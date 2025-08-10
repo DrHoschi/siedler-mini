@@ -1,0 +1,20 @@
+{
+  "name": "Siedler Mini V11.1",
+  "short_name": "Siedler Mini",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0e0f14",
+  "theme_color": "#0e0f14",
+  "icons": [
+    {
+      "src": "assets/hq_wood.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/hq_wood.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
