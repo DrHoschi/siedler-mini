@@ -72,7 +72,6 @@
 
 <script src="main.js"></script>
 <script>
-// PWA-Registration
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
