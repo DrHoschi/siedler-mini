@@ -1,31 +1,32 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <title>Siedler Mini V11.1</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+  <title>Siedler Mini V12 (Iso + Mini‑Map + Carrier)</title>
   <style>
     :root { --bg:#0e0f14; --panel:#141820; --line:#242a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9; }
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
-    #ui{position:fixed;inset:0;display:flex;flex-direction:column}
-    header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#11151c,#0e1118); padding-top:max(10px,env(safe-area-inset-top))}
-    .stats{font-variant-numeric:tabular-nums;font-size:14px;display:flex;gap:12px;flex-wrap:wrap}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;overflow:hidden}
+    header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#11151c,#0e1118)}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
     .pill{padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#161b24}
     .pill b{margin-left:6px}
-    #toolbar{display:flex;gap:8px;overflow:auto;padding:8px 10px;background:linear-gradient(180deg,#11151c,#0e1118);border-top:1px solid var(--line); padding-bottom:max(8px,env(safe-area-inset-bottom))}
-    .btn{appearance:none;border:1px solid var(--line);background:#161b24;color:var(--txt);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600;white-space:nowrap}
-    .btn.active{outline:2px solid var(--accent);outline-offset:0}
-    #canvas{flex:1;touch-action:none;display:block;background:#0b0e13}
-    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:1000}
-    .card{pointer-events:auto;width:min(92vw,720px);background:rgba(20,26,34,.86);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:16px;padding:18px}
+    #toolbar{position:fixed;left:10px;top:64px;display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid var(--line);border-radius:12px;background:#141820cc;backdrop-filter:blur(6px);z-index:20}
+    .btn{appearance:none;border:1px solid var(--line);background:#161b24;color:var(--txt);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:600;white-space:nowrap}
+    .btn.active{outline:2px solid var(--accent)}
+    #canvas{position:fixed;inset:0;display:block;touch-action:none;background:#0b0e13}
+    #minimap{position:fixed;right:10px;bottom:10px;width:180px;height:140px;border:1px solid var(--line);border-radius:8px;background:#0c1118;z-index:10}
+    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50}
+    .card{width:min(92vw,720px);background:#141a22e6;border:1px solid var(--line);border-radius:16px;padding:18px}
     .card h1{margin:0 0 8px;font-size:22px}
     .card p{margin:8px 0 0;color:var(--mut);line-height:1.35}
     .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     .tip{font-size:12px;color:var(--mut);margin-top:8px}
+    #badge{position:fixed;right:10px;bottom:10px;z-index:30;padding:4px 8px;background:rgba(0,0,0,.45);color:#6ee7a9;border-radius:6px;font-size:12px}
   </style>
 </head>
 <body>
-<div id="ui">
+
   <header>
     <div class="stats">
       <span class="pill">🌲 Holz <b id="wood">0</b></span>
@@ -33,20 +34,25 @@
       <span class="pill">🌾 Nahrung <b id="food">0</b></span>
       <span class="pill">🪙 Gold <b id="gold">0</b></span>
       <span class="pill">👥 Bev. <b id="pop">0</b></span>
-      <span class="pill">Ansicht: <b id="viewLbl">Iso</b></span>
+      <span class="pill">Ansicht: <b>Isometrisch</b></span>
     </div>
-    <div class="stats">
-      <button class="btn" id="toggleView">Umschalten (Top/Persp/Iso)</button>
-    </div>
+    <div class="stats"><span class="pill">V12</span></div>
   </header>
 
+  <div id="toolbar">
+    <button class="btn active" data-tool="road">Straße</button>
+    <button class="btn" data-tool="lumber">Holzfäller</button>
+    <button class="btn" data-tool="bulldoze">Abriss</button>
+  </div>
+
   <canvas id="canvas"></canvas>
+  <canvas id="minimap" width="180" height="140" title="Mini‑Map"></canvas>
 
   <div id="overlay">
-    <div class="card" id="startCard">
-      <h1>Siedler‑Mini V11.1</h1>
-      <p>Baue <b>Straßen</b>, verbinde Gebäude mit dem <b>HQ</b>. Gebäude produzieren nur mit <b>HQ‑Anbindung</b>.</p>
-      <p class="tip">Gesten: Tippen = bauen • Rechtsklick ziehen / 2‑Finger = Karte bewegen • Mausrad/Pinch = Zoom</p>
+    <div class="card">
+      <h1>Siedler‑Mini V12</h1>
+      <p>Nur isometrische Ansicht. Baue <b>Straßen</b>, setze eine <b>Holzfällerhütte</b> (neben Wald), verbinde sie mit dem <b>HQ</b> → Träger holen Holz automatisch.</p>
+      <p class="tip">Mausrad/Pinch = Zoom zum Cursor • Rechtsklick ziehen/2‑Finger = Karte bewegen • Linksklick = Bauen</p>
       <div class="row">
         <button class="btn" data-action="start">Start</button>
         <button class="btn" data-action="reset">Neues Spiel</button>
@@ -54,51 +60,8 @@
     </div>
   </div>
 
-  <div id="toolbar">
-    <button class="btn active" data-tool="road">Straße (1🌲)</button>
-    <button class="btn" data-tool="lumber">Holzfäller (5🌲)</button>
-    <button class="btn" data-tool="quarry">Steinbruch (5🌲,2🌾)</button>
-    <button class="btn" data-tool="farm">Farm (5🌲)</button>
-    <button class="btn" data-tool="house">Haus (10🌲,5⛰️,5🌾)</button>
-    <button class="btn" data-tool="depot">Depot (8🌲,2⛰️)</button>
-    <button class="btn" data-tool="bulldoze">Abriss</button>
-  </div>
-</div>
+  <div id="badge">JS V12</div>
 
-<!-- Zwang: alten Service‑Worker und Caches loswerden -->
-<script>
-  (async () => {
-    // alten SW + Cache loswerden (falls einer noch greift)
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations();
-      regs.forEach(r => r.unregister());
-    }
-    if (window.caches) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => caches.delete(k)));
-    }
-    // NEUE Datei mit NEUEM Namen laden (bypasst jeden Cache/SW)
-    const s = document.createElement('script');
-    s.src = 'app-v11.1r6.js?t=' + Date.now();
-    s.defer = true;
-    s.onload = () => console.log('✅ app-v11.1r6 geladen');
-    s.onerror = () => {
-      const err = document.createElement('div');
-      err.textContent = 'Konnte app-v11.1r6.js nicht laden!';
-      Object.assign(err.style,{position:'fixed',left:'10px',bottom:'10px',background:'#b00',color:'#fff',padding:'6px 10px',borderRadius:'6px',zIndex:3000});
-      document.body.appendChild(err);
-    };
-    document.head.appendChild(s);
-
-    // Marker, dass DIESE index läuft
-    const m = document.createElement('div');
-    m.textContent = 'INDEX r6';
-    Object.assign(m.style,{position:'fixed',left:'10px',top:'10px',background:'rgba(0,0,0,.4)',color:'#6ee7a9',padding:'4px 8px',borderRadius:'6px',zIndex:3000});
-    document.body.appendChild(m);
-  })();
-</script>
-
-<!-- Spiel -->
-<script src="main.js?v=11.1r5" defer></script>
+  <script src="main.js?v=12.0.0" defer></script>
 </body>
 </html>
