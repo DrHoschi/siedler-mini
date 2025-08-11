@@ -278,3 +278,21 @@ Promise.all(toLoad.map(([k,s])=>load(k,s))).then(()=>{
   document.querySelector('[data-action="reset"]').onclick=()=>{ location.reload(); };
   requestAnimationFrame(loop);
 });
+// === Overlay-Buttons (Start / Neues Spiel) ===
+function startGame() {
+    const ov = document.getElementById('overlay');
+    if (ov) ov.style.display = 'none';
+    // einmalig initial zeichnen
+    drawAll();
+}
+
+function bindOverlay() {
+    const startBtn = document.querySelector('[data-action="start"]');
+    const resetBtn = document.querySelector('[data-action="reset"]');
+
+    if (startBtn) startBtn.addEventListener('click', startGame);
+    if (resetBtn) resetBtn.addEventListener('click', () => location.reload());
+}
+
+// Call direkt nach Laden
+bindOverlay();
