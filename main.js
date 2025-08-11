@@ -1,278 +1,208 @@
-/* =========================================================
-   Siedler-Mini V12.2
-   - Isometrischer Renderer
-   - Zoom zum Mauszeiger / Pinch-Zoom
-   - Mini-Map
-   - Straßen-Autotiling & HQ-Konnektivität
-   - Holzfäller-Produktion
-   - Animierte Träger mit Wegfindung
-   ========================================================= */
+// main.js – V12 mit Panning-Fix und Bau-Check
 
-'use strict';
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-// ------------------- Globale Variablen -------------------
-const TILE_W = 64, TILE_H = 32; // Iso-Tile Größe
-const MAP_W = 50, MAP_H = 50;
-const ZOOM_MIN = 0.5, ZOOM_MAX = 2.5;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let canvas, ctx, minimap, mctx;
-let camX = 0, camY = 0, zoom = 1;
-let mouseX = 0, mouseY = 0;
-let isPanning = false, panStart = {x:0, y:0}, camStart = {x:0, y:0};
-let tool = 'select';
-let overlay, toolbar;
-let dragging = false;
+// Kamera und Zoom
+let camX = 0;
+let camY = 0;
+let zoom = 1;
 
-// Map-Daten
-let map = [];
-let buildings = [];
-let carriers = [];
+// Panning Steuerung
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let camStart = { x: 0, y: 0 };
 
-// Ressourcen
-let res = {
-  wood: 0,
-  stone: 0,
-  food: 0,
-  gold: 0,
-  pop: 0
-};
+// Tile-Größe (für isometrische Darstellung)
+const tileWidth = 128;
+const tileHeight = 64;
 
-// Bilder
-let textures = {};
+// Spielkarten-Daten
+const mapWidth = 30;
+const mapHeight = 30;
+let mapTiles = [];
 
-// ------------------- Init -------------------
-window.addEventListener('DOMContentLoaded', () => {
-  canvas = document.getElementById('canvas');
-  ctx = canvas.getContext('2d');
-  minimap = document.getElementById('minimap');
-  mctx = minimap.getContext('2d');
-  overlay = document.getElementById('overlay');
-  toolbar = document.getElementById('toolbar');
+// Aktives Werkzeug
+let tool = 'select'; // 'select', 'road', 'hq', 'lumberjack'
 
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+// Assets laden
+const textures = {};
+const textureFiles = [
+    "grass.png",
+    "grass_flowers.png",
+    "dirt.png",
+    "rocky.png",
+    "sand.png",
+    "water.png",
+    "shore.png",
+    "hq_wood.png",
+    "lumberjack.png",
+    "road_straight.png",
+    "road_curve.png",
+    "depot.png"
+];
 
-  loadTextures(startup);
-});
-
-// ------------------- Texturen laden -------------------
-function loadTextures(cb){
-  const files = [
-    'grass.png','water.png','shore.png','dirt.png','rocky.png','sand.png',
-    'road.png','road_straight.png','road_curve.png',
-    'hq_wood.png','lumberjack.png','depot.png'
-  ];
-  let loaded = 0;
-  files.forEach(name => {
-    const img = new Image();
-    img.src = 'assets/'+name;
-    img.onload = () => {
-      loaded++;
-      if(loaded === files.length) cb();
-    };
-    textures[name] = img;
-  });
-}
-
-// ------------------- Start -------------------
-function startup(){
-  generateMap();
-  setupUI();
-  requestAnimationFrame(loop);
-}
-
-// ------------------- UI Setup -------------------
-function setupUI(){
-  document.querySelectorAll('#toolbar .btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      document.querySelectorAll('#toolbar .btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      tool = btn.dataset.tool;
+function loadTextures() {
+    let loaded = 0;
+    return new Promise(resolve => {
+        textureFiles.forEach(file => {
+            const img = new Image();
+            img.src = `assets/${file}`;
+            img.onload = () => {
+                loaded++;
+                if (loaded === textureFiles.length) {
+                    resolve();
+                }
+            };
+            textures[file] = img;
+        });
     });
-  });
+}
 
-  document.querySelectorAll('[data-action="start"]').forEach(b=>{
-    b.addEventListener('click',()=>{
-      overlay.style.display='none';
+// Karte initialisieren
+function generateMap() {
+    for (let y = 0; y < mapHeight; y++) {
+        mapTiles[y] = [];
+        for (let x = 0; x < mapWidth; x++) {
+            mapTiles[y][x] = { type: "grass", building: null };
+        }
+    }
+}
+
+// Zeichnen
+function drawMap() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < mapHeight; y++) {
+        for (let x = 0; x < mapWidth; x++) {
+            const screenX = (x - y) * tileWidth / 2 * zoom + camX + canvas.width / 2;
+            const screenY = (x + y) * tileHeight / 2 * zoom + camY;
+            ctx.drawImage(textures["grass.png"], screenX, screenY, tileWidth * zoom, tileHeight * zoom);
+
+            if (mapTiles[y][x].building) {
+                ctx.drawImage(textures[mapTiles[y][x].building], screenX, screenY - 40 * zoom, tileWidth * zoom, tileHeight * zoom);
+            }
+        }
+    }
+}
+
+// Bauen
+function handleClick(e) {
+    const worldPos = screenToTile(e.clientX, e.clientY);
+    const tile = mapTiles[worldPos.y] && mapTiles[worldPos.y][worldPos.x];
+    if (tile) {
+        if (tool === 'road') tile.building = 'road_straight.png';
+        if (tool === 'hq') tile.building = 'hq_wood.png';
+        if (tool === 'lumberjack') tile.building = 'lumberjack.png';
+    }
+}
+
+// Screen-zu-Tile-Umrechnung
+function screenToTile(screenX, screenY) {
+    const worldX = (screenX - camX - canvas.width / 2) / zoom;
+    const worldY = (screenY - camY) / zoom;
+    let tx = Math.floor((worldY / (tileHeight / 2) + worldX / (tileWidth / 2)) / 2);
+    let ty = Math.floor((worldY / (tileHeight / 2) - worldX / (tileWidth / 2)) / 2);
+    return { x: tx, y: ty };
+}
+
+// UI und Events
+function setupUI() {
+    // Maus
+    canvas.addEventListener('mousedown', e => {
+        if (tool === 'select' || e.button !== 0) {
+            // Panning starten
+            isPanning = true;
+            panStart.x = e.clientX;
+            panStart.y = e.clientY;
+            camStart.x = camX;
+            camStart.y = camY;
+        } else {
+            // Bauaktion
+            handleClick(e);
+        }
     });
-  });
-  document.querySelectorAll('[data-action="reset"]').forEach(b=>{
-    b.addEventListener('click',()=>{
-      generateMap();
-      overlay.style.display='none';
+
+    canvas.addEventListener('mousemove', e => {
+        if (isPanning) {
+            camX = camStart.x + (e.clientX - panStart.x);
+            camY = camStart.y + (e.clientY - panStart.y);
+        }
     });
-  });
 
-  // Maus-Events
-  canvas.addEventListener('mousedown', e=>{
-    if(e.button === 1 || e.button === 2){
-      isPanning = true;
-      panStart.x = e.clientX; panStart.y = e.clientY;
-      camStart.x = camX; camStart.y = camY;
-    } else if(e.button === 0){
-      handleClick(e);
-    }
-  });
-  window.addEventListener('mouseup', e=>{
-    isPanning = false;
-  });
-  window.addEventListener('mousemove', e=>{
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-    if(isPanning){
-      camX = camStart.x + (e.clientX - panStart.x);
-      camY = camStart.y + (e.clientY - panStart.y);
-    }
-  });
+    canvas.addEventListener('mouseup', () => isPanning = false);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-  // Touch (Pan + Pinch)
-  canvas.addEventListener('touchstart', handleTouchStart, {passive:false});
-  canvas.addEventListener('touchmove', handleTouchMove, {passive:false});
-  canvas.addEventListener('touchend', handleTouchEnd);
+    // Zoom mit Maus
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const zoomFactor = 1.1;
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+        const worldBeforeZoom = screenToTile(mouseX, mouseY);
+        if (e.deltaY < 0) zoom *= zoomFactor;
+        else zoom /= zoomFactor;
+        const worldAfterZoom = screenToTile(mouseX, mouseY);
+        camX += (worldAfterZoom.x - worldBeforeZoom.x) * tileWidth / 2 * zoom;
+        camY += (worldAfterZoom.y - worldBeforeZoom.y) * tileHeight / 2 * zoom;
+    }, { passive: false });
 
-  // Zoom
-  canvas.addEventListener('wheel', e=>{
-    e.preventDefault();
-    zoomToPoint(e.deltaY < 0 ? 1.1 : 0.9, e.clientX, e.clientY);
-  }, {passive:false});
+    // Touch für iPad
+    let lastTouchDist = null;
+    canvas.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) {
+            isPanning = true;
+            panStart.x = e.touches[0].clientX;
+            panStart.y = e.touches[0].clientY;
+            camStart.x = camX;
+            camStart.y = camY;
+        } else if (e.touches.length === 2) {
+            lastTouchDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+        }
+    });
+
+    canvas.addEventListener('touchmove', e => {
+        if (e.touches.length === 1 && isPanning) {
+            camX = camStart.x + (e.touches[0].clientX - panStart.x);
+            camY = camStart.y + (e.touches[0].clientY - panStart.y);
+        } else if (e.touches.length === 2 && lastTouchDist !== null) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            if (dist > lastTouchDist) zoom *= 1.05;
+            else zoom /= 1.05;
+            lastTouchDist = dist;
+        }
+    });
+
+    canvas.addEventListener('touchend', e => {
+        if (e.touches.length < 2) lastTouchDist = null;
+        if (e.touches.length === 0) isPanning = false;
+    });
+
+    // Werkzeugbuttons
+    document.getElementById("btnSelect").addEventListener("click", () => tool = 'select');
+    document.getElementById("btnRoad").addEventListener("click", () => tool = 'road');
+    document.getElementById("btnHQ").addEventListener("click", () => tool = 'hq');
+    document.getElementById("btnLumberjack").addEventListener("click", () => tool = 'lumberjack');
 }
 
-// ------------------- Map generieren -------------------
-function generateMap(){
-  map = [];
-  for(let y=0;y<MAP_H;y++){
-    let row = [];
-    for(let x=0;x<MAP_W;x++){
-      let type = 'grass';
-      if(x<5) type='water';
-      if(x===5) type='shore';
-      row.push({type, road:false, b:null});
-    }
-    map.push(row);
-  }
-  // HQ in der Mitte
-  let hqx = Math.floor(MAP_W/2);
-  let hqy = Math.floor(MAP_H/2);
-  map[hqy][hqx].b = {type:'hq_wood'};
+// Game Loop
+function gameLoop() {
+    drawMap();
+    requestAnimationFrame(gameLoop);
 }
 
-// ------------------- Spiel-Loop -------------------
-function loop(){
-  render();
-  update();
-  requestAnimationFrame(loop);
-}
-
-// ------------------- Render -------------------
-function render(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  for(let y=0;y<MAP_H;y++){
-    for(let x=0;x<MAP_W;x++){
-      let tile = map[y][x];
-      let sx = (x - y) * TILE_W/2 * zoom + camX + canvas.width/2;
-      let sy = (x + y) * TILE_H/2 * zoom + camY;
-      ctx.drawImage(textures[tile.type+'.png'], sx, sy, TILE_W*zoom, TILE_H*zoom);
-      if(tile.road){
-        ctx.drawImage(textures['road.png'], sx, sy, TILE_W*zoom, TILE_H*zoom);
-      }
-      if(tile.b){
-        ctx.drawImage(textures[tile.b.type+'.png'], sx, sy - TILE_H*zoom, TILE_W*zoom, TILE_W*zoom);
-      }
-    }
-  }
-
-  // Minimap
-  mctx.clearRect(0,0,minimap.width,minimap.height);
-  let scale = minimap.width / MAP_W;
-  for(let y=0;y<MAP_H;y++){
-    for(let x=0;x<MAP_W;x++){
-      let tile = map[y][x];
-      mctx.fillStyle = tile.type==='water' ? '#3af' : '#4c4';
-      mctx.fillRect(x*scale,y*scale,scale,scale);
-    }
-  }
-}
-
-// ------------------- Update -------------------
-function update(){
-  // TODO: Produktion + Träger-Logik
-}
-
-// ------------------- Klick-Handler -------------------
-function handleClick(e){
-  let iso = screenToIso(e.clientX, e.clientY);
-  let gx = iso.x, gy = iso.y;
-  if(gx<0||gy<0||gx>=MAP_W||gy>=MAP_H) return;
-
-  if(tool==='road'){
-    map[gy][gx].road = true;
-  }
-  if(tool==='lumber'){
-    map[gy][gx].b = {type:'lumberjack'};
-  }
-  if(tool==='bulldoze'){
-    map[gy][gx].road = false;
-    map[gy][gx].b = null;
-  }
-}
-
-// ------------------- Screen→Iso -------------------
-function screenToIso(sx, sy){
-  let cx = (sx - camX - canvas.width/2) / zoom;
-  let cy = (sy - camY) / zoom;
-  let gx = Math.floor((cx / (TILE_W/2) + cy / (TILE_H/2)) / 2);
-  let gy = Math.floor((cy / (TILE_H/2) - cx / (TILE_W/2)) / 2);
-  return {x:gx, y:gy};
-}
-
-// ------------------- Zoom zum Punkt -------------------
-function zoomToPoint(factor, mx, my){
-  let wxBefore = (mx - camX) / zoom;
-  let wyBefore = (my - camY) / zoom;
-  zoom *= factor;
-  zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom));
-  let wxAfter = (mx - camX) / zoom;
-  let wyAfter = (my - camY) / zoom;
-  camX += (wxAfter - wxBefore) * zoom;
-  camY += (wyAfter - wyBefore) * zoom;
-}
-
-// ------------------- Touch-Gesten -------------------
-let touchStartDist = 0, lastZoom = zoom;
-function handleTouchStart(e){
-  if(e.touches.length===1){
-    isPanning=true;
-    panStart.x = e.touches[0].clientX;
-    panStart.y = e.touches[0].clientY;
-    camStart.x = camX; camStart.y = camY;
-  } else if(e.touches.length===2){
-    touchStartDist = getTouchDist(e);
-    lastZoom = zoom;
-  }
-}
-function handleTouchMove(e){
-  e.preventDefault();
-  if(e.touches.length===1 && isPanning){
-    camX = camStart.x + (e.touches[0].clientX - panStart.x);
-    camY = camStart.y + (e.touches[0].clientY - panStart.y);
-  } else if(e.touches.length===2){
-    let dist = getTouchDist(e);
-    let factor = dist / touchStartDist;
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, lastZoom * factor));
-  }
-}
-function handleTouchEnd(e){
-  if(e.touches.length===0) isPanning=false;
-}
-function getTouchDist(e){
-  let dx = e.touches[0].clientX - e.touches[1].clientX;
-  let dy = e.touches[0].clientY - e.touches[1].clientY;
-  return Math.sqrt(dx*dx + dy*dy);
-}
-
-// ------------------- Resize -------------------
-function resizeCanvas(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+// Start
+(async function () {
+    await loadTextures();
+    generateMap();
+    setupUI();
+    gameLoop();
+})();
