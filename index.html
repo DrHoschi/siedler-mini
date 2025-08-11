@@ -2,27 +2,82 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
-  <title>Siedler Mini V12 (Iso + Mini‑Map + Carrier)</title>
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>Siedler Mini V12.2 – Iso + Mini‑Map + Träger</title>
+
+  <meta name="theme-color" content="#0e0f14" />
   <style>
-    :root { --bg:#0e0f14; --panel:#141820; --line:#242a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9; }
+    :root{
+      --bg:#0e0f14; --panel:#141820; --line:#242a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9;
+    }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;overflow:hidden}
-    header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#11151c,#0e1118)}
-    .stats{display:flex;gap:12px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
-    .pill{padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#161b24}
+
+    /* Kopfzeile */
+    header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:10px 12px; padding-top:max(10px, env(safe-area-inset-top));
+      border-bottom:1px solid var(--line);
+      background:linear-gradient(180deg,#11151c,#0e1118);
+      position:relative; z-index:30;
+    }
+    .stats{display:flex; gap:12px; flex-wrap:wrap; font-variant-numeric:tabular-nums; font-size:14px}
+    .pill{padding:6px 10px; border:1px solid var(--line); border-radius:10px; background:#161b24}
     .pill b{margin-left:6px}
-    #toolbar{position:fixed;left:10px;top:64px;display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid var(--line);border-radius:12px;background:#141820cc;backdrop-filter:blur(6px);z-index:20}
-    .btn{appearance:none;border:1px solid var(--line);background:#161b24;color:var(--txt);padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:600;white-space:nowrap}
-    .btn.active{outline:2px solid var(--accent)}
-    #canvas{position:fixed;inset:0;display:block;touch-action:none;background:#0b0e13}
-    #minimap{position:fixed;right:10px;bottom:10px;width:180px;height:140px;border:1px solid var(--line);border-radius:8px;background:#0c1118;z-index:10}
-    #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50}
-    .card{width:min(92vw,720px);background:#141a22e6;border:1px solid var(--line);border-radius:16px;padding:18px}
-    .card h1{margin:0 0 8px;font-size:22px}
-    .card p{margin:8px 0 0;color:var(--mut);line-height:1.35}
-    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .tip{font-size:12px;color:var(--mut);margin-top:8px}
-    #badge{position:fixed;right:10px;bottom:10px;z-index:30;padding:4px 8px;background:rgba(0,0,0,.45);color:#6ee7a9;border-radius:6px;font-size:12px}
+
+    /* Linkes Werkzeug-Panel */
+    #toolbar{
+      position:fixed; left:10px; top:68px;
+      display:flex; flex-direction:column; gap:8px;
+      padding:8px; border:1px solid var(--line); border-radius:12px;
+      background:#141820cc; backdrop-filter:blur(6px);
+      z-index:25;
+    }
+    .btn{
+      appearance:none; border:1px solid var(--line); background:#161b24; color:var(--txt);
+      padding:9px 11px; border-radius:10px; cursor:pointer; font-weight:600; white-space:nowrap;
+    }
+    .btn.active{ outline:2px solid var(--accent); outline-offset:0 }
+
+    /* Spielfeld & Minimap */
+    #wrap{ position:fixed; inset:0; display:block }
+    #canvas{
+      position:absolute; inset:0; display:block; touch-action:none; background:#0b0e13;
+    }
+    #minimap{
+      position:absolute; right:10px; bottom:10px; width:200px; height:148px;
+      border:1px solid var(--line); border-radius:8px; background:#0c1118; z-index:20;
+    }
+
+    /* Overlay (Start) */
+    #overlay{
+      position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:40;
+      background:transparent; pointer-events:none;
+    }
+    .card{
+      pointer-events:auto; width:min(92vw,740px);
+      background:rgba(20,26,34,.9); border:1px solid var(--line); border-radius:16px; padding:18px;
+      box-shadow:0 10px 30px rgba(0,0,0,.45);
+    }
+    .card h1{ margin:0 0 8px; font-size:22px }
+    .card p{ margin:8px 0 0; color:var(--mut); line-height:1.35 }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px }
+    .tip{ font-size:12px; color:var(--mut); margin-top:8px }
+
+    /* Badges unten rechts (Version/Diag) */
+    #badge, #diag{
+      position:fixed; right:10px; z-index:35; padding:4px 8px; border-radius:6px; font-size:12px;
+      background:rgba(0,0,0,.45); color:#6ee7a9;
+    }
+    #badge{ bottom:10px }
+    #diag{ bottom:34px; color:#ffe8e8 }
+
+    /* Mobile Helfer */
+    @media (max-width: 640px){
+      #toolbar{ top:66px; left:8px; gap:6px; }
+      .btn{ padding:8px 10px; }
+      #minimap{ width:168px; height:126px; }
+    }
   </style>
 </head>
 <body>
@@ -36,23 +91,33 @@
       <span class="pill">👥 Bev. <b id="pop">0</b></span>
       <span class="pill">Ansicht: <b>Isometrisch</b></span>
     </div>
-    <div class="stats"><span class="pill">V12</span></div>
+    <div class="stats">
+      <span class="pill">V12.2</span>
+    </div>
   </header>
 
-  <div id="toolbar">
-    <button class="btn active" data-tool="road">Straße</button>
-    <button class="btn" data-tool="lumber">Holzfäller</button>
-    <button class="btn" data-tool="bulldoze">Abriss</button>
+  <!-- Linkes Werkzeug-Panel -->
+  <div id="toolbar" aria-label="Werkzeuge">
+    <button class="btn active" data-tool="select" title="Zeiger (nichts bauen)">Zeiger</button>
+    <button class="btn" data-tool="road" title="Straße bauen">Straße</button>
+    <button class="btn" data-tool="lumber" title="Holzfäller-Hütte setzen">Holzfäller</button>
+    <button class="btn" data-tool="bulldoze" title="Abriss (Entfernen)">Abriss</button>
   </div>
 
-  <canvas id="canvas"></canvas>
-  <canvas id="minimap" width="180" height="140" title="Mini‑Map"></canvas>
+  <!-- Spielfeld + Minimap -->
+  <div id="wrap">
+    <canvas id="canvas"></canvas>
+    <canvas id="minimap" width="200" height="148"></canvas>
+  </div>
 
+  <!-- Start/Reset Overlay -->
   <div id="overlay">
     <div class="card">
-      <h1>Siedler‑Mini V12</h1>
-      <p>Nur isometrische Ansicht. Baue <b>Straßen</b>, setze eine <b>Holzfällerhütte</b> (neben Wald), verbinde sie mit dem <b>HQ</b> → Träger holen Holz automatisch.</p>
-      <p class="tip">Mausrad/Pinch = Zoom zum Cursor • Rechtsklick ziehen/2‑Finger = Karte bewegen • Linksklick = Bauen</p>
+      <h1>Siedler‑Mini V12.2</h1>
+      <p>Isometrische Ansicht mit Mini‑Map. Baue <b>Straßen</b>, platziere eine <b>Holzfällerhütte</b> neben Wald
+         und verbinde sie mit dem <b>HQ</b> – <i>Träger</i> holen Holz automatisch.</p>
+      <p class="tip">Steuerung: Linksklick = bauen (nur im Bau‑Tool) • Rechtsklick/2‑Finger ziehen = Karte bewegen
+        • Mausrad/Pinch = Zoom zum Cursor • ESC = zurück zum Zeiger</p>
       <div class="row">
         <button class="btn" data-action="start">Start</button>
         <button class="btn" data-action="reset">Neues Spiel</button>
@@ -60,8 +125,12 @@
     </div>
   </div>
 
-  <div id="badge">JS V12</div>
+  <!-- Badges -->
+  <div id="badge" aria-live="polite">JS V12.2</div>
+  <div id="diag" style="display:none"></div>
 
-  <script src="main.js?v=12.0.0" defer></script>
+  <!-- Spiel-Logik -->
+  <script src="main.js?v=12.2.0" defer></script>
+
 </body>
 </html>
