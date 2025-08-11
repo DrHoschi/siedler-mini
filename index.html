@@ -1,80 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Siedler-Mini V11.1 (PWA)</title>
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0e0f14">
-<style>
-  :root { --bg:#0e0f14; --panel:#141820; --line:#242a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9; }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
-  #ui{position:fixed;inset:0;display:flex;flex-direction:column}
-  header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#11151c,#0e1118); padding-top:max(10px,env(safe-area-inset-top))}
-  .stats{font-variant-numeric:tabular-nums;font-size:14px;display:flex;gap:12px;flex-wrap:wrap}
-  .pill{padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#161b24}
-  .pill b{margin-left:6px}
-  #toolbar{display:flex;gap:8px;overflow:auto;padding:8px 10px;background:linear-gradient(180deg,#11151c,#0e1118);border-top:1px solid var(--line); padding-bottom:max(8px,env(safe-area-inset-bottom))}
-  .btn{appearance:none;border:1px solid var(--line);background:#161b24;color:var(--txt);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600;white-space:nowrap}
-  .btn.active{outline:2px solid var(--accent);outline-offset:0}
-  #canvas{flex:1;touch-action:none;display:block;background:#0b0e13}
-  #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:1000}
-  .card{pointer-events:auto;width:min(92vw,720px);background:rgba(20,26,34,.86);backdrop-filter:blur(8px);
-        border:1px solid var(--line);border-radius:16px;padding:18px}
-  .card h1{margin:0 0 8px;font-size:22px}
-  .card p{margin:8px 0 0;color:var(--mut);line-height:1.35}
-  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-  .tip{font-size:12px;color:var(--mut);margin-top:8px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Siedler Mini V11</title>
+
+    <!-- Styles -->
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px;
+            border-radius: 6px;
+        }
+        button {
+            margin: 2px;
+        }
+    </style>
 </head>
 <body>
-<div id="ui">
-  <header>
-    <div class="stats">
-      <span class="pill">🌲 Holz <b id="wood">0</b></span>
-      <span class="pill">⛰️ Stein <b id="stone">0</b></span>
-      <span class="pill">🌾 Nahrung <b id="food">0</b></span>
-      <span class="pill">🪙 Gold <b id="gold">0</b></span>
-      <span class="pill">👥 Bev. <b id="pop">0</b></span>
-      <span class="pill">Ansicht: <b id="viewLbl">Iso</b></span>
+    <!-- UI -->
+    <div id="ui">
+        <button onclick="setBuildMode('road')">Straße</button>
+        <button onclick="setBuildMode('hq')">HQ</button>
+        <button onclick="setBuildMode('erase')">Abriss</button>
+        <button onclick="toggleView()">Ansicht wechseln</button>
     </div>
-    <div class="stats">
-      <button class="btn" id="toggleView">Umschalten (Top/Persp/Iso)</button>
-    </div>
-  </header>
 
-  <canvas id="canvas" title="Tippe/Klicke, um zu starten"></canvas>
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
 
-  <div id="overlay">
-    <div class="card" id="startCard">
-      <h1>Siedler-Mini V11.1</h1>
-      <p>Baue <b>Straßen</b>, verbinde Gebäude mit dem <b>HQ</b>, produziere Ressourcen.
-      Gebäude arbeiten nur, wenn sie per Straße ans HQ/Depot angebunden sind.</p>
-      <p class="tip">Gesten: Tippen = bauen • Zwei-Finger ziehen = Karte bewegen • Pinch = Zoom • „Abriss“ löscht</p>
-      <div class="row">
-        <button class="btn" data-action="start">Start</button>
-        <button class="btn" data-action="reset">Neues Spiel</button>
-      </div>
-      <p class="tip">Neu in V11.1: Träger-Mehrfachladung, Prioritäten, Depots, Pfad-Linien.</p>
-    </div>
-  </div>
-
-  <div id="toolbar">
-    <button class="btn active" data-tool="road">Straße (1🌲)</button>
-    <button class="btn" data-tool="lumber">Holzfäller (5🌲)</button>
-    <button class="btn" data-tool="quarry">Steinbruch (5🌲,2🌾)</button>
-    <button class="btn" data-tool="farm">Farm (5🌲)</button>
-    <button class="btn" data-tool="house">Haus (10🌲,5⛰️,5🌾)</button>
-    <button class="btn" data-tool="depot">Depot (8🌲,2⛰️)</button>
-    <button class="btn" data-tool="bulldoze">Abriss</button>
-  </div>
-</div>
-
-<script src="main.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
-}
-</script>
+    <!-- Game Script -->
+    <script src="main.js" defer></script>
 </body>
 </html>
