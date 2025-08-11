@@ -1,107 +1,90 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Siedler Mini</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Siedler Mini V11.1</title>
   <style>
-    body {
-      margin: 0;
-      font-family: system-ui, sans-serif;
-      background: #222;
-      color: #fff;
-      overflow: hidden;
-    }
-    header {
-      background: #333;
-      padding: 8px;
-      text-align: center;
-      font-weight: bold;
-      font-size: 1.2em;
-    }
-    #toolbar {
-      display: flex;
-      background: #444;
-      padding: 4px;
-      gap: 4px;
-      justify-content: center;
-    }
-    .btn {
-      padding: 6px 10px;
-      background: #666;
-      border: none;
-      color: white;
-      cursor: pointer;
-    }
-    .btn.active {
-      background: #999;
-    }
-    #hud {
-      display: flex;
-      gap: 12px;
-      background: #333;
-      padding: 4px 8px;
-      font-size: 14px;
-    }
-    #canvas {
-      display: block;
-      background: #000;
-      cursor: crosshair;
-    }
-    #overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.85);
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      z-index: 2000;
-    }
-    #overlay button {
-      padding: 10px 20px;
-      font-size: 16px;
-      background: #4caf50;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
+    :root { --bg:#0e0f14; --panel:#141820; --line:#242a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9; }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
+    #ui{position:fixed;inset:0;display:flex;flex-direction:column}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#11151c,#0e1118); padding-top:max(10px,env(safe-area-inset-top))}
+    .stats{font-variant-numeric:tabular-nums;font-size:14px;display:flex;gap:12px;flex-wrap:wrap}
+    .pill{padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:#161b24}
+    .pill b{margin-left:6px}
+    #toolbar{display:flex;gap:8px;overflow:auto;padding:8px 10px;background:linear-gradient(180deg,#11151c,#0e1118);border-top:1px solid var(--line); padding-bottom:max(8px,env(safe-area-inset-bottom))}
+    .btn{appearance:none;border:1px solid var(--line);background:#161b24;color:var(--txt);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600;white-space:nowrap}
+    .btn.active{outline:2px solid var(--accent);outline-offset:0}
+    #canvas{flex:1;touch-action:none;display:block;background:#0b0e13}
+    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;z-index:1000}
+    .card{pointer-events:auto;width:min(92vw,720px);background:rgba(20,26,34,.86);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:16px;padding:18px}
+    .card h1{margin:0 0 8px;font-size:22px}
+    .card p{margin:8px 0 0;color:var(--mut);line-height:1.35}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .tip{font-size:12px;color:var(--mut);margin-top:8px}
   </style>
 </head>
 <body>
+<div id="ui">
+  <header>
+    <div class="stats">
+      <span class="pill">🌲 Holz <b id="wood">0</b></span>
+      <span class="pill">⛰️ Stein <b id="stone">0</b></span>
+      <span class="pill">🌾 Nahrung <b id="food">0</b></span>
+      <span class="pill">🪙 Gold <b id="gold">0</b></span>
+      <span class="pill">👥 Bev. <b id="pop">0</b></span>
+      <span class="pill">Ansicht: <b id="viewLbl">Iso</b></span>
+    </div>
+    <div class="stats">
+      <button class="btn" id="toggleView">Umschalten (Top/Persp/Iso)</button>
+    </div>
+  </header>
 
-<header>Siedler Mini <span id="viewLbl">Iso</span></header>
+  <canvas id="canvas"></canvas>
 
-<div id="hud">
-  Holz: <span id="wood">0</span> |
-  Stein: <span id="stone">0</span> |
-  Nahrung: <span id="food">0</span> |
-  Gold: <span id="gold">0</span> |
-  Bevölkerung: <span id="pop">0</span>
+  <div id="overlay">
+    <div class="card" id="startCard">
+      <h1>Siedler‑Mini V11.1</h1>
+      <p>Baue <b>Straßen</b>, verbinde Gebäude mit dem <b>HQ</b>. Gebäude produzieren nur mit <b>HQ‑Anbindung</b>.</p>
+      <p class="tip">Gesten: Tippen = bauen • Rechtsklick ziehen / 2‑Finger = Karte bewegen • Mausrad/Pinch = Zoom</p>
+      <div class="row">
+        <button class="btn" data-action="start">Start</button>
+        <button class="btn" data-action="reset">Neues Spiel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button class="btn active" data-tool="road">Straße (1🌲)</button>
+    <button class="btn" data-tool="lumber">Holzfäller (5🌲)</button>
+    <button class="btn" data-tool="quarry">Steinbruch (5🌲,2🌾)</button>
+    <button class="btn" data-tool="farm">Farm (5🌲)</button>
+    <button class="btn" data-tool="house">Haus (10🌲,5⛰️,5🌾)</button>
+    <button class="btn" data-tool="depot">Depot (8🌲,2⛰️)</button>
+    <button class="btn" data-tool="bulldoze">Abriss</button>
+  </div>
 </div>
 
-<div id="toolbar">
-  <button class="btn active" data-tool="road">Straße</button>
-  <button class="btn" data-tool="lumber">Holzfäller</button>
-  <button class="btn" data-tool="quarry">Steinbruch</button>
-  <button class="btn" data-tool="farm">Farm</button>
-  <button class="btn" data-tool="house">Haus</button>
-  <button class="btn" data-tool="depot">Lager</button>
-  <button class="btn" data-tool="bulldoze">Abriss</button>
-  <button id="toggleView" class="btn">Ansicht wechseln</button>
-</div>
+<!-- Zwang: alten Service‑Worker und Caches loswerden -->
+<script>
+  (async () => {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      regs.forEach(r => r.unregister());
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    // Sichtbarer Marker, dass **diese** index geladen wurde
+    const m = document.createElement('div');
+    m.textContent = 'INDEX v11.1r5 geladen';
+    Object.assign(m.style, {position:'fixed',left:'10px',top:'10px',padding:'4px 8px',background:'rgba(0,0,0,.4)',color:'#6ee7a9',font:'12px system-ui',borderRadius:'6px',zIndex:3000});
+    document.body.appendChild(m);
+  })();
+</script>
 
-<canvas id="canvas"></canvas>
-
-<div id="overlay">
-  <h1>Willkommen bei Siedler Mini</h1>
-  <button data-action="start">Spiel starten</button>
-  <button data-action="reset">Zurücksetzen</button>
-</div>
-
+<!-- Spiel -->
 <script src="main.js?v=11.1r5" defer></script>
-
 </body>
 </html>
