@@ -1,4 +1,4 @@
-/* ==== Siedler‑Mini V11.1 – main.js (Top/Persp/Iso, Texturen, Pan/Zoom, Bauen/Abriss, HQ‑Anbindung & Holzproduktion) ==== */
+/* ==== Siedler‑Mini V11.1 – main.js (v11.1r4) ==== */
 (() => {
   // ---------- Canvas ----------
   const canvas = document.getElementById('canvas');
@@ -29,7 +29,6 @@
   document.getElementById('toggleView').onclick = () => {
     viewMode = viewMode === 'iso' ? 'top' : (viewMode === 'top' ? 'persp' : 'iso');
     viewLbl.textContent = viewMode === 'iso' ? 'Iso' : (viewMode === 'top' ? 'Top' : 'Persp');
-    // HQ (oder Mitte) als Anker zentrieren
     let cx = (MAP.W/2)|0, cy = (MAP.H/2)|0;
     for (let y=0;y<MAP.H;y++) for (let x=0;x<MAP.W;x++) if (grid[y][x].building==='hq'){ cx=x; cy=y; }
     centerCamToCell(cx, cy);
@@ -64,7 +63,7 @@
     drawAll();
   });
   canvas.addEventListener('pointerup', () => { panning = false; });
-  canvas.addEventListener('contextmenu', (e)=>e.preventDefault()); // Rechtsklick-Menu aus
+  canvas.addEventListener('contextmenu', (e)=>e.preventDefault());
 
   // Touch: Pinch/Pan
   let tStart = null;
@@ -92,7 +91,7 @@
   }, {passive:false});
   canvas.addEventListener('touchend', ()=>{ tStart=null; }, {passive:true});
 
-  // ---------- Ressourcen / HUD ----------
+  // ---------- HUD ----------
   const res = { wood: 20, stone: 10, food: 10, gold: 0, pop: 5 };
   function hud() {
     const ids = ['wood','stone','food','gold','pop'];
@@ -100,7 +99,7 @@
   }
   hud();
 
-  // ---------- Texturen laden ----------
+  // ---------- Texturen ----------
   const IMAGES = {};
   function loadImage(key, src) {
     return new Promise((resolve) => {
@@ -124,7 +123,7 @@
       ground: 'grass',
       road: false,
       building: null,
-      node: null,          // 'forest' | später 'stone' | 'grain' ...
+      node: null,          // 'forest' usw.
       active: false,       // per HQ-Anbindung
       timer: 0             // Produktions-Timer
     }))
@@ -147,7 +146,7 @@
     }
   }
 
-  // einfache Wald-Flecken setzen
+  // Wald-Flecken
   function generateForests() {
     function blob(cx, cy, r){
       for (let y = Math.max(1, cy-r); y <= Math.min(MAP.H-2, cy+r); y++){
@@ -162,7 +161,7 @@
     blob(26, 18, 4);
   }
 
-  // ---------- Projektion / Kamera-Zentrierung ----------
+  // ---------- Projektion ----------
   function projRect(x, y) {
     if (viewMode === 'top') {
       return { x: x*MAP.TILE - cam.x, y: y*MAP.TILE - cam.y, w: MAP.TILE, h: MAP.TILE };
@@ -197,40 +196,33 @@
     return null;
   }
 
-  // ---------- HQ‑Anbindung (BFS über Straßen) ----------
+  // ---------- HQ‑Anbindung (BFS) ----------
   function updateConnectivity() {
-    // reset
     for (let y=0;y<MAP.H;y++) for (let x=0;x<MAP.W;x++) grid[y][x].active = false;
-
-    // HQs als Startpunkte suchen
     const q = [];
     for (let y=0;y<MAP.H;y++) for (let x=0;x<MAP.W;x++) {
       if (grid[y][x].building === 'hq') { grid[y][x].active = true; q.push([x,y]); }
     }
-
-    const passable = (x,y) => grid[y]?.[x] && (grid[y][x].road || grid[y][x].building==='hq');
+    const pass = (x,y)=> grid[y]?.[x] && (grid[y][x].road || grid[y][x].building==='hq');
     const N = [[1,0],[-1,0],[0,1],[0,-1]];
-
     while (q.length) {
       const [cx,cy]=q.shift();
       for (const d of N) {
         const nx=cx+d[0], ny=cy+d[1];
         if (!grid[ny]?.[nx]) continue;
         if (grid[ny][nx].active) continue;
-        if (passable(nx,ny)) { grid[ny][nx].active = true; q.push([nx,ny]); }
+        if (pass(nx,ny)) { grid[ny][nx].active = true; q.push([nx,ny]); }
         else if (grid[ny][nx].building && grid[ny][nx].building!=='hq') {
-          // Gebäude wird aktiviert, expandiert aber nicht weiter
-          grid[ny][nx].active = true;
+          grid[ny][nx].active = true; // Gebäude aktivieren, aber nicht weiter expandieren
         }
       }
     }
   }
 
-  // ---------- Produktion (nur Lumber -> wood) ----------
+  // ---------- Produktion ----------
   const PROD = {
-    lumber: { out:'wood', every:3.0, needNode:'forest' } // alle 3s +1 Holz, wenn an Wald angrenzend & aktiv
+    lumber: { out:'wood', every:3.0, needNode:'forest' } // alle 3s +1 Holz
   };
-
   function hasAdjacentNode(x,y, nodeName){
     const N=[[1,0],[-1,0],[0,1],[0,-1]];
     for (const d of N){
@@ -239,7 +231,6 @@
     }
     return false;
   }
-
   function tick(dt){
     for (let y=0;y<MAP.H;y++){
       for (let x=0;x<MAP.W;x++){
@@ -247,9 +238,9 @@
         const b = t.building;
         if (!b || b==='hq') continue;
         const p = PROD[b];
-        if (!p) continue;             // nur Lumber implementiert
-        if (!t.active) continue;      // nur wenn am Netz
-        if (p.needNode && !hasAdjacentNode(x,y,p.needNode)) continue; // braucht Wald
+        if (!p) continue;
+        if (!t.active) continue;
+        if (p.needNode && !hasAdjacentNode(x,y,p.needNode)) continue;
         t.timer += dt;
         if (t.timer >= p.every){
           t.timer -= p.every;
@@ -259,20 +250,32 @@
     }
   }
 
-  // ---------- Start / Reset ----------
+  // ---------- Start/Reset robust binden + Fallback ----------
   let started = false;
-  document.querySelectorAll('#overlay .btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const act = btn.dataset.action;
-      if (act === 'start') startGame();
-      if (act === 'reset') resetGame();
+  (function bindStartReset(){
+    const startBtn = document.querySelector('#overlay [data-action="start"]');
+    const resetBtn = document.querySelector('#overlay [data-action="reset"]');
+    if (startBtn) startBtn.onclick = () => startGame();
+    if (resetBtn) resetBtn.onclick = () => resetGame();
+    // Fallback: Tap aufs Canvas startet
+    canvas.addEventListener('click', () => { if (!started) startGame(); });
+
+    // Debug-Badge (Version sichtbar)
+    const badge = document.createElement('div');
+    badge.textContent = 'JS v11.1r4';
+    Object.assign(badge.style, {
+      position:'fixed', right:'10px', bottom:'10px', padding:'4px 8px',
+      background:'rgba(0,0,0,.45)', color:'#6ee7a9', borderRadius:'6px',
+      font:'12px system-ui', zIndex: 2000
     });
-  });
+    document.body.appendChild(badge);
+  })();
 
   function startGame() {
     if (started) return;
     started = true;
-    document.getElementById('overlay').style.display = 'none';
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.style.display = 'none';
     const cx = (MAP.W/2)|0, cy = (MAP.H/2)|0;
     grid[cy][cx].building = 'hq';
     centerCamToCell(cx, cy);
@@ -288,7 +291,8 @@
     generateGround();
     generateForests();
     started = false;
-    document.getElementById('overlay').style.display = 'flex';
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.style.display = 'flex';
     cam.x = cam.y = 0; cam.z = 1;
     centerCamToCell((MAP.W/2)|0, (MAP.H/2)|0);
     res.wood = 20; res.stone = 10; res.food = 10; res.gold = 0; res.pop = 5;
@@ -350,11 +354,7 @@
     // Gebäude
     if (!grid[gy][gx].building && !grid[gy][gx].road && grid[gy][gx].ground !== 'water') {
       if (!canPay(costs[tool] || {})) return;
-      // Lumber: muss an Wald angrenzen
-      if (tool==='lumber' && !hasAdjacentNode(gx,gy,'forest')) {
-        // optional: visuelle Fehlermarkierung möglich
-        return;
-      }
+      if (tool==='lumber' && !hasAdjacentNode(gx,gy,'forest')) return; // Lumber braucht Wald-Nachbar
       pay(costs[tool] || {});
       grid[gy][gx].building = tool;
       updateConnectivity();
@@ -379,7 +379,7 @@
   }
 
   function drawNodes() {
-    // Wald-Spots dezent einzeichnen
+    // Wald-Spots dezent
     for (let y=0;y<MAP.H;y++){
       for (let x=0;x<MAP.W;x++){
         if (grid[y][x].node==='forest'){
@@ -425,7 +425,6 @@
           continue;
         }
 
-        // einfache Platzhalter für andere Gebäude; aktive Gebäude heller
         const active = t.active;
         ctx.fillStyle =
           b === 'lumber' ? (active ? '#4aa45a' : '#3f6a3f') :
@@ -448,14 +447,11 @@
     ctx.restore();
   }
 
-  // ---------- Game Loop (Produktion) ----------
+  // ---------- Game Loop ----------
   let last = performance.now(), acc = 0;
   function loop(ts){
     const dt = Math.min(0.05, (ts-last)/1000); last=ts; acc+=dt;
-    while (acc > 0.2) { // grob 5 Ticks/s
-      tick(0.2);
-      acc -= 0.2;
-    }
+    while (acc > 0.2) { tick(0.2); acc -= 0.2; }
     hud();
     drawAll();
     requestAnimationFrame(loop);
@@ -470,7 +466,10 @@
     requestAnimationFrame(loop);
   }
 
-  Promise.all(toLoad.map(([k, s]) => loadImage(k, s)))
-    .then(() => { boot(); /* Overlay bleibt bis Start sichtbar */ });
+  Promise.all(toLoad.map(([k, s]) => loadImage(k, s))).then(() => {
+    boot();
+    // Fallback: auto-start nach kurzer Zeit, falls Buttons/Events blockiert sind
+    setTimeout(() => { if (!started) startGame(); }, 800);
+  });
 
 })();
