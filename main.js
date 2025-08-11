@@ -1,4 +1,4 @@
-/* ==== Siedler‑Mini V11.1 – main.js (Top/Persp/Iso, Texturen, Pan/Zoom, Bauen/Abriss) ==== */
+/* ==== Siedler‑Mini V11.1 – main.js (Top/Persp/Iso, Texturen, Pan/Zoom, Bauen/Abriss, HQ‑Anbindung & Holzproduktion) ==== */
 (() => {
   // ---------- Canvas ----------
   const canvas = document.getElementById('canvas');
@@ -66,7 +66,7 @@
   canvas.addEventListener('pointerup', () => { panning = false; });
   canvas.addEventListener('contextmenu', (e)=>e.preventDefault()); // Rechtsklick-Menu aus
 
-  // Touch: zwei Finger = Pan + Pinch handled vom Browser-zoom nicht, daher manuell:
+  // Touch: Pinch/Pan
   let tStart = null;
   canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length===2){
@@ -86,7 +86,6 @@
     const d = Math.hypot(p0.clientX-p1.clientX, p0.clientY-p1.clientY);
     const scale = d / tStart.d;
     cam.z = Math.max(0.5, Math.min(2.5, tStart.cam.z * scale));
-    // Pan nach Midpoint
     cam.x = tStart.cam.x - (cx - tStart.cx) / cam.z;
     cam.y = tStart.cam.y - (cy - tStart.cy) / cam.z;
     drawAll();
@@ -121,7 +120,14 @@
   // ---------- Karte ----------
   const MAP = { W: 36, H: 28, TILE: 64 };
   const grid = Array.from({ length: MAP.H }, () =>
-    Array.from({ length: MAP.W }, () => ({ ground: 'grass', road: false, building: null }))
+    Array.from({ length: MAP.W }, () => ({
+      ground: 'grass',
+      road: false,
+      building: null,
+      node: null,          // 'forest' | später 'stone' | 'grain' ...
+      active: false,       // per HQ-Anbindung
+      timer: 0             // Produktions-Timer
+    }))
   );
 
   function generateGround() {
@@ -141,14 +147,28 @@
     }
   }
 
+  // einfache Wald-Flecken setzen
+  function generateForests() {
+    function blob(cx, cy, r){
+      for (let y = Math.max(1, cy-r); y <= Math.min(MAP.H-2, cy+r); y++){
+        for (let x = Math.max(1, cx-r); x <= Math.min(MAP.W-2, cx+r); x++){
+          const dx=x-cx, dy=y-cy;
+          if (dx*dx+dy*dy <= r*r && grid[y][x].ground==='grass') grid[y][x].node = 'forest';
+        }
+      }
+    }
+    blob(10, 10, 3);
+    blob(20, 7, 2);
+    blob(26, 18, 4);
+  }
+
   // ---------- Projektion / Kamera-Zentrierung ----------
   function projRect(x, y) {
-    // Weltkachel -> Bildschirmrechteck (ungezoomt)
     if (viewMode === 'top') {
       return { x: x*MAP.TILE - cam.x, y: y*MAP.TILE - cam.y, w: MAP.TILE, h: MAP.TILE };
     }
     if (viewMode === 'persp') {
-      const h = MAP.TILE * 0.82; // vertikal flacher
+      const h = MAP.TILE * 0.82;
       return { x: x*MAP.TILE - cam.x, y: y*h - cam.y, w: MAP.TILE, h };
     }
     // iso
@@ -163,11 +183,9 @@
     cam.y = r.y + r.h/2 - (H / cam.z)/2;
   }
 
-  // Heuristik: finde Zelle unter Bildschirmpunkt (sx,sy)
   function screenToCell(sx, sy) {
     const wx = sx / cam.z + cam.x;
     const wy = sy / cam.z + cam.y;
-    // Brute-force (Map ist klein): prüfe projRect‑Bounds
     for (let y = 0; y < MAP.H; y++) {
       for (let x = 0; x < MAP.W; x++) {
         const r = projRect(x, y);
@@ -177,6 +195,68 @@
       }
     }
     return null;
+  }
+
+  // ---------- HQ‑Anbindung (BFS über Straßen) ----------
+  function updateConnectivity() {
+    // reset
+    for (let y=0;y<MAP.H;y++) for (let x=0;x<MAP.W;x++) grid[y][x].active = false;
+
+    // HQs als Startpunkte suchen
+    const q = [];
+    for (let y=0;y<MAP.H;y++) for (let x=0;x<MAP.W;x++) {
+      if (grid[y][x].building === 'hq') { grid[y][x].active = true; q.push([x,y]); }
+    }
+
+    const passable = (x,y) => grid[y]?.[x] && (grid[y][x].road || grid[y][x].building==='hq');
+    const N = [[1,0],[-1,0],[0,1],[0,-1]];
+
+    while (q.length) {
+      const [cx,cy]=q.shift();
+      for (const d of N) {
+        const nx=cx+d[0], ny=cy+d[1];
+        if (!grid[ny]?.[nx]) continue;
+        if (grid[ny][nx].active) continue;
+        if (passable(nx,ny)) { grid[ny][nx].active = true; q.push([nx,ny]); }
+        else if (grid[ny][nx].building && grid[ny][nx].building!=='hq') {
+          // Gebäude wird aktiviert, expandiert aber nicht weiter
+          grid[ny][nx].active = true;
+        }
+      }
+    }
+  }
+
+  // ---------- Produktion (nur Lumber -> wood) ----------
+  const PROD = {
+    lumber: { out:'wood', every:3.0, needNode:'forest' } // alle 3s +1 Holz, wenn an Wald angrenzend & aktiv
+  };
+
+  function hasAdjacentNode(x,y, nodeName){
+    const N=[[1,0],[-1,0],[0,1],[0,-1]];
+    for (const d of N){
+      const nx=x+d[0], ny=y+d[1];
+      if (grid[ny]?.[nx]?.node === nodeName) return true;
+    }
+    return false;
+  }
+
+  function tick(dt){
+    for (let y=0;y<MAP.H;y++){
+      for (let x=0;x<MAP.W;x++){
+        const t = grid[y][x];
+        const b = t.building;
+        if (!b || b==='hq') continue;
+        const p = PROD[b];
+        if (!p) continue;             // nur Lumber implementiert
+        if (!t.active) continue;      // nur wenn am Netz
+        if (p.needNode && !hasAdjacentNode(x,y,p.needNode)) continue; // braucht Wald
+        t.timer += dt;
+        if (t.timer >= p.every){
+          t.timer -= p.every;
+          res[p.out] = (res[p.out]||0) + 1;
+        }
+      }
+    }
   }
 
   // ---------- Start / Reset ----------
@@ -196,14 +276,17 @@
     const cx = (MAP.W/2)|0, cy = (MAP.H/2)|0;
     grid[cy][cx].building = 'hq';
     centerCamToCell(cx, cy);
+    updateConnectivity();
+    hud();
     drawAll();
   }
 
   function resetGame() {
     for (let y = 0; y < MAP.H; y++)
       for (let x = 0; x < MAP.W; x++)
-        grid[y][x] = { ground: 'grass', road: false, building: null };
+        grid[y][x] = { ground: 'grass', road: false, building: null, node:null, active:false, timer:0 };
     generateGround();
+    generateForests();
     started = false;
     document.getElementById('overlay').style.display = 'flex';
     cam.x = cam.y = 0; cam.z = 1;
@@ -235,8 +318,7 @@
   function inb(x,y){ return x>=0 && y>=0 && x<MAP.W && y<MAP.H; }
 
   canvas.addEventListener('pointerdown', (e) => {
-    // Linksklick bauen
-    if (e.button !== 0) return;
+    if (e.button !== 0) return; // nur Linksklick fürs Bauen
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
     const cell = screenToCell(sx, sy);
@@ -245,10 +327,11 @@
     if (!inb(gx, gy)) return;
 
     if (tool === 'bulldoze') {
-      // HQ bleibt geschützt
       if (grid[gy][gx].building === 'hq') return;
       grid[gy][gx].road = false;
       grid[gy][gx].building = null;
+      grid[gy][gx].timer = 0;
+      updateConnectivity();
       drawAll();
       return;
     }
@@ -258,6 +341,7 @@
         if (!canPay(costs.road)) return;
         pay(costs.road);
         grid[gy][gx].road = true;
+        updateConnectivity();
       }
       drawAll();
       return;
@@ -266,8 +350,14 @@
     // Gebäude
     if (!grid[gy][gx].building && !grid[gy][gx].road && grid[gy][gx].ground !== 'water') {
       if (!canPay(costs[tool] || {})) return;
+      // Lumber: muss an Wald angrenzen
+      if (tool==='lumber' && !hasAdjacentNode(gx,gy,'forest')) {
+        // optional: visuelle Fehlermarkierung möglich
+        return;
+      }
       pay(costs[tool] || {});
       grid[gy][gx].building = tool;
+      updateConnectivity();
       drawAll();
     }
   });
@@ -279,15 +369,26 @@
         const g = grid[y][x].ground;
         const img = g === 'water' ? IMAGES.water : (g === 'shore' ? IMAGES.shore : IMAGES.grass);
         const r = projRect(x, y);
-        if (img && img.width) {
-          ctx.drawImage(img, r.x, r.y, r.w, r.h);
-        } else {
-          ctx.fillStyle = g === 'water' ? '#0e2233' : (g === 'shore' ? '#2a3f2a' : '#1b2e19');
-          ctx.fillRect(r.x, r.y, r.w, r.h);
-        }
+        if (img && img.width) ctx.drawImage(img, r.x, r.y, r.w, r.h);
+        else { ctx.fillStyle = g === 'water' ? '#0e2233' : (g === 'shore' ? '#2a3f2a' : '#1b2e19'); ctx.fillRect(r.x, r.y, r.w, r.h); }
         // dezentes Raster
         ctx.strokeStyle = 'rgba(255,255,255,.05)';
         ctx.strokeRect(r.x, r.y, r.w, r.h);
+      }
+    }
+  }
+
+  function drawNodes() {
+    // Wald-Spots dezent einzeichnen
+    for (let y=0;y<MAP.H;y++){
+      for (let x=0;x<MAP.W;x++){
+        if (grid[y][x].node==='forest'){
+          const r = projRect(x,y);
+          ctx.fillStyle = 'rgba(30,120,40,0.55)';
+          ctx.beginPath();
+          ctx.ellipse(r.x + r.w*0.5, r.y + r.h*0.6, r.w*0.28, r.h*0.18, 0, 0, Math.PI*2);
+          ctx.fill();
+        }
       }
     }
   }
@@ -298,7 +399,7 @@
         if (!grid[y][x].road) continue;
         const r = projRect(x, y);
         ctx.fillStyle = '#6b6f7a';
-        ctx.fillRect(r.x + r.w*0.16, r.y + r.h*0.34, r.w*0.68, r.h*0.32); // einfacher Feldweg
+        ctx.fillRect(r.x + r.w*0.16, r.y + r.h*0.34, r.w*0.68, r.h*0.32);
       }
     }
   }
@@ -306,7 +407,8 @@
   function drawBuildings() {
     for (let y = 0; y < MAP.H; y++) {
       for (let x = 0; x < MAP.W; x++) {
-        const b = grid[y][x].building;
+        const t = grid[y][x];
+        const b = t.building;
         if (!b) continue;
         const r = projRect(x, y);
 
@@ -323,13 +425,14 @@
           continue;
         }
 
-        // Platzhalter-Farben für andere Gebäude (bis PNGs genutzt werden)
+        // einfache Platzhalter für andere Gebäude; aktive Gebäude heller
+        const active = t.active;
         ctx.fillStyle =
-          b === 'depot'  ? '#8a6a46' :
-          b === 'lumber' ? '#3f6a3f' :
-          b === 'quarry' ? '#5b6370' :
-          b === 'farm'   ? '#8aa34f' :
-          b === 'house'  ? '#6f7c8a' : '#445';
+          b === 'lumber' ? (active ? '#4aa45a' : '#3f6a3f') :
+          b === 'quarry' ? (active ? '#8a92a3' : '#5b6370') :
+          b === 'farm'   ? (active ? '#a9c35b' : '#8aa34f') :
+          b === 'house'  ? (active ? '#93a4b3' : '#6f7c8a') :
+          b === 'depot'  ? (active ? '#b2895a' : '#8a6a46') : '#445';
         ctx.fillRect(r.x + r.w*0.12, r.y + r.h*0.12, r.w*0.76, r.h*0.76);
       }
     }
@@ -339,17 +442,32 @@
     ctx.save();
     ctx.scale(cam.z, cam.z);
     drawGround();
+    drawNodes();
     drawRoads();
     drawBuildings();
     ctx.restore();
   }
 
+  // ---------- Game Loop (Produktion) ----------
+  let last = performance.now(), acc = 0;
+  function loop(ts){
+    const dt = Math.min(0.05, (ts-last)/1000); last=ts; acc+=dt;
+    while (acc > 0.2) { // grob 5 Ticks/s
+      tick(0.2);
+      acc -= 0.2;
+    }
+    hud();
+    drawAll();
+    requestAnimationFrame(loop);
+  }
+
   // ---------- Boot ----------
   function boot() {
     generateGround();
-    // Kamera auf Kartenmitte, noch bevor Start
+    generateForests();
     centerCamToCell((MAP.W/2)|0, (MAP.H/2)|0);
     drawAll();
+    requestAnimationFrame(loop);
   }
 
   Promise.all(toLoad.map(([k, s]) => loadImage(k, s)))
