@@ -67,11 +67,5 @@
 
 <!-- Kein Service‑Worker, nur Spiel -->
 <script src="main.js?v=11.1r4" defer></script>
-<script>
-  // Alte Service‑Worker loswerden, falls noch einer hängt
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
-  }
-</script>
 </body>
 </html>
