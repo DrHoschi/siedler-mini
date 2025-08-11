@@ -66,10 +66,6 @@
 </div>
 
 <!-- Kein Service‑Worker, nur Spiel -->
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(list => list.forEach(r => r.unregister()));
-}
-</script>
+<script src="main.js?v=11.1r2" defer></script>
 </body>
 </html>
