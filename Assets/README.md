@@ -1,1 +1,0 @@
-hier sollten alle Texturen liegen
