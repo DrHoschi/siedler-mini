@@ -22,7 +22,7 @@ function loadOne(key, src){
   return new Promise(res=>{
     const img=new Image();
     img.onload=()=>{ IM[key]=img; res(); };
-    img.onerror=()=>{ console.warn('[assets] fehlend:', src); IM[key]=null; res(); };
+    img.onerror=()=>{ console.warn(`[assets] fehlend: ${src}`); IM[key]=null; res(); };
     img.src=src;
   });
 }
