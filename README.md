@@ -15,11 +15,15 @@ siedler-mini-v11/
     ├── carrier.png
     └── … (weitere Texturen)
 
-    index.html
-main.js
-/assets
-  grass.png  water.png  shore.png
-  hq_wood.png
-  road_straight.png  road_curve.png  road_t.png  road_cross.png  road_end.png
-  lumberjack.png  quarry.png  farm.png  house.png  depot.png
-  carrier.png   (Spritesheet, s. oben)
+index.html          // nur Loader + Canvas + UI
+main.js             // Initialisierung, Loop, State-Management
+core/
+ ├─ assets.js       // Laden und Verwalten der Texturen
+ ├─ camera.js       // Pan/Zoom-Logik
+ ├─ input.js        // Pointer Events speziell für Touch
+ ├─ render.js       // Spielfeld zeichnen
+ ├─ world.js        // Spiellogik (Bauen, Abriss, Rohstoffe)
+ ├─ ui.js           // Buttons, Menüs, HUD
+ └─ sim.js          // Produktion, Träger, Wegfindung
+assets/
+ └─ *.png           // Texturen
