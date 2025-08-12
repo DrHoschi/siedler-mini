@@ -1,145 +1,182 @@
-// render.js – V13.7.2 – stabiler Iso-Renderer mit Kamera-Zentrierung
-export class IsoRenderer {
-  constructor(canvas, opts = {}) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha: false });
-    this.TW = opts.tileW ?? 128;      // Breite der Iso-Raute (Screen)
-    this.TH = opts.tileH ?? 64;       // Höhe der Iso-Raute (Screen)
-    this.Z  = opts.zoom ?? 1;         // Zoom-Faktor (1 = 100%)
-    this.cx = 0;                      // Kamera: Welt-X (in ISO-Spalten)
-    this.cy = 0;                      // Kamera: Welt-Y (in ISO-Reihen)
-    this.bg = opts.bg ?? '#0f172a';   // Hintergrund
+// Isometrischer Renderer, korrekte Screen<->Grid Umrechnung, Clipping, Tiles
+export async function createRenderer(canvas, world, hooks){
+  const ctx = canvas.getContext('2d');
 
-    this.pixelRatio = Math.max(1, window.devicePixelRatio || 1);
-    this.resizeObserver = new ResizeObserver(()=>this.resize());
-    this.resizeObserver.observe(this.canvas);
-    this.resize();
-
-    // Pre-bind
-    this.worldToScreen = this.worldToScreen.bind(this);
-    this.screenToWorld = this.screenToWorld.bind(this);
-  }
-
-  destroy(){
-    this.resizeObserver?.disconnect();
-  }
-
-  setZoom(z, pivotScreen=null){
-    // Zoom zur Cursor-Position (optional)
-    const oldZ = this.Z;
-    const newZ = Math.max(0.25, Math.min(3, z));
-    if (!pivotScreen){
-      this.Z = newZ;
-      return;
+  // Gerätepixel korrekt handhaben
+  const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  function resize(){
+    const w = Math.floor(canvas.clientWidth * DPR);
+    const h = Math.floor(canvas.clientHeight* DPR);
+    if (canvas.width!==w || canvas.height!==h){
+      canvas.width=w; canvas.height=h;
     }
-    // Weltkoordinate vor dem Zoom merken:
-    const w = this.screenToWorld(pivotScreen.x, pivotScreen.y);
-    this.Z = newZ;
-    // Danach gleiche Weltkoordinate wieder unter den Cursor legen:
-    const s = this.worldToScreen(w.x, w.y);
-    this.cx += (pivotScreen.x - s.x) / (this.TW * 0.5 * this.Z);
-    this.cy += (pivotScreen.y - s.y) / (this.TH * 0.5 * this.Z);
+  }
+  // Layout
+  function fit(){
+    canvas.style.width='100vw';
+    canvas.style.height='100vh';
+    resize();
+  }
+  fit(); window.addEventListener('resize', fit);
+
+  // Texturen laden (fehlende = Platzhalter)
+  const IM = {};
+  async function load(name, src){
+    return new Promise(res=>{
+      const img = new Image();
+      img.onload=()=>{ IM[name]=img; res(); };
+      img.onerror=()=>{ IM[name]=makePH(); res(); };
+      img.src=src;
+    });
+  }
+  function makePH(){
+    const c = document.createElement('canvas');
+    c.width=64; c.height=64;
+    const g = c.getContext('2d');
+    g.fillStyle='#334155'; g.fillRect(0,0,64,64);
+    g.strokeStyle='#475569'; g.beginPath(); g.moveTo(0,64); g.lineTo(64,0); g.stroke();
+    return c;
   }
 
-  setCameraCenter(worldX, worldY){ this.cx = worldX; this.cy = worldY; }
-  nudgeCamera(dx, dy){ this.cx += dx; this.cy += dy; }
+  await Promise.all([
+    load('grass','assets/grass.png'),
+    load('water','assets/water.png'),
+    load('shore','assets/shore.png'),
+    load('hq_wood','assets/hq_wood.png'),
+    load('hq_stone','assets/hq_stone.png'),
+    load('lumber','assets/lumberjack.png'),
+    load('depot','assets/depot.png'),
+    load('road','assets/road.png'),
+  ]);
 
-  resize(){
-    const r = this.pixelRatio;
-    const w = this.canvas.clientWidth|0;
-    const h = this.canvas.clientHeight|0;
-    this.canvas.width  = Math.max(1, (w * r)|0);
-    this.canvas.height = Math.max(1, (h * r)|0);
-    this.ctx.setTransform(r,0,0,r,0,0);
+  // Iso‑Geometrie
+  const base = 64;                 // Kachelgrundmaß
+  const isoW = base, isoH = base*0.5; // Diamantbreite/-höhe
+  let zoom = 1;
+  let cam = { x: world.W/2, y: world.H/2, px:0, py:0 }; // center in Grid
+
+  // Von Grid (gx,gy) zu Screen‑Pixel
+  function gridToScreen(gx,gy){
+    const cx = (gx - gy) * (isoW/2);
+    const cy = (gx + gy) * (isoH/2);
+    const sx = (canvas.width/2) + (cx - cam.px)*zoom;
+    const sy = (canvas.height/2)+ (cy - cam.py)*zoom;
+    return {x:sx, y:sy};
+  }
+  // Umkehrung: Screen -> Grid (nächste Zelle)
+  function screenToGrid(sx,sy){
+    const cx = ((sx - canvas.width/2)/zoom) + cam.px;
+    const cy = ((sy - canvas.height/2)/zoom) + cam.py;
+    const gx = Math.round(( cy/(isoH/2) + cx/(isoW/2) )/2);
+    const gy = Math.round(( cy/(isoH/2) - cx/(isoW/2) )/2);
+    return {gx, gy};
   }
 
-  clear(){
-    this.ctx.fillStyle = this.bg;
-    this.ctx.fillRect(0,0,this.canvas.width/this.pixelRatio,this.canvas.height/this.pixelRatio);
+  // Kameraoperationen
+  function centerOn(gx,gy, z=zoom){
+    cam.x=gx; cam.y=gy;
+    const c = gridToScreen(gx,gy);
+    cam.px = ((gx - gy) * (isoW/2));
+    cam.py = ((gx + gy) * (isoH/2));
+    setZoomClamped(z);
+    requestFrame();
+  }
+  function panPixels(dx,dy){
+    cam.px -= dx/zoom;
+    cam.py -= dy/zoom;
+    requestFrame();
+  }
+  function setZoomClamped(z, anchorX=null, anchorY=null){
+    const nz = Math.min(2.0, Math.max(0.35, z));
+    if (anchorX!=null && anchorY!=null){
+      // zoom zum Maus-/Fingerpunkt
+      const before = screenToGrid(anchorX,anchorY);
+      zoom = nz;
+      hooks?.onZoom?.(zoom);
+      const after = screenToGrid(anchorX,anchorY);
+      cam.px += (after.gx - before.gx)*(isoW/2);
+      cam.py += (after.gy - before.gy)*(isoH/2);
+    } else {
+      zoom = nz;
+      hooks?.onZoom?.(zoom);
+    }
+    requestFrame();
   }
 
-  // ---- Iso-Konvertierung
-  // Welt (i,j) -> Screen (x,y)
-  worldToScreen(i, j){
-    // klassische 2:1-Iso
-    const halfW = this.TW * 0.5 * this.Z;
-    const halfH = this.TH * 0.5 * this.Z;
-    const ox = (this.canvas.clientWidth  * 0.5);
-    const oy = (this.canvas.clientHeight * 0.5);
-    const dx = (i - this.cx);
-    const dy = (j - this.cy);
-    const x = ox + (dx - dy) * halfW;
-    const y = oy + (dx + dy) * halfH;
-    return { x, y };
-  }
+  // Zeichnen
+  let needs = true;
+  function requestFrame(){ needs=true; }
+  function draw(){
+    if (!needs) return;
+    needs=false; resize();
 
-  // Screen (px,py) -> Welt (i,j)
-  screenToWorld(px, py){
-    const halfW = this.TW * 0.5 * this.Z;
-    const halfH = this.TH * 0.5 * this.Z;
-    const ox = (this.canvas.clientWidth  * 0.5);
-    const oy = (this.canvas.clientHeight * 0.5);
-    const sx = (px - ox);
-    const sy = (py - oy);
-    // Inverse der obigen Linearkombination:
-    const dx =  (sx / (2*halfW)) + (sy / (2*halfH));
-    const dy = -(sx / (2*halfW)) + (sy / (2*halfH));
-    return { x: this.cx + dx, y: this.cy + dy };
-  }
+    const g = ctx;
+    g.setTransform(DPR,0,0,DPR,0,0);
+    g.clearRect(0,0,canvas.width,canvas.height);
 
-  // Zeichne eine einzelne Iso-Kachel-Textur mittig auf (i,j)
-  drawTileImage(img, i, j){
-    const p = this.worldToScreen(i, j);
-    const w = this.TW * this.Z;
-    const h = this.TH * this.Z;
-    // Texturen sind in deinem Projekt als "hochstehende" Rauten angelegt.
-    this.ctx.imageSmoothingEnabled = false;
-    this.ctx.drawImage(img, p.x - w*0.5, p.y - h*0.75, w, h); // kleiner Y-Offset für „Höhe“
-  }
+    // Sichtrechteck in Grid grob bestimmen (großzügig)
+    const pad = 4;
+    const TL = screenToGrid(-200,-200);                  // extra Rand
+    const BR = screenToGrid(canvas.width+200, canvas.height+200);
+    const minx = Math.max(0, Math.min(TL.gx,BR.gx)-pad);
+    const maxx = Math.min(world.W-1, Math.max(TL.gx,BR.gx)+pad);
+    const miny = Math.max(0, Math.min(TL.gy,BR.gy)-pad);
+    const maxy = Math.min(world.H-1, Math.max(TL.gy,BR.gy)+pad);
 
-  // Hilfs-Gitter (Debug)
-  drawGrid(area, color='rgba(255,255,255,0.06)'){
-    const {minI,maxI,minJ,maxJ} = area;
-    this.ctx.strokeStyle = color;
-    this.ctx.lineWidth = 1;
-    this.ctx.beginPath();
-    for(let i=minI;i<=maxI;i++){
-      for(let j=minJ;j<=maxJ;j++){
-        const p = this.worldToScreen(i,j);
-        const hw = this.TW*0.5*this.Z, hh=this.TH*0.5*this.Z;
-        this.ctx.moveTo(p.x, p.y-hh);
-        this.ctx.lineTo(p.x+hw, p.y);
-        this.ctx.lineTo(p.x, p.y+hh);
-        this.ctx.lineTo(p.x-hw, p.y);
-        this.ctx.closePath();
+    // Boden
+    for (let y=miny; y<=maxy; y++){
+      for (let x=minx; x<=maxx; x++){
+        const t = world.tiles[y*world.W+x]; // 0 grass 1 water 2 shore
+        const p = gridToScreen(x,y);
+        const img = t===1?IM.water : t===2?IM.shore : IM.grass;
+        const w = isoW*zoom, h = isoH*zoom;
+        g.drawImage(img, p.x-w/2, p.y-h/2, w, h);
       }
     }
-    this.ctx.stroke();
+
+    // Straßen
+    world.roads.forEach(k=>{
+      const [x,y] = k.split(',').map(Number);
+      if (x<minx||x>maxx||y<miny||y>maxy) return;
+      const p = gridToScreen(x,y);
+      g.drawImage(IM.road, p.x-(isoW*zoom/2), p.y-(isoH*zoom/2), isoW*zoom, isoH*zoom);
+    });
+
+    // Gebäude (einfache Z‑Sortierung)
+    const list = [...world.buildings].sort((a,b)=>(a.x+a.y)-(b.x+b.y));
+    for (const b of list){
+      const p = gridToScreen(b.x,b.y);
+      const img = IM[b.kind] || IM.hq_wood;
+      const w = isoW*1.8*zoom, h = isoH*3.2*zoom;
+      g.drawImage(img, p.x-w/2, p.y-h*0.9, w, h); // optischer Offset
+    }
+
+    // Debug-Raster
+    if (hooks?.debugGetter?.()){
+      g.strokeStyle='rgba(0,255,255,.15)';
+      for (let y=miny; y<=maxy; y++){
+        for (let x=minx; x<=maxx; x++){
+          const p = gridToScreen(x,y);
+          const w = isoW*zoom, h = isoH*zoom;
+          g.strokeRect(p.x-w/2, p.y-h/2, w, h);
+        }
+      }
+    }
   }
 
-  // Sichtbereich als Welt-Bounds (für culling)
-  getVisibleWorldBounds(pad=2){
-    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
-    const tl = this.screenToWorld(0,0);
-    const tr = this.screenToWorld(W,0);
-    const bl = this.screenToWorld(0,H);
-    const br = this.screenToWorld(W,H);
-    const minI = Math.floor(Math.min(tl.x,tr.x,bl.x,br.x)) - pad;
-    const maxI = Math.ceil (Math.max(tl.x,tr.x,bl.x,br.x)) + pad;
-    const minJ = Math.floor(Math.min(tl.y,tr.y,bl.y,br.y)) - pad;
-    const maxJ = Math.ceil (Math.max(tl.y,tr.y,bl.y,br.y)) + pad;
-    return {minI,maxI,minJ,maxJ};
+  // Loop
+  function loop(){
+    draw();
+    requestAnimationFrame(loop);
   }
+  loop();
 
-  // Debug-Anzeige oben rechts
-  drawDebug(text){
-    this.ctx.save();
-    this.ctx.font = '12px system-ui, sans-serif';
-    this.ctx.textAlign = 'right';
-    this.ctx.textBaseline = 'top';
-    this.ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    const s = Array.isArray(text)? text.join('  |  ') : text;
-    this.ctx.fillText(s, this.canvas.clientWidth-10, 8);
-    this.ctx.restore();
-  }
+  return {
+    requestFrame,
+    centerOn,
+    panPixels,
+    setZoomClamped,
+    get zoom(){return zoom;},
+    screenToGrid,
+  };
 }
