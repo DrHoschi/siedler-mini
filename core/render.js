@@ -1,80 +1,151 @@
-// core/render.js — Isometrisches Rendering (keine Welt-Importe!)
+// core/render.js
+// Isometrischer Renderer + korrekte Projektion
 
-import { IM } from './assets.js';
+export const TILE = 64;           // Kantenlänge der „Quadrat“-Basis (vor Iso)
+export const TILE_W = TILE;       // Breite in Weltkoordinaten
+export const TILE_H = TILE / 2;   // projizierte Höhe in Iso (Diamant)
+export const PAD_TILES = 2;       // zusätzliche Kacheln um den View, gegen schwarze Ränder
 
-// Einheitliche Tile-Maße
-export const TILE_W = 96;
-export const TILE_H = 48;
-export const HALF_W = TILE_W/2;
-export const HALF_H = TILE_H/2;
-
-// Welt -> Screen (ohne Kamera)
-export function worldToScreen(ix,iy){
-  return { wx:(ix-iy)*HALF_W, wy:(ix+iy)*HALF_H };
+export class Camera {
+  constructor(w, h) {
+    this.x = 0;   // Weltkoordinate (px, isometrische Leinwand)
+    this.y = 0;
+    this.z = 1;   // Zoom
+    this.vw = w;  // viewport pixel
+    this.vh = h;
+  }
+  resize(w, h) { this.vw = w; this.vh = h; }
 }
 
-// Textur zeichnen oder Fallback
-function drawTile(ctx, img, sx, sy, w=TILE_W, h=TILE_H, fallback='#3c5'){
-  if(img){ ctx.drawImage(img, sx, sy, w, h); }
-  else{ ctx.fillStyle=fallback; ctx.fillRect(sx, sy, w, h); }
+export function makeCanvas() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  return { canvas, ctx };
 }
 
-/**
- * drawWorldLayered(ctx, cam, data, view)
- * data: { W,H, tiles (Uint8), roads(Set key "x,y"), buildings:Array<{x,y,type}> }
- * view: {screenW,screenH}
- */
-export function drawWorldLayered(ctx, cam, data, view){
-  const sw=view.screenW, sh=view.screenH;
+export function resizeCanvas(cam, canvas) {
+  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cam.resize(rect.width, rect.height);
+  return dpr;
+}
 
-  // Sichtfenster grob -> Kachelbereich
-  const pad = 4; // großzügig, vermeidet „schwarze Ecken“
-  const minX = Math.floor((cam.x - sw*0.5)/HALF_W) - pad;
-  const maxX = Math.ceil((cam.x + sw + sw*0.5)/HALF_W) + pad;
-  const minY = Math.floor((cam.y - sh*0.5)/HALF_H) - pad;
-  const maxY = Math.ceil((cam.y + sh + sh*0.5)/HALF_H) + pad;
+// ---------- Projektion
 
-  // Boden
-  for(let y=minY; y<=maxY; y++){
-    for(let x=minX; x<=maxX; x++){
-      if(x<0||y<0||x>=data.W||y>=data.H) continue;
-      const {wx,wy}=worldToScreen(x,y);
-      const sx=(wx - cam.x) * cam.z;
-      const sy=(wy - cam.y) * cam.z;
-      // Tile wählen
-      const t = data.tiles[y*data.W+x]; // 0=grass,1=water,2=shore,3=dirt
-      const img = t===1? IM.water : t===2? IM.shore : t===3? IM.dirt : IM.grass;
-      drawTile(ctx, img, sx, sy, TILE_W*cam.z, TILE_H*cam.z);
-      // einfache Rasterlinie (sehr dezent)
-      ctx.strokeStyle='rgba(0,0,0,.12)';
-      ctx.strokeRect(sx, sy, TILE_W*cam.z, TILE_H*cam.z);
+// Welt(px, „iso‑Leinwand“) → Bildschirm(px)
+export function worldToScreen(cam, wx, wy) {
+  // Kamera anwenden
+  const sx = (wx - cam.x) * cam.z + cam.vw * 0.5;
+  const sy = (wy - cam.y) * cam.z + cam.vh * 0.5;
+  return { sx, sy };
+}
+
+// Bildschirm(px) → Welt(px)
+export function screenToWorld(cam, sx, sy) {
+  const wx = (sx - cam.vw * 0.5) / cam.z + cam.x;
+  const wy = (sy - cam.vh * 0.5) / cam.z + cam.y;
+  return { wx, wy };
+}
+
+// Tile( i,j ) → Welt(px)
+export function cellToWorld(i, j) {
+  // „Diamant“: Basisformel
+  const wx = (i - j) * (TILE_W * 0.5);
+  const wy = (i + j) * (TILE_H * 0.5);
+  return { wx, wy };
+}
+
+// Welt(px) → Tile( i,j )  (das ist der wichtige Fix!)
+export function worldToCell(wx, wy) {
+  // Inverse zu cellToWorld:
+  // i = wy/TILE_H + wx/TILE_W
+  // j = wy/TILE_H - wx/TILE_W
+  const iFloat = (wy / (TILE_H * 0.5) + wx / (TILE_W * 0.5)) * 0.5;
+  const jFloat = (wy / (TILE_H * 0.5) - wx / (TILE_W * 0.5)) * 0.5;
+  // zu Kachel runden
+  const i = Math.floor(iFloat);
+  const j = Math.floor(jFloat);
+  return { i, j, iFloat, jFloat };
+}
+
+// Client‑Koord. (PointerEvent) sicher in Canvas‑Space holen
+export function clientToCanvasXY(canvas, ev) {
+  const rect = canvas.getBoundingClientRect();
+  // Touch: wir nehmen den ersten Finger
+  const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+  const cy = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+  return { cx, cy };
+}
+
+// Sichtbares Kachelrechteck bestimmen + Polster
+export function visibleTileBounds(cam) {
+  // vier View‑Ecken in Welt
+  const corners = [
+    screenToWorld(cam, 0, 0),
+    screenToWorld(cam, cam.vw, 0),
+    screenToWorld(cam, 0, cam.vh),
+    screenToWorld(cam, cam.vw, cam.vh),
+  ];
+  // in Tile‑Space umrechnen und Min/Max bestimmen
+  let imin = +Infinity, jmin = +Infinity, imax = -Infinity, jmax = -Infinity;
+  for (const c of corners) {
+    const { iFloat, jFloat } = worldToCell(c.wx, c.wy);
+    imin = Math.min(imin, iFloat); imax = Math.max(imax, iFloat);
+    jmin = Math.min(jmin, jFloat); jmax = Math.max(jmax, jFloat);
+  }
+  imin = Math.floor(imin) - PAD_TILES;
+  jmin = Math.floor(jmin) - PAD_TILES;
+  imax = Math.ceil(imax) + PAD_TILES;
+  jmax = Math.ceil(jmax) + PAD_TILES;
+  return { imin, imax, jmin, jmax };
+}
+
+// Zeichnet Map‑Tiles
+export function drawMap(ctx, cam, world, IM) {
+  // Hintergrund
+  ctx.fillStyle = '#0e1416';
+  ctx.fillRect(0, 0, cam.vw, cam.vh);
+
+  const { imin, imax, jmin, jmax } = visibleTileBounds(cam);
+
+  for (let j = jmin; j <= jmax; j++) {
+    for (let i = imin; i <= imax; i++) {
+      if (i < 0 || j < 0 || i >= world.W || j >= world.H) continue;
+      const t = world.tile[i + j * world.W];
+      const { wx, wy } = cellToWorld(i, j);
+      const { sx, sy } = worldToScreen(cam, wx, wy);
+
+      const img = pickTileImage(t, IM);
+      // center auf Diamant legen
+      const iw = TILE_W;          // Bild darf breiter sein – wird skaliert
+      const ih = TILE_H * 2;      // volle „Rauten‑Höhe“
+      ctx.drawImage(img, sx - iw / 2, sy - ih / 2, iw, ih);
     }
   }
+}
 
-  // Straßen (einfach)
-  if(data.roads){
-    ctx.globalAlpha=0.95;
-    for(const k of data.roads){
-      const [x,y]=k.split(',').map(n=>+n);
-      if(x<0||y<0||x>=data.W||y>=data.H) continue;
-      const {wx,wy}=worldToScreen(x,y);
-      const sx=(wx - cam.x) * cam.z;
-      const sy=(wy - cam.y) * cam.z;
-      drawTile(ctx, IM.road||IM.road_straight, sx, sy, TILE_W*cam.z, TILE_H*cam.z, '#775');
-    }
-    ctx.globalAlpha=1;
+function pickTileImage(t, IM) {
+  // 0=grass,1=water,2=shore,3=rocky,4=sand,5=dirt
+  switch (t) {
+    case 1: return IM.water || fallback('#457b9d');
+    case 2: return IM.shore || fallback('#d6b36a');
+    case 3: return IM.rocky || fallback('#6b6f7a');
+    case 4: return IM.sand || fallback('#c2a766');
+    case 5: return IM.dirt || fallback('#7a5b3a');
+    default: return IM.grass || fallback('#355e3b');
   }
+}
 
-  // Gebäude
-  for(const b of data.buildings){
-    const {wx,wy}=worldToScreen(b.x,b.y);
-    const sx=(wx - cam.x) * cam.z;
-    const sy=(wy - cam.y) * cam.z;
-    let img=null, color='#468';
-    if(b.type==='HQ_STONE') img=IM.hq_stone, color='#789';
-    else if(b.type==='HQ_WOOD') img=IM.hq_wood, color='#685';
-    else if(b.type==='LUMBER') img=IM.lumber, color='#574';
-    else if(b.type==='DEPOT') img=IM.depot, color='#846';
-    drawTile(ctx, img, sx, sy, TILE_W*cam.z, TILE_H*cam.z, color);
-  }
+// einfacher Solid‑Color‑Fallback
+const _cache = new Map();
+function fallback(color) {
+  if (_cache.has(color)) return _cache.get(color);
+  const c = document.createElement('canvas'); c.width = TILE_W; c.height = TILE_H * 2;
+  const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+  _cache.set(color, c);
+  return c;
 }
