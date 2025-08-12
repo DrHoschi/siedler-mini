@@ -1,7 +1,12 @@
-// Isometrischer Renderer, korrekte Screen<->Grid Umrechnung, Clipping, Tiles
-export async function createRenderer(canvas, world, hooks){
-  const ctx = canvas.getContext('2d');
-
+// worldToScreen: nimmt Weltkoordinaten (tile- oder centerbasiert) und liefert Canvas‑Pixel
+export function worldToScreen(wx, wy){
+  // falls du schon eine hast, nimm deine.
+  // Beispiel (isometrisch, 64x32 Basis):
+  const TW = 64, TH = 32;
+  const sx = (wx - wy) * (TW/2) + camera.offsetX;
+  const sy = (wx + wy) * (TH/2) + camera.offsetY;
+  return {x:sx, y:sy};
+}
   // Gerätepixel korrekt handhaben
   const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
   function resize(){
