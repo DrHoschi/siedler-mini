@@ -1,198 +1,150 @@
-// core/render.js
-// Isometrischer Renderer + Asset-Loader + Eingabe-Helfer
+// core/render.js — V13.7
+export class Camera {
+  constructor(){
+    this.x=0; this.y=0; this.zoom=1; this.tile=64;
+  }
+  setCenter(x,y){ this.x=x; this.y=y; }
+  setZoom(z){ this.zoom=Math.max(0.35, Math.min(2.8, z)); }
+  worldToScreen(wx,wy,w,h){
+    const s=this.tile*this.zoom, cx=w*0.5, cy=h*0.5;
+    const ix=(wx-wy)*s, iy=(wx+wy)*s*0.5;
+    return {x:cx+ix, y:cy+iy};
+  }
+  screenToWorld(px,py,w,h){
+    const s=this.tile*this.zoom, cx=w*0.5, cy=h*0.5;
+    const dx=(px-cx)/s, dy=(py-cy)/(s*0.5);
+    // isoX = (wx - wy) = dx, isoY = (wx + wy) = dy  => löse:
+    const wx = (dx + dy)*0.5 + this.x;
+    const wy = (dy - dx)*0.5 + this.y;
+    return {x:wx, y:wy};
+  }
+}
 
-export class Renderer {
+export class Renderer{
   constructor(canvas){
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha:false });
-    this.DPR = Math.max(1, Math.min(window.devicePixelRatio||1, 2));
-    this.resize();
-    window.addEventListener('resize', ()=>this.resize(), {passive:true});
-
-    // Iso-Größe je Tile (kannst du bei Bedarf anpassen)
-    this.TW = 96;  // Breite eines Rhombus
-    this.TH = 48;  // Höhe eines Rhombus
-
-    // Kamera
-    this.cameraX = 0;
-    this.cameraY = 0;
-    this.zoom = 1.0;
-    this.minZoom = 0.6;
-    this.maxZoom = 2.4;
-
-    // Map
-    this.MW = 0; this.MH = 0;
-    this.map = null;
-
-    // Assets
-    this.img = {}; // key->Image (oder null)
-    this.hasImage = (k)=> !!this.img[k];
-
-    // Debug
-    this._fps = 0; this._lastFpsT=performance.now(); this._frames=0;
-    this._hoverTile = {x:-1,y:-1};
+    this.cv=canvas; this.ctx=canvas.getContext('2d');
+    this.cam=new Camera();
+    this.images={}; this.map=null; this.buildings=[]; this.roads=new Set();
+    this.carriers=[]; // {x,y,px,py,frame}
+    this._raf=0;
+    this._resize=this._resize.bind(this); this._loop=this._loop.bind(this);
+    addEventListener('resize', this._resize, {passive:true});
+    this._resize();
   }
-
-  setMapSize(w,h){ this.MW=w; this.MH=h; }
-
-  async loadAssets(dict){
-    const keys = Object.keys(dict);
-    await Promise.all(keys.map(k=>this._loadOne(k, dict[k])));
-  }
-  _loadOne(key, src){
-    return new Promise(res=>{
-      const img = new Image();
-      img.onload = ()=>{ this.img[key]=img; res(); };
-      img.onerror = ()=>{ console.warn('[assets] fehlt:', src); this.img[key]=null; res(); };
-      img.src = src + ((src.includes('?')?'&':'?')+'v='+Date.now()); // Cache-Bust
-    });
-  }
-
-  resize(){
-    const r = this.canvas.getBoundingClientRect();
-    this.canvas.width  = Math.floor(r.width  * this.DPR);
-    this.canvas.height = Math.floor(r.height * this.DPR);
-    this.ctx.setTransform(this.DPR,0,0,this.DPR,0,0);
-  }
-
-  // ---------- Koordinaten ----------
-  isoToScreen(ix,iy){
-    // Mittelpunkt eines Tiles
-    const x = (ix - iy) * (this.TW/2);
-    const y = (ix + iy) * (this.TH/2);
-    return { x: x*this.zoom + this.cameraX, y: y*this.zoom + this.cameraY };
-  }
-  screenToIso(sx,sy){
-    // Umkehrung (ungefähr) – liefert Float‑Koords
-    const x = (sx - this.cameraX)/this.zoom;
-    const y = (sy - this.cameraY)/this.zoom;
-    const ix = (x/(this.TW/2) + y/(this.TH/2))/2;
-    const iy = (y/(this.TH/2) - x/(this.TW/2))/2;
-    return { ix, iy };
-  }
-  screenToTile(sx,sy){
-    const {ix,iy} = this.screenToIso(sx,sy);
-    // Der Renderer zeichnet Texturen "tile‑zentriert", deshalb runden wir
-    const tx = Math.round(ix);
-    const ty = Math.round(iy);
-    return {tx,ty};
-  }
-
-  // ---------- Eingabe‑Hilfen ----------
-  beginPinch(p0,p1){
-    this._pinch = {
-      z0:this.zoom,
-      c0:{ x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2 }
-    };
-  }
-  doPinch(p0,p1){
-    if(!this._pinch) return;
-    const c1 = { x:(p0.x+p1.x)/2, y:(p0.y+p1.y)/2 };
-    const d0 = Math.hypot(p0.x-p1.x, p0.y-p1.y);
-    const d1 = Math.hypot(p0._x-p1._x, p0._y-p1._y); // _x/_y = initial, s. game.js
-    const scale = (d0 && d1) ? (d0/d1) : 1;
-    const prev = this.zoom;
-    this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this._pinch.z0*scale));
-    // Zoom zum Pinch‑Mittelpunkt
-    const wx = (c1.x - this.cameraX)/prev;
-    const wy = (c1.y - this.cameraY)/prev;
-    this.cameraX = c1.x - wx*this.zoom;
-    this.cameraY = c1.y - wy*this.zoom;
-  }
-  endPinch(){ this._pinch=null; }
-
-  // ---------- Zeichnen ----------
-  drawMap(map){
-    if(!map){ this.clear(); return; }
-    this.map = map;
-    this.clear();
-
-    // sichtbares Bounds grob bestimmen
-    const W = this.canvas.width/this.DPR;
-    const H = this.canvas.height/this.DPR;
-
-    // vier Eck‑Screens auf Iso -> min/max
-    const corners = [
-      this.screenToIso(0,0),
-      this.screenToIso(W,0),
-      this.screenToIso(0,H),
-      this.screenToIso(W,H),
-    ];
-    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    for(const c of corners){
-      minX = Math.min(minX, c.ix);
-      minY = Math.min(minY, c.iy);
-      maxX = Math.max(maxX, c.ix);
-      maxY = Math.max(maxY, c.iy);
+  attachAssets(imgs){ this.images=imgs||{}; }
+  attachMap(map){ this.map=map; }
+  attachBuildings(arr){ this.buildings=arr; }
+  attachRoads(set){ this.roads=set; }
+  attachCarriers(arr){ this.carriers=arr; }
+  _resize(){
+    const dpr=Math.max(1, devicePixelRatio||1);
+    const w=innerWidth|0, h=innerHeight|0;
+    if (this.cv.width!==w*dpr || this.cv.height!==h*dpr){
+      this.cv.width=w*dpr; this.cv.height=h*dpr; this.cv.style.width=w+'px'; this.cv.style.height=h+'px';
+      this.ctx.setTransform(dpr,0,0,dpr,0,0);
     }
-    // Puffer, damit Ränder nicht knipsen
-    minX = Math.floor(minX) - 2;
-    minY = Math.floor(minY) - 2;
-    maxX = Math.ceil(maxX) + 2;
-    maxY = Math.ceil(maxY) + 2;
+  }
+  start(){ cancelAnimationFrame(this._raf); this._raf=requestAnimationFrame(this._loop); }
+  stop(){ cancelAnimationFrame(this._raf); this._raf=0; }
+  clear(){ this.ctx.fillStyle='#0c1117'; this.ctx.fillRect(0,0,this.cv.width,this.cv.height); }
 
-    // Zeichnen
-    for(let ty=minY; ty<=maxY; ty++){
-      for(let tx=minX; tx<=maxX; tx++){
-        if(tx<0||ty<0||tx>=this.MW||ty>=this.MH) continue;
-        const cell = map[ty][tx];
-        const pos = this.isoToScreen(tx,ty);
-        // Boden
-        this.drawTileImage(cell.ground, pos.x, pos.y);
-        // Objekt
-        if(cell.object){
-          this.drawTileImage(cell.object, pos.x, pos.y);
+  _visibleBounds(){
+    const s=this.cam.tile*this.cam.zoom, w=this.cv.width, h=this.cv.height;
+    const tilesX=Math.ceil(w/s)+6, tilesY=Math.ceil(h/(s*0.5))+6;
+    return {tilesX,tilesY};
+  }
+
+  drawTiles(){
+    if(!this.map) return;
+    const {ctx,cv,cam,map}=this;
+    const {tilesX,tilesY} = this._visibleBounds();
+    const cx=Math.floor(cam.x), cy=Math.floor(cam.y);
+    const minX=Math.max(0,cx-tilesX), maxX=Math.min(map.w-1,cx+tilesX);
+    const minY=Math.max(0,cy-tilesY), maxY=Math.min(map.h-1,cy+tilesY);
+    for(let y=minY;y<=maxY;y++){
+      for(let x=minX;x<=maxX;x++){
+        const t=map.tiles[y][x];
+        const pos=cam.worldToScreen(x,y,cv.width,cv.height);
+        const img=this.images[t];
+        if(img && img.complete){
+          const base=128; const s=cam.tile*cam.zoom;
+          const sc=s/base, w=img.naturalWidth*sc, h=img.naturalHeight*sc;
+          this.ctx.drawImage(img, pos.x-w*0.5, pos.y-h*0.75, w, h);
+        }else{
+          const s=cam.tile*cam.zoom; ctx.fillStyle=(t==='water')?'#1b6a8c':'#2a3f24';
+          ctx.beginPath(); ctx.moveTo(pos.x, pos.y-s*.25); ctx.lineTo(pos.x+s*.5,pos.y);
+          ctx.lineTo(pos.x, pos.y+s*.25); ctx.lineTo(pos.x-s*.5, pos.y); ctx.closePath(); ctx.fill();
         }
       }
     }
+  }
 
-    // FPS berechnen
-    this._frames++;
-    const now = performance.now();
-    if(now - this._lastFpsT > 500){
-      this._fps = Math.round(this._frames*1000/(now-this._lastFpsT));
-      this._frames=0; this._lastFpsT=now;
+  drawRoads(){
+    if(!this.roads || this.roads.size===0) return;
+    const {ctx,cv,cam}=this;
+    const s=cam.tile*cam.zoom;
+    for(const key of this.roads){
+      const [x,y]=key.split(',').map(n=>+n);
+      const p=cam.worldToScreen(x,y,cv.width,cv.height);
+      const img=this.images.road_straight||this.images.road||null;
+      if(img){
+        const base=128, w=img.naturalWidth*(s/base), h=img.naturalHeight*(s/base);
+        ctx.drawImage(img, p.x-w*0.5, p.y-h*0.75, w, h);
+      }else{
+        ctx.fillStyle='#6b5034';
+        ctx.beginPath(); ctx.arc(p.x,p.y, s*0.18, 0, Math.PI*2); ctx.fill();
+      }
     }
   }
 
-  drawTileImage(key, cx, cy){
-    const img = this.img[key];
-    const ctx=this.ctx;
-    if(img){
-      // Bild so zeichnen, dass das Motiv auf dem Tile‑Mittelpunkt sitzt
-      const w = this.TW*this.zoom;
-      const h = this.TH*this.zoom;
-      ctx.drawImage(img, Math.round(cx - w/2), Math.round(cy - h/2), Math.round(w), Math.round(h));
-    }else{
-      // Fallback: schraffierte Raute
-      const w = this.TW*this.zoom, h=this.TH*this.zoom;
-      const x = Math.round(cx), y=Math.round(cy);
-      ctx.save();
-      ctx.translate(x,y);
-      ctx.beginPath();
-      ctx.moveTo(0,-h/2); ctx.lineTo(w/2,0); ctx.lineTo(0,h/2); ctx.lineTo(-w/2,0); ctx.closePath();
-      ctx.fillStyle = '#1a2130'; ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.stroke();
-      ctx.restore();
+  drawBuildings(){
+    if(!this.buildings) return;
+    const {ctx,cv,cam}=this; const s=cam.tile*cam.zoom;
+    for(const b of this.buildings){
+      const img=this.images[b.kind] || this.images.hq;
+      const p=cam.worldToScreen(b.x,b.y,cv.width,cv.height);
+      if(img){
+        const base=128, w=img.naturalWidth*(s/base), h=img.naturalHeight*(s/base);
+        ctx.drawImage(img, p.x-w*0.5, p.y-h*0.9, w, h);
+      }else{
+        ctx.fillStyle='#c93'; ctx.fillRect(p.x-s*.25, p.y-s*.5, s*.5, s*.5);
+      }
     }
   }
 
-  clear(){
-    const ctx=this.ctx, c=this.canvas;
-    ctx.fillStyle='#0b0e13';
-    ctx.fillRect(0,0,c.width,c.height);
+  drawCarriers(t){
+    if(!this.carriers) return;
+    const {ctx,cv,cam}=this; const s=cam.tile*cam.zoom;
+    const img=this.images.carrier;
+    for(const c of this.carriers){
+      const p=cam.worldToScreen(c.x, c.y, cv.width, cv.height);
+      if(img){
+        const base=64, w=img.naturalWidth*(s/base), h=img.naturalHeight*(s/base);
+        const sx = (Math.floor((t/120)+c.seed)%4)*base; // simple 4‑Frame walk
+        ctx.drawImage(img, sx, 0, base, base, p.x-w*0.5, p.y-h*0.8, w, h);
+      }else{
+        ctx.fillStyle='#ffd46a'; ctx.beginPath(); ctx.arc(p.x,p.y-s*0.15, s*0.12, 0, Math.PI*2); ctx.fill();
+      }
+    }
   }
 
-  // Debug‑Text für Overlay
-  getDebugText(extra={}){
-    const z = this.zoom.toFixed(2);
-    const cam = `${Math.round(this.cameraX)}, ${Math.round(this.cameraY)}`;
-    return [
-      `FPS ${this._fps}`,
-      `Zoom ${z}x`,
-      `Cam  ${cam}`,
-      ...(extra.tile ? [`Tile ${extra.tile.tx}, ${extra.tile.ty}`] : []),
-      ...(extra.msg ? [extra.msg] : []),
-    ].join('\n');
+  drawGrid(){
+    const {ctx,cv,cam}=this; const s=cam.tile*cam.zoom;
+    ctx.lineWidth=1; ctx.strokeStyle='rgba(255,255,255,.06)';
+    ctx.beginPath();
+    for(let x=-cv.width; x<cv.width*2; x+=s){ ctx.moveTo(x,0); ctx.lineTo(x+cv.height,cv.height); }
+    ctx.stroke(); ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.beginPath();
+    for(let x=-cv.width; x<cv.width*2; x+=s){ ctx.moveTo(x,cv.height); ctx.lineTo(x+cv.height,0); }
+    ctx.stroke();
+  }
+
+  _loop(ts){
+    this.clear();
+    this.drawTiles();
+    this.drawRoads();
+    this.drawBuildings();
+    this.drawCarriers(ts||0);
+    this.drawGrid();
+    this._raf=requestAnimationFrame(this._loop);
   }
 }
