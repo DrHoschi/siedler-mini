@@ -12,8 +12,7 @@
     canvas{display:block;position:absolute;inset:0;touch-action:none;background:#000}
     #hud{position:fixed;left:12px;top:10px;background:rgba(18,24,33,.6);border:1px solid var(--line);
          padding:6px 10px;border-radius:10px;font-size:14px;backdrop-filter:blur(6px)}
-    #minimap{position:fixed;right:12px;bottom:12px;width:160px;height:120px;border:2px solid #fff;border-radius:8px;background:#0e1420}
-    #toolbar{position:fixed;left:10px;top:60px;display:flex;flex-direction:column;gap:8px}
+    #toolbar{position:fixed;left:10px;top:60px;display:flex;flex-direction:column;gap:8px;z-index:3}
     .btn{appearance:none;border:1px solid var(--line);background:#182233;color:var(--txt);padding:10px 12px;border-radius:14px;font-weight:600}
     .btn.active{outline:2px solid #6ee7a9}
     #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);z-index:5}
@@ -24,25 +23,27 @@
 <body>
   <div id="game">
     <canvas id="canvas"></canvas>
-    <canvas id="minimap"></canvas>
 
-    <div id="hud">V13 Mobile • Pan: 1 Finger • Zoom: 2 Finger</div>
+    <div id="hud">V13 Mobile • Pan: 1 Finger • Zoom: 2 Finger • Tap: bauen</div>
 
     <div id="toolbar">
       <button class="btn active" id="tool-pointer">Zeiger</button>
-      <!-- (Bau-Buttons kommen später; jetzt nur Mobile-Steuerung testen) -->
+      <button class="btn" id="tool-road">Straße</button>
+      <button class="btn" id="tool-hq">HQ</button>
+      <button class="btn" id="tool-lumber">Holzfäller</button>
+      <button class="btn" id="tool-depot">Depot</button>
+      <button class="btn" id="tool-bulldoze">Abriss</button>
     </div>
 
     <div id="start">
       <div class="card">
-        <h1>Siedler‑Mini V13 (Mobile‑Start)</h1>
-        <p>Touch‑Steuerung aktiv: 1 Finger = Karte verschieben, 2 Finger = Zoom.</p>
+        <h1>Siedler‑Mini V13 (Mobile)</h1>
+        <p>1 Finger = Karte verschieben, 2 Finger = Zoom, kurzer Tap = bauen (im Bau‑Tool).</p>
         <button class="btn" id="startBtn">Start</button>
       </div>
     </div>
   </div>
 
-  <!-- Module laden -->
   <script type="module" src="./main.js"></script>
 </body>
 </html>
