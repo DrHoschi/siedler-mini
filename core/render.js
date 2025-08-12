@@ -1,85 +1,113 @@
-// Zeichnen von Boden + Minimap in isometrischer Projektion
+// Zeichnen: schneller Boden via Offscreen-Canvas, dann Roads/Buildings
 import { IM } from './assets.js';
 import { cam } from './camera.js';
-import { TILE_W, TILE_H, MAP, grid } from './world.js';
+import { TILE_W, TILE_H, MAP, grid, computeRoadMasks, buildingImage, cellToIso } from './world.js';
 
-let canvas=null, ctx=null, mini=null, mctx=null;
-
+let canvas=null, ctx=null;
 export function setMainCanvas(c){ canvas=c; ctx=c.getContext('2d',{alpha:false}); }
-export function setMiniMapCanvas(m){ mini=m; mctx=m.getContext('2d',{alpha:false}); }
 
-function cellToIso(x,y){ return { x:(x - y)*(TILE_W/2), y:(x + y)*(TILE_H/2) }; }
-function rectFor(x,y){ const p=cellToIso(x,y); return { x:p.x - cam.x, y:p.y - cam.y, w:TILE_W, h:TILE_H }; }
+let needsDraw = true;
+export function requestDraw(){ needsDraw=true; drawIfNeeded(); }
+function drawIfNeeded(){ if(!needsDraw) return; needsDraw=false; drawAll(); }
 
-function diamondPath(x,y,w,h){
-  ctx.beginPath();
-  ctx.moveTo(x + w*0.5, y);
-  ctx.lineTo(x + w,     y + h*0.5);
-  ctx.lineTo(x + w*0.5, y + h);
-  ctx.lineTo(x,         y + h*0.5);
-  ctx.closePath();
-}
+// ---------- Offscreen Boden ----------
+let groundLayer=null, gtx=null, gW=0, gH=0;
 
-function drawGround(){
+export function prerenderGround(){
+  gW = MAP.W * TILE_W;
+  gH = MAP.H * TILE_H;
+  groundLayer = document.createElement('canvas');
+  groundLayer.width=gW; groundLayer.height=gH;
+  gtx = groundLayer.getContext('2d',{alpha:false});
+  gtx.imageSmoothingEnabled=true;
+
+  // ganze Map vorzeichnen
   for(let y=0;y<MAP.H;y++){
     for(let x=0;x<MAP.W;x++){
-      const r=rectFor(x,y);
-      ctx.save(); diamondPath(r.x,r.y,r.w,r.h); ctx.clip();
-      const t = grid[y][x].ground;
-      const img = t==='water' ? IM.water : t==='shore' ? IM.shore : IM.grass;
-      if(img) ctx.drawImage(img, r.x-1, r.y-1, r.w+2, r.h+2);
-      else { ctx.fillStyle = t==='water'?'#10324a' : t==='shore'?'#244822' : '#2a3e1f'; ctx.fillRect(r.x,r.y,r.w,r.h); }
-      ctx.restore();
-      ctx.strokeStyle='rgba(255,255,255,.04)'; ctx.strokeRect(r.x,r.y,r.w,r.h);
+      const p=cellToIso(x,y);
+      const r={x:p.x, y:p.y, w:TILE_W, h:TILE_H};
+      gtx.save();
+      diamondPath(gtx, r.x,r.y,r.w,r.h); gtx.clip();
+      const t=grid[y][x].ground;
+      const img = t==='water'?IM.water : t==='shore'?IM.shore : IM.grass;
+      if(img) gtx.drawImage(img, r.x-1, r.y-1, r.w+2, r.h+2);
+      else { gtx.fillStyle=t==='water'?'#10324a':t==='shore'?'#244822':'#2a3e1f'; gtx.fillRect(r.x,r.y,r.w,r.h); }
+      gtx.restore();
     }
   }
 }
 
-function drawMini(){
-  if(!mini) return;
-  const w=mini.width, h=mini.height, sx=w/MAP.W, sy=h/MAP.H;
-  mctx.clearRect(0,0,w,h);
-  for(let y=0;y<MAP.H;y++) for(let x=0;x<MAP.W;x++){
-    const t=grid[y][x].ground;
-    mctx.fillStyle = t==='water' ? '#1a3a55' : t==='shore' ? '#2d5128' : '#21451f';
-    mctx.fillRect(x*sx, y*sy, sx, sy);
+function diamondPath(c, x,y,w,h){
+  c.beginPath();
+  c.moveTo(x + w*0.5, y);
+  c.lineTo(x + w,     y + h*0.5);
+  c.lineTo(x + w*0.5, y + h);
+  c.lineTo(x,         y + h*0.5);
+  c.closePath();
+}
+
+// ---------- Roads/Buildings ----------
+function pickRoadTexture(mask){
+  const opp = (mask===0b0101 || mask===0b1010);
+  return opp ? (IM.road_straight||IM.road_curve) : (IM.road_curve||IM.road_straight);
+}
+
+function drawRoads(){
+  computeRoadMasks();
+  for(let y=0;y<MAP.H;y++)for(let x=0;x<MAP.W;x++){
+    if(!grid[y][x].road) continue;
+    const p=cellToIso(x,y);
+    const r={x:p.x - cam.x, y:p.y - cam.y, w:TILE_W, h:TILE_H};
+
+    ctx.save(); diamondPath(ctx, r.x,r.y,r.w,r.h); ctx.clip();
+    const tex=pickRoadTexture(grid[y][x].roadMask);
+    if(tex) ctx.drawImage(tex, r.x-1, r.y-1, r.w+2, r.h+2);
+    else { ctx.fillStyle='#6b6f7a'; ctx.fillRect(r.x+r.w*.18, r.y+r.h*.36, r.w*.64, r.h*.28); }
+    ctx.restore();
   }
 }
 
+function drawBuildings(){
+  for(let y=0;y<MAP.H;y++)for(let x=0;x<MAP.W;x++){
+    const b=grid[y][x].building; if(!b) continue;
+    const p=cellToIso(x,y);
+    const r={x:p.x - cam.x, y:p.y - cam.y, w:TILE_W, h:TILE_H};
+    const img=buildingImage(b);
+    if(img){
+      const w=r.w*1.05, h=img.height*(w/img.width);
+      ctx.drawImage(img, r.x+r.w/2-w/2, r.y+r.h - h + r.h*0.10, w, h);
+    }else{
+      ctx.fillStyle=b==='hq'?'#6a4':(b==='depot'?'#bfa':'#4aa45a');
+      ctx.fillRect(r.x+r.w*.12, r.y+r.h*.12, r.w*.76, r.h*.76);
+    }
+  }
+}
+
+// ---------- Haupt-Draw ----------
 export function drawAll(){
   if(!canvas) return;
-  // Reset + Clear
+
+  // Full clear
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // Zoom/Scale (wir zeichnen in Logik-Px; Canvas ist DPR‑skaliert)
+  // Scale
   ctx.save();
-  const z = cam.z;
-  ctx.scale(z, z);
+  const z=cam.z;
+  ctx.scale(z,z);
 
   // Hintergrund
-  ctx.fillStyle = '#0b0e13';
+  ctx.fillStyle='#0b0e13';
   ctx.fillRect(0,0, canvas.width/z, canvas.height/z);
 
-  // Boden
-  drawGround();
+  // Boden aus Offscreen
+  if(groundLayer){
+    ctx.drawImage(groundLayer, -cam.x, -cam.y, gW, gH);
+  }
+
+  // Overlay: Roads & Buildings
+  drawRoads();
+  drawBuildings();
 
   ctx.restore();
-
-  // Minimap
-  drawMini();
-}
-
-// Hilfsfunktionen für Input (Zoom zum Punkt)
-export function screenToWorld(sx, sy){
-  // Screen-Px → Logik-Px (vor Iso)
-  const wx = sx / cam.z + cam.x;
-  const wy = sy / cam.z + cam.y;
-  return { wx, wy };
-}
-export function zoomAt(sx, sy, factor){
-  const { wx, wy } = screenToWorld(sx, sy);
-  cam.z = Math.max(0.6, Math.min(2.6, cam.z * factor));
-  cam.x = wx - sx / cam.z;
-  cam.y = wy - sy / cam.z;
 }
