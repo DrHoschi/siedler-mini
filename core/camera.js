@@ -1,10 +1,5 @@
-export const cam = { x:0, y:0, z:1.15 };
-
-export function resizeCanvas(canvas){
-  const dpr = Math.max(1, Math.min(devicePixelRatio||1, 2));
-  const rect = canvas.getBoundingClientRect();
-  canvas.width  = Math.max(1, rect.width  * dpr);
-  canvas.height = Math.max(1, rect.height * dpr);
-  const ctx = canvas.getContext('2d',{alpha:false});
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-}
+// core/camera.js
+export const cam = { x:0, y:0, z:1, sw:800, sh:600 };
+export function setCanvasSize(w,h){ cam.sw=w; cam.sh=h; }
+export function setZoom(z){ cam.z = Math.max(0.6, Math.min(3, z)); }
+export function setCamCenter(wx,wy){ cam.x = wx - cam.sw/2/cam.z; cam.y = wy - cam.sh/2/cam.z; }
