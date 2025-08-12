@@ -1,15 +1,10 @@
 // Bild-Assets (optional). Fehlende Dateien => Fallback-Farben/Grafik.
 export const IM = {
-  // Boden
   grass:null, water:null, shore:null, dirt:null, rocky:null, sand:null,
-  // Straße
   road_straight:null, road_curve:null,
-  // Gebäude
   hq:null, hq_stone:null, lumber:null, depot:null,
-  // Träger (optional)
   carrier:null
 };
-
 const LIST = [
   ['grass','assets/grass.png'],
   ['water','assets/water.png'],
@@ -25,7 +20,6 @@ const LIST = [
   ['depot','assets/depot.png'],
   ['carrier','assets/carrier.png']
 ];
-
 export function loadAllAssets(){ return Promise.all(LIST.map(([k,src])=>loadOne(k,src))); }
 function loadOne(key, src){
   return new Promise(res=>{
