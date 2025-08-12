@@ -24,9 +24,16 @@
 <body>
 <div id="ui">
   <header>
-    <div class="badge">V13.5 Mobile · Pan: 1 Finger · Zoom: 2 Finger · Tap: bauen</div>
-    <div class="badge" id="hint">Zeiger</div>
-  </header>
+  <div class="badge">V13.6 Mobile · Pan: 1 Finger · Zoom: 2 Finger · Tap: bauen</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="badge">🌲 Holz <b id="uiWood">0</b></span>
+    <span class="badge">⛰️ Stein <b id="uiStone">0</b></span>
+    <span class="badge">🌾 Nahrung <b id="uiFood">0</b></span>
+    <span class="badge">🪙 Gold <b id="uiGold">0</b></span>
+    <span class="badge">🚶 Träger <b id="uiCar">0</b></span>
+    <span class="badge" id="hint">Zeiger</span>
+  </div>
+</header>
 
   <div id="left">
     <button class="btn active" data-tool="pointer">Zeiger</button>
