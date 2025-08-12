@@ -1,160 +1,220 @@
-// main.js — V13 Mobile Full
-
-import { loadAllAssets } from './core/assets.js';
-import { cam, setCanvasSize, setZoom, setCamCenter } from './core/camera.js';
+// main.js
+import { IM, loadAllAssets } from './core/assets.js';
+import { createWorld, T } from './core/world.js';
 import {
-  createWorld, updateWorld, getRenderData, // Daten fürs Rendern
-  buildAt, setTool, TOOLS, screenToCell,
-  startPos, resources, carriersCount
-} from './core/world.js';
-import { drawWorldLayered } from './core/render.js';
+  makeCanvas, resizeCanvas, Camera,
+  drawMap, screenToWorld, worldToCell, cellToWorld,
+  clientToCanvasXY, worldToScreen, TILE
+} from './core/render.js';
 
-// ---------- Canvas ----------
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true, willReadFrequently:false });
-let DPR = Math.max(1, Math.min(window.devicePixelRatio||1, 2));
+// --- UI ---
+const btnRoad    = document.getElementById('tool-road');
+const btnHQ      = document.getElementById('tool-hq');
+const btnLumber  = document.getElementById('tool-lumber');
+const btnDepot   = document.getElementById('tool-depot');
+const btnPointer = document.getElementById('tool-pointer');
+const statWood   = document.getElementById('stat-wood');
+const statStone  = document.getElementById('stat-stone');
+const statFood   = document.getElementById('stat-food');
+const statGold   = document.getElementById('stat-gold');
+const statCar    = document.getElementById('stat-carriers');
 
-function resize(){
-  const r = canvas.getBoundingClientRect();
-  canvas.width = Math.round(r.width * DPR);
-  canvas.height= Math.round(r.height* DPR);
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  setCanvasSize(r.width, r.height);
-  requestDraw();
+const { canvas, ctx } = makeCanvas();
+const cam = new Camera(0, 0);
+let dpr = resizeCanvas(cam, canvas);
+window.addEventListener('resize', () => { dpr = resizeCanvas(cam, canvas); });
+
+let world = null;
+let running = false;
+let tool = 'pointer';
+
+function setTool(t) {
+  tool = t;
+  document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
 }
-addEventListener('resize', resize, {passive:true});
+btnPointer.onclick = () => setTool('pointer');
+btnRoad.onclick    = () => setTool('road');
+btnHQ.onclick      = () => setTool('hq');
+btnLumber.onclick  = () => setTool('lumber');
+btnDepot.onclick   = () => setTool('depot');
 
-// ---------- HUD ----------
-const ui = {
-  wood: document.getElementById('uiWood'),
-  stone:document.getElementById('uiStone'),
-  food: document.getElementById('uiFood'),
-  gold: document.getElementById('uiGold'),
-  car:  document.getElementById('uiCar'),
-  hint: document.getElementById('hint'),
-};
-function setHint(t){ if(ui.hint) ui.hint.textContent=t; }
-
-// Tools
-const toolBtns = {
-  pointer: document.getElementById('btnPointer'),
-  road:    document.getElementById('btnRoad'),
-  hq:      document.getElementById('btnHQ'),
-  lumber:  document.getElementById('btnLumber'),
-  depot:   document.getElementById('btnDepot'),
-  bull:    document.getElementById('btnBull'),
-};
-function activateBtn(id){
-  Object.values(toolBtns).forEach(b=> b&&b.classList.remove('active'));
-  if(toolBtns[id]) toolBtns[id].classList.add('active');
-}
-function pickTool(id,label){
-  setTool(TOOLS[id.toUpperCase()]);
-  activateBtn(id); setHint(label);
-}
-toolBtns.pointer.onclick=()=>pickTool('pointer','Zeiger');
-toolBtns.road.onclick   =()=>pickTool('road','Straße');
-toolBtns.hq.onclick     =()=>pickTool('hq','HQ');
-toolBtns.lumber.onclick =()=>pickTool('lumber','Holzfäller');
-toolBtns.depot.onclick  =()=>pickTool('depot','Depot');
-toolBtns.bull.onclick   =()=>pickTool('bull','Abriss');
-activateBtn('pointer'); setHint('Zeiger');
-
-// ---------- Touch & Maus ----------
-let touches=new Map(), lastMid=null, lastDist=0;
-let tapped=false, tapT=0, tapPos=null;
-
-const rectOf = ()=> canvas.getBoundingClientRect();
-const mid = (a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
-const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-
-canvas.addEventListener('touchstart', (e)=>{
-  for(const t of e.changedTouches) touches.set(t.identifier,{x:t.clientX,y:t.clientY});
-  if(touches.size===1){ const t=[...touches.values()][0]; tapped=true; tapT=performance.now(); tapPos={x:t.x,y:t.y}; }
-},{passive:true});
-canvas.addEventListener('touchmove', (e)=>{
-  if(!touches.size) return; e.preventDefault();
-  for(const t of e.changedTouches) if(touches.has(t.identifier)) touches.set(t.identifier,{x:t.clientX,y:t.clientY});
-  const list=[...touches.values()];
-  if(list.length===1){
-    const cur=list[0]; if(lastMid){ cam.x-=(cur.x-lastMid.x)/cam.z; cam.y-=(cur.y-lastMid.y)/cam.z; requestDraw(); }
-    lastMid={x:cur.x,y:cur.y};
-  }else if(list.length===2){
-    const a=list[0], b=list[1]; const m=mid(a,b); const d=dist(a,b);
-    if(lastMid){ cam.x-=(m.x-lastMid.x)/cam.z; cam.y-=(m.y-lastMid.y)/cam.z; }
-    if(lastDist){ const s=d/lastDist; zoomToPoint(s,m.x,m.y); }
-    lastMid=m; lastDist=d; requestDraw();
-  }
-},{passive:false});
-canvas.addEventListener('touchend', (e)=>{
-  if(tapped){
-    const dt=performance.now()-tapT; if(dt<250 && tapPos){
-      const r=rectOf();
-      tryBuildAt(tapPos.x-r.left, tapPos.y-r.top);
-    }
-  }
-  for(const t of e.changedTouches) touches.delete(t.identifier);
-  if(touches.size<2) lastDist=0;
-  if(!touches.size) lastMid=null;
-  tapped=false;
-},{passive:true});
-
-// Maus (zum Testen)
-let dragging=false, lastM=null;
-canvas.addEventListener('mousedown', e=>{ dragging=true; lastM={x:e.clientX,y:e.clientY}; if(e.button===0){ const r=rectOf(); tryBuildAt(e.clientX-r.left, e.clientY-r.top);} });
-addEventListener('mousemove', e=>{ if(!dragging||!lastM) return; cam.x-=(e.clientX-lastM.x)/cam.z; cam.y-=(e.clientY-lastM.y)/cam.z; lastM={x:e.clientX,y:e.clientY}; requestDraw(); });
-addEventListener('mouseup', ()=>{ dragging=false; lastM=null; });
-canvas.addEventListener('wheel', e=>{ e.preventDefault(); const s=e.deltaY>0?0.9:1.1; zoomToPoint(s,e.clientX,e.clientY); requestDraw(); }, {passive:false});
-
-function zoomToPoint(scale, sx, sy){
-  const prev=cam.z, nz=Math.max(0.6,Math.min(3,prev*scale));
-  const r=rectOf(); const wx=cam.x+(sx-r.left)/prev; const wy=cam.y+(sy-r.top)/prev;
-  cam.z=nz; cam.x=wx-(sx-r.left)/nz; cam.y=wy-(sy-r.top)/nz;
+function updateHUD() {
+  statWood.textContent  = Math.floor(world.res.wood);
+  statStone.textContent = Math.floor(world.res.stone);
+  statFood.textContent  = Math.floor(world.res.food);
+  statGold.textContent  = Math.floor(world.res.gold);
+  statCar.textContent   = world.carriers.length;
 }
 
-function tryBuildAt(sx,sy){
-  // nur bauen, wenn NICHT Zeiger
-  if(ui.hint && ui.hint.textContent==='Zeiger') return;
-  const c=screenToCell(sx,sy); if(!c) return;
-  if(buildAt(c.x,c.y)) requestDraw();
-}
-
-// ---------- Loop ----------
-let needsDraw=true; function requestDraw(){ needsDraw=true; }
-let last=0;
-function frame(){
-  if(needsDraw){
-    const now=performance.now(); const dt=Math.min(0.05, (now-last)/1000 || 0); last=now;
-    updateWorld(dt);
-
-    // Clear vollflächig (verhindert „schwarze Ecke“)
-    ctx.fillStyle='#0d1a12'; ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // Render
-    drawWorldLayered(ctx, cam, getRenderData(), {screenW:canvas.width/DPR, screenH:canvas.height/DPR});
-
-    // HUD
-    ui.wood.textContent = Math.floor(resources.wood);
-    ui.stone.textContent= Math.floor(resources.stone);
-    ui.food.textContent = Math.floor(resources.food);
-    ui.gold.textContent = Math.floor(resources.gold);
-    ui.car.textContent  = carriersCount();
-
-    needsDraw=false;
-  }
-  requestAnimationFrame(frame);
-}
-
-// ---------- Boot ----------
-window.addEventListener('game-start', ()=>{ requestDraw(); }); // Overlay schließt – dann läuft’s
-(async function boot(){
-  resize();
+// --- Welt aufbauen ---
+async function boot() {
   await loadAllAssets();
-  createWorld(96,96); // feste Kartengröße
+  world = createWorld(128, 128); // feste Größe
 
-  // Kamera Mitte (zum HQ)
-  const p=startPos; setCamCenter( (p.x - p.y) * 48, (p.x + p.y) * 24 ); setZoom(1.0);
+  // HQ (Stein) in die Mitte
+  const cx = Math.floor(world.W / 2), cy = Math.floor(world.H / 2);
+  world.placeHQ(cx, cy, 'stone');
 
-  pickTool('pointer','Zeiger');
-  requestDraw(); requestAnimationFrame(frame);
-})();
+  // Kamera auf HQ zentrieren
+  const { wx, wy } = cellToWorld(cx, cy);
+  cam.x = wx; cam.y = wy; cam.z = 1.25;
+
+  updateHUD();
+  running = true;
+  requestAnimationFrame(loop);
+}
+boot();
+
+// --- Pointer / Touch Eingabe ---
+let isPanning = false;
+let lastTouchDist = 0;
+let panStart = { x: 0, y: 0, cx: 0, cy: 0, camx: 0, camy: 0 };
+
+canvas.addEventListener('pointerdown', (ev) => {
+  canvas.setPointerCapture(ev.pointerId);
+});
+
+canvas.addEventListener('pointerup', (ev) => {
+  // kurzer Tap ⇒ bauen (nur wenn Tool != pointer)
+  if (tool !== 'pointer' && !isPanning) {
+    buildAtEvent(ev);
+  }
+  isPanning = false;
+});
+
+canvas.addEventListener('pointermove', (ev) => {
+  // auf Desktop ignorieren – wir fokussieren Mobile
+});
+
+canvas.addEventListener('touchstart', (ev) => {
+  if (ev.touches.length === 1) {
+    isPanning = true;
+    const { cx, cy } = clientToCanvasXY(canvas, ev);
+    panStart.cx = cx; panStart.cy = cy; panStart.camx = cam.x; panStart.camy = cam.y;
+  } else if (ev.touches.length === 2) {
+    isPanning = true;
+    lastTouchDist = touchDist(ev);
+    const mid = touchMid(ev);
+    panStart.cx = mid.cx; panStart.cy = mid.cy; panStart.camx = cam.x; panStart.camy = cam.y;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (ev) => {
+  if (!isPanning) return;
+  ev.preventDefault();
+
+  if (ev.touches.length === 1) {
+    // Pan
+    const { cx, cy } = clientToCanvasXY(canvas, ev);
+    const dx = (cx - panStart.cx) / cam.z;
+    const dy = (cy - panStart.cy) / cam.z;
+    cam.x = panStart.camx - dx;
+    cam.y = panStart.camy - dy;
+  } else if (ev.touches.length === 2) {
+    // Pinch‑Zoom um Midpoint
+    const midNow = touchMid(ev);
+    const dist = touchDist(ev);
+    const scale = Math.max(0.6, Math.min(2.5, cam.z * (dist / Math.max(1, lastTouchDist))));
+    zoomAt(midNow.cx, midNow.cy, scale);
+    lastTouchDist = dist;
+
+    // gleichzeitiges Panning: Midpoint‑Verschiebung
+    const dx = (midNow.cx - panStart.cx) / cam.z;
+    const dy = (midNow.cy - panStart.cy) / cam.z;
+    cam.x = panStart.camx - dx;
+    cam.y = panStart.camy - dy;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { isPanning = false; }, { passive: true });
+
+// Hilfen Touch
+function touchDist(ev) {
+  const a = ev.touches[0], b = ev.touches[1];
+  const dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+function touchMid(ev) {
+  const a = ev.touches[0], b = ev.touches[1];
+  const cx = (a.clientX + b.clientX) * 0.5;
+  const cy = (a.clientY + b.clientY) * 0.5;
+  const rect = canvas.getBoundingClientRect();
+  return { cx: cx - rect.left, cy: cy - rect.top };
+}
+
+// Zoom auf Cursor/Touchpunkt
+function zoomAt(cx, cy, newZ) {
+  const pre = screenToWorld(cam, cx, cy);
+  cam.z = newZ;
+  const post = screenToWorld(cam, cx, cy);
+  // Kamera so verschieben, dass der Punkt „stehen bleibt“
+  cam.x += pre.wx - post.wx;
+  cam.y += pre.wy - post.wy;
+}
+
+// Bauen am Event‑Ort (Fix: richtige Zelle!)
+function buildAtEvent(ev) {
+  const { cx, cy } = clientToCanvasXY(canvas, ev);
+  const { wx, wy } = screenToWorld(cam, cx, cy);
+  const { i, j } = worldToCell(wx, wy);
+
+  if (i < 0 || j < 0 || i >= world.W || j >= world.H) return;
+
+  if (tool === 'road') {
+    world.placeRoad(i, j);
+  } else if (tool === 'hq') {
+    world.placeHQ(i, j, 'wood');
+  } else if (tool === 'lumber') {
+    world.placeLumber(i, j);
+  } else if (tool === 'depot') {
+    world.placeDepot(i, j);
+  }
+}
+
+// --- Game‑Loop ---
+let last = performance.now();
+function loop(ts) {
+  if (!running) return;
+  const dt = Math.min(0.05, (ts - last) / 1000); last = ts;
+
+  world.tick(dt);
+  updateHUD();
+
+  drawMap(ctx, cam, world, IM);
+  drawBuildings();
+  drawCarriers();
+
+  requestAnimationFrame(loop);
+}
+
+// Gebäude und Deko
+function drawBuildings() {
+  for (const b of world.buildings) {
+    const { wx, wy } = cellToWorld(b.i, b.j);
+    const { sx, sy } = worldToScreen(cam, wx, wy);
+    const img = pickBuilding(b.kind);
+    if (!img) continue;
+    const w = TILE * 1.8, h = TILE * 1.6;
+    ctx.drawImage(img, sx - w / 2, sy - h + TILE * 0.6, w, h);
+  }
+}
+
+function pickBuilding(kind) {
+  switch (kind) {
+    case 'hq-stone': return IM.hq_stone || IM.hq || null;
+    case 'hq-wood':  return IM.hq_wood  || IM.hq || null;
+    case 'lumber':   return IM.lumber   || null;
+    case 'depot':    return IM.depot    || null;
+    default: return null;
+  }
+}
+
+// einfache Träger‑Darstellung (Animation tickt in world.tick)
+function drawCarriers() {
+  if (!IM.carrier) return;
+  for (const c of world.carriers) {
+    const { sx, sy } = worldToScreen(cam, c.x, c.y);
+    const size = 28;
+    ctx.drawImage(IM.carrier, sx - size / 2, sy - size + 6, size, size);
+  }
+}
