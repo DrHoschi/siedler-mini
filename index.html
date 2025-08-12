@@ -1,112 +1,48 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<title>Siedler Mini V12.4.1</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    background: #000;
-    color: #fff;
-    font-family: sans-serif;
-    user-select: none;
-    height: 100%;
-  }
-  #gameCanvas {
-    position: absolute;
-    left: 0;
-    top: 0;
-    background: #000;
-  }
-  #hud {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.5);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 14px;
-  }
-  #toolbar {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: rgba(0,0,0,0.5);
-    padding: 6px;
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  #toolbar button {
-    padding: 4px 6px;
-    background: #444;
-    color: white;
-    border: none;
-    cursor: pointer;
-  }
-  #toolbar button:hover {
-    background: #666;
-  }
-  #miniMap {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    border: 1px solid #fff;
-    background: #111;
-  }
-  #startScreen {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0,0,0,0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    color: white;
-    z-index: 10;
-  }
-  #startScreen button {
-    padding: 10px 20px;
-    font-size: 16px;
-    background: #6a4;
-    border: none;
-    cursor: pointer;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler Mini – V13 Mobile</title>
+  <meta name="theme-color" content="#0b0e13" />
+  <style>
+    :root { --bg:#0b0e13; --ui:#121821; --line:#253044; --txt:#e9edf5; }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
+    #game{position:fixed;inset:0;overflow:hidden}
+    canvas{display:block;position:absolute;inset:0;touch-action:none;background:#000}
+    #hud{position:fixed;left:12px;top:10px;background:rgba(18,24,33,.6);border:1px solid var(--line);
+         padding:6px 10px;border-radius:10px;font-size:14px;backdrop-filter:blur(6px)}
+    #minimap{position:fixed;right:12px;bottom:12px;width:160px;height:120px;border:2px solid #fff;border-radius:8px;background:#0e1420}
+    #toolbar{position:fixed;left:10px;top:60px;display:flex;flex-direction:column;gap:8px}
+    .btn{appearance:none;border:1px solid var(--line);background:#182233;color:var(--txt);padding:10px 12px;border-radius:14px;font-weight:600}
+    .btn.active{outline:2px solid #6ee7a9}
+    #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);z-index:5}
+    #start .card{width:min(92vw,520px);background:rgba(18,24,33,.85);border:1px solid var(--line);border-radius:16px;padding:18px}
+    #start h1{margin:0 0 8px}
+  </style>
 </head>
 <body>
+  <div id="game">
+    <canvas id="canvas"></canvas>
+    <canvas id="minimap"></canvas>
 
-<canvas id="gameCanvas"></canvas>
+    <div id="hud">V13 Mobile • Pan: 1 Finger • Zoom: 2 Finger</div>
 
-<div id="hud">
-  Holz: <span id="wood">0</span> |
-  Stein: <span id="stone">0</span> |
-  Nahrung: <span id="food">0</span> |
-  Gold: <span id="gold">0</span> |
-  Pop: <span id="pop">0</span>
-</div>
+    <div id="toolbar">
+      <button class="btn active" id="tool-pointer">Zeiger</button>
+      <!-- (Bau-Buttons kommen später; jetzt nur Mobile-Steuerung testen) -->
+    </div>
 
-<div id="toolbar">
-  <button id="selectTool">Zeiger</button>
-  <button id="buildRoad">Straße</button>
-  <button id="buildHQ">HQ</button>
-  <button id="buildLumberjack">Holzfäller</button>
-  <button id="buildDepot">Depot</button>
-  <button id="newGameBtn">Neues Spiel</button>
-</div>
+    <div id="start">
+      <div class="card">
+        <h1>Siedler‑Mini V13 (Mobile‑Start)</h1>
+        <p>Touch‑Steuerung aktiv: 1 Finger = Karte verschieben, 2 Finger = Zoom.</p>
+        <button class="btn" id="startBtn">Start</button>
+      </div>
+    </div>
+  </div>
 
-<canvas id="miniMap" width="160" height="120"></canvas>
-
-<div id="startScreen">
-  <h1>Siedler Mini V12.4.1</h1>
-  <button onclick="startGame()">Spiel starten</button>
-</div>
-
-<script src="main.js"></script>
+  <!-- Module laden -->
+  <script type="module" src="./main.js"></script>
 </body>
 </html>
