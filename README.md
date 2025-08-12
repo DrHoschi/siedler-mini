@@ -27,3 +27,18 @@ core/
  └─ sim.js          // Produktion, Träger, Wegfindung
 assets/
  └─ *.png           // Texturen
+
+
+
+index.html
+main.js
+/core/
+  assets.js
+  camera.js
+  input.js
+  render.js
+  world.js
+/assets/
+  grass.png  water.png  shore.png
+  road_straight.png  road_curve.png
+  hq_wood.png  lumberjack.png  depot.png
