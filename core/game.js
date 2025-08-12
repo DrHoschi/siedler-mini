@@ -1,238 +1,171 @@
-// core/game.js
+// core/game.js — V13.7
 import { Renderer } from './render.js';
-import { CarrierSystem } from './carriers.js';
 
-export class Game {
-  constructor(renderer){
-    this.r = renderer;
-    this.W = 80; this.H = 80;
-    this.map = null;
+function keyXY(x,y){ return `${x},${y}`; }
+function neighbors4(x,y){ return [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]; }
 
-    this.tool='pointer';
-    this._touches=[];
-    this._isPanning=false;
-
-    this.state = {
-      res:{ wood:20, stone:10, food:10, gold:0 },
-      carriers:[ /* via CarrierSystem */ ],
-      buildings:[]
-    };
-
-    this.costs = {
-      road:{ wood:1 },
-      hq:{ wood:0, stone:0, food:0 },
-      lumberjack:{ wood:5 },
-      depot:{ wood:6, stone:2 }
-    };
-
-    this.running=false; this.last=0;
-
-    this._bindInput();
+export class Game{
+  /** @param {Renderer} r */
+  constructor(r){
+    this.r=r;
+    this.assets={};
+    this.world=null;         // {w,h,tiles}
+    this.roads=new Set();    // "x,y"
+    this.buildings=[];       // {kind:'hq'|'lumber'|'depot', x,y}
+    this.carriers=[];        // {x,y,route:[],seed,load}
+    this.resources={wood:20, stone:10, food:10, gold:0, carriers:0};
+    this.running=false;
   }
 
-  async init(){
-    await this.r.loadAssets({
-      grass:'assets/grass.png',
-      water:'assets/water.png',
-      shore:'assets/shore.png',
-      dirt:'assets/dirt.png',
-      rocky:'assets/rocky.png',
-      sand:'assets/sand.png',
-      road:'assets/road.png',
-      hq_stone:'assets/hq_stone.png',
-      hq_wood:'assets/hq_wood.png',
-      lumberjack:'assets/lumberjack.png',
-      depot:'assets/depot.png',
+  // ----- Assets -----
+  async loadImage(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src; }); }
+  async loadAssets(){
+    const list = {
+      grass:'assets/grass.png', water:'assets/water.png', shore:'assets/shore.png',
+      dirt:'assets/dirt.png', rocky:'assets/rocky.png', sand:'assets/sand.png',
+      hq:'assets/hq_stone.png', lumber:'assets/lumberjack.png', depot:'assets/depot.png',
+      road:'assets/road.png', road_curve:'assets/road_curve.png', road_straight:'assets/road_straight.png',
       carrier:'assets/carrier.png'
+    };
+    const out={}; await Promise.all(Object.entries(list).map(async([k,src])=>out[k]=await this.loadImage(src)));
+    this.assets=out; this.r.attachAssets(out);
+  }
+
+  // ----- Welt -----
+  makeWorld(){
+    const W=140,H=110;
+    const tiles=Array.from({length:H},(_,y)=>Array.from({length:W},(_,x)=>{
+      let t='grass';
+      const wx0=44,wy0=32,wx1=94,wy1=62;
+      if(x>=wx0&&x<=wx1&&y>=wy0&&y<=wy1) t='water';
+      if(t==='grass'){
+        if( (x>=wx0-1&&x<=wx1+1&&y>=wy0-1&&y<=wy1+1) && !(x>=wx0&&x<=wx1&&y>=wy0&&y<=wy1) ) t='shore';
+      }
+      return t;
+    }));
+    this.world={w:W,h:H,tiles};
+    this.r.attachMap(this.world);
+  }
+
+  placeStartHQ(){
+    const cx=(this.world.w/2)|0, cy=(this.world.h/2)|0;
+    for(let y=cy-1;y<=cy+1;y++) for(let x=cx-1;x<=cx+1;x++) this.world.tiles[y][x]='dirt';
+    this.buildings.push({kind:'hq',x:cx,y:cy});
+    this.r.attachBuildings(this.buildings);
+  }
+
+  centerCam(){ this.r.cam.setCenter(this.world.w*0.5, this.world.h*0.5); this.r.cam.setZoom(1.0); }
+
+  // ----- Straßen / Graph -----
+  addRoad(x,y){ this.roads.add(keyXY(x,y)); this.r.attachRoads(this.roads); }
+  isRoad(x,y){ return this.roads.has(keyXY(x,y)); }
+  roadNeighbors(x,y){ return neighbors4(x,y).filter(([nx,ny])=>this.isRoad(nx,ny)); }
+
+  // BFS auf Straßen zwischen zwei Punkten (Start/Ende sitzen auf Straße)
+  findPath(ax,ay, bx,by){
+    const start=keyXY(ax,ay), goal=keyXY(bx,by);
+    const Q=[start], prev=new Map([[start,null]]); 
+    while(Q.length){
+      const cur=Q.shift(); if(cur===goal) break;
+      const [x,y]=cur.split(',').map(Number);
+      for(const [nx,ny] of this.roadNeighbors(x,y)){
+        const k=keyXY(nx,ny);
+        if(!prev.has(k)){ prev.set(k,cur); Q.push(k); }
+      }
+    }
+    if(!prev.has(goal)) return null;
+    const path=[]; let c=goal; while(c){ const [x,y]=c.split(',').map(Number); path.push([x,y]); c=prev.get(c); }
+    path.reverse(); return path;
+  }
+
+  // ----- Gebäude-Logik -----
+  nearestHubOnRoad(x,y){
+    // Hubs: HQ + Depots; wähle den, der über Straßen erreichbar ist
+    const hubs = this.buildings.filter(b=>b.kind==='hq'||b.kind==='depot');
+    // Suche nächsten Hub, der über Straße verbunden ist
+    for(const hub of hubs){
+      // Finde je eine Straßenkachel in der Nähe von Quelle & Ziel
+      const src = neighbors4(x,y).find(([sx,sy])=>this.isRoad(sx,sy));
+      const dst = neighbors4(hub.x,hub.y).find(([dx,dy])=>this.isRoad(dx,dy));
+      if(!src || !dst) continue;
+      const p=this.findPath(src[0],src[1], dst[0],dst[1]);
+      if(p) return {hub, path:p};
+    }
+    return null;
+  }
+
+  spawnCarrier(path, load=2){
+    const [sx,sy]=path[0];
+    this.carriers.push({x:sx,y:sy,route:path.slice(1),seed:(Math.random()*8|0),load});
+    this.resources.carriers=this.carriers.length;
+    this.r.attachCarriers(this.carriers);
+  }
+
+  tickCarriers(){
+    for(const c of this.carriers){
+      if(!c.route || c.route.length===0) continue;
+      const [tx,ty]=c.route[0];
+      // sanft bewegen
+      const speed=0.08; // Kacheln pro Frame
+      const dx=tx-c.x, dy=ty-c.y;
+      const dist=Math.hypot(dx,dy);
+      if(dist<=speed){ c.x=tx; c.y=ty; c.route.shift(); }
+      else { c.x+=dx/dist*speed; c.y+=dy/dist*speed; }
+    }
+    // Aufräumen: Carrier mit leerer Route angekommen -> entladen u. verschwinden lassen
+    this.carriers = this.carriers.filter(c=>{
+      if(c.route && c.route.length===0){
+        this.resources.wood += c.load;
+        return false;
+      }
+      return true;
     });
-
-    this._genWorld();
-
-    // HQ in die Mitte
-    const cx=this.W>>1, cy=this.H>>1;
-    this._placeObject(cx,cy,'hq_stone', false);
-    this.state.buildings.push({type:'hq',x:cx,y:cy});
-
-    // Kamera auf HQ
-    const s=this.r.isoToScreen(cx,cy);
-    this.r.cameraX = this.r.canvas.width/this.r.DPR/2 - s.x;
-    this.r.cameraY = this.r.canvas.height/this.r/DPR/2 - (s.y + 24);
-
-    // Carriers
-    this.carriers = new CarrierSystem(this);
-
-    // erste Zeichnung & HUD
-    this.r.setMapSize(this.W,this.H);
-    this.r.drawMap(this.map);
-    document.getElementById('viewName').textContent='Isometrisch';
-    const updZoom = ()=> document.getElementById('zoomLbl').textContent = `${this.r.zoom.toFixed(2)}×`;
-    updZoom(); this._updZoomLbl = updZoom;
+    this.resources.carriers=this.carriers.length;
   }
 
-  start(){
-    if(this.running) return;
-    this.running=true; this.last=performance.now();
-    const loop=(ts)=>{
-      if(!this.running) return;
-      const dt=Math.min(0.05,(ts-this.last)/1000); this.last=ts;
-      this._tick(dt);
-      this.r.drawMap(this.map);
-      // Träger oberhalb zeichnen
-      this.carriers?.draw(this.r.ctx);
-      // Debug
-      const dbg=document.getElementById('debug');
-      if(dbg && dbg.style.display==='block'){
-        dbg.textContent = this.r.getDebugText({ tile:this._lastTile });
-      }
-      requestAnimationFrame(loop);
-    };
-    requestAnimationFrame(loop);
-  }
-
-  setTool(t){ this.tool=t; }
-
-  // ------- Welt -------
-  _genWorld(){
-    this.map = Array.from({length:this.H}, (_,y)=>
-      Array.from({length:this.W}, (_,x)=>({ ground:'grass', object:null, meta:{} }))
-    );
-    // See
-    const sx=12, sy=10, sw=18, sh=12;
-    for(let y=sy;y<sy+sh;y++) for(let x=sx;x<sx+sw;x++){ this.map[y][x].ground='water'; }
-    for(let y=sy-1;y<=sy+sh;y++) for(let x=sx-1;x<=sx+sw;x++){
-      if(this._inb(x,y) && this.map[y][x].ground!=='water'){
-        if(this._anyN(x,y,c=>c.ground==='water')) this.map[y][x].ground='shore';
-      }
+  // Holzfäller produziert „Rohholz“ → sobald Straße & Hub erreichbar, Träger erzeugen
+  tickProduction(){
+    for(const b of this.buildings){
+      if(b.kind!=='lumber') continue;
+      b.timer = (b.timer||0) + 1;
+      if(b.timer<120) continue; // ~2s
+      b.timer=0;
+      // ist an Straße & Hub erreichbar?
+      const reach=this.nearestHubOnRoad(b.x,b.y);
+      if(reach){ this.spawnCarrier(reach.path, 2); }
     }
   }
-  _inb(x,y){ return x>=0&&y>=0&&x<this.W&&y<this.H; }
-  _anyN(x,y,pred){ const n=[[1,0],[-1,0],[0,1],[0,-1]]; for(const d of n){const nx=x+d[0],ny=y+d[1]; if(this._inb(nx,ny)&&pred(this.map[ny][nx])) return true;} return false; }
 
-  _placeObject(x,y,key, pay=true){
-    if(!this._inb(x,y)) return false;
-    if(this.map[y][x].object) return false;
-    if(pay){
-      const cost = (key==='road')?this.costs.road:(key==='lumberjack')?this.costs.lumberjack:(key==='depot')?this.costs.depot:null;
-      if(cost){ for(const k in cost){ if((this.state.res[k]||0)<cost[k]) return false; } for(const k in cost){ this.state.res[k]-=cost[k]; } }
+  // ----- Public API -----
+  async init(){ await this.loadAssets(); this.makeWorld(); this.placeStartHQ(); this.centerCam();
+    this.r.attachRoads(this.roads); this.r.attachBuildings(this.buildings); this.r.attachCarriers(this.carriers); }
+
+  start(){ if(this.running) return; this.running=true; this.r.start(); }
+
+  step(){ this.tickProduction(); this.tickCarriers(); }
+
+  // Build helpers
+  canInBounds(x,y){ return x>=0&&y>=0&&x<this.world.w&&y<this.world.h; }
+  build(kind,x,y){
+    if(!this.canInBounds(x,y)) return false;
+    if(kind==='road'){ this.addRoad(x,y); return true; }
+    if(kind==='lumber'||kind==='depot'){
+      // kleine Baufläche glätten
+      for(let j=y-1;j<=y+1;j++) for(let i=x-1;i<=x+1;i++) if(this.canInBounds(i,j)) this.world.tiles[j][i]='dirt';
+      this.buildings.push({kind,x,y});
+      return true;
     }
-    this.map[y][x].object=key;
-    // Gebäude merken
-    if(key==='hq_wood'||key==='hq_stone') this.state.buildings.push({type:'hq',x,y});
-    if(key==='depot') this.state.buildings.push({type:'depot',x,y});
-    if(key==='lumberjack'){
-      const b={type:'lumberjack',x,y,prod:0,buffer:0};
-      this.state.buildings.push(b);
+    if(kind==='hq'){
+      for(let j=y-1;j<=y+1;j++) for(let i=x-1;i<=x+1;i++) if(this.canInBounds(i,j)) this.world.tiles[j][i]='dirt';
+      this.buildings.push({kind:'hq',x,y});
+      return true;
     }
-    return true;
-  }
-
-  // ------- Loop -------
-  _tick(dt){
-    // Produktion: Holzfäller generiert alle 6s 1 Holz und fordert Abholung an (wenn Straße vorhanden)
-    for(const b of this.state.buildings){
-      if(b.type==='lumberjack'){
-        b.prod = (b.prod||0) + dt;
-        if(b.prod>=6){
-          b.prod=0;
-          // nur wenn verbunden? (einfach: wenn mind. 1 Straße in Nachbarschaft)
-          if(this._anyN(b.x,b.y,c=>c.object==='road')){
-            this.carriers.produceAndRequestPickup(b);
-          }
-        }
-      }
+    if(kind==='bulldoze'){
+      this.roads.delete(keyXY(x,y));
+      const idx=this.buildings.findIndex(b=>b.x===x&&b.y===y);
+      if(idx>=0) this.buildings.splice(idx,1);
+      return true;
     }
-
-    // Träger updaten
-    this.carriers.update(dt);
-
-    // HUD
-    document.getElementById('res-wood').textContent  = Math.floor(this.state.res.wood);
-    document.getElementById('res-stone').textContent = Math.floor(this.state.res.stone);
-    document.getElementById('res-food').textContent  = Math.floor(this.state.res.food);
-    document.getElementById('res-gold').textContent  = Math.floor(this.state.res.gold);
-    document.getElementById('res-carrier').textContent = this.state.carriers.length;
-  }
-
-  // ------- Input (wie zuvor) -------
-  _bindInput(){
-    const c=this.r.canvas;
-
-    const onPointerDown=(e)=>{
-      c.setPointerCapture?.(e.pointerId);
-      if(e.pointerType==='touch'){
-        this._touches=[{id:e.pointerId,x:e.clientX,y:e.clientY,_x:e.clientX,_y:e.clientY}];
-      }else{
-        this._mouseDown=true; this._mouseLast={x:e.clientX,y:e.clientY};
-      }
-      if(this.tool!=='pointer' && this.tool!=='bulldoze'){
-        const rect=c.getBoundingClientRect();
-        const {tx,ty}=this.r.screenToTile(e.clientX-rect.left,e.clientY-rect.top);
-        this._lastTile={tx,ty};
-        this._tryBuild(tx,ty);
-      }else if(this.tool==='bulldoze'){
-        const rect=c.getBoundingClientRect();
-        const {tx,ty}=this.r.screenToTile(e.clientX-rect.left,e.clientY-rect.top);
-        if(this._inb(tx,ty)){ this.map[ty][tx].object=null; }
-      }
-      this._isPanning=(this.tool==='pointer');
-    };
-
-    const onPointerMove=(e)=>{
-      const rect=c.getBoundingClientRect();
-      const sx=e.clientX-rect.left, sy=e.clientY-rect.top;
-      this._lastTile=this.r.screenToTile(sx,sy);
-      if(e.pointerType!=='touch'){
-        if(this._mouseDown && this._isPanning){
-          const dx=e.clientX-this._mouseLast.x, dy=e.clientY-this._mouseLast.y;
-          this.r.cameraX+=dx; this.r.cameraY+=dy; this._mouseLast={x:e.clientX,y:e.clientY};
-        }
-        return;
-      }
-    };
-
-    const onPointerUp=()=>{ this._mouseDown=false; this._touches=[]; this.r.endPinch(); };
-
-    const onTouchStart=(e)=>{
-      if(e.touches.length===2){
-        const t0={x:e.touches[0].clientX,y:e.touches[0].clientY};
-        const t1={x:e.touches[1].clientX,y:e.touches[1].clientY};
-        t0._x=t0.x; t0._y=t0.y; t1._x=t1.x; t1._y=t1.y;
-        this._touches=[t0,t1];
-        this.r.beginPinch(t0,t1);
-      }
-    };
-    const onTouchMove=(e)=>{
-      if(e.touches.length===1 && this._isPanning){
-        e.preventDefault();
-        const dx=e.touches[0].movementX || (e.touches[0].clientX-(this._tLastX||e.touches[0].clientX));
-        const dy=e.touches[0].movementY || (e.touches[0].clientY-(this._tLastY||e.touches[0].clientY));
-        this.r.cameraX+=dx; this.r.cameraY+=dy;
-        this._tLastX=e.touches[0].clientX; this._tLastY=e.touches[0].clientY;
-      }else if(e.touches.length===2){
-        e.preventDefault();
-        const t0={x:e.touches[0].clientX,y:e.touches[0].clientY,_x:this._touches[0]._x,_y:this._touches[0]._y};
-        const t1={x:e.touches[1].clientX,y:e.touches[1].clientY,_x:this._touches[1]._x,_y:this._touches[1]._y};
-        this.r.doPinch(t0,t1); this._updZoomLbl?.();
-      }
-    };
-    const onTouchEnd=()=>{ this.r.endPinch(); this._touches=[]; };
-
-    c.addEventListener('pointerdown', onPointerDown);
-    c.addEventListener('pointermove', onPointerMove);
-    c.addEventListener('pointerup', onPointerUp);
-    c.addEventListener('pointercancel', onPointerUp);
-    c.addEventListener('touchstart', onTouchStart, {passive:false});
-    c.addEventListener('touchmove', onTouchMove, {passive:false});
-    c.addEventListener('touchend', onTouchEnd, {passive:true});
-  }
-
-  _tryBuild(tx,ty){
-    if(!this._inb(tx,ty)) return;
-    switch(this.tool){
-      case 'road':       this._placeObject(tx,ty,'road'); break;
-      case 'hq':         this._placeObject(tx,ty,'hq_wood'); break;
-      case 'lumberjack': this._placeObject(tx,ty,'lumberjack'); break;
-      case 'depot':      this._placeObject(tx,ty,'depot'); break;
-    }
+    return false;
   }
 }
