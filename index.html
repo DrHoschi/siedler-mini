@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Siedler‑Mini V13 (Mobile)</title>
+<title>Siedler‑Mini V13.5 (Mobile)</title>
 <style>
-  :root { --bg:#0e0f14; --panel:#11161f; --line:#232a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9; }
-  html,body{margin:0;height:100%;background:#0b0f14;color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto}
+  :root{--bg:#0b0f14;--panel:#11161f;--line:#232a36;--txt:#e9edf5;--mut:#aab0bd;--accent:#6ee7a9;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto}
   #ui{position:fixed;inset:0;display:flex;flex-direction:column}
-  header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;background:linear-gradient(180deg,#0f141c,#0b1017);border-bottom:1px solid var(--line)}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:linear-gradient(180deg,#0f141c,#0b1017);border-bottom:1px solid var(--line)}
   .badge{padding:4px 8px;border:1px solid var(--line);border-radius:10px;background:#131a22;font-variant-numeric:tabular-nums}
-  #left{position:absolute;left:8px;top:60px;display:flex;flex-direction:column;gap:8px;z-index:5}
-  .btn{appearance:none;border:1px solid var(--line);background:#111825;color:var(--txt);padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:600}
+  #left{position:absolute;left:8px;top:54px;display:flex;flex-direction:column;gap:8px;z-index:5}
+  .btn{appearance:none;border:1px solid var(--line);background:#121a25;color:var(--txt);padding:10px 12px;border-radius:12px;font-weight:600}
   .btn.active{outline:2px solid var(--accent)}
   #canvas{flex:1;touch-action:none;display:block;background:#20361b}
   #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6}
@@ -24,7 +24,7 @@
 <body>
 <div id="ui">
   <header>
-    <div class="badge">V13 Mobile · Pan: 1 Finger · Zoom: 2 Finger · Tap: bauen</div>
+    <div class="badge">V13.5 Mobile · Pan: 1 Finger · Zoom: 2 Finger · Tap: bauen</div>
     <div class="badge" id="hint">Zeiger</div>
   </header>
 
@@ -41,15 +41,12 @@
 
   <div id="overlay">
     <div class="card">
-      <h1>Siedler‑Mini V13 (Mobile)</h1>
-      <p>1 Finger = Karte verschieben · 2 Finger = Zoom · kurzer Tap = bauen (im Bau‑Tool).</p>
-      <div class="row">
-        <button class="btn" id="startBtn">Start</button>
-      </div>
+      <h1>Siedler‑Mini V13.5</h1>
+      <p>HQ (Stein) startet in der Mitte. Baue Straßen & Gebäude, Träger liefern Holz automatisch per Straße zu HQ/Depots.</p>
+      <div class="row"><button class="btn" id="startBtn">Start</button></div>
     </div>
   </div>
 </div>
-
-<script type="module" src="./main.js?v=13.0"></script>
+<script type="module" src="./main.js?v=13.5.0"></script>
 </body>
 </html>
