@@ -1,224 +1,48 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Siedler‑Mini V13.6 (Mobile‑Fix)</title>
-<style>
-  :root{
-    --bg:#0f1218; --panel:#141a22; --line:#253040; --txt:#e9edf5; --mut:#9aa7b8;
-    --accent:#6ee7a9;
-  }
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);
-            font:14px/1.3 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
-  #ui{position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden}
-  header{display:flex;gap:10px;align-items:center;justify-content:space-between;
-         padding:8px 10px; border-bottom:1px solid var(--line);
-         background:linear-gradient(180deg,#0f1420,#0b1018)}
-  .stats{font-variant-numeric:tabular-nums;display:flex;gap:8px;flex-wrap:wrap}
-  .pill{padding:6px 10px;border:1px solid var(--line);border-radius:11px;background:#141a24}
-  .pill b{margin-left:6px}
-
-  #wrap{position:relative; flex:1; overflow:hidden}
-  canvas{position:absolute; inset:0; width:100%; height:100%;
-         /* WICHTIG: damit Safari die Seite nicht pinch-zoomt */
-         touch-action:none; background:#0c1016}
-
-  /* Tools */
-  #tools{position:absolute; left:10px; top:58px; display:flex; flex-direction:column; gap:8px; z-index:2}
-  .btn{appearance:none;border:1px solid var(--line);background:#151b26;color:var(--txt);
-       padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:600;white-space:nowrap}
-  .btn.active{outline:2px solid var(--accent); outline-offset:0}
-
-  /* Overlay Start */
-  #overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:3}
-  .card{pointer-events:auto; width:min(92vw,520px);
-        background:rgba(20,26,34,.88); backdrop-filter:blur(8px);
-        border:1px solid var(--line); border-radius:16px; padding:18px}
-  .card h1{margin:0 0 8px; font-size:22px}
-  .card p{margin:8px 0 0; color:var(--mut)}
-  .row{display:flex; gap:8px; margin-top:12px}
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Siedler-Mini</title>
+    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div id="ui">
-  <header>
-    <div class="stats">
-      <span class="pill">🌲 Holz <b id="wood">0</b></span>
-      <span class="pill">⛰️ Stein <b id="stone">0</b></span>
-      <span class="pill">🌾 Nahrung <b id="food">0</b></span>
-      <span class="pill">🪙 Gold <b id="gold">0</b></span>
-      <span class="pill">👥 Träger <b id="car">0</b></span>
-    </div>
-    <div class="stats"><span class="pill" id="toolName">Zeiger</span></div>
-  </header>
-
-  <div id="wrap">
-    <canvas id="canvas"></canvas>
-
-    <div id="tools">
-      <button class="btn active" data-tool="pointer">Zeiger</button>
-      <button class="btn" data-tool="road">Straße</button>
-      <button class="btn" data-tool="hq">HQ</button>
-      <button class="btn" data-tool="lumber">Holzfäller</button>
-      <button class="btn" data-tool="depot">Depot</button>
-      <button class="btn" data-tool="bulldoze">Abriss</button>
-    </div>
-
-    <div id="overlay">
-      <div class="card">
-        <h1>Siedler‑Mini V13.6 (Mobile)</h1>
-        <p>1 Finger = Karte verschieben • 2 Finger = Zoomen • kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).<br>
-           HQ (Stein) steht bereits in der Kartenmitte.</p>
-        <div class="row">
-          <button class="btn" id="startBtn">Start</button>
+    <div id="ui">
+        <div id="resource-bar">
+            <span>🌲 Holz <span id="res-wood">0</span></span>
+            <span>🪨 Stein <span id="res-stone">0</span></span>
+            <span>🌾 Nahrung <span id="res-food">0</span></span>
+            <span>🪙 Gold <span id="res-gold">0</span></span>
+            <span>🚶 Träger <span id="res-carrier">0</span></span>
         </div>
-      </div>
+        <div id="toolbar">
+            <button data-tool="pointer">Zeiger</button>
+            <button data-tool="road">Straße</button>
+            <button data-tool="hq">HQ</button>
+            <button data-tool="lumberjack">Holzfäller</button>
+            <button data-tool="depot">Depot</button>
+            <button data-tool="destroy">Abriss</button>
+        </div>
     </div>
-  </div>
-</div>
 
-<script type="module">
-import { IM, loadAllAssets } from './core/assets.js';
-import { makeWorld, tryBuild, tickWorld, tileAt, T, B, RES } from './core/world.js';
-import { Render } from './core/render.js';
+    <canvas id="game"></canvas>
 
-const canvas = document.getElementById('canvas');
-const hud = {
-  wood: wood, stone: stone, food: food, gold: gold, car: car, toolName: toolName
-};
-const DPR = Math.max(1, Math.min(devicePixelRatio||1, 2));
-const render = new Render(canvas, DPR);
-let world = null;
+    <script type="module">
+        import { Renderer } from './core/render.js';
+        import { Game } from './core/game.js';
 
-// ------- Tools ----------
-let tool = 'pointer';
-const tools = [...document.querySelectorAll('#tools .btn')];
-tools.forEach(b=> b.addEventListener('click', ()=>{
-  tools.forEach(x=>x.classList.remove('active')); b.classList.add('active');
-  tool = b.dataset.tool; hud.toolName.textContent = b.textContent;
-}));
+        const canvas = document.getElementById('game');
+        const renderer = new Renderer(canvas);
+        const game = new Game(renderer);
 
-// ------- Start ----------
-document.getElementById('startBtn').onclick = async ()=>{
-  document.getElementById('overlay').style.display='none';
-  await loadAllAssets();             // wartet wirklich auf Bilder
-  world = makeWorld(128, 128);       // HQ (Stein) zentriert
-  renderer.setWorld(world);
-  requestAnimationFrame(loop);
-};
+        game.start();
 
-// ------- Pointer / Touch Gesten -------
-let pan = {active:false, x:0, y:0, cx:0, cy:0};
-let pinch = {active:false, d0:0, z0:1, cx:0, cy:0};
-let tap = {down:false, t0:0, x0:0, y0:0};
-
-function resize(){
-  const r = canvas.getBoundingClientRect();
-  canvas.width = Math.round(r.width*DPR);
-  canvas.height= Math.round(r.height*DPR);
-  renderer.setSize(r.width, r.height);
-}
-addEventListener('resize', resize, {passive:true}); resize();
-
-canvas.addEventListener('pointerdown', (e)=>{
-  canvas.setPointerCapture(e.pointerId);
-  tap = {down:true, t0:performance.now(), x0:e.clientX, y0:e.clientY};
-  // 1 Finger → Pan
-  if(e.isPrimary && !pinch.active){
-    pan.active=true; pan.x=e.clientX; pan.y=e.clientY; pan.cx=renderer.cam.x; pan.cy=renderer.cam.y;
-  }
-});
-
-canvas.addEventListener('pointermove', (e)=>{
-  if(pinch.active) return; // echte 2‑Finger Pinch behandeln wir über Touch‑Events
-  if(pan.active){
-    const dx=(e.clientX-pan.x)/renderer.cam.z;
-    const dy=(e.clientY-pan.y)/renderer.cam.z;
-    renderer.cam.x = pan.cx - dx;
-    renderer.cam.y = pan.cy - dy;
-  }
-});
-
-canvas.addEventListener('pointerup', (e)=>{
-  if(!world) return;
-  if(pan.active) pan.active=false;
-
-  // kurzer Tap = bauen
-  const moved = Math.hypot(e.clientX-tap.x0, e.clientY-tap.y0);
-  const dt = performance.now()-tap.t0;
-  if(moved<8 && dt<280){
-    if(tool==='bulldoze'){
-      const t = renderer.screenToTile(e.clientX, e.clientY);
-      tryBuild(world, 'bulldoze', t.tx, t.ty);
-    }else if(tool!=='pointer'){
-      const t = renderer.screenToTile(e.clientX, e.clientY);
-      tryBuild(world, tool, t.tx, t.ty);
-    }
-  }
-  tap.down=false;
-});
-
-// Native Pinch: Touch‑Events separat (Safari iOS)
-canvas.addEventListener('touchstart', (e)=>{
-  if(e.touches.length===2){
-    e.preventDefault();
-    const [a,b]=e.touches;
-    pinch.active=true;
-    pinch.d0 = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-    pinch.z0 = renderer.cam.z;
-    pinch.cx = (a.clientX+b.clientX)/2;
-    pinch.cy = (a.clientY+b.clientY)/2;
-  }
-},{passive:false});
-
-canvas.addEventListener('touchmove', (e)=>{
-  if(pinch.active && e.touches.length===2){
-    e.preventDefault();
-    const [a,b]=e.touches;
-    const d1 = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-    const scale = d1 / Math.max(10, pinch.d0);
-    const before = renderer.screenToWorld(pinch.cx, pinch.cy);
-    renderer.cam.z = Math.max(0.5, Math.min(2.5, pinch.z0*scale));
-    const after  = renderer.screenToWorld(pinch.cx, pinch.cy);
-    renderer.cam.x += (before.x-after.x);
-    renderer.cam.y += (before.y-after.y);
-  }
-},{passive:false});
-
-canvas.addEventListener('touchend', ()=>{ pinch.active=false; }, {passive:true});
-
-// Maus‑Rad Zoom (Desktop)
-canvas.addEventListener('wheel', (e)=>{
-  e.preventDefault();
-  const mx=e.clientX, my=e.clientY;
-  const before = renderer.screenToWorld(mx,my);
-  const f = Math.pow(1.1, e.deltaY>0?-1:1);
-  renderer.cam.z = Math.max(0.5, Math.min(2.5, renderer.cam.z*f));
-  const after = renderer.screenToWorld(mx,my);
-  renderer.cam.x += (before.x-after.x);
-  renderer.cam.y += (before.y-after.y);
-},{passive:false});
-
-// ------- Loop -------
-let last=0, acc=0;
-function loop(ts){
-  if(!world) return;
-  const dt = Math.min(0.05, (ts-last)/1000); last=ts; acc+=dt;
-  while(acc>0.2){ tickWorld(world, 0.2); acc-=0.2; }
-  renderer.render();
-  updateHUD();
-  requestAnimationFrame(loop);
-}
-
-function updateHUD(){
-  hud.wood.textContent = world.res.wood|0;
-  hud.stone.textContent= world.res.stone|0;
-  hud.food.textContent = world.res.food|0;
-  hud.gold.textContent = world.res.gold|0;
-  hud.car.textContent  = world.carriers.length|0;
-}
-</script>
+        // Toolbar-Buttons
+        document.querySelectorAll('#toolbar button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                game.setTool(btn.dataset.tool);
+            });
+        });
+    </script>
 </body>
 </html>
