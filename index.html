@@ -3,57 +3,68 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Siedler‑Mini V13.5 (Mobile)</title>
+<title>Siedler-Mini V13 Mobile</title>
 <style>
-  :root{--bg:#0b0f14;--panel:#11161f;--line:#232a36;--txt:#e9edf5;--mut:#aab0bd;--accent:#6ee7a9;}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto}
-  #ui{position:fixed;inset:0;display:flex;flex-direction:column}
-  header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:linear-gradient(180deg,#0f141c,#0b1017);border-bottom:1px solid var(--line)}
-  .badge{padding:4px 8px;border:1px solid var(--line);border-radius:10px;background:#131a22;font-variant-numeric:tabular-nums}
-  #left{position:absolute;left:8px;top:54px;display:flex;flex-direction:column;gap:8px;z-index:5}
-  .btn{appearance:none;border:1px solid var(--line);background:#121a25;color:var(--txt);padding:10px 12px;border-radius:12px;font-weight:600}
+  :root{--bg:#0d1117;--pan:#0f1620;--line:#263143;--txt:#e9eff7;--mut:#9fb0c6;--chip:#141b25;--accent:#6ee7a9}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
+  #top{position:fixed;left:0;right:0;top:0;height:44px;display:flex;align-items:center;gap:8px;padding:0 10px;background:linear-gradient(180deg,#0e141e,#0c121a);border-bottom:1px solid var(--line);z-index:20}
+  .stat{font-variant-numeric:tabular-nums;background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 10px;display:flex;gap:6px;align-items:center}
+  #left{position:fixed;left:8px;top:56px;display:flex;flex-direction:column;gap:10px;z-index:15}
+  .btn{appearance:none;border:1px solid var(--line);background:#0f1722;color:var(--txt);padding:10px 12px;border-radius:12px;font-weight:700}
   .btn.active{outline:2px solid var(--accent)}
-  #canvas{flex:1;touch-action:none;display:block;background:#20361b}
-  #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6}
-  .card{width:min(92vw,560px);background:rgba(17,22,31,.9);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:18px}
-  .card h1{margin:0 0 6px;font-size:22px}
-  .card p{margin:8px 0;color:var(--mut)}
-  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  #wrap{position:fixed;inset:0;top:45px}
+  #canvas{position:absolute;inset:0;touch-action:none;display:block}
+  #ver{position:fixed;right:10px;bottom:8px;color:#8fb3a2;font-size:11px;opacity:.9;z-index:25}
+  /* Start-Overlay */
+  #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:50}
+  #card{width:min(92vw,560px);background:#12161d;border:1px solid #273043;border-radius:14px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  #card h2{margin:0 0 6px}
+  #card p{margin:8px 0 14px;color:var(--mut)}
+  #btnStart{appearance:none;border:1px solid #2e394d;background:#0df08a;color:#06240f;font-weight:800;padding:8px 14px;border-radius:10px}
 </style>
 </head>
 <body>
-<div id="ui">
-  <header>
-  <div class="badge">V13.6 Mobile · Pan: 1 Finger · Zoom: 2 Finger · Tap: bauen</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <span class="badge">🌲 Holz <b id="uiWood">0</b></span>
-    <span class="badge">⛰️ Stein <b id="uiStone">0</b></span>
-    <span class="badge">🌾 Nahrung <b id="uiFood">0</b></span>
-    <span class="badge">🪙 Gold <b id="uiGold">0</b></span>
-    <span class="badge">🚶 Träger <b id="uiCar">0</b></span>
-    <span class="badge" id="hint">Zeiger</span>
+  <div id="top">
+    <span class="stat">🌲 Holz <b id="uiWood">0</b></span>
+    <span class="stat">⛰️ Stein <b id="uiStone">0</b></span>
+    <span class="stat">🌾 Nahrung <b id="uiFood">0</b></span>
+    <span class="stat">🪙 Gold <b id="uiGold">0</b></span>
+    <span class="stat">🚶 Träger <b id="uiCar">0</b></span>
+    <span class="stat" id="hint">Zeiger</span>
   </div>
-</header>
 
   <div id="left">
-    <button class="btn active" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="lumber">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="bulldoze">Abriss</button>
+    <button class="btn active" id="btnPointer">Zeiger</button>
+    <button class="btn" id="btnRoad">Straße</button>
+    <button class="btn" id="btnHQ">HQ</button>
+    <button class="btn" id="btnLumber">Holzfäller</button>
+    <button class="btn" id="btnDepot">Depot</button>
+    <button class="btn" id="btnBull">Abriss</button>
   </div>
 
-  <canvas id="canvas"></canvas>
+  <div id="wrap"><canvas id="canvas"></canvas></div>
+  <div id="ver">JS V13</div>
 
+  <!-- Start-Overlay -->
   <div id="overlay">
-    <div class="card">
-      <h1>Siedler‑Mini V13.5</h1>
-      <p>HQ (Stein) startet in der Mitte. Baue Straßen & Gebäude, Träger liefern Holz automatisch per Straße zu HQ/Depots.</p>
-      <div class="row"><button class="btn" id="startBtn">Start</button></div>
+    <div id="card">
+      <h2>Siedler‑Mini V13 (Mobile)</h2>
+      <p>1 Finger = Karte verschieben • 2 Finger = Zoomen • kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).
+      <br>HQ (Stein) ist bereits in der Kartenmitte platziert.</p>
+      <button id="btnStart">Start</button>
     </div>
   </div>
-</div>
-<script type="module" src="./main.js?v=13.5.0"></script>
+
+  <script type="module" src="./main.js?v=13m"></script>
+  <script>
+    // Overlay-Start
+    (function(){
+      const start = document.getElementById('btnStart');
+      const overlay = document.getElementById('overlay');
+      const go = ()=>{ overlay.style.display='none'; window.dispatchEvent(new CustomEvent('game-start')); };
+      start.addEventListener('click', go, {passive:true});
+      start.addEventListener('touchend', (e)=>{ e.preventDefault(); go(); }, {passive:false});
+    })();
+  </script>
 </body>
 </html>
