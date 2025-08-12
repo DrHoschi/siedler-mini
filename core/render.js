@@ -1,4 +1,4 @@
-// core/render.js – V13.1 Mobile (super padded ground + auto rebuild)
+// core/render.js – V13.2 Mobile (safe padded ground with max size clamp)
 import { IM } from './assets.js';
 import { cam } from './camera.js';
 import { TILE_W, TILE_H, MAP, grid, computeRoadMasks, buildingImage, cellToIso } from './world.js';
@@ -14,28 +14,43 @@ let needsDraw = true;
 export function requestDraw(){ needsDraw = true; drawIfNeeded(); }
 function drawIfNeeded(){ if(!needsDraw) return; needsDraw=false; drawAll(); }
 
-/* ---------- Offscreen-Boden (mit sehr großem, dynamischem Rand) ---------- */
+/* ---------- Offscreen-Boden ---------- */
 let groundLayer=null, gtx=null, gW=0, gH=0, PAD=0;
 let lastBuild = { z:null, vw:0, vh:0, pad:0 };
+
+// harte Obergrenze für Offscreen-Texturen (iOS/Safari sicher)
+const MAX_OFFSCREEN = 8192; // px
 
 export function prerenderGround(){
   if(!canvas) return;
 
-  // Mapgröße (Iso-Logik-Pixel)
   const mapW = MAP.W * TILE_W;
   const mapH = MAP.H * TILE_H;
 
-  // Viewport (Logik-Pixel) unter aktuellem Zoom
+  // Viewport in Logikpx (DPR/Zoom)
   const dpr = window.devicePixelRatio || 1;
   const vw  = (window.innerWidth  * dpr) / Math.max(cam.z, 0.001);
   const vh  = (window.innerHeight * dpr) / Math.max(cam.z, 0.001);
 
-  // *** WICHTIG ***: Großzügiges Padding – 4x Diagonale + 12 Tiles
-  // So bleibt auch bei starkem Rauszoomen/Schieben alles grün gekachelt.
-  PAD = Math.ceil(Math.hypot(vw, vh) * 4.0) + Math.max(TILE_W, TILE_H) * 12;
+  // gewünschtes großzügiges Padding
+  const desiredPAD = Math.ceil(Math.hypot(vw, vh) * 1.5) + Math.max(TILE_W, TILE_H) * 6;
+
+  // maximale PADs, damit Offscreen <= MAX_OFFSCREEN bleibt
+  const maxPadX = Math.max(0, Math.floor((MAX_OFFSCREEN - mapW) / 2));
+  const maxPadY = Math.max(0, Math.floor((MAX_OFFSCREEN - mapH) / 2));
+
+  PAD = Math.max(0, Math.min(desiredPAD, maxPadX, maxPadY));
 
   gW = mapW + PAD*2;
   gH = mapH + PAD*2;
+
+  // falls Map selbst schon größer als MAX_OFFSCREEN (hier nicht der Fall), clampen:
+  if (gW > MAX_OFFSCREEN || gH > MAX_OFFSCREEN) {
+    // letzter Notanker: kein PAD (direkt Mapgröße)
+    PAD = 0;
+    gW = mapW;
+    gH = mapH;
+  }
 
   groundLayer = document.createElement('canvas');
   groundLayer.width  = gW;
@@ -43,11 +58,11 @@ export function prerenderGround(){
   gtx = groundLayer.getContext('2d', { alpha:false });
   gtx.imageSmoothingEnabled = true;
 
-  // 1) Randfläche (Gras) – Basisfarbe
+  // Randfläche füllen (Grasbasis)
   gtx.fillStyle = '#20361b';
   gtx.fillRect(0,0,gW,gH);
 
-  // 2) Map-Raute zeichnen (um PAD verschoben)
+  // Map-Raute zeichnen (um PAD verschoben)
   for(let y=0;y<MAP.H;y++){
     for(let x=0;x<MAP.W;x++){
       const p=cellToIso(x,y);
@@ -125,28 +140,26 @@ function drawBuildings(){
 function maybeRebuild(){
   if(!groundLayer) return true;
 
-  // Zoom oder Viewport stark verändert?
+  // Zoom/Viewport geändert?
   const zoomChanged = (lastBuild.z==null) || (Math.abs(cam.z - lastBuild.z) / (lastBuild.z||1) > 0.10);
   const vpChanged   = (window.innerWidth !== lastBuild.vw || window.innerHeight !== lastBuild.vh);
-
   if(zoomChanged || vpChanged) return true;
 
-  // Liegt die sichtbare Fläche zu nah am Offscreen-Rand? -> Neu bauen
+  // Sichtfenster zu nah am Offscreen-Rand?
   const dpr = window.devicePixelRatio || 1;
   const vw  = (window.innerWidth  * dpr) / Math.max(cam.z, 0.001);
   const vh  = (window.innerHeight * dpr) / Math.max(cam.z, 0.001);
 
-  // sichtbarer Offscreen-Ausschnitt
   const left   = cam.x + lastBuild.pad;
   const top    = cam.y + lastBuild.pad;
   const right  = left + vw;
   const bottom = top  + vh;
 
-  const MARGIN = lastBuild.pad * 0.25; // Sicherheitsabstand
-  if (left   < MARGIN * 0.5)        return true;
-  if (top    < MARGIN * 0.5)        return true;
-  if (right  > gW - MARGIN * 0.5)   return true;
-  if (bottom > gH - MARGIN * 0.5)   return true;
+  const margin = Math.max(64, lastBuild.pad * 0.15); // min. 64px Sicherheit
+  if (left   < margin)           return true;
+  if (top    < margin)           return true;
+  if (right  > gW - margin)      return true;
+  if (bottom > gH - margin)      return true;
 
   return false;
 }
@@ -155,10 +168,8 @@ function maybeRebuild(){
 export function drawAll(){
   if(!canvas) return;
 
-  // Automatisch neu bauen, wenn nötig
   if(maybeRebuild()) prerenderGround();
 
-  // Clear & Scale
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -166,16 +177,14 @@ export function drawAll(){
   const z = cam.z;
   ctx.scale(z,z);
 
-  // Hintergrund (gleiche Grundfarbe wie Offscreen-Rand)
+  // Hintergrund passend zum Offscreen-Rand
   ctx.fillStyle = '#20361b';
   ctx.fillRect(0,0, canvas.width/z, canvas.height/z);
 
-  // Boden (mit PAD-Offset)
   if(groundLayer){
     ctx.drawImage(groundLayer, -cam.x - PAD, -cam.y - PAD);
   }
 
-  // Overlay
   drawRoads();
   drawBuildings();
 
