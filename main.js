@@ -1,261 +1,286 @@
-// main.js – V13.7.2 – Startet mit zentriertem HQ + funktionierendem Pan/Zoom/Bauen
-import { IsoRenderer } from './render.js';
+// Siedler‑Mini V13.7 – Mobile start fix + fullscreen + korrekte Karte
+// Lädt render.js dynamisch und initialisiert Welt/Events.
 
-// ---- Asset-Loader (deine Namen aus /assets)
-const IM = {};
-const LIST = [
-  ['grass','assets/grass.png'],
-  ['water','assets/water.png'],
-  ['shore','assets/shore.png'],
-  ['dirt','assets/dirt.png'],
-  ['rocky','assets/rocky.png'],
-  ['sand','assets/sand.png'],
-  ['road','assets/road.png'],               // neutrales Straßen-Tile (Platzhalter)
-  ['road_curve','assets/road_curve.png'],   // optional
-  ['road_straight','assets/road_straight.png'],
-  ['hq_stone','assets/hq_stone.png'],
-  ['hq_wood','assets/hq_wood.png'],
-  ['lumber','assets/lumberjack.png'],
-  ['depot','assets/depot.png'],
-  ['carrier','assets/carrier.png'],         // (Sprite-Sheet 4x2 o.ä., Platzhalter ok)
-];
+import { createRenderer } from './render.js';
 
-function loadAssets(){
-  return Promise.all(LIST.map(([k,src]) => new Promise(res=>{
-    const im = new Image(); im.onload=()=>{IM[k]=im;res();};
-    im.onerror=()=>{console.warn('Fehlt:',src); IM[k]=null; res();};
-    im.src = src;
-  })));
-}
+// --- DOM ----
+const cvs = document.getElementById('game');
+const overlay = document.getElementById('overlay');
+const btnStart = document.getElementById('start');
+const btnFull = document.getElementById('btnFull');
+const btnCenter = document.getElementById('btnCenter');
+const btnDebug = document.getElementById('btnDebug');
 
-// ---- Welt-Daten
-const WORLD_W = 160;   // Spalten
-const WORLD_H = 120;   // Reihen
-const TILES = new Array(WORLD_W*WORLD_H).fill(0); // 0=Grass, 1=Water, 2=Shore, 3=Dirt, 4=Rocky, 5=Sand
-const ROADS = new Set();     // Schlüssel "i,j"
-const BUILD = [];            // {type:'hq'|'lumber'|'depot', i,j, img}
+const toolName = document.getElementById('toolName');
+const zoomLabel = document.getElementById('zoomLabel');
 
-// kleine Demo-Map mit See
-function genWorld(){
-  for(let j=0;j<WORLD_H;j++){
-    for(let i=0;i<WORLD_W;i++){
-      TILES[i+j*WORLD_W] = 0; // grass
-    }
-  }
-  // See in der Mitte-oben
-  const cx=WORLD_W*0.6, cy=WORLD_H*0.25, R=12;
-  for(let j=0;j<WORLD_H;j++){
-    for(let i=0;i<WORLD_W;i++){
-      const d = Math.hypot(i-cx, j-cy);
-      if(d<R) TILES[i+j*WORLD_W] = 1; // water
-      else if (d<R+1 && TILES[i+j*WORLD_W]===0) TILES[i+j*WORLD_W]=2; // shore
-    }
-  }
-}
+const btnCursor  = document.getElementById('toolCursor');
+const btnRoad    = document.getElementById('toolRoad');
+const btnHQ      = document.getElementById('toolHQ');
+const btnLumber  = document.getElementById('toolLumber');
+const btnDepot   = document.getElementById('toolDepot');
+const btnBulldo  = document.getElementById('toolBulldo');
 
-// ---- Hilfen
-const key = (i,j)=> `${i},${j}`;
-const inBounds = (i,j)=> (i>=0 && j>=0 && i<WORLD_W && j<WORLD_H);
-
-// ---- Kamera & Renderer
-const canvas = document.getElementById('game');
-const r = new IsoRenderer(canvas, { tileW:128, tileH:64, zoom:1, bg:'#0b1220' });
-
-// ---- UI
-const ui = {
-  start: document.getElementById('start'),
-  overlay: document.getElementById('overlay'),
-  btnFull: document.getElementById('btnFull'),
-  debug: document.getElementById('btnDebug'),
-  zoomLabel: document.getElementById('zoomLabel'),
-  btnCenter: document.getElementById('btnCenter'),
-  toolBtns: {
-    cursor: document.getElementById('toolCursor'),
-    road:   document.getElementById('toolRoad'),
-    hq:     document.getElementById('toolHQ'),
-    lumber: document.getElementById('toolLumber'),
-    depot:  document.getElementById('toolDepot'),
-    bulldo: document.getElementById('toolBulldo'),
-  }
+// --- Spielzustand klein & robust ---
+const State = {
+  started:false,
+  tool:'cursor',                 // cursor|road|hq|lumber|depot|bulldo
+  zoom:1,
+  debug:false,
+  world:null,
+  r:null,                        // renderer
+  pointer:{x:0,y:0,down:false},
 };
 
-let DEBUG=false;
-let tool='cursor';
-let running=false;
-let startHQ = { i: (WORLD_W/2|0), j: (WORLD_H/2|0) };
-
-// ---- Gesten (Mobile‑freundlich)
-let dragging=false;
-let last1=null;
-let pinchStart=null;
-
-function setTool(t){
-  tool=t;
-  document.getElementById('toolName').textContent = 
-    t==='cursor'?'Zeiger': t==='road'?'Straße': t==='hq'?'HQ': t==='lumber'?'Holzfäller': t==='depot'?'Depot':'Abriss';
-}
-
-function centerOnHQ(){
-  r.setCameraCenter(startHQ.i, startHQ.j);
-}
-
-function onStart(){
-  ui.overlay.style.display='none';
-  running=true;
-  centerOnHQ(); // <<— **hier ist die Karte ab Start garantiert sichtbar**
-}
-
-// Touch/Pan/Pinch
-canvas.addEventListener('touchstart', (e)=>{
-  if(!running) return;
-  if(e.touches.length===1){
-    dragging=true;
-    last1 = { x:e.touches[0].clientX, y:e.touches[0].clientY };
-  }else if(e.touches.length===2){
-    dragging=false;
-    const [a,b]=e.touches;
-    pinchStart = {
-      d: Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY),
-      z: r.Z,
-      pivot: { x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2 }
-    };
+// --- einfache Welt (feste Größe, HQ in Mitte) ---
+function makeWorld(){
+  const W = 120, H = 120;                 // feste Karte
+  const tiles = new Array(W*H).fill(0);   // 0=gras
+  // kleiner See unten rechts als Sicht-Anker
+  for (let y=80;y<96;y++){
+    for (let x=80;x<110;x++){
+      tiles[y*W+x] = (x===80||y===80||x===109||y===95) ? 2 : 1; // 2=shore, 1=water
+    }
   }
-},{passive:true});
+  // HQ an Kartenmitte
+  const cx = (W/2)|0, cy = (H/2)|0;
+  const buildings = [{ kind:'hq_stone', x:cx, y:cy }];
 
-canvas.addEventListener('touchmove', (e)=>{
-  if(!running) return;
-  if(e.touches.length===1 && dragging && tool==='cursor'){
-    const t=e.touches[0];
-    const dx = (t.clientX - last1.x) / (r.TW*0.5*r.Z);
-    const dy = (t.clientY - last1.y) / (r.TH*0.5*r.Z);
-    r.nudgeCamera(-dx, -dy);
-    last1 = { x:t.clientX, y:t.clientY };
-  }else if(e.touches.length===2 && pinchStart){
-    const [a,b]=e.touches;
-    const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-    const z = pinchStart.z * (d / pinchStart.d);
-    r.setZoom(z, pinchStart.pivot);
+  // Straßengraph / Belegung separat
+  const roads = new Set();     // key `${x},${y}`
+  const blocked = new Set();   // für Gebäude-Footprints
+
+  // Fußabdruck HQ (3x3) blocken
+  for (let dy=-1; dy<=1; dy++){
+    for (let dx=-1; dx<=1; dx++){
+      blocked.add(`${cx+dx},${cy+dy}`);
+    }
   }
-},{passive:true});
 
-canvas.addEventListener('touchend', ()=>{
-  dragging=false; pinchStart=null; last1=null;
-},{passive:true});
+  return { W,H, tiles, roads, buildings, blocked };
+}
 
-// Kurzer Tap = bauen (wenn Bau-Tool)
-canvas.addEventListener('click', (e)=>{
-  if(!running) return;
-  if(tool==='cursor') return;
-  const rect = canvas.getBoundingClientRect();
-  const px = e.clientX - rect.left;
-  const py = e.clientY - rect.top;
-  const w = r.screenToWorld(px, py);
-  const i = Math.round(w.x);
-  const j = Math.round(w.y);
-  if(!inBounds(i,j)) return;
+// Hilfsfunktionen
+const key = (x,y)=>`${x},${y}`;
+const inBounds = (w,x,y)=> x>=0 && y>=0 && x<w.W && y<w.H;
 
-  if(tool==='road'){
-    ROADS.add(key(i,j));
-  }else if(tool==='hq'){
-    BUILD.push({type:'hq', i, j, img: IM.hq_wood ?? null});
-  }else if(tool==='lumber'){
-    BUILD.push({type:'lumber', i, j, img: IM.lumber ?? null});
-  }else if(tool==='depot'){
-    BUILD.push({type:'depot', i, j, img: IM.depot ?? null});
-  }else if(tool==='bulldo'){
-    ROADS.delete(key(i,j));
-    // Gebäude wegräumen:
-    for(let k=BUILD.length-1;k>=0;k--){
-      if(BUILD[k].i===i && BUILD[k].j===j){ BUILD.splice(k,1); }
+// --- Tool-UI sync ---
+function setTool(name){
+  State.tool = name;
+  toolName.textContent = name==='cursor' ? 'Zeiger'
+    : name==='road' ? 'Straße'
+    : name==='hq' ? 'HQ'
+    : name==='lumber' ? 'Holzfäller'
+    : name==='depot' ? 'Depot'
+    : 'Abriss';
+}
+
+// --- Bauen / Abreißen ---
+function canPlaceBuilding(world, kind, gx,gy){
+  // footprints
+  let fp = [{x:0,y:0}];
+  if (kind==='hq' || kind==='hq_stone') {
+    fp = [];
+    for (let dy=-1; dy<=1; dy++)
+      for (let dx=-1; dx<=1; dx++)
+        fp.push({x:dx,y:dy});
+  } else if (kind==='lumber' || kind==='depot'){
+    fp = [{x:0,y:0},{x:1,y:0},{x:0,y:1},{x:1,y:1}];
+  }
+  for (const o of fp){
+    const x = gx+o.x, y = gy+o.y;
+    if (!inBounds(world,x,y) || world.blocked.has(key(x,y))) return false;
+  }
+  return true;
+}
+function placeBuilding(world, kind, gx,gy){
+  const k = (kind==='hq')?'hq_wood':(kind==='hq_stone'? 'hq_stone': kind);
+  if (!canPlaceBuilding(world,k,gx,gy)) return false;
+  world.buildings.push({kind:k,x:gx,y:gy});
+  // blockieren
+  if (k==='hq_stone' || k==='hq_wood'){
+    for (let dy=-1; dy<=1; dy++)
+      for (let dx=-1; dx<=1; dx++)
+        world.blocked.add(key(gx+dx,gy+dy));
+  } else if (k==='lumber' || k==='depot'){
+    for (let dy=0; dy<=1; dy++)
+      for (let dx=0; dx<=1; dx++)
+        world.blocked.add(key(gx+dx,gy+dy));
+  } else {
+    world.blocked.add(key(gx,gy));
+  }
+  return true;
+}
+function toggleRoad(world, gx,gy){
+  const k = key(gx,gy);
+  if (!inBounds(world,gx,gy) || world.blocked.has(k)) return;
+  if (world.roads.has(k)) world.roads.delete(k);
+  else world.roads.add(k);
+}
+
+// --- Startlogik / Overlay ---
+btnStart.addEventListener('click', async ()=>{
+  await startGame();
+});
+btnFull.addEventListener('click', async ()=>{
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch(_) {}
+});
+
+async function startGame(){
+  if (State.started) return;
+  // Renderer erzeugen (lädt Texturen, setzt Kamera usw.)
+  State.world = makeWorld();
+  State.r = await createRenderer(cvs, State.world, {
+    onZoom:(z)=>{ State.zoom=z; zoomLabel.textContent=`Zoom ${z.toFixed(2)}x`; },
+    debugGetter:()=>State.debug
+  });
+  // Kamera auf HQ
+  const hq = State.world.buildings.find(b=>b.kind.startsWith('hq'));
+  if (hq) State.r.centerOn(hq.x, hq.y, 1.0);
+
+  overlay.style.display='none';
+  State.started = true;
+  setTool('cursor');
+  State.r.requestFrame();
+}
+
+// --- Debug / Center UI ---
+btnCenter.addEventListener('click', ()=>{
+  if (!State.r || !State.world) return;
+  const hq = State.world.buildings.find(b=>b.kind.startsWith('hq'));
+  if (hq) State.r.centerOn(hq.x, hq.y, State.r.zoom);
+});
+btnDebug.addEventListener('click', ()=>{
+  State.debug = !State.debug;
+  btnDebug.textContent = State.debug ? 'Debug ✓' : 'Debug';
+  if (State.r) State.r.requestFrame();
+});
+
+// --- Tool Buttons ---
+btnCursor .addEventListener('click', ()=>setTool('cursor'));
+btnRoad   .addEventListener('click', ()=>setTool('road'));
+btnHQ     .addEventListener('click', ()=>setTool('hq'));
+btnLumber .addEventListener('click', ()=>setTool('lumber'));
+btnDepot  .addEventListener('click', ()=>setTool('depot'));
+btnBulldo .addEventListener('click', ()=>setTool('bulldo'));
+
+// --- Eingaben (Touch+Maus) ---
+// Pan nur im Zeiger-Tool, Bauen per kurzer Tap/Klick in Bau-Tools
+let drag=false, last={x:0,y:0};
+cvs.addEventListener('pointerdown', (e)=>{
+  if (!State.started) return;
+  cvs.setPointerCapture(e.pointerId);
+  State.pointer.down=true;
+  last.x=e.clientX; last.y=e.clientY;
+
+  if (State.tool!=='cursor'){
+    // bauen/abreißen
+    const {gx,gy} = State.r.screenToGrid(e.clientX, e.clientY);
+    if (State.tool==='road')       toggleRoad(State.world, gx,gy);
+    else if (State.tool==='bulldo'){ // Abriss: Gebäude oder Straße
+      const k = key(gx,gy);
+      State.world.roads.delete(k);
+      // Gebäude entfernen, wenn footprint enthält die Zelle
+      const b = State.world.buildings.findIndex(b=>containsFoot(b,gx,gy));
+      if (b>=0){
+        unBlock(State.world, State.world.buildings[b]);
+        State.world.buildings.splice(b,1);
+      }
+    }
+    else if (State.tool==='hq' || State.tool==='lumber' || State.tool==='depot'){
+      const placed = placeBuilding(State.world, State.tool, gx,gy);
+      if (!placed) flashBtn(btnHQ);
+    }
+    State.r.requestFrame();
+  } else {
+    drag=true;
+  }
+});
+cvs.addEventListener('pointermove', (e)=>{
+  if (!State.started) return;
+  if (drag && State.tool==='cursor'){
+    const dx = e.clientX-last.x, dy = e.clientY-last.y;
+    last.x=e.clientX; last.y=e.clientY;
+    State.r.panPixels(dx,dy);
+  }
+});
+cvs.addEventListener('pointerup', ()=>{
+  State.pointer.down=false;
+  drag=false;
+});
+
+// Pinch‑Zoom (2 Finger)
+let pinchIdA=null, pinchIdB=null, pinchStartDist=0, pinchStartZoom=1;
+cvs.addEventListener('pointerdown', (e)=>{
+  if (pinchIdA===null) pinchIdA=e.pointerId;
+  else if (pinchIdB===null && e.pointerId!==pinchIdA) {
+    pinchIdB=e.pointerId;
+    pinchStartDist = distOfPointers();
+    pinchStartZoom = State.r.zoom;
+  }
+});
+cvs.addEventListener('pointerup', (e)=>{
+  if (e.pointerId===pinchIdA) pinchIdA=null;
+  if (e.pointerId===pinchIdB) pinchIdB=null;
+});
+cvs.addEventListener('pointermove', (e)=>{
+  if (pinchIdA && pinchIdB){
+    const d = distOfPointers();
+    if (d>0){
+      const scale = d/pinchStartDist;
+      State.r.setZoomClamped(pinchStartZoom*scale, e.clientX, e.clientY);
     }
   }
 });
+function distOfPointers(){
+  const pA = getPointerById(pinchIdA);
+  const pB = getPointerById(pinchIdB);
+  return (pA && pB) ? Math.hypot(pA.clientX-pB.clientX, pA.clientY-pB.clientY) : 0;
+}
+function getPointerById(id){
+  // Safari hat keine Pointer Events Liste -> wir nutzen last event position
+  // Workaround: read from document’s last known positions (keine API),
+  // deshalb geben wir null zurück falls nicht verfügbar.
+  return [...document.querySelectorAll(':pointer')].find(p=>p.pointerId===id) || null;
+}
 
-// Mausrad (Desktop) – zoom zum Mauszeiger
-canvas.addEventListener('wheel', (e)=>{
-  if(!running) return;
+// Maus-Zoom (Desktop)
+cvs.addEventListener('wheel',(e)=>{
+  if (!State.started) return;
   e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const px = e.clientX - rect.left;
-  const py = e.clientY - rect.top;
-  const dz = Math.exp((-e.deltaY/200));
-  r.setZoom(r.Z*dz, {x:px,y:py});
+  const dir = Math.sign(e.deltaY);
+  const f = dir>0 ? 0.9 : 1.1;
+  State.r.setZoomClamped(State.r.zoom*f, e.clientX, e.clientY);
 },{passive:false});
 
-// ---- UI Events
-ui.start.addEventListener('click', onStart);
-ui.btnFull?.addEventListener('click', ()=>{
-  if(!document.fullscreenElement) canvas.requestFullscreen().catch(()=>{});
-  else document.exitFullscreen().catch(()=>{});
-});
-ui.debug?.addEventListener('click', ()=>{ DEBUG=!DEBUG; });
-ui.btnCenter?.addEventListener('click', centerOnHQ);
-
-Object.entries(ui.toolBtns).forEach(([k,btn])=>{
-  btn?.addEventListener('click', ()=> setTool(
-    k==='cursor'?'cursor': k==='road'?'road': k==='hq'?'hq': k==='lumber'?'lumber': k==='depot'?'depot':'bulldo'
-  ));
-});
-
-// ---- Zeichnen
-function draw(){
-  r.clear();
-
-  if(!running){
-    // Splash zeigt r.clear(); Overlay regelt der DOM
-    requestAnimationFrame(draw);
-    return;
-  }
-
-  const vis = r.getVisibleWorldBounds(3);
-
-  // Hintergrund‑Tiles
-  for(let j=vis.minJ;j<=vis.maxJ;j++){
-    for(let i=vis.minI;i<=vis.maxI;i++){
-      if(!inBounds(i,j)) continue;
-      const t = TILES[i+j*WORLD_W];
-      let img = null;
-      if(t===0) img=IM.grass; else if(t===1) img=IM.water;
-      else if(t===2) img=IM.shore; else if(t===3) img=IM.dirt;
-      else if(t===4) img=IM.rocky; else if(t===5) img=IM.sand;
-      if(img) r.drawTileImage(img, i, j);
-    }
-  }
-
-  // Straßen
-  for(const k of ROADS){
-    const [si,sj] = k.split(',').map(n=>parseInt(n,10));
-    r.drawTileImage(IM.road ?? IM.dirt, si, sj);
-  }
-
-  // Gebäude
-  for(const b of BUILD){
-    const im = b.img ?? IM.hq_wood ?? IM.dirt;
-    r.drawTileImage(im, b.i, b.j);
-  }
-
-  // Start-HQ (Stein) – fest in der Mitte
-  r.drawTileImage(IM.hq_stone ?? IM.dirt, startHQ.i, startHQ.j);
-
-  // Debug HUD
-  if(DEBUG){
-    r.drawDebug([
-      `cam=(${r.cx.toFixed(2)}, ${r.cy.toFixed(2)})`,
-      `zoom=${r.Z.toFixed(2)}`,
-      `tiles=${WORLD_W}x${WORLD_H}`
-    ]);
-    // r.drawGrid(vis);
-  }
-
-  ui.zoomLabel && (ui.zoomLabel.textContent = `Zoom ${r.Z.toFixed(2)}x`);
-  requestAnimationFrame(draw);
+// Kleine Helfer
+function flashBtn(el){
+  el.animate([{boxShadow:'0 0 0 0 rgba(239,68,68,.8)'},
+              {boxShadow:'0 0 0 6px rgba(239,68,68,0)'}],
+             {duration:400});
 }
-
-// ---- Boot
-(async function boot(){
-  await loadAssets();
-  genWorld();
-  setTool('cursor');
-  // Start-HQ landet mittig (bereits oben gesetzt)
-  requestAnimationFrame(draw);
-})();
+function containsFoot(b,gx,gy){
+  if (b.kind.startsWith('hq')){
+    return Math.abs(gx-b.x)<=1 && Math.abs(gy-b.y)<=1;
+  }
+  if (b.kind==='lumber' || b.kind==='depot'){
+    return gx>=b.x && gx<=b.x+1 && gy>=b.y && gy<=b.y+1;
+  }
+  return gx===b.x && gy===b.y;
+}
+function unBlock(world, b){
+  if (b.kind.startsWith('hq')){
+    for (let dy=-1; dy<=1; dy++)
+      for (let dx=-1; dx<=1; dx++)
+        world.blocked.delete(key(b.x+dx,b.y+dy));
+  } else if (b.kind==='lumber' || b.kind==='depot'){
+    for (let dy=0; dy<=1; dy++)
+      for (let dx=0; dx<=1; dx++)
+        world.blocked.delete(key(b.x+dx,b.y+dy));
+  } else {
+    world.blocked.delete(key(b.x,b.y));
+  }
+}
