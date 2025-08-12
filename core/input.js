@@ -1,70 +1,64 @@
-// Mobile Pointer-Input: 1 Finger Pan, 2 Finger Pinch, Tap = bauen
-import { cam, ZMIN, ZMAX } from './camera.js';
+// Ein-Finger: Pan · Zwei-Finger: Pinch-Zoom · kurzer Tap: bauen (Callback)
 
-export function setupInput(canvas, camRef, { onTap, onChange }){
-  canvas.style.touchAction = 'none';
+export function setupInput(canvas, cam, {onTap,onChange}){
+  let lastTouches=[];
+  let lastDist=0;
 
-  let panning=false, panStart={x:0,y:0}, camStart={x:0,y:0};
-  const pts = new Map(); // id -> {x,y}
-  let tapInfo=null; // {x,y,t}
+  canvas.addEventListener('touchstart', e=>{
+    lastTouches = [...e.touches].map(t=>({x:t.clientX,y:t.clientY}));
+    if(e.touches.length===1) startTapTimer(e.touches[0]);
+  }, {passive:true});
 
-  function rect(){ return canvas.getBoundingClientRect(); }
-  function sx(evt){ return evt.clientX - rect().left; }
-  function sy(evt){ return evt.clientY - rect().top; }
+  canvas.addEventListener('touchmove', e=>{
+    const t=[...e.touches].map(t=>({x:t.clientX,y:t.clientY}));
+    if(t.length===1 && lastTouches.length===1){
+      // Pan
+      const dx = t[0].x - lastTouches[0].x;
+      const dy = t[0].y - lastTouches[0].y;
+      cam.x -= dx / cam.z;
+      cam.y -= dy / cam.z;
+      onChange&&onChange();
+    }else if(t.length===2){
+      // Pinch
+      const d = Math.hypot(t[0].x-t[1].x, t[0].y-t[1].y);
+      if(!lastDist) lastDist=d;
+      const scale = d/lastDist;
+      const prevZ=cam.z;
+      cam.z = Math.max(.5, Math.min(2.5, cam.z*scale));
+      lastDist=d;
 
-  canvas.addEventListener('pointerdown', e=>{
-    canvas.setPointerCapture(e.pointerId);
-    const p={x:sx(e),y:sy(e)}; pts.set(e.pointerId,p);
-    if(pts.size===1){
-      tapInfo={x:p.x,y:p.y,t:performance.now()};
-      panning=true; panStart={x:e.clientX,y:e.clientY}; camStart={...camRef};
+      // Zoom zur Mitte der Finger
+      const rect=canvas.getBoundingClientRect();
+      const mx=(t[0].x+t[1].x)/2-rect.left, my=(t[0].y+t[1].y)/2-rect.top;
+      const wx = cam.x + mx/prevZ;
+      const wy = cam.y + my/prevZ;
+      cam.x = wx - mx/cam.z;
+      cam.y = wy - my/cam.z;
+
+      onChange&&onChange();
     }
-    onChange?.();
-  });
+    lastTouches=t;
+  }, {passive:true});
 
-  canvas.addEventListener('pointermove', e=>{
-    const p={x:sx(e),y:sy(e)}; pts.set(e.pointerId,p);
+  canvas.addEventListener('touchend', e=>{
+    if(e.touches.length<2){ lastDist=0; }
+    lastTouches=[...e.touches].map(t=>({x:t.clientX,y:t.clientY}));
+  }, {passive:true});
 
-    if(pts.size===1 && panning){
-      const dx=(e.clientX-panStart.x)/camRef.z, dy=(e.clientY-panStart.y)/camRef.z;
-      camRef.x = camStart.x - dx; camRef.y = camStart.y - dy;
-      onChange?.();
-    }else if(pts.size===2){
-      const [a,b]=[...pts.values()];
-      if(!canvas._pinch){
-        canvas._pinch={ d:Math.hypot(a.x-b.x,a.y-b.y), z:camRef.z, mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2} };
-      }else{
-        const d=Math.hypot(a.x-b.x,a.y-b.y);
-        const factor=d/canvas._pinch.d;
-        const mid=canvas._pinch.mid;
-        const wx = mid.x/camRef.z + camRef.x;
-        const wy = mid.y/camRef.z + camRef.y;
-        camRef.z=Math.max(ZMIN,Math.min(ZMAX, canvas._pinch.z*factor));
-        camRef.x=wx - mid.x/camRef.z; camRef.y=wy - mid.y/camRef.z;
-        onChange?.();
-      }
-    }
-  });
-
-  function end(e){
-    pts.delete(e.pointerId);
-    if(pts.size<2) canvas._pinch=null;
-    if(pts.size===0){
-      // Tap?
-      if(tapInfo){
-        const dt=performance.now()-tapInfo.t;
-        const dx=e.clientX - (tapInfo.clientX??0), dy=e.clientY - (tapInfo.clientY??0);
-        const moved = Math.hypot((sx(e)-tapInfo.x),(sy(e)-tapInfo.y));
-        if(dt<300 && moved<10){ onTap?.(tapInfo.x, tapInfo.y); }
-      }
-      tapInfo=null; panning=false;
-    }
-    onChange?.();
+  // Tap‑Erkennung (kurzer schneller Tap)
+  let tapTimer=null, tapPos=null;
+  function startTapTimer(t){
+    clearTimeout(tapTimer); tapPos={x:t.clientX,y:t.clientY};
+    tapTimer=setTimeout(()=>{ tapPos=null; }, 220);
   }
-  canvas.addEventListener('pointerup', end);
-  canvas.addEventListener('pointercancel', end);
-  canvas.addEventListener('pointerleave', end);
-
-  // Kein Kontextmenü
-  canvas.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
+  canvas.addEventListener('touchend', e=>{
+    if(!tapPos) return;
+    const dx = (e.changedTouches[0].clientX - tapPos.x);
+    const dy = (e.changedTouches[0].clientY - tapPos.y);
+    if(Math.hypot(dx,dy) < 10){
+      const rect=canvas.getBoundingClientRect();
+      onTap && onTap(e.changedTouches[0].clientX-rect.left, e.changedTouches[0].clientY-rect.top);
+    }
+    tapPos=null;
+  }, {passive:true});
 }
