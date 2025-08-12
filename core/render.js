@@ -1,4 +1,4 @@
-// Zeichnen: schneller Boden via Offscreen-Canvas, dann Roads/Buildings
+// core/render.js – V13 Mobile (bordered ground layer)
 import { IM } from './assets.js';
 import { cam } from './camera.js';
 import { TILE_W, TILE_H, MAP, grid, computeRoadMasks, buildingImage, cellToIso } from './world.js';
@@ -10,29 +10,49 @@ let needsDraw = true;
 export function requestDraw(){ needsDraw=true; drawIfNeeded(); }
 function drawIfNeeded(){ if(!needsDraw) return; needsDraw=false; drawAll(); }
 
-// ---------- Offscreen Boden ----------
-let groundLayer=null, gtx=null, gW=0, gH=0;
+// ---------- Offscreen-Boden mit Rand ----------
+let groundLayer=null, gtx=null, gW=0, gH=0, PAD=0;
 
+/** Baut die Bodenebene komplett neu auf (bei Resize/Assets/Bauteppich-Änderung aufrufen) */
 export function prerenderGround(){
-  gW = MAP.W * TILE_W;
-  gH = MAP.H * TILE_H;
-  groundLayer = document.createElement('canvas');
-  groundLayer.width=gW; groundLayer.height=gH;
-  gtx = groundLayer.getContext('2d',{alpha:false});
-  gtx.imageSmoothingEnabled=true;
+  // Map-Gesamtgröße in Iso-Logikpixel
+  const mapW = MAP.W * TILE_W;
+  const mapH = MAP.H * TILE_H;
 
-  // ganze Map vorzeichnen
+  // Dicke Sicherheitszone außenrum (verhindert schwarze Keile beim Rauszoomen)
+  PAD = Math.max(TILE_W, TILE_H) * 8; // ~8 Tiles Rand
+
+  gW = mapW + PAD*2;
+  gH = mapH + PAD*2;
+
+  const off = document.createElement('canvas');
+  off.width = gW; off.height = gH;
+  groundLayer = off;
+  gtx = off.getContext('2d', { alpha:false });
+  gtx.imageSmoothingEnabled = true;
+
+  // 1) Randfläche füllen (dunkles Gras)
+  gtx.fillStyle = '#20361b';
+  gtx.fillRect(0,0,gW,gH);
+
+  // 2) Diamant-Kacheln der Map malen (an PAD verschoben)
   for(let y=0;y<MAP.H;y++){
     for(let x=0;x<MAP.W;x++){
       const p=cellToIso(x,y);
-      const r={x:p.x, y:p.y, w:TILE_W, h:TILE_H};
+      const r={x:p.x + PAD, y:p.y + PAD, w:TILE_W, h:TILE_H};
+
       gtx.save();
       diamondPath(gtx, r.x,r.y,r.w,r.h); gtx.clip();
+
       const t=grid[y][x].ground;
       const img = t==='water'?IM.water : t==='shore'?IM.shore : IM.grass;
       if(img) gtx.drawImage(img, r.x-1, r.y-1, r.w+2, r.h+2);
       else { gtx.fillStyle=t==='water'?'#10324a':t==='shore'?'#244822':'#2a3e1f'; gtx.fillRect(r.x,r.y,r.w,r.h); }
+
       gtx.restore();
+
+      // dezentes Grid (optional, sehr schwach)
+      // gtx.strokeStyle='rgba(255,255,255,.03)'; gtx.strokeRect(r.x,r.y,r.w,r.h);
     }
   }
 }
@@ -48,7 +68,7 @@ function diamondPath(c, x,y,w,h){
 
 // ---------- Roads/Buildings ----------
 function pickRoadTexture(mask){
-  const opp = (mask===0b0101 || mask===0b1010);
+  const opp = (mask===0b0101 || mask===0b1010); // N+S oder E+W
   return opp ? (IM.road_straight||IM.road_curve) : (IM.road_curve||IM.road_straight);
 }
 
@@ -58,7 +78,6 @@ function drawRoads(){
     if(!grid[y][x].road) continue;
     const p=cellToIso(x,y);
     const r={x:p.x - cam.x, y:p.y - cam.y, w:TILE_W, h:TILE_H};
-
     ctx.save(); diamondPath(ctx, r.x,r.y,r.w,r.h); ctx.clip();
     const tex=pickRoadTexture(grid[y][x].roadMask);
     if(tex) ctx.drawImage(tex, r.x-1, r.y-1, r.w+2, r.h+2);
@@ -87,22 +106,22 @@ function drawBuildings(){
 export function drawAll(){
   if(!canvas) return;
 
-  // Full clear
+  // Clear & Scale
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // Scale
   ctx.save();
   const z=cam.z;
   ctx.scale(z,z);
 
-  // Hintergrund
+  // Hintergrund (falls Offscreen fehlt)
   ctx.fillStyle='#0b0e13';
   ctx.fillRect(0,0, canvas.width/z, canvas.height/z);
 
-  // Boden aus Offscreen
+  // Boden aus Offscreen (mit PAD-Versatz!)
   if(groundLayer){
-    ctx.drawImage(groundLayer, -cam.x, -cam.y, gW, gH);
+    // Wir zeichnen das komplette Offscreen, versetzt um Kamera
+    ctx.drawImage(groundLayer, -cam.x - PAD, -cam.y - PAD);
   }
 
   // Overlay: Roads & Buildings
