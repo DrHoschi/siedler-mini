@@ -89,7 +89,7 @@ const hud = {
   wood: wood, stone: stone, food: food, gold: gold, car: car, toolName: toolName
 };
 const DPR = Math.max(1, Math.min(devicePixelRatio||1, 2));
-const renderer = new Renderer(canvas, DPR);
+const render = new Render(canvas, DPR);
 let world = null;
 
 // ------- Tools ----------
