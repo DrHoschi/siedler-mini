@@ -1,75 +1,70 @@
-// Mobile-optimierte Pointer-Events: 1 Finger Pan, 2 Finger Pinch-Zoom
-import { zoomAt } from './render.js';
+// Mobile Pointer-Input: 1 Finger Pan, 2 Finger Pinch, Tap = bauen
+import { cam, ZMIN, ZMAX } from './camera.js';
 
-export function setupInput(canvas, cam, redraw){
+export function setupInput(canvas, camRef, { onTap, onChange }){
   canvas.style.touchAction = 'none';
 
   let panning=false, panStart={x:0,y:0}, camStart={x:0,y:0};
-  const pointers = new Map(); // id -> {x,y}
+  const pts = new Map(); // id -> {x,y}
+  let tapInfo=null; // {x,y,t}
 
-  function pos(e){
-    const r=canvas.getBoundingClientRect();
-    return { x:e.clientX - r.left, y:e.clientY - r.top };
-  }
+  function rect(){ return canvas.getBoundingClientRect(); }
+  function sx(evt){ return evt.clientX - rect().left; }
+  function sy(evt){ return evt.clientY - rect().top; }
 
-  canvas.addEventListener('pointerdown', (e)=>{
+  canvas.addEventListener('pointerdown', e=>{
     canvas.setPointerCapture(e.pointerId);
-    const p=pos(e);
-    pointers.set(e.pointerId, p);
-
-    if (pointers.size===1){
-      // Start Pan
-      panning=true; panStart={x:e.clientX,y:e.clientY}; camStart={...cam};
+    const p={x:sx(e),y:sy(e)}; pts.set(e.pointerId,p);
+    if(pts.size===1){
+      tapInfo={x:p.x,y:p.y,t:performance.now()};
+      panning=true; panStart={x:e.clientX,y:e.clientY}; camStart={...camRef};
     }
+    onChange?.();
   });
 
-  canvas.addEventListener('pointermove', (e)=>{
-    const p=pos(e);
-    pointers.set(e.pointerId, p);
+  canvas.addEventListener('pointermove', e=>{
+    const p={x:sx(e),y:sy(e)}; pts.set(e.pointerId,p);
 
-    if (pointers.size===1 && panning){
-      const dx=(e.clientX-panStart.x)/cam.z;
-      const dy=(e.clientY-panStart.y)/cam.z;
-      cam.x = camStart.x - dx;
-      cam.y = camStart.y - dy;
-      redraw();
-    }
-    else if (pointers.size===2){
-      // Pinch-Zoom
-      const [a,b] = [...pointers.values()];
-      if(!a||!b) return;
+    if(pts.size===1 && panning){
+      const dx=(e.clientX-panStart.x)/camRef.z, dy=(e.clientY-panStart.y)/camRef.z;
+      camRef.x = camStart.x - dx; camRef.y = camStart.y - dy;
+      onChange?.();
+    }else if(pts.size===2){
+      const [a,b]=[...pts.values()];
       if(!canvas._pinch){
-        canvas._pinch = {
-          d: Math.hypot(a.x-b.x, a.y-b.y),
-          z: cam.z,
-          mid:{ x:(a.x+b.x)/2, y:(a.y+b.y)/2 }
-        };
+        canvas._pinch={ d:Math.hypot(a.x-b.x,a.y-b.y), z:camRef.z, mid:{x:(a.x+b.x)/2,y:(a.y+b.y)/2} };
       }else{
-        const d = Math.hypot(a.x-b.x, a.y-b.y);
-        const factor = d / canvas._pinch.d;
-        zoomAt(canvas._pinch.mid.x, canvas._pinch.mid.y, factor * 1.0);
-        redraw();
+        const d=Math.hypot(a.x-b.x,a.y-b.y);
+        const factor=d/canvas._pinch.d;
+        const mid=canvas._pinch.mid;
+        const wx = mid.x/camRef.z + camRef.x;
+        const wy = mid.y/camRef.z + camRef.y;
+        camRef.z=Math.max(ZMIN,Math.min(ZMAX, canvas._pinch.z*factor));
+        camRef.x=wx - mid.x/camRef.z; camRef.y=wy - mid.y/camRef.z;
+        onChange?.();
       }
     }
   });
 
-  function endPointer(e){
-    pointers.delete(e.pointerId);
-    if (pointers.size<2) canvas._pinch=null;
-    if (pointers.size===0){ panning=false; }
+  function end(e){
+    pts.delete(e.pointerId);
+    if(pts.size<2) canvas._pinch=null;
+    if(pts.size===0){
+      // Tap?
+      if(tapInfo){
+        const dt=performance.now()-tapInfo.t;
+        const dx=e.clientX - (tapInfo.clientX??0), dy=e.clientY - (tapInfo.clientY??0);
+        const moved = Math.hypot((sx(e)-tapInfo.x),(sy(e)-tapInfo.y));
+        if(dt<300 && moved<10){ onTap?.(tapInfo.x, tapInfo.y); }
+      }
+      tapInfo=null; panning=false;
+    }
+    onChange?.();
   }
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('pointerleave', end);
 
-  canvas.addEventListener('pointerup', endPointer);
-  canvas.addEventListener('pointercancel', endPointer);
-  canvas.addEventListener('pointerleave', endPointer);
-
-  // Doppeltipp-Zoom optional (sanft rein)
-  canvas.addEventListener('dblclick', (e)=>{
-    const r=canvas.getBoundingClientRect();
-    zoomAt(e.clientX - r.left, e.clientY - r.top, 1.25);
-    redraw();
-  });
-
-  // Kontextmenü aus
+  // Kein Kontextmenü
   canvas.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
 }
