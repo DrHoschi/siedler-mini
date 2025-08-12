@@ -1,49 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler Mini – V13 Mobile</title>
-  <meta name="theme-color" content="#0b0e13" />
-  <style>
-    :root { --bg:#0b0e13; --ui:#121821; --line:#253044; --txt:#e9edf5; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
-    #game{position:fixed;inset:0;overflow:hidden}
-    canvas{display:block;position:absolute;inset:0;touch-action:none;background:#000}
-    #hud{position:fixed;left:12px;top:10px;background:rgba(18,24,33,.6);border:1px solid var(--line);
-         padding:6px 10px;border-radius:10px;font-size:14px;backdrop-filter:blur(6px)}
-    #toolbar{position:fixed;left:10px;top:60px;display:flex;flex-direction:column;gap:8px;z-index:3}
-    .btn{appearance:none;border:1px solid var(--line);background:#182233;color:var(--txt);padding:10px 12px;border-radius:14px;font-weight:600}
-    .btn.active{outline:2px solid #6ee7a9}
-    #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);z-index:5}
-    #start .card{width:min(92vw,520px);background:rgba(18,24,33,.85);border:1px solid var(--line);border-radius:16px;padding:18px}
-    #start h1{margin:0 0 8px}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Siedler‑Mini V13 (Mobile)</title>
+<style>
+  :root { --bg:#0e0f14; --panel:#11161f; --line:#232a36; --txt:#e9edf5; --mut:#aab0bd; --accent:#6ee7a9; }
+  html,body{margin:0;height:100%;background:#0b0f14;color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto}
+  #ui{position:fixed;inset:0;display:flex;flex-direction:column}
+  header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 12px;background:linear-gradient(180deg,#0f141c,#0b1017);border-bottom:1px solid var(--line)}
+  .badge{padding:4px 8px;border:1px solid var(--line);border-radius:10px;background:#131a22;font-variant-numeric:tabular-nums}
+  #left{position:absolute;left:8px;top:60px;display:flex;flex-direction:column;gap:8px;z-index:5}
+  .btn{appearance:none;border:1px solid var(--line);background:#111825;color:var(--txt);padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:600}
+  .btn.active{outline:2px solid var(--accent)}
+  #canvas{flex:1;touch-action:none;display:block;background:#20361b}
+  #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:6}
+  .card{width:min(92vw,560px);background:rgba(17,22,31,.9);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .card h1{margin:0 0 6px;font-size:22px}
+  .card p{margin:8px 0;color:var(--mut)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+</style>
 </head>
 <body>
-  <div id="game">
-    <canvas id="canvas"></canvas>
+<div id="ui">
+  <header>
+    <div class="badge">V13 Mobile · Pan: 1 Finger · Zoom: 2 Finger · Tap: bauen</div>
+    <div class="badge" id="hint">Zeiger</div>
+  </header>
 
-    <div id="hud">V13 Mobile • Pan: 1 Finger • Zoom: 2 Finger • Tap: bauen</div>
+  <div id="left">
+    <button class="btn active" data-tool="pointer">Zeiger</button>
+    <button class="btn" data-tool="road">Straße</button>
+    <button class="btn" data-tool="hq">HQ</button>
+    <button class="btn" data-tool="lumber">Holzfäller</button>
+    <button class="btn" data-tool="depot">Depot</button>
+    <button class="btn" data-tool="bulldoze">Abriss</button>
+  </div>
 
-    <div id="toolbar">
-      <button class="btn active" id="tool-pointer">Zeiger</button>
-      <button class="btn" id="tool-road">Straße</button>
-      <button class="btn" id="tool-hq">HQ</button>
-      <button class="btn" id="tool-lumber">Holzfäller</button>
-      <button class="btn" id="tool-depot">Depot</button>
-      <button class="btn" id="tool-bulldoze">Abriss</button>
-    </div>
+  <canvas id="canvas"></canvas>
 
-    <div id="start">
-      <div class="card">
-        <h1>Siedler‑Mini V13 (Mobile)</h1>
-        <p>1 Finger = Karte verschieben, 2 Finger = Zoom, kurzer Tap = bauen (im Bau‑Tool).</p>
+  <div id="overlay">
+    <div class="card">
+      <h1>Siedler‑Mini V13 (Mobile)</h1>
+      <p>1 Finger = Karte verschieben · 2 Finger = Zoom · kurzer Tap = bauen (im Bau‑Tool).</p>
+      <div class="row">
         <button class="btn" id="startBtn">Start</button>
       </div>
     </div>
   </div>
+</div>
 
-  <script type="module" src="./main.js"></script>
+<script type="module" src="./main.js?v=13.0"></script>
 </body>
 </html>
