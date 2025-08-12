@@ -1,71 +1,68 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Siedler‑Mini V13 Mobile</title>
-<style>
-  :root{--bg:#0c0f14;--panel:#11151c;--line:#1c2230;--txt:#e9eef7;--mut:#a7b0c0;--pri:#6ee7a9;}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
-  #wrap{position:fixed;inset:0;display:flex;flex-direction:column}
-  header{height:40px;display:flex;align-items:center;gap:10px;padding:6px 8px;background:linear-gradient(180deg,#0f131a,#0b0e13);border-bottom:1px solid var(--line);overflow:auto;white-space:nowrap}
-  .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);border-radius:999px;background:#121823;font-size:12px}
-  .pill b{font-variant-numeric:tabular-nums}
-  #hudright{margin-left:auto;display:flex;gap:8px}
-  #canvas{flex:1;display:block;touch-action:none;background:#0b0e13}
-  #sidebar{position:fixed;left:8px;top:56px;display:flex;flex-direction:column;gap:10px;z-index:10}
-  .btn{appearance:none;border:1px solid var(--line);background:#131a24;color:var(--txt);padding:9px 14px;border-radius:12px;font-weight:600;cursor:pointer}
-  .btn.active{outline:2px solid var(--pri);outline-offset:0}
-  #debug{position:fixed;right:8px;top:56px;min-width:200px;max-width:46vw;background:rgba(15,20,28,.85);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.35 ui-monospace,Consolas,Menlo,monospace;display:none;z-index:12}
-  #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
-  .card{width:min(92vw,560px);background:rgba(15,20,28,.9);border:1px solid var(--line);border-radius:16px;padding:18px}
-  .card h1{margin:0 0 6px;font-size:22px}
-  .card p{margin:6px 0 0;color:var(--mut)}
-  .row{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler‑Mini V13.7 (Mobile)</title>
+  <style>
+    :root{color-scheme:dark light}
+    html,body{margin:0;height:100%;background:#0c1117;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    #ui{position:fixed;inset:0;pointer-events:none}
+    .hud{position:fixed;left:0;right:0;top:0;display:flex;gap:.5rem;justify-content:center;align-items:center;padding:.5rem;pointer-events:auto}
+    .hud .badge{background:#111a;color:#cfd7e6;border:1px solid #223; border-radius:999px; padding:.2rem .6rem; font-size:.85rem;}
+    #tools{position:fixed;left:.5rem;top:3.5rem;display:flex;flex-direction:column;gap:.5rem;pointer-events:auto}
+    #tools button{background:#0f1a28;color:#cfe; border:1px solid #234; border-radius:16px; padding:.45rem .8rem; min-width:4.5rem}
+    #tools button.active{outline:2px solid #5dd}
+    #topRight{position:fixed;right:.5rem;top:.5rem;display:flex;gap:.5rem;pointer-events:auto}
+    #topRight button,#topRight .badge{background:#0f1a28;color:#cfe;border:1px solid #234;border-radius:16px;padding:.4rem .7rem}
+    #overlayStart{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);pointer-events:auto}
+    #overlayStart .card{background:#0d1420;border:1px solid #223; color:#dbe7ff; padding:1rem 1.2rem; border-radius:14px; width:min(92vw,560px); box-shadow:0 10px 40px rgba(0,0,0,.5)}
+    #overlayStart .actions{display:flex;gap:.6rem;margin-top:.8rem}
+    #overlayStart .actions button{background:#1a2a3f;color:#cfe;border:1px solid #345;border-radius:12px;padding:.5rem .9rem}
+    canvas{touch-action:none;display:block;width:100vw;height:100vh}
+    #hint{position:fixed;right:.5rem;bottom:.5rem;font-size:.8rem;color:#8aa;opacity:.7}
+  </style>
 </head>
 <body>
-<div id="wrap">
-  <header>
-    <span class="pill">🌲 Holz <b id="res-wood">0</b></span>
-    <span class="pill">⛰️ Stein <b id="res-stone">0</b></span>
-    <span class="pill">🌾 Nahrung <b id="res-food">0</b></span>
-    <span class="pill">🪙 Gold <b id="res-gold">0</b></span>
-    <span class="pill">👣 Träger <b id="res-carrier">0</b></span>
-    <div id="hudright">
-      <button class="btn" id="fullscreenBtn">Vollbild</button>
-      <button class="btn" id="debugToggle">Debug</button>
-      <span class="pill">🧭 Ansicht: <b id="viewName">Isometrisch</b></span>
-      <span class="pill">🔍 Zoom <b id="zoomLbl">1.00×</b></span>
+  <canvas id="game"></canvas>
+
+  <div id="ui">
+    <div class="hud" id="hudRes">
+      <span class="badge">🌲 Holz <b id="rWood">0</b></span>
+      <span class="badge">🪨 Stein <b id="rStone">0</b></span>
+      <span class="badge">🌿 Nahrung <b id="rFood">0</b></span>
+      <span class="badge">🪙 Gold <b id="rGold">0</b></span>
+      <span class="badge">🧺 Träger <b id="rCar">0</b></span>
     </div>
-  </header>
-
-  <canvas id="canvas"></canvas>
-
-  <div id="sidebar">
-    <button class="btn active" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="lumberjack">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="bulldoze">Abriss</button>
-  </div>
-
-  <pre id="debug"></pre>
-
-  <div id="start">
-    <div class="card">
-      <h1>Siedler‑Mini V13 (Mobile)</h1>
-      <p>1 Finger = Karte verschieben (nur im Zeiger‑Tool) · 2 Finger = Zoom · kurzer Tap = bauen (wenn Bau‑Tool aktiv).</p>
-      <p>Das erste HQ (Stein) ist bereits mittig gesetzt. Texturen lädt das Spiel aus <code>/assets/</code> (fehlende → Platzhalter).</p>
-      <div class="row">
-        <button class="btn" id="startBtn">Start</button>
+    <div id="tools">
+      <button data-tool="pointer" class="active">Zeiger</button>
+      <button data-tool="road">Straße</button>
+      <button data-tool="hq">HQ</button>
+      <button data-tool="lumber">Holzfäller</button>
+      <button data-tool="depot">Depot</button>
+      <button data-tool="bulldoze">Abriss</button>
+    </div>
+    <div id="topRight">
+      <button id="btnFull">Vollbild</button>
+      <button id="btnDebug">Debug</button>
+      <span class="badge" id="viewLbl">Ansicht: Isometrisch</span>
+      <span class="badge" id="zoomLbl">Zoom 1.00×</span>
+      <button id="btnCenter">Zentrieren</button>
+    </div>
+    <div id="overlayStart">
+      <div class="card">
+        <h3>Siedler‑Mini V13.7 (Mobile)</h3>
+        <p>1 Finger = Karte verschieben (nur im Zeiger‑Tool) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn Bau‑Tool aktiv ist).</p>
+        <p>HQ (Stein) ist bereits mittig gesetzt. Träger holen Holz aus Holzfällern über Straßen zu HQ/Depots.</p>
+        <div class="actions">
+          <button id="btnStart">Start</button>
+          <button id="btnFs">Vollbild</button>
+        </div>
       </div>
     </div>
+    <div id="hint">JS V13.7</div>
   </div>
-</div>
 
-<!-- Wichtig: main.js bootstrapped Game und lädt core/* -->
-<script type="module" src="./main.js?v=13.6"></script>
+  <script type="module" src="main.js?v=13.7"></script>
 </body>
 </html>
