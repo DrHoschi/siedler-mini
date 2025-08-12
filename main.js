@@ -1,18 +1,18 @@
-// main.js — V13.6 Mobile
+// main.js — V13 Mobile Full
 
-import { loadAllAssets, IM } from './core/assets.js';
-import {
-  createWorld, updateWorld, drawWorldLayered,
-  buildAt, setTool, TOOLS,
-  screenToCell, startPos,
-  resources, carriersCount
-} from './core/world.js';
+import { loadAllAssets } from './core/assets.js';
 import { cam, setCanvasSize, setZoom, setCamCenter } from './core/camera.js';
+import {
+  createWorld, updateWorld, getRenderData, // Daten fürs Rendern
+  buildAt, setTool, TOOLS, screenToCell,
+  startPos, resources, carriersCount
+} from './core/world.js';
+import { drawWorldLayered } from './core/render.js';
 
-// ---------- Canvas / Context ----------
+// ---------- Canvas ----------
 const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
-let DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true, willReadFrequently:false });
+let DPR = Math.max(1, Math.min(window.devicePixelRatio||1, 2));
 
 function resize(){
   const r = canvas.getBoundingClientRect();
@@ -22,9 +22,9 @@ function resize(){
   setCanvasSize(r.width, r.height);
   requestDraw();
 }
-window.addEventListener('resize', resize, {passive:true});
+addEventListener('resize', resize, {passive:true});
 
-// ---------- UI / HUD ----------
+// ---------- HUD ----------
 const ui = {
   wood: document.getElementById('uiWood'),
   stone:document.getElementById('uiStone'),
@@ -33,9 +33,9 @@ const ui = {
   car:  document.getElementById('uiCar'),
   hint: document.getElementById('hint'),
 };
-function setHint(txt){ if(ui.hint) ui.hint.textContent = txt; }
+function setHint(t){ if(ui.hint) ui.hint.textContent=t; }
 
-// Tool-Buttons (linke Leiste)
+// Tools
 const toolBtns = {
   pointer: document.getElementById('btnPointer'),
   road:    document.getElementById('btnRoad'),
@@ -45,197 +45,116 @@ const toolBtns = {
   bull:    document.getElementById('btnBull'),
 };
 function activateBtn(id){
-  Object.values(toolBtns).forEach(b=> b && b.classList.remove('active'));
+  Object.values(toolBtns).forEach(b=> b&&b.classList.remove('active'));
   if(toolBtns[id]) toolBtns[id].classList.add('active');
 }
-function pickTool(id, label){
+function pickTool(id,label){
   setTool(TOOLS[id.toUpperCase()]);
-  activateBtn(id);
-  setHint(label);
+  activateBtn(id); setHint(label);
 }
-if(toolBtns.pointer) toolBtns.pointer.onclick = ()=> pickTool('pointer','Zeiger');
-if(toolBtns.road)    toolBtns.road.onclick    = ()=> pickTool('road','Straße');
-if(toolBtns.hq)      toolBtns.hq.onclick      = ()=> pickTool('hq','HQ');
-if(toolBtns.lumber)  toolBtns.lumber.onclick  = ()=> pickTool('lumber','Holzfäller');
-if(toolBtns.depot)   toolBtns.depot.onclick   = ()=> pickTool('depot','Depot');
-if(toolBtns.bull)    toolBtns.bull.onclick    = ()=> pickTool('bull','Abriss');
-
+toolBtns.pointer.onclick=()=>pickTool('pointer','Zeiger');
+toolBtns.road.onclick   =()=>pickTool('road','Straße');
+toolBtns.hq.onclick     =()=>pickTool('hq','HQ');
+toolBtns.lumber.onclick =()=>pickTool('lumber','Holzfäller');
+toolBtns.depot.onclick  =()=>pickTool('depot','Depot');
+toolBtns.bull.onclick   =()=>pickTool('bull','Abriss');
 activateBtn('pointer'); setHint('Zeiger');
 
-// ---------- Eingabe: Touch / Maus ----------
-let touches = new Map();
-let lastMid=null, lastDist=0;
-let tapTimer=0, tapPos=null, tapped=false;
+// ---------- Touch & Maus ----------
+let touches=new Map(), lastMid=null, lastDist=0;
+let tapped=false, tapT=0, tapPos=null;
 
-function getMid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
-function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+const rectOf = ()=> canvas.getBoundingClientRect();
+const mid = (a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 
 canvas.addEventListener('touchstart', (e)=>{
-  for(const t of e.changedTouches){
-    touches.set(t.identifier, {x:t.clientX, y:t.clientY});
-  }
-  if(touches.size===1){
-    const t=[...touches.values()][0];
-    tapTimer = performance.now();
-    tapPos = {x:t.x, y:t.y};
-    tapped = true;
-  }else{
-    tapped = false;
-  }
+  for(const t of e.changedTouches) touches.set(t.identifier,{x:t.clientX,y:t.clientY});
+  if(touches.size===1){ const t=[...touches.values()][0]; tapped=true; tapT=performance.now(); tapPos={x:t.x,y:t.y}; }
 },{passive:true});
-
 canvas.addEventListener('touchmove', (e)=>{
-  if(touches.size===0) return;
-  e.preventDefault();
-
-  // update positions
-  for(const t of e.changedTouches){
-    if(touches.has(t.identifier)) touches.set(t.identifier, {x:t.clientX, y:t.clientY});
-  }
+  if(!touches.size) return; e.preventDefault();
+  for(const t of e.changedTouches) if(touches.has(t.identifier)) touches.set(t.identifier,{x:t.clientX,y:t.clientY});
   const list=[...touches.values()];
-
   if(list.length===1){
-    // 1-Finger: Pan
-    const cur=list[0];
-    if(lastMid){
-      const dx=(cur.x-lastMid.x)/cam.z;
-      const dy=(cur.y-lastMid.y)/cam.z;
-      cam.x -= dx; cam.y -= dy;
-      requestDraw();
-    }
-    lastMid = {x:cur.x,y:cur.y};
+    const cur=list[0]; if(lastMid){ cam.x-=(cur.x-lastMid.x)/cam.z; cam.y-=(cur.y-lastMid.y)/cam.z; requestDraw(); }
+    lastMid={x:cur.x,y:cur.y};
   }else if(list.length===2){
-    // 2-Finger: Pinch + Pan
-    const a=list[0], b=list[1];
-    const mid=getMid(a,b);
-    const d=dist(a,b);
-    if(lastMid){
-      // Pan
-      cam.x -= (mid.x-lastMid.x)/cam.z;
-      cam.y -= (mid.y-lastMid.y)/cam.z;
-    }
-    if(lastDist){
-      const scale = d/lastDist;
-      zoomToPoint(scale, mid.x, mid.y);
-    }
-    lastMid=mid; lastDist=d; requestDraw();
+    const a=list[0], b=list[1]; const m=mid(a,b); const d=dist(a,b);
+    if(lastMid){ cam.x-=(m.x-lastMid.x)/cam.z; cam.y-=(m.y-lastMid.y)/cam.z; }
+    if(lastDist){ const s=d/lastDist; zoomToPoint(s,m.x,m.y); }
+    lastMid=m; lastDist=d; requestDraw();
   }
 },{passive:false});
-
 canvas.addEventListener('touchend', (e)=>{
-  // Tap zum Bauen (kurz & wenig Bewegung)
   if(tapped){
-    const now=performance.now();
-    const dt = now - tapTimer;
-    const list=[...touches.values()];
-    if(dt<250 && tapPos){
-      const moved = list.length? Math.hypot(list[0].x-tapPos.x, list[0].y-tapPos.y):0;
-      if(moved<12){
-        tryBuildAt(tapPos.x, tapPos.y);
-      }
+    const dt=performance.now()-tapT; if(dt<250 && tapPos){
+      const r=rectOf();
+      tryBuildAt(tapPos.x-r.left, tapPos.y-r.top);
     }
   }
-  for(const t of e.changedTouches){ touches.delete(t.identifier); }
-  if(touches.size<2){ lastDist=0; }
-  if(touches.size===0){ lastMid=null; }
+  for(const t of e.changedTouches) touches.delete(t.identifier);
+  if(touches.size<2) lastDist=0;
+  if(!touches.size) lastMid=null;
   tapped=false;
 },{passive:true});
 
-// Maus (für Desktop-Tests)
-let mouseDown=false, lastMouse=null;
-canvas.addEventListener('mousedown', (e)=>{
-  mouseDown=true; lastMouse={x:e.clientX,y:e.clientY};
-  // linker Klick baut (wenn Tool != Zeiger)
-  if(e.button===0) tryBuildAt(e.clientX, e.clientY);
-});
-window.addEventListener('mousemove', (e)=>{
-  if(!mouseDown||!lastMouse) return;
-  if(e.buttons&1){
-    cam.x -= (e.clientX-lastMouse.x)/cam.z;
-    cam.y -= (e.clientY-lastMouse.y)/cam.z;
-    lastMouse={x:e.clientX,y:e.clientY}; requestDraw();
-  }
-});
-window.addEventListener('mouseup', ()=>{ mouseDown=false; lastMouse=null; });
-
-canvas.addEventListener('wheel', (e)=>{
-  e.preventDefault();
-  const scale = e.deltaY>0 ? 0.9 : 1.1;
-  zoomToPoint(scale, e.clientX, e.clientY);
-  requestDraw();
-},{passive:false});
+// Maus (zum Testen)
+let dragging=false, lastM=null;
+canvas.addEventListener('mousedown', e=>{ dragging=true; lastM={x:e.clientX,y:e.clientY}; if(e.button===0){ const r=rectOf(); tryBuildAt(e.clientX-r.left, e.clientY-r.top);} });
+addEventListener('mousemove', e=>{ if(!dragging||!lastM) return; cam.x-=(e.clientX-lastM.x)/cam.z; cam.y-=(e.clientY-lastM.y)/cam.z; lastM={x:e.clientX,y:e.clientY}; requestDraw(); });
+addEventListener('mouseup', ()=>{ dragging=false; lastM=null; });
+canvas.addEventListener('wheel', e=>{ e.preventDefault(); const s=e.deltaY>0?0.9:1.1; zoomToPoint(s,e.clientX,e.clientY); requestDraw(); }, {passive:false});
 
 function zoomToPoint(scale, sx, sy){
-  const prevZ = cam.z;
-  const nz = Math.max(0.6, Math.min(3.0, cam.z * scale));
-  const rect = canvas.getBoundingClientRect();
-  const wx = cam.x + (sx-rect.left)/prevZ;
-  const wy = cam.y + (sy-rect.top)/prevZ;
-  cam.z = nz;
-  cam.x = wx - (sx-rect.left)/cam.z;
-  cam.y = wy - (sy-rect.top)/cam.z;
+  const prev=cam.z, nz=Math.max(0.6,Math.min(3,prev*scale));
+  const r=rectOf(); const wx=cam.x+(sx-r.left)/prev; const wy=cam.y+(sy-r.top)/prev;
+  cam.z=nz; cam.x=wx-(sx-r.left)/nz; cam.y=wy-(sy-r.top)/nz;
 }
 
-// Bauen-Helfer
 function tryBuildAt(sx,sy){
-  // Nur bauen, wenn nicht im Zeiger-Modus
+  // nur bauen, wenn NICHT Zeiger
   if(ui.hint && ui.hint.textContent==='Zeiger') return;
-  const rect = canvas.getBoundingClientRect();
-  const cell = screenToCell((sx-rect.left), (sy-rect.top));
-  if(!cell) return;
-  if(buildAt(cell.x, cell.y)) requestDraw();
+  const c=screenToCell(sx,sy); if(!c) return;
+  if(buildAt(c.x,c.y)) requestDraw();
 }
 
-// ---------- Draw Loop ----------
+// ---------- Loop ----------
 let needsDraw=true; function requestDraw(){ needsDraw=true; }
 let last=0;
-
-function drawFrame(){
+function frame(){
   if(needsDraw){
-    // Update
-    const now=performance.now();
-    const dt = Math.min(0.05, (now-last)/1000 || 0); last=now;
+    const now=performance.now(); const dt=Math.min(0.05, (now-last)/1000 || 0); last=now;
     updateWorld(dt);
 
-    // Clear
-    ctx.fillStyle='#0e1116'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    // Clear vollflächig (verhindert „schwarze Ecke“)
+    ctx.fillStyle='#0d1a12'; ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    // Welt
-    drawWorldLayered(ctx, {x:cam.x, y:cam.y, z:cam.z, width:canvas.width/DPR, height:canvas.height/DPR});
+    // Render
+    drawWorldLayered(ctx, cam, getRenderData(), {screenW:canvas.width/DPR, screenH:canvas.height/DPR});
 
-    // HUD Werte
-    if(ui.wood)  ui.wood.textContent  = Math.floor(resources.wood);
-    if(ui.stone) ui.stone.textContent = Math.floor(resources.stone);
-    if(ui.food)  ui.food.textContent  = Math.floor(resources.food);
-    if(ui.gold)  ui.gold.textContent  = Math.floor(resources.gold);
-    if(ui.car)   ui.car.textContent   = carriersCount();
+    // HUD
+    ui.wood.textContent = Math.floor(resources.wood);
+    ui.stone.textContent= Math.floor(resources.stone);
+    ui.food.textContent = Math.floor(resources.food);
+    ui.gold.textContent = Math.floor(resources.gold);
+    ui.car.textContent  = carriersCount();
 
     needsDraw=false;
   }
-  requestAnimationFrame(drawFrame);
+  requestAnimationFrame(frame);
 }
 
 // ---------- Boot ----------
+window.addEventListener('game-start', ()=>{ requestDraw(); }); // Overlay schließt – dann läuft’s
 (async function boot(){
   resize();
   await loadAllAssets();
-  createWorld(96, 96);
+  createWorld(96,96); // feste Kartengröße
 
-  // Kamera zur Startposition (Mitte HQ)
-  const p = startPos;
-  // leichte Schräge, damit man was sieht
-  setCamCenter( (p.x - p.y) * (64/2), (p.x + p.y) * (32/2) );
-  setZoom(1.0);
+  // Kamera Mitte (zum HQ)
+  const p=startPos; setCamCenter( (p.x - p.y) * 48, (p.x + p.y) * 24 ); setZoom(1.0);
 
-  // Start-Tool = Zeiger
   pickTool('pointer','Zeiger');
-
-  requestDraw();
-  requestAnimationFrame(drawFrame);
-})();
-
-// Optional: Sichtbare Version unten rechts (klein)
-(function versionBadge(){
-  const el=document.getElementById('ver');
-  if(!el) return; el.textContent='JS V13.6';
+  requestDraw(); requestAnimationFrame(frame);
 })();
