@@ -1,11 +1,14 @@
 // core/game.js — V13.7
-import { Renderer } from './render.js';
+import { Carriers } from './core/carriers.js';
+import * as Render from './render.js'; // falls nicht schon importiert
+import * as World  from './world.js';  // dein World‑Modul
+import { IM }      from './core/assets.js'; // falls du Bilder dort lädst
 
 function keyXY(x,y){ return `${x},${y}`; }
 function neighbors4(x,y){ return [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]; }
 
 export class Game{
-  /** @param {Renderer} r */
+  /** @param {Render} r */
   constructor(r){
     this.r=r;
     this.assets={};
