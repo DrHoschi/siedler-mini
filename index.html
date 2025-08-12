@@ -1,102 +1,112 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Siedler Mini V12.3</title>
-
-    <!-- Manifest für PWA -->
-    <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#4CAF50">
-
-    <!-- CSS-Style -->
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #222;
-            font-family: Arial, sans-serif;
-        }
-        #gameCanvas {
-            display: block;
-            background-color: #000;
-        }
-        #ui {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 10;
-        }
-        button {
-            padding: 8px 12px;
-            font-size: 14px;
-            margin: 4px;
-            cursor: pointer;
-        }
-        #startScreen {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.85);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            z-index: 20;
-        }
-        #startScreen h1 {
-            font-size: 28px;
-            margin-bottom: 20px;
-        }
-        #miniMap {
-            position: absolute;
-            right: 10px;
-            bottom: 10px;
-            border: 2px solid white;
-            z-index: 15;
-            width: 150px;
-            height: 150px;
-            background: #333;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Siedler Mini V12.4.1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    color: #fff;
+    font-family: sans-serif;
+    user-select: none;
+    height: 100%;
+  }
+  #gameCanvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    background: #000;
+  }
+  #hud {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.5);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  #toolbar {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.5);
+    padding: 6px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  #toolbar button {
+    padding: 4px 6px;
+    background: #444;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  #toolbar button:hover {
+    background: #666;
+  }
+  #miniMap {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    border: 1px solid #fff;
+    background: #111;
+  }
+  #startScreen {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: white;
+    z-index: 10;
+  }
+  #startScreen button {
+    padding: 10px 20px;
+    font-size: 16px;
+    background: #6a4;
+    border: none;
+    cursor: pointer;
+  }
+</style>
 </head>
 <body>
 
-<!-- Startbildschirm -->
-<div id="startScreen">
-    <h1>Siedler Mini V12.3</h1>
-    <button id="startButton">Spiel starten</button>
-</div>
-
-<!-- UI-Bereich -->
-<div id="ui">
-    <button id="selectTool">Zeiger</button>
-    <button id="buildRoad">Straße bauen</button>
-    <button id="buildHQ">HQ bauen</button>
-    <button id="buildLumberjack">Holzfäller bauen</button>
-    <button id="buildDepot">Depot bauen</button>
-</div>
-
-<!-- Mini-Map -->
-<canvas id="miniMap"></canvas>
-
-<!-- Spielfeld -->
 <canvas id="gameCanvas"></canvas>
 
-<!-- Scripts -->
-<script src="main.js?v=12.3" defer></script>
+<div id="hud">
+  Holz: <span id="wood">0</span> |
+  Stein: <span id="stone">0</span> |
+  Nahrung: <span id="food">0</span> |
+  Gold: <span id="gold">0</span> |
+  Pop: <span id="pop">0</span>
+</div>
 
-<script>
-    document.getElementById("startButton").addEventListener("click", () => {
-        document.getElementById("startScreen").style.display = "none";
-        if (typeof startGame === "function") {
-            startGame();
-        } else {
-            console.error("startGame() ist nicht definiert. Bitte prüfe main.js.");
-        }
-    });
-</script>
+<div id="toolbar">
+  <button id="selectTool">Zeiger</button>
+  <button id="buildRoad">Straße</button>
+  <button id="buildHQ">HQ</button>
+  <button id="buildLumberjack">Holzfäller</button>
+  <button id="buildDepot">Depot</button>
+  <button id="newGameBtn">Neues Spiel</button>
+</div>
 
+<canvas id="miniMap" width="160" height="120"></canvas>
+
+<div id="startScreen">
+  <h1>Siedler Mini V12.4.1</h1>
+  <button onclick="startGame()">Spiel starten</button>
+</div>
+
+<script src="main.js"></script>
 </body>
 </html>
