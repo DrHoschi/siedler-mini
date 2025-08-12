@@ -1,10 +1,13 @@
-/* main.js – Siedler Mini V12.4
-   Features:
-   1) Produktion Holzfäller -> Aufträge
-   2) Träger (Mehrfachladung, Prioritäten, Wegfindung, Animation, bleibt wo er ist)
-   3) Straßen-Autotiling (Masken, Fallbacks)
-   4) Ressourcen-HUD + Kostenprüfung
-   5) Save/Load via localStorage (+ Neues Spiel, falls Button vorhanden)
+/* main.js – Siedler Mini V12.4.1
+   - Iso-Renderer mit exakter Klick-Zuordnung (inverse Iso + Rhombus-Test)
+   - Zoom zum Maus-/Pinch-Mittelpunkt, sauberes Canvas-Clear
+   - Panning (Zeiger: Linksdrag; immer: Rechts/Mitte; Touch: 1 Finger)
+   - Tap-to-Build (Touch) im Bau-Tool
+   - Ghost-Vorschau im Bau-Tool
+   - Straßen-Autotiling (Basis)
+   - Produktion Holzfäller → Jobs, Träger mit Mehrfachladung & Priorität, bleiben am Ziel
+   - Ressourcen-HUD + Kostenprüfung
+   - Save/Load via localStorage (+ Neues Spiel optional)
 */
 
 'use strict';
@@ -109,11 +112,9 @@ function computeRoadMasks(){
   }
 }
 function pickRoadTexture(mask){
-  // N,E,S,W → Bits 1,2,4,8 (hier 0..3)
-  const opp = (mask===0b0101 || mask===0b1010);
+  const opp = (mask===0b0101 || mask===0b1010); // N+S oder E+W
   if(opp) return IM.road_straight||IM.road_curve;
-  // Rest: Kurve als Fallback
-  return IM.road_curve||IM.road_straight;
+  return IM.road_curve||IM.road_straight;       // Fallback
 }
 
 // ===== Klickumrechnung (exakt) =====
@@ -140,37 +141,23 @@ function centerOn(x,y){
 
 // ===== Produktion & Träger =====
 const JOBS=[];         // {x,y,type:'wood', qty}
-const CARRIERS=[];     // {x,y,px,py,path:[],cap,maxCap,load:{wood:0},speed,state}
-const PRIORITY=['food','wood','stone','gold']; // höhere Priorität = früher (food>wood…)
+const CARRIERS=[];     // {x,y,px,py,path:[],cap,maxCap,load:{},speed,state}
+const PRIORITY=['food','wood','stone','gold'];
 
 function spawnCarrier(x,y){
-  CARRIERS.push({ x, y, px:x, py:y, path:[], cap:0, maxCap:3, load:{wood:0}, speed:3.0, state:'idle' });
-}
-function nearestStorage(x,y){
-  // HQ oder Depot (auf Gebäudefeld); Rückgabe Koordinate des Gebäudefelds
-  let best=null, bestD=1e9;
-  for(let yy=0; yy<MAP.H; yy++) for(let xx=0; xx<MAP.W; xx++){
-    const b=grid[yy][xx].building;
-    if(b==='hq' || b==='depot'){
-      const d=Math.abs(xx-x)+Math.abs(yy-y);
-      if(d<bestD){ bestD=d; best={x:xx,y:yy}; }
-    }
-  }
-  return best;
+  CARRIERS.push({ x, y, px:x, py:y, path:[], cap:0, maxCap:3, load:{}, speed:3.0, state:'idle' });
 }
 
-// Holzfäller-Produktions-Timer
-const prodTimers = {}; // key "x,y" -> t
+const prodTimers = {}; // "x,y" -> t
 function tickProduction(dt){
   for(let y=0;y<MAP.H;y++)for(let x=0;x<MAP.W;x++){
     if(grid[y][x].building!=='lumber') continue;
     const key=x+','+y;
     prodTimers[key]=(prodTimers[key]||0)+dt;
-    const EVERY=6; // s
+    const EVERY=6;
     if(prodTimers[key] >= EVERY){
-      // produziert 1 Holz, legt Job an (wenn angrenzend Wald vorhanden)
       prodTimers[key]-=EVERY;
-      // simple Bedingung: mindestens ein Nachbar mit forest-node
+      // braucht angrenzend forest
       const N4=[[1,0],[-1,0],[0,1],[0,-1]];
       const hasForest = N4.some(([dx,dy])=> grid[y+dy]?.[x+dx]?.node==='forest');
       if(hasForest) JOBS.push({x,y,type:'wood',qty:1});
@@ -178,10 +165,9 @@ function tickProduction(dt){
   }
 }
 
-// BFS Wegfindung auf Straßen (inkl. Gebäude-Kacheln als „Knoten“)
+// Wegfindung über Straßen/Buildings
 function passable(x,y){
   if(x<0||y<0||x>=MAP.W||y>=MAP.H) return false;
-  // Straße passierbar; Gebäudefelder gelten als passierbar damit man „drauf“ kann
   if(grid[y][x].road) return true;
   if(grid[y][x].building) return true;
   return false;
@@ -201,41 +187,69 @@ function bfsPath(sx,sy, tx,ty){
   }
   const endKey=key(tx,ty); if(!prev.has(endKey) && !(sx===tx&&sy===ty)) return null;
   const path=[]; let cur={x:tx,y:ty};
-  while(!(cur.x===sx && cur.y===sy)){ path.push(cur); cur=prev.get(key(cur.x,cur.y)); if(!cur){ return null; } }
+  while(!(cur.x===sx && cur.y===sy)){ path.push(cur); cur=prev.get(key(cur.x,cur.y)); if(!cur) return null; }
   path.reverse(); return path;
 }
 
-// Träger-Logik
+function nearestStorage(x,y){
+  let best=null, bestD=1e9;
+  for(let yy=0; yy<MAP.H; yy++) for(let xx=0; xx<MAP.W; xx++){
+    const b=grid[yy][xx].building;
+    if(b==='hq' || b==='depot'){
+      const d=Math.abs(xx-x)+Math.abs(yy-y);
+      if(d<bestD){ bestD=d; best={x:xx,y:yy}; }
+    }
+  }
+  return best;
+}
+
+function onArrive(c){
+  if(c.state==='toPickup'){
+    const j=JOBS[c.jobIndex];
+    if(!j){ c.state='idle'; return; }
+    const room=c.maxCap - c.cap;
+    const take=Math.max(0, Math.min(room, j.qty));
+    if(take>0){
+      c.cap += take;
+      c.load[j.type]=(c.load[j.type]||0)+take;
+      j.qty-=take;
+      if(j.qty<=0) JOBS.splice(c.jobIndex,1);
+    }
+    const st=nearestStorage(c.x,c.y) || {x:HQ.x,y:HQ.y};
+    const path=bfsPath(c.x,c.y, st.x, st.y);
+    if(path){ c.state='toStore'; c.path=path; } else { c.state='idle'; }
+  }else if(c.state==='toStore'){
+    // abladen
+    for(const k in c.load){ res[k]=(res[k]||0) + c.load[k]; c.cap-=c.load[k]; c.load[k]=0; }
+    hud();
+    c.state='idle'; // bleibt wo er ist
+  }
+}
+
 function tickCarriers(dt){
-  // Idle Carrier suchen Aufträge
   CARRIERS.forEach(c=>{
-    // Bewegung entlang Pfad
     if(c.path && c.path.length){
       const next=c.path[0];
-      // animiere mit Geschwindigkeit (Tiles pro Sek.)
-      c.px += Math.sign(next.x - c.px)*c.speed*dt;
-      c.py += Math.sign(next.y - c.py)*c.speed*dt;
-      // Snap wenn nahe
+      const speed=c.speed*dt;
+      // einfache gleitende Bewegung
+      if(Math.abs(c.px-next.x) > 0.001) c.px += Math.sign(next.x - c.px)*speed;
+      if(Math.abs(c.py-next.y) > 0.001) c.py += Math.sign(next.y - c.py)*speed;
       if(Math.abs(c.px-next.x)<0.05 && Math.abs(c.py-next.y)<0.05){
         c.px=next.x; c.py=next.y; c.x=next.x; c.y=next.y; c.path.shift();
-        // Ziel erreicht?
         if(c.path.length===0) onArrive(c);
       }
       return;
     }
-
-    // Kein Pfad → handle State
     if(c.state==='idle'){
-      // Auftrag mit höchster Priorität, geringste Distanz
-      let best=null, bestP=99, bestDist=1e9, bestIdx=-1;
+      // Job mit Priorität & Distanz
+      let best=null, bestP=99, bestD=1e9, bestIdx=-1;
       for(let i=0;i<JOBS.length;i++){
         const j=JOBS[i];
-        const p = PRIORITY.indexOf(j.type); const pr = p>=0?p:50;
+        const pr = Math.max(0, PRIORITY.indexOf(j.type)); // kleiner besser
         const d = Math.abs(j.x-c.x)+Math.abs(j.y-c.y);
-        if(pr<bestP || (pr===bestP && d<bestDist)){ bestP=pr; bestDist=d; best= j; bestIdx=i; }
+        if(pr<bestP || (pr===bestP && d<bestD)){ bestP=pr; bestD=d; best=j; bestIdx=i; }
       }
       if(best){
-        // Pfad zum Job
         const path=bfsPath(c.x,c.y, best.x, best.y);
         if(path){ c.state='toPickup'; c.target=best; c.jobIndex=bestIdx; c.path=path; }
       }
@@ -243,33 +257,10 @@ function tickCarriers(dt){
   });
 }
 
-// Bei Ankunft an Knoten
-function onArrive(c){
-  if(c.state==='toPickup'){
-    const j=JOBS[c.jobIndex];
-    if(!j){ c.state='idle'; return; }
-    // aufnehmen bis Kapazität
-    const room=c.maxCap - c.cap;
-    const take=Math.max(0, Math.min(room, j.qty));
-    if(take>0){
-      c.cap += take; c.load[j.type]=(c.load[j.type]||0)+take; j.qty-=take;
-      if(j.qty<=0) JOBS.splice(c.jobIndex,1);
-    }
-    // nächstes Ziel: Lager (Depot/HQ)
-    const st=nearestStorage(c.x,c.y) || {x:HQ.x,y:HQ.y};
-    const path=bfsPath(c.x,c.y, st.x, st.y);
-    if(path){ c.state='toStore'; c.path=path; } else { c.state='idle'; }
-  }else if(c.state==='toStore'){
-    // Abliefern
-    if(c.load.wood){ res.wood += c.load.wood; c.cap -= c.load.wood; c.load.wood=0; hud(); }
-    c.state='idle';
-    // bleibt wo er ist (keine Rückkehr)
-  }
-}
-
 // ===== Interaktion: Pan/Zoom/Bauen =====
 let panning=false, panStart={x:0,y:0}, camStart={x:0,y:0};
 
+// Maus
 canvas.addEventListener('mousedown', e=>{
   const rect=canvas.getBoundingClientRect();
   if(currentTool==='pointer' || e.button!==0){
@@ -294,6 +285,7 @@ canvas.addEventListener('mousemove', e=>{
 window.addEventListener('mouseup', ()=>{ panning=false; });
 canvas.addEventListener('contextmenu', e=>e.preventDefault());
 
+// Wheel-Zoom (zum Mauspunkt)
 canvas.addEventListener('wheel', e=>{
   e.preventDefault();
   const rect=canvas.getBoundingClientRect();
@@ -303,32 +295,73 @@ canvas.addEventListener('wheel', e=>{
   cam.x=wx - sx/cam.z; cam.y=wy - sy/cam.z;
 },{passive:false});
 
-// Touch
-let pinch=null;
-canvas.addEventListener('touchstart', e=>{
-  if(e.touches.length===1){
-    panning=true; panStart={x:e.touches[0].clientX,y:e.touches[0].clientY}; camStart={...cam};
-  }else if(e.touches.length===2){
-    pinch={ d:dist(e.touches[0],e.touches[1]), z:cam.z,
-            mid:{ x:(e.touches[0].clientX+e.touches[1].clientX)/2,
-                  y:(e.touches[0].clientY+e.touches[1].clientY)/2 } };
+// Touch – Tap-to-Build, Pan, Pinch
+let pinch = null;
+let tapStart = null;      // {x,y,t}
+let tapMoved = false;
+
+canvas.addEventListener('touchstart', (e)=>{
+  if (e.touches.length===1){
+    const t = e.touches[0];
+    tapStart = { x:t.clientX, y:t.clientY, t:performance.now() };
+    tapMoved = false;
+
+    if (currentTool==='pointer'){
+      panning = true;
+      panStart = { x:t.clientX, y:t.clientY };
+      camStart = { ...cam };
+    }
+  } else if (e.touches.length===2){
+    const a=e.touches[0], b=e.touches[1];
+    pinch = {
+      d: Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY),
+      z: cam.z,
+      mid:{ x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2 }
+    };
   }
-},{passive:true});
-canvas.addEventListener('touchmove', e=>{
-  if(e.touches.length===1 && panning){
-    const dx=(e.touches[0].clientX-panStart.x)/cam.z, dy=(e.touches[0].clientY-panStart.y)/cam.z;
-    cam.x=camStart.x - dx; cam.y=camStart.y - dy;
-  }else if(e.touches.length===2 && pinch){
+}, {passive:true});
+
+canvas.addEventListener('touchmove', (e)=>{
+  if (e.touches.length===1){
+    const t = e.touches[0];
+    if (tapStart){
+      const dx=t.clientX - tapStart.x, dy=t.clientY - tapStart.y;
+      if (Math.hypot(dx,dy) > 8) tapMoved = true;
+    }
+    if (panning && currentTool==='pointer'){
+      const dx=(t.clientX-panStart.x)/cam.z, dy=(t.clientY-panStart.y)/cam.z;
+      cam.x = camStart.x - dx; cam.y = camStart.y - dy;
+    }
+    // Ghost für Touch im Bau-Tool
+    if (!panning && currentTool!=='pointer'){
+      const r=canvas.getBoundingClientRect();
+      const cell=screenToCell(t.clientX-r.left, t.clientY-r.top);
+      if(cell){ ghost.x=cell.x; ghost.y=cell.y; } else { ghost.x=ghost.y=null; }
+    }
+  } else if (e.touches.length===2 && pinch){
     e.preventDefault();
-    const d=dist(e.touches[0],e.touches[1]); const factor=d/pinch.d;
-    const rect=canvas.getBoundingClientRect(); const sx=pinch.mid.x-rect.left, sy=pinch.mid.y-rect.top;
+    const a=e.touches[0], b=e.touches[1];
+    const factor = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY) / pinch.d;
+    const rect=canvas.getBoundingClientRect();
+    const sx=pinch.mid.x-rect.left, sy=pinch.mid.y-rect.top;
     const wx=sx/cam.z + cam.x, wy=sy/cam.z + cam.y;
-    cam.z=Math.max(ZMIN,Math.min(ZMAX, pinch.z*factor));
-    cam.x=wx - sx/cam.z; cam.y=wy - sy/cam.z;
+    cam.z = Math.max(ZMIN, Math.min(ZMAX, pinch.z * factor));
+    cam.x = wx - sx/cam.z; cam.y = wy - sy/cam.z;
   }
-},{passive:false});
-canvas.addEventListener('touchend', ()=>{ if(event.touches?.length===0){ panning=false; pinch=null; } }, {passive:true});
-function dist(a,b){ return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
+}, {passive:false});
+
+canvas.addEventListener('touchend', (e)=>{
+  if (e.touches.length===0) { pinch=null; panning=false; }
+  // kurzer Tap → bauen
+  if (tapStart && !tapMoved && currentTool!=='pointer'){
+    const dt = performance.now() - tapStart.t;
+    if (dt < 400){
+      const rect=canvas.getBoundingClientRect();
+      buildAt(tapStart.x-rect.left, tapStart.y-rect.top);
+    }
+  }
+  tapStart = null;
+}, {passive:true});
 
 // ===== Bauen / Abriss =====
 function buildAt(sx,sy){
@@ -342,8 +375,7 @@ function buildAt(sx,sy){
   }else if(currentTool==='hq'){
     if(!canPay(costs.hq)) return;
     grid[HQ.y][HQ.x].building=null; HQ={x,y}; grid[y][x].building='hq'; pay(costs.hq);
-    // Starter-Träger am HQ (falls noch keiner)
-    if(!CARRIERS.length) spawnCarrier(x,y);
+    if(!CARRIERS.length) spawnCarrier(x,y); // Starter-Träger
   }else if(currentTool==='lumberjack'){
     if(!canPay(costs.lumberjack)) return;
     if(!grid[y][x].road && !grid[y][x].building){ grid[y][x].building='lumber'; pay(costs.lumberjack); }
@@ -363,6 +395,7 @@ function pathDiamond(x,y,w,h){
   ctx.lineTo(x,         y + h*0.5);
   ctx.closePath();
 }
+
 function drawGround(){
   for(let y=0;y<MAP.H;y++){
     for(let x=0;x<MAP.W;x++){
@@ -415,10 +448,8 @@ function drawGhost(){
 function drawCarriers(){
   CARRIERS.forEach(c=>{
     const r=rectForTile(c.px, c.py);
-    // simple Sprite: kleiner „Träger“
     ctx.fillStyle='#f0c674';
     ctx.beginPath(); ctx.ellipse(r.x+r.w*0.5, r.y+r.h*0.55, 6, 8, 0, 0, Math.PI*2); ctx.fill();
-    // Ladung als kleine Kästchen
     const n=c.cap|0;
     for(let i=0;i<n;i++){ ctx.fillStyle='#8a5'; ctx.fillRect(r.x+r.w*0.35+i*6, r.y+r.h*0.40, 5,4); }
   });
@@ -436,10 +467,9 @@ function drawMini(){
     if(grid[y][x].building==='lumber'){ mctx.fillStyle='#9ad17a'; mctx.fillRect(x*sx,y*sy,sx,sy); }
     if(grid[y][x].building==='depot'){ mctx.fillStyle='#d9c28f'; mctx.fillRect(x*sx,y*sy,sx,sy); }
   }
-  // Carrier Punkt
   CARRIERS.forEach(c=>{
-    const sx=c.x*sx+sx*0.5, sy=c.y*sy+sy*0.5;
-    mctx.fillStyle='#fff'; mctx.fillRect(sx,sy,2,2);
+    const sx_=c.x*sx+sx*0.5, sy_=c.y*sy+sy*0.5;
+    mctx.fillStyle='#fff'; mctx.fillRect(sx_,sy_,2,2);
   });
 }
 
@@ -476,7 +506,7 @@ function loop(ts){
 }
 
 // ===== Save/Load =====
-const SAVE_KEY='siedler_v124';
+const SAVE_KEY='siedler_v1241';
 function save(){
   const data={
     res, cam,
@@ -521,6 +551,5 @@ Promise.all(toLoad.map(([k,s])=>load(k,s))).then(()=>{
   bindToolbar(); hud();
   drawAll();
   requestAnimationFrame(loop);
-  // Auto-Save alle 5s
   setInterval(save, 5000);
 });
