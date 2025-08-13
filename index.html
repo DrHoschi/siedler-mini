@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b1620" />
   <style>
     :root{color-scheme:dark light}
-    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial; overscroll-behavior:none;}
     #game{display:block;touch-action:none;position:fixed;inset:0}
 
     /* HUD oben */
@@ -26,7 +26,6 @@
     #startCard h1{margin:0 0 10px 0;font-size:22px}
     #startCard p{margin:6px 0;color:#c9d8ee}
     #startBtns{display:flex;gap:8px;margin-top:8px}
-
     #version{position:fixed;right:10px;bottom:6px;color:#7fa2d3;opacity:.8;font-size:12px}
   </style>
 </head>
@@ -34,7 +33,7 @@
 
 <canvas id="game"></canvas>
 
-<!-- HUD top -->
+<!-- HUD -->
 <div id="uiBar" class="hud" style="opacity:0">
   <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
   <div class="pill">🪨 Stein <span id="hudStone">0</span></div>
@@ -50,7 +49,7 @@
   </div>
 </div>
 
-<!-- Tool-Leiste links -->
+<!-- Tools -->
 <div class="tools">
   <button class="btn active" id="toolPointer">Zeiger</button>
   <button class="btn" id="toolRoad">Straße</button>
@@ -75,9 +74,9 @@
   </div>
 </div>
 
-<div id="version">JS V14.3‑safe3</div>
+<div id="version">JS V14.3‑safe4</div>
 
 <!-- Ein einziger Einstiegspunkt -->
-<script src="./boot.js?v=14.3-safe3" defer></script>
+<script src="./boot.js?v=14.3" defer></script>
 </body>
 </html>
