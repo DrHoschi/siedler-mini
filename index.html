@@ -4,56 +4,50 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini V14 (Mobile)</title>
-  <meta name="theme-color" content="#0b1620"/>
+  <meta name="theme-color" content="#0b1620" />
   <style>
     :root{color-scheme:dark light}
-    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial}
+    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
     #game{display:block;touch-action:none;position:fixed;inset:0}
-
-    /* HUD (oben) */
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;opacity:.98;z-index:20}
-    .pill{padding:6px 12px;border-radius:999px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px;display:flex;gap:8px;align-items:center}
+    /* HUD (Top-Bar) */
+    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;opacity:.95;pointer-events:none}
+    .pill{pointer-events:auto;padding:6px 10px;border-radius:999px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
     .right{margin-left:auto;display:flex;gap:8px}
-
-    /* Tools (links) */
-    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px;z-index:22}
+    /* Tools links */
+    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px}
     .btn{padding:8px 12px;border-radius:12px;background:#0f1b29;border:1px solid #1b2a3f;color:#cfe3ff;font-size:15px}
-    .btn:active{outline:2px solid #36a3ff}
-    .btn.active{box-shadow:0 0 0 2px #3ea0ff inset}
-
-    /* Overlay (Start) */
-    #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:30}
+    .btn.active{outline:2px solid #36a3ff}
+    /* Start-Overlay */
+    #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
     .startCard{
-      width:min(92vw,720px);max-width:92vw;
-      background:#122313;border:1px solid #20324a;border-radius:16px;
-      box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px
+      max-width:min(92vw,720px);width:92vw;padding:22px;background:#122313;border:1px solid #20324e;border-radius:16px;
+      box-shadow:0 20px 60px rgba(0,0,0,.35);opacity:.96
     }
     .startBtns{display:flex;gap:8px;margin-top:8px}
-    .pillHint{margin-left:auto;opacity:.75}
-    #version{position:fixed;right:10px;bottom:6px;color:#7fa2d3;opacity:.8;font-size:12px;z-index:10}
+    #version{position:fixed;right:12px;bottom:6px;color:#77a2d3;opacity:.8;font-size:12px}
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
 
-  <!-- HUD -->
-  <div class="hud" id="uiBar" style="opacity:.95">
+  <!-- HUD oben -->
+  <div class="hud" id="uiBar" style="opacity:0">
     <span class="pill">🌲 Holz <span id="hudWood">0</span></span>
     <span class="pill">🪨 Stein <span id="hudStone">0</span></span>
     <span class="pill">🌿 Nahrung <span id="hudFood">0</span></span>
     <span class="pill">🪙 Gold <span id="hudGold">0</span></span>
-    <span class="pill">🧺 Träger <span id="hudCarriers">0</span></span>
+    <span class="pill">🧺 Träger <span id="hudCarrier">0</span></span>
     <span class="pill">Tool: <span id="hudTool">Zeiger</span></span>
     <span class="pill">Zoom <span id="hudZoom">1.00x</span></span>
-    <span class="right">
-      <button class="btn" id="centerBtn">Zentrieren</button>
-      <button class="btn" id="debugBtn">Debug</button>
-      <button class="btn" id="fsBtn">Vollbild</button>
-    </span>
+    <div class="right">
+      <button class="pill" id="btnCenter">Zentrieren</button>
+      <button class="pill" id="btnDebug">Debug</button>
+      <button class="pill" id="btnFS">Vollbild</button>
+    </div>
   </div>
 
-  <!-- Tool-Leiste -->
-  <div class="tools" id="toolBox">
+  <!-- Tools links -->
+  <div class="tools">
     <button class="btn active" id="toolPointer">Zeiger</button>
     <button class="btn" id="toolRoad">Straße</button>
     <button class="btn" id="toolHQ">HQ</button>
@@ -65,24 +59,20 @@
   <!-- Start-Overlay -->
   <div id="startOverlay">
     <div class="startCard">
-      <h3 style="margin:4px 0 8px 0">Siedler‑Mini V14 (Mobile)</h3>
-      <p style="margin:8px 0 6px 0">
-        <b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) ·
-        <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).
-        Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.
-      </p>
+      <h3>Siedler‑Mini V14 (Mobile)</h3>
+      <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist). Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
+      <p class="pill" style="opacity:.8">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
       <div class="startBtns">
-        <button class="btn" id="startBtn">Start</button>
-        <button class="btn" id="fsStartBtn">Vollbild</button>
-        <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#5a1a1a">Reset</button>
-        <span class="pill pillHint">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</span>
+        <button class="btn" id="startBtn" style="background:#195f2a;border-color:#2c8f45">Start</button>
+        <button class="btn" id="fsBtn">Vollbild</button>
+        <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#7a1f1f">Reset</button>
       </div>
     </div>
   </div>
 
   <div id="version">JS V14.4</div>
 
-  <!-- Einziger Einstiegspunkt – lädt boot.js, das wiederum main.run() aufruft -->
-  <script src="./boot.js?v=14.4" defer></script>
+  <!-- Ein einziger Einstiegspunkt: boot.js lädt und ruft window.main.run() -->
+  <script type="module" src="./boot.js?v=14.4"></script>
 </body>
 </html>
