@@ -2,41 +2,49 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+  />
   <title>Siedler‑Mini V14 (Mobile)</title>
   <meta name="theme-color" content="#0b1620" />
   <style>
-    :root{color-scheme:dark light}
-    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #game{display:block;touch-action:none;position:fixed;inset:0}
-    /* HUD (Top-Bar) */
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;opacity:.95;pointer-events:none}
-    .pill{pointer-events:auto;padding:6px 10px;border-radius:999px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
+    :root { color-scheme: dark light }
+    html,body { margin:0; padding:0; height:100%; background:#0f1823; font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Open Sans','Helvetica Neue', Arial; }
+    /* Canvas – block + keine Browser-Gesten */
+    #game { display:block; position:fixed; inset:0; touch-action:none; }
+    /* HUD oben */
+    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;opacity:.98;pointer-events:none}
+    .pill{pointer-events:auto;padding:6px 12px;border-radius:999px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
     .right{margin-left:auto;display:flex;gap:8px}
     /* Tools links */
-    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px}
-    .btn{padding:8px 12px;border-radius:12px;background:#0f1b29;border:1px solid #1b2a3f;color:#cfe3ff;font-size:15px}
+    .tools{position:fixed;left:12px;top:56px;display:flex;flex-direction:column;gap:10px}
+    .btn{padding:8px 12px;border-radius:12px;background:#0f1829;border:1px solid #2b3a55;color:#cfe3ff;font-size:15px}
     .btn.active{outline:2px solid #36a3ff}
     /* Start-Overlay */
-    #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
-    .startCard{
-      max-width:min(92vw,720px);width:92vw;padding:22px;background:#122313;border:1px solid #20324e;border-radius:16px;
-      box-shadow:0 20px 60px rgba(0,0,0,.35);opacity:.96
+    #startCard{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    #startCard .card{
+      pointer-events:auto;max-width:min(92vw,720px);width:92vw;background:#112231;border:1px solid #20324a;border-radius:16px;
+      box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px 18px 14px;color:#cfe3ff
     }
-    .startBtns{display:flex;gap:8px;margin-top:8px}
-    #version{position:fixed;right:12px;bottom:6px;color:#77a2d3;opacity:.8;font-size:12px}
+    .card h1{margin:0 0 8px 0;font-size:22px}
+    .card p{margin:6px 0 10px 0;color:#a8bed9}
+    .card .row{display:flex;gap:10px;margin-top:10px}
+    .btn.green{background:#0c5a2a}
+    .btn.red{background:#5a0c0c}
+    #version{position:fixed;right:12px;bottom:8px;color:#7fa2d3;opacity:.8;font-size:12px}
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
 
   <!-- HUD oben -->
-  <div class="hud" id="uiBar" style="opacity:0">
-    <span class="pill">🌲 Holz <span id="hudWood">0</span></span>
-    <span class="pill">🪨 Stein <span id="hudStone">0</span></span>
-    <span class="pill">🌿 Nahrung <span id="hudFood">0</span></span>
+  <div class="hud" id="hudBar">
+    <span class="pill">🌲 Holz <span id="hudHolz">0</span></span>
+    <span class="pill">🪨 Stein <span id="hudStein">0</span></span>
+    <span class="pill">🌿 Nahrung <span id="hudNahrung">0</span></span>
     <span class="pill">🪙 Gold <span id="hudGold">0</span></span>
-    <span class="pill">🧺 Träger <span id="hudCarrier">0</span></span>
+    <span class="pill">🧺 Träger <span id="hudTraeger">0</span></span>
     <span class="pill">Tool: <span id="hudTool">Zeiger</span></span>
     <span class="pill">Zoom <span id="hudZoom">1.00x</span></span>
     <div class="right">
@@ -47,32 +55,32 @@
   </div>
 
   <!-- Tools links -->
-  <div class="tools">
-    <button class="btn active" id="toolPointer">Zeiger</button>
-    <button class="btn" id="toolRoad">Straße</button>
-    <button class="btn" id="toolHQ">HQ</button>
-    <button class="btn" id="toolLumber">Holzfäller</button>
-    <button class="btn" id="toolDepot">Depot</button>
-    <button class="btn" id="toolBulldoze">Abriss</button>
+  <div class="tools" id="toolBar">
+    <button class="btn active" data-tool="pointer">Zeiger</button>
+    <button class="btn" data-tool="road">Straße</button>
+    <button class="btn" data-tool="hq">HQ</button>
+    <button class="btn" data-tool="woodcutter">Holzfäller</button>
+    <button class="btn" data-tool="depot">Depot</button>
+    <button class="btn" data-tool="bulldoze">Abriss</button>
   </div>
 
   <!-- Start-Overlay -->
-  <div id="startOverlay">
-    <div class="startCard">
-      <h3>Siedler‑Mini V14 (Mobile)</h3>
+  <div id="startCard">
+    <div class="card">
+      <h1>Siedler‑Mini V14 (Mobile)</h1>
       <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist). Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
-      <p class="pill" style="opacity:.8">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
-      <div class="startBtns">
-        <button class="btn" id="startBtn" style="background:#195f2a;border-color:#2c8f45">Start</button>
+      <p class="pill" style="display:block;text-align:center;">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
+      <div class="row">
+        <button class="btn green" id="startBtn">Start</button>
         <button class="btn" id="fsBtn">Vollbild</button>
-        <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#7a1f1f">Reset</button>
+        <button class="btn red" id="resetBtn">Reset</button>
       </div>
     </div>
   </div>
 
   <div id="version">JS V14.4</div>
 
-  <!-- Ein einziger Einstiegspunkt: boot.js lädt und ruft window.main.run() -->
+  <!-- Ein einziger Einstiegspunkt: boot.js lädt und ruft game.startGame() -->
   <script type="module" src="./boot.js?v=14.4"></script>
 </body>
 </html>
