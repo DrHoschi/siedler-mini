@@ -1,151 +1,137 @@
-// main.js (V14)
+// V14.1 – Bootstrap, UI, Loop
 import { loadAllAssets } from './core/assets.js';
 import { Camera } from './core/camera.js';
-import { installMobileInput, installMouseInput } from './core/input.js';
+import { makeInput } from './core/input.js';
 import { Renderer } from './render.js';
-import { World } from './game.js';
+import { makeWorld, placeRoad, placeBuilding } from './world.js';
+import { Game, Tools } from './game.js';
 
-const qs = s=>document.querySelector(s);
-const cv = qs('#stage');
-const cx = cv.getContext('2d');
-const ui = {
-  overlay: qs('#overlay'),
-  btnStart: qs('#btnStart'),
-  btnOverFull: qs('#btnOverlayFull'),
-  btnFull: qs('#btnFull'),
-  btnCenter: qs('#btnCenter'),
-  btnDebug: qs('#btnDebug'),
-  r: {
-    wood: qs('#rWood'), stone: qs('#rStone'), food: qs('#rFood'), gold: qs('#rGold'), car: qs('#rCar')
-  },
-  toolName: qs('#toolName'),
-  tools: [...document.querySelectorAll('#leftTools .btn')],
-};
+const VERSION='V14.1';
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', {alpha:false, desynchronized:true});
 
-let world, camera, renderer;
-let activeTool = 'pointer';
-let running = false;
-let debug = false;
+let world, game, cam, renderer, running=false;
 
 function resize(){
-  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
-  cv.width = Math.floor(cv.clientWidth * dpr);
-  cv.height= Math.floor(cv.clientHeight* dpr);
-  cx.setTransform(1,0,0,1,0,0);
-  cx.scale(1,1);
-  camera.setViewport(cv.width, cv.height);
+  canvas.width = window.innerWidth * devicePixelRatio;
+  canvas.height= window.innerHeight* devicePixelRatio;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  cam.setViewport(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', resize);
 
-function setTool(t){
-  activeTool = t;
-  ui.toolName.textContent = ({
-    pointer:'Zeiger', road:'Straße', hq:'HQ', lumberjack:'Holzfäller', depot:'Depot', bulldoze:'Abriss'
-  })[t] || t;
+function markActiveTool(){
+  document.querySelectorAll('[data-tool]').forEach(b=>{
+    b.classList.toggle('active', toolFromBtn(b)===game.tool);
+  });
 }
-ui.tools.forEach(b=> b.addEventListener('click', ()=> setTool(b.dataset.tool)));
+function toolFromBtn(el){
+  const m = el.getAttribute('data-tool');
+  switch(m){
+    case 'pointer': return Tools.POINTER;
+    case 'road':    return Tools.ROAD;
+    case 'hq':      return Tools.HQ;
+    case 'lumber':  return Tools.LUMBER;
+    case 'depot':   return Tools.DEPOT;
+    case 'bulldoze':return Tools.BULL;
+    default: return Tools.POINTER;
+  }
+}
 
-ui.btnCenter.addEventListener('click', ()=>{
-  // auf HQ zentrieren
-  const hq = world.buildings.find(b=>b.type==='hq');
-  const wpos = renderer.isoToWorld(hq.i, hq.j);
-  camera.centerOn(wpos.x, wpos.y-8);
-});
-ui.btnDebug.addEventListener('click', ()=> debug=!debug);
+function updateResUI(){
+  rWood.textContent=game.resources.wood;
+  rStone.textContent=game.resources.stone;
+  rFood.textContent=game.resources.food;
+  rGold.textContent=game.resources.gold;
+  rCar.textContent=game.resources.carriers;
+}
+
+function worldFromScreen(sx,sy){
+  // nutzt renderer.screenToWorldTile (korrigiert für zoom/offset)
+  return renderer.screenToWorldTile(sx,sy);
+}
+
+async function init(){
+  world = makeWorld(90,70);
+  game = new Game(world);
+
+  cam = new Camera(window.innerWidth, window.innerHeight, 128,64);
+  renderer = new Renderer(ctx, cam, world);
+
+  resize();
+  updateResUI();
+  markActiveTool();
+
+  // Input
+  makeInput(canvas,
+    // Tap
+    (sx,sy)=>{
+      if (!running) return;
+      const {tx,ty}=worldFromScreen(sx,sy);
+      if (tx<0||ty<0||tx>=world.w||ty>=world.h) return;
+      switch(game.tool){
+        case Tools.ROAD: placeRoad(world,tx,ty); break;
+        case Tools.HQ:   placeBuilding(world,tx,ty,'hq'); break;
+        case Tools.LUMBER: placeBuilding(world,tx,ty,'lumber'); break;
+        case Tools.DEPOT:  placeBuilding(world,tx,ty,'depot'); break;
+        case Tools.BULL: world.buildings[ty][tx]=null; world.roads[ty][tx]=0; break;
+        default: /* pointer */ break;
+      }
+    },
+    // Pan
+    (dx,dy)=>{ if (game.tool===Tools.POINTER) cam.pan(-dx,-dy); },
+    // Pinch (Zoom)
+    (factor,cx,cy)=>{
+      cam.zoomAt(factor, cx, cy);
+      zoomLabel.textContent=`Zoom ${cam.scale.toFixed(2)}×`;
+    },
+    ()=> game.tool===Tools.POINTER
+  );
+
+  // UI Buttons
+  document.getElementById('toolCol').addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('[data-tool]'); if (!btn) return;
+    game.setTool(toolFromBtn(btn)); markActiveTool();
+  });
+
+  centerBtn.addEventListener('click', ()=>{
+    renderer.centerOnTile(game.hqPos.tx, game.hqPos.ty);
+  });
+  dbgBtn.addEventListener('click', ()=>{ game.debug=!game.debug; dbgBtn.classList.toggle('active',game.debug); });
+  fsBtn.addEventListener('click', toggleFullscreen);
+
+  // Overlay
+  startBtn.addEventListener('click', startGame);
+  startFsBtn.addEventListener('click', ()=>{ toggleFullscreen(); startGame(); });
+  document.getElementById('startCard').addEventListener('dblclick', ()=>toggleFullscreen());
+
+  await loadAllAssets(); // nach UI bereit
+  renderer.centerOnTile(game.hqPos.tx, game.hqPos.ty);
+  draw();
+}
 
 function toggleFullscreen(){
-  const el = document.documentElement;
-  if(!document.fullscreenElement){
-    el.requestFullscreen?.();
+  const el=document.documentElement;
+  if (!document.fullscreenElement){
+    el.requestFullscreen?.().catch(()=>{});
   } else {
     document.exitFullscreen?.();
   }
 }
-ui.btnFull.addEventListener('click', toggleFullscreen);
-ui.btnOverFull.addEventListener('click', toggleFullscreen);
-qs('#card').addEventListener('dblclick', toggleFullscreen);
 
-// ====== Eingabe ======
-function installInput(){
-  installMobileInput(cv, {
-    onTap: (sx,sy)=> tryBuildAtScreen(sx,sy),
-    onPan: (dx,dy)=>{ if(activeTool==='pointer') camera.pan(-dx,-dy); },
-    onPinch: (cx,cy,delta)=> camera.zoomAround(cx,cy, delta)
-  });
-  installMouseInput(cv, {
-    onTap: (sx,sy)=> tryBuildAtScreen(sx,sy),
-    onPan: (dx,dy)=>{ if(activeTool==='pointer') camera.pan(-dx,-dy); },
-    onWheel: (sx,sy,dy)=> camera.zoomAround(sx,sy, dy)
-  });
-}
-
-function tryBuildAtScreen(sx,sy){
-  if(!running) return;
-  // Nur bauen, wenn Bau‑Tool aktiv
-  if(!['road','hq','lumberjack','depot','bulldoze'].includes(activeTool)) return;
-
-  const wpt = camera.screenToWorld(sx,sy);
-  // Screen -> Iso Tile (ungefähr passend)
-  const {i,j} = renderer.worldToIso(wpt.x, wpt.y);
-  if(!world.inside(i,j)) return;
-
-  if(world.build(activeTool, i,j)){
-    pumpTopBar();
-  }
-}
-
-function pumpTopBar(){
-  ui.r.wood.textContent = world.res.wood;
-  ui.r.stone.textContent= world.res.stone;
-  ui.r.food.textContent = world.res.food;
-  ui.r.gold.textContent = world.res.gold;
-  ui.r.car.textContent  = world.res.carriers;
-}
-
-// ====== Game Loop ======
-let last=0;
-function frame(ts){
-  if(!running){ requestAnimationFrame(frame); return; }
-  const dt = Math.min(.033, (ts-last)/1000||0); last=ts;
-  world.update(dt);
-  renderer.draw();
-  if(debug){
-    cx.fillStyle='#fff8'; cx.font='12px system-ui'; cx.fillText(`scale=${camera.scale.toFixed(2)} cam=(${camera.x.toFixed(1)}, ${camera.y.toFixed(1)})`, 12, cv.height-16);
-  }
-  requestAnimationFrame(frame);
-}
-
-// ====== Start/Boot ======
-async function boot(){
-  camera = new Camera();
-  renderer = new Renderer(cv, camera, null); // world später
-  installInput();
-  resize();
-  await loadAllAssets();
-
-  // Welt
-  world = new World(64);
-  renderer.world = world;
-
-  // Kamera grob auf HQ
-  const hq = world.buildings.find(b=>b.type==='hq');
-  const wpos = renderer.isoToWorld(hq.i, hq.j);
-  camera.scale = 1;
-  camera.centerOn(wpos.x, wpos.y-6);
-  pumpTopBar();
-}
-boot().catch(err=>{
-  alert('Startfehler beim Boot:\n'+(err?.message||err));
-});
-
-// Start‑Knöpfe — ACHTUNG: kein Re‑Assign auf readonly Objekte mehr
 function startGame(){
-  if(running) return;
-  running = true;
-  ui.overlay.style.display='none';
-  requestAnimationFrame(ts=>{ last=ts; frame(ts); });
+  if (running) return;
+  running=true;
+  overlay.style.display='none';
 }
-ui.btnStart.addEventListener('click', startGame);
 
-// für Testzwecke auch global (optional)
-window.SM = { start: startGame };
+function draw(){
+  renderer.draw();
+  requestAnimationFrame(draw);
+}
+
+init().catch(err=>{
+  alert('Startfehler: '+err?.message);
+  console.error(err);
+});
