@@ -23,9 +23,12 @@
   async function startGame() {
     try {
       const m = await import(`./main.js?v=14.2`);
-      if (typeof m.run === 'function') await m.run();
-      else if (window.main && typeof window.main.run === 'function') await window.main.run();
-      else throw new Error('main.run() fehlt');
+      // sowohl named export als auch window fallback unterstützen
+      const run = (typeof m.run === 'function') ? m.run
+                 : (window.main && typeof window.main.run === 'function') ? window.main.run
+                 : null;
+      if (!run) throw new Error('main.run() fehlt');
+      await run();
     } catch (e) {
       alert(`Startfehler: main.js konnte nicht geladen werden.\n${e.message}`);
       console.error(e);
