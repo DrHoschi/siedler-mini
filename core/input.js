@@ -1,158 +1,77 @@
-// core/input.js  v14.2 – Touch/Mouse für Pan, Pinch, Tap‑Build
-import { isoToPixel } from '../world.js?v=14.2';
+// core/input.js
+// V14.2 – saubere Touchsteuerung (Pan nur im Zeiger-Tool), Tap-Box für Abriss
 
-export function attachInput(canvas, camera, state, world, renderer, onBuilt){
-  const st = {
-    dragging:false, lastX:0, lastY:0,
-    t1:null, t2:null, lastPinchDist:0
-  };
-
-  const onDown = (x,y)=>{
-    st.dragging=true; st.lastX=x; st.lastY=y;
-  };
-  const onMove = (x,y)=>{
-    if(!st.dragging) return;
-    if (state.tool==='pointer'){
-      camera.pan(-(x-st.lastX), -(y-st.lastY));
-    }
-    st.lastX=x; st.lastY=y;
-  };
-  const onUp = ()=>{
-    st.dragging=false;
-  };
-
-  // Tap zum Bauen
-  const onTap = (x,y)=>{
-    if(state.tool==='pointer') return;
-    // Bildschirm -> Welt
-    // inverse Kamera-Transform (approx.)
-    const cx = (x - canvas.width/2) / camera.zoom + camera.x;
-    const cy = (y - canvas.height/2) / camera.zoom + camera.y;
-    // inverse world-origin
-    const wx = cx - world.originX;
-    const wy = cy - world.originY;
-
-    // Weltpixel -> IsoTile schätzen
-    // aus isoToPixel-Formel umgestellt:
-    // x = (wy/TILE_H + wx/TILE_W), y = (wy/TILE_H - wx/TILE_W)
-    const TW=128, TH=64;
-    let tx = Math.round( wy/(TH/2)/2 + wx/(TW/2)/2 );
-    let ty = Math.round( wy/(TH/2)/2 - wx/(TW/2)/2 );
-
-    if (!world.inBounds(tx,ty)) return;
-
-    if (state.tool==='road'){
-      if (world.placeRoad(tx,ty)) onBuilt?.(true);
-    } else if (state.tool==='hq'){
-      if (world.placeBuilding('hq_wood', tx,ty)) onBuilt?.(true);
-    } else if (state.tool==='lumber'){
-      if (world.placeBuilding('lumber', tx,ty)) onBuilt?.(true);
-    } else if (state.tool==='depot'){
-      if (world.placeBuilding('depot', tx,ty)) onBuilt?.(true);
-    } else if (state.tool==='erase'){
-      // Einfach: Straße entfernen
-      const k = world.key(tx,ty);
-      if (world.roads.delete(k)) onBuilt?.(true);
-    }
-  };
-
-  // Mouse
-  const mdown = e=>{ e.preventDefault(); onDown(e.clientX*devicePixelRatio, e.clientY*devicePixelRatio); };
-  const mmove = e=>{ if(!st.dragging) return; onMove(e.clientX*devicePixelRatio, e.clientY*devicePixelRatio); };
-  const mup   = e=>{ onUp(); };
-  const mclick= e=>{
-    // kurzer Klick gilt als Tap
-    onTap(e.clientX*devicePixelRatio, e.clientY*devicePixelRatio);
-  };
-
-  // Touch
-  const tstart = e=>{
-    e.preventDefault();
-    if (e.touches.length===1){
-      const t=e.touches[0];
-      onDown(t.clientX*devicePixelRatio, t.clientY*devicePixelRatio);
-    } else if (e.touches.length===2){
-      st.dragging=false;
-      st.t1=e.touches[0]; st.t2=e.touches[1];
-      st.lastPinchDist = dist(st.t1, st.t2);
-    }
-  };
-  const tmove = e=>{
-    e.preventDefault();
-    if (e.touches.length===1 && state.tool==='pointer'){
-      const t=e.touches[0];
-      onMove(t.clientX*devicePixelRatio, t.clientY*devicePixelRatio);
-    } else if (e.touches.length===2){
-      const a=e.touches[0], b=e.touches[1];
-      const d = dist(a,b);
-      const anchorX = ( (a.clientX+b.clientX)/2 )*devicePixelRatio;
-      const anchorY = ( (a.clientY+b.clientY)/2 )*devicePixelRatio;
-      const worldAnchorX = (anchorX - canvas.width/2)/camera.zoom + camera.x;
-      const worldAnchorY = (anchorY - canvas.height/2)/camera.zoom + camera.y;
-      const factor = d / (st.lastPinchDist||d);
-      camera.setZoom(camera.zoom * factor, worldAnchorX, worldAnchorY);
-      st.lastPinchDist = d;
-    }
-  };
-  const tend = e=>{
-    e.preventDefault();
-    if (e.touches.length===0) onUp();
-  };
-  const ttap = e=>{
-    if (e.changedTouches && e.changedTouches[0]){
-      const t=e.changedTouches[0];
-      onTap(t.clientX*devicePixelRatio, t.clientY*devicePixelRatio);
-    }
-  };
-
-  // Wheel (Desktop Test)
-  const wheel = e=>{
-    e.preventDefault();
-    const dir = e.deltaY>0 ? 0.92 : 1.08;
-    const ax = e.clientX*devicePixelRatio, ay = e.clientY*devicePixelRatio;
-    const wx = (ax - canvas.width/2)/camera.zoom + camera.x;
-    const wy = (ay - canvas.height/2)/camera.zoom + camera.y;
-    camera.setZoom(camera.zoom*dir, wx, wy);
-  };
-
-  canvas.addEventListener('mousedown', mdown, {passive:false});
-  window.addEventListener('mousemove', mmove, {passive:false});
-  window.addEventListener('mouseup', mup, {passive:false});
-  canvas.addEventListener('click', mclick, {passive:false});
-  canvas.addEventListener('wheel', wheel, {passive:false});
-
-  canvas.addEventListener('touchstart', tstart, {passive:false});
-  canvas.addEventListener('touchmove',  tmove,  {passive:false});
-  canvas.addEventListener('touchend',   tend,   {passive:false});
-  canvas.addEventListener('touchcancel',tend,   {passive:false});
-  canvas.addEventListener('touchend',   ttap,   {passive:false});
-
-  // Tool-Buttons
-  bindTool('#toolPointer','pointer');
-  bindTool('#toolRoad','road');
-  bindTool('#toolHQ','hq');
-  bindTool('#toolLumber','lumber');
-  bindTool('#toolDepot','depot');
-  bindTool('#toolErase','erase');
-
-  function bindTool(sel, name){
-    const el=document.querySelector(sel);
-    if(!el) return;
-    el.addEventListener('click', ()=>{
-      state.setTool(name);
-      document.querySelectorAll('.tools .btn').forEach(b=>b.classList.remove('active'));
-      el.classList.add('active');
-    });
+export class Input {
+  constructor(getState) {
+    this.getState = getState; // {tool, camera, pickAtScreen, demolishAtWorld}
+    this.touches = new Map();
+    this.lastTapMs = 0;
   }
 
-  return { detach: () => detachInput(canvas) };
-}
+  attach(el) {
+    el.addEventListener('touchstart', this.onStart, {passive:false});
+    el.addEventListener('touchmove',  this.onMove,  {passive:false});
+    el.addEventListener('touchend',   this.onEnd,   {passive:false});
+    el.addEventListener('touchcancel',this.onEnd,   {passive:false});
+  }
 
-export function detachInput(canvas){
-  canvas.replaceWith(canvas.cloneNode(true)); // quick & clean: alle Listener weg
-}
+  onStart = (ev) => {
+    if (!ev.target) return;
+    const now = performance.now();
+    if (now - this.lastTapMs < 280) {
+      // Doppeltipp lassen wir die App (UI) abfangen – hier: nichts
+    }
+    for (const t of ev.changedTouches) this.touches.set(t.identifier, {x:t.clientX, y:t.clientY});
+    this.lastTapMs = now;
+  }
 
-function dist(a,b){
-  const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY;
-  return Math.hypot(dx,dy);
+  onMove = (ev) => {
+    const st = this.getState();
+    if (!st) return;
+    if (ev.touches.length === 1 && st.tool === 'pointer') {
+      const t = ev.touches[0];
+      const prev = this.touches.get(t.identifier);
+      if (prev) {
+        st.camera.pan(t.clientX - prev.x, t.clientY - prev.y);
+        prev.x = t.clientX; prev.y = t.clientY;
+      }
+      ev.preventDefault();
+    } else if (ev.touches.length === 2) {
+      // Pinch‑Zoom
+      const [a,b] = ev.touches;
+      const pa = this.touches.get(a.identifier) ?? {x:a.clientX, y:a.clientY};
+      const pb = this.touches.get(b.identifier) ?? {x:b.clientX, y:b.clientY};
+      const d0 = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+      const d1 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      if (d0 > 0 && d1 > 0) {
+        const f = st.camera.zoom * (d1 / d0);
+        const cx = (a.clientX + b.clientX) * 0.5;
+        const cy = (a.clientY + b.clientY) * 0.5;
+        st.camera.zoomTo(f, cx, cy);
+      }
+      this.touches.set(a.identifier, {x:a.clientX, y:a.clientY});
+      this.touches.set(b.identifier, {x:b.clientX, y:b.clientY});
+      ev.preventDefault();
+    }
+  }
+
+  onEnd = (ev) => {
+    const st = this.getState();
+    if (!st) return;
+    // kurzer Tap → bauen/abreißen
+    if (ev.changedTouches.length === 1) {
+      const t = ev.changedTouches[0];
+      const screen = {x:t.clientX, y:t.clientY};
+      const world = st.pickAtScreen(screen.x, screen.y);
+      if (!world) return;
+
+      if (st.tool === 'demolish') {
+        // großzügige Hitbox (ein Tile‑Quadrat um den Tap)
+        st.demolishAtWorld(world.wx, world.wy, world.tileX, world.tileY);
+      } else {
+        st.buildAtWorld(world.wx, world.wy, world.tileX, world.tileY);
+      }
+    }
+    for (const t of ev.changedTouches) this.touches.delete(t.identifier);
+  }
 }
