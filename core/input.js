@@ -1,40 +1,86 @@
-// Mobile: 1 Finger Pan · 2 Finger Pinch‑Zoom · kurzer Tap = bauen
-export function setupInput(canvas, cam, {onTap,onChange}){
-  let lastTouches=[], lastDist=0;
-  let tapPos=null, tapTimer=null;
+import { addZoom, pan, screenToWorld } from './camera.js';
 
-  canvas.addEventListener('touchstart', e=>{
-    lastTouches=[...e.touches].map(t=>({x:t.clientX,y:t.clientY}));
-    if(e.touches.length===1) startTapTimer(e.touches[0]);
-  }, {passive:true});
+let tool = 'pointer';
+let canvasRef = null;
+let buildTapCb = ()=>{};
 
-  canvas.addEventListener('touchmove', e=>{
-    const t=[...e.touches].map(t=>({x:t.clientX,y:t.clientY}));
-    if(t.length===1 && lastTouches.length===1){
-      const dx=t[0].x-lastTouches[0].x, dy=t[0].y-lastTouches[0].y;
-      cam.x -= dx / cam.z; cam.y -= dy / cam.z; onChange&&onChange();
-    }else if(t.length===2){
-      const d=Math.hypot(t[0].x-t[1].x,t[0].y-t[1].y); if(!lastDist) lastDist=d;
-      const prevZ=cam.z; cam.z=Math.max(.6,Math.min(2.6,cam.z*(d/lastDist))); lastDist=d;
-      // zoom zur Mitte der Finger
-      const rect=canvas.getBoundingClientRect();
-      const mx=(t[0].x+t[1].x)/2-rect.left, my=(t[0].y+t[1].y)/2-rect.top;
-      const wx = cam.x + mx/prevZ, wy = cam.y + my/prevZ;
-      cam.x = wx - mx/cam.z; cam.y = wy - my/cam.z; onChange&&onChange();
+export function initInput(canvas, onTapBuild){
+  canvasRef = canvas;
+  buildTapCb = onTapBuild;
+
+  // Touch
+  let last1=null, lastDist=null, mode='idle';
+  canvas.addEventListener('touchstart', (e)=>{
+    if(e.touches.length===1){
+      last1 = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+      mode='one';
+    }else if(e.touches.length===2){
+      lastDist = dist(e.touches[0], e.touches[1]);
+      mode='two';
     }
-    lastTouches=t;
-  }, {passive:true});
+  },{passive:false});
 
-  canvas.addEventListener('touchend', e=>{
-    if(e.touches.length<2) lastDist=0;
-    lastTouches=[...e.touches].map(t=>({x:t.clientX,y:t.clientY}));
-    // Tap?
-    if(tapPos){
-      const dx=e.changedTouches[0].clientX-tapPos.x, dy=e.changedTouches[0].clientY-tapPos.y;
-      if(Math.hypot(dx,dy)<12){ const rect=canvas.getBoundingClientRect(); onTap&&onTap(e.changedTouches[0].clientX-rect.left, e.changedTouches[0].clientY-rect.top); }
-      tapPos=null;
+  canvas.addEventListener('touchmove',(e)=>{
+    if(mode==='one' && tool==='pointer'){
+      const p = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+      const dx = (p.x-last1.x) / 64; // Pan-Sensitivität
+      const dy = (p.y-last1.y) / 64;
+      pan(-dx, -dy);
+      last1 = p;
+    }else if(mode==='two'){
+      const d = dist(e.touches[0],e.touches[1]);
+      if(lastDist){
+        const factor = Math.pow(d/lastDist, 1.0);
+        addZoom(factor);
+      }
+      lastDist = d;
     }
+    e.preventDefault();
+  },{passive:false});
+
+  canvas.addEventListener('touchend',(e)=>{
+    if(mode==='one' && e.touches.length===0){
+      // kurzer Tap = bauen
+      if (tool!=='pointer' && last1){
+        buildTapCb(last1.x, last1.y);
+      }
+      mode='idle'; last1=null; lastDist=null;
+    }else if(mode==='two' && e.touches.length<2){
+      mode='idle'; last1=null; lastDist=null;
+    }
+  });
+
+  // Maus
+  let isDrag=false, mLast=null;
+  canvas.addEventListener('mousedown', (e)=>{
+    if (tool==='pointer'){ isDrag=true; mLast={x:e.clientX,y:e.clientY}; }
+    else { buildTapCb(e.clientX,e.clientY); }
+  });
+  window.addEventListener('mousemove',(e)=>{
+    if(isDrag && mLast){
+      const dx = (e.clientX-mLast.x)/64;
+      const dy = (e.clientY-mLast.y)/64;
+      pan(-dx,-dy); mLast={x:e.clientX,y:e.clientY};
+    }
+  });
+  window.addEventListener('mouseup', ()=>{ isDrag=false; mLast=null; });
+
+  canvas.addEventListener('wheel',(e)=>{
+    const factor = e.deltaY<0 ? 1.1 : 0.9;
+    addZoom(factor);
   }, {passive:true});
 
-  function startTapTimer(t){ clearTimeout(tapTimer); tapPos={x:t.clientX,y:t.clientY}; tapTimer=setTimeout(()=>tapPos=null,220); }
+  // Toolbar
+  setToolButtonHandlers();
 }
+
+function dist(a,b){ const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY; return Math.hypot(dx,dy); }
+
+/* Tool control */
+export function setToolButtonHandlers(onChange){
+  document.querySelectorAll('#tools .tool').forEach(btn=>{
+    btn.onclick = ()=>{ setTool(btn.dataset.tool); onChange && onChange(); };
+  });
+}
+export function setTool(t){ tool=t; }
+export function getTool(){ return tool; }
