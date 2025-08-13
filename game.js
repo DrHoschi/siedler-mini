@@ -1,198 +1,89 @@
-// game.js — V14.3
-// Exportiert startGame(opts), sodass main.js -> game.startGame(opts) aufrufen kann.
+// game.js (V14.3)
+// Minimal-Start, damit main.run() sicher funktioniert.
+// Später kannst du hier deine komplette Spiellogik (World/Renderer/Carriers etc.) wieder einhängen.
 
-import Camera from './core/camera.js?v=14.3';
-import Input  from './core/input.js?v=14.3';
-// (optional – wird später fürs Träger‑Feature genutzt)
-// import Carriers from './core/carriers.js?v=14.3';
-import { createRenderer } from './render.js?v=14.3';
+import Renderer from './render.js?v=14.3';
 
+function setCanvasSize(canvas, DPR = 1) {
+  const w = Math.floor(canvas.clientWidth * DPR);
+  const h = Math.floor(canvas.clientHeight * DPR);
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+}
+
+function drawGrid(ctx, step = 64) {
+  const { width: W, height: H } = ctx.canvas;
+  ctx.save();
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0f1823';
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = '#2b3b53';
+  ctx.lineWidth = 1;
+
+  // dezentes „Diamant“-Raster (isometrisches Gefühl)
+  for (let y = -step; y < H + step; y += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  for (let x = -step; x < W + step; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Startet das Spiel. Wird von main.run({ canvas, DPR, onHud }) aufgerufen.
+ */
 export async function startGame(opts = {}) {
-  // opts kommt aus main.run(): { canvas, DPR, onHUD, onHudSet, ... }
-  const canvas = opts.canvas || document.getElementById('game');
-  if (!canvas) throw new Error('Canvas #game fehlt');
-  const DPR = opts.DPR || (window.devicePixelRatio || 1);
+  const { canvas, DPR = (window.devicePixelRatio || 1), onHud } = opts;
+  if (!canvas) throw new Error('startGame(opts): canvas fehlt');
+
+  // Canvas vorbereiten
+  setCanvasSize(canvas, DPR);
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('ctx fehlt');
+  if (!ctx) throw new Error('Kein 2D‑Context verfügbar');
 
-  // Start-Overlay ausblenden
-  const overlay = document.getElementById('startOverlay');
-  if (overlay) overlay.style.display = 'none';
+  // (optional) HUD initialisieren
+  if (typeof onHud === 'function') {
+    onHud('Tool', 'Zeiger');
+    onHud('Zoom', '1.00x');
+  }
 
-  // HUD einblenden
-  const uiBar = document.getElementById('uiBar');
-  if (uiBar) uiBar.style.opacity = '0.95';
+  // Renderer-Objekt anlegen (falls dein core/render.js ein default "createRenderer" liefert)
+  // Dieser Aufruf ist „no-op“ sicher, falls createRenderer intern noch leer ist.
+  let renderer = null;
+  try {
+    renderer = Renderer && typeof Renderer === 'function' ? Renderer(canvas) : null;
+  } catch (e) {
+    // Falls dein core/render.js noch keinen Default zurückgibt, zeichnen wir einfach das Grid.
+    console.warn('Renderer nicht initialisierbar – fallback auf Grid', e);
+  }
 
-  // Welt (ganz simpel)
-  const world = {
-    tileSize: 48,       // logische Kachelgröße (wird vom Renderer skaliert)
-    cols: 26,
-    rows: 18,
-    buildings: [],      // {type:'hq'|'lumber'|'depot', x,y}
-    roads: new Set(),   // key "x,y"
-    zoom: 1,
+  // Erstes Bild
+  if (renderer && typeof renderer.draw === 'function') {
+    renderer.draw();
+  } else {
+    drawGrid(ctx, 64);
+  }
+
+  // Resize-Handling
+  const onResize = () => {
+    setCanvasSize(canvas, DPR);
+    if (renderer && typeof renderer.draw === 'function') renderer.draw();
+    else drawGrid(ctx, 64);
   };
+  window.addEventListener('resize', onResize);
 
-  // Kamera
-  const camera = new Camera(canvas.width, canvas.height, world.cols * world.tileSize, world.rows * world.tileSize);
-  camera.zoom = 1;
-  camera.centerOn((world.cols * world.tileSize) / 2, (world.rows * world.tileSize) / 2);
-
-  // Renderer
-  const renderer = createRenderer(canvas, ctx, world, camera, DPR);
-
-  // Tool-Status
-  const state = {
-    tool: 'pointer', // 'pointer' | 'road' | 'hq' | 'lumber' | 'depot' | 'demolish'
-  };
-
-  // HUD-Text setzen (nur wenn vorhanden)
-  const setHUD = (key, val) => {
-    const el = document.getElementById(key);
-    if (el) el.textContent = String(val);
-  };
-  // Erstwerte
-  setHUD('hudWood', 0);
-  setHUD('hudStone', 0);
-  setHUD('hudFood', 0);
-  setHUD('hudGold', 0);
-  setHUD('hudCar',  0);
-  document.getElementById('hudTool')?.replaceChildren(document.createTextNode('Zeiger'));
-  document.getElementById('hudZoom')?.replaceChildren(document.createTextNode('1.00x'));
-
-  // Buttons (links)
-  const btns = {
-    pointer: document.getElementById('toolPointer'),
-    road:    document.getElementById('toolRoad'),
-    hq:      document.getElementById('toolHQ'),
-    lumber:  document.getElementById('toolLumber'),
-    depot:   document.getElementById('toolDepot'),
-    demolish:document.getElementById('toolErase'),
-  };
-  function activateTool(t) {
-    state.tool = t;
-    Object.entries(btns).forEach(([k, b]) => b?.classList.toggle('active', k === t));
-    const name = t === 'pointer' ? 'Zeiger' :
-                 t === 'road'    ? 'Straße' :
-                 t === 'hq'      ? 'HQ' :
-                 t === 'lumber'  ? 'Holzfäller' :
-                 t === 'depot'   ? 'Depot' :
-                 t === 'demolish'? 'Abriss' : t;
-    document.getElementById('hudTool')?.replaceChildren(document.createTextNode(name));
-  }
-  btns.pointer?.addEventListener('click', () => activateTool('pointer'));
-  btns.road?.addEventListener('click',    () => activateTool('road'));
-  btns.hq?.addEventListener('click',      () => activateTool('hq'));
-  btns.lumber?.addEventListener('click',  () => activateTool('lumber'));
-  btns.depot?.addEventListener('click',   () => activateTool('depot'));
-  btns.demolish?.addEventListener('click',() => activateTool('demolish'));
-  activateTool('pointer');
-
-  // „Zentrieren“-Button (oben rechts)
-  document.getElementById('centerBtn')?.addEventListener('click', () => {
-    camera.centerOn((world.cols * world.tileSize) / 2, (world.rows * world.tileSize) / 2);
-  });
-
-  // (Optional) Debug‑Anzeige oben rechts
-  document.getElementById('dbgBtn')?.addEventListener('click', () => {
-    renderer.toggleDebug();
-  });
-
-  // Fullscreen oben rechts (zusätzlich zum Start‑Overlay)
-  document.getElementById('fsBtnTop')?.addEventListener('click', () => {
-    if (!document.fullscreenElement && canvas.requestFullscreen) canvas.requestFullscreen();
-    else if (document.exitFullscreen) document.exitFullscreen();
-  });
-
-  // Input (Touch/Pointer)
-  const input = new Input(() => ({ tool: state.tool, camera, pickAtScreen, demolishAtWorld, buildAtWorld }));
-  input.attach(canvas);
-
-  function worldToTile(wx, wy) {
-    const ts = world.tileSize;
-    return { tx: Math.floor(wx / ts), ty: Math.floor(wy / ts) };
-  }
-  function inBounds(tx, ty) {
-    return tx >= 0 && ty >= 0 && tx < world.cols && ty < world.rows;
-  }
-  function pickAtScreen(screenx, screeny) {
-    const wx = camera.x + screenx / camera.zoom;
-    const wy = camera.y + screeny / camera.zoom;
-    const { tx, ty } = worldToTile(wx, wy);
-    if (!inBounds(tx, ty)) return null;
-    return { wx, wy, tx, ty };
-  }
-
-  function key(x, y) { return `${x},${y}`; }
-
-  function buildAtWorld(wx, wy, tx, ty) {
-    // Baut je nach Tool
-    if (!inBounds(tx, ty)) return;
-
-    if (state.tool === 'road') {
-      world.roads.add(key(tx, ty));
-      return;
-    }
-    if (state.tool === 'hq') {
-      world.buildings.push({ type: 'hq', x: tx, y: ty });
-      return;
-    }
-    if (state.tool === 'lumber') {
-      world.buildings.push({ type: 'lumber', x: tx, y: ty });
-      return;
-    }
-    if (state.tool === 'depot') {
-      world.buildings.push({ type: 'depot', x: tx, y: ty });
-      return;
-    }
-  }
-
-  function demolishAtWorld(wx, wy, tx, ty) {
-    // Großzügig: Straße oder Gebäude auf dieser Kachel entfernen
-    if (!inBounds(tx, ty)) return;
-    world.roads.delete(key(tx, ty));
-    const idx = world.buildings.findIndex(b => b.x === tx && b.y === ty);
-    if (idx >= 0) world.buildings.splice(idx, 1);
-  }
-
-  // Fenster-/Canvas‑Resize
-  function resize() {
-    const w = Math.floor(canvas.clientWidth  * DPR);
-    const h = Math.floor(canvas.clientHeight * DPR);
-    if (w && h) {
-      canvas.width  = w;
-      canvas.height = h;
-      camera.resize(w, h);
-      document.getElementById('hudZoom')?.replaceChildren(
-        document.createTextNode(`${camera.zoom.toFixed(2)}x`)
-      );
-    }
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Ein HQ mittig voraussetzen (wie im Text)
-  const cx = Math.floor(world.cols / 2);
-  const cy = Math.floor(world.rows / 2);
-  world.buildings.push({ type: 'hq', x: cx, y: cy });
-
-  // Render‑Loop
-  let last = performance.now();
-  function frame(now) {
-    const dt = (now - last) / 1000;
-    last = now;
-
-    renderer.draw(dt);
-
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-
-  // Öffentlich (falls später gebraucht)
+  // einfache Rückgabe, damit du später Stop/Dispose ergänzen kannst
   return {
-    world,
-    camera,
-    renderer,
-    setTool: activateTool,
+    dispose() {
+      window.removeEventListener('resize', onResize);
+    }
   };
 }
