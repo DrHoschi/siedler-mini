@@ -1,86 +1,95 @@
-// render.js  v14.2 – einfacher isometrischer Renderer
-import { IM } from './core/assets.js?v=14.2';
-import { TILE_SIZE } from './world.js?v=14.2';
+// render.js
+// V14.2 – kleinere Grundkacheln + skalierte Gebäude + klares ClearRect
 
-export function createRenderer(){
-  const R = {
-    w: 0, h: 0, dpr: 1,
-    debug: false,
-    setViewport(w,h,dpr){ this.w=w; this.h=h; this.dpr=dpr||1; },
-  };
+import { IM } from './core/assets.js';
 
-  R.render = (ctx, world, state, camera, carriers) => {
-    // Clear
-    ctx.fillStyle = '#0f1823';
-    ctx.fillRect(0,0,R.w,R.h);
+export const TILE_W = 64;   // Pixelbreite Isokachel
+export const TILE_H = 32;   // Pixelhöhe Isokachel
+export const GRID_W = 64;   // Anzahl Tiles X
+export const GRID_H = 64;   // Anzahl Tiles Y
 
-    ctx.save();
-    // Kamera-Transform
-    ctx.translate(R.w/2, R.h/2);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.translate(-camera.x, -camera.y);
+// Gebäudeskalen (damit nichts riesig wird)
+const SCALE = {
+  hq_stone: 0.66,
+  hq_wood : 0.66,
+  lumberjack: 0.70,
+  depot: 0.66
+};
 
-    // Karte leicht versetzen: world.originX/Y wird von hier gesetzt
-    if(!world._originSet){
-      world.originX = - (world.size * (TILE_SIZE.W/2)) / 2;
-      world.originY = - (TILE_SIZE.H/2);
-      world._originSet = true;
-    }
-    ctx.translate(world.originX, world.originY);
+export function worldPixelSize() {
+  // isometrische Breite/Höhe der gesamten Karte (ungefährer Rahmen)
+  const w = (GRID_W + GRID_H) * (TILE_W / 2);
+  const h = (GRID_W + GRID_H) * (TILE_H / 2);
+  return {w, h};
+}
 
-    // Tiles zeichnen (einfach komplett; Mobile‑größe klein)
-    for(let y=0;y<world.size;y++){
-      for(let x=0;x<world.size;x++){
-        const px = (x - y) * (TILE_SIZE.W/2);
-        const py = (x + y) * (TILE_SIZE.H/2);
-        const img = IM.grass || null;
-        if (img) ctx.drawImage(img, px - TILE_SIZE.W/2, py - TILE_SIZE.H/2, TILE_SIZE.W, TILE_SIZE.H);
-        else { ctx.fillStyle = '#234a2d'; ctx.fillRect(px-32,py-16,64,32); }
-        // Straße oben drauf
-        if(world.hasRoad(x,y)){
-          const rimg = IM.road || IM.road_straight || null;
-          if (rimg) ctx.drawImage(rimg, px - TILE_SIZE.W/2, py - TILE_SIZE.H/2, TILE_SIZE.W, TILE_SIZE.H);
-          else { ctx.fillStyle='#c9b08a'; ctx.fillRect(px-20,py-8,40,16); }
-        }
-      }
-    }
+export function clear(ctx, w, h) {
+  ctx.clearRect(0, 0, w, h);
+}
 
-    // Gebäude
-    for(const b of world.buildings){
-      const px = b.pixelX, py = b.pixelY;
-      let img = null;
-      if (b.type==='hq' || b.type==='hq_stone') img = IM.hq_stone || IM.hq || null;
-      else if (b.type==='hq_wood') img = IM.hq_wood || null;
-      else if (b.type==='lumber' || b.type==='lumberjack') img = IM.lumberjack || null;
-      else if (b.type==='depot') img = IM.depot || null;
+export function drawTiles(ctx, camera, tiles) {
+  // tiles: function(y,x) → key ('grass' etc.) – oder vorgerendert
+  const {w:worldW, h:worldH} = worldPixelSize();
 
+  // grobe Sichtfenster‑Schleife (einfach & ausreichend schnell für Mobile)
+  const pad = 2;
+  for (let gy = -pad; gy < GRID_H + pad; gy++) {
+    for (let gx = -pad; gx < GRID_W + pad; gx++) {
+      const center = isoToWorld(gx, gy);
+      const s = camera.toScreen(center.x, center.y);
+      // schnell raus, wenn weit außerhalb
+      if (s.x < -TILE_W || s.y < -TILE_H || s.x > camera.viewW + TILE_W || s.y > camera.viewH + TILE_H) continue;
+
+      const k = tiles(gx, gy) || 'grass';
+      const img = IM[k];
       if (img) {
-        // Gebäude sind größer als Tile – mittig aufs Tile setzen
-        const w = img.width, h = img.height;
-        ctx.drawImage(img, px - w/2, py - h + (TILE_SIZE.H/2));
+        ctx.drawImage(img, s.x - TILE_W/2, s.y - TILE_H/2, TILE_W, TILE_H);
       } else {
-        ctx.fillStyle='#6aa36a';
-        ctx.fillRect(px-24, py-24, 48, 48);
+        // Fallback
+        ctx.fillStyle = '#2a4';
+        ctx.beginPath();
+        diamond(ctx, s.x, s.y, TILE_W, TILE_H);
+        ctx.fill();
       }
     }
+  }
+}
 
-    // Träger (optional)
-    carriers?.render?.(ctx);
+export function drawBuilding(ctx, camera, kind, wx, wy) {
+  const img = IM[kind];
+  const s = SCALE[kind] ?? 0.7;
 
-    // Debug‑Grid
-    if (R.debug){
-      ctx.strokeStyle='rgba(255,255,255,.08)';
-      for(let y=0;y<world.size;y++){
-        for(let x=0;x<world.size;x++){
-          const px = (x - y) * (TILE_SIZE.W/2);
-          const py = (x + y) * (TILE_SIZE.H/2);
-          ctx.strokeRect(px - TILE_SIZE.W/2, py - TILE_SIZE.H/2, TILE_SIZE.W, TILE_SIZE.H);
-        }
-      }
-    }
+  const sc = camera.toScreen(wx, wy);
+  if (!img) {
+    ctx.fillStyle = '#933';
+    ctx.fillRect(sc.x - 24, sc.y - 24, 48, 48);
+    return;
+  }
+  const w = img.naturalWidth * s;
+  const h = img.naturalHeight * s;
+  ctx.drawImage(img, sc.x - w * 0.5, sc.y - h + 18, w, h);
+}
 
-    ctx.restore();
+// ----- Helfer
+
+export function isoToWorld(gx, gy) {
+  // Diamond‑Iso: (gx,gy) Mitte der Kachel
+  return {
+    x: (gx - gy) * (TILE_W / 2),
+    y: (gx + gy) * (TILE_H / 2)
   };
+}
 
-  return R;
+export function worldToIso(wx, wy) {
+  const gx = (wx / (TILE_W/2) + wy / (TILE_H/2)) * 0.5;
+  const gy = (wy / (TILE_H/2) - wx / (TILE_W/2)) * 0.5;
+  return {gx, gy};
+}
+
+function diamond(ctx, cx, cy, w, h) {
+  ctx.moveTo(cx, cy - h/2);
+  ctx.lineTo(cx + w/2, cy);
+  ctx.lineTo(cx, cy + h/2);
+  ctx.lineTo(cx - w/2, cy);
+  ctx.closePath();
 }
