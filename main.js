@@ -1,27 +1,41 @@
-// main.js – Einstieg ins eigentliche Spiel (lazy import)
+// main.js – lädt game.js und ruft game.startGame({ ... }) auf
+// Achtung: game.js muss "export async function startGame(opts) { ... }" bereitstellen.
 
-export async function run(canvas, opts = {}) {
-  // opts: { DPR, onHud }
-  if (!canvas) throw new Error('Canvas fehlt');
+export async function run() {
+  const $ = sel => document.querySelector(sel);
+  const canvas = $('#game');
+  if (!canvas) throw new Error('canvas fehlt');
 
-  // Import mit Cache‑Buster passend zur Version
-  const gameMod = await import('./game.js?v=14.3').catch(err => {
-    console.error('game.js Importfehler', err);
-    throw err;
-  });
+  const DPR = window.devicePixelRatio || 1;
 
-  if (!gameMod || typeof gameMod.startGame !== 'function') {
-    throw new Error('game.startGame(opts) fehlt oder ist keine Funktion');
+  // HUD‑Updater
+  function onHUD(api){
+    $('#hudWood').textContent  = api.wood?.()  ?? '0';
+    $('#hudStone').textContent = api.stone?.() ?? '0';
+    $('#hudFood').textContent  = api.food?.()  ?? '0';
+    $('#hudGold').textContent  = api.gold?.()  ?? '0';
+    $('#hudCar').textContent   = api.car?.()   ?? '0';
+    $('#hudTool').textContent  = api.tool?.()  ?? 'Zeiger';
+    $('#hudZoom').textContent  = api.zoom?.()  ?? '1.00x';
   }
 
-  // Optionen weiterreichen – game.js kann wiederum render.js & core/* importieren
-  await gameMod.startGame({
-    canvas,
-    DPR: opts.DPR || Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
-    onHud: opts.onHud || (()=>{}),
-    $: (s)=>document.querySelector(s)
-  });
+  // game.js laden
+  const game = await import('./game.js?v=14.3-safe2');
+  const startGame = game.startGame || game.default?.startGame;
+  if (typeof startGame !== 'function') {
+    throw new Error('game.startGame(opts) fehlt oder ist keine Funktion.');
+  }
+
+  // Start
+  await startGame({ canvas, DPR, onHUD });
+
+  // optional: damit „Zentrieren“ (HUD‑Button) sofort nutzbar ist,
+  // kann game.js window.main.centerMap setzen – falls nicht, hier No‑op:
+  if (!window.main) window.main = {};
+  if (typeof window.main.centerMap !== 'function') {
+    window.main.centerMap = () => {};
+  }
 }
 
-// Optional: von game.js überschrieben, hier nur Fallback.
-export function centerMap(){ /* noop */ }
+// Fallback‑Export, falls boot.js window.main.run() erwartet
+export default { run };
