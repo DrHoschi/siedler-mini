@@ -1,65 +1,101 @@
-// V14.1 – Touch/Maus Input (UI-Klicks nicht abfangen)
+// V14.1 – Touch/Maus‑Input
+// 1 Finger = Pan (nur wenn isPointerTool() true) · 2 Finger = Pinch‑Zoom · kurzer Tap = onTap
 export function makeInput(canvas, onTap, onPan, onPinch, isPointerTool){
-  let t1=null, t2=null, lastDist=0;
-  const uiFilter = (ev)=> !!(ev.target.closest('.ui')); // UI‑Element?
-  const opts = {passive:false};
+  // iOS/Safari: passive:false, damit preventDefault() erlaubt ist
+  const opts = { passive: false };
 
-  function onPointerDown(ev){
-    if (uiFilter(ev)) return;         // UI klickbar lassen
-    ev.preventDefault();
-    const pt = getPoint(ev);
-    if (!t1) t1={id:ev.pointerId, x:pt.x, y:pt.y};
-    else if (!t2){ t2={id:ev.pointerId, x:pt.x, y:pt.y}; lastDist=dist(); }
-  }
-  function onPointerMove(ev){
-    if (uiFilter(ev)) return;
-    ev.preventDefault();
-    const pt = getPoint(ev);
-    if (t1 && t1.id===ev.pointerId) t1.x=pt.x, t1.y=pt.y;
-    if (t2 && t2.id===ev.pointerId) t2.x=pt.x, t2.y=pt.y;
+  let p1 = null; // {id,x,y,prevX,prevY,startX,startY}
+  let p2 = null;
+  let lastDist = 0;
 
-    if (t1 && t2){ // Pinch
-      const d=dist();
-      if (lastDist>0) onPinch(d/lastDist,(t1.x+t2.x)/2,(t1.y+t2.y)/2);
-      lastDist=d;
-    } else if (t1 && isPointerTool()){ // Pan nur im Zeiger‑Tool
-      onPan(pt.dx, pt.dy);
+  // UI‑Elemente dürfen Events bekommen – Canvas soll sie nicht „schlucken“
+  const isUI = (ev) => !!ev.target.closest('.ui');
+
+  function pointerDown(ev){
+    if (isUI(ev)) return;
+    ev.preventDefault();
+
+    const pt = mkPoint(ev);
+    if (!p1){
+      p1 = pt;
+    } else if (!p2){
+      p2 = pt;
+      lastDist = distance(p1, p2);
     }
   }
-  function onPointerUp(ev){
-    if (uiFilter(ev)) return;
+
+  function pointerMove(ev){
+    if (isUI(ev)) return;
     ev.preventDefault();
-    const pt=getPoint(ev);
-    if (t1 && ev.pointerId===t1.id){
-      // Tap?
-      if (!t2 && Math.hypot(pt.totalDx,pt.totalDy)<10) onTap(pt.x,pt.y);
-      t1=null;
-    } else if (t2 && ev.pointerId===t2.id){ t2=null; lastDist=0; }
+
+    if (p1 && ev.pointerId === p1.id) updatePoint(p1, ev);
+    if (p2 && ev.pointerId === p2.id) updatePoint(p2, ev);
+
+    // Pinch‑Zoom
+    if (p1 && p2){
+      const d = distance(p1, p2);
+      if (lastDist > 0 && isFinite(d) && d > 0){
+        onPinch(d / lastDist, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+      }
+      lastDist = d;
+      return;
+    }
+
+    // Pan (nur Zeiger‑Tool)
+    if (p1 && !p2 && isPointerTool()){
+      const dx = p1.x - p1.prevX;
+      const dy = p1.y - p1.prevY;
+      if (dx || dy) onPan(-dx, -dy);   // Karte folgt dem Finger (invertiert)
+    }
   }
 
-  // Mauswheel Zoom
-  function onWheel(ev){
-    if (uiFilter(ev)) return;
+  function pointerUp(ev){
+    if (isUI(ev)) return;
     ev.preventDefault();
-    const f = ev.deltaY>0 ? 0.9 : 1.1;
-    onPinch(f, ev.clientX, ev.clientY);
+
+    if (p1 && ev.pointerId === p1.id){
+      // kurzer Tap?
+      const moved = Math.hypot(p1.x - p1.startX, p1.y - p1.startY);
+      if (!p2 && moved < 10){
+        onTap(p1.x, p1.y);
+      }
+      p1 = p2;      // „nachrücken“
+      p2 = null;
+      lastDist = 0;
+      return;
+    }
+    if (p2 && ev.pointerId === p2.id){
+      p2 = null;
+      lastDist = 0;
+    }
   }
 
-  // helpers
-  let startX=0,startY=0,totalDx=0,totalDy=0,lastX=0,lastY=0;
-  function getPoint(ev){
-    const x=ev.clientX, y=ev.clientY;
-    const dx = lastX? (x-lastX) : 0, dy = lastY? (y-lastY) : 0;
-    lastX=x; lastY=y;
-    if (!t1){ startX=x; startY=y; totalDx=0; totalDy=0; }
-    else { totalDx += dx; totalDy += dy; }
-    return {x,y,dx,dy,totalDx,totalDy};
+  function wheel(ev){
+    if (isUI(ev)) return;
+    ev.preventDefault();
+    const factor = ev.deltaY > 0 ? 0.9 : 1.1;
+    onPinch(factor, ev.clientX, ev.clientY);
   }
-  function dist(){ return Math.hypot(t1.x-t2.x, t1.y-t2.y); }
 
-  canvas.addEventListener('pointerdown',onPointerDown,opts);
-  window.addEventListener('pointermove',onPointerMove,opts);
-  window.addEventListener('pointerup',onPointerUp,opts);
-  window.addEventListener('pointercancel',onPointerUp,opts);
-  canvas.addEventListener('wheel',onWheel,opts);
+  // Helpers
+  function mkPoint(ev){
+    return {
+      id: ev.pointerId,
+      x: ev.clientX, y: ev.clientY,
+      prevX: ev.clientX, prevY: ev.clientY,
+      startX: ev.clientX, startY: ev.clientY
+    };
+  }
+  function updatePoint(p, ev){
+    p.prevX = p.x; p.prevY = p.y;
+    p.x = ev.clientX; p.y = ev.clientY;
+  }
+  function distance(a,b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  // Listener
+  canvas.addEventListener('pointerdown', pointerDown, opts);
+  window.addEventListener('pointermove', pointerMove, opts);
+  window.addEventListener('pointerup',    pointerUp,   opts);
+  window.addEventListener('pointercancel',pointerUp,   opts);
+  canvas.addEventListener('wheel', wheel, opts);
 }
