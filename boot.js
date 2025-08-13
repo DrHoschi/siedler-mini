@@ -1,92 +1,67 @@
-// boot.js  (V13.8.2)
-const V = 'V13.8.2';
-const qs = sel => document.querySelector(sel);
-const startDlg = qs('#startDlg');
-const canvas = qs('#game');
+// Start/Werkbank + sicheres Laden von main.js
+export function boot(){
+  const qs = (s)=>document.querySelector(s);
 
-function showError(msg, err) {
-  console.error('[BOOT]', msg, err);
-  alert(msg + (err?.message ? `\n\n${err.message}` : ''));
-}
+  // Doppeltipp auf Overlay → Vollbild
+  qs('#startOverlay').addEventListener('dblclick', ()=>toggleFullscreen());
+  qs('#startFsBtn').addEventListener('click', ()=>toggleFullscreen());
+  qs('#resetBtn').addEventListener('click', resetAll);
 
-// Dialog öffnen und Double‑Tap für Vollbild
-function openStart() {
-  if (!startDlg.open) startDlg.showModal();
-  // Doppeltipp/Doppelklick -> Vollbild versuchen
-  let last = 0;
-  startDlg.addEventListener('pointerdown', ev => {
-    const t = performance.now();
-    if (t - last < 350) requestFullscreen();
-    last = t;
-  }, { passive:true });
-}
+  // Start klick → Overlay aus, main.js laden
+  qs('#startBtn').addEventListener('click', startGame);
 
-async function requestFullscreen() {
-  try {
-    const el = document.documentElement;
-    if (document.fullscreenElement) { await document.exitFullscreen(); }
-    else if (el.requestFullscreen) { await el.requestFullscreen(); }
-  } catch (e) {
-    console.warn('Fullscreen abgelehnt:', e);
-  }
-}
+  // HUD‑Knöpfe (werden von main.js übernommen, aber hier kein Blocker)
+  qs('#fsBtn').addEventListener('click', toggleFullscreen);
 
-function wireHUD(main) {
-  const setTool = id => () => main.setTool(id);
-  qs('#toolPointer').onclick  = setTool('pointer');
-  qs('#toolRoad').onclick     = setTool('road');
-  qs('#toolHQ').onclick       = setTool('hq');
-  qs('#toolLumber').onclick   = setTool('lumber');
-  qs('#toolDepot').onclick    = setTool('depot');
-  qs('#toolBulldoze').onclick = setTool('bulldoze');
+  // Wenn du direkt starten willst (z. B. nach Reset):  // startGame();
 
-  qs('#fsBtn').onclick = requestFullscreen;
-  qs('#centerBtn').onclick = () => main.centerOnMap();
-  qs('#debugBtn').onclick = () => main.toggleDebug?.();
-
-  // Debug‑Chips aktualisieren
-  const toolChip = qs('#toolChip');
-  const zoomChip = qs('#zoomChip');
-  main.onToolChanged = (name)=> toolChip.textContent = `Tool: ${name}`;
-  main.onZoomChanged = (z)=> zoomChip.textContent = `Zoom ${z.toFixed(2)}×`;
-}
-
-async function startGame() {
-  // main.js laden (als ES‑Modul)
-  let main;
-  try {
-    main = await import(`./main.js?v=${encodeURIComponent(V)}`);
-  } catch (e) {
-    showError('Fehler: main.js konnte nicht geladen werden. Prüfe Dateinamen/Pfade.', e);
-    return;
-  }
-
-  try {
-    // Minimal‑API prüfen
-    if (!main || typeof main.init !== 'function' || typeof main.run !== 'function') {
-      showError('main.js: erwartete Funktionen fehlen (init/run).');
-      return;
+  async function startGame(){
+    hideOverlay();
+    try{
+      const mod = await import('./main.js?v=14.1');   // Cache‑Bust
+      if (mod && typeof mod.run === 'function') {
+        await mod.run({
+          onZoom:(z)=>{ const l=document.getElementById('zoomLbl'); if(l) l.textContent=`Zoom ${z.toFixed(2)}×`; },
+          onTool:(name)=>{ const lab=document.getElementById('toolLabel'); if(lab) lab.textContent=name; }
+        });
+      } else {
+        alert('Fehler: main.js geladen, aber run() fehlt.');
+      }
+    } catch(err){
+      console.error(err);
+      alert('Startfehler: main.js konnte nicht geladen werden.\n' + (err?.message||err));
+      showOverlay();
     }
-
-    // Canvas & HUD an main übergeben
-    await main.init({ canvas, version: V });
-    wireHUD(main);
-    startDlg.close();
-    await main.run();  // startet Game‑Loop
-  } catch (e) {
-    showError('Startfehler in main.run()', e);
   }
+
+  function hideOverlay(){ const o = document.getElementById('startOverlay'); if(o) o.style.display='none'; }
+  function showOverlay(){ const o = document.getElementById('startOverlay'); if(o) o.style.display='flex'; }
+
+  async function resetAll(){
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      // Service‑Worker deregistrieren (baut viele „Geister‑Versionen“ ab)
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) await r.unregister();
+      }
+      location.reload(true);
+    } catch(e) {
+      console.warn('ResetAll:', e);
+      location.reload(true);
+    }
+  }
+
+  function toggleFullscreen(){
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+    }
+  }
+
+  // Qualität des Lebens: bei Resize den Canvas‑Owner informieren (main.js hängt sich ran)
+  window.addEventListener('resize', ()=>window.dispatchEvent(new CustomEvent('app-resize')));
 }
-
-// Buttons verdrahten
-qs('#startBtn').addEventListener('click', startGame);
-qs('#startFsBtn').addEventListener('click', async ()=>{
-  await requestFullscreen();
-  startGame();
-});
-
-// Start‑UI zeigen
-openStart();
-
-// Fail‑Fast: deutliche Konsoleninfo
-console.log(`Siedler‑Mini Boot ${V} bereit. Erwartet: ./main.js, ./render.js, ./core/* vorhanden.`);
