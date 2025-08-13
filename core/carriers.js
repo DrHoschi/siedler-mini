@@ -1,29 +1,25 @@
-// /core/carriers.js
-export class Carrier {
-  constructor(path){
-    this.path = path;        // Array von {x,y} (Weltpixel) – bereits entlang Straße
-    this.t = 0;              // Segment‑Index float
-    this.speed = 55;         // px/s
-    this.dead = false;
+// core/camera.js  v14.2
+export class Camera{
+  constructor(){
+    this.x=0; this.y=0; this.zoom=1;
+    this.minZoom=.5; this.maxZoom=2;
   }
-  update(dt){
-    if(this.dead || this.path.length<2) return;
-    let left = this.speed*dt;
-    while(left>0 && !this.dead){
-      const i = Math.min(Math.floor(this.t), this.path.length-2);
-      const a = this.path[i], b = this.path[i+1];
-      const seg = Math.hypot(b.x-a.x, b.y-a.y) || 1;
-      const segLeft = (1-(this.t-i))*seg;
-      const use = Math.min(left, segLeft);
-      this.t += use/seg;
-      left -= use;
-      if(this.t>=this.path.length-1){ this.dead=true; break; }
-    }
+  centerOn(px,py){ this.x=px; this.y=py; this.clamp(); }
+  pan(dx,dy){ this.x+=dx/this.zoom; this.y+=dy/this.zoom; this.clamp(); }
+  setZoom(n, anchorX=0, anchorY=0){
+    const old=this.zoom;
+    n=Math.max(this.minZoom, Math.min(this.maxZoom, n));
+    if (n===old) return;
+    // Zoom um Ankerpunkt (Weltkoordinaten)
+    const k=n/old;
+    this.x = anchorX + (this.x - anchorX)/k;
+    this.y = anchorY + (this.y - anchorY)/k;
+    this.zoom=n; this.clamp();
   }
-  get pos(){
-    const i = Math.min(Math.floor(this.t), this.path.length-2);
-    const a = this.path[i], b = this.path[i+1];
-    const f = this.t - i;
-    return { x: a.x + (b.x-a.x)*f, y: a.y + (b.y-a.y)*f };
+  clamp(){
+    // einfache Soft‑Bounds
+    const pad=400;
+    this.x=Math.max(-pad, Math.min(this.x, pad));
+    this.y=Math.max(-pad, Math.min(this.y, pad));
   }
 }
