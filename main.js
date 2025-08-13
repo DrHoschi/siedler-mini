@@ -1,137 +1,94 @@
-// V14.1 – Bootstrap, UI, Loop
-import { loadAllAssets } from './core/assets.js';
-import { Camera } from './core/camera.js';
-import { makeInput } from './core/input.js';
-import { Renderer } from './render.js';
-import { makeWorld, placeRoad, placeBuilding } from './world.js';
-import { Game, Tools } from './game.js';
+// main.js  v14.2
+import { IM, loadAllAssets }        from './core/assets.js?v=14.2';
+import { attachInput, detachInput } from './core/input.js?v=14.2';
+import { Camera }                   from './core/camera.js?v=14.2';
+import { Carriers }                 from './core/carriers.js?v=14.2';
+import { createWorld }              from './world.js?v=14.2';
+import { createRenderer }           from './render.js?v=14.2';
+import { createGameState }          from './game.js?v=14.2';
 
-const VERSION='V14.1';
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d', {alpha:false, desynchronized:true});
+const $ = (s) => document.querySelector(s);
+let canvas, ctx, renderer, camera, world, state, carriers, rafId=0, running=false, lastT=0;
 
-let world, game, cam, renderer, running=false;
-
-function resize(){
-  canvas.width = window.innerWidth * devicePixelRatio;
-  canvas.height= window.innerHeight* devicePixelRatio;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(devicePixelRatio, devicePixelRatio);
-  cam.setViewport(window.innerWidth, window.innerHeight);
+function ensureCanvas() {
+  canvas = $('#game');
+  if (!canvas) throw new Error('#game Canvas fehlt (index.html)');
+  const c = canvas.getContext('2d', { alpha:false, desynchronized:true });
+  if (!c) throw new Error('2D Kontext nicht verfügbar');
+  ctx = c; resizeCanvas(); window.addEventListener('resize', resizeCanvas, {passive:true});
 }
-window.addEventListener('resize', resize);
-
-function markActiveTool(){
-  document.querySelectorAll('[data-tool]').forEach(b=>{
-    b.classList.toggle('active', toolFromBtn(b)===game.tool);
-  });
+function resizeCanvas() {
+  const dpr = Math.max(1, Math.min(window.devicePixelRatio||1, 2));
+  const w = Math.floor(innerWidth*dpr), h = Math.floor(innerHeight*dpr);
+  if (canvas.width!==w || canvas.height!==h){canvas.width=w;canvas.height=h;}
+  canvas.style.width = `${innerWidth}px`; canvas.style.height = `${innerHeight}px`;
+  renderer?.setViewport(w,h,dpr);
 }
-function toolFromBtn(el){
-  const m = el.getAttribute('data-tool');
-  switch(m){
-    case 'pointer': return Tools.POINTER;
-    case 'road':    return Tools.ROAD;
-    case 'hq':      return Tools.HQ;
-    case 'lumber':  return Tools.LUMBER;
-    case 'depot':   return Tools.DEPOT;
-    case 'bulldoze':return Tools.BULL;
-    default: return Tools.POINTER;
+function hideStartOverlay(){ const ov=$('#startOverlay'); if(ov) ov.style.display='none'; }
+function showUI(){ const ui=$('#uiBar'); if(ui) ui.style.opacity='1'; }
+
+function updateHUD(){
+  if(!state) return;
+  const R=state.resources;
+  $('#hudWood')?.replaceChildren(String(R.wood));
+  $('#hudStone')?.replaceChildren(String(R.stone));
+  $('#hudFood')?.replaceChildren(String(R.food));
+  $('#hudGold')?.replaceChildren(String(R.gold));
+  $('#hudCar')?.replaceChildren(String(R.carriers));
+  $('#hudTool')?.replaceChildren(state.toolName||'Zeiger');
+  $('#hudZoom')?.replaceChildren(`${camera.zoom.toFixed(2)}x`);
+}
+
+async function initGame(){
+  ensureCanvas();
+  await loadAllAssets();
+  world    = createWorld({ size: 40 }); // kleine Karte für Mobile
+  state    = createGameState({ placeStartHQ:true });
+  camera   = new Camera();
+  renderer = createRenderer();
+  carriers = new Carriers({ sprite: IM.carrier });
+
+  // Kamera auf HQ ausrichten
+  camera.centerOn(world.hq.pixelX, world.hq.pixelY);
+  camera.minZoom=0.55; camera.maxZoom=2.0;
+
+  attachInput(canvas, camera, state, world, renderer, () => updateHUD());
+  showUI(); updateHUD();
+}
+
+function step(dt){
+  state.time += dt;
+  carriers.update(dt, world, state);
+  renderer.render(ctx, world, state, camera, carriers);
+  updateHUD();
+}
+
+function loop(t){
+  if(!running) return;
+  const dt=Math.min(0.05,(t-lastT)/1000)||0.016; lastT=t;
+  step(dt);
+  rafId=requestAnimationFrame(loop);
+}
+function stop(){
+  running=false; if(rafId) cancelAnimationFrame(rafId);
+  detachInput(canvas);
+  removeEventListener('resize', resizeCanvas);
+}
+
+export async function run(){
+  if(running) return;
+  try{
+    await initGame();
+    hideStartOverlay();
+    running=true; lastT=performance.now(); rafId=requestAnimationFrame(loop);
+  }catch(e){
+    alert(`Startfehler in main.run()\n${e.message}`);
+    console.error(e); stop(); throw e;
   }
 }
 
-function updateResUI(){
-  rWood.textContent=game.resources.wood;
-  rStone.textContent=game.resources.stone;
-  rFood.textContent=game.resources.food;
-  rGold.textContent=game.resources.gold;
-  rCar.textContent=game.resources.carriers;
-}
+// kleine Helfer für HUD-Buttons
+function center(){ camera?.centerOn(world.hq.pixelX, world.hq.pixelY); }
+function toggleDebug(){ renderer.debug = !renderer.debug; }
 
-function worldFromScreen(sx,sy){
-  // nutzt renderer.screenToWorldTile (korrigiert für zoom/offset)
-  return renderer.screenToWorldTile(sx,sy);
-}
-
-async function init(){
-  world = makeWorld(90,70);
-  game = new Game(world);
-
-  cam = new Camera(window.innerWidth, window.innerHeight, 128,64);
-  renderer = new Renderer(ctx, cam, world);
-
-  resize();
-  updateResUI();
-  markActiveTool();
-
-  // Input
-  makeInput(canvas,
-    // Tap
-    (sx,sy)=>{
-      if (!running) return;
-      const {tx,ty}=worldFromScreen(sx,sy);
-      if (tx<0||ty<0||tx>=world.w||ty>=world.h) return;
-      switch(game.tool){
-        case Tools.ROAD: placeRoad(world,tx,ty); break;
-        case Tools.HQ:   placeBuilding(world,tx,ty,'hq'); break;
-        case Tools.LUMBER: placeBuilding(world,tx,ty,'lumber'); break;
-        case Tools.DEPOT:  placeBuilding(world,tx,ty,'depot'); break;
-        case Tools.BULL: world.buildings[ty][tx]=null; world.roads[ty][tx]=0; break;
-        default: /* pointer */ break;
-      }
-    },
-    // Pan
-    (dx,dy)=>{ if (game.tool===Tools.POINTER) cam.pan(-dx,-dy); },
-    // Pinch (Zoom)
-    (factor,cx,cy)=>{
-      cam.zoomAt(factor, cx, cy);
-      zoomLabel.textContent=`Zoom ${cam.scale.toFixed(2)}×`;
-    },
-    ()=> game.tool===Tools.POINTER
-  );
-
-  // UI Buttons
-  document.getElementById('toolCol').addEventListener('click', (ev)=>{
-    const btn = ev.target.closest('[data-tool]'); if (!btn) return;
-    game.setTool(toolFromBtn(btn)); markActiveTool();
-  });
-
-  centerBtn.addEventListener('click', ()=>{
-    renderer.centerOnTile(game.hqPos.tx, game.hqPos.ty);
-  });
-  dbgBtn.addEventListener('click', ()=>{ game.debug=!game.debug; dbgBtn.classList.toggle('active',game.debug); });
-  fsBtn.addEventListener('click', toggleFullscreen);
-
-  // Overlay
-  startBtn.addEventListener('click', startGame);
-  startFsBtn.addEventListener('click', ()=>{ toggleFullscreen(); startGame(); });
-  document.getElementById('startCard').addEventListener('dblclick', ()=>toggleFullscreen());
-
-  await loadAllAssets(); // nach UI bereit
-  renderer.centerOnTile(game.hqPos.tx, game.hqPos.ty);
-  draw();
-}
-
-function toggleFullscreen(){
-  const el=document.documentElement;
-  if (!document.fullscreenElement){
-    el.requestFullscreen?.().catch(()=>{});
-  } else {
-    document.exitFullscreen?.();
-  }
-}
-
-function startGame(){
-  if (running) return;
-  running=true;
-  overlay.style.display='none';
-}
-
-function draw(){
-  renderer.draw();
-  requestAnimationFrame(draw);
-}
-
-init().catch(err=>{
-  alert('Startfehler: '+err?.message);
-  console.error(err);
-});
+window.main = { run, center, toggleDebug };
