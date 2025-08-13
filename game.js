@@ -1,254 +1,124 @@
-// game.js (V14.3-safe4)
-// Minimal‑Spielzustand: Raster + HQ-Platzhalter, Pan/Zoom, Tool-Umschalter, Zentrieren.
-// KEINE weiteren Imports -> kann standalone laufen.
+// game.js – Minimalspielplatz (Platzhalter), liefert startGame(opts)
 
-export async function startGame({ canvas, DPR = 1, onHUD = () => {} }) {
+export async function startGame(opts){
+  const { canvas, DPR, onHUD, onTool, onZoom } = opts;
   const ctx = canvas.getContext('2d');
 
-  // ---------- State ----------
-  const st = {
-    tool: 'Zeiger',   // "Zeiger" | "Straße" | "HQ" | "Holzfäller" | "Depot" | "Abriss"
+  // State
+  const state = {
+    tool: 'pointer',
     zoom: 1,
-    minZoom: 0.5,
-    maxZoom: 2.0,
-    overscroll: 160,  // weicher Rand
-    world: { w: 2000, h: 2000 }, // Dummy-Welt
-    cam: { x: 0, y: 0 },         // Welt-Offset (px)
-    pinch: null,                  // für 2‑Finger‑Zoom
+    camX: 0,
+    camY: 0,
   };
 
-  // ---------- Helpers ----------
-  const $ = (sel) => document.querySelector(sel);
-
-  function setCanvasSize() {
+  // Resize
+  function resize(){
     const w = Math.floor(canvas.clientWidth * DPR);
     const h = Math.floor(canvas.clientHeight * DPR);
-    if (canvas.width !== w) canvas.width = w;
-    if (canvas.height !== h) canvas.height = h;
+    if (w!==canvas.width || h!==canvas.height){
+      canvas.width = w; canvas.height = h;
+    }
+    draw();
   }
+  resize();
+  window.addEventListener('resize', resize);
 
-  function clampCam() {
-    // weiche Begrenzung mit Puffer (overscroll)
-    const maxX = st.world.w * st.zoom + st.overscroll;
-    const maxY = st.world.h * st.zoom + st.overscroll;
-    const minX = -st.overscroll;
-    const minY = -st.overscroll;
-    st.cam.x = Math.max(minX, Math.min(st.cam.x, maxX - canvas.width));
-    st.cam.y = Math.max(minY, Math.min(st.cam.y, maxY - canvas.height));
-  }
-
-  function setZoom(nz, cx = canvas.width / 2, cy = canvas.height / 2) {
-    const old = st.zoom;
-    const z = Math.max(st.minZoom, Math.min(nz, st.maxZoom));
-    if (z === old) return;
-
-    // Zoomen um einen Fixpunkt (cx,cy) im Canvas -> Weltpunkt stabil halten
-    const wx = (cx + st.cam.x) / old;
-    const wy = (cy + st.cam.y) / old;
-    st.zoom = z;
-    st.cam.x = wx * z - cx;
-    st.cam.y = wy * z - cy;
-    clampCam();
-    onHUD('Zoom', st.zoom.toFixed(2) + 'x');
-  }
-
-  function worldToScreen(x, y) {
-    return { x: Math.round(x * st.zoom - st.cam.x), y: Math.round(y * st.zoom - st.cam.y) };
-  }
-
-  // ---------- Zeichnen ----------
-  function clear() {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0f1823';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  function drawGrid() {
+  // Zeichnen
+  function drawGrid(){
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // Hintergrund
+    ctx.fillStyle = '#0f1823';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    // Grid
+    const step = Math.round(128 * DPR * state.zoom);
+    ctx.strokeStyle = 'rgba(255,255,255,.08)';
     ctx.lineWidth = 1;
-    const step = 128 * st.zoom; // grobes Raster
-    const ox = - (st.cam.x % step);
-    const oy = - (st.cam.y % step);
-    for (let x = ox; x < canvas.width; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-    }
-    for (let y = oy; y < canvas.height; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-    }
+    for (let y=((state.camY%step)+step)%step; y<canvas.height; y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
+    for (let x=((state.camX%step)+step)%step; x<canvas.width; x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
     ctx.restore();
   }
-
-  function drawHQPlaceholder() {
-    // HQ zentriert in der "Welt"
-    const HQ = { x: st.world.w / 2 - 200, y: st.world.h / 2 - 120, w: 400, h: 240 };
-    const p = worldToScreen(HQ.x, HQ.y);
-    ctx.fillStyle = '#2da24a';
-    ctx.fillRect(p.x, p.y, Math.round(HQ.w * st.zoom), Math.round(HQ.h * st.zoom));
-
-    // Titel
-    ctx.fillStyle = '#e7f3ff';
-    ctx.font = Math.round(64 * st.zoom) + 'px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-    ctx.fillText('HQ (Platzhalter)', p.x - Math.round(160 * st.zoom), p.y - Math.round(28 * st.zoom));
+  function drawHQ(){
+    ctx.save();
+    ctx.translate(-state.camX, -state.camY);
+    ctx.scale(state.zoom, state.zoom);
+    const rw = 420*DPR, rh = 180*DPR;
+    ctx.fillStyle = '#2aa149';
+    ctx.fillRect(240*DPR, 220*DPR, rw, rh);
+    ctx.fillStyle = '#e5f0ff';
+    ctx.font = `${64*DPR}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+    ctx.fillText('HQ (Platzhalter)', 140*DPR, 180*DPR);
+    ctx.restore();
   }
-
-  function drawHUDDbg() {
-    // kleines Zoom‑Badge im HUD rechts (optional)
-    const el = $('#hudZoom');
-    if (el) el.textContent = st.zoom.toFixed(2) + 'x';
-  }
-
-  function render() {
-    clear();
+  function draw(){
     drawGrid();
-    drawHQPlaceholder();
-    drawHUDDbg();
+    drawHQ();
   }
 
-  // ---------- Input ----------
-  let dragging = false;
-  let last = { x: 0, y: 0 };
-
-  function onPointerDown(ev) {
-    if (st.tool !== 'Zeiger') return; // Pan nur im Zeiger-Tool
-    dragging = true;
-    last = { x: ev.clientX, y: ev.clientY };
-  }
-  function onPointerMove(ev) {
-    if (!dragging) return;
-    const dx = ev.clientX - last.x;
-    const dy = ev.clientY - last.y;
-    last = { x: ev.clientX, y: ev.clientY };
-    st.cam.x -= dx;
-    st.cam.y -= dy;
-    clampCam();
-  }
-  function onPointerUp() {
-    dragging = false;
-  }
-
-  function onWheel(ev) {
-    ev.preventDefault();
-    const delta = Math.sign(ev.deltaY);
-    const factor = delta > 0 ? 0.9 : 1.111; // feinfühlig
-    setZoom(st.zoom * factor, ev.clientX * DPR, ev.clientY * DPR);
-  }
-
-  function dist(a, b) {
-    const dx = a.clientX - b.clientX;
-    const dy = a.clientY - b.clientY;
-    return Math.hypot(dx, dy);
-  }
-
-  function onTouchStart(ev) {
-    if (ev.touches.length === 2) {
-      st.pinch = {
-        d0: dist(ev.touches[0], ev.touches[1]),
-        z0: st.zoom,
-        cx: (ev.touches[0].clientX + ev.touches[1].clientX) / 2 * DPR,
-        cy: (ev.touches[0].clientY + ev.touches[1].clientY) / 2 * DPR,
-      };
-    } else if (ev.touches.length === 1 && st.tool === 'Zeiger') {
-      dragging = true;
-      last = { x: ev.touches[0].clientX, y: ev.touches[0].clientY };
+  // Pan / Zoom (1 Finger Pan im Zeiger-Tool, 2 Finger Zoom überall)
+  let lastTouches = [];
+  function dist(a,b){ const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY; return Math.hypot(dx,dy); }
+  canvas.addEventListener('touchstart', (e)=>{ lastTouches = [...e.touches]; }, {passive:false});
+  canvas.addEventListener('touchmove', (e)=>{
+    e.preventDefault();
+    const t = [...e.touches];
+    if (t.length===1 && state.tool==='pointer'){
+      // Pan
+      const dx = t[0].clientX - lastTouches[0].clientX;
+      const dy = t[0].clientY - lastTouches[0].clientY;
+      state.camX -= dx * DPR;
+      state.camY -= dy * DPR;
+      lastTouches = t;
+      draw();
+    } else if (t.length===2){
+      // Pinch Zoom (relativ)
+      const dNow = dist(t[0], t[1]);
+      const dPrev = dist(lastTouches[0] ?? t[0], lastTouches[1] ?? t[1]);
+      const factor = Math.max(0.5, Math.min(2.0, dNow / (dPrev || dNow)));
+      state.zoom = Math.max(0.4, Math.min(2.0, state.zoom * factor));
+      onZoom?.(state.zoom);
+      lastTouches = t;
+      draw();
     }
+  }, {passive:false});
+
+  // Maus (zum Testen am Desktop)
+  let dragging = false, lx=0, ly=0;
+  canvas.addEventListener('mousedown', (e)=>{ dragging=true; lx=e.clientX; ly=e.clientY; });
+  window.addEventListener('mouseup', ()=> dragging=false);
+  window.addEventListener('mousemove', (e)=>{
+    if (!dragging || state.tool!=='pointer') return;
+    state.camX -= (e.clientX-lx) * DPR; state.camY -= (e.clientY-ly) * DPR;
+    lx=e.clientX; ly=e.clientY; draw();
+  });
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const f = e.deltaY<0 ? 1.1 : 0.9;
+    state.zoom = Math.max(0.4, Math.min(2.0, state.zoom * f));
+    onZoom?.(state.zoom);
+    draw();
+  }, {passive:false});
+
+  // Tools setzen (UI spiegelt main.js)
+  function setTool(name){
+    state.tool = name || 'pointer';
+    onTool?.(state.tool);
   }
 
-  function onTouchMove(ev) {
-    if (st.pinch && ev.touches.length === 2) {
-      const d = dist(ev.touches[0], ev.touches[1]);
-      const k = d / Math.max(1, st.pinch.d0);
-      setZoom(st.pinch.z0 * k, st.pinch.cx, st.pinch.cy);
-    } else if (dragging && ev.touches.length === 1) {
-      const t = ev.touches[0];
-      const dx = t.clientX - last.x;
-      const dy = t.clientY - last.y;
-      last = { x: t.clientX, y: t.clientY };
-      st.cam.x -= dx;
-      st.cam.y -= dy;
-      clampCam();
-    }
+  // HUD Demo-Werte initial
+  onHUD?.('Wood', 0); onHUD?.('Stone',0); onHUD?.('Food',0); onHUD?.('Gold',0); onHUD?.('Car',0);
+  onZoom?.(state.zoom);
+  setTool('pointer');
+  draw();
+
+  // Center-Button Logik
+  function center(){
+    state.camX = state.camY = 0;
+    state.zoom = 1;
+    onZoom?.(state.zoom);
+    draw();
   }
 
-  function onTouchEnd() {
-    st.pinch = null;
-    dragging = false;
-  }
-
-  // Tool‑Buttons
-  const toolIds = ['Zeiger','Straße','HQ','Holzfäller','Depot','Abriss'];
-  function setTool(name) {
-    st.tool = name;
-    toolIds.forEach(id => {
-      const b = document.getElementById('tool' + id.replace('ß','ss'));
-      if (b) b.classList.toggle('active', id === name);
-    });
-    onHUD('Tool', name);
-  }
-
-  // Zentrieren‑Button Bridge
-  window.centerMap = () => {
-    st.zoom = 1;
-    // auf HQ zentrieren:
-    const cx = st.world.w / 2 * st.zoom;
-    const cy = st.world.h / 2 * st.zoom;
-    st.cam.x = cx - canvas.width / 2;
-    st.cam.y = cy - canvas.height / 2;
-    clampCam();
-  };
-
-  // ---------- Lifecycle ----------
-  function attachUI() {
-    // Buttons (falls vorhanden)
-    const map = {
-      Zeiger: '#toolPointer',
-      Straße: '#toolRoad',
-      HQ: '#toolHQ',
-      Holzfäller: '#toolLumber',
-      Depot: '#toolDepot',
-      Abriss: '#toolErase',
-    };
-    Object.entries(map).forEach(([name, sel]) => {
-      const el = $(sel);
-      if (el) el.addEventListener('click', () => setTool(name));
-    });
-    const centerBtn = document.getElementById('centerBtn');
-    if (centerBtn) centerBtn.addEventListener('click', () => window.centerMap());
-
-    // Anfangszustand
-    setTool('Zeiger');
-    onHUD('Zoom', st.zoom.toFixed(2) + 'x');
-  }
-
-  function attachInput() {
-    canvas.addEventListener('pointerdown', onPointerDown, { passive: true });
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
-    window.addEventListener('pointerup', onPointerUp, { passive: true });
-
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-
-    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: true });
-    canvas.addEventListener('touchcancel', onTouchEnd, { passive: true });
-  }
-
-  function onResize() {
-    setCanvasSize();
-    clampCam();
-  }
-
-  // Init
-  onResize();
-  window.addEventListener('resize', onResize);
-  attachUI();
-  attachInput();
-  window.centerMap();
-
-  // Render‑Loop
-  function loop() {
-    render();
-    requestAnimationFrame(loop);
-  }
-  loop();
+  return { setTool, center };
 }
