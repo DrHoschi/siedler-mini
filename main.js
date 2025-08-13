@@ -1,17 +1,32 @@
-// main.js — Einstieg aus boot.js
-// Exportiert run(opts), lädt game.js und startet das Spiel.
+// main.js (V14.3-safe4)
+// Einziger Job: game.js laden und startGame(...) aufrufen.
 
-export async function run(opts) {
+export async function run() {
+  const canvas = document.getElementById('game');
+  if (!canvas) throw new Error('#game Canvas fehlt');
+
+  // Modul laden (Cache-Busting über Query)
+  let game;
   try {
-    const { default: startGame } = await import('./game.js'); // default export
-    await startGame({
-      canvas: opts.canvas,
-      DPR: opts.DPR ?? (window.devicePixelRatio || 1),
-      onHUD: opts.onHUD ?? (() => {}),
-    });
-  } catch (err) {
-    // Fehler landet sichtbar im Start‑Overlay (boot.js fängt diesen throw ab)
-    console.error('[main.run] error:', err);
-    throw err;
+    game = await import('./game.js?v=14.3-safe4');
+  } catch (e) {
+    throw new Error('Modulimport fehlgeschlagen (game.js): ' + e.message);
   }
+
+  if (!game || typeof game.startGame !== 'function') {
+    throw new Error('game.startGame fehlt oder ist keine Funktion');
+  }
+
+  // HUD-Bridge: schreibt z.B. Tool/Zoom in deine Pills
+  const onHUD = (key, val) => {
+    const el = document.getElementById('hud' + key);
+    if (el) el.textContent = String(val);
+  };
+
+  // Start
+  await game.startGame({
+    canvas,
+    DPR: window.devicePixelRatio || 1,
+    onHUD,
+  });
 }
