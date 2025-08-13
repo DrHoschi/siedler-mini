@@ -1,8 +1,8 @@
-import { initInput, setToolButtonHandlers, setTool, getTool } from './core/input.js';
+import { initInput, setToolButtonHandlers, getTool } from './core/input.js';
 import { camera, centerOnHQ, setCanvas } from './core/camera.js';
 import { loadAllAssets } from './core/assets.js';
-import { initWorld, drawWorld, tryBuildAtScreen, worldTick, resources, HQ_POS } from './world.js';
-import { startCarriers, carriers, tickCarriers } from './core/carriers.js';
+import { initWorld, drawWorld, tryBuildAtScreen, worldTick, resources, getBuildingsOfType, getHQ, isRoad, inBounds } from './world.js';
+import { initCarriers, onRoadChanged, registerSource, registerSink, spawnCarrierAt, carriers, tickCarriers } from './core/carriers.js';
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha:false });
@@ -23,7 +23,6 @@ const fsPreBtn = document.getElementById('fsPreBtn');
 const fsBtn = document.getElementById('fsBtn');
 const dbgBtn = document.getElementById('dbgBtn');
 const centerBtn = document.getElementById('centerBtn');
-const toolInfo = document.getElementById('toolInfo');
 const zoomInfo = document.getElementById('zoomInfo');
 
 fsPreBtn.addEventListener('click', toggleFullscreen);
@@ -42,12 +41,38 @@ startBtn.addEventListener('click', async () => {
 /* ---------- Boot pipeline ---------- */
 async function bootGame(){
   await loadAllAssets();
-  initWorld();                // legt Karte + HQ fest
-  initInput(canvas, onTapBuild); // Gesten / Pan / Zoom
+  initWorld();
+
+  // Carriers initialisieren (zugriff auf Roads/InBounds)
+  initCarriers({ isRoad, inBounds });
+
+  // Input / Tools
+  initInput(canvas, onTapBuild);
   setToolButtonHandlers(updateToolUI);
   updateToolUI();
-  centerOnHQ();               // Kamera auf HQ ausrichten
-  startCarriers();            // Träger‑System starten
+
+  // HQ finden → als Senke registrieren + Träger spawnen
+  const HQ = getHQ();
+  registerSink({ id:'snk_hq', x:HQ.x, y:HQ.y, acceptType:'wood', capacity:9999, amount:0, prio:2 });
+  spawnCarrierAt(HQ.x, HQ.y);
+  spawnCarrierAt(HQ.x, HQ.y+1);
+
+  // Vorhandene Holzfäller/Depots als Quellen/Senken registrieren
+  syncCarriersRegistrations();
+
+  centerOnHQ();
+}
+
+/* Quellen/Senken für alle Gebäude im Weltzustand synchronisieren */
+function syncCarriersRegistrations(){
+  const ljs = getBuildingsOfType('lumberjack');
+  for(const lj of ljs){
+    registerSource({ id:`src_${lj.x}_${lj.y}`, x:lj.x, y:lj.y, type:'wood', batch:1, cooldownTime:4, stock:0 });
+  }
+  const deps = getBuildingsOfType('depot');
+  for(const d of deps){
+    registerSink({ id:`snk_${d.x}_${d.y}`, x:d.x, y:d.y, acceptType:'wood', capacity:200, amount:0, prio:1 });
+  }
 }
 
 /* ---------- Loop ---------- */
@@ -79,13 +104,27 @@ function loop(now){
 function onTapBuild(screenX, screenY){
   const t = getTool();
   if (t === 'pointer') return; // Zeiger baut nix
-  tryBuildAtScreen(screenX, screenY, t);
+  const res = tryBuildAtScreen(screenX, screenY, t);
+
+  if (res.kind === 'roadChanged'){
+    onRoadChanged();
+  } else if (res.kind === 'building' && res.building){
+    if (res.building.type === 'lumberjack'){
+      registerSource({ id:`src_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, type:'wood', batch:1, cooldownTime:4, stock:0 });
+    } else if (res.building.type === 'depot'){
+      registerSink({ id:`snk_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, acceptType:'wood', capacity:200, amount:0, prio:1 });
+    } else if (res.building.type === 'hq_wood' || res.building.type === 'hq_stone'){
+      registerSink({ id:`snk_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, acceptType:'wood', capacity:9999, amount:0, prio:1.5 });
+      spawnCarrierAt(res.building.x, res.building.y);
+    }
+  }
 }
 
 /* ---------- UI helpers ---------- */
 function updateToolUI(){
   const t = getTool();
-  toolInfo.textContent = `Tool: ${t==='pointer'?'Zeiger':t==='road'?'Straße':t==='lumber'?'Holzfäller':t==='hq'?'HQ':t==='depot'?'Depot':'Abriss'}`;
+  const txt = t==='pointer'?'Zeiger': t==='road'?'Straße': t==='lumber'?'Holzfäller': t==='hq'?'HQ': t==='depot'?'Depot':'Abriss';
+  document.getElementById('toolInfo').textContent = `Tool: ${txt}`;
   document.querySelectorAll('#tools .tool').forEach(btn=>{
     btn.classList.toggle('on', btn.dataset.tool===t);
   });
