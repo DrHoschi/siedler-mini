@@ -1,121 +1,147 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <meta charset="utf-8" />
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no" />
   <title>Siedler‑Mini V13 (Mobile)</title>
-  <meta http-equiv="Cache-Control" content="no-store" />
-  <style>
-    :root{--bg:#0b1117;--panel:#0e1620;--pill:#0c2131;--pill2:#143a54;--txt:#cfe7ff}
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    #uiTop{position:fixed;inset:0 0 auto 0;display:flex;gap:.5rem;padding:.5rem;align-items:center;z-index:20}
-    .pill{background:var(--pill);border:1px solid #244256;border-radius:999px;padding:.25rem .6rem;font-size:.9rem;user-select:none}
-    .right{margin-left:auto;display:flex;gap:.5rem}
-    #tools{position:fixed;left:.5rem;top:3.5rem;display:flex;flex-direction:column;gap:.5rem;z-index:20}
-    .tool{background:var(--pill);border:1px solid #244256;border-radius:999px;padding:.45rem .8rem;user-select:none}
-    .tool.on{background:var(--pill2)}
-    #stage{position:fixed;inset:0;z-index:1;background:var(--bg)}
-    #gameCanvas{width:100%;height:100%;display:block;touch-action:none;background:var(--bg);pointer-events:auto}
+  <meta name="theme-color" content="#0b1220"/>
 
-    /* Overlay */
-    #startOverlay{position:fixed;inset:0;display:grid;place-items:center;z-index:50;
-      background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
-    #card{background:#0e1620;border:1px solid #263646;border-radius:16px;padding:18px 20px;max-width:560px;
-      box-shadow:0 20px 60px rgba(0,0,0,.35)}
-    #card h1{font-size:1.3rem;margin:.25rem 0 0}
-    #card p{opacity:.9;line-height:1.35;margin:.25rem 0 .75rem}
-    #card .row{display:flex;gap:.5rem;flex-wrap:wrap}
-    button{color:var(--txt);background:#18415e;border:1px solid #2b4b65;border-radius:12px;padding:.5rem .9rem;cursor:pointer}
-    #debugNote{position:fixed;right:.5rem;bottom:.5rem;z-index:60;font-size:.8rem;opacity:.8}
+  <style>
+    :root { --bg:#0b1220; --panel:#121a2a; --text:#d7e1f8; --muted:#93a2be; --accent:#4cc38a; }
+    html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+    #ui-bar { position:fixed; inset:0 0 auto 0; display:flex; gap:.5rem; padding:.5rem .75rem; align-items:center; z-index:10; pointer-events:none; }
+    #ui-bar .pill { pointer-events:auto; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+                    border-radius:999px; padding:.35rem .6rem; font-size:.9rem; }
+    #left-tools { position:fixed; left:.5rem; top:3.75rem; display:flex; flex-direction:column; gap:.5rem; z-index:11; }
+    .tool-btn { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+                color:var(--text); border-radius:999px; padding:.45rem .9rem; font-size:.9rem; }
+    .tool-btn.active { outline:2px solid var(--accent); }
+
+    #canvas { position:fixed; inset:0; touch-action:none; background:transparent; z-index:1; }
+
+    /* Start-Overlay */
+    #overlay { position:fixed; inset:0; display:grid; place-items:center; z-index:20;
+               background:linear-gradient(180deg, rgba(4,8,16,.92), rgba(4,8,16,.92)); }
+    #card { background:var(--panel); border:1px solid rgba(255,255,255,.09); border-radius:16px;
+            padding:20px 22px; width:min(680px,92vw); box-shadow: 0 18px 40px rgba(0,0,0,.35); }
+    #card h1 { font-size:1.25rem; margin:.25rem 0 .5rem; }
+    #card p { color:var(--muted); margin:.25rem 0; line-height:1.4; }
+    #card .row { display:flex; gap:.5rem; margin-top:.75rem; }
+    .btn { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1);
+           color:var(--text); padding:.5rem .9rem; border-radius:10px; }
+    .btn.primary { background:var(--accent); color:#04110a; border:none; }
+
+    /* Debug-Pill rechts */
+    #dbg { position:fixed; right:.5rem; top:.5rem; display:flex; gap:.5rem; z-index:12; }
+    #dbg .pill { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+                 border-radius:999px; padding:.35rem .6rem; font-size:.9rem; }
+
+    /* „Zentrieren“-Button */
+    #centerBtn { position:fixed; right:.5rem; top:3.2rem; z-index:12; }
   </style>
 </head>
 <body>
-  <div id="uiTop">
-    <span class="pill" id="resWood">🌲 Holz 0</span>
-    <span class="pill" id="resStone">🪨 Stein 0</span>
-    <span class="pill" id="resFood">🌿 Nahrung 0</span>
-    <span class="pill" id="resGold">🪙 Gold 0</span>
-    <span class="pill" id="resCarriers">👣 Träger 0</span>
-    <div class="right">
-      <span class="pill" id="toolInfo">Tool: Zeiger</span>
-      <span class="pill" id="zoomInfo">Zoom 1.00×</span>
-      <button class="pill" id="centerBtn" type="button">Zentrieren</button>
-      <button class="pill" id="dbgBtn" type="button">Debug</button>
-      <button class="pill" id="fsBtn" type="button">Vollbild</button>
-    </div>
+
+  <!-- Oberleiste (Ressourcen + kleine Helfer) -->
+  <div id="ui-bar">
+    <span class="pill" id="r-wood">🌲 Holz 0</span>
+    <span class="pill" id="r-stone">🪨 Stein 0</span>
+    <span class="pill" id="r-food">🌿 Nahrung 0</span>
+    <span class="pill" id="r-gold">⚪️ Gold 0</span>
+    <span class="pill" id="r-car">🧺 Träger 0</span>
   </div>
 
-  <div id="tools">
-    <button class="tool on" data-tool="pointer">Zeiger</button>
-    <button class="tool" data-tool="road">Straße</button>
-    <button class="tool" data-tool="hq">HQ</button>
-    <button class="tool" data-tool="lumber">Holzfäller</button>
-    <button class="tool" data-tool="depot">Depot</button>
-    <button class="tool" data-tool="erase">Abriss</button>
+  <!-- linke Tool-Leiste -->
+  <div id="left-tools">
+    <button class="tool-btn" data-tool="pointer">Zeiger</button>
+    <button class="tool-btn" data-tool="road">Straße</button>
+    <button class="tool-btn" data-tool="hq">HQ</button>
+    <button class="tool-btn" data-tool="lumber">Holzfäller</button>
+    <button class="tool-btn" data-tool="depot">Depot</button>
+    <button class="tool-btn" data-tool="bulldoze">Abriss</button>
   </div>
 
-  <div id="stage"><canvas id="gameCanvas" width="1920" height="1080"></canvas></div>
+  <div id="dbg">
+    <span class="pill" id="toolLabel">Tool: Zeiger</span>
+    <span class="pill" id="zoomLabel">Zoom 1.00×</span>
+  </div>
+  <button id="centerBtn" class="pill">Zentrieren</button>
 
-  <div id="startOverlay">
+  <!-- Spiel-Canvas -->
+  <canvas id="canvas"></canvas>
+
+  <!-- Start-Overlay -->
+  <div id="overlay">
     <div id="card">
       <h1>Siedler‑Mini V13 (Mobile)</h1>
-      <p>1 Finger = Karte verschieben (nur im Zeiger‑Tool) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).<br>
-         Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als Platzhalter dargestellt.</p>
+      <p>1 Finger = Karte verschieben (nur im <em>Zeiger‑Tool</em>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+      <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als Platzhalter dargestellt.</p>
       <div class="row">
-        <button id="startBtn" type="button">Start</button>
-        <button id="fsPreBtn" type="button">Vollbild</button>
+        <button id="startBtn" class="btn primary">Start</button>
+        <button id="fsBtn" class="btn">Vollbild</button>
       </div>
-      <p style="opacity:.75;margin-top:.5rem">Tipp: Doppeltipp/Doppelklick auf diese Karte schaltet Vollbild.</p>
+      <p style="margin-top:.5rem;">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
     </div>
   </div>
 
-  <div id="debugNote" class="pill">JS V13.8.2</div>
+  <!-- Hauptmodul direkt laden -->
+  <script type="module">
+    import * as Game from './main.js?v=13.8.2';
 
-  <!-- App (modular) -->
-  <script type="module" src="./main.js?v=13.8.2"></script>
+    // expose für Buttons
+    window.__Game = Game;
 
-  <!-- Inline-BOOT: sorgt dafür, dass Start/Vollbild IMMER funktionieren -->
-  <script>
-  (function boot(){
-    const $ = (id)=>document.getElementById(id);
-    const startBtn=$('startBtn'), fsPreBtn=$('fsPreBtn'), card=$('card');
-    let app=null;
+    const startBtn = document.getElementById('startBtn');
+    const fsBtn    = document.getElementById('fsBtn');
+    const overlay  = document.getElementById('overlay');
+    const card     = document.getElementById('card');
 
-    async function ensureApp(){
-      if(app) return app;
-      try{
-        app = await import('./main.js?v=13.8.2');
-        return app;
-      }catch(err){
-        console.error('Import main.js fehlgeschlagen', err);
-        alert('Fehler: main.js konnte nicht geladen werden. Prüfe Dateinamen/Pfade.');
-        throw err;
-      }
-    }
+    // Start
+    startBtn.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      Game.start();
+    });
 
-    startBtn?.addEventListener('click', async (e)=>{
-      try{ (await ensureApp()).startFromOverlay?.(e); }catch{}
-    }, {passive:true});
-    fsPreBtn?.addEventListener('click', async ()=>{
-      try{ (await ensureApp()).toggleFullscreen?.(); }catch{}
-    }, {passive:true});
+    // Vollbild
+    fsBtn.addEventListener('click', () => Game.toggleFullscreen());
 
-    // Doppeltipp/Doppelklick auf Karte → Vollbild (nur im Overlay)
-    let lastTap=0;
-    card?.addEventListener('touchend', async ()=>{
-      const now=Date.now(); if(now-lastTap<300){ (await ensureApp()).toggleFullscreen?.(); }
-      lastTap=now;
-    }, {passive:true});
-    card?.addEventListener('dblclick', async ()=>{ (await ensureApp()).toggleFullscreen?.(); });
+    // Doppeltipp auf Karte => Vollbild
+    card.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      Game.toggleFullscreen();
+    }, { passive:false });
 
-    // Canvas-Inputs blockieren, bis Start
-    const canvas=document.getElementById('gameCanvas');
-    const setCanvasPointer=(on)=>canvas && (canvas.style.pointerEvents = on?'auto':'none');
-    setCanvasPointer(false);
+    // Tool-Buttons (linke Spalte)
+    document.querySelectorAll('#left-tools .tool-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.querySelectorAll('#left-tools .tool-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        const tool = btn.dataset.tool;
+        document.getElementById('toolLabel').textContent = 'Tool: ' + (tool==='pointer'?'Zeiger':
+                                                                         tool==='road'?'Straße':
+                                                                         tool==='hq'?'HQ':
+                                                                         tool==='lumber'?'Holzfäller':
+                                                                         tool==='depot'?'Depot':'Abriss');
+        Game.setTool(tool);
+      });
+    });
 
-    // Fallback: wenn main.js schon geladen ist und uns startFromOverlay anbietet, Canvas freigeben nach Start
-    window.__enableCanvasPointer = ()=>setCanvasPointer(true);
-  })();
+    // „Zentrieren“
+    document.getElementById('centerBtn').addEventListener('click', ()=>Game.centerOnHQ());
+
+    // HUD Labels von Game updaten lassen
+    Game.onHud((hud)=>{
+      document.getElementById('r-wood').textContent = `🌲 Holz ${hud.wood}`;
+      document.getElementById('r-stone').textContent = `🪨 Stein ${hud.stone}`;
+      document.getElementById('r-food').textContent  = `🌿 Nahrung ${hud.food}`;
+      document.getElementById('r-gold').textContent  = `⚪️ Gold ${hud.gold}`;
+      document.getElementById('r-car').textContent   = `🧺 Träger ${hud.carriers}`;
+      document.getElementById('zoomLabel').textContent = `Zoom ${hud.zoom.toFixed(2)}×`;
+    });
+
+    // beim Laden: Zeiger-Tool markieren
+    document.querySelector('#left-tools .tool-btn[data-tool="pointer"]').classList.add('active');
   </script>
 </body>
 </html>
