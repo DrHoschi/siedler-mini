@@ -2,146 +2,87 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport"
-        content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
   <title>Siedler‑Mini V13 (Mobile)</title>
   <meta name="theme-color" content="#0b1220"/>
 
   <style>
-    :root { --bg:#0b1220; --panel:#121a2a; --text:#d7e1f8; --muted:#93a2be; --accent:#4cc38a; }
-    html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-    #ui-bar { position:fixed; inset:0 0 auto 0; display:flex; gap:.5rem; padding:.5rem .75rem; align-items:center; z-index:10; pointer-events:none; }
-    #ui-bar .pill { pointer-events:auto; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
-                    border-radius:999px; padding:.35rem .6rem; font-size:.9rem; }
-    #left-tools { position:fixed; left:.5rem; top:3.75rem; display:flex; flex-direction:column; gap:.5rem; z-index:11; }
-    .tool-btn { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
-                color:var(--text); border-radius:999px; padding:.45rem .9rem; font-size:.9rem; }
-    .tool-btn.active { outline:2px solid var(--accent); }
-
-    #canvas { position:fixed; inset:0; touch-action:none; background:transparent; z-index:1; }
+    :root {
+      color-scheme: dark;
+      --bg: #0e1524; --panel:#121b2e; --text:#dfe7ff; --muted:#9fb0d0; --accent:#36d399;
+      --btn:#1a2743; --btn-h:#223150; --ring:#3b82f6;
+    }
+    * { box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font:16px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    #hud { position:fixed; inset:0; pointer-events:none; }
+    #topbar { position:absolute; left:12px; right:12px; top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; pointer-events:auto; }
+    .chip { background:#0a1221; padding:6px 10px; border-radius:14px; font-size:13px; color:#d2dcff; border:1px solid #15213a; }
+    .chip b { color:white; }
+    #left { position:absolute; left:12px; top:64px; display:flex; flex-direction:column; gap:10px; pointer-events:auto; }
+    .btn { background:var(--btn); border:1px solid #253356; color:var(--text); border-radius:14px; padding:9px 14px; font-weight:600; cursor:pointer; }
+    .btn:hover { background:var(--btn-h); }
+    .btn:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
 
     /* Start-Overlay */
-    #overlay { position:fixed; inset:0; display:grid; place-items:center; z-index:20;
-               background:linear-gradient(180deg, rgba(4,8,16,.92), rgba(4,8,16,.92)); }
-    #card { background:var(--panel); border:1px solid rgba(255,255,255,.09); border-radius:16px;
-            padding:20px 22px; width:min(680px,92vw); box-shadow: 0 18px 40px rgba(0,0,0,.35); }
-    #card h1 { font-size:1.25rem; margin:.25rem 0 .5rem; }
-    #card p { color:var(--muted); margin:.25rem 0; line-height:1.4; }
-    #card .row { display:flex; gap:.5rem; margin-top:.75rem; }
-    .btn { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.1);
-           color:var(--text); padding:.5rem .9rem; border-radius:10px; }
-    .btn.primary { background:var(--accent); color:#04110a; border:none; }
+    dialog#startDlg {
+      border:none; border-radius:14px; background:var(--panel); color:var(--text);
+      width:min(600px, calc(100% - 32px)); padding:18px 18px 16px; box-shadow:0 8px 40px rgba(0,0,0,.5);
+    }
+    #startDlg::backdrop { background:rgba(0,0,0,.55); }
+    #startDlg h1 { font-size:22px; margin:0 0 10px; }
+    #startDlg p { margin:6px 0; color:var(--muted); }
+    #startDlg footer { display:flex; gap:8px; margin-top:12px; }
 
-    /* Debug-Pill rechts */
-    #dbg { position:fixed; right:.5rem; top:.5rem; display:flex; gap:.5rem; z-index:12; }
-    #dbg .pill { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
-                 border-radius:999px; padding:.35rem .6rem; font-size:.9rem; }
-
-    /* „Zentrieren“-Button */
-    #centerBtn { position:fixed; right:.5rem; top:3.2rem; z-index:12; }
+    /* Canvas (Spielfläche) */
+    #gameWrap { position:fixed; inset:0; overflow:hidden; }
+    canvas#game { position:absolute; left:0; top:0; width:100%; height:100%; touch-action:none; }
   </style>
 </head>
 <body>
 
-  <!-- Oberleiste (Ressourcen + kleine Helfer) -->
-  <div id="ui-bar">
-    <span class="pill" id="r-wood">🌲 Holz 0</span>
-    <span class="pill" id="r-stone">🪨 Stein 0</span>
-    <span class="pill" id="r-food">🌿 Nahrung 0</span>
-    <span class="pill" id="r-gold">⚪️ Gold 0</span>
-    <span class="pill" id="r-car">🧺 Träger 0</span>
+  <div id="gameWrap">
+    <canvas id="game" width="1024" height="768"></canvas>
   </div>
 
-  <!-- linke Tool-Leiste -->
-  <div id="left-tools">
-    <button class="tool-btn" data-tool="pointer">Zeiger</button>
-    <button class="tool-btn" data-tool="road">Straße</button>
-    <button class="tool-btn" data-tool="hq">HQ</button>
-    <button class="tool-btn" data-tool="lumber">Holzfäller</button>
-    <button class="tool-btn" data-tool="depot">Depot</button>
-    <button class="tool-btn" data-tool="bulldoze">Abriss</button>
-  </div>
+  <!-- HUD -->
+  <div id="hud" aria-hidden="true">
+    <div id="topbar">
+      <span class="chip">Holz <b id="resWood">0</b></span>
+      <span class="chip">Stein <b id="resStone">0</b></span>
+      <span class="chip">Nahrung <b id="resFood">0</b></span>
+      <span class="chip">Gold <b id="resGold">0</b></span>
+      <span class="chip">Träger <b id="resCarriers">0</b></span>
+      <span class="chip" id="toolChip">Tool: Zeiger</span>
+      <span class="chip" id="zoomChip">Zoom 1.00×</span>
+      <button id="centerBtn" class="btn">Zentrieren</button>
+      <button id="debugBtn" class="btn">Debug</button>
+      <button id="fsBtn" class="btn">Vollbild</button>
+    </div>
 
-  <div id="dbg">
-    <span class="pill" id="toolLabel">Tool: Zeiger</span>
-    <span class="pill" id="zoomLabel">Zoom 1.00×</span>
-  </div>
-  <button id="centerBtn" class="pill">Zentrieren</button>
-
-  <!-- Spiel-Canvas -->
-  <canvas id="canvas"></canvas>
-
-  <!-- Start-Overlay -->
-  <div id="overlay">
-    <div id="card">
-      <h1>Siedler‑Mini V13 (Mobile)</h1>
-      <p>1 Finger = Karte verschieben (nur im <em>Zeiger‑Tool</em>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
-      <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als Platzhalter dargestellt.</p>
-      <div class="row">
-        <button id="startBtn" class="btn primary">Start</button>
-        <button id="fsBtn" class="btn">Vollbild</button>
-      </div>
-      <p style="margin-top:.5rem;">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
+    <div id="left">
+      <button id="toolPointer"  class="btn">Zeiger</button>
+      <button id="toolRoad"     class="btn">Straße</button>
+      <button id="toolHQ"       class="btn">HQ</button>
+      <button id="toolLumber"   class="btn">Holzfäller</button>
+      <button id="toolDepot"    class="btn">Depot</button>
+      <button id="toolBulldoze" class="btn">Abriss</button>
     </div>
   </div>
 
-  <!-- Hauptmodul direkt laden -->
-  <script type="module">
-    import * as Game from './main.js?v=13.8.2';
+  <!-- Start-Dialog -->
+  <dialog id="startDlg">
+    <h1>Siedler‑Mini V13 (Mobile)</h1>
+    <p>1 Finger = Karte verschieben (nur im <b>Zeiger‑Tool</b>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+    <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als Platzhalter dargestellt.</p>
+    <p style="opacity:.8">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
+    <footer>
+      <button id="startBtn" class="btn" autofocus>Start</button>
+      <button id="startFsBtn" class="btn">Vollbild</button>
+    </footer>
+  </dialog>
 
-    // expose für Buttons
-    window.__Game = Game;
-
-    const startBtn = document.getElementById('startBtn');
-    const fsBtn    = document.getElementById('fsBtn');
-    const overlay  = document.getElementById('overlay');
-    const card     = document.getElementById('card');
-
-    // Start
-    startBtn.addEventListener('click', () => {
-      overlay.style.display = 'none';
-      Game.start();
-    });
-
-    // Vollbild
-    fsBtn.addEventListener('click', () => Game.toggleFullscreen());
-
-    // Doppeltipp auf Karte => Vollbild
-    card.addEventListener('dblclick', (e) => {
-      e.preventDefault();
-      Game.toggleFullscreen();
-    }, { passive:false });
-
-    // Tool-Buttons (linke Spalte)
-    document.querySelectorAll('#left-tools .tool-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        document.querySelectorAll('#left-tools .tool-btn').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        const tool = btn.dataset.tool;
-        document.getElementById('toolLabel').textContent = 'Tool: ' + (tool==='pointer'?'Zeiger':
-                                                                         tool==='road'?'Straße':
-                                                                         tool==='hq'?'HQ':
-                                                                         tool==='lumber'?'Holzfäller':
-                                                                         tool==='depot'?'Depot':'Abriss');
-        Game.setTool(tool);
-      });
-    });
-
-    // „Zentrieren“
-    document.getElementById('centerBtn').addEventListener('click', ()=>Game.centerOnHQ());
-
-    // HUD Labels von Game updaten lassen
-    Game.onHud((hud)=>{
-      document.getElementById('r-wood').textContent = `🌲 Holz ${hud.wood}`;
-      document.getElementById('r-stone').textContent = `🪨 Stein ${hud.stone}`;
-      document.getElementById('r-food').textContent  = `🌿 Nahrung ${hud.food}`;
-      document.getElementById('r-gold').textContent  = `⚪️ Gold ${hud.gold}`;
-      document.getElementById('r-car').textContent   = `🧺 Träger ${hud.carriers}`;
-      document.getElementById('zoomLabel').textContent = `Zoom ${hud.zoom.toFixed(2)}×`;
-    });
-
-    // beim Laden: Zeiger-Tool markieren
-    document.querySelector('#left-tools .tool-btn[data-tool="pointer"]').classList.add('active');
-  </script>
+  <!-- Nur EIN Modul laden: den Boot‑Loader -->
+  <script type="module" src="./boot.js?v=13.8.2"></script>
+  <!-- Achtung: KEIN weiteres <script src="main.js"> in der Seite belassen! -->
 </body>
 </html>
