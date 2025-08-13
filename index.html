@@ -2,85 +2,85 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
-  />
-  <title>Siedler‑Mini V14 (Mobile)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler‑Mini V14.6 (Mobile)</title>
   <meta name="theme-color" content="#0b1620" />
   <style>
     :root { color-scheme: dark light }
-    html,body { margin:0; padding:0; height:100%; background:#0f1823; font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Open Sans','Helvetica Neue', Arial; }
-    /* Canvas – block + keine Browser-Gesten */
-    #game { display:block; position:fixed; inset:0; touch-action:none; }
-    /* HUD oben */
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;opacity:.98;pointer-events:none}
-    .pill{pointer-events:auto;padding:6px 12px;border-radius:999px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
+    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    #game{display:block;touch-action:none;position:fixed;inset:0}
+    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;z-index:10;pointer-events:none}
+    .pill{padding:6px 10px;border-radius:99px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px;pointer-events:auto}
+    .pill small{opacity:.7}
     .right{margin-left:auto;display:flex;gap:8px}
-    /* Tools links */
-    .tools{position:fixed;left:12px;top:56px;display:flex;flex-direction:column;gap:10px}
-    .btn{padding:8px 12px;border-radius:12px;background:#0f1829;border:1px solid #2b3a55;color:#cfe3ff;font-size:15px}
+    .btn{padding:9px 12px;border-radius:12px;background:#0f1b29;border:1px solid #203a56;color:#d5e8ff;font-size:15px;pointer-events:auto}
     .btn.active{outline:2px solid #36a3ff}
-    /* Start-Overlay */
-    #startCard{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-    #startCard .card{
-      pointer-events:auto;max-width:min(92vw,720px);width:92vw;background:#112231;border:1px solid #20324a;border-radius:16px;
-      box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px 18px 14px;color:#cfe3ff
-    }
-    .card h1{margin:0 0 8px 0;font-size:22px}
-    .card p{margin:6px 0 10px 0;color:#a8bed9}
-    .card .row{display:flex;gap:10px;margin-top:10px}
-    .btn.green{background:#0c5a2a}
-    .btn.red{background:#5a0c0c}
-    #version{position:fixed;right:12px;bottom:8px;color:#7fa2d3;opacity:.8;font-size:12px}
+    .btn:disabled{opacity:.5}
+    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px;z-index:10}
+    .tbtn{padding:9px 12px;border-radius:12px;background:#0f1b29;border:1px solid #203a56;color:#d5e8ff;font-size:15px}
+    .tbtn.active{outline:2px solid #36a3ff}
+    .tbtn:disabled{opacity:.5}
+    #startCard{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9}
+    #startCard > div{max-width:min(92vw,720px);width:min(92vw,720px);background:#0f2231;border:1px solid #203a42;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px}
+    #startBtns{display:flex;gap:8px;margin-top:8px}
+    .btn2{padding:8px 12px;border-radius:9px}
+    .ok{background:#175a2e;border:1px solid #2b9150}
+    .fs{background:#0b2e73;border:1px solid #356cd7}
+    .danger{background:#6b1111;border:1px solid #b04040}
+    #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:999}
+    #err > div{max-width:min(92vw,560px);background:#12293d;border:1px solid #2a537d;border-radius:14px;padding:16px;color:#e9f3ff}
+    #err .row{display:flex;justify-content:flex-end;margin-top:12px}
+    #err .row button{padding:7px 12px;border-radius:8px;background:#263a53;border:1px solid #4b6c96;color:#e9f3ff}
+    #version{position:fixed;right:12px;bottom:6px;color:#7fa2d3;opacity:.8;font:12px/1 system-ui;z-index:10}
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
 
-  <!-- HUD oben -->
-  <div class="hud" id="hudBar">
-    <span class="pill">🌲 Holz <span id="hudHolz">0</span></span>
-    <span class="pill">🪨 Stein <span id="hudStein">0</span></span>
-    <span class="pill">🌿 Nahrung <span id="hudNahrung">0</span></span>
-    <span class="pill">🪙 Gold <span id="hudGold">0</span></span>
-    <span class="pill">🧺 Träger <span id="hudTraeger">0</span></span>
-    <span class="pill">Tool: <span id="hudTool">Zeiger</span></span>
-    <span class="pill">Zoom <span id="hudZoom">1.00x</span></span>
+  <div class="hud" id="hudBar" style="opacity:.0">
+    <span class="pill"><small>🌲</small> Holz <span id="hudholz">0</span></span>
+    <span class="pill"><small>🪨</small> Stein <span id="hudstein">0</span></span>
+    <span class="pill"><small>🌿</small> Nahrung <span id="hudnahrung">0</span></span>
+    <span class="pill"><small>🪙</small> Gold <span id="hudgold">0</span></span>
+    <span class="pill"><small>🧺</small> Träger <span id="hudtraeger">0</span></span>
+    <span class="pill" id="hudTool">Tool: —</span>
+    <span class="pill" id="hudZoom">Zoom 1.00x</span>
     <div class="right">
-      <button class="pill" id="btnCenter">Zentrieren</button>
-      <button class="pill" id="btnDebug">Debug</button>
-      <button class="pill" id="btnFS">Vollbild</button>
+      <button class="btn" id="btnCenter" disabled>Zentrieren</button>
+      <button class="btn" id="btnDbg">Debug</button>
+      <button class="btn" id="btnFS">Vollbild</button>
     </div>
   </div>
 
-  <!-- Tools links -->
-  <div class="tools" id="toolBar">
-    <button class="btn active" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="woodcutter">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="bulldoze">Abriss</button>
+  <div class="tools">
+    <button class="tbtn" id="tPointer" data-tool="pointer" disabled>Zeiger</button>
+    <button class="tbtn" id="tRoad"    data-tool="road" disabled>Straße</button>
+    <button class="tbtn" id="tHQ"      data-tool="hq" disabled>HQ</button>
+    <button class="tbtn" id="tLumber"  data-tool="lumber" disabled>Holzfäller</button>
+    <button class="tbtn" id="tDepot"   data-tool="depot" disabled>Depot</button>
+    <button class="tbtn" id="tErase"   data-tool="erase" disabled>Abriss</button>
   </div>
 
-  <!-- Start-Overlay -->
   <div id="startCard">
-    <div class="card">
-      <h1>Siedler‑Mini V14 (Mobile)</h1>
-      <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist). Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
-      <p class="pill" style="display:block;text-align:center;">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
-      <div class="row">
-        <button class="btn green" id="startBtn">Start</button>
-        <button class="btn" id="fsBtn">Vollbild</button>
-        <button class="btn red" id="resetBtn">Reset</button>
+    <div>
+      <h3 style="margin:6px 0 8px">Siedler‑Mini V14.6 (Mobile)</h3>
+      <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist). Das erste HQ ist mittig gesetzt. Produktionsgebäude arbeiten nur, wenn sie über Straßen mit dem HQ verbunden sind.</p>
+      <p style="opacity:.8">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
+      <div id="startBtns">
+        <button class="btn2 ok" id="startBtn">Start</button>
+        <button class="btn2 fs" id="fsBtn">Vollbild</button>
+        <button class="btn2 danger" id="resetBtn">Reset</button>
       </div>
     </div>
   </div>
 
-  <div id="version">JS V14.4</div>
+  <div id="version">JS V14.6</div>
 
-  <!-- Ein einziger Einstiegspunkt: boot.js lädt und ruft game.startGame() -->
-  <script type="module" src="./boot.js?v=14.4"></script>
+  <div id="err"><div>
+    <div id="errMsg">Fehler</div>
+    <div class="row"><button id="errClose">Schließen</button></div>
+  </div></div>
+
+  <script type="module" src="./boot.js?v=14.6"></script>
 </body>
 </html>
