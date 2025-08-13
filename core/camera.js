@@ -10,15 +10,15 @@ export class Camera{
     const old=this.zoom;
     n=Math.max(this.minZoom, Math.min(this.maxZoom, n));
     if (n===old) return;
-    // Zoom um Ankerpunkt (Weltkoordinaten)
+    // Zoom um Ankerpunkt
     const k=n/old;
     this.x = anchorX + (this.x - anchorX)/k;
     this.y = anchorY + (this.y - anchorY)/k;
     this.zoom=n; this.clamp();
   }
   clamp(){
-    // einfache Soft‑Bounds
-    const pad=400;
+    // Soft‑Bounds. Wenn deine Karte größer/kleiner wird: Werte anpassen.
+    const pad=800;
     this.x=Math.max(-pad, Math.min(this.x, pad));
     this.y=Math.max(-pad, Math.min(this.y, pad));
   }
