@@ -6,28 +6,23 @@
   <title>Siedler‑Mini V14 (Mobile)</title>
   <meta name="theme-color" content="#0b1620" />
   <style>
-    :root { color-scheme: dark light }
-    html,body { margin:0; padding:0; height:100%; background:#0f1823;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial }
-    #game { display:block; touch-action:none; position:fixed; inset:0 }
+    :root{color-scheme:dark light}
+    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    #game{display:block;touch-action:none;position:fixed;inset:0}
 
-    /* HUD (oben) */
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;
-      justify-content:flex-start;opacity:.95;pointer-events:none}
-    .pill{pointer-events:auto;padding:6px 10px;border-radius:999px;background:#122131;border:1px solid #1e2d42;
-      color:#cfe3ff;font-size:14px;line-height:18px}
-    .right{position:fixed;top:8px;right:12px;display:flex;gap:8px}
+    /* HUD oben */
+    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;opacity:.95;pointer-events:none}
+    .pill{pointer-events:auto;padding:6px 10px;border-radius:999px;background:#122131;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
+    .right{margin-left:auto;display:flex;gap:8px}
 
-    /* Tools (links) */
-    .tools{position:fixed;left:12px;top:56px;display:flex;flex-direction:column;gap:10px}
+    /* Tools links */
+    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px}
     .btn{padding:8px 12px;border-radius:12px;background:#0f1b29;border:1px solid #1b2a3f;color:#cfe3ff;font-size:15px}
     .btn.active{outline:2px solid #36a3ff}
 
-    /* Start-Overlay (on top) */
-    #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-      background:rgba(0,0,0,.35);backdrop-filter:saturate(1.1) blur(2px)}
-    #startCard{max-width:min(92vw,680px);width:92vw;background:#122131;border:1px solid #20324a;border-radius:16px;
-      box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px}
+    /* Start-Overlay */
+    #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);backdrop-filter:saturate(1.1) blur(2px)}
+    #startCard{max-width:min(92vw,680px);width:92vw;background:#122131;border:1px solid #20324a;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px}
     #startCard h1{margin:0 0 10px 0;font-size:22px}
     #startCard p{margin:6px 0;color:#c9d8ee}
     #startBtns{display:flex;gap:8px;margin-top:8px}
@@ -39,7 +34,7 @@
 
 <canvas id="game"></canvas>
 
-<!-- HUD -->
+<!-- HUD top -->
 <div id="uiBar" class="hud" style="opacity:0">
   <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
   <div class="pill">🪨 Stein <span id="hudStone">0</span></div>
@@ -55,7 +50,7 @@
   </div>
 </div>
 
-<!-- Tools -->
+<!-- Tool-Leiste links -->
 <div class="tools">
   <button class="btn active" id="toolPointer">Zeiger</button>
   <button class="btn" id="toolRoad">Straße</button>
@@ -69,7 +64,7 @@
 <div id="startOverlay">
   <div id="startCard">
     <h1>Siedler‑Mini V14 (Mobile)</h1>
-    <p>1 Finger = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+    <p>1 Finger = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · 2 Finger/Scroll = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
     <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
     <p style="opacity:.8">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
     <div id="startBtns">
@@ -80,9 +75,9 @@
   </div>
 </div>
 
-<div id="version">JS V14.3‑safe2</div>
+<div id="version">JS V14.3‑safe3</div>
 
-<!-- EIN Einstiegspunkt: boot.js lädt und ruft window.main.run() -->
-<script type="module" src="./boot.js?v=14.3-safe2"></script>
+<!-- Ein einziger Einstiegspunkt -->
+<script src="./boot.js?v=14.3-safe3" defer></script>
 </body>
 </html>
