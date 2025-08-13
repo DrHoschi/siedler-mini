@@ -1,92 +1,51 @@
-// main.js (V14.3)
-// Minimal-Start, damit der Start-Button zuverlässig funktioniert.
-// Später kannst du hier deine echten Module importieren und im run() starten, z.B.:
-//   import { startGame } from './game.js?v=14.3';
-//   export async function run(opts){ await startGame(opts); }
+// main.js — lädt game.js & startet das eigentliche Spiel
+// Wichtig: Am Ende setzen wir window.main = { run, centerMap } !
 
-let ctx, W = 0, H = 0, DPR = 1;
-let zoom = 1;
+function $(sel){ return document.querySelector(sel); }
 
-function resizeCanvas(canvas) {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  canvas.width  = Math.floor(w * DPR);
-  canvas.height = Math.floor(h * DPR);
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  W = canvas.width  / DPR;
-  H = canvas.height / DPR;
+let __started = false;
+let __game = null;
+
+function updateHUD(values={}){
+  if ('wood'  in values) $('#hudWood').textContent  = values.wood;
+  if ('stone' in values) $('#hudStone').textContent = values.stone;
+  if ('food'  in values) $('#hudFood').textContent  = values.food;
+  if ('gold'  in values) $('#hudGold').textContent  = values.gold;
+  if ('car'   in values) $('#hudCar').textContent   = values.car;
+  if ('tool'  in values) $('#hudTool').textContent  = values.tool;
+  if ('zoom'  in values) $('#hudZoom').textContent  = values.zoom.toFixed(2)+'x';
 }
 
-function drawPlaceholder() {
-  // dunkler BG
-  ctx.fillStyle = '#0f1823';
-  ctx.fillRect(0, 0, W, H);
+export async function run(){
+  if (__started) return; // Doppelstart verhindern
+  __started = true;
 
-  // kleines isometrisches Gitter als „Karte“
-  const s = 40 * zoom;             // Kachelgröße
-  const ox = Math.floor(W/2 - 10*s);
-  const oy = Math.floor(H/2 - 6*s);
-  for (let r = 0; r < 12; r++) {
-    for (let c = 0; c < 20; c++) {
-      const x = ox + (c - r) * (s/2);
-      const y = oy + (c + r) * (s/4);
-      // Raute
-      ctx.beginPath();
-      ctx.moveTo(x,       y - s/4);
-      ctx.lineTo(x + s/2, y);
-      ctx.lineTo(x,       y + s/4);
-      ctx.lineTo(x - s/2, y);
-      ctx.closePath();
-      ctx.fillStyle = ( (r+c) % 2 ) ? '#1c2b3f' : '#1a283b';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,.05)';
-      ctx.stroke();
-    }
+  const canvas = $('#game');
+  if (!canvas) throw new Error('#game Canvas fehlt');
+
+  // Spielmodul laden (dein vorhandenes game.js)
+  // -> game.startGame(opts) muss exportiert sein.
+  const game = await import('./game.js?v=14.3');
+  if (!game || typeof game.startGame !== 'function') {
+    throw new Error('game.startGame(...) nicht gefunden');
   }
 
-  // „HQ“-Platzhalter
-  ctx.fillStyle = '#2f8a3b';
-  ctx.fillRect(W/2 - 60, H/2 - 40, 120, 80);
-  ctx.fillStyle = '#e6f2ff';
-  ctx.font = '14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-  ctx.fillText('HQ (Platzhalter)', W/2 - 56, H/2 + 4);
+  // Hooks ins Spiel geben
+  __game = await game.startGame({
+    canvas,
+    DPR: Math.max(1, Math.min(3, window.devicePixelRatio||1)),
+    onHUD: updateHUD,
+    onError: (msg)=> alert('Spiel-Fehler: '+msg),
+  });
+
+  // Optional: Buttons (Debug etc.) an dein Spiel durchreichen
+  $('#dbgBtn')?.addEventListener('click', ()=> __game?.toggleDebug?.());
 }
 
-export async function run(opts = {}) {
-  const { canvas, DPR: deviceDPR = 1 } = opts;
-  if (!canvas) throw new Error('Canvas fehlt (opts.canvas)');
-
-  DPR = Math.max(1, Math.min(3, deviceDPR || 1));
-  ctx = canvas.getContext('2d');
-
-  // Größe setzen und zeichnen
-  resizeCanvas(canvas);
-  drawPlaceholder();
-
-  // einfache Gesten (nur Zoom per Wheel/Pinch simuliert; Pan lässt du deiner Input-Logik)
-  const onWheel = (ev) => {
-    ev.preventDefault();
-    zoom = Math.max(0.4, Math.min(2.0, zoom * (ev.deltaY < 0 ? 1.05 : 0.95)));
-    drawPlaceholder();
-  };
-  canvas.addEventListener('wheel', onWheel, { passive:false });
-
-  // Resize
-  const onResize = () => { resizeCanvas(canvas); drawPlaceholder(); };
-  window.addEventListener('resize', onResize);
-
-  // Cleanup-Funktion (falls du später neu startest)
-  run.cleanup = () => {
-    canvas.removeEventListener('wheel', onWheel);
-    window.removeEventListener('resize', onResize);
-  };
-
-  // → Ab hier kannst du deine echten Module starten:
-  // const game = await import('./game.js?v=14.3');
-  // await game.startGame({ canvas, DPR, ... });
+export function centerMap(){
+  // wird vom "Zentrieren"-Button genutzt
+  __game?.centerMap?.();
 }
 
-export function centerMap() {
-  // Im Platzhalter nur neu zeichnen – in deiner echten Version Kamera auf Mitte setzen
-  drawPlaceholder();
-}
+// Damit boot.js den Einstieg findet:
+window.main = { run, centerMap };
