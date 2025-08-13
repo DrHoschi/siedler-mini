@@ -1,9 +1,10 @@
 // core/input.js
-// V14.2 – saubere Touchsteuerung (Pan nur im Zeiger-Tool), Tap-Box für Abriss
+// V14.2 – Touchsteuerung: Pan nur im Zeiger‑Tool, Pinch‑Zoom, Tap‑Box für Abriss/Bau
 
 export class Input {
   constructor(getState) {
-    this.getState = getState; // {tool, camera, pickAtScreen, demolishAtWorld}
+    // getState() soll { tool, camera, pickAtScreen, buildAtWorld, demolishAtWorld } liefern
+    this.getState = getState;
     this.touches = new Map();
     this.lastTapMs = 0;
   }
@@ -18,60 +19,73 @@ export class Input {
   onStart = (ev) => {
     if (!ev.target) return;
     const now = performance.now();
-    if (now - this.lastTapMs < 280) {
-      // Doppeltipp lassen wir die App (UI) abfangen – hier: nichts
-    }
-    for (const t of ev.changedTouches) this.touches.set(t.identifier, {x:t.clientX, y:t.clientY});
+    // Doppeltipp fängt die UI selbst ab (Vollbild o.ä.), hier nix tun
+    if (now - this.lastTapMs < 280) return;
+    for (const t of ev.changedTouches) this.touches.set(t.identifier, t);
     this.lastTapMs = now;
+    // Drag-Start für Einfingerpan
+    if (this.touches.size === 1) {
+      const t = [...this.touches.values()][0];
+      const st = this.getState();
+      if (st.tool === 'pointer') st.camera.dragStart(t.clientX, t.clientY);
+    }
   }
 
   onMove = (ev) => {
     const st = this.getState();
     if (!st) return;
-    if (ev.touches.length === 1 && st.tool === 'pointer') {
+
+    if (this.touches.size === 1 && st.tool === 'pointer') {
       const t = ev.touches[0];
-      const prev = this.touches.get(t.identifier);
-      if (prev) {
-        st.camera.pan(t.clientX - prev.x, t.clientY - prev.y);
-        prev.x = t.clientX; prev.y = t.clientY;
-      }
+      st.camera.dragMove(t.clientX, t.clientY);
       ev.preventDefault();
-    } else if (ev.touches.length === 2) {
-      // Pinch‑Zoom
+      return;
+    }
+
+    // Pinch‑Zoom (2 Finger)
+    if (ev.touches.length === 2) {
       const [a,b] = ev.touches;
-      const pa = this.touches.get(a.identifier) ?? {x:a.clientX, y:a.clientY};
-      const pb = this.touches.get(b.identifier) ?? {x:b.clientX, y:b.clientY};
-      const d0 = Math.hypot(pa.x - pb.x, pa.y - pb.y);
-      const d1 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-      if (d0 > 0 && d1 > 0) {
-        const f = st.camera.zoom * (d1 / d0);
-        const cx = (a.clientX + b.clientX) * 0.5;
-        const cy = (a.clientY + b.clientY) * 0.5;
-        st.camera.zoomTo(f, cx, cy);
+      const [a0,b0] = [...this.touches.values()];
+      if (a0 && b0) {
+        const dist0 = Math.hypot(a0.clientX - b0.clientX, a0.clientY - b0.clientY);
+        const dist1 = Math.hypot(a.clientX - b.clientX,   a.clientY - b.clientY);
+        if (dist0 > 0) {
+          const f = dist1 / dist0;
+          const cx = (a.clientX + b.clientX) / 2;
+          const cy = (a.clientY + b.clientY) / 2;
+          st.camera.zoomAt(f, cx, cy);
+        }
       }
-      this.touches.set(a.identifier, {x:a.clientX, y:a.clientY});
-      this.touches.set(b.identifier, {x:b.clientX, y:b.clientY});
       ev.preventDefault();
     }
+
+    // Touch‑Map aktualisieren
+    this.touches.clear();
+    for (const t of ev.touches) this.touches.set(t.identifier, t);
   }
 
   onEnd = (ev) => {
     const st = this.getState();
     if (!st) return;
-    // kurzer Tap → bauen/abreißen
-    if (ev.changedTouches.length === 1) {
-      const t = ev.changedTouches[0];
-      const screen = {x:t.clientX, y:t.clientY};
-      const world = st.pickAtScreen(screen.x, screen.y);
-      if (!world) return;
+
+    // Tap‑Events (kurzer Tipp)
+    for (const t of ev.changedTouches) {
+      // nur kurzer Tap ohne Bewegung
+      // (hier genügt: wenn nach dem End keine Touches aktiv sind)
+      const sx = t.clientX, sy = t.clientY;
+      const world = st.pickAtScreen(sx, sy);
+      if (!world) continue;
 
       if (st.tool === 'demolish') {
-        // großzügige Hitbox (ein Tile‑Quadrat um den Tap)
-        st.demolishAtWorld(world.wx, world.wy, world.tileX, world.tileY);
-      } else {
-        st.buildAtWorld(world.wx, world.wy, world.tileX, world.tileY);
+        // großzügige 1x1‑Tile‑Hitbox
+        st.demolishAtWorld(world.wx, world.wy, world.worldTileX, world.worldTileY);
+      } else if (st.tool !== 'pointer') {
+        st.buildAtWorld(world.wx, world.wy, world.worldTileX, world.worldTileY);
       }
     }
+
+    // Drag‑End / Touch‑Map
+    st.camera.dragEnd();
     for (const t of ev.changedTouches) this.touches.delete(t.identifier);
   }
 }
