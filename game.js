@@ -1,81 +1,154 @@
-// game.js — minimal lauffähig, keine externen Imports, damit "module script failed" sicher weg ist.
+// /game.js  — V14.3 voll verdrahtet
+// Startet das Spiel, lädt Assets, richtet Kamera+Input ein und ruft render.draw()
 
-export async function startGame({ canvas, DPR = 1, onHUD = ()=>{} } = {}){
+import Camera from './core/camera.js';
+import Input  from './core/input.js';
+import { loadAllAssets } from './core/assets.js';
+import Renderer from './render.js';
+
+// --- Spielzustand -----------------------------------------------------------
+const T = 64;                // Tile-Größe (px)
+const MAP_W = 32, MAP_H = 32;
+
+function makeWorld() {
+  // einfache Ground-Map (0 = Gras)
+  const ground = new Array(MAP_H).fill(0).map(() => new Array(MAP_W).fill(0));
+  // ein initiales HQ ungefähr mittig
+  const hq = { x: Math.floor(MAP_W/2), y: Math.floor(MAP_H/2), type: 'hq_stone' };
+  const buildings = [hq];
+  const roads = []; // {x,y} Liste – kann deine Straßenlogik später füllen
+  return { tiles: {w:MAP_W, h:MAP_H, size:T}, ground, buildings, roads };
+}
+
+// --- HUD-Helfer -------------------------------------------------------------
+function bindHUD(onHUD, getState) {
+  if (!onHUD) return;
+  const api = {
+    wood:  () => getState().res.wood,
+    stone: () => getState().res.stone,
+    food:  () => getState().res.food,
+    gold:  () => getState().res.gold,
+    car:   () => getState().carrier,
+    tool:  () => getState().tool,
+    zoom:  () => getState().camera.zoom.toFixed(2) + 'x',
+  };
+  onHUD(api);
+}
+
+// --- öffentliche Startfunktion ---------------------------------------------
+export async function startGame(opts = {}) {
+  const {
+    canvas,
+    DPR = 1,
+    onHUD,           // Funktion, die HUD-Werte setzt (kommt aus boot.js)
+    // centerMap wird _optional_ als Platzhalter belegt (siehe unten)
+  } = opts;
+
+  if (!canvas) throw new Error('canvas fehlt');
+
+  // 1) Assets laden (lädt Platzhalter, falls eine Textur fehlt)
+  await loadAllAssets();
+
+  // 2) Welt erzeugen
+  const world = makeWorld();
+
+  // 3) Kamera einrichten
+  const viewW = Math.floor(canvas.clientWidth  * DPR);
+  const viewH = Math.floor(canvas.clientHeight * DPR);
+  const worldPxW = world.tiles.w * T;
+  const worldPxH = world.tiles.h * T;
+
+  const camera = new Camera(viewW, viewH, worldPxW, worldPxH);
+  camera.centerOn((worldPxW/2)|0, (worldPxH/2)|0);
+
+  // 4) Renderer
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('canvas.getContext() fehlgeschlagen');
+  const renderer = new Renderer(ctx, T);
 
-  // kleine Demo‑Werte ins HUD
-  onHUD('Wood','20'); onHUD('Stone','10'); onHUD('Food','10'); onHUD('Gold','0'); onHUD('Car','0');
-
-  // einfache Kamera/Zoom‑Platzhalter
+  // 5) Spiel‑State
   const state = {
-    t: 0,
-    zoom: 1,
-    px: 0, py: 0,
-    dragging: false,
-    lastX: 0, lastY: 0,
-    tool: 'pointer',
+    // Ressourcen (nur Dummy – kann später aus deiner Logik kommen)
+    res: { wood: 0, stone: 0, food: 0, gold: 0 },
+    carrier: 0,
+
+    tool: 'pointer',       // 'pointer' | 'road' | 'hq' | 'lumber' | 'depot' | 'erase'
+    debug: false,
+
+    world, camera, ctx, DPR,
+    // kleine Helfer um im Render/Input schnell auf State zuzugreifen
+    setTool(name){ this.tool = name; },
   };
 
-  canvas.addEventListener('pointerdown', ev => {
-    state.dragging = true; state.lastX = ev.clientX; state.lastY = ev.clientY;
-    canvas.setPointerCapture(ev.pointerId);
-  });
-  canvas.addEventListener('pointermove', ev => {
-    if (!state.dragging) return;
-    const dx = ev.clientX - state.lastX, dy = ev.clientY - state.lastY;
-    state.lastX = ev.clientX; state.lastY = ev.clientY;
-    state.px += dx; state.py += dy;
-  });
-  canvas.addEventListener('pointerup', ev => { state.dragging = false; canvas.releasePointerCapture?.(ev.pointerId); });
-  canvas.addEventListener('wheel', ev => {
-    ev.preventDefault();
-    const z = Math.max(0.5, Math.min(2.0, state.zoom * (ev.deltaY < 0 ? 1.1 : 0.9)));
-    state.zoom = z;
-    const el = document.querySelector('#hudZoom'); if (el) el.textContent = `${z.toFixed(2)}x`;
-  }, { passive:false });
+  // HUD verbinden
+  bindHUD(onHUD, () => state);
 
-  function drawGrid(ctx){
-    const w = canvas.width, h = canvas.height;
-    ctx.save();
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = '#0f1823';
-    ctx.fillRect(0,0,w,h);
+  // 6) Input
+  const input = new Input(() => state);
+  input.attach(canvas);
 
-    ctx.translate(state.px, state.py);
-    ctx.scale(state.zoom, state.zoom);
+  // 7) Buttons (linke Tool-Leiste)
+  const id = s => document.getElementById(s);
+  const toolBtns = [
+    ['toolPointer','pointer'],
+    ['toolRoad','road'],
+    ['toolHQ','hq'],
+    ['toolLumber','lumber'],
+    ['toolDepot','depot'],
+    ['toolErase','erase'],
+  ];
+  for (const [btnId, toolName] of toolBtns) {
+    const el = id(btnId);
+    if (!el) continue;
+    el.onclick = () => {
+      state.tool = toolName;
+      // visuelles „active“
+      toolBtns.forEach(([id2, t]) => {
+        const b = id(id2); if (b) b.classList.toggle('active', t === toolName);
+      });
+    };
+  }
 
-    ctx.globalAlpha = 1;
-    const step = 64 * DPR;
-    ctx.strokeStyle = 'rgba(255,255,255,.08)';
-    ctx.lineWidth = 1;
+  // 8) Zentrieren & Debug & Vollbild oben rechts (falls vorhanden)
+  const centerBtn = id('centerBtn');
+  if (centerBtn) centerBtn.onclick = () => {
+    camera.centerOn((worldPxW/2)|0, (worldPxH/2)|0);
+  };
+  const dbgBtn = id('dbgBtn');
+  if (dbgBtn) dbgBtn.onclick = () => state.debug = !state.debug;
+  const fsBtnTop = id('fsBtnTop');
+  if (fsBtnTop) fsBtnTop.onclick = async () => {
+    const docEl = document.documentElement;
+    if (!document.fullscreenElement && docEl.requestFullscreen) await docEl.requestFullscreen();
+    else if (document.exitFullscreen) await document.exitFullscreen();
+  };
 
-    for (let y=-step; y<h+step; y+=step){
-      for (let x=-step; x<w+step; x+=step){
-        ctx.beginPath();
-        ctx.moveTo(x, y+step/2);
-        ctx.lineTo(x+step/2, y);
-        ctx.lineTo(x+step, y+step/2);
-        ctx.lineTo(x+step/2, y+step);
-        ctx.closePath();
-        ctx.stroke();
-      }
+  // 9) Resize
+  function resize() {
+    const w = Math.floor(canvas.clientWidth * DPR);
+    const h = Math.floor(canvas.clientHeight * DPR);
+    if (w && h) {
+      canvas.width = w; canvas.height = h;
+      camera.resize(w, h);
     }
-
-    // Ein Platzhalter‑HQ
-    ctx.fillStyle = '#2f8a3e';
-    ctx.fillRect(-80, -80, 160, 160);
-    ctx.fillStyle = '#e7ffee';
-    ctx.font = `${16*DPR}px system-ui,-apple-system,Segoe UI,Roboto,Arial`;
-    ctx.fillText('HQ (Platzhalter)', -70*DPR, -50*DPR);
-
-    ctx.restore();
   }
+  window.addEventListener('resize', resize);
+  resize();
 
-  function frame(ts){
-    state.t = ts;
-    drawGrid(ctx);
-    requestAnimationFrame(frame);
+  // 10) Zeichenschleife
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    // (hier könnte später Logik/Träger‑Update laufen)
+    renderer.draw(state);  // Boden, Gebäude, Debug etc.
+
+    requestAnimationFrame(loop);
   }
-  requestAnimationFrame(frame);
+  requestAnimationFrame(loop);
+
+  // 11) Optional: centerMap‑Platzhalter bereitstellen (boot.js nutzt es evtl.)
+  window.main.centerMap = () => {
+    camera.centerOn((worldPxW/2)|0, (worldPxH/2)|0);
+  };
 }
