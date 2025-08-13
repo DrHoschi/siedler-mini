@@ -1,88 +1,83 @@
-// boot.js – verdrahtet Start/Vollbild/Reset und ruft game.startGame()
+// boot.js – verdrahtet Start/Vollbild/Reset und ruft main.run()
+function $(sel){ return document.querySelector(sel); }
 
-const $  = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-
-function isFull() { return document.fullscreenElement || document.webkitFullscreenElement; }
-async function reqFS() {
+function isFullScreen(){
+  return document.fullscreenElement || document.webkitFullscreenElement;
+}
+async function requestFS(){
   const el = document.documentElement;
   if (!el.requestFullscreen) return el.webkitRequestFullscreen?.();
   return el.requestFullscreen();
 }
-async function exitFS() {
+async function exitFS(){
   if (document.exitFullscreen) return document.exitFullscreen();
   return document.webkitExitFullscreen?.();
 }
-function toggleFS(){ isFull() ? exitFS() : reqFS(); }
+function toggleFS(){ isFullScreen() ? exitFS() : requestFS(); }
 
 function showHUD(show){
   $('#uiBar').style.opacity = show ? '0.95' : '0';
 }
 
-function drawPlaceholder(ctx, canvas){
+// Platzhalter zeichnen (bis main.run das Spiel übernimmt)
+function drawPlaceholder(){
+  const canvas = $('#game');
+  const ctx = canvas.getContext('2d');
   const DPR = window.devicePixelRatio || 1;
-  const w = canvas.width, h = canvas.height;
-  ctx.save();
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  ctx.clearRect(0,0,w,h);
+  const w = Math.floor(canvas.clientWidth * DPR);
+  const h = Math.floor(canvas.clientHeight * DPR);
+  if (w===canvas.width && h===canvas.height) {
+    ctx.clearRect(0,0,w,h);
+  } else {
+    canvas.width = w; canvas.height = h;
+  }
   ctx.fillStyle = '#0f1823';
   ctx.fillRect(0,0,w,h);
 
-  // dezentes Raster
+  // dezentes Grid
+  ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,.06)';
   ctx.lineWidth = 1;
-  const step = 64;
-  for(let y = 0; y < h; y += step){
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
-  }
-
-  // "HQ (Platzhalter)"
-  ctx.fillStyle = '#2ea043';
-  const rw = 240, rh = 140;
-  ctx.fillRect((w/DPR - rw)/2, (h/DPR - rh)/2, rw, rh);
-  ctx.fillStyle = '#cfe3ff';
-  ctx.font = 'bold 40px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-  ctx.fillText('HQ (Platzhalter)', (w/DPR)/2 - 240, (h/DPR)/2 - 100);
+  const step = Math.round(96*DPR);
+  for (let y=step; y<h; y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  for (let x=step; x<w; x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
   ctx.restore();
+
+  // HQ Platzhalter
+  ctx.fillStyle = '#2aa149';
+  const rw = Math.min(w*0.35, 560*DPR), rh = Math.min(h*0.20, 300*DPR);
+  ctx.fillRect(Math.round(w*0.32), Math.round(h*0.34), rw, rh);
+  ctx.fillStyle = '#e5f0ff';
+  ctx.font = `${Math.round(64*DPR)}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+  ctx.fillText('HQ (Platzhalter)', Math.round(w*0.18), Math.round(h*0.28));
 }
 
-// --- Buttons & Start ---
+// Start/FS/Reset Buttons
 window.addEventListener('DOMContentLoaded', () => {
-  const canvas = $('#game');
-  const ctx = canvas.getContext('2d');
-  // erstes Bild (vor Start)
-  const resize = () => {
-    const DPR = window.devicePixelRatio || 1;
-    canvas.width  = Math.floor(canvas.clientWidth  * DPR);
-    canvas.height = Math.floor(canvas.clientHeight * DPR);
-    drawPlaceholder(ctx, canvas);
-  };
-  resize(); window.addEventListener('resize', resize);
+  drawPlaceholder();
 
-  $('#fsBtn').addEventListener('click', toggleFS);
-  $('#fsBtnTop').addEventListener('click', toggleFS);
-  $('#resetBtn').addEventListener('click', () => location.reload());
+  $('#fsBtn')?.addEventListener('click', toggleFS);
+  $('#fsBtnTop')?.addEventListener('click', toggleFS);
+  $('#resetBtn')?.addEventListener('click', () => location.reload());
 
-  $('#startBtn').addEventListener('click', async () => {
+  $('#startBtn')?.addEventListener('click', async () => {
     try{
+      if (!window.main || typeof window.main.run!=='function') {
+        throw new Error('main.run() wurde nicht gefunden (Export fehlt?).');
+      }
+      // HUD sichtbar
       showHUD(true);
+      // Game starten
+      await window.main.run();
+      // Overlay schließen
       $('#startOverlay').style.display = 'none';
-      // dynamisch laden, damit vorher garantiert keine Module nötig sind
-      const game = await import('./game.js?v=14.3-safe3');
-      await game.startGame({
-        canvas,
-        DPR: window.devicePixelRatio || 1,
-        onHUD: (key, val) => {
-          const el = document.querySelector('#hud'+key);
-          if (el) el.textContent = String(val);
-        }
-      });
     }catch(err){
-      // Overlay wieder zeigen & Fehler melden
-      $('#startOverlay').style.display = '';
-      showHUD(false);
-      alert('Startfehler: ' + (err?.message || err));
+      showHUD(true);
+      alert(`Startfehler: ${err.message || err}`);
       console.error(err);
     }
   });
+
+  // Canvas resize/placeholder bis echtes Game übernimmt
+  window.addEventListener('resize', drawPlaceholder);
 });
