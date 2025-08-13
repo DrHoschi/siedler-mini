@@ -279,4 +279,123 @@ const _game = (() => {
       // Klick‑/Tap‑Position in Tile umrechnen
       const rect = state.canvas.getBoundingClientRect();
       const sx = ev.clientX - rect.left;
-      const sy =
+      const sy = ev.clientY - rect.top;
+      const [tx,ty] = screenToIso(sx,sy);
+      placeAt(tx,ty);
+    }
+  }
+
+  // Touch‑Zoom (Pinch)
+  function onTouchStart(ev){
+    if(ev.touches.length===2){
+      state.touch.pinch = true;
+      const a=ev.touches[0], b=ev.touches[1];
+      const d = Math.hypot(b.clientX-a.clientX, b.clientY-a.clientY);
+      state.touch.d0 = d; state.touch.kz = state.zoom;
+    }
+  }
+  function onTouchMove(ev){
+    if(state.touch.pinch && ev.touches.length===2){
+      const a=ev.touches[0], b=ev.touches[1];
+      const d = Math.hypot(b.clientX-a.clientX, b.clientY-a.clientY);
+      const k = d / Math.max(1,state.touch.d0);
+      setZoom(state.touch.kz * k, (a.clientX+b.clientX)/2, (a.clientY+b.clientY)/2);
+      ev.preventDefault();
+    }
+  }
+  function onTouchEnd(){
+    state.touch.pinch = false;
+  }
+
+  function setZoom(z, cx, cy){
+    const {minZ,maxZ,zoom} = state;
+    const nz = Math.max(minZ, Math.min(maxZ, z));
+    if(nz===zoom) return;
+
+    // Zoomen zum Cursor: Weltpunkt unter (cx,cy) halten
+    const [wx, wy] = screenToIso(cx, cy);
+    const [sx0, sy0] = isoToScreen(wx, wy);
+    state.zoom = nz;
+    const [sx1, sy1] = isoToScreen(wx, wy);
+    state.camX += (cx - (sx1));
+    state.camY += (cy - (sy1));
+
+    onZoomChanged?.(state.zoom);
+  }
+
+  function onWheel(ev){
+    const dir = ev.deltaY>0 ? -1 : 1;
+    const z = state.zoom * (1 + dir*0.08);
+    const rect = state.canvas.getBoundingClientRect();
+    setZoom(z, ev.clientX - rect.left, ev.clientY - rect.top);
+  }
+
+  function centerOnMap(){
+    // Mitte der Karte optisch zentrieren
+    const {mapW,mapH, canvas} = state;
+    const cx = Math.floor(mapW/2), cy = Math.floor(mapH/2);
+    const [sx,sy] = isoToScreen(cx,cy);
+    state.camX += (canvas.width/2 - sx);
+    state.camY += (canvas.height/2 - sy);
+  }
+
+  // ======= Loop =======
+  let rafId=0, lastT=0;
+  function loop(ts){
+    const dt = Math.min(50, ts - lastT); lastT = ts;
+    // (später: Carrier‑Animation, Wegfindung etc.)
+    render();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ======= Init & Run =======
+  async function init(canvas, version){
+    state.version = version || state.version;
+    state.canvas = canvas;
+    state.ctx = canvas.getContext('2d');
+
+    // Canvas auf Gerätegröße anpassen
+    const resize = ()=>{
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const w = Math.floor(canvas.clientWidth * dpr);
+      const h = Math.floor(canvas.clientHeight * dpr);
+      if(canvas.width!==w || canvas.height!==h){ canvas.width=w; canvas.height=h; }
+    };
+    new ResizeObserver(resize).observe(canvas);
+    resize();
+
+    await loadAssets();
+    makeMap();
+
+    // Start‑Kamera: auf Mitte
+    centerOnMap();
+
+    // Events
+    canvas.addEventListener('pointerdown', onPointerDown, {passive:true});
+    canvas.addEventListener('pointermove', onPointerMove, {passive:true});
+    canvas.addEventListener('pointerup', onPointerUp, {passive:true});
+    canvas.addEventListener('wheel', onWheel, {passive:false});
+    canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+    canvas.addEventListener('touchmove', onTouchMove, {passive:false});
+    canvas.addEventListener('touchend', onTouchEnd, {passive:true});
+
+    // Default‑Tool
+    setTool('pointer');
+    onZoomChanged?.(state.zoom);
+  }
+
+  async function run(){
+    cancelAnimationFrame(rafId);
+    lastT = performance.now();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ======= Exposed =======
+  return {
+    init, run, setTool, centerOnMap,
+    get debug(){ return state.debug; },
+    set debug(v){ state.debug=v; },
+  };
+})();
+
+// Ende main.js
