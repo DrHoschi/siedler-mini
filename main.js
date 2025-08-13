@@ -1,97 +1,140 @@
-// main.js  v14.2
-import { IM, loadAllAssets }        from './core/assets.js?v=14.2';
-import { attachInput, detachInput } from './core/input.js?v=14.2';
-import { Camera }                   from './core/camera.js?v=14.2';
-import { Carriers }                 from './core/carriers.js?v=14.2';
-import { createWorld }              from './world.js?v=14.2';
-import { createRenderer }           from './render.js?v=14.2';
-import { createGameState }          from './game.js?v=14.2';
+// main.js – V14.2
+// Bootstrapping: Assets laden, Game + Renderer bauen, Loop starten, UI verdrahten
 
-const $ = (s) => document.querySelector(s);
-let canvas, ctx, renderer, camera, world, state, carriers;
-let rafId=0, running=false, lastT=0;
+import { IM, loadAllAssets }   from './core/assets.js';
+import { Camera }              from './core/camera.js';
+import { Input }               from './core/input.js';
+import { Carriers }            from './core/carriers.js';
+import { Game }                from './game.js';
+import { createRenderer }      from './render.js';
 
-function ensureCanvas() {
-  canvas = $('#game');
-  if (!canvas) throw new Error('#game Canvas fehlt (index.html)');
-  const c = canvas.getContext('2d', { alpha:false, desynchronized:true });
-  if (!c) throw new Error('2D Kontext nicht verfügbar');
-  ctx = c;
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas, {passive:true});
-}
-function resizeCanvas() {
-  const dpr = Math.max(1, Math.min(window.devicePixelRatio||1, 2));
-  const w = Math.floor(innerWidth*dpr), h = Math.floor(innerHeight*dpr);
-  if (canvas.width!==w || canvas.height!==h){canvas.width=w;canvas.height=h;}
-  canvas.style.width = `${innerWidth}px`; canvas.style.height = `${innerHeight}px`;
-  renderer?.setViewport(w,h,dpr);
-}
-function hideStartOverlay(){ const ov=$('#startOverlay'); if(ov) ov.style.display='none'; }
-function showUI(){ const ui=$('#uiBar'); if(ui) ui.style.opacity='1'; }
+const VERSION = 'V14.2';
 
-function updateHUD(){
-  if(!state) return;
-  const R=state.resources;
-  $('#hudWood')?.replaceChildren(String(R.wood));
-  $('#hudStone')?.replaceChildren(String(R.stone));
-  $('#hudFood')?.replaceChildren(String(R.food));
-  $('#hudGold')?.replaceChildren(String(R.gold));
-  $('#hudCar')?.replaceChildren(String(R.carriers));
-  $('#hudTool')?.replaceChildren(state.toolName||'Zeiger');
-  $('#hudZoom')?.replaceChildren(`${camera.zoom.toFixed(2)}x`);
-}
+function $(sel) { return document.querySelector(sel); }
 
-async function initGame(){
-  ensureCanvas();
-  await loadAllAssets();
-  world    = createWorld({ size: 40 });
-  state    = createGameState({ placeStartHQ:true });
-  camera   = new Camera();
-  renderer = createRenderer();
-  carriers = new Carriers({ sprite: IM.carrier });
+const state = {
+  tool: 'pointer',        // 'pointer' | 'road' | 'hq' | 'lumberjack' | 'depot' | 'demolish'
+  game: null,
+  camera: null,
+  input: null,
+  carriers: null,
+  renderer: null,
+  running: false,
+};
 
-  // Kamera auf HQ fokussieren
-  camera.centerOn(world.hq.pixelX, world.hq.pixelY);
-  camera.minZoom=0.55; camera.maxZoom=2.0;
+async function boot() {
+  // Lazy UI labels (falls vorhanden)
+  const ver = document.querySelector('.js-version');
+  if (ver) ver.textContent = 'JS ' + VERSION;
 
-  attachInput(canvas, camera, state, world, renderer, () => updateHUD());
-  showUI(); updateHUD();
-}
-
-function step(dt){
-  state.time += dt;
-  carriers.update(dt, world, state);
-  renderer.render(ctx, world, state, camera, carriers);
-  updateHUD();
-}
-
-function loop(t){
-  if(!running) return;
-  const dt=Math.min(0.05,(t-lastT)/1000)||0.016; lastT=t;
-  step(dt);
-  rafId=requestAnimationFrame(loop);
-}
-function stop(){
-  running=false; if(rafId) cancelAnimationFrame(rafId);
-  detachInput(canvas);
-  removeEventListener('resize', resizeCanvas);
-}
-
-export async function run(){
-  if(running) return;
-  try{
-    await initGame();
-    hideStartOverlay();
-    running=true; lastT=performance.now(); rafId=requestAnimationFrame(loop);
-  }catch(e){
-    alert(`Startfehler in main.run()\n${e.message}`);
-    console.error(e); stop(); throw e;
+  // Canvas erzeugen (falls nicht in index.html vorhanden)
+  let canvas = $('#game');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'game';
+    canvas.style.display = 'block';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    document.body.appendChild(canvas);
   }
+
+  // Assets laden (mit simpler Fortschrittsanzeige im Titel, optional)
+  await loadAllAssets();
+
+  // Welt anlegen (Tiles), Rendering‑Größe
+  const worldTilesW = 64, worldTilesH = 64;     // feste Größe
+  const tileDX = 64, tileDY = 32;               // isometrische Projektion
+  const worldPxW = worldTilesW * tileDX;
+  const worldPxH = worldTilesH * tileDY;
+
+  // Canvas‑Größe an Viewport koppeln
+  function resizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth  || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    canvas.width  = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    state.renderer && state.renderer.setSize(canvas.width, canvas.height, dpr);
+    state.camera && state.camera.resize(canvas.width / dpr, canvas.height / dpr);
+  }
+
+  // Camera + Game + Renderer
+  state.camera   = new Camera(window.innerWidth, window.innerHeight, worldPxW, worldPxH);
+  state.game     = new Game(worldTilesW, worldTilesH, tileDX, tileDY, IM, state.camera);
+  state.carriers = new Carriers(state.game, state.game.findRoadPath);
+  state.renderer = createRenderer(canvas, IM, state);
+
+  // Input verdrahten
+  state.input = new Input(() => ({
+    tool: state.tool,
+    camera: state.camera,
+    pickAtScreen: (sx, sy) => state.game.pickAtScreen(sx, sy),
+    buildAtWorld: (wx, wy, tx, ty) => state.game.buildAtWorld(state.tool, tx, ty),
+    demolishAtWorld: (wx, wy, tx, ty) => state.game.demolishAtWorld(tx, ty),
+  }));
+  state.input.attach(canvas);
+
+  // HQ mittig setzen
+  const mid = state.game.centerTile();
+  state.game.placeHQ(mid.x, mid.y, /*stone=*/true);
+  state.camera.centerOn(mid.wx, mid.wy);
+
+  // Buttons (optional vorhanden)
+  $('#btn-start')?.addEventListener('click', start);
+  $('#btn-fullscreen')?.addEventListener('click', toggleFullscreen);
+  $('#btn-reset')?.addEventListener('click', () => location.reload());
+
+  // Tool‑Buttons (optional vorhanden)
+  $('#tool-pointer')?.addEventListener('click', () => state.tool = 'pointer');
+  $('#tool-road')?.addEventListener('click',    () => state.tool = 'road');
+  $('#tool-hq')?.addEventListener('click',      () => state.tool = 'hq');
+  $('#tool-lumber')?.addEventListener('click',  () => state.tool = 'lumberjack');
+  $('#tool-depot')?.addEventListener('click',   () => state.tool = 'depot');
+  $('#tool-demolish')?.addEventListener('click',() => state.tool = 'demolish');
+
+  window.addEventListener('resize', resizeCanvas, {passive:true});
+  resizeCanvas();
+
+  // Autostart, wenn kein Start‑Dialog
+  if (!$('#btn-start')) start();
 }
 
-// kleine Helfer für HUD
-function center(){ camera?.centerOn(world.hq.pixelX, world.hq.pixelY); }
-function toggleDebug(){ renderer.debug = !renderer.debug; }
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement) el.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
 
-window.main = { run, center, toggleDebug };
+let _rafId = 0, _last = 0;
+function start() {
+  if (state.running) return;
+  state.running = true;
+  _last = performance.now();
+  const loop = (t) => {
+    const dt = Math.min(0.05, (t - _last) / 1000);
+    _last = t;
+    // Update
+    state.game.update(dt);
+    state.carriers.update(dt);
+    // Render
+    state.renderer.draw();
+    _rafId = requestAnimationFrame(loop);
+  };
+  _rafId = requestAnimationFrame(loop);
+}
+
+function stop() {
+  if (_rafId) cancelAnimationFrame(_rafId);
+  state.running = false;
+}
+
+// Exporte + Globale Fallbacks (damit index.html flexibel bleibt)
+export const main = { boot, start, stop, toggleFullscreen, state };
+window.main = { boot, start, stop, toggleFullscreen, state };
+
+// Auto‑Boot sobald DOM da ist
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot, {once:true});
+} else {
+  boot();
+}
