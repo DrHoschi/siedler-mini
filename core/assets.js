@@ -1,17 +1,17 @@
-// /core/assets.js
+// V14.1 – Assets laden (PNG aus /assets, sonst Platzhalter)
 export const IM = {
-  grass:null, water:null, shore:null, sand:null, rocky:null, dirt:null,
-  road:null, road_straight:null, road_curve:null,
+  grass:null, water:null, shore:null, dirt:null, rocky:null, sand:null, road:null,
+  road_straight:null, road_curve:null,
   hq_stone:null, hq_wood:null, lumberjack:null, depot:null, carrier:null
 };
 
-const LIST = [
+const MAP = [
   ['grass','assets/grass.png'],
   ['water','assets/water.png'],
   ['shore','assets/shore.png'],
-  ['sand','assets/sand.png'],
-  ['rocky','assets/rocky.png'],
   ['dirt','assets/dirt.png'],
+  ['rocky','assets/rocky.png'],
+  ['sand','assets/sand.png'],
   ['road','assets/road.png'],
   ['road_straight','assets/road_straight.png'],
   ['road_curve','assets/road_curve.png'],
@@ -22,15 +22,15 @@ const LIST = [
   ['carrier','assets/carrier.png'],
 ];
 
-export function loadAllAssets(){
-  return Promise.all(LIST.map(([key,src]) => loadOne(key,src)));
+export async function loadAllAssets(){
+  await Promise.all(MAP.map(([k,src])=>loadOne(k,src)));
 }
 
-function loadOne(key, src){
+function loadOne(k,src){
   return new Promise(res=>{
-    const img = new Image();
-    img.onload = ()=>{ IM[key]=img; res(); };
-    img.onerror = ()=>{ console.warn(`(assets) fehlt: ${src}`); IM[key]=null; res(); };
-    img.src = src;
+    const img=new Image();
+    img.onload=()=>{ IM[k]=img; res(); };
+    img.onerror=()=>{ console.warn(`[assets] fehlt: ${src}`); IM[k]=null; res(); };
+    img.src=src;
   });
 }
