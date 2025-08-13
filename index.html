@@ -1,88 +1,70 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
-  <title>Siedler‑Mini V13 (Mobile)</title>
-  <meta name="theme-color" content="#0b1220"/>
-
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Siedler‑Mini V14 (Mobile)</title>
   <style>
-    :root {
-      color-scheme: dark;
-      --bg: #0e1524; --panel:#121b2e; --text:#dfe7ff; --muted:#9fb0d0; --accent:#36d399;
-      --btn:#1a2743; --btn-h:#223150; --ring:#3b82f6;
-    }
-    * { box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
-    html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font:16px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-    #hud { position:fixed; inset:0; pointer-events:none; }
-    #topbar { position:absolute; left:12px; right:12px; top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; pointer-events:auto; }
-    .chip { background:#0a1221; padding:6px 10px; border-radius:14px; font-size:13px; color:#d2dcff; border:1px solid #15213a; }
-    .chip b { color:white; }
-    #left { position:absolute; left:12px; top:64px; display:flex; flex-direction:column; gap:10px; pointer-events:auto; }
-    .btn { background:var(--btn); border:1px solid #253356; color:var(--text); border-radius:14px; padding:9px 14px; font-weight:600; cursor:pointer; }
-    .btn:hover { background:var(--btn-h); }
-    .btn:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
-
-    /* Start-Overlay */
-    dialog#startDlg {
-      border:none; border-radius:14px; background:var(--panel); color:var(--text);
-      width:min(600px, calc(100% - 32px)); padding:18px 18px 16px; box-shadow:0 8px 40px rgba(0,0,0,.5);
-    }
-    #startDlg::backdrop { background:rgba(0,0,0,.55); }
-    #startDlg h1 { font-size:22px; margin:0 0 10px; }
-    #startDlg p { margin:6px 0; color:var(--muted); }
-    #startDlg footer { display:flex; gap:8px; margin-top:12px; }
-
-    /* Canvas (Spielfläche) */
-    #gameWrap { position:fixed; inset:0; overflow:hidden; }
-    canvas#game { position:absolute; left:0; top:0; width:100%; height:100%; touch-action:none; }
+    :root { color-scheme: dark; }
+    html,body{margin:0;height:100%;background:#111722;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
+    #uiBar{position:fixed;inset:0 0 auto 0;display:flex;gap:.5rem;padding:.5rem .75rem;align-items:center;background:linear-gradient(180deg,#0f1620aa,transparent);pointer-events:none}
+    #uiBar .chip{pointer-events:auto;background:#0e1a27;border:1px solid #203143;border-radius:999px;padding:.25rem .6rem;font-size:.9rem;line-height:1.8rem;color:#cfe3ff}
+    #leftTools{position:fixed;inset:4.5rem auto auto .5rem;display:flex;flex-direction:column;gap:.5rem}
+    #leftTools .btn{background:#0e1a27;border:1px solid #203143;border-radius:999px;color:#cfe3ff;padding:.55rem 1rem;min-width:5.8rem;text-align:left}
+    #stageWrap{position:fixed;inset:0}
+    canvas{display:block;width:100%;height:100%}
+    /* Overlay */
+    #overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
+    #card{max-width:640px;background:#121b27;border:1px solid #25364a;border-radius:14px;box-shadow:0 12px 40px #0009;padding:1.25rem 1.35rem}
+    #card h1{font-size:1.3rem;margin:.25rem 0 1rem;color:#e6f0ff}
+    #card p{opacity:.9;line-height:1.45}
+    #card .row{display:flex;gap:.5rem;margin-top:.75rem}
+    #ver{position:fixed;right:.5rem;bottom:.5rem;font-size:.75rem;opacity:.6}
   </style>
 </head>
 <body>
-
-  <div id="gameWrap">
-    <canvas id="game" width="1024" height="768"></canvas>
+  <!-- Top bar -->
+  <div id="uiBar">
+    <span class="chip">Holz <b id="rWood">0</b></span>
+    <span class="chip">Stein <b id="rStone">0</b></span>
+    <span class="chip">Nahrung <b id="rFood">0</b></span>
+    <span class="chip">Gold <b id="rGold">0</b></span>
+    <span class="chip">Träger <b id="rCar">0</b></span>
+    <span class="chip">Tool: <b id="toolName">Zeiger</b></span>
+    <button id="btnCenter" class="chip">Zentrieren</button>
+    <button id="btnDebug" class="chip">Debug</button>
+    <button id="btnFull" class="chip">Vollbild</button>
   </div>
 
-  <!-- HUD -->
-  <div id="hud" aria-hidden="true">
-    <div id="topbar">
-      <span class="chip">Holz <b id="resWood">0</b></span>
-      <span class="chip">Stein <b id="resStone">0</b></span>
-      <span class="chip">Nahrung <b id="resFood">0</b></span>
-      <span class="chip">Gold <b id="resGold">0</b></span>
-      <span class="chip">Träger <b id="resCarriers">0</b></span>
-      <span class="chip" id="toolChip">Tool: Zeiger</span>
-      <span class="chip" id="zoomChip">Zoom 1.00×</span>
-      <button id="centerBtn" class="btn">Zentrieren</button>
-      <button id="debugBtn" class="btn">Debug</button>
-      <button id="fsBtn" class="btn">Vollbild</button>
-    </div>
+  <!-- Left tools -->
+  <div id="leftTools">
+    <button class="btn" data-tool="pointer">Zeiger</button>
+    <button class="btn" data-tool="road">Straße</button>
+    <button class="btn" data-tool="hq">HQ</button>
+    <button class="btn" data-tool="lumberjack">Holzfäller</button>
+    <button class="btn" data-tool="depot">Depot</button>
+    <button class="btn" data-tool="bulldoze">Abriss</button>
+  </div>
 
-    <div id="left">
-      <button id="toolPointer"  class="btn">Zeiger</button>
-      <button id="toolRoad"     class="btn">Straße</button>
-      <button id="toolHQ"       class="btn">HQ</button>
-      <button id="toolLumber"   class="btn">Holzfäller</button>
-      <button id="toolDepot"    class="btn">Depot</button>
-      <button id="toolBulldoze" class="btn">Abriss</button>
+  <!-- Stage -->
+  <div id="stageWrap"><canvas id="stage" width="1920" height="1080"></canvas></div>
+
+  <!-- Start overlay -->
+  <div id="overlay">
+    <div id="card">
+      <h1>Siedler‑Mini V14 (Mobile)</h1>
+      <p>1 Finger = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+      <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
+      <div class="row">
+        <button id="btnStart" class="chip" style="background:#26b36a;border-color:#1a8c52">Start</button>
+        <button id="btnOverlayFull" class="chip">Vollbild</button>
+      </div>
+      <p style="margin-top:.5rem;opacity:.8">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
     </div>
   </div>
 
-  <!-- Start-Dialog -->
-  <dialog id="startDlg">
-    <h1>Siedler‑Mini V13 (Mobile)</h1>
-    <p>1 Finger = Karte verschieben (nur im <b>Zeiger‑Tool</b>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
-    <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als Platzhalter dargestellt.</p>
-    <p style="opacity:.8">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
-    <footer>
-      <button id="startBtn" class="btn" autofocus>Start</button>
-      <button id="startFsBtn" class="btn">Vollbild</button>
-    </footer>
-  </dialog>
+  <div id="ver">JS V14</div>
 
-  <!-- Nur EIN Modul laden: den Boot‑Loader -->
-  <script type="module" src="./boot.js?v=13.8.2"></script>
-  <!-- Achtung: KEIN weiteres <script src="main.js"> in der Seite belassen! -->
+  <script type="module" src="./main.js?v=14"></script>
 </body>
 </html>
