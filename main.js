@@ -8,14 +8,17 @@ import { createRenderer }           from './render.js?v=14.2';
 import { createGameState }          from './game.js?v=14.2';
 
 const $ = (s) => document.querySelector(s);
-let canvas, ctx, renderer, camera, world, state, carriers, rafId=0, running=false, lastT=0;
+let canvas, ctx, renderer, camera, world, state, carriers;
+let rafId=0, running=false, lastT=0;
 
 function ensureCanvas() {
   canvas = $('#game');
   if (!canvas) throw new Error('#game Canvas fehlt (index.html)');
   const c = canvas.getContext('2d', { alpha:false, desynchronized:true });
   if (!c) throw new Error('2D Kontext nicht verfügbar');
-  ctx = c; resizeCanvas(); window.addEventListener('resize', resizeCanvas, {passive:true});
+  ctx = c;
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas, {passive:true});
 }
 function resizeCanvas() {
   const dpr = Math.max(1, Math.min(window.devicePixelRatio||1, 2));
@@ -42,13 +45,13 @@ function updateHUD(){
 async function initGame(){
   ensureCanvas();
   await loadAllAssets();
-  world    = createWorld({ size: 40 }); // kleine Karte für Mobile
+  world    = createWorld({ size: 40 });
   state    = createGameState({ placeStartHQ:true });
   camera   = new Camera();
   renderer = createRenderer();
   carriers = new Carriers({ sprite: IM.carrier });
 
-  // Kamera auf HQ ausrichten
+  // Kamera auf HQ fokussieren
   camera.centerOn(world.hq.pixelX, world.hq.pixelY);
   camera.minZoom=0.55; camera.maxZoom=2.0;
 
@@ -87,7 +90,7 @@ export async function run(){
   }
 }
 
-// kleine Helfer für HUD-Buttons
+// kleine Helfer für HUD
 function center(){ camera?.centerOn(world.hq.pixelX, world.hq.pixelY); }
 function toggleDebug(){ renderer.debug = !renderer.debug; }
 
