@@ -1,8 +1,8 @@
 // core/game.js — V13.7
-import { Carriers } from './core/carriers.js';
-import * as Render from './render.js'; // falls nicht schon importiert
-import * as World  from './world.js';  // dein World‑Modul
-import { IM }      from './core/assets.js'; // falls du Bilder dort lädst
+import './world.js';
+import './core/assets.js';
+import './core/camera.js';
+import './core/carriers.js';
 
 function keyXY(x,y){ return `${x},${y}`; }
 function neighbors4(x,y){ return [[x+1,y],[x-1,y],[x,y+1],[x,y-1]]; }
