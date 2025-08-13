@@ -1,32 +1,53 @@
-// main.js (V14.3-safe4)
-// Einziger Job: game.js laden und startGame(...) aufrufen.
+// main.js – EIN Einstieg: run() startet das Spiel
+import { startGame } from './game.js?v=14.3';
 
-export async function run() {
-  const canvas = document.getElementById('game');
-  if (!canvas) throw new Error('#game Canvas fehlt');
+function $(s){ return document.querySelector(s); }
 
-  // Modul laden (Cache-Busting über Query)
-  let game;
-  try {
-    game = await import('./game.js?v=14.3-safe4');
-  } catch (e) {
-    throw new Error('Modulimport fehlgeschlagen (game.js): ' + e.message);
-  }
+function setActiveTool(name){
+  const ids = ['Pointer','Road','HQ','Lumber','Depot','Erase'];
+  ids.forEach(id => $('#tool'+id)?.classList.toggle('active', id.toLowerCase()===name));
+  const map = {pointer:'Zeiger', road:'Straße', hq:'HQ', lumber:'Holzfäller', depot:'Depot', erase:'Abriss'};
+  $('#hudTool').textContent = map[name] || 'Zeiger';
+}
 
-  if (!game || typeof game.startGame !== 'function') {
-    throw new Error('game.startGame fehlt oder ist keine Funktion');
-  }
+export async function run(){
+  const canvas = $('#game');
+  const DPR = window.devicePixelRatio || 1;
 
-  // HUD-Bridge: schreibt z.B. Tool/Zoom in deine Pills
-  const onHUD = (key, val) => {
-    const el = document.getElementById('hud' + key);
+  // iOS Gesten (Seitenzoom) killen
+  const stopGesture = e => { e.preventDefault(); };
+  document.addEventListener('gesturestart', stopGesture, {passive:false});
+  document.addEventListener('gesturechange', stopGesture, {passive:false});
+  document.addEventListener('gestureend', stopGesture, {passive:false});
+  window.addEventListener('touchmove', e => {
+    if (e.target===canvas) e.preventDefault();
+  }, {passive:false});
+
+  // HUD Update Helper
+  const onHUD = (key,val) => {
+    const el = document.querySelector('#hud'+key);
     if (el) el.textContent = String(val);
   };
 
-  // Start
-  await game.startGame({
-    canvas,
-    DPR: window.devicePixelRatio || 1,
-    onHUD,
-  });
+  // Toolbuttons (nur Anzeige/State – Logik im game.js)
+  $('#toolPointer')?.addEventListener('click', () => window.__setTool?.('pointer'));
+  $('#toolRoad')?.addEventListener('click', () => window.__setTool?.('road'));
+  $('#toolHQ')?.addEventListener('click', () => window.__setTool?.('hq'));
+  $('#toolLumber')?.addEventListener('click', () => window.__setTool?.('lumber'));
+  $('#toolDepot')?.addEventListener('click', () => window.__setTool?.('depot'));
+  $('#toolErase')?.addEventListener('click', () => window.__setTool?.('erase'));
+  $('#centerBtn')?.addEventListener('click', () => window.__centerMap?.());
+
+  // Start Game (liefert Steuerfunktionen zurück)
+  const api = await startGame({ canvas, DPR, onHUD, onTool:setActiveTool, onZoom:z=>($('#hudZoom').textContent = z.toFixed(2)+'x') });
+
+  // API an window hängen, damit Buttons sie finden
+  window.__setTool = api.setTool;
+  window.__centerMap = api.center;
+  // initiale UI
+  setActiveTool('pointer');
+  $('#uiBar').style.opacity = '0.95';
 }
+
+// Export für boot.js
+window.main = { run };
