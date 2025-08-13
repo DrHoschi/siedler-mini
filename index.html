@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler‑Mini V14 (Mobile)</title>
+  <title>Siedler-Mini V14 (Mobile)</title>
   <meta name="theme-color" content="#0b1620" />
   <style>
     :root{color-scheme:dark light}
@@ -12,7 +12,7 @@
     /* HUD */
     .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;justify-content:flex-start;opacity:.95;pointer-events:none}
     .pill{pointer-events:auto;padding:6px 10px;border-radius:999px;background:#122131;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
-    .right{position:fixed;top:8px;right:12px;display:flex;gap:8px}
+    .right{display:flex;gap:8px;margin-left:auto}
     /* Tool-Leiste */
     .tools{position:fixed;left:12px;top:56px;display:flex;flex-direction:column;gap:10px}
     .btn{padding:8px 12px;border-radius:12px;background:#0f1b29;border:1px solid #1b2a3f;color:#cfe3ff;font-size:15px}
@@ -40,39 +40,40 @@
   <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
   <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   <div class="right">
-    <button class="pill" id="centerBtn">Zentrieren</button>
-    <button class="pill" id="dbgBtn">Debug</button>
-    <button class="pill" id="fsBtnTop">Vollbild</button>
+    <button class="pill" id="btn-center">Zentrieren</button>
+    <button class="pill" id="btn-debug">Debug</button>
+    <button class="pill" id="btn-fullscreen-top">Vollbild</button>
   </div>
 </div>
 
 <!-- Tool-Leiste links -->
 <div class="tools">
-  <button class="btn active" id="toolPointer">Zeiger</button>
-  <button class="btn" id="toolRoad">Straße</button>
-  <button class="btn" id="toolHQ">HQ</button>
-  <button class="btn" id="toolLumber">Holzfäller</button>
-  <button class="btn" id="toolDepot">Depot</button>
-  <button class="btn" id="toolErase">Abriss</button>
+  <button class="btn active" id="tool-pointer">Zeiger</button>
+  <button class="btn" id="tool-road">Straße</button>
+  <button class="btn" id="tool-hq">HQ</button>
+  <button class="btn" id="tool-lumber">Holzfäller</button>
+  <button class="btn" id="tool-depot">Depot</button>
+  <button class="btn" id="tool-demolish">Abriss</button>
 </div>
 
 <!-- Start -->
 <div id="startOverlay">
   <div id="startCard">
-    <h1>Siedler‑Mini V14 (Mobile)</h1>
-    <p>1 Finger = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+    <h1>Siedler-Mini V14 (Mobile)</h1>
+    <p>1 Finger = Karte verschieben (nur im <i>Zeiger-Tool</i>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau-Tool aktiv ist).</p>
     <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
     <p style="opacity:.8">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
     <div id="startBtns">
-      <button class="btn" id="startBtn" style="background:#0d3d1b;border-color:#146a2f">Start</button>
-      <button class="btn" id="fsBtn">Vollbild</button>
-      <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#6a1414">Reset</button>
+      <button class="btn" id="btn-start" style="background:#0d3d1b;border-color:#146a2f">Start</button>
+      <button class="btn" id="btn-fullscreen">Vollbild</button>
+      <button class="btn" id="btn-reset" style="background:#3d0d0d;border-color:#6a1414">Reset</button>
     </div>
   </div>
 </div>
 
 <div id="version">JS V14.2</div>
 
+<!-- statt boot.js jetzt main.js als Modul laden -->
 <script type="module" src="./main.js?v=14.2"></script>
 </body>
 </html>
