@@ -1,140 +1,63 @@
-// main.js – V14.2
-// Bootstrapping: Assets laden, Game + Renderer bauen, Loop starten, UI verdrahten
+// main.js – V14.3
+export async function run() {
+  // 1) Canvas holen
+  const canvas = document.getElementById('game');
+  if (!canvas) throw new Error('#game (Canvas) nicht gefunden.');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas.getContext("2d") schlug fehl.');
 
-import { IM, loadAllAssets }   from './core/assets.js';
-import { Camera }              from './core/camera.js';
-import { Input }               from './core/input.js';
-import { Carriers }            from './core/carriers.js';
-import { Game }                from './game.js';
-import { createRenderer }      from './render.js';
+  // 2) DevicePixelRatio-scharf an Fenster binden
+  const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  function resize() {
+    const w = Math.floor(window.innerWidth);
+    const h = Math.floor(window.innerHeight);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.width = Math.floor(w * DPR);
+    canvas.height = Math.floor(h * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawPlaceholder();
+  }
+  window.addEventListener('resize', resize, { passive:true });
+  resize();
 
-const VERSION = 'V14.2';
+  // 3) HUD Grundwerte (sichtbar machen)
+  const $ = id => document.getElementById(id);
+  $('#uiBar') && ($('#uiBar').style.opacity = 1);
+  $('#hudWood') && ($('#hudWood').textContent = '20');
+  $('#hudStone') && ($('#hudStone').textContent = '10');
+  $('#hudFood') && ($('#hudFood').textContent = '10');
+  $('#hudGold') && ($('#hudGold').textContent = '0');
+  $('#hudCar')  && ($('#hudCar').textContent  = '0');
+  $('#hudTool') && ($('#hudTool').textContent = 'Zeiger');
+  $('#hudZoom') && ($('#hudZoom').textContent = '1.00x');
 
-function $(sel) { return document.querySelector(sel); }
-
-const state = {
-  tool: 'pointer',        // 'pointer' | 'road' | 'hq' | 'lumberjack' | 'depot' | 'demolish'
-  game: null,
-  camera: null,
-  input: null,
-  carriers: null,
-  renderer: null,
-  running: false,
-};
-
-async function boot() {
-  // Lazy UI labels (falls vorhanden)
-  const ver = document.querySelector('.js-version');
-  if (ver) ver.textContent = 'JS ' + VERSION;
-
-  // Canvas erzeugen (falls nicht in index.html vorhanden)
-  let canvas = $('#game');
-  if (!canvas) {
-    canvas = document.createElement('canvas');
-    canvas.id = 'game';
-    canvas.style.display = 'block';
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    document.body.appendChild(canvas);
+  // 4) Platzhalter-Zeichnung (bis dein Game startet)
+  function drawPlaceholder() {
+    ctx.fillStyle = '#0f1823';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const sz = 64;
+    for (let y = -sz; y < canvas.height + sz; y += sz) {
+      for (let x = -sz; x < canvas.width + sz; x += sz) {
+        ctx.fillStyle = ((x + y) / sz) % 2 ? '#1a2b3d' : '#132235';
+        ctx.fillRect(x, y, sz, sz);
+      }
+    }
+    ctx.fillStyle = '#cfe3ff';
+    ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+    ctx.fillText('main.run() OK – Platzhalter', 16, 28);
   }
 
-  // Assets laden (mit simpler Fortschrittsanzeige im Titel, optional)
-  await loadAllAssets();
+  // 5) (Optional) Dein echtes Spiel starten:
+  // Entkommentieren, wenn game.js vorhanden und startGame exportiert:
+  // const { startGame } = await import('./game.js?v=14.3');
+  // await startGame({
+  //   canvas,
+  //   DPR,
+  //   onHud: (key, val) => { const el = $('#'+key); if (el) el.textContent = val; }
+  // });
 
-  // Welt anlegen (Tiles), Rendering‑Größe
-  const worldTilesW = 64, worldTilesH = 64;     // feste Größe
-  const tileDX = 64, tileDY = 32;               // isometrische Projektion
-  const worldPxW = worldTilesW * tileDX;
-  const worldPxH = worldTilesH * tileDY;
-
-  // Canvas‑Größe an Viewport koppeln
-  function resizeCanvas() {
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth  || window.innerWidth;
-    const h = canvas.clientHeight || window.innerHeight;
-    canvas.width  = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    state.renderer && state.renderer.setSize(canvas.width, canvas.height, dpr);
-    state.camera && state.camera.resize(canvas.width / dpr, canvas.height / dpr);
-  }
-
-  // Camera + Game + Renderer
-  state.camera   = new Camera(window.innerWidth, window.innerHeight, worldPxW, worldPxH);
-  state.game     = new Game(worldTilesW, worldTilesH, tileDX, tileDY, IM, state.camera);
-  state.carriers = new Carriers(state.game, state.game.findRoadPath);
-  state.renderer = createRenderer(canvas, IM, state);
-
-  // Input verdrahten
-  state.input = new Input(() => ({
-    tool: state.tool,
-    camera: state.camera,
-    pickAtScreen: (sx, sy) => state.game.pickAtScreen(sx, sy),
-    buildAtWorld: (wx, wy, tx, ty) => state.game.buildAtWorld(state.tool, tx, ty),
-    demolishAtWorld: (wx, wy, tx, ty) => state.game.demolishAtWorld(tx, ty),
-  }));
-  state.input.attach(canvas);
-
-  // HQ mittig setzen
-  const mid = state.game.centerTile();
-  state.game.placeHQ(mid.x, mid.y, /*stone=*/true);
-  state.camera.centerOn(mid.wx, mid.wy);
-
-  // Buttons (optional vorhanden)
-  $('#btn-start')?.addEventListener('click', start);
-  $('#btn-fullscreen')?.addEventListener('click', toggleFullscreen);
-  $('#btn-reset')?.addEventListener('click', () => location.reload());
-
-  // Tool‑Buttons (optional vorhanden)
-  $('#tool-pointer')?.addEventListener('click', () => state.tool = 'pointer');
-  $('#tool-road')?.addEventListener('click',    () => state.tool = 'road');
-  $('#tool-hq')?.addEventListener('click',      () => state.tool = 'hq');
-  $('#tool-lumber')?.addEventListener('click',  () => state.tool = 'lumberjack');
-  $('#tool-depot')?.addEventListener('click',   () => state.tool = 'depot');
-  $('#tool-demolish')?.addEventListener('click',() => state.tool = 'demolish');
-
-  window.addEventListener('resize', resizeCanvas, {passive:true});
-  resizeCanvas();
-
-  // Autostart, wenn kein Start‑Dialog
-  if (!$('#btn-start')) start();
-}
-
-function toggleFullscreen() {
-  const el = document.documentElement;
-  if (!document.fullscreenElement) el.requestFullscreen?.();
-  else document.exitFullscreen?.();
-}
-
-let _rafId = 0, _last = 0;
-function start() {
-  if (state.running) return;
-  state.running = true;
-  _last = performance.now();
-  const loop = (t) => {
-    const dt = Math.min(0.05, (t - _last) / 1000);
-    _last = t;
-    // Update
-    state.game.update(dt);
-    state.carriers.update(dt);
-    // Render
-    state.renderer.draw();
-    _rafId = requestAnimationFrame(loop);
-  };
-  _rafId = requestAnimationFrame(loop);
-}
-
-function stop() {
-  if (_rafId) cancelAnimationFrame(_rafId);
-  state.running = false;
-}
-
-// Exporte + Globale Fallbacks (damit index.html flexibel bleibt)
-export const main = { boot, start, stop, toggleFullscreen, state };
-window.main = { boot, start, stop, toggleFullscreen, state };
-
-// Auto‑Boot sobald DOM da ist
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot, {once:true});
-} else {
-  boot();
+  // 6) Zentrieren-Knopf unterstützen (falls gewünscht)
+  // Du kannst diese Funktion von deinem Game später überschreiben.
+  window.__centerMap = () => { drawPlaceholder(); };
 }
