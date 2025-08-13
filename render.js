@@ -1,100 +1,81 @@
-// render.js
+// V14.1 – isometrischer Renderer (nur Sichtbereich)
 import { IM } from './core/assets.js';
 
 export class Renderer {
-  constructor(canvas, camera, world){
-    this.cv=canvas; this.cx=canvas.getContext('2d');
-    this.camera=camera; this.world=world;
-    this.tileW=64; this.tileH=32; // isometrisches Rhombus-Basismass
+  constructor(ctx, cam, world){
+    this.ctx=ctx; this.cam=cam; this.world=world;
+    this.tileW=128; this.tileH=64; // Grundrhombus
+    this.cam.setMapPixelSize(world.w*this.tileW, world.h*this.tileH);
   }
-
-  isoToWorld(i,j){
-    // ground tile center in Pixel (Welt)
-    const x = (i - j) * this.tileW/2;
-    const y = (i + j) * this.tileH/2;
-    return {x,y};
+  screenToWorldTile(sx,sy){
+    // Screen -> Weltpixel
+    const wx = this.cam.x*this.cam.scale + sx;
+    const wy = this.cam.y*this.cam.scale + sy;
+    // Pixel -> Iso‑Tile‑Index (ungefähr; mit 128×64 Grundraster)
+    const ix = Math.floor((wx/this.cam.scale)/this.tileW);
+    const iy = Math.floor((wy/this.cam.scale)/this.tileH);
+    return {tx:ix, ty:iy};
   }
-
-  worldToIso(wx,wy){
-    const i = Math.round((wx/ (this.tileW/2) + wy /(this.tileH/2))/2);
-    const j = Math.round((wy /(this.tileH/2) - wx /(this.tileW/2))/2);
-    return {i,j};
+  centerOnTile(tx,ty){
+    const px = tx*this.tileW + this.tileW/2;
+    const py = ty*this.tileH + this.tileH/2;
+    this.cam.centerOn(px,py);
   }
-
   draw(){
-    const {cx,cv,camera:cam,world:w} = this;
-    cx.clearRect(0,0,cv.width,cv.height);
+    const {ctx,cam,world} = this;
+    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
 
-    // Sichtfenster -> Iso‑Bounds abschätzen
-    const tl = cam.screenToWorld(0,0);
-    const br = cam.screenToWorld(cv.width,cv.height);
-    const pad = 4;
+    const s=cam.scale;
+    ctx.save();
+    ctx.translate(-cam.x*s, -cam.y*s);
+    ctx.scale(s,s);
 
-    const toIJ = p => this.worldToIso(p.x,p.y);
-    const ijTL = toIJ(tl);
-    const ijBR = toIJ(br);
+    // Sichtfenster in Tile‑Koords
+    const minX = Math.max(0, Math.floor(cam.x/this.tileW)-2);
+    const minY = Math.max(0, Math.floor(cam.y/this.tileH)-2);
+    const maxX = Math.min(world.w-1, Math.ceil((cam.x+cam.viewW/s)/this.tileW)+2);
+    const maxY = Math.min(world.h-1, Math.ceil((cam.y+cam.viewH/s)/this.tileH)+2);
 
-    const iMin = Math.max(-pad, Math.min(ijTL.i, ijBR.i)-pad);
-    const jMin = Math.max(-pad, Math.min(ijTL.j, ijBR.j)-pad);
-    const iMax = Math.min(w.size+pad, Math.max(ijTL.i, ijBR.i)+pad);
-    const jMax = Math.min(w.size+pad, Math.max(ijTL.j, ijBR.j)+pad);
-
-    // Boden
-    for(let j=jMin;j<jMax;j++){
-      for(let i=iMin;i<iMax;i++){
-        if(i<0||j<0||i>=w.size||j>=w.size) continue;
-        const pos = this.isoToWorld(i,j);
-        const sc = cam.worldToScreen(pos.x, pos.y);
-        const img = w.groundImg(i,j) || IM.grass;
-        if(img) this.drawIso(img, sc.x, sc.y);
-        else this.drawDiamond(sc.x, sc.y, '#2a3b22');
+    for(let ty=minY; ty<=maxY; ty++){
+      for(let tx=minX; tx<=maxX; tx++){
+        const x = tx*this.tileW, y=ty*this.tileH;
+        // Boden (Gras/Wasser/Sand …)
+        const t = world.terrain[ty][tx];
+        const img = pickBase(t);
+        if (img) ctx.drawImage(img, x, y, this.tileW, this.tileH);
+        else { // Fallback
+          ctx.fillStyle = t==='water' ? '#2b87c5' : '#2e6d1a';
+          ctx.fillRect(x,y,this.tileW,this.tileH);
+        }
+        // Straße
+        if (world.roads[ty][tx]) {
+          const rimg = IM.road || IM.road_straight;
+          if (rimg) ctx.drawImage(rimg, x, y, this.tileW,this.tileH);
+          else { ctx.fillStyle='rgba(180,120,60,.8)'; ctx.fillRect(x+40,y+28,48,8); }
+        }
+        // Gebäude
+        const b = world.buildings[ty][tx];
+        if (b){
+          const bimg = b.kind==='hq' ? (IM.hq_stone||IM.hq_wood) :
+                       b.kind==='lumber' ? IM.lumberjack :
+                       b.kind==='depot' ? IM.depot : null;
+          if (bimg) ctx.drawImage(bimg, x, y-32, this.tileW, this.tileH+32);
+          else { ctx.fillStyle='#d6c08a'; ctx.fillRect(x+16,y+10,96,44); }
+        }
       }
     }
 
-    // Straßen und Gebäude
-    w.eachRoad((i,j,kind)=>{
-      const pos = this.isoToWorld(i,j);
-      const sc = cam.worldToScreen(pos.x, pos.y);
-      const img = IM.road || IM.road_straight || null;
-      if(img) this.drawIso(img, sc.x, sc.y);
-      else this.drawDiamond(sc.x, sc.y, '#6b5532');
-    });
-
-    w.eachBuilding(b=>{
-      const pos = this.isoToWorld(b.i,b.j);
-      const sc = cam.worldToScreen(pos.x, pos.y - 14); // leicht nach oben
-      const img = b.type==='hq' ? (IM.hq_stone||IM.hq_wood) :
-                 b.type==='lumberjack' ? IM.lumberjack :
-                 b.type==='depot' ? IM.depot : null;
-      if(img) this.drawIso(img, sc.x, sc.y);
-      else this.drawDiamond(sc.x, sc.y, '#444a66');
-    });
-
-    // Träger
-    for(const c of w.carriers){
-      const p = c.pos;
-      const sc = cam.worldToScreen(p.x,p.y-8);
-      const sprite = IM.carrier;
-      if(sprite) this.drawIso(sprite, sc.x, sc.y);
-      else { cx.fillStyle='#ffd06e'; cx.beginPath(); cx.arc(sc.x,sc.y,4,0,Math.PI*2); cx.fill(); }
-    }
+    ctx.restore();
   }
+}
 
-  drawIso(img, sx, sy){
-    const {cx,camera:cam,tileW,tileH} = this;
-    const w = img.naturalWidth||img.width||tileW;
-    const h = img.naturalHeight||img.height||tileH;
-    cx.drawImage(img, sx*cam.scale - w/2*cam.scale, sy*cam.scale - h/2*cam.scale, w*cam.scale, h*cam.scale);
-  }
-  drawDiamond(sx,sy,color){
-    const {cx, camera:cam, tileW, tileH} = this;
-    const w = tileW*cam.scale, h=tileH*cam.scale;
-    cx.fillStyle=color;
-    cx.beginPath();
-    cx.moveTo(sx*cam.scale, (sy-h/2));
-    cx.lineTo(sx*cam.scale + w/2, sy);
-    cx.lineTo(sx*cam.scale, (sy+h/2));
-    cx.lineTo(sx*cam.scale - w/2, sy);
-    cx.closePath(); cx.fill();
+function pickBase(t){
+  switch(t){
+    case 'water': return IM.water;
+    case 'shore': return IM.shore;
+    case 'sand' : return IM.sand;
+    case 'rocky': return IM.rocky;
+    case 'dirt' : return IM.dirt;
+    default: return IM.grass;
   }
 }
