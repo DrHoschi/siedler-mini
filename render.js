@@ -1,145 +1,115 @@
-// render.js – V14.2
-// Zeichnet Welt (Boden/Gras), Straßen, Gebäude, Träger
+// render.js — V14.3
+// Kleiner Renderer für Raster, Straßen & einfache Gebäude‑Platzhalter.
+// Exportiert createRenderer(...)
 
-export function createRenderer(canvas, IM, state) {
-  const ctx = canvas.getContext('2d');
-
-  let viewW=canvas.width, viewH=canvas.height, dpr=1;
-  function setSize(w,h,_dpr){ viewW=w; viewH=h; dpr=_dpr||1; }
+export function createRenderer(canvas, ctx, world, camera, DPR = 1) {
+  let debug = false;
 
   function clear() {
     ctx.setTransform(1,0,0,1,0,0);
-    ctx.clearRect(0,0,viewW,viewH);
-    ctx.fillStyle = '#0f1420';
-    ctx.fillRect(0,0,viewW,viewH);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // dunkler Hintergrund
+    ctx.fillStyle = '#0f1823';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  function drawGround() {
-    const g = state.game;
-    const cam = state.camera;
+  function applyCamera() {
+    ctx.setTransform(camera.zoom, 0, 0, camera.zoom, -camera.x * camera.zoom, -camera.y * camera.zoom);
+  }
 
-    // Sichtbares Tile‑Rechteck grob schätzen
-    const pad = 2;
-    const topLeft = g.worldToTile(cam.x, cam.y);
-    const bottomRight = g.worldToTile(cam.x + viewW/cam.zoom, cam.y + viewH/cam.zoom);
+  function drawGrid() {
+    // dezentes isometrisches Raster (als Diamant‑Kacheln angedeutet)
+    const ts = world.tileSize;
+    const cols = world.cols;
+    const rows = world.rows;
 
-    const minX = Math.max(0, topLeft.tx - pad);
-    const minY = Math.max(0, topLeft.ty - pad);
-    const maxX = Math.min(g.w-1, bottomRight.tx + pad);
-    const maxY = Math.min(g.h-1, bottomRight.ty + pad);
+    ctx.save();
+    applyCamera();
 
-    for (let ty=minY; ty<=maxY; ty++) {
-      for (let tx=minX; tx<=maxX; tx++) {
-        const {wx,wy} = g.tileToWorld(tx,ty);
-        const sx = (wx - cam.x) * cam.zoom;
-        const sy = (wy - cam.y) * cam.zoom;
-
-        const img = IM.grass;
-        if (img) {
-          const w = 64 * cam.zoom, h = 32 * cam.zoom; // Basisgröße passend zum TileDX/DY
-          ctx.drawImage(img, sx - w/2, sy - h/2, w, h);
-        } else {
-          // Platzhalter‑Diamant
-          ctx.fillStyle = '#1b2a16';
-          drawDiamond(sx, sy, 32*cam.zoom, 16*cam.zoom);
-          ctx.fill();
-          ctx.strokeStyle = '#2e4a26';
-          ctx.stroke();
-        }
+    // Kachelfläche
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const cx = x * ts + ts / 2;
+        const cy = y * ts + ts / 2;
+        drawDiamond(cx, cy, ts * 0.5, ts * 0.25, '#132638');
       }
     }
+    ctx.restore();
   }
 
   function drawRoads() {
-    const g = state.game, cam = state.camera;
-    for (let ty=0; ty<g.h; ty++) for (let tx=0; tx<g.w; tx++) {
-      const c = g.tiles[ty][tx];
-      if (!c.road) continue;
-      const {wx,wy} = g.tileToWorld(tx,ty);
-      const sx = (wx - cam.x) * cam.zoom;
-      const sy = (wy - cam.y) * cam.zoom;
-
-      const img = IM.road_straight || IM.road || null;
-      if (img) {
-        const w = 64 * cam.zoom, h = 32 * cam.zoom;
-        ctx.drawImage(img, sx - w/2, sy - h/2, w, h);
-      } else {
-        ctx.fillStyle = '#8e8e8e';
-        drawDiamond(sx, sy, 28*cam.zoom, 12*cam.zoom);
-        ctx.fill();
-      }
+    const ts = world.tileSize;
+    ctx.save();
+    applyCamera();
+    ctx.fillStyle = '#6e6e6e';
+    for (const k of world.roads) {
+      const [tx, ty] = k.split(',').map(Number);
+      const x = tx * ts;
+      const y = ty * ts;
+      ctx.fillRect(x + ts*0.25, y + ts*0.4, ts*0.5, ts*0.2);
     }
+    ctx.restore();
   }
 
   function drawBuildings() {
-    const g=state.game, cam=state.camera, S=g.sprite;
-    for (let ty=0; ty<g.h; ty++) for (let tx=0; tx<g.w; tx++) {
-      const b = g.tiles[ty][tx].b; if (!b) continue;
-      const {wx,wy} = g.tileToWorld(tx,ty);
-      const sx = (wx - cam.x) * cam.zoom;
-      const sy = (wy - cam.y) * cam.zoom;
-
-      const name = b.type;
-      const img = IM[name] || null;
-      const off = S[name] || {ox:0,oy:0};
-      if (img) {
-        const w = img.width * cam.zoom, h = img.height * cam.zoom;
-        ctx.drawImage(img, sx + off.ox*cam.zoom, sy + off.oy*cam.zoom, w, h);
-      } else {
-        // Platzhalter‑Kasten
-        ctx.fillStyle = '#555';
-        ctx.fillRect(sx-20*cam.zoom, sy-20*cam.zoom, 40*cam.zoom, 40*cam.zoom);
+    const ts = world.tileSize;
+    ctx.save();
+    applyCamera();
+    for (const b of world.buildings) {
+      const x = b.x * ts;
+      const y = b.y * ts;
+      if (b.type === 'hq') {
+        ctx.fillStyle = '#2e8b57';
+        ctx.fillRect(x + 2, y + 2, ts*2 - 4, ts*2 - 4); // 2x2 Felder, etwas sichtbar
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${Math.floor(ts*0.45)}px system-ui, sans-serif`;
+        ctx.fillText('HQ', x + ts*0.4, y + ts*1.2);
+      } else if (b.type === 'lumber') {
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+        ctx.fillStyle = '#fff';
+        ctx.font = `${Math.floor(ts*0.35)}px system-ui, sans-serif`;
+        ctx.fillText('L', x + ts*0.35, y + ts*0.7);
+      } else if (b.type === 'depot') {
+        ctx.fillStyle = '#3a6ea5';
+        ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+        ctx.fillStyle = '#fff';
+        ctx.font = `${Math.floor(ts*0.35)}px system-ui, sans-serif`;
+        ctx.fillText('D', x + ts*0.35, y + ts*0.7);
       }
     }
-  }
-
-  function drawCarriers() {
-    const cam = state.camera;
-    const list = state.carriers?.getDrawList() || [];
-    if (!list.length) return;
-
-    for (const c of list) {
-      const sx = (c.px - cam.x) * cam.zoom;
-      const sy = (c.py - cam.y) * cam.zoom;
-      const img = IM.carrier;
-      if (img) {
-        const w = img.width * cam.zoom, h = img.height * cam.zoom;
-        ctx.drawImage(img, sx - w/2, sy - h + 6*cam.zoom, w, h);
-      } else {
-        ctx.fillStyle = '#caa76a';
-        ctx.beginPath();
-        ctx.arc(sx, sy-6*cam.zoom, 6*cam.zoom, 0, Math.PI*2);
-        ctx.fill();
-      }
-    }
-  }
-
-  function drawDiamond(cx, cy, rx, ry) {
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - ry);
-    ctx.lineTo(cx + rx, cy);
-    ctx.lineTo(cx, cy + ry);
-    ctx.lineTo(cx - rx, cy);
-    ctx.closePath();
+    ctx.restore();
   }
 
   function drawHUD() {
-    // optional: kleine Debug‑Infos
-    const cam = state.camera;
+    if (!debug) return;
     ctx.setTransform(1,0,0,1,0,0);
-    ctx.fillStyle = 'rgba(255,255,255,0.66)';
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
     ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText(`Zoom ${cam.zoom.toFixed(2)}`, 12, 16);
+    ctx.fillText(`Zoom ${camera.zoom.toFixed(2)}x`, 12, 16);
   }
 
-  function draw() {
+  function drawDiamond(cx, cy, rx, ry, stroke = '#1e3a57') {
+    ctx.beginPath();
+    ctx.moveTo(cx,       cy - ry);
+    ctx.lineTo(cx + rx,  cy);
+    ctx.lineTo(cx,       cy + ry);
+    ctx.lineTo(cx - rx,  cy);
+    ctx.closePath();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  function draw(dt) {
     clear();
-    drawGround();
+    drawGrid();
     drawRoads();
     drawBuildings();
-    drawCarriers();
     drawHUD();
   }
 
-  return { setSize, draw };
+  function toggleDebug() { debug = !debug; }
+
+  return { draw, toggleDebug };
 }
