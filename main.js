@@ -1,10 +1,13 @@
 // Siedler‑Mini V13.7 – Mobile start fix + fullscreen + korrekte Karte
 // Lädt render.js dynamisch und initialisiert Welt/Events.
 
-import { Carriers } from './core/carriers.js';
-import * as Render from './render.js'; // falls nicht schon importiert
-import * as World  from './world.js';  // dein World‑Modul
-import { IM }      from './core/assets.js'; // falls du Bilder dort lädst
+import './render.js';
+import './game.js';
+import './world.js';
+import './core/assets.js';
+import './core/camera.js';
+import './core/carriers.js';
+import './core/input.js';
 
 // --- DOM ----
 const cvs = document.getElementById('game');
