@@ -14,17 +14,24 @@
     .tool{background:var(--btn);border:1px solid #2a3b4a;border-radius:999px;padding:.4rem .75rem}
     .tool.on{background:var(--btnOn)}
     #stage{position:fixed;inset:0;z-index:1;background:#0b1117}
-    #gameCanvas{width:100%;height:100%;display:block;touch-action:none;background:#0b1117}
+    #gameCanvas{width:100%;height:100%;display:block;touch-action:none;background:#0b1117;pointer-events:auto}
 
-    /* Startoverlay */
-    #startOverlay{position:fixed;inset:0;display:grid;place-items:center;z-index:30;
-      background:rgba(0,0,0,.55);backdrop-filter:blur(2px)}
-    #card{background:#0e1620;border:1px solid #263646;border-radius:16px;padding:18px 20px;max-width:560px}
+    /* Startoverlay – WICHTIG: klickbar und über Canvas */
+    #startOverlay{
+      position:fixed;inset:0;display:grid;place-items:center;z-index:50;
+      background:rgba(0,0,0,.55);backdrop-filter:blur(2px);
+      pointer-events:auto;
+    }
+    #startOverlay *{ pointer-events:auto; }
+    #card{
+      background:#0e1620;border:1px solid #263646;border-radius:16px;padding:18px 20px;max-width:560px;
+      box-shadow:0 20px 60px rgba(0,0,0,.35);
+    }
     #card h1{font-size:1.3rem;margin:.25rem 0 0}
-    #card p{opacity:.8;line-height:1.35;margin:.25rem 0 .75rem}
-    #card .row{display:flex;gap:.5rem}
+    #card p{opacity:.85;line-height:1.35;margin:.25rem 0 .75rem}
+    #card .row{display:flex;gap:.5rem;flex-wrap:wrap}
     button{color:var(--text);background:#18415e;border:1px solid #2b4b65;border-radius:12px;
-      padding:.5rem .9rem}
+      padding:.5rem .9rem;cursor:pointer}
   </style>
 </head>
 <body>
@@ -71,10 +78,11 @@
         <button id="startBtn">Start</button>
         <button id="fsPreBtn">Vollbild</button>
       </div>
+      <p style="opacity:.7;margin-top:.5rem">Tipp: Doppelklick/Doppeltipp auf dieses Feld schaltet Vollbild.</p>
     </div>
   </div>
 
   <!-- App -->
-  <script type="module" src="./main.js?v=13.7"></script>
+  <script type="module" src="./main.js?v=13.8"></script>
 </body>
 </html>
