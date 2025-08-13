@@ -1,56 +1,65 @@
-// /core/input.js
-export function installMobileInput(canvas, {onTap,onPan,onPinch}){
-  let lastTouches = [];
-  let panning = false;
+// V14.1 – Touch/Maus Input (UI-Klicks nicht abfangen)
+export function makeInput(canvas, onTap, onPan, onPinch, isPointerTool){
+  let t1=null, t2=null, lastDist=0;
+  const uiFilter = (ev)=> !!(ev.target.closest('.ui')); // UI‑Element?
+  const opts = {passive:false};
 
-  const getDist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  function onPointerDown(ev){
+    if (uiFilter(ev)) return;         // UI klickbar lassen
+    ev.preventDefault();
+    const pt = getPoint(ev);
+    if (!t1) t1={id:ev.pointerId, x:pt.x, y:pt.y};
+    else if (!t2){ t2={id:ev.pointerId, x:pt.x, y:pt.y}; lastDist=dist(); }
+  }
+  function onPointerMove(ev){
+    if (uiFilter(ev)) return;
+    ev.preventDefault();
+    const pt = getPoint(ev);
+    if (t1 && t1.id===ev.pointerId) t1.x=pt.x, t1.y=pt.y;
+    if (t2 && t2.id===ev.pointerId) t2.x=pt.x, t2.y=pt.y;
 
-  canvas.addEventListener('touchstart', e=>{
-    if(!e.touches.length) return;
-    lastTouches = [...e.touches];
-    if(e.touches.length===1) panning = true;
-  }, {passive:false});
-
-  canvas.addEventListener('touchmove', e=>{
-    if(!e.touches.length) return;
-    const ts = [...e.touches];
-    if(ts.length===1 && panning){
-      const dx = ts[0].clientX - lastTouches[0].clientX;
-      const dy = ts[0].clientY - lastTouches[0].clientY;
-      onPan?.(dx,dy);
-    } else if(ts.length===2 && lastTouches.length===2){
-      const dNow = getDist(ts);
-      const dPrev = getDist(lastTouches);
-      const cx = (ts[0].clientX + ts[1].clientX)/2;
-      const cy = (ts[0].clientY + ts[1].clientY)/2;
-      onPinch?.(cx,cy, dNow-dPrev);
+    if (t1 && t2){ // Pinch
+      const d=dist();
+      if (lastDist>0) onPinch(d/lastDist,(t1.x+t2.x)/2,(t1.y+t2.y)/2);
+      lastDist=d;
+    } else if (t1 && isPointerTool()){ // Pan nur im Zeiger‑Tool
+      onPan(pt.dx, pt.dy);
     }
-    lastTouches = ts;
-    e.preventDefault();
-  }, {passive:false});
+  }
+  function onPointerUp(ev){
+    if (uiFilter(ev)) return;
+    ev.preventDefault();
+    const pt=getPoint(ev);
+    if (t1 && ev.pointerId===t1.id){
+      // Tap?
+      if (!t2 && Math.hypot(pt.totalDx,pt.totalDy)<10) onTap(pt.x,pt.y);
+      t1=null;
+    } else if (t2 && ev.pointerId===t2.id){ t2=null; lastDist=0; }
+  }
 
-  canvas.addEventListener('touchend', e=>{
-    if(lastTouches.length===1 && e.changedTouches.length===1){
-      const t = e.changedTouches[0];
-      onTap?.(t.clientX, t.clientY);
-    }
-    lastTouches = [...e.touches];
-    if(!e.touches.length) panning=false;
-  });
-}
+  // Mauswheel Zoom
+  function onWheel(ev){
+    if (uiFilter(ev)) return;
+    ev.preventDefault();
+    const f = ev.deltaY>0 ? 0.9 : 1.1;
+    onPinch(f, ev.clientX, ev.clientY);
+  }
 
-export function installMouseInput(canvas, {onTap,onPan,onWheel}){
-  let isDown=false, lastX=0, lastY=0;
-  canvas.addEventListener('mousedown', e=>{ isDown=true; lastX=e.clientX; lastY=e.clientY; });
-  canvas.addEventListener('mousemove', e=>{
-    if(!isDown) return;
-    onPan?.(e.clientX-lastX, e.clientY-lastY);
-    lastX=e.clientX; lastY=e.clientY;
-  });
-  window.addEventListener('mouseup', ()=>{ isDown=false; });
-  canvas.addEventListener('click', e=> onTap?.(e.clientX,e.clientY));
-  canvas.addEventListener('wheel', e=>{
-    onWheel?.(e.clientX,e.clientY, e.deltaY);
-    e.preventDefault();
-  }, {passive:false});
+  // helpers
+  let startX=0,startY=0,totalDx=0,totalDy=0,lastX=0,lastY=0;
+  function getPoint(ev){
+    const x=ev.clientX, y=ev.clientY;
+    const dx = lastX? (x-lastX) : 0, dy = lastY? (y-lastY) : 0;
+    lastX=x; lastY=y;
+    if (!t1){ startX=x; startY=y; totalDx=0; totalDy=0; }
+    else { totalDx += dx; totalDy += dy; }
+    return {x,y,dx,dy,totalDx,totalDy};
+  }
+  function dist(){ return Math.hypot(t1.x-t2.x, t1.y-t2.y); }
+
+  canvas.addEventListener('pointerdown',onPointerDown,opts);
+  window.addEventListener('pointermove',onPointerMove,opts);
+  window.addEventListener('pointerup',onPointerUp,opts);
+  window.addEventListener('pointercancel',onPointerUp,opts);
+  canvas.addEventListener('wheel',onWheel,opts);
 }
