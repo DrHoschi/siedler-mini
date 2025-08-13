@@ -1,168 +1,331 @@
-// Minimal‑Spiel: Pan/Zoom + Grid + HQ‑Klotz (Platzhalter)
-
-let state = null;
+// main.js (V14.4) – keine weiteren Imports, exportiert run() & centerMap()
 
 export async function run(opts){
-  const { canvas, DPR=1, onHUD = ()=>{} } = opts;
-  const ctx = canvas.getContext('2d');
+  const canvas = opts.canvas;
+  const DPR = opts.DPR || 1;
+  const hud = (k,v)=>opts.onHUD?.(k,v);
 
-  state = {
-    ctx,
-    DPR,
+  // ---------- Spielfeld/Kamera ----------
+  const world = {
+    tile: 64,
+    width: 200,  // in Tiles
+    height: 120,
+  };
+  const cam = {
+    x: (world.width*world.tile)/2,
+    y: (world.height*world.tile)/2,
     zoom: 1,
-    tx: 0,   // translation (screen space px @ DPR)
-    ty: 0,
-    dragging:false,
-    dragX:0, dragY:0,
-    showGrid:true
+    minZoom: 0.5,
+    maxZoom: 2.0,
+  };
+  let debug = false;
+
+  // ---------- Spielstand ----------
+  const state = {
+    res: {Wood:0, Stone:0, Food:0, Gold:0, Carriers:0},
+    tool: 'pointer', // pointer|road|hq|lumber|depot|bulldoze
+    roads: [],       // [{x1,y1,x2,y2}]
+    buildings: [],   // [{type:'hq'|'lumber'|'depot', x,y,w,h}]
   };
 
-  // Input
-  canvas.addEventListener('pointerdown', onPointerDown, { passive:false });
-  canvas.addEventListener('pointermove', onPointerMove, { passive:false });
-  canvas.addEventListener('pointerup',   onPointerUp,   { passive:false });
-  canvas.addEventListener('pointercancel', onPointerUp);
-  canvas.addEventListener('wheel', onWheel, { passive:false });
+  // HQ vorplatzieren (Mitte)
+  const HQ = {type:'hq', x: Math.floor(world.width/2)*world.tile, y: Math.floor(world.height/2)*world.tile, w: world.tile*5, h: world.tile*3};
+  state.buildings.push(HQ);
 
-  // Touch‑Pinch (einfach)
-  canvas.addEventListener('touchstart', onTouchStart, { passive:false });
-  canvas.addEventListener('touchmove',  onTouchMove,  { passive:false });
-  canvas.addEventListener('touchend',   onTouchEnd,   { passive:false });
+  // ---------- Canvas Setup ----------
+  function resizeCanvas() {
+    const w = canvas.clientWidth|0, h = canvas.clientHeight|0;
+    if (!w || !h) return;
+    if (canvas.width !== w*DPR || canvas.height !== h*DPR){
+      canvas.width = w*DPR; canvas.height = h*DPR;
+    }
+  }
+  resizeCanvas();
+  new ResizeObserver(resizeCanvas).observe(canvas);
 
-  // kleines Debug‑Toggle vom HUD
-  document.getElementById('btnDebug')?.addEventListener('click', ()=>{
-    state.showGrid = !state.showGrid;
+  const ctx = canvas.getContext('2d');
+
+  // ---------- Utilities ----------
+  function worldToScreen(wx, wy){
+    const cx = canvas.width / (2*DPR), cy = canvas.height / (2*DPR);
+    return [
+      cx + (wx - cam.x) * cam.zoom,
+      cy + (wy - cam.y) * cam.zoom
+    ];
+  }
+  function screenToWorld(sx, sy){
+    const cx = canvas.width / (2*DPR), cy = canvas.height / (2*DPR);
+    return [
+      cam.x + (sx - cx) / cam.zoom,
+      cam.y + (sy - cy) / cam.zoom
+    ];
+  }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function centerMap(){
+    cam.x = (world.width*world.tile)/2;
+    cam.y = (world.height*world.tile)/2;
+    requestRender();
+  }
+  exportFunction('centerMap', centerMap);
+
+  function toggleDebug(){
+    debug = !debug;
+    requestRender();
+  }
+  exportFunction('toggleDebug', toggleDebug);
+
+  // ---------- Input ----------
+  let dragging = false;
+  let last = {x:0,y:0};
+  let pinch = null; // {d,lastZoom}
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    canvas.setPointerCapture(e.pointerId);
+    last.x = e.clientX; last.y = e.clientY;
+    dragging = true;
+  });
+  canvas.addEventListener('pointerup', (e)=>{
+    canvas.releasePointerCapture(e.pointerId);
+    if (!dragging) return;
+    dragging = false;
+
+    // kurzer Tap → bauen/aktion (nur wenn kaum Bewegung)
+    const dx = Math.abs(e.clientX - last.x);
+    const dy = Math.abs(e.clientY - last.y);
+    if (dx < 6 && dy < 6){
+      const [wx,wy] = screenToWorld(e.clientX*1, e.clientY*1);
+      handleTap(wx, wy);
+    }
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if (!dragging) return;
+    // Pan nur im Pointer-Tool
+    if (state.tool === 'pointer'){
+      const dx = (e.clientX - last.x) / cam.zoom;
+      const dy = (e.clientY - last.y) / cam.zoom;
+      cam.x -= dx; cam.y -= dy;
+      last.x = e.clientX; last.y = e.clientY;
+      clampCamera();
+      requestRender();
+    }
   });
 
-  // Startwerte
-  centerMap();
-  loop();
+  // Pinch-Zoom (2-Finger) via Touch-Events (Safari iOS)
+  canvas.addEventListener('touchstart', (e)=>{
+    if (e.touches.length===2){
+      const d = dist(e.touches[0], e.touches[1]);
+      pinch = {d, lastZoom: cam.zoom};
+    }
+  }, {passive:true});
+  canvas.addEventListener('touchmove', (e)=>{
+    if (e.touches.length===2 && pinch){
+      const d = dist(e.touches[0], e.touches[1]);
+      const ratio = (d / Math.max(1,pinch.d));
+      cam.zoom = clamp(pinch.lastZoom * ratio, cam.minZoom, cam.maxZoom);
+      hud('Zoom', `${cam.zoom.toFixed(2)}x`);
+      requestRender();
+    }
+  }, {passive:true});
+  canvas.addEventListener('touchend', ()=>{ pinch = null; }, {passive:true});
 
-  function loop(){
-    draw();
-    requestAnimationFrame(loop);
+  // Wheel-Zoom (Desktop)
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const delta = Math.sign(e.deltaY);
+    cam.zoom = clamp(cam.zoom * (delta>0? 0.9 : 1.1), cam.minZoom, cam.maxZoom);
+    hud('Zoom', `${cam.zoom.toFixed(2)}x`);
+    requestRender();
+  }, {passive:false});
+
+  // Tool-Buttons (DOM)
+  function selectTool(id, name){
+    state.tool = id;
+    hud('Tool', name);
+  }
+  $('#toolPointer')?.addEventListener('click', ()=>selectTool('pointer','Zeiger'));
+  $('#toolRoad')?.addEventListener('click',   ()=>selectTool('road','Straße'));
+  $('#toolHQ')?.addEventListener('click',     ()=>selectTool('hq','HQ'));
+  $('#toolLumber')?.addEventListener('click', ()=>selectTool('lumber','Holzfäller'));
+  $('#toolDepot')?.addEventListener('click',  ()=>selectTool('depot','Depot'));
+  $('#toolBulldoze')?.addEventListener('click',()=>selectTool('bulldoze','Abriss'));
+
+  // ---------- Aktionen ----------
+  function handleTap(wx, wy){
+    if (state.tool === 'pointer') return; // nichts zu bauen
+
+    if (state.tool === 'hq'){
+      placeBuilding('hq', wx, wy, 5, 3);
+    } else if (state.tool === 'lumber'){
+      placeBuilding('lumber', wx, wy, 3, 2);
+    } else if (state.tool === 'depot'){
+      placeBuilding('depot', wx, wy, 3, 2);
+    } else if (state.tool === 'bulldoze'){
+      bulldozeAt(wx, wy);
+    } else if (state.tool === 'road'){
+      // Straßen-Klick setzt kurzen Abschnitt im Grid
+      const t = world.tile;
+      const gx = Math.floor(wx/t)*t, gy = Math.floor(wy/t)*t;
+      state.roads.push({x1:gx,y1:gy,x2:gx+t,y2:gy});
+    }
+    requestRender();
+  }
+
+  function placeBuilding(type, wx, wy, tw, th){
+    const t = world.tile;
+    const gx = Math.floor(wx/t)*t, gy = Math.floor(wy/t)*t;
+    const w = tw*t, h = th*t;
+    // simple Kollisionsprüfung
+    for (const b of state.buildings){
+      if (rectsOverlap(gx,gy,w,h, b.x,b.y,b.w,b.h)) return;
+    }
+    state.buildings.push({type, x:gx, y:gy, w, h});
+  }
+
+  function bulldozeAt(wx, wy){
+    const i = state.buildings.findIndex(b => pointInRect(wx,wy,b.x,b.y,b.w,b.h));
+    if (i>=0){ state.buildings.splice(i,1); return; }
+    // roads
+    for (let r=0;r<state.roads.length;r++){
+      const rd = state.roads[r];
+      if (pointNearSegment(wx,wy, rd.x1,rd.y1,rd.x2,rd.y2, 10)){
+        state.roads.splice(r,1); return;
+      }
+    }
+  }
+
+  // ---------- Render ----------
+  let needsRender = true;
+  function requestRender(){ needsRender = true; }
+
+  function clampCamera(){
+    const w = world.width*world.tile, h = world.height*world.tile;
+    const viewW = (canvas.width / DPR) / cam.zoom;
+    const viewH = (canvas.height / DPR) / cam.zoom;
+    cam.x = clamp(cam.x, viewW*0.5, w - viewW*0.5);
+    cam.y = clamp(cam.y, viewH*0.5, h - viewH*0.5);
   }
 
   function draw(){
-    const { ctx } = state;
-    const w = ctx.canvas.width, h = ctx.canvas.height;
+    clampCamera();
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.clearRect(0,0,canvas.width/DPR,canvas.height/DPR);
 
-    ctx.save();
     // Hintergrund
-    ctx.fillStyle = '#0f1823'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = '#0f1823';
+    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
 
-    // Kamera
-    ctx.translate(state.tx, state.ty);
-    ctx.scale(state.zoom, state.zoom);
+    // Welt-Transform
+    const [cx, cy] = [canvas.width/(2*DPR), canvas.height/(2*DPR)];
+    ctx.translate(cx, cy);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-cam.x, -cam.y);
 
     // Grid
-    if (state.showGrid){
-      ctx.strokeStyle = 'rgba(255,255,255,.08)';
-      const step = 96;
-      for (let y=-2000; y<2000; y+=step){ ctx.beginPath(); ctx.moveTo(-3000,y); ctx.lineTo(3000,y); ctx.stroke(); }
-      for (let x=-3000; x<3000; x+=step){ ctx.beginPath(); ctx.moveTo(x,-2000); ctx.lineTo(x,2000); ctx.stroke(); }
+    drawGrid();
+
+    // Roads
+    ctx.strokeStyle = '#657fa8';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    for (const r of state.roads){
+      ctx.beginPath();
+      ctx.moveTo(r.x1, r.y1);
+      ctx.lineTo(r.x2, r.y2);
+      ctx.stroke();
     }
 
-    // HQ‑Block zentriert in Welt (0,0)
-    const s = 320;
-    ctx.fillStyle = '#2f924a';
-    ctx.fillRect(-s*0.8, -s*0.3, s*1.6, s*0.6);
-    ctx.fillStyle = '#e9f1ff';
-    ctx.font = '48px system-ui, sans-serif';
-    ctx.fillText('HQ (Platzhalter)', -260, -160);
-
-    ctx.restore();
-
-    onHUD('Zoom', state.zoom.toFixed(2)+'x');
-  }
-
-  function onPointerDown(e){
-    if (e.pointerType === 'touch') return; // Touch handhaben wir separat
-    state.dragging = true;
-    state.dragX = e.clientX;
-    state.dragY = e.clientY;
-    e.preventDefault();
-  }
-  function onPointerMove(e){
-    if (!state.dragging) return;
-    const dx = e.clientX - state.dragX;
-    const dy = e.clientY - state.dragY;
-    state.dragX = e.clientX;
-    state.dragY = e.clientY;
-    state.tx += dx;
-    state.ty += dy;
-    e.preventDefault();
-  }
-  function onPointerUp(){ state.dragging = false }
-
-  function onWheel(e){
-    // Zoom um Cursor
-    const delta = Math.sign(e.deltaY) * 0.1;
-    zoomAt(e.clientX, e.clientY, Math.exp(-delta));
-    e.preventDefault();
-  }
-
-  // Touch‑Pinch/Pan
-  let pinch = null;
-  function onTouchStart(e){
-    if (e.touches.length === 1){
-      pinch = null;
-      state.dragging = true;
-      state.dragX = e.touches[0].clientX;
-      state.dragY = e.touches[0].clientY;
-    } else if (e.touches.length === 2){
-      state.dragging = false;
-      pinch = {
-        dist: dist2(e.touches[0], e.touches[1]),
-        cx: (e.touches[0].clientX + e.touches[1].clientX)/2,
-        cy: (e.touches[0].clientY + e.touches[1].clientY)/2
-      };
+    // Buildings
+    for (const b of state.buildings){
+      drawBuilding(b);
     }
-    e.preventDefault();
-  }
-  function onTouchMove(e){
-    if (pinch && e.touches.length === 2){
-      const nd = dist2(e.touches[0], e.touches[1]);
-      const scale = nd / pinch.dist;
-      pinch.dist = nd;
-      // leicht gedämpft
-      zoomAt(pinch.cx, pinch.cy, Math.pow(scale, 0.5));
-      e.preventDefault();
-      return;
-    }
-    if (state.dragging && e.touches.length === 1){
-      const t = e.touches[0];
-      const dx = t.clientX - state.dragX;
-      const dy = t.clientY - state.dragY;
-      state.dragX = t.clientX; state.dragY = t.clientY;
-      state.tx += dx; state.ty += dy;
-      e.preventDefault();
+
+    // Debug crosshair
+    if (debug){
+      ctx.strokeStyle = 'rgba(255,255,255,.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cam.x-2000, cam.y); ctx.lineTo(cam.x+2000, cam.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cam.x, cam.y-2000); ctx.lineTo(cam.x, cam.y+2000); ctx.stroke();
     }
   }
-  function onTouchEnd(e){ state.dragging = false; pinch = null }
 
-  function dist2(a,b){ const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY; return Math.hypot(dx,dy) }
+  function drawGrid(){
+    const t = world.tile;
+    const startX = Math.floor((cam.x - (canvas.width/(2*DPR))/cam.zoom)/t)*t - t;
+    const endX   = Math.floor((cam.x + (canvas.width/(2*DPR))/cam.zoom)/t)*t + t;
+    const startY = Math.floor((cam.y - (canvas.height/(2*DPR))/cam.zoom)/t)*t - t;
+    const endY   = Math.floor((cam.y + (canvas.height/(2*DPR))/cam.zoom)/t)*t + t;
 
-  function zoomAt(cx, cy, factor){
-    // Weltkoordinate vor dem Zoom bestimmen, damit unter dem Finger bleibt
-    const preX = (cx - state.tx) / state.zoom;
-    const preY = (cy - state.ty) / state.zoom;
-
-    state.zoom = clamp(state.zoom * factor, 0.5, 2.5);
-
-    // translation so anpassen, dass pre‑Punkt gleich bleibt
-    state.tx = cx - preX * state.zoom;
-    state.ty = cy - preY * state.zoom;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    for (let x=startX; x<=endX; x+=t){
+      ctx.beginPath(); ctx.moveTo(x, startY); ctx.lineTo(x, endY); ctx.stroke();
+    }
+    for (let y=startY; y<=endY; y+=t){
+      ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(endX, y); ctx.stroke();
+    }
   }
 
-  function clamp(v,a,b){ return Math.max(a, Math.min(b,v)) }
+  function drawBuilding(b){
+    const color =
+      b.type==='hq' ? '#2ea24b' :
+      b.type==='lumber' ? '#2a7fcf' :
+      b.type==='depot' ? '#cfa32a' : '#6a6a6a';
+
+    ctx.fillStyle = color;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.font = 'bold 36px system-ui,-apple-system,Segoe UI,Roboto,Arial';
+    const label =
+      b.type==='hq' ? 'HQ (Platzhalter)' :
+      b.type==='lumber' ? 'Holzfäller' :
+      b.type==='depot' ? 'Depot' : b.type;
+    ctx.fillText(label, b.x - 120, b.y - 14);
+  }
+
+  // ---------- Helpers ----------
+  function dist(a,b){ const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY; return Math.hypot(dx,dy); }
+  function rectsOverlap(ax,ay,aw,ah, bx,by,bw,bh){
+    return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+  }
+  function pointInRect(px,py, x,y,w,h){ return px>=x && px<=x+w && py>=y && py<=y+h; }
+  function pointNearSegment(px,py, x1,y1,x2,y2, r){
+    // Abstand Punkt → Segment
+    const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+    const dot = A*C + B*D;
+    const lenSq = C*C + D*D;
+    let t = lenSq!==0 ? dot/lenSq : -1;
+    t = Math.max(0, Math.min(1,t));
+    const xx = x1 + t*C, yy = y1 + t*D;
+    const dx = px-xx, dy = py-yy;
+    return (dx*dx + dy*dy) <= r*r;
+  }
+
+  function $(sel){ return document.querySelector(sel); }
+  function exportFunction(name, fn){ try{ Object.defineProperty(window,'main',{value:window.main||{}, writable:true}); window.main[name]=fn; }catch(_){} }
+
+  // ---------- Loop ----------
+  function frame(){
+    if (needsRender){ draw(); needsRender = false; }
+    requestAnimationFrame(frame);
+  }
+  requestRender();
+  frame();
+
+  // HUD initial
+  hud('Wood', state.res.Wood);
+  hud('Stone', state.res.Stone);
+  hud('Food', state.res.Food);
+  hud('Gold', state.res.Gold);
+  hud('Carriers', state.res.Carriers);
+  hud('Tool', 'Zeiger');
+  hud('Zoom', `${cam.zoom.toFixed(2)}x`);
+
+  // public OK
+  return true;
 }
 
-export function centerMap(){
-  if (!state) return;
-  const { ctx } = state;
-  // Mitte der Canvas in Screenkoordinaten
-  state.zoom = 1.05;
-  state.tx = ctx.canvas.width * 0.5;
-  state.ty = ctx.canvas.height* 0.45;
-}
+// zusätzliche API bereits oben via exportFunction hinterlegt:
+export function centerMap(){ /* wird zur Laufzeit ersetzt */ }
+export function toggleDebug(){ /* wird zur Laufzeit ersetzt */ }
