@@ -146,7 +146,16 @@ function addCanvasGestures() {
   const pointers = new Map();
   let lastPan = null; // {x,y} in Weltkoordinaten
   let lastDist = null;
-
+  // 👇 NEU EINFÜGEN
+  state._pinchGetter = () => {
+    const arr = [...pointers.values()];
+    if (arr.length < 2) return { dist: 1, center: { x: state.width/2, y: state.height/2 } };
+    const [a, b] = arr;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.hypot(dx, dy);
+    const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    return { dist, center };
+  };
   const onPointerDown = (e) => {
     C.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
