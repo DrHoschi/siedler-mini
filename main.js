@@ -14,79 +14,61 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha:false });
 setCanvas(canvas);
 
-// --- UI
+// UI
 const startOverlay = document.getElementById('startOverlay');
-const card = document.getElementById('card');
 const startBtn = document.getElementById('startBtn');
-const fsPreBtn = document.getElementById('fsPreBtn');
 const fsBtn = document.getElementById('fsBtn');
 const dbgBtn = document.getElementById('dbgBtn');
 const centerBtn = document.getElementById('centerBtn');
 const zoomInfo = document.getElementById('zoomInfo');
 
-// Solange Overlay sichtbar ist, darf das Canvas keine Events fangen:
-setCanvasPointerEnabled(false);
-
-// Buttons + Doppelklick fürs Overlay
-startBtn.addEventListener('click', handleStart, {passive:true});
-fsPreBtn.addEventListener('click', toggleFullscreen, {passive:true});
-fsBtn.addEventListener('click', toggleFullscreen, {passive:true});
-dbgBtn.addEventListener('click',()=>{debug=!debug;}, {passive:true});
-centerBtn.addEventListener('click',()=>centerOnHQ(), {passive:true});
-
-// Doppeltipp/Doppelklick auf Overlay → Vollbild
-['dblclick','touchend'].forEach(type=>{
-  card.addEventListener(type, (e)=>{
-    // Doppeltipp-Heuristik mobil
-    if(type==='touchend'){
-      const now=Date.now();
-      if(card._lastTap && now-card._lastTap<300){ toggleFullscreen(); }
-      card._lastTap=now;
-    } else {
-      toggleFullscreen();
-    }
-  }, {passive:true});
-});
-
 let running=false, debug=false, last=performance.now();
 
-// Boot
-async function handleStart(e){
-  e.stopPropagation();
-  startBtn.disabled = true;
+function setCanvasPointerEnabled(on){
+  canvas.style.pointerEvents = on ? 'auto' : 'none';
+}
+
+// Falls `boot.js` noch nicht da war: minimale Fallback-Handler
+startBtn?.addEventListener('click', (e)=>startFromOverlay(e), {passive:true});
+fsBtn?.addEventListener('click', ()=>toggleFullscreen(), {passive:true});
+dbgBtn?.addEventListener('click', ()=>{debug=!debug;}, {passive:true});
+centerBtn?.addEventListener('click', ()=>centerOnHQ(), {passive:true});
+
+// Overlay blockiert Canvas-Inputs, bis gestartet wurde
+setCanvasPointerEnabled(false);
+
+export async function startFromOverlay(e){
+  e?.stopPropagation?.();
+  startBtn && (startBtn.disabled = true);
   await bootGame();
-  // Overlay weg und Canvas wieder klickbar machen
   startOverlay.style.display='none';
   setCanvasPointerEnabled(true);
-
   running = true;
   requestAnimationFrame(loop);
+}
+
+export function toggleFullscreen(){
+  const el = document.documentElement;
+  if (!document.fullscreenElement) el.requestFullscreen?.().catch(()=>{});
+  else document.exitFullscreen?.().catch(()=>{});
 }
 
 async function bootGame(){
   await loadAllAssets();
   initWorld();
 
-  // Carriers initialisieren (Road/InBounds API)
   initCarriers({ isRoad, inBounds });
-
-  // Input/Gesten erst NACH Overlay-Start aktivieren:
   initInput(canvas, onTapBuild);
   setToolButtonHandlers(updateToolUI);
   updateToolUI();
 
-  // HQ registrieren + Carrier spawnen
   const HQ = getHQ();
   registerSink({ id:'snk_hq', x:HQ.x, y:HQ.y, acceptType:'wood', capacity:9999, amount:0, prio:2 });
   spawnCarrierAt(HQ.x, HQ.y);
   spawnCarrierAt(HQ.x, HQ.y+1);
 
-  // vorhandene Gebäude (falls via Startsave) synchronisieren
   syncCarriersRegistrations();
-
   centerOnHQ();
-
-  // erste Zeichnung, falls User noch nicht im Loop ist
   drawFrame();
 }
 
@@ -101,20 +83,12 @@ function syncCarriersRegistrations(){
   }
 }
 
-function setCanvasPointerEnabled(on){
-  canvas.style.pointerEvents = on ? 'auto' : 'none';
-}
-
-// Loop
 function loop(now){
   const dt = Math.min(0.05, (now-last)/1000);
   last = now;
-
   worldTick(dt);
   tickCarriers(dt);
-
   drawFrame();
-
   if(running) requestAnimationFrame(loop);
 }
 
@@ -131,7 +105,6 @@ function drawFrame(){
   zoomInfo.textContent = `Zoom ${camera.zoom.toFixed(2)}×`;
 }
 
-// Build/Tap
 function onTapBuild(screenX, screenY){
   const t = getTool();
   if (t === 'pointer') return;
@@ -149,14 +122,6 @@ function onTapBuild(screenX, screenY){
   }
 }
 
-// Vollbild
-function toggleFullscreen(){
-  const el = document.documentElement;
-  if (!document.fullscreenElement) el.requestFullscreen?.().catch(()=>{});
-  else document.exitFullscreen?.().catch(()=>{});
-}
-
-// Resize
 function resize(){
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   canvas.width  = Math.floor(canvas.clientWidth * dpr);
@@ -166,3 +131,12 @@ function resize(){
 }
 window.addEventListener('resize', resize);
 resize();
+
+// Tool-UI (nur Anzeige)
+function updateToolUI(){
+  const t = getTool();
+  document.getElementById('toolInfo').textContent = `Tool: ${t[0].toUpperCase()+t.slice(1)}`;
+  document.querySelectorAll('.tool').forEach(b=>{
+    b.classList.toggle('on', b.dataset.tool===t);
+  });
+}
