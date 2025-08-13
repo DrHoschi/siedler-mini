@@ -11,22 +11,21 @@
     #game{display:block;touch-action:none;position:fixed;inset:0}
 
     /* HUD oben */
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;justify-content:flex-start;opacity:.95;pointer-events:none}
+    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;opacity:.95;pointer-events:none}
     .pill{pointer-events:auto;padding:6px 10px;border-radius:999px;background:#122131;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
     .right{margin-left:auto;display:flex;gap:8px}
 
     /* Tools links */
-    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px}
+    .tools{position:fixed;left:12px;top:56px;display:flex;flex-direction:column;gap:10px}
     .btn{padding:8px 12px;border-radius:12px;background:#0f1b29;border:1px solid #1b2a3f;color:#cfe3ff;font-size:15px}
     .btn.active{outline:2px solid #36a3ff}
 
     /* Start-Overlay */
     #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);backdrop-filter:saturate(1.1) blur(2px)}
-    #startCard{max-width:min(92vw,720px);width:92vw;background:#122131;border:1px solid #20324a;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px}
+    #startCard{max-width:min(92vw,680px);width:92vw;background:#122131;border:1px solid #20324a;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px}
     #startCard h1{margin:0 0 10px 0;font-size:22px}
     #startCard p{margin:6px 0;color:#c9d8ee}
     #startBtns{display:flex;gap:8px;margin-top:8px}
-
     #version{position:fixed;right:10px;bottom:6px;color:#7fa2d3;opacity:.8;font-size:12px}
   </style>
 </head>
@@ -34,7 +33,7 @@
 
 <canvas id="game"></canvas>
 
-<!-- HUD top -->
+<!-- HUD -->
 <div id="uiBar" class="hud" style="opacity:0">
   <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
   <div class="pill">🪨 Stein <span id="hudStone">0</span></div>
@@ -44,23 +43,23 @@
   <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
   <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   <div class="right">
-    <button class="pill" id="centerBtn">Zentrieren</button>
-    <button class="pill" id="dbgBtn">Debug</button>
-    <button class="pill" id="fsBtnTop">Vollbild</button>
+    <button class="pill" id="centerBtn" type="button">Zentrieren</button>
+    <button class="pill" id="dbgBtn" type="button">Debug</button>
+    <button class="pill" id="fsBtnTop" type="button">Vollbild</button>
   </div>
 </div>
 
-<!-- Tool-Leiste links (Buttons werden von deinem Spiel genutzt) -->
+<!-- Tools -->
 <div class="tools">
-  <button class="btn active" id="toolPointer">Zeiger</button>
-  <button class="btn" id="toolRoad">Straße</button>
-  <button class="btn" id="toolHQ">HQ</button>
-  <button class="btn" id="toolLumber">Holzfäller</button>
-  <button class="btn" id="toolDepot">Depot</button>
-  <button class="btn" id="toolErase">Abriss</button>
+  <button class="btn active" id="toolPointer" type="button">Zeiger</button>
+  <button class="btn" id="toolRoad"    type="button">Straße</button>
+  <button class="btn" id="toolHQ"      type="button">HQ</button>
+  <button class="btn" id="toolLumber"  type="button">Holzfäller</button>
+  <button class="btn" id="toolDepot"   type="button">Depot</button>
+  <button class="btn" id="toolErase"   type="button">Abriss</button>
 </div>
 
-<!-- Start -->
+<!-- Start-Overlay -->
 <div id="startOverlay">
   <div id="startCard">
     <h1>Siedler‑Mini V14 (Mobile)</h1>
@@ -68,16 +67,16 @@
     <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
     <p style="opacity:.8">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</p>
     <div id="startBtns">
-      <button class="btn" id="startBtn" style="background:#0d3d1b;border-color:#146a2f">Start</button>
-      <button class="btn" id="fsBtn">Vollbild</button>
-      <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#6a1414">Reset</button>
+      <button class="btn" id="startBtn" style="background:#0d3d1b;border-color:#146a2f" type="button">Start</button>
+      <button class="btn" id="fsBtn"    type="button">Vollbild</button>
+      <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#6a1414" type="button">Reset</button>
     </div>
   </div>
 </div>
 
 <div id="version">JS V14.3</div>
 
-<!-- Ein einziger Einstiegspunkt: boot.js lädt und ruft window.main.run() -->
+<!-- Einziger Einstieg: boot.js lädt & ruft window.main.run() -->
 <script type="module" src="./boot.js?v=14.3"></script>
 </body>
 </html>
