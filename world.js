@@ -5,35 +5,40 @@ import { drawCarriers } from './core/carriers.js';
 export const MAP_W = 120;
 export const MAP_H = 120;
 
-/* Ressourcen */
 export const resources = { wood:20, stone:10, food:10, gold:0 };
 
-/* Weltzustand */
 export const tiles = new Array(MAP_W*MAP_H).fill('grass'); // terrain id
 export const roads = new Set();                             // key "x,y"
 export const buildings = [];                                // {type,x,y}
 export const HQ_POS = {x:Math.floor(MAP_W/2), y:Math.floor(MAP_H/2)};
-window.HQ_POS = HQ_POS; // für camera.centerOnHQ()
+window.HQ_POS = HQ_POS;
+
+const K=(x,y)=>`${x},${y}`;
+const IDX=(x,y)=> y*MAP_W+x;
+export const inBounds=(x,y)=> x>=0&&y>=0&&x<MAP_W&&y<MAP_H;
+export const isRoad=(x,y)=> roads.has(K(x,y));
 
 export function initWorld(){
   // kleiner See
   for(let y=35;y<55;y++){
     for(let x=35;x<55;x++){
-      tiles[idx(x,y)] = 'water';
-      if(x===35||x===54||y===35||y===54) tiles[idx(x,y)]='shore';
+      tiles[IDX(x,y)] = 'water';
+      if(x===35||x===54||y===35||y===54) tiles[IDX(x,y)]='shore';
     }
   }
   // Start-HQ (Stein) mittig
   buildings.length=0;
   buildings.push({type:'hq_stone', x:HQ_POS.x, y:HQ_POS.y});
+  // kurze Startstraße
+  roads.add(K(HQ_POS.x, HQ_POS.y+1));
 }
 
-function idx(x,y){ return y*MAP_W+x; }
-function inMap(x,y){ return x>=0&&y>=0&&x<MAP_W&&y<MAP_H; }
+export function getBuildingsOfType(type){ return buildings.filter(b=>b.type===type); }
+export function getHQ(){ return buildings.find(b=>b.type==='hq_stone'||b.type==='hq_wood') || {x:HQ_POS.x,y:HQ_POS.y}; }
 
 /* ---------- Zeichnen ---------- */
 export function drawWorld(ctx, debug=false){
-  // Sichtfenster grob bestimmen (etwas Rand)
+  // Sichtfenster grob bestimmen
   const pad = 4;
   const corners = [
     screenToWorld(0,0),
@@ -52,7 +57,7 @@ export function drawWorld(ctx, debug=false){
   // Terrain
   for(let y=minY;y<=maxY;y++){
     for(let x=minX;x<=maxX;x++){
-      const t = tiles[idx(x,y)];
+      const t = tiles[IDX(x,y)];
       const [sx,sy] = worldToScreen(x,y);
       drawTile(ctx, t, sx, sy);
     }
@@ -60,7 +65,7 @@ export function drawWorld(ctx, debug=false){
   // Straßen
   for(let y=minY;y<=maxY;y++){
     for(let x=minX;x<=maxX;x++){
-      if(roads.has(key(x,y))){
+      if(roads.has(K(x,y))){
         const [sx,sy]=worldToScreen(x,y);
         drawRoadAuto(ctx,x,y,sx,sy);
       }
@@ -84,21 +89,19 @@ function drawTile(ctx, t, sx, sy){
   const img = IM[t];
   if(img) ctx.drawImage(img, sx-(TILE_W/2), sy-TILE_H, TILE_W, TILE_H*2);
   else {
-    ctx.fillStyle = t==='water' ? '#1763a1' : '#295a2e';
+    ctx.fillStyle = t==='water' ? '#1763a1' : t==='shore' ? '#375a4d' : '#295a2e';
     isoDiamond(ctx, sx, sy, '#000', ctx.fillStyle);
   }
 }
 
 function drawRoadAuto(ctx,x,y,sx,sy){
-  // simple Autotile je Nachbarn
-  const n = hasRoad(x,y-1), s=hasRoad(x,y+1), w=hasRoad(x-1,y), e=hasRoad(x+1,y);
+  const n = isRoad(x,y-1), s=isRoad(x,y+1), w=isRoad(x-1,y), e=isRoad(x+1,y);
   let img = IM.road;
   if((n&&s&&!w&&!e)||(w&&e&&!n&&!s)) img = IM.road_straight || img;
   else if((n&&e)|| (e&&s) || (s&&w) || (w&&n)) img = IM.road_curve || img;
   if(img) ctx.drawImage(img, sx-(TILE_W/2), sy-TILE_H, TILE_W, TILE_H*2);
   else isoDiamond(ctx,sx,sy,'#000','#806a4a');
 }
-function hasRoad(x,y){ return roads.has(key(x,y)); }
 
 function drawBuilding(ctx,b,sx,sy){
   const img = IM[b.type] || IM.hq_wood;
@@ -118,33 +121,26 @@ function isoDiamond(ctx, sx, sy, stroke, fill){
   ctx.strokeStyle=stroke; ctx.stroke();
 }
 
-/* ---------- Bauen ---------- */
+/* ---------- Bauen (liefert Ergebnis an main.js) ---------- */
 export function tryBuildAtScreen(screenX,screenY, tool){
   const [wx, wy] = screenToWorld(screenX,screenY);
   const x = Math.round(wx), y = Math.round(wy);
-  if(!inMap(x,y)) return;
+  if(!inBounds(x,y)) return {kind:'none'};
 
-  if(tool==='road'){ roads.add(key(x,y)); }
-  else if(tool==='erase'){ roads.delete(key(x,y)); removeBuildingAt(x,y); }
-  else if(tool==='hq'){ buildings.push({type:'hq_wood',x,y}); }
-  else if(tool==='lumber'){ buildings.push({type:'lumberjack',x,y}); }
-  else if(tool==='depot'){ buildings.push({type:'depot',x,y}); }
-}
-
-function removeBuildingAt(x,y){
-  const i = buildings.findIndex(b=>b.x===x && b.y===y);
-  if(i>=0) buildings.splice(i,1);
-}
-
-function key(x,y){ return `${x},${y}`; }
-
-/* ---------- Tick ---------- */
-let tickAcc=0;
-export function worldTick(dt){
-  // primitive Produktion: +1 Holz alle 3s, wenn es mind. 1 Holzfäller gibt
-  tickAcc += dt;
-  if(tickAcc>=3){
-    if(buildings.some(b=>b.type==='lumberjack')) resources.wood += 1;
-    tickAcc = 0;
+  if(tool==='road'){
+    roads.add(K(x,y));
+    return {kind:'roadChanged'};
   }
+  if(tool==='erase'){
+    const wasRoad = roads.delete(K(x,y));
+    if (wasRoad) return {kind:'roadChanged'};
+    const i = buildings.findIndex(b=>b.x===x && b.y===y);
+    if(i>=0){ const b=buildings[i]; buildings.splice(i,1); return {kind:'buildingRemoved', building:b}; }
+    return {kind:'none'};
+  }
+  if(tool==='hq'){ const b={type:'hq_wood',x,y}; buildings.push(b); return {kind:'building', building:b}; }
+  if(tool==='lumber'){ const b={type:'lumberjack',x,y}; buildings.push(b); return {kind:'building', building:b}; }
+  if(tool==='depot'){ const b={type:'depot',x,y}; buildings.push(b); return {kind:'building', building:b}; }
+
+  return {kind:'none'};
 }
