@@ -1,41 +1,17 @@
-// main.js – lädt game.js und ruft game.startGame({ ... }) auf
-// Achtung: game.js muss "export async function startGame(opts) { ... }" bereitstellen.
+// main.js — Einstieg aus boot.js
+// Exportiert run(opts), lädt game.js und startet das Spiel.
 
-export async function run() {
-  const $ = sel => document.querySelector(sel);
-  const canvas = $('#game');
-  if (!canvas) throw new Error('canvas fehlt');
-
-  const DPR = window.devicePixelRatio || 1;
-
-  // HUD‑Updater
-  function onHUD(api){
-    $('#hudWood').textContent  = api.wood?.()  ?? '0';
-    $('#hudStone').textContent = api.stone?.() ?? '0';
-    $('#hudFood').textContent  = api.food?.()  ?? '0';
-    $('#hudGold').textContent  = api.gold?.()  ?? '0';
-    $('#hudCar').textContent   = api.car?.()   ?? '0';
-    $('#hudTool').textContent  = api.tool?.()  ?? 'Zeiger';
-    $('#hudZoom').textContent  = api.zoom?.()  ?? '1.00x';
-  }
-
-  // game.js laden
-  const game = await import('./game.js?v=14.3-safe2');
-  const startGame = game.startGame || game.default?.startGame;
-  if (typeof startGame !== 'function') {
-    throw new Error('game.startGame(opts) fehlt oder ist keine Funktion.');
-  }
-
-  // Start
-  await startGame({ canvas, DPR, onHUD });
-
-  // optional: damit „Zentrieren“ (HUD‑Button) sofort nutzbar ist,
-  // kann game.js window.main.centerMap setzen – falls nicht, hier No‑op:
-  if (!window.main) window.main = {};
-  if (typeof window.main.centerMap !== 'function') {
-    window.main.centerMap = () => {};
+export async function run(opts) {
+  try {
+    const { default: startGame } = await import('./game.js'); // default export
+    await startGame({
+      canvas: opts.canvas,
+      DPR: opts.DPR ?? (window.devicePixelRatio || 1),
+      onHUD: opts.onHUD ?? (() => {}),
+    });
+  } catch (err) {
+    // Fehler landet sichtbar im Start‑Overlay (boot.js fängt diesen throw ab)
+    console.error('[main.run] error:', err);
+    throw err;
   }
 }
-
-// Fallback‑Export, falls boot.js window.main.run() erwartet
-export default { run };
