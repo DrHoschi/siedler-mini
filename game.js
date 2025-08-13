@@ -1,274 +1,336 @@
-// game.js – minimaler Spielkern + Mobile‑Gesten
-// Exportierte API: startGame, resetGame, centerCamera, toggleDebug, setTool
+const STORE_KEY='sm_v146';
+const clamp=(v,mi,ma)=>Math.max(mi,Math.min(ma,v));
+const snap=(v,s)=>Math.round(v/s)*s;
+const key=(x,y)=>`${x},${y}`;
 
-let state = null;
+const COSTS={
+  road:{holz:1,stein:0,gold:0},
+  hq:{holz:20,stein:20,gold:0},        // erstes HQ gratis (beim Erststart)
+  lumber:{holz:8,stein:4,gold:0},
+  depot:{holz:10,stein:6,gold:0},
+};
+const REFUND_FACTOR=0.5;
 
-export function startGame(opts) {
-  const canvas = opts.canvas;
+export async function run(opts){
+  const {canvas,DPR=1,onHUD=()=>{},onTool=()=>{},onZoom=()=>{},onError=()=>{},onReady=()=>{}}=opts||{};
+  if(!canvas) throw new Error('Canvas fehlt');
   const ctx = canvas.getContext('2d');
 
-  // Spielzustand
-  state = {
-    canvas, ctx,
-    DPR: opts.DPR || 1,
-    width: 0, height: 0,
-    scale: 1, minScale: 0.5, maxScale: 2.5,
-    camX: 0, camY: 0,   // Welt‑Koordinaten der Bildschirmmitte
-    tool: 'pointer',
-    debug: false,
-    hq: { x: 0, y: 0, w: 320, h: 160 }, // Platzhalter
-    updateHUD: opts.onHUD || (()=>{})
+  // Welt/Kamera
+  const grid=64;
+  let zoom=1, Z_MIN=0.5, Z_MAX=2.5;
+  let camX=0, camY=0;
+
+  // State
+  let state={
+    res:{holz:30,stein:20,nahrung:0,gold:0,traeger:0},
+    hq:{x:0,y:0,placed:true},           // mittig & gratis
+    roads:new Set(),
+    buildings:{},
+    dbg:false,
+    tool:'pointer',
+    lastProd:0
   };
 
-  // サイズ + initiale Kamera
+  // Load
+  try{
+    const raw=localStorage.getItem(STORE_KEY);
+    if(raw){
+      const j=JSON.parse(raw);
+      state={...state,...j};
+      state.roads=new Set(j.roads||[]);
+    }
+  }catch(e){ console.warn('load failed',e); }
+
+  // Resize
+  function resize(){
+    const w=Math.floor(canvas.clientWidth*DPR), h=Math.floor(canvas.clientHeight*DPR);
+    if(canvas.width!==w) canvas.width=w;
+    if(canvas.height!==h) canvas.height=h;
+  }
   resize();
-  centerCamera();
+  new ResizeObserver(resize).observe(canvas);
 
-  // Events
-  addCanvasGestures();
-  window.addEventListener('resize', resize);
+  // Transforms
+  const worldToScreen=(wx,wy)=>[
+    Math.floor((wx-camX)*zoom*DPR+canvas.width/2),
+    Math.floor((wy-camY)*zoom*DPR+canvas.height/2)
+  ];
+  const screenToWorld=(sx,sy)=>[
+    ((sx-canvas.width/2)/(zoom*DPR)+camX),
+    ((sy-canvas.height/2)/(zoom*DPR)+camY)
+  ];
 
-  // Los geht’s
-  draw();
-}
-
-export function resetGame() {
-  if (!state) return;
-  state.scale = 1;
-  centerCamera();
-  draw();
-}
-
-export function centerCamera() {
-  if (!state) return;
-  const { hq } = state;
-  state.camX = hq.x + hq.w/2;
-  state.camY = hq.y + hq.h/2;
-  draw();
-}
-
-export function setTool(tool) {
-  if (!state) return;
-  state.tool = tool;
-  state.updateHUD('Tool', tool === 'pointer' ? 'Zeiger' : tool.toUpperCase());
-}
-
-export function toggleDebug() {
-  if (!state) return;
-  state.debug = !state.debug;
-  draw();
-}
-
-/* ------------------ Rendering ------------------ */
-
-function resize() {
-  const { innerWidth:w, innerHeight:h, devicePixelRatio:dpr=1 } = window;
-  if (!state) return;
-  state.width = w; state.height = h;
-  const C = state.canvas;
-  C.width = Math.floor(w * state.DPR);
-  C.height = Math.floor(h * state.DPR);
-  C.style.width = w + 'px';
-  C.style.height = h + 'px';
-  draw();
-}
-
-function worldToScreen(x, y) {
-  const { width, height, camX, camY, scale, DPR } = state;
-  const sx = (x - camX) * scale + width/2;
-  const sy = (y - camY) * scale + height/2;
-  return [sx * DPR, sy * DPR];
-}
-function sizeToScreen(w, h) {
-  const { scale, DPR } = state;
-  return [w * scale * DPR, h * scale * DPR];
-}
-
-function drawGrid() {
-  const { ctx, width, height, scale, DPR } = state;
-  const step = 96 * scale; // optische Gridgröße
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-  ctx.lineWidth = 1 * DPR;
-  const x0 = 0, y0 = 0;
-  for (let x = x0; x <= width * DPR; x += step * DPR) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height * DPR); ctx.stroke();
+  function save(){
+    try{
+      const json={...state, roads:[...state.roads]};
+      localStorage.setItem(STORE_KEY, JSON.stringify(json));
+    }catch(e){ console.warn('save failed',e); }
   }
-  for (let y = y0; y <= height * DPR; y += step * DPR) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width * DPR, y); ctx.stroke();
+
+  // Drawing
+  function clear(){ ctx.fillStyle='#0f1823'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+  function drawGrid(){
+    if(!state.dbg) return;
+    ctx.save(); ctx.lineWidth=1*DPR; ctx.strokeStyle='rgba(255,255,255,.10)';
+    const step=grid*zoom*DPR;
+    const [sx0,sy0]=worldToScreen(-99999,-99999);
+    const [sx1,sy1]=worldToScreen( 99999, 99999);
+    const xStart=Math.floor((sx0)/step)*step, yStart=Math.floor((sy0)/step)*step;
+    for(let x=xStart;x<sx1+step;x+=step){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke(); }
+    for(let y=yStart;y<sy1+step;y+=step){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke(); }
+    ctx.restore();
   }
-  ctx.restore();
-}
-
-function drawHQ() {
-  const { ctx, hq, debug } = state;
-  const [sx, sy] = worldToScreen(hq.x, hq.y);
-  const [sw, sh] = sizeToScreen(hq.w, hq.h);
-
-  // Körper
-  ctx.fillStyle = '#2ba34a';
-  ctx.fillRect(sx, sy, sw, sh);
-
-  // Titel
-  ctx.fillStyle = 'rgba(255,255,255,.92)';
-  ctx.font = `${Math.max(22, sh/3)}px system-ui, -apple-system, Segoe UI`;
-  ctx.textBaseline = 'bottom';
-  ctx.fillText('HQ (Platzhalter)', sx - 120, sy - 12);
-
-  if (debug) {
-    ctx.strokeStyle = 'rgba(255,255,255,.35)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx, sy, sw, sh);
+  function drawHQ(){
+    const w=grid*4,h=grid*2;
+    const [sx,sy]=worldToScreen(state.hq.x,state.hq.y);
+    ctx.save();
+    ctx.fillStyle='#36a14f';
+    ctx.fillRect(sx-w/2*zoom*DPR, sy-h/2*zoom*DPR, w*zoom*DPR, h*zoom*DPR);
+    ctx.fillStyle='rgba(255,255,255,.92)'; ctx.font=`${18*DPR}px system-ui`; ctx.textAlign='center';
+    ctx.fillText('HQ (Platzhalter)', sx, sy-(h*zoom*DPR)/2-10*DPR);
+    ctx.restore();
   }
-}
-
-function drawBackground() {
-  const { ctx, width, height, DPR } = state;
-  ctx.fillStyle = '#0f1823';
-  ctx.fillRect(0, 0, width * DPR, height * DPR);
-}
-
-function draw() {
-  if (!state) return;
-  const { ctx, scale } = state;
-  drawBackground();
-  drawGrid();
-  drawHQ();
-  state.updateHUD('Zoom', scale.toFixed(2) + 'x');
-}
-
-/* -------------- Gesten: Pan/Pinch -------------- */
-
-function addCanvasGestures() {
-  const C = state.canvas;
-  C.style.touchAction = 'none';
-
-  const pointers = new Map();
-  let lastPan = null; // {x,y} in Weltkoordinaten
-  let lastDist = null;
-  // 👇 NEU EINFÜGEN
-  state._pinchGetter = () => {
-    const arr = [...pointers.values()];
-    if (arr.length < 2) return { dist: 1, center: { x: state.width/2, y: state.height/2 } };
-    const [a, b] = arr;
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const dist = Math.hypot(dx, dy);
-    const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    return { dist, center };
-  };
-  const onPointerDown = (e) => {
-    C.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
-    if (pointers.size === 1) {
-      lastPan = screenToWorld(e.clientX, e.clientY);
-    } else if (pointers.size === 2) {
-      lastDist = pinchDistance();
+  function drawRoads(){
+    ctx.save(); ctx.fillStyle='#7b8b99';
+    const size=grid*0.8;
+    for(const k of state.roads){
+      const [gx,gy]=k.split(',').map(Number);
+      const wx=gx*grid, wy=gy*grid;
+      const [sx,sy]=worldToScreen(wx,wy);
+      ctx.fillRect(sx-(size/2)*zoom*DPR, sy-(size/2)*zoom*DPR, size*zoom*DPR, size*zoom*DPR);
     }
-  };
+    ctx.restore();
+  }
+  function drawBuildings(){
+    ctx.save();
+    for(const k in state.buildings){
+      const b=state.buildings[k];
+      const wx=b.gx*grid, wy=b.gy*grid;
+      const [sx,sy]=worldToScreen(wx,wy);
+      const w=b.w*grid, h=b.h*grid;
+      ctx.fillStyle = b.type==='lumber' ? '#2e9146' : '#2f6aa8';
+      ctx.globalAlpha = 0.95;
+      ctx.fillRect(sx-w/2*zoom*DPR, sy-h/2*zoom*DPR, w*zoom*DPR, h*zoom*DPR);
+      ctx.globalAlpha=1;
+      ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font=`${14*DPR}px system-ui`; ctx.textAlign='center';
+      ctx.fillText(b.type, sx, sy - (h*zoom*DPR)/2 - 8*DPR);
+    }
+    ctx.restore();
+  }
+  function render(){
+    clear(); drawGrid(); drawRoads(); drawBuildings(); drawHQ(); if(ghost) drawGhost();
+  }
 
-  const onPointerMove = (e) => {
-    if (!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  // Ghost
+  let ghost=null;
+  function mkGhost(type, wx,wy){
+    if(type==='road'){
+      const gx=Math.round(wx/grid), gy=Math.round(wy/grid);
+      const valid=!state.roads.has(key(gx,gy));
+      const affordable=canPay('road');
+      return {type, gx,gy, wx:gx*grid, wy:gy*grid, w:0.8*grid, h:0.8*grid, color:(valid&&affordable?'#9db4c6':'#b25a5a'), valid:valid&&affordable};
+    }
+    const w= type==='hq' ? 4 : 3;
+    const h= type==='hq' ? 2 : 1.6;
+    const gx=Math.round(wx/grid), gy=Math.round(wy/grid);
+    const wx2=gx*grid, wy2=gy*grid;
+    const overlap = collidesAny(gx,gy,w,h);
+    const affordable=canPay(type);
+    return {type,gx,gy,wx:wx2,wy:wy2,w:w*grid,h:h*grid,color:(!(overlap)&&affordable?'#3ca14e':'#b25a5a'), valid:!overlap&&affordable};
+  }
+  function drawGhost(){
+    const [sx,sy]=worldToScreen(ghost.wx,ghost.wy);
+    ctx.save(); ctx.globalAlpha=ghost.valid?0.35:0.18; ctx.fillStyle=ghost.color;
+    ctx.fillRect(sx-ghost.w/2*zoom*DPR, sy-ghost.h/2*zoom*DPR, ghost.w*zoom*DPR, ghost.h*zoom*DPR);
+    ctx.restore();
+  }
 
-    if (pointers.size === 1 && state.tool === 'pointer') {
-      // Pan
-      const wNow = screenToWorld(e.clientX, e.clientY);
-      const dx = wNow.x - lastPan.x;
-      const dy = wNow.y - lastPan.y;
-      state.camX -= dx;
-      state.camY -= dy;
-      lastPan = screenToWorld(e.clientX, e.clientY);
-      draw();
-    } else if (pointers.size >= 2) {
-      // Pinch‑Zoom (um den Mittelfingerpunkt)
-      const d = pinchDistance();
-      if (lastDist != null) {
-        const pivot = pinchCenter();
-        applyZoom(d / lastDist, pivot.x, pivot.y);
+  // Kollision
+  function collidesAny(gx,gy,w,h){
+    const hqW=4,hqH=2;
+    const hqGX=Math.round(state.hq.x/grid), hqGY=Math.round(state.hq.y/grid);
+    if(rectsOverlap(gx-w/2,gy-h/2,w,h, hqGX-hqW/2,hqGY-hqH/2,hqW,hqH)) return true;
+    for(const k in state.buildings){
+      const b=state.buildings[k];
+      if(rectsOverlap(gx-w/2,gy-h/2,w,h, b.gx-b.w/2,b.gy-b.h/2,b.w,b.h)) return true;
+    }
+    return false;
+  }
+  function rectsOverlap(ax,ay,aw,ah, bx,by,bw,bh){
+    return !(ax+aw<=bx || bx+bw<=ax || ay+ah<=by || by+bh<=ay);
+  }
+
+  // Kosten
+  function canPay(type){ const c=COSTS[type]; if(!c) return true; return state.res.holz>=c.holz && state.res.stein>=c.stein && state.res.gold>=c.gold; }
+  function pay(type){ const c=COSTS[type]; if(!c) return; state.res.holz-=c.holz; state.res.stein-=c.stein; state.res.gold-=c.gold; updateHUD(); }
+  function refund(type){ const c=COSTS[type]; if(!c) return; state.res.holz+=Math.floor(c.holz*0.5); state.res.stein+=Math.floor(c.stein*0.5); state.res.gold+=Math.floor(c.gold*0.5); updateHUD(); }
+  function updateHUD(){ onHUD('holz',state.res.holz); onHUD('stein',state.res.stein); onHUD('nahrung',state.res.nahrung); onHUD('gold',state.res.gold); onHUD('traeger',state.res.traeger); }
+
+  // Netz (Straßen mit HQ verbunden)
+  function computeConnectedRoads(){
+    const startGX=Math.round(state.hq.x/grid), startGY=Math.round(state.hq.y/grid);
+    const startNeighbors=[key(startGX+1,startGY),key(startGX-1,startGY),key(startGX,startGY+1),key(startGX,startGY-1)]
+      .filter(k=>state.roads.has(k));
+    const vis=new Set(), q=[...startNeighbors];
+    while(q.length){
+      const k=q.shift(); if(vis.has(k)) continue; vis.add(k);
+      const [gx,gy]=k.split(',').map(Number);
+      for(const nk of [key(gx+1,gy),key(gx-1,gy),key(gx,gy+1),key(gx,gy-1)])
+        if(state.roads.has(nk) && !vis.has(nk)) q.push(nk);
+    }
+    return vis;
+  }
+  function isBuildingConnected(b){
+    const connected=computeConnectedRoads();
+    for(let dx=-Math.floor(b.w/2); dx<=Math.floor(b.w/2); dx++){
+      if(connected.has(key(b.gx+dx, b.gy+Math.ceil(b.h/2)))) return true;
+      if(connected.has(key(b.gx+dx, b.gy-Math.ceil(b.h/2)))) return true;
+    }
+    for(let dy=-Math.floor(b.h/2); dy<=Math.floor(b.h/2); dy++){
+      if(connected.has(key(b.gx+Math.ceil(b.w/2), b.gy+dy))) return true;
+      if(connected.has(key(b.gx-Math.ceil(b.w/2), b.gy+dy))) return true;
+    }
+    return false;
+  }
+
+  // Kamera
+  function center(){ camX=state.hq.x; camY=state.hq.y; render(); }
+  function setZoom(z,pivotScreen){
+    const old=zoom; zoom=clamp(z,0.5,2.5);
+    if(pivotScreen){
+      const [wx,wy]=screenToWorld(pivotScreen[0],pivotScreen[1]);
+      const [sx,sy]=worldToScreen(wx,wy);
+      camX += (wx - camX) - ((sx - canvas.width/2)/(zoom*DPR));
+      camY += (wy - camY) - ((sy - canvas.height/2)/(zoom*DPR));
+    }
+    if(old!==zoom) onZoom(zoom);
+    render();
+  }
+
+  // Input
+  let dragging=false; let last={x:0,y:0}; let pinch=null;
+  canvas.addEventListener('pointerdown',(e)=>{ canvas.setPointerCapture(e.pointerId); dragging=true; last.x=e.clientX; last.y=e.clientY; });
+  canvas.addEventListener('pointerup',  (e)=>{ canvas.releasePointerCapture(e.pointerId); dragging=false; });
+  canvas.addEventListener('pointercancel', ()=>{ dragging=false; pinch=null; });
+
+  canvas.addEventListener('touchstart',(e)=>{
+    if(e.touches.length===2){
+      const a=e.touches[0], b=e.touches[1];
+      pinch={ d:Math.hypot(b.clientX-a.clientX, b.clientY-a.clientY), cx:(a.clientX+b.clientX)/2, cy:(a.clientY+b.clientY)/2, startZoom:zoom };
+    }
+  },{passive:false});
+  canvas.addEventListener('touchmove',(e)=>{
+    if(pinch && e.touches.length===2){
+      e.preventDefault();
+      const a=e.touches[0], b=e.touches[1];
+      const d2=Math.hypot(b.clientX-a.clientX, b.clientY-a.clientY);
+      const ratio=d2/pinch.d;
+      setZoom(zoom*ratio, [pinch.cx*DPR, pinch.cy*DPR]);
+    }
+  },{passive:false});
+  canvas.addEventListener('touchend',()=>{ pinch=null; });
+
+  canvas.addEventListener('wheel',(e)=>{
+    e.preventDefault();
+    const delta=e.deltaY>0?0.94:1.06;
+    const r=canvas.getBoundingClientRect();
+    setZoom(zoom*delta, [(e.clientX-r.left)*DPR,(e.clientY-r.top)*DPR]);
+  },{passive:false});
+
+  canvas.addEventListener('pointermove',(e)=>{
+    const r=canvas.getBoundingClientRect();
+    const sx=(e.clientX-r.left)*DPR, sy=(e.clientY-r.top)*DPR;
+    const [wx,wy]=screenToWorld(sx,sy);
+
+    if(state.tool!=='pointer') ghost=mkGhost(state.tool, wx,wy);
+    else ghost=null;
+
+    if(dragging && state.tool==='pointer'){
+      const dx=(e.clientX-last.x), dy=(e.clientY-last.y);
+      last.x=e.clientX; last.y=e.clientY;
+      camX-=dx/(zoom); camY-=dy/(zoom);
+      render();
+    }else if(ghost){ render(); }
+  });
+
+  canvas.addEventListener('click',(e)=>{
+    const r=canvas.getBoundingClientRect();
+    const sx=(e.clientX-r.left)*DPR, sy=(e.clientY-r.top)*DPR;
+    const [wx,wy]=screenToWorld(sx,sy);
+
+    if(state.tool==='pointer') return;
+
+    if(state.tool==='road'){
+      const gx=Math.round(wx/grid), gy=Math.round(wy/grid);
+      const k=key(gx,gy);
+      if(state.roads.has(k)){ state.roads.delete(k); refund('road'); save(); render(); return; }
+      if(!canPay('road')) return;
+      state.roads.add(k); pay('road'); save(); render(); return;
+    }
+
+    if(state.tool==='erase'){
+      const gx=Math.round(wx/grid), gy=Math.round(wy/grid);
+      const k=key(gx,gy);
+      if(state.roads.delete(k)){ refund('road'); save(); render(); return; }
+      for(const bk in state.buildings){
+        const b=state.buildings[bk];
+        if(pointInRect(gx,gy, b.gx-b.w/2,b.gy-b.h/2,b.w,b.h)){
+          delete state.buildings[bk]; refund(b.type); save(); render(); return;
+        }
       }
-      lastDist = d;
+      return;
     }
-    e.preventDefault();
-  };
 
-  const onPointerUp = (e) => {
-    pointers.delete(e.pointerId);
-    lastDist = null;
-    if (pointers.size === 1) {
-      // Wechsel zurück auf Pan‑Referenz
-      const [pid] = pointers.keys();
-      const p = pointers.get(pid);
-      if (p) lastPan = screenToWorld(p.x, p.y);
+    const type=state.tool;
+    const g=mkGhost(type, wx,wy);
+    if(!g.valid) return;
+
+    if(type==='hq'){
+      // weiteres HQ kostet
+      if(!canPay('hq')) return;
+      pay('hq'); state.hq={x:g.wx,y:g.wy,placed:true}; save(); render(); return;
     }
-  };
 
-  // Wheel‑Zoom (Maus/Trackpad)
-  const onWheel = (e) => {
-    const delta = e.deltaY;
-    const factor = Math.pow(1.0018, -delta);
-    applyZoom(factor, e.clientX, e.clientY);
-    e.preventDefault();
-  };
+    const b={type, gx:g.gx, gy:g.gy, w:(type==='lumber'||type==='depot')?3:3, h:(type==='lumber'||type==='depot')?1.6:1.6};
+    if(collidesAny(b.gx,b.gy,b.w,b.h)) return;
+    if(!canPay(type)) return;
+    pay(type);
+    state.buildings[key(b.gx,b.gy)] = b;
+    save(); render();
+  });
 
-  C.addEventListener('pointerdown', onPointerDown, { passive:false });
-  C.addEventListener('pointermove', onPointerMove, { passive:false });
-  C.addEventListener('pointerup', onPointerUp, { passive:true });
-  C.addEventListener('pointercancel', onPointerUp, { passive:true });
-  C.addEventListener('wheel', onWheel, { passive:false });
+  function pointInRect(px,py, rx,ry,rw,rh){
+    return (px>=rx && px<=rx+rw && py>=ry && py<=ry+rh);
+  }
 
-  // Kurzer Tap = bauen (später), derzeit nur Tool‑Echo
-  C.addEventListener('click', (e) => {
-    if (state.tool !== 'pointer') {
-      // Platz für Build‑Logik
-      // console.log('Build at', screenToWorld(e.clientX, e.clientY));
+  // Produktion alle 5s (nur verbunden)
+  function tickProduction(t){
+    if(!state.lastProd) state.lastProd=t;
+    if(t - state.lastProd >= 5000){
+      state.lastProd = t;
+      for(const k in state.buildings){
+        const b=state.buildings[k];
+        if(!isBuildingConnected(b)) continue;
+        if(b.type==='lumber'){ state.res.holz+=1; }
+        if(b.type==='depot'){ state.res.traeger+=1; }
+      }
+      updateHUD(); save();
     }
-  }, { passive:true });
+  }
+
+  // API
+  function setTool(name){ state.tool=name; onTool(name); render(); }
+  function toggleDebug(){ state.dbg=!state.dbg; render(); }
+  function center(){ camX=state.hq.x; camY=state.hq.y; render(); }
+
+  updateHUD(); onTool(state.tool); onZoom(zoom); onReady(); center();
+
+  let raf=null, lastT=0;
+  function loop(t){ if(t-lastT>33){ render(); lastT=t; } tickProduction(t); raf=requestAnimationFrame(loop); }
+  raf=requestAnimationFrame(loop);
+  window.addEventListener('beforeunload',()=>{ if(raf) cancelAnimationFrame(raf); });
+
+  return { center, setTool, toggleDebug, reset:()=>{ localStorage.removeItem(STORE_KEY); location.reload(); } };
 }
-
-function screenToWorld(clientX, clientY) {
-  const { width, height, camX, camY, scale } = state;
-  const x = (clientX - width/2) / scale + camX;
-  const y = (clientY - height/2) / scale + camY;
-  return { x, y };
-}
-
-function applyZoom(factor, clientX, clientY) {
-  const { minScale, maxScale } = state;
-  const before = screenToWorld(clientX, clientY);
-  state.scale = clamp(state.scale * factor, minScale, maxScale);
-  const after = screenToWorld(clientX, clientY);
-  // Halte den Punkt unter dem Finger stabil -> verschiebe Kamera gegengerichtet
-  state.camX += before.x - after.x;
-  state.camY += before.y - after.y;
-  draw();
-}
-
-function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-
-function pinchDistance() {
-  const arr = [...document.pointerLockElement ? [] : []]; // nicht genutzt – nur für TS‑Ruhe
-  const pts = [...document.querySelectorAll(':root')]; // dummy für bundler – ignorieren
-  // echte Berechnung:
-  const ps = [...state.canvas.getPointerList?.() || []]; // nicht unterstützt – egal
-  // eigene Map aus addCanvasGestures verwenden:
-  // (Workaround, weil oben keine closure‑Variable hier)
-  return _pinch().dist;
-}
-function pinchCenter(){ return _pinch().center; }
-
-// Hilfsfunktion: holt aktuelle Zeiger aus Event‑Scope (Closure Workaround)
-function _pinch(){
-  // Wir behalten die Implementierung innerhalb addCanvasGestures;
-  // hier bauen wir sie leicht neu auf Basis der zuletzt bekannten Pointer-Positions,
-  // indem wir sie aus einem WeakMap‑Hack ziehen (unterbinden wir – simpler: speichern global).
-  // → Einfacher: wir merken uns die letzte zwei Pointer in state:
-  if (!state._pointers) state._pointers = new Map();
-  // addCanvasGestures überschreibt state._pinchGetter, die wir hier aufrufen:
-  return state._pinchGetter ? state._pinchGetter() : { dist: 1, center: {x: state.width/2, y: state.height/2} };
-}
-
-/* --- kleine Brücke, damit _pinch() echte Daten bekommt --- */
-(function bridgePinch(){
-  const C = () => state?.canvas;
-  if (!C()) return;
-})();
+export default { run };
