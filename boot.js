@@ -1,6 +1,7 @@
-// boot.js — Start/Vollbild/Reset verdrahten und main.run() aufrufen
+// boot.js – Verdrahtet Start/Vollbild/Reset und ruft main.run(), zeigt Fehler als Popup
 
 function $(sel){ return document.querySelector(sel); }
+function showHUD(show){ $('#uiBar').style.opacity = show ? '0.95' : '0'; }
 
 function isFull(){ return document.fullscreenElement || document.webkitFullscreenElement; }
 async function reqFS(){
@@ -12,91 +13,73 @@ async function exitFS(){
   if (document.exitFullscreen) return document.exitFullscreen();
   return document.webkitExitFullscreen?.();
 }
-async function toggleFS(){ return isFull() ? exitFS() : reqFS(); }
+async function toggleFS(){ isFull() ? await exitFS() : await reqFS(); }
 
-function showHUD(show){
-  $('#uiBar').style.opacity = show ? '0.95' : '0';
-}
+function drawPlaceholder(ctx, canvas){
+  const DPR = window.devicePixelRatio || 1;
+  const w = Math.floor(canvas.clientWidth * DPR);
+  const h = Math.floor(canvas.clientHeight * DPR);
+  canvas.width = w; canvas.height = h;
 
-// Platzhalter falls game nicht lädt
-function drawPlaceholder(ctx, DPR){
-  const w = ctx.canvas.width, h = ctx.canvas.height;
-  ctx.save();
-  ctx.scale(DPR, DPR);
-  ctx.clearRect(0,0,w,h);
   ctx.fillStyle = '#0f1823';
   ctx.fillRect(0,0,w,h);
-  ctx.strokeStyle = 'rgba(255,255,255,.06)';
-  const step = 64;
-  for (let y=-step; y<h+step; y+=step){
-    for (let x=-step; x<w+step; x+=step){
-      ctx.beginPath();
-      ctx.moveTo(x, y+step/2);
-      ctx.lineTo(x+step/2, y);
-      ctx.lineTo(x+step, y+step/2);
-      ctx.lineTo(x+step/2, y+step);
-      ctx.closePath();
-      ctx.stroke();
-    }
-  }
-  ctx.fillStyle = '#9bb7ff';
-  ctx.font = '16px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-  ctx.fillText('Warte auf Start …', 16, 28);
-  ctx.restore();
+  ctx.fillStyle = '#3aa34a';
+  const bw = Math.min(w*0.3, 420), bh = bw*0.6;
+  ctx.fillRect((w-bw)/2, (h-bh)/2, bw, bh);
+  ctx.fillStyle = '#cfe3ff';
+  ctx.font = 'bold 48px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillText('HQ (Platzhalter)', 20, 80);
 }
 
-function getDPR(){ return Math.min(3, window.devicePixelRatio || 1); }
-function resizeCanvas(canvas){
-  const DPR = getDPR();
-  const w = Math.floor(canvas.clientWidth  * DPR);
-  const h = Math.floor(canvas.clientHeight * DPR);
-  if (canvas.width !== w || canvas.height !== h){
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    drawPlaceholder(ctx, DPR);
-  }
+function alertErr(prefix, err){
+  console.error(prefix, err);
+  alert(`${prefix}\n${(err && err.message) || err}`);
 }
 
-async function run(){
+window.addEventListener('DOMContentLoaded', () => {
   const canvas = $('#game');
-  if (!canvas){ alert('Startfehler: Canvas fehlt.'); return; }
+  const startBtn = $('#startBtn');
+  const fsBtn = $('#fsBtn');
+  const resetBtn = $('#resetBtn');
 
-  // Initial zeichnen
-  resizeCanvas(canvas);
+  // Diagnose: falls Buttons nicht gefunden werden
+  if (!canvas || !startBtn || !fsBtn || !resetBtn) {
+    alert('Startfehler: UI‑Elemente fehlen (canvas/start/fs/reset).');
+    return;
+  }
 
-  // Buttons
-  $('#fsBtn')?.addEventListener('click', toggleFS);
-  $('#fsBtnTop')?.addEventListener('click', toggleFS);
-  $('#resetBtn')?.addEventListener('click', () => location.reload());
+  // Placeholder sofort zeichnen
+  drawPlaceholder(canvas.getContext('2d'), canvas);
 
-  // START
-  $('#startBtn')?.addEventListener('click', async () => {
-    try{
-      const DPR = getDPR();
-      // dynamisch laden – kein weiterer Import in game.js nötig
-      const mod = await import('./game.js?v=14.3-safe');
-      if (typeof mod.startGame !== 'function') throw new Error('game.startGame(opts) fehlt oder ist keine Funktion');
-      // HUD sichtbar
-      showHUD(true);
-      // Overlay ausblenden
+  // Vollbild
+  fsBtn.onclick = () => toggleFS().catch(e => alertErr('Vollbild‑Fehler:', e));
+  $('#fsBtnTop')?.addEventListener('click', () => toggleFS().catch(e => alertErr('Vollbild‑Fehler:', e)));
+
+  // Reset = Seite neu laden
+  resetBtn.onclick = () => location.reload();
+
+  // Start
+  startBtn.onclick = async () => {
+    try {
+      startBtn.disabled = true;
+      startBtn.textContent = 'Starte …';
+      // main laden
+      const mod = await import('./main.js?v=14.3-safe2');
+      const run = (mod && mod.default?.run) || mod.run || window.main?.run;
+      if (typeof run !== 'function') throw new Error('main.run() wurde nicht gefunden (Export fehlt?).');
+
+      // Overlay weg, HUD an
       $('#startOverlay').style.display = 'none';
-      // Spiel starten
-      await mod.startGame({
-        canvas,
-        DPR,
-        onHUD: (k,v)=>{ const el = document.querySelector('#hud'+k); if (el) el.textContent = v; },
-      });
-    }catch(err){
-      // Overlay wieder zeigen, Fehler popup
-      $('#startOverlay').style.display = '';
+      showHUD(true);
+
+      // Start
+      await run();
+    } catch (err) {
+      $('#startOverlay').style.display = ''; // Overlay wieder zeigen
       showHUD(false);
-      alert(`Startfehler: ${err.message || err}`);
-      console.error(err);
+      startBtn.disabled = false;
+      startBtn.textContent = 'Start';
+      alertErr('Startfehler:', err);
     }
-  });
-
-  // Resize
-  window.addEventListener('resize', () => resizeCanvas(canvas));
-}
-
-window.main = { run };
+  };
+});
