@@ -1,8 +1,8 @@
-// Texturen – wenn eine Datei fehlt, wird mit Farbe gefüllt (Fallback).
 export const IM = {
   grass:null, water:null, shore:null, dirt:null, rocky:null, sand:null,
   road:null, road_straight:null, road_curve:null,
-  hq:null, hq_stone:null, lumber:null, depot:null, carrier:null
+  hq_stone:null, hq_wood:null, lumberjack:null, depot:null,
+  carrier:null
 };
 
 const LIST = [
@@ -16,10 +16,10 @@ const LIST = [
   ['road_straight','assets/road_straight.png'],
   ['road_curve','assets/road_curve.png'],
   ['hq_stone','assets/hq_stone.png'],
-  ['hq','assets/hq_wood.png'],
-  ['lumber','assets/lumberjack.png'],
+  ['hq_wood','assets/hq_wood.png'],
+  ['lumberjack','assets/lumberjack.png'],
   ['depot','assets/depot.png'],
-  ['carrier','assets/carrier.png'],
+  ['carrier','assets/carrier.png']
 ];
 
 export function loadAllAssets(){
@@ -28,9 +28,9 @@ export function loadAllAssets(){
 
 function loadOne(key, src){
   return new Promise(res=>{
-    const img=new Image(); img.decoding='async';
-    img.onload=()=>{ IM[key]=img; res(); };
-    img.onerror=()=>{ console.warn(`[assets] fehlt: ${src}`); IM[key]=null; res(); };
-    img.src=src;
+    const img = new Image();
+    img.onload = ()=>{ IM[key]=img; res(); };
+    img.onerror = ()=>{ console.warn(`(assets) fehlt: ${src}`); IM[key]=null; res(); };
+    img.src = src;
   });
 }
