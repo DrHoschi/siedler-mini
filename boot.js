@@ -1,111 +1,142 @@
-// verdrahtet Start/Vollbild/Reset und ruft main.run()
+// boot.js (V14.4) – Start/Overlay/Vollbild/Reset + main.run()
 
-const $ = (sel) => document.querySelector(sel);
+function $(sel){ return document.querySelector(sel); }
 
-function isFS() { return document.fullscreenElement || document.webkitFullscreenElement }
-async function reqFS() {
+function isFullScreen(){
+  return document.fullscreenElement || document.webkitFullscreenElement;
+}
+async function requestFS(){
   const el = document.documentElement;
   if (!el.requestFullscreen) return el.webkitRequestFullscreen?.();
   return el.requestFullscreen();
 }
-async function exitFS() {
+async function exitFS(){
   if (document.exitFullscreen) return document.exitFullscreen();
   return document.webkitExitFullscreen?.();
 }
-function toggleFS(){ isFS() ? exitFS() : reqFS() }
+async function toggleFS(){ isFullScreen() ? exitFS() : requestFS(); }
 
-function showHUD(show) { $('#uiBar').style.opacity = show ? '0.95' : '0' }
-
-function resizeCanvas(canvas){
-  const DPR = window.devicePixelRatio || 1;
-  const w = Math.floor(canvas.clientWidth * DPR);
-  const h = Math.floor(canvas.clientHeight * DPR);
-  if (canvas.width !== w)  canvas.width = w;
-  if (canvas.height !== h) canvas.height = h;
+function showHUD(show){
+  $('#uiBar').style.opacity = show ? '0.95' : '0';
 }
 
-function drawPlaceholder(ctx){
-  const { width:w, height:h } = ctx.canvas;
-  ctx.save();
+// Platzhalter-Rendering (bis main.run übernimmt)
+function drawPlaceholder(){
+  const canvas = $('#game');
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const w = canvas.clientWidth|0, h = canvas.clientHeight|0;
+  if (w===0 || h===0) return;
+  if (canvas.width !== w*DPR || canvas.height !== h*DPR){
+    canvas.width = w*DPR; canvas.height = h*DPR;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,w,h);
   ctx.fillStyle = '#0f1823';
   ctx.fillRect(0,0,w,h);
 
-  // dezentes Raster
-  ctx.strokeStyle = 'rgba(255,255,255,.06)';
-  for (let y=0; y<h; y+=64) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke() }
-  for (let x=0; x<w; x+=64) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke() }
-
-  // Platzhalter HQ
-  const s = Math.min(w,h)*0.28;
-  const cx = (w-s)/2, cy = (h-s)/2;
-  ctx.fillStyle = '#2f924a';
-  ctx.fillRect(cx, cy, s, s*0.55);
-  ctx.font = `${Math.max(18,s*0.22)}px system-ui, sans-serif`;
-  ctx.fillStyle = '#e9f1ff';
-  ctx.fillText('HQ (Platzhalter)', Math.max(16,cx-40), Math.max(40,cy-20));
+  // dezentes Grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  const step = 64;
+  for (let y=0;y<h;y+=step){ ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(w,y+0.5); ctx.stroke(); }
+  for (let x=0;x<w;x+=step){ ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,h); ctx.stroke(); }
   ctx.restore();
+
+  // HQ Platzhalter
+  ctx.fillStyle = '#2ea24b';
+  const rW = Math.min(420, Math.floor(w*0.42));
+  const rH = Math.min(180, Math.floor(h*0.22));
+  ctx.fillRect((w-rW)/2, (h-rH)/2, rW, rH);
+
+  ctx.fillStyle = '#cfe3ff';
+  ctx.font = 'bold 48px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.fillText('HQ (Platzhalter)', Math.max(12,(w-rW)/2 - 20), Math.max(60,(h-rH)/2 - 18));
 }
 
-function wireTools(){
-  const bar = $('#toolBar');
-  bar?.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.btn'); if (!btn) return;
-    bar.querySelectorAll('.btn').forEach(b=>b.classList.toggle('active', b===btn));
-    $('#hudTool').textContent = btn.dataset.tool;
-  });
-}
-
-window.addEventListener('DOMContentLoaded', () => {
+// Start-Sequenz
+(async function initBoot(){
   const canvas = $('#game');
-  const ctx = canvas.getContext('2d');
-  resizeCanvas(canvas);
-  drawPlaceholder(ctx);
+  drawPlaceholder();
 
   // Buttons
-  $('#fsBtn').onclick = toggleFS;
-  $('#btnFS2').onclick = toggleFS;
+  $('#fsBtn').addEventListener('click', toggleFS);
+  $('#fsStartBtn').addEventListener('click', toggleFS);
+  $('#resetBtn').addEventListener('click', () => {
+    try{ localStorage.removeItem('siedler-mini-save'); }catch(_){}
+    location.reload();
+  });
 
-  $('#resetBtn').onclick = () => {
-    showHUD(false);
-    resizeCanvas(canvas);
-    drawPlaceholder(ctx);
-  };
+  // Doppeltipp auf Canvas → Vollbild
+  let lastTap = 0;
+  canvas.addEventListener('pointerup', () => {
+    const t = performance.now();
+    if (t - lastTap < 280) toggleFS();
+    lastTap = t;
+  }, {passive:true});
 
-  $('#btnCenter').onclick = () => window.main?.centerMap?.();
-
-  $('#startBtn').onclick = async () => {
-    try{
-      // Overlay zu & HUD an
-      $('#startOverlay').style.display = 'none';
-      showHUD(true);
-
-      // Start
-      await window.main.run({
-        canvas,
-        DPR: window.devicePixelRatio || 1,
-        onHUD: (key,val)=>{
-          const el = document.querySelector('#hud'+key);
-          if (el) el.textContent = String(val);
-        }
-      });
-    } catch(err){
-      $('#startOverlay').style.display = '';
-      showHUD(false);
-      alert('Startfehler: ' + (err?.message || err));
-      console.error(err);
-    }
-  };
-
-  // Canvas‑Resize
-  window.addEventListener('resize', () => {
-    resizeCanvas(canvas);
-    // beim Start zeichnet main.js selbst; davor: Platzhalter
-    if ($('#startOverlay').style.display !== 'none') {
-      const c = $('#game').getContext('2d');
-      drawPlaceholder(c);
+  // Zentrieren-Knopf (wird von main implementiert; hier nur Hook)
+  $('#centerBtn').addEventListener('click', () => {
+    if (window.main && typeof window.main.centerMap === 'function') {
+      window.main.centerMap();
     }
   });
 
-  // Tools aktivierbar
-  wireTools();
-});
+  // Tool-Buttons-UI (reines Styling; Logik macht main.js ebenfalls)
+  const toolIds = ['toolPointer','toolRoad','toolHQ','toolLumber','toolDepot','toolBulldoze'];
+  toolIds.forEach(id=>{
+    $('#'+id).addEventListener('click', () => {
+      toolIds.forEach(x => $('#'+x).classList.remove('active'));
+      $('#'+id).classList.add('active');
+      $('#hudTool').textContent =
+        id==='toolPointer' ? 'Zeiger' :
+        id==='toolRoad'    ? 'Straße' :
+        id==='toolHQ'      ? 'HQ' :
+        id==='toolLumber'  ? 'Holzfäller' :
+        id==='toolDepot'   ? 'Depot' :
+        'Abriss';
+    });
+  });
+
+  // Debug-Toggle – Übergabe an main (falls vorhanden)
+  $('#debugBtn').addEventListener('click', ()=>{
+    if (window.main && typeof window.main.toggleDebug==='function'){
+      window.main.toggleDebug();
+    }
+  });
+
+  // Responsive Canvas, solange das Spiel noch nicht läuft
+  function resize(){ drawPlaceholder(); }
+  window.addEventListener('resize', resize);
+
+  // Start
+  $('#startBtn').addEventListener('click', startGame);
+  async function startGame(){
+    try{
+      showHUD(false);
+      // main dynamisch laden
+      const mod = await import('./main.js?v=14.4');
+      if (!mod || typeof mod.run !== 'function') throw new Error('main.run() wurde nicht gefunden (Export fehlt?).');
+
+      window.main = mod; // API für Buttons (center/debug)
+      await mod.run({
+        canvas,
+        DPR: Math.max(1, Math.min(2, window.devicePixelRatio || 1)),
+        onHUD: (key,val)=>{
+          const el = document.querySelector('#hud'+key);
+          if (el) el.textContent = (key==='Zoom') ? val : String(val);
+        }
+      });
+
+      // Overlay aus
+      $('#startOverlay').style.display = 'none';
+      showHUD(true);
+      window.removeEventListener('resize', resize);
+    }catch(err){
+      console.error(err);
+      drawPlaceholder();
+      showHUD(true);
+      alert('Startfehler: ' + (err?.message || err));
+    }
+  }
+})();
