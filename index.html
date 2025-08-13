@@ -2,97 +2,107 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>Siedler‑Mini V14.1 (Mobile)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0b1520" />
+  <title>Siedler‑Mini V14 (Mobile)</title>
+
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #0e1922;
-      --panel: #18252f;
-      --panel2: #203140;
-      --text: #dbe7f3;
-      --accent: #3ecf8e;
+      --bg: #0f1822;
+      --panel: #1c2733;
+      --panel2: #121a24;
+      --txt: #d7e1ea;
+      --muted: #9fb2c4;
+      --accent: #66e28f;
+      --danger: #ff6b6b;
+      --radius: 14px;
     }
-    html,body { margin:0; height:100%; background:#0e1922; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--text); }
-    #app { position:relative; width:100%; height:100%; overflow:hidden; }
-    #gameCanvas { position:absolute; inset:0; touch-action:none; background:#0e1922; }
 
-    /* HUD (UI) */
-    .ui { position:absolute; left:8px; top:8px; display:flex; gap:8px; flex-wrap:wrap; z-index:20; }
-    .ui .pill { padding:.35rem .6rem; border-radius:999px; background:var(--panel2); border:1px solid #2a3b4a; font-size:.85rem; }
-    .leftTools { position:absolute; left:8px; top:60px; display:flex; flex-direction:column; gap:8px; z-index:20; }
-    .leftTools .btn { padding:.45rem .7rem; border-radius:14px; background:var(--panel); border:1px solid #2a3b4a; }
-    .leftTools .btn.active { outline:2px solid var(--accent); }
+    html,body{height:100%;margin:0;padding:0;background:#0b1520;color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif}
+    #wrap{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr}
+    /* Obere Leiste (Debug/Zoom etc.) – optional, kann leer sein */
+    #hudTop{display:flex;gap:.5rem;padding:.5rem .75rem;align-items:center;pointer-events:none}
+    .pill{pointer-events:auto;background:var(--panel2);border:1px solid #223241;color:var(--txt);padding:.25rem .6rem;border-radius:999px;font-size:.85rem;opacity:.9}
+    .pill.green{background:#12311f;border-color:#1e5a36;color:#9af3b9}
+    .pill.red{background:#3a1a1a;border-color:#6b2828;color:#ffb3b3}
 
-    /* Start-Overlay immer ganz oben */
-    #startOverlay {
-      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-      background:rgba(0,0,0,.55);
-      z-index:9999; /* wichtiger als alles andere */
+    /* Linke Werkzeugleiste */
+    #tools{position:fixed;left:.5rem;top:3.25rem;display:flex;flex-direction:column;gap:.5rem;z-index:10}
+    .btn{background:var(--panel2);border:1px solid #223241;border-radius:12px;padding:.45rem .7rem;color:var(--txt);min-width:88px;text-align:center;font-size:.9rem}
+    .btn.active{outline:2px solid #5ad18e}
+
+    /* Das Spiel-Canvas */
+    #stage{position:relative;inset:0}
+    #game{
+      position:absolute;left:0;top:0;width:100%;height:100%;
+      touch-action:none; /* Pan/Pinch übernehmen wir selbst */
+      display:block;background:transparent;
     }
-    .card {
-      width:min(90vw, 720px);
-      background:rgba(20,28,36,.9);
-      border:1px solid #2a3b4a; border-radius:16px; padding:18px 20px;
-      box-shadow: 0 10px 40px rgba(0,0,0,.55);
+
+    /* Start-Overlay */
+    #start{
+      position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.35);backdrop-filter:blur(2px);
+      z-index:20;
     }
-    .title { font-weight:700; font-size:1.2rem; margin-bottom:.5rem; }
-    .row { display:flex; gap:8px; margin-top:12px; }
-    .btn {
-      background:#243546; color:var(--text); border:1px solid #35506a;
-      padding:.55rem .9rem; border-radius:12px; font-weight:600;
+    #card{
+      width:min(680px,90vw);background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid #223241;border-radius:var(--radius);
+      padding:1rem 1.25rem;box-shadow:0 20px 60px rgba(0,0,0,.35)
     }
-    .btn.green { background: #1f5a3b; border-color:#2a8a58; }
-    .btn.red   { background: #5a2323; border-color:#8a2a2a; }
-    a,button { -webkit-tap-highlight-color: transparent; }
-    .version { position:fixed; right:10px; bottom:8px; font-size:.8rem; opacity:.7; z-index:30; }
+    #card h1{font-size:1.2rem;margin:.15rem 0 0 0}
+    #card p{color:var(--muted);margin:.25rem 0}
+    #card .actions{margin-top:.6rem;display:flex;gap:.5rem}
+    .b{border-radius:999px;border:1px solid #243142;padding:.45rem .85rem;background:#0f1924;color:var(--txt)}
+    .b.start{background:#153023;border-color:#285a41;color:#a2f3bf}
+    .b.full{background:#0f1f2f;border-color:#284a6b}
+    .b.reset{background:#2c1515;border-color:#6b2828;color:#ffc5c5}
+    .hint{margin-top:.4rem;color:#7fa3c4;font-size:.9rem}
+    #ver{position:fixed;right:.5rem;bottom:.35rem;color:#7c95aa;font-size:.75rem;opacity:.7;z-index:5}
   </style>
 </head>
 <body>
-  <div id="app">
-    <canvas id="gameCanvas"></canvas>
-
-    <!-- HUD (kurz gehalten – nur, was wir jetzt brauchen) -->
-    <div class="ui">
-      <span class="pill">Tool: <strong id="toolLabel">Zeiger</strong></span>
-      <button class="pill" id="centerBtn">Zentrieren</button>
-      <button class="pill" id="fsBtn">Vollbild</button>
-      <button class="pill" id="dbgBtn">Debug</button>
-      <span class="pill" id="zoomLbl">Zoom 1.00×</span>
+  <div id="wrap">
+    <div id="hudTop">
+      <!-- ein paar klickbare Pills, optional; Start blendet HUD aus -->
+      <div id="hudDebug" class="pill">Debug</div>
+      <div id="hudZoom" class="pill">Zoom 1.00×</div>
+      <div id="hudCenter" class="pill">Zentrieren</div>
+      <div id="hudFull" class="pill">Vollbild</div>
     </div>
 
-    <div class="leftTools">
-      <button class="btn active ui" data-tool="pointer">Zeiger</button>
-      <button class="btn ui" data-tool="road">Straße</button>
-      <button class="btn ui" data-tool="hq">HQ</button>
-      <button class="btn ui" data-tool="lumber">Holzfäller</button>
-      <button class="btn ui" data-tool="depot">Depot</button>
-      <button class="btn ui" data-tool="erase">Abriss</button>
+    <div id="stage">
+      <!-- WICHTIG: dieses Canvas MUSS existieren -->
+      <canvas id="game"></canvas>
     </div>
-
-    <!-- Start-Overlay -->
-    <div id="startOverlay">
-      <div class="card ui">
-        <div class="title">Siedler‑Mini V14 (Mobile)</div>
-        <div>1 Finger = Karte verschieben (nur im <em>Zeiger‑Tool</em>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).<br>
-             Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</div>
-        <div style="opacity:.75;margin-top:.4rem;">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</div>
-        <div class="row">
-          <button class="btn green" id="startBtn">Start</button>
-          <button class="btn" id="startFsBtn">Vollbild</button>
-          <button class="btn red" id="resetBtn" title="löscht Cache & SW">Reset</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="version">JS V14.1</div>
   </div>
 
-  <!-- JS (mit Cache‑Bust) -->
-  <script type="module">
-    import { boot } from './boot.js?v=14.1';
-    boot();
-  </script>
+  <!-- Werkzeuge links -->
+  <div id="tools" aria-label="Werkzeuge">
+    <button class="btn active" data-tool="pointer">Zeiger</button>
+    <button class="btn" data-tool="road">Straße</button>
+    <button class="btn" data-tool="hq">HQ</button>
+    <button class="btn" data-tool="lumber">Holzfäller</button>
+    <button class="btn" data-tool="depot">Depot</button>
+    <button class="btn" data-tool="bulldoze">Abriss</button>
+  </div>
+
+  <!-- Start-Overlay -->
+  <div id="start">
+    <div id="card">
+      <h1>Siedler‑Mini V14 (Mobile)</h1>
+      <p>1 Finger = Karte verschieben (nur im <em>Zeiger‑Tool</em>) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+      <p>Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen lädt das Spiel als Platzhalter.</p>
+      <div class="actions">
+        <button id="btnStart" class="b start">Start</button>
+        <button id="btnFull"  class="b full">Vollbild</button>
+        <button id="btnReset" class="b reset">Reset</button>
+      </div>
+      <div class="hint">Tipp: Doppeltipp auf diese Karte schaltet Vollbild.</div>
+    </div>
+  </div>
+
+  <div id="ver">JS V14.1</div>
+
+  <!-- Boot-Strapper (kümmert sich um DOM ready, SW, Vollbild & Start) -->
+  <script type="module" src="./boot.js"></script>
 </body>
 </html>
