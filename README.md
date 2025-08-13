@@ -1,17 +1,12 @@
-/index.html
-/main.js
-/core/render.js
-/core/game.js
-/core/carriers.js
-/assets/...(hq_stone.png, 
-            hq_wood.png, 
-            lumberjack.png, 
-            depot.png, 
-            road.png,
-            grass.png, 
-            water.png, 
-            shore.png, 
-            dirt.png,
-            rocky.png,
-            sand.png,
-            carrier.png)
+/
+├─ index.html
+├─ boot.js
+├─ main.js
+├─ game.js
+├─ render.js
+├─ world.js
+└─ core/
+   ├─ assets.js
+   ├─ camera.js
+   ├─ input.js
+   └─ carriers.js
