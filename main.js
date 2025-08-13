@@ -1,23 +1,22 @@
 import { initInput, setToolButtonHandlers, getTool } from './core/input.js';
 import { camera, centerOnHQ, setCanvas } from './core/camera.js';
 import { loadAllAssets } from './core/assets.js';
-import { initWorld, drawWorld, tryBuildAtScreen, worldTick, resources, getBuildingsOfType, getHQ, isRoad, inBounds } from './world.js';
-import { initCarriers, onRoadChanged, registerSource, registerSink, spawnCarrierAt, carriers, tickCarriers } from './core/carriers.js';
+import {
+  initWorld, drawWorld, tryBuildAtScreen, worldTick, resources,
+  getBuildingsOfType, getHQ, isRoad, inBounds
+} from './world.js';
+import {
+  initCarriers, onRoadChanged, registerSource, registerSink,
+  spawnCarrierAt, carriers, tickCarriers
+} from './core/carriers.js';
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha:false });
-
-/* ---------- Boot ---------- */
 setCanvas(canvas);
-resize();
-window.addEventListener('resize', resize);
 
-let running = false;
-let debug = false;
-let last = performance.now();
-
-/* UI refs */
+// --- UI
 const startOverlay = document.getElementById('startOverlay');
+const card = document.getElementById('card');
 const startBtn = document.getElementById('startBtn');
 const fsPreBtn = document.getElementById('fsPreBtn');
 const fsBtn = document.getElementById('fsBtn');
@@ -25,45 +24,72 @@ const dbgBtn = document.getElementById('dbgBtn');
 const centerBtn = document.getElementById('centerBtn');
 const zoomInfo = document.getElementById('zoomInfo');
 
-fsPreBtn.addEventListener('click', toggleFullscreen);
-fsBtn.addEventListener('click', toggleFullscreen);
-dbgBtn.addEventListener('click',()=>{debug=!debug;});
-centerBtn.addEventListener('click',()=>centerOnHQ());
+// Solange Overlay sichtbar ist, darf das Canvas keine Events fangen:
+setCanvasPointerEnabled(false);
 
-startBtn.addEventListener('click', async () => {
-  startBtn.disabled = true;
-  await bootGame();
-  startOverlay.style.display = 'none';
-  running = true;
-  requestAnimationFrame(loop);
+// Buttons + Doppelklick fürs Overlay
+startBtn.addEventListener('click', handleStart, {passive:true});
+fsPreBtn.addEventListener('click', toggleFullscreen, {passive:true});
+fsBtn.addEventListener('click', toggleFullscreen, {passive:true});
+dbgBtn.addEventListener('click',()=>{debug=!debug;}, {passive:true});
+centerBtn.addEventListener('click',()=>centerOnHQ(), {passive:true});
+
+// Doppeltipp/Doppelklick auf Overlay → Vollbild
+['dblclick','touchend'].forEach(type=>{
+  card.addEventListener(type, (e)=>{
+    // Doppeltipp-Heuristik mobil
+    if(type==='touchend'){
+      const now=Date.now();
+      if(card._lastTap && now-card._lastTap<300){ toggleFullscreen(); }
+      card._lastTap=now;
+    } else {
+      toggleFullscreen();
+    }
+  }, {passive:true});
 });
 
-/* ---------- Boot pipeline ---------- */
+let running=false, debug=false, last=performance.now();
+
+// Boot
+async function handleStart(e){
+  e.stopPropagation();
+  startBtn.disabled = true;
+  await bootGame();
+  // Overlay weg und Canvas wieder klickbar machen
+  startOverlay.style.display='none';
+  setCanvasPointerEnabled(true);
+
+  running = true;
+  requestAnimationFrame(loop);
+}
+
 async function bootGame(){
   await loadAllAssets();
   initWorld();
 
-  // Carriers initialisieren (zugriff auf Roads/InBounds)
+  // Carriers initialisieren (Road/InBounds API)
   initCarriers({ isRoad, inBounds });
 
-  // Input / Tools
+  // Input/Gesten erst NACH Overlay-Start aktivieren:
   initInput(canvas, onTapBuild);
   setToolButtonHandlers(updateToolUI);
   updateToolUI();
 
-  // HQ finden → als Senke registrieren + Träger spawnen
+  // HQ registrieren + Carrier spawnen
   const HQ = getHQ();
   registerSink({ id:'snk_hq', x:HQ.x, y:HQ.y, acceptType:'wood', capacity:9999, amount:0, prio:2 });
   spawnCarrierAt(HQ.x, HQ.y);
   spawnCarrierAt(HQ.x, HQ.y+1);
 
-  // Vorhandene Holzfäller/Depots als Quellen/Senken registrieren
+  // vorhandene Gebäude (falls via Startsave) synchronisieren
   syncCarriersRegistrations();
 
   centerOnHQ();
+
+  // erste Zeichnung, falls User noch nicht im Loop ist
+  drawFrame();
 }
 
-/* Quellen/Senken für alle Gebäude im Weltzustand synchronisieren */
 function syncCarriersRegistrations(){
   const ljs = getBuildingsOfType('lumberjack');
   for(const lj of ljs){
@@ -75,40 +101,43 @@ function syncCarriersRegistrations(){
   }
 }
 
-/* ---------- Loop ---------- */
+function setCanvasPointerEnabled(on){
+  canvas.style.pointerEvents = on ? 'auto' : 'none';
+}
+
+// Loop
 function loop(now){
   const dt = Math.min(0.05, (now-last)/1000);
   last = now;
 
-  // Sim
   worldTick(dt);
   tickCarriers(dt);
 
-  // Draw
+  drawFrame();
+
+  if(running) requestAnimationFrame(loop);
+}
+
+function drawFrame(){
   ctx.fillStyle = '#0b1117';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   drawWorld(ctx, debug);
 
-  // HUD
   document.getElementById('resWood').textContent = `🌲 Holz ${resources.wood}`;
   document.getElementById('resStone').textContent= `🪨 Stein ${resources.stone}`;
   document.getElementById('resFood').textContent = `🌿 Nahrung ${resources.food}`;
   document.getElementById('resGold').textContent  = `🪙 Gold ${resources.gold}`;
   document.getElementById('resCarriers').textContent = `👣 Träger ${carriers.length}`;
   zoomInfo.textContent = `Zoom ${camera.zoom.toFixed(2)}×`;
-
-  if(running) requestAnimationFrame(loop);
 }
 
-/* ---------- Build tap ---------- */
+// Build/Tap
 function onTapBuild(screenX, screenY){
   const t = getTool();
-  if (t === 'pointer') return; // Zeiger baut nix
+  if (t === 'pointer') return;
   const res = tryBuildAtScreen(screenX, screenY, t);
-
-  if (res.kind === 'roadChanged'){
-    onRoadChanged();
-  } else if (res.kind === 'building' && res.building){
+  if (res.kind === 'roadChanged') onRoadChanged();
+  else if (res.kind === 'building' && res.building){
     if (res.building.type === 'lumberjack'){
       registerSource({ id:`src_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, type:'wood', batch:1, cooldownTime:4, stock:0 });
     } else if (res.building.type === 'depot'){
@@ -120,22 +149,14 @@ function onTapBuild(screenX, screenY){
   }
 }
 
-/* ---------- UI helpers ---------- */
-function updateToolUI(){
-  const t = getTool();
-  const txt = t==='pointer'?'Zeiger': t==='road'?'Straße': t==='lumber'?'Holzfäller': t==='hq'?'HQ': t==='depot'?'Depot':'Abriss';
-  document.getElementById('toolInfo').textContent = `Tool: ${txt}`;
-  document.querySelectorAll('#tools .tool').forEach(btn=>{
-    btn.classList.toggle('on', btn.dataset.tool===t);
-  });
-}
-
+// Vollbild
 function toggleFullscreen(){
   const el = document.documentElement;
-  if (!document.fullscreenElement) el.requestFullscreen().catch(()=>{});
-  else document.exitFullscreen().catch(()=>{});
+  if (!document.fullscreenElement) el.requestFullscreen?.().catch(()=>{});
+  else document.exitFullscreen?.().catch(()=>{});
 }
 
+// Resize
 function resize(){
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   canvas.width  = Math.floor(canvas.clientWidth * dpr);
@@ -143,3 +164,5 @@ function resize(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.scale(dpr,dpr);
 }
+window.addEventListener('resize', resize);
+resize();
