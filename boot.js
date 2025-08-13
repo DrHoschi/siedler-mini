@@ -1,100 +1,107 @@
-// boot.js – verdrahtet Start/Vollbild/Reset und ruft main.run()
+// boot.js – Start/Vollbild/Reset + sicherer Import von main.run()
 
-function $(sel) { return document.querySelector(sel); }
+/* Helpers */
+const $ = (s) => document.querySelector(s);
 
-function isFullscreen() {
-  return document.fullscreenElement || document.webkitFullscreenElement;
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
 }
-async function requestFS() {
+function requestFS(){
   const el = document.documentElement;
-  if (!el.requestFullscreen) return el.webkitRequestFullscreen?.();
-  return el.requestFullscreen();
+  if (el.requestFullscreen) return el.requestFullscreen();
+  if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
 }
-async function exitFS() {
+function exitFS(){
   if (document.exitFullscreen) return document.exitFullscreen();
-  return document.webkitExitFullscreen?.();
+  if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
 }
 function toggleFS(){ isFullscreen() ? exitFS() : requestFS(); }
 
-function showHUD(show){
-  $('#uiBar').style.opacity = show ? '0.95' : '0';
+function showHUD(v){
+  const bar = $('#uiBar');
+  if (bar) bar.style.opacity = v ? '0.95' : '0';
 }
 
-// Platzhalter zeichnen (bis main.run das Game übernimmt)
+/* Placeholder bis main.run übernimmt */
 function drawPlaceholder(){
   const canvas = $('#game');
+  if (!canvas) return;
+
   const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const w = canvas.clientWidth || window.innerWidth;
+  const h = canvas.clientHeight || window.innerHeight;
   canvas.width = Math.floor(w * DPR);
   canvas.height = Math.floor(h * DPR);
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = '#0f1823';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // leichtes Diagonal‑Grid als „Bühne“
-  const s = 42, sz = 2;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle = '#0f1823';
+  ctx.fillRect(0,0,w,h);
+
+  // kleines Muster
   ctx.fillStyle = '#122b3d';
-  for (let y = -s; y < h + s; y += s) {
-    for (let x = -s; x < w + s; x += s) {
-      ctx.fillRect(x, y, sz, sz);
-    }
+  const s = 42, sz = 2;
+  for (let y = -s; y < h + s; y += s){
+    for (let x = -s; x < w + s; x += s){ ctx.fillRect(x,y,sz,sz); }
   }
   ctx.fillStyle = '#3fc3ff';
-  ctx.font = '14px system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  ctx.font = '14px system-ui,-apple-system,Segoe UI,Roboto,Arial';
   ctx.fillText('Warte auf Start …', 16, 22);
 }
 
-function wireStartUI(){
-  const start = $('#startBtn');
-  const fs = $('#fsBtn');
-  const fsTop = $('#fsBtnTop');
-  const reset = $('#resetBtn');
+/* UI verdrahten */
+function wireUI(){
   const overlay = $('#startOverlay');
+  const card = $('#startCard');
+  const startBtn = $('#startBtn');
+  const fsBtn = $('#fsBtn');
+  const fsBtnTop = $('#fsBtnTop');
+  const resetBtn = $('#resetBtn');
 
-  // Doppeltipp auf Card => Vollbild
-  $('#startCard').addEventListener('dblclick', toggleFS, {passive:true});
+  card && card.addEventListener('dblclick', () => toggleFS(), {passive:true});
+  fsBtn && fsBtn.addEventListener('click', () => toggleFS());
+  fsBtnTop && fsBtnTop.addEventListener('click', () => toggleFS());
 
-  fs?.addEventListener('click', toggleFS, {passive:true});
-  fsTop?.addEventListener('click', toggleFS, {passive:true});
-
-  reset?.addEventListener('click', () => {
+  resetBtn && resetBtn.addEventListener('click', () => {
     try { localStorage.removeItem('siedler-mini-save'); } catch {}
     location.reload();
   });
 
-  start?.addEventListener('click', async () => {
+  startBtn && startBtn.addEventListener('click', async () => {
     try{
       showHUD(true);
-      overlay.style.display = 'none'; // UI frei machen
-      // main.js dynamisch laden und run() aufrufen
+      if (overlay) overlay.style.display = 'none';
+      // ---- wichtig: lazy Import von main.js + run() ----
       const mod = await import('./main.js?v=14.3');
       if (!mod || typeof mod.run !== 'function') {
-        throw new Error('main.run() wurde nicht gefunden (Export fehlt?)');
+        throw new Error('main.run() wurde nicht gefunden.');
       }
       await mod.run($('#game'), {
-        DPR: Math.max(1, Math.min(3, window.devicePixelRatio||1)),
+        DPR: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
         onHud: (k,v) => { const el = document.querySelector('#'+k); if (el) el.textContent = v; }
       });
-    }catch(err){
-      overlay.style.display = ''; // Start wieder anzeigen
+    } catch (err) {
+      // zurück ins Startmenü + Fehler zeigen
+      if (overlay) overlay.style.display = '';
       showHUD(false);
-      alert('Startfehler:\n' + (err?.message || String(err)));
-      console.error(err);
+      alert('Startfehler: ' + (err && err.message ? err.message : String(err)));
+      console.error('[boot] start error', err);
     }
   });
 }
 
-// bei Resize den Platzhalter nachziehen (bis Spiel läuft)
+/* Resize – solange Overlay sichtbar ist, nur Placeholder anpassen */
 window.addEventListener('resize', () => {
-  if ($('#startOverlay').style.display !== 'none') drawPlaceholder();
+  const overlayVisible = $('#startOverlay') && $('#startOverlay').style.display !== 'none';
+  if (overlayVisible) drawPlaceholder();
 });
 
-// Kickoff
+/* Kickoff */
 drawPlaceholder();
-wireStartUI();
+wireUI();
 
-// optional API, falls du von außen zentrieren willst
+/* kleine API-Haken, falls game.js das überschreiben will */
 window.main = window.main || {};
-window.main.centerMap = () => {}; // wird von game.js bei Bedarf überschrieben
+window.main.centerMap = window.main.centerMap || (()=>{});
