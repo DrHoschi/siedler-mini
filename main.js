@@ -1,142 +1,254 @@
-import { initInput, setToolButtonHandlers, getTool } from './core/input.js';
-import { camera, centerOnHQ, setCanvas } from './core/camera.js';
-import { loadAllAssets } from './core/assets.js';
-import {
-  initWorld, drawWorld, tryBuildAtScreen, worldTick, resources,
-  getBuildingsOfType, getHQ, isRoad, inBounds
-} from './world.js';
-import {
-  initCarriers, onRoadChanged, registerSource, registerSink,
-  spawnCarrierAt, carriers, tickCarriers
-} from './core/carriers.js';
+// main.js — Siedler‑Mini V13.8.2 (Mobile)
+// ------------------------------------------------------------
+// Erwartete DOM‑Elemente: in index.html vorhanden (canvas, Tool‑Buttons, Overlay…)
+// Exportiert: startFromOverlay(e), toggleFullscreen()
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d', { alpha:false });
-setCanvas(canvas);
+// ===== Imports =====
+import { IM, loadAllAssets }         from './core/assets.js';
+import { Camera }                    from './core/camera.js';
+import { setupInput }                from './core/input.js';
+import { ensureWorld, tileAt, setTile, autotileRoad, TILES } from './world.js';
+import { createRenderer }            from './render.js';
 
-// UI
-const startOverlay = document.getElementById('startOverlay');
-const startBtn = document.getElementById('startBtn');
-const fsBtn = document.getElementById('fsBtn');
-const dbgBtn = document.getElementById('dbgBtn');
-const centerBtn = document.getElementById('centerBtn');
-const zoomInfo = document.getElementById('zoomInfo');
+// (optional) Carriers‑System vorbereiten – kann leer sein, wird später erweitert
+let Carriers = { init:()=>({update:()=>{}}) };
+try {
+  const m = await import('./core/carriers.js');
+  // carriers.js darf leer sein; wenn vorhanden, nutzen
+  if (m && m.Carriers) Carriers = m.Carriers;
+} catch(_) { /* ok, später */ }
 
-let running=false, debug=false, last=performance.now();
+// ===== Globale App‑Objekte =====
+const dom = {
+  canvas: document.getElementById('gameCanvas'),
+  overlay: document.getElementById('startOverlay'),
+  fsTopBtn: document.getElementById('fsBtn'),
+  fsPreBtn: document.getElementById('fsPreBtn'),
+  startBtn: document.getElementById('startBtn'),
+  toolInfo: document.getElementById('toolInfo'),
+  zoomInfo: document.getElementById('zoomInfo'),
+  centerBtn: document.getElementById('centerBtn'),
+  dbgBtn: document.getElementById('dbgBtn'),
+  toolsPanel: document.getElementById('tools'),
+  res: {
+    wood: document.getElementById('resWood'),
+    stone: document.getElementById('resStone'),
+    food:  document.getElementById('resFood'),
+    gold:  document.getElementById('resGold'),
+    carriers: document.getElementById('resCarriers'),
+  }
+};
 
-function setCanvasPointerEnabled(on){
-  canvas.style.pointerEvents = on ? 'auto' : 'none';
+const state = {
+  started: false,
+  debug: false,
+  tool: 'pointer', // 'pointer' | 'road' | 'hq' | 'lumber' | 'depot' | 'erase'
+  zoom: 1,
+  world: null,
+  cam: null,
+  rnd: null,
+  carriers: null,
+  // Ressourcen
+  res: { wood:20, stone:10, food:10, gold:0, carriers:0 },
+  // Tiles
+  iso: { tw: 128, th: 64 }, // Texturen sind isometrisch (Breite/Höhe pro Tile)
+};
+
+// ===== Utility =====
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+function updateTopUI(){
+  dom.toolInfo.textContent = `Tool: ${toolLabel(state.tool)}`;
+  dom.zoomInfo.textContent = `Zoom ${state.zoom.toFixed(2)}×`;
+  dom.res.wood.textContent = `🌲 Holz ${state.res.wood}`;
+  dom.res.stone.textContent = `🪨 Stein ${state.res.stone}`;
+  dom.res.food.textContent  = `🌿 Nahrung ${state.res.food}`;
+  dom.res.gold.textContent  = `🪙 Gold ${state.res.gold}`;
+  dom.res.carriers.textContent = `👣 Träger ${state.res.carriers}`;
+}
+function toolLabel(k){
+  return k==='pointer'?'Zeiger':
+         k==='road'   ?'Straße':
+         k==='hq'     ?'HQ':
+         k==='lumber' ?'Holzfäller':
+         k==='depot'  ?'Depot':
+         k==='erase'  ?'Abriss': k;
 }
 
-// Falls `boot.js` noch nicht da war: minimale Fallback-Handler
-startBtn?.addEventListener('click', (e)=>startFromOverlay(e), {passive:true});
-fsBtn?.addEventListener('click', ()=>toggleFullscreen(), {passive:true});
-dbgBtn?.addEventListener('click', ()=>{debug=!debug;}, {passive:true});
-centerBtn?.addEventListener('click', ()=>centerOnHQ(), {passive:true});
+// Screen ↔ World Konvertierung (ISO), mit Kameraversatz & Zoom, zentriert auf Tile‑Raute
+function screenToWorldCell(sx, sy){
+  const { cam } = state;
+  const z = state.zoom;
+  // Canvas‑Pixel → Weltpixel
+  const wx = (sx / z) + cam.x;
+  const wy = (sy / z) + cam.y;
 
-// Overlay blockiert Canvas-Inputs, bis gestartet wurde
-setCanvasPointerEnabled(false);
+  const { tw, th } = state.iso;
+  // klassische inverse Isometrie (45°/26.565°): von Pixel in Kartenkoordinate
+  const halfW = tw/2, halfH = th/2;
+  // Ursprung (0,0) an Kachel‑Raster ausrichten
+  const i = Math.floor((wx / halfW + wy / halfH) / 2);
+  const j = Math.floor((wy / halfH - (wx / halfW)) / 2);
+  return {i, j};
+}
+function worldCellToScreen(i, j){
+  const { tw, th } = state.iso;
+  const halfW = tw/2, halfH = th/2;
+  const px = (i - j) * halfW;
+  const py = (i + j) * halfH;
+  const z = state.zoom;
+  const { cam } = state;
+  return { x: (px - cam.x)*z, y:(py - cam.y)*z };
+}
 
-export async function startFromOverlay(e){
-  e?.stopPropagation?.();
-  startBtn && (startBtn.disabled = true);
-  await bootGame();
-  startOverlay.style.display='none';
-  setCanvasPointerEnabled(true);
-  running = true;
+// ===== Start / Boot‑Flows =====
+export async function startFromOverlay(){
+  if (state.started) return;
+  // 1) Assets
+  await loadAllAssets();
+
+  // 2) Welt und Renderer
+  state.world = ensureWorld({ width: 128, height: 128 });
+  state.cam   = new Camera();
+  state.rnd   = createRenderer(dom.canvas, { IM, iso: state.iso });
+
+  // 3) Erstes HQ in Kartenmitte setzen (Stein‑HQ)
+  const cx = Math.floor(state.world.w/2);
+  const cy = Math.floor(state.world.h/2);
+  setTile(state.world, cx, cy, TILES.HQ_STONE);
+
+  // 4) Kamera so zentrieren, dass HQ mittig im View ist
+  centerOnCell(cx, cy);
+
+  // 5) Input (Pan/Zoom/Build)
+  setupInput({
+    canvas: dom.canvas,
+    getTool: ()=>state.tool,
+    getZoom: ()=>state.zoom,
+    setZoom: (z, pivot)=>applyZoom(z, pivot),
+    onPan: (dx, dy)=> panBy(dx, dy),
+    onTap: (sx, sy)=> onTapBuild(sx, sy),
+  });
+
+  // 6) Tools klicken
+  dom.toolsPanel.querySelectorAll('.tool').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      dom.toolsPanel.querySelectorAll('.tool').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      state.tool = btn.dataset.tool;
+      updateTopUI();
+    });
+  });
+  dom.centerBtn.addEventListener('click', ()=>centerOnCell(cx, cy));
+  dom.dbgBtn.addEventListener('click', ()=>{ state.debug=!state.debug; });
+
+  // 7) Overlay schließen & Canvas Eingaben freigeben
+  dom.overlay.style.display = 'none';
+  state.started = true;
+  updateTopUI();
+  window.__enableCanvasPointer?.();
+
+  // 8) Carriers initialisieren (Stub; später echte Logik)
+  state.carriers = Carriers.init?.(state.world) || { update:()=>{} };
+
+  // 9) Render‑Loop
   requestAnimationFrame(loop);
 }
 
-export function toggleFullscreen(){
+export async function toggleFullscreen(){
   const el = document.documentElement;
-  if (!document.fullscreenElement) el.requestFullscreen?.().catch(()=>{});
-  else document.exitFullscreen?.().catch(()=>{});
-}
-
-async function bootGame(){
-  await loadAllAssets();
-  initWorld();
-
-  initCarriers({ isRoad, inBounds });
-  initInput(canvas, onTapBuild);
-  setToolButtonHandlers(updateToolUI);
-  updateToolUI();
-
-  const HQ = getHQ();
-  registerSink({ id:'snk_hq', x:HQ.x, y:HQ.y, acceptType:'wood', capacity:9999, amount:0, prio:2 });
-  spawnCarrierAt(HQ.x, HQ.y);
-  spawnCarrierAt(HQ.x, HQ.y+1);
-
-  syncCarriersRegistrations();
-  centerOnHQ();
-  drawFrame();
-}
-
-function syncCarriersRegistrations(){
-  const ljs = getBuildingsOfType('lumberjack');
-  for(const lj of ljs){
-    registerSource({ id:`src_${lj.x}_${lj.y}`, x:lj.x, y:lj.y, type:'wood', batch:1, cooldownTime:4, stock:0 });
-  }
-  const deps = getBuildingsOfType('depot');
-  for(const d of deps){
-    registerSink({ id:`snk_${d.x}_${d.y}`, x:d.x, y:d.y, acceptType:'wood', capacity:200, amount:0, prio:1 });
-  }
-}
-
-function loop(now){
-  const dt = Math.min(0.05, (now-last)/1000);
-  last = now;
-  worldTick(dt);
-  tickCarriers(dt);
-  drawFrame();
-  if(running) requestAnimationFrame(loop);
-}
-
-function drawFrame(){
-  ctx.fillStyle = '#0b1117';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  drawWorld(ctx, debug);
-
-  document.getElementById('resWood').textContent = `🌲 Holz ${resources.wood}`;
-  document.getElementById('resStone').textContent= `🪨 Stein ${resources.stone}`;
-  document.getElementById('resFood').textContent = `🌿 Nahrung ${resources.food}`;
-  document.getElementById('resGold').textContent  = `🪙 Gold ${resources.gold}`;
-  document.getElementById('resCarriers').textContent = `👣 Träger ${carriers.length}`;
-  zoomInfo.textContent = `Zoom ${camera.zoom.toFixed(2)}×`;
-}
-
-function onTapBuild(screenX, screenY){
-  const t = getTool();
-  if (t === 'pointer') return;
-  const res = tryBuildAtScreen(screenX, screenY, t);
-  if (res.kind === 'roadChanged') onRoadChanged();
-  else if (res.kind === 'building' && res.building){
-    if (res.building.type === 'lumberjack'){
-      registerSource({ id:`src_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, type:'wood', batch:1, cooldownTime:4, stock:0 });
-    } else if (res.building.type === 'depot'){
-      registerSink({ id:`snk_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, acceptType:'wood', capacity:200, amount:0, prio:1 });
-    } else if (res.building.type === 'hq_wood' || res.building.type === 'hq_stone'){
-      registerSink({ id:`snk_${res.building.x}_${res.building.y}`, x:res.building.x, y:res.building.y, acceptType:'wood', capacity:9999, amount:0, prio:1.5 });
-      spawnCarrierAt(res.building.x, res.building.y);
+  try{
+    if (!document.fullscreenElement) {
+      await el.requestFullscreen?.();
+    } else {
+      await document.exitFullscreen?.();
     }
+  }catch(e){ console.warn('Fullscreen failed', e); }
+}
+
+// ===== Kamera / Zoom / Pan =====
+function centerOnCell(i, j){
+  // Welt‑Pixel des Zentrums dieser Zelle
+  const { tw, th } = state.iso;
+  const halfW = tw/2, halfH = th/2;
+  const px = (i - j) * halfW;
+  const py = (i + j) * halfH;
+
+  const viewW = dom.canvas.width / state.zoom;
+  const viewH = dom.canvas.height / state.zoom;
+
+  state.cam.x = px - viewW/2 + halfW; // Mittelpunkt der Raute
+  state.cam.y = py - viewH/2 + halfH/2;
+}
+function panBy(dx, dy){
+  // dx/dy kommen bereits in Canvas‑Pixeln; Kameraraum = Pixel/Zoom
+  const z = state.zoom;
+  state.cam.x -= dx / z;
+  state.cam.y -= dy / z;
+}
+function applyZoom(nextZoom, pivotScreen){
+  const minZ=0.35, maxZ=2.5;
+  const nz = clamp(nextZoom, minZ, maxZ);
+  const oz = state.zoom;
+  if (Math.abs(nz-oz)<1e-4) return;
+
+  // Zoom zum Finger‑Mittelpunkt: Kamera so verschieben, dass der Pivot am selben Weltpunkt bleibt
+  const { cam } = state;
+  const wx = cam.x + (pivotScreen.x/oz);
+  const wy = cam.y + (pivotScreen.y/oz);
+  state.zoom = nz;
+  cam.x = wx - (pivotScreen.x/nz);
+  cam.y = wy - (pivotScreen.y/nz);
+  updateTopUI();
+}
+
+// ===== Bauen / Tap =====
+function onTapBuild(sx, sy){
+  if (state.tool==='pointer') return; // nur schieben
+  const { i, j } = screenToWorldCell(sx, sy);
+  if (i<0||j<0||i>=state.world.w||j>=state.world.h) return;
+
+  if (state.tool==='erase'){
+    setTile(state.world, i, j, TILES.GRASS);
+    autotileRoad(state.world, i, j);
+    return;
+  }
+
+  if (state.tool==='road'){
+    setTile(state.world, i, j, TILES.ROAD);
+    autotileRoad(state.world, i, j);
+    return;
+  }
+  if (state.tool==='hq'){
+    setTile(state.world, i, j, TILES.HQ_WOOD);
+    return;
+  }
+  if (state.tool==='lumber'){
+    setTile(state.world, i, j, TILES.LUMBER);
+    return;
+  }
+  if (state.tool==='depot'){
+    setTile(state.world, i, j, TILES.DEPOT);
+    return;
   }
 }
 
-function resize(){
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  canvas.width  = Math.floor(canvas.clientWidth * dpr);
-  canvas.height = Math.floor(canvas.clientHeight* dpr);
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(dpr,dpr);
-}
-window.addEventListener('resize', resize);
-resize();
+// ===== Loop / Render =====
+let lastTs=0;
+function loop(ts){
+  const dt = Math.min(0.05, (ts-lastTs)/1000)||0.016;
+  lastTs = ts;
 
-// Tool-UI (nur Anzeige)
-function updateToolUI(){
-  const t = getTool();
-  document.getElementById('toolInfo').textContent = `Tool: ${t[0].toUpperCase()+t.slice(1)}`;
-  document.querySelectorAll('.tool').forEach(b=>{
-    b.classList.toggle('on', b.dataset.tool===t);
-  });
+  // Update
+  state.carriers?.update?.(dt, state.world);
+
+  // Render
+  state.rnd.clear();
+  state.rnd.renderWorld(state.world, state.cam, state.zoom, state.iso, { debug: state.debug });
+  requestAnimationFrame(loop);
 }
+
+// ===== Buttons oben (FS etc.) =====
+dom.fsTopBtn?.addEventListener('click', ()=>toggleFullscreen());
+
+// ===== Debug: globale Hilfe =====
+window.__app = { state, screenToWorldCell, worldCellToScreen, centerOnCell, applyZoom };
