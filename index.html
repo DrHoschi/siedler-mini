@@ -5,33 +5,32 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <title>Siedler‑Mini V13 (Mobile)</title>
   <style>
-    :root{--bg:#0f1720;--panel:#101922;--btn:#0b2233;--btnOn:#123a55;--text:#cfe7ff;}
-    html,body{margin:0;height:100%;background:#0b1117;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    :root{--bg:#0f1720;--panel:#101922;--btn:#0b2233;--btnOn:#123a55;--text:#cfe7ff}
+    html,body{margin:0;height:100%;background:#0b1117;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
     #uiTop{position:fixed;inset:0 0 auto 0;display:flex;gap:.5rem;padding:.5rem;align-items:center;z-index:20;pointer-events:auto}
-    .pill{background:var(--btn);border:1px solid #2a3b4a;border-radius:999px;padding:.25rem .6rem;font-size:.9rem}
+    .pill{background:#0c2131;border:1px solid #244256;border-radius:999px;padding:.25rem .6rem;font-size:.9rem}
     .right{margin-left:auto;display:flex;gap:.5rem}
     #tools{position:fixed;left:.5rem;top:3.5rem;display:flex;flex-direction:column;gap:.5rem;z-index:20}
-    .tool{background:var(--btn);border:1px solid #2a3b4a;border-radius:999px;padding:.4rem .75rem}
-    .tool.on{background:var(--btnOn)}
+    .tool{background:#0c2131;border:1px solid #244256;border-radius:999px;padding:.45rem .8rem}
+    .tool.on{background:#143a54}
     #stage{position:fixed;inset:0;z-index:1;background:#0b1117}
     #gameCanvas{width:100%;height:100%;display:block;touch-action:none;background:#0b1117;pointer-events:auto}
 
-    /* Startoverlay – WICHTIG: klickbar und über Canvas */
+    /* Startoverlay */
     #startOverlay{
       position:fixed;inset:0;display:grid;place-items:center;z-index:50;
       background:rgba(0,0,0,.55);backdrop-filter:blur(2px);
       pointer-events:auto;
     }
-    #startOverlay *{ pointer-events:auto; }
+    #startOverlay *{ pointer-events:auto }
     #card{
       background:#0e1620;border:1px solid #263646;border-radius:16px;padding:18px 20px;max-width:560px;
-      box-shadow:0 20px 60px rgba(0,0,0,.35);
+      box-shadow:0 20px 60px rgba(0,0,0,.35)
     }
     #card h1{font-size:1.3rem;margin:.25rem 0 0}
-    #card p{opacity:.85;line-height:1.35;margin:.25rem 0 .75rem}
+    #card p{opacity:.9;line-height:1.35;margin:.25rem 0 .75rem}
     #card .row{display:flex;gap:.5rem;flex-wrap:wrap}
-    button{color:var(--text);background:#18415e;border:1px solid #2b4b65;border-radius:12px;
-      padding:.5rem .9rem;cursor:pointer}
+    button{color:var(--text);background:#18415e;border:1px solid #2b4b65;border-radius:12px;padding:.5rem .9rem;cursor:pointer}
   </style>
 </head>
 <body>
@@ -68,21 +67,20 @@
   <div id="startOverlay">
     <div id="card">
       <h1>Siedler‑Mini V13 (Mobile)</h1>
-      <p>
-        1 Finger = Karte verschieben (nur im Zeiger‑Tool) · 2 Finger = Zoomen ·
-        kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).<br>
-        Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als
-        Platzhalter dargestellt.
-      </p>
+      <p>1 Finger = Karte verschieben (nur im Zeiger‑Tool) · 2 Finger = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist).<br>
+         Das erste HQ (Stein) ist mittig gesetzt. Fehlende Texturen werden als Platzhalter dargestellt.</p>
       <div class="row">
-        <button id="startBtn">Start</button>
-        <button id="fsPreBtn">Vollbild</button>
+        <button id="startBtn" type="button">Start</button>
+        <button id="fsPreBtn" type="button">Vollbild</button>
       </div>
-      <p style="opacity:.7;margin-top:.5rem">Tipp: Doppelklick/Doppeltipp auf dieses Feld schaltet Vollbild.</p>
+      <p style="opacity:.75;margin-top:.5rem">Tipp: Doppelklick/Doppeltipp auf dieses Feld schaltet Vollbild.</p>
     </div>
   </div>
 
-  <!-- App -->
+  <!-- BOOT (nicht-modular) – sorgt dafür, dass Start/Vollbild immer reagieren -->
+  <script src="./boot.js?v=13.8"></script>
+
+  <!-- App (modular) -->
   <script type="module" src="./main.js?v=13.8"></script>
 </body>
 </html>
