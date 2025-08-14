@@ -16,7 +16,7 @@ export const game = (() => {
   const TEXT_COLOR  = "#cfe3ff";
 
   // Träger‑Sprite‑Assets (anpassen, falls anderer Pfad/Name)
-  const SPRITE_IMG  = "assets/carrier_topdown_v2.jpeg";
+  const SPRITE_IMG  = "assets/carrier_topdown_v2.png";
   const SPRITE_JSON = "assets/carrier_topdown_v2.json";
 
   // Produktion & Laufgeschwindigkeit
