@@ -1,26 +1,25 @@
-// boot.js — V14.6-mobil-build
-// Startbildschirm, HUD-Wiring, Buttons. Übergibt nach Start an game.startGame(opts).
+// boot.js — V14.6-mobil (fix: echtes <canvas>, korrekte HUD/Btn-IDs)
 
 import * as game from "./game.js";
 
 (function () {
-  const canvas = document.getElementById("game");
+  // WICHTIG: echtes Canvas-Element holen (id="canvas"), nicht das umschließende DIV (#game)
+  const canvas = document.getElementById("canvas");
   const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
 
-  // --- HUD helper ---
+  // --- HUD helper: IDs exakt wie in deiner index.html ---
   const hudMap = {
-    holz: document.querySelector("#hudholz"),
-    stein: document.querySelector("#hudstein"),
-    nahrung: document.querySelector("#hudnahrung"),
-    gold: document.querySelector("#hudgold"),
-    traeger: document.querySelector("#hudtraeger"),
-    tool: document.querySelector("#hudtool"),
-    zoom: document.querySelector("#hudzoom"),
+    holz:    document.getElementById("hudHolz"),
+    stein:   document.getElementById("hudStein"),
+    nahrung: document.getElementById("hudNahrung"),
+    gold:    document.getElementById("hudGold"),
+    traeger: document.getElementById("hudTraeger"),
+    tool:    document.getElementById("hudTool"),
+    zoom:    document.getElementById("hudZoom"),
   };
   function onHUD(key, val) {
     const el = hudMap[key];
-    if (!el) return;
-    el.textContent = String(val);
+    if (el) el.textContent = String(val);
   }
 
   // --- Fullscreen helpers ---
@@ -37,24 +36,23 @@ import * as game from "./game.js";
     } catch {}
   }
 
-  // --- Start-Overlay-UI ---
+  // --- Buttons / Overlays (IDs wie in deiner HTML) ---
   const startCard = document.getElementById("startCard");
-  const btnStart = document.getElementById("btnStart");
-  const btnFull = document.getElementById("btnFull");
-  const btnReset = document.getElementById("btnReset");
+  const btnStart  = document.getElementById("btnStart");
+  const btnReset  = document.getElementById("btnReset");
   const btnCenter = document.getElementById("btnCenter");
-  const btnDebug = document.getElementById("btnDebug");
+  const btnDebug  = document.getElementById("btnDebug");
+  const btnFull   = document.getElementById("btnFull"); // rechts oben
+  const btnFs     = document.getElementById("btnFs");   // im Start-Overlay
 
-  // Buttons rechts oben (Fullscreen/Center/Debug) vorhanden?
   if (btnFull) btnFull.addEventListener("click", () => enterFullscreen());
+  if (btnFs)   btnFs.addEventListener("click", () => enterFullscreen());
   if (btnCenter) btnCenter.addEventListener("click", () => dispatchEvent(new CustomEvent("ui-center")));
-  if (btnDebug) btnDebug.addEventListener("click", () => dispatchEvent(new CustomEvent("ui-debug")));
+  if (btnDebug)  btnDebug.addEventListener("click",  () => dispatchEvent(new CustomEvent("ui-debug")));
 
   if (btnReset) {
     btnReset.addEventListener("click", () => {
-      try {
-        localStorage.removeItem("siedler-mini-save");
-      } catch {}
+      try { localStorage.removeItem("siedler-mini-save"); } catch {}
       location.reload();
     });
   }
@@ -68,9 +66,7 @@ import * as game from "./game.js";
           onHUD,
           onZoom: (z) => onHUD("zoom", `${z.toFixed(2)}x`),
         });
-        // Overlay einklappen
         if (startCard) startCard.style.display = "none";
-        // Wenn das Spiel gerne direkt Fullscreen möchte, erledigen
         if (ret && ret.requestFullscreen) enterFullscreen();
       } catch (err) {
         alert(`Startfehler: ${err && err.message ? err.message : String(err)}`);
@@ -78,7 +74,7 @@ import * as game from "./game.js";
     });
   }
 
-  // Tipp: Doppeltipp auf die Karte → Fullscreen (mobile)
+  // Doppeltipp aufs Canvas -> Vollbild (Mobile)
   let lastTap = 0;
   canvas.addEventListener("touchend", () => {
     const now = Date.now();
@@ -86,13 +82,16 @@ import * as game from "./game.js";
     lastTap = now;
   });
 
-  // Bildschirmgröße an DPR anpassen
+  // Canvas-Size an DPR koppeln
   function resize() {
     const r = canvas.getBoundingClientRect();
-    canvas.width = Math.floor(r.width * DPR);
+    canvas.width  = Math.floor(r.width  * DPR);
     canvas.height = Math.floor(r.height * DPR);
     dispatchEvent(new CustomEvent("ui-resize", { detail: { w: canvas.width, h: canvas.height, DPR } }));
   }
   resize();
   addEventListener("resize", resize);
+
+  // Safari: Wheel-Zoom nicht passiv (wird in game.js registriert), zur Sicherheit touch-action deaktiviert
+  canvas.style.touchAction = "none";
 })();
