@@ -1,370 +1,146 @@
-// game.js — V14.6-mobil-build
-// Render-Loop, Pan/Zoom, Bauen (Straße/HQ/Holzfäller/Depot), Ghost-Preview, Ressourcen.
+// Siedler-Mini – game.js (V14.7-kompatible Schablone)
+export function startGame(opts){
+  const { canvas, DPR=1, onHUD=()=>{}, getView, setView } = opts;
+  const ctx = canvas.getContext('2d');
 
-export async function startGame(opts) {
-  const { canvas, DPR = 1, onHUD = () => {}, onZoom = () => {} } = opts;
-
-  // --- State ----------------------------------------------------------------
-  const ctx = canvas.getContext("2d");
-  ctx.imageSmoothingEnabled = false;
-
-  const world = {
-    tile: 48,            // Grundgröße pro Kachel (vor Zoom)
-    scale: 1,
-    minScale: 0.5,
-    maxScale: 2.5,
-    panX: 0,
-    panY: 0,
-    gridSize: 200,       // virtueller Bereich (Kacheln)
-    roads: new Set(),    // "x,y" als Key (Straßenkachel)
-    buildings: [],       // {type, x, y, w, h}
-    hqPlaced: false,
+  // --- Spielzustand ---
+  const S = {
+    tool: 'pointer',
+    debug: false,
+    wood: 30, stone: 20, food: 0, gold: 0, carrier: 0,
+    nodes: [], // {type:'hq'|'wood'|'depot', x,y,w,h,label}
+    roads: [], // [{x1,y1,x2,y2}]
   };
 
-  const res = {
-    holz: 30,
-    stein: 20,
-    nahrung: 0,
-    gold: 0,
-    traeger: 0,
-  };
+  // HUD initial
+  function pushHUD(){
+    onHUD('Holz', S.wood);
+    onHUD('Stein', S.stone);
+    onHUD('Nahrung', S.food);
+    onHUD('Gold', S.gold);
+    onHUD('Traeger', S.carrier);
+  }
+  pushHUD();
 
-  const cost = {
-    road: { holz: 1 },
-    hq: { stein: 5 },
-    woodcutter: { holz: 2, stein: 1 },
-    depot: { holz: 3, stein: 2 },
-  };
+  // --- Platzhaltergrößen (Weltkoordinaten) ---
+  const W = { cell: 64, hq: {w:9*16, h:6*16}, b: {w:4*16, h:4*16} };
 
-  let currentTool = "pointer"; // pointer | road | hq | woodcutter | depot | erase
-  onHUD("tool", toolLabel(currentTool));
-  pushResHUD();
-
-  // --- Koordinaten / View ---------------------------------------------------
-  function centerOn(xTiles, yTiles) {
-    const { width, height } = canvas;
-    const viewW = width / DPR;
-    const viewH = height / DPR;
-    const px = xTiles * world.tile * world.scale;
-    const py = yTiles * world.tile * world.scale;
-    world.panX = viewW * 0.5 - px;
-    world.panY = viewH * 0.5 - py;
+  // Welt->Screen
+  function worldToScreen(wx, wy){
+    const v = getView();
+    const x = (wx + v.panX) * DPR;
+    const y = (wy + v.panY) * DPR;
+    return {x, y};
   }
 
-  // beim Start: HQ mittig stehen (als Preview); echtes Setzen beim ersten HQ-Bau
-  centerOn(world.gridSize / 2, world.gridSize / 2);
-
-  // --- Events von Buttons/Tools --------------------------------------------
-  const toolsRoot = document.querySelector("#tools");
-  if (toolsRoot) {
-    toolsRoot.addEventListener("click", (ev) => {
-      const btn = ev.target.closest("[data-tool]");
-      if (!btn) return;
-      currentTool = btn.getAttribute("data-tool") || "pointer";
-      onHUD("tool", toolLabel(currentTool));
-    });
-  }
-  addEventListener("ui-center", () => {
-    // Zentriert auf HQ, sonst auf Mitte
-    const hq = world.buildings.find((b) => b.type === "hq");
-    if (hq) centerOn(hq.x + hq.w * 0.5, hq.y + hq.h * 0.5);
-    else centerOn(world.gridSize / 2, world.gridSize / 2);
-  });
-  addEventListener("ui-debug", () => {
-    console.log("DEBUG", { res, world, currentTool, scale: world.scale });
-  });
-
-  // --- Eingabe (Pan/Zoom + Tap) --------------------------------------------
-  let dragging = false;
-  let lastX = 0, lastY = 0;
-
-  canvas.addEventListener("pointerdown", (e) => {
-    canvas.setPointerCapture(e.pointerId);
-    lastX = e.clientX; lastY = e.clientY;
-    dragging = true;
-  });
-
-  canvas.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    if (currentTool !== "pointer") return; // Karte verschieben nur im Zeiger-Tool
-    const dx = (e.clientX - lastX);
-    const dy = (e.clientY - lastY);
-    world.panX += dx;
-    world.panY += dy;
-    lastX = e.clientX; lastY = e.clientY;
-  });
-
-  addEventListener("pointerup", () => { dragging = false; });
-
-  // Scroll-/Pinch-Zoom (Mausrad mobil ≈ Scroll-Geste in iPadOS Safari)
-  canvas.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const delta = Math.sign(e.deltaY) * -0.1;
-    zoomAt(canvas, e.clientX, e.clientY, delta);
-  }, { passive: false });
-
-  // Simple Tap (Kurzer Klick)
-  canvas.addEventListener("click", (e) => {
-    const pt = clientToWorld(e.clientX, e.clientY);
-    const gx = Math.floor(pt.x);
-    const gy = Math.floor(pt.y);
-    handleBuildAt(gx, gy);
-  });
-
-  function zoomAt(target, clientX, clientY, delta) {
-    const rect = target.getBoundingClientRect();
-    const mx = (clientX - rect.left);
-    const my = (clientY - rect.top);
-    const before = screenToWorld(mx, my);
-
-    world.scale = clamp(world.scale * (1 + delta), world.minScale, world.maxScale);
-    onZoom(world.scale);
-
-    const after = screenToWorld(mx, my);
-    world.panX += (before.x - after.x) * world.tile * world.scale;
-    world.panY += (before.y - after.y) * world.tile * world.scale;
-  }
-
-  // --- Bauen / Löschen ------------------------------------------------------
-  function handleBuildAt(gx, gy) {
-    if (currentTool === "pointer") return;
-
-    if (currentTool === "erase") {
-      // Straße löschen?
-      const k = key(gx, gy);
-      if (world.roads.has(k)) {
-        world.roads.delete(k);
-        // (kleine Rückerstattung? hier bewusst keine)
-        return;
-      }
-      // Gebäude löschen?
-      const idx = world.buildings.findIndex((b) => gx >= b.x && gx < b.x + b.w && gy >= b.y && gy < b.y + b.h);
-      if (idx >= 0) {
-        world.buildings.splice(idx, 1);
-        if (!world.buildings.some(b => b.type === "hq")) world.hqPlaced = false;
-      }
-      return;
-    }
-
-    if (currentTool === "road") {
-      if (!canAfford(cost.road)) return;
-      const k = key(gx, gy);
-      if (world.roads.has(k)) return; // schon Straße
-      world.roads.add(k);
-      pay(cost.road);
-      pushResHUD();
-      return;
-    }
-
-    if (currentTool === "hq") {
-      if (world.hqPlaced) return;
-      if (!canAfford(cost.hq)) return;
-      world.buildings.push({ type: "hq", x: gx - 2, y: gy - 1, w: 4, h: 2 });
-      world.hqPlaced = true;
-      pay(cost.hq);
-      pushResHUD();
-      return;
-    }
-
-    if (currentTool === "woodcutter") {
-      if (!canAfford(cost.woodcutter)) return;
-      world.buildings.push({ type: "woodcutter", x: gx - 1, y: gy - 1, w: 2, h: 2 });
-      pay(cost.woodcutter);
-      pushResHUD();
-      return;
-    }
-
-    if (currentTool === "depot") {
-      if (!canAfford(cost.depot)) return;
-      world.buildings.push({ type: "depot", x: gx - 1, y: gy - 1, w: 2, h: 2 });
-      pay(cost.depot);
-      pushResHUD();
-      return;
-    }
-  }
-
-  function canAfford(c) {
-    for (const k in c) if (res[k] < c[k]) return false;
-    return true;
-  }
-  function pay(c) {
-    for (const k in c) res[k] -= c[k];
-  }
-  function pushResHUD() {
-    onHUD("holz", res.holz);
-    onHUD("stein", res.stein);
-    onHUD("nahrung", res.nahrung);
-    onHUD("gold", res.gold);
-    onHUD("traeger", res.traeger);
-    onHUD("zoom", `${world.scale.toFixed(2)}x`);
-  }
-
-  // --- Render ---------------------------------------------------------------
-  function render() {
-    const W = canvas.width, H = canvas.height;
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-
-    // Hintergrund
-    ctx.fillStyle = "#0f1823";
-    ctx.fillRect(0, 0, W, H);
-
-    // Welt-Transform
-    ctx.save();
-    ctx.translate(world.panX, world.panY);
-    ctx.scale(world.scale, world.scale);
-
-    // Raster
-    drawGrid();
+  // Zeichnen
+  function draw(){
+    const {width, height} = canvas;
+    ctx.clearRect(0,0,width,height);
 
     // Straßen
-    drawRoads();
-
-    // Gebäude
-    drawBuildings();
-
-    // Ghost-Preview (wenn Build-Tool)
-    drawGhost();
-
-    ctx.restore();
-
-    requestAnimationFrame(render);
-  }
-  requestAnimationFrame(render);
-
-  // --- Helpers --------------------------------------------------------------
-  function drawGrid() {
-    const t = world.tile;
-    const cols = Math.ceil(canvas.width / DPR / (t * world.scale)) + 2;
-    const rows = Math.ceil(canvas.height / DPR / (t * world.scale)) + 2;
-
-    // Offset in Weltkoordinaten
-    const topLeft = screenToWorld(0, 0);
-    const startX = Math.floor(topLeft.x) - 1;
-    const startY = Math.floor(topLeft.y) - 1;
-
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.lineWidth = 6*DPR;
+    ctx.strokeStyle = '#7bd38a';
+    ctx.setLineDash([12*DPR, 10*DPR]);
     ctx.beginPath();
-    for (let x = 0; x <= cols; x++) {
-      const gx = (startX + x) * t;
-      ctx.moveTo(gx, (startY) * t);
-      ctx.lineTo(gx, (startY + rows) * t);
-    }
-    for (let y = 0; y <= rows; y++) {
-      const gy = (startY + y) * t;
-      ctx.moveTo((startX) * t, gy);
-      ctx.lineTo((startX + cols) * t, gy);
+    for (const r of S.roads){
+      const a = worldToScreen(r.x1, r.y1);
+      const b = worldToScreen(r.x2, r.y2);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
     }
     ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Gebäude
+    for (const n of S.nodes){
+      const {x,y} = worldToScreen(n.x, n.y);
+      const w = n.w * DPR, h = n.h * DPR;
+      ctx.fillStyle = n.type==='hq' ? '#2aa351' : n.type==='depot' ? '#d83e8a' : '#3b82f6';
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#cfe3ff';
+      ctx.font = `${14*DPR}px system-ui`;
+      ctx.fillText(n.label, x+8*DPR, y+8*DPR);
+    }
+
+    if (S.debug){
+      // einfaches Raster oben drauf
+      ctx.strokeStyle = '#1b2a40';
+      ctx.lineWidth = 1;
+      const step = 80 * DPR;
+      ctx.beginPath();
+      for (let x=0; x<width; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,height); }
+      for (let y=0; y<height; y+=step){ ctx.moveTo(0,y); ctx.lineTo(width,y); }
+      ctx.stroke();
+    }
   }
 
-  function drawRoads() {
-    const t = world.tile;
-    ctx.fillStyle = "#6c8";
-    world.roads.forEach(k => {
-      const { x, y } = unkey(k);
-      ctx.fillRect(x * t + 4, y * t + 20, t - 8, 8); // simple Balkenstraße
-    });
+  // Hilfen zum Bauen
+  function gridSnap(v){ return Math.round(v / W.cell) * W.cell; }
+  function addNode(type, wx, wy){
+    const snapX = gridSnap(wx), snapY = gridSnap(wy);
+    const n = {
+      type,
+      x: snapX, y: snapY,
+      w: (type==='hq'?W.hq.w:W.b.w),
+      h: (type==='hq'?W.hq.h:W.b.h),
+      label: (type==='hq'?'HQ': type==='wood'?'Holzfäller':'Depot')
+    };
+    S.nodes.push(n);
+    draw();
+  }
+  function addRoad(ax,ay,bx,by){
+    S.roads.push({x1:gridSnap(ax), y1:gridSnap(ay), x2:gridSnap(bx), y2:gridSnap(by)});
+    draw();
   }
 
-  function drawBuildings() {
-    const t = world.tile;
-    for (const b of world.buildings) {
-      if (b.type === "hq") {
-        ctx.fillStyle = "#36a852";
-      } else if (b.type === "woodcutter") {
-        ctx.fillStyle = "#2a7aee";
-      } else if (b.type === "depot") {
-        ctx.fillStyle = "#c27";
-      } else {
-        ctx.fillStyle = "#888";
+  // Interaktion (sehr simpel)
+  let down=false, sx=0, sy=0, lastTap=0;
+  canvas.addEventListener('pointerdown', (e)=>{
+    down = true; sx = e.clientX; sy = e.clientY;
+    canvas.setPointerCapture?.(e.pointerId);
+  });
+  canvas.addEventListener('pointerup', (e)=>{
+    if (!down) return; down = false;
+    const now=Date.now();
+    const rect = canvas.getBoundingClientRect();
+    const v = getView();
+    const wx = (e.clientX - rect.left)/DPR - v.panX;
+    const wy = (e.clientY - rect.top )/DPR - v.panY;
+
+    if (S.tool === 'pointer'){
+      if (now-lastTap < 260){ /* double tap -> center here */
+        setView({ panX: v.panX - (wx - 0), panY: v.panY - (wy - 0) });
       }
-      ctx.fillRect(b.x * t, b.y * t, b.w * t, b.h * t);
+      lastTap = now;
+    } else if (S.tool === 'hq'){ addNode('hq', wx, wy); }
+      else if (S.tool === 'woodcutter'){ addNode('wood', wx, wy); }
+      else if (S.tool === 'depot'){ addNode('depot', wx, wy); }
+      else if (S.tool === 'road'){
+        // Einfache horizontale Straße von letzter zur neuen Position
+        addRoad(wx, wy, wx + W.cell, wy);
+      } else if (S.tool === 'erase'){
+        // Alles löschen in Klicknähe
+        const hit = (arr,pred)=>{ const i=arr.findIndex(pred); if(i>=0) arr.splice(i,1); };
+        hit(S.nodes, n => Math.abs(n.x-wx)<W.cell && Math.abs(n.y-wy)<W.cell);
+        hit(S.roads, r => Math.hypot((r.x1+r.x2)/2 - wx, (r.y1+r.y2)/2 - wy) < W.cell);
+        draw();
+      }
+  });
 
-      // Label
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.font = "bold 22px system-ui, -apple-system, Segoe UI, Roboto";
-      ctx.fillText(labelFor(b.type), b.x * t + 8, b.y * t + 24);
-    }
-  }
+  // API für boot.js
+  startGame.setTool = (t)=>{ S.tool=t; };
+  startGame.center  = ()=>{ setView({panX:0, panY:0, zoom:1}); draw(); };
+  startGame.reset   = ()=>{ S.nodes.length=0; S.roads.length=0; draw(); };
+  startGame.setDebug= (v)=>{ S.debug=!!v; draw(); };
 
-  function drawGhost() {
-    if (currentTool === "pointer" || currentTool === "erase") return;
+  // Ein HQ in die Mitte setzen (optional – kannst du entfernen)
+  addNode('hq', -W.hq.w/2, -W.hq.h/2);
 
-    const pt = lastPointerWorld();
-    if (!pt) return;
+  // Initial zeichnen
+  draw();
 
-    const t = world.tile;
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-
-    if (currentTool === "road") {
-      ctx.fillStyle = canAfford(cost.road) ? "#6c8" : "#c55";
-      const gx = Math.floor(pt.x), gy = Math.floor(pt.y);
-      ctx.fillRect(gx * t + 4, gy * t + 20, t - 8, 8);
-    } else {
-      let w = 2, h = 2, color = "#888";
-      if (currentTool === "hq") { w = 4; h = 2; color = "#36a852"; }
-      if (currentTool === "woodcutter") { w = 2; h = 2; color = "#2a7aee"; }
-      if (currentTool === "depot") { w = 2; h = 2; color = "#c27"; }
-      const gx = Math.floor(pt.x) - Math.floor(w/2);
-      const gy = Math.floor(pt.y) - Math.floor(h/2);
-      const affordable = canAfford(cost[currentTool] || {});
-      ctx.fillStyle = affordable ? color : "#c55";
-      ctx.fillRect(gx * t, gy * t, w * t, h * t);
-    }
-    ctx.restore();
-  }
-
-  // Pointer-Tracking für Ghost
-  let lastClientX = null, lastClientY = null;
-  canvas.addEventListener("pointermove", (e) => { lastClientX = e.clientX; lastClientY = e.clientY; });
-  function lastPointerWorld() {
-    if (lastClientX == null) return null;
-    return clientToWorld(lastClientX, lastClientY);
-  }
-
-  // Mathe/Koord‑Utils
-  function clientToWorld(cx, cy) {
-    const r = canvas.getBoundingClientRect();
-    const sx = (cx - r.left);
-    const sy = (cy - r.top);
-    return screenToWorld(sx, sy);
-  }
-  function screenToWorld(sx, sy) {
-    const x = (sx - world.panX) / (world.tile * world.scale);
-    const y = (sy - world.panY) / (world.tile * world.scale);
-    return { x, y };
-  }
-  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-  function key(x, y) { return `${x},${y}`; }
-  function unkey(k) { const [x, y] = k.split(",").map(n => parseInt(n, 10)); return { x, y }; }
-  function toolLabel(t) {
-    switch (t) {
-      case "pointer": return "Zeiger";
-      case "road": return "Straße";
-      case "hq": return "HQ";
-      case "woodcutter": return "Holzfäller";
-      case "depot": return "Depot";
-      case "erase": return "Abriss";
-      default: return t;
-    }
-  }
-  function labelFor(t) {
-    switch (t) {
-      case "hq": return "HQ";
-      case "woodcutter": return "Holzfäller";
-      case "depot": return "Depot";
-      default: return t;
-    }
-  }
-
-  // beim Start direkt Zoom in HUD schreiben
-  onZoom(world.scale);
-
-  // API zurück (optional nutzbar)
-  return {
-    requestFullscreen: false,
-  };
+  return startGame;
 }
+
+// Optional default export
+export default { startGame };
