@@ -4,42 +4,41 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V14.7 (Mobile)</title>
+  <title>Siedler‑Mini V14.7 (Mobil)</title>
   <style>
     :root{
       color-scheme: dark;
       --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
-      --pill:#0f1b29; --accent:#1e2d42; --ok:#1a7f3e; --warn:#982e2e;
+      --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
     }
-    html,body{height:100%;margin:0;background:var(--bg);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
     #wrap{height:100%;display:flex;flex-direction:column}
-
-    /* Canvas-Feld */
-    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
-    #canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
     /* HUD oben */
     #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
       padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3; pointer-events:none}
-    .pill{pointer-events:auto;background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+    .pill{background:#0f1b29;border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px;pointer-events:auto}
 
     /* Tools links */
     #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;
       padding-left: calc(env(safe-area-inset-left,0)); z-index:3; pointer-events:none}
-    #tools .btn{pointer-events:auto}
     .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
-      font-size:15px;padding:8px 12px}
-    .btn.active{outline:2px solid #36a3ff}
+      font-size:15px;padding:8px 12px;pointer-events:auto}
+    .btn.ok{background:#1a7f3e;border-color:#0a6129}
+    .btn.danger{background:#982e2e;border-color:#752020}
+    .btn.active{box-shadow:0 0 0 2px #6aa1ff inset}
 
-    /* Buttons rechts */
+    /* Tasten rechts */
     #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;
-      padding-right: calc(env(safe-area-inset-right,0)); z-index:3}
-    .btn.ok{background:var(--ok);border-color:#0a6129}
-    .btn.danger{background:var(--warn);border-color:#752020}
+      padding-right: calc(env(safe-area-inset-right,0)); z-index:3; pointer-events:none}
+    #hudRight .btn{pointer-events:auto}
+
+    /* Spielfläche */
+    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
+    canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
     /* Startkarte */
     #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
@@ -56,6 +55,11 @@
       #hudRight{top:56px}
       #startCard{top:68%}
     }
+
+    /* kleine Fehlerleiste unten links (Dev‑Helfer) */
+    #err{position:fixed;left:6px;bottom:6px;max-width:70vw;background:#3b0e12;color:#ffd7d7;
+      font:13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:6px 8px;border-radius:8px;display:none;z-index:5}
+    #err.show{display:block}
   </style>
 </head>
 <body>
@@ -66,6 +70,7 @@
     <div class="pill">🪨 Stein <span id="hudStein">0</span></div>
     <div class="pill">🌿 Nahrung <span id="hudNahrung">0</span></div>
     <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
+    <div class="pill">🍞 Träger <span id="hudTraeger">0</span></div>
     <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
     <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
@@ -83,8 +88,8 @@
   <!-- Buttons rechts -->
   <div id="hudRight" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug"  class="btn">Debug</button>
-    <button id="btnFull"   class="btn">Vollbild</button>
+    <button id="btnDebug" class="btn">Debug</button>
+    <button id="btnFull"  class="btn">Vollbild</button>
   </div>
 
   <!-- Spielfläche -->
@@ -103,144 +108,8 @@
   </div>
 </div>
 
-<!-- DIAGNOSE + SW-UNREGISTER (drin lassen!) -->
-<script>
-(function(){
-  // Alte Service Worker & Caches leeren (gegen „alte“ Dateien)
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations?.().then(regs=>{
-      regs.forEach(r=>r.unregister());
-      if (window.caches?.keys) caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
-    });
-  }
-  // Diagnose-Pille
-  const pill = document.createElement('div');
-  pill.id = 'diagPill';
-  pill.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#222;border:1px solid #444;border-radius:10px;padding:4px 8px;color:#cfe3ff;font:12px system-ui;opacity:.9';
-  document.body.appendChild(pill);
-  function setDiag(t, ok){ pill.textContent=t; pill.style.background = ok ? '#11331f' : '#3a1515'; pill.style.borderColor = ok ? '#0a6129' : '#752020'; }
-  window._setDiag = setDiag;
+<div id="err" role="status" aria-live="polite"></div>
 
-  // Notfall-Klick-Hooks (zeigen, dass DOM-Events ankommen)
-  function hook(id, label){
-    const el = document.getElementById(id);
-    if (!el) { setDiag('fehlt #' + id, false); return; }
-    el.addEventListener('click', ()=>setDiag('Klick: '+label, true), {passive:true});
-  }
-  hook('btnStart','Start');
-  hook('btnFs','FS (Karte)');
-  hook('btnReset','Reset');
-  hook('btnFull','FS (Top)');
-  hook('btnCenter','Zentrieren');
-
-  const tools = document.getElementById('tools');
-  tools?.addEventListener('click',(e)=>{
-    const b = e.target.closest('.btn'); if (!b) return;
-    setDiag('Tool: ' + (b.dataset.tool||b.textContent), true);
-  }, {passive:true});
-
-  setDiag('DIAG aktiv', true);
-})();
-</script>
-
-<!-- INLINE-BOOT (ersetzt boot.js) -->
-<script type="module">
-(async ()=>{
-  const setDiag = window._setDiag || function(){};
-
-  // 1) game.js importieren
-  let game;
-  try {
-    ({ game } = await import('./game.js?v=147hf4'));
-  } catch (err) {
-    console.error(err);
-    setDiag('IMPORT FAIL: ' + (err?.message||err), false);
-    return;
-  }
-
-  const $ = s => document.querySelector(s);
-  const canvas    = $('#canvas');
-  const startCard = $('#startCard');
-  const btnStart  = $('#btnStart');
-  const btnFsCard = $('#btnFs');
-  const btnReset  = $('#btnReset');
-  const btnFull   = $('#btnFull');
-  const btnCenter = $('#btnCenter');
-  const btnDebug  = $('#btnDebug');
-  const toolsBar  = $('#tools');
-  const hudZoomEl = $('#hudZoom');
-  const hudToolEl = $('#hudTool');
-
-  if (!canvas || !btnStart || !btnReset || !toolsBar) {
-    setDiag('BOOT FAIL: DOM fehlt', false); return;
-  }
-
-  // 2) HUD Callback
-  const onHUD = (k,v)=>{
-    if (k==='Zoom' && hudZoomEl) hudZoomEl.textContent = v;
-    if (k==='Tool' && hudToolEl) hudToolEl.textContent = v;
-  };
-
-  // 3) Vollbild-Helper (inkl. iOS/WebKit)
-  const canFS = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
-  async function enterFS(){
-    try{
-      const el = document.documentElement;
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-      setTimeout(()=>window.dispatchEvent(new Event('resize')),120);
-    }catch(e){ alert('Vollbild nicht möglich:\n' + (e?.message||e)); }
-  }
-  const ensureFS = async ()=>{
-    if (!canFS){ alert('Vollbild wird hier nicht unterstützt. Tipp: iOS 16+ oder „Zum Homescreen hinzufügen“.'); return; }
-    await enterFS();
-  };
-
-  // 4) Buttons binden
-  btnStart.addEventListener('click', ()=>{
-    try{
-      startCard.style.display = 'none';
-      game.startGame({ canvas, onHUD });
-      setDiag('BOOT OK', true);
-    }catch(e){
-      console.error(e);
-      setDiag('startGame FAIL: ' + (e?.message||e), false);
-      alert('Startfehler: ' + (e?.message||e));
-    }
-  });
-
-  btnReset.addEventListener('click', ()=>{
-    try{
-      const s = game.state; s.roads.length=0; s.buildings.length=0; s.camX=0; s.camY=0; s.zoom=1;
-      if (hudZoomEl) hudZoomEl.textContent = '1.00x';
-      setDiag('Reset ok', true);
-    }catch(e){ setDiag('Reset FAIL', false); }
-  });
-
-  btnFull?.addEventListener('click', ensureFS);
-  btnFsCard?.addEventListener('click', ensureFS);
-  btnCenter?.addEventListener('click', ()=>game.center());
-  btnDebug?.addEventListener('click', ()=>{
-    const s = game.state;
-    alert(`Debug:\nZoom ${s.zoom.toFixed(2)}x  Cam(${s.camX},${s.camY})\n`+
-          `Straßen: ${s.roads.length}  Gebäude: ${s.buildings.length}`);
-  });
-
-  toolsBar.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.btn[data-tool]'); if (!btn) return;
-    const tool = btn.getAttribute('data-tool');
-    game.setTool(tool);
-    toolsBar.querySelectorAll('.btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-
-  // 5) FS/Resize Events → Canvas-Resize anstoßen (game.js reagiert darauf)
-  ['resize','orientationchange','fullscreenchange','webkitfullscreenchange'].forEach(ev=>{
-    window.addEventListener(ev, ()=> setTimeout(()=>window.dispatchEvent(new Event('resize')), 50));
-  });
-
-  setDiag('BOOT bereit', true);
-})();
-</script>
+<script type="module" src="./boot.js?v=147hf2"></script>
 </body>
 </html>
