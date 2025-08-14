@@ -1,11 +1,11 @@
-/* Siedler‑Mini V14.7 (mobile) — sprite-anim2
+/* Siedler‑Mini V14.7 (mobile) — sprite-anim3
    – Pinch‑Zoom (nur Zeiger) + Pan
    – Bauen/Abriss + Straßen
-   – Träger (Carrier) Holzfäller -> Depot -> HQ
+   – Träger mit Wegfindung (Holzfäller → Depot → HQ, Loop)
    – HUD‑Updates
-   – Vorstart‑Preload: assets/carrier_topdown_v2.json + .png
-   – Fallback: Punkt‑Animation
-   – NEU: Winkelbasierte Richtung + weiche Drehung + distanzgetriebene Schritt-Frames
+   – Träger‑Sprite: assets/carrier_topdown_v2.json + .png
+   – Fallback: Punkt‑Träger
+   – NEU: Richtungs‑Hysterese, Dwell‑Zeit, LookAhead, sanfte Drehung
 */
 export const game = (() => {
   // ===== Darstellung / Welt =====
@@ -19,12 +19,17 @@ export const game = (() => {
 
   // ===== Träger‑Parameter =====
   const CARRIER = {
-    START_DELAY_MS: 3000,   // ~3s bis erster Lauf
-    TURN_DELAY_MS:   350,
-    RESPAWN_MS:     3600,
-    SPEED:            44,   // px/s (langsamer)
+    START_DELAY_MS: 3000,  // ~3s bis erster Lauf
+    TURN_DELAY_MS:   300,
+    RESPAWN_MS:     3400,
+    SPEED:            42,  // px/s
     DOT_R:             4,
-    STEP_PIXELS:       16   // Distanz pro Framewechsel (Schrittweite)
+    STEP_PIXELS:       16, // Distanz pro Framewechsel
+    // Anim-Glättung
+    TURN_SPEED:      7.0,  // rad/s für Exponential‑Smoothing der Blickrichtung
+    FACE_HYST_DEG:   18,   // Winkel‑Totzone, bevor Bucket wechselt
+    FACE_DWELL_MS:  120,   // Mindest‑Verweildauer in Bucket
+    LOOKAHEAD:        0.35 // 0..1 auf nächstes Segment schauen
   };
 
   // ===== Sprite‑Setup (Assets) =====
@@ -34,9 +39,8 @@ export const game = (() => {
     urlJSON: "assets/carrier_topdown_v2.json",
     frameW: 64, frameH: 64,
     framesPerDir: 4,
-    fps: 8,                       // fallback, wenn Distanz ~0 (z.B. Stand)
+    fps: 8,                       // Fallback wenn Stillstand
     scale: 0.6,
-    // Reihenfolge der Zeilen im Sheet (ohne Carry); Carry benutzt offset unten
     order: ["DOWN","LEFT","RIGHT","UP"],
     carryRowOffset: 4
   };
@@ -65,7 +69,7 @@ export const game = (() => {
       ready:false,
       cfg: {...SPRITE_DEFAULT},
       img:null, cols:0, rows:0,
-      hasLeftRow:true,  // aus JSON/order abgeleitet
+      hasLeftRow:true,
       hasRightRow:true
     },
 
@@ -88,6 +92,18 @@ export const game = (() => {
   function dist2(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return dx*dx+dy*dy; }
   const dist = (a,b)=> Math.hypot(a.x-b.x, a.y-b.y);
   function screenMid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+
+  function angleNorm(rad){ // 0..2PI
+    let a = rad % (Math.PI*2);
+    if (a < 0) a += Math.PI*2;
+    return a;
+  }
+  function angleDiff(a,b){ // kürzeste Differenz −PI..PI
+    let d = (a - b) % (Math.PI*2);
+    if (d > Math.PI) d -= Math.PI*2;
+    if (d < -Math.PI) d += Math.PI*2;
+    return d;
+  }
 
   function zoomAroundScreen(sx,sy,newZoom){
     newZoom = clamp(newZoom, state.minZoom, state.maxZoom);
@@ -164,7 +180,7 @@ export const game = (() => {
         resolve(true);
       };
       img.onerror = ()=> resolve(false);
-      img.src = cfg.urlPNG + "?v=147sa2";
+      img.src = cfg.urlPNG + "?v=147sa3";
     });
 
     if (okPNG){
@@ -188,7 +204,7 @@ export const game = (() => {
     const oy=(state.height/2-(state.camY*state.zoom)*state.DPR)%step;
     ctx.beginPath();
     for(let x=ox;x<=state.width;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,state.height);}
-    for(let y=oy;y<=state.height;y+=step){ctx.moveTo(0,y);ctx.lineTo(state.width,y);}
+    for(let y=oy;y<=state.height;y+=step){ctx.moveTo(0,y);ctx.lineTo(0,state.width);}
     ctx.stroke(); ctx.restore();
   }
 
@@ -214,10 +230,11 @@ export const game = (() => {
     ctx.restore();
   }
 
-  // ===== Sprite-Richtung anhand Winkel =====
-  function angleToFace(rad){
-    // 0: +x (RIGHT), pi/2: +y (DOWN). Wir mappen in 4 Quadranten.
-    const a = ((rad % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+  // ===== Richtungs‑Buckets =====
+  const FACE_TO_ANGLE = { RIGHT:0, DOWN:Math.PI/2, LEFT:Math.PI, UP:3*Math.PI/2 };
+  function angleToBucket(rad){
+    // 4 Sektoren (45°..135° etc.)
+    const a = angleNorm(rad);
     const deg = a * 180/Math.PI;
     if (deg >= 45 && deg < 135) return "DOWN";
     if (deg >= 135 && deg < 225) return "LEFT";
@@ -245,22 +262,18 @@ export const game = (() => {
       return;
     }
 
-    // Richtung: weicher Zielwinkel
     const img = state.sprite.img;
     const cfg = state.sprite.cfg;
 
-    const face = angleToFace(c.faceAngle);
-    let row = dirRowIndex(face, c.hasWood);
-
-    // Links ggf. spiegeln, falls keine eigene LEFT‑Reihe vorhanden
+    // stabiler Bucket + Spiegeln falls nötig
+    let row = dirRowIndex(c.faceBucket, c.hasWood);
     let flipX = false;
-    if (face === "LEFT" && !state.sprite.hasLeftRow && state.sprite.hasRightRow){
+    if (c.faceBucket === "LEFT" && !state.sprite.hasLeftRow && state.sprite.hasRightRow){
       row = dirRowIndex("RIGHT", c.hasWood);
       flipX = true;
     }
 
-    // Distanz‑getriebener Frameindex:
-    // animStep steigt mit gelaufener Strecke; framesPerDir bestimmt Wrap
+    // Distanz‑getriebener Frameindex
     const frameIdx = Math.floor(c.animStep / CARRIER.STEP_PIXELS) % cfg.framesPerDir;
     const sx = frameIdx * cfg.frameW;
     const sy = row * cfg.frameH;
@@ -295,7 +308,7 @@ export const game = (() => {
     if (!state.preload.done){
       ctx.save();
       ctx.fillStyle="rgba(0,0,0,0.35)";
-      ctx.fillRect(10, 10, 170, 46);
+      ctx.fillRect(10, 10, 180, 48);
       ctx.fillStyle="#cfe3ff";
       ctx.font = `${12*state.DPR}px system-ui,-apple-system`;
       ctx.fillText("Lade Träger‑Sprites…", 20, 30);
@@ -353,8 +366,10 @@ export const game = (() => {
       hasWood:false,
       tWaitUntil: performance.now() + CARRIER.START_DELAY_MS,
       // Animation / Richtung
-      faceAngle: Math.PI/2,    // initial DOWN
-      animStep: 0              // Distanz‑Akkumulator für Schritt‑Frames
+      faceAngle: Math.PI/2,      // aktuelle Blickrichtung (rad)
+      faceBucket: "DOWN",        // stabiler Bucket für Sprite‑Reihe
+      lastFaceChange: performance.now(),
+      animStep: 0                // Distanz‑Akkumulator für Schritt‑Frames
     };
     state.carriers.push(c);
     state.stock.carrier++; writeStockHUD();
@@ -370,14 +385,44 @@ export const game = (() => {
     return best<0?0:best;
   }
 
-  function retargetFaceAngle(c, target){
-    // Zielwinkel Richtung Path-Ziel (nächster Punkt)
-    const dx = target.x - c.pos.x;
-    const dy = target.y - c.pos.y;
-    const ang = Math.atan2(dy, dx);
-    // weich Annähern (lerp auf Kreis): hier simpler Ansatz
-    const diff = ((((ang - c.faceAngle) + Math.PI*3) % (Math.PI*2)) - Math.PI);
-    c.faceAngle += diff * 0.25; // 25% pro Tick → weich genug
+  function targetAngleFromPath(c){
+    // Richtung auf Segment + LookAhead auf nächstes
+    if (!c.path || c.seg >= c.path.length-1){
+      return c.faceAngle;
+    }
+    const a = c.pos;
+    const b = c.path[c.seg+1];
+    let tx = b.x - a.x, ty = b.y - a.y;
+
+    if (c.seg < c.path.length-2 && CARRIER.LOOKAHEAD > 0){
+      const n = c.path[c.seg+2];
+      tx = (1-CARRIER.LOOKAHEAD)*(b.x-a.x) + CARRIER.LOOKAHEAD*(n.x-a.x);
+      ty = (1-CARRIER.LOOKAHEAD)*(b.y-a.y) + CARRIER.LOOKAHEAD*(n.y-a.y);
+    }
+    if (Math.abs(tx)+Math.abs(ty) < 1e-6) return c.faceAngle;
+    return Math.atan2(ty, tx);
+  }
+
+  function updateFace(c, dt, now){
+    // 1) weiche Drehung der kontinuierlichen Blickrichtung
+    const target = targetAngleFromPath(c);
+    const diff = angleDiff(target, c.faceAngle);
+    const k = 1 - Math.exp(-CARRIER.TURN_SPEED * dt); // exp‑Smoothing
+    c.faceAngle = angleNorm(c.faceAngle + diff * k);
+
+    // 2) stabiler Bucket mit Hysterese + Dwell
+    const newBucket = angleToBucket(c.faceAngle);
+    if (newBucket !== c.faceBucket){
+      const centerOld = FACE_TO_ANGLE[c.faceBucket];
+      const centerNew = FACE_TO_ANGLE[newBucket];
+      const dToNewDeg = Math.abs(angleDiff(centerNew, c.faceAngle)) * 180/Math.PI;
+      const dwellOk   = (now - c.lastFaceChange) >= CARRIER.FACE_DWELL_MS;
+      const hysterOk  = dToNewDeg >= CARRIER.FACE_HYST_DEG;
+      if (dwellOk && hysterOk){
+        c.faceBucket = newBucket;
+        c.lastFaceChange = now;
+      }
+    }
   }
 
   function advanceOnPath(c, dt){
@@ -389,10 +434,6 @@ export const game = (() => {
       const a=c.pos, b=c.path[c.seg+1];
       const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
       if (d<0.0001){ c.seg++; continue; }
-
-      // Zielwinkel updaten
-      retargetFaceAngle(c, b);
-
       if (remaining>=d){
         c.pos.x=b.x; c.pos.y=b.y; c.seg++; remaining-=d; moved += d;
       } else {
@@ -430,6 +471,9 @@ export const game = (() => {
     }
 
     for (const c of state.carriers){
+      // Blickrichtung zuerst updaten (weicher, hysterese)
+      updateFace(c, dt, now);
+
       switch (c.phase){
         case "waitStart":
           if (now >= c.tWaitUntil){
@@ -483,7 +527,6 @@ export const game = (() => {
 
   // ===== Build‑Logik =====
   const snap = v => Math.round(v / TILE) * TILE;
-
   function placeBuilding(type, wx, wy){
     const b = { id:_idSeq++, type, x:snap(wx), y:snap(wy), w:TILE*2, h:TILE*2, _node:-1 };
     state.buildings.push(b);
