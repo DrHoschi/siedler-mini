@@ -2,85 +2,144 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler‑Mini V14.6 (Mobile)</title>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1620" />
+  <title>Siedler-Mini V14.6 (Mobile)</title>
   <style>
-    :root { color-scheme: dark light }
-    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #game{display:block;touch-action:none;position:fixed;inset:0}
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;z-index:10;pointer-events:none}
-    .pill{padding:6px 10px;border-radius:99px;background:#122313;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px;pointer-events:auto}
-    .pill small{opacity:.7}
-    .right{margin-left:auto;display:flex;gap:8px}
-    .btn{padding:9px 12px;border-radius:12px;background:#0f1b29;border:1px solid #203a56;color:#d5e8ff;font-size:15px;pointer-events:auto}
-    .btn.active{outline:2px solid #36a3ff}
-    .btn:disabled{opacity:.5}
-    .tools{position:fixed;left:12px;top:64px;display:flex;flex-direction:column;gap:10px;z-index:10}
-    .tbtn{padding:9px 12px;border-radius:12px;background:#0f1b29;border:1px solid #203a56;color:#d5e8ff;font-size:15px}
-    .tbtn.active{outline:2px solid #36a3ff}
-    .tbtn:disabled{opacity:.5}
-    #startCard{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9}
-    #startCard > div{max-width:min(92vw,720px);width:min(92vw,720px);background:#0f2231;border:1px solid #203a42;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px}
-    #startBtns{display:flex;gap:8px;margin-top:8px}
-    .btn2{padding:8px 12px;border-radius:9px}
-    .ok{background:#175a2e;border:1px solid #2b9150}
-    .fs{background:#0b2e73;border:1px solid #356cd7}
-    .danger{background:#6b1111;border:1px solid #b04040}
-    #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:999}
-    #err > div{max-width:min(92vw,560px);background:#12293d;border:1px solid #2a537d;border-radius:14px;padding:16px;color:#e9f3ff}
-    #err .row{display:flex;justify-content:flex-end;margin-top:12px}
-    #err .row button{padding:7px 12px;border-radius:8px;background:#263a53;border:1px solid #4b6c96;color:#e9f3ff}
-    #version{position:fixed;right:12px;bottom:6px;color:#7fa2d3;opacity:.8;font:12px/1 system-ui;z-index:10}
+    :root{
+      color-scheme: dark;
+      --safe-top: env(safe-area-inset-top);
+      --safe-right: env(safe-area-inset-right);
+      --safe-bottom: env(safe-area-inset-bottom);
+      --safe-left: env(safe-area-inset-left);
+      --pad: 8px;
+    }
+
+    html,body{ margin:0; padding:0; background:#0f1823; height:100%; overscroll-behavior:none; }
+    /* Spielfeld */
+    #game{
+      position:fixed; inset:0; width:100vw; height:100dvh; display:block; background:#0f1823;
+      touch-action:none;  /* wichtig: Gesten ans Spiel, nicht an den Browser */
+    }
+
+    /* HUD oben – kompakt & scrollbar */
+    .hud-row{
+      position:fixed;
+      top:calc(var(--pad) + var(--safe-top));
+      left:calc(var(--pad) + var(--safe-left));
+      right:calc(var(--pad) + var(--safe-right));
+      display:flex; gap:8px; align-items:center;
+      overflow-x:auto; overscroll-behavior:contain;
+      padding:6px 2px; -webkit-overflow-scrolling: touch;
+      z-index:10;
+    }
+
+    /* Tools links */
+    .tools{
+      position:fixed;
+      top:calc(56px + var(--safe-top)); /* unter der HUD-Zeile */
+      left:calc(var(--pad) + var(--safe-left));
+      display:flex; flex-direction:column; gap:10px;
+      z-index:10;
+    }
+
+    /* Utility rechts oben */
+    .utils{
+      position:fixed;
+      top:calc(var(--pad) + var(--safe-top));
+      right:calc(var(--pad) + var(--safe-right));
+      display:flex; gap:8px; z-index:10;
+    }
+
+    /* Buttons */
+    .pill,.btn{
+      background:#0f1b29; border:1px solid #1e2d42; border-radius:18px;
+      color:#cfe3ff; font:14px/18px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      padding:8px 12px; white-space:nowrap;
+    }
+    .btn.active{ outline:2px solid #3675ff; }
+    .btn.green{ background:#0f2b1b; border-color:#214c39; }
+    .btn.blue{ background:#0f1f2b; border-color:#1e3a56; }
+    .btn.red{ background:#2b1111; border-color:#5c2525; }
+
+    /* Start-Overlay */
+    #startOverlay{
+      position:fixed; left:0; right:0;
+      bottom:calc(18px + var(--safe-bottom)); margin:0 auto; width:min(92vw, 680px);
+      background:rgba(15,27,41,.9); border:1px solid #1e2d42; border-radius:18px;
+      color:#cfe3ff; padding:14px 16px; z-index:20;
+      box-shadow:0 12px 40px rgba(0,0,0,.45);
+    }
+    #startOverlay h3{ margin:0 0 10px; font-weight:700; }
+    #startOverlay p{ margin:6px 0; opacity:.9; }
+    #startOverlay .row{ display:flex; gap:10px; margin-top:10px; }
+
+    /* Versions-Badge */
+    .vbadge{
+      position:fixed; right:calc(var(--pad) + var(--safe-right));
+      bottom:calc(var(--pad) + var(--safe-bottom));
+      font:12px/1 system-ui, -apple-system, Segoe UI, Roboto;
+      color:#6f88a8; opacity:.6; user-select:none; pointer-events:none; z-index:9;
+    }
+
+    /* Mobile Tuning */
+    @media (max-width:700px){
+      .pill,.btn{ font-size:13px; padding:6px 10px; border-radius:16px; }
+      .tools{ gap:8px; }
+      #startOverlay{ width:min(94vw, 560px); }
+    }
   </style>
 </head>
 <body>
+
+  <!-- HUD: Ressourcen -->
+  <div class="hud-row" id="hud">
+    <div class="pill" id="hud-wood">🌲 Holz <span>0</span></div>
+    <div class="pill" id="hud-stone">🪨 Stein <span>0</span></div>
+    <div class="pill" id="hud-food">🌿 Nahrung <span>0</span></div>
+    <div class="pill" id="hud-gold">🪙 Gold <span>0</span></div>
+    <div class="pill" id="hud-carrier">🥔 Träger <span>0</span></div>
+    <div class="pill" id="hud-tool">Tool: <span>Zeiger</span></div>
+    <div class="pill" id="hud-zoom">Zoom <span>1.00x</span></div>
+  </div>
+
+  <!-- Tools: links -->
+  <div class="tools">
+    <button class="btn active" id="btnPointer">Zeiger</button>
+    <button class="btn" id="btnRoad">Straße</button>
+    <button class="btn" id="btnHQ">HQ</button>
+    <button class="btn" id="btnLumber">Holzfäller</button>
+    <button class="btn" id="btnDepot">Depot</button>
+    <button class="btn" id="btnErase">Abriss</button>
+  </div>
+
+  <!-- Utils: rechts oben -->
+  <div class="utils">
+    <button class="btn" id="centerBtn">Zentrieren</button>
+    <button class="btn" id="debugBtn">Debug</button>
+    <button class="btn" id="fsBtn">Vollbild</button>
+  </div>
+
+  <!-- Spielfeld -->
   <canvas id="game"></canvas>
 
-  <div class="hud" id="hudBar" style="opacity:.0">
-    <span class="pill"><small>🌲</small> Holz <span id="hudholz">0</span></span>
-    <span class="pill"><small>🪨</small> Stein <span id="hudstein">0</span></span>
-    <span class="pill"><small>🌿</small> Nahrung <span id="hudnahrung">0</span></span>
-    <span class="pill"><small>🪙</small> Gold <span id="hudgold">0</span></span>
-    <span class="pill"><small>🧺</small> Träger <span id="hudtraeger">0</span></span>
-    <span class="pill" id="hudTool">Tool: —</span>
-    <span class="pill" id="hudZoom">Zoom 1.00x</span>
-    <div class="right">
-      <button class="btn" id="btnCenter" disabled>Zentrieren</button>
-      <button class="btn" id="btnDbg">Debug</button>
-      <button class="btn" id="btnFS">Vollbild</button>
+  <!-- Start-Hinweis -->
+  <div id="startOverlay">
+    <h3>Siedler-Mini V14.6 (Mobile)</h3>
+    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger-Tool</i>) ·
+       <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau-Tool aktiv ist).
+       Das erste HQ ist mittig gesetzt.</p>
+    <p>Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
+    <div class="row">
+      <button class="btn green" id="startBtn">Start</button>
+      <button class="btn blue"  id="fsBtn2">Vollbild</button>
+      <button class="btn red"   id="resetBtn">Reset</button>
     </div>
   </div>
 
-  <div class="tools">
-    <button class="tbtn" id="tPointer" data-tool="pointer" disabled>Zeiger</button>
-    <button class="tbtn" id="tRoad"    data-tool="road" disabled>Straße</button>
-    <button class="tbtn" id="tHQ"      data-tool="hq" disabled>HQ</button>
-    <button class="tbtn" id="tLumber"  data-tool="lumber" disabled>Holzfäller</button>
-    <button class="tbtn" id="tDepot"   data-tool="depot" disabled>Depot</button>
-    <button class="tbtn" id="tErase"   data-tool="erase" disabled>Abriss</button>
-  </div>
+  <div class="vbadge">JS V14.6</div>
 
-  <div id="startCard">
-    <div>
-      <h3 style="margin:6px 0 8px">Siedler‑Mini V14.6 (Mobile)</h3>
-      <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau‑Tool aktiv ist). Das erste HQ ist mittig gesetzt. Produktionsgebäude arbeiten nur, wenn sie über Straßen mit dem HQ verbunden sind.</p>
-      <p style="opacity:.8">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
-      <div id="startBtns">
-        <button class="btn2 ok" id="startBtn">Start</button>
-        <button class="btn2 fs" id="fsBtn">Vollbild</button>
-        <button class="btn2 danger" id="resetBtn">Reset</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="version">JS V14.6</div>
-
-  <div id="err"><div>
-    <div id="errMsg">Fehler</div>
-    <div class="row"><button id="errClose">Schließen</button></div>
-  </div></div>
-
-  <script type="module" src="./boot.js?v=14.6"></script>
+  <script type="module" src="./boot.js"></script>
 </body>
 </html>
