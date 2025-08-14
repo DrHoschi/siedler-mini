@@ -4,40 +4,41 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler-Mini V14.6 (Mobil)</title>
+  <title>Siedler-Mini V14.7 (Mobil)</title>
   <style>
     :root{
       color-scheme: dark;
       --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
-      --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
-      --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
+      --grid:#1b2a40; --line:#25364d;
+      --text:#cfe3ff; --muted:#9fb3cc;
+      --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
-      --gap:10px;
     }
-    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #wrap{height:100%;display:flex;flex-direction:column}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
+
+    /* Root-Container – wird für Fullscreen benutzt, damit HUD sichtbar bleibt */
+    #wrap{position:relative;min-height:100%;}
+
+    /* HUD oben */
     #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
       padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3; pointer-events:none}
     #hudTop .pill{pointer-events:auto}
 
+    /* Tools links */
     #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;
       padding-left: calc(env(safe-area-inset-left,0)); z-index:3; pointer-events:none}
     #tools .btn{pointer-events:auto}
 
+    /* Buttons rechts */
     #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;
       padding-right: calc(env(safe-area-inset-right,0)); z-index:3; pointer-events:none}
     #hudRight .btn{pointer-events:auto}
 
+    /* Spielfläche */
     #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
-    canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+    #canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
-    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
-    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
-      font-size:15px;padding:8px 12px}
-    .btn.ok{background:var(--ok);border-color:#0a6129}
-    .btn.danger{background:var(--warn);border-color:#752020}
-
+    /* Startkarte */
     #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
       background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
       width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
@@ -45,13 +46,19 @@
     #startCard p{margin:8px 0;color:var(--muted)}
     #startBtns{display:flex;gap:10px;margin-top:10px}
 
-    /* Z-Layer / Interaktion: Canvas unten, Overlays oben, Buttons klickbar */
-    #game{ z-index:0; }
-    #startCard{ z-index:2; }
-    #hudTop, #tools, #hudRight{ z-index:3; pointer-events:none; }
-    #hudTop .pill, #tools .btn, #hudRight .btn{ pointer-events:auto; }
+    /* UI-Bausteine */
+    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
+      font-size:15px;padding:8px 12px}
+    .btn.ok{background:var(--ok);border-color:#0a6129}
+    .btn.danger{background:var(--warn);border-color:#752020}
 
-    /* Sehr schmale Geräte: Pills kleiner */
+    /* Version unten rechts */
+    #ver{position:fixed;right:8px;bottom:6px;color:#7793b8;font-size:12px;z-index:3;
+      padding-right: calc(env(safe-area-inset-right,0));}
+
+    /* Sehr schmale Geräte */
     @media (max-width:480px){
       .pill{font-size:13px;padding:5px 8px}
       #tools{top:56px}
@@ -64,13 +71,13 @@
 <div id="wrap">
   <!-- HUD oben -->
   <div id="hudTop" aria-label="Ressourcen & Status">
-    <div class="pill" id="hudwood">🌲 Holz <span id="hudHolz">0</span></div>
-    <div class="pill" id="hudstone">🪨 Stein <span id="hudStein">0</span></div>
-    <div class="pill" id="hudfood">🌿 Nahrung <span id="hudNahrung">0</span></div>
-    <div class="pill" id="hudgold">🪙 Gold <span id="hudGold">0</span></div>
-    <div class="pill" id="hudcarry">🍞 Träger <span id="hudTraeger">0</span></div>
-    <div class="pill" id="hudtool">Tool: <span id="hudTool">Zeiger</span></div>
-    <div class="pill" id="hudzoom">Zoom <span id="hudZoom">1.00x</span></div>
+    <div class="pill">🌲 Holz <span id="hudHolz">0</span></div>
+    <div class="pill">🪨 Stein <span id="hudStein">0</span></div>
+    <div class="pill">🌿 Nahrung <span id="hudNahrung">0</span></div>
+    <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
+    <div class="pill">🍞 Träger <span id="hudTraeger">0</span></div>
+    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
+    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
 
   <!-- Tools links -->
@@ -86,8 +93,8 @@
   <!-- Buttons rechts -->
   <div id="hudRight" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug" class="btn">Debug</button>
-    <button id="btnFull" class="btn">Vollbild</button>
+    <button id="btnDebug"  class="btn">Debug</button>
+    <button id="btnFull"   class="btn">Vollbild</button>
   </div>
 
   <!-- Spielfläche -->
@@ -95,18 +102,23 @@
 
   <!-- Startkarte -->
   <div id="startCard">
-    <h3>Siedler-Mini V14.6 (Mobile)</h3>
-    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger-Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau-Tool aktiv ist). Das erste HQ ist mittig gesetzt. Produktionsgebäude arbeiten nur, wenn sie über Straßen mit dem HQ verbunden sind.</p>
+    <h3>Siedler-Mini V14.7 (Mobile)</h3>
+    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger-Tool</i>) ·
+       <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau-Tool aktiv ist).
+       Das erste HQ ist mittig gesetzt. Produktionsgebäude arbeiten nur, wenn sie über
+       Straßen mit dem HQ verbunden sind.</p>
     <p><i>Tipp:</i> Doppeltipp auf die Karte schaltet Vollbild.</p>
     <div id="startBtns">
       <button id="btnStart" class="btn ok">Start</button>
-      <button id="btnFs" class="btn">Vollbild</button>
+      <button id="btnFs"    class="btn">Vollbild</button>
       <button id="btnReset" class="btn danger">Reset</button>
     </div>
   </div>
+
+  <div id="ver">JS V14.7</div>
 </div>
 
-<!-- Cache-Buster erhöht: v=146m3 -->
-<script type="module" src="./boot.js?v=146m3"></script>
+<!-- Cache-Buster bei Bedarf anheben -->
+<script type="module" src="./boot.js?v=147m1"></script>
 </body>
 </html>
