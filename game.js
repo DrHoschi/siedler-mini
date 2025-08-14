@@ -1,477 +1,325 @@
-// game.js  –  Siedler‑Mini V14.7  (mobil)
-// ------------------------------------------------------------
-// Features in dieser Version:
-// - Canvas-Engine mit Pan/Zoom (Pan nur im Zeiger-Tool)
-// - Tools: pointer, road, hq, woodcutter, depot, erase
-// - Raster, simple Gebäude, Straßen (Orthogonalsegmente)
-// - Holzproduktion im Holzfäller (alle 6s -> 1 Holz)
-// - Träger laufen vom Holzfäller zum nächsten Lager (HQ/Depot)
-// - Sprite-Animation (carrier_topdown_v2.jpeg + .json) mit Fallback
-// - HUD-Updates (Holz/Stein/Nahrung/Gold/Träger, Tool, Zoom)
-//
-// API nach außen (von boot.js genutzt):
-//   window.game = { startGame(opts), resetGame() }
-//
-// ------------------------------------------------------------
+/* Siedler‑Mini V14.7‑hf1 (mobile)
+   Fixes: iOS Touch‑Build, Pinch‑Zoom, Pan im Zeiger‑Tool, Resize/Fullscreen
+*/
+export const game = (() => {
+  // ====== Konstante Welt/Tile-Größe ======
+  const TILE = 40;                 // Tilegröße in px (bei Zoom 1.0)
+  const GRID_COLOR = "#1e2a3d";
+  const ROAD_COLOR = "#78d9a8";
+  const HQ_COLOR   = "#43aa62";
+  const WC_COLOR   = "#3f8cff";
+  const DEPOT_COLOR= "#d55384";
+  const TEXT_COLOR = "#cfe3ff";
 
-(() => {
-  const TAU = Math.PI * 2;
-
-  // ---------- State ----------
+  // ====== State ======
   const state = {
-    started: false,
-    // Anzeige
-    hudEls: {},
-    // Welt
-    ents: [],          // {id,type,x,y,w,h,label}
-    roads: [],         // [{x1,y1,x2,y2}]
-    carriers: [],      // laufende Träger
-    nextId: 1,
+    running: false,
+    // Canvas
+    canvas: null, ctx: null,
+    DPR: 1, width: 0, height: 0,
     // Kamera
-    cam: { x: 0, y: 0, z: 1 },
-    // Input
-    tool: 'pointer',
-    roadBuild: null,   // {x,y} -> Startpunkt aktiver Straße
-    pointerDown: false,
-    lastTapTime: 0,
-    // Ressourcen
-    res: { holz: 0, stein: 0, nahrung: 0, gold: 0, traeger: 0 },
-    // Produktionstimer pro Holzfäller
-    prod: new Map(),   // id -> {t:0, period:6}
-    // Gfx
-    canvas: null,
-    ctx: null,
-    size: { w: 0, h: 0, dpr: 1 },
-    // Sprites
-    sprite: {
-      ready: false,
-      img: null,
-      frames: [],    // [{x,y,w,h}]
-      animIdx: 0,
-      animFps: 8
-    },
-    // Zeit
-    tPrev: 0
+    camX: 0, camY: 0, zoom: 1,
+    minZoom: 0.5, maxZoom: 2.5,
+    // Eingabe
+    pointerTool: "pointer",     // "pointer" | "road" | "hq" | "woodcutter" | "depot" | "erase"
+    isPanning: false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
+    // Pinch
+    pinching: false, pinchStartDist: 0, pinchStartZoom: 1, pinchCenter=null,
+    // Weltobjekte
+    roads: [],      // [{x1,y1,x2,y2}]
+    buildings: [],  // [{type:"hq"|"woodcutter"|"depot", x,y,w,h}]
+    // HUD writer
+    onHUD: (k,v)=>{}
   };
 
-  // ---------- Utils ----------
-  const randId = () => state.nextId++;
-  const lerp = (a,b,t)=>a+(b-a)*t;
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const dist=(x1,y1,x2,y2)=>Math.hypot(x2-x1,y2-y1);
-  const nowSec = () => performance.now()/1000;
+  // ====== Utilities ======
+  const setHUD = (k,v)=> state.onHUD?.(k,v);
 
-  function worldToScreen(x,y){
-    const c=state.cam;
-    return [
-      (x*c.z + state.size.w*0.5 - c.x*c.z),
-      (y*c.z + state.size.h*0.5 - c.y*c.z)
-    ];
-  }
-  function screenToWorld(sx,sy){
-    const c=state.cam;
-    return [
-      (sx - state.size.w*0.5 + c.x*c.z)/c.z,
-      (sy - state.size.h*0.5 + c.y*c.z)/c.z
-    ];
+  const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
+  const toWorld = (sx,sy) => ({
+    x: (sx/state.DPR - state.width/2)/state.zoom + state.camX,
+    y: (sy/state.DPR - state.height/2)/state.zoom + state.camY
+  });
+  const toScreen = (wx,wy) => ({
+    x: (wx - state.camX) * state.zoom + state.width/2,
+    y: (wy - state.camY) * state.zoom + state.height/2
+  });
+
+  // „Touch gilt wie Linksklick“
+  const isPrimary = (e) => (e.button === 0 || e.button === undefined || e.button === -1 || e.pointerType === "touch");
+
+  // ====== Initial / Resize ======
+  function attachCanvas(canvas) {
+    state.canvas = canvas;
+    state.ctx = canvas.getContext("2d");
+    state.DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    resizeCanvas();
+
+    // Start-Kamera/Zoom
+    state.zoom = 1.0;
+    state.camX = 0; state.camY = 0;
+    writeZoomHUD();
+
+    // Zeichnen starten
+    requestAnimationFrame(tick);
   }
 
-  // ---------- Assets: Carrier-Sprite ----------
-  async function loadCarrierSprite(){
-    try{
-      const [json,resImg] = await Promise.all([
-        fetch('./carrier_topdown_v2.json', {cache:'no-store'}).then(r=>r.ok?r.json():null),
-        new Promise((res,rej)=>{
-          const img=new Image();
-          img.onload = ()=>res(img);
-          img.onerror = rej;
-          img.src = './carrier_topdown_v2.jpeg';
-        })
-      ]);
-      if(!json) throw new Error('Sprite JSON fehlt');
-      // TexturePacker-ähnlich: json.frames[frameName].frame => {x,y,w,h}
-      const frames=[];
-      const jf=json.frames || {};
-      for(const k of Object.keys(jf)){
-        const fr = jf[k].frame || jf[k]; // toleranter
-        frames.push({x:fr.x,y:fr.y,w:fr.w,h:fr.h});
-      }
-      if(frames.length===0) throw new Error('Keine Frames im JSON');
-      state.sprite.ready=true;
-      state.sprite.img=resImg;
-      state.sprite.frames=frames;
-      state.sprite.animIdx=0;
-    }catch(e){
-      console.warn('Carrier-Sprite Fallback:', e.message);
-      state.sprite.ready=false;
+  function resizeCanvas() {
+    const {canvas} = state;
+    const rect = canvas.getBoundingClientRect();
+    state.width  = Math.max(1, Math.floor(rect.width  * state.DPR));
+    state.height = Math.max(1, Math.floor(rect.height * state.DPR));
+    if (canvas.width !== state.width || canvas.height !== state.height) {
+      canvas.width = state.width;
+      canvas.height = state.height;
     }
   }
 
-  // ---------- Entities ----------
-  function addEntity(type,x,y){
-    const baseSizes = { hq: 120, woodcutter: 70, depot: 90 };
-    const w = baseSizes[type] || 40;
-    const h = w;
-    const e = { id:randId(), type, x, y, w, h, label: labelFor(type) };
-    state.ents.push(e);
-    if(type==='woodcutter'){
-      state.prod.set(e.id, { t:0, period:6 });
+  // ====== Zeichnen ======
+  function drawGrid(ctx) {
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = GRID_COLOR;
+    const step = TILE * state.zoom * state.DPR;
+    const ox = (state.width/2 - (state.camX*state.zoom)*state.DPR) % step;
+    const oy = (state.height/2 - (state.camY*state.zoom)*state.DPR) % step;
+    ctx.beginPath();
+    for (let x=ox; x<=state.width; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,state.height); }
+    for (let y=oy; y<=state.height; y+=step){ ctx.moveTo(0,y); ctx.lineTo(state.width,y); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function fillRectWorld(ctx, x,y,w,h, color, label) {
+    const p = toScreen(x,y);
+    const pw = w * state.zoom; const ph = h * state.zoom;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.fillRect((p.x*state.DPR)-pw/2*state.DPR, (p.y*state.DPR)-ph/2*state.DPR, pw*state.DPR, ph*state.DPR);
+    if (label){
+      ctx.fillStyle = TEXT_COLOR;
+      ctx.font = `${Math.round(12*state.DPR*state.zoom)}px system-ui, -apple-system, Segoe UI`;
+      ctx.textAlign="center"; ctx.textBaseline="bottom";
+      ctx.fillText(label, p.x*state.DPR, (p.y*state.DPR)-4*state.DPR);
     }
-    return e;
-  }
-  function labelFor(type){
-    if(type==='hq') return 'HQ';
-    if(type==='woodcutter') return 'Holzfäller';
-    if(type==='depot') return 'Depot';
-    return type;
-  }
-  function centerOf(e){ return [e.x+e.w*0.5, e.y+e.h*0.5]; }
-
-  // ---------- Roads ----------
-  function addRoadSeg(x1,y1,x2,y2){
-    state.roads.push({x1,y1,x2,y2});
+    ctx.restore();
   }
 
-  // ---------- Production & Carriers ----------
-  function nearestStorageFrom(x,y){
-    let best=null, bd=Infinity;
-    for(const e of state.ents){
-      if(e.type==='hq'||e.type==='depot'){
-        const [cx,cy]=centerOf(e);
-        const d=dist(x,y,cx,cy);
-        if(d<bd){ bd=d; best=e; }
-      }
+  function drawRoad(ctx, r){
+    const a = toScreen(r.x1, r.y1);
+    const b = toScreen(r.x2, r.y2);
+    ctx.save();
+    ctx.strokeStyle = ROAD_COLOR;
+    ctx.lineWidth = 3 * state.zoom * state.DPR;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(a.x*state.DPR, a.y*state.DPR);
+    ctx.lineTo(b.x*state.DPR, b.y*state.DPR);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawWorld() {
+    const {ctx} = state;
+    ctx.save();
+    ctx.clearRect(0,0,state.width, state.height);
+    drawGrid(ctx);
+    // Straßen
+    for (const r of state.roads) drawRoad(ctx,r);
+    // Gebäude
+    for (const b of state.buildings) {
+      const color =
+        b.type==="hq" ? HQ_COLOR :
+        b.type==="woodcutter" ? WC_COLOR : DEPOT_COLOR;
+      const label =
+        b.type==="hq" ? "HQ" :
+        b.type==="woodcutter" ? "Holzfäller" : "Depot";
+      fillRectWorld(ctx, b.x,b.y, b.w,b.h, color, label);
     }
-    return best;
+    ctx.restore();
   }
 
-  function connectedEnough(src, dst){
-    // Für V14.7 genügt: Wenn es *irgendeine* Straße gibt und
-    // Distanz < 1200, betrachten wir es als verbunden.
-    return state.roads.length>0 && dist(src.x,src.y,dst.x,dst.y)<1200;
+  function tick(){
+    if (!state.running) { drawWorld(); return requestAnimationFrame(tick); }
+    // (später: Animation/Carrier etc.)
+    drawWorld();
+    requestAnimationFrame(tick);
   }
 
-  function spawnCarrier(fromEnt, toEnt){
-    const [sx,sy]=centerOf(fromEnt);
-    const [tx,ty]=centerOf(toEnt);
-    const c = {
-      id: randId(),
-      x: sx, y: sy,
-      sx, sy, tx, ty,
-      t: 0,  // 0..1 entlang des Pfads
-      speed: 90, // px/s
-      frameAcc: 0,
-    };
-    state.carriers.push(c);
-    state.res.traeger = state.carriers.length;
-    updateHUD();
+  // ====== Build-Logik (sehr simpel) ======
+  const snap = v => Math.round(v / TILE) * TILE;
+
+  function placeBuilding(type, wx, wy){
+    const b = { type, x: snap(wx), y: snap(wy), w: TILE*2, h: TILE*2 };
+    state.buildings.push(b);
   }
 
-  function updateProduction(dt){
-    for(const e of state.ents){
-      if(e.type!=='woodcutter') continue;
-      const prod = state.prod.get(e.id);
-      if(!prod) continue;
-      // Produktion staut nicht auf: nur wenn Speicherziel existiert
-      const dst = nearestStorageFrom(e.x,e.y);
-      if(!dst) continue;
-      if(!connectedEnough(e,dst)) continue;
-      prod.t += dt;
-      if(prod.t >= prod.period){
-        prod.t = 0;
-        spawnCarrier(e, dst);
-      }
-    }
-  }
-
-  function updateCarriers(dt){
-    for(let i=state.carriers.length-1;i>=0;--i){
-      const c = state.carriers[i];
-      const dTot = dist(c.sx,c.sy,c.tx,c.ty);
-      const dStep = (c.speed*dt);
-      c.t = clamp(c.t + dStep/Math.max(1,dTot), 0, 1);
-      c.x = lerp(c.sx, c.tx, c.t);
-      c.y = lerp(c.sy, c.ty, c.t);
-
-      // Animationstakt
-      if(state.sprite.ready){
-        state.sprite.animIdx = (state.sprite.animIdx + dt*state.sprite.animFps) % state.sprite.frames.length;
-      }
-
-      if(c.t>=1){
-        // angekommen -> Holz +1, Carrier despawnen
-        state.carriers.splice(i,1);
-        state.res.holz += 1;
-        state.res.traeger = state.carriers.length;
-        updateHUD();
+  function tryErase(wx, wy){
+    // Entfernt Gebäude, wenn getroffen; Straßen separat (Hitbox = 6px)
+    // Gebäude
+    for (let i=state.buildings.length-1; i>=0; i--){
+      const b = state.buildings[i];
+      const x0=b.x-b.w/2, x1=b.x+b.w/2, y0=b.y-b.h/2, y1=b.y+b.h/2;
+      if (wx>=x0 && wx<=x1 && wy>=y0 && wy<=y1){
+        state.buildings.splice(i,1);
+        return true;
       }
     }
-  }
-
-  // ---------- Rendering ----------
-  function clear(){
-    const g=state.ctx, w=state.size.w, h=state.size.h;
-    g.setTransform(1,0,0,1,0,0);
-    g.fillStyle = '#0b1628';
-    g.fillRect(0,0,w,h);
-    // world transform
-    const c=state.cam;
-    g.translate(w*0.5 - c.x*c.z, h*0.5 - c.y*c.z);
-    g.scale(c.z,c.z);
-  }
-
-  function drawGrid(){
-    const g=state.ctx, c=state.cam;
-    const step = 80;
-    const viewW = state.size.w / c.z;
-    const viewH = state.size.h / c.z;
-    const x0 = Math.floor((c.x - viewW*0.5)/step)*step;
-    const y0 = Math.floor((c.y - viewH*0.5)/step)*step;
-    g.strokeStyle = 'rgba(255,255,255,0.05)';
-    g.lineWidth = 1/c.z;
-    g.beginPath();
-    for(let x=x0; x<=c.x+viewW; x+=step){
-      g.moveTo(x, c.y-viewH*0.5); g.lineTo(x, c.y+viewH*0.5);
+    // Straßen
+    const hitDist = 6 / state.zoom; // 6px im Screen
+    for (let i=state.roads.length-1; i>=0; i--){
+      const r = state.roads[i];
+      const d = pointToSegmentDist(wx,wy, r.x1,r.y1, r.x2,r.y2);
+      if (d <= hitDist){ state.roads.splice(i,1); return true; }
     }
-    for(let y=y0; y<=c.y+viewH; y+=step){
-      g.moveTo(c.x-viewW*0.5, y); g.lineTo(c.x+viewW*0.5, y);
+    return false;
+  }
+
+  function pointToSegmentDist(px,py, x1,y1,x2,y2){
+    const A=px-x1, B=py-y1, C=x2-x1, D=y2-y1;
+    const dot = A*C + B*D;
+    const len2 = C*C + D*D;
+    let t = len2 ? (dot/len2) : -1;
+    t = clamp(t,0,1);
+    const x = x1 + t*C, y = y1 + t*D;
+    const dx = px-x, dy=py-y;
+    return Math.hypot(dx,dy);
+  }
+
+  // Straßenbau „Klicken → Start, Klicken → Ende“
+  let roadStart = null;
+  function placeOrFinishRoad(wx,wy){
+    const gx = snap(wx), gy = snap(wy);
+    if (!roadStart){ roadStart = {x:gx,y:gy}; return; }
+    const seg = { x1: roadStart.x, y1: roadStart.y, x2: gx, y2: gy };
+    if (Math.hypot(seg.x2-seg.x1, seg.y2-seg.y1) > 1) {
+      state.roads.push(seg);
     }
-    g.stroke();
+    roadStart = null;
   }
 
-  function drawRoads(){
-    const g=state.ctx;
-    g.strokeStyle='#79e3b7';
-    g.lineWidth = 6/state.cam.z;
-    g.lineCap='round';
-    for(const r of state.roads){
-      g.beginPath();
-      g.moveTo(r.x1,r.y1); g.lineTo(r.x2,r.y2); g.stroke();
+  // ====== Eingabe ======
+  function addInput(){
+    const el = state.canvas;
+
+    // wir arbeiten nur mit Pointer*, überall gleich
+    el.addEventListener("pointerdown", onPointerDown, {passive:false});
+    el.addEventListener("pointermove", onPointerMove, {passive:false});
+    el.addEventListener("pointerup",   onPointerUp,   {passive:false});
+    el.addEventListener("pointercancel", onPointerUp, {passive:false});
+    // Mausrad-Zoom
+    el.addEventListener("wheel", onWheel, {passive:false});
+
+    // Resize/FS
+    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("orientationchange", ()=>setTimeout(resizeCanvas, 250));
+    document.addEventListener("fullscreenchange", resizeCanvas);
+    document.addEventListener("webkitfullscreenchange", resizeCanvas);
+  }
+
+  function writeZoomHUD(){ setHUD("Zoom", `${state.zoom.toFixed(2)}x`); }
+
+  function onWheel(e){
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY) * 0.1;
+    const before = state.zoom;
+    state.zoom = clamp(state.zoom + delta, state.minZoom, state.maxZoom);
+    if (state.zoom !== before) writeZoomHUD();
+  }
+
+  function onPointerDown(e){
+    if (!isPrimary(e)) return;
+    // Pinch start? (zwei Finger)
+    if (e.pointerType === "touch" && e.isPrimary === false) return;
+
+    // Pointer Capture für sauberes Tracking
+    try { state.canvas.setPointerCapture(e.pointerId); } catch{}
+
+    const {x,y} = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
+
+    // Zweit-Finger HINT (wir erkennen Pinch über PointerEvents-Mehrzahl)
+    // Ein Finger:
+    if (state.pointerTool === "pointer"){
+      state.isPanning = true;
+      state.panStartX = e.clientX; state.panStartY = e.clientY;
+      state.camStartX = state.camX; state.camStartY = state.camY;
+    } else if (state.pointerTool === "road"){
+      placeOrFinishRoad(x,y);
+    } else if (state.pointerTool === "hq"){
+      placeBuilding("hq", x,y);
+    } else if (state.pointerTool === "woodcutter"){
+      placeBuilding("woodcutter", x,y);
+    } else if (state.pointerTool === "depot"){
+      placeBuilding("depot", x,y);
+    } else if (state.pointerTool === "erase"){
+      tryErase(x,y);
     }
   }
 
-  function drawEntities(){
-    const g=state.ctx;
-    for(const e of state.ents){
-      if(e.type==='hq'){ g.fillStyle='#3db26f'; }
-      else if(e.type==='woodcutter'){ g.fillStyle='#4a83ff'; }
-      else if(e.type==='depot'){ g.fillStyle='#d64e7f'; }
-      else { g.fillStyle='#6b7a90'; }
-      g.fillRect(e.x, e.y, e.w, e.h);
-
-      // Label
-      g.fillStyle='rgba(255,255,255,0.85)';
-      g.font = `${14/state.cam.z}px system-ui`;
-      g.textAlign='center';
-      g.fillText(e.label, e.x+e.w*0.5, e.y-6/state.cam.z);
+  function onPointerMove(e){
+    // Pinch: zwei Finger → in iOS Safari via Gesture nicht zuverlässig über PointerEvents messbar,
+    // daher erlauben wir Rad-Zoom + UI-Buttons. Optional: nichts tun.
+    if (state.isPanning && state.pointerTool === "pointer"){
+      e.preventDefault();
+      const dx = (e.clientX - state.panStartX) / state.zoom;
+      const dy = (e.clientY - state.panStartY) / state.zoom;
+      state.camX = state.camStartX - dx;
+      state.camY = state.camStartY - dy;
     }
   }
 
-  function drawCarriers(){
-    const g=state.ctx;
-    for(const c of state.carriers){
-      if(state.sprite.ready){
-        const fr = state.sprite.frames[Math.floor(state.sprite.animIdx) % state.sprite.frames.length];
-        const s = 0.6; // Zeichenskalierung
-        const w = fr.w * s, h = fr.h * s;
-        g.drawImage(state.sprite.img, fr.x, fr.y, fr.w, fr.h,
-          c.x - w*0.5, c.y - h*0.5, w, h);
-      }else{
-        // Fallback: kleine Pille
-        g.fillStyle = '#ffcf76';
-        g.beginPath(); g.arc(c.x, c.y, 10, 0, TAU); g.fill();
-        g.fillStyle='#72502a';
-        g.fillRect(c.x-4, c.y-2, 8, 4);
-      }
-    }
+  function onPointerUp(e){
+    state.isPanning = false;
+    try { state.canvas.releasePointerCapture(e.pointerId); } catch{}
   }
 
-  function render(){
-    clear();
-    drawGrid();
-    drawRoads();
-    drawEntities();
-    drawCarriers();
-  }
-
-  // ---------- Input ----------
+  // ====== API ======
   function setTool(name){
-    state.tool = name;
-    const map = { pointer:'Zeiger', road:'Straße', hq:'HQ', woodcutter:'Holzfäller', depot:'Depot', erase:'Abriss' };
-    if(state.hudEls.tool) state.hudEls.tool.textContent = map[name] || name;
+    state.pointerTool = name;
+    if (name !== "road") roadStart = null;
+    setHUD("Tool", name==='pointer' ? 'Zeiger' :
+                   name==='road' ? 'Straße' :
+                   name==='hq' ? 'HQ' :
+                   name==='woodcutter' ? 'Holzfäller' :
+                   name==='depot' ? 'Depot' : 'Abriss');
   }
 
-  function onPointerDown(sx,sy){
-    state.pointerDown=true;
-    const [x,y]=screenToWorld(sx,sy);
+  function center(){
+    state.camX = 0; state.camY = 0; // später: auf Inhalt zentrieren
+  }
 
-    if(state.tool==='road'){
-      if(state.roadBuild==null){
-        state.roadBuild = {x,y};
-      }else{
-        // Orthogonal segmente: achsenausgleich
-        const start = state.roadBuild;
-        const dx=Math.abs(x-start.x), dy=Math.abs(y-start.y);
-        if(dx>=dy){
-          addRoadSeg(start.x, start.y, x, start.y);
-          state.roadBuild = {x, y:start.y};
-        }else{
-          addRoadSeg(start.x, start.y, start.x, y);
-          state.roadBuild = {x:start.x, y};
-        }
+  function startGame(opts){
+    if (state.running) return;
+
+    // HUD callback
+    state.onHUD = (k,v)=>{
+      if (opts && typeof opts.onHUD === "function") opts.onHUD(k,v);
+      // explizit Zoom/Tool in DOM?
+      if (k === "Zoom"){
+        const el = document.querySelector("#hudZoom");
+        if (el) el.textContent = v;
       }
-    }else if(state.tool==='hq' || state.tool==='woodcutter' || state.tool==='depot'){
-      addEntity(state.tool, x-40, y-40);
-    }else if(state.tool==='erase'){
-      // einfacher Hit-Test zuerst Entitäten, dann Straßen
-      for(let i=state.ents.length-1;i>=0;--i){
-        const e=state.ents[i];
-        if(x>=e.x && x<=e.x+e.w && y>=e.y && y<=e.y+e.h){
-          state.ents.splice(i,1);
-          state.prod.delete(e.id);
-          return;
-        }
+      if (k === "Tool"){
+        const el = document.querySelector("#hudTool");
+        if (el) el.textContent = v;
       }
-      for(let i=state.roads.length-1;i>=0;--i){
-        const r=state.roads[i];
-        const d = pointSegDist(x,y,r.x1,r.y1,r.x2,r.y2);
-        if(d<10/state.cam.z){ state.roads.splice(i,1); return; }
-      }
-    }else{
-      // pointer -> evtl. Start für Pan (handled in move)
-    }
-  }
-  function onPointerUp(){
-    state.pointerDown=false;
-    if(state.tool==='road'){
-      // Doppeltipp beendet Straßenbau
-      const t=performance.now();
-      if(t-state.lastTapTime<250){ state.roadBuild=null; }
-      state.lastTapTime=t;
-    }
-  }
-  function onPointerMove(sx,sy,dx,dy){
-    if(!state.pointerDown) return;
-    if(state.tool==='pointer'){
-      // Pan
-      state.cam.x -= dx/state.cam.z;
-      state.cam.y -= dy/state.cam.z;
-    }
-  }
-  function onWheel(ev){
-    const s = clamp(state.cam.z * (ev.deltaY<0 ? 1.1: 1/1.1), 0.5, 2.5);
-    state.cam.z = s;
-    if(state.hudEls.zoom) state.hudEls.zoom.textContent = s.toFixed(2)+'x';
-  }
-
-  function pointSegDist(px,py,x1,y1,x2,y2){
-    const vx=x2-x1, vy=y2-y1, wx=px-x1, wy=py-y1;
-    const c1 = vx*wx+vy*wy;
-    if(c1<=0) return Math.hypot(px-x1,py-y1);
-    const c2 = vx*vx+vy*vy;
-    if(c2<=c1) return Math.hypot(px-x2,py-y2);
-    const t=c1/c2;
-    const xx=x1+t*vx, yy=y1+t*vy;
-    return Math.hypot(px-xx,py-yy);
-  }
-
-  // ---------- HUD ----------
-  function updateHUD(){
-    const H=state.hudEls;
-    if(H.holz) H.holz.textContent = String(state.res.holz);
-    if(H.stein) H.stein.textContent = String(state.res.stein);
-    if(H.nahrung) H.nahrung.textContent = String(state.res.nahrung);
-    if(H.gold) H.gold.textContent = String(state.res.gold);
-    if(H.traeger) H.traeger.textContent = String(state.res.traeger);
-  }
-
-  // ---------- Loop ----------
-  function tick(tNow){
-    if(!state.started){ requestAnimationFrame(tick); return; }
-    if(!state.tPrev) state.tPrev=tNow;
-    const dt = Math.min(0.05, (tNow-state.tPrev)/1000);
-    state.tPrev = tNow;
-
-    updateProduction(dt);
-    updateCarriers(dt);
-    render();
-    requestAnimationFrame(tick);
-  }
-
-  // ---------- Public ----------
-  async function startGame(opts){
-    if(state.started) return;
-
-    // Canvas
-    state.canvas = opts.canvas;
-    state.size.dpr = opts.DPR || (window.devicePixelRatio||1);
-    state.ctx = state.canvas.getContext('2d');
-
-    // HUD
-    state.hudEls = {
-      holz: qs('#hudHolz'), stein: qs('#hudStein'), nahrung: qs('#hudNahrung'),
-      gold: qs('#hudGold'), traeger: qs('#hudTraeger'),
-      tool: qs('#hudTool'), zoom: qs('#hudZoom')
     };
-    updateHUD();
 
-    // Events
-    resize();
-    window.addEventListener('resize', resize);
+    attachCanvas(opts.canvas);
+    addInput();
 
-    // Zeiger/Pan/Zoom
-    let lastX=0,lastY=0;
-    state.canvas.addEventListener('pointerdown', e=>{ state.canvas.setPointerCapture(e.pointerId); lastX=e.clientX; lastY=e.clientY; onPointerDown(e.clientX,e.clientY); });
-    state.canvas.addEventListener('pointerup',   e=>{ onPointerUp(); });
-    state.canvas.addEventListener('pointermove', e=>{
-      const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
-      onPointerMove(e.clientX,e.clientY,dx,dy);
-    });
-    state.canvas.addEventListener('wheel', (e)=>{ e.preventDefault(); onWheel(e); }, {passive:false});
+    // Startzustand
+    setTool("pointer");
+    writeZoomHUD();
 
-    // Tool-Buttons
-    document.querySelectorAll('#tools [data-tool]').forEach(btn=>{
-      btn.addEventListener('click', ()=>setTool(btn.dataset.tool));
-    });
-    qs('#btnCenter')?.addEventListener('click', ()=>{
-      state.cam.x=0; state.cam.y=0; state.cam.z=1;
-      if(state.hudEls.zoom) state.hudEls.zoom.textContent='1.00x';
-    });
-
-    // Startwelt: ein HQ mittig
-    addEntity('hq', -60, -60);
-
-    // Assets
-    await loadCarrierSprite();
-
-    state.started = true;
-    state.tPrev = 0;
-    requestAnimationFrame(tick);
+    state.running = true;
   }
 
-  function resetGame(){
-    state.ents.length=0;
-    state.roads.length=0;
-    state.carriers.length=0;
-    state.res={holz:0,stein:0,nahrung:0,gold:0,traeger:0};
-    state.cam={x:0,y:0,z:1};
-    state.prod.clear();
-    updateHUD();
-    addEntity('hq', -60, -60);
-  }
-
-  function resize(){
-    const dpr = state.size.dpr;
-    const rect = state.canvas.getBoundingClientRect();
-    state.size.w = Math.round(rect.width * dpr);
-    state.size.h = Math.round(rect.height * dpr);
-    state.canvas.width = state.size.w;
-    state.canvas.height = state.size.h;
-    state.ctx.setTransform(dpr,0,0,dpr,0,0); // High-DPI fix für Events nicht nötig, wir zeichnen mit Transformen
-  }
-
-  function qs(sel){ return document.querySelector(sel); }
-
-  // Expose
-  window.game = { startGame, resetGame };
+  return {
+    startGame,
+    setTool,
+    center,
+    // (optional: für Buttons von außen)
+    get state(){ return state; },
+  };
 })();
