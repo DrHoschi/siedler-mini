@@ -1,10 +1,11 @@
-/* Siedler‑Mini V14.7 (mobile) — sprite-preload
+/* Siedler‑Mini V14.7 (mobile) — sprite-anim2
    – Pinch‑Zoom (nur Zeiger) + Pan
    – Bauen/Abriss + Straßen
    – Träger (Carrier) Holzfäller -> Depot -> HQ
    – HUD‑Updates
-   – Lädt vor Spielstart: assets/carrier_topdown_v2.json + .png
-   – Fallback: Punkt‑Animation, wenn Sprite nicht verfügbar
+   – Vorstart‑Preload: assets/carrier_topdown_v2.json + .png
+   – Fallback: Punkt‑Animation
+   – NEU: Winkelbasierte Richtung + weiche Drehung + distanzgetriebene Schritt-Frames
 */
 export const game = (() => {
   // ===== Darstellung / Welt =====
@@ -16,30 +17,26 @@ export const game = (() => {
   const DEPOT_COLOR= "#d55384";
   const TEXT_COLOR = "#cfe3ff";
 
-  // ===== Träger‑Parameter (etwas langsamer, 3–4s Start) =====
+  // ===== Träger‑Parameter =====
   const CARRIER = {
-    START_DELAY_MS: 3200,
-    TURN_DELAY_MS:  400,
-    RESPAWN_MS:     3800,
-    SPEED:          48,          // px/s (langsamer)
-    DOT_R:          4
+    START_DELAY_MS: 3000,   // ~3s bis erster Lauf
+    TURN_DELAY_MS:   350,
+    RESPAWN_MS:     3600,
+    SPEED:            44,   // px/s (langsamer)
+    DOT_R:             4,
+    STEP_PIXELS:       16   // Distanz pro Framewechsel (Schrittweite)
   };
 
-  // ===== Sprite‑Setup (Assets‑Pfad) =====
-  // Erwartet:
-  //   assets/carrier_topdown_v2.png
-  //   assets/carrier_topdown_v2.json
-  // JSON kann (optional) so aussehen:
-  // { "frameW":64,"frameH":64,"fps":8,"framesPerDir":4,"scale":0.6,
-  //   "order": ["DOWN","LEFT","RIGHT","UP"], "carryRowOffset":4 }
+  // ===== Sprite‑Setup (Assets) =====
   const SPRITE_DEFAULT = {
     enabled: true,
     urlPNG:  "assets/carrier_topdown_v2.png",
     urlJSON: "assets/carrier_topdown_v2.json",
     frameW: 64, frameH: 64,
     framesPerDir: 4,
-    fps: 8,
+    fps: 8,                       // fallback, wenn Distanz ~0 (z.B. Stand)
     scale: 0.6,
+    // Reihenfolge der Zeilen im Sheet (ohne Carry); Carry benutzt offset unten
     order: ["DOWN","LEFT","RIGHT","UP"],
     carryRowOffset: 4
   };
@@ -67,10 +64,12 @@ export const game = (() => {
     sprite:{
       ready:false,
       cfg: {...SPRITE_DEFAULT},
-      img:null, cols:0, rows:0
+      img:null, cols:0, rows:0,
+      hasLeftRow:true,  // aus JSON/order abgeleitet
+      hasRightRow:true
     },
 
-    // Preload‑Status
+    // Preload
     preload: { started:false, done:false, ok:false, message:"" }
   };
 
@@ -119,7 +118,6 @@ export const game = (() => {
     state.zoom=1; state.camX=0; state.camY=0;
     writeZoomHUD(); writeStockHUD();
 
-    // Preload anstoßen; Spiel beginnt erst nach Preload (oder Fallback)
     if (!state.preload.started) {
       preloadSprites().finally(()=>{
         state.preload.done = true;
@@ -140,26 +138,23 @@ export const game = (() => {
     if (state.canvas.height !== state.height) state.canvas.height = state.height;
   }
 
-  // ===== Sprite‑Preload (JSON + PNG) =====
+  // ===== Sprite‑Preload =====
   async function preloadSprites(){
-    // 1) JSON laden (optional, aber bevorzugt)
     let cfg = {...SPRITE_DEFAULT};
     try{
       const res = await fetch(cfg.urlJSON, {cache:"no-store"});
-      if (!res.ok) throw new Error("JSON HTTP "+res.status);
-      const meta = await res.json();
-      if (meta.frameW) cfg.frameW = meta.frameW;
-      if (meta.frameH) cfg.frameH = meta.frameH;
-      if (meta.fps) cfg.fps = meta.fps;
-      if (meta.framesPerDir) cfg.framesPerDir = meta.framesPerDir;
-      if (meta.scale) cfg.scale = meta.scale;
-      if (Array.isArray(meta.order) && meta.order.length>=4) cfg.order = meta.order.slice(0,4);
-      if (typeof meta.carryRowOffset === "number") cfg.carryRowOffset = meta.carryRowOffset;
-    } catch(e){
-      // JSON optional → wenn weg, dann mit Default weitermachen
-    }
+      if (res.ok){
+        const meta = await res.json();
+        if (meta.frameW) cfg.frameW = meta.frameW;
+        if (meta.frameH) cfg.frameH = meta.frameH;
+        if (meta.fps) cfg.fps = meta.fps;
+        if (meta.framesPerDir) cfg.framesPerDir = meta.framesPerDir;
+        if (meta.scale) cfg.scale = meta.scale;
+        if (Array.isArray(meta.order) && meta.order.length>=4) cfg.order = meta.order.slice(0,4);
+        if (typeof meta.carryRowOffset === "number") cfg.carryRowOffset = meta.carryRowOffset;
+      }
+    }catch{} // JSON optional
 
-    // 2) PNG laden
     const okPNG = await new Promise(resolve=>{
       const img = new Image();
       img.onload = ()=>{
@@ -169,14 +164,17 @@ export const game = (() => {
         resolve(true);
       };
       img.onerror = ()=> resolve(false);
-      img.src = cfg.urlPNG + "?v=147sp";
+      img.src = cfg.urlPNG + "?v=147sa2";
     });
 
     if (okPNG){
       state.sprite.cfg = cfg;
       state.sprite.ready = true;
+      const hasL = cfg.order.includes("LEFT");
+      const hasR = cfg.order.includes("RIGHT");
+      state.sprite.hasLeftRow  = hasL;
+      state.sprite.hasRightRow = hasR;
     } else {
-      // Fallback → Punkte
       state.sprite.ready = false;
     }
   }
@@ -216,11 +214,16 @@ export const game = (() => {
     ctx.restore();
   }
 
-  function facingFromSegment(dx,dy){
-    if (Math.abs(dx) >= Math.abs(dy)) return (dx>=0) ? "RIGHT" : "LEFT";
-    return (dy>=0) ? "DOWN" : "UP";
+  // ===== Sprite-Richtung anhand Winkel =====
+  function angleToFace(rad){
+    // 0: +x (RIGHT), pi/2: +y (DOWN). Wir mappen in 4 Quadranten.
+    const a = ((rad % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    const deg = a * 180/Math.PI;
+    if (deg >= 45 && deg < 135) return "DOWN";
+    if (deg >= 135 && deg < 225) return "LEFT";
+    if (deg >= 225 && deg < 315) return "UP";
+    return "RIGHT";
   }
-
   function dirRowIndex(face, hasWood){
     const base = state.sprite.cfg.order.indexOf(face);
     const off  = hasWood ? (state.sprite.cfg.carryRowOffset|0) : 0;
@@ -242,19 +245,23 @@ export const game = (() => {
       return;
     }
 
-    // Sprite
+    // Richtung: weicher Zielwinkel
     const img = state.sprite.img;
-    // Richtung
-    let dx=0, dy=1;
-    if (c.seg < c.path.length-1){
-      const a=c.pos, b=c.path[c.seg+1];
-      dx=b.x-a.x; dy=b.y-a.y;
-    }
-    const face = facingFromSegment(dx,dy);
-    const row  = dirRowIndex(face, c.hasWood);
-    const cfg  = state.sprite.cfg;
+    const cfg = state.sprite.cfg;
 
-    const frameIdx = Math.floor(c.animTime * cfg.fps) % cfg.framesPerDir;
+    const face = angleToFace(c.faceAngle);
+    let row = dirRowIndex(face, c.hasWood);
+
+    // Links ggf. spiegeln, falls keine eigene LEFT‑Reihe vorhanden
+    let flipX = false;
+    if (face === "LEFT" && !state.sprite.hasLeftRow && state.sprite.hasRightRow){
+      row = dirRowIndex("RIGHT", c.hasWood);
+      flipX = true;
+    }
+
+    // Distanz‑getriebener Frameindex:
+    // animStep steigt mit gelaufener Strecke; framesPerDir bestimmt Wrap
+    const frameIdx = Math.floor(c.animStep / CARRIER.STEP_PIXELS) % cfg.framesPerDir;
     const sx = frameIdx * cfg.frameW;
     const sy = row * cfg.frameH;
     const dw = cfg.frameW * cfg.scale * state.zoom * state.DPR;
@@ -262,9 +269,14 @@ export const game = (() => {
 
     ctx.save();
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(img, sx,sy, cfg.frameW,cfg.frameH,
-      (p.x*state.DPR) - dw/2, (p.y*state.DPR) - dh*0.9,
-      dw, dh);
+    if (flipX){
+      ctx.translate(p.x*state.DPR, p.y*state.DPR);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, sx,sy, cfg.frameW,cfg.frameH, -dw/2, -dh*0.9, dw, dh);
+    } else {
+      ctx.drawImage(img, sx,sy, cfg.frameW,cfg.frameH,
+        (p.x*state.DPR) - dw/2, (p.y*state.DPR) - dh*0.9, dw, dh);
+    }
     ctx.restore();
   }
 
@@ -280,11 +292,10 @@ export const game = (() => {
     }
     for (const c of state.carriers) drawCarrier(ctx,c);
 
-    // dezentes Preload‑Badge (nur bis fertig)
     if (!state.preload.done){
       ctx.save();
       ctx.fillStyle="rgba(0,0,0,0.35)";
-      ctx.fillRect(10, 10, 160, 46);
+      ctx.fillRect(10, 10, 170, 46);
       ctx.fillStyle="#cfe3ff";
       ctx.font = `${12*state.DPR}px system-ui,-apple-system`;
       ctx.fillText("Lade Träger‑Sprites…", 20, 30);
@@ -341,25 +352,13 @@ export const game = (() => {
       path:pA.slice(0), seg:0,
       hasWood:false,
       tWaitUntil: performance.now() + CARRIER.START_DELAY_MS,
-      animTime: 0
+      // Animation / Richtung
+      faceAngle: Math.PI/2,    // initial DOWN
+      animStep: 0              // Distanz‑Akkumulator für Schritt‑Frames
     };
     state.carriers.push(c);
     state.stock.carrier++; writeStockHUD();
     return c;
-  }
-
-  function advanceOnPath(c, dt){
-    const speed=CARRIER.SPEED;
-    let remaining = speed*dt;
-    while (remaining>0 && c.seg < c.path.length-1){
-      const a=c.pos, b=c.path[c.seg+1];
-      const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
-      if (d<0.0001){ c.seg++; continue; }
-      if (remaining>=d){ c.pos.x=b.x; c.pos.y=b.y; c.seg++; remaining-=d; }
-      else { const f=remaining/d; c.pos.x+=dx*f; c.pos.y+=dy*f; remaining=0; }
-    }
-    c.animTime += dt;
-    return (c.seg >= c.path.length-1 && Math.hypot(c.pos.x - c.path.at(-1).x, c.pos.y - c.path.at(-1).y) < 0.5);
   }
 
   function nearestNode(pt){
@@ -371,11 +370,44 @@ export const game = (() => {
     return best<0?0:best;
   }
 
-  function updateCarriers(dt, now){
-    // erst starten, wenn Preload abgeschlossen (Fehler vermeiden)
-    if (!state.preload.done) return;
+  function retargetFaceAngle(c, target){
+    // Zielwinkel Richtung Path-Ziel (nächster Punkt)
+    const dx = target.x - c.pos.x;
+    const dy = target.y - c.pos.y;
+    const ang = Math.atan2(dy, dx);
+    // weich Annähern (lerp auf Kreis): hier simpler Ansatz
+    const diff = ((((ang - c.faceAngle) + Math.PI*3) % (Math.PI*2)) - Math.PI);
+    c.faceAngle += diff * 0.25; // 25% pro Tick → weich genug
+  }
 
+  function advanceOnPath(c, dt){
+    const speed=CARRIER.SPEED;
+    let remaining = speed*dt;
+    let moved = 0;
+
+    while (remaining>0 && c.seg < c.path.length-1){
+      const a=c.pos, b=c.path[c.seg+1];
+      const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy);
+      if (d<0.0001){ c.seg++; continue; }
+
+      // Zielwinkel updaten
+      retargetFaceAngle(c, b);
+
+      if (remaining>=d){
+        c.pos.x=b.x; c.pos.y=b.y; c.seg++; remaining-=d; moved += d;
+      } else {
+        const f=remaining/d; c.pos.x+=dx*f; c.pos.y+=dy*f; moved += remaining; remaining=0;
+      }
+    }
+
+    if (moved>0) c.animStep += moved;
+    return (c.seg >= c.path.length-1 && Math.hypot(c.pos.x - c.path.at(-1).x, c.pos.y - c.path.at(-1).y) < 0.5);
+  }
+
+  function updateCarriers(dt, now){
+    if (!state.preload.done) return;
     if (!state.graph.nodes.length) rebuildGraph();
+
     const wcs = state.buildings.filter(b=>b.type==="woodcutter");
     const dps = state.buildings.filter(b=>b.type==="depot");
     const hqs = state.buildings.filter(b=>b.type==="hq");
@@ -442,7 +474,7 @@ export const game = (() => {
           if (now >= c.tWaitUntil){
             const d=dps[0], nFrom=nearestNode(c.pos), p=shortestPath(nFrom, d._node);
             if (p){ c.path=p; c.seg=0; c.phase="toDepot"; }
-            else { c.tWaitUntil = now + 1000; } // warten & nochmal probieren
+            else { c.tWaitUntil = now + 1000; }
           }
           break;
       }
@@ -576,7 +608,6 @@ export const game = (() => {
       updateCarriers(dt, ts);
       drawWorld();
     } else {
-      // erst laufen lassen, wenn Preload durch (oder Fallback) → weniger Fehler
       drawWorld();
       if (state.preload.done) {
         state.running = true;
@@ -608,7 +639,6 @@ export const game = (() => {
     setTool("pointer");
     writeZoomHUD(); writeStockHUD();
     rebuildGraph();
-    // Hinweis in HUD (optional)
     setHUD("Tool", "Zeiger");
     if (!state.preload.done) setHUD("Note", "Lade Sprites…");
   }
