@@ -1,4 +1,4 @@
-// game.js (V14.7 mobile) — cache-bust: v=147f2
+// game.js (V14.7 mobile) — Straßen: Punkt-zu-Punkt mit Kette + Abriss-HitTest
 
 // --- State ---
 const S = {
@@ -10,11 +10,13 @@ const S = {
   debug:false,
   buildings: [], // {type:'hq'|'woodcutter'|'depot', x,y,w,h}
   roads: [],     // [{x1,y1,x2,y2}]
+  roadDraft: null, // {x,y} akt. Startpunkt der Kette
   onChange: ()=>{},
   ctx: null,
   canvas: null,
   logical: { w: 2000, h: 1200 }, // Spielfeld (logisch)
 };
+
 const SIZE = {
   grid: 64,
   hq: {w: 360, h: 220},
@@ -38,9 +40,12 @@ export function resize(pxW, pxH, dpr){
   S.canvas.height = Math.max(1, Math.round(pxH * S.cam.dpr));
   draw();
 }
-export function setTool(t){ S.tool = t; S.onChange(state()); }
+export function setTool(t){
+  S.tool = t;
+  if (t !== 'road') S.roadDraft = null;   // Kette automatisch beenden beim Toolwechsel
+  S.onChange(state());
+}
 export function center(){
-  // Falls HQ existiert → darauf fokussieren
   const hq = S.buildings.find(b=>b.type==='hq');
   const target = hq ? { x: hq.x + hq.w/2, y: hq.y + hq.h/2 } : { x: 0, y:0 };
   S.cam.x = target.x; S.cam.y = target.y;
@@ -52,6 +57,7 @@ export function reset(){
   S.tool='pointer';
   S.buildings.length=0;
   S.roads.length=0;
+  S.roadDraft=null;
   S.cam.x=0; S.cam.y=0; S.cam.z=1;
   draw(); S.onChange(state());
 }
@@ -79,7 +85,6 @@ export function zoomAt(cx, cy, factor){
   z = Math.min(2.5, Math.max(0.5, z));
   if (z===oldZ) return;
 
-  // Zoom um Bildschirmpunkt (cx,cy)
   const wxOld = screenToWorldX(cx);
   const wyOld = screenToWorldY(cy);
   S.cam.z = z;
@@ -110,21 +115,53 @@ export function clickBuild(cx,cy){
     S.buildings.push({type:'depot', x:wx-w/2, y:wy-h/2, w, h});
     draw(); return true;
   }
+
   if (S.tool==='road'){
-    // einfache Raster‑Straße: auf Grid schnappen
+    // Raster-Snap
     const x = Math.round(wx / SIZE.grid) * SIZE.grid;
     const y = Math.round(wy / SIZE.grid) * SIZE.grid;
-    const last = S.roads.at(-1);
-    if (!last || last.x2!==x || last.y2!==y){
-      if (!last) S.roads.push({x1:x,y1:y,x2:x,y2:y});
-      else S.roads.push({x1:last.x2,y1:last.y2,x2:x,y2:y});
+
+    // 1) Neuer Start, wenn noch keiner existiert
+    if (!S.roadDraft){
+      S.roadDraft = {x,y};
+      draw(); return true;
     }
+
+    // Distanz zum aktuellen Startpunkt
+    const dx = x - S.roadDraft.x, dy = y - S.roadDraft.y;
+    const dist2 = dx*dx + dy*dy;
+
+    // 2) Gleicher Punkt: Kette beenden
+    if (dist2 === 0){
+      S.roadDraft = null;
+      draw(); return true;
+    }
+
+    // 3) Sehr weit weg (neuer Bereich): neue Kette starten
+    const far = (SIZE.grid*3)*(SIZE.grid*3);
+    if (dist2 > far){
+      S.roadDraft = {x,y};
+      draw(); return true;
+    }
+
+    // 4) Reguläres Segment: vom Draft zum neuen Punkt
+    S.roads.push({x1:S.roadDraft.x, y1:S.roadDraft.y, x2:x, y2:y});
+    // Kette fortsetzen
+    S.roadDraft = {x,y};
     draw(); return true;
   }
+
   if (S.tool==='erase'){
-    // grob löschen: Gebäude unter Cursor
-    const i = S.buildings.findIndex(b=> wx>=b.x && wx<=b.x+b.w && wy>=b.y && wy<=b.y+b.h );
-    if (i>=0){ S.buildings.splice(i,1); draw(); return true; }
+    // Gebäude unter Cursor löschen
+    const bi = S.buildings.findIndex(b=> wx>=b.x && wx<=b.x+b.w && wy>=b.y && wy<=b.y+b.h );
+    if (bi>=0){ S.buildings.splice(bi,1); draw(); return true; }
+
+    // Straße in der Nähe löschen (Abstand Linie–Punkt)
+    const hitIndex = hitRoadIndexNear(wx, wy, 12); // 12px Toleranz
+    if (hitIndex>=0){
+      S.roads.splice(hitIndex,1);
+      draw(); return true;
+    }
   }
   return false;
 }
@@ -163,6 +200,14 @@ function draw(){
   }
   ctx.stroke();
   ctx.setLineDash([]);
+
+  // Draft-Startpunkt
+  if (S.tool==='road' && S.roadDraft){
+    ctx.fillStyle='#8ee0b0';
+    ctx.beginPath();
+    ctx.arc(S.roadDraft.x, S.roadDraft.y, 6, 0, Math.PI*2);
+    ctx.fill();
+  }
 
   // Buildings
   for (const b of S.buildings){
@@ -228,3 +273,27 @@ function worldLeft(){   return S.cam.x - (S.cam.vw/2)/S.cam.z; }
 function worldRight(){  return S.cam.x + (S.cam.vw/2)/S.cam.z; }
 function worldTop(){    return S.cam.y - (S.cam.vh/2)/S.cam.z; }
 function worldBottom(){ return S.cam.y + (S.cam.vh/2)/S.cam.z; }
+
+// --- Hit-Test für Straßen ---
+function hitRoadIndexNear(px, py, tolPx){
+  // tolPx in Weltkoordinaten umrechnen (ungefähr)
+  const tol = tolPx; // Welt ~= px bei z≈1; passt für UI-Zwecke
+  let bestI = -1, bestD = Infinity;
+  for (let i=0; i<S.roads.length; i++){
+    const r = S.roads[i];
+    const d = pointSegDist(px,py, r.x1,r.y1, r.x2,r.y2);
+    if (d < tol && d < bestD){ bestD = d; bestI = i; }
+  }
+  return bestI;
+}
+function pointSegDist(px,py, x1,y1,x2,y2){
+  const vx = x2-x1, vy=y2-y1;
+  const wx = px-x1, wy=py-y1;
+  const c1 = vx*wx + vy*wy;
+  if (c1 <= 0) return Math.hypot(px-x1, py-y1);
+  const c2 = vx*vx + vy*vy;
+  if (c2 <= c1) return Math.hypot(px-x2, py-y2);
+  const t = c1 / c2;
+  const projx = x1 + t*vx, projy = y1 + t*vy;
+  return Math.hypot(px-projx, py-projy);
+}
