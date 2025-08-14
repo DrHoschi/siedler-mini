@@ -1,82 +1,160 @@
-const $ = (s)=>document.querySelector(s);
+// --------- DOM ---------
+const canvas = document.getElementById('game');
+const startOverlay = document.getElementById('startOverlay');
 
-// Fullscreen
-const isFull = () => document.fullscreenElement || document.webkitFullscreenElement;
-const reqFS   = async () => { const el=document.documentElement; return (el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.()); };
-const exitFS  = async () => { return (document.exitFullscreen?.() ?? document.webkitExitFullscreen?.()); };
-const toggleFS= () => isFull()?exitFS():reqFS();
+// HUD helpers
+const hud = {
+  wood:  document.querySelector('#hud-wood span'),
+  stone: document.querySelector('#hud-stone span'),
+  food:  document.querySelector('#hud-food span'),
+  gold:  document.querySelector('#hud-gold span'),
+  carrier: document.querySelector('#hud-carrier span'),
+  tool:  document.querySelector('#hud-tool span'),
+  zoom:  document.querySelector('#hud-zoom span'),
+};
 
-function showHUD(show){ $('#hudBar').style.opacity = show? '0.95':'0'; }
+// Tool buttons
+const btns = {
+  pointer: document.getElementById('btnPointer'),
+  road:    document.getElementById('btnRoad'),
+  hq:      document.getElementById('btnHQ'),
+  lumber:  document.getElementById('btnLumber'),
+  depot:   document.getElementById('btnDepot'),
+  erase:   document.getElementById('btnErase'),
+};
 
-// Platzhalterbild bis Game startet
-(function drawPH(){
-  const c=$('#game'), DPR=Math.floor(devicePixelRatio||1), ctx=c.getContext('2d');
-  const size=()=>{ const w=Math.floor(c.clientWidth*DPR),h=Math.floor(c.clientHeight*DPR); if(c.width!==w)c.width=w; if(c.height!==h)c.height=h; };
-  size();
-  ctx.fillStyle='#0f1823'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.save(); ctx.strokeStyle='rgba(255,255,255,.08)'; const st=64*DPR;
-  for(let x=0;x<c.width;x+=st){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke();}
-  for(let y=0;y<c.height;y+=st){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();}
-  ctx.restore();
-  ctx.fillStyle='#3ca14e';
-  const rw=Math.min(c.width*.45,Math.max(220*DPR,c.width*.25)), rh=rw*.45;
-  ctx.fillRect((c.width-rw)/2,(c.height-rh)/2+40*DPR,rw,rh);
-  ctx.fillStyle='rgba(255,255,255,.92)'; ctx.font=`${48*DPR}px system-ui`; ctx.textAlign='center';
-  ctx.fillText('HQ (Platzhalter)', c.width/2, (c.height/2)-10*DPR);
-})();
+// Utils
+const centerBtn = document.getElementById('centerBtn');
+const debugBtn  = document.getElementById('debugBtn');
+const fsBtn     = document.getElementById('fsBtn');
+const fsBtn2    = document.getElementById('fsBtn2');
+const startBtn  = document.getElementById('startBtn');
+const resetBtn  = document.getElementById('resetBtn');
 
-// Fehlerdialog
-function err(msg){ $('#errMsg').textContent=String(msg); $('#err').style.display='flex'; }
-$('#errClose').onclick=()=>$('#err').style.display='none';
+// --------- Mobile / iOS Fixes ---------
+function applyVhFix(){
+  document.documentElement.style.setProperty('--vh-px', `${window.innerHeight}px`);
+}
+applyVhFix();
+window.addEventListener('resize', applyVhFix);
 
-// Buttons
-$('#fsBtn').onclick = toggleFS;
-$('#btnFS').onclick = toggleFS;
-$('#resetBtn').onclick = ()=>{ try{ localStorage.removeItem('sm_v146'); }catch{} location.reload(); };
+// Safari: Pinch-/Gesten dem Browser verbieten, damit das Spiel sie bekommt
+document.addEventListener('gesturestart',  e => e.preventDefault());
+document.addEventListener('gesturechange', e => e.preventDefault());
+document.addEventListener('gestureend',    e => e.preventDefault());
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive:false });
 
-let controller=null;
+// Doppel-Tap toggelt Vollbild
+function toggleFullscreen(){
+  if (document.fullscreenElement) { document.exitFullscreen(); }
+  else { (document.documentElement.requestFullscreen?.call(document.documentElement)); }
+}
+let lastTap = 0;
+canvas.addEventListener('touchend', e => {
+  const now = Date.now();
+  if (now - lastTap < 300) toggleFullscreen();
+  lastTap = now;
+}, { passive:true });
 
-async function start(){
-  try{
-    const mod=await import('./game.js?v=14.6');
-    const run=mod.run||mod.default?.run;
-    if(typeof run!=='function') throw new Error('main.run() wurde nicht gefunden (Export fehlt?).');
-    controller = await run({
-      canvas: $('#game'),
-      DPR: Math.floor(devicePixelRatio||1),
-      onHUD: (k,v)=>{ const el=document.querySelector('#hud'+k); if(el) el.textContent=String(v); },
-      onTool: (name)=>{ $('#hudTool').textContent='Tool: '+name; },
-      onZoom: (z)=>{ $('#hudZoom').textContent=`Zoom ${z.toFixed(2)}x`; },
-      onError: (m)=>err('Startfehler: '+m),
-      onReady: ()=>{
-        showHUD(true);
-        document.querySelectorAll('.tools .tbtn').forEach(b=>b.disabled=false);
-        $('#btnCenter').disabled=false;
-        setActiveTool('pointer');
-      }
-    });
-  }catch(e){ console.error(e); err(e.message||e); }
+fsBtn?.addEventListener('click', toggleFullscreen);
+fsBtn2?.addEventListener('click', toggleFullscreen);
+
+// --------- Spiel-Integration ---------
+// Wir versuchen flexibel, die Spiel-API zu finden (ESM oder global window.game).
+let gameAPI = null;
+let startGameFn = null;
+
+async function loadGameModule(){
+  try {
+    // Versuche ESM ./game.js zu laden
+    const mod = await import('./game.js');
+    // mögliche Varianten: export function startGame, export default { startGame }, window.game.startGame
+    startGameFn = mod.startGame || mod.default?.startGame || window.game?.startGame;
+    gameAPI     = mod.game || mod.default || window.game || null;
+  } catch (err) {
+    // Fallback: global
+    startGameFn = window.game?.startGame;
+    gameAPI     = window.game || null;
+  }
 }
 
 function setActiveTool(name){
-  document.querySelectorAll('.tools .tbtn').forEach(b=>b.classList.toggle('active', b.dataset.tool===name));
+  Object.values(btns).forEach(b => b.classList.remove('active'));
+  const map = { pointer:'pointer', road:'road', hq:'hq', lumber:'lumber', depot:'depot', erase:'erase' };
+  const id = ({pointer:'btnPointer', road:'btnRoad', hq:'btnHQ', lumber:'btnLumber', depot:'btnDepot', erase:'btnErase'})[name];
+  document.getElementById(id)?.classList.add('active');
+  hud.tool.textContent = ({
+    pointer:'Zeiger', road:'Straße', hq:'HQ', lumber:'Holzfäller', depot:'Depot', erase:'Abriss'
+  })[name] || name;
+  try { (gameAPI?.setTool || window.game?.setTool)?.(map[name] || name); } catch {}
 }
 
-$('#startBtn').onclick=async()=>{ $('#startCard').style.display='none'; await start(); };
-$('#btnCenter').onclick = ()=>controller&&controller.center();
-$('#btnDbg').onclick     = ()=>controller&&controller.toggleDebug();
+// HUD-Update, das vom Spiel aufgerufen werden kann
+function onHUD(key, val){
+  const k = String(key).toLowerCase();
+  if (hud[k]) hud[k].textContent = String(val);
+  if (k === 'zoom') hud.zoom.textContent = `${Number(val).toFixed(2)}x`;
+}
 
-document.querySelectorAll('.tools .tbtn').forEach(b=>{
-  b.addEventListener('click', ()=>{
-    if(!controller) return;
-    const name=b.dataset.tool;
-    controller.setTool(name);
-    setActiveTool(name);
-  });
+// Start-Logik
+async function start(){
+  if (!startGameFn) await loadGameModule();
+
+  const opts = {
+    canvas,
+    DPR: window.devicePixelRatio || 1,
+    onHUD, // Spiel ruft z.B. onHUD('wood', 12)
+  };
+
+  if (typeof startGameFn !== 'function'){
+    alert("Startfehler: game.startGame(opts) fehlt oder ist keine Funktion.");
+    return;
+  }
+
+  try {
+    await startGameFn(opts);
+    window.dispatchEvent(new Event('game-started')); // für externe Hooks
+  } catch (err){
+    console.error(err);
+    alert("Startfehler: " + (err?.message || err));
+    return;
+  }
+
+  // Overlay aus & Defaults setzen
+  startOverlay.style.display = 'none';
+  setActiveTool('pointer');
+
+  // Karte sicher zentrieren, falls die Kamera off-screen startet
+  try { (gameAPI?.center || window.game?.center)?.(); } catch {}
+}
+
+// --------- Events verdrahten ---------
+startBtn?.addEventListener('click', start);
+
+resetBtn?.addEventListener('click', () => {
+  try { localStorage.clear(); } catch {}
+  location.reload();
 });
 
-// Doppeltipp auf Canvas -> Vollbild
-let lastTap=0;
-$('#game').addEventListener('pointerdown', ()=>{
-  const t=performance.now(); if(t-lastTap<300) toggleFS(); lastTap=t;
+centerBtn?.addEventListener('click', () => {
+  try { (gameAPI?.center || window.game?.center)?.(); } catch {}
+});
+
+debugBtn?.addEventListener('click', () => {
+  try { (gameAPI?.toggleDebug || window.game?.toggleDebug)?.(); } catch {}
+});
+
+// Tools
+btns.pointer?.addEventListener('click', () => setActiveTool('pointer'));
+btns.road?.addEventListener('click',    () => setActiveTool('road'));
+btns.hq?.addEventListener('click',      () => setActiveTool('hq'));
+btns.lumber?.addEventListener('click',  () => setActiveTool('lumber'));
+btns.depot?.addEventListener('click',   () => setActiveTool('depot'));
+btns.erase?.addEventListener('click',   () => setActiveTool('erase'));
+
+// Kleines QoL: beim echten Spielstart Tool sicher auf Zeiger
+window.addEventListener('game-started', () => {
+  setActiveTool('pointer');
 });
