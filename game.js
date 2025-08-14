@@ -1,9 +1,8 @@
-/* Siedler‑Mini V14.7 (mobile)
-   Features:
-   - Pan (nur im Zeiger‑Tool), Maus‑Rad Zoom
+/* Siedler‑Mini V14.7 (mobile) — Carriers+Sprites
+   - Pan (nur im Zeiger‑Tool), Wheel‑Zoom
    - Raster, Gebäude (HQ, Holzfäller, Depot), Straßen (Punkt→Punkt), Abriss
-   - Produktion: Holzfäller erzeugt alle 10s Holz, wenn per Straße mit HQ/Depot verbunden
-   - Träger (gelber Punkt) holt Holz ab, liefert zum Ziel und kehrt zurück
+   - Produktion: Holzfäller alle 3.5s → 1 Holz (wenn via Straße mit HQ/Depot verbunden)
+   - Träger mit Sprite‑Animation (Fallback: gelber Punkt), laufen Holz ausliefern & zurück
 */
 
 export const game = (() => {
@@ -15,6 +14,15 @@ export const game = (() => {
   const WC_COLOR    = "#3f8cff";
   const DEPOT_COLOR = "#d55384";
   const TEXT_COLOR  = "#cfe3ff";
+
+  // Träger‑Sprite‑Assets (anpassen, falls anderer Pfad/Name)
+  const SPRITE_IMG  = "assets/carrier_topdown_v2.jpeg";
+  const SPRITE_JSON = "assets/carrier_topdown_v2.json";
+
+  // Produktion & Laufgeschwindigkeit
+  const WOOD_INTERVAL_MS = 3500;                     // 3.5 s bis erster/weiterer Holz‑Output
+  const CARR_TILES_PER_SEC = 0.8;                    // deutlich langsamer, gut sichtbar
+  const CARR_SPEED_PX_PER_MS = (TILE * CARR_TILES_PER_SEC) / 1000;
 
   // ====== State ======
   const state = {
@@ -29,11 +37,13 @@ export const game = (() => {
     // Weltobjekte
     roads: [],                              // {x1,y1,x2,y2}
     buildings: [],                          // {type, x,y,w,h, nextWoodTime?}
-    carriers: [],                           // {x,y, tx,ty, speed, hasWood, origin:{x,y}, alive}
+    carriers: [],                           // siehe createCarrier()
     // Ressourcen
-    res: { Holzbalken: 0, Holz: 0, Stein: 0, Nahrung: 0, Gold: 0, Traeger: 0 },
+    res: { Holz: 0, Stein: 0, Nahrung: 0, Gold: 0, Traeger: 0 },
     // HUD
-    onHUD: (k,v)=>{}
+    onHUD: (k,v)=>{},
+    // Sprites
+    carrierSprite: null,                    // {img, fw, fh, rows, cols, anim:{up,down,left,right}, frameDur}
   };
 
   // ====== Utilities ======
@@ -99,6 +109,64 @@ export const game = (() => {
     if (state.canvas.height!== state.height) state.canvas.height = state.height;
   }
 
+  // ====== Sprite‑Loader (robust gegen verschiedene JSON‑Formate) ======
+  async function loadCarrierSprite(){
+    try{
+      const [img, meta] = await Promise.all([ loadImage(SPRITE_IMG), fetchJSON(SPRITE_JSON) ]);
+      // Versuche verschiedene Schemata:
+      // A) Einfach: {frameWidth, frameHeight, rows, cols, frameDuration, animations:{up:[],down:[],left:[],right:[]}}
+      // B) TexturePacker‑ähnlich: {frames:{...}, meta:{}} → wir lesen frameSize aus meta oder erstem Frame
+      let fw, fh, rows=1, cols=1, frameDur=120, anim={};
+      if ('frameWidth' in meta && 'frameHeight' in meta){
+        fw = meta.frameWidth; fh = meta.frameHeight;
+        rows = meta.rows ?? 1; cols = meta.cols ?? Math.floor((img.width/fw));
+        frameDur = meta.frameDuration ?? 120;
+        anim = meta.animations ?? {};
+      } else if (meta.frames) {
+        // sehr simple Heuristik: erstes Frame liefert Größe
+        const firstKey = Object.keys(meta.frames)[0];
+        const fr = meta.frames[firstKey];
+        fw = fr.frame?.w || fr.sourceSize?.w || fr.w || fr.width || TILE;
+        fh = fr.frame?.h || fr.sourceSize?.h || fr.h || fr.height || TILE;
+        cols = Math.floor(img.width / fw);
+        rows = Math.floor(img.height / fh);
+        frameDur = 120;
+        // Default‑Anims: Zeile 0..3 = down,left,right,up (häufiges Schema)
+        anim = {
+          down:  seqRange(0, cols-1).map(i => ({x:i,y:0})),
+          left:  seqRange(0, cols-1).map(i => ({x:i,y:1})),
+          right: seqRange(0, cols-1).map(i => ({x:i,y:2})),
+          up:    seqRange(0, cols-1).map(i => ({x:i,y:3})),
+        };
+      } else {
+        // Fallback: gleichmäßiges Gitter annehmen
+        cols = 4; rows = 4; fw = Math.floor(img.width/cols); fh = Math.floor(img.height/rows);
+        frameDur = 120;
+        anim = {
+          down:  seqRange(0, cols-1).map(i => ({x:i,y:0})),
+          left:  seqRange(0, cols-1).map(i => ({x:i,y:1})),
+          right: seqRange(0, cols-1).map(i => ({x:i,y:2})),
+          up:    seqRange(0, cols-1).map(i => ({x:i,y:3})),
+        };
+      }
+      state.carrierSprite = { img, fw, fh, rows, cols, anim, frameDur };
+    }catch(err){
+      console.warn("Carrier‑Sprite konnte nicht geladen werden. Fallback auf Punkte.", err);
+      state.carrierSprite = null;
+    }
+  }
+  function loadImage(src){
+    return new Promise((resolve,reject)=>{
+      const img = new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src+'?v='+Date.now();
+    });
+  }
+  async function fetchJSON(url){
+    const r = await fetch(url+'?v='+Date.now());
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  }
+  function seqRange(a,b){ const arr=[]; for(let i=a;i<=b;i++) arr.push(i); return arr; }
+
   // ====== Zeichnen ======
   function drawGrid(ctx){
     ctx.save();
@@ -144,19 +212,59 @@ export const game = (() => {
     ctx.restore();
   }
 
-  function drawCarriers(ctx){
-    ctx.save();
-    ctx.fillStyle = "#ffcc00"; // Träger als „gelber Punkt“
-    for (const c of state.carriers){
-      const p = toScreen(c.x, c.y);
-      ctx.beginPath();
-      ctx.arc(p.x*state.DPR, p.y*state.DPR, 5*state.zoom*state.DPR, 0, Math.PI*2);
-      ctx.fill();
+  function drawCarriers(ctx, dt){
+    if (!state.carriers.length) return;
+    const spr = state.carrierSprite;
+    if (!spr){
+      // Fallback: gelbe Punkte
+      ctx.save();
+      ctx.fillStyle = "#ffcc00";
+      for (const c of state.carriers){
+        const p = toScreen(c.x, c.y);
+        ctx.beginPath();
+        ctx.arc(p.x*state.DPR, p.y*state.DPR, 5*state.zoom*state.DPR, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
     }
-    ctx.restore();
+
+    // Sprite zeichnen
+    const {img, fw, fh, anim, frameDur} = spr;
+    for (const c of state.carriers){
+      // Richtung bestimmen
+      const vx = (c.tx - c.x), vy = (c.ty - c.y);
+      const ax = Math.abs(vx), ay = Math.abs(vy);
+      let dir = "down";
+      if (ax > ay) dir = vx >= 0 ? "right" : "left";
+      else         dir = vy >= 0 ? "down"  : "up";
+
+      // Animation vorantreiben
+      c.animTime = (c.animTime || 0) + dt;
+      if (!c.animFrame) c.animFrame = 0;
+      if (c.animTime >= frameDur){
+        c.animTime -= frameDur;
+        c.animFrame = (c.animFrame + 1) % (anim[dir]?.length || 1);
+      }
+
+      // Frame ermitteln
+      const frame = (anim[dir] && anim[dir][c.animFrame]) || {x:0, y:0};
+      const sx = frame.x * fw, sy = frame.y * fh;
+
+      // Bildschirmposition
+      const p = toScreen(c.x, c.y);
+      const scale = Math.max(0.9, state.zoom); // etwas stabil im Zoom
+      const dw = fw * scale, dh = fh * scale;
+
+      // zeichnen (Bild nutzt CSS‑Pixel; wir multiplizieren nur Koords mit DPR)
+      ctx.drawImage(img, sx, sy, fw, fh,
+        (p.x - dw/2) * state.DPR,
+        (p.y - dh/2) * state.DPR,
+        dw * state.DPR, dh * state.DPR);
+    }
   }
 
-  function drawWorld(){
+  function drawWorld(dt){
     const ctx = state.ctx;
     ctx.clearRect(0,0,state.width, state.height);
     drawGrid(ctx);
@@ -166,7 +274,7 @@ export const game = (() => {
       const label = b.type==="hq" ? "HQ" : b.type==="woodcutter" ? "Holzfäller" : "Depot";
       fillRectWorld(ctx, b.x,b.y, b.w,b.h, color, label);
     }
-    drawCarriers(ctx);
+    drawCarriers(ctx, dt);
   }
 
   // ====== Straße & Abriss ======
@@ -213,7 +321,7 @@ export const game = (() => {
   // ====== Gebäude ======
   function placeBuilding(type, wx, wy){
     const b = { type, x: snap(wx), y: snap(wy), w: TILE*2, h: TILE*2 };
-    if (type === "woodcutter") b.nextWoodTime = now() + 10000; // erste Produktion in 10s
+    if (type === "woodcutter") b.nextWoodTime = now() + WOOD_INTERVAL_MS;
     state.buildings.push(b);
   }
 
@@ -247,16 +355,22 @@ export const game = (() => {
   }
 
   // ====== Träger / Produktion ======
-  function spawnCarrier(from, to){
-    state.carriers.push({
+  function createCarrier(from, to){
+    return {
       x: from.x, y: from.y,
       tx: to.x,  ty: to.y,
-      speed: Math.max(0.06 * TILE, 1.2), // Welt‑px pro ms → ~2.4 Tiles/s
+      speed: CARR_SPEED_PX_PER_MS,
       hasWood: true,
       origin: { x: from.x, y: from.y },
       alive: true,
-    });
-    state.res.Traeger = Math.max(0, state.res.Traeger); // Zähler existiert
+      animTime: 0,
+      animFrame: 0,
+    };
+  }
+
+  function spawnCarrier(from, to){
+    state.carriers.push(createCarrier(from, to));
+    state.res.Traeger = Math.max(1, state.carriers.length);
     syncHUD();
   }
 
@@ -266,6 +380,7 @@ export const game = (() => {
       const dx = c.tx - c.x, dy = c.ty - c.y;
       const dist = Math.hypot(dx,dy);
       const step = c.speed * dt; // dt in ms
+
       if (dist <= step){
         // Ziel erreicht
         c.x = c.tx; c.y = c.ty;
@@ -276,7 +391,7 @@ export const game = (() => {
           c.hasWood = false;
           c.tx = c.origin.x; c.ty = c.origin.y;
         } else {
-          // zurück am Ursprung → Ende
+          // wieder am Ursprung → Ende
           c.alive = false;
         }
       } else {
@@ -284,8 +399,9 @@ export const game = (() => {
         c.y += (dy/dist) * step;
       }
     }
-    // Tote löschen
+    // Tote löschen + Träger‑Zähler aktualisieren
     state.carriers = state.carriers.filter(c => c.alive);
+    state.res.Traeger = state.carriers.length;
   }
 
   function updateProduction(){
@@ -293,15 +409,15 @@ export const game = (() => {
     if (hqOrDepot.length === 0) return;
     for (const b of state.buildings){
       if (b.type !== "woodcutter") continue;
-      if (!b.nextWoodTime) b.nextWoodTime = now() + 10000;
+      if (!b.nextWoodTime) b.nextWoodTime = now() + WOOD_INTERVAL_MS;
       if (now() >= b.nextWoodTime){
-        // Nächstes Ziel wählen (erstes verbundenes HQ/Depot)
+        // Ziel wählen: erstes verbundenes HQ/Depot
         let target = null;
         for (const t of hqOrDepot){
           if (hasRoadPath(b.x,b.y, t.x,t.y)){ target = t; break; }
         }
         if (target) spawnCarrier(b, target);
-        b.nextWoodTime = now() + 10000; // 10s bis zur nächsten Produktion
+        b.nextWoodTime = now() + WOOD_INTERVAL_MS; // nächster Output
       }
     }
   }
@@ -322,7 +438,7 @@ export const game = (() => {
 
   function onWheel(e){
     e.preventDefault();
-    const delta = -Math.sign(e.deltaY) * 0.12;
+    const delta = -Math.sign(e.deltaY) * 0.10;
     const before = state.zoom;
     state.zoom = clamp(state.zoom + delta, state.minZoom, state.maxZoom);
     if (state.zoom !== before) syncHUD();
@@ -379,7 +495,7 @@ export const game = (() => {
       updateCarriers(dt);
     }
 
-    drawWorld();
+    drawWorld(dt);
     requestAnimationFrame(tick);
   }
 
@@ -394,7 +510,7 @@ export const game = (() => {
     state.camX = 0; state.camY = 0;
   }
 
-  function startGame(opts){
+  async function startGame(opts){
     if (state.running) return;
 
     // HUD‑Bridge
@@ -406,6 +522,9 @@ export const game = (() => {
     addInput();
     setTool("pointer");
     syncHUD();
+
+    // Sprite asynchron laden (ohne das Spiel zu blockieren)
+    loadCarrierSprite();
 
     state.running = true;
   }
