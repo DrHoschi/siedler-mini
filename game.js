@@ -1,305 +1,296 @@
-/* game.js — V14.7h
-   Fixes: garantiertes Raster nach Start, zuverlässiges Re-Rendern nach Resize,
-   Bauen aktiv, Träger sichtbar sobald HQ + Holzfäller + Depot über Straßen verbunden sind.
-*/
-(function () {
-  'use strict';
+// V14.7 game.js – Render-Loop, Raster, Tools & Eingaben
 
-  // ===== Util =====
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const lerp=(a,b,t)=>a+(b-a)*t;
-  const TILE=40, WORLD_W=128, WORLD_H=128;
+// ------- State -------
+let cvs, ctx, DPR = 1;
+let w = 0, h = 0;
 
-  const Tools={POINTER:'pointer',ROAD:'road',HQ:'hq',WOOD:'woodcutter',DEPOT:'depot',ERASE:'erase'};
-  const Colors={bg:'#0b1628',grid2:'#0f1b2a',road:'#6ed39a',hq:'#39b36a',wood:'#4d86ff',depot:'#e04586',text:'#cfe3ff',carrier:'#ffe08a',shadow:'rgba(0,0,0,.25)'};
+const camera = { x: 0, y: 0, z: 1 }; // z = zoom
+const grid = { size: 64 };           // 64px Kachel
 
-  function rasterLine(x0,y0,x1,y1){
-    const pts=[]; let dx=Math.abs(x1-x0), sx=x0<x1?1:-1;
-    let dy=-Math.abs(y1-y0), sy=y0<y1?1:-1; let err=dx+dy;
-    for(;;){
-      pts.push({x:x0,y:y0});
-      if(x0===x1 && y0===y1) break;
-      const e2=2*err;
-      if(e2>=dy){err+=dy; x0+=sx;}
-      if(e2<=dx){err+=dx; y0+=sy;}
-    }
-    return pts;
-  }
-  class Queue{constructor(){this.a=[];this.b=0;}push(v){this.a.push(v);}shift(){return this.a[this.b++];}get length(){return this.a.length-this.b;}}
+// Welt
+const buildings = []; // {type:'hq'|'woodcutter'|'depot', x,y}
+const roads = [];     // [{ax,ay,bx,by}] auf Rasterzentren
 
-  // ===== State =====
-  const state={
-    canvas:null, ctx:null, DPR:1, onHUD:(k,v)=>{},
-    cam:{x:WORLD_W/2,y:WORLD_H/2,z:1},
-    tool:Tools.POINTER,
-    dragging:false, dragStart:{x:0,y:0}, camAtDrag:{x:0,y:0},
-    buildings:[],         // {id,type,x,y,w,h}
-    roads:new Set(),      // "x,y"
-    roadChainStart:null, previewTile:null,
-    carriers:[],          // {path, seg, t, speed}
-    debug:false
+// Input
+let tool = 'pointer';
+let isDragging = false;
+let dragStart = {x:0,y:0, cx:0, cy:0};
+let roadStart = null; // {gx,gy} Rasterkoordinate
+
+// HUD-Callback
+let onHUD = () => {};
+
+// ------- öffentliche API -------
+export function startGame(opts) {
+  cvs = opts.canvas;
+  DPR = Math.max(1, opts.DPR || 1);
+  onHUD = typeof opts.onHUD === 'function' ? opts.onHUD : ()=>{};
+
+  // Context sicher holen
+  ctx = cvs.getContext('2d', { alpha: false, desynchronized: true });
+  if (!ctx) throw new Error('2D-Context nicht verfügbar');
+
+  resize();
+  installInput();
+  placeInitialHQ();
+  loop();
+
+  return {
+    setTool, center, resize,
   };
-  const key=(x,y)=>`${x},${y}`;
+}
 
-  // ===== HUD =====
-  function hudTool(){ state.onHUD('Tool', labelTool(state.tool)); }
-  function hudZoom(){ state.onHUD('Zoom', state.cam.z.toFixed(2)+'x'); }
-  function labelTool(t){
-    switch(t){
-      case 'pointer': return 'Zeiger';
-      case 'road': return 'Straße';
-      case 'hq': return 'HQ';
-      case 'woodcutter': return 'Holzfäller';
-      case 'depot': return 'Depot';
-      case 'erase': return 'Abriss';
-      default: return t;
-    }
-  }
+export function exportState() {
+  return {camera: {...camera}, buildings: buildings.slice(), roads: roads.slice()};
+}
 
-  // ===== Transform =====
-  function worldToScreen(x,y){
-    const {cam}=state;
-    return {
-      x:(x-cam.x)*(TILE*cam.z)+state.canvas.width/2,
-      y:(y-cam.y)*(TILE*cam.z)+state.canvas.height/2
-    };
-  }
-  function screenToWorld(px,py){
-    const {cam}=state;
-    return {
-      x:(px-state.canvas.width/2)/(TILE*cam.z)+cam.x,
-      y:(py-state.canvas.height/2)/(TILE*cam.z)+cam.y
-    };
-  }
-  function screenToTile(px,py){ const w=screenToWorld(px,py); return {x:Math.round(w.x), y:Math.round(w.y)}; }
+// ------- Setup -------
+function resize() {
+  // CSS-Größe nehmen
+  const rect = cvs.getBoundingClientRect();
+  w = Math.max(1, rect.width);
+  h = Math.max(1, rect.height);
+  cvs.width  = Math.round(w * DPR);
+  cvs.height = Math.round(h * DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  onHUD('zoom', camera.z);
+}
+function setTool(t) {
+  tool = t;
+  onHUD('tool', t);
+}
+function center() {
+  camera.x = 0; camera.y = 0; camera.z = Math.min(2.5, Math.max(0.5, camera.z));
+}
 
-  // ===== World =====
-  function randId(){ return Math.random().toString(36).slice(2,10); }
-  function buildingAt(tx,ty){ return state.buildings.find(b=> tx>=b.x && tx<b.x+b.w && ty>=b.y && ty<b.y+b.h ); }
-  function place(type,x,y){ const w=(type==='hq'?3:2), h=(type==='hq'?2:2); state.buildings.push({id:randId(),type,x,y,w,h}); }
-  function addRoadLine(a,b){ rasterLine(a.x,a.y,b.x,b.y).forEach(p=>state.roads.add(key(p.x,p.y))); }
-  function removeRoadAt(tx,ty){ const kxy=key(tx,ty); if(state.roads.has(kxy)){ state.roads.delete(kxy); return true;} return false; }
+// ------- Weltinitialisierung -------
+function placeInitialHQ() {
+  const {gx, gy} = worldToGrid(0,0);
+  buildings.push({ type:'hq', x: gx, y: gy });
+}
 
-  // ===== Paths & Carriers =====
-  function neighbors(x,y){ const out=[],opts=[[1,0],[-1,0],[0,1],[0,-1]]; for(const[dx,dy] of opts){ const kxy=key(x+dx,y+dy); if(state.roads.has(kxy)) out.push({x:x+dx,y:y+dy}); } return out; }
-  function nearestRoadToRect(b){
-    const cx=Math.round(b.x+b.w/2), cy=Math.round(b.y+Math.floor(b.h/2));
-    let best=null, bestD=1e9;
-    for(let r=0;r<=3;r++){
-      for(let dx=-r; dx<=r; dx++){
-        for(let dy=-r; dy<=r; dy++){
-          const kxy=key(cx+dx,cy+dy);
-          if(state.roads.has(kxy)){ const d=Math.abs(dx)+Math.abs(dy); if(d<bestD){bestD=d; best={x:cx+dx,y:cy+dy};} }
-        }
-      }
-      if(best) break;
-    }
-    return best;
-  }
-  function bfsPath(a,b){
-    if(!a||!b) return null;
-    const ak=key(a.x,a.y), bk=key(b.x,b.y);
-    if(!state.roads.has(ak)||!state.roads.has(bk)) return null;
-    const came=new Map(); const q=new Queue(); q.push(ak); came.set(ak,null);
-    while(q.length){
-      const kx=q.shift(); if(kx===bk) break;
-      const [xs,ys]=kx.split(','); const x=+xs,y=+ys;
-      for(const n of neighbors(x,y)){ const nk=key(n.x,n.y); if(!came.has(nk)){ came.set(nk,kx); q.push(nk); } }
-    }
-    if(!came.has(bk)) return null;
-    const path=[]; let ck=bk; while(ck){ const [xs,ys]=ck.split(','); path.push({x:+xs,y:+ys}); ck=came.get(ck); }
-    return path.reverse();
-  }
-  function rebuildCarriers(){
-    state.carriers.length=0;
-    const hq=state.buildings.find(b=>b.type==='hq');
-    const wc=state.buildings.find(b=>b.type==='woodcutter');
-    const dp=state.buildings.find(b=>b.type==='depot');
-    if(!hq||!wc||!dp) return;
-    const hR=nearestRoadToRect(hq), wR=nearestRoadToRect(wc), dR=nearestRoadToRect(dp);
-    if(!hR||!wR||!dR) return;
-    const p1=bfsPath(hR,wR), p2=bfsPath(wR,dR);
-    if(p1&&p2){
-      const fwd=p1.concat(p2.slice(1));
-      state.carriers.push({path:fwd, seg:0, t:0, speed:1.5});
-      state.carriers.push({path:fwd.slice().reverse(), seg:0, t:0, speed:1.5});
-    }
-  }
+// ------- Render -------
+function loop() {
+  requestAnimationFrame(loop);
+  draw();
+}
 
-  // ===== Render =====
-  function drawGrid(){
-    const ctx=state.ctx, s=TILE*state.cam.z;
-    const w=state.canvas.width, h=state.canvas.height;
-    ctx.save();
-    ctx.translate(w/2 - (state.cam.x*s % s), h/2 - (state.cam.y*s % s));
-    ctx.strokeStyle=Colors.grid2; ctx.lineWidth=1;
-    for(let x=-20000; x<=w+20000; x+=s){ ctx.beginPath(); ctx.moveTo(x,-20000); ctx.lineTo(x,h+20000); ctx.stroke(); }
-    for(let y=-20000; y<=h+20000; y+=s){ ctx.beginPath(); ctx.moveTo(-20000,y); ctx.lineTo(w+20000,y); ctx.stroke(); }
-    ctx.restore();
-  }
-  function drawRoads(){
-    const ctx=state.ctx;
-    ctx.save(); ctx.lineWidth=Math.max(2,4*state.cam.z); ctx.strokeStyle=Colors.road;
-    for(const kxy of state.roads){
-      const [tx,ty]=kxy.split(',').map(Number);
-      const p=worldToScreen(tx,ty), s=TILE*state.cam.z;
-      ctx.beginPath(); ctx.moveTo(p.x-s*0.45,p.y); ctx.lineTo(p.x+s*0.45,p.y); ctx.stroke();
-    }
-    ctx.restore();
-  }
-  function drawBuildings(){
-    const ctx=state.ctx, s=TILE*state.cam.z;
-    for(const b of state.buildings){
-      const p=worldToScreen(b.x,b.y); const w=b.w*s,h=b.h*s;
-      ctx.save();
-      ctx.fillStyle=(b.type==='hq')?Colors.hq:(b.type==='woodcutter'?Colors.wood:Colors.depot);
-      ctx.beginPath(); ctx.roundRect(p.x,p.y,w,h,8*state.cam.z); ctx.fill();
-      ctx.fillStyle=Colors.text; ctx.font=`${Math.max(10,14*state.cam.z)}px system-ui,-apple-system`;
-      ctx.fillText(b.type==='woodcutter'?'Holzfäller':b.type.toUpperCase(), p.x+8*state.cam.z, p.y+18*state.cam.z);
-      ctx.restore();
-    }
-  }
-  function drawCarriers(){
-    const ctx=state.ctx;
-    for(const c of state.carriers){
-      if(!c.path||c.path.length<2) continue;
-      const a=c.path[c.seg], b=c.path[c.seg+1]; if(!a||!b) continue;
-      const x=lerp(a.x,b.x,c.t), y=lerp(a.y,b.y,c.t);
-      const p=worldToScreen(x,y); const r=Math.max(2,3.5*state.cam.z);
-      ctx.save();
-      ctx.fillStyle=Colors.shadow;  ctx.beginPath(); ctx.arc(p.x+2,p.y+2,r,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=Colors.carrier; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
-      ctx.restore();
-    }
-  }
-  function render(){
-    const ctx=state.ctx, c=state.canvas;
-    ctx.clearRect(0,0,c.width,c.height);
-    ctx.fillStyle=Colors.bg; ctx.fillRect(0,0,c.width,c.height);
-    drawGrid(); drawRoads(); drawBuildings(); drawCarriers();
+function draw() {
+  // Hintergrund
+  ctx.fillStyle = '#0b1628';
+  ctx.fillRect(0,0,w,h);
 
-    // Straßen‑Vorschau
-    if(state.tool===Tools.ROAD && state.roadChainStart && state.previewTile){
-      const a=state.roadChainStart, b=state.previewTile;
-      const pts=rasterLine(a.x,a.y,b.x,b.y);
-      ctx.save(); ctx.strokeStyle='#9cdcc0'; ctx.lineWidth=Math.max(1,2*state.cam.z);
-      for(const p of pts){ const sp=worldToScreen(p.x,p.y), s=TILE*state.cam.z;
-        ctx.beginPath(); ctx.moveTo(sp.x-s*0.45,sp.y); ctx.lineTo(sp.x+s*0.45,sp.y); ctx.stroke();
-      }
-      ctx.restore();
-    }
+  // Welt -> Bildschirm-Transform
+  ctx.save();
+  ctx.translate(Math.floor(w/2), Math.floor(h/2));
+  ctx.scale(camera.z, camera.z);
+  ctx.translate(-camera.x, -camera.y);
+
+  drawGrid();
+  drawRoads();
+  drawBuildings();
+
+  ctx.restore();
+
+  // Overlay: aktuelles Tool/Zoom (HUD kommt aus boot.js, hier nichts)
+}
+
+function drawGrid() {
+  const s = grid.size;
+  const left   = camera.x - w/(2*camera.z) - s;
+  const right  = camera.x + w/(2*camera.z) + s;
+  const top    = camera.y - h/(2*camera.z) - s;
+  const bottom = camera.y + h/(2*camera.z) + s;
+
+  const x0 = Math.floor(left / s) * s;
+  const y0 = Math.floor(top  / s) * s;
+
+  ctx.strokeStyle = '#1c2a3f';
+  ctx.lineWidth = 1 / camera.z;
+  ctx.beginPath();
+  for (let x = x0; x <= right; x += s) {
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
   }
-
-  // ===== Loop =====
-  let raf=0,last=0;
-  function step(dt){
-    for(const c of state.carriers){
-      if(!c.path||c.path.length<2) continue;
-      c.t += (c.speed*dt)/60;
-      while(c.t>=1){ c.t-=1; c.seg++; if(c.seg>=c.path.length-1){ c.seg=0; c.t=0; } }
-    }
+  for (let y = y0; y <= bottom; y += s) {
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
   }
-  function loop(ts){
-    raf=requestAnimationFrame(loop);
-    const dt=(ts-last)/16.6667||1; last=ts;
-    step(dt); render();
+  ctx.stroke();
+}
+
+function drawBuildings() {
+  for (const b of buildings) {
+    const {sx, sy} = gridToWorld(b.x, b.y);
+    const half = grid.size * 0.75;
+    ctx.fillStyle = (b.type==='hq') ? '#29a35c' :
+                    (b.type==='depot') ? '#c43c74' : '#3b82f6';
+    ctx.fillRect(sx - half/2, sy - half/2, half, half);
+
+    // Label
+    ctx.fillStyle = '#dbeafe';
+    ctx.font = `${14/camera.z}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      b.type === 'hq' ? 'HQ' : (b.type==='woodcutter'?'Holzfäller':'Depot'),
+      sx, sy - (half/2) - (8/camera.z)
+    );
   }
+}
 
-  // ===== Input =====
-  function onPointerDown(e){
-    const r=state.canvas.getBoundingClientRect();
-    const px=(e.clientX-r.left)*state.DPR, py=(e.clientY-r.top)*state.DPR;
-    const t=screenToTile(px,py);
-
-    if(state.tool===Tools.POINTER){
-      state.dragging=true; state.dragStart={x:px,y:py}; state.camAtDrag={x:state.cam.x,y:state.cam.y};
-      return;
-    }
-    if(state.tool===Tools.ROAD){
-      if(!state.roadChainStart || Math.hypot(t.x-(state.roadChainStart.x||1e9), t.y-(state.roadChainStart.y||1e9))>2){
-        state.roadChainStart=t; state.previewTile=t;
-      }else{
-        addRoadLine(state.roadChainStart, t);
-        state.roadChainStart=t; state.previewTile=null;
-        rebuildCarriers();
-      }
-      return;
-    }
-    if(state.tool===Tools.ERASE){
-      if(removeRoadAt(t.x,t.y)){ rebuildCarriers(); return; }
-      const b=buildingAt(t.x,t.y);
-      if(b){ state.buildings=state.buildings.filter(x=>x!==b); rebuildCarriers(); }
-      return;
-    }
-    if(state.tool===Tools.HQ||state.tool===Tools.WOOD||state.tool===Tools.DEPOT){
-      if(buildingAt(t.x,t.y)) return;
-      place(state.tool===Tools.HQ?'hq':state.tool===Tools.WOOD?'woodcutter':'depot', t.x,t.y);
-      rebuildCarriers();
-    }
+function drawRoads() {
+  if (!roads.length) return;
+  ctx.strokeStyle = '#64d597';
+  ctx.lineWidth = 4 / camera.z;
+  for (const r of roads) {
+    const A = gridToWorld(r.ax, r.ay);
+    const B = gridToWorld(r.bx, r.by);
+    ctx.beginPath();
+    ctx.moveTo(A.sx, A.sy);
+    ctx.lineTo(B.sx, B.sy);
+    ctx.stroke();
   }
-  function onPointerMove(e){
-    const r=state.canvas.getBoundingClientRect();
-    const px=(e.clientX-r.left)*state.DPR, py=(e.clientY-r.top)*state.DPR;
-    if(state.tool===Tools.POINTER && state.dragging){
-      const dx=(px-state.dragStart.x)/(TILE*state.cam.z);
-      const dy=(py-state.dragStart.y)/(TILE*state.cam.z);
-      state.cam.x=state.camAtDrag.x-dx; state.cam.y=state.camAtDrag.y-dy;
-      return;
-    }
-    if(state.tool===Tools.ROAD && state.roadChainStart){
-      state.previewTile=screenToTile(px,py);
-    }
+}
+
+// ------- Eingaben -------
+function installInput() {
+  // Panning (1 Finger), Zoom (2 Finger / Wheel)
+  cvs.addEventListener('pointerdown', onPointerDown);
+  cvs.addEventListener('pointermove', onPointerMove);
+  cvs.addEventListener('pointerup', onPointerUp);
+  cvs.addEventListener('pointercancel', onPointerUp);
+
+  cvs.addEventListener('wheel', onWheel, {passive:false});
+  // Touch-Zoom (einfach): iOS Safari -> verhindern, dass Page zoomt
+  cvs.addEventListener('gesturestart', e => e.preventDefault());
+  cvs.addEventListener('gesturechange', e => e.preventDefault());
+  cvs.addEventListener('gestureend', e => e.preventDefault());
+}
+
+function onPointerDown(e) {
+  cvs.setPointerCapture(e.pointerId);
+  const world = screenToWorld(e.clientX, e.clientY);
+  dragStart = { x: e.clientX, y: e.clientY, cx: camera.x, cy: camera.y, world };
+  isDragging = true;
+}
+
+function onPointerMove(e) {
+  if (!isDragging) return;
+
+  if (tool === 'pointer') {
+    // Karte verschieben
+    const dx = (e.clientX - dragStart.x) / camera.z;
+    const dy = (e.clientY - dragStart.y) / camera.z;
+    camera.x = dragStart.cx - dx;
+    camera.y = dragStart.cy - dy;
+    return;
   }
-  function onPointerUp(){ state.dragging=false; }
-  function onWheel(e){ e.preventDefault(); setZoom(state.cam.z*(e.deltaY<0?1.1:1/1.1)); }
+}
 
-  // ===== Public API =====
-  function startGame({canvas,DPR=1,onHUD=()=>{}}){
-    state.canvas=canvas; state.ctx=canvas.getContext('2d',{alpha:false}); state.DPR=DPR; state.onHUD=onHUD;
+function onPointerUp(e) {
+  if (!isDragging) return;
+  isDragging = false;
 
-    // Canvas‑Backbuffer passend setzen
-    function resize(){
-      const rect=canvas.getBoundingClientRect();
-      canvas.width = Math.max(2, Math.floor(rect.width * DPR));
-      canvas.height= Math.max(2, Math.floor(rect.height* DPR));
-      render(); // sofort zeichnen → Raster garantiert
-    }
-    resize();
-    // iOS: mehrfach sichern
-    window.addEventListener('resize', ()=>setTimeout(resize,0));
-    new ResizeObserver(()=>setTimeout(resize,0)).observe(canvas);
+  const {world} = dragStart;
+  const now = screenToWorld(e.clientX, e.clientY);
+  const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) > 6;
 
-    // Start‑Setup
-    reset(false);
-    const cx=Math.floor(WORLD_W/2), cy=Math.floor(WORLD_H/2);
-    place('hq', cx-2, cy-1);                 // erstes HQ
-    addRoadLine({x:cx-1,y:cy},{x:cx+5,y:cy}); // kurze Startstraße
-    rebuildCarriers();
-    center();
+  if (moved && tool === 'pointer') return; // Drag, kein Tap
 
-    // Input
-    canvas.addEventListener('pointerdown', onPointerDown, {passive:true});
-    canvas.addEventListener('pointermove', onPointerMove, {passive:true});
-    window.addEventListener('pointerup', onPointerUp, {passive:true});
-    canvas.addEventListener('wheel', onWheel, {passive:false});
-
-    hudTool(); hudZoom();
-    if(!raf) loop(performance.now());
+  // Tap → bauen / abreißen
+  const g = worldToGrid(now.x, now.y);
+  if (tool === 'hq' || tool === 'woodcutter' || tool === 'depot') {
+    placeBuilding(tool, g.gx, g.gy);
+  } else if (tool === 'road') {
+    placeRoad(g.gx, g.gy);
+  } else if (tool === 'erase') {
+    eraseAt(g.gx, g.gy);
   }
-  function setTool(t){ state.tool=[Tools.POINTER,Tools.ROAD,Tools.HQ,Tools.WOOD,Tools.DEPOT,Tools.ERASE].includes(t)?t:Tools.POINTER; state.previewTile=null; hudTool(); }
-  function center(){
-    const hq=state.buildings.find(b=>b.type==='hq');
-    const target=hq?{x:hq.x+1,y:hq.y+1}:{x:WORLD_W/2,y:WORLD_H/2};
-    state.cam.x=target.x; state.cam.y=target.y;
-    render();
-  }
-  function setZoom(z){ state.cam.z=clamp(z,0.4,2.5); hudZoom(); render(); }
-  function reset(place=true){
-    state.buildings=[]; state.roads.clear(); state.carriers=[]; state.roadChainStart=null; state.previewTile=null;
-    if(place){ const cx=Math.floor(WORLD_W/2), cy=Math.floor(WORLD_H/2); place('hq',cx-2,cy-1); addRoadLine({x:cx-1,y:cy},{x:cx+3,y:cy}); rebuildCarriers(); }
-    center(); render();
-  }
-  function toggleDebug(){ state.debug=!state.debug; }
+}
 
-  window.game = { startGame, setTool, center, setZoom, reset, toggleDebug };
-})();
+function onWheel(e) {
+  e.preventDefault();
+  const old = camera.z;
+  const delta = Math.sign(e.deltaY) * 0.1;
+  camera.z = clamp(camera.z * (1 - delta), 0.5, 2.5);
+
+  // Zoom um den Mauspunkt (stabil)
+  const before = screenToWorld(e.clientX, e.clientY);
+  const after  = screenToWorld(e.clientX, e.clientY);
+  camera.x += before.x - after.x;
+  camera.y += before.y - after.y;
+
+  onHUD('zoom', camera.z);
+}
+
+// ------- Bauen/Abriss -------
+function placeBuilding(type, gx, gy) {
+  // Ein Gebäude pro Rasterfeld
+  if (findBuilding(gx,gy)) return;
+  buildings.push({ type, x: gx, y: gy });
+}
+
+function placeRoad(gx, gy) {
+  if (!roadStart) { roadStart = {gx, gy}; return; }
+  const a = {...roadStart}, b = {gx, gy};
+  // Manhattan: erst x, dann y (oder umgekehrt)
+  if (a.gx === b.gx && a.gy === b.gy) { roadStart = null; return; }
+
+  // Segment(e) erzeugen – polygonal in 2 Teilen (L) um Kreuzungen zu erleichtern
+  const mid = { gx: b.gx, gy: a.gy };
+  pushSegment(a.gx, a.gy, mid.gx, mid.gy);
+  pushSegment(mid.gx, mid.gy, b.gx, b.gy);
+
+  roadStart = null; // Neuer Startpunkt muss wieder gesetzt werden
+}
+
+function pushSegment(ax, ay, bx, by) {
+  // identische Punkte ignorieren
+  if (ax===bx && ay===by) return;
+  roads.push({ ax, ay, bx, by });
+}
+
+function eraseAt(gx, gy) {
+  // Erst Gebäude exakt am Feld
+  const bi = buildings.findIndex(b => b.x===gx && b.y===gy);
+  if (bi>=0) { buildings.splice(bi,1); return; }
+  // Dann nächstes Straßen-Segment, dessen Abstand zum Feldzentrum klein ist
+  const {sx, sy} = gridToWorld(gx, gy);
+  const idx = roads.findIndex(r => distPointToSegment(sx,sy, gridToWorld(r.ax,r.ay), gridToWorld(r.bx,r.by)) < 18);
+  if (idx>=0) roads.splice(idx,1);
+}
+
+function findBuilding(gx, gy) {
+  return buildings.find(b => b.x===gx && b.y===gy);
+}
+
+// ------- Mathe/Helfer -------
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+function screenToWorld(px, py) {
+  // Canvas-Position berücksichtigen
+  const rect = cvs.getBoundingClientRect();
+  const x = (px - rect.left - w/2) / camera.z + camera.x;
+  const y = (py - rect.top  - h/2) / camera.z + camera.y;
+  return {x,y};
+}
+function worldToGrid(x,y) {
+  const s = grid.size;
+  return { gx: Math.round(x/s), gy: Math.round(y/s) };
+}
+function gridToWorld(gx,gy) {
+  const s = grid.size;
+  return { sx: gx*s, sy: gy*s };
+}
+function distPointToSegment(px,py, A, B) {
+  // A,B = {sx,sy}
+  const vx = B.sx - A.sx, vy = B.sy - A.sy;
+  const wx = px - A.sx,  wy = py - A.sy;
+  const c1 = vx*wx + vy*wy;
+  if (c1<=0) return Math.hypot(px - A.sx, py - A.sy);
+  const c2 = vx*vx + vy*vy;
+  if (c2<=c1) return Math.hypot(px - B.sx, py - B.sy);
+  const t = c1 / c2;
+  const projx = A.sx + t*vx, projy = A.sy + t*vy;
+  return Math.hypot(px - projx, py - projy);
+}
