@@ -1,90 +1,68 @@
-// V14.7b boot.js – Fix: Modul lädt wieder, Events aktiv
+// boot.js — V14.7‑hf1 wiring
+import { game } from './game.js?v=147hf1';
 
-import * as game from './game.js';
+const $ = (s)=>document.querySelector(s);
 
-const $  = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
+// --- DOM refs ---
+const canvas     = $('#canvas');
+const startCard  = $('#startCard');
 
-const elCanvas = $('#canvas');
-const elStart  = $('#btnStart');
-const elReset  = $('#btnReset');
-const elFsTop  = $('#btnFull');
-const elFsCard = $('#btnFs');
-const elCard   = $('#startCard');
+const btnStart   = $('#btnStart');
+const btnFsCard  = $('#btnFs');
+const btnReset   = $('#btnReset');
 
-const pillTool = $('#hudTool');
-const pillZoom = $('#hudZoom');
+const btnFull    = $('#btnFull');
+const btnCenter  = $('#btnCenter');
 
-const toolBtns = $$('#tools .btn');
+const pillsTool  = $('#hudTool');
+const pillsZoom  = $('#hudZoom');
 
-$('#btnCenter').addEventListener('click', () => api?.center());
-$('#btnDebug').addEventListener('click', () => console.log('DEBUG state:', game.exportState()));
-[elFsTop, elFsCard].forEach((b) => b?.addEventListener('click', tryFullscreen));
-
-elStart.addEventListener('click', onStart);
-elReset.addEventListener('click', () => location.reload());
-
-toolBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const t = btn.dataset.tool;
-    api?.setTool(t);
-    pillTool.textContent = toolLabel(t);
-    toolBtns.forEach((b) => b.classList.toggle('ok', b === btn));
-  });
+// linkes Bau-Menü
+document.querySelectorAll('#tools .btn').forEach(btn=>{
+  btn.addEventListener('click', ()=> game.setTool(btn.dataset.tool));
 });
 
-function tryFullscreen() {
-  const root = document.documentElement;
-  const any =
-    root.requestFullscreen ||
-    root.webkitRequestFullscreen ||
-    root.msRequestFullscreen;
-  if (any) {
-    any.call(root).catch(() => {});
+// HUD updater vom Spiel
+function onHUD(key, val){
+  if (key === 'Tool' && pillsTool) pillsTool.textContent = val;
+  if (key === 'Zoom' && pillsZoom) pillsZoom.textContent = val;
+}
+
+// Start
+btnStart.addEventListener('click', ()=>{
+  startCard.style.display = 'none';
+  game.startGame({ canvas, onHUD });
+});
+
+// Reset (einfach & robust)
+btnReset.addEventListener('click', ()=>{
+  // Fürs schnelle Testen reicht ein Reload
+  location.reload();
+});
+
+// Zentrieren
+btnCenter.addEventListener('click', ()=> game.center());
+
+// Vollbild (Top‑Button + Karte)
+function toggleFullscreen(){
+  const el = document.documentElement;
+  const req  = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+
+  if (!document.fullscreenElement && req){
+    req.call(el).catch(()=>alert('Vollbild wird in diesem Browser/Modus nicht unterstützt.\nTipp: In iOS Safari ab iOS 16 oder "Zum Homescreen hinzufügen".'));
+  } else if (exit){
+    exit.call(document);
   } else {
-    alert(
-      'Vollbild wird von diesem Browser/Modus nicht unterstützt.\n\nTipp: iOS Safari ab iOS 16 oder Seite zum Homescreen hinzufügen.'
-    );
+    alert('Vollbild wird in diesem Browser/Modus nicht unterstützt.');
   }
 }
+btnFull.addEventListener('click', toggleFullscreen);
+btnFsCard.addEventListener('click', toggleFullscreen);
 
-document.addEventListener(
-  'dblclick',
-  (e) => {
-    if (e.target === elCanvas || e.target.closest('#game')) tryFullscreen();
-  },
-  { passive: true }
-);
-
-let api = null;
-
-function onStart() {
-  elCard.style.display = 'none';
-  api = game.startGame({
-    canvas: elCanvas,
-    DPR: window.devicePixelRatio || 1,
-    onHUD: (key, val) => {
-      if (key === 'zoom') pillZoom.textContent = `${val.toFixed(2)}x`;
-      if (key === 'tool') pillTool.textContent = toolLabel(val);
-      // Ressourcen-Mapping lassen wir vorerst weg; kommt mit Wirtschaft.
-    },
+// Optional: Beim Wechsel der FS-/Orientation die Canvasgröße aktualisieren
+['resize','orientationchange','fullscreenchange','webkitfullscreenchange'].forEach(ev=>{
+  window.addEventListener(ev, ()=> {
+    // game.js hört bereits auf resize und passt die Canvas an
   });
-
-  toolBtns.forEach((b) => b.classList.toggle('ok', b.dataset.tool === 'pointer'));
-  pillTool.textContent = toolLabel('pointer');
-  pillZoom.textContent = '1.00x';
-}
-
-window.addEventListener('resize', () => api?.resize(), { passive: true });
-
-function toolLabel(t) {
-  const map = {
-    pointer: '☝️ Zeiger',
-    road: '🛣️ Straße',
-    hq: '🏠 HQ',
-    woodcutter: '🪓 Holzfäller',
-    depot: '📦 Depot',
-    erase: '🗑️ Abriss',
-  };
-  return map[t] || t;
-}
+});
