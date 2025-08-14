@@ -1,11 +1,12 @@
-/* Siedler‑Mini V14.7‑hf2 (mobile)
+/* Siedler‑Mini V14.7‑hf3 (mobile)
    – Pinch‑Zoom (nur Zeiger‑Tool) + Pan
-   – Klicken zum Bauen (HQ / Holzfäller / Depot / Straße Segment)
-   – Abriss für Gebäude/Straßen
+   – Bauen/Abriss wie gehabt
+   – NEU: einfache Träger (Carrier) mit Ressourcenkette
+          Holzfäller -> Depot -> HQ  (nur wenn über Straßen verbunden)
+   – Startverzögerung & langsamer Lauf konfigurierbar
 */
-
 export const game = (() => {
-  // ===== Konstante Welt/Tile-Größe =====
+  // ===== Konstante Welt / Darstellung =====
   const TILE = 40;
   const GRID_COLOR = "#1e2a3d";
   const ROAD_COLOR = "#78d9a8";
@@ -13,6 +14,15 @@ export const game = (() => {
   const WC_COLOR   = "#3f8cff";
   const DEPOT_COLOR= "#d55384";
   const TEXT_COLOR = "#cfe3ff";
+
+  // Träger-Parametrisierung
+  const CARRIER = {
+    START_DELAY_MS: 3500,     // ~3–4 s bis zum ersten Loslaufen
+    TURN_DELAY_MS:  400,      // kleine Pause beim Ankommen/Umdrehen
+    RESPAWN_MS:     4000,     // Pause am Holzfäller bis zur nächsten Runde
+    SPEED:          55,       // px/s (langsam)
+    DOT_R:          4         // Fallback-Darstellung (kleiner Punkt)
+  };
 
   // ===== State =====
   const state = {
@@ -28,10 +38,19 @@ export const game = (() => {
     pinchCenter:{x:0,y:0}, tapBlockUntil:0,
     // Welt
     roads:[],        // {x1,y1,x2,y2}
-    buildings:[],    // {type:"hq"|"woodcutter"|"depot", x,y,w,h}
-    // HUD callback
-    onHUD:(k,v)=>{}
+    buildings:[],    // {id,type:"hq"|"woodcutter"|"depot", x,y,w,h}
+    // Economy / HUD
+    stock:{ wood:0, stone:0, food:0, gold:0, carrier:0 },
+    onHUD:(k,v)=>{},
+    // Graph (für Wege)
+    graph:{ nodes:[], edges:new Map() }, // nodes: [{x,y,tag?}]  edges: Map(index -> Set(index))
+    // Träger
+    carriers:[],     // siehe createCarrier()
+    // Loop
+    _lastTS:0
   };
+
+  let _idSeq = 1;      // building ids
 
   // ===== Utilities =====
   const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
@@ -47,7 +66,8 @@ export const game = (() => {
     y: (wy - state.camY) * state.zoom + state.height/2
   });
 
-  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+  function dist2(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return dx*dx+dy*dy; }
+  const dist = (a,b)=> Math.hypot(a.x-b.x, a.y-b.y);
   function screenMid(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 
   function zoomAroundScreen(sx, sy, newZoom){
@@ -60,6 +80,15 @@ export const game = (() => {
     writeZoomHUD();
   }
 
+  function writeZoomHUD(){ setHUD("Zoom", `${state.zoom.toFixed(2)}x`); }
+  function writeStockHUD(){
+    setHUD("Holz",  String(state.stock.wood));
+    setHUD("Stein", String(state.stock.stone));
+    setHUD("Nahrung", String(state.stock.food));
+    setHUD("Gold",  String(state.stock.gold));
+    setHUD("Traeger", String(state.stock.carrier));
+  }
+
   // ===== Initial / Resize =====
   function attachCanvas(canvas){
     state.canvas = canvas;
@@ -67,10 +96,10 @@ export const game = (() => {
     state.DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
     resizeCanvas();
 
-    // Startkamera
     state.zoom = 1.0; state.camX = 0; state.camY = 0;
-    writeZoomHUD();
+    writeZoomHUD(); writeStockHUD();
 
+    state._lastTS = performance.now();
     requestAnimationFrame(tick);
   }
   function resizeCanvas(){
@@ -125,6 +154,18 @@ export const game = (() => {
     ctx.restore();
   }
 
+  function drawCarrier(ctx, c){
+    // Fallback: kleiner gelber „Träger“-Punkt mit Schatten
+    const p = toScreen(c.pos.x, c.pos.y);
+    const r = CARRIER.DOT_R * state.zoom * state.DPR;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath(); ctx.arc(p.x*state.DPR+1.5*r, p.y*state.DPR+1.2*r, 0.9*r, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = c.hasWood ? "#f6c571" : "#d6e3ff";       // mit/ohne Holzladung
+    ctx.beginPath(); ctx.arc(p.x*state.DPR, p.y*state.DPR, r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
   function drawWorld(){
     const {ctx} = state;
     ctx.clearRect(0,0,state.width,state.height);
@@ -135,20 +176,232 @@ export const game = (() => {
       const label = b.type==="hq" ? "HQ" : b.type==="woodcutter" ? "Holzfäller" : "Depot";
       fillRectWorld(ctx, b.x,b.y, b.w,b.h, color, label);
     }
+    // Carrier zuletzt
+    for (const c of state.carriers) drawCarrier(ctx,c);
   }
 
-  function tick(){
-    if (!state.running){ drawWorld(); return requestAnimationFrame(tick); }
-    drawWorld();
-    requestAnimationFrame(tick);
+  // ===== Graph / Wege =====
+  function rebuildGraph(){
+    const nodes = [];               // [{x,y,tag}]
+    const keyOf = (x,y)=> `${x}|${y}`;
+    const nodeIndex = new Map();
+    const edges = new Map();
+
+    function addNode(x,y,tag=null){
+      const k = keyOf(x,y);
+      if (nodeIndex.has(k)) return nodeIndex.get(k);
+      const idx = nodes.length;
+      nodes.push({x,y,tag});
+      nodeIndex.set(k, idx);
+      edges.set(idx, new Set());
+      return idx;
+    }
+    function addEdge(a,b){ if (a===b) return; edges.get(a).add(b); edges.get(b).add(a); }
+
+    // Road endpoints => Nodes + Edge
+    for (const r of state.roads){
+      const a = addNode(r.x1, r.y1);
+      const b = addNode(r.x2, r.y2);
+      addEdge(a,b);
+    }
+
+    // Buildings => Node
+    for (const b of state.buildings){
+      b._node = addNode(b.x, b.y, {type:b.type, id:b.id});
+    }
+
+    // Snap Building zu Road-Endpunkt wenn nahe
+    const SNAP2 = (TILE*0.75)*(TILE*0.75);
+    for (const b of state.buildings){
+      const bn = b._node;
+      // verbinde zu allen Road-Nodes in der Nähe
+      for (let i=0;i<nodes.length;i++){
+        const n = nodes[i];
+        if (n===nodes[bn]) continue;
+        if (dist2(n, nodes[bn]) <= SNAP2){
+          addEdge(bn, i);
+        }
+      }
+    }
+
+    state.graph = {nodes, edges};
+  }
+
+  function shortestPath(fromNode, toNode){
+    // BFS auf ungewichteten Edges → Liste von Punkten (Weltkoords)
+    const {nodes, edges} = state.graph;
+    if (!nodes.length) return null;
+    const q = [fromNode];
+    const prev = new Array(nodes.length).fill(-1);
+    prev[fromNode] = fromNode;
+    while (q.length){
+      const v = q.shift();
+      if (v === toNode) break;
+      for (const w of edges.get(v) || []){
+        if (prev[w] !== -1) continue;
+        prev[w] = v; q.push(w);
+      }
+    }
+    if (prev[toNode] === -1) return null;
+    const pathIdx = [];
+    for (let v=toNode; v!==fromNode; v=prev[v]) pathIdx.push(v);
+    pathIdx.push(fromNode); pathIdx.reverse();
+    return pathIdx.map(i => ({ x: state.graph.nodes[i].x, y: state.graph.nodes[i].y }));
+  }
+
+  // ===== Carrier‑Logic =====
+  function createCarrier(fromWoodcutter, viaDepot, toHQ){
+    const pathA = shortestPath(fromWoodcutter._node, viaDepot._node);
+    const pathB = shortestPath(viaDepot._node, toHQ._node);
+    if (!pathA || !pathB) return null;
+
+    const c = {
+      phase:"waitStart",              // waitStart -> toDepot -> turn -> toHQ -> deliver -> backToWood -> waitRespawn
+      pos:{ x: pathA[0].x, y: pathA[0].y },
+      path: pathA.slice(0),          // aktuelle Polyline
+      seg: 0,                        // segment index
+      hasWood:false,
+      tWaitUntil: performance.now() + CARRIER.START_DELAY_MS
+    };
+    state.carriers.push(c);
+    state.stock.carrier++; writeStockHUD();
+    return c;
+  }
+
+  function advanceOnPath(c, dt){
+    const speed = CARRIER.SPEED; // px/s
+    let remaining = speed * dt;
+    while (remaining > 0 && c.seg < c.path.length-1){
+      const a = c.path[c.seg], b = c.path[c.seg+1];
+      const dx = b.x - c.pos.x, dy = b.y - c.pos.y;
+      const d = Math.hypot(dx,dy);
+      if (d < 0.0001){ c.seg++; continue; }
+      if (remaining >= d){
+        c.pos.x = b.x; c.pos.y = b.y; c.seg++; remaining -= d;
+      }else{
+        const f = remaining / d;
+        c.pos.x += dx*f; c.pos.y += dy*f;
+        remaining = 0;
+      }
+    }
+    return (c.seg >= c.path.length-1 && Math.hypot(c.pos.x - c.path.at(-1).x, c.pos.y - c.path.at(-1).y) < 0.5);
+  }
+
+  function updateCarriers(dt, now){
+    // Vorbedingung: Graph aktuell halten
+    if (!state.graph.nodes.length) rebuildGraph();
+
+    const woodcutters = state.buildings.filter(b=>b.type==="woodcutter");
+    const depots      = state.buildings.filter(b=>b.type==="depot");
+    const hqs         = state.buildings.filter(b=>b.type==="hq");
+    if (!woodcutters.length || !depots.length || !hqs.length) return;
+
+    // Falls noch keine Carrier zu einem Holzfäller existieren → anlegen
+    // (max 1 Carrier pro Holzfäller gleichzeitig – simpel)
+    for (const wc of woodcutters){
+      const has = state.carriers.some(c => dist(c.pos, {x:wc.x,y:wc.y}) < 1.5*TILE);
+      if (!has){
+        // suche „nächstes“ Depot/HQ mit erreichbarem Pfad
+        let created = false;
+        for (const d of depots){
+          for (const h of hqs){
+            rebuildGraph(); // sicherstellen, dass _node existiert
+            const tryA = shortestPath(wc._node, d._node);
+            const tryB = tryA ? shortestPath(d._node, h._node) : null;
+            if (tryA && tryB){ createCarrier(wc, d, h); created = true; break; }
+          }
+          if (created) break;
+        }
+      }
+    }
+
+    // Update existierender Carrier
+    for (const c of state.carriers){
+      switch (c.phase){
+        case "waitStart":
+          if (now >= c.tWaitUntil){
+            // setze Ziel Depot
+            c.phase = "toDepot";
+            // Pfad neu berechnen (falls sich was geändert hat)
+            const wcNode = nearestNode(c.pos);
+            const d = depots[0], h = hqs[0];
+            const pA = shortestPath(wcNode, d._node);
+            c.path = pA || c.path; c.seg = 0;
+          }
+          break;
+
+        case "toDepot":{
+          const arrived = advanceOnPath(c, dt);
+          if (arrived){
+            c.hasWood = true;
+            c.phase = "turn";
+            c.tWaitUntil = now + CARRIER.TURN_DELAY_MS;
+            // neuen Pfad Depot -> HQ
+            const d = depots[0], h = hqs[0];
+            const nFrom = nearestNode(c.pos);
+            const p = shortestPath(nFrom, h._node);
+            if (p){ c.path = p; c.seg = 0; }
+          }
+        } break;
+
+        case "turn":
+          if (now >= c.tWaitUntil) c.phase = "toHQ";
+          break;
+
+        case "toHQ":{
+          const arrived = advanceOnPath(c, dt);
+          if (arrived){
+            // Holz abliefern
+            if (c.hasWood){ state.stock.wood++; writeStockHUD(); }
+            c.hasWood = false;
+            c.phase = "backToWood";
+            // zurück zum Holzfäller
+            const wc = woodcutters[0];
+            const nFrom = nearestNode(c.pos);
+            const pBack = shortestPath(nFrom, wc._node);
+            if (pBack){ c.path = pBack; c.seg = 0; }
+          }
+        } break;
+
+        case "backToWood":{
+          const arrived = advanceOnPath(c, dt);
+          if (arrived){
+            c.phase = "waitRespawn";
+            c.tWaitUntil = now + CARRIER.RESPAWN_MS;
+          }
+        } break;
+
+        case "waitRespawn":
+          if (now >= c.tWaitUntil){
+            // neue Runde Depot -> HQ
+            const wc = woodcutters[0], d = depots[0], h = hqs[0];
+            const nFrom = nearestNode(c.pos);
+            const pA = shortestPath(nFrom, d._node);
+            if (pA){ c.path = pA; c.seg = 0; c.phase = "toDepot"; }
+            else { c.tWaitUntil = now + 1000; } // warte & versuche später
+          }
+          break;
+      }
+    }
+  }
+
+  function nearestNode(pt){
+    let best=-1, bestD=Infinity;
+    for (let i=0;i<state.graph.nodes.length;i++){
+      const n = state.graph.nodes[i];
+      const d2 = dist2(pt, n);
+      if (d2 < bestD){ bestD=d2; best=i; }
+    }
+    return best<0 ? 0 : best;
   }
 
   // ===== Build-Logik =====
   const snap = v => Math.round(v / TILE) * TILE;
 
   function placeBuilding(type, wx, wy){
-    const b = { type, x: snap(wx), y: snap(wy), w: TILE*2, h: TILE*2 };
+    const b = { id:_idSeq++, type, x: snap(wx), y: snap(wy), w: TILE*2, h: TILE*2, _node:-1 };
     state.buildings.push(b);
+    rebuildGraph(); // Graph aktualisieren (für Wege)
   }
 
   function pointToSegmentDist(px,py, x1,y1,x2,y2){
@@ -168,6 +421,7 @@ export const game = (() => {
       const x0=b.x-b.w/2, x1=b.x+b.w/2, y0=b.y-b.h/2, y1=b.y+b.h/2;
       if (wx>=x0 && wx<=x1 && wy>=y0 && wy<=y1){
         state.buildings.splice(i,1);
+        rebuildGraph();
         return true;
       }
     }
@@ -176,7 +430,9 @@ export const game = (() => {
     for (let i=state.roads.length-1;i>=0;i--){
       const r = state.roads[i];
       if (pointToSegmentDist(wx,wy,r.x1,r.y1,r.x2,r.y2) <= hitDist){
-        state.roads.splice(i,1); return true;
+        state.roads.splice(i,1);
+        rebuildGraph();
+        return true;
       }
     }
     return false;
@@ -188,7 +444,10 @@ export const game = (() => {
     const gx = snap(wx), gy = snap(wy);
     if (!roadStart){ roadStart = {x:gx,y:gy}; return; }
     const seg = { x1:roadStart.x, y1:roadStart.y, x2:gx, y2:gy };
-    if (Math.hypot(seg.x2-seg.x1, seg.y2-seg.y1) > 1) state.roads.push(seg);
+    if (Math.hypot(seg.x2-seg.x1, seg.y2-seg.y1) > 1){
+      state.roads.push(seg);
+      rebuildGraph();
+    }
     roadStart=null;
   }
 
@@ -200,14 +459,11 @@ export const game = (() => {
     el.addEventListener("pointerup",   onPointerUp,    {passive:false});
     el.addEventListener("pointercancel", onPointerUp,  {passive:false});
     el.addEventListener("wheel", onWheel, {passive:false});
-
     window.addEventListener("resize", resizeCanvas);
     window.addEventListener("orientationchange", ()=>setTimeout(resizeCanvas, 250));
     document.addEventListener("fullscreenchange", resizeCanvas);
     document.addEventListener("webkitfullscreenchange", resizeCanvas);
   }
-
-  function writeZoomHUD(){ setHUD("Zoom", `${state.zoom.toFixed(2)}x`); }
 
   function onWheel(e){
     e.preventDefault();
@@ -243,7 +499,6 @@ export const game = (() => {
       return;
     }
 
-    // nach Pinch kurze Blockade gegen „Geister‑Tap“
     if (now < state.tapBlockUntil) return;
 
     if (state.pointerTool === "road") placeOrFinishRoad(x,y);
@@ -263,7 +518,7 @@ export const game = (() => {
       const d = dist(a,b);
       if (d > 0 && state.pinchLastDist > 0){
         const mid = screenMid(a,b);
-        const factor = d / state.pinchLastDist; // ~1.02 usw.
+        const factor = d / state.pinchLastDist;
         zoomAroundScreen(mid.x, mid.y, clamp(state.zoom * factor, state.minZoom, state.maxZoom));
         state.pinchLastDist = d;
       }
@@ -283,16 +538,29 @@ export const game = (() => {
 
   function onPointerUp(e){
     state.activePointers.delete(e.pointerId);
-
     if (state.pinchActive){
       if (state.activePointers.size < 2){
         state.pinchActive = false;
         state.pinchLastDist = 0;
-        state.tapBlockUntil = performance.now() + 150; // 150ms Tap‑Block
+        state.tapBlockUntil = performance.now() + 150; // 150ms Tap‑Block gegen Geistertaps
       }
     }
     state.isPanning = false;
     try{ state.canvas.releasePointerCapture(e.pointerId); }catch{}
+  }
+
+  // ===== Loop =====
+  function tick(ts){
+    const dt = Math.min(0.05, (ts - state._lastTS)/1000); // clamp dt
+    state._lastTS = ts;
+
+    if (state.running){
+      updateCarriers(dt, ts);
+      drawWorld();
+    }else{
+      drawWorld();
+    }
+    requestAnimationFrame(tick);
   }
 
   // ===== API =====
@@ -316,7 +584,8 @@ export const game = (() => {
     attachCanvas(opts.canvas);
     addInput();
     setTool('pointer');
-    writeZoomHUD();
+    writeZoomHUD(); writeStockHUD();
+    rebuildGraph();
     state.running = true;
   }
 
