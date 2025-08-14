@@ -16,8 +16,16 @@
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
 
-    /* Root-Container – wird für Fullscreen benutzt, damit HUD sichtbar bleibt */
+    /* Root-Container – wird für Fullscreen (und Pseudo-FS) benutzt */
     #wrap{position:relative;min-height:100%;}
+
+    /* Pseudo-Fullscreen (Fallback für iPhone, wenn echte FS-API nicht verfügbar) */
+    .pseudo-fs #hudTop{ padding-top: 6px; }
+    .pseudo-fs #tools{ top: 50px; }
+    .pseudo-fs #hudRight{ top: 50px; }
+    .pseudo-fs #startCard{ top: 64%; }
+    .pseudo-fs #game{ inset: 0; }
+    .pseudo-fs{ position:fixed; inset:0; background:var(--bg); }
 
     /* HUD oben */
     #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
@@ -76,8 +84,8 @@
     <div class="pill">🌿 Nahrung <span id="hudNahrung">0</span></div>
     <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
     <div class="pill">🍞 Träger <span id="hudTraeger">0</span></div>
-    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
-    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
+    <div class="pill">🖱️ Tool: <span id="hudTool">Zeiger</span></div>
+    <div class="pill">🔍 Zoom <span id="hudZoom">1.00x</span></div>
   </div>
 
   <!-- Tools links -->
@@ -119,6 +127,6 @@
 </div>
 
 <!-- Cache-Buster bei Bedarf anheben -->
-<script type="module" src="./boot.js?v=147m1"></script>
+<script type="module" src="./boot.js?v=147m2"></script>
 </body>
 </html>
