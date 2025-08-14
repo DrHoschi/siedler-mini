@@ -1,295 +1,234 @@
-/* Siedler-Mini – Bootstrapping V14.7 (mobil) */
+// boot.js  (V14.7 mobile)  — cache-bust: v=147f2
+import * as game from './game.js?v=147f2';
 
-const $  = (s, r=document) => r.querySelector(s);
-const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
-
-const wrap   = $('#wrap');
-const gameEl = $('#game');
-const canvas = $('#canvas');
-if (!canvas || typeof canvas.getContext !== 'function') {
-  alert('Startfehler: Canvas nicht gefunden (id="canvas").');
-  throw new Error('Canvas missing');
-}
-const ctx = canvas.getContext('2d');
-
-const HUD = {
-  Holz:    $('#hudHolz'),
-  Stein:   $('#hudStein'),
-  Nahrung: $('#hudNahrung'),
-  Gold:    $('#hudGold'),
-  Traeger: $('#hudTraeger'),
-  Tool:    $('#hudTool'),
-  Zoom:    $('#hudZoom'),
+const $ = (q) => document.querySelector(q);
+const hud = {
+  wood:  $('#hudHolz'),
+  stone: $('#hudStein'),
+  food:  $('#hudNahrung'),
+  gold:  $('#hudGold'),
+  carry: $('#hudTraeger'),
+  tool:  $('#hudTool'),
+  zoom:  $('#hudZoom'),
 };
-
+const pills = {
+  tool:  $('#hudtool'),
+  zoom:  $('#hudzoom'),
+};
+const btn = {
+  start:  $('#btnStart'),
+  fs:     $('#btnFs'),
+  reset:  $('#btnReset'),
+  center: $('#btnCenter'),
+  debug:  $('#btnDebug'),
+  full:   $('#btnFull'),
+};
+const toolsEl = $('#tools');
+const canvas  = $('#canvas');
 const startCard = $('#startCard');
-const btnStart  = $('#btnStart');
-const btnFs     = $('#btnFs');
-const btnReset  = $('#btnReset');
+const gameWrap = $('#game');
 
-const btnFull   = $('#btnFull');
-const btnCenter = $('#btnCenter');
-const btnDebug  = $('#btnDebug');
+let started = false;
+let fsWanted = false;
 
-const state = {
-  DPR: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
-  zoom: 1, panX: 0, panY: 0,
-  tool: 'pointer',
-  running: false, debug: false,
-  usingGameModule: false,
-  pseudoFS: false,
-};
-
-/* ---------- Fullscreen Helpers (inkl. iOS Fallback) ---------- */
-const fs = {
-  supported(el = document.body){
-    return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen);
-  },
-  async enter(el){
-    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    if (!req) throw new Error('no fs api');
-    const p = req.call(el, {navigationUI:'hide'});
-    if (p && p.then) await p;
-  },
-  async exit(){
-    const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-    if (ex) {
-      const p = ex.call(document);
-      if (p && p.then) await p;
-    }
-  },
-  current(){
-    return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-  },
-  async toggle(el){
-    if (fs.current()) return fs.exit();
-    return fs.enter(el);
+// ---------- Helpers ----------
+function showAlert(msg){
+  alert(msg);
+}
+function updateHUD(state){
+  hud.wood.textContent  = state.res.wood;
+  hud.stone.textContent = state.res.stone;
+  hud.food.textContent  = state.res.food;
+  hud.gold.textContent  = state.res.gold;
+  hud.carry.textContent = state.res.carry;
+  hud.zoom.textContent  = `${state.cam.z.toFixed(2)}x`;
+  hud.tool.textContent  = toolLabel(state.tool);
+  // kleine Icons
+  pills.tool.firstChild && (pills.tool.firstChild.nodeType===3);
+  pills.tool.innerHTML = `☝️ Tool: <span id="hudTool">${hud.tool.textContent}</span>`;
+  pills.zoom.innerHTML = `🔎 Zoom <span id="hudZoom">${hud.zoom.textContent}</span>`;
+}
+function toolLabel(t){
+  switch(t){
+    case 'pointer':   return 'Zeiger';
+    case 'road':      return 'Straße';
+    case 'hq':        return 'HQ';
+    case 'woodcutter':return 'Holzfäller';
+    case 'depot':     return 'Depot';
+    case 'erase':     return 'Abriss';
+    default:          return String(t);
   }
-};
-
-function togglePseudoFS(){
-  state.pseudoFS = !state.pseudoFS;
-  wrap.classList.toggle('pseudo-fs', state.pseudoFS);
-  resizeCanvas(); requestFrame();
 }
 
-function attachFullscreen(){
-  const handler = async (e)=>{
-    e.preventDefault();
-    if (fs.supported(wrap)) {
-      try { await fs.toggle(wrap); }
-      catch { alert('Vollbild konnte nicht gestartet werden.'); }
-    } else {
-      // iPhone-Fallback: Pseudo-Fullscreen
-      togglePseudoFS();
-    }
-  };
-  btnFull?.addEventListener('click', handler);
-  btnFs?.addEventListener('click', handler);
-
-  // Doppel-Tap auf Spielfläche toggelt ebenfalls
-  let lastTap = 0;
-  gameEl.addEventListener('touchend', ()=>{
-    const now = Date.now();
-    if (now - lastTap < 300) {
-      if (fs.supported(wrap)) { fs.toggle(wrap).catch(()=>{}); }
-      else { togglePseudoFS(); }
-    }
-    lastTap = now;
-  }, {passive:true});
+// Fullscreen – iOS‑sicher(ish)
+function canFullscreen(){
+  const d = document;
+  return !!(d.fullscreenEnabled || d.webkitFullscreenEnabled || d.documentElement.requestFullscreen || d.documentElement.webkitRequestFullscreen);
 }
-attachFullscreen();
+async function requestFullscreenSafe(el){
+  try{
+    if (el.requestFullscreen)      await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    else throw new Error('no FS');
+    fsWanted = true;
+  }catch(e){
+    showAlert('Vollbild wird von diesem Browser/Modus nicht unterstützt.\n\nTipp: iOS Safari (iOS 16+) oder Seite zum Homescreen hinzufügen.');
+  }
+}
+async function exitFullscreenSafe(){
+  try{
+    if (document.exitFullscreen) await document.exitFullscreen();
+    else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+  }catch{}
+  fsWanted = false;
+}
 
-/* ---------- Canvas sizing ---------- */
+document.addEventListener('fullscreenchange',  handleFSChange);
+document.addEventListener('webkitfullscreenchange', handleFSChange);
+function handleFSChange(){
+  // Nach FS-Wechsel Canvas neu dimensionieren & Events neu binden
+  resizeCanvas();
+  if (started) bindGameInput(); // sicherstellen, dass Listener aktiv sind
+}
+
+// iOS Safari: natives Pinch‑Zoom im Vollbild unterdrücken
+['gesturestart','gesturechange','gestureend'].forEach(ev=>{
+  document.addEventListener(ev, e=>{
+    if (fsWanted) e.preventDefault();
+  }, {passive:false});
+});
+
+// ---------- Größenänderung ----------
 function resizeCanvas(){
-  const r = gameEl.getBoundingClientRect();
-  const dpr = state.DPR;
-  const w = Math.max(1, Math.floor(r.width  * dpr));
-  const h = Math.max(1, Math.floor(r.height * dpr));
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w; canvas.height = h;
-  }
+  const dpr = window.devicePixelRatio || 1;
+  const r = gameWrap.getBoundingClientRect();
+  canvas.width  = Math.max(1, Math.round(r.width  * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  game.resize(r.width, r.height, dpr);
+  updateHUD(game.state());
 }
-addEventListener('resize', resizeCanvas, {passive:true});
-resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
-/* ---------- Fallback Grid / Placeholder ---------- */
-function drawGrid(){
-  const {width, height} = canvas;
-  ctx.clearRect(0,0,width,height);
-  ctx.fillStyle = '#0b1628';
-  ctx.fillRect(0,0,width,height);
+// ---------- Input ----------
+let bound = false;
+function bindGameInput(){
+  if (bound) return;
+  bound = true;
 
-  const step = Math.max(40, Math.round(80 * state.zoom)) * state.DPR * 0.5;
-  ctx.strokeStyle = '#1b2a40';
-  ctx.lineWidth = 1;
+  // Pointer für Pan (nur im Zeiger-Tool)
+  canvas.addEventListener('pointerdown', (e)=>{
+    game.pointerDown(e.clientX, e.clientY);
+  }, {passive:true});
+  canvas.addEventListener('pointermove', (e)=>{
+    game.pointerMove(e.clientX, e.clientY);
+    updateHUD(game.state());
+  }, {passive:true});
+  canvas.addEventListener('pointerup', ()=>{
+    game.pointerUp();
+  }, {passive:true});
+  canvas.addEventListener('pointercancel', ()=>{
+    game.pointerUp();
+  }, {passive:true});
 
-  const ox = (state.panX * state.DPR) % step;
-  const oy = (state.panY * state.DPR) % step;
-
-  ctx.beginPath();
-  for (let x = ox; x <= width; x += step) { ctx.moveTo(x,0); ctx.lineTo(x,height); }
-  for (let y = oy; y <= height; y += step) { ctx.moveTo(0,y); ctx.lineTo(width,y); }
-  ctx.stroke();
-}
-
-/* ---------- Zoom & Pan ---------- */
-function setZoom(next, cx, cy){
-  const zMin = 0.5, zMax = 2.5;
-  const prev = state.zoom;
-  const z = Math.min(zMax, Math.max(zMin, next));
-  if (z === prev) return;
-  const k = z / prev;
-  state.panX = cx - (cx - state.panX) * k;
-  state.panY = cy - (cy - state.panY) * k;
-  state.zoom = z;
-  HUD.Zoom.textContent = `${z.toFixed(2)}x`;
-  requestFrame();
-}
-
-let pointerDown=false, lastX=0, lastY=0, twoFinger=false, pinchDist=0;
-
-gameEl.addEventListener('wheel', (e)=>{
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-  const delta = Math.sign(e.deltaY) * 0.1;
-  setZoom(state.zoom * (1 - delta), cx, cy);
-}, {passive:false});
-
-gameEl.addEventListener('pointerdown', (e)=>{
-  pointerDown = true; lastX = e.clientX; lastY = e.clientY;
-  gameEl.setPointerCapture?.(e.pointerId);
-});
-gameEl.addEventListener('pointermove', (e)=>{
-  if (!pointerDown) return;
-  if (state.tool === 'pointer') {
-    state.panX += e.clientX - lastX;
-    state.panY += e.clientY - lastY;
-    lastX = e.clientX; lastY = e.clientY;
-    requestFrame();
-  }
-});
-gameEl.addEventListener('pointerup', (e)=>{
-  pointerDown = false; gameEl.releasePointerCapture?.(e.pointerId);
-});
-
-gameEl.addEventListener('touchstart', (e)=>{
-  if (e.touches.length === 2) {
-    twoFinger = true;
-    const [a,b] = e.touches;
-    pinchDist = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-  }
-},{passive:true});
-gameEl.addEventListener('touchmove', (e)=>{
-  if (twoFinger && e.touches.length === 2) {
-    e.preventDefault();
-    const [a,b] = e.touches;
-    const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-    const rect = canvas.getBoundingClientRect();
-    const cx = ((a.clientX+b.clientX)/2) - rect.left;
-    const cy = ((a.clientY+b.clientY)/2) - rect.top;
-    if (pinchDist) setZoom(state.zoom * (d/pinchDist), cx, cy);
-    pinchDist = d;
-  }
-},{passive:false});
-gameEl.addEventListener('touchend', ()=>{
-  if (twoFinger && event.touches?.length < 2) twoFinger = false;
-},{passive:true});
-
-/* ---------- Tool switching & actions ---------- */
-function applyTool(name){
-  state.tool = name;
-  HUD.Tool.textContent =
-    name==='pointer' ? 'Zeiger' :
-    name==='road' ? 'Straße' :
-    name==='hq' ? 'HQ' :
-    name==='woodcutter' ? 'Holzfäller' :
-    name==='depot' ? 'Depot' :
-    name==='erase' ? 'Abriss' : name;
-  gameApi?.setTool?.(name);
-}
-$('#tools')?.addEventListener('click', (e)=>{
-  const btn = e.target.closest('button[data-tool]');
-  if (!btn) return;
-  applyTool(btn.getAttribute('data-tool'));
-});
-
-btnCenter?.addEventListener('click', ()=>{
-  state.panX = 0; state.panY = 0; state.zoom = 1;
-  HUD.Zoom.textContent = '1.00x';
-  gameApi?.center?.();
-  requestFrame();
-});
-btnDebug?.addEventListener('click', ()=>{
-  state.debug = !state.debug;
-  gameApi?.setDebug?.(state.debug);
-  requestFrame();
-});
-btnReset?.addEventListener('click', ()=>{
-  if (gameApi?.reset) gameApi.reset();
-  else location.reload();
-});
-
-/* ---------- Render-Loop ---------- */
-let needFrame=false;
-function requestFrame(){ if (!needFrame){ needFrame=true; requestAnimationFrame(frame); } }
-
-function frame(){
-  needFrame=false;
-  if (!state.usingGameModule) {
-    drawGrid();
-    const {width, height} = canvas;
-    const cx = width/2 + state.panX*state.DPR;
-    const cy = height/2 + state.panY*state.DPR;
-    const w = 360*state.DPR*state.zoom, h = 220*state.DPR*state.zoom;
-    ctx.fillStyle = '#2aa351';
-    ctx.fillRect(cx - w/2, cy - h/2, w, h);
-    ctx.fillStyle = '#cfe3ff';
-    ctx.font = `${Math.max(14, 48*state.DPR*state.zoom)}px system-ui`;
-    ctx.textBaseline = 'top';
-    ctx.fillText('HQ (Platzhalter)', cx - w/2 + 16*state.DPR, cy - h/2 + 12*state.DPR);
-  } else {
-    if (state.debug) drawGrid(); // Modul kann drüberzeichnen
-  }
-}
-
-/* ---------- Start ---------- */
-let gameApi=null;
-
-async function start(){
-  try {
-    // Optionales Modul laden
-    const mod = await import('./game.js?v=147m2').catch(()=>null);
-    const api = mod && (mod.default || mod);
-    if (api && typeof api.startGame === 'function') {
-      state.usingGameModule = true;
-      gameApi = api;
-      api.startGame({
-        canvas,
-        DPR: state.DPR,
-        onHUD: (k,v)=>{ const el = HUD[k]; if (el) el.textContent = String(v); },
-        getView: ()=>({panX:state.panX, panY:state.panY, zoom:state.zoom}),
-        setView: (p)=>{
-          if (!p) return;
-          if (p.panX!=null) state.panX=p.panX;
-          if (p.panY!=null) state.panY=p.panY;
-          if (p.zoom!=null){ state.zoom=p.zoom; HUD.Zoom.textContent=`${state.zoom.toFixed(2)}x`; }
-          requestFrame();
-        },
-      });
-    } else {
-      state.usingGameModule = false; // Fallback
+  // 2‑Finger Zoom (Touch)
+  let lastDist = null;
+  canvas.addEventListener('touchstart', (e)=>{
+    if (e.touches.length===2){
+      lastDist = dist(e.touches[0], e.touches[1]);
+    }else{
+      lastDist = null;
     }
-    state.running = true;
-    startCard?.remove();
-    requestFrame();
-  } catch (err) {
-    alert('Startfehler: ' + (err?.message || String(err)));
+  }, {passive:true});
+  canvas.addEventListener('touchmove', (e)=>{
+    if (e.touches.length===2 && lastDist){
+      const d = dist(e.touches[0], e.touches[1]);
+      const factor = d / lastDist;
+      const cx = (e.touches[0].clientX + e.touches[1].clientX)/2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY)/2;
+      game.zoomAt(cx, cy, factor);
+      lastDist = d;
+      updateHUD(game.state());
+    }
+  }, {passive:true});
+  canvas.addEventListener('touchend', ()=>{ lastDist=null; }, {passive:true});
+
+  function dist(a,b){
+    const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY;
+    return Math.hypot(dx,dy);
+  }
+
+  // Klick zum Bauen (wenn Bau‑Tool)
+  canvas.addEventListener('click', (e)=>{
+    // Startkarte blockiert Eingaben, solange sichtbar.
+    if (startCard && startCard.style.display!=='none') return;
+    const built = game.clickBuild(e.clientX, e.clientY);
+    if (built) updateHUD(game.state());
+  });
+}
+
+function unbindGameInput(){
+  if (!bound) return;
+  bound = false;
+  const clone = canvas.cloneNode(true);
+  canvas.replaceWith(clone);
+  clone.id = 'canvas';
+  // DOM‑Referenz aktualisieren
+  const newCanvas = $('#canvas');
+  // swap var
+  (function(){ Object.assign(canvas, newCanvas); })(); // no-op to keep name
+}
+
+// ---------- Toolbuttons ----------
+toolsEl.addEventListener('click', (e)=>{
+  const t = e.target.closest('button[data-tool]');
+  if (!t) return;
+  const tool = t.getAttribute('data-tool');
+  game.setTool(tool);
+  updateHUD(game.state());
+});
+
+// ---------- Buttons rechts ----------
+btn.center.addEventListener('click', ()=>{
+  game.center();
+  updateHUD(game.state());
+});
+btn.debug.addEventListener('click', ()=>{
+  const dbg = game.toggleDebug();
+  showAlert('Debug: ' + (dbg ? 'AN' : 'AUS'));
+});
+btn.full.addEventListener('click', ()=>requestFullscreenSafe(document.documentElement));
+
+// ---------- Startkarte ----------
+btn.fs.addEventListener('click', ()=>requestFullscreenSafe(document.documentElement));
+btn.reset.addEventListener('click', ()=>{
+  started=false;
+  unbindGameInput();
+  game.reset();
+  startCard.style.display='';
+  updateHUD(game.state());
+});
+btn.start.addEventListener('click', ()=>{
+  start();
+});
+
+// Doppel‑Tap auf Karte → Vollbild
+gameWrap.addEventListener('dblclick', ()=>{
+  requestFullscreenSafe(document.documentElement);
+});
+
+// Blockiere Canvas‑Eingaben bis Start
+function start(){
+  if (!started){
+    started = true;
+    startCard.style.display='none';
+    bindGameInput();
   }
 }
 
-btnStart?.addEventListener('click', start);
-startCard?.addEventListener('dblclick', start);
-
-requestFrame();
+// ---------- Init ----------
+game.init({
+  onChange: (state)=> updateHUD(state),
+  canvas,
+});
+resizeCanvas();
+updateHUD(game.state());
