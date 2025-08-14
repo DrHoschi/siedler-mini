@@ -1,5 +1,6 @@
-/* Siedler‑Mini V14.7‑hf1 (mobile)
-   Fixes: iOS Touch‑Build, Pinch‑Zoom, Pan im Zeiger‑Tool, Resize/Fullscreen
+/* Siedler‑Mini V14.7‑hf5 (mobile)
+   Fixes: Syntaxfehler (pinchCenter), iOS Touch‑Build, Pan im Zeiger‑Tool,
+          Wheel‑Zoom, Resize/Fullscreen Hooks
 */
 export const game = (() => {
   // ====== Konstante Welt/Tile-Größe ======
@@ -23,8 +24,8 @@ export const game = (() => {
     // Eingabe
     pointerTool: "pointer",     // "pointer" | "road" | "hq" | "woodcutter" | "depot" | "erase"
     isPanning: false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
-    // Pinch
-    pinching: false, pinchStartDist: 0, pinchStartZoom: 1, pinchCenter=null,
+    // Pinch (derzeit nur vorbereitet – iOS nutzt Rad/Buttons)
+    pinching: false, pinchStartDist: 0, pinchStartZoom: 1, pinchCenter: null,
     // Weltobjekte
     roads: [],      // [{x1,y1,x2,y2}]
     buildings: [],  // [{type:"hq"|"woodcutter"|"depot", x,y,w,h}]
@@ -34,7 +35,6 @@ export const game = (() => {
 
   // ====== Utilities ======
   const setHUD = (k,v)=> state.onHUD?.(k,v);
-
   const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
   const toWorld = (sx,sy) => ({
     x: (sx/state.DPR - state.width/2)/state.zoom + state.camX,
@@ -66,6 +66,7 @@ export const game = (() => {
 
   function resizeCanvas() {
     const {canvas} = state;
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     state.width  = Math.max(1, Math.floor(rect.width  * state.DPR));
     state.height = Math.max(1, Math.floor(rect.height * state.DPR));
@@ -155,7 +156,6 @@ export const game = (() => {
   }
 
   function tryErase(wx, wy){
-    // Entfernt Gebäude, wenn getroffen; Straßen separat (Hitbox = 6px)
     // Gebäude
     for (let i=state.buildings.length-1; i>=0; i--){
       const b = state.buildings[i];
@@ -165,8 +165,8 @@ export const game = (() => {
         return true;
       }
     }
-    // Straßen
-    const hitDist = 6 / state.zoom; // 6px im Screen
+    // Straßen (Hitbox ≈ 6px)
+    const hitDist = 6 / state.zoom;
     for (let i=state.roads.length-1; i>=0; i--){
       const r = state.roads[i];
       const d = pointToSegmentDist(wx,wy, r.x1,r.y1, r.x2,r.y2);
@@ -202,11 +202,11 @@ export const game = (() => {
   function addInput(){
     const el = state.canvas;
 
-    // wir arbeiten nur mit Pointer*, überall gleich
     el.addEventListener("pointerdown", onPointerDown, {passive:false});
     el.addEventListener("pointermove", onPointerMove, {passive:false});
     el.addEventListener("pointerup",   onPointerUp,   {passive:false});
     el.addEventListener("pointercancel", onPointerUp, {passive:false});
+
     // Mausrad-Zoom
     el.addEventListener("wheel", onWheel, {passive:false});
 
@@ -229,16 +229,10 @@ export const game = (() => {
 
   function onPointerDown(e){
     if (!isPrimary(e)) return;
-    // Pinch start? (zwei Finger)
-    if (e.pointerType === "touch" && e.isPrimary === false) return;
-
-    // Pointer Capture für sauberes Tracking
     try { state.canvas.setPointerCapture(e.pointerId); } catch{}
 
     const {x,y} = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
 
-    // Zweit-Finger HINT (wir erkennen Pinch über PointerEvents-Mehrzahl)
-    // Ein Finger:
     if (state.pointerTool === "pointer"){
       state.isPanning = true;
       state.panStartX = e.clientX; state.panStartY = e.clientY;
@@ -257,8 +251,6 @@ export const game = (() => {
   }
 
   function onPointerMove(e){
-    // Pinch: zwei Finger → in iOS Safari via Gesture nicht zuverlässig über PointerEvents messbar,
-    // daher erlauben wir Rad-Zoom + UI-Buttons. Optional: nichts tun.
     if (state.isPanning && state.pointerTool === "pointer"){
       e.preventDefault();
       const dx = (e.clientX - state.panStartX) / state.zoom;
@@ -285,7 +277,7 @@ export const game = (() => {
   }
 
   function center(){
-    state.camX = 0; state.camY = 0; // später: auf Inhalt zentrieren
+    state.camX = 0; state.camY = 0;
   }
 
   function startGame(opts){
@@ -294,7 +286,6 @@ export const game = (() => {
     // HUD callback
     state.onHUD = (k,v)=>{
       if (opts && typeof opts.onHUD === "function") opts.onHUD(k,v);
-      // explizit Zoom/Tool in DOM?
       if (k === "Zoom"){
         const el = document.querySelector("#hudZoom");
         if (el) el.textContent = v;
@@ -319,7 +310,6 @@ export const game = (() => {
     startGame,
     setTool,
     center,
-    // (optional: für Buttons von außen)
     get state(){ return state; },
   };
 })();
