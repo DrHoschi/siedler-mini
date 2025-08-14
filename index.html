@@ -3,62 +3,79 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler-Mini V14.6 (Mobile)</title>
-  <meta name="theme-color" content="#0b1620" />
+  <meta name="theme-color" content="#0b1628" />
+  <title>Siedler-Mini V14.6 (Mobil)</title>
   <style>
-    :root { color-scheme: dark light }
-    html,body{margin:0;padding:0;height:100%;background:#0f1823;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #game{display:block;touch-action:none;position:fixed;inset:0}
-
-    /* HUD oben */
-    .hud{position:fixed;left:12px;right:12px;top:8px;display:flex;gap:8px;align-items:center;pointer-events:none}
-    .pill{pointer-events:auto;padding:8px 10px;border-radius:999px;background:#122231;border:1px solid #1e2d42;color:#cfe3ff;font-size:14px;line-height:18px}
-    .hud .right{margin-left:auto;display:flex;gap:8px}
-
-    /* Tools links */
-    .tools{position:fixed;left:12px;top:56px;display:flex;flex-direction:column;gap:10px}
-    .btn{pointer-events:auto;padding:8px 12px;border-radius:12px;background:#0f1b29;border:1px solid #182a3f;color:#cfe3ff;font-size:15px}
-    .btn.active{outline:2px solid #36a3ff}
-
-    /* Startkarte */
-    #startCard{position:fixed;inset:auto 12px 12px;left:12px;right:12px;max-width:920px;margin:0 auto;padding:14px;border-radius:16px;
-      background:#0f1b29d0;border:1px solid #203a5a;box-shadow:0 20px 60px rgba(0,0,0,.35)}
-    #startCard h2{margin:0 0 6px 0}
-    #startCard .row{display:flex;gap:10px;margin-top:10px}
-    #startCard .row .btn{border-radius:14px}
-
-    /* kleine Helfer */
-    .hide{display:none}
-
-    /* iOS Vollbild-Hint Platz lassen */
-    @supports(padding:max(env(safe-area-inset-bottom))){ 
-      #startCard{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+    :root{
+      color-scheme: dark;
+      --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
+      --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
+      --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
+      --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --gap:10px;
     }
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    #wrap{height:100%;display:flex;flex-direction:column}
+    #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
+      padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3; pointer-events:none}
+    #hudTop .pill{pointer-events:auto}
 
-    /* Versionslabel */
-    #ver{position:fixed;right:10px;bottom:8px;color:#7f8fa6;font-size:12px;pointer-events:none}
+    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;
+      padding-left: calc(env(safe-area-inset-left,0)); z-index:3; pointer-events:none}
+    #tools .btn{pointer-events:auto}
+
+    #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;
+      padding-right: calc(env(safe-area-inset-right,0)); z-index:3; pointer-events:none}
+    #hudRight .btn{pointer-events:auto}
+
+    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
+    canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+
+    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
+      font-size:15px;padding:8px 12px}
+    .btn.ok{background:var(--ok);border-color:#0a6129}
+    .btn.danger{background:var(--warn);border-color:#752020}
+
+    #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
+      background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
+      width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
+    #startCard h3{margin:0 0 10px;font-size:20px}
+    #startCard p{margin:8px 0;color:var(--muted)}
+    #startBtns{display:flex;gap:10px;margin-top:10px}
+
+    /* Z-Layer / Interaktion: Canvas unten, Overlays oben, Buttons klickbar */
+    #game{ z-index:0; }
+    #startCard{ z-index:2; }
+    #hudTop, #tools, #hudRight{ z-index:3; pointer-events:none; }
+    #hudTop .pill, #tools .btn, #hudRight .btn{ pointer-events:auto; }
+
+    /* Sehr schmale Geräte: Pills kleiner */
+    @media (max-width:480px){
+      .pill{font-size:13px;padding:5px 8px}
+      #tools{top:56px}
+      #hudRight{top:56px}
+      #startCard{top:68%}
+    }
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
-
-  <!-- HUD -->
-  <div class="hud" id="hudBar" aria-hidden="true">
-    <div class="pill" id="hudwood">🌲 Holz <span>0</span></div>
-    <div class="pill" id="hudstone">🪨 Stein <span>0</span></div>
-    <div class="pill" id="hudfood">🌿 Nahrung <span>0</span></div>
-    <div class="pill" id="hudgold">🪙 Gold <span>0</span></div>
-    <div class="pill" id="hudcarrier">🧺 Träger <span>0</span></div>
-    <div class="right">
-      <button class="pill" id="btnCenter">Zentrieren</button>
-      <button class="pill" id="btnDebug">Debug</button>
-      <button class="pill" id="btnFs">Vollbild</button>
-    </div>
+<div id="wrap">
+  <!-- HUD oben -->
+  <div id="hudTop" aria-label="Ressourcen & Status">
+    <div class="pill" id="hudwood">🌲 Holz <span id="hudHolz">0</span></div>
+    <div class="pill" id="hudstone">🪨 Stein <span id="hudStein">0</span></div>
+    <div class="pill" id="hudfood">🌿 Nahrung <span id="hudNahrung">0</span></div>
+    <div class="pill" id="hudgold">🪙 Gold <span id="hudGold">0</span></div>
+    <div class="pill" id="hudcarry">🍞 Träger <span id="hudTraeger">0</span></div>
+    <div class="pill" id="hudtool">Tool: <span id="hudTool">Zeiger</span></div>
+    <div class="pill" id="hudzoom">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
 
-  <!-- Tools -->
-  <div class="tools" id="toolBar" aria-label="Werkzeuge">
-    <button class="btn active" data-tool="pointer">Zeiger</button>
+  <!-- Tools links -->
+  <div id="tools" aria-label="Werkzeuge">
+    <button class="btn" data-tool="pointer">Zeiger</button>
     <button class="btn" data-tool="road">Straße</button>
     <button class="btn" data-tool="hq">HQ</button>
     <button class="btn" data-tool="woodcutter">Holzfäller</button>
@@ -66,21 +83,30 @@
     <button class="btn" data-tool="erase">Abriss</button>
   </div>
 
-  <!-- Startkarte -->
-  <div id="startCard" role="dialog" aria-label="Start">
-    <h2>Siedler-Mini V14.6 (Mobile)</h2>
-    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger-Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau-Tool aktiv ist).
-    Das erste HQ ist mittig gesetzt. Produktionsgebäude arbeiten nur, wenn sie über Straßen mit dem HQ verbunden sind.</p>
-    <div class="row">
-      <button class="btn" id="btnStart">Start</button>
-      <button class="btn" id="btnFs2">Vollbild</button>
-      <button class="btn" id="btnReset">Reset</button>
-    </div>
-    <p class="pill" style="margin-top:10px;display:block;max-width:max-content">Tipp: Doppeltipp auf die Karte schaltet Vollbild.</p>
+  <!-- Buttons rechts -->
+  <div id="hudRight" aria-label="Aktionen">
+    <button id="btnCenter" class="btn">Zentrieren</button>
+    <button id="btnDebug" class="btn">Debug</button>
+    <button id="btnFull" class="btn">Vollbild</button>
   </div>
 
-  <div id="ver">JS V14.6</div>
+  <!-- Spielfläche -->
+  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
 
-  <script type="module" src="./boot.js?v=146m"></script>
+  <!-- Startkarte -->
+  <div id="startCard">
+    <h3>Siedler-Mini V14.6 (Mobile)</h3>
+    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger-Tool</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn ein Bau-Tool aktiv ist). Das erste HQ ist mittig gesetzt. Produktionsgebäude arbeiten nur, wenn sie über Straßen mit dem HQ verbunden sind.</p>
+    <p><i>Tipp:</i> Doppeltipp auf die Karte schaltet Vollbild.</p>
+    <div id="startBtns">
+      <button id="btnStart" class="btn ok">Start</button>
+      <button id="btnFs" class="btn">Vollbild</button>
+      <button id="btnReset" class="btn danger">Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cache-Buster erhöht: v=146m3 -->
+<script type="module" src="./boot.js?v=146m3"></script>
 </body>
 </html>
