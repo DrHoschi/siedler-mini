@@ -127,6 +127,57 @@
 </div>
 
 <!-- Cache-Buster bei Bedarf anheben -->
-<script type="module" src="./boot.js?v=147hf2"></script>
+<!-- 1) Dein Boot-Loader als ES-Modul -->
+<script type="module" src="./boot.js?v=147hf3"></script>
+
+<!-- 2) Diagnose + SW-Unregister + Notfall-Click-Hooks (nur temporär!) -->
+<script>
+(function(){
+  // *** Alte Service Worker killen (sonst kommen alte Dateien aus Cache) ***
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs=>{
+      regs.forEach(r=>r.unregister());
+      // zusätzlich alle Caches leeren
+      if (window.caches && caches.keys) {
+        caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+      }
+    });
+  }
+
+  // *** Kleine Diagnose-Pille ***
+  const pill = document.createElement('div');
+  pill.id = 'diagPill';
+  pill.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#222;border:1px solid #444;border-radius:10px;padding:4px 8px;color:#cfe3ff;font:12px system-ui;opacity:.9';
+  pill.textContent = 'DIAG: index ok';
+  document.body.appendChild(pill);
+  const setP = (t,c)=>{ pill.textContent=t; pill.style.background=c||'#222'; };
+
+  // *** Notfall-Hooks: zeigen sofort, ob Klicks ankommen ***
+  function hook(id, label){
+    const el = document.getElementById(id);
+    if (!el) { setP('DIAG: fehlt #' + id, '#5a1a1a'); return; }
+    el.addEventListener('click', ()=>{ setP('Klick: '+label, '#1b3f22'); }, {passive:true});
+  }
+  // Buttons auf Start-Overlay
+  hook('btnStart','Start');
+  hook('btnFs','FS (Karte)');
+  hook('btnReset','Reset');
+  // Buttons oben rechts
+  hook('btnFull','FS (Top)');
+  hook('btnCenter','Zentrieren');
+
+  // Tool-Leiste (zeigt „Tool-Klick“ an)
+  const tools = document.getElementById('tools');
+  if (tools){
+    tools.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.btn');
+      if (btn) setP('Tool: ' + (btn.dataset.tool||btn.textContent), '#1b2c4a');
+    }, {passive:true});
+  }
+
+  // Info, dass dieses Snippet aktiv ist
+  setP('DIAG: inline aktiv');
+})();
+</script>
 </body>
 </html>
