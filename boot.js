@@ -1,82 +1,84 @@
-// Siedler‑Mini V14.7‑hf2 – Boot/DOM‑Verdrahtung
-import { game } from './game.js?v=147hf2';
+// boot.js (V15)
+import { game } from './game.js?v=1500';
 
-const $ = sel => document.querySelector(sel);
-const $$ = sel => [...document.querySelectorAll(sel)];
-const err = $('#err');
+const $ = s => document.querySelector(s);
+const ui = {
+  canvas: $('#canvas'),
+  startCard: $('#startCard'),
+  btnStart: $('#btnStart'),
+  btnFs:    $('#btnFs'),
+  btnReset: $('#btnReset'),
+  btnFull:  $('#btnFull'),
+  btnCenter:$('#btnCenter'),
+  btnDebug: $('#btnDebug'),
+  tools:    document.querySelectorAll('#tools .btn'),
+  hud: {
+    wood: $('#hudWood'), stone: $('#hudStone'), food: $('#hudFood'), gold: $('#hudGold'),
+    car:  $('#hudCar'), tool: $('#hudTool'), zoom: $('#hudZoom'), err: $('#hudErr'),
+  }
+};
 
-function showErr(msg){
-  if (!err) return;
-  err.textContent = msg;
-  err.classList.add('show');
-  clearTimeout(showErr._t);
-  showErr._t = setTimeout(()=>err.classList.remove('show'), 4000);
+// Fehler sichtbar machen
+function showError(msg){
+  ui.hud.err.textContent = msg;
+  ui.hud.err.classList.remove('hide');
+  // nach 6s automatisch ausblenden
+  clearTimeout(showError._t);
+  showError._t = setTimeout(()=> ui.hud.err.classList.add('hide'), 6000);
 }
+window.addEventListener('error', (e)=>{
+  showError(`Fehler: ${String(e.message||e.error||'unbekannt')}`);
+});
 
-// HUD Callback in DOM schreiben
+// HUD Callback
 function onHUD(k,v){
-  if (k === 'Zoom')  $('#hudZoom').textContent = v;
-  if (k === 'Tool')  $('#hudTool').textContent = v;
-  if (k === 'Holz')  $('#hudHolz').textContent = v;
-  if (k === 'Stein') $('#hudStein').textContent = v;
-  if (k === 'Nahrung') $('#hudNahrung').textContent = v;
-  if (k === 'Gold') $('#hudGold').textContent = v;
-  if (k === 'Traeger') $('#hudTraeger').textContent = v;
+  if (k==='wood') ui.hud.wood.textContent = v|0;
+  if (k==='stone')ui.hud.stone.textContent= v|0;
+  if (k==='food') ui.hud.food.textContent = v|0;
+  if (k==='gold') ui.hud.gold.textContent = v|0;
+  if (k==='car')  ui.hud.car.textContent  = v|0;
+  if (k==='Tool') ui.hud.tool.textContent = v;
+  if (k==='Zoom') ui.hud.zoom.textContent = v;
 }
 
 // Start
-const canvas = $('#canvas');
-const startCard = $('#startCard');
-
-$('#btnStart').addEventListener('click', ()=>{
-  try{
-    game.startGame({ canvas, onHUD });
-    startCard.style.display = 'none';
-  }catch(e){ showErr('STARTFEHLER: '+e.message); }
+ui.btnStart.addEventListener('click', ()=>{
+  ui.startCard.style.display='none';
+  game.startGame({ canvas: ui.canvas, onHUD, showError });
 });
 
-$('#btnReset').addEventListener('click', ()=>{
+// Reset
+ui.btnReset.addEventListener('click', ()=>{
+  localStorage.removeItem('sm_v15_save');
   location.reload();
 });
 
-function canFullscreen(){
-  return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+// Vollbild (Fallback iOS: nur „Pseudo“)
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) return el.requestFullscreen();
+  if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
+  // Fallback: nix, HUD bleibt sichtbar
 }
-async function enterFullscreen(el){
-  try{
-    if (el.requestFullscreen) await el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-  }catch(e){ showErr('Vollbild nicht erlaubt: '+e.message); }
-}
+ui.btnFs.addEventListener('click', enterFullscreen);
+ui.btnFull.addEventListener('click', enterFullscreen);
 
-$('#btnFs').addEventListener('click', ()=>{
-  if (!canFullscreen()) return showErr('Vollbild wird nicht unterstützt (Browser/Modus).');
-  enterFullscreen(document.documentElement);
-});
-$('#btnFull').addEventListener('click', ()=>{
-  if (!canFullscreen()) return showErr('Vollbild wird nicht unterstützt (Browser/Modus).');
-  enterFullscreen(document.documentElement);
-});
+// Zentrieren
+ui.btnCenter.addEventListener('click', ()=> game.center());
+
+// Debug
+ui.btnDebug.addEventListener('click', ()=> game.toggleDebug());
 
 // Tools
-$('#tools').addEventListener('click', (e)=>{
-  const btn = e.target.closest('[data-tool]');
-  if (!btn) return;
-  $$('#tools .btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  game.setTool(btn.dataset.tool);
+ui.tools.forEach(b=>{
+  b.addEventListener('click', ()=>{
+    ui.tools.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    game.setTool(b.dataset.tool);
+  });
 });
 
-$('#btnCenter').addEventListener('click', ()=> game.center());
-$('#btnDebug').addEventListener('click', ()=> showErr('Debug: ok'));
-
-// Doppeltipp auf Canvas → Vollbild
-let lastTap=0;
-canvas.addEventListener('pointerdown', ()=>{
-  const now = performance.now();
-  if (now - lastTap < 300){
-    if (!canFullscreen()) return showErr('Vollbild wird nicht unterstützt (Browser/Modus).');
-    enterFullscreen(document.documentElement);
-  }
-  lastTap = now;
+// Doppeltipp → Vollbild (nur im Start-Overlay sinnvoll)
+document.addEventListener('dblclick', ()=>{
+  if (ui.startCard.style.display!=='none') enterFullscreen();
 });
