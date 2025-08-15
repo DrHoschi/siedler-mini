@@ -1,0 +1,34 @@
+// css/platform.css.js (V15)
+(function () {
+  const html = document.documentElement;
+  const ua = navigator.userAgent || navigator.vendor || window.opera || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(ua);
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/.test(ua);
+  const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+  const hasHover = matchMedia('(hover:hover)').matches;
+
+  html.classList.add(isIOS ? 'ios' : isAndroid ? 'android' : isMobile ? 'mobile' : 'desktop');
+  html.classList.toggle('touch', !!isTouch);
+  html.classList.toggle('mouse', !isTouch && hasHover);
+
+  function inject(href){
+    const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; document.head.appendChild(l);
+  }
+  inject('css/mobile.css?v=1500');     // Touch Defaults
+  if(!isMobile) inject('css/desktop.css?v=1500');
+  if(isIOS) inject('css/ios.css?v=1500');
+  if(isAndroid) inject('css/android.css?v=1500');
+
+  const setOrient = ()=> {
+    html.classList.toggle('portrait', window.innerHeight>=window.innerWidth);
+    html.classList.toggle('landscape', window.innerHeight<window.innerWidth);
+  };
+  setOrient(); addEventListener('resize', ()=>setTimeout(setOrient,50));
+  document.addEventListener('fullscreenchange', ()=>{
+    html.classList.toggle('fullscreen', !!document.fullscreenElement);
+  });
+  document.addEventListener('webkitfullscreenchange', ()=>{
+    html.classList.toggle('fullscreen', !!document.webkitFullscreenElement);
+  });
+})();
