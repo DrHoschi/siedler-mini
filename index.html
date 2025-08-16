@@ -1,77 +1,68 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <meta name="theme-color" content="#0b1628"/>
-  <title>Siedler‑Mini V15.0.2 (Mobile)</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0b1628" />
+  <title>Siedler‑Mini V15.0 (Mobile)</title>
   <style>
     :root{
-      color-scheme: dark;
+      color-scheme:dark;
       --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-      --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --shadow:0 20px 60px rgba(0,0,0,.35);
     }
-    html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #wrap{position:relative;min-height:100dvh}
-    /* Pseudo-Fullscreen (iPhone-Fallback) */
-    .pseudo-fs, .pseudo-fs body{overflow:hidden;height:100%;touch-action:none}
-    .pseudo-fs #wrap{position:fixed;inset:0;height:100dvh}
-    /* Canvas */
+    html,body{margin:0;height:100%;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial}
     #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
     canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
     /* HUD */
-    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
-    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
+    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:var(--text);
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;gap:8px;align-items:center}
+    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:var(--text);
       font-size:15px;padding:8px 12px}
     .btn.ok{background:var(--ok);border-color:#0a6129}
     .btn.danger{background:var(--warn);border-color:#752020}
-
-    #hudTop{position:fixed;left:8px;right:8px;top:8px;display:flex;gap:8px;align-items:center;z-index:3;pointer-events:none}
+    #hudTop{position:fixed;left:8px;right:8px;top:8px;display:flex;gap:8px;flex-wrap:wrap;z-index:3;pointer-events:none}
     #hudTop .pill{pointer-events:auto}
     #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:3;pointer-events:none}
     #tools .btn{pointer-events:auto}
     #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;z-index:3;pointer-events:none}
     #hudRight .btn{pointer-events:auto}
 
-    /* Start-Karte */
-    #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
+    /* Startkarte */
+    #startCard{position:fixed;left:50%;top:68%;transform:translate(-50%,-50%);
       background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
       width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
     #startCard h3{margin:0 0 10px;font-size:20px}
     #startCard p{margin:8px 0;color:var(--muted)}
     #startBtns{display:flex;gap:10px;margin-top:10px}
 
-    /* Debug-Bottom */
-    #dbg{position:fixed;left:8px;bottom:8px;z-index:4;min-width:260px;max-width:92vw}
-    #dbg pre{margin:0;padding:8px 10px;border:1px solid #1e2d42;border-radius:12px;background:#0b1421;color:#a8c7ff;font-size:12px;max-height:45dvh;overflow:auto}
+    /* Debug-Pill unten links */
+    #dbg{position:fixed;left:8px;bottom:8px;color:#ffd3d3;background:#2a1111;border:1px solid #5b2626;
+      border-radius:8px;padding:6px 8px;font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre;z-index:4}
 
     @media (max-width:480px){
       .pill{font-size:13px;padding:5px 8px}
-      #tools{top:56px}
-      #hudRight{top:56px}
-      #startCard{top:68%}
+      #startCard{top:66%}
     }
   </style>
 </head>
 <body>
-<div id="wrap">
+  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
 
-  <!-- HUD -->
-  <div id="hudTop">
-    <div class="pill">🌲 Holz <span id="hudHolz">0</span></div>
-    <div class="pill">🪨 Stein <span id="hudStein">0</span></div>
-    <div class="pill">🌿 Nahrung <span id="hudNahrung">0</span></div>
-    <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
-    <div class="pill">🧺 Träger <span id="hudTraeger">0</span></div>
+  <!-- HUD oben -->
+  <div id="hudTop" aria-label="Ressourcen & Status">
+    <div class="pill">🌲 <span id="hudWood">0</span></div>
+    <div class="pill">🪨 <span id="hudStone">0</span></div>
+    <div class="pill">🍞 <span id="hudFood">0</span></div>
+    <div class="pill">🪙 <span id="hudGold">0</span></div>
     <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
     <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
 
-  <!-- Tools -->
+  <!-- Tools links -->
   <div id="tools" aria-label="Werkzeuge">
     <button class="btn" data-tool="pointer">Zeiger</button>
     <button class="btn" data-tool="road">Straße</button>
@@ -81,21 +72,18 @@
     <button class="btn" data-tool="erase">Abriss</button>
   </div>
 
-  <!-- Actions -->
-  <div id="hudRight">
+  <!-- Buttons rechts -->
+  <div id="hudRight" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
     <button id="btnDebug" class="btn">Debug</button>
     <button id="btnFull" class="btn">Vollbild</button>
   </div>
 
-  <!-- Spielfläche -->
-  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
-
-  <!-- Start -->
+  <!-- Startkarte -->
   <div id="startCard">
-    <h3>Siedler‑Mini V15.0.2 (Mobile)</h3>
-    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) · <b>Scroll/2‑Finger</b> = Zoomen · Tap = bauen (wenn Bau‑Tool aktiv).</p>
-    <p>iPhone: Pseudo‑Vollbild wird genutzt (Safari unterstützt kein echtes Fullscreen).</p>
+    <h3>Siedler‑Mini V15.0 (Mobile)</h3>
+    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger</i>) · <b>2 Finger</b>/<b>Mausrad</b> = Zoomen · kurzer Tap = bauen (bei Bau‑Tool). Erstes HQ wird mittig gesetzt.</p>
+    <p><i>Tipp:</i> Doppeltipp auf die Karte schaltet Vollbild (iOS nutzt WebKit‑Fullscreen).</p>
     <div id="startBtns">
       <button id="btnStart" class="btn ok">Start</button>
       <button id="btnFs" class="btn">Vollbild</button>
@@ -103,14 +91,8 @@
     </div>
   </div>
 
-  <!-- Debug unten -->
-  <div id="dbg" style="display:none">
-    <pre id="dbgPre">DBG…</pre>
-  </div>
+  <pre id="dbg" hidden></pre>
 
-</div>
-
-<!-- Scripts -->
-<script type="module" src="./boot.js?v=1502"></script>
+  <script type="module" src="./boot.js?v=150"></script>
 </body>
 </html>
