@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V15 (Mobile Top‑Down)</title>
+  <title>Siedler‑Mini V15.0.4 (Mobile)</title>
   <style>
     :root{
       color-scheme: dark;
@@ -15,85 +15,97 @@
       --gap:10px;
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #wrap{height:100%;display:flex;flex-direction:column}
     #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
     canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
-    /* HUD */
+    /* HUD oben */
+    #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
+      padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3; pointer-events:none}
     .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px; pointer-events:auto}
+
+    /* Tools links */
+    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;
+      padding-left: calc(env(safe-area-inset-left,0)); z-index:3; pointer-events:none}
     .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
-      font-size:15px;padding:8px 12px}
+      font-size:15px;padding:8px 12px; pointer-events:auto}
     .btn.ok{background:var(--ok);border-color:#0a6129}
     .btn.danger{background:var(--warn);border-color:#752020}
+    .btn.active{outline:2px solid #36a3ff}
 
-    #hudTop{position:fixed;left:8px;right:8px;top:8px;display:flex;gap:8px;align-items:center;z-index:3;pointer-events:none}
-    #hudTop .pill{pointer-events:auto}
-    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:3;pointer-events:none}
-    #tools .btn{pointer-events:auto}
-    #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;z-index:3;pointer-events:none}
+    /* Buttons rechts */
+    #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;
+      padding-right: calc(env(safe-area-inset-right,0)); z-index:3}
     #hudRight .btn{pointer-events:auto}
 
     /* Startkarte */
-    #startCard{position:fixed;left:50%;top:64%;transform:translate(-50%,-50%);
+    #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
       background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
       width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
     #startCard h3{margin:0 0 10px;font-size:20px}
     #startCard p{margin:8px 0;color:var(--muted)}
     #startBtns{display:flex;gap:10px;margin-top:10px}
 
-    /* Debug-Overlay (dragbar) */
-    #debugBox{
-      position:fixed;left:12px;bottom:12px;right:12px;max-height:36vh;overflow:auto;
-      background:var(--panel2);border:1px solid #2b3b53;border-radius:10px;color:#cfe3ff;z-index:4;display:none
+    /* Debug-Panel (verschiebbar) */
+    #debugPanel{
+      position:fixed; left:10px; bottom:10px; width:min(92vw,520px); max-height:40vh;
+      background:#0f1d31; border:1px solid #27405f; border-radius:10px; color:#d7ecff;
+      box-shadow:var(--shadow); z-index:4; display:none; overflow:auto;
     }
-    #debugHead{display:flex;align-items:center;gap:8px;background:#132036;padding:6px 8px;cursor:move}
-    #debugBody{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;padding:8px;white-space:pre-wrap}
+    #debugHeader{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 10px; background:#14233a; border-bottom:1px solid #27405f; cursor:grab;
+    }
+    #debugBody{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size:12px; line-height:1.4; padding:8px 10px; white-space:pre-wrap }
+    #debugPanel.show{ display:block }
 
     /* Sehr schmale Geräte */
     @media (max-width:480px){
       .pill{font-size:13px;padding:5px 8px}
+      #tools{top:56px}
+      #hudRight{top:56px}
       #startCard{top:68%}
     }
   </style>
 </head>
 <body>
-<div id="wrap">
+
+  <!-- Spielfläche -->
+  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
+
   <!-- HUD oben -->
   <div id="hudTop" aria-label="Ressourcen & Status">
     <div class="pill">🌲 Holz <span id="hudHolz">0</span></div>
     <div class="pill">🪨 Stein <span id="hudStein">0</span></div>
     <div class="pill">🌿 Nahrung <span id="hudNahrung">0</span></div>
     <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
-    <div class="pill">👣 Tool: <span id="hudTool">Zeiger</span></div>
-    <div class="pill">🔍 Zoom <span id="hudZoom">1.00x</span></div>
+    <div class="pill">🧺 Träger <span id="hudTraeger">0</span></div>
+    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
+    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
 
   <!-- Tools links -->
   <div id="tools" aria-label="Werkzeuge">
-    <button class="btn" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="woodcutter">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="erase">Abriss</button>
+    <!-- Zeiger ist „immer da“, aber kein eigener Button nötig, deshalb nur Bau-Tools -->
+    <button class="btn tool-btn" data-tool="hq">HQ</button>
+    <button class="btn tool-btn" data-tool="woodcutter">Holzfäller</button>
+    <button class="btn tool-btn" data-tool="depot">Depot</button>
+    <button class="btn tool-btn" data-tool="erase">Abriss</button>
   </div>
 
   <!-- Buttons rechts -->
   <div id="hudRight" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug" class="btn">Debug</button>
-    <button id="btnFull" class="btn">Vollbild</button>
+    <button id="btnDebug"  class="btn">Debug</button>
+    <button id="btnFull"   class="btn">Vollbild</button>
   </div>
-
-  <!-- Canvas -->
-  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
 
   <!-- Startkarte -->
   <div id="startCard">
-    <h3>Siedler‑Mini V15 (Mobile)</h3>
-    <p><b>Zeiger:</b> 1 Finger = verschieben · 2 Finger/Scroll = zoomen. Kurzer Tap mit Bau‑Tool = bauen. Erstes HQ wird mittig gesetzt.</p>
-    <p><i>Tipp:</i> Doppeltipp auf die Karte → Vollbild (falls erlaubt).</p>
+    <h3>Siedler‑Mini V15.0.4 (Mobile)</h3>
+    <p><b>Schieben:</b> nur im Zeiger‑Modus (Standard). <b>Tippen:</b> mit aktivem Bau‑Tool baut auf Raster‑Punkte. <b>Zoom:</b> Mausrad/Pinch (sofern vom Gerät unterstützt).</p>
+    <p>Erstes HQ wird mittig gesetzt. Fehlende Texturen sind okay – Platzhalter werden gezeichnet.</p>
     <div id="startBtns">
       <button id="btnStart" class="btn ok">Start</button>
       <button id="btnFs" class="btn">Vollbild</button>
@@ -102,17 +114,11 @@
   </div>
 
   <!-- Debug -->
-  <div id="debugBox">
-    <div id="debugHead">🔧 Debug <span id="dbgHint" style="opacity:.7;font-size:12px">ziehen, um zu verschieben</span>
-      <button id="dbgClose" class="btn" style="margin-left:auto;padding:2px 8px;font-size:12px">Schließen</button>
-    </div>
+  <div id="debugPanel" role="dialog" aria-label="Debug-Ausgabe">
+    <div id="debugHeader">Debug <span id="debugClose" style="opacity:.8;cursor:pointer;">✕</span></div>
     <div id="debugBody"></div>
   </div>
-</div>
 
-<!-- Cache‑Buster anheben, wenn du änderst -->
-<!-- Scripts mit Cache-Buster -->
-<script type="module" src="./boot.js?v=15.0.3"></script>
-<script> window.__SM_VER__ = "15.0.3"; </script>
+  <script type="module" src="./boot.js?v=1504"></script>
 </body>
 </html>
