@@ -1,134 +1,89 @@
-// Siedler‑Mini V15 – Bootstrapping
-import { world } from './world.js';
-import { input } from './input.js';
+import { game } from './game.js?v=150';
 
-// ---- DOM-Griffe
-const canvas   = document.getElementById('canvas');
-const btnStart = document.getElementById('btnStart');
-const btnFs    = document.getElementById('btnFs');
-const btnReset = document.getElementById('btnReset');
-const btnFull  = document.getElementById('btnFull');   // HUD oben rechts
-const btnCenter= document.getElementById('btnCenter');
-const btnDebug = document.getElementById('btnDebug');
-const startCard= document.getElementById('startCard');
+const qs = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
 
-// Tool-Leiste (Buttons mit data-tool)
-const toolsBar = document.getElementById('tools');
-const hudZoom  = document.getElementById('hudZoom');
-const hudTool  = document.getElementById('hudTool');
+const ui = {
+  canvas: qs('#canvas'),
+  startCard: qs('#startCard'),
+  btnStart: qs('#btnStart'),
+  btnFs: qs('#btnFs'),
+  btnReset: qs('#btnReset'),
+  btnCenter: qs('#btnCenter'),
+  btnDebug: qs('#btnDebug'),
+  btnFullTop: qs('#btnFull'),
+  tools: $$('#tools .btn'),
+  hudTool: qs('#hudTool'),
+  hudZoom: qs('#hudZoom'),
+  dbg: qs('#dbg'),
+};
 
-// Debug-Ecke dynamisch anlegen (unten links)
-let dbgEl = document.getElementById('dbgPane');
-if (!dbgEl) {
-  dbgEl = document.createElement('div');
-  dbgEl.id = 'dbgPane';
-  Object.assign(dbgEl.style,{
-    position:'fixed', left:'8px', bottom:'8px', maxWidth:'60vw',
-    background:'rgba(0,0,0,.55)', border:'1px solid #31445f',
-    borderRadius:'8px', padding:'6px 8px', color:'#cfe3ff',
-    font:'12px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-    whiteSpace:'pre-wrap', pointerEvents:'none', zIndex: 4, display:'none'
+function setToolActive(name){
+  ui.tools.forEach(b=>{
+    const active = b.dataset.tool === name;
+    b.classList.toggle('active', active);
   });
-  document.body.appendChild(dbgEl);
-}
-let debugOn = false;
-function logDbg(lines) {
-  if (!debugOn) return;
-  dbgEl.style.display = 'block';
-  dbgEl.textContent = lines.join('\n');
+  ui.hudTool.textContent = name==='pointer'?'Zeiger':
+                           name==='road'?'Straße':
+                           name==='hq'?'HQ':
+                           name==='woodcutter'?'Holzfäller':
+                           name==='depot'?'Depot':'Abriss';
 }
 
-// ---- Vollbild-Toggle (ein Codepfad für beide Buttons)
-async function toggleFullscreen() {
-  const root = document.documentElement; // oder canvas.parentNode
-  try {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      if (root.requestFullscreen) await root.requestFullscreen();
-      else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
-    } else {
-      if (document.exitFullscreen) await document.exitFullscreen();
-      else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
-    }
-  } catch (e) {
-    // iOS iPhone unterstützt kein echtes Fullscreen per JS → leise ignorieren
-    console.warn('Fullscreen not available:', e);
-  }
+function fullscreen() {
+  const el = document.documentElement;
+  const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (fs) fs.call(el).catch(()=>{});
 }
 
-// ---- HUD Writer
-function onHUD(k,v) {
-  if (k === 'Zoom' && hudZoom) hudZoom.textContent = v;
-  if (k === 'Tool' && hudTool) hudTool.textContent = v;
+function exitFS(){
+  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  if (ex) ex.call(document).catch(()=>{});
 }
 
-// ---- Button‑Handler
-btnFs?.addEventListener('click', toggleFullscreen);
-btnFull?.addEventListener('click', toggleFullscreen);
-
-btnReset?.addEventListener('click', () => {
-  // Soft-Reset: Welt und Kamera neu
-  world.softReset();
-  input.attach(canvas, world); // re-bind Input falls nötig
-  logDbg(['Reset durchgeführt']);
-});
-
-btnCenter?.addEventListener('click', () => {
-  world.centerOnContent();
-});
-
-btnDebug?.addEventListener('click', () => {
-  debugOn = !debugOn;
-  if (!debugOn) { dbgEl.style.display = 'none'; return; }
-  // einmal sofort rendern
-  const s = world.state();
-  logDbg([
-    `DBG ON  | DPR=${s.DPR.toFixed(2)}  Size=${s.width}x${s.height}`,
-    `cam=(${s.camX.toFixed(1)}, ${s.camY.toFixed(1)}) zoom=${s.zoom.toFixed(2)}`,
-    `tiles=${s.tileSize}   roads=${s.roads.length}   buildings=${s.buildings.length}`,
-    `tool=${s.tool}`
-  ]);
-});
-
-// Tools
-toolsBar?.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-tool]');
-  if (!b) return;
-  for (const btn of toolsBar.querySelectorAll('.btn')) btn.classList.remove('active');
-  b.classList.add('active');
-  const name = b.getAttribute('data-tool');
-  world.setTool(name);
-  onHUD('Tool',
-    name==='pointer' ? 'Zeiger' :
-    name==='road' ? 'Straße' :
-    name==='hq' ? 'HQ' :
-    name==='woodcutter' ? 'Holzfäller' :
-    name==='depot' ? 'Depot' : 'Abriss'
-  );
-});
-
-// Start: Welt initialisieren und Overlay schließen
-btnStart?.addEventListener('click', () => {
-  startCard.style.display = 'none';
-
-  world.start({
-    canvas,
-    onHUD,
-    onDebug: () => {
-      if (!debugOn) return;
-      const s = world.state();
-      logDbg([
-        `DBG ON  | DPR=${s.DPR.toFixed(2)}  Size=${s.width}x${s.height}`,
-        `cam=(${s.camX.toFixed(1)}, ${s.camY.toFixed(1)}) zoom=${s.zoom.toFixed(2)}`,
-        `tiles=${s.tileSize}   roads=${s.roads.length}   buildings=${s.buildings.length}`,
-        `tool=${s.tool}`
-      ]);
-    }
+function bindStartButtons(){
+  ui.btnStart.addEventListener('click', ()=>{
+    ui.startCard.remove();
+    game.startGame({
+      canvas: ui.canvas,
+      onHUD: (k,v)=>{
+        if (k==='Zoom' && ui.hudZoom) ui.hudZoom.textContent = v;
+        if (k==='Tool' && ui.hudTool) ui.hudTool.textContent = v;
+      },
+      onDebug: (s)=>{ if (ui.dbg) { ui.dbg.hidden=false; ui.dbg.textContent=s; } }
+    });
+    setToolActive('pointer');
   });
 
-  input.attach(canvas, world);
-  world.placeInitialHQ();      // HQ (Stein) mittig setzen
-  world.centerOnContent();     // Kamera aufs HQ
-});
+  ui.btnReset.addEventListener('click', ()=>{
+    location.reload();
+  });
 
-// Beim Laden schon mal minimal initialisieren (nur Grid/Platzhalter)
-world.bootstrap(canvas, onHUD);
+  const askFS = ()=>fullscreen();
+  ui.btnFs.addEventListener('click', askFS);
+  ui.btnFullTop.addEventListener('click', askFS);
+
+  // Doppeltipp auf Canvas → Vollbild
+  let lastTap=0;
+  ui.canvas.addEventListener('touchend', (e)=>{
+    const now = Date.now();
+    if (now - lastTap < 300) { fullscreen(); }
+    lastTap = now;
+  }, {passive:true});
+}
+
+function bindTools(){
+  ui.tools.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const tool = btn.dataset.tool;
+      game.setTool(tool);
+      setToolActive(tool);
+    });
+  });
+
+  ui.btnCenter.addEventListener('click', ()=>game.center());
+  ui.btnDebug.addEventListener('click', ()=>game.toggleDebug?.());
+}
+
+bindStartButtons();
+bindTools();
