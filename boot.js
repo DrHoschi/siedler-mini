@@ -1,5 +1,5 @@
-// Siedler‑Mini V15.1 – Boot/DOM/Wireup
-import { game } from './game.js?v=15.1';
+// Siedler‑Mini V15.2 – Boot/DOM/Wireup + Device Profile + FS‑Stabilisierung
+import { game } from './game.js?v=15.2';
 
 const els = {
   canvas: document.getElementById('game'),
@@ -16,90 +16,105 @@ const els = {
   hudTool: document.getElementById('hudTool'),
   tools: document.getElementById('tools'),
 };
+const body = document.body;
 
+function detectProfile(){
+  const ua = navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints>1);
+  const android = /Android/.test(ua);
+  body.classList.toggle('ios', ios);
+  body.classList.toggle('android', android);
+  body.classList.toggle('desktop', !ios && !android);
+  return { ios, android, desktop: !ios && !android };
+}
+const profile = detectProfile();
+
+function onHUD(k,v){
+  if (k === 'Zoom' && els.hudZoom) els.hudZoom.textContent = v;
+  if (k === 'Tool' && els.hudTool) els.hudTool.textContent = v;
+}
 function logDbg(obj){
   els.dbgOut.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
 }
-
 function toggleDebug(){
   const s = getComputedStyle(els.dbg).display;
   els.dbg.style.display = (s === 'none') ? 'block' : 'none';
 }
 
-// Draggable Debug
-(() => {
-  let dragging = false, sx=0, sy=0, left=10, bottom=10;
-  const el = els.dbg;
-  const header = el.querySelector('header');
+// Debug verschiebbar
+(()=> {
+  let dragging=false, sx=0, sy=0, left=10, bottom=10;
+  const panel = els.dbg, header = panel.querySelector('header');
   header.addEventListener('pointerdown', (e)=>{
-    dragging = true; sx = e.clientX; sy = e.clientY;
-    el.setPointerCapture?.(e.pointerId);
-  });
+    dragging=true; sx=e.clientX; sy=e.clientY; panel.setPointerCapture?.(e.pointerId);
+  }, {passive:false});
   window.addEventListener('pointermove', (e)=>{
-    if (!dragging) return;
+    if(!dragging) return;
     left += (e.clientX - sx);
-    bottom -= (e.clientY - sy); // invert y
-    sx = e.clientX; sy = e.clientY;
-    el.style.left = `${Math.max(0,left)}px`;
-    el.style.right = 'auto';
-    el.style.bottom = `${Math.max(0,bottom)}px`;
-    el.style.top = 'auto';
-  });
-  window.addEventListener('pointerup', ()=> dragging=false);
+    bottom -= (e.clientY - sy);
+    sx=e.clientX; sy=e.clientY;
+    panel.style.left = `${Math.max(0,left)}px`;
+    panel.style.right = 'auto';
+    panel.style.bottom = `${Math.max(0,bottom)}px`;
+    panel.style.top = 'auto';
+  }, {passive:false});
+  window.addEventListener('pointerup', ()=> dragging=false, {passive:true});
 })();
 
-// HUD bridge
-function onHUD(k,v){
-  if (k === 'Zoom' && els.hudZoom) els.hudZoom.textContent = v;
-  if (k === 'Tool' && els.hudTool) els.hudTool.textContent = v;
+// Buttons: defaultPrevent, damit kein „falscher“ Browser‑Zoom o.ä.
+function bindButton(el, fn){
+  el?.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); fn(); }, {passive:false});
+  el?.addEventListener('pointerdown', (e)=>{ e.preventDefault(); e.stopPropagation(); }, {passive:false});
 }
 
-// Fullscreen helper (iOS/Android/Desktop)
 async function toggleFullscreen(){
-  const d = document;
-  const el = d.documentElement;
-  try {
+  const d = document, el = d.documentElement;
+  try{
     if (!d.fullscreenElement && !d.webkitFullscreenElement) {
-      (el.requestFullscreen?.() || el.webkitRequestFullscreen?.())?.catch?.(()=>{});
+      await (el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.());
     } else {
-      (d.exitFullscreen?.() || d.webkitExitFullscreen?.())?.catch?.(()=>{});
+      await (d.exitFullscreen?.() ?? d.webkitExitFullscreen?.());
     }
-  } catch {}
+  }catch{}
 }
 
-els.fsBtn.addEventListener('click', toggleFullscreen);
-els.fsBtnTop.addEventListener('click', toggleFullscreen);
+// Fullscreen‑Zustand verfolgen → Klasse + Game resetten (Captures/Gesten)
+function onFullscreenChange(){
+  const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  body.classList.toggle('fullscreen', fs);
+  game.viewportReset();               // <— wichtig: Captures & Pointer leeren
+  setTimeout(()=> game.resizeNow?.(), 0);
+}
 
-els.resetBtn.addEventListener('click', ()=>{
-  // simple reset = Seite neu laden (damit Cache‑State gleich bleibt)
-  location.reload();
-});
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
-els.centerBtn.addEventListener('click', ()=>{
-  game.center();
-});
+// Wire Buttons
+bindButton(els.fsBtn, toggleFullscreen);
+bindButton(els.fsBtnTop, toggleFullscreen);
+bindButton(els.resetBtn, ()=> location.reload());
+bindButton(els.centerBtn, ()=> game.center());
+bindButton(els.dbgBtn, ()=> { toggleDebug(); logDbg(game.debugSnapshot()); });
 
-els.dbgBtn.addEventListener('click', ()=>{
-  toggleDebug();
-  logDbg(game.debugSnapshot());
-});
-
-// Tools wählen
+// Tools
 els.tools.addEventListener('click', (e)=>{
   const btn = e.target.closest('[data-tool]');
   if (!btn) return;
   for (const b of els.tools.querySelectorAll('.btn')) b.classList.remove('active');
   btn.classList.add('active');
   game.setTool(btn.dataset.tool);
-});
+}, {passive:false});
 
-els.startBtn.addEventListener('click', ()=>{
+// Start
+bindButton(els.startBtn, ()=>{
   els.startOverlay.style.display = 'none';
   game.startGame({
     canvas: els.canvas,
     onHUD,
-    onDebug: logDbg
+    onDebug: logDbg,
+    profile
   });
 });
 
-// Direkt DOM‑ready: nichts weiter – Start erst nach Klick
+// Beim Laden kurz Profil loggen
+logDbg({profile});
