@@ -1,5 +1,5 @@
-// boot.js V15.3
-import { game } from './game.js?v=15.3';
+// boot.js V15.3.1
+import { game } from './game.js?v=15.3.1';
 
 const $ = sel => document.querySelector(sel);
 const on = (el, ev, fn, opt) => el.addEventListener(ev, fn, opt);
@@ -21,14 +21,16 @@ const ui = {
   dbgMove: $('#dbgMove'),
   buildBtn: $('#buildBtn'),
   buildPanel: $('#buildPanel'),
+  buildBackdrop: $('#buildBackdrop'),
   buildClose: $('#buildClose'),
   buildDone: $('#buildDone'),
 };
 
 let dbgEnabled = false;
 let buildOpen = false;
+let buildCloseUntil = 0; // kurzer Cooldown nach Panel-Schließen
 
-// ---------- Debug ----------
+/* ---------------- Debug ---------------- */
 function setDebug(onOff){
   dbgEnabled = onOff;
   ui.dbg.style.display = onOff ? 'block' : 'none';
@@ -39,11 +41,8 @@ function writeDebug(){
   ui.dbgOut.textContent =
 `cam=(${s.camX.toFixed(1)}, ${s.camY.toFixed(1)})  zoom=${s.zoom.toFixed(2)}
 tool=${s.pointerTool}  running=${s.running}  buildOpen=${s.buildMenuOpen}
-buildings=${s.buildings.length}  carriers=${s.carriers.length}
-wood=${document.querySelector('#hudHolz')?.textContent || '0'}`;
+buildings=${s.buildings.length}  carriers=${s.carriers.length}`;
 }
-
-// kleiner Drag für Debug-Fenster
 let dbgDrag=false, dbgDX=0, dbgDY=0;
 on(ui.dbgMove,'pointerdown',e=>{
   dbgDrag=true; dbgDX=e.clientX - ui.dbg.offsetLeft; dbgDY=e.clientY - ui.dbg.offsetTop;
@@ -56,7 +55,7 @@ on(document,'pointermove',e=>{
 });
 on(document,'pointerup',()=> dbgDrag=false);
 
-// ---------- Vollbild ----------
+/* --------------- Vollbild --------------- */
 async function reqFullscreen(node){
   const el = node || document.documentElement;
   try{
@@ -65,42 +64,45 @@ async function reqFullscreen(node){
     }else{
       await (el.requestFullscreen?.({navigationUI:'hide'}) || el.webkitRequestFullscreen?.());
     }
-  }catch(e){ /* iOS iPhone kann ablehnen; ignorieren */ }
+  }catch(e){ /* iOS iPhone kann ablehnen */ }
 }
 
-// ---------- Bau-Panel ----------
+/* ------------- Bau-Panel Logic ---------- */
+function reallyCloseBuildPanel(){
+  buildOpen = false;
+  ui.buildPanel.style.display = 'none';
+  ui.buildBackdrop.classList.remove('show');
+  // Hart: Menü zu => sofort Pointer + Build sperren
+  game.setTool('pointer');
+  game.setBuildMenuOpen(false);
+  buildCloseUntil = performance.now() + 200; // 200ms Tap-Sperre
+}
 function openBuildPanel(){
   buildOpen = true;
   ui.buildPanel.style.display = 'block';
+  ui.buildBackdrop.classList.add('show');
   game.setBuildMenuOpen(true);
-  // default: zuletzt gewähltes Tool wird angezeigt, aber bauen nur solange Panel offen ist
 }
-function closeBuildPanel(){
-  buildOpen = false;
-  ui.buildPanel.style.display = 'none';
-  game.setBuildMenuOpen(false); // schaltet faktisch auf Zeiger/Pan
+function toggleBuild(){
+  if (buildOpen) reallyCloseBuildPanel(); else openBuildPanel();
 }
+on(ui.buildBtn, 'click', toggleBuild);
+on(ui.buildClose,'click', reallyCloseBuildPanel);
+on(ui.buildDone,'click', reallyCloseBuildPanel);
+// Klick außerhalb schließt auch
+on(ui.buildBackdrop,'click', (e)=>{ if (e.target === ui.buildBackdrop) reallyCloseBuildPanel(); });
 
-// Buttons im Panel
+// Tool-Buttons im Panel
 ui.buildPanel.addEventListener('click', (e)=>{
   const btn = e.target.closest('.tool');
   if (!btn) return;
   const tool = btn.getAttribute('data-tool');
-  // Tool optisch markieren
   ui.buildPanel.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active', t===btn));
-  // Ins Spiel setzen
   game.setTool(tool);
-  // Panel BLEIBT offen, damit bauen nur aktiv ist solange Panel offen
-});
-on(ui.buildClose,'click', closeBuildPanel);
-on(ui.buildDone,'click', closeBuildPanel);
-
-// Launcher
-on(ui.buildBtn,'click', ()=>{
-  if (buildOpen) closeBuildPanel(); else openBuildPanel();
+  // Panel bleibt offen — bauen ist nur solange offen möglich
 });
 
-// ---------- Start / Reset / Center / Debug ----------
+/* -------- Start / Reset / Center / Debug -------- */
 on(ui.btnStart,'click', ()=>{
   ui.startCard.style.display = 'none';
   game.startGame({
@@ -108,11 +110,9 @@ on(ui.btnStart,'click', ()=>{
     onHUD: (k,v)=>{
       if (k==='Zoom') ui.hudZoom.textContent = v;
       if (k==='Tool') ui.hudTool.textContent = v;
-      if (k==='Holz') ui.hudHolz.textContent = v;
       writeDebug();
     }
   });
-  // initial ausrichten + erstes HQ
   game.center();
   game.placeInitialHQ();
   writeDebug();
@@ -121,19 +121,24 @@ on(ui.btnStart,'click', ()=>{
 on(ui.btnFs,'click', ()=> reqFullscreen(document.documentElement));
 on(ui.btnFull,'click', ()=> reqFullscreen(document.documentElement));
 
-on(ui.btnReset,'click', ()=>{
-  location.href = location.pathname + '?v=' + Date.now();
-});
+on(ui.btnReset,'click', ()=>{ location.href = location.pathname + '?v=' + Date.now(); });
 
 on(ui.btnCenter,'click', ()=>{ game.center(); writeDebug(); });
-on(ui.btnDebug,'click', ()=>{
-  setDebug(!dbgEnabled);
+on(ui.btnDebug,'click', ()=>{ setDebug(!dbgEnabled); writeDebug(); });
+
+/* -------- Kleinzeug -------- */
+setInterval(()=> {
+  // kleine Schutzschicht: wenn Panel zu und Tool != pointer, erzwinge pointer
+  if (!buildOpen && game.state.pointerTool !== 'pointer'){
+    game.setTool('pointer');
+  }
   writeDebug();
-});
+}, 400);
 
-// zyklisch Debug updaten
-setInterval(writeDebug, 500);
+// Exponiere Cooldown, damit game ihn berücksichtigen kann
+export function isBuildCooldown(){
+  return performance.now() < buildCloseUntil;
+}
 
-// Bei Seitenstart: Debug aus, Bau-Panel zu
 setDebug(false);
-closeBuildPanel();
+reallyCloseBuildPanel(); // beim Laden: zu + pointer
