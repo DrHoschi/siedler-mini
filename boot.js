@@ -1,97 +1,92 @@
-// V15 boot – verbindet DOM mit Spielmodulen
+// boot.js – V15.0.2: FS-Fallback + sanftere Pan/Zoom + Debug
 import { createGame } from './main.js';
+import { Fullscreen } from './fullscreen.js';
 
-const $ = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
+const $ = sel => document.querySelector(sel);
 
-const ui = {
-  canvas: $('#gameCanvas'),
-  startCard: $('#startCard'),
-  btnStart: $('#btnStart'),
-  btnReset: $('#btnReset'),
-  btnFsTop: $('#btnFull'),
-  btnFsMid: $('#btnFs'),
-  btnCenter: $('#btnCenter'),
-  btnDebug: $('#btnDebug'),
-  tools: $$('#tools .btn'),
-  hud: {
-    wood: $('#hudWood'),
-    stone: $('#hudStone'),
-    food: $('#hudFood'),
-    gold: $('#hudGold'),
-    car:  $('#hudCar'),
-    tool: $('#hudTool'),
-    zoom: $('#hudZoom'),
-  },
-  debugBox: $('#debug'),
-};
+// DOM refs
+const canvas   = $('#canvas');
+const btnStart = $('#btnStart');
+const btnFs    = $('#btnFs');
+const btnReset = $('#btnReset');
+const btnCenter= $('#btnCenter');
+const btnDebug = $('#btnDebug');
+const hudZoom  = $('#hudZoom');
+const hudTool  = $('#hudTool');
+const dbgWrap  = $('#dbg');
+const dbgPre   = $('#dbgPre');
 
+// Debug helper
+const log = (m)=>{ dbgPre.textContent = `[${new Date().toLocaleTimeString()}] ${m}\n` + dbgPre.textContent; };
+const err = (m)=>{ log('❌ ' + m); };
+
+// Game erstellen
 const game = createGame({
-  canvas: ui.canvas,
-  onHUD: (k,v) => {
-    if (k==='Zoom') ui.hud.zoom.textContent = v;
-    else if (k==='Tool') ui.hud.tool.textContent = v;
-    else if (k==='Wood') ui.hud.wood.textContent = v|0;
-    else if (k==='Stone') ui.hud.stone.textContent = v|0;
-    else if (k==='Food') ui.hud.food.textContent = v|0;
-    else if (k==='Gold') ui.hud.gold.textContent = v|0;
-    else if (k==='Car') ui.hud.car.textContent = v|0;
+  canvas,
+  onHUD: (k,v)=>{
+    if (k==='Zoom') hudZoom.textContent = v;
+    if (k==='Tool') hudTool.textContent = v;
   },
-  onLog: (msg) => log(msg),
-  onError: (msg) => log('❌ '+msg, true),
+  onLog: log,
+  onError: err
 });
 
-// Tools
-ui.tools.forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    ui.tools.forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const tool = btn.getAttribute('data-tool');
-    game.setTool(tool);
+// Werkzeuge
+document.querySelectorAll('#tools .btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    document.querySelectorAll('#tools .btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    game.setTool(b.dataset.tool);
   });
 });
 
-// Buttons rechts
-ui.btnCenter.addEventListener('click', ()=>game.center());
-ui.btnDebug.addEventListener('click', ()=>{
-  ui.debugBox.style.display = ui.debugBox.style.display==='none' ? 'block' : 'none';
+// Buttons
+btnCenter.addEventListener('click', ()=>game.center());
+btnDebug.addEventListener('click', ()=>{
+  const vis = dbgWrap.style.display !== 'none';
+  dbgWrap.style.display = vis ? 'none' : 'block';
+  if (!vis) {
+    log(`DPR=${window.devicePixelRatio || 1}, FS=${Fullscreen.activeMode()}, nativeFS=${Fullscreen.isNativeSupported()}`);
+  }
 });
-ui.btnFsTop.addEventListener('click', tryFullscreen);
-ui.btnFsMid?.addEventListener('click', tryFullscreen);
 
-ui.btnReset.addEventListener('click', ()=>{
-  game.resetSave();
+// Fullscreen Handler (native oder Pseudo)
+async function toggleFullscreen(){
+  const mode = Fullscreen.activeMode();
+  if (mode==='none'){
+    const res = await Fullscreen.enter('#wrap');
+    log(`Fullscreen enter: ${res.mode}`);
+  } else {
+    const res = await Fullscreen.exit();
+    log(`Fullscreen exit: ${res.mode}`);
+  }
+}
+btnFs.addEventListener('click', toggleFullscreen);
+
+// Start / Reset
+btnStart.addEventListener('click', ()=>{
+  document.getElementById('startCard')?.remove();
+  game.start();
+  log('Spiel gestartet');
+});
+btnReset.addEventListener('click', ()=>{
+  // Lokalen Save löschen und Seite neu laden
+  try { localStorage.removeItem('siedler_v15'); } catch{}
   location.reload();
 });
 
-ui.btnStart.addEventListener('click', startGame);
+// Taste für schnelle Tests (optional)
+window.addEventListener('keydown', (e)=>{
+  if (e.key==='f') toggleFullscreen();
+});
 
-// Doppeltipp → FS (iOS freundlich)
-ui.canvas.addEventListener('dblclick', tryFullscreen, {passive:true});
-
-function startGame(){
-  game.start();
-  ui.startCard.style.display = 'none';
+// iOS-Hinweis (nur Info)
+const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+if (isiOS && !Fullscreen.isNativeSupported()){
+  log('iOS erkannt: nutze Pseudo‑Fullscreen. Safari erlaubt kein echtes Fullscreen für Canvas/Div.');
 }
 
-async function tryFullscreen(){
-  const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if (!req){
-    log('⚠️ Vollbild nicht unterstützt.');
-    return;
-  }
-  try { await req.call(el); }
-  catch(e){ log('⚠️ Vollbild abgelehnt: '+e.message); }
-}
-
-function log(text, isErr=false){
-  const t = new Date().toLocaleTimeString();
-  ui.debugBox.style.display = 'block';
-  ui.debugBox.textContent = `[${t}] ${text}\n` + ui.debugBox.textContent;
-  if (isErr) console.error(text); else console.log(text);
-}
-
-// Fehler global abfangen
-window.addEventListener('error', (e)=>log('JS-Error: '+e.message, true));
-window.addEventListener('unhandledrejection', (e)=>log('Promise: '+(e.reason?.message||e.reason), true));
+// Kleinigkeit: Safari „pull to refresh“ vermeiden
+window.addEventListener('touchmove', e=>{
+  if (Fullscreen.activeMode()!=='none') e.preventDefault();
+}, {passive:false});
