@@ -1,7 +1,7 @@
-// Siedler-Mini V15.4-pm — Engine/Renderer/Input/Bau-Ghost+Bestätigung
+// Siedler-Mini V15.4-pm2 — Engine/Renderer/Input/Bau-Ghost+Bestätigung UX
 export const game = (() => {
-  // --- Konstante ---
-  const TILE = 64;                         // Rastergröße
+  // --- Konstanten ---
+  const TILE = 64;
   const GRID_COLOR = "#1e2a3d";
   const TEXT_COLOR = "#cfe3ff";
   const COLOR_ROAD = "#78d9a8";
@@ -19,7 +19,7 @@ export const game = (() => {
     pan:false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
     tool:'pointer',            // 'pointer' | 'erase' | 'build'
     buildType:null,            // 'hq' | 'woodcutter' | 'depot'
-    ghost:null,                // {x,y,w,h, valid, sx,sy} (sx/sy = letzte Screenpos für UI)
+    ghost:null,                // {x,y,w,h, valid, sx,sy}
     roads:[],
     buildings:[],              // {type,x,y,w,h}
     onHUD:()=>{},
@@ -28,7 +28,7 @@ export const game = (() => {
     uiPlaceHide:()=>{},
   };
 
-  // --- Utilities ---
+  // --- Utils ---
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
   const snap  = v => Math.round(v/TILE)*TILE;
   const toWorld = (sx,sy)=>({
@@ -40,9 +40,7 @@ export const game = (() => {
     y: (wy - state.camY)*state.zoom + state.height/2
   });
 
-  function setHUD(k,v){
-    state.onHUD?.(k,v);
-  }
+  function setHUD(k,v){ state.onHUD?.(k,v); }
   function dbg(obj){
     state.onDebug?.({
       tool: state.tool,
@@ -60,7 +58,7 @@ export const game = (() => {
     state.DPR = Math.max(1, Math.min(3, devicePixelRatio||1));
     resize();
     state.zoom = 1.0;
-    center(); // Start aufs Zentrum
+    center();
     setHUD('Zoom', `${state.zoom.toFixed(2)}x`);
     requestAnimationFrame(tick);
   }
@@ -125,8 +123,6 @@ export const game = (() => {
     ctx.fillStyle = g.valid ? '#32cd32' : '#cd3232';
     ctx.fillRect(p.x*state.DPR - pw/2, p.y*state.DPR - ph/2, pw, ph);
     ctx.restore();
-
-    // Umriss
     ctx.save();
     ctx.strokeStyle = g.valid ? '#28a828' : '#b82828';
     ctx.lineWidth = 2*state.zoom*state.DPR;
@@ -139,23 +135,16 @@ export const game = (() => {
     ctx.clearRect(0,0,state.width,state.height);
     drawGrid(ctx);
 
-    // Straßen (falls reaktiviert werden)
     for (const r of state.roads) drawRoad(ctx,r);
-
-    // Gebäude
     for (const b of state.buildings){
       const color = b.type==='hq'?COLOR_HQ : b.type==='woodcutter'?COLOR_WC : COLOR_DEP;
       const label = b.type==='hq'?'HQ' : b.type==='woodcutter'?'Holzfäller' : 'Depot';
       drawRectWorld(ctx, b.x,b.y, b.w,b.h, color, label);
     }
-
-    // Ghost
     if (state.ghost) drawGhost(ctx, state.ghost);
   }
 
   function tick(){
-    if (!state.running) { render(); return requestAnimationFrame(tick); }
-    // (später Animation/Carrier etc.)
     render();
     requestAnimationFrame(tick);
   }
@@ -168,30 +157,35 @@ export const game = (() => {
              a.y-a.h/2 >= b.y+b.h/2);
   }
   function canPlace(box){
-    // Verbiete Überlappung mit bestehenden Gebäuden
-    for (const b of state.buildings){
-      if (intersects(box, b)) return false;
-    }
-    // (Optional: Wasser/Verbotszonen prüfen, wenn Tilemap vorhanden)
+    for (const b of state.buildings) if (intersects(box,b)) return false;
     return true;
   }
-
   function ghostSizeFor(type){
-    // einfache Stellvertreter: 2x2 Tiles
-    const w = TILE*2, h=TILE*2;
-    return {w,h};
+    return { w:TILE*2, h:TILE*2 };
+  }
+  function ghostContains(wx,wy){
+    const g = state.ghost; if (!g) return false;
+    return (wx>=g.x-g.w/2 && wx<=g.x+g.w/2 && wy>=g.y-g.h/2 && wy<=g.y+g.h/2);
   }
 
+  function makeGhostAtWorld(wx,wy){
+    const gx = snap(wx), gy = snap(wy);
+    const {w,h} = ghostSizeFor(state.buildType||'hq');
+    const box = {x:gx, y:gy, w, h};
+    const valid = canPlace(box);
+    // merke für UI die letzte Screen-Position
+    const s = toScreen(gx,gy);
+    state.ghost = { ...box, valid, sx: s.x*state.DPR, sy: s.y*state.DPR };
+    state.uiPlaceShow?.(state.ghost.sx, state.ghost.sy, valid);
+    dbg({hint:'ghost-set', world:{x:gx,y:gy}, valid});
+  }
   function updateGhostAtScreen(sx,sy){
-    // Screen -> World -> Snap
     const w = toWorld(sx,sy);
     const gx = snap(w.x), gy = snap(w.y);
-    if (!state.buildType) return;
-    const {w:gw, h:gh} = ghostSizeFor(state.buildType);
+    const {w:gw,h:gh} = ghostSizeFor(state.buildType||'hq');
     const box = {x:gx, y:gy, w:gw, h:gh};
     const valid = canPlace(box);
     state.ghost = { ...box, valid, sx, sy };
-    // UI (✔/✖) positionieren
     state.uiPlaceShow?.(sx, sy, valid);
     dbg({hint:'ghost-move', world:{x:gx,y:gy}, valid});
   }
@@ -200,8 +194,7 @@ export const game = (() => {
     if (!state.ghost || !state.ghost.valid || !state.buildType) return;
     const g = state.ghost;
     state.buildings.push({type: state.buildType, x:g.x, y:g.y, w:g.w, h:g.h});
-    cancelBuild();       // Ghost weg
-    setTool('pointer');  // zurück zum Zeiger
+    cancelBuild();
   }
   function cancelBuild(){
     state.ghost = null;
@@ -215,18 +208,21 @@ export const game = (() => {
   // --- Eingabe ---
   function onPointerDown(e){
     const sx = e.clientX*state.DPR, sy = e.clientY*state.DPR;
+    const w = toWorld(sx,sy);
+
     if (state.tool==='pointer'){
-      // Pan starten
       state.pan = true;
-      state.panStartX = e.clientX;
-      state.panStartY = e.clientY;
-      state.camStartX = state.camX;
-      state.camStartY = state.camY;
+      state.panStartX = e.clientX; state.panStartY = e.clientY;
+      state.camStartX = state.camX; state.camStartY = state.camY;
     } else if (state.tool==='erase'){
-      const w = toWorld(sx,sy);
       eraseAt(w.x,w.y);
     } else if (state.tool==='build'){
-      // Tap fixiert nur die Ghost-Position (UI ✔/✖ bestätigt)
+      // Tap auf Ghost → sofort bestätigen (wenn gültig)
+      if (state.ghost && ghostContains(w.x,w.y) && state.ghost.valid){
+        confirmBuild();
+        return;
+      }
+      // sonst Ghost an die Tap-Position setzen und UI anzeigen
       updateGhostAtScreen(sx,sy);
     }
   }
@@ -240,9 +236,7 @@ export const game = (() => {
       updateGhostAtScreen(e.clientX*state.DPR, e.clientY*state.DPR);
     }
   }
-  function onPointerUp(){
-    state.pan = false;
-  }
+  function onPointerUp(){ state.pan = false; }
   function onWheel(e){
     e.preventDefault();
     const delta = -Math.sign(e.deltaY)*0.1;
@@ -253,7 +247,6 @@ export const game = (() => {
 
   // --- Erase ---
   function eraseAt(wx,wy){
-    // Gebäude löschen (topmost first)
     for (let i=state.buildings.length-1;i>=0;i--){
       const b=state.buildings[i];
       if (wx>=b.x-b.w/2 && wx<=b.x+b.w/2 && wy>=b.y-b.h/2 && wy<=b.y+b.h/2){
@@ -268,19 +261,22 @@ export const game = (() => {
   function setTool(name){
     state.tool = name;
     if (name!=='build'){ state.buildType=null; state.ghost=null; state.uiPlaceHide?.(); }
-    const nice = name==='pointer'?'Zeiger' : name==='erase'?'Abriss' : 'Bauen';
-    setHUD('Tool', nice);
+    setHUD('Tool', name==='pointer'?'Zeiger' : name==='erase'?'Abriss' : 'Bauen');
   }
+
   function setBuildMode(type){
     state.tool = 'build';
     state.buildType = type;
     setHUD('Tool', `Bauen: ${type==='hq'?'HQ':type==='woodcutter'?'Holzfäller':'Depot'}`);
-    // Ghost erscheint erst bei erster Bewegung/Tap → UI folgt dem Finger
+    // Sofort einen Ghost in der Bildschirmmitte anzeigen:
+    const midSx = (state.width/2);   // schon in Canvas-Pixeln
+    const midSy = (state.height/2);
+    // makeGhostAtWorld erwartet Weltkoordinaten → Screen -> World:
+    const midWorld = toWorld(midSx, midSy);
+    makeGhostAtWorld(midWorld.x, midWorld.y);
   }
 
-  function center(){
-    state.camX = 0; state.camY = 0;
-  }
+  function center(){ state.camX = 0; state.camY = 0; }
 
   function startGame(opts){
     if (state.running) return;
@@ -297,7 +293,7 @@ export const game = (() => {
     state.canvas.addEventListener('pointercancel', onPointerUp, {passive:false});
     state.canvas.addEventListener('wheel', onWheel, {passive:false});
 
-    // Start: HQ bereits mittig gesetzt (optional: einmalig)
+    // Ein Start-HQ mittig:
     state.buildings.push({type:'hq', x:0, y:0, w:TILE*2, h:TILE*2});
 
     state.running = true;
