@@ -1,92 +1,103 @@
-// V15 boot.js – UI verdrahten, Canvas-Resize, Fullscreen
+// boot.js (V15)
 import { game } from './game.js';
 
-const $ = (s)=>document.querySelector(s);
-const $$ = (s)=>[...document.querySelectorAll(s)];
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-const canvas = $('#gameCanvas');
-const debugBox = $('#debug');
-const hudZoom = $('#hudZoom');
-const hudTool = $('#hudTool');
-const startOverlay = $('#start');
+const ui = {
+  canvas: $('#canvas'),
+  startCard: $('#startCard'),
+  btnStart: $('#btnStart'),
+  btnFsStart: $('#btnFs'),
+  btnReset: $('#btnReset'),
+  btnFull: $('#btnFull'),
+  btnCenter: $('#btnCenter'),
+  btnDebug: $('#btnDebug'),
+  tools: $$('#tools .btn'),
+  hud: {
+    tool: $('#hudTool'),
+    zoom: $('#hudZoom'),
+    wood: $('#hudWood'),
+    stone: $('#hudStone'),
+    carry: $('#hudCarry'),
+  },
+  debug: $('#debug'),
+};
 
-function logDbg(msg){
-  debugBox.style.display = 'block';
-  debugBox.textContent = String(msg);
+// --- Debug helper
+let debugOn = false;
+function logDbg(lines) {
+  if (!debugOn) return;
+  ui.debug.textContent = lines.join('\n');
 }
 
-// Canvas korrekt auf Viewportgröße + DPR anpassen
-function resizeCanvas(){
-  const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-  const rect = canvas.getBoundingClientRect();
-  const w = Math.max(1, Math.floor(rect.width * dpr));
-  const h = Math.max(1, Math.floor(rect.height * dpr));
-  if (canvas.width !== w || canvas.height !== h){
-    canvas.width = w; canvas.height = h;
-  }
-  // Renderer informieren
-  game.resize(w, h, dpr);
-}
-
-// Vollbild (mit iOS-Fallback: kein echter Fullscreen, aber ok)
-async function enterFullscreen() {
+// --- Fullscreen helper (mit iOS/WebKit-Fallback)
+async function requestFullscreen() {
   const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if (req) { try { await req.call(el); } catch(e) { logDbg('Fullscreen nicht erlaubt'); } }
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (fn) {
+    try { await fn.call(el); } catch(e) {/* ignorieren */}
+  }
 }
 function exitFullscreen() {
-  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-  if (ex) try { ex.call(document); } catch(e){}
+  const doc = document;
+  const fn = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+  if (fn) { try { fn.call(doc); } catch(e){} }
 }
 
-function wireUI(){
-  // Start
-  $('#btnStart').addEventListener('click', ()=>{
-    startOverlay.style.display = 'none';
-    game.start(canvas, {
-      onHUD: (k,v)=>{
-        if (k==='Zoom') hudZoom.textContent = v;
-        if (k==='Tool') hudTool.textContent = v;
-      }
-    });
-    game.center();
-  });
-
-  $('#btnFs').addEventListener('click', ()=>enterFullscreen());
-  $('#btnReset').addEventListener('click', ()=>{
-    location.reload();
-  });
-
-  // HUD
-  $('#btnCenter').addEventListener('click', ()=>game.center());
-  $('#btnDebug').addEventListener('click', ()=>{
-    debugBox.style.display = (debugBox.style.display==='block'?'none':'block');
-  });
-  $('#btnFsTop').addEventListener('click', ()=>enterFullscreen());
-
-  // Tools
-  $$('#tools .btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      $$('#tools .btn').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      game.setTool(btn.dataset.tool);
-    });
-  });
-
-  // Resize Events
-  window.addEventListener('resize', resizeCanvas);
-  window.addEventListener('orientationchange', ()=>setTimeout(resizeCanvas, 250));
-  document.addEventListener('fullscreenchange', resizeCanvas);
-  document.addEventListener('webkitfullscreenchange', resizeCanvas);
+// --- HUD Callback ins Spiel reichen
+function onHUD(key, val) {
+  if (key === 'Tool') ui.hud.tool.textContent = val;
+  if (key === 'Zoom') ui.hud.zoom.textContent = val;
+  if (key === 'Wood') ui.hud.wood.textContent = val;
+  if (key === 'Stone') ui.hud.stone.textContent = val;
+  if (key === 'Carry') ui.hud.carry.textContent = val;
 }
 
-function init(){
-  wireUI();
-  // Canvas initial fitten (auch vor Start schon wichtig, damit Koordinaten stimmen)
-  resizeCanvas();
-  // „Zeiger“ initial anzeigen
-  hudTool.textContent = 'Zeiger';
-  hudZoom.textContent = '1.00x';
-}
+// --- Toolbuttons
+ui.tools.forEach(btn => {
+  btn.addEventListener('click', () => {
+    ui.tools.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    game.setTool(btn.dataset.tool);
+  });
+});
 
-init();
+// --- Aktionen rechts
+ui.btnCenter.addEventListener('click', () => game.center());
+ui.btnDebug.addEventListener('click', () => {
+  debugOn = !debugOn;
+  ui.btnDebug.classList.toggle('active', debugOn);
+  ui.debug.hidden = !debugOn;
+  if (debugOn) logDbg(['Debug: AN']);
+});
+ui.btnFull.addEventListener('click', requestFullscreen);
+
+// --- Startkarte
+ui.btnFsStart.addEventListener('click', requestFullscreen);
+ui.btnReset.addEventListener('click', () => {
+  // einfacher Reset
+  location.reload();
+});
+ui.btnStart.addEventListener('click', () => {
+  ui.startCard.style.display = 'none';
+  game.startGame({
+    canvas: ui.canvas,
+    onHUD,
+    onDebug: (state) => {
+      if (!debugOn) return;
+      logDbg([
+        `Zoom: ${state.zoom.toFixed(2)}  DPR:${state.dpr.toFixed(2)}`,
+        `Cam:  (${state.camX.toFixed(1)}, ${state.camY.toFixed(1)})`,
+        `CSS:  ${state.cssW}×${state.cssH}  px`,
+        `Tiles:${state.buildings.length} bld / ${state.roads.length} roads`,
+        `Tool: ${state.tool}`,
+        `PointerMode: pan=${state.panning}`,
+      ]);
+    }
+  });
+});
+
+// Erststatus
+ui.hud.tool.textContent = 'Zeiger';
+ui.hud.zoom.textContent = '1.00x';
