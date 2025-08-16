@@ -1,141 +1,92 @@
-import { game } from './game.js?v=153';
+// V15 boot.js – UI verdrahten, Canvas-Resize, Fullscreen
+import { game } from './game.js';
 
-const $  = s => document.querySelector(s);
-const $$ = s => Array.from(document.querySelectorAll(s));
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>[...document.querySelectorAll(s)];
 
-const ui = {
-  canvas: $('#canvas'),
-  hudZoom: $('#hudZoom'),
-  hudTool: $('#hudTool'),
-  btnCenter: $('#btnCenter'),
-  btnDebug: $('#btnDebug'),
-  btnFull: $('#btnFull'),
-  startCard: $('#startCard'),
-  btnStart: $('#btnStart'),
-  btnFs: $('#btnFs'),
-  btnReset: $('#btnReset'),
-  btnErase: $('#btnErase'),
-  btnBuild: $('#btnBuild'),
-  sheet: $('#buildSheet'),
-  tabs: $$('#buildTabs .tab'),
-  grid: $('#buildGrid'),
-  closeBuild: $('#btnCloseBuild'),
-  dbg: $('#dbg'),
-};
+const canvas = $('#gameCanvas');
+const debugBox = $('#debug');
+const hudZoom = $('#hudZoom');
+const hudTool = $('#hudTool');
+const startOverlay = $('#start');
 
-// KEIN Infra/road mehr
-const BUILD_ITEMS = {
-  core: [
-    {id:'hq', icon:'🏰', label:'HQ'},
-    {id:'depot', icon:'📦', label:'Depot'},
-  ],
-  prod: [
-    {id:'woodcutter', icon:'🪓', label:'Holzfäller'},
-  ],
-};
+function logDbg(msg){
+  debugBox.style.display = 'block';
+  debugBox.textContent = String(msg);
+}
 
-function renderGrid(cat='core'){
-  ui.grid.innerHTML='';
-  for (const it of BUILD_ITEMS[cat]){
-    const b=document.createElement('button');
-    b.className='tileBtn';
-    b.innerHTML=`<div class="tileIcon">${it.icon}</div><span>${it.label}</span>`;
-    b.addEventListener('click', ()=>{
-      game.setTool(it.id);
-      setHudTool(it.id);
-      hideSheet(true); // Tool behalten
-    });
-    ui.grid.appendChild(b);
+// Canvas korrekt auf Viewportgröße + DPR anpassen
+function resizeCanvas(){
+  const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width * dpr));
+  const h = Math.max(1, Math.floor(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h){
+    canvas.width = w; canvas.height = h;
   }
-}
-function setHudTool(name){
-  ui.hudTool.textContent =
-    name==='hq' ? 'HQ' :
-    name==='woodcutter' ? 'Holzfäller' :
-    name==='depot' ? 'Depot' :
-    name==='erase' ? 'Abriss' : 'Zeiger';
+  // Renderer informieren
+  game.resize(w, h, dpr);
 }
 
-function fullscreen() {
+// Vollbild (mit iOS-Fallback: kein echter Fullscreen, aber ok)
+async function enterFullscreen() {
   const el = document.documentElement;
-  const fs = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if (fs) { fs.call(el).catch(()=>{}); }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (req) { try { await req.call(el); } catch(e) { logDbg('Fullscreen nicht erlaubt'); } }
+}
+function exitFullscreen() {
+  const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  if (ex) try { ex.call(document); } catch(e){}
 }
 
-function bindStart(){
-  ui.btnStart.addEventListener('click', ()=>{
-    ui.startCard.remove();
-    game.startGame({
-      canvas: ui.canvas,
-      onHUD: (k,v)=>{ if (k==='Zoom') ui.hudZoom.textContent=v; if (k==='Tool') ui.hudTool.textContent=v; },
-      onDebug: (s)=>{ ui.dbg.hidden=false; ui.dbg.textContent=s; },
+function wireUI(){
+  // Start
+  $('#btnStart').addEventListener('click', ()=>{
+    startOverlay.style.display = 'none';
+    game.start(canvas, {
+      onHUD: (k,v)=>{
+        if (k==='Zoom') hudZoom.textContent = v;
+        if (k==='Tool') hudTool.textContent = v;
+      }
+    });
+    game.center();
+  });
+
+  $('#btnFs').addEventListener('click', ()=>enterFullscreen());
+  $('#btnReset').addEventListener('click', ()=>{
+    location.reload();
+  });
+
+  // HUD
+  $('#btnCenter').addEventListener('click', ()=>game.center());
+  $('#btnDebug').addEventListener('click', ()=>{
+    debugBox.style.display = (debugBox.style.display==='block'?'none':'block');
+  });
+  $('#btnFsTop').addEventListener('click', ()=>enterFullscreen());
+
+  // Tools
+  $$('#tools .btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      $$('#tools .btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      game.setTool(btn.dataset.tool);
     });
   });
-  ui.btnReset.addEventListener('click', ()=>location.reload());
-  ui.btnFs.addEventListener('click', fullscreen);
-  ui.btnFull.addEventListener('click', fullscreen);
 
-  // Doppeltipp Vollbild
-  let lastTap=0;
-  ui.canvas.addEventListener('touchend',(e)=>{
-    const now=Date.now();
-    if (now-lastTap<300) fullscreen();
-    lastTap=now;
-  },{passive:true});
+  // Resize Events
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', ()=>setTimeout(resizeCanvas, 250));
+  document.addEventListener('fullscreenchange', resizeCanvas);
+  document.addEventListener('webkitfullscreenchange', resizeCanvas);
 }
 
-function bindHud(){
-  ui.btnCenter.addEventListener('click', ()=>game.center());
-  ui.btnDebug.addEventListener('click', ()=>{
-    game.toggleDebug?.();
-    ui.dbg.hidden = !ui.dbg.hidden;
-  });
+function init(){
+  wireUI();
+  // Canvas initial fitten (auch vor Start schon wichtig, damit Koordinaten stimmen)
+  resizeCanvas();
+  // „Zeiger“ initial anzeigen
+  hudTool.textContent = 'Zeiger';
+  hudZoom.textContent = '1.00x';
 }
 
-function openSheet(){ ui.sheet.classList.add('open'); ui.sheet.setAttribute('aria-hidden','false'); }
-function hideSheet(keepTool=false){
-  ui.sheet.classList.remove('open'); ui.sheet.setAttribute('aria-hidden','true');
-  if (!keepTool){ game.setTool('pointer'); setHudTool('pointer'); }
-}
-
-function bindBuild(){
-  ui.btnBuild.addEventListener('click', ()=>{ renderGrid(getActiveCat()); openSheet(); });
-  ui.btnErase.addEventListener('click', ()=>{ game.setTool('erase'); setHudTool('erase'); });
-
-  ui.tabs.forEach(t=>{
-    t.addEventListener('click', ()=>{
-      ui.tabs.forEach(x=>x.classList.toggle('active', x===t));
-      renderGrid(t.dataset.cat);
-    });
-  });
-  ui.closeBuild.addEventListener('click', ()=>hideSheet(false));
-
-  // Sheet-Swipe schließen
-  let y0=null;
-  ui.sheet.addEventListener('touchstart', e=>{ y0=e.touches[0].clientY; }, {passive:true});
-  ui.sheet.addEventListener('touchmove', e=>{
-    if (y0==null) return;
-    if ((e.touches[0].clientY - y0) > 80){ y0=null; hideSheet(false); }
-  }, {passive:true});
-  ui.sheet.addEventListener('touchend', ()=>{ y0=null; });
-}
-function getActiveCat(){ const a=ui.tabs.find(t=>t.classList.contains('active')); return a? a.dataset.cat : 'core'; }
-
-/* Debug verschiebbar */
-(function makeDebugDraggable(){
-  const el=ui.dbg; el.style.touchAction='none';
-  let drag=false,sx=0,sy=0,sl=0,st=0;
-  const down=(e)=>{ drag=true;
-    const r=el.getBoundingClientRect(); el.style.left=r.left+'px'; el.style.top=r.top+'px'; el.style.right=''; el.style.bottom='';
-    sx=('touches'in e?e.touches[0].clientX:e.clientX); sy=('touches'in e?e.touches[0].clientY:e.clientY); sl=r.left; st=r.top; e.preventDefault();
-  };
-  const move=(e)=>{ if(!drag) return; const cx=('touches'in e?e.touches[0].clientX:e.clientX); const cy=('touches'in e?e.touches[0].clientY:e.clientY);
-    el.style.left=(sl+cx-sx)+'px'; el.style.top=(st+cy-sy)+'px'; };
-  const up = ()=>{ drag=false; };
-  el.addEventListener('pointerdown',down); el.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
-  el.addEventListener('touchstart',down,{passive:false}); el.addEventListener('touchmove',move,{passive:false}); el.addEventListener('touchend',up);
-})();
-
-bindStart();
-bindHud();
-bindBuild();
+init();
