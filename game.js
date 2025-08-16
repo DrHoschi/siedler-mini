@@ -1,6 +1,6 @@
-// Siedler-Mini V15.4-pm2 — Engine/Renderer/Input/Bau-Ghost+Bestätigung UX
+// Siedler‑Mini V15.6 — Pfad-Textur (Trampelpfad), Träger, Bau-Ghost, Tiling-Background
 export const game = (() => {
-  // --- Konstanten ---
+  // ====== Konstanten ======
   const TILE = 64;
   const GRID_COLOR = "#1e2a3d";
   const TEXT_COLOR = "#cfe3ff";
@@ -8,8 +8,9 @@ export const game = (() => {
   const COLOR_HQ   = "#43aa62";
   const COLOR_WC   = "#3f8cff";
   const COLOR_DEP  = "#d55384";
+  const COLOR_CAR  = "#ffd955"; // Träger (Punkt)
 
-  // --- State ---
+  // ====== State ======
   const state = {
     running:false,
     canvas:null, ctx:null,
@@ -17,20 +18,55 @@ export const game = (() => {
     camX:0, camY:0, zoom:1,
     minZoom:0.75, maxZoom:1.75,
     pan:false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
-    tool:'pointer',            // 'pointer' | 'erase' | 'build'
-    buildType:null,            // 'hq' | 'woodcutter' | 'depot'
-    ghost:null,                // {x,y,w,h, valid, sx,sy}
+    // Tools / Bauen
+    tool:'pointer',              // 'pointer' | 'erase' | 'build'
+    buildType:null,              // 'hq'|'woodcutter'|'depot'
+    ghost:null,                  // {x,y,w,h,valid,sx,sy}
+    // Welt
     roads:[],
-    buildings:[],              // {type,x,y,w,h}
+    buildings:[],                // {type,x,y,w,h}
+    // Träger
+    carriers:[],                 // {x,y, tx,ty, home:{x,y}, work:{x,y}, carrying, speed, lastMarkX,lastMarkY, moveAcc}
+    carrierSpawnTimer:0,
+    // „getrampelte Wege“: Map<"gx,gy", count>
+    pathHeat: new Map(),
+    pathHeatCap: 1500,           // Performance-Deckel
+    // UI/Callbacks
     onHUD:()=>{},
     onDebug:()=>{},
     uiPlaceShow:()=>{},
     uiPlaceHide:()=>{},
+    // Texturen
+    tex: {},
+    texList: [
+      // Hintergrund
+      'assets/tex/topdown_grass.png',
+      // optionale weitere Hintergründe
+      'assets/tex/topdown_dirt.png',
+      'assets/tex/topdown_water.png',
+      // Wege / Straßen
+      'assets/tex/path0.png',
+      'assets/tex/topdown_road_straight.png',
+      'assets/tex/topdown_road_corner.png',
+      'assets/tex/topdown_road_t.png',
+      'assets/tex/topdown_road_cross.png',
+      // Gebäude
+      'assets/tex/topdown_hq.png',
+      'assets/tex/topdown_depot.png',
+      'assets/tex/topdown_woodcutter.png',
+      // von dir erwähnt
+      'assets/tex/hq_wood.png'
+    ],
+    texLoaded:false,
+    // intern
+    _lastTs:0
   };
 
-  // --- Utils ---
+  // ====== Utils ======
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
   const snap  = v => Math.round(v/TILE)*TILE;
+  const gx = (x)=>Math.round(x/TILE), gy=(y)=>Math.round(y/TILE);
+  const keyOf = (gx,gy)=>`${gx},${gy}`;
   const toWorld = (sx,sy)=>({
     x: (sx/state.DPR - state.width/2)/state.zoom + state.camX,
     y: (sy/state.DPR - state.height/2)/state.zoom + state.camY
@@ -39,6 +75,7 @@ export const game = (() => {
     x: (wx - state.camX)*state.zoom + state.width/2,
     y: (wy - state.camY)*state.zoom + state.height/2
   });
+  const dist = (ax,ay,bx,by)=>Math.hypot(ax-bx, ay-by);
 
   function setHUD(k,v){ state.onHUD?.(k,v); }
   function dbg(obj){
@@ -47,22 +84,37 @@ export const game = (() => {
       zoom: +state.zoom.toFixed(2),
       cam: {x:+state.camX.toFixed(1), y:+state.camY.toFixed(1)},
       ghost: state.ghost ? {...state.ghost} : null,
+      carriers: state.carriers.length,
+      heat: state.pathHeat.size,
       ...obj
     });
   }
 
-  // --- Canvas/Resize ---
+  // ====== Texture Loader ======
+  function loadTextures(list){
+    if (!list || !list.length) { state.texLoaded = true; return; }
+    let left = list.length, miss = 0;
+    for (const url of list){
+      const img = new Image();
+      img.onload = ()=>{ state.tex[url]=img; if (--left===0){ state.texLoaded=true; dbg({tex:'loaded', ok:list.length, missing:miss}); } };
+      img.onerror = ()=>{ state.tex[url]=null; miss++; dbg({tex:'MISSING', url}); if (--left===0){ state.texLoaded=true; dbg({tex:'loaded', ok:list.length-miss, missing:miss}); } };
+      img.src = url + '?v=' + Date.now();
+    }
+  }
+
+  // ====== Canvas / Resize ======
   function attachCanvas(canvas){
     state.canvas = canvas;
     state.ctx = canvas.getContext('2d');
     state.DPR = Math.max(1, Math.min(3, devicePixelRatio||1));
-    resize();
+    _resize();
     state.zoom = 1.0;
     center();
     setHUD('Zoom', `${state.zoom.toFixed(2)}x`);
+    loadTextures(state.texList);
     requestAnimationFrame(tick);
   }
-  function resize(){
+  function _resize(){
     const rect = state.canvas.getBoundingClientRect();
     state.width  = Math.max(1, Math.floor(rect.width  * state.DPR));
     state.height = Math.max(1, Math.floor(rect.height * state.DPR));
@@ -72,7 +124,40 @@ export const game = (() => {
     }
   }
 
-  // --- Zeichnen ---
+  // ====== Zeichnen ======
+  function drawTiled(ctx, imgUrl){
+    const img = state.tex[imgUrl];
+    if (!img) return false;
+    // Größe der Kachel im Screenmaßstab
+    const size = TILE*state.zoom*state.DPR;
+    if (size <= 1) return true;
+
+    // Errechne linken/oberen Start in Screen-Koords, so dass es nahtlos scrollt
+    const worldLeft   = state.camX - (state.width /(2*state.zoom));
+    const worldTop    = state.camY - (state.height/(2*state.zoom));
+    const startGX = Math.floor(worldLeft / TILE) - 1;
+    const startGY = Math.floor(worldTop  / TILE) - 1;
+    const endGX   = Math.ceil((worldLeft + state.width / state.zoom) / TILE) + 1;
+    const endGY   = Math.ceil((worldTop  + state.height/ state.zoom) / TILE) + 1;
+
+    ctx.save();
+    for (let iy=startGY; iy<=endGY; iy++){
+      for (let ix=startGX; ix<=endGX; ix++){
+        const wx = ix*TILE, wy = iy*TILE;
+        const s  = toScreen(wx,wy);
+        ctx.drawImage(
+          img,
+          0,0,img.width,img.height,
+          (s.x*state.DPR - size/2),
+          (s.y*state.DPR - size/2),
+          size, size
+        );
+      }
+    }
+    ctx.restore();
+    return true;
+  }
+
   function drawGrid(ctx){
     ctx.save();
     ctx.lineWidth = 1;
@@ -86,6 +171,7 @@ export const game = (() => {
     ctx.stroke();
     ctx.restore();
   }
+
   function drawRectWorld(ctx,x,y,w,h, color, label){
     const p = toScreen(x,y);
     const pw = w*state.zoom*state.DPR;
@@ -101,6 +187,7 @@ export const game = (() => {
     }
     ctx.restore();
   }
+
   function drawRoad(ctx,r){
     const a = toScreen(r.x1,r.y1);
     const b = toScreen(r.x2,r.y2);
@@ -114,6 +201,7 @@ export const game = (() => {
     ctx.stroke();
     ctx.restore();
   }
+
   function drawGhost(ctx,g){
     const p = toScreen(g.x,g.y);
     const pw = g.w*state.zoom*state.DPR;
@@ -130,26 +218,144 @@ export const game = (() => {
     ctx.restore();
   }
 
+  function drawCarrier(ctx,c){
+    const s = toScreen(c.x,c.y);
+    ctx.save();
+    ctx.fillStyle = COLOR_CAR;
+    ctx.beginPath();
+    ctx.arc(s.x*state.DPR, s.y*state.DPR, 4*state.zoom*state.DPR, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPaths(ctx){
+    const img = state.tex['assets/tex/path0.png'];
+    if (!img || state.pathHeat.size===0) return;
+    // Sichtfenster in Grid
+    const worldLeft   = state.camX - (state.width /(2*state.zoom));
+    const worldTop    = state.camY - (state.height/(2*state.zoom));
+    const worldRight  = state.camX + (state.width /(2*state.zoom));
+    const worldBottom = state.camY + (state.height/(2*state.zoom));
+    const minGX = Math.floor(worldLeft / TILE) - 1;
+    const minGY = Math.floor(worldTop  / TILE) - 1;
+    const maxGX = Math.ceil (worldRight/ TILE) + 1;
+    const maxGY = Math.ceil (worldBottom/TILE) + 1;
+
+    const size = TILE*state.zoom*state.DPR;
+    ctx.save();
+    for (const [k,count] of state.pathHeat){
+      const [ix,iy] = k.split(',').map(n=>parseInt(n,10));
+      if (ix<minGX||ix>maxGX||iy<minGY||iy>maxGY) continue;
+      const wx = ix*TILE, wy = iy*TILE;
+      const s  = toScreen(wx,wy);
+      // Alpha je Nutzung (sanft)
+      const a = clamp(0.2 + (count/20)*0.6, 0.2, 0.85);
+      ctx.globalAlpha = a;
+      ctx.drawImage(img, 0,0,img.width,img.height, s.x*state.DPR - size/2, s.y*state.DPR - size/2, size, size);
+    }
+    ctx.restore();
+  }
+
   function render(){
     const ctx = state.ctx;
     ctx.clearRect(0,0,state.width,state.height);
-    drawGrid(ctx);
 
+    // 1) Hintergrund: Gras (falls vorhanden), sonst Grid
+    const didGrass = drawTiled(ctx, 'assets/tex/topdown_grass.png');
+    if (!didGrass) drawGrid(ctx);
+
+    // 2) Trampelpfade
+    drawPaths(ctx);
+
+    // 3) optionale Straßen (falls du sie nutzen willst)
     for (const r of state.roads) drawRoad(ctx,r);
+
+    // 4) Gebäude
     for (const b of state.buildings){
       const color = b.type==='hq'?COLOR_HQ : b.type==='woodcutter'?COLOR_WC : COLOR_DEP;
       const label = b.type==='hq'?'HQ' : b.type==='woodcutter'?'Holzfäller' : 'Depot';
       drawRectWorld(ctx, b.x,b.y, b.w,b.h, color, label);
     }
+
+    // 5) Träger
+    for (const c of state.carriers) drawCarrier(ctx,c);
+
+    // 6) Ghost
     if (state.ghost) drawGhost(ctx, state.ghost);
   }
 
-  function tick(){
-    render();
-    requestAnimationFrame(tick);
+  // ====== Carrier / Produktion (minimal) ======
+  function findHQ(){ return state.buildings.find(b=>b.type==='hq') || null; }
+  function findWoodcutters(){ return state.buildings.filter(b=>b.type==='woodcutter'); }
+
+  function spawnCarrierBetween(a,b){
+    if (!a || !b) return;
+    state.carriers.push({
+      x:a.x, y:a.y,
+      tx:b.x, ty:b.y,
+      home:{x:a.x,y:a.y},
+      work:{x:b.x,y:b.y},
+      carrying:false,
+      speed: 38,            // gemütlich
+      lastMarkX: gx(a.x),   // Heat-Start
+      lastMarkY: gy(a.y),
+      moveAcc: 0
+    });
   }
 
-  // --- Platzierung / Validierung ---
+  function markPathAt(x,y){
+    if (state.pathHeat.size >= state.pathHeatCap) return; // Deckel
+    const Gx = gx(x), Gy = gy(y);
+    const k = keyOf(Gx,Gy);
+    state.pathHeat.set(k, (state.pathHeat.get(k)||0) + 1);
+  }
+
+  function updateCarriers(dt){
+    for (const c of state.carriers){
+      // Bewegen
+      const d = Math.max(1, dist(c.x,c.y,c.tx,c.ty));
+      const step = c.speed * dt;
+      if (d <= step){
+        // Ziel erreicht → drehen
+        if (c.tx===c.work.x && c.ty===c.work.y){
+          c.carrying = true;
+          c.tx = c.home.x; c.ty = c.home.y;
+        } else {
+          c.carrying = false;
+          c.tx = c.work.x; c.ty = c.work.y;
+        }
+      } else {
+        const nx = (c.tx - c.x) / d;
+        const ny = (c.ty - c.y) / d;
+        c.x += nx * step;
+        c.y += ny * step;
+      }
+
+      // Pfad-Heat setzen: alle ~0.5 Tile Wegstrecke
+      c.moveAcc += step;
+      if (c.moveAcc >= TILE*0.5){
+        c.moveAcc = 0;
+        const cgx = gx(c.x), cgy = gy(c.y);
+        if (cgx!==c.lastMarkX || cgy!==c.lastMarkY){
+          c.lastMarkX = cgx; c.lastMarkY = cgy;
+          markPathAt(c.x, c.y);
+        }
+      }
+    }
+  }
+
+  function carriersTickSpawn(dt){
+    // alle ~3.5s je Holzfäller einen Träger losschicken (wenn HQ existiert)
+    state.carrierSpawnTimer += dt;
+    if (state.carrierSpawnTimer < 3.5) return;
+    state.carrierSpawnTimer = 0;
+    const hq = findHQ(); if (!hq) return;
+    const wcs = findWoodcutters(); if (!wcs.length) return;
+    const wc = wcs[Math.floor(Math.random()*wcs.length)];
+    spawnCarrierBetween(hq, wc);
+  }
+
+  // ====== Platzierung / Validierung ======
   function intersects(a,b){
     return !(a.x+a.w/2 <= b.x-b.w/2 ||
              a.x-a.w/2 >= b.x+b.w/2 ||
@@ -160,34 +366,33 @@ export const game = (() => {
     for (const b of state.buildings) if (intersects(box,b)) return false;
     return true;
   }
-  function ghostSizeFor(type){
-    return { w:TILE*2, h:TILE*2 };
-  }
+  function ghostSizeFor(type){ return { w:TILE*2, h:TILE*2 }; }
+
   function ghostContains(wx,wy){
     const g = state.ghost; if (!g) return false;
     return (wx>=g.x-g.w/2 && wx<=g.x+g.w/2 && wy>=g.y-g.h/2 && wy<=g.y+g.h/2);
   }
 
   function makeGhostAtWorld(wx,wy){
-    const gx = snap(wx), gy = snap(wy);
+    const gxw = snap(wx), gyw = snap(wy);
     const {w,h} = ghostSizeFor(state.buildType||'hq');
-    const box = {x:gx, y:gy, w, h};
+    const box = {x:gxw, y:gyw, w, h};
     const valid = canPlace(box);
-    // merke für UI die letzte Screen-Position
-    const s = toScreen(gx,gy);
+    const s = toScreen(gxw,gyw);
     state.ghost = { ...box, valid, sx: s.x*state.DPR, sy: s.y*state.DPR };
     state.uiPlaceShow?.(state.ghost.sx, state.ghost.sy, valid);
-    dbg({hint:'ghost-set', world:{x:gx,y:gy}, valid});
+    dbg({hint:'ghost-set', world:{x:gxw,y:gyw}, valid});
   }
+
   function updateGhostAtScreen(sx,sy){
     const w = toWorld(sx,sy);
-    const gx = snap(w.x), gy = snap(w.y);
+    const gxw = snap(w.x), gyw = snap(w.y);
     const {w:gw,h:gh} = ghostSizeFor(state.buildType||'hq');
-    const box = {x:gx, y:gy, w:gw, h:gh};
+    const box = {x:gxw, y:gyw, w:gw, h:gh};
     const valid = canPlace(box);
     state.ghost = { ...box, valid, sx, sy };
     state.uiPlaceShow?.(sx, sy, valid);
-    dbg({hint:'ghost-move', world:{x:gx,y:gy}, valid});
+    dbg({hint:'ghost-move', world:{x:gxw,y:gyw}, valid});
   }
 
   function confirmBuild(){
@@ -205,7 +410,7 @@ export const game = (() => {
     dbg({hint:'build-cancel'});
   }
 
-  // --- Eingabe ---
+  // ====== Eingabe ======
   function onPointerDown(e){
     const sx = e.clientX*state.DPR, sy = e.clientY*state.DPR;
     const w = toWorld(sx,sy);
@@ -217,12 +422,10 @@ export const game = (() => {
     } else if (state.tool==='erase'){
       eraseAt(w.x,w.y);
     } else if (state.tool==='build'){
-      // Tap auf Ghost → sofort bestätigen (wenn gültig)
       if (state.ghost && ghostContains(w.x,w.y) && state.ghost.valid){
         confirmBuild();
         return;
       }
-      // sonst Ghost an die Tap-Position setzen und UI anzeigen
       updateGhostAtScreen(sx,sy);
     }
   }
@@ -237,6 +440,7 @@ export const game = (() => {
     }
   }
   function onPointerUp(){ state.pan = false; }
+
   function onWheel(e){
     e.preventDefault();
     const delta = -Math.sign(e.deltaY)*0.1;
@@ -245,7 +449,7 @@ export const game = (() => {
     if (state.zoom!==before) setHUD('Zoom', `${state.zoom.toFixed(2)}x`);
   }
 
-  // --- Erase ---
+  // ====== Erase ======
   function eraseAt(wx,wy){
     for (let i=state.buildings.length-1;i>=0;i--){
       const b=state.buildings[i];
@@ -257,25 +461,35 @@ export const game = (() => {
     }
   }
 
-  // --- API ---
+  // ====== Main Loop ======
+  function tick(ts=0){
+    if (!state._lastTs) state._lastTs = ts;
+    const dt = Math.min(0.05, (ts - state._lastTs)/1000);
+    state._lastTs = ts;
+
+    if (state.running){
+      carriersTickSpawn(dt);
+      updateCarriers(dt);
+    }
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  // ====== API ======
   function setTool(name){
     state.tool = name;
     if (name!=='build'){ state.buildType=null; state.ghost=null; state.uiPlaceHide?.(); }
     setHUD('Tool', name==='pointer'?'Zeiger' : name==='erase'?'Abriss' : 'Bauen');
   }
-
   function setBuildMode(type){
     state.tool = 'build';
     state.buildType = type;
     setHUD('Tool', `Bauen: ${type==='hq'?'HQ':type==='woodcutter'?'Holzfäller':'Depot'}`);
-    // Sofort einen Ghost in der Bildschirmmitte anzeigen:
-    const midSx = (state.width/2);   // schon in Canvas-Pixeln
+    const midSx = (state.width/2);
     const midSy = (state.height/2);
-    // makeGhostAtWorld erwartet Weltkoordinaten → Screen -> World:
     const midWorld = toWorld(midSx, midSy);
     makeGhostAtWorld(midWorld.x, midWorld.y);
   }
-
   function center(){ state.camX = 0; state.camY = 0; }
 
   function startGame(opts){
@@ -293,11 +507,15 @@ export const game = (() => {
     state.canvas.addEventListener('pointercancel', onPointerUp, {passive:false});
     state.canvas.addEventListener('wheel', onWheel, {passive:false});
 
-    // Ein Start-HQ mittig:
+    // Start-HQ mittig
     state.buildings.push({type:'hq', x:0, y:0, w:TILE*2, h:TILE*2});
 
     state.running = true;
+    dbg({hint:'start', texProbe: state.texList});
   }
+
+  // (public) Resize-Hook für Fullscreen/Rotate
+  function resize(){ _resize(); }
 
   return {
     startGame,
