@@ -18,7 +18,7 @@ export const ASSETS = {
       'assets/tex/topdown_path8.PNG',
       'assets/tex/topdown_path9.PNG',
     ],
-    // (optionale) „klassische“ Straßen:
+    // (optionale) Straßen
     road_straight: 'assets/tex/topdown_road_straight.PNG',
     road_corner:   'assets/tex/topdown_road_corner.PNG',
     road_t:        'assets/tex/topdown_road_t.PNG',
@@ -26,17 +26,17 @@ export const ASSETS = {
   },
 
   buildings: {
-    // Holz‑Variante (deine neuen Dateien)
+    // Holz-Variante (deine neuen Dateien)
     wood: {
       hq:               'assets/tex/building/wood/hq_wood.PNG',
       hq_ug1:           'assets/tex/building/wood/hq_wood_ug1.PNG',
       depot:            'assets/tex/building/wood/depot_wood.PNG',
       depot_ug:         'assets/tex/building/wood/depot_wood_ug.PNG',
-      lumberjack:       'assets/tex/building/wood/lumberjack_wood.PNG',     // Holzfäller
+      lumberjack:       'assets/tex/building/wood/lumberjack_wood.PNG',
       farm:             'assets/tex/building/wood/farm_wood.PNG',
       bakery:           'assets/tex/building/wood/baeckerei_wood.PNG',
-      fisher:           'assets/tex/building/wood/fischer_wood1.PNG',       // Angler/Fischer
-      stonebreaker:     'assets/tex/building/wood/stonebraker_wood.PNG',    // Steinbruch/Steinmetz
+      fisher:           'assets/tex/building/wood/fischer_wood1.PNG',
+      stonebreaker:     'assets/tex/building/wood/stonebraker_wood.PNG',
       watermill:        'assets/tex/building/wood/wassermuehle_wood.PNG',
       windmill:         'assets/tex/building/wood/windmuehle_wood.PNG',
       house1:           'assets/tex/building/wood/haeuser_wood1.PNG',
@@ -44,19 +44,15 @@ export const ASSETS = {
       house2:           'assets/tex/building/wood/haeuser_wood2.PNG',
     },
 
-    // Platzhalter für spätere Stein‑Variante etc. (derzeit leer)
-    stone: {
-      // z.B. hq: 'assets/tex/building/stone/hq_stone.PNG'
-    }
+    // Platzhalter für spätere Stein-Variante
+    stone: {}
   },
 
   units: {
-    // Träger/Carrier – wenn du sie (wieder) brauchst
-    // carrier_png: 'assets/tex/units/carrier_topdown_v2.png',
-    // carrier_json:'assets/tex/units/carrier_topdown_v2.json'
+    // Hier später Träger/Carrier ergänzen
   },
 
   ui: {
-    // hier könntest du später Buttons/Icons pflegen (Hammer/Schaufel etc.)
+    // Hier Buttons/Icons pflegen
   }
 };
