@@ -1,307 +1,339 @@
-// V15 world – Logik, Ressourcen, Wege, Träger-Spawning
-const TILE = 40;
+// Siedler‑Mini V15 – Welt/Renderer/Bauen
+export const world = (() => {
+  // --------- State
+  const S = {
+    // Canvas & Kontext
+    canvas: null, ctx: null,
+    DPR: 1, width: 0, height: 0,
 
-export function createWorld({ onHUD=()=>{}, log=()=>{}, err=()=>{} }={}){
-  // Tile-Typen
-  const T = { GRASS:0, WATER:1, DIRT:2, FOREST:3 };
+    // Kamera & Grid
+    tileSize: 64,
+    camX: 0, camY: 0, zoom: 1, minZoom: 0.5, maxZoom: 2.5,
 
-  const world = {
-    w: 100, h: 100,
-    tiles: [],           // 2D
-    roads: [],           // {x1,y1,x2,y2} (welt-Koords, grid-snap)
-    nodes: new Map(),    // key "x,y" -> Set(neighborKey)
-    buildings: [],       // {id,type,x,y,w,h,footprint:[{gx,gy}], stock:{}}
-    carriers: [],        // {x,y,speed,path:[{x,y}], t, frame}
-    center: {x:0,y:0},
-    res: { wood:0, stone:0, food:0, gold:0 },
-    _roadStart: null,
-    _nextId: 1,
+    // Inhalte
+    roads: [], // {x1,y1,x2,y2}
+    buildings: [], // {type,x,y,w,h}
+
+    // Tool
+    tool: 'pointer',
+    roadStart: null,
+
+    // Callbacks
+    onHUD: null,
+    onDebug: null,
+
+    // Loop
+    running: false,
   };
 
-  // ===== Utilities =====
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const gSnap = v => Math.round(v/TILE)*TILE;
-  const key = (gx,gy)=> `${gx},${gy}`;
-  const addEdge = (a,b) => {
-    if (!world.nodes.has(a)) world.nodes.set(a, new Set());
-    if (!world.nodes.has(b)) world.nodes.set(b, new Set());
-    world.nodes.get(a).add(b);
-    world.nodes.get(b).add(a);
-  };
+  // --------- Utilities
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const roundTo = (v,step) => Math.round(v/step)*step;
 
-  function hudPush(){
-    onHUD('Wood', world.res.wood);
-    onHUD('Stone', world.res.stone);
-    onHUD('Food', world.res.food);
-    onHUD('Gold', world.res.gold);
-    onHUD('Car', world.carriers.length|0);
+  function setHUD(k,v){ S.onHUD && S.onHUD(k,v); }
+
+  // Canvas Größe / DPR
+  function resizeCanvas(){
+    if (!S.canvas) return;
+    const rect = S.canvas.getBoundingClientRect();
+    S.DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const w = Math.max(1, Math.floor(rect.width  * S.DPR));
+    const h = Math.max(1, Math.floor(rect.height * S.DPR));
+    if (S.width !== w || S.height !== h){
+      S.width = w; S.height = h;
+      S.canvas.width = w; S.canvas.height = h;
+    }
   }
 
-  // ===== Map erzeugen =====
-  function generate(){
-    world.tiles = Array.from({length:world.h}, (_,y)=>
-      Array.from({length:world.w}, (_,x)=>{
-        // Wasser am Rand, innen Gras, Flecken DIRT/FOREST
-        const m = 6;
-        if (x<m||y<m||x>world.w-m-1||y>world.h-m-1) return T.WATER;
-        let v = T.GRASS;
-        if ((x+y)%17===0) v=T.DIRT;
-        if ((x*31+y*7)%29===0) v=T.FOREST;
-        return v;
-      })
+  // Screen(client) → World
+  function clientToWorldX(cx){
+    // Screen‑Center als Ursprung
+    const sx = cx * S.DPR;
+    const worldX = (sx - S.width/2) / S.zoom + S.camX;
+    return worldX;
+  }
+  function clientToWorldY(cy){
+    const sy = cy * S.DPR;
+    const worldY = (sy - S.height/2) / S.zoom + S.camY;
+    return worldY;
+  }
+  // World → Screen (ctx‑Koordinaten)
+  function worldToScreen(wx, wy){
+    const sx = (wx - S.camX) * S.zoom + S.width/2;
+    const sy = (wy - S.camY) * S.zoom + S.height/2;
+    return { x: sx, y: sy };
+  }
+
+  function setZoom(target, anchorClientX, anchorClientY){
+    const old = S.zoom;
+    S.zoom = clamp(target, S.minZoom, S.maxZoom);
+    if (S.zoom === old) return;
+    setHUD('Zoom', `${S.zoom.toFixed(2)}x`);
+    // optional: Zoom zur Maus/Touch verankern (Pivot)
+    if (anchorClientX != null && anchorClientY != null){
+      // Weltpunkt vor dem Zoom:
+      const wxBefore = clientToWorldX(anchorClientX);
+      const wyBefore = clientToWorldY(anchorClientY);
+      // Nach Zoom Kamera so verschieben, dass derselbe Weltpunkt unter dem Cursor bleibt:
+      const sx = anchorClientX * S.DPR, sy = anchorClientY * S.DPR;
+      S.camX = wxBefore - (sx - S.width/2) / S.zoom;
+      S.camY = wyBefore - (sy - S.height/2) / S.zoom;
+    }
+  }
+
+  function setCamera(x,y){
+    S.camX = x; S.camY = y;
+  }
+
+  // ---- Tiles / Snap
+  function worldToTile(wx, wy){
+    const ts = S.tileSize;
+    return {
+      tx: Math.floor(wx / ts),
+      ty: Math.floor(wy / ts)
+    };
+  }
+  function tileToWorldCenter(tx,ty){
+    const ts = S.tileSize;
+    return { x: tx*ts + ts/2, y: ty*ts + ts/2 };
+  }
+
+  // --------- Render
+  function drawGrid(){
+    const ctx = S.ctx;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#1e2a3d';
+
+    const step = S.tileSize * S.zoom;
+    const ox = (S.width/2 - S.camX*S.zoom) % step;
+    const oy = (S.height/2 - S.camY*S.zoom) % step;
+
+    ctx.beginPath();
+    for (let x=ox; x<=S.width; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,S.height); }
+    for (let y=oy; y<=S.height; y+=step){ ctx.moveTo(0,y); ctx.lineTo(S.width,y); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawRoad(r){
+    const ctx = S.ctx;
+    const a = worldToScreen(r.x1, r.y1);
+    const b = worldToScreen(r.x2, r.y2);
+    ctx.save();
+    ctx.strokeStyle = '#78d9a8';
+    ctx.lineWidth = 3 * S.zoom;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBuilding(b){
+    const ctx = S.ctx;
+    const p = worldToScreen(b.x, b.y);
+    const w = b.w * S.zoom;
+    const h = b.h * S.zoom;
+    ctx.save();
+    ctx.fillStyle =
+      b.type==='hq' ? '#43aa62' :
+      b.type==='woodcutter' ? '#3f8cff' :
+      b.type==='depot' ? '#d55384' :
+      b.type==='farm' ? '#f5c15b' :
+      '#9aa7b3';
+
+    ctx.fillRect(p.x - w/2, p.y - h/2, w, h);
+
+    ctx.fillStyle = '#cfe3ff';
+    ctx.font = `${Math.round(12*S.zoom)}px system-ui, -apple-system, Segoe UI`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(
+      b.type==='hq' ? 'HQ' :
+      b.type==='woodcutter' ? 'Holzfäller' :
+      b.type==='depot' ? 'Depot' :
+      b.type==='farm' ? 'Farm' : b.type,
+      p.x, p.y - h/2 - 4*S.zoom
     );
-    world.center = { x:(world.w*TILE)/2, y:(world.h*TILE)/2 };
+    ctx.restore();
   }
 
-  // ===== Gebäude =====
-  const FOOT = {
-    hq:         { w:2, h:2 },
-    woodcutter: { w:2, h:2 },
-    depot:      { w:2, h:2 },
-  };
-  function footprintCells(type, wx,wy){
-    const f = FOOT[type]||{w:2,h:2};
-    const gx0 = Math.round((wx - (f.w*TILE)/2)/TILE);
-    const gy0 = Math.round((wy - (f.h*TILE)/2)/TILE);
-    const cells=[];
-    for (let dy=0; dy<f.h; dy++)
-      for (let dx=0; dx<f.w; dx++)
-        cells.push({gx:gx0+dx, gy:gy0+dy});
-    return cells;
-  }
-  function canBuild(type, wx, wy){
-    const cells = footprintCells(type, wx, wy);
-    for(const c of cells){
-      if (c.gx<0||c.gy<0||c.gx>=world.w||c.gy>=world.h) return false;
-      const tt = world.tiles[c.gy][c.gx];
-      if (tt===T.WATER) return false;
-      // kollisionscheck
-      for (const b of world.buildings){
-        for (const f of b.footprint) if (f.gx===c.gx && f.gy===c.gy) return false;
-      }
-    }
-    return true;
-  }
-  function placeBuilding(type, pos){
-    const x = gSnap(pos.x), y=gSnap(pos.y);
-    if (!canBuild(type,x,y)) return false;
-    const fp = footprintCells(type,x,y);
-    const id = world._nextId++;
-    const b = { id, type, x, y, w:FOOT[type]?.w*TILE||TILE*2, h:FOOT[type]?.h*TILE||TILE*2,
-      footprint:fp, stock:{} };
-    world.buildings.push(b);
-    log(`🏗️ ${type} gebaut @ ${x},${y}`);
-    // Produktions-Timer für Holzfäller
-    if (type==='woodcutter'){
-      b._prod=0;      // Sekunden-Akkumulator
-      b._prodTime= 7 + Math.random()*3; // 7–10s
-    }
-    hudPush();
-    return true;
+  function render(){
+    const ctx = S.ctx;
+    ctx.save();
+    ctx.clearRect(0,0,S.width,S.height);
+
+    drawGrid();
+
+    for (const r of S.roads) drawRoad(r);
+    for (const b of S.buildings) drawBuilding(b);
+
+    ctx.restore();
   }
 
-  function eraseAt(pos){
-    // Gebäude?
-    for (let i=world.buildings.length-1; i>=0; i--){
-      const b=world.buildings[i];
-      const x0=b.x-b.w/2, y0=b.y-b.h/2, x1=x0+b.w, y1=y0+b.h;
-      if (pos.x>=x0 && pos.x<=x1 && pos.y>=y0 && pos.y<=y1){
-        world.buildings.splice(i,1);
-        log('🧹 Gebäude entfernt');
-        return true;
-      }
+  function tick(){
+    if (!S.running) { render(); requestAnimationFrame(tick); return; }
+    // (später: Carrier/Animationen)
+    render();
+    S.onDebug && S.onDebug();
+    requestAnimationFrame(tick);
+  }
+
+  // --------- Build‑/Erase‑Logik
+  function setTool(name){
+    S.tool = name;
+    if (name !== 'road') S.roadStart = null;
+    setHUD('Tool',
+      name==='pointer' ? 'Zeiger' :
+      name==='road' ? 'Straße' :
+      name==='hq' ? 'HQ' :
+      name==='woodcutter' ? 'Holzfäller' :
+      name==='depot' ? 'Depot' : 'Abriss'
+    );
+  }
+
+  function placeBuilding(type, tx, ty){
+    const ts = S.tileSize;
+    const w = (type==='hq' ? 3 : 2) * ts;
+    const h = (type==='hq' ? 3 : 2) * ts;
+    const c = tileToWorldCenter(tx,ty);
+    S.buildings.push({ type, x:c.x, y:c.y, w, h });
+  }
+
+  function pointSegDist(px,py, x1,y1,x2,y2){
+    const A=px-x1, B=py-y1, C=x2-x1, D=y2-y1;
+    const dot = A*C + B*D;
+    const len2= C*C + D*D;
+    let t = len2 ? dot/len2 : 0;
+    t = clamp(t,0,1);
+    const x = x1 + t*C, y = y1 + t*D;
+    return Math.hypot(px-x, py-y);
+  }
+
+  function tryErase(wx, wy){
+    // Gebäude
+    for (let i=S.buildings.length-1; i>=0; i--){
+      const b=S.buildings[i], x0=b.x-b.w/2, x1=b.x+b.w/2, y0=b.y-b.h/2, y1=b.y+b.h/2;
+      if (wx>=x0 && wx<=x1 && wy>=y0 && wy<=y1){ S.buildings.splice(i,1); return true; }
     }
-    // Straße?
-    const hit = 6;
-    for (let i=world.roads.length-1; i>=0; i--){
-      const r=world.roads[i];
-      const d = pointToSegmentDist(pos.x,pos.y, r.x1,r.y1, r.x2,r.y2);
-      if (d<=hit){ world.roads.splice(i,1); rebuildGraph(); log('🧹 Straße entfernt'); return true; }
+    // Straßen (Hit 6px)
+    const hit = 6 / S.zoom;
+    for (let i=S.roads.length-1; i>=0; i--){
+      const r=S.roads[i];
+      if (pointSegDist(wx,wy, r.x1,r.y1,r.x2,r.y2) <= hit){ S.roads.splice(i,1); return true; }
     }
     return false;
   }
-  function pointToSegmentDist(px,py,x1,y1,x2,y2){
-    const A=px-x1, B=py-y1, C=x2-x1, D=y2-y1;
-    const dot=A*C+B*D, len2=C*C+D*D;
-    let t = len2 ? (dot/len2) : -1; t= clamp(t,0,1);
-    const x=x1+t*C, y=y1+t*D;
-    return Math.hypot(px-x,py-y);
+
+  function placeOrFinishRoad(tx,ty){
+    const ts = S.tileSize;
+    const c = tileToWorldCenter(tx,ty);
+    if (!S.roadStart){ S.roadStart = {x:c.x, y:c.y}; return; }
+    const seg = { x1:S.roadStart.x, y1:S.roadStart.y, x2:c.x, y2:c.y };
+    if (Math.hypot(seg.x2-seg.x1, seg.y2-seg.y1) > 1) S.roads.push(seg);
+    S.roadStart = null;
   }
 
-  // ===== Straßen =====
-  function addRoad(seg){
-    const s = {
-      x1: gSnap(seg.x1), y1: gSnap(seg.y1),
-      x2: gSnap(seg.x2), y2: gSnap(seg.y2)
-    };
-    if (Math.hypot(s.x2-s.x1, s.y2-s.y1) < 2) return false;
-    world.roads.push(s);
-    rebuildGraph();
-    log(`🛣️ Straße: ${s.x1},${s.y1} → ${s.x2},${s.y2}`);
-    return true;
-  }
-  function cancelRoadStart(){ world._roadStart=null; }
-  function rebuildGraph(){
-    world.nodes.clear();
-    for (const r of world.roads){
-      const a = key(r.x1,r.y1), b = key(r.x2,r.y2);
-      addEdge(a,b);
-    }
-  }
-
-  // ===== Wegfindung über Road‑Graph =====
-  function nearestNode(wx,wy){
-    if (world.roads.length===0) return null;
-    let best=null, bd=1e9;
-    for (const r of world.roads){
-      const pts = [{x:r.x1,y:r.y1},{x:r.x2,y:r.y2}];
-      for (const p of pts){
-        const d=Math.hypot(wx-p.x, wy-p.y);
-        if (d<bd){bd=d;best=p;}
+  // Tap‑Dispatcher: bekommt **Weltkoordinaten**
+  function tap(wx, wy){
+    switch (S.tool){
+      case 'road': {
+        const {tx,ty} = worldToTile(wx,wy);
+        placeOrFinishRoad(tx,ty);
+        break;
       }
-    }
-    return best ? key(best.x,best.y) : null;
-  }
-  function bfsPath(fromKey, toKey){
-    if (!fromKey||!toKey) return null;
-    const q=[fromKey], prev=new Map([[fromKey,null]]); let hit=null;
-    while(q.length){
-      const u=q.shift();
-      if (u===toKey){ hit=u; break; }
-      for (const v of (world.nodes.get(u)||[])){
-        if (!prev.has(v)){ prev.set(v,u); q.push(v); }
+      case 'hq': {
+        const {tx,ty} = worldToTile(wx,wy);
+        placeBuilding('hq',tx,ty);
+        break;
       }
-    }
-    if (!hit) return null;
-    // rückwärts
-    const path=[];
-    for (let k=hit; k!==null; k = prev.get(k)){
-      const [sx,sy]=k.split(',').map(n=>+n);
-      path.push({x:+sx, y:+sy});
-    }
-    path.reverse();
-    return path;
-  }
-
-  // ===== Carrier / Transport =====
-  function requestCarry(fromB, toB){
-    // finde Pfad von nächster Road-Node nahe fromB→toB
-    const a = nearestNode(fromB.x, fromB.y);
-    const b = nearestNode(toB.x, toB.y);
-    const nodesPath = bfsPath(a,b);
-    if (!nodesPath) return false;
-    // startpunkt auf Gebäude-Position ergänzen (optisch)
-    const path = [{x:fromB.x, y:fromB.y}, ...nodesPath.map(p=>({x:p.x,y:p.y})), {x:toB.x,y:toB.y}];
-    const c = { x: path[0].x, y:path[0].y, path, t:0, seg:0, speed: 55, frame:0 };
-    world.carriers.push(c);
-    onHUD('Car', world.carriers.length);
-    return true;
-  }
-
-  function updateCarriers(dt){
-    for (const c of world.carriers){
-      if (c.seg >= c.path.length-1) continue;
-      const a=c.path[c.seg], b=c.path[c.seg+1];
-      const dx=b.x-c.x, dy=b.y-c.y, dist=Math.hypot(dx,dy)||1;
-      const step = c.speed*dt;
-      if (step>=dist){ c.x=b.x; c.y=b.y; c.seg++; }
-      else { c.x+=dx/dist*step; c.y+=dy/dist*step; }
-      c.frame = (c.frame + dt*8) % 4; // 8 fps anim
-    }
-    // Fertige löschen (optional nach kurzer Pause)
-    for (let i=world.carriers.length-1;i>=0;i--){
-      const c=world.carriers[i];
-      if (c.seg>=c.path.length-1) world.carriers.splice(i,1);
-    }
-  }
-
-  // ===== Produktion / Logik =====
-  function nearestByType(type, from){
-    let best=null, bd=1e9;
-    for (const b of world.buildings){
-      if (b.type!==type) continue;
-      const d = Math.hypot(b.x-from.x, b.y-from.y);
-      if (d<bd){ bd=d; best=b; }
-    }
-    return best;
-  }
-  function anyHQ(){ return world.buildings.find(b=>b.type==='hq'); }
-  function anyDepot(){ return world.buildings.find(b=>b.type==='depot'); }
-
-  function updateProduction(dt){
-    for (const b of world.buildings){
-      if (b.type==='woodcutter'){
-        b._prod += dt;
-        if (b._prod >= b._prodTime){
-          b._prod = 0;
-          // Rohholz erzeugt → Transportauftrag
-          const depot = nearestByType('depot', b);
-          const hq    = nearestByType('hq', b) || anyHQ();
-          if (!hq){ continue; }
-          // „kürzerer Weg“ zählt: Distanz Gebäude→Ziel
-          let target = hq;
-          if (depot){
-            const dhq = Math.hypot(hq.x-b.x, hq.y-b.y);
-            const dpt = Math.hypot(depot.x-b.x, depot.y-b.y);
-            target = (dpt<dhq) ? depot : hq;
-          }
-          if (requestCarry(b, target)){
-            // Ankunft erhöht Ressourcen – vereinfachte, sofortige Gutschrift:
-            // (Eleganter wäre: erst bei Arrive. Für jetzt: direkt buchen.)
-            world.res.wood += 1;
-            onHUD('Wood', world.res.wood);
-          }
-        }
+      case 'woodcutter': {
+        const {tx,ty} = worldToTile(wx,wy);
+        placeBuilding('woodcutter',tx,ty);
+        break;
       }
+      case 'depot': {
+        const {tx,ty} = worldToTile(wx,wy);
+        placeBuilding('depot',tx,ty);
+        break;
+      }
+      case 'erase': {
+        tryErase(wx,wy);
+        break;
+      }
+      default: /* pointer */ break;
     }
   }
 
-  // ===== API =====
-  function newGame(){
-    generate();
-    // Start-HQ mittig
-    placeBuilding('hq', world.center);
+  // --------- Public Helpers für Input
+  function start({canvas, onHUD, onDebug}){
+    S.canvas = canvas;
+    S.ctx = canvas.getContext('2d');
+    S.onHUD = onHUD || null;
+    S.onDebug = onDebug || null;
+    resizeCanvas();
+    S.zoom = 1.0;
+    setHUD('Zoom', `${S.zoom.toFixed(2)}x`);
+    setTool('pointer');
+
+    S.running = true;
   }
 
-  function update(dt){
-    updateProduction(dt);
-    updateCarriers(dt);
+  // nur Grid/Platzhalter schon vor Start zeigen
+  function bootstrap(canvas, onHUD){
+    S.canvas = canvas;
+    S.ctx = canvas.getContext('2d');
+    S.onHUD = onHUD || null;
+    resizeCanvas();
+    setHUD('Zoom', `${S.zoom.toFixed(2)}x`);
+    S.running = true;
+    requestAnimationFrame(tick);
   }
 
-  function cancelRoadStart(){ world._roadStart=null; }
+  function softReset(){
+    S.roads.length = 0;
+    S.buildings.length = 0;
+    S.camX = 0; S.camY = 0; S.zoom = 1.0;
+    setHUD('Zoom', `${S.zoom.toFixed(2)}x`);
+    setTool('pointer');
+    resizeCanvas();
+  }
 
-  function eraseAt(pos){ return eraseAt_impl(pos); }
-  const eraseAt_impl = eraseAt; // rename for export consistency
+  function centerOnContent(){
+    if (S.buildings.length === 0) { S.camX=0; S.camY=0; return; }
+    // Auf erstes HQ/falls nicht vorhanden erstes Gebäude zentrieren
+    const hq = S.buildings.find(b=>b.type==='hq') || S.buildings[0];
+    S.camX = hq.x; S.camY = hq.y;
+  }
 
-  function toJSON(){
+  function placeInitialHQ(){
+    // HQ (Stein) mittig auf den Bildschirm‑Weltkoordinaten
+    const cx = S.camX, cy = S.camY;
+    const {tx,ty} = worldToTile(cx,cy);
+    placeBuilding('hq', tx, ty);
+  }
+
+  // Exporte für Input
+  function state(){
     return {
-      w:world.w, h:world.h,
-      tiles: world.tiles,
-      roads: world.roads,
-      buildings: world.buildings.map(b=>({id:b.id,type:b.type,x:b.x,y:b.y,w:b.w,h:b.h,footprint:b.footprint})),
-      res: world.res,
+      DPR:S.DPR, width:S.width, height:S.height,
+      camX:S.camX, camY:S.camY, zoom:S.zoom, tileSize:S.tileSize,
+      roads:S.roads, buildings:S.buildings, tool:S.tool
     };
-  }
-  function fromJSON(data){
-    world.w=data.w; world.h=data.h;
-    world.tiles=data.tiles;
-    world.roads=data.roads; rebuildGraph();
-    world.buildings = data.buildings;
-    world.res = data.res||world.res;
-    // reposition center
-    world.center = { x:(world.w*TILE)/2, y:(world.h*TILE)/2 };
   }
 
   return {
-    T, TILE,
-    get tiles(){ return world.tiles; },
-    get roads(){ return world.roads; },
-    get buildings(){ return world.buildings; },
-    get carriers(){ return world.carriers; },
-    get center(){ return world.center; },
-    newGame, update,
-    addRoad, cancelRoadStart,
-    placeBuilding, eraseAt: eraseAt_impl,
-    toJSON, fromJSON,
+    // Lifecycle
+    bootstrap, start, softReset,
+    // Camera/Zoom
+    resizeCanvas, setZoom, setCamera, centerOnContent,
+    // Build
+    setTool, tap, placeInitialHQ,
+    // Coord helpers for input
+    clientToWorldX, clientToWorldY,
+    // State (readonly snapshot)
+    state
   };
-}
+})();
