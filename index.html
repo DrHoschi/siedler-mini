@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V15.0 (Mobile)</title>
+  <title>Siedler‑Mini V15.1 (Mobile)</title>
   <style>
     :root{
       color-scheme:dark;
@@ -17,19 +17,22 @@
     #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
     canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
-    /* HUD */
     .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:var(--text);
       padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;gap:8px;align-items:center}
     .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:var(--text);
-      font-size:15px;padding:8px 12px}
+      font-size:15px;padding:10px 14px}
     .btn.ok{background:var(--ok);border-color:#0a6129}
     .btn.danger{background:var(--warn);border-color:#752020}
+
+    /* HUD */
     #hudTop{position:fixed;left:8px;right:8px;top:8px;display:flex;gap:8px;flex-wrap:wrap;z-index:3;pointer-events:none}
     #hudTop .pill{pointer-events:auto}
-    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:3;pointer-events:none}
-    #tools .btn{pointer-events:auto}
     #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;z-index:3;pointer-events:none}
     #hudRight .btn{pointer-events:auto}
+
+    /* Floating Build-Button */
+    #buildFab{position:fixed;left:8px;bottom:8px;z-index:3;display:flex;gap:8px}
+    #buildFab .btn{display:inline-flex;align-items:center;gap:8px}
 
     /* Startkarte */
     #startCard{position:fixed;left:50%;top:68%;transform:translate(-50%,-50%);
@@ -37,15 +40,29 @@
       width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
     #startCard h3{margin:0 0 10px;font-size:20px}
     #startCard p{margin:8px 0;color:var(--muted)}
-    #startBtns{display:flex;gap:10px;margin-top:10px}
+    #startBtns{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
 
-    /* Debug-Pill unten links */
+    /* Bau-Menü (Bottom Sheet) */
+    #buildSheet{position:fixed;left:0;right:0;bottom:0;transform:translateY(100%);
+      background:var(--panel2);border-top:1px solid #20324a;border-radius:16px 16px 0 0;
+      box-shadow:0 -20px 60px rgba(0,0,0,.35);color:var(--text);z-index:4;
+      transition:.22s transform ease-out}
+    #buildSheet.open{transform:translateY(0)}
+    #buildHeader{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)}
+    #buildTabs{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+    .tab{padding:8px 12px;border-radius:999px;background:#0f1b29;border:1px solid #1b2a40;cursor:pointer}
+    .tab.active{outline:2px solid #36a3ff}
+    #buildGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px}
+    .tileBtn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:center}
+    .tileBtn span{font-size:12px;color:var(--muted)}
+    .tileIcon{width:40px;height:40px;display:grid;place-items:center;font-size:22px}
+
+    /* Debug */
     #dbg{position:fixed;left:8px;bottom:8px;color:#ffd3d3;background:#2a1111;border:1px solid #5b2626;
-      border-radius:8px;padding:6px 8px;font:12px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;white-space:pre;z-index:4}
+      border-radius:8px;padding:6px 8px;font:12px/1.25 ui-monospace,Menlo,monospace;white-space:pre;z-index:4}
 
-    @media (max-width:480px){
-      .pill{font-size:13px;padding:5px 8px}
-      #startCard{top:66%}
+    @media (max-width:520px){
+      #buildGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
     }
   </style>
 </head>
@@ -62,16 +79,6 @@
     <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
 
-  <!-- Tools links -->
-  <div id="tools" aria-label="Werkzeuge">
-    <button class="btn" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="woodcutter">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="erase">Abriss</button>
-  </div>
-
   <!-- Buttons rechts -->
   <div id="hudRight" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
@@ -79,10 +86,16 @@
     <button id="btnFull" class="btn">Vollbild</button>
   </div>
 
+  <!-- Floating Build -->
+  <div id="buildFab">
+    <button id="btnBuild" class="btn">🪓🔧 Bauen</button>
+    <button id="btnErase" class="btn">🗑️ Abriss</button>
+  </div>
+
   <!-- Startkarte -->
   <div id="startCard">
-    <h3>Siedler‑Mini V15.0 (Mobile)</h3>
-    <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger</i>) · <b>2 Finger</b>/<b>Mausrad</b> = Zoomen · kurzer Tap = bauen (bei Bau‑Tool). Erstes HQ wird mittig gesetzt.</p>
+    <h3>Siedler‑Mini V15.1 (Mobile)</h3>
+    <p>Ein Finger = verschieben (automatisch im Zeiger) · Zwei Finger/Scroll = zoomen · kurzer Tap = bauen (wenn Bau‑Tool aktiv). Erstes HQ wird mittig gesetzt.</p>
     <p><i>Tipp:</i> Doppeltipp auf die Karte schaltet Vollbild (iOS nutzt WebKit‑Fullscreen).</p>
     <div id="startBtns">
       <button id="btnStart" class="btn ok">Start</button>
@@ -91,8 +104,22 @@
     </div>
   </div>
 
+  <!-- Bau-Menü -->
+  <section id="buildSheet" aria-label="Bau-Menü" aria-hidden="true">
+    <div id="buildHeader">
+      <strong>Baumenü</strong>
+      <button id="btnCloseBuild" class="btn">Schließen</button>
+    </div>
+    <nav id="buildTabs">
+      <div class="tab active" data-cat="core">Kern</div>
+      <div class="tab" data-cat="infra">Infrastruktur</div>
+      <div class="tab" data-cat="prod">Produktion</div>
+    </nav>
+    <div id="buildGrid"></div>
+  </section>
+
   <pre id="dbg" hidden></pre>
 
-  <script type="module" src="./boot.js?v=150"></script>
+  <script type="module" src="./boot.js?v=151"></script>
 </body>
 </html>
