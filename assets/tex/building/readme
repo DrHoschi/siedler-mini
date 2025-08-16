@@ -1,0 +1,10 @@
+ │   ├─ buildings/
+ │   │   ├─ common/     ← für Platzhalter/Shared
+ │   │   │   └─ PLACEHOLDER_2x2.PNG
+ │   │   ├─ wood/       ← Holz‑Variante
+ │   │   │   ├─ HQ_WOOD.PNG
+ │   │   │   ├─ DEPOT_WOOD.PNG
+ │   │   │   └─ WOODCUTTER_WOOD.PNG
+ │   │   └─ stone/      ← Stein‑Variante
+ │   │       ├─ HQ_STONE.PNG
+ │   │       └─ 
