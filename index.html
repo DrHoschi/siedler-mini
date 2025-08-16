@@ -2,117 +2,163 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Siedler‑Mini • DEV</title>
-  <style>
-    /* ======== Grundlayout ======== */
-    html, body { height:100%; margin:0; background:#0f1a28; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    #wrap { position:relative; width:100%; height:100%; }
-    #game { position:absolute; inset:0; display:block; touch-action:none; background:#0f1a28; }
-
-    /* ======== HUD / Buttons ======== */
-    .hud-row { position:absolute; top:12px; left:12px; display:flex; gap:8px; flex-wrap:wrap; z-index:5; }
-    .hud-right { position:absolute; top:12px; right:12px; display:flex; gap:8px; z-index:5; }
-    .pill { background:#172235; color:#cfe3ff; border-radius:14px; padding:6px 10px; font-size:14px; border:1px solid #20314d; }
-    .btn { cursor:pointer; user-select:none; transition:transform .05s; }
-    .btn:active { transform:scale(0.98); }
-
-    /* ======== Start-Overlay ======== */
-    #startOverlay {
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      background:rgba(10,16,24,.35); backdrop-filter: blur(3px); z-index:6;
-    }
-    .card {
-      background:#132135; color:#cfe3ff; border-radius:12px; padding:18px 20px; width:min(620px, calc(100vw - 32px));
-      box-shadow: 0 10px 30px rgba(0,0,0,.35); border:1px solid #20314d;
-    }
-    .card h2 { margin:0 0 8px 0; font-size:18px; }
-    .row { display:flex; gap:10px; margin-top:12px; }
-    .btn-solid { background:#2e6ee8; border:0; color:white; border-radius:10px; padding:10px 14px; font-weight:600; }
-    .btn-ghost { background:transparent; border:1px solid #2e6ee8; color:#cfe3ff; border-radius:10px; padding:10px 14px; }
-
-    /* ======== Bau-Menü (Floating) ======== */
-    #buildMenu { position:absolute; left:12px; bottom:14px; z-index:5; display:flex; gap:8px; }
-    .menu { background:#132135; border:1px solid #20314d; border-radius:10px; padding:8px; display:flex; gap:8px; }
-    .tool { background:#1a2b45; border:1px solid #20314d; color:#cfe3ff; padding:8px 10px; border-radius:8px; cursor:pointer; }
-    .tool.active { outline:2px solid #2e6ee8; }
-
-    /* ======== Debug-Panel (draggable) ======== */
-    #debug {
-      position:absolute; left:10px; bottom:10px; z-index:7;
-      background:#111a2a; border:1px solid #243554; color:#b7d0ff; border-radius:10px; padding:10px;
-      min-width:260px; max-width:min(96vw, 540px); font-size:13px;
-      user-select:text; cursor:grab;
-    }
-    #debug.dragging { cursor:grabbing; }
-    #debug pre { margin:6px 0 0; white-space:pre-wrap; word-break:break-word; max-height:40vh; overflow:auto; }
-    #debug .title { opacity:.8; font-weight:600; }
-
-    /* kleine Version unten rechts: Versionsstempel */
-    #ver { position:absolute; right:10px; bottom:8px; color:#4978ff99; font-size:11px; z-index:4; }
-
-    /* Mobile Safari Vollbild-Hinweis (wird nur bei Bedarf angezeigt) */
-    #fullWarn { position:absolute; top:56px; right:12px; background:#512; color:#ffd9d9; border:1px solid #a55; padding:6px 10px;
-      border-radius:10px; z-index:6; display:none; }
-  </style>
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>Siedler‑Mini V15 (DEV)</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div id="wrap">
-  <canvas id="game"></canvas>
 
-  <!-- HUD links: Ressourcen (Dummy-Anzeige, füllen wir aus JS) -->
-  <div class="hud-row" id="hudRow">
-    <div class="pill" id="hudWood">Holz 0</div>
-    <div class="pill" id="hudStone">Stein 0</div>
-    <div class="pill" id="hudFood">Nahrung 0</div>
-    <div class="pill" id="hudGold">Gold 0</div>
-    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
-    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
-  </div>
+  <!-- HUD: Ressourcen + Buttons (position:fixed; werden bei Fullscreen automatisch mitgenommen) -->
+  <header id="hud">
+    <div class="chips" id="res">
+      <span class="chip">Holz <b id="resWood">0</b></span>
+      <span class="chip">Stein <b id="resStone">0</b></span>
+      <span class="chip">Nahrung <b id="resFood">0</b></span>
+      <span class="chip">Gold <b id="resGold">0</b></span>
+      <span class="chip">Träger <b id="resCarrier">0</b></span>
+      <span class="chip">Tool: <b id="hudTool">Zeiger</b></span>
+      <span class="chip">Zoom <b id="hudZoom">1.00x</b></span>
+    </div>
 
-  <!-- HUD rechts: Steuerung -->
-  <div class="hud-right">
-    <div class="pill btn" id="btnCenter">Zentrieren</div>
-    <div class="pill btn" id="btnDebug">Debug</div>
-    <div class="pill btn" id="btnFS">Vollbild</div>
-  </div>
+    <div class="actions">
+      <button class="btn" id="btnCenter">Zentrieren</button>
+      <button class="btn" id="btnDebug">Debug</button>
+      <button class="btn" id="btnFullscreen">Vollbild</button>
+      <button class="btn primary" id="btnBuild">Bauen</button>
+    </div>
+  </header>
 
-  <!-- Start-Overlay -->
+  <!-- Bau‑Palette (ein/aus) -->
+  <aside id="buildPalette" hidden>
+    <button class="btn tool" data-tool="pointer">Zeiger</button>
+    <!-- Straßen sind momentan deaktiviert; Button bleibt auskommentiert
+    <button class="btn tool" data-tool="road">Straße</button>
+    -->
+    <button class="btn tool" data-tool="hq">HQ</button>
+    <button class="btn tool" data-tool="depot">Depot</button>
+    <button class="btn tool" data-tool="woodcutter">Holzfäller</button>
+    <button class="btn danger tool" data-tool="erase">Abriss</button>
+  </aside>
+
+  <!-- Spielfeld -->
+  <main id="stage">
+    <canvas id="game"></canvas>
+  </main>
+
+  <!-- Start‑Overlay (nur Info) -->
   <div id="startOverlay">
     <div class="card">
-      <h2>Siedler‑Mini • DEV (Top‑Down)</h2>
-      <div>1 Finger: Karte verschieben · 2 Finger/Scroll: Zoomen · Tippen: Bauen (wenn ein Bau‑Tool aktiv ist).<br>
-      Tipp: Doppel‑Tap auf die Karte schaltet Vollbild (falls der Browser erlaubt).</div>
+      <h3>Siedler‑Mini V15 (Mobile)</h3>
+      <p>
+        <b>Zeiger:</b> ziehen = Karte verschieben · <b>Pinch</b> = zoomen ·
+        <b>Kurz‑Tap</b> = bauen (bei aktivem Bau‑Tool)<br />
+        <b>Tipp:</b> Doppeltipp auf die Karte zoomt stufenweise.
+      </p>
       <div class="row">
-        <button class="btn-solid" id="btnStart">Start</button>
-        <button class="btn-ghost" id="btnStartFS">Vollbild + Start</button>
-        <button class="btn-ghost" id="btnReset">Reset</button>
+        <button class="btn primary" id="btnStart">Start</button>
+        <button class="btn" id="btnFSInCard">Vollbild</button>
+        <button class="btn danger" id="btnReset">Reset</button>
       </div>
     </div>
   </div>
 
-  <!-- Bau-Menü (links unten) -->
-  <div id="buildMenu">
-    <div class="menu">
-      <div class="tool btn" data-tool="pointer" id="toolPointer">Zeiger</div>
-      <div class="tool btn" data-tool="hq">HQ</div>
-      <div class="tool btn" data-tool="woodcutter">Holzfäller</div>
-      <div class="tool btn" data-tool="depot">Depot</div>
-      <div class="tool btn" data-tool="erase">Abriss</div>
+  <!-- Debug‑Konsole (ziehbar) -->
+  <div id="debug" hidden>
+    <div class="debugHead">
+      <span>Debug (ziehen zum Verschieben)</span>
+      <button id="dbgClose">×</button>
     </div>
+    <pre id="debugOut"></pre>
   </div>
 
-  <!-- bewegliches Debug -->
-  <div id="debug" style="display:none">
-    <div class="title">Debug (ziehen zum Verschieben)</div>
-    <pre id="debugLog"></pre>
-  </div>
+  <footer id="version">DEV 16.8.2025</footer>
 
-  <div id="fullWarn">Vollbild wird hier evtl. nicht unterstützt. Tipp: iOS ≥16 Safari oder “Zum Homescreen hinzufügen”.</div>
-  <div id="ver">DEV 16.8.2025 • v15.x</div>
-</div>
+  <script type="module">
+    import { game } from './game.js';
 
-<!-- Module -->
-<script type="module" src="./js/ui.js"></script>
+    // ---------- Mini-Hilfsfunktionen ----------
+    const $ = sel => document.querySelector(sel);
+    const log = (...a)=>game.debug?.log(...a);
+
+    // ---------- Buttons verdrahten ----------
+    $('#btnStart').onclick = () => game.startGame({
+      canvas: $('#game'),
+      onHUD: (k,v) => {
+        if (k==='Zoom') $('#hudZoom').textContent = v;
+        if (k==='Tool') $('#hudTool').textContent = v;
+      }
+    });
+
+    $('#btnReset').onclick = () => location.reload();
+
+    const requestFS = async () => {
+      const elem = document.documentElement;
+      try {
+        if (elem.requestFullscreen) await elem.requestFullscreen();
+        else if (elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
+        else alert('Vollbild wird in diesem Browser/Modus nicht unterstützt.\nTipp: iOS Safari ab iOS 16 oder „Zum Homescreen hinzufügen“.');
+      } catch(e){ alert('Fullscreen: ' + e.message); }
+    };
+    $('#btnFullscreen').onclick = requestFS;
+    $('#btnFSInCard').onclick = requestFS;
+
+    $('#btnCenter').onclick = () => game.centerOnContent?.();
+
+    // Debug an/aus + verschiebbar
+    const dbg = $('#debug');
+    const dbgOut = $('#debugOut');
+    $('#btnDebug').onclick = () => {
+      dbg.hidden = !dbg.hidden;
+      game.debug?.setEnabled(!dbg.hidden);
+    };
+    $('#dbgClose').onclick = () => { dbg.hidden = true; game.debug?.setEnabled(false); };
+
+    // Debug draggable
+    (() => {
+      let dragging=false, sx=0, sy=0, ox=0, oy=0;
+      const head = dbg.querySelector('.debugHead');
+      head.addEventListener('pointerdown', e=>{
+        dragging=true; sx=e.clientX; sy=e.clientY;
+        const r = dbg.getBoundingClientRect(); ox=r.left; oy=r.top;
+        dbg.setPointerCapture?.(e.pointerId);
+      });
+      window.addEventListener('pointermove', e=>{
+        if (!dragging) return;
+        const nx = ox + (e.clientX-sx);
+        const ny = oy + (e.clientY-sy);
+        dbg.style.left = Math.max(8, Math.min(window.innerWidth-200, nx)) + 'px';
+        dbg.style.top  = Math.max(8, Math.min(window.innerHeight-100, ny)) + 'px';
+      }, {passive:true});
+      window.addEventListener('pointerup', ()=> dragging=false, {passive:true});
+    })();
+
+    // Ausgabe an Debug weiterreichen
+    game.debug = {
+      setEnabled: (on)=> game.setDebug?.(on),
+      log: (...a) => {
+        if (dbg.hidden) return;
+        dbgOut.textContent += a.join(' ') + '\n';
+        dbgOut.scrollTop = dbgOut.scrollHeight;
+      }
+    };
+
+    // Bau‑Palette
+    const palette = $('#buildPalette');
+    $('#btnBuild').onclick = () => {
+      palette.hidden = !palette.hidden;
+    };
+    palette.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.tool');
+      if (!btn) return;
+      const tool = btn.dataset.tool;
+      game.setTool(tool);
+      $('#hudTool').textContent = btn.textContent;
+      palette.hidden = true; // Palette schließt sich beim Tool‑Wechsel
+    });
+
+    // Start‑Overlay sichtbar lassen bis „Start“
+    // (Klicks gehen aber schon auf die Karte durch – ist Absicht)
+  </script>
 </body>
 </html>
