@@ -1,168 +1,31 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#0b1628" />
-<title>Siedler-Mini V15.4-pm (Mobile)</title>
-<style>
-  :root{
-    color-scheme: dark;
-    --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
-    --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
-    --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-    --shadow: 0 20px 60px rgba(0,0,0,.35);
-    --gap:10px;
-  }
-  html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-  #wrap{height:100%;display:flex;flex-direction:column}
-
-  /* Canvas */
-  #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
-  canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
-
-  /* HUD oben */
-  #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
-    padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3; pointer-events:none}
-  .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
-    padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px;pointer-events:auto}
-
-  /* Tools: Tablet links, Phone unten als Sheet */
-  #toolsSidebar{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;
-    padding-left: calc(env(safe-area-inset-left,0)); z-index:3; pointer-events:none}
-  #toolsSidebar .btn{pointer-events:auto}
-  .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
-    font-size:15px;padding:10px 14px}
-  .btn.ok{background:var(--ok);border-color:#0a6129}
-  .btn.danger{background:var(--warn);border-color:#752020}
-  .btn.active{outline:2px solid #36a3ff}
-
-  /* Rechts oben */
-  #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;
-    padding-right: calc(env(safe-area-inset-right,0)); z-index:3; pointer-events:none}
-  #hudRight .btn{pointer-events:auto}
-
-  /* Startkarte */
-  #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
-    background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
-    width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
-  #startCard h3{margin:0 0 10px;font-size:20px}
-  #startCard p{margin:8px 0;color:var(--muted)}
-  #startBtns{display:flex;gap:10px;margin-top:10px}
-
-  /* Build-Sheet (Phone) */
-  #buildSheet{position:fixed;left:0;right:0;bottom:0;max-height:56vh;
-    background:var(--panel2);border-top:1px solid var(--line);box-shadow:0 -20px 60px rgba(0,0,0,.35);
-    transform:translateY(100%);transition:transform .2s ease;z-index:3}
-  #buildSheet.open{transform:translateY(0)}
-  #buildSheetHeader{display:flex;justify-content:space-between;align-items:center;padding:10px 12px}
-  #buildGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:10px 12px}
-  .tileBtn{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;
-    padding:12px;border-radius:12px;background:#0f1b29;border:1px solid #1b2a40}
-  .tileBtn span{font-size:12px;color:var(--muted)}
-  .tileImg{width:48px;height:48px;background:#0c1520;border-radius:8px;border:1px solid #1b2a40;
-    display:flex;align-items:center;justify-content:center;overflow:hidden}
-
-  /* Platzierungs-UI (✔/✖) – erscheint neben dem Ghost */
-  #placeUI{position:fixed;display:none;gap:8px;z-index:4}
-  #placeUI .btn{padding:8px 10px}
-
-  /* Debug-Feld (dragbar) */
-  #dbg{position:fixed;left:12px;bottom:12px;background:#0a111b;opacity:.95;color:#b7d1ff;
-    border:1px solid #19304b;border-radius:10px;padding:8px 10px;z-index:5;display:none}
-  #dbg h4{margin:0 0 6px 0;font-size:13px;color:#89b6ff}
-  #dbg pre{margin:0;font-size:12px;white-space:pre-wrap}
-
-  /* Sehr schmale Geräte */
-  @media (max-width:480px){
-    .pill{font-size:13px;padding:5px 8px}
-    #toolsSidebar{display:none} /* Phone nutzt Build-Sheet */
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Siedler-Mini</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      touch-action: none;
+      background: #111;
+    }
+  </style>
 </head>
 <body>
-<div id="wrap">
+  <canvas id="game"></canvas>
 
-  <!-- HUD oben -->
-  <div id="hudTop" aria-label="Ressourcen & Status">
-    <div class="pill">🌲 Holz <span id="hudHolz">0</span></div>
-    <div class="pill">🪨 Stein <span id="hudStein">0</span></div>
-    <div class="pill">🌿 Nahrung <span id="hudNahrung">0</span></div>
-    <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
-    <div class="pill">🍞 Träger <span id="hudTraeger">0</span></div>
-    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
-    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
-  </div>
-
-  <!-- Tools (Tablet/Desk) -->
-  <div id="toolsSidebar" aria-label="Werkzeuge">
-    <button class="btn" data-tool="pointer">Zeiger</button>
-    <button class="btn" id="btnBuildOpen">Bau-Menü</button>
-    <button class="btn" data-tool="erase">Abriss</button>
-  </div>
-
-  <!-- Rechts oben -->
-  <div id="hudRight" aria-label="Aktionen">
-    <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug" class="btn">Debug</button>
-    <button id="btnFull" class="btn">Vollbild</button>
-  </div>
-
-  <!-- Spielfläche -->
-  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
-
-  <!-- Startkarte -->
-  <div id="startCard">
-    <h3>Siedler-Mini V15.4-pm</h3>
-    <p><b>Zeiger:</b> Karte verschieben · <b>Bau-Menü:</b> Objekt wählen → Ghost erscheint (grün=baubar, rot=blockiert) → ✔ bauen / ✖ abbrechen.</p>
-    <p><i>Tipp:</i> Doppeltipp auf die Karte schaltet Vollbild.</p>
-    <div id="startBtns">
-      <button id="btnStart" class="btn ok">Start</button>
-      <button id="btnFs" class="btn">Vollbild</button>
-      <button id="btnReset" class="btn danger">Reset</button>
-    </div>
-  </div>
-
-  <!-- Build-Sheet (Phone + auch auf Tablet nutzbar) -->
-  <div id="buildSheet" aria-label="Bauen">
-    <div id="buildSheetHeader">
-      <div style="font-weight:600;color:#cfe3ff">Bauen</div>
-      <div>
-        <button class="btn" id="btnBuildClose">Fertig</button>
-      </div>
-    </div>
-    <div id="buildGrid">
-      <!-- Kacheln (Bauobjekte) -->
-      <button class="tileBtn" data-build="hq">
-        <div class="tileImg"><img alt="HQ" src="assets/tex/topdown_hq.png" width="48" height="48"></div>
-        <span>Hauptquartier</span>
-      </button>
-      <button class="tileBtn" data-build="woodcutter">
-        <div class="tileImg"><img alt="Holzfäller" src="assets/tex/topdown_woodcutter.png" width="48" height="48"></div>
-        <span>Holzfäller</span>
-      </button>
-      <button class="tileBtn" data-build="depot">
-        <div class="tileImg"><img alt="Depot" src="assets/tex/topdown_depot.png" width="48" height="48"></div>
-        <span>Depot</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- Platzierungs-UI (✔/✖) – Position wird dynamisch gesetzt -->
-  <div id="placeUI">
-    <button id="btnPlaceOk" class="btn ok">✔ Bauen</button>
-    <button id="btnPlaceCancel" class="btn danger">✖ Abbrechen</button>
-  </div>
-
-  <!-- Debug -->
-  <div id="dbg">
-    <h4>Debug</h4>
-    <pre id="dbgText">–</pre>
-  </div>
-</div>
-
-<script type="module" src="./boot.js?v=154pm"></script>
+  <!-- Asset-Liste (zentral) -->
   <script type="module" src="assets.js"></script>
-<script type="module" src="game.js"></script>
+  <!-- Hauptspiel -->
+  <script type="module" src="game.js"></script>
 </body>
 </html>
