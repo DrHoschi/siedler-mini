@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V15.3 (Mobile)</title>
+  <title>Siedler‑Mini V15.3.1 (Mobile)</title>
   <style>
     :root{
       color-scheme: dark;
@@ -36,7 +36,10 @@
     #buildLauncher{position:fixed;left:8px;top:64px;z-index:3}
     #buildBtn{padding:10px 14px;font-size:16px;border-radius:14px}
 
-    /* Bau-Panel */
+    /* Bau-Panel + Click-Backdrop */
+    #buildBackdrop{position:fixed;inset:0;z-index:3;display:none}
+    #buildBackdrop.show{display:block}
+    #buildBackdrop::before{content:"";position:absolute;inset:0;background:transparent}
     #buildPanel{position:fixed;left:8px;top:110px;z-index:4;display:none}
     #buildCard{background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
       width:min(360px,94vw);padding:12px;box-shadow:var(--shadow)}
@@ -91,6 +94,9 @@
   <button id="buildBtn" class="btn ok">🔨 Bauen</button>
 </div>
 
+<!-- Backdrop, um durch Klick außerhalb zu schließen -->
+<div id="buildBackdrop"></div>
+
 <!-- Bau-Panel -->
 <div id="buildPanel" role="dialog" aria-modal="true" aria-labelledby="buildTitle">
   <div id="buildCard">
@@ -121,7 +127,7 @@
 
 <!-- Startkarte -->
 <div id="startCard">
-  <h3>Siedler‑Mini V15.3 (Mobile)</h3>
+  <h3>Siedler‑Mini V15.3.1 (Mobile)</h3>
   <p><b>Schieben</b> geht nur, wenn das <b>Bau‑Menü geschlossen</b> ist (Zeiger‑Modus). <b>Bauen</b> ist nur möglich, solange das Bau‑Menü offen ist – so vermeidest du versehentliche Platzierungen.</p>
   <p><b>1 Finger</b> = schieben · <b>Scroll</b> = zoomen · kurzer Tap platziert.</p>
   <div id="startBtns">
@@ -137,9 +143,9 @@
   <pre id="dbgOut">–</pre>
 </div>
 
-<div id="version">V15.3</div>
+<div id="version">V15.3.1</div>
 
 <!-- Boot -->
-<script type="module" src="./boot.js?v=15.3"></script>
+<script type="module" src="./boot.js?v=15.3.1"></script>
 </body>
 </html>
