@@ -2,119 +2,65 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V15.2 (Mobile)</title>
-  <style>
-    :root{
-      color-scheme: dark;
-      --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
-      --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
-      --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-      --shadow: 0 20px 60px rgba(0,0,0,.35);
-    }
-    *{ box-sizing:border-box; }
-    html,body{
-      height:100%; margin:0; background:var(--bg);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial;
-      -webkit-user-select:none; user-select:none;
-      overscroll-behavior:none; touch-action:manipulation;
-    }
-    #game{
-      position:fixed; inset:0; display:block; z-index:0;
-      /* WICHTIG: Canvas selbst fängt keine Browserscrolls ab */
-      touch-action:none;
-    }
-    canvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Siedler‑Mini</title>
 
-    /* HUD */
-    .hud{position:fixed;left:8px;right:8px;top:6px;display:flex;gap:8px;align-items:center;z-index:3;pointer-events:none}
-    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:var(--text);
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px;pointer-events:auto}
-    .right{margin-left:auto;display:flex;gap:8px}
+  <!-- DEV Loader: hängt überall automatisch ?v=<timestamp> an -->
+  <script>
+    (function () {
+      // Ein Zeitstempel pro Seitenaufruf – identisch für alle Dateien dieses Loads
+      const TS = Date.now();
+      // global verfügbar machen
+      window.__BUILD_TS__ = TS;
+      window.__IS_DEV_BUILD__ = true; // auf false setzen, wenn du das nicht willst
 
-    /* Tools */
-    .tools{position:fixed;left:8px;top:56px;display:flex;flex-direction:column;gap:8px;z-index:3}
-    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:var(--text);
-      font-size:15px;padding:8px 12px}
-    .btn.active{outline:2px solid #36a3ff}
+      // Hilfsfunktion: <link rel="stylesheet"> mit ts einfügen
+      function addCSS(href) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href + '?v=' + TS;
+        document.head.appendChild(link);
+      }
 
-    /* Startkarte */
-    #startOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-      background:rgba(0,0,0,.35);backdrop-filter:saturate(1.05) blur(2px);z-index:2}
-    #startCard{max-width:min(92vw,680px);width:92vw;background:var(--panel);border:1px solid #20324a;
-      border-radius:16px;box-shadow:var(--shadow);padding:18px;color:var(--text)}
-    #startCard h1{margin:0 0 10px 0;font-size:22px}
-    #startCard p{margin:6px 0;color:#c9d8ee}
-    #startBtns{display:flex;gap:8px;margin-top:8px}
+      // Deine Haupt‑CSS laden (Dateiname ggf. anpassen)
+      addCSS('./style.css');
 
-    /* Debug Panel (draggable) */
-    #dbg{position:fixed;left:10px;bottom:10px;min-width:240px;max-width:92vw;
-      background:var(--panel2);color:var(--text);border:1px solid #20324a;border-radius:10px;
-      padding:10px;z-index:4;display:none;touch-action:none}
-    #dbg header{font-weight:600;margin-bottom:6px;cursor:move}
-    #dbg pre{white-space:pre-wrap;margin:0;font:12px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+      // Haupt‑Bootscript mit ts laden (als ES‑Module)
+      const s = document.createElement('script');
+      s.type = 'module';
+      s.src = './boot.js?v=' + TS;
+      document.head.appendChild(s);
+    })();
+  </script>
 
-    #version{position:fixed;right:10px;bottom:6px;color:#7fa2d3;opacity:.85;font-size:12px;z-index:3}
-
-    /* iOS/Android spezifische Kleinigkeiten */
-    body.ios #startCard { padding-bottom: calc(env(safe-area-inset-bottom,0) + 16px); }
-    body.fullscreen .tools, body.fullscreen .hud { padding-top: env(safe-area-inset-top,0); }
-  </style>
+  <noscript>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:24px}
+      .nojs{background:#1e2a3d;color:#cfe3ff;padding:16px;border-radius:12px}
+    </style>
+  </noscript>
 </head>
 <body>
-
-<canvas id="game" aria-label="Spielbrett"></canvas>
-
-<!-- HUD top -->
-<div class="hud" id="hud">
-  <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
-  <div class="pill">🪨 Stein <span id="hudStone">0</span></div>
-  <div class="pill">🌿 Nahrung <span id="hudFood">0</span></div>
-  <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
-  <div class="pill">🧺 Träger <span id="hudCar">0</span></div>
-  <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
-  <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
-  <div class="right">
-    <button class="pill" id="centerBtn">Zentrieren</button>
-    <button class="pill" id="dbgBtn">Debug</button>
-    <button class="pill" id="fsBtnTop">Vollbild</button>
-  </div>
-</div>
-
-<!-- Tools -->
-<div class="tools" id="tools">
-  <button class="btn active" data-tool="pointer">Zeiger</button>
-  <button class="btn" data-tool="road">Straße</button>
-  <button class="btn" data-tool="hq">HQ</button>
-  <button class="btn" data-tool="woodcutter">Holzfäller</button>
-  <button class="btn" data-tool="depot">Depot</button>
-  <button class="btn" data-tool="erase">Abriss</button>
-</div>
-
-<!-- Start -->
-<div id="startOverlay">
-  <div id="startCard">
-    <h1>Siedler‑Mini V15.2 (Mobile)</h1>
-    <p><b>Zeiger</b>=Schieben · <b>2 Finger</b>=Pinch‑Zoom · kurzer Tap=bauen (Bau‑Tool aktiv).</p>
-    <p>Das erste HQ wird mittig gesetzt. Fehlende Texturen → Platzhalter.</p>
-    <div id="startBtns">
-      <button class="btn" id="startBtn" style="background:#0d3d1b;border-color:#146a2f">Start</button>
-      <button class="btn" id="fsBtn">Vollbild</button>
-      <button class="btn" id="resetBtn" style="background:#3d0d0d;border-color:#6a1414">Reset</button>
+  <noscript>
+    <div class="nojs">
+      Dieses Spiel benötigt JavaScript.
     </div>
+  </noscript>
+
+  <!--
+    Deine bisherige HTML-Struktur kann so bleiben.
+    Wichtig: Lass ein Element mit id="app" oder einen Canvas im DOM,
+    falls dein jetziges boot/game darauf zugreift.
+  -->
+  <div id="app">
+    <!-- Dein Canvas/Overlay/HUD wird von boot.js / game.js gefüllt -->
   </div>
-</div>
 
-<!-- Debug floating -->
-<div id="dbg" role="dialog" aria-live="polite">
-  <header>Debug (ziehen)</header>
-  <pre id="dbgOut">–</pre>
-</div>
-
-<div id="version">JS V15.2</div>
-
-<script type="module" src="./boot.js?v=15.2"></script>
+  <!-- dev Build Footer (wird von boot.js befüllt) -->
+  <div id="buildBadge" style="
+      position:fixed;right:8px;bottom:6px;z-index:99999;
+      font:12px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      color:#8fb3ff;opacity:.85;pointer-events:none">
+  </div>
 </body>
 </html>
