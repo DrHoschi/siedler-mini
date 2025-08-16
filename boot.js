@@ -1,107 +1,151 @@
-// Siedler‑Mini V15 boot.js (robuste Start-Logik + iOS-Fullscreen-Fallback)
-import { game } from './game.js?v=15.0.3';
+// Siedler‑Mini V15.0.4 – boot.js
+// Verdrahtet UI ↔ game.js: Start, Tools, Debug, Vollbild, Zentrieren, HUD-Updates.
 
-const $ = s => document.querySelector(s);
+import { game } from './game.js?v=1503'; // deine aktuelle game.js; Querystring als Cache-Buster
+
+const q = (sel) => document.querySelector(sel);
+const qa = (sel) => Array.from(document.querySelectorAll(sel));
 
 const els = {
-  canvas: $('#canvas') || $('#game canvas') || document.getElementById('game'),
-  startCard: $('#startCard'),
-  btnStart:  $('#btnStart'),
-  btnFs:     $('#btnFs'),
-  btnReset:  $('#btnReset'),
-  btnFullHUD:  $('#btnFull'),     // HUD rechts
-  btnCenter: $('#btnCenter'),
-  btnDebug:  $('#btnDebug'),
-  hudTool:   $('#hudTool'),
-  hudZoom:   $('#hudZoom'),
+  canvas:    q('#canvas'),
+  startCard: q('#startCard'),
+  btnStart:  q('#btnStart'),
+  btnFs:     q('#btnFs'),
+  btnReset:  q('#btnReset'),
+  btnFull:   q('#btnFull'),
+  btnCenter: q('#btnCenter'),
+  btnDebug:  q('#btnDebug'),
+
+  hudTool: q('#hudTool'),
+  hudZoom: q('#hudZoom'),
+
+  toolButtons: qa('.tool-btn'),
+
+  dbgPanel:  q('#debugPanel'),
+  dbgHeader: q('#debugHeader'),
+  dbgClose:  q('#debugClose'),
+  dbgBody:   q('#debugBody'),
 };
 
-function canFullscreen() {
-  const el = document.documentElement;
-  return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen);
+let debugOn = false;
+
+// ---------- Debug ----------
+function dbg(...args){
+  if (!debugOn) return;
+  const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  els.dbgBody.textContent += line + '\n';
+  els.dbgBody.scrollTop = els.dbgBody.scrollHeight;
 }
-async function enterFullscreen() {
+function setDebug(on){
+  debugOn = on;
+  els.dbgPanel.classList.toggle('show', on);
+  dbg('Debug aktiviert:', on);
+}
+// Drag des Debug-Fensters
+(() => {
+  let dragging = false, sx=0, sy=0, startLeft=0, startTop=0;
+  els.dbgHeader.addEventListener('pointerdown', (e)=>{
+    dragging = true; els.dbgHeader.setPointerCapture(e.pointerId);
+    const r = els.dbgPanel.getBoundingClientRect();
+    startLeft = r.left; startTop = r.top; sx = e.clientX; sy = e.clientY;
+    els.dbgHeader.style.cursor='grabbing';
+  });
+  els.dbgHeader.addEventListener('pointermove', (e)=>{
+    if (!dragging) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    els.dbgPanel.style.left = Math.max(0, startLeft + dx) + 'px';
+    els.dbgPanel.style.top  = Math.max(0, startTop + dy) + 'px';
+    els.dbgPanel.style.bottom = 'auto';
+  });
+  const finish = (e)=>{ if(!dragging) return; dragging=false; try{els.dbgHeader.releasePointerCapture(e.pointerId);}catch{} els.dbgHeader.style.cursor='grab'; };
+  els.dbgHeader.addEventListener('pointerup', finish);
+  els.dbgHeader.addEventListener('pointercancel', finish);
+  els.dbgClose.addEventListener('click', ()=>setDebug(false));
+})();
+
+// ---------- HUD Bridge ----------
+function onHUD(key, value){
+  if (key === 'Tool' && els.hudTool) els.hudTool.textContent = value;
+  if (key === 'Zoom' && els.hudZoom) els.hudZoom.textContent = value;
+  dbg('[HUD]', key, value);
+}
+
+// ---------- Tool-Auswahl ----------
+function selectTool(tool){
+  // optisch kennzeichnen
+  els.toolButtons.forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  // an Spiel melden
+  game.setTool(tool);
+}
+
+function wireTools(){
+  els.toolButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      selectTool(btn.dataset.tool);
+    }, {passive:true});
+  });
+}
+
+// ---------- Vollbild ----------
+async function enterFullscreen(){
   const el = document.documentElement;
   try {
     if (el.requestFullscreen) await el.requestFullscreen();
     else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
-  } catch {}
-}
-function exitFullscreen() {
-  const d = document;
-  if (d.exitFullscreen) d.exitFullscreen();
-  else if (d.webkitExitFullscreen) d.webkitExitFullscreen();
-}
-
-// Debug Overlay beweglich halten
-const dbg = {
-  root: document.getElementById('dbgOverlay'),
-  btn:  document.getElementById('dbgToggle'),
-};
-if (dbg.btn && dbg.root) {
-  let dragging = false, sx=0, sy=0, ox=0, oy=0;
-  dbg.btn.addEventListener('click', () => dbg.root.classList.toggle('open'));
-  dbg.root.addEventListener('pointerdown', (e)=>{
-    if (!e.target.closest('.drag')) return;
-    dragging = true; sx=e.clientX; sy=e.clientY;
-    const r = dbg.root.getBoundingClientRect(); ox=r.left; oy=r.top;
-    dbg.root.setPointerCapture(e.pointerId);
-  });
-  dbg.root.addEventListener('pointermove', (e)=>{
-    if (!dragging) return;
-    const x = ox + (e.clientX - sx);
-    const y = oy + (e.clientY - sy);
-    dbg.root.style.left = Math.max(8, x) + 'px';
-    dbg.root.style.top  = Math.max(8, y) + 'px';
-  });
-  dbg.root.addEventListener('pointerup', ()=>{ dragging=false; });
+    else throw new Error('Fullscreen wird auf diesem Gerät/Browser nicht unterstützt.');
+    dbg('Fullscreen: ok');
+  } catch(err){
+    alert('Vollbild nicht möglich: ' + err.message);
+    dbg('Fullscreen error:', err.message);
+  }
 }
 
-// Start-Button verdrahten (mit einmaliger Initialisierung)
-let started = false;
-async function startGame() {
-  if (started) return;
-  started = true;
+// ---------- Start / Reset / Center / Debug ----------
+function wireTopButtons(){
+  els.btnFull?.addEventListener('click', enterFullscreen, {passive:true});
+  els.btnFs?.addEventListener('click', enterFullscreen, {passive:true});
 
-  // Start Overlay schließen
-  els.startCard?.remove();
+  els.btnCenter?.addEventListener('click', ()=>{
+    game.center();
+    dbg('center()');
+  }, {passive:true});
 
-  // Game starten
-  await game.startGame({
-    canvas: els.canvas,
-    onHUD: (k,v)=>{
-      if (k === 'Tool' && els.hudTool) els.hudTool.textContent = v;
-      if (k === 'Zoom' && els.hudZoom) els.hudZoom.textContent = v;
-    }
-  });
+  els.btnDebug?.addEventListener('click', ()=>{
+    setDebug(!debugOn);
+  }, {passive:true});
 
-  // Erstes HQ mittig platzieren & Kamera zentrieren (nur ein Mal)
-  if (game.placeInitialHQ) game.placeInitialHQ();
-  if (game.center) game.center();
+  els.btnReset?.addEventListener('click', ()=>{
+    // einfache Seite neu laden (Cache-Buster hilft)
+    location.href = location.pathname + '?r=' + Date.now();
+  }, {passive:true});
+
+  els.btnStart?.addEventListener('click', async ()=>{
+    els.startCard.style.display = 'none';
+    await game.startGame({ canvas: els.canvas, onHUD });
+    game.placeInitialHQ();
+    game.center();
+    selectTool('pointer'); // Zeiger ist Standard
+    dbg('startGame() → HQ gesetzt → center()');
+  }, {passive:true});
 }
 
-// Buttons
-els.btnStart?.addEventListener('click', startGame);
-els.btnReset?.addEventListener('click', ()=>location.reload());
-els.btnFs?.addEventListener('click', async ()=>{
-  if (!canFullscreen()) return; // iOS iPhone in Safari: oft nicht erlaubt
-  await enterFullscreen();
-});
-els.btnFullHUD?.addEventListener('click', async ()=>{
-  if (!canFullscreen()) return;
-  await enterFullscreen();
-});
-els.btnCenter?.addEventListener('click', ()=> game.center && game.center());
-els.btnDebug?.addEventListener('click', ()=>{
-  document.getElementById('dbgOverlay')?.classList.toggle('open');
-});
+// ---------- iOS Scroll-Pinch verhindern auf Canvas ----------
+function lockTouchDefaults(){
+  // Canvas: kein Browser-Scroll/Pinch
+  els.canvas.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
+  els.canvas.addEventListener('touchmove',  e=>e.preventDefault(), {passive:false});
+}
 
-// Doppeltipp auf Karte -> Fullscreen (falls erlaubt)
-document.getElementById('game')?.addEventListener('dblclick', async ()=>{
-  if (!canFullscreen()) return;
-  await enterFullscreen();
-});
-
-// Sichtbare Version unten links loggen
-console.log('Siedler‑Mini Boot', window.__SM_VER__ || '');
+// ---------- Boot ----------
+function boot(){
+  wireTools();
+  wireTopButtons();
+  lockTouchDefaults();
+  // Debug am Anfang optional sichtbar machen:
+  // setDebug(true);
+  // HUD initial
+  onHUD('Tool','Zeiger');
+  onHUD('Zoom','1.00x');
+  dbg('boot ok');
+}
+boot();
