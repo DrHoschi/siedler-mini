@@ -1,151 +1,139 @@
-// Siedler‑Mini V15.0.4 – boot.js
-// Verdrahtet UI ↔ game.js: Start, Tools, Debug, Vollbild, Zentrieren, HUD-Updates.
+// boot.js V15.3
+import { game } from './game.js?v=15.3';
 
-import { game } from './game.js?v=1503'; // deine aktuelle game.js; Querystring als Cache-Buster
+const $ = sel => document.querySelector(sel);
+const on = (el, ev, fn, opt) => el.addEventListener(ev, fn, opt);
 
-const q = (sel) => document.querySelector(sel);
-const qa = (sel) => Array.from(document.querySelectorAll(sel));
-
-const els = {
-  canvas:    q('#canvas'),
-  startCard: q('#startCard'),
-  btnStart:  q('#btnStart'),
-  btnFs:     q('#btnFs'),
-  btnReset:  q('#btnReset'),
-  btnFull:   q('#btnFull'),
-  btnCenter: q('#btnCenter'),
-  btnDebug:  q('#btnDebug'),
-
-  hudTool: q('#hudTool'),
-  hudZoom: q('#hudZoom'),
-
-  toolButtons: qa('.tool-btn'),
-
-  dbgPanel:  q('#debugPanel'),
-  dbgHeader: q('#debugHeader'),
-  dbgClose:  q('#debugClose'),
-  dbgBody:   q('#debugBody'),
+const ui = {
+  canvas: $('#canvas'),
+  startCard: $('#startCard'),
+  btnStart: $('#btnStart'),
+  btnFs: $('#btnFs'),
+  btnReset: $('#btnReset'),
+  btnFull: $('#btnFull'),
+  btnCenter: $('#btnCenter'),
+  btnDebug: $('#btnDebug'),
+  hudZoom: $('#hudZoom'),
+  hudTool: $('#hudTool'),
+  hudHolz: $('#hudHolz'),
+  dbg: $('#dbg'),
+  dbgOut: $('#dbgOut'),
+  dbgMove: $('#dbgMove'),
+  buildBtn: $('#buildBtn'),
+  buildPanel: $('#buildPanel'),
+  buildClose: $('#buildClose'),
+  buildDone: $('#buildDone'),
 };
 
-let debugOn = false;
+let dbgEnabled = false;
+let buildOpen = false;
 
 // ---------- Debug ----------
-function dbg(...args){
-  if (!debugOn) return;
-  const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-  els.dbgBody.textContent += line + '\n';
-  els.dbgBody.scrollTop = els.dbgBody.scrollHeight;
+function setDebug(onOff){
+  dbgEnabled = onOff;
+  ui.dbg.style.display = onOff ? 'block' : 'none';
 }
-function setDebug(on){
-  debugOn = on;
-  els.dbgPanel.classList.toggle('show', on);
-  dbg('Debug aktiviert:', on);
-}
-// Drag des Debug-Fensters
-(() => {
-  let dragging = false, sx=0, sy=0, startLeft=0, startTop=0;
-  els.dbgHeader.addEventListener('pointerdown', (e)=>{
-    dragging = true; els.dbgHeader.setPointerCapture(e.pointerId);
-    const r = els.dbgPanel.getBoundingClientRect();
-    startLeft = r.left; startTop = r.top; sx = e.clientX; sy = e.clientY;
-    els.dbgHeader.style.cursor='grabbing';
-  });
-  els.dbgHeader.addEventListener('pointermove', (e)=>{
-    if (!dragging) return;
-    const dx = e.clientX - sx, dy = e.clientY - sy;
-    els.dbgPanel.style.left = Math.max(0, startLeft + dx) + 'px';
-    els.dbgPanel.style.top  = Math.max(0, startTop + dy) + 'px';
-    els.dbgPanel.style.bottom = 'auto';
-  });
-  const finish = (e)=>{ if(!dragging) return; dragging=false; try{els.dbgHeader.releasePointerCapture(e.pointerId);}catch{} els.dbgHeader.style.cursor='grab'; };
-  els.dbgHeader.addEventListener('pointerup', finish);
-  els.dbgHeader.addEventListener('pointercancel', finish);
-  els.dbgClose.addEventListener('click', ()=>setDebug(false));
-})();
-
-// ---------- HUD Bridge ----------
-function onHUD(key, value){
-  if (key === 'Tool' && els.hudTool) els.hudTool.textContent = value;
-  if (key === 'Zoom' && els.hudZoom) els.hudZoom.textContent = value;
-  dbg('[HUD]', key, value);
+function writeDebug(){
+  if (!dbgEnabled) return;
+  const s = game.state;
+  ui.dbgOut.textContent =
+`cam=(${s.camX.toFixed(1)}, ${s.camY.toFixed(1)})  zoom=${s.zoom.toFixed(2)}
+tool=${s.pointerTool}  running=${s.running}  buildOpen=${s.buildMenuOpen}
+buildings=${s.buildings.length}  carriers=${s.carriers.length}
+wood=${document.querySelector('#hudHolz')?.textContent || '0'}`;
 }
 
-// ---------- Tool-Auswahl ----------
-function selectTool(tool){
-  // optisch kennzeichnen
-  els.toolButtons.forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
-  // an Spiel melden
-  game.setTool(tool);
-}
-
-function wireTools(){
-  els.toolButtons.forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      selectTool(btn.dataset.tool);
-    }, {passive:true});
-  });
-}
+// kleiner Drag für Debug-Fenster
+let dbgDrag=false, dbgDX=0, dbgDY=0;
+on(ui.dbgMove,'pointerdown',e=>{
+  dbgDrag=true; dbgDX=e.clientX - ui.dbg.offsetLeft; dbgDY=e.clientY - ui.dbg.offsetTop;
+  e.preventDefault();
+});
+on(document,'pointermove',e=>{
+  if(!dbgDrag) return;
+  ui.dbg.style.left = (e.clientX - dbgDX)+'px';
+  ui.dbg.style.top  = (e.clientY - dbgDY)+'px';
+});
+on(document,'pointerup',()=> dbgDrag=false);
 
 // ---------- Vollbild ----------
-async function enterFullscreen(){
-  const el = document.documentElement;
-  try {
-    if (el.requestFullscreen) await el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-    else throw new Error('Fullscreen wird auf diesem Gerät/Browser nicht unterstützt.');
-    dbg('Fullscreen: ok');
-  } catch(err){
-    alert('Vollbild nicht möglich: ' + err.message);
-    dbg('Fullscreen error:', err.message);
-  }
+async function reqFullscreen(node){
+  const el = node || document.documentElement;
+  try{
+    if (document.fullscreenElement || document.webkitFullscreenElement){
+      await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
+    }else{
+      await (el.requestFullscreen?.({navigationUI:'hide'}) || el.webkitRequestFullscreen?.());
+    }
+  }catch(e){ /* iOS iPhone kann ablehnen; ignorieren */ }
 }
+
+// ---------- Bau-Panel ----------
+function openBuildPanel(){
+  buildOpen = true;
+  ui.buildPanel.style.display = 'block';
+  game.setBuildMenuOpen(true);
+  // default: zuletzt gewähltes Tool wird angezeigt, aber bauen nur solange Panel offen ist
+}
+function closeBuildPanel(){
+  buildOpen = false;
+  ui.buildPanel.style.display = 'none';
+  game.setBuildMenuOpen(false); // schaltet faktisch auf Zeiger/Pan
+}
+
+// Buttons im Panel
+ui.buildPanel.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.tool');
+  if (!btn) return;
+  const tool = btn.getAttribute('data-tool');
+  // Tool optisch markieren
+  ui.buildPanel.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active', t===btn));
+  // Ins Spiel setzen
+  game.setTool(tool);
+  // Panel BLEIBT offen, damit bauen nur aktiv ist solange Panel offen
+});
+on(ui.buildClose,'click', closeBuildPanel);
+on(ui.buildDone,'click', closeBuildPanel);
+
+// Launcher
+on(ui.buildBtn,'click', ()=>{
+  if (buildOpen) closeBuildPanel(); else openBuildPanel();
+});
 
 // ---------- Start / Reset / Center / Debug ----------
-function wireTopButtons(){
-  els.btnFull?.addEventListener('click', enterFullscreen, {passive:true});
-  els.btnFs?.addEventListener('click', enterFullscreen, {passive:true});
+on(ui.btnStart,'click', ()=>{
+  ui.startCard.style.display = 'none';
+  game.startGame({
+    canvas: ui.canvas,
+    onHUD: (k,v)=>{
+      if (k==='Zoom') ui.hudZoom.textContent = v;
+      if (k==='Tool') ui.hudTool.textContent = v;
+      if (k==='Holz') ui.hudHolz.textContent = v;
+      writeDebug();
+    }
+  });
+  // initial ausrichten + erstes HQ
+  game.center();
+  game.placeInitialHQ();
+  writeDebug();
+});
 
-  els.btnCenter?.addEventListener('click', ()=>{
-    game.center();
-    dbg('center()');
-  }, {passive:true});
+on(ui.btnFs,'click', ()=> reqFullscreen(document.documentElement));
+on(ui.btnFull,'click', ()=> reqFullscreen(document.documentElement));
 
-  els.btnDebug?.addEventListener('click', ()=>{
-    setDebug(!debugOn);
-  }, {passive:true});
+on(ui.btnReset,'click', ()=>{
+  location.href = location.pathname + '?v=' + Date.now();
+});
 
-  els.btnReset?.addEventListener('click', ()=>{
-    // einfache Seite neu laden (Cache-Buster hilft)
-    location.href = location.pathname + '?r=' + Date.now();
-  }, {passive:true});
+on(ui.btnCenter,'click', ()=>{ game.center(); writeDebug(); });
+on(ui.btnDebug,'click', ()=>{
+  setDebug(!dbgEnabled);
+  writeDebug();
+});
 
-  els.btnStart?.addEventListener('click', async ()=>{
-    els.startCard.style.display = 'none';
-    await game.startGame({ canvas: els.canvas, onHUD });
-    game.placeInitialHQ();
-    game.center();
-    selectTool('pointer'); // Zeiger ist Standard
-    dbg('startGame() → HQ gesetzt → center()');
-  }, {passive:true});
-}
+// zyklisch Debug updaten
+setInterval(writeDebug, 500);
 
-// ---------- iOS Scroll-Pinch verhindern auf Canvas ----------
-function lockTouchDefaults(){
-  // Canvas: kein Browser-Scroll/Pinch
-  els.canvas.addEventListener('touchstart', e=>e.preventDefault(), {passive:false});
-  els.canvas.addEventListener('touchmove',  e=>e.preventDefault(), {passive:false});
-}
-
-// ---------- Boot ----------
-function boot(){
-  wireTools();
-  wireTopButtons();
-  lockTouchDefaults();
-  // Debug am Anfang optional sichtbar machen:
-  // setDebug(true);
-  // HUD initial
-  onHUD('Tool','Zeiger');
-  onHUD('Zoom','1.00x');
-  dbg('boot ok');
-}
-boot();
+// Bei Seitenstart: Debug aus, Bau-Panel zu
+setDebug(false);
+closeBuildPanel();
