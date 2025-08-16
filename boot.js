@@ -1,144 +1,136 @@
-// boot.js V15.3.1
-import { game } from './game.js?v=15.3.1';
+// Siedler-Mini V15.4-pm — Boot/DOM/Fullscreen/Build-Sheet
+import { game } from './game.js';
 
 const $ = sel => document.querySelector(sel);
-const on = (el, ev, fn, opt) => el.addEventListener(ev, fn, opt);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-const ui = {
+const el = {
   canvas: $('#canvas'),
-  startCard: $('#startCard'),
-  btnStart: $('#btnStart'),
-  btnFs: $('#btnFs'),
-  btnReset: $('#btnReset'),
-  btnFull: $('#btnFull'),
-  btnCenter: $('#btnCenter'),
-  btnDebug: $('#btnDebug'),
+  start:  $('#btnStart'),
+  fsTop:  $('#btnFull'),
+  fsMid:  $('#btnFs'),
+  reset:  $('#btnReset'),
+  center: $('#btnCenter'),
+  debug:  $('#btnDebug'),
   hudZoom: $('#hudZoom'),
   hudTool: $('#hudTool'),
-  hudHolz: $('#hudHolz'),
-  dbg: $('#dbg'),
-  dbgOut: $('#dbgOut'),
-  dbgMove: $('#dbgMove'),
-  buildBtn: $('#buildBtn'),
-  buildPanel: $('#buildPanel'),
-  buildBackdrop: $('#buildBackdrop'),
-  buildClose: $('#buildClose'),
-  buildDone: $('#buildDone'),
+  startCard: $('#startCard'),
+  buildSheet: $('#buildSheet'),
+  buildOpen: $('#btnBuildOpen'),
+  buildClose: $('#btnBuildClose'),
+  buildTiles: $$('#buildGrid .tileBtn'),
+  toolsSidebar: $('#toolsSidebar'),
+  pointerBtn: document.querySelector('[data-tool="pointer"]'),
+  eraseBtn: document.querySelector('[data-tool="erase"]'),
+  dbg: $('#dbg'), dbgText: $('#dbgText'),
+  placeUI: $('#placeUI'),
+  placeOk: $('#btnPlaceOk'),
+  placeCancel: $('#btnPlaceCancel'),
 };
 
-let dbgEnabled = false;
-let buildOpen = false;
-let buildCloseUntil = 0; // kurzer Cooldown nach Panel-Schließen
+let isDebug = false;
 
-/* ---------------- Debug ---------------- */
-function setDebug(onOff){
-  dbgEnabled = onOff;
-  ui.dbg.style.display = onOff ? 'block' : 'none';
+// ---------- Fullscreen ----------
+async function requestFS() {
+  const root = document.documentElement;
+  try {
+    if (root.requestFullscreen) await root.requestFullscreen();
+    else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
+  } catch (e) { /* iOS kann ablehnen */ }
 }
-function writeDebug(){
-  if (!dbgEnabled) return;
-  const s = game.state;
-  ui.dbgOut.textContent =
-`cam=(${s.camX.toFixed(1)}, ${s.camY.toFixed(1)})  zoom=${s.zoom.toFixed(2)}
-tool=${s.pointerTool}  running=${s.running}  buildOpen=${s.buildMenuOpen}
-buildings=${s.buildings.length}  carriers=${s.carriers.length}`;
-}
-let dbgDrag=false, dbgDX=0, dbgDY=0;
-on(ui.dbgMove,'pointerdown',e=>{
-  dbgDrag=true; dbgDX=e.clientX - ui.dbg.offsetLeft; dbgDY=e.clientY - ui.dbg.offsetTop;
-  e.preventDefault();
-});
-on(document,'pointermove',e=>{
-  if(!dbgDrag) return;
-  ui.dbg.style.left = (e.clientX - dbgDX)+'px';
-  ui.dbg.style.top  = (e.clientY - dbgDY)+'px';
-});
-on(document,'pointerup',()=> dbgDrag=false);
-
-/* --------------- Vollbild --------------- */
-async function reqFullscreen(node){
-  const el = node || document.documentElement;
-  try{
-    if (document.fullscreenElement || document.webkitFullscreenElement){
-      await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
-    }else{
-      await (el.requestFullscreen?.({navigationUI:'hide'}) || el.webkitRequestFullscreen?.());
-    }
-  }catch(e){ /* iOS iPhone kann ablehnen */ }
+function exitFS(){
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else if (document.webkitFullscreenElement) document.webkitExitFullscreen?.();
 }
 
-/* ------------- Bau-Panel Logic ---------- */
-function reallyCloseBuildPanel(){
-  buildOpen = false;
-  ui.buildPanel.style.display = 'none';
-  ui.buildBackdrop.classList.remove('show');
-  // Hart: Menü zu => sofort Pointer + Build sperren
+// ---------- Build Sheet ----------
+function openBuildSheet(){ el.buildSheet.classList.add('open'); }
+function closeBuildSheet(){
+  el.buildSheet.classList.remove('open');
+  // Beim Schließen standardmäßig auf Zeiger zurück
   game.setTool('pointer');
-  game.setBuildMenuOpen(false);
-  buildCloseUntil = performance.now() + 200; // 200ms Tap-Sperre
+  markTool('pointer');
 }
-function openBuildPanel(){
-  buildOpen = true;
-  ui.buildPanel.style.display = 'block';
-  ui.buildBackdrop.classList.add('show');
-  game.setBuildMenuOpen(true);
-}
-function toggleBuild(){
-  if (buildOpen) reallyCloseBuildPanel(); else openBuildPanel();
-}
-on(ui.buildBtn, 'click', toggleBuild);
-on(ui.buildClose,'click', reallyCloseBuildPanel);
-on(ui.buildDone,'click', reallyCloseBuildPanel);
-// Klick außerhalb schließt auch
-on(ui.buildBackdrop,'click', (e)=>{ if (e.target === ui.buildBackdrop) reallyCloseBuildPanel(); });
 
-// Tool-Buttons im Panel
-ui.buildPanel.addEventListener('click', (e)=>{
-  const btn = e.target.closest('.tool');
-  if (!btn) return;
-  const tool = btn.getAttribute('data-tool');
-  ui.buildPanel.querySelectorAll('.tool').forEach(t=>t.classList.toggle('active', t===btn));
-  game.setTool(tool);
-  // Panel bleibt offen — bauen ist nur solange offen möglich
-});
+function markTool(name){
+  // Sidebar
+  $$('#toolsSidebar .btn').forEach(b=>b.classList.remove('active'));
+  if (name==='pointer') el.pointerBtn?.classList.add('active');
+  if (name==='erase')   el.eraseBtn?.classList.add('active');
+}
 
-/* -------- Start / Reset / Center / Debug -------- */
-on(ui.btnStart,'click', ()=>{
-  ui.startCard.style.display = 'none';
+// ---------- Debug ----------
+function setDebug(on){
+  isDebug = on;
+  el.dbg.style.display = isDebug ? 'block' : 'none';
+}
+function updateDebug(msgObj){
+  if (!isDebug) return;
+  el.dbgText.textContent = JSON.stringify(msgObj, null, 2);
+}
+
+// ---------- Start / Reset ----------
+function doStart(){
+  el.startCard.style.display='none';
   game.startGame({
-    canvas: ui.canvas,
+    canvas: el.canvas,
     onHUD: (k,v)=>{
-      if (k==='Zoom') ui.hudZoom.textContent = v;
-      if (k==='Tool') ui.hudTool.textContent = v;
-      writeDebug();
+      if (k==='Zoom') el.hudZoom.textContent = v;
+      if (k==='Tool') el.hudTool.textContent = v;
+    },
+    onDebug: updateDebug,
+    uiPlaceShow: (sx,sy,valid)=>{
+      // Position der ✔/✖ UI – leicht rechts oben vom Finger
+      el.placeUI.style.display='flex';
+      el.placeUI.style.left = Math.round(sx+12)+'px';
+      el.placeUI.style.top  = Math.round(sy-12)+'px';
+      el.placeOk.disabled = !valid;
+    },
+    uiPlaceHide: ()=>{
+      el.placeUI.style.display='none';
     }
   });
-  game.center();
-  game.placeInitialHQ();
-  writeDebug();
-});
-
-on(ui.btnFs,'click', ()=> reqFullscreen(document.documentElement));
-on(ui.btnFull,'click', ()=> reqFullscreen(document.documentElement));
-
-on(ui.btnReset,'click', ()=>{ location.href = location.pathname + '?v=' + Date.now(); });
-
-on(ui.btnCenter,'click', ()=>{ game.center(); writeDebug(); });
-on(ui.btnDebug,'click', ()=>{ setDebug(!dbgEnabled); writeDebug(); });
-
-/* -------- Kleinzeug -------- */
-setInterval(()=> {
-  // kleine Schutzschicht: wenn Panel zu und Tool != pointer, erzwinge pointer
-  if (!buildOpen && game.state.pointerTool !== 'pointer'){
-    game.setTool('pointer');
-  }
-  writeDebug();
-}, 400);
-
-// Exponiere Cooldown, damit game ihn berücksichtigen kann
-export function isBuildCooldown(){
-  return performance.now() < buildCloseUntil;
+}
+function doReset(){
+  location.reload();
 }
 
-setDebug(false);
-reallyCloseBuildPanel(); // beim Laden: zu + pointer
+// ---------- Wire UI ----------
+el.start?.addEventListener('click', doStart);
+el.reset?.addEventListener('click', doReset);
+el.fsTop?.addEventListener('click', requestFS);
+el.fsMid?.addEventListener('click', requestFS);
+el.center?.addEventListener('click', ()=>game.center());
+el.debug?.addEventListener('click', ()=>setDebug(!isDebug));
+
+// Tools (Sidebar)
+el.pointerBtn?.addEventListener('click', ()=>{ game.setTool('pointer'); markTool('pointer'); });
+el.eraseBtn?.addEventListener('click',   ()=>{ game.setTool('erase');   markTool('erase'); });
+
+// Build-Sheet open/close
+el.buildOpen?.addEventListener('click', openBuildSheet);
+el.buildClose?.addEventListener('click', closeBuildSheet);
+
+// Build-Tiles → setzen das Build-Tool + Objekt-Typ
+el.buildTiles.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const type = btn.getAttribute('data-build');
+    // Schließen wir das Sheet, wechseln ins "build(type)"-Tool
+    closeBuildSheet();
+    game.setBuildMode(type); // zeigt Ghost, wartet auf ✔/✖
+    markTool(null);
+  });
+});
+
+// ✔/✖ (Platzierung bestätigen/abbrechen)
+el.placeOk.addEventListener('click', ()=>game.confirmBuild());
+el.placeCancel.addEventListener('click', ()=>game.cancelBuild());
+
+// Doppeltipp auf Startkarte → Vollbild
+$('#startCard')?.addEventListener('dblclick', requestFS);
+
+// Resize passt Canvas an
+addEventListener('resize', ()=>game.resize?.());
+addEventListener('orientationchange', ()=>setTimeout(()=>game.resize?.(), 250));
+document.addEventListener('fullscreenchange', ()=>game.resize?.());
+document.addEventListener('webkitfullscreenchange', ()=>game.resize?.());
