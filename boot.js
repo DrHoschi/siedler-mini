@@ -1,4 +1,4 @@
-import { game } from './game.js?v=152';
+import { game } from './game.js?v=153';
 
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -23,13 +23,11 @@ const ui = {
   dbg: $('#dbg'),
 };
 
+// KEIN Infra/road mehr
 const BUILD_ITEMS = {
   core: [
     {id:'hq', icon:'🏰', label:'HQ'},
     {id:'depot', icon:'📦', label:'Depot'},
-  ],
-  infra: [
-    {id:'road', icon:'🛣️', label:'Straße'},
   ],
   prod: [
     {id:'woodcutter', icon:'🪓', label:'Holzfäller'},
@@ -52,7 +50,6 @@ function renderGrid(cat='core'){
 }
 function setHudTool(name){
   ui.hudTool.textContent =
-    name==='road' ? 'Straße' :
     name==='hq' ? 'HQ' :
     name==='woodcutter' ? 'Holzfäller' :
     name==='depot' ? 'Depot' :
@@ -78,7 +75,7 @@ function bindStart(){
   ui.btnFs.addEventListener('click', fullscreen);
   ui.btnFull.addEventListener('click', fullscreen);
 
-  // Doppeltipp Vollbild (Canvas)
+  // Doppeltipp Vollbild
   let lastTap=0;
   ui.canvas.addEventListener('touchend',(e)=>{
     const now=Date.now();
@@ -113,7 +110,7 @@ function bindBuild(){
   });
   ui.closeBuild.addEventListener('click', ()=>hideSheet(false));
 
-  // Sheet-Swipe zum Schließen
+  // Sheet-Swipe schließen
   let y0=null;
   ui.sheet.addEventListener('touchstart', e=>{ y0=e.touches[0].clientY; }, {passive:true});
   ui.sheet.addEventListener('touchmove', e=>{
