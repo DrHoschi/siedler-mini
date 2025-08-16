@@ -1,103 +1,105 @@
-// boot.js (V15)
-import { game } from './game.js';
+// Siedler‑Mini V15.1 – Boot/DOM/Wireup
+import { game } from './game.js?v=15.1';
 
-const $ = sel => document.querySelector(sel);
-const $$ = sel => Array.from(document.querySelectorAll(sel));
-
-const ui = {
-  canvas: $('#canvas'),
-  startCard: $('#startCard'),
-  btnStart: $('#btnStart'),
-  btnFsStart: $('#btnFs'),
-  btnReset: $('#btnReset'),
-  btnFull: $('#btnFull'),
-  btnCenter: $('#btnCenter'),
-  btnDebug: $('#btnDebug'),
-  tools: $$('#tools .btn'),
-  hud: {
-    tool: $('#hudTool'),
-    zoom: $('#hudZoom'),
-    wood: $('#hudWood'),
-    stone: $('#hudStone'),
-    carry: $('#hudCarry'),
-  },
-  debug: $('#debug'),
+const els = {
+  canvas: document.getElementById('game'),
+  startOverlay: document.getElementById('startOverlay'),
+  startBtn: document.getElementById('startBtn'),
+  fsBtn: document.getElementById('fsBtn'),
+  fsBtnTop: document.getElementById('fsBtnTop'),
+  resetBtn: document.getElementById('resetBtn'),
+  centerBtn: document.getElementById('centerBtn'),
+  dbgBtn: document.getElementById('dbgBtn'),
+  dbg: document.getElementById('dbg'),
+  dbgOut: document.getElementById('dbgOut'),
+  hudZoom: document.getElementById('hudZoom'),
+  hudTool: document.getElementById('hudTool'),
+  tools: document.getElementById('tools'),
 };
 
-// --- Debug helper
-let debugOn = false;
-function logDbg(lines) {
-  if (!debugOn) return;
-  ui.debug.textContent = lines.join('\n');
+function logDbg(obj){
+  els.dbgOut.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
 }
 
-// --- Fullscreen helper (mit iOS/WebKit-Fallback)
-async function requestFullscreen() {
-  const el = document.documentElement;
-  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if (fn) {
-    try { await fn.call(el); } catch(e) {/* ignorieren */}
-  }
-}
-function exitFullscreen() {
-  const doc = document;
-  const fn = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
-  if (fn) { try { fn.call(doc); } catch(e){} }
+function toggleDebug(){
+  const s = getComputedStyle(els.dbg).display;
+  els.dbg.style.display = (s === 'none') ? 'block' : 'none';
 }
 
-// --- HUD Callback ins Spiel reichen
-function onHUD(key, val) {
-  if (key === 'Tool') ui.hud.tool.textContent = val;
-  if (key === 'Zoom') ui.hud.zoom.textContent = val;
-  if (key === 'Wood') ui.hud.wood.textContent = val;
-  if (key === 'Stone') ui.hud.stone.textContent = val;
-  if (key === 'Carry') ui.hud.carry.textContent = val;
-}
-
-// --- Toolbuttons
-ui.tools.forEach(btn => {
-  btn.addEventListener('click', () => {
-    ui.tools.forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    game.setTool(btn.dataset.tool);
+// Draggable Debug
+(() => {
+  let dragging = false, sx=0, sy=0, left=10, bottom=10;
+  const el = els.dbg;
+  const header = el.querySelector('header');
+  header.addEventListener('pointerdown', (e)=>{
+    dragging = true; sx = e.clientX; sy = e.clientY;
+    el.setPointerCapture?.(e.pointerId);
   });
-});
+  window.addEventListener('pointermove', (e)=>{
+    if (!dragging) return;
+    left += (e.clientX - sx);
+    bottom -= (e.clientY - sy); // invert y
+    sx = e.clientX; sy = e.clientY;
+    el.style.left = `${Math.max(0,left)}px`;
+    el.style.right = 'auto';
+    el.style.bottom = `${Math.max(0,bottom)}px`;
+    el.style.top = 'auto';
+  });
+  window.addEventListener('pointerup', ()=> dragging=false);
+})();
 
-// --- Aktionen rechts
-ui.btnCenter.addEventListener('click', () => game.center());
-ui.btnDebug.addEventListener('click', () => {
-  debugOn = !debugOn;
-  ui.btnDebug.classList.toggle('active', debugOn);
-  ui.debug.hidden = !debugOn;
-  if (debugOn) logDbg(['Debug: AN']);
-});
-ui.btnFull.addEventListener('click', requestFullscreen);
+// HUD bridge
+function onHUD(k,v){
+  if (k === 'Zoom' && els.hudZoom) els.hudZoom.textContent = v;
+  if (k === 'Tool' && els.hudTool) els.hudTool.textContent = v;
+}
 
-// --- Startkarte
-ui.btnFsStart.addEventListener('click', requestFullscreen);
-ui.btnReset.addEventListener('click', () => {
-  // einfacher Reset
+// Fullscreen helper (iOS/Android/Desktop)
+async function toggleFullscreen(){
+  const d = document;
+  const el = d.documentElement;
+  try {
+    if (!d.fullscreenElement && !d.webkitFullscreenElement) {
+      (el.requestFullscreen?.() || el.webkitRequestFullscreen?.())?.catch?.(()=>{});
+    } else {
+      (d.exitFullscreen?.() || d.webkitExitFullscreen?.())?.catch?.(()=>{});
+    }
+  } catch {}
+}
+
+els.fsBtn.addEventListener('click', toggleFullscreen);
+els.fsBtnTop.addEventListener('click', toggleFullscreen);
+
+els.resetBtn.addEventListener('click', ()=>{
+  // simple reset = Seite neu laden (damit Cache‑State gleich bleibt)
   location.reload();
 });
-ui.btnStart.addEventListener('click', () => {
-  ui.startCard.style.display = 'none';
+
+els.centerBtn.addEventListener('click', ()=>{
+  game.center();
+});
+
+els.dbgBtn.addEventListener('click', ()=>{
+  toggleDebug();
+  logDbg(game.debugSnapshot());
+});
+
+// Tools wählen
+els.tools.addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-tool]');
+  if (!btn) return;
+  for (const b of els.tools.querySelectorAll('.btn')) b.classList.remove('active');
+  btn.classList.add('active');
+  game.setTool(btn.dataset.tool);
+});
+
+els.startBtn.addEventListener('click', ()=>{
+  els.startOverlay.style.display = 'none';
   game.startGame({
-    canvas: ui.canvas,
+    canvas: els.canvas,
     onHUD,
-    onDebug: (state) => {
-      if (!debugOn) return;
-      logDbg([
-        `Zoom: ${state.zoom.toFixed(2)}  DPR:${state.dpr.toFixed(2)}`,
-        `Cam:  (${state.camX.toFixed(1)}, ${state.camY.toFixed(1)})`,
-        `CSS:  ${state.cssW}×${state.cssH}  px`,
-        `Tiles:${state.buildings.length} bld / ${state.roads.length} roads`,
-        `Tool: ${state.tool}`,
-        `PointerMode: pan=${state.panning}`,
-      ]);
-    }
+    onDebug: logDbg
   });
 });
 
-// Erststatus
-ui.hud.tool.textContent = 'Zeiger';
-ui.hud.zoom.textContent = '1.00x';
+// Direkt DOM‑ready: nichts weiter – Start erst nach Klick
