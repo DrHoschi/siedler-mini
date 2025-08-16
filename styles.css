@@ -1,0 +1,58 @@
+:root{
+  --bg:#0f1a2b;
+  --panel:#12233a;
+  --chip:#1b2e4a;
+  --text:#cfe3ff;
+  --accent:#3f8cff;
+  --ok:#2cbe6f;
+  --warn:#d55384;
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+button{cursor:pointer;border:0;border-radius:12px;padding:.55rem .85rem;background:#213854;color:var(--text);}
+button.primary{background:var(--ok);}
+button.danger{background:#a63a5f;}
+button:active{transform:translateY(1px);}
+
+#hud{
+  position:fixed; inset:0 0 auto 0; padding:.5rem .75rem; display:flex; gap:.75rem; align-items:center; justify-content:space-between; pointer-events:auto; z-index:20;
+}
+.chips{display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;}
+.chip{background:var(--chip); padding:.35rem .6rem; border-radius:14px; font-size:.9rem; opacity:.95;}
+.actions{display:flex; gap:.5rem; align-items:center; margin-left:auto;}
+
+#buildPalette{
+  position:fixed; left:.5rem; top:3.5rem; display:flex; flex-direction:column; gap:.5rem; padding:.5rem; background:var(--panel); border-radius:14px; box-shadow:var(--shadow); z-index:25;
+}
+
+#stage{position:fixed; inset:0; display:grid;}
+#game{width:100%; height:100%; touch-action:none; display:block;}
+
+#startOverlay{
+  position:fixed; inset:0; display:grid; place-items:center; z-index:15; pointer-events:none;
+}
+#startOverlay .card{
+  width:min(560px,92vw); background:var(--panel); border-radius:16px; padding:1rem 1.1rem; box-shadow:var(--shadow); pointer-events:auto;
+}
+#startOverlay .row{display:flex; gap:.5rem; margin-top:.75rem; justify-content:flex-start;}
+
+#debug{
+  position:fixed; left:10px; bottom:10px; width:280px; max-height:45vh; display:grid; grid-template-rows:auto 1fr; background:var(--panel); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); z-index:30;
+}
+#debug .debugHead{display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.35rem .5rem; background:#0b1730;}
+#debug pre{margin:0; padding:.5rem; font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow:auto; white-space:pre-wrap; word-break:break-word;}
+#dbgClose{background:transparent; font-size:1.2rem; padding:.2rem .4rem;}
+
+#version{
+  position:fixed; right:8px; bottom:6px; font-size:.72rem; opacity:.55; pointer-events:none; z-index:5;
+}
+
+/* HUD an Ränder „kleben“, auch im nicht‑Fullscreen‑Browser */
+@media (max-width: 800px){
+  #hud{gap:.4rem}
+  .chips{gap:.35rem}
+  .chip{font-size:.82rem}
+  #buildPalette{top:3.1rem}
+}
