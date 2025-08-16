@@ -1,4 +1,4 @@
-// Siedler-Mini V15.4-pm — Boot/DOM/Fullscreen/Build-Sheet
+// Siedler-Mini V15.4-pm2 — Boot/DOM/Fullscreen/Build-Sheet
 import { game } from './game.js';
 
 const $ = sel => document.querySelector(sel);
@@ -19,7 +19,6 @@ const el = {
   buildOpen: $('#btnBuildOpen'),
   buildClose: $('#btnBuildClose'),
   buildTiles: $$('#buildGrid .tileBtn'),
-  toolsSidebar: $('#toolsSidebar'),
   pointerBtn: document.querySelector('[data-tool="pointer"]'),
   eraseBtn: document.querySelector('[data-tool="erase"]'),
   dbg: $('#dbg'), dbgText: $('#dbgText'),
@@ -36,7 +35,7 @@ async function requestFS() {
   try {
     if (root.requestFullscreen) await root.requestFullscreen();
     else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
-  } catch (e) { /* iOS kann ablehnen */ }
+  } catch {}
 }
 function exitFS(){
   if (document.fullscreenElement) document.exitFullscreen?.();
@@ -53,7 +52,6 @@ function closeBuildSheet(){
 }
 
 function markTool(name){
-  // Sidebar
   $$('#toolsSidebar .btn').forEach(b=>b.classList.remove('active'));
   if (name==='pointer') el.pointerBtn?.classList.add('active');
   if (name==='erase')   el.eraseBtn?.classList.add('active');
@@ -80,7 +78,6 @@ function doStart(){
     },
     onDebug: updateDebug,
     uiPlaceShow: (sx,sy,valid)=>{
-      // Position der ✔/✖ UI – leicht rechts oben vom Finger
       el.placeUI.style.display='flex';
       el.placeUI.style.left = Math.round(sx+12)+'px';
       el.placeUI.style.top  = Math.round(sy-12)+'px';
@@ -91,9 +88,7 @@ function doStart(){
     }
   });
 }
-function doReset(){
-  location.reload();
-}
+function doReset(){ location.reload(); }
 
 // ---------- Wire UI ----------
 el.start?.addEventListener('click', doStart);
@@ -115,9 +110,8 @@ el.buildClose?.addEventListener('click', closeBuildSheet);
 el.buildTiles.forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const type = btn.getAttribute('data-build');
-    // Schließen wir das Sheet, wechseln ins "build(type)"-Tool
     closeBuildSheet();
-    game.setBuildMode(type); // zeigt Ghost, wartet auf ✔/✖
+    game.setBuildMode(type); // zeigt sofort einen Ghost in der Bildschirmmitte
     markTool(null);
   });
 });
