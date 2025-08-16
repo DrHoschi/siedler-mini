@@ -1,127 +1,107 @@
-// Siedler‑Mini V15 boot.js
-// Verkabelt UI ↔ Spiel, Debug, Vollbild, Start/Reset
+// Siedler‑Mini V15 boot.js (robuste Start-Logik + iOS-Fullscreen-Fallback)
+import { game } from './game.js?v=15.0.3';
 
-import { game } from './game.js?v=1500';
+const $ = s => document.querySelector(s);
 
-const $ = sel => document.querySelector(sel);
-const canvas = $('#canvas');
-
-// ---------- Debug ----------
-const dbgBox = $('#debugBox');
-const dbgHead = $('#debugHead');
-const dbgBody = $('#debugBody');
-const dbgClose = $('#dbgClose');
-
-function dbg(msg) {
-  const time = new Date().toLocaleTimeString();
-  dbgBody.textContent = `[${time}] ${msg}\n` + dbgBody.textContent;
-}
-function toggleDebug(show) {
-  dbgBox.style.display = show ? 'block' : 'none';
-}
-dbgClose.addEventListener('click', ()=> toggleDebug(false));
-// Drag debug panel
-(function enableDrag(){
-  let dragging=false, sx=0, sy=0, left=12, bottom=12;
-  dbgHead.addEventListener('pointerdown', e=>{
-    dragging=true; sx=e.clientX; sy=e.clientY;
-    dbgHead.setPointerCapture(e.pointerId);
-  });
-  dbgHead.addEventListener('pointermove', e=>{
-    if(!dragging) return;
-    const dx=e.clientX-sx, dy=e.clientY-sy;
-    dbgBox.style.left = (left+dx)+'px';
-    dbgBox.style.bottom = (bottom-dy)+'px';
-    dbgBox.style.right = 'auto';
-  });
-  dbgHead.addEventListener('pointerup', e=>{
-    dragging=false;
-    const rect = dbgBox.getBoundingClientRect();
-    left = rect.left; bottom = window.innerHeight - rect.bottom;
-  });
-})();
-
-// ---------- Buttons / HUD ----------
-const hud = {
-  tool: $('#hudTool'),
-  zoom: $('#hudZoom'),
-  holz: $('#hudHolz'),
-  stein: $('#hudStein'),
-  nahr: $('#hudNahrung'),
-  gold: $('#hudGold')
+const els = {
+  canvas: $('#canvas') || $('#game canvas') || document.getElementById('game'),
+  startCard: $('#startCard'),
+  btnStart:  $('#btnStart'),
+  btnFs:     $('#btnFs'),
+  btnReset:  $('#btnReset'),
+  btnFullHUD:  $('#btnFull'),     // HUD rechts
+  btnCenter: $('#btnCenter'),
+  btnDebug:  $('#btnDebug'),
+  hudTool:   $('#hudTool'),
+  hudZoom:   $('#hudZoom'),
 };
-function setHUD(key, value){
-  if (key === 'Tool') hud.tool.textContent = value;
-  if (key === 'Zoom') hud.zoom.textContent = value;
-  if (key === 'Holz') hud.holz.textContent = value;
-  if (key === 'Stein') hud.stein.textContent = value;
-  if (key === 'Nahrung') hud.nahr.textContent = value;
-  if (key === 'Gold') hud.gold.textContent = value;
+
+function canFullscreen() {
+  const el = document.documentElement;
+  return !!(el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen);
+}
+async function enterFullscreen() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+  } catch {}
+}
+function exitFullscreen() {
+  const d = document;
+  if (d.exitFullscreen) d.exitFullscreen();
+  else if (d.webkitExitFullscreen) d.webkitExitFullscreen();
 }
 
-function bindTools(){
-  document.querySelectorAll('#tools .btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const tool = btn.dataset.tool;
-      game.setTool(tool);
-      document.querySelectorAll('#tools .btn').forEach(b=>b.classList.toggle('active', b===btn));
-      setHUD('Tool',
-        tool==='pointer' ? 'Zeiger' :
-        tool==='road' ? 'Straße' :
-        tool==='hq' ? 'HQ' :
-        tool==='woodcutter' ? 'Holzfäller' :
-        tool==='depot' ? 'Depot' : 'Abriss');
-    });
+// Debug Overlay beweglich halten
+const dbg = {
+  root: document.getElementById('dbgOverlay'),
+  btn:  document.getElementById('dbgToggle'),
+};
+if (dbg.btn && dbg.root) {
+  let dragging = false, sx=0, sy=0, ox=0, oy=0;
+  dbg.btn.addEventListener('click', () => dbg.root.classList.toggle('open'));
+  dbg.root.addEventListener('pointerdown', (e)=>{
+    if (!e.target.closest('.drag')) return;
+    dragging = true; sx=e.clientX; sy=e.clientY;
+    const r = dbg.root.getBoundingClientRect(); ox=r.left; oy=r.top;
+    dbg.root.setPointerCapture(e.pointerId);
   });
+  dbg.root.addEventListener('pointermove', (e)=>{
+    if (!dragging) return;
+    const x = ox + (e.clientX - sx);
+    const y = oy + (e.clientY - sy);
+    dbg.root.style.left = Math.max(8, x) + 'px';
+    dbg.root.style.top  = Math.max(8, y) + 'px';
+  });
+  dbg.root.addEventListener('pointerup', ()=>{ dragging=false; });
 }
-bindTools();
 
-$('#btnCenter').addEventListener('click', ()=>{
-  game.center();
-  dbg('Zentrieren');
-});
+// Start-Button verdrahten (mit einmaliger Initialisierung)
+let started = false;
+async function startGame() {
+  if (started) return;
+  started = true;
 
-$('#btnDebug').addEventListener('click', ()=>{
-  toggleDebug(dbgBox.style.display==='none');
-});
+  // Start Overlay schließen
+  els.startCard?.remove();
 
-async function goFullscreen() {
-  const el = document.documentElement; // ganze Seite
-  try{
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      dbg('Fullscreen aus');
-    } else {
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      else dbg('Fullscreen: nicht unterstützt');
-      dbg('Fullscreen an (falls erlaubt)');
+  // Game starten
+  await game.startGame({
+    canvas: els.canvas,
+    onHUD: (k,v)=>{
+      if (k === 'Tool' && els.hudTool) els.hudTool.textContent = v;
+      if (k === 'Zoom' && els.hudZoom) els.hudZoom.textContent = v;
     }
-  } catch(err){
-    dbg('Fullscreen blockiert: ' + (err?.message || err));
-  }
-}
-$('#btnFull').addEventListener('click', goFullscreen);
-$('#btnFs').addEventListener('click', goFullscreen);
-
-// ---------- Start/Reset ----------
-function startGame() {
-  document.getElementById('startCard').style.display = 'none';
-  game.startGame({
-    canvas,
-    onHUD: setHUD,
-    onDebug: dbg
   });
-  dbg('Spiel gestartet');
-}
-$('#btnStart').addEventListener('click', startGame);
 
-$('#btnReset').addEventListener('click', ()=>{
-  location.reload();
+  // Erstes HQ mittig platzieren & Kamera zentrieren (nur ein Mal)
+  if (game.placeInitialHQ) game.placeInitialHQ();
+  if (game.center) game.center();
+}
+
+// Buttons
+els.btnStart?.addEventListener('click', startGame);
+els.btnReset?.addEventListener('click', ()=>location.reload());
+els.btnFs?.addEventListener('click', async ()=>{
+  if (!canFullscreen()) return; // iOS iPhone in Safari: oft nicht erlaubt
+  await enterFullscreen();
+});
+els.btnFullHUD?.addEventListener('click', async ()=>{
+  if (!canFullscreen()) return;
+  await enterFullscreen();
+});
+els.btnCenter?.addEventListener('click', ()=> game.center && game.center());
+els.btnDebug?.addEventListener('click', ()=>{
+  document.getElementById('dbgOverlay')?.classList.toggle('open');
 });
 
-// Doppeltipp auf Canvas → Fullscreen
-canvas.addEventListener('dblclick', goFullscreen);
+// Doppeltipp auf Karte -> Fullscreen (falls erlaubt)
+document.getElementById('game')?.addEventListener('dblclick', async ()=>{
+  if (!canFullscreen()) return;
+  await enterFullscreen();
+});
 
-// ---------- Erste Meldung ----------
-dbg('Boot ok. Warte auf Start…');
+// Sichtbare Version unten links loggen
+console.log('Siedler‑Mini Boot', window.__SM_VER__ || '');
