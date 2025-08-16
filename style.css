@@ -1,0 +1,80 @@
+/* Siedler‑Mini – Baseline Styles (safe defaults) */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0f1725; /* dunkles Blau */
+  color: #cfe3ff;
+}
+
+#app, canvas#gameCanvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* HUD-Buttons am Rand „einfangen“ */
+.hud-bar {
+  position: fixed;
+  left: env(safe-area-inset-left, 8px);
+  right: env(safe-area-inset-right, 8px);
+  top: env(safe-area-inset-top, 8px);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  z-index: 1000;
+}
+
+.hud-right {
+  position: fixed;
+  top: env(safe-area-inset-top, 8px);
+  right: env(safe-area-inset-right, 8px);
+  display: flex;
+  gap: 8px;
+  z-index: 1001;
+}
+
+.pill {
+  background: rgba(28, 41, 60, .9);
+  border: 1px solid rgba(120, 170, 255, .25);
+  color: #cfe3ff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font: 13px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  user-select: none;
+}
+
+/* Debug-Fenster „draggable“ Overlay – nur Layout, Logik in boot.js */
+#debugDock {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  max-width: min(640px, 92vw);
+  max-height: 40vh;
+  overflow: auto;
+  z-index: 2000;
+  background: rgba(16, 22, 35, .9);
+  border: 1px solid rgba(120,170,255,.25);
+  border-radius: 12px;
+  color: #d5e6ff;
+  padding: 10px 12px;
+  box-shadow: 0 6px 30px rgba(0,0,0,.35);
+}
+
+#debugDock .drag {
+  cursor: move;
+  opacity: .9;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+button.btn {
+  background: #20324d;
+  color: #d5e6ff;
+  border: 1px solid #415e8a;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font: 14px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+}
+button.btn:active { transform: translateY(1px); }
