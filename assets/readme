@@ -1,1 +1,35 @@
-----> hier sollten alle Texturen liegen <----
+assets/
+ ├─ tex/
+ │   ├─ terrain/
+ │   │   ├─ TOPDOWN_GRASS.PNG
+ │   │   ├─ TOPDOWN_DIRT.PNG
+ │   │   ├─ TOPDOWN_FOREST.PNG
+ │   │   └─ TOPDOWN_WATER.PNG
+ │   ├─ road/
+ │   │   ├─ TOPDOWN_ROAD_STRAIGHT.PNG
+ │   │   ├─ TOPDOWN_ROAD_CORNER.PNG
+ │   │   ├─ TOPDOWN_ROAD_T.PNG
+ │   │   └─ TOPDOWN_ROAD_CROSS.PNG
+ │   ├─ path/           ← deine „Trampelpfade“ (path0..path9)
+ │   │   ├─ TOPDOWN_PATH0.PNG
+ │   │   └─ …
+ │   ├─ buildings/
+ │   │   ├─ common/     ← für Platzhalter/Shared
+ │   │   │   └─ PLACEHOLDER_2x2.PNG
+ │   │   ├─ wood/       ← Holz‑Variante
+ │   │   │   ├─ HQ_WOOD.PNG
+ │   │   │   ├─ DEPOT_WOOD.PNG
+ │   │   │   └─ WOODCUTTER_WOOD.PNG
+ │   │   └─ stone/      ← Stein‑Variante
+ │   │       ├─ HQ_STONE.PNG
+ │   │       └─ …
+ │   ├─ units/
+ │   │   ├─ CARRIER.PNG
+ │   │   └─ WOODCUTTER.PNG
+ │   └─ ui/
+ │       ├─ ICON_BUILD.PNG
+ │       └─ …
+ └─ sprites/
+     └─ carrier/
+         ├─ carrier_topdown_v2.png
+         └─ carrier_topdown_v2.json
