@@ -1,65 +1,65 @@
-/* Siedler‑Mini V15.2 – game.js
-   - Top-Down Tile-Renderer (64px) mit Texturen aus assets/tex/
-   - Gebäude als Sprites (HQ / Holzfäller / Depot)
-   - Holz-Produktion + Träger (langsam), liefert zum nahesten Lager (HQ/Depot)
-   - Kamera/Zoom/Pan wie gehabt; HUD-Bridge via onHUD
+/* Siedler‑Mini V15.3 – game.js
+   Erweiterung ggü. V15.2:
+   - buildMenuOpen-Flag + setBuildMenuOpen()
+   - Bauen NUR, solange Bau-Panel offen ist
+   - Tap-Filter: kurzer Tap (<220ms) & <8px Bewegung platziert; sonst kein Build
 */
-
 export const game = (() => {
-  // ====== Konstanten ======
-  const TILE = 64;                   // passt zu deinen 64x64 Top-Down Texturen
+  const TILE = 64;
   const GRID_COLOR = "#1e2a3d";
   const TEXT_COLOR = "#cfe3ff";
 
-  // Produktions-/Träger-Parameter
-  const PROD_TIME_MS = 8000;         // Holzfäller produziert alle 8s
-  const CARRIER_DELAY_MS = 3000;     // Wartezeit, bis Träger losläuft (3s)
-  const CARRIER_SPEED = 60;          // px/s (deutlich langsamer als vorher)
+  const PROD_TIME_MS = 8000;
+  const CARRIER_DELAY_MS = 3000;
+  const CARRIER_SPEED = 60;
 
-  // ====== State ======
   const state = {
     running: false,
-    // Canvas/Viewport
     canvas: null, ctx: null,
     DPR: 1, width: 0, height: 0,
-    // Kamera
     camX: 0, camY: 0, zoom: 1.0,
     minZoom: 0.5, maxZoom: 2.5,
 
-    // Welt
-    mapW: 48, mapH: 32,              // Kachelanzahl
-    tiles: [],                        // uint8 pro Tile (0=Grass,1=Dirt,2=Forest,3=Water)
-    roads: [],                        // {x1,y1,x2,y2} (Weltkoordinaten, gerastert)
-    buildings: [],                    // {id,type,x,y,w,h,spriteKey,store,prodTimer}
-    carriers: [],                     // {x,y,tx,ty,speed,hasWood}
+    mapW: 48, mapH: 32,
+    tiles: [],
+    roads: [],
+    buildings: [],
+    carriers: [],
 
-    // Auswahl/Interaktion
     pointerTool: "pointer",
+    buildMenuOpen: false,          // <<< NEU
+
     isPanning: false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
+    tapStartTs: 0, tapStartX:0, tapStartY:0,   // <<< NEU: Tap-Filter
 
-    // HUD callback
     onHUD: (k,v)=>{},
-
-    // Assets
-    images: new Map(),                // key->HTMLImageElement
+    images: new Map(),
     assetsReady: false,
 
-    // Zeit
     lastTs: 0
   };
 
-  // ====== Assets laden (mit robusten Fallbacks & Groß/Kleinschreibung) ======
   const ASSET_LIST = {
-    // Boden
     topdown_grass:      ["assets/tex/topdown_grass.png", "assets/tex/Topdown_grass.png"],
     topdown_dirt:       ["assets/tex/topdown_dirt.png",  "assets/tex/Topdown_dirt.png"],
     topdown_forest:     ["assets/tex/topdown_forest.png","assets/tex/Topdown_forest.png"],
     topdown_water:      ["assets/tex/topdown_water.png", "assets/tex/Topdown_water.png"],
-    // Gebäude
-    hq_sprite:          ["assets/tex/topdown_hq.png", "assets/tex/hq_wood.png", "assets/tex/HQ_Wood.png", "assets/tex/Hq_wood.png"],
+    hq_sprite:          ["assets/tex/topdown_hq.png", "assets/tex/hq_wood.png","assets/tex/HQ_Wood.png","assets/tex/Hq_wood.png"],
     woodcutter_sprite:  ["assets/tex/topdown_woodcutter.png","assets/tex/Topdown_woodcutter.png"],
     depot_sprite:       ["assets/tex/topdown_depot.png","assets/tex/Topdown_depot.png"],
   };
+
+  const setHUD = (k,v)=> state.onHUD?.(k,v);
+  const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
+  const toWorld = (sx,sy) => ({
+    x: (sx/state.DPR - state.width/2)/state.zoom + state.camX,
+    y: (sy/state.DPR - state.height/2)/state.zoom + state.camY
+  });
+  const toScreen = (wx,wy) => ({
+    x: (wx - state.camX) * state.zoom + state.width/2,
+    y: (wy - state.camY) * state.zoom + state.height/2
+  });
+  const snap = v => Math.round(v / TILE) * TILE;
 
   function loadImageWithFallbacks(paths){
     return new Promise((resolve) => {
@@ -75,7 +75,6 @@ export const game = (() => {
       img.src = paths[0] + "?r=" + Date.now();
     });
   }
-
   async function loadAssets(){
     const entries = Object.entries(ASSET_LIST);
     for (const [key, paths] of entries){
@@ -85,47 +84,29 @@ export const game = (() => {
     state.assetsReady = true;
   }
 
-  // ====== Utilities ======
-  const setHUD = (k,v)=> state.onHUD?.(k,v);
-  const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
-  const toWorld = (sx,sy) => ({
-    x: (sx/state.DPR - state.width/2)/state.zoom + state.camX,
-    y: (sy/state.DPR - state.height/2)/state.zoom + state.camY
-  });
-  const toScreen = (wx,wy) => ({
-    x: (wx - state.camX) * state.zoom + state.width/2,
-    y: (wy - state.camY) * state.zoom + state.height/2
-  });
-  const snap = v => Math.round(v / TILE) * TILE;
-
-  // ====== Map erzeugen (einfaches “Noise”-Muster) ======
   function makeMap(){
     state.tiles = new Array(state.mapW*state.mapH);
     for (let y=0; y<state.mapH; y++){
       for (let x=0; x<state.mapW; x++){
-        // simple Gradientenmischung → Wasser am Rand, sonst Gras/Forest/Dirt
         const dx = (x - state.mapW/2) / state.mapW;
         const dy = (y - state.mapH/2) / state.mapH;
         const r = Math.hypot(dx,dy);
-        let t = 0; // 0=Grass
-        if (r > 0.44) t = 3; // Water
-        else if (Math.sin(x*0.5)+Math.cos(y*0.4)>1.0) t = 2; // Forest
-        else if ((x+y)%7===0) t = 1; // Dirt Inseln
+        let t = 0;
+        if (r > 0.44) t = 3;
+        else if (Math.sin(x*0.5)+Math.cos(y*0.4)>1.0) t = 2;
+        else if ((x+y)%7===0) t = 1;
         state.tiles[y*state.mapW+x] = t;
       }
     }
   }
 
-  // ====== Zeichnen ======
   function drawTiles(ctx){
     if (!state.assetsReady){ drawGrid(ctx); return; }
-
     const imgGrass  = state.images.get("topdown_grass");
     const imgDirt   = state.images.get("topdown_dirt");
     const imgForest = state.images.get("topdown_forest");
     const imgWater  = state.images.get("topdown_water");
 
-    // Sichtfenster in Tile-Koordinaten berechnen
     const leftW   = state.camX - (state.width/2)/state.zoom;
     const topW    = state.camY - (state.height/2)/state.zoom;
     const rightW  = state.camX + (state.width/2)/state.zoom;
@@ -152,12 +133,10 @@ export const game = (() => {
         if (t===2 && imgForest) img = imgForest;
         if (t===3 && imgWater)  img = imgWater;
 
-        if (img) {
-          ctx.drawImage(img, 0,0,img.naturalWidth,img.naturalHeight, dstX, dstY, dstS, dstS);
-        } else {
-          // Fallback: einfärben
-          ctx.fillStyle = t===0? "#2e6a3a" : t===1? "#7d5a3a" : t===2? "#2f4b30" : "#254564";
-          ctx.fillRect(dstX, dstY, dstS, dstS);
+        if (img) ctx.drawImage(img, 0,0,img.naturalWidth,img.naturalHeight, dstX, dstY, dstS, dstS);
+        else {
+          const c = t===0? "#2e6a3a" : t===1? "#7d5a3a" : t===2? "#2f4b30" : "#254564";
+          state.ctx.fillStyle = c; state.ctx.fillRect(dstX, dstY, dstS, dstS);
         }
       }
     }
@@ -178,9 +157,8 @@ export const game = (() => {
   }
 
   function drawRoads(ctx){
-    // vorerst als Linien (später: Autotiles)
     ctx.save();
-    ctx.strokeStyle = "#a88c5a"; // erdiger Weg
+    ctx.strokeStyle = "#a88c5a";
     ctx.lineWidth = 6 * state.zoom * state.DPR;
     ctx.lineCap = "round";
     for (const r of state.roads){
@@ -205,7 +183,6 @@ export const game = (() => {
     if (img){
       ctx.drawImage(img, 0,0,img.naturalWidth,img.naturalHeight, dstX, dstY, dstW, dstH);
     } else {
-      // Fallback-Box + Label
       ctx.fillStyle = b.type==="hq" ? "#43aa62" : b.type==="woodcutter" ? "#3f8cff" : "#d55384";
       ctx.fillRect(dstX, dstY, dstW, dstH);
       ctx.fillStyle = TEXT_COLOR;
@@ -215,7 +192,7 @@ export const game = (() => {
     }
   }
 
-  function drawCarriers(ctx, dt){
+  function drawCarriers(ctx){
     ctx.save();
     for (const c of state.carriers){
       const p = toScreen(c.x,c.y);
@@ -233,12 +210,11 @@ export const game = (() => {
     ctx.clearRect(0,0,state.width, state.height);
     drawTiles(ctx);
     drawRoads(ctx);
-    // Gebäude über Straßen
     for (const b of state.buildings) drawBuilding(ctx,b);
     drawCarriers(ctx);
   }
 
-  // ====== Gebäude‑API ======
+  // ----- Buildings / Production / Carriers -----
   let nextId = 1;
   function addBuilding(type, wx, wy){
     const gx = snap(wx), gy = snap(wy);
@@ -251,38 +227,7 @@ export const game = (() => {
     state.buildings.push(b);
     return b;
   }
-
-  function findNearestStorage(wx, wy){
-    // Lager ist HQ oder Depot
-    let best=null, bestD=Infinity;
-    for (const b of state.buildings){
-      if (b.type==="hq" || b.type==="depot"){
-        const d = Math.hypot(wx - b.x, wy - b.y);
-        if (d < bestD){ bestD=d; best=b; }
-      }
-    }
-    return best;
-  }
-
-  // ====== Produktion & Träger ======
-  function tickProduction(dt){
-    for (const b of state.buildings){
-      if (b.type!=="woodcutter") continue;
-      b.prodTimer += dt;
-      if (b.prodTimer >= PROD_TIME_MS){
-        b.prodTimer = 0;
-        // Holz ist "fertig" → Träger nach CARRIER_DELAY losschicken
-        const target = chooseDeliveryTarget(b.x, b.y);
-        if (target){
-          setTimeout(()=>{
-            spawnCarrier(b.x, b.y, target.x, target.y, true);
-          }, CARRIER_DELAY_MS);
-        }
-      }
-    }
-  }
   function chooseDeliveryTarget(sx,sy){
-    // kürzeres Ziel: HQ vs. nächstes Depot
     let hq=null, nearestDepot=null, dDepot=Infinity;
     for (const b of state.buildings){
       if (b.type==="hq") hq=b;
@@ -297,36 +242,9 @@ export const game = (() => {
     const dHQ = Math.hypot(sx-hq.x, sy-hq.y);
     return (dDepot < dHQ) ? nearestDepot : hq;
   }
-
   function spawnCarrier(x,y,tx,ty, hasWood){
     state.carriers.push({ x, y, tx, ty, speed: CARRIER_SPEED, hasWood });
   }
-
-  function moveCarriers(dt){
-    // einfache Gerade‑Bewegung (später: Pfad über Wege)
-    const done = [];
-    for (const c of state.carriers){
-      const dx = c.tx - c.x, dy = c.ty - c.y;
-      const dist = Math.hypot(dx,dy);
-      if (dist < 1){
-        // Lieferung angekommen
-        if (c.hasWood){
-          const store = findStorageAt(c.tx, c.ty);
-          if (store) store.store.wood = (store.store.wood||0) + 1;
-          // HUD Holz erhöhen (global)
-          addHudResource("Holz", 1);
-        }
-        done.push(c);
-      } else {
-        const step = (c.speed * dt/1000);
-        c.x += (dx/dist)*step;
-        c.y += (dy/dist)*step;
-      }
-    }
-    // entfernen
-    state.carriers = state.carriers.filter(c => !done.includes(c));
-  }
-
   function findStorageAt(wx,wy){
     for (const b of state.buildings){
       if ((b.type==="hq" || b.type==="depot") &&
@@ -336,8 +254,6 @@ export const game = (() => {
     }
     return null;
   }
-
-  // HUD Ressourcen (nur Holz jetzt)
   let hudWood = 0;
   function addHudResource(kind, n){
     if (kind === "Holz"){
@@ -345,8 +261,41 @@ export const game = (() => {
       setHUD("Holz", String(hudWood));
     }
   }
+  function tickProduction(dt){
+    for (const b of state.buildings){
+      if (b.type!=="woodcutter") continue;
+      b.prodTimer += dt;
+      if (b.prodTimer >= PROD_TIME_MS){
+        b.prodTimer = 0;
+        const target = chooseDeliveryTarget(b.x, b.y);
+        if (target){
+          setTimeout(()=>{ spawnCarrier(b.x, b.y, target.x, target.y, true); }, CARRIER_DELAY_MS);
+        }
+      }
+    }
+  }
+  function moveCarriers(dt){
+    const done = [];
+    for (const c of state.carriers){
+      const dx = c.tx - c.x, dy = c.ty - c.y;
+      const dist = Math.hypot(dx,dy);
+      if (dist < 1){
+        if (c.hasWood){
+          const store = findStorageAt(c.tx, c.ty);
+          if (store) store.store.wood = (store.store.wood||0) + 1;
+          addHudResource("Holz", 1);
+        }
+        done.push(c);
+      } else {
+        const step = (c.speed * dt/1000);
+        c.x += (dx/dist)*step;
+        c.y += (dy/dist)*step;
+      }
+    }
+    state.carriers = state.carriers.filter(c => !done.includes(c));
+  }
 
-  // ====== Eingabe ======
+  // ----- Input -----
   function writeZoomHUD(){ setHUD("Zoom", `${state.zoom.toFixed(2)}x`); }
 
   function onWheel(e){
@@ -357,46 +306,7 @@ export const game = (() => {
     if (state.zoom !== before) writeZoomHUD();
   }
 
-  function onPointerDown(e){
-    // nur primär
-    if (!(e.button === 0 || e.button === undefined || e.button === -1 || e.pointerType === "touch")) return;
-    try { state.canvas.setPointerCapture(e.pointerId); } catch{}
-
-    const {x,y} = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
-
-    if (state.pointerTool === "pointer"){
-      // Pan starten
-      state.isPanning = true;
-      state.panStartX = e.clientX; state.panStartY = e.clientY;
-      state.camStartX = state.camX; state.camStartY = state.camY;
-    } else if (state.pointerTool === "erase"){
-      // Abriss
-      if (tryErase(x,y)) return;
-    } else {
-      // Bau
-      if (state.pointerTool==="hq" || state.pointerTool==="woodcutter" || state.pointerTool==="depot"){
-        addBuilding(state.pointerTool, x, y);
-      }
-    }
-  }
-
-  function onPointerMove(e){
-    if (state.isPanning && state.pointerTool === "pointer"){
-      e.preventDefault();
-      const dx = (e.clientX - state.panStartX) / state.zoom;
-      const dy = (e.clientY - state.panStartY) / state.zoom;
-      state.camX = state.camStartX - dx;
-      state.camY = state.camStartY - dy;
-    }
-  }
-
-  function onPointerUp(e){
-    state.isPanning = false;
-    try { state.canvas.releasePointerCapture(e.pointerId); } catch{}
-  }
-
   function tryErase(wx,wy){
-    // Gebäude zuerst
     for (let i=state.buildings.length-1; i>=0; i--){
       const b = state.buildings[i];
       const x0=b.x-b.w/2, x1=b.x+b.w/2, y0=b.y-b.h/2, y1=b.y+b.h/2;
@@ -405,7 +315,6 @@ export const game = (() => {
         return true;
       }
     }
-    // Straßen (falls vorhanden)
     const hitDist = 6 / state.zoom;
     for (let i=state.roads.length-1; i>=0; i--){
       const r = state.roads[i];
@@ -425,7 +334,58 @@ export const game = (() => {
     return Math.hypot(dx,dy);
   }
 
-  // ====== Tick ======
+  // **Wichtig**: Bauen nur, wenn buildMenuOpen === true UND kurzer Tap
+  function onPointerDown(e){
+    const primary = (e.button === 0 || e.button === undefined || e.button === -1 || e.pointerType === "touch");
+    if (!primary) return;
+    try { state.canvas.setPointerCapture(e.pointerId); } catch{}
+
+    state.tapStartTs = performance.now();
+    state.tapStartX = e.clientX; state.tapStartY = e.clientY;
+
+    if (!state.buildMenuOpen || state.pointerTool === "pointer"){
+      // Pan
+      state.isPanning = true;
+      state.panStartX = e.clientX; state.panStartY = e.clientY;
+      state.camStartX = state.camX; state.camStartY = state.camY;
+      return;
+    }
+    // Panel ist offen → Bauen/Abriss KANN passieren, aber erst bei PointerUp nach Tap-Check
+  }
+
+  function onPointerMove(e){
+    if (state.isPanning && (!state.buildMenuOpen || state.pointerTool === "pointer")){
+      e.preventDefault();
+      const dx = (e.clientX - state.panStartX) / state.zoom;
+      const dy = (e.clientY - state.panStartY) / state.zoom;
+      state.camX = state.camStartX - dx;
+      state.camY = state.camStartY - dy;
+    }
+  }
+
+  function onPointerUp(e){
+    state.isPanning = false;
+    try { state.canvas.releasePointerCapture(e.pointerId); } catch{}
+
+    // Bauen nur bei offenem Panel
+    if (!state.buildMenuOpen) return;
+
+    // Tap-Filter
+    const dt = performance.now() - state.tapStartTs;
+    const move = Math.hypot(e.clientX - state.tapStartX, e.clientY - state.tapStartY);
+    const isTap = (dt < 220 && move < 8);
+    if (!isTap) return;
+
+    // Jetzt bauen/abreißen
+    const w = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
+    if (state.pointerTool === "erase"){
+      tryErase(w.x,w.y);
+    } else if (state.pointerTool === "hq" || state.pointerTool === "woodcutter" || state.pointerTool === "depot"){
+      addBuilding(state.pointerTool, w.x, w.y);
+    }
+  }
+
+  // ----- Tick/Loop -----
   function tick(ts){
     if (!state.lastTs) state.lastTs = ts;
     const dt = ts - state.lastTs;
@@ -435,12 +395,11 @@ export const game = (() => {
       tickProduction(dt);
       moveCarriers(dt);
     }
-
     drawWorld();
     requestAnimationFrame(tick);
   }
 
-  // ====== Init / Public API ======
+  // ----- Canvas / Start -----
   function attachCanvas(canvas){
     state.canvas = canvas;
     state.ctx = canvas.getContext("2d");
@@ -451,14 +410,12 @@ export const game = (() => {
     document.addEventListener("fullscreenchange", resizeCanvas);
     document.addEventListener("webkitfullscreenchange", resizeCanvas);
 
-    // Eingaben
     canvas.addEventListener("pointerdown", onPointerDown, {passive:false});
     canvas.addEventListener("pointermove", onPointerMove, {passive:false});
     canvas.addEventListener("pointerup", onPointerUp, {passive:false});
     canvas.addEventListener("pointercancel", onPointerUp, {passive:false});
     canvas.addEventListener("wheel", onWheel, {passive:false});
   }
-
   function resizeCanvas(){
     const rect = state.canvas.getBoundingClientRect();
     state.width  = Math.max(1, Math.floor(rect.width  * state.DPR));
@@ -500,20 +457,22 @@ export const game = (() => {
                    name==='depot' ? 'Depot' : 'Abriss');
   }
 
+  function setBuildMenuOpen(open){
+    state.buildMenuOpen = !!open;
+    // Wenn geschlossen → automatisch in “Zeiger”-Verhalten (kein Build auf Down/Up)
+    if (!state.buildMenuOpen) setTool('pointer');
+  }
+
   function center(){
-    // auf Kartenmitte
     state.camX = (state.mapW*TILE)/2;
     state.camY = (state.mapH*TILE)/2;
   }
-
   function placeInitialHQ(){
-    // Mitte der Karte, gesnappt
     const cx = snap((state.mapW*TILE)/2);
     const cy = snap((state.mapH*TILE)/2);
     addBuilding("hq", cx, cy);
   }
 
-  // Lazy‑Asset‑Load gleich beim Import starten
   loadAssets();
 
   return {
@@ -521,6 +480,7 @@ export const game = (() => {
     setTool,
     center,
     placeInitialHQ,
+    setBuildMenuOpen,
     get state(){ return state; },
   };
 })();
