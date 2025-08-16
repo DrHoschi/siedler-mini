@@ -1,59 +1,95 @@
-// V15 input – Pointer, Pan/Zoom, Bauen, Abriss, Straßen
-export function createInput({
-  canvas, world, getTool, setZoom, getZoom,
-  moveCamera, screenToWorld, onPlaceRoad, onPlaceBuilding, onEraseAt, onLog
-}){
-  const state = {
-    panning:false, panStart:{x:0,y:0}, camStart:{x:0,y:0},
-    roadStart:null,
-  };
+// Siedler‑Mini V15 – Eingabe/Interaktion (Pan, Zoom, Bauen)
+export const input = (() => {
+  let world = null;
+  let canvas = null;
 
-  // Zoom (Mausrad)
-  canvas.addEventListener('wheel', (e)=>{
-    e.preventDefault();
-    if (getTool()!=='pointer') return;
-    const delta = -Math.sign(e.deltaY)*0.12;
-    const z = clamp(getZoom()+delta, 0.5, 2.5);
-    setZoom(z);
-  }, {passive:false});
+  // Panning
+  const PAN_SPEED = 0.25; // Dämpfung (langsameres Verschieben)
+  let isPanning = false;
+  let panStartX = 0, panStartY = 0;
+  let camStartX = 0, camStartY = 0;
 
-  // Touch‑Gesten: 1 Finger = Pan (nur Zeiger)
-  canvas.addEventListener('pointerdown', (e)=>{
-    if (!isPrimary(e)) return;
-    canvas.setPointerCapture?.(e.pointerId);
-    const tool = getTool();
-    const wPos = screenToWorld(e.clientX, e.clientY);
+  // Multi‑Pointer für (eventuell) Pinch (hier vorerst nur Count)
+  const activePointers = new Map();
 
-    if (tool==='pointer'){
-      state.panning = true;
-      state.panStart = {x:e.clientX, y:e.clientY};
-      state.camStart = {x:0,y:0}; // in main/render gemanagt → wir schicken nur Delta via moveCamera
-    } else if (tool==='road'){
-      if (!state.roadStart) state.roadStart = wPos;
-      else {
-        onPlaceRoad({ x1: state.roadStart.x, y1: state.roadStart.y, x2: wPos.x, y2: wPos.y });
-        state.roadStart = null;
-      }
-    } else if (tool==='erase'){
-      onEraseAt(wPos);
-    } else {
-      // Gebäude
-      onPlaceBuilding(tool, wPos);
+  function attach(_canvas, _world) {
+    canvas = _canvas;
+    world  = _world;
+
+    // Safety: alle Listener neu setzen
+    detach();
+    canvas.addEventListener('pointerdown', onPointerDown, {passive:false});
+    canvas.addEventListener('pointermove', onPointerMove, {passive:false});
+    canvas.addEventListener('pointerup',   onPointerUp,   {passive:false});
+    canvas.addEventListener('pointercancel', onPointerUp, {passive:false});
+    canvas.addEventListener('wheel', onWheel, {passive:false});
+
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onOrient);
+    document.addEventListener('fullscreenchange', onResize);
+    document.addEventListener('webkitfullscreenchange', onResize);
+  }
+
+  function detach() {
+    if (!canvas) return;
+    canvas.onpointerdown = null;
+    canvas.onpointermove = null;
+    canvas.onpointerup   = null;
+    canvas.onwheel       = null;
+  }
+
+  function onResize(){ world?.resizeCanvas(); }
+  function onOrient(){ setTimeout(()=>world?.resizeCanvas(), 250); }
+
+  function primary(e){ return (e.button===0 || e.button===undefined || e.button===-1 || e.pointerType==='touch'); }
+
+  function onPointerDown(e){
+    if (!primary(e)) return;
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
+    activePointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+    const s = world.state();
+
+    // Nur im Zeiger-Tool wird gepannt
+    if (s.tool === 'pointer' && activePointers.size === 1){
+      isPanning = true;
+      panStartX = e.clientX; panStartY = e.clientY;
+      camStartX = s.camX;    camStartY = s.camY;
+      return;
     }
-  }, {passive:false});
 
-  canvas.addEventListener('pointermove', (e)=>{
-    if (!state.panning || getTool()!=='pointer') return;
+    // Tap → bauen/straßen/abriss
+    const wx = world.clientToWorldX(e.clientX);
+    const wy = world.clientToWorldY(e.clientY);
+    world.tap(wx, wy);
+  }
+
+  function onPointerMove(e){
+    if (!primary(e)) return;
+    const s = world.state();
+
+    // Pan nur im Zeiger-Tool
+    if (isPanning && s.tool === 'pointer'){
+      e.preventDefault();
+      const dx = (e.clientX - panStartX) * (1/s.zoom) * PAN_SPEED;
+      const dy = (e.clientY - panStartY) * (1/s.zoom) * PAN_SPEED;
+      world.setCamera(camStartX - dx, camStartY - dy);
+      return;
+    }
+  }
+
+  function onPointerUp(e){
+    activePointers.delete(e.pointerId);
+    isPanning = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
+  }
+
+  function onWheel(e){
     e.preventDefault();
-    moveCamera(e.clientX - state.panStart.x, e.clientY - state.panStart.y);
-  }, {passive:false});
+    const s = world.state();
+    const delta = -Math.sign(e.deltaY) * 0.1;
+    world.setZoom(s.zoom + delta, e.clientX, e.clientY);
+  }
 
-  canvas.addEventListener('pointerup', (e)=>{
-    state.panning = false;
-    try{ canvas.releasePointerCapture?.(e.pointerId); }catch{}
-  });
-
-  // Helper
-  function isPrimary(e){ return (e.button===0 || e.button===undefined || e.button===-1 || e.pointerType==='touch'); }
-  function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
-}
+  return { attach, detach };
+})();
