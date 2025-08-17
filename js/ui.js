@@ -1,58 +1,62 @@
 // ui.js
-export const ui = (()=>{
+//
+// Bau-Menü und UI-Steuerung
+// Verknüpft Gebäude-Buttons mit den Grafiken aus assets.js
 
-  function toggleFS(){
-    const el = document.documentElement;
-    const inFS = document.fullscreenElement || document.webkitFullscreenElement;
-    if (!inFS){
-      const req = el.requestFullscreen || el.webkitRequestFullscreen;
-      if (req) req.call(el);
-    }else{
-      const exit = document.exitFullscreen || document.webkitExitFullscreen;
-      if (exit) exit.call(document);
+import { ASSETS } from "../core/assets.js";
+
+export class UI {
+    constructor(game) {
+        this.game = game;
+        this.selectedBuilding = null;
+
+        // Menü anlegen
+        this.menu = document.createElement("div");
+        this.menu.id = "build-menu";
+        this.menu.style.position = "absolute";
+        this.menu.style.bottom = "10px";
+        this.menu.style.left = "10px";
+        this.menu.style.display = "flex";
+        this.menu.style.gap = "6px";
+        this.menu.style.background = "rgba(0,0,0,0.4)";
+        this.menu.style.padding = "6px";
+        this.menu.style.borderRadius = "6px";
+        document.body.appendChild(this.menu);
+
+        // Buttons hinzufügen
+        this.createButton("HQ", ASSETS.building.hq, "hq");
+        this.createButton("Depot", ASSETS.building.depot, "depot");
+        this.createButton("Farm", ASSETS.building.farm, "farm");
+        this.createButton("Holzfäller", ASSETS.building.lumberjack, "lumberjack");
+        this.createButton("Fischer", ASSETS.building.fischer, "fischer");
+        this.createButton("Haus1", ASSETS.building.haeuser1, "haeuser1");
+        this.createButton("Haus2", ASSETS.building.haeuser2, "haeuser2");
+        this.createButton("Steinbruch", ASSETS.building.stonebraker, "stonebraker");
+        this.createButton("Wassermühle", ASSETS.building.wassermuehle, "wassermuehle");
+        this.createButton("Windmühle", ASSETS.building.windmuehle, "windmuehle");
+        this.createButton("Bäckerei", ASSETS.building.baeckerei, "baeckerei");
     }
-  }
 
-  function toggleDebug(el){
-    el.hidden = !el.hidden;
-  }
+    createButton(label, iconSrc, buildingId) {
+        const btn = document.createElement("button");
+        btn.style.width = "48px";
+        btn.style.height = "48px";
+        btn.style.backgroundImage = `url(${iconSrc})`;
+        btn.style.backgroundSize = "cover";
+        btn.style.border = "1px solid #888";
+        btn.style.borderRadius = "4px";
+        btn.style.cursor = "pointer";
+        btn.title = label;
 
-  function toggleBuildDock(dock){
-    dock.hidden = !dock.hidden;
-  }
+        btn.onclick = () => {
+            this.selectedBuilding = buildingId;
+            console.log("Gebäude gewählt:", buildingId);
+        };
 
-  function closeBuildDock(dock){
-    dock.hidden = true;
-    // aktive Auswahl optisch zurücksetzen
-    dock.querySelectorAll(".tool.active").forEach(b=>b.classList.remove("active"));
-  }
+        this.menu.appendChild(btn);
+    }
 
-  function markActiveTool(btn){
-    const group = btn.closest(".group");
-    group?.querySelectorAll(".tool.active").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-  }
-
-  // kleines Drag‑Utility für das Debugfenster
-  function makeDebugDraggable(panel){
-    let dragging=false, sx=0, sy=0, sl=0, st=0;
-    panel.addEventListener("pointerdown",(e)=>{
-      dragging=true; panel.classList.add("drag");
-      sx=e.clientX; sy=e.clientY;
-      const r=panel.getBoundingClientRect(); sl=r.left; st=r.top;
-      panel.setPointerCapture(e.pointerId);
-    });
-    panel.addEventListener("pointermove",(e)=>{
-      if(!dragging) return;
-      const dx=e.clientX-sx, dy=e.clientY-sy;
-      panel.style.left = Math.max(6,sl+dx)+"px";
-      panel.style.top  = Math.max(6,st+dy)+"px";
-    });
-    panel.addEventListener("pointerup",(e)=>{
-      dragging=false; panel.classList.remove("drag");
-      try{panel.releasePointerCapture(e.pointerId);}catch{}
-    });
-  }
-
-  return { toggleFS, toggleDebug, toggleBuildDock, closeBuildDock, markActiveTool, makeDebugDraggable };
-})();
+    getSelectedBuilding() {
+        return this.selectedBuilding;
+    }
+}
