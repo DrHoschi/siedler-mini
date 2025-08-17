@@ -2,219 +2,116 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler‑Mini V15 – Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1628" />
+  <title>Siedler‑Mini V15.2 (Terrain + JPEG)</title>
   <style>
     :root{
-      --ui: #0f1a2a; --ui2:#132134; --txt:#cfe3ff; --acc:#72e0a5; --err:#ff7a7a;
+      color-scheme: dark;
+      --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
+      --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
+      --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
+      --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --gap:10px;
     }
-    html,body{height:100%;margin:0;background:#0b1624;color:var(--txt);font:14px system-ui,-apple-system,Segoe UI,Roboto;}
-    #wrap{position:fixed;inset:0;display:flex;flex-direction:column;}
-    #hudTop{display:flex;gap:.5rem;align-items:center;padding:.4rem .6rem;background:linear-gradient(#0e1a2b,#0b1624);box-shadow:0 2px 8px #0008;z-index:5;flex-wrap:wrap}
-    .pill{padding:.25rem .6rem;border-radius:999px;background:#152338;color:var(--txt);border:1px solid #1d2c45;user-select:none}
-    .btn{cursor:pointer}
-    #main{position:relative;flex:1;min-height:0;background:#0b1624}
-    #gameCanvas{position:absolute;inset:0;touch-action:none}
-    /* Debug Window (drag) */
-    #debug{position:absolute;left:.6rem;bottom:.6rem;background:#0d1b2c88;border:1px solid #1e3356;
-      border-radius:.6rem;padding:.6rem;backdrop-filter: blur(6px);z-index:6;min-width:220px}
-    #debug.drag{opacity:.85}
-    /* Build menu */
-    #buildDock{position:absolute;left:.6rem;top:3.2rem;display:flex;flex-direction:column;gap:.4rem;z-index:7}
-    #buildDock .group{background:#0f1d31;border:1px solid #1e3356;border-radius:.6rem;padding:.45rem}
-    #buildDock .group h4{margin:.15rem .2rem .45rem .2rem;font-size:.9rem;color:#9ec2ff}
-    #buildDock .row{display:flex;gap:.4rem;flex-wrap:wrap}
-    .tool{padding:.35rem .55rem;border-radius:.5rem;background:#15263f;border:1px solid #1f3457;cursor:pointer}
-    .tool.active{outline:2px solid var(--acc)}
-    /* Confirm UI */
-    #confirm{position:absolute;display:none;gap:.4rem;transform:translate(-50%,-50%);z-index:8}
-    #confirm .ok{background:var(--acc)} #confirm .no{background:#2a1a1a;border:1px solid #5a2a2a}
-    #confirm .pill{pointer-events:auto}
-    /* Ghost badge (valid/invalid) */
-    #ghostBadge{position:absolute;display:none;pointer-events:none;transform:translate(-50%,-50%);z-index:7}
-    #ghostBadge .ok{background:#1f3a28;border:1px solid #3f7a58}
-    #ghostBadge .bad{background:#3a1f1f;border:1px solid #7a3f3f}
-    /* Version label */
-    #ver{position:absolute;right:.6rem;bottom:.4rem;opacity:.6;font-size:.75rem;z-index:4}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    #wrap{height:100%;display:flex;flex-direction:column}
+
+    /* Canvas liegt ganz unten, HUD darüber */
+    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
+    canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+
+    /* HUD oben */
+    #hudTop{position:fixed;left:0;right:0;top:0;display:flex;gap:8px;align-items:center;
+      padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3; pointer-events:none}
+    #hudTop .pill{pointer-events:auto}
+
+    /* Tools links */
+    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;
+      padding-left: calc(env(safe-area-inset-left,0)); z-index:3; pointer-events:none}
+    #tools .btn{pointer-events:auto}
+
+    /* Buttons rechts */
+    #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;
+      padding-right: calc(env(safe-area-inset-right,0)); z-index:3; pointer-events:none}
+    #hudRight .btn{pointer-events:auto}
+
+    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:24px;color:#cfe3ff;
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
+      font-size:15px;padding:8px 12px}
+    .btn.ok{background:var(--ok);border-color:#0a6129}
+    .btn.danger{background:var(--warn);border-color:#752020}
+
+    /* Startkarte */
+    #startCard{position:fixed;left:50%;top:70%;transform:translate(-50%,-50%);
+      background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
+      width:min(720px,94vw);padding:16px 18px 14px;box-shadow:var(--shadow);z-index:2}
+    #startCard h3{margin:0 0 10px;font-size:20px}
+    #startCard p{margin:8px 0;color:var(--muted)}
+    #startBtns{display:flex;gap:10px;margin-top:10px}
+
+    #version{position:fixed;right:10px;bottom:6px;color:#8fb0df;opacity:.85;font-size:12px;z-index:4}
+
+    /* Sehr schmale Geräte */
+    @media (max-width:480px){
+      .pill{font-size:13px;padding:5px 8px}
+      #tools{top:56px}
+      #hudRight{top:56px}
+      #startCard{top:68%}
+    }
   </style>
 </head>
 <body>
 <div id="wrap">
-  <div id="hudTop">
-    <span class="pill">Holz <span id="hudWood">0</span></span>
-    <span class="pill">Stein <span id="hudStone">0</span></span>
-    <span class="pill">Nahrung <span id="hudFood">0</span></span>
-    <span class="pill">Gold <span id="hudGold">0</span></span>
-    <span class="pill">Träger <span id="hudCar">0</span></span>
-    <span class="pill">Tool: <span id="hudTool">Zeiger</span></span>
-    <span class="pill">Zoom <span id="hudZoom">1.00x</span></span>
-    <span class="pill btn" id="btnCenter">Zentrieren</span>
-    <span class="pill btn" id="btnDebug">Debug</span>
-    <span class="pill btn" id="btnFS">Vollbild</span>
-    <span class="pill btn" id="btnBuildMenu">Bau‑Menü</span>
+  <!-- HUD oben -->
+  <div id="hudTop" aria-label="Ressourcen & Status">
+    <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
+    <div class="pill">🪨 Stein <span id="hudStone">0</span></div>
+    <div class="pill">🌿 Nahrung <span id="hudFood">0</span></div>
+    <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
+    <div class="pill">🍞 Träger <span id="hudCar">0</span></div>
+    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
+    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
   </div>
-  <div id="main">
-    <canvas id="gameCanvas"></canvas>
 
-    <!-- Build dock -->
-    <div id="buildDock" hidden>
-      <div class="group">
-        <h4>Gebäude (Holz)</h4>
-        <div class="row">
-          <div class="tool" data-type="hq_wood">HQ</div>
-          <div class="tool" data-type="depot_wood">Depot</div>
-          <div class="tool" data-type="lumberjack_wood">Holzfäller</div>
-          <div class="tool" data-type="farm_wood">Farm</div>
-          <div class="tool" data-type="stonebreaker_wood">Steinbruch</div>
-          <div class="tool" data-type="baeckerei_wood">Bäckerei</div>
-          <div class="tool" data-type="fischer_wood1">Fischer</div>
-          <div class="tool" data-type="windmuehle_wood">Windmühle</div>
-          <div class="tool" data-type="wassermuehle_wood">Wassermühle</div>
-          <div class="tool" data-type="haeuser_wood1">Haus 1</div>
-          <div class="tool" data-type="haeuser_wood2">Haus 2</div>
-        </div>
-      </div>
-      <div class="group">
-        <h4>Modus</h4>
-        <div class="row">
-          <div class="tool" data-mode="pointer">Zeiger</div>
-          <div class="tool" data-mode="erase">Abriss</div>
-        </div>
-      </div>
-      <div class="group">
-        <div class="row">
-          <div class="tool" id="btnCloseBuild">Bauen beenden</div>
-        </div>
-      </div>
+  <!-- Tools links -->
+  <div id="tools" aria-label="Werkzeuge">
+    <button class="btn" data-tool="pointer">Zeiger</button>
+    <button class="btn" data-tool="road">Straße</button>
+    <button class="btn" data-tool="hq">HQ</button>
+    <button class="btn" data-tool="woodcutter">Holzfäller</button>
+    <button class="btn" data-tool="depot">Depot</button>
+    <button class="btn" data-tool="erase">Abriss</button>
+  </div>
+
+  <!-- Buttons rechts -->
+  <div id="hudRight" aria-label="Aktionen">
+    <button id="btnCenter" class="btn">Zentrieren</button>
+    <button id="btnDebug" class="btn">Debug</button>
+    <button id="btnFull" class="btn">Vollbild</button>
+  </div>
+
+  <!-- Spielfläche -->
+  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
+
+  <!-- Startkarte -->
+  <div id="startCard">
+    <h3>Siedler‑Mini V15.2 (Mobile)</h3>
+    <p><b>1 Finger</b> = Karte verschieben (nur <i>Zeiger</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn Bau‑Tool aktiv).</p>
+    <p>Terrain lädt nun aus <code>assets/tex/terrain/</code> — PNG/JPEG werden automatisch erkannt.</p>
+    <div id="startBtns">
+      <button id="btnStart" class="btn ok">Start</button>
+      <button id="btnFs" class="btn">Vollbild</button>
+      <button id="btnReset" class="btn danger">Reset</button>
     </div>
-
-    <!-- Confirm & Ghost badges -->
-    <div id="confirm">
-      <span class="pill ok btn" id="btnConfirm">Bauen</span>
-      <span class="pill no btn" id="btnCancel">Abbrechen</span>
-    </div>
-    <div id="ghostBadge"><span class="pill ok" id="ghostTxt">OK</span></div>
-
-    <!-- Debug -->
-    <div id="debug" hidden>
-      <div style="font-weight:600;margin-bottom:.25rem">Debug (ziehen zum Verschieben)</div>
-      <div id="debugLog" style="max-width:38ch;white-space:pre-wrap"></div>
-    </div>
-
-    <div id="ver">DEV • V15.1</div>
   </div>
 </div>
 
-<script type="module">
-/* ===== Asset-Liste (PNG‑Namen groß/klein exakt wie bei dir!) ===== */
-const BUILD_TEX = {
-  // Gebäude Holz – Pfade wie von dir hochgeladen:
-  hq_wood:              "assets/tex/building/wood/hq_wood.PNG",
-  depot_wood:           "assets/tex/building/wood/depot_wood.PNG",
-  depot_wood_ug:        "assets/tex/building/wood/depot_wood_ug.PNG",
-  lumberjack_wood:      "assets/tex/building/wood/lumberjack_wood.PNG",
-  farm_wood:            "assets/tex/building/wood/farm_wood.PNG",
-  stonebreaker_wood:    "assets/tex/building/wood/stonebreaker_wood.PNG",
-  baeckerei_wood:       "assets/tex/building/wood/baeckerei_wood.PNG",
-  fischer_wood1:        "assets/tex/building/wood/fischer_wood1.PNG",
-  windmuehle_wood:      "assets/tex/building/wood/windmuehle_wood.PNG",
-  wassermuehle_wood:    "assets/tex/building/wood/wassermuehle_wood.PNG",
-  haeuser_wood1:        "assets/tex/building/wood/haeuser_wood1.PNG",
-  haeuser_wood2:        "assets/tex/building/wood/haeuser_wood2.PNG",
-  haeuser_wood1_ug1:    "assets/tex/building/wood/haeuser_wood1_ug1.PNG",
-  hq_wood_ug1:          "assets/tex/building/wood/hq_wood_ug1.PNG"
-};
-// Boden/Kachel‑Texte
-const TILE_TEX = {
-  grass: "assets/tex/topdown_grass.PNG",
-  dirt:  "assets/tex/topdown_dirt.PNG",
-  water: "assets/tex/topdown_water.PNG",
-  forest:"assets/tex/topdown_forest.PNG",
-  // Gehpfade (path0..path9) – optional genutzt
-  path0: "assets/tex/topdown_path0.PNG",
-  path1: "assets/tex/topdown_path1.PNG",
-  path2: "assets/tex/topdown_path2.PNG",
-  path3: "assets/tex/topdown_path3.PNG",
-  path4: "assets/tex/topdown_path4.PNG",
-  path5: "assets/tex/topdown_path5.PNG",
-  path6: "assets/tex/topdown_path6.PNG",
-  path7: "assets/tex/topdown_path7.PNG",
-  path8: "assets/tex/topdown_path8.PNG",
-  path9: "assets/tex/topdown_path9.PNG",
-};
+<div id="version">DEV • V15.2‑terrain</div>
 
-import { game } from "./js/game.js";   // neue game.js unten
-import { ui }   from "./js/ui.js";     // neue ui.js unten
-
-// App starten
-const canvas = document.querySelector("#gameCanvas");
-const dbg     = document.querySelector("#debug");
-const dbgLog  = document.querySelector("#debugLog");
-const ghost   = document.querySelector("#ghostBadge");
-const confirm = document.querySelector("#confirm");
-
-game.start({
-  canvas,
-  buildTextures: BUILD_TEX,
-  tileTextures: TILE_TEX,
-  onHUD: (k,v)=>{
-    if (k==="Zoom") document.querySelector("#hudZoom").textContent = v;
-    if (k==="Tool") document.querySelector("#hudTool").textContent = v;
-  },
-  onDebug: (line)=>{ dbgLog.textContent = line; },
-  onGhostMove: (sx,sy,isOk)=>{
-    ghost.style.display = "block";
-    ghost.style.left = sx+"px"; ghost.style.top = sy+"px";
-    const pill = ghost.firstElementChild;
-    pill.className = "pill " + (isOk ? "ok" : "bad");
-    pill.textContent = isOk ? "OK" : "X";
-  },
-  onGhostHide: ()=>{ ghost.style.display = "none"; },
-  onNeedConfirm: (sx,sy)=>{
-    confirm.style.display = "flex";
-    confirm.style.left = sx+"px"; confirm.style.top = (sy-30)+"px";
-  },
-  onHideConfirm: ()=>{ confirm.style.display = "none"; },
-});
-
-// HUD Buttons
-document.querySelector("#btnCenter").onclick = ()=> game.center();
-document.querySelector("#btnFS").onclick     = ()=> ui.toggleFS();
-document.querySelector("#btnDebug").onclick  = ()=> ui.toggleDebug(dbg);
-
-// Build‑Menü
-const dock = document.querySelector("#buildDock");
-document.querySelector("#btnBuildMenu").onclick = ()=> ui.toggleBuildDock(dock);
-document.querySelector("#btnCloseBuild").onclick = ()=>{
-  ui.closeBuildDock(dock);
-  game.setTool("pointer"); // wichtig: nach Schließen NICHT mehr bauen
-};
-
-// Toolauswahl in Gruppen
-dock.addEventListener("click",(e)=>{
-  const t = e.target.closest(".tool");
-  if (!t) return;
-  const mode = t.getAttribute("data-mode");
-  const type = t.getAttribute("data-type");
-  if (mode){
-    game.setTool(mode);
-    ui.markActiveTool(t);
-    return;
-  }
-  if (type){
-    // Geister‑Platzierung für diesen Gebäudetyp
-    game.chooseBuilding(type);
-    ui.markActiveTool(t);
-    // Menüs dürfen offen bleiben; Bauen benötigt Bestätigung (Confirm)
-  }
-});
-
-// Confirm / Cancel
-document.querySelector("#btnConfirm").onclick = ()=> game.confirmBuild();
-document.querySelector("#btnCancel").onclick  = ()=> game.cancelBuild();
-
-// Drag‑Debug
-ui.makeDebugDraggable(dbg);
-</script>
+<!-- Module laden (mit Cache‑Buster) -->
+<script type="module" src="./assets.js?v=15.2t"></script>
+<script type="module" src="./boot.js?v=15.2t"></script>
 </body>
 </html>
