@@ -1,375 +1,339 @@
-/* game.js — V15 Terrain‑Integration (Top‑Down)
-   - Nutzt Assets + Terrain (64px‑Tiles)
-   - Lädt automatisch mögliche Terrain‑Shapes aus assets/tex/terrain/
-   - Zeichnet: Terrain -> Roads -> Buildings
-   - Behält Build‑Ghost + OK/Abbrechen (vereinfachte Version)
+/* game.js — Terrain integriert (PNG/JPEG), flexible Namen
+   V15.2‑terrain
 */
-
-import { ASSETS } from "./assets.js";
-import { Terrain, TILE_PX } from "./terrain.js";
+import { Assets } from './assets.js?v=15.2t';
 
 export const game = (() => {
-  // ====== State ======
+  // ===== Welt/Render =====
+  const TILE = 64;                             // Terrain‑Tilegröße (passt zu deinen 64x64)
+  const GRID_COLOR = "rgba(46,60,84,.35)";
+
+  // ===== State =====
   const state = {
     running:false,
-    canvas:null, ctx:null, DPR:1,
-    width:0, height:0,
-    camX: 0, camY: 0, zoom: 1, minZoom:0.5, maxZoom:2.5,
+    canvas:null, ctx:null,
+    DPR:1, width:0, height:0,
+    camX:0, camY:0, zoom:1,
+    minZoom:.5, maxZoom:3,
+
+    // Eingabe
+    pointerTool:"pointer",
+    isPanning:false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
 
     // Welt
-    terrain: null,
+    cols: 80, rows: 60,       // feste Map (kannst du später ändern)
+    terrain: [],              // int‑Codes pro Zelle
+    textures: {},             // name->Image
+    texById: {},              // id -> Image/Canvas
+    // simple Building/Road (wie gehabt)
     roads: [],
     buildings: [],
 
-    // Build‑Ghost
-    tool: "pointer",            // "pointer"|"road"|"hq"|"woodcutter"|"depot"|...
-    ghost: null,                // {type,x,y,w,h}
-    confirmMode: false,         // OK/Abbrechen sichtbar
-
-    // Input
-    panning:false, panStartX:0, panStartY:0, camStartX:0, camStartY:0,
-
-    // HUD hook
+    // HUD callback
     onHUD:(k,v)=>{},
+    debug:false
   };
 
-  // ===== Helpers =====
-  const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
-  const toWorld = (sx,sy)=>({
+  // Terrain‑IDs (du kannst das frei mappen)
+  const T = {
+    GRASS:0, DIRT:1, WATER:2, SHORE:3, ROCK:4, SAND:5, PATH:6
+  };
+
+  // Welche Schlüssel wir zu laden versuchen -> flexible Dateinamen!
+  const TEX_KEYS = {
+    grass: ["grass","grass0","path0","topdown_grass"],
+    dirt:  ["dirt","mud","ground","topdown_dirt"],
+    water: ["water","water0","lake","topdown_water"],
+    shore: ["shore","beach","coast","topdown_shore","sandshore"],
+    rock:  ["rock","rocky","stone","topdown_rock","stones"],
+    sand:  ["sand","desert","topdown_sand"],
+    path:  ["path","path0","road_dirt","track"], // dein „Pfad“ (Trampelpfad)
+  };
+
+  // ===== Utils =====
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const toWorld = (sx,sy) => ({
     x: (sx/state.DPR - state.width/2)/state.zoom + state.camX,
     y: (sy/state.DPR - state.height/2)/state.zoom + state.camY
   });
-  const isPrimary = (e)=> (e.button===0 || e.button===undefined || e.button===-1 || e.pointerType==="touch");
-  const snap = v => Math.round(v / TILE_PX) * TILE_PX;
+  const toScreen = (wx,wy) => ({
+    x: (wx - state.camX) * state.zoom + state.width/2,
+    y: (wy - state.camY) * state.zoom + state.height/2
+  });
 
-  // ===== Boot/Resize =====
-  function attachCanvas(canvas){
+  // ===== Init =====
+  async function startGame({canvas, onHUD}){
+    if (state.running) return;
     state.canvas = canvas;
     state.ctx = canvas.getContext("2d");
     state.DPR = Math.max(1, Math.min(3, window.devicePixelRatio||1));
-    resize();
-    requestAnimationFrame(tick);
-  }
-  function resize(){
-    const rect = state.canvas.getBoundingClientRect();
-    const W = Math.max(1, Math.floor(rect.width  * state.DPR));
-    const H = Math.max(1, Math.floor(rect.height * state.DPR));
-    if (state.canvas.width !== W || state.canvas.height !== H) {
-      state.canvas.width = state.width = W;
-      state.canvas.height = state.height = H;
-    } else {
-      state.width = W; state.height = H;
-    }
-  }
+    state.onHUD = onHUD || state.onHUD;
 
-  // ===== Terrain / Assets laden =====
-  async function loadAll(){
-    await ASSETS.loadTerrainAll();            // lädt Atlas (optional) + Einzel‑Shapes
-    state.terrain = new Terrain(128,128);     // Karte 128×128 Tiles
-  }
+    resizeCanvas();
+    // Startkamera in Mitte der Map
+    state.camX = (state.cols*TILE)/2;
+    state.camY = (state.rows*TILE)/2;
+    state.zoom = 1.0;
+    writeHUD("Zoom", `${state.zoom.toFixed(2)}x`);
+    writeHUD("Tool", "Zeiger");
 
-  // ===== Zeichnen =====
-  function draw(){
-    const ctx = state.ctx;
-    ctx.clearRect(0,0,state.width, state.height);
+    // Terrain anlegen + Texturen laden
+    buildTerrain();
+    await loadTerrainTextures();
 
-    // 1) Terrain
-    if (state.terrain) {
-      state.terrain.draw(ctx, state.camX, state.camY, state.zoom, state.DPR, state.width, state.height);
-    }
-
-    // 2) Roads (vorerst einfache Linien)
-    ctx.save();
-    ctx.lineWidth = 3 * state.zoom * state.DPR;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#7ad39f";
-    for (const r of state.roads) {
-      const a = toScreen(r.x1,r.y1);
-      const b = toScreen(r.x2,r.y2);
-      ctx.beginPath();
-      ctx.moveTo(a.x*state.DPR, a.y*state.DPR);
-      ctx.lineTo(b.x*state.DPR, b.y*state.DPR);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // 3) Buildings (Kacheln als Platzhalter‑Rechtecke, bis deine Top‑Down‑Sprites dran sind)
-    for (const b of state.buildings) {
-      drawBuildingRect(b);
-    }
-
-    // 4) Ghost + OK/Cancel
-    drawGhost();
-  }
-
-  function toScreen(wx,wy){
-    return {
-      x: (wx - state.camX) * state.zoom + state.width /(2),
-      y: (wy - state.camY) * state.zoom + state.height/(2),
-    };
-  }
-
-  function drawBuildingRect(b) {
-    const ctx = state.ctx;
-    const p = toScreen(b.x,b.y);
-    const w = b.w * state.zoom * state.DPR;
-    const h = b.h * state.zoom * state.DPR;
-    ctx.save();
-    ctx.fillStyle =
-      b.type==="hq"         ? "#2aa06a" :
-      b.type==="woodcutter" ? "#3f8cff" :
-      b.type==="depot"      ? "#d55384" :
-      b.type==="farm"       ? "#c2a74b" :
-      b.type==="bakery"     ? "#d49562" :
-      b.type==="mill"       ? "#cbb27b" :
-      b.type==="watermill"  ? "#8bb0c9" :
-      b.type==="mine"       ? "#9b9fa8" :
-      b.type==="smith"      ? "#9a6d58" : "#6e7f8b";
-    ctx.fillRect(
-      (p.x*state.DPR) - w/2,
-      (p.y*state.DPR) - h/2,
-      w, h
-    );
-    ctx.restore();
-  }
-
-  function drawGhost(){
-    if (!state.ghost) return;
-    const { type, x, y, w, h, placeable } = state.ghost;
-    const ctx = state.ctx;
-    const p = toScreen(x,y);
-    const W = w * state.zoom * state.DPR;
-    const H = h * state.zoom * state.DPR;
-
-    ctx.save();
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = placeable ? "#2a7f33" : "#8c2e2e";
-    ctx.fillRect((p.x*state.DPR) - W/2, (p.y*state.DPR) - H/2, W, H);
-    ctx.restore();
-
-    // OK/Cancel Buttons neben Ghost
-    const pad = 16 * state.zoom * state.DPR;
-    drawUiButton(p.x*state.DPR + W/2 + pad, p.y*state.DPR, 28*state.DPR, 28*state.DPR, "ok");
-    drawUiButton(p.x*state.DPR + W/2 + pad + 40*state.DPR, p.y*state.DPR, 28*state.DPR, 28*state.DPR, "cancel");
-  }
-
-  function drawUiButton(cx, cy, w, h, kind){
-    const ctx = state.ctx;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.beginPath();
-    ctx.fillStyle = kind==="ok" ? "#27ae60" : "#c0392b";
-    ctx.strokeStyle = "#0d1b2a";
-    ctx.lineWidth = 2;
-    ctx.rect(-w/2, -h/2, w, h);
-    ctx.fill(); ctx.stroke();
-
-    ctx.fillStyle = "#fff";
-    ctx.font = `${Math.round(14*state.DPR)}px system-ui, -apple-system, Segoe UI`;
-    ctx.textAlign="center"; ctx.textBaseline="middle";
-    ctx.fillText(kind==="ok" ? "✓" : "✕", 0, 1);
-    ctx.restore();
-  }
-
-  // ===== Game Loop =====
-  function tick(){
-    if (!state.running) { draw(); return requestAnimationFrame(tick); }
-    draw();
+    addInput();
+    state.running = true;
     requestAnimationFrame(tick);
   }
 
-  // ===== Build‑/UI‑Logik =====
-  function setTool(name){
-    state.tool = name;
-    if (state.onHUD) state.onHUD("Tool", name);
-    // Ghost löschen, wenn kein Bau‑Tool
-    if (name==="pointer" || name==="erase") state.ghost = null;
-  }
+  function writeHUD(k,v){ state.onHUD?.(k,v); }
 
-  function beginGhost(type, wx, wy){
-    state.ghost = {
-      type,
-      x: snap(wx), y: snap(wy),
-      w: TILE_PX*2, h: TILE_PX*2,
-      placeable: true
+  // einfache Map (Grass mit etwas Wasser/Sand/Stein gemischt)
+  function buildTerrain(){
+    state.terrain = new Array(state.rows * state.cols).fill(T.GRASS);
+    // Streue ein paar Flecken
+    const rnd = mulberry32(12345);
+    const blobs = (type, count, radius)=>{
+      for (let n=0;n<count;n++){
+        const cx = Math.floor(rnd()*state.cols);
+        const cy = Math.floor(rnd()*state.rows);
+        for (let y=-radius;y<=radius;y++){
+          for (let x=-radius;x<=radius;x++){
+            if (x*x+y*y<=radius*radius){
+              const gx = clamp(cx+x,0,state.cols-1);
+              const gy = clamp(cy+y,0,state.rows-1);
+              state.terrain[gy*state.cols+gx] = type;
+            }
+          }
+        }
+      }
     };
-    state.confirmMode = true;
+    blobs(T.WATER, 6, 4);
+    blobs(T.SAND, 10, 3);
+    blobs(T.ROCK, 6, 3);
+    blobs(T.DIRT, 8, 3);
+    // Ufer umranden (WATER Nachbarn -> SHORE)
+    for (let y=0;y<state.rows;y++){
+      for (let x=0;x<state.cols;x++){
+        const i=y*state.cols+x;
+        if (state.terrain[i]!==T.WATER) continue;
+        for (let dy=-1;dy<=1;dy++){
+          for (let dx=-1;dx<=1;dx++){
+            if (!dx && !dy) continue;
+            const nx=x+dx, ny=y+dy;
+            if (nx<0||ny<0||nx>=state.cols||ny>=state.rows) continue;
+            const ni=ny*state.cols+nx;
+            if (state.terrain[ni]!==T.WATER) state.terrain[ni]=T.SHORE;
+          }
+        }
+      }
+    }
   }
 
-  function updateGhost(wx, wy){
-    if (!state.ghost) return;
-    state.ghost.x = snap(wx);
-    state.ghost.y = snap(wy);
-    // einfache Kollision: nicht außerhalb Terrain
-    const gx = state.ghost.x / TILE_PX;
-    const gy = state.ghost.y / TILE_PX;
-    state.ghost.placeable =
-      gx>=0 && gx<state.terrain.w && gy>=0 && gy<state.terrain.h;
-  }
+  async function loadTerrainTextures(){
+    // Wir versuchen mehrere Kandidaten pro Kategorie; bei Erfolg merken wir uns genau 1 Image
+    async function loadOne(keyArray, fallbackLabel){
+      for (const nm of keyArray){
+        const img = await Assets.loadTextures({keys:[nm]}).then(()=>Assets.getTexture(nm));
+        if (img) return img;
+      }
+      // Platzhalter
+      return Assets.placeholder64(fallbackLabel);
+    }
 
-  function confirmGhost(){
-    if (!state.ghost || !state.ghost.placeable) return;
-    const b = { type: state.ghost.type, x: state.ghost.x, y: state.ghost.y, w: state.ghost.w, h: state.ghost.h };
-    state.buildings.push(b);
-    state.ghost = null;
-    state.confirmMode = false;
-    // setTool("pointer"); // optional: nach Platzierung zurück zum Zeiger
-  }
+    const grass = await loadOne(TEX_KEYS.grass, "GRASS");
+    const dirt  = await loadOne(TEX_KEYS.dirt,  "DIRT");
+    const water = await loadOne(TEX_KEYS.water, "WATER");
+    const shore = await loadOne(TEX_KEYS.shore, "SHORE");
+    const rock  = await loadOne(TEX_KEYS.rock,  "ROCK");
+    const sand  = await loadOne(TEX_KEYS.sand,  "SAND");
+    const path  = await loadOne(TEX_KEYS.path,  "PATH");
 
-  function cancelGhost(){
-    state.ghost = null;
-    state.confirmMode = false;
-    // setTool("pointer"); // optional
+    state.textures = {grass,dirt,water,shore,rock,sand,path};
+    // Mapping ID -> Bild
+    state.texById = {
+      [T.GRASS]: grass,
+      [T.DIRT ]: dirt,
+      [T.WATER]: water,
+      [T.SHORE]: shore,
+      [T.ROCK ]: rock,
+      [T.SAND ]: sand,
+      [T.PATH ]: path
+    };
   }
 
   // ===== Input =====
   function addInput(){
     const el = state.canvas;
-    el.addEventListener("pointerdown", onDown, {passive:false});
-    el.addEventListener("pointermove", onMove, {passive:false});
-    el.addEventListener("pointerup",   onUp,   {passive:false});
-    el.addEventListener("pointercancel", onUp, {passive:false});
+    el.addEventListener("pointerdown", onPointerDown, {passive:false});
+    el.addEventListener("pointermove", onPointerMove, {passive:false});
+    el.addEventListener("pointerup",   onPointerUp,   {passive:false});
+    el.addEventListener("pointercancel", onPointerUp, {passive:false});
     el.addEventListener("wheel", onWheel, {passive:false});
-    window.addEventListener("resize", resize);
-    window.addEventListener("orientationchange", ()=>setTimeout(resize, 250));
+
+    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("orientationchange", ()=>setTimeout(resizeCanvas, 250));
+    document.addEventListener("fullscreenchange", resizeCanvas);
+    document.addEventListener("webkitfullscreenchange", resizeCanvas);
   }
 
   function onWheel(e){
     e.preventDefault();
+    const dz = -Math.sign(e.deltaY) * 0.1;
     const before = state.zoom;
-    const d = -Math.sign(e.deltaY) * 0.1;
-    state.zoom = clamp(state.zoom + d, state.minZoom, state.maxZoom);
-    if (state.zoom !== before) state.onHUD?.("Zoom", `${state.zoom.toFixed(2)}x`);
+    state.zoom = clamp(state.zoom + dz, state.minZoom, state.maxZoom);
+    if (state.zoom !== before) writeHUD("Zoom", `${state.zoom.toFixed(2)}x`);
   }
 
-  function onDown(e){
-    if (!isPrimary(e)) return;
-    try { state.canvas.setPointerCapture(e.pointerId); } catch {}
-    const {x,y} = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
-
-    if (state.confirmMode) {
-      // Klick auf OK/Cancel?
-      const hit = ghostUiHit(e.clientX*state.DPR, e.clientY*state.DPR);
-      if (hit==="ok")   { confirmGhost(); return; }
-      if (hit==="cancel"){ cancelGhost();  return; }
-      // ansonsten Ghost mitziehen
-      updateGhost(x,y);
-      return;
-    }
-
-    if (state.tool === "pointer") {
-      state.panning = true; state.panStartX = e.clientX; state.panStartY = e.clientY;
+  function onPointerDown(e){
+    if (e.button!==0 && e.pointerType!=="touch") return;
+    try{ state.canvas.setPointerCapture(e.pointerId); }catch{}
+    if (state.pointerTool==="pointer"){
+      state.isPanning = true;
+      state.panStartX = e.clientX; state.panStartY = e.clientY;
       state.camStartX = state.camX; state.camStartY = state.camY;
-      return;
-    }
-
-    // Bau‑Tools: Ghost starten
-    if (["hq","woodcutter","depot","farm","bakery","smith","mine","watermill","mill"].includes(state.tool)) {
-      beginGhost(state.tool, x,y);
-      return;
-    }
-
-    if (state.tool === "erase") {
-      tryErase(x,y);
+    } else {
+      // Bau‑Aktionen (hier nur Demo: HQ platzieren)
+      const w = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
+      if (state.pointerTool==="hq"){
+        state.buildings.push({type:"hq", x: snap(w.x,TILE), y: snap(w.y,TILE), w:TILE*2, h:TILE*2});
+      }
+      if (state.pointerTool==="erase"){
+        eraseAt(w.x,w.y);
+      }
     }
   }
-
-  function ghostUiHit(sx, sy){
-    // selbe Position wie drawUiButton berechnen
-    if (!state.ghost) return null;
-    const {x,y,w,h} = state.ghost;
-    const p = toScreen(x,y);
-    const DPR = state.DPR;
-    const W = w * state.zoom * DPR, H = h * state.zoom * DPR;
-    const pad = 16 * state.zoom * DPR;
-
-    const ok = { cx: p.x*DPR + W/2 + pad, cy: p.y*DPR, w:28*DPR, h:28*DPR };
-    const ca = { cx: ok.cx + 40*DPR,      cy: ok.cy,  w:28*DPR, h:28*DPR };
-
-    if (hitRect(sx, sy, ok)) return "ok";
-    if (hitRect(sx, sy, ca)) return "cancel";
-    return null;
-  }
-  function hitRect(sx, sy, r){ return (sx >= r.cx - r.w/2 && sx <= r.cx + r.w/2 && sy >= r.cy - r.h/2 && sy <= r.cy + r.h/2); }
-
-  function onMove(e){
-    if (state.confirmMode && state.ghost) {
-      const {x,y} = toWorld(e.clientX*state.DPR, e.clientY*state.DPR);
-      updateGhost(x,y);
+  function onPointerMove(e){
+    if (state.isPanning && state.pointerTool==="pointer"){
       e.preventDefault();
-      return;
-    }
-    if (state.panning && state.tool==="pointer"){
-      e.preventDefault();
-      const dx = (e.clientX - state.panStartX) / state.zoom;
-      const dy = (e.clientY - state.panStartY) / state.zoom;
+      const dx = (e.clientX - state.panStartX)/state.zoom;
+      const dy = (e.clientY - state.panStartY)/state.zoom;
       state.camX = state.camStartX - dx;
       state.camY = state.camStartY - dy;
     }
   }
-  function onUp(e){
-    state.panning = false;
-    try { state.canvas.releasePointerCapture(e.pointerId); } catch {}
+  function onPointerUp(e){
+    state.isPanning = false;
+    try{ state.canvas.releasePointerCapture(e.pointerId); }catch{}
   }
 
-  // ===== Erase simple =====
-  function tryErase(wx, wy){
-    // Buildings
-    for (let i=state.buildings.length-1; i>=0; i--){
-      const b = state.buildings[i];
-      const x0=b.x-b.w/2, x1=b.x+b.w/2, y0=b.y-b.h/2, y1=b.y+b.h/2;
-      if (wx>=x0 && wx<=x1 && wy>=y0 && wy<=y1){
-        state.buildings.splice(i,1);
-        return true;
+  // ===== Zeichnen =====
+  function tick(){
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  function draw(){
+    const ctx = state.ctx;
+    ctx.save();
+    ctx.clearRect(0,0,state.width, state.height);
+
+    // Sichtfenster in Kacheln berechnen
+    const left   = Math.floor((state.camX - state.width/(2*state.zoom)) / TILE);
+    const top    = Math.floor((state.camY - state.height/(2*state.zoom)) / TILE);
+    const right  = Math.ceil ((state.camX + state.width/(2*state.zoom)) / TILE);
+    const bottom = Math.ceil ((state.camY + state.height/(2*state.zoom)) / TILE);
+
+    for (let gy=top; gy<bottom; gy++){
+      if (gy<0||gy>=state.rows) continue;
+      for (let gx=left; gx<right; gx++){
+        if (gx<0||gx>=state.cols) continue;
+        const id = state.terrain[gy*state.cols + gx] ?? T.GRASS;
+        const img = state.texById[id] || state.textures.grass;
+
+        const wx = gx*TILE + TILE/2;
+        const wy = gy*TILE + TILE/2;
+        const p  = toScreen(wx,wy);
+        const size = TILE*state.zoom*state.DPR;
+
+        // zeichne 64x64 Bild skaliert auf TILE
+        ctx.drawImage(img, Math.round((p.x - TILE/2*state.zoom)*state.DPR),
+                           Math.round((p.y - TILE/2*state.zoom)*state.DPR),
+                           Math.round(size), Math.round(size));
       }
     }
-    // Roads
-    for (let i=state.roads.length-1; i>=0; i--){
-      const r = state.roads[i];
-      const d = pointToSegmentDist(wx,wy, r.x1,r.y1, r.x2,r.y2);
-      if (d <= 8/state.zoom){ state.roads.splice(i,1); return true; }
+
+    // optional Raster
+    drawGrid(ctx);
+
+    // Gebäude (einfach als Boxen)
+    for (const b of state.buildings){
+      drawBuilding(ctx,b);
     }
-    return false;
+
+    if (state.debug){
+      ctx.fillStyle = "rgba(0,0,0,.5)";
+      ctx.fillRect(6*state.DPR, (state.height-70*state.DPR), 320*state.DPR, 64*state.DPR);
+      ctx.fillStyle = "#cfe3ff";
+      ctx.font = `${12*state.DPR}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      ctx.fillText(`cam=(${state.camX.toFixed(1)}, ${state.camY.toFixed(1)}) zoom=${state.zoom.toFixed(2)} DPR=${state.DPR}`, 12*state.DPR, (state.height-48*state.DPR));
+      ctx.fillText(`tiles=${state.cols}x${state.rows}  visible=${Math.max(0,(right-left)*(bottom-top))}`, 12*state.DPR, (state.height-28*state.DPR));
+    }
+
+    ctx.restore();
   }
-  function pointToSegmentDist(px,py, x1,y1,x2,y2){
-    const A=px-x1, B=py-y1, C=x2-x1, D=y2-y1;
-    const dot = A*C + B*D;
-    const len2 = C*C + D*D;
-    let t = len2 ? (dot/len2) : -1;
-    t = Math.max(0, Math.min(1,t));
-    const x = x1 + t*C, y = y1 + t*D;
-    const dx = px-x, dy = py-y;
-    return Math.hypot(dx,dy);
+
+  function drawGrid(ctx){
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = GRID_COLOR;
+    const step = TILE * state.zoom * state.DPR;
+    const ox = (state.width/2 - (state.camX*state.zoom)*state.DPR) % step;
+    const oy = (state.height/2 - (state.camY*state.zoom)*state.DPR) % step;
+    ctx.beginPath();
+    for (let x=ox; x<=state.width; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,state.height); }
+    for (let y=oy; y<=state.height; y+=step){ ctx.moveTo(0,y); ctx.lineTo(state.width,y); }
+    ctx.stroke();
+    ctx.restore();
   }
+
+  function drawBuilding(ctx,b){
+    const p = toScreen(b.x,b.y);
+    const w = b.w*state.zoom*state.DPR;
+    const h = b.h*state.zoom*state.DPR;
+    ctx.save();
+    ctx.fillStyle = b.type==="hq" ? "#3aa56d" : "#5f8cff";
+    ctx.fillRect((p.x*state.DPR - w/2), (p.y*state.DPR - h/2), w, h);
+    ctx.restore();
+  }
+
+  // ===== Helpers =====
+  function resizeCanvas(){
+    const c = state.canvas;
+    const rect = c.getBoundingClientRect();
+    state.width  = Math.max(1, Math.floor(rect.width  * state.DPR));
+    state.height = Math.max(1, Math.floor(rect.height * state.DPR));
+    if (c.width!==state.width || c.height!==state.height){
+      c.width = state.width; c.height = state.height;
+    }
+  }
+  function snap(v, s){ return Math.round(v/s)*s; }
+
+  function eraseAt(wx,wy){
+    for (let i=state.buildings.length-1;i>=0;i--){
+      const b=state.buildings[i];
+      const x0=b.x-b.w/2, x1=b.x+b.w/2, y0=b.y-b.h/2, y1=b.y+b.h/2;
+      if (wx>=x0 && wx<=x1 && wy>=y0 && wy<=y1){ state.buildings.splice(i,1); return; }
+    }
+  }
+
+  // Mini RNG
+  function mulberry32(a){ return function(){ let t=a+=0x6D2B79F5; t=Math.imul(t^t>>>15, t|1); t^=t+Math.imul(t^t>>>7, t|61); return ((t^t>>>14)>>>0)/4294967296; } }
 
   // ===== API =====
-  async function start({canvas, onHUD}){
-    if (state.running) return;
-    state.onHUD = onHUD || state.onHUD;
-    attachCanvas(canvas);
-    await loadAll();
-
-    // Startkamera: auf Kartenmitte
-    state.camX = (state.terrain.w * TILE_PX) / 2;
-    state.camY = (state.terrain.h * TILE_PX) / 2;
-    state.zoom = 1.0;
-    state.onHUD?.("Zoom", `${state.zoom.toFixed(2)}x`);
-
-    addInput();
-    state.running = true;
+  function setTool(name){
+    state.pointerTool = name;
+    writeHUD("Tool", name==='pointer'?'Zeiger':
+                    name==='road'?'Straße':
+                    name==='hq'?'HQ':
+                    name==='woodcutter'?'Holzfäller':
+                    name==='depot'?'Depot':'Abriss');
   }
-
   function center(){
-    if (!state.terrain) return;
-    state.camX = (state.terrain.w * TILE_PX) / 2;
-    state.camY = (state.terrain.h * TILE_PX) / 2;
+    state.camX = (state.cols*TILE)/2;
+    state.camY = (state.rows*TILE)/2;
   }
+  function toggleDebug(){ state.debug = !state.debug; }
 
-  return {
-    start,
-    setTool,
-    center,
-    confirmGhost,
-    cancelGhost,
-  };
+  return { startGame, setTool, center, toggleDebug };
 })();
