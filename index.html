@@ -112,7 +112,19 @@
 
 <!-- Module laden (mit Cache‑Buster) -->
 <script type="module" src="./assets.js?v=15.2t"></script>
+<script type="module" src="./terrain.js?v=15.2t"></script>
 <script type="module" src="./boot.js?v=15.2t"></script>
-  <script type="module" src="terrain.js"></script>
+
+<!-- Optionale eigene Asset-Checkliste (muss vor debug.js stehen) -->
+<script>
+  window.ASSET_CHECK_LIST = [
+    'assets/tex/topdown_grass.png',
+    'assets/tex/terrain/path0.jpeg',
+    // … deine vollständige Liste hier …
+  ];
+</script>
+
+<!-- Diagnose / Asset-Scan IMMER zuletzt -->
+<script src="./debug.js?v=15.2t"></script>
 </body>
 </html>
