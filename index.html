@@ -62,69 +62,81 @@
     }
   </style>
 </head>
+<!-- ... dein bisheriger <head> bleibt ... -->
+
 <body>
-<div id="wrap">
-  <!-- HUD oben -->
-  <div id="hudTop" aria-label="Ressourcen & Status">
-    <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
-    <div class="pill">🪨 Stein <span id="hudStone">0</span></div>
-    <div class="pill">🌿 Nahrung <span id="hudFood">0</span></div>
-    <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
-    <div class="pill">🍞 Träger <span id="hudCar">0</span></div>
-    <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
-    <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
+  <!-- HUD -->
+  <div id="hud" class="hud">
+    <span>Tool: <b id="hudTool">Zeiger</b></span>
+    <span>Zoom <b id="hudZoom">1.00x</b></span>
+    <button id="btnCenter">Zentrieren</button>
+    <button id="btnDebug">Debug</button>
+    <button id="btnFs">Vollbild</button>
   </div>
 
-  <!-- Tools links -->
-  <div id="tools" aria-label="Werkzeuge">
-    <button class="btn" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="woodcutter">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="erase">Abriss</button>
+  <!-- Linke Toolbar -->
+  <div id="tools" class="toolbar">
+    <button data-tool="pointer" class="active">Zeiger</button>
+    <button data-tool="road">Straße</button>
+    <button data-tool="hq">HQ</button>
+    <button data-tool="woodcutter">Holzfäller</button>
+    <button data-tool="depot">Depot</button>
+    <button data-tool="erase">Abriss</button>
   </div>
 
-  <!-- Buttons rechts -->
-  <div id="hudRight" aria-label="Aktionen">
-    <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug" class="btn">Debug</button>
-    <button id="btnFull" class="btn">Vollbild</button>
-  </div>
-
-  <!-- Spielfläche -->
-  <div id="game"><canvas id="canvas" aria-label="Spielbrett"></canvas></div>
+  <!-- Canvas -->
+  <canvas id="canvas" class="game-canvas"></canvas>
 
   <!-- Startkarte -->
-  <div id="startCard">
-    <h3>Siedler‑Mini V15.2 (Mobile)</h3>
-    <p><b>1 Finger</b> = Karte verschieben (nur <i>Zeiger</i>) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn Bau‑Tool aktiv).</p>
-    <p>Terrain lädt nun aus <code>assets/tex/terrain/</code> — PNG/JPEG werden automatisch erkannt.</p>
-    <div id="startBtns">
-      <button id="btnStart" class="btn ok">Start</button>
-      <button id="btnFs" class="btn">Vollbild</button>
-      <button id="btnReset" class="btn danger">Reset</button>
+  <div id="startCard" class="start-card">
+    <div class="card">
+      <h3>Siedler‑Mini V15.2 (Mobile)</h3>
+      <p><b>1 Finger</b> = Karte verschieben (nur im Zeiger‑Tool) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn Bau‑Tool aktiv).</p>
+      <p>Terrain lädt aus <code>assets/tex/terrain/</code> (PNG/JPEG werden automatisch erkannt).</p>
+      <div class="row">
+        <button id="btnStart" class="primary">Start</button>
+        <button id="btnFull">Vollbild</button>
+        <button id="btnReset">Reset</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div id="version">DEV • V15.2‑terrain</div>
+  <!-- kleine Styles, damit Overlays nicht blockieren -->
+  <style>
+    html,body{margin:0;height:100%;background:#0f2237;color:#cfe3ff;font-family:system-ui,-apple-system,Segoe UI,Roboto;}
+    .game-canvas{position:fixed;inset:0;width:100vw;height:100vh;touch-action:none;}
+    .hud{position:fixed;top:12px;right:12px;display:flex;gap:10px;align-items:center;z-index:10}
+    .toolbar{position:fixed;left:12px;top:70px;display:flex;flex-direction:column;gap:10px;z-index:10}
+    .toolbar button.active{outline:2px solid #3f8cff}
+    .start-card{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20}
+    .start-card .card{width:min(680px,92vw);background:#172b45;border-radius:14px;padding:18px 22px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+    .row{display:flex;gap:10px;margin-top:10px}
+    .primary{background:#2aa55a;color:#fff;border:none;padding:10px 16px;border-radius:8px}
+    /* Debug-Box */
+    #__debugBox{position:fixed;left:12px;bottom:12px;max-width:80vw;z-index:30;background:#0c1a2bbb;border:1px solid #28405e;padding:8px 10px;border-radius:8px;backdrop-filter:blur(6px);font-size:12px;line-height:1.3}
+    #__debugBox pre{white-space:pre-wrap;margin:4px 0}
+    #__debugBox .drag{cursor:move;opacity:.8}
+  </style>
 
-<!-- Module laden (mit Cache‑Buster) -->
-<script type="module" src="./assets.js?v=15.2t"></script>
-<script type="module" src="./terrain.js?v=15.2t"></script>
-<script type="module" src="./boot.js?v=15.2t"></script>
+  <!-- Reihenfolge der Module -->
+  <script>
+    // Liste für Asset-Check (du kannst beliebig erweitern)
+    window.ASSET_CHECK_LIST = [
+      'assets/tex/terrain/topdown_grass.PNG',
+      'assets/tex/terrain/sm_topdown_grass0.jpeg',
+      'assets/sprites/carrier/carrier_topdown_v2.png',
+      'assets/sprites/carrier/carrier_topdown_v2.json'
+    ];
+  </script>
 
-<!-- Optionale eigene Asset-Checkliste (muss vor debug.js stehen) -->
-<script>
-  window.ASSET_CHECK_LIST = [
-    'assets/tex/topdown_grass.png',
-    'assets/tex/terrain/path0.jpeg',
-    // … deine vollständige Liste hier …
-  ];
-</script>
+  <!-- 1) Core-Assets (falls bei dir im Ordner core/) -->
+  <script type="module" src="./core/assets.js?v=15.2t"></script>
 
-<!-- Diagnose / Asset-Scan IMMER zuletzt -->
-<script src="./debug.js?v=15.2t"></script>
+  <!-- 2) Spielcode -->
+  <script type="module" src="./game.js?v=15.2t"></script>
+  <script type="module" src="./boot.js?v=15.2t"></script>
+
+  <!-- 3) Diagnose immer zuletzt -->
+  <script src="./debug.js?v=15.2t"></script>
 </body>
 </html>
