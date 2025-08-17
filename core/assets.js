@@ -1,63 +1,210 @@
 // core/assets.js
-//
-// Hier werden ALLE Grafiken eingebunden.
-// Einheitliche Struktur: { id: "name", src: "assets/tex/.../file.ext" }
+// Zentrale Asset-Quelle (eine Datei für alles).
+// Exports:
+//   - version
+//   - ASSETS                     (Manifest mit Pfaden)
+//   - getAsset(path)             -> String|Object
+//   - listImages()               -> String[]
+//   - listAudio()                -> String[]
+//   - preloadImages({onProgress})-> Promise<{loaded,total}>
+//   - preloadAudio({onProgress}) -> Promise<{loaded,total}>
 
+export const version = "2025-08-17.2";
+
+// ---------------------------------------------------------------------------
+// Manifest – passe nur die Strings an deine Ordner/Dateinamen an.
+// Empfohlene Ordner: img/buildings, img/terrain, img/ui, sfx, music
+// ---------------------------------------------------------------------------
 export const ASSETS = {
-    terrain: {
-        grass: "assets/tex/terrain/topdown_grass.PNG",
-        dirt: "assets/tex/terrain/topdown_dirt.PNG",
-        meadow: "assets/tex/terrain/topdown_meadow.PNG",
-        rock: "assets/tex/terrain/topdown_rock.PNG",
-        shore: "assets/tex/terrain/topdown_shore.PNG",
+  // --- Gebäude-Icons / Menügrafiken ---
+  building: {
+    hq:            "img/buildings/hq.png",
+    depot:         "img/buildings/depot.png",
+    farm:          "img/buildings/farm.png",
+    lumberjack:    "img/buildings/lumberjack.png",
+    fischer:       "img/buildings/fischer.png",
+    haeuser1:      "img/buildings/haeuser1.png",
+    haeuser2:      "img/buildings/haeuser2.png",
+    stonebraker:   "img/buildings/stonebraker.png",
+    wassermuehle:  "img/buildings/wassermuehle.png",
+    windmuehle:    "img/buildings/windmuehle.png",
+    baeckerei:     "img/buildings/baeckerei.png",
+  },
 
-        // neue sm_topdown Texturen (JPEG + PNG gemischt)
-        dirt0: "assets/tex/terrain/sm_topdown_dirt0.jpeg",
-        earth0: "assets/tex/terrain/sm_topdown_earth0_ug1.jpeg",
-        grass0: "assets/tex/terrain/sm_topdown_grass0.jpeg",
-        meadow0: "assets/tex/terrain/sm_topdown_meadow0_ug0.jpeg",
-        meadow1: "assets/tex/terrain/sm_topdown_meadow1_ug0.jpeg",
-        sumpf0: "assets/tex/terrain/sm_topdown_moor_sumpf0_ug0.jpeg",
-        sumpf1: "assets/tex/terrain/sm_topdown_moor_sumpf1_ug0.jpeg",
-        rock0: "assets/tex/terrain/sm_topdown_rock0_ug0.jpeg",
-        rock1: "assets/tex/terrain/sm_topdown_rock1_ug0.jpeg",
-        rock2: "assets/tex/terrain/sm_topdown_rock2_ug0.jpeg",
-        rock3: "assets/tex/terrain/sm_topdown_rock3_ug0.jpeg",
-        strand_nord0: "assets/tex/terrain/sm_topdown_strand_nord_ug0.jpeg",
-        strand_nord1: "assets/tex/terrain/sm_topdown_strand_nord_ug1.jpeg",
-        strand_ost0: "assets/tex/terrain/sm_topdown_strand_ost_ug0.jpeg",
-        strand_ost1: "assets/tex/terrain/sm_topdown_strand_ost_ug1.jpeg",
-        strand_sued0: "assets/tex/terrain/sm_topdown_strand_sued_ug0.jpeg",
-        strand_sued1: "assets/tex/terrain/sm_topdown_strand_sued_ug1.jpeg",
-        strand_west0: "assets/tex/terrain/sm_topdown_strand_west_ug0.jpeg",
-        strand_west1: "assets/tex/terrain/sm_topdown_strand_west_ug1.jpeg",
-        tundra_snow0: "assets/tex/terrain/sm_topdown_tundra_snow0_ug0.PNG",
-        tree_needle0: "assets/tex/terrain/sm_topdown_tree_needle0_ug0.PNG",
-        water0: "assets/tex/terrain/sm_topdown_water0_ug0.jpeg"
-    },
+  // Optional: große Spielfeld‑Sprites getrennt von Menü‑Icons
+  buildingSprites: {
+    hq:            "img/buildings/sprites/hq_sprite.png",
+    depot:         "img/buildings/sprites/depot_sprite.png",
+    farm:          "img/buildings/sprites/farm_sprite.png",
+    lumberjack:    "img/buildings/sprites/lumberjack_sprite.png",
+    fischer:       "img/buildings/sprites/fischer_sprite.png",
+    haeuser1:      "img/buildings/sprites/haeuser1_sprite.png",
+    haeuser2:      "img/buildings/sprites/haeuser2_sprite.png",
+    stonebraker:   "img/buildings/sprites/stonebraker_sprite.png",
+    wassermuehle:  "img/buildings/sprites/wassermuehle_sprite.png",
+    windmuehle:    "img/buildings/sprites/windmuehle_sprite.png",
+    baeckerei:     "img/buildings/sprites/baeckerei_sprite.png",
+  },
 
-    path: {
-        path0: "assets/tex/path/topdown_path0.PNG"
-    },
+  // --- Terrain / Landscape (nahtlose Top‑Down‑Texturen) ---
+  terrain: {
+    grass:                      "img/terrain/grass.png",
+    dirt:                       "img/terrain/dirt.png",
+    rockyGround:                "img/terrain/rocky_ground.png",
+    stone:                      "img/terrain/stone.png",
+    mountainTerrain:            "img/terrain/mountain_terrain.png",
+    snowyGround:                "img/terrain/snowy_ground.png",
+    desertSand:                 "img/terrain/desert_sand.png",
+    shoreline:                  "img/terrain/shoreline.png", // Übergang Sand↔Wasser
+    meadow:                     "img/terrain/meadow.png",
+    coniferForestGround:        "img/terrain/conifer_forest_ground.png",
+    deciduousForestGround:      "img/terrain/deciduous_forest_ground.png",
 
-    road: {
-        // später mehr Roads einfügen
-    },
+    // Erweiterte / exotische Biome
+    volcanicAshPlain:           "img/terrain/volcanic_ash_plain.png",
+    volcanicLavaField:          "img/terrain/volcanic_lava_field.png",
+    floodedAgriculture:         "img/terrain/flooded_agriculture.png",
+    coastalMangroveSwamp:       "img/terrain/coastal_mangrove_swamp.png",
+  },
 
-    building: {
-        hq: "assets/tex/building/wood/hq_wood.PNG",
-        hq_ug1: "assets/tex/building/wood/hq_wood_ug1.PNG",
-        depot: "assets/tex/building/wood/depot_wood.PNG",
-        depot_ug1: "assets/tex/building/wood/depot_wood_ug.PNG",
-        farm: "assets/tex/building/wood/farm_wood.PNG",
-        lumberjack: "assets/tex/building/wood/lumberjack_wood.PNG",
-        fischer: "assets/tex/building/wood/fischer_wood1.PNG",
-        haeuser1: "assets/tex/building/wood/haeuser_wood1.PNG",
-        haeuser1_ug1: "assets/tex/building/wood/haeuser_wood1_ug1.PNG",
-        haeuser2: "assets/tex/building/wood/haeuser_wood2.PNG",
-        stonebraker: "assets/tex/building/wood/stonebraker_wood.PNG",
-        wassermuehle: "assets/tex/building/wood/wassermuehle_wood.PNG",
-        windmuehle: "assets/tex/building/wood/windmuehle_wood.PNG",
-        baeckerei: "assets/tex/building/wood/baeckerei_wood.PNG"
-    }
+  // --- UI‑Assets ---
+  ui: {
+    cursor:               "img/ui/cursor.png",
+    selectRing:           "img/ui/select_ring.png",
+    buildMarker:          "img/ui/build_marker.png",
+    toolBuild:            "img/ui/tool_build.png",
+    toolInspect:          "img/ui/tool_inspect.png",
+    toolErase:            "img/ui/tool_erase.png",
+  },
+
+  // --- Audio (optional) ---
+  sfx: {
+    click:                "sfx/click.mp3",
+    buildStart:           "sfx/build_start.mp3",
+    buildPlace:           "sfx/build_place.mp3",
+    error:                "sfx/error.mp3",
+  },
+  music: {
+    mainTheme:            "music/main_theme.mp3",
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Hilfsfunktionen
+// ---------------------------------------------------------------------------
+
+/**
+ * Liest eine verschachtelte Ressource aus dem Manifest.
+ * @param {string|string[]} path z.B. "building.hq" oder ["terrain","grass"]
+ */
+export function getAsset(path) {
+  const parts = Array.isArray(path) ? path : String(path).split(".");
+  let node = ASSETS;
+  for (const p of parts) {
+    if (!node || typeof node !== "object") return undefined;
+    node = node[p];
+  }
+  return node;
+}
+
+/** intern: sammelt URLs nach Endungen */
+function collectByExt(root, exts) {
+  const urls = [];
+  (function walk(n) {
+    if (!n) return;
+    if (typeof n === "string") {
+      const low = n.toLowerCase();
+      if (exts.some((e) => low.endsWith(e))) urls.push(n);
+      return;
+    }
+    if (Array.isArray(n)) { for (const v of n) walk(v); return; }
+    if (typeof n === "object") { for (const k in n) walk(n[k]); }
+  })(root);
+  return urls;
+}
+
+export function listImages() {
+  return collectByExt(ASSETS, [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]);
+}
+
+export function listAudio() {
+  return collectByExt(ASSETS, [".mp3", ".ogg", ".wav", ".m4a"]);
+}
+
+/**
+ * Lädt alle Bild‑Assets vor. Fehler blockieren nicht; Fortschritt wird gemeldet.
+ * @param {{onProgress?:(loaded:number,total:number,url:string,info?:{error:true})=>void}} opts
+ */
+export function preloadImages(opts = {}) {
+  const urls = listImages();
+  const total = urls.length;
+  if (total === 0) return Promise.resolve({ loaded: 0, total: 0 });
+
+  let loaded = 0;
+  const { onProgress } = opts;
+
+  const tasks = urls.map(
+    (url) =>
+      new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          loaded++;
+          if (onProgress) { try { onProgress(loaded, total, url); } catch {} }
+          resolve();
+        };
+        img.onerror = () => {
+          loaded++;
+          if (onProgress) { try { onProgress(loaded, total, url, { error: true }); } catch {} }
+          resolve();
+        };
+        img.src = url;
+      })
+  );
+
+  return Promise.all(tasks).then(() => ({ loaded, total }));
+}
+
+/**
+ * Lädt Audio‑Metadaten vor (kein Autoplay, iOS‑tauglich).
+ * @param {{onProgress?:(loaded:number,total:number,url:string)=>void}} opts
+ */
+export function preloadAudio(opts = {}) {
+  const urls = listAudio();
+  const total = urls.length;
+  if (total === 0) return Promise.resolve({ loaded: 0, total: 0 });
+
+  let loaded = 0;
+  const { onProgress } = opts;
+
+  const tasks = urls.map(
+    (url) =>
+      new Promise((resolve) => {
+        const a = new Audio();
+        const done = () => {
+          loaded++;
+          if (onProgress) { try { onProgress(loaded, total, url); } catch {} }
+          cleanup(); resolve();
+        };
+        const cleanup = () => {
+          a.removeEventListener("canplaythrough", done);
+          a.removeEventListener("error", done);
+        };
+        a.addEventListener("canplaythrough", done, { once: true });
+        a.addEventListener("error", done, { once: true });
+        a.preload = "auto";
+        a.src = url;
+        a.load?.();
+      })
+  );
+
+  return Promise.all(tasks).then(() => ({ loaded, total }));
+}
+
+// ---------------------------------------------------------------------------
+// Hinweise zur Nutzung
+// ---------------------------------------------------------------------------
+// In UI/Build-Menü:
+//   btn.style.backgroundImage = `url(${ASSETS.building.hq})`;
+// Preloading (z.B. im boot/start):
+//   await preloadImages({ onProgress:(n,total)=>updateLoader(n/total) });
+//   await preloadAudio();
