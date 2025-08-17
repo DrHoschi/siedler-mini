@@ -1,111 +1,58 @@
-/* Siedler‑Mini • ui.js
-   Koppelt DOM <-> game.js. Enthält:
-   - Start/Reset/Fullscreen Buttons
-   - Bau-Menü (Pointer/HQ/Holzfäller/Depot/Abriss)
-   - Debug-Panel (beweglich)
-*/
+// ui.js
+export const ui = (()=>{
 
-import { game } from './game.js';
+  function toggleFS(){
+    const el = document.documentElement;
+    const inFS = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!inFS){
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) req.call(el);
+    }else{
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  }
 
-const $ = sel => document.querySelector(sel);
+  function toggleDebug(el){
+    el.hidden = !el.hidden;
+  }
 
-// Debug-Log in Panel ausgeben
-function logger() {
-  const logEl = $("#debugLog");
-  return (msg) => {
-    if (!logEl) return;
-    const ts = new Date().toISOString().replace('T',' ').slice(0,19);
-    logEl.textContent = `[${ts}] ${msg}\n` + logEl.textContent;
-  };
-}
+  function toggleBuildDock(dock){
+    dock.hidden = !dock.hidden;
+  }
 
-const log = logger();
+  function closeBuildDock(dock){
+    dock.hidden = true;
+    // aktive Auswahl optisch zurücksetzen
+    dock.querySelectorAll(".tool.active").forEach(b=>b.classList.remove("active"));
+  }
 
-// ===== Start / Reset / FS =====
-$("#btnStart").addEventListener("click", async ()=>{
-  await start(true);
-});
-$("#btnStartFS").addEventListener("click", async ()=>{
-  await tryFS();
-  await start(true);
-});
-$("#btnReset").addEventListener("click", ()=>{
-  location.reload();
-});
-
-async function start(hideOverlay){
-  const canvas = $("#game");
-  await game.startGame({
-    canvas,
-    onHUD:(k,v)=>{},  // HUD wird im game selbst gesetzt
-    log
-  });
-  if (hideOverlay) $("#startOverlay").style.display="none";
-}
-
-async function tryFS(){
-  game.toggleFullscreen();
-}
-
-// ===== HUD Buttons rechts =====
-$("#btnCenter").addEventListener("click", ()=>{
-  game.center({fit:true, padding: 80});
-});
-$("#btnFS").addEventListener("click", tryFS);
-
-const dbg = $("#debug");
-$("#btnDebug").addEventListener("click", ()=>{
-  if (dbg.style.display==="none"){ dbg.style.display="block"; } else { dbg.style.display="none"; }
-  game.toggleDebug();
-});
-
-// ===== Bau‑Menü =====
-const tools = document.querySelectorAll("#buildMenu .tool");
-tools.forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    tools.forEach(b=>b.classList.remove("active"));
+  function markActiveTool(btn){
+    const group = btn.closest(".group");
+    group?.querySelectorAll(".tool.active").forEach(b=>b.classList.remove("active"));
     btn.classList.add("active");
-    game.setTool(btn.dataset.tool);
-  });
-});
-// Zeiger initial aktiv markieren
-$("#toolPointer").classList.add("active");
+  }
 
-// ===== Debug Panel drag =====
-(function makeDebugDraggable(){
-  let dragging=false, sx=0, sy=0, startL=0, startT=0;
+  // kleines Drag‑Utility für das Debugfenster
+  function makeDebugDraggable(panel){
+    let dragging=false, sx=0, sy=0, sl=0, st=0;
+    panel.addEventListener("pointerdown",(e)=>{
+      dragging=true; panel.classList.add("drag");
+      sx=e.clientX; sy=e.clientY;
+      const r=panel.getBoundingClientRect(); sl=r.left; st=r.top;
+      panel.setPointerCapture(e.pointerId);
+    });
+    panel.addEventListener("pointermove",(e)=>{
+      if(!dragging) return;
+      const dx=e.clientX-sx, dy=e.clientY-sy;
+      panel.style.left = Math.max(6,sl+dx)+"px";
+      panel.style.top  = Math.max(6,st+dy)+"px";
+    });
+    panel.addEventListener("pointerup",(e)=>{
+      dragging=false; panel.classList.remove("drag");
+      try{panel.releasePointerCapture(e.pointerId);}catch{}
+    });
+  }
 
-  const onDown = (e)=>{
-    dragging=true; dbg.classList.add("dragging");
-    sx = ("touches" in e)? e.touches[0].clientX : e.clientX;
-    sy = ("touches" in e)? e.touches[0].clientY : e.clientY;
-    // aktuelle Position lesen
-    const rect = dbg.getBoundingClientRect();
-    startL = rect.left; startT = rect.top;
-  };
-  const onMove = (e)=>{
-    if (!dragging) return;
-    const cx = ("touches" in e)? e.touches[0].clientX : e.clientX;
-    const cy = ("touches" in e)? e.touches[0].clientY : e.clientY;
-    const dx = cx - sx, dy = cy - sy;
-    dbg.style.left = Math.max(6, startL + dx) + "px";
-    dbg.style.top  = Math.max(6, startT + dy) + "px";
-  };
-  const onUp = ()=>{
-    dragging=false; dbg.classList.remove("dragging");
-  };
-
-  dbg.addEventListener("mousedown", onDown);
-  dbg.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
-
-  dbg.addEventListener("touchstart", onDown, {passive:true});
-  dbg.addEventListener("touchmove", onMove, {passive:false});
-  window.addEventListener("touchend", onUp, {passive:true});
+  return { toggleFS, toggleDebug, toggleBuildDock, closeBuildDock, markActiveTool, makeDebugDraggable };
 })();
-
-// ===== Doppel‑Tap auf Canvas für FS =====
-$("#game").addEventListener("dblclick", ()=> tryFS());
-
-// ===== Autostart: nur Overlay zeigen, bis Start gedrückt wurde =====
-// (bewusst kein Autostart, damit iOS Touch/Audio/FS‑Policies eingehalten werden)
