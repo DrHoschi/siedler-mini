@@ -138,5 +138,28 @@
 
   <!-- 3) Diagnose immer zuletzt -->
   <script src="./debug.js?v=15.2t"></script>
+  <script>
+(() => {
+  const mustHave = [
+    "#canvas", "#startCard", "#btnStart", "#btnFs", "#btnFull",
+    "#btnReset", "#btnCenter", "#btnDebug", "#tools", "#hudZoom", "#hudTool"
+  ];
+  const missing = mustHave.filter(sel => !document.querySelector(sel));
+  if (missing.length) {
+    console.error("[SANITY] Fehlende DOM-IDs:", missing.join(", "));
+  } else {
+    console.log("[SANITY] Alle erwarteten DOM-IDs vorhanden.");
+  }
+
+  // Klick-Logger, hilft sofort zu sehen, ob Events feuern:
+  [
+    ["#btnStart","Start"],["#btnFs","FS-Icon"],["#btnFull","Vollbild"],
+    ["#btnReset","Reset"],["#btnCenter","Zentrieren"],["#btnDebug","Debug"]
+  ].forEach(([sel,name])=>{
+    const el = document.querySelector(sel);
+    if (el) el.addEventListener("click", () => console.log("[UI]", name, "geklickt"));
+  });
+})();
+</script>
 </body>
 </html>
