@@ -1,0 +1,155 @@
+<script>
+// ===== Debug Overlay + Asset Scanner =====================================
+// Einfach in index.html *nach* boot.js laden (siehe Schritt 3).
+// Öffnet ein Overlay und prüft das Laden einer Asset-Liste.
+
+(function(){
+  const STYLE = `
+  #dbgOverlay{position:fixed;inset:auto 8px 8px auto; min-width:280px; max-width:92vw;
+    background:#0f1d31; color:#cfe3ff; border:1px solid #1e2d42; border-radius:10px;
+    box-shadow:0 12px 40px rgba(0,0,0,.35); font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto;
+    z-index:999999; display:none}
+  #dbgOverlay header{display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid #1e2d42}
+  #dbgOverlay header strong{font-size:15px}
+  #dbgOverlay .body{max-height:50vh; overflow:auto; padding:8px 10px}
+  #dbgOverlay .row{display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-bottom:1px dotted #20324a}
+  #dbgOverlay .ok{color:#77e29f} .fail{color:#ff8890}
+  #dbgOverlay .muted{opacity:.8}
+  #dbgBtns{position:fixed; right:8px; top:64px; display:flex; gap:8px; z-index:999999}
+  #dbgBtns button{background:#0f1b29; border:1px solid #1b2a40; color:#cfe3ff; border-radius:10px; padding:6px 10px; font:14px}
+  `;
+  const CSS = document.createElement('style'); CSS.textContent = STYLE; document.head.appendChild(CSS);
+
+  // Floating Buttons (Assets-Scan + Koords)
+  const btns = document.createElement('div');
+  btns.id = 'dbgBtns';
+  btns.innerHTML = `
+    <button id="btnScan">Assets-Scan</button>
+    <button id="btnInfo">Info</button>
+  `;
+  document.body.appendChild(btns);
+
+  // Overlay
+  const box = document.createElement('div');
+  box.id = 'dbgOverlay';
+  box.innerHTML = `
+    <header>
+      <strong>Diagnose</strong>
+      <span class="muted" id="dbgSummary"></span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button id="dbgClose" style="background:#3a1b1b;border:1px solid #6a2d2d;color:#ffd2d2;border-radius:8px;padding:4px 8px">schließen</button>
+      </div>
+    </header>
+    <div class="body" id="dbgBody"></div>
+  `;
+  document.body.appendChild(box);
+
+  function openOverlay() { box.style.display = 'block'; }
+  function closeOverlay() { box.style.display = 'none'; }
+  document.getElementById('dbgClose').onclick = closeOverlay;
+
+  // ------- Helfer
+  function row(label, status, extra=''){
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = `<span>${label}</span><span class="${status?'ok':'fail'}">${status?'OK':'FEHLT'}${extra?` <span class="muted">${extra}</span>`:''}</span>`;
+    return div;
+  }
+
+  function testImage(url){
+    return new Promise(resolve=>{
+      const img = new Image();
+      img.onload = ()=> resolve({url, ok:true, w:img.naturalWidth, h:img.naturalHeight});
+      img.onerror = ()=> resolve({url, ok:false});
+      img.src = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now(); // Cache-Bust
+    });
+  }
+
+  // ------- Standardliste (aus deiner Historie + neue terrain/tex)
+  const DEFAULT_LIST = [
+    // Boden (topdown_*)
+    'assets/tex/topdown_grass.png',
+    'assets/tex/topdown_dirt.png',
+    'assets/tex/topdown_forest.png',
+    'assets/tex/topdown_water.png',
+    // Straßen (autotiles)
+    'assets/tex/topdown_road_straight.png',
+    'assets/tex/topdown_road_corner.png',
+    'assets/tex/topdown_road_t.png',
+    'assets/tex/topdown_road_cross.png',
+    // Gebäude (topdown)
+    'assets/tex/topdown_hq.png',
+    'assets/tex/topdown_depot.png',
+    'assets/tex/topdown_woodcutter.png',
+    // Deine neuen path-Texturen (PNG/JPEG gemischt – wir testen beide Endungen)
+    'assets/tex/terrain/path0.png',
+    'assets/tex/terrain/path1.png',
+    'assets/tex/terrain/path2.png',
+    'assets/tex/terrain/path3.png',
+    'assets/tex/terrain/path4.png',
+    'assets/tex/terrain/path5.png',
+    'assets/tex/terrain/path6.png',
+    'assets/tex/terrain/path0.jpeg',
+    'assets/tex/terrain/path1.jpeg',
+    'assets/tex/terrain/path2.jpeg',
+    'assets/tex/terrain/path3.jpeg',
+    'assets/tex/terrain/path4.jpeg',
+    'assets/tex/terrain/path5.jpeg',
+    'assets/tex/terrain/path6.jpeg',
+    // Platzhalter
+    'assets/tex/placeholder64.png',
+    'assets/carrier.png',
+    'assets/carrier.json'
+  ];
+
+  async function scanAssets(list){
+    const body = document.getElementById('dbgBody');
+    body.innerHTML = '';
+    const results = await Promise.all(list.map(testImage));
+    let ok=0, fail=0;
+    results.forEach(r=>{
+      if (r.ok){ ok++; body.appendChild(row(r.url, true, `${r.w||'?'}×${r.h||'?'}`)); }
+      else { fail++; body.appendChild(row(r.url, false)); }
+    });
+    document.getElementById('dbgSummary').textContent = ` Assets: ${ok} ok / ${fail} fehlen`;
+    openOverlay();
+    console.log('[Assets-Scan]', results);
+  }
+
+  function infoPanel(){
+    const body = document.getElementById('dbgBody');
+    body.innerHTML = '';
+    const lines = [];
+    // Versuchen, game-State auszulesen (wenn verfügbar)
+    try{
+      const s = window.__GAME_STATE__ || (window.game && window.game.state);
+      if (s){
+        lines.push(['Zoom', (s.zoom||s.camera?.zoom||1).toFixed ? (s.zoom||s.camera.zoom).toFixed(2)+'x' : String(s.zoom||s.camera?.zoom)]);
+        lines.push(['Cam', `${Math.round(s.camX||s.camera?.x||0)}, ${Math.round(s.camY||s.camera?.y||0)}`]);
+        lines.push(['DPR', String(s.DPR||window.devicePixelRatio||1)]);
+        lines.push(['Canvas', `${s.width||s.canvas?.width||'?'}×${s.height||s.canvas?.height||'?'}`]);
+        lines.push(['Objekte', `roads:${s.roads?.length||0} blds:${s.buildings?.length||0}`]);
+      }
+    }catch(e){/*noop*/}
+    if (!lines.length){
+      lines.push(['Hinweis', 'Kein Spiel-State gefunden.']);
+    }
+    lines.forEach(([k,v])=>{
+      const div = document.createElement('div');
+      div.className = 'row';
+      div.innerHTML = `<span>${k}</span><span class="muted">${v}</span>`;
+      body.appendChild(div);
+    });
+    document.getElementById('dbgSummary').textContent = ' Systeminfo';
+    openOverlay();
+  }
+
+  // Button-Wiring
+  document.getElementById('btnScan').onclick = ()=> scanAssets((window.ASSET_CHECK_LIST && window.ASSET_CHECK_LIST.length)? window.ASSET_CHECK_LIST : DEFAULT_LIST);
+  document.getElementById('btnInfo').onclick = infoPanel;
+
+  // Expose für Konsole
+  window.__runAssetScan = ()=> scanAssets((window.ASSET_CHECK_LIST && window.ASSET_CHECK_LIST.length)? window.ASSET_CHECK_LIST : DEFAULT_LIST);
+  window.__dbgInfo = infoPanel;
+})();
+</script>
