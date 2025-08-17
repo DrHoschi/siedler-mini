@@ -1,6 +1,6 @@
 <script>
 // ===== Debug Overlay + Asset Scanner =====================================
-// Einfach in index.html *nach* boot.js laden (siehe Schritt 3).
+// Einfach in index.html *nach* boot.js laden.
 // Öffnet ein Overlay und prüft das Laden einer Asset-Liste.
 
 (function(){
@@ -20,7 +20,7 @@
   `;
   const CSS = document.createElement('style'); CSS.textContent = STYLE; document.head.appendChild(CSS);
 
-  // Floating Buttons (Assets-Scan + Koords)
+  // Floating Buttons (Assets-Scan + Info)
   const btns = document.createElement('div');
   btns.id = 'dbgBtns';
   btns.innerHTML = `
@@ -65,7 +65,7 @@
     });
   }
 
-  // ------- Standardliste (aus deiner Historie + neue terrain/tex)
+  // ------- Standardliste
   const DEFAULT_LIST = [
     // Boden (topdown_*)
     'assets/tex/topdown_grass.png',
@@ -81,7 +81,7 @@
     'assets/tex/topdown_hq.png',
     'assets/tex/topdown_depot.png',
     'assets/tex/topdown_woodcutter.png',
-    // Deine neuen path-Texturen (PNG/JPEG gemischt – wir testen beide Endungen)
+    // Neue path-Texturen (PNG/JPEG)
     'assets/tex/terrain/path0.png',
     'assets/tex/terrain/path1.png',
     'assets/tex/terrain/path2.png',
@@ -120,7 +120,6 @@
     const body = document.getElementById('dbgBody');
     body.innerHTML = '';
     const lines = [];
-    // Versuchen, game-State auszulesen (wenn verfügbar)
     try{
       const s = window.__GAME_STATE__ || (window.game && window.game.state);
       if (s){
@@ -131,9 +130,7 @@
         lines.push(['Objekte', `roads:${s.roads?.length||0} blds:${s.buildings?.length||0}`]);
       }
     }catch(e){/*noop*/}
-    if (!lines.length){
-      lines.push(['Hinweis', 'Kein Spiel-State gefunden.']);
-    }
+    if (!lines.length){ lines.push(['Hinweis', 'Kein Spiel-State gefunden.']); }
     lines.forEach(([k,v])=>{
       const div = document.createElement('div');
       div.className = 'row';
