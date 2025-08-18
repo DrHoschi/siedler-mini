@@ -1,5 +1,5 @@
 /* =====================================================
-   game.js – Hauptspiel-Logik
+   game.js – Hauptspiel-Logik mit Debug-Overlay
    Version 15.2t
    ===================================================== */
 
@@ -21,12 +21,13 @@ export const game = (() => {
     running: false,
     raf: null,
     onHUD: null,
+    debugEl: null,
   };
 
   // === Utils ===
   function log(...args){ console.log("[game]", ...args); }
 
-  // === Start / Stop ===
+  // === Start ===
   function startGame(cfg){
     if (!cfg?.canvas) {
       console.error("[game] startGame: canvas fehlt");
@@ -54,6 +55,7 @@ export const game = (() => {
       state.onHUD("Tool", state.tool);
     }
 
+    makeDebugOverlay();
     bindInput();
     loop();
   }
@@ -62,6 +64,36 @@ export const game = (() => {
     state.running = false;
     if (state.raf) cancelAnimationFrame(state.raf);
     log("stopGame()");
+  }
+
+  // === Debug Overlay ===
+  function makeDebugOverlay(){
+    let box = document.getElementById("__miniDebug");
+    if (!box){
+      box = document.createElement("div");
+      box.id = "__miniDebug";
+      box.style.position = "fixed";
+      box.style.left = "8px";
+      box.style.bottom = "8px";
+      box.style.background = "rgba(0,0,0,.6)";
+      box.style.color = "#0f0";
+      box.style.font = "12px monospace";
+      box.style.padding = "6px 8px";
+      box.style.border = "1px solid #080";
+      box.style.borderRadius = "6px";
+      box.style.zIndex = "99";
+      document.body.appendChild(box);
+    }
+    state.debugEl = box;
+  }
+
+  function updateDebug(){
+    if (!state.debugEl) return;
+    state.debugEl.innerHTML =
+      `Tool: ${state.tool}<br>`+
+      `Zoom: ${state.zoom.toFixed(2)}x<br>`+
+      `Roads: ${state.roads.length}<br>`+
+      `Buildings: ${state.buildings.length}`;
   }
 
   // === Input ===
@@ -90,7 +122,7 @@ export const game = (() => {
       if (state.onHUD) state.onHUD("Zoom", state.zoom.toFixed(2)+"x");
     }, {passive:false});
 
-    // Touch (iOS!)
+    // Touch
     let touchStartDist=0;
     state.canvas.addEventListener("touchstart", e=>{
       if (e.touches.length===1){
@@ -135,7 +167,7 @@ export const game = (() => {
     if (state.tool==="road"){
       state.roads.push({x:gx,y:gy});
     }
-    if (state.tool==="hq" || state.tool==="woodcutter" || state.tool==="depot"){
+    if (["hq","woodcutter","depot"].includes(state.tool)){
       state.buildings.push({x:gx,y:gy,type:state.tool});
     }
   }
@@ -198,6 +230,9 @@ export const game = (() => {
     });
 
     ctx.restore();
+
+    // Debug aktualisieren
+    updateDebug();
   }
 
   // === Exportierte API ===
