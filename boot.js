@@ -1,13 +1,20 @@
-// Siedler‑Mini V14.7 (Mobil) — Boot/Glue
-// Verdrahtet DOM ↔ game.js, Debug/Diag, Fullscreen & Start-Overlay.
+// =============================================
+// Bootloader für Siedler-Mini V14.7 (Mobile)
+// =============================================
+// Aufgaben:
+// - Verdrahtet DOM <-> game.js
+// - Overlay / HUD / Tools
+// - Debug- & Diagnose-Funktionen
+// - Fullscreen & iOS Workarounds
+// =============================================
 
-import { game } from './game.js'; // deine aktuelle game.js (V14.7‑hf Linie)
+import { game } from './game.js';
 
 (function boot(){
-  const $ = sel => document.querySelector(sel);
+  const $  = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-  // DOM refs
+  // --- DOM Referenzen ---
   const canvas    = $('#game');
   const hudZoom   = $('#hudZoom');
   const hudTool   = $('#hudTool');
@@ -24,183 +31,140 @@ import { game } from './game.js'; // deine aktuelle game.js (V14.7‑hf Linie)
   const btnReset     = $('#btnReset');
   const btnFs        = $('#btnFs');
   const btnFsTop     = $('#btnFsTop');
-  const btnFsSide    = $('#btnFsSide');
-  const btnDebug     = $('#btnDebug');
   const btnCenter    = $('#btnCenter');
   const btnCenter2   = $('#btnCenter2');
+  const btnDebug     = $('#btnDebug');
 
   const toolButtons  = $$('#tools .btn');
 
-  // --- Diagnose/Debug helpers ---
-  const state = {
-    debugVisible: false,
-    clickEcho: null,
-  };
+  // --- interner Status ---
+  const state = { debugVisible:false };
 
-  function logDiag(lines){
-    if (!state.debugVisible) return;
-    diag.textContent = lines.join('\n');
-  }
+  // === Helper: Toast (oben mittig) ===
   function showToast(msg){
-    toast.textContent = msg;
+    if (!toast) return;
+    toast.textContent = String(msg);
     toast.style.display = 'block';
     clearTimeout(showToast._t);
     showToast._t = setTimeout(()=> toast.style.display='none', 4500);
   }
 
-  // globale Fehler → Toast + Diag
+  // === Helper: Diagnosefenster (unten) ===
+  function logDiag(lines){
+    if (!diag) return;
+    if (!state.debugVisible){ diag.style.display='none'; return; }
+    diag.style.display='block';
+    diag.textContent = lines.join('\n');
+  }
+
+  // --- Fehler abfangen ---
   window.addEventListener('error', (e)=>{
     showToast('JS-Fehler: ' + (e.message || e.error || e));
   });
   window.addEventListener('unhandledrejection', (e)=>{
-    showToast('Promise-Fehler: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    showToast('Promise-Fehler: ' + (e.reason?.message || e.reason));
   });
 
-  // --- Fullscreen (inkl. iOS Fallback) ---
+  // === Vollbild ===
   async function requestFullscreen(el){
     try{
       if (document.fullscreenElement || document.webkitFullscreenElement) return;
       if (el.requestFullscreen) await el.requestFullscreen();
       else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-      else showToast('Vollbild wird von diesem Gerät/Browser nicht unterstützt.');
+      else showToast('Vollbild nicht unterstützt.');
     }catch(err){
       showToast('Vollbild verweigert: ' + err.message);
     }
   }
-  async function exitFullscreen(){
-    try{
-      if (document.exitFullscreen)      await document.exitFullscreen();
-      else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
-    }catch{}
-  }
 
-  // Mini-Overlay-Klickschutz entfernen
-  function hideStart(){
-    startOverlay.style.display = 'none';
-  }
-  function showStart(){
-    startOverlay.style.display = 'flex';
-  }
+  // === Overlay Steuerung ===
+  function hideStart(){ if (startOverlay) startOverlay.style.display='none'; }
+  function showStart(){ if (startOverlay) startOverlay.style.display='flex'; }
 
-  // --- Buttons wiring ---
-  btnDebug.addEventListener('click', ()=>{
+  // === Button Wiring ===
+  if (btnDebug) btnDebug.addEventListener('click', ()=>{
     state.debugVisible = !state.debugVisible;
-    diag.style.display = state.debugVisible ? 'block' : 'none';
+    logDiag(state.debugVisible ? ['Debug an.'] : []);
   });
 
-  btnCenter.addEventListener('click', ()=> game.center());
-  btnCenter2.addEventListener('click', ()=> game.center());
+  if (btnCenter)  btnCenter.addEventListener('click', ()=> game.center());
+  if (btnCenter2) btnCenter2.addEventListener('click', ()=> game.center());
 
-  btnFs.addEventListener('click', ()=> requestFullscreen(document.documentElement));
-  btnFsTop.addEventListener('click', ()=> requestFullscreen(document.documentElement));
-  btnFsSide.addEventListener('click', ()=> requestFullscreen(document.documentElement));
+  if (btnFsTop) btnFsTop.addEventListener('click', ()=> requestFullscreen(document.documentElement));
+  if (btnFs)    btnFs.addEventListener('click',    ()=> requestFullscreen(document.documentElement));
 
-  btnReset.addEventListener('click', ()=>{
-    // hier könnte später Persistenz gelöscht werden
+  if (btnReset) btnReset.addEventListener('click', ()=>{
     showToast('Zurückgesetzt – starte neu.');
-    // einfache „Soft‑Reset“: wieder Startkarte anzeigen
     showStart();
   });
 
-  btnStart.addEventListener('click', ()=>{
-    try{
-      hideStart();
-      startGameNow();
-    }catch(err){
-      showToast('Start fehlgeschlagen: ' + err.message);
-      showStart();
-    }
+  if (btnStart) btnStart.addEventListener('click', ()=>{
+    try{ hideStart(); startGameNow(); }
+    catch(err){ showToast('Start fehlgeschlagen: ' + err.message); showStart(); }
   });
 
-  // Tools (links)
+  // === Tool Buttons (links) ===
   toolButtons.forEach(b=>{
     b.addEventListener('click', ()=>{
       toolButtons.forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
       const tool = b.getAttribute('data-tool');
       game.setTool(tool);
-      hudTool.textContent = tool==='pointer' ? 'Zeiger' :
-                            tool==='road' ? 'Straße' :
-                            tool==='hq' ? 'HQ' :
-                            tool==='woodcutter' ? 'Holzfäller' :
-                            tool==='depot' ? 'Depot' : 'Abriss';
+
+      // HUD Text anpassen
+      if (hudTool){
+        hudTool.textContent = tool==='pointer' ? 'Zeiger' :
+                              tool==='road' ? 'Straße' :
+                              tool==='hq' ? 'HQ' :
+                              tool==='woodcutter' ? 'Holzfäller' :
+                              tool==='depot' ? 'Depot' : 'Abriss';
+      }
     });
   });
 
-  // Doppeltipp auf die Zeichenfläche → Vollbild (wenn erlaubt)
+  // === Sonderblock: Doppeltipp auf Canvas → Vollbild ===
   let lastTap = 0;
-  canvas.addEventListener('pointerdown', (e)=>{
-    const now = performance.now();
-    if (now - lastTap < 300){
-      requestFullscreen(document.documentElement);
-      lastTap = 0;
-    }else{
-      lastTap = now;
-    }
-  }, {passive:true});
+  if (canvas) {
+    canvas.addEventListener('pointerdown', (e)=>{
+      const now = performance.now();
+      if (now - lastTap < 300){
+        requestFullscreen(document.documentElement);
+        lastTap = 0;
+      } else lastTap = now;
+    }, {passive:true});
+  }
 
-  // Klick‑Echo (unten links als rote Koordinatenzeile) für Fehleranalyse
-  document.addEventListener('pointerdown', (e)=>{
-    if (!state.debugVisible) return;
-    const s = `click: ${e.clientX.toFixed(0)}×${e.clientY.toFixed(0)}  type=${e.pointerType}`;
-    const lines = diag.textContent.split('\n').filter(Boolean);
-    lines.push(s);
-    logDiag(lines.slice(-10));
-  }, {passive:true});
-
-  // --- Start Game glue ---
+  // === Start Game ===
   function startGameNow(){
+    if (!canvas) throw new Error('#game (canvas) fehlt');
+
     game.startGame({
       canvas,
       onHUD: (k,v)=>{
-        // HUD-Schreiblogik (nur Keys, die in game.js gemeldet werden)
-        if (k === 'Zoom') hudZoom.textContent = v;
-        if (k === 'Tool') hudTool.textContent = v;
-        if (k === 'Wood') hudWood.textContent = v;
-        if (k === 'Stone') hudStone.textContent = v;
-        if (k === 'Food') hudFood.textContent = v;
-        if (k === 'Gold') hudGold.textContent = v;
-        if (k === 'Carriers') hudCar.textContent = v;
+        if (k==='Zoom' && hudZoom)   hudZoom.textContent = v;
+        if (k==='Tool' && hudTool)   hudTool.textContent = v;
+        if (k==='wood' && hudWood)   hudWood.textContent = v;
+        if (k==='stone'&& hudStone)  hudStone.textContent = v;
+        if (k==='food' && hudFood)   hudFood.textContent = v;
+        if (k==='gold' && hudGold)   hudGold.textContent = v;
+        if (k==='carriers' && hudCar)hudCar.textContent = v;
       }
     });
 
-    // Start‑Tool standardmäßig: Zeiger
+    // Tool-Default (Zeiger) aktivieren
     const btnPointer = document.querySelector('[data-tool="pointer"]');
     if (btnPointer){
       toolButtons.forEach(x=>x.classList.remove('active'));
       btnPointer.classList.add('active');
     }
 
-    // Erstdiagnose anzeigen
-    if (state.debugVisible) {
-      logDiag([
-        'V14.7 boot ✓',
-        'HUD/Buttons ✓',
-        'Start() → running',
-        'Tippe „Debug“ erneut zum Verstecken.'
-      ]);
-    }
+    if (state.debugVisible) logDiag(['Boot OK', 'Start() → running']);
   }
 
-  // Optional: gleich Debug sichtbar starten (zum Testen aus/ein)
-  // state.debugVisible = true; diag.style.display = 'block';
+  // === Initialisierung ===
+  showStart(); // beim Laden Overlay zeigen
 
-  // Beim Laden: Startkarte zeigen
-  showStart();
+  // Safari/iOS bfcache Workaround → harte Reinit
+  window.addEventListener('pageshow', (e)=>{ if (e.persisted) location.reload(); });
 
-  // Resize/Fullscreen Events → Canvas neu messen
-  function onResize(){ 
-    // game.js handled intern resize; hier keine Logik nötig,
-    // aber wir können die HUD/Diag stabil halten.
-  }
-  window.addEventListener('resize', onResize);
-  document.addEventListener('fullscreenchange', onResize);
-  document.addEventListener('webkitfullscreenchange', onResize);
-
-  // iOS: Back/Forward Cache „bfcache“ → harte Reinit
-  window.addEventListener('pageshow', (e)=>{
-    if (e.persisted){
-      location.reload();
-    }
-  });
 })();
