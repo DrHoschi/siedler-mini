@@ -135,6 +135,36 @@
   <script type="module" src="./boot.js?v=147b2"></script>
   -->
   <!--
+  4️⃣ Asset-Checker
+  Prüft, ob wichtige Dateien/Assets erreichbar sind.
+  Die Liste im checkAssets([...]) kannst du beliebig anpassen.
+  -->
+  <script>
+    async function checkAssets(files) {
+      for (let f of files) {
+        try {
+          const res = await fetch(f);
+          if (res.ok) {
+            console.log("✅ Gefunden:", f);
+          } else {
+            console.warn("⚠️ Nicht geladen:", f, res.status);
+          }
+        } catch {
+          console.error("❌ Fehler:", f);
+        }
+      }
+    }
+
+    // Beispielaufruf
+    checkAssets([
+      "./core/asset.js",
+      "./tools/map-runtime.js",
+      "./maps/map-pro.json",
+      "./assets/tileset.png",
+      "./assets/sprites.png"
+    ]);
+  </script>
+  <!--
   5️⃣ Ordnerstruktur-Logger
   Listet vorgegebene Ordner/Dateien in der Konsole.
   Hilfreich, wenn man einen Überblick braucht.
