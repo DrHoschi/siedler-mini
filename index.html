@@ -134,6 +134,28 @@
   -->
   <script type="module" src="./boot.js?v=147b2"></script>
   -->
+  <!--
+  5️⃣ Ordnerstruktur-Logger
+  Listet vorgegebene Ordner/Dateien in der Konsole.
+  Hilfreich, wenn man einen Überblick braucht.
+  -->
+  <script>
+    const folders = {
+      "core": ["asset.js"],
+      "tools": ["map-runtime.js"],
+      "maps": ["map-pro.json"],
+      "assets": ["tileset.png", "sprites.png"]
+    };
+
+    for (let folder in folders) {
+      folders[folder].forEach(file => {
+        const path = `./${folder}/${file}`;
+        fetch(path).then(r => {
+          console.log(r.ok ? "✅" : "❌", path);
+        });
+      });
+    }
+  </script>
 
   <!--
   1️⃣ Script-Load-Tester
