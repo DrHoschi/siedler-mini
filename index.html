@@ -133,5 +133,19 @@
        - Weitere optionale Module (Sprites/Audio) sind in boot.js bereits vorbereitet (auskommentiert).
   -->
   <script type="module" src="./boot.js?v=147b2"></script>
+  -->
+
+  <!--
+  1️⃣ Script-Load-Tester
+  Prüft, ob deine Hauptskripte korrekt geladen wurden.
+  Reihenfolge: erst asset.js, dann map-runtime.js
+  -->
+  
+  <script src="./core/asset.js"
+          onload="console.log('✅ asset.js geladen')"
+          onerror="console.error('❌ asset.js fehlt')"></script>
+  <script src="./tools/map-runtime.js"
+          onload="console.log('✅ map-runtime.js geladen')"
+          onerror="console.error('❌ map-runtime.js fehlt')"></script>
 </body>
 </html>
