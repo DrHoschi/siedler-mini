@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler-Mini V15.2 (Terrain + JPEG)</title>
+  <title>Siedler-Mini V15.3 (mit Repo-Checker)</title>
   <style>
     :root{
       color-scheme: dark;
@@ -12,47 +12,51 @@
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --gap:10px;
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    /* Canvas ganz unten */
-    #canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none;z-index:0}
+    #wrap{height:100%;display:flex;flex-direction:column}
 
-    /* HUD oben rechts */
+    /* Canvas */
+    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
+    canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
+
+    /* HUD */
     #hud{position:fixed;top:12px;right:12px;display:flex;gap:10px;align-items:center;z-index:10}
-    #hud .pill{background:var(--pill,#0f1b29);border:1px solid #1b2a40;border-radius:24px;color:#cfe3ff;
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;gap:8px}
+    #hud span{background:var(--pill);border:1px solid #1e2d42;border-radius:20px;padding:4px 8px;font-size:13px}
+    #hud button{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;padding:6px 10px}
 
-    /* Toolbar links */
+    /* Toolbar */
     #tools{position:fixed;left:12px;top:70px;display:flex;flex-direction:column;gap:10px;z-index:10}
-    #tools button{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
-      font-size:15px;padding:8px 12px;text-align:left}
     #tools button.active{outline:2px solid #3f8cff}
 
     /* Startkarte */
     #startCard{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20}
-    #startCard .card{width:min(680px,92vw);background:#172b45;border:1px solid #20324a;border-radius:14px;
-      padding:18px 22px;box-shadow:var(--shadow);color:#cfe3ff}
+    #startCard .card{width:min(680px,92vw);background:#172b45;border-radius:14px;padding:18px 22px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
     #startCard h3{margin:0 0 10px;font-size:20px}
     #startCard p{margin:8px 0;color:#9fb3cc}
-    #startCard .row{display:flex;gap:10px;margin-top:10px}
-    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;font-size:15px;padding:8px 12px}
-    .btn.primary{background:#2aa55a;border-color:#0a6129;color:#fff}
-    .btn.warn{background:#982e2e;border-color:#752020;color:#fff}
-    @media (max-width:480px){ #tools{top:56px} }
+    .row{display:flex;gap:10px;margin-top:10px}
+    .primary{background:#2aa55a;color:#fff;border:none;padding:10px 16px;border-radius:8px}
+
+    /* Debug-Box */
+    #__debugBox{position:fixed;left:12px;bottom:12px;max-width:80vw;z-index:30;background:#0c1a2bbb;
+      border:1px solid #28405e;padding:8px 10px;border-radius:8px;backdrop-filter:blur(6px);
+      font-size:12px;line-height:1.3}
+    #__debugBox pre{white-space:pre-wrap;margin:4px 0}
+    #__debugBox .drag{cursor:move;opacity:.8}
   </style>
 </head>
-
 <body>
   <!-- HUD -->
   <div id="hud">
-    <span class="pill">Tool: <b id="hudTool">Zeiger</b></span>
-    <span class="pill">Zoom <b id="hudZoom">1.00x</b></span>
-    <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug" class="btn">Debug</button>
-    <button id="btnFs" class="btn">Vollbild</button>
+    <span>Tool: <b id="hudTool">Zeiger</b></span>
+    <span>Zoom <b id="hudZoom">1.00x</b></span>
+    <button id="btnCenter">Zentrieren</button>
+    <button id="btnDebug">Debug</button>
+    <button id="btnFs">Vollbild</button>
   </div>
 
-  <!-- Linke Toolbar -->
+  <!-- Toolbar -->
   <div id="tools">
     <button data-tool="pointer" class="active">Zeiger</button>
     <button data-tool="road">Straße</button>
@@ -63,276 +67,70 @@
   </div>
 
   <!-- Canvas -->
-  <canvas id="canvas"></canvas>
+  <canvas id="canvas" class="game-canvas"></canvas>
 
   <!-- Startkarte -->
   <div id="startCard">
     <div class="card">
-      <h3>Siedler-Mini V15.2 (Mobile)</h3>
-      <p><b>1 Finger</b> = Karte verschieben (nur im Zeiger-Tool) · <b>2 Finger/Scroll</b> = Zoomen · kurzer Tap = bauen (wenn Bau-Tool aktiv).</p>
+      <h3>Siedler-Mini V15.3</h3>
+      <p><b>1 Finger</b> = Karte verschieben (nur im Zeiger-Tool) · <b>2 Finger/Scroll</b> = Zoomen · Tap = bauen.</p>
       <p>Terrain lädt aus <code>assets/tex/terrain/</code> (PNG/JPEG werden automatisch erkannt).</p>
       <div class="row">
-        <button id="btnStart" class="btn primary">Start</button>
-        <button id="btnFull"  class="btn">Vollbild</button>
-        <button id="btnReset" class="btn warn">Reset</button>
+        <button id="btnStart" class="primary">Start</button>
+        <button id="btnFull">Vollbild</button>
+        <button id="btnReset">Reset</button>
       </div>
     </div>
   </div>
 
-  <!-- Asset-Check-Liste (kannst du erweitern) -->
+  <!-- Asset-Liste für Debug -->
   <script>
     window.ASSET_CHECK_LIST = [
-      'assets/tex/terrain/topdown_grass.PNG',
-      'assets/tex/terrain/sm_topdown_grass0.jpeg',
+      'assets/tex/topdown_grass.png',
+      'assets/tex/terrain/path0.jpeg',
       'assets/sprites/carrier/carrier_topdown_v2.png',
       'assets/sprites/carrier/carrier_topdown_v2.json'
     ];
   </script>
 
-  <!-- 1) Core-Assets (Pfad anpassen, falls nicht in /core/) -->
-  <script type="module" src="./core/assets.js?v=15.2t"></script>
+  <!-- Core + Game -->
+  <script type="module" src="./core/assets.js?v=15.3"></script>
+  <script type="module" src="./core/terrain.js?v=15.3"></script>
+  <script type="module" src="./boot.js?v=15.3"></script>
+  <script type="module" src="./game.js?v=15.3"></script>
 
-  <!-- 2) Spielcode -->
-  <script type="module" src="./game.js?v=15.2t"></script>
-  <script type="module" src="./boot.js?v=15.2t"></script>
-
-  <!-- 3) Sanity-Check + Fallback-Start (falls boot.js mal nicht greift) -->
+  <!-- Debug/Checker -->
+  <script src="./debug.js?v=15.3"></script>
   <script>
-  (() => {
-    const mustHave = ["#canvas","#startCard","#btnStart","#btnFs","#btnFull","#btnReset","#btnCenter","#btnDebug","#tools","#hudZoom","#hudTool"];
-    const missing = mustHave.filter(sel => !document.querySelector(sel));
-    if (missing.length) console.error("[SANITY] Fehlende DOM-IDs:", missing.join(", "));
-    else console.log("[SANITY] Alle erwarteten DOM-IDs vorhanden.");
-
-    // Buttons-Klicklog
-    [["#btnStart","Start"],["#btnFs","FS-Icon"],["#btnFull","Vollbild"],
-     ["#btnReset","Reset"],["#btnCenter","Zentrieren"],["#btnDebug","Debug"]]
-     .forEach(([sel,name])=>{ const el = document.querySelector(sel); if (el) el.addEventListener("click", () => console.log("[UI]", name, "geklickt")); });
-
-    // Fallback-Start, wenn boot.js/game.js länger laden
-    const canvas = document.getElementById('canvas');
-    function goFS(){
-      const el = document.documentElement;
-      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      if (req) req.call(el);
-    }
-    document.getElementById('btnFs')  .addEventListener('click', goFS);
-    document.getElementById('btnFull').addEventListener('click', goFS);
-    document.getElementById('btnReset').addEventListener('click', ()=>location.reload());
-
-    document.getElementById('btnStart').addEventListener('click', ()=> {
-      // wenn boot.js API da ist → nutzen
-      if (window.game && typeof game.startGame === 'function') {
-        try {
-          document.getElementById('startCard').style.display = 'none';
-          game.startGame({
-            canvas,
-            onHUD: (k,v)=> {
-              if (k==="Zoom") document.getElementById('hudZoom').textContent = v;
-              if (k==="Tool") document.getElementById('hudTool').textContent = v;
-            }
-          });
-          console.log("[START] via game.startGame()");
-          return;
-        } catch(e){ console.error(e); }
-      }
-      // Fallback: public API aus boot.js (falls exportiert)
-      if (window.gameAPI && typeof window.gameAPI.start === 'function'){
-        document.getElementById('startCard').style.display = 'none';
-        window.gameAPI.start();
-        console.log("[START] via gameAPI.start()");
-        return;
-      }
-      console.warn("[START] Game-API noch nicht verfügbar. Prüfe boot.js/game.js Pfade.");
-    });
-
-    // Debug-Toggle (öffnet die kleine Box unten links)
-    document.getElementById('btnDebug').addEventListener('click', ()=> {
-      const box = window.__debugBox;
-      if (box) box.classList.toggle('open');
-    });
-  })();
-  </script>
-
-  <!-- 4) kleines Debug-Overlay (beweglich) -->
-  <script>
+  // === Repo-Checker Integration ===
   (function(){
-    const box = document.createElement('div');
-    box.id = '__debugBox';
-    box.style.cssText = 'position:fixed;left:12px;bottom:12px;max-width:80vw;z-index:30;background:#0c1a2bbb;border:1px solid #28405e;padding:8px 10px;border-radius:8px;backdrop-filter:blur(6px);font-size:12px;line-height:1.3;color:#cfe3ff;display:none';
-    box.innerHTML = '<div class="drag" style="cursor:move;opacity:.8">Debug (ziehen zum Verschieben)</div><pre id="__dbgText"></pre>';
+    const box=document.createElement('div');
+    box.id="__debugBox";
+    box.innerHTML="<div class='drag'>📂 Repo-Checker</div><pre id='__out'>Klick für Struktur-Scan…</pre>";
     document.body.appendChild(box);
-    window.__debugBox = box;
-    const pre = box.querySelector('#__dbgText');
-    const drag = box.querySelector('.drag');
-    let sx=0, sy=0, bx=12, by=12, dragging=false;
-    function setPos(){ box.style.left = bx+'px'; box.style.bottom = by+'px'; }
-    drag.addEventListener('pointerdown', e=>{ dragging=true; sx=e.clientX; sy=e.clientY; drag.setPointerCapture(e.pointerId); });
-    drag.addEventListener('pointermove', e=>{ if(!dragging) return; bx += (e.clientX - sx); by += -(e.clientY - sy); sx=e.clientX; sy=e.clientY; setPos(); });
-    drag.addEventListener('pointerup', ()=> dragging=false);
-    setInterval(()=> {
-      const s = window.__GAME_STATE__ || (window.game && window.game.state) || {};
-      const zoom = (s.zoom || s.camera?.zoom || 1);
-      const camX = Math.round(s.camX || s.camera?.x || 0);
-      const camY = Math.round(s.camY || s.camera?.y || 0);
-      pre.textContent = `Tool: ${s.activeTool||'-'}  Zoom: ${zoom.toFixed?zoom.toFixed(2):zoom}x
-Cam: ${camX}, ${camY}   DPR: ${window.devicePixelRatio||1}
-Canvas: ${s.canvas?.width||'-'}×${s.canvas?.height||'-'}
-Objekte: roads ${s.roads?.length||0}  buildings ${s.buildings?.length||0}`;
-    }, 500);
-  })();
-  </script>
 
-  <!-- 5) Repo-Checker v2 (Struktur + Duplikate + Image-Test) -->
-  <div id="repoTool" style="position:fixed;right:10px;bottom:10px;z-index:99999;background:#0f1d31;color:#cfe3ff;border:1px solid #1e2d42;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:10px;width:min(94vw,640px);max-height:70vh;overflow:auto;font:13px/1.45 system-ui,-apple-system,Segoe UI,Roboto">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <strong>Repo-Checker</strong>
-      <span id="rt_status" style="opacity:.8;margin-left:auto">bereit</span>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-      <label>Owner: <input id="rt_owner" style="width:140px" value="DrHoschi"></label>
-      <label>Repo: <input id="rt_repo" style="width:180px" value="siedler-mini"></label>
-      <label>Ref: <input id="rt_ref" style="width:110px" value="gh-pages" title="z. B. gh-pages oder main"></label>
-      <button id="rt_load" class="btn">Struktur laden</button>
-      <button id="rt_save" class="btn">Als TXT speichern</button>
-      <label style="display:flex;gap:6px;align-items:center"><input id="rt_imgtest" type="checkbox" checked> <span>Image-Load-Test</span></label>
-    </div>
-    <details open style="margin:6px 0 10px">
-      <summary style="cursor:pointer">Erwartete Dateien (bearbeitbar) – fehlt ⇒ rot</summary>
-      <textarea id="rt_expect" style="width:100%;height:110px;background:#0c1626;color:#cfe3ff;border:1px solid #20324a;border-radius:6px;padding:8px;resize:vertical"></textarea>
-      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-        <button id="rt_expect_fill" class="btn">Mit Beispiel füllen</button>
-        <button id="rt_expect_clear" class="btn">Leeren</button>
-      </div>
-    </details>
-    <div id="rt_summary" style="opacity:.9;margin:6px 0 8px"></div>
-    <div id="rt_table" style="border-top:1px solid #20324a;padding-top:6px"></div>
-  </div>
-  <style>
-    .rt-badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:11px;margin-left:6px}
-    .rt-ok{color:#77e29f}.rt-warn{color:#ffd88a}.rt-err{color:#ff8890}
-    .rt-row{display:grid;grid-template-columns:minmax(160px,1fr) minmax(120px,1fr) minmax(120px,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dotted #20324a}
-    .rt-head{font-weight:600;opacity:.9;border-bottom:1px solid #20324a;margin-bottom:6px}
-    .rt-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-    .rt-chip{display:inline-block;border:1px solid #28405e;border-radius:999px;padding:1px 6px;margin:0 3px 3px 0;background:#11233a}
-    .rt-small{opacity:.8;font-size:12px}
-  </style>
-  <script>
-  (function(){
-    const $ = (s)=>document.querySelector(s);
-    const st = $('#rt_status'), out = $('#rt_table'), sum = $('#rt_summary');
-    const ownerEl=$('#rt_owner'), repoEl=$('#rt_repo'), refEl=$('#rt_ref');
-    const loadBtn=$('#rt_load'), saveBtn=$('#rt_save');
-    const expTA=$('#rt_expect'), fillBtn=$('#rt_expect_fill'), clrBtn=$('#rt_expect_clear');
-    const doImgTest=$('#rt_imgtest');
+    let dragging=false,ox=0,oy=0;
+    box.querySelector('.drag').addEventListener('mousedown',e=>{dragging=true;ox=e.clientX-box.offsetLeft;oy=e.clientY-box.offsetTop;});
+    window.addEventListener('mouseup',()=>dragging=false);
+    window.addEventListener('mousemove',e=>{if(dragging){box.style.left=(e.clientX-ox)+'px';box.style.top=(e.clientY-oy)+'px';}});
 
-    const SAMPLE_EXPECT = [
-      'assets/tex/terrain/topdown_grass.PNG',
-      'assets/tex/terrain/sm_topdown_grass0.jpeg',
-      'assets/sprites/carrier/carrier_topdown_v2.png',
-      'assets/sprites/carrier/carrier_topdown_v2.json',
-      'assets/tex/placeholder64.png'
-    ].join('\n');
-    if (!expTA.value.trim()) expTA.value = SAMPLE_EXPECT;
-    fillBtn.onclick = ()=> expTA.value = SAMPLE_EXPECT;
-    clrBtn.onclick = ()=> expTA.value = '';
-    function setStatus(msg){ st.textContent = msg; }
-    function parseExpect(){ return expTA.value.split(/\r?\n/).map(s=>s.trim()).filter(s=>s && !s.startsWith('#')); }
-
-    async function fetchTree(owner, repo, ref){
-      const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-      const res = await fetch(url, {headers:{'Accept':'application/vnd.github+json'}});
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (!data.tree) throw new Error('Kein "tree" Feld in Antwort.');
-      return data.tree;
+    async function scan(){
+      const owner="DrHoschi", repo="siedler-mini", ref="gh-pages";
+      const url=`https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
+      const out=document.getElementById('__out');
+      out.textContent="lade Struktur…";
+      const r=await fetch(url); const j=await r.json();
+      if(!j.tree){ out.textContent="Fehler: "+JSON.stringify(j); return; }
+      let files=j.tree.filter(x=>x.type==="blob").map(x=>x.path);
+      let dirs=j.tree.filter(x=>x.type==="tree").map(x=>x.path);
+      // Duplikate & Fehlende prüfen
+      const expected=["assets/tex/placeholder64.png"];
+      let missing=expected.filter(e=>!files.includes(e));
+      let dups=files.filter((f,i)=>files.indexOf(f)!==i);
+      out.textContent=`=== Repo-Checker Export ===\nDateien: ${files.length}, Ordner: ${dirs.length}\nFehlend: ${missing.length}, Doppelt: ${dups.length}\n\nMissing: ${missing.join(", ")||"-"}\nDups: ${dups.join(", ")||"-"}`;
+      console.log("[Repo-Checker]",{files,dirs,missing,dups});
     }
-    function groupDuplicatesByBasename(paths){
-      const map = new Map(); paths.forEach(p=>{ const b=p.split('/').pop().toLowerCase(); (map.get(b)||map.set(b,[]).get(b)).push(p); });
-      return [...map].map(([base,arr])=>({base,paths:arr})).filter(x=>x.paths.length>1).sort((a,b)=>a.base.localeCompare(b.base));
-    }
-    function toRawGitURL(owner, repo, ref, path){ return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`; }
-    function testImage(url){
-      return new Promise(resolve=>{
-        const img = new Image(), t0=performance.now();
-        img.onload = ()=> resolve({ok:true,w:img.naturalWidth,h:img.naturalHeight,ms:Math.round(performance.now()-t0)});
-        img.onerror = ()=> resolve({ok:false});
-        img.src = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now();
-      });
-    }
-    function renderSummary(stats){
-      const {fileCount,dirCount,missing,duplicates,imgChecked,imgErrors} = stats;
-      sum.innerHTML = [
-        `Einträge: <b>${fileCount+dirCount}</b> (Dateien ${fileCount}, Ordner ${dirCount})`,
-        missing.length ? `<span class="rt-badge rt-err">Fehlend: ${missing.length}</span>` : `<span class="rt-badge rt-ok">Alle erwartet vorhanden</span>`,
-        duplicates.length ? `<span class="rt-badge rt-warn">Duplikate: ${duplicates.length}</span>` : `<span class="rt-badge rt-ok">Keine Duplikate</span>`,
-        (imgChecked>0) ? (imgErrors>0 ? `<span class="rt-badge rt-err">Image-Fehler: ${imgErrors}/${imgChecked}</span>` : `<span class="rt-badge rt-ok">Images OK: ${imgChecked}</span>`) : `<span class="rt-badge rt-small">Image-Test aus</span>`
-      ].join(' &nbsp; ');
-    }
-    function renderTable(sections){
-      const frag = document.createDocumentFragment();
-      const head = document.createElement('div'); head.className='rt-row rt-head';
-      head.innerHTML = '<div>Kategorie</div><div class="rt-mono">Pfad / Name</div><div>Ergebnis</div><div class="rt-small">Details</div>';
-      frag.appendChild(head);
-      sections.forEach(sec=>{
-        const title=document.createElement('div'); title.style.margin='10px 0 4px'; title.innerHTML=`<span class="rt-chip">${sec.title}</span>`; frag.appendChild(title);
-        sec.rows.forEach(r=>{ const row=document.createElement('div'); row.className='rt-row';
-          row.innerHTML = `<div>${r.cat||''}</div><div class="rt-mono">${r.path||r.name||''}</div><div>${r.status}</div><div class="rt-small">${r.note||''}</div>`;
-          frag.appendChild(row);
-        });
-      });
-      out.innerHTML=''; out.appendChild(frag);
-    }
-
-    async function run(){
-      try{
-        setStatus('lädt …'); out.innerHTML=''; sum.textContent='';
-        const owner=ownerEl.value.trim(), repo=repoEl.value.trim(), ref=refEl.value.trim();
-        const expect=parseExpect();
-        const tree=await fetchTree(owner,repo,ref);
-        const files=tree.filter(e=>e.type==='blob').map(e=>e.path);
-        const dirs =tree.filter(e=>e.type==='tree').map(e=>e.path);
-
-        const missing = expect.filter(p=> !files.includes(p));
-        const duplicates = groupDuplicatesByBasename(files);
-
-        let imgChecked=0, imgErrors=0; const imgRows=[];
-        if (doImgTest.checked){
-          const imgLike = files.filter(p=>/\.(png|jpg|jpeg|gif|webp)$/i.test(p)).slice(0,200);
-          const tests = await Promise.all(imgLike.map(p => testImage(toRawGitURL(owner,repo,ref,p)).then(r=>({...r,path:p}))));
-          tests.forEach(t=>{ imgChecked++; imgErrors += t.ok?0:1;
-            imgRows.push({cat:'Image', path:t.path, status: t.ok?'<span class="rt-ok">OK</span>':'<span class="rt-err">lädt nicht</span>', note: t.ok?`${t.w}×${t.h} • ${t.ms}ms`:''});
-          });
-        }
-
-        const secMissing = { title:'Fehlende erwartete Dateien',
-          rows: missing.length? missing.map(p=>({cat:'Expect',path:p,status:'<span class="rt-err">FEHLT</span>',note:'nicht im Tree'}))
-               : [{cat:'Expect',name:'—',status:'<span class="rt-ok">alle vorhanden</span>',note:''}] };
-        const secDup = { title:'Duplikate (gleicher Dateiname)',
-          rows: duplicates.length? duplicates.flatMap(d=> d.paths.map((p,i)=>({cat:i===0?d.base:'',path:p,status:'<span class="rt-warn">Duplikat</span>',note:i===0?`${d.paths.length}×`:''})))
-               : [{cat:'',name:'—',status:'<span class="rt-ok">keine Duplikate</span>',note:''}] };
-        const secImg = { title:'Image-Load-Test (max 200)', rows: imgRows.length? imgRows : [{cat:'Image',name:'—',status:'<span class="rt-small">ausgeschaltet</span>',note:''}] };
-
-        renderSummary({fileCount:files.length,dirCount:dirs.length,missing,duplicates,imgChecked,imgErrors});
-        renderTable([secMissing,secDup,secImg]);
-
-        setStatus('fertig');
-      }catch(err){
-        setStatus('Fehler'); out.innerHTML = '<div style="color:#ff8890">Fehler: '+(err?.message||err)+'</div>'; console.error('[Repo-Checker]', err);
-      }
-    }
-    function saveTxt(){
-      const txt = [
-        '=== Repo-Checker Export ===',
-        'Owner: '+ownerEl.value+'  Repo: '+repoEl.value+'  Ref: '+refEl.value,
-        sum.textContent, '', ...Array.from(document.querySelectorAll('#rt_table .rt-row')).map(r=> r.innerText.replace(/\s+/g,' ').trim())
-      ].join('\n');
-      const blob=new Blob([txt],{type:'text/plain'}); const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.download='repo-check.txt'; a.href=url; document.body.appendChild(a); a.click();
-      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },0);
-    }
-    document.getElementById('rt_load').addEventListener('click', run);
-    document.getElementById('rt_save').addEventListener('click', saveTxt);
+    box.addEventListener('click',scan);
   })();
   </script>
 </body>
