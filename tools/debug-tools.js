@@ -1,46 +1,39 @@
-// tools/debug-tools.js
+// ./tools/debug-tools.js
 // ======================================================
-// 🔧 Universal Debug-Tools (per Flags schaltbar)
-// true = aktiv, false = aus
-const ENABLE = {
-  loadTester:     true,   // Script-Load-Tester (asset.js / map-runtime.js)
-  errorLogger:    true,   // Globaler Error-Logger
-  perfLogger:     false,  // Performance-Zeiterfassung
-  assetChecker:   true,   // checkAssets([...])
-  folderLogger:   true,   // Ordnerstruktur-Logger
-  mapLoaderDebug: false   // map-pro.json laden & ausgeben
-};
+// 🔧 Debug-Tools (sichtbarer Banner + sichere Checks)
+// Läuft ohne andere Skripte nachzuladen (keine Konflikte).
 
-// 1) Script-Load-Tester
-if (ENABLE.loadTester) {
-  const add = (src, label) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload  = () => console.log(`✅ ${label} geladen`);
-    s.onerror = () => console.error(`❌ ${label} fehlt (${src})`);
-    document.head.appendChild(s);
-  };
-  add('./core/asset.js', 'asset.js');
-  add('./tools/map-runtime.js', 'map-runtime.js');
-}
+console.log("[DebugTools] geladen");
 
-// 2) Globaler Error-Logger
-if (ENABLE.errorLogger) {
-  window.addEventListener('error', e => {
-    console.error('🔥 Fehler:', e.message, 'bei', e.filename, 'Zeile', e.lineno);
+// 0) Sichtbarer Banner, damit du SOFORT siehst, dass die Datei läuft
+(() => {
+  const bar = document.createElement('div');
+  bar.id = 'debugToolsBar';
+  bar.textContent = '🔧 Debug-Tools aktiv';
+  Object.assign(bar.style, {
+    position: 'fixed', left: '50%', top: '10px', transform: 'translateX(-50%)',
+    background: '#0c1320cc', color: '#cfe3ff', border: '1px solid #21334d',
+    borderRadius: '10px', padding: '8px 12px', zIndex: 99999, font: '12px ui-monospace'
   });
-  window.addEventListener('unhandledrejection', e => {
-    console.error('🔥 Unhandled Promise Rejection:', e.reason);
-  });
-}
+  document.body.appendChild(bar);
+})();
 
-// 3) Performance-Logger
-if (ENABLE.perfLogger) {
+// 1) Globaler Error-/Promise-Logger
+window.addEventListener('error', e => {
+  console.error('🔥 Fehler:', e.message, 'bei', e.filename, 'Zeile', e.lineno);
+});
+window.addEventListener('unhandledrejection', e => {
+  console.error('🔥 Unhandled Promise Rejection:', e.reason);
+});
+
+// 2) Performance (optional: auf true setzen)
+const PERF = false;
+if (PERF) {
   console.time('⏱️ Gesamt-Ladezeit');
   window.addEventListener('load', () => console.timeEnd('⏱️ Gesamt-Ladezeit'));
 }
 
-// 4) Asset-Checker
+// 3) Asset-Checker – nur prüfen, nichts laden
 async function checkAssets(files) {
   for (const f of files) {
     try {
@@ -52,26 +45,11 @@ async function checkAssets(files) {
     }
   }
 }
-if (ENABLE.assetChecker) {
-  checkAssets([
-    './core/asset.js',          // Haupt-Asset
-    './tools/map-runtime.js',   // Karten-Engine
-    './maps/map-pro.json',      // Map-Datei
-    './assets/tileset.png',     // Beispielgrafik
-    './assets/sprites.png'      // Beispielsprites
-  ]);
-}
 
-// 5) Ordnerstruktur-Logger
-if (ENABLE.folderLogger) {
-  const folders = {
-    core:   ['asset.js'],
-    tools:  ['map-runtime.js'],
-    maps:   ['map-pro.json'],
-    assets: ['tileset.png', 'sprites.png']
-  };
-  for (const folder in folders) {
-    for (const file of folders[folder]) {
+// 4) Ordnerstruktur-Logger – nur prüfen, nichts laden
+function logFolderStructure(map) {
+  for (const folder in map) {
+    for (const file of map[folder]) {
       const path = `./${folder}/${file}`;
       fetch(path, { cache: 'no-cache' })
         .then(r => console.log(r.ok ? '✅' : '❌', path));
@@ -79,15 +57,18 @@ if (ENABLE.folderLogger) {
   }
 }
 
-// 6) Map-Loader Debug
-if (ENABLE.mapLoaderDebug) {
-  (async () => {
-    try {
-      const res = await fetch('./maps/map-pro.json', { cache: 'no-cache' });
-      const json = await res.json();
-      console.log('🗺️ Map geladen:', json);
-    } catch (err) {
-      console.error('❌ Map konnte nicht geladen werden:', err);
-    }
-  })();
-}
+// ==== HIER ANPASSEN: Was soll geprüft werden? ====
+checkAssets([
+  './core/asset.js',
+  './tools/map-runtime.js',
+  './maps/map-pro.json',
+  './assets/tileset.png',
+  './assets/sprites.png'
+]);
+
+logFolderStructure({
+  core:   ['asset.js'],
+  tools:  ['map-runtime.js'],
+  maps:   ['map-pro.json'],
+  assets: ['tileset.png', 'sprites.png']
+});
