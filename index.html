@@ -2,136 +2,244 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b1628" />
-  <title>Siedler-Mini V15.3 (mit Repo-Checker)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Siedler 2020 – Startmap</title>
+  <meta name="color-scheme" content="dark light" />
+
+  <!--
+    Projektstruktur (erwartet):
+    /index.html
+    /core/asset.js           – Asset-Loader (auch extensionless)
+    /core/input.js           – Eingabe
+    /core/audio.js           – Audio
+    /core/utils.js           – Helfer
+    /tools/map-runtime.js    – SiedlerMap Runtime
+    /tools/tilemap.js        – Tilemap-Tools
+    /tools/debug.js          – Debug-Funktionen (optional)
+    /tools/diagnose.js       – Diagnose/Profiling (optional)
+    /game.js                 – Spiellogik
+    /boot.js                 – Bootstrapping
+    /main.js                 – (optional) zusätzliche App-Logik
+    /assets/...              – Grafiken, Sounds
+    /maps/map-pro.json       – Startmap (anpassbar via data-map)
+
+    Schalter:
+    - Debug aktivieren:    index.html?debug=1
+    - Diagnose aktivieren: index.html?diag=1
+  -->
+
   <style>
-    :root{
-      color-scheme: dark;
-      --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
-      --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
-      --accent:#1e2d42; --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-      --shadow: 0 20px 60px rgba(0,0,0,.35);
-      --gap:10px;
+    html, body { margin:0; padding:0; height:100%; }
+    body { background:#111; color:#ddd; font-family:system-ui, Arial, sans-serif; }
+    #app { position:fixed; inset:0; display:grid; place-items:center; }
+    canvas { width:100vw; height:100vh; image-rendering: pixelated; background:#000; }
+    #overlay {
+      position:fixed; left:0; right:0; top:0; background:rgba(0,0,0,.6);
+      color:#fff; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      padding:.5rem .75rem; display:none; z-index:10; white-space:pre-wrap; word-break:break-word;
     }
-    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
-    #wrap{height:100%;display:flex;flex-direction:column}
-
-    /* Canvas */
-    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
-    canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
-
-    /* HUD */
-    #hud{position:fixed;top:12px;right:12px;display:flex;gap:10px;align-items:center;z-index:10}
-    #hud span{background:var(--pill);border:1px solid #1e2d42;border-radius:20px;padding:4px 8px;font-size:13px}
-    #hud button{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;padding:6px 10px}
-
-    /* Toolbar */
-    #tools{position:fixed;left:12px;top:70px;display:flex;flex-direction:column;gap:10px;z-index:10}
-    #tools button.active{outline:2px solid #3f8cff}
-
-    /* Startkarte */
-    #startCard{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20}
-    #startCard .card{width:min(680px,92vw);background:#172b45;border-radius:14px;padding:18px 22px;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-    #startCard h3{margin:0 0 10px;font-size:20px}
-    #startCard p{margin:8px 0;color:#9fb3cc}
-    .row{display:flex;gap:10px;margin-top:10px}
-    .primary{background:#2aa55a;color:#fff;border:none;padding:10px 16px;border-radius:8px}
-
-    /* Debug-Box */
-    #__debugBox{position:fixed;left:12px;bottom:12px;max-width:80vw;z-index:30;background:#0c1a2bbb;
-      border:1px solid #28405e;padding:8px 10px;border-radius:8px;backdrop-filter:blur(6px);
-      font-size:12px;line-height:1.3}
-    #__debugBox pre{white-space:pre-wrap;margin:4px 0}
-    #__debugBox .drag{cursor:move;opacity:.8}
+    #hud {
+      position:fixed; right:.75rem; bottom:.75rem; background:rgba(0,0,0,.4);
+      color:#fff; padding:.4rem .6rem; border-radius:.5rem; font-size:.85rem;
+      display:flex; gap:.6rem; z-index:5;
+    }
+    #hud .pill { padding:.1rem .5rem; border-radius:.4rem; background:rgba(255,255,255,.12); }
+    #nosupport { padding:1rem; color:#f66; }
   </style>
 </head>
 <body>
-  <!-- HUD -->
-  <div id="hud">
-    <span>Tool: <b id="hudTool">Zeiger</b></span>
-    <span>Zoom <b id="hudZoom">1.00x</b></span>
-    <button id="btnCenter">Zentrieren</button>
-    <button id="btnDebug">Debug</button>
-    <button id="btnFs">Vollbild</button>
+  <div id="overlay" role="status" aria-live="polite"></div>
+
+  <div id="app">
+    <canvas id="game" width="1280" height="720"
+      data-assets="./assets/"
+      data-map="./maps/map-pro.json"
+      data-pixelratio="auto"></canvas>
+    <noscript id="nosupport">
+      JavaScript ist deaktiviert – bitte aktivieren.
+    </noscript>
   </div>
 
-  <!-- Toolbar -->
-  <div id="tools">
-    <button data-tool="pointer" class="active">Zeiger</button>
-    <button data-tool="road">Straße</button>
-    <button data-tool="hq">HQ</button>
-    <button data-tool="woodcutter">Holzfäller</button>
-    <button data-tool="depot">Depot</button>
-    <button data-tool="erase">Abriss</button>
+  <div id="hud" hidden>
+    <span class="pill" id="hud-fps">FPS: –</span>
+    <span class="pill" id="hud-state">State: boot</span>
+    <span class="pill" id="hud-debug" hidden>Debug</span>
+    <span class="pill" id="hud-diag" hidden>Diagnose</span>
   </div>
 
-  <!-- Canvas -->
-  <canvas id="canvas" class="game-canvas"></canvas>
+  <!-- ===========================================================
+       1) KERN-BIBLIOTHEKEN (Reihenfolge beachten)
+       =========================================================== -->
+  <script type="module">
+    // Kleines Helper-Modul direkt inline: URL-Flags, Error-Overlay, DPR
+    const qs = new URLSearchParams(location.search);
+    const FLAGS = Object.freeze({
+      DEBUG: qs.get('debug') === '1',
+      DIAG:  qs.get('diag')  === '1'
+    });
+    window.__FLAGS__ = FLAGS;
 
-  <!-- Startkarte -->
-  <div id="startCard">
-    <div class="card">
-      <h3>Siedler-Mini V15.3</h3>
-      <p><b>1 Finger</b> = Karte verschieben (nur im Zeiger-Tool) · <b>2 Finger/Scroll</b> = Zoomen · Tap = bauen.</p>
-      <p>Terrain lädt aus <code>assets/tex/terrain/</code> (PNG/JPEG werden automatisch erkannt).</p>
-      <div class="row">
-        <button id="btnStart" class="primary">Start</button>
-        <button id="btnFull">Vollbild</button>
-        <button id="btnReset">Reset</button>
-      </div>
-    </div>
-  </div>
+    // Fehler hübsch anzeigen
+    const overlay = document.getElementById('overlay');
+    const showOverlay = (msg)=> {
+      overlay.style.display = 'block';
+      overlay.textContent = msg;
+      console.error(msg);
+    };
+    window.addEventListener('error', e => showOverlay(`❌ Fehler: ${e.message}\n${e.filename}:${e.lineno}:${e.colno}`));
+    window.addEventListener('unhandledrejection', e => showOverlay(`❌ Unhandled Promise Rejection:\n${e.reason?.stack || e.reason}`));
 
-  <!-- Asset-Liste für Debug -->
-  <script>
-    window.ASSET_CHECK_LIST = [
-      'assets/tex/topdown_grass.png',
-      'assets/tex/terrain/path0.jpeg',
-      'assets/sprites/carrier/carrier_topdown_v2.png',
-      'assets/sprites/carrier/carrier_topdown_v2.json'
-    ];
-  </script>
+    // HUD toggles
+    const hud = document.getElementById('hud');
+    const pillDebug = document.getElementById('hud-debug');
+    const pillDiag  = document.getElementById('hud-diag');
+    hud.hidden = false;
+    pillDebug.hidden = !FLAGS.DEBUG;
+    pillDiag.hidden  = !FLAGS.DIAG;
 
-  <!-- Core + Game -->
-  <script type="module" src="./core/assets.js?v=15.3"></script>
-  <script type="module" src="./core/terrain.js?v=15.3"></script>
-  <script type="module" src="./boot.js?v=15.3"></script>
-  <script type="module" src="./game.js?v=15.3"></script>
-
-  <!-- Debug/Checker -->
-  <script src="./debug.js?v=15.3"></script>
-  <script>
-  // === Repo-Checker Integration ===
-  (function(){
-    const box=document.createElement('div');
-    box.id="__debugBox";
-    box.innerHTML="<div class='drag'>📂 Repo-Checker</div><pre id='__out'>Klick für Struktur-Scan…</pre>";
-    document.body.appendChild(box);
-
-    let dragging=false,ox=0,oy=0;
-    box.querySelector('.drag').addEventListener('mousedown',e=>{dragging=true;ox=e.clientX-box.offsetLeft;oy=e.clientY-box.offsetTop;});
-    window.addEventListener('mouseup',()=>dragging=false);
-    window.addEventListener('mousemove',e=>{if(dragging){box.style.left=(e.clientX-ox)+'px';box.style.top=(e.clientY-oy)+'px';}});
-
-    async function scan(){
-      const owner="DrHoschi", repo="siedler-mini", ref="gh-pages";
-      const url=`https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
-      const out=document.getElementById('__out');
-      out.textContent="lade Struktur…";
-      const r=await fetch(url); const j=await r.json();
-      if(!j.tree){ out.textContent="Fehler: "+JSON.stringify(j); return; }
-      let files=j.tree.filter(x=>x.type==="blob").map(x=>x.path);
-      let dirs=j.tree.filter(x=>x.type==="tree").map(x=>x.path);
-      // Duplikate & Fehlende prüfen
-      const expected=["assets/tex/placeholder64.png"];
-      let missing=expected.filter(e=>!files.includes(e));
-      let dups=files.filter((f,i)=>files.indexOf(f)!==i);
-      out.textContent=`=== Repo-Checker Export ===\nDateien: ${files.length}, Ordner: ${dirs.length}\nFehlend: ${missing.length}, Doppelt: ${dups.length}\n\nMissing: ${missing.join(", ")||"-"}\nDups: ${dups.join(", ")||"-"}`;
-      console.log("[Repo-Checker]",{files,dirs,missing,dups});
+    // DPR automatisch setzen (optional)
+    const cv = document.getElementById('game');
+    if (cv.dataset.pixelratio === 'auto') {
+      const ctx = cv.getContext('2d');
+      const pr = Math.max(1, Math.min(2, Math.floor(window.devicePixelRatio || 1)));
+      cv.width  = Math.floor(innerWidth  * pr);
+      cv.height = Math.floor(innerHeight * pr);
+      ctx.imageSmoothingEnabled = false;
+      addEventListener('resize', () => {
+        const pr2 = Math.max(1, Math.min(2, Math.floor(window.devicePixelRatio || 1)));
+        cv.width  = Math.floor(innerWidth  * pr2);
+        cv.height = Math.floor(innerHeight * pr2);
+        ctx.imageSmoothingEnabled = false;
+      });
     }
-    box.addEventListener('click',scan);
-  })();
+
+    // Make flags available globally early
+    window.__showOverlay = showOverlay;
   </script>
+
+  <!-- Core-Module als ES-Module laden -->
+  <script src="./core/utils.js" type="module"></script>
+  <script src="./core/asset.js" type="module"></script>
+  <script src="./core/input.js" type="module"></script>
+  <script src="./core/audio.js" type="module"></script>
+
+  <!-- ===========================================================
+       2) TOOLS / RUNTIME
+       =========================================================== -->
+  <script src="./tools/tilemap.js" type="module"></script>
+  <script src="./tools/map-runtime.js" type="module"></script>
+
+  <!-- Optional: Debug & Diagnose (per URL-Flag aktivierbar) -->
+  <!--
+  <script src="./tools/debug.js" type="module"></script>
+  <script src="./tools/diagnose.js" type="module"></script>
+  -->
+
+  <!-- ===========================================================
+       3) GAME BOOT / MAIN
+       =========================================================== -->
+  <script src="./boot.js" type="module"></script>
+  <script src="./game.js" type="module"></script>
+  <!-- Optionales App-Skript, falls vorhanden -->
+  <!-- <script src="./main.js" type="module"></script> -->
+
+  <!-- ===========================================================
+       4) STARTMAP-LADER (funktioniert auch mit extensionless Assets)
+       =========================================================== -->
+  <script type="module">
+    // Import erst NACHDEM die Runtime geladen wurde:
+    import { SiedlerMap } from './tools/map-runtime.js';
+
+    // Asset-Basis aus dem Canvas-Attribut
+    const cv = /** @type {HTMLCanvasElement} */ (document.getElementById('game'));
+    const ctx = cv.getContext('2d');
+    const assetBase = cv.dataset.assets || './assets/';
+    const mapJson   = cv.dataset.map    || './maps/map-pro.json';
+
+    // Falls unser Asset-Loader "extensionless" kann, nutzen wir das:
+    const resolveAsset = (name) => assetBase + name; // z.B. "tiles/grass" lädt .png/.jpg transparent je nach Implementierung von asset.js
+
+    // FPS-Anzeige
+    const hudFps   = document.getElementById('hud-fps');
+    const hudState = document.getElementById('hud-state');
+    let fpsLast = performance.now(), fpsFrames = 0, fpsValue = 0;
+    function updateFps() {
+      const now = performance.now(); fpsFrames++;
+      if (now - fpsLast >= 500) { // halbsekündlich
+        fpsValue = Math.round( (fpsFrames * 1000) / (now - fpsLast) );
+        fpsFrames = 0; fpsLast = now;
+        hudFps.textContent = `FPS: ${fpsValue}`;
+      }
+    }
+
+    // Welt initialisieren
+    let world;
+    (async () => {
+      hudState.textContent = 'State: load';
+
+      // 1) Karte laden
+      const res = await fetch(mapJson);
+      if (!res.ok) throw new Error(`Map konnte nicht geladen werden: ${mapJson} (${res.status})`);
+      const json = await res.json();
+
+      // 2) Welt anlegen
+      world = new SiedlerMap({
+        tileResolver: resolveAsset,
+        onReady: () => { hudState.textContent = 'State: ready'; }
+      });
+
+      await world.loadFromObject(json);
+
+      // 3) Loop starten
+      function loop() {
+        try {
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          world.draw(ctx, { x:0, y:0, w:cv.width, h:cv.height });
+          updateFps();
+          requestAnimationFrame(loop);
+        } catch (err) {
+          window.__showOverlay(`❌ Draw-Fehler:\n${err?.stack || err}`);
+        }
+      }
+      loop();
+
+      // 4) Optional: Debug/Diagnose nachladen, wenn Flags aktiv
+      const { DEBUG, DIAG } = window.__FLAGS__ || {};
+      if (DEBUG) {
+        try { await import('./tools/debug.js'); document.getElementById('hud-debug').hidden = false; }
+        catch (e) { console.warn('Debug konnte nicht geladen werden:', e); }
+      }
+      if (DIAG) {
+        try { await import('./tools/diagnose.js'); document.getElementById('hud-diag').hidden = false; }
+        catch (e) { console.warn('Diagnose konnte nicht geladen werden:', e); }
+      }
+
+    })().catch(err => window.__showOverlay(err?.stack || String(err)));
+  </script>
+
+  <!-- ===========================================================
+       5) OPTIONAL: MOBILE QUALITY-OF-LIFE (auskommentiert)
+       =========================================================== -->
+  <!--
+  <script type="module">
+    // Fullscreen-Request auf Touch
+    const cv = document.getElementById('game');
+    cv.addEventListener('click', async () => {
+      if (document.fullscreenElement) return;
+      try { await cv.requestFullscreen(); } catch {}
+    });
+  </script>
+  -->
+
+  <!-- ===========================================================
+       6) OPTIONAL: SERVICE WORKER / OFFLINE (auskommentiert)
+       =========================================================== -->
+  <!--
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(console.warn);
+    }
+  </script>
+  -->
 </body>
 </html>
