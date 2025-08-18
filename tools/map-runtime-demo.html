@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siedler 2020 — Map Runtime Demo</title>
+<style>
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;background:#0f1115;color:#e8ecf1}
+  header{display:flex;gap:8px;align-items:center;padding:10px 12px;background:#151923;border-bottom:1px solid #10141c;position:sticky;top:0}
+  header h1{font-size:15px;margin:0 8px 0 0}
+  header button, header select, header input{background:#0d121a;border:1px solid #2c3444;color:#e8ecf1;border-radius:8px;padding:6px 10px}
+  #wrap{display:grid;grid-template-columns: 1fr 320px;gap:10px;height:calc(100vh - 56px);padding:10px}
+  #game{background:#0b0f16;border:1px solid #1b2130;border-radius:10px;position:relative;overflow:hidden}
+  #game canvas{width:100%;height:100%;display:block}
+  aside{background:#171a21;border:1px solid #1b2130;border-radius:10px;padding:10px;overflow:auto}
+  .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .kbd{font-family:ui-monospace,Consolas,monospace;background:#0d121a;border:1px solid #2c3444;padding:1px 4px;border-radius:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Map Runtime Demo</h1>
+  <input type="file" id="jsonFile" accept="application/json">
+  <label>Tiles-Pfad: <input id="basePath" value="../assets/" style="width:220px"></label>
+  <button id="btnLoad">Map laden</button>
+  <button id="btnToggleCol">Kollisionen</button>
+  <label>Zoom <select id="zoom">
+    <option value="0.5">50%</option>
+    <option value="1" selected>100%</option>
+    <option value="2">200%</option>
+  </select></label>
+</header>
+<div id="wrap">
+  <div id="game"><canvas id="cv"></canvas></div>
+  <aside>
+    <div class="row">Pfeile / WASD = Kamera bewegen</div>
+    <div class="row">Plus/Minus = Zoom</div>
+    <div class="row">Mausziehen = Pannen</div>
+    <div class="row">„Map laden“: wähle exportierte <span class="kbd">map-pro.json</span></div>
+    <div class="row">Tiles liegen unter <span class="kbd">Tiles-Pfad + tiles[i].name</span></div>
+    <hr>
+    <div id="info" style="font-size:12px;opacity:.85"></div>
+  </aside>
+</div>
+
+<script type="module">
+import { SiedlerMap } from './map-runtime.js';
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const info = document.getElementById('info');
+
+function resize(){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = document.getElementById('game').getBoundingClientRect();
+  cv.width = Math.floor(rect.width * dpr);
+  cv.height = Math.floor(rect.height * dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+let showCollisions = false;
+const world = new SiedlerMap({
+  tileResolver: (name)=> document.getElementById('basePath').value + name,
+  onProgress: (done,total)=> { info.textContent = `Tiles: ${done}/${total}`; },
+  onReady: ()=> { info.textContent += ' — bereit'; render(); }
+});
+
+let dragging=false, lastX=0, lastY=0;
+cv.addEventListener('mousedown', (e)=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+window.addEventListener('mouseup', ()=> dragging=false);
+window.addEventListener('mousemove', (e)=>{
+  if(!dragging) return;
+  world.camera.x += (e.clientX-lastX);
+  world.camera.y += (e.clientY-lastY);
+  lastX=e.clientX; lastY=e.clientY; render();
+});
+window.addEventListener('keydown', (e)=>{
+  if(e.key==='+' || e.key==='='){ world.camera.zoom = Math.min(world.camera.zoom*1.1, 6); render(); }
+  if(e.key==='-'){ world.camera.zoom = Math.max(world.camera.zoom/1.1, 0.25); render(); }
+  const step = 32*world.camera.zoom;
+  if(['ArrowUp','w','W'].includes(e.key)) { world.camera.y += step; render(); }
+  if(['ArrowDown','s','S'].includes(e.key)) { world.camera.y -= step; render(); }
+  if(['ArrowLeft','a','A'].includes(e.key)) { world.camera.x += step; render(); }
+  if(['ArrowRight','d','D'].includes(e.key)) { world.camera.x -= step; render(); }
+});
+
+document.getElementById('zoom').addEventListener('change', (e)=>{
+  world.camera.zoom = Number(e.target.value); render();
+});
+document.getElementById('btnToggleCol').addEventListener('click', ()=>{ showCollisions=!showCollisions; render(); });
+
+document.getElementById('btnLoad').addEventListener('click', async ()=>{
+  const f = document.getElementById('jsonFile').files[0];
+  if(!f) { alert('Bitte exportierte map-pro.json wählen.'); return; }
+  const text = await f.text();
+  const json = JSON.parse(text);
+  await world.loadFromObject(json);
+  world.camera.x = 0; world.camera.y = 0; world.camera.zoom = Number(document.getElementById('zoom').value)||1;
+  render();
+});
+
+function render(){
+  ctx.fillStyle = '#0a0f15'; ctx.fillRect(0,0,cv.width,cv.height);
+  world.draw(ctx, {x:0,y:0,w:cv.width,h:cv.height}, {drawCollisions:showCollisions});
+  ctx.strokeStyle = '#2e6bff'; ctx.globalAlpha = .65;
+  ctx.beginPath(); ctx.moveTo(cv.width/2-10, cv.height/2); ctx.lineTo(cv.width/2+10, cv.height/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cv.width/2, cv.height/2-10); ctx.lineTo(cv.width/2, cv.height/2+10); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+</script>
+</body>
+</html>
