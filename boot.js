@@ -1,21 +1,27 @@
-// =============================================
-// Bootloader für Siedler-Mini V14.7 (Mobile)
-// =============================================
-// Aufgaben:
-// - Verdrahtet DOM <-> game.js
-// - Overlay / HUD / Tools
-// - Debug- & Diagnose-Funktionen
-// - Fullscreen & iOS Workarounds
-// =============================================
+// Siedler‑Mini V14.7 (Mobil) — Boot/Glue
+// -------------------------------------------------------------
+// Verdrahtet DOM ↔ game.js, Start‑Overlay, Fullscreen, Debug/Diag,
+// Tool‑Buttons, HUD‑Writer. Canvas‑Größe wird in game.js korrekt
+// gesetzt (DPR, Resize/FS). Diese Datei fasst nur die "App‑Shell".
+// -------------------------------------------------------------
 
 import { game } from './game.js';
 
+// --- Optional vorgesehene Module (später aktivierbar) --------
+// import { spriteSystem } from './sprites.js';   // Träger mit PNG+JSON
+// import { audio } from './audio.js';            // SFX/BGM
+// import { save } from './save.js';              // Persistenz (localStorage)
+// -------------------------------------------------------------
+
 (function boot(){
+  // Mini‑Query‑Helpers
   const $  = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-  // --- DOM Referenzen ---
+  // ==== DOM‑Refs ====
+  // WICHTIG: #game muss ein echtes <canvas> sein (siehe index.html)
   const canvas    = $('#game');
+
   const hudZoom   = $('#hudZoom');
   const hudTool   = $('#hudTool');
   const hudWood   = $('#hudWood');
@@ -23,8 +29,6 @@ import { game } from './game.js';
   const hudFood   = $('#hudFood');
   const hudGold   = $('#hudGold');
   const hudCar    = $('#hudCar');
-  const diag      = $('#diag');
-  const toast     = $('#toast');
 
   const startOverlay = $('#startOverlay');
   const btnStart     = $('#btnStart');
@@ -33,138 +37,161 @@ import { game } from './game.js';
   const btnFsTop     = $('#btnFsTop');
   const btnCenter    = $('#btnCenter');
   const btnCenter2   = $('#btnCenter2');
+
   const btnDebug     = $('#btnDebug');
+  const diag         = $('#diag');
+  const toast        = $('#toast');
 
   const toolButtons  = $$('#tools .btn');
 
-  // --- interner Status ---
-  const state = { debugVisible:false };
+  // ==== Debug/Diag/Toast ====
+  const ui = {
+    debugVisible: false,
+    showToast(msg, ms=4200){
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      clearTimeout(ui._t); ui._t = setTimeout(()=> toast.style.display='none', ms);
+    },
+    log(lines){
+      if (!ui.debugVisible) return;
+      diag.textContent = lines.join('\n');
+    }
+  };
 
-  // === Helper: Toast (oben mittig) ===
-  function showToast(msg){
-    if (!toast) return;
-    toast.textContent = String(msg);
-    toast.style.display = 'block';
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(()=> toast.style.display='none', 4500);
-  }
-
-  // === Helper: Diagnosefenster (unten) ===
-  function logDiag(lines){
-    if (!diag) return;
-    if (!state.debugVisible){ diag.style.display='none'; return; }
-    diag.style.display='block';
-    diag.textContent = lines.join('\n');
-  }
-
-  // --- Fehler abfangen ---
+  // Globale Fehler abfangen → Toast (und ggf. Diag)
   window.addEventListener('error', (e)=>{
-    showToast('JS-Fehler: ' + (e.message || e.error || e));
+    ui.showToast('JS‑Fehler: ' + (e.message || e.error || e));
   });
   window.addEventListener('unhandledrejection', (e)=>{
-    showToast('Promise-Fehler: ' + (e.reason?.message || e.reason));
+    ui.showToast('Promise‑Fehler: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
   });
 
-  // === Vollbild ===
+  // ==== Fullscreen (mit iOS WebKit Fallback) ====
   async function requestFullscreen(el){
     try{
       if (document.fullscreenElement || document.webkitFullscreenElement) return;
       if (el.requestFullscreen) await el.requestFullscreen();
       else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-      else showToast('Vollbild nicht unterstützt.');
+      else ui.showToast('Vollbild wird von diesem Gerät/Browser nicht unterstützt.');
     }catch(err){
-      showToast('Vollbild verweigert: ' + err.message);
+      ui.showToast('Vollbild verweigert: ' + err.message);
     }
   }
 
-  // === Overlay Steuerung ===
-  function hideStart(){ if (startOverlay) startOverlay.style.display='none'; }
-  function showStart(){ if (startOverlay) startOverlay.style.display='flex'; }
+  // Start‑Overlay Sichtbarkeit
+  const hideStart = ()=> startOverlay.style.display = 'none';
+  const showStart = ()=> startOverlay.style.display = 'flex';
 
-  // === Button Wiring ===
-  if (btnDebug) btnDebug.addEventListener('click', ()=>{
-    state.debugVisible = !state.debugVisible;
-    logDiag(state.debugVisible ? ['Debug an.'] : []);
+  // ==== Buttons ====
+  btnDebug.addEventListener('click', ()=>{
+    ui.debugVisible = !ui.debugVisible;
+    diag.style.display = ui.debugVisible ? 'block' : 'none';
   });
 
-  if (btnCenter)  btnCenter.addEventListener('click', ()=> game.center());
-  if (btnCenter2) btnCenter2.addEventListener('click', ()=> game.center());
+  btnCenter.addEventListener('click', ()=> game.center());
+  btnCenter2.addEventListener('click', ()=> game.center());
 
-  if (btnFsTop) btnFsTop.addEventListener('click', ()=> requestFullscreen(document.documentElement));
-  if (btnFs)    btnFs.addEventListener('click',    ()=> requestFullscreen(document.documentElement));
+  btnFs.addEventListener('click',    ()=> requestFullscreen(document.documentElement));
+  btnFsTop.addEventListener('click', ()=> requestFullscreen(document.documentElement));
 
-  if (btnReset) btnReset.addEventListener('click', ()=>{
-    showToast('Zurückgesetzt – starte neu.');
+  btnReset.addEventListener('click', ()=>{
+    // Placeholder: später Persistenz löschen (save.clear() o.ä.)
+    ui.showToast('Zurückgesetzt – starte neu.');
     showStart();
   });
 
-  if (btnStart) btnStart.addEventListener('click', ()=>{
-    try{ hideStart(); startGameNow(); }
-    catch(err){ showToast('Start fehlgeschlagen: ' + err.message); showStart(); }
+  btnStart.addEventListener('click', ()=>{
+    try{
+      hideStart();
+      startGameNow();
+    }catch(err){
+      ui.showToast('Start fehlgeschlagen: ' + err.message);
+      showStart();
+    }
   });
 
-  // === Tool Buttons (links) ===
+  // Tool‑Buttons (linke Leiste)
   toolButtons.forEach(b=>{
     b.addEventListener('click', ()=>{
       toolButtons.forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
-      const tool = b.getAttribute('data-tool');
-      game.setTool(tool);
 
-      // HUD Text anpassen
-      if (hudTool){
-        hudTool.textContent = tool==='pointer' ? 'Zeiger' :
-                              tool==='road' ? 'Straße' :
-                              tool==='hq' ? 'HQ' :
-                              tool==='woodcutter' ? 'Holzfäller' :
-                              tool==='depot' ? 'Depot' : 'Abriss';
-      }
+      const t = b.getAttribute('data-tool');
+      game.setTool(t);
+
+      // HUD sauber benennen (Deutsch)
+      hudTool.textContent =
+          t==='pointer'     ? 'Zeiger'     :
+          t==='road'        ? 'Straße'     :
+          t==='hq'          ? 'HQ'         :
+          t==='woodcutter'  ? 'Holzfäller' :
+          t==='depot'       ? 'Depot'      : 'Abriss';
     });
   });
 
-  // === Sonderblock: Doppeltipp auf Canvas → Vollbild ===
+  // Doppeltipp direkt auf die Zeichenfläche → Vollbild
   let lastTap = 0;
-  if (canvas) {
-    canvas.addEventListener('pointerdown', (e)=>{
-      const now = performance.now();
-      if (now - lastTap < 300){
-        requestFullscreen(document.documentElement);
-        lastTap = 0;
-      } else lastTap = now;
-    }, {passive:true});
-  }
+  canvas.addEventListener('pointerdown', ()=>{
+    const now = performance.now();
+    if (now - lastTap < 300){
+      requestFullscreen(document.documentElement);
+      lastTap = 0;
+    } else lastTap = now;
+  }, {passive:true});
 
-  // === Start Game ===
+  // ==== Game‑Start Glue ====
   function startGameNow(){
-    if (!canvas) throw new Error('#game (canvas) fehlt');
+    // Sicherheitsnetz: Canvas wirklich <canvas>?
+    if (!(canvas instanceof HTMLCanvasElement)){
+      ui.showToast('Fehler: #game ist kein <canvas>. Prüfe index.html.');
+      return;
+    }
 
+    // Start game – HUD‑Writer gibt alle von game.js gemeldeten Werte durch
     game.startGame({
       canvas,
       onHUD: (k,v)=>{
-        if (k==='Zoom' && hudZoom)   hudZoom.textContent = v;
-        if (k==='Tool' && hudTool)   hudTool.textContent = v;
-        if (k==='wood' && hudWood)   hudWood.textContent = v;
-        if (k==='stone'&& hudStone)  hudStone.textContent = v;
-        if (k==='food' && hudFood)   hudFood.textContent = v;
-        if (k==='gold' && hudGold)   hudGold.textContent = v;
-        if (k==='carriers' && hudCar)hudCar.textContent = v;
+        if (k === 'Zoom')      hudZoom.textContent = v;
+        if (k === 'Tool')      hudTool.textContent = v;
+        if (k === 'wood')      hudWood.textContent = v;
+        if (k === 'stone')     hudStone.textContent = v;
+        if (k === 'food')      hudFood.textContent = v;
+        if (k === 'gold')      hudGold.textContent = v;
+        if (k === 'carriers')  hudCar.textContent = v;
       }
     });
 
-    // Tool-Default (Zeiger) aktivieren
+    // Start‑Tool optisch auf „Zeiger“
     const btnPointer = document.querySelector('[data-tool="pointer"]');
     if (btnPointer){
       toolButtons.forEach(x=>x.classList.remove('active'));
       btnPointer.classList.add('active');
     }
 
-    if (state.debugVisible) logDiag(['Boot OK', 'Start() → running']);
+    // Optional: Sprite/Audiosystem initialisieren (später aktivieren)
+    // spriteSystem.init({ assetsBase: 'assets/' });
+    // audio.init();
+
+    if (ui.debugVisible){
+      ui.log([
+        'Boot V14.7 ✓',
+        'Canvas ok ✓',
+        'Game gestartet ✓',
+        'Tippe „Debug“ erneut zum Verstecken.'
+      ]);
+    }
   }
 
-  // === Initialisierung ===
-  showStart(); // beim Laden Overlay zeigen
+  // Beim Laden: Startkarte anzeigen
+  showStart();
 
-  // Safari/iOS bfcache Workaround → harte Reinit
+  // iOS Back/Forward‑Cache → immer frisch initialisieren
   window.addEventListener('pageshow', (e)=>{ if (e.persisted) location.reload(); });
 
+  // Resize/FS‑Events: game.js handled Canvas‑Resize intern;
+  // wir halten hier nur Platz falls wir später UI anpassen wollen.
+  const onResize = ()=>{};
+  window.addEventListener('resize', onResize);
+  document.addEventListener('fullscreenchange', onResize);
+  document.addEventListener('webkitfullscreenchange', onResize);
 })();
