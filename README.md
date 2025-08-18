@@ -28,3 +28,32 @@ assets/
   └─ sprites/
       ├─ carrier.png        (optional)
       └─ carrier.json       (optional, frames)
+
+
+/index.html
+/main.js
+/render.js
+/game.js        ← aus core hierher verschoben
+/world.js       ← aus core hierher verschoben
+
+/core/
+    assets.js
+    camera.js
+    carriers.js
+    input.js
+
+/assets/
+    carrier.png
+    depot.png
+    dirt.png
+    grass.png
+    hq_stone.png
+    hq_wood.png
+    lumberjack.png
+    road.png
+    road_curve.png
+    road_straight.png
+    rocky.png
+    sand.png
+    shore.png
+    water.png
