@@ -82,23 +82,29 @@ export const game = (() => {
   }
 
   // Sprite-Helper (einfaches Frame-Array aus TexturePacker-JSON)
-  function buildSimpleSprite(img,json){
-    // erwartet: { frames: [{frame:{x,y,w,h}}, ...] }
-    const frames=(json.frames||[]).map(f=>{
-      const r=f.frame||f; return {x:r.x|0,y:r.y|0,w:r.w|0,h:r.h|0};
-    });
-    return {
-      img, frames,
-      draw(ctx, wx, wy, zoom, phase){
-        if(!frames.length) return;
-        const f = frames[Math.floor(phase*frames.length)%frames.length];
-        const p=toScreen(wx,wy); const scale= Math.max(1, 1.0*zoom); // 1:1 Größe
-        const dw=Math.round(f.w*scale*state.DPR), dh=Math.round(f.h*scale*state.DPR);
-        const dx=Math.round(p.x*state.DPR - dw/2), dy=Math.round(p.y*state.DPR - dh/2);
-        ctx.drawImage(img, f.x,f.y,f.w,f.h, dx,dy, dw,dh);
-      }
-    };
-  }
+  // --- in game.js: buildSimpleSprite ersetzen ---
+function buildSimpleSprite(img, json){
+  // Array ODER Object unterstützen
+  const raw = Array.isArray(json.frames) ? json.frames : Object.values(json.frames || {});
+  const frames = raw.map(f=>{
+    // TexturePacker: f.frame vorhanden, sonst direkt x/y/w/h
+    const r = f.frame || f;
+    return { x: r.x|0, y: r.y|0, w: r.w|0, h: r.h|0 };
+  });
+
+  return {
+    img, frames,
+    draw(ctx, wx, wy, zoom, phase){
+      if(!frames.length) return;
+      const f = frames[Math.floor(phase*frames.length)%frames.length];
+      const p = toScreen(wx,wy);
+      const scale = Math.max(1, 1.0*zoom);
+      const dw = Math.round(f.w*scale*state.DPR), dh = Math.round(f.h*scale*state.DPR);
+      const dx = Math.round(p.x*state.DPR - dw/2), dy = Math.round(p.y*state.DPR - dh/2);
+      ctx.drawImage(img, f.x,f.y,f.w,f.h, dx,dy, dw,dh);
+    }
+  };
+}
 
   async function loadTextures(){
     // Placeholder
