@@ -2,64 +2,84 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler-Mini V14.7 (Mobil)</title>
+  <title>Siedler‑Mini V14.7 (Mobil)</title>
 
-  <!-- === Grundlayout & Farben === -->
+  <!--
+    Styles:
+    - Canvas füllt den Screen
+    - HUD/Buttons/Overlay
+    - Debug/Diag + Toast
+  -->
   <style>
     :root{
       color-scheme: dark;
       --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-      --gap:10px; --shadow:0 20px 60px rgba(0,0,0,.35);
+      --shadow: 0 20px 60px rgba(0,0,0,.35);
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+    html,body{height:100%;margin:0;background:var(--bg);
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
 
-    /* ===== HUD (oben links) ===== */
-    #hud{position:fixed;left:8px;right:8px;top:8px;display:flex;gap:8px;align-items:center;z-index:3}
-    .pill{background:var(--pill);border:1px solid #1e2d42;border-radius:18px;padding:8px 12px}
-    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;padding:8px 12px}
+    /* === WICHTIG: Zeichenfläche ===
+       - echtes <canvas id="game"> (kein DIV!)
+       - CSS‑Größe (width/height) = sichtbar, JS setzt die Pixelgröße (width/height Attribute)
+    */
+    canvas#game{
+      position:fixed; inset:0;
+      width:100%; height:100%;
+      display:block; touch-action:none; z-index:0;
+      background:transparent;
+    }
+
+    /* ===== HUD ===== */
+    #hudTop{position:fixed;left:0;right:0;top:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+      padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3}
+    .pill{background:#0f1b29;border:1px solid #1b2a40;border-radius:18px;color:#cfe3ff;
+      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+
+    /* Tools links */
+    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:3}
+    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
+      font-size:15px;padding:8px 12px}
+    .btn.active{outline:2px solid #2f7de1}
     .btn.ok{background:var(--ok);border-color:#0a6129}
     .btn.danger{background:var(--warn);border-color:#752020}
 
-    /* ===== Tool-Buttons (links) ===== */
-    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:3}
-    #tools .btn.active{outline:2px solid #3e7fff}
-
-    /* ===== HUD Buttons (rechts) ===== */
+    /* Buttons rechts */
     #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;z-index:3}
 
-    /* ===== Canvas als Spielfläche ===== */
-    #game{position:fixed;inset:0;display:block;touch-action:none;z-index:0}
-
-    /* ===== Start-Overlay ===== */
-    #startOverlay{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;pointer-events:auto;z-index:2}
-    #startCard{background:var(--panel);border:1px solid #20324a;border-radius:14px;
-      width:min(860px,94vw);margin:0 0 24px 0;padding:16px 18px 14px;box-shadow:var(--shadow)}
-    #startCard h3{margin:0 0 10px}
-    #startCard p{margin:8px 0;color:var(--muted)}
-    #startBtns{display:flex;gap:10px;margin-top:10px}
-
-    /* ===== Debug & Toast ===== */
-    #diag{position:fixed;left:8px;bottom:8px;right:8px;background:#0a1424;border:1px solid #20324a;
-      border-radius:10px;padding:10px;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;display:none;z-index:4;white-space:pre-wrap}
-    #toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);background:#0a1424;border:1px solid #20324a;
-      padding:8px 12px;border-radius:10px;display:none;z-index:5}
-
-    @media (max-width:480px){
-      #tools{top:56px}
-      #hudRight{top:56px}
+    /* Start-Overlay (unten, nicht blockierend) */
+    #startOverlay{
+      position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;
+      pointer-events:auto; z-index:2;
     }
+    #startCard{
+      background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
+      width:min(820px,94vw);margin:0 12px 24px; padding:18px 18px 14px;box-shadow:var(--shadow);
+    }
+    #startCard h3{margin:0 0 10px;font-size:22px}
+    #startCard p{margin:8px 0;color:var(--muted)}
+    #startBtns{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+
+    /* Debug/Diag & Toast */
+    #diag{position:fixed;left:8px;bottom:8px;right:8px;max-height:40vh;overflow:auto;
+      background:#0c1320cc;border:1px solid #21334d;color:#cfe3ff;border-radius:10px;
+      font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:10px;display:none; z-index:4}
+    #toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);
+      background:#0c1320cc;border:1px solid #21334d;color:#cfe3ff;border-radius:10px;
+      padding:8px 12px; display:none; z-index:5}
   </style>
 </head>
 <body>
 
-  <!-- === HUD Oben (Ressourcenanzeige) === -->
-  <div id="hud" aria-label="HUD">
+  <!-- === Zeichenfläche (Game Canvas) === -->
+  <canvas id="game" aria-label="Spielbrett"></canvas>
+
+  <!-- === HUD oben === -->
+  <div id="hudTop" aria-label="Ressourcen & Status">
     <div class="pill">Tool: <span id="hudTool">Zeiger</span></div>
     <div class="pill">Zoom <span id="hudZoom">1.00x</span></div>
     <div class="pill">🌲 Holz <span id="hudWood">0</span></div>
@@ -67,16 +87,9 @@
     <div class="pill">🌿 Nahrung <span id="hudFood">0</span></div>
     <div class="pill">🪙 Gold <span id="hudGold">0</span></div>
     <div class="pill">🍞 Träger <span id="hudCar">0</span></div>
-
-    <!-- Buttons rechts oben -->
-    <div id="hudRight">
-      <button id="btnCenter" class="btn">Zentrieren</button>
-      <button id="btnDebug" class="btn">Debug</button>
-      <button id="btnFsTop" class="btn">Vollbild</button>
-    </div>
   </div>
 
-  <!-- === Tool Buttons (links) === -->
+  <!-- === Tools links === -->
   <div id="tools" aria-label="Werkzeuge">
     <button class="btn active" data-tool="pointer">Zeiger</button>
     <button class="btn" data-tool="road">Straße</button>
@@ -86,29 +99,39 @@
     <button class="btn" data-tool="erase">Abriss</button>
   </div>
 
-  <!-- === Spielfeld (Canvas) === -->
-  <canvas id="game" aria-label="Spielbrett"></canvas>
+  <!-- === Buttons rechts === -->
+  <div id="hudRight" aria-label="Aktionen">
+    <button id="btnCenter" class="btn">Zentrieren</button>
+    <button id="btnDebug" class="btn">Debug</button>
+    <button id="btnFsTop" class="btn">Vollbild</button>
+  </div>
 
-  <!-- === Start Overlay (erste Anzeige beim Laden) === -->
+  <!-- === Start‑Overlay (Infokarte + Buttons) === -->
   <div id="startOverlay">
     <div id="startCard">
-      <h3>Siedler-Mini V14.7 (Mobile)</h3>
-      <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger-Tool</i>) · <b>2 Finger / Scroll</b> = Zoomen · Tap = bauen (wenn ein Bau-Tool aktiv ist).</p>
-      <p>Terrain/Straßen/Gebäude-Texturen werden automatisch aus <code>assets/tex/**</code> geladen (Dateiendung egal).</p>
+      <h3>Siedler‑Mini V14.7 (Mobile)</h3>
+      <p><b>1 Finger</b> = Karte verschieben (nur im <i>Zeiger‑Tool</i>) ·
+         <b>2 Finger / Scroll</b> = Zoomen · Tap = bauen (wenn ein Bau‑Tool aktiv ist).</p>
+      <p>Textures werden automatisch aus <code>assets/tex/**</code> geladen. Dateiendung ist egal (PNG/JPEG, Groß/Klein).</p>
       <div id="startBtns">
         <button id="btnStart" class="btn ok">Start</button>
         <button id="btnFs" class="btn">Vollbild</button>
-        <button id="btnReset" class="btn danger">Reset</button>
         <button id="btnCenter2" class="btn">Zentrieren</button>
+        <button id="btnReset" class="btn danger">Reset</button>
       </div>
     </div>
   </div>
 
-  <!-- === Debug / Toast Anzeige === -->
-  <pre id="diag"></pre>
+  <!-- === Debug/Diag & Toast === -->
+  <div id="diag"></div>
   <div id="toast"></div>
 
-  <!-- === Einstieg ins Spiel (Bootloader) === -->
-  <script type="module" src="./boot.js?v=147-dev"></script>
+  <!-- === Scripts ===
+       - boot.js verdrahtet DOM ↔ game.js
+       - game.js enthält: Asset‑Loader (endungslos), Pan/Zoom, Bauen, Auto‑Road‑Tiles,
+         Connectivity, Produktion & Träger (Punkt), Terrain‑Tiles, usw.
+       - Weitere optionale Module (Sprites/Audio) sind in boot.js bereits vorbereitet (auskommentiert).
+  -->
+  <script type="module" src="./boot.js?v=147b2"></script>
 </body>
 </html>
