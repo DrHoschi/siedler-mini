@@ -10,26 +10,26 @@
 Prüft, ob deine Hauptskripte korrekt geladen wurden.
 Reihenfolge: erst asset.js, dann map-runtime.js
 -->
-<!--
+
 <script src="./core/asset.js"
         onload="console.log('✅ asset.js geladen')"
         onerror="console.error('❌ asset.js fehlt')"></script>
 <script src="./tools/map-runtime.js"
         onload="console.log('✅ map-runtime.js geladen')"
         onerror="console.error('❌ map-runtime.js fehlt')"></script>
--->
+
 
 <!--
 2️⃣ Globaler Error-Logger
 Fängt alle JavaScript-Fehler ab und zeigt sie in der Konsole an.
 -->
-<!--
+
 <script>
   window.addEventListener("error", function (e) {
     console.error("🔥 Fehler:", e.message, "bei", e.filename, "Zeile", e.lineno);
   });
 </script>
--->
+
 
 <!--
 3️⃣ Performance-Logger
@@ -49,7 +49,7 @@ Misst die Gesamt-Ladezeit der Seite.
 Prüft, ob bestimmte Dateien erreichbar sind.
 Liste im checkAssets([...]) kannst du selbst anpassen.
 -->
-<!--
+
 <script>
   async function checkAssets(files) {
     for (let f of files) {
@@ -72,14 +72,14 @@ Liste im checkAssets([...]) kannst du selbst anpassen.
     "./assets/sprites.png"    // Beispielsprites
   ]);
 </script>
--->
+
 
 <!--
 5️⃣ Ordnerstruktur-Logger
 Geht deine vorgegebene Struktur durch und meldet,
 ob die Dateien vorhanden sind.
 -->
-<!--
+
 <script>
   const folders = {
     "core": ["asset.js"],
@@ -97,7 +97,7 @@ ob die Dateien vorhanden sind.
     });
   }
 </script>
--->
+
 
 <!--
 6️⃣ Map-Loader Debug
