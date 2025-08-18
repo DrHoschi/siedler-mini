@@ -1,13 +1,8 @@
-/* boot.js — UI & Start, lädt game.js dynamisch (robust, iOS-safe)
-   V15.2t-robust
-*/
-let game;
-try {
-  const m = await import('./game.js?v=15.2t');
-  game = m.game;
-} catch (e) {
-  console.error('[boot] game.js Import fehlgeschlagen:', e);
-}
+/* boot.js — UI & Start, lädt game.js robust (V15.2t) */
+import * as GameMod from './game.js?v=15.2t';
+
+// robustes Resolve: named, default, oder Modul selbst
+const game = (GameMod && (GameMod.game || GameMod.default)) || GameMod;
 
 const $ = (s)=>document.querySelector(s);
 const ui = {
@@ -24,80 +19,71 @@ const ui = {
   hudTool: $("#hudTool"),
 };
 
-function safe(fn, name){
-  try { return fn(); } catch(e){ console.error('[boot:'+name+']', e); }
-}
-
-function startGameNow(){
-  if (!game || !ui.canvas) { console.warn('[boot] game/canvas fehlt'); return; }
-  // Startkarte weg
-  if (ui.startCard) ui.startCard.style.display = "none";
-  // Spiel starten
-  safe(()=>game.startGame({
-    canvas: ui.canvas,
-    onHUD: (k,v)=>{
-      if (k==="Zoom" && ui.hudZoom) ui.hudZoom.textContent = v;
-      if (k==="Tool" && ui.hudTool) ui.hudTool.textContent = v;
-    }
-  }), 'startGame');
+// Mini-Overlay für sofortige Fehlersichtbarkeit (statt nur Konsole)
+function ensure(fn, msg){
+  try { return fn(); } catch(e){
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:999999;background:#2b1a1a;color:#ffdada;border:1px solid #6a2d2d;border-radius:8px;padding:8px 10px;font:13px system-ui';
+    box.textContent = 'boot.js Fehler: ' + msg;
+    document.body.appendChild(box);
+    console.error('[boot.js]', msg, e);
+    return null;
+  }
 }
 
 function wireUI(){
-  // Button-Handler
-  ui.btnStart?.addEventListener("click", startGameNow);
+  if (!ui.btnStart) return;
+
+  ui.btnStart.addEventListener("click", ()=>{
+    if (!game || typeof game.startGame !== 'function'){
+      ensure(()=>{ throw new Error('game.startGame nicht gefunden'); }, 'game.startGame fehlt – stimmt der Export in game.js?');
+      return;
+    }
+    ui.startCard.style.display = "none";
+    game.startGame({
+      canvas: ui.canvas,
+      onHUD: (k,v)=>{
+        if (k==="Zoom" && ui.hudZoom) ui.hudZoom.textContent = v;
+        if (k==="Tool" && ui.hudTool) ui.hudTool.textContent = v;
+      }
+    });
+  });
+
+  ui.btnReset?.addEventListener("click", ()=> location.reload());
 
   function goFS(){
     const el = document.documentElement;
     const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    try { req && req.call(el); } catch(e){ console.warn('[boot] fullscreen:', e); }
+    if (req) req.call(el);
   }
   ui.btnFs?.addEventListener("click", goFS);
   ui.btnFull?.addEventListener("click", goFS);
 
-  ui.btnReset?.addEventListener("click", ()=> location.reload());
-  ui.btnCenter?.addEventListener("click", ()=> safe(()=>game?.center?.(), 'center'));
-  ui.btnDebug?.addEventListener("click", ()=> {
-    // öffnet dein debug-Overlay, blockiert nicht die UI
-    try { window.__debugBox?.classList.toggle('open'); } catch(e){/*noop*/ }
-  });
+  ui.btnCenter?.addEventListener("click", ()=> game?.center?.());
+  ui.btnDebug?.addEventListener("click", ()=> game?.toggleDebug?.());
 
-  // Tools
+  // Tool-Leiste
   ui.tools?.addEventListener("click", (e)=>{
     const btn = e.target.closest("button[data-tool]");
     if (!btn) return;
     const name = btn.dataset.tool;
-    safe(()=>game?.setTool?.(name), 'setTool');
+    game?.setTool?.(name);
+    // aktiv markieren
     for (const b of ui.tools.querySelectorAll("button[data-tool]")){
       b.classList.toggle("active", b===btn);
     }
+    if (ui.hudTool) ui.hudTool.textContent = name;
   });
 }
+wireUI();
 
-// Public API (Fallbacks aus index.html)
-if (typeof window !== 'undefined') {
-  window.gameAPI = {
-    start: () => startGameNow(),
-    center: () => safe(()=>game?.center?.(), 'center'),
-    setTool: (n) => safe(()=>game?.setTool?.(n), 'setTool'),
-    fullscreen: () => {
-      const el = document.documentElement;
-      try {
-        if (!document.fullscreenElement) { (el.requestFullscreen||el.webkitRequestFullscreen)?.call(el); }
-        else { (document.exitFullscreen||document.webkitExitFullscreen)?.call(document); }
-      } catch(e){ console.warn('[boot] fullscreen api', e); }
-    },
-    toggleDebug: () => { try { window.__debugBox?.classList.toggle('open'); } catch(e){}; },
-    reset: () => { try { location.reload(); } catch(e){}; }
-  };
+// Sanity: sofort melden, wenn Export nicht passt
+window.__BOOT_OK__ = !!(game && typeof game.startGame === 'function');
+if (!window.__BOOT_OK__){
+  const keys = Object.keys(GameMod || {});
+  console.error('[boot.js] game.js geladen, aber Export passt nicht. Verfügbare Keys:', keys);
+  ensure(()=>{ throw new Error('Import/Export-Mismatch in game.js'); }, 'Import/Export-Mismatch in game.js (siehe Konsole)');
 }
 
-function domReady(cb){
-  if (document.readyState === 'complete' || document.readyState === 'interactive') cb();
-  else document.addEventListener('DOMContentLoaded', cb, {once:true});
-}
-domReady(wireUI);
-
-// Sanity-Log – hilft sofort am iPhone
-console.log('[boot] wired:',
-  !!ui.btnStart, !!ui.btnFull, !!ui.btnFs, !!ui.btnCenter, !!ui.btnDebug, !!ui.tools,
-  'game:', !!game);
+// (Optional) global nutzbar für Tests
+window.game = game;
