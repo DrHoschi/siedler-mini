@@ -10,6 +10,7 @@
     Styles:
     - Canvas füllt den Screen
     - HUD/Buttons/Overlay
+    - Baumenü-Dock + ActionBar (responsive)
     - Debug/Diag + Toast
   -->
   <style>
@@ -25,7 +26,7 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial
     }
 
-    /* === WICHTIG: Zeichenfläche === */
+    /* === Zeichenfläche === */
     canvas#game{
       position:fixed; inset:0;
       width:100%; height:100%;
@@ -33,7 +34,7 @@
       background:transparent;
     }
 
-    /* ===== HUD ===== */
+    /* ===== HUD oben ===== */
     #hudTop{
       position:fixed; left:0; right:0; top:0;
       display:flex; flex-wrap:wrap; gap:8px; align-items:center;
@@ -83,8 +84,19 @@
     /* Aktives Tool */
     #buildList .btn.active { outline: 2px solid #2f7de1; }
 
-    /* Start-Overlay (unten, nicht blockierend) */
-    #startOverlay{ position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; pointer-events:auto; z-index:2; }
+    /* === Start-Overlay (liegt über allem) === */
+    #startOverlay{
+      position:fixed; left:0; right:0; bottom:0;
+      display:flex; justify-content:center;
+      z-index:50;               /* vorher 2 → jetzt vorne */
+      pointer-events:auto;
+    }
+    /* leichter Hintergrund-Scrim */
+    #startOverlay::before{
+      content:""; position:fixed; inset:0;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(2px);
+      z-index:-1;
+    }
     #startCard{
       background:var(--panel); border:1px solid #20324a; border-radius:14px; color:var(--text);
       width:min(820px,94vw); margin:0 12px 24px; padding:18px 18px 14px; box-shadow:var(--shadow);
@@ -93,7 +105,7 @@
     #startCard p{margin:8px 0; color:var(--muted)}
     #startBtns{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap}
 
-    /* Debug/Diag & Toast */
+    /* === Debug/Diag & Toast === */
     #diag{
       position:fixed; left:8px; bottom:8px; right:8px; max-height:40vh; overflow:auto;
       background:#0c1320cc; border:1px solid #21334d; color:#cfe3ff; border-radius:10px;
@@ -103,6 +115,13 @@
       position:fixed; left:50%; top:16px; transform:translateX(-50%);
       background:#0c1320cc; border:1px solid #21334d; color:#cfe3ff; border-radius:10px;
       padding:8px 12px; display:none; z-index:5
+    }
+
+    /* === Beim Start: UI-Elemente darunter verstecken === */
+    body.has-start #buildDock,
+    body.has-start #actionBar,
+    body.has-start #debugToolsDock {  /* Debug-Dock unten */
+      display: none !important;
     }
 
     /* Kleine Sicherheitsabstände */
@@ -157,10 +176,10 @@
       <p>Textures werden automatisch aus <code>assets/tex/**</code> geladen.
          Dateiendung ist egal (PNG/JPEG, Groß/Klein).</p>
       <div id="startBtns">
-        <button id="btnStart" class="btn ok">Start</button>
-        <button id="btnFs" class="btn">Vollbild</button>
-        <button id="btnCenter2" class="btn">Zentrieren</button>
-        <button id="btnReset" class="btn danger">Reset</button>
+        <button id="btnStart"  class="btn ok">Start</button>
+        <button id="btnFs"     class="btn">Vollbild</button>
+        <button id="btnCenter2"class="btn">Zentrieren</button>
+        <button id="btnReset"  class="btn danger">Reset</button>
       </div>
     </div>
   </div>
@@ -169,30 +188,30 @@
   <div id="diag"></div>
   <div id="toast"></div>
 
-  <!-- === kleines UI-Skript für das Baumenü (nur Toggle & Active-Style) === -->
-  <script>
-    (function(){
-      const toggle = document.getElementById('buildToggle');
-      const list   = document.getElementById('buildList');
-      if (toggle && list) {
-        toggle.addEventListener('click', () => {
-          const show = list.hasAttribute('hidden');
-          if (show) list.removeAttribute('hidden'); else list.setAttribute('hidden','');
-        });
-        // aktive Tool-Markierung
-        list.addEventListener('click', (e)=>{
-          const b = e.target.closest('button[data-tool]'); if (!b) return;
-          list.querySelectorAll('.btn').forEach(x=>x.classList.remove('active'));
-          b.classList.add('active');
-        });
-      }
-    })();
-  </script>
-
   <!-- ======================================================
        SCRIPTS – IMMER am Ende vor </body> einbinden
+       Reihenfolge:
+       1) boot.js (verdrahtet DOM ↔ game.js, startet das Spiel)
+       2) debug-tools.js (Dock + In-Game-Log-Overlay)
+       Hinweis: Seite über HTTP starten (kein file://)
   ======================================================= -->
-  <script type="module" src="./boot.js?v=147b2"></script>
-  <script type="module" src="./tools/debug-tools.js?v=5"></script>
+  <script type="module" src="./boot.js?v=147b3"></script>
+  <script type="module" src="./tools/debug-tools.js?v=6"></script>
+
+  <!-- Mini-Helper: steuert die Start-UI rein/raus (ohne boot.js ändern zu müssen) -->
+  <script>
+    // Start: Overlay sichtbar → UI aus
+    document.body.classList.add('has-start');
+
+    // Start klick: UI an
+    document.getElementById('btnStart')?.addEventListener('click', () => {
+      document.body.classList.remove('has-start');
+    });
+
+    // Reset klick: UI wieder aus
+    document.getElementById('btnReset')?.addEventListener('click', () => {
+      document.body.classList.add('has-start');
+    });
+  </script>
 </body>
 </html>
