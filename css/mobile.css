@@ -1,4 +1,40 @@
+/* ========== MOBILE-Styles ==========
+   Gilt für Smartphones (Android & iOS).
+   Desktop-Defaults bleiben in index.html, nur die Abweichungen stehen hier. */
+
+/* Buttons und Pills etwas größer auf Touch */
 html.mobile .btn{ padding:12px 14px; font-size:16px; }
 html.mobile .pill{ font-size:13px; padding:6px 9px; }
+
+/* Positionen leicht tiefer als Desktop */
 html.mobile #tools{ top:56px; }
-html.mobile #hudRight{ top:56px; }
+
+/* ✅ Bottom-Bar:
+   Wir „recyceln“ #hudRight als fixierte Leiste am unteren Rand.
+   Sie bleibt immer sichtbar, unabhängig von Hoch-/Querformat.
+   Safe-Area (Notch/Home-Indicator) wird berücksichtigt. */
+html.mobile #hudRight{
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px));
+  top: auto;                   /* überschreibt Desktop-Top-Position */
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: rgba(15, 27, 41, 0.92); /* dunkler Balken */
+  border-top: 1px solid #1b2a40;
+  z-index: 1000;
+  backdrop-filter: saturate(120%) blur(6px);
+}
+
+/* Der Toast erscheint auf Mobil dezent über der Bottom-Bar */
+html.mobile #toast{
+  top: auto !important;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  left: 50%; transform: translateX(-50%);
+  display: none;               /* wird per JS eingeblendet */
+}
+
+/* Debug/Diag darf über der Bottom-Bar liegen */
+html.mobile #diag{ z-index: 1200; }
