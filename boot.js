@@ -1,40 +1,131 @@
-// Siedler-Mini V14.7-hf2 (Mobil) — BOOT/GLUE
-// Verdrahtet DOM ↔ game.js, Debug/Diag, Fullscreen, Start-Overlay, Pfad-Checker-Toggle.
-
+// Siedler-Mini V14.7-hf2 (Mobil) — BOOT/GLUE // Verdrahtet DOM ↔ game.js, Debug/Diag, Fullscreen, Start-Overlay, Pfad-Checker-Toggle.
 import { game } from './game.js';
 
 (function boot(){
+
+  // ------------------------------------------------------------
+  // ICONS: SpriteSheet + Atlas laden und auf Baumenü-Buttons malen
+  // ------------------------------------------------------------
+  const ICONS_PATH = './assets/icons';              // <- falls du woanders abgelegt hast, hier anpassen
+  const ICONS_JSON = `${ICONS_PATH}/icons_spritesheet_64.json`;
+  const ICONS_IMG  = `${ICONS_PATH}/icons_spritesheet_64.png`;
+
+  // Zuordnung Tool -> Iconname im Atlas (fallback bleibt Text)
+  const TOOL_ICON = {
+    'pointer':   'cursor',
+    'road':      'path_stones',
+    'hq':        'hq_palisade',
+    'woodcutter':'hand_axe',       // alternativ: 'woodcutter' (Einheit)
+    'depot':     'ring',           // Hinweis: in unserem Atlas ist das das Fass (Bezeichner "ring")
+    'bulldoze':  'red_x'
+  };
+
+  let _iconAtlas = null;
+  let _iconImg   = null;
+
+  async function loadIcons(){
+    try{
+      const atlas = await (await fetch(ICONS_JSON, {cache:'no-store'})).json();
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = ICONS_IMG;
+      await new Promise(res => img.onload = res);
+      _iconAtlas = atlas;
+      _iconImg   = img;
+    }catch(err){
+      console.warn('Icons konnten nicht geladen werden:', err);
+    }
+  }
+
+  // erzeugt ein <canvas> 24×24 / 28×28 u. zeichnet das Icon hinein
+  function makeIconCanvas(name, px=24){
+    if (!_iconAtlas || !_iconImg) return null;
+    const f = _iconAtlas.frames[name];
+    if (!f) return null;
+
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = px;
+    const cx = cv.getContext('2d');
+    cx.imageSmoothingEnabled = true;
+    cx.imageSmoothingQuality = 'high';
+    cx.drawImage(_iconImg, f.x, f.y, f.w, f.h, 0, 0, px, px);
+    cv.className = 'btn-ico';
+    cv.style.width  = px + 'px';
+    cv.style.height = px + 'px';
+    cv.style.marginRight = '6px';
+    cv.style.verticalAlign = 'middle';
+    return cv;
+  }
+
+  // DOM helpers
   const $  = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
   // DOM refs (vorhandene IDs aus deiner index.html)
-  const canvas      = $('#game');
-  const hudZoom     = $('#hudZoom');
-  const hudTool     = $('#hudTool');
-  const hudWood     = $('#hudWood');
-  const hudStone    = $('#hudStone');
-  const hudFood     = $('#hudFood');
-  const hudGold     = $('#hudGold');
-  const hudCar      = $('#hudCar');
-  const diag        = $('#diag') || (()=>{ const d=document.createElement('pre'); d.id='diag'; d.style.display='none'; d.style.position='fixed'; d.style.left='8px'; d.style.bottom='8px'; d.style.maxWidth='70vw'; d.style.maxHeight='40vh'; d.style.overflow='auto'; d.style.background='rgba(0,0,0,.55)'; d.style.color='#cfe3ff'; d.style.padding='8px 10px'; d.style.border='1px solid #1e2d42'; d.style.borderRadius='8px'; d.style.zIndex='9999'; document.body.appendChild(d); return d; })();
+  const canvas   = $('#game');
+  const hudZoom  = $('#hudZoom');
+  const hudTool  = $('#hudTool');
+  const hudWood  = $('#hudWood');
+  const hudStone = $('#hudStone');
+  const hudFood  = $('#hudFood');
+  const hudGold  = $('#hudGold');
+  const hudCar   = $('#hudCar');
+
+  const diag = $('#diag') || (()=>{
+    const d=document.createElement('pre');
+    d.id='diag';
+    d.style.display='none';
+    d.style.position='fixed';
+    d.style.left='8px';
+    d.style.bottom='8px';
+    d.style.maxWidth='70vw';
+    d.style.maxHeight='40vh';
+    d.style.overflow='auto';
+    d.style.background='rgba(0,0,0,.55)';
+    d.style.color='#cfe3ff';
+    d.style.padding='8px 10px';
+    d.style.border='1px solid #1e2d42';
+    d.style.borderRadius='8px';
+    d.style.zIndex='9999';
+    document.body.appendChild(d);
+    return d;
+  })();
 
   // Start-Overlay & Buttons
   const startOverlay = $('#startOverlay');
-  const btnStart     = $('#btnStart');
-  const btnReset     = $('#btnReset');
-  const btnFs        = $('#btnFs');
-  const btnFsTop     = $('#btnFsTop');
-  const btnFsSide    = $('#btnFsSide');
-  const btnDebug     = $('#btnDebug') || addTopBtn('btnDebug', 'Debug');
-  const btnCenter    = $('#btnCenter') || addTopBtn('btnCenter', 'Zentrieren');
-  const btnCenter2   = $('#btnCenter2'); // optional vorhanden
+  const btnStart = $('#btnStart');
+  const btnReset = $('#btnReset');
+  const btnFs = $('#btnFs');
+  const btnFsTop = $('#btnFsTop');
+  const btnFsSide = $('#btnFsSide');
+
+  const btnDebug  = $('#btnDebug')  || addTopBtn('btnDebug',  'Debug');
+  const btnCenter = $('#btnCenter') || addTopBtn('btnCenter', 'Zentrieren');
+  const btnCenter2 = $('#btnCenter2'); // optional vorhanden
 
   // ► Neuer Pfad-Checker Button (falls nicht vorhanden, wird er erzeugt)
   let btnPath = $('#btnPath');
   if (!btnPath) btnPath = addTopBtn('btnPath', 'Pfad');
 
   // simple Toast
-  const toast = $('#toast') || (()=>{ const t=document.createElement('div'); t.id='toast'; t.style.position='fixed'; t.style.left='50%'; t.style.bottom='14px'; t.style.transform='translateX(-50%)'; t.style.background='#122131'; t.style.border='1px solid #1e2d42'; t.style.borderRadius='10px'; t.style.color='#cfe3ff'; t.style.padding='8px 12px'; t.style.boxShadow='0 10px 40px rgba(0,0,0,.35)'; t.style.display='none'; t.style.zIndex='9999'; document.body.appendChild(t); return t; })();
+  const toast = $('#toast') || (()=>{
+    const t=document.createElement('div');
+    t.id='toast';
+    t.style.position='fixed';
+    t.style.left='50%';
+    t.style.bottom='14px';
+    t.style.transform='translateX(-50%)';
+    t.style.background='#122131';
+    t.style.border='1px solid #1e2d42';
+    t.style.borderRadius='10px';
+    t.style.color='#cfe3ff';
+    t.style.padding='8px 12px';
+    t.style.boxShadow='0 10px 40px rgba(0,0,0,.35)';
+    t.style.display='none';
+    t.style.zIndex='9999';
+    document.body.appendChild(t);
+    return t;
+  })();
 
   function addTopBtn(id, label){
     // rechts oben Sammelleiste suchen/erstellen
@@ -59,9 +150,7 @@ import { game } from './game.js';
   }
 
   // --- Diagnose/Debug helpers ---
-  const state = {
-    debugVisible: false
-  };
+  const state = { debugVisible: false };
 
   function logDiag(lines){
     if (!state.debugVisible) return;
@@ -73,7 +162,6 @@ import { game } from './game.js';
     clearTimeout(showToast._t);
     showToast._t = setTimeout(()=> toast.style.display='none', 4200);
   }
-
   // Globale JS-Fehler → Toast
   window.addEventListener('error', (e)=>{
     showToast('JS-Fehler: ' + (e.message || e.error || e));
@@ -81,7 +169,6 @@ import { game } from './game.js';
   window.addEventListener('unhandledrejection', (e)=>{
     showToast('Promise-Fehler: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
   });
-
   // Debug-Event von game.js (siedler:log) → Diag
   const recent = [];
   window.addEventListener('siedler:log', e=>{
@@ -104,37 +191,22 @@ import { game } from './game.js';
   }
   async function exitFullscreen(){
     try{
-      if (document.exitFullscreen)      await document.exitFullscreen();
+      if (document.exitFullscreen) await document.exitFullscreen();
       else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
     }catch{}
   }
-
   function hideStart(){ if (startOverlay) startOverlay.style.display='none'; }
   function showStart(){ if (startOverlay) startOverlay.style.display='flex'; }
 
   // --- Buttons wiring ---
-  if (btnDebug) btnDebug.addEventListener('click', ()=>{
-    state.debugVisible = !state.debugVisible;
-    diag.style.display = state.debugVisible ? 'block' : 'none';
-    if (state.debugVisible) logDiag(['Debug an ✓']);
-  });
-
+  if (btnDebug)  btnDebug.addEventListener('click', ()=>{ state.debugVisible = !state.debugVisible; diag.style.display = state.debugVisible ? 'block' : 'none'; if (state.debugVisible) logDiag(['Debug an ✓']); });
   if (btnCenter) btnCenter.addEventListener('click', ()=> game.center());
   if (btnCenter2) btnCenter2.addEventListener('click', ()=> game.center());
-
   if (btnFs)     btnFs.addEventListener('click', ()=> requestFullscreen(document.documentElement));
   if (btnFsTop)  btnFsTop.addEventListener('click', ()=> requestFullscreen(document.documentElement));
   if (btnFsSide) btnFsSide.addEventListener('click', ()=> requestFullscreen(document.documentElement));
-
-  if (btnReset) btnReset.addEventListener('click', ()=>{
-    showToast('Zurückgesetzt – starte neu.');
-    showStart();
-  });
-
-  if (btnStart) btnStart.addEventListener('click', ()=>{
-    try{ hideStart(); startGameNow(); }
-    catch(err){ showToast('Start fehlgeschlagen: ' + err.message); showStart(); }
-  });
+  if (btnReset)  btnReset.addEventListener('click', ()=>{ showToast('Zurückgesetzt – starte neu.'); showStart(); });
+  if (btnStart)  btnStart.addEventListener('click', ()=>{ try{ hideStart(); startGameNow(); } catch(err){ showToast('Start fehlgeschlagen: ' + err.message); showStart(); } });
 
   // ► Pfad-Checker Toggle
   if (btnPath) {
@@ -148,19 +220,41 @@ import { game } from './game.js';
   // -------------------------------------------------------------------
   // NEU: Baumenü-Integration (#buildDock / #buildList) statt #tools
   // -------------------------------------------------------------------
-  const buildToggle = $('#buildToggle');         // Button "Baumenü"
-  const buildList   = $('#buildList');           // Container mit Tool-Buttons
+  const buildToggle = $('#buildToggle');   // Button "Baumenü"
+  const buildList   = $('#buildList');     // Container mit Tool-Buttons
+
   if (buildToggle && buildList){
     // Ein-/Ausklappen
     buildToggle.addEventListener('click', () => {
       const show = buildList.hasAttribute('hidden');
-      if (show) buildList.removeAttribute('hidden'); else buildList.setAttribute('hidden','');
+      if (show) buildList.removeAttribute('hidden');
+      else buildList.setAttribute('hidden','');
     });
   }
 
-  // ALT (entfernt): const toolButtons  = $$('#tools .btn');
+  // ALT (entfernt): const toolButtons = $$('#tools .btn');
   // NEU: Tool-Buttons kommen aus #buildList
   const toolButtons = buildList ? Array.from(buildList.querySelectorAll('.btn')) : [];
+
+  // Icons nachladen und Buttons dekorieren
+  (async ()=>{
+    await loadIcons();
+    if (_iconAtlas && _iconImg && toolButtons.length){
+      toolButtons.forEach(b=>{
+        const tool = b.getAttribute('data-tool');
+        const iconName = TOOL_ICON[tool];
+        if (!iconName) return;
+        // noch keinen Icon-Canvas drin?
+        if (!b.querySelector('canvas.btn-ico')){
+          const cv = makeIconCanvas(iconName, 24); // 24px fürs UI
+          if (cv){
+            // Text behalten, Icon vorne dran
+            b.prepend(cv);
+          }
+        }
+      });
+    }
+  })();
 
   // Tools (Baumenü)
   toolButtons.forEach(b=>{
@@ -170,11 +264,13 @@ import { game } from './game.js';
       const tool = b.getAttribute('data-tool');
       game.setTool(tool);
       if (hudTool){
-        hudTool.textContent = tool==='pointer' ? 'Zeiger' :
-                              tool==='road' ? 'Straße' :
-                              tool==='hq' ? 'HQ' :
-                              tool==='woodcutter' ? 'Holzfäller' :
-                              tool==='depot' ? 'Depot' : 'Abriss';
+        hudTool.textContent = (
+          tool === 'pointer'    ? 'Zeiger' :
+          tool === 'road'       ? 'Straße' :
+          tool === 'hq'         ? 'HQ' :
+          tool === 'woodcutter' ? 'Holzfäller' :
+          tool === 'depot'      ? 'Depot' : 'Abriss'
+        );
       }
     });
   });
@@ -192,24 +288,24 @@ import { game } from './game.js';
   // Klick-Echo in Diag
   document.addEventListener('pointerdown', (e)=>{
     if (!state.debugVisible) return;
-    const s = `click: ${e.clientX|0}×${e.clientY|0}  type=${e.pointerType}`;
+    const s = `click: ${e.clientX|0}×${e.clientY|0} type=${e.pointerType}`;
     const lines = diag.textContent.split('\n').filter(Boolean);
     lines.push(s);
     logDiag(lines.slice(-12));
   }, {passive:true});
 
-  // Start Game glue
+  // Start Game
   function startGameNow(){
     game.startGame({
       canvas,
       onHUD: (k,v)=>{
-        if (k === 'Zoom' && hudZoom) hudZoom.textContent = v;
-        if (k === 'Tool' && hudTool) hudTool.textContent = v;
-        if (k === 'Wood' && hudWood) hudWood.textContent = v;
-        if (k === 'Stone' && hudStone) hudStone.textContent = v;
-        if (k === 'Food' && hudFood) hudFood.textContent = v;
-        if (k === 'Gold' && hudGold) hudGold.textContent = v;
-        if (k === 'Carriers' && hudCar) hudCar.textContent = v;
+        if (k === 'Zoom'   && hudZoom)  hudZoom.textContent  = v;
+        if (k === 'Tool'   && hudTool)  hudTool.textContent  = v;
+        if (k === 'Wood'   && hudWood)  hudWood.textContent  = v;
+        if (k === 'Stone'  && hudStone) hudStone.textContent = v;
+        if (k === 'Food'   && hudFood)  hudFood.textContent  = v;
+        if (k === 'Gold'   && hudGold)  hudGold.textContent  = v;
+        if (k === 'Carriers' && hudCar) hudCar.textContent   = v;
       }
     });
 
@@ -236,7 +332,6 @@ import { game } from './game.js';
   showStart();
 
   // Optional: Body-Klassen je nach Orientierung (falls du sie brauchst)
-  // (CSS funktioniert bereits über @media, das hier ist nur als Hook)
   function updateOrientationClass(){
     document.body.classList.toggle('is-portrait',  matchMedia('(orientation: portrait)').matches);
     document.body.classList.toggle('is-landscape', matchMedia('(orientation: landscape)').matches);
