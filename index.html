@@ -46,7 +46,58 @@
       background:#0f1b29; border:1px solid #1b2a40; border-radius:18px; color:#cfe3ff;
       padding:6px 10px; font-size:14px; line-height:18px; display:inline-flex; align-items:center; gap:8px
     }
+/* === Aktionsleiste (Portrait unten, Landscape rechts) === */
+#actionBar {
+  position: fixed; z-index: 3; display: flex; gap: 8px;
+}
+@media (orientation: portrait) {
+  #actionBar {
+    left: 8px; right: 8px; bottom: 8px;
+    justify-content: center; flex-wrap: wrap;
+  }
+  #actionBar .btn { min-width: 100px; }
+}
+@media (orientation: landscape) {
+  #actionBar {
+    right: 8px; top: 80px; bottom: auto; left: auto;
+    flex-direction: column; align-items: stretch;
+  }
+}
 
+/* === Baumenü (Dock links) === */
+#buildDock { position: fixed; z-index: 3; }
+@media (orientation: portrait) {
+  #buildDock { left: 8px; bottom: calc(8px + 48px); /* über der ActionBar */ }
+  #buildList {
+    position: fixed; left: 8px; right: 8px;
+    bottom: calc(8px + 48px + 40px); /* über Toggle + ActionBar */
+    background: var(--panel); border:1px solid #20324a; border-radius: 12px;
+    padding: 8px; display: flex; gap: 8px; overflow-x: auto;
+  }
+  #buildList .btn { flex: 0 0 auto; }
+}
+@media (orientation: landscape) {
+  #buildDock { left: 8px; top: 64px; }
+  #buildList {
+    position: fixed; left: 8px; top: 104px; bottom: 8px;
+    width: 140px; display: flex; flex-direction: column; gap: 8px;
+    background: transparent; border: 0; padding: 0; overflow:auto;
+  }
+}
+
+/* Toggle-Button für Baumenü */
+#buildToggle {
+  background:#0f1b29; border:1px solid #1b2a40; border-radius:12px;
+  color:#cfe3ff; font-size:15px; padding:8px 12px;
+}
+
+/* Optional: aktive Tool-Markierung */
+#buildList .btn.active { outline: 2px solid #2f7de1; }
+
+/* Kleine Sicherheitsabstände auf sehr schmalen Screens */
+@media (max-width: 360px) and (orientation: portrait) {
+  #actionBar .btn { min-width: 88px; padding: 8px 10px; }
+}
 <!-- === Baumenü (Dock) === -->
 <div id="buildDock" aria-label="Baumenü">
   <button id="buildToggle" class="btn">Baumenü</button>
