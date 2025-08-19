@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "gen:manifest": "node tools/gen-manifest.mjs",
+    "build": "npm run gen:manifest && <dein-bisheriger-build-befehl>",
+    "dev": "npm run gen:manifest && <dein-dev-server>"
+  }
+}
