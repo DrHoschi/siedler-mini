@@ -7,12 +7,10 @@
   <title>Siedler‑Mini V14.7 (Mobil)</title>
 
   <!--
-    ──────────────────────────────────────────────────────────────────────
-    BASIS-STYLE + DEBUG UI
-    - Canvas: pixelated Rendering für knackige Tiles
-    - Debug-Bar: fix am unteren Rand, Buttons für Overlays/Infos
-    - Alles minimal gehalten, damit es mobil nicht stört
-    ──────────────────────────────────────────────────────────────────────
+    Start-first Layout:
+    - Vollflächiges Hintergrundbild (./assets/Logo.PNG)
+    - Start-Overlay (oben zentriert, nicht durch Debug-Bar verdeckt)
+    - Debug-Bar bleibt unten sichtbar
   -->
   <style>
     :root{
@@ -21,21 +19,35 @@
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --dbgHeight: 56px; /* Höhe der Debug-Bar für Layout-Offset */
     }
     html,body{ height:100%; margin:0; background:var(--bg); }
-    body{ overflow:hidden; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--text); }
+    body{
+      overflow:hidden;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color:var(--text);
+    }
+
+    /* Vollflächiger Hintergrund */
+    .bg{
+      position:fixed; inset:0; z-index:0;
+      background: #0b1628 url('./assets/Logo.PNG') center center / cover no-repeat;
+      /* Fallback-Farbe bleibt, falls Bild fehlt */
+    }
 
     canvas{
-      display:block; width:100vw; height:100vh; background:var(--bg);
+      position:relative; z-index:1;
+      display:block; width:100vw; height:100vh; background:transparent;
       image-rendering: pixelated;   /* modern */
       image-rendering: crisp-edges; /* fallback */
-      touch-action:none;            /* verhindert Browser-Gesten beim Pannen/Zoomen */
+      touch-action:none;
     }
 
     /* Debug-Bar (fix unten) */
     .dbg{
-      position:fixed; left:0; right:0; bottom:0; z-index:10;
+      position:fixed; left:0; right:0; bottom:0; z-index:20;
       display:flex; gap:.5rem; align-items:center; padding:.5rem .75rem;
+      height:var(--dbgHeight);
       background:linear-gradient(180deg, rgba(15,27,41,.75), rgba(15,27,41,.95));
       border-top:1px solid var(--line);
       backdrop-filter: blur(6px);
@@ -49,11 +61,10 @@
     .dbg .pill[aria-pressed="true"]{ outline:2px solid #3b82f6; }
     .dbg .sep{ width:1px; height:1.75rem; background:var(--line); margin:0 .25rem; }
     .dbg .info{ font-size:.8rem; color:var(--muted); margin-left:auto; display:flex; gap:1rem; }
-    .dbg a{ color:var(--text); text-decoration:underline; }
 
-    /* Overlay-Panels */
+    /* Panels (Debug-Overlays) */
     .panel{
-      position:fixed; right:.75rem; bottom:3.25rem; z-index:9;
+      position:fixed; right:.75rem; bottom:calc(var(--dbgHeight) + .75rem); z-index:19;
       min-width:220px; max-width:min(90vw, 380px);
       background:var(--panel); border:1px solid var(--line); border-radius:.6rem;
       box-shadow: var(--shadow); padding:.5rem .75rem; display:none;
@@ -61,65 +72,73 @@
     .panel.show{ display:block; }
     .panel h3{ margin:.2rem 0 .6rem; font-size:1rem; font-weight:600; }
     .kv{ display:grid; grid-template-columns: auto 1fr; gap:.25rem .75rem; font-size:.85rem; }
-    .kv .k{ color:var(--muted); }
-    .kv .v{ color:var(--text); word-break:break-word; }
+    .kv .k{ color:var(--muted); } .kv .v{ color:var(--text); word-break:break-word; }
 
-    /* Start-Overlay (optional, falls du einen Start-Button willst) */
+    /* Start-Overlay: bewusst höher (40vh) statt exakt Mitte,
+       damit es nicht mit der Debug-Bar kollidiert */
     .start-overlay{
-      position:fixed; inset:0; display:none; place-items:center; background:rgba(11,22,40,.85); z-index:20;
+      position:fixed; inset:0; z-index:30; display:none;
+      align-items:flex-start; justify-content:center;
+      padding-top:clamp(40px, 40vh, 55vh); /* höher platzieren */
+      background:linear-gradient(180deg, rgba(10,18,32,.55), rgba(10,18,32,.65));
       backdrop-filter: blur(8px);
     }
-    .start-overlay.show{ display:grid; }
+    .start-overlay.show{ display:flex; }
     .start-overlay .card{
-      background:var(--panel2); border:1px solid var(--line); padding:1rem 1.25rem; border-radius:.8rem; text-align:center;
+      background:var(--panel2);
+      border:1px solid var(--line);
+      padding:1rem 1.25rem;
+      border-radius:.8rem;
       box-shadow:var(--shadow);
+      text-align:center;
+      max-width:min(92vw, 460px);
     }
-    .start-overlay .card h1{ margin:.2rem 0 .6rem; font-size:1.1rem; }
-    .start-overlay .card button{
+    .start-overlay .card h1{ margin:.2rem 0 .55rem; font-size:1.15rem; }
+    .start-overlay .card p{ margin:.25rem 0 .75rem; color:var(--muted); }
+    .start-overlay .row{ display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap; }
+    .start-overlay .btn{
       appearance:none; border:1px solid var(--line); background:var(--pill);
-      color:var(--text); padding:.55rem .9rem; border-radius:.6rem; font-weight:600; cursor:pointer;
+      color:var(--text); padding:.6rem .9rem; border-radius:.6rem; font-weight:600; cursor:pointer;
     }
+    .start-overlay .btn.warn{ border-color:#7a2828; }
   </style>
-
-  <!--
-    OPTIONALE EXTERNE DEBUG-SKRIPTE
-    - Du kannst hier z.B. stats.js (FPS-Zähler) oder andere Helfer einhängen.
-    - Standardmäßig AUSKOMMENTIERT lassen, bei Bedarf aktivieren.
-  -->
-  <!-- <script src="./tools/vendor/stats.min.js"></script> -->
 </head>
 <body>
-  <!--
-    START-OVERLAY (optional)
-    - Wenn du einen manuellen Start-Button willst (z.B. für Audio‑Unlock auf iOS),
-      lasse `data-autostart="0"`. Für Sofortstart `data-autostart="1"`.
-  -->
-  <div class="start-overlay" id="start" data-autostart="1">
+  <!-- Vollflächiges Hintergrundbild -->
+  <div class="bg" aria-hidden="true"></div>
+
+  <!-- Start-Overlay: kommt IMMER zuerst (autostart=0) -->
+  <div class="start-overlay" id="start" data-autostart="0">
     <div class="card">
       <h1>Siedler‑Mini</h1>
-      <p>Bereit? Tippe auf Start.</p>
-      <button id="btnStart">Start</button>
+      <p>Tippe auf Start. Die Karte lädt erst danach.</p>
+      <div class="row">
+        <button class="btn" id="btnStart">Start</button>
+        <button class="btn warn" id="btnReset">Reset</button>
+        <!-- Dritte Taste (Platzhalter): z. B. „Optionen“ -->
+        <button class="btn" id="btnOptions">Optionen</button>
+      </div>
     </div>
   </div>
 
-  <!-- CANVAS -->
+  <!-- Canvas (Map wird erst nach Start gezeichnet) -->
   <canvas id="game"></canvas>
 
-  <!-- DEBUG-OVERLAY: Gerätestatus, Pfade, Flags -->
+  <!-- Debug-Panel: Infos -->
   <div class="panel" id="pInfo" aria-hidden="true">
     <h3>Infos</h3>
     <div class="kv">
       <div class="k">DPR</div><div class="v" id="vDpr">–</div>
       <div class="k">Viewport</div><div class="v" id="vVp">–</div>
       <div class="k">Canvas</div><div class="v" id="vCv">–</div>
-      <div class="k">Boot</div><div class="v">./boot.js</div>
+      <div class="k">Boot</div><div class="v">./boot.js (eingebettet)</div>
       <div class="k">Map</div><div class="v">./assets/maps/map-pro.json</div>
       <div class="k">Atlas</div><div class="v">./assets/tiles/tileset.(json/png)</div>
       <div class="k">Renderer</div><div class="v">Canvas2D</div>
     </div>
   </div>
 
-  <!-- DEBUG-OVERLAY: Layer/Overlays toggles -->
+  <!-- Debug-Panel: Overlays -->
   <div class="panel" id="pLayers" aria-hidden="true">
     <h3>Overlays</h3>
     <label style="display:flex;align-items:center;gap:.5rem;margin:.25rem 0;">
@@ -133,7 +152,7 @@
     </label>
   </div>
 
-  <!-- DEBUG-BAR (fix unten) -->
+  <!-- Debug-Bar -->
   <div class="dbg" role="toolbar" aria-label="Debug-Leiste">
     <button class="pill" id="tglInfo" aria-pressed="false">ℹ️ Infos</button>
     <button class="pill" id="tglLayers" aria-pressed="false">🗺️ Overlays</button>
@@ -143,22 +162,18 @@
     <span class="sep"></span>
     <div class="info">
       <span id="lblFps">FPS: –</span>
-      <span id="lblHint">Tippe auf „Infos“/„Overlays“</span>
+      <span id="lblHint">Startfenster zuerst</span>
     </div>
   </div>
 
-  <!--
-    BOOT/GLUE
-    - Verbindet UI/Debug mit dem eigentlichen Game-Boot (boot.js).
-    - Hält sich aus der Game-Logik raus.
-  -->
+  <!-- Boot/Glue: Startfenster steuert den Start. Keine Map vor Klick! -->
   <script type="module">
     import { Assets } from './core/asset.js';
     import { SiedlerMap } from './tools/map-runtime.js';
 
-    // --- DOM refs
     const cv = document.getElementById('game');
     const ctx = cv.getContext('2d', { alpha:false });
+
     const pInfo = document.getElementById('pInfo');
     const pLayers = document.getElementById('pLayers');
     const tglInfo = document.getElementById('tglInfo');
@@ -169,23 +184,22 @@
     const vVp = document.getElementById('vVp');
     const vCv = document.getElementById('vCv');
 
-    // Overlay toggles
     const chkGrid = document.getElementById('chkGrid');
     const chkAAB = document.getElementById('chkAABBox');
     const chkAnimDbg = document.getElementById('chkAnimDbg');
 
-    // Optionaler Start-Overlay
     const start = document.getElementById('start');
     const btnStart = document.getElementById('btnStart');
+    const btnReset = document.getElementById('btnReset');
+    const btnOptions = document.getElementById('btnOptions');
 
-    // Simple query flags (?autostart=0&grid=1)
+    // Query-Flags
     const Q = new URLSearchParams(location.search);
-    const qAuto = Q.get('autostart');     // "0" oder "1"
-    const qGrid = Q.get('grid');          // "1" → Gitter an
-    const qAAB  = Q.get('bounds');        // "1" → Bounds an
-    const qAnim = Q.get('animdbg');       // "1" → Anim-Debug
+    const qGrid = Q.get('grid');   if (qGrid==='1') chkGrid.checked = true;
+    const qAAB  = Q.get('bounds'); if (qAAB==='1')  chkAAB.checked = true;
+    const qAnim = Q.get('animdbg');if (qAnim==='1') chkAnimDbg.checked = true;
 
-    // Canvas & DPR
+    // Canvas/DPR
     function resize(){
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const w = Math.floor(innerWidth);
@@ -196,21 +210,15 @@
       cv.style.height = h+'px';
       ctx.setTransform(dpr,0,0,dpr,0,0);
 
-      // Debug-Infos
       vDpr.textContent = dpr.toFixed(2);
       vVp.textContent = `${w}×${h}`;
       vCv.textContent = `${cv.width}×${cv.height} (CSS ${w}×${h})`;
     }
     addEventListener('resize', resize);
-
     Assets.imageRenderingCrisp(cv);
+    resize();
 
-    // Flags aus Query übernehmen
-    if (qGrid === '1') chkGrid.checked = true;
-    if (qAAB  === '1') chkAAB.checked = true;
-    if (qAnim === '1') chkAnimDbg.checked = true;
-
-    // Panels toggles
+    // Panels
     function togglePanel(btn, panel){
       const vis = panel.classList.toggle('show');
       btn.setAttribute('aria-pressed', String(vis));
@@ -222,17 +230,7 @@
     btnReload.addEventListener('click', ()=> location.reload());
     btnCenter.addEventListener('click', ()=> { view.x = 0; view.y = 0; });
 
-    // Start-Overlay Logik
-    const wantsAutostart = (start?.dataset.autostart ?? '1') === '1';
-    if (qAuto === '0') { if (start) start.classList.add('show'); }
-    else if (!wantsAutostart && start) { start.classList.add('show'); }
-
-    btnStart?.addEventListener('click', ()=>{
-      start.classList.remove('show');
-      begin();
-    });
-
-    // FPS rudimentär (ohne externes stats.js)
+    // FPS
     let fps=0, _lf=performance.now();
     function tickFps(){
       const now = performance.now();
@@ -241,14 +239,17 @@
       document.getElementById('lblFps').textContent = 'FPS: ' + Math.round(fps);
     }
 
-    // Kamera/View (sehr simpel; später ggf. mit Input koppeln)
+    // Kamera/View
     const view = { x:0, y:0, w:0, h:0 };
 
-    // Welt/Renderer
-    let world=null;
+    // Welt/Renderer – wird erst nach Start initialisiert
+    let world=null, started=false;
+
     async function begin(){
-      resize(); // initial
-      // Preload
+      if (started) return;
+      started = true;
+
+      // Preload Map/Atlas (Map bleibt bis Start unsichtbar → kein "Glitch" oben links)
       await Assets.loadAll({
         images: [ './assets/tiles/tileset.png' ],
         json:   [ './assets/tiles/tileset.json', './assets/maps/map-pro.json' ]
@@ -279,17 +280,13 @@
         ctx.stroke();
         ctx.restore();
       }
-
       if (chkAAB.checked){
         ctx.save();
         ctx.globalAlpha = .35;
         ctx.fillStyle = '#982e2e';
-        // Hier könnte man z.B. aktuell sichtbare Tile-Bounds füllen/rahmen.
-        // Placeholder: kleiner Marker links oben:
-        ctx.fillRect(6,6,10,10);
+        ctx.fillRect(6,6,10,10); // Platzhalter
         ctx.restore();
       }
-
       if (chkAnimDbg.checked){
         ctx.save();
         ctx.globalAlpha = .9;
@@ -302,36 +299,32 @@
 
     function loop(){
       tickFps();
-
       ctx.clearRect(0,0,cv.width,cv.height);
       view.w = cv.width; view.h = cv.height;
-
       if (world){
         world.draw(ctx, view);
       }
-
       drawDebugOverlays();
       requestAnimationFrame(loop);
     }
 
-    // Autostart?
-    if ((qAuto !== '0') && (start?.dataset.autostart !== '0')) {
-      // Wenn kein Start-Overlay sichtbar → direkt los
-      if (!start || !start.classList.contains('show')) {
-        begin();
-      }
-    }
+    // Startfenster: immer sichtbar zu Beginn
+    start.classList.add('show');
 
-    // Initial einmal aufrufen
-    resize();
+    btnStart.addEventListener('click', ()=>{
+      start.classList.remove('show');
+      begin();
+    });
+
+    btnReset.addEventListener('click', ()=>{
+      // „Reset“: alles neu laden (Cache leer + Layout sauber)
+      location.reload();
+    });
+
+    btnOptions.addEventListener('click', ()=>{
+      // Placeholder – später mit Optionen füllen
+      togglePanel(tglLayers, pLayers);
+    });
   </script>
-
-  <!--
-    ALTERNATIVER BOOT-EINSTIEG
-    - Falls du lieber dein reines ./boot.js nutzen willst (ohne Debug-Glue oben),
-      kannst du diese Zeile aktivieren und den obigen <script type="module"> auskommentieren.
-    - Beide gleichzeitig sollten NICHT aktiv sein.
-  -->
-  <!-- <script type="module" src="./boot.js"></script> -->
 </body>
 </html>
