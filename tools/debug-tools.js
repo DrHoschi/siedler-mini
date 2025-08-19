@@ -3,6 +3,8 @@
 // 🔧 Debug-Tools (sichtbarer Banner + sichere Checks)
 // Läuft ohne andere Skripte nachzuladen (keine Konflikte).
 
+alert("DebugTools geladen"); // TEMP: prüft, dass die Datei wirklich läuft
+
 console.log("[DebugTools] geladen");
 
 // 0) Sichtbarer Banner, damit du SOFORT siehst, dass die Datei läuft
