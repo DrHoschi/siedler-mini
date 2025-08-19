@@ -6,12 +6,7 @@
   <meta name="theme-color" content="#0b1628" />
   <title>Siedler‑Mini V14.7 (Mobil)</title>
 
-  <!--
-    Styles:
-    - Canvas füllt den Screen
-    - HUD/Buttons/Overlay
-    - Debug/Diag + Toast
-  -->
+  <!-- Basis-Styles (Canvas + HUD). Mobil-Spezifika werden in mobile.css/ios.css überschrieben -->
   <style>
     :root{
       color-scheme: dark;
@@ -20,13 +15,12 @@
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
     }
-    html,body{height:100%;margin:0;background:var(--bg);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial}
+    html,body{
+      height:100%; margin:0; background:var(--bg);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial
+    }
 
-    /* === WICHTIG: Zeichenfläche ===
-       - echtes <canvas id="game"> (kein DIV!)
-       - CSS‑Größe (width/height) = sichtbar, JS setzt die Pixelgröße (width/height Attribute)
-    */
+    /* Zeichenfläche: echtes <canvas>, JS setzt die Pixelgröße (width/height Attribute) */
     canvas#game{
       position:fixed; inset:0;
       width:100%; height:100%;
@@ -34,44 +28,58 @@
       background:transparent;
     }
 
-    /* ===== HUD ===== */
-    #hudTop{position:fixed;left:0;right:0;top:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
-      padding: calc(env(safe-area-inset-top,0) + 6px) 8px 8px 8px; z-index:3}
-    .pill{background:#0f1b29;border:1px solid #1b2a40;border-radius:18px;color:#cfe3ff;
-      padding:6px 10px;font-size:14px;line-height:18px;display:inline-flex;align-items:center;gap:8px}
+    /* ===== HUD (Desktop-Default) =====
+       Auf Mobil werden Positionen/Layouts in mobile.css/ios.css angepasst. */
+    #hudTop{
+      position:fixed; left:0; right:0; top:0;
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+      padding: 6px 8px 8px 8px; z-index:3;
+    }
+    .pill{
+      background:#0f1b29; border:1px solid #1b2a40; border-radius:18px;
+      color:#cfe3ff; padding:6px 10px; font-size:14px; line-height:18px;
+      display:inline-flex; align-items:center; gap:8px;
+    }
 
     /* Tools links */
-    #tools{position:fixed;left:8px;top:64px;display:flex;flex-direction:column;gap:8px;z-index:3}
-    .btn{background:#0f1b29;border:1px solid #1b2a40;border-radius:12px;color:#cfe3ff;
-      font-size:15px;padding:8px 12px}
-    .btn.active{outline:2px solid #2f7de1}
-    .btn.ok{background:var(--ok);border-color:#0a6129}
-    .btn.danger{background:var(--warn);border-color:#752020}
+    #tools{ position:fixed; left:8px; top:64px; display:flex; flex-direction:column; gap:8px; z-index:3; }
+    .btn{ background:#0f1b29; border:1px solid #1b2a40; border-radius:12px; color:#cfe3ff; font-size:15px; padding:8px 12px; }
+    .btn.active{ outline:2px solid #2f7de1 }
+    .btn.ok{ background:var(--ok); border-color:#0a6129 }
+    .btn.danger{ background:var(--warn); border-color:#752020 }
 
-    /* Buttons rechts */
-    #hudRight{position:fixed;right:8px;top:64px;display:flex;gap:8px;z-index:3}
+    /* Rechts-Buttons (Desktop-Default oben rechts).
+       → Auf Mobil wird #hudRight zur fixen Bottom-Bar umgebaut (mobile.css). */
+    #hudRight{ position:fixed; right:8px; top:64px; display:flex; gap:8px; z-index:3; }
 
-    /* Start-Overlay (unten, nicht blockierend) */
-    #startOverlay{
-      position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;
-      pointer-events:auto; z-index:2;
-    }
+    /* Start-Overlay */
+    #startOverlay{ position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; pointer-events:auto; z-index:2; }
     #startCard{
-      background:var(--panel);border:1px solid #20324a;border-radius:14px;color:var(--text);
-      width:min(820px,94vw);margin:0 12px 24px; padding:18px 18px 14px;box-shadow:var(--shadow);
+      background:var(--panel); border:1px solid #20324a; border-radius:14px; color:var(--text);
+      width:min(820px,94vw); margin:0 12px 24px; padding:18px 18px 14px; box-shadow:var(--shadow);
     }
-    #startCard h3{margin:0 0 10px;font-size:22px}
-    #startCard p{margin:8px 0;color:var(--muted)}
-    #startBtns{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+    #startCard h3{ margin:0 0 10px; font-size:22px }
+    #startCard p{ margin:8px 0; color:var(--muted) }
+    #startBtns{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap }
 
-    /* Debug/Diag & Toast */
-    #diag{position:fixed;left:8px;bottom:8px;right:8px;max-height:40vh;overflow:auto;
-      background:#0c1320cc;border:1px solid #21334d;color:#cfe3ff;border-radius:10px;
-      font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:10px;display:none; z-index:4}
-    #toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);
-      background:#0c1320cc;border:1px solid #21334d;color:#cfe3ff;border-radius:10px;
-      padding:8px 12px; display:none; z-index:5}
+    /* Debug/Diag */
+    #diag{
+      position:fixed; left:8px; bottom:8px; right:8px; max-height:40vh; overflow:auto;
+      background:#0c1320cc; border:1px solid #21334d; color:#cfe3ff; border-radius:10px;
+      font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding:10px; display:none; z-index:4;
+    }
+
+    /* Toast (Default: oben; auf Mobil wird in mobile.css nach unten über die Bottom-Bar verschoben) */
+    #toast{
+      position:fixed; left:50%; top:16px; transform:translateX(-50%);
+      background:#0c1320cc; border:1px solid #21334d; color:#cfe3ff; border-radius:10px;
+      padding:8px 12px; display:none; z-index:5;
+    }
   </style>
+
+  <!-- HINWEIS: Die platform-spezifischen Styles werden extern geladen -->
+  <link rel="stylesheet" href="./css/mobile.css">
+  <link rel="stylesheet" href="./css/ios.css">
 </head>
 <body>
 
@@ -99,14 +107,15 @@
     <button class="btn" data-tool="erase">Abriss</button>
   </div>
 
-  <!-- === Buttons rechts === -->
+  <!-- === Aktionen (Desktop: oben rechts) | Mobil: unten fix als Bottom-Bar (per mobile.css) === -->
   <div id="hudRight" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
     <button id="btnDebug" class="btn">Debug</button>
     <button id="btnFsTop" class="btn">Vollbild</button>
+    <button id="btnPath" class="btn">Pfad</button>
   </div>
 
-  <!-- === Start‑Overlay (Infokarte + Buttons) === -->
+  <!-- === Start‑Overlay === -->
   <div id="startOverlay">
     <div id="startCard">
       <h3>Siedler‑Mini V14.7 (Mobile)</h3>
@@ -121,64 +130,77 @@
       </div>
     </div>
   </div>
-  <!-- === Debug/Diag & Toast === -->
-  <div id="diag"></div>
-  <div id="toast"></div>
-  <!-- === Scripts ===
-       - boot.js verdrahtet DOM ↔ game.js
-       - game.js enthält: Asset‑Loader (endungslos), Pan/Zoom, Bauen, Auto‑Road‑Tiles,
-         Connectivity, Produktion & Träger (Punkt), Terrain‑Tiles, usw.
-       - Weitere optionale Module (Sprites/Audio) sind in boot.js bereits vorbereitet (auskommentiert).
-  -->
+
+  <!-- Debug/Diag & Toast -->
+  <div id="diag" role="log" aria-live="polite"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- App-Skripte -->
   <script type="module" src="./boot.js?v=147b2"></script>
-<!-- Debug-Tools einschalten -->
-<script type="module" src="./tools/debug-tools.js?v=3"></script>  
-  <script>
-  console.log("Sanity: inline JS läuft");
-</script>
-  <!-- Sprite/Map-Integration: lädt map-pro.json + sprites.json, rendert objects[] -->
-<script type="module">
-  import { SiedlerMap, SpriteAtlas, ObjectSpriteSystem } from './tools/map-runtime.js';
 
-  // Canvas/Context initialisieren
-  const cv = document.getElementById('game');
-  const ctx = cv.getContext('2d');
+  <!-- 👇 Debug-Tools werden per dynamic import geladen, danach zeigen wir automatisch einen Toast,
+       der nach kurzer Zeit wieder verschwindet (keine blockierende Alert-Box). -->
+  <script type="module">
+    // Einfacher Toast-Helper (wird auch von anderen Stellen nutzbar)
+    window.showToast = (text, ms = 2000) => {
+      const el = document.getElementById('toast');
+      if(!el) return;
+      el.textContent = text;
+      el.style.display = 'block';
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        el.style.display = 'none';
+        el.textContent = '';
+      }, ms);
+    };
 
-  // Device-Pixel-Scaling (scharf auf HiDPI)
-  function resizeCanvas(){
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    cv.width  = Math.floor(cv.clientWidth  * dpr);
-    cv.height = Math.floor(cv.clientHeight * dpr);
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.scale(dpr, dpr);
-  }
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+    // Debug-Tools laden und Erfolgsmeldung anzeigen
+    await import('./tools/debug-tools.js?v=3').catch(console.warn);
+    showToast('DebugTools geladen'); // ✔ automatisch ausblenden
+  </script>
 
-  // Welt anlegen und Karte laden
-  const world = new SiedlerMap({
-    tileResolver: (name)=> './assets/' + name, // falls Tile-Bilder genutzt werden
-    onReady: ()=> {/* Loop unten */ }
-  });
-  const mapJson = await (await fetch('./maps/map-pro.json')).json();
-  await world.loadFromObject(mapJson);
+  <!-- Sprite/Map-Integration -->
+  <script type="module">
+    import { SiedlerMap, SpriteAtlas, ObjectSpriteSystem } from './tools/map-runtime.js';
 
-  // Sprite-Atlas (sprites.json + sprites.png aus /assets/)
-  const atlas = new SpriteAtlas();
-  await atlas.load('./assets/sprites.json');
+    // Canvas/Context initialisieren (HiDPI-scharf)
+    const cv  = document.getElementById('game');
+    const ctx = cv.getContext('2d');
 
-  // Objects[] → Sprites zeichnen
-  const objSprites = new ObjectSpriteSystem(world, atlas);
+    function resizeCanvas(){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      cv.width  = Math.floor(cv.clientWidth  * dpr);
+      cv.height = Math.floor(cv.clientHeight * dpr);
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(dpr, dpr);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
 
-  // Render-Loop: erst Map, dann Objekte
-  let last = performance.now();
-  function loop(now = performance.now()){
-    const dt = (now - last) / 1000; last = now;
-    world.draw(ctx, { x:0, y:0, w:cv.clientWidth, h:cv.clientHeight }, { clear:true });
-    objSprites.drawAll(ctx, dt);
-    requestAnimationFrame(loop);
-  }
-  loop();
-</script>
+    // Welt laden
+    const world = new SiedlerMap({
+      tileResolver: (name)=> './assets/' + name,
+      onReady: ()=> {/* Render-Loop unten */}
+    });
+    const mapJson = await (await fetch('./maps/map-pro.json')).json();
+    await world.loadFromObject(mapJson);
+
+    // Sprite-Atlas
+    const atlas = new SpriteAtlas();
+    await atlas.load('./assets/sprites.json');
+
+    // Objects → Sprites
+    const objSprites = new ObjectSpriteSystem(world, atlas);
+
+    // Render-Loop
+    let last = performance.now();
+    function loop(now = performance.now()){
+      const dt = (now - last) / 1000; last = now;
+      world.draw(ctx, { x:0, y:0, w:cv.clientWidth, h:cv.clientHeight }, { clear:true });
+      objSprites.drawAll(ctx, dt);
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
 </body>
 </html>
