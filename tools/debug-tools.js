@@ -152,7 +152,7 @@ function logFolderStructure(map) {
 }
 
 // ======================================================================
-// 5) HIER passt du an, was geprüft werden soll (wie bei dir)
+// 5) HIER passt du an, was geprüft werden soll (wie bei dir) 
 // ======================================================================
 checkAssets([
   './core/assets.js',
