@@ -1,0 +1,57 @@
+{
+  "name": "default-tileset",
+  "tileSize": 64,
+  "image": "tileset.png",
+  "columns": 8,
+  "rows": 1,
+  "tiles": {
+    "0": {
+      "id": 0,
+      "name": "grass",
+      "description": "Lush green meadow grass, seamless",
+      "srcRect": { "x": 0, "y": 0, "w": 64, "h": 64 }
+    },
+    "1": {
+      "id": 1,
+      "name": "dirt",
+      "description": "Compacted medieval dirt ground, seamless",
+      "srcRect": { "x": 64, "y": 0, "w": 64, "h": 64 }
+    },
+    "2": {
+      "id": 2,
+      "name": "water",
+      "description": "Shallow medieval water texture, seamless",
+      "srcRect": { "x": 128, "y": 0, "w": 64, "h": 64 }
+    },
+    "3": {
+      "id": 3,
+      "name": "sand",
+      "description": "Medieval shoreline sand, seamless",
+      "srcRect": { "x": 192, "y": 0, "w": 64, "h": 64 }
+    },
+    "4": {
+      "id": 4,
+      "name": "forest",
+      "description": "Medieval forest ground, leafy and mossy, seamless",
+      "srcRect": { "x": 256, "y": 0, "w": 64, "h": 64 }
+    },
+    "5": {
+      "id": 5,
+      "name": "rock",
+      "description": "Rough medieval stone ground, seamless",
+      "srcRect": { "x": 320, "y": 0, "w": 64, "h": 64 }
+    },
+    "6": {
+      "id": 6,
+      "name": "path",
+      "description": "Lightly trampled medieval grass path, seamless",
+      "srcRect": { "x": 384, "y": 0, "w": 64, "h": 64 }
+    },
+    "7": {
+      "id": 7,
+      "name": "mountain",
+      "description": "Medieval rocky mountain ground, seamless",
+      "srcRect": { "x": 448, "y": 0, "w": 64, "h": 64 }
+    }
+  }
+}
