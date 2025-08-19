@@ -4,7 +4,7 @@
 // Läuft ohne andere Skripte nachzuladen (keine Konflikte).
 
 // TEMP: Prüft, dass die Datei sicher geladen wird (kannst du später löschen)
-// alert("DebugTools geladen"); // TEMP zum Test, später entfernen
+alert("DebugTools geladen"); // TEMP zum Test, später entfernen
 console.log("[DebugTools] geladen");
 
 // ======================================================================
