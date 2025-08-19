@@ -1,100 +1,144 @@
 // ./tools/debug-tools.js
 // ======================================================
-// 🔧 Debug-Tools (sichtbarer Banner + sichere Checks)
-// Läuft ohne andere Skripte nachzuladen (keine Konflikte).
+// 🔧 Debug-Tools (Dock unten + Overlay mit Filtern/Autoscroll)
 
-// TEMP: Prüft, dass die Datei sicher geladen wird (kannst du später löschen)
-// alert("DebugTools geladen"); // TEMP zum Test, später entfernen
 console.log("[DebugTools] geladen");
 
-// ======================================================================
-// 🔼 NEU: Mini-Debug-Konsole im Spiel (Overlay) + klickbarer Banner
-// - Banner oben mittig -> Klick toggelt Overlay
-// - Overlay zeigt console.log / warn / error live im Spiel
-// - Buttons: Clear (löschen), Close (verbergen)
-// ======================================================================
+// ====== State ======
+let AUTO_SCROLL = true;
+let ACTIVE_FILTER = "all"; // "all" | "log" | "warn" | "error"
 
 document.addEventListener('DOMContentLoaded', () => {
-  // === Banner erzeugen (sichtbarer „Schalter“) ===
-  const bar = document.createElement('div');
-  bar.id = 'debugToolsBar';
-  bar.textContent = '🔧 Debug-Tools (klick mich)';
-  Object.assign(bar.style, {
-    position: 'fixed', left: '50%', top: '10px', transform: 'translateX(-50%)',
+  // ===== Dock (unten, schmaler Button) =====
+  const dock = document.createElement('div');
+  dock.id = 'debugToolsDock';
+  dock.textContent = '🔧 Debug‑Tools';
+  Object.assign(dock.style, {
+    position: 'fixed', left: '50%', bottom: '8px', transform: 'translateX(-50%)',
     background: '#0c1320cc', color: '#cfe3ff', border: '1px solid #21334d',
-    borderRadius: '10px', padding: '8px 12px', zIndex: 99999, font: '12px ui-monospace',
-    cursor: 'pointer', userSelect: 'none'
+    borderRadius: '10px', padding: '6px 10px', zIndex: 99999, font: '12px ui-monospace',
+    cursor: 'pointer', userSelect: 'none', boxShadow: '0 12px 30px rgba(0,0,0,.35)'
   });
-  document.body.appendChild(bar);
+  document.body.appendChild(dock);
 
-  // === Overlay (Container) ===
+  // ===== Overlay =====
   const overlay = document.createElement('div');
   overlay.id = 'debugOverlay';
   Object.assign(overlay.style, {
-    position: 'fixed', left: '8px', right: '8px', bottom: '8px',
+    position: 'fixed', left: '8px', right: '8px', bottom: '44px', /* Platz fürs Dock */
     maxHeight: '40vh', background: '#0c1320cc', border: '1px solid #21334d',
     color: '#cfe3ff', borderRadius: '10px', zIndex: 99998, display: 'none',
     boxShadow: '0 12px 40px rgba(0,0,0,.35)', backdropFilter: 'blur(4px)'
   });
 
-  // === Overlay: Kopfzeile mit Buttons ===
+  // Header
   const head = document.createElement('div');
   Object.assign(head.style, {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '8px 10px', borderBottom: '1px solid #21334d',
-    font: '12px ui-monospace'
+    font: '12px ui-monospace', gap: '8px'
   });
-  head.innerHTML = `<span>🧪 Debug-Konsole</span>`;
+  head.innerHTML = `<span>🧪 Debug‑Konsole</span>`;
   overlay.appendChild(head);
 
-  // Buttons rechts
-  const btns = document.createElement('div');
+  // Controls links: Filter
+  const filters = document.createElement('div');
+  const mkBtn = (label, type) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.dataset.type = type;
+    Object.assign(b.style, {
+      background: '#0f1b29', color: '#cfe3ff', border: '1px solid #21334d',
+      borderRadius: '8px', padding: '4px 8px', cursor: 'pointer', marginRight: '6px'
+    });
+    b.onclick = () => { setFilter(type); };
+    return b;
+  };
+  const btnAll   = mkBtn('All',   'all');
+  const btnInfo  = mkBtn('Info',  'log');
+  const btnWarn  = mkBtn('Warn',  'warn');
+  const btnError = mkBtn('Error', 'error');
+  filters.append(btnAll, btnInfo, btnWarn, btnError);
+  head.prepend(filters);
+
+  // Controls rechts: AutoScroll / Clear / Close
+  const right = document.createElement('div');
+  const btnAuto = document.createElement('button');
   const btnClear = document.createElement('button');
   const btnClose = document.createElement('button');
-  [btnClear, btnClose].forEach(b => Object.assign(b.style, {
+  [btnAuto, btnClear, btnClose].forEach(b => Object.assign(b.style, {
     background: '#0f1b29', color: '#cfe3ff', border: '1px solid #21334d',
-    borderRadius: '8px', padding: '4px 8px', marginLeft: '6px', cursor: 'pointer'
+    borderRadius: '8px', padding: '4px 8px', cursor: 'pointer', marginLeft: '6px'
   }));
+  btnAuto.textContent = `Auto‑Scroll: ON`;
   btnClear.textContent = 'Clear';
   btnClose.textContent = 'Close';
-  btns.append(btnClear, btnClose);
-  head.appendChild(btns);
+  right.append(btnAuto, btnClear, btnClose);
+  head.appendChild(right);
 
-  // === Overlay: Log-Container ===
+  // Body (scrollbar)
   const body = document.createElement('div');
   Object.assign(body.style, {
-    padding: '8px 10px', font: '12px/1.4 ui-monospace', overflow: 'auto',
-    maxHeight: 'calc(40vh - 42px)'
+    padding: '8px 10px', font: '12px/1.4 ui-monospace',
+    overflow: 'auto', maxHeight: 'calc(40vh - 42px)'
   });
   overlay.appendChild(body);
 
   document.body.appendChild(overlay);
 
-  // Toggle per Banner-Klick
-  bar.addEventListener('click', () => {
+  // Dock klick toggelt Overlay
+  dock.addEventListener('click', () => {
     overlay.style.display = (overlay.style.display === 'none') ? 'block' : 'none';
   });
-  // Close-Button
+  // Close
   btnClose.addEventListener('click', () => overlay.style.display = 'none');
-  // Clear-Button
+  // Clear
   btnClear.addEventListener('click', () => { body.innerHTML = ''; });
+  // AutoScroll togglen
+  btnAuto.addEventListener('click', () => {
+    AUTO_SCROLL = !AUTO_SCROLL;
+    btnAuto.textContent = `Auto‑Scroll: ${AUTO_SCROLL ? 'ON' : 'OFF'}`;
+  });
 
-  // === Log-Funktion: schreibt in Overlay + scrollt nach unten ===
+  // Filter-Funktion
+  function setFilter(type) {
+    ACTIVE_FILTER = type;
+    // Buttons optisch markieren
+    [btnAll, btnInfo, btnWarn, btnError].forEach(b=>{
+      b.style.outline = (b.dataset.type === type) ? '2px solid #2f7de1' : 'none';
+    });
+    // Zeilen filtern
+    [...body.children].forEach(line => {
+      const t = line.dataset.type || 'log';
+      line.style.display = (type === 'all' || t === type) ? '' : 'none';
+    });
+  }
+  setFilter('all'); // default
+
+  // Logs ins Overlay schreiben
   function logToOverlay(type, args) {
     const line = document.createElement('div');
-    // Farbe je nach Typ
+    line.dataset.type = type; // für Filter
     line.style.whiteSpace = 'pre-wrap';
     line.style.color = (type === 'error') ? '#ff6b6b'
-                  : (type === 'warn')  ? '#f3d250'
-                  : '#cfe3ff';
-    // Zeitstempel + Inhalt
+                    : (type === 'warn')  ? '#f3d250'
+                    : '#cfe3ff';
     const ts = new Date().toLocaleTimeString();
     line.textContent = `[${ts}] [${type}] ` + args.map(String).join(' ');
     body.appendChild(line);
-    body.scrollTop = body.scrollHeight;
+
+    // Filter live anwenden
+    if (!(ACTIVE_FILTER === 'all' || ACTIVE_FILTER === type)) {
+      line.style.display = 'none';
+    }
+
+    // Auto-Scroll
+    if (AUTO_SCROLL) {
+      body.scrollTop = body.scrollHeight;
+    }
   }
 
-  // === Konsole „tee’en“: Original beibehalten, zusätzlich ins Overlay schreiben ===
+  // Konsole „tee’en“: Original + Overlay
   ['log','warn','error'].forEach(type => {
     const orig = console[type].bind(console);
     console[type] = (...args) => {
@@ -102,69 +146,55 @@ document.addEventListener('DOMContentLoaded', () => {
       try { logToOverlay(type, args); } catch {}
     };
   });
-});
 
-// ======================================================================
-// 1) Globaler Error-/Promise-Logger (wie gehabt)
-// ======================================================================
-window.addEventListener('error', e => {
-  console.error('🔥 Fehler:', e.message, 'bei', e.filename, 'Zeile', e.lineno);
-});
-window.addEventListener('unhandledrejection', e => {
-  console.error('🔥 Unhandled Promise Rejection:', e.reason);
-});
+  // ===== Deine bestehenden Tools =====
 
-// ======================================================================
-// 2) Performance (optional: auf true setzen)
-// ======================================================================
-const PERF = false;
-if (PERF) {
-  console.time('⏱️ Gesamt-Ladezeit');
-  window.addEventListener('load', () => console.timeEnd('⏱️ Gesamt-Ladezeit'));
-}
+  // Error-/Promise-Logger
+  window.addEventListener('error', e => {
+    console.error('🔥 Fehler:', e.message, 'bei', e.filename, 'Zeile', e.lineno);
+  });
+  window.addEventListener('unhandledrejection', e => {
+    console.error('🔥 Unhandled Promise Rejection:', e.reason);
+  });
 
-// ======================================================================
-// 3) Asset-Checker – nur prüfen, nichts laden (wie bei dir)
-// ======================================================================
-async function checkAssets(files) {
-  for (const f of files) {
-    try {
-      const res = await fetch(f, { cache: 'no-cache' });
-      if (res.ok) console.log('✅ Gefunden:', f);
-      else        console.warn('⚠️ Nicht geladen:', f, res.status);
-    } catch (err) {
-      console.error('❌ Fehler:', f, err);
+  // Asset-Checker – nur prüfen, nichts laden
+  async function checkAssets(files) {
+    for (const f of files) {
+      try {
+        const res = await fetch(f, { cache: 'no-cache' });
+        if (res.ok) console.log('✅ Gefunden:', f);
+        else        console.warn('⚠️ Nicht geladen:', f, res.status);
+      } catch (err) {
+        console.error('❌ Fehler:', f, err);
+      }
     }
   }
-}
 
-// ======================================================================
-// 4) Ordnerstruktur-Logger – nur prüfen, nichts laden (wie bei dir)
-// ======================================================================
-function logFolderStructure(map) {
-  for (const folder in map) {
-    for (const file of map[folder]) {
-      const path = `./${folder}/${file}`;
-      fetch(path, { cache: 'no-cache' })
-        .then(r => console.log(r.ok ? '✅' : '❌', path));
+  // Ordnerstruktur-Logger – nur prüfen, nichts laden
+  function logFolderStructure(map) {
+    for (const folder in map) {
+      for (const file of map[folder]) {
+        const path = `./${folder}/${file}`;
+        fetch(path, { cache: 'no-cache' })
+          .then(r => console.log(r.ok ? '✅' : '❌', path));
+      }
     }
   }
-}
 
-// ======================================================================
-// 5) HIER passt du an, was geprüft werden soll (wie bei dir)
-// ======================================================================
-checkAssets([
-  './core/assets.js',
-  './tools/map-runtime.js',
-  './maps/map-pro.json',
-  './assets/tileset.png',
-  './assets/sprites.png'
-]);
+  // === HIER anpassen: was prüfen? (mit deinem Fix assets.js) ===
+  checkAssets([
+    './core/assets.js',
+    './tools/map-runtime.js',
+    './maps/map-pro.json',
+    './assets/tileset.png',
+    './assets/sprites.png'
+  ]);
 
-logFolderStructure({
-  core:   ['assets.js'],
-  tools:  ['map-runtime.js'],
-  maps:   ['map-pro.json'],
-  assets: ['tileset.png', 'sprites.png']
-});
+  logFolderStructure({
+    core:   ['assets.js'],
+    tools:  ['map-runtime.js'],
+    maps:   ['map-pro.json'],
+    assets: ['tileset.png', 'sprites.png']
+  });
+
+}); // DOMContentLoaded
