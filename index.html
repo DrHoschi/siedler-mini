@@ -25,10 +25,7 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Open Sans','Helvetica Neue',Arial
     }
 
-    /* === WICHTIG: Zeichenfläche ===
-       - echtes <canvas id="game"> (kein DIV!)
-       - CSS‑Größe (width/height) = sichtbar, JS setzt die Pixelgröße (width/height Attribute)
-    */
+    /* === WICHTIG: Zeichenfläche === */
     canvas#game{
       position:fixed; inset:0;
       width:100%; height:100%;
@@ -46,78 +43,48 @@
       background:#0f1b29; border:1px solid #1b2a40; border-radius:18px; color:#cfe3ff;
       padding:6px 10px; font-size:14px; line-height:18px; display:inline-flex; align-items:center; gap:8px
     }
-/* === Aktionsleiste (Portrait unten, Landscape rechts) === */
-#actionBar {
-  position: fixed; z-index: 3; display: flex; gap: 8px;
-}
-@media (orientation: portrait) {
-  #actionBar {
-    left: 8px; right: 8px; bottom: 8px;
-    justify-content: center; flex-wrap: wrap;
-  }
-  #actionBar .btn { min-width: 100px; }
-}
-@media (orientation: landscape) {
-  #actionBar {
-    right: 8px; top: 80px; bottom: auto; left: auto;
-    flex-direction: column; align-items: stretch;
-  }
-}
 
-/* === Baumenü (Dock links) === */
-#buildDock { position: fixed; z-index: 3; }
-@media (orientation: portrait) {
-  #buildDock { left: 8px; bottom: calc(8px + 48px); /* über der ActionBar */ }
-  #buildList {
-    position: fixed; left: 8px; right: 8px;
-    bottom: calc(8px + 48px + 40px); /* über Toggle + ActionBar */
-    background: var(--panel); border:1px solid #20324a; border-radius: 12px;
-    padding: 8px; display: flex; gap: 8px; overflow-x: auto;
-  }
-  #buildList .btn { flex: 0 0 auto; }
-}
-@media (orientation: landscape) {
-  #buildDock { left: 8px; top: 64px; }
-  #buildList {
-    position: fixed; left: 8px; top: 104px; bottom: 8px;
-    width: 140px; display: flex; flex-direction: column; gap: 8px;
-    background: transparent; border: 0; padding: 0; overflow:auto;
-  }
-}
+    /* === Aktionsleiste (Portrait unten, Landscape rechts) === */
+    #actionBar { position: fixed; z-index: 3; display: flex; gap: 8px; }
+    @media (orientation: portrait) {
+      #actionBar { left: 8px; right: 8px; bottom: 8px; justify-content: center; flex-wrap: wrap; }
+      #actionBar .btn { min-width: 100px; }
+    }
+    @media (orientation: landscape) {
+      #actionBar { right: 8px; top: 80px; bottom: auto; left: auto; flex-direction: column; align-items: stretch; }
+    }
 
-/* Toggle-Button für Baumenü */
-#buildToggle {
-  background:#0f1b29; border:1px solid #1b2a40; border-radius:12px;
-  color:#cfe3ff; font-size:15px; padding:8px 12px;
-}
+    /* === Baumenü (Dock links) === */
+    #buildDock { position: fixed; z-index: 3; }
+    @media (orientation: portrait) {
+      #buildDock { left: 8px; bottom: calc(8px + 48px); } /* über ActionBar */
+      #buildList {
+        position: fixed; left: 8px; right: 8px;
+        bottom: calc(8px + 48px + 40px); /* über Toggle + ActionBar */
+        background: var(--panel); border:1px solid #20324a; border-radius: 12px;
+        padding: 8px; display: flex; gap: 8px; overflow-x: auto;
+      }
+      #buildList .btn { flex: 0 0 auto; }
+    }
+    @media (orientation: landscape) {
+      #buildDock { left: 8px; top: 64px; }
+      #buildList {
+        position: fixed; left: 8px; top: 104px; bottom: 8px;
+        width: 140px; display: flex; flex-direction: column; gap: 8px;
+        background: transparent; border: 0; padding: 0; overflow:auto;
+      }
+    }
 
-/* Optional: aktive Tool-Markierung */
-#buildList .btn.active { outline: 2px solid #2f7de1; }
-
-/* Kleine Sicherheitsabstände auf sehr schmalen Screens */
-@media (max-width: 360px) and (orientation: portrait) {
-  #actionBar .btn { min-width: 88px; padding: 8px 10px; }
-}
-<!-- === Baumenü (Dock) === -->
-<div id="buildDock" aria-label="Baumenü">
-  <button id="buildToggle" class="btn">Baumenü</button>
-  <div id="buildList" class="build-list" hidden>
-    <button class="btn" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="woodcutter">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="erase">Abriss</button>
-  </div>
-</div>
-    /* Buttons rechts */
-    #hudRight{position:fixed; right:8px; top:64px; display:flex; gap:8px; z-index:3}
+    /* Toggle-Button für Baumenü */
+    #buildToggle {
+      background:#0f1b29; border:1px solid #1b2a40; border-radius:12px;
+      color:#cfe3ff; font-size:15px; padding:8px 12px;
+    }
+    /* Aktives Tool */
+    #buildList .btn.active { outline: 2px solid #2f7de1; }
 
     /* Start-Overlay (unten, nicht blockierend) */
-    #startOverlay{
-      position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center;
-      pointer-events:auto; z-index:2;
-    }
+    #startOverlay{ position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; pointer-events:auto; z-index:2; }
     #startCard{
       background:var(--panel); border:1px solid #20324a; border-radius:14px; color:var(--text);
       width:min(820px,94vw); margin:0 12px 24px; padding:18px 18px 14px; box-shadow:var(--shadow);
@@ -137,6 +104,11 @@
       background:#0c1320cc; border:1px solid #21334d; color:#cfe3ff; border-radius:10px;
       padding:8px 12px; display:none; z-index:5
     }
+
+    /* Kleine Sicherheitsabstände */
+    @media (max-width: 360px) and (orientation: portrait) {
+      #actionBar .btn { min-width: 88px; padding: 8px 10px; }
+    }
   </style>
 </head>
 <body>
@@ -155,21 +127,25 @@
     <div class="pill">🍞 Träger <span id="hudCar">0</span></div>
   </div>
 
-  <!-- === Tools links === -->
-  <div id="tools" aria-label="Werkzeuge">
-    <button class="btn active" data-tool="pointer">Zeiger</button>
-    <button class="btn" data-tool="road">Straße</button>
-    <button class="btn" data-tool="hq">HQ</button>
-    <button class="btn" data-tool="woodcutter">Holzfäller</button>
-    <button class="btn" data-tool="depot">Depot</button>
-    <button class="btn" data-tool="erase">Abriss</button>
+  <!-- === Baumenü (Dock) === -->
+  <div id="buildDock" aria-label="Baumenü">
+    <button id="buildToggle" class="btn">Baumenü</button>
+    <div id="buildList" class="build-list" hidden>
+      <button class="btn" data-tool="pointer">Zeiger</button>
+      <button class="btn" data-tool="road">Straße</button>
+      <button class="btn" data-tool="hq">HQ</button>
+      <button class="btn" data-tool="woodcutter">Holzfäller</button>
+      <button class="btn" data-tool="depot">Depot</button>
+      <button class="btn" data-tool="erase">Abriss</button>
+    </div>
   </div>
 
-  <!-- === Buttons rechts === -->
-  <div id="hudRight" aria-label="Aktionen">
+  <!-- === Aktionsleiste (Portrait unten, Landscape rechts) === -->
+  <div id="actionBar" aria-label="Aktionen">
     <button id="btnCenter" class="btn">Zentrieren</button>
-    <button id="btnDebug" class="btn">Debug</button>
-    <button id="btnFsTop" class="btn">Vollbild</button>
+    <button id="btnDebug"  class="btn">Debug</button>
+    <button id="btnFsTop"  class="btn">Vollbild</button>
+    <button id="btnPath"   class="btn">Pfad</button>
   </div>
 
   <!-- === Start‑Overlay (Infokarte + Buttons) === -->
@@ -193,17 +169,30 @@
   <div id="diag"></div>
   <div id="toast"></div>
 
+  <!-- === kleines UI-Skript für das Baumenü (nur Toggle & Active-Style) === -->
+  <script>
+    (function(){
+      const toggle = document.getElementById('buildToggle');
+      const list   = document.getElementById('buildList');
+      if (toggle && list) {
+        toggle.addEventListener('click', () => {
+          const show = list.hasAttribute('hidden');
+          if (show) list.removeAttribute('hidden'); else list.setAttribute('hidden','');
+        });
+        // aktive Tool-Markierung
+        list.addEventListener('click', (e)=>{
+          const b = e.target.closest('button[data-tool]'); if (!b) return;
+          list.querySelectorAll('.btn').forEach(x=>x.classList.remove('active'));
+          b.classList.add('active');
+        });
+      }
+    })();
+  </script>
+
   <!-- ======================================================
        SCRIPTS – IMMER am Ende vor </body> einbinden
-       Reihenfolge:
-       1) boot.js (verdrahtet DOM ↔ game.js, startet das Spiel)
-       2) debug-tools.js (klickbarer Banner + In-Game-Log-Overlay)
-       Hinweis: Seite über HTTP starten (kein file://), z. B.:
-         python3 -m http.server 8080
   ======================================================= -->
   <script type="module" src="./boot.js?v=147b2"></script>
-
-  <!-- Debug-Tools einschalten (Banner + Overlay im Spiel) -->
   <script type="module" src="./tools/debug-tools.js?v=5"></script>
 </body>
 </html>
