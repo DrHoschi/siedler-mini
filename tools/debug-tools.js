@@ -3,12 +3,11 @@
 // 🔧 Debug-Tools (sichtbarer Banner + sichere Checks)
 // Läuft ohne andere Skripte nachzuladen (keine Konflikte).
 
-alert("DebugTools geladen"); // TEMP: prüft, dass die Datei wirklich läuft
-
+alert("DebugTools geladen"); // TEMP zum Test, später löschen
 console.log("[DebugTools] geladen");
 
-// 0) Sichtbarer Banner, damit du SOFORT siehst, dass die Datei läuft
-(() => {
+// 0) Sichtbarer Banner – erst wenn DOM steht
+document.addEventListener('DOMContentLoaded', () => {
   const bar = document.createElement('div');
   bar.id = 'debugToolsBar';
   bar.textContent = '🔧 Debug-Tools aktiv';
@@ -18,7 +17,7 @@ console.log("[DebugTools] geladen");
     borderRadius: '10px', padding: '8px 12px', zIndex: 99999, font: '12px ui-monospace'
   });
   document.body.appendChild(bar);
-})();
+});
 
 // 1) Globaler Error-/Promise-Logger
 window.addEventListener('error', e => {
