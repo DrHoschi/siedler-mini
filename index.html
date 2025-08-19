@@ -4,14 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V14.7 (Mobil)</title>
+  <title>Siedler-Mini V14.7 (Mobil)</title>
 
-  <!--
-    Start-first Layout:
-    - Vollflächiges Hintergrundbild (./assets/Logo.PNG)
-    - Start-Overlay (oben zentriert, nicht durch Debug-Bar verdeckt)
-    - Debug-Bar bleibt unten sichtbar
-  -->
   <style>
     :root{
       color-scheme: dark;
@@ -19,50 +13,38 @@
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
-      --dbgHeight: 56px; /* Höhe der Debug-Bar für Layout-Offset */
+      --dbgHeight: 56px;
     }
     html,body{ height:100%; margin:0; background:var(--bg); }
-    body{
-      overflow:hidden;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      color:var(--text);
-    }
+    body{ overflow:hidden; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--text); }
 
-    /* Vollflächiger Hintergrund */
     .bg{
       position:fixed; inset:0; z-index:0;
-      background: #0b1628 url('./assets/Logo.PNG') center center / cover no-repeat;
-      /* Fallback-Farbe bleibt, falls Bild fehlt */
+      background:#0b1628 url('./assets/Logo.PNG') center center / cover no-repeat;
     }
-
     canvas{
       position:relative; z-index:1;
       display:block; width:100vw; height:100vh; background:transparent;
-      image-rendering: pixelated;   /* modern */
-      image-rendering: crisp-edges; /* fallback */
-      touch-action:none;
+      image-rendering: pixelated; image-rendering: crisp-edges; touch-action:none;
     }
 
-    /* Debug-Bar (fix unten) */
     .dbg{
       position:fixed; left:0; right:0; bottom:0; z-index:20;
       display:flex; gap:.5rem; align-items:center; padding:.5rem .75rem;
       height:var(--dbgHeight);
       background:linear-gradient(180deg, rgba(15,27,41,.75), rgba(15,27,41,.95));
       border-top:1px solid var(--line);
-      backdrop-filter: blur(6px);
-      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px); box-shadow: var(--shadow);
     }
     .dbg .pill{
       background:var(--pill); border:1px solid var(--line);
       padding:.35rem .6rem; border-radius:10rem; font-size:.85rem; color:var(--text);
-      user-select:none; cursor:pointer; white-space:nowrap;
+      user-select:none; cursor:pointer;
     }
     .dbg .pill[aria-pressed="true"]{ outline:2px solid #3b82f6; }
     .dbg .sep{ width:1px; height:1.75rem; background:var(--line); margin:0 .25rem; }
     .dbg .info{ font-size:.8rem; color:var(--muted); margin-left:auto; display:flex; gap:1rem; }
 
-    /* Panels (Debug-Overlays) */
     .panel{
       position:fixed; right:.75rem; bottom:calc(var(--dbgHeight) + .75rem); z-index:19;
       min-width:220px; max-width:min(90vw, 380px);
@@ -72,26 +54,20 @@
     .panel.show{ display:block; }
     .panel h3{ margin:.2rem 0 .6rem; font-size:1rem; font-weight:600; }
     .kv{ display:grid; grid-template-columns: auto 1fr; gap:.25rem .75rem; font-size:.85rem; }
-    .kv .k{ color:var(--muted); } .kv .v{ color:var(--text); word-break:break-word; }
+    .kv .k{ color:var(--muted); } .kv .v{ color:var(--text); }
 
-    /* Start-Overlay: bewusst höher (40vh) statt exakt Mitte,
-       damit es nicht mit der Debug-Bar kollidiert */
     .start-overlay{
       position:fixed; inset:0; z-index:30; display:none;
       align-items:flex-start; justify-content:center;
-      padding-top:clamp(40px, 40vh, 55vh); /* höher platzieren */
+      padding-top:clamp(40px, 40vh, 55vh);
       background:linear-gradient(180deg, rgba(10,18,32,.55), rgba(10,18,32,.65));
       backdrop-filter: blur(8px);
     }
     .start-overlay.show{ display:flex; }
     .start-overlay .card{
-      background:var(--panel2);
-      border:1px solid var(--line);
-      padding:1rem 1.25rem;
-      border-radius:.8rem;
-      box-shadow:var(--shadow);
-      text-align:center;
-      max-width:min(92vw, 460px);
+      background:var(--panel2); border:1px solid var(--line);
+      padding:1rem 1.25rem; border-radius:.8rem; box-shadow:var(--shadow);
+      text-align:center; max-width:min(92vw, 460px);
     }
     .start-overlay .card h1{ margin:.2rem 0 .55rem; font-size:1.15rem; }
     .start-overlay .card p{ margin:.25rem 0 .75rem; color:var(--muted); }
@@ -104,56 +80,37 @@
   </style>
 </head>
 <body>
-  <!-- Vollflächiges Hintergrundbild -->
   <div class="bg" aria-hidden="true"></div>
 
-  <!-- Start-Overlay: kommt IMMER zuerst (autostart=0) -->
+  <!-- Start-Fenster mit 4 Buttons -->
   <div class="start-overlay" id="start" data-autostart="0">
     <div class="card">
-      <h1>Siedler‑Mini</h1>
-      <p>Tippe auf Start. Die Karte lädt erst danach.</p>
+      <h1>Siedler-Mini</h1>
+      <p>Willkommen! Bitte wählen:</p>
       <div class="row">
         <button class="btn" id="btnStart">Start</button>
+        <button class="btn" id="btnLoad">Laden</button>
         <button class="btn warn" id="btnReset">Reset</button>
-        <!-- Dritte Taste (Platzhalter): z. B. „Optionen“ -->
-        <button class="btn" id="btnOptions">Optionen</button>
+        <button class="btn" id="btnFullscreen">Vollbild</button>
       </div>
     </div>
   </div>
 
-  <!-- Canvas (Map wird erst nach Start gezeichnet) -->
   <canvas id="game"></canvas>
 
-  <!-- Debug-Panel: Infos -->
+  <!-- Debug-Info -->
   <div class="panel" id="pInfo" aria-hidden="true">
     <h3>Infos</h3>
     <div class="kv">
       <div class="k">DPR</div><div class="v" id="vDpr">–</div>
       <div class="k">Viewport</div><div class="v" id="vVp">–</div>
       <div class="k">Canvas</div><div class="v" id="vCv">–</div>
-      <div class="k">Boot</div><div class="v">./boot.js (eingebettet)</div>
-      <div class="k">Map</div><div class="v">./assets/maps/map-pro.json</div>
-      <div class="k">Atlas</div><div class="v">./assets/tiles/tileset.(json/png)</div>
-      <div class="k">Renderer</div><div class="v">Canvas2D</div>
+      <div class="k">Boot</div><div class="v">./boot.js</div>
     </div>
   </div>
 
-  <!-- Debug-Panel: Overlays -->
-  <div class="panel" id="pLayers" aria-hidden="true">
-    <h3>Overlays</h3>
-    <label style="display:flex;align-items:center;gap:.5rem;margin:.25rem 0;">
-      <input type="checkbox" id="chkGrid" /> Kachel-Gitter (64px)
-    </label>
-    <label style="display:flex;align-items:center;gap:.5rem;margin:.25rem 0;">
-      <input type="checkbox" id="chkAABBox" /> Tile-Bounds
-    </label>
-    <label style="display:flex;align-items:center;gap:.5rem;margin:.25rem 0;">
-      <input type="checkbox" id="chkAnimDbg" /> Anim-Index einblenden
-    </label>
-  </div>
-
   <!-- Debug-Bar -->
-  <div class="dbg" role="toolbar" aria-label="Debug-Leiste">
+  <div class="dbg">
     <button class="pill" id="tglInfo" aria-pressed="false">ℹ️ Infos</button>
     <button class="pill" id="tglLayers" aria-pressed="false">🗺️ Overlays</button>
     <span class="sep"></span>
@@ -166,165 +123,66 @@
     </div>
   </div>
 
-  <!-- Boot/Glue: Startfenster steuert den Start. Keine Map vor Klick! -->
   <script type="module">
     import { Assets } from './core/asset.js';
     import { SiedlerMap } from './tools/map-runtime.js';
 
     const cv = document.getElementById('game');
     const ctx = cv.getContext('2d', { alpha:false });
+    const start = document.getElementById('start');
+    const btnStart = document.getElementById('btnStart');
+    const btnLoad = document.getElementById('btnLoad');
+    const btnReset = document.getElementById('btnReset');
+    const btnFullscreen = document.getElementById('btnFullscreen');
 
-    const pInfo = document.getElementById('pInfo');
-    const pLayers = document.getElementById('pLayers');
-    const tglInfo = document.getElementById('tglInfo');
-    const tglLayers = document.getElementById('tglLayers');
-    const btnReload = document.getElementById('btnReload');
-    const btnCenter = document.getElementById('btnCenter');
     const vDpr = document.getElementById('vDpr');
     const vVp = document.getElementById('vVp');
     const vCv = document.getElementById('vCv');
 
-    const chkGrid = document.getElementById('chkGrid');
-    const chkAAB = document.getElementById('chkAABBox');
-    const chkAnimDbg = document.getElementById('chkAnimDbg');
-
-    const start = document.getElementById('start');
-    const btnStart = document.getElementById('btnStart');
-    const btnReset = document.getElementById('btnReset');
-    const btnOptions = document.getElementById('btnOptions');
-
-    // Query-Flags
-    const Q = new URLSearchParams(location.search);
-    const qGrid = Q.get('grid');   if (qGrid==='1') chkGrid.checked = true;
-    const qAAB  = Q.get('bounds'); if (qAAB==='1')  chkAAB.checked = true;
-    const qAnim = Q.get('animdbg');if (qAnim==='1') chkAnimDbg.checked = true;
-
-    // Canvas/DPR
     function resize(){
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      const w = Math.floor(innerWidth);
-      const h = Math.floor(innerHeight);
-      cv.width = Math.floor(w * dpr);
-      cv.height = Math.floor(h * dpr);
-      cv.style.width = w+'px';
-      cv.style.height = h+'px';
+      const w = innerWidth, h = innerHeight;
+      cv.width = w * dpr; cv.height = h * dpr;
+      cv.style.width = w+'px'; cv.style.height = h+'px';
       ctx.setTransform(dpr,0,0,dpr,0,0);
-
       vDpr.textContent = dpr.toFixed(2);
-      vVp.textContent = `${w}×${h}`;
-      vCv.textContent = `${cv.width}×${cv.height} (CSS ${w}×${h})`;
+      vVp.textContent = `${w}×${h}`; vCv.textContent = `${cv.width}×${cv.height}`;
     }
     addEventListener('resize', resize);
-    Assets.imageRenderingCrisp(cv);
-    resize();
+    Assets.imageRenderingCrisp(cv); resize();
 
-    // Panels
-    function togglePanel(btn, panel){
-      const vis = panel.classList.toggle('show');
-      btn.setAttribute('aria-pressed', String(vis));
-      panel.setAttribute('aria-hidden', String(!vis));
-    }
-    tglInfo.addEventListener('click', ()=> togglePanel(tglInfo, pInfo));
-    tglLayers.addEventListener('click', ()=> togglePanel(tglLayers, pLayers));
-
-    btnReload.addEventListener('click', ()=> location.reload());
-    btnCenter.addEventListener('click', ()=> { view.x = 0; view.y = 0; });
-
-    // FPS
-    let fps=0, _lf=performance.now();
-    function tickFps(){
-      const now = performance.now();
-      const dt = now - _lf; _lf = now;
-      fps = 1000 / (dt||16.7);
-      document.getElementById('lblFps').textContent = 'FPS: ' + Math.round(fps);
-    }
-
-    // Kamera/View
-    const view = { x:0, y:0, w:0, h:0 };
-
-    // Welt/Renderer – wird erst nach Start initialisiert
     let world=null, started=false;
-
     async function begin(){
-      if (started) return;
-      started = true;
-
-      // Preload Map/Atlas (Map bleibt bis Start unsichtbar → kein "Glitch" oben links)
+      if (started) return; started=true;
       await Assets.loadAll({
-        images: [ './assets/tiles/tileset.png' ],
-        json:   [ './assets/tiles/tileset.json', './assets/maps/map-pro.json' ]
+        images:['./assets/tiles/tileset.png'],
+        json:['./assets/tiles/tileset.json','./assets/maps/map-pro.json']
       });
       const worldJson = await Assets.get('./assets/maps/map-pro.json');
-
       world = new SiedlerMap({
-        tileResolver: (name)=> './assets/' + name,
-        onReady: ()=> loop()
+        tileResolver:(n)=>'./assets/'+n,
+        onReady:()=>loop()
       });
       await world.loadFromObject(worldJson);
     }
 
-    function drawDebugOverlays(){
-      const ts = 64;
-      if (chkGrid.checked){
-        ctx.save();
-        ctx.globalAlpha = .35;
-        ctx.beginPath();
-        for (let x = - (view.x % ts); x < view.w; x += ts){
-          ctx.moveTo(x, 0); ctx.lineTo(x, view.h);
-        }
-        for (let y = - (view.y % ts); y < view.h; y += ts){
-          ctx.moveTo(0, y); ctx.lineTo(view.w, y);
-        }
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = '#2b3b53';
-        ctx.stroke();
-        ctx.restore();
-      }
-      if (chkAAB.checked){
-        ctx.save();
-        ctx.globalAlpha = .35;
-        ctx.fillStyle = '#982e2e';
-        ctx.fillRect(6,6,10,10); // Platzhalter
-        ctx.restore();
-      }
-      if (chkAnimDbg.checked){
-        ctx.save();
-        ctx.globalAlpha = .9;
-        ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-        ctx.fillStyle = '#cfe3ff';
-        ctx.fillText('Anim-Debug: EIN', 12, 24);
-        ctx.restore();
-      }
-    }
-
     function loop(){
-      tickFps();
       ctx.clearRect(0,0,cv.width,cv.height);
-      view.w = cv.width; view.h = cv.height;
-      if (world){
-        world.draw(ctx, view);
-      }
-      drawDebugOverlays();
+      if (world) world.draw(ctx,{x:0,y:0,w:cv.width,h:cv.height});
       requestAnimationFrame(loop);
     }
 
-    // Startfenster: immer sichtbar zu Beginn
+    // Buttons
+    btnStart.addEventListener('click',()=>{ start.classList.remove('show'); begin(); });
+    btnLoad.addEventListener('click',()=>alert('Laden: Funktion kommt später.'));
+    btnReset.addEventListener('click',()=>location.reload());
+    btnFullscreen.addEventListener('click',()=>{
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    });
+
+    // Startfenster immer zeigen
     start.classList.add('show');
-
-    btnStart.addEventListener('click', ()=>{
-      start.classList.remove('show');
-      begin();
-    });
-
-    btnReset.addEventListener('click', ()=>{
-      // „Reset“: alles neu laden (Cache leer + Layout sauber)
-      location.reload();
-    });
-
-    btnOptions.addEventListener('click', ()=>{
-      // Placeholder – später mit Optionen füllen
-      togglePanel(tglLayers, pLayers);
-    });
   </script>
 </body>
 </html>
