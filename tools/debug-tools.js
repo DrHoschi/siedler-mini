@@ -4,7 +4,7 @@
 // Läuft ohne andere Skripte nachzuladen (keine Konflikte).
 
 // TEMP: Prüft, dass die Datei sicher geladen wird (kannst du später löschen)
-alert("DebugTools geladen"); // TEMP zum Test, später entfernen
+// alert("DebugTools geladen"); // TEMP zum Test, später entfernen
 console.log("[DebugTools] geladen");
 
 // ======================================================================
@@ -152,10 +152,10 @@ function logFolderStructure(map) {
 }
 
 // ======================================================================
-// 5) HIER passt du an, was geprüft werden soll (wie bei dir) 
+// 5) HIER passt du an, was geprüft werden soll (wie bei dir)
 // ======================================================================
 checkAssets([
-  './core/assets.js',
+  './core/asset.js',
   './tools/map-runtime.js',
   './maps/map-pro.json',
   './assets/tileset.png',
@@ -163,7 +163,7 @@ checkAssets([
 ]);
 
 logFolderStructure({
-  core:   ['assets.js'],
+  core:   ['asset.js'],
   tools:  ['map-runtime.js'],
   maps:   ['map-pro.json'],
   assets: ['tileset.png', 'sprites.png']
