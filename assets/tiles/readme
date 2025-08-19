@@ -1,0 +1,10 @@
+/assets/
+  tiles/
+    tileset.png
+    tileset.json   ← Atlas-Beschreibung (Frames, Animationen)
+  maps/
+    map-pro.json   ← deine Map
+/core/
+  asset.js         ← neuer kleiner Loader (unten)
+/tools/
+  map-runtime.js   ← aktualisiert für Atlas + Animation (unten)
