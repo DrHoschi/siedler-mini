@@ -136,6 +136,49 @@
   <script>
   console.log("Sanity: inline JS läuft");
 </script>
-  
+  <!-- Sprite/Map-Integration: lädt map-pro.json + sprites.json, rendert objects[] -->
+<script type="module">
+  import { SiedlerMap, SpriteAtlas, ObjectSpriteSystem } from './tools/map-runtime.js';
+
+  // Canvas/Context initialisieren
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+
+  // Device-Pixel-Scaling (scharf auf HiDPI)
+  function resizeCanvas(){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    cv.width  = Math.floor(cv.clientWidth  * dpr);
+    cv.height = Math.floor(cv.clientHeight * dpr);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(dpr, dpr);
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // Welt anlegen und Karte laden
+  const world = new SiedlerMap({
+    tileResolver: (name)=> './assets/' + name, // falls Tile-Bilder genutzt werden
+    onReady: ()=> {/* Loop unten */ }
+  });
+  const mapJson = await (await fetch('./maps/map-pro.json')).json();
+  await world.loadFromObject(mapJson);
+
+  // Sprite-Atlas (sprites.json + sprites.png aus /assets/)
+  const atlas = new SpriteAtlas();
+  await atlas.load('./assets/sprites.json');
+
+  // Objects[] → Sprites zeichnen
+  const objSprites = new ObjectSpriteSystem(world, atlas);
+
+  // Render-Loop: erst Map, dann Objekte
+  let last = performance.now();
+  function loop(now = performance.now()){
+    const dt = (now - last) / 1000; last = now;
+    world.draw(ctx, { x:0, y:0, w:cv.clientWidth, h:cv.clientHeight }, { clear:true });
+    objSprites.drawAll(ctx, dt);
+    requestAnimationFrame(loop);
+  }
+  loop();
+</script>
 </body>
 </html>
