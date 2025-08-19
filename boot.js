@@ -28,7 +28,6 @@ import { game } from './game.js';
   const btnDebug     = $('#btnDebug') || addTopBtn('btnDebug', 'Debug');
   const btnCenter    = $('#btnCenter') || addTopBtn('btnCenter', 'Zentrieren');
   const btnCenter2   = $('#btnCenter2'); // optional vorhanden
-  const toolButtons  = $$('#tools .btn');
 
   // ► Neuer Pfad-Checker Button (falls nicht vorhanden, wird er erzeugt)
   let btnPath = $('#btnPath');
@@ -138,13 +137,32 @@ import { game } from './game.js';
   });
 
   // ► Pfad-Checker Toggle
-  btnPath.addEventListener('click', ()=>{
-    const enabled = game.togglePathOverlay();
-    btnPath.classList.toggle('active', enabled);
-    showToast('Pfad-Overlay: ' + (enabled?'AN':'AUS'));
-  });
+  if (btnPath) {
+    btnPath.addEventListener('click', ()=>{
+      const enabled = game.togglePathOverlay();
+      btnPath.classList.toggle('active', enabled);
+      showToast('Pfad-Overlay: ' + (enabled?'AN':'AUS'));
+    });
+  }
 
-  // Tools (links)
+  // -------------------------------------------------------------------
+  // NEU: Baumenü-Integration (#buildDock / #buildList) statt #tools
+  // -------------------------------------------------------------------
+  const buildToggle = $('#buildToggle');         // Button "Baumenü"
+  const buildList   = $('#buildList');           // Container mit Tool-Buttons
+  if (buildToggle && buildList){
+    // Ein-/Ausklappen
+    buildToggle.addEventListener('click', () => {
+      const show = buildList.hasAttribute('hidden');
+      if (show) buildList.removeAttribute('hidden'); else buildList.setAttribute('hidden','');
+    });
+  }
+
+  // ALT (entfernt): const toolButtons  = $$('#tools .btn');
+  // NEU: Tool-Buttons kommen aus #buildList
+  const toolButtons = buildList ? Array.from(buildList.querySelectorAll('.btn')) : [];
+
+  // Tools (Baumenü)
   toolButtons.forEach(b=>{
     b.addEventListener('click', ()=>{
       toolButtons.forEach(x=>x.classList.remove('active'));
@@ -195,8 +213,8 @@ import { game } from './game.js';
       }
     });
 
-    // Start-Tool = Zeiger markieren
-    const btnPointer = document.querySelector('[data-tool="pointer"]');
+    // Start-Tool = Zeiger markieren (im Baumenü)
+    const btnPointer = document.querySelector('#buildList [data-tool="pointer"]');
     if (btnPointer){
       toolButtons.forEach(x=>x.classList.remove('active'));
       btnPointer.classList.add('active');
@@ -216,5 +234,15 @@ import { game } from './game.js';
 
   // Startkarte initial
   showStart();
+
+  // Optional: Body-Klassen je nach Orientierung (falls du sie brauchst)
+  // (CSS funktioniert bereits über @media, das hier ist nur als Hook)
+  function updateOrientationClass(){
+    document.body.classList.toggle('is-portrait',  matchMedia('(orientation: portrait)').matches);
+    document.body.classList.toggle('is-landscape', matchMedia('(orientation: landscape)').matches);
+  }
+  updateOrientationClass();
+  window.addEventListener('resize', updateOrientationClass, {passive:true});
+  window.addEventListener('orientationchange', updateOrientationClass);
 
 })();
