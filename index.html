@@ -47,16 +47,18 @@
       padding:6px 10px; font-size:14px; line-height:18px; display:inline-flex; align-items:center; gap:8px
     }
 
-    /* Tools links */
-    #tools{position:fixed; left:8px; top:64px; display:flex; flex-direction:column; gap:8px; z-index:3}
-    .btn{
-      background:#0f1b29; border:1px solid #1b2a40; border-radius:12px; color:#cfe3ff;
-      font-size:15px; padding:8px 12px; cursor:pointer
-    }
-    .btn.active{outline:2px solid #2f7de1}
-    .btn.ok{background:var(--ok); border-color:#0a6129}
-    .btn.danger{background:var(--warn); border-color:#752020}
-
+<!-- === Baumenü (Dock) === -->
+<div id="buildDock" aria-label="Baumenü">
+  <button id="buildToggle" class="btn">Baumenü</button>
+  <div id="buildList" class="build-list" hidden>
+    <button class="btn" data-tool="pointer">Zeiger</button>
+    <button class="btn" data-tool="road">Straße</button>
+    <button class="btn" data-tool="hq">HQ</button>
+    <button class="btn" data-tool="woodcutter">Holzfäller</button>
+    <button class="btn" data-tool="depot">Depot</button>
+    <button class="btn" data-tool="erase">Abriss</button>
+  </div>
+</div>
     /* Buttons rechts */
     #hudRight{position:fixed; right:8px; top:64px; display:flex; gap:8px; z-index:3}
 
