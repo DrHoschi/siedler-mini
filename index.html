@@ -213,5 +213,13 @@
       document.body.classList.add('has-start');
     });
   </script>
+  <!-- Dev HUD: nur in Entwicklung laden -->
+<script type="module">
+  // Toggle über URL-Flag ?dev=1
+  const dev = /[?&]dev=1/.test(location.search);
+  if (dev) {
+    import('./tools/dev-inspector.js');
+  }
+</script>
 </body>
 </html>
