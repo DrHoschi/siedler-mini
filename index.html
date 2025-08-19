@@ -197,7 +197,12 @@
   ======================================================= -->
   <script type="module" src="./boot.js?v=147b4"></script>
   <script type="module" src="./tools/debug-tools.js?v=7"></script>
-
+<!-- z.B. am Ende von index.html, NACH debug-tools.js -->
+<script>
+  if (location.search.includes('dev=1') && window.DebugTools) {
+    DebugTools.Assets.expectFromJSON('/assets/manifest.json');
+  }
+</script>
   <!-- Mini-Helper: steuert die Start-UI rein/raus (ohne boot.js ändern zu müssen) -->
   <script>
     // Start: Overlay sichtbar → UI aus
