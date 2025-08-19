@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<title>Texture Checker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; margin:16px;}
+  header{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  button{padding:8px 12px;border:1px solid #ccc;border-radius:6px;background:#f7f7f7;cursor:pointer}
+  .ok{color:#0a0}
+  .warn{color:#b80}
+  .bad{color:#c00}
+  table{border-collapse:collapse;width:100%;margin-top:12px}
+  th,td{border:1px solid #ddd;padding:6px;font-size:12px}
+  th{background:#fafafa;position:sticky;top:0}
+  details{margin:12px 0}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>Texture Checker</h1>
+  <input id="picker" type="file" webkitdirectory multiple accept="image/*" />
+  <input id="multi" type="file" multiple accept="image/*" />
+  <button id="btnExportCSV" disabled>CSV exportieren</button>
+  <button id="btnExportJSON" disabled>JSON exportieren</button>
+</header>
+
+<details open>
+  <summary><b>Prüfregeln</b></summary>
+  <ul>
+    <li>Duplikate: identischer aHash <em>und</em> gleiche Dimensionen/Bytes (nahezu‑identisch) sowie <b>ähnliche</b> Bilder (Hamming‑Distanz ≤ 6).</li>
+    <li>Formate: PNG, JPG, WEBP, GIF.</li>
+    <li>Hinweise: nicht quadratisch und/oder keine Power‑of‑Two‑Kanten (z. B. 300×300, 300×512).</li>
+  </ul>
+</details>
+
+<div id="stats"></div>
+<div id="issues"></div>
+<div id="table"></div>
+
+<script>
+// ---- kleine Helfer ---------------------------------------------------------
+const POT = n => (n & (n-1)) === 0;
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+function hammingDistanceBigInt(a, b){
+  let x = (a ^ b);
+  let c = 0n;
+  while (x) { c += (x & 1n); x >>= 1n; }
+  return Number(c);
+}
+
+// aHash (8x8, grau) -> 64-bit BigInt
+async function aHashFromFile(file){
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = url;
+  await img.decode().catch(()=>{});
+  const cnv = document.createElement('canvas');
+  cnv.width = 8; cnv.height = 8;
+  const ctx = cnv.getContext('2d', {willReadFrequently:true});
+  // Draw scaled
+  ctx.drawImage(img, 0, 0, 8, 8);
+  const {data} = ctx.getImageData(0,0,8,8);
+  // to grayscale + mean
+  const gray = [];
+  for (let i=0;i<data.length;i+=4){
+    const g = Math.round(0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]);
+    gray.push(g);
+  }
+  const mean = gray.reduce((a,b)=>a+b,0)/64;
+  let bits = 0n;
+  for (let i=0;i<64;i++){
+    bits <<= 1n;
+    if (gray[i] >= mean) bits |= 1n;
+  }
+  URL.revokeObjectURL(url);
+  return bits; // BigInt
+}
+
+async function getImageDims(file){
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = url;
+  await img.decode().catch(()=>{});
+  const w = img.naturalWidth, h = img.naturalHeight;
+  URL.revokeObjectURL(url);
+  return {w,h};
+}
+
+function formatBytes(n){
+  if (n < 1024) return `${n} B`;
+  const k = 1024, units = ['KB','MB','GB'];
+  let i = -1; do { n /= k; i++; } while (n >= k && i < units.length-1);
+  return `${n.toFixed(1)} ${units[i]}`;
+}
+
+// ---- Hauptlogik ------------------------------------------------------------
+const picker = document.getElementById('picker');
+const multi  = document.getElementById('multi');
+const stats  = document.getElementById('stats');
+const issues = document.getElementById('issues');
+const tableDiv = document.getElementById('table');
+const btnCSV = document.getElementById('btnExportCSV');
+const btnJSON = document.getElementById('btnExportJSON');
+
+let report = null;
+
+async function handleFiles(fileList){
+  const files = [...fileList].filter(f => /^image\//.test(f.type));
+  if (!files.length){ alert('Keine Bilddateien gefunden.'); return; }
+
+  stats.textContent = 'Analysiere…';
+  issues.innerHTML = '';
+  tableDiv.innerHTML = '';
+  report = null;
+  btnCSV.disabled = btnJSON.disabled = true;
+
+  const rows = [];
+  // Schrittweise, damit UI nicht einfriert bei vielen Dateien
+  for (let i=0;i<files.length;i++){
+    const f = files[i];
+    const path = f.webkitRelativePath || f.name;
+    const {w,h} = await getImageDims(f);
+    const hash = await aHashFromFile(f);
+    rows.push({
+      path, name: f.name, size: f.size, type: f.type,
+      width: w, height: h,
+      sq: (w===h), potW: POT(w), potH: POT(h),
+      ahash: '0x'+hash.toString(16).padStart(16,'0'),
+      ahashBig: hash
+    });
+    if ((i%20)===0) await sleep(0);
+  }
+
+  // Duplikate (exakt nach (hash,w,h,bytes)) & ähnliche (Hamming ≤ 6)
+  const exactMap = new Map();
+  const similarPairs = [];
+  for (const r of rows){
+    const k = `${r.ahash}|${r.width}x${r.height}|${r.size}`;
+    if (!exactMap.has(k)) exactMap.set(k, []);
+    exactMap.get(k).push(r);
+  }
+  // Ähnlichkeiten (N^2; ok für kleinere Sets)
+  for (let i=0;i<rows.length;i++){
+    for (let j=i+1;j<rows.length;j++){
+      const a = rows[i], b = rows[j];
+      // Skip wenn exakt gleich-Gruppe
+      if (a.ahash===b.ahash && a.width===b.width && a.height===b.height && a.size===b.size) continue;
+      const dist = hammingDistanceBigInt(a.ahashBig, b.ahashBig);
+      if (dist <= 6){
+        similarPairs.push({a:a.path,b:b.path,dist});
+      }
+    }
+  }
+
+  // gleiche Basenames in unterschiedlichen Ordnern
+  const basenameMap = new Map();
+  for (const r of rows){
+    if (!basenameMap.has(r.name)) basenameMap.set(r.name, []);
+    basenameMap.get(r.name).push(r.path);
+  }
+  const sameNameDiffPath = [...basenameMap.entries()]
+    .filter(([,arr]) => new Set(arr.map(p=>p.substring(0,p.lastIndexOf('/')))).size > 1);
+
+  // Hinweise sammeln
+  const nonSquare = rows.filter(r=>!r.sq);
+  const nonPOT = rows.filter(r=>!(r.potW && r.potH));
+
+  // Tabellen-Rendering
+  tableDiv.innerHTML = renderTable(rows);
+  const exactGroupsHTML = [...exactMap.values()]
+     .filter(arr => arr.length>1)
+     .map(arr => `<li><span class="bad">Exakte Duplikate (${arr.length})</span><ul>${arr.map(x=>`<li class="mono">${x.path} — ${x.width}×${x.height}, ${formatBytes(x.size)}, ${x.ahash}</li>`).join('')}</ul></li>`)
+     .join('');
+  const similarHTML = similarPairs
+     .sort((x,y)=>x.dist-y.dist)
+     .slice(0,300)
+     .map(p=>`<li class="mono">(${p.dist}) ${p.a} ↔ ${p.b}</li>`).join('');
+  const sameNameHTML = sameNameDiffPath
+     .map(([name,arr])=>`<li><span class="warn">Gleicher Dateiname:</span> <b class="mono">${name}</b><ul>${arr.map(p=>`<li class="mono">${p}</li>`).join('')}</ul></li>`)
+     .join('');
+
+  issues.innerHTML = `
+  <h3>Funde</h3>
+  <ul>
+    <li><b>Exakte Duplikat‑Gruppen:</b> ${[...exactMap.values()].filter(a=>a.length>1).length}</li>
+    <li><b>Ähnliche Paare (Hamming ≤ 6):</b> ${similarPairs.length}</li>
+    <li><b>Gleiche Namen in verschiedenen Ordnern:</b> ${sameNameDiffPath.length}</li>
+    <li><b>Nicht quadratisch:</b> ${nonSquare.length}</li>
+    <li><b>Keine POT‑Kanten:</b> ${
