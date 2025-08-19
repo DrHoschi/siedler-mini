@@ -1,5 +1,26 @@
-html.ios body{ overscroll-behavior:none; }
-html.ios #hudTop, html.ios #tools, html.ios #hudRight{
-  padding-left: env(safe-area-inset-left,0); padding-right: env(safe-area-inset-right,0);
+/* iOS-spezifische Feinheiten (z. B. Safari Overscroll & Safe-Area) */
+html.ios body{ overscroll-behavior: none; }
+
+/* Safe-Area für obere HUD-Zeile und Seitenränder */
+html.ios #hudTop,
+html.ios #tools,
+html.ios #hudRight{
+  padding-left:  env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
 }
-html.ios #hudTop{ padding-top: calc(env(safe-area-inset-top,0) + 6px); }
+
+/* Abstand nach oben bei der Top-HUD */
+html.ios #hudTop{
+  padding-top: calc(env(safe-area-inset-top, 0) + 6px);
+}
+
+/* ✅ iOS: zusätzliche Rücksicht auf Home-Indikator in der Bottom-Bar */
+html.ios #hudRight{
+  /* ergänzt die mobile.css-Regel um mehr Unterluft, falls nötig */
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
+}
+
+/* ✅ iOS: Toast sitzt ebenfalls oberhalb der Bottom-Bar */
+html.ios #toast{
+  bottom: calc(76px + env(safe-area-inset-bottom, 0));
+}
