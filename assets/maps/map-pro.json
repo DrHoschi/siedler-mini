@@ -1,54 +1,30 @@
 {
-  "version": 1,
-  "name": "map-pro",
   "tileSize": 64,
-  "width": 14,
-  "height": 10,
-  "tileset": "tileset.json",
-  "legend": { "0":"grass","1":"dirt","2":"water","3":"sand","4":"forest","5":"rock","6":"path","7":"mountain" },
-  "layers": {
-    "ground": [
-      [2,2,2,2,2,2,2,2,2,2,2,2,2,2],
-      [2,3,3,3,3,3,3,3,3,3,3,3,3,2],
-      [2,3,0,0,0,0,0,0,0,0,0,0,3,2],
-      [2,3,0,0,0,0,0,0,0,0,0,0,3,2],
-      [2,3,0,0,0,0,0,0,0,0,0,0,3,2],
-      [2,6,6,6,6,6,6,0,0,0,0,0,3,2],
-      [2,3,0,0,0,0,0,0,0,0,0,0,3,2],
-      [2,3,0,0,0,0,0,0,0,0,0,0,3,2],
-      [2,3,3,3,3,3,3,3,3,3,3,3,3,2],
-      [2,2,2,2,2,2,2,2,2,2,2,2,2,2]
-    ],
-    "overlay": [
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
-      [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
-    ],
-    "collision": [
-      [true,true,true,true,true,true,true,true,true,true,true,true,true,true],
-      [true,false,false,false,false,false,false,false,false,false,false,false,false,true],
-      [true,false,false,false,false,false,false,false,false,false,false,false,false,true],
-      [true,false,false,false,false,false,false,false,false,false,false,false,false,true],
-      [true,false,false,false,false,false,true,true,false,false,false,false,false,true],
-      [true,false,false,false,false,false,true,true,false,false,false,false,false,true],
-      [true,false,false,false,false,false,false,false,false,false,false,false,false,true],
-      [true,false,false,false,false,false,false,false,false,false,false,false,false,true],
-      [true,false,false,false,false,false,false,false,false,false,false,false,false,true],
-      [true,true,true,true,true,true,true,true,true,true,true,true,true,true]
-    ]
-  },
-  "objects": [
-    { "id": "hq1", "type": "building", "kind": "hq",        "pos": { "col": 7, "row": 4 }, "scale": 1 },
-    { "id": "mkt", "type": "building", "kind": "market",    "pos": { "col": 6, "row": 5 } },
-    { "id": "spw", "type": "spawn",    "kind": "player",    "pos": { "col": 2, "row": 5 } },
-    { "id": "wrk", "type": "unit",     "anim": "carrier_idle","pos": { "col": 7, "row": 5 } }
-  ],
-  "start": { "camera": { "x": 512, "y": 320 }, "focusObjectId": "hq1" }
+  "atlas": "./assets/tiles/tileset.json",
+  "layers": [
+    {
+      "name": "ground",
+      "type": "tile",
+      "grid": [
+        ["grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
+        ["grass","grass","grass","grass","grass","grass","grass","grass"]
+      ]
+    },
+    {
+      "name": "edges",
+      "type": "tile",
+      "grid": [
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,"forest_edge_E",null,null,null],
+        [null,null,"forest_edge_N",null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null]
+      ]
+    }
+  ]
 }
