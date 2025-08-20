@@ -1,27 +1,40 @@
 /* ================================================================================================
-   Siedler‑Mini V14.7‑hf2 — game.js
+   Siedler‑Mini V14.7‑hf3 — game.js
    Zweck:
      • Startfunktion startGame({canvas,ctx}) – wird von index.html aufgerufen
      • Stabiler Render‑Loop (Pan/Zoom, HiDPI, HUD, Grid‑Fallback)
      • Sanfte Imports (core/asset.js, tools/map-runtime.js)
-     • Karten‑Ladung mit klaren Logs (URL + HTTP‑Codes)
+     • Karten‑Ladung mit ROBUSTER URL (Patch B) + klaren Debug‑Logs
    Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports
+   Hinweis:
+     • Kommentare bitte beibehalten; später nur aktualisieren/ergänzen.
    ================================================================================================ */
 
+/// —————————————————————————————————————————————————————————————————————————————
+/// Imports (sanft via dynamic import – keine harten Crashs, Overlay zeigt Fehler)
+/// —————————————————————————————————————————————————————————————————————————————
 async function tryImport(path){
   try{ return await import(path); }
-  catch(e){ console.error(`Import fehlgeschlagen: ${path}`, e); return null; }
+  catch(e){ console.error(`Import fehlgeschlagen: ${path}`, e); dbgOverlay(`Import fehlgeschlagen: ${path}`, e?.stack||String(e)); return null; }
 }
 
 // Optionale Module (werden in startGame() geladen)
 let M_ASSET = null;   // ./core/asset.js
 let M_TOOLS = null;   // ./tools/map-runtime.js
 
-// — Konstanten —
-const DPR_MIN=1, GRID_SIZE=64, HUD_PAD=8, ZOOM_MIN=0.5, ZOOM_MAX=3.5, ZOOM_STEP=0.1;
+/// —————————————————————————————————————————————————————————————————————————————
+/// Konstanten
+/// —————————————————————————————————————————————————————————————————————————————
+const DPR_MIN=1;
+const GRID_SIZE=64;
+const HUD_PAD=8;
+const ZOOM_MIN=0.5, ZOOM_MAX=3.5, ZOOM_STEP=0.1;
 
-// — Helpers —
+/// —————————————————————————————————————————————————————————————————————————————
+/// Hilfsfunktionen (Canvas/Zeichnen/Overlay)
+/// —————————————————————————————————————————————————————————————————————————————
 function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
 function setupHiDPICanvas(cv){
   const dpr=Math.max(DPR_MIN, window.devicePixelRatio||1);
   const w=(innerWidth||document.documentElement.clientWidth);
@@ -30,6 +43,7 @@ function setupHiDPICanvas(cv){
   cv.style.width=w+'px'; cv.style.height=h+'px';
   return dpr;
 }
+
 function drawHUD(ctx, lines, dpr){
   const pad=HUD_PAD*dpr, w=ctx.canvas.width;
   ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#0f1b29';
@@ -37,6 +51,7 @@ function drawHUD(ctx, lines, dpr){
   ctx.save(); ctx.font=`${Math.max(12*dpr,14*dpr)}px ui-monospace,monospace`; ctx.fillStyle='#cfe3ff';
   let y=pad+18*dpr; for(const ln of lines){ ctx.fillText(ln, pad+16*dpr, y); y+=18*dpr; } ctx.restore();
 }
+
 function drawGrid(ctx, cam, dpr){
   const w=ctx.canvas.width, h=ctx.canvas.height, step=GRID_SIZE*cam.zoom*dpr;
   const offX= (-(cam.x*cam.zoom*dpr))%step, offY= (-(cam.y*cam.zoom*dpr))%step;
@@ -45,7 +60,8 @@ function drawGrid(ctx, cam, dpr){
   for(let y=offY; y<h; y+=step){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
   ctx.stroke(); ctx.restore();
 }
-/** Schreibt eine Zeile ins Debug‑Overlay (sicher). */
+
+/** Schreibt eine Zeile ins Debug‑Overlay (nie werfen). */
 function dbgOverlay(msg, extra){
   try{
     const box=document.getElementById('dbgOverlay'); if(!box) return;
@@ -55,18 +71,24 @@ function dbgOverlay(msg, extra){
   }catch{}
 }
 
-// — Eingaben —
+/// —————————————————————————————————————————————————————————————————————————————
+/// Eingaben (Pan/Zoom)
+/// —————————————————————————————————————————————————————————————————————————————
 class InputController{
   constructor(canvas, camera){
     this.cv=canvas; this.cam=camera; this.dragging=false; this.last={x:0,y:0}; this.pinch=null;
+
     // Maus
     this.onDown=(ev)=>{ this.dragging=true; this.last={x:ev.clientX,y:ev.clientY}; ev.preventDefault(); };
     this.onMove=(ev)=>{ if(!this.dragging) return;
       const dx=(ev.clientX-this.last.x)/this.cam.zoom, dy=(ev.clientY-this.last.y)/this.cam.zoom;
       this.cam.x-=dx; this.cam.y-=dy; this.last={x:ev.clientX,y:ev.clientY}; };
     this.onUp =()=>{ this.dragging=false; };
+
+    // Wheel‑Zoom
     this.onWheel=(ev)=>{ const dir=Math.sign(ev.deltaY);
       this.cam.zoom=clamp(this.cam.zoom*(1 - dir*ZOOM_STEP), ZOOM_MIN, ZOOM_MAX); ev.preventDefault(); };
+
     // Touch
     this.onTouchStart=(ev)=>{ if(ev.touches.length===1){ const t=ev.touches[0];
         this.dragging=true; this.last={x:t.clientX,y:t.clientY}; }
@@ -79,24 +101,35 @@ class InputController{
         const dy=ev.touches[0].clientY-ev.touches[1].clientY; const d1=Math.hypot(dx,dy);
         this.cam.zoom=clamp(this.pinch.zoom0*(d1/this.pinch.d0), ZOOM_MIN, ZOOM_MAX); }
       ev.preventDefault(); };
+
     this.onTouchEnd=()=>{ this.dragging=false; this.pinch=null; };
 
-    // Registrieren
-    canvas.addEventListener('mousedown',this.onDown); addEventListener('mousemove',this.onMove); addEventListener('mouseup',this.onUp);
+    // Registrierung
+    canvas.addEventListener('mousedown',this.onDown);
+    addEventListener('mousemove',this.onMove);
+    addEventListener('mouseup',this.onUp);
     canvas.addEventListener('wheel',this.onWheel,{passive:false});
     canvas.addEventListener('touchstart',this.onTouchStart,{passive:false});
     canvas.addEventListener('touchmove',this.onTouchMove,{passive:false});
-    canvas.addEventListener('touchend',this.onTouchEnd,{passive:false}); canvas.addEventListener('touchcancel',this.onTouchEnd,{passive:false});
+    canvas.addEventListener('touchend',this.onTouchEnd,{passive:false});
+    canvas.addEventListener('touchcancel',this.onTouchEnd,{passive:false});
   }
+
   destroy(){
-    this.cv.removeEventListener('mousedown',this.onDown); removeEventListener('mousemove',this.onMove); removeEventListener('mouseup',this.onUp);
+    this.cv.removeEventListener('mousedown',this.onDown);
+    removeEventListener('mousemove',this.onMove);
+    removeEventListener('mouseup',this.onUp);
     this.cv.removeEventListener('wheel',this.onWheel);
-    this.cv.removeEventListener('touchstart',this.onTouchStart); this.cv.removeEventListener('touchmove',this.onTouchMove);
-    this.cv.removeEventListener('touchend',this.onTouchEnd); this.cv.removeEventListener('touchcancel',this.onTouchEnd);
+    this.cv.removeEventListener('touchstart',this.onTouchStart);
+    this.cv.removeEventListener('touchmove',this.onTouchMove);
+    this.cv.removeEventListener('touchend',this.onTouchEnd);
+    this.cv.removeEventListener('touchcancel',this.onTouchEnd);
   }
 }
 
-// — Game‑Klasse —
+/// —————————————————————————————————————————————————————————————————————————————
+/// Game‑Klasse
+/// —————————————————————————————————————————————————————————————————————————————
 class Game{
   constructor({ canvas, ctx }){
     this.cv=canvas; this.ctx=ctx; this.dpr=1;
@@ -109,10 +142,11 @@ class Game{
   async init(){
     // Größe/DPI
     this.onResize(); addEventListener('resize', this.onResize, {passive:true});
+
     // Eingaben
     this.input=new InputController(this.cv, this.camera);
 
-    // optional: Asset‑Manager
+    // optional: Asset‑Manager warmup
     if(M_ASSET && M_ASSET.AssetManager){
       try{
         this.state.assets = new M_ASSET.AssetManager({ base: './assets/' });
@@ -123,24 +157,37 @@ class Game{
       }
     }
 
-    // Karte versuchen zu laden (sicher + klare Logs)
+    // Karte laden (Patch B: robuste URL + klare Logs)
     await this.tryLoadMap();
   }
 
+  /**
+   * Patch B: Robuste URL für die Map + klare Logs
+   *  - Verwendet document.baseURI, damit auch Unterordner/Pages korrekt aufgelöst werden.
+   *  - Zeigt im Overlay die exakte URL + HTTP‑Status oder Fehler.
+   */
   async tryLoadMap(){
     if(!M_TOOLS || !M_TOOLS.SiedlerMap){
       console.warn('tools/map-runtime.js fehlt — überspringe Kartenladung.');
+      dbgOverlay('Map‑Lader übersprungen: tools/map-runtime.js fehlt.');
       return;
     }
-    const url = './maps/map-pro.json';
+
+    // ROBUSTE URL (wichtig für GitHub Pages und Unterpfade):
+    const url = new URL('./maps/map-pro.json', document.baseURI).href;
+    dbgOverlay(`Lade Karte: ${url}`);
+
     try{
-      dbgOverlay(`Lade Karte: ${url}`);
       const res = await fetch(url);
+      dbgOverlay(`[net] ${res.status} ${url}`);
       if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
       const json = await res.json();
+
+      // Map‑Instanz erstellen + laden
       const world = new M_TOOLS.SiedlerMap({ tileResolver: (n)=> './assets/' + n });
       await world.loadFromObject(json);
       this.state.map = world;
+
       dbgOverlay(`Karte geladen: ${url}`);
     }catch(e){
       console.warn('Karte konnte nicht geladen werden', e);
@@ -166,7 +213,7 @@ class Game{
   }
 
   update(dt){
-    // Später: Produktionsketten / Einheiten / etc.
+    // (später) Spiel‑Update / Entities / etc.
     if(this.state.map && this.state.map.update){
       try{ this.state.map.update(dt); }catch(e){ console.error('Map update fail', e); }
     }
@@ -176,7 +223,7 @@ class Game{
     const { ctx, cv, camera, dpr } = this;
     ctx.clearRect(0,0,cv.width,cv.height);
 
-    // Karte vorhanden → zeichnen; sonst Grid‑Fallback
+    // Karte zeichnen oder Grid‑Fallback
     if(this.state.map && this.state.map.draw){
       ctx.save();
       this.state.map.draw(ctx, { x:camera.x, y:camera.y, w:cv.width/dpr, h:cv.height/dpr, zoom:camera.zoom }, performance.now()-this.state.t0);
@@ -202,11 +249,13 @@ class Game{
   }
 }
 
-// — Öffentlicher Start‑Entry —
+/// —————————————————————————————————————————————————————————————————————————————
+/// Öffentlicher Start‑Entry
+/// —————————————————————————————————————————————————————————————————————————————
 export async function startGame({ canvas, ctx }){
   if(!canvas || !ctx) throw new Error('startGame: Canvas/Context fehlen');
 
-  // Sanft importieren (kein Crash bei 404/CORS)
+  // Sanft importieren (kein Crash bei 404/SyntaxError; Overlay loggt)
   M_ASSET = await tryImport('./core/asset.js');
   M_TOOLS = await tryImport('./tools/map-runtime.js');
 
@@ -221,6 +270,6 @@ export async function startGame({ canvas, ctx }){
   return game;
 }
 
-// Zusätzliche Hooks (optional)
+// Zusätzliche Hooks (optional; beibehalten für künftige Steps)
 export function prewarmAssets(){ /* reserviert */ }
 export function stopGame(){ try{ window.__SIEDLER_GAME__?.destroy?.(); }catch{} }
