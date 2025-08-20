@@ -265,409 +265,464 @@
   </div>
 
   <!-- BOOT/GLUE (nur dieser Block enthält Logik; alle anderen Dateien bleiben unberührt) -->
-  <script type="module">
-    import { Assets } from './core/asset.js';
-    import { SiedlerMap } from './tools/map-runtime.js';
+<script type="module">
+  import { Assets } from './core/asset.js';
+  import { SiedlerMap } from './tools/map-runtime.js';
 
-    /* ==== DOM/Refs ==== */
-    const bg = document.getElementById('bg');
-    const hud = document.getElementById('hud');
-    const build = document.getElementById('build');
-    const tabsEl = document.getElementById('tabs');
-    const gridEl = document.getElementById('grid');
-    const btnBuildText = document.getElementById('btnBuildText');
-    const btnBuildFab = document.getElementById('btnBuildFab');
+  /* ========= DOM ========= */
+  const bg  = document.getElementById('bg');
+  const hud = document.getElementById('hud');
+  const build = document.getElementById('build');
+  const tabsEl = document.getElementById('tabs');
+  const gridEl = document.getElementById('grid');
+  const btnBuildText = document.getElementById('btnBuildText');
+  const btnBuildFab  = document.getElementById('btnBuildFab');
 
-    const cv = document.getElementById('game');
-    const ctx = cv.getContext('2d', { alpha:false });
-    Assets.imageRenderingCrisp(cv);
+  const start = document.getElementById('start');
+  const btnStart = document.getElementById('btnStart');
+  const btnLoad  = document.getElementById('btnLoad');
+  const btnReset = document.getElementById('btnReset');
+  const btnFullscreen = document.getElementById('btnFullscreen');
+  const btnCloseFS = document.getElementById('btnCloseFS');
 
-    // Debug/Checker
-    const pInfo = document.getElementById('pInfo');
-    const tglInfo = document.getElementById('tglInfo');
-    const tglLayers = document.getElementById('tglLayers'); // Placeholder
-    const btnReload = document.getElementById('btnReload');
-    const btnCenter = document.getElementById('btnCenter');
-    const vDpr = document.getElementById('vDpr');
-    const vVp = document.getElementById('vVp');
-    const vCv = document.getElementById('vCv');
+  const pInfo = document.getElementById('pInfo');
+  const tglInfo = document.getElementById('tglInfo');
+  const tglLayers = document.getElementById('tglLayers');
+  const btnReload = document.getElementById('btnReload');
+  const btnCenter = document.getElementById('btnCenter');
+  const vDpr = document.getElementById('vDpr');
+  const vVp  = document.getElementById('vVp');
+  const vCv  = document.getElementById('vCv');
+  const lblFps = document.getElementById('lblFps');
+  const lblHint = document.getElementById('lblHint');
 
-    // Start/FULLSCREEN
-    const start = document.getElementById('start');
-    const btnStart = document.getElementById('btnStart');
-    const btnLoad = document.getElementById('btnLoad');
-    const btnReset = document.getElementById('btnReset');
-    const btnFullscreen = document.getElementById('btnFullscreen');
-    const btnCloseFS = document.getElementById('btnCloseFS');
+  /* ========= Canvas / Kamera ========= */
+  const TILE = 64;
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d', { alpha:false });
+  Assets.imageRenderingCrisp(cv);
 
-    /* ==== Kamera/Zoom/View ==== */
-    const TILE = 64;
-    const view = { x:0, y:0, w:0, h:0, s:1 }; // s = scale/zoom
-    function resize(){
-      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      const w = innerWidth, h = innerHeight;
-      cv.width = w * dpr; cv.height = h * dpr;
-      cv.style.width = w+'px'; cv.style.height = h+'px';
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      view.w = cv.width; view.h = cv.height;
-      vDpr.textContent = dpr.toFixed(2);
-      vVp.textContent = `${w}×${h}`;
-      vCv.textContent = `${cv.width}×${cv.height}`;
-    }
-    addEventListener('resize', resize);
-    resize();
+  const view = { x:0, y:0, w:0, h:0, s:1 };
+  function resize(){
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const w = innerWidth, h = innerHeight;
+    cv.width = w * dpr; cv.height = h * dpr;
+    cv.style.width = w+'px'; cv.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    view.w = cv.width; view.h = cv.height;
+    if (vDpr) vDpr.textContent = dpr.toFixed(2);
+    if (vVp)  vVp.textContent  = `${w}×${h}`;
+    if (vCv)  vCv.textContent  = `${cv.width}×${cv.height}`;
+  }
+  addEventListener('resize', resize);
+  resize();
 
-    function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-    function screenToWorld(px, py){ return { x: view.x + px / view.s, y: view.y + py / view.s }; }
-    function worldToScreen(wx, wy){ return { x: (wx - view.x) * view.s, y: (wy - view.y) * view.s }; }
+  const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
+  const screenToWorld = (px,py)=> ({ x: view.x + px / view.s, y: view.y + py / view.s });
+  const worldToScreen = (wx,wy)=> ({ x: (wx - view.x) * view.s, y: (wy - view.y) * view.s });
 
-    /* ==== Welt/Renderer ==== */
-    let world=null, started=false, _lf=performance.now();
+  /* ========= Welt / Atlas ========= */
+  let world=null, started=false, _lf=performance.now();
+  let atlas=null, atlasImage=null;
 
-    async function begin(){
-      if (started) return; started=true;
-      // Preload Map/Atlas
-      await Assets.loadAll({
-        images:['./assets/tiles/tileset.png'],
-        json:['./assets/tiles/tileset.json','./assets/maps/map-pro.json']
-      });
-      const worldJson = await Assets.get('./assets/maps/map-pro.json');
+  // Kategorien (fix) – Items werden dynamisch aus dem Atlas gemappt
+  const CATEGORIES = [
+    { id:'food',   label:'Nahrung',   items:[] },
+    { id:'res',    label:'Ressourcen',items:[] },
+    { id:'housing',label:'Wohnen',    items:[] },
+    { id:'mil',    label:'Militär',   items:[] },
+    { id:'roads',  label:'Logistik',  items:[] },
+    { id:'deco',   label:'Deko',      items:[] },
+    { id:'spec',   label:'Spezial',   items:[] },
+  ];
+  let activeCat = 'food';
+  let placeMode = null; // { id,label,cost,frame }
 
-      world = new SiedlerMap({
-        tileResolver:(n)=>'./assets/'+n,
-        onReady:()=> loop()
-      });
-      await world.loadFromObject(worldJson);
-    }
+  // Heuristik: ordnet Frame-Namen Kategorien zu (du hast die Sprites ja schon)
+  const RULES = [
+    { cat:'food',    rx:/(farm|mill|fisher|hunter|bak|bread|field)/i, labelMap:{fisher:'Fischerhütte',hunter:'Jägerhütte',farm:'Farm',mill:'Mühle'} },
+    { cat:'res',     rx:/(lumber|wood|saw|quarr|mine|ore|stone)/i,    labelMap:{lumber:'Holzfäller',sawmill:'Sägewerk',quarry:'Steinbruch',mine:'Mine'} },
+    { cat:'housing', rx:/(house|hut|home|hq)/i,                       labelMap:{hut:'Hütte',house:'Haus',hq:'Hauptquartier'} },
+    { cat:'mil',     rx:/(barrack|tower|guard|fort)/i,                labelMap:{barracks:'Kaserne',tower:'Wachturm'} },
+    { cat:'roads',   rx:/(road|bridge|ware|store|stock|cart)/i,       labelMap:{road:'Straße',bridge:'Brücke',warehouse:'Lagerhaus'} },
+    { cat:'deco',    rx:/(statue|fountain|deco|garden)/i,             labelMap:{statue:'Statue',fountain:'Brunnen'} },
+    { cat:'spec',    rx:/(market|port|dock|harbor|harbour)/i,         labelMap:{market:'Markt',port:'Hafen'} },
+  ];
 
-    /* ==== Ressourcen (Dummy) ==== */
-    const R = { gold:100, wood:50, stone:30, food:25 };
-    const q = (id)=> document.getElementById(id);
-    function setRes(){ q('rGold').textContent=R.gold; q('rWood').textContent=R.wood; q('rStone').textContent=R.stone; q('rFood').textContent=R.food; }
-    setRes();
+  // Optional: feste Kosten (wenn kein Eintrag gefunden wird, 0)
+  const COST = {
+    hut:{wood:4}, house:{wood:8,stone:2}, hq:{wood:12,stone:8},
+    lumber:{wood:4}, sawmill:{wood:8}, quarry:{wood:6,stone:2}, mine:{wood:6,stone:4},
+    hunter:{wood:6}, fisher:{wood:6}, farm:{wood:8}, mill:{wood:10,stone:4},
+    road:{stone:1}, bridge:{wood:6,stone:4}, warehouse:{wood:10,stone:6},
+    barracks:{wood:10,stone:6}, tower:{stone:8},
+    statue:{stone:12}, fountain:{stone:6},
+    market:{wood:10,stone:6}, port:{wood:12,stone:12},
+  };
 
-    /* ==== Bau-Menü: Kategorien + Items (Platzhalter) ==== */
-    const CATEGORIES = [
-      { id:'food',   label:'Nahrung',   items:[ {id:'hunter',label:'Jägerhütte',cost:{wood:6}}, {id:'fisher',label:'Fischerhütte',cost:{wood:6}}, {id:'farm',label:'Farm',cost:{wood:8}}, {id:'mill',label:'Mühle',cost:{wood:10, stone:4}} ]},
-      { id:'res',    label:'Ressourcen',items:[ {id:'lumber',label:'Holzfäller',cost:{wood:4}}, {id:'sawmill',label:'Sägewerk',cost:{wood:8}}, {id:'quarry',label:'Steinbruch',cost:{wood:6, stone:2}}, {id:'mine',label:'Mine',cost:{wood:6, stone:4}} ]},
-      { id:'housing',label:'Wohnen',    items:[ {id:'hut',label:'Hütte',cost:{wood:4}}, {id:'house',label:'Haus',cost:{wood:8, stone:2}}, {id:'hq',label:'Hauptquartier',cost:{wood:12, stone:8}} ]},
-      { id:'mil',    label:'Militär',   items:[ {id:'barracks',label:'Kaserne',cost:{wood:10, stone:6}}, {id:'tower',label:'Wachturm',cost:{stone:8}} ]},
-      { id:'roads',  label:'Logistik',  items:[ {id:'road',label:'Straße',cost:{stone:1}}, {id:'bridge',label:'Brücke',cost:{wood:6, stone:4}}, {id:'warehouse',label:'Lagerhaus',cost:{wood:10, stone:6}} ]},
-      { id:'deco',   label:'Deko',      items:[ {id:'statue',label:'Statue',cost:{stone:12}}, {id:'fountain',label:'Brunnen',cost:{stone:6}} ]},
-      { id:'spec',   label:'Spezial',   items:[ {id:'market',label:'Markt',cost:{wood:10, stone:6}}, {id:'port',label:'Hafen',cost:{wood:12, stone:12}} ]},
-    ];
-    let activeCat = CATEGORIES[0].id;
-    let placeMode = null; // { id, label, cost }
+  // Menü-Icons: zuerst ./assets/ui/build/*.png; wenn nicht vorhanden → Crops aus Atlas
+  function uiIconPath(id) { return `./assets/ui/build/${id}.png`; }
 
-    function renderTabs(){
-      tabsEl.innerHTML = '';
-      CATEGORIES.forEach(c=>{
-        const b = document.createElement('button');
-        b.className = 'tab';
-        b.textContent = c.label;
-        b.setAttribute('aria-selected', String(c.id===activeCat));
-        b.addEventListener('click', ()=>{ activeCat=c.id; renderTabs(); renderGrid(); });
-        tabsEl.appendChild(b);
-      });
-    }
-    function renderGrid(){
-      gridEl.innerHTML = '';
-      const cat = CATEGORIES.find(c=>c.id===activeCat);
-      (cat?.items||[]).forEach(item=>{
-        const btn = document.createElement('button');
-        btn.className='tile'; btn.dataset.type=item.id;
-        // solange keine Sprites: Emoji/Quadrat als Icon-Ersatz
-        const ic = document.createElement('div'); ic.style.fontSize='28px'; ic.textContent='⬜';
-        const lbl = document.createElement('span'); lbl.textContent=item.label;
-        btn.appendChild(ic); btn.appendChild(lbl);
-        btn.addEventListener('click', ()=>{
-          placeMode = {...item};
-          build.classList.remove('show');
-          btnBuildFab.classList.remove('pulse'); // Puls nach 1. Nutzung aus
-        });
-        gridEl.appendChild(btn);
-      });
-    }
+  async function begin(){
+    if (started) return; started=true;
+    // UI vor Start sperren
+    document.body.classList.remove('lock-ui');
+
+    await Assets.loadAll({
+      images:['./assets/tiles/tileset.png'],
+      json:['./assets/tiles/tileset.json','./assets/maps/map-pro.json']
+    });
+
+    const worldJson = await Assets.get('./assets/maps/map-pro.json');
+    world = new SiedlerMap({
+      tileResolver:(n)=>'./assets/'+n,
+      onReady:()=> loop()
+    });
+    await world.loadFromObject(worldJson);
+
+    atlas = world.atlas;         // JSON
+    atlasImage = world.atlasImage; // ImageBitmap|HTMLImageElement
+
+    // 1) Frames aus Atlas in Kategorien einsortieren
+    autoCatalogFromAtlas();
+
+    // 2) Tabs + Grid zeichnen (mit Icons/Thumbnails)
     renderTabs(); renderGrid();
+  }
 
-    /* ==== FAB/Build toggles ==== */
-    function toggleBuild(){ build.classList.toggle('show'); btnBuildFab.classList.remove('pulse'); }
-    btnBuildText.addEventListener('click', toggleBuild);
-    btnBuildFab.addEventListener('click', toggleBuild);
+  /* ========= Auto-Katalog aus tileset.json ========= */
+  function titleFromKey(key){
+    // human readable: "house_hut_01" → "House Hut 01" → deutsche Labels per RULES.labelMap überschreiben
+    return key.replace(/[_\-]+/g,' ')
+              .replace(/\b\w/g, m=>m.toUpperCase());
+  }
+  function guessId(key){
+    // ID vereinfachen (z.B. "house_hut_01" → "hut")
+    const parts = key.toLowerCase().split(/[_\-]/);
+    // nimm „prägnanteste“ Komponente
+    const pick = parts.find(p=>!['tile','tiles','01','02','idle','anim','frame'].includes(p)) || parts[0];
+    return pick;
+  }
+  function autoCatalogFromAtlas(){
+    const frames = atlas?.frames || {};
+    const keys = Object.keys(frames);
 
-    /* ==== Vollbild-"X" nur im Fullscreen ==== */
-    function syncFSButton(){ btnCloseFS.classList.toggle('show', !!document.fullscreenElement); }
-    document.addEventListener('fullscreenchange', syncFSButton);
-    btnCloseFS.addEventListener('click', ()=> document.fullscreenElement && document.exitFullscreen());
-    syncFSButton();
+    // Clear
+    CATEGORIES.forEach(c=> c.items = []);
 
-    /* ==== Start-Flow ==== */
+    for (const k of keys){
+      const rule = RULES.find(r=> r.rx.test(k));
+      if (!rule) continue;
+      const id = guessId(k);
+      const label = rule.labelMap?.[id] || titleFromKey(k);
+      // Ein Item pro id
+      const cat = CATEGORIES.find(c=> c.id === rule.cat);
+      if (!cat.items.some(it=>it.id===id)){
+        cat.items.push({ id, label, frame:k, cost: COST[id] || {} });
+      }
+    }
+
+    // Falls leer (z.B. Atlas anders benannt), sichere Defaults drinlassen:
+    CATEGORIES.forEach(c=>{
+      if (!c.items.length && c.id === 'housing'){
+        c.items.push({ id:'hut', label:'Hütte', frame: Object.keys(frames)[0] || null, cost:COST.hut||{} });
+      }
+    });
+  }
+
+  /* ========= Baumenü Rendering ========= */
+  function renderTabs(){
+    tabsEl.innerHTML = '';
+    const firstNonEmpty = CATEGORIES.find(c=>c.items.length) || CATEGORIES[0];
+    if (!CATEGORIES.find(c=>c.id===activeCat && c.items.length)) activeCat = firstNonEmpty.id;
+
+    CATEGORIES.forEach(c=>{
+      if (!c.items.length) return; // leere Kategorien ausblenden
+      const b = document.createElement('button');
+      b.className='tab'; b.textContent=c.label;
+      b.setAttribute('aria-selected', String(c.id===activeCat));
+      b.addEventListener('click', ()=>{ activeCat=c.id; renderTabs(); renderGrid(); });
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function makeThumb(frameKey){
+    const f = atlas.frames?.[frameKey]; if (!f) return null;
+    const off = document.createElement('canvas');
+    off.width = 48; off.height = 48;
+    const ox = off.getContext('2d');
+    ox.imageSmoothingEnabled = false;
+    const scale = Math.min(48 / f.w, 48 / f.h);
+    const dw = Math.floor(f.w * scale), dh = Math.floor(f.h * scale);
+    const dx = Math.floor((48 - dw)/2), dy = Math.floor((48 - dh)/2);
+    ox.drawImage(atlasImage, f.x,f.y,f.w,f.h, dx,dy, dw,dh);
+    return off.toDataURL('image/png');
+  }
+
+  function renderGrid(){
+    gridEl.innerHTML = '';
+    const cat = CATEGORIES.find(c=>c.id===activeCat);
+    (cat?.items||[]).forEach(item=>{
+      const btn = document.createElement('button');
+      btn.className='tile'; btn.dataset.type=item.id;
+
+      const icWrap = document.createElement('div');
+      icWrap.style.width='48px'; icWrap.style.height='48px';
+      icWrap.style.display='grid'; icWrap.style.placeItems='center';
+
+      // 1) Versuche UI-Icon-Datei
+      const iconSrc = uiIconPath(item.id);
+      const img = document.createElement('img');
+      img.alt = item.label; img.width=48; img.height=48;
+      img.onload = ()=>{}; img.onerror = ()=>{
+        // 2) Fallback: Thumb aus Atlas
+        const th = item.frame && makeThumb(item.frame);
+        if (th) img.src = th;
+        else { icWrap.textContent = '⬜'; icWrap.style.fontSize='28px'; return; }
+      };
+      img.src = iconSrc;
+      icWrap.appendChild(img);
+
+      const lbl = document.createElement('span'); lbl.textContent=item.label;
+      btn.appendChild(icWrap); btn.appendChild(lbl);
+
+      btn.addEventListener('click', ()=>{
+        placeMode = {...item}; // {id,label,cost,frame}
+        build.classList.remove('show');
+        btnBuildFab.classList.remove('pulse');
+      });
+
+      gridEl.appendChild(btn);
+    });
+  }
+
+  /* ========= FAB / Menü ========= */
+  function toggleBuild(){ build.classList.toggle('show'); btnBuildFab.classList.remove('pulse'); }
+  btnBuildText.addEventListener('click', ()=> { if (!uiLocked()) toggleBuild(); });
+  btnBuildFab .addEventListener('click', ()=> { if (!uiLocked()) toggleBuild(); });
+
+  /* ========= Vollbild-X nur im Fullscreen ========= */
+  function syncFSButton(){ btnCloseFS.classList.toggle('show', !!document.fullscreenElement); }
+  document.addEventListener('fullscreenchange', syncFSButton);
+  btnCloseFS.addEventListener('click', ()=> document.fullscreenElement && document.exitFullscreen());
+  syncFSButton();
+
+  /* ========= Start-Overlay erzwingen + UI lock ========= */
+  function forceStartOverlay(){
     start.classList.add('show');
-    btnStart.addEventListener('click', ()=>{
-      start.classList.remove('show');
-      if (bg) { bg.classList.add('fade'); bg.addEventListener('transitionend', ()=> bg.classList.add('hidden'), { once:true }); }
-      begin(); // Map jetzt laden/zeichnen
-    });
-    btnLoad.addEventListener('click', ()=> alert('Laden: Slots/Autosaves später.'));
-    btnReset.addEventListener('click', ()=> location.reload());
-    btnFullscreen.addEventListener('click', ()=>{
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    });
+    document.body.classList.add('lock-ui');
+  }
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', forceStartOverlay, { once:true });
+  else forceStartOverlay();
 
-    /* ==== Eingaben: Zoom (Rad/Pinch), Pan (MMB/RMB/Touch), Platzieren ==== */
-    let isPanning=false, panLast={x:0,y:0};
-    let pointers = new Map(); // pointerId -> {x,y}
-    let pinchStart=null;
-    let ghostPos = null;      // {wx, wy} für Platzierungs-Ghost
+  btnStart.addEventListener('click', ()=>{
+    start.classList.remove('show');
+    if (bg) { bg.classList.add('fade'); bg.addEventListener('transitionend', ()=> bg.classList.add('hidden'), { once:true }); }
+    begin();
+  });
+  btnLoad.addEventListener('click', ()=> alert('Laden: Slots/Autosaves später.'));
+  btnReset.addEventListener('click', ()=> location.reload());
+  btnFullscreen.addEventListener('click', ()=>{
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  });
 
-    // Mausrad-Zoom (fokussiert auf Cursorposition)
-    cv.addEventListener('wheel', (e)=>{
-      e.preventDefault();
-      const rect = cv.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const before = screenToWorld(mx, my);
-      const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
-      view.s = clamp(view.s * factor, 0.5, 3);
-      const after = screenToWorld(mx, my);
-      view.x += before.x - after.x;
-      view.y += before.y - after.y;
-    }, { passive:false });
+  const uiLocked = ()=> document.body.classList.contains('lock-ui');
 
-    // Pointer-Events (Pan/Pinch/Platzieren/Ghost)
-    function onPointerDown(e){
-      cv.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-      if (pointers.size===1){
-        // Pan mit mittlerer/rechter Taste; links: bauen
-        if (e.button===1 || e.button===2){ isPanning=true; panLast={x:e.clientX, y:e.clientY}; }
-        else if (e.button===0 && placeMode){ tryPlaceAtEvent(e); }
-      } else if (pointers.size===2){
-        pinchStart = getPinch();
+  /* ========= Ressourcen (Dummy) ========= */
+  const R = { gold:100, wood:50, stone:30, food:25 };
+  const q = (id)=> document.getElementById(id);
+  function setRes(){ q('rGold').textContent=R.gold; q('rWood').textContent=R.wood; q('rStone').textContent=R.stone; q('rFood').textContent=R.food; }
+  setRes();
+
+  function canAfford(cost){
+    if (!cost) return true;
+    if (cost.wood && R.wood < cost.wood) return false;
+    if (cost.stone && R.stone < cost.stone) return false;
+    if (cost.gold && R.gold < cost.gold) return false;
+    if (cost.food && R.food < cost.food) return false;
+    return true;
+  }
+  function pay(cost){
+    if (!cost) return;
+    if (cost.wood) R.wood -= cost.wood;
+    if (cost.stone) R.stone -= cost.stone;
+    if (cost.gold) R.gold -= cost.gold;
+    if (cost.food) R.food -= cost.food;
+    setRes();
+  }
+
+  /* ========= Eingaben: Zoom / Pan / Platzieren ========= */
+  let pointers = new Map(); // id -> {x,y}
+  let isPanning=false, panLast={x:0,y:0}, pinchStart=null;
+  let ghostPos=null;        // {wx,wy}
+
+  cv.addEventListener('wheel', (e)=>{
+    if (uiLocked()) return;
+    e.preventDefault();
+    const rect = cv.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const before = screenToWorld(mx, my);
+    const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
+    view.s = clamp(view.s * factor, 0.5, 3);
+    const after = screenToWorld(mx, my);
+    view.x += before.x - after.x; view.y += before.y - after.y;
+  }, { passive:false });
+
+  function onPointerDown(e){
+    if (uiLocked()) return;
+    cv.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if (pointers.size===1){
+      if (e.button===1 || e.button===2){ isPanning=true; panLast={x:e.clientX, y:e.clientY}; }
+      else if (e.button===0 && placeMode){ tryPlaceAtEvent(e); }
+    } else if (pointers.size===2){
+      pinchStart = getPinch();
+    }
+  }
+  function onPointerMove(e){
+    if (uiLocked()) return;
+    const p = pointers.get(e.pointerId);
+    if (p){ p.x=e.clientX; p.y=e.clientY; }
+    const rect = cv.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const w = screenToWorld(mx, my);
+    ghostPos = { wx:w.x, wy:w.y };
+
+    if (pointers.size===1 && isPanning){
+      const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
+      panLast = {x:e.clientX, y:e.clientY};
+      view.x -= dx / view.s; view.y -= dy / view.s;
+    } else if (pointers.size===2){
+      const pinch = getPinch();
+      if (pinchStart){
+        const before = pinchStart.centerWorld;
+        view.s = clamp(pinchStart.scale * (pinch.dist / pinchStart.dist), 0.5, 3);
+        const after = screenToWorld(pinch.center.x, pinch.center.y);
+        view.x += before.x - after.x; view.y += before.y - after.y;
       }
     }
-    function onPointerMove(e){
-      const p = pointers.get(e.pointerId);
-      if (p){ p.x=e.clientX; p.y=e.clientY; }
-      // Ghost-Position
-      const rect = cv.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const w = screenToWorld(mx, my);
-      ghostPos = { wx:w.x, wy:w.y };
+  }
+  function onPointerUp(e){
+    pointers.delete(e.pointerId);
+    if (uiLocked()) return;
+    if (e.pointerType==='mouse' && e.button===0 && placeMode){ tryPlaceAtEvent(e); }
+    if (pointers.size===0){ isPanning=false; pinchStart=null; }
+  }
+  function onContextMenu(e){ e.preventDefault(); }
+  cv.addEventListener('pointerdown', onPointerDown);
+  cv.addEventListener('pointermove', onPointerMove);
+  cv.addEventListener('pointerup', onPointerUp);
+  cv.addEventListener('pointercancel', onPointerUp);
+  cv.addEventListener('contextmenu', onContextMenu);
 
-      if (pointers.size===1 && isPanning){
-        const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
-        panLast = {x:e.clientX, y:e.clientY};
-        view.x -= dx / view.s;
-        view.y -= dy / view.s;
-      } else if (pointers.size===2){
-        const pinch = getPinch();
-        if (pinchStart){
-          const before = pinchStart.centerWorld;
-          view.s = clamp(pinchStart.scale * (pinch.dist / pinchStart.dist), 0.5, 3);
-          const after = screenToWorld(pinch.center.x, pinch.center.y);
-          view.x += before.x - after.x;
-          view.y += before.y - after.y;
-        }
-      }
-    }
-    function onPointerUp(e){
-      pointers.delete(e.pointerId);
-      if (e.pointerType==='mouse' && e.button===0 && placeMode){ tryPlaceAtEvent(e); }
-      if (pointers.size===0){ isPanning=false; pinchStart=null; }
-    }
-    function onContextMenu(e){ e.preventDefault(); } // RMB-Kontextmenü unterdrücken
-    cv.addEventListener('pointerdown', onPointerDown);
-    cv.addEventListener('pointermove', onPointerMove);
-    cv.addEventListener('pointerup', onPointerUp);
-    cv.addEventListener('pointercancel', onPointerUp);
-    cv.addEventListener('contextmenu', onContextMenu);
+  function getPinch(){
+    const arr=[...pointers.values()]; if (arr.length<2) return null;
+    const a=arr[0], b=arr[1];
+    const center={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    const rect = cv.getBoundingClientRect();
+    const centerInCanvas = { x:center.x-rect.left, y:center.y-rect.top };
+    const dist = Math.hypot(a.x-b.x, a.y-b.y);
+    return { center:centerInCanvas, dist, scale:view.s, centerWorld: screenToWorld(centerInCanvas.x, centerInCanvas.y) };
+  }
 
-    function getPinch(){
-      const arr=[...pointers.values()]; if (arr.length<2) return null;
-      const a=arr[0], b=arr[1];
-      const center={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
-      const rect = cv.getBoundingClientRect();
-      const centerInCanvas = { x:center.x-rect.left, y:center.y-rect.top };
-      const dist = Math.hypot(a.x-b.x, a.y-b.y);
-      return { center:centerInCanvas, dist, scale:view.s, centerWorld: screenToWorld(centerInCanvas.x, centerInCanvas.y) };
-    }
+  const buildings = []; // {wx,wy,type,frame}
+  function tryPlaceAtEvent(e){
+    if (!placeMode) return;
+    const rect = cv.getBoundingClientRect();
+    const mx = (e.clientX ?? (e.touches?.[0]?.clientX)) - rect.left;
+    const my = (e.clientY ?? (e.touches?.[0]?.clientY)) - rect.top;
+    const w = screenToWorld(mx, my);
+    const sx = Math.floor(w.x / TILE) * TILE;
+    const sy = Math.floor(w.y / TILE) * TILE;
 
-    /* ==== Platzieren (Platzhalter‑Kacheln; später Sprites) ==== */
-    const buildings = []; // {wx, wy, type, color}
-    const COLORS = {
-      hunter:'#8bc34a', fisher:'#03a9f4', farm:'#c0ca33', mill:'#9e9e9e',
-      lumber:'#795548', sawmill:'#a1887f', quarry:'#90a4ae', mine:'#546e7a',
-      hut:'#8d6e63', house:'#bdbdbd', hq:'#ffb74d',
-      barracks:'#607d8b', tower:'#78909c',
-      road:'#b0bec5', bridge:'#90caf9', warehouse:'#6d4c41',
-      statue:'#e0e0e0', fountain:'#81d4fa',
-      market:'#ffcc80', port:'#80cbc4'
-    };
-    function canAfford(cost){
-      if (!cost) return true;
-      if (cost.wood && R.wood < cost.wood) return false;
-      if (cost.stone && R.stone < cost.stone) return false;
-      if (cost.gold && R.gold < cost.gold) return false;
-      if (cost.food && R.food < cost.food) return false;
-      return true;
+    if (!canAfford(placeMode.cost)){
+      if (lblHint) lblHint.textContent = 'Nicht genug Ressourcen';
+      return;
     }
-    function pay(cost){
-      if (!cost) return;
-      if (cost.wood) R.wood -= cost.wood;
-      if (cost.stone) R.stone -= cost.stone;
-      if (cost.gold) R.gold -= cost.gold;
-      if (cost.food) R.food -= cost.food;
-      setRes();
-    }
-    function tryPlaceAtEvent(e){
-      if (!placeMode) return;
-      const rect = cv.getBoundingClientRect();
-      const mx = (e.clientX ?? (e.touches?.[0]?.clientX)) - rect.left;
-      const my = (e.clientY ?? (e.touches?.[0]?.clientY)) - rect.top;
-      const w = screenToWorld(mx, my);
-      const sx = Math.floor(w.x / TILE) * TILE;
-      const sy = Math.floor(w.y / TILE) * TILE;
+    buildings.push({ wx:sx, wy:sy, type:placeMode.id, frame:placeMode.frame });
+    pay(placeMode.cost);
+  }
 
-      if (!canAfford(placeMode.cost)){
-        const lbl = document.getElementById('lblHint');
-        if (lbl) lbl.textContent = 'Nicht genug Ressourcen';
-        return;
-      }
-      buildings.push({ wx:sx, wy:sy, type:placeMode.id, color: (COLORS[placeMode.id] || '#3b82f6') });
-      pay(placeMode.cost);
-    }
+  /* ========= Zeichnen ========= */
+  function tickFps(){
+    const now = performance.now();
+    const dt = now - _lf; _lf = now;
+    if (lblFps) lblFps.textContent = 'FPS: ' + Math.round(1000/(dt||16.7));
+  }
 
-    /* ==== Zeichnen ==== */
-    function tickFps(){
-      const now = performance.now();
-      const dt = now - _lf; _lf = now;
-      document.getElementById('lblFps').textContent = 'FPS: ' + Math.round(1000/(dt||16.7));
-    }
-    function drawGhost(){
-      if (!placeMode || !ghostPos) return;
-      const sx = Math.floor(ghostPos.wx / TILE) * TILE;
-      const sy = Math.floor(ghostPos.wy / TILE) * TILE;
-      const pt = worldToScreen(sx, sy);
-      const size = TILE * view.s;
-      ctx.save();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = (COLORS[placeMode.id] || '#3b82f6');
+  function drawSpriteFrame(frameKey, dx, dy, size){
+    const f = atlas?.frames?.[frameKey];
+    if (!f || !atlasImage) return false;
+    const scale = Math.min(size / f.w, size / f.h);
+    const dw = Math.floor(f.w * scale), dh = Math.floor(f.h * scale);
+    const px = Math.floor(dx + (size - dw)/2), py = Math.floor(dy + (size - dh)/2);
+    ctx.drawImage(atlasImage, f.x,f.y,f.w,f.h, px,py, dw,dh);
+    return true;
+  }
+
+  function drawGhost(){
+    if (!placeMode || !ghostPos) return;
+    const sx = Math.floor(ghostPos.wx / TILE) * TILE;
+    const sy = Math.floor(ghostPos.wy / TILE) * TILE;
+    const pt = worldToScreen(sx, sy);
+    const size = TILE * view.s;
+
+    ctx.save();
+    if (!drawSpriteFrame(placeMode.frame, pt.x, pt.y, size)){
+      ctx.globalAlpha = 0.5; ctx.fillStyle = '#3b82f6';
       ctx.fillRect(pt.x, pt.y, size, size);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffffff';
+      ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
       ctx.strokeRect(pt.x, pt.y, size, size);
-      ctx.restore();
+    } else {
+      ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+      ctx.strokeRect(pt.x, pt.y, size, size);
     }
-    function drawBuildings(){
-      ctx.save();
-      for (const b of buildings){
-        const pt = worldToScreen(b.wx, b.wy);
-        const size = TILE * view.s;
-        ctx.fillStyle = b.color;
+    ctx.restore();
+  }
+
+  function drawBuildings(){
+    if (!buildings.length) return;
+    ctx.save();
+    for (const b of buildings){
+      const pt = worldToScreen(b.wx, b.wy);
+      const size = TILE * view.s;
+      if (!drawSpriteFrame(b.frame, pt.x, pt.y, size)){
+        ctx.fillStyle = '#3b82f6';
         ctx.fillRect(pt.x, pt.y, size, size);
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#0b1628';
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#0b1628';
         ctx.strokeRect(pt.x, pt.y, size, size);
       }
-      ctx.restore();
     }
-    function loop(){
-      tickFps();
-      ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.restore();
+  }
 
-      // Map-Layer im Weltmaßstab
-      ctx.save();
-      ctx.scale(view.s, view.s);
-      if (world){
-        world.draw(ctx, { x:view.x, y:view.y, w:cv.width / view.s, h:cv.height / view.s });
-      }
-      ctx.restore();
+  function loop(){
+    tickFps();
+    ctx.clearRect(0,0,cv.width,cv.height);
 
-      // UI-Layer über der Welt (Gebäude/Platzierungs-Ghost in Screenkoordinaten)
-      drawBuildings();
-      drawGhost();
-
-      requestAnimationFrame(loop);
+    ctx.save();
+    ctx.scale(view.s, view.s);
+    if (world){
+      world.draw(ctx, { x:view.x, y:view.y, w:cv.width / view.s, h:cv.height / view.s });
     }
+    ctx.restore();
 
-    /* ==== Checker Buttons ==== */
-    tglInfo.addEventListener('click', ()=>{
-      const vis = pInfo.classList.toggle('show');
-      tglInfo.setAttribute('aria-pressed', String(vis));
-    });
-    tglLayers.addEventListener('click', ()=> alert('Overlay‑Menü folgt.'));
-    btnReload.addEventListener('click', ()=> location.reload());
-    btnCenter.addEventListener('click', ()=> { view.x=0; view.y=0; view.s=1; });
+    drawBuildings();
+    drawGhost();
 
-    /* ==== Ghost-Tracking (für Maus) ==== */
-    let pointers = new Map(); // wiederverwendet
-    cv.addEventListener('pointermove', (e)=>{
-      const rect = cv.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const w = screenToWorld(mx, my);
-      ghostPos = { wx:w.x, wy:w.y };
-    });
+    requestAnimationFrame(loop);
+  }
 
-    /* ==== Pan/Pinch (Eingabestrom komplett) ==== */
-    let isPanning=false, panLast={x:0,y:0}, pinchStart=null;
-    function onPointerDown(e){
-      cv.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-      if (pointers.size===1){
-        if (e.button===1 || e.button===2){ isPanning=true; panLast={x:e.clientX, y:e.clientY}; }
-        else if (e.button===0 && placeMode){ tryPlaceAtEvent(e); }
-      } else if (pointers.size===2){
-        pinchStart = getPinch();
-      }
-    }
-    function onPointerMove(e){
-      const p = pointers.get(e.pointerId);
-      if (p){ p.x=e.clientX; p.y=e.clientY; }
+  /* ========= Checker ========= */
+  tglInfo.addEventListener('click', ()=>{
+    const vis = pInfo.classList.toggle('show');
+    tglInfo.setAttribute('aria-pressed', String(vis));
+  });
+  tglLayers.addEventListener('click', ()=> alert('Overlay‑Menü folgt.'));
+  btnReload.addEventListener('click', ()=> location.reload());
+  btnCenter.addEventListener('click', ()=> { view.x=0; view.y=0; view.s=1; });
 
-      const rect = cv.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const w = screenToWorld(mx, my);
-      ghostPos = { wx:w.x, wy:w.y };
-
-      if (pointers.size===1 && isPanning){
-        const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
-        panLast = {x:e.clientX, y:e.clientY};
-        view.x -= dx / view.s;
-        view.y -= dy / view.s;
-      } else if (pointers.size===2){
-        const pinch = getPinch();
-        if (pinchStart){
-          const before = pinchStart.centerWorld;
-          view.s = clamp(pinchStart.scale * (pinch.dist / pinchStart.dist), 0.5, 3);
-          const after = screenToWorld(pinch.center.x, pinch.center.y);
-          view.x += before.x - after.x;
-          view.y += before.y - after.y;
-        }
-      }
-    }
-    function onPointerUp(e){
-      pointers.delete(e.pointerId);
-      if (e.pointerType==='mouse' && e.button===0 && placeMode){ tryPlaceAtEvent(e); }
-      if (pointers.size===0){ isPanning=false; pinchStart=null; }
-    }
-    function onContextMenu(e){ e.preventDefault(); }
-    cv.addEventListener('pointerdown', onPointerDown);
-    cv.addEventListener('pointermove', onPointerMove);
-    cv.addEventListener('pointerup', onPointerUp);
-    cv.addEventListener('pointercancel', onPointerUp);
-    cv.addEventListener('contextmenu', onContextMenu);
-
-    function getPinch(){
-      const arr=[...pointers.values()];
-      if (arr.length<2) return null;
-      const a=arr[0], b=arr[1];
-      const center={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
-      const rect = cv.getBoundingClientRect();
-      const centerInCanvas = { x:center.x-rect.left, y:center.y-rect.top };
-      const dist = Math.hypot(a.x-b.x, a.y-b.y);
-      return { center:centerInCanvas, dist, scale:view.s, centerWorld: screenToWorld(centerInCanvas.x, centerInCanvas.y) };
-    }
-  </script>
+</script>
 </body>
 </html>
