@@ -1,35 +1,38 @@
 {
+  "name": "map-pro",
   "tileSize": 64,
-  "background": "#0b1628",
 
   "atlas": {
     "json": "../tiles/tileset.json",
     "image": "../tiles/tileset.png"
   },
 
+  "background": "#0b1420",
+
   "layers": [
     {
       "name": "ground",
       "type": "tile",
       "grid": [
-        ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","dirt","dirt","dirt","grass","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","dirt","water","water","water","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","dirt","water","water","water","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","dirt","dirt","dirt","grass","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"]
+        ["grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
+        ["grass","grass","grass","grass","grass","grass","grass","grass"]
       ]
     },
+
     {
-      "name": "details",
+      "name": "coast",
       "type": "tile",
       "grid": [
-        [null,null,null,null,null,null,null,null,null,null,null,null],
-        [null,null,null,null,"forest_edge_E",null,null,null,null,null,null,null],
-        [null,null,"forest_edge_N",null,null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null,null,null,null,null]
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,"coast_grass_N",null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null]
       ]
     }
   ]
