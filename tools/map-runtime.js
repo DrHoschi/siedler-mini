@@ -1,7 +1,8 @@
 /* ================================================================================================
-   tools/map-runtime.js — Tile/Atlas-Renderer (robuste Version)
+   tools/map-runtime.js — Tile/Atlas-Renderer (robust)
    - Base-URL aware (alle Pfade relativ zum Speicherort der Map)
    - Guards gegen fehlende/ungültige Pfade (kein new URL auf undefined)
+   - Extra-Debug: loggt die aufgelösten Atlas-URLs
    ================================================================================================ */
 
 const DEFAULT_TILE = 64;
@@ -100,6 +101,12 @@ export class SiedlerMap{
       const jsonUrl  = ensureUrl(a.json,  this.baseUrl);
       const imageUrl = ensureUrl(a.image, this.baseUrl);
 
+      if (this.dbg) {
+        this.dbg(`[atlas] base=${this.baseUrl}`);
+        this.dbg(`[atlas] json=${a?.json||'(leer)'} → ${jsonUrl||'null'}`);
+        this.dbg(`[atlas] image=${a?.image||'(leer)'} → ${imageUrl||'null'}`);
+      }
+
       if(!jsonUrl)  this.dbg?.('Atlas-JSON-Pfad fehlt/ungültig — überspringe Atlas.');
       if(!imageUrl) this.dbg?.('Atlas-IMAGE-Pfad fehlt/ungültig — überspringe Atlas.');
 
@@ -144,3 +151,5 @@ export class SiedlerMap{
     }
   }
 }
+
+export default { SiedlerMap, loadJSON, loadImage };
