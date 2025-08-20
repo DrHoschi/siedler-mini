@@ -1,0 +1,71 @@
+{
+  // ---------------------------------------------------------------------------------------------
+  // Map: "map-pro"  •  MAX-Version (mit Atlas)
+  // Diese Datei dient NUR der Doku. Die Engine lädt stattdessen die map-pro.json (ohne Kommentare).
+  // Regeln:
+  //  • Kommentare / trailing commas sind hier erlaubt (JSONC), in map-pro.json NICHT.
+  //  • Pfade werden relativ zum Ordner dieser Datei (assets/maps/) aufgelöst.
+  //  • tileSize steuert die Kachelgröße in Pixeln (muss zum Atlas passen).
+  // ---------------------------------------------------------------------------------------------
+
+  "tileSize": 64,
+
+  // Hintergrundfarbe des Viewports (wird vor Layers gefüllt)
+  "background": "#0b1628",
+
+  // Atlas-Definition: beide Pfade MÜSSEN existieren.
+  //  - json : frames/aliases/animations (z. B. "grass", "dirt", "water", ...)
+  //  - image: Sprite-Sheet (PNG/WebP etc.)
+  // Tipp: Groß-/Kleinschreibung der Dateinamen genau prüfen.
+  "atlas": {
+    "json": "../tiles/tileset.json",
+    "image": "../tiles/tileset.png"
+  },
+
+  // Layers:
+  //  - "ground"   : Hauptboden (vollflächige Tiles)
+  //  - "details"  : optionale Zusatz-Tiles (Kanten, Bäume, etc.), null = nichts zeichnen
+  //  Grid: 2D-Array ( [row][col] ) mit Schlüsseln, die im Atlas definiert sind.
+  "layers": [
+    {
+      "name": "ground",
+      "type": "tile",
+      "grid": [
+        // 12 Spalten × 6 Zeilen
+        ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"]
+      ]
+    },
+    {
+      "name": "details",
+      "type": "tile",
+      "grid": [
+        [null,null,null,null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,"forest_edge_E",null,null,null,null,null,null,null],
+        [null,null,"forest_edge_N",null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null,null,null,null,null]
+      ]
+    }
+  ]
+
+  // ---------------------------------------------------------------------------------------------
+  // Erwartungen an den Atlas (assets/tiles/tileset.json):
+  //  • frames: { "grass": {...}, "dirt": {...}, "water": {...}, "forest_edge_E": {...}, "forest_edge_N": {...} }
+  //  • optional: aliases und animations (z. B. "water" animiert als water_0, water_1, ...)
+  //  • meta.tileSize = 64  (sollte zu tileSize passen, sonst wird tileSize aus meta übernommen)
+  //
+  // Wenn ein Key im Grid nicht im Atlas existiert, wird einfach nichts gezeichnet (kein Crash).
+  //
+  // Test-Checkliste im Overlay:
+  //  ✓ [net] 200  assets/maps/map-pro.json
+  //  ✓ [net] 200  assets/tiles/tileset.json
+  //  ✓ [net] 200  assets/tiles/tileset.png
+  //  → "Karte geladen: …" und anschließend sichtbare Tiles statt nur Grid.
+  // ---------------------------------------------------------------------------------------------
+}
