@@ -2,727 +2,175 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+  />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V14.7 (Mobil)</title>
+  <title>Siedler-Mini V14.7 (Mobil)</title>
 
-  <!--
-    ─────────────────────────────────────────────────────────────────────
-    LAYOUT-LEITLINIEN
-    - Start-BG (./assets/Logo.PNG) → blendet nach Start aus + wird deaktiviert
-    - HUD (Ressourcen) oben; Debug-Bar/Checker unten
-    - Großer runder FAB „Bauen“ unten rechts
-    - Bau-Menü links oben, Tabs (Kategorien), Kacheln (Platzhalter)
-    - Fullscreen-"X" nur sichtbar im Vollbild, rechts oben
-    - Canvas füllt den Screen (Map rendert erst nach Start)
-    - Alle Blöcke gut kommentiert, Debug-Tools bleiben drin
-    ─────────────────────────────────────────────────────────────────────
-  -->
+  <!-- Basis-Styles (Canvas + HUD). Mobil-Spezifika können in separaten CSS-Dateien überschrieben werden -->
   <style>
     :root{
       color-scheme: dark;
       --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-      --accent:#3b82f6;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
-      --dbgHeight: 56px;   /* Checker/Debug-Bar Höhe */
-      --hudHeight: 52px;   /* Ressourcen-HUD Höhe  */
-      --fabSize: 64px;     /* FAB-Durchmesser      */
-      --fabOffset: 14px;   /* FAB-Abstand vom Rand */
     }
-    html,body{ height:100%; margin:0; background:var(--bg); }
-    body{
-      overflow:hidden;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      color:var(--text);
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); }
+    body{ overflow:hidden; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+    canvas{ display:block; width:100vw; height:100vh; image-rendering:pixelated; }
+    /* optionale HUD-Container, falls vom Spiel genutzt */
+    #hud, #topbar, #bottombar { position:fixed; left:0; right:0; pointer-events:auto; }
+    #topbar{ top:0; padding:8px; display:flex; gap:8px; justify-content:center; }
+    #bottombar{ bottom:0; padding:8px; display:flex; gap:8px; justify-content:center; }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px;
+      background:var(--pill); border:1px solid var(--line); box-shadow:var(--shadow);
+      font: 600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
-
-    /* Vollflächiges Start-Hintergrundbild (blendet aus + wird deaktiviert) */
-    .bg{
-      position:fixed; inset:0; z-index:0;
-      background:#0b1628 url('./assets/Logo.PNG') center center / cover no-repeat;
-      transition: opacity .35s ease;
+    .btn{
+      display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:12px;
+      background:var(--panel); border:1px solid var(--line); color:var(--text);
+      font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
-    .bg.fade{ opacity:0; pointer-events:none; }
-    .bg.hidden{ display:none; } /* nach Transition → keine Repaints/Reflows */
-
-    /* Spielfläche/Canvas (zeichnet die Map) */
-    canvas{
-      position:relative; z-index:1;
-      display:block; width:100vw; height:100vh; background:transparent;
-      image-rendering: pixelated; image-rendering: crisp-edges; touch-action:none;
-    }
-
-    /* Ressourcen-HUD (oben angedockt) */
-    .hud{
-      position:fixed; left:0; right:0; top:0; z-index:15;
-      height:var(--hudHeight);
-      display:flex; align-items:center; gap:.5rem;
-      padding:.4rem .65rem;
-      background:linear-gradient(180deg, rgba(18,34,56,.85), rgba(18,34,56,.65));
-      border-bottom:1px solid var(--line);
-      backdrop-filter: blur(6px);
-      box-shadow: var(--shadow);
-    }
-    .hud .res{
-      display:flex; align-items:center; gap:.4rem;
-      padding:.3rem .55rem; border-radius:10rem;
-      background:var(--pill); border:1px solid var(--line);
-      font-size:.9rem;
-    }
-    .hud .res .v{ min-width:3.2ch; text-align:right; }
-    .hud .spacer{ flex:1; }
-    .hud .btn{
-      background:var(--pill); border:1px solid var(--line);
-      padding:.35rem .6rem; border-radius:.6rem; cursor:pointer; color:var(--text);
-      font-weight:600;
-    }
-
-    /* Checker/Debug-Bar (unten fix) */
-    .dbg{
-      position:fixed; left:0; right:0; bottom:0; z-index:20;
-      display:flex; gap:.5rem; align-items:center; padding:.5rem .75rem;
-      height:var(--dbgHeight);
-      background:linear-gradient(180deg, rgba(15,27,41,.75), rgba(15,27,41,.95));
-      border-top:1px solid var(--line); backdrop-filter: blur(6px); box-shadow: var(--shadow);
-    }
-    .dbg .pill{
-      background:var(--pill); border:1px solid var(--line);
-      padding:.35rem .6rem; border-radius:10rem; font-size:.85rem; color:var(--text);
-      user-select:none; cursor:pointer; white-space:nowrap;
-    }
-    .dbg .pill[aria-pressed="true"]{ outline:2px solid var(--accent); }
-    .dbg .sep{ width:1px; height:1.75rem; background:var(--line); margin:0 .25rem; }
-    .dbg .info{ font-size:.8rem; color:var(--muted); margin-left:auto; display:flex; gap:1rem; }
-
-    /* Debug-Panel (Infos) */
-    .panel{
-      position:fixed; right:.75rem; bottom:calc(var(--dbgHeight) + .75rem); z-index:19;
-      min-width:220px; max-width:min(90vw, 380px);
-      background:var(--panel); border:1px solid var(--line); border-radius:.6rem;
-      box-shadow: var(--shadow); padding:.5rem .75rem; display:none;
-    }
-    .panel.show{ display:block; }
-    .panel h3{ margin:.2rem 0 .6rem; font-size:1rem; font-weight:600; }
-    .kv{ display:grid; grid-template-columns: auto 1fr; gap:.25rem .75rem; font-size:.85rem; }
-    .kv .k{ color:var(--muted); } .kv .v{ color:var(--text); word-break:break-word; }
-
-    /* FAB: großer runder „Bauen“-Button unten rechts (puls bis Erstnutzung) */
-    .fab{
-      position:fixed; z-index:22;
-      right:var(--fabOffset);
-      bottom:calc(var(--dbgHeight) + var(--fabOffset));
-      width:var(--fabSize); height:var(--fabSize);
-      border-radius:50%;
-      display:grid; place-items:center;
-      background:radial-gradient(120% 120% at 30% 20%, #274162, #15263e);
-      border:2px solid var(--line);
-      box-shadow: 0 10px 30px rgba(0,0,0,.45);
-      cursor:pointer; user-select:none;
-    }
-    .fab svg{ width:34px; height:34px; }
-    .fab:focus-visible{ outline:3px solid var(--accent); }
-    @keyframes fabPulse {
-      0%{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 0 rgba(59,130,246,.25); }
-      70%{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 16px rgba(59,130,246,0); }
-      100%{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 0 rgba(59,130,246,0); }
-    }
-    .fab.pulse{ animation: fabPulse 2.8s ease-out infinite; }
-
-    /* Bau-Menü (links oben, unter HUD) */
-    .build{
-      position:fixed; left:.75rem; top:calc(var(--hudHeight) + .75rem); z-index:21;
-      width:min(96vw, 420px); max-height:calc(100vh - var(--hudHeight) - var(--dbgHeight) - 1.5rem);
-      background:var(--panel); border:1px solid var(--line); border-radius:.6rem;
-      box-shadow: var(--shadow); padding:.6rem .75rem; display:none; overflow:auto;
-    }
-    .build.show{ display:block; }
-    .build h3{ margin:.2rem 0 .6rem; font-size:1rem; font-weight:600; }
-    .tabs{ display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.55rem; }
-    .tab{
-      padding:.35rem .6rem; border-radius:10rem; cursor:pointer;
-      background:var(--pill); border:1px solid var(--line); color:var(--text);
-      font-size:.85rem; user-select:none;
-    }
-    .tab[aria-selected="true"]{ outline:2px solid var(--accent); }
-    .grid{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:.55rem; }
-    .tile{
-      display:flex; flex-direction:column; align-items:center; gap:.25rem;
-      background:var(--pill); border:1px solid var(--line); border-radius:.5rem; padding:.5rem .4rem;
-      cursor:pointer;
-    }
-    .tile img{ width:48px; height:48px; image-rendering: pixelated; }
-    .tile span{ font-size:.8rem; color:var(--muted); text-align:center; }
-
-    /* Close‑„X“: nur im Vollbild sichtbar (rechts oben) */
-    .closeFS{
-      position:fixed; right:.6rem; top:.6rem; z-index:25;
-      display:none;
-      background:var(--pill); border:1px solid var(--line);
-      color:var(--text); padding:.35rem .6rem; border-radius:.6rem; cursor:pointer; font-weight:700;
-    }
-    .closeFS.show{ display:inline-flex; }
-
-    /* Start-Overlay (oben, näher an die Mitte; über Debug-Bar) */
-    .start-overlay{
-      position:fixed; inset:0; z-index:30; display:none;
-      align-items:flex-start; justify-content:center;
-      padding-top:clamp(40px, 40vh, 55vh);
-      background:linear-gradient(180deg, rgba(10,18,32,.55), rgba(10,18,32,.65));
-      backdrop-filter: blur(8px);
-    }
-    .start-overlay.show{ display:flex; }
-    .start-overlay .card{
-      background:var(--panel2); border:1px solid var(--line);
-      padding:1rem 1.25rem; border-radius:.8rem; box-shadow:var(--shadow);
-      text-align:center; max-width:min(92vw, 520px);
-    }
-    .start-overlay .card h1{ margin:.2rem 0 .55rem; font-size:1.15rem; }
-    .start-overlay .card p{ margin:.25rem 0 .75rem; color:var(--muted); }
-    .start-overlay .row{ display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap; }
-    .start-overlay .btn{
-      appearance:none; border:1px solid var(--line); background:var(--pill);
-      color:var(--text); padding:.6rem .9rem; border-radius:.6rem; font-weight:600; cursor:pointer;
-    }
-    .start-overlay .btn.warn{ border-color:#7a2828; }
+    .btn:active{ transform:translateY(1px); }
+    /* Platz für Start-Overlay, falls boot.js eines einblendet */
+    #start-overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.35); backdrop-filter: blur(6px); z-index:50; }
+    #start-overlay.active{ display:flex; }
   </style>
+
+  <!-- OPTIONAL: Apple PWA Touch-Einstellungen könnten hier folgen -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 </head>
 <body>
-  <!-- Startbild (blendet nach Start weich aus) -->
-  <div class="bg" id="bg" aria-hidden="true"></div>
-
-  <!-- Ressourcen-HUD (oben) -->
-  <div class="hud" id="hud">
-    <div class="res"><span>🪙</span><span>Gold</span><span class="v" id="rGold">100</span></div>
-    <div class="res"><span>🪵</span><span>Holz</span><span class="v" id="rWood">50</span></div>
-    <div class="res"><span>🗿</span><span>Stein</span><span class="v" id="rStone">30</span></div>
-    <div class="res"><span>🍖</span><span>Nahrung</span><span class="v" id="rFood">25</span></div>
-    <div class="spacer"></div>
-    <!-- optionaler Text-Button; FAB ist der große Einstieg -->
-    <button class="btn" id="btnBuildText">Bauen</button>
-  </div>
-
-  <!-- Canvas (Map) -->
+  <!-- Haupt-Canvas (dein Renderer greift idR. über JS zu) -->
   <canvas id="game"></canvas>
 
-  <!-- Großer runder FAB (Bauen) -->
-  <button class="fab pulse" id="btnBuildFab" aria-label="Bauen öffnen" title="Bauen">
-    <!-- Hacke + Schaufel (monochromes SVG) -->
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M2.8 21.2l6.9-6.9 1.9 1.9-6.9 6.9c-.5.5-1.3.5-1.8 0l-.1-.1c-.5-.5-.5-1.3 0-1.8zM13.3 10.7l-1.9-1.9 3.7-3.7c.6-.6 1.6-.6 2.2 0l.6.6c.6.6.6 1.6 0 2.2l-3.7 3.7-0.9-.9zM17.6 13.2l3.1-3.1c.4-.4.4-1 0-1.4l-.4-.4c-.4-.4-1-.4-1.4 0l-3.1 3.1 1.8 1.8z"/>
-    </svg>
-  </button>
-
-  <!-- Bau-Menü (Kategorien + Kacheln) -->
-  <div class="build" id="build" role="dialog" aria-modal="false" aria-labelledby="buildTitle">
-    <h3 id="buildTitle">Bauen</h3>
-    <div class="tabs" id="tabs"></div>
-    <div class="grid" id="grid"></div>
+  <!-- Beispiel-UI (nur Platzhalter; deine boot.js kann eigene Elemente erzeugen) -->
+  <div id="topbar" aria-hidden="true" style="pointer-events:none">
+    <!-- Buttons können von boot.js aktiviert/ersetzt werden -->
+  </div>
+  <div id="bottombar" aria-hidden="true" style="pointer-events:none">
+    <!-- Buttons können von boot.js aktiviert/ersetzt werden -->
   </div>
 
-  <!-- Close‑„X“ (nur im Vollbild sichtbar) -->
-  <button class="closeFS" id="btnCloseFS">✕</button>
-
-  <!-- Debug/Info-Panel -->
-  <div class="panel" id="pInfo" aria-hidden="true">
-    <h3>Infos</h3>
-    <div class="kv">
-      <div class="k">DPR</div><div class="v" id="vDpr">–</div>
-      <div class="k">Viewport</div><div class="v" id="vVp">–</div>
-      <div class="k">Canvas</div><div class="v" id="vCv">–</div>
-      <div class="k">Boot</div><div class="v">./boot.js (eingebettet)</div>
-      <div class="k">Map</div><div class="v">./assets/maps/map-pro.json</div>
-    </div>
+  <!-- Start-Overlay (wird nur genutzt, wenn boot.js es toggelt) -->
+  <div id="start-overlay">
+    <button class="btn" id="start-btn">Start</button>
   </div>
 
-  <!-- Debug-Bar / Checker -->
-  <div class="dbg" role="toolbar" aria-label="Debug-Leiste">
-    <button class="pill" id="tglInfo" aria-pressed="false">ℹ️ Infos</button>
-    <button class="pill" id="tglLayers" aria-pressed="false">🗺️ Overlays</button>
-    <span class="sep"></span>
-    <button class="pill" id="btnReload">⟳ Reload</button>
-    <button class="pill" id="btnCenter">🎯 Zentrum</button>
-    <span class="sep"></span>
-    <div class="info">
-      <span id="lblFps">FPS: –</span>
-      <span id="lblHint">Start → BG blendet aus</span>
-    </div>
-  </div>
+  <!-- ===================================================================== -->
+  <!--  Runtime-Settings für Assets (Cache-Busting, iOS-Fallback)            -->
+  <!--  Wichtig: VOR boot.js, damit Settings schon beim ersten Load greifen. -->
+  <!-- ===================================================================== -->
+  <script type="module">
+    import Assets from './core/asset.js';
+    // Entwicklung: aggressiv gegen Cache/Bitmap-Edgecases (iOS)
+    Assets.setVersion(String(Date.now()));   // hartes Cache-Busting
+    Assets.setCacheMode('no-store');         // immer frisch laden
+    Assets.setUseImageBitmap(false);         // <img>-Fallback erzwingen
+    // Tipp (Produktion später):
+    // Assets.setVersion('build-abc123'); Assets.setCacheMode('default'); Assets.setUseImageBitmap(true);
+  </script>
 
-  <!-- Start-Overlay (vier Buttons) -->
-  <div class="start-overlay" id="start" data-autostart="0">
-    <div class="card">
-      <h1>Siedler‑Mini</h1>
-      <p>Willkommen! Bitte wählen:</p>
-      <div class="row">
-        <button class="btn" id="btnStart">Start</button>
-        <button class="btn" id="btnLoad">Laden</button>
-        <button class="btn warn" id="btnReset">Reset</button>
-        <button class="btn" id="btnFullscreen">Vollbild</button>
-      </div>
-    </div>
-  </div>
+  <!-- Spielstart / Glue-Code -->
+  <script type="module" src="./boot.js"></script>
 
-  <!-- BOOT/GLUE (nur dieser Block enthält Logik; alle anderen Dateien bleiben unberührt) -->
-<script type="module">
-  import { Assets } from './core/asset.js';
-  import { SiedlerMap } from './tools/map-runtime.js';
+  <!-- ===================================================================== -->
+  <!-- Emergency Debug HUD: Fehlerbanner, Tap-Logger, Overlay-Killer         -->
+  <!-- Toggle: Button 🐞 unten rechts oder 3× schnell tippen                 -->
+  <!-- ===================================================================== -->
+  <script>
+  (function(){
+    const style = document.createElement('style');
+    style.textContent = `
+    #dbgBtn{position:fixed;right:14px;bottom:14px;z-index:99999;border:0;border-radius:14px;
+            width:44px;height:44px;font-size:22px;box-shadow:var(--shadow,0 8px 24px rgba(0,0,0,.35));
+            background:var(--panel,#122238);color:var(--text,#cfe3ff)}
+    #dbgWrap{position:fixed;right:14px;bottom:70px;z-index:99999;min-width:260px;max-width:90vw;
+             background:var(--panel2,#0f1d31);color:var(--text,#cfe3ff);border-radius:12px;
+             box-shadow:var(--shadow,0 20px 60px rgba(0,0,0,.35));padding:10px;display:none}
+    #dbgWrap.active{display:block}
+    #dbgWrap button{margin:6px 6px 0 0;border:0;border-radius:10px;padding:8px 10px;
+                    background:#1c2b44;color:#cfe3ff}
+    #dbgErr{position:fixed;left:8px;top:8px;z-index:99999;background:#7d1f1f;color:#fff;
+            padding:8px 10px;border-radius:8px;display:none;max-width:90vw;white-space:pre-wrap}
+    .tapdot{position:fixed;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.25);
+            border:2px solid rgba(255,255,255,.7);pointer-events:none;transform:translate(-50%,-50%);
+            z-index:99998;animation:tapdot .6s ease-out forwards}
+    @keyframes tapdot{to{opacity:0;transform:translate(-50%,-50%) scale(1.8)}}
+    `;
+    document.head.appendChild(style);
 
-  /* ========= DOM ========= */
-  const bg  = document.getElementById('bg');
-  const hud = document.getElementById('hud');
-  const build = document.getElementById('build');
-  const tabsEl = document.getElementById('tabs');
-  const gridEl = document.getElementById('grid');
-  const btnBuildText = document.getElementById('btnBuildText');
-  const btnBuildFab  = document.getElementById('btnBuildFab');
+    const btn = Object.assign(document.createElement('button'), {id:'dbgBtn',textContent:'🐞',title:'Debug'});
+    const wrap = Object.assign(document.createElement('div'), {id:'dbgWrap',innerHTML:`
+      <div style="font-weight:600;margin:4px 0 6px">Debug-Werkzeuge</div>
+      <button id="dbgTap">Tap-Log: AUS</button>
+      <button id="dbgKill">Overlays aus</button>
+      <button id="dbgReload">Hard-Reload</button>
+      <div id="dbgInfo" style="margin-top:8px;font-size:12px;opacity:.8"></div>
+    `});
+    const err = Object.assign(document.createElement('div'), {id:'dbgErr'});
+    document.body.append(btn, wrap, err);
 
-  const start = document.getElementById('start');
-  const btnStart = document.getElementById('btnStart');
-  const btnLoad  = document.getElementById('btnLoad');
-  const btnReset = document.getElementById('btnReset');
-  const btnFullscreen = document.getElementById('btnFullscreen');
-  const btnCloseFS = document.getElementById('btnCloseFS');
+    let tapLog=false, tripleTap=0, tripleTimer=null;
+    function setInfo(s){ wrap.querySelector('#dbgInfo').textContent = s; }
+    function showErr(s){ err.textContent = s; err.style.display='block';
+      clearTimeout(err._t); err._t=setTimeout(()=> err.style.display='none', 8000); }
 
-  const pInfo = document.getElementById('pInfo');
-  const tglInfo = document.getElementById('tglInfo');
-  const tglLayers = document.getElementById('tglLayers');
-  const btnReload = document.getElementById('btnReload');
-  const btnCenter = document.getElementById('btnCenter');
-  const vDpr = document.getElementById('vDpr');
-  const vVp  = document.getElementById('vVp');
-  const vCv  = document.getElementById('vCv');
-  const lblFps = document.getElementById('lblFps');
-  const lblHint = document.getElementById('lblHint');
+    // Fehler sichtbar machen
+    window.addEventListener('error', e => showErr('Error: ' + (e.message||e.error||'unknown')));
+    window.addEventListener('unhandledrejection', e => showErr('Promise: ' + (e.reason||'unknown')));
 
-  /* ========= Canvas / Kamera ========= */
-  const TILE = 64;
-  const cv = document.getElementById('game');
-  const ctx = cv.getContext('2d', { alpha:false });
-  Assets.imageRenderingCrisp(cv);
-
-  const view = { x:0, y:0, w:0, h:0, s:1 };
-  function resize(){
-    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    const w = innerWidth, h = innerHeight;
-    cv.width = w * dpr; cv.height = h * dpr;
-    cv.style.width = w+'px'; cv.style.height = h+'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    view.w = cv.width; view.h = cv.height;
-    if (vDpr) vDpr.textContent = dpr.toFixed(2);
-    if (vVp)  vVp.textContent  = `${w}×${h}`;
-    if (vCv)  vCv.textContent  = `${cv.width}×${cv.height}`;
-  }
-  addEventListener('resize', resize);
-  resize();
-
-  const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
-  const screenToWorld = (px,py)=> ({ x: view.x + px / view.s, y: view.y + py / view.s });
-  const worldToScreen = (wx,wy)=> ({ x: (wx - view.x) * view.s, y: (wy - view.y) * view.s });
-
-  /* ========= Welt / Atlas ========= */
-  let world=null, started=false, _lf=performance.now();
-  let atlas=null, atlasImage=null;
-
-  // Kategorien (fix) – Items werden dynamisch aus dem Atlas gemappt
-  const CATEGORIES = [
-    { id:'food',   label:'Nahrung',   items:[] },
-    { id:'res',    label:'Ressourcen',items:[] },
-    { id:'housing',label:'Wohnen',    items:[] },
-    { id:'mil',    label:'Militär',   items:[] },
-    { id:'roads',  label:'Logistik',  items:[] },
-    { id:'deco',   label:'Deko',      items:[] },
-    { id:'spec',   label:'Spezial',   items:[] },
-  ];
-  let activeCat = 'food';
-  let placeMode = null; // { id,label,cost,frame }
-
-  // Heuristik: ordnet Frame-Namen Kategorien zu (du hast die Sprites ja schon)
-  const RULES = [
-    { cat:'food',    rx:/(farm|mill|fisher|hunter|bak|bread|field)/i, labelMap:{fisher:'Fischerhütte',hunter:'Jägerhütte',farm:'Farm',mill:'Mühle'} },
-    { cat:'res',     rx:/(lumber|wood|saw|quarr|mine|ore|stone)/i,    labelMap:{lumber:'Holzfäller',sawmill:'Sägewerk',quarry:'Steinbruch',mine:'Mine'} },
-    { cat:'housing', rx:/(house|hut|home|hq)/i,                       labelMap:{hut:'Hütte',house:'Haus',hq:'Hauptquartier'} },
-    { cat:'mil',     rx:/(barrack|tower|guard|fort)/i,                labelMap:{barracks:'Kaserne',tower:'Wachturm'} },
-    { cat:'roads',   rx:/(road|bridge|ware|store|stock|cart)/i,       labelMap:{road:'Straße',bridge:'Brücke',warehouse:'Lagerhaus'} },
-    { cat:'deco',    rx:/(statue|fountain|deco|garden)/i,             labelMap:{statue:'Statue',fountain:'Brunnen'} },
-    { cat:'spec',    rx:/(market|port|dock|harbor|harbour)/i,         labelMap:{market:'Markt',port:'Hafen'} },
-  ];
-
-  // Optional: feste Kosten (wenn kein Eintrag gefunden wird, 0)
-  const COST = {
-    hut:{wood:4}, house:{wood:8,stone:2}, hq:{wood:12,stone:8},
-    lumber:{wood:4}, sawmill:{wood:8}, quarry:{wood:6,stone:2}, mine:{wood:6,stone:4},
-    hunter:{wood:6}, fisher:{wood:6}, farm:{wood:8}, mill:{wood:10,stone:4},
-    road:{stone:1}, bridge:{wood:6,stone:4}, warehouse:{wood:10,stone:6},
-    barracks:{wood:10,stone:6}, tower:{stone:8},
-    statue:{stone:12}, fountain:{stone:6},
-    market:{wood:10,stone:6}, port:{wood:12,stone:12},
-  };
-
-  // Menü-Icons: zuerst ./assets/ui/build/*.png; wenn nicht vorhanden → Crops aus Atlas
-  function uiIconPath(id) { return `./assets/ui/build/${id}.png`; }
-
-  async function begin(){
-    if (started) return; started=true;
-    // UI vor Start sperren
-    document.body.classList.remove('lock-ui');
-
-    await Assets.loadAll({
-      images:['./assets/tiles/tileset.png'],
-      json:['./assets/tiles/tileset.json','./assets/maps/map-pro.json']
-    });
-
-    const worldJson = await Assets.get('./assets/maps/map-pro.json');
-    world = new SiedlerMap({
-      tileResolver:(n)=>'./assets/'+n,
-      onReady:()=> loop()
-    });
-    await world.loadFromObject(worldJson);
-
-    atlas = world.atlas;         // JSON
-    atlasImage = world.atlasImage; // ImageBitmap|HTMLImageElement
-
-    // 1) Frames aus Atlas in Kategorien einsortieren
-    autoCatalogFromAtlas();
-
-    // 2) Tabs + Grid zeichnen (mit Icons/Thumbnails)
-    renderTabs(); renderGrid();
-  }
-
-  /* ========= Auto-Katalog aus tileset.json ========= */
-  function titleFromKey(key){
-    // human readable: "house_hut_01" → "House Hut 01" → deutsche Labels per RULES.labelMap überschreiben
-    return key.replace(/[_\-]+/g,' ')
-              .replace(/\b\w/g, m=>m.toUpperCase());
-  }
-  function guessId(key){
-    // ID vereinfachen (z.B. "house_hut_01" → "hut")
-    const parts = key.toLowerCase().split(/[_\-]/);
-    // nimm „prägnanteste“ Komponente
-    const pick = parts.find(p=>!['tile','tiles','01','02','idle','anim','frame'].includes(p)) || parts[0];
-    return pick;
-  }
-  function autoCatalogFromAtlas(){
-    const frames = atlas?.frames || {};
-    const keys = Object.keys(frames);
-
-    // Clear
-    CATEGORIES.forEach(c=> c.items = []);
-
-    for (const k of keys){
-      const rule = RULES.find(r=> r.rx.test(k));
-      if (!rule) continue;
-      const id = guessId(k);
-      const label = rule.labelMap?.[id] || titleFromKey(k);
-      // Ein Item pro id
-      const cat = CATEGORIES.find(c=> c.id === rule.cat);
-      if (!cat.items.some(it=>it.id===id)){
-        cat.items.push({ id, label, frame:k, cost: COST[id] || {} });
-      }
+    // Tap-Visualizer
+    function tapDot(x,y){ const d=document.createElement('div'); d.className='tapdot'; d.style.left=x+'px'; d.style.top=y+'px'; document.body.appendChild(d); setTimeout(()=>d.remove(),650); }
+    function onPointer(ev){
+      if(!tapLog) return;
+      tapDot(ev.clientX, ev.clientY);
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      if(!el) return;
+      const name = (el.id?('#'+el.id):'') + (el.className?('.'+String(el.className).split(' ').join('.')):'');
+      console.log('[TAP]', ev.type, el.tagName+name, getComputedStyle(el).pointerEvents, 'z=', getComputedStyle(el).zIndex);
     }
 
-    // Falls leer (z.B. Atlas anders benannt), sichere Defaults drinlassen:
-    CATEGORIES.forEach(c=>{
-      if (!c.items.length && c.id === 'housing'){
-        c.items.push({ id:'hut', label:'Hütte', frame: Object.keys(frames)[0] || null, cost:COST.hut||{} });
-      }
-    });
-  }
-
-  /* ========= Baumenü Rendering ========= */
-  function renderTabs(){
-    tabsEl.innerHTML = '';
-    const firstNonEmpty = CATEGORIES.find(c=>c.items.length) || CATEGORIES[0];
-    if (!CATEGORIES.find(c=>c.id===activeCat && c.items.length)) activeCat = firstNonEmpty.id;
-
-    CATEGORIES.forEach(c=>{
-      if (!c.items.length) return; // leere Kategorien ausblenden
-      const b = document.createElement('button');
-      b.className='tab'; b.textContent=c.label;
-      b.setAttribute('aria-selected', String(c.id===activeCat));
-      b.addEventListener('click', ()=>{ activeCat=c.id; renderTabs(); renderGrid(); });
-      tabsEl.appendChild(b);
-    });
-  }
-
-  function makeThumb(frameKey){
-    const f = atlas.frames?.[frameKey]; if (!f) return null;
-    const off = document.createElement('canvas');
-    off.width = 48; off.height = 48;
-    const ox = off.getContext('2d');
-    ox.imageSmoothingEnabled = false;
-    const scale = Math.min(48 / f.w, 48 / f.h);
-    const dw = Math.floor(f.w * scale), dh = Math.floor(f.h * scale);
-    const dx = Math.floor((48 - dw)/2), dy = Math.floor((48 - dh)/2);
-    ox.drawImage(atlasImage, f.x,f.y,f.w,f.h, dx,dy, dw,dh);
-    return off.toDataURL('image/png');
-  }
-
-  function renderGrid(){
-    gridEl.innerHTML = '';
-    const cat = CATEGORIES.find(c=>c.id===activeCat);
-    (cat?.items||[]).forEach(item=>{
-      const btn = document.createElement('button');
-      btn.className='tile'; btn.dataset.type=item.id;
-
-      const icWrap = document.createElement('div');
-      icWrap.style.width='48px'; icWrap.style.height='48px';
-      icWrap.style.display='grid'; icWrap.style.placeItems='center';
-
-      // 1) Versuche UI-Icon-Datei
-      const iconSrc = uiIconPath(item.id);
-      const img = document.createElement('img');
-      img.alt = item.label; img.width=48; img.height=48;
-      img.onload = ()=>{}; img.onerror = ()=>{
-        // 2) Fallback: Thumb aus Atlas
-        const th = item.frame && makeThumb(item.frame);
-        if (th) img.src = th;
-        else { icWrap.textContent = '⬜'; icWrap.style.fontSize='28px'; return; }
-      };
-      img.src = iconSrc;
-      icWrap.appendChild(img);
-
-      const lbl = document.createElement('span'); lbl.textContent=item.label;
-      btn.appendChild(icWrap); btn.appendChild(lbl);
-
-      btn.addEventListener('click', ()=>{
-        placeMode = {...item}; // {id,label,cost,frame}
-        build.classList.remove('show');
-        btnBuildFab.classList.remove('pulse');
+    // HUD Controls
+    btn.onclick = ()=> wrap.classList.toggle('active');
+    wrap.querySelector('#dbgTap').onclick = function(){
+      tapLog=!tapLog; this.textContent = 'Tap-Log: '+(tapLog?'AN':'AUS');
+      const opts={capture:true,passive:true};
+      const fns=['pointerdown','pointerup','click','touchstart','touchend'];
+      fns.forEach(t=> (tapLog? document.addEventListener(t,onPointer,opts)
+                             : document.removeEventListener(t,onPointer,opts)));
+      setInfo(tapLog?'Taps werden geloggt (Konsole öffnen).':'');
+    };
+    wrap.querySelector('#dbgKill').onclick = ()=>{
+      // Blendet typische Blocker-Overlays aus
+      const sel='[class*="overlay"],[id*="overlay"],[class*="modal"],[id*="modal"],[class*="glass"],[class*="backdrop"]';
+      document.querySelectorAll(sel).forEach(el=>{
+        el.dataset._prev_display = getComputedStyle(el).display;
+        el.style.display='none';
       });
+      setInfo('Overlays mit *overlay/modal/glass/backdrop* wurden ausgeblendet.');
+    };
+    wrap.querySelector('#dbgReload').onclick = ()=> location.reload(true);
 
-      gridEl.appendChild(btn);
-    });
-  }
+    // 3× schnelles Tippen → HUD umschalten
+    document.addEventListener('pointerdown', ()=>{
+      tripleTap++; clearTimeout(tripleTimer);
+      tripleTimer=setTimeout(()=>{ tripleTap=0; }, 550);
+      if(tripleTap>=3){ wrap.classList.toggle('active'); tripleTap=0; }
+    }, {passive:true});
+  })();
+  </script>
 
-  /* ========= FAB / Menü ========= */
-  function toggleBuild(){ build.classList.toggle('show'); btnBuildFab.classList.remove('pulse'); }
-  btnBuildText.addEventListener('click', ()=> { if (!uiLocked()) toggleBuild(); });
-  btnBuildFab .addEventListener('click', ()=> { if (!uiLocked()) toggleBuild(); });
-
-  /* ========= Vollbild-X nur im Fullscreen ========= */
-  function syncFSButton(){ btnCloseFS.classList.toggle('show', !!document.fullscreenElement); }
-  document.addEventListener('fullscreenchange', syncFSButton);
-  btnCloseFS.addEventListener('click', ()=> document.fullscreenElement && document.exitFullscreen());
-  syncFSButton();
-
-  /* ========= Start-Overlay erzwingen + UI lock ========= */
-  function forceStartOverlay(){
-    start.classList.add('show');
-    document.body.classList.add('lock-ui');
-  }
-  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', forceStartOverlay, { once:true });
-  else forceStartOverlay();
-
-  btnStart.addEventListener('click', ()=>{
-    start.classList.remove('show');
-    if (bg) { bg.classList.add('fade'); bg.addEventListener('transitionend', ()=> bg.classList.add('hidden'), { once:true }); }
-    begin();
-  });
-  btnLoad.addEventListener('click', ()=> alert('Laden: Slots/Autosaves später.'));
-  btnReset.addEventListener('click', ()=> location.reload());
-  btnFullscreen.addEventListener('click', ()=>{
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-    else document.exitFullscreen();
-  });
-
-  const uiLocked = ()=> document.body.classList.contains('lock-ui');
-
-  /* ========= Ressourcen (Dummy) ========= */
-  const R = { gold:100, wood:50, stone:30, food:25 };
-  const q = (id)=> document.getElementById(id);
-  function setRes(){ q('rGold').textContent=R.gold; q('rWood').textContent=R.wood; q('rStone').textContent=R.stone; q('rFood').textContent=R.food; }
-  setRes();
-
-  function canAfford(cost){
-    if (!cost) return true;
-    if (cost.wood && R.wood < cost.wood) return false;
-    if (cost.stone && R.stone < cost.stone) return false;
-    if (cost.gold && R.gold < cost.gold) return false;
-    if (cost.food && R.food < cost.food) return false;
-    return true;
-  }
-  function pay(cost){
-    if (!cost) return;
-    if (cost.wood) R.wood -= cost.wood;
-    if (cost.stone) R.stone -= cost.stone;
-    if (cost.gold) R.gold -= cost.gold;
-    if (cost.food) R.food -= cost.food;
-    setRes();
-  }
-
-  /* ========= Eingaben: Zoom / Pan / Platzieren ========= */
-  let pointers = new Map(); // id -> {x,y}
-  let isPanning=false, panLast={x:0,y:0}, pinchStart=null;
-  let ghostPos=null;        // {wx,wy}
-
-  cv.addEventListener('wheel', (e)=>{
-    if (uiLocked()) return;
-    e.preventDefault();
-    const rect = cv.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const before = screenToWorld(mx, my);
-    const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
-    view.s = clamp(view.s * factor, 0.5, 3);
-    const after = screenToWorld(mx, my);
-    view.x += before.x - after.x; view.y += before.y - after.y;
-  }, { passive:false });
-
-  function onPointerDown(e){
-    if (uiLocked()) return;
-    cv.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
-    if (pointers.size===1){
-      if (e.button===1 || e.button===2){ isPanning=true; panLast={x:e.clientX, y:e.clientY}; }
-      else if (e.button===0 && placeMode){ tryPlaceAtEvent(e); }
-    } else if (pointers.size===2){
-      pinchStart = getPinch();
-    }
-  }
-  function onPointerMove(e){
-    if (uiLocked()) return;
-    const p = pointers.get(e.pointerId);
-    if (p){ p.x=e.clientX; p.y=e.clientY; }
-    const rect = cv.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const w = screenToWorld(mx, my);
-    ghostPos = { wx:w.x, wy:w.y };
-
-    if (pointers.size===1 && isPanning){
-      const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
-      panLast = {x:e.clientX, y:e.clientY};
-      view.x -= dx / view.s; view.y -= dy / view.s;
-    } else if (pointers.size===2){
-      const pinch = getPinch();
-      if (pinchStart){
-        const before = pinchStart.centerWorld;
-        view.s = clamp(pinchStart.scale * (pinch.dist / pinchStart.dist), 0.5, 3);
-        const after = screenToWorld(pinch.center.x, pinch.center.y);
-        view.x += before.x - after.x; view.y += before.y - after.y;
-      }
-    }
-  }
-  function onPointerUp(e){
-    pointers.delete(e.pointerId);
-    if (uiLocked()) return;
-    if (e.pointerType==='mouse' && e.button===0 && placeMode){ tryPlaceAtEvent(e); }
-    if (pointers.size===0){ isPanning=false; pinchStart=null; }
-  }
-  function onContextMenu(e){ e.preventDefault(); }
-  cv.addEventListener('pointerdown', onPointerDown);
-  cv.addEventListener('pointermove', onPointerMove);
-  cv.addEventListener('pointerup', onPointerUp);
-  cv.addEventListener('pointercancel', onPointerUp);
-  cv.addEventListener('contextmenu', onContextMenu);
-
-  function getPinch(){
-    const arr=[...pointers.values()]; if (arr.length<2) return null;
-    const a=arr[0], b=arr[1];
-    const center={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
-    const rect = cv.getBoundingClientRect();
-    const centerInCanvas = { x:center.x-rect.left, y:center.y-rect.top };
-    const dist = Math.hypot(a.x-b.x, a.y-b.y);
-    return { center:centerInCanvas, dist, scale:view.s, centerWorld: screenToWorld(centerInCanvas.x, centerInCanvas.y) };
-  }
-
-  const buildings = []; // {wx,wy,type,frame}
-  function tryPlaceAtEvent(e){
-    if (!placeMode) return;
-    const rect = cv.getBoundingClientRect();
-    const mx = (e.clientX ?? (e.touches?.[0]?.clientX)) - rect.left;
-    const my = (e.clientY ?? (e.touches?.[0]?.clientY)) - rect.top;
-    const w = screenToWorld(mx, my);
-    const sx = Math.floor(w.x / TILE) * TILE;
-    const sy = Math.floor(w.y / TILE) * TILE;
-
-    if (!canAfford(placeMode.cost)){
-      if (lblHint) lblHint.textContent = 'Nicht genug Ressourcen';
-      return;
-    }
-    buildings.push({ wx:sx, wy:sy, type:placeMode.id, frame:placeMode.frame });
-    pay(placeMode.cost);
-  }
-
-  /* ========= Zeichnen ========= */
-  function tickFps(){
-    const now = performance.now();
-    const dt = now - _lf; _lf = now;
-    if (lblFps) lblFps.textContent = 'FPS: ' + Math.round(1000/(dt||16.7));
-  }
-
-  function drawSpriteFrame(frameKey, dx, dy, size){
-    const f = atlas?.frames?.[frameKey];
-    if (!f || !atlasImage) return false;
-    const scale = Math.min(size / f.w, size / f.h);
-    const dw = Math.floor(f.w * scale), dh = Math.floor(f.h * scale);
-    const px = Math.floor(dx + (size - dw)/2), py = Math.floor(dy + (size - dh)/2);
-    ctx.drawImage(atlasImage, f.x,f.y,f.w,f.h, px,py, dw,dh);
-    return true;
-  }
-
-  function drawGhost(){
-    if (!placeMode || !ghostPos) return;
-    const sx = Math.floor(ghostPos.wx / TILE) * TILE;
-    const sy = Math.floor(ghostPos.wy / TILE) * TILE;
-    const pt = worldToScreen(sx, sy);
-    const size = TILE * view.s;
-
-    ctx.save();
-    if (!drawSpriteFrame(placeMode.frame, pt.x, pt.y, size)){
-      ctx.globalAlpha = 0.5; ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(pt.x, pt.y, size, size);
-      ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-      ctx.strokeRect(pt.x, pt.y, size, size);
-    } else {
-      ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
-      ctx.strokeRect(pt.x, pt.y, size, size);
-    }
-    ctx.restore();
-  }
-
-  function drawBuildings(){
-    if (!buildings.length) return;
-    ctx.save();
-    for (const b of buildings){
-      const pt = worldToScreen(b.wx, b.wy);
-      const size = TILE * view.s;
-      if (!drawSpriteFrame(b.frame, pt.x, pt.y, size)){
-        ctx.fillStyle = '#3b82f6';
-        ctx.fillRect(pt.x, pt.y, size, size);
-        ctx.lineWidth = 1.5; ctx.strokeStyle = '#0b1628';
-        ctx.strokeRect(pt.x, pt.y, size, size);
-      }
-    }
-    ctx.restore();
-  }
-
-  function loop(){
-    tickFps();
-    ctx.clearRect(0,0,cv.width,cv.height);
-
-    ctx.save();
-    ctx.scale(view.s, view.s);
-    if (world){
-      world.draw(ctx, { x:view.x, y:view.y, w:cv.width / view.s, h:cv.height / view.s });
-    }
-    ctx.restore();
-
-    drawBuildings();
-    drawGhost();
-
-    requestAnimationFrame(loop);
-  }
-
-  /* ========= Checker ========= */
-  tglInfo.addEventListener('click', ()=>{
-    const vis = pInfo.classList.toggle('show');
-    tglInfo.setAttribute('aria-pressed', String(vis));
-  });
-  tglLayers.addEventListener('click', ()=> alert('Overlay‑Menü folgt.'));
-  btnReload.addEventListener('click', ()=> location.reload());
-  btnCenter.addEventListener('click', ()=> { view.x=0; view.y=0; view.s=1; });
-
-</script>
+  <noscript>
+    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#300;color:#fff;font:600 16px system-ui">
+      JavaScript ist deaktiviert – das Spiel kann nicht gestartet werden.
+    </div>
+  </noscript>
 </body>
 </html>
