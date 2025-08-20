@@ -1,17 +1,35 @@
 {
   "tileSize": 64,
   "background": "#0b1628",
+
+  "atlas": {
+    "json": "../tiles/tileset.json",
+    "image": "../tiles/tileset.png"
+  },
+
   "layers": [
     {
       "name": "ground",
       "type": "tile",
       "grid": [
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null],
-        [null, null, null, null, null, null, null, null]
+        ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","water","water","water","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","dirt","dirt","dirt","grass","grass","grass","grass","grass","grass","grass","grass"],
+        ["grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass"]
+      ]
+    },
+    {
+      "name": "details",
+      "type": "tile",
+      "grid": [
+        [null,null,null,null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,"forest_edge_E",null,null,null,null,null,null,null],
+        [null,null,"forest_edge_N",null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null,null,null,null,null],
+        [null,null,null,null,null,null,null,null,null,null,null,null]
       ]
     }
   ]
