@@ -1,12 +1,6 @@
 {
   "tileSize": 64,
 
-  /* Atlas: relativ zu assets/maps/ → daher ../tiles/... */
-  "atlas": {
-    "json": "../tiles/tileset.json",
-    "image": "../tiles/tileset.png"
-  },
-
   "background": "#0b1628",
 
   "layers": [
