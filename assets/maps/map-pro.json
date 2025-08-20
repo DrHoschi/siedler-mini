@@ -1,19 +1,17 @@
 {
   "tileSize": 64,
-
   "background": "#0b1628",
-
   "layers": [
     {
       "name": "ground",
       "type": "tile",
       "grid": [
-        ["grass","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
-        ["grass","dirt","water","water","water","grass","grass","grass"],
-        ["grass","dirt","water","water","water","grass","grass","grass"],
-        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
-        ["grass","grass","grass","grass","grass","grass","grass","grass"]
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null]
       ]
     }
   ]
