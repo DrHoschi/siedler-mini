@@ -1,13 +1,13 @@
 {
   "tileSize": 64,
 
-  /* Atlas-Angabe: als Objekt mit json + image.
-     Pfade sind RELATIV zum Speicherort dieser Datei (assets/maps/…).
-     Daher "../tiles/…", um in den tiles-Ordner zu gelangen. */
+  /* Atlas: relativ zu assets/maps/ → daher ../tiles/... */
   "atlas": {
     "json": "../tiles/tileset.json",
     "image": "../tiles/tileset.png"
   },
+
+  "background": "#0b1628",
 
   "layers": [
     {
@@ -20,18 +20,6 @@
         ["grass","dirt","water","water","water","grass","grass","grass"],
         ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
         ["grass","grass","grass","grass","grass","grass","grass","grass"]
-      ]
-    },
-    {
-      "name": "edges",
-      "type": "tile",
-      "grid": [
-        [null,null,null,null,null,null,null,null],
-        [null,null,null,null,"forest_edge_E",null,null,null],
-        [null,null,"forest_edge_N",null,null,null,null,null],
-        [null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null]
       ]
     }
   ]
