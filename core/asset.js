@@ -1,56 +1,94 @@
-// Tiny asset loader for images & JSON (no deps)
-// Crisp pixels & ImageBitmap when available.
+// ============================================================================
+// 📦 core/asset.js   (Beispiel-Struktur)
+// ----------------------------------------------------------------------------
+// Zweck:   Lädt, verwaltet und stellt Assets (Bilder, Sounds, Daten etc.)
+//          für das Spiel bereit.
+// Struktur: Immer in Blöcke gegliedert mit Kommentaren.
+// ============================================================================
 
-export const Assets = (() => {
-  const cache = new Map();
+// -----------------------------------------------------------------------------
+// 1. IMPORTS
+// -----------------------------------------------------------------------------
+/* 
+   - Hier binden wir externe Module oder interne Hilfsdateien ein.
+   - Alles, was von außen kommt, steht ganz oben, damit man es sofort sieht.
+*/
+// import { loadImage } from './loader.js';   // Beispiel
 
-  function imageRenderingCrisp(ctxOrCanvas) {
-    const c = ctxOrCanvas?.canvas || ctxOrCanvas;
-    if (!c) return;
-    c.style.imageRendering = 'pixelated';
+
+// -----------------------------------------------------------------------------
+// 2. KONSTANTEN & KONFIGURATION
+// -----------------------------------------------------------------------------
+/*
+   - Statische Daten wie Pfade, Dateinamen, Standardwerte
+   - Zentral hier abgelegt, damit leicht änderbar
+*/
+const ASSET_PATH = './assets/';
+
+const IMAGE_LIST = {
+  player: 'sprites/player.png',
+  enemy: 'sprites/enemy.png',
+  terrain: 'tiles/terrain.png',
+};
+
+
+// -----------------------------------------------------------------------------
+// 3. HILFSFUNKTIONEN
+// -----------------------------------------------------------------------------
+/*
+   - Kleine Funktionen, die man mehrfach im Code braucht
+   - z. B. Loader, Konverter, Parser
+*/
+function loadImage(src) {
+  const img = new Image();
+  img.src = ASSET_PATH + src;
+  return img;
+}
+
+
+// -----------------------------------------------------------------------------
+// 4. KLASSEN / OBJEKTE
+// -----------------------------------------------------------------------------
+/*
+   - Größere Strukturen, die im Spiel genutzt werden
+   - z. B. AssetManager, Renderer, Entity
+*/
+class AssetManager {
+  constructor(list) {
+    this.assets = {};
+    this.list = list;
   }
 
-  async function loadImage(url) {
-    if (cache.has(url)) return cache.get(url);
-
-    const p = (async () => {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      if ('createImageBitmap' in window) {
-        return await createImageBitmap(blob, { imageOrientation: 'from-image', premultiplyAlpha: 'none' });
-      }
-      return await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = (e) => reject(e);
-        img.decoding = 'async';
-        img.src = URL.createObjectURL(blob);
-      });
-    })();
-
-    cache.set(url, p);
-    return p;
+  // Lädt alle Assets aus der Liste
+  loadAll() {
+    for (const [key, file] of Object.entries(this.list)) {
+      this.assets[key] = loadImage(file);
+    }
   }
 
-  async function loadJSON(url) {
-    if (cache.has(url)) return cache.get(url);
-    const p = fetch(url).then(r => {
-      if (!r.ok) throw new Error(`JSON load failed: ${url}`);
-      return r.json();
-    });
-    cache.set(url, p);
-    return p;
+  // Gibt ein Asset zurück
+  get(name) {
+    return this.assets[name];
   }
+}
 
-  async function loadAll(manifest) {
-    // manifest = { images: [url], json: [url] }
-    const tasks = [];
-    (manifest.images || []).forEach(u => tasks.push(loadImage(u)));
-    (manifest.json || []).forEach(u => tasks.push(loadJSON(u)));
-    await Promise.all(tasks);
-  }
 
-  function get(url) { return cache.get(url); }
+// -----------------------------------------------------------------------------
+// 5. INITIALISIERUNG / HAUPTLOGIK
+// -----------------------------------------------------------------------------
+/*
+   - Hier wird der Code ausgeführt, der direkt beim Laden laufen soll
+   - z. B. Initialisierung vom AssetManager
+*/
+const assetManager = new AssetManager(IMAGE_LIST);
+assetManager.loadAll();
 
-  return { loadImage, loadJSON, loadAll, get, imageRenderingCrisp };
-})();
+
+// -----------------------------------------------------------------------------
+// 6. EXPORTS
+// -----------------------------------------------------------------------------
+/*
+   - Alles, was in anderen Dateien gebraucht wird, exportieren
+   - So bleibt die Struktur modular und wiederverwendbar
+*/
+export { assetManager, AssetManager, IMAGE_LIST };
