@@ -7,11 +7,16 @@
   <title>Siedler‑Mini V14.7 (Mobil)</title>
 
   <!--
-    Layout-Ziele:
-    - Start-BG sichtbar → nach Klick sauber ausblenden + deaktivieren (pointer + display:none)
-    - Ressourcen-HUD oben angedockt
-    - Bau-Menü Panel mit Close-"X" rechts oben; X nur in Fullscreen sichtbar
-    - Debug-Bar unten unverändert
+    ─────────────────────────────────────────────────────────────────────
+    LAYOUT-LEITLINIEN
+    - Start-BG (./assets/Logo.PNG) → blendet nach Start aus + wird deaktiviert
+    - HUD (Ressourcen) oben; Debug-Bar/Checker unten
+    - Großer runder FAB „Bauen“ unten rechts
+    - Bau-Menü links oben, Tabs (Kategorien), Kacheln (Platzhalter)
+    - Fullscreen-"X" nur sichtbar im Vollbild, rechts oben
+    - Canvas füllt den Screen (Map rendert erst nach Start)
+    - Alle Blöcke gut kommentiert, Debug-Tools bleiben drin
+    ─────────────────────────────────────────────────────────────────────
   -->
   <style>
     :root{
@@ -21,8 +26,10 @@
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --accent:#3b82f6;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
-      --dbgHeight: 56px;
-      --hudHeight: 52px;
+      --dbgHeight: 56px;   /* Checker/Debug-Bar Höhe */
+      --hudHeight: 52px;   /* Ressourcen-HUD Höhe  */
+      --fabSize: 64px;     /* FAB-Durchmesser      */
+      --fabOffset: 14px;   /* FAB-Abstand vom Rand */
     }
     html,body{ height:100%; margin:0; background:var(--bg); }
     body{
@@ -31,23 +38,23 @@
       color:var(--text);
     }
 
-    /* Vollflächiges Start-Hintergrundbild */
+    /* Vollflächiges Start-Hintergrundbild (blendet aus + wird deaktiviert) */
     .bg{
       position:fixed; inset:0; z-index:0;
       background:#0b1628 url('./assets/Logo.PNG') center center / cover no-repeat;
       transition: opacity .35s ease;
     }
     .bg.fade{ opacity:0; pointer-events:none; }
-    .bg.hidden{ display:none; } /* wird nach der Transition gesetzt (ressourcensparend) */
+    .bg.hidden{ display:none; } /* nach Transition → keine Repaints/Reflows */
 
-    /* Spielfläche */
+    /* Spielfläche/Canvas (zeichnet die Map) */
     canvas{
       position:relative; z-index:1;
       display:block; width:100vw; height:100vh; background:transparent;
       image-rendering: pixelated; image-rendering: crisp-edges; touch-action:none;
     }
 
-    /* HUD: Ressourcen oben */
+    /* Ressourcen-HUD (oben angedockt) */
     .hud{
       position:fixed; left:0; right:0; top:0; z-index:15;
       height:var(--hudHeight);
@@ -72,7 +79,7 @@
       font-weight:600;
     }
 
-    /* Debug-Bar unten */
+    /* Checker/Debug-Bar (unten fix) */
     .dbg{
       position:fixed; left:0; right:0; bottom:0; z-index:20;
       display:flex; gap:.5rem; align-items:center; padding:.5rem .75rem;
@@ -89,7 +96,7 @@
     .dbg .sep{ width:1px; height:1.75rem; background:var(--line); margin:0 .25rem; }
     .dbg .info{ font-size:.8rem; color:var(--muted); margin-left:auto; display:flex; gap:1rem; }
 
-    /* Panels (Debug) */
+    /* Debug-Panel (Infos) */
     .panel{
       position:fixed; right:.75rem; bottom:calc(var(--dbgHeight) + .75rem); z-index:19;
       min-width:220px; max-width:min(90vw, 380px);
@@ -101,7 +108,63 @@
     .kv{ display:grid; grid-template-columns: auto 1fr; gap:.25rem .75rem; font-size:.85rem; }
     .kv .k{ color:var(--muted); } .kv .v{ color:var(--text); word-break:break-word; }
 
-    /* Start-Overlay: höher, damit nicht von Debug-Bar verdeckt */
+    /* FAB: großer runder „Bauen“-Button unten rechts (puls bis Erstnutzung) */
+    .fab{
+      position:fixed; z-index:22;
+      right:var(--fabOffset);
+      bottom:calc(var(--dbgHeight) + var(--fabOffset));
+      width:var(--fabSize); height:var(--fabSize);
+      border-radius:50%;
+      display:grid; place-items:center;
+      background:radial-gradient(120% 120% at 30% 20%, #274162, #15263e);
+      border:2px solid var(--line);
+      box-shadow: 0 10px 30px rgba(0,0,0,.45);
+      cursor:pointer; user-select:none;
+    }
+    .fab svg{ width:34px; height:34px; }
+    .fab:focus-visible{ outline:3px solid var(--accent); }
+    @keyframes fabPulse {
+      0%{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 0 rgba(59,130,246,.25); }
+      70%{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 16px rgba(59,130,246,0); }
+      100%{ box-shadow: 0 10px 30px rgba(0,0,0,.45), 0 0 0 0 rgba(59,130,246,0); }
+    }
+    .fab.pulse{ animation: fabPulse 2.8s ease-out infinite; }
+
+    /* Bau-Menü (links oben, unter HUD) */
+    .build{
+      position:fixed; left:.75rem; top:calc(var(--hudHeight) + .75rem); z-index:21;
+      width:min(96vw, 420px); max-height:calc(100vh - var(--hudHeight) - var(--dbgHeight) - 1.5rem);
+      background:var(--panel); border:1px solid var(--line); border-radius:.6rem;
+      box-shadow: var(--shadow); padding:.6rem .75rem; display:none; overflow:auto;
+    }
+    .build.show{ display:block; }
+    .build h3{ margin:.2rem 0 .6rem; font-size:1rem; font-weight:600; }
+    .tabs{ display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.55rem; }
+    .tab{
+      padding:.35rem .6rem; border-radius:10rem; cursor:pointer;
+      background:var(--pill); border:1px solid var(--line); color:var(--text);
+      font-size:.85rem; user-select:none;
+    }
+    .tab[aria-selected="true"]{ outline:2px solid var(--accent); }
+    .grid{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:.55rem; }
+    .tile{
+      display:flex; flex-direction:column; align-items:center; gap:.25rem;
+      background:var(--pill); border:1px solid var(--line); border-radius:.5rem; padding:.5rem .4rem;
+      cursor:pointer;
+    }
+    .tile img{ width:48px; height:48px; image-rendering: pixelated; }
+    .tile span{ font-size:.8rem; color:var(--muted); text-align:center; }
+
+    /* Close‑„X“: nur im Vollbild sichtbar (rechts oben) */
+    .closeFS{
+      position:fixed; right:.6rem; top:.6rem; z-index:25;
+      display:none;
+      background:var(--pill); border:1px solid var(--line);
+      color:var(--text); padding:.35rem .6rem; border-radius:.6rem; cursor:pointer; font-weight:700;
+    }
+    .closeFS.show{ display:inline-flex; }
+
+    /* Start-Overlay (oben, näher an die Mitte; über Debug-Bar) */
     .start-overlay{
       position:fixed; inset:0; z-index:30; display:none;
       align-items:flex-start; justify-content:center;
@@ -123,69 +186,45 @@
       color:var(--text); padding:.6rem .9rem; border-radius:.6rem; font-weight:600; cursor:pointer;
     }
     .start-overlay .btn.warn{ border-color:#7a2828; }
-
-    /* Bau-Menü (Farbschema wie Panels) */
-    .build{
-      position:fixed; left:.75rem; top:calc(var(--hudHeight) + .75rem); z-index:18;
-      width:min(92vw, 360px); max-height:calc(100vh - var(--hudHeight) - var(--dbgHeight) - 1.5rem);
-      background:var(--panel); border:1px solid var(--line); border-radius:.6rem;
-      box-shadow: var(--shadow); padding:.6rem .75rem; display:none; overflow:auto;
-    }
-    .build.show{ display:block; }
-    .build h3{ margin:.2rem 0 .6rem; font-size:1rem; font-weight:600; }
-    .grid{
-      display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:.5rem;
-    }
-    .tile{
-      display:flex; flex-direction:column; align-items:center; gap:.25rem;
-      background:var(--pill); border:1px solid var(--line); border-radius:.5rem; padding:.4rem;
-      cursor:pointer;
-    }
-    .tile img{ width:48px; height:48px; image-rendering: pixelated; }
-    .tile span{ font-size:.8rem; color:var(--muted); }
-
-    /* Close-X: rechts oben — nur im Vollbild sichtbar */
-    .closeFS{
-      position:fixed; right:.6rem; top:.6rem; z-index:25;
-      display:none; /* Standard: aus */
-      background:var(--pill); border:1px solid var(--line);
-      color:var(--text); padding:.35rem .6rem; border-radius:.6rem; cursor:pointer; font-weight:700;
-    }
-    .closeFS.show{ display:inline-flex; }
   </style>
 </head>
 <body>
-  <!-- Start-Hintergrund -->
+  <!-- Startbild (blendet nach Start weich aus) -->
   <div class="bg" id="bg" aria-hidden="true"></div>
 
-  <!-- Ressourcen-HUD -->
+  <!-- Ressourcen-HUD (oben) -->
   <div class="hud" id="hud">
     <div class="res"><span>🪙</span><span>Gold</span><span class="v" id="rGold">100</span></div>
     <div class="res"><span>🪵</span><span>Holz</span><span class="v" id="rWood">50</span></div>
-    <div class="res"><span🗿></span><span>Stein</span><span class="v" id="rStone">30</span></div>
+    <div class="res"><span>🗿</span><span>Stein</span><span class="v" id="rStone">30</span></div>
     <div class="res"><span>🍖</span><span>Nahrung</span><span class="v" id="rFood">25</span></div>
     <div class="spacer"></div>
-    <button class="btn" id="btnBuild">Bauen</button>
+    <!-- optionaler Text-Button; FAB ist der große Einstieg -->
+    <button class="btn" id="btnBuildText">Bauen</button>
   </div>
 
-  <!-- Bau-Menü -->
-  <div class="build" id="build">
-    <h3>Bauen</h3>
-    <div class="grid">
-      <!-- Platzhalter-Icons: nimm deine echten Sprites/Icons wenn vorhanden -->
-      <button class="tile" data-type="hq"><img src="./assets/tiles/tileset.png" alt="HQ"/><span>Hauptquartier</span></button>
-      <button class="tile" data-type="house"><img src="./assets/tiles/tileset.png" alt="Haus"/><span>Haus</span></button>
-      <button class="tile" data-type="lumber"><img src="./assets/tiles/tileset.png" alt="Holzfäller"/><span>Holzfäller</span></button>
-      <button class="tile" data-type="quarry"><img src="./assets/tiles/tileset.png" alt="Steinbruch"/><span>Steinbruch</span></button>
-      <button class="tile" data-type="farm"><img src="./assets/tiles/tileset.png" alt="Farm"/><span>Farm</span></button>
-      <button class="tile" data-type="mill"><img src="./assets/tiles/tileset.png" alt="Mühle"/><span>Mühle</span></button>
-    </div>
+  <!-- Canvas (Map) -->
+  <canvas id="game"></canvas>
+
+  <!-- Großer runder FAB (Bauen) -->
+  <button class="fab pulse" id="btnBuildFab" aria-label="Bauen öffnen" title="Bauen">
+    <!-- Hacke + Schaufel (monochromes SVG) -->
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M2.8 21.2l6.9-6.9 1.9 1.9-6.9 6.9c-.5.5-1.3.5-1.8 0l-.1-.1c-.5-.5-.5-1.3 0-1.8zM13.3 10.7l-1.9-1.9 3.7-3.7c.6-.6 1.6-.6 2.2 0l.6.6c.6.6.6 1.6 0 2.2l-3.7 3.7-0.9-.9zM17.6 13.2l3.1-3.1c.4-.4.4-1 0-1.4l-.4-.4c-.4-.4-1-.4-1.4 0l-3.1 3.1 1.8 1.8z"/>
+    </svg>
+  </button>
+
+  <!-- Bau-Menü (Kategorien + Kacheln) -->
+  <div class="build" id="build" role="dialog" aria-modal="false" aria-labelledby="buildTitle">
+    <h3 id="buildTitle">Bauen</h3>
+    <div class="tabs" id="tabs"></div>
+    <div class="grid" id="grid"></div>
   </div>
 
-  <!-- Close-X (nur im Vollbild sichtbar) -->
+  <!-- Close‑„X“ (nur im Vollbild sichtbar) -->
   <button class="closeFS" id="btnCloseFS">✕</button>
 
-  <!-- Debug: Info-Panel -->
+  <!-- Debug/Info-Panel -->
   <div class="panel" id="pInfo" aria-hidden="true">
     <h3>Infos</h3>
     <div class="kv">
@@ -197,7 +236,7 @@
     </div>
   </div>
 
-  <!-- Debug-Bar -->
+  <!-- Debug-Bar / Checker -->
   <div class="dbg" role="toolbar" aria-label="Debug-Leiste">
     <button class="pill" id="tglInfo" aria-pressed="false">ℹ️ Infos</button>
     <button class="pill" id="tglLayers" aria-pressed="false">🗺️ Overlays</button>
@@ -211,7 +250,7 @@
     </div>
   </div>
 
-  <!-- Start-Overlay mit 4 Buttons -->
+  <!-- Start-Overlay (vier Buttons) -->
   <div class="start-overlay" id="start" data-autostart="0">
     <div class="card">
       <h1>Siedler‑Mini</h1>
@@ -225,129 +264,75 @@
     </div>
   </div>
 
-  <!-- Boot/Glue -->
+  <!-- BOOT/GLUE (nur dieser Block enthält Logik; alle anderen Dateien bleiben unberührt) -->
   <script type="module">
     import { Assets } from './core/asset.js';
     import { SiedlerMap } from './tools/map-runtime.js';
 
-    // --- DOM
+    /* ==== DOM/Refs ==== */
     const bg = document.getElementById('bg');
     const hud = document.getElementById('hud');
     const build = document.getElementById('build');
-    const btnBuild = document.getElementById('btnBuild');
+    const tabsEl = document.getElementById('tabs');
+    const gridEl = document.getElementById('grid');
+    const btnBuildText = document.getElementById('btnBuildText');
+    const btnBuildFab = document.getElementById('btnBuildFab');
 
-    const cv = document.createElement('canvas'); // wir ersetzen unten das existierende Canvas
-    cv.id = 'game';
-    document.body.insertBefore(cv, document.querySelector('.hud').nextSibling);
+    const cv = document.getElementById('game');
     const ctx = cv.getContext('2d', { alpha:false });
+    Assets.imageRenderingCrisp(cv);
 
-    // Debug
+    // Debug/Checker
     const pInfo = document.getElementById('pInfo');
     const tglInfo = document.getElementById('tglInfo');
-    const tglLayers = document.getElementById('tglLayers'); // (Platzhalter)
+    const tglLayers = document.getElementById('tglLayers'); // Placeholder
     const btnReload = document.getElementById('btnReload');
     const btnCenter = document.getElementById('btnCenter');
     const vDpr = document.getElementById('vDpr');
     const vVp = document.getElementById('vVp');
     const vCv = document.getElementById('vCv');
 
-    // Start
+    // Start/FULLSCREEN
     const start = document.getElementById('start');
     const btnStart = document.getElementById('btnStart');
     const btnLoad = document.getElementById('btnLoad');
     const btnReset = document.getElementById('btnReset');
     const btnFullscreen = document.getElementById('btnFullscreen');
-
-    // Fullscreen Close-X
     const btnCloseFS = document.getElementById('btnCloseFS');
 
-    // Canvas/DPR
+    /* ==== Kamera/Zoom/View ==== */
+    const TILE = 64;
+    const view = { x:0, y:0, w:0, h:0, s:1 }; // s = scale/zoom
     function resize(){
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const w = innerWidth, h = innerHeight;
       cv.width = w * dpr; cv.height = h * dpr;
       cv.style.width = w+'px'; cv.style.height = h+'px';
       ctx.setTransform(dpr,0,0,dpr,0,0);
+      view.w = cv.width; view.h = cv.height;
       vDpr.textContent = dpr.toFixed(2);
-      vVp.textContent = `${w}×${h}`; vCv.textContent = `${cv.width}×${cv.height}`;
+      vVp.textContent = `${w}×${h}`;
+      vCv.textContent = `${cv.width}×${cv.height}`;
     }
     addEventListener('resize', resize);
-    Assets.imageRenderingCrisp(cv); resize();
+    resize();
 
-    // Debug UI
-    function togglePanel(btn, panel){
-      const vis = panel.classList.toggle('show');
-      btn.setAttribute('aria-pressed', String(vis));
-      panel.setAttribute('aria-hidden', String(!vis));
-    }
-    tglInfo.addEventListener('click', ()=> togglePanel(tglInfo, pInfo));
-    tglLayers.addEventListener('click', ()=> alert('Overlay‑Menü folgt.'));
+    function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+    function screenToWorld(px, py){ return { x: view.x + px / view.s, y: view.y + py / view.s }; }
+    function worldToScreen(wx, wy){ return { x: (wx - view.x) * view.s, y: (wy - view.y) * view.s }; }
 
-    btnReload.addEventListener('click', ()=> location.reload());
-    const view = { x:0, y:0, w:0, h:0 };
-    btnCenter.addEventListener('click', ()=> { view.x = 0; view.y = 0; });
-
-    // Ressourcen (Dummy-Ticker, zeigt dass HUD lebt)
-    const R = { gold:100, wood:50, stone:30, food:25 };
-    const q = (id)=> document.getElementById(id);
-    function updateRes(){
-      q('rGold').textContent = R.gold;
-      q('rWood').textContent = R.wood;
-      q('rStone').textContent = R.stone;
-      q('rFood').textContent = R.food;
-    }
-    updateRes();
-
-    // Bau-Menü Toggle
-    btnBuild.addEventListener('click', ()=> build.classList.toggle('show'));
-    build.addEventListener('click', (ev)=>{
-      const b = ev.target.closest('.tile');
-      if (!b) return;
-      const type = b.dataset.type;
-      // TODO: hier später Platzierungsmodus aktivieren
-      build.classList.remove('show');
-    });
-
-    // Vollbild-X nur im Fullscreen anzeigen
-    function syncFSButton(){
-      const fs = !!document.fullscreenElement;
-      btnCloseFS.classList.toggle('show', fs);
-    }
-    document.addEventListener('fullscreenchange', syncFSButton);
-    syncFSButton();
-
-    // Startfenster anzeigen
-    start.classList.add('show');
-
-    btnStart.addEventListener('click', ()=>{
-      start.classList.remove('show');
-
-      // BG weich ausblenden & danach deaktivieren
-      bg.classList.add('fade');
-      bg.addEventListener('transitionend', ()=> bg.classList.add('hidden'), { once:true });
-
-      begin(); // Map erst jetzt laden/zeichnen
-    });
-    btnLoad.addEventListener('click', ()=> alert('Laden: Slots/Autosaves kommen später.'));
-    btnReset.addEventListener('click', ()=> location.reload());
-    btnFullscreen.addEventListener('click', ()=>{
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    });
-    btnCloseFS.addEventListener('click', ()=>{
-      if (document.fullscreenElement) document.exitFullscreen();
-    });
-
-    // Welt/Renderer – erst nach Start
+    /* ==== Welt/Renderer ==== */
     let world=null, started=false, _lf=performance.now();
+
     async function begin(){
       if (started) return; started=true;
-
+      // Preload Map/Atlas
       await Assets.loadAll({
         images:['./assets/tiles/tileset.png'],
         json:['./assets/tiles/tileset.json','./assets/maps/map-pro.json']
       });
       const worldJson = await Assets.get('./assets/maps/map-pro.json');
+
       world = new SiedlerMap({
         tileResolver:(n)=>'./assets/'+n,
         onReady:()=> loop()
@@ -355,22 +340,333 @@
       await world.loadFromObject(worldJson);
     }
 
+    /* ==== Ressourcen (Dummy) ==== */
+    const R = { gold:100, wood:50, stone:30, food:25 };
+    const q = (id)=> document.getElementById(id);
+    function setRes(){ q('rGold').textContent=R.gold; q('rWood').textContent=R.wood; q('rStone').textContent=R.stone; q('rFood').textContent=R.food; }
+    setRes();
+
+    /* ==== Bau-Menü: Kategorien + Items (Platzhalter) ==== */
+    const CATEGORIES = [
+      { id:'food',   label:'Nahrung',   items:[ {id:'hunter',label:'Jägerhütte',cost:{wood:6}}, {id:'fisher',label:'Fischerhütte',cost:{wood:6}}, {id:'farm',label:'Farm',cost:{wood:8}}, {id:'mill',label:'Mühle',cost:{wood:10, stone:4}} ]},
+      { id:'res',    label:'Ressourcen',items:[ {id:'lumber',label:'Holzfäller',cost:{wood:4}}, {id:'sawmill',label:'Sägewerk',cost:{wood:8}}, {id:'quarry',label:'Steinbruch',cost:{wood:6, stone:2}}, {id:'mine',label:'Mine',cost:{wood:6, stone:4}} ]},
+      { id:'housing',label:'Wohnen',    items:[ {id:'hut',label:'Hütte',cost:{wood:4}}, {id:'house',label:'Haus',cost:{wood:8, stone:2}}, {id:'hq',label:'Hauptquartier',cost:{wood:12, stone:8}} ]},
+      { id:'mil',    label:'Militär',   items:[ {id:'barracks',label:'Kaserne',cost:{wood:10, stone:6}}, {id:'tower',label:'Wachturm',cost:{stone:8}} ]},
+      { id:'roads',  label:'Logistik',  items:[ {id:'road',label:'Straße',cost:{stone:1}}, {id:'bridge',label:'Brücke',cost:{wood:6, stone:4}}, {id:'warehouse',label:'Lagerhaus',cost:{wood:10, stone:6}} ]},
+      { id:'deco',   label:'Deko',      items:[ {id:'statue',label:'Statue',cost:{stone:12}}, {id:'fountain',label:'Brunnen',cost:{stone:6}} ]},
+      { id:'spec',   label:'Spezial',   items:[ {id:'market',label:'Markt',cost:{wood:10, stone:6}}, {id:'port',label:'Hafen',cost:{wood:12, stone:12}} ]},
+    ];
+    let activeCat = CATEGORIES[0].id;
+    let placeMode = null; // { id, label, cost }
+
+    function renderTabs(){
+      tabsEl.innerHTML = '';
+      CATEGORIES.forEach(c=>{
+        const b = document.createElement('button');
+        b.className = 'tab';
+        b.textContent = c.label;
+        b.setAttribute('aria-selected', String(c.id===activeCat));
+        b.addEventListener('click', ()=>{ activeCat=c.id; renderTabs(); renderGrid(); });
+        tabsEl.appendChild(b);
+      });
+    }
+    function renderGrid(){
+      gridEl.innerHTML = '';
+      const cat = CATEGORIES.find(c=>c.id===activeCat);
+      (cat?.items||[]).forEach(item=>{
+        const btn = document.createElement('button');
+        btn.className='tile'; btn.dataset.type=item.id;
+        // solange keine Sprites: Emoji/Quadrat als Icon-Ersatz
+        const ic = document.createElement('div'); ic.style.fontSize='28px'; ic.textContent='⬜';
+        const lbl = document.createElement('span'); lbl.textContent=item.label;
+        btn.appendChild(ic); btn.appendChild(lbl);
+        btn.addEventListener('click', ()=>{
+          placeMode = {...item};
+          build.classList.remove('show');
+          btnBuildFab.classList.remove('pulse'); // Puls nach 1. Nutzung aus
+        });
+        gridEl.appendChild(btn);
+      });
+    }
+    renderTabs(); renderGrid();
+
+    /* ==== FAB/Build toggles ==== */
+    function toggleBuild(){ build.classList.toggle('show'); btnBuildFab.classList.remove('pulse'); }
+    btnBuildText.addEventListener('click', toggleBuild);
+    btnBuildFab.addEventListener('click', toggleBuild);
+
+    /* ==== Vollbild-"X" nur im Fullscreen ==== */
+    function syncFSButton(){ btnCloseFS.classList.toggle('show', !!document.fullscreenElement); }
+    document.addEventListener('fullscreenchange', syncFSButton);
+    btnCloseFS.addEventListener('click', ()=> document.fullscreenElement && document.exitFullscreen());
+    syncFSButton();
+
+    /* ==== Start-Flow ==== */
+    start.classList.add('show');
+    btnStart.addEventListener('click', ()=>{
+      start.classList.remove('show');
+      if (bg) { bg.classList.add('fade'); bg.addEventListener('transitionend', ()=> bg.classList.add('hidden'), { once:true }); }
+      begin(); // Map jetzt laden/zeichnen
+    });
+    btnLoad.addEventListener('click', ()=> alert('Laden: Slots/Autosaves später.'));
+    btnReset.addEventListener('click', ()=> location.reload());
+    btnFullscreen.addEventListener('click', ()=>{
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    });
+
+    /* ==== Eingaben: Zoom (Rad/Pinch), Pan (MMB/RMB/Touch), Platzieren ==== */
+    let isPanning=false, panLast={x:0,y:0};
+    let pointers = new Map(); // pointerId -> {x,y}
+    let pinchStart=null;
+    let ghostPos = null;      // {wx, wy} für Platzierungs-Ghost
+
+    // Mausrad-Zoom (fokussiert auf Cursorposition)
+    cv.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const rect = cv.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const before = screenToWorld(mx, my);
+      const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
+      view.s = clamp(view.s * factor, 0.5, 3);
+      const after = screenToWorld(mx, my);
+      view.x += before.x - after.x;
+      view.y += before.y - after.y;
+    }, { passive:false });
+
+    // Pointer-Events (Pan/Pinch/Platzieren/Ghost)
+    function onPointerDown(e){
+      cv.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (pointers.size===1){
+        // Pan mit mittlerer/rechter Taste; links: bauen
+        if (e.button===1 || e.button===2){ isPanning=true; panLast={x:e.clientX, y:e.clientY}; }
+        else if (e.button===0 && placeMode){ tryPlaceAtEvent(e); }
+      } else if (pointers.size===2){
+        pinchStart = getPinch();
+      }
+    }
+    function onPointerMove(e){
+      const p = pointers.get(e.pointerId);
+      if (p){ p.x=e.clientX; p.y=e.clientY; }
+      // Ghost-Position
+      const rect = cv.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const w = screenToWorld(mx, my);
+      ghostPos = { wx:w.x, wy:w.y };
+
+      if (pointers.size===1 && isPanning){
+        const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
+        panLast = {x:e.clientX, y:e.clientY};
+        view.x -= dx / view.s;
+        view.y -= dy / view.s;
+      } else if (pointers.size===2){
+        const pinch = getPinch();
+        if (pinchStart){
+          const before = pinchStart.centerWorld;
+          view.s = clamp(pinchStart.scale * (pinch.dist / pinchStart.dist), 0.5, 3);
+          const after = screenToWorld(pinch.center.x, pinch.center.y);
+          view.x += before.x - after.x;
+          view.y += before.y - after.y;
+        }
+      }
+    }
+    function onPointerUp(e){
+      pointers.delete(e.pointerId);
+      if (e.pointerType==='mouse' && e.button===0 && placeMode){ tryPlaceAtEvent(e); }
+      if (pointers.size===0){ isPanning=false; pinchStart=null; }
+    }
+    function onContextMenu(e){ e.preventDefault(); } // RMB-Kontextmenü unterdrücken
+    cv.addEventListener('pointerdown', onPointerDown);
+    cv.addEventListener('pointermove', onPointerMove);
+    cv.addEventListener('pointerup', onPointerUp);
+    cv.addEventListener('pointercancel', onPointerUp);
+    cv.addEventListener('contextmenu', onContextMenu);
+
+    function getPinch(){
+      const arr=[...pointers.values()]; if (arr.length<2) return null;
+      const a=arr[0], b=arr[1];
+      const center={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+      const rect = cv.getBoundingClientRect();
+      const centerInCanvas = { x:center.x-rect.left, y:center.y-rect.top };
+      const dist = Math.hypot(a.x-b.x, a.y-b.y);
+      return { center:centerInCanvas, dist, scale:view.s, centerWorld: screenToWorld(centerInCanvas.x, centerInCanvas.y) };
+    }
+
+    /* ==== Platzieren (Platzhalter‑Kacheln; später Sprites) ==== */
+    const buildings = []; // {wx, wy, type, color}
+    const COLORS = {
+      hunter:'#8bc34a', fisher:'#03a9f4', farm:'#c0ca33', mill:'#9e9e9e',
+      lumber:'#795548', sawmill:'#a1887f', quarry:'#90a4ae', mine:'#546e7a',
+      hut:'#8d6e63', house:'#bdbdbd', hq:'#ffb74d',
+      barracks:'#607d8b', tower:'#78909c',
+      road:'#b0bec5', bridge:'#90caf9', warehouse:'#6d4c41',
+      statue:'#e0e0e0', fountain:'#81d4fa',
+      market:'#ffcc80', port:'#80cbc4'
+    };
+    function canAfford(cost){
+      if (!cost) return true;
+      if (cost.wood && R.wood < cost.wood) return false;
+      if (cost.stone && R.stone < cost.stone) return false;
+      if (cost.gold && R.gold < cost.gold) return false;
+      if (cost.food && R.food < cost.food) return false;
+      return true;
+    }
+    function pay(cost){
+      if (!cost) return;
+      if (cost.wood) R.wood -= cost.wood;
+      if (cost.stone) R.stone -= cost.stone;
+      if (cost.gold) R.gold -= cost.gold;
+      if (cost.food) R.food -= cost.food;
+      setRes();
+    }
+    function tryPlaceAtEvent(e){
+      if (!placeMode) return;
+      const rect = cv.getBoundingClientRect();
+      const mx = (e.clientX ?? (e.touches?.[0]?.clientX)) - rect.left;
+      const my = (e.clientY ?? (e.touches?.[0]?.clientY)) - rect.top;
+      const w = screenToWorld(mx, my);
+      const sx = Math.floor(w.x / TILE) * TILE;
+      const sy = Math.floor(w.y / TILE) * TILE;
+
+      if (!canAfford(placeMode.cost)){
+        const lbl = document.getElementById('lblHint');
+        if (lbl) lbl.textContent = 'Nicht genug Ressourcen';
+        return;
+      }
+      buildings.push({ wx:sx, wy:sy, type:placeMode.id, color: (COLORS[placeMode.id] || '#3b82f6') });
+      pay(placeMode.cost);
+    }
+
+    /* ==== Zeichnen ==== */
     function tickFps(){
       const now = performance.now();
       const dt = now - _lf; _lf = now;
       document.getElementById('lblFps').textContent = 'FPS: ' + Math.round(1000/(dt||16.7));
     }
-
+    function drawGhost(){
+      if (!placeMode || !ghostPos) return;
+      const sx = Math.floor(ghostPos.wx / TILE) * TILE;
+      const sy = Math.floor(ghostPos.wy / TILE) * TILE;
+      const pt = worldToScreen(sx, sy);
+      const size = TILE * view.s;
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = (COLORS[placeMode.id] || '#3b82f6');
+      ctx.fillRect(pt.x, pt.y, size, size);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.strokeRect(pt.x, pt.y, size, size);
+      ctx.restore();
+    }
+    function drawBuildings(){
+      ctx.save();
+      for (const b of buildings){
+        const pt = worldToScreen(b.wx, b.wy);
+        const size = TILE * view.s;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(pt.x, pt.y, size, size);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#0b1628';
+        ctx.strokeRect(pt.x, pt.y, size, size);
+      }
+      ctx.restore();
+    }
     function loop(){
       tickFps();
       ctx.clearRect(0,0,cv.width,cv.height);
-      view.w = cv.width; view.h = cv.height;
 
+      // Map-Layer im Weltmaßstab
+      ctx.save();
+      ctx.scale(view.s, view.s);
       if (world){
-        world.draw(ctx, view);
+        world.draw(ctx, { x:view.x, y:view.y, w:cv.width / view.s, h:cv.height / view.s });
       }
+      ctx.restore();
+
+      // UI-Layer über der Welt (Gebäude/Platzierungs-Ghost in Screenkoordinaten)
+      drawBuildings();
+      drawGhost();
 
       requestAnimationFrame(loop);
+    }
+
+    /* ==== Checker Buttons ==== */
+    tglInfo.addEventListener('click', ()=>{
+      const vis = pInfo.classList.toggle('show');
+      tglInfo.setAttribute('aria-pressed', String(vis));
+    });
+    tglLayers.addEventListener('click', ()=> alert('Overlay‑Menü folgt.'));
+    btnReload.addEventListener('click', ()=> location.reload());
+    btnCenter.addEventListener('click', ()=> { view.x=0; view.y=0; view.s=1; });
+
+    /* ==== Ghost-Tracking (für Maus) ==== */
+    let pointers = new Map(); // wiederverwendet
+    cv.addEventListener('pointermove', (e)=>{
+      const rect = cv.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const w = screenToWorld(mx, my);
+      ghostPos = { wx:w.x, wy:w.y };
+    });
+
+    /* ==== Pan/Pinch (Eingabestrom komplett) ==== */
+    let isPanning=false, panLast={x:0,y:0}, pinchStart=null;
+    function onPointerDown(e){
+      cv.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (pointers.size===1){
+        if (e.button===1 || e.button===2){ isPanning=true; panLast={x:e.clientX, y:e.clientY}; }
+        else if (e.button===0 && placeMode){ tryPlaceAtEvent(e); }
+      } else if (pointers.size===2){
+        pinchStart = getPinch();
+      }
+    }
+    function onPointerMove(e){
+      const p = pointers.get(e.pointerId);
+      if (p){ p.x=e.clientX; p.y=e.clientY; }
+
+      const rect = cv.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const w = screenToWorld(mx, my);
+      ghostPos = { wx:w.x, wy:w.y };
+
+      if (pointers.size===1 && isPanning){
+        const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
+        panLast = {x:e.clientX, y:e.clientY};
+        view.x -= dx / view.s;
+        view.y -= dy / view.s;
+      } else if (pointers.size===2){
+        const pinch = getPinch();
+        if (pinchStart){
+          const before = pinchStart.centerWorld;
+          view.s = clamp(pinchStart.scale * (pinch.dist / pinchStart.dist), 0.5, 3);
+          const after = screenToWorld(pinch.center.x, pinch.center.y);
+          view.x += before.x - after.x;
+          view.y += before.y - after.y;
+        }
+      }
+    }
+    function onPointerUp(e){
+      pointers.delete(e.pointerId);
+      if (e.pointerType==='mouse' && e.button===0 && placeMode){ tryPlaceAtEvent(e); }
+      if (pointers.size===0){ isPanning=false; pinchStart=null; }
+    }
+    function onContextMenu(e){ e.preventDefault(); }
+    cv.addEventListener('pointerdown', onPointerDown);
+    cv.addEventListener('pointermove', onPointerMove);
+    cv.addEventListener('pointerup', onPointerUp);
+    cv.addEventListener('pointercancel', onPointerUp);
+    cv.addEventListener('contextmenu', onContextMenu);
+
+    function getPinch(){
+      const arr=[...pointers.values()];
+      if (arr.length<2) return null;
+      const a=arr[0], b=arr[1];
+      const center={ x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+      const rect = cv.getBoundingClientRect();
+      const centerInCanvas = { x:center.x-rect.left, y:center.y-rect.top };
+      const dist = Math.hypot(a.x-b.x, a.y-b.y);
+      return { center:centerInCanvas, dist, scale:view.s, centerWorld: screenToWorld(centerInCanvas.x, centerInCanvas.y) };
     }
   </script>
 </body>
