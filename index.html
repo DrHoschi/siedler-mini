@@ -2,14 +2,11 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
-  />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler-Mini V14.7 (Mobil)</title>
+  <title>Siedler‑Mini V14.7 (Mobil)</title>
 
-  <!-- Basis-Styles (Canvas + HUD). Mobil-Spezifika können in separaten CSS-Dateien überschrieben werden -->
+  <!-- ===== Basis-Styles (Canvas + HUD). Mobil-Spezifika können in separaten CSS überschrieben werden ===== -->
   <style>
     :root{
       color-scheme: dark;
@@ -18,159 +15,219 @@
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
     }
-    html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); }
-    body{ overflow:hidden; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
-    canvas{ display:block; width:100vw; height:100vh; image-rendering:pixelated; }
-    /* optionale HUD-Container, falls vom Spiel genutzt */
-    #hud, #topbar, #bottombar { position:fixed; left:0; right:0; pointer-events:auto; }
-    #topbar{ top:0; padding:8px; display:flex; gap:8px; justify-content:center; }
-    #bottombar{ bottom:0; padding:8px; display:flex; gap:8px; justify-content:center; }
-    .pill{
-      display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px;
-      background:var(--pill); border:1px solid var(--line); box-shadow:var(--shadow);
-      font: 600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    #root{isolation:isolate;height:100%;position:relative}
+    canvas#game{display:block;width:100vw;height:100vh;touch-action:none;background:transparent}
+
+    /* Startfenster (soll zuerst sichtbar sein) */
+    #start-window{
+      position:fixed; inset:0; display:block; z-index:99990;
+      background:rgba(11,22,40,.92); backdrop-filter:saturate(120%) blur(2px);
+      display:flex; align-items:center; justify-content:center;
     }
+    .start-card{
+      background:var(--panel); border:1px solid var(--line);
+      box-shadow:var(--shadow); border-radius:12px; padding:18px; width:min(520px,92vw)
+    }
+    .start-card h1{margin:.2rem 0 1rem 0; font-size:1.25rem}
+    .row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+    .muted{color:var(--muted)}
     .btn{
-      display:inline-flex; align-items:center; gap:6px; padding:8px 12px; border-radius:12px;
-      background:var(--panel); border:1px solid var(--line); color:var(--text);
-      font:600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      appearance:none; border:1px solid var(--line); background:var(--pill);
+      color:var(--text); padding:10px 14px; border-radius:10px; cursor:pointer;
     }
-    .btn:active{ transform:translateY(1px); }
-    /* Platz für Start-Overlay, falls boot.js eines einblendet */
-    #start-overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-      background:rgba(0,0,0,.35); backdrop-filter: blur(6px); z-index:50; }
-    #start-overlay.active{ display:flex; }
+    .btn.ok{background:linear-gradient(180deg,#184f2d,#0e2e1b); border-color:#225f3a}
+    .btn:active{transform:translateY(1px)}
+
+    /* Debug Overlay */
+    #dbgOverlay{
+      position:fixed; inset:12px; z-index:99999; display:none;
+      background:rgba(11,22,40,.96); color:#cfe3ff; border:1px solid #2b3b53;
+      border-radius:8px; padding:12px; box-shadow:0 20px 60px rgba(0,0,0,.35);
+      font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow:auto;
+    }
+    #dbgOverlay b{color:#8fd18f}
+    #dbgBtn{
+      position:fixed; right:12px; bottom:12px; z-index:100000; padding:6px 10px; border-radius:999px;
+      background:#0f1b29; color:#cfe3ff; border:1px solid #2b3b53; cursor:pointer
+    }
+
+    /* Kleine HUD-Pill für Build/Version */
+    .badge{position:fixed; left:12px; bottom:12px; z-index:100000; font-size:12px; padding:6px 10px; border-radius:999px;
+      background:#0f1b29; color:#9fb3cc; border:1px solid #2b3b53}
   </style>
 
-  <!-- OPTIONAL: Apple PWA Touch-Einstellungen könnten hier folgen -->
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-</head>
-<body>
-  <!-- Haupt-Canvas (dein Renderer greift idR. über JS zu) -->
-  <canvas id="game"></canvas>
-
-  <!-- Beispiel-UI (nur Platzhalter; deine boot.js kann eigene Elemente erzeugen) -->
-  <div id="topbar" aria-hidden="true" style="pointer-events:none">
-    <!-- Buttons können von boot.js aktiviert/ersetzt werden -->
-  </div>
-  <div id="bottombar" aria-hidden="true" style="pointer-events:none">
-    <!-- Buttons können von boot.js aktiviert/ersetzt werden -->
-  </div>
-
-  <!-- Start-Overlay (wird nur genutzt, wenn boot.js es toggelt) -->
-  <div id="start-overlay">
-    <button class="btn" id="start-btn">Start</button>
-  </div>
-
-  <!-- ===================================================================== -->
-  <!--  Runtime-Settings für Assets (Cache-Busting, iOS-Fallback)            -->
-  <!--  Wichtig: VOR boot.js, damit Settings schon beim ersten Load greifen. -->
-  <!-- ===================================================================== -->
-  <script type="module">
-    import Assets from './core/asset.js';
-    // Entwicklung: aggressiv gegen Cache/Bitmap-Edgecases (iOS)
-    Assets.setVersion(String(Date.now()));   // hartes Cache-Busting
-    Assets.setCacheMode('no-store');         // immer frisch laden
-    Assets.setUseImageBitmap(false);         // <img>-Fallback erzwingen
-    // Tipp (Produktion später):
-    // Assets.setVersion('build-abc123'); Assets.setCacheMode('default'); Assets.setUseImageBitmap(true);
-  </script>
-
-  <!-- Spielstart / Glue-Code -->
-  <script type="module" src="./boot.js"></script>
-
-  <!-- ===================================================================== -->
-  <!-- Emergency Debug HUD: Fehlerbanner, Tap-Logger, Overlay-Killer         -->
-  <!-- Toggle: Button 🐞 unten rechts oder 3× schnell tippen                 -->
-  <!-- ===================================================================== -->
+  <!-- ===== Debug-Overlay (sichtbar per Button, sammelt Fehler/Logs) ===== -->
+  <div id="dbgOverlay"></div><button id="dbgBtn" type="button" title="Debug anzeigen/ausblenden">Debug</button>
   <script>
   (function(){
-    const style = document.createElement('style');
-    style.textContent = `
-    #dbgBtn{position:fixed;right:14px;bottom:14px;z-index:99999;border:0;border-radius:14px;
-            width:44px;height:44px;font-size:22px;box-shadow:var(--shadow,0 8px 24px rgba(0,0,0,.35));
-            background:var(--panel,#122238);color:var(--text,#cfe3ff)}
-    #dbgWrap{position:fixed;right:14px;bottom:70px;z-index:99999;min-width:260px;max-width:90vw;
-             background:var(--panel2,#0f1d31);color:var(--text,#cfe3ff);border-radius:12px;
-             box-shadow:var(--shadow,0 20px 60px rgba(0,0,0,.35));padding:10px;display:none}
-    #dbgWrap.active{display:block}
-    #dbgWrap button{margin:6px 6px 0 0;border:0;border-radius:10px;padding:8px 10px;
-                    background:#1c2b44;color:#cfe3ff}
-    #dbgErr{position:fixed;left:8px;top:8px;z-index:99999;background:#7d1f1f;color:#fff;
-            padding:8px 10px;border-radius:8px;display:none;max-width:90vw;white-space:pre-wrap}
-    .tapdot{position:fixed;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.25);
-            border:2px solid rgba(255,255,255,.7);pointer-events:none;transform:translate(-50%,-50%);
-            z-index:99998;animation:tapdot .6s ease-out forwards}
-    @keyframes tapdot{to{opacity:0;transform:translate(-50%,-50%) scale(1.8)}}
-    `;
-    document.head.appendChild(style);
-
-    const btn = Object.assign(document.createElement('button'), {id:'dbgBtn',textContent:'🐞',title:'Debug'});
-    const wrap = Object.assign(document.createElement('div'), {id:'dbgWrap',innerHTML:`
-      <div style="font-weight:600;margin:4px 0 6px">Debug-Werkzeuge</div>
-      <button id="dbgTap">Tap-Log: AUS</button>
-      <button id="dbgKill">Overlays aus</button>
-      <button id="dbgReload">Hard-Reload</button>
-      <div id="dbgInfo" style="margin-top:8px;font-size:12px;opacity:.8"></div>
-    `});
-    const err = Object.assign(document.createElement('div'), {id:'dbgErr'});
-    document.body.append(btn, wrap, err);
-
-    let tapLog=false, tripleTap=0, tripleTimer=null;
-    function setInfo(s){ wrap.querySelector('#dbgInfo').textContent = s; }
-    function showErr(s){ err.textContent = s; err.style.display='block';
-      clearTimeout(err._t); err._t=setTimeout(()=> err.style.display='none', 8000); }
-
-    // Fehler sichtbar machen
-    window.addEventListener('error', e => showErr('Error: ' + (e.message||e.error||'unknown')));
-    window.addEventListener('unhandledrejection', e => showErr('Promise: ' + (e.reason||'unknown')));
-
-    // Tap-Visualizer
-    function tapDot(x,y){ const d=document.createElement('div'); d.className='tapdot'; d.style.left=x+'px'; d.style.top=y+'px'; document.body.appendChild(d); setTimeout(()=>d.remove(),650); }
-    function onPointer(ev){
-      if(!tapLog) return;
-      tapDot(ev.clientX, ev.clientY);
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      if(!el) return;
-      const name = (el.id?('#'+el.id):'') + (el.className?('.'+String(el.className).split(' ').join('.')):'');
-      console.log('[TAP]', ev.type, el.tagName+name, getComputedStyle(el).pointerEvents, 'z=', getComputedStyle(el).zIndex);
+    const box = document.getElementById('dbgOverlay');
+    const btn = document.getElementById('dbgBtn');
+    function show(){ box.style.display='block'; }
+    function log(kind, msg, extra){
+      const time = new Date().toLocaleTimeString();
+      const line = document.createElement('div');
+      line.innerHTML = `<b>[${time}] ${kind}:</b> ${msg}${extra?`<pre>${extra}</pre>`:''}`;
+      box.appendChild(line);
     }
+    btn.onclick = ()=> box.style.display = (box.style.display==='none'?'block':'none');
 
-    // HUD Controls
-    btn.onclick = ()=> wrap.classList.toggle('active');
-    wrap.querySelector('#dbgTap').onclick = function(){
-      tapLog=!tapLog; this.textContent = 'Tap-Log: '+(tapLog?'AN':'AUS');
-      const opts={capture:true,passive:true};
-      const fns=['pointerdown','pointerup','click','touchstart','touchend'];
-      fns.forEach(t=> (tapLog? document.addEventListener(t,onPointer,opts)
-                             : document.removeEventListener(t,onPointer,opts)));
-      setInfo(tapLog?'Taps werden geloggt (Konsole öffnen).':'');
-    };
-    wrap.querySelector('#dbgKill').onclick = ()=>{
-      // Blendet typische Blocker-Overlays aus
-      const sel='[class*="overlay"],[id*="overlay"],[class*="modal"],[id*="modal"],[class*="glass"],[class*="backdrop"]';
-      document.querySelectorAll(sel).forEach(el=>{
-        el.dataset._prev_display = getComputedStyle(el).display;
-        el.style.display='none';
-      });
-      setInfo('Overlays mit *overlay/modal/glass/backdrop* wurden ausgeblendet.');
-    };
-    wrap.querySelector('#dbgReload').onclick = ()=> location.reload(true);
+    const origErr = console.error.bind(console);
+    console.error = (...args)=>{ origErr(...args); show(); log('console.error', args.join(' ')); };
 
-    // 3× schnelles Tippen → HUD umschalten
-    document.addEventListener('pointerdown', ()=>{
-      tripleTap++; clearTimeout(tripleTimer);
-      tripleTimer=setTimeout(()=>{ tripleTap=0; }, 550);
-      if(tripleTap>=3){ wrap.classList.toggle('active'); tripleTap=0; }
-    }, {passive:true});
+    window.addEventListener('error', (e)=>{
+      show(); log('window.error', (e.message||'') + (e.filename?` @ ${e.filename}:${e.lineno||''}:${e.colno||''}`:''), e.error && e.error.stack);
+    });
+    window.addEventListener('unhandledrejection', (e)=>{
+      show(); const reason = e.reason && (e.reason.stack || e.reason.message || String(e.reason));
+      log('promise.reject', reason||'Unbekannter Fehler');
+    });
+    log('boot', 'Debug‑Overlay aktiv. Warte auf DOM & Game‑Start …');
   })();
   </script>
+</head>
 
-  <noscript>
-    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#300;color:#fff;font:600 16px system-ui">
-      JavaScript ist deaktiviert – das Spiel kann nicht gestartet werden.
-    </div>
-  </noscript>
+<body>
+  <div id="root">
+    <!-- ===== Startfenster (soll standardmäßig oben liegen) ===== -->
+    <section id="start-window" aria-modal="true" role="dialog">
+      <div class="start-card">
+        <h1>Siedler‑Mini</h1>
+        <p class="muted">Starte die aktuelle Karte. (Debug‑Tools bleiben aktiv)</p>
+        <div class="row">
+          <button id="btn-start" class="btn ok">Start</button>
+          <button id="btn-reload" class="btn" title="Spiel neu laden">Neu laden</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Spielfeld ===== -->
+    <canvas id="game"></canvas>
+
+    <!-- Build/Version Badge (optional) -->
+    <div class="badge">V14.7 • Mobil • Debug</div>
+  </div>
+
+  <!-- ===== Sicherer Boot‑Hook + sanfte Modul‑Imports ===== -->
+  <script type="module">
+    // === Import-Reihenfolge (sanft & optional) ===
+    // Hinweis: Wir importieren defensiv. Falls eine Datei fehlt, bleibt die App lauffähig
+    // und das Debug-Overlay zeigt die Meldung an.
+    async function tryImport(path){
+      try{ return await import(path); }
+      catch(err){ console.error(`Import fehlgeschlagen: ${path}`, err); return null; }
+    }
+
+    // Deine Kern-Module (Dateinamen gemäß Projektvorgaben):
+    const M_asset = await tryImport('./core/asset.js');          // MUSS so heißen (Projekt-Präferenz)
+    const M_tools = await tryImport('./tools/map-runtime.js');   // Map/Runtime Tools (falls vorhanden)
+    const M_boot  = await tryImport('./boot.js');                // Dein vorhandener Glue/Boot
+    const M_game  = await tryImport('./game.js');                // Hauptspiel-Logik (falls vorhanden)
+
+    function $(sel, root=document){ return root.querySelector(sel); }
+
+    function ensureStartWindowOnTop(){
+      const start = $('#start-window, .start-window, #startModal');
+      if(start){
+        Object.assign(start.style, { display: 'block', position: 'fixed', zIndex: '99990', inset: '0' });
+        document.body.style.overflow = 'hidden';
+      } else {
+        console.warn('Startfenster nicht gefunden. Prüfe ID/Klasse (#start-window).');
+      }
+    }
+
+    function getCanvas(){
+      const cv = $('canvas#game, canvas.game, canvas');
+      if(!cv){ console.error('Canvas nicht gefunden. Stelle sicher, dass <canvas id="game"> im DOM ist.'); return null; }
+      const ctx = cv.getContext('2d');
+      if(!ctx){ console.error('getContext("2d") schlug fehl.'); return null; }
+      return {cv, ctx};
+    }
+
+    function resizeCanvas(cv){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const w = (innerWidth||document.documentElement.clientWidth);
+      const h = (innerHeight||document.documentElement.clientHeight);
+      cv.width  = Math.floor(w * dpr);
+      cv.height = Math.floor(h * dpr);
+      cv.style.width  = w + 'px';
+      cv.style.height = h + 'px';
+    }
+
+    function safeCall(fn, ...args){
+      try{ return fn && fn(...args); }
+      catch(e){ console.error('Aufruf schlug fehl:', e); }
+    }
+
+    async function boot(){
+      console.log('Boot: DOM ready.');
+      ensureStartWindowOnTop();
+
+      const cc = getCanvas();
+      if(!cc) return; // Fehler stehen bereits im Overlay
+      resizeCanvas(cc.cv);
+      addEventListener('resize', ()=>resizeCanvas(cc.cv), {passive:true});
+
+      // Falls dein vorhandenes boot.js einen Hook bereitstellt, führen wir ihn aus (non-blocking).
+      safeCall(M_boot && M_boot.preGameInit, { canvas: cc.cv, ctx: cc.ctx });
+
+      const btnStart = document.getElementById('btn-start');
+      const btnReload = document.getElementById('btn-reload');
+
+      if(btnReload){
+        btnReload.addEventListener('click', ()=> location.reload());
+      }
+
+      if(btnStart){
+        btnStart.addEventListener('click', async ()=>{
+          document.body.style.overflow = '';
+          const start = document.getElementById('start-window') || document.querySelector('.start-window,#startModal');
+          if(start) start.style.display = 'none';
+
+          // 1) Falls game.js eine startGame-Funktion exportiert:
+          if(M_game && typeof M_game.startGame === 'function'){
+            console.log('Starte Spiel via game.startGame …');
+            await safeCall(M_game.startGame, { canvas: cc.cv, ctx: cc.ctx, assets: M_asset, tools: M_tools });
+            return;
+          }
+
+          // 2) Falls boot.js einen Start-Hook exportiert:
+          if(M_boot && typeof M_boot.start === 'function'){
+            console.log('Starte Spiel via boot.start …');
+            await safeCall(M_boot.start, { canvas: cc.cv, ctx: cc.ctx, assets: M_asset, tools: M_tools });
+            return;
+          }
+
+          // 3) Fallback: Minimaler Draw-Loop, damit sofort etwas sichtbar ist
+          console.warn('Kein startGame()/boot.start() gefunden – starte Fallback-Renderer.');
+          const ctx = cc.ctx;
+          let t0 = performance.now();
+          (function loop(now){
+            const dt = now - t0; t0 = now;
+            ctx.clearRect(0,0,cc.cv.width,cc.cv.height);
+            ctx.save();
+            ctx.globalAlpha = .85;
+            ctx.fillStyle = '#0f1b29';
+            ctx.fillRect(20,20,420,120);
+            ctx.restore();
+            ctx.font = `${Math.max(12, Math.floor(14 * (window.devicePixelRatio||1)))}px ui-monospace,monospace`;
+            ctx.fillStyle = '#cfe3ff';
+            ctx.fillText('Fallback‑Renderer aktiv.', 40, 60);
+            ctx.fillText('Binde game.js::startGame(...) oder boot.js::start(...) ein.', 40, 80);
+            ctx.fillText(`dt=${dt.toFixed(2)}ms`, 40, 100);
+            requestAnimationFrame(loop);
+          })(t0);
+        }, {once:true});
+      } else {
+        console.warn('Kein Start‑Button gefunden (#btn-start). Spielstart bleibt manuell.');
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot, {once:true});
+    } else {
+      boot();
+    }
+  </script>
 </body>
 </html>
