@@ -1,21 +1,27 @@
 /* ================================================================================================
-   Siedler‑Mini V14.7‑hf3 — game.js
+   Siedler‑Mini V14.7‑hf4 — game.js
    Zweck:
-     • Startfunktion startGame({canvas,ctx}) – wird von index.html aufgerufen
+     • Startfunktion startGame({canvas,ctx})
      • Stabiler Render‑Loop (Pan/Zoom, HiDPI, HUD, Grid‑Fallback)
      • Sanfte Imports (core/asset.js, tools/map-runtime.js)
-     • Karten‑Ladung mit ROBUSTER URL (Patch B) + klaren Debug‑Logs
+     • Karten‑Ladung über ROBUSTE URL:
+         1) assets/maps/map-pro.json  (aktueller Speicherort)
+         2) maps/map-pro.json         (Fallback, falls später verschoben)
    Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports
-   Hinweis:
-     • Kommentare bitte beibehalten; später nur aktualisieren/ergänzen.
+   Hinweise:
+     • Kommentare beibehalten; bei Änderungen nur aktualisieren/ergänzen.
    ================================================================================================ */
 
 /// —————————————————————————————————————————————————————————————————————————————
-/// Imports (sanft via dynamic import – keine harten Crashs, Overlay zeigt Fehler)
+/// Dynamic Imports (sanft: keine harten Crashs; Fehler landen im Overlay)
 /// —————————————————————————————————————————————————————————————————————————————
 async function tryImport(path){
   try{ return await import(path); }
-  catch(e){ console.error(`Import fehlgeschlagen: ${path}`, e); dbgOverlay(`Import fehlgeschlagen: ${path}`, e?.stack||String(e)); return null; }
+  catch(e){
+    console.error(`Import fehlgeschlagen: ${path}`, e);
+    dbgOverlay(`Import fehlgeschlagen: ${path}`, e?.stack || String(e));
+    return null;
+  }
 }
 
 // Optionale Module (werden in startGame() geladen)
@@ -25,10 +31,10 @@ let M_TOOLS = null;   // ./tools/map-runtime.js
 /// —————————————————————————————————————————————————————————————————————————————
 /// Konstanten
 /// —————————————————————————————————————————————————————————————————————————————
-const DPR_MIN=1;
-const GRID_SIZE=64;
-const HUD_PAD=8;
-const ZOOM_MIN=0.5, ZOOM_MAX=3.5, ZOOM_STEP=0.1;
+const DPR_MIN = 1;
+const GRID_SIZE = 64;
+const HUD_PAD = 8;
+const ZOOM_MIN = 0.5, ZOOM_MAX = 3.5, ZOOM_STEP = 0.1;
 
 /// —————————————————————————————————————————————————————————————————————————————
 /// Hilfsfunktionen (Canvas/Zeichnen/Overlay)
@@ -36,26 +42,28 @@ const ZOOM_MIN=0.5, ZOOM_MAX=3.5, ZOOM_STEP=0.1;
 function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
 
 function setupHiDPICanvas(cv){
-  const dpr=Math.max(DPR_MIN, window.devicePixelRatio||1);
-  const w=(innerWidth||document.documentElement.clientWidth);
-  const h=(innerHeight||document.documentElement.clientHeight);
-  cv.width=Math.floor(w*dpr); cv.height=Math.floor(h*dpr);
-  cv.style.width=w+'px'; cv.style.height=h+'px';
+  const dpr = Math.max(DPR_MIN, window.devicePixelRatio || 1);
+  const w = (innerWidth || document.documentElement.clientWidth);
+  const h = (innerHeight|| document.documentElement.clientHeight);
+  cv.width  = Math.floor(w * dpr);
+  cv.height = Math.floor(h * dpr);
+  cv.style.width  = w + 'px';
+  cv.style.height = h + 'px';
   return dpr;
 }
 
 function drawHUD(ctx, lines, dpr){
-  const pad=HUD_PAD*dpr, w=ctx.canvas.width;
-  ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#0f1b29';
-  ctx.fillRect(pad,pad,Math.min(560*dpr,w-2*pad),20*dpr*(lines.length+1)); ctx.restore();
-  ctx.save(); ctx.font=`${Math.max(12*dpr,14*dpr)}px ui-monospace,monospace`; ctx.fillStyle='#cfe3ff';
-  let y=pad+18*dpr; for(const ln of lines){ ctx.fillText(ln, pad+16*dpr, y); y+=18*dpr; } ctx.restore();
+  const pad = HUD_PAD * dpr, w = ctx.canvas.width;
+  ctx.save(); ctx.globalAlpha = .85; ctx.fillStyle = '#0f1b29';
+  ctx.fillRect(pad, pad, Math.min(560*dpr, w-2*pad), 20*dpr*(lines.length+1)); ctx.restore();
+  ctx.save(); ctx.font = `${Math.max(12*dpr,14*dpr)}px ui-monospace,monospace`; ctx.fillStyle = '#cfe3ff';
+  let y = pad + 18*dpr; for(const ln of lines){ ctx.fillText(ln, pad+16*dpr, y); y += 18*dpr; } ctx.restore();
 }
 
 function drawGrid(ctx, cam, dpr){
   const w=ctx.canvas.width, h=ctx.canvas.height, step=GRID_SIZE*cam.zoom*dpr;
-  const offX= (-(cam.x*cam.zoom*dpr))%step, offY= (-(cam.y*cam.zoom*dpr))%step;
-  ctx.save(); ctx.lineWidth=Math.max(1,Math.floor(1*dpr)); ctx.strokeStyle='#2b3b53'; ctx.beginPath();
+  const offX = (-(cam.x*cam.zoom*dpr))%step, offY = (-(cam.y*cam.zoom*dpr))%step;
+  ctx.save(); ctx.lineWidth = Math.max(1, Math.floor(1*dpr)); ctx.strokeStyle = '#2b3b53'; ctx.beginPath();
   for(let x=offX; x<w; x+=step){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
   for(let y=offY; y<h; y+=step){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
   ctx.stroke(); ctx.restore();
@@ -157,14 +165,15 @@ class Game{
       }
     }
 
-    // Karte laden (Patch B: robuste URL + klare Logs)
+    // Karte laden (korrekter Pfad + Fallback)
     await this.tryLoadMap();
   }
 
   /**
-   * Patch B: Robuste URL für die Map + klare Logs
-   *  - Verwendet document.baseURI, damit auch Unterordner/Pages korrekt aufgelöst werden.
-   *  - Zeigt im Overlay die exakte URL + HTTP‑Status oder Fehler.
+   * Map-Loader:
+   *  1) Versucht zuerst assets/maps/map-pro.json (dein aktueller Speicherort)
+   *  2) Fällt zurück auf maps/map-pro.json (falls du später wieder verschiebst)
+   *  3) Loggt JEDE angefragte URL + Status ins Debug-Overlay
    */
   async tryLoadMap(){
     if(!M_TOOLS || !M_TOOLS.SiedlerMap){
@@ -173,103 +182,26 @@ class Game{
       return;
     }
 
-    // ROBUSTE URL (wichtig für GitHub Pages und Unterpfade):
-    const url = new URL('./maps/map-pro.json', document.baseURI).href;
-    dbgOverlay(`Lade Karte: ${url}`);
+    // Kandidaten in Reihenfolge der Priorität
+    const candidates = [
+      new URL('./assets/maps/map-pro.json', document.baseURI).href, // ✅ aktueller Ort
+      new URL('./maps/map-pro.json',         document.baseURI).href  // ↩︎ Fallback
+    ];
 
-    try{
-      const res = await fetch(url);
-      dbgOverlay(`[net] ${res.status} ${url}`);
-      if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-      const json = await res.json();
+    let loaded = false;
+    for(const url of candidates){
+      try{
+        dbgOverlay(`Lade Karte: ${url}`);
+        const res = await fetch(url);
+        dbgOverlay(`[net] ${res.status} ${url}`);
+        if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
 
-      // Map‑Instanz erstellen + laden
-      const world = new M_TOOLS.SiedlerMap({ tileResolver: (n)=> './assets/' + n });
-      await world.loadFromObject(json);
-      this.state.map = world;
+        const json  = await res.json();
+        const world = new M_TOOLS.SiedlerMap({ tileResolver: (n)=> './assets/' + n });
+        await world.loadFromObject(json);
+        this.state.map = world;
 
-      dbgOverlay(`Karte geladen: ${url}`);
-    }catch(e){
-      console.warn('Karte konnte nicht geladen werden', e);
-      dbgOverlay(`Karte konnte nicht geladen werden: ${url}`, e?.stack || String(e));
-    }
-  }
-
-  start(){
-    if(this.running) return;
-    this.running = true;
-    this.state.t0 = performance.now();
-    this.state.last = this.state.t0;
-
-    const loop = (now)=>{
-      if(!this.running) return;
-      const dt = now - this.state.last; this.state.last = now;
-      this.update(dt);
-      this.render(dt);
-      this.state.frames++;
-      this.raf = requestAnimationFrame(loop);
-    };
-    this.raf = requestAnimationFrame(loop);
-  }
-
-  update(dt){
-    // (später) Spiel‑Update / Entities / etc.
-    if(this.state.map && this.state.map.update){
-      try{ this.state.map.update(dt); }catch(e){ console.error('Map update fail', e); }
-    }
-  }
-
-  render(dt){
-    const { ctx, cv, camera, dpr } = this;
-    ctx.clearRect(0,0,cv.width,cv.height);
-
-    // Karte zeichnen oder Grid‑Fallback
-    if(this.state.map && this.state.map.draw){
-      ctx.save();
-      this.state.map.draw(ctx, { x:camera.x, y:camera.y, w:cv.width/dpr, h:cv.height/dpr, zoom:camera.zoom }, performance.now()-this.state.t0);
-      ctx.restore();
-    } else {
-      drawGrid(ctx, camera, dpr);
-    }
-
-    // HUD
-    drawHUD(ctx, [
-      `Frames: ${this.state.frames}  dt=${dt.toFixed(2)}ms`,
-      `Cam: x=${camera.x.toFixed(1)}  y=${camera.y.toFixed(1)}  zoom=${camera.zoom.toFixed(2)}`,
-      `${this.state.map ? 'Map: aktiv' : 'Map: (keine)'}  /  Assets: ${this.state.assets ? 'aktiv' : '(keine)'}`,
-      `DPR=${dpr.toFixed(2)}  Size=${cv.width}x${cv.height}`
-    ], dpr);
-  }
-
-  destroy(){
-    this.running = false;
-    if(this.raf) cancelAnimationFrame(this.raf);
-    removeEventListener('resize', this.onResize);
-    this.input?.destroy?.();
-  }
-}
-
-/// —————————————————————————————————————————————————————————————————————————————
-/// Öffentlicher Start‑Entry
-/// —————————————————————————————————————————————————————————————————————————————
-export async function startGame({ canvas, ctx }){
-  if(!canvas || !ctx) throw new Error('startGame: Canvas/Context fehlen');
-
-  // Sanft importieren (kein Crash bei 404/SyntaxError; Overlay loggt)
-  M_ASSET = await tryImport('./core/asset.js');
-  M_TOOLS = await tryImport('./tools/map-runtime.js');
-
-  const game = new Game({ canvas, ctx });
-  await game.init();
-  game.start();
-
-  // Debug‑Zugriff im Fenster
-  // @ts-ignore
-  window.__SIEDLER_GAME__ = game;
-  dbgOverlay('Game gestartet.');
-  return game;
-}
-
-// Zusätzliche Hooks (optional; beibehalten für künftige Steps)
-export function prewarmAssets(){ /* reserviert */ }
-export function stopGame(){ try{ window.__SIEDLER_GAME__?.destroy?.(); }catch{} }
+        dbgOverlay(`Karte geladen: ${url}`);
+        loaded = true;
+        break; // Erfolg, weitere Kandidaten nicht nötig
+      }
