@@ -1,8 +1,9 @@
 /* ================================================================================================
-   tools/map-runtime.js — Tile/Atlas-Renderer (robust + JSONC-tolerant)
+   tools/map-runtime.js — Tile/Atlas-Renderer (robust + JSONC-tolerant + iOS createImageBitmap-Fallback)
    - Base-URL aware (alle Pfade relativ zum Speicherort der Map)
    - JSON-Lader akzeptiert JSON mit Kommentaren / trailing commas
-   - Atlas-Fehler blockieren den Map-Load nicht; alles sauber geloggt
+   - Atlas-Fehler blockieren den Map-Load nicht; ausführliches Debug-Logging
+   - iOS/Safari: createImageBitmap-Fehler -> automatischer <img>-Fallback
    ================================================================================================ */
 
 const DEFAULT_TILE = 64;
@@ -10,46 +11,46 @@ const DEFAULT_FPS  = 6;
 
 /* ---------- Hilfsfunktionen -------------------------------------------------- */
 
-/** Versucht eine URL relativ zu 'base' zu erzeugen. Liefert null, wenn 'u' fehlt/ungültig. */
 function ensureUrl(u, base){
   if (!u || typeof u !== 'string') return null;
   try { return new URL(u, base || document.baseURI).href; }
   catch { return null; }
 }
 
-/** Entfernt //-, /* *-/ Kommentare und trailing commas aus JSON-Text. */
 function stripJsoncAndTrailingCommas(text){
   if (typeof text !== 'string') return text;
-  // Block-Kommentare
-  let t = text.replace(/\/\*[\s\S]*?\*\//g, '');
-  // Zeilen-Kommentare
-  t = t.replace(/(^|[^:])\/\/.*$/gm, '$1');
-  // Trailing commas in Objekten
-  t = t.replace(/,\s*}/g, '}');
-  // Trailing commas in Arrays
-  t = t.replace(/,\s*\]/g, ']');
+  let t = text.replace(/\/\*[\s\S]*?\*\//g, '');     // /* ... */
+  t = t.replace(/(^|[^:])\/\/.*$/gm, '$1');          // // ...
+  t = t.replace(/,\s*}/g, '}');                      // trailing comma in {}
+  t = t.replace(/,\s*\]/g, ']');                     // trailing comma in []
   return t.trim();
 }
 
-/** JSON robuster laden: zuerst res.json(); bei SyntaxError -> Text + manuellem Parse (JSONC). */
 export async function loadJSON(u){
   if (!u) throw new Error('loadJSON: URL fehlt/undefined');
   const res = await fetch(u);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${u}`);
 
-  // 1) Versuch: normales JSON
   try { return await res.clone().json(); }
-  catch (e) {
-    // 2) Fallback: JSONC/Text tolerant parsen
+  catch {
     const raw = await res.text();
     const cleaned = stripJsoncAndTrailingCommas(raw);
     try { return JSON.parse(cleaned); }
     catch (e2) {
-      // Fehlerspur mit ein paar Zeichen Kontext loggen
       const preview = cleaned.slice(0, 280).replace(/\s+/g,' ').trim();
       throw new Error(`JSON parse failed for ${u}: ${e2.message}\nPreview: ${preview}`);
     }
   }
+}
+
+function loadImageViaTag(blob){
+  return new Promise((ok, err)=>{
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(url); ok(img); };
+    img.onerror= (e)=>{ URL.revokeObjectURL(url); err(e); };
+    img.src = url;
+  });
 }
 
 export async function loadImage(u){
@@ -57,13 +58,19 @@ export async function loadImage(u){
   const res = await fetch(u);
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${u}`);
   const b = await res.blob();
+
+  // Bevorzugt: createImageBitmap
   if ('createImageBitmap' in self) {
-    return await createImageBitmap(b, { imageOrientation:'from-image', premultiplyAlpha:'none' });
+    try {
+      return await createImageBitmap(b, { imageOrientation:'from-image', premultiplyAlpha:'none' });
+    } catch (e) {
+      // iOS/Safari wirft hier gern DOMException -> sauberer Fallback auf <img>
+      console?.warn?.('[atlas] createImageBitmap failed — falling back to <img>:', e?.message||e);
+      return await loadImageViaTag(b);
+    }
   }
-  return await new Promise((ok,err)=>{
-    const i=new Image(); i.onload=()=>ok(i); i.onerror=err;
-    i.src=URL.createObjectURL(b);
-  });
+  // Direkt <img>-Fallback
+  return await loadImageViaTag(b);
 }
 
 function splitNumericSuffix(key){
@@ -150,7 +157,6 @@ export class SiedlerMap{
         // Beide Formen unterstützen
         let atlasDecl = worldObj.atlas;
         if (typeof atlasDecl === 'string') {
-          // String-Form -> in Objekt wandeln; Bildname aus json ableiten (tileset.png)
           const jsonRel = atlasDecl;
           const pngRel  = jsonRel.replace(/\.jsonc?(\?.*)?$/i, '.png$1');
           atlasDecl = { json: jsonRel, image: pngRel };
@@ -177,7 +183,9 @@ export class SiedlerMap{
         }
       }catch(e){
         // **Wichtig:** Map-Load NICHT abbrechen — nur loggen und ohne Atlas weiter.
-        this.dbg?.(`Atlas konnte nicht geladen werden — fahre ohne Atlas fort.`, e?.stack||String(e));
+        const msg = (e && (e.stack||e.message)) ? (e.stack||e.message) : String(e);
+        this.dbg?.(`Atlas konnte nicht geladen werden — fahre ohne Atlas fort.`, msg);
+        console?.warn?.('[atlas] load failed:', msg);
       }
     }
 
