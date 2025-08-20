@@ -88,8 +88,12 @@ class Game{
     for(const url of candidates){
       try{
         dbgOverlay(`Lade Karte: ${url}`);
-        const res=await fetch(url); dbgOverlay(`[net] ${res.status} ${url}`); if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-        const json=await res.json();
+        const res=await fetch(url); dbgOverlay(`[net] ${res.status} ${url}`);
+        if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+
+        let json;
+        try { json = await res.json(); }
+        catch (e) { dbgOverlay('JSON‑Parsefehler bei map-pro.json', e?.message||String(e)); throw e; }
 
         // Basis-Ordner der Map-URL (für relative Atlas-Pfade)
         const baseUrl = url.replace(/[^/?#]+(?:\?.*)?$/, '');
