@@ -1,38 +1,22 @@
 {
-  "name": "map-pro",
+  "width": 7,
+  "height": 1,
   "tileSize": 64,
-
   "atlas": {
     "json": "../tiles/tileset.json",
     "image": "../tiles/tileset.png"
   },
-
-  "background": "#0b1420",
-
   "layers": [
     {
-      "name": "ground",
-      "type": "tile",
-      "grid": [
-        ["grass","grass","grass","grass","grass","grass","grass","grass"],
-        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
-        ["grass","dirt","water","water","water","grass","grass","grass"],
-        ["grass","dirt","water","water","water","grass","grass","grass"],
-        ["grass","dirt","dirt","dirt","grass","grass","grass","grass"],
-        ["grass","grass","grass","grass","grass","grass","grass","grass"]
-      ]
-    },
-
-    {
-      "name": "coast",
-      "type": "tile",
-      "grid": [
-        [null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null],
-        [null,null,"coast_grass_N",null,null,null,null,null],
-        [null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null],
-        [null,null,null,null,null,null,null,null]
+      "name": "demo",
+      "data": [
+        "grass",
+        "dirt",
+        "water",
+        "coast_grass_N",
+        "sand",
+        "snow",
+        "forest_oak"
       ]
     }
   ]
