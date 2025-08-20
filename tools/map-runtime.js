@@ -1,104 +1,215 @@
-// Map Runtime with Tileset Atlas & basic tile animation
-// Exports SiedlerMap which draws tile layers to a 2D canvas context.
+// tools/map-runtime.js
+// SiedlerMap – minimalistischer Tile-Renderer mit Alias- und Animations-Support
+// -----------------------------------------------------------
+// Features:
+// - Atlas (frames + animations) + Bild
+// - Aliases aus atlas.aliases werden automatisch aufgelöst
+// - Animations-Frames über atlas.animations[base] (fps, frames[]) oder Keys *_0,_1,_2...
+// - Sichtbares Fenster rendern (view{x,y,w,h})
+// - Flexible Map-Struktur: { tileSize?, width?, height?, tiles?[][], layers?[], atlas?{json|image} }
+//
+// Erwartete Pfade (typisch):
+//   assets/tiles/tileset.terrain.json
+//   assets/tiles/tileset.terrain.png
+//
+// Öffentliche API:
+//   const world = new SiedlerMap({ tileResolver: (n)=>'./assets/'+n, onReady:()=>{} });
+//   await world.loadFromObject(worldJson);
+//   // optional: world.attachAtlas(atlasJsonObj, atlasImageBitmapOrImg);
+//   world.draw(ctx, viewRect, elapsedMs);
+//
+// -----------------------------------------------------------
 
-import { Assets } from '../core/asset.js';
+/** Canvas-Image loader (HTMLImageElement bevorzugt; ImageBitmap optional) */
+async function loadImage(src) {
+  // Wenn bereits ein ImageBitmap oder <img> übergeben wurde, zurückgeben
+  if (src && (src instanceof ImageBitmap || (typeof HTMLImageElement !== 'undefined' && src instanceof HTMLImageElement))) {
+    return src;
+  }
+  const res = await fetch(src);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${src}`);
+  const blob = await res.blob();
+  if ('createImageBitmap' in self) {
+    return await createImageBitmap(blob, { imageOrientation: 'from-image', premultiplyAlpha: 'none' });
+  }
+  return await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(blob);
+  });
+}
+
+/** JSON loader (URL oder Objekt durchreichen) */
+async function loadJSON(maybeUrlOrObj) {
+  if (typeof maybeUrlOrObj === 'object' && maybeUrlOrObj !== null) return maybeUrlOrObj;
+  const res = await fetch(maybeUrlOrObj);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${maybeUrlOrObj}`);
+  return await res.json();
+}
+
+/** Alias-Auflösung */
+function resolveAlias(atlas, name) {
+  if (!atlas || !name) return name;
+  const aliases = atlas.aliases || {};
+  return aliases[name] || name;
+}
+
+/** Prüft, ob ein Key wie foo_0, foo_1, ... ist */
+function splitNumericSuffix(key) {
+  const m = /^(.+)_([0-9]+)$/.exec(key);
+  if (!m) return null;
+  return { base: m[1], index: parseInt(m[2], 10) };
+}
+
+/** Liefert den Animations-Frame-Key zu einer Basis (oder Name selbst, wenn statisch) */
+function currentFrameKey(atlas, baseName, elapsedMs) {
+  if (!atlas) return baseName;
+
+  // 1) Explizite Animationseinträge bevorzugen
+  const anim = atlas.animations && atlas.animations[baseName];
+  if (anim && anim.frames && anim.frames.length) {
+    const fps = anim.fps || 6;
+    const idx = Math.floor((elapsedMs / 1000) * fps) % anim.frames.length;
+    return anim.frames[idx];
+  }
+
+  // 2) Implizite *_0,_1,_2 ... Frames
+  //    Wir sammeln alle Frames, die wie baseName_# heißen
+  const frames = [];
+  const keys = Object.keys(atlas.frames || {});
+  const prefix = baseName + '_';
+  for (const k of keys) {
+    if (k.startsWith(prefix)) {
+      const s = splitNumericSuffix(k);
+      if (s) frames.push({ k, i: s.index });
+    }
+  }
+  if (frames.length > 0) {
+    frames.sort((a, b) => a.i - b.i);
+    const fps = 6;
+    const idx = Math.floor((elapsedMs / 1000) * fps) % frames.length;
+    return frames[idx].k;
+  }
+
+  // 3) Fallback: statisch
+  return baseName;
+}
+
+/** Zeichnet einen Frame oder eine Animation an (dx,dy) in Zielgröße size (px) */
+function drawTileFromAtlas(ctx, atlas, atlasImage, baseOrKey, dx, dy, size, elapsedMs = 0) {
+  if (!atlas || !atlasImage || !baseOrKey) return;
+  const resolved = resolveAlias(atlas, baseOrKey);
+  const key = currentFrameKey(atlas, resolved, elapsedMs);
+  const f = atlas.frames && atlas.frames[key];
+  if (!f) return;
+  ctx.drawImage(atlasImage, f.x, f.y, f.w, f.h, dx, dy, size, size);
+}
 
 export class SiedlerMap {
-  constructor(opts) {
-    this.opts = opts || {};
-    this.tileSize = 64;
-    this.world = null;
-    this.atlas = null;
-    this.atlasImageURL = null;
-    this.atlasImage = null;
-    this.time = 0;
-    this._ready = false;
+  constructor(opts = {}) {
+    this.tileResolver = opts.tileResolver || (n => n);
+    this.onReady = opts.onReady || (() => {});
+
+    // Atlas
+    this.atlas = null;          // { frames, animations, aliases?, meta? }
+    this.atlasImage = null;     // ImageBitmap|HTMLImageElement
+
+    // Map-Daten
+    this.tileSize = 64;         // Default; kann von atlas.meta.tileSize überschrieben werden
+    this.width = 0;             // in Tiles
+    this.height = 0;            // in Tiles
+
+    // Einfache Kartenformen:
+    // - tiles: 2D Array [y][x] -> string key
+    // - layers: [{ tiles: 2D array, visible:true }]
+    this.tiles = null;
+    this.layers = null;
+
+    // Optional: Hintergrundfarbe
+    this.background = '#000000';
   }
 
-  async loadFromObject(worldJson) {
-    this.world = worldJson;
-    this.tileSize = worldJson.tileSize || this.tileSize;
-
-    const atlasURL = worldJson.atlas || this.opts.tileResolver?.('tiles/tileset.json') || 'assets/tiles/tileset.json';
-    this.atlas = await Assets.loadJSON(atlasURL);
-    this.atlasImageURL = (this.atlas.meta?.image)
-      ? (this.opts.tileResolver?.('tiles/' + this.atlas.meta.image) || 'assets/tiles/' + this.atlas.meta.image)
-      : (this.opts.tileResolver?.('tiles/tileset.png') || 'assets/tiles/tileset.png');
-
-    this.atlasImage = await Assets.loadImage(this.atlasImageURL);
-    this._ready = true;
-    this.opts.onReady && this.opts.onReady();
-  }
-
-  draw(ctx, view) {
-    if (!this._ready || !this.world) return;
-
-    const now = performance.now();
-    const dt = this._lastT ? (now - this._lastT) : 16.7;
-    this._lastT = now;
-    this.time += dt;
-
-    const ts = this.tileSize;
-    const startCol = Math.floor(view.x / ts);
-    const startRow = Math.floor(view.y / ts);
-    const endCol   = Math.ceil((view.x + view.w) / ts);
-    const endRow   = Math.ceil((view.y + view.h) / ts);
-
-    Assets.imageRenderingCrisp(ctx);
-
-    for (const layer of (this.world.layers || [])) {
-      if (layer.type !== 'tile') continue;
-      const grid = layer.grid;
-
-      for (let r = startRow; r < endRow; r++) {
-        const row = grid[r];
-        if (!row) continue;
-        for (let c = startCol; c < endCol; c++) {
-          const cell = row[c];
-          if (!cell) continue;
-
-          let key = (typeof cell === 'string') ? cell : (cell.key || '');
-          if (!key) continue;
-
-          if (this.atlas.aliases && this.atlas.aliases[key]) key = this.atlas.aliases[key];
-
-          const anim = this.atlas.animations?.[key];
-          if (anim) {
-            const frameIdx = this._animFrame(anim, this.time);
-            const frameKey = anim.frames[frameIdx];
-            this._blitFrame(ctx, frameKey, c * ts - view.x, r * ts - view.y, cell);
-          } else {
-            this._blitFrame(ctx, key, c * ts - view.x, r * ts - view.y, cell);
-          }
-        }
-      }
+  /** Optionaler direkter Atlas-Anschluss (wenn der Aufrufer schon alles geladen hat) */
+  attachAtlas(atlasJson, atlasImage) {
+    this.atlas = atlasJson || null;
+    this.atlasImage = atlasImage || null;
+    if (this.atlas && this.atlas.meta && this.atlas.meta.tileSize) {
+      this.tileSize = this.atlas.meta.tileSize | 0 || this.tileSize;
     }
   }
 
-  _animFrame(anim, timeMs) {
-    const fps = anim.fps || 6;
-    const len = anim.frames.length || 1;
-    const f = Math.floor((timeMs / 1000) * fps);
-    if (anim.loop !== false) return f % len;
-    return Math.min(f, len - 1);
+  /** World/Map laden. worldObj kann Atlas-URLs enthalten oder bereits geladene Daten. */
+  async loadFromObject(worldObj = {}) {
+    // 1) Kartenstruktur übernehmen
+    this.tileSize = worldObj.tileSize | 0 || this.tileSize;
+    this.width = worldObj.width | 0 || this.width || (worldObj.tiles ? (worldObj.tiles[0]?.length || 0) : 0);
+    this.height = worldObj.height | 0 || this.height || (worldObj.tiles ? worldObj.tiles.length : 0);
+    this.tiles = Array.isArray(worldObj.tiles) ? worldObj.tiles : null;
+    this.layers = Array.isArray(worldObj.layers) ? worldObj.layers : (this.tiles ? [{ tiles: this.tiles, visible: true }] : null);
+    if (worldObj.background) this.background = worldObj.background;
+
+    // 2) Atlas laden (wenn in der Map angegeben), sonst warten wir auf attachAtlas()
+    if (!this.atlas && worldObj.atlas) {
+      // Varianten: atlas:{ json:'url', image:'url' }  ODER bereits Objekte
+      const atlasJson = await loadJSON(worldObj.atlas.json);
+      const atlasImg = await loadImage(worldObj.atlas.image);
+      this.attachAtlas(atlasJson, atlasImg);
+    }
+
+    // 3) Tilegröße ggf. aus Atlas übernehmen
+    if (this.atlas && this.atlas.meta && this.atlas.meta.tileSize) {
+      this.tileSize = this.atlas.meta.tileSize | 0 || this.tileSize;
+    }
+
+    // 4) Ready-Callback
+    this.onReady();
   }
 
-  _blitFrame(ctx, frameKey, dx, dy, cell) {
-    const f = this.atlas.frames?.[frameKey];
-    if (!f) return;
-    const sx = f.x|0, sy = f.y|0, sw = f.w|0, sh = f.h|0;
+  /** Zeichnet die Karte in den angegebenen Sichtbereich */
+  draw(ctx, view, elapsedMs = 0) {
+    if (!ctx) return;
+    const t = this.tileSize || 64;
 
-    const flipX = !!(cell && cell.flipX);
-    const flipY = !!(cell && cell.flipY);
+    // Sichtfenster in Tile-Koordinaten bestimmen
+    const vx = view?.x | 0 || 0;
+    const vy = view?.y | 0 || 0;
+    const vw = view?.w | 0 || ctx.canvas.width;
+    const vh = view?.h | 0 || ctx.canvas.height;
 
-    if (flipX || flipY) {
+    const minTX = Math.max(0, Math.floor(vx / t));
+    const minTY = Math.max(0, Math.floor(vy / t));
+    const maxTX = Math.min(this.width, Math.ceil((vx + vw) / t) + 1);
+    const maxTY = Math.min(this.height, Math.ceil((vy + vh) / t) + 1);
+
+    // Hintergrund (optional)
+    if (this.background) {
       ctx.save();
-      ctx.translate(dx + (flipX ? sw : 0), dy + (flipY ? sh : 0));
-      ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-      ctx.drawImage(this.atlasImage, sx, sy, sw, sh, 0, 0, sw, sh);
+      ctx.fillStyle = this.background;
+      ctx.fillRect(0, 0, vw, vh);
       ctx.restore();
-    } else {
-      ctx.drawImage(this.atlasImage, sx, sy, sw, sh, dx, dy, sw, sh);
+    }
+
+    // Layers iterieren
+    const layers = this.layers || [];
+    for (const layer of layers) {
+      if (layer.visible === false) continue;
+      const grid = layer.tiles;
+      if (!Array.isArray(grid)) continue;
+
+      for (let ty = minTY; ty < maxTY; ty++) {
+        const row = grid[ty];
+        if (!row) continue;
+        for (let tx = minTX; tx < maxTX; tx++) {
+          const name = row[tx];
+          if (!name) continue;
+
+          const dx = (tx * t) - vx;
+          const dy = (ty * t) - vy;
+
+          drawTileFromAtlas(ctx, this.atlas, this.atlasImage, name, dx, dy, t, elapsedMs);
+        }
+      }
     }
   }
 }
