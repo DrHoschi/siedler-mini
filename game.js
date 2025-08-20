@@ -1,15 +1,15 @@
 /* ================================================================================================
-   Siedler‑Mini V14.7‑hf4 — game.js
+   Siedler‑Mini V14.7‑hf5 — game.js
    Zweck:
      • Startfunktion startGame({canvas,ctx})
      • Stabiler Render‑Loop (Pan/Zoom, HiDPI, HUD, Grid‑Fallback)
      • Sanfte Imports (core/asset.js, tools/map-runtime.js)
-     • Karten‑Ladung über ROBUSTE URL:
-         1) assets/maps/map-pro.json  (aktueller Speicherort)
-         2) maps/map-pro.json         (Fallback, falls später verschoben)
+     • Karten‑Ladung über ROBUSTE URLS (in dieser Reihenfolge):
+         1) ./assets/maps/map-pro.json  ← dein aktueller Speicherort
+         2) ./maps/map-pro.json         ← Fallback (falls später wieder verschoben)
    Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports
    Hinweise:
-     • Kommentare beibehalten; bei Änderungen nur aktualisieren/ergänzen.
+     • Kommentare bleiben immer erhalten; wir aktualisieren sie nur.
    ================================================================================================ */
 
 /// —————————————————————————————————————————————————————————————————————————————
@@ -31,10 +31,10 @@ let M_TOOLS = null;   // ./tools/map-runtime.js
 /// —————————————————————————————————————————————————————————————————————————————
 /// Konstanten
 /// —————————————————————————————————————————————————————————————————————————————
-const DPR_MIN = 1;
+const DPR_MIN   = 1;
 const GRID_SIZE = 64;
-const HUD_PAD = 8;
-const ZOOM_MIN = 0.5, ZOOM_MAX = 3.5, ZOOM_STEP = 0.1;
+const HUD_PAD   = 8;
+const ZOOM_MIN  = 0.5, ZOOM_MAX = 3.5, ZOOM_STEP = 0.1;
 
 /// —————————————————————————————————————————————————————————————————————————————
 /// Hilfsfunktionen (Canvas/Zeichnen/Overlay)
@@ -171,8 +171,8 @@ class Game{
 
   /**
    * Map-Loader:
-   *  1) Versucht zuerst assets/maps/map-pro.json (dein aktueller Speicherort)
-   *  2) Fällt zurück auf maps/map-pro.json (falls du später wieder verschiebst)
+   *  1) Versucht zuerst ./assets/maps/map-pro.json (dein aktueller Speicherort)
+   *  2) Fällt zurück auf ./maps/map-pro.json (falls du später wieder verschiebst)
    *  3) Loggt JEDE angefragte URL + Status ins Debug-Overlay
    */
   async tryLoadMap(){
@@ -182,7 +182,6 @@ class Game{
       return;
     }
 
-    // Kandidaten in Reihenfolge der Priorität
     const candidates = [
       new URL('./assets/maps/map-pro.json', document.baseURI).href, // ✅ aktueller Ort
       new URL('./maps/map-pro.json',         document.baseURI).href  // ↩︎ Fallback
@@ -204,4 +203,93 @@ class Game{
         dbgOverlay(`Karte geladen: ${url}`);
         loaded = true;
         break; // Erfolg, weitere Kandidaten nicht nötig
+      }catch(e){
+        console.warn('Kartenversuch fehlgeschlagen', url, e);
+        dbgOverlay(`Karte konnte nicht geladen werden: ${url}`, e?.stack || String(e));
+        // weiterer Kandidat wird probiert
       }
+    }
+
+    if(!loaded){
+      dbgOverlay('Keine Karte geladen – es wird das Grid‑Fallback gerendert.');
+    }
+  }
+
+  start(){
+    if(this.running) return;
+    this.running = true;
+    this.state.t0 = performance.now();
+    this.state.last = this.state.t0;
+
+    const loop = (now)=>{
+      if(!this.running) return;
+      const dt = now - this.state.last; this.state.last = now;
+      this.update(dt);
+      this.render(dt);
+      this.state.frames++;
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
+  }
+
+  update(dt){
+    // (später) Spiel‑Logik / Entities
+    if(this.state.map && this.state.map.update){
+      try{ this.state.map.update(dt); }catch(e){ console.error('Map update fail', e); }
+    }
+  }
+
+  render(dt){
+    const { ctx, cv, camera, dpr } = this;
+    ctx.clearRect(0,0,cv.width,cv.height);
+
+    // Karte zeichnen oder Grid‑Fallback
+    if(this.state.map && this.state.map.draw){
+      ctx.save();
+      this.state.map.draw(ctx, { x:camera.x, y:camera.y, w:cv.width/dpr, h:cv.height/dpr, zoom:camera.zoom }, performance.now()-this.state.t0);
+      ctx.restore();
+    } else {
+      drawGrid(ctx, camera, dpr);
+    }
+
+    // HUD
+    drawHUD(ctx, [
+      `Frames: ${this.state.frames}  dt=${dt.toFixed(2)}ms`,
+      `Cam: x=${camera.x.toFixed(1)}  y=${camera.y.toFixed(1)}  zoom=${camera.zoom.toFixed(2)}`,
+      `${this.state.map ? 'Map: aktiv' : 'Map: (keine)'}  /  Assets: ${this.state.assets ? 'aktiv' : '(keine)'}`,
+      `DPR=${dpr.toFixed(2)}  Size=${cv.width}x${cv.height}`
+    ], dpr);
+  }
+
+  destroy(){
+    this.running = false;
+    if(this.raf) cancelAnimationFrame(this.raf);
+    removeEventListener('resize', this.onResize);
+    this.input?.destroy?.();
+  }
+}
+
+/// —————————————————————————————————————————————————————————————————————————————
+/// Öffentlicher Start‑Entry
+/// —————————————————————————————————————————————————————————————————————————————
+export async function startGame({ canvas, ctx }){
+  if(!canvas || !ctx) throw new Error('startGame: Canvas/Context fehlen');
+
+  // Sanft importieren (kein Crash bei 404/SyntaxError; Overlay loggt)
+  M_ASSET = await tryImport('./core/asset.js');
+  M_TOOLS = await tryImport('./tools/map-runtime.js');
+
+  const game = new Game({ canvas, ctx });
+  await game.init();
+  game.start();
+
+  // Debug‑Zugriff im Fenster
+  // @ts-ignore
+  window.__SIEDLER_GAME__ = game;
+  dbgOverlay('Game gestartet.');
+  return game;
+}
+
+// Zusätzliche Hooks (optional; beibehalten für spätere Schritte)
+export function prewarmAssets(){ /* reserviert */ }
+export function stopGame(){ try{ window.__SIEDLER_GAME__?.destroy?.(); }catch{} }
