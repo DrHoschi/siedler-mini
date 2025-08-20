@@ -1,21 +1,15 @@
 // ============================================================================
-// 📦 core/asset.js
+// 📦 core/asset.js  — v1.1 (robust, cache-busting, default export)
 // ----------------------------------------------------------------------------
 // Zweck
 //   Kleiner, robuster Asset-Loader für Images & JSON mit Cache.
 //   - Crisp-Pixel-Rendering (pixelated)
-//   - ImageBitmap-Fallback auf <img>
+//   - ImageBitmap (optional) oder <img>-Fallback
 //   - Gemeinsamer Cache für wiederholte Zugriffe
 //   - Manifest-Preload (images/json)
-//   - Debug-Statistiken (optional)
-//
-// Struktur
-//   1) IMPORTS
-//   2) KONSTANTEN & KONFIG
-//   3) HILFSFUNKTIONEN (intern/extern)
-//   4) KLASSE: AssetStore
-//   5) INITIALISIERUNG (Default-Instanz)
-//   6) EXPORTS (inkl. Backwards-Compat zu deiner alten API)
+//   - Debug-Logs (optional)
+//   - Cache-Busting: Version-Suffix & Fetch-Cache-Mode
+//   - Default-Export + Named Exports (kompatibel zu unterschiedlichen Imports)
 // ============================================================================
 
 
@@ -23,7 +17,7 @@
 // -----------------------------------------------------------------------------
 // 1) IMPORTS
 // -----------------------------------------------------------------------------
-// (Derzeit keine externen Imports nötig)
+// (keine externen Imports)
 
 
 
@@ -31,17 +25,10 @@
 // 2) KONSTANTEN & KONFIG
 // -----------------------------------------------------------------------------
 
-/**
- * Debug-Schalter:
- * - true  → Konsolen-Logs & Metriken (Ladezeiten) aktiv
- * - false → still
- */
+/** Debug-Schalter */
 const DEBUG_ASSETS = false;
 
-/**
- * Standard-Optionen für ImageBitmap-Erzeugung (wenn verfügbar).
- * (Konservativ gewählt, ändert Alpha nicht und respektiert EXIF-Orientation.)
- */
+/** Standard-Optionen für ImageBitmap */
 const IMAGEBITMAP_OPTS = {
   imageOrientation: 'from-image',
   premultiplyAlpha: 'none'
@@ -53,34 +40,21 @@ const IMAGEBITMAP_OPTS = {
 // 3) HILFSFUNKTIONEN
 // -----------------------------------------------------------------------------
 
-/**
- * Sorgt für knackige Pixel-Darstellung (z. B. für Retro/Sprite-Grafik).
- * Kann mit Canvas-Element ODER 2D-Context aufgerufen werden.
- *
- * @param {HTMLCanvasElement|CanvasRenderingContext2D} ctxOrCanvas
- */
+/** Crispes Pixel-Scaling (nearest-neighbor) für Canvas */
 export function imageRenderingCrisp(ctxOrCanvas) {
   const c = ctxOrCanvas?.canvas || ctxOrCanvas;
   if (!c) return;
-  // CSS-Eigenschaft für nearest-neighbor Scaling
   c.style.imageRendering = 'pixelated';
 }
 
-/**
- * Baut aus Basis-Pfad und Teil-URL eine nutzbare URL.
- * @param {string} base - Basis-Pfad (kann leer sein)
- * @param {string} url  - relative oder absolute URL
- */
+/** URL-Auflösung mit optionalem Base-Pfad */
 function resolveURL(base, url) {
   if (!base) return url;
-  // Keine doppelte Slash-Seuche
   if (/^https?:\/\//i.test(url) || url.startsWith('/')) return url;
   return `${base.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`;
 }
 
-/**
- * Hilfsfunktion: misst eine asynchrone Operation (nur für Debug).
- */
+/** Zeitmessung für Async-Operationen (nur Debug) */
 async function timeAsync(label, fn) {
   if (!DEBUG_ASSETS) return fn();
   const t0 = performance.now();
@@ -96,30 +70,39 @@ async function timeAsync(label, fn) {
   }
 }
 
+/** hängt ?v=... an (oder &v=...), falls version gesetzt ist */
+function withVersion(url, version) {
+  if (!version) return url;
+  return url + (url.includes('?') ? `&v=${encodeURIComponent(version)}` : `?v=${encodeURIComponent(version)}`);
+}
+
 
 
 // -----------------------------------------------------------------------------
 // 4) KLASSE: AssetStore
 // -----------------------------------------------------------------------------
 
-/**
- * Zentraler Asset-Loader mit Cache.
- * - Lädt Bilder als ImageBitmap (wenn unterstützt) oder <img> Fallback
- * - Lädt JSON und cached die Promise-Ergebnisse
- * - Manifest-Preload: { images: [url], json: [url] }
- * - Optionaler Basis-Pfad (basePath) für alle relativen URLs
- */
 class AssetStore {
-  constructor() {
+  /**
+   * @param {Object} [opts]
+   * @param {string} [opts.basePath]            - Basis-Pfad für relative URLs
+   * @param {string} [opts.version]             - Version-Suffix für Cache-Busting (z. B. Build-Hash)
+   * @param {RequestCache} [opts.cacheMode]     - fetch cache mode ('default' | 'reload' | 'no-store' | ...)
+   * @param {boolean} [opts.useImageBitmap]     - true = bevorzugt ImageBitmap, false = erzwinge <img>-Fallback
+   * @param {boolean} [opts.trackObjectURLs]    - Object-URLs sammeln und später freigeben
+   */
+  constructor(opts = {}) {
     /** @type {Map<string, Promise<any>>} */
     this.cache = new Map();
 
-    /** @type {string} Basis-Pfad für relative URLs */
-    this.basePath = '';
+    this.basePath = opts.basePath || '';
+    this.version  = opts.version  || '';          // z. B. globaler BUILD_HASH
+    this.cacheMode = opts.cacheMode || 'default'; // 'default' | 'reload' | 'no-store' ...
+    this.useImageBitmap = (opts.useImageBitmap !== undefined)
+      ? !!opts.useImageBitmap
+      : ('createImageBitmap' in window);
 
-    /** @type {boolean} Ob Objekt-URLs für <img>-Fallback aufgehoben werden sollen */
-    this._trackObjectURLs = true;
-    /** @type {Set<string>} Gesammelte Object-URLs zum späteren Aufräumen */
+    this._trackObjectURLs = opts.trackObjectURLs !== false; // default: true
     this._objectURLs = new Set();
   }
 
@@ -127,18 +110,11 @@ class AssetStore {
   // Konfiguration
   // ------------------------------
 
-  /**
-   * Setzt einen Basis-Pfad, der vor alle relativen URLs gesetzt wird.
-   * @param {string} base
-   */
-  setBasePath(base) {
-    this.basePath = base || '';
-  }
+  setBasePath(base) { this.basePath = base || ''; }
+  setVersion(v)     { this.version  = v || ''; }
+  setCacheMode(m)   { this.cacheMode = m || 'default'; }
+  setUseImageBitmap(flag) { this.useImageBitmap = !!flag; }
 
-  /**
-   * Löscht den gesamten Cache (und gibt ggf. Object-URLs frei).
-   * Achtung: Referenzen auf bereits geladene Bitmaps/<img> bleiben bestehen.
-   */
   clear() {
     this.cache.clear();
     this._revokeAllObjectURLs();
@@ -148,39 +124,31 @@ class AssetStore {
   // Kern-Loader
   // ------------------------------
 
-  /**
-   * Lädt ein Bild (ImageBitmap oder HTMLImageElement, je nach Support) und cached es.
-   * @param {string} url
-   * @returns {Promise<ImageBitmap|HTMLImageElement>}
-   */
   async loadImage(url) {
-    const key = resolveURL(this.basePath, url);
+    const resolved = resolveURL(this.basePath, url);
+    const withVer  = withVersion(resolved, this.version);
+    const key = withVer;
+
     if (this.cache.has(key)) return this.cache.get(key);
 
     const task = timeAsync(`image ${key}`, async () => {
-      const res = await fetch(key);
-      if (!res.ok) throw new Error(`Image load failed: ${key} (${res.status})`);
+      const res = await fetch(withVer, { cache: this.cacheMode });
+      if (!res.ok) throw new Error(`Image load failed: ${withVer} (${res.status})`);
       const blob = await res.blob();
 
-      // Moderner Weg: ImageBitmap
-      if ('createImageBitmap' in window) {
+      if (this.useImageBitmap) {
+        // Moderner Weg: ImageBitmap
         return await createImageBitmap(blob, IMAGEBITMAP_OPTS);
       }
 
-      // Fallback: HTMLImageElement mit Object-URL
+      // Fallback: HTMLImageElement
       return await new Promise((resolve, reject) => {
         const urlObj = URL.createObjectURL(blob);
         const img = new Image();
         img.decoding = 'async';
         img.onload = () => {
           resolve(img);
-          // Object-URL kann jetzt aufgehoben werden (optional verzögert)
-          if (this._trackObjectURLs) {
-            this._objectURLs.add(urlObj);
-            // Direkt freigeben → weniger Speicher, aber im Fehlerfall erneut nötig.
-            // Wir geben hier NICHT sofort frei, damit Re-Layout/Draw sicher ist.
-            // Aufräumen übernehmen _revokeAllObjectURLs() / clear().
-          }
+          if (this._trackObjectURLs) this._objectURLs.add(urlObj);
         };
         img.onerror = (e) => {
           URL.revokeObjectURL(urlObj);
@@ -194,18 +162,16 @@ class AssetStore {
     return task;
   }
 
-  /**
-   * Lädt JSON-Daten und cached sie.
-   * @param {string} url
-   * @returns {Promise<any>}
-   */
   async loadJSON(url) {
-    const key = resolveURL(this.basePath, url);
+    const resolved = resolveURL(this.basePath, url);
+    const withVer  = withVersion(resolved, this.version);
+    const key = withVer;
+
     if (this.cache.has(key)) return this.cache.get(key);
 
     const task = timeAsync(`json ${key}`, async () => {
-      const res = await fetch(key);
-      if (!res.ok) throw new Error(`JSON load failed: ${key} (${res.status})`);
+      const res = await fetch(withVer, { cache: this.cacheMode });
+      if (!res.ok) throw new Error(`JSON load failed: ${withVer} (${res.status})`);
       return res.json();
     });
 
@@ -213,14 +179,10 @@ class AssetStore {
     return task;
   }
 
-  /**
-   * Lädt mehrere Assets gemäß Manifest.
-   * @param {{images?: string[], json?: string[]}} manifest
-   */
   async loadAll(manifest = {}) {
     const tasks = [];
     (manifest.images || []).forEach(u => tasks.push(this.loadImage(u)));
-    (manifest.json || []).forEach(u => tasks.push(this.loadJSON(u)));
+    (manifest.json   || []).forEach(u => tasks.push(this.loadJSON(u)));
     await Promise.all(tasks);
   }
 
@@ -228,32 +190,22 @@ class AssetStore {
   // Cache-Helfer
   // ------------------------------
 
-  /**
-   * Gibt die (Promise auf die) Ressource zurück, falls vorhanden.
-   * @param {string} url
-   */
   get(url) {
-    const key = resolveURL(this.basePath, url);
-    return this.cache.get(key);
+    const resolved = resolveURL(this.basePath, url);
+    const withVer  = withVersion(resolved, this.version);
+    return this.cache.get(withVer);
   }
 
-  /**
-   * Prüft, ob eine Ressource bereits im Cache ist.
-   * @param {string} url
-   */
   has(url) {
-    const key = resolveURL(this.basePath, url);
-    return this.cache.has(key);
+    const resolved = resolveURL(this.basePath, url);
+    const withVer  = withVersion(resolved, this.version);
+    return this.cache.has(withVer);
   }
 
-  /**
-   * Legt manuell einen bereits vorliegenden Wert in den Cache.
-   * @param {string} url
-   * @param {any|Promise<any>} value
-   */
   put(url, value) {
-    const key = resolveURL(this.basePath, url);
-    this.cache.set(key, Promise.resolve(value));
+    const resolved = resolveURL(this.basePath, url);
+    const withVer  = withVersion(resolved, this.version);
+    this.cache.set(withVer, Promise.resolve(value));
   }
 
   // ------------------------------
@@ -272,14 +224,7 @@ class AssetStore {
   // Debug / Stats
   // ------------------------------
 
-  /**
-   * Liefert eine kleine Übersicht über den Cache-Status.
-   */
-  stats() {
-    return {
-      entries: this.cache.size
-    };
-  }
+  stats() { return { entries: this.cache.size }; }
 }
 
 
@@ -288,29 +233,21 @@ class AssetStore {
 // 5) INITIALISIERUNG (Default-Instanz)
 // -----------------------------------------------------------------------------
 
-/**
- * Gemeinsame Standard-Instanz für bequeme Nutzung im Projekt.
- * Beispiel:
- *   import { Assets } from './core/asset.js';
- *   await Assets.loadImage('sprites/player.png');
- */
 const Assets = new AssetStore();
 
 
 
 // -----------------------------------------------------------------------------
-// 6) EXPORTS
+// 6) EXPORTS (Named + Default)
 // -----------------------------------------------------------------------------
-//
-// - Primär: AssetStore-Klasse + Standardinstanz `Assets`
-// - Backwards-Compatibility: gleichnamige Funktions-Exports wie in deiner alten
-//   IIFE-Version (loadImage, loadJSON, loadAll, get, imageRenderingCrisp).
-//
 
 export { AssetStore, Assets };
 
-// Backwards-Compat: Direkt-Funktionen, verweisen auf die Default-Instanz
-export async function loadImage(url)   { return Assets.loadImage(url); }
-export async function loadJSON(url)    { return Assets.loadJSON(url); }
-export async function loadAll(manifest){ return Assets.loadAll(manifest); }
-export function get(url)               { return Assets.get(url); }
+// Backwards-Compat: Direkt-Funktionen an die Default-Instanz gebunden
+export async function loadImage(url)    { return Assets.loadImage(url); }
+export async function loadJSON(url)     { return Assets.loadJSON(url); }
+export async function loadAll(manifest) { return Assets.loadAll(manifest); }
+export function get(url)                { return Assets.get(url); }
+
+// Default-Export (falls irgendwo `import Assets from '...'`)
+export default Assets;
