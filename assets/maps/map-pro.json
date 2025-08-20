@@ -1,6 +1,14 @@
 {
   "tileSize": 64,
-  "atlas": "./assets/tiles/tileset.json",
+
+  /* Atlas-Angabe: als Objekt mit json + image.
+     Pfade sind RELATIV zum Speicherort dieser Datei (assets/maps/…).
+     Daher "../tiles/…", um in den tiles-Ordner zu gelangen. */
+  "atlas": {
+    "json": "../tiles/tileset.json",
+    "image": "../tiles/tileset.png"
+  },
+
   "layers": [
     {
       "name": "ground",
