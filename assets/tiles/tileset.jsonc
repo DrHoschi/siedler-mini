@@ -1,13 +1,54 @@
 {
-  // Tileset (16 Spalten × 6 Zeilen, 64px Kachelgröße). Nach unten beliebig erweiterbar.
-  // Zeile 0: grass_1..8 | dirt_1..8
-  // Zeile 1: sand_1..8  | rock_1..8
-  // Zeile 2: snow_1..8  | forest_floor_1..8
-  // Zeile 3: water_0..7 | coast_grass_[NESW] | coast_sand_[NESW]
-  // Zeile 4: lava_0..3, ash_1..4 | path_[..] | path_t_[n,e,s,w]
-  // Zeile 5: path_cross, road_[h,v,ne,nw,se,sw], cliff_[N,E,S,W], hill_1..3
-  //
-  // Hinweis:
-  //  • Wenn du später weitere Reihen hinzufügst, erhöhe meta.imageHeight entsprechend (Zeilen·64).
-  //  • Die Koordinaten folgen immer: x = Spalte*64, y = Zeile*64, w=h=64.
+  // DOKU: Tileset-Konfiguration für Siedler-Mini
+  // Diese Datei erklärt die Felder der produktiven tileset.json.
+  // Sie wird NICHT vom Spiel geladen, dient nur zur Dokumentation.
+
+  "image": "tileset.png",   // Dateiname der Textur im selben Ordner.
+  "tileSize": 64,           // Kantenlänge einer einzelnen Kachel (px). Muss zur Map passen.
+
+  // Optionale Meta-Infos – helfen beim Validieren und Debuggen:
+  "imageWidth": 1024,       // Gesamtbreite der PNG (px) – an echte Größe anpassen!
+  "imageHeight": 1024,      // Gesamthöhe  der PNG (px) – an echte Größe anpassen!
+  "columns": 16,            // nur informativ: imageWidth / tileSize
+  "rows": 16,               // nur informativ: imageHeight / tileSize
+
+  // Frames: benannte Ausschnitte in der PNG.
+  // Jeder Key ist ein Name, der in map-*.json in den Layer-Grids verwendet wird.
+  // Koordinaten starten oben links (0/0).
+  "frames": {
+    // Boden
+    "grass":         { "x": 0,   "y": 0,   "w": 64, "h": 64 },
+    "dirt":          { "x": 64,  "y": 0,   "w": 64, "h": 64 },
+    "water":         { "x": 128, "y": 0,   "w": 64, "h": 64 },
+
+    // Küste (Norden): Wasser unten, Gras oben – nur als Beispielname
+    "coast_grass_N": { "x": 192, "y": 0,   "w": 64, "h": 64 }
+
+    // Weitere Varianten (wenn vorhanden) einfach hinzufügen:
+    // "coast_grass_S": { "x": 256, "y": 0, "w": 64, "h": 64 },
+    // "coast_grass_W": { "x": 320, "y": 0, "w": 64, "h": 64 },
+    // "coast_grass_E": { "x": 384, "y": 0, "w": 64, "h": 64 }
+  }
+
+  /*
+   QUICK-CHECKLISTE BEI “Atlas konnte nicht geladen werden”:
+
+   1) Pfade korrekt?
+      map-pro.json → atlas.json  : "../tiles/tileset.json"
+      map-pro.json → atlas.image : "../tiles/tileset.png"
+      (relativ zum Ordner assets/maps/)
+
+   2) Dateitypen korrekt?
+      → SPIEL lädt NUR tileset.json (ohne Kommentare).
+      → tileset.jsonc ist nur Doku.
+
+   3) tileSize passt zur Map?
+      map-pro.json.tileSize == tileset.json.tileSize
+
+   4) Alle im Map-Grid verwendeten Namen existieren als Frames?
+      z.B. "grass", "dirt", "water", "coast_grass_N"
+
+   5) Koordinaten im PNG korrekt?
+      x/y innerhalb der PNG, w/h == tileSize.
+  */
 }
