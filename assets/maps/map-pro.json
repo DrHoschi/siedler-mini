@@ -1,22 +1,24 @@
 {
-  "width": 7,
-  "height": 1,
+  "width": 20,
+  "height": 12,
   "tileSize": 64,
-  "atlas": {
-    "json": "../tiles/tileset.json",
-    "image": "../tiles/tileset.png"
-  },
+  "atlas": { "json": "../tiles/tileset.json", "image": "../tiles/tileset.png" },
   "layers": [
     {
-      "name": "demo",
+      "name": "terrain",
       "data": [
-        "grass",
-        "dirt",
-        "water",
-        "coast_grass_N",
-        "sand",
-        "snow",
-        "forest_oak"
+        "mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow","mountain_snow",
+        "mountain","mountain","mountain","mountain","mountain_snow","mountain","mountain","mountain","hill","hill","hill","snow","snow","snow","snow","snow","snow","snow","snow","snow",
+        "forest_pine","forest_pine","forest_pine","forest_pine","mountain","hill","hill","forest_pine","forest_oak","forest_oak","grass","grass","grass","grass","grass","grass","meadow_flowers","meadow_flowers","grass","grass",
+        "forest_oak","forest_oak","forest_oak","forest_pine","hill","hill","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass",
+        "grass","grass","grass","grass","grass","grass","grass","grass","coast_grass_NW","coast_grass_N","coast_grass_N","coast_grass_NE","grass","grass","dirt","dirt","dirt","grass","grass","grass",
+        "grass","road_WE","road_WE","road_WE","road_WE","road_cross","road_WE","road_WE","coast_grass_W","water","water","coast_grass_E","grass","dirt","dirt","dirt","dirt","dirt","grass","grass",
+        "grass","road_T_N","road_NS","road_NS","bridge_NS","river_NS","bridge_NS","road_NS","coast_grass_W","water","deep_water","coast_grass_E","grass","dirt","swamp","swamp","swamp","dirt","grass","grass",
+        "grass","road_WE","road_WE","road_WE","road_cross","river_cross","road_cross","road_WE","coast_grass_W","water","water","coast_grass_E","beach","sand","sand","sand","desert_rock","dirt","grass","grass",
+        "grass","grass","grass","grass","river_NW","river_WE","river_WE","river_SE","coast_grass_SW","coast_grass_S","coast_grass_S","coast_grass_SE","beach","sand","sand","sand","desert_rock","dirt","grass","grass",
+        "grass","grass","meadow_flowers","grass","grass","grass","grass","river_NS","grass","grass","grass","grass","coast_grass_NW","coast_grass_N","coast_grass_NE","grass","dirt","lava_rock","lava","lava",
+        "grass","grass","farmland","farmland","meadow_flowers","grass","grass","river_NS","grass","road_WE","road_WE","road_WE","coast_grass_W","water","coast_grass_E","grass","dirt","lava","lava","lava",
+        "grass","grass","farmland","farmland","meadow_flowers","grass","grass","river_T_S","river_WE","road_T_N","road_NS","road_T_S","grass","coast_grass_W","coast_grass_E","grass","stone","gravel","lava_rock","lava"
       ]
     }
   ]
