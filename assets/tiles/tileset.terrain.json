@@ -1,43 +1,26 @@
 {
-  "frames": {
-    "terrain_r0_c0": { "x": 0, "y": 0, "w": 64, "h": 64 },
-    "terrain_r0_c1": { "x": 64, "y": 0, "w": 64, "h": 64 },
-    "terrain_r0_c2": { "x": 128, "y": 0, "w": 64, "h": 64 },
-    "terrain_r0_c3": { "x": 192, "y": 0, "w": 64, "h": 64 },
-
-    "terrain_r1_c0": { "x": 0, "y": 64, "w": 64, "h": 64 },
-    "terrain_r1_c1": { "x": 64, "y": 64, "w": 64, "h": 64 },
-    "terrain_r1_c2": { "x": 128, "y": 64, "w": 64, "h": 64 },
-    "terrain_r1_c3": { "x": 192, "y": 64, "w": 64, "h": 64 },
-    "terrain_r1_c4": { "x": 256, "y": 64, "w": 64, "h": 64 }
-
-    // … die restlichen Felder werden vom Packer automatisch ergänzt,
-    // wenn dein Bild größer als 256 px breit/hoch ist
+  "tileSize": 64,
+  "groups": {
+    "grass": ["grass_1","grass_2","grass_3","grass_4","grass_5","grass_6","grass_7","grass_8"],
+    "dirt":  ["dirt_1","dirt_2","dirt_3","dirt_4","dirt_5","dirt_6","dirt_7","dirt_8"],
+    "sand":  ["sand_1","sand_2","sand_3","sand_4","sand_5","sand_6","sand_7","sand_8"],
+    "rock":  ["rock_1","rock_2","rock_3","rock_4","rock_5","rock_6","rock_7","rock_8"],
+    "snow":  ["snow_1","snow_2","snow_3","snow_4","snow_5","snow_6","snow_7","snow_8"],
+    "forest_floor": ["forest_floor_1","forest_floor_2","forest_floor_3","forest_floor_4","forest_floor_5","forest_floor_6","forest_floor_7","forest_floor_8"],
+    "water": ["water_0","water_1","water_2","water_3","water_4","water_5","water_6","water_7"],
+    "lava":  ["lava_0","lava_1","lava_2","lava_3"],
+    "path":  ["path_h","path_v","path_ne","path_nw","path_se","path_sw","path_t_n","path_t_e","path_t_s","path_t_w","path_cross"],
+    "road":  ["road_h","road_v","road_ne","road_nw","road_se","road_sw"],
+    "cliff": ["cliff_N","cliff_E","cliff_S","cliff_W"],
+    "hill":  ["hill_1","hill_2","hill_3"]
   },
-
-  "animations": {
-    "water": {
-      "frames": ["terrain_r1_c0", "terrain_r1_c1", "terrain_r1_c2"],
-      "fps": 6
-    },
-    "lava": {
-      "frames": ["terrain_r1_c3", "terrain_r1_c4"],
-      "fps": 4
-    }
+  "transitions": {
+    "grass_to_water": ["coast_grass_N","coast_grass_E","coast_grass_S","coast_grass_W"],
+    "sand_to_water":  ["coast_sand_N","coast_sand_E","coast_sand_S","coast_sand_W"]
   },
-
-  "aliases": {
-    "grass": "terrain_r0_c0",
-    "dirt": "terrain_r0_c1",
-    "sand": "terrain_r0_c2",
-    "stone": "terrain_r0_c3",
-    "water": "water",
-    "lava": "lava"
-  },
-
-  "meta": {
-    "image": "tileset.terrain.png",
-    "tileSize": 64,
-    "note": "Frames automatisch vom Script erzeugt, Animationen für Wasser/Lava ergänzt, Aliases für einfache Nutzung."
+  "defaults": {
+    "fill": "grass_1",
+    "edgeForWaterOverGrass": "coast_grass_N",
+    "edgeForWaterOverSand":  "coast_sand_N"
   }
 }
