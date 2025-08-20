@@ -1,31 +1,14 @@
 {
-  // --- Basis-Infos für den Loader ---
-  "image": "tileset.png",          // relativ zum Ordner: assets/tiles/
-  "tileSize": 64,                  // MUSS zur map-pro.json passen
-  "imageWidth": 1024,              // Breite der PNG in Pixel (anpassen, falls anders)
-  "imageHeight": 1024,             // Höhe der PNG in Pixel (anpassen, falls anders)
-
-  // optional; rein informativ
+  "image": "tileset.png",
+  "tileSize": 64,
+  "imageWidth": 1024,
+  "imageHeight": 1024,
   "columns": 16,
   "rows": 16,
-
-  // --- Hier kommen die benannten Ausschnitte (Frames) rein ---
-  // WICHTIG: Die Keys müssen exakt so heißen,
-  // wie sie in map-pro.json in den Layer-Grids verwendet werden.
   "frames": {
-    "grass":         { "x":   0, "y":   0, "w": 64, "h": 64 },
-    "dirt":          { "x":  64, "y":   0, "w": 64, "h": 64 },
-    "water":         { "x": 128, "y":   0, "w": 64, "h": 64 },
-
-    // Beispiel für Küsten-Variante nach Norden
-    "coast_grass_N": { "x": 192, "y":   0, "w": 64, "h": 64 }
-
-    /* 
-      👉 Du kannst hier beliebig erweitern:
-      "sand":            { "x": 256, "y": 0, "w": 64, "h": 64 },
-      "snow":            { "x": 320, "y": 0, "w": 64, "h": 64 },
-      "forest_oak":      { "x": 384, "y": 0, "w": 64, "h": 64 },
-      ...
-    */
+    "grass":         { "x": 0,   "y": 0, "w": 64, "h": 64 },
+    "dirt":          { "x": 64,  "y": 0, "w": 64, "h": 64 },
+    "water":         { "x": 128, "y": 0, "w": 64, "h": 64 },
+    "coast_grass_N": { "x": 192, "y": 0, "w": 64, "h": 64 }
   }
 }
