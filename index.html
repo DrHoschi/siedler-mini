@@ -4,277 +4,150 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V14.7 (Mobil)</title>
+  <title>Siedler-Mini V14.7 (Mobil)</title>
 
-  <!--
-    ===============================================================================================
-    Siedler‑Mini – Index
-    Ziel dieses Dokuments:
-    • Startfenster erscheint ZUERST (Projekt‑Präferenz)
-    • Debug‑Overlay bleibt IMMER drin (nicht blockierend, F2‑Hotkey)
-    • Modul‑Imports mit Cache‑Bust (iOS/Safari holt wirklich die neue Version)
-    • Fallback‑Renderer, falls game/boot fehlen
-    • Einheitliches Farbschema
-    ===============================================================================================
-  -->
-
-  <!-- ===== Basis-Styles (Canvas + HUD + Startfenster + Debug) ===== -->
+  <!-- =====================================================================
+       Basis-Styles (Canvas + HUD). Mobil-Spezifika werden in mobile.css/ios.css überschrieben.
+       Design-Farben bleiben so, wie von dir gewünscht.
+       ===================================================================== -->
   <style>
-    :root{
+    :root {
       color-scheme: dark;
       --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
       --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
       --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
       --shadow: 0 20px 60px rgba(0,0,0,.35);
     }
-
-    html,body{
-      height:100%; margin:0;
-      background:var(--bg); color:var(--text);
-      font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial;
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); }
+    body{ display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    canvas{ display:block; max-width:100%; max-height:100%; background:var(--bg); }
+    #startScreen{
+      position:absolute; inset:0; display:flex;
+      align-items:center; justify-content:center;
+      background:rgba(11,22,40,0.95); color:var(--text);
+      font-family:sans-serif; z-index:10;
     }
-    #root{ isolation:isolate; height:100%; position:relative }
-
-    /* Spielfeld */
-    canvas#game{
-      display:block; width:100vw; height:100vh;
-      touch-action:none; background:transparent;
-    }
-
-    /* ===== Startfenster (soll zuerst sichtbar sein) ===== */
-    #start-window{
-      position:fixed; inset:0; z-index:99990;
-      background:rgba(11,22,40,.92);
-      backdrop-filter:saturate(120%) blur(2px);
-      display:flex; align-items:center; justify-content:center;
-    }
-    .start-card{
+    #startScreen button{
+      padding:1em 2em; font-size:1.2em;
       background:var(--panel); border:1px solid var(--line);
-      box-shadow:var(--shadow); border-radius:12px; padding:18px;
-      width:min(520px,92vw)
+      color:var(--text); border-radius:4px; cursor:pointer;
     }
-    .start-card h1{ margin:.2rem 0 1rem 0; font-size:1.25rem }
-    .row{ display:flex; gap:10px; align-items:center; justify-content:space-between }
-    .muted{ color:var(--muted) }
-    .btn{
-      appearance:none; border:1px solid var(--line); background:var(--pill);
-      color:var(--text); padding:10px 14px; border-radius:10px; cursor:pointer;
-    }
-    .btn.ok{ background:linear-gradient(180deg,#184f2d,#0e2e1b); border-color:#225f3a }
-    .btn:active{ transform:translateY(1px) }
-
-    /* ===== Debug-Overlay (nicht blockierend) =====
-       - Overlay selbst lässt Pointer-Events durch (pointer-events:none)
-       - Nur das innere .panel ist klick-/scrollbar (pointer-events:auto)
-    */
     #dbgOverlay{
-      position:fixed; inset:12px; z-index:99999; display:none;
-      background:transparent; pointer-events:none;
-    }
-    #dbgOverlay .panel{
-      max-width:min(560px,92vw); max-height:50vh; margin-left:auto;
-      background:rgba(11,22,40,.96);
-      color:#cfe3ff; border:1px solid #2b3b53;
-      border-radius:8px; padding:12px; box-shadow:0 20px 60px rgba(0,0,0,.35);
-      font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      overflow:auto; pointer-events:auto;
-    }
-    #dbgOverlay b{ color:#8fd18f }
-    #dbgBtn{
-      position:fixed; right:12px; bottom:12px; z-index:100000;
-      padding:6px 10px; border-radius:999px;
-      background:#0f1b29; color:#cfe3ff; border:1px solid #2b3b53; cursor:pointer;
-    }
-
-    /* Badge unten links */
-    .badge{
-      position:fixed; left:12px; bottom:12px; z-index:100000;
-      font-size:12px; padding:6px 10px; border-radius:999px;
-      background:#0f1b29; color:#9fb3cc; border:1px solid #2b3b53;
+      position:absolute; top:0; left:0; right:0; max-height:40%;
+      overflow:auto; background:rgba(0,0,0,0.7); font-family:monospace;
+      font-size:12px; color:#fff; padding:4px; display:none; z-index:20;
     }
   </style>
+</head>
+<body>
+  <!-- Start-Screen -->
+  <div id="startScreen">
+    <button id="btnStart">Start</button>
+  </div>
+  <!-- Debug-Overlay -->
+  <div id="dbgOverlay"></div>
+  <!-- Haupt-Canvas -->
+  <canvas id="gameCanvas"></canvas>
 
-  <!-- ===== Debug-Overlay HTML + Init (steht hier bewusst früh) ===== -->
-  <div id="dbgOverlay"><div class="panel" id="dbgPanel"></div></div>
-  <button id="dbgBtn" type="button" title="Debug anzeigen/ausblenden">Debug</button>
+  <!-- =====================================================================
+       Debug-Overlay-Script: sorgt dafür, dass wir im Spiel jederzeit Logs sehen.
+       ===================================================================== -->
   <script>
-  // Debug-Overlay: sammelt Errors / console.error / Promise-Rejects
-  (function(){
-    const box   = document.getElementById('dbgOverlay');
-    const panel = document.getElementById('dbgPanel');
-    const btn   = document.getElementById('dbgBtn');
-
-    function show(){ box.style.display='block'; }
-    function toggle(){ box.style.display = (box.style.display==='none'?'block':'none'); }
-    function log(kind, msg, extra){
-      show();
-      const time = new Date().toLocaleTimeString();
-      const line = document.createElement('div');
-      line.innerHTML = `<b>[${time}] ${kind}:</b> ${msg}${extra?`<pre>${extra}</pre>`:''}`;
-      (panel || box).appendChild(line);
+    const dbgOverlayEl = document.getElementById('dbgOverlay');
+    function dbgOverlay(msg){
+      try{
+        dbgOverlayEl.style.display='block';
+        dbgOverlayEl.insertAdjacentHTML('beforeend',
+          `<div>${new Date().toLocaleTimeString()} :: ${msg}</div>`);
+      }catch(e){ console.warn('dbgOverlay fail', e); }
     }
+    window.dbgOverlay = dbgOverlay;
 
-    btn.onclick = toggle;
-    addEventListener('keydown', (e)=>{ if(e.key === 'F2') toggle(); });
-
-    const origErr = console.error.bind(console);
-    console.error = (...args)=>{ origErr(...args); log('console.error', args.join(' ')); };
-    addEventListener('error', (e)=>{
-      log('window.error', (e.message||'') + (e.filename?` @ ${e.filename}:${e.lineno||''}:${e.colno||''}`:''), e.error && e.error.stack);
+    // Toggle mit Taste "D"
+    window.addEventListener('keydown', ev=>{
+      if(ev.key==='d' || ev.key==='D'){
+        dbgOverlayEl.style.display = dbgOverlayEl.style.display==='none'?'block':'none';
+      }
     });
-    addEventListener('unhandledrejection', (e)=>{
-      const reason = e.reason && (e.reason.stack || e.reason.message || String(e.reason));
-      log('promise.reject', reason||'Unbekannter Fehler');
-    });
+  </script>
 
-    log('boot', 'Debug‑Overlay aktiv (non‑blocking). F2 toggelt Overlay.');
+  <!-- =====================================================================
+       Patch A: NET-LOGGER
+       Dieser Block loggt JEDEN fetch()-Aufruf ins Debug-Overlay.
+       Damit sehen wir sofort, welche URL geladen wurde und ob es Fehler (404 etc.) gab.
+       ===================================================================== -->
+  <script>
+  (function(){
+    const origFetch = window.fetch;
+    window.fetch = async function(...args){
+      const url = String(args[0]);
+      const t0 = performance.now();
+      try{
+        const res = await origFetch.apply(this, args);
+        const ms = (performance.now()-t0).toFixed(0);
+        console.info('[net]', res.status, url, ms+'ms');
+        try{
+          const box=document.getElementById('dbgOverlay');
+          const panel=box;
+          if(panel){ box.style.display='block';
+            panel.insertAdjacentHTML('beforeend', `<div><b>[net]</b> ${res.status} ${url} (${ms}ms)</div>`);
+          }
+        }catch{}
+        return res;
+      }catch(err){
+        console.error('[net-error]', url, err);
+        try{
+          const box=document.getElementById('dbgOverlay');
+          const panel=box;
+          if(panel){ box.style.display='block';
+            panel.insertAdjacentHTML('beforeend', `<div><b>[net-error]</b> ${url}<pre>${err && (err.stack||err.message||String(err))}</pre></div>`);
+          }
+        }catch{}
+        throw err;
+      }
+    };
   })();
   </script>
-</head>
 
-<body>
-  <div id="root">
-    <!-- ===== Startfenster (Start & Reload) ===== -->
-    <section id="start-window" aria-modal="true" role="dialog">
-      <div class="start-card">
-        <h1>Siedler‑Mini</h1>
-        <p class="muted">Starte die aktuelle Karte. (Debug‑Tools bleiben aktiv)</p>
-        <div class="row">
-          <button id="btn-start" class="btn ok">Start</button>
-          <button id="btn-reload" class="btn" title="Spiel neu laden">Neu laden</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Spielfeld -->
-    <canvas id="game"></canvas>
-
-    <!-- Build-Kennzeichnung -->
-    <div class="badge">V14.7 • Mobil • Debug</div>
-  </div>
-
-  <!-- ===== Boot-Script (saubere Reihenfolge, Cache‑Bust, Fallback) ===== -->
+  <!-- =====================================================================
+       Haupt-Import-Script (Module). Lädt boot.js, game.js usw.
+       Enthält Cache-Busting, damit immer die aktuelle Version genommen wird.
+       ===================================================================== -->
   <script type="module">
-    /*  Warum Cache‑Bust?
-        Safari/iOS cached ES‑Module sehr hartnäckig. Der ?v=…‑Querystring erzwingt das Neuladen,
-        damit Fixes (z. B. in core/asset.js) wirklich live gehen.
-    */
+    // Cache-Busting Query-Parameter (zwingt Browser, frische Datei zu laden)
     const BUST = `?v=${Date.now()}`;
 
     async function tryImport(path){
       try{ return await import(path + BUST); }
-      catch(err){ console.error(`Import fehlgeschlagen: ${path}`, err); return null; }
+      catch(err){
+        const msg = `${err && (err.name||'Error')}: ${err && (err.message||String(err))}`;
+        console.error(`Import fehlgeschlagen: ${path}`, err);
+        try{
+          const box=document.getElementById('dbgOverlay');
+          const panel=box;
+          if(panel){ box.style.display='block';
+            panel.insertAdjacentHTML('beforeend', `<div><b>[import]</b> ${path}<pre>${msg}</pre></div>`);
+          }
+        }catch{}
+        return null;
+      }
     }
 
-    // — Modul-Imports (sanft, keine Crashs) —
+    // Lade Module
     const M_asset = await tryImport('./core/asset.js');
     const M_tools = await tryImport('./tools/map-runtime.js');
     const M_boot  = await tryImport('./boot.js');
     const M_game  = await tryImport('./game.js');
 
-    // Import-Status direkt ins Overlay (Fehlersuche super schnell)
-    (function dbgStatus(){
-      const box=document.getElementById('dbgOverlay');
-      const panel=document.getElementById('dbgPanel')||box;
-      if(!panel) return; box.style.display='block';
-      const log = (k,v)=> panel.insertAdjacentHTML('beforeend', `<div><b>[boot]</b> ${k}: ${v?'OK':'fehlt'}</div>`);
-      log('asset.js',!!M_asset); log('map-runtime.js',!!M_tools); log('boot.js',!!M_boot); log('game.js',!!M_game);
-    })();
-
-    // — DOM‑Helfer —
-    function $(sel, root=document){ return root.querySelector(sel); }
-
-    // Startfenster erzwingen (zuerst sichtbar, Scroll sperren)
-    function ensureStartWindowOnTop(){
-      const start = $('#start-window');
-      if(start){
-        Object.assign(start.style, { display:'flex', position:'fixed', zIndex:'99990', inset:'0' });
-        document.body.style.overflow = 'hidden';
+    // Starte Spiel, sobald Button geklickt
+    document.getElementById('btnStart').addEventListener('click', ()=>{
+      document.getElementById('startScreen').style.display='none';
+      if(M_boot && M_boot.startGame){
+        M_boot.startGame({M_asset,M_tools,M_game});
+      }else{
+        dbgOverlay('Start fehlgeschlagen: boot.js nicht geladen.');
       }
-    }
-
-    // Canvas + Context sicher holen
-    function getCanvas(){
-      const cv = $('canvas#game'); if(!cv){ console.error('Canvas nicht gefunden.'); return null; }
-      const ctx = cv.getContext('2d'); if(!ctx){ console.error('getContext("2d") schlug fehl.'); return null; }
-      return {cv, ctx};
-    }
-
-    // HiDPI‑Resize
-    function resizeCanvas(cv){
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      const w = innerWidth, h = innerHeight;
-      cv.width  = Math.floor(w * dpr);
-      cv.height = Math.floor(h * dpr);
-      cv.style.width  = w + 'px';
-      cv.style.height = h + 'px';
-    }
-
-    // Call‑Wrapper: wirf nie hart; Overlay zeigt Fehler
-    function safeCall(fn, ...args){
-      try{ return fn && fn(...args); }
-      catch(e){ console.error('Aufruf schlug fehl:', e); }
-    }
-
-    // — Boot —
-    async function boot(){
-      console.log('Boot: DOM ready.');
-      ensureStartWindowOnTop();
-
-      const cc = getCanvas(); if(!cc) return;
-      resizeCanvas(cc.cv);
-      addEventListener('resize', ()=>resizeCanvas(cc.cv), {passive:true});
-
-      // früher Hook (setzt z. B. crisp‑Rendering); KEINE Side‑Effects beim Import
-      safeCall(M_boot && M_boot.preGameInit, { canvas: cc.cv, ctx: cc.ctx });
-
-      const btnStart  = document.getElementById('btn-start');
-      const btnReload = document.getElementById('btn-reload');
-
-      if(btnReload) btnReload.addEventListener('click', ()=> location.reload());
-
-      if(btnStart){
-        btnStart.addEventListener('click', async ()=>{
-          // Doppel‑Klick verhindern, UI aufgeräumt
-          btnStart.disabled = true; btnStart.textContent = 'Start…';
-          document.body.style.overflow = '';    // Scroll wieder erlauben
-          const start = document.getElementById('start-window');
-          if(start) start.style.display = 'none';
-
-          // Primär: game.js::startGame
-          if(M_game && typeof M_game.startGame === 'function'){
-            console.log('Starte Spiel via game.startGame …');
-            await safeCall(M_game.startGame, { canvas: cc.cv, ctx: cc.ctx, assets: M_asset, tools: M_tools });
-            return;
-          }
-          // Fallback: boot.js::start
-          if(M_boot && typeof M_boot.start === 'function'){
-            console.log('Starte Spiel via boot.start …');
-            await safeCall(M_boot.start, { canvas: cc.cv, ctx: cc.ctx, assets: M_asset, tools: M_tools });
-            return;
-          }
-
-          // Minimaler Fallback-Renderer (immer etwas sichtbar)
-          console.warn('Kein startGame()/boot.start() gefunden – starte Fallback.');
-          const ctx = cc.ctx; let t0 = performance.now();
-          (function loop(now){
-            const dt = now - t0; t0 = now;
-            ctx.clearRect(0,0,cc.cv.width,cc.cv.height);
-            ctx.save(); ctx.globalAlpha = .85; ctx.fillStyle = '#0f1b29';
-            ctx.fillRect(20,20,420,120); ctx.restore();
-            ctx.font = `${Math.max(12, Math.floor(14 * (window.devicePixelRatio||1)))}px ui-monospace,monospace`;
-            ctx.fillStyle = '#cfe3ff';
-            ctx.fillText('Fallback-Renderer aktiv.', 40, 60);
-            ctx.fillText('Binde game.js::startGame(...) oder boot.js::start(...) ein.', 40, 80);
-            ctx.fillText(`dt=${dt.toFixed(2)}ms`, 40, 100);
-            requestAnimationFrame(loop);
-          })(t0);
-        }, {once:true});
-      }
-    }
-
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
-    else boot();
+    });
   </script>
 </body>
 </html>
