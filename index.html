@@ -1,136 +1,294 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <!-- verhindert Browser-Zoom; wir zoomen selbst im Canvas -->
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta charset="utf-8" />
+  <title>Siedler‑Mini</title>
+
+  <!-- Mobile/Viewport -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0e1b26" />
 
   <style>
-    /* Seite */
+    /* ========== Reset & Layout ========== */
     :root {
-      --ui-gap: 12px;
-      --ui-pad: 12px;
-      --panel-bg: rgba(10, 20, 30, 0.78);
+      --bg: #0e1b26;
+      --panel: rgba(8,14,20,0.72);
       --panel-border: rgba(255,255,255,0.08);
-      --shadow: 0 10px 30px rgba(0,0,0,0.35);
-      --radius: 14px;
-      --text: #dbe7ef;
-      --muted: #a7b3be;
+      --txt: #e9f1f6;
+      --muted: #c7d2db;
+      --accent: #80caff;
+      --ok: #1fb06a;
+      --btn: #1e2a36;
+      --btn-hov: #243444;
+      --btn-brd: rgba(255,255,255,0.1);
+      --gap: 12px;
+      --radius: 16px;
     }
 
     html, body {
       margin: 0;
       height: 100%;
-      background: #0f1b25;
-      color: var(--text);
-      overflow: hidden;             /* kein Scrollen der Seite */
+      background: var(--bg);
+      overflow: hidden; /* Seite selbst scrollt nicht */
+      color: var(--txt);
       -webkit-tap-highlight-color: transparent;
+      font: 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     }
 
-    /* Canvas-Bühne */
+    /* Das Spielfeld */
     #stage {
       position: absolute;
       inset: 0;
-      touch-action: none;           /* damit wir Gesten abfangen können */
+      width: 100%;
+      height: 100%;
+      touch-action: none;        /* wir handlen Gesten selbst */
+      display: block;
     }
 
-    /* ===============================
-       ❶ UI-Panel: fix unten links
-       – wrapped, 2+ Zeilen möglich
-       – Safe-Area respektieren
-       ===============================*/
-    #ui {
+    /* Debug-Box oben links – erscheint nur, wenn Text gesetzt wird */
+    #debug-overlay{
       position: fixed;
-      left: max(12px, env(safe-area-inset-left));
-      bottom: max(12px, env(safe-area-inset-bottom));
-      z-index: 50;
-      display: flex;
-      flex-wrap: wrap;              /* automatisch umbrechen */
-      gap: var(--ui-gap);
-      align-items: center;
-      max-width: calc(
-        100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px
-      );
-      padding: var(--ui-pad) calc(var(--ui-pad) + 2px);
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(8px);   /* glasig */
-    }
-
-    /* kleine Gruppen im Panel (Start, Reload, Select, Checkbox, …) */
-    .group {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      flex: 0 1 auto;               /* erlaubt Umbruch */
-      min-width: 0;                 /* sauberes Shrinking */
-    }
-
-    /* Buttons/Inputs – optisch neutral (du hast ggf. eigene Klassen) */
-    .btn {
-      padding: 9px 14px;
-      border-radius: 10px;
-      background: #1c2a36;
-      color: var(--text);
-      border: 1px solid var(--panel-border);
-      cursor: pointer;
+      top: calc(env(safe-area-inset-top, 0px) + 8px);
+      left: 8px;
+      z-index: 11;
+      display: none;             /* game.js blendet ein/aus */
+      white-space: pre;
+      padding: 10px 12px;
+      border-radius: 12px;
+      color: #fff;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      pointer-events: none;
       user-select: none;
     }
-    .btn.primary { background: #1e7f42; }
-    .btn:active { transform: translateY(1px); }
+    /* Debug erzwingen (Toggle) */
+    body.debug-on #debug-overlay { display:block; }
 
-    select, .checkbox {
-      font: inherit;
-      color: var(--text);
-      background: #13212c;
+    /* UI unten links, bleibt fix – zoomt NICHT mit */
+    #ui {
+      position: fixed;
+      left: max(10px, env(safe-area-inset-left));
+      bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 10;
+      display: grid;
+      grid-auto-flow: row;
+      gap: 10px;
+      max-width: calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    }
+
+    .panel {
+      background: var(--panel);
       border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      padding: 10px;
+      box-shadow: 0 6px 26px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.25);
+      backdrop-filter: saturate(1.1) blur(8px);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button, select, .chk {
+      font: inherit;
+      color: var(--txt);
+    }
+    button {
+      background: var(--btn);
+      border: 1px solid var(--btn-brd);
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button:hover { background: var(--btn-hov); }
+    .btn-ok { background: var(--ok); border-color: rgba(0,0,0,.15); color: #fff; }
+    .btn-ok:hover { filter: brightness(1.05); }
+
+    select {
+      background: #0f2232;
+      border: 1px solid var(--btn-brd);
       border-radius: 10px;
-      padding: 7px 12px;
+      padding: 8px 12px;
+      min-width: 220px;
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%),
+        linear-gradient(to right, #0f2232, #0f2232);
+      background-position:
+        calc(100% - 18px) 55%,
+        calc(100% - 12px) 55%,
+        0 0;
+      background-size: 6px 6px, 6px 6px, 100% 100%;
+      background-repeat: no-repeat;
     }
 
     label { color: var(--muted); }
 
-    /* ===============================
-       ❷ Debug-Overlay: fix oben links
-       (zoomt NICHT mit)
-       ===============================*/
-    #debug-overlay {
-      position: fixed;
-      left: max(12px, env(safe-area-inset-left));
-      top: max(12px, env(safe-area-inset-top));
-      z-index: 60;
-      white-space: pre;
-      font: 14px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      color: #e8f0f7;
-      background: rgba(15, 30, 45, 0.8);
-      border: 1px solid var(--panel-border);
-      padding: 10px 12px;
-      border-radius: 10px;
-      box-shadow: var(--shadow);
-      pointer-events: none;  /* klickt "durch" */
+    .chk {
+      display:flex; align-items:center; gap:8px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--btn-brd);
+      border-radius: 999px;
+      padding: 6px 10px 6px 6px;
+    }
+    .chk input[type="checkbox"]{ width:18px; height:18px; }
+
+    /* kleine Statuszeile */
+    #hint {
+      font-size: 12px;
+      color: var(--muted);
+      text-shadow: 0 1px 0 rgba(0,0,0,.4);
+      user-select: none;
+    }
+
+    /* zweizeilig umbrechen, falls der Platz unten rechts eng wird */
+    @media (max-width: 480px) {
+      .row.wrap { flex-wrap: wrap; }
     }
   </style>
 </head>
-<body>
-  <canvas id="game"></canvas>
 
+<body>
+  <!-- Canvas -->
+  <canvas id="stage"></canvas>
+
+  <!-- Debug-Overlay (Text wird von game.js gesetzt) -->
   <div id="debug-overlay"></div>
 
-  <div id="ui">
-    <button id="btnStart">Start</button>
-    <button id="btnReload">Neu laden</button>
-    <br><br>
-    Karte:
-    <select id="mapSelect">
-      <option value="map-pro.json">map-pro.json</option>
-      <option value="map-demo.json">map-demo.json</option>
-      <option value="map-checker-16x16.json">map-checker (16×16)</option>
-    </select>
-    <label><input type="checkbox" id="autoStart"> Auto-Start</label>
+  <!-- UI fixiert unten links -->
+  <div id="ui" class="panel">
+    <div class="row wrap">
+      <button id="btn-start" class="btn-ok">Start</button>
+      <button id="btn-reload">Neu laden</button>
+
+      <label for="sel-map">Karte:</label>
+      <select id="sel-map" aria-label="Karte auswählen"></select>
+
+      <label class="chk" title="Startet nach Seitenaufruf automatisch">
+        <input id="chk-autostart" type="checkbox" />
+        <span>Auto‑Start</span>
+      </label>
+
+      <label class="chk" title="Debug overlay ein/aus">
+        <input id="chk-debug" type="checkbox" />
+        <span>Debug</span>
+      </label>
+    </div>
+
+    <div id="hint">Zoom: 0.5–3.5 • Ziehen = Pan • Pinch/Wheel = Zoom • UI bleibt fix</div>
   </div>
 
-  <script type="module" src="./boot.js"></script>
+  <!-- Boot & Game laden (mit Bust gegen Cache) -->
+  <script>
+    // kleine Hilfe für Bust-Parameter
+    const BUST = Date.now();
+
+    // Kartenliste (Pfad relativ zu /)
+    const MAPS = [
+      { label: 'map-demo.json',             url: 'assets/maps/map-demo.json' },
+      { label: 'map-pro.json',              url: 'assets/maps/map-pro.json' },
+      { label: 'map-checker (16×16)',       url: 'assets/maps/map-checker-16x16.json' },
+    ];
+
+    // UI initialisieren, Events weiterreichen
+    function initUI(){
+      const sel    = document.getElementById('sel-map');
+      const start  = document.getElementById('btn-start');
+      const reload = document.getElementById('btn-reload');
+      const autost = document.getElementById('chk-autostart');
+      const dbg    = document.getElementById('chk-debug');
+
+      // Karten befüllen
+      sel.innerHTML = '';
+      for (const m of MAPS){
+        const opt = document.createElement('option');
+        opt.value = m.url;
+        opt.textContent = m.label;
+        sel.appendChild(opt);
+      }
+
+      // gespeicherte Auswahl übernehmen
+      const lastMap = localStorage.getItem('sm:lastMap');
+      if (lastMap && [...sel.options].some(o => o.value === lastMap)) sel.value = lastMap;
+
+      const lastAuto = localStorage.getItem('sm:autoStart') === '1';
+      autost.checked = lastAuto;
+
+      const dbgOn = localStorage.getItem('sm:debugOn') === '1';
+      dbg.checked = dbgOn;
+      document.body.classList.toggle('debug-on', dbgOn);
+
+      sel.addEventListener('change', () => {
+        localStorage.setItem('sm:lastMap', sel.value);
+      });
+
+      autost.addEventListener('change', () => {
+        localStorage.setItem('sm:autoStart', autost.checked ? '1':'0');
+      });
+
+      dbg.addEventListener('change', () => {
+        localStorage.setItem('sm:debugOn', dbg.checked ? '1':'0');
+        document.body.classList.toggle('debug-on', dbg.checked);
+        // Optional: sofort etwas Text anzeigen, falls leer
+        if (dbg.checked && typeof window.setDebug === 'function'){
+          window.setDebug('Debug aktiv …');
+        }
+        if (!dbg.checked && typeof window.setDebug === 'function'){
+          window.setDebug('');
+        }
+      });
+
+      // Start -> CustomEvent für game.js
+      start.addEventListener('click', () => {
+        const mapUrl = sel.value;
+        document.dispatchEvent(new CustomEvent('app:start', { detail: { mapUrl }}));
+      });
+
+      // Neu laden (mit Bust)
+      reload.addEventListener('click', () => {
+        const url = new URL(location.href);
+        url.searchParams.set('v', String(BUST));
+        location.replace(url.toString());
+      });
+
+      // Auto‑Start (kleine Verzögerung, bis game.js da ist)
+      if (autost.checked && sel.value){
+        setTimeout(() => {
+          document.dispatchEvent(new CustomEvent('app:start', { detail: { mapUrl: sel.value }}));
+        }, 60);
+      }
+    }
+
+    // Boot & Game dynamisch hinzufügen (Cache‑Bust)
+    function loadScript(src){
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src + (src.includes('?') ? '&' : '?') + 'v=' + BUST;
+        s.defer = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    (async function main(){
+      try {
+        await loadScript('boot.js');
+        await loadScript('game.js');
+      } catch (e) {
+        console.error('Scripts konnten nicht geladen werden:', e);
+      } finally {
+        initUI();
+      }
+    })();
+  </script>
 </body>
 </html>
