@@ -53,42 +53,25 @@
       cursor: pointer;
     }
 
-    /* Control-Panel unten mittig */
+    /* Control-Panel unten */
     #panel {
       position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
-      z-index: 40; display: flex; gap: .75rem; align-items: center;
+      z-index: 40; display: flex; gap: .6rem .8rem; align-items: center; flex-wrap: wrap;
       background: var(--panel); border: 1px solid var(--panel-border);
       border-radius: 16px; padding: .9rem 1.1rem; backdrop-filter: blur(4px);
     }
     .btn {
       appearance: none; border: 1px solid var(--btn-border);
-      border-radius: 14px; padding: .65rem 1.1rem; font-weight: 700; cursor: pointer;
+      border-radius: 14px; padding: .55rem .9rem; font-weight: 700; cursor: pointer;
       color: #fff; background: var(--btn);
     }
     .btn.secondary { background: var(--btn2); color: var(--text); }
     label { color: var(--muted); }
     select {
       background: #0c1b2b; color: var(--text); border: 1px solid #06111b;
-      padding: .5rem .7rem; border-radius: 10px;
+      padding: .45rem .6rem; border-radius: 10px;
     }
 
-    /* Bauleiste (Platzhalter) unten links */
-    #buildBar {
-      position: absolute; left: 24px; bottom: 16px; z-index: 40;
-      display: flex; align-items: center; gap: .6rem;
-      background: var(--panel); border: 1px solid var(--panel-border);
-      border-radius: 16px; padding: .6rem .8rem;
-    }
-    #buildBar .swatch {
-      width: 34px; height: 28px; border-radius: 6px; border: 1px solid #0007; opacity: .85;
-    }
-
-    /* Hinweisbanner für Ladefehler (wird dem Debug-Text angehängt) – Styling-Reserve */
-    .errorLine { color: #ffbdbd; }
-
-    /* Start-Overlay (nur Styling; Inhalt kommt aus #panel) */
-
-    /* Kleiner DPI-Hinweis oben links (HUD), wird per JS geschrieben */
     #hudMini {
       position: absolute; left: 12px; top: 12px; z-index: 30;
       padding: .6rem .7rem; border-radius: 10px;
@@ -113,21 +96,11 @@
       <button id="btnReload" class="btn secondary" title="Seite neu laden">Neu laden</button>
       <label for="selMap">Karte:</label>
       <select id="selMap" title="Karte wählen"></select>
-    </div>
-
-    <div id="buildBar" title="(Platzhalter – Mal‑Brush)">
-      <span style="color:#9ab0c8">Bauen:</span>
-      <div class="swatch" style="background:#7dbb41"></div>
-      <div class="swatch" style="background:#9c6b2b"></div>
-      <div class="swatch" style="background:#3d5a86"></div>
-      <div class="swatch" style="background:#777c84"></div>
-      <div class="swatch" style="background:#ced8e2"></div>
-      <div class="swatch" style="background:#284a22"></div>
+      <button id="btnFit" class="btn secondary" title="Auf gesamte Karte einpassen">Fit</button>
+      <button id="btnOne" class="btn secondary" title="Originalmaßstab 1:1">1:1</button>
     </div>
   </div>
 
-  <!-- Bestehende Dateien dürfen weiterhin geladen werden -->
-  <script src="asset.js"></script>
-  <script type="module" src="boot.js"></script>
+  <script type="module" src="./boot.js"></script>
 </body>
 </html>
