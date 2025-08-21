@@ -1,23 +1,37 @@
 {
-  // DOKU: Tileset für die große Test-Map.
-  // JSON-Dateien im Spiel dürfen KEINE Kommentare enthalten → produktiv ist tileset.json.
-  // Diese .jsonc dient nur als Erklärung/Plan.
+  // Sprite-Atlas für die Boden-/Deko-Tiles.
+  // Wird in der Map so referenziert:
+  //   "atlas": { "json": "../tiles/tileset.json", "image": "../tiles/tileset.png" }
+  //
+  // WICHTIG:
+  // - keys in "frames" sind die Namen, die in der Map-Layer-Grid erscheinen (z.B. "grass", "water").
+  // - x,y,w,h sind Pixelkoordinaten in tileset.png.
+  // - meta.tileSize ist nur informativ; die Engine zeichnet nach Map.tileSize.
+  "meta": {
+    "image": "tileset.png",
+    "tileSize": 64
+  },
+  "frames": {
+    // Beispiel: 6 Basisterrains + 6 Spezialfelder (Ufer, Wald, etc.)
+    "grass": { "x": 0, "y": 0, "w": 64, "h": 64 },
+    "grass-2": { "x": 64, "y": 0, "w": 64, "h": 64 },
+    "dirt":  { "x": 128, "y": 0, "w": 64, "h": 64 },
+    "sand":  { "x": 192, "y": 0, "w": 64, "h": 64 },
+    "rock":  { "x": 256, "y": 0, "w": 64, "h": 64 },
+    "snow":  { "x": 320, "y": 0, "w": 64, "h": 64 },
 
-  "image": "tileset.png",
-  "tileSize": 64,
-  "imageWidth": 1024,
-  "imageHeight": 1024,
-  "columns": 16,
-  "rows": 16,
+    "water": { "x": 0, "y": 64, "w": 64, "h": 64 },
+    "water-deep": { "x": 64, "y": 64, "w": 64, "h": 64 },
+    "water-shore-N": { "x": 128, "y": 64, "w": 64, "h": 64 },
+    "water-shore-E": { "x": 192, "y": 64, "w": 64, "h": 64 },
+    "water-shore-S": { "x": 256, "y": 64, "w": 64, "h": 64 },
+    "water-shore-W": { "x": 320, "y": 64, "w": 64, "h": 64 },
 
-  // Frames liegen in 64px-Schritten, 16 Spalten je Zeile.
-  // Falls dein PNG anders aufgebaut ist, x/y hier anpassen.
-  "frames": { /* identisch zu tileset.json, siehe oben */ }
-
-  /*
-  CHECK:
-  - tileSize der Map = 64?
-  - Benutzte Keys in map-pro.json existieren hier?
-  - x/y innerhalb der PNG?
-  */
+    "forest": { "x": 0, "y": 128, "w": 64, "h": 64 },
+    "forest-dense": { "x": 64, "y": 128, "w": 64, "h": 64 },
+    "hill": { "x": 128, "y": 128, "w": 64, "h": 64 },
+    "mountain-snow": { "x": 192, "y": 128, "w": 64, "h": 64 },
+    "lava": { "x": 256, "y": 128, "w": 64, "h": 64 },
+    "ash": { "x": 320, "y": 128, "w": 64, "h": 64 }
+  }
 }
