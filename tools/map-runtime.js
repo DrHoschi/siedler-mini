@@ -1,376 +1,194 @@
-/* ============================================================================
-   tools/map-runtime.js
-   ----------------------------------------------------------------------------
-   Zweck
-   -----
-   Lädt eine Karten-JSON (z. B. assets/maps/map-pro.json), optional einen
-   Tile-Atlas (tileset.json + tileset.png), und rendert sie auf ein Canvas.
-   - Unterstützt Query-Param `?map=…` (z. B. index.html?map=assets/maps/map-demo.json)
-   - Robustes Logging (einheitliche, gut durchsuchbare Tags)
-   - Funktioniert als ES‑Module UND als globales Objekt (window.MapRuntime)
+/*
+  tools/map-runtime.js – MAX‑Variante
+  ===================================
+  Aufgabe:
+  - Map JSON laden (Pfad aus boot.js).
+  - Atlas‑JSON + Atlas‑PNG auflösen (relativ zum Map‑Pfad).
+  - Tolerant sein:
+      * Fehlt atlas.json oder image -> weiterfahren ohne Atlas (nur Log).
+  - Kein Abbruch des Spiels bei Fehlern (wir werfen nur im harten Fehlerfall:
+    Map nicht ladbar oder JSON ungültig).
+  - Hilfsfunktion demoRenderToCanvas: malt aus der Map (Layer "ground")
+    eine kleine Vorschau – reicht für Debug / Sichtprüfung.
+*/
 
-   Öffentliche API
-   ---------------
-   - loadMapFromRuntime(canvas, mapUrl[, options])
-   - resolveMapUrlFromQuery([fallbackUrl])
-   - version
+const text = (r) => r.text();
+const json = (r) => r.json();
 
-   Optionen (optional)
-   -------------------
-   {
-     tilesetBase: 'assets/tiles/',       // Basispfad, falls im Map-JSON nichts steht
-     bust: true,                         // Cache-Buster aktivieren (default: true)
-     imageSmoothing: false,              // ob Browser-Smoothing aktiv sein soll
-     debugLog: true,                     // Logs an/aus
-   }
-
-   Tileset-JSON (Erwartung)
-   ------------------------
-   {
-     "image": "tileset.png",
-     "tileSize": 64,
-     "imageWidth": 1024,
-     "imageHeight": 1024,
-     "frames": {
-       "grass": { "x":0, "y":0, "w":64, "h":64 },
-       "dirt":  { "x":64, "y":0, "w":64, "h":64 }
-       ...
-     }
-   }
-
-   Map-JSON (Erwartung – tolerant)
-   -------------------------------
-   {
-     "width":  50,     // in Tiles
-     "height": 40,     // in Tiles
-     "tileSize": 64,   // optional; sonst aus Tileset
-     "atlas": {
-        "json":  "../tiles/tileset.json",
-        "image": "../tiles/tileset.png"  // optional; sonst aus Tileset-JSON
-     },
-     "layers": [
-        {
-          "name": "ground",
-          // grid als 2D-Array (height x width) mit Frame-Keys aus tileset.json
-          "grid": [
-            ["grass","grass","dirt", ...],
-            ...
-          ]
-        }
-     ]
-   }
-
-   Fallback
-   --------
-   Wenn kein Atlas gefunden/ladbar ist oder Frames fehlen, rendert der Loader
-   ein „magenta/anthrazit“-Platzhalter oder ein Schachbrett-Grid, damit man
-   sofort erkennt, dass etwas fehlt – aber die App läuft weiter.
-
-   © Siedler‑Mini (Projekt-intern). Diese Datei darf kommentiert bleiben.
-============================================================================ */
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Hilfs‑Logging
-   ──────────────────────────────────────────────────────────────────────────── */
-const LOG = {
-  on: true, // wird unten aus options.debugLog überschrieben
-  tag(t) { return `[${t}]`; },
-  info(t, ...a) { if (this.on) console.log(this.tag(t), ...a); },
-  warn(t, ...a) { if (this.on) console.warn(this.tag(t), ...a); },
-  error(t, ...a){ if (this.on) console.error(this.tag(t), ...a); },
-};
-
-/* ────────────────────────────────────────────────────────────────────────────
-   URL‑Utils
-   ──────────────────────────────────────────────────────────────────────────── */
-
-/** Führt zwei Pfadsegmente robust zusammen (ohne doppelte Slashes). */
-function joinUrl(base, rel) {
-  if (!base) return rel || '';
-  if (!rel)  return base;
-  // Browser-URL-API zur robusten Auflösung relativer Pfade:
+/** Hilfsfunktion: URL relativ zu einer Basis erstellen */
+function resolveRelative(baseUrl, relative) {
   try {
-    return new URL(rel, new URL(base, window.location.href)).toString();
+    return new URL(relative, baseUrl).toString();
   } catch {
-    // einfache Fallback-Variante
-    if (base.endsWith('/')) base = base.slice(0, -1);
-    if (rel.startsWith('/')) rel = rel.slice(1);
-    return `${base}/${rel}`;
+    // Fallback: einfach zusammenstückeln (sehr tolerant)
+    if (relative.startsWith('http')) return relative;
+    const idx = baseUrl.lastIndexOf('/');
+    return baseUrl.slice(0, idx+1) + relative.replace(/^\.\//, '');
   }
 }
 
-/** Liefert Verzeichnis-Anteil einer URL (ohne Dateiname). */
-function dirname(url) {
-  try {
-    const u = new URL(url, window.location.href);
-    u.pathname = u.pathname.replace(/\/[^/]*$/, '/');
-    u.search = '';
-    u.hash = '';
-    return u.toString();
-  } catch {
-    return url.replace(/\/[^/]*$/, '/');
-  }
-}
-
-/** Hängt (falls gewünscht) einen Cache‑Buster an. */
-function withBust(url, enableBust) {
-  if (!enableBust) return url;
-  try {
-    const u = new URL(url, window.location.href);
-    // Bereits vorhandene „v“/„bust“ überschreiben wir nicht
-    if (!u.searchParams.has('v') && !u.searchParams.has('bust')) {
-      u.searchParams.set('bust', String(Date.now()));
-    }
-    return u.toString();
-  } catch {
-    // Fallback: einfacher Anhang
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}bust=${Date.now()}`;
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Fetch‑Utils
-   ──────────────────────────────────────────────────────────────────────────── */
-
-/** JSON laden mit Fehlerbehandlung. */
-async function fetchJSON(url) {
+/** Netzwerk-Fetch mit Logging-Hooks */
+async function fetchWithLog(url, onNet) {
   const t0 = performance.now();
   const res = await fetch(url, { cache: 'no-store' });
-  const dt = Math.round(performance.now() - t0);
+  const dt = Math.max(1, Math.round(performance.now() - t0));
+  if (onNet) onNet('[net]', res.status, url, `(${dt}ms)`);
   if (!res.ok) {
-    LOG.warn('net', `${res.status} ${url} (${dt}ms)`);
-    throw new Error(`HTTP ${res.status} for ${url}`);
+    const err = new Error(`HTTP ${res.status} for ${url}`);
+    err.response = res;
+    throw err;
   }
-  LOG.info('net', `200 ${url} (${dt}ms)`);
-  return res.json();
+  return res;
 }
-
-/** Image laden (Promise) mit Fehlerbehandlung. */
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    // Wichtig für GitHub Pages iOS/Safari: Same-Origin des Projekts
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(new Error(`Image load failed: ${url}`));
-    img.src = url;
-  });
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Darstellung „crisp“ (kein Weichzeichnen) – reine Canvas‑Seiteneffekte
-   ──────────────────────────────────────────────────────────────────────────── */
-function setCanvasCrisp(canvas, smoothing = false) {
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.imageSmoothingEnabled = !!smoothing;
-    ctx.imageSmoothingQuality = 'low';
-  }
-  // CSS‑Seite: je nach Browser
-  const style = canvas.style;
-  style.imageRendering = smoothing ? 'auto' : 'pixelated'; // moderne Browser
-  style.msInterpolationMode = smoothing ? 'bicubic' : 'nearest-neighbor'; // Alt‑IE
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Query‑Param‑Unterstützung
-   ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Liest ?map=… aus der aktuellen URL. Wenn vorhanden, wird die URL (bereits
- * absolut aufgelöst) zurückgegeben. Ansonsten `fallbackUrl`.
+ * Map laden & vorbereiten.
+ * @param {Object} opt
+ * @param {string} opt.mapUrl              – absolute oder relative URL zur Map‑JSON
+ * @param {(…args)=>void} [opt.onNet]      – Log‑Hook für Netz‑Zeilen
+ * @param {(…args)=>void} [opt.onAtlas]    – Log‑Hook für Atlas‑Zeilen
+ * @returns {Promise<{mapUrl:string, map:any, atlas?:any, atlasImage?:HTMLImageElement, frames?:Record<string, any>}>}
  */
-function resolveMapUrlFromQuery(fallbackUrl = null) {
-  try {
-    const u = new URL(window.location.href);
-    const map = u.searchParams.get('map');
-    if (map) {
-      const resolved = new URL(map, u).toString();
-      LOG.info('diag', `Query map=… erkannt → ${resolved}`);
-      return resolved;
-    }
-  } catch {
-    // ignorieren
+export async function loadAndPrepareMap(opt) {
+  const { mapUrl, onNet, onAtlas } = opt;
+
+  // 1) Map‑JSON holen
+  const rMap = await fetchWithLog(mapUrl, onNet);
+  const map = await rMap.json();
+
+  // 2) Atlas bestimmen (tolerant)
+  let atlasJsonUrl = null;
+  let atlasImgUrl  = null;
+  if (map && map.atlas) {
+    const base = map.atlas.base
+      ? resolveRelative(mapUrl, map.atlas.base)
+      : mapUrl; // „mapUrl“ ist eine brauchbare Basis
+
+    if (map.atlas.json)  atlasJsonUrl = resolveRelative(base, map.atlas.json);
+    if (map.atlas.image) atlasImgUrl  = resolveRelative(base, map.atlas.image);
+
+    if (onAtlas) onAtlas('[atlas] base=' + base);
+    if (atlasJsonUrl && onAtlas) onAtlas('[atlas] json=' + map.atlas.json + ' → ' + atlasJsonUrl);
+    if (atlasImgUrl  && onAtlas) onAtlas('[atlas] image=' + map.atlas.image + ' → ' + atlasImgUrl);
   }
-  return fallbackUrl;
+
+  // 3) Atlas‑JSON & Bild laden (optional)
+  let atlas = null;
+  let frames = null;
+  let atlasImage = null;
+
+  try {
+    if (atlasJsonUrl) {
+      const rA = await fetchWithLog(atlasJsonUrl, onNet);
+      atlas = await rA.json();
+      frames = atlas.frames || null;
+    } else {
+      if (onAtlas) onAtlas('Atlas‑JSON‑Pfad fehlt/ungültig — überspringe Atlas.');
+    }
+  } catch (e) {
+    if (onAtlas) onAtlas('Atlas‑JSON konnte nicht geladen werden — fahre ohne Atlas fort.');
+  }
+
+  try {
+    if (atlasImgUrl) {
+      // Bild laden (klassisch)
+      atlasImage = await new Promise((resolve, reject)=>{
+        const img = new Image();
+        // CORS‑freundlich auf GitHub Pages
+        img.crossOrigin = 'anonymous';
+        img.onload = ()=>resolve(img);
+        img.onerror = reject;
+        img.src = atlasImgUrl;
+      });
+    } else {
+      if (onAtlas) onAtlas('Atlas‑IMAGE‑Pfad fehlt/ungültig — überspringe Atlas.');
+    }
+  } catch (e) {
+    if (onAtlas) onAtlas('Atlas‑IMAGE konnte nicht geladen werden — fahre ohne Atlas fort.');
+  }
+
+  // Ergebnis zurück – Renderer/Engine kann selbst entscheiden, was er nutzt
+  return { mapUrl, map, atlas, atlasImage, frames };
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Kern: Tileset & Map laden und rendern
-   ──────────────────────────────────────────────────────────────────────────── */
+/* ============================================================
+   Kleine Render‑Demo (DEBUG/Vorschau)
+   ------------------------------------------------------------
+   - Erwartet: map.layers.ground (2D‑Array von Frame‑Keys)
+   - Nutzt „frames“ (aus atlas.json) – wenn nicht vorhanden, zeichnet Raster.
+   - Diese Funktion ist optional; das eigentliche Spiel darf sie ignorieren.
+============================================================ */
+export async function demoRenderToCanvas(canvas, payload) {
+  const { map, frames, atlasImage } = payload;
+  if (!canvas) return;
 
-/**
- * Lädt Map + Tileset und rendert auf das Canvas.
- * @param {HTMLCanvasElement} canvas
- * @param {string} mapUrl - absolute oder relative URL zur Map-JSON
- * @param {object} options - siehe Kopf-Kommentar
- */
-async function loadMapFromRuntime(canvas, mapUrl, options = {}) {
-  const {
-    tilesetBase = 'assets/tiles/',
-    bust = true,
-    imageSmoothing = false,
-    debugLog = true,
-  } = options;
-
-  LOG.on = !!debugLog;
-
-  if (!canvas) throw new Error('loadMapFromRuntime(): canvas fehlt');
-  if (!mapUrl) throw new Error('loadMapFromRuntime(): mapUrl fehlt');
-
-  // Canvas „crisp“ vorbereiten
-  setCanvasCrisp(canvas, imageSmoothing);
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D‑Context nicht verfügbar');
+  const dpr = devicePixelRatio || 1;
+  const W = Math.floor(innerWidth * dpr);
+  const H = Math.floor(innerHeight * dpr);
+  canvas.width = W; canvas.height = H;
 
-  // Map‑URL vorbereiten (+ optional bust)
-  const mapUrlBusted = withBust(mapUrl, bust);
-
-  // 1) MAP laden
-  LOG.info('game', 'Lade Karte:', mapUrlBusted);
-  const map = await fetchJSON(mapUrlBusted);
-
-  // Basis für relative Pfade aus der Map
-  const base = dirname(mapUrlBusted);
-  LOG.info('atlas', `base=${base}`);
-
-  // 2) Tileset ermitteln
-  //    Quelle A: map.atlas.json / map.atlas.image
-  //    Quelle B: fallback (options.tilesetBase)
-  let tilesetJsonUrl = null;
-  let tilesetPngUrl  = null;
-
-  if (map.atlas && typeof map.atlas === 'object') {
-    if (map.atlas.json) {
-      tilesetJsonUrl = joinUrl(base, map.atlas.json);
-      LOG.info('atlas', `json=${map.atlas.json} → ${tilesetJsonUrl}`);
-    }
-    if (map.atlas.image) {
-      tilesetPngUrl = joinUrl(base, map.atlas.image);
-      LOG.info('atlas', `image=${map.atlas.image} → ${tilesetPngUrl}`);
-    }
+  // Falls keine Map/Layer -> nur Grid zeichnen, aber NICHT scheitern
+  if (!map || !map.layers || !map.layers.ground) {
+    drawGrid(ctx, W, H, dpr);
+    return;
   }
 
-  // Falls kein atlas.json angegeben, nutze Standard‑Ort:
-  if (!tilesetJsonUrl) {
-    tilesetJsonUrl = joinUrl(base, joinUrl(tilesetBase, 'tileset.json'));
-    LOG.info('atlas', `json (fallback) → ${tilesetJsonUrl}`);
-  }
+  const ground = map.layers.ground; // 2D‑Array der Frame‑Keys (Strings)
+  const tile = (map.tileSize || 64) * dpr;
 
-  // Tileset‑JSON laden
-  let tileset = null;
-  try {
-    tileset = await fetchJSON(withBust(tilesetJsonUrl, bust));
-  } catch (err) {
-    LOG.warn('game', `Atlas JSON konnte nicht geladen werden – fahre ohne Atlas fort.\n@${tilesetJsonUrl}`);
-  }
+  // Viewport so anordnen, dass die Karte sichtbar ist
+  const cols = ground[0]?.length || 0;
+  const rows = ground.length;
+  const mapW = cols * tile;
+  const mapH = rows * tile;
 
-  // 3) Tileset‑PNG URL bestimmen
-  if (!tilesetPngUrl && tileset && tileset.image) {
-    tilesetPngUrl = joinUrl(dirname(tilesetJsonUrl), tileset.image);
-    LOG.info('atlas', `image (aus tileset.json) → ${tilesetPngUrl}`);
-  }
-  if (!tilesetPngUrl) {
-    // Letzter Fallback: Standard-Dateiname
-    tilesetPngUrl = joinUrl(base, joinUrl(tilesetBase, 'tileset.png'));
-    LOG.info('atlas', `image (fallback) → ${tilesetPngUrl}`);
-  }
+  const offX = Math.floor((W - mapW) / 2);
+  const offY = Math.floor((H - mapH) / 2);
 
-  // 4) Tileset‑PNG laden (nur wenn wir Frames haben – sonst egal)
-  let tilesetImg = null;
-  if (tileset && tileset.frames && typeof tileset.frames === 'object') {
-    try {
-      tilesetImg = await loadImage(withBust(tilesetPngUrl, bust));
-      LOG.info('net', `200 ${tilesetPngUrl}`);
-    } catch (err) {
-      LOG.warn('game', `Tileset PNG konnte nicht geladen werden – fahre ohne Atlas fort.\n@${tilesetPngUrl}`);
-      tilesetImg = null;
-      tileset = null;
-    }
-  } else {
-    LOG.warn('game', 'Atlas‑JSON unvollständig/ungültig – überspringe Atlas.');
-    tileset = null;
-  }
+  ctx.clearRect(0,0,W,H);
 
-  // 5) Render‑Parameter bestimmen
-  const tileSize = Number(map.tileSize || tileset?.tileSize || 64);
-  const mapW = Number(map.width  || (Array.isArray(map.layers?.[0]?.grid?.[0]) ? map.layers[0].grid[0].length : 0));
-  const mapH = Number(map.height || (Array.isArray(map.layers?.[0]?.grid) ? map.layers[0].grid.length : 0));
-
-  // Canvasgröße an Map anpassen (DevicePixelRatio berücksichtigen)
-  const DPR = window.devicePixelRatio || 1;
-  canvas.width  = Math.max(1, Math.floor(mapW * tileSize * DPR));
-  canvas.height = Math.max(1, Math.floor(mapH * tileSize * DPR));
-  canvas.style.width  = `${Math.max(1, mapW * tileSize)}px`;
-  canvas.style.height = `${Math.max(1, mapH * tileSize)}px`;
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); // logisches Pixelmaß
-
-  // 6) Rendern
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const layers = Array.isArray(map.layers) ? map.layers : [];
-
-  if (tileset && tilesetImg) {
-    // Normalfall: mit Frames rendern
-    for (const layer of layers) {
-      if (!Array.isArray(layer.grid)) continue;
-      for (let y = 0; y < layer.grid.length; y++) {
-        const row = layer.grid[y];
-        if (!Array.isArray(row)) continue;
-        for (let x = 0; x < row.length; x++) {
-          const key = row[x];
-          const f = tileset.frames?.[key];
-          const dx = x * tileSize;
-          const dy = y * tileSize;
-
-          if (f) {
-            ctx.drawImage(
-              tilesetImg,
-              f.x, f.y, f.w, f.h,
-              dx,  dy,   tileSize, tileSize
-            );
-          } else if (key != null) {
-            // Platzhalter (magenta) für unbekannte Keys
-            ctx.fillStyle = '#C2185B';
-            ctx.fillRect(dx, dy, tileSize, tileSize);
-            ctx.strokeStyle = '#212121';
-            ctx.strokeRect(dx + 0.5, dy + 0.5, tileSize - 1, tileSize - 1);
-          }
-        }
+  // Wenn kein Atlas/frames -> graues Raster plus Keys schreiben
+  if (!frames || !atlasImage) {
+    drawGrid(ctx, W, H, dpr);
+    ctx.save();
+    ctx.translate(offX, offY);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.font = `${11*dpr}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    for (let y=0; y<rows; y++){
+      for (let x=0; x<cols; x++){
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.strokeRect(x*tile, y*tile, tile, tile);
+        const key = ground[y][x] ?? '';
+        ctx.fillText(String(key), x*tile + 6*dpr, y*tile + 14*dpr);
       }
     }
-  } else {
-    // Fallback: Schachbrett‑Grid, damit das Spiel sichtbar weiterläuft.
-    LOG.warn('game', 'Kein Atlas geladen — rendere Grid‑Fallback.');
-    const colA = '#22303a';
-    const colB = '#31414e';
-    for (let y = 0; y < mapH; y++) {
-      for (let x = 0; x < mapW; x++) {
-        ctx.fillStyle = ((x + y) & 1) ? colA : colB;
-        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-      }
-    }
+    ctx.restore();
+    return;
   }
 
-  LOG.info('game', 'Karte geladen:', mapUrlBusted);
+  // Zeichnen mit Atlas
+  ctx.save();
+  ctx.translate(offX, offY);
+  for (let y=0; y<rows; y++){
+    for (let x=0; x<cols; x++){
+      const key = ground[y][x];
+      const f = frames[key];
+      if (!f) continue;
+      const sx = f.x|0, sy = f.y|0, sw = f.w|0, sh = f.h|0;
+      ctx.drawImage(atlasImage, sx, sy, sw, sh, x*tile, y*tile, tile, tile);
+    }
+  }
+  ctx.restore();
 }
 
-/* ────────────────────────────────────────────────────────────────────────────
-   Öffentliche API (Dual‑Export)
-   ──────────────────────────────────────────────────────────────────────────── */
-
-// Version dieser Laufzeit
-const version = '1.1.0';
-
-// Globaler Namespace – für Code, der window.MapRuntime erwartet:
-try {
-  window.MapRuntime = window.MapRuntime || {};
-  window.MapRuntime.load = loadMapFromRuntime;
-  window.MapRuntime.resolveMapUrlFromQuery = resolveMapUrlFromQuery;
-  window.MapRuntime.version = version;
-} catch { /* SSR / non‑browser safe‑guard */ }
-
-// ESM‑Exports:
-export { loadMapFromRuntime, resolveMapUrlFromQuery, version };
-export default { loadMapFromRuntime, resolveMapUrlFromQuery, version };
+/* Kleines Raster für Fallback */
+function drawGrid(ctx, W, H, dpr) {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0f2030';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  const step = 64 * dpr;
+  for (let x=0; x<=W; x+=step) ctx.strokeRect(x,0,1,H);
+  for (let y=0; y<=H; y+=step) ctx.strokeRect(0,y,W,1);
+}
