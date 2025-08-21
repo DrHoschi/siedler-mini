@@ -1,38 +1,168 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta charset="utf-8">
   <title>Siedler‑Mini</title>
+
+  <!-- Viewport: nur ein Geräte‑Screen, User‑Zoom aus (wir zoomen die Welt selbst) -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
   <style>
-    :root { color-scheme: dark; }
-    html, body { margin:0; padding:0; height:100%; background:#0e1a25; font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; overflow:hidden; }
-    #game { position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; image-rendering:crisp-edges; }
-    .panel { position:absolute; left:50%; top:70%; transform:translate(-50%,-50%); background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:18px 22px; color:#dfe8f0; min-width:320px; backdrop-filter:blur(6px); }
-    .panel h1{ margin:0 0 10px; font-size:22px; } .panel p{ margin:0 0 14px; opacity:.85; }
-    .row{ display:flex; gap:10px; }
-    .btn{ appearance:none; border:1px solid rgba(255,255,255,.12); background:#163041; color:#dfe8f0; padding:10px 14px; border-radius:10px; cursor:pointer; }
-    .btn.primary{ background:#144c2a; border-color:#2a6d42; }
-    .badge{ position:fixed; left:12px; bottom:10px; font-size:12px; color:#8aa3b6; opacity:.8; }
-    .debug-badge{ position:fixed; right:12px; bottom:10px; color:#8aa3b6; opacity:.8; cursor:pointer; user-select:none; }
+    :root {
+      --bg: #0c1722;
+      --panel: #122233;
+      --panel-2: #0f1c2a;
+      --text: #e6f0ff;
+      --muted: #9fb3c8;
+      --accent: #3ad37b;
+      --danger: #ef5350;
+      --grid: rgba(255,255,255,0.06);
+    }
+    html, body {
+      margin:0; padding:0; height:100%;
+      background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      /* blockt Gesten-Scroll/Zoom; Zoom und Pan steuern wir selbst */
+      overscroll-behavior: none;
+      touch-action: none;
+    }
+    #wrap {
+      position:fixed; inset:0; display:grid;
+      grid-template-rows: 1fr auto; /* Canvas + UI unten */
+    }
+    #stage {
+      position:relative; overflow:hidden;
+    }
+    canvas#game {
+      position:absolute; inset:0;
+      width:100%; height:100%;
+      image-rendering: pixelated; /* crisp tiles */
+      touch-action: none;          /* wichtig für iOS Gesten */
+    }
+
+    /* UI Leiste unten */
+    #hud {
+      display:flex; gap:.75rem; align-items:center;
+      padding: .75rem 1rem; background: rgba(0,0,0,0.25);
+      backdrop-filter: blur(6px);
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: .9rem 1rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25) inset,
+                  0 2px 10px rgba(0,0,0,.15);
+    }
+    .btn {
+      appearance:none; border:none; border-radius: 10px;
+      padding:.6rem .9rem; font-weight:600; cursor:pointer;
+      color: var(--text); background: #1e3a56;
+    }
+    .btn.primary { background: #235b2f; }
+    .btn.ghost   { background: #1a2b40; }
+    .btn.danger  { background: #5a2322; }
+    .btn:disabled { opacity:.55; cursor:not-allowed; }
+    select, input[type="text"] {
+      background: var(--panel-2); color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px; padding:.5rem .6rem;
+    }
+
+    /* Debug-Overlay oben rechts */
+    #debug {
+      position:absolute; top:12px; right:12px;
+      min-width: 320px; max-width: 44vw;
+      background: rgba(0,0,0,0.55); color:#b7ffb7;
+      border: 1px solid rgba(0,0,0,0.6);
+      border-radius: 10px; padding:.6rem .7rem; font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      pointer-events: none; /* Klicks gehen durch */
+      white-space: pre-wrap;
+    }
+    #debug strong { color:#9fe19f; }
+    /* kleiner Toggle-Button rechts unten */
+    #debugToggle {
+      position: fixed; right: 12px; bottom: 12px;
+      z-index: 10;
+    }
+
+    /* kleine Karte + Baupanel (Platzhalter / sichtbar) */
+    #panelStart {
+      position:absolute; left:50%; bottom:80px; transform: translateX(-50%);
+      display:flex; gap:.75rem; align-items:center;
+    }
+    #build {
+      display:flex; gap:.5rem; align-items:center; padding:.6rem .8rem;
+    }
+    #build .swatch {
+      width:28px; height:28px; border-radius:6px; border:1px solid rgba(255,255,255,0.25);
+      display:inline-block; cursor:pointer;
+    }
+    #build .swatch[data-key="grass"]  { background:#3b7e2a; }
+    #build .swatch[data-key="dirt"]   { background:#6b4a28; }
+    #build .swatch[data-key="water"]  { background:#203d62; }
+    #build .swatch[data-key="rock"]   { background:#5b605f; }
+    #build .swatch[data-key="snow"]   { background:#bcd6e9; }
+    #build .swatch[data-key="forest"] { background:#0f3b1b; }
+    #build .swatch.active { outline: 3px solid rgba(255,255,255,0.5); }
+
+    /* kleine Statusblase links oben (wie gewohnt) */
+    #status {
+      position:absolute; left:12px; top:12px;
+      background: rgba(0,0,0,0.55); color:#fff;
+      border-radius: 8px; padding:.5rem .6rem;
+      font: 13px/1.35 ui-monospace, monospace; white-space: pre;
+    }
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game"></canvas>
 
-  <div class="panel" id="startPanel">
-    <h1>Siedler‑Mini</h1>
-    <p>Starte die aktuelle Karte. (Debug‑Tools bleiben aktiv)</p>
-    <div class="row">
-      <button class="btn primary" id="btnStart">Start</button>
-      <button class="btn" id="btnReload">Neu laden</button>
+    <!-- Status (FPS / Cam / Map / Assets) -->
+    <div id="status">Frames: –––  dt=–––ms
+Cam: x=0.0  y=0.0  zoom=1.00
+Map: –      /  Assets: –
+DPR=–.—   Size=–×–</div>
+
+    <!-- Start / Neu laden (bleiben aktiv im Debug-Modus) -->
+    <div id="panelStart" class="card">
+      <button id="btnStart" class="btn primary">Start</button>
+      <button id="btnReload" class="btn ghost">Neu laden</button>
+
+      <!-- Kartenwahl -->
+      <label style="display:flex; gap:.4rem; align-items:center;">
+        <span style="color:var(--muted)">Karte:</span>
+        <select id="selMap">
+          <!-- wird von boot.js befüllt -->
+        </select>
+      </label>
     </div>
+
+    <!-- Debug-Konsole -->
+    <div id="debug"></div>
   </div>
 
-  <div class="badge">V14.7 • Mobil • Debug</div>
-  <!-- ← hier die ID ergänzt -->
-  <div class="debug-badge" id="btnDebug">Debug</div>
+  <!-- HUD unten: Bau-Dummy sichtbar, Debug-Toggle -->
+  <div id="hud">
+    <div id="build" class="card">
+      <span style="color:var(--muted)">Bauen:</span>
+      <span class="swatch" data-key="grass"  title="Gras"></span>
+      <span class="swatch" data-key="dirt"   title="Erde"></span>
+      <span class="swatch" data-key="water"  title="Wasser"></span>
+      <span class="swatch" data-key="rock"   title="Fels"></span>
+      <span class="swatch" data-key="snow"   title="Schnee"></span>
+      <span class="swatch" data-key="forest" title="Wald"></span>
+      <small style="margin-left:.6rem; color:var(--muted)">(Platzhalter – Mal‑Brush)</small>
+    </div>
 
-  <script type="module" src="./boot.js"></script>
+    <button id="debugToggle" class="btn ghost">Debug</button>
+  </div>
+</div>
+
+<!-- App -->
+<script type="module" src="./boot.js"></script>
 </body>
 </html>
