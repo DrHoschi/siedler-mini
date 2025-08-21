@@ -1,28 +1,28 @@
 {
-  "atlas": { "json": "../tiles/tileset.json", "image": "../tiles/tileset.png" },
-  "meta": { "legend": {
-    "GRASS": "t0_0", "DIRT": "t0_1", "SAND": "t0_2", "WATER": "t0_8",
-    "ROCK": "t1_2", "SNOW": "t3_10", "FOREST": "t3_12", "LAVA": "t3_14"
-  }},
+  "rows": 12,
+  "cols": 16,
+  "tileSize": 64,
+
+  "atlas": {
+    "json": "../tiles/tileset.json",
+    "image": "../tiles/tileset.png"
+  },
+
   "layers": [
     {
+      "name": "ground",
       "grid": [
-        ["GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","ROCK","ROCK","SNOW","SNOW"],
-        ["GRASS","FOREST","FOREST","GRASS","GRASS","GRASS","GRASS","WATER","WATER","WATER","GRASS","GRASS","ROCK","ROCK","SNOW","SNOW"],
-        ["GRASS","FOREST","FOREST","GRASS","DIRT","DIRT","SAND","WATER","WATER","WATER","SAND","GRASS","GRASS","ROCK","ROCK","SNOW"],
-        ["GRASS","GRASS","FOREST","GRASS","DIRT","DIRT","SAND","WATER","WATER","WATER","SAND","GRASS","GRASS","GRASS","ROCK","ROCK"],
-        ["GRASS","GRASS","GRASS","GRASS","GRASS","DIRT","SAND","SAND","WATER","SAND","SAND","GRASS","GRASS","GRASS","GRASS","ROCK"],
-        ["DIRT","DIRT","GRASS","GRASS","GRASS","DIRT","DIRT","SAND","SAND","SAND","DIRT","DIRT","GRASS","GRASS","GRASS","GRASS"],
-        ["DIRT","DIRT","DIRT","GRASS","GRASS","GRASS","DIRT","DIRT","SAND","DIRT","DIRT","DIRT","GRASS","GRASS","GRASS","GRASS"],
-        ["LAVA","LAVA","DIRT","DIRT","GRASS","GRASS","GRASS","DIRT","DIRT","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"],
-        ["LAVA","LAVA","LAVA","DIRT","DIRT","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"],
-        ["LAVA","LAVA","LAVA","DIRT","DIRT","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","FOREST","FOREST","GRASS"],
-        ["DIRT","DIRT","DIRT","DIRT","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","FOREST","FOREST","GRASS"],
-        ["SAND","SAND","DIRT","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"],
-        ["WATER","SAND","SAND","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"],
-        ["WATER","WATER","SAND","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"],
-        ["WATER","WATER","WATER","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"],
-        ["WATER","WATER","WATER","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS","GRASS"]
+        "grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass",
+        "grass","grass","grass","grass","forest","forest","grass","grass","grass","grass","grass","grass","grass","grass","grass","grass",
+        "grass","grass","dirt","dirt","forest","forest","dirt","dirt","grass","grass","grass","grass","hill","hill","rock","rock",
+        "grass","dirt","dirt","sand","sand","sand","sand","dirt","grass","grass","water","water","water","water","water","water",
+        "grass","dirt","sand","sand","water","water","sand","sand","grass","grass","water-deep","water-deep","water","water","water","water",
+        "grass","dirt","sand","water","water","water","water","sand","grass","grass","water","water","water","water","water","water",
+        "grass","dirt","sand","water","water","water","water","sand","grass","grass","water","water","water-shore-S","water","water","water",
+        "grass","dirt","sand","sand","water","water","sand","sand","grass","grass","water","water","water","water","water","water",
+        "grass","dirt","dirt","sand","sand","sand","sand","dirt","grass","grass","grass","grass","lava","lava","ash","ash",
+        "grass","grass","dirt","dirt","forest","forest","dirt","dirt","grass","rock","rock","rock","snow","snow","snow","snow",
+        "grass","grass","grass","grass","grass","grass","grass","grass","grass","rock","rock","rock","snow","snow","snow","snow"
       ]
     }
   ]
