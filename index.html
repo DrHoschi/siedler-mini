@@ -2,293 +2,362 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini</title>
 
-  <!-- Mobile/Viewport -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#0e1b26" />
+  <!-- Bestehende Spiele-Skripte (deine Dateien, Pfade ggf. anpassen) -->
+  <script defer src="boot.js"></script>
+  <script defer src="game.js"></script>
+  <script defer src="tools/map-runtime.js"></script>
 
   <style>
-    /* ========== Reset & Layout ========== */
-    :root {
-      --bg: #0e1b26;
-      --panel: rgba(8,14,20,0.72);
-      --panel-border: rgba(255,255,255,0.08);
-      --txt: #e9f1f6;
-      --muted: #c7d2db;
-      --accent: #80caff;
-      --ok: #1fb06a;
-      --btn: #1e2a36;
-      --btn-hov: #243444;
-      --btn-brd: rgba(255,255,255,0.1);
-      --gap: 12px;
-      --radius: 16px;
+    :root{
+      --bg:#0f2230;
+      --panel:#0e1720e6;
+      --panelBorder:#203241;
+      --text:#d7e3ef;
+      --muted:#99a7b3;
+      --accent:#36a169;
+      --accent-weak:#2a6c49;
+      --danger:#e55353;
+      --shadow: 0 8px 28px rgba(0,0,0,.35);
+      --radius:14px;
+      --gap:10px;
+    }
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+      overscroll-behavior:none;
     }
 
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: var(--bg);
-      overflow: hidden; /* Seite selbst scrollt nicht */
-      color: var(--txt);
-      -webkit-tap-highlight-color: transparent;
-      font: 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    /* App-Layer */
+    #app {
+      position:fixed;
+      inset:0;
+      overflow:hidden; /* wir zoomen nur im Canvas */
     }
 
-    /* Das Spielfeld */
+    /* Zeichenfläche (nur diese wird gezoomt/verschoben) */
     #stage {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      touch-action: none;        /* wir handlen Gesten selbst */
-      display: block;
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform: translate(-50%,-50%) scale(1); /* wird per JS aktualisiert */
+      transform-origin: 0 0;
+      image-rendering: pixelated;     /* hübsch für Tiles */
+      touch-action:none;              /* Pinch/Drag für Canvas aktiv */
+      background:transparent;
     }
 
-    /* Debug-Box oben links – erscheint nur, wenn Text gesetzt wird */
-    #debug-overlay{
-      position: fixed;
-      top: calc(env(safe-area-inset-top, 0px) + 8px);
-      left: 8px;
-      z-index: 11;
-      display: none;             /* game.js blendet ein/aus */
-      white-space: pre;
-      padding: 10px 12px;
-      border-radius: 12px;
-      color: #fff;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.08);
-      backdrop-filter: blur(6px);
-      font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      pointer-events: none;
-      user-select: none;
-    }
-    /* Debug erzwingen (Toggle) */
-    body.debug-on #debug-overlay { display:block; }
-
-    /* UI unten links, bleibt fix – zoomt NICHT mit */
-    #ui {
-      position: fixed;
-      left: max(10px, env(safe-area-inset-left));
-      bottom: max(10px, env(safe-area-inset-bottom));
-      z-index: 10;
-      display: grid;
-      grid-auto-flow: row;
-      gap: 10px;
-      max-width: calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    /* Debug oben links (fix, skaliert NICHT mit) */
+    #debugOverlay{
+      position:fixed;
+      left:16px;
+      top:16px;
+      background:var(--panel);
+      border:1px solid var(--panelBorder);
+      border-radius:12px;
+      padding:10px 12px;
+      font:14px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      color:var(--text);
+      box-shadow:var(--shadow);
+      pointer-events:none;
+      min-width:260px;
+      white-space:pre;
     }
 
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
+    /* Docked HUD unten links (fix, skaliert NICHT mit) */
+    #hud{
+      position:fixed;
+      left:16px;
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      background:var(--panel);
+      border:1px solid var(--panelBorder);
       border-radius: var(--radius);
-      padding: 10px;
-      box-shadow: 0 6px 26px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.25);
-      backdrop-filter: saturate(1.1) blur(8px);
+      box-shadow:var(--shadow);
+      padding:14px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      flex-wrap:wrap;      /* bei wenig Breite 2. Zeile */
+      max-width: min(100vw - 32px, 680px);
+      z-index:10;
     }
 
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
     }
 
-    button, select, .chk {
-      font: inherit;
-      color: var(--txt);
+    button{
+      appearance:none;
+      border:1px solid var(--panelBorder);
+      background:#102332;
+      color:var(--text);
+      border-radius:10px;
+      padding:10px 14px;
+      font-weight:600;
+      touch-action:manipulation;
     }
-    button {
-      background: var(--btn);
-      border: 1px solid var(--btn-brd);
-      border-radius: 999px;
-      padding: 8px 14px;
-      cursor: pointer;
+    button.primary{ background:var(--accent); border-color:var(--accent-weak); color:#06220f; }
+    button:disabled{ opacity:.5; }
+
+    select, label.switch {
+      background:#0f1c27;
+      color:var(--text);
+      border:1px solid var(--panelBorder);
+      border-radius:10px;
+      padding:10px 12px;
+      touch-action:manipulation;
     }
-    button:hover { background: var(--btn-hov); }
-    .btn-ok { background: var(--ok); border-color: rgba(0,0,0,.15); color: #fff; }
-    .btn-ok:hover { filter: brightness(1.05); }
+    select{ min-width:220px; }
 
-    select {
-      background: #0f2232;
-      border: 1px solid var(--btn-brd);
-      border-radius: 10px;
-      padding: 8px 12px;
-      min-width: 220px;
-      appearance: none;
-      background-image:
-        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-        linear-gradient(135deg, var(--muted) 50%, transparent 50%),
-        linear-gradient(to right, #0f2232, #0f2232);
-      background-position:
-        calc(100% - 18px) 55%,
-        calc(100% - 12px) 55%,
-        0 0;
-      background-size: 6px 6px, 6px 6px, 100% 100%;
-      background-repeat: no-repeat;
+    label.switch{
+      display:flex; align-items:center; gap:10px; user-select:none;
     }
+    label.switch input{ inline-size:1.25rem; block-size:1.25rem; }
 
-    label { color: var(--muted); }
-
-    .chk {
-      display:flex; align-items:center; gap:8px;
-      background: rgba(255,255,255,.03);
-      border: 1px solid var(--btn-brd);
-      border-radius: 999px;
-      padding: 6px 10px 6px 6px;
-    }
-    .chk input[type="checkbox"]{ width:18px; height:18px; }
-
-    /* kleine Statuszeile */
-    #hint {
-      font-size: 12px;
-      color: var(--muted);
-      text-shadow: 0 1px 0 rgba(0,0,0,.4);
-      user-select: none;
+    /* Mobile Safari – Adressleiste: Panels optisch über ihr hinweg */
+    @supports (padding: max(0px)) {
+      #hud{ bottom: max(16px, env(safe-area-inset-bottom)); }
     }
 
-    /* zweizeilig umbrechen, falls der Platz unten rechts eng wird */
-    @media (max-width: 480px) {
-      .row.wrap { flex-wrap: wrap; }
+    /* kleine Screens: Panels etwas kompakter */
+    @media (max-width:420px){
+      #debugOverlay{ font-size:12px; min-width:220px; }
+      select{ min-width:180px; }
     }
   </style>
 </head>
-
 <body>
-  <!-- Canvas -->
-  <canvas id="stage"></canvas>
+  <div id="app">
+    <!-- Canvas: NUR dieser Layer wird transformiert -->
+    <canvas id="stage" width="2048" height="2048"></canvas>
 
-  <!-- Debug-Overlay (Text wird von game.js gesetzt) -->
-  <div id="debug-overlay"></div>
+    <!-- Debug -->
+    <pre id="debugOverlay">Cam: x=0.0  y=0.0  zoom=1.00
+Map: –
+rows=– cols=– tile=–
+DPR=–     Size=–×–</pre>
 
-  <!-- UI fixiert unten links -->
-  <div id="ui" class="panel">
-    <div class="row wrap">
-      <button id="btn-start" class="btn-ok">Start</button>
-      <button id="btn-reload">Neu laden</button>
-
-      <label for="sel-map">Karte:</label>
-      <select id="sel-map" aria-label="Karte auswählen"></select>
-
-      <label class="chk" title="Startet nach Seitenaufruf automatisch">
-        <input id="chk-autostart" type="checkbox" />
-        <span>Auto‑Start</span>
-      </label>
-
-      <label class="chk" title="Debug overlay ein/aus">
-        <input id="chk-debug" type="checkbox" />
-        <span>Debug</span>
-      </label>
+    <!-- HUD (fix angedockt) -->
+    <div id="hud" role="region" aria-label="Spiel-Steuerung">
+      <div class="row">
+        <button id="btnStart" class="primary">Start</button>
+        <button id="btnReload">Neu laden</button>
+      </div>
+      <div class="row">
+        <span>Karte:</span>
+        <select id="mapSelect" aria-label="Karte wählen">
+          <!-- Du kannst diese Liste gern erweitern -->
+          <option value="assets/maps/map-demo.json">map-demo.json</option>
+          <option value="assets/maps/map-pro.json">map-pro.json</option>
+          <option value="assets/maps/map-checker-16x16.json">map-checker (16×16)</option>
+        </select>
+        <label class="switch" title="Beim Laden automatisch starten">
+          <input id="autoStart" type="checkbox" />
+          <span>Auto‑Start</span>
+        </label>
+      </div>
     </div>
-
-    <div id="hint">Zoom: 0.5–3.5 • Ziehen = Pan • Pinch/Wheel = Zoom • UI bleibt fix</div>
   </div>
 
-  <!-- Boot & Game laden (mit Bust gegen Cache) -->
   <script>
-    // kleine Hilfe für Bust-Parameter
-    const BUST = Date.now();
+  // ====== UI + Zoom/Pan nur fürs Canvas =====================================
 
-    // Kartenliste (Pfad relativ zu /)
-    const MAPS = [
-      { label: 'map-demo.json',             url: 'assets/maps/map-demo.json' },
-      { label: 'map-pro.json',              url: 'assets/maps/map-pro.json' },
-      { label: 'map-checker (16×16)',       url: 'assets/maps/map-checker-16x16.json' },
-    ];
+  (function(){
+    const canvas = document.getElementById('stage');
+    const ctx     = canvas.getContext('2d');
+    const hud     = document.getElementById('hud');
+    const dbg     = document.getElementById('debugOverlay');
+    const sel     = document.getElementById('mapSelect');
+    const autoCb  = document.getElementById('autoStart');
+    const btnStart= document.getElementById('btnStart');
+    const btnReload= document.getElementById('btnReload');
 
-    // UI initialisieren, Events weiterreichen
-    function initUI(){
-      const sel    = document.getElementById('sel-map');
-      const start  = document.getElementById('btn-start');
-      const reload = document.getElementById('btn-reload');
-      const autost = document.getElementById('chk-autostart');
-      const dbg    = document.getElementById('chk-debug');
-
-      // Karten befüllen
-      sel.innerHTML = '';
-      for (const m of MAPS){
-        const opt = document.createElement('option');
-        opt.value = m.url;
-        opt.textContent = m.label;
-        sel.appendChild(opt);
+    // Kamera / Transform nur für #stage (nicht fürs UI)
+    const camera = {
+      x: 0, y: 0, zoom: 1,
+      min: 0.5, max: 3.5,
+      setZoom(z, cx, cy){
+        const prev = this.zoom;
+        this.zoom = Math.min(this.max, Math.max(this.min, z));
+        // zoomen um den Zeiger: korrigiere Position relativ zum Zoom-Mittelpunkt
+        if (cx !== undefined && cy !== undefined){
+          const k = this.zoom / prev;
+          this.x = cx - k*(cx - this.x);
+          this.y = cy - k*(cy - this.y);
+        }
+        applyTransform();
+        maybeForwardToGame();
+      },
+      pan(dx, dy){
+        this.x += dx;
+        this.y += dy;
+        applyTransform();
+        maybeForwardToGame();
       }
+    };
 
-      // gespeicherte Auswahl übernehmen
-      const lastMap = localStorage.getItem('sm:lastMap');
-      if (lastMap && [...sel.options].some(o => o.value === lastMap)) sel.value = lastMap;
+    // Canvas initial mittig positionieren (zentriert)
+    function applyTransform(){
+      // Wir rendern per CSS-Transform NUR das Canvas
+      canvas.style.transform =
+        `translate(calc(50% + ${camera.x}px), calc(50% + ${camera.y}px)) scale(${camera.zoom})`;
+      updateDebug();
+    }
 
-      const lastAuto = localStorage.getItem('sm:autoStart') === '1';
-      autost.checked = lastAuto;
+    // Debug-Overlay updaten
+    function updateDebug(){
+      const dpr  = Math.round(devicePixelRatio*100)/100;
+      dbg.textContent =
+`Cam: x=${camera.x.toFixed(1)}  y=${camera.y.toFixed(1)}  zoom=${camera.zoom.toFixed(2)}
+Map: ${sel.value || '–'}
+rows=16  cols=16  tile=64
+DPR=${dpr}     Size=${innerWidth}×${innerHeight}`;
+    }
 
-      const dbgOn = localStorage.getItem('sm:debugOn') === '1';
-      dbg.checked = dbgOn;
-      document.body.classList.toggle('debug-on', dbgOn);
+    // Einfaches Grid, damit Zoomen/Schieben sofort sichtbar ist
+    function drawGrid(){
+      const w = canvas.width, h = canvas.height, tile=64;
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle = '#102738';
+      ctx.fillRect(0,0,w,h);
+      ctx.strokeStyle = 'rgba(255,255,255,.07)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x=0; x<=w; x+=tile){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
+      for (let y=0; y<=h; y+=tile){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
+      ctx.stroke();
+    }
 
-      sel.addEventListener('change', () => {
-        localStorage.setItem('sm:lastMap', sel.value);
-      });
+    // ==== Pointer / Wheel (nur auf Canvas aktiv) ============================
+    let isPanning=false, last={x:0,y:0};
+    let pinchActive=false, pinchDist=0, pinchCenter={x:0,y:0};
 
-      autost.addEventListener('change', () => {
-        localStorage.setItem('sm:autoStart', autost.checked ? '1':'0');
-      });
+    function canvasPointFromEvent(e){
+      const rect = canvas.getBoundingClientRect();
+      // Koord. im Canvas-Layer (vor Transform)
+      const x = e.clientX - rect.left - rect.width/2 - camera.x;
+      const y = e.clientY - rect.top  - rect.height/2 - camera.y;
+      return { x, y };
+    }
 
-      dbg.addEventListener('change', () => {
-        localStorage.setItem('sm:debugOn', dbg.checked ? '1':'0');
-        document.body.classList.toggle('debug-on', dbg.checked);
-        // Optional: sofort etwas Text anzeigen, falls leer
-        if (dbg.checked && typeof window.setDebug === 'function'){
-          window.setDebug('Debug aktiv …');
+    // Wheel-Zoom
+    canvas.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const delta = Math.sign(e.deltaY);
+      const factor = 1 + (delta>0 ? -0.12 : 0.12);
+      const p = canvasPointFromEvent(e);
+      camera.setZoom(camera.zoom * factor, p.x, p.y);
+    }, {passive:false});
+
+    // Pointer: Drag / Pinch
+    const activeTouches = new Map();
+
+    canvas.addEventListener('pointerdown', (e)=>{
+      canvas.setPointerCapture(e.pointerId);
+      activeTouches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if (activeTouches.size===1){
+        isPanning=true;
+        last.x=e.clientX; last.y=e.clientY;
+      }
+      if (activeTouches.size===2){
+        pinchActive=true;
+        const pts = [...activeTouches.values()];
+        pinchDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+        pinchCenter = { x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2 };
+      }
+    });
+    canvas.addEventListener('pointermove', (e)=>{
+      if (!activeTouches.has(e.pointerId)) return;
+      activeTouches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+      if (pinchActive && activeTouches.size===2){
+        const pts = [...activeTouches.values()];
+        const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+        if (d>0){
+          const scale = d / pinchDist;
+          pinchDist = d;
+          // Mittelpunkt ins Canvas-Koordinatensystem
+          const rect = canvas.getBoundingClientRect();
+          const cx = pinchCenter.x - rect.left - rect.width/2 - camera.x;
+          const cy = pinchCenter.y - rect.top  - rect.height/2 - camera.y;
+          camera.setZoom(camera.zoom * scale, cx, cy);
         }
-        if (!dbg.checked && typeof window.setDebug === 'function'){
-          window.setDebug('');
-        }
-      });
+      } else if (isPanning && activeTouches.size===1){
+        const dx = e.clientX - last.x;
+        const dy = e.clientY - last.y;
+        last.x = e.clientX; last.y = e.clientY;
+        camera.pan(dx, dy);
+      }
+    });
+    function endPointer(e){
+      activeTouches.delete(e.pointerId);
+      if (activeTouches.size<2) pinchActive=false;
+      if (activeTouches.size===0) isPanning=false;
+    }
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', endPointer);
+    canvas.addEventListener('pointerleave', endPointer);
 
-      // Start -> CustomEvent für game.js
-      start.addEventListener('click', () => {
-        const mapUrl = sel.value;
-        document.dispatchEvent(new CustomEvent('app:start', { detail: { mapUrl }}));
-      });
+    // HUD‑Buttons – Spielaktionen als Events herausgeben
+    btnStart.addEventListener('click', ()=>{
+      const url = sel.value;
+      // 1) Eigene Game-API (optional)
+      if (window.GameLoader && typeof window.GameLoader.start === 'function'){
+        window.GameLoader.start(url);
+      }
+      // 2) Event für deine bestehenden Skripte:
+      window.dispatchEvent(new CustomEvent('ui:start', { detail:{ map:url }}));
+    });
 
-      // Neu laden (mit Bust)
-      reload.addEventListener('click', () => {
-        const url = new URL(location.href);
-        url.searchParams.set('v', String(BUST));
-        location.replace(url.toString());
-      });
+    btnReload.addEventListener('click', ()=>{
+      const url = sel.value;
+      if (window.GameLoader && typeof window.GameLoader.reload === 'function'){
+        window.GameLoader.reload(url);
+      }
+      window.dispatchEvent(new CustomEvent('ui:reload', { detail:{ map:url }}));
+    });
 
-      // Auto‑Start (kleine Verzögerung, bis game.js da ist)
-      if (autost.checked && sel.value){
-        setTimeout(() => {
-          document.dispatchEvent(new CustomEvent('app:start', { detail: { mapUrl: sel.value }}));
-        }, 60);
+    // Wenn dein Spiel eine Kamera besitzt, reiche Werte weiter:
+    function maybeForwardToGame(){
+      if (window.GameCamera){
+        const c = window.GameCamera;
+        if (typeof c.setZoom === 'function') c.setZoom(camera.zoom);
+        if (typeof c.setPosition === 'function') c.setPosition(camera.x, camera.y);
       }
     }
 
-    // Boot & Game dynamisch hinzufügen (Cache‑Bust)
-    function loadScript(src){
-      return new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src + (src.includes('?') ? '&' : '?') + 'v=' + BUST;
-        s.defer = true;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-
-    (async function main(){
-      try {
-        await loadScript('boot.js');
-        await loadScript('game.js');
-      } catch (e) {
-        console.error('Scripts konnten nicht geladen werden:', e);
-      } finally {
-        initUI();
+    // Autostart, wenn gesetzt
+    window.addEventListener('load', ()=>{
+      drawGrid();
+      applyTransform();
+      updateDebug();
+      if (autoCb.checked){
+        btnStart.click();
       }
-    })();
+    });
+
+    // Falls du aus boot.js/game.js die Map umschaltest:
+    window.addEventListener('game:mapLoaded', (e)=>{
+      if (e && e.detail && e.detail.mapUrl){
+        sel.value = e.detail.mapUrl;
+        updateDebug();
+      }
+    });
+
+    // Sicherstellen, dass Scroll/Zoom des Browsers nicht auf dem Canvas greift:
+    // (UI bleibt klickbar, weil touch-action dort auf "manipulation" ist)
+    canvas.addEventListener('gesturestart', e=>e.preventDefault());
+    canvas.addEventListener('gesturechange', e=>e.preventDefault());
+    canvas.addEventListener('gestureend', e=>e.preventDefault());
+  })();
   </script>
 </body>
 </html>
