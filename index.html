@@ -1,363 +1,372 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler‑Mini</title>
+/* game.js — Siedler‑Mini Runtime
+   - Atlas-Support (tileset.json + tileset.png)
+   - Zoom/Pan nur im Canvas (#stage)
+   - Debug-Overlay + Log-Puffer + Download
+   - hört auf ui:start / ui:reload (aus index.html) und app:start (aus boot.js)
+   - F2 toggelt Debug
+*/
+(() => {
+  'use strict';
 
-  <!-- Bestehende Spiele-Skripte (deine Dateien, Pfade ggf. anpassen) -->
-  <script defer src="boot.js"></script>
-  <script defer src="game.js"></script>
-  <script defer src="tools/map-runtime.js"></script>
+  // ===== Short helpers =======================================================
+  const $ = s => document.querySelector(s);
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const logBuf = [];
+  function klog(tag, ...a){
+    const line = `[${tag}] ${a.map(x=>typeof x==='object'?JSON.stringify(x):String(x)).join(' ')}`;
+    logBuf.push(line);
+    if (logBuf.length>2000) logBuf.shift();
+    console.log(line);
+  }
+  function saveLog(){
+    const blob = new Blob([logBuf.join('\n')], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.download = `siedler-mini-debug-${Date.now()}.txt`;
+    a.href = url; a.click();
+    URL.revokeObjectURL(url);
+  }
+  window.SM_DEBUG = { saveLog, lines:()=>logBuf.slice() };
 
-  <style>
-    :root{
-      --bg:#0f2230;
-      --panel:#0e1720e6;
-      --panelBorder:#203241;
-      --text:#d7e3ef;
-      --muted:#99a7b3;
-      --accent:#36a169;
-      --accent-weak:#2a6c49;
-      --danger:#e55353;
-      --shadow: 0 8px 28px rgba(0,0,0,.35);
-      --radius:14px;
-      --gap:10px;
+  // ===== DOM/Canvas ==========================================================
+  const canvas = $('#stage') || (()=>{ const c=document.createElement('canvas'); c.id='stage'; document.body.appendChild(c); return c; })();
+  const ctx = canvas.getContext('2d');
+  const dbg = $('#debugOverlay');         // <pre id="debugOverlay">
+  if (!dbg) {                             // falls nicht vorhanden → still anlegen
+    const p = document.createElement('pre');
+    p.id = 'debugOverlay'; document.body.appendChild(p);
+  }
+
+  // Vollbild‑Canvas (CSS) – echte Pixel per DPR dynamisch
+  function resizeCanvas(){
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+    const r = canvas.getBoundingClientRect();
+    canvas.width  = Math.round(r.width  * dpr);
+    canvas.height = Math.round(r.height * dpr);
+    state.dpr = dpr;
+  }
+  window.addEventListener('resize', ()=>{ resizeCanvas(); });
+
+  // ===== State ===============================================================
+  const state = {
+    running:false,
+    dpr: Math.max(1, Math.min(3, window.devicePixelRatio||1)),
+
+    // Kamera/Transform (wir transformieren im Canvas, UI bleibt fix)
+    cam:{ x:0, y:0, z:1, zMin:0.5, zMax:3.5 },
+
+    // Map
+    map:{
+      url:null,
+      rows:16, cols:16, tile:64,
+      layers:[]  // layer[0].grid = flache Liste (rows*cols) von Tile-Keys
+    },
+
+    // Atlas
+    atlas:{
+      frames:null,       // { key:{x,y,w,h} }
+      image:null,        // HTMLImageElement
+      ok:false
+    },
+
+    // Input
+    drag:false, down:{x:0,y:0}, cam0:{x:0,y:0},
+    pinch:null, // {d, z0}
+
+    // Debug
+    debugOn: true
+  };
+
+  // ===== Debug Overlay =======================================================
+  function setDebug(text){
+    const el = $('#debugOverlay');
+    if (!el) return;
+    el.style.display = state.debugOn ? 'block':'none';
+    if (state.debugOn) el.textContent = text || '';
+  }
+  window.setDebug = setDebug; // optional von außen nutzbar
+
+  function updateOverlay(extra=''){
+    if (!state.debugOn) return;
+    const size = `${Math.round(canvas.clientWidth)}x${Math.round(canvas.clientHeight)}`;
+    const lines = [
+      `Cam: x=${state.cam.x.toFixed(1)}  y=${state.cam.y.toFixed(1)}  zoom=${state.cam.z.toFixed(2)}`,
+      `Map: ${state.map.url || '—'}`,
+      `rows=${state.map.rows}  cols=${state.map.cols}  tile=${state.map.tile}`,
+      `Atlas: ${state.atlas.ok ? 'OK':'—'}`,
+      `DPR=${state.dpr}   Size=${size}`
+    ];
+    if (extra) lines.push(extra);
+    setDebug(lines.join('\n'));
+  }
+
+  window.addEventListener('keydown', (e)=>{
+    if (e.code === 'F2'){
+      state.debugOn = !state.debugOn;
+      updateOverlay(state.debugOn?'[debug] ON':'[debug] OFF');
     }
-    html,body{
-      height:100%;
-      margin:0;
-      background:var(--bg);
-      color:var(--text);
-      font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
-      overscroll-behavior:none;
-    }
-
-    /* App-Layer */
-    #app {
-      position:fixed;
-      inset:0;
-      overflow:hidden; /* wir zoomen nur im Canvas */
-    }
-
-    /* Zeichenfläche (nur diese wird gezoomt/verschoben) */
-    #stage {
-      position:absolute;
-      left:50%;
-      top:50%;
-      transform: translate(-50%,-50%) scale(1); /* wird per JS aktualisiert */
-      transform-origin: 0 0;
-      image-rendering: pixelated;     /* hübsch für Tiles */
-      touch-action:none;              /* Pinch/Drag für Canvas aktiv */
-      background:transparent;
-    }
-
-    /* Debug oben links (fix, skaliert NICHT mit) */
-    #debugOverlay{
-      position:fixed;
-      left:16px;
-      top:16px;
-      background:var(--panel);
-      border:1px solid var(--panelBorder);
-      border-radius:12px;
-      padding:10px 12px;
-      font:14px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      color:var(--text);
-      box-shadow:var(--shadow);
-      pointer-events:none;
-      min-width:260px;
-      white-space:pre;
-    }
-
-    /* Docked HUD unten links (fix, skaliert NICHT mit) */
-    #hud{
-      position:fixed;
-      left:16px;
-      bottom: calc(16px + env(safe-area-inset-bottom));
-      background:var(--panel);
-      border:1px solid var(--panelBorder);
-      border-radius: var(--radius);
-      box-shadow:var(--shadow);
-      padding:14px;
-      display:flex;
-      gap:12px;
-      align-items:center;
-      flex-wrap:wrap;      /* bei wenig Breite 2. Zeile */
-      max-width: min(100vw - 32px, 680px);
-      z-index:10;
-    }
-
-    .row{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-
-    button{
-      appearance:none;
-      border:1px solid var(--panelBorder);
-      background:#102332;
-      color:var(--text);
-      border-radius:10px;
-      padding:10px 14px;
-      font-weight:600;
-      touch-action:manipulation;
-    }
-    button.primary{ background:var(--accent); border-color:var(--accent-weak); color:#06220f; }
-    button:disabled{ opacity:.5; }
-
-    select, label.switch {
-      background:#0f1c27;
-      color:var(--text);
-      border:1px solid var(--panelBorder);
-      border-radius:10px;
-      padding:10px 12px;
-      touch-action:manipulation;
-    }
-    select{ min-width:220px; }
-
-    label.switch{
-      display:flex; align-items:center; gap:10px; user-select:none;
-    }
-    label.switch input{ inline-size:1.25rem; block-size:1.25rem; }
-
-    /* Mobile Safari – Adressleiste: Panels optisch über ihr hinweg */
-    @supports (padding: max(0px)) {
-      #hud{ bottom: max(16px, env(safe-area-inset-bottom)); }
-    }
-
-    /* kleine Screens: Panels etwas kompakter */
-    @media (max-width:420px){
-      #debugOverlay{ font-size:12px; min-width:220px; }
-      select{ min-width:180px; }
-    }
-  </style>
-</head>
-<body>
-  <div id="app">
-    <!-- Canvas: NUR dieser Layer wird transformiert -->
-    <canvas id="stage" width="2048" height="2048"></canvas>
-
-    <!-- Debug -->
-    <pre id="debugOverlay">Cam: x=0.0  y=0.0  zoom=1.00
-Map: –
-rows=– cols=– tile=–
-DPR=–     Size=–×–</pre>
-
-    <!-- HUD (fix angedockt) -->
-    <div id="hud" role="region" aria-label="Spiel-Steuerung">
-      <div class="row">
-        <button id="btnStart" class="primary">Start</button>
-        <button id="btnReload">Neu laden</button>
-      </div>
-      <div class="row">
-        <span>Karte:</span>
-        <select id="mapSelect" aria-label="Karte wählen">
-          <!-- Du kannst diese Liste gern erweitern -->
-          <option value="assets/maps/map-demo.json">map-demo.json</option>
-          <option value="assets/maps/map-pro.json">map-pro.json</option>
-          <option value="assets/maps/map-checker-16x16.json">map-checker (16×16)</option>
-        </select>
-        <label class="switch" title="Beim Laden automatisch starten">
-          <input id="autoStart" type="checkbox" />
-          <span>Auto‑Start</span>
-        </label>
-      </div>
-    </div>
-  </div>
-
-  <script>
-  // ====== UI + Zoom/Pan nur fürs Canvas =====================================
-
-  (function(){
-    const canvas = document.getElementById('stage');
-    const ctx     = canvas.getContext('2d');
-    const hud     = document.getElementById('hud');
-    const dbg     = document.getElementById('debugOverlay');
-    const sel     = document.getElementById('mapSelect');
-    const autoCb  = document.getElementById('autoStart');
-    const btnStart= document.getElementById('btnStart');
-    const btnReload= document.getElementById('btnReload');
-
-    // Kamera / Transform nur für #stage (nicht fürs UI)
-    const camera = {
-      x: 0, y: 0, zoom: 1,
-      min: 0.5, max: 3.5,
-      setZoom(z, cx, cy){
-        const prev = this.zoom;
-        this.zoom = Math.min(this.max, Math.max(this.min, z));
-        // zoomen um den Zeiger: korrigiere Position relativ zum Zoom-Mittelpunkt
-        if (cx !== undefined && cy !== undefined){
-          const k = this.zoom / prev;
-          this.x = cx - k*(cx - this.x);
-          this.y = cy - k*(cy - this.y);
-        }
-        applyTransform();
-        maybeForwardToGame();
-      },
-      pan(dx, dy){
-        this.x += dx;
-        this.y += dy;
-        applyTransform();
-        maybeForwardToGame();
-      }
-    };
-
-    // Canvas initial mittig positionieren (zentriert)
-    function applyTransform(){
-      // Wir rendern per CSS-Transform NUR das Canvas
-      canvas.style.transform =
-        `translate(calc(50% + ${camera.x}px), calc(50% + ${camera.y}px)) scale(${camera.zoom})`;
-      updateDebug();
-    }
-
-    // Debug-Overlay updaten
-    function updateDebug(){
-      const dpr  = Math.round(devicePixelRatio*100)/100;
-      dbg.textContent =
-`Cam: x=${camera.x.toFixed(1)}  y=${camera.y.toFixed(1)}  zoom=${camera.zoom.toFixed(2)}
-Map: ${sel.value || '–'}
-rows=16  cols=16  tile=64
-DPR=${dpr}     Size=${innerWidth}×${innerHeight}`;
-    }
-
-    // Einfaches Grid, damit Zoomen/Schieben sofort sichtbar ist
-    function drawGrid(){
-      const w = canvas.width, h = canvas.height, tile=64;
-      ctx.clearRect(0,0,w,h);
-      ctx.fillStyle = '#102738';
-      ctx.fillRect(0,0,w,h);
-      ctx.strokeStyle = 'rgba(255,255,255,.07)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let x=0; x<=w; x+=tile){ ctx.moveTo(x,0); ctx.lineTo(x,h); }
-      for (let y=0; y<=h; y+=tile){ ctx.moveTo(0,y); ctx.lineTo(w,y); }
-      ctx.stroke();
-    }
-
-    // ==== Pointer / Wheel (nur auf Canvas aktiv) ============================
-    let isPanning=false, last={x:0,y:0};
-    let pinchActive=false, pinchDist=0, pinchCenter={x:0,y:0};
-
-    function canvasPointFromEvent(e){
-      const rect = canvas.getBoundingClientRect();
-      // Koord. im Canvas-Layer (vor Transform)
-      const x = e.clientX - rect.left - rect.width/2 - camera.x;
-      const y = e.clientY - rect.top  - rect.height/2 - camera.y;
-      return { x, y };
-    }
-
-    // Wheel-Zoom
-    canvas.addEventListener('wheel', (e)=>{
+    if (e.code === 'KeyD' && (e.ctrlKey||e.metaKey)){
+      // Ctrl/Cmd+D → Debug speichern
       e.preventDefault();
-      const delta = Math.sign(e.deltaY);
-      const factor = 1 + (delta>0 ? -0.12 : 0.12);
-      const p = canvasPointFromEvent(e);
-      camera.setZoom(camera.zoom * factor, p.x, p.y);
-    }, {passive:false});
+      saveLog();
+    }
+  });
 
-    // Pointer: Drag / Pinch
-    const activeTouches = new Map();
+  // ===== Camera helpers ======================================================
+  function applyCam(){
+    // Alles in CSS‑Pixeln zeichnen, DPR bereits über canvas.width/height berücksichtigt
+    ctx.setTransform(1,0,0,1,0,0);
+    // Mittelpunkt = Bildschirmmitte
+    const cx = Math.floor(canvas.width/state.dpr/2);
+    const cy = Math.floor(canvas.height/state.dpr/2);
+    ctx.translate(cx, cy);
+    ctx.scale(state.cam.z, state.cam.z);
+    ctx.translate(-state.cam.x, -state.cam.y);
+  }
 
-    canvas.addEventListener('pointerdown', (e)=>{
-      canvas.setPointerCapture(e.pointerId);
-      activeTouches.set(e.pointerId, {x:e.clientX, y:e.clientY});
-      if (activeTouches.size===1){
-        isPanning=true;
-        last.x=e.clientX; last.y=e.clientY;
-      }
-      if (activeTouches.size===2){
-        pinchActive=true;
-        const pts = [...activeTouches.values()];
-        pinchDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
-        pinchCenter = { x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2 };
-      }
-    });
-    canvas.addEventListener('pointermove', (e)=>{
-      if (!activeTouches.has(e.pointerId)) return;
-      activeTouches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  function zoomTo(z, centerCssX, centerCssY){
+    z = clamp(z, state.cam.zMin, state.cam.zMax);
+    if (centerCssX!=null && centerCssY!=null){
+      // Zoom um Zeiger: korrigiere Kamera so, dass der Punkt stehen bleibt
+      const before = cssToWorld(centerCssX, centerCssY);
+      state.cam.z = z;
+      const after  = cssToWorld(centerCssX, centerCssY);
+      state.cam.x += (before.x - after.x);
+      state.cam.y += (before.y - after.y);
+    } else {
+      state.cam.z = z;
+    }
+  }
 
-      if (pinchActive && activeTouches.size===2){
-        const pts = [...activeTouches.values()];
-        const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
-        if (d>0){
-          const scale = d / pinchDist;
-          pinchDist = d;
-          // Mittelpunkt ins Canvas-Koordinatensystem
-          const rect = canvas.getBoundingClientRect();
-          const cx = pinchCenter.x - rect.left - rect.width/2 - camera.x;
-          const cy = pinchCenter.y - rect.top  - rect.height/2 - camera.y;
-          camera.setZoom(camera.zoom * scale, cx, cy);
+  function cssToWorld(px, py){
+    const cx = canvas.getBoundingClientRect().width/2;
+    const cy = canvas.getBoundingClientRect().height/2;
+    return {
+      x: (px - cx)/state.cam.z + state.cam.x,
+      y: (py - cy)/state.cam.z + state.cam.y
+    };
+  }
+
+  // ===== Input (nur Canvas reagiert) ========================================
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const delta = -Math.sign(e.deltaY)*0.12;
+    zoomTo(state.cam.z + delta, e.clientX, e.clientY);
+    updateOverlay();
+  }, {passive:false});
+
+  canvas.addEventListener('pointerdown', (e)=>{
+    canvas.setPointerCapture(e.pointerId);
+    if (e.isPrimary){
+      state.drag = true;
+      state.down.x = e.clientX; state.down.y = e.clientY;
+      state.cam0.x = state.cam.x; state.cam0.y = state.cam.y;
+    }
+  });
+  canvas.addEventListener('pointermove', (e)=>{
+    if (!state.drag) return;
+    const dx = (e.clientX - state.down.x)/state.cam.z;
+    const dy = (e.clientY - state.down.y)/state.cam.z;
+    state.cam.x = state.cam0.x - dx;
+    state.cam.y = state.cam0.y - dy;
+    updateOverlay();
+  });
+  window.addEventListener('pointerup', ()=>{ state.drag=false; });
+
+  // Touch‑Pinch
+  canvas.addEventListener('touchstart', (e)=>{
+    if (e.touches.length===2){
+      e.preventDefault();
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      state.pinch = { d, z0: state.cam.z };
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchmove', (e)=>{
+    if (state.pinch && e.touches.length===2){
+      e.preventDefault();
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale = d / Math.max(1, state.pinch.d);
+      zoomTo(state.pinch.z0 * scale);
+      updateOverlay();
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchend', ()=>{ state.pinch=null; }, {passive:true});
+
+  // ===== Map/Atlas laden =====================================================
+  async function loadMap(url){
+    state.map.url = url;
+    klog('map', 'lade', url);
+    updateOverlay('[map] lädt …');
+    try{
+      const res = await fetch(url, {cache:'no-store'});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const map = await res.json();
+
+      state.map.rows = Number(map.rows) || state.map.rows;
+      state.map.cols = Number(map.cols) || state.map.cols;
+      state.map.tile = Number(map.tileSize||map.tile) || state.map.tile;
+
+      // layer
+      const L0 = map.layers && map.layers[0];
+      if (L0 && Array.isArray(L0.grid)){
+        state.map.layers = [ { grid: L0.grid.slice() } ];
+      } else {
+        // Fallback: simple checker
+        const grid = [];
+        for (let r=0;r<state.map.rows;r++){
+          for (let c=0;c<state.map.cols;c++){
+            grid.push( ((r+c)&1) ? 'grass' : 'dirt' );
+          }
         }
-      } else if (isPanning && activeTouches.size===1){
-        const dx = e.clientX - last.x;
-        const dy = e.clientY - last.y;
-        last.x = e.clientX; last.y = e.clientY;
-        camera.pan(dx, dy);
+        state.map.layers = [ { grid } ];
       }
-    });
-    function endPointer(e){
-      activeTouches.delete(e.pointerId);
-      if (activeTouches.size<2) pinchActive=false;
-      if (activeTouches.size===0) isPanning=false;
+
+      // Atlas optional
+      state.atlas.ok = false;
+      state.atlas.frames = null;
+      state.atlas.image = null;
+
+      const base = url.substring(0, url.lastIndexOf('/')+1);
+      const atlasJson = map?.atlas?.json  ? new URL(map.atlas.json, base).toString()  : null;
+      const atlasImg  = map?.atlas?.image ? new URL(map.atlas.image, base).toString() : null;
+
+      if (atlasJson && atlasImg){
+        const [j, img] = await Promise.all([
+          fetch(atlasJson, {cache:'no-store'}).then(r=>r.ok?r.json():null),
+          loadImage(atlasImg)
+        ]);
+        if (j && img){
+          state.atlas.frames = j.frames || j; // beide Schemata unterstützen
+          state.atlas.image  = img;
+          state.atlas.ok     = true;
+          klog('atlas', 'OK', atlasJson, atlasImg);
+        } else {
+          klog('atlas', 'fehlend/unvollständig → Fallback');
+        }
+      } else {
+        klog('atlas', 'nicht angegeben → Fallback');
+      }
+
+      // Kamera in die Mitte der Map
+      state.cam.x = (state.map.cols*state.map.tile)/2;
+      state.cam.y = (state.map.rows*state.map.tile)/2;
+      updateOverlay('[map] geladen ✓');
+      state.running = true;
+    } catch(err){
+      klog('ERR', 'map load', String(err?.message||err));
+      updateOverlay('[map] Fehler: '+String(err?.message||err));
+      state.running = true; // trotzdem Grid zeigen
     }
-    canvas.addEventListener('pointerup', endPointer);
-    canvas.addEventListener('pointercancel', endPointer);
-    canvas.addEventListener('pointerleave', endPointer);
+  }
 
-    // HUD‑Buttons – Spielaktionen als Events herausgeben
-    btnStart.addEventListener('click', ()=>{
-      const url = sel.value;
-      // 1) Eigene Game-API (optional)
-      if (window.GameLoader && typeof window.GameLoader.start === 'function'){
-        window.GameLoader.start(url);
-      }
-      // 2) Event für deine bestehenden Skripte:
-      window.dispatchEvent(new CustomEvent('ui:start', { detail:{ map:url }}));
-    });
+  function loadImage(src){
+    return new Promise((resolve)=>{ const img=new Image(); img.onload=()=>resolve(img); img.onerror=()=>resolve(null); img.src=src+(src.includes('?')?'&':'?')+'v='+Date.now(); });
+  }
 
-    btnReload.addEventListener('click', ()=>{
-      const url = sel.value;
-      if (window.GameLoader && typeof window.GameLoader.reload === 'function'){
-        window.GameLoader.reload(url);
-      }
-      window.dispatchEvent(new CustomEvent('ui:reload', { detail:{ map:url }}));
-    });
+  // ===== Rendering ===========================================================
+  function render(){
+    // Clear (CSS‑Pixel)
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width/state.dpr, canvas.height/state.dpr);
 
-    // Wenn dein Spiel eine Kamera besitzt, reiche Werte weiter:
-    function maybeForwardToGame(){
-      if (window.GameCamera){
-        const c = window.GameCamera;
-        if (typeof c.setZoom === 'function') c.setZoom(camera.zoom);
-        if (typeof c.setPosition === 'function') c.setPosition(camera.x, camera.y);
+    applyCam();
+
+    const tile = state.map.tile;
+    const cols = state.map.cols;
+    const rows = state.map.rows;
+
+    // Map‑Hintergrund
+    ctx.fillStyle = '#102433';
+    ctx.fillRect(0,0, cols*tile, rows*tile);
+
+    // Zeichnen
+    const L0 = state.map.layers[0]?.grid;
+    if (L0){
+      if (state.atlas.ok){
+        // mit Atlas
+        const F = state.atlas.frames, IMG = state.atlas.image;
+        for (let i=0;i<L0.length;i++){
+          const key = L0[i];
+          if (!key) continue;
+          const f = F[key];
+          if (!f) continue;
+          const r = (i/cols)|0, c = i%cols;
+          ctx.drawImage(IMG, f.x, f.y, f.w, f.h, c*tile, r*tile, tile, tile);
+        }
+      } else {
+        // Fallback‑Farben
+        const col = (k)=> k==='grass'?'#2b7d2e': k==='dirt'?'#7a5a2a': k==='water'?'#1e4a6a': k==='rock'?'#5b6672': k==='snow'?'#cfd7df': k==='sand'?'#bda36c': k==='lava'?'#6b2b1e':'#3a4a59';
+        for (let i=0;i<L0.length;i++){
+          const key = L0[i];
+          if (!key) continue;
+          const r = (i/cols)|0, c = i%cols;
+          ctx.fillStyle = col(key);
+          ctx.fillRect(c*tile, r*tile, tile, tile);
+        }
       }
     }
 
-    // Autostart, wenn gesetzt
-    window.addEventListener('load', ()=>{
-      drawGrid();
-      applyTransform();
-      updateDebug();
-      if (autoCb.checked){
-        btnStart.click();
-      }
-    });
+    // dezentes Grid drüber
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1/state.cam.z;
+    ctx.beginPath();
+    for (let c=0;c<=cols;c++){ const x = c*tile+0.5; ctx.moveTo(x,0); ctx.lineTo(x,rows*tile); }
+    for (let r=0;r<=rows;r++){ const y = r*tile+0.5; ctx.moveTo(0,y); ctx.lineTo(cols*tile,y); }
+    ctx.stroke();
+  }
 
-    // Falls du aus boot.js/game.js die Map umschaltest:
-    window.addEventListener('game:mapLoaded', (e)=>{
-      if (e && e.detail && e.detail.mapUrl){
-        sel.value = e.detail.mapUrl;
-        updateDebug();
-      }
-    });
+  function loop(){
+    if (state.running) render();
+    updateOverlay();
+    requestAnimationFrame(loop);
+  }
 
-    // Sicherstellen, dass Scroll/Zoom des Browsers nicht auf dem Canvas greift:
-    // (UI bleibt klickbar, weil touch-action dort auf "manipulation" ist)
-    canvas.addEventListener('gesturestart', e=>e.preventDefault());
-    canvas.addEventListener('gesturechange', e=>e.preventDefault());
-    canvas.addEventListener('gestureend', e=>e.preventDefault());
+  // ===== UI‑Brücken ==========================================================
+  // index.html Variante
+  window.addEventListener('ui:start', (e)=>{ const u=e.detail?.map; if (u) startGame(u); });
+  window.addEventListener('ui:reload', (e)=>{ const u=e.detail?.map; if (u) startGame(u); });
+
+  // boot.js Variante
+  document.addEventListener('app:start', (e)=>{ const u=e.detail?.mapUrl; if (u) startGame(u); });
+
+  // Public API (für andere Skripte)
+  async function startGame(url){ await loadMap(url); }
+  async function reloadGame(url){ await loadMap(url || state.map.url); }
+  window.GameLoader = { start: (url)=>startGame(url), reload: (url)=>reloadGame(url) };
+  window.GameCamera = {
+    setZoom:(z)=>{ zoomTo(z); },
+    setPosition:(x,y)=>{ state.cam.x=x; state.cam.y=y; }
+  };
+
+  // ===== Init ================================================================
+  // Buttons, falls vorhanden: Debug speichern (langfristig UX-Button in UI)
+  (function hookButtons(){
+    const btnStart = $('#btnStart');
+    const btnReload= $('#btnReload');
+    const mapSel   = $('#mapSelect');
+
+    if (btnStart && mapSel) btnStart.addEventListener('click', ()=>startGame(mapSel.value));
+    if (btnReload && mapSel) btnReload.addEventListener('click', ()=>reloadGame(mapSel.value));
+
+    // Langdruck Geste auf Debug‑Overlay → Log speichern
+    const overlay = $('#debugOverlay');
+    if (overlay){
+      let t0=0;
+      overlay.addEventListener('pointerdown', ()=>{ t0=performance.now(); });
+      overlay.addEventListener('pointerup', ()=>{ if (performance.now()-t0>600) saveLog(); });
+    }
   })();
-  </script>
-</body>
-</html>
+
+  resizeCanvas();
+  state.cam.z = 1;
+  state.cam.x = (state.map.cols*state.map.tile)/2;
+  state.cam.y = (state.map.rows*state.map.tile)/2;
+  klog('boot','Runtime bereit');
+  requestAnimationFrame(loop);
+})();
