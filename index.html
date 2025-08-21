@@ -2,105 +2,132 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler‑Mini • Debug</title>
-  <meta name="color-scheme" content="dark light" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler‑Mini</title>
   <style>
-    :root{
-      --bg:#0c1722; --panel:#101b26; --panel2:#0e1924;
-      --text:#d7e6f2; --muted:#97a7b5; --accent:#45d07e;
-      --btn:#1a3a2a; --btn2:#1e2e46; --warn:#e9b64b;
+    :root {
+      --bg: #0f1b2a;
+      --panel: #0f2437cc;
+      --panel-border: #0a1622;
+      --text: #e8f0ff;
+      --muted: #9ab0c8;
+      --btn: #1f6f3a;
+      --btn2: #203245;
+      --btn-border: #07121c;
     }
     html, body {
-      margin:0; padding:0; height:100%;
-      background:var(--bg); color:var(--text);
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      overscroll-behavior: none;  /* Buttons sollen Events bekommen */
+      overscroll-behavior: none;
     }
-    #stage{ position:relative; width:100vw; height:100vh; overflow:hidden; }
-    canvas#game{
-      position:absolute; inset:0;
-      width:100%; height:100%;
+    #stage { position: relative; inline-size: 100%; block-size: 100%; overflow: hidden; }
+    canvas#game {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
       image-rendering: pixelated;
-      touch-action: none;          /* Pan/Pinch macht die Engine */
+      touch-action: none; /* Pan/Pinch steuern wir selbst */
       background: transparent;
     }
 
-    /* Status-HUD links oben (FPS, Cam, Map …) */
-    #hud{
-      position:absolute; left:12px; top:12px; z-index:40;
+    /* Debug-Konsole rechts oben */
+    #debug {
+      position: absolute; top: 12px; right: 12px;
+      z-index: 50;
+      min-width: 320px; max-width: min(44vw, 560px);
       background: rgba(0,0,0,.55);
-      border:1px solid rgba(0,0,0,.6);
-      border-radius:10px; padding:.55rem .7rem;
+      color: #b7ffb7;
+      border: 1px solid rgba(0,0,0,.6);
+      border-radius: 10px;
+      padding: .6rem .7rem;
       font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      white-space:pre; color:#b7d7ff;
-      pointer-events:none;
+      pointer-events: none;
+      white-space: pre-wrap;
+      user-select: text;
+    }
+    #debugToggle {
+      position: fixed; right: 12px; bottom: 12px; z-index: 60;
+      background: var(--btn2); color: var(--text);
+      border: 1px solid var(--btn-border);
+      border-radius: 10px; padding: .5rem .75rem; font-weight: 600;
+      cursor: pointer;
     }
 
-    /* Debug-Log rechts oben */
-    #debug{
-      position:absolute; right:12px; top:12px; z-index:50;
-      min-width:320px; max-width:44vw; max-height:50vh; overflow:auto;
-      background: rgba(0,0,0,.55); color:#b7ffb7;
-      border:1px solid rgba(0,0,0,.6); border-radius:10px;
-      padding:.6rem .7rem; font:13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      white-space:pre-wrap;
+    /* Control-Panel unten mittig */
+    #panel {
+      position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+      z-index: 40; display: flex; gap: .75rem; align-items: center;
+      background: var(--panel); border: 1px solid var(--panel-border);
+      border-radius: 16px; padding: .9rem 1.1rem; backdrop-filter: blur(4px);
     }
-    #debug strong{ color:#fff; }
-    #debug .err{ color:#ffb1b1; }
-
-    /* Control-Panel unten mittig (Start, Reload, Mapwahl) */
-    #panel{
-      position:absolute; left:50%; bottom:24px; transform:translateX(-50%);
-      z-index:45; display:flex; gap:.8rem; align-items:center;
-      padding:1rem 1.1rem; background:linear-gradient(180deg,var(--panel),var(--panel2));
-      border:1px solid rgba(0,0,0,.5); border-radius:16px;
-      box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    .btn {
+      appearance: none; border: 1px solid var(--btn-border);
+      border-radius: 14px; padding: .65rem 1.1rem; font-weight: 700; cursor: pointer;
+      color: #fff; background: var(--btn);
     }
-    .btn{
-      appearance:none; border:0; border-radius:14px; padding:.7rem 1.1rem;
-      font-weight:700; cursor:pointer; color:#dff5e8;
-      background:var(--btn);
-    }
-    .btn.secondary{ background:var(--btn2); color:#d8e3f0; }
-    .label{ color:var(--muted); font-weight:600; margin-left:.25rem; }
-    select{
-      background:#0f1b27; color:#eaf4ff; border:1px solid #0a1118;
-      padding:.6rem .7rem; border-radius:.6rem; min-width: 240px;
+    .btn.secondary { background: var(--btn2); color: var(--text); }
+    label { color: var(--muted); }
+    select {
+      background: #0c1b2b; color: var(--text); border: 1px solid #06111b;
+      padding: .5rem .7rem; border-radius: 10px;
     }
 
-    /* Debug-Toggle unten rechts (muss klickbar sein) */
-    #debugToggle{ position: fixed; right:12px; bottom:12px; z-index:60; }
+    /* Bauleiste (Platzhalter) unten links */
+    #buildBar {
+      position: absolute; left: 24px; bottom: 16px; z-index: 40;
+      display: flex; align-items: center; gap: .6rem;
+      background: var(--panel); border: 1px solid var(--panel-border);
+      border-radius: 16px; padding: .6rem .8rem;
+    }
+    #buildBar .swatch {
+      width: 34px; height: 28px; border-radius: 6px; border: 1px solid #0007; opacity: .85;
+    }
+
+    /* Hinweisbanner für Ladefehler (wird dem Debug-Text angehängt) – Styling-Reserve */
+    .errorLine { color: #ffbdbd; }
+
+    /* Start-Overlay (nur Styling; Inhalt kommt aus #panel) */
+
+    /* Kleiner DPI-Hinweis oben links (HUD), wird per JS geschrieben */
+    #hudMini {
+      position: absolute; left: 12px; top: 12px; z-index: 30;
+      padding: .6rem .7rem; border-radius: 10px;
+      background: rgba(0,0,0,.35); color: #cfe5ff;
+      border: 1px solid rgba(0,0,0,.5);
+      font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap; pointer-events: none;
+    }
   </style>
 </head>
 <body>
   <div id="stage">
     <canvas id="game"></canvas>
 
-    <!-- Status oben links -->
-    <div id="hud">Frames: 0   dt=0ms
-Cam: x=0.0  y=0.0  zoom=1.00
-Map: –      /   Assets: –
-DPR=–       Size=–x–</div>
+    <pre id="debug" style="display:block"></pre>
+    <button id="debugToggle" title="F2 toggelt Debug">Debug</button>
 
-    <!-- Debug rechts oben -->
-    <div id="debug">[boot] Debug‑Overlay aktiv (non‑blocking). F2 toggelt Overlay.</div>
+    <div id="hudMini"></div>
 
-    <!-- Control-Panel -->
     <div id="panel">
       <button id="btnStart" class="btn">Start</button>
-      <button id="btnReload" class="btn secondary">Neu laden</button>
-      <span class="label">Karte:</span>
-      <select id="selMap">
-        <!-- per JS befüllt -->
-      </select>
+      <button id="btnReload" class="btn secondary" title="Seite neu laden">Neu laden</button>
+      <label for="selMap">Karte:</label>
+      <select id="selMap" title="Karte wählen"></select>
     </div>
 
-    <button id="debugToggle" class="btn secondary">Debug</button>
+    <div id="buildBar" title="(Platzhalter – Mal‑Brush)">
+      <span style="color:#9ab0c8">Bauen:</span>
+      <div class="swatch" style="background:#7dbb41"></div>
+      <div class="swatch" style="background:#9c6b2b"></div>
+      <div class="swatch" style="background:#3d5a86"></div>
+      <div class="swatch" style="background:#777c84"></div>
+      <div class="swatch" style="background:#ced8e2"></div>
+      <div class="swatch" style="background:#284a22"></div>
+    </div>
   </div>
 
-  <!-- Reihenfolge beibehalten -->
-  <script defer src="tools/map-runtime.js"></script>
-  <script defer src="boot.js"></script>
+  <!-- Bestehende Dateien dürfen weiterhin geladen werden -->
+  <script src="asset.js"></script>
+  <script type="module" src="boot.js"></script>
 </body>
 </html>
