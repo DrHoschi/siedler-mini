@@ -1,261 +1,285 @@
-/*
-  boot.js – MAX
-  - Debug-Overlay (F2 + Klick auf „Debug“)
-  - Query-Params: ?map=…, ?v=…, ?overlay=0
-  - Lädt tools/map-runtime.js und nutzt renderView(...) aus dem Modul
-  - Start/Reload-Buttons, niemals harter Abbruch
-  - Neu: Kamera + Eingaben (Drag/Touch/Pinch/Wheel) und Render-Loop
-*/
+// boot.js — App‑Start, Input, Debug, Query‑Params, Map‑Wechsel
+import { loadAndPrepareMap, renderView } from './tools/map-runtime.js';
 
-const log = {
-  time(){ const d=new Date(); return d.toTimeString().slice(0,8); },
-  pfx(){ return (k,...m)=>console.log(`[${log.time()}] %c${k}`, 'color:#a7bed0', ...m); }
-};
-const lBoot = log.pfx(); const lGame = log.pfx(); const lNet  = log.pfx(); const lDiag = log.pfx(); const lAtlas= log.pfx();
-
-let overlayOn = true;
+/* -----------------------------------------------------------
+   Globale App‑State
+----------------------------------------------------------- */
 const cv = document.getElementById('game');
-const ctx = cv.getContext('2d');
+const ctx = cv.getContext('2d', { alpha:false });
+ctx.imageSmoothingEnabled = false;
 
-function resize(){
-  cv.width  = Math.floor(innerWidth  * devicePixelRatio);
-  cv.height = Math.floor(innerHeight * devicePixelRatio);
+const debugEl  = document.getElementById('debug');
+const statusEl = document.getElementById('status');
+const btnStart = document.getElementById('btnStart');
+const btnReload= document.getElementById('btnReload');
+const selMap   = document.getElementById('selMap');
+const btnDbgT  = document.getElementById('debugToggle');
+
+const buildPanel = document.getElementById('build');
+let currentBrush = 'grass'; // „Bauen“‑Dummy
+
+// Kamera (Welt‑Koords), Welt‑Zoom
+const camera = { x:0, y:0, zoom:1 };
+
+// Aktuelle Welt / Assets
+let world = null;     // { view:{fullCanvas,width,height,tileSize}, mapUrl, ... }
+let running = false;  // Render‑Loop
+let lastTS = 0;
+
+// Logging mit Bereich (boot/net/game/atlas/diag)
+function log(tag, msg) {
+  const now = new Date();
+  const t = now.toTimeString().slice(0,8);
+  debugEl.textContent += `[${t}] ${tag}: ${msg}\n`;
+  debugEl.scrollTop = debugEl.scrollHeight;
 }
-resize(); addEventListener('resize', resize);
+function diag(msg){ log('diag', msg); }
+function boot(msg){ log('boot', msg); }
+function game(msg){ log('game', msg); }
+function net (msg){ log('net ', msg); }
+function atlas(msg){ log('atlas', msg); }
 
-// Kamera-Status (Pixel in Weltkoordinaten, zoom=Skalierung)
-const CAMERA = window.__CAMERA = { x:0, y:0, zoom:1 };
-
-// === Overlay ===
-(function overlay(){
-  const url = new URL(location.href);
-  if (url.searchParams.get('overlay') === '0') overlayOn = false;
-
-  let frames=0, last=performance.now(), dt=16.7;
-  function hud(now){
-    frames++; dt=now-last; last=now; requestAnimationFrame(hud);
-    if (!overlayOn) return;
-    ctx.save(); ctx.scale(devicePixelRatio,devicePixelRatio);
-    ctx.clearRect(0,0,360,90);
-    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(6,6,350,78);
-    ctx.fillStyle='#cfe6ff'; ctx.font='12px ui-monospace, SFMono-Regular, Menlo, monospace';
-    const map=(window.__MAP_STATE||{}).loaded?'aktiv':'—';
-    const assets=(window.__ASSETS_OK)?'aktiv':'—';
-    const lines=[
-      `Frames: ${String(frames).padStart(4)}   dt=${dt.toFixed(2)}ms`,
-      `Cam: x=${CAMERA.x.toFixed(1)}   y=${CAMERA.y.toFixed(1)}   zoom=${CAMERA.zoom.toFixed(2)}`,
-      `Map: ${map}   /   Assets: ${assets}`,
-      `DPR=${devicePixelRatio.toFixed(2)}   Size=${innerWidth}x${innerHeight}`
-    ];
-    lines.forEach((t,i)=>ctx.fillText(t,12,22+i*16));
-    ctx.restore();
-  }
-  requestAnimationFrame(hud);
-
-  addEventListener('keydown', ev=>{
-    if (ev.key==='F2'){ overlayOn=!overlayOn; lBoot('Debug‑Overlay toggled →', overlayOn?'ON':'OFF'); }
-  });
-  document.getElementById('btnDebug')?.addEventListener('click', ()=>{
-    overlayOn=!overlayOn; lBoot('Debug‑Overlay toggled →', overlayOn?'ON':'OFF');
-  });
-
-  lBoot('Debug‑Overlay aktiv (non‑blocking). F2 toggelt Overlay.');
-})();
-
-// === Diagnose ===
-(function(){
-  const url=new URL(location.href);
-  const bust=url.searchParams.get('v') ?? Date.now().toString();
-  lDiag('page='+location.href);
-  lDiag('bust=?v='+bust);
-  lDiag('fetchPatched='+true);
-  window.__MAP_STATE={loaded:false,url:null,error:null,bust};
-})();
-
-// === Buttons ===
-document.getElementById('btnReload').addEventListener('click', ()=>{
-  const url=new URL(location.href);
-  const v=parseInt(url.searchParams.get('v')||'0',10);
-  url.searchParams.set('v', String(isFinite(v)?(v+1):Date.now()));
-  location.href=url.toString();
-});
-document.getElementById('btnStart').addEventListener('click', async ()=>{
-  document.getElementById('startPanel').style.display='none';
-  if (!window.__MAP_STATE.loaded && !window.__MAP_STATE.loading) {
-    try { await loadMapNow(); } catch(e) {}
-  }
+/* -----------------------------------------------------------
+   Debug‑Overlay toggeln (F2 + Button)
+----------------------------------------------------------- */
+let debugVisible = true;
+function setDebugVisible(v){
+  debugVisible = v;
+  debugEl.style.display = v ? 'block' : 'none';
+}
+btnDbgT.addEventListener('click', ()=> setDebugVisible(!debugVisible));
+window.addEventListener('keydown', (e)=>{
+  if (e.key === 'F2') setDebugVisible(!debugVisible);
 });
 
-// === Laden + Rendern ===
-let mapRuntime = null;
-let VIEW = null; // { fullCanvas, width, height }
-let RENDER = null; // function renderView(canvas, view, camera)
+/* -----------------------------------------------------------
+   Viewport / Canvas sizing (HiDPI)
+----------------------------------------------------------- */
+function fitCanvas(){
+  const dpr = devicePixelRatio || 1;
+  const w = cv.clientWidth;
+  const h = cv.clientHeight;
+  cv.width  = Math.max(1, Math.floor(w * dpr));
+  cv.height = Math.max(1, Math.floor(h * dpr));
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener('resize', fitCanvas);
 
-async function loadMapNow(){
-  window.__MAP_STATE.loading = true;
+/* -----------------------------------------------------------
+   Query‑Params (Karte/Tileset wählen, Bust)
+   Beispiele:
+   ?map=assets/maps/map-pro.json
+   ?map=assets/maps/map-demo.json&v=3
+----------------------------------------------------------- */
+function getParams(){
+  const u = new URL(location.href);
+  return {
+    map:  u.searchParams.get('map')  || 'assets/maps/map-pro.json',
+    bust: u.searchParams.get('v')    || '',
+  };
+}
 
-  // Map-URL bestimmen
-  const DEFAULT_MAP = './assets/maps/map-pro.json';
-  const url=new URL(location.href);
-  let mapUrl=url.searchParams.get('map')||DEFAULT_MAP;
-  if (!/[?&]v=/.test(mapUrl)) {
-    const sep = mapUrl.includes('?') ? '&' : '?';
-    mapUrl += `${sep}v=${encodeURIComponent(window.__MAP_STATE.bust)}`;
+/* -----------------------------------------------------------
+   UI: Map‑Dropdown befüllen (kannst du beliebig erweitern)
+----------------------------------------------------------- */
+function initMapSelector(defaultMap){
+  const options = [
+    ['assets/maps/map-pro.json',  'map-pro.json'],
+    ['assets/maps/map-demo.json', 'map-demo.json'],
+  ];
+  selMap.innerHTML = options.map(([v,l]) =>
+    `<option value="${v}" ${v===defaultMap?'selected':''}>${l}</option>`).join('');
+
+  selMap.addEventListener('change', ()=>{
+    // URL Query aktualisieren (History pushen)
+    const url = new URL(location.href);
+    url.searchParams.set('map', selMap.value);
+    history.pushState({}, '', url);
+  });
+}
+
+/* -----------------------------------------------------------
+   Input: Pan & Zoom (nur Canvas, nicht die Seite)
+----------------------------------------------------------- */
+// Browser‑Gesten‑Zoom weg
+document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+document.addEventListener('gesturechange',e=>e.preventDefault(), {passive:false});
+document.addEventListener('gestureend',  e=>e.preventDefault(), {passive:false});
+
+// Wheel‑Zoom
+cv.addEventListener('wheel', (e)=>{
+  e.preventDefault();
+  const zf = Math.exp(-e.deltaY * 0.0015);
+  zoomAroundPoint(e.clientX, e.clientY, zf);
+}, {passive:false});
+
+// Touch: 1 Finger pan, 2 Finger pinch
+let touchMode = 0; // 0=none, 1=drag, 2=pinch
+let tLast = [];
+function copyTouch(t){ return { id:t.identifier, x:t.clientX, y:t.clientY }; }
+
+cv.addEventListener('touchstart', (e)=>{
+  e.preventDefault();
+  if (e.touches.length===1){ touchMode=1; tLast=[copyTouch(e.touches[0])]; }
+  else if (e.touches.length>=2){ touchMode=2; tLast=[copyTouch(e.touches[0]), copyTouch(e.touches[1])]; }
+}, {passive:false});
+
+cv.addEventListener('touchmove', (e)=>{
+  e.preventDefault();
+  if (touchMode===1 && e.touches.length===1){
+    const t = copyTouch(e.touches[0]); const p=tLast[0];
+    const dx = (t.x - p.x) / (camera.zoom * (devicePixelRatio||1));
+    const dy = (t.y - p.y) / (camera.zoom * (devicePixelRatio||1));
+    camera.x -= dx; camera.y -= dy; tLast=[t];
+  } else if (touchMode===2 && e.touches.length>=2){
+    const a = copyTouch(e.touches[0]), b = copyTouch(e.touches[1]);
+    const pa=tLast[0], pb=tLast[1];
+    const dist = Math.hypot(a.x-b.x, a.y-b.y);
+    const pDist= Math.hypot(pa.x-pb.x, pa.y-pb.y);
+    if (pDist>0){
+      const zf = dist/pDist;
+      // zoom um Mitte der zwei Finger
+      const cx = (a.x+b.x)/2, cy=(a.y+b.y)/2;
+      zoomAroundPoint(cx, cy, zf);
+    }
+    tLast=[a,b];
   }
+}, {passive:false});
 
-  try{
-    mapRuntime = await import('./tools/map-runtime.js');
-    lBoot('map-runtime.js: OK');
-  }catch(e){
-    lBoot('map-runtime.js: fehlt');
-    lGame('Map‑Lader übersprungen: tools/map-runtime.js fehlt.');
-    window.__MAP_STATE.loading = false;
-    return;
-  }
+cv.addEventListener('touchend', (e)=>{
+  e.preventDefault(); touchMode=0; tLast=[];
+}, {passive:false});
 
+// Zoom um einen Bildschirm‑Punkt (Client‑Koordinate)
+function zoomAroundPoint(clientX, clientY, zf){
+  const dpr = devicePixelRatio||1;
+  const rect = cv.getBoundingClientRect();
+  // Bildschirm‑Punkt -> Welt‑Koord
+  const sx = (clientX - rect.left) * dpr;
+  const sy = (clientY - rect.top ) * dpr;
+
+  // aktuelle Welt‑Koord dieses Punktes
+  const wx = camera.x + sx / (camera.zoom * dpr);
+  const wy = camera.y + sy / (camera.zoom * dpr);
+
+  // neue Zoomstufe clampen
+  const old = camera.zoom;
+  camera.zoom = Math.min(4, Math.max(0.25, camera.zoom * zf));
+
+  // Kamera so verschieben, dass Bildschirm‑Punkt auf gleicher Welt‑Koord bleibt
+  camera.x = wx - sx / (camera.zoom * dpr);
+  camera.y = wy - sy / (camera.zoom * dpr);
+}
+
+/* -----------------------------------------------------------
+   Bau‑Panel (Dummy): Brush wählen (später: Mal‑Funktion)
+----------------------------------------------------------- */
+buildPanel.querySelectorAll('.swatch').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    buildPanel.querySelectorAll('.swatch').forEach(x=>x.classList.remove('active'));
+    el.classList.add('active');
+    currentBrush = el.dataset.key;
+  });
+});
+buildPanel.querySelector('.swatch[data-key="grass"]').classList.add('active');
+
+/* -----------------------------------------------------------
+   Start / Reload
+----------------------------------------------------------- */
+btnStart.addEventListener('click', async ()=>{
+  await startGame();
+});
+btnReload.addEventListener('click', ()=>{
+  location.replace(bustUrl(location.href)); // harter Bust‑Reload
+});
+
+function bustUrl(u){
+  const url = new URL(u);
+  url.searchParams.set('v', Date.now().toString());
+  return url.toString();
+}
+
+/* -----------------------------------------------------------
+   Haupt‑Startlogik
+----------------------------------------------------------- */
+async function startGame(){
+  const params = getParams();
+  const page = bustUrl(location.origin + location.pathname + location.search);
+  diag(`page=${page}`);
+  boot('Debug‑Overlay aktiv (non‑blocking). F2 toggelt Overlay.');
+  fitCanvas();
+
+  initMapSelector(params.map);
+
+  // Lade Map
+  boot('preGameInit OK • V14.7‑hf2');
   try{
-    lGame('Lade Karte:', mapUrl);
-    const result = await mapRuntime.loadAndPrepareMap({
-      mapUrl,
-      onNet:(...m)=>lNet('[net]',...m),
-      onAtlas:(...m)=>lAtlas('[atlas]',...m),
+    const mapUrl = selMap.value || params.map;
+    game(`Lade Karte:\n${new URL(mapUrl, location.href).toString()}`);
+
+    world = await loadAndPrepareMap(mapUrl, {
+      onNet: (url, code, ms)=> net(`${code} ${url} (${ms}ms)`),
+      onAtlas: (k,v)=> atlas(`${k}=${v}`),
+      log: (t,m)=> log(t,m),
     });
 
-    VIEW   = result.view;
-    RENDER = mapRuntime.renderView;
-
-    window.__MAP_STATE.loaded = true;
-    window.__MAP_STATE.url = mapUrl;
-    window.__ASSETS_OK = !!VIEW;
-
-    lGame('Karte geladen:', result.mapUrl);
-
-    // Kamera angenehm starten (zentriert)
-    CAMERA.x = Math.max(0, (VIEW.width  - innerWidth /devicePixelRatio)/2);
-    CAMERA.y = Math.max(0, (VIEW.height - innerHeight/devicePixelRatio)/2);
-    CAMERA.zoom = 1;
-
-    startRenderLoop();
-
-    lGame('Game gestartet.');
-  }catch(err){
-    window.__MAP_STATE.error = String(err && err.message || err);
-    lGame('Karte konnte nicht geladen werden:', mapUrl);
-    if (err && err.stack) console.error(err);
-  }finally{
-    window.__MAP_STATE.loading = false;
+    game(`Karte geladen: ${new URL(mapUrl, location.href).toString()}`);
+    running = true; lastTS = 0;
+    requestAnimationFrame(loop);
+  } catch(err){
+    game(`Karte konnte nicht geladen werden: ${err?.message || err}`);
+    running = true; // trotzdem Fallback‑Loop (leeres Grid)
+    lastTS = 0;
+    requestAnimationFrame(loop);
   }
 }
 
-// === Render-Loop ===
-let animId = 0;
-function startRenderLoop(){
-  cancelAnimationFrame(animId);
-  const draw = ()=> {
-    if (VIEW && RENDER) {
-      RENDER(cv, VIEW, CAMERA);
-    } else {
-      // Clear
-      ctx.setTransform(1,0,0,1,0,0);
-      ctx.clearRect(0,0,cv.width,cv.height);
-    }
-    animId = requestAnimationFrame(draw);
-  };
-  animId = requestAnimationFrame(draw);
+/* -----------------------------------------------------------
+   Render‑Loop
+----------------------------------------------------------- */
+function loop(ts){
+  if (!running) return;
+  if (lastTS===0) lastTS = ts;
+  const dt = ts - lastTS; lastTS = ts;
+
+  // Status HUD oben links
+  const dpr = devicePixelRatio||1;
+  const size = `${cv.width}×${cv.height}`;
+  const mapName = world?.mapUrl ? world.mapUrl.split('/').pop() : '–';
+  const assetsState = world ? 'aktiv' : '–';
+  statusEl.textContent =
+`Frames: ${Math.round(ts/1000*60)%10000}  dt=${dt.toFixed(2)}ms
+Cam: x=${camera.x.toFixed(1)}  y=${camera.y.toFixed(1)}  zoom=${camera.zoom.toFixed(2)}
+Map: ${mapName.padEnd(6)} /  Assets: ${assetsState}
+DPR=${dpr.toFixed(2)}   Size=${size}`;
+
+  // Hintergrund
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle = '#0b1621';
+  ctx.fillRect(0,0,cv.width,cv.height);
+
+  // Welt zeichnen
+  if (world?.view){
+    renderView(cv, world.view, camera);
+  } else {
+    // Fallback: nur Gitter im Nichts anzeigen (Debug)
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let x=0; x<cv.width; x+=64) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cv.height); ctx.stroke(); }
+    for (let y=0; y<cv.height;y+=64){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cv.width,y); ctx.stroke(); }
+  }
+
+  requestAnimationFrame(loop);
 }
 
-// === Eingaben (Pan/Zoom) ===
-(function input(){
-  let dragging = false;
-  let lastX=0, lastY=0;
-
-  // Drag (Mouse)
-  cv.addEventListener('mousedown', (e)=>{
-    dragging = true; lastX=e.clientX; lastY=e.clientY;
-  });
-  addEventListener('mouseup', ()=> dragging=false);
-  addEventListener('mousemove', (e)=>{
-    if (!dragging) return;
-    const dx = (e.clientX - lastX) / (CAMERA.zoom);
-    const dy = (e.clientY - lastY) / (CAMERA.zoom);
-    CAMERA.x -= dx / devicePixelRatio;
-    CAMERA.y -= dy / devicePixelRatio;
-    lastX = e.clientX; lastY = e.clientY;
-    clampCamera();
-  });
-
-  // Wheel-Zoom (um Mauspunkt)
-  cv.addEventListener('wheel', (e)=>{
-    e.preventDefault();
-    const zoomFactor = Math.exp(-e.deltaY * 0.0015);
-    zoomAroundPoint(e.clientX, e.clientY, zoomFactor);
-  }, { passive:false });
-
-  // Touch: 1 Finger Pan, 2 Finger Pinch
-  let touchMode = 0; // 0=none, 1=pan, 2=pinch
-  let tLast = [];
-  cv.addEventListener('touchstart', (e)=>{
-    if (e.touches.length===1){ touchMode=1; tLast=[copyTouch(e.touches[0])]; }
-    else if (e.touches.length>=2){ touchMode=2; tLast=[copyTouch(e.touches[0]), copyTouch(e.touches[1])]; }
-  }, { passive:true });
-
-  cv.addEventListener('touchmove', (e)=>{
-    if (touchMode===1 && e.touches.length===1){
-      const t=e.touches[0];
-      const dx = (t.clientX - tLast[0].clientX) / (CAMERA.zoom*devicePixelRatio);
-      const dy = (t.clientY - tLast[0].clientY) / (CAMERA.zoom*devicePixelRatio);
-      CAMERA.x -= dx; CAMERA.y -= dy; tLast=[copyTouch(t)];
-      clampCamera();
-    } else if (touchMode===2 && e.touches.length>=2){
-      const a=[copyTouch(e.touches[0]), copyTouch(e.touches[1])];
-      const d0 = dist(tLast[0], tLast[1]);
-      const d1 = dist(a[0], a[1]);
-      if (d0>0){
-        const zoomFactor = d1/d0;
-        const cx=(a[0].clientX+a[1].clientX)*0.5;
-        const cy=(a[0].clientY+a[1].clientY)*0.5;
-        zoomAroundPoint(cx, cy, zoomFactor);
-      }
-      tLast=a;
-    }
-  }, { passive:false });
-
-  addEventListener('touchend', ()=>{ touchMode=0; tLast=[]; }, { passive:true });
-
-  function copyTouch(t){ return { clientX:t.clientX, clientY:t.clientY }; }
-  function dist(a,b){ const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY; return Math.hypot(dx,dy); }
-
-  function zoomAroundPoint(clientX, clientY, factor){
-    const prevZoom = CAMERA.zoom;
-    let nextZoom = prevZoom * factor;
-    // Grenzen
-    nextZoom = Math.max(0.25, Math.min(4, nextZoom));
-
-    // Weltkoordinate unter dem Cursor vor der Zoomänderung
-    const rect = cv.getBoundingClientRect();
-    const vx = (clientX - rect.left) * (1/devicePixelRatio) / prevZoom + CAMERA.x;
-    const vy = (clientY - rect.top ) * (1/devicePixelRatio) / prevZoom + CAMERA.y;
-
-    // neue Kamera so setzen, dass derselbe Weltpunkt unter dem Cursor bleibt
-    CAMERA.zoom = nextZoom;
-    CAMERA.x = vx - (clientX - rect.left) * (1/devicePixelRatio) / nextZoom;
-    CAMERA.y = vy - (clientY - rect.top ) * (1/devicePixelRatio) / nextZoom;
-
-    clampCamera();
-  }
-
-  function clampCamera(){
-    if (!VIEW){ return; }
-    const vw = innerWidth  / (devicePixelRatio * CAMERA.zoom);
-    const vh = innerHeight / (devicePixelRatio * CAMERA.zoom);
-
-    const maxX = Math.max(0, VIEW.width  - vw);
-    const maxY = Math.max(0, VIEW.height - vh);
-
-    CAMERA.x = Math.max(0, Math.min(maxX, CAMERA.x));
-    CAMERA.y = Math.max(0, Math.min(maxY, CAMERA.y));
-  }
-})();
-
-// auto-load wie zuvor; wenn du nur via „Start“ willst, entferne die Zeile
-loadMapNow().catch(()=>{});
+/* -----------------------------------------------------------
+   Autostart im Debug‑Flow: UI bleibt sichtbar
+----------------------------------------------------------- */
+addEventListener('load', ()=>{
+  // sofort bereit, aber erst nach Klick „Start“ laden
+  boot('asset.js: OK');
+  boot('map-runtime.js: OK');
+  boot('boot.js: OK');
+  setDebugVisible(true);
+});
