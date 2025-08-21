@@ -5,55 +5,46 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini</title>
   <style>
-    :root {
-      --bg:#0f1b26; --panel:#132333; --panel2:#0e1a27; --text:#e8f1f8;
-      --btn:#1f8f44; --btn2:#2b3f56; --chip:#22364a;
-    }
+    :root { --bg:#0f1b26; --panel:#132333; --panel2:#0e1a27; --text:#e8f1f8; --btn:#1f8f44; --btn2:#2b3f56; --chip:#22364a; }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-    #stage {position:fixed; inset:0; overflow:hidden;}
-    /* Wichtig: UI ist „position:fixed“ – wird NICHT vom Canvas-Transform beeinflusst */
-    .hud {position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:linear-gradient(180deg,var(--panel),var(--panel2)); border-radius:16px; padding:16px 20px; display:flex; gap:16px; align-items:center; box-shadow:0 12px 30px rgba(0,0,0,.35);}
-    .btn {border:0; border-radius:12px; padding:12px 18px; font-weight:600; cursor:pointer; color:#fff;}
-    .btn.primary{background:var(--btn);}
-    .btn.ghost{background:var(--btn2);}
+    /* Bühne */
+    #stage { position:fixed; inset:0; overflow:hidden; z-index:0; }
+    canvas#game { position:absolute; left:50%; top:50%; transform-origin:0 0; image-rendering:pixelated; }
+    /* UI – NICHT gezoomt */
+    .hud{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:linear-gradient(180deg,var(--panel),var(--panel2));
+      border-radius:16px; padding:16px 20px; display:flex; gap:16px; align-items:center; box-shadow:0 12px 30px rgba(0,0,0,.35); z-index:1000; }
+    .btn{ border:0; border-radius:12px; padding:12px 18px; font-weight:600; cursor:pointer; color:#fff; }
+    .btn.primary{background:var(--btn);} .btn.ghost{background:var(--btn2);}
     .group{display:flex; gap:10px; align-items:center}
-    .select{appearance:none;background:var(--chip); color:#fff; border:1px solid #2d455e; border-radius:12px; padding:10px 38px 10px 12px; position:relative;}
+    .select{appearance:none;background:var(--chip); color:#fff; border:1px solid #2d455e; border-radius:12px; padding:10px 38px 10px 12px;}
     .select-wrap{position:relative}
     .select-wrap::after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#9fb6ca; pointer-events:none;}
-
-    /* Debug-Badge rechts unten */
-    #debugToggle{ position:fixed; right:16px; bottom:24px; }
-
-    /* Overlay oben links */
-    #overlay{ position:fixed; left:16px; top:16px; background:rgba(0,0,0,.45); padding:10px 12px; border-radius:10px; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; white-space:pre; }
-    #overlay.hidden{display:none;}
-
-    /* Canvas immer volle Fläche; transform nur auf dieses Element */
-    canvas#game { position:absolute; left:50%; top:50%; transform-origin:0 0; image-rendering:pixelated; }
-    /* „Bauen“-Leiste nur als Platzhalter */
-    .brushes{ position:fixed; left:24px; bottom:24px; background:linear-gradient(180deg,var(--panel),var(--panel2)); border-radius:14px; padding:10px 12px; display:flex; gap:8px; align-items:center}
+    #debugToggle{ position:fixed; right:16px; bottom:24px; z-index:1000; }
+    /* Debug-Overlay sichtbar, klickt nichts weg */
+    #overlay{ position:fixed; left:16px; top:16px; background:rgba(0,0,0,.58); padding:10px 12px; border-radius:10px;
+      font:12px/1.4 ui-monospace,Consolas,Menlo,monospace; white-space:pre; z-index:1000; max-width:80vw; color:#dff2ff; pointer-events:none; }
+    #overlay.hidden{ display:none; }
+    .brushes{ position:fixed; left:24px; bottom:24px; background:linear-gradient(180deg,var(--panel),var(--panel2)); border-radius:14px; padding:10px 12px; display:flex; gap:8px; align-items:center; z-index:1000; }
     .dot{width:28px;height:28px;border-radius:7px; background:#5aa342; outline:2px solid #203245;}
     .dot.s1{background:#a67432}.dot.s2{background:#3c5f8d}.dot.s3{background:#8a9097}.dot.s4{background:#c9d4d9}.dot.s5{background:#1f5b2f}
+    /* falls aus alten Builds noch ein Range-Slider existiert -> raus damit */
+    input[type="range"], #devSlider, #devZoom { display:none !important; }
   </style>
 </head>
 <body>
-  <div id="stage">
-    <canvas id="game" width="2048" height="2048"></canvas>
-  </div>
+  <div id="stage"><canvas id="game" width="1024" height="1024"></canvas></div>
 
-  <div id="overlay" class="hidden"></div>
+  <div id="overlay" class="hidden">Debug bereit (F2 oder Button)</div>
 
-  <div class="hud">
+  <div class="hud" id="hud">
     <div class="group">
-      <button id="btnStart" class="btn primary">Start</button>
+      <button id="btnStart"  class="btn primary">Start</button>
       <button id="btnReload" class="btn ghost">Neu laden</button>
     </div>
     <div class="group">
       <span>Karte:</span>
       <span class="select-wrap">
-        <select id="mapSelect" class="select">
-          <!-- wird in boot.js gesetzt -->
-        </select>
+        <select id="mapSelect" class="select"></select>
       </span>
     </div>
   </div>
@@ -62,11 +53,10 @@
 
   <div class="brushes">
     <span>Bauen:</span>
-    <span class="dot"></span><span class="dot s1"></span><span class="dot s2"></span>
-    <span class="dot s3"></span><span class="dot s4"></span><span class="dot s5"></span>
+    <span class="dot"></span><span class="dot s1"></span><span class="dot s2"></span><span class="dot s3"></span><span class="dot s4"></span><span class="dot s5"></span>
   </div>
 
-  <script src="boot.js"></script>
-  <script src="tools/map-runtime.js"></script>
+  <script src="boot.js" defer></script>
+  <script src="tools/map-runtime.js" defer></script>
 </body>
 </html>
