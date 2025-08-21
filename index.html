@@ -3,77 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-
-  <!--
-    Siedler-Mini • MAX-Variante
-    --------------------------------
-    - Lädt boot.js als ES-Modul.
-    - Keine absoluten Pfade -> alles relativ zur index.html.
-    - Debug-Overlay bleibt aktiv (F2 toggeln, siehe boot.js).
-  -->
   <title>Siedler‑Mini</title>
-
   <style>
-    /* Minimaler, dunkler Hintergrund – wie gehabt */
     :root { color-scheme: dark; }
-    html, body {
-      margin: 0; padding: 0;
-      height: 100%;
-      background: #0e1a25; /* Dark Navy */
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      overflow: hidden;
-    }
-
-    /* Canvas im Vollbild, wird von game/boot positioniert */
-    #game {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      display: block;
-      image-rendering: pixelated;      /* „crispe“ Pixel */
-      image-rendering: crisp-edges;
-    }
-
-    /* Das kleine Start-Panel (bekannt) */
-    .panel {
-      position: absolute;
-      left: 50%; top: 70%;
-      transform: translate(-50%, -50%);
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 18px 22px;
-      color: #dfe8f0;
-      min-width: 320px;
-      backdrop-filter: blur(6px);
-    }
-    .panel h1 { margin: 0 0 10px; font-size: 22px; }
-    .panel p  { margin: 0 0 14px; opacity: .85; }
-    .row { display: flex; gap: 10px; }
-    .btn {
-      appearance: none;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: #163041;
-      color: #dfe8f0;
-      padding: 10px 14px;
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    .btn.primary { background: #144c2a; border-color: #2a6d42; }
-    .badge {
-      position: fixed; left: 12px; bottom: 10px;
-      font-size: 12px; color: #8aa3b6; opacity: .8;
-    }
-    .debug-badge { position: fixed; right: 12px; bottom: 10px; color: #8aa3b6; opacity: .8; }
+    html, body { margin:0; padding:0; height:100%; background:#0e1a25; font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; overflow:hidden; }
+    #game { position:absolute; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; image-rendering:crisp-edges; }
+    .panel { position:absolute; left:50%; top:70%; transform:translate(-50%,-50%); background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:18px 22px; color:#dfe8f0; min-width:320px; backdrop-filter:blur(6px); }
+    .panel h1{ margin:0 0 10px; font-size:22px; } .panel p{ margin:0 0 14px; opacity:.85; }
+    .row{ display:flex; gap:10px; }
+    .btn{ appearance:none; border:1px solid rgba(255,255,255,.12); background:#163041; color:#dfe8f0; padding:10px 14px; border-radius:10px; cursor:pointer; }
+    .btn.primary{ background:#144c2a; border-color:#2a6d42; }
+    .badge{ position:fixed; left:12px; bottom:10px; font-size:12px; color:#8aa3b6; opacity:.8; }
+    .debug-badge{ position:fixed; right:12px; bottom:10px; color:#8aa3b6; opacity:.8; cursor:pointer; user-select:none; }
   </style>
 </head>
 <body>
-
-  <!-- Game-Canvas (wird in boot.js gefunden) -->
   <canvas id="game"></canvas>
 
-  <!-- Start-Panel bleibt – Debug-Tools bleiben aktiv -->
   <div class="panel" id="startPanel">
     <h1>Siedler‑Mini</h1>
     <p>Starte die aktuelle Karte. (Debug‑Tools bleiben aktiv)</p>
@@ -84,9 +30,9 @@
   </div>
 
   <div class="badge">V14.7 • Mobil • Debug</div>
-  <div class="debug-badge">Debug</div>
+  <!-- ← hier die ID ergänzt -->
+  <div class="debug-badge" id="btnDebug">Debug</div>
 
-  <!-- WICHTIG: ES‑Modul – relativer Pfad. Kein leading slash! -->
   <script type="module" src="./boot.js"></script>
 </body>
 </html>
