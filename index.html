@@ -7,27 +7,24 @@
   <style>
     :root { --bg:#0f1b26; --panel:#132333; --panel2:#0e1a27; --text:#e8f1f8; --btn:#1f8f44; --btn2:#2b3f56; --chip:#22364a; }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-    /* Bühne */
     #stage { position:fixed; inset:0; overflow:hidden; z-index:0; }
     canvas#game { position:absolute; left:50%; top:50%; transform-origin:0 0; image-rendering:pixelated; }
-    /* UI – NICHT gezoomt */
     .hud{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:linear-gradient(180deg,var(--panel),var(--panel2));
-      border-radius:16px; padding:16px 20px; display:flex; gap:16px; align-items:center; box-shadow:0 12px 30px rgba(0,0,0,.35); z-index:1000; }
-    .btn{ border:0; border-radius:12px; padding:12px 18px; font-weight:600; cursor:pointer; color:#fff; }
+      border-radius:16px; padding:14px 16px; display:flex; gap:16px; align-items:center; box-shadow:0 12px 30px rgba(0,0,0,.35); z-index:1000; flex-wrap:wrap }
+    .btn{ border:0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer; color:#fff; }
     .btn.primary{background:var(--btn);} .btn.ghost{background:var(--btn2);}
+    .chip{background:var(--chip);border:1px solid #2d455e;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px}
     .group{display:flex; gap:10px; align-items:center}
     .select{appearance:none;background:var(--chip); color:#fff; border:1px solid #2d455e; border-radius:12px; padding:10px 38px 10px 12px;}
     .select-wrap{position:relative}
     .select-wrap::after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#9fb6ca; pointer-events:none;}
     #debugToggle{ position:fixed; right:16px; bottom:24px; z-index:1000; }
-    /* Debug-Overlay sichtbar, klickt nichts weg */
     #overlay{ position:fixed; left:16px; top:16px; background:rgba(0,0,0,.58); padding:10px 12px; border-radius:10px;
       font:12px/1.4 ui-monospace,Consolas,Menlo,monospace; white-space:pre; z-index:1000; max-width:80vw; color:#dff2ff; pointer-events:none; }
     #overlay.hidden{ display:none; }
     .brushes{ position:fixed; left:24px; bottom:24px; background:linear-gradient(180deg,var(--panel),var(--panel2)); border-radius:14px; padding:10px 12px; display:flex; gap:8px; align-items:center; z-index:1000; }
     .dot{width:28px;height:28px;border-radius:7px; background:#5aa342; outline:2px solid #203245;}
     .dot.s1{background:#a67432}.dot.s2{background:#3c5f8d}.dot.s3{background:#8a9097}.dot.s4{background:#c9d4d9}.dot.s5{background:#1f5b2f}
-    /* falls aus alten Builds noch ein Range-Slider existiert -> raus damit */
     input[type="range"], #devSlider, #devZoom { display:none !important; }
   </style>
 </head>
@@ -41,11 +38,21 @@
       <button id="btnStart"  class="btn primary">Start</button>
       <button id="btnReload" class="btn ghost">Neu laden</button>
     </div>
+
     <div class="group">
       <span>Karte:</span>
       <span class="select-wrap">
         <select id="mapSelect" class="select"></select>
       </span>
+      <label class="chip"><input id="autoStart" type="checkbox" /> Auto‑Start</label>
+    </div>
+
+    <div class="group">
+      <button id="zoomOut" class="btn ghost">−</button>
+      <span class="chip" id="zoomInfo">Zoom 1.00</span>
+      <button id="zoomIn"  class="btn ghost">+</button>
+      <button id="fit"     class="btn ghost">Fit</button>
+      <button id="reset"   class="btn ghost">Reset</button>
     </div>
   </div>
 
