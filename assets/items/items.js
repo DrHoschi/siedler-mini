@@ -1,51 +1,83 @@
 {
+  "$schema": "https://example.local/schemas/items-atlas.schema.json",
+  "name": "transport_items",
+  "version": "1.0.0",
   "meta": {
-    "image": "items_sprite_sheet.png",
-    "size": {"w": 768, "h": 768},
-    "scale": 1
+    "author": "Spiel Texturen",
+    "frameUnit": "px",
+    "note": "handleOffset beschreibt die Position, an der die FIGUREN-Hand das Item greift. Item wird dort an den Figuren-Attach-Punkt 'carry' aus porter.json angedockt."
   },
-  "frames": {
-    "item_log": {
-      "frame": {"x": 0, "y": 0, "w": 256, "h": 256},
-      "rotated": false,
-      "trimmed": false,
-      "sourceSize": {"w": 256, "h": 256},
-      "spriteSourceSize": {"x": 0, "y": 0, "w": 256, "h": 256}
+
+  "defaults": {
+    "pivot": { "x": 0, "y": 0 }, 
+    "shadow": "soft",
+    "zIndexBias": 0
+  },
+
+  "items": {
+    "log": {
+      "sheet": "item_log.png",
+      "sizeHint": { "w": 40, "h": 24 },
+      "handleOffset": { "x": 12, "y": 8 },
+      "zIndexBias": 0,
+      "tags": ["wood","resource","carry"]
     },
-    "item_stone": {
-      "frame": {"x": 256, "y": 0, "w": 256, "h": 256},
-      "rotated": false,
-      "trimmed": false,
-      "sourceSize": {"w": 256, "h": 256},
-      "spriteSourceSize": {"x": 0, "y": 0, "w": 256, "h": 256}
+
+    "stone": {
+      "sheet": "item_stone.png",
+      "sizeHint": { "w": 36, "h": 28 },
+      "handleOffset": { "x": 14, "y": 12 },
+      "zIndexBias": 0,
+      "tags": ["stone","resource","carry"]
     },
-    "item_sack": {
-      "frame": {"x": 512, "y": 0, "w": 256, "h": 256},
-      "rotated": false,
-      "trimmed": false,
-      "sourceSize": {"w": 256, "h": 256},
-      "spriteSourceSize": {"x": 0, "y": 0, "w": 256, "h": 256}
+
+    "crate": {
+      "sheet": "item_crate.png",
+      "sizeHint": { "w": 36, "h": 32 },
+      "handleOffset": { "x": 16, "y": 14 },
+      "zIndexBias": 1,
+      "tags": ["container","resource","carry"]
     },
-    "item_crate": {
-      "frame": {"x": 0, "y": 256, "w": 256, "h": 256},
-      "rotated": false,
-      "trimmed": false,
-      "sourceSize": {"w": 256, "h": 256},
-      "spriteSourceSize": {"x": 0, "y": 0, "w": 256, "h": 256}
+
+    "sack": {
+      "sheet": "item_sack.png",
+      "sizeHint": { "w": 34, "h": 30 },
+      "handleOffset": { "x": 12, "y": 11 },
+      "zIndexBias": 0,
+      "tags": ["food","grain","carry"]
     },
-    "item_bucket_full": {
-      "frame": {"x": 256, "y": 256, "w": 256, "h": 256},
-      "rotated": false,
-      "trimmed": false,
-      "sourceSize": {"w": 256, "h": 256},
-      "spriteSourceSize": {"x": 0, "y": 0, "w": 256, "h": 256}
+
+    "bucket_empty": {
+      "sheet": "item_bucket_empty.png",
+      "sizeHint": { "w": 28, "h": 28 },
+      "handleOffset": { "x": 9, "y": 12 },
+      "zIndexBias": 0,
+      "tags": ["bucket","tool","carry"]
     },
-    "item_food_bundle": {
-      "frame": {"x": 512, "y": 256, "w": 256, "h": 256},
-      "rotated": false,
-      "trimmed": false,
-      "sourceSize": {"w": 256, "h": 256},
-      "spriteSourceSize": {"x": 0, "y": 0, "w": 256, "h": 256}
+
+    "bucket_full": {
+      "sheet": "item_bucket_full.png",
+      "sizeHint": { "w": 28, "h": 28 },
+      "handleOffset": { "x": 9, "y": 14 },
+      "zIndexBias": 0,
+      "tags": ["bucket","water","carry"]
+    },
+
+    "food_bundle": {
+      "sheet": "item_food_bundle.png",
+      "sizeHint": { "w": 34, "h": 26 },
+      "handleOffset": { "x": 13, "y": 10 },
+      "zIndexBias": 0,
+      "tags": ["food","carry"]
+    }
+  },
+
+  "directionOverrides": {
+    "carry": {
+      "N": { "zOrder": "behind" },
+      "E": { "zOrder": "behind" },
+      "S": { "zOrder": "front"  },
+      "W": { "zOrder": "behind" }
     }
   }
 }
