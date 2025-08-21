@@ -1,69 +1,58 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler‑Mini</title>
+  <meta charset="UTF-8">
+  <title>Siedler-Mini</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    :root { --bg:#0f1b26; --panel:#132333; --panel2:#0e1a27; --text:#e8f1f8; --btn:#1f8f44; --btn2:#2b3f56; --chip:#22364a; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-    #stage { position:fixed; inset:0; overflow:hidden; z-index:0; }
-    canvas#game { position:absolute; left:50%; top:50%; transform-origin:0 0; image-rendering:pixelated; }
-    .hud{ position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:linear-gradient(180deg,var(--panel),var(--panel2));
-      border-radius:16px; padding:14px 16px; display:flex; gap:16px; align-items:center; box-shadow:0 12px 30px rgba(0,0,0,.35); z-index:1000; flex-wrap:wrap }
-    .btn{ border:0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer; color:#fff; }
-    .btn.primary{background:var(--btn);} .btn.ghost{background:var(--btn2);}
-    .chip{background:var(--chip);border:1px solid #2d455e;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px}
-    .group{display:flex; gap:10px; align-items:center}
-    .select{appearance:none;background:var(--chip); color:#fff; border:1px solid #2d455e; border-radius:12px; padding:10px 38px 10px 12px;}
-    .select-wrap{position:relative}
-    .select-wrap::after{content:"▾"; position:absolute; right:12px; top:50%; transform:translateY(-50%); color:#9fb6ca; pointer-events:none;}
-    #debugToggle{ position:fixed; right:16px; bottom:24px; z-index:1000; }
-    #overlay{ position:fixed; left:16px; top:16px; background:rgba(0,0,0,.58); padding:10px 12px; border-radius:10px;
-      font:12px/1.4 ui-monospace,Consolas,Menlo,monospace; white-space:pre; z-index:1000; max-width:80vw; color:#dff2ff; pointer-events:none; }
-    #overlay.hidden{ display:none; }
-    .brushes{ position:fixed; left:24px; bottom:24px; background:linear-gradient(180deg,var(--panel),var(--panel2)); border-radius:14px; padding:10px 12px; display:flex; gap:8px; align-items:center; z-index:1000; }
-    .dot{width:28px;height:28px;border-radius:7px; background:#5aa342; outline:2px solid #203245;}
-    .dot.s1{background:#a67432}.dot.s2{background:#3c5f8d}.dot.s3{background:#8a9097}.dot.s4{background:#c9d4d9}.dot.s5{background:#1f5b2f}
-    input[type="range"], #devSlider, #devZoom { display:none !important; }
+    body {
+      margin: 0;
+      background: #101820;
+      color: #fff;
+      font-family: monospace;
+      overflow: hidden;
+    }
+    #ui {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.6);
+      padding: 10px;
+      border-radius: 6px;
+    }
+    #debug-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 6px 10px;
+      border-radius: 6px;
+      white-space: pre;
+      font-size: 12px;
+    }
+    canvas {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <div id="stage"><canvas id="game" width="1024" height="1024"></canvas></div>
+  <canvas id="game"></canvas>
 
-  <div id="overlay" class="hidden">Debug bereit (F2 oder Button)</div>
+  <div id="debug-overlay"></div>
 
-  <div class="hud" id="hud">
-    <div class="group">
-      <button id="btnStart"  class="btn primary">Start</button>
-      <button id="btnReload" class="btn ghost">Neu laden</button>
-    </div>
-
-    <div class="group">
-      <span>Karte:</span>
-      <span class="select-wrap">
-        <select id="mapSelect" class="select"></select>
-      </span>
-      <label class="chip"><input id="autoStart" type="checkbox" /> Auto‑Start</label>
-    </div>
-
-    <div class="group">
-      <button id="zoomOut" class="btn ghost">−</button>
-      <span class="chip" id="zoomInfo">Zoom 1.00</span>
-      <button id="zoomIn"  class="btn ghost">+</button>
-      <button id="fit"     class="btn ghost">Fit</button>
-      <button id="reset"   class="btn ghost">Reset</button>
-    </div>
+  <div id="ui">
+    <button id="btnStart">Start</button>
+    <button id="btnReload">Neu laden</button>
+    <br><br>
+    Karte:
+    <select id="mapSelect">
+      <option value="map-pro.json">map-pro.json</option>
+      <option value="map-demo.json">map-demo.json</option>
+      <option value="map-checker-16x16.json">map-checker (16×16)</option>
+    </select>
+    <label><input type="checkbox" id="autoStart"> Auto-Start</label>
   </div>
 
-  <button id="debugToggle" class="btn ghost">Debug</button>
-
-  <div class="brushes">
-    <span>Bauen:</span>
-    <span class="dot"></span><span class="dot s1"></span><span class="dot s2"></span><span class="dot s3"></span><span class="dot s4"></span><span class="dot s5"></span>
-  </div>
-
-  <script src="boot.js" defer></script>
-  <script src="tools/map-runtime.js" defer></script>
+  <script type="module" src="./boot.js"></script>
 </body>
 </html>
