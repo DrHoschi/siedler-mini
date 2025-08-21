@@ -1,95 +1,124 @@
-/* tools/map-runtime.js – Karten/Tileset laden + Render‑Probe + Logging */
-window.MapRuntime = (function(){
-  const log = (t,...a)=>console.log(`%c[${t}]`,"color:#9f7",...a);
-  const warn= (t,...a)=>console.warn(`%c[${t}]`,"color:#fb7",...a);
-  const err = (t,...a)=>console.error(`%c[${t}]`,"color:#f77",...a);
-  const ST = window.__SM_STATE__ || {};
+// map-runtime.js
 
-  async function fetchJSON(url){
-    const t0 = performance.now();
-    const res = await fetch(url,{cache:"no-store"});
-    log("net", `${res.status} ${url} (${Math.round(performance.now()-t0)}ms)`);
-    if(!res.ok) throw new Error(`${res.status} ${url}`);
-    return res.json();
+export class SiedlerMap {
+  constructor(canvas, ctx, debugOverlay) {
+    this.canvas = canvas;
+    this.ctx = ctx;
+    this.debugOverlay = debugOverlay;
+
+    this.map = null;
+    this.camX = 0;
+    this.camY = 0;
+    this.zoom = 1.0;
+    this.tileSize = 64;
+    this.rows = 0;
+    this.cols = 0;
+
+    this.dragging = false;
+    this.lastX = 0;
+    this.lastY = 0;
+
+    this.initEvents();
   }
-  function loadImage(url){
-    return new Promise((res,rej)=>{
-      const img=new Image();
-      img.onload=()=>res(img);
-      img.onerror=()=>rej(new Error("Image load failed: "+url));
-      img.src=url+(url.includes("?")?"&":"?")+"bust="+Date.now();
+
+  setSize(w, h) {
+    this.canvas.width = w;
+    this.canvas.height = h;
+  }
+
+  async loadMap(path) {
+    const res = await fetch(path);
+    this.map = await res.json();
+    this.rows = this.map.rows || 16;
+    this.cols = this.map.cols || 16;
+    this.tileSize = this.map.tile || 64;
+  }
+
+  reload() {
+    if (!this.map) return;
+    this.camX = 0;
+    this.camY = 0;
+    this.zoom = 1.0;
+  }
+
+  initEvents() {
+    this.canvas.addEventListener("mousedown", e => {
+      this.dragging = true;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
     });
-  }
-  async function loadTileset(base, jsonRel, imgRel){
-    const j = new URL(jsonRel, base).toString();
-    const i = new URL(imgRel,  base).toString();
-    log("atlas","base="+base);
-    log("atlas","json="+jsonRel+" →", j);
-    log("atlas","image="+imgRel+" →", i);
-    const data = await fetchJSON(j);
-    const image= await loadImage(i);
-    return {data,image};
-  }
-
-  async function startSelected(url){
-    const mapUrl = url || ST.mapUrl;
-    if(!mapUrl){ warn("game","Keine Karte ausgewählt."); return; }
-
-    log("game","Lade Karte:", mapUrl);
-    let map;
-    try{ map = await fetchJSON(mapUrl); }
-    catch(e){ err("game","Karte konnte nicht geladen werden:", mapUrl); console.error(e); return; }
-    log("game","Karte geladen:", mapUrl);
-
-    const base = mapUrl.substring(0, mapUrl.lastIndexOf("/")+1);
-    const atlasJsonRel = map?.atlas?.json  || "../tiles/tileset.json";
-    const atlasImgRel  = map?.atlas?.image || "../tiles/tileset.png";
-
-    let atlas=null;
-    try{ atlas = await loadTileset(base, atlasJsonRel, atlasImgRel); }
-    catch(e){ warn("game","Atlas konnte nicht geladen werden — fahre ohne Atlas fort."); console.warn(e); }
-
-    renderMap(map, atlas);
-  }
-
-  function renderMap(map, atlas){
-    const canvas=document.getElementById("game");
-    const ctx=canvas.getContext("2d");
-    const tile = (map.tileSize||64)|0;
-    const W = (map.cols||16)*tile, H=(map.rows||16)*tile;
-
-    if (canvas.width!==W || canvas.height!==H){
-      canvas.width=W; canvas.height=H;
-      if(window.__SM_STATE__){ __SM_STATE__.width=W; __SM_STATE__.height=H; }
-    }
-
-    ctx.imageSmoothingEnabled=false;
-    ctx.fillStyle="#152536"; ctx.fillRect(0,0,W,H);
-
-    const layer = Array.isArray(map.layers)&&map.layers[0];
-    const frames = atlas?.data?.frames||{};
-    const img = atlas?.image||null;
-
-    if(!layer){
-      // Fallback-Grid
-      for(let x=0;x<=W;x+=tile){ ctx.fillStyle=(x/tile)%4===0?"#2a4058":"#1b2f45"; ctx.fillRect(x,0,1,H); }
-      for(let y=0;y<=H;y+=tile){ ctx.fillStyle=(y/tile)%4===0?"#2a4058":"#1b2f45"; ctx.fillRect(0,y,W,1); }
-      return;
-    }
-
-    for(let y=0;y<map.rows;y++){
-      for(let x=0;x<map.cols;x++){
-        const key = layer[y*map.cols + x];
-        if(img && frames[key]){
-          const f=frames[key];
-          ctx.drawImage(img, f.x,f.y,f.w,f.h, x*tile, y*tile, tile, tile);
-        }else{
-          ctx.fillStyle = key ? "#345a2b" : "#384e66";
-          ctx.fillRect(x*tile,y*tile,tile,tile);
-        }
+    this.canvas.addEventListener("mouseup", () => this.dragging = false);
+    this.canvas.addEventListener("mouseout", () => this.dragging = false);
+    this.canvas.addEventListener("mousemove", e => {
+      if (this.dragging) {
+        this.camX += (this.lastX - e.clientX) / this.zoom;
+        this.camY += (this.lastY - e.clientY) / this.zoom;
+        this.lastX = e.clientX;
+        this.lastY = e.clientY;
       }
-    }
+    });
+
+    // Touch
+    this.canvas.addEventListener("touchstart", e => {
+      if (e.touches.length === 1) {
+        this.dragging = true;
+        this.lastX = e.touches[0].clientX;
+        this.lastY = e.touches[0].clientY;
+      }
+    });
+    this.canvas.addEventListener("touchmove", e => {
+      if (this.dragging && e.touches.length === 1) {
+        this.camX += (this.lastX - e.touches[0].clientX) / this.zoom;
+        this.camY += (this.lastY - e.touches[0].clientY) / this.zoom;
+        this.lastX = e.touches[0].clientX;
+        this.lastY = e.touches[0].clientY;
+      }
+    });
+    this.canvas.addEventListener("touchend", () => this.dragging = false);
+
+    // Zoom
+    this.canvas.addEventListener("wheel", e => {
+      e.preventDefault();
+      const zoomFactor = 1.1;
+      if (e.deltaY < 0) {
+        this.zoom = Math.min(this.zoom * zoomFactor, 2.0);
+      } else {
+        this.zoom = Math.max(this.zoom / zoomFactor, 0.5);
+      }
+    }, { passive: false });
   }
 
-  return { startSelected };
-})();
+  draw() {
+    if (!this.map) return;
+
+    const { ctx, canvas } = this;
+
+    ctx.save();
+    ctx.scale(this.zoom, this.zoom);
+    ctx.translate(-this.camX, -this.camY);
+
+    // Grid zeichnen
+    ctx.strokeStyle = "#333";
+    for (let r = 0; r <= this.rows; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * this.tileSize);
+      ctx.lineTo(this.cols * this.tileSize, r * this.tileSize);
+      ctx.stroke();
+    }
+    for (let c = 0; c <= this.cols; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * this.tileSize, 0);
+      ctx.lineTo(c * this.tileSize, this.rows * this.tileSize);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Debug Overlay aktualisieren
+    this.debugOverlay.innerText =
+      `Cam: x=${this.camX.toFixed(1)} y=${this.camY.toFixed(1)} zoom=${this.zoom.toFixed(2)}\n` +
+      `Map: ${this.map ? this.map.name || 'unnamed' : '-'}\n` +
+      `rows=${this.rows} cols=${this.cols} tile=${this.tileSize}\n` +
+      `Size=${canvas.width}x${canvas.height}`;
+  }
+}
