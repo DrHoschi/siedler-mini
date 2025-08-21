@@ -3,296 +3,90 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b1628" />
-  <title>Siedler‑Mini V14.7 (Mobil)</title>
 
   <!--
-    =================================================================================================
-    Siedler‑Mini — Index (Diagnose-Build)
-    Ziele:
-      • Startfenster zuerst sichtbar
-      • Debug-Overlay non-blocking (F2/Button)
-      • NET-LOGGER: alle fetch()-Aufrufe sichtbar
-      • Cache-Bust für Module + Diagnose, welcher Bust aktiv ist
-      • Import-Status & ausführliche Fehlertexte
-      • (Optional) Service Worker deaktivieren für saubere Tests
-    Hinweise:
-      • Seite selbst kannst du mit ?v=1234 aufrufen, um den Seiten-Cache zu busten.
-        Wichtig: Genau " ?v=... " (ohne "=" vor dem v).
-    =================================================================================================
+    Siedler-Mini • MAX-Variante
+    --------------------------------
+    - Lädt boot.js als ES-Modul.
+    - Keine absoluten Pfade -> alles relativ zur index.html.
+    - Debug-Overlay bleibt aktiv (F2 toggeln, siehe boot.js).
   -->
+  <title>Siedler‑Mini</title>
 
-  <!-- (leichter No-Cache-Hinweis; Browser beachten diese Meta-Header nicht immer streng) -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-
-  <!-- ===== Styles ===== -->
   <style>
-    :root{
-      color-scheme: dark;
-      --bg:#0b1628; --panel:#122238; --panel2:#0f1d31;
-      --line:#2b3b53; --text:#cfe3ff; --muted:#9fb3cc;
-      --pill:#0f1b29; --ok:#1a7f3e; --warn:#982e2e;
-      --shadow: 0 20px 60px rgba(0,0,0,.35);
+    /* Minimaler, dunkler Hintergrund – wie gehabt */
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%;
+      background: #0e1a25; /* Dark Navy */
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      overflow: hidden;
     }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    #root{isolation:isolate;height:100%;position:relative}
-    canvas#game{display:block;width:100vw;height:100vh;touch-action:none;background:transparent}
 
-    /* Startfenster */
-    #start-window{
-      position:fixed; inset:0; z-index:99990;
-      background:rgba(11,22,40,.92); backdrop-filter:saturate(120%) blur(2px);
-      display:flex; align-items:center; justify-content:center;
+    /* Canvas im Vollbild, wird von game/boot positioniert */
+    #game {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;      /* „crispe“ Pixel */
+      image-rendering: crisp-edges;
     }
-    .start-card{ background:var(--panel); border:1px solid var(--line);
-      box-shadow:var(--shadow); border-radius:12px; padding:18px; width:min(520px,92vw) }
-    .start-card h1{ margin:.2rem 0 1rem 0; font-size:1.25rem }
-    .row{ display:flex; gap:10px; align-items:center; justify-content:space-between }
-    .muted{ color:var(--muted) }
-    .btn{ appearance:none; border:1px solid var(--line); background:var(--pill); color:var(--text);
-      padding:10px 14px; border-radius:10px; cursor:pointer }
-    .btn.ok{ background:linear-gradient(180deg,#184f2d,#0e2e1b); border-color:#225f3a }
-    .btn:active{ transform:translateY(1px) }
 
-    /* Debug Overlay (non-blocking) */
-    #dbgOverlay{ position:fixed; inset:12px; z-index:99999; display:none; background:transparent; pointer-events:none }
-    #dbgOverlay .panel{
-      max-width:min(560px,92vw); max-height:54vh; margin-left:auto;
-      background:rgba(11,22,40,.96); color:#cfe3ff; border:1px solid #2b3b53;
-      border-radius:8px; padding:12px; box-shadow:0 20px 60px rgba(0,0,0,.35);
-      font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      overflow:auto; pointer-events:auto
+    /* Das kleine Start-Panel (bekannt) */
+    .panel {
+      position: absolute;
+      left: 50%; top: 70%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 18px 22px;
+      color: #dfe8f0;
+      min-width: 320px;
+      backdrop-filter: blur(6px);
     }
-    #dbgOverlay b{ color:#8fd18f }
-    #dbgBtn{ position:fixed; right:12px; bottom:12px; z-index:100000; padding:6px 10px; border-radius:999px;
-      background:#0f1b29; color:#cfe3ff; border:1px solid #2b3b53; cursor:pointer }
-
-    .badge{ position:fixed; left:12px; bottom:12px; z-index:100000; font-size:12px; padding:6px 10px; border-radius:999px;
-      background:#0f1b29; color:#9fb3cc; border:1px solid #2b3b53 }
+    .panel h1 { margin: 0 0 10px; font-size: 22px; }
+    .panel p  { margin: 0 0 14px; opacity: .85; }
+    .row { display: flex; gap: 10px; }
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: #163041;
+      color: #dfe8f0;
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .btn.primary { background: #144c2a; border-color: #2a6d42; }
+    .badge {
+      position: fixed; left: 12px; bottom: 10px;
+      font-size: 12px; color: #8aa3b6; opacity: .8;
+    }
+    .debug-badge { position: fixed; right: 12px; bottom: 10px; color: #8aa3b6; opacity: .8; }
   </style>
-
-  <!-- ===== Debug-Overlay HTML + Init ===== -->
-  <div id="dbgOverlay"><div class="panel" id="dbgPanel"></div></div>
-  <button id="dbgBtn" type="button" title="Debug anzeigen/ausblenden">Debug</button>
-  <script>
-  (function(){
-    const box=document.getElementById('dbgOverlay');
-    const panel=document.getElementById('dbgPanel');
-    const btn=document.getElementById('dbgBtn');
-
-    function show(){ box.style.display='block'; }
-    function toggle(){ box.style.display=(box.style.display==='none'?'block':'none'); }
-    function log(kind, msg, extra){
-      show();
-      const t=new Date().toLocaleTimeString();
-      const div=document.createElement('div');
-      div.innerHTML=`<b>[${t}] ${kind}:</b> ${msg}${extra?`<pre>${extra}</pre>`:''}`;
-      (panel||box).appendChild(div);
-    }
-    btn.onclick=toggle;
-    addEventListener('keydown',(e)=>{ if(e.key==='F2') toggle(); });
-
-    const origErr=console.error.bind(console);
-    console.error=(...a)=>{ origErr(...a); log('console.error', a.join(' ')); };
-    addEventListener('error',(e)=>{ log('window.error',(e.message||'') + (e.filename?` @ ${e.filename}:${e.lineno||''}:${e.colno||''}`:''), e.error && e.error.stack); });
-    addEventListener('unhandledrejection',(e)=>{ const r=e.reason && (e.reason.stack||e.reason.message||String(e.reason)); log('promise.reject', r||'Unbekannter Fehler'); });
-
-    log('boot', 'Debug‑Overlay aktiv (non‑blocking). F2 toggelt Overlay.');
-  })();
-  </script>
-
-  <!-- ===== Patch A: NET‑LOGGER (alle fetch() calls) ===== -->
-  <script>
-  (function(){
-    const origFetch = window.fetch;
-    window.fetch = async function(...args){
-      const url = String(args[0]);
-      const t0 = performance.now();
-      try{
-        const res = await origFetch.apply(this, args);
-        const ms = (performance.now()-t0).toFixed(0);
-        try{
-          const box=document.getElementById('dbgOverlay');
-          const panel=document.getElementById('dbgPanel')||box;
-          if(panel){ box.style.display='block';
-            panel.insertAdjacentHTML('beforeend', `<div><b>[net]</b> ${res.status} ${url} (${ms}ms)</div>`);
-          }
-        }catch{}
-        return res;
-      }catch(err){
-        try{
-          const box=document.getElementById('dbgOverlay');
-          const panel=document.getElementById('dbgPanel')||box;
-          if(panel){ box.style.display='block';
-            panel.insertAdjacentHTML('beforeend', `<div><b>[net-error]</b> ${url}<pre>${err && (err.stack||err.message||String(err))}</pre></div>`);
-          }
-        }catch{}
-        throw err;
-      }
-    };
-  })();
-  </script>
-
-  <!-- ===== (Optional) SW‑Kill-Schalter: verhindert altes SW‑Caching während Diagnose ===== -->
-  <script>
-  (async function(){
-    try{
-      if('serviceWorker' in navigator){
-        const regs = await navigator.serviceWorker.getRegistrations();
-        if(regs && regs.length){
-          for(const r of regs){ await r.unregister().catch(()=>{}); }
-          const box=document.getElementById('dbgOverlay'); const p=document.getElementById('dbgPanel')||box;
-          if(p){ box.style.display='block'; p.insertAdjacentHTML('beforeend', `<div><b>[diag]</b> Service Worker unregistered (Testmodus)</div>`); }
-        }
-      }
-    }catch{}
-  })();
-  </script>
-
 </head>
-
 <body>
-  <div id="root">
-    <!-- ===== Startfenster ===== -->
-    <section id="start-window" aria-modal="true" role="dialog">
-      <div class="start-card">
-        <h1>Siedler‑Mini</h1>
-        <p class="muted">Starte die aktuelle Karte. (Debug‑Tools bleiben aktiv)</p>
-        <div class="row">
-          <button id="btn-start" class="btn ok">Start</button>
-          <button id="btn-reload" class="btn" title="Spiel neu laden">Neu laden</button>
-        </div>
-      </div>
-    </section>
 
-    <!-- Spielfeld -->
-    <canvas id="game"></canvas>
+  <!-- Game-Canvas (wird in boot.js gefunden) -->
+  <canvas id="game"></canvas>
 
-    <!-- Build/Version Badge -->
-    <div class="badge">V14.7 • Mobil • Debug</div>
+  <!-- Start-Panel bleibt – Debug-Tools bleiben aktiv -->
+  <div class="panel" id="startPanel">
+    <h1>Siedler‑Mini</h1>
+    <p>Starte die aktuelle Karte. (Debug‑Tools bleiben aktiv)</p>
+    <div class="row">
+      <button class="btn primary" id="btnStart">Start</button>
+      <button class="btn" id="btnReload">Neu laden</button>
+    </div>
   </div>
 
-  <!-- ===== Haupt-Boot-Script (mit Cache‑Bust + Diagnose) ===== -->
-  <script type="module">
-    // Cache‑Bust: Dieser Wert wird an ALLE Modul‑Imports angehängt.
-    // So erzwingen wir, dass Safari/iOS frische Module lädt.
-    const BUST = `?v=${Date.now()}`;
+  <div class="badge">V14.7 • Mobil • Debug</div>
+  <div class="debug-badge">Debug</div>
 
-    // Diagnose: Zeige aufgerufene URL + aktiven Bust + ob fetch gepatched ist
-    (function runtimeInfo(){
-      try{
-        const box=document.getElementById('dbgOverlay'); const p=document.getElementById('dbgPanel')||box;
-        if(!p) return; box.style.display='block';
-        const fPatched = String(window.fetch).includes('origFetch.apply');
-        p.insertAdjacentHTML('beforeend',
-          `<div><b>[diag]</b> page=${location.href}<br/>bust=${BUST}<br/>fetchPatched=${fPatched}</div>`);
-      }catch{}
-    })();
-
-    async function tryImport(path){
-      try{ return await import(path + BUST); }
-      catch(err){
-        const msg = `${err && (err.name||'Error')}: ${err && (err.message||String(err))}`;
-        console.error(`Import fehlgeschlagen: ${path}`, err);
-        try{
-          const box=document.getElementById('dbgOverlay');
-          const panel=document.getElementById('dbgPanel')||box;
-          if(panel){ box.style.display='block';
-            panel.insertAdjacentHTML('beforeend', `<div><b>[import]</b> ${path}<pre>${msg}</pre></div>`);
-          }
-        }catch{}
-        return null;
-      }
-    }
-
-    // Sanfte Modul‑Imports
-    const M_asset = await tryImport('./core/asset.js');
-    const M_tools = await tryImport('./tools/map-runtime.js');
-    const M_boot  = await tryImport('./boot.js');
-    const M_game  = await tryImport('./game.js');
-
-    // Import-Status direkt anzeigen
-    (function dbgStatus(){
-      const box=document.getElementById('dbgOverlay'); const panel=document.getElementById('dbgPanel')||box;
-      if(!panel) return; box.style.display='block';
-      const log = (k,v)=> panel.insertAdjacentHTML('beforeend', `<div><b>[boot]</b> ${k}: ${v?'OK':'fehlt'}</div>`);
-      log('asset.js',!!M_asset); log('map-runtime.js',!!M_tools); log('boot.js',!!M_boot); log('game.js',!!M_game);
-    })();
-
-    function $(sel, root=document){ return root.querySelector(sel); }
-
-    function ensureStartWindowOnTop(){
-      const start=$('#start-window');
-      if(start){
-        Object.assign(start.style, { display:'flex', position:'fixed', zIndex:'99990', inset:'0' });
-        document.body.style.overflow='hidden';
-      }
-    }
-
-    function getCanvas(){
-      const cv=$('canvas#game'); if(!cv){ console.error('Canvas nicht gefunden.'); return null; }
-      const ctx=cv.getContext('2d'); if(!ctx){ console.error('getContext("2d") schlug fehl.'); return null; }
-      return {cv,ctx};
-    }
-
-    function resizeCanvas(cv){
-      const dpr=Math.max(1, window.devicePixelRatio||1);
-      const w=innerWidth, h=innerHeight;
-      cv.width=Math.floor(w*dpr); cv.height=Math.floor(h*dpr);
-      cv.style.width=w+'px'; cv.style.height=h+'px';
-    }
-
-    function safeCall(fn, ...args){ try{ return fn && fn(...args); } catch(e){ console.error('Aufruf schlug fehl:', e); } }
-
-    async function boot(){
-      ensureStartWindowOnTop();
-
-      const cc=getCanvas(); if(!cc) return;
-      resizeCanvas(cc.cv); addEventListener('resize',()=>resizeCanvas(cc.cv),{passive:true});
-
-      // Früher Hook (kein Side-Effect beim Import)
-      safeCall(M_boot && M_boot.preGameInit, { canvas: cc.cv, ctx: cc.ctx });
-
-      const btnStart=document.getElementById('btn-start');
-      const btnReload=document.getElementById('btn-reload');
-      if(btnReload) btnReload.addEventListener('click', ()=>location.reload());
-
-      if(btnStart){
-        btnStart.addEventListener('click', async ()=>{
-          btnStart.disabled=true; btnStart.textContent='Start…';
-          document.body.style.overflow=''; const start=$('#start-window'); if(start) start.style.display='none';
-
-          if(M_game && typeof M_game.startGame==='function'){
-            await safeCall(M_game.startGame, { canvas: cc.cv, ctx: cc.ctx, assets: M_asset, tools: M_tools });
-            return;
-          }
-          if(M_boot && typeof M_boot.start==='function'){
-            await safeCall(M_boot.start, { canvas: cc.cv, ctx: cc.ctx, assets: M_asset, tools: M_tools });
-            return;
-          }
-
-          // Fallback-Renderer (immer sichtbares Feedback)
-          const ctx=cc.ctx; let t0=performance.now();
-          (function loop(now){
-            const dt=now - t0; t0=now;
-            ctx.clearRect(0,0,cc.cv.width,cc.cv.height);
-            ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#0f1b29';
-            ctx.fillRect(20,20,420,120); ctx.restore();
-            ctx.font=`${Math.max(12, Math.floor(14*(window.devicePixelRatio||1)))}px ui-monospace,monospace`;
-            ctx.fillStyle='#cfe3ff';
-            ctx.fillText('Fallback-Renderer aktiv.',40,60);
-            ctx.fillText('Binde game.js::startGame(...) oder boot.js::start(...) ein.',40,80);
-            ctx.fillText(`dt=${dt.toFixed(2)}ms`,40,100);
-            requestAnimationFrame(loop);
-          })(t0);
-        }, {once:true});
-      }
-    }
-
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
-    else boot();
-  </script>
+  <!-- WICHTIG: ES‑Modul – relativer Pfad. Kein leading slash! -->
+  <script type="module" src="./boot.js"></script>
 </body>
 </html>
