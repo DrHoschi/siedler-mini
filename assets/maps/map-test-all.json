@@ -1,8 +1,5 @@
 {
-  "atlas": {
-    "json": "../tiles/tileset.json",
-    "image": "../tiles/tileset.png"
-  },
+  "atlas": { "json": "../tiles/tileset.json", "image": "../tiles/tileset.png" },
   "layers": [
     {
       "grid": [
