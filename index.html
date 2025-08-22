@@ -1,87 +1,163 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Siedler-Mini</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Manifest & Styles -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Siedler‑Mini</title>
+  <!-- PWA + Basis‑Styles (deine vorhandenen Dateien) -->
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/mobile.css">
-  <link rel="stylesheet" href="css/desktop.css">
-  <link rel="stylesheet" href="css/ios.css">
-  <link rel="stylesheet" href="css/android.css">
-  <link rel="stylesheet" href="css/platform.css">
+  <!-- Kleine UI‑Ergänzungen speziell für Start‑Panel/Stage -->
+  <style>
+    :root{--bg:#0b1726;--panel:#0f1d31}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:#cfe3ff;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto}
+
+    /* Stage: NICHT skalieren – nur Canvas im eigenen Layer */
+    #stageWrap{position:fixed;inset:0;overflow:hidden;z-index:0}
+    #stage{position:absolute;left:0;top:0}
+
+    /* Start-Panel: zentriert, immer im Vordergrund */
+    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:90000}
+    #startPanel .card{background:var(--panel);border:1px solid #1e2d42;border-radius:16px;padding:18px;min-width:300px;max-width:min(90vw,560px);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+    #startPanel h1{margin:0 0 10px 0;font-size:40px;letter-spacing:.5px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+    select,button,input[type=checkbox]{font:inherit}
+    button{background:#0f1b29;border:1px solid #1b2a40;color:#cfe3ff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .muted{opacity:.8}
+  </style>
 </head>
 <body>
-  <!-- Spielfeld -->
-  <canvas id="stage"></canvas>
 
-  <!-- Steuer-UI -->
-  <div id="ui">
-    <h1>Siedler-Mini</h1>
-    <label for="mapSelect">Karte:</label>
-    <select id="mapSelect">
-      <option value="assets/maps/map-demo.json">map-demo.json</option>
-      <option value="assets/maps/map-pro.json">map-pro.json</option>
-      <option value="assets/maps/map-test-all.json">map-test-all.json</option>
-      <option value="maps/start-map.json">start-map.json</option>
-    </select>
-    <br>
-    <label>
-      <input type="checkbox" id="autoStart" checked>
-      Auto-Start
-    </label>
-    <br>
-    <button id="btnStart">Start</button>
-    <button id="btnReload">Neu laden</button>
-    <button id="btnFullscreen">Vollbild</button>
-    <button id="btnDebug">Debug</button>
-    <button id="btnSaveDebug">Debug speichern</button>
+  <!-- Zeichenfläche / Bühne -->
+  <div id="stageWrap">
+    <canvas id="stage" width="1024" height="768"></canvas>
   </div>
 
-  <!-- Debug-Inspector -->
-  <div id="debug-console"></div>
-  <div id="dev-inspector">
-    <div id="inspector-header">
-      <span>Dev-Inspector</span>
-      <button id="inspector-toggle">Min</button>
-    </div>
-    <div id="inspector-body">
-      <p>Items: <span id="inspector-items">0</span></p>
-      <p>Images: <span id="inspector-images">0</span></p>
-      <p>JSON: <span id="inspector-json">0</span></p>
-      <p>JS: <span id="inspector-js">0</span></p>
-      <button id="inspector-copy">Copy Pfad-Liste</button>
-      <button id="inspector-export">Export JSON</button>
-      <button id="inspector-clear">Clear</button>
-      <button id="inspector-hide">Hide</button>
+  <!-- Start‑UI (zentriert). Wird per JS sichtbar gemacht -->
+  <div id="startPanel" hidden>
+    <div class="card">
+      <h1>Siedler‑Mini</h1>
+
+      <div class="row">
+        <label for="mapSelect">Karte:&nbsp;</label>
+        <select id="mapSelect">
+          <!-- Deine drei Maps – Pfade exakt wie von dir genutzt -->
+          <option value="assets/maps/map-demo.json">map-demo.json</option>
+          <option value="assets/maps/map-pro.json">map-pro.json</option>
+          <option value="assets/maps/map-test-all.json">map-test-all.json</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="muted"><input id="autoStart" type="checkbox" checked> Auto‑Start</label>
+      </div>
+
+      <div class="row">
+        <button id="btnStart">Start</button>
+        <button id="btnReload">Neu laden</button>
+        <button id="btnFull">Vollbild</button>
+        <button id="btnDebug">Debug</button>
+        <button id="btnSaveDbg">Debug speichern</button>
+      </div>
+
+      <!-- Einfache Sofort‑Diagnose -->
+      <div class="row muted" id="quickDiag" style="white-space:pre; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;"></div>
     </div>
   </div>
 
-  <!-- ⚡ Wichtig: Lade-Reihenfolge beachten -->
-  <!-- Erst Game-Engine, dann Boot & Rest -->
-  <script src="game.js"></script>
-  <script src="render.js"></script>
-  <script src="storage.js"></script>
-  <script src="buildingData.js"></script>
-  <script src="textures.js"></script>
-  <script src="unitLogic.js"></script>
-  <script src="world.js"></script>
-  <script src="fullscreen.js"></script>
-  <script src="input.js"></script>
+  <!-- ===== Debug/Inspector (früh laden, damit Konsole gehookt wird) ===== -->
   <script src="debug.js"></script>
-  <script src="main.js"></script>
-  <script src="app-v11.1r6.js"></script>
-
-  <!-- Boot zuletzt laden, da er die Checks macht -->
-  <script src="boot.js"></script>
-
-  <!-- Tools & Helfer -->
-  <script src="tools/debug-tools.js"></script>
   <script src="tools/dev-inspector.js"></script>
+
+  <!-- ===== Engine/Spiel – deine existierenden Dateien in stabiler Reihenfolge ===== -->
+  <script src="boot.js"></script>
+  <script src="app-v11.1r6.js"></script>
+  <script src="main.js"></script>
+  <script src="render.js"></script>
+  <script src="textures.js"></script>
+  <script src="world.js"></script>
+  <script src="input.js"></script>
+  <script src="unitLogic.js"></script>
+  <script src="buildingData.js"></script>
+  <script src="fullscreen.js"></script>
+  <script src="game.js"></script>
+
+  <!-- ===== Page‑Bootstrapping: UI‑Wiring + Quick‑Diag ===== -->
+  <script>
+  (function(){
+    const $ = (id)=>document.getElementById(id);
+    const stage = $('stage');
+    const panel = $('startPanel');
+    const diag  = $('quickDiag');
+
+    // Canvas im Inspector registrieren (nur als Marker)
+    window.DevInspector?.img('#stage');
+
+    // Panel anzeigen
+    panel.hidden = false;
+
+    // --- Buttons ---
+    $('btnStart').addEventListener('click', () => {
+      const map = $('mapSelect').value;
+      try{
+        if (!window.GameLoader || typeof GameLoader.start!=='function') throw new Error('GameLoader.start fehlt');
+        console.log('[boot] Start Game', map);
+        GameLoader.start(map);
+      }catch(err){
+        console.error('[boot] GameStart fehlgeschlagen:', err);
+        alert('GameStart fehlgeschlagen. Details in der Konsole.');
+      }
+    });
+
+    $('btnReload').addEventListener('click', () => {
+      const map = $('mapSelect').value;
+      try{
+        if (window.GameLoader?.reload) GameLoader.reload(map);
+        else if (window.GameLoader?.start) GameLoader.start(map);
+        else throw new Error('GameLoader.* fehlt');
+      }catch(err){
+        console.error('[boot] Reload fehlgeschlagen:', err);
+        alert('Reload fehlgeschlagen. Details in der Konsole.');
+      }
+    });
+
+    $('btnFull').addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    });
+
+    $('btnDebug').addEventListener('click', () => {
+      const di = document.getElementById('devInspector');
+      if (!di) return;
+      const min = di.classList.contains('min');
+      window.DevInspector?.setMinimized(!min);
+    });
+
+    $('btnSaveDbg').addEventListener('click', () => {
+      if (typeof window.saveDebugLog==='function') return window.saveDebugLog();
+      // Fallback: speichere Inspector-Log
+      const blob = new Blob([(window.DevInspector?._getLogTxt?.() || '')],{type:'text/plain'});
+      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='siedler-mini-debug.txt'; a.click(); URL.revokeObjectURL(a.href);
+    });
+
+    // --- Quick‑Diag: gibt dir sofort Feedback im Start‑Panel ---
+    function ok(x){return `[OK] ${x}`}
+    function fail(x){return `[FAIL] ${x}`}
+    const lines = [];
+    lines.push( stage ? ok('Canvas #stage • OK') : fail('Canvas #stage • fehlt') );
+    lines.push( $('btnStart')? ok('Button Start') : fail('Button Start') );
+    lines.push( $('btnReload')? ok('Button Reload') : fail('Button Reload') );
+    lines.push( typeof window.saveDebugLog==='function' ? ok('saveDebugLog()') : fail('saveDebugLog()') );
+    lines.push( (window.GameLoader && typeof GameLoader.start==='function') ? ok('GameLoader • ok') : fail('GameLoader • FEHLT') );
+    lines.push( (window.GameCamera) ? ok('GameCamera') : fail('GameCamera') );
+    lines.push( navigator.serviceWorker && navigator.serviceWorker.controller ? ok('ServiceWorker aktiv • Ja') : fail('ServiceWorker aktiv • Nein') );
+    lines.push( ok('Map‑URL • ' + ($('mapSelect').value || '—')) );
+    diag.textContent = lines.join('\n');
+
+    // Auto‑Start wenn gewünscht
+    if ($('autoStart').checked) $('btnStart').click();
+  })();
+  </script>
 </body>
 </html>
