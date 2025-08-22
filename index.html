@@ -3,282 +3,74 @@
 <head>
   <meta charset="utf-8" />
   <title>Siedler‑Mini</title>
-
-  <!-- Mobile/Viewport -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e1b26" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#0e1b26" />
-
   <style>
-    /* ====== Basislayout ====== */
-    :root {
-      --bg: #0e1b26;
-      --panel: rgba(8,14,20,0.72);
-      --panel-border: rgba(255,255,255,0.08);
-      --txt: #e9f1f6;
-      --muted: #c7d2db;
-      --ok: #1fb06a;
-      --btn: #1e2a36;
-      --btn-hov: #243444;
-      --btn-brd: rgba(255,255,255,0.1);
-      --gap: 12px;
-      --radius: 16px;
-      --shadow: 0 8px 28px rgba(0,0,0,.35);
+    :root{
+      --bg:#0e1b26; --panel:rgba(8,14,20,.78); --panel-bd:rgba(255,255,255,.10);
+      --txt:#e9f1f6; --muted:#b9c6d2; --ok:#1fb06a; --btn:#162737; --btn-h:#1f3346;
+      --shadow:0 10px 40px rgba(0,0,0,.35); --r:14px;
     }
-
-    html, body {
-      margin: 0; height: 100%;
-      background: var(--bg); color: var(--txt);
-      overflow: hidden;
-      -webkit-tap-highlight-color: transparent;
-      font: 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    /* ====== Canvas: nur hier wird gezoomt/pannt ====== */
-    #stage {
-      position: absolute;
-      inset: 0;
-      width: 100%; height: 100%;
-      touch-action: none; /* Canvas fängt Gesten, UI bleibt klickbar */
-      display: block;
-      image-rendering: pixelated;
-      background: transparent;
-    }
-
-    /* ====== Debug-Overlay (fix) ====== */
-    #debugOverlay{
-      position: fixed;
-      left: 16px;
-      top: 16px;
-      z-index: 11;
-      display: none;            /* per Button/Key toggeln */
-      white-space: pre;
-      padding: 10px 12px;
-      border-radius: 12px;
-      color: #fff;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.08);
-      backdrop-filter: blur(6px);
-      font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      pointer-events: none;
-      user-select: none;
-      min-width: 260px;
-    }
-    body.debug-on #debugOverlay{ display:block; }
-
-    /* ====== HUD (fix unten links) ====== */
-    #hud {
-      position: fixed;
-      left: max(10px, env(safe-area-inset-left));
-      bottom: max(10px, env(safe-area-inset-bottom));
-      z-index: 10;
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 12px;
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;                 /* bricht automatisch um */
-      align-items: center;
-      max-width: calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));
-    }
-    .group{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-
-    button, select, label {
-      font: inherit; color: var(--txt);
-    }
-    button {
-      background: var(--btn);
-      border: 1px solid var(--btn-brd);
-      border-radius: 10px;
-      padding: 9px 14px;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-    button:hover { background: var(--btn-hov); }
-    .btn-ok { background: var(--ok); border-color: rgba(0,0,0,.15); color: #06220f; }
-    .btn-ok:hover { filter: brightness(1.05); }
-
-    select {
-      background: #0f2232;
-      border: 1px solid var(--btn-brd);
-      border-radius: 10px;
-      padding: 9px 12px;
-      min-width: 220px;
-      appearance: none;
-      background-image:
-        linear-gradient(45deg, transparent 50%, #9fb6ca 50%),
-        linear-gradient(135deg, #9fb6ca 50%, transparent 50%),
-        linear-gradient(to right, #0f2232, #0f2232);
-      background-position:
-        calc(100% - 18px) 55%,
-        calc(100% - 12px) 55%,
-        0 0;
-      background-size: 6px 6px, 6px 6px, 100% 100%;
-      background-repeat: no-repeat;
-    }
-    label { color: var(--muted); display:flex; align-items:center; gap:8px; }
-
-    /* kleine Screens */
-    @media (max-width:480px){
-      #debugOverlay{ font-size:12px; min-width:220px; }
-      select{ min-width: 180px; }
-    }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+    /* Canvas (nur hier Zoomen/Pan) */
+    #stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;image-rendering:pixelated;background:transparent;}
+    /* Debug (fix) */
+    #debugOverlay{position:fixed;left:16px;top:16px;z-index:11;display:none;min-width:260px;white-space:pre;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(6px);font:13px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;pointer-events:none;user-select:none;}
+    body.debug-on #debugOverlay{display:block;}
+    /* HUD (fix) */
+    #hud{position:fixed;left:max(10px, env(safe-area-inset-left));bottom:max(10px, env(safe-area-inset-bottom));z-index:10;display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--panel-bd);border-radius:var(--r);box-shadow:var(--shadow);padding:12px;max-width:calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));}
+    .grp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    button,select,label{font:inherit;color:var(--txt)}
+    button{background:var(--btn);border:1px solid var(--panel-bd);border-radius:10px;padding:9px 14px;cursor:pointer;touch-action:manipulation}
+    button:hover{background:var(--btn-h)}
+    .ok{background:var(--ok);border-color:rgba(0,0,0,.15);color:#06220f}
+    select{background:#0f2232;border:1px solid var(--panel-bd);border-radius:10px;padding:9px 12px;min-width:220px}
+    label{color:var(--muted);display:flex;align-items:center;gap:8px}
+    #badge{padding:6px 10px;border-radius:999px;background:#102336;border:1px solid var(--panel-bd);font:12px/1 ui-monospace,Menlo,Consolas}
+    #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:none;background:#122131;border:1px solid #1e2d42;border-radius:10px;color:#cfe3ff;padding:8px 12px;box-shadow:var(--shadow);z-index:9999}
+    @media (max-width:480px){select{min-width:180px}}
   </style>
 </head>
 <body>
-  <!-- Spielfeld -->
   <canvas id="stage"></canvas>
-
-  <!-- Debug -->
   <pre id="debugOverlay"></pre>
 
-  <!-- HUD -->
   <div id="hud" role="toolbar" aria-label="Spielsteuerung">
-    <div class="group">
-      <button id="btnStart"  class="btn-ok">Start</button>
+    <span id="badge" title="Version / Boost-ID">V? • ?</span>
+
+    <div class="grp">
+      <button id="btnStart" class="ok">Start</button>
       <button id="btnReload">Neu laden</button>
     </div>
 
-    <div class="group">
+    <div class="grp">
       <label for="mapSelect">Karte:</label>
-      <select id="mapSelect" aria-label="Karte auswählen"></select>
+      <select id="mapSelect"></select>
       <label><input id="autoStart" type="checkbox" /> Auto‑Start</label>
     </div>
 
-    <div class="group">
+    <div class="grp">
       <button id="btnDebug"      title="Debug an/aus (F2)">Debug</button>
-      <button id="btnSaveDebug"  title="Debug‑Log speichern (TXT)">Debug speichern</button>
-      <button id="btnFullscreen" title="Vollbild an/aus">Vollbild</button>
+      <button id="btnSaveDebug"  title="Debug als TXT speichern">Debug speichern</button>
+      <button id="btnFullscreen" title="Vollbild umschalten">Vollbild</button>
+    </div>
+
+    <div class="grp">
+      <button id="btnSpawnCarrier"    title="Träger spawnen (C)">+ Träger</button>
+      <button id="btnSpawnLumberjack" title="Holzfäller spawnen (L)">+ Holzfäller</button>
+      <button id="btnSpawnStone"      title="Steinmetz spawnen (S)">+ Steinmetz</button>
+      <button id="btnPause"           title="Simulation pausieren/fortsetzen (P)">Pause</button>
+      <button id="btnPaths"           title="Wege/Targets anzeigen (H)">Wege</button>
     </div>
   </div>
 
-  <!-- Spiele-Skripte (deine bestehenden Dateien) -->
+  <div id="toast"></div>
+
+  <!-- Skripte (KEINE Module) -->
   <script src="boot.js"></script>
   <script src="game.js"></script>
   <script src="tools/map-runtime.js"></script>
-
-  <!-- HUD-Wiring -->
-  <script>
-  (function(){
-    const BUST = Date.now();
-
-    const el = {
-      stage: document.getElementById('stage'),
-      dbg:   document.getElementById('debugOverlay'),
-      start: document.getElementById('btnStart'),
-      reload:document.getElementById('btnReload'),
-      maps:  document.getElementById('mapSelect'),
-      auto:  document.getElementById('autoStart'),
-      btnDbg:document.getElementById('btnDebug'),
-      btnSave:document.getElementById('btnSaveDebug'),
-      btnFS: document.getElementById('btnFullscreen')
-    };
-
-    // Kartenliste hier verwalten (kannst du jederzeit erweitern)
-    const MAPS = [
-      { label: 'map-demo.json',             url: 'assets/maps/map-demo.json' },
-      { label: 'map-pro.json',              url: 'assets/maps/map-pro.json' },
-      { label: 'map-checker (16×16)',       url: 'assets/maps/map-checker-16x16.json' }
-    ];
-
-    // Select füllen
-    function fillMaps(){
-      el.maps.innerHTML = '';
-      for (const m of MAPS){
-        const o = document.createElement('option');
-        o.value = m.url; o.textContent = m.label;
-        el.maps.appendChild(o);
-      }
-      const last = localStorage.getItem('sm:lastMap');
-      if (last && [...el.maps.options].some(o=>o.value===last)) {
-        el.maps.value = last;
-      }
-    }
-
-    // Autostart/Debug-Status laden
-    function restoreToggles(){
-      el.auto.checked = localStorage.getItem('sm:autoStart') === '1';
-      const dbgOn = localStorage.getItem('sm:debugOn') === '1';
-      document.body.classList.toggle('debug-on', dbgOn);
-      // falls Overlay sichtbar sein soll und noch leer ist, einen kurzen Text setzen
-      if (dbgOn && typeof window.setDebug === 'function') window.setDebug('Debug aktiv …');
-    }
-
-    // Events
-    el.maps.addEventListener('change', ()=>{
-      localStorage.setItem('sm:lastMap', el.maps.value);
-    });
-    el.auto.addEventListener('change', ()=>{
-      localStorage.setItem('sm:autoStart', el.auto.checked ? '1' : '0');
-    });
-
-    el.start.addEventListener('click', ()=>{
-      const mapUrl = el.maps.value;
-      // an game.js (UI‑Variante)
-      window.dispatchEvent(new CustomEvent('ui:start', { detail: { map: mapUrl }}));
-    });
-    el.reload.addEventListener('click', ()=>{
-      const url = new URL(location.href);
-      url.searchParams.set('v', String(BUST));
-      location.replace(url.toString());
-    });
-
-    // Debug an/aus (Overlay zeigt game.js‑Infos)
-    function toggleDebug(){
-      const on = !document.body.classList.contains('debug-on');
-      document.body.classList.toggle('debug-on', on);
-      localStorage.setItem('sm:debugOn', on ? '1' : '0');
-      if (typeof window.setDebug === 'function'){
-        window.setDebug(on ? 'Debug aktiv …' : '');
-      }
-    }
-    el.btnDbg.addEventListener('click', toggleDebug);
-    window.addEventListener('keydown', (e)=>{ if (e.code==='F2') toggleDebug(); });
-
-    // Debug speichern (kompletter Log aus SM_DEBUG)
-    el.btnSave.addEventListener('click', ()=>{
-      if (window.SM_DEBUG && typeof window.SM_DEBUG.saveLog === 'function'){
-        window.SM_DEBUG.saveLog();
-      } else {
-        // Fallback: aktuelles Overlay speichern
-        const txt = (el.dbg && el.dbg.textContent) ? el.dbg.textContent : 'Kein Debug-Log verfügbar.';
-        const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = `siedler-mini-debug-${Date.now()}.txt`; a.click();
-        URL.revokeObjectURL(url);
-      }
-    });
-
-    // Vollbild (rein/raus)
-    function isFullscreen(){
-      return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-    }
-    function enterFS(el){
-      (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen || el.mozRequestFullScreen).call(el);
-    }
-    function exitFS(){
-      (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen).call(document);
-    }
-    el.btnFS.addEventListener('click', ()=>{
-      if (isFullscreen()){ exitFS(); }
-      else { enterFS(document.documentElement); }
-    });
-
-    // Autostart
-    function maybeAutostart(){
-      if (el.auto.checked && el.maps.value){
-        setTimeout(()=> el.start.click(), 60);
-      }
-    }
-
-    // Boot
-    fillMaps();
-    restoreToggles();
-    maybeAutostart();
-  })();
-  </script>
 </body>
 </html>
