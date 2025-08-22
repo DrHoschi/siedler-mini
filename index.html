@@ -1,246 +1,194 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <title>Siedler‑Mini v11.1r6</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-  <link rel="manifest" href="manifest.webmanifest" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Siedler‑Mini</title>
 
-  <!-- Basis-Styles (deine vorhandenen Dateien) -->
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="styles.css" />
+  <!-- optionale, aufgesplittete Plattform-CSS -->
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/platform.css" />
-  <link rel="stylesheet" href="css/android.css" />
-  <link rel="stylesheet" href="css/ios.css" />
-  <link rel="stylesheet" href="css/desktop.css" />
   <link rel="stylesheet" href="css/mobile.css" />
+  <link rel="stylesheet" href="css/ios.css" />
+  <link rel="stylesheet" href="css/android.css" />
+  <link rel="stylesheet" href="css/desktop.css" />
 
   <style>
-    /* Fixes: Canvas füllt Viewport; HUD/Toolbar bleiben fix (zoomen NICHT mit) */
-    html, body { height: 100%; margin: 0; background: #0c1a25; color: #e8f2ff; }
-    #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-
-    /* Startscreen & Toolbar (fixiert) */
-    #startScreen {
-      position: fixed; inset: 0; display: grid; place-items: center;
-      background: radial-gradient(1200px 900px at 50% 40%, rgba(255,255,255,.06), transparent 60%) #0c1a25;
-      z-index: 1000;
+    /* Docked UI unten links – bleibt immer sichtbar */
+    #uiDock {
+      position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 10000;
+      max-width: 960px; margin: 0 auto; pointer-events: auto;
     }
-    .start-card {
-      background: rgba(10,16,24,.82); border: 1px solid rgba(255,255,255,.07);
-      border-radius: 14px; padding: 16px 18px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
-      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    #panel {
+      background: rgba(10,18,30,.88);
+      border: 1px solid #1e2d42; border-radius: 16px;
+      padding: 14px; color: #cfe3ff; backdrop-filter: blur(6px);
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
     }
-    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; }
-    .row > * { flex: 0 0 auto; }
-
-    .btn { border: 1px solid rgba(255,255,255,.12); background:#1c2c44; color:#e8f2ff;
-           border-radius: 12px; padding: 10px 14px; cursor: pointer; }
-    .btn.ok { background:#1fb06a; color:#062411; border-color: rgba(0,0,0,.2); }
-    .btn.alt { background:#24314a; }
-    select, label.switch {
-      background:#0f1b2d; color:#e8f2ff; border:1px solid rgba(255,255,255,.12);
-      border-radius:12px; padding:10px 12px; min-width: 240px;
+    #panel h1 { margin: 0 0 10px; font-size: 28px; }
+    .row { display:flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+    .row label { opacity:.85; }
+    select, button, input[type=checkbox] {
+      font: 15px/1.2 system-ui, -apple-system, Segoe UI, Roboto; 
     }
-    label.switch { display: inline-flex; align-items: center; gap: 8px; }
-
-    /* Debug-Overlay (wird von debug.js / tools/debug-tools.js genutzt) */
-    #debugOverlay { position: fixed; left: 16px; top: 16px; z-index: 1100; display: none;
-      background: rgba(0,0,0,.40); border: 1px solid rgba(255,255,255,.1); border-radius: 12px;
-      padding: 10px 12px; white-space: pre; font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    body.debug-on #debugOverlay { display: block; }
-
-    /* Toolbar unten (fix) */
-    #toolbar {
-      position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom, 0px) + 12px);
-      z-index: 1050; pointer-events: none;
+    select {
+      padding: 8px 12px; border-radius: 10px; border:1px solid #2a3b57;
+      background:#0f1b29; color:#cfe3ff; min-width: 240px;
     }
-    .toolbar-card {
-      pointer-events: auto;
-      background: rgba(10,16,24,.82); border: 1px solid rgba(255,255,255,.08);
-      border-radius: 14px; padding: 10px 12px; box-shadow: 0 10px 32px rgba(0,0,0,.35);
-      display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+    button {
+      background:#0f1b29; color:#cfe3ff; border:1px solid #2a3b57;
+      border-radius: 10px; padding: 10px 14px; cursor: pointer;
+    }
+    button.primary { background:#1a5f2a; border-color:#2a7f3f; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    #stage {
+      position: fixed; inset: 0; z-index: 1; background: #0a1624; touch-action: none;
+    }
+    /* Debug-Ausgabe oben links */
+    #debugBox {
+      position: fixed; left: 16px; top: 16px; z-index: 10001; 
+      background: rgba(15,29,49,.92); color:#cfe3ff;
+      border:1px solid #1e2d42; border-radius:12px; padding:10px 12px; 
+      white-space:pre; font: 14px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      max-width: 90vw;
     }
   </style>
 </head>
 <body>
 
-  <!-- Zeichenfläche -->
-  <canvas id="stage"></canvas>
+  <!-- Spielfläche -->
+  <canvas id="stage" width="1024" height="768"></canvas>
 
-  <!-- Debug Overlay (Text wird von debug.js gesetzt) -->
-  <pre id="debugOverlay"></pre>
+  <!-- Debug-Box -->
+  <div id="debugBox" hidden></div>
 
-  <!-- Start-Screen -->
-  <div id="startScreen" aria-modal="true" role="dialog">
-    <div class="start-card">
-      <div class="row" style="justify-content: center; margin-bottom: 10px;">
-        <h1 style="margin: 0 0 6px 0;">Siedler‑Mini</h1>
-      </div>
-      <div class="row" style="margin-bottom: 8px;">
+  <!-- Docked UI -->
+  <div id="uiDock">
+    <div id="panel">
+      <h1>Siedler‑Mini</h1>
+      <div class="row">
         <label for="mapSelect">Karte:</label>
         <select id="mapSelect">
           <option value="assets/maps/map-demo.json">map-demo.json</option>
           <option value="assets/maps/map-pro.json">map-pro.json</option>
           <option value="assets/maps/map-test-all.json">map-test-all.json</option>
-          <option value="maps/start-map.json">start-map.json</option>
         </select>
-        <label class="switch"><input id="autoStart" type="checkbox" /> Auto‑Start</label>
+        <label style="margin-left:12px">
+          <input id="autoStart" type="checkbox" checked> Auto‑Start
+        </label>
       </div>
       <div class="row">
-        <button id="btnStart" class="btn ok">Start</button>
-        <button id="btnReload" class="btn alt">Neu laden</button>
-        <button id="btnFullscreen" class="btn alt">Vollbild</button>
-        <button id="btnDebug" class="btn alt" title="Debug an/aus (F2)">Debug</button>
-        <button id="saveDebugBtn" class="btn alt" title="Debug‑Log speichern">Debug speichern</button>
+        <button id="btnStart" class="primary">Start</button>
+        <button id="btnReload">Neu laden</button>
+        <button id="btnFullscreen">Vollbild</button>
+        <button id="btnToggleDebug">Debug</button>
+      </div>
+      <div class="row">
+        <button id="saveDebugBtn">Debug speichern</button>
       </div>
     </div>
   </div>
 
-  <!-- Toolbar unten (fix, bleibt sichtbar beim Spielen) -->
-  <div id="toolbar">
-    <div class="toolbar-card">
-      <span id="badge" style="font:600 12px ui-monospace,Menlo,Consolas">V? • ?</span>
-      <button id="tbStart" class="btn ok">Start</button>
-      <button id="tbReload" class="btn alt">Neu laden</button>
-      <button id="tbFS" class="btn alt">Vollbild</button>
-      <button id="tbDbg" class="btn alt">Debug</button>
-      <button id="tbSave" class="btn alt">Debug speichern</button>
-    </div>
-  </div>
-
-  <!-- Reihenfolge: Boot zuerst, dann App/Game/Main, dann Module/Utils, dann Tools -->
-  <script>
-    // Sichtbare Build/Boost-ID (auch für Cachebusting nutzbar)
-    window.BUILD_ID = (window.BUILD_ID || "v11.1r6") + "-" + new Date().toISOString().slice(0,10);
-  </script>
-
-  <!-- Kern -->
-  <script src="boot.js" defer></script>
-  <script src="app-v11.1r6.js" defer></script>
-  <script src="game.js" defer></script>
-  <script src="main.js" defer></script>
-
-  <!-- Module/Libs (deine bestehenden Dateien) -->
-  <script src="buildingData.js" defer></script>
-  <script src="world.js" defer></script>
-  <script src="render.js" defer></script>
-  <script src="unitLogic.js" defer></script>
-  <script src="textures.js" defer></script>
-  <script src="input.js" defer></script>
-  <script src="storage.js" defer></script>
-
-  <!-- Utilities -->
-  <script src="fullscreen.js" defer></script>
+  <!-- SCRIPTS – Reihenfolge wichtig -->
   <script src="debug.js" defer></script>
-
-  <!-- Dev/Debug Tools -->
-  <script src="tools/debug-tools.js" defer></script>
   <script src="tools/dev-inspector.js" defer></script>
 
-  <!-- Service Worker (optional – wenn vorhanden) -->
+  <script src="app-v11.1r6.js" defer></script>
+  <script src="boot.js" defer></script>
+  <script src="main.js" defer></script>
+  <script src="render.js" defer></script>
+  <script src="textures.js" defer></script>
+  <script src="world.js" defer></script>
+  <script src="input.js" defer></script>
+  <script src="fullscreen.js" defer></script>
+  <script src="buildingData.js" defer></script>
+  <script src="unitLogic.js" defer></script>
+  <script src="game.js" defer></script>
+
+  <!-- Debug Saver (falls in debug.js nicht enthalten) -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(()=>{});
+  (function(){
+    if (window.saveDebugLog) return; // schon vorhanden
+    const lines = [];
+    const orig = { log:console.log, warn:console.warn, error:console.error, info:console.info };
+    function ts(){ return new Date().toISOString(); }
+    function push(level,args){
+      const s = Array.from(args).map(v=>{
+        if (v instanceof Error) return v.stack || (v.name+': '+v.message);
+        try { return (typeof v==='object'&&v)? JSON.stringify(v): String(v); }
+        catch{ return String(v); }
+      }).join(' ');
+      lines.push(`[${ts()}] ${level.toUpperCase()}: ${s}`); if (lines.length>50000) lines.shift();
+      const box = document.getElementById('debugBox');
+      if (box && !box.hasAttribute('hidden')) box.textContent = lines.slice(-500).join('\n');
     }
-  </script>
-  <script>
-/* Debug-Bridge: sorgt dafür, dass setDebug/Overlay immer funktionieren */
-(() => {
-  const el = document.getElementById('debugOverlay') || (() => {
-    const p = document.createElement('pre');
-    p.id = 'debugOverlay';
-    p.style.position = 'fixed';
-    p.style.left = '16px';
-    p.style.top = '16px';
-    p.style.zIndex = '1100';
-    p.style.background = 'rgba(0,0,0,.40)';
-    p.style.border = '1px solid rgba(255,255,255,.1)';
-    p.style.borderRadius = '12px';
-    p.style.padding = '10px 12px';
-    p.style.whiteSpace = 'pre';
-    p.style.font = '13px/1.35 ui-monospace,Menlo,Consolas,monospace';
-    p.style.display = 'none';
-    document.body.appendChild(p);
-    return p;
-  })();
+    console.log  = (...a)=>{ push('log',a);  orig.log(...a); };
+    console.warn = (...a)=>{ push('warn',a); orig.warn(...a); };
+    console.error= (...a)=>{ push('error',a);orig.error(...a); };
+    console.info = (...a)=>{ push('info',a); orig.info(...a); };
 
-  if (!window.setDebug) {
-    window.setDebug = (txt) => {
-      if (!txt) { el.style.display = 'none'; el.textContent = ''; return; }
-      el.style.display = 'block';
-      // Wenn body.debug-on vorhanden -> immer zeigen, sonst nur initiale Meldung
-      if (!document.body.classList.contains('debug-on')) document.body.classList.add('debug-on');
-      el.textContent = String(txt);
+    window.saveDebugLog = function(filename){
+      const header = [
+        '=== Siedler‑Mini Debug Log ===',
+        'URL: '+location.href,
+        'UA:  '+navigator.userAgent, ''
+      ].join('\n');
+      const blob = new Blob([header, lines.join('\n')], {type:'text/plain;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename || ('siedler-mini-debug-'+new Date().toISOString().replace(/[:.]/g,'-')+'.txt');
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
     };
-    console.log('[debug-bridge] setDebug bereit');
-  }
-})();
-</script>
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const b = document.getElementById('saveDebugBtn');
+      if (b) b.addEventListener('click', ()=> saveDebugLog());
+    });
+  })();
+  </script>
+
+  <!-- Quick‑Diag (zeigt genau deinen Screenshot-Block) -->
   <script>
-/* ===== Siedler‑Mini Quick‑Diag ===========================================
- * Zeigt den Status wichtiger Bausteine und versucht 1x Map-Start.
- * Einfach ans Ende von index.html setzen (nach allen <script>-Tags).
- * Aufruf in Konsole:  __diag()
- * =======================================================================*/
-(function(){
-  const S = [];
-  const add = (name, ok, extra='') => S.push({name, ok, extra});
-  const byId = (id)=>document.getElementById(id);
+  (function(){
+    function setDebug(msg){
+      const box = document.getElementById('debugBox');
+      if (!box) return;
+      box.removeAttribute('hidden');
+      box.textContent = String(msg||'');
+    }
+    window.setDebug = window.setDebug || setDebug;
 
-  // 1) DOM/IDs vorhanden?
-  const canvas = byId('stage');
-  add('Canvas #stage', !!canvas, canvas?'OK':'FEHLT');
+    const out = [];
+    const add = (n,ok,extra='')=> out.push(`[${ok?'OK':'FAIL'}] ${n}${extra?(' • '+extra):''}`);
+    const $ = id=> document.getElementById(id);
+    add('Canvas #stage', !!$('stage'), 'OK');
+    add('Button Start', !!$('btnStart'));
+    add('Button Reload', !!$('btnReload'));
+    add('Select Map', !!$('mapSelect'), $('mapSelect')?$('mapSelect').value:'');
+    add('setDebug()', typeof window.setDebug==='function');
+    add('saveDebugLog()', typeof window.saveDebugLog==='function');
+    add('GameLoader', !!window.GameLoader && typeof GameLoader.start==='function', window.GameLoader?'OK':'FEHLT');
+    add('GameCamera', !!window.GameCamera);
+    add('ServiceWorker aktiv', !!(navigator.serviceWorker && navigator.serviceWorker.controller), (!!(navigator.serviceWorker && navigator.serviceWorker.controller))?'Ja':'Nein');
+    const mapUrl = ($('mapSelect')&&$('mapSelect').value)||'assets/maps/map-demo.json';
+    add('Map-URL', true, mapUrl);
+    setDebug(out.join('\n'));
+    console.log('[Quick‑Diag]', out.join('\n'));
 
-  const startBtn  = byId('btnStart')  || byId('startBtn')  || byId('start-button');
-  const reloadBtn = byId('btnReload') || byId('reloadBtn');
-  const mapSel    = byId('mapSelect') || byId('selectMap');
-  add('Button Start',  !!startBtn);
-  add('Button Reload', !!reloadBtn);
-  add('Select Map',    !!mapSel, mapSel?mapSel.value:'');
+    // Buttons verdrahten (fallback, falls Boot nicht greift)
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const m = $('mapSelect'); const s=$('btnStart'); const r=$('btnReload');
+      const f=$('btnFullscreen'); const d=$('btnToggleDebug');
+      if (s) s.onclick = ()=> window.GameLoader?.start?.( (m&&m.value)||'assets/maps/map-demo.json' );
+      if (r) r.onclick = ()=> location.reload();
+      if (f) f.onclick = ()=> document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{});
+      if (d) d.onclick = ()=> { const el=$('debugBox'); if(!el) return; if (el.hasAttribute('hidden')) el.removeAttribute('hidden'); else el.setAttribute('hidden',''); };
+    });
+  })();
+  </script>
 
-  // 2) Debug/Overlay vorhanden?
-  add('setDebug()', typeof window.setDebug === 'function');
-  add('saveDebugLog()', typeof window.saveDebugLog === 'function');
-
-  // 3) Game-Bridge/Loader vorhanden?
-  add('GameLoader', !!window.GameLoader && typeof GameLoader.start === 'function',
-      window.GameLoader ? 'start() OK' : 'FEHLT');
-  add('GameCamera', !!window.GameCamera);
-
-  // 4) Service Worker: evtl. Cache-Falle?
-  const swControlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-  add('ServiceWorker aktiv', swControlled, swControlled?'Ja (prüfe sw.js Version!)':'Nein');
-
-  // 5) Map-URL plausibel?
-  const mapUrl = (mapSel?.value?.trim() || 'assets/maps/map-demo.json');
-  add('Map-URL', true, mapUrl);
-
-  // Ausgabe im Overlay oder Konsole
-  function paint() {
-    const msg = S.map(x => `[${x.ok?'OK':'FAIL'}] ${x.name}${x.extra?(' • '+x.extra):''}`).join('\n');
-    try { window.setDebug?.(msg); } catch(_) {}
-    console[(S.some(x=>!x.ok)?'error':'log')]('[Quick‑Diag]\n'+msg);
-  }
-
-  // 6) Einmal „sanft“ starten, wenn alles da ist
-  async function tryStart() {
-    paint();
-    if (!canvas || !window.GameLoader || !GameLoader.start) return;
-    // Cache‑Bust um SW/HTTP‑Cache zu umgehen
-    const url = mapUrl + (mapUrl.includes('?')?'&':'?') + 'v=' + Date.now();
-    console.log('[Quick‑Diag] versuche Start:', url);
-    try { await GameLoader.start(url); }
-    catch(e){ console.error('[Quick‑Diag] Start‑Fehler:', e); }
-  }
-
-  // öffentlich machen
-  window.__diag = () => { S.length=0; tryStart(); };
-
-  // auto-run beim ersten Load
-  tryStart();
-})();
-</script>
 </body>
 </html>
