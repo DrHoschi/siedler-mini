@@ -1,6 +1,6 @@
 {
   "meta": {
-    "image": "porter.json.png",
+    "image": "porter.png",
     "size": { "w": 384, "h": 256 },
     "frameSize": { "w": 64, "h": 64 }
   },
