@@ -2,7 +2,7 @@
   "meta": {
     "app": "Siedler-Mini",
     "version": "V14.7-hf2",
-    "image": "fisherman_sprite.png",
+    "image": "fisherman.png",
     "size": { "w": 768, "h": 768 },
     "tile": { "w": 64, "h": 64 }
   },
