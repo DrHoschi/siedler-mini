@@ -1,194 +1,87 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler‑Mini</title>
+  <meta charset="UTF-8">
+  <title>Siedler-Mini</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="styles.css" />
-  <!-- optionale, aufgesplittete Plattform-CSS -->
-  <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/platform.css" />
-  <link rel="stylesheet" href="css/mobile.css" />
-  <link rel="stylesheet" href="css/ios.css" />
-  <link rel="stylesheet" href="css/android.css" />
-  <link rel="stylesheet" href="css/desktop.css" />
-
-  <style>
-    /* Docked UI unten links – bleibt immer sichtbar */
-    #uiDock {
-      position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 10000;
-      max-width: 960px; margin: 0 auto; pointer-events: auto;
-    }
-    #panel {
-      background: rgba(10,18,30,.88);
-      border: 1px solid #1e2d42; border-radius: 16px;
-      padding: 14px; color: #cfe3ff; backdrop-filter: blur(6px);
-      box-shadow: 0 12px 40px rgba(0,0,0,.35);
-    }
-    #panel h1 { margin: 0 0 10px; font-size: 28px; }
-    .row { display:flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
-    .row label { opacity:.85; }
-    select, button, input[type=checkbox] {
-      font: 15px/1.2 system-ui, -apple-system, Segoe UI, Roboto; 
-    }
-    select {
-      padding: 8px 12px; border-radius: 10px; border:1px solid #2a3b57;
-      background:#0f1b29; color:#cfe3ff; min-width: 240px;
-    }
-    button {
-      background:#0f1b29; color:#cfe3ff; border:1px solid #2a3b57;
-      border-radius: 10px; padding: 10px 14px; cursor: pointer;
-    }
-    button.primary { background:#1a5f2a; border-color:#2a7f3f; }
-    button:disabled { opacity:.55; cursor:not-allowed; }
-    #stage {
-      position: fixed; inset: 0; z-index: 1; background: #0a1624; touch-action: none;
-    }
-    /* Debug-Ausgabe oben links */
-    #debugBox {
-      position: fixed; left: 16px; top: 16px; z-index: 10001; 
-      background: rgba(15,29,49,.92); color:#cfe3ff;
-      border:1px solid #1e2d42; border-radius:12px; padding:10px 12px; 
-      white-space:pre; font: 14px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      max-width: 90vw;
-    }
-  </style>
+  <!-- Manifest & Styles -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/mobile.css">
+  <link rel="stylesheet" href="css/desktop.css">
+  <link rel="stylesheet" href="css/ios.css">
+  <link rel="stylesheet" href="css/android.css">
+  <link rel="stylesheet" href="css/platform.css">
 </head>
 <body>
+  <!-- Spielfeld -->
+  <canvas id="stage"></canvas>
 
-  <!-- Spielfläche -->
-  <canvas id="stage" width="1024" height="768"></canvas>
+  <!-- Steuer-UI -->
+  <div id="ui">
+    <h1>Siedler-Mini</h1>
+    <label for="mapSelect">Karte:</label>
+    <select id="mapSelect">
+      <option value="assets/maps/map-demo.json">map-demo.json</option>
+      <option value="assets/maps/map-pro.json">map-pro.json</option>
+      <option value="assets/maps/map-test-all.json">map-test-all.json</option>
+      <option value="maps/start-map.json">start-map.json</option>
+    </select>
+    <br>
+    <label>
+      <input type="checkbox" id="autoStart" checked>
+      Auto-Start
+    </label>
+    <br>
+    <button id="btnStart">Start</button>
+    <button id="btnReload">Neu laden</button>
+    <button id="btnFullscreen">Vollbild</button>
+    <button id="btnDebug">Debug</button>
+    <button id="btnSaveDebug">Debug speichern</button>
+  </div>
 
-  <!-- Debug-Box -->
-  <div id="debugBox" hidden></div>
-
-  <!-- Docked UI -->
-  <div id="uiDock">
-    <div id="panel">
-      <h1>Siedler‑Mini</h1>
-      <div class="row">
-        <label for="mapSelect">Karte:</label>
-        <select id="mapSelect">
-          <option value="assets/maps/map-demo.json">map-demo.json</option>
-          <option value="assets/maps/map-pro.json">map-pro.json</option>
-          <option value="assets/maps/map-test-all.json">map-test-all.json</option>
-        </select>
-        <label style="margin-left:12px">
-          <input id="autoStart" type="checkbox" checked> Auto‑Start
-        </label>
-      </div>
-      <div class="row">
-        <button id="btnStart" class="primary">Start</button>
-        <button id="btnReload">Neu laden</button>
-        <button id="btnFullscreen">Vollbild</button>
-        <button id="btnToggleDebug">Debug</button>
-      </div>
-      <div class="row">
-        <button id="saveDebugBtn">Debug speichern</button>
-      </div>
+  <!-- Debug-Inspector -->
+  <div id="debug-console"></div>
+  <div id="dev-inspector">
+    <div id="inspector-header">
+      <span>Dev-Inspector</span>
+      <button id="inspector-toggle">Min</button>
+    </div>
+    <div id="inspector-body">
+      <p>Items: <span id="inspector-items">0</span></p>
+      <p>Images: <span id="inspector-images">0</span></p>
+      <p>JSON: <span id="inspector-json">0</span></p>
+      <p>JS: <span id="inspector-js">0</span></p>
+      <button id="inspector-copy">Copy Pfad-Liste</button>
+      <button id="inspector-export">Export JSON</button>
+      <button id="inspector-clear">Clear</button>
+      <button id="inspector-hide">Hide</button>
     </div>
   </div>
 
-  <!-- SCRIPTS – Reihenfolge wichtig -->
-  <script src="debug.js" defer></script>
-  <script src="tools/dev-inspector.js" defer></script>
+  <!-- ⚡ Wichtig: Lade-Reihenfolge beachten -->
+  <!-- Erst Game-Engine, dann Boot & Rest -->
+  <script src="game.js"></script>
+  <script src="render.js"></script>
+  <script src="storage.js"></script>
+  <script src="buildingData.js"></script>
+  <script src="textures.js"></script>
+  <script src="unitLogic.js"></script>
+  <script src="world.js"></script>
+  <script src="fullscreen.js"></script>
+  <script src="input.js"></script>
+  <script src="debug.js"></script>
+  <script src="main.js"></script>
+  <script src="app-v11.1r6.js"></script>
 
-  <script src="app-v11.1r6.js" defer></script>
-  <script src="boot.js" defer></script>
-  <script src="main.js" defer></script>
-  <script src="render.js" defer></script>
-  <script src="textures.js" defer></script>
-  <script src="world.js" defer></script>
-  <script src="input.js" defer></script>
-  <script src="fullscreen.js" defer></script>
-  <script src="buildingData.js" defer></script>
-  <script src="unitLogic.js" defer></script>
-  <script src="game.js" defer></script>
+  <!-- Boot zuletzt laden, da er die Checks macht -->
+  <script src="boot.js"></script>
 
-  <!-- Debug Saver (falls in debug.js nicht enthalten) -->
-  <script>
-  (function(){
-    if (window.saveDebugLog) return; // schon vorhanden
-    const lines = [];
-    const orig = { log:console.log, warn:console.warn, error:console.error, info:console.info };
-    function ts(){ return new Date().toISOString(); }
-    function push(level,args){
-      const s = Array.from(args).map(v=>{
-        if (v instanceof Error) return v.stack || (v.name+': '+v.message);
-        try { return (typeof v==='object'&&v)? JSON.stringify(v): String(v); }
-        catch{ return String(v); }
-      }).join(' ');
-      lines.push(`[${ts()}] ${level.toUpperCase()}: ${s}`); if (lines.length>50000) lines.shift();
-      const box = document.getElementById('debugBox');
-      if (box && !box.hasAttribute('hidden')) box.textContent = lines.slice(-500).join('\n');
-    }
-    console.log  = (...a)=>{ push('log',a);  orig.log(...a); };
-    console.warn = (...a)=>{ push('warn',a); orig.warn(...a); };
-    console.error= (...a)=>{ push('error',a);orig.error(...a); };
-    console.info = (...a)=>{ push('info',a); orig.info(...a); };
-
-    window.saveDebugLog = function(filename){
-      const header = [
-        '=== Siedler‑Mini Debug Log ===',
-        'URL: '+location.href,
-        'UA:  '+navigator.userAgent, ''
-      ].join('\n');
-      const blob = new Blob([header, lines.join('\n')], {type:'text/plain;charset=utf-8'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename || ('siedler-mini-debug-'+new Date().toISOString().replace(/[:.]/g,'-')+'.txt');
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-    };
-    window.addEventListener('DOMContentLoaded', ()=>{
-      const b = document.getElementById('saveDebugBtn');
-      if (b) b.addEventListener('click', ()=> saveDebugLog());
-    });
-  })();
-  </script>
-
-  <!-- Quick‑Diag (zeigt genau deinen Screenshot-Block) -->
-  <script>
-  (function(){
-    function setDebug(msg){
-      const box = document.getElementById('debugBox');
-      if (!box) return;
-      box.removeAttribute('hidden');
-      box.textContent = String(msg||'');
-    }
-    window.setDebug = window.setDebug || setDebug;
-
-    const out = [];
-    const add = (n,ok,extra='')=> out.push(`[${ok?'OK':'FAIL'}] ${n}${extra?(' • '+extra):''}`);
-    const $ = id=> document.getElementById(id);
-    add('Canvas #stage', !!$('stage'), 'OK');
-    add('Button Start', !!$('btnStart'));
-    add('Button Reload', !!$('btnReload'));
-    add('Select Map', !!$('mapSelect'), $('mapSelect')?$('mapSelect').value:'');
-    add('setDebug()', typeof window.setDebug==='function');
-    add('saveDebugLog()', typeof window.saveDebugLog==='function');
-    add('GameLoader', !!window.GameLoader && typeof GameLoader.start==='function', window.GameLoader?'OK':'FEHLT');
-    add('GameCamera', !!window.GameCamera);
-    add('ServiceWorker aktiv', !!(navigator.serviceWorker && navigator.serviceWorker.controller), (!!(navigator.serviceWorker && navigator.serviceWorker.controller))?'Ja':'Nein');
-    const mapUrl = ($('mapSelect')&&$('mapSelect').value)||'assets/maps/map-demo.json';
-    add('Map-URL', true, mapUrl);
-    setDebug(out.join('\n'));
-    console.log('[Quick‑Diag]', out.join('\n'));
-
-    // Buttons verdrahten (fallback, falls Boot nicht greift)
-    window.addEventListener('DOMContentLoaded', ()=>{
-      const m = $('mapSelect'); const s=$('btnStart'); const r=$('btnReload');
-      const f=$('btnFullscreen'); const d=$('btnToggleDebug');
-      if (s) s.onclick = ()=> window.GameLoader?.start?.( (m&&m.value)||'assets/maps/map-demo.json' );
-      if (r) r.onclick = ()=> location.reload();
-      if (f) f.onclick = ()=> document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{});
-      if (d) d.onclick = ()=> { const el=$('debugBox'); if(!el) return; if (el.hasAttribute('hidden')) el.removeAttribute('hidden'); else el.setAttribute('hidden',''); };
-    });
-  })();
-  </script>
-
+  <!-- Tools & Helfer -->
+  <script src="tools/debug-tools.js"></script>
+  <script src="tools/dev-inspector.js"></script>
 </body>
 </html>
