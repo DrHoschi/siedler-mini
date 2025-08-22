@@ -1,76 +1,65 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- Siedler‑Mini • index.html (Start, HUD, Inspector, Backdrop, Build-Menü) -->
+  <!-- Siedler‑Mini • index.html (Start, HUD, Inspector, Backdrop, Build-Menü, SVG-Icons) -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini</title>
 
   <style>
     :root{
-      --bg:#0b0d10;               /* Grundhintergrund – auf Bildtönung anpassbar */
-      --stage:#161a20;
+      --bg:#0b0d10; --stage:#161a20;
       --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
       --fg:#e8e8e8; --muted:#b9c4d1;
+      --accent:#6aa3ff;
     }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
       font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
     .hide{display:none!important}
 
-    /* Bühne / Spielfläche */
+    /* Bühne */
     #stage{display:block;width:100vw;height:100vh;background:var(--stage)}
 
-    /* HUD (oben) */
+    /* HUD */
     #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
       align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
       padding:8px 10px;border-radius:8px}
     #hud .spacer{flex:1 1 auto}
     button{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
     button:hover{background:#222a35}
-    button.icon{width:36px;height:36px;display:inline-grid;place-items:center;padding:0;line-height:1.1}
     button:disabled{opacity:.5;cursor:not-allowed}
+    .iconbtn{width:36px;height:36px;display:inline-grid;place-items:center;padding:0}
+    .icon{width:20px;height:20px;display:block;fill:currentColor}
     select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
 
-    /* ---------- Start‑Backdrop (füllt die komplette Seite) ---------- */
+    /* Backdrop (Logo) */
     #startBackdrop{
-      position:fixed; inset:0; z-index:25;
-      display:grid; place-items:center;
-      background-color: var(--bg);
-      opacity:1;
+      position:fixed; inset:0; z-index:25; display:grid; place-items:center;
+      background-color: var(--bg); opacity:1;
     }
-    #startBackdrop img{
-      max-width:min(90vw, 1200px);
-      max-height:min(90vh, 800px);
-      height:auto; width:auto; display:block; object-fit:contain;
-      filter: drop-shadow(0 8px 24px rgba(0,0,0,.5));
-    }
-    #startBackdrop.fade-out{ opacity:0; transition: opacity 3s ease; }
-    #startBackdrop.hidden{ display:none; }
+    #startBackdrop img{max-width:min(90vw,1200px);max-height:min(90vh,800px);height:auto;width:auto;display:block;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5))}
+    #startBackdrop.fade-out{opacity:0;transition:opacity 3s ease}
+    #startBackdrop.hidden{display:none}
 
-    /* ---------- Start-Overlay (Zustand A) ----------
-       Blockiert NICHT die Toast-/Inspector-Leiste (pointer-events).
-    */
+    /* Start-Overlay (blockiert nicht die Toast-Leiste) */
     #startPanel{
       position:fixed; inset:0; z-index:30; display:grid; place-items:center;
-      background:linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.8));
+      background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.8));
       pointer-events:none;
     }
-    #startPanel.hidden{ display:none; }
+    #startPanel.hidden{display:none}
     #startPanel .panel{
-      width:min(720px, 92vw); background:var(--panel); border:1px solid var(--b1);
+      width:min(720px,92vw); background:var(--panel); border:1px solid var(--b1);
       border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px;
       pointer-events:auto; position:relative;
     }
-    #btnMenuClose{
-      position:absolute; top:8px; right:8px; width:32px; height:32px;
-      display:inline-grid; place-items:center; border-radius:8px;
-    }
+    #btnMenuClose{position:absolute; top:8px; right:8px; width:32px; height:32px; display:inline-grid; place-items:center; border-radius:8px}
     .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
     h1{margin:0 0 8px}
     p.sub{margin:0 0 14px; opacity:.85}
     #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
 
-    /* Untere Toast-Leiste (immer bedienbar dank pointer-events auf Overlay) */
+    /* Toast-Leiste */
     #inspectorBar{
       position:fixed; left:8px; right:8px; bottom:8px; z-index:35;
       display:flex; justify-content:space-between; gap:8px;
@@ -78,19 +67,25 @@
       padding:6px 8px; border-radius:8px
     }
 
-    /* ---------- Build-Menü (Platzhalter) ---------- */
+    /* Build-Menü */
     #buildMenu{
       position:fixed; left:8px; top:64px; z-index:18;
       background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
-      border:1px solid var(--b1); border-radius:10px; padding:8px 10px;
+      border:1px solid var(--b1); border-radius:10px; padding:10px 12px; min-width:260px;
     }
-    #buildMenu[hidden]{ display:none; }
+    #buildMenu[hidden]{display:none}
+    #buildMenu header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    #buildTools{display:grid;grid-template-columns:repeat(4, minmax(36px,1fr));gap:8px}
+    .tool{display:grid;place-items:center;height:40px;border:1px solid var(--b2);border-radius:8px;background:#141b24;cursor:pointer}
+    .tool:hover{background:#1b2430}
+    .tool .icon{width:18px;height:18px}
+    .tool.active{outline:2px solid var(--accent); outline-offset:1px}
 
-    /* ---------- Inspector (responsiv & maximierbar) ---------- */
+    /* Inspector (responsiv & maximierbar) */
     #inspector{
       position: fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-      width: min(1000px, 92vw); height: min(720px, 88vh);
-      z-index: 40; background: var(--panel); border: 1px solid var(--b1); border-radius: 12px;
+      width:min(1000px,92vw); height:min(720px,88vh);
+      z-index:40; background:var(--panel); border:1px solid var(--b1); border-radius:12px;
       display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.6);
     }
     #inspector[hidden]{display:none}
@@ -121,15 +116,31 @@
 </head>
 
 <body>
+  <!-- ===== SVG-Icon-Sprite (inline, keine externen Dateien nötig) ===== -->
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <defs>
+      <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M4 15v5h5M20 9V4h-5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-road" viewBox="0 0 24 24"><path d="M6 20l4-16h4l4 16M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-hut" viewBox="0 0 24 24"><path d="M4 12l8-6 8 6v8H4zM10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 2l4 6h-3l3 5h-3l4 7H7l4-7H8l3-5H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-stone" viewBox="0 0 24 24"><path d="M4 16l4-8h8l4 8-6 4H10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
   <!-- HUD -->
   <div id="hud" aria-label="Spiel‑HUD">
     <strong id="buildBadge" title="Build/Version">Siedler‑Mini</strong>
     <span class="spacer"></span>
-    <!-- Vollbild-Icon: ⛶ (rein) / ✖ (raus) -->
-    <button id="btnFS" class="icon" title="Vollbild">⛶</button>
+    <!-- Vollbild-Icon: ⛶ rein / ✖ raus (SVG) -->
+    <button id="btnFS" class="iconbtn" title="Vollbild">
+      <svg class="icon"><use href="#i-full"></use></svg>
+    </button>
   </div>
 
-  <!-- Start‑Backdrop (füllt Seite, zeigt Logo) -->
+  <!-- Backdrop -->
   <div id="startBackdrop" aria-hidden="true">
     <img id="startLogo" alt="Spiel‑Logo" src="./assets/Logo.PNG" />
   </div>
@@ -140,7 +151,9 @@
   <!-- Start-Overlay -->
   <section id="startPanel">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
-      <button id="btnMenuClose" class="icon" title="Menü schließen">✖</button>
+      <button id="btnMenuClose" class="iconbtn" title="Menü schließen">
+        <svg class="icon"><use href="#i-close"></use></svg>
+      </button>
       <h1 id="t">Siedler‑Mini</h1>
       <p class="sub">Wähle eine Karte und starte das Spiel.</p>
 
@@ -163,22 +176,36 @@
     </div>
   </section>
 
-  <!-- Build-Menü (Platzhalter, erscheint automatisch nach Start/Continue) -->
+  <!-- Build-Menü -->
   <aside id="buildMenu" hidden>
-    <strong>Baumenü</strong> · <button id="btnBuildMenuHide" class="icon" title="Baumenü ausblenden">✖</button>
-    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-      <button>Weg</button>
-      <button>Hütte</button>
-      <button>Holzfäller</button>
-      <button>Steinmetz</button>
-      <!-- später echte Aktionen -->
+    <header>
+      <strong>Baumenü</strong>
+      <button id="btnBuildMenuHide" class="iconbtn" title="Baumenü ausblenden">
+        <svg class="icon"><use href="#i-close"></use></svg>
+      </button>
+    </header>
+    <div id="buildTools">
+      <button class="tool" data-tool="road" title="Weg">
+        <svg class="icon"><use href="#i-road"></use></svg>
+      </button>
+      <button class="tool" data-tool="hut" title="Hütte">
+        <svg class="icon"><use href="#i-hut"></use></svg>
+      </button>
+      <button class="tool" data-tool="lumber" title="Holzfäller">
+        <svg class="icon"><use href="#i-tree"></use></svg>
+      </button>
+      <button class="tool" data-tool="mason" title="Steinmetz">
+        <svg class="icon"><use href="#i-stone"></use></svg>
+      </button>
     </div>
   </aside>
 
   <!-- Toast-Leiste -->
   <div id="inspectorBar" class="toast" aria-live="polite">
     <div>
-      <button id="btnMenu" title="Startmenü öffnen">Menü</button>
+      <button id="btnMenu" title="Startmenü öffnen">
+        <svg class="icon" style="margin-right:6px"><use href="#i-menu"></use></svg>Menü
+      </button>
     </div>
     <div style="display:flex;gap:8px">
       <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
@@ -201,7 +228,7 @@
     <div class="content" id="inspectorContent"></div>
   </aside>
 
-  <!-- SCRIPTS -->
+  <!-- Scripts -->
   <script src="./core/asset.js" defer></script>
   <script src="./core/asset.items.js" defer></script>
   <script src="./game.js" defer></script>
