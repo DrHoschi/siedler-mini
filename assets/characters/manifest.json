@@ -1,0 +1,21 @@
+{
+  // Jede Figur kann beliebige "states" haben (idle, walk_empty, walk_carry, work, ...).
+  // "atlas" zeigt auf die PNG, "json" auf die Atlas-JSON (gleicher Basename).
+  "builder": {
+    "idle":      { "atlas": "builder.PNG",          "json": "builder.json" }
+  },
+  "hunter": {
+    "idle":      { "atlas": "hunter.PNG",           "json": "hunter.json" }
+  },
+  "porter": {
+    "idle":      { "atlas": "porter.PNG",           "json": "porter.json" },
+    "walk_empty":{ "atlas": "porter_walk_empty.PNG","json": "porter_walk_empty.json" },
+    "walk_carry":{ "atlas": "porter_walk_carry.PNG","json": "porter_walk_carry.json" }
+  },
+  "stonecutter": {
+    "idle":      { "atlas": "stonecutter.PNG",      "json": "stonecutter.json" }
+  },
+  "woodcutter": {
+    "idle":      { "atlas": "woodcutter.PNG",       "json": "woodcutter.json" }
+  }
+}
