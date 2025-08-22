@@ -92,7 +92,7 @@
   <!-- boot.js initialisiert die UI EINMAL und loggt „UI bereit.“ -->
   <script src="boot.js"></script>
 
-  <!-- Seite‑lokales Wiring (ohne zweiten „UI bereit“-Log!) -->
+  <!-- Seite‑lokales Wiring (debounced Start/Reload, kein zweites „UI bereit“) -->
   <script>
   (function(){
     const $ = (id)=>document.getElementById(id);
@@ -106,7 +106,6 @@
     const autoStart  = $('autoStart');
     const diag       = $('quickDiag');
 
-    // Busy-Flag gegen Doppelklicks
     let busy = false;
 
     async function doStart() {
@@ -116,7 +115,7 @@
         const map = mapSelect.value;
         if (!window.GameLoader?.start) throw new Error('GameLoader.start fehlt');
         console.log('[boot] Start Game', map);
-        await GameLoader.start(map); // Cache‑Bust & Guard in game.js
+        await GameLoader.start(map);
       } catch (e) {
         console.error('[boot] GameStart fehlgeschlagen:', e);
         alert('GameStart fehlgeschlagen. Details in der Konsole.');
@@ -164,27 +163,22 @@
       a.click(); URL.revokeObjectURL(a.href);
     });
 
-    // Quick-Diag
-    function diagLine(ok, label, extra='') {
-      return `[${ok?'OK':'FAIL'}] ${label}${extra?(' • '+extra):''}`;
-    }
-    function paintDiag() {
+    // Quick‑Diag
+    function line(ok, label, extra=''){return `[${ok?'OK':'FAIL'}] ${label}${extra?(' • '+extra):''}`;}
+    (function paint(){
       const lines = [];
-      lines.push( diagLine(!!document.getElementById('stage'), 'Canvas #stage') );
-      lines.push( diagLine(!!window.GameLoader && typeof GameLoader.start==='function', 'GameLoader.start') );
-      lines.push( diagLine(!!window.GameCamera, 'GameCamera') );
-      lines.push( diagLine(typeof window.saveDebugLog==='function', 'saveDebugLog()') );
-      lines.push( diagLine(true, 'Map‑URL', mapSelect.value) );
+      lines.push( line(!!document.getElementById('stage'), 'Canvas #stage') );
+      lines.push( line(!!window.GameLoader && typeof GameLoader.start==='function', 'GameLoader.start') );
+      lines.push( line(!!window.GameCamera, 'GameCamera') );
+      lines.push( line(typeof window.saveDebugLog==='function', 'saveDebugLog()') );
+      lines.push( line(true, 'Map‑URL', mapSelect.value) );
       const sw = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-      lines.push( diagLine(sw, 'ServiceWorker aktiv', sw?'Ja':'Nein') );
+      lines.push( line(sw, 'ServiceWorker aktiv', sw?'Ja':'Nein') );
       diag.textContent = lines.join('\n');
-    }
-    paintDiag();
+    })();
 
-    // Optionaler Auto‑Start (nur 1×, wenn Checkbox gesetzt)
     if (autoStart.checked) setTimeout(doStart, 0);
-
-    // WICHTIG: hier KEIN zweites console.log('UI bereit.')
+    // KEIN zweites console.log('UI bereit.') hier – das macht boot.js
   })();
   </script>
 </body>
