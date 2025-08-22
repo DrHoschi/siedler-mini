@@ -1,223 +1,81 @@
-// ui.js
-// Bau-Menü + robuste UI-Bindings, als ES-Modul
-// - UI: erzeugt das Build-Menü (Icons aus ASSETS, Auswahl-Highlight, Getter)
-// - initGlobalUIBindings: delegiert Klicks auf [data-action], Debug-Box, sichere Events
+/* ============================================================================
+ * js/ui.js — Baumenü & Interaktion
+ * Unten links angedockte Build-Bar, platzieren per Klick auf die Karte.
+ * UI bleibt im Vordergrund (eigener DOM-Layer), Canvas zoomt unabhängig.
+ * Globale Hotspots:
+ *   • window.UI.selectTool(type|null)
+ *   • Baumenü: HQ, Depot, Woodcutter (Beispiele)
+ * ========================================================================== */
+(() => {
+  if (window.UI) return;
 
-import { ASSETS } from "../core/assets.js";
+  const CSS = `
+  #buildBar{position:fixed;left:8px;bottom:8px;z-index:99980;display:flex;flex-wrap:wrap;gap:6px;max-width:96vw}
+  #buildBar button{background:#0f1b29;border:1px solid #1b2a40;color:#cfe3ff;border-radius:10px;padding:8px 10px;cursor:pointer}
+  #buildBar button.active{outline:2px solid #3d74ff}
+  #buildHint{position:fixed;left:8px;bottom:56px;color:#cfe3ff;background:#0f1d31;border:1px solid #1e2d42;border-radius:8px;padding:4px 8px;font:12px system-ui}
+  `;
+  const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
 
-/** Kleine Hilfsfunktionen */
-const el = (tag, props = {}, styles = {}) => {
-  const n = document.createElement(tag);
-  Object.assign(n, props);
-  Object.assign(n.style, styles);
-  return n;
-};
+  // Build-Bar erzeugen
+  const bar = document.createElement('div'); bar.id='buildBar';
+  bar.innerHTML = `
+    <button data-tool="">(Aus)</button>
+    <button data-tool="hq">HQ (2x2)</button>
+    <button data-tool="depot">Depot (2x2)</button>
+    <button data-tool="woodcutter">Holzfäller (1x1)</button>
+  `;
+  document.body.appendChild(bar);
 
-const SELECT_CLASS = "ui-selected";
+  const hint = document.createElement('div'); hint.id='buildHint'; hint.textContent='Werkzeug: (Aus)';
+  document.body.appendChild(hint);
 
-/** Stile einmal injizieren (Highlight etc.) */
-function injectStyles() {
-  if (document.getElementById("__ui_css")) return;
-  const css = `
-    #build-menu { -webkit-user-select:none; user-select:none; }
-    #build-menu button {
-      width:48px; height:48px; background-size:cover; background-position:center;
-      border:1px solid #888; border-radius:4px; cursor:pointer; outline:none;
-      display:inline-block;
-    }
-    #build-menu button.${SELECT_CLASS} {
-      box-shadow: 0 0 0 2px #7FDBFF inset, 0 0 8px rgba(127,219,255,.6);
-      border-color:#7FDBFF;
-    }
-    #debugBox a { color:#9fd3ff; text-decoration:underline; }
-  `.trim();
-  const style = el("style", { id: "__ui_css", textContent: css });
-  document.head.appendChild(style);
-}
+  let tool = ''; // '', 'hq', 'depot', 'woodcutter'
 
-/** Bau-Menü */
-export class UI {
-  /**
-   * @param {object} game - deine Game-Instanz (optional, nur falls du callbacks brauchst)
-   * @param {object} opts - { onSelect?: (id)=>void, mount?: HTMLElement }
-   */
-  constructor(game, opts = {}) {
-    injectStyles();
-    this.game = game;
-    this.onSelect = opts.onSelect || null;
-    this.selectedBuilding = null;
+  function selectTool(t){
+    tool = t || '';
+    bar.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
+    hint.textContent = 'Werkzeug: ' + (tool || '(Aus)');
+    console.log('[ui] Tool:', tool || '(Aus)');
+  }
 
-    // Menü erstellen/anhängen
-    this.menu = el(
-      "div",
-      { id: "build-menu" },
-      {
-        position: "absolute",
-        bottom: "10px",
-        left: "10px",
-        display: "flex",
-        gap: "6px",
-        background: "rgba(0,0,0,0.4)",
-        padding: "6px",
-        borderRadius: "6px",
-        backdropFilter: "blur(2px)",
-        zIndex: 10000,
-        pointerEvents: "auto",
+  bar.addEventListener('click', (ev)=>{
+    const btn = ev.target.closest('button'); if (!btn) return;
+    selectTool(btn.dataset.tool || '');
+  });
+
+  // Platzierung per Klick auf Canvas
+  const canvas = document.getElementById('stage');
+  canvas?.addEventListener('click', (ev)=>{
+    if (!tool) return;
+    const S = window.World?.state; if (!S) return;
+
+    // Screen -> World -> Tile
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (window.devicePixelRatio||1);
+    const y = (ev.clientY - rect.top ) * (window.devicePixelRatio||1);
+
+    // Inverse worldToScreen:
+    const z = S.camera.zoom;
+    const wx = (x - (canvas.width/2)) / z + S.camera.x;
+    const wy = (y - (canvas.height/2)) / z + S.camera.y;
+
+    const tx = Math.floor(wx / S.tile);
+    const ty = Math.floor(wy / S.tile);
+
+    let w=1, h=1;
+    if (tool==='hq' || tool==='depot'){ w=2; h=2; }
+
+    if (window.World.placeBuilding(tool, tx, ty, w, h)) {
+      // Option: bei HQ gleich ein Worker‑Pünktchen daneben spawnen
+      if (tool==='hq') {
+        const px = tx*S.tile + S.tile*0.5, py = ty*S.tile + S.tile*0.5;
+        window.World.addUnit('carrier', px+S.tile*2, py, '#ff0');
       }
-    );
-
-    (opts.mount || document.body).appendChild(this.menu);
-
-    // Buttons definieren (Label, Asset, ID)
-    const defs = [
-      ["HQ",          ASSETS.building.hq,           "hq"],
-      ["Depot",       ASSETS.building.depot,        "depot"],
-      ["Farm",        ASSETS.building.farm,         "farm"],
-      ["Holzfäller",  ASSETS.building.lumberjack,   "lumberjack"],
-      ["Fischer",     ASSETS.building.fischer,      "fischer"],
-      ["Haus1",       ASSETS.building.haeuser1,     "haeuser1"],
-      ["Haus2",       ASSETS.building.haeuser2,     "haeuser2"],
-      ["Steinbruch",  ASSETS.building.stonebraker,  "stonebraker"],
-      ["Wassermühle", ASSETS.building.wassermuehle, "wassermuehle"],
-      ["Windmühle",   ASSETS.building.windmuehle,   "windmuehle"],
-      ["Bäckerei",    ASSETS.building.baeckerei,    "baeckerei"],
-    ];
-
-    this.buttons = new Map();
-    for (const [label, src, id] of defs) {
-      this._createButton(label, src, id);
-    }
-  }
-
-  _createButton(label, iconSrc, buildingId) {
-    const btn = el("button", { title: label }, { backgroundImage: `url(${iconSrc})` });
-    btn.dataset.building = buildingId;
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      this.setSelectedBuilding(buildingId);
-    });
-    this.menu.appendChild(btn);
-    this.buttons.set(buildingId, btn);
-  }
-
-  setSelectedBuilding(buildingId) {
-    this.selectedBuilding = buildingId;
-
-    // Visuelles Highlight
-    for (const [id, b] of this.buttons) {
-      if (id === buildingId) b.classList.add(SELECT_CLASS);
-      else b.classList.remove(SELECT_CLASS);
-    }
-
-    // Callback zu deinem Spiel
-    if (typeof this.onSelect === "function") {
-      try { this.onSelect(buildingId); } catch {}
-    }
-
-    // Optional: globale gameAPI informieren (Tool-Logik)
-    if (window.gameAPI?.setTool) {
-      window.gameAPI.setTool(`build:${buildingId}`);
-    }
-
-    // Konsolenhinweis
-    console.log("Gebäude gewählt:", buildingId);
-  }
-
-  getSelectedBuilding() {
-    return this.selectedBuilding;
-  }
-
-  /** Menü entfernen (z. B. bei Szenenwechsel) */
-  destroy() {
-    if (this.menu?.parentNode) this.menu.parentNode.removeChild(this.menu);
-    this.buttons.clear();
-  }
-}
-
-/** --------- Globale, robuste Bindings + Debug-Box --------- */
-
-export function initGlobalUIBindings(gameAPI = window.gameAPI) {
-  // Defensiver Event-Helper
-  const on = (target, ev, fn) => target && target.addEventListener(ev, fn, { passive: false });
-
-  // Delegation für Buttons/Links mit data-action
-  on(document, "click", (e) => {
-    const btn = e.target.closest?.("[data-action]");
-    if (!btn) return;
-    e.preventDefault();
-    const act = btn.getAttribute("data-action") || "";
-
-    if (act.startsWith("tool:")) {
-      const name = act.split(":")[1];
-      gameAPI?.setTool?.(name);
-      return;
-    }
-
-    switch (act) {
-      case "start":      gameAPI?.start?.(); break;
-      case "center":     gameAPI?.center?.(); break;
-      case "fullscreen": gameAPI?.fullscreen?.(); break;
-      case "debug":      gameAPI?.toggleDebug?.(); break;
-      case "reset":      gameAPI?.reset?.(); break;
+    } else {
+      console.warn('[ui] Platzierung nicht möglich @', tx, ty);
     }
   });
 
-  // Debug-Box einmalig erzeugen
-  makeDebugBox();
-}
-
-function makeDebugBox() {
-  if (window.__debugBox) return;
-  const box = el(
-    "div",
-    { id: "debugBox" },
-    {
-      position: "fixed",
-      left: "12px",
-      bottom: "12px",
-      maxWidth: "60vw",
-      zIndex: 99999,
-      background: "rgba(20,30,48,.9)",
-      color: "#cfe3ff",
-      border: "1px solid #2f425f",
-      font: "12px system-ui,-apple-system,Segoe UI",
-      padding: "8px 10px",
-      borderRadius: "8px",
-      pointerEvents: "auto",
-      userSelect: "text",
-      lineHeight: "1.3",
-      whiteSpace: "pre-wrap",
-    }
-  );
-  box.textContent = "Debug (ziehen zum Verschieben)…";
-  document.body.appendChild(box);
-  window.__debugBox = box;
-
-  // Dragging
-  let dragging = false, sx = 0, sy = 0, bx = 12, by = 12;
-  const onMove = (ev) => {
-    if (!dragging) return;
-    const dx = (ev.clientX || 0) - sx;
-    const dy = (ev.clientY || 0) - sy;
-    box.style.left = (bx + dx) + "px";
-    box.style.bottom = "auto";
-    box.style.top = (window.innerHeight - (by + dy) - box.offsetHeight) + "px";
-  };
-  box.addEventListener("pointerdown", (ev) => {
-    dragging = true;
-    sx = ev.clientX; sy = ev.clientY;
-    bx = box.offsetLeft;
-    by = window.innerHeight - box.offsetTop - box.offsetHeight;
-    box.setPointerCapture(ev.pointerId);
-  });
-  box.addEventListener("pointermove", onMove);
-  box.addEventListener("pointerup", () => { dragging = false; });
-
-  // Fehler-Listener
-  window.addEventListener("error", (e) => {
-    box.textContent = "JS-Error: " + (e.message || e);
-  });
-  window.addEventListener("unhandledrejection", (e) => {
-    box.textContent = "Promise-Error: " + (e.reason?.message || e.reason || e);
-  });
-}
+  window.UI = { selectTool };
+})();
