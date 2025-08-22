@@ -145,5 +145,38 @@
       navigator.serviceWorker.register('sw.js').catch(()=>{});
     }
   </script>
+  <script>
+/* Debug-Bridge: sorgt dafür, dass setDebug/Overlay immer funktionieren */
+(() => {
+  const el = document.getElementById('debugOverlay') || (() => {
+    const p = document.createElement('pre');
+    p.id = 'debugOverlay';
+    p.style.position = 'fixed';
+    p.style.left = '16px';
+    p.style.top = '16px';
+    p.style.zIndex = '1100';
+    p.style.background = 'rgba(0,0,0,.40)';
+    p.style.border = '1px solid rgba(255,255,255,.1)';
+    p.style.borderRadius = '12px';
+    p.style.padding = '10px 12px';
+    p.style.whiteSpace = 'pre';
+    p.style.font = '13px/1.35 ui-monospace,Menlo,Consolas,monospace';
+    p.style.display = 'none';
+    document.body.appendChild(p);
+    return p;
+  })();
+
+  if (!window.setDebug) {
+    window.setDebug = (txt) => {
+      if (!txt) { el.style.display = 'none'; el.textContent = ''; return; }
+      el.style.display = 'block';
+      // Wenn body.debug-on vorhanden -> immer zeigen, sonst nur initiale Meldung
+      if (!document.body.classList.contains('debug-on')) document.body.classList.add('debug-on');
+      el.textContent = String(txt);
+    };
+    console.log('[debug-bridge] setDebug bereit');
+  }
+})();
+</script>
 </body>
 </html>
