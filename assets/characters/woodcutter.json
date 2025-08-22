@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "image": "woodcutter.png",
+    "size": { "w": 384, "h": 192 },
+    "frameSize": { "w": 64, "h": 64 }
+  },
+  "animations": {
+    "idle": {
+      "frames": 6,
+      "row": 0,
+      "directions": ["N", "E", "S", "W"],
+      "fps": 6
+    },
+    "work": {
+      "frames": 6,
+      "row": 1,
+      "directions": ["N", "E", "S", "W"],
+      "fps": 8,
+      "note": "Neutral chopping motion, no tool visible"
+    },
+    "walk_carry": {
+      "frames": 6,
+      "row": 2,
+      "directions": ["N", "E", "S", "W"],
+      "fps": 8,
+      "attachPoint": "carry"
+    }
+  },
+  "attachPoints": {
+    "carry": {
+      "shoulder": { "x": 32, "y": 20 },
+      "belly":    { "x": 32, "y": 36 },
+      "hand":     { "x": 40, "y": 40 }
+    }
+  }
+}
