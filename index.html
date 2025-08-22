@@ -1,60 +1,58 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- Siedler‑Mini • index.html (Startfenster, HUD, Inspector, Backdrop) -->
+  <!-- Siedler‑Mini • index.html (Start, HUD, Inspector, Backdrop, Build-Menü) -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini</title>
 
   <style>
     :root{
-      --bg:#0b0d10;               /* Passe auf Bildtönung an */
+      --bg:#0b0d10;               /* Grundhintergrund – auf Bildtönung anpassbar */
       --stage:#161a20;
       --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
       --fg:#e8e8e8; --muted:#b9c4d1;
     }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
       font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .hide{display:none!important}
 
     /* Bühne / Spielfläche */
     #stage{display:block;width:100vw;height:100vh;background:var(--stage)}
 
     /* HUD (oben) */
-    #hud{
-      position:fixed;top:8px;left:8px;right:8px;z-index:20;
-      display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-      background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
-      padding:8px 10px;border-radius:8px
-    }
+    #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
+      align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
+      padding:8px 10px;border-radius:8px}
     #hud .spacer{flex:1 1 auto}
     button{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
     button:hover{background:#222a35}
+    button.icon{width:36px;height:36px;display:inline-grid;place-items:center;padding:0;line-height:1.1}
     button:disabled{opacity:.5;cursor:not-allowed}
     select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
-    .hide{display:none!important}
 
     /* ---------- Start‑Backdrop (füllt die komplette Seite) ---------- */
     #startBackdrop{
       position:fixed; inset:0; z-index:25;
       display:grid; place-items:center;
-      background-color: var(--bg); /* Randfarbe zum Bild */
+      background-color: var(--bg);
       opacity:1;
     }
     #startBackdrop img{
       max-width:min(90vw, 1200px);
       max-height:min(90vh, 800px);
-      height:auto; width:auto; display:block;
-      object-fit:contain;
+      height:auto; width:auto; display:block; object-fit:contain;
       filter: drop-shadow(0 8px 24px rgba(0,0,0,.5));
     }
     #startBackdrop.fade-out{ opacity:0; transition: opacity 3s ease; }
     #startBackdrop.hidden{ display:none; }
 
-    /* ---------- Start-Overlay (Zustand A) ---------- */
+    /* ---------- Start-Overlay (Zustand A) ----------
+       Blockiert NICHT die Toast-/Inspector-Leiste (pointer-events).
+    */
     #startPanel{
       position:fixed; inset:0; z-index:30; display:grid; place-items:center;
       background:linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.8));
-      /* Overlay darf die Toast-/Inspector-Leiste nicht blockieren: */
       pointer-events:none;
     }
     #startPanel.hidden{ display:none; }
@@ -63,20 +61,14 @@
       border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px;
       pointer-events:auto; position:relative;
     }
-    /* Menü schließen (oben rechts) */
     #btnMenuClose{
-      position:absolute; right:10px; top:10px;
-      width:32px; height:32px; border-radius:8px;
-      display:grid; place-items:center;
+      position:absolute; top:8px; right:8px; width:32px; height:32px;
+      display:inline-grid; place-items:center; border-radius:8px;
     }
-
     .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
     h1{margin:0 0 8px}
     p.sub{margin:0 0 14px; opacity:.85}
-    #quickDiag{
-      margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);
-      max-height:30vh;overflow:auto;white-space:pre-wrap
-    }
+    #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
 
     /* Untere Toast-Leiste (immer bedienbar dank pointer-events auf Overlay) */
     #inspectorBar{
@@ -85,6 +77,14 @@
       background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
       padding:6px 8px; border-radius:8px
     }
+
+    /* ---------- Build-Menü (Platzhalter) ---------- */
+    #buildMenu{
+      position:fixed; left:8px; top:64px; z-index:18;
+      background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
+      border:1px solid var(--b1); border-radius:10px; padding:8px 10px;
+    }
+    #buildMenu[hidden]{ display:none; }
 
     /* ---------- Inspector (responsiv & maximierbar) ---------- */
     #inspector{
@@ -125,8 +125,8 @@
   <div id="hud" aria-label="Spiel‑HUD">
     <strong id="buildBadge" title="Build/Version">Siedler‑Mini</strong>
     <span class="spacer"></span>
-    <!-- Vollbild-Icon rechts (⛶ → ✕) -->
-    <button id="btnFSIcon" title="Vollbild">⛶</button>
+    <!-- Vollbild-Icon: ⛶ (rein) / ✖ (raus) -->
+    <button id="btnFS" class="icon" title="Vollbild">⛶</button>
   </div>
 
   <!-- Start‑Backdrop (füllt Seite, zeigt Logo) -->
@@ -140,7 +140,7 @@
   <!-- Start-Overlay -->
   <section id="startPanel">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
-      <button id="btnMenuClose" title="Menü schließen">✖</button>
+      <button id="btnMenuClose" class="icon" title="Menü schließen">✖</button>
       <h1 id="t">Siedler‑Mini</h1>
       <p class="sub">Wähle eine Karte und starte das Spiel.</p>
 
@@ -155,7 +155,7 @@
 
       <div class="row">
         <button id="btnStart">Neues Spiel</button>
-        <button id="btnContinue">Weiterspielen</button>
+        <button id="btnContinue" disabled>Weiterspielen</button>
         <button id="btnReset">Reset</button>
       </div>
 
@@ -163,7 +163,19 @@
     </div>
   </section>
 
-  <!-- Toast-Leiste (immer sichtbar) -->
+  <!-- Build-Menü (Platzhalter, erscheint automatisch nach Start/Continue) -->
+  <aside id="buildMenu" hidden>
+    <strong>Baumenü</strong> · <button id="btnBuildMenuHide" class="icon" title="Baumenü ausblenden">✖</button>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <button>Weg</button>
+      <button>Hütte</button>
+      <button>Holzfäller</button>
+      <button>Steinmetz</button>
+      <!-- später echte Aktionen -->
+    </div>
+  </aside>
+
+  <!-- Toast-Leiste -->
   <div id="inspectorBar" class="toast" aria-live="polite">
     <div>
       <button id="btnMenu" title="Startmenü öffnen">Menü</button>
@@ -195,11 +207,11 @@
   <script src="./game.js" defer></script>
   <script src="./boot.js" defer></script>
 
-  <!-- FS-Icon ggf. ausblenden -->
+  <!-- FS-Icon ggf. ausblenden bei no-fs -->
   <script>
     (function(){
       if(document.documentElement.classList.contains('no-fs')){
-        const el=document.getElementById('btnFSIcon'); if(el) el.classList.add('hide');
+        const fsBtn=document.getElementById('btnFS'); if(fsBtn) fsBtn.classList.add('hide');
       }
     })();
   </script>
