@@ -2,8 +2,8 @@
 <html lang="de">
 <head>
   <!-- =========================================
-       Siedler‑Mini • index.html
-       Zweck: Startfenster (Zustand A), HUD, Inspector
+       Siedler‑Mini • index.html (Zustand A/B)
+       Zweck: Startfenster, HUD, Inspector (responsiv)
        ========================================= -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -11,36 +11,166 @@
 
   <!-- ====== STYLES (kompakt, aktuelles Farbschema) ====== -->
   <style>
-    :root{ --bg:#0b0d10; --stage:#161a20; --panel:#0f1318; --b1:#2a2f38; --b2:#39414d; --fg:#e8e8e8; --muted:#b9c4d1; }
+    :root{
+      --bg:#0b0d10; --stage:#161a20; --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
+      --fg:#e8e8e8; --muted:#b9c4d1;
+    }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+
+    /* Bühne / Spielfläche */
     #stage{display:block;width:100vw;height:100vh;background:var(--stage)}
-    #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);padding:8px 10px;border-radius:8px}
+
+    /* HUD-Leiste (oben) – bleibt auch im Startbild sichtbar */
+    #hud{
+      position:fixed; top:8px; left:8px; right:8px; z-index:20;
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
+      padding:8px 10px; border-radius:8px;
+    }
     #hud .spacer{flex:1 1 auto}
-    button{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
+
+    button{
+      padding:6px 10px; border-radius:8px; border:1px solid var(--b2);
+      background:#1a2029; color:var(--fg); cursor:pointer
+    }
     button:hover{background:#222a35}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
-    #startPanel{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:linear-gradient(180deg,rgba(0,0,0,.65),rgba(0,0,0,.85))}
-    #startPanel .panel{width:min(720px,92vw);background:var(--panel);border:1px solid var(--b1);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.6);padding:18px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
-    h1{margin:0 0 8px}
-    p.sub{margin:0 0 14px;opacity:.85}
-    #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
-    #inspectorBar{position:fixed;left:8px;right:8px;bottom:8px;z-index:25;display:flex;justify-content:space-between;gap:8px;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);padding:6px 8px;border-radius:8px}
-    #inspector{position:fixed;inset:4% 4% auto 4%;bottom:4%;z-index:40;background:var(--panel);border:1px solid var(--b1);border-radius:12px;display:flex;flex-direction:column}
-    #inspector[hidden]{display:none}
-    #inspector header{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--b1)}
-    #inspector .tabs{display:flex;gap:8px;padding:8px 10px;border-bottom:1px solid var(--b1)}
-    #inspector .content{flex:1 1 auto;overflow:auto;padding:10px}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    select{background:#121821; color:var(--fg); border:1px solid var(--b2); border-radius:8px; padding:6px 8px}
     .hide{display:none!important}
-    /* Logo im Startscreen */
+
+    /* Start-Overlay (Zustand A) */
+    #startPanel{
+      position:fixed; inset:0; z-index:30; display:grid; place-items:center;
+      background:linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,.85));
+
+      /* ------------------------------------------
+         WICHTIG: Startpanel darf NICHT die Toast-/Inspector-Leiste blockieren.
+         Lösung: Overlay (#startPanel) nimmt KEINE Klicks an.
+         Nur die innere Dialogbox (.panel) ist klickbar.
+         ------------------------------------------ */
+      pointer-events: none;
+    }
+    #startPanel .panel{
+      width:min(720px, 92vw); background:var(--panel); border:1px solid var(--b1);
+      border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px;
+      pointer-events: auto; /* Nur hier Klicks blocken */
+    }
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
+    h1{margin:0 0 8px}
+    p.sub{margin:0 0 14px; opacity:.85}
+
+    /* Quick-Diagnose / Meldungen */
+    #quickDiag{
+      margin-top:10px; padding:10px; background:#0b0f14;
+      border:1px dashed #2b3340; border-radius:8px; color:var(--muted);
+      max-height:30vh; overflow:auto; white-space:pre-wrap
+    }
+
+    /* Untere Toast-Leiste (immer bedienbar dank pointer-events-Fix) */
+    #inspectorBar{
+      position:fixed; left:8px; right:8px; bottom:8px; z-index:25;
+      display:flex; justify-content:space-between; gap:8px;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
+      padding:6px 8px; border-radius:8px
+    }
+
+    /* ================= Inspector (responsiv & lesbar) ================= */
+
+    /* Basis: zentriertes Panel, nicht Vollbild */
+    #inspector{
+      position: fixed;
+      /* zentriert, mit max Breite/Höhe */
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(1000px, 92vw);
+      height: min(720px, 88vh);
+
+      z-index: 40;
+      background: var(--panel);
+      border: 1px solid var(--b1);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 12px 48px rgba(0,0,0,.6);
+    }
+    #inspector[hidden]{ display:none; }
+
+    #inspector header{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:8px; padding:10px 12px; border-bottom:1px solid var(--b1);
+    }
+    #inspector header .left,
+    #inspector header .right{ display:flex; gap:8px; align-items:center; }
+    #inspector .tabs{
+      display:flex; gap:8px; padding:8px 12px; border-bottom:1px solid var(--b1);
+      overflow:auto;
+    }
+    #inspector .content{
+      flex:1 1 auto; overflow:auto; padding:12px;
+      /* Text immer sichtbar, nie rauslaufen */
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    /* Schlüssel/Wert-Grid (liest sich gut in allen Größen) */
+    .kv{
+      display:grid;
+      grid-template-columns: 160px 1fr;
+      gap: 6px 12px;
+    }
+    .kv > div:first-child{ opacity:.9; }
+
+    /* Tabellen, falls du welche renderst */
+    #inspector table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+    #inspector th, #inspector td{
+      border-bottom:1px solid #212733; padding:6px 8px;
+      white-space: normal; word-break: break-word; overflow-wrap: anywhere;
+    }
+
+    /* -------- Bottom‑Sheet Verhalten: Handy Hochformat -------- */
+    @media (max-width: 700px) and (orientation: portrait){
+      #inspector{
+        left: 50%; transform: translate(-50%, 0);
+        top: auto; bottom: 0;
+        width: 100vw;
+        height: 75vh;          /* Bottom‑Sheet Höhe */
+        border-radius: 12px 12px 0 0;
+      }
+      .kv{ grid-template-columns: 130px 1fr; }
+    }
+
+    /* -------- Handy sehr schmal: einspaltig -------- */
+    @media (max-width: 430px){
+      .kv{ grid-template-columns: 1fr; }
+    }
+
+    /* -------- Querformat: nutzt mehr Breite, bleibt lesbar -------- */
+    @media (max-height: 520px) and (orientation: landscape){
+      #inspector{
+        width: min(1100px, 96vw);
+        height: min(560px, 90vh);
+      }
+    }
+
+    /* -------- Modus: Maximiert (echtes Layout-Vollbild, kein Browser-FS) -------- */
+    #inspector.max{
+      left: 0; top: 0; transform: none;
+      width: 100vw; height: 100vh; border-radius: 0;
+    }
+
+    /* Inspector-Header-Buttons */
+    button.inspector{ padding:6px 10px; border-radius:8px; border:1px solid var(--b2); background:#1a2029; color:var(--fg); cursor:pointer; }
+    button.inspector:hover{ background:#222a35; }
+
+    /* Logo-Hintergrund im Startscreen (leicht transparent) */
     #startPanel::before{
       content:""; position:absolute; inset:0; z-index:-1;
-      background:url("./assets/ui/logo.png") center/40% no-repeat; opacity:.12; filter:blur(0.2px);
+      background: url("./assets/ui/logo.png") center/40% no-repeat; opacity:.12; filter: blur(0.2px);
     }
   </style>
 
-  <!-- Feature-Flag Fullscreen → iPhone blendet Button später aus -->
+  <!-- Feature-Flag für Fullscreen (iPhone blendet Button später aus) -->
   <script>
     (function(){
       const isIPhone = /iPhone/i.test(navigator.userAgent);
@@ -51,14 +181,14 @@
 </head>
 
 <body>
-  <!-- ===================== HUD ===================== -->
+  <!-- ===================== HUD (oben) ===================== -->
   <div id="hud" aria-label="Spiel‑HUD">
     <strong id="buildBadge" title="Build/Version">Siedler‑Mini</strong>
     <span class="spacer"></span>
-    <button id="btnFull" title="Vollbild umschalten">Vollbild</button>
+    <button id="btnFull"  title="Vollbild umschalten">Vollbild</button>
   </div>
 
-  <!-- ===================== Bühne ===================== -->
+  <!-- ===================== Bühne / Canvas ===================== -->
   <canvas id="stage"></canvas>
 
   <!-- ===================== Start-Overlay (Zustand A) ===================== -->
@@ -89,18 +219,27 @@
   <!-- ===================== Untere Toast-Leiste ===================== -->
   <div id="inspectorBar" class="toast" aria-live="polite">
     <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
+    <!-- Cache-Bust/Hard-Reload ohne Inspector aufzuklappen -->
     <button id="btnCacheClear" title="Seite neu laden und Cache umgehen">Cache leeren</button>
   </div>
 
-  <!-- ===================== Inspector ===================== -->
+  <!-- ===================== Inspector (responsiv, maximierbar) ===================== -->
   <aside id="inspector" hidden>
     <header>
-      <strong>Inspector</strong>
-      <button id="btnInspectorClose" title="Schließen">Close</button>
+      <div class="left">
+        <strong>Inspector</strong>
+      </div>
+      <div class="right">
+        <button id="btnInspectorToggleMax" class="inspector" title="Maximieren / Fenstergröße">Maximieren</button>
+        <button id="btnInspectorClose" class="inspector" title="Schließen">Close</button>
+      </div>
     </header>
+
     <div class="tabs">
+      <!-- Reiter-Struktur; „Debug“ wird von boot.js/game.js befüllt -->
       <button data-tab="debug">Debug</button>
     </div>
+
     <div class="content" id="inspectorContent"></div>
   </aside>
 
@@ -110,43 +249,25 @@
        ist wichtig, damit Abhängigkeiten stimmen.
        -------------------------------------------------------------------
        1) VENDOR / POLYFILLS (optional)
-          → Beispiel: Tiled-Parser, EventEmitter, Promise polyfill
-          <script src="./vendor/some-polyfill.js" defer></script>
-
        2) CORE (Assets, Konstanten, Datendefinitionen)
-          → Muss vor Game‑Systemen geladen werden.
-          <script src="./core/asset.js" defer></script>
-          <script src="./core/asset.items.js" defer></script>
-
-       3) GAME‑SYSTEME / MODULE
-          → Rendering, Map‑Runtime, Kamera, Entities, UI‑Helpers etc.
-          Beispiele/Platzhalter:
-          <script src="./tools/map-runtime.js" defer></script>
-          <script src="./entities/worker.js" defer></script>
-          <script src="./entities/fisherman.js" defer></script>
-
-       4) GAMELOADER / SPIELKERN
-          → Stellt window.GameLoader.start(..) & .continueFrom(..) bereit.
-          <script src="./game.js" defer></script>
-
-       5) BOOT / VERDRAHTUNG
-          → Verdrahtet DOM, Startfenster, Inspector, Cache-Leeren, FS‑Toggle.
-          <script src="./boot.js" defer></script>
+       3) GAME‑SYSTEME / MODULE (Map‑Runtime, Entities, UI‑Utils …)
+       4) GAMELOADER / SPIELKERN (stellt window.GameLoader bereit)
+       5) BOOT / VERDRAHTUNG (DOM, Startfenster, Inspector)
        =================================================================== -->
 
-  <!-- ===== [2] CORE ===== -->
+  <!-- [2] CORE -->
   <script src="./core/asset.js" defer></script>
   <script src="./core/asset.items.js" defer></script>
 
-  <!-- ===== [3] GAME‑SYSTEME (Beispiele – optional, falls vorhanden) ===== -->
+  <!-- [3] GAME‑SYSTEME (Beispiele – optional, falls vorhanden) -->
   <!-- <script src="./tools/map-runtime.js" defer></script> -->
   <!-- <script src="./entities/worker.js" defer></script> -->
   <!-- <script src="./entities/fisherman.js" defer></script> -->
 
-  <!-- ===== [4] GAMELOADER ===== -->
+  <!-- [4] GAMELOADER -->
   <script src="./game.js" defer></script>
 
-  <!-- ===== [5] BOOT ===== -->
+  <!-- [5] BOOT -->
   <script src="./boot.js" defer></script>
 
   <!-- Fullscreen-Button ggf. ausblenden (Flag aus <head>) -->
