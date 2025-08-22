@@ -1,62 +1,105 @@
-// Siedler‑Mini V15 textures.js
-// Lädt alle benötigten Texturen aus assets/tex/… (64×64)
+/* ============================================================================
+ * textures.js — Atlas/Tile-Handling
+ * Lädt einen JSON-Atlas + Image und stellt Zugriff per Key bereit.
+ * Robust: Wenn ein Key fehlt, wird ein Platzhalter gezeichnet.
+ * Globale Exports: window.Textures
+ * ========================================================================== */
+(() => {
+  if (window.Textures) return;
 
-export const TILE = 64; // passt zu deinen 64×64 PNGs
-
-// sichere Loaderoutine mit Platzhalter, falls eine Datei fehlt
-function loadImage(src){
-  return new Promise(res=>{
-    const img = new Image();
-    img.onload = ()=> res(img);
-    img.onerror = ()=>{
-      // Fallback: karierter Platzhalter
-      const c = document.createElement('canvas');
-      c.width = c.height = TILE;
-      const ctx = c.getContext('2d');
-      ctx.fillStyle = '#303e55'; ctx.fillRect(0,0,TILE,TILE);
-      ctx.fillStyle = '#42597a';
-      for(let y=0;y<TILE;y+=8) for(let x= (y/8)%2?0:8; x<TILE; x+=16) ctx.fillRect(x,y,8,8);
-      const ph = new Image(); ph.onload = ()=>res(ph); ph.src = c.toDataURL();
-    };
-    img.src = src;
-  });
-}
-
-export const Tex = {
-  // Boden
-  grass: null,
-  dirt: null,
-  forest: null,
-  water: null,
-  // Straßen
-  road_straight: null,
-  road_corner: null,
-  road_t: null,
-  road_cross: null,
-  // Gebäude
-  hq: null,
-  depot: null,
-  woodcutter: null,
-};
-
-export async function loadAllTextures(onDebug){
-  const base = 'assets/tex';
-  const paths = {
-    grass: `${base}/topdown_grass.png`,
-    dirt: `${base}/topdown_dirt.png`,
-    forest: `${base}/topdown_forest.png`,
-    water: `${base}/topdown_water.png`,
-    road_straight: `${base}/topdown_road_straight.png`,
-    road_corner:   `${base}/topdown_road_corner.png`,
-    road_t:        `${base}/topdown_road_t.png`,
-    road_cross:    `${base}/topdown_road_cross.png`,
-    hq:            `${base}/topdown_hq.png`,
-    depot:         `${base}/topdown_depot.png`,
-    woodcutter:    `${base}/topdown_woodcutter.png`,
+  const L = {
+    log : (...a)=>console.log('[tex]',...a),
+    warn: (...a)=>console.warn('[tex]',...a),
+    err : (...a)=>console.error('[tex]',...a),
   };
 
-  for (const [k,src] of Object.entries(paths)){
-    Tex[k] = await loadImage(src);
-    onDebug?.(`Texture OK: ${src}`);
+  const cache = {
+    image: null,
+    frames: new Map(),   // key -> {x,y,w,h}
+    tileSize: 64,
+    ready: false,
+  };
+
+  async function loadAtlas(mapJson, mapUrl) {
+    cache.frames.clear();
+    cache.image = null;
+    cache.ready = false;
+
+    const atlas = mapJson?.atlas;
+    if (!atlas) { L.warn('kein atlas in Map — Platzhalter aktiv'); return; }
+
+    const base = new URL(mapUrl, location.href);
+    const jsonUrl  = new URL(atlas.json, base).toString();
+    const imageUrl = new URL(atlas.image, base).toString();
+
+    const res = await fetch(jsonUrl, {cache:'no-store'});
+    if (!res.ok) throw new Error(`Atlas JSON fehlgeschlagen: ${res.status} ${res.statusText}`);
+    const data = await res.json();
+
+    // Unterstütze unterschiedliche Tileset-Formate:
+    // 1) {frames:{KEY:{frame:{x,y,w,h}}}}
+    // 2) {tiles:[{name:'grass',x,y,w,h},...]}
+    // 3) {map:{KEY:[x,y,w,h]}, tileSize:n}
+    if (data.frames) {
+      for (const [k,v] of Object.entries(data.frames)) {
+        const fr = v.frame || v; cache.frames.set(stripExt(k), {x:fr.x,y:fr.y,w:fr.w,h:fr.h});
+      }
+    } else if (Array.isArray(data.tiles)) {
+      for (const t of data.tiles) cache.frames.set(stripExt(t.name), {x:t.x,y:t.y,w:t.w,h:t.h});
+    } else if (data.map) {
+      for (const [k,arr] of Object.entries(data.map)) {
+        const [x,y,w,h] = arr; cache.frames.set(stripExt(k), {x,y,w,h});
+      }
+    }
+
+    cache.tileSize = Number.isFinite(mapJson.tileSize) ? mapJson.tileSize
+                    : Number.isFinite(mapJson.tile)     ? mapJson.tile
+                    : Number.isFinite(data.tileSize)    ? data.tileSize
+                    : 64;
+
+    cache.image = await loadImage(imageUrl);
+    cache.ready = true;
+    L.log('Atlas geladen', {keys: cache.frames.size, tile: cache.tileSize});
   }
-}
+
+  function stripExt(name){ return String(name).replace(/\.(png|jpg|jpeg|webp)$/i,''); }
+
+  function loadImage(url){
+    return new Promise((res, rej)=>{
+      const img = new Image();
+      img.onload = ()=>res(img);
+      img.onerror= ()=>rej(new Error('Image load fail: '+url));
+      img.src = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now();
+    });
+  }
+
+  function drawTile(ctx, key, dx, dy, size){
+    size = size || cache.tileSize;
+    const k = stripExt(key);
+    if (cache.ready && cache.frames.has(k)) {
+      const f = cache.frames.get(k);
+      ctx.drawImage(cache.image, f.x, f.y, f.w, f.h, dx, dy, size, size);
+    } else {
+      // Platzhalter: farbige Kachel mit Label
+      ctx.save();
+      ctx.fillStyle = colorForKey(k);
+      ctx.fillRect(dx, dy, size, size);
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.strokeRect(dx+0.5, dy+0.5, size-1, size-1);
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.font = Math.max(10, size*0.18)+'px ui-monospace,monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(k, dx+size/2, dy+size/2);
+      ctx.restore();
+    }
+  }
+
+  function colorForKey(k){
+    // deterministische „Hash“-Farbe
+    let h=0; for (let i=0;i<k.length;i++) h=(h*131 + k.charCodeAt(i))>>>0;
+    const r = 100 + (h & 0x7F);
+    const g = 100 + ((h>>7) & 0x7F);
+    const b = 100 + ((h>>14)& 0x7F);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  window.Textures = { loadAtlas, drawTile, get tileSize(){return cache.tileSize;} };
+})();
