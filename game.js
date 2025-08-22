@@ -1,301 +1,265 @@
-/* game.js
- * Siedler‑Mini • v11.1r6 • 2025‑08‑22
- * -----------------------------------
- * Verantwortlich für:
- *  - Laden & (Neu)Starten einer Map (GameLoader)
- *  - Kamera & einfache Interaktion (GameCamera)
- *  - Minimaler Renderer (Grid / Map-Bounds)
- *
- * Öffentliche API (für boot.js / Debug):
- *   window.GameLoader.start(mapUrl?)
- *   window.GameLoader.reload(mapUrl?)
- *   window.GameLoader.isRunning
- *   window.GameCamera.setZoom(z)
- *   window.GameCamera.setPosition(x,y)
- *   window.GameCamera.get()
+/* ============================================================================
+ * game.js  —  Siedler‑Mini • v11.1r6
+ * ----------------------------------------------------------------------------
+ * Aufgaben:
+ *  - Stellt startGame(url) / reloadGame(url) bereit
+ *  - Zentrale GameLoader‑API mit Reentrancy‑Guard & Cache‑Bust
+ *  - Einfache Kamera (zoom/position) + Canvas‑Rendering (Grid + Maprahmen)
+ *  - Sauberes Logging, kompatibel zu saveDebugLog()/dev‑inspector
+ * ============================================================================
  */
 
 (() => {
-  "use strict";
-
-  // ===== Version / Helpers ===================================================
-  const VERSION = "v11.1r6";
-  const DEFAULT_MAP = "assets/maps/map-demo.json";
-
-  const now = () => performance.now();
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-
-  // ===== Canvas / Context ====================================================
-  const canvas = document.getElementById("stage");
-  if (!canvas) {
-    console.error("[game] Canvas #stage fehlt – index.html prüfen!");
-    return;
-  }
-  const ctx = canvas.getContext("2d");
-
-  // ===== State ===============================================================
-  const state = {
-    running: false,
-    mapUrl: null,
-    map: null,              // geladene Map (JSON)
-    tileSize: 64,           // Fallback falls Map nichts liefert
-    rows: 16,
-    cols: 16,
-
-    // Anzeige/Device
-    DPR: Math.max(1, window.devicePixelRatio || 1),
-    width: 0,
-    height: 0,
-
-    // Kamera
-    camera: {
-      x: 0,
-      y: 0,
-      zoom: 1.0,
-      minZoom: 0.5,
-      maxZoom: 3.5
-    },
-
-    // Input
-    dragging: false,
-    dragStartX: 0,
-    dragStartY: 0,
-    camStartX: 0,
-    camStartY: 0,
-
-    // Loop
-    lastTime: 0
+  // -------- Version/Logger ---------------------------------------------------
+  const VERSION = 'v11.1r6';
+  const L = {
+    log : (...a) => console.log('[game]', ...a),
+    info: (...a) => console.info('[game]', ...a),
+    warn: (...a) => console.warn('[game]', ...a),
+    err : (...a) => console.error('[game]', ...a),
   };
 
-  // ===== Resize Handling =====================================================
+  // -------- Globale Runtime (für Inspector & andere Module) ------------------
+  const R = (window.__GAME_RUN__ = window.__GAME_RUN__ || {
+    starting   : false,           // Start/Reload läuft?
+    currentMap : null,            // zuletzt gestartete Map-URL (inkl. Bust)
+    mapData    : null,            // geladene Map (JSON)
+    canvas     : null,
+    ctx        : null,
+    camera     : { x:0, y:0, zoom:1 },
+    tile       : 64,
+    rows       : 0,
+    cols       : 0,
+    dpr        : window.devicePixelRatio || 1,
+    rafId      : 0,               // requestAnimationFrame‑ID
+    gridColor  : 'rgba(255,255,255,0.06)',
+    needsDraw  : true,            // einfaches Inval‑Flag
+  });
+
+  // -------- Canvas anlegen/holen --------------------------------------------
+  function ensureCanvas() {
+    if (R.canvas) return;
+    let c = document.getElementById('stage');
+    if (!c) {
+      c = document.createElement('canvas');
+      c.id = 'stage';
+      // Die CSS‑Größe übernimmt die Seite; wir skalieren mit DPR
+      c.style.display = 'block';
+      c.style.width = '100%';
+      c.style.height = '100%';
+      document.body.appendChild(c);
+    }
+    R.canvas = c;
+    R.ctx = c.getContext('2d');
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+  }
+
   function resizeCanvas() {
-    const DPR = state.DPR = Math.max(1, window.devicePixelRatio || 1);
-    const rect = canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width * DPR));
-    const h = Math.max(1, Math.floor(rect.height * DPR));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
+    const rectW = Math.max(1, R.canvas.clientWidth  || window.innerWidth);
+    const rectH = Math.max(1, R.canvas.clientHeight || window.innerHeight);
+    const W = Math.floor(rectW  * R.dpr);
+    const H = Math.floor(rectH * R.dpr);
+    if (R.canvas.width !== W || R.canvas.height !== H) {
+      R.canvas.width  = W;
+      R.canvas.height = H;
+      R.needsDraw = true;
     }
-    state.width = w;
-    state.height = h;
-  }
-  resizeCanvas();
-  window.addEventListener("resize", resizeCanvas);
-
-  // ===== Map Laden ===========================================================
-  async function loadMap(url) {
-    const bustUrl = url + (url.includes("?") ? "&" : "?") + "cb=" + Date.now();
-    console.log("[game] Lade Map:", url);
-
-    const res = await fetch(bustUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status} beim Laden von ${url}`);
-    const data = await res.json();
-
-    // Sanity & Defaults
-    state.map = data;
-    state.tileSize = Number(data.tileSize || 64);
-    state.rows = Number(data.rows || 16);
-    state.cols = Number(data.cols || 16);
-
-    // Kamera initial grob mittig
-    state.camera.x = (state.cols * state.tileSize) / 2;
-    state.camera.y = (state.rows * state.tileSize) / 2;
-    state.camera.zoom = clamp(state.camera.zoom, state.camera.minZoom, state.camera.maxZoom);
-
-    console.log("[game] Map OK:", { rows: state.rows, cols: state.cols, tile: state.tileSize });
   }
 
-  // ===== Renderer (minimal) ==================================================
-  function clear() {
-    ctx.fillStyle = "#0d1722";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  function worldToScreen(wx, wy) {
-    const { x, y, zoom } = state.camera;
-    const sx = (wx - x) * zoom + state.width / 2;
-    const sy = (wy - y) * zoom + state.height / 2;
-    return [sx, sy];
-  }
-
-  function drawGrid() {
-    const { rows, cols, tileSize } = state;
-    const totalW = cols * tileSize;
-    const totalH = rows * tileSize;
-
-    // Map-Umrandung
-    ctx.save();
-    ctx.lineWidth = 2 * state.camera.zoom;
-    ctx.strokeStyle = "rgba(120,160,200,0.35)";
-
-    const [x0, y0] = worldToScreen(0, 0);
-    const [x1, y1] = worldToScreen(totalW, totalH);
-    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
-    ctx.restore();
-
-    // Zartes Grid
-    ctx.save();
-    ctx.strokeStyle = "rgba(120,160,200,0.18)";
-    ctx.lineWidth = 1 * state.camera.zoom;
-
-    // Vertikal
-    for (let c = 1; c < cols; c++) {
-      const wx = c * tileSize;
-      const [sx0, sy0] = worldToScreen(wx, 0);
-      const [sx1, sy1] = worldToScreen(wx, totalH);
-      ctx.beginPath();
-      ctx.moveTo(sx0, sy0);
-      ctx.lineTo(sx1, sy1);
-      ctx.stroke();
+  // -------- Einfache Kamera‑API ---------------------------------------------
+  const Camera = {
+    setZoom(z) {
+      const clamped = Math.max(0.5, Math.min(3.5, Number(z) || 1));
+      if (clamped !== R.camera.zoom) {
+        R.camera.zoom = clamped;
+        R.needsDraw = true;
+      }
+    },
+    setPosition(x, y) {
+      x = Number.isFinite(x) ? x : 0;
+      y = Number.isFinite(y) ? y : 0;
+      if (x !== R.camera.x || y !== R.camera.y) {
+        R.camera.x = x; R.camera.y = y;
+        R.needsDraw = true;
+      }
     }
-    // Horizontal
-    for (let r = 1; r < rows; r++) {
-      const wy = r * tileSize;
-      const [sx0, sy0] = worldToScreen(0, wy);
-      const [sx1, sy1] = worldToScreen(totalW, wy);
-      ctx.beginPath();
-      ctx.moveTo(sx0, sy0);
-      ctx.lineTo(sx1, sy1);
-      ctx.stroke();
-    }
+  };
 
-    ctx.restore();
-  }
+  // -------- Rendering (leichtgewichtiges Grid + Map‑Rahmen) -----------------
+  function render() {
+    R.rafId = window.requestAnimationFrame(render);
+    if (!R.needsDraw || !R.ctx) return;
+    R.needsDraw = false;
 
-  function drawHudReadout() {
-    // Ein paar State-Werte in die Ecke (hilfreich ohne separates Overlay)
-    const z = state.camera.zoom.toFixed(2);
-    const txt = `Cam: x=${state.camera.x.toFixed(1)}  y=${state.camera.y.toFixed(1)}  zoom=${z}
-Map: ${state.map ? state.mapUrl : "—"} 
-rows=${state.rows} cols=${state.cols} tile=${state.tileSize}
-DPR=${state.DPR}   Size=${state.width}×${state.height}`;
+    const { ctx, canvas, camera, gridColor, tile, rows, cols } = R;
+    const W = canvas.width, H = canvas.height;
+
+    // Hintergrund
     ctx.save();
-    const pad = 12 * state.DPR;
-    ctx.font = `${12 * state.DPR}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-    const lines = txt.split("\n");
-    const metrics = ctx.measureText("M".repeat(48));
-    const boxW = Math.max(metrics.width + pad * 2, 260 * state.DPR);
-    const boxH = (lines.length * 16 + 10) * state.DPR;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0c1b2b';
+    ctx.fillRect(0, 0, W, H);
 
-    // Bubble
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = "#0f1d31";
-    ctx.strokeStyle = "#1e2d42";
-    ctx.lineWidth = 1 * state.DPR;
+    // Welt‑Transform (Center + Zoom + Pan)
+    ctx.translate(W/2, H/2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
+
+    // Grid (sichtbarer Bereich grob)
+    const worldW = cols * tile;
+    const worldH = rows * tile;
+
+    // Leichter Rahmen um die Map
+    ctx.fillStyle = '#11263a';
+    ctx.fillRect(-worldW/2 - tile, -worldH/2 - tile, worldW + 2*tile, worldH + 2*tile);
+
+    // Raster
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1 / camera.zoom;
+
     ctx.beginPath();
-    const x = pad, y = pad;
-    roundRect(ctx, x, y, boxW, boxH, 8 * state.DPR);
-    ctx.fill();
+    for (let r = 0; r <= rows; r++) {
+      const y = -worldH/2 + r * tile;
+      ctx.moveTo(-worldW/2, y);
+      ctx.lineTo( worldW/2, y);
+    }
+    for (let c = 0; c <= cols; c++) {
+      const x = -worldW/2 + c * tile;
+      ctx.moveTo(x, -worldH/2);
+      ctx.lineTo(x,  worldH/2);
+    }
     ctx.stroke();
 
-    // Text
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#cfe3ff";
-    let ty = y + 20 * state.DPR;
-    for (const line of lines) {
-      ctx.fillText(line, x + 12 * state.DPR, ty);
-      ty += 16 * state.DPR;
-    }
     ctx.restore();
   }
 
-  function roundRect(c, x, y, w, h, r) {
-    c.moveTo(x + r, y);
-    c.arcTo(x + w, y, x + w, y + h, r);
-    c.arcTo(x + w, y + h, x, y + h, r);
-    c.arcTo(x, y + h, x, y, r);
-    c.arcTo(x, y, x + w, y, r);
+  function startLoop() {
+    if (!R.rafId) R.rafId = window.requestAnimationFrame(render);
+  }
+  function stopLoop() {
+    if (R.rafId) cancelAnimationFrame(R.rafId);
+    R.rafId = 0;
   }
 
-  function render() {
-    clear();
-    if (state.map) drawGrid();
-    drawHudReadout();
+  // -------- Map laden/initialisieren ----------------------------------------
+  async function loadMapJson(url) {
+    // WICHTIG: keinen eigenen Cache‑Bust anhängen; das macht GameLoader
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Map‑Fetch fehlgeschlagen: ${res.status} ${res.statusText}`);
+    return res.json();
   }
 
-  // ===== Loop ================================================================
-  function tick(t) {
-    if (!state.running) return;
-    const dt = (t - state.lastTime) || 16;
-    state.lastTime = t;
-    // (hier später: Animationen, Units etc.)
-    render();
-    requestAnimationFrame(tick);
+  function applyMapMeta(map) {
+    // Erwartete Felder: rows, cols, tile (Fallbacks)
+    R.rows = Number.isFinite(map.rows) ? map.rows : 16;
+    R.cols = Number.isFinite(map.cols) ? map.cols : 16;
+    R.tile = Number.isFinite(map.tile) ? map.tile : 64;
+
+    // Kamera grob zentrieren
+    Camera.setZoom(1.0);
+    Camera.setPosition( (R.cols * R.tile)/2, (R.rows * R.tile)/2 );
+
+    R.needsDraw = true;
   }
 
-  // ===== Input (nur auf dem Canvas) =========================================
-  // Maus / Touch Drag
-  canvas.addEventListener("pointerdown", (e) => {
-    canvas.setPointerCapture(e.pointerId);
-    state.dragging = true;
-    state.dragStartX = e.clientX;
-    state.dragStartY = e.clientY;
-    state.camStartX = state.camera.x;
-    state.camStartY = state.camera.y;
-  });
-  canvas.addEventListener("pointermove", (e) => {
-    if (!state.dragging) return;
-    const dx = (e.clientX - state.dragStartX) / state.camera.zoom;
-    const dy = (e.clientY - state.dragStartY) / state.camera.zoom;
-    state.camera.x = state.camStartX - dx;
-    state.camera.y = state.camStartY - dy;
-  });
-  canvas.addEventListener("pointerup", () => { state.dragging = false; });
-  canvas.addEventListener("pointercancel", () => { state.dragging = false; });
-
-  // Wheel‑Zoom (nur über Canvas)
-  canvas.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const { minZoom, maxZoom } = state.camera;
-    const factor = Math.exp(-e.deltaY * 0.0015); // smooth
-    const newZ = clamp(state.camera.zoom * factor, minZoom, maxZoom);
-    state.camera.zoom = newZ;
-  }, { passive: false });
-
-  // ===== Public API ==========================================================
-  async function start(mapUrl = DEFAULT_MAP) {
+  // -------- Öffentliche Start/Reload‑Funktionen -----------------------------
+  /**
+   * Startet das Spiel mit einer Map‑URL.
+   * Erwartet eine „Raw“-URL (ohne eigenen Bust), Bust kommt zentral über GameLoader.
+   */
+  async function startGame(mapUrl) {
     try {
-      state.mapUrl = mapUrl;
-      await loadMap(mapUrl);
-      if (!state.running) {
-        state.running = true;
-        state.lastTime = now();
-        requestAnimationFrame(tick);
-      }
-      console.log("[game] gestartet •", mapUrl);
-    } catch (err) {
-      console.error("[game] Startfehler:", err);
-      alert("GameStart fehlgeschlagen. Details in der Konsole.");
+      ensureCanvas();
+      L.log('bereit •', VERSION);
+
+      L.log('Lade Map:', mapUrl);
+      const map = await loadMapJson(mapUrl);
+      R.mapData = map;
+
+      // Map anwenden (Größe etc.)
+      applyMapMeta(map);
+      L.log('Map OK:', map);
+
+      // Hier könnten später Texturen/Atlas/Units … geladen/initialisiert werden
+
+      startLoop();
+      L.log('gestartet •', mapUrl);
+    } catch (e) {
+      L.err('Start fehlgeschlagen:', e);
+      throw e;
     }
   }
 
-  async function reload(mapUrl = state.mapUrl || DEFAULT_MAP) {
-    console.log("[game] reload •", mapUrl);
-    await start(mapUrl);
+  /**
+   * Lädt die aktuelle oder eine neue Map neu.
+   */
+  async function reloadGame(mapUrl) {
+    try {
+      ensureCanvas();
+
+      const url = mapUrl || R.currentMap;
+      if (!url) throw new Error('Kein Map‑Pfad für reloadGame verfügbar.');
+      L.log('Reload •', url);
+
+      stopLoop();
+      const map = await loadMapJson(url);
+      R.mapData = map;
+
+      applyMapMeta(map);
+      startLoop();
+      L.log('Reload OK •', url);
+    } catch (e) {
+      L.err('Reload fehlgeschlagen:', e);
+      throw e;
+    }
   }
 
-  // Kamera‑API (für Debug/Boot)
-  function setZoom(z) {
-    state.camera.zoom = clamp(Number(z) || 1, state.camera.minZoom, state.camera.maxZoom);
-  }
-  function setPosition(x, y) {
-    state.camera.x = Number.isFinite(x) ? Number(x) : state.camera.x;
-    state.camera.y = Number.isFinite(y) ? Number(y) : state.camera.y;
-  }
-  function getCamera() {
-    return { ...state.camera };
+  // -------- Zentrale Loader‑API (einziger Ort mit Cache‑Bust!) --------------
+  function withBust(url) {
+    const u = new URL(url, location.href);
+    u.searchParams.set('v', Date.now().toString());
+    return u.pathname + u.search;
   }
 
-  // Expose
   window.GameLoader = {
-    start, reload,
-    get isRunning() { return !!state.running; },
-    get state() { return state; },
-    get mapUrl() { return state.mapUrl; }
+    async start(mapUrl) {
+      if (R.starting) { L.warn('Start ignoriert (busy)'); return; }
+      R.starting = true;
+      try {
+        const finalUrl = withBust(mapUrl);
+        R.currentMap = finalUrl;
+        L.log('Starte Karte:', finalUrl);
+        await startGame(finalUrl);
+      } finally {
+        R.starting = false;
+      }
+    },
+    async reload(mapUrl) {
+      if (R.starting) { L.warn('Reload ignoriert (busy)'); return; }
+      R.starting = true;
+      try {
+        const base = mapUrl || R.currentMap || 'assets/maps/map-demo.json';
+        const finalUrl = withBust(base);
+        R.currentMap = finalUrl;
+        L.log('Reload Karte:', finalUrl);
+        await reloadGame(finalUrl);
+      } finally {
+        R.starting = false;
+      }
+    }
   };
-  window.GameCamera = { setZoom, setPosition, get: getCamera };
 
-  // ===== Boot‑Hint ===========================================================
-  console.log(`[game] bereit • ${VERSION}`);
+  // -------- Kleine Kamera‑API für’s UI/Debug --------------------------------
+  window.GameCamera = {
+    setZoom: Camera.setZoom,
+    setPosition: Camera.setPosition,
+  };
+
+  // -------- Globale Hooks (für Boot/Inspector) ------------------------------
+  window.startGame  = startGame;   // falls Boot direkt darauf zugreift
+  window.reloadGame = reloadGame;
+
+  // -------- Initial‑Log ------------------------------------------------------
+  L.log('bereit •', VERSION);
 })();
