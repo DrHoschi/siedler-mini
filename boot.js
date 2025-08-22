@@ -151,3 +151,27 @@
 
   console.log('[BOOT] bereit •', BUILD);
 })();
+<script>
+// minimaler Button‑Hook (nur ausführen, wenn die IDs existieren)
+(() => {
+  const byId = (id) => document.getElementById(id);
+
+  const startBtn = byId('btnStart') || byId('startBtn') || byId('start-button');
+  const reloadBtn = byId('btnReload') || byId('reloadBtn');
+  const mapSel = byId('mapSelect') || byId('selectMap');
+
+  const getUrl = () => (mapSel?.value?.trim() || 'assets/maps/map-demo.json');
+
+  startBtn && startBtn.addEventListener('click', () => {
+    const url = getUrl();
+    console.log('[ui] Start:', url);
+    window.GameLoader?.start(url);
+  });
+
+  reloadBtn && reloadBtn.addEventListener('click', () => {
+    const url = getUrl();
+    console.log('[ui] Reload:', url);
+    window.GameLoader?.reload(url);
+  });
+})();
+</script>
