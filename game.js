@@ -228,3 +228,54 @@ window.GameCamera = {
   setZoom:     (z)    => camera.setZoom(z),
   setPosition: (x,y)  => camera.setPosition(x,y),
 };
+<!-- am ENDE von game.js einfügen -->
+<script>
+(() => {
+  // Fallback: sehr einfaches Laden & sichtbares Feedback, falls startGame noch nicht verkabelt ist
+  async function __fallbackLoadMap(url) {
+    try {
+      const bust = (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      const res = await fetch(url + bust, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      const c = document.getElementById('stage');
+      if (!c) { console.error('[fallback-map] Canvas #stage fehlt'); return; }
+      const ctx = c.getContext('2d');
+
+      // „sichtbares“ Feedback
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.clearRect(0,0,c.width,c.height);
+      ctx.fillStyle = '#0b1825'; ctx.fillRect(0,0,c.width,c.height);
+      ctx.fillStyle = '#e8f2ff';
+      ctx.font = '16px ui-monospace,Menlo,Consolas';
+      ctx.fillText('Map geladen: ' + (data.name || url.split('/').pop()), 20, 40);
+      ctx.fillText(`rows=${data.rows} cols=${data.cols} tile=${data.tile||data.tileSize||64}`, 20, 66);
+
+      console.log('[fallback-map] OK:', url, data);
+      window.setDebug?.(`[Fallback] Map OK • ${url}`);
+    } catch (e) {
+      console.error('[fallback-map] Fehler:', e);
+      window.setDebug?.('[Fallback] Map-Fehler: ' + (e.message || e));
+    }
+  }
+
+  // Wrapper: echte Funktionen verwenden, sonst Fallback
+  const start = (mapUrl) =>
+    (typeof window.startGame === 'function') ? window.startGame(mapUrl) : __fallbackLoadMap(mapUrl);
+
+  const reload = (mapUrl) =>
+    (typeof window.reloadGame === 'function') ? window.reloadGame(mapUrl) : start(mapUrl);
+
+  // Öffentliche Loader-API ergänzen (ohne vorhandenes zu überschreiben)
+  window.GameLoader = Object.assign({}, window.GameLoader, { start, reload });
+
+  // Kamera-API (nur falls vorhanden)
+  window.GameCamera = Object.assign({}, window.GameCamera, {
+    setZoom: (z) => window.game?.camera?.setZoom?.(z),
+    setPosition: (x,y) => window.game?.camera?.setPosition?.(x,y),
+  });
+
+  console.log('[game-bridge] GameLoader/Camera bereit');
+})();
+</script>
