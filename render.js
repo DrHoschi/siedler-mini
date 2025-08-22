@@ -1,118 +1,125 @@
-// Siedler‑Mini V15 render.js
-// Kameramatrix, Welt/Screencoords, Zeichnen von Tiles, Straßen, Gebäuden
+/* ============================================================================
+ * render.js — Zeichnet Map, Gebäude und Figuren auf #stage
+ * Erwartet: World.state (rows/cols/tile,map.layers[0].grid), Textures
+ * Globale Exports: window.Render
+ * ========================================================================== */
+(() => {
+  if (window.Render) return;
 
-import { TILE, Tex } from './textures.js?v=1500';
-
-export const render = (()=>{
-
-  const state = {
-    canvas:null, ctx:null, DPR:1, width:0, height:0,
-    camX:0, camY:0, zoom:1, minZoom:0.5, maxZoom:2.5
+  const R = {
+    canvas: null,
+    ctx: null,
+    dpr: window.devicePixelRatio || 1,
+    raf: 0,
+    showGrid: false,
   };
 
-  function attachCanvas(canvas){
-    state.canvas = canvas;
-    state.ctx = canvas.getContext('2d');
-    state.DPR = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+  function ensureCanvas(){
+    if (R.canvas) return;
+    R.canvas = document.getElementById('stage');
+    R.ctx = R.canvas.getContext('2d');
     resize();
+    window.addEventListener('resize', resize);
   }
-
   function resize(){
-    const rect = state.canvas.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width  * state.DPR));
-    const h = Math.max(1, Math.floor(rect.height * state.DPR));
-    if (w!==state.canvas.width || h!==state.canvas.height){
-      state.canvas.width  = w;
-      state.canvas.height = h;
-    }
-    state.width = w; state.height = h;
+    const w = Math.max(1, R.canvas.clientWidth  || window.innerWidth);
+    const h = Math.max(1, R.canvas.clientHeight || window.innerHeight);
+    const W = Math.floor(w * R.dpr), H = Math.floor(h * R.dpr);
+    if (R.canvas.width!==W || R.canvas.height!==H){ R.canvas.width=W; R.canvas.height=H; }
   }
 
-  // ---- Koordinaten
-  function toWorld(clientX, clientY){
-    // client → CSS px; auf DPR bringen:
-    const sx = clientX * state.DPR;
-    const sy = clientY * state.DPR;
-    const wx = (sx - state.width/2) / (state.zoom) + state.camX;
-    const wy = (sy - state.height/2) / (state.zoom) + state.camY;
-    return {x:wx, y:wy};
-  }
-  function toScreen(wx, wy){
-    const sx = (wx - state.camX)*state.zoom + state.width/2;
-    const sy = (wy - state.camY)*state.zoom + state.height/2;
-    return {x:sx, y:sy};
-  }
-  function snap(v){ return Math.round(v / TILE) * TILE; }
-
-  // ---- Zeichenhelfer
-  function drawTile(img, gx, gy){
-    const {ctx} = state;
-    const {x,y} = toScreen(gx, gy);
-    const s = TILE * state.zoom;
-    ctx.drawImage(img,
-      x - s/2, y - s/2, s, s);
+  function worldToScreen(x, y, S){
+    const W=R.canvas.width, H=R.canvas.height;
+    const z=S.camera.zoom;
+    const ox = W/2 - S.camera.x*z;
+    const oy = H/2 - S.camera.y*z;
+    return { x: ox + x*z, y: oy + y*z, z };
   }
 
-  function drawRoadSegment(seg){
-    const ctx = state.ctx;
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#a07c4a'; // Erdweg-Farbe (sichtbar ohne Texturlogik)
-    ctx.lineWidth = Math.max(3, 10*state.zoom);
-    const a = toScreen(seg.x1, seg.y1);
-    const b = toScreen(seg.x2, seg.y2);
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.restore();
-  }
+  function drawMap(S){
+    const ctx=R.ctx, tile=S.tile;
+    const layer = S.map?.layers?.[0];
+    if (!layer) return;
 
-  function drawBuilding(b){
-    const ctx = state.ctx;
-    const tex = b.type==='hq' ? Tex.hq : b.type==='woodcutter' ? Tex.woodcutter : Tex.depot;
-    const {x,y} = toScreen(b.x, b.y);
-    const s = TILE * state.zoom;
-    ctx.drawImage(tex, x - s/2, y - s/2, s, s);
-  }
+    const grid = layer.grid; // 1D‑Array mit Keys (rows*cols)
+    if (!grid || !grid.length) return;
 
-  // ---- Welt zeichnen
-  function draw(world){
-    const ctx = state.ctx;
-    ctx.save();
-    ctx.clearRect(0,0,state.width, state.height);
+    // Hintergrund
+    ctx.fillStyle='#0c1b2b'; ctx.fillRect(0,0,R.canvas.width,R.canvas.height);
 
-    // Boden (einfaches Raster aus Grass; später Chunk-Renderer)
-    // Zeichne sichtbares Tile-Rechteck
-    const left   = Math.floor((state.camX - state.width/2/state.zoom)/TILE)-1;
-    const right  = Math.floor((state.camX + state.width/2/state.zoom)/TILE)+1;
-    const top    = Math.floor((state.camY - state.height/2/state.zoom)/TILE)-1;
-    const bottom = Math.floor((state.camY + state.height/2/state.zoom)/TILE)+1;
-
-    for (let gy=top; gy<=bottom; gy++){
-      for (let gx=left; gx<=right; gx++){
-        // simple Biome: Wasser Rand, sonst Gras (Platzhalter)
-        const wx = gx*TILE, wy = gy*TILE;
-        const edge = (Math.abs(gx)>40 || Math.abs(gy)>40);
-        const img = edge ? Tex.water : Tex.grass;
-        drawTile(img, wx, wy);
+    // Kacheln
+    for (let r=0; r<S.rows; r++){
+      for (let c=0; c<S.cols; c++){
+        const key = grid[r*S.cols + c] || 'missing';
+        const wx = c*tile, wy = r*tile;
+        const scr = worldToScreen(wx, wy, S);
+        Textures.drawTile(ctx, key, scr.x, scr.y, tile*scr.z);
       }
     }
 
-    // Straßen
-    for (const r of world.roads) drawRoadSegment(r);
+    // optionales Overlay‑Grid (fein)
+    if (R.showGrid) {
+      ctx.save();
+      ctx.strokeStyle='rgba(255,255,255,.08)';
+      for (let r=0; r<=S.rows; r++){
+        const wy = r*tile; const a=worldToScreen(0,wy,S); const b=worldToScreen(S.cols*tile,wy,S);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      }
+      for (let c=0; c<=S.cols; c++){
+        const wx = c*tile; const a=worldToScreen(wx,0,S); const b=worldToScreen(wx,S.rows*tile,S);
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
 
-    // Gebäude
-    for (const b of world.buildings) drawBuilding(b);
-
+  function drawBuildings(S){
+    const ctx=R.ctx, t=S.tile;
+    ctx.save();
+    for (const b of S.buildings){
+      const x = b.tx*t, y=b.ty*t;
+      const scr = worldToScreen(x,y,S);
+      const sz = t*scr.z;
+      ctx.fillStyle='rgba(255,160,80,.85)';
+      ctx.fillRect(scr.x, scr.y, b.w*sz, b.h*sz);
+      ctx.strokeStyle='rgba(0,0,0,.5)'; ctx.strokeRect(scr.x+0.5, scr.y+0.5, b.w*sz-1, b.h*sz-1);
+      ctx.fillStyle='rgba(0,0,0,.6)'; ctx.font= Math.max(10, sz*0.22)+'px ui-monospace,monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(b.type, scr.x + (b.w*sz)/2, scr.y + (b.h*sz)/2);
+    }
     ctx.restore();
   }
 
-  // ---- Kamera APIs
-  function setZoom(v){ state.zoom = Math.max(state.minZoom, Math.min(state.maxZoom, v)); }
-  function zoomBy(d){ setZoom(state.zoom + d); }
-  function moveBy(dx, dy){ state.camX += dx; state.camY += dy; }
-  function centerOn(wx, wy){ state.camX = wx; state.camY = wy; }
+  function drawUnits(S){
+    const ctx=R.ctx, t=S.tile;
+    ctx.save();
+    for (const u of S.units){
+      const scr=worldToScreen(u.x, u.y, S);
+      const r = Math.max(3, t*scr.z*0.18);
+      ctx.beginPath(); ctx.fillStyle=u.color||'#ff0';
+      ctx.arc(scr.x, scr.y, r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.5)'; ctx.stroke();
+    }
+    ctx.restore();
+  }
 
-  return { attachCanvas, resize, draw, toWorld, toScreen, snap, setZoom, zoomBy, moveBy, centerOn, state };
+  function loop(){
+    R.raf = requestAnimationFrame(loop);
+    const S = window.World?.state;
+    if (!S || !R.ctx) return;
+
+    drawMap(S);
+    drawBuildings(S);
+    drawUnits(S);
+  }
+
+  function start(){
+    ensureCanvas();
+    if (!R.raf) R.raf = requestAnimationFrame(loop);
+  }
+  function stop(){
+    if (R.raf) cancelAnimationFrame(R.raf); R.raf=0;
+  }
+
+  window.Render = { start, stop, worldToScreen, set showGrid(v){R.showGrid=!!v;} };
 })();
