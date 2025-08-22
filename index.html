@@ -1,10 +1,15 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- Siedler‑Mini • index.html -->
+  <!-- =========================================
+       Siedler‑Mini • index.html
+       Zweck: Startfenster (Zustand A), HUD, Inspector
+       ========================================= -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini</title>
+
+  <!-- ====== STYLES (kompakt, aktuelles Farbschema) ====== -->
   <style>
     :root{ --bg:#0b0d10; --stage:#161a20; --panel:#0f1318; --b1:#2a2f38; --b2:#39414d; --fg:#e8e8e8; --muted:#b9c4d1; }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -28,14 +33,14 @@
     #inspector .tabs{display:flex;gap:8px;padding:8px 10px;border-bottom:1px solid var(--b1)}
     #inspector .content{flex:1 1 auto;overflow:auto;padding:10px}
     .hide{display:none!important}
-    /* Logo-Hintergrund im Startscreen (optional, via CSS) */
+    /* Logo im Startscreen */
     #startPanel::before{
       content:""; position:absolute; inset:0; z-index:-1;
-      background: url("./assets/ui/logo.png") center/40% no-repeat; opacity:.12; filter: blur(0.2px);
+      background:url("./assets/ui/logo.png") center/40% no-repeat; opacity:.12; filter:blur(0.2px);
     }
   </style>
 
-  <!-- Feature-Flag für Fullscreen (iPhone blendet aus) -->
+  <!-- Feature-Flag Fullscreen → iPhone blendet Button später aus -->
   <script>
     (function(){
       const isIPhone = /iPhone/i.test(navigator.userAgent);
@@ -44,18 +49,19 @@
     })();
   </script>
 </head>
+
 <body>
-  <!-- HUD (oben) -->
+  <!-- ===================== HUD ===================== -->
   <div id="hud" aria-label="Spiel‑HUD">
     <strong id="buildBadge" title="Build/Version">Siedler‑Mini</strong>
     <span class="spacer"></span>
-    <button id="btnFull"  title="Vollbild umschalten">Vollbild</button>
+    <button id="btnFull" title="Vollbild umschalten">Vollbild</button>
   </div>
 
-  <!-- Bühne -->
+  <!-- ===================== Bühne ===================== -->
   <canvas id="stage"></canvas>
 
-  <!-- Start-Overlay -->
+  <!-- ===================== Start-Overlay (Zustand A) ===================== -->
   <section id="startPanel">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
       <h1 id="t">Siedler‑Mini</h1>
@@ -71,11 +77,8 @@
       </div>
 
       <div class="row">
-        <!-- Neues Spiel (mit Confirm vorm Überschreiben) -->
         <button id="btnStart">Neues Spiel</button>
-        <!-- Weiterspielen (enabled wenn Save vorhanden) -->
         <button id="btnContinue" disabled>Weiterspielen</button>
-        <!-- Reset (mit Confirm – löscht alle Spielstände) -->
         <button id="btnReset">Reset</button>
       </div>
 
@@ -83,14 +86,13 @@
     </div>
   </section>
 
-  <!-- Untere Toast-Leiste (immer sichtbar, Inspector einklappbar) -->
+  <!-- ===================== Untere Toast-Leiste ===================== -->
   <div id="inspectorBar" class="toast" aria-live="polite">
     <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
-    <!-- Cache-Bust/Hard-Reload ohne Inspector aufzuklappen -->
     <button id="btnCacheClear" title="Seite neu laden und Cache umgehen">Cache leeren</button>
   </div>
 
-  <!-- Inspector-Fenster -->
+  <!-- ===================== Inspector ===================== -->
   <aside id="inspector" hidden>
     <header>
       <strong>Inspector</strong>
@@ -102,12 +104,52 @@
     <div class="content" id="inspectorContent"></div>
   </aside>
 
-  <!-- Scripts -->
+  <!-- ===================================================================
+       ⬇⬇⬇  S C R I P T   P I P E L I N E  (ORDER MATTERS)  ⬇⬇⬇
+       Lege DEINE Skripte hier unten ab – *vor* </body>. Die Reihenfolge
+       ist wichtig, damit Abhängigkeiten stimmen.
+       -------------------------------------------------------------------
+       1) VENDOR / POLYFILLS (optional)
+          → Beispiel: Tiled-Parser, EventEmitter, Promise polyfill
+          <script src="./vendor/some-polyfill.js" defer></script>
+
+       2) CORE (Assets, Konstanten, Datendefinitionen)
+          → Muss vor Game‑Systemen geladen werden.
+          <script src="./core/asset.js" defer></script>
+          <script src="./core/asset.items.js" defer></script>
+
+       3) GAME‑SYSTEME / MODULE
+          → Rendering, Map‑Runtime, Kamera, Entities, UI‑Helpers etc.
+          Beispiele/Platzhalter:
+          <script src="./tools/map-runtime.js" defer></script>
+          <script src="./entities/worker.js" defer></script>
+          <script src="./entities/fisherman.js" defer></script>
+
+       4) GAMELOADER / SPIELKERN
+          → Stellt window.GameLoader.start(..) & .continueFrom(..) bereit.
+          <script src="./game.js" defer></script>
+
+       5) BOOT / VERDRAHTUNG
+          → Verdrahtet DOM, Startfenster, Inspector, Cache-Leeren, FS‑Toggle.
+          <script src="./boot.js" defer></script>
+       =================================================================== -->
+
+  <!-- ===== [2] CORE ===== -->
   <script src="./core/asset.js" defer></script>
   <script src="./core/asset.items.js" defer></script>
+
+  <!-- ===== [3] GAME‑SYSTEME (Beispiele – optional, falls vorhanden) ===== -->
+  <!-- <script src="./tools/map-runtime.js" defer></script> -->
+  <!-- <script src="./entities/worker.js" defer></script> -->
+  <!-- <script src="./entities/fisherman.js" defer></script> -->
+
+  <!-- ===== [4] GAMELOADER ===== -->
+  <script src="./game.js" defer></script>
+
+  <!-- ===== [5] BOOT ===== -->
   <script src="./boot.js" defer></script>
 
-  <!-- Kleiner Helper: FS-Button ausblenden wenn no-fs -->
+  <!-- Fullscreen-Button ggf. ausblenden (Flag aus <head>) -->
   <script>
     (function(){
       if (document.documentElement.classList.contains('no-fs')) {
