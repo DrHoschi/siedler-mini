@@ -150,3 +150,111 @@
   window.__dbgInfo = infoPanel;
 })();
 </script>
+/* ---------------------------------------------------------
+ * Debug Saver – Log sammeln & als .txt speichern
+ * Drop-in: ans Ende von debug.js einfügen (oder separat laden)
+ * Stellt global bereit:
+ *   - logDebug(...args)
+ *   - saveDebugLog(filename?)
+ *   - debugGetLog()
+ *   - debugClearLog()
+ * --------------------------------------------------------- */
+(() => {
+  // Mehrfach-Init verhindern
+  if (window.__DEBUG_SAVER_READY__) return;
+  window.__DEBUG_SAVER_READY__ = true;
+
+  const MAX_LINES = 50000;           // großer Ringpuffer
+  const lines = [];
+  const startedAt = new Date();
+
+  // Zeitstempel
+  const ts = () => new Date().toISOString();
+
+  // Robustes Stringify
+  const toStr = (v) => {
+    if (v instanceof Error) return `${v.name}: ${v.message}\n${v.stack || ''}`;
+    try {
+      if (typeof v === 'object' && v !== null) return JSON.stringify(v, null, 2);
+    } catch (_) {}
+    return String(v);
+  };
+
+  // Eine Zeile hinzufügen
+  const pushLine = (level, args) => {
+    const msg = args.map(toStr).join(' ');
+    lines.push(`[${ts()}] ${level.toUpperCase()}: ${msg}`);
+    if (lines.length > MAX_LINES) lines.shift();
+
+    // Optionales Overlay live aktualisieren
+    const el = document.getElementById('debugOutput');
+    if (el) el.textContent = lines.slice(-500).join('\n');
+  };
+
+  // Öffentliche API
+  function logDebug(...args){ pushLine('debug', args); }
+  function debugGetLog(){ return lines.join('\n'); }
+  function debugClearLog(){ lines.length = 0; }
+
+  // Globale Fehler
+  window.addEventListener('error', (e) => {
+    pushLine('error', [e.message, '@', e.filename, ':', e.lineno, e.colno]);
+    if (e.error && e.error.stack) pushLine('error', [e.error.stack]);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    pushLine('error', ['UnhandledRejection:', toStr(e.reason)]);
+  });
+
+  // Konsole abgreifen (ohne Original zu verlieren)
+  if (!window.__CONSOLE_ORIG__) {
+    window.__CONSOLE_ORIG__ = {
+      log: console.log, warn: console.warn, error: console.error, info: console.info
+    };
+    console.log  = (...a)=>{ pushLine('log',  a); window.__CONSOLE_ORIG__.log.apply(console, a);  };
+    console.warn = (...a)=>{ pushLine('warn', a); window.__CONSOLE_ORIG__.warn.apply(console, a); };
+    console.error= (...a)=>{ pushLine('error',a); window.__CONSOLE_ORIG__.error.apply(console, a);};
+    console.info = (...a)=>{ pushLine('info', a); window.__CONSOLE_ORIG__.info.apply(console, a); };
+  }
+
+  // Datei speichern
+  function saveDebugLog(filename){
+    const header = [
+      '=== Siedler‑Mini Debug Log ===',
+      `Started:   ${startedAt.toISOString()}`,
+      `Captured:  ${new Date().toISOString()}`,
+      `URL:       ${location.href}`,
+      `UA:        ${navigator.userAgent}`,
+      `Platform:  ${navigator.platform}`,
+      ''
+    ].join('\n');
+
+    const blob = new Blob([header, debugGetLog(), '\n'], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const stamp= new Date().toISOString().replace(/[:.]/g,'-');
+    a.href = url;
+    a.download = filename || `siedler-mini-debug-${stamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // Button auto‑verdrahten (falls vorhanden)
+  window.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('saveDebugBtn');
+    if (btn && !btn.__wired__) {
+      btn.__wired__ = true;
+      btn.addEventListener('click', () => saveDebugLog());
+    }
+  });
+
+  // Global verfügbar machen (überschreibt nichts, falls schon da)
+  window.logDebug      = window.logDebug      || logDebug;
+  window.saveDebugLog  = window.saveDebugLog  || saveDebugLog;
+  window.debugGetLog   = window.debugGetLog   || debugGetLog;
+  window.debugClearLog = window.debugClearLog || debugClearLog;
+
+  // Startmeldung
+  logDebug('Debug Saver initialisiert.');
+})();
