@@ -8,7 +8,7 @@
 
   <style>
     :root{
-      --bg:#0b0d10;               /* Grundhintergrund – passe an Bildtönung an */
+      --bg:#0b0d10;               /* Passe auf Bildtönung an */
       --stage:#161a20;
       --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
       --fg:#e8e8e8; --muted:#b9c4d1;
@@ -20,9 +20,12 @@
     #stage{display:block;width:100vw;height:100vh;background:var(--stage)}
 
     /* HUD (oben) */
-    #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
-      align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
-      padding:8px 10px;border-radius:8px}
+    #hud{
+      position:fixed;top:8px;left:8px;right:8px;z-index:20;
+      display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+      background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
+      padding:8px 10px;border-radius:8px
+    }
     #hud .spacer{flex:1 1 auto}
     button{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
     button:hover{background:#222a35}
@@ -34,7 +37,7 @@
     #startBackdrop{
       position:fixed; inset:0; z-index:25;
       display:grid; place-items:center;
-      background-color: var(--bg); /* passt den Rand an Bildfarbe an */
+      background-color: var(--bg); /* Randfarbe zum Bild */
       opacity:1;
     }
     #startBackdrop img{
@@ -47,25 +50,33 @@
     #startBackdrop.fade-out{ opacity:0; transition: opacity 3s ease; }
     #startBackdrop.hidden{ display:none; }
 
-    /* ---------- Start-Overlay (Zustand A) ----------
-       Overlay darf NICHT die Toast-/Inspector-Leiste blockieren.
-       -> Overlay nimmt KEINE Klicks an, nur die Dialogbox (.panel) ist klickbar.
-    */
+    /* ---------- Start-Overlay (Zustand A) ---------- */
     #startPanel{
       position:fixed; inset:0; z-index:30; display:grid; place-items:center;
       background:linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.8));
+      /* Overlay darf die Toast-/Inspector-Leiste nicht blockieren: */
       pointer-events:none;
     }
-    #startPanel.hidden{ display:none; } /* hart weg, wenn gestartet */
+    #startPanel.hidden{ display:none; }
     #startPanel .panel{
       width:min(720px, 92vw); background:var(--panel); border:1px solid var(--b1);
       border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px;
-      pointer-events:auto;
+      pointer-events:auto; position:relative;
     }
+    /* Menü schließen (oben rechts) */
+    #btnMenuClose{
+      position:absolute; right:10px; top:10px;
+      width:32px; height:32px; border-radius:8px;
+      display:grid; place-items:center;
+    }
+
     .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
     h1{margin:0 0 8px}
     p.sub{margin:0 0 14px; opacity:.85}
-    #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
+    #quickDiag{
+      margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);
+      max-height:30vh;overflow:auto;white-space:pre-wrap
+    }
 
     /* Untere Toast-Leiste (immer bedienbar dank pointer-events auf Overlay) */
     #inspectorBar{
@@ -114,7 +125,8 @@
   <div id="hud" aria-label="Spiel‑HUD">
     <strong id="buildBadge" title="Build/Version">Siedler‑Mini</strong>
     <span class="spacer"></span>
-    <button id="btnFull" title="Vollbild umschalten">Vollbild</button>
+    <!-- Vollbild-Icon rechts (⛶ → ✕) -->
+    <button id="btnFSIcon" title="Vollbild">⛶</button>
   </div>
 
   <!-- Start‑Backdrop (füllt Seite, zeigt Logo) -->
@@ -128,6 +140,7 @@
   <!-- Start-Overlay -->
   <section id="startPanel">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
+      <button id="btnMenuClose" title="Menü schließen">✖</button>
       <h1 id="t">Siedler‑Mini</h1>
       <p class="sub">Wähle eine Karte und starte das Spiel.</p>
 
@@ -142,7 +155,7 @@
 
       <div class="row">
         <button id="btnStart">Neues Spiel</button>
-        <button id="btnContinue" disabled>Weiterspielen</button>
+        <button id="btnContinue">Weiterspielen</button>
         <button id="btnReset">Reset</button>
       </div>
 
@@ -182,11 +195,11 @@
   <script src="./game.js" defer></script>
   <script src="./boot.js" defer></script>
 
-  <!-- FS-Button ggf. ausblenden -->
+  <!-- FS-Icon ggf. ausblenden -->
   <script>
     (function(){
       if(document.documentElement.classList.contains('no-fs')){
-        const fsBtn=document.getElementById('btnFull'); if(fsBtn) fsBtn.classList.add('hide');
+        const el=document.getElementById('btnFSIcon'); if(el) el.classList.add('hide');
       }
     })();
   </script>
