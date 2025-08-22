@@ -1,15 +1,16 @@
 /* =============================================================================
- * Siedler‑Mini — boot.js v1.1
- * Initialisiert UI einmalig, verdrahtet Startfenster (Zustand A),
- * Inspector‑Toast, Vollbild, „Cache leeren“, „Weiterspielen“ und „Reset“.
+ * Siedler‑Mini — boot.js v1.2
+ * Initialisiert UI, verdrahtet Startfenster (Zustand A), Inspector‑Toast,
+ * Vollbild, „Cache leeren“, „Weiterspielen“, „Reset“, Debug‑/Diagnose‑Basics.
  *
  * Projekt‑Vorgaben:
  *  - Startfenster zuerst sichtbar
  *  - Buttons: „Neues Spiel“, „Weiterspielen“, „Reset“
  *  - „Cache leeren“ in der Toast‑Leiste (ohne Inspector auszuklappen)
- *  - Vollbild nur wenn unterstützt (iPhone ausblenden via index.html)
+ *  - Vollbild nur wenn unterstützt (iPhone blendet Button in index.html aus)
+ *  - Inspector als Panel/Bottom‑Sheet, optional „Maximieren“ (Layout‑Vollbild)
  *  - Debug/Inspector wird über Toast geöffnet, nicht im Startfenster
- *  - Debug‑Tools/Checker NICHT entfernen
+ *  - Debug-Tools/Checker NICHT entfernen
  *
  * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
  * =========================================================================== */
@@ -130,16 +131,94 @@ async function hardReloadWithBust() {
   location.replace(url.toString());
 }
 
-// Inspector öffnen/schließen
-function openInspector() {
+// Inspector öffnen/schließen/maximieren
+function openInspector(){
   const ins = $('inspector');
   if (!ins) return;
   ins.hidden = false;
+  // Button-Label initial passend setzen
+  const bMax = $('btnInspectorToggleMax');
+  if (bMax) bMax.textContent = ins.classList.contains('max') ? 'Fenstergröße' : 'Maximieren';
+  // Beim Öffnen Debug‑Tab aktualisieren (Basis)
+  paintInspectorBasic();
 }
-function closeInspector() {
+function closeInspector(){
   const ins = $('inspector');
   if (!ins) return;
   ins.hidden = true;
+}
+function toggleInspectorMax(){
+  const ins = $('inspector');
+  if (!ins) return;
+  ins.classList.toggle('max');
+  const bMax = $('btnInspectorToggleMax');
+  if (bMax) bMax.textContent = ins.classList.contains('max') ? 'Fenstergröße' : 'Maximieren';
+}
+
+// Basis‑Debug/Inspector‑Inhalt (falls game.js nichts schreibt)
+function paintInspectorBasic(){
+  const el = $('inspectorContent');
+  if (!el) return;
+
+  // Daten aus lokalem Save (Meta)
+  let meta = null;
+  try {
+    const raw = localStorage.getItem(SAVE_META_KEY);
+    meta = raw ? JSON.parse(raw) : null;
+  } catch {}
+  const when = meta?.when ? new Date(meta.when).toLocaleString() : '—';
+
+  // Wenn game.js einen World‑Zustand hat, ruhig ein paar Infos anzeigen
+  const W = window.GameLoader?._world;
+  const map = W?.state?.mapUrl ?? '—';
+  const t   = typeof W?.state?.time === 'number' ? W.state.time.toFixed(1)+' s' : '—';
+  const p   = W?.state?.player ? `x=${W.state.player.x?.toFixed?.(2) ?? '?'}, y=${W.state.player.y?.toFixed?.(2) ?? '?'}` : '—';
+
+  el.innerHTML = `
+    <div class="kv">
+      <div><strong>Build</strong></div><div>${$('buildBadge')?.textContent || '—'}</div>
+      <div><strong>Map</strong></div><div>${map}</div>
+      <div><strong>Spielzeit</strong></div><div>${t}</div>
+      <div><strong>Player</strong></div><div>${p}</div>
+      <div><strong>Letztes Save</strong></div><div>${when}</div>
+      <div><strong>FS‑Support</strong></div><div>${canFullscreen() ? 'Ja' : 'Nein'}</div>
+      <div><strong>UA</strong></div><div>${navigator.userAgent}</div>
+    </div>
+    <hr style="border-color:#2a2f38;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="dbgSaveNow">Jetzt speichern</button>
+      <button id="dbgLoadNow">Save laden</button>
+      <button id="dbgPause">${W?.running ? 'Pausieren' : 'Fortsetzen'}</button>
+    </div>
+  `;
+
+  // Hooks (funktionieren nur, wenn game.js / World existieren)
+  const $q = (id)=> el.querySelector('#'+id);
+  $q('dbgSaveNow')?.addEventListener('click', () => {
+    if (W?.snapshot) {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(W.snapshot()));
+        localStorage.setItem(SAVE_META_KEY, JSON.stringify({ when: Date.now(), map: W.state.mapUrl }));
+        updateContinueButton();
+        paintInspectorBasic();
+      } catch(e){ console.warn('[boot] save failed:', e); }
+    }
+  });
+  $q('dbgLoadNow')?.addEventListener('click', async () => {
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw || !window.GameLoader?.continueFrom) return;
+      const snap = JSON.parse(raw);
+      await window.GameLoader.continueFrom(snap);
+      updateContinueButton();
+      paintInspectorBasic();
+    } catch(e){ console.warn('[boot] load failed:', e); }
+  });
+  $q('dbgPause')?.addEventListener('click', () => {
+    if (!W) return;
+    if (W.running && W.pause) W.pause(); else if (!W.running && W.play) W.play();
+    paintInspectorBasic();
+  });
 }
 
 /* ----------------------------------------
@@ -165,13 +244,15 @@ function closeInspector() {
     updateContinueButton();
 
     // --- Buttons verdrahten (einmalig) ---
-    const bNew    = $('btnStart');         // „Neues Spiel“
-    const bCont   = $('btnContinue');      // „Weiterspielen“
-    const bReset  = $('btnReset');         // „Reset“
-    const bFS     = $('btnFull');          // Vollbild (im HUD)
-    const bInsp   = $('btnInspector');     // Inspector öffnen
-    const bInspX  = $('btnInspectorClose');// Inspector schließen
-    const bCache  = $('btnCacheClear');    // Cache leeren (Toast)
+    const bNew    = $('btnStart');             // „Neues Spiel“
+    const bCont   = $('btnContinue');          // „Weiterspielen“
+    const bReset  = $('btnReset');             // „Reset“
+    const bFS     = $('btnFull');              // Vollbild (im HUD)
+
+    const bInsp     = $('btnInspector');       // Inspector öffnen
+    const bInspX    = $('btnInspectorClose');  // Inspector schließen
+    const bInspMax  = $('btnInspectorToggleMax'); // Inspector maximieren
+    const bCache    = $('btnCacheClear');      // Cache leeren (Toast)
 
     // Neues Spiel
     on(bNew, 'click', guard(async () => {
@@ -182,6 +263,7 @@ function closeInspector() {
       await window.GameLoader?.start(url);
       // Startpanel ausblenden
       if (panel) panel.hidden = true;
+      paintInspectorBasic(); // Debug aktualisieren
     }));
 
     // Weiterspielen
@@ -196,7 +278,9 @@ function closeInspector() {
         console.error('[boot] Weiterspielen fehlgeschlagen:', err);
         // Falls Save korrupt → Button deaktivieren
         try { localStorage.removeItem(SAVE_KEY); } catch {}
+      } finally {
         updateContinueButton();
+        paintInspectorBasic();
       }
     }));
 
@@ -212,14 +296,16 @@ function closeInspector() {
       // Optional: kleine Bestätigung
       const box = $('quickDiag');
       if (box) box.textContent = (box.textContent ? box.textContent + '\n' : '') + '[OK] Spielstände gelöscht.';
+      paintInspectorBasic();
     }));
 
     // Vollbild (nur wenn unterstützt; Index blendet den Button bei no-fs aus)
     on(bFS, 'click', () => { if (canFullscreen()) toggleFullscreen(); });
 
-    // Inspector öffnen/schließen
-    on(bInsp,  'click', openInspector);
-    on(bInspX, 'click', closeInspector);
+    // Inspector öffnen/schließen/maximieren
+    on(bInsp,    'click', openInspector);
+    on(bInspX,   'click', closeInspector);
+    on(bInspMax, 'click', toggleInspectorMax);
 
     // Cache leeren (Hard‑Reload + Cache‑Bust)
     on(bCache, 'click', guard(hardReloadWithBust));
@@ -238,18 +324,6 @@ function closeInspector() {
 window.BootUI = Object.freeze({
   setBuildBadge,
   paintDiag,
-  updateContinueButton
+  updateContinueButton,
+  paintInspectorBasic
 });
-
-/* ----------------------------------------
- * Hinweise zur Integration (Dok):
- *  - Speichern im Spiel:
- *      localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot));
- *      localStorage.setItem(SAVE_META_KEY, JSON.stringify({ when: Date.now(), map: currentMap }));
- *    Danach BootUI.updateContinueButton() aufrufen.
- *  - GameLoader muss bereitstellen:
- *      start(mapUrl: string): Promise<void>
- *      continueFrom(snapshot: object): Promise<void>
- *  - „Cache leeren“:
- *      nutzt CacheStorage API (wenn vorhanden) und hängt ?v=timestamp an URL.
- * --------------------------------------*/
