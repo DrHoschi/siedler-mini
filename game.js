@@ -1,46 +1,49 @@
-/* -------------------------------------------------------------
- * Siedler‑Mini • game.js
- * Version: v11.1r6 • 2025‑08‑22
+/* game.js
+ * Siedler‑Mini • v11.1r6 • 2025‑08‑22
+ * -----------------------------------
+ * Verantwortlich für:
+ *  - Laden & (Neu)Starten einer Map (GameLoader)
+ *  - Kamera & einfache Interaktion (GameCamera)
+ *  - Minimaler Renderer (Grid / Map-Bounds)
  *
- * Zweck
- *  - Start/Reload einer Karte (JSON) über eine stabile öffentliche API
- *  - Kamera-Steuerung (Zoom/Pan) – UI bleibt angedockt, Canvas zoomt
- *  - Fallback-Rendering (Grid), falls kein externer Renderer verfügbar
- *  - Nicht-invasiv: if (window.Render?.drawMap) => delegieren
- *
- * Öffentliche API (für UI / boot.js):
- *  - window.startGame(mapUrl: string): Promise<void>
- *  - window.reloadGame(mapUrl?: string): Promise<void>
- *  - window.game (State-Objekt)
- *  - window.GameLoader.start/reload (Bridge)
- *  - window.GameCamera.setZoom/setPosition (Bridge)
- * ------------------------------------------------------------- */
+ * Öffentliche API (für boot.js / Debug):
+ *   window.GameLoader.start(mapUrl?)
+ *   window.GameLoader.reload(mapUrl?)
+ *   window.GameLoader.isRunning
+ *   window.GameCamera.setZoom(z)
+ *   window.GameCamera.setPosition(x,y)
+ *   window.GameCamera.get()
+ */
 
 (() => {
-  const VERSION = 'v11.1r6';
-  const DATE = '2025-08-22';
+  "use strict";
 
-  const log   = (...a) => console.log('[game]', ...a);
-  const warn  = (...a) => console.warn('[game]', ...a);
-  const error = (...a) => console.error('[game]', ...a);
-  const setDbg = (msg) => (typeof window.setDebug === 'function' ? window.setDebug(msg) : void 0);
+  // ===== Version / Helpers ===================================================
+  const VERSION = "v11.1r6";
+  const DEFAULT_MAP = "assets/maps/map-demo.json";
 
-  /** Hard-Limits & Defaults für Kamera */
-  const CAMERA = {
-    MIN_ZOOM: 0.5,
-    MAX_ZOOM: 3.5,
-    START_ZOOM: 0.8,
-    PAN_SPEED: 1.0, // Faktor für Drag
-  };
+  const now = () => performance.now();
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  /** Interner Helper: DOM-Elemente */
-  const $ = (id) => document.getElementById(id);
+  // ===== Canvas / Context ====================================================
+  const canvas = document.getElementById("stage");
+  if (!canvas) {
+    console.error("[game] Canvas #stage fehlt – index.html prüfen!");
+    return;
+  }
+  const ctx = canvas.getContext("2d");
 
-  /** Globale State-Struktur (sichtbar unter window.game) */
+  // ===== State ===============================================================
   const state = {
-    version: VERSION,
-    canvas: null,
-    ctx: null,
+    running: false,
+    mapUrl: null,
+    map: null,              // geladene Map (JSON)
+    tileSize: 64,           // Fallback falls Map nichts liefert
+    rows: 16,
+    cols: 16,
+
+    // Anzeige/Device
+    DPR: Math.max(1, window.devicePixelRatio || 1),
     width: 0,
     height: 0,
 
@@ -48,300 +51,251 @@
     camera: {
       x: 0,
       y: 0,
-      zoom: CAMERA.START_ZOOM,
-      setZoom(z) {
-        this.zoom = Math.max(CAMERA.MIN_ZOOM, Math.min(CAMERA.MAX_ZOOM, Number(z) || CAMERA.START_ZOOM));
-        requestRender();
-      },
-      setPosition(x, y) {
-        this.x = Number(x) || 0;
-        this.y = Number(y) || 0;
-        requestRender();
-      },
+      zoom: 1.0,
+      minZoom: 0.5,
+      maxZoom: 3.5
     },
 
-    // Map / Daten
-    mapUrl: '',
-    map: null,        // Map-JSON
-    tileset: null,    // optional – wenn dein Renderer es braucht
-    startedAt: null,
+    // Input
+    dragging: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    camStartX: 0,
+    camStartY: 0,
 
-    // Eingabe
-    input: {
-      dragging: false,
-      dragStartX: 0,
-      dragStartY: 0,
-      camStartX: 0,
-      camStartY: 0,
-      lastPinchDist: 0,
-    },
-
-    // Sonstiges
-    DPR: (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1,
-    needsRender: false,
+    // Loop
+    lastTime: 0
   };
 
-  /** Render-Invalider */
-  function requestRender() {
-    state.needsRender = true;
+  // ===== Resize Handling =====================================================
+  function resizeCanvas() {
+    const DPR = state.DPR = Math.max(1, window.devicePixelRatio || 1);
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(rect.width * DPR));
+    const h = Math.max(1, Math.floor(rect.height * DPR));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    state.width = w;
+    state.height = h;
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+
+  // ===== Map Laden ===========================================================
+  async function loadMap(url) {
+    const bustUrl = url + (url.includes("?") ? "&" : "?") + "cb=" + Date.now();
+    console.log("[game] Lade Map:", url);
+
+    const res = await fetch(bustUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status} beim Laden von ${url}`);
+    const data = await res.json();
+
+    // Sanity & Defaults
+    state.map = data;
+    state.tileSize = Number(data.tileSize || 64);
+    state.rows = Number(data.rows || 16);
+    state.cols = Number(data.cols || 16);
+
+    // Kamera initial grob mittig
+    state.camera.x = (state.cols * state.tileSize) / 2;
+    state.camera.y = (state.rows * state.tileSize) / 2;
+    state.camera.zoom = clamp(state.camera.zoom, state.camera.minZoom, state.camera.maxZoom);
+
+    console.log("[game] Map OK:", { rows: state.rows, cols: state.cols, tile: state.tileSize });
   }
 
-  /** Canvas vorbereiten (Resizing + DPR) */
-  function initCanvas() {
-    const c = $('stage');
-    if (!c) {
-      error('Canvas #stage fehlt – index.html prüfen.');
-      return false;
-    }
-    state.canvas = c;
-    state.ctx = c.getContext('2d', { alpha: false });
-
-    function fit() {
-      const DPR = (state.DPR = window.devicePixelRatio || 1);
-      const w = Math.floor(c.clientWidth * DPR) || window.innerWidth * DPR;
-      const h = Math.floor(c.clientHeight * DPR) || window.innerHeight * DPR;
-      if (c.width !== w || c.height !== h) {
-        c.width = w; c.height = h;
-        state.width = w; state.height = h;
-        requestRender();
-      }
-    }
-    fit();
-    window.addEventListener('resize', fit);
-    return true;
+  // ===== Renderer (minimal) ==================================================
+  function clear() {
+    ctx.fillStyle = "#0d1722";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  /** Eingaben (Zoom/Pan) – nur, wenn Cursor/Gesten über dem Canvas sind */
-  function initInput() {
-    const c = state.canvas;
-    if (!c) return;
-
-    // Canvas soll Gesten selbst konsumieren
-    c.style.touchAction = 'none';
-
-    // Wheel-Zoom
-    c.addEventListener('wheel', (ev) => {
-      ev.preventDefault();
-      const delta = Math.sign(ev.deltaY) * 0.1; // kleiner Zoomschritt
-      state.camera.setZoom(state.camera.zoom * (1 - delta));
-    }, { passive: false });
-
-    // Drag/Pan (Maus)
-    c.addEventListener('mousedown', (ev) => {
-      state.input.dragging = true;
-      state.input.dragStartX = ev.clientX;
-      state.input.dragStartY = ev.clientY;
-      state.input.camStartX = state.camera.x;
-      state.input.camStartY = state.camera.y;
-    });
-    window.addEventListener('mousemove', (ev) => {
-      if (!state.input.dragging) return;
-      const dx = (ev.clientX - state.input.dragStartX);
-      const dy = (ev.clientY - state.input.dragStartY);
-      state.camera.setPosition(
-        state.input.camStartX - dx / state.camera.zoom * CAMERA.PAN_SPEED,
-        state.input.camStartY - dy / state.camera.zoom * CAMERA.PAN_SPEED
-      );
-    });
-    window.addEventListener('mouseup', () => { state.input.dragging = false; });
-
-    // Touch (Pan + Pinch)
-    c.addEventListener('touchstart', (ev) => {
-      if (ev.touches.length === 1) {
-        const t = ev.touches[0];
-        state.input.dragging = true;
-        state.input.dragStartX = t.clientX;
-        state.input.dragStartY = t.clientY;
-        state.input.camStartX = state.camera.x;
-        state.input.camStartY = state.camera.y;
-        state.input.lastPinchDist = 0;
-      } else if (ev.touches.length === 2) {
-        state.input.dragging = false;
-        state.input.lastPinchDist = pinchDist(ev.touches[0], ev.touches[1]);
-      }
-    }, { passive: false });
-
-    c.addEventListener('touchmove', (ev) => {
-      ev.preventDefault();
-      if (ev.touches.length === 1 && state.input.dragging) {
-        const t = ev.touches[0];
-        const dx = (t.clientX - state.input.dragStartX);
-        const dy = (t.clientY - state.input.dragStartY);
-        state.camera.setPosition(
-          state.input.camStartX - dx / state.camera.zoom * CAMERA.PAN_SPEED,
-          state.input.camStartY - dy / state.camera.zoom * CAMERA.PAN_SPEED
-        );
-      } else if (ev.touches.length === 2) {
-        const d = pinchDist(ev.touches[0], ev.touches[1]);
-        if (state.input.lastPinchDist) {
-          const factor = d / state.input.lastPinchDist;
-          state.camera.setZoom(state.camera.zoom * factor);
-        }
-        state.input.lastPinchDist = d;
-      }
-    }, { passive: false });
-
-    window.addEventListener('touchend', () => { state.input.dragging = false; state.input.lastPinchDist = 0; }, { passive: true });
-
-    function pinchDist(a, b) {
-      const dx = a.clientX - b.clientX;
-      const dy = a.clientY - b.clientY;
-      return Math.hypot(dx, dy);
-    }
+  function worldToScreen(wx, wy) {
+    const { x, y, zoom } = state.camera;
+    const sx = (wx - x) * zoom + state.width / 2;
+    const sy = (wy - y) * zoom + state.height / 2;
+    return [sx, sy];
   }
 
-  /* -------------------------------------------------------------
-   * Rendering
-   * 1) Wenn externer Renderer vorhanden (window.Render.drawMap), dann delegieren
-   * 2) Sonst: Fallback – schlichtes Grid zeichnen
-   * ----------------------------------------------------------- */
+  function drawGrid() {
+    const { rows, cols, tileSize } = state;
+    const totalW = cols * tileSize;
+    const totalH = rows * tileSize;
 
-  function render() {
-    state.needsRender = false;
-    const { ctx, width, height, camera, map } = state;
-    if (!ctx) return;
-
-    // Hintergrund
-    ctx.fillStyle = '#0a1624';
-    ctx.fillRect(0, 0, width, height);
-
-    // Delegation an ext. Renderer (falls verfügbar)
-    try {
-      if (window.Render && typeof window.Render.drawMap === 'function') {
-        window.Render.drawMap(ctx, state);
-        return;
-      }
-    } catch (e) {
-      error('Fehler im externen Renderer:', e);
-    }
-
-    // ---- Fallback: Grid + simple info
-    const tile = (map && map.tile) || (map && map.tileSize) || 64;
-    const cols = (map && map.cols) || 16;
-    const rows = (map && map.rows) || 16;
-
-    // Welt -> Bildschirm
+    // Map-Umrandung
     ctx.save();
-    ctx.translate(width / 2, height / 2);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.translate(-camera.x, -camera.y);
+    ctx.lineWidth = 2 * state.camera.zoom;
+    ctx.strokeStyle = "rgba(120,160,200,0.35)";
 
-    // Grid
-    const w = cols * tile;
-    const h = rows * tile;
-    const left = -w / 2;
-    const top  = -h / 2;
-
-    ctx.fillStyle = '#10233b';
-    ctx.fillRect(left, top, w, h);
-
-    ctx.strokeStyle = 'rgba(207,227,255,.15)';
-    ctx.lineWidth = 1 / camera.zoom;
-    for (let r = 0; r <= rows; r++) {
-      const y = top + r * tile;
-      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + w, y); ctx.stroke();
-    }
-    for (let c = 0; c <= cols; c++) {
-      const x = left + c * tile;
-      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + h); ctx.stroke();
-    }
-
-    // Mittelpunkt
-    ctx.fillStyle = '#8fd0ff';
-    ctx.beginPath(); ctx.arc(0, 0, 3 / camera.zoom, 0, Math.PI * 2); ctx.fill();
-
+    const [x0, y0] = worldToScreen(0, 0);
+    const [x1, y1] = worldToScreen(totalW, totalH);
+    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     ctx.restore();
 
-    // Debug-Overlay
-    const lines = [
-      `Cam: x=${Math.round(camera.x)}   y=${Math.round(camera.y)}   zoom=${camera.zoom.toFixed(2)}`,
-      `Map: ${state.mapUrl || '(keine)'} `,
-      `rows=${rows}  cols=${cols}  tile=${tile}`,
-      `DPR=${state.DPR}   Size=${state.width}×${state.height}`
-    ];
-    setDbg(lines.join('\n'));
+    // Zartes Grid
+    ctx.save();
+    ctx.strokeStyle = "rgba(120,160,200,0.18)";
+    ctx.lineWidth = 1 * state.camera.zoom;
+
+    // Vertikal
+    for (let c = 1; c < cols; c++) {
+      const wx = c * tileSize;
+      const [sx0, sy0] = worldToScreen(wx, 0);
+      const [sx1, sy1] = worldToScreen(wx, totalH);
+      ctx.beginPath();
+      ctx.moveTo(sx0, sy0);
+      ctx.lineTo(sx1, sy1);
+      ctx.stroke();
+    }
+    // Horizontal
+    for (let r = 1; r < rows; r++) {
+      const wy = r * tileSize;
+      const [sx0, sy0] = worldToScreen(0, wy);
+      const [sx1, sy1] = worldToScreen(totalW, wy);
+      ctx.beginPath();
+      ctx.moveTo(sx0, sy0);
+      ctx.lineTo(sx1, sy1);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
-  function renderLoop() {
-    if (state.needsRender) render();
-    requestAnimationFrame(renderLoop);
+  function drawHudReadout() {
+    // Ein paar State-Werte in die Ecke (hilfreich ohne separates Overlay)
+    const z = state.camera.zoom.toFixed(2);
+    const txt = `Cam: x=${state.camera.x.toFixed(1)}  y=${state.camera.y.toFixed(1)}  zoom=${z}
+Map: ${state.map ? state.mapUrl : "—"} 
+rows=${state.rows} cols=${state.cols} tile=${state.tileSize}
+DPR=${state.DPR}   Size=${state.width}×${state.height}`;
+    ctx.save();
+    const pad = 12 * state.DPR;
+    ctx.font = `${12 * state.DPR}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+    const lines = txt.split("\n");
+    const metrics = ctx.measureText("M".repeat(48));
+    const boxW = Math.max(metrics.width + pad * 2, 260 * state.DPR);
+    const boxH = (lines.length * 16 + 10) * state.DPR;
+
+    // Bubble
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "#0f1d31";
+    ctx.strokeStyle = "#1e2d42";
+    ctx.lineWidth = 1 * state.DPR;
+    ctx.beginPath();
+    const x = pad, y = pad;
+    roundRect(ctx, x, y, boxW, boxH, 8 * state.DPR);
+    ctx.fill();
+    ctx.stroke();
+
+    // Text
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#cfe3ff";
+    let ty = y + 20 * state.DPR;
+    for (const line of lines) {
+      ctx.fillText(line, x + 12 * state.DPR, ty);
+      ty += 16 * state.DPR;
+    }
+    ctx.restore();
   }
 
-  /* -------------------------------------------------------------
-   * Map‑Laden
-   * ----------------------------------------------------------- */
-
-  async function loadMapJSON(url) {
-    const bust = url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
-    const t0 = performance.now();
-    const res = await fetch(bust, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Map-HTTP ${res.status} @ ${url}`);
-    const json = await res.json();
-    const dt = Math.round(performance.now() - t0);
-    log(`Map geladen: ${url} (${dt}ms)`);
-    return json;
+  function roundRect(c, x, y, w, h, r) {
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
   }
 
-  /* -------------------------------------------------------------
-   * Öffentliche API: startGame / reloadGame
-   * ----------------------------------------------------------- */
+  function render() {
+    clear();
+    if (state.map) drawGrid();
+    drawHudReadout();
+  }
 
-  async function startGame(mapUrl) {
+  // ===== Loop ================================================================
+  function tick(t) {
+    if (!state.running) return;
+    const dt = (t - state.lastTime) || 16;
+    state.lastTime = t;
+    // (hier später: Animationen, Units etc.)
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  // ===== Input (nur auf dem Canvas) =========================================
+  // Maus / Touch Drag
+  canvas.addEventListener("pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    state.dragging = true;
+    state.dragStartX = e.clientX;
+    state.dragStartY = e.clientY;
+    state.camStartX = state.camera.x;
+    state.camStartY = state.camera.y;
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!state.dragging) return;
+    const dx = (e.clientX - state.dragStartX) / state.camera.zoom;
+    const dy = (e.clientY - state.dragStartY) / state.camera.zoom;
+    state.camera.x = state.camStartX - dx;
+    state.camera.y = state.camStartY - dy;
+  });
+  canvas.addEventListener("pointerup", () => { state.dragging = false; });
+  canvas.addEventListener("pointercancel", () => { state.dragging = false; });
+
+  // Wheel‑Zoom (nur über Canvas)
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const { minZoom, maxZoom } = state.camera;
+    const factor = Math.exp(-e.deltaY * 0.0015); // smooth
+    const newZ = clamp(state.camera.zoom * factor, minZoom, maxZoom);
+    state.camera.zoom = newZ;
+  }, { passive: false });
+
+  // ===== Public API ==========================================================
+  async function start(mapUrl = DEFAULT_MAP) {
     try {
-      if (!state.canvas) {
-        if (!initCanvas()) return;
-        initInput();
-        // Render-Schleife einmal starten
-        requestRender();
-        requestAnimationFrame(renderLoop);
+      state.mapUrl = mapUrl;
+      await loadMap(mapUrl);
+      if (!state.running) {
+        state.running = true;
+        state.lastTime = now();
+        requestAnimationFrame(tick);
       }
-
-      state.startedAt = Date.now();
-      state.mapUrl = mapUrl || state.mapUrl || 'assets/maps/map-demo.json';
-
-      // Map laden
-      state.map = await loadMapJSON(state.mapUrl);
-
-      // Kamera sinnvoll initialisieren (Weltmitte)
-      const tile = state.map.tile || state.map.tileSize || 64;
-      const cols = state.map.cols || 16;
-      const rows = state.map.rows || 16;
-      state.camera.setPosition((cols * tile) / 2, (rows * tile) / 2);
-      if (!Number.isFinite(state.camera.zoom)) state.camera.setZoom(CAMERA.START_ZOOM);
-
-      requestRender();
-      log('Game gestartet.', { map: state.mapUrl, version: VERSION });
-    } catch (e) {
-      error('startGame() fehlgeschlagen:', e);
-      alert('Karte konnte nicht gestartet werden. Details in der Konsole.');
+      console.log("[game] gestartet •", mapUrl);
+    } catch (err) {
+      console.error("[game] Startfehler:", err);
+      alert("GameStart fehlgeschlagen. Details in der Konsole.");
     }
   }
 
-  async function reloadGame(mapUrl) {
-    if (mapUrl) state.mapUrl = mapUrl;
-    log('Neu laden…', state.mapUrl);
-    return startGame(state.mapUrl);
+  async function reload(mapUrl = state.mapUrl || DEFAULT_MAP) {
+    console.log("[game] reload •", mapUrl);
+    await start(mapUrl);
   }
 
-  /* -------------------------------------------------------------
-   * Bridges (für UI/boot.js)
-   * ----------------------------------------------------------- */
+  // Kamera‑API (für Debug/Boot)
+  function setZoom(z) {
+    state.camera.zoom = clamp(Number(z) || 1, state.camera.minZoom, state.camera.maxZoom);
+  }
+  function setPosition(x, y) {
+    state.camera.x = Number.isFinite(x) ? Number(x) : state.camera.x;
+    state.camera.y = Number.isFinite(y) ? Number(y) : state.camera.y;
+  }
+  function getCamera() {
+    return { ...state.camera };
+  }
 
-  window.startGame  = startGame;
-  window.reloadGame = reloadGame;
-
+  // Expose
   window.GameLoader = {
-    start: (mapUrl)  => startGame(mapUrl),
-    reload: (mapUrl) => reloadGame(mapUrl),
+    start, reload,
+    get isRunning() { return !!state.running; },
+    get state() { return state; },
+    get mapUrl() { return state.mapUrl; }
   };
+  window.GameCamera = { setZoom, setPosition, get: getCamera };
 
-  window.GameCamera = {
-    setZoom:     (z)    => state.camera.setZoom(z),
-    setPosition: (x, y) => state.camera.setPosition(x, y),
-  };
-
-  // Öffentlichen State bereitstellen
-  window.game = state;
-
-  log(`game.js geladen • ${VERSION} • ${DATE}`);
+  // ===== Boot‑Hint ===========================================================
+  console.log(`[game] bereit • ${VERSION}`);
 })();
