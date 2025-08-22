@@ -1,185 +1,177 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <!-- =========================================
+       Siedler‑Mini • index.html (Zustand A/B)
+       Struktur: HTML + CSS (Startpanel, HUD, Inspector)
+       JS-Wiring passiert in boot.js
+       ========================================= -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler‑Mini</title>
 
-  <!-- PWA/Styles -->
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css">
-
-  <!-- Lokale UI-Styles (Startpanel, Canvas-Layer) -->
+  <!-- ====== Basis‑Styles (bewusst kompakt, Farbschema wie aktuell) ====== -->
   <style>
-    :root{--bg:#0b1726;--panel:#0f1d31}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:#cfe3ff;font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto}
-
-    /* Zeichenfläche: eigener Layer, damit UI nicht mitzoomt */
-    #stageWrap{position:fixed;inset:0;overflow:hidden;z-index:0}
-    #stage{position:absolute;left:0;top:0}
-
-    /* Start-Panel zentriert */
-    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:90000}
-    #startPanel .card{
-      background:var(--panel); border:1px solid #1e2d42; border-radius:16px; padding:18px;
-      min-width:300px; max-width:min(92vw,600px); box-shadow:0 20px 60px rgba(0,0,0,.45)
+    :root{
+      --bg:#0b0d10; --stage:#161a20; --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
+      --fg:#e8e8e8; --muted:#b9c4d1;
     }
-    #startPanel h1{margin:0 0 10px 0;font-size:40px;letter-spacing:.5px}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
-    select,button,input[type=checkbox]{font:inherit}
-    button{background:#0f1b29;border:1px solid #1b2a40;color:#cfe3ff;border-radius:10px;padding:10px 14px;cursor:pointer}
-    button:disabled{opacity:.55;cursor:not-allowed}
-    .muted{opacity:.8}
-    #quickDiag{white-space:pre; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
-  </style>
-</head>
-<body>
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif}
+    /* Bühne / Spielfläche */
+    #stage{display:block;width:100vw;height:100vh;background:var(--stage)}
+    /* HUD-Leiste (oben) – bleibt auch im Startbild sichtbar */
+    #hud{
+      position:fixed; top:8px; left:8px; right:8px; z-index:20;
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
+      padding:8px 10px; border-radius:8px;
+    }
+    #hud .spacer{flex:1 1 auto}
+    button{
+      padding:6px 10px; border-radius:8px; border:1px solid var(--b2);
+      background:#1a2029; color:var(--fg); cursor:pointer
+    }
+    button:hover{background:#222a35}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    select{background:#121821; color:var(--fg); border:1px solid var(--b2); border-radius:8px; padding:6px 8px}
 
-  <!-- Zeichenfläche -->
-  <div id="stageWrap">
-    <canvas id="stage" width="1024" height="768"></canvas>
+    /* Start-Overlay (Zustand A) */
+    #startPanel{
+      position:fixed; inset:0; z-index:30; display:grid; place-items:center;
+      background:linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,.85));
+    }
+    #startPanel .panel{
+      width:min(720px, 92vw); background:var(--panel); border:1px solid var(--b1);
+      border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px;
+    }
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
+    h1{margin:0 0 8px}
+    p.sub{margin:0 0 14px; opacity:.85}
+
+    /* Quick-Diagnose / Meldungen */
+    #quickDiag{
+      margin-top:10px; padding:10px; background:#0b0f14;
+      border:1px dashed #2b3340; border-radius:8px; color:var(--muted);
+      max-height:30vh; overflow:auto; white-space:pre-wrap
+    }
+
+    /* Untere Toast-Leiste + Inspector */
+    #inspectorBar{
+      position:fixed; left:8px; right:8px; bottom:8px; z-index:25;
+      display:flex; justify-content:flex-end; gap:8px;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
+      padding:6px 8px; border-radius:8px
+    }
+    #inspector{
+      position:fixed; inset:4% 4% auto 4%; bottom:4%; z-index:40;
+      background:var(--panel); border:1px solid var(--b1); border-radius:12px;
+      display:flex; flex-direction:column
+    }
+    #inspector[hidden]{display:none}
+    #inspector header{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 10px; border-bottom:1px solid var(--b1)
+    }
+    #inspector .tabs{display:flex; gap:8px; padding:8px 10px; border-bottom:1px solid var(--b1)}
+    #inspector .content{flex:1 1 auto; overflow:auto; padding:10px}
+
+    /* Hilfsklasse: wird per JS gesetzt, um FS-Button auszublenden */
+    .hide{display:none !important}
+  </style>
+
+  <!-- Mini‑Feature‑Check: Fullscreen auf iPhone ausblenden (nur CSS‑Klasse setzen) -->
+  <script>
+    (function(){
+      const isIPhone = /iPhone/i.test(navigator.userAgent);
+      const canFS = !!(document.documentElement.requestFullscreen||
+                       document.documentElement.webkitRequestFullscreen||
+                       document.documentElement.msRequestFullscreen);
+      if (isIPhone || !canFS) {
+        // Markiere Body – boot.js blendet dann gezielt Buttons aus (oder wir per CSS)
+        document.documentElement.classList.add('no-fs');
+      }
+    })();
+  </script>
+</head>
+
+<body>
+  <!-- ===================== HUD (oben) ===================== -->
+  <div id="hud" aria-label="Spiel‑HUD">
+    <strong id="buildBadge" title="Build/Version">Siedler‑Mini</strong>
+    <span class="spacer"></span>
+    <!-- Hinweis: nur EIN Satz IDs – keine Duplikate -->
+    <button id="btnReload" title="Neu laden (Cache‑Bust)">Neu laden</button>
+    <button id="btnFull"  title="Vollbild umschalten">Vollbild</button>
   </div>
 
-  <!-- Start-/Control-UI -->
-  <div id="startPanel">
-    <div class="card">
-      <h1>Siedler‑Mini</h1>
+  <!-- ===================== Bühne / Canvas ===================== -->
+  <canvas id="stage"></canvas>
+
+  <!-- ===================== Start-Overlay (Zustand A) ===================== -->
+  <section id="startPanel">
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
+      <h1 id="t">Siedler‑Mini</h1>
+      <p class="sub">Wähle eine Karte und starte das Spiel.</p>
 
       <div class="row">
-        <label for="mapSelect">Karte:&nbsp;</label>
+        <label for="mapSelect">Karte:</label>
         <select id="mapSelect">
-          <option value="assets/maps/map-demo.json">map-demo.json</option>
-          <option value="assets/maps/map-pro.json">map-pro.json</option>
-          <option value="assets/maps/map-test-all.json">map-test-all.json</option>
+          <!-- Liste deiner Maps (kann boot.js auch dynamisch füllen) -->
+          <option value="./assets/maps/map-demo.json">map-demo.json</option>
+          <option value="./assets/maps/map-pro.json">map-pro.json</option>
+          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
         </select>
       </div>
 
       <div class="row">
-        <label class="muted"><input id="autoStart" type="checkbox"> Auto‑Start (nur einmal)</label>
-      </div>
-
-      <div class="row">
         <button id="btnStart">Start</button>
-        <button id="btnReload">Neu laden</button>
-        <button id="btnFull">Vollbild</button>
-        <button id="btnDebug">Debug</button>
-        <button id="btnSaveDbg">Debug speichern</button>
+        <!-- Weiterspielen ist aktiv, wenn ein Save vorhanden ist (boot.js schaltet frei) -->
+        <button id="btnContinue" disabled>Weiterspielen</button>
       </div>
 
-      <div class="row muted" id="quickDiag"></div>
+      <!-- Laufzeitmeldungen (wird von boot.js/Inspector genutzt) -->
+      <pre id="quickDiag" aria-live="polite"></pre>
     </div>
+  </section>
+
+  <!-- ===================== Untere Toast-Leiste ===================== -->
+  <div id="inspectorBar" class="toast" aria-live="polite">
+    <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
   </div>
 
-  <!-- Debug & Inspector zuerst, damit console-Hooks aktiv sind -->
-  <script src="debug.js"></script>
-  <script src="tools/dev-inspector.js"></script>
+  <!-- ===================== Inspector (aufklappbar / Vollbild-fähig) ===================== -->
+  <aside id="inspector" hidden>
+    <header>
+      <strong>Inspector</strong>
+      <button id="btnInspectorClose" title="Schließen">Close</button>
+    </header>
+    <div class="tabs">
+      <!-- Reiter-Struktur; „Debug“ folgt in separater Implementierung -->
+      <button data-tab="debug">Debug</button>
+      <!-- weitere Tabs bei Bedarf -->
+    </div>
+    <div class="content" id="inspectorContent"></div>
+  </aside>
 
-  <!-- Engine/Module -->
-  <script src="app-v11.1r6.js"></script>
-  <script src="main.js"></script>
-  <script src="render.js"></script>
-  <script src="textures.js"></script>
-  <script src="world.js"></script>
-  <script src="input.js"></script>
-  <script src="unitLogic.js"></script>
-  <script src="buildingData.js"></script>
-  <script src="fullscreen.js"></script>
+  <!-- ===================== Scripts (Reihenfolge wichtig) =====================
+       1) Kern-Game/Loader/Assets
+       2) boot.js verdrahtet DOM (Start, Weiterspielen, Inspector, Fullscreen, etc.)
+       Hinweis: Pfade stimmen mit deinem Repo überein.
+  ============================================================================ -->
+  <script src="./core/asset.js" defer></script>
+  <script src="./core/asset.items.js" defer></script>
+  <!-- game.js / loader ggf. hier einfügen, falls getrennt -->
+  <script src="./boot.js" defer></script>
 
-  <!-- game.js stellt GameLoader/GameCamera bereit -->
-  <script src="game.js"></script>
-
-  <!-- boot.js initialisiert die UI EINMAL und loggt „UI bereit.“ -->
-  <script src="boot.js"></script>
-
-  <!-- Seite‑lokales Wiring (debounced Start/Reload, kein zweites „UI bereit“) -->
+  <!-- Optional: kleines CSS-Only-Hiding für Fullscreen-Button bei no-fs -->
   <script>
-  (function(){
-    const $ = (id)=>document.getElementById(id);
-
-    const btnStart   = $('btnStart');
-    const btnReload  = $('btnReload');
-    const btnFull    = $('btnFull');
-    const btnDebug   = $('btnDebug');
-    const btnSaveDbg = $('btnSaveDbg');
-    const mapSelect  = $('mapSelect');
-    const autoStart  = $('autoStart');
-    const diag       = $('quickDiag');
-
-    let busy = false;
-
-    async function doStart() {
-      if (busy) return;
-      busy = true; btnStart.disabled = true;
-      try {
-        const map = mapSelect.value;
-        if (!window.GameLoader?.start) throw new Error('GameLoader.start fehlt');
-        console.log('[boot] Start Game', map);
-        await GameLoader.start(map);
-      } catch (e) {
-        console.error('[boot] GameStart fehlgeschlagen:', e);
-        alert('GameStart fehlgeschlagen. Details in der Konsole.');
-      } finally {
-        busy = false; btnStart.disabled = false;
+    // Falls oben 'no-fs' gesetzt wurde: FS-Button im HUD ausblenden (ohne Logik zu duplizieren)
+    (function(){
+      if (document.documentElement.classList.contains('no-fs')) {
+        const fsBtn = document.getElementById('btnFull');
+        if (fsBtn) fsBtn.classList.add('hide');
       }
-    }
-
-    async function doReload() {
-      if (busy) return;
-      busy = true; btnReload.disabled = true;
-      try {
-        const map = mapSelect.value;
-        console.log('[boot] Reload Game', map);
-        if (window.GameLoader?.reload) await GameLoader.reload(map);
-        else if (window.GameLoader?.start) await GameLoader.start(map);
-        else throw new Error('GameLoader.* fehlt');
-      } catch (e) {
-        console.error('[boot] Reload fehlgeschlagen:', e);
-        alert('Reload fehlgeschlagen. Details in der Konsole.');
-      } finally {
-        busy = false; btnReload.disabled = false;
-      }
-    }
-
-    // Buttons verbinden
-    btnStart .addEventListener('click', doStart);
-    btnReload.addEventListener('click', doReload);
-    btnFull  .addEventListener('click', () => {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else document.documentElement.requestFullscreen?.();
-    });
-    btnDebug .addEventListener('click', () => {
-      const di = document.getElementById('devInspector');
-      if (!di) return;
-      const min = di.classList.contains('min');
-      window.DevInspector?.setMinimized(!min);
-    });
-    btnSaveDbg.addEventListener('click', () => {
-      if (typeof window.saveDebugLog==='function') return window.saveDebugLog();
-      const txt = document.querySelector('#diLogPre')?.textContent || '';
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([txt], {type:'text/plain'}));
-      a.download = 'siedler-mini-debug.txt';
-      a.click(); URL.revokeObjectURL(a.href);
-    });
-
-    // Quick‑Diag
-    function line(ok, label, extra=''){return `[${ok?'OK':'FAIL'}] ${label}${extra?(' • '+extra):''}`;}
-    (function paint(){
-      const lines = [];
-      lines.push( line(!!document.getElementById('stage'), 'Canvas #stage') );
-      lines.push( line(!!window.GameLoader && typeof GameLoader.start==='function', 'GameLoader.start') );
-      lines.push( line(!!window.GameCamera, 'GameCamera') );
-      lines.push( line(typeof window.saveDebugLog==='function', 'saveDebugLog()') );
-      lines.push( line(true, 'Map‑URL', mapSelect.value) );
-      const sw = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
-      lines.push( line(sw, 'ServiceWorker aktiv', sw?'Ja':'Nein') );
-      diag.textContent = lines.join('\n');
     })();
-
-    if (autoStart.checked) setTimeout(doStart, 0);
-    // KEIN zweites console.log('UI bereit.') hier – das macht boot.js
-  })();
   </script>
 </body>
 </html>
