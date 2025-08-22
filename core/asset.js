@@ -1,27 +1,28 @@
-/* ================================================================================================
-   Siedler‑Mini V14.7‑hf2 — core/asset.js
-   Zweck: Kleine, robuste Helfer rund um Canvas, Loading & Assets.
-   Enthält u. a. imageRenderingCrisp(), ensure2DContext(), simple Loader, kleinen AssetManager.
-   Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports
-   ================================================================================================ */
+/* ================================================================================================ 
+ Siedler‑Mini V14.7‑hf2 — core/asset.js
+ Zweck: Kleine, robuste Helfer rund um Canvas, Loading & Assets. Enthält u. a. imageRenderingCrisp(), ensure2DContext(), 
+ simple Loader, kleinen AssetManager.
+ Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports 
+================================================================================================ */
 
 // ---------------------------------------------------------
 // Imports (derzeit keine externen nötig)
 // ---------------------------------------------------------
+// ➕ NEU: Items‑Atlas‑Loader einbinden (separate Datei)
+import { initItemsAtlas, ItemAtlas, DEFAULT_ITEMS_IMAGE_PATH, DEFAULT_ITEMS_ATLAS_PATH, resolveItemKey } from './core/asset.items.js';
 
 // ---------------------------------------------------------
 // Konstanten (Rendering & Carry-System)
 // ---------------------------------------------------------
-
-const IMG_RENDER_PIXELATED = 'pixelated';   // gut unterstützt (inkl. Safari/iOS)
-const IMG_RENDER_AUTO      = 'auto';
+const IMG_RENDER_PIXELATED = 'pixelated'; // gut unterstützt (inkl. Safari/iOS)
+const IMG_RENDER_AUTO = 'auto';
 
 // Carry-System: unterstützte Trage-Stile
 const CARRY_STYLES = /** @type {const} */ (["shoulder","belly","hand"]);
 
 // Defaults für Attach-/Handle-Offsets
 const DEFAULT_ATTACH_FALLBACK = { x: 32, y: 32 };
-const DEFAULT_HANDLE_FALLBACK = { x: 0,  y: 0 };
+const DEFAULT_HANDLE_FALLBACK = { x: 0, y: 0 };
 
 // ---------------------------------------------------------
 // Helpers (Canvas/Context/Loader) — bestehend aus deiner Datei
@@ -44,11 +45,11 @@ function coerceCanvasAndCtx(target){
 /** HiDPI‑Maße setzen. Gibt den verwendeten DPR zurück. */
 export function setupHiDPICanvas(cv, { dpr = Math.max(1, window.devicePixelRatio || 1), width, height } = {}){
   if(!cv) return 1;
-  const w = width  ?? (innerWidth || document.documentElement.clientWidth  || cv.clientWidth  || 800);
+  const w = width ?? (innerWidth || document.documentElement.clientWidth || cv.clientWidth || 800);
   const h = height ?? (innerHeight|| document.documentElement.clientHeight || cv.clientHeight || 600);
-  cv.width  = Math.floor(w * dpr);
+  cv.width = Math.floor(w * dpr);
   cv.height = Math.floor(h * dpr);
-  cv.style.width  = w + 'px';
+  cv.style.width = w + 'px';
   cv.style.height = h + 'px';
   return dpr;
 }
@@ -103,20 +104,26 @@ export async function loadJSON(url){
   if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return await res.json();
 }
+
 export async function loadImage(url){
   const res = await fetch(url);
   if(!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   const blob = await res.blob();
   if ('createImageBitmap' in self) return await createImageBitmap(blob);
   return await new Promise((resolve, reject)=>{
-    const img = new Image(); img.onload=()=>resolve(img); img.onerror=reject;
+    const img = new Image();
+    img.onload=()=>resolve(img);
+    img.onerror=reject;
     img.src = URL.createObjectURL(blob);
   });
 }
 
 /** Sehr einfacher Asset‑Manager (Cache + Basis‑Pfad). */
 export class AssetManager{
-  constructor({ base = './assets/' } = {}){ this.base = base; this.cache = new Map(); }
+  constructor({ base = './assets/' } = {}){
+    this.base = base;
+    this.cache = new Map();
+  }
   async getImage(name){
     if(this.cache.has(name)) return this.cache.get(name);
     const img = await loadImage(this.base + name);
@@ -127,7 +134,7 @@ export class AssetManager{
 }
 
 // ---------------------------------------------------------
-// Helpers (Carry-System) — NEU
+// Helpers (Carry-System) — bestehend
 // ---------------------------------------------------------
 
 /**
@@ -158,9 +165,7 @@ function getHandleOffset(itemsAtlas, itemKey, style){
  * 3) "belly" als neutraler Default
  */
 function resolveCarryStyle(actor, itemsAtlas){
-  if (actor?.carryStyleOverride && CARRY_STYLES.includes(actor.carryStyleOverride))
-    return actor.carryStyleOverride;
-
+  if (actor?.carryStyleOverride && CARRY_STYLES.includes(actor.carryStyleOverride)) return actor.carryStyleOverride;
   const key = actor?.carryItemKey;
   const itm = key && itemsAtlas?.items?.[key];
   const prefs = itm?.preferredStyles;
@@ -170,10 +175,7 @@ function resolveCarryStyle(actor, itemsAtlas){
   return "belly";
 }
 
-/**
- * Liefert Z-Order-Regel "front"/"behind" abhängig von Richtung.
- * Primär porterAtlas.zOrderCarry[dir], Fallback itemsAtlas.directionOverrides.carry[dir].
- */
+/** Liefert Z-Order-Regel "front"/"behind" abhängig von Richtung. */
 function resolveZOrder(dir, porterAtlas, itemsAtlas){
   const p = porterAtlas?.zOrderCarry?.[dir];
   if (p) return p;
@@ -189,7 +191,7 @@ function frameForDir(f, dir, framesPerRow){
 }
 
 // ---------------------------------------------------------
-// Klassen (Carry-Debug Overlay) — NEU, optional
+// Klassen (Carry-Debug Overlay) — bestehend
 // ---------------------------------------------------------
 
 class CarryDebug {
@@ -212,7 +214,7 @@ class CarryDebug {
 const carryDebug = new CarryDebug();
 
 // ---------------------------------------------------------
-// Hauptlogik (Carry-System) — NEU
+// Hauptlogik (Carry-System) — bestehend
 // ---------------------------------------------------------
 
 /**
@@ -220,11 +222,11 @@ const carryDebug = new CarryDebug();
  * → Wird VOR bzw. NACH der Figur gezeichnet je nach Z-Order.
  *
  * Erwartet:
- *  - actor: { pos:{x,y}, anim, frame, dir, carryItemKey, carryStyleOverride? }
- *  - porterAtlas: geladene porter.json (Animations + attachPoints + zOrderCarry)
- *  - itemsAtlas:  geladene items.json  (items + handleOffsetByStyle + directionOverrides)
- *  - drawFrame(sheetName, frameIndex, x, y)
- *  - drawImage(sheetName, x, y)
+ * - actor: { pos:{x,y}, anim, frame, dir, carryItemKey, carryStyleOverride? }
+ * - porterAtlas: geladene porter.json (Animations + attachPoints + zOrderCarry)
+ * - itemsAtlas: geladene items.json (items + handleOffsetByStyle + directionOverrides)
+ * - drawFrame(sheetName, frameIndex, x, y)
+ * - drawImage(sheetName, x, y)
  */
 export function attachQueueForActor(ctx, {actor, porterAtlas, itemsAtlas, drawFrame, drawImage}){
   const key = actor?.carryItemKey;
@@ -252,6 +254,7 @@ export function attachQueueForActor(ctx, {actor, porterAtlas, itemsAtlas, drawFr
 
   // 5) Draw-Funktion vormerken
   const drawFn = () => {
+    // Erwartet sheet‑Name im Items‑Atlas‑Meta (legacy). Fallback: direkter Draw via drawImage(sheetName,...)
     drawImage(itemsAtlas.items[key].sheet, ix, iy);
     // Debug-Visualisierung: Attach-Punkt auf dem Figurenframe
     carryDebug.drawAnchor(ctx, actor.pos.x + att.x, actor.pos.y + att.y);
@@ -291,6 +294,42 @@ export function drawActorWithCarry(ctx, {actor, porterAtlas, itemsAtlas, drawFra
 }
 
 // ---------------------------------------------------------
+// NEU: Items‑Master‑Sprite Integration (Loader + Draw‑Helper)
+// ↳ Kapselt das PNG/JSON‑Duo und stellt Canvas‑Draw bereit,
+//   ohne dein bestehendes Carry‑System zu verändern.
+// ---------------------------------------------------------
+
+/** @type {ItemAtlas|null} */
+let _itemsMaster = null;
+
+/** Lädt die Items‑Master‑Sprite + Atlas einmalig (idempotent). */
+export async function initItems({
+  imagePath = DEFAULT_ITEMS_IMAGE_PATH,
+  atlasPath = DEFAULT_ITEMS_ATLAS_PATH
+} = {}){
+  if (_itemsMaster) return _itemsMaster;
+  _itemsMaster = await initItemsAtlas({ imagePath, atlasPath });
+  return _itemsMaster;
+}
+
+/** Gibt die geladene ItemAtlas‑Instanz zurück (oder wirft). */
+export function getItemsAtlas(){
+  if (!_itemsMaster) throw new Error('Items‑Atlas ist noch nicht initialisiert. initItems() zuerst aufrufen.');
+  return _itemsMaster;
+}
+
+/** True/False ob ein Item‑Key (oder Alias) existiert. */
+export function hasItem(key){
+  return !!_itemsMaster && _itemsMaster.has(resolveItemKey(key));
+}
+
+/** Zeichnet ein Item direkt (Canvas 2D). */
+export function drawItem(ctx, key, x, y, opt){
+  const m = getItemsAtlas();
+  m.draw(ctx, key, x, y, opt);
+}
+
+// ---------------------------------------------------------
 // Exports (Default-Bündel + named Exports) — bestehend + neu
 // ---------------------------------------------------------
 
@@ -303,17 +342,20 @@ const Assets = {
   loadImage,
   AssetManager,
 
-  // NÜTZLICH: Carry-API zusätzlich im Default-Bündel
+  // Carry‑API
   attachQueueForActor,
   drawActorWithCarry,
   carryDebug,
-  CARRY_STYLES
+  CARRY_STYLES,
+
+  // ➕ Items‑API
+  initItems,
+  getItemsAtlas,
+  hasItem,
+  drawItem,
 };
 
 export default Assets;
 
 // Named Exports für gezielten Import
-export {
-  CARRY_STYLES,
-  carryDebug
-};
+export { CARRY_STYLES, carryDebug };
