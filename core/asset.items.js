@@ -1,10 +1,10 @@
 /**
  * core/asset.items.js
  * -----------------------------------------------------------------------------
- * Items-Master-Sprite (PNG) + Atlas (JSON) Loader mit bequemen Aliassen
- * Projekt-Style: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+ * Items‑Master‑Sprite (PNG) + Atlas (JSON) Loader mit bequemen Aliassen.
+ * Projektstil: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
  * Raster: 128x128 pro Zelle (laut erzeugtem Atlas)
- * Debug-Tools bleiben unberührt
+ * Debug‑Tools bleiben unberührt.
  * -----------------------------------------------------------------------------
  */
 
@@ -15,7 +15,6 @@
 export const DEFAULT_ITEMS_IMAGE_PATH = '/assets/items/items_master_sprite.png';
 export const DEFAULT_ITEMS_ATLAS_PATH = '/assets/items/items_master_sprite.json';
 
-// Aliase für ergonomischen Zugriff im Code
 const ITEM_ALIASES = {
   log: 'item_log',
   stone: 'item_stone',
@@ -113,9 +112,7 @@ export class ItemAtlas {
 }
 
 /* ===================== Hauptlogik ===================== */
-/**
- * Lädt Bild + Atlas und liefert eine ItemAtlas-Instanz.
- */
+/** Lädt Bild + Atlas und liefert eine ItemAtlas-Instanz. */
 export async function initItemsAtlas({
   imagePath = DEFAULT_ITEMS_IMAGE_PATH,
   atlasPath = DEFAULT_ITEMS_ATLAS_PATH
