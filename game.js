@@ -1,281 +1,347 @@
-// game.js  •  v11
-// ES‑Modul: Characters laden + Canvas‑Stage + Kamera + Map‑Loader + UI‑Wireup
+/* -------------------------------------------------------------
+ * Siedler‑Mini • game.js
+ * Version: v11.1r6 • 2025‑08‑22
+ *
+ * Zweck
+ *  - Start/Reload einer Karte (JSON) über eine stabile öffentliche API
+ *  - Kamera-Steuerung (Zoom/Pan) – UI bleibt angedockt, Canvas zoomt
+ *  - Fallback-Rendering (Grid), falls kein externer Renderer verfügbar
+ *  - Nicht-invasiv: if (window.Render?.drawMap) => delegieren
+ *
+ * Öffentliche API (für UI / boot.js):
+ *  - window.startGame(mapUrl: string): Promise<void>
+ *  - window.reloadGame(mapUrl?: string): Promise<void>
+ *  - window.game (State-Objekt)
+ *  - window.GameLoader.start/reload (Bridge)
+ *  - window.GameCamera.setZoom/setPosition (Bridge)
+ * ------------------------------------------------------------- */
 
-import { Characters } from './js/characters.js';
-
-// ---------- Stage/Context ----------
-const canvas = document.getElementById('stage');
-const ctx     = canvas.getContext('2d', { alpha:false });
-
-// DPR anpassen
-function fitCanvas() {
-  const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-  const w = Math.floor(canvas.clientWidth  * dpr);
-  const h = Math.floor(canvas.clientHeight * dpr);
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w; canvas.height = h;
-  }
-}
-fitCanvas();
-addEventListener('resize', fitCanvas);
-
-// ---------- Welt/Kamera ----------
-const camera = {
-  x: 0, y: 0, zoom: 1,
-  min: 0.5, max: 3.5,
-  setZoom(z)   { this.zoom = Math.max(this.min, Math.min(this.max, z)); },
-  setPosition(x,y){ this.x = x; this.y = y; },
-};
-
-// ---------- Map‑State ----------
-let currentMapUrl = null;
-let mapData = null;      // { rows, cols, tile, layers: [...] } – minimal erwartet
-let tileSize = 64;
-
-// ---------- Debug‑HUD ----------
-const hud = document.getElementById('hud');
-let debugOn = false;
-function updateHUD() {
-  if (!debugOn) { hud.classList.remove('on'); return; }
-  hud.classList.add('on');
-  const dpr = Math.round((window.devicePixelRatio || 1)*100)/100;
-  const rows = mapData?.rows ?? "-";
-  const cols = mapData?.cols ?? "-";
-  const tile = mapData?.tile ?? tileSize;
-  hud.textContent =
-`Cam:  x=${camera.x.toFixed(1)}  y=${camera.y.toFixed(1)}  zoom=${camera.zoom.toFixed(2)}
-Map:  ${currentMapUrl || "—"}
-rows=${rows}  cols=${cols}  tile=${tile}
-DPR=${dpr}  Size=${canvas.width}x${canvas.height}`;
-}
-
-// ---------- Input: Pan/Zoom nur auf Canvas ----------
-let panDrag = null;
-
-canvas.addEventListener('pointerdown', (e) => {
-  canvas.setPointerCapture(e.pointerId);
-  panDrag = { id:e.pointerId, sx:e.clientX, sy:e.clientY, ox:camera.x, oy:camera.y };
-});
-
-canvas.addEventListener('pointermove', (e) => {
-  if (!panDrag || panDrag.id !== e.pointerId) return;
-  const dx = (e.clientX - panDrag.sx) / camera.zoom;
-  const dy = (e.clientY - panDrag.sy) / camera.zoom;
-  camera.setPosition(panDrag.ox - dx, panDrag.oy - dy);
-});
-
-addEventListener('pointerup', (e) => { if (panDrag && panDrag.id === e.pointerId) panDrag = null; });
-
-canvas.addEventListener('wheel', (e) => {
-  // Zoom zum Cursor – innerhalb des Canvas, UI unaffected
-  e.preventDefault();
-  const prev = camera.zoom;
-  const factor = (e.deltaY < 0) ? 1.1 : 0.9;
-  camera.setZoom(prev * factor);
-
-  // Zoom zur Maus fokussieren
-  const rect = canvas.getBoundingClientRect();
-  const mx = (e.clientX - rect.left);
-  const my = (e.clientY - rect.top);
-  const k = (1/prev - 1/camera.zoom);
-  camera.x += k * mx;
-  camera.y += k * my;
-}, { passive:false });
-
-// ---------- Simple Renderer (Grid + Demo‑Unit) ----------
-function worldToScreen(px, py) { return { x: (px - camera.x) * camera.zoom, y: (py - camera.y) * camera.zoom }; }
-
-function drawGrid() {
-  const step = tileSize * camera.zoom;
-  if (step < 16) return;
-  const cols = Math.ceil(canvas.width / step) + 2;
-  const rows = Math.ceil(canvas.height/ step) + 2;
-  const ox = -((camera.x*camera.zoom) % step);
-  const oy = -((camera.y*camera.zoom) % step);
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let i=0;i<cols;i++){ const x = ox + i*step; ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); }
-  for (let j=0;j<rows;j++){ const y = oy + j*step; ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); }
-  ctx.stroke();
-}
-
-function render() {
-  ctx.fillStyle = '#0b1a26';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  drawGrid();
-
-  // Demo‑Charakter (nur um zu sehen, dass Atlanten/Fallbacks funktionieren)
-  if (mapData) {
-    const center = { x: (mapData.cols*tileSize)/2, y: (mapData.rows*tileSize)/2 };
-    const s = worldToScreen(center.x, center.y);
-    const drawable = Characters.getDrawable({ role:'porter', state:'walk_empty' });
-    ctx.save();
-    ctx.translate(s.x, s.y);
-    drawable.draw(ctx, 0, 0, tileSize * camera.zoom);
-    ctx.restore();
-  }
-
-  updateHUD();
-  requestAnimationFrame(render);
-}
-
-// ---------- Map‑Loader ----------
-async function loadMap(url) {
-  currentMapUrl = url;
-  try {
-    const res = await fetch(url + `?v=${window.BUILD_ID||''}`);
-    if (!res.ok) throw new Error(`map ${url} ${res.status}`);
-    mapData = await res.json();
-    tileSize = mapData.tile || 64;
-
-    // Kamera initial zentrieren
-    const W = (mapData.cols||16)*tileSize;
-    const H = (mapData.rows||16)*tileSize;
-    camera.setPosition(W*0.5 - (canvas.width / 2)/camera.zoom,
-                       H*0.5 - (canvas.height/2)/camera.zoom);
-
-    console.log("[game] map loaded:", url, mapData);
-  } catch (err) {
-    console.warn("[game] map load failed:", err);
-    mapData = null;
-  }
-}
-
-// ---------- UI‑Verdrahtung ----------
-const elStart   = document.getElementById('btnStart');
-const elReload  = document.getElementById('btnReload');
-const elDebug   = document.getElementById('btnDebug');
-const elFS      = document.getElementById('btnFullscreen');
-const elSelect  = document.getElementById('mapSelect');
-const elAuto    = document.getElementById('autoStart');
-
-function getSelectedMap() {
-  return elSelect.value || 'assets/maps/map-demo.json';
-}
-
-elStart.addEventListener('click', async () => {
-  elStart.disabled = true;
-  await loadMap(getSelectedMap());
-  setTimeout(()=> (elStart.disabled = false), 250);
-});
-
-elReload.addEventListener('click', async () => {
-  await loadMap(getSelectedMap());
-});
-
-elDebug.addEventListener('click', () => {
-  debugOn = !debugOn;
-  updateHUD();
-});
-
-elFS.addEventListener('click', async () => {
-  const docEl = document.documentElement;
-  if (!document.fullscreenElement) {
-    await docEl.requestFullscreen().catch(()=>{});
-  } else {
-    await document.exitFullscreen().catch(()=>{});
-  }
-});
-
-// Query‑Param ?map=… auswerten
-(function applyQueryParam() {
-  const p = new URLSearchParams(location.search);
-  const map = p.get('map');
-  if (map) {
-    elSelect.value = map;
-    if (![...elSelect.options].some(o=>o.value===map)) {
-      const opt = document.createElement('option');
-      opt.value = map; opt.textContent = map.replace(/^.*\//,'');
-      elSelect.appendChild(opt);
-    }
-  }
-})();
-
-// Auto‑Start, wenn gewünscht
-if (elAuto.checked) {
-  loadMap(getSelectedMap());
-}
-
-// ---------- Characters vorladen & Renderloop starten ----------
-(async function init() {
-  try {
-    await Characters.loadAll();
-  } catch (e) {
-    console.warn("[characters] preload failed:", e);
-  }
-  render();
-})();
-
-// ---------- Öffentliche API (wie gewünscht) ----------
-window.startGame  = async (mapUrl) => loadMap(mapUrl || getSelectedMap());
-window.reloadGame = async (mapUrl) => loadMap(mapUrl || getSelectedMap());
-
-window.game = {
-  camera,
-  get map() { return mapData; },
-  get tileSize() { return tileSize; },
-  get ctx() { return ctx; },
-};
-
-window.GameLoader = {
-  start:  (mapUrl) => window.startGame?.(mapUrl),
-  reload: (mapUrl) => window.reloadGame?.(mapUrl),
-};
-window.GameCamera = {
-  setZoom:     (z)    => camera.setZoom(z),
-  setPosition: (x,y)  => camera.setPosition(x,y),
-};
-<!-- am ENDE von game.js einfügen -->
-<script>
 (() => {
-  // Fallback: sehr einfaches Laden & sichtbares Feedback, falls startGame noch nicht verkabelt ist
-  async function __fallbackLoadMap(url) {
-    try {
-      const bust = (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
-      const res = await fetch(url + bust, { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
+  const VERSION = 'v11.1r6';
+  const DATE = '2025-08-22';
 
-      const c = document.getElementById('stage');
-      if (!c) { console.error('[fallback-map] Canvas #stage fehlt'); return; }
-      const ctx = c.getContext('2d');
+  const log   = (...a) => console.log('[game]', ...a);
+  const warn  = (...a) => console.warn('[game]', ...a);
+  const error = (...a) => console.error('[game]', ...a);
+  const setDbg = (msg) => (typeof window.setDebug === 'function' ? window.setDebug(msg) : void 0);
 
-      // „sichtbares“ Feedback
-      ctx.setTransform(1,0,0,1,0,0);
-      ctx.clearRect(0,0,c.width,c.height);
-      ctx.fillStyle = '#0b1825'; ctx.fillRect(0,0,c.width,c.height);
-      ctx.fillStyle = '#e8f2ff';
-      ctx.font = '16px ui-monospace,Menlo,Consolas';
-      ctx.fillText('Map geladen: ' + (data.name || url.split('/').pop()), 20, 40);
-      ctx.fillText(`rows=${data.rows} cols=${data.cols} tile=${data.tile||data.tileSize||64}`, 20, 66);
+  /** Hard-Limits & Defaults für Kamera */
+  const CAMERA = {
+    MIN_ZOOM: 0.5,
+    MAX_ZOOM: 3.5,
+    START_ZOOM: 0.8,
+    PAN_SPEED: 1.0, // Faktor für Drag
+  };
 
-      console.log('[fallback-map] OK:', url, data);
-      window.setDebug?.(`[Fallback] Map OK • ${url}`);
-    } catch (e) {
-      console.error('[fallback-map] Fehler:', e);
-      window.setDebug?.('[Fallback] Map-Fehler: ' + (e.message || e));
+  /** Interner Helper: DOM-Elemente */
+  const $ = (id) => document.getElementById(id);
+
+  /** Globale State-Struktur (sichtbar unter window.game) */
+  const state = {
+    version: VERSION,
+    canvas: null,
+    ctx: null,
+    width: 0,
+    height: 0,
+
+    // Kamera
+    camera: {
+      x: 0,
+      y: 0,
+      zoom: CAMERA.START_ZOOM,
+      setZoom(z) {
+        this.zoom = Math.max(CAMERA.MIN_ZOOM, Math.min(CAMERA.MAX_ZOOM, Number(z) || CAMERA.START_ZOOM));
+        requestRender();
+      },
+      setPosition(x, y) {
+        this.x = Number(x) || 0;
+        this.y = Number(y) || 0;
+        requestRender();
+      },
+    },
+
+    // Map / Daten
+    mapUrl: '',
+    map: null,        // Map-JSON
+    tileset: null,    // optional – wenn dein Renderer es braucht
+    startedAt: null,
+
+    // Eingabe
+    input: {
+      dragging: false,
+      dragStartX: 0,
+      dragStartY: 0,
+      camStartX: 0,
+      camStartY: 0,
+      lastPinchDist: 0,
+    },
+
+    // Sonstiges
+    DPR: (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1,
+    needsRender: false,
+  };
+
+  /** Render-Invalider */
+  function requestRender() {
+    state.needsRender = true;
+  }
+
+  /** Canvas vorbereiten (Resizing + DPR) */
+  function initCanvas() {
+    const c = $('stage');
+    if (!c) {
+      error('Canvas #stage fehlt – index.html prüfen.');
+      return false;
+    }
+    state.canvas = c;
+    state.ctx = c.getContext('2d', { alpha: false });
+
+    function fit() {
+      const DPR = (state.DPR = window.devicePixelRatio || 1);
+      const w = Math.floor(c.clientWidth * DPR) || window.innerWidth * DPR;
+      const h = Math.floor(c.clientHeight * DPR) || window.innerHeight * DPR;
+      if (c.width !== w || c.height !== h) {
+        c.width = w; c.height = h;
+        state.width = w; state.height = h;
+        requestRender();
+      }
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    return true;
+  }
+
+  /** Eingaben (Zoom/Pan) – nur, wenn Cursor/Gesten über dem Canvas sind */
+  function initInput() {
+    const c = state.canvas;
+    if (!c) return;
+
+    // Canvas soll Gesten selbst konsumieren
+    c.style.touchAction = 'none';
+
+    // Wheel-Zoom
+    c.addEventListener('wheel', (ev) => {
+      ev.preventDefault();
+      const delta = Math.sign(ev.deltaY) * 0.1; // kleiner Zoomschritt
+      state.camera.setZoom(state.camera.zoom * (1 - delta));
+    }, { passive: false });
+
+    // Drag/Pan (Maus)
+    c.addEventListener('mousedown', (ev) => {
+      state.input.dragging = true;
+      state.input.dragStartX = ev.clientX;
+      state.input.dragStartY = ev.clientY;
+      state.input.camStartX = state.camera.x;
+      state.input.camStartY = state.camera.y;
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if (!state.input.dragging) return;
+      const dx = (ev.clientX - state.input.dragStartX);
+      const dy = (ev.clientY - state.input.dragStartY);
+      state.camera.setPosition(
+        state.input.camStartX - dx / state.camera.zoom * CAMERA.PAN_SPEED,
+        state.input.camStartY - dy / state.camera.zoom * CAMERA.PAN_SPEED
+      );
+    });
+    window.addEventListener('mouseup', () => { state.input.dragging = false; });
+
+    // Touch (Pan + Pinch)
+    c.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length === 1) {
+        const t = ev.touches[0];
+        state.input.dragging = true;
+        state.input.dragStartX = t.clientX;
+        state.input.dragStartY = t.clientY;
+        state.input.camStartX = state.camera.x;
+        state.input.camStartY = state.camera.y;
+        state.input.lastPinchDist = 0;
+      } else if (ev.touches.length === 2) {
+        state.input.dragging = false;
+        state.input.lastPinchDist = pinchDist(ev.touches[0], ev.touches[1]);
+      }
+    }, { passive: false });
+
+    c.addEventListener('touchmove', (ev) => {
+      ev.preventDefault();
+      if (ev.touches.length === 1 && state.input.dragging) {
+        const t = ev.touches[0];
+        const dx = (t.clientX - state.input.dragStartX);
+        const dy = (t.clientY - state.input.dragStartY);
+        state.camera.setPosition(
+          state.input.camStartX - dx / state.camera.zoom * CAMERA.PAN_SPEED,
+          state.input.camStartY - dy / state.camera.zoom * CAMERA.PAN_SPEED
+        );
+      } else if (ev.touches.length === 2) {
+        const d = pinchDist(ev.touches[0], ev.touches[1]);
+        if (state.input.lastPinchDist) {
+          const factor = d / state.input.lastPinchDist;
+          state.camera.setZoom(state.camera.zoom * factor);
+        }
+        state.input.lastPinchDist = d;
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => { state.input.dragging = false; state.input.lastPinchDist = 0; }, { passive: true });
+
+    function pinchDist(a, b) {
+      const dx = a.clientX - b.clientX;
+      const dy = a.clientY - b.clientY;
+      return Math.hypot(dx, dy);
     }
   }
 
-  // Wrapper: echte Funktionen verwenden, sonst Fallback
-  const start = (mapUrl) =>
-    (typeof window.startGame === 'function') ? window.startGame(mapUrl) : __fallbackLoadMap(mapUrl);
+  /* -------------------------------------------------------------
+   * Rendering
+   * 1) Wenn externer Renderer vorhanden (window.Render.drawMap), dann delegieren
+   * 2) Sonst: Fallback – schlichtes Grid zeichnen
+   * ----------------------------------------------------------- */
 
-  const reload = (mapUrl) =>
-    (typeof window.reloadGame === 'function') ? window.reloadGame(mapUrl) : start(mapUrl);
+  function render() {
+    state.needsRender = false;
+    const { ctx, width, height, camera, map } = state;
+    if (!ctx) return;
 
-  // Öffentliche Loader-API ergänzen (ohne vorhandenes zu überschreiben)
-  window.GameLoader = Object.assign({}, window.GameLoader, { start, reload });
+    // Hintergrund
+    ctx.fillStyle = '#0a1624';
+    ctx.fillRect(0, 0, width, height);
 
-  // Kamera-API (nur falls vorhanden)
-  window.GameCamera = Object.assign({}, window.GameCamera, {
-    setZoom: (z) => window.game?.camera?.setZoom?.(z),
-    setPosition: (x,y) => window.game?.camera?.setPosition?.(x,y),
-  });
+    // Delegation an ext. Renderer (falls verfügbar)
+    try {
+      if (window.Render && typeof window.Render.drawMap === 'function') {
+        window.Render.drawMap(ctx, state);
+        return;
+      }
+    } catch (e) {
+      error('Fehler im externen Renderer:', e);
+    }
 
-  console.log('[game-bridge] GameLoader/Camera bereit');
+    // ---- Fallback: Grid + simple info
+    const tile = (map && map.tile) || (map && map.tileSize) || 64;
+    const cols = (map && map.cols) || 16;
+    const rows = (map && map.rows) || 16;
+
+    // Welt -> Bildschirm
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
+
+    // Grid
+    const w = cols * tile;
+    const h = rows * tile;
+    const left = -w / 2;
+    const top  = -h / 2;
+
+    ctx.fillStyle = '#10233b';
+    ctx.fillRect(left, top, w, h);
+
+    ctx.strokeStyle = 'rgba(207,227,255,.15)';
+    ctx.lineWidth = 1 / camera.zoom;
+    for (let r = 0; r <= rows; r++) {
+      const y = top + r * tile;
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(left + w, y); ctx.stroke();
+    }
+    for (let c = 0; c <= cols; c++) {
+      const x = left + c * tile;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + h); ctx.stroke();
+    }
+
+    // Mittelpunkt
+    ctx.fillStyle = '#8fd0ff';
+    ctx.beginPath(); ctx.arc(0, 0, 3 / camera.zoom, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+
+    // Debug-Overlay
+    const lines = [
+      `Cam: x=${Math.round(camera.x)}   y=${Math.round(camera.y)}   zoom=${camera.zoom.toFixed(2)}`,
+      `Map: ${state.mapUrl || '(keine)'} `,
+      `rows=${rows}  cols=${cols}  tile=${tile}`,
+      `DPR=${state.DPR}   Size=${state.width}×${state.height}`
+    ];
+    setDbg(lines.join('\n'));
+  }
+
+  function renderLoop() {
+    if (state.needsRender) render();
+    requestAnimationFrame(renderLoop);
+  }
+
+  /* -------------------------------------------------------------
+   * Map‑Laden
+   * ----------------------------------------------------------- */
+
+  async function loadMapJSON(url) {
+    const bust = url + (url.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+    const t0 = performance.now();
+    const res = await fetch(bust, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Map-HTTP ${res.status} @ ${url}`);
+    const json = await res.json();
+    const dt = Math.round(performance.now() - t0);
+    log(`Map geladen: ${url} (${dt}ms)`);
+    return json;
+  }
+
+  /* -------------------------------------------------------------
+   * Öffentliche API: startGame / reloadGame
+   * ----------------------------------------------------------- */
+
+  async function startGame(mapUrl) {
+    try {
+      if (!state.canvas) {
+        if (!initCanvas()) return;
+        initInput();
+        // Render-Schleife einmal starten
+        requestRender();
+        requestAnimationFrame(renderLoop);
+      }
+
+      state.startedAt = Date.now();
+      state.mapUrl = mapUrl || state.mapUrl || 'assets/maps/map-demo.json';
+
+      // Map laden
+      state.map = await loadMapJSON(state.mapUrl);
+
+      // Kamera sinnvoll initialisieren (Weltmitte)
+      const tile = state.map.tile || state.map.tileSize || 64;
+      const cols = state.map.cols || 16;
+      const rows = state.map.rows || 16;
+      state.camera.setPosition((cols * tile) / 2, (rows * tile) / 2);
+      if (!Number.isFinite(state.camera.zoom)) state.camera.setZoom(CAMERA.START_ZOOM);
+
+      requestRender();
+      log('Game gestartet.', { map: state.mapUrl, version: VERSION });
+    } catch (e) {
+      error('startGame() fehlgeschlagen:', e);
+      alert('Karte konnte nicht gestartet werden. Details in der Konsole.');
+    }
+  }
+
+  async function reloadGame(mapUrl) {
+    if (mapUrl) state.mapUrl = mapUrl;
+    log('Neu laden…', state.mapUrl);
+    return startGame(state.mapUrl);
+  }
+
+  /* -------------------------------------------------------------
+   * Bridges (für UI/boot.js)
+   * ----------------------------------------------------------- */
+
+  window.startGame  = startGame;
+  window.reloadGame = reloadGame;
+
+  window.GameLoader = {
+    start: (mapUrl)  => startGame(mapUrl),
+    reload: (mapUrl) => reloadGame(mapUrl),
+  };
+
+  window.GameCamera = {
+    setZoom:     (z)    => state.camera.setZoom(z),
+    setPosition: (x, y) => state.camera.setPosition(x, y),
+  };
+
+  // Öffentlichen State bereitstellen
+  window.game = state;
+
+  log(`game.js geladen • ${VERSION} • ${DATE}`);
 })();
-</script>
