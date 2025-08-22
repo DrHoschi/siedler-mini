@@ -2,75 +2,116 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>Siedler‑Mini</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0e1b26" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler‑Mini • v11</title>
+
+  <!-- Basis‑Styles -->
+  <link rel="stylesheet" href="./css/styles.css" />
+  <link rel="stylesheet" href="./css/style.css" />
+
   <style>
-    :root{
-      --bg:#0e1b26; --panel:rgba(8,14,20,.78); --panel-bd:rgba(255,255,255,.10);
-      --txt:#e9f1f6; --muted:#b9c6d2; --ok:#1fb06a; --btn:#162737; --btn-h:#1f3346;
-      --shadow:0 10px 40px rgba(0,0,0,.35); --r:14px;
+    /* UI fixiert am Rand – zoomt NICHT mit dem Canvas */
+    .ui-root {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: max(12px, env(safe-area-inset-bottom, 0px) + 12px);
+      z-index: 1000;
+      pointer-events: none; /* Buttons selbst setzen wieder pointer-events:auto */
     }
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-    /* Canvas (nur hier Zoomen/Pan) */
-    #stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;image-rendering:pixelated;background:transparent;}
-    /* Debug (fix) */
-    #debugOverlay{position:fixed;left:16px;top:16px;z-index:11;display:none;min-width:260px;white-space:pre;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(6px);font:13px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;pointer-events:none;user-select:none;}
-    body.debug-on #debugOverlay{display:block;}
-    /* HUD (fix) */
-    #hud{position:fixed;left:max(10px, env(safe-area-inset-left));bottom:max(10px, env(safe-area-inset-bottom));z-index:10;display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--panel-bd);border-radius:var(--r);box-shadow:var(--shadow);padding:12px;max-width:calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));}
-    .grp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    button,select,label{font:inherit;color:var(--txt)}
-    button{background:var(--btn);border:1px solid var(--panel-bd);border-radius:10px;padding:9px 14px;cursor:pointer;touch-action:manipulation}
-    button:hover{background:var(--btn-h)}
-    .ok{background:var(--ok);border-color:rgba(0,0,0,.15);color:#06220f}
-    select{background:#0f2232;border:1px solid var(--panel-bd);border-radius:10px;padding:9px 12px;min-width:220px}
-    label{color:var(--muted);display:flex;align-items:center;gap:8px}
-    #badge{padding:6px 10px;border-radius:999px;background:#102336;border:1px solid var(--panel-bd);font:12px/1 ui-monospace,Menlo,Consolas}
-    #toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:none;background:#122131;border:1px solid #1e2d42;border-radius:10px;color:#cfe3ff;padding:8px 12px;box-shadow:var(--shadow);z-index:9999}
-    @media (max-width:480px){select{min-width:180px}}
+    .ui-card {
+      pointer-events: auto;
+      background: rgba(10,16,24,.8);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      color: #dbe7ff;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      max-width: 100%;
+    }
+    .ui-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .ui-row > * { flex: 0 0 auto; }
+
+    .btn {
+      appearance: none; border:0; border-radius: 12px;
+      background:#153a2a; color:#eafff5; font-weight:600;
+      padding:10px 16px; line-height:1; cursor:pointer;
+    }
+    .btn.secondary { background:#223047; color:#e5efff; }
+    .btn:disabled { opacity:.5; cursor:default; }
+
+    select, label.switch {
+      background:#0d1623; color:#e5efff; border:1px solid #203048;
+      border-radius:12px; padding:10px 12px;
+    }
+    select { min-width: 220px; }
+    .switch input { margin-right:8px; }
+
+    /* Debug‑Badge oben links (togglebar) */
+    .hud {
+      position: fixed; left: 16px; top: max(12px, env(safe-area-inset-top, 0px) + 12px);
+      z-index: 1000; color:#e5efff; font: 600 14px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: rgba(10,16,24,.75); padding:10px 12px; border-radius:12px;
+      border: 1px solid rgba(255,255,255,.07);
+      display: none; white-space: pre;
+    }
+    .hud.on { display:block; }
+
+    /* Canvas/Stage: füllt Viewport, transform: none, damit UI nicht mit-zoomt */
+    html, body { height: 100%; background:#0c1a25; margin:0; }
+    #stageWrap { position:fixed; inset:0; }
+    canvas { display:block; width:100%; height:100%; transform:none !important; }
   </style>
 </head>
 <body>
-  <canvas id="stage"></canvas>
-  <pre id="debugOverlay"></pre>
 
-  <div id="hud" role="toolbar" aria-label="Spielsteuerung">
-    <span id="badge" title="Version / Boost-ID">V? • ?</span>
+  <!-- Zeichenfläche -->
+  <div id="stageWrap">
+    <canvas id="stage" width="1920" height="1080"></canvas>
+  </div>
 
-    <div class="grp">
-      <button id="btnStart" class="ok">Start</button>
-      <button id="btnReload">Neu laden</button>
-    </div>
+  <!-- HUD (Debug) -->
+  <div id="hud" class="hud"></div>
 
-    <div class="grp">
-      <label for="mapSelect">Karte:</label>
-      <select id="mapSelect"></select>
-      <label><input id="autoStart" type="checkbox" /> Auto‑Start</label>
-    </div>
+  <!-- UI unten -->
+  <div class="ui-root">
+    <div class="ui-card">
+      <div class="ui-row">
+        <button id="btnStart" class="btn">Start</button>
+        <button id="btnReload" class="btn secondary">Neu laden</button>
 
-    <div class="grp">
-      <button id="btnDebug"      title="Debug an/aus (F2)">Debug</button>
-      <button id="btnSaveDebug"  title="Debug als TXT speichern">Debug speichern</button>
-      <button id="btnFullscreen" title="Vollbild umschalten">Vollbild</button>
-    </div>
+        <div class="ui-row">
+          <span>Karte:</span>
+          <select id="mapSelect" aria-label="Karte wählen">
+            <!-- wird von game.js befüllt; Fallback: drei Standard‑Maps -->
+            <option value="assets/maps/map-demo.json">map-demo.json</option>
+            <option value="assets/maps/map-pro.json">map-pro.json</option>
+            <option value="assets/maps/map-checker-16x16.json">map-checker (16×16)</option>
+          </select>
+        </div>
 
-    <div class="grp">
-      <button id="btnSpawnCarrier"    title="Träger spawnen (C)">+ Träger</button>
-      <button id="btnSpawnLumberjack" title="Holzfäller spawnen (L)">+ Holzfäller</button>
-      <button id="btnSpawnStone"      title="Steinmetz spawnen (S)">+ Steinmetz</button>
-      <button id="btnPause"           title="Simulation pausieren/fortsetzen (P)">Pause</button>
-      <button id="btnPaths"           title="Wege/Targets anzeigen (H)">Wege</button>
+        <label class="switch">
+          <input id="autoStart" type="checkbox" checked /> Auto‑Start
+        </label>
+
+        <button id="btnDebug" class="btn secondary" title="Debug an/aus">Debug</button>
+        <button id="btnFullscreen" class="btn secondary" title="Vollbild">Vollbild</button>
+      </div>
     </div>
   </div>
 
-  <div id="toast"></div>
+  <!-- Boot/Debug (deine bestehenden Dateien dürfen so bleiben) -->
+  <script>
+    // sichtbare Build‑ID für Logs & Cachebuster
+    window.BUILD_ID = (window.BUILD_ID || "v11.1.0") + "-" + new Date().toISOString().slice(0,10);
+    console.log("[boot] Siedler‑Mini", window.BUILD_ID);
+  </script>
+  <script src="./debug.js"></script>
+  <script src="./fullscreen.js"></script>
 
-  <!-- Skripte (KEINE Module) -->
-  <script src="boot.js"></script>
-  <script src="game.js"></script>
-  <script src="tools/map-runtime.js"></script>
+  <!-- Game (ES‑Modul lädt Characters + Spiel) -->
+  <script type="module" src="./game.js"></script>
 </body>
 </html>
