@@ -178,5 +178,69 @@
   }
 })();
 </script>
+  <script>
+/* ===== Siedler‑Mini Quick‑Diag ===========================================
+ * Zeigt den Status wichtiger Bausteine und versucht 1x Map-Start.
+ * Einfach ans Ende von index.html setzen (nach allen <script>-Tags).
+ * Aufruf in Konsole:  __diag()
+ * =======================================================================*/
+(function(){
+  const S = [];
+  const add = (name, ok, extra='') => S.push({name, ok, extra});
+  const byId = (id)=>document.getElementById(id);
+
+  // 1) DOM/IDs vorhanden?
+  const canvas = byId('stage');
+  add('Canvas #stage', !!canvas, canvas?'OK':'FEHLT');
+
+  const startBtn  = byId('btnStart')  || byId('startBtn')  || byId('start-button');
+  const reloadBtn = byId('btnReload') || byId('reloadBtn');
+  const mapSel    = byId('mapSelect') || byId('selectMap');
+  add('Button Start',  !!startBtn);
+  add('Button Reload', !!reloadBtn);
+  add('Select Map',    !!mapSel, mapSel?mapSel.value:'');
+
+  // 2) Debug/Overlay vorhanden?
+  add('setDebug()', typeof window.setDebug === 'function');
+  add('saveDebugLog()', typeof window.saveDebugLog === 'function');
+
+  // 3) Game-Bridge/Loader vorhanden?
+  add('GameLoader', !!window.GameLoader && typeof GameLoader.start === 'function',
+      window.GameLoader ? 'start() OK' : 'FEHLT');
+  add('GameCamera', !!window.GameCamera);
+
+  // 4) Service Worker: evtl. Cache-Falle?
+  const swControlled = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+  add('ServiceWorker aktiv', swControlled, swControlled?'Ja (prüfe sw.js Version!)':'Nein');
+
+  // 5) Map-URL plausibel?
+  const mapUrl = (mapSel?.value?.trim() || 'assets/maps/map-demo.json');
+  add('Map-URL', true, mapUrl);
+
+  // Ausgabe im Overlay oder Konsole
+  function paint() {
+    const msg = S.map(x => `[${x.ok?'OK':'FAIL'}] ${x.name}${x.extra?(' • '+x.extra):''}`).join('\n');
+    try { window.setDebug?.(msg); } catch(_) {}
+    console[(S.some(x=>!x.ok)?'error':'log')]('[Quick‑Diag]\n'+msg);
+  }
+
+  // 6) Einmal „sanft“ starten, wenn alles da ist
+  async function tryStart() {
+    paint();
+    if (!canvas || !window.GameLoader || !GameLoader.start) return;
+    // Cache‑Bust um SW/HTTP‑Cache zu umgehen
+    const url = mapUrl + (mapUrl.includes('?')?'&':'?') + 'v=' + Date.now();
+    console.log('[Quick‑Diag] versuche Start:', url);
+    try { await GameLoader.start(url); }
+    catch(e){ console.error('[Quick‑Diag] Start‑Fehler:', e); }
+  }
+
+  // öffentlich machen
+  window.__diag = () => { S.length=0; tryStart(); };
+
+  // auto-run beim ersten Load
+  tryStart();
+})();
+</script>
 </body>
 </html>
