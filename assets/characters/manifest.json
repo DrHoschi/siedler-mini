@@ -1,6 +1,4 @@
 {
-  // Jede Figur kann beliebige "states" haben (idle, walk_empty, walk_carry, work, ...).
-  // "atlas" zeigt auf die PNG, "json" auf die Atlas-JSON (gleicher Basename).
   "builder": {
     "idle":      { "atlas": "builder.PNG",          "json": "builder.json" }
   },
