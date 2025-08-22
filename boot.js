@@ -1,9 +1,9 @@
 /* =============================================================================
- * Siedler‑Mini — boot.js v1.6
- * Startfenster sofort ausblenden, Backdrop (Logo) vollflächig + weicher Fade,
- * Menü-Button in Toast, Menü schließbar (✖), Inspector responsiv & maximierbar,
- * HUD Fullscreen-Icon (⛶ / ✖) mit Auto-Umschaltung, Build-Menü Auto-Show,
- * Debug‑Ringpuffer + Export + Copy-to-Clipboard.
+ * Siedler‑Mini — boot.js v1.7
+ * Startfenster sofort ausblenden; Backdrop (Logo) vollflächig + weicher Fade;
+ * Toast-Menübutton; Startmenü schließbar (✖); Inspector responsiv & maximierbar;
+ * HUD Fullscreen-Icon (SVG ⛶ / ✖) mit Auto-Umschaltung; Build-Menü Auto-Show;
+ * Debug‑Ringpuffer + Export + Copy-to-Clipboard; Toolauswahl im Baumenü.
  * =========================================================================== */
 
 const SAVE_KEY       = 'siedler:lastSave';
@@ -42,15 +42,11 @@ function dbgExportTxt(){
   setTimeout(()=> URL.revokeObjectURL(a.href), 800);
 }
 async function dbgCopyClipboard(){
-  try{
-    await navigator.clipboard.writeText(__dbg.join('\n'));
-    dbg('Clipboard: Log kopiert');
-  }catch(e){
-    dbg('Clipboard FAIL', e?.message || e);
-  }
+  try{ await navigator.clipboard.writeText(__dbg.join('\n')); dbg('Clipboard: Log kopiert'); }
+  catch(e){ dbg('Clipboard FAIL', e?.message || e); }
 }
 
-/* ---------- FS ---------- */
+/* ---------- Fullscreen ---------- */
 function canFullscreen(){
   return !!(document.documentElement.requestFullscreen||
             document.documentElement.webkitRequestFullscreen||
@@ -61,8 +57,9 @@ function isFullscreen(){
 }
 function updateFSIcon(){
   const b = $('btnFS'); if (!b) return;
+  const use = b.querySelector('use');
   b.title = isFullscreen() ? 'Vollbild verlassen' : 'Vollbild';
-  b.textContent = isFullscreen() ? '✖' : '⛶';
+  if (use) use.setAttribute('href', isFullscreen() ? '#i-exit' : '#i-full');
 }
 function toggleFullscreen(){
   const de = document.documentElement;
@@ -177,26 +174,18 @@ function paintInspectorBasic(){
 function showStartPanel(){ const p=$('startPanel'); if(p) p.classList.remove('hidden'); }
 function hideStartPanelOnly(){ const p=$('startPanel'); if(p) p.classList.add('hidden'); }
 
-/* Textur‑Ready Heuristik (kannst du an Asset‑Loader koppeln) */
 function areTexturesReady(){
   try{
     if (typeof window.Asset?.areTexturesReady === 'function') return !!window.Asset.areTexturesReady();
     if (typeof window.Asset?.texturesReady === 'boolean')    return !!window.Asset.texturesReady;
-    const W = window.GameLoader?._world;
-    if (typeof W?.texturesReady === 'boolean') return !!W.texturesReady;
+    const W = window.GameLoader?._world; if (typeof W?.texturesReady === 'boolean') return !!W.texturesReady;
   }catch{}
   return false;
 }
 
-/* Fade‑Watcher State */
-let __fadeDone = false;
-let __fadeInt  = null;
-let __fadeTmo  = null;
+let __fadeDone=false, __fadeInt=null, __fadeTmo=null;
 function stopFadeWatcher(){ if(__fadeInt){clearInterval(__fadeInt);__fadeInt=null;} if(__fadeTmo){clearTimeout(__fadeTmo);__fadeTmo=null;} }
-function resetBackdropState(){
-  __fadeDone=false; stopFadeWatcher();
-  const bd=$('startBackdrop'); if(bd){ bd.classList.remove('fade-out','hidden'); bd.style.opacity=''; }
-}
+function resetBackdropState(){ __fadeDone=false; stopFadeWatcher(); const bd=$('startBackdrop'); if(bd){ bd.classList.remove('fade-out','hidden'); bd.style.opacity=''; } }
 function fadeOutBackdropWhenReady({maxWaitMs=TEX_READY_TIMEOUT_MS}={}){
   const bd=$('startBackdrop'); if(!bd) return;
   if(__fadeDone){ dbg('Backdrop already done'); return; }
@@ -226,12 +215,20 @@ function fadeOutBackdropWhenReady({maxWaitMs=TEX_READY_TIMEOUT_MS}={}){
 function showBuildMenu(){ const m=$('buildMenu'); if(m) m.hidden=false; }
 function hideBuildMenu(){ const m=$('buildMenu'); if(m) m.hidden=true; }
 
+// Tool-Auswahl (nur UI-seitig; Log für Debug)
+function selectBuildTool(id){
+  document.querySelectorAll('#buildTools .tool').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tool===id);
+  });
+  dbg('Tool select', id);
+}
+
 /* ---------- Boot ---------- */
 (() => {
   if (window.__BOOT_INIT_DONE__) return; window.__BOOT_INIT_DONE__=true;
 
   window.addEventListener('DOMContentLoaded', () => {
-    showStartPanel();                 // Startpanel sichtbar
+    showStartPanel();
     setBuildBadge(); paintDiag(); updateContinueButton(); dbg('UI ready');
 
     // FS Icon initial + on change
@@ -252,36 +249,32 @@ function hideBuildMenu(){ const m=$('buildMenu'); if(m) m.hidden=true; }
     const bInspMax = $('btnInspectorToggleMax');
     const bCache   = $('btnCacheClear');
 
-    // Neues Spiel
+    // Tool-Buttons (Baumenü)
+    document.querySelectorAll('#buildTools .tool').forEach(btn=>{
+      btn.addEventListener('click', ()=> selectBuildTool(btn.dataset.tool));
+    });
+
     on(bNew,'click',guard(async()=>{
       if(!(await confirmOverwriteIfNeeded())) return;
       const url=$('mapSelect')?.value; if(!url){ alert('Keine Karte ausgewählt.'); return; }
       dbg('NewGame start',url);
-      hideStartPanelOnly();      // sofort weg
-      resetBackdropState();      // Backdrop sichtbar
+      hideStartPanelOnly(); resetBackdropState();
       await window.GameLoader?.start(url);
-      showBuildMenu();           // Baumenü sofort zeigen
-      fadeOutBackdropWhenReady();
-      paintInspectorBasic();
+      showBuildMenu(); fadeOutBackdropWhenReady(); paintInspectorBasic();
     }));
 
-    // Weiterspielen
     on(bCont,'click',guard(async()=>{
       try{
         const raw=localStorage.getItem(SAVE_KEY); if(!raw){ updateContinueButton(); return; }
         const snap=JSON.parse(raw);
         dbg('Continue start');
-        hideStartPanelOnly();
-        resetBackdropState();
+        hideStartPanelOnly(); resetBackdropState();
         await window.GameLoader?.continueFrom(snap);
-        showBuildMenu();
-        fadeOutBackdropWhenReady();
-      }catch(err){
-        dbg('Continue FAIL',err?.message||err); try{localStorage.removeItem(SAVE_KEY);}catch{}
-      }finally{ updateContinueButton(); paintInspectorBasic(); }
+        showBuildMenu(); fadeOutBackdropWhenReady();
+      }catch(err){ dbg('Continue FAIL',err?.message||err); try{localStorage.removeItem(SAVE_KEY);}catch{} }
+      finally{ updateContinueButton(); paintInspectorBasic(); }
     }));
 
-    // Reset
     on(bReset,'click',guard(async()=>{
       if(!(await confirmResetAll())) return;
       try{ localStorage.removeItem(SAVE_KEY); localStorage.removeItem(SAVE_META_KEY); dbg('Reset OK'); }
