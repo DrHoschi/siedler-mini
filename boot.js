@@ -1,256 +1,151 @@
-/* boot.js  —  Siedler‑Mini  (dockbares UI, Debug‑Overlay, Map‑Loader)
-   ──────────────────────────────────────────────────────────────────
-   Features:
-   • Fixes UI-Panel unten‑links (zoomt NICHT mit)
-   • Debug-Overlay oben‑links (togglebar)
-   • Query‑Params:  ?map=…  und  ?autostart=1|0
-   • Autostart Toggle
-   • Sauberes Logging (boot:, ui:, map:, diag:)
-   • Canvas‑Resize mit DPR
-   • Nur Canvas fängt Wheel/Pinch ab (kein Browser‑Zoom)
-   • Map‑Laden via CustomEvent + Fallback auf window.Game.loadMap/start
-*/
+// Siedler‑Mini V15.0.0 (UMD) — BOOT/GLUE
+// - Kein ES-Import; verdrahtet DOM ↔ window.GameLoader / UI-Events
+// - Vollbild, Debug-Toggle, Toasts, Versions-/Cachebusting
 
 (() => {
-  'use strict';
+  const VERSION = '15.0.0';
+  const BUST = (() => {
+    // kurze Build-ID für Cachebusting (YYYYMMDD-HHMM)
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  })();
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Kurz-Helfer
-  const $ = (sel) => document.querySelector(sel);
-  const on = (el, ev, fn, opt) => el && el.addEventListener(ev, fn, opt);
+  const $ = sel => document.querySelector(sel);
 
-  // Log mit Kanal
-  const log = {
-    boot:  (...a) => console.log('%c[boot]',  'color:#9fd;font-weight:600', ...a),
-    ui:    (...a) => console.log('%c[ui]  ',  'color:#adf', ...a),
-    map:   (...a) => console.log('%c[map] ',  'color:#cfa', ...a),
-    diag:  (...a) => console.log('%c[diag]',  'color:#bbb', ...a),
-    warn:  (...a) => console.warn('%c[warn]', 'color:#fb6', ...a),
-    err:   (...a) => console.error('%c[ERR]', 'color:#f88', ...a),
-  };
+  // DOM-Refs (IDs aus index.html)
+  const btnStart = $('#btnStart');
+  const btnReload = $('#btnReload');
+  const btnDebug = $('#btnDebug');          // Debug-Overlay an/aus
+  const btnSaveDebug = $('#btnSaveDebug');  // Debug-Log speichern
+  const btnFullscreen = $('#btnFullscreen');
+  const mapSelect = $('#mapSelect');
+  const autoStart = $('#autoStart');
+  const debugOverlay = $('#debugOverlay');
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // DOM-Refs
-  const canvas       = $('#stage');
-  const uiPanel      = $('#ui');
-  const btnStart     = $('#btnStart');
-  const btnReload    = $('#btnReload');
-  const selMap       = $('#selMap');
-  const chkAutostart = $('#chkAutostart');
-  const btnDebug     = $('#btnDebug');
-  const dbgBox       = $('#debug-overlay');
-
-  if (!canvas) { log.err('Canvas #stage nicht gefunden.'); return; }
-
-  // Public Debug-API für game.js
-  window.setDebug = function setDebug(text) {
-    if (dbgBox) dbgBox.textContent = text || '';
-  };
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Maps registrieren (passe hier an, wenn du neue Dateien hinzufügst)
-  const MAPS = [
-    { label: 'map-demo.json',          url: 'assets/maps/map-demo.json' },
-    { label: 'map-pro.json',           url: 'assets/maps/map-pro.json' },
-    { label: 'map-checker (16×16)',    url: 'assets/maps/map-checker-16x16.json' },
-  ];
-
-  // Dropdown befüllen, falls leer
-  if (selMap && selMap.options.length === 0) {
-    MAPS.forEach(m => {
-      const o = document.createElement('option');
-      o.value = m.url;
-      o.textContent = m.label;
-      selMap.appendChild(o);
-    });
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Query-Params
-  const urlParams = new URLSearchParams(location.search);
-  const qpMap      = urlParams.get('map');              // relative URL zur Map
-  const qpAutostart= urlParams.get('autostart');        // "1" | "0"
-  const qpBust     = Date.now().toString();             // einfacher Bust
-
-  if (qpMap && selMap) {
-    // Versuch, die selektierte Option auf Query-Map zu setzen (oder adhoc hinzufügen)
-    const exists = [...selMap.options].some(o => o.value === qpMap);
-    if (!exists) {
-      const o = document.createElement('option');
-      o.value = qpMap;
-      o.textContent = qpMap.split('/').pop();
-      selMap.appendChild(o);
+  // --- kleine Helpers ---
+  function toast(msg) {
+    let t = document.getElementById('toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.style.position = 'fixed';
+      t.style.left = '50%';
+      t.style.bottom = '14px';
+      t.style.transform = 'translateX(-50%)';
+      t.style.background = '#122131';
+      t.style.border = '1px solid #1e2d42';
+      t.style.borderRadius = '10px';
+      t.style.color = '#cfe3ff';
+      t.style.padding = '8px 12px';
+      t.style.boxShadow = '0 10px 40px rgba(0,0,0,.35)';
+      t.style.display = 'none';
+      t.style.zIndex = '9999';
+      document.body.appendChild(t);
     }
-    selMap.value = qpMap;
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => (t.style.display = 'none'), 4200);
   }
 
-  if (chkAutostart && qpAutostart !== null) {
-    chkAutostart.checked = qpAutostart === '1';
-  }
+  // Globale JS‑Fehler -> Toast
+  window.addEventListener('error', e => toast('JS-Fehler: ' + (e.message || e.error || e)));
+  window.addEventListener('unhandledrejection', e => toast('Promise-Fehler: ' + (e.reason?.message || e.reason)));
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Canvas‑Resize mit DPR
-  const state = {
-    dpr: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
-    width: 0,
-    height: 0,
-    running: false,
-    debugVisible: true,
-  };
-
-  function resizeCanvas() {
-    const r = canvas.getBoundingClientRect();
-    state.dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-    const w = Math.floor(r.width  * state.dpr);
-    const h = Math.floor(r.height * state.dpr);
-    if (w !== state.width || h !== state.height) {
-      state.width = w; state.height = h;
-      canvas.width  = w;
-      canvas.height = h;
-      // CSS Größe bleibt visuell: vollflächig (per CSS)
-      dispatch('app:resize', { width: w, height: h, dpr: state.dpr });
-      log.boot(`Canvas resized → ${w}×${h} (DPR=${state.dpr})`);
+  // --- Debug Overlay toggle ---
+  function setDebugVisible(on) {
+    document.body.classList.toggle('debug-on', !!on);
+    localStorage.setItem('sm:debugOn', on ? '1' : '0');
+    if (typeof window.setDebug === 'function') {
+      window.setDebug(on ? `[Boot ${VERSION}] Debug aktiv …` : '');
+    } else if (debugOverlay) {
+      debugOverlay.style.display = on ? 'block' : 'none';
+      debugOverlay.textContent = on ? `[Boot ${VERSION}] Debug aktiv …` : '';
     }
   }
-
-  // Fullscreen‑Canvas (füllt Viewport)
-  function fitCanvasToViewport() {
-    canvas.style.position = 'absolute';
-    canvas.style.inset = '0';
+  function getDebugVisible() {
+    return localStorage.getItem('sm:debugOn') === '1';
   }
 
-  fitCanvasToViewport();
-  resizeCanvas();
-  on(window, 'resize',  resizeCanvas);
-  on(window, 'orientationchange',  () => setTimeout(resizeCanvas, 50));
+  // --- Vollbild ---
+  function isFS() { return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement; }
+  function enterFS(el) {
+    (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen || el.mozRequestFullScreen).call(el);
+  }
+  function exitFS() {
+    (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen || document.mozCancelFullScreen).call(document);
+  }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Gesten: Nur Canvas, kein Browser‑Zoom/Scroll
-  ['gesturestart','gesturechange','gestureend'].forEach(ev =>
-    document.addEventListener(ev, e => e.preventDefault(), { passive:false })
-  );
+  // --- Events an game.js (UI-Brücke, ohne Import) ---
+  function startSelectedMap() {
+    const url = mapSelect?.value;
+    if (!url) return;
+    // a) öffentliche API, falls vorhanden
+    if (window.GameLoader && typeof window.GameLoader.start === 'function') {
+      window.GameLoader.start(url);
+    }
+    // b) zusätzlich Event, falls jemand darauf hört
+    window.dispatchEvent(new CustomEvent('ui:start', { detail: { map: url }}));
+  }
 
-  // Wheel unterbinden (Seite scrollt nicht)
-  on(canvas, 'wheel', (e) => {
-    e.preventDefault();
-    // Reiche ans Spiel weiter
-    dispatch('app:wheel', { deltaY: e.deltaY, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey });
-  }, { passive:false });
+  // --- Buttons verdrahten ---
+  btnStart?.addEventListener('click', startSelectedMap);
 
-  // Touch‑Gesten weiterreichen (Panning/Pinch handled by game.js)
-  on(canvas, 'touchstart', (e) => { e.preventDefault(); dispatch('app:touchstart', e); }, { passive:false });
-  on(canvas, 'touchmove',  (e) => { e.preventDefault(); dispatch('app:touchmove',  e); }, { passive:false });
-  on(canvas, 'touchend',   (e) => { e.preventDefault(); dispatch('app:touchend',   e); }, { passive:false });
-
-  // Maus‑Panning weiterreichen
-  on(canvas, 'mousedown', (e) => dispatch('app:mousedown', e));
-  on(window, 'mousemove', (e) => dispatch('app:mousemove', e));
-  on(window, 'mouseup',   (e) => dispatch('app:mouseup',   e));
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // UI‑Events
-  on(btnReload, 'click', () => {
-    // Bust‑Param neu setzen, damit GitHub‑Cache sicher umgangen wird
+  btnReload?.addEventListener('click', () => {
+    // Seite hart neu laden mit Versionsbust
     const u = new URL(location.href);
-    u.searchParams.set('bust', qpBust);
+    u.searchParams.set('v', `${VERSION}-${BUST}`);
     location.replace(u.toString());
   });
 
-  on(btnStart, 'click', () => {
-    const url = selMap?.value || 'assets/maps/map-demo.json';
-    startGame(url);
+  btnDebug?.addEventListener('click', () => setDebugVisible(!getDebugVisible()));
+
+  // F2 auch als Toggle
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'F2') setDebugVisible(!getDebugVisible());
   });
 
-  on(selMap, 'change', () => {
-    if (state.running) {
-      startGame(selMap.value);
+  btnSaveDebug?.addEventListener('click', () => {
+    if (window.SM_DEBUG?.saveLog) window.SM_DEBUG.saveLog();
+    else {
+      // Fallback: Overlay-Inhalt speichern
+      const txt = debugOverlay?.textContent || '[kein Debug verfügbar]';
+      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.download = `siedler-mini-debug-${Date.now()}.txt`;
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
     }
   });
 
-  on(chkAutostart, 'change', () => {
-    localStorage.setItem('autostart', chkAutostart.checked ? '1' : '0');
+  btnFullscreen?.addEventListener('click', () => {
+    if (isFS()) exitFS(); else enterFS(document.documentElement);
   });
 
-  on(btnDebug, 'click', () => {
-    state.debugVisible = !state.debugVisible;
-    if (dbgBox) dbgBox.style.display = state.debugVisible ? 'block' : 'none';
-    dispatch('app:debug-toggle', { visible: state.debugVisible });
-  });
+  // Map-Auswahl & Autostart merken
+  mapSelect?.addEventListener('change', () => localStorage.setItem('sm:lastMap', mapSelect.value));
+  autoStart?.addEventListener('change', () => localStorage.setItem('sm:autoStart', autoStart.checked ? '1' : '0'));
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Start/Map‑Load
-  function startGame(mapUrl) {
-    const bustUrl = addBust(mapUrl);
-    state.running = true;
-    log.ui('Start gedrückt →', bustUrl);
-
-    // an Spiel weiterreichen:
-    // 1) CustomEvent (sauber entkoppelt)
-    dispatch('app:start', { mapUrl: bustUrl });
-
-    // 2) Fallbacks, falls game.js direkt API erwartet
-    if (window.Game && typeof window.Game.loadMap === 'function') {
-      window.Game.loadMap(bustUrl);
+  // Startwerte aus LocalStorage
+  (function restore() {
+    const last = localStorage.getItem('sm:lastMap');
+    if (last && mapSelect) {
+      const has = [...mapSelect.options].some(o => o.value === last);
+      if (has) mapSelect.value = last;
     }
-    if (window.Game && typeof window.Game.start === 'function') {
-      window.Game.start();
+    setDebugVisible(getDebugVisible());
+    if (autoStart?.checked || localStorage.getItem('sm:autoStart') === '1') {
+      if (autoStart) autoStart.checked = true;
+      // kleiner Delay, damit game.js schon hängt
+      setTimeout(startSelectedMap, 80);
     }
-  }
-
-  function addBust(url) {
-    try {
-      const u = new URL(url, location.href);
-      u.searchParams.set('v', Date.now().toString());
-      return u.pathname + u.search;
-    } catch {
-      // relative Pfade (z.B. assets/maps/x.json)
-      const sep = url.includes('?') ? '&' : '?';
-      return `${url}${sep}v=${Date.now()}`;
-    }
-  }
-
-  function dispatch(name, detail) {
-    document.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Autostart-Logik
-  const lsAutostart = localStorage.getItem('autostart');
-  if (chkAutostart && lsAutostart !== null) {
-    chkAutostart.checked = lsAutostart === '1';
-  }
-
-  // Beim ersten Load: Default Map selektieren (falls nichts gesetzt)
-  if (selMap && !selMap.value) {
-    selMap.value = MAPS[0]?.url ?? 'assets/maps/map-demo.json';
-  }
-
-  // Query‑Autostart oder Checkbox
-  const shouldAutostart =
-    (chkAutostart && chkAutostart.checked) ||
-    qpAutostart === '1';
-
-  if (shouldAutostart) {
-    setTimeout(() => {
-      const url = selMap?.value || 'assets/maps/map-demo.json';
-      log.boot('Autostart…', url);
-      startGame(url);
-    }, 50);
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // Initiale Diagnostics
-  (function bootDiag() {
-    const info = {
-      page: location.href,
-      dpr: state.dpr,
-      safeArea: {
-        top: getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)'),
-        bottom: getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)'),
-      }
-    };
-    log.boot('Init OK');
-    log.diag(info);
   })();
 
+  // Versions‑Banner ins Debug
+  if (typeof window.setDebug === 'function') {
+    window.setDebug(`[Boot ${VERSION}] bereit (${BUST})`);
+  }
 })();
