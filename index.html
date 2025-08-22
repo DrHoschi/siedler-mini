@@ -1,258 +1,44 @@
-<!-- === Asset-Scanner & Diagnose-Overlay ================================= -->
-<script>
-(function(){
-  const STYLE = `
-  #dbgOverlay{position:fixed;inset:auto 8px 8px auto;min-width:280px;max-width:92vw;
-    background:#0f1d31;color:#cfe3ff;border:1px solid #1e2d42;border-radius:10px;
-    box-shadow:0 12px 40px rgba(0,0,0,.35);font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto;
-    z-index:999999;display:none}
-  #dbgOverlay header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #1e2d42}
-  #dbgOverlay header strong{font-size:15px}
-  #dbgOverlay .body{max-height:50vh;overflow:auto;padding:8px 10px}
-  #dbgOverlay .row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px dotted #20324a}
-  #dbgOverlay .ok{color:#77e29f} .fail{color:#ff8890}
-  #dbgOverlay .muted{opacity:.8}
-  #dbgBtns{position:fixed;right:8px;top:64px;display:flex;gap:8px;z-index:999999}
-  #dbgBtns button{background:#0f1b29;border:1px solid #1b2a40;color:#cfe3ff;border-radius:10px;padding:6px 10px;font:14px}
-  `;
-  const CSS = document.createElement('style'); CSS.textContent = STYLE; document.head.appendChild(CSS);
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Siedler-Mini v11.1r6</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Startfenster -->
+  <div id="startScreen">
+    <h1>Siedler-Mini</h1>
+    <button id="startBtn">Start</button>
+    <button id="saveDebugBtn">Debug-Log speichern</button>
+  </div>
 
-  // Floating Buttons (Assets-Scan + Info)
-  const btns = document.createElement('div');
-  btns.id = 'dbgBtns';
-  btns.innerHTML = `
-    <button id="btnScan">Assets-Scan</button>
-    <button id="btnInfo">Info</button>
-  `;
-  document.body.appendChild(btns);
+  <!-- Spielfläche -->
+  <canvas id="stage"></canvas>
 
-  // Overlay
-  const box = document.createElement('div');
-  box.id = 'dbgOverlay';
-  box.innerHTML = `
-    <header>
-      <strong>Diagnose</strong>
-      <span class="muted" id="dbgSummary"></span>
-      <div style="margin-left:auto;display:flex;gap:6px">
-        <button id="dbgClose" style="background:#3a1b1b;border:1px solid #6a2d2d;color:#ffd2d2;border-radius:8px;padding:4px 8px">schließen</button>
-      </div>
-    </header>
-    <div class="body" id="dbgBody"></div>
-  `;
-  document.body.appendChild(box);
+  <!-- Scripts: Kernlogik -->
+  <script src="boot.js"></script>
+  <script src="app-v11.1r6.js"></script>
+  <script src="game.js"></script>
+  <script src="main.js"></script>
 
-  function openOverlay(){ box.style.display='block'; }
-  function closeOverlay(){ box.style.display='none'; }
-  document.getElementById('dbgClose').onclick = closeOverlay;
+  <!-- Module -->
+  <script src="buildingData.js"></script>
+  <script src="debug.js"></script>
+  <script src="fullscreen.js"></script>
+  <script src="input.js"></script>
+  <script src="render.js"></script>
+  <script src="storage.js"></script>
+  <script src="textures.js"></script>
+  <script src="unitLogic.js"></script>
+  <script src="world.js"></script>
 
-  // Helpers
-  function row(label, ok, extra=''){
-    const div = document.createElement('div');
-    div.className = 'row';
-    div.innerHTML = `<span>${label}</span><span class="${ok?'ok':'fail'}">${ok?'OK':'FEHLT'}${extra?` <span class="muted">${extra}</span>`:''}</span>`;
-    return div;
-  }
+  <!-- Debug Tools (Overlay + Saver) -->
+  <!-- Hier kommt der zuletzt angepasste Block aus unserer letzten Version -->
+  <script src="debug-tools.js"></script> <!-- optional ausgelagert -->
 
-  function ext(url){
-    const m = /\.([a-z0-9]+)(?:\?|$)/i.exec(url);
-    return m ? m[1].toLowerCase() : '';
-  }
-
-  function testImage(url){
-    return new Promise(resolve=>{
-      const img = new Image();
-      img.onload = ()=> resolve({url, ok:true, w:img.naturalWidth, h:img.naturalHeight, type:'img'});
-      img.onerror = ()=> resolve({url, ok:false, type:'img'});
-      img.src = url + (url.includes('?')?'&':'?') + 'cb=' + Date.now();
-    });
-  }
-
-  async function testJSON(url){
-    try{
-      const r = await fetch(url + (url.includes('?')?'&':'?') + 'cb=' + Date.now(), {cache:'no-store'});
-      if (!r.ok) return {url, ok:false, type:'json'};
-      await r.json(); // parse check
-      return {url, ok:true, type:'json'};
-    } catch {
-      return {url, ok:false, type:'json'};
-    }
-  }
-
-  // Standardliste
-  const DEFAULT_LIST = [
-    // Boden (topdown_*)
-    'assets/tex/topdown_grass.png',
-    'assets/tex/topdown_dirt.png',
-    'assets/tex/topdown_forest.png',
-    'assets/tex/topdown_water.png',
-    // Straßen (autotiles)
-    'assets/tex/topdown_road_straight.png',
-    'assets/tex/topdown_road_corner.png',
-    'assets/tex/topdown_road_t.png',
-    'assets/tex/topdown_road_cross.png',
-    // Gebäude (topdown)
-    'assets/tex/topdown_hq.png',
-    'assets/tex/topdown_depot.png',
-    'assets/tex/topdown_woodcutter.png',
-    // Neue path-Texturen (PNG/JPEG)
-    'assets/tex/terrain/path0.png',
-    'assets/tex/terrain/path1.png',
-    'assets/tex/terrain/path2.png',
-    'assets/tex/terrain/path3.png',
-    'assets/tex/terrain/path4.png',
-    'assets/tex/terrain/path5.png',
-    'assets/tex/terrain/path6.png',
-    'assets/tex/terrain/path0.jpeg',
-    'assets/tex/terrain/path1.jpeg',
-    'assets/tex/terrain/path2.jpeg',
-    'assets/tex/terrain/path3.jpeg',
-    'assets/tex/terrain/path4.jpeg',
-    'assets/tex/terrain/path5.jpeg',
-    'assets/tex/terrain/path6.jpeg',
-    // Platzhalter + Beispiel-Atlas
-    'assets/tex/placeholder64.png',
-    'assets/carrier.png',
-    'assets/carrier.json'
-  ];
-
-  async function scanAssets(list){
-    const body = document.getElementById('dbgBody');
-    body.innerHTML = '';
-
-    const tasks = list.map(u => {
-      const e = ext(u);
-      return (e==='png'||e==='jpg'||e==='jpeg'||e==='webp') ? testImage(u) : testJSON(u);
-    });
-
-    const results = await Promise.all(tasks);
-    let ok=0, fail=0;
-    results.forEach(r=>{
-      if (r.ok){ ok++; body.appendChild(row(r.url, true, r.type==='img' ? `${r.w||'?'}×${r.h||'?'}` : 'JSON')); }
-      else { fail++; body.appendChild(row(r.url, false, r.type==='img' ? 'IMG' : 'JSON')); }
-    });
-    document.getElementById('dbgSummary').textContent = ` Assets: ${ok} ok / ${fail} fehlen`;
-    openOverlay();
-    console.log('[Assets-Scan]', results);
-  }
-
-  function infoPanel(){
-    const body = document.getElementById('dbgBody');
-    body.innerHTML = '';
-    const lines = [];
-    try{
-      const s = window.__GAME_STATE__ || (window.game && (window.game.state||{camX:window.game.camera?.x, camY:window.game.camera?.y, zoom:window.game.camera?.zoom, canvas:document.getElementById('stage')}));
-      if (s){
-        lines.push(['Zoom', (s.zoom||1).toFixed ? (s.zoom).toFixed(2)+'x' : String(s.zoom)]);
-        lines.push(['Cam', `${Math.round(s.camX||0)}, ${Math.round(s.camY||0)}`]);
-        lines.push(['DPR', String(window.devicePixelRatio||1)]);
-        const c = s.canvas || document.querySelector('canvas');
-        if (c) lines.push(['Canvas', `${c.width}×${c.height}`]);
-        lines.push(['Objekte', `roads:${s.roads?.length||0} blds:${s.buildings?.length||0}`]);
-      }
-    }catch(e){}
-    if (!lines.length){ lines.push(['Hinweis', 'Kein Spiel-State gefunden.']); }
-    lines.forEach(([k,v])=>{
-      const div = document.createElement('div');
-      div.className = 'row';
-      div.innerHTML = `<span>${k}</span><span class="muted">${v}</span>`;
-      body.appendChild(div);
-    });
-    document.getElementById('dbgSummary').textContent = ' Systeminfo';
-    openOverlay();
-  }
-
-  // Wiring
-  document.getElementById('btnScan').onclick = ()=> scanAssets((window.ASSET_CHECK_LIST && window.ASSET_CHECK_LIST.length)? window.ASSET_CHECK_LIST : DEFAULT_LIST);
-  document.getElementById('btnInfo').onclick = infoPanel;
-
-  // Expose für Konsole
-  window.__runAssetScan = ()=> scanAssets((window.ASSET_CHECK_LIST && window.ASSET_CHECK_LIST.length)? window.ASSET_CHECK_LIST : DEFAULT_LIST);
-  window.__dbgInfo = infoPanel;
-})();
-</script>
-
-<!-- === Debug Saver: Log -> .txt ========================================== -->
-<script>
-(() => {
-  if (window.__DEBUG_SAVER_READY__) return;
-  window.__DEBUG_SAVER_READY__ = true;
-
-  const MAX_LINES = 50000;
-  const lines = [];
-  const startedAt = new Date();
-  const ts = () => new Date().toISOString();
-
-  const toStr = (v) => {
-    if (v instanceof Error) return `${v.name}: ${v.message}\n${v.stack || ''}`;
-    try { if (typeof v === 'object' && v !== null) return JSON.stringify(v, null, 2); }
-    catch(_) {}
-    return String(v);
-  };
-
-  const pushLine = (level, args) => {
-    const msg = args.map(toStr).join(' ');
-    lines.push(`[${ts()}] ${level.toUpperCase()}: ${msg}`);
-    if (lines.length > MAX_LINES) lines.shift();
-    const el = document.getElementById('debugOutput');
-    if (el) el.textContent = lines.slice(-500).join('\n');
-  };
-
-  function logDebug(...args){ pushLine('debug', args); }
-  function debugGetLog(){ return lines.join('\n'); }
-  function debugClearLog(){ lines.length = 0; }
-
-  window.addEventListener('error', (e) => {
-    pushLine('error', [e.message, '@', e.filename, ':', e.lineno, e.colno]);
-    if (e.error && e.error.stack) pushLine('error', [e.error.stack]);
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    pushLine('error', ['UnhandledRejection:', toStr(e.reason)]);
-  });
-
-  if (!window.__CONSOLE_ORIG__) {
-    window.__CONSOLE_ORIG__ = { log:console.log, warn:console.warn, error:console.error, info:console.info };
-    console.log  = (...a)=>{ pushLine('log',  a); window.__CONSOLE_ORIG__.log.apply(console, a);  };
-    console.warn = (...a)=>{ pushLine('warn', a); window.__CONSOLE_ORIG__.warn.apply(console, a); };
-    console.error= (...a)=>{ pushLine('error',a); window.__CONSOLE_ORIG__.error.apply(console, a);};
-    console.info = (...a)=>{ pushLine('info', a); window.__CONSOLE_ORIG__.info.apply(console, a); };
-  }
-
-  function saveDebugLog(filename){
-    const header = [
-      '=== Siedler‑Mini Debug Log ===',
-      `Started:   ${startedAt.toISOString()}`,
-      `Captured:  ${new Date().toISOString()}`,
-      `URL:       ${location.href}`,
-      `UA:        ${navigator.userAgent}`,
-      `Platform:  ${navigator.platform}`,
-      ''
-    ].join('\n');
-
-    const blob = new Blob([header, debugGetLog(), '\n'], { type: 'text/plain;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    const stamp= new Date().toISOString().replace(/[:.]/g,'-');
-    a.href = url;
-    a.download = filename || `siedler-mini-debug-${stamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  window.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('saveDebugBtn');
-    if (btn && !btn.__wired__) {
-      btn.__wired__ = true;
-      btn.addEventListener('click', () => saveDebugLog());
-    }
-  });
-
-  window.logDebug      = window.logDebug      || logDebug;
-  window.saveDebugLog  = window.saveDebugLog  || saveDebugLog;
-  window.debugGetLog   = window.debugGetLog   || debugGetLog;
-  window.debugClearLog = window.debugClearLog || debugClearLog;
-
-  logDebug('Debug Saver initialisiert.');
-})();
-</script>
+</body>
+</html>
