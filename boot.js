@@ -1,124 +1,213 @@
-// Siedler‑Mini V15.1.0 — BOOT/GLUE (UMD, kein ES-Import)
-(() => {
-  const VERSION = '15.1.0';
-  const BUST = (() => {
-    const d = new Date(), p = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-  })();
+/**
+ * Siedler‑Mini — boot.js
+ * -----------------------------------------------------------------------------
+ * Rolle: Startpunkt der App. Setup von Canvas, Rendering-Prefs, globaler Init,
+ *        Laden der Items‑Master‑Sprite + Atlas, Start des Game‑Loops.
+ * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+ * Hinweise:
+ *  - Debug‑Tools bleiben unangetastet (hier nur optionaler Sanity‑Check via F2).
+ *  - Startfenster/UX bleibt bei euch; hier nur Basiskleber zum Rendern.
+ *  - Pixel‑Art-Rendering standardmäßig "crisp" (Nearest‑Neighbor).
+ * -----------------------------------------------------------------------------
+ */
 
-  const $ = s => document.querySelector(s);
+/* ===================== Imports ===================== */
+import Assets, { initItems, getItemsAtlas, drawItem } from './core/asset.js';
 
-  const els = {
-    stage: $('#stage'), dbg: $('#debugOverlay'), badge: $('#badge'),
-    btnStart: $('#btnStart'), btnReload: $('#btnReload'),
-    btnDebug: $('#btnDebug'), btnSave: $('#btnSaveDebug'), btnFS: $('#btnFullscreen'),
-    map: $('#mapSelect'), auto: $('#autoStart'),
-    spawnC: $('#btnSpawnCarrier'), spawnL: $('#btnSpawnLumberjack'), spawnS: $('#btnSpawnStone'),
-    btnPause: $('#btnPause'), btnPaths: $('#btnPaths'),
-    toast: $('#toast')
+/* ===================== Konstanten ===================== */
+const CANVAS_ID = 'game';
+const ENABLE_PIXEL_ART = true;      // true = crisp (nearest); false = smooth
+const INITIAL_BG = '#0b1628';       // euer Farbschema (aus index.html)
+const DPR_FALLBACK = 1;             // falls devicePixelRatio nicht verfügbar
+const SHOW_BOOT_LOG = true;         // Konsolen-Logs für Boot-Sequenz
+const DEBUG_HOTKEY = 'F2';          // F2: Sanity-Overlay toggeln
+
+/* ===================== Hilfsfunktionen ===================== */
+
+/** Hole Canvas + 2D-Kontext, setze Rendering-Qualität und DPI-Scaling. */
+function prepareCanvas() {
+  const canvas = document.getElementById(CANVAS_ID);
+  if (!canvas) throw new Error(`[boot] Canvas #${CANVAS_ID} nicht gefunden.`);
+
+  // Rendering-Qualität setzen
+  const { ctx } = ENABLE_PIXEL_ART
+    ? Assets.imageRenderingCrisp(canvas)
+    : Assets.imageRenderingSmooth(canvas);
+
+  // Hintergrundfarbe (nur kosmetisch, falls CSS fehlt)
+  try { canvas.style.background = INITIAL_BG; } catch {}
+
+  // HiDPI-Setup
+  const dpr = Assets.setupHiDPICanvas(canvas, { dpr: Math.max(DPR_FALLBACK, self.devicePixelRatio || 1) });
+
+  return { canvas, ctx, dpr };
+}
+
+/** Resize-Handler (HiDPI bleibt korrekt). */
+function attachResize(canvas) {
+  let rafId = 0;
+  const onResize = () => {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(() => {
+      Assets.setupHiDPICanvas(canvas);
+    });
   };
+  addEventListener('resize', onResize);
+  addEventListener('orientationchange', onResize);
+  return () => {
+    removeEventListener('resize', onResize);
+    removeEventListener('orientationchange', onResize);
+  };
+}
 
-  // Kartenliste hier verwalten
-  const MAPS = [
-    { label: 'map-demo.json',       url: 'assets/maps/map-demo.json' },
-    { label: 'map-pro.json',        url: 'assets/maps/map-pro.json' },
-    { label: 'map-checker-16x16',   url: 'assets/maps/map-checker-16x16.json' }
-  ];
+/** Clear mit optionaler Hintergrundfarbe. */
+function clear(ctx, color = null) {
+  const { canvas } = ctx;
+  if (color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
 
-  // Badge
-  function updateBadge(){
-    if (els.badge) els.badge.textContent = `V${VERSION} • ${BUST}`;
-    if (typeof window.setDebug === 'function') {
-      window.setDebug(`[Boot ${VERSION}] bereit (${BUST})`);
-    } else if (els.dbg) {
-      els.dbg.style.display = 'block';
-      els.dbg.textContent = `[Boot ${VERSION}] bereit (${BUST})`;
+/* ===================== Klassen ===================== */
+
+/**
+ * Kleine Debug‑Overlay‑Klasse: Zeichnet ein paar Items aus dem Atlas,
+ * wenn per Hotkey aktiviert (F2). Ersetzt NICHT eure Debug‑Leiste.
+ */
+class ItemsSanityOverlay {
+  constructor() {
+    this.enabled = false;
+    this.lastToggleTs = 0;
+    this.keysToShow = [
+      'log', 'stone', 'crate', 'sack', 'barrel', 'rope',
+      'bread', 'cheese', 'fish', 'meat', 'grain', 'food',
+      'bucket', 'sword', 'bow', 'arrows', 'shield', 'coins', 'gems'
+    ];
+  }
+  toggle() {
+    const now = performance.now();
+    if (now - this.lastToggleTs < 150) return; // simple debounce
+    this.enabled = !this.enabled;
+    this.lastToggleTs = now;
+    console.debug(`[ItemsSanityOverlay] ${this.enabled ? 'ON' : 'OFF'}`);
+  }
+  draw(ctx) {
+    if (!this.enabled) return;
+    let x = 24, y = 24, col = 0;
+    const step = 72; // 128px * 0.5 ~ 64px + 8px padding
+    for (const key of this.keysToShow) {
+      try {
+        drawItem(ctx, key, x, y, { scale: 0.5, pixelSnap: true });
+      } catch (e) {
+        // Falls ein Key (noch) nicht im Atlas existiert, ignorieren.
+      }
+      x += step; col++;
+      if (col >= 10) { col = 0; x = 24; y += step; }
     }
   }
+}
 
-  // Toast
-  function toast(msg){
-    if (!els.toast) return;
-    els.toast.textContent = msg;
-    els.toast.style.display = 'block';
-    clearTimeout(toast._t);
-    toast._t = setTimeout(()=> els.toast.style.display='none', 4200);
-  }
-  window.addEventListener('error', e => toast('JS‑Fehler: ' + (e.message || e.error || e)));
-  window.addEventListener('unhandledrejection', e => toast('Promise‑Fehler: ' + (e.reason?.message || e.reason)));
+/* ===================== Hauptlogik ===================== */
 
-  // Debug an/aus
-  function setDebugVisible(on){
-    document.body.classList.toggle('debug-on', !!on);
-    localStorage.setItem('sm:debugOn', on ? '1' : '0');
-    if (typeof window.setDebug === 'function') window.setDebug(on ? `[Boot ${VERSION}] Debug aktiv …` : '');
-  }
-  function getDebugVisible(){ return localStorage.getItem('sm:debugOn') === '1'; }
+const Boot = {
+  /** Globaler Zustand des Bootstraps. */
+  state: {
+    canvas: null,
+    ctx: null,
+    dpr: 1,
+    running: false,
+    disposer: null,
+    overlay: new ItemsSanityOverlay(),
+    t0: 0,
+    tLast: 0
+  },
 
-  // Vollbild
-  const isFS = ()=> document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
-  const enterFS = el => (el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen||el.mozRequestFullScreen).call(el);
-  const exitFS  = ()=> (document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen||document.mozCancelFullScreen).call(document);
+  /** Initialisiert Canvas, lädt Items‑Atlas, startet Loop. */
+  async start() {
+    if (SHOW_BOOT_LOG) console.debug('[BOOT] start');
 
-  // Map Select
-  function fillMaps(){
-    if (!els.map) return;
-    els.map.innerHTML = '';
-    for (const m of MAPS){
-      const o = document.createElement('option'); o.value = m.url; o.textContent = m.label; els.map.appendChild(o);
+    // 1) Canvas/Context vorbereiten
+    const { canvas, ctx, dpr } = prepareCanvas();
+    this.state.canvas = canvas;
+    this.state.ctx = ctx;
+    this.state.dpr = dpr;
+
+    // 2) Resize-Listener
+    this.state.disposer = attachResize(canvas);
+
+    // 3) Items‑Atlas laden (idempotent)
+    if (SHOW_BOOT_LOG) console.debug('[BOOT] loading Items…');
+    try {
+      await initItems(); // lädt /assets/items/items_master_sprite.(png|json)
+      if (SHOW_BOOT_LOG) console.debug('[BOOT] Items ready', Object.keys(getItemsAtlas().frames).length, 'frames');
+    } catch (err) {
+      console.error('[BOOT] Items init failed:', err);
     }
-    const last = localStorage.getItem('sm:lastMap');
-    if (last && [...els.map.options].some(o=>o.value===last)) els.map.value = last;
-  }
 
-  // Start
-  function startSelectedMap(){
-    const url = els.map?.value;
-    if (!url) return;
-    if (window.GameLoader?.start) window.GameLoader.start(url);
-    window.dispatchEvent(new CustomEvent('ui:start', { detail:{ map:url }}));
-  }
+    // 4) Input: Hotkey für Mini‑Sanity‑Overlay (F2)
+    addEventListener('keydown', (ev) => {
+      if (ev.key === DEBUG_HOTKEY) {
+        this.state.overlay.toggle();
+        ev.preventDefault();
+      }
+    });
 
-  // Wire Buttons
-  els.btnStart?.addEventListener('click', startSelectedMap);
-  els.map?.addEventListener('change', ()=> localStorage.setItem('sm:lastMap', els.map.value));
-  els.btnReload?.addEventListener('click', ()=>{
-    const u = new URL(location.href);
-    u.searchParams.set('v', `V${VERSION}-${BUST}`);
-    location.replace(u.toString());
-  });
-  els.btnDebug?.addEventListener('click', ()=> setDebugVisible(!getDebugVisible()));
-  window.addEventListener('keydown', e => { if (e.code==='F2') setDebugVisible(!getDebugVisible()); });
+    // 5) Game‑Loop starten
+    this.state.running = true;
+    this.state.t0 = performance.now();
+    this.state.tLast = this.state.t0;
+    requestAnimationFrame(this.loop.bind(this));
+  },
 
-  els.btnSave?.addEventListener('click', ()=>{
-    if (window.SM_DEBUG?.saveLog) window.SM_DEBUG.saveLog();
-    else {
-      const txt = els.dbg?.textContent || '[kein Debug verfügbar]';
-      const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
-      const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href = url; a.download = `siedler-mini-debug-${Date.now()}.txt`; a.click(); URL.revokeObjectURL(url);
+  /** Einfache Loop mit Delta‑Zeit. */
+  loop(tNow) {
+    if (!this.state.running) return;
+    const { ctx } = this.state;
+    const dt = (tNow - this.state.tLast) / 1000;
+    this.state.tLast = tNow;
+
+    // Update‑Phase (hier später eure Systeme/Scenes aufrufen)
+    // update(dt);
+
+    // Render‑Phase
+    clear(ctx, INITIAL_BG);
+
+    // Beispiel: Hier könnten eure World/UI‑Renderer kommen
+    // renderWorld(ctx, dt);
+    // renderUI(ctx, dt);
+
+    // Optional: Sanity‑Overlay mit Items zeichnen (wenn aktiviert)
+    this.state.overlay.draw(ctx);
+
+    requestAnimationFrame(this.loop.bind(this));
+  },
+
+  /** Stoppt den Loop & räumt Events auf. */
+  stop() {
+    this.state.running = false;
+    if (this.state.disposer) {
+      try { this.state.disposer(); } catch {}
+      this.state.disposer = null;
     }
-  });
+  }
+};
 
-  els.btnFS?.addEventListener('click', ()=> { if (isFS()) exitFS(); else enterFS(document.documentElement); });
+/* ===================== Exports ===================== */
+export default Boot;
 
-  els.auto?.addEventListener('change', ()=> localStorage.setItem('sm:autoStart', els.auto.checked ? '1':'0'));
+/* ===================== Auto-Start ===================== */
+function onReady(fn) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fn, { once: true });
+  } else {
+    fn();
+  }
+}
 
-  // Actor‑Buttons (rufen Public‑API aus game.js)
-  els.spawnC?.addEventListener('click', ()=> window.SM?.spawn?.('carrier'));
-  els.spawnL?.addEventListener('click', ()=> window.SM?.spawn?.('lumberjack'));
-  els.spawnS?.addEventListener('click', ()=> window.SM?.spawn?.('stonemason'));
-  els.btnPause?.addEventListener('click', ()=> window.SM?.pause?.());
-  els.btnPaths?.addEventListener('click', ()=> window.SM?.paths?.());
-
-  // Restore + Autostart
-  (function restore(){
-    fillMaps();
-    const dbgOn = getDebugVisible(); setDebugVisible(dbgOn);
-    if (localStorage.getItem('sm:autoStart') === '1' && els.auto) els.auto.checked = true;
-    updateBadge();
-    if (els.auto?.checked && els.map?.value){
-      setTimeout(startSelectedMap, 80);
-    }
-  })();
-})();
+// Automatischer Start (Startfenster/Scene-Manager bleibt getrennt bei euch)
+onReady(() => Boot.start());
