@@ -1,102 +1,237 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Siedler-Mini v11.1r6</title>
+  <!-- Siedler-Mini • index.html (Start, HUD, Inspector, Backdrop, Build-Menü, SVG-Icons) -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler-Mini</title>
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="styles.css">
-  <!-- Inspector-CSS kann später noch ausgelagert werden -->
   <style>
-    body { margin:0; background:#111; color:#eee; font-family:sans-serif; }
-    #ui { position:absolute; top:0; left:0; right:0; padding:8px; background:rgba(0,0,0,0.5); z-index:50; }
-    #ui button { margin-right:6px; }
-    canvas#game { display:block; background:#000; width:100vw; height:100vh; }
+    :root{
+      --bg:#0b0d10; --stage:#161a20;
+      --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
+      --fg:#e8e8e8; --muted:#b9c4d1;
+      --accent:#6aa3ff;
+    }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .hide{display:none!important}
 
-    /* Inspector-Min/Max */
-    #dev-inspector { position:fixed; bottom:0; left:0; right:0; max-height:40vh;
-      background:#1e1e1e; color:#eee; font-size:13px; overflow:auto; z-index:9999; }
-    #dev-inspector.minimized { height:28px; overflow:hidden; }
-    #dev-inspector header { display:flex; justify-content:space-between;
-      background:#333; padding:2px 6px; font-weight:bold; }
-    #dev-inspector pre { margin:0; padding:6px; font-family:monospace; white-space:pre-wrap; }
+    /* Bühne */
+    #stage{display:block;width:100vw;height:100vh;background:var(--stage)}
+
+    /* HUD */
+    #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
+      align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
+      padding:8px 10px;border-radius:8px}
+    #hud .spacer{flex:1 1 auto}
+    button{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
+    button:hover{background:#222a35}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .iconbtn{width:36px;height:36px;display:inline-grid;place-items:center;padding:0}
+    .icon{width:20px;height:20px;display:block;fill:currentColor}
+    select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
+
+    /* Backdrop (Logo) */
+    #startBackdrop{
+      position:fixed; inset:0; z-index:25; display:grid; place-items:center;
+      background-color: var(--bg); opacity:1;
+    }
+    #startBackdrop img{max-width:min(90vw,1200px);max-height:min(90vh,800px);height:auto;width:auto;display:block;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5))}
+    #startBackdrop.fade-out{opacity:0;transition:opacity 3s ease}
+    #startBackdrop.hidden{display:none}
+
+    /* Start-Overlay (blockiert nicht die Toast-Leiste) */
+    #startPanel{
+      position:fixed; inset:0; z-index:30; display:grid; place-items:center;
+      background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.8));
+      pointer-events:none;
+    }
+    #startPanel.hidden{display:none}
+    #startPanel .panel{
+      width:min(720px,92vw); background:var(--panel); border:1px solid var(--b1);
+      border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px;
+      pointer-events:auto; position:relative;
+    }
+    #btnMenuClose{position:absolute; top:8px; right:8px; width:32px; height:32px; display:inline-grid; place-items:center; border-radius:8px}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
+    h1{margin:0 0 8px}
+    p.sub{margin:0 0 14px; opacity:.85}
+    #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
+
+    /* Toast-Leiste */
+    #inspectorBar{
+      position:fixed; left:8px; right:8px; bottom:8px; z-index:35;
+      display:flex; justify-content:space-between; gap:8px;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
+      padding:6px 8px; border-radius:8px
+    }
+
+    /* Build-Menü */
+    #buildMenu{
+      position:fixed; left:8px; top:64px; z-index:18;
+      background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
+      border:1px solid var(--b1); border-radius:10px; padding:10px 12px; min-width:260px;
+    }
+    #buildMenu[hidden]{display:none}
+    #buildMenu header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    #buildTools{display:grid;grid-template-columns:repeat(4, minmax(36px,1fr));gap:8px}
+    .tool{display:grid;place-items:center;height:40px;border:1px solid var(--b2);border-radius:8px;background:#141b24;cursor:pointer}
+    .tool:hover{background:#1b2430}
+    .tool .icon{width:18px;height:18px}
+    .tool.active{outline:2px solid var(--accent); outline-offset:1px}
+
+    /* Inspector */
+    #inspector{
+      position: fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:min(1000px,92vw); height:min(720px,88vh);
+      z-index:40; background:var(--panel); border:1px solid var(--b1); border-radius:12px;
+      display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.6);
+    }
+    #inspector[hidden]{display:none}
+    #inspector header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--b1)}
+    #inspector header .left, #inspector header .right{display:flex;gap:8px;align-items:center}
+    #inspector .tabs{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--b1);overflow:auto}
+    #inspector .content{flex:1 1 auto;overflow:auto;padding:12px;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+    .kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px}
+    .kv>div:first-child{opacity:.9}
+    #inspector table{width:100%;border-collapse:collapse;table-layout:fixed}
+    #inspector th,#inspector td{border-bottom:1px solid #212733;padding:6px 8px;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+    @media (max-width:700px) and (orientation:portrait){#inspector{left:50%;transform:translate(-50%,0);top:auto;bottom:0;width:100vw;height:75vh;border-radius:12px 12px 0 0}.kv{grid-template-columns:130px 1fr}}
+    @media (max-width:430px){.kv{grid-template-columns:1fr}}
+    @media (max-height:520px) and (orientation:landscape){#inspector{width:min(1100px,96vw);height:min(560px,90vh)}}
+    #inspector.max{left:0;top:0;transform:none;width:100vw;height:100vh;border-radius:0}
+    button.inspector{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
+    button.inspector:hover{background:#222a35}
   </style>
+
+  <!-- Feature-Flag für Fullscreen -->
+  <script>
+    (function(){
+      const isIPhone=/iPhone/i.test(navigator.userAgent);
+      const canFS=!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen||document.documentElement.msRequestFullscreen);
+      if(isIPhone || !canFS) document.documentElement.classList.add('no-fs');
+    })();
+  </script>
 </head>
+
 <body>
-  <!-- UI-Bereich -->
-  <div id="ui">
-    <select id="mapSelect">
-      <option value="assets/maps/map-demo.json">Demo-Map</option>
-      <option value="assets/maps/map-pro.json">Pro-Map</option>
-      <option value="assets/maps/map-test-all.json">Test-All</option>
-    </select>
-    <button id="startBtn">Start</button>
-    <button id="reloadBtn">Neuladen</button>
-    <button id="saveDebugBtn">Debug speichern</button>
-    <label><input type="checkbox" id="autoStart"> AutoStart</label>
+  <!-- ===== SVG-Icons ===== -->
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <defs>
+      <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M4 15v5h5M20 9V4h-5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-road" viewBox="0 0 24 24"><path d="M6 20l4-16h4l4 16M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-hut" viewBox="0 0 24 24"><path d="M4 12l8-6 8 6v8H4zM10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 2l4 6h-3l3 5h-3l4 7H7l4-7H8l3-5H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-stone" viewBox="0 0 24 24"><path d="M4 16l4-8h8l4 8-6 4H10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- HUD -->
+  <div id="hud" aria-label="Spiel-HUD">
+    <strong id="buildBadge" title="Build/Version">Siedler-Mini</strong>
+    <span class="spacer"></span>
+    <button id="btnFS" class="iconbtn" title="Vollbild">
+      <svg class="icon"><use href="#i-full"></use></svg>
+    </button>
   </div>
 
-  <!-- Canvas -->
-  <canvas id="game"></canvas>
+  <!-- Backdrop -->
+  <div id="startBackdrop" aria-hidden="true">
+    <img id="startLogo" alt="Spiel-Logo" src="./assets/Logo.PNG" />
+  </div>
 
-  <!-- Dev-Inspector -->
-  <div id="dev-inspector" class="minimized">
+  <!-- Bühne -->
+  <canvas id="stage"></canvas>
+
+  <!-- Start-Overlay -->
+  <section id="startPanel">
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
+      <button id="btnMenuClose" class="iconbtn" title="Menü schließen">
+        <svg class="icon"><use href="#i-close"></use></svg>
+      </button>
+      <h1 id="t">Siedler-Mini</h1>
+      <p class="sub">Wähle eine Karte und starte das Spiel.</p>
+
+      <div class="row">
+        <label for="mapSelect">Karte:</label>
+        <select id="mapSelect">
+          <option value="./assets/maps/map-demo.json">map-demo.json</option>
+          <option value="./assets/maps/map-pro.json">map-pro.json</option>
+          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <button id="btnStart">Neues Spiel</button>
+        <button id="btnContinue" disabled>Weiterspielen</button>
+        <button id="btnReset">Reset</button>
+      </div>
+
+      <pre id="quickDiag" aria-live="polite"></pre>
+    </div>
+  </section>
+
+  <!-- Build-Menü -->
+  <aside id="buildMenu" hidden>
     <header>
-      <span>Inspector</span>
-      <div>
-        <button id="toggleInspector">⤡</button>
+      <strong>Baumenü</strong>
+      <button id="btnBuildMenuHide" class="iconbtn" title="Baumenü ausblenden">
+        <svg class="icon"><use href="#i-close"></use></svg>
+      </button>
+    </header>
+    <div id="buildTools">
+      <button class="tool" data-tool="road" title="Weg"><svg class="icon"><use href="#i-road"></use></svg></button>
+      <button class="tool" data-tool="hut" title="Hütte"><svg class="icon"><use href="#i-hut"></use></svg></button>
+      <button class="tool" data-tool="lumber" title="Holzfäller"><svg class="icon"><use href="#i-tree"></use></svg></button>
+      <button class="tool" data-tool="mason" title="Steinmetz"><svg class="icon"><use href="#i-stone"></use></svg></button>
+    </div>
+  </aside>
+
+  <!-- Toast-Leiste -->
+  <div id="inspectorBar" class="toast" aria-live="polite">
+    <div>
+      <button id="btnMenu" title="Startmenü öffnen">
+        <svg class="icon" style="margin-right:6px"><use href="#i-menu"></use></svg>Menü
+      </button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
+      <button id="btnCacheClear" title="Seite neu laden und Cache umgehen">Cache leeren</button>
+    </div>
+  </div>
+
+  <!-- Inspector -->
+  <aside id="inspector" hidden>
+    <header>
+      <div class="left"><strong>Inspector</strong></div>
+      <div class="right">
+        <button id="btnInspectorToggleMax" class="inspector" title="Maximieren / Fenstergröße">Maximieren</button>
+        <button id="btnInspectorClose" class="inspector" title="Schließen">Close</button>
       </div>
     </header>
-    <pre id="debugOutput">[Inspector bereit]</pre>
-  </div>
+    <div class="tabs">
+      <button data-tab="debug">Debug</button>
+    </div>
+    <div class="content" id="inspectorContent"></div>
+  </aside>
 
   <!-- Scripts -->
-  <script src="boot.js"></script>
-  <script src="game.js"></script>
-  <script src="debug.js"></script>
-  <script src="tools/dev-inspector.js"></script>
-  <script src="fullscreen.js"></script>
-  <script src="input.js"></script>
-  <script src="render.js"></script>
-  <script src="unitLogic.js"></script>
-  <script src="world.js"></script>
-  <script src="app-v11.1r6.js"></script>
+  <script src="./core/asset.js" defer></script>
+  <script src="./core/asset.items.js" defer></script>
+  <script src="./game.js" defer></script>
+  <script src="./boot.js" defer></script>
 
+  <!-- FS-Icon ggf. ausblenden bei no-fs -->
   <script>
-    // ======================================================================
-    // Boot-UI Wiring
-    // ======================================================================
-    document.addEventListener("DOMContentLoaded", () => {
-      const startBtn   = document.getElementById("startBtn");
-      const reloadBtn  = document.getElementById("reloadBtn");
-      const mapSelect  = document.getElementById("mapSelect");
-      const autoStart  = document.getElementById("autoStart");
-
-      // Start
-      startBtn.onclick = () => {
-        const map = mapSelect.value;
-        console.log("[boot] Start Game", map);
-        window.GameLoader?.start(map);
-      };
-
-      // Reload
-      reloadBtn.onclick = () => {
-        const map = mapSelect.value;
-        console.log("[boot] Reload Game", map);
-        window.GameLoader?.reload(map);
-      };
-
-      // AutoStart beim Laden
-      if (autoStart.checked) {
-        const map = mapSelect.value;
-        console.log("[boot] AutoStart aktiv:", map);
-        window.GameLoader?.start(map);
+    (function(){
+      if(document.documentElement.classList.contains('no-fs')){
+        const fsBtn=document.getElementById('btnFS'); if(fsBtn) fsBtn.classList.add('hide');
       }
-
-      console.log("[boot] UI bereit.");
-    });
+    })();
   </script>
 </body>
 </html>
