@@ -1,24 +1,20 @@
 /* =============================================================================
- * game.js • v1.7
- * - Pfade angepasst:
+ * game.js • v1.7.1
+ * - Robustere Pfadauflösung (Safari/iOS-freundlich) für Maps & Assets
+ * - Pfade wie besprochen:
  *     • Units (Figuren):      ./assets/characters/{builder.png, carrier.png}
  *     • Gebäude (Epoche 1):   ./assets/tex/building/wood/*.png
- * - Tileset-JSON+PNG (terrain) wie zuvor
- * - Units/Carrier: Builder + (wood/stone/food)-Carrier, Loops + Delivery
- * - Builder kehrt nach dem Bauen zur Basis zurück
- * - Ressourcen: Start = 1000/1000/1000/1000; Delivery addiert, Bau abgezogen
- * - Pfadpunkte bei Platzhalterkarten sichtbar; Sprite-Fallbacks bleiben
- * - Umfangreiche Debug-Logs
+ * - Rest wie v1.7: Träger/Builder, Ressourcen, Debug-Logs
  * ============================================================================= */
 
 (function(){
   const CANVAS_ID = 'stage';
   const dbg = (...a) => (window.BootUI?.dbg ? window.BootUI.dbg(...a) : console.log(...a));
 
-  // === Projektpfade (an deine Struktur angepasst) ============================
+  // === Projektpfade =========================================================
   const PATHS = {
-    units: './assets/characters',           // <— Figuren/Sprites
-    buildings: './assets/tex/building/wood' // <— Gebäudetexturen Epoche 1
+    units: './assets/characters',
+    buildings: './assets/tex/building/wood'
   };
 
   // === Spiel-Balancing (Testwerte) =========================================
@@ -26,26 +22,66 @@
   const BUILD_COST = {
     road:{wood:1,stone:0,food:0,pop:0},
     hut:{wood:10,stone:2,food:0,pop:1},
-    lumber:{wood:6,stone:0,food:0,pop:1},  // Holzfällerhütte
-    mason:{wood:4,stone:6,food:0,pop:1},   // Steinbruch/-metz
+    lumber:{wood:6,stone:0,food:0,pop:1},
+    mason:{wood:4,stone:6,food:0,pop:1},
   };
-  const CARRIER_PAYLOAD = { wood:8, stone:6, food:5 }; // pro Lieferung (Testwerte)
-  const CARRIER_SPEED   = 90;                           // px/s
-  const BUILDER_SPEED   = 90;                           // px/s
+  const CARRIER_PAYLOAD = { wood:8, stone:6, food:5 };
+  const CARRIER_SPEED   = 90;
+  const BUILDER_SPEED   = 90;
 
-  // === Helpers ==============================================================
-  async function fetchJSON(url){ const r=await fetch(url,{cache:'no-cache'}); if(!r.ok) throw new Error(`HTTP ${r.status} ${url}`); return r.json(); }
-  function joinPath(base,rel){ if(/^https?:|^\//.test(rel)) return rel; const u=new URL(base,location.href); const seg=u.pathname.split('/'); seg.pop(); return new URL(seg.join('/')+'/'+rel,u).toString(); }
+  // === Helpers: robuste URL-/Fetch-Utilities ===============================
+  function normalizeUrl(input){
+    // Versuche Varianten: as-is, ohne './', absolut via base
+    const variants = [];
+    if (typeof input !== 'string') return [];
+    variants.push(input);
+    if (input.startsWith('./')) variants.push(input.slice(2));
+    try { variants.push(new URL(input, location.href).href); } catch(e){}
+    return [...new Set(variants)];
+  }
+
+  async function fetchTextSmart(url){
+    const tries = normalizeUrl(url);
+    let lastErr = null;
+    for (const u of tries){
+      try {
+        const r = await fetch(u, { cache:'no-cache' });
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${u}`);
+        const t = await r.text();
+        dbg('fetch OK', u);
+        return t;
+      } catch(e){ lastErr = e; dbg('fetch FAIL', String(e.message||e)); }
+    }
+    throw lastErr || new Error('fetch failed '+url);
+  }
+
+  async function fetchJSON(url){
+    const txt = await fetchTextSmart(url);
+    try { return JSON.parse(txt); }
+    catch(e){ dbg('JSON parse FAIL', String(e.message||e)); throw e; }
+  }
+
+  // Asset-URL Join (für Atlas-Referenzen):
+  function joinPath(base,rel){
+    // Wenn rel bereits absolut oder mit Protokoll → direkt
+    if (/^https?:|^data:|^\//i.test(rel)) return rel;
+    // base kann selbst relativ sein; wir nutzen location.href als Fallback
+    try { return new URL(rel, new URL(base, location.href)).href; }
+    catch(e){ return rel; }
+  }
+
   function hash2i(x,y,mod){ let n=(x|0)*73856093 ^ (y|0)*19349663; n^=(n<<11); n^=(n>>>7); n^=(n<<3); return mod>0?Math.abs(n)%mod:0; }
   const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 
-  // Kleiner Loader, der verschiedene Kandidats-Dateinamen probiert:
+  // Loader, der verschiedene Kandidats-Dateinamen probiert:
   async function loadFirstThatWorks(key, candidates){
-    for (const url of candidates){
-      try { const img = await window.Asset.loadImage(key+':'+url, url); return img; }
-      catch(e){ /* try next */ }
+    const tries = candidates.flatMap(normalizeUrl);
+    let lastErr = null;
+    for (const url of tries){
+      try { const img = await window.Asset.loadImage(key+':'+url, url); dbg('img OK', url); return img; }
+      catch(e){ lastErr=e; dbg('img FAIL', url); }
     }
-    throw new Error('No image found for '+key);
+    throw lastErr || new Error('No image found for '+key);
   }
 
   // === Map laden (Tileset JSON/PNG + Auto-Fallback) =========================
@@ -65,7 +101,7 @@
       // Tileset (.json bevorzugt)
       let atlas = null;
       if (md.tileset && /\.json(\?|$)/i.test(md.tileset)){
-        const metaUrl = md.tileset;
+        const metaUrl = joinPath(url, md.tileset);
         const meta = await fetchJSON(metaUrl);
         const pngUrl = joinPath(metaUrl, meta.meta?.image || 'tileset.png');
         const tileSize = Number(meta.meta?.tileSize || meta.tileSize || md.tileSize || 32);
@@ -73,7 +109,8 @@
         md.tileSize = tileSize;
         dbg('Tileset JSON OK', JSON.stringify({pngUrl, tileSize, frames:Object.keys(atlas.frames).length}));
       } else if (md.tileset){
-        atlas = { type:'png', pngUrl: md.tileset, tileSize: md.tileSize||32, frames:null, grid:null };
+        const pngUrl = joinPath(url, md.tileset);
+        atlas = { type:'png', pngUrl, tileSize: md.tileSize||32, frames:null, grid:null };
         dbg('Tileset PNG', JSON.stringify({pngUrl:atlas.pngUrl, tileSize:atlas.tileSize}));
       } else {
         // Auto terrain
@@ -126,34 +163,24 @@
   // === Units ================================================================
   class Unit {
     constructor(type, posPx, opts={}){
-      this.type = type;         // 'builder' | 'carrier'
-      this.x = posPx.x; this.y = posPx.y;
-      this.path = [];           // Array<{x,y} px>
-      this.i = 0;
-      this.speed = opts.speed||80;
-      this.size = opts.size||18;
+      this.type = type; this.x = posPx.x; this.y = posPx.y;
+      this.path = []; this.i = 0;
+      this.speed = opts.speed||80; this.size = opts.size||18;
       this.color = opts.color||'#ffd166';
       this.sprite = opts.sprite||null;
-      this.frameW = opts.frameW||0;
-      this.frameH = opts.frameH||0;
-      this.frames = opts.frames||1;
-      this.fps = opts.fps||6;
-      this._animT = 0;
-      this.done = false;
+      this.frameW = opts.frameW||0; this.frameH = opts.frameH||0;
+      this.frames = opts.frames||1; this.fps = opts.fps||6;
+      this._animT = 0; this.done = false;
 
-      // Carrier Zusatz
-      this.cargoType = opts.cargoType||null;   // 'wood' | 'stone' | 'food'
-      this.cargo = opts.cargo||0;              // aktuelle Fracht
-      this.cargoMax = opts.cargoMax||0;
-      this.onArrive = opts.onArrive||null;     // callback(unit, phase)
-      this.loop = opts.loop||false;            // Loop hin/zurück
-      this._home = opts.home||null;            // Startpunkt für Loop (px)
+      this.cargoType = opts.cargoType||null;
+      this.cargo = opts.cargo||0; this.cargoMax = opts.cargoMax||0;
+      this.onArrive = opts.onArrive||null; this.loop = opts.loop||false; this._home = opts.home||null;
     }
     setPathPx(points){ this.path = points||[]; this.i=0; this._arriveCalled=false; }
     update(dt){
-      if (this.done || this.i >= this.path.length) { 
+      if (this.done || this.i >= this.path.length) {
         if (this.onArrive && !this._arriveCalled){ this._arriveCalled=true; this.onArrive(this,'end'); }
-        return; 
+        return;
       }
       const tx = this.path[this.i].x, ty=this.path[this.i].y;
       const dx = tx - this.x, dy = ty - this.y;
@@ -164,8 +191,7 @@
           if (this.onArrive){ this.onArrive(this,'end'); }
           if (this.loop && this._home){
             const back = this.path.slice().reverse();
-            this.path = back; this.i=1;
-            this._arriveCalled=false;
+            this.path = back; this.i=1; this._arriveCalled=false;
             if (this.onArrive){ this.onArrive(this,'loop'); }
           } else {
             this.done=true;
@@ -173,8 +199,7 @@
         }
       } else {
         const v = this.speed * dt;
-        this.x += (dx/dist)*v;
-        this.y += (dy/dist)*v;
+        this.x += (dx/dist)*v; this.y += (dy/dist)*v;
       }
       this._animT += dt;
     }
@@ -195,7 +220,6 @@
   class World {
     constructor(canvas, mapData){
       this.canvas = canvas; this.ctx = canvas.getContext('2d');
-
       this.camX=0; this.camY=0; this.zoom=1; this.minZoom=0.5; this.maxZoom=3;
       this.time=0; this.running=true;
 
@@ -212,20 +236,18 @@
       this.numericIds=true; this.heuristic=false;
 
       // Gameplay
-      this.buildings=[]; // {type, tx, ty}
-      this.res={wood:1000,stone:1000,food:1000,pop:1000}; // Startwerte zum Testen
+      this.buildings=[];
+      this.res={wood:1000,stone:1000,food:1000,pop:1000};
       this.currentTool=null;
 
       // Units
       this.units=[];
-      this.unitSprites = { builder:null, carrier:null };  // optional
+      this.unitSprites = { builder:null, carrier:null };
       this.unitSpriteMeta = { builder:{ frameW:32, frameH:32, frames:4, fps:6 },
                               carrier:{ frameW:32, frameH:32, frames:4, fps:6 } };
 
       // Gebäude-Sprites (optional)
-      this.buildingSprites = {
-        road:null, hut:null, lumber:null, mason:null
-      };
+      this.buildingSprites = { road:null, hut:null, lumber:null, mason:null };
 
       // Input
       this._touches=new Map(); this._pinchBase=null; this._dragging=false; this._lastX=0; this._lastY=0;
@@ -272,7 +294,7 @@
 
       if (this.heuristic) dbg('Tiles mode: HEURISTIC'); else dbg('Tiles mode:', this.numericIds?'NUMERIC':'KEYS');
 
-      // ---- Unit-Sprites (aus assets/characters) ----
+      // ---- Unit-Sprites (assets/characters) ----
       try{
         this.unitSprites.builder = await loadFirstThatWorks('builder', [
           `${PATHS.units}/builder.png`,
@@ -291,7 +313,7 @@
         dbg('Unit sprite OK','carrier');
       }catch(e){ dbg('Unit sprite missing → dot (carrier)'); }
 
-      // ---- Gebäude-Sprites (aus assets/tex/building/wood) ----
+      // ---- Gebäude-Sprites (assets/tex/building/wood) ----
       await this._loadBuildingSprites();
 
       this.play();
@@ -310,7 +332,7 @@
           this.buildingSprites[key] = await loadFirstThatWorks('b:'+key, candidates);
           dbg('Building sprite OK', key);
         }catch(e){
-          this.buildingSprites[key] = null; // Fallback: Vektorform
+          this.buildingSprites[key] = null;
           dbg('Building sprite missing → shape', key);
         }
       }
@@ -352,7 +374,6 @@
         // Produktionsgebäude → Träger-Loop starten
         if (this.currentTool==='lumber') this.spawnCarrierLoop('wood', tx,ty);
         if (this.currentTool==='mason')  this.spawnCarrierLoop('stone',tx,ty);
-        // Falls Nahrungseinheit existiert (Farm/Jagd), analog: spawnCarrierLoop('food', tx,ty)
       });
 
       let wheelT=null; this.canvas.addEventListener('wheel',(ev)=>{ ev.preventDefault(); const d=-Math.sign(ev.deltaY)*0.1; this._zoomAt(ev.clientX,ev.clientY,d); clearTimeout(wheelT); wheelT=setTimeout(()=>dbg('Zoom',this.zoom.toFixed(2)),120); },{passive:false});
@@ -384,7 +405,6 @@
     spawnBuilderReturn(tx,ty){
       const startT = this.getDepotTile();
       const startPx = tileCenterPx(startT.x,startT.y,this.tileSize);
-      const goalPx  = tileCenterPx(tx,ty,this.tileSize);
       const pathTo  = [startPx, ...manhattanPathTiles(startT.x,startT.y,tx,ty).map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
       const pathBack= pathTo.slice().reverse();
 
@@ -392,9 +412,8 @@
       const u = new Unit('builder', startPx, opts);
       u.setPathPx(pathTo.slice(1));
       u.onArrive = (unit,phase)=>{
-        if (phase==='end'){ // An Baustelle angekommen
+        if (phase==='end'){
           dbg('Builder arrived', JSON.stringify({tx,ty}));
-          // Rückweg:
           unit.setPathPx(pathBack.slice(1));
           unit._arriveCalled=false;
         }
@@ -404,9 +423,8 @@
     }
 
     spawnCarrierLoop(kind, srcTx, srcTy){
-      const depotT = this.getNearestHQorHut(srcTx,srcTy);  // halbquartier/hütte bevor depot
+      const depotT = this.getNearestHQorHut(srcTx,srcTy);
       const srcPx  = tileCenterPx(srcTx,srcTy,this.tileSize);
-      const dstPx  = tileCenterPx(depotT.x,depotT.y,this.tileSize);
       const pathTo = [srcPx, ...manhattanPathTiles(srcTx,srcTy,depotT.x,depotT.y).map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
 
       const colorBy = { wood:'#7cc36b', stone:'#c7cbd1', food:'#f3b562' };
@@ -483,16 +501,13 @@
       for(const b of this.buildings){
         const x=b.tx*tileSize,y=b.ty*tileSize,s=tileSize;
         const spr = this.buildingSprites[b.type] || null;
-        if (spr){
-          // Standard: sprite an Tile anpassen (quadratisch, skaliert auf tileSize)
-          ctx.drawImage(spr, x, y, s, s);
-        } else {
-          // Fallback-Vector
+        if (spr){ ctx.drawImage(spr, x, y, s, s); }
+        else {
           switch(b.type){
             case 'road': ctx.fillStyle='#8c7a57'; ctx.fillRect(x+2,y+s*0.4,s-4,s*0.2); break;
             case 'hut': ctx.fillStyle='#b08968'; ctx.fillRect(x+4,y+8,s-8,s-12); ctx.fillStyle='#6b4f3f'; ctx.fillRect(x+8,y+4,s-16,8); break;
             case 'lumber': ctx.fillStyle='#2f5d2e'; ctx.beginPath(); ctx.arc(x+s/2,y+s/2,s*0.32,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#3c6b3a'; ctx.fillRect(x+s*0.45,y+s*0.2,s*0.1,s*0.6); break;
-            case 'mason': ctx.fillStyle='#9aa0a6'; ctx.fillRect(x+6,y+6,s-12,s-12); ctx.fillStyle='#7d8186'; ctx.fillRect(x+s*0.4,y+4,s*0.2,s*0.2); break;
+            case 'mason': ctx.fillStyle:'#9aa0a6'; ctx.fillRect(x+6,y+6,s-12,s-12); ctx.fillStyle:'#7d8186'; ctx.fillRect(x+s*0.4,y+4,s*0.2,s*0.2); break;
             default: ctx.strokeStyle='#fff'; ctx.strokeRect(x+6,y+6,s-12,s-12);
           }
         }
@@ -500,8 +515,7 @@
 
       // --- PATH DOTS (nur wenn Terrain Platzhalter ist) ---
       if (!this.tilesetImg){
-        ctx.save();
-        ctx.globalAlpha = 0.7;
+        ctx.save(); ctx.globalAlpha = 0.7;
         for (const u of this.units){
           ctx.fillStyle = '#6aa3ff';
           for (const p of u.path){ ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
