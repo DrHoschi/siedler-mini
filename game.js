@@ -1,15 +1,18 @@
 /* =============================================================================
- * game.js • v1.1
- * - Map laden (Tileset oder Platzhalter)
- * - Kamera mit Zoom & Pan (Mausrad, Drag; Touch: Pinch & Drag) → Canvas fängt Gesten ab
- * - Ressourcen-System (Holz/Stein/Nahrung/Bewohner) + HUD-Update
- * - Baumenü platziert Objekte mit Kostenprüfung
+ * game.js • v1.2
+ * - Map laden (Tileset oder Platzhalter) + ausführliches Debug
+ * - Kamera mit Zoom & Pan (Mausrad, Drag; Touch-Pinch) – Canvas fängt Gesten ab
+ * - Ressourcen-System + HUD-Update mit Logs
+ * - Baumenü: Platzieren mit Kostenprüfung + Logs
  * - Snapshot/Continue kompatibel
  * - Asset.texturesReady = true sobald renderbar
  * =========================================================================== */
 
 (function(){
   const CANVAS_ID = 'stage';
+
+  // zentraler Debug-Hook (fällt auf console.log zurück)
+  const dbg = (...a) => (window.BootUI?.dbg ? window.BootUI.dbg(...a) : console.log(...a));
 
   // Platzhalterfarben
   const TILE_COLORS = {0:'#1a2735',1:'#2c3e2f',2:'#4a5b2f',3:'#6f5b2f',4:'#666'};
@@ -22,37 +25,47 @@
     mason:  {wood:4,  stone:6,  food:0,  pop:1},
   };
 
+  // Map laden (mit Debug)
   async function loadMap(url){
+    if (!url) { dbg('Map load: NO URL → using demo'); return demoMap(); }
     try{
+      dbg('Map load start', url);
       const res = await fetch(url, {cache:'no-cache'});
       if(!res.ok) throw new Error('HTTP '+res.status);
       const j = await res.json();
-      return {
+      const md = {
         width:  j.width  || j.w || 32,
         height: j.height || j.h || 18,
         tileSize: j.tileSize || j.tile || 32,
         tileset: j.tileset || null,
         tiles: (Array.isArray(j.tiles) ? j.tiles.flat() : []) || []
       };
+      dbg('Map load OK', JSON.stringify({w:md.width,h:md.height,tile:md.tileSize,tileset:!!md.tileset}));
+      return md;
     }catch(e){
-      console.warn('[game] Map laden fehlgeschlagen, Demo:', e);
-      const width=32, height=18, tileSize=32;
-      const tiles = new Array(width*height).fill(0).map((_,i)=>{
-        const x=i%width, y=(i/width)|0;
-        if (y<4) return 0; if (y>height-4) return 4;
-        if ((x+y)%7===0) return 1; if ((x*y)%11===0) return 3; return 2;
-      });
-      return { width, height, tileSize, tileset:null, tiles };
+      dbg('Map load FAIL → demo fallback', (e && e.message) || e);
+      return demoMap();
     }
   }
 
-  // HUD-Res Update
-  function updateHUD(res){
+  function demoMap(){
+    const width=32, height=18, tileSize=32;
+    const tiles = new Array(width*height).fill(0).map((_,i)=>{
+      const x=i%width, y=(i/width)|0;
+      if (y<4) return 0; if (y>height-4) return 4;
+      if ((x+y)%7===0) return 1; if ((x*y)%11===0) return 3; return 2;
+    });
+    return { width, height, tileSize, tileset:null, tiles };
+  }
+
+  // HUD-Res Update (mit optionalem Tag, woher die Änderung kam)
+  function updateHUD(res, tag){
     const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = String(val|0); };
     set('res-wood', res.wood);
     set('res-stone',res.stone);
     set('res-food', res.food);
     set('res-pop',  res.pop);
+    if (tag) dbg('HUD resources', tag, JSON.stringify(res));
   }
 
   class World {
@@ -74,7 +87,7 @@
       this.tiles = mapData.tiles?.length ? mapData.tiles : new Array(mapData.width*mapData.height).fill(2);
 
       // Tileset
-      this.tileset = null; this.tsCols = 8; this.tsTile = this.tileSize;
+      this.tileset = null; this.tsCols = 8; this.tsTile = this.tileSize; this._atlasRows = 0;
 
       // Buildings + Ressourcen
       this.buildings = [];
@@ -85,25 +98,38 @@
 
       // Touch state
       this._dragging = false; this._lastX=0; this._lastY=0;
-      this._touches = new Map();
+      this._touches = new Map(); this._pinchBase = null;
 
       // intern
       this._raf = null; this.texturesReady = false;
+      this._loggedRenderMode = false;  // once-Log im draw()
 
       this._bindInput();
       this._resize();
       window.addEventListener('resize', ()=>this._resize(), {passive:true});
-      updateHUD(this.res);
+      updateHUD(this.res, 'init');
     }
 
     async init(mapUrl){
       this.state.mapUrl = mapUrl || this.state.mapUrl;
       if (this.map.tileset){
         try{
+          dbg('Tileset load start', this.map.tileset);
           this.tileset = await window.Asset.loadImage('tileset', this.map.tileset);
+          // Atlas-Abmessungen ableiten
+          const iw = this.tileset.naturalWidth || this.tileset.width;
+          const ih = this.tileset.naturalHeight || this.tileset.height;
+          this.tsCols = Math.max(1, Math.floor(iw / this.tsTile));
+          this._atlasRows = Math.max(1, Math.floor(ih / this.tsTile));
           this.texturesReady = true; window.Asset.markTexturesReady(true);
-        }catch(e){ console.warn('[game] Tileset fehlgeschlagen:', e); this.texturesReady = true; window.Asset.markTexturesReady(true); }
+          dbg('Tileset load OK', JSON.stringify({w:iw,h:ih,ts:this.tsTile,cols:this.tsCols,rows:this._atlasRows}));
+        }catch(e){
+          dbg('Tileset load FAIL → placeholders', (e && e.message) || e);
+          this.tileset = null;
+          this.texturesReady = true; window.Asset.markTexturesReady(true);
+        }
       }else{
+        dbg('No tileset → placeholders');
         this.texturesReady = true; window.Asset.markTexturesReady(true);
       }
       this.play();
@@ -123,19 +149,26 @@
     get running(){ return this._running; }
     set running(v){ this._running=!!v; }
 
-    snapshot(){ return { mapUrl:this.state.mapUrl, time:this.time, buildings:this.buildings, cam:{x:this.camX,y:this.camY,z:this.zoom}, res:this.res }; }
+    snapshot(){
+      const snap = { mapUrl:this.state.mapUrl, time:this.time, buildings:this.buildings, cam:{x:this.camX,y:this.camY,z:this.zoom}, res:this.res };
+      dbg('Snapshot create', JSON.stringify({t:Math.round(this.time), n:this.buildings.length}));
+      return snap;
+    }
     async restore(snap){
       if (!snap) return;
+      dbg('Restore start', JSON.stringify({hasMap:!!snap.mapUrl, n:snap.buildings?.length||0}));
       if (snap.mapUrl && snap.mapUrl !== this.state.mapUrl){
         const md = await loadMap(snap.mapUrl);
         this.map = md;
         this.tiles = md.tiles?.length ? md.tiles : new Array(md.width*md.height).fill(2);
-        await this.init(snap.mapUrl);
+        await this.init(snap.mapUrl); // init setzt texturesReady/tileset etc.
       }
       this.buildings = Array.isArray(snap.buildings) ? snap.buildings.slice() : [];
       if (snap.res) this.res = Object.assign({}, this.res, snap.res);
       if (snap.cam){ this.camX=snap.cam.x||0; this.camY=snap.cam.y||0; this.zoom=snap.cam.z||1; }
-      this.time = Number(snap.time||0); updateHUD(this.res);
+      this.time = Number(snap.time||0);
+      updateHUD(this.res, 'restore');
+      dbg('Restore done', JSON.stringify({cam:{x:this.camX,y:this.camY,z:+this.zoom.toFixed(2)}}));
     }
 
     _resize(){
@@ -144,38 +177,52 @@
       this.canvas.width = Math.floor(w*dpr); this.canvas.height = Math.floor(h*dpr);
       this.canvas.style.width=w+'px'; this.canvas.style.height=h+'px';
       this.ctx.setTransform(dpr,0,0,dpr,0,0);
+      dbg('Canvas resize', `${w}x${h} (dpr:${dpr})`);
     }
 
     _bindInput(){
       // Baumenü Tools
       document.querySelectorAll('#buildTools .tool').forEach(btn=>{
-        btn.addEventListener('click', ()=>{ this.currentTool = btn.dataset.tool || null; });
+        btn.addEventListener('click', ()=>{
+          this.currentTool = btn.dataset.tool || null;
+          dbg('Tool select', this.currentTool || 'none');
+        });
       });
 
       // Platzieren (Klick/Tap)
       this.canvas.addEventListener('click', (ev)=>{
         if (!this.currentTool) return;
         const {tx,ty} = this._viewToTile(ev.clientX, ev.clientY);
-        if (tx<0||ty<0||tx>=this.map.width||ty>=this.map.height) return;
-        if (!this._canAfford(this.currentTool)) return;
+        if (tx<0||ty<0||tx>=this.map.width||ty>=this.map.height) { dbg('Build out-of-bounds', JSON.stringify({tool:this.currentTool,tx,ty})); return; }
+        const cost = BUILD_COST[this.currentTool] || {};
+        if (!this._canAfford(this.currentTool)) {
+          dbg('Build DENIED (cost)', JSON.stringify({tool:this.currentTool,tx,ty,cost,have:this.res}));
+          return;
+        }
+        const before = {...this.res};
         this.buildings.push({type:this.currentTool, tx, ty});
         this._pay(this.currentTool);
-        updateHUD(this.res);
+        updateHUD(this.res, 'build');
+        dbg('Build OK', JSON.stringify({tool:this.currentTool,tx,ty,cost,before,after:this.res}));
       });
 
-      // Wheel Zoom (auch Touchpad)
+      // Wheel Zoom
+      let wheelTimer=null;
       this.canvas.addEventListener('wheel', (ev)=>{
         ev.preventDefault();
-        const delta = -Math.sign(ev.deltaY) * 0.1; // step
+        const delta = -Math.sign(ev.deltaY) * 0.1;
         this._zoomAt(ev.clientX, ev.clientY, delta);
+        clearTimeout(wheelTimer);
+        wheelTimer=setTimeout(()=>{ dbg('Zoom end', this.zoom.toFixed(2)); }, 120);
       }, {passive:false});
 
-      // Mouse drag → Pan
+      // Pointer (Drag/Pinch)
       this.canvas.addEventListener('pointerdown', (ev)=>{
         this.canvas.setPointerCapture(ev.pointerId);
         this._dragging = true; this._lastX=ev.clientX; this._lastY=ev.clientY;
         this._touches.set(ev.pointerId, {x:ev.clientX,y:ev.clientY});
       });
+      let panMoved=false;
       this.canvas.addEventListener('pointermove', (ev)=>{
         if (!this._touches.has(ev.pointerId)) return;
         const prev = this._touches.get(ev.pointerId);
@@ -185,9 +232,9 @@
           const dx = ev.clientX - this._lastX, dy = ev.clientY - this._lastY;
           this._lastX = ev.clientX; this._lastY = ev.clientY;
           this.camX -= dx / this.zoom; this.camY -= dy / this.zoom;
+          panMoved=true;
         }
         else if (this._touches.size>=2){
-          // Pinch zoom
           const pts = Array.from(this._touches.values());
           const a = pts[0], b = pts[1];
           const cx = (a.x+b.x)/2, cy=(a.y+b.y)/2;
@@ -204,11 +251,14 @@
       this.canvas.addEventListener('pointerup', (ev)=>{
         this._touches.delete(ev.pointerId);
         if (this._touches.size<2) this._pinchBase = null;
-        if (this._touches.size===0){ this._dragging=false; }
+        if (this._touches.size===0){
+          if (panMoved){ dbg('Pan end', JSON.stringify({cam:{x:Math.round(this.camX),y:Math.round(this.camY),z:+this.zoom.toFixed(2)}})); }
+          this._dragging=false; panMoved=false;
+        }
       });
       this.canvas.addEventListener('pointercancel', (ev)=>{
         this._touches.delete(ev.pointerId);
-        this._pinchBase = null; this._dragging=false;
+        this._pinchBase = null; this._dragging=false; panMoved=false;
       });
     }
 
@@ -216,7 +266,6 @@
 
     _zoomAt(clientX, clientY, deltaStep=0, absoluteZoom=null){
       const before = this._viewToWorld(clientX, clientY);
-      const z0 = this.zoom;
       const z1 = absoluteZoom!=null ? absoluteZoom : this._clamp(this.zoom * (1 + deltaStep), this.minZoom, this.maxZoom);
       this.zoom = z1;
       const after = this._viewToWorld(clientX, clientY);
@@ -258,13 +307,29 @@
       ctx.translate(-this.camX * this.zoom, -this.camY * this.zoom);
       ctx.scale(this.zoom, this.zoom);
 
+      // Render-Modus einmalig loggen
+      if (!this._loggedRenderMode){
+        this._loggedRenderMode = true;
+        if (this.tileset) dbg('Render mode: TILESET');
+        else dbg('Render mode: PLACEHOLDER');
+      }
+
       // Karte
       if (this.tileset){
         for (let ty=0; ty<H; ty++){
           for (let tx=0; tx<W; tx++){
             const id = this.tiles[ty*W+tx] | 0;
-            const sx = (id % this.tsCols) * this.tsTile;
-            const sy = Math.floor(id / this.tsCols) * this.tsTile;
+            const col = id % this.tsCols;
+            const row = Math.floor(id / this.tsCols);
+            if (row >= this._atlasRows) {
+              // Tile-ID zeigt außerhalb des Atlas → Warnung (einmal pro ID wäre ideal; hier einfach direkt)
+              dbg('WARN tile id outside atlas', JSON.stringify({id,col,row,cols:this.tsCols,rows:this._atlasRows}));
+              ctx.fillStyle = '#8b0000';
+              ctx.fillRect(tx*tileSize, ty*tileSize, tileSize, tileSize);
+              continue;
+            }
+            const sx = col * this.tsTile;
+            const sy = row * this.tsTile;
             ctx.drawImage(this.tileset, sx, sy, this.tsTile, this.tsTile, tx*tileSize, ty*tileSize, tileSize, tileSize);
           }
         }
@@ -315,18 +380,21 @@
     }
   }
 
-  // GameLoader
+  // GameLoader (mit Logs)
   const GameLoader = {
     _world: null,
     async start(mapUrl){
+      dbg('GameLoader.start', mapUrl);
       const mapData = await loadMap(mapUrl);
       const canvas = document.getElementById(CANVAS_ID);
       const world = new World(canvas, mapData);
       this._world = world;
       await world.init(mapUrl);
       window.BootUI?.paintInspectorBasic?.();
+      dbg('Game started');
     },
     async continueFrom(snap){
+      dbg('GameLoader.continueFrom');
       const mapData = await loadMap(snap?.mapUrl);
       const canvas = document.getElementById(CANVAS_ID);
       const world = new World(canvas, mapData);
@@ -334,6 +402,7 @@
       await world.init(snap?.mapUrl);
       await world.restore(snap);
       window.BootUI?.paintInspectorBasic?.();
+      dbg('Game continued');
     }
   };
   window.GameLoader = GameLoader;
