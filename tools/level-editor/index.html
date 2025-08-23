@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Siedler‑Mini • Level‑Editor v1</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --ui:#1b1f24; --ui2:#232a31; --ink:#e7eef6; --mut:#9fb0c0; --acc:#5aa9ff; --grid:#323841; --warn:#ff6a6a; }
+    html,body{height:100%;margin:0;background:#0b0f14;color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,Arial;}
+    #app{display:grid;grid-template-columns:280px 1fr 340px;grid-template-rows:48px 1fr 28px;height:100%;}
+    header{grid-column:1/4;background:var(--ui);display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid #000;}
+    header .btn{background:var(--ui2);border:1px solid #000;padding:6px 10px;border-radius:6px;cursor:pointer}
+    header .btn:hover{outline:1px solid var(--acc)}
+    #left,#right{background:#0d1218;border-right:1px solid #000;overflow:auto}
+    #right{border-left:1px solid #000}
+    #center{position:relative;background:#0b0f14}
+    #cv{width:100%;height:100%;display:block}
+    #status{grid-column:1/4;background:#0a0e13;color:#9aa3ad;display:flex;align-items:center;gap:12px;padding:4px 10px;border-top:1px solid #000}
+    h3{margin:10px;color:#d8e3ed}
+    .section{padding:8px;border-top:1px solid #000}
+    .row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+    .tile{width:64px;height:64px;image-rendering:pixelated;border:1px solid #000;margin:4px;cursor:pointer}
+    .tile.sel{outline:2px solid var(--acc)}
+    label{display:block;margin:6px 0 2px;color:#b3c2d1}
+    input[type=number],input[type=text],select{width:100%;padding:6px;background:#0e141b;color:var(--ink);border:1px solid #000;border-radius:6px}
+    button{padding:6px;background:var(--ui2);color:var(--ink);border:1px solid #000;border-radius:6px;cursor:pointer}
+    .tabs{display:flex;border-bottom:1px solid #000;gap:6px;padding:6px}
+    .tab{padding:6px 10px;background:#0f151c;border:1px solid #000;border-bottom:none;border-radius:8px 8px 0 0;cursor:pointer;color:#b9c9d9}
+    .tab.active{background:#18202a;color:#fff}
+    .panel{display:none}
+    .panel.active{display:block}
+    .kbd{background:#1a2028;border:1px solid #000;border-radius:4px;padding:1px 6px;color:#c8d6e3}
+    #inspector{position:absolute;right:10px;top:10px;background:rgba(0,0,0,.55);border:1px solid #000;padding:8px;border-radius:8px;font:12px monospace;pointer-events:none;white-space:pre}
+    /* Start-Overlay */
+    #start{position:fixed;inset:0;background:rgba(0,0,0,.86);display:flex;align-items:center;justify-content:center}
+    #start .card{width:560px;background:#0d1218;border:1px solid #000;border-radius:12px;padding:16px}
+    #start h2{margin:0 0 8px 0}
+    .list{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
+    .badge{padding:2px 6px;border-radius:6px;background:#16202a;color:#cfe5ff;border:1px solid #000;font-size:12px}
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <strong>🧭 Level‑Editor v1</strong>
+    <button class="btn" id="btnNew">Neues Level</button>
+    <button class="btn" id="btnOpen">JSON laden</button>
+    <button class="btn" id="btnSave">JSON speichern</button>
+    <button class="btn" id="btnExportPng">PNG export</button>
+    <span style="margin-left:auto"></span>
+    <label><input type="checkbox" id="chkGrid" checked> Grid</label>
+    <label><input type="checkbox" id="chkColl"> Collision</label>
+    <label><input type="checkbox" id="chkSnap" checked> Rasterfang</label>
+    <label style="margin-left:8px;">Modus
+      <select id="mode">
+        <option value="tiles">Tiles</option>
+        <option value="entities">Entities</option>
+        <option value="triggers">Trigger</option>
+      </select>
+    </label>
+    <label style="margin-left:8px;">Tool
+      <select id="tool">
+        <option value="paint">Pinsel</option>
+        <option value="erase">Radierer</option>
+        <option value="pick">Pipette</option>
+        <option value="rect">Rechteck</option>
+        <option value="fill">Füllen</option>
+        <option value="move">Bewegen/Selekt.</option>
+      </select>
+    </label>
+    <label style="margin-left:8px;">Pinsel
+      <select id="brush">
+        <option value="1">1×1</option>
+        <option value="3">3×3</option>
+        <option value="5">5×5</option>
+      </select>
+    </label>
+  </header>
+
+  <!-- LEFT: Tiles / Entities / Triggers -->
+  <aside id="left">
+    <div class="tabs">
+      <div class="tab active" data-tab="tilesTab">Tiles</div>
+      <div class="tab" data-tab="entitiesTab">Entities</div>
+      <div class="tab" data-tab="triggersTab">Trigger</div>
+    </div>
+
+    <div id="tilesTab" class="panel active">
+      <h3>Palette</h3>
+      <div class="section">
+        <div class="row" id="tileRow"></div>
+        <label for="addUrl">Kachel‑URL (PNG/JPG)</label>
+        <input type="text" id="addUrl" placeholder="./assets/tiles/grass.png" />
+        <div class="row">
+          <button id="btnAddUrl">Hinzufügen</button>
+          <input type="file" id="addFile" accept="image/*" />
+        </div>
+        <p style="color:#8aa0b4">Tipp: Bilder hier **ziehen & ablegen**.</p>
+      </div>
+      <h3>Ebenen</h3>
+      <div class="section">
+        <div class="row">
+          <select id="layerSel"></select>
+          <button id="btnAddLayer">+ Ebene</button>
+          <button id="btnDelLayer">–</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="entitiesTab" class="panel">
+      <h3>Entity‑Typen</h3>
+      <div class="section">
+        <div class="row">
+          <select id="entType">
+            <option value="building">building</option>
+            <option value="resource">resource</option>
+            <option value="spawner">spawner</option>
+            <option value="decoration">decoration</option>
+          </select>
+          <input type="text" id="entName" placeholder="Name (optional)" />
+          <button id="btnEntAdd">Platzieren</button>
+        </div>
+        <p class="muted">Modus <span class="kbd">Entities</span> + Tool <span class="kbd">Bewegen/Selekt.</span> zum Verschieben/Selektieren.</p>
+      </div>
+      <h3>Liste</h3>
+      <div class="section" id="entList"></div>
+    </div>
+
+    <div id="triggersTab" class="panel">
+      <h3>Trigger anlegen</h3>
+      <div class="section row">
+        <input type="text" id="trigName" placeholder="Name z. B. mission_start" />
+        <button id="btnTrigAdd">Rechteck ziehen</button>
+      </div>
+      <h3>Liste</h3>
+      <div class="section" id="trigList"></div>
+    </div>
+  </aside>
+
+  <!-- CENTER: Canvas -->
+  <main id="center">
+    <canvas id="cv"></canvas>
+    <pre id="inspector"></pre>
+  </main>
+
+  <!-- RIGHT: Properties -->
+  <aside id="right">
+    <h3>Level‑Eigenschaften</h3>
+    <div class="section">
+      <label>Breite (Tiles)</label><input type="number" id="mapW" min="1" value="32">
+      <label>Höhe (Tiles)</label><input type="number" id="mapH" min="1" value="18">
+      <label>Tile‑Größe (px)</label><input type="number" id="tileSize" min="8" step="1" value="64">
+      <div class="row" style="margin-top:8px;">
+        <button id="btnResize">Größe anwenden</button>
+        <button id="btnCenter">Zentrieren</button>
+      </div>
+    </div>
+
+    <h3>Kollision</h3>
+    <div class="section">
+      <div class="row">
+        <button id="btnColAll">Alles begehbar</button>
+        <button id="btnColNone">Alles blockiert</button>
+      </div>
+      <p><span class="kbd">Alt</span> beim Malen → Kollision toggeln</p>
+    </div>
+
+    <h3>Auswahl‑Eigenschaften</h3>
+    <div class="section" id="propBox">
+      <p style="color:var(--mut)">Nichts selektiert.</p>
+    </div>
+  </aside>
+
+  <footer id="status">
+    <span id="stMsg">Bereit.</span>
+    <span id="stXY"></span>
+    <span id="stSel"></span>
+    <span id="stLayer"></span>
+  </footer>
+</div>
+
+<!-- Start-Overlay -->
+<div id="start">
+  <div class="card">
+    <h2>Level‑Editor starten</h2>
+    <p>Wähle, wie du beginnen möchtest:</p>
+    <div class="row" style="margin:6px 0 12px;">
+      <button id="startBlank">Neues Level</button>
+      <button id="startLoad">JSON laden…</button>
+      <button id="startDemo">Demo laden (assets/maps/map-demo.json)</button>
+    </div>
+    <div class="list">
+      <span>Breite</span><input type="number" id="startW" value="32" min="1">
+      <span>Höhe</span><input type="number" id="startH" value="18" min="1">
+      <span>Tile</span><input type="number" id="startT" value="64" min="8">
+    </div>
+    <p style="margin-top:10px;color:var(--mut)">Debug/Inspector ist aktiviert (oben rechts) – bitte nicht entfernen.</p>
+    <span class="badge">v1</span>
+  </div>
+</div>
+
+<script type="module" src="./boot.js"></script>
+</body>
+</html>
