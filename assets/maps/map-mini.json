@@ -1,0 +1,58 @@
+{
+  "width": 22,
+  "height": 14,
+  "tileSize": 64,
+  "tileset": "./assets/tiles/tileset.terrain.json",
+
+  /* Grundidee:
+     - Viel Wiese (r4_c0)
+     - Ein geschwungener Fluss/Lagune (r0_c4)
+     - Steinplateau/Wege unten (r8_c0 / r0_c1)
+     - Etwas Fels/Stein (r3_c10) und dunklere Wiese (r8_c3) als Akzent
+     Hinweis: Keys sind reine Raster-Referenzen (terrain_rROW_cCOL) – keine Autotiles.
+  */
+
+  "tiles": [
+    /* Zeile 0 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 1 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 2 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 3 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 4 – kleine Insel in der Lagune */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 5 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r8_c3","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 6 – Stein/Fels rechts */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r3_c10","terrain_r3_c10","terrain_r3_c10","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 7 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r0_c4","terrain_r0_c4","terrain_r0_c4","terrain_r4_c0","terrain_r3_c10","terrain_r3_c10","terrain_r3_c10","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 8 – Wege beginnen unten links */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 9 – Wegnetz */
+    "terrain_r8_c0","terrain_r0_c1","terrain_r0_c1","terrain_r8_c0","terrain_r0_c1","terrain_r4_c0","terrain_r0_c1","terrain_r8_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 10 – Wegnetz */
+    "terrain_r8_c0","terrain_r0_c1","terrain_r4_c0","terrain_r8_c0","terrain_r0_c1","terrain_r4_c0","terrain_r0_c1","terrain_r8_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 11 – Wegnetz */
+    "terrain_r8_c0","terrain_r0_c1","terrain_r0_c1","terrain_r8_c0","terrain_r0_c1","terrain_r4_c0","terrain_r0_c1","terrain_r8_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 12 – „Dorfplatz“ unten links */
+    "terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r8_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0",
+
+    /* Zeile 13 */
+    "terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"
+  ]
+}
