@@ -2,9 +2,13 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>Siedler‑Mini • Level‑Editor v1</title>
+  <title>Siedler‑Mini • Level‑Editor v1 (mit Atlas‑Support)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
+    /* ————————————————————————————————————————————————
+       UI-Grundlayout — bewusst „neutral dunkel“, kollisionsfrei
+       zum Spielstil. Bitte Farbschema beibehalten.
+       ———————————————————————————————————————————————— */
     :root { --ui:#1b1f24; --ui2:#232a31; --ink:#e7eef6; --mut:#9fb0c0; --acc:#5aa9ff; --grid:#323841; --warn:#ff6a6a; }
     html,body{height:100%;margin:0;background:#0b0f14;color:var(--ink);font:14px/1.45 system-ui,Segoe UI,Roboto,Arial;}
     #app{display:grid;grid-template-columns:280px 1fr 340px;grid-template-rows:48px 1fr 28px;height:100%;}
@@ -88,6 +92,7 @@
     <div id="tilesTab" class="panel active">
       <h3>Palette</h3>
       <div class="section">
+        <!-- Statische Bilder wie gehabt -->
         <div class="row" id="tileRow"></div>
         <label for="addUrl">Kachel‑URL (PNG/JPG)</label>
         <input type="text" id="addUrl" placeholder="./assets/tiles/grass.png" />
@@ -95,8 +100,27 @@
           <button id="btnAddUrl">Hinzufügen</button>
           <input type="file" id="addFile" accept="image/*" />
         </div>
-        <p style="color:#8aa0b4">Tipp: Bilder hier **ziehen & ablegen**.</p>
+
+        <!-- NEU: Atlas‑Laden – JSON + Bild (Sprite‑Sheet) -->
+        <h3 style="margin-top:16px">Atlas laden (JSON + Bild)</h3>
+        <div class="section">
+          <div class="row">
+            <input type="file" id="addAtlasJson" accept=".json,application/json" />
+            <input type="file" id="addAtlasImage" accept="image/*" />
+          </div>
+          <div class="row">
+            <input type="text" id="atlasPrefix" placeholder="Optionaler Name‑Präfix, z. B. tiles/" />
+            <button id="btnAddAtlas">Atlas importieren</button>
+          </div>
+          <p style="color:#8aa0b4; margin-top:6px;">
+            Unterstützt typische TexturePacker/PIXI/Phaser‑Formate („frames“ als Objekt oder Array).<br/>
+            Frames werden als einzelne Tiles in die Palette aufgenommen (Stempeln wie gewohnt).
+          </p>
+        </div>
+
+        <p style="color:#8aa0b4">Tipp: Bilder oder Atlas‑JSON hier **ziehen & ablegen**.</p>
       </div>
+
       <h3>Ebenen</h3>
       <div class="section">
         <div class="row">
@@ -140,6 +164,7 @@
   <!-- CENTER: Canvas -->
   <main id="center">
     <canvas id="cv"></canvas>
+    <!-- Debug/Inspector immer aktiv lassen (Projektvorgabe) -->
     <pre id="inspector"></pre>
   </main>
 
@@ -179,7 +204,7 @@
   </footer>
 </div>
 
-<!-- Start-Overlay -->
+<!-- Start-Overlay (Startfenster zuerst) -->
 <div id="start">
   <div class="card">
     <h2>Level‑Editor starten</h2>
@@ -195,7 +220,7 @@
       <span>Tile</span><input type="number" id="startT" value="64" min="8">
     </div>
     <p style="margin-top:10px;color:var(--mut)">Debug/Inspector ist aktiviert (oben rechts) – bitte nicht entfernen.</p>
-    <span class="badge">v1</span>
+    <span class="badge">v1‑atlas</span>
   </div>
 </div>
 
