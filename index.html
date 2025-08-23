@@ -8,10 +8,11 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- =======================================================================
-       index.html • v1.7
-       - Integrierter Level-Editor (Dock/Overlay)
-       - Bestehende UI (Startpanel, HUD, Buildmenu, Toast/Inspector, Fullscreen)
-       - Mobile-sicheres Layout, keine Browser-Zoom-Gesten (Pinch-Zoom nur Canvas)
+       index.html • v1.8
+       - Live‑Malen direkt auf dem Canvas (Pinsel/Füllen/Löschen)
+       - Undo/Redo (Stacks; auch Drag-Operationen)
+       - Auto‑Tiler für Straßen & Gewässer (N/E/S/W-Bitmasken)
+       - Editor-Dock bleibt erhalten; Startpanel/HUD/Toast/Inspector/FS
        ======================================================================= -->
 
   <style>
@@ -35,14 +36,16 @@
     html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
     button{cursor:pointer}
 
-    /* ============== Canvas Layer ========================================= */
+    /* Canvas */
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
 
-    /* ============== Boot / Startpanel ==================================== */
+    /* Backdrop mit Logo */
     #backdrop{
       position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;
       opacity:.9;transition:opacity .5s ease;pointer-events:none;z-index:5;
     }
+
+    /* Startpanel */
     #startPanel{
       position:fixed;inset:0;display:grid;place-items:center;z-index:20;
       background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.55));
@@ -67,7 +70,7 @@
          padding:10px;border-radius:12px;min-width:180px}
     .note{color:var(--muted);font-size:.9rem;margin-top:6px}
 
-    /* ============== HUD (Top-Left) ======================================= */
+    /* HUD */
     #hud{
       position:fixed;left:8px;top:8px;z-index:12;min-width:280px;
       padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));
@@ -79,7 +82,7 @@
     .res .val{min-width:28px;text-align:right}
     .ico{width:18px;height:18px;opacity:.9;display:inline-block;vertical-align:-3px}
 
-    /* ============== Build Menu (Center-Top) ============================== */
+    /* Build-Menü */
     #buildMenu{
       position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:12;
       background:var(--glass);backdrop-filter:blur(var(--blur));
@@ -88,22 +91,20 @@
     #buildTools{display:flex;gap:10px;flex-wrap:wrap}
     .tool{padding:10px 12px;border-radius:12px;background:#1f2a3a;border:1px solid rgba(255,255,255,.08);min-width:44px;text-align:center}
     .tool.active{outline:2px solid var(--accent)}
-
     #buildReopen{
       position:fixed;left:8px;top:88px;z-index:12;display:none;
       background:var(--glass);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(var(--blur));
       border-radius:12px;padding:8px 10px
     }
 
-    /* ============== Toast-Leiste (unten) ================================= */
+    /* Toast */
     #toast{
       position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;
       padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)
     }
     #toast .left, #toast .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    #toast .btn{padding:10px 12px}
 
-    /* ============== Inspector (Dock) ===================================== */
+    /* Inspector */
     #inspector{
       position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;
       background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px 12px 10px
@@ -112,16 +113,16 @@
          font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,.06)}
     .logline{white-space:pre}
 
-    /* ============== Vollbild-Buttons (rechts oben) ======================= */
+    /* Vollbild-Toggles */
     #fsEnter,#fsExit{
       position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid rgba(255,255,255,.08);
       background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px
     }
     #fsExit{display:none}
 
-    /* ============== Level-Editor (Dock/Overlay) ========================== */
+    /* Level-Editor Dock */
     #editorDock{
-      position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);max-width:100vw;z-index:40;
+      position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);max-width:100vw;z-index:40;
       display:none;background:var(--panel);border-left:1px solid rgba(255,255,255,.1);
       box-shadow:-12px 0 30px rgba(0,0,0,.25)
     }
@@ -138,6 +139,13 @@
     #tilesPreview{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
     #tilesPreview button{aspect-ratio:1/1;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#111822}
 
+    /* Overlay-Hinweis beim Live-Malen */
+    #paintHUD{
+      position:fixed;left:50%;top:18px;transform:translateX(-50%);
+      background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(6px);
+      padding:6px 10px;border-radius:12px;z-index:50;display:none;font-size:.9rem
+    }
+
     @media (max-width: 880px){
       #editorDock{left:0;width:100vw}
     }
@@ -145,13 +153,13 @@
 </head>
 <body>
 
-  <!-- ====================== Spielfeld / Canvas =========================== -->
+  <!-- Canvas -->
   <canvas id="stage"></canvas>
 
-  <!-- ====================== Backdrop mit Logo (wird ausgeblendet) ======== -->
+  <!-- Backdrop mit Logo -->
   <div id="backdrop" aria-hidden="true"></div>
 
-  <!-- ====================== Startpanel =================================== -->
+  <!-- Startpanel -->
   <div id="startPanel" role="dialog" aria-modal="true">
     <div id="startCard">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
@@ -173,14 +181,14 @@
       <div class="row" style="margin-bottom:10px">
         <button id="btnReset" class="btn danger">Reset</button>
         <div class="grow"></div>
-        <span class="note">Hinweis: Vollbild über das Symbol oben rechts.</span>
+        <span class="note">Vollbild über das Symbol oben rechts.</span>
       </div>
 
-      <div class="note">Tipp: Den <b>Level‑Editor</b> kannst du jederzeit über die Toast‑Leiste unten öffnen.</div>
+      <div class="note">Tipp: Den <b>Level‑Editor</b> oder das <b>Live‑Malen</b> kannst du unten in der Toast‑Leiste aktivieren.</div>
     </div>
   </div>
 
-  <!-- ====================== HUD ========================================== -->
+  <!-- HUD -->
   <div id="hud" aria-live="polite" aria-atomic="true">
     <div id="versionSmall">V?.?.? • <span id="versionDate"></span></div>
     <div id="resbar" class="res">
@@ -191,7 +199,7 @@
     </div>
   </div>
 
-  <!-- ====================== Build-Menü =================================== -->
+  <!-- Build-Menü -->
   <div id="buildMenu">
     <div style="font-weight:700;margin-bottom:6px">Baumenü</div>
     <div id="buildTools">
@@ -203,23 +211,26 @@
   </div>
   <button id="buildReopen" title="Baumenü öffnen">🧱 Bauen</button>
 
-  <!-- ====================== Vollbild-Buttons ============================= -->
+  <!-- Vollbild -->
   <button id="fsEnter" title="Vollbild"><span>⛶</span></button>
   <button id="fsExit"  title="Vollbild verlassen"><span>✕</span></button>
 
-  <!-- ====================== Toast-Leiste ================================= -->
+  <!-- Toast -->
   <div id="toast" role="region" aria-label="Utility-Leiste">
     <div class="left">
       <button id="btnMenu" class="btn">Menü</button>
     </div>
     <div class="right">
-      <button id="btnInspector" class="btn">Inspector öffnen</button>
+      <button id="btnInspector" class="btn">Inspector</button>
       <button id="btnCache" class="btn">Cache leeren</button>
-      <button id="btnEditor" class="btn">Editor öffnen</button>
+      <button id="btnEditor" class="btn">Editor</button>
+      <button id="btnPaint" class="btn">Live‑Malen</button>
+      <button id="btnUndo" class="btn">Undo</button>
+      <button id="btnRedo" class="btn">Redo</button>
     </div>
   </div>
 
-  <!-- ====================== Inspector ==================================== -->
+  <!-- Inspector -->
   <div id="inspector">
     <div class="row" style="justify-content:space-between;margin-bottom:8px">
       <strong>Dev‑Inspector</strong>
@@ -233,7 +244,7 @@
     <div id="log" aria-live="polite"></div>
   </div>
 
-  <!-- ====================== Level‑Editor ================================= -->
+  <!-- Level‑Editor Dock -->
   <div id="editorDock" role="dialog" aria-modal="true" aria-label="Level-Editor">
     <div id="editorHead">
       <div style="font-weight:800">Level‑Editor</div>
@@ -286,7 +297,7 @@
         <div class="field">
           <label>Tile‑Index auswählen</label>
           <div id="tilesPreview"></div>
-          <div class="note">Tipp: Der Index entspricht dem Zellen‑Index im Tileset‑Grid (0‑basiert).</div>
+          <div class="note">Der Index entspricht dem Zellen‑Index im Tileset‑Grid (0‑basiert).</div>
         </div>
 
         <div class="field">
@@ -312,14 +323,18 @@
     </div>
   </div>
 
-  <!-- ====================== SCRIPT-MODULE: Reihenfolge wichtig! ===========
-       1) asset.js (einfacher Image-Loader + TexturesReady-Fahne)
-       2) game.js  (Spiel-Engine, Units, Map-Lader etc.)
-       3) boot.js  (UI/Start/Inspector/FullScreen/Toast – ruft GameLoader)
-       4) inline Editor-Glue (verbindet Editor mit GameLoader)
+  <!-- Overlay-Hinweis Live-Paint -->
+  <div id="paintHUD">Live‑Malen aktiv • Brush:<span id="hudBrush">paint</span> • Size:<span id="hudSize">1</span> • Tile:<span id="hudTile">0</span></div>
+
+  <!-- ====================== SCRIPT-MODULE ==================================
+       1) asset.js    – Image-Loader + TexturesReady-Fahne
+       2) game.js     – Spiel-Engine (bereits vorhanden)
+       3) boot.js     – UI/Start/Inspector/FS
+       4) inline code – Editor-Glue + Live-Paint + Auto-Tiler + Undo/Redo
        =================================================================== -->
+
   <script>
-  // ---- (1) asset.js – minimaler Loader (falls nicht schon vorhanden) -----
+  // (1) asset.js – minimaler Loader
   window.Asset = window.Asset || (function(){
     const cache = new Map();
     let texturesReady = false;
@@ -341,96 +356,62 @@
   })();
   </script>
 
-  <!-- (2) game.js – deine aktuelle Engine einbinden -->
+  <!-- (2) game.js -->
   <script src="./game.js"></script>
 
-  <!-- (3) boot.js – vorhandene Start-/UI-Logik -->
+  <!-- (3) boot.js -->
   <script src="./boot.js"></script>
 
-  <!-- (4) Inline: Editor-Glue + UI-Verhalten -->
+  <!-- (4) Inline: Editor + Live-Paint + Auto-Tiler + Undo/Redo -->
   <script>
   (function(){
-    const $ = sel => document.querySelector(sel);
-    const log = (m)=> (window.BootUI?.dbg ? BootUI.dbg(m) : console.log(m));
+    const $ = (s)=>document.querySelector(s);
+    const log = (...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
+    const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 
-    // ======== Build/Version Anzeige =======================================
-    const today = new Date();
-    const y = today.getFullYear(), m = String(today.getMonth()+1).padStart(2,'0'), d = String(today.getDate()).padStart(2,'0');
+    // ===== Version/Datum =====
+    const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
     $('#buildDate').textContent = `${y}${m}${d}`;
     $('#versionDate').textContent = `${y}${m}${d}`;
+    BootUI = window.BootUI || {};
+    BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
 
-    // ======== Startpanel Buttons ==========================================
+    // ===== Startpanel =====
     $('#btnNew').addEventListener('click', async ()=>{
       const map = $('#mapSelect').value;
       if (confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')) {
-        hideStart();
-        await window.GameLoader.start(map);
+        hideStart(); await window.GameLoader.start(map);
       }
     });
-    $('#btnCont').addEventListener('click', async ()=>{
-      hideStart();
-      BootUI.continueLastSnapshot?.();
-    });
-    $('#btnReset').addEventListener('click', ()=>{
-      if (confirm('Wirklich alle Spielstände zurücksetzen (Cache leeren)?')) {
-        try { localStorage.clear(); log('[Reset] OK'); } catch(e){}
-      }
-    });
+    $('#btnCont').addEventListener('click', async ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); });
+    $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände zurücksetzen (Cache leeren)?')){ try{ localStorage.clear(); log('[Reset] OK'); }catch(e){} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    // ======== Build-Menü zeigen/verstecken =================================
+    // ===== Build-Menü toggles =====
     (function(){
-      const menu = $('#buildMenu');
-      const reopen = $('#buildReopen');
-      // Schließen via Doppeltap auf Titel (kleiner Hack) – oder später eigener Close-Button
+      const menu=$('#buildMenu'), reopen=$('#buildReopen');
       menu.addEventListener('dblclick', ()=>{ menu.style.display='none'; reopen.style.display='block'; });
       reopen.addEventListener('click', ()=>{ menu.style.display='block'; reopen.style.display='none'; });
     })();
 
-    // ======== Vollbild =====================================================
-    const fsEnter = $('#fsEnter'), fsExit = $('#fsExit');
+    // ===== Vollbild =====
+    const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
     fsEnter.addEventListener('click', ()=>{
-      const el = document.documentElement;
-      const goFS = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-      goFS?.call(el).then(()=>{ fsEnter.style.display='none'; fsExit.style.display='inline-block'; }).catch(()=>{});
+      const el=document.documentElement, goFS=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen;
+      goFS?.call(el)?.then(()=>{ fsEnter.style.display='none'; fsExit.style.display='inline-block'; }).catch(()=>{});
     });
     fsExit.addEventListener('click', ()=>{
-      const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-      ex?.call(document).finally(()=>{ fsExit.style.display='none'; fsEnter.style.display='inline-block'; });
+      const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen;
+      ex?.call(document)?.finally(()=>{ fsExit.style.display='none'; fsEnter.style.display='inline-block'; });
     });
 
-    // ======== Toast Buttons =================================================
+    // ===== Toast Buttons =====
     $('#btnMenu').addEventListener('click', ()=>{ $('#startPanel').style.display='grid'; });
     $('#btnInspector').addEventListener('click', ()=>{ $('#inspector').style.display='block'; });
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ try{ localStorage.clear(); location.reload(); }catch(e){} } });
-    $('#btnEditor').addEventListener('click', ()=> openEditor(true));
     $('#btnCloseInspector').addEventListener('click', ()=> $('#inspector').style.display='none');
 
-    // ======== Inspector Log‑API Bindung ===================================
-    window.BootUI = window.BootUI || {};
-    BootUI.dbg = function(){
-      const t = new Date();
-      const stamp = `[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
-      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
-      const el = document.createElement('div'); el.className='logline'; el.textContent = `${stamp} ${line}`;
-      const logEl = $('#log'); logEl.appendChild(el); logEl.scrollTop = logEl.scrollHeight;
-      console.log(stamp, ...arguments);
-    };
-    BootUI.paintInspectorBasic = function(){
-      // Platz für spätere Stats – aktuell reicht das Log
-    };
-    BootUI.continueLastSnapshot = async function(){
-      try{
-        const raw = localStorage.getItem('lastSnapshot');
-        if (!raw) { alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
-        const snap = JSON.parse(raw);
-        await window.GameLoader.continueFrom(snap);
-      }catch(e){
-        alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid';
-      }
-    };
-
-    // ======== Backdrop Fade steuern (wenn Texturen ready) ==================
+    // ===== Backdrop Fade =====
     (function waitTextures(){
       const bd = $('#backdrop');
       let timeout = setTimeout(()=>{ BootUI.dbg('Textures TIMEOUT → fade'); bd.style.opacity='0'; setTimeout(()=>bd.style.display='none', 1200); }, 60000);
@@ -440,30 +421,37 @@
           clearTimeout(timeout);
           bd.style.opacity='0';
           setTimeout(()=>{ bd.style.display='none'; BootUI.dbg('Backdrop hidden'); }, 3000);
-        } else {
-          requestAnimationFrame(tick);
-        }
+        } else { requestAnimationFrame(tick); }
       };
       tick();
     })();
 
-    // ==================== LEVEL EDITOR =====================================
+    // ===== Inspector Log API =====
+    BootUI.paintInspectorBasic = function(){};
+    BootUI.continueLastSnapshot = async function(){
+      try{
+        const raw = localStorage.getItem('lastSnapshot');
+        if (!raw) { alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
+        const snap = JSON.parse(raw);
+        await window.GameLoader.continueFrom(snap);
+      }catch(e){ alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid'; }
+    };
+
+    // ===================== Level-Editor (Dock) =============================
     const ed = {
       open:false, brush:'paint', size:1, tile:0,
       width:32, height:18, tileSize:32, tileset:'./assets/tiles/tileset.terrain.json',
       tiles: new Uint16Array(32*18),
-      builds: [] // {type,tx,ty}
+      builds: []
     };
-
-    // UI Wiring
     $('#btnEditor').addEventListener('click', ()=>openEditor(true));
     $('#btnEditorClose').addEventListener('click', ()=>openEditor(false));
     $('#edWidth').addEventListener('change', e=> ed.width = parseInt(e.target.value,10)||32);
     $('#edHeight').addEventListener('change', e=> ed.height = parseInt(e.target.value,10)||18);
     $('#edTileSize').addEventListener('change', e=> ed.tileSize = parseInt(e.target.value,10)||32);
     $('#edTileset').addEventListener('change', e=> ed.tileset = e.target.value);
-    document.querySelectorAll('[data-ed="brush"]').forEach(b=> b.addEventListener('click', ()=> ed.brush = b.dataset.val));
-    document.querySelectorAll('[data-ed="size"]').forEach(b=> b.addEventListener('click', ()=> ed.size = parseInt(b.dataset.val,10)||1));
+    document.querySelectorAll('[data-ed="brush"]').forEach(b=> b.addEventListener('click', ()=>{ ed.brush = b.dataset.val; updatePaintHUD(); }));
+    document.querySelectorAll('[data-ed="size"]').forEach(b=> b.addEventListener('click', ()=>{ ed.size = parseInt(b.dataset.val,10)||1; updatePaintHUD(); }));
     document.querySelectorAll('[data-ed="build"]').forEach(b=> b.addEventListener('click', ()=> { ed.builds.push({type:b.dataset.val, tx:0, ty:0}); BootUI.dbg('Ed add building', b.dataset.val); }));
 
     $('#btnEdNew').addEventListener('click', ()=>{
@@ -472,79 +460,300 @@
       ed.builds = [];
       BootUI.dbg('Editor: new map', {w:ed.width,h:ed.height,tile:ed.tileSize});
     });
-
     $('#btnEdExport').addEventListener('click', ()=>{
       const data = editorToMap();
       const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'map-custom.json';
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'map-custom.json'; a.click(); URL.revokeObjectURL(a.href);
       BootUI.dbg('Editor: export map-custom.json');
     });
-
     $('#fileImport').addEventListener('change', async (e)=>{
       const file = e.target.files?.[0]; if(!file) return;
-      try{
-        const txt = await file.text(); const j = JSON.parse(txt);
-        applyMapToEditor(j);
-        BootUI.dbg('Editor: import OK', file.name);
-      }catch(err){
-        alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL', String(err?.message||err));
-      }
+      try{ const txt = await file.text(); const j = JSON.parse(txt); applyMapToEditor(j); BootUI.dbg('Editor: import OK', file.name); }
+      catch(err){ alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL', String(err?.message||err)); }
       e.target.value='';
     });
-
     $('#btnEditorTest').addEventListener('click', async ()=>{
-      const data = editorToMap();
-      const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      openEditor(false);
-      $('#startPanel').style.display='none';
-      await window.GameLoader.start(url);
-      setTimeout(()=> URL.revokeObjectURL(url), 10000);
-      BootUI.dbg('Editor: test run');
+      const data = editorToMap(); const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+      const url = URL.createObjectURL(blob); openEditor(false); $('#startPanel').style.display='none'; await window.GameLoader.start(url);
+      setTimeout(()=> URL.revokeObjectURL(url), 10000); BootUI.dbg('Editor: test run');
     });
 
-    // Tiles-Auswahl füllen (0..35 Dummy)
     (function buildTilePreview(){
       const host = $('#tilesPreview');
       for (let i=0;i<36;i++){
-        const b = document.createElement('button');
-        b.title = 'Tile '+i;
-        b.textContent = i;
-        b.addEventListener('click', ()=>{ ed.tile = i; [...host.children].forEach(n=>n.style.outline=''); b.style.outline='2px solid var(--accent)'; });
+        const b = document.createElement('button'); b.title = 'Tile '+i; b.textContent = i;
+        b.addEventListener('click', ()=>{ ed.tile = i; [...host.children].forEach(n=>n.style.outline=''); b.style.outline='2px solid var(--accent)'; updatePaintHUD(); });
         host.appendChild(b);
       }
     })();
-
-    function openEditor(v){
-      ed.open = !!v;
-      $('#editorDock').style.display = v ? 'block' : 'none';
-    }
-
-    function editorToMap(){
-      return {
-        width: ed.width,
-        height: ed.height,
-        tileSize: ed.tileSize,
-        tileset: ed.tileset,
-        tiles: Array.from(ed.tiles)
-      };
-    }
+    function openEditor(v){ ed.open=!!v; $('#editorDock').style.display = v ? 'block' : 'none'; }
+    function editorToMap(){ return {width:ed.width,height:ed.height,tileSize:ed.tileSize,tileset:ed.tileset,tiles:Array.from(ed.tiles)}; }
     function applyMapToEditor(j){
-      ed.width = j.width|0; ed.height = j.height|0; ed.tileSize = j.tileSize|0;
-      ed.tileset = j.tileset || './assets/tiles/tileset.terrain.json';
-      ed.tiles = new Uint16Array((j.tiles||[]).slice(0, ed.width*ed.height));
-      $('#edWidth').value = ed.width; $('#edHeight').value = ed.height; $('#edTileSize').value = ed.tileSize; $('#edTileset').value = ed.tileset;
+      ed.width=j.width|0; ed.height=j.height|0; ed.tileSize=j.tileSize|0; ed.tileset=j.tileset || './assets/tiles/tileset.terrain.json';
+      ed.tiles=new Uint16Array((j.tiles||[]).slice(0, ed.width*ed.height));
+      $('#edWidth').value=ed.width; $('#edHeight').value=ed.height; $('#edTileSize').value=ed.tileSize; $('#edTileset').value=ed.tileset;
     }
 
-    // Optional: Malen auf die laufende Karte (einfacher Prototyp)
-    // → Für den Anfang lassen wir das Malen direkt in der Spiel-Canvas außen vor,
-    //   damit die Engine sauber bleibt. Später können wir einen edit-Overlay einbauen.
+    // ===================== Live‑Malen direkt auf Canvas ====================
+    const paint = {
+      active:false, mode:'paint', size:1, tile:0,
+      dragging:false, batch:[], // gesammelt für Undo
+      undo:[], redo:[],
+      autoTile:true
+    };
+    const hud = {wrap: $('#paintHUD'), brush: $('#hudBrush'), size: $('#hudSize'), tile: $('#hudTile') };
+    function updatePaintHUD(){ hud.brush.textContent = paint.mode; hud.size.textContent = paint.size; hud.tile.textContent = paint.tile; }
 
-    // Initial-Log
+    // *** Auto‑Tiler-Konfig ***
+    // Passe hier die Indizes an DEIN Tileset an:
+    const AUTO_TILER = {
+      ENABLED: true,
+      // Kategorien: welche Tile-Indices gelten als Straße / Wasser?
+      ROAD_SET: new Set([40]),   // <— Beispiel: 40 ist "Straße-Basis"
+      WATER_SET:new Set([50]),   // <— Beispiel: 50 ist "Wasser-Basis"
+      // Bitmask-zu-Index-Tabellen (0..15 → Index)
+      // Maske: N=1, E=2, S=4, W=8 (Summe)
+      ROAD_MASK_MAP: {
+        0:40, 1:41, 2:42, 4:43, 8:44,
+        3:45, 6:46, 9:47, 12:48,
+        5:49, 10:50,
+        7:51, 11:52, 13:53, 14:54, 15:55
+      },
+      WATER_MASK_MAP: {
+        0:50, 1:51, 2:52, 4:53, 8:54,
+        3:55, 6:56, 9:57, 12:58,
+        5:59, 10:60,
+        7:61, 11:62, 13:63, 14:64, 15:65
+      }
+    };
+    // Fallback, falls dein Tileset andere Indizes hat:
+    function autotileIndex(kind, mask, fallbackIdx){
+      if (!AUTO_TILER.ENABLED) return fallbackIdx;
+      if (kind==='road'){ return AUTO_TILER.ROAD_MASK_MAP[mask] ?? fallbackIdx; }
+      if (kind==='water'){ return AUTO_TILER.WATER_MASK_MAP[mask] ?? fallbackIdx; }
+      return fallbackIdx;
+    }
+    function isKind(idx, kind){
+      if (kind==='road') return AUTO_TILER.ROAD_SET.has(idx);
+      if (kind==='water') return AUTO_TILER.WATER_SET.has(idx);
+      return false;
+    }
+
+    // UI-Kopplung
+    $('#btnPaint').addEventListener('click', ()=> togglePaint());
+    $('#btnUndo').addEventListener('click', ()=> doUndo());
+    $('#btnRedo').addEventListener('click', ()=> doRedo());
+    window.addEventListener('keydown', (e)=>{
+      if (e.key.toLowerCase()==='e'){ togglePaint(); }
+      if ((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); doUndo(); }
+      if (((e.ctrlKey||e.metaKey)&& e.shiftKey && e.key.toLowerCase()==='z') || ((e.ctrlKey||e.metaKey)&& e.key.toLowerCase()==='y')){ e.preventDefault(); doRedo(); }
+      if (e.key.toLowerCase()==='r'){ paint.mode='paint'; paint.tile=[...AUTO_TILER.ROAD_SET][0]??paint.tile; paint.autoTile=true; updatePaintHUD(); flashHUD(); }
+      if (e.key.toLowerCase()==='w'){ paint.mode='paint'; paint.tile=[...AUTO_TILER.WATER_SET][0]??paint.tile; paint.autoTile=true; updatePaintHUD(); flashHUD(); }
+      if (e.key==='+'){ paint.size=clamp(paint.size+1,1,4); updatePaintHUD(); flashHUD(); }
+      if (e.key==='-'){ paint.size=clamp(paint.size-1,1,4); updatePaintHUD(); flashHUD(); }
+    });
+
+    function togglePaint(force){
+      paint.active = (typeof force==='boolean') ? force : !paint.active;
+      $('#paintHUD').style.display = paint.active ? 'block' : 'none';
+      updatePaintHUD();
+      if (paint.active) attachPaintHandlers(); else detachPaintHandlers();
+      log('Live‑Malen', paint.active?'ON':'OFF');
+    }
+    function flashHUD(){ const el=hud.wrap; el.style.transform='translateX(-50%) scale(1.05)'; setTimeout(()=>el.style.transform='translateX(-50%) scale(1)',150); }
+
+    // Zugriff auf Game-World & Koordinatenumrechnung
+    const canvas = $('#stage');
+    function getWorld(){
+      return window.GameLoader? window.GameLoader._world : null;
+    }
+    function clientToTile(x,y){
+      const w=getWorld(); if(!w) return {tx:-1,ty:-1};
+      const r=canvas.getBoundingClientRect();
+      const cx = (x - r.left)/w.zoom + w.camX;
+      const cy = (y - r.top )/w.zoom + w.camY;
+      const tx = Math.floor(cx / w.tileSize);
+      const ty = Math.floor(cy / w.tileSize);
+      return {tx,ty};
+    }
+
+    // Undo/Redo
+    function pushBatchToUndo(batch){
+      if (!batch || !batch.length) return;
+      paint.undo.push(batch.map(e=>({...e})));
+      paint.redo.length=0; // clear redo
+    }
+    function doUndo(){
+      const w=getWorld(); if(!w) return;
+      const op=paint.undo.pop(); if(!op) return;
+      const redoBatch=[];
+      for(const e of op){
+        const idx = w.map.width*e.ty + e.tx;
+        const cur = w.tiles[idx];
+        redoBatch.push({tx:e.tx,ty:e.ty, prev:cur, next:e.prev});
+        w.tiles[idx]=e.prev;
+      }
+      paint.redo.push(redoBatch);
+      BootUI.dbg('Undo', op.length+' changes');
+    }
+    function doRedo(){
+      const w=getWorld(); if(!w) return;
+      const op=paint.redo.pop(); if(!op) return;
+      const undoBatch=[];
+      for(const e of op){
+        const idx = w.map.width*e.ty + e.tx;
+        const cur = w.tiles[idx];
+        undoBatch.push({tx:e.tx,ty:e.ty, prev:cur, next:e.next});
+        w.tiles[idx]=e.next;
+      }
+      paint.undo.push(undoBatch);
+      BootUI.dbg('Redo', op.length+' changes');
+    }
+
+    // Malen/Füllen/Löschen
+    function attachPaintHandlers(){
+      canvas.addEventListener('pointerdown', onDown, {passive:false});
+      canvas.addEventListener('pointermove', onMove, {passive:false});
+      canvas.addEventListener('pointerup',   onUp,   {passive:false});
+      canvas.addEventListener('pointercancel', onUp, {passive:false});
+    }
+    function detachPaintHandlers(){
+      canvas.removeEventListener('pointerdown', onDown);
+      canvas.removeEventListener('pointermove', onMove);
+      canvas.removeEventListener('pointerup',   onUp);
+      canvas.removeEventListener('pointercancel', onUp);
+    }
+    function onDown(ev){
+      if (!paint.active) return;
+      ev.preventDefault();
+      paint.dragging=true; paint.batch=[];
+      const {tx,ty}=clientToTile(ev.clientX,ev.clientY);
+      applyBrush(tx,ty,true);
+    }
+    function onMove(ev){
+      if (!paint.active || !paint.dragging) return;
+      ev.preventDefault();
+      const {tx,ty}=clientToTile(ev.clientX,ev.clientY);
+      applyBrush(tx,ty,false);
+    }
+    function onUp(_ev){
+      if (!paint.active) return;
+      paint.dragging=false;
+      pushBatchToUndo(paint.batch);
+      paint.batch=[];
+    }
+
+    function applyBrush(tx,ty,first){
+      const w=getWorld(); if(!w) return;
+      if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
+
+      if (ed.brush==='fill' || paint.mode==='fill'){
+        if (first) floodFill(tx,ty, paint.tile);
+        return;
+      }
+      const half = paint.size-1;
+      for(let dy=-half; dy<=half; dy++){
+        for(let dx=-half; dx<=half; dx++){
+          const x=tx+dx, y=ty+dy;
+          if (x<0||y<0||x>=w.map.width||y>=w.map.height) continue;
+          if (ed.brush==='erase' || paint.mode==='erase') setTileWithRecord(x,y,0);
+          else setTileWithRecord(x,y, paint.tile);
+          if (paint.autoTile) autoTileAround(x,y);
+        }
+      }
+    }
+
+    function setTileWithRecord(tx,ty,newIdx){
+      const w=getWorld(); if(!w) return;
+      const i = w.map.width*ty + tx;
+      const prev = w.tiles[i]|0;
+      if (prev===newIdx) return;
+      w.tiles[i] = newIdx;
+      paint.batch.push({tx,ty,prev,next:newIdx});
+    }
+
+    function floodFill(tx,ty,newIdx){
+      const w=getWorld(); if(!w) return;
+      const W=w.map.width, H=w.map.height;
+      const i0=W*ty+tx, oldIdx=w.tiles[i0]|0;
+      if (oldIdx===newIdx) return;
+      const q=[[tx,ty]]; const seen=new Set([i0]);
+      const batch=[];
+      while(q.length){
+        const [x,y]=q.pop(); const ii=W*y+x; const cur=w.tiles[ii]|0;
+        if (cur!==oldIdx) continue;
+        w.tiles[ii]=newIdx; batch.push({tx:x,ty:y,prev:cur,next:newIdx});
+        if (x>0 && !seen.has(ii-1)){ seen.add(ii-1); q.push([x-1,y]); }
+        if (x<W-1 && !seen.has(ii+1)){ seen.add(ii+1); q.push([x+1,y]); }
+        if (y>0 && !seen.has(ii-W)){ seen.add(ii-W); q.push([x,y-1]); }
+        if (y<H-1 && !seen.has(ii+W)){ seen.add(ii+W); q.push([x,y+1]); }
+      }
+      paint.batch.push(...batch);
+      if (paint.autoTile){
+        // Nach dem Fill die Ränder nach-tilen:
+        for(const e of batch){ autoTileAround(e.tx,e.ty); }
+      }
+    }
+
+    // Auto‑Tiler: N/E/S/W‑Maske bilden und Mapping anwenden
+    function autoTileAround(tx,ty){
+      applyAutoAt(tx,ty);
+      applyAutoAt(tx+1,ty); applyAutoAt(tx-1,ty);
+      applyAutoAt(tx,ty+1); applyAutoAt(tx,ty-1);
+    }
+    function applyAutoAt(tx,ty){
+      const w=getWorld(); if(!w) return;
+      if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
+      const W=w.map.width, H=w.map.height;
+      const i=W*ty+tx; const cur = w.tiles[i]|0;
+
+      let kind = null;
+      if (isKind(cur,'road')) kind='road';
+      else if (isKind(cur,'water')) kind='water';
+      else return; // keine automatische Kachel
+
+      const n = (ty>0      ? w.tiles[i-W]|0 : -1);
+      const e = (tx<W-1    ? w.tiles[i+1]|0 : -1);
+      const s = (ty<H-1    ? w.tiles[i+W]|0 : -1);
+      const ww= (tx>0      ? w.tiles[i-1]|0 : -1);
+
+      let mask=0;
+      if (isKind(n,kind)) mask |= 1; // N
+      if (isKind(e,kind)) mask |= 2; // E
+      if (isKind(s,kind)) mask |= 4; // S
+      if (isKind(ww,kind))mask |= 8; // W
+
+      const nextIdx = autotileIndex(kind, mask, cur);
+      if (nextIdx!==cur){
+        const prev=cur;
+        w.tiles[i]=nextIdx;
+        // nur speichern, wenn wir nicht schon in dieser Batch für dieselbe Zelle geschrieben haben
+        if (!paint.batch.some(e=>e.tx===tx && e.ty===ty)){
+          paint.batch.push({tx,ty,prev,next:nextIdx});
+        }
+      }
+    }
+
+    // ====== Paint HUD initial =====
+    $('#btnPaint').title = 'Live‑Malen (E) • Undo (Ctrl/Cmd+Z) • Redo (Ctrl/Cmd+Y oder Shift+Z) • R=Straße • W=Wasser • +/- Größe';
+    updatePaintHUD();
+
+    // ===================== Editor+Spiel: Brücke ============================
+    $('#btnEditor').addEventListener('click', ()=> openEditor(true));
+    $('#btnEditorClose').addEventListener('click', ()=> openEditor(false));
+    $('#btnEditorTest').addEventListener('click', ()=> openEditor(false));
+
+    // ===================== Inspector Log‑Setup =============================
+    BootUI.dbg = function(){
+      const t = new Date();
+      const stamp = `[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
+      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
+      const el = document.createElement('div'); el.className='logline'; el.textContent = `${stamp} ${line}`;
+      const logEl = $('#log'); logEl.appendChild(el); logEl.scrollTop = logEl.scrollHeight;
+      console.log(stamp, ...arguments);
+    };
+
+    // ===================== UI ready Log ===================================
     BootUI.dbg('UI ready');
   })();
   </script>
