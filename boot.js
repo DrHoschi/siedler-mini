@@ -1,16 +1,15 @@
 /* =============================================================================
- * Siedler‑Mini — boot.js v1.7
- * Startfenster sofort ausblenden; Backdrop (Logo) vollflächig + weicher Fade;
- * Toast-Menübutton; Startmenü schließbar (✖); Inspector responsiv & maximierbar;
- * HUD Fullscreen-Icon (SVG ⛶ / ✖) mit Auto-Umschaltung; Build-Menü Auto-Show;
- * Debug‑Ringpuffer + Export + Copy-to-Clipboard; Toolauswahl im Baumenü.
+ * boot.js • v1.8
+ * - Version im unteren Inspector-Bar-Badge
+ * - Build-Menü-Toggle-Icon im HUD (öffnen/schließen)
+ * - Rest: wie v1.7 (Startpanel, Backdrop-Fade, Inspector, Clipboard, FS-Icon)
  * =========================================================================== */
 
 const SAVE_KEY       = 'siedler:lastSave';
 const SAVE_META_KEY  = 'siedler:lastSaveMeta';
 const BUILD_FALLBACK = 'V?.?.?';
 
-const TEX_READY_TIMEOUT_MS = 60_000;
+const TEX_READY_TIMEOUT_MS = 60_000; // Merker: beim nächsten Anfassen auf 10_000 reduzieren
 const TEX_POLL_MS          = 250;
 const BACKDROP_FADE_MS     = 3_000;
 
@@ -28,11 +27,7 @@ function dbg(...msg){
                msg.map(x => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ');
   __dbg.push(line); while (__dbg.length > DBG_CAP) __dbg.shift();
   console.log(line);
-  const box = $('quickDiag');
-  if (box) {
-    const tail = __dbg.slice(-12).join('\n');
-    box.textContent = tail;
-  }
+  const box = $('quickDiag'); if (box) box.textContent = __dbg.slice(-12).join('\n');
   if (!document.hidden) paintInspectorBasic();
 }
 function dbgExportTxt(){
@@ -70,13 +65,13 @@ function toggleFullscreen(){
   else req.call(de);
 }
 
-/* ---------- Badge & Diag ---------- */
+/* ---------- Badge/Version + Diag ---------- */
 function setBuildBadge(){
-  const el = $('buildBadge'); if(!el) return;
-  const build = (window.__BUILD_STR__) ||
-                (typeof window.__BUILD_VER__ === 'string' && window.__BUILD_VER__) ||
-                `${BUILD_FALLBACK} • ${new Date().toISOString().slice(0,10).replace(/-/g,'')}`;
-  el.textContent = build;
+  const ver = (window.__BUILD_STR__) ||
+              (typeof window.__BUILD_VER__ === 'string' && window.__BUILD_VER__) ||
+              `${BUILD_FALLBACK} • ${new Date().toISOString().slice(0,10).replace(/-/g,'')}`;
+  const elBottom = $('versionBadge');
+  if (elBottom) elBottom.textContent = ver;
 }
 function paintDiag(){
   const box = $('quickDiag'); if(!box) return;
@@ -115,19 +110,13 @@ async function hardReloadWithBust(){
 }
 
 /* ---------- Inspector ---------- */
-function openInspector(){
-  const ins=$('inspector'); if(!ins) return;
-  ins.hidden=false;
-  const bMax=$('btnInspectorToggleMax');
-  if(bMax) bMax.textContent = ins.classList.contains('max') ? 'Fenstergröße' : 'Maximieren';
+function openInspector(){ const ins=$('inspector'); if(!ins) return; ins.hidden=false;
+  const bMax=$('btnInspectorToggleMax'); if(bMax) bMax.textContent = ins.classList.contains('max') ? 'Fenstergröße' : 'Maximieren';
   paintInspectorBasic();
 }
 function closeInspector(){ const ins=$('inspector'); if(ins) ins.hidden=true; }
-function toggleInspectorMax(){
-  const ins=$('inspector'); if(!ins) return;
-  ins.classList.toggle('max');
-  const bMax=$('btnInspectorToggleMax');
-  if(bMax) bMax.textContent = ins.classList.contains('max') ? 'Fenstergröße' : 'Maximieren';
+function toggleInspectorMax(){ const ins=$('inspector'); if(!ins) return; ins.classList.toggle('max');
+  const bMax=$('btnInspectorToggleMax'); if(bMax) bMax.textContent = ins.classList.contains('max') ? 'Fenstergröße' : 'Maximieren';
 }
 function paintInspectorBasic(){
   const el=$('inspectorContent'); if(!el) return;
@@ -139,7 +128,7 @@ function paintInspectorBasic(){
   const p=W?.state?.player ? `x=${W.state.player.x?.toFixed?.(2)??'?'}, y=${W.state.player.y?.toFixed?.(2)??'?'}` : '—';
   el.innerHTML = `
     <div class="kv">
-      <div><strong>Build</strong></div><div>${$('buildBadge')?.textContent||'—'}</div>
+      <div><strong>Version</strong></div><div>${$('versionBadge')?.textContent||'—'}</div>
       <div><strong>Map</strong></div><div>${map}</div>
       <div><strong>Spielzeit</strong></div><div>${t}</div>
       <div><strong>Player</strong></div><div>${p}</div>
@@ -214,22 +203,14 @@ function fadeOutBackdropWhenReady({maxWaitMs=TEX_READY_TIMEOUT_MS}={}){
 /* ---------- Build-Menü ---------- */
 function showBuildMenu(){ const m=$('buildMenu'); if(m) m.hidden=false; }
 function hideBuildMenu(){ const m=$('buildMenu'); if(m) m.hidden=true; }
-
-// Tool-Auswahl (nur UI-seitig; Log für Debug)
-function selectBuildTool(id){
-  document.querySelectorAll('#buildTools .tool').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.tool===id);
-  });
-  dbg('Tool select', id);
-}
+function toggleBuildMenu(){ const m=$('buildMenu'); if(!m) return; m.hidden = !m.hidden; dbg(m.hidden?'BuildMenu hidden':'BuildMenu shown'); }
 
 /* ---------- Boot ---------- */
 (() => {
   if (window.__BOOT_INIT_DONE__) return; window.__BOOT_INIT_DONE__=true;
 
   window.addEventListener('DOMContentLoaded', () => {
-    showStartPanel();
-    setBuildBadge(); paintDiag(); updateContinueButton(); dbg('UI ready');
+    showStartPanel(); setBuildBadge(); paintDiag(); updateContinueButton(); dbg('UI ready');
 
     // FS Icon initial + on change
     updateFSIcon();
@@ -241,18 +222,16 @@ function selectBuildTool(id){
     const bCont    = $('btnContinue');
     const bReset   = $('btnReset');
     const bFS      = $('btnFS');
-    const bMenu    = $('btnMenu');            // Menü öffnen
-    const bMenuX   = $('btnMenuClose');       // Menü schließen
-    const bBuildX  = $('btnBuildMenuHide');   // Buildmenü schließen
+    const bBuildT  = $('btnBuildToggle');
+    const bMenu    = $('btnMenu');
+    const bMenuX   = $('btnMenuClose');
+    const bBuildX  = $('btnBuildMenuHide');
     const bInsp    = $('btnInspector');
     const bInspX   = $('btnInspectorClose');
     const bInspMax = $('btnInspectorToggleMax');
     const bCache   = $('btnCacheClear');
 
-    // Tool-Buttons (Baumenü)
-    document.querySelectorAll('#buildTools .tool').forEach(btn=>{
-      btn.addEventListener('click', ()=> selectBuildTool(btn.dataset.tool));
-    });
+    // Tool-Buttons (Baumenü) -> handled in game.js
 
     on(bNew,'click',guard(async()=>{
       if(!(await confirmOverwriteIfNeeded())) return;
@@ -288,8 +267,9 @@ function selectBuildTool(id){
     on(bMenu,'click',()=>{ showStartPanel(); hideBuildMenu(); dbg('Menu open'); });
     on(bMenuX,'click',()=>{ hideStartPanelOnly(); dbg('Menu close'); });
 
-    // Buildmenü schließen
+    // Buildmenü
     on(bBuildX,'click',()=>{ hideBuildMenu(); dbg('BuildMenu close'); });
+    on(bBuildT,'click',()=>{ toggleBuildMenu(); });
 
     // Vollbild
     on(bFS,'click',()=>{ if(canFullscreen()) toggleFullscreen(); });
