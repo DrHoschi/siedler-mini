@@ -1,10 +1,11 @@
 /* =============================================================================
- * game.js • v1.5
- * - Tileset-JSON+PNG (terrain) wie v1.4
- * - NEU: einfache Units (builder) mit Manhattan-Pfaden + Bewegung
- * - Unit-Sprites optional (assets/units/builder.png) → sonst Punkt-Fallback
- * - Bei Platzhalterkarten werden Pfadpunkte sichtbar gerendert
- * - Debug-Logs überall (Build/Units/Render/Loads)
+ * game.js • v1.6
+ * - Tileset-JSON+PNG (terrain) wie v1.4/v1.5
+ * - Units/Carrier: Builder + (wood/stone/food)-Carrier, Loops + Delivery
+ * - Builder kehrt nach dem Bauen zur Basis zurück
+ * - Ressourcen: Start = 1000/1000/1000/1000; Delivery addiert, Bau abgezogen
+ * - Pfadpunkte bei Platzhalterkarten sichtbar; Sprite-Fallbacks bleiben
+ * - Umfangreiche Debug-Logs
  * =========================================================================== */
 
 (function(){
@@ -15,9 +16,12 @@
   const BUILD_COST = {
     road:{wood:1,stone:0,food:0,pop:0},
     hut:{wood:10,stone:2,food:0,pop:1},
-    lumber:{wood:6,stone:0,food:0,pop:1},
-    mason:{wood:4,stone:6,food:0,pop:1},
+    lumber:{wood:6,stone:0,food:0,pop:1},  // Holzfällerhütte
+    mason:{wood:4,stone:6,food:0,pop:1},   // Steinmetz/Bruch
   };
+  const CARRIER_PAYLOAD = { wood:8, stone:6, food:5 };   // pro Lieferung (Testwerte)
+  const CARRIER_SPEED   = 90;                             // px/s
+  const BUILDER_SPEED   = 90;                             // px/s
 
   // ---------- helpers ----------
   async function fetchJSON(url){ const r=await fetch(url,{cache:'no-cache'}); if(!r.ok) throw new Error(`HTTP ${r.status} ${url}`); return r.json(); }
@@ -25,7 +29,7 @@
   function hash2i(x,y,mod){ let n=(x|0)*73856093 ^ (y|0)*19349663; n^=(n<<11); n^=(n>>>7); n^=(n<<3); return mod>0?Math.abs(n)%mod:0; }
   const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 
-  // ---------- Map laden (wie v1.4) ----------
+  // ---------- Map laden ----------
   async function loadMap(url){
     if (!url){ dbg('Map: NO URL → demo'); return demoMap(); }
     try{
@@ -91,32 +95,63 @@
     if (tag) dbg('HUD', tag, JSON.stringify(res));
   }
 
+  // ---- Pfad/Koord ----
+  function tileCenterPx(tx,ty,tile){ return {x: tx*tile + tile/2, y: ty*tile + tile/2}; }
+  function manhattanPathTiles(x0,y0,x1,y1){
+    const path=[]; let x=x0,y=y0;
+    while (x!==x1){ x += (x1>x)?1:-1; path.push({x,y}); }
+    while (y!==y1){ y += (y1>y)?1:-1; path.push({x,y}); }
+    return path;
+  }
+
   // ---------- Units ----------
   class Unit {
-    constructor(type, x, y, pathPx, opts){
-      this.type = type;              // 'builder'
-      this.x = x; this.y = y;        // px
-      this.path = pathPx || [];      // [{x,y} in px]
-      this.i = 0;                    // aktueller Segment-Index
-      this.speed = (opts?.speed)||80;// px/s
-      this.size = (opts?.size)||18;  // Radius für Dot
-      this.color= (opts?.color)||'#ffd166';
-      this.sprite = opts?.sprite||null;
-      this.frameW = opts?.frameW||0;
-      this.frameH = opts?.frameH||0;
-      this.frames = opts?.frames||1;
-      this.fps = opts?.fps||6;
+    constructor(type, posPx, opts={}){
+      this.type = type;         // 'builder' | 'carrier'
+      this.x = posPx.x; this.y = posPx.y;
+      this.path = [];           // Array<{x,y} px>
+      this.i = 0;
+      this.speed = opts.speed||80;
+      this.size = opts.size||18;
+      this.color = opts.color||'#ffd166';
+      this.sprite = opts.sprite||null;
+      this.frameW = opts.frameW||0;
+      this.frameH = opts.frameH||0;
+      this.frames = opts.frames||1;
+      this.fps = opts.fps||6;
       this._animT = 0;
       this.done = false;
+
+      // Carrier Zusatz
+      this.cargoType = opts.cargoType||null;   // 'wood' | 'stone' | 'food'
+      this.cargo = opts.cargo||0;              // aktuelle Fracht
+      this.cargoMax = opts.cargoMax||0;
+      this.onArrive = opts.onArrive||null;     // callback(unit, waypointIndex == last ? 'end' : 'mid')
+      this.loop = opts.loop||false;            // Loop hin/zurück
+      this._home = opts.home||null;            // Startpunkt für Loop (px)
     }
+    setPathPx(points){ this.path = points||[]; this.i=0; }
     update(dt){
-      if (this.done || this.i >= this.path.length) { this.done=true; return; }
+      if (this.done || this.i >= this.path.length) { 
+        if (this.onArrive && !this._arriveCalled){ this._arriveCalled=true; this.onArrive(this,'end'); }
+        return; 
+      }
       const tx = this.path[this.i].x, ty=this.path[this.i].y;
       const dx = tx - this.x, dy = ty - this.y;
       const dist = Math.hypot(dx,dy);
       if (dist < Math.max(1, this.speed*dt*0.5)){
         this.x=tx; this.y=ty; this.i++;
-        if (this.i>=this.path.length) { this.done=true; }
+        if (this.i>=this.path.length){
+          if (this.onArrive){ this.onArrive(this,'end'); }
+          if (this.loop && this._home){
+            // für Loop: Weg zurück spiegeln
+            const back = this.path.slice().reverse();
+            this.path = back; this.i=1; // bei 1 starten, weil 0 identisch ist
+            if (this.onArrive){ this.onArrive(this,'loop'); }
+          } else {
+            this.done=true;
+          }
+        }
       } else {
         const v = this.speed * dt;
         this.x += (dx/dist)*v;
@@ -135,14 +170,6 @@
         ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
       }
     }
-  }
-
-  function tileCenterPx(tx,ty,tile){ return {x: tx*tile + tile/2, y: ty*tile + tile/2}; }
-  function manhattanPathTiles(x0,y0,x1,y1){
-    const path=[]; let x=x0,y=y0;
-    while (x!==x1){ x += (x1>x)?1:-1; path.push({x,y}); }
-    while (y!==y1){ y += (y1>y)?1:-1; path.push({x,y}); }
-    return path;
   }
 
   // ---------- World ----------
@@ -166,14 +193,16 @@
       this.numericIds=true; this.heuristic=false;
 
       // Gameplay
-      this.buildings=[];
-      this.res={wood:50,stone:30,food:20,pop:5};
+      this.buildings=[]; // {type, tx, ty}
+      // Startressourcen für Tests:
+      this.res={wood:1000,stone:1000,food:1000,pop:1000};
       this.currentTool=null;
 
       // Units
       this.units=[];
-      this.unitSprites = { builder:null };  // optionales Image
-      this.unitSpriteMeta = { builder:{ frameW:32, frameH:32, frames:4, fps:6 } };
+      this.unitSprites = { builder:null, carrier:null };  // optional
+      this.unitSpriteMeta = { builder:{ frameW:32, frameH:32, frames:4, fps:6 },
+                              carrier:{ frameW:32, frameH:32, frames:4, fps:6 } };
 
       // Input
       this._touches=new Map(); this._pinchBase=null; this._dragging=false; this._lastX=0; this._lastY=0;
@@ -221,11 +250,8 @@
       if (this.heuristic) dbg('Tiles mode: HEURISTIC'); else dbg('Tiles mode:', this.numericIds?'NUMERIC':'KEYS');
 
       // ---- Unit-Sprites versuchen (optional) ----
-      try{
-        const spr = await window.Asset.loadImage('builder', './assets/units/builder.png');
-        this.unitSprites.builder = spr;
-        dbg('Unit sprite OK', 'builder.png');
-      }catch(e){ dbg('Unit sprite missing → dot fallback'); }
+      try{ this.unitSprites.builder = await window.Asset.loadImage('builder', './assets/units/builder.png'); dbg('Unit sprite OK','builder.png'); }catch(e){ dbg('Unit sprite missing → dot (builder)'); }
+      try{ this.unitSprites.carrier = await window.Asset.loadImage('carrier', './assets/units/carrier.png'); dbg('Unit sprite OK','carrier.png'); }catch(e){ dbg('Unit sprite missing → dot (carrier)'); }
 
       this.play();
     }
@@ -259,9 +285,17 @@
         this.buildings.push({type:this.currentTool, tx, ty});
         this._pay(this.currentTool); updateHUD(this.res,'build');
         dbg('Build OK',JSON.stringify({tool:this.currentTool,tx,ty,cost,before,after:this.res}));
-        // Worker zur Baustelle schicken
-        this.spawnBuilderTo(tx,ty);
+
+        // Worker zur Baustelle schicken und zurück
+        this.spawnBuilderReturn(tx,ty);
+
+        // Bei Produktionsgebäuden direkt einen Träger in Endlosschleife starten
+        if (this.currentTool==='lumber') this.spawnCarrierLoop('wood', tx,ty);
+        if (this.currentTool==='mason')  this.spawnCarrierLoop('stone',tx,ty);
+        // Nahrung gäbe es später über Farm/Jagd; hier optional:
+        // if (this.currentTool==='farm') this.spawnCarrierLoop('food', tx,ty);
       });
+
       let wheelT=null; this.canvas.addEventListener('wheel',(ev)=>{ ev.preventDefault(); const d=-Math.sign(ev.deltaY)*0.1; this._zoomAt(ev.clientX,ev.clientY,d); clearTimeout(wheelT); wheelT=setTimeout(()=>dbg('Zoom',this.zoom.toFixed(2)),120); },{passive:false});
       this.canvas.addEventListener('pointerdown',(ev)=>{ this.canvas.setPointerCapture(ev.pointerId); this._dragging=true; this._lastX=ev.clientX; this._lastY=ev.clientY; this._touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY}); });
       let moved=false;
@@ -274,20 +308,79 @@
       this.canvas.addEventListener('pointercancel',()=>{ this._touches.clear(); this._pinchBase=null; this._dragging=false; moved=false; });
     }
 
-    // ---- Units ----
-    spawnBuilderTo(tx,ty){
-      const startT = {x:0, y:this.map.height-1}; // Dorfrand links unten
-      const pathTiles = manhattanPathTiles(startT.x, startT.y, tx, ty);
-      const pathPx = [tileCenterPx(startT.x,startT.y,this.tileSize), ...pathTiles.map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
-      const opts = { speed: 90, size: 16, color: '#ffd166' };
-      const spr = this.unitSprites.builder;
-      if (spr){ Object.assign(opts, this.unitSpriteMeta.builder, {sprite:spr}); }
-      const u = new Unit('builder', pathPx[0].x, pathPx[0].y, pathPx.slice(1), opts);
-      this.units.push(u);
-      dbg('Unit spawn', JSON.stringify({type:'builder', from:startT, to:{x:tx,y:ty}, steps:pathTiles.length}));
+    // === Depot / Halbquartier ===
+    getDepotTile(){ return {x:0, y:this.map.height-1}; }
+    getNearestHQorHut(tx,ty){
+      // nächstgelegene Hütte, sonst Depot
+      const huts = this.buildings.filter(b=>b.type==='hut');
+      if (!huts.length) return this.getDepotTile();
+      let best=huts[0], bestD=1e9;
+      for (const h of huts){
+        const d = Math.abs(h.tx-tx)+Math.abs(h.ty-ty);
+        if (d<bestD){ bestD=d; best=h; }
+      }
+      return {x:best.tx, y:best.ty};
     }
 
-    _update(dt){ for(const u of this.units){ if(!u.done) u.update(dt); } this.units = this.units.filter(u=>!u.done); }
+    // === Units erstellen ===
+    spawnBuilderReturn(tx,ty){
+      const startT = this.getDepotTile();
+      const startPx = tileCenterPx(startT.x,startT.y,this.tileSize);
+      const goalPx  = tileCenterPx(tx,ty,this.tileSize);
+      const pathTo  = [startPx, ...manhattanPathTiles(startT.x,startT.y,tx,ty).map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
+      const pathBack= pathTo.slice().reverse();
+
+      const opts = { speed: BUILDER_SPEED, size: 16, color: '#ffd166', sprite: this.unitSprites.builder, ...this.unitSpriteMeta.builder };
+      const u = new Unit('builder', startPx, opts);
+      u.setPathPx(pathTo.slice(1));
+      u.onArrive = (unit,phase)=>{
+        if (phase==='end'){ // An Baustelle angekommen
+          dbg('Builder arrived', JSON.stringify({tx,ty}));
+          // kurze „Bau“-Pause simulieren? (optional)
+          // Rückweg:
+          unit.setPathPx(pathBack.slice(1));
+          unit._arriveCalled=false; // erneut callback erlauben
+        } else if (phase==='loop'){
+          // nichts
+        }
+      };
+      this.units.push(u);
+      dbg('Unit spawn', JSON.stringify({type:'builder', from:startT, to:{x:tx,y:ty}, steps:pathTo.length-1}));
+    }
+
+    spawnCarrierLoop(kind, srcTx, srcTy){
+      const depotT = this.getNearestHQorHut(srcTx,srcTy);  // halbquartier/hütte bevor depot
+      const srcPx  = tileCenterPx(srcTx,srcTy,this.tileSize);
+      const dstPx  = tileCenterPx(depotT.x,depotT.y,this.tileSize);
+      const pathTo = [srcPx, ...manhattanPathTiles(srcTx,srcTy,depotT.x,depotT.y).map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
+
+      const colorBy = { wood:'#7cc36b', stone:'#c7cbd1', food:'#f3b562' };
+      const opts = { speed:CARRIER_SPEED, size:14, color:colorBy[kind]||'#6aa3ff', sprite:this.unitSprites.carrier, ...this.unitSpriteMeta.carrier,
+                     cargoType:kind, cargoMax:CARRIER_PAYLOAD[kind]||4, cargo:CARRIER_PAYLOAD[kind]||4, loop:true, home:srcPx };
+      const u = new Unit('carrier', srcPx, opts);
+      u.setPathPx(pathTo.slice(1));
+      u.onArrive = (unit,phase)=>{
+        // Bei Ankunft am Ziel (Depot/Hütte): Fracht abliefern
+        if (phase==='end'){
+          const add = unit.cargo|0;
+          if (add>0){
+            this.res[unit.cargoType] = (this.res[unit.cargoType]||0) + add;
+            updateHUD(this.res, 'deliver');
+            dbg('Carrier deliver', JSON.stringify({kind:unit.cargoType, amount:add, at:depotT}));
+            unit.cargo = 0;
+          }
+        } else if (phase==='loop'){
+          // auf dem Rückweg: wieder „beladen“ am Quellgebäude
+          unit.cargo = unit.cargoMax;
+          dbg('Carrier load', JSON.stringify({kind:unit.cargoType, amount:unit.cargo, at:{x:srcTx,y:srcTy}}));
+        }
+      };
+      this.units.push(u);
+      dbg('Unit spawn', JSON.stringify({type:'carrier', kind, from:{x:srcTx,y:srcTy}, to:depotT, steps:pathTo.length-1, payload:opts.cargoMax}));
+    }
+
+    // === Update/Draw ===
+    _update(dt){ for(const u of this.units){ if(!u.done) u.update(dt); } this.units = this.units.filter(u=>!u.done || u.loop); }
 
     _clamp(v,a,b){ return Math.min(b,Math.max(a,v)); }
     _zoomAt(cx,cy,delta=0,abs=null){ const bef=this._viewToWorld(cx,cy); const z=abs!=null?abs:this._clamp(this.zoom*(1+delta),this.minZoom,this.maxZoom); this.zoom=z; const aft=this._viewToWorld(cx,cy); this.camX+=(bef.x-aft.x); this.camY+=(bef.y-aft.y); }
