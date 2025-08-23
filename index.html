@@ -2,101 +2,551 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>Siedler‑Mini</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="x-ua-compatible" content="ie=edge" />
+  <title>Siedler Mini – Prototype</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#12161c" />
+
+  <!-- =======================================================================
+       index.html • v1.7
+       - Integrierter Level-Editor (Dock/Overlay)
+       - Bestehende UI (Startpanel, HUD, Buildmenu, Toast/Inspector, Fullscreen)
+       - Mobile-sicheres Layout, keine Browser-Zoom-Gesten (Pinch-Zoom nur Canvas)
+       ======================================================================= -->
+
   <style>
-    :root{ --bg:#0b0f14; --ui:#1b1f24; --ui2:#232a31; --ink:#e7eef6; --mut:#9fb0c0; --acc:#5aa9ff; }
-    html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink);
-      font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    #app{ position:relative; width:100%; height:100%; overflow:hidden; }
-    canvas{ display:block; width:100%; height:100%; }
+    :root{
+      --bg:#0f1318;
+      --panel:#1a2230;
+      --panel-2:#101722;
+      --glass:rgba(16,23,34,.65);
+      --text:#e8eef6;
+      --muted:#96a2b6;
+      --accent:#3b82f6;
+      --ok:#22c55e;
+      --warn:#eab308;
+      --danger:#ef4444;
+      --tile:32px;
+      --radius:14px;
+      --radius-sm:10px;
+      --blur:10px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
+    button{cursor:pointer}
 
-    /* Start-Overlay: zuerst sichtbar */
-    #start{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-      background:rgba(0,0,0,.86); z-index:1000; }
-    #start .card{ width:560px; max-width:96vw; background:#0d1218; border:1px solid #000;
-      border-radius:12px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.5); }
-    #start h2{ margin:0 0 8px 0; }
-    .row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
-    button{ padding:8px 12px; background:var(--ui2); color:var(--ink); border:1px solid #000;
-      border-radius:8px; cursor:pointer; }
-    button:hover{ outline:1px solid var(--acc); }
-    input[type=file]{ color:var(--ink); }
+    /* ============== Canvas Layer ========================================= */
+    #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
 
-    /* Mini-Statusleiste unten */
-    #status{ position:fixed; left:0; right:0; bottom:0; height:28px; display:flex; gap:12px;
-      align-items:center; padding:4px 10px; background:#0a0e13; color:#9aa3ad; border-top:1px solid #000; z-index:10; }
+    /* ============== Boot / Startpanel ==================================== */
+    #backdrop{
+      position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;
+      opacity:.9;transition:opacity .5s ease;pointer-events:none;z-index:5;
+    }
+    #startPanel{
+      position:fixed;inset:0;display:grid;place-items:center;z-index:20;
+      background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.55));
+      backdrop-filter: blur(6px);
+    }
+    #startCard{
+      width:min(680px,92vw);padding:20px 20px 16px;border-radius:18px;
+      background:rgba(18,22,28,.8);box-shadow:0 10px 40px rgba(0,0,0,.4);
+      border:1px solid rgba(255,255,255,.06)
+    }
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .grow{flex:1 1 auto}
+    .btn{
+      background:#1f2a3a;border:1px solid rgba(255,255,255,.08);
+      color:#e9eef7;padding:10px 14px;border-radius:12px;
+      font-weight:600;letter-spacing:.2px;display:inline-flex;gap:8px;align-items:center
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn.primary{background:#2a3b55;border-color:#3b82f650}
+    .btn.danger{background:#3a2226;border-color:#ef444450}
+    .sel{appearance:none;background:#1f2a3a;color:#e9eef7;border:1px solid rgba(255,255,255,.08);
+         padding:10px;border-radius:12px;min-width:180px}
+    .note{color:var(--muted);font-size:.9rem;margin-top:6px}
 
-    /* Inspector/Debug (oben rechts) – bitte nicht entfernen */
-    #inspector{ position:fixed; right:10px; top:10px; z-index:20; background:rgba(0,0,0,.55);
-      color:#e7eef6; border:1px solid #000; border-radius:8px; padding:8px; white-space:pre;
-      font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; pointer-events:none; }
+    /* ============== HUD (Top-Left) ======================================= */
+    #hud{
+      position:fixed;left:8px;top:8px;z-index:12;min-width:280px;
+      padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));
+      border:1px solid rgba(255,255,255,.08)
+    }
+    #versionSmall{font-weight:800;font-size:.9rem;opacity:.85;margin-bottom:8px}
+    #resbar{display:flex;gap:18px;align-items:center;background:rgba(12,16,22,.5);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,.06)}
+    .res{display:grid;grid-template-columns:auto auto;gap:8px 10px;align-items:center}
+    .res .val{min-width:28px;text-align:right}
+    .ico{width:18px;height:18px;opacity:.9;display:inline-block;vertical-align:-3px}
+
+    /* ============== Build Menu (Center-Top) ============================== */
+    #buildMenu{
+      position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:12;
+      background:var(--glass);backdrop-filter:blur(var(--blur));
+      border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px;min-width:260px
+    }
+    #buildTools{display:flex;gap:10px;flex-wrap:wrap}
+    .tool{padding:10px 12px;border-radius:12px;background:#1f2a3a;border:1px solid rgba(255,255,255,.08);min-width:44px;text-align:center}
+    .tool.active{outline:2px solid var(--accent)}
+
+    #buildReopen{
+      position:fixed;left:8px;top:88px;z-index:12;display:none;
+      background:var(--glass);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(var(--blur));
+      border-radius:12px;padding:8px 10px
+    }
+
+    /* ============== Toast-Leiste (unten) ================================= */
+    #toast{
+      position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;
+      padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)
+    }
+    #toast .left, #toast .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    #toast .btn{padding:10px 12px}
+
+    /* ============== Inspector (Dock) ===================================== */
+    #inspector{
+      position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;
+      background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px 12px 10px
+    }
+    #log{max-height:28vh;overflow:auto;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+         font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,.06)}
+    .logline{white-space:pre}
+
+    /* ============== Vollbild-Buttons (rechts oben) ======================= */
+    #fsEnter,#fsExit{
+      position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid rgba(255,255,255,.08);
+      background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px
+    }
+    #fsExit{display:none}
+
+    /* ============== Level-Editor (Dock/Overlay) ========================== */
+    #editorDock{
+      position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);max-width:100vw;z-index:40;
+      display:none;background:var(--panel);border-left:1px solid rgba(255,255,255,.1);
+      box-shadow:-12px 0 30px rgba(0,0,0,.25)
+    }
+    #editorHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+    #editorBody{padding:12px 14px;display:grid;gap:12px;overflow:auto;height:calc(100% - 52px)}
+    .grid{display:grid;gap:10px}
+    .cols2{grid-template-columns:1fr 1fr}
+    .field label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+    input[type="number"], select{
+      width:100%;padding:8px 10px;border-radius:10px;background:#131a25;border:1px solid rgba(255,255,255,.08);color:var(--text)
+    }
+    .seg{display:flex;flex-wrap:wrap;gap:8px}
+    .seg .btn{padding:8px 10px}
+    #tilesPreview{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+    #tilesPreview button{aspect-ratio:1/1;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#111822}
+
+    @media (max-width: 880px){
+      #editorDock{left:0;width:100vw}
+    }
   </style>
 </head>
 <body>
-  <div id="app">
-    <!-- Dein Canvas (Spiel) -->
-    <canvas id="game"></canvas>
 
-    <!-- Start-Overlay -->
-    <div id="start">
-      <div class="card">
-        <h2>Siedler‑Mini</h2>
-        <p>Wähle, wie du starten möchtest:</p>
-        <div class="row" style="margin:6px 0 12px;">
-          <button id="btnStartGame">Spiel starten</button>
-          <button id="btnLoadMap">Map laden…</button>
-          <!-- NEU: Level-Editor Button (separater Tab) -->
-          <button id="btnLevelEditor">Level‑Editor starten</button>
-        </div>
+  <!-- ====================== Spielfeld / Canvas =========================== -->
+  <canvas id="stage"></canvas>
 
-        <div class="row" style="margin-top:6px;">
-          <input id="fileMap" type="file" accept=".json,application/json" />
-          <button id="btnReload">Neu laden</button>
-          <button id="btnSaveDebug">Debug speichern</button>
-          <label style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-            <input id="chkAutostart" type="checkbox" />
-            AutoStart
-          </label>
-        </div>
+  <!-- ====================== Backdrop mit Logo (wird ausgeblendet) ======== -->
+  <div id="backdrop" aria-hidden="true"></div>
 
-        <p style="color:var(--mut); margin:10px 0 0 0;">
-          Debug/Inspector ist aktiv (oben rechts). Das Startfenster erscheint immer zuerst.
-        </p>
+  <!-- ====================== Startpanel =================================== -->
+  <div id="startPanel" role="dialog" aria-modal="true">
+    <div id="startCard">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <div style="font-weight:800;font-size:1.1rem;letter-spacing:.3px">Siedler Mini</div>
+        <div style="opacity:.7">Build <span id="buildDate"></span></div>
       </div>
-    </div>
 
-    <!-- Inspector-Overlay -->
-    <pre id="inspector">[Inspector bereit]</pre>
+      <div class="row" style="margin-bottom:10px">
+        <select id="mapSelect" class="sel grow" title="Map auswählen">
+          <option value="./assets/maps/map-mini.json">Mini-Map (Test)</option>
+          <option value="./assets/maps/map-demo.json">Demo</option>
+          <option value="./assets/maps/map-test-all.json">Test-All</option>
+          <option value="./assets/maps/map-pro.json">Pro</option>
+        </select>
+        <button id="btnNew" class="btn primary">Neues Spiel</button>
+        <button id="btnCont" class="btn">Weiterspielen</button>
+      </div>
 
-    <!-- Statusleiste -->
-    <div id="status">
-      <span id="stA">Demo-Map</span>
-      <span id="stB">Pro-Map</span>
-      <span id="stC">Test-All</span>
-      <span id="stD">Start</span>
-      <span id="stE">Neuladen</span>
-      <span id="stF">Debug speichern</span>
-      <span id="stG">AutoStart</span>
+      <div class="row" style="margin-bottom:10px">
+        <button id="btnReset" class="btn danger">Reset</button>
+        <div class="grow"></div>
+        <span class="note">Hinweis: Vollbild über das Symbol oben rechts.</span>
+      </div>
+
+      <div class="note">Tipp: Den <b>Level‑Editor</b> kannst du jederzeit über die Toast‑Leiste unten öffnen.</div>
     </div>
   </div>
 
-  <!-- Haupt-Einstieg: dein bestehendes Boot-Skript -->
-  <script type="module" src="./boot.js"></script>
+  <!-- ====================== HUD ========================================== -->
+  <div id="hud" aria-live="polite" aria-atomic="true">
+    <div id="versionSmall">V?.?.? • <span id="versionDate"></span></div>
+    <div id="resbar" class="res">
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M6 20h12L12 4z"/></svg> Holz</span><span class="val" id="res-wood">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12l9-9 9 9-9 9z"/></svg> Stein</span><span class="val" id="res-stone">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung</span><span class="val" id="res-food">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew.</span><span class="val" id="res-pop">0</span>
+    </div>
+  </div>
 
-  <!-- Kleiner Zusatz-Handler NUR für den Level-Editor-Button.
-       Kollisionsfrei zu deiner bestehenden boot.js-Logik. -->
+  <!-- ====================== Build-Menü =================================== -->
+  <div id="buildMenu">
+    <div style="font-weight:700;margin-bottom:6px">Baumenü</div>
+    <div id="buildTools">
+      <button class="tool" data-tool="road">Straße</button>
+      <button class="tool" data-tool="hut">Hütte</button>
+      <button class="tool" data-tool="lumber">Holzfäller</button>
+      <button class="tool" data-tool="mason">Steinbruch</button>
+    </div>
+  </div>
+  <button id="buildReopen" title="Baumenü öffnen">🧱 Bauen</button>
+
+  <!-- ====================== Vollbild-Buttons ============================= -->
+  <button id="fsEnter" title="Vollbild"><span>⛶</span></button>
+  <button id="fsExit"  title="Vollbild verlassen"><span>✕</span></button>
+
+  <!-- ====================== Toast-Leiste ================================= -->
+  <div id="toast" role="region" aria-label="Utility-Leiste">
+    <div class="left">
+      <button id="btnMenu" class="btn">Menü</button>
+    </div>
+    <div class="right">
+      <button id="btnInspector" class="btn">Inspector öffnen</button>
+      <button id="btnCache" class="btn">Cache leeren</button>
+      <button id="btnEditor" class="btn">Editor öffnen</button>
+    </div>
+  </div>
+
+  <!-- ====================== Inspector ==================================== -->
+  <div id="inspector">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <strong>Dev‑Inspector</strong>
+      <div class="seg">
+        <button id="btnLogMax" class="btn">Max</button>
+        <button id="btnCopyPaths" class="btn">Copy Pfad‑Liste</button>
+        <button id="btnExportJson" class="btn">Export JSON</button>
+        <button id="btnCloseInspector" class="btn">Close</button>
+      </div>
+    </div>
+    <div id="log" aria-live="polite"></div>
+  </div>
+
+  <!-- ====================== Level‑Editor ================================= -->
+  <div id="editorDock" role="dialog" aria-modal="true" aria-label="Level-Editor">
+    <div id="editorHead">
+      <div style="font-weight:800">Level‑Editor</div>
+      <div class="seg">
+        <button id="btnEditorTest" class="btn">Im Spiel testen</button>
+        <button id="btnEditorClose" class="btn">Schließen</button>
+      </div>
+    </div>
+    <div id="editorBody">
+      <div class="grid cols2">
+        <div class="field">
+          <label>Breite (Tiles)</label>
+          <input id="edWidth" type="number" min="4" max="256" value="32">
+        </div>
+        <div class="field">
+          <label>Höhe (Tiles)</label>
+          <input id="edHeight" type="number" min="4" max="256" value="18">
+        </div>
+        <div class="field">
+          <label>Kachelgröße (px)</label>
+          <input id="edTileSize" type="number" min="16" max="128" value="32">
+        </div>
+        <div class="field">
+          <label>Tileset</label>
+          <select id="edTileset">
+            <option value="./assets/tiles/tileset.terrain.json">terrain.json (empfohlen)</option>
+            <option value="./assets/tiles/tileset.terrain.png">terrain.png (Grid)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <label>Pinsel</label>
+          <div class="seg">
+            <button class="btn" data-ed="brush" data-val="paint">Malen</button>
+            <button class="btn" data-ed="brush" data-val="fill">Füllen</button>
+            <button class="btn" data-ed="brush" data-val="erase">Löschen</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Pinselgröße</label>
+          <div class="seg">
+            <button class="btn" data-ed="size" data-val="1">1</button>
+            <button class="btn" data-ed="size" data-val="2">2</button>
+            <button class="btn" data-ed="size" data-val="3">3</button>
+            <button class="btn" data-ed="size" data-val="4">4</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Tile‑Index auswählen</label>
+          <div id="tilesPreview"></div>
+          <div class="note">Tipp: Der Index entspricht dem Zellen‑Index im Tileset‑Grid (0‑basiert).</div>
+        </div>
+
+        <div class="field">
+          <label>Gebäude (symbolisch platzieren)</label>
+          <div class="seg">
+            <button class="btn" data-ed="build" data-val="hut">Hütte</button>
+            <button class="btn" data-ed="build" data-val="lumber">Holzfäller</button>
+            <button class="btn" data-ed="build" data-val="mason">Steinbruch</button>
+            <button class="btn" data-ed="build" data-val="road">Straße</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Datei</label>
+          <div class="seg">
+            <button id="btnEdNew" class="btn">Neu</button>
+            <button id="btnEdExport" class="btn">Export</button>
+            <label class="btn" for="fileImport">Import</label>
+            <input id="fileImport" type="file" accept=".json" style="display:none">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================== SCRIPT-MODULE: Reihenfolge wichtig! ===========
+       1) asset.js (einfacher Image-Loader + TexturesReady-Fahne)
+       2) game.js  (Spiel-Engine, Units, Map-Lader etc.)
+       3) boot.js  (UI/Start/Inspector/FullScreen/Toast – ruft GameLoader)
+       4) inline Editor-Glue (verbindet Editor mit GameLoader)
+       =================================================================== -->
   <script>
+  // ---- (1) asset.js – minimaler Loader (falls nicht schon vorhanden) -----
+  window.Asset = window.Asset || (function(){
+    const cache = new Map();
+    let texturesReady = false;
+    async function loadImage(key, url){
+      if (cache.has(url)) return cache.get(url);
+      return new Promise((resolve,reject)=>{
+        const img = new Image(); img.crossOrigin="anonymous";
+        img.onload=()=>{ cache.set(url,img); resolve(img); };
+        img.onerror=()=>reject(new Error('IMG '+url));
+        img.src = url;
+      });
+    }
+    return {
+      loadImage,
+      markTexturesReady(v){ texturesReady = !!v; },
+      areTexturesReady(){ return texturesReady; },
+      _cache: cache
+    };
+  })();
+  </script>
+
+  <!-- (2) game.js – deine aktuelle Engine einbinden -->
+  <script src="./game.js"></script>
+
+  <!-- (3) boot.js – vorhandene Start-/UI-Logik -->
+  <script src="./boot.js"></script>
+
+  <!-- (4) Inline: Editor-Glue + UI-Verhalten -->
+  <script>
+  (function(){
+    const $ = sel => document.querySelector(sel);
+    const log = (m)=> (window.BootUI?.dbg ? BootUI.dbg(m) : console.log(m));
+
+    // ======== Build/Version Anzeige =======================================
+    const today = new Date();
+    const y = today.getFullYear(), m = String(today.getMonth()+1).padStart(2,'0'), d = String(today.getDate()).padStart(2,'0');
+    $('#buildDate').textContent = `${y}${m}${d}`;
+    $('#versionDate').textContent = `${y}${m}${d}`;
+
+    // ======== Startpanel Buttons ==========================================
+    $('#btnNew').addEventListener('click', async ()=>{
+      const map = $('#mapSelect').value;
+      if (confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')) {
+        hideStart();
+        await window.GameLoader.start(map);
+      }
+    });
+    $('#btnCont').addEventListener('click', async ()=>{
+      hideStart();
+      BootUI.continueLastSnapshot?.();
+    });
+    $('#btnReset').addEventListener('click', ()=>{
+      if (confirm('Wirklich alle Spielstände zurücksetzen (Cache leeren)?')) {
+        try { localStorage.clear(); log('[Reset] OK'); } catch(e){}
+      }
+    });
+    function hideStart(){ $('#startPanel').style.display='none'; }
+
+    // ======== Build-Menü zeigen/verstecken =================================
     (function(){
-      const btn = document.getElementById('btnLevelEditor');
-      if(btn){
-        btn.addEventListener('click', () => {
-          // Öffnet den Editor in einem neuen Tab – keine Änderung an game/boot nötig
-          window.open('./tools/level-editor/index.html', '_blank', 'noopener');
-        });
+      const menu = $('#buildMenu');
+      const reopen = $('#buildReopen');
+      // Schließen via Doppeltap auf Titel (kleiner Hack) – oder später eigener Close-Button
+      menu.addEventListener('dblclick', ()=>{ menu.style.display='none'; reopen.style.display='block'; });
+      reopen.addEventListener('click', ()=>{ menu.style.display='block'; reopen.style.display='none'; });
+    })();
+
+    // ======== Vollbild =====================================================
+    const fsEnter = $('#fsEnter'), fsExit = $('#fsExit');
+    fsEnter.addEventListener('click', ()=>{
+      const el = document.documentElement;
+      const goFS = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      goFS?.call(el).then(()=>{ fsEnter.style.display='none'; fsExit.style.display='inline-block'; }).catch(()=>{});
+    });
+    fsExit.addEventListener('click', ()=>{
+      const ex = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+      ex?.call(document).finally(()=>{ fsExit.style.display='none'; fsEnter.style.display='inline-block'; });
+    });
+
+    // ======== Toast Buttons =================================================
+    $('#btnMenu').addEventListener('click', ()=>{ $('#startPanel').style.display='grid'; });
+    $('#btnInspector').addEventListener('click', ()=>{ $('#inspector').style.display='block'; });
+    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ try{ localStorage.clear(); location.reload(); }catch(e){} } });
+    $('#btnEditor').addEventListener('click', ()=> openEditor(true));
+    $('#btnCloseInspector').addEventListener('click', ()=> $('#inspector').style.display='none');
+
+    // ======== Inspector Log‑API Bindung ===================================
+    window.BootUI = window.BootUI || {};
+    BootUI.dbg = function(){
+      const t = new Date();
+      const stamp = `[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
+      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
+      const el = document.createElement('div'); el.className='logline'; el.textContent = `${stamp} ${line}`;
+      const logEl = $('#log'); logEl.appendChild(el); logEl.scrollTop = logEl.scrollHeight;
+      console.log(stamp, ...arguments);
+    };
+    BootUI.paintInspectorBasic = function(){
+      // Platz für spätere Stats – aktuell reicht das Log
+    };
+    BootUI.continueLastSnapshot = async function(){
+      try{
+        const raw = localStorage.getItem('lastSnapshot');
+        if (!raw) { alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
+        const snap = JSON.parse(raw);
+        await window.GameLoader.continueFrom(snap);
+      }catch(e){
+        alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid';
+      }
+    };
+
+    // ======== Backdrop Fade steuern (wenn Texturen ready) ==================
+    (function waitTextures(){
+      const bd = $('#backdrop');
+      let timeout = setTimeout(()=>{ BootUI.dbg('Textures TIMEOUT → fade'); bd.style.opacity='0'; setTimeout(()=>bd.style.display='none', 1200); }, 60000);
+      const tick = ()=> {
+        if (window.Asset?.areTexturesReady?.()) {
+          BootUI.dbg('Textures READY -> fade');
+          clearTimeout(timeout);
+          bd.style.opacity='0';
+          setTimeout(()=>{ bd.style.display='none'; BootUI.dbg('Backdrop hidden'); }, 3000);
+        } else {
+          requestAnimationFrame(tick);
+        }
+      };
+      tick();
+    })();
+
+    // ==================== LEVEL EDITOR =====================================
+    const ed = {
+      open:false, brush:'paint', size:1, tile:0,
+      width:32, height:18, tileSize:32, tileset:'./assets/tiles/tileset.terrain.json',
+      tiles: new Uint16Array(32*18),
+      builds: [] // {type,tx,ty}
+    };
+
+    // UI Wiring
+    $('#btnEditor').addEventListener('click', ()=>openEditor(true));
+    $('#btnEditorClose').addEventListener('click', ()=>openEditor(false));
+    $('#edWidth').addEventListener('change', e=> ed.width = parseInt(e.target.value,10)||32);
+    $('#edHeight').addEventListener('change', e=> ed.height = parseInt(e.target.value,10)||18);
+    $('#edTileSize').addEventListener('change', e=> ed.tileSize = parseInt(e.target.value,10)||32);
+    $('#edTileset').addEventListener('change', e=> ed.tileset = e.target.value);
+    document.querySelectorAll('[data-ed="brush"]').forEach(b=> b.addEventListener('click', ()=> ed.brush = b.dataset.val));
+    document.querySelectorAll('[data-ed="size"]').forEach(b=> b.addEventListener('click', ()=> ed.size = parseInt(b.dataset.val,10)||1));
+    document.querySelectorAll('[data-ed="build"]').forEach(b=> b.addEventListener('click', ()=> { ed.builds.push({type:b.dataset.val, tx:0, ty:0}); BootUI.dbg('Ed add building', b.dataset.val); }));
+
+    $('#btnEdNew').addEventListener('click', ()=>{
+      if (!confirm('Neues leeres Level erzeugen?')) return;
+      ed.tiles = new Uint16Array(ed.width*ed.height);
+      ed.builds = [];
+      BootUI.dbg('Editor: new map', {w:ed.width,h:ed.height,tile:ed.tileSize});
+    });
+
+    $('#btnEdExport').addEventListener('click', ()=>{
+      const data = editorToMap();
+      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'map-custom.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      BootUI.dbg('Editor: export map-custom.json');
+    });
+
+    $('#fileImport').addEventListener('change', async (e)=>{
+      const file = e.target.files?.[0]; if(!file) return;
+      try{
+        const txt = await file.text(); const j = JSON.parse(txt);
+        applyMapToEditor(j);
+        BootUI.dbg('Editor: import OK', file.name);
+      }catch(err){
+        alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL', String(err?.message||err));
+      }
+      e.target.value='';
+    });
+
+    $('#btnEditorTest').addEventListener('click', async ()=>{
+      const data = editorToMap();
+      const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      openEditor(false);
+      $('#startPanel').style.display='none';
+      await window.GameLoader.start(url);
+      setTimeout(()=> URL.revokeObjectURL(url), 10000);
+      BootUI.dbg('Editor: test run');
+    });
+
+    // Tiles-Auswahl füllen (0..35 Dummy)
+    (function buildTilePreview(){
+      const host = $('#tilesPreview');
+      for (let i=0;i<36;i++){
+        const b = document.createElement('button');
+        b.title = 'Tile '+i;
+        b.textContent = i;
+        b.addEventListener('click', ()=>{ ed.tile = i; [...host.children].forEach(n=>n.style.outline=''); b.style.outline='2px solid var(--accent)'; });
+        host.appendChild(b);
       }
     })();
+
+    function openEditor(v){
+      ed.open = !!v;
+      $('#editorDock').style.display = v ? 'block' : 'none';
+    }
+
+    function editorToMap(){
+      return {
+        width: ed.width,
+        height: ed.height,
+        tileSize: ed.tileSize,
+        tileset: ed.tileset,
+        tiles: Array.from(ed.tiles)
+      };
+    }
+    function applyMapToEditor(j){
+      ed.width = j.width|0; ed.height = j.height|0; ed.tileSize = j.tileSize|0;
+      ed.tileset = j.tileset || './assets/tiles/tileset.terrain.json';
+      ed.tiles = new Uint16Array((j.tiles||[]).slice(0, ed.width*ed.height));
+      $('#edWidth').value = ed.width; $('#edHeight').value = ed.height; $('#edTileSize').value = ed.tileSize; $('#edTileset').value = ed.tileset;
+    }
+
+    // Optional: Malen auf die laufende Karte (einfacher Prototyp)
+    // → Für den Anfang lassen wir das Malen direkt in der Spiel-Canvas außen vor,
+    //   damit die Engine sauber bleibt. Später können wir einen edit-Overlay einbauen.
+
+    // Initial-Log
+    BootUI.dbg('UI ready');
+  })();
   </script>
 </body>
 </html>
