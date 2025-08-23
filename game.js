@@ -1,20 +1,20 @@
 /* =============================================================================
- * game.js • v1.2
- * - Map laden (Tileset oder Platzhalter) + ausführliches Debug
- * - Kamera mit Zoom & Pan (Mausrad, Drag; Touch-Pinch) – Canvas fängt Gesten ab
- * - Ressourcen-System + HUD-Update mit Logs
- * - Baumenü: Platzieren mit Kostenprüfung + Logs
- * - Snapshot/Continue kompatibel
- * - Asset.texturesReady = true sobald renderbar
+ * game.js • v1.3
+ * - Auto-Tileset-Unterstützung für assets/tiles/tileset.terrain.json/.png
+ * - Lädt Atlas (tileSize aus JSON), berechnet Spalten/Zeilen aus PNG
+ * - Heuristik-Renderer: echte Atlas-Kacheln (deterministisch verteilt),
+ *   auch wenn kein Name→Index-Mapping vorliegt (überall echte Texturen sichtbar)
+ * - Kamera: Zoom/Pan (wie zuvor)
+ * - Ressourcen + Bauen (wie zuvor)
+ * - Umfangreiche Debug-Logs (Map/Tileset/Render-Modus/Fehler)
  * =========================================================================== */
 
 (function(){
   const CANVAS_ID = 'stage';
 
-  // zentraler Debug-Hook (fällt auf console.log zurück)
   const dbg = (...a) => (window.BootUI?.dbg ? window.BootUI.dbg(...a) : console.log(...a));
 
-  // Platzhalterfarben
+  // Platzhalterfarben (nur falls gar kein Atlas nutzbar ist)
   const TILE_COLORS = {0:'#1a2735',1:'#2c3e2f',2:'#4a5b2f',3:'#6f5b2f',4:'#666'};
 
   // Baukosten
@@ -25,21 +25,60 @@
     mason:  {wood:4,  stone:6,  food:0,  pop:1},
   };
 
-  // Map laden (mit Debug)
+  // ---------------------------------------------------------------------------
+  // Map laden + optional Auto-Tileset (terrain)
+  // ---------------------------------------------------------------------------
+  async function loadJson(url){
+    const res = await fetch(url, {cache:'no-cache'});
+    if(!res.ok) throw new Error('HTTP '+res.status+' '+url);
+    return res.json();
+  }
+
+  async function tryLoadTerrainTileset(){
+    // Erwartet: assets/tiles/tileset.terrain.json neben tileset.terrain.png
+    const base = './assets/tiles/tileset.terrain';
+    try{
+      const meta = await loadJson(base + '.json'); // enthält tileSize=64, groups, ...
+      const tileSize = Number(meta.tileSize||64);
+      const pngUrl = base + '.png';
+      dbg('Tileset(meta) OK', JSON.stringify({tileSize, pngUrl}));
+      return { pngUrl, tileSize, meta };
+    }catch(e){
+      dbg('Tileset(meta) not found', (e && e.message) || e);
+      return null;
+    }
+  }
+
   async function loadMap(url){
-    if (!url) { dbg('Map load: NO URL → using demo'); return demoMap(); }
+    if (!url) { dbg('Map load: NO URL → demo'); return demoMap(); }
     try{
       dbg('Map load start', url);
-      const res = await fetch(url, {cache:'no-cache'});
-      if(!res.ok) throw new Error('HTTP '+res.status);
-      const j = await res.json();
+      const j = await loadJson(url);
       const md = {
         width:  j.width  || j.w || 32,
         height: j.height || j.h || 18,
-        tileSize: j.tileSize || j.tile || 32,
+        tileSize: j.tileSize || j.tile || null, // wenn null → von Tileset ableiten
         tileset: j.tileset || null,
         tiles: (Array.isArray(j.tiles) ? j.tiles.flat() : []) || []
       };
+
+      // Falls kein tileset in der Map: versuche Terrain-Auto-Tileset
+      if (!md.tileset){
+        const terrain = await tryLoadTerrainTileset();
+        if (terrain){
+          md.tileset  = terrain.pngUrl;
+          md.tileSize = md.tileSize || terrain.tileSize;
+          md._terrainMeta = terrain.meta; // Gruppen (Namen) – aktuell nur informativ
+          dbg('Map uses AUTO tileset (terrain)', JSON.stringify({tileSize:md.tileSize}));
+        }
+      }
+
+      // Wenn immer noch kein tileSize → Default auf 32, aber loggen
+      if (!md.tileSize){
+        md.tileSize = 32;
+        dbg('Map had no tileSize → default 32 (warn)');
+      }
+
       dbg('Map load OK', JSON.stringify({w:md.width,h:md.height,tile:md.tileSize,tileset:!!md.tileset}));
       return md;
     }catch(e){
@@ -58,7 +97,7 @@
     return { width, height, tileSize, tileset:null, tiles };
   }
 
-  // HUD-Res Update (mit optionalem Tag, woher die Änderung kam)
+  // HUD-Res Update
   function updateHUD(res, tag){
     const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = String(val|0); };
     set('res-wood', res.wood);
@@ -66,6 +105,16 @@
     set('res-food', res.food);
     set('res-pop',  res.pop);
     if (tag) dbg('HUD resources', tag, JSON.stringify(res));
+  }
+
+  // deterministische „Pseudozufalls“-Verteilung (damit jede Zelle stabil bleibt)
+  function hash2i(x,y,mod){
+    // x,y ints → 32-bit hash → [0..mod)
+    let n = (x|0)*73856093 ^ (y|0)*19349663;
+    n ^= (n<<11); n ^= (n>>>7); n ^= (n<<3);
+    if (mod<=0) return 0;
+    const r = Math.abs(n) % mod;
+    return r;
   }
 
   class World {
@@ -86,8 +135,10 @@
       this.tileSize = mapData.tileSize || 32;
       this.tiles = mapData.tiles?.length ? mapData.tiles : new Array(mapData.width*mapData.height).fill(2);
 
-      // Tileset
-      this.tileset = null; this.tsCols = 8; this.tsTile = this.tileSize; this._atlasRows = 0;
+      // Tileset/Atlas
+      this.tileset = null; this.tsCols = 1; this.tsRows = 1; this.tsTile = this.tileSize;
+      this.totalTiles = 1;
+      this.heuristicAtlas = false; // true = wir verteilen IDs ohne Mapping (Name→Index fehlt)
 
       // Buildings + Ressourcen
       this.buildings = [];
@@ -102,7 +153,7 @@
 
       // intern
       this._raf = null; this.texturesReady = false;
-      this._loggedRenderMode = false;  // once-Log im draw()
+      this._loggedRenderMode = false;
 
       this._bindInput();
       this._resize();
@@ -112,17 +163,25 @@
 
     async init(mapUrl){
       this.state.mapUrl = mapUrl || this.state.mapUrl;
+
       if (this.map.tileset){
         try{
           dbg('Tileset load start', this.map.tileset);
           this.tileset = await window.Asset.loadImage('tileset', this.map.tileset);
-          // Atlas-Abmessungen ableiten
           const iw = this.tileset.naturalWidth || this.tileset.width;
           const ih = this.tileset.naturalHeight || this.tileset.height;
           this.tsCols = Math.max(1, Math.floor(iw / this.tsTile));
-          this._atlasRows = Math.max(1, Math.floor(ih / this.tsTile));
+          this.tsRows = Math.max(1, Math.floor(ih / this.tsTile));
+          this.totalTiles = this.tsCols * this.tsRows;
           this.texturesReady = true; window.Asset.markTexturesReady(true);
-          dbg('Tileset load OK', JSON.stringify({w:iw,h:ih,ts:this.tsTile,cols:this.tsCols,rows:this._atlasRows}));
+
+          if (!Array.isArray(this.map.tiles) || this.map.tiles.length===0){
+            // Keine IDs vorhanden → Heuristik-Modus aktivieren
+            this.heuristicAtlas = true;
+            dbg('Tileset load OK (HEURISTIC MODE)', JSON.stringify({w:iw,h:ih,ts:this.tsTile,cols:this.tsCols,rows:this.tsRows,total:this.totalTiles}));
+          } else {
+            dbg('Tileset load OK', JSON.stringify({w:iw,h:ih,ts:this.tsTile,cols:this.tsCols,rows:this.tsRows,total:this.totalTiles}));
+          }
         }catch(e){
           dbg('Tileset load FAIL → placeholders', (e && e.message) || e);
           this.tileset = null;
@@ -132,6 +191,7 @@
         dbg('No tileset → placeholders');
         this.texturesReady = true; window.Asset.markTexturesReady(true);
       }
+
       this.play();
     }
 
@@ -160,8 +220,9 @@
       if (snap.mapUrl && snap.mapUrl !== this.state.mapUrl){
         const md = await loadMap(snap.mapUrl);
         this.map = md;
+        this.tileSize = md.tileSize || this.tileSize;
         this.tiles = md.tiles?.length ? md.tiles : new Array(md.width*md.height).fill(2);
-        await this.init(snap.mapUrl); // init setzt texturesReady/tileset etc.
+        await this.init(snap.mapUrl);
       }
       this.buildings = Array.isArray(snap.buildings) ? snap.buildings.slice() : [];
       if (snap.res) this.res = Object.assign({}, this.res, snap.res);
@@ -269,7 +330,6 @@
       const z1 = absoluteZoom!=null ? absoluteZoom : this._clamp(this.zoom * (1 + deltaStep), this.minZoom, this.maxZoom);
       this.zoom = z1;
       const after = this._viewToWorld(clientX, clientY);
-      // halte den Punkt unter dem Cursor fest
       this.camX += (before.x - after.x);
       this.camY += (before.y - after.y);
     }
@@ -310,30 +370,37 @@
       // Render-Modus einmalig loggen
       if (!this._loggedRenderMode){
         this._loggedRenderMode = true;
-        if (this.tileset) dbg('Render mode: TILESET');
+        if (this.tileset) dbg('Render mode: TILESET', this.heuristicAtlas ? '(HEURISTIC)' : '');
         else dbg('Render mode: PLACEHOLDER');
       }
 
-      // Karte
       if (this.tileset){
+        // --- TILESET Rendering ---
         for (let ty=0; ty<H; ty++){
           for (let tx=0; tx<W; tx++){
-            const id = this.tiles[ty*W+tx] | 0;
+            let id;
+            if (this.heuristicAtlas || this.map.tiles.length===0){
+              // Keine IDs vorhanden → nimm deterministisch eine Atlas-Zelle
+              id = hash2i(tx,ty,this.totalTiles);
+            } else {
+              id = this.map.tiles[ty*W+tx] | 0;
+              if (id<0 || id>=this.totalTiles){
+                // ID außerhalb Atlas → deterministisch ersetzen + Warnfarbe kurz zeichnen
+                if ((tx+ty)%17===0) { // nicht jede Zelle warnen
+                  dbg('WARN tile id outside atlas', JSON.stringify({id,total:this.totalTiles}));
+                }
+                id = hash2i(tx,ty,this.totalTiles);
+              }
+            }
             const col = id % this.tsCols;
             const row = Math.floor(id / this.tsCols);
-            if (row >= this._atlasRows) {
-              // Tile-ID zeigt außerhalb des Atlas → Warnung (einmal pro ID wäre ideal; hier einfach direkt)
-              dbg('WARN tile id outside atlas', JSON.stringify({id,col,row,cols:this.tsCols,rows:this._atlasRows}));
-              ctx.fillStyle = '#8b0000';
-              ctx.fillRect(tx*tileSize, ty*tileSize, tileSize, tileSize);
-              continue;
-            }
             const sx = col * this.tsTile;
             const sy = row * this.tsTile;
             ctx.drawImage(this.tileset, sx, sy, this.tsTile, this.tsTile, tx*tileSize, ty*tileSize, tileSize, tileSize);
           }
         }
       }else{
+        // --- Platzhalter ---
         for (let ty=0; ty<H; ty++){
           for (let tx=0; tx<W; tx++){
             const id = this.tiles[ty*W+tx] | 0;
@@ -380,7 +447,7 @@
     }
   }
 
-  // GameLoader (mit Logs)
+  // GameLoader
   const GameLoader = {
     _world: null,
     async start(mapUrl){
