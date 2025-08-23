@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- index.html • v1.4 • HUD-Ressourcen + Canvas touch-action -->
+  <!-- index.html • v1.5 • Ressourcen oben, Version unten, Build-Toggle-Icon -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler-Mini</title>
@@ -19,11 +19,11 @@
     /* Bühne */
     #stage{
       display:block;width:100vw;height:100vh;background:var(--stage);
-      /* WICHTIG: verhindert Browser-Pinch/Scroll auf Mobilgeräten */
+      /* verhindert Browser-Pinch/Scroll auf Mobilgeräten */
       touch-action:none;
     }
 
-    /* HUD */
+    /* HUD (oben) */
     #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
       align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
       padding:8px 10px;border-radius:8px}
@@ -62,9 +62,10 @@
     p.sub{margin:0 0 14px; opacity:.85}
     #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
 
-    /* Toast-Leiste */
-    #inspectorBar{position:fixed; left:8px; right:8px; bottom:8px; z-index:35; display:flex; justify-content:space-between; gap:8px;
-      background:rgba(0,0,0,.35); backdrop-filter:blur(4px); padding:6px 8px; border-radius:8px}
+    /* Toast-/Inspector-Leiste (unten) */
+    #inspectorBar{position:fixed; left:8px; right:8px; bottom:8px; z-index:35; display:flex; align-items:center; gap:12px;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(4px); padding:6px 10px; border-radius:8px}
+    #versionBadge{opacity:.9;font-weight:600}
 
     /* Build-Menü */
     #buildMenu{position:fixed; left:8px; top:64px; z-index:18; background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
@@ -90,6 +91,7 @@
     #inspector.max{left:0;top:0;transform:none;width:100vw;height:100vh;border-radius:0}
   </style>
 
+  <!-- Fullscreen-Fallback-Flag -->
   <script>
     (function(){
       const isIPhone=/iPhone/i.test(navigator.userAgent);
@@ -111,13 +113,12 @@
       <symbol id="i-hut" viewBox="0 0 24 24"><path d="M4 12l8-6 8 6v8H4zM10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 2l4 6h-3l3 5h-3l4 7H7l4-7H8l3-5H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
       <symbol id="i-stone" viewBox="0 0 24 24"><path d="M4 16l4-8h8l4 8-6 4H10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+      <symbol id="i-build" viewBox="0 0 24 24"><path d="M3 21l6-6M3 7l4-4 4 4-4 4-4-4zm10 6l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     </defs>
   </svg>
 
-  <!-- HUD -->
+  <!-- HUD oben -->
   <div id="hud" aria-label="Spiel-HUD">
-    <strong id="buildBadge" title="Build/Version">Siedler-Mini</strong>
-
     <!-- Ressourcen -->
     <div id="resources" aria-label="Ressourcen">
       <span class="r">Holz <span id="res-wood" class="val">0</span></span>
@@ -127,6 +128,11 @@
     </div>
 
     <span class="spacer"></span>
+
+    <!-- Baumenü an/aus -->
+    <button id="btnBuildToggle" class="iconbtn" title="Baumenü ein/aus">
+      <svg class="icon"><use href="#i-build"></use></svg>
+    </button>
 
     <!-- Vollbild -->
     <button id="btnFS" class="iconbtn" title="Vollbild">
@@ -186,14 +192,11 @@
     </div>
   </aside>
 
-  <!-- Toast-Leiste -->
+  <!-- Toast-/Inspector-Leiste unten -->
   <div id="inspectorBar" class="toast" aria-live="polite">
-    <div>
-      <button id="btnMenu" title="Startmenü öffnen">
-        <svg class="icon" style="margin-right:6px"><use href="#i-menu"></use></svg>Menü
-      </button>
-    </div>
-    <div style="display:flex;gap:8px">
+    <span id="versionBadge">—</span>
+    <div style="display:flex;gap:8px;margin-left:auto">
+      <button id="btnMenu" title="Startmenü öffnen"><svg class="icon" style="margin-right:6px"><use href="#i-menu"></use></svg>Menü</button>
       <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
       <button id="btnCacheClear" title="Seite neu laden und Cache umgehen">Cache leeren</button>
     </div>
