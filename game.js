@@ -1,9 +1,10 @@
 /* =============================================================================
- * game.js • v1.4
- * - Unterstützt Tileset-JSON (frames + meta) + PNG (z. B. tileset.terrain.json/.png)
- * - Map.tiles: Zahlen-IDs ODER Frame-Keys ("terrain_r4_c7")
- * - Debug-Logs für jeden Schritt
- * - Zoom/Pan, Build, Ressourcen wie zuvor
+ * game.js • v1.5
+ * - Tileset-JSON+PNG (terrain) wie v1.4
+ * - NEU: einfache Units (builder) mit Manhattan-Pfaden + Bewegung
+ * - Unit-Sprites optional (assets/units/builder.png) → sonst Punkt-Fallback
+ * - Bei Platzhalterkarten werden Pfadpunkte sichtbar gerendert
+ * - Debug-Logs überall (Build/Units/Render/Loads)
  * =========================================================================== */
 
 (function(){
@@ -19,20 +20,12 @@
   };
 
   // ---------- helpers ----------
-  async function fetchJSON(url){
-    const r = await fetch(url, {cache:'no-cache'});
-    if(!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
-    return r.json();
-  }
-  function joinPath(base, rel){
-    if (/^https?:|^\//.test(rel)) return rel;
-    const u = new URL(base, location.href);
-    const seg = u.pathname.split('/'); seg.pop(); // drop file
-    return new URL(seg.join('/') + '/' + rel, u).toString();
-  }
+  async function fetchJSON(url){ const r=await fetch(url,{cache:'no-cache'}); if(!r.ok) throw new Error(`HTTP ${r.status} ${url}`); return r.json(); }
+  function joinPath(base,rel){ if(/^https?:|^\//.test(rel)) return rel; const u=new URL(base,location.href); const seg=u.pathname.split('/'); seg.pop(); return new URL(seg.join('/')+'/'+rel,u).toString(); }
   function hash2i(x,y,mod){ let n=(x|0)*73856093 ^ (y|0)*19349663; n^=(n<<11); n^=(n>>>7); n^=(n<<3); return mod>0?Math.abs(n)%mod:0; }
+  const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 
-  // ---------- Map laden (mit Auto-/JSON-Tileset) ----------
+  // ---------- Map laden (wie v1.4) ----------
   async function loadMap(url){
     if (!url){ dbg('Map: NO URL → demo'); return demoMap(); }
     try{
@@ -46,7 +39,7 @@
         tiles: Array.isArray(j.tiles) ? j.tiles.flat() : [],
       };
 
-      // Tileset-Auflösung (.json → lese meta; .png → direkt)
+      // Tileset (.json bevorzugt)
       let atlas = null;
       if (md.tileset && /\.json(\?|$)/i.test(md.tileset)){
         const metaUrl = md.tileset;
@@ -60,7 +53,7 @@
         atlas = { type:'png', pngUrl: md.tileset, tileSize: md.tileSize||32, frames:null, grid:null };
         dbg('Tileset PNG', JSON.stringify({pngUrl:atlas.pngUrl, tileSize:atlas.tileSize}));
       } else {
-        // Kein Tileset angegeben → versuchen terrain automatisch
+        // Auto terrain
         try{
           const autoMetaUrl = './assets/tiles/tileset.terrain.json';
           const meta = await fetchJSON(autoMetaUrl);
@@ -98,10 +91,64 @@
     if (tag) dbg('HUD', tag, JSON.stringify(res));
   }
 
+  // ---------- Units ----------
+  class Unit {
+    constructor(type, x, y, pathPx, opts){
+      this.type = type;              // 'builder'
+      this.x = x; this.y = y;        // px
+      this.path = pathPx || [];      // [{x,y} in px]
+      this.i = 0;                    // aktueller Segment-Index
+      this.speed = (opts?.speed)||80;// px/s
+      this.size = (opts?.size)||18;  // Radius für Dot
+      this.color= (opts?.color)||'#ffd166';
+      this.sprite = opts?.sprite||null;
+      this.frameW = opts?.frameW||0;
+      this.frameH = opts?.frameH||0;
+      this.frames = opts?.frames||1;
+      this.fps = opts?.fps||6;
+      this._animT = 0;
+      this.done = false;
+    }
+    update(dt){
+      if (this.done || this.i >= this.path.length) { this.done=true; return; }
+      const tx = this.path[this.i].x, ty=this.path[this.i].y;
+      const dx = tx - this.x, dy = ty - this.y;
+      const dist = Math.hypot(dx,dy);
+      if (dist < Math.max(1, this.speed*dt*0.5)){
+        this.x=tx; this.y=ty; this.i++;
+        if (this.i>=this.path.length) { this.done=true; }
+      } else {
+        const v = this.speed * dt;
+        this.x += (dx/dist)*v;
+        this.y += (dy/dist)*v;
+      }
+      this._animT += dt;
+    }
+    draw(ctx){
+      if (this.sprite){
+        const frame = Math.floor(this._animT * this.fps) % this.frames;
+        const sx = frame * this.frameW, sy = 0;
+        ctx.drawImage(this.sprite, sx,sy,this.frameW,this.frameH, this.x-this.frameW/2, this.y-this.frameH/2, this.frameW, this.frameH);
+      } else {
+        ctx.fillStyle=this.color;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size/2, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.stroke();
+      }
+    }
+  }
+
+  function tileCenterPx(tx,ty,tile){ return {x: tx*tile + tile/2, y: ty*tile + tile/2}; }
+  function manhattanPathTiles(x0,y0,x1,y1){
+    const path=[]; let x=x0,y=y0;
+    while (x!==x1){ x += (x1>x)?1:-1; path.push({x,y}); }
+    while (y!==y1){ y += (y1>y)?1:-1; path.push({x,y}); }
+    return path;
+  }
+
+  // ---------- World ----------
   class World {
     constructor(canvas, mapData){
-      this.canvas = canvas;
-      this.ctx = canvas.getContext('2d');
+      this.canvas = canvas; this.ctx = canvas.getContext('2d');
 
       this.camX=0; this.camY=0; this.zoom=1; this.minZoom=0.5; this.maxZoom=3;
       this.time=0; this.running=true;
@@ -114,19 +161,24 @@
 
       // Atlas
       this.tilesetImg = null;
-      this.frames = null;      // Map<string, {x,y,w,h}>
-      this.cols = 1; this.rows = 1; this.total = 1;
+      this.frames = null; this.cols=1; this.rows=1; this.total=1;
       this.tsTile = this.tileSize;
-      this.numericIds = true;  // true → map.tiles enthält Zahlen
-      this.heuristic = false;  // true → keine Tiles → verteile deterministisch
+      this.numericIds=true; this.heuristic=false;
 
-      // Build + Ressourcen
-      this.buildings=[]; this.res={wood:50,stone:30,food:20,pop:5};
+      // Gameplay
+      this.buildings=[];
+      this.res={wood:50,stone:30,food:20,pop:5};
       this.currentTool=null;
 
-      // Input state
+      // Units
+      this.units=[];
+      this.unitSprites = { builder:null };  // optionales Image
+      this.unitSpriteMeta = { builder:{ frameW:32, frameH:32, frames:4, fps:6 } };
+
+      // Input
       this._touches=new Map(); this._pinchBase=null; this._dragging=false; this._lastX=0; this._lastY=0;
 
+      // intern
       this._raf=null; this.texturesReady=false; this._loggedRender=false;
 
       this._bindInput();
@@ -137,7 +189,7 @@
     async init(mapUrl){
       this.state.mapUrl = mapUrl || this.state.mapUrl;
 
-      // ---------- Atlas laden ----------
+      // ---- Atlas laden ----
       const A = this.map._atlas;
       if (A){
         try{
@@ -148,38 +200,41 @@
           const ih = img.naturalHeight || img.height;
 
           if (A.type==='json' && A.frames && Object.keys(A.frames).length){
-            this.frames = A.frames; // key → {x,y,w,h}
-            // cols/rows aus meta.grid oder Bildmaßen
+            this.frames = A.frames;
             if (A.grid && A.grid.cols && A.grid.rows){ this.cols=A.grid.cols; this.rows=A.grid.rows; }
             else { this.cols=Math.max(1,Math.floor(iw/this.tsTile)); this.rows=Math.max(1,Math.floor(ih/this.tsTile)); }
-            this.total = this.cols * this.rows;
+            this.total=this.cols*this.rows;
             dbg('Atlas JSON OK', JSON.stringify({tile:this.tsTile, cols:this.cols, rows:this.rows, frames:Object.keys(this.frames).length}));
           } else {
-            // reines PNG‑Grid
-            this.frames = null;
+            this.frames=null;
             this.cols=Math.max(1,Math.floor(iw/this.tsTile)); this.rows=Math.max(1,Math.floor(ih/this.tsTile)); this.total=this.cols*this.rows;
             dbg('Atlas PNG OK', JSON.stringify({tile:this.tsTile, cols:this.cols, rows:this.rows}));
           }
           this.texturesReady=true; window.Asset.markTexturesReady(true);
-        }catch(e){
-          dbg('Atlas FAIL → placeholders', e?.message||e);
-          this.tilesetImg=null; this.frames=null; this.texturesReady=true; window.Asset.markTexturesReady(true);
-        }
-      } else {
-        dbg('No atlas → placeholders'); this.texturesReady=true; window.Asset.markTexturesReady(true);
-      }
+        }catch(e){ dbg('Atlas FAIL → placeholders', e?.message||e); this.tilesetImg=null; this.frames=null; this.texturesReady=true; window.Asset.markTexturesReady(true); }
+      } else { dbg('No atlas → placeholders'); this.texturesReady=true; window.Asset.markTexturesReady(true); }
 
-      // Tiles Art bestimmen
+      // Tiles Art
       this.numericIds = this.tiles.length ? (typeof this.tiles[0] === 'number') : true;
       this.heuristic = !this.tiles.length && !!this.tilesetImg;
 
-      if (this.heuristic) dbg('Tiles mode: HEURISTIC');
-      else dbg('Tiles mode:', this.numericIds ? 'NUMERIC' : 'KEYS');
+      if (this.heuristic) dbg('Tiles mode: HEURISTIC'); else dbg('Tiles mode:', this.numericIds?'NUMERIC':'KEYS');
+
+      // ---- Unit-Sprites versuchen (optional) ----
+      try{
+        const spr = await window.Asset.loadImage('builder', './assets/units/builder.png');
+        this.unitSprites.builder = spr;
+        dbg('Unit sprite OK', 'builder.png');
+      }catch(e){ dbg('Unit sprite missing → dot fallback'); }
 
       this.play();
     }
 
-    play(){ if(this._raf) return; const tick=()=>{ this._raf=requestAnimationFrame(tick); if(!this.running) return; this.time+=1/60; this.state.time=this.time; this._draw(); }; this._raf=requestAnimationFrame(tick); }
+    play(){ if(this._raf) return; let last=performance.now();
+      const tick=(t)=>{ this._raf=requestAnimationFrame(tick); const dt=Math.min(0.05,(t-last)/1000); last=t; if(!this.running) return;
+        this.time+=dt; this.state.time=this.time; this._update(dt); this._draw(); };
+      this._raf=requestAnimationFrame(tick);
+    }
     pause(){ this.running=false; }
     get running(){ return this._running; } set running(v){ this._running=!!v; }
 
@@ -192,11 +247,20 @@
       this.canvas.width=Math.floor(w*dpr); this.canvas.height=Math.floor(h*dpr); this.canvas.style.width=w+'px'; this.canvas.style.height=h+'px'; this.ctx.setTransform(dpr,0,0,dpr,0,0); dbg('Canvas',`${w}x${h} dpr:${dpr}`); }
 
     _bindInput(){
-      document.querySelectorAll('#buildTools .tool').forEach(b=>b.addEventListener('click',()=>{ this.currentTool=b.dataset.tool||null; dbg('Tool',this.currentTool||'none'); }));
+      document.querySelectorAll('#buildTools .tool').forEach(b=>b.addEventListener('click',()=>{ 
+        this.currentTool=b.dataset.tool||null; 
+        document.querySelectorAll('#buildTools .tool').forEach(n=>n.classList.toggle('active', n===b));
+        dbg('Tool',this.currentTool||'none'); 
+      }));
       this.canvas.addEventListener('click',(ev)=>{ if(!this.currentTool) return; const {tx,ty}=this._viewToTile(ev.clientX,ev.clientY);
         if(tx<0||ty<0||tx>=this.map.width||ty>=this.map.height){ dbg('Build OOB',JSON.stringify({tool:this.currentTool,tx,ty})); return; }
         const cost=BUILD_COST[this.currentTool]||{}; if(!this._canAfford(this.currentTool)){ dbg('Build DENIED',JSON.stringify({tool:this.currentTool,tx,ty,cost,have:this.res})); return; }
-        const before={...this.res}; this.buildings.push({type:this.currentTool,tx,ty}); this._pay(this.currentTool); updateHUD(this.res,'build'); dbg('Build OK',JSON.stringify({tool:this.currentTool,tx,ty,cost,before,after:this.res}));
+        const before={...this.res};
+        this.buildings.push({type:this.currentTool, tx, ty});
+        this._pay(this.currentTool); updateHUD(this.res,'build');
+        dbg('Build OK',JSON.stringify({tool:this.currentTool,tx,ty,cost,before,after:this.res}));
+        // Worker zur Baustelle schicken
+        this.spawnBuilderTo(tx,ty);
       });
       let wheelT=null; this.canvas.addEventListener('wheel',(ev)=>{ ev.preventDefault(); const d=-Math.sign(ev.deltaY)*0.1; this._zoomAt(ev.clientX,ev.clientY,d); clearTimeout(wheelT); wheelT=setTimeout(()=>dbg('Zoom',this.zoom.toFixed(2)),120); },{passive:false});
       this.canvas.addEventListener('pointerdown',(ev)=>{ this.canvas.setPointerCapture(ev.pointerId); this._dragging=true; this._lastX=ev.clientX; this._lastY=ev.clientY; this._touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY}); });
@@ -204,11 +268,26 @@
       this.canvas.addEventListener('pointermove',(ev)=>{ if(!this._touches.has(ev.pointerId)) return; this._touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
         if(this._touches.size===1&&this._dragging){ const dx=ev.clientX-this._lastX,dy=ev.clientY-this._lastY; this._lastX=ev.clientX; this._lastY=ev.clientY; this.camX-=dx/this.zoom; this.camY-=dy/this.zoom; moved=true; }
         else if(this._touches.size>=2){ const pts=[...this._touches.values()]; const a=pts[0],b=pts[1]; const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2; const dist=Math.hypot(a.x-b.x,a.y-b.y);
-          if(!this._pinchBase) this._pinchBase={dist,zoom:this.zoom}; else { const scale=dist/this._pinchBase.dist; const target=this._clamp(this._pinchBase.zoom*scale,this.minZoom,this.maxZoom); this._zoomAt(cx,cy,0,target); } }
+          if(!this._pinchBase) this._pinchBase={dist,zoom:this.zoom}; else { const scale=dist/this._pinchBase.dist; const target=clamp(this._pinchBase.zoom*scale,this.minZoom,this.maxZoom); this._zoomAt(cx,cy,0,target); } }
       });
       this.canvas.addEventListener('pointerup',(ev)=>{ this._touches.delete(ev.pointerId); if(this._touches.size<2) this._pinchBase=null; if(this._touches.size===0){ if(moved) dbg('Pan',JSON.stringify({x:Math.round(this.camX),y:Math.round(this.camY),z:+this.zoom.toFixed(2)})); this._dragging=false; moved=false; }});
       this.canvas.addEventListener('pointercancel',()=>{ this._touches.clear(); this._pinchBase=null; this._dragging=false; moved=false; });
     }
+
+    // ---- Units ----
+    spawnBuilderTo(tx,ty){
+      const startT = {x:0, y:this.map.height-1}; // Dorfrand links unten
+      const pathTiles = manhattanPathTiles(startT.x, startT.y, tx, ty);
+      const pathPx = [tileCenterPx(startT.x,startT.y,this.tileSize), ...pathTiles.map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
+      const opts = { speed: 90, size: 16, color: '#ffd166' };
+      const spr = this.unitSprites.builder;
+      if (spr){ Object.assign(opts, this.unitSpriteMeta.builder, {sprite:spr}); }
+      const u = new Unit('builder', pathPx[0].x, pathPx[0].y, pathPx.slice(1), opts);
+      this.units.push(u);
+      dbg('Unit spawn', JSON.stringify({type:'builder', from:startT, to:{x:tx,y:ty}, steps:pathTiles.length}));
+    }
+
+    _update(dt){ for(const u of this.units){ if(!u.done) u.update(dt); } this.units = this.units.filter(u=>!u.done); }
 
     _clamp(v,a,b){ return Math.min(b,Math.max(a,v)); }
     _zoomAt(cx,cy,delta=0,abs=null){ const bef=this._viewToWorld(cx,cy); const z=abs!=null?abs:this._clamp(this.zoom*(1+delta),this.minZoom,this.maxZoom); this.zoom=z; const aft=this._viewToWorld(cx,cy); this.camX+=(bef.x-aft.x); this.camY+=(bef.y-aft.y); }
@@ -224,55 +303,27 @@
 
       if(!this._loggedRender){ this._loggedRender=true; dbg('Render', this.tilesetImg ? (this.frames?'TILESET(JSON)':'TILESET(PNG)') : 'PLACEHOLDER', this.heuristic?'(HEURISTIC)':''); }
 
+      // --- TERRAIN ---
       if(this.tilesetImg){
-        // --- Atlas: JSON (frames) oder PNG-Grid ---
         for(let ty=0; ty<H; ty++){
           for(let tx=0; tx<W; tx++){
             let sx,sy,sw,sh;
             if (this.frames){
-              // Frames vorhanden → benutze Key oder numerisch zu Key
               let key;
-              if (this.heuristic){
-                // gar keine Tiles → verteile deterministisch
-                const id = hash2i(tx,ty,this.cols*this.rows);
-                const r = Math.floor(id/this.cols), c = id%this.cols;
-                key = `terrain_r${r}_c${c}`;
-              } else if (this.numericIds){
-                const id = (this.tiles[ty*W+tx]|0);
-                const r = Math.floor(id/this.cols), c = id%this.cols;
-                key = `terrain_r${r}_c${c}`;
-              } else {
-                key = this.tiles[ty*W+tx] + '';
-              }
-              const f = this.frames[key];
-              if (!f){ // Fallback: heuristisch wählen
-                const id = hash2i(tx,ty,this.cols*this.rows);
-                const r = Math.floor(id/this.cols), c = id%this.cols;
-                const fk = `terrain_r${r}_c${c}`;
-                const ff = this.frames[fk];
-                if (!ff){ ctx.fillStyle='#8b0000'; ctx.fillRect(tx*tileSize,ty*tileSize,tileSize,tileSize); continue; }
-                sx=ff.x; sy=ff.y; sw=ff.w; sh=ff.h;
-                if ((tx+ty)%23===0) dbg('WARN missing frame', key, '→', fk);
-              } else {
-                sx=f.x; sy=f.y; sw=f.w; sh=f.h;
-              }
+              if (this.heuristic){ const id=hash2i(tx,ty,this.cols*this.rows); const r=Math.floor(id/this.cols), c=id%this.cols; key=`terrain_r${r}_c${c}`; }
+              else if (this.numericIds){ const id=(this.tiles[ty*W+tx]|0); const r=Math.floor(id/this.cols), c=id%this.cols; key=`terrain_r${r}_c${c}`; }
+              else { key = this.tiles[ty*W+tx]+''; }
+              const f=this.frames[key];
+              if (!f){ const id=hash2i(tx,ty,this.cols*this.rows); const r=Math.floor(id/this.cols), c=id%this.cols; const fk=`terrain_r${r}_c${c}`; const ff=this.frames[fk]; if(!ff){ ctx.fillStyle='#8b0000'; ctx.fillRect(tx*tileSize,ty*tileSize,tileSize,tileSize); continue; } sx=ff.x; sy=ff.y; sw=ff.w; sh=ff.h; if((tx+ty)%23===0) dbg('WARN missing frame', key, '→', fk); }
+              else { sx=f.x; sy=f.y; sw=f.w; sh=f.h; }
             } else {
-              // PNG-Grid
-              let id;
-              if (this.heuristic) id=hash2i(tx,ty,this.total);
-              else if (this.numericIds) id=(this.tiles[ty*W+tx]|0);
-              else { // string → in r/c übersetzen erwartet "rX_cY"
-                const key=(this.tiles[ty*W+tx]+''); const m=key.match(/r(\d+)_c(\d+)/i);
-                id = m ? (parseInt(m[1],10)*this.cols + parseInt(m[2],10)) : hash2i(tx,ty,this.total);
-              }
-              const col=id%this.cols, row=Math.floor(id/this.cols);
-              sx=col*this.tsTile; sy=row*this.tsTile; sw=this.tsTile; sh=this.tsTile;
+              let id; if (this.heuristic) id=hash2i(tx,ty,this.total); else if (this.numericIds) id=(this.tiles[ty*W+tx]|0); else { const key=(this.tiles[ty*W+tx]+''); const m=key.match(/r(\d+)_c(\d+)/i); id = m ? (parseInt(m[1],10)*this.cols + parseInt(m[2],10)) : hash2i(tx,ty,this.total); }
+              const col=id%this.cols, row=Math.floor(id/this.cols); sx=col*this.tsTile; sy=row*this.tsTile; sw=this.tsTile; sh=this.tsTile;
             }
             ctx.drawImage(this.tilesetImg, sx,sy,sw,sh, tx*tileSize,ty*tileSize, tileSize,tileSize);
           }
         }
       } else {
-        // --- Platzhalter ---
         for(let ty=0; ty<H; ty++){
           for(let tx=0; tx<W; tx++){
             const id=this.tiles.length? (this.numericIds?(this.tiles[ty*W+tx]|0):0) : 2;
@@ -282,7 +333,7 @@
         }
       }
 
-      // Buildings (wie bisher, simple Shapes)
+      // --- BUILDINGS (simple shapes) ---
       for(const b of this.buildings){
         const x=b.tx*tileSize,y=b.ty*tileSize,s=tileSize;
         switch(b.type){
@@ -293,6 +344,20 @@
           default: ctx.strokeStyle='#fff'; ctx.strokeRect(x+6,y+6,s-12,s-12);
         }
       }
+
+      // --- PATH DOTS (nur wenn Terrain Platzhalter ist) ---
+      if (!this.tilesetImg){
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        for (const u of this.units){
+          ctx.fillStyle = '#6aa3ff';
+          for (const p of u.path){ ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
+        }
+        ctx.restore();
+      }
+
+      // --- UNITS ---
+      for(const u of this.units){ u.draw(ctx); }
 
       ctx.restore();
     }
