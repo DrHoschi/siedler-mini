@@ -1,10 +1,15 @@
 /* =============================================================================
- * game.js • v1.7.1
- * - Robustere Pfadauflösung (Safari/iOS-freundlich) für Maps & Assets
+ * game.js • v1.8
+ * - "Path Wear": Einheiten laufen → Kachel zählt Durchläufe → Level 0..9
+ *   • Texturen: ./assets/tex/path/topdown_path0..9.PNG
+ *   • Manuelle Straße (Build "road") setzt Level=9
+ *   • Speed-Faktoren je Level (konfigurierbar)
  * - Pfade wie besprochen:
- *     • Units (Figuren):      ./assets/characters/{builder.png, carrier.png}
+ *     • Units (Figuren):      ./assets/characters/{builder.png,carrier.png}
  *     • Gebäude (Epoche 1):   ./assets/tex/building/wood/*.png
- * - Rest wie v1.7: Träger/Builder, Ressourcen, Debug-Logs
+ *     • Pfade/Straßen:        ./assets/tex/path/topdown_path*.PNG
+ * - Robuste Pfadauflösung für Maps & Assets (Safari-freundlich)
+ * - Träger/Builder, Ressourcen, Debug-Logs wie zuvor
  * ============================================================================= */
 
 (function(){
@@ -14,8 +19,15 @@
   // === Projektpfade =========================================================
   const PATHS = {
     units: './assets/characters',
-    buildings: './assets/tex/building/wood'
+    buildings: './assets/tex/building/wood',
+    paths: './assets/tex/path'
   };
+
+  // === Path-Wear Tuning =====================================================
+  // Ab wie vielen Durchläufen steigt das Pfad-Level? (kumulativ)
+  const PATH_THRESH = [1, 3, 8, 18, 33, 53, 78, 108, 143]; // → Level 1..9
+  // Geschwindigkeits-Faktoren pro Level (Index = Level 0..9)
+  const PATH_SPEED = [1.00, 1.02, 1.04, 1.07, 1.10, 1.13, 1.16, 1.20, 1.25, 1.30];
 
   // === Spiel-Balancing (Testwerte) =========================================
   const TILE_COLORS = {0:'#1a2735',1:'#2c3e2f',2:'#4a5b2f',3:'#6f5b2f',4:'#666'};
@@ -31,7 +43,6 @@
 
   // === Helpers: robuste URL-/Fetch-Utilities ===============================
   function normalizeUrl(input){
-    // Versuche Varianten: as-is, ohne './', absolut via base
     const variants = [];
     if (typeof input !== 'string') return [];
     variants.push(input);
@@ -61,11 +72,8 @@
     catch(e){ dbg('JSON parse FAIL', String(e.message||e)); throw e; }
   }
 
-  // Asset-URL Join (für Atlas-Referenzen):
   function joinPath(base,rel){
-    // Wenn rel bereits absolut oder mit Protokoll → direkt
     if (/^https?:|^data:|^\//i.test(rel)) return rel;
-    // base kann selbst relativ sein; wir nutzen location.href als Fallback
     try { return new URL(rel, new URL(base, location.href)).href; }
     catch(e){ return rel; }
   }
@@ -73,7 +81,6 @@
   function hash2i(x,y,mod){ let n=(x|0)*73856093 ^ (y|0)*19349663; n^=(n<<11); n^=(n>>>7); n^=(n<<3); return mod>0?Math.abs(n)%mod:0; }
   const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 
-  // Loader, der verschiedene Kandidats-Dateinamen probiert:
   async function loadFirstThatWorks(key, candidates){
     const tries = candidates.flatMap(normalizeUrl);
     let lastErr = null;
@@ -98,7 +105,6 @@
         tiles: Array.isArray(j.tiles) ? j.tiles.flat() : [],
       };
 
-      // Tileset (.json bevorzugt)
       let atlas = null;
       if (md.tileset && /\.json(\?|$)/i.test(md.tileset)){
         const metaUrl = joinPath(url, md.tileset);
@@ -113,7 +119,6 @@
         atlas = { type:'png', pngUrl, tileSize: md.tileSize||32, frames:null, grid:null };
         dbg('Tileset PNG', JSON.stringify({pngUrl:atlas.pngUrl, tileSize:atlas.tileSize}));
       } else {
-        // Auto terrain
         try{
           const autoMetaUrl = './assets/tiles/tileset.terrain.json';
           const meta = await fetchJSON(autoMetaUrl);
@@ -174,10 +179,27 @@
 
       this.cargoType = opts.cargoType||null;
       this.cargo = opts.cargo||0; this.cargoMax = opts.cargoMax||0;
-      this.onArrive = opts.onArrive||null; this.loop = opts.loop||false; this._home = opts.home||null;
+      this.onArrive = opts.onArrive||null; this.onStep = opts.onStep||null;
+      this.loop = opts.loop||false; this._home = opts.home||null;
+
+      this._lastTile = {x:NaN, y:NaN};
+      this.getSpeedFactorAt = opts.getSpeedFactorAt || (()=>1);
     }
     setPathPx(points){ this.path = points||[]; this.i=0; this._arriveCalled=false; }
+
+    _maybeStepCallback(){
+      const tx = Math.floor(this.x/this.frameH || 0); // not used; keep method available if needed
+    }
+
     update(dt){
+      // Step-Callback: wenn Kachel gewechselt
+      const cx = Math.floor(this.x / (this.frameW||32));
+      const cy = Math.floor(this.y / (this.frameH||32));
+      if ((cx!==this._lastTile.x || cy!==this._lastTile.y) && this.onStep){
+        this._lastTile = {x:cx, y:cy};
+        this.onStep(this, cx, cy);
+      }
+
       if (this.done || this.i >= this.path.length) {
         if (this.onArrive && !this._arriveCalled){ this._arriveCalled=true; this.onArrive(this,'end'); }
         return;
@@ -185,7 +207,13 @@
       const tx = this.path[this.i].x, ty=this.path[this.i].y;
       const dx = tx - this.x, dy = ty - this.y;
       const dist = Math.hypot(dx,dy);
-      if (dist < Math.max(1, this.speed*dt*0.5)){
+
+      // Geschwindigkeitsfaktor der aktuellen Kachel
+      const ttx = Math.max(0, Math.floor(this.x / (this.frameW||32)));
+      const tty = Math.max(0, Math.floor(this.y / (this.frameH||32)));
+      const factor = this.getSpeedFactorAt(ttx, tty);
+
+      if (dist < Math.max(1, this.speed*factor*dt*0.5)){
         this.x=tx; this.y=ty; this.i++;
         if (this.i>=this.path.length){
           if (this.onArrive){ this.onArrive(this,'end'); }
@@ -198,7 +226,7 @@
           }
         }
       } else {
-        const v = this.speed * dt;
+        const v = this.speed * factor * dt;
         this.x += (dx/dist)*v; this.y += (dy/dist)*v;
       }
       this._animT += dt;
@@ -249,6 +277,13 @@
       // Gebäude-Sprites (optional)
       this.buildingSprites = { road:null, hut:null, lumber:null, mason:null };
 
+      // Pfad-Overlays (0..9)
+      this.pathSprites = new Array(10).fill(null);
+
+      // Path-Wear Daten
+      this.pathWear = new Uint16Array(this.map.width * this.map.height); // Laufzähler
+      this.pathLevel = new Uint8Array(this.map.width * this.map.height); // 0..9
+
       // Input
       this._touches=new Map(); this._pinchBase=null; this._dragging=false; this._lastX=0; this._lastY=0;
 
@@ -259,6 +294,8 @@
       this._resize(); window.addEventListener('resize',()=>this._resize(),{passive:true});
       updateHUD(this.res,'init');
     }
+
+    idx(tx,ty){ return ty*this.map.width + tx; }
 
     async init(mapUrl){
       this.state.mapUrl = mapUrl || this.state.mapUrl;
@@ -291,7 +328,6 @@
       // Tiles Art
       this.numericIds = this.tiles.length ? (typeof this.tiles[0] === 'number') : true;
       this.heuristic = !this.tiles.length && !!this.tilesetImg;
-
       if (this.heuristic) dbg('Tiles mode: HEURISTIC'); else dbg('Tiles mode:', this.numericIds?'NUMERIC':'KEYS');
 
       // ---- Unit-Sprites (assets/characters) ----
@@ -316,6 +352,9 @@
       // ---- Gebäude-Sprites (assets/tex/building/wood) ----
       await this._loadBuildingSprites();
 
+      // ---- Path-Sprites 0..9 ----
+      await this._loadPathSprites();
+
       this.play();
     }
 
@@ -334,6 +373,21 @@
         }catch(e){
           this.buildingSprites[key] = null;
           dbg('Building sprite missing → shape', key);
+        }
+      }
+    }
+
+    async _loadPathSprites(){
+      // topdown_path0..9.PNG (Großbuchstaben laut deinem Repo)
+      for (let i=0;i<=9;i++){
+        const name = `${PATHS.paths}/topdown_path${i}.PNG`;
+        try{
+          this.pathSprites[i] = await loadFirstThatWorks('path:'+i, [name]);
+          dbg('Path sprite OK', i, name);
+        }catch(e){
+          this.pathSprites[i] = null;
+          if (i===0) dbg('Path sprite 0 fehlt – Pfad-Overlay startet ab Level>0');
+          else dbg('Path sprite missing', i);
         }
       }
     }
@@ -368,6 +422,9 @@
         this._pay(this.currentTool); updateHUD(this.res,'build');
         dbg('Build OK',JSON.stringify({tool:this.currentTool,tx,ty,cost,before,after:this.res}));
 
+        // Manuelle "road": sofort Level 9 setzen
+        if (this.currentTool==='road'){ this._setPathLevel(tx,ty,9,true); }
+
         // Worker zur Baustelle + zurück
         this.spawnBuilderReturn(tx,ty);
 
@@ -381,14 +438,44 @@
       let moved=false;
       this.canvas.addEventListener('pointermove',(ev)=>{ if(!this._touches.has(ev.pointerId)) return; this._touches.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
         if(this._touches.size===1&&this._dragging){ const dx=ev.clientX-this._lastX,dy=ev.clientY-this._lastY; this._lastX=ev.clientX; this._lastY=ev.clientY; this.camX-=dx/this.zoom; this.camY-=dy/this.zoom; moved=true; }
-        else if(this._touches.size>=2){ const pts=[...this._touches.values()]; const a=pts[0],b=pts[1]; const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2; const dist=Math.hypot(a.x-b.x,a.y-b.y);
+        else if(this._touches.size>=2){ const pts=[...this._touches.values()]; const a=pts[0],b=pts[1]; const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2; const dist=Math.hypot(a.x-b.x);
           if(!this._pinchBase) this._pinchBase={dist,zoom:this.zoom}; else { const scale=dist/this._pinchBase.dist; const target=clamp(this._pinchBase.zoom*scale,this.minZoom,this.maxZoom); this._zoomAt(cx,cy,0,target); } }
       });
       this.canvas.addEventListener('pointerup',(ev)=>{ this._touches.delete(ev.pointerId); if(this._touches.size<2) this._pinchBase=null; if(this._touches.size===0){ if(moved) dbg('Pan',JSON.stringify({x:Math.round(this.camX),y:Math.round(this.camY),z:+this.zoom.toFixed(2)})); this._dragging=false; moved=false; }});
       this.canvas.addEventListener('pointercancel',()=>{ this._touches.clear(); this._pinchBase=null; this._dragging=false; moved=false; });
     }
 
-    // === Depot / Halbquartier ===
+    // === Path-Wear API ======================================================
+    _incPath(tx,ty){
+      if (tx<0||ty<0||tx>=this.map.width||ty>=this.map.height) return;
+      const id=this.idx(tx,ty);
+      const before = this.pathWear[id];
+      this.pathWear[id] = Math.min(65535, before+1);
+
+      const oldLevel = this.pathLevel[id];
+      const newLevel = this._levelFromWear(this.pathWear[id]);
+      if (newLevel>oldLevel){
+        this.pathLevel[id] = newLevel;
+        dbg('Path level up', JSON.stringify({tx,ty, wear:this.pathWear[id], level:newLevel}));
+      }
+    }
+    _setPathLevel(tx,ty,level,log){
+      const id=this.idx(tx,ty);
+      this.pathLevel[id] = Math.max(0, Math.min(9, level|0));
+      if (log) dbg('Path set', JSON.stringify({tx,ty,level:this.pathLevel[id]}));
+    }
+    _levelFromWear(w){
+      let lvl=0;
+      for (let i=0;i<PATH_THRESH.length;i++){ if (w>=PATH_THRESH[i]) lvl=i+1; else break; }
+      return Math.min(9, lvl);
+    }
+    speedFactorAt(tx,ty){
+      const id=this.idx(tx,ty);
+      const lvl = this.pathLevel[id]||0;
+      return PATH_SPEED[lvl]||1.0;
+    }
+
+    // === Depot / Halbquartier ==============================================
     getDepotTile(){ return {x:0, y:this.map.height-1}; }
     getNearestHQorHut(tx,ty){
       const huts = this.buildings.filter(b=>b.type==='hut');
@@ -401,14 +488,18 @@
       return {x:best.tx, y:best.ty};
     }
 
-    // === Units erstellen ===
+    // === Units erstellen ====================================================
     spawnBuilderReturn(tx,ty){
       const startT = this.getDepotTile();
       const startPx = tileCenterPx(startT.x,startT.y,this.tileSize);
       const pathTo  = [startPx, ...manhattanPathTiles(startT.x,startT.y,tx,ty).map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
       const pathBack= pathTo.slice().reverse();
 
-      const opts = { speed: BUILDER_SPEED, size: 16, color: '#ffd166', sprite: this.unitSprites.builder, ...this.unitSpriteMeta.builder };
+      const opts = { speed: BUILDER_SPEED, size: 16, color: '#ffd166',
+        sprite: this.unitSprites.builder, ...this.unitSpriteMeta.builder,
+        getSpeedFactorAt: (x,y)=>this.speedFactorAt(x,y),
+        onStep: (_u,cx,cy)=>this._incPath(cx,cy)
+      };
       const u = new Unit('builder', startPx, opts);
       u.setPathPx(pathTo.slice(1));
       u.onArrive = (unit,phase)=>{
@@ -428,8 +519,13 @@
       const pathTo = [srcPx, ...manhattanPathTiles(srcTx,srcTy,depotT.x,depotT.y).map(p=>tileCenterPx(p.x,p.y,this.tileSize))];
 
       const colorBy = { wood:'#7cc36b', stone:'#c7cbd1', food:'#f3b562' };
-      const opts = { speed:CARRIER_SPEED, size:14, color:colorBy[kind]||'#6aa3ff', sprite:this.unitSprites.carrier, ...this.unitSpriteMeta.carrier,
-                     cargoType:kind, cargoMax:CARRIER_PAYLOAD[kind]||4, cargo:CARRIER_PAYLOAD[kind]||4, loop:true, home:srcPx };
+      const opts = { speed:CARRIER_SPEED, size:14, color:colorBy[kind]||'#6aa3ff',
+        sprite:this.unitSprites.carrier, ...this.unitSpriteMeta.carrier,
+        cargoType:kind, cargoMax:CARRIER_PAYLOAD[kind]||4, cargo:CARRIER_PAYLOAD[kind]||4,
+        loop:true, home:srcPx,
+        getSpeedFactorAt: (x,y)=>this.speedFactorAt(x,y),
+        onStep: (_u,cx,cy)=>this._incPath(cx,cy)
+      };
       const u = new Unit('carrier', srcPx, opts);
       u.setPathPx(pathTo.slice(1));
       u.onArrive = (unit,phase)=>{
@@ -454,7 +550,7 @@
     _update(dt){ for(const u of this.units){ if(!u.done) u.update(dt); } this.units = this.units.filter(u=>!u.done || u.loop); }
 
     _clamp(v,a,b){ return Math.min(b,Math.max(a,v)); }
-    _zoomAt(cx,cy,delta=0,abs=null){ const bef=this._viewToWorld(cx,cy); const z=abs!=null?abs:this._clamp(this.zoom*(1+delta),this.minZoom,this.maxZoom); this.zoom=z; const aft=this._viewToWorld(cx,cy); this.camX+=(bef.x-aft.x); this.camY+=(bef.y-aft.y); }
+    _zoomAt(cx,cy,delta=0,abs=null){ const bef=this._viewToWorld(cx,cy); const z=abs!=null?abs=this._clamp(abs,this.minZoom,this.maxZoom):this._clamp(this.zoom*(1+delta),this.minZoom,this.maxZoom); this.zoom=z; const aft=this._viewToWorld(cx,cy); this.camX+=(bef.x-aft.x); this.camY+=(bef.y-aft.y); }
     _viewToWorld(cx,cy){ const r=this.canvas.getBoundingClientRect(); return {x:(cx-r.left)/this.zoom+this.camX, y:(cy-r.top)/this.zoom+this.camY}; }
     _viewToTile(cx,cy){ const w=this._viewToWorld(cx,cy); return {tx:Math.floor(w.x/this.tileSize), ty:Math.floor(w.y/this.tileSize)}; }
     _canAfford(tool){ const c=BUILD_COST[tool]; if(!c) return true; return this.res.wood>=c.wood && this.res.stone>=c.stone && this.res.food>=c.food && this.res.pop>=c.pop; }
@@ -507,20 +603,20 @@
             case 'road': ctx.fillStyle='#8c7a57'; ctx.fillRect(x+2,y+s*0.4,s-4,s*0.2); break;
             case 'hut': ctx.fillStyle='#b08968'; ctx.fillRect(x+4,y+8,s-8,s-12); ctx.fillStyle='#6b4f3f'; ctx.fillRect(x+8,y+4,s-16,8); break;
             case 'lumber': ctx.fillStyle='#2f5d2e'; ctx.beginPath(); ctx.arc(x+s/2,y+s/2,s*0.32,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#3c6b3a'; ctx.fillRect(x+s*0.45,y+s*0.2,s*0.1,s*0.6); break;
-            case 'mason': ctx.fillStyle:'#9aa0a6'; ctx.fillRect(x+6,y+6,s-12,s-12); ctx.fillStyle:'#7d8186'; ctx.fillRect(x+s*0.4,y+4,s*0.2,s*0.2); break;
+            case 'mason': ctx.fillStyle='#9aa0a6'; ctx.fillRect(x+6,y+6,s-12,s-12); ctx.fillStyle='#7d8186'; ctx.fillRect(x+s*0.4,y+4,s*0.2,s*0.2); break;
             default: ctx.strokeStyle='#fff'; ctx.strokeRect(x+6,y+6,s-12,s-12);
           }
         }
       }
 
-      // --- PATH DOTS (nur wenn Terrain Platzhalter ist) ---
-      if (!this.tilesetImg){
-        ctx.save(); ctx.globalAlpha = 0.7;
-        for (const u of this.units){
-          ctx.fillStyle = '#6aa3ff';
-          for (const p of u.path){ ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
+      // --- PATH OVERLAY (Level > 0 zeichnet Textur über Terrain) ---
+      for (let ty=0; ty<H; ty++){
+        for (let tx=0; tx<W; tx++){
+          const lvl = this.pathLevel[this.idx(tx,ty)];
+          if (lvl>0 && this.pathSprites[lvl]){
+            ctx.drawImage(this.pathSprites[lvl], tx*tileSize, ty*tileSize, tileSize, tileSize);
+          }
         }
-        ctx.restore();
       }
 
       // --- UNITS ---
