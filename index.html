@@ -3,11 +3,13 @@
 <head>
   <!--
     =====================================================================
-    Siedler-Mini • index.html • v1.7
-    - Vollständige Seite mit HUD, Startmenü, Backdrop, Inspector, Baumenü
-    - Ressourcen-Icons im HUD (Holz/Stein/Nahrung/Bewohner)
-    - Deutlich kommentierte Bereiche, speziell die Kartenauswahl
-    - Kompatibel mit game.js v1.4 (Tileset-JSON+PNG, Keys ODER numerische IDs)
+    Siedler-Mini • index.html • v1.8
+    - HUD mit Ressourcen-Icons
+    - Startmenü + Backdrop (Logo) + sanftes Ausblenden
+    - Toast-/Inspector-Leiste
+    - Baumenü mit ICON + TEXT (zweizeilig), Re-aktivierbar via HUD-Button
+    - Klar markierter Bereich für Kartenauswahl (inkl. map-mini.json)
+    - Kompatibel mit game.js v1.5 (Units/Paths/Sprite-Fallback)
     =====================================================================
   -->
   <meta charset="utf-8" />
@@ -25,11 +27,7 @@
     .hide{display:none!important}
 
     /* ===== Bühne/Canvas ===== */
-    #stage{
-      display:block;width:100vw;height:100vh;background:var(--stage);
-      /* Wichtig: Damit Gesten (Pan/Pinch) an das Canvas gehen, NICHT an den Browser */
-      touch-action:none;
-    }
+    #stage{display:block;width:100vw;height:100vh;background:var(--stage);touch-action:none;}
 
     /* ===== HUD (oben) ===== */
     #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
@@ -44,11 +42,8 @@
     select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
 
     /* Ressourcen-Leiste (mit Icons) */
-    #resources{
-      display:flex; gap:12px; align-items:center;
-      background:rgba(0,0,0,.28); border:1px solid var(--b1); border-radius:8px; padding:6px 10px;
-      white-space:nowrap;
-    }
+    #resources{display:flex; gap:12px; align-items:center;
+      background:rgba(0,0,0,.28); border:1px solid var(--b1); border-radius:8px; padding:6px 10px; white-space:nowrap;}
     #resources .r{display:inline-flex; gap:6px; align-items:center}
     #resources .icon{width:18px;height:18px;opacity:.9}
     #resources .val{min-width:36px; text-align:right; font-variant-numeric:tabular-nums}
@@ -56,7 +51,6 @@
     /* ===== Backdrop (Logo vorm Start) ===== */
     #startBackdrop{position:fixed; inset:0; z-index:25; display:grid; place-items:center;background-color: var(--bg); opacity:1;}
     #startBackdrop img{max-width:min(90vw,1200px);max-height:min(90vh,800px);height:auto;width:auto;display:block;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5))}
-    /* wird via JS auf .fade-out gesetzt (3s Transition) und danach .hidden */
     #startBackdrop.fade-out{opacity:0;transition:opacity 3s ease}
     #startBackdrop.hidden{display:none}
 
@@ -75,18 +69,20 @@
     /* ===== Toast-/Inspector-Leiste (unten) ===== */
     #inspectorBar{position:fixed; left:8px; right:8px; bottom:8px; z-index:35; display:flex; align-items:center; gap:12px;
       background:rgba(0,0,0,.35); backdrop-filter:blur(4px); padding:6px 10px; border-radius:8px}
-    /* Merker: beim nächsten Anfassen kleiner machen + Tooltip mit Build-Info */
+    /* Merker: später kleiner + Tooltip mit Build-Info */
     #versionBadge{opacity:.9;font-weight:600}
 
-    /* ===== Baumenü ===== */
+    /* ===== Baumenü (Buttons mit Icon + Text) ===== */
     #buildMenu{position:fixed; left:8px; top:64px; z-index:18; background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
-      border:1px solid var(--b1); border-radius:10px; padding:10px 12px; min-width:260px;}
+      border:1px solid var(--b1); border-radius:10px; padding:10px 12px; min-width:280px;}
     #buildMenu[hidden]{display:none}
     #buildMenu header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-    #buildTools{display:grid;grid-template-columns:repeat(4, minmax(36px,1fr));gap:8px}
-    .tool{display:grid;place-items:center;height:40px;border:1px solid var(--b2);border-radius:8px;background:#141b24;cursor:pointer}
+    #buildTools{display:grid;grid-template-columns:repeat(4, minmax(60px,1fr));gap:8px}
+    .tool{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:70px;
+      border:1px solid var(--b2);border-radius:10px;background:#141b24;cursor:pointer;text-align:center}
     .tool:hover{background:#1b2430}
-    .tool .icon{width:18px;height:18px}
+    .tool .icon{width:20px;height:20px}
+    .tool .label{font-size:12px;line-height:1}
     .tool.active{outline:2px solid var(--accent); outline-offset:1px}
 
     /* ===== Inspector ===== */
@@ -102,7 +98,7 @@
     #inspector.max{left:0;top:0;transform:none;width:100vw;height:100vh;border-radius:0}
   </style>
 
-  <!-- Fullscreen-Fallback-Flag (z.B. iPhone kann Probleme machen) -->
+  <!-- Fullscreen-Fallback-Flag -->
   <script>
     (function(){
       const isIPhone=/iPhone/i.test(navigator.userAgent);
@@ -113,7 +109,7 @@
 </head>
 
 <body>
-  <!-- ===== SVG-Icon-Sprite (zentral für Buttons & HUD) ===== -->
+  <!-- ===== SVG-Icon-Sprite ===== -->
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
     <defs>
       <!-- HUD/Bedienung -->
@@ -137,9 +133,8 @@
     </defs>
   </svg>
 
-  <!-- ===== HUD oben: Ressourcen + Baumenü-Toggle + Vollbild ===== -->
+  <!-- ===== HUD oben ===== -->
   <div id="hud" aria-label="Spiel-HUD">
-    <!-- Ressourcen mit Icons -->
     <div id="resources" aria-label="Ressourcen">
       <span class="r" title="Holz"><svg class="icon"><use href="#i-wood"></use></svg> <span id="res-wood" class="val">0</span></span>
       <span class="r" title="Stein"><svg class="icon"><use href="#i-stone"></use></svg> <span id="res-stone" class="val">0</span></span>
@@ -149,35 +144,112 @@
 
     <span class="spacer"></span>
 
-    <!-- Baumenü an/aus -->
     <button id="btnBuildToggle" class="iconbtn" title="Baumenü ein/aus">
       <svg class="icon"><use href="#i-build"></use></svg>
     </button>
 
-    <!-- Vollbild (wird auf iPhone automatisch versteckt) -->
     <button id="btnFS" class="iconbtn" title="Vollbild">
       <svg class="icon"><use href="#i-full"></use></svg>
     </button>
   </div>
 
-  <!-- ===== Backdrop (Logo) hinter dem Startmenü, blendet nach Start aus ===== -->
+  <!-- ===== Backdrop (Logo) ===== -->
   <div id="startBackdrop" aria-hidden="true">
     <img id="startLogo" alt="Spiel-Logo" src="./assets/Logo.PNG" />
   </div>
 
-  <!-- ===== Bühne (Spiel-Canvas) ===== -->
+  <!-- ===== Bühne ===== -->
   <canvas id="stage"></canvas>
 
-  <!-- ===== Start-Overlay: Karten-Auswahl + Start/Weiter/Reset ===== -->
+  <!-- ===== Start-Overlay ===== -->
   <section id="startPanel">
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
-      <button id="btnMenuClose" class="iconbtn" title="Menü schließen">
-        <svg class="icon"><use href="#i-close"></use></svg>
-      </button>
+      <button id="btnMenuClose" class="iconbtn" title="Menü schließen"><svg class="icon"><use href="#i-close"></use></svg></button>
       <h1 id="t">Siedler‑Mini</h1>
       <p class="sub">Wähle eine Karte und starte das Spiel.</p>
 
-      <!--
-        === MAPS DROPDOWN ======================================================
-        • Hier trägst du die verfügbaren Karten (JSON) ein.
-        • Jede Option ist ein relativer Pf
+      <!-- === MAPS DROPDOWN (hier neue Karten eintragen) =================== -->
+      <div class="row">
+        <label for="mapSelect">Karte:</label>
+        <select id="mapSelect">
+          <option value="./assets/maps/map-mini.json">map-mini.json</option>
+          <option value="./assets/maps/map-demo.json">map-demo.json</option>
+          <option value="./assets/maps/map-pro.json">map-pro.json</option>
+          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <button id="btnStart">Neues Spiel</button>
+        <button id="btnContinue" disabled>Weiterspielen</button>
+        <button id="btnReset">Reset</button>
+      </div>
+
+      <pre id="quickDiag" aria-live="polite"></pre>
+    </div>
+  </section>
+
+  <!-- ===== Baumenü (Icon + Text) ===== -->
+  <aside id="buildMenu" hidden>
+    <header>
+      <strong>Baumenü</strong>
+      <button id="btnBuildMenuHide" class="iconbtn" title="Baumenü ausblenden"><svg class="icon"><use href="#i-close"></use></svg></button>
+    </header>
+    <div id="buildTools">
+      <button class="tool" data-tool="road"  title="Weg">
+        <svg class="icon"><use href="#i-road"></use></svg>
+        <span class="label">Weg</span>
+      </button>
+      <button class="tool" data-tool="hut"   title="Hütte">
+        <svg class="icon"><use href="#i-hut"></use></svg>
+        <span class="label">Hütte</span>
+      </button>
+      <button class="tool" data-tool="lumber" title="Holzfäller">
+        <svg class="icon"><use href="#i-tree"></use></svg>
+        <span class="label">Holzfäller</span>
+      </button>
+      <button class="tool" data-tool="mason"  title="Steinmetz">
+        <svg class="icon"><use href="#i-stone"></use></svg>
+        <span class="label">Steinmetz</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===== Toast-/Inspector-Leiste unten ===== -->
+  <div id="inspectorBar" class="toast" aria-live="polite">
+    <span id="versionBadge">index.html v1.8 • boot.js v1.8 • game.js v1.5</span>
+    <div style="display:flex;gap:8px;margin-left:auto">
+      <button id="btnMenu" title="Startmenü öffnen"><svg class="icon" style="margin-right:6px"><use href="#i-menu"></use></svg>Menü</button>
+      <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
+      <button id="btnCacheClear" title="Seite neu laden und Cache umgehen">Cache leeren</button>
+    </div>
+  </div>
+
+  <!-- ===== Inspector ===== -->
+  <aside id="inspector" hidden>
+    <header>
+      <div class="left"><strong>Inspector</strong></div>
+      <div class="right">
+        <button id="btnInspectorToggleMax" class="inspector" title="Maximieren / Fenstergröße">Maximieren</button>
+        <button id="btnInspectorClose" class="inspector" title="Schließen">Close</button>
+      </div>
+    </header>
+    <div class="tabs"><button data-tab="debug">Debug</button></div>
+    <div class="content" id="inspectorContent"></div>
+  </aside>
+
+  <!-- ===== Scripts ===== -->
+  <script src="./core/asset.js" defer></script>
+  <script src="./core/asset.items.js" defer></script>
+  <script src="./game.js" defer></script>
+  <script src="./boot.js" defer></script>
+
+  <script>
+    (function(){
+      if(document.documentElement.classList.contains('no-fs')){
+        const fsBtn=document.getElementById('btnFS'); if(fsBtn) fsBtn.classList.add('hide');
+      }
+    })();
+  </script>
+</body>
+</html>
