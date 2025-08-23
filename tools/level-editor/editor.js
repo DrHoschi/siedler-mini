@@ -1,13 +1,28 @@
-// Siedler‑Mini • Level‑Editor v1 — Kern
-// Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+// Siedler‑Mini • Level‑Editor v1 — KERN (mit Atlas‑Support)
+// =============================================================================
+// WICHTIG (Projekt-Standards):
+//  - Kommentare ausführlich lassen (Debug/Erklärung) — NICHT entfernen
+//  - Struktur strikt einhalten: Imports → Konstanten → Hilfsfunktionen
+//                               → Klassen (Daten + Editor)
+//                               → Hauptlogik (im Boot) → Exports
+//  - Startfenster zuerst (im index.html/boot.js gelöst)
+//  - Debug/Inspector immer drin lassen
+//  - Dateiname/Ordnerstruktur stabil halten
+// =============================================================================
 
+// ————————————————————————————————————————————————
 // Imports (keine externen Abhängigkeiten)
+// ————————————————————————————————————————————————
 
+// ————————————————————————————————————————————————
 // Konstanten
+// ————————————————————————————————————————————————
 const DEFAULT_LAYERS = ['ground','overlay'];
 const COLL_NONE=0, COLL_BLOCK=1;
 
+// ————————————————————————————————————————————————
 // Hilfsfunktionen
+// ————————————————————————————————————————————————
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 function make2D(w,h,fill=-1){ return Array.from({length:h},()=>Array(w).fill(fill)); }
 function drawGrid(ctx,w,h,ts,c='#23262a'){ ctx.save(); ctx.strokeStyle=c; ctx.lineWidth=1;
@@ -22,19 +37,75 @@ function hatch(ctx,x,y,w,h){ ctx.save(); ctx.globalAlpha=.35; ctx.fillStyle='#ff
 }
 function uid(prefix='id'){ return prefix + Math.random().toString(36).slice(2,8); }
 
-// Klassen: Daten
-class Tile { constructor(id,name,src,img){ this.id=id; this.name=name||('tile-'+id); this.src=src; this.img=img; } }
+// ————————————————————————————————————————————————
+// Atlas‑Parser: Unterstützt gängige JSON‑Schemata (TexturePacker/PIXI/Phaser)
+// Gibt Frames als [{name, x,y,w,h}] zurück.
+// ————————————————————————————————————————————————
+function parseAtlasJSON(jsonText){
+  let j; try{ j=JSON.parse(jsonText); } catch(e){ throw new Error('Atlas‑JSON ungültig'); }
+  const frames = [];
+
+  // Schema A: { frames: { "name":{"frame":{"x":..,"y":..,"w":..,"h":..}} } }
+  if(j.frames && !Array.isArray(j.frames)){
+    for(const [name, node] of Object.entries(j.frames)){
+      const f = node.frame || node; // manche packer haben frame direkt auf Knoten
+      if(f && Number.isFinite(f.x)) frames.push({ name, x:f.x, y:f.y, w:f.w, h:f.h });
+    }
+  }
+
+  // Schema B: { frames: [ {filename:"name", frame:{x,y,w,h}} ] }
+  if(Array.isArray(j.frames)){
+    for(const node of j.frames){
+      const name = node.filename || node.name || '';
+      const f = node.frame || node;
+      if(f && Number.isFinite(f.x)) frames.push({ name, x:f.x, y:f.y, w:f.w, h:f.h });
+    }
+  }
+
+  // Hinweis: LibGDX .atlas ist oft KEIN JSON, sondern ein Textformat — das behandeln
+  // wir hier bewusst NICHT. (Optional später: Textparser.)
+
+  if(!frames.length) throw new Error('Keine Frames im Atlas‑JSON erkannt.');
+  return { frames, meta: j.meta||{} };
+}
+
+// ————————————————————————————————————————————————
+// Datenklassen
+// ————————————————————————————————————————————————
+
+// Tile kann EINZELBILD oder ATLAS‑FRAME repräsentieren.
+// Wenn tile.rect existiert, wird aus der Atlas‑Bildquelle ausgeschnitten.
+class Tile {
+  // img: HTMLImageElement der Bildquelle (entweder das Einzelbild oder das Atlas‑Sheet)
+  // optRect: {x,y,w,h} falls Atlas‑Frame
+  constructor(id, name, img, optRect=null, sourceInfo=null){
+    this.id = id;
+    this.name = name || ('tile-'+id);
+    this.img = img;             // Bildquelle (kann das Atlas‑Sheet sein)
+    this.rect = optRect;        // null → voll (Einzelbild), sonst frame‑Rect (Atlas)
+    this.source = sourceInfo;   // { kind:'image'|'atlas', src:string, imageName?:string, frameName?:string }
+  }
+}
 
 class MapDoc {
   constructor({w=32,h=18,ts=64,layers=[...DEFAULT_LAYERS]}={}){
     this.w=w; this.h=h; this.ts=ts;
     this.layers = layers.map(n=>({ name:n, tiles: make2D(w,h,-1) }));
     this.collision = make2D(w,h, COLL_NONE);
-    this.tiles = []; // [{id,name,src}]
+
+    // Palette/Katalog:
+    // Für Export speichern wir KEINE HTMLImage‑Refs, sondern nur Metadaten:
+    //  - Einzelbild: {id,name,src}
+    //  - Atlas‑Frame: {id,name,atlasImage,frame:{name?,x,y,w,h}}
+    this.tiles = [];
+
+    // Level‑Sachen
     this.entities = []; // [{id,type,name,x,y,rot,props}]
     this.triggers = []; // [{id,name,x,y,w,h,props}]
+
     this.meta = { title:'Unbenanntes Level', created:new Date().toISOString(), engine:'siedler-mini', format:2 };
   }
+
   resize(newW,newH){
     const W=this.w,H=this.h; this.w=newW; this.h=newH;
     const fix = grid=>{
@@ -46,6 +117,7 @@ class MapDoc {
     const col=make2D(newW,newH,COLL_NONE);
     for(let y=0;y<Math.min(H,newH);y++) for(let x=0;x<Math.min(W,newW);x++) col[y][x]=this.collision[y][x];
     this.collision=col;
+
     // Entities/Trigger im sichtbaren Bereich halten
     this.entities.forEach(e=>{ e.x=clamp(e.x,0,newW-1); e.y=clamp(e.y,0,newH-1); });
     this.triggers.forEach(t=>{
@@ -53,21 +125,27 @@ class MapDoc {
       t.w=clamp(t.w,1,newW-t.x); t.h=clamp(t.h,1,newH-t.y);
     });
   }
+
   toJSON(){
     return {
       meta:this.meta, width:this.w, height:this.h, tileSize:this.ts,
-      tiles:this.tiles.map(t=>({id:t.id,name:t.name,src:t.src})),
+      // Wichtig: Wir geben die Metadatenstruktur aus, NICHT die Canvas‑Images.
+      tiles:this.tiles.map(t=>({ ...t })), // shallow copy
       layers:this.layers.map(L=>({name:L.name, data:L.tiles})),
       collision:this.collision,
       entities:this.entities.map(e=>({id:e.id,type:e.type,name:e.name,x:e.x,y:e.y,rot:e.rot||0,props:e.props||{}})),
       triggers:this.triggers.map(t=>({id:t.id,name:t.name,x:t.x,y:t.y,w:t.w,h:t.h,props:t.props||{}}))
     };
   }
+
   static fromJSON(json){
     const d=new MapDoc({w:json.width,h:json.height,ts:json.tileSize,layers:(json.layers?.map(l=>l.name)||DEFAULT_LAYERS)});
     d.layers.forEach((L,i)=> L.tiles = json.layers?.[i]?.data || make2D(d.w,d.h,-1));
     d.collision = json.collision || make2D(d.w,d.h,COLL_NONE);
-    d.tiles = (json.tiles||[]).map(t=>({id:t.id,name:t.name,src:t.src}));
+
+    // Palette‑Metadaten übernehmen (Images lädt der Editor separat)
+    d.tiles = (json.tiles||[]).map(node=> ({...node}));
+
     d.entities = (json.entities||[]).map(e=>({id:e.id||uid('e'),type:e.type||'entity',name:e.name||'',x:e.x|0,y:e.y|0,rot:e.rot|0,props:e.props||{}}));
     d.triggers = (json.triggers||[]).map(t=>({id:t.id||uid('t'),name:t.name||'',x:t.x|0,y:t.y|0,w:Math.max(1,t.w|0),h:Math.max(1,t.h|0),props:t.props||{}}));
     d.meta = json.meta || d.meta;
@@ -75,12 +153,18 @@ class MapDoc {
   }
 }
 
-// Klassen: Editor
+// ————————————————————————————————————————————————
+// Editor‑Klasse
+// ————————————————————————————————————————————————
 class LevelEditor {
   constructor({canvas, inspector, status, ui}){
     this.cv=canvas; this.ctx=this.cv.getContext('2d');
+
+    // Dokument + Paletten-Cache (Images)
     this.doc = new MapDoc();
-    this.tilesById=new Map();
+    this.tilesById=new Map(); // id → Tile (mit HTMLImage und evtl. rect)
+
+    // Viewport / State
     this.zoom=1; this.scrollX=0; this.scrollY=0;
     this.state = {
       mode:'tiles', tool:'paint', brush:1, grid:true, coll:false, snap:true,
@@ -89,19 +173,25 @@ class LevelEditor {
       dragging:false, dragOff:{x:0,y:0},
       rectStart:null, creatingTrigger:null
     };
+
+    // UI/Debug
     this.inspector=inspector; this.status=status; this.ui=ui;
     this._mouse={x:0,y:0,gx:0,gy:0,down:false,alt:false,shift:false};
 
+    // Setup
     this._bindUI();
     this._resizeCanvas();
     window.addEventListener('resize', ()=>this._resizeCanvas());
     this._loop();
   }
 
-  // ——— UI ———
+  // ————————————————————————————————————————————————
+  // UI‑Verdrahtung (Buttons, Inputs, Shortcuts)
+  // ————————————————————————————————————————————————
   _bindUI(){
     const ui=this.ui;
-    // Global toggles
+
+    // Globale toggles
     ui.chkGrid.onchange = ()=>{ this.state.grid = ui.chkGrid.checked; };
     ui.chkColl.onchange = ()=>{ this.state.coll = ui.chkColl.checked; };
     ui.chkSnap.onchange = ()=>{ this.state.snap = ui.chkSnap.checked; };
@@ -109,7 +199,7 @@ class LevelEditor {
     ui.tool.onchange = ()=> this.state.tool = ui.tool.value;
     ui.brush.onchange = ()=> this.state.brush = parseInt(ui.brush.value,10);
 
-    // Map props
+    // Map‑Props
     ui.btnResize.onclick = ()=>{
       const w=+ui.mapW.value|0, h=+ui.mapH.value|0, ts=+ui.tileSize.value|0;
       if(ts!==this.doc.ts) this.doc.ts=ts;
@@ -131,7 +221,7 @@ class LevelEditor {
     };
     ui.layerSel.onchange = ()=>{ this.state.layer = ui.layerSel.selectedIndex; this._updateStatus(); };
 
-    // Palette
+    // Palette (Klick‑Auswahl)
     ui.tileRow.addEventListener('click', ev=>{
       const el=ev.target.closest('.tile'); if(!el) return;
       const id=+el.dataset.id;
@@ -159,7 +249,6 @@ class LevelEditor {
     ui.btnTrigAdd.onclick = ()=>{
       this.setMode('triggers');
       const name = ui.trigName.value||'trigger';
-      // Rechteck wird per Drag im Canvas aufgezogen
       this.state.creatingTrigger = { name };
       this.state.tool='rect';
       alert('Ziehe im Canvas ein Rechteck für den Trigger.');
@@ -171,7 +260,7 @@ class LevelEditor {
       this.state.sel={kind:'trigger', id}; this._syncPropBox();
     });
 
-    // Canvas Interaktion
+    // Canvas Interaktion (Maus, Zoom, Pan)
     this.cv.addEventListener('mousemove', ev=> this._onMouse(ev));
     this.cv.addEventListener('mousedown', ev=> { this._onMouse(ev); this._onDown(ev); });
     window.addEventListener('mouseup', ev=> this._onUp(ev));
@@ -179,7 +268,6 @@ class LevelEditor {
       if(ev.ctrlKey){ ev.preventDefault();
         const dz=Math.sign(ev.deltaY); const old=this.zoom;
         this.zoom = clamp(this.zoom*(dz>0?0.9:1.1), 0.25, 3);
-        // Zoom um Cursor
         const rect=this.cv.getBoundingClientRect();
         const x=(ev.clientX-rect.left)/devicePixelRatio, y=(ev.clientY-rect.top)/devicePixelRatio;
         const rx=x/old, ry=y/old, nx=x/this.zoom, ny=y/this.zoom;
@@ -191,7 +279,7 @@ class LevelEditor {
     }, {passive:false});
     this.cv.addEventListener('contextmenu', ev=> ev.preventDefault());
 
-    // Shortcuts
+    // Shortcuts (Debugfreundlich, keine Konflikte mit Spiel)
     window.addEventListener('keydown', e=>{
       if(e.key==='g'){ this.state.grid=!this.state.grid; this.ui.chkGrid.checked=this.state.grid; }
       if(e.key==='c'){ this.state.coll=!this.state.coll; this.ui.chkColl.checked=this.state.coll; }
@@ -210,25 +298,27 @@ class LevelEditor {
       if(e.key==='Shift') this._mouse.shift=false;
     });
 
+    // Listen initial füllen
     this._rebuildLayerUI();
     this._rebuildEntityList();
     this._rebuildTriggerList();
     this._updateStatus();
   }
 
+  // Moduswechsel (Tiles / Entities / Triggers) + Tab‑Sync
   setMode(m){
     this.state.mode=m; this.ui.mode.value=m;
-    // Tabs optisch setzen
     document.querySelectorAll('.tab').forEach(t=> t.classList.toggle('active', (t.dataset.tab===(m+'Tab')) ));
     Object.entries(this.ui.panels).forEach(([k,el])=> el.classList.toggle('active', k===m+'Tab'));
-    // Tool sinnvoll wählen
     if(m==='tiles' && !['paint','erase','fill','rect','pick'].includes(this.state.tool)) this.state.tool='paint';
     if((m==='entities' || m==='triggers') && !['move','rect','pick','erase'].includes(this.state.tool)) this.state.tool='move';
     this.ui.tool.value=this.state.tool;
     this._updateStatus();
   }
 
-  // ——— Datei I/O ———
+  // ————————————————————————————————————————————————
+  // Datei‑I/O
+  // ————————————————————————————————————————————————
   createBlank(w=32,h=18,ts=64){
     this.doc = new MapDoc({w,h,ts});
     this.tilesById.clear(); this.state.tileSel=-1; this.state.sel=null;
@@ -236,51 +326,136 @@ class LevelEditor {
     this.ui.mapW.value=w; this.ui.mapH.value=h; this.ui.tileSize.value=ts;
     this._updateStatus('Neues Level erstellt.');
   }
+
+  // Wichtig: Beim Laden müssen wir die dokumentierten Tiles (Metadaten) in echte Tile‑Objekte
+  // + Images überführen. Atlas‑Frames brauchen dasselbe Atlas‑Image.
   load(json){
     this.doc = MapDoc.fromJSON(json);
     this.tilesById.clear();
-    (json.tiles||[]).forEach(t=> this.addTileFromUrl(t.src, t.name, t.id));
+
+    // 1) Alle Einzelbild‑Tiles laden
+    for(const node of (this.doc.tiles||[])){
+      if(node.src){ // Einzelbild
+        this._loadImage(node.src).then(img=>{
+          const t = new Tile(node.id, node.name, img, null, {kind:'image', src:node.src});
+          this.tilesById.set(node.id, t);
+          this._rebuildPalette();
+        });
+      }
+    }
+
+    // 2) Alle Atlas‑Tiles: Atlas‑Bilder ggf. cachen (damit ein Sheet nur 1× geladen wird)
+    const atlasGroups = new Map(); // imageSrc -> list of nodes
+    for(const node of (this.doc.tiles||[])){
+      if(node.atlasImage){ // Atlas‑Frame
+        const key=node.atlasImage;
+        if(!atlasGroups.has(key)) atlasGroups.set(key, []);
+        atlasGroups.get(key).push(node);
+      }
+    }
+    for(const [imgSrc, nodes] of atlasGroups){
+      // Atlas‑Bild laden und auf alle Frames anwenden
+      this._loadImage(imgSrc).then(img=>{
+        for(const node of nodes){
+          const r = node.frame || node.rect; // kompatibel
+          const rect = r ? {x:r.x|0,y:r.y|0,w:r.w|0,h:r.h|0} : null;
+          const t = new Tile(node.id, node.name, img, rect, {kind:'atlas', src:imgSrc, imageName:node.imageName||'', frameName:node.frameName||''});
+          this.tilesById.set(node.id, t);
+        }
+        this._rebuildPalette();
+      });
+    }
+
     this._rebuildLayerUI(); this._rebuildEntityList(); this._rebuildTriggerList();
     this.ui.mapW.value=this.doc.w; this.ui.mapH.value=this.doc.h; this.ui.tileSize.value=this.doc.ts;
     this._updateStatus('Level geladen.');
   }
+
   export(){ return this.doc.toJSON(); }
 
   async exportPng(){
-    // nur Map + einfache Overlays der Entities/Trigger
+    // Nur Map + einfache Overlays der Entities/Trigger (Debughilfreich)
     const cv=document.createElement('canvas'); cv.width=this.doc.w*this.doc.ts; cv.height=this.doc.h*this.doc.ts;
     const ctx=cv.getContext('2d');
     this._drawMap(ctx,true,false);
-    // Entities
     this._drawEntities(ctx,true);
-    // Trigger
     this._drawTriggers(ctx,true);
     const a=document.createElement('a'); a.download=(this.doc.meta?.title||'level')+'.png'; a.href=cv.toDataURL('image/png'); a.click();
   }
 
-  // ——— Palette ———
-  async addTileFromUrl(src,name,fixedId){
-    const img=new Image(); img.crossOrigin='anonymous';
-    const id=(fixedId!=null? fixedId : (this.doc.tiles.length? Math.max(...this.doc.tiles.map(t=>t.id))+1 : 0));
-    const tile=new Tile(id,name||('tile-'+id),src,img);
-    this.doc.tiles.push({id:tile.id,name:tile.name,src:tile.src});
-    this.tilesById.set(id,tile);
-    img.onload=()=> this._rebuildPalette();
-    img.onerror=()=>{ console.warn('Tile konnte nicht geladen werden:',src); this._rebuildPalette(); };
-    img.src=src;
+  // ————————————————————————————————————————————————
+  // Palette: Einzelbild
+  // ————————————————————————————————————————————————
+  async addTileFromUrl(src, name){
+    const img = await this._loadImage(src);
+    const id = this._nextTileId();
+    // Metadaten für Export
+    this.doc.tiles.push({ id, name: name||('tile-'+id), src });
+    // Laufzeit‑Tile
+    const tile = new Tile(id, name||('tile-'+id), img, null, {kind:'image', src});
+    this.tilesById.set(id, tile);
     if(this.state.tileSel===-1) this.state.tileSel=id;
     this._rebuildPalette();
   }
+
+  // ————————————————————————————————————————————————
+  // Palette: ATLAS (JSON + Bild)
+  //  - jsonText: Inhalt der Atlas‑JSON
+  //  - imageUrl: Objekt‑URL oder reguläre URL des Sprite‑Sheets
+  //  - opts: { imageName?:string, prefix?:string }
+// ————————————————————————————————————————————————
+  async addAtlasFromJson(jsonText, imageUrl, opts={}){
+    const { frames } = parseAtlasJSON(jsonText);
+    const img = await this._loadImage(imageUrl);
+    const prefix = opts.prefix || '';
+    for(const f of frames){
+      const id = this._nextTileId();
+      const name = (prefix? prefix : '') + (f.name || ('frame_'+id));
+      // Metadaten für Export (HINWEIS: imageUrl kann blob: sein → im Export nicht portabel.
+      // Für echte Builds bitte echte Pfade verwenden.)
+      this.doc.tiles.push({
+        id, name,
+        atlasImage: imageUrl,
+        imageName: opts.imageName || '',
+        frameName: f.name || '',
+        frame: { x:f.x|0, y:f.y|0, w:f.w|0, h:f.h|0 }
+      });
+      const rect = { x:f.x|0, y:f.y|0, w:f.w|0, h:f.h|0 };
+      const tile = new Tile(id, name, img, rect, {kind:'atlas', src:imageUrl, imageName:opts.imageName||'', frameName:f.name||''});
+      this.tilesById.set(id, tile);
+      if(this.state.tileSel===-1) this.state.tileSel=id;
+    }
+    this._rebuildPalette();
+  }
+
+  // ————————————————————————————————————————————————
+  // Hilfsloader für HTMLImage
+  // ————————————————————————————————————————————————
+  _loadImage(src){
+    return new Promise((resolve,reject)=>{
+      const img=new Image(); img.crossOrigin='anonymous';
+      img.onload=()=> resolve(img);
+      img.onerror=()=> reject(new Error('Bild konnte nicht geladen werden: '+src));
+      img.src=src;
+    });
+  }
+  _nextTileId(){
+    return this.doc.tiles.length? Math.max(...this.doc.tiles.map(t=>t.id))+1 : 0;
+  }
+
   _rebuildPalette(){
     const row=this.ui.tileRow; row.innerHTML='';
-    for(const t of this.doc.tiles){
-      const tile=this.tilesById.get(t.id);
+    for(const meta of this.doc.tiles){
+      const t = this.tilesById.get(meta.id);
       const imgEl=document.createElement('img');
-      imgEl.className='tile'+(t.id===this.state.tileSel?' sel':''); imgEl.dataset.id=String(t.id);
-      imgEl.title=`${t.name} (#${t.id})`; imgEl.src=tile?.img?.src||t.src;
+      imgEl.className='tile'+(meta.id===this.state.tileSel?' sel':''); imgEl.dataset.id=String(meta.id);
+      imgEl.title=`${meta.name} (#${meta.id})`;
+      // Für Atlas‑Frames können wir kein Teilbild direkt als <img> zeigen; zeigen das Gesamtbild:
+      imgEl.src = (t?.img?.src || meta.src || meta.atlasImage || '');
       row.appendChild(imgEl);
     }
   }
+
   _rebuildLayerUI(){
     const sel=this.ui.layerSel; sel.innerHTML='';
     this.doc.layers.forEach((L,i)=>{ const o=document.createElement('option'); o.value=String(i); o.textContent=`${i}: ${L.name}`; sel.appendChild(o); });
@@ -306,7 +481,9 @@ class LevelEditor {
     }
   }
 
-  // ——— Canvas/Render ———
+  // ————————————————————————————————————————————————
+  // Rendering
+  // ————————————————————————————————————————————————
   _resizeCanvas(){
     const rect=this.cv.getBoundingClientRect();
     this.cv.width=Math.max(2,rect.width*devicePixelRatio);
@@ -320,17 +497,15 @@ class LevelEditor {
     ctx.clearRect(0,0,this.cv.width,this.cv.height);
     ctx.translate(this.scrollX*this.zoom, this.scrollY*this.zoom); ctx.scale(this.zoom,this.zoom);
 
-    // Hintergrund
+    // Karte
     ctx.fillStyle='#0f141a'; ctx.fillRect(0,0,this.doc.w*this.doc.ts,this.doc.h*this.doc.ts);
-
-    // Map
     this._drawMap(ctx, this.state.grid, this.state.coll);
 
-    // Entities/Trigger
+    // Entities/Trigger Overlays
     this._drawEntities(ctx,false);
     this._drawTriggers(ctx,false);
 
-    // Cursor
+    // Cursor‑Kachel
     const {gx,gy}=this._mouse;
     if(gx>=0&&gy>=0&&gx<this.doc.w&&gy<this.doc.h){
       ctx.save(); ctx.strokeStyle='#5aa9ff'; ctx.lineWidth=2; ctx.strokeRect(gx*this.doc.ts+.5,gy*this.doc.ts+.5,this.doc.ts-1,this.doc.ts-1); ctx.restore();
@@ -340,6 +515,7 @@ class LevelEditor {
     this._drawInspector();
   }
 
+  // Zeichnet alle Layer; erkennt automatisch Atlas‑Frames.
   _drawMap(ctx, drawGridFlag, drawColl){
     const ts=this.doc.ts, W=this.doc.w, H=this.doc.h;
     for(const L of this.doc.layers){
@@ -348,7 +524,14 @@ class LevelEditor {
         for(let x=0;x<W;x++){
           const id=G[y][x]; if(id<0) continue;
           const t=this.tilesById.get(id);
-          if(t?.img?.complete) ctx.drawImage(t.img, x*ts, y*ts, ts, ts);
+          if(!t || !t.img?.complete) continue;
+          const dx=x*ts, dy=y*ts;
+          if(t.rect){
+            const {x:sx,y:sy,w:sw,h:sh}=t.rect;
+            ctx.drawImage(t.img, sx,sy,sw,sh, dx,dy, ts,ts);
+          } else {
+            ctx.drawImage(t.img, dx,dy, ts,ts);
+          }
         }
       }
     }
@@ -364,19 +547,16 @@ class LevelEditor {
       const sel=(this.state.sel?.kind==='entity' && this.state.sel?.id===e.id);
       const x=e.x*ts, y=e.y*ts;
       ctx.save();
-      // Icon/Gizmo
       ctx.globalAlpha = exporting? 1 : .95;
       ctx.fillStyle = sel? '#3bd1ff' : '#2a9df4';
       ctx.strokeStyle = sel? '#ffffff' : '#0b2a45';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(x+ts/2,y+ts/2, Math.max(6,ts*0.2), 0, Math.PI*2); ctx.fill(); ctx.stroke();
-      // Label
       ctx.fillStyle='#ffffff'; ctx.font='12px system-ui'; ctx.textAlign='center';
       ctx.fillText((e.name||e.type), x+ts/2, y+ts-4);
       ctx.restore();
     }
   }
-
   _drawTriggers(ctx, exporting){
     const ts=this.doc.ts;
     for(const t of this.doc.triggers){
@@ -397,7 +577,9 @@ class LevelEditor {
     }
   }
 
-  // ——— Maus & Tools ———
+  // ————————————————————————————————————————————————
+  // Maus & Tools (Tiles / Entities / Trigger)
+  // ————————————————————————————————————————————————
   _toGrid(ev){
     const rect=this.cv.getBoundingClientRect();
     const x=(ev.clientX-rect.left)/devicePixelRatio, y=(ev.clientY-rect.top)/devicePixelRatio;
@@ -474,9 +656,7 @@ class LevelEditor {
     if(this.state.tool==='pick'){ if(hit){ this.state.sel={kind:'entity', id:hit.id}; this._syncPropBox(); } return; }
     if(this.state.tool==='move'){
       if(hit){ this.state.sel={kind:'entity', id:hit.id}; this.state.dragging=true; this.state.dragOff={x:gx-hit.x,y:gy-hit.y}; this._syncPropBox(); }
-      else { // leeres Feld: neue Entity setzen falls Auswahl vorhanden
-        if(this.state.sel?.kind==='entity'){ const e=this._getSelEntity(); if(e){ e.x=gx; e.y=gy; this._rebuildEntityList(); this._syncPropBox(); } }
-      }
+      else { if(this.state.sel?.kind==='entity'){ const e=this._getSelEntity(); if(e){ e.x=gx; e.y=gy; this._rebuildEntityList(); this._syncPropBox(); } } }
     }
   }
   _entityMove({gx,gy}, _ev){
@@ -520,7 +700,9 @@ class LevelEditor {
   _getSelEntity(){ return this.doc.entities.find(e=>e.id===this.state.sel?.id); }
   _getSelTrigger(){ return this.doc.triggers.find(t=>t.id===this.state.sel?.id); }
 
-  // ——— Inspector/Status/Props ———
+  // ————————————————————————————————————————————————
+  // Inspector/Status/Props
+  // ————————————————————————————————————————————————
   _drawInspector(){
     if(!this.inspector) return;
     const {gx,gy}=this._mouse;
@@ -577,5 +759,7 @@ class LevelEditor {
   }
 }
 
+// ————————————————————————————————————————————————
 // Exports
+// ————————————————————————————————————————————————
 export { LevelEditor };
