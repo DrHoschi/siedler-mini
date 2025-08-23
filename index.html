@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- index.html • v1.5 • Ressourcen oben, Version unten, Build-Toggle-Icon -->
+  <!-- index.html • v1.6 • Ressourcen-Icons im HUD, Version unten, Build-Toggle-Icon -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Siedler-Mini</title>
@@ -35,13 +35,14 @@
     .icon{width:20px;height:20px;display:block;fill:currentColor}
     select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
 
-    /* Ressourcen-Leiste */
+    /* Ressourcen-Leiste (mit Icons) */
     #resources{
-      display:flex; gap:10px; align-items:center;
+      display:flex; gap:12px; align-items:center;
       background:rgba(0,0,0,.28); border:1px solid var(--b1); border-radius:8px; padding:6px 10px;
       white-space:nowrap;
     }
     #resources .r{display:inline-flex; gap:6px; align-items:center}
+    #resources .icon{width:18px;height:18px;opacity:.9}
     #resources .val{min-width:36px; text-align:right; font-variant-numeric:tabular-nums}
 
     /* Backdrop (Logo) */
@@ -105,26 +106,42 @@
   <!-- SVG-Icons -->
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
     <defs>
+      <!-- HUD/Bedienung -->
       <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M4 15v5h5M20 9V4h-5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="i-build" viewBox="0 0 24 24"><path d="M3 21l6-6M3 7l4-4 4 4-4 4-4-4zm10 6l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+
+      <!-- Baumenü-Tools -->
       <symbol id="i-road" viewBox="0 0 24 24"><path d="M6 20l4-16h4l4 16M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-hut" viewBox="0 0 24 24"><path d="M4 12l8-6 8 6v8H4zM10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
       <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 2l4 6h-3l3 5h-3l4 7H7l4-7H8l3-5H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
       <symbol id="i-stone" viewBox="0 0 24 24"><path d="M4 16l4-8h8l4 8-6 4H10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
-      <symbol id="i-build" viewBox="0 0 24 24"><path d="M3 21l6-6M3 7l4-4 4 4-4 4-4-4zm10 6l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+
+      <!-- Ressourcen-Icons -->
+      <symbol id="i-wood" viewBox="0 0 24 24">
+        <path d="M8 21V9l4-5 4 5v12H8z" fill="none" stroke="currentColor" stroke-width="2"/>
+      </symbol>
+      <!-- i-stone wird wiederverwendet -->
+      <symbol id="i-food" viewBox="0 0 24 24">
+        <path d="M12 3a9 9 0 100 18M8 12h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="i-pop" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="2" fill="none"/>
+      </symbol>
     </defs>
   </svg>
 
   <!-- HUD oben -->
   <div id="hud" aria-label="Spiel-HUD">
-    <!-- Ressourcen -->
+    <!-- Ressourcen mit Icons -->
     <div id="resources" aria-label="Ressourcen">
-      <span class="r">Holz <span id="res-wood" class="val">0</span></span>
-      <span class="r">Stein <span id="res-stone" class="val">0</span></span>
-      <span class="r">Nahrung <span id="res-food" class="val">0</span></span>
-      <span class="r">Bew. <span id="res-pop" class="val">0</span></span>
+      <span class="r" title="Holz"><svg class="icon"><use href="#i-wood"></use></svg> <span id="res-wood" class="val">0</span></span>
+      <span class="r" title="Stein"><svg class="icon"><use href="#i-stone"></use></svg> <span id="res-stone" class="val">0</span></span>
+      <span class="r" title="Nahrung"><svg class="icon"><use href="#i-food"></use></svg> <span id="res-food" class="val">0</span></span>
+      <span class="r" title="Bewohner"><svg class="icon"><use href="#i-pop"></use></svg> <span id="res-pop" class="val">0</span></span>
     </div>
 
     <span class="spacer"></span>
