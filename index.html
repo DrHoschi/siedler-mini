@@ -1,253 +1,100 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!--
-    =====================================================================
-    Siedler-Mini • index.html • v1.8
-    - HUD mit Ressourcen-Icons
-    - Startmenü + Backdrop (Logo) + sanftes Ausblenden
-    - Toast-/Inspector-Leiste
-    - Baumenü mit ICON + TEXT (zweizeilig), Re-aktivierbar via HUD-Button
-    - Klar markierter Bereich für Kartenauswahl (inkl. map-mini.json)
-    - Kompatibel mit game.js v1.5 (Units/Paths/Sprite-Fallback)
-    =====================================================================
-  -->
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler-Mini</title>
-
+  <title>Siedler‑Mini</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="x-ua-compatible" content="ie=edge" />
   <style>
-    :root{
-      --bg:#0b0d10; --stage:#161a20;
-      --panel:#0f1318; --b1:#2a2f38; --b2:#39414d;
-      --fg:#e8e8e8; --muted:#b9c4d1; --accent:#6aa3ff;
-    }
-    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
-      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-    .hide{display:none!important}
+    :root{ --bg:#0b0f14; --ui:#1b1f24; --ui2:#232a31; --ink:#e7eef6; --mut:#9fb0c0; --acc:#5aa9ff; }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--ink);
+      font:14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #app{ position:relative; width:100%; height:100%; overflow:hidden; }
+    canvas{ display:block; width:100%; height:100%; }
 
-    /* ===== Bühne/Canvas ===== */
-    #stage{display:block;width:100vw;height:100vh;background:var(--stage);touch-action:none;}
+    /* Start-Overlay: zuerst sichtbar */
+    #start{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.86); z-index:1000; }
+    #start .card{ width:560px; max-width:96vw; background:#0d1218; border:1px solid #000;
+      border-radius:12px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.5); }
+    #start h2{ margin:0 0 8px 0; }
+    .row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+    button{ padding:8px 12px; background:var(--ui2); color:var(--ink); border:1px solid #000;
+      border-radius:8px; cursor:pointer; }
+    button:hover{ outline:1px solid var(--acc); }
+    input[type=file]{ color:var(--ink); }
 
-    /* ===== HUD (oben) ===== */
-    #hud{position:fixed;top:8px;left:8px;right:8px;z-index:20;display:flex;gap:8px;
-      align-items:center;flex-wrap:wrap;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);
-      padding:8px 10px;border-radius:8px}
-    #hud .spacer{flex:1 1 auto}
-    button{padding:6px 10px;border-radius:8px;border:1px solid var(--b2);background:#1a2029;color:var(--fg);cursor:pointer}
-    button:hover{background:#222a35}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .iconbtn{width:36px;height:36px;display:inline-grid;place-items:center;padding:0}
-    .icon{width:20px;height:20px;display:block;fill:currentColor}
-    select{background:#121821;color:var(--fg);border:1px solid var(--b2);border-radius:8px;padding:6px 8px}
+    /* Mini-Statusleiste unten */
+    #status{ position:fixed; left:0; right:0; bottom:0; height:28px; display:flex; gap:12px;
+      align-items:center; padding:4px 10px; background:#0a0e13; color:#9aa3ad; border-top:1px solid #000; z-index:10; }
 
-    /* Ressourcen-Leiste (mit Icons) */
-    #resources{display:flex; gap:12px; align-items:center;
-      background:rgba(0,0,0,.28); border:1px solid var(--b1); border-radius:8px; padding:6px 10px; white-space:nowrap;}
-    #resources .r{display:inline-flex; gap:6px; align-items:center}
-    #resources .icon{width:18px;height:18px;opacity:.9}
-    #resources .val{min-width:36px; text-align:right; font-variant-numeric:tabular-nums}
-
-    /* ===== Backdrop (Logo vorm Start) ===== */
-    #startBackdrop{position:fixed; inset:0; z-index:25; display:grid; place-items:center;background-color: var(--bg); opacity:1;}
-    #startBackdrop img{max-width:min(90vw,1200px);max-height:min(90vh,800px);height:auto;width:auto;display:block;object-fit:contain;filter:drop-shadow(0 8px 24px rgba(0,0,0,.5))}
-    #startBackdrop.fade-out{opacity:0;transition:opacity 3s ease}
-    #startBackdrop.hidden{display:none}
-
-    /* ===== Start-Overlay / Hauptmenü ===== */
-    #startPanel{position:fixed; inset:0; z-index:30; display:grid; place-items:center;
-      background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.8)); pointer-events:none;}
-    #startPanel.hidden{display:none}
-    #startPanel .panel{width:min(720px,92vw); background:var(--panel); border:1px solid var(--b1);
-      border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.6); padding:18px; pointer-events:auto; position:relative;}
-    #btnMenuClose{position:absolute; top:8px; right:8px; width:32px; height:32px; display:inline-grid; place-items:center; border-radius:8px}
-    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0}
-    h1{margin:0 0 8px}
-    p.sub{margin:0 0 14px; opacity:.85}
-    #quickDiag{margin-top:10px;padding:10px;background:#0b0f14;border:1px dashed #2b3340;border-radius:8px;color:var(--muted);max-height:30vh;overflow:auto;white-space:pre-wrap}
-
-    /* ===== Toast-/Inspector-Leiste (unten) ===== */
-    #inspectorBar{position:fixed; left:8px; right:8px; bottom:8px; z-index:35; display:flex; align-items:center; gap:12px;
-      background:rgba(0,0,0,.35); backdrop-filter:blur(4px); padding:6px 10px; border-radius:8px}
-    /* Merker: später kleiner + Tooltip mit Build-Info */
-    #versionBadge{opacity:.9;font-weight:600}
-
-    /* ===== Baumenü (Buttons mit Icon + Text) ===== */
-    #buildMenu{position:fixed; left:8px; top:64px; z-index:18; background:rgba(0,0,0,.45); backdrop-filter:blur(4px);
-      border:1px solid var(--b1); border-radius:10px; padding:10px 12px; min-width:280px;}
-    #buildMenu[hidden]{display:none}
-    #buildMenu header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-    #buildTools{display:grid;grid-template-columns:repeat(4, minmax(60px,1fr));gap:8px}
-    .tool{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:70px;
-      border:1px solid var(--b2);border-radius:10px;background:#141b24;cursor:pointer;text-align:center}
-    .tool:hover{background:#1b2430}
-    .tool .icon{width:20px;height:20px}
-    .tool .label{font-size:12px;line-height:1}
-    .tool.active{outline:2px solid var(--accent); outline-offset:1px}
-
-    /* ===== Inspector ===== */
-    #inspector{position: fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:min(1000px,92vw); height:min(720px,88vh);
-      z-index:40; background:var(--panel); border:1px solid var(--b1); border-radius:12px; display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.6);}
-    #inspector[hidden]{display:none}
-    #inspector header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--b1)}
-    #inspector header .left, #inspector header .right{display:flex;gap:8px;align-items:center}
-    #inspector .tabs{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid var(--b1);overflow:auto}
-    #inspector .content{flex:1 1 auto;overflow:auto;padding:12px;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
-    .kv{display:grid;grid-template-columns:160px 1fr;gap:6px 12px}
-    .kv>div:first-child{opacity:.9}
-    #inspector.max{left:0;top:0;transform:none;width:100vw;height:100vh;border-radius:0}
+    /* Inspector/Debug (oben rechts) – bitte nicht entfernen */
+    #inspector{ position:fixed; right:10px; top:10px; z-index:20; background:rgba(0,0,0,.55);
+      color:#e7eef6; border:1px solid #000; border-radius:8px; padding:8px; white-space:pre;
+      font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; pointer-events:none; }
   </style>
-
-  <!-- Fullscreen-Fallback-Flag -->
-  <script>
-    (function(){
-      const isIPhone=/iPhone/i.test(navigator.userAgent);
-      const canFS=!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen||document.documentElement.msRequestFullscreen);
-      if(isIPhone || !canFS) document.documentElement.classList.add('no-fs');
-    })();
-  </script>
 </head>
-
 <body>
-  <!-- ===== SVG-Icon-Sprite ===== -->
-  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
-    <defs>
-      <!-- HUD/Bedienung -->
-      <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M4 15v5h5M20 9V4h-5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-exit" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-build" viewBox="0 0 24 24"><path d="M3 21l6-6M3 7l4-4 4 4-4 4-4-4zm10 6l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <div id="app">
+    <!-- Dein Canvas (Spiel) -->
+    <canvas id="game"></canvas>
 
-      <!-- Baumenü-Tools -->
-      <symbol id="i-road" viewBox="0 0 24 24"><path d="M6 20l4-16h4l4 16M12 4v16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-hut" viewBox="0 0 24 24"><path d="M4 12l8-6 8 6v8H4zM10 20v-6h4v6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-tree" viewBox="0 0 24 24"><path d="M12 2l4 6h-3l3 5h-3l4 7H7l4-7H8l3-5H8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
-      <symbol id="i-stone" viewBox="0 0 24 24"><path d="M4 16l4-8h8l4 8-6 4H10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <!-- Start-Overlay -->
+    <div id="start">
+      <div class="card">
+        <h2>Siedler‑Mini</h2>
+        <p>Wähle, wie du starten möchtest:</p>
+        <div class="row" style="margin:6px 0 12px;">
+          <button id="btnStartGame">Spiel starten</button>
+          <button id="btnLoadMap">Map laden…</button>
+          <!-- NEU: Level-Editor Button (separater Tab) -->
+          <button id="btnLevelEditor">Level‑Editor starten</button>
+        </div>
 
-      <!-- Ressourcen-Icons -->
-      <symbol id="i-wood" viewBox="0 0 24 24"><path d="M8 21V9l4-5 4 5v12H8z" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
-      <!-- i-stone wird wiederverwendet -->
-      <symbol id="i-food" viewBox="0 0 24 24"><path d="M12 3a9 9 0 100 18M8 12h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-      <symbol id="i-pop" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
-    </defs>
-  </svg>
+        <div class="row" style="margin-top:6px;">
+          <input id="fileMap" type="file" accept=".json,application/json" />
+          <button id="btnReload">Neu laden</button>
+          <button id="btnSaveDebug">Debug speichern</button>
+          <label style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+            <input id="chkAutostart" type="checkbox" />
+            AutoStart
+          </label>
+        </div>
 
-  <!-- ===== HUD oben ===== -->
-  <div id="hud" aria-label="Spiel-HUD">
-    <div id="resources" aria-label="Ressourcen">
-      <span class="r" title="Holz"><svg class="icon"><use href="#i-wood"></use></svg> <span id="res-wood" class="val">0</span></span>
-      <span class="r" title="Stein"><svg class="icon"><use href="#i-stone"></use></svg> <span id="res-stone" class="val">0</span></span>
-      <span class="r" title="Nahrung"><svg class="icon"><use href="#i-food"></use></svg> <span id="res-food" class="val">0</span></span>
-      <span class="r" title="Bewohner"><svg class="icon"><use href="#i-pop"></use></svg> <span id="res-pop" class="val">0</span></span>
-    </div>
-
-    <span class="spacer"></span>
-
-    <button id="btnBuildToggle" class="iconbtn" title="Baumenü ein/aus">
-      <svg class="icon"><use href="#i-build"></use></svg>
-    </button>
-
-    <button id="btnFS" class="iconbtn" title="Vollbild">
-      <svg class="icon"><use href="#i-full"></use></svg>
-    </button>
-  </div>
-
-  <!-- ===== Backdrop (Logo) ===== -->
-  <div id="startBackdrop" aria-hidden="true">
-    <img id="startLogo" alt="Spiel-Logo" src="./assets/Logo.PNG" />
-  </div>
-
-  <!-- ===== Bühne ===== -->
-  <canvas id="stage"></canvas>
-
-  <!-- ===== Start-Overlay ===== -->
-  <section id="startPanel">
-    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
-      <button id="btnMenuClose" class="iconbtn" title="Menü schließen"><svg class="icon"><use href="#i-close"></use></svg></button>
-      <h1 id="t">Siedler‑Mini</h1>
-      <p class="sub">Wähle eine Karte und starte das Spiel.</p>
-
-      <!-- === MAPS DROPDOWN (hier neue Karten eintragen) =================== -->
-      <div class="row">
-        <label for="mapSelect">Karte:</label>
-        <select id="mapSelect">
-          <option value="./assets/maps/map-mini.json">map-mini.json</option>
-          <option value="./assets/maps/map-demo.json">map-demo.json</option>
-          <option value="./assets/maps/map-pro.json">map-pro.json</option>
-          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
-        </select>
+        <p style="color:var(--mut); margin:10px 0 0 0;">
+          Debug/Inspector ist aktiv (oben rechts). Das Startfenster erscheint immer zuerst.
+        </p>
       </div>
-
-      <div class="row">
-        <button id="btnStart">Neues Spiel</button>
-        <button id="btnContinue" disabled>Weiterspielen</button>
-        <button id="btnReset">Reset</button>
-      </div>
-
-      <pre id="quickDiag" aria-live="polite"></pre>
     </div>
-  </section>
 
-  <!-- ===== Baumenü (Icon + Text) ===== -->
-  <aside id="buildMenu" hidden>
-    <header>
-      <strong>Baumenü</strong>
-      <button id="btnBuildMenuHide" class="iconbtn" title="Baumenü ausblenden"><svg class="icon"><use href="#i-close"></use></svg></button>
-    </header>
-    <div id="buildTools">
-      <button class="tool" data-tool="road"  title="Weg">
-        <svg class="icon"><use href="#i-road"></use></svg>
-        <span class="label">Weg</span>
-      </button>
-      <button class="tool" data-tool="hut"   title="Hütte">
-        <svg class="icon"><use href="#i-hut"></use></svg>
-        <span class="label">Hütte</span>
-      </button>
-      <button class="tool" data-tool="lumber" title="Holzfäller">
-        <svg class="icon"><use href="#i-tree"></use></svg>
-        <span class="label">Holzfäller</span>
-      </button>
-      <button class="tool" data-tool="mason"  title="Steinmetz">
-        <svg class="icon"><use href="#i-stone"></use></svg>
-        <span class="label">Steinmetz</span>
-      </button>
-    </div>
-  </aside>
+    <!-- Inspector-Overlay -->
+    <pre id="inspector">[Inspector bereit]</pre>
 
-  <!-- ===== Toast-/Inspector-Leiste unten ===== -->
-  <div id="inspectorBar" class="toast" aria-live="polite">
-    <span id="versionBadge">index.html v1.8 • boot.js v1.8 • game.js v1.5</span>
-    <div style="display:flex;gap:8px;margin-left:auto">
-      <button id="btnMenu" title="Startmenü öffnen"><svg class="icon" style="margin-right:6px"><use href="#i-menu"></use></svg>Menü</button>
-      <button id="btnInspector" title="Inspector öffnen">Inspector öffnen</button>
-      <button id="btnCacheClear" title="Seite neu laden und Cache umgehen">Cache leeren</button>
+    <!-- Statusleiste -->
+    <div id="status">
+      <span id="stA">Demo-Map</span>
+      <span id="stB">Pro-Map</span>
+      <span id="stC">Test-All</span>
+      <span id="stD">Start</span>
+      <span id="stE">Neuladen</span>
+      <span id="stF">Debug speichern</span>
+      <span id="stG">AutoStart</span>
     </div>
   </div>
 
-  <!-- ===== Inspector ===== -->
-  <aside id="inspector" hidden>
-    <header>
-      <div class="left"><strong>Inspector</strong></div>
-      <div class="right">
-        <button id="btnInspectorToggleMax" class="inspector" title="Maximieren / Fenstergröße">Maximieren</button>
-        <button id="btnInspectorClose" class="inspector" title="Schließen">Close</button>
-      </div>
-    </header>
-    <div class="tabs"><button data-tab="debug">Debug</button></div>
-    <div class="content" id="inspectorContent"></div>
-  </aside>
+  <!-- Haupt-Einstieg: dein bestehendes Boot-Skript -->
+  <script type="module" src="./boot.js"></script>
 
-  <!-- ===== Scripts ===== -->
-  <script src="./core/asset.js" defer></script>
-  <script src="./core/asset.items.js" defer></script>
-  <script src="./game.js" defer></script>
-  <script src="./boot.js" defer></script>
-
+  <!-- Kleiner Zusatz-Handler NUR für den Level-Editor-Button.
+       Kollisionsfrei zu deiner bestehenden boot.js-Logik. -->
   <script>
     (function(){
-      if(document.documentElement.classList.contains('no-fs')){
-        const fsBtn=document.getElementById('btnFS'); if(fsBtn) fsBtn.classList.add('hide');
+      const btn = document.getElementById('btnLevelEditor');
+      if(btn){
+        btn.addEventListener('click', () => {
+          // Öffnet den Editor in einem neuen Tab – keine Änderung an game/boot nötig
+          window.open('./tools/level-editor/index.html', '_blank', 'noopener');
+        });
       }
     })();
   </script>
