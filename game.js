@@ -1,21 +1,20 @@
 /* =====================================================================
-   game.js  •  v1.14
-   - Robuster Map-Loader (CSV ODER Array, Strings werden zu Zahlen)
-   - Sichere Canvas/Context-Erzeugung (kein c.width-Null mehr)
-   - Platzhalter-Renderer (zeigt sofort Grid/Layer)
-   - Ausführliche BootUI-Logs (Spiel / Fehler / Warnungen)
-   - Signal an Backdrop über Asset.markTexturesReady(true)
+   game.js  •  v1.15
+   - Robuster JSON-Fetch (res.text + JSON.parse mit BOM-Strip & Snippet)
+   - Toleranter Map-Parser (CSV ODER Array; Strings → Zahlen)
+   - Sichere Canvas/Context-Erzeugung
+   - Platzhalter-Renderer
+   - Ausführliche BootUI-Logs
+   - Asset.markTexturesReady(true) nach erfolgreichem Setup
    ===================================================================== */
 (function () {
   'use strict';
 
-  // ---- Kurz-Helfer ----------------------------------------------------
   const BootUI = (window.BootUI = window.BootUI || {});
   const logOK   = (...a) => BootUI.logOK ? BootUI.logOK(...a)   : console.log('[OK]', ...a);
   const logWarn = (...a) => BootUI.logWarn ? BootUI.logWarn(...a) : console.warn('[WARN]', ...a);
   const logErr  = (...a) => BootUI.logErr ? BootUI.logErr(...a)  : console.error('[ERR]', ...a);
 
-  // Globale Game-State-Objekte
   const Game = (window.Game = window.Game || {});
   const GameLoader = (window.GameLoader = window.GameLoader || {});
   Game.state = {
@@ -27,7 +26,6 @@
     dpr: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
   };
 
-  // ---- Canvas & Context sicher erzeugen --------------------------------
   const Stage = {
     cvs: null,
     ctx: null,
@@ -58,35 +56,26 @@
     }
   };
 
-  // ---- Utility: Zahl/Array/CSV robust parsen ---------------------------
   function toInt(x, fallback = 0) {
     const n = (typeof x === 'string') ? parseInt(x, 10) : (typeof x === 'number' ? x : NaN);
     return Number.isFinite(n) ? n : fallback;
   }
 
   function parseLayerData(raw) {
-    // Akzeptiert:
-    // - CSV-String: "1,2,3"
-    // - Array aus Zahlen oder String-Zahlen: [1,"2","3"]
     if (raw == null) return [];
-    if (Array.isArray(raw)) {
-      return raw.map(v => toInt(v, 0));
-    }
+    if (Array.isArray(raw)) return raw.map(v => toInt(v, 0));
     if (typeof raw === 'string') {
-      // CSV oder whitespace-getrennt
       const parts = raw.split(/[\s,;]+/).filter(Boolean);
       return parts.map(v => toInt(v, 0));
     }
-    // Unerwartet: versuche JSON-String zu parsen
     try {
       const maybe = JSON.parse(String(raw));
       if (Array.isArray(maybe)) return maybe.map(v => toInt(v, 0));
     } catch (_) {}
-    logWarn('Layer data: unbekanntes Format → wird leer gesetzt');
+    logWarn('Layer data: unbekanntes Format → leer');
     return [];
   }
 
-  // ---- Assets (Tileset optional) ---------------------------------------
   async function loadImage(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -98,7 +87,6 @@
   }
 
   async function loadTilesetIfPresent(map) {
-    // Tolerant: Wir lesen gängige Felder
     const ts =
       map.tileSize || map.tilesize || map.tile || (map.meta && (map.meta.tile || map.meta.tileSize)) || 64;
     Game.state.tileSize = toInt(ts, 64);
@@ -116,15 +104,23 @@
     }
   }
 
-  // ---- Map laden & validieren ------------------------------------------
+  // === NEU: Robuster JSON-Fetch mit Diagnose ============================
   async function fetchJson(url) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    return res.json();
+    const text = await res.text();
+    // BOM entfernen
+    const clean = text.replace(/^\uFEFF/, '');
+    try {
+      return JSON.parse(clean);
+    } catch (e) {
+      const snippet = clean.slice(0, 160).replace(/\s+/g,' ').trim();
+      logErr('Map fetch FAIL', e.message || String(e), 'snippet:', snippet);
+      throw new Error(e.message || 'JSON parse error');
+    }
   }
 
   function normalizeMap(json) {
-    // Erwartete Kernfelder: width, height, layers[]
     const w = toInt(json.width, 0);
     const h = toInt(json.height, 0);
     if (!w || !h) throw new Error('Map: width/height fehlen oder sind 0');
@@ -134,14 +130,12 @@
       throw new Error('Map: layers fehlen/leer');
     }
 
-    // Jede Ebene normalisieren
     const normLayers = layers.map((L, idx) => {
       const name = L.name || `layer${idx}`;
       const kind = (L.type || L.kind || 'tiles').toLowerCase();
       const raw = L.data != null ? L.data : (L.csv != null ? L.csv : L.values);
       const data = parseLayerData(raw);
 
-      // Falls Größe nicht passt, auffüllen/kürzen
       const needed = w * h;
       if (data.length < needed) {
         data.push(...new Array(needed - data.length).fill(0));
@@ -160,7 +154,6 @@
     };
   }
 
-  // ---- Minimaler Renderer (zeigt sofort was) ----------------------------
   function renderMapPlaceholder(map) {
     const ctx = Stage.ctx;
     const { width: tw, height: th } = map;
@@ -168,11 +161,9 @@
 
     Stage.clear();
 
-    // Hintergrund
     ctx.fillStyle = '#0f1a10';
     ctx.fillRect(0, 0, Stage.cvs.width, Stage.cvs.height);
 
-    // erstes Layer (falls vorhanden) grob zeichnen
     const L0 = map.layers[0];
     if (L0 && L0.data) {
       for (let ty = 0; ty < th; ty++) {
@@ -180,7 +171,6 @@
           const i = ty * tw + tx;
           const v = L0.data[i] | 0;
           if (v !== 0) {
-            // einfache farbliche Kodierung
             const c = 100 + (v % 100);
             ctx.fillStyle = `rgb(${c},${120},${90})`;
           } else {
@@ -191,40 +181,25 @@
       }
     }
 
-    // Grid drüber (dezent)
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255,255,255,.06)';
     for (let x = 0; x <= tw; x++) {
-      ctx.beginPath();
-      ctx.moveTo(x * ts, 0);
-      ctx.lineTo(x * ts, th * ts);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x * ts, 0); ctx.lineTo(x * ts, th * ts); ctx.stroke();
     }
     for (let y = 0; y <= th; y++) {
-      ctx.beginPath();
-      ctx.moveTo(0, y * ts);
-      ctx.lineTo(tw * ts, y * ts);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, y * ts); ctx.lineTo(tw * ts, y * ts); ctx.stroke();
     }
   }
 
-  // ---- Public API -------------------------------------------------------
   GameLoader.start = async function start(mapUrl) {
     logOK('GameLoader.start', mapUrl);
 
-    // Canvas sicher initialisieren
     Stage.init();
 
-    // Map laden
-    const raw = await fetchJson(mapUrl).catch((e) => {
-      logErr('Map fetch FAIL', e.message || String(e));
-      throw e;
-    });
+    const raw = await fetchJson(mapUrl); // wir loggen den Fehler inkl. Snippet in fetchJson
 
-    // Tileset optional laden (versucht Standardpfad)
-    await loadTilesetIfPresent(raw).catch(() => { /* bereits geloggt */ });
+    await loadTilesetIfPresent(raw).catch(()=>{ /* bereits geloggt */ });
 
-    // Map normalisieren (tolerant)
     let map;
     try {
       map = normalizeMap(raw);
@@ -238,10 +213,8 @@
       throw e;
     }
 
-    // Signal an Backdrop: Texturen i. O. (wir haben alles Nötige)
     try { window.Asset && window.Asset.markTexturesReady && window.Asset.markTexturesReady(true); } catch (_) {}
 
-    // Erste Darstellung
     try {
       renderMapPlaceholder(map);
       logOK('Render PLACEHOLDER');
@@ -249,12 +222,8 @@
       logErr('Render FAIL', e.message || String(e));
       throw e;
     }
-
-    // (Optional) Game Loop – hier nur einfaches Redraw bei Resize
-    // → bereits via Stage.resize() erledigt.
   };
 
-  // ---- minimale Build-Kosten & Tool-API (für UI-Buttons) ---------------
   Game.buildCosts = Game.buildCosts || {
     road:  { wood: 1, stone: 0, food: 0, pop: 0 },
     hut:   { wood:10, stone: 2, food: 0, pop: 1 },
@@ -279,5 +248,5 @@
     Game.state.activeTool = tool;
   };
 
-  logOK('script load ok','game.js v1.14');
+  logOK('script load ok','game.js v1.15');
 })();
