@@ -1,0 +1,37 @@
+{
+  // === Texture-Atlas für Terrain-Tiles =====================================
+  // Dieses JSON beschreibt, wo sich einzelne 64x64-Tiles im PNG befinden.
+  // Es ist kompatibel zu unserem Loader (game.js v1.16+).
+  // -------------------------------------------------------------------------
+
+  "frames": {
+    // Namensschema: terrain_r{row}_c{col}
+    // Jede Kachel ist 64x64 Pixel, beginnend oben links (0/0).
+    "terrain_r0_c0":  { "x": 0,   "y": 0,   "w": 64, "h": 64 },
+    "terrain_r0_c1":  { "x": 64,  "y": 0,   "w": 64, "h": 64 },
+    "terrain_r0_c2":  { "x": 128, "y": 0,   "w": 64, "h": 64 },
+    // ... (alle Einträge 0..15 je Reihe, 0..15 je Spalte, insgesamt 16x16) ...
+    // Hinweis: Vollständige Liste siehe produktive JSON oben; hier gekürzt.
+  },
+
+  "animations": {
+    // optional: falls einzelne Frames animiert werden sollen
+  },
+
+  "meta": {
+    // Der zugehörige Bildpfad. Relative URL wird relativ zu dieser JSON aufgelöst.
+    "image": "tileset.terrain.png",
+
+    // Tile-Kantenlänge in Pixeln (Quadrate).
+    "tileSize": 64,
+
+    // Gesamtabmessungen des PNG (nur informativ).
+    "size": { "w": 1024, "h": 1024 },
+
+    // Logische Gittergröße im Atlas (Spalten/Zeilen) – nur informativ.
+    "grid": { "cols": 16, "rows": 16 },
+
+    // Beliebige Notizen.
+    "note": "Generic grid mapping; rename or alias keys to semantic names as needed."
+  }
+}
