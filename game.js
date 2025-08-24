@@ -1,6 +1,7 @@
 /* =====================================================================
-   game.js  •  v1.15
-   - Robuster JSON-Fetch (res.text + JSON.parse mit BOM-Strip & Snippet)
+   game.js  •  v1.16
+   - JSONC-Unterstützung (Kommentare strippen, ohne Strings zu zerstören)
+   - Tileset: .png ODER .json (Atlas) wird erkannt und geladen
    - Toleranter Map-Parser (CSV ODER Array; Strings → Zahlen)
    - Sichere Canvas/Context-Erzeugung
    - Platzhalter-Renderer
@@ -26,6 +27,7 @@
     dpr: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
   };
 
+  // ---------- Canvas/Stage ----------
   const Stage = {
     cvs: null,
     ctx: null,
@@ -56,6 +58,7 @@
     }
   };
 
+  // ---------- Utils ----------
   function toInt(x, fallback = 0) {
     const n = (typeof x === 'string') ? parseInt(x, 10) : (typeof x === 'number' ? x : NaN);
     return Number.isFinite(n) ? n : fallback;
@@ -86,6 +89,116 @@
     });
   }
 
+  // ---------- JSONC: Kommentare strippen (ohne Strings zu zerstören) ----------
+  function stripJsonComments(source) {
+    let out = '';
+    let i = 0;
+    const n = source.length;
+    let inStr = false, strChar = '';
+    let inLine = false, inBlock = false;
+    while (i < n) {
+      const c = source[i];
+      const c2 = source[i+1];
+
+      // String-Start/-Ende
+      if (!inLine && !inBlock) {
+        if (!inStr && (c === '"' || c === "'")) {
+          inStr = true; strChar = c; out += c; i++; continue;
+        } else if (inStr) {
+          // escape?
+          if (c === '\\') { out += c; if (i+1 < n) { out += source[i+1]; i+=2; continue; } }
+          if (c === strChar) { inStr = false; strChar = ''; out += c; i++; continue; }
+          out += c; i++; continue;
+        }
+      }
+
+      // Kommentare
+      if (!inStr) {
+        // Block-Kommentar /* ... */
+        if (!inBlock && !inLine && c === '/' && c2 === '*') { inBlock = true; i += 2; continue; }
+        if (inBlock) { if (c === '*' && c2 === '/') { inBlock = false; i += 2; } else { i++; } continue; }
+
+        // Zeilen-Kommentar // ...
+        if (!inLine && c === '/' && c2 === '/') { inLine = true; i += 2; continue; }
+        if (inLine) { if (c === '\n' || c === '\r') { inLine = false; out += c; } i++; continue; }
+      }
+
+      // normaler Durchlauf
+      out += c; i++;
+    }
+    return out;
+  }
+
+  // ---------- JSON laden (robust) ----------
+  async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    const text = await res.text();
+    const clean = stripJsonComments(text.replace(/^\uFEFF/, ''));
+    try {
+      return JSON.parse(clean);
+    } catch (e) {
+      const snippet = clean.slice(0, 200).replace(/\s+/g,' ').trim();
+      logErr('Map fetch FAIL', e.message || String(e), 'snippet:', snippet);
+      throw new Error(e.message || 'JSON parse error');
+    }
+  }
+
+  // ---------- Tileset laden (png oder atlas.json) ----------
+  async function loadTilesetFromUrlLike(urlLike, baseFallback) {
+    if (!urlLike) return null;
+
+    // Absolute/relative Pfade normalisieren
+    const url = String(urlLike);
+
+    // JSON-Atlas?
+    if (url.toLowerCase().endsWith('.json')) {
+      try {
+        const atlas = await fetchJson(url);
+        // Häufige Felder:
+        //  - TexturePacker: { meta:{ image:"foo.png" }, frames:{...} }
+        //  - Tiled: { meta:{image:"..."}} oder { image:"..." }
+        const imgRel =
+          (atlas.meta && (atlas.meta.image || atlas.meta.imagePath)) ||
+          atlas.image ||
+          (atlas.atlas && atlas.atlas.image) ||
+          null;
+
+        if (imgRel) {
+          // URL für Bild relativ zur Atlas-JSON auflösen
+          const abs = new URL(imgRel, url).toString();
+          const img = await loadImage(abs);
+          logOK('Tileset (atlas) OK', url, '→', abs, `${img.naturalWidth}x${img.naturalHeight}`);
+          return img;
+        } else {
+          logWarn('Atlas JSON ohne image-Feld', url);
+          return null;
+        }
+      } catch (e) {
+        logWarn('Atlas JSON load fail', url, e.message || String(e));
+        return null;
+      }
+    }
+
+    // Direktes Bild
+    try {
+      const img = await loadImage(url);
+      logOK('Tileset OK', url, `${img.naturalWidth}x${img.naturalHeight}`);
+      return img;
+    } catch (e) {
+      logWarn('Tileset IMG fail', url);
+      // Fallback
+      if (baseFallback) {
+        try {
+          const img = await loadImage(baseFallback);
+          logOK('Tileset Fallback OK', baseFallback, `${img.naturalWidth}x${img.naturalHeight}`);
+          return img;
+        } catch (_) {}
+      }
+      return null;
+    }
+  }
+
   async function loadTilesetIfPresent(map) {
     const ts =
       map.tileSize || map.tilesize || map.tile || (map.meta && (map.meta.tile || map.meta.tileSize)) || 64;
@@ -94,32 +207,13 @@
     const tilesetUrl =
       map.tileset || (map.meta && map.meta.tileset) || (map.atlas && map.atlas.image) || './assets/tiles/tileset.terrain.png';
 
-    try {
-      const img = await loadImage(tilesetUrl);
-      Game.state.tilesetImg = img;
-      logOK('Tileset OK', tilesetUrl, `${img.naturalWidth}x${img.naturalHeight}`);
-    } catch (e) {
-      Game.state.tilesetImg = null;
+    Game.state.tilesetImg = await loadTilesetFromUrlLike(tilesetUrl, './assets/tiles/tileset.terrain.png');
+    if (!Game.state.tilesetImg) {
       logWarn('Tileset fehlt/optional', tilesetUrl);
     }
   }
 
-  // === NEU: Robuster JSON-Fetch mit Diagnose ============================
-  async function fetchJson(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    const text = await res.text();
-    // BOM entfernen
-    const clean = text.replace(/^\uFEFF/, '');
-    try {
-      return JSON.parse(clean);
-    } catch (e) {
-      const snippet = clean.slice(0, 160).replace(/\s+/g,' ').trim();
-      logErr('Map fetch FAIL', e.message || String(e), 'snippet:', snippet);
-      throw new Error(e.message || 'JSON parse error');
-    }
-  }
-
+  // ---------- Map normalisieren ----------
   function normalizeMap(json) {
     const w = toInt(json.width, 0);
     const h = toInt(json.height, 0);
@@ -154,6 +248,7 @@
     };
   }
 
+  // ---------- Platzhalter-Renderer ----------
   function renderMapPlaceholder(map) {
     const ctx = Stage.ctx;
     const { width: tw, height: th } = map;
@@ -191,12 +286,13 @@
     }
   }
 
+  // ---------- Public API ----------
   GameLoader.start = async function start(mapUrl) {
     logOK('GameLoader.start', mapUrl);
 
     Stage.init();
 
-    const raw = await fetchJson(mapUrl); // wir loggen den Fehler inkl. Snippet in fetchJson
+    const raw = await fetchJson(mapUrl); // JSONC ok
 
     await loadTilesetIfPresent(raw).catch(()=>{ /* bereits geloggt */ });
 
@@ -224,6 +320,7 @@
     }
   };
 
+  // ---------- (Minimal) Build-Costs & Tool ----------
   Game.buildCosts = Game.buildCosts || {
     road:  { wood: 1, stone: 0, food: 0, pop: 0 },
     hut:   { wood:10, stone: 2, food: 0, pop: 1 },
@@ -248,5 +345,5 @@
     Game.state.activeTool = tool;
   };
 
-  logOK('script load ok','game.js v1.15');
+  logOK('script load ok','game.js v1.16');
 })();
