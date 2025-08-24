@@ -1,18 +1,20 @@
 {
-  // Atlas (JSONC) – nur zur Doku. Spiel lädt die .json Variante oben!
-  "frames": {
-    // Reihe 0 (Beispiel: UI-Grasplatten, etc.)
-    "terrain_r0_c0": { "x": 0, "y": 0, "w": 64, "h": 64 },
-    "terrain_r0_c1": { "x": 64, "y": 0, "w": 64, "h": 64 },
-    // ... (alle Frames wie in der JSON-Datei, identisch fortgeführt)
-  },
-  "animations": {},
+  // Wichtig: KEIN absoluter/verschachtelter Pfad hier!
+  // Nur der Dateiname, damit der Loader ihn relativ zu dieser JSON auflöst.
   "meta": {
-    // WICHTIG: relativer, auflösbarer Pfad – verhindert URL-Fehler im Loader
-    "image": "./assets/tiles/tileset.terrain.png",
+    "image": "tileset.terrain.png", // liegt im selben Ordner wie diese JSON
     "tileSize": 64,
     "size": { "w": 1024, "h": 1024 },
     "grid": { "cols": 16, "rows": 16 },
-    "note": "16x16 Grid; Frame-Namen terrain_r{row}_c{col}."
-  }
+    "note": "Kommentar-Version; Spiel lädt die .json (ohne C)."
+  },
+  // Für die Mini-Map brauchen wir erstmal nur ein paar Wiesen-Tiles (r4_c0..)
+  "frames": {
+    "terrain_r4_c0": { "x": 0,   "y": 256, "w": 64, "h": 64 },
+    "terrain_r4_c1": { "x": 64,  "y": 256, "w": 64, "h": 64 },
+    "terrain_r4_c2": { "x": 128, "y": 256, "w": 64, "h": 64 },
+    "terrain_r4_c3": { "x": 192, "y": 256, "w": 64, "h": 64 }
+    // … vollständiges Raster siehe produktive tileset.terrain.json
+  },
+  "animations": {}
 }
