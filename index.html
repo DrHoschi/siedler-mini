@@ -6,23 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" content="#12161c" />
-
-  <!-- ============================================================
-       index.html • v1.11
-       CHANGES:
-       - Build-Menü dockt dynamisch direkt UNTER die Ressourcenleiste
-       - Build-Menü: Icons + Texte für Straße/Hütte/Holzfäller/Steinbruch
-       - Sicherer Fallback, wenn Tool serverseitig/ingame noch fehlt
-       - Kommentar-Banner & Insert-Marker ergänzt
-       ============================================================ -->
+  <!-- index.html • v1.12 • Buildmenü: alle Gebäude aus assets/tex/building/wood integriert -->
 
   <style>
-    :root{
-      --bg:#0f1318;--panel:#1a2230;--glass:rgba(16,23,34,.65);
-      --text:#e8eef6;--muted:#96a2b6;--accent:#3b82f6;
-      --ok:#22c55e;--warn:#eab308;--danger:#ef4444;
-      --radius:14px;--blur:10px
-    }
+    :root{--bg:#0f1318;--panel:#1a2230;--glass:rgba(16,23,34,.65);
+      --text:#e8eef6;--muted:#96a2b6;--accent:#3b82f6;--ok:#22c55e;--warn:#eab308;--danger:#ef4444;--radius:14px;--blur:10px}
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     button{cursor:pointer}
@@ -32,15 +20,12 @@
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .grow{flex:1 1 auto}
 
-    /* ====== Bühne / Hintergrund ====== */
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
     #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.9;transition:opacity .5s;pointer-events:none;z-index:5}
 
-    /* ====== Startpanel ====== */
     #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
     #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10}
 
-    /* ====== HUD oben links (Ressourcen) ====== */
     #hud{position:fixed;left:8px;top:8px;z-index:12;min-width:280px;padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #versionSmall{font-weight:800;font-size:.85rem;opacity:.85;margin-bottom:8px}
     #resbar{display:flex;gap:18px;align-items:center;background:#0c101a80;border-radius:12px;padding:10px;border:1px solid #ffffff10}
@@ -48,19 +33,15 @@
     .res .val{min-width:28px;text-align:right}
     .ico{width:18px;height:18px;opacity:.92;display:inline-block;vertical-align:-3px}
 
-    /* ====== Build-Menü (angedockt unter HUD) ====== */
-    #buildMenu{
-      position:fixed; left:8px; z-index:12;
-      background:var(--glass); backdrop-filter:blur(var(--blur));
-      border:1px solid #ffffff19; border-radius:16px; padding:10px 12px; min-width:260px;
-      /* top wird dynamisch per JS direkt unter #hud gesetzt */
-    }
-    #buildTitle{font-weight:700;margin:2px 0 8px 2px}
+    /* Build-Menü dockt direkt unter HUD */
+    #buildMenu{position:fixed;left:8px;z-index:12;background:var(--glass);backdrop-filter:blur(var(--blur));
+      border:1px solid #ffffff19;border-radius:16px;padding:10px 12px;min-width:280px}
+    #buildTitle{font-weight:800;margin:2px 0 8px 2px}
+    #buildGroups{display:flex;flex-direction:column;gap:10px}
+    .group{background:#101722a8;border:1px solid #ffffff0f;border-radius:12px;padding:10px}
+    .group h4{margin:0 0 8px 0;font-size:.9rem;color:#cfd7e6}
     #buildTools{display:flex;flex-wrap:wrap;gap:8px}
-    .tool{
-      display:flex;align-items:center;gap:8px;
-      padding:8px 10px;border-radius:12px;background:#1f2a3a;border:1px solid #ffffff14;min-width:44px
-    }
+    .tool{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:#1f2a3a;border:1px solid #ffffff14;min-width:44px}
     .tool .ticon{width:18px;height:18px;opacity:.95}
     .tool.active{outline:2px solid var(--accent)}
     .tool.disabled{opacity:.5;filter:saturate(.6)}
@@ -69,23 +50,19 @@
 
     #buildReopen{position:fixed;left:8px;z-index:12;display:none;background:var(--glass);border:1px solid #ffffff14;border-radius:12px;padding:8px 10px}
 
-    /* ====== Toast / Inspector ====== */
     #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px}
     #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10}
 
-    /* ====== Vollbild Buttons ====== */
     #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
   </style>
 </head>
 <body>
 
-  <!-- ================= STAGE / BACKDROP ================= -->
   <canvas id="stage"></canvas>
   <div id="backdrop" aria-hidden="true"></div>
 
-  <!-- ================= STARTPANEL ================= -->
   <div id="startPanel" role="dialog" aria-modal="true">
     <div id="startCard">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
@@ -93,7 +70,7 @@
         <div style="opacity:.7">Build <span id="buildDate"></span></div>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <select id="mapSelect" class="btn grow" style="background:#1b2433"> 
+        <select id="mapSelect" class="btn grow" style="background:#1b2433">
           <option value="./assets/maps/map-mini.json">Mini-Map (Test)</option>
           <option value="./assets/maps/map-demo.json">Demo</option>
           <option value="./assets/maps/map-test-all.json">Test-All</option>
@@ -104,70 +81,109 @@
       </div>
       <div class="row" style="margin-bottom:10px">
         <button id="btnReset" class="btn danger">Reset</button>
-        <div class="grow"></div><span class="note" style="color:var(--muted)">Vollbild oben rechts.</span>
+        <div class="grow"></div><span class="note" style="color:#96a2b6">Vollbild oben rechts.</span>
       </div>
-      <div class="note" style="color:var(--muted)">Editor & Live‑Malen in der Toast‑Leiste.</div>
+      <div class="note" style="color:#96a2b6">Editor & Live‑Malen in der Toast‑Leiste.</div>
     </div>
   </div>
 
-  <!-- ================= HUD (Ressourcen) ================= -->
+  <!-- HUD -->
   <div id="hud" aria-live="polite" aria-atomic="true">
     <div id="versionSmall">V?.?.? • <span id="versionDate"></span></div>
     <div id="resbar" class="res">
-      <span>
-        <!-- Holz -->
-        <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3l10 4-4 10-10-4z"/></svg> Holz
-      </span><span class="val" id="res-wood">0</span>
-      <span>
-        <!-- Stein -->
-        <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M4 16l4-10h8l4 10-8 5z"/></svg> Stein
-      </span><span class="val" id="res-stone">0</span>
-      <span>
-        <!-- Nahrung -->
-        <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung
-      </span><span class="val" id="res-food">0</span>
-      <span>
-        <!-- Bewohner -->
-        <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew.
-      </span><span class="val" id="res-pop">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3l10 4-4 10-10-4z"/></svg> Holz</span><span class="val" id="res-wood">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M4 16l4-10h8l4 10-8 5z"/></svg> Stein</span><span class="val" id="res-stone">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung</span><span class="val" id="res-food">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew.</span><span class="val" id="res-pop">0</span>
     </div>
   </div>
 
-  <!-- ================= BUILD-MENÜ (angedockt) ================= -->
+  <!-- Build-Menü (angedockt) -->
   <div id="buildMenu">
     <div id="buildTitle">Baumenü</div>
-    <div id="buildTools">
-      <!-- ==== BUILD TOOLS (Icons + Text) ==== -->
-      <button class="tool" data-tool="road" title="Straße bauen">
-        <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M9 2h6v20H9zM2 9h20v6H2z"/></svg>
-        <span>Straße</span>
-      </button>
-      <button class="tool" data-tool="hut" title="Hütte">
-        <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 11l9-7 9 7v9H3zM8 20v-6h8v6"/></svg>
-        <span>Hütte</span>
-      </button>
-      <button class="tool" data-tool="lumber" title="Holzfäller">
-        <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 20l6-6-2-2-6 6v2h2zM13 5l6 6 2-2-6-6-2 2z"/></svg>
-        <span>Holzfäller</span>
-      </button>
-      <button class="tool" data-tool="mason" title="Steinbruch">
-        <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17l6-10 6 10H3zm12 0l3-5 3 5h-6z"/></svg>
-        <span>Steinbruch</span>
-      </button>
 
-      <!-- ==== BUILD TOOLS – ADD MORE (Platzhalter) ====
-           Beispiel: weitere Gebäude später wieder aktivieren.
-           <button class="tool disabled" data-tool="farm" title="Farm (später)">
-             <svg class="ticon" ...></svg><span>Farm</span>
-           </button>
-      -->
+    <div id="buildGroups">
+      <!-- Grundwerkzeuge -->
+      <div class="group">
+        <h4>Grundwerkzeuge</h4>
+        <div id="buildTools">
+          <button class="tool" data-tool="road" title="Straße">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M9 2h6v20H9zM2 9h20v6H2z"/></svg><span>Straße</span>
+          </button>
+          <button class="tool" data-tool="hut" title="Hütte">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 11l9-7 9 7v9H3zM8 20v-6h8v6"/></svg><span>Hütte</span>
+          </button>
+          <button class="tool" data-tool="lumber" title="Holzfäller">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 20l6-6-2-2-6 6v2h2zM13 5l6 6 2-2-6-6-2 2z"/></svg><span>Holzfäller</span>
+          </button>
+          <button class="tool" data-tool="mason" title="Steinbruch">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17l6-10 6 10H3zm12 0l3-5 3 5h-6z"/></svg><span>Steinbruch</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Epoche I – Holzbau (aus assets/tex/building/wood) -->
+      <div class="group">
+        <h4>Epoche I – Holzbau</h4>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button class="tool" data-tool="hq_wood" title="Hauptquartier (Holz)">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12l9-7 9 7v8H3z"/></svg><span>HQ</span>
+          </button>
+          <button class="tool" data-tool="hq_wood_ug1" title="HQ Upgrade I">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M2 12l10-8 10 8v9H2zM8 21v-6h8v6"/></svg><span>HQ UG1</span>
+          </button>
+
+          <button class="tool" data-tool="depot_wood" title="Depot">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 10l8-5 8 5v9H4z"/></svg><span>Depot</span>
+          </button>
+          <button class="tool" data-tool="depot_wood_ug" title="Depot Upgrade">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 10l8-5 8 5v9H4zM8 19v-5h8v5"/></svg><span>Depot UG</span>
+          </button>
+
+          <button class="tool" data-tool="lumberjack_wood" title="Säge/Holzhütte">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12l7-5 7 5v7H3z"/></svg><span>Holzhütte</span>
+          </button>
+
+          <button class="tool" data-tool="stonebraker_wood" title="Steinbrecher">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 18l4-9h8l4 9H4z"/></svg><span>Steinbrecher</span>
+          </button>
+
+          <button class="tool" data-tool="farm_wood" title="Farm">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17h18v3H3zM4 14l8-6 8 6H4z"/></svg><span>Farm</span>
+          </button>
+          <button class="tool" data-tool="baeckerei_wood" title="Bäckerei">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M5 10h14v9H5zM7 7h10l2 3H5"/></svg><span>Bäckerei</span>
+          </button>
+
+          <button class="tool" data-tool="fischer_wood1" title="Fischerhütte">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M3 12l7-5 7 5v7H3zM15 6c1.7 0 3-1.3 3-3"/></svg><span>Fischer</span>
+          </button>
+
+          <button class="tool" data-tool="wassermuehle_wood" title="Wassermühle">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3l3 5-3 5-3-5 3-5zm-7 15h14v3H5z"/></svg><span>Wassermühle</span>
+          </button>
+          <button class="tool" data-tool="windmuehle_wood" title="Windmühle">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12l8-3-3 8-5-5-5 5-3-8 8 3z"/></svg><span>Windmühle</span>
+          </button>
+
+          <button class="tool" data-tool="haeuser_wood1" title="Haus 1">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 12l8-6 8 6v8H4z"/></svg><span>Haus 1</span>
+          </button>
+          <button class="tool" data-tool="haeuser_wood1_ug1" title="Haus 1 UG1">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 12l8-6 8 6v8H4zM8 20v-6h8v6"/></svg><span>Haus 1 UG1</span>
+          </button>
+          <button class="tool" data-tool="haeuser_wood2" title="Haus 2">
+            <svg class="ticon" viewBox="0 0 24 24"><path fill="currentColor" d="M5 12l7-5 7 5v8H5z"/></svg><span>Haus 2</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
   <button id="buildReopen" title="Baumenü öffnen">🧱 Bauen</button>
 
-  <!-- ================= FS + TOAST + INSPECTOR ================= -->
+  <!-- Vollbild + Toast + Inspector -->
   <button id="fsEnter" title="Vollbild">⛶</button>
-  <button id="fsExit"  title="Vollbild verlassen">✕</button>
+  <button id="fsExit" title="Vollbild verlassen">✕</button>
 
   <div id="toast" role="region" aria-label="Utility-Leiste">
     <div class="left"><button id="btnMenu" class="btn">Menü</button></div>
@@ -194,39 +210,35 @@
     <div id="log" aria-live="polite"></div>
   </div>
 
-  <!-- ================= SCRIPT-MODULE: ASSET LOADER ================= -->
+  <!-- Minimal Asset-Loader -->
   <script>
   window.Asset = window.Asset || (function(){
     const cache = new Map(); let texturesReady=false;
     async function loadImage(key, url){
       if(cache.has(url)) return cache.get(url);
-      return new Promise((res,rej)=>{
-        const img=new Image(); img.crossOrigin="anonymous";
-        img.onload=()=>{ cache.set(url,img); res(img); };
-        img.onerror=()=>rej(new Error('IMG '+url)); img.src=url;
-      });
+      return new Promise((res,rej)=>{ const img=new Image(); img.crossOrigin="anonymous";
+        img.onload=()=>{cache.set(url,img);res(img)}; img.onerror=()=>rej(new Error('IMG '+url)); img.src=url;});
     }
     return { loadImage, markTexturesReady(v){texturesReady=!!v;}, areTexturesReady(){return texturesReady;}, _cache:cache };
   })();
   </script>
 
-  <!-- ================= HIER: SPIEL/BOOT SCRIPTS EINBINDEN ================= -->
+  <!-- Spiel-Module -->
   <script src="./game.js"></script>
   <script src="./boot.js"></script>
 
-  <!-- ================= UI/LOGIK (Docking + Events) ================= -->
+  <!-- UI/Docking + Build-Tool Binding -->
   <script>
   (function(){
-    const $ = (s)=>document.querySelector(s);
-    const log = (...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
+    const $=s=>document.querySelector(s);
+    const log=(...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
+    BootUI=window.BootUI||{}; BootUI.dbg=BootUI.dbg||function(){console.log('[DBG]',...arguments)}
 
-    // ---- Version/Build Datum
-    const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
-    $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
-    BootUI = window.BootUI || {};
-    BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
+    // Build-Datum
+    const t=new Date(), y=t.getFullYear(), m=String(t.getMonth()+1).padStart(2,'0'), d=String(t.getDate()).padStart(2,'0');
+    document.getElementById('buildDate').textContent=`${y}${m}${d}`; document.getElementById('versionDate').textContent=`${y}${m}${d}`;
 
-    // ---- Startpanel
+    // Startpanel
     $('#btnNew').addEventListener('click', async ()=>{
       const map=$('#mapSelect').value;
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){ hideStart(); await window.GameLoader.start(map); }
@@ -235,22 +247,23 @@
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    // ---- Toast / Inspector / FS
-    $('#btnMenu').addEventListener('click', ()=> $('#startPanel').style.display='grid');
-    $('#btnInspector').addEventListener('click', ()=> $('#inspector').style.display='block');
-    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
-    $('#btnCloseInspector').addEventListener('click', ()=> $('#inspector').style.display='none');
-
+    // Vollbild
     const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
     fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
     fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
 
-    // ---- Backdrop Fade (Textures Ready/Timeout)
-    (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
-      const tick=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
+    // Toast
+    $('#btnMenu').addEventListener('click', ()=> $('#startPanel').style.display='grid'));
+    $('#btnInspector').addEventListener('click', ()=> $('#inspector').style.display='block'));
+    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
+    $('#btnCloseInspector').addEventListener('click', ()=> $('#inspector').style.display='none'));
+
+    // Backdrop Fade via Texturen-Flag/Timeout
+    (function(){ const bd=$('#backdrop'); let tt=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
+      const poll=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(tt);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(poll) }; poll();
     })();
 
-    // ---- Build-Menü Show/Hide via Doppelklick + Reopen
+    // Build-Menü ↔ Reopen
     (function(){
       const m=$('#buildMenu'), r=$('#buildReopen');
       m.addEventListener('dblclick', ()=>{ m.style.display='none'; r.style.display='block'; dockReopen(); });
@@ -259,70 +272,39 @@
       window.addEventListener('resize', dockReopen);
     })();
 
-    // =========================================================
-    // DOCKING: Build-Menü exakt UNTER der Ressourcenleiste
-    // =========================================================
+    // Docking: exakt unter HUD
     function dockBuildMenu(){
-      const hud = $('#hud');
-      const menu = $('#buildMenu');
-      const y = hud.offsetTop + hud.offsetHeight + 8; // 8px Abstand
-      menu.style.top = y+'px';
+      const hud=$('#hud'), menu=$('#buildMenu');
+      const y=hud.offsetTop + hud.offsetHeight + 8; menu.style.top=y+'px';
     }
     window.addEventListener('load', dockBuildMenu);
     window.addEventListener('resize', dockBuildMenu);
-    // Falls HUD dynamisch größer wird (z.B. andere DPI), beim Startpanel-Hide neu docken:
-    const ro = new ResizeObserver(()=>dockBuildMenu());
-    ro.observe($('#hud'));
+    new ResizeObserver(dockBuildMenu).observe($('#hud'));
 
-    // =========================================================
-    // BUILD-TOOLS: Icons + „existiert dieses Tool?“ Prüfung
-    // =========================================================
-    const toolButtons = Array.from(document.querySelectorAll('#buildTools .tool'));
+    // Build-Tool Binding + Existenz-Check (Game.buildCosts/tool)
+    const toolButtons=[...document.querySelectorAll('.tool[data-tool]')];
     toolButtons.forEach(btn=>{
       btn.addEventListener('click', ()=>{
-        const tool = btn.dataset.tool;
-        // Prüfen, ob das Spiel diese Bauart kennt:
+        const tool=btn.dataset.tool;
         const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[tool]);
-        if(!ok){
-          // Sanfter Hinweis statt Fehler
-          btn.classList.add('shake'); setTimeout(()=>btn.classList.remove('shake'), 280);
-          BootUI.dbg('Build tool nicht verfügbar (noch nicht im Spiel hinterlegt):', tool);
-          return;
-        }
-        // Aktiv markieren
-        toolButtons.forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        // Tool ans Spiel melden (so wie bisher):
-        window.Game?.setActiveTool?.(tool);
-        BootUI.dbg('Tool', tool);
+        if(!ok){ btn.classList.add('shake'); setTimeout(()=>btn.classList.remove('shake'),280); BootUI.dbg('Build tool nicht verfügbar:', tool); return; }
+        toolButtons.forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+        window.Game?.setActiveTool?.(tool); BootUI.dbg('Tool', tool);
       });
     });
 
-    // =========================================================
-    // Inspector Log Minimal
-    // =========================================================
-    BootUI.dbg = function(){
-      const t=new Date(), stamp=`[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
-      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
-      const el=document.createElement('div'); el.className='logline'; el.textContent=`${stamp} ${line}`;
-      const host=$('#log'); host.appendChild(el); host.scrollTop=host.scrollHeight; console.log(stamp, ...arguments);
-    };
+    // Continue aus Snapshot
+    BootUI.continueLastSnapshot=async function(){ try{
+      const raw=localStorage.getItem('lastSnapshot'); if(!raw){ alert('Kein Spielstand gefunden.'); document.getElementById('startPanel').style.display='grid'; return; }
+      const snap=JSON.parse(raw); await window.GameLoader.continueFrom(snap);
+    }catch(e){ alert('Konnte Spielstand nicht laden.'); document.getElementById('startPanel').style.display='grid'; }};
 
-    // „Weiterspielen“ Loader
-    BootUI.continueLastSnapshot = async function(){
-      try{
-        const raw=localStorage.getItem('lastSnapshot');
-        if(!raw){ alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
-        const snap=JSON.parse(raw);
-        await window.GameLoader.continueFrom(snap);
-      }catch(e){
-        alert('Konnte Spielstand nicht laden.');
-        $('#startPanel').style.display='grid';
-      }
-    };
+    // Inspector Log
+    BootUI.dbg=function(){ const t=new Date(), s=`[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
+      const line=Array.from(arguments).map(v=>typeof v==='string'?v:JSON.stringify(v)).join(' ');
+      const el=document.createElement('div'); el.textContent=`${s} ${line}`; const host=document.getElementById('log'); host.appendChild(el); host.scrollTop=host.scrollHeight; console.log(s,...arguments); };
 
-    // UI ready
-    log('UI ready (v1.11, BuildMenu docked under HUD)');
+    log('UI ready (v1.12, Build‑Erweiterung)');
   })();
   </script>
 </body>
