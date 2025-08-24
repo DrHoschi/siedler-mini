@@ -1,29 +1,31 @@
 {
-  // Mini-Map (16x10), lädt sicher. Bitte im Spiel die .json-Version verwenden.
-  "width": 16,
-  "height": 10,
-  "tileSize": 64,
+  "version": 1,
+  "name": "map-mini",
+  "tileSize": 64, // muss zu tileset.meta.tileSize passen
+  "tileset": "./assets/tiles/tileset.terrain.json", // relativ zur HTML/Location der Map geladen
 
-  // Atlas-Definition (strict JSON-Version)
-  "tileset": "./assets/tiles/tileset.terrain.json",
+  "size": { "w": 16, "h": 10 }, // Spalten x Zeilen
 
   "layers": [
     {
       "name": "ground",
-      "type": "tiles",
-      // Ein Layer voll Gras: terrain_r4_c0 (eine deiner üblichen Wiesen-Kacheln)
-      "data": [
-        // 10 Zeilen à 16 Spalten
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"]
+      "type": "tilegrid", // vom Loader unterstützt: Gitter aus Indizes
+      "legend": {
+        // Mappt Zahlenwerte in 'tiles' auf Frame-Keys aus dem Tileset
+        "0": "terrain_r4_c0" // sattes Gras
+      },
+      "tiles": [
+        // 10 Zeilen á 16 Spalten → reine Wiese
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
       ]
     }
   ]
