@@ -8,66 +8,92 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.14.1
-       CHANGES:
-       - Hinweis im Baumenü: Live‑Malen Shortcuts (Alt=Fluss, Shift=Straße)
-       - sonst unverändert (Kategorien-Baumenü, Docking, Inspector ...)
+       index.html • v1.15
+       Änderungen
+       - Ressourcenleiste als Toast oben (mit Icons)
+       - Baumenü kompakt: EINZEILIG, horizontal scrollen
+       - Schließen-Button im Baumenü; runder Mini-Button (Werkzeug)
+         zum Wiederöffnen
+       - Versionstext klein unten in der Toast-/Inspector-Leiste
+       - Mal-/Editor-Buttons aus der Toast-Leiste entfernt
        ============================================================ -->
 
   <style>
     :root{
-      --bg:#0f1318;--panel:#1a2230;--glass:rgba(16,23,34,.65);
-      --text:#e8eef6;--muted:#96a2b6;--accent:#3b82f6;
-      --ok:#22c55e;--warn:#eab308;--danger:#ef4444;
-      --radius:14px;--blur:10px
+      --glass:rgba(16,23,34,.65);
+      --text:#e8eef6; --muted:#9fb0c8; --accent:#3b82f6;
+      --danger:#ef4444; --radius:14px; --blur:10px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     button{cursor:pointer}
-    .btn{background:#1f2a3a;border:1px solid #ffffff14;color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
+    .btn{background:#1f2a3a;border:1px solid #ffffff1a;color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
     .btn.primary{background:#2a3b55;border-color:#3b82f650}
     .btn.danger{background:#3a2226;border-color:#ef444450}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .grow{flex:1 1 auto}
 
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
     #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.9;transition:opacity .5s;pointer-events:none;z-index:5}
 
+    /* Startpanel */
     #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
     #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10}
 
-    #hud{position:fixed;left:8px;top:8px;z-index:12;min-width:280px;padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
-    #versionSmall{font-weight:800;font-size:.85rem;opacity:.85;margin-bottom:8px}
-    #resbar{display:flex;gap:18px;align-items:center;background:#0c101a80;border-radius:12px;padding:10px;border:1px solid #ffffff10}
-    .res{display:grid;grid-template-columns:auto auto;gap:8px 10px;align-items:center}
-    .res .val{min-width:28px;text-align:right}
-    .ico{width:18px;height:18px;opacity:.92;display:inline-block;vertical-align:-3px}
-
-    #buildMenu{
-      position:fixed; left:8px; z-index:12;
-      background:var(--glass); backdrop-filter:blur(var(--blur));
-      border:1px solid #ffffff19; border-radius:16px; padding:10px 12px; min-width:280px;
-      max-width:min(92vw,560px);
+    /* Ressourcen-Toast oben */
+    #hudToast{
+      position:fixed; left:10px; right:10px; top:10px; z-index:12;
+      display:flex; gap:16px; align-items:center; justify-content:flex-start;
+      padding:10px 12px; border-radius:16px; background:var(--glass);
+      backdrop-filter:blur(var(--blur)); border:1px solid #ffffff14;
+      overflow:auto; -webkit-overflow-scrolling:touch;
     }
-    #buildTitle{font-weight:800;margin:2px 0 8px 2px}
+    .ico{width:18px;height:18px;opacity:.95;vertical-align:-3px}
+    .resItem{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#0d1422;border-radius:12px;border:1px solid #ffffff10;white-space:nowrap}
+    .resVal{min-width:32px;text-align:right}
 
-    .cat{margin:8px 0;border:1px solid #ffffff10;border-radius:12px;overflow:hidden;background:#0e1622b0}
-    .cat>summary{list-style:none;cursor:pointer;padding:8px 10px;font-weight:700;display:flex;align-items:center;gap:8px}
-    .cat>summary::-webkit-details-marker{display:none}
-    .cat[open]>summary{background:#162233b0}
-    .cat .scroller{display:flex;gap:8px;padding:10px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch; scrollbar-width:thin}
-    .bcard{flex:0 0 auto; width:92px; border-radius:12px; border:1px solid #ffffff1a;background:#182233; display:flex; flex-direction:column; align-items:center;padding:8px 6px; gap:6px}
-    .bcard.active{outline:2px solid var(--accent)}
-    .bcard.disabled{opacity:.5;filter:saturate(.6)}
+    /* Kompaktes Baumenü (einzeilig) */
+    #buildMenu{
+      position:fixed; left:10px; right:10px;
+      z-index:12; background:var(--glass); backdrop-filter:blur(var(--blur));
+      border:1px solid #ffffff19; border-radius:16px; padding:8px 8px;
+      top: calc(10px + 54px + 10px); /* direkt unter HUD-Toast */
+    }
+    #bmHead{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    #bmTitle{font-weight:800}
+    #bmClose{margin-left:auto;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;background:#2a3347;border:1px solid #ffffff22}
+    #bmRow{
+      display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; padding:6px 4px 8px;
+      -webkit-overflow-scrolling:touch; scrollbar-width:thin;
+    }
+    .bcard{
+      flex:0 0 auto; width:92px; border-radius:12px; border:1px solid #ffffff1a;
+      background:#182233; display:flex; flex-direction:column; align-items:center;
+      padding:8px 6px; gap:6px
+    }
     .thumb{width:64px;height:64px;object-fit:contain;border-radius:6px;background:#0c1422;border:1px solid #ffffff10}
     .label{font-size:.78rem;line-height:1.2;text-align:center;color:#d7dfed;min-height:2.2em}
+    .bcard.active{outline:2px solid var(--accent)}
+    .bcard.disabled{opacity:.5;filter:saturate(.6)}
 
-    #buildReopen{position:fixed;left:8px;z-index:12;display:none;background:var(--glass);border:1px solid #ffffff14;border-radius:12px;padding:8px 10px}
+    /* Reopen: runder Werkzeug-Button links unten */
+    #buildOpen{
+      position:fixed; left:10px; bottom:82px; z-index:13;
+      width:44px; height:44px; border-radius:999px; border:1px solid #ffffff22;
+      background:var(--glass); backdrop-filter:blur(var(--blur)); display:none;
+      align-items:center; justify-content:center; font-size:20px;
+    }
 
-    #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
+    /* Toast unten (Inspector + Version) */
+    #toast{
+      position:fixed; left:10px; right:10px; bottom:10px; z-index:30;
+      display:flex; gap:12px; justify-content:space-between; align-items:center;
+      padding:10px 12px; border-radius:16px; background:var(--glass);
+      backdrop-filter:blur(var(--blur)); border:1px solid #ffffff14
+    }
+    #verSmall{font-size:.78rem;color:var(--muted)}
     #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px}
     #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10}
 
+    /* Vollbild */
     #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
   </style>
@@ -77,14 +103,15 @@
   <canvas id="stage"></canvas>
   <div id="backdrop" aria-hidden="true"></div>
 
+  <!-- Start -->
   <div id="startPanel" role="dialog" aria-modal="true">
     <div id="startCard">
-      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-weight:800;font-size:1.1rem">Siedler Mini</div>
         <div style="opacity:.7">Build <span id="buildDate"></span></div>
       </div>
-      <div class="row" style="margin-bottom:10px">
-        <select id="mapSelect" class="btn grow" style="background:#1b2433"> 
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <select id="mapSelect" class="btn" style="flex:1;background:#1b2433">
           <option value="./assets/maps/map-mini.json">Mini-Map (Test)</option>
           <option value="./assets/maps/map-demo.json">Demo</option>
           <option value="./assets/maps/map-test-all.json">Test-All</option>
@@ -93,148 +120,81 @@
         <button id="btnNew" class="btn primary">Neues Spiel</button>
         <button id="btnCont" class="btn">Weiterspielen</button>
       </div>
-      <div class="row" style="margin-bottom:10px">
+      <div style="display:flex;gap:10px;align-items:center">
         <button id="btnReset" class="btn danger">Reset</button>
-        <div class="grow"></div><span class="note" style="color:var(--muted)">Vollbild oben rechts.</span>
+        <div style="flex:1"></div>
+        <span style="color:#9fb0c8">Vollbild oben rechts.</span>
       </div>
-      <div class="note" style="color:var(--muted)">Editor & Live‑Malen in der Toast‑Leiste.</div>
     </div>
   </div>
 
-  <div id="hud" aria-live="polite" aria-atomic="true">
-    <div id="versionSmall">V?.?.? • <span id="versionDate"></span></div>
-    <div id="resbar" class="res">
-      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3l10 4-4 10-10-4z"/></svg> Holz</span><span class="val" id="res-wood">0</span>
-      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M4 16l4-10h8l4 10-8 5z"/></svg> Stein</span><span class="val" id="res-stone">0</span>
-      <span><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung</span><span class="val" id="res-food">0</span>
-      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew.</span><span class="val" id="res-pop">0</span>
-    </div>
+  <!-- Ressourcen-Toast -->
+  <div id="hudToast" aria-live="polite" aria-atomic="true">
+    <div class="resItem"><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3l10 4-4 10-10-4z"/></svg> Holz <span class="resVal" id="res-wood">0</span></div>
+    <div class="resItem"><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M4 16l4-10h8l4 10-8 5z"/></svg> Stein <span class="resVal" id="res-stone">0</span></div>
+    <div class="resItem"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung <span class="resVal" id="res-food">0</span></div>
+    <div class="resItem"><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew. <span class="resVal" id="res-pop">0</span></div>
   </div>
 
+  <!-- Kompaktes Baumenü -->
   <div id="buildMenu">
-    <div id="buildTitle">Baumenü <span style="opacity:.6;font-weight:600">• Live‑Malen: <kbd>Alt</kbd>=Fluss, <kbd>Shift</kbd>=Straße</span></div>
-
-    <details class="cat" open>
-      <summary>🔧 Infrastruktur</summary>
-      <div class="scroller">
-        <button class="bcard" data-tool="road" title="Straße">
-          <svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>
-          <div class="label">Straße</div>
-        </button>
-        <button class="bcard" data-tool="hut" title="Hütte">
-          <svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z" fill="#b88a5a"/></svg>
-          <div class="label">Hütte</div>
-        </button>
-      </div>
-    </details>
-
-    <details class="cat">
-      <summary>🪵 Rohstoffe</summary>
-      <div class="scroller">
-        <button class="bcard" data-tool="lumberjack_wood" title="Holzhütte">
-          <img class="thumb" src="./assets/tex/building/wood/lumberjack_wood.PNG" alt="" />
-          <div class="label">Holzhütte</div>
-        </button>
-        <button class="bcard" data-tool="stonebraker_wood" title="Steinbrecher">
-          <img class="thumb" src="./assets/tex/building/wood/stonebraker_wood.PNG" alt="" />
-          <div class="label">Steinbrecher</div>
-        </button>
-      </div>
-    </details>
-
-    <details class="cat">
-      <summary>🍞 Nahrung</summary>
-      <div class="scroller">
-        <button class="bcard" data-tool="farm_wood" title="Farm">
-          <img class="thumb" src="./assets/tex/building/wood/farm_wood.PNG" alt="" />
-          <div class="label">Farm</div>
-        </button>
-        <button class="bcard" data-tool="baeckerei_wood" title="Bäckerei">
-          <img class="thumb" src="./assets/tex/building/wood/baeckerei_wood.PNG" alt="" />
-          <div class="label">Bäckerei</div>
-        </button>
-        <button class="bcard" data-tool="fischer_wood1" title="Fischerhütte">
-          <img class="thumb" src="./assets/tex/building/wood/fischer_wood1.PNG" alt="" />
-          <div class="label">Fischer</div>
-        </button>
-        <button class="bcard" data-tool="wassermuehle_wood" title="Wassermühle">
-          <img class="thumb" src="./assets/tex/building/wood/wassermuehle_wood.PNG" alt="" />
-          <div class="label">Wassermühle</div>
-        </button>
-        <button class="bcard" data-tool="windmuehle_wood" title="Windmühle">
-          <img class="thumb" src="./assets/tex/building/wood/windmuehle_wood.PNG" alt="" />
-          <div class="label">Windmühle</div>
-        </button>
-      </div>
-    </details>
-
-    <details class="cat">
-      <summary>📦 Lagerung</summary>
-      <div class="scroller">
-        <button class="bcard" data-tool="depot_wood" title="Depot">
-          <img class="thumb" src="./assets/tex/building/wood/depot_wood.PNG" alt="" />
-          <div class="label">Depot</div>
-        </button>
-        <button class="bcard" data-tool="depot_wood_ug" title="Depot Upgrade">
-          <img class="thumb" src="./assets/tex/building/wood/depot_wood_ug.PNG" alt="" />
-          <div class="label">Depot UG</div>
-        </button>
-      </div>
-    </details>
-
-    <details class="cat">
-      <summary>🏰 HQ</summary>
-      <div class="scroller">
-        <button class="bcard" data-tool="hq_wood" title="HQ (Holz)">
-          <img class="thumb" src="./assets/tex/building/wood/hq_wood.PNG" alt="" />
-          <div class="label">HQ</div>
-        </button>
-        <button class="bcard" data-tool="hq_wood_ug1" title="HQ Upgrade I">
-          <img class="thumb" src="./assets/tex/building/wood/hq_wood_ug1.PNG" alt="" />
-          <div class="label">HQ UG1</div>
-        </button>
-      </div>
-    </details>
-
-    <details class="cat">
-      <summary>🏠 Wohnen</summary>
-      <div class="scroller">
-        <button class="bcard" data-tool="haeuser_wood1" title="Haus 1">
-          <img class="thumb" src="./assets/tex/building/wood/haeuser_wood1.PNG" alt="" />
-          <div class="label">Haus 1</div>
-        </button>
-        <button class="bcard" data-tool="haeuser_wood1_ug1" title="Haus 1 UG1">
-          <img class="thumb" src="./assets/tex/building/wood/haeuser_wood1_ug1.PNG" alt="" />
-          <div class="label">Haus 1 UG1</div>
-        </button>
-        <button class="bcard" data-tool="haeuser_wood2" title="Haus 2">
-          <img class="thumb" src="./assets/tex/building/wood/haeuser_wood2.PNG" alt="" />
-          <div class="label">Haus 2</div>
-        </button>
-      </div>
-    </details>
+    <div id="bmHead">
+      <div id="bmTitle">Baumenü</div>
+      <button id="bmClose" title="Menü schließen">✕</button>
+    </div>
+    <div id="bmRow">
+      <!-- Infrastruktur -->
+      <button class="bcard" data-tool="road" title="Straße">
+        <svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>
+        <div class="label">Straße</div>
+      </button>
+      <button class="bcard" data-tool="hut" title="Hütte">
+        <svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z" fill="#b88a5a"/></svg>
+        <div class="label">Hütte</div>
+      </button>
+      <!-- Rohstoffe -->
+      <button class="bcard" data-tool="lumberjack_wood" title="Holzhütte"><img class="thumb" src="./assets/tex/building/wood/lumberjack_wood.PNG" alt=""><div class="label">Holzhütte</div></button>
+      <button class="bcard" data-tool="stonebraker_wood" title="Steinbrecher"><img class="thumb" src="./assets/tex/building/wood/stonebraker_wood.PNG" alt=""><div class="label">Steinbrecher</div></button>
+      <!-- Nahrung -->
+      <button class="bcard" data-tool="farm_wood" title="Farm"><img class="thumb" src="./assets/tex/building/wood/farm_wood.PNG" alt=""><div class="label">Farm</div></button>
+      <button class="bcard" data-tool="baeckerei_wood" title="Bäckerei"><img class="thumb" src="./assets/tex/building/wood/baeckerei_wood.PNG" alt=""><div class="label">Bäckerei</div></button>
+      <button class="bcard" data-tool="fischer_wood1" title="Fischerhütte"><img class="thumb" src="./assets/tex/building/wood/fischer_wood1.PNG" alt=""><div class="label">Fischer</div></button>
+      <button class="bcard" data-tool="wassermuehle_wood" title="Wassermühle"><img class="thumb" src="./assets/tex/building/wood/wassermuehle_wood.PNG" alt=""><div class="label">Wassermühle</div></button>
+      <button class="bcard" data-tool="windmuehle_wood" title="Windmühle"><img class="thumb" src="./assets/tex/building/wood/windmuehle_wood.PNG" alt=""><div class="label">Windmühle</div></button>
+      <!-- Lager -->
+      <button class="bcard" data-tool="depot_wood" title="Depot"><img class="thumb" src="./assets/tex/building/wood/depot_wood.PNG" alt=""><div class="label">Depot</div></button>
+      <button class="bcard" data-tool="depot_wood_ug" title="Depot UG"><img class="thumb" src="./assets/tex/building/wood/depot_wood_ug.PNG" alt=""><div class="label">Depot UG</div></button>
+      <!-- HQ / Wohnen -->
+      <button class="bcard" data-tool="hq_wood" title="HQ"><img class="thumb" src="./assets/tex/building/wood/hq_wood.PNG" alt=""><div class="label">HQ</div></button>
+      <button class="bcard" data-tool="hq_wood_ug1" title="HQ UG1"><img class="thumb" src="./assets/tex/building/wood/hq_wood_ug1.PNG" alt=""><div class="label">HQ UG1</div></button>
+      <button class="bcard" data-tool="haeuser_wood1" title="Haus 1"><img class="thumb" src="./assets/tex/building/wood/haeuser_wood1.PNG" alt=""><div class="label">Haus 1</div></button>
+      <button class="bcard" data-tool="haeuser_wood1_ug1" title="Haus 1 UG1"><img class="thumb" src="./assets/tex/building/wood/haeuser_wood1_ug1.PNG" alt=""><div class="label">Haus 1 UG1</div></button>
+      <button class="bcard" data-tool="haeuser_wood2" title="Haus 2"><img class="thumb" src="./assets/tex/building/wood/haeuser_wood2.PNG" alt=""><div class="label">Haus 2</div></button>
+    </div>
   </div>
-  <button id="buildReopen" title="Baumenü öffnen">🧱 Bauen</button>
 
+  <!-- Reopen (Werkzeug) -->
+  <button id="buildOpen" title="Baumenü öffnen">🛠️</button>
+
+  <!-- Vollbild -->
   <button id="fsEnter" title="Vollbild">⛶</button>
   <button id="fsExit"  title="Vollbild verlassen">✕</button>
 
-  <div id="toast" role="region" aria-label="Utility-Leiste">
+  <!-- Toast unten -->
+  <div id="toast">
     <div class="left"><button id="btnMenu" class="btn">Menü</button></div>
-    <div class="right">
+    <div class="right" style="display:flex;gap:10px;align-items:center">
       <button id="btnInspector" class="btn">Inspector</button>
       <button id="btnCache" class="btn">Cache leeren</button>
-      <button id="btnEditor" class="btn">Editor</button>
-      <button id="btnPaint" class="btn">Live‑Malen</button>
-      <button id="btnUndo" class="btn">Undo</button>
-      <button id="btnRedo" class="btn">Redo</button>
+      <span id="verSmall">V?.?.? • <span id="versionDate"></span></span>
     </div>
   </div>
 
+  <!-- Inspector -->
   <div id="inspector">
-    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
       <strong>Dev‑Inspector</strong>
-      <div class="seg">
+      <div>
         <button id="btnLogMax" class="btn">Max</button>
         <button id="btnCopyPaths" class="btn">Copy Pfad‑Liste</button>
         <button id="btnExportJson" class="btn">Export JSON</button>
@@ -244,6 +204,7 @@
     <div id="log" aria-live="polite"></div>
   </div>
 
+  <!-- Asset-Loader (mini) -->
   <script>
   window.Asset = window.Asset || (function(){
     const cache = new Map(); let texturesReady=false;
@@ -262,58 +223,52 @@
   <script src="./game.js"></script>
   <script src="./boot.js"></script>
 
+  <!-- UI Logik -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
-    const log = (...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
-    BootUI = window.BootUI || {};
-    BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
+    BootUI = window.BootUI || {}; BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
 
+    // Build-Date/V
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
     $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
 
+    // Startpanel
     $('#btnNew').addEventListener('click', async ()=>{
       const map=$('#mapSelect').value;
-      if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){ hideStart(); await window.GameLoader.start(map); }
+      if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){
+        hideStart(); await window.GameLoader.start(map);
+      }
     });
     $('#btnCont').addEventListener('click', async ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); });
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    $('#btnMenu').addEventListener('click', ()=> { $('#startPanel').style.display='grid'; });
-    $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; });
-    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
-    $('#btnCloseInspector').addEventListener('click', ()=> { $('#inspector').style.display='none'; });
-
-    const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
-    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
-    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
-
+    // Backdrop Fade (ready/timeout)
     (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
       const tick=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
     })();
 
-    (function(){
-      const m=$('#buildMenu'), r=$('#buildReopen');
-      m.addEventListener('dblclick', ()=>{ m.style.display='none'; r.style.display='block'; dockReopen(); });
-      r.addEventListener('click', ()=>{ m.style.display='block'; r.style.display='none'; dockBuildMenu(); });
-      function dockReopen(){ const hud=$('#hud'); const y=hud.offsetTop + hud.offsetHeight + 8; r.style.top = y+'px'; }
-      window.addEventListener('resize', dockReopen);
-    })();
+    // Inspector/Toast
+    $('#btnMenu').addEventListener('click', ()=> { $('#startPanel').style.display='grid'; });
+    $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; });
+    $('#btnCloseInspector').addEventListener('click', ()=> { $('#inspector').style.display='none'; });
+    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
 
-    function dockBuildMenu(){
-      const hud = $('#hud');
-      const menu = $('#buildMenu');
-      const y = hud.offsetTop + hud.offsetHeight + 8;
-      menu.style.top = y+'px';
-    }
-    window.addEventListener('load', dockBuildMenu);
-    window.addEventListener('resize', dockBuildMenu);
-    const ro = new ResizeObserver(()=>dockBuildMenu()); ro.observe($('#hud'));
+    // Vollbild
+    const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
+    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
+    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
 
-    const toolButtons = Array.from(document.querySelectorAll('.bcard'));
-    function setActive(btn){ toolButtons.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
-    toolButtons.forEach(btn=>{
+    // Baumenü schließen/öffnen
+    const bm=$('#buildMenu'), openBtn=$('#buildOpen');
+    $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; openBtn.style.display='flex'; });
+    $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; openBtn.style.display='none'; });
+
+    // Tool-Bindings
+    const btns = Array.from(document.querySelectorAll('.bcard'));
+    function setActive(btn){ btns.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+    btns.forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const tool = btn.dataset.tool;
         const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[tool]);
@@ -322,19 +277,17 @@
       });
     });
 
+    // Weiterspielen
     BootUI.continueLastSnapshot = async function(){
       try{
         const raw=localStorage.getItem('lastSnapshot');
         if(!raw){ alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
         const snap=JSON.parse(raw);
         await window.GameLoader.continueFrom(snap);
-      }catch(e){
-        alert('Konnte Spielstand nicht laden.');
-        $('#startPanel').style.display='grid';
-      }
+      }catch{ alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid'; }
     };
 
-    console.log('UI ready (v1.14.1, Kategorien‑Baumenü)');
+    console.log('UI ready (index v1.15)');
   })();
   </script>
 </body>
