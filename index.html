@@ -8,32 +8,43 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.24 (SAFE MODE)
-       - KEIN console-Patching mehr (verhindert iOS/Safari-Crashs)
+       index.html • v1.25
+       - SAFE: kein console-Patch (iOS Crash-Fix)
        - Früher Logger + Error/Promise Hooks + Fetch-Trace
-       - Backdrop: sofortiges Fade + 10s Fail‑Safe + 60s Timeout
-       - Startmenü, Ressourcen-Toast, kompaktes Baumenü, Inspector, Editor-Hook
+       - Backdrop: sofortiges Fade + 10s Fail-Safe + 60s Timeout
+       - Inspector (Tabs/Filter) + Editor-Hook
+       - Build-Menü kompakt, Ressourcen-Toast
+       - NEU: Image-Diagnose (zeigt exakt, welche PNG/JPG fehlen)
+       - NEU: Defensiver GameLoader.start-Wrapper (Canvas/Context-Guards)
        ============================================================ -->
 
   <style>
-    :root{ --glass:rgba(16,23,34,.65); --text:#e8eef6; --muted:#9fb0c8; --accent:#3b82f6; --danger:#ef4444; --blur:10px; --ok:#22c55e; --warn:#eab308; --err:#ef4444; }
+    :root{
+      --glass:rgba(16,23,34,.65); --text:#e8eef6; --muted:#9fb0c8; --accent:#3b82f6;
+      --danger:#ef4444; --blur:10px; --ok:#22c55e; --warn:#eab308; --err:#ef4444;
+    }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     button{cursor:pointer}
     .btn{background:#1f2a3a;border:1px solid #ffffff1a;color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
     .btn.primary{background:#2a3b55;border-color:#3b82f650} .btn.danger{background:#3a2226;border-color:#ef444450}
 
+    /* Stage & Backdrop */
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
     #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.96;transition:opacity .6s;pointer-events:none;z-index:5}
 
+    /* Startpanel */
     #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
     #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10}
 
+    /* Ressourcen-Toast oben */
     #hudToast{position:fixed;left:10px;right:10px;top:10px;z-index:12;display:flex;gap:16px;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14;overflow:auto;-webkit-overflow-scrolling:touch}
     .ico{width:18px;height:18px;opacity:.95;vertical-align:-3px}
     .resItem{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#0d1422;border-radius:12px;border:1px solid #ffffff10;white-space:nowrap}
     .resVal{min-width:32px;text-align:right}
 
+    /* Build-Menü kompakt */
     #buildMenu{position:fixed;left:10px;right:10px;z-index:12;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff19;border-radius:16px;padding:8px;top:calc(10px + 54px + 10px)}
     #bmHead{display:flex;align-items:center;gap:8px;margin-bottom:6px} #bmTitle{font-weight:800}
     #bmClose{margin-left:auto;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;background:#2a3347;border:1px solid #ffffff22}
@@ -46,23 +57,26 @@
     .bcard.active{outline:2px solid var(--accent)} .bcard.disabled{opacity:.5;filter:saturate(.6)}
     #buildOpen{position:fixed;left:10px;bottom:82px;z-index:13;width:44px;height:44px;border-radius:999px;border:1px solid #ffffff22;background:var(--glass);backdrop-filter:blur(var(--blur));display:none;align-items:center;justify-content:center;font-size:20px}
 
+    /* Toast unten (Inspector / Cache / Menü) */
     #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #verSmall{font-size:.78rem;color:#9fb0c8}
 
-    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px;max-height:32vh;overflow:hidden}
+    /* Inspector */
+    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px;max-height:36vh;overflow:hidden}
     #inspector.max{top:10px;bottom:70px;max-height:none}
     #logToolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
     #logTabs button{padding:8px 12px;border-radius:999px;border:1px solid #ffffff22;background:#162034;color:#d7dfed}
     #logTabs button.active{outline:2px solid var(--accent)}
     #logFilter{padding:8px 10px;border-radius:10px;background:#0d1422;color:#e9eef7;border:1px solid #ffffff22}
-    #log{height:100%;max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10;white-space:pre-wrap}
+    #log{height:100%;max-height:26vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10;white-space:pre-wrap}
     .logline{margin:2px 0} .log-ok::before{content:"✅ ";color:var(--ok)} .log-warn::before{content:"⚠️ ";color:var(--warn)} .log-err::before{content:"❌ ";color:var(--err)}
     .ts{opacity:.7} .src{opacity:.8}
 
-    #editorPanel{position:fixed;inset:10px 10px 70px 10px;z-index:26;display:none;background:#111824;border:1px solid #ffffff22;border-radius:16px;padding:12px;backdrop-filter:blur(6px)}
-    #editorHead{display:flex;align-items:center;gap:8px;margin-bottom:8px} #editorTitle{font-weight:800} #editorClose{margin-left:auto}
-    #editorBody{height:100%;min-height:200px;border:1px dashed #ffffff22;border-radius:12px;padding:10px;overflow:auto}
-    #editorHint{color:#9fb0c8;margin-bottom:6px} pre.code{background:#0b1018;border:1px solid #ffffff12;border-radius:10px;padding:10px;overflow:auto}
+    /* Inspector: Asset-Zusammenfassung */
+    #assetsPanel{margin-top:8px;display:flex;gap:10px;flex-wrap:wrap}
+    .tag{font-size:.78rem;background:#0d1422;border:1px solid #ffffff20;color:#d7dfed;border-radius:999px;padding:4px 8px;white-space:nowrap}
+    .tag.err{border-color:#ef4444aa;color:#ffb4b4;background:#2a1418}
+    .tag.ok{border-color:#22c55e88;color:#c9f7d5;background:#0f2218}
   </style>
 
   <!-- ===== Früher Logger (ohne console-Patch) + Error/Promise Hooks + Fetch‑Trace ===== -->
@@ -84,21 +98,66 @@
     BootUI.edOK=(...a)=>push('editor','ok',a);
     BootUI.edWarn=(...a)=>push('editor','warn',a);
     BootUI.edErr=(...a)=>push('editor','err',a);
-    BootUI.dbg=(...a)=>BootUI.logOK(...a);
 
+    // Sammellisten für Assets
+    BootUI.assets = { ok:[], fail:[] };
+
+    // Globale Fehler
     window.addEventListener('error', e=>BootUI.logErr('window.onerror', e.message||'Error', (e.filename||'')+':'+(e.lineno||'')+':'+(e.colno||'')));
     window.addEventListener('unhandledrejection', e=>BootUI.logErr('unhandledrejection', (e.reason && e.reason.message)||String(e.reason)));
 
+    // Fetch-Trace
     const _fetch = window.fetch.bind(window);
     window.fetch = async function(input, init){
       const url = (typeof input==='string')?input:(input && input.url)||'';
       BootUI.logOK('fetch', url||'(req)');
-      try{ const res = await _fetch(input, init); BootUI[res.ok?'logOK':'logWarn']('fetch-res', res.status, res.statusText, url); return res; }
-      catch(err){ BootUI.logErr('fetch-fail', (err && err.message)||String(err), url); throw err; }
+      try{ const res = await _fetch(input, init);
+           BootUI[res.ok?'logOK':'logWarn']('fetch-res', res.status, res.statusText, url);
+           return res;
+      }catch(err){ BootUI.logErr('fetch-fail', (err && err.message)||String(err), url); throw err; }
     };
 
     BootUI.logOK('INDEX early boot');
     document.addEventListener('DOMContentLoaded', ()=>BootUI.logOK('DOM ready'));
+  })();
+  </script>
+
+  <!-- ===== Image-Diagnose: loggt jedes img.src (OK/FAIL) – deckt auch game.js ab ===== -->
+  <script>
+  (function(){
+    const BootUI = window.BootUI;
+    const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
+    if(desc && desc.set){
+      const origSet = desc.set, origGet = desc.get;
+      Object.defineProperty(HTMLImageElement.prototype,'src',{
+        configurable:true,
+        get: function(){ return origGet.call(this); },
+        set: function(v){
+          try{
+            const url = String(v);
+            const onLoad = ()=>{
+              this.removeEventListener('load', onLoad);
+              this.removeEventListener('error', onError);
+              const w=this.naturalWidth||0,h=this.naturalHeight||0;
+              BootUI.assets.ok.push(url);
+              BootUI.logOK('IMG ok', url, `${w}x${h}`);
+              window.__renderAssets && window.__renderAssets();
+            };
+            const onError = ()=>{
+              this.removeEventListener('load', onLoad);
+              this.removeEventListener('error', onError);
+              BootUI.assets.fail.push(url);
+              BootUI.logErr('IMG fail', url);
+              window.__renderAssets && window.__renderAssets();
+            };
+            this.addEventListener('load', onLoad, {once:true});
+            this.addEventListener('error', onError, {once:true});
+            BootUI.logOK('IMG set', url);
+          }catch(_){}
+          return origSet.call(this, v);
+        }
+      });
+    }
   })();
   </script>
 </head>
@@ -186,6 +245,7 @@
       </div>
     </div>
     <div id="log"></div>
+    <div id="assetsPanel"></div>
   </div>
 
   <!-- Editor‑Hook -->
@@ -221,19 +281,22 @@
   })();
   </script>
 
-  <!-- Spielcode (mit Lade-Logging über onload/onerror) -->
-  <script defer src="./game.js" onload="window.BootUI&&BootUI.logOK('script load ok','game.js')" onerror="window.BootUI&&BootUI.logErr('script load FAIL','game.js')"></script>
-  <script defer src="./boot.js" onload="window.BootUI&&BootUI.logOK('script load ok','boot.js')" onerror="window.BootUI&&BootUI.logErr('script load FAIL','boot.js')"></script>
+  <!-- Spielcode: boot.js ohne onload-Log (vermeidet Konflikt), game.js geloggt -->
+  <script defer src="./game.js"
+    onload="try{window.BootUI&&BootUI.logOK&&BootUI.logOK('script load ok','game.js')}catch(e){}"
+    onerror="try{window.BootUI&&BootUI.logErr&&BootUI.logErr('script load FAIL','game.js')}catch(e){}"></script>
 
-  <!-- UI, Inspector & Hooks -->
+  <script defer src="./boot.js"></script>
+
+  <!-- UI, Inspector, Build-Menü, Defensiv-Wrapper -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
     const $$ = (s,root=document)=>Array.from(root.querySelectorAll(s));
     const BootUI = window.BootUI;
 
-    // Inspector-Render
-    const logBox = $('#log');
+    /* Inspector-Render */
+    const logBox = $('#log'), assetsPanel=$('#assetsPanel');
     function tsStr(d){ return d.toTimeString().slice(0,8); }
     function lineHtml(e){ const css = e.lvl==='err'?'log-err':(e.lvl==='warn'?'log-warn':'log-ok'); return `<div class="logline ${css}"><span class="ts">[${tsStr(e.ts)}]</span> <span class="src">(${e.src})</span> ${e.text}</div>`; }
     window.__renderLogNow = function(){
@@ -242,23 +305,30 @@
       const arr = (BootUI.__logs?.[tab]) || [];
       logBox.innerHTML = arr.filter(e=> filter==='all' || e.lvl===filter).map(lineHtml).join('');
       logBox.scrollTop = logBox.scrollHeight;
+      window.__renderAssets && window.__renderAssets();
+    };
+    window.__renderAssets = function(){
+      const ok=BootUI.assets.ok, fail=BootUI.assets.fail;
+      const okTags = ok.slice(-6).map(u=>`<span class="tag ok">OK: ${u.split('/').pop()}</span>`).join(' ');
+      const failTags = fail.map(u=>`<span class="tag err">FEHLT: ${u}</span>`).join(' ');
+      assetsPanel.innerHTML = (fail.length?failTags:'') + (ok.length?(' ' + okTags):'');
     };
 
-    // Version
+    /* Build-Datum */
     const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
     $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
 
-    // Startpanel helpers
+    /* Startpanel helpers */
     const start = $('#startPanel'); function hideStart(){ start.style.display='none'; } function showStart(){ start.style.display='grid'; }
 
-    // Backdrop Fade
+    /* Backdrop fade */
     const bd = $('#backdrop');
     function backdropFadeNow(){ if(bd.style.display==='none') return; bd.style.opacity='0'; setTimeout(()=>{ bd.style.display='none'; BootUI.logOK('Backdrop hidden'); }, 700); }
     setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop fail-safe 10s → fade'); backdropFadeNow(); } }, 10000);
     setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop TIMEOUT 60s → fade'); backdropFadeNow(); } }, 60000);
     (function tick(){ if(window.Asset?.areTexturesReady?.()){ BootUI.logOK('Textures READY → fade'); backdropFadeNow(); } else { requestAnimationFrame(tick); } })();
 
-    // Buttons
+    /* Buttons */
     $('#btnNew').addEventListener('click', async ()=>{
       const map = $('#mapSelect').value || './assets/maps/map-mini.json';
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){
@@ -278,7 +348,7 @@
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     $('#btnMenu').addEventListener('click', showStart);
 
-    // Inspector
+    /* Inspector UI */
     document.body.dataset.logTab='game';
     $('#btnInspector').addEventListener('click', ()=>{ $('#inspector').style.display='block'; window.__renderLogNow(); });
     $('#btnCloseInspector').addEventListener('click', ()=>{ $('#inspector').style.display='none'; });
@@ -287,7 +357,7 @@
     $('#tabEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); window.__renderLogNow(); });
     $('#logFilter').addEventListener('change', window.__renderLogNow);
 
-    // Cache leeren
+    /* Cache leeren */
     async function clearCachesAndReload(){
       BootUI.logWarn('Cache clear requested');
       try{ localStorage.clear(); }catch{} try{ sessionStorage.clear(); }catch{}
@@ -297,7 +367,7 @@
     }
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache wirklich leeren?')) clearCachesAndReload(); });
 
-    // Baumenü
+    /* Baumenü (Kategorien + Row) */
     const bm=$('#buildMenu'), row=$('#bmRow');
     function svgThumb(kind){ if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64"/><rect x="0" y="28" width="64" height="8"/></svg>'; if(kind==='hut') return '<svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z"/></svg>'; return '<div class="thumb"></div>'; }
     const BUILD_CARDS=[
@@ -338,14 +408,30 @@
     $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; $('#buildOpen').style.display='flex'; });
     $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; $('#buildOpen').style.display='none'; });
 
-    // Editor-Hook
+    /* Editor-Hook */
     const Editor=(window.Editor=window.Editor||{}), $panel=$('#editorPanel');
     Editor.open = ()=>{ $panel.style.display='block'; BootUI.edOK('Editor geöffnet'); window.__renderLogNow(); };
     Editor.close= ()=>{ $panel.style.display='none';  BootUI.edOK('Editor geschlossen'); window.__renderLogNow(); };
     Editor.toggle=()=>{ ($panel.style.display==='block')?Editor.close():Editor.open(); };
     $('#btnEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); $('#inspector').style.display='block'; window.__renderLogNow(); Editor.open(); });
 
-    BootUI.logOK('UI ready (index v1.24)'); window.__renderLogNow();
+    /* Defensiver Wrapper: Canvas/Context prüfen & präzise Fehler loggen */
+    (function wrapStart(){
+      if(!window.GameLoader || typeof window.GameLoader.start!=='function'){ return; }
+      const _start = window.GameLoader.start.bind(window.GameLoader);
+      window.GameLoader.start = async function(mapUrl){
+        const cvs = document.getElementById('stage');
+        if(!cvs){ BootUI.logErr('Canvas fehlt (#stage)'); throw new Error('Canvas #stage nicht gefunden'); }
+        if(typeof cvs.getContext!=='function'){ BootUI.logErr('getContext fehlt'); throw new Error('Canvas.getContext nicht verfügbar'); }
+        const ctx = cvs.getContext('2d');
+        if(!ctx){ BootUI.logErr('2D-Context null'); throw new Error('2D-Context null'); }
+        BootUI.logOK('GameLoader.start', mapUrl);
+        try{ const r = await _start(mapUrl); return r; }
+        catch(e){ BootUI.logErr('GameLoader.start FAIL', (e&&e.message)||String(e)); throw e; }
+      };
+    })();
+
+    BootUI.logOK('UI ready (index v1.25)'); window.__renderLogNow();
   })();
   </script>
 </body>
