@@ -16,7 +16,6 @@
     "terrain_r0_c13": { "x": 832, "y": 0, "w": 64, "h": 64 },
     "terrain_r0_c14": { "x": 896, "y": 0, "w": 64, "h": 64 },
     "terrain_r0_c15": { "x": 960, "y": 0, "w": 64, "h": 64 }
-    // … alle weiteren Tiles bleiben identisch …
   },
   "animations": {},
   "meta": {
