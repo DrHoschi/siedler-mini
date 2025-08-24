@@ -6,59 +6,43 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" content="#12161c" />
-
-  <!-- =======================================================================
-       index.html • v1.9
-       - Auto‑Tiler Mapping für dein Atlas komplett ausgefüllt
-       - DPR/HiDPI‑Fix, Live‑Malen, Undo/Redo, Editor‑Dock, Atlas‑Palette
-       ======================================================================= -->
-
+  <!-- index.html • v1.10 • Road‑Atlas integriert (.atlas + .png) -->
   <style>
-    :root{
-      --bg:#0f1318;--panel:#1a2230;--panel-2:#101722;--glass:rgba(16,23,34,.65);
-      --text:#e8eef6;--muted:#96a2b6;--accent:#3b82f6;--ok:#22c55e;--warn:#eab308;--danger:#ef4444;
-      --tile:32px;--radius:14px;--radius-sm:10px;--blur:10px;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
-    button{cursor:pointer}
+    :root{--bg:#0f1318;--panel:#1a2230;--panel-2:#101722;--glass:rgba(16,23,34,.65);
+      --text:#e8eef6;--muted:#96a2b6;--accent:#3b82f6;--ok:#22c55e;--warn:#eab308;--danger:#ef4444;--radius:14px;--blur:10px}
+    *{box-sizing:border-box}html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    button{cursor:pointer}.btn{background:#1f2a3a;border:1px solid #ffffff14;color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600}
+    .btn.primary{background:#2a3b55;border-color:#3b82f650}.btn.danger{background:#3a2226;border-color:#ef444450}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.grow{flex:1 1 auto}
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
-    #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.9;transition:opacity .5s ease;pointer-events:none;z-index:5;}
-    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.55));backdrop-filter: blur(6px);}
-    #startCard{width:min(680px,92vw);padding:20px 20px 16px;border-radius:18px;background:rgba(18,22,28,.8);box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.06)}
-    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.grow{flex:1 1 auto}
-    .btn{background:#1f2a3a;border:1px solid rgba(255,255,255,.08);color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;letter-spacing:.2px;display:inline-flex;gap:8px;align-items:center}
-    .btn:active{transform:translateY(1px)}.btn.primary{background:#2a3b55;border-color:#3b82f650}.btn.danger{background:#3a2226;border-color:#ef444450}
-    .sel{appearance:none;background:#1f2a3a;color:#e9eef7;border:1px solid rgba(255,255,255,.08);padding:10px;border-radius:12px;min-width:180px}
-    .note{color:var(--muted);font-size:.9rem;margin-top:6px}
-    #hud{position:fixed;left:8px;top:8px;z-index:12;min-width:280px;padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)}
+    #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.9;transition:opacity .5s;pointer-events:none;z-index:5}
+    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
+    #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10}
+    #hud{position:fixed;left:8px;top:8px;z-index:12;min-width:280px;padding:10px;border-radius:16px;background:rgba(16,23,34,.65);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #versionSmall{font-weight:800;font-size:.9rem;opacity:.85;margin-bottom:8px}
-    #resbar{display:flex;gap:18px;align-items:center;background:rgba(12,16,22,.5);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,.06)}
+    #resbar{display:flex;gap:18px;align-items:center;background:#0c101a80;border-radius:12px;padding:10px;border:1px solid #ffffff10}
     .res{display:grid;grid-template-columns:auto auto;gap:8px 10px;align-items:center}.res .val{min-width:28px;text-align:right}
     .ico{width:18px;height:18px;opacity:.9;display:inline-block;vertical-align:-3px}
-    #buildMenu{position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:12;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px;min-width:260px}
-    #buildTools{display:flex;gap:10px;flex-wrap:wrap}.tool{padding:10px 12px;border-radius:12px;background:#1f2a3a;border:1px solid rgba(255,255,255,.08);min-width:44px;text-align:center}
-    .tool.active{outline:2px solid var(--accent)}
-    #buildReopen{position:fixed;left:8px;top:88px;z-index:12;display:none;background:var(--glass);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(var(--blur));border-radius:12px;padding:8px 10px}
-    #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)}
-    #toast .left,#toast .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px 12px 10px}
-    #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,.06)}
-    .logline{white-space:pre}
-    #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
+    #buildMenu{position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:12;background:rgba(16,23,34,.65);backdrop-filter:blur(var(--blur));border:1px solid #ffffff19;border-radius:16px;padding:12px 14px}
+    #buildTools{display:flex;gap:10px;flex-wrap:wrap}.tool{padding:10px 12px;border-radius:12px;background:#1f2a3a;border:1px solid #ffffff14}
+    #buildReopen{position:fixed;left:8px;top:88px;z-index:12;display:none;background:rgba(16,23,34,.65);border:1px solid #ffffff14;border-radius:12px;padding:8px 10px}
+    #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:rgba(16,23,34,.65);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
+    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px}
+    #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10}
+    #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:rgba(16,23,34,.65);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
-    #editorDock{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);max-width:100vw;z-index:40;display:none;background:var(--panel);border-left:1px solid rgba(255,255,255,.1);box-shadow:-12px 0 30px rgba(0,0,0,.25)}
-    #editorHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+    #editorDock{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);z-index:40;display:none;background:#1a2230;border-left:1px solid #ffffff1a;box-shadow:-12px 0 30px #0006}
+    #editorHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #ffffff14}
     #editorBody{padding:12px 14px;display:grid;gap:12px;overflow:auto;height:calc(100% - 52px)}
     .grid{display:grid;gap:10px}.cols2{grid-template-columns:1fr 1fr}
-    .field label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
-    input[type="number"],select{width:100%;padding:8px 10px;border-radius:10px;background:#131a25;border:1px solid rgba(255,255,255,.08);color:var(--text)}
+    .field label{display:block;font-size:.85rem;color:#96a2b6;margin-bottom:6px}
+    input[type="number"],select{width:100%;padding:8px 10px;border-radius:10px;background:#131a25;border:1px solid #ffffff14;color:#e8eef6}
     .seg{display:flex;flex-wrap:wrap;gap:8px}.seg .btn{padding:8px 10px}
     #tilesPreview{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-    #tilesPreview button{aspect-ratio:1/1;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#111822;overflow:hidden}
+    #tilesPreview button{aspect-ratio:1/1;border:1px solid #ffffff19;border-radius:10px;background:#111822;overflow:hidden}
     .tileThumb{width:100%;height:100%;background-repeat:no-repeat;background-origin:content-box}
-    #paintHUD{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(6px);padding:6px 10px;border-radius:12px;z-index:50;display:none;font-size:.9rem}
-    @media (max-width: 880px){#editorDock{left:0;width:100vw}}
+    #paintHUD{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#0008;border:1px solid #ffffff33;backdrop-filter:blur(6px);padding:6px 10px;border-radius:12px;z-index:50;display:none;font-size:.9rem}
+    @media (max-width:880px){#editorDock{left:0;width:100vw}}
   </style>
 </head>
 <body>
@@ -66,14 +50,15 @@
   <canvas id="stage"></canvas>
   <div id="backdrop" aria-hidden="true"></div>
 
+  <!-- Startpanel -->
   <div id="startPanel" role="dialog" aria-modal="true">
     <div id="startCard">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
-        <div style="font-weight:800;font-size:1.1rem;letter-spacing:.3px">Siedler Mini</div>
+        <div style="font-weight:800;font-size:1.1rem">Siedler Mini</div>
         <div style="opacity:.7">Build <span id="buildDate"></span></div>
       </div>
       <div class="row" style="margin-bottom:10px">
-        <select id="mapSelect" class="sel grow" title="Map auswählen">
+        <select id="mapSelect" class="sel grow">
           <option value="./assets/maps/map-mini.json">Mini-Map (Test)</option>
           <option value="./assets/maps/map-demo.json">Demo</option>
           <option value="./assets/maps/map-test-all.json">Test-All</option>
@@ -86,11 +71,12 @@
         <button id="btnReset" class="btn danger">Reset</button>
         <div class="grow"></div><span class="note">Vollbild über das Symbol oben rechts.</span>
       </div>
-      <div class="note">Tipp: <b>Level‑Editor</b> & <b>Live‑Malen</b> findest du unten in der Toast‑Leiste.</div>
+      <div class="note">Level‑Editor & Live‑Malen findest du unten in der Toast‑Leiste.</div>
     </div>
   </div>
 
-  <div id="hud" aria-live="polite" aria-atomic="true">
+  <!-- HUD -->
+  <div id="hud">
     <div id="versionSmall">V?.?.? • <span id="versionDate"></span></div>
     <div id="resbar" class="res">
       <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M6 20h12L12 4z"/></svg> Holz</span><span class="val" id="res-wood">0</span>
@@ -100,6 +86,7 @@
     </div>
   </div>
 
+  <!-- Baumenü -->
   <div id="buildMenu">
     <div style="font-weight:700;margin-bottom:6px">Baumenü</div>
     <div id="buildTools">
@@ -111,10 +98,11 @@
   </div>
   <button id="buildReopen" title="Baumenü öffnen">🧱 Bauen</button>
 
-  <button id="fsEnter" title="Vollbild"><span>⛶</span></button>
-  <button id="fsExit"  title="Vollbild verlassen"><span>✕</span></button>
+  <!-- FS + Toast -->
+  <button id="fsEnter" title="Vollbild">⛶</button>
+  <button id="fsExit" title="Vollbild verlassen">✕</button>
 
-  <div id="toast" role="region" aria-label="Utility-Leiste">
+  <div id="toast" role="region">
     <div class="left"><button id="btnMenu" class="btn">Menü</button></div>
     <div class="right">
       <button id="btnInspector" class="btn">Inspector</button>
@@ -126,6 +114,7 @@
     </div>
   </div>
 
+  <!-- Inspector -->
   <div id="inspector">
     <div class="row" style="justify-content:space-between;margin-bottom:8px">
       <strong>Dev‑Inspector</strong>
@@ -139,6 +128,7 @@
     <div id="log" aria-live="polite"></div>
   </div>
 
+  <!-- Editor -->
   <div id="editorDock" role="dialog" aria-modal="true" aria-label="Level-Editor">
     <div id="editorHead">
       <div style="font-weight:800">Level‑Editor</div>
@@ -152,8 +142,9 @@
         <div class="field">
           <label>Tileset</label>
           <select id="edTileset">
-            <option value="./assets/tiles/tileset.terrain.json">terrain.json (empfohlen)</option>
+            <option value="./assets/tiles/tileset.terrain.json">terrain.json (Grid)</option>
             <option value="./assets/tiles/tileset.terrain.png">terrain.png (Grid)</option>
+            <option value="./assets/tex/road/road_atlas.atlas">Road‑Atlas (empfohlen)</option>
           </select>
         </div>
       </div>
@@ -178,7 +169,7 @@
         <div class="field">
           <label>Tile‑Auswahl (aus Atlas)</label>
           <div id="tilesPreview"></div>
-          <div class="note">Die Kacheln werden aus dem Atlas‑JSON gelesen (Frames). Klick = Index wählen.</div>
+          <div class="note">Bei .atlas werden die **benannten** Regionen geladen (straights, curves, T, cross).</div>
         </div>
         <div class="field">
           <label>Datei</label>
@@ -193,22 +184,19 @@
     </div>
   </div>
 
-  <div id="paintHUD">Live‑Malen aktiv • Brush:<span id="hudBrush">paint</span> • Size:<span id="hudSize">1</span> • Tile:<span id="hudTile">0</span></div>
+  <div id="paintHUD">Live‑Malen aktiv • Size:<span id="hudSize">1</span> • Tile:<span id="hudTile">0</span></div>
 
-  <!-- ====================== SCRIPT-MODULE ================================== -->
+  <!-- Grundmodule -->
   <script>
-  // asset.js – minimal
+  // asset.js – minimal Loader
   window.Asset = window.Asset || (function(){
-    const cache = new Map(); let texturesReady = false;
+    const cache = new Map(); let texturesReady=false;
     async function loadImage(key, url){
-      if (cache.has(url)) return cache.get(url);
-      return new Promise((resolve,reject)=>{
-        const img = new Image(); img.crossOrigin="anonymous";
-        img.onload=()=>{ cache.set(url,img); resolve(img); };
-        img.onerror=()=>reject(new Error('IMG '+url)); img.src = url;
-      });
+      if(cache.has(url)) return cache.get(url);
+      return new Promise((res,rej)=>{ const img=new Image(); img.crossOrigin="anonymous";
+        img.onload=()=>{cache.set(url,img); res(img)}; img.onerror=()=>rej(new Error('IMG '+url)); img.src=url; });
     }
-    return { loadImage, markTexturesReady(v){ texturesReady=!!v; }, areTexturesReady(){ return texturesReady; }, _cache: cache };
+    return { loadImage, markTexturesReady(v){texturesReady=!!v;}, areTexturesReady(){return texturesReady;}, _cache:cache };
   })();
   </script>
 
@@ -217,305 +205,267 @@
 
   <script>
   (function(){
-    const $ = (s)=>document.querySelector(s);
-    const log = (...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
-    const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+    const $=s=>document.querySelector(s);
+    const log=(...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
 
-    // Version
+    // Version/Build
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
-    $('#buildDate').textContent = `${y}${m}${d}`; $('#versionDate').textContent = `${y}${m}${d}`;
-    BootUI = window.BootUI || {}; BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
+    $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
+    BootUI=window.BootUI||{}; BootUI.dbg=BootUI.dbg||function(){console.log('[DBG]',...arguments)};
 
     // Startpanel
     $('#btnNew').addEventListener('click', async ()=>{
-      const map = $('#mapSelect').value;
-      if (confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')) { hideStart(); await window.GameLoader.start(map); }
+      const map=$('#mapSelect').value;
+      if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){ hideStart(); await window.GameLoader.start(map); }
     });
     $('#btnCont').addEventListener('click', async ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); });
-    $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände zurücksetzen (Cache leeren)?')){ try{ localStorage.clear(); log('[Reset] OK'); }catch(e){} }});
+    $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    // Build-Menü toggle
-    (function(){ const m=$('#buildMenu'), r=$('#buildReopen'); m.addEventListener('dblclick', ()=>{ m.style.display='none'; r.style.display='block'; }); r.addEventListener('click', ()=>{ m.style.display='block'; r.style.display='none'; }); })();
+    // Build-Menü show/hide
+    (function(){ const m=$('#buildMenu'), r=$('#buildReopen'); m.addEventListener('dblclick', ()=>{m.style.display='none';r.style.display='block'}); r.addEventListener('click', ()=>{m.style.display='block';r.style.display='none'}); })();
 
     // Vollbild
     const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
-    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, goFS=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; goFS?.call(el)?.then(()=>{ fsEnter.style.display='none'; fsExit.style.display='inline-block'; }); });
-    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{ fsExit.style.display='none'; fsEnter.style.display='inline-block'; }); });
+    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
+    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
 
     // Toast
-    $('#btnMenu').addEventListener('click', ()=>{ $('#startPanel').style.display='grid'; });
-    $('#btnInspector').addEventListener('click', ()=>{ $('#inspector').style.display='block'; });
-    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ try{ localStorage.clear(); location.reload(); }catch(e){} } });
+    $('#btnMenu').addEventListener('click', ()=> $('#startPanel').style.display='grid');
+    $('#btnInspector').addEventListener('click', ()=> $('#inspector').style.display='block');
+    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
     $('#btnCloseInspector').addEventListener('click', ()=> $('#inspector').style.display='none');
 
-    // Backdrop Fade
-    (function waitTextures(){
-      const bd = $('#backdrop');
-      let timeout = setTimeout(()=>{ BootUI.dbg('Textures TIMEOUT → fade'); bd.style.opacity='0'; setTimeout(()=>bd.style.display='none', 1200); }, 60000);
-      const tick = ()=> { if (window.Asset?.areTexturesReady?.()) { BootUI.dbg('Textures READY -> fade'); clearTimeout(timeout); bd.style.opacity='0'; setTimeout(()=>{ bd.style.display='none'; BootUI.dbg('Backdrop hidden'); }, 3000);} else requestAnimationFrame(tick); };
-      tick();
+    // Backdrop Fade auf Texturen
+    (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
+      const tick=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
     })();
 
-    // Inspector Log
-    BootUI.dbg = function(){ const t=new Date(), stamp=`[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
-      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
-      const el=document.createElement('div'); el.className='logline'; el.textContent=`${stamp} ${line}`; const host=$('#log'); host.appendChild(el); host.scrollTop=host.scrollHeight; console.log(stamp, ...arguments); };
+    // Inspector log
+    BootUI.dbg=function(){ const t=new Date(), stamp=`[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
+      const line=Array.from(arguments).map(v=>typeof v==='string'?v:JSON.stringify(v)).join(' ');
+      const el=document.createElement('div'); el.className='logline'; el.textContent=`${stamp} ${line}`; const host=$('#log'); host.appendChild(el); host.scrollTop=host.scrollHeight; console.log(stamp,...arguments); };
 
-    BootUI.continueLastSnapshot = async function(){ try{ const raw=localStorage.getItem('lastSnapshot'); if(!raw){ alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; } const snap=JSON.parse(raw); await window.GameLoader.continueFrom(snap);}catch(e){ alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid'; }};
+    BootUI.continueLastSnapshot=async function(){ try{const raw=localStorage.getItem('lastSnapshot'); if(!raw){alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return;} const snap=JSON.parse(raw); await window.GameLoader.continueFrom(snap);}catch(e){alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid';}};
 
-    // ================== Editor/Palette (Atlas-Parser) ======================
-    const ed = { open:false, brush:'paint', size:1, tile:0, width:32, height:18, tileSize:32, tileset:'./assets/tiles/tileset.terrain.json', tiles:new Uint16Array(32*18), builds:[], frames:[], atlasImage:null, atlasMeta:null };
-    $('#btnEditor').addEventListener('click', ()=>openEditor(true));
-    $('#btnEditorClose').addEventListener('click', ()=>openEditor(false));
-    $('#edWidth').addEventListener('change', e=> ed.width = parseInt(e.target.value,10)||32);
-    $('#edHeight').addEventListener('change', e=> ed.height = parseInt(e.target.value,10)||18);
-    $('#edTileSize').addEventListener('change', e=> ed.tileSize = parseInt(e.target.value,10)||32);
-    $('#edTileset').addEventListener('change', async (e)=>{ ed.tileset = e.target.value; await buildTilePreviewFromTileset(); });
-    document.querySelectorAll('[data-ed="brush"]').forEach(b=> b.addEventListener('click', ()=>{ ed.brush = b.dataset.val; updatePaintHUD(); }));
-    document.querySelectorAll('[data-ed="size"]').forEach(b=> b.addEventListener('click', ()=>{ ed.size = parseInt(b.dataset.val,10)||1; updatePaintHUD(); }));
+    // ================== Editor/Palette ==================
+    const ed={open:false,size:1,tile:0,width:32,height:18,tileSize:32,tileset:'./assets/tiles/tileset.terrain.json',tiles:new Uint16Array(32*18),frames:[],atlasImage:null,atlasMeta:null,nameToIndex:{}};
+    $('#btnEditor').addEventListener('click',()=>openEditor(true));
+    $('#btnEditorClose').addEventListener('click',()=>openEditor(false));
+    $('#edWidth').addEventListener('change',e=>ed.width=parseInt(e.target.value,10)||32);
+    $('#edHeight').addEventListener('change',e=>ed.height=parseInt(e.target.value,10)||18);
+    $('#edTileSize').addEventListener('change',e=>ed.tileSize=parseInt(e.target.value,10)||32);
+    $('#edTileset').addEventListener('change',async e=>{ ed.tileset=e.target.value; await buildTilePreviewFromTileset(); });
 
-    $('#btnEdNew').addEventListener('click', ()=>{ if (!confirm('Neues leeres Level erzeugen?')) return; ed.tiles = new Uint16Array(ed.width*ed.height); ed.builds = []; BootUI.dbg('Editor: new map', {w:ed.width,h:ed.height,tile:ed.tileSize}); });
-    $('#btnEdExport').addEventListener('click', ()=>{ const data = editorToMap(); const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'map-custom.json'; a.click(); URL.revokeObjectURL(a.href); BootUI.dbg('Editor: export map-custom.json'); });
-    $('#fileImport').addEventListener('change', async (e)=>{ const file=e.target.files?.[0]; if(!file) return; try{ const txt=await file.text(); const j=JSON.parse(txt); applyMapToEditor(j); BootUI.dbg('Editor: import OK', file.name); }catch(err){ alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL', String(err?.message||err)); } e.target.value=''; });
-    $('#btnEditorTest').addEventListener('click', async ()=>{ const data=editorToMap(); const blob=new Blob([JSON.stringify(data)],{type:'application/json'}); const url=URL.createObjectURL(blob); openEditor(false); $('#startPanel').style.display='none'; await window.GameLoader.start(url); setTimeout(()=> URL.revokeObjectURL(url), 10000); BootUI.dbg('Editor: test run'); });
+    document.querySelectorAll('[data-ed="brush"]').forEach(b=>b.addEventListener('click',()=>{ paint.mode=b.dataset.val; updatePaintHUD(); }));
+    document.querySelectorAll('[data-ed="size"]').forEach(b=>b.addEventListener('click',()=>{ paint.size=parseInt(b.dataset.val,10)||1; updatePaintHUD(); }));
+
+    $('#btnEdNew').addEventListener('click',()=>{ if(!confirm('Neues leeres Level erzeugen?'))return; ed.tiles=new Uint16Array(ed.width*ed.height); BootUI.dbg('Editor: new map',{w:ed.width,h:ed.height,tile:ed.tileSize}); });
+    $('#btnEdExport').addEventListener('click',()=>{ const data=editorToMap(); const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='map-custom.json'; a.click(); URL.revokeObjectURL(a.href); BootUI.dbg('Editor: export map-custom.json'); });
+    $('#fileImport').addEventListener('change',async e=>{ const f=e.target.files?.[0]; if(!f)return; try{const txt=await f.text(); const j=JSON.parse(txt); applyMapToEditor(j); BootUI.dbg('Editor: import OK',f.name);}catch(err){alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL',String(err?.message||err));} e.target.value=''; });
+    $('#btnEditorTest').addEventListener('click', async ()=>{ const data=editorToMap(); const blob=new Blob([JSON.stringify(data)],{type:'application/json'}); const url=URL.createObjectURL(blob); openEditor(false); $('#startPanel').style.display='none'; await window.GameLoader.start(url); setTimeout(()=>URL.revokeObjectURL(url),10000); BootUI.dbg('Editor: test run'); });
 
     (async function initTiles(){ await buildTilePreviewFromTileset(); })();
 
     async function buildTilePreviewFromTileset(){
-      const host = $('#tilesPreview'); host.innerHTML='';
-      ed.frames=[]; ed.atlasImage=null; ed.atlasMeta=null;
+      const host=$('#tilesPreview'); host.innerHTML=''; ed.frames=[]; ed.nameToIndex={}; ed.atlasImage=null; ed.atlasMeta=null;
+      const url=ed.tileset;
 
-      const url = ed.tileset;
-      if (url.endsWith('.json')){
-        const res = await fetch(url); const js = await res.json();
-        const base = new URL(url, location.href);
-        const imgUrl = new URL(js.meta?.image || 'tileset.terrain.png', base).toString();
-        ed.atlasMeta = {w: js.meta?.size?.w||1024, h: js.meta?.size?.h||1024};
-        ed.atlasImage = imgUrl;
-
-        const frames = Object.entries(js.frames||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([key,f])=>({key, x:f.x|0, y:f.y|0, w:f.w|0, h:f.h|0}));
-        ed.frames = frames;
-
-        for (let i=0;i<frames.length;i++){
-          const f = frames[i];
-          const btn = document.createElement('button'); btn.title = `${i} • ${f.key}`;
-          const tile = document.createElement('div'); tile.className='tileThumb';
-          tile.style.backgroundImage = `url("${imgUrl}")`;
-          tile.style.backgroundPosition = `-${f.x}px -${f.y}px`;
-          tile.style.backgroundSize = `${ed.atlasMeta.w}px ${ed.atlasMeta.h}px`;
-          btn.appendChild(tile);
-          btn.addEventListener('click', ()=>{ ed.tile=i; paint.tile=i; markSelected(i); updatePaintHUD(); });
-          host.appendChild(btn);
-        }
-        markSelected(0);
-        BootUI.dbg('Palette: JSON‑Atlas geladen', {frames:frames.length,img:imgUrl});
-      } else {
-        const img = await Asset.loadImage('atlasPNG', url);
-        const TILE = 64, cols = Math.floor(img.width/TILE), rows = Math.floor(img.height/TILE);
+      // ---- 1) libGDX .atlas -----------------------
+      if(url.endsWith('.atlas')){
+        const base=new URL(url,location.href);
+        const atlasTxt=await (await fetch(url)).text();
+        const {imageUrl,frames}=parseLibGDXAtlas(atlasTxt, new URL('./road_atlas.png', base).toString());
+        ed.atlasImage=imageUrl; ed.frames=frames;
+        frames.forEach((f,i)=>{ ed.nameToIndex[f.name]=i; });
+        makeThumbs(host, frames, imageUrl, 1024, 1024);
+        markSel(0);
+        BootUI.dbg('Palette: .atlas geladen', {frames:frames.length,img:imageUrl});
+      }
+      // ---- 2) TexturePacker/PIXI JSON --------------
+      else if(url.endsWith('.json')){
+        const js=await (await fetch(url)).json();
+        const base=new URL(url,location.href);
+        const imgUrl=new URL(js.meta?.image||'tileset.terrain.png', base).toString();
+        ed.atlasMeta={w:js.meta?.size?.w||1024,h:js.meta?.size?.h||1024}; ed.atlasImage=imgUrl;
+        const frames=Object.entries(js.frames||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([key,f])=>({name:key,x:f.x|0,y:f.y|0,w:f.w|0,h:f.h|0}));
+        ed.frames=frames; frames.forEach((f,i)=>ed.nameToIndex[f.name]=i);
+        makeThumbs(host, frames, imgUrl, ed.atlasMeta.w, ed.atlasMeta.h);
+        markSel(0);
+        BootUI.dbg('Palette: JSON‑Atlas geladen',{frames:frames.length,img:imgUrl});
+      }
+      // ---- 3) PNG‑Grid -----------------------------
+      else{
+        const img=await Asset.loadImage('atlasPNG',url);
+        const TILE=64, cols=Math.floor(img.width/TILE), rows=Math.floor(img.height/TILE);
         ed.atlasMeta={w:img.width,h:img.height}; ed.atlasImage=url;
         let idx=0;
-        for(let r=0;r<rows;r++){
-          for(let c=0;c<cols;c++){
-            const f={key:`r${r}c${c}`,x:c*TILE,y:r*TILE,w:TILE,h:TILE}; ed.frames.push(f);
-            const btn=document.createElement('button'); btn.title=String(idx);
-            const tile=document.createElement('div'); tile.className='tileThumb';
-            tile.style.backgroundImage=`url("${url}")`;
-            tile.style.backgroundPosition=`-${f.x}px -${f.y}px`;
-            tile.style.backgroundSize=`${img.width}px ${img.height}px`;
-            btn.appendChild(tile);
-            btn.addEventListener('click', ()=>{ ed.tile=idx; paint.tile=idx; markSelected(idx); updatePaintHUD(); });
-            host.appendChild(btn); idx++;
-          }
+        for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+          const f={name:`r${r}c${c}`,x:c*TILE,y:r*TILE,w:TILE,h:TILE}; ed.frames.push(f); ed.nameToIndex[f.name]=idx++;
         }
-        markSelected(0);
-        BootUI.dbg('Palette: PNG‑Grid geladen', {frames:ed.frames.length});
+        makeThumbs(host, ed.frames, url, img.width, img.height);
+        markSel(0);
+        BootUI.dbg('Palette: PNG‑Grid geladen',{frames:ed.frames.length});
       }
-      function markSelected(i){ [...host.children].forEach(n=>n.style.outline=''); if (host.children[i]) host.children[i].style.outline='2px solid var(--accent)'; }
+
+      function makeThumbs(host, frames, imgUrl, W, H){
+        frames.forEach((f,i)=>{
+          const btn=document.createElement('button'); btn.title = f.name||String(i);
+          const tile=document.createElement('div'); tile.className='tileThumb';
+          tile.style.backgroundImage=`url("${imgUrl}")`;
+          tile.style.backgroundPosition=`-${f.x}px -${f.y}px`;
+          tile.style.backgroundSize=`${W}px ${H}px`;
+          btn.appendChild(tile);
+          btn.addEventListener('click',()=>{ ed.tile=i; paint.tile=i; $('#hudTile').textContent=i; markSel(i); });
+          host.appendChild(btn);
+        });
+      }
+      function markSel(i){ [...host.children].forEach(n=>n.style.outline=''); if(host.children[i]) host.children[i].style.outline='2px solid var(--accent)'; }
     }
 
-    function openEditor(v){ ed.open=!!v; $('#editorDock').style.display = v ? 'block' : 'none'; }
+    // libGDX .atlas (sehr einfacher Parser: Regionen mit name/xy/size)
+    function parseLibGDXAtlas(txt, imgUrlFallback){
+      const lines=txt.replace(/\r/g,'').split('\n');
+      let imageUrl=imgUrlFallback; const frames=[];
+      let current=null;
+      for(let i=0;i<lines.length;i++){
+        const L=lines[i].trim();
+        if(!L) continue;
+        if(i===0 && L.endsWith('.png')) { imageUrl = new URL(L, location.href).toString(); continue; }
+        // neuer Region-Name (keine Doppelpunkt-Zeile)
+        if(!L.includes(':')){ current={name:L}; frames.push(current); continue; }
+        const [k,raw]=L.split(':').map(s=>s.trim()); const v=raw.split(',').map(s=>s.trim());
+        if(k==='xy'){ current.x=parseInt(v[0],10); current.y=parseInt(v[1],10); }
+        else if(k==='size'){ current.w=parseInt(v[0],10); current.h=parseInt(v[1],10); }
+      }
+      // Default-Größe, falls nicht gesetzt
+      frames.forEach(f=>{ f.w=f.w||64; f.h=f.h||64; });
+      return {imageUrl, frames};
+    }
+
+    function openEditor(v){ ed.open=!!v; $('#editorDock').style.display=v?'block':'none'; }
     function editorToMap(){ return {width:ed.width,height:ed.height,tileSize:ed.tileSize,tileset:ed.tileset,tiles:Array.from(ed.tiles)}; }
-    function applyMapToEditor(j){ ed.width=j.width|0; ed.height=j.height|0; ed.tileSize=j.tileSize|0; ed.tileset=j.tileset || './assets/tiles/tileset.terrain.json'; ed.tiles=new Uint16Array((j.tiles||[]).slice(0, ed.width*ed.height));
+    function applyMapToEditor(j){ ed.width=j.width|0; ed.height=j.height|0; ed.tileSize=j.tileSize|0; ed.tileset=j.tileset||'./assets/tiles/tileset.terrain.json'; ed.tiles=new Uint16Array((j.tiles||[]).slice(0,ed.width*ed.height));
       $('#edWidth').value=ed.width; $('#edHeight').value=ed.height; $('#edTileSize').value=ed.tileSize; $('#edTileset').value=ed.tileset; }
 
-    // ================== Auto‑Tiler (MAPPINGS GEFÜLLT) ======================
-    // Bitmask: N=1, E=2, S=4, W=8  → 0..15
-    // Index = row*16 + col  (Atlas 16×16, 64px)
-    const AUTO_TILER = {
-      ENABLED: true,
-
-      // Die beiden 4×4‑Blöcke im Atlas:
-      // Straße: rows 12–15, cols 8–11  → Indizes 200..251 (Blockreihenfolge)
-      // Wasser: rows  0– 3, cols 3– 6  → Indizes   3.. 54 (Blockreihenfolge)
-
-      ROAD_SET:  new Set([200,201,202,203,216,217,218,219,232,233,234,235,248,249,250,251]),
-      WATER_SET: new Set([  3,  4,  5,  6, 19, 20, 21, 22, 35, 36, 37, 38, 51, 52, 53, 54]),
-
-      // Zuordnung Maske → Index (Block in Lesereihenfolge zu Masken 0..15)
-      ROAD_MASK_MAP: {
-        0: 200, 1: 201, 2: 202, 3: 203,
-        4: 216, 5: 217, 6: 218, 7: 219,
-        8: 232, 9: 233,10: 234,11: 235,
-       12: 248,13: 249,14: 250,15: 251
-      },
-      WATER_MASK_MAP: {
-        0:   3, 1:   4, 2:   5, 3:   6,
-        4:  19, 5:  20, 6:  21, 7:  22,
-        8:  35, 9:  36,10:  37,11:  38,
-       12:  51,13:  52,14:  53,15:  54
-      }
+    // ================== Auto‑Tiler (ROAD‑ATLAS) ==================
+    // Bitmask: N=1, E=2, S=4, W=8 → 0..15
+    const ROAD_NAMES = {
+      V:'road_straight_vertical',
+      H:'road_straight_horizontal',
+      NE:'road_curve_NE', SE:'road_curve_SE', SW:'road_curve_SW', NW:'road_curve_NW',
+      Tup:'road_T_up', Tr:'road_T_right', Td:'road_T_down', Tl:'road_T_left',
+      X:'road_cross'
     };
+
+    function nameIdx(n){ const i=ed.nameToIndex[n]; if(i==null){ BootUI.dbg('Road‑Atlas: Name nicht gefunden', n); return 0; } return i; }
+
+    // → Masken zu Namen
+    function buildRoadMaskMap(){
+      return {
+        0: nameIdx(ROAD_NAMES.H),        // allein → irgendeine Gerade
+        1: nameIdx(ROAD_NAMES.V),        // N‑Ende → vertikal
+        2: nameIdx(ROAD_NAMES.H),        // E‑Ende → horizontal
+        3: nameIdx(ROAD_NAMES.NE),       // N+E
+        4: nameIdx(ROAD_NAMES.V),        // S‑Ende
+        5: nameIdx(ROAD_NAMES.V),        // N+S
+        6: nameIdx(ROAD_NAMES.SE),       // E+S
+        7: nameIdx(ROAD_NAMES.Tr),       // N+E+S (kein W) → T‑Right (offen nach rechts)
+        8: nameIdx(ROAD_NAMES.H),        // W‑Ende
+        9: nameIdx(ROAD_NAMES.NW),       // N+W
+        10:nameIdx(ROAD_NAMES.H),        // E+W
+        11:nameIdx(ROAD_NAMES.Tup),      // N+E+W (kein S) → T‑Up
+        12:nameIdx(ROAD_NAMES.SW),       // S+W
+        13:nameIdx(ROAD_NAMES.Tl),       // N+S+W (kein E) → T‑Left
+        14:nameIdx(ROAD_NAMES.Td),       // S+E+W (kein N) → T‑Down
+        15:nameIdx(ROAD_NAMES.X)         // Kreuz
+      };
+    }
+
+    // Wasser bleibt (vorerst) generisch aus Terrain‑Atlas – du kannst es wie Straßen auf .atlas umstellen:
+    const WATER_SET = new Set(); // leer = kein Auto‑Tiling für Wasser, bis gesetzt
+
+    const AUTO_TILER = {
+      ENABLED:true,
+      ROAD_MASK_MAP: buildRoadMaskMap(),
+      WATER_MASK_MAP: Object.fromEntries(Array.from({length:16},(_,i)=>[i, null]))
+    };
+
     function autotileIndex(kind, mask, fallbackIdx){
-      if (!AUTO_TILER.ENABLED) return fallbackIdx;
-      if (kind==='road'){ return AUTO_TILER.ROAD_MASK_MAP[mask] ?? fallbackIdx; }
-      if (kind==='water'){ return AUTO_TILER.WATER_MASK_MAP[mask] ?? fallbackIdx; }
+      if(!AUTO_TILER.ENABLED) return fallbackIdx;
+      if(kind==='road'){ const v=AUTO_TILER.ROAD_MASK_MAP[mask]; return (v==null?fallbackIdx:v); }
+      if(kind==='water'){ const v=AUTO_TILER.WATER_MASK_MAP[mask]; return (v==null?fallbackIdx:v); }
       return fallbackIdx;
     }
-    function isKind(idx, kind){
-      if (kind==='road')  return AUTO_TILER.ROAD_SET.has(idx)  || Object.values(AUTO_TILER.ROAD_MASK_MAP).includes(idx);
-      if (kind==='water') return AUTO_TILER.WATER_SET.has(idx) || Object.values(AUTO_TILER.WATER_MASK_MAP).includes(idx);
-      return false;
-    }
+    function isRoadIdx(idx){ return Object.values(AUTO_TILER.ROAD_MASK_MAP).includes(idx); }
+    function isWaterIdx(idx){ return WATER_SET.has(idx) || Object.values(AUTO_TILER.WATER_MASK_MAP).includes(idx); }
 
-    // ================== Live‑Malen (mit DPR‑Fix) ===========================
-    const paint = { active:false, mode:'paint', size:1, tile:0, dragging:false, batch:[], undo:[], redo:[], autoTile:true };
-    const hud = {wrap: $('#paintHUD'), brush: $('#hudBrush'), size: $('#hudSize'), tile: $('#hudTile') };
-    function updatePaintHUD(){ hud.brush.textContent = paint.mode; hud.size.textContent = paint.size; hud.tile.textContent = paint.tile; }
+    // ================== Live‑Malen + Undo/Redo ==================
+    const paint={active:false,mode:'paint',size:1,tile:0,dragging:false,batch:[],undo:[],redo:[],autoTile:true};
+    const hud={wrap:$('#paintHUD'), size:$('#hudSize'), tile:$('#hudTile')};
+    const canvas=$('#stage');
 
-    $('#btnPaint').addEventListener('click', ()=> togglePaint());
-    $('#btnUndo').addEventListener('click', ()=> doUndo());
-    $('#btnRedo').addEventListener('click', ()=> doRedo());
-    window.addEventListener('keydown', (e)=>{
-      if ((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ e.preventDefault(); doUndo(); }
-      if (((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='z')||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y')){ e.preventDefault(); doRedo(); }
-      if (e.key.toLowerCase()==='e'){ togglePaint(); }
-      if (e.key==='+'){ paint.size=clamp(paint.size+1,1,4); updatePaintHUD(); flashHUD(); }
-      if (e.key==='-'){ paint.size=clamp(paint.size-1,1,4); updatePaintHUD(); flashHUD(); }
+    $('#btnPaint').addEventListener('click',()=>togglePaint());
+    $('#btnUndo').addEventListener('click',()=>doUndo());
+    $('#btnRedo').addEventListener('click',()=>doRedo());
+    window.addEventListener('keydown',e=>{
+      if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();doUndo();}
+      if(((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='z')||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y')){e.preventDefault();doRedo();}
+      if(e.key==='+'){paint.size=Math.min(4,paint.size+1);updatePaintHUD();}
+      if(e.key==='-'){paint.size=Math.max(1,paint.size-1);updatePaintHUD();}
     });
 
-    const canvas = $('#stage');
     function getWorld(){ return window.GameLoader? window.GameLoader._world : null; }
-    function getCanvasScale(){ const rect = canvas.getBoundingClientRect(); const sx = canvas.width/rect.width; const sy = canvas.height/rect.height; return {sx,sy,rect}; }
-    function clientToTile(x,y){
-      const w=getWorld(); if(!w) return {tx:-1,ty:-1};
-      const {sx,sy,rect}=getCanvasScale();
-      const px=(x-rect.left)*sx, py=(y-rect.top)*sy;
-      const cx=px/w.zoom + w.camX, cy=py/w.zoom + w.camY;
-      return { tx: Math.floor(cx / w.tileSize), ty: Math.floor(cy / w.tileSize) };
+    function getCanvasScale(){ const rect=canvas.getBoundingClientRect(); return {sx:canvas.width/rect.width, sy:canvas.height/rect.height, rect}; }
+    function clientToTile(x,y){ const w=getWorld(); if(!w) return {tx:-1,ty:-1}; const {sx,sy,rect}=getCanvasScale();
+      const px=(x-rect.left)*sx, py=(y-rect.top)*sy; const cx=px/w.zoom + w.camX, cy=py/w.zoom + w.camY; return {tx:Math.floor(cx/w.tileSize), ty:Math.floor(cy/w.tileSize)}; }
+
+    function togglePaint(force){ paint.active=(typeof force==='boolean')?force:!paint.active; hud.wrap.style.display=paint.active?'block':'none'; updatePaintHUD();
+      if(paint.active){ canvas.addEventListener('pointerdown',onDown,{passive:false}); canvas.addEventListener('pointermove',onMove,{passive:false}); canvas.addEventListener('pointerup',onUp,{passive:false}); canvas.addEventListener('pointercancel',onUp,{passive:false}); }
+      else { canvas.removeEventListener('pointerdown',onDown); canvas.removeEventListener('pointermove',onMove); canvas.removeEventListener('pointerup',onUp); canvas.removeEventListener('pointercancel',onUp); }
+      log('Live‑Malen', paint.active?'ON':'OFF');
     }
-
-    function togglePaint(force){ paint.active = (typeof force==='boolean') ? force : !paint.active; $('#paintHUD').style.display = paint.active ? 'block' : 'none'; updatePaintHUD(); if (paint.active) attachPaintHandlers(); else detachPaintHandlers(); log('Live‑Malen', paint.active?'ON':'OFF'); }
-    function flashHUD(){ const el=hud.wrap; el.style.transform='translateX(-50%) scale(1.05)'; setTimeout(()=>el.style.transform='translateX(-50%) scale(1)',150); }
-    function attachPaintHandlers(){ canvas.addEventListener('pointerdown', onDown, {passive:false}); canvas.addEventListener('pointermove', onMove, {passive:false}); canvas.addEventListener('pointerup', onUp, {passive:false}); canvas.addEventListener('pointercancel', onUp, {passive:false}); }
-    function detachPaintHandlers(){ canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointercancel', onUp); }
-
-    function onDown(ev){ if (!paint.active) return; ev.preventDefault(); paint.dragging=true; paint.batch=[]; const {tx,ty}=clientToTile(ev.clientX,ev.clientY); applyBrush(tx,ty,true); }
-    function onMove(ev){ if (!paint.active||!paint.dragging) return; ev.preventDefault(); const {tx,ty}=clientToTile(ev.clientX,ev.clientY); applyBrush(tx,ty,false); }
-    function onUp(){ if (!paint.active) return; paint.dragging=false; pushBatchToUndo(paint.batch); paint.batch=[]; }
+    function updatePaintHUD(){ hud.size.textContent=paint.size; hud.tile.textContent=paint.tile; }
+    function onDown(ev){ if(!paint.active)return; ev.preventDefault(); paint.dragging=true; paint.batch=[]; const {tx,ty}=clientToTile(ev.clientX,ev.clientY); applyBrush(tx,ty,true); }
+    function onMove(ev){ if(!paint.active||!paint.dragging)return; ev.preventDefault(); const {tx,ty}=clientToTile(ev.clientX,ev.clientY); applyBrush(tx,ty,false); }
+    function onUp(){ if(!paint.active)return; paint.dragging=false; pushBatchToUndo(paint.batch); paint.batch=[]; }
 
     function applyBrush(tx,ty,first){
       const w=getWorld(); if(!w) return;
-      if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
-      if (ed.brush==='fill' || paint.mode==='fill'){ if (first) floodFill(tx,ty, paint.tile); return; }
-      const half = paint.size-1;
-      for(let dy=-half; dy<=half; dy++){
-        for(let dx=-half; dx<=half; dx++){
-          const x=tx+dx, y=ty+dy;
-          if (x<0||y<0||x>=w.map.width||y>=w.map.height) continue;
-          if (ed.brush==='erase' || paint.mode==='erase') setTileWithRecord(x,y,0);
-          else setTileWithRecord(x,y, paint.tile);
-          if (paint.autoTile) autoTileAround(x,y);
-        }
+      if(tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
+      if(paint.mode==='fill'){ if(first) floodFill(tx,ty,paint.tile); return; }
+      const half=paint.size-1;
+      for(let dy=-half; dy<=half; dy++)for(let dx=-half; dx<=half; dx++){
+        const x=tx+dx, y=ty+dy; if(x<0||y<0||x>=w.map.width||y>=w.map.height) continue;
+        setTileWithRecord(x,y,paint.tile); if(paint.autoTile) autoTileAround(x,y);
       }
     }
-    function setTileWithRecord(tx,ty,newIdx){ const w=getWorld(); if(!w) return; const i=w.map.width*ty + tx; const prev=w.tiles[i]|0; if (prev===newIdx) return; w.tiles[i]=newIdx; paint.batch.push({tx,ty,prev,next:newIdx}); }
-    function floodFill(tx,ty,newIdx){
-      const w=getWorld(); if(!w) return; const W=w.map.width, H=w.map.height; const i0=W*ty+tx, oldIdx=w.tiles[i0]|0; if (oldIdx===newIdx) return;
-      const q=[[tx,ty]], seen=new Set([i0]); const batch=[];
-      while(q.length){ const [x,y]=q.pop(); const ii=W*y+x; const cur=w.tiles[ii]|0; if (cur!==oldIdx) continue; w.tiles[ii]=newIdx; batch.push({tx:x,ty:y,prev:cur,next:newIdx});
-        if (x>0    && !seen.has(ii-1)){ seen.add(ii-1); q.push([x-1,y]); }
-        if (x<W-1  && !seen.has(ii+1)){ seen.add(ii+1); q.push([x+1,y]); }
-        if (y>0    && !seen.has(ii-W)){ seen.add(ii-W); q.push([x,y-1]); }
-        if (y<H-1  && !seen.has(ii+W)){ seen.add(ii+W); q.push([x,y+1]); }
-      }
-      paint.batch.push(...batch);
-      if (paint.autoTile){ for(const e of batch){ autoTileAround(e.tx,e.ty); } }
+    function setTileWithRecord(tx,ty,newIdx){ const w=getWorld(); const i=w.map.width*ty+tx; const prev=w.tiles[i]|0; if(prev===newIdx)return; w.tiles[i]=newIdx; paint.batch.push({tx,ty,prev,next:newIdx}); }
+    function floodFill(tx,ty,newIdx){ const w=getWorld(); const W=w.map.width,H=w.map.height; const i0=W*ty+tx, oldIdx=w.tiles[i0]|0; if(oldIdx===newIdx)return;
+      const q=[[tx,ty]], seen=new Set([i0]); const batch=[]; while(q.length){ const [x,y]=q.pop(); const ii=W*y+x; const cur=w.tiles[ii]|0; if(cur!==oldIdx)continue; w.tiles[ii]=newIdx; batch.push({tx:x,ty:y,prev:cur,next:newIdx});
+        if(x>0&&!seen.has(ii-1)){seen.add(ii-1);q.push([x-1,y])} if(x<W-1&&!seen.has(ii+1)){seen.add(ii+1);q.push([x+1,y])}
+        if(y>0&&!seen.has(ii-W)){seen.add(ii-W);q.push([x,y-1])} if(y<H-1&&!seen.has(ii+W)){seen.add(ii+W);q.push([x,y+1])} }
+      paint.batch.push(...batch); if(paint.autoTile){ for(const e of batch) autoTileAround(e.tx,e.ty); }
     }
+
     function autoTileAround(tx,ty){ applyAutoAt(tx,ty); applyAutoAt(tx+1,ty); applyAutoAt(tx-1,ty); applyAutoAt(tx,ty+1); applyAutoAt(tx,ty-1); }
     function applyAutoAt(tx,ty){
-      const w=getWorld(); if(!w) return; if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
-      const W=w.map.width; const i=W*ty+tx; const cur=w.tiles[i]|0; let kind=null;
-      if (isKind(cur,'road')) kind='road'; else if (isKind(cur,'water')) kind='water'; else return;
+      const w=getWorld(); if(!w) return; if(tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
+      const W=w.map.width; const i=W*ty+tx; const cur=w.tiles[i]|0;
+      const kind = isRoadIdx(cur) ? 'road' : (isWaterIdx(cur)? 'water' : null); if(!kind) return;
       const n=(ty>0)? w.tiles[i-W]|0 : -1, e=(tx<W-1)? w.tiles[i+1]|0 : -1, s=(ty<w.map.height-1)? w.tiles[i+W]|0 : -1, ww=(tx>0)? w.tiles[i-1]|0 : -1;
-      let mask=0; if (isKind(n,kind)) mask|=1; if (isKind(e,kind)) mask|=2; if (isKind(s,kind)) mask|=4; if (isKind(ww,kind)) mask|=8;
-      const nextIdx=autotileIndex(kind, mask, cur); if (nextIdx!==cur){ const prev=cur; w.tiles[i]=nextIdx; if (!paint.batch.some(e=>e.tx===tx&&e.ty===ty)){ paint.batch.push({tx,ty,prev,next:nextIdx}); } }
+      let mask=0; if((kind==='road'  && isRoadIdx(n))|| (kind==='water' && isWaterIdx(n))) mask|=1;
+                 if((kind==='road'  && isRoadIdx(e))|| (kind==='water' && isWaterIdx(e))) mask|=2;
+                 if((kind==='road'  && isRoadIdx(s))|| (kind==='water' && isWaterIdx(s))) mask|=4;
+                 if((kind==='road'  && isRoadIdx(ww))|| (kind==='water' && isWaterIdx(ww))) mask|=8;
+      const nextIdx=autotileIndex(kind,mask,cur); if(nextIdx!==cur){ const prev=cur; w.tiles[i]=nextIdx;
+        if(!paint.batch.some(e=>e.tx===tx&&e.ty===ty)){ paint.batch.push({tx,ty,prev,next:nextIdx}); }
+      }
     }
 
-    function pushBatchToUndo(batch){ if (!batch||!batch.length) return; paint.undo.push(batch.map(e=>({...e}))); paint.redo.length=0; }
-    function doUndo(){ const w=getWorld(); if(!w) return; const op=paint.undo.pop(); if(!op) return; const redo=[]; for(const e of op){ const idx=w.map.width*e.ty+e.tx; const cur=w.tiles[idx]; redo.push({tx:e.tx,ty:e.ty,prev:cur,next:e.prev}); w.tiles[idx]=e.prev; } paint.redo.push(redo); BootUI.dbg('Undo', op.length+' changes'); }
-    function doRedo(){ const w=getWorld(); if(!w) return; const op=paint.redo.pop(); if(!op) return; const undo=[]; for(const e of op){ const idx=w.map.width*e.ty+e.tx; const cur=w.tiles[idx]; undo.push({tx:e.tx,ty:e.ty,prev:cur,next:e.next}); w.tiles[idx]=e.next; } paint.undo.push(undo); BootUI.dbg('Redo', op.length+' changes'); }
-
-    // Paint HUD
-    $('#btnPaint').title = 'Live‑Malen (E) • Undo (Ctrl/Cmd+Z) • Redo (Ctrl/Cmd+Y/Shift+Z) • +/- Größe';
-    function updatePaintSelectionFromPalette(i){ ed.tile=i; paint.tile=i; updatePaintHUD(); }
-    function updatePaintHUD(){ hud.brush.textContent = paint.mode; hud.size.textContent = paint.size; hud.tile.textContent = paint.tile; }
-    function flashHUD(){ const el=hud.wrap; el.style.transform='translateX(-50%) scale(1.05)'; setTimeout(()=>el.style.transform='translateX(-50%) scale(1)',150); }
-
-    // ===== Auto‑Tiler Assistent (bleibt verfügbar zum Feinjustieren) =======
-    ;(function addAutotileAssistant(){
-      const body = document.querySelector('#editorBody');
-      const wrap = document.createElement('div');
-      wrap.className = 'grid';
-      wrap.innerHTML = `
-        <div class="field">
-          <label>Auto‑Tiler</label>
-          <div class="note">1) Im Atlas eine Kachel wählen • 2) unten Maske anklicken • 3) „Mapping kopieren“.</div>
-          <div class="seg" style="margin-top:8px">
-            <button id="btnATCatRoad"  class="btn">Kategorie: Straße</button>
-            <button id="btnATCatWater" class="btn">Kategorie: Wasser</button>
-            <button id="btnATCopy"     class="btn">Mapping kopieren</button>
-          </div>
-          <div id="atMaskGrid" style="display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-top:8px"></div>
-          <div class="note" id="atHint" style="margin-top:6px">Aktive Kategorie: Straße • Ausgewählter Atlas‑Index: <b id="atSelIdx">–</b></div>
-        </div>
-      `;
-      body.appendChild(wrap);
-
-      const maskGrid = wrap.querySelector('#atMaskGrid');
-      const atSelIdxEl = wrap.querySelector('#atSelIdx');
-      let category = 'road';
-      let selIdx = 0;
-
-      const maskLabels = {0:'•',1:'N',2:'E',3:'NE',4:'S',5:'NS',6:'ES',7:'NES',8:'W',9:'NW',10:'EW',11:'NEW',12:'SW',13:'NSW',14:'ESW',15:'NESW'};
-      for(let m=0;m<16;m++){
-        const b=document.createElement('button'); b.className='btn'; b.textContent = maskLabels[m]; b.title = `Maske ${m} (N=1,E=2,S=4,W=8)`;
-        b.addEventListener('click', ()=>{
-          const tbl = (category==='road') ? AUTO_TILER.ROAD_MASK_MAP : AUTO_TILER.WATER_MASK_MAP;
-          tbl[m] = selIdx; BootUI.dbg(`AT set ${category}[${m}] = ${selIdx}`);
-        });
-        maskGrid.appendChild(b);
-      }
-      wrap.querySelector('#btnATCatRoad').addEventListener('click', ()=>{category='road'; wrap.querySelector('#atHint').innerHTML=`Aktive Kategorie: <b>Straße</b> • Ausgewählter Atlas‑Index: <b id="atSelIdx">${selIdx}</b>`;});
-      wrap.querySelector('#btnATCatWater').addEventListener('click', ()=>{category='water'; wrap.querySelector('#atHint').innerHTML=`Aktive Kategorie: <b>Wasser</b> • Ausgewählter Atlas‑Index: <b id="atSelIdx">${selIdx}</b>`;});
-
-      const preview = document.querySelector('#tilesPreview');
-      const takeSel = new MutationObserver(()=>{ attachPaletteClicks(); });
-      takeSel.observe(preview, {childList:true});
-      attachPaletteClicks();
-      function attachPaletteClicks(){
-        [...preview.children].forEach((btn, i)=>{
-          btn.addEventListener('click', ()=>{ selIdx=i; atSelIdxEl.textContent=String(selIdx);
-            const set = (category==='road') ? AUTO_TILER.ROAD_SET : AUTO_TILER.WATER_SET;
-            set.add(selIdx);
-          }, {once:false});
-        });
-      }
-      wrap.querySelector('#btnATCopy').addEventListener('click', async ()=>{
-        const out={ ROAD_SET:Array.from(AUTO_TILER.ROAD_SET), WATER_SET:Array.from(AUTO_TILER.WATER_SET), ROAD_MASK_MAP:AUTO_TILER.ROAD_MASK_MAP, WATER_MASK_MAP:AUTO_TILER.WATER_MASK_MAP };
-        const txt=JSON.stringify(out,null,2); try{ await navigator.clipboard.writeText(txt); alert('Auto‑Tiler Mapping kopiert!'); } catch{ BootUI.dbg('Clipboard fail – JSON:', out); }
-      });
-    })();
+    function pushBatchToUndo(batch){ if(!batch||!batch.length)return; paint.undo.push(batch.map(e=>({...e}))); paint.redo.length=0; }
+    function doUndo(){ const w=getWorld(); const op=paint.undo.pop(); if(!op)return; const redo=[]; for(const e of op){ const idx=w.map.width*e.ty+e.tx; const cur=w.tiles[idx]; redo.push({tx:e.tx,ty:e.ty,prev:cur,next:e.prev}); w.tiles[idx]=e.prev; } paint.redo.push(redo); BootUI.dbg('Undo', op.length+' changes'); }
+    function doRedo(){ const w=getWorld(); const op=paint.redo.pop(); if(!op)return; const undo=[]; for(const e of op){ const idx=w.map.width*e.ty+e.tx; const cur=w.tiles[idx]; undo.push({tx:e.tx,ty:e.ty,prev:cur,next:e.next}); w.tiles[idx]=e.next; } paint.undo.push(undo); BootUI.dbg('Redo', op.length+' changes'); }
 
     // UI ready
     BootUI.dbg('UI ready');
