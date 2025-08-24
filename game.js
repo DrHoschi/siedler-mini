@@ -1,6 +1,6 @@
 /* =====================================================================
    game.js  —  Siedler-Mini Core
-   Version: v1.12  (2025-08-24)
+   Version: v1.13  (2025-08-24)
    Author: Siedler 2020 – Integration Build
    ---------------------------------------------------------------------
    WICHTIG:
@@ -11,6 +11,10 @@
    - Roads:   libGDX .atlas      (assets/tex/road/road_atlas.atlas)
    - Buildings (Epoche Holz):    assets/tex/building/wood/*.PNG
    - Units (Builder/Carrier):    assets/characters/*.png
+   - Neu v1.13:
+     * Road-Overlay-Layer inkl. Auto-Tiler (N/E/S/W-Maske → Atlas-Index)
+     * Render-Reihenfolge: Tiles → Roads → Units → Buildings → HUD
+     * Road-Bau blockiert auf belegten (Gebäude-)Tiles
    ===================================================================== */
 
 /* ============================== Utilities ============================== */
@@ -32,11 +36,9 @@ function fitCanvas(canvas){
   return {dpr,w,h,rect,ctx};
 }
 
-/* Sprite atlas helpers */
+/* Fetch helpers */
 async function loadJSON(url){ const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status+' '+url); return res.json(); }
 async function loadText(url){ const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status+' '+url); return res.text(); }
-
-/* Load image via global Asset helper (index.html) */
 async function loadImg(url){ try{ const img = await Asset.loadImage(url,url); return img; }catch(e){ throw e; }}
 
 /* ============================== Paths/Assets ============================== */
@@ -49,11 +51,6 @@ const PATHS = {
 };
 
 /* ============================== GameLoader ============================== */
-/**
- * GameLoader: Start/Continue aus boot.js
- * - start(mapURL) lädt Map-JSON (oder Blob-URL aus Editor-Test)
- * - continueFrom(snapshot) stellt Welt wieder her
- */
 window.GameLoader = {
   _world: null,
 
@@ -61,27 +58,20 @@ window.GameLoader = {
     DBG('GameLoader.start', mapURL);
     const canvas = document.getElementById('stage');
 
-    // 1) Canvas
     const view = fitCanvas(canvas);
     DBG(`Canvas ${Math.round(view.rect.width)}x${Math.round(view.rect.height)} dpr:${(window.devicePixelRatio||1)}`);
 
-    // 2) Map laden
     const map = await this._loadMap(mapURL);
-
-    // 3) Assets laden (Terrain, Road-Atlas, Units, ggf. Buildings lazy)
     const assets = await this._loadCoreAssets();
 
-    // 4) Game init
     this._world = Game.create(canvas, map, assets);
     Game.start(this._world);
 
-    // 5) Backdrop Fade erlauben (Texturen ok)
     Asset.markTexturesReady(true);
     DBG('Game started');
   },
 
   async continueFrom(snapshot){
-    // Minimal: Läd Map + State wieder
     DBG('Continue from snapshot...');
     const canvas = document.getElementById('stage');
     const view = fitCanvas(canvas);
@@ -102,20 +92,18 @@ window.GameLoader = {
       const res = await fetch(url);
       const j = await res.json();
       DBG('Map start', url);
-      // Erwartetes Format: {width,height,tileSize,tileset,tiles:[]}
       const W = j.width|0, H = j.height|0, TS = j.tileSize|0 || 64;
       const tiles = (j.tiles && j.tiles.length===W*H) ? new Uint16Array(j.tiles) : new Uint16Array(W*H);
       return { width:W, height:H, tileSize:TS, tileset:j.tileset||PATHS.terrainJSON, tiles };
     }catch(e){
       DBG('Map FAIL → demo', e?.message||String(e));
-      // Fallback: kleine Demo-Map
       const W=24,H=14,TS=64; const tiles=new Uint16Array(W*H).fill(0);
       return { width:W, height:H, tileSize:TS, tileset:PATHS.terrainJSON, tiles };
     }
   },
 
   async _loadCoreAssets(){
-    // Terrain JSON -> Frames + Bild
+    // ---- Terrain (TexturePacker JSON) ----
     let terrain = null;
     try{
       const tj = await loadJSON(PATHS.terrainJSON);
@@ -131,7 +119,7 @@ window.GameLoader = {
       terrain = null;
     }
 
-    // Road-Atlas parse (libGDX)
+    // ---- Road-Atlas (libGDX .atlas) ----
     let roads = null;
     try{
       const txt = await loadText(PATHS.roadAtlas);
@@ -149,17 +137,35 @@ window.GameLoader = {
       }
       frames.forEach(f=>{ f.w=f.w||64; f.h=f.h||64; });
       const img = await loadImg(imageURL);
-      roads = {img, frames, imageURL};
-      DBG('Road atlas OK', {frames:frames.length});
+
+      // Map Namen → Indexe gemäß road_ids.txt
+      const wantOrder = [
+        'road_straight_vertical',   // 0
+        'road_straight_horizontal', // 1
+        'road_curve_NE',            // 2
+        'road_curve_SE',            // 3
+        'road_curve_SW',            // 4
+        'road_curve_NW',            // 5
+        'road_T_up',                // 6
+        'road_T_right',             // 7
+        'road_T_down',              // 8
+        'road_T_left',              // 9
+        'road_cross'                // 10
+      ];
+      const nameToIndex = Object.fromEntries(frames.map((f,i)=>[f.name,i]));
+      const ids = wantOrder.map((n)=> nameToIndex[n] ?? 0);
+
+      roads = {img, frames, ids, imageURL};
+      DBG('Road atlas OK', {frames:frames.length, ids});
     }catch(e){
       DBG('Road atlas FAIL', e?.message||String(e));
       roads = null;
     }
 
-    // Units
+    // ---- Units ----
     let builderImg=null, carrierImg=null;
     try{ builderImg = await loadImg(PATHS.unitBuilder); }catch{ DBG('Unit sprite missing → dot (builder)'); }
-    try{ carrierImg = await loadImg(PATHS.unitCarrier); }catch{ DBG('Unit sprite OK carrier'); } // Log blieb in deinen Traces so stehen
+    try{ carrierImg = await loadImg(PATHS.unitCarrier); }catch{ DBG('Unit sprite missing → dot (carrier)'); }
 
     return { terrain, roads, builderImg, carrierImg };
   }
@@ -169,22 +175,19 @@ window.GameLoader = {
 const Game = (function(){
 
   /* --------------------------- Build-Kosten --------------------------- */
-  // Achtung: Tool-Namen müssen mit data-tool in index.html übereinstimmen.
   const buildCosts = {
-    // Grundtools (wie im bisherigen Prototyp)
     road:   { wood:1,  stone:0, food:0, pop:0 },
     hut:    { wood:10, stone:2, food:0, pop:1 },
     lumber: { wood:6,  stone:0, food:0, pop:1 },
     mason:  { wood:4,  stone:6, food:0, pop:1 },
 
-    // Epoche Holz – grobe, spielbare Defaults (kannst du später feinjustieren)
     hq_wood:         { wood:60,  stone:20, food:10, pop:5 },
     hq_wood_ug1:     { wood:90,  stone:50, food:20, pop:5 },
     depot_wood:      { wood:20,  stone:6,  food:0,  pop:1 },
     depot_wood_ug:   { wood:30,  stone:12, food:0,  pop:1 },
-    lumberjack_wood: { wood:18,  stone:4,  food:0,  pop:1 }, // Holzproduktion
-    stonebraker_wood:{ wood:12,  stone:10, food:0,  pop:1 }, // Steinproduktion
-    farm_wood:       { wood:22,  stone:6,  food:0,  pop:2 }, // Nahrung
+    lumberjack_wood: { wood:18,  stone:4,  food:0,  pop:1 },
+    stonebraker_wood:{ wood:12,  stone:10, food:0,  pop:1 },
+    farm_wood:       { wood:22,  stone:6,  food:0,  pop:2 },
     baeckerei_wood:  { wood:14,  stone:8,  food:0,  pop:1 },
     fischer_wood1:   { wood:16,  stone:4,  food:0,  pop:1 },
     wassermuehle_wood:{wood:18,  stone:10, food:0,  pop:1 },
@@ -195,10 +198,7 @@ const Game = (function(){
   };
 
   /* --------------------------- Building Sprites --------------------------- */
-  // Map Tool → Datei (relativ zu PATHS.buildings). Falls nicht vorhanden → Placeholder-Rect.
   const buildingSpriteFile = {
-    // Grundtools haben keine eigenen PNGs -> Platzhalter
-    // Epoche Holz
     hq_wood: 'hq_wood.PNG',
     hq_wood_ug1: 'hq_wood_ug1.PNG',
     depot_wood: 'depot_wood.PNG',
@@ -224,21 +224,32 @@ const Game = (function(){
       camX: 0, camY: 0, zoom: 1,
       dpr: window.devicePixelRatio||1,
       running: false,
+
       /* Ressourcen (Startwert hoch zum Testen) */
       res: { wood:1000, stone:1000, food:1000, pop:1000 },
+
       /* Entities: buildings & units */
       entities: [],
+
       /* Assets */
       terrain: assets.terrain, roads: assets.roads,
       builderImg: assets.builderImg, carrierImg: assets.carrierImg,
+
       /* Tiles cached pointer */
       tiles: map.tiles,
+
+      /* Overlays: Roads (Map & ausgewählter Atlas-Frame je Zelle) */
+      roadMap: new Uint8Array(map.width*map.height),            // 0/1: Straße vorhanden
+      roadFrames: new Int16Array(map.width*map.height).fill(-1),// Index ins roads.ids (→ frames[])
+
       /* Interaction */
       activeTool: 'road',
       hoverTile: null,
+
       /* Time */
       t: 0, dt: 0, last: performance.now(),
-      /* HUD updaters (wired by boot.js) – hier minimal: IDs in index.html */
+
+      /* HUD updaters */
       updateHUD(){ 
         const q = s=>document.getElementById(s);
         q('res-wood').textContent = this.res.wood|0;
@@ -246,13 +257,15 @@ const Game = (function(){
         q('res-food').textContent = this.res.food|0;
         q('res-pop').textContent  = this.res.pop|0;
       },
-      /* Name → Kosten */
+
+      /* Tables */
       buildCosts,
-      /* Sprites geladen */
-      buildingSprites: {},  // name -> Image
+
+      /* Sprites */
+      buildingSprites: {},
     };
 
-    // Kamera zentrieren
+    // Kamera grob passend
     world.camX = 0; world.camY = 0; world.zoom = clamp( (canvas.width/world.map.width)/world.map.tileSize, 0.5, 2 );
 
     // Input
@@ -281,7 +294,6 @@ const Game = (function(){
     world.running = true;
     world.updateHUD();
 
-    // Event: Fenstergröße
     const resize = ()=> fitCanvas(world.canvas);
     window.addEventListener('resize', resize);
     resize();
@@ -301,23 +313,16 @@ const Game = (function(){
 
   /* --------------------------- Update --------------------------- */
   function update(w, dt){
-    // Simple AI: Carrier Aufgaben abarbeiten (Transport von Produktionsgebäuden zum nächsten Depot/HQ)
     for(const e of w.entities){
       if(e.kind==='unit'){
         updateUnit(w, e, dt);
       }else if(e.kind==='building'){
-        // Produktion pushen
+        // Produktion
         if(e.produces && (w.t - (e._lastProd||0)) > e.prodEvery){
           e._lastProd = w.t;
-          // Suche nächstes Depot/HQ
           const dep = findClosest(w, e.tx, e.ty, b=> b.kind==='building' && (b.type==='depot_wood'||b.type==='hq_wood'||b.type==='hq_wood_ug1'));
-          if(dep){
-            spawnCarrier(w, e, dep, e.produces.kind, e.produces.amount);
-          }else{
-            // Ohne Depot adden wir direkt (Testkomfort)
-            w.res[e.produces.kind] = (w.res[e.produces.kind]||0) + e.produces.amount;
-            DBG('HUD deliver', JSON.stringify(w.res));
-          }
+          if(dep){ spawnCarrier(w, e, dep, e.produces.kind, e.produces.amount); }
+          else { w.res[e.produces.kind] = (w.res[e.produces.kind]||0) + e.produces.amount; DBG('HUD deliver', JSON.stringify(w.res)); }
           w.updateHUD();
         }
       }
@@ -328,7 +333,7 @@ const Game = (function(){
   function render(w){
     const ctx = w.ctx;
     const {width:W,height:H,tileSize:TS} = w.map;
-    const view = fitCanvas(w.canvas); // DPR-sicher
+    const view = fitCanvas(w.canvas);
     ctx.clearRect(0,0,view.rect.width,view.rect.height);
 
     // Kamera
@@ -336,7 +341,7 @@ const Game = (function(){
     ctx.scale(w.zoom, w.zoom);
     ctx.translate(-w.camX, -w.camY);
 
-    // Tiles
+    // === 1) Terrain ===
     if(w.terrain){
       const img = w.terrain.img;
       for(let y=0;y<H;y++){
@@ -344,34 +349,34 @@ const Game = (function(){
           const idx = w.tiles[W*y+x]|0;
           const f = w.terrain.frames[idx];
           if(f) ctx.drawImage(img, f.x, f.y, f.w, f.h, x*TS, y*TS, TS, TS);
-          else { // Fallback grün
-            ctx.fillStyle = (x+y)%2? '#314d25' : '#2c4721';
-            ctx.fillRect(x*TS, y*TS, TS, TS);
-          }
+          else { ctx.fillStyle = (x+y)%2? '#314d25' : '#2c4721'; ctx.fillRect(x*TS, y*TS, TS, TS); }
         }
       }
     }else{
-      // Placeholder Grid
-      ctx.fillStyle='#294224';
-      ctx.fillRect(0,0,W*TS,H*TS);
+      ctx.fillStyle='#294224'; ctx.fillRect(0,0,W*TS,H*TS);
       ctx.strokeStyle='#335027';
       for(let y=0;y<=H;y++){ ctx.beginPath(); ctx.moveTo(0,y*TS); ctx.lineTo(W*TS,y*TS); ctx.stroke(); }
       for(let x=0;x<=W;x++){ ctx.beginPath(); ctx.moveTo(x*TS,0); ctx.lineTo(x*TS,H*TS); ctx.stroke(); }
     }
 
-    // Buildings
-    for(const b of w.entities){
-      if(b.kind!=='building') continue;
-      const px = b.tx*TS, py=b.ty*TS;
-      const img = w.buildingSprites[b.type];
-      if(img) ctx.drawImage(img, px, py, TS, TS);
-      else {
-        ctx.fillStyle='#6b4d2a88'; ctx.fillRect(px+4,py+4,TS-8,TS-8);
-        ctx.strokeStyle='#8b6b3a'; ctx.strokeRect(px+4,py+4,TS-8,TS-8);
+    // === 2) Roads Overlay ===
+    if(w.roads){
+      const img = w.roads.img;
+      const frames = w.roads.frames;
+      const ids = w.roads.ids;
+      for(let y=0;y<H;y++){
+        for(let x=0;x<W;x++){
+          const fidx = w.roadFrames[W*y+x];
+          if(fidx>=0){
+            const atlasIndex = ids[fidx] ?? ids[0];
+            const fr = frames[atlasIndex];
+            if(fr) ctx.drawImage(img, fr.x, fr.y, fr.w, fr.h, x*TS, y*TS, TS, TS);
+          }
+        }
       }
     }
 
-    // Units
+    // === 3) Units (unter Gebäuden) ===
     for(const u of w.entities){
       if(u.kind!=='unit') continue;
       const px = u.x*TS, py=u.y*TS;
@@ -380,10 +385,18 @@ const Game = (function(){
       else { ctx.fillStyle= (u.type==='builder')? '#ffd33d' : '#66ccff'; ctx.beginPath(); ctx.arc(px+TS/2, py+TS/2, 4, 0, Math.PI*2); ctx.fill(); }
     }
 
+    // === 4) Buildings (immer zuletzt, verdecken Units nie) ===
+    for(const b of w.entities){
+      if(b.kind!=='building') continue;
+      const px = b.tx*TS, py=b.ty*TS;
+      const img = w.buildingSprites[b.type];
+      if(img) ctx.drawImage(img, px, py, TS, TS);
+      else { ctx.fillStyle='#6b4d2a88'; ctx.fillRect(px+4,py+4,TS-8,TS-8); ctx.strokeStyle='#8b6b3a'; ctx.strokeRect(px+4,py+4,TS-8,TS-8); }
+    }
+
     // Hover
     if(w.hoverTile){
-      ctx.strokeStyle='#ffffffaa';
-      ctx.lineWidth=2/w.zoom;
+      ctx.strokeStyle='#ffffffaa'; ctx.lineWidth=2/w.zoom;
       ctx.strokeRect(w.hoverTile.tx*TS+1, w.hoverTile.ty*TS+1, TS-2, TS-2);
     }
 
@@ -399,8 +412,7 @@ const Game = (function(){
     c.addEventListener('pointerleave',()=> dragging=false);
     c.addEventListener('pointermove', e=>{
       const rect = c.getBoundingClientRect();
-      const sx = 1; const sy = 1; // UI coords = CSS px
-      const px = (e.clientX-rect.left)*sx, py = (e.clientY-rect.top)*sy;
+      const px = (e.clientX-rect.left), py = (e.clientY-rect.top);
       const cx = px/w.zoom + w.camX, cy = py/w.zoom + w.camY;
       const tx = Math.floor(cx/w.map.tileSize), ty = Math.floor(cy/w.map.tileSize);
       if(tx>=0&&ty>=0&&tx<w.map.width&&ty<w.map.height) w.hoverTile={tx,ty}; else w.hoverTile=null;
@@ -417,19 +429,17 @@ const Game = (function(){
     // Wheel → Zoom
     c.addEventListener('wheel', e=>{
       e.preventDefault();
-      const zOld = w.zoom;
       const dir = Math.sign(e.deltaY);
-      const zNew = clamp( zOld * (dir>0?0.9:1.1), 0.4, 3.0 );
-      w.zoom = zNew;
+      w.zoom = clamp( w.zoom * (dir>0?0.9:1.1), 0.4, 3.0 );
     }, {passive:false});
 
-    // Tap/Click → Build
+    // Click → Build
     c.addEventListener('click', e=>{
       if(!w.hoverTile) return;
       buildAt(w, w.activeTool, w.hoverTile.tx, w.hoverTile.ty);
     });
 
-    // Gesten: Doppel-Tap zum Zentrieren
+    // Double-Tap → Reset View
     let lastTap=0;
     c.addEventListener('pointerdown', ()=>{
       const t=performance.now(); if(t-lastTap<280){ w.camX=0; w.camY=0; w.zoom=1; }
@@ -460,28 +470,24 @@ const Game = (function(){
     if(!cost){ DBG('Build FAIL → no cost', tool); return; }
     if(!canAfford(w,cost)){ DBG('Build FAIL → no resources', tool); return; }
 
-    // Road ist direkt eine Tile-Änderung (Editor/Auto-Tiler kümmert sich live um Maske in index.html;
-    // hier machen wir einfach eine 1x1-Zuweisung an die "aktuelle" Straßen-Tile falls bekannt → Demo).
     if(tool==='road'){
-      const i = w.map.width*ty+tx;
-      w.tiles[i] = w.tiles[i]; // belassen – Auto-Tiler im Editor/Live‑Malen kümmert sich
+      // Keine Straße auf Gebäude-Tile
+      if(tileBlockedByBuilding(w,tx,ty)){ DBG('Road blocked by building', {tx,ty}); return; }
+      setRoadTile(w, tx, ty);
       pay(w, cost);
-      DBG('Build OK', JSON.stringify({tool, tx, ty, cost, before:'-', after:'-'}));
+      DBG('Build OK', JSON.stringify({tool, tx, ty, cost}));
       return;
     }
 
-    // Sonst Gebäude mit Builder‑Animation
+    // Gebäude mit Builder
     const before = pay(w, cost);
-
-    // Reservierung
     const b = { kind:'building', type:tool, tx, ty, placed:false };
-    // Produktionsprofile für einige Gebäude
+    // Produktionsprofile
     if(tool==='lumberjack_wood'){ b.produces={kind:'wood', amount:8}; b.prodEvery=4.0; }
     if(tool==='stonebraker_wood'){ b.produces={kind:'stone', amount:6}; b.prodEvery=4.0; }
     if(tool==='farm_wood' || tool==='baeckerei_wood' || tool==='fischer_wood1' || tool==='wassermuehle_wood' || tool==='windmuehle_wood'){
       b.produces={kind:'food', amount:4}; b.prodEvery=6.0;
     }
-
     w.entities.push(b);
 
     // Builder los
@@ -490,6 +496,59 @@ const Game = (function(){
     const steps = Math.abs(start.x-tx)+Math.abs(start.y-ty);
     DBG('Build OK', JSON.stringify({tool, tx, ty, cost, before, after:{...w.res}}));
     spawnBuilder(w, start, {x:tx,y:ty}, steps, ()=>{ b.placed=true; DBG('Builder arrived', JSON.stringify({tx,ty})); });
+  }
+
+  /* --------------------------- Roads: Auto-Tiler --------------------------- */
+  function isRoadAt(w,x,y){
+    const W=w.map.width,H=w.map.height;
+    if(x<0||y<0||x>=W||y>=H) return false;
+    return w.roadMap[W*y+x]===1;
+  }
+  function maskNESW(w,tx,ty){
+    // Bits: N=8, E=4, S=2, W=1
+    const N=isRoadAt(w,tx,ty-1)?8:0;
+    const E=isRoadAt(w,tx+1,ty)?4:0;
+    const S=isRoadAt(w,tx,ty+1)?2:0;
+    const Wt=isRoadAt(w,tx-1,ty)?1:0;
+    return N|E|S|Wt;
+  }
+  function atlasIndexForMask(mask){
+    // Rückgabe: Index 0..10 (siehe roads.ids)
+    switch(mask){
+      case 10: return 0;  // N+S → vertical
+      case 5:  return 1;  // E+W → horizontal
+      case 12: return 2;  // N+E
+      case 6:  return 3;  // E+S
+      case 3:  return 4;  // S+W
+      case 9:  return 5;  // N+W
+      case 13: return 6;  // T_up (N+E+W)
+      case 14: return 7;  // T_right (N+E+S)
+      case 7:  return 8;  // T_down (E+S+W)
+      case 11: return 9;  // T_left (N+S+W)
+      case 15: return 10; // cross
+      default:
+        // Einzelne Nachbarn / isoliert
+        if(mask===8 || mask===2) return 0;  // nur N oder S → vertical
+        if(mask===4 || mask===1) return 1;  // nur E oder W → horizontal
+        return 0; // Fallback
+    }
+  }
+  function setRoadTile(w, tx, ty){
+    const W=w.map.width,H=w.map.height;
+    if(tx<0||ty<0||tx>=W||ty>=H) return;
+    const i = W*ty+tx;
+    w.roadMap[i]=1;
+
+    // eigene Maske + Nachbarn neu berechnen
+    const recalc = (x,y)=>{
+      if(x<0||y<0||x>=W||y>=H) return;
+      if(!isRoadAt(w,x,y)) return;
+      const m = maskNESW(w,x,y);
+      const idx = atlasIndexForMask(m);
+      w.roadFrames[W*y+x] = idx;
+    };
+    recalc(tx,ty);
+    recalc(tx,ty-1); recalc(tx+1,ty); recalc(tx,ty+1); recalc(tx-1,ty);
   }
 
   /* --------------------------- Units --------------------------- */
@@ -517,16 +576,13 @@ const Game = (function(){
       const dy = Math.sign(dest.y - u.y);
       if(u.x===dest.x && u.y===dest.y){
         if(u.phase==='toDepot'){
-          // Abliefern
           Game._world.res[kind] = (Game._world.res[kind]||0) + u.payload;
           Game._world.updateHUD();
           DBG('HUD deliver', JSON.stringify(Game._world.res));
           DBG('Carrier deliver', JSON.stringify({kind, amount:u.payload, at:{x:u.to.x,y:u.to.y}}));
-          // zurück laden
           u.phase='toSource';
           DBG('Carrier load', JSON.stringify({kind, amount:u.payload, at:{x:u.from.x,y:u.from.y}}));
         }else{
-          // Zyklus fertig
           u.done=true;
         }
       }else{
@@ -555,6 +611,9 @@ const Game = (function(){
       if(d<bestD){ bestD=d; best=e; }
     }
     return best;
+  }
+  function tileBlockedByBuilding(w,tx,ty){
+    return w.entities.some(e=> e.kind==='building' && e.tx===tx && e.ty===ty);
   }
 
   /* --------------------------- Exposed API --------------------------- */
