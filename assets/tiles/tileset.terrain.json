@@ -3,7 +3,7 @@
     "terrain_r0_c0": { "x": 0, "y": 0, "w": 64, "h": 64 },
     "terrain_r0_c1": { "x": 64, "y": 0, "w": 64, "h": 64 },
     "terrain_r0_c2": { "x": 128, "y": 0, "w": 64, "h": 64 },
-    "terrain_r0_c3": { "x": 192, "y": 0, "w": 64, "h": 64 },
+    "terrain_r0_c3": { "x": 192, "y": 0, "w": 64, "h": 64 }
     "terrain_r0_c4": { "x": 256, "y": 0, "w": 64, "h": 64 },
     "terrain_r0_c5": { "x": 320, "y": 0, "w": 64, "h": 64 },
     "terrain_r0_c6": { "x": 384, "y": 0, "w": 64, "h": 64 },
@@ -87,10 +87,11 @@
   },
   "animations": {},
   "meta": {
-    "image": "tileset.terrain.png",
+    "image": "./assets/tiles/tileset.terrain.png",
+    "placeholder": "./assets/tex/placeholder64.PNG",
     "tileSize": 64,
     "size": { "w": 1024, "h": 1024 },
     "grid": { "cols": 16, "rows": 16 },
-    "note": "Siedler 2020 terrain atlas — relative image name so it resolves next to this JSON."
+    "note": "Generic grid mapping; rename or alias keys to semantic names as needed."
   }
 }
