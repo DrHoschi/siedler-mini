@@ -8,13 +8,15 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.16
+       index.html • v1.17
        Änderungen:
-       - Editor-Button zurück in der unteren Toast-Leiste
-       - Inspector: Max/Normal Toggle repariert
-       - Logger: BootUI.dbg() -> Inspector-Log + console.log
-       - Baumenü: Kategorien-Leiste (einzeilig, horizontal scroll)
-                 + gefilterte Gebäudezeile (einzeilig, horizontal scroll)
+       - Inspector mit getrennten Logs: Spiel / Editor
+       - Log-Level (OK, WARN, ERROR) mit Symbolen ✅ ⚠️ ❌
+       - Filter: Alle / OK / Warnung / Fehler
+       - Inspector startet geschlossen; Button unten öffnet
+       - Start-Button lädt zuverlässig die gewählte Map
+       - Menü-Button (Toast unten) öffnet das Startmenü sicher
+       - Baumenü (kompakt einzeilig + close/reopen) bleibt erhalten
        ============================================================ -->
 
   <style>
@@ -22,6 +24,7 @@
       --glass:rgba(16,23,34,.65);
       --text:#e8eef6; --muted:#9fb0c8; --accent:#3b82f6;
       --danger:#ef4444; --radius:14px; --blur:10px;
+      --ok:#22c55e; --warn:#eab308; --err:#ef4444;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
@@ -49,12 +52,12 @@
     .resItem{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#0d1422;border-radius:12px;border:1px solid #ffffff10;white-space:nowrap}
     .resVal{min-width:32px;text-align:right}
 
-    /* Baumenü: Kategorien + Karten (beide einzeilig, horizontal) */
+    /* Baumenü kompakt */
     #buildMenu{
       position:fixed; left:10px; right:10px; z-index:12;
       background:var(--glass); backdrop-filter:blur(var(--blur));
-      border:1px solid #ffffff19; border-radius:16px; padding:8px 8px;
-      top: calc(10px + 54px + 10px); /* direkt unter HUD-Toast */
+      border:1px solid #ffffff19; border-radius:16px; padding:8px;
+      top: calc(10px + 54px + 10px);
     }
     #bmHead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
     #bmTitle{font-weight:800}
@@ -75,7 +78,7 @@
     .bcard.active{outline:2px solid var(--accent)}
     .bcard.disabled{opacity:.5;filter:saturate(.6)}
 
-    /* Reopen: runder Werkzeug-Button links unten */
+    /* Reopen-Button (Werkzeug) */
     #buildOpen{
       position:fixed; left:10px; bottom:82px; z-index:13;
       width:44px; height:44px; border-radius:999px; border:1px solid #ffffff22;
@@ -99,8 +102,18 @@
       max-height:32vh; overflow:hidden;
     }
     #inspector.max{top:10px; bottom:70px; max-height:none;}
+    #logToolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+    #logTabs button{padding:8px 12px;border-radius:999px;border:1px solid #ffffff22;background:#162034;color:#d7dfed}
+    #logTabs button.active{outline:2px solid var(--accent)}
+    #logFilter{padding:8px 10px;border-radius:10px;background:#0d1422;color:#e9eef7;border:1px solid #ffffff22}
     #log{height:100%;max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10;white-space:pre-wrap}
-
+    .logline{margin:2px 0}
+    .log-ok::before{content:"✅ ";color:var(--ok)}
+    .log-warn::before{content:"⚠️ ";color:var(--warn)}
+    .log-err::before{content:"❌ ";color:var(--err)}
+    .ts{opacity:.7}
+    .lvl-ok{color:var(--ok)} .lvl-warn{color:var(--warn)} .lvl-err{color:var(--err)}
+    .src{opacity:.8}
     /* Vollbild */
     #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
@@ -120,7 +133,7 @@
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <select id="mapSelect" class="btn" style="flex:1;background:#1b2433">
-          <option value="./assets/maps/map-mini.json">Mini-Map (Test)</option>
+          <option value="./assets/maps/map-mini.json" selected>Mini-Map (Test)</option>
           <option value="./assets/maps/map-demo.json">Demo</option>
           <option value="./assets/maps/map-test-all.json">Test-All</option>
           <option value="./assets/maps/map-pro.json">Pro</option>
@@ -150,8 +163,6 @@
       <div id="bmTitle">Baumenü</div>
       <button id="bmClose" title="Menü schließen">✕</button>
     </div>
-
-    <!-- Kategorien (einzeilig) -->
     <div id="bmCats">
       <button class="cat active" data-cat="infra">Infrastruktur</button>
       <button class="cat" data-cat="raw">Rohstoffe</button>
@@ -159,8 +170,6 @@
       <button class="cat" data-cat="storage">Lager</button>
       <button class="cat" data-cat="housing">Wohnen/HQ</button>
     </div>
-
-    <!-- Kartenzeile (einzeilig) -->
     <div id="bmRow"></div>
   </div>
 
@@ -185,17 +194,26 @@
   </div>
 
   <!-- Inspector -->
-  <div id="inspector">
-    <div style="display:flex;justify-content:space-between;margin-bottom:8px;gap:8px;align-items:center">
-      <strong>Dev‑Inspector</strong>
-      <div style="display:flex;gap:8px">
+  <div id="inspector" aria-label="Debugger">
+    <div id="logToolbar">
+      <div id="logTabs">
+        <button id="tabGame" class="active">Spiel‑Log</button>
+        <button id="tabEditor">Editor‑Log</button>
+      </div>
+      <select id="logFilter" title="Filter">
+        <option value="all">Alle</option>
+        <option value="ok">OK</option>
+        <option value="warn">Warnung</option>
+        <option value="err">Fehler</option>
+      </select>
+      <div style="margin-left:auto;display:flex;gap:8px">
         <button id="btnLogMax" class="btn">Max</button>
         <button id="btnCopyPaths" class="btn">Copy Pfad‑Liste</button>
         <button id="btnExportJson" class="btn">Export JSON</button>
         <button id="btnCloseInspector" class="btn">Close</button>
       </div>
     </div>
-    <div id="log" aria-live="polite"></div>
+    <div id="log"></div>
   </div>
 
   <!-- Mini Asset-Loader -->
@@ -217,71 +235,115 @@
   <script src="./game.js"></script>
   <script src="./boot.js"></script>
 
-  <!-- UI / Logger / Menüs -->
+  <!-- UI, Logger & Baumenü -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
-    // ---------- Logger: BootUI.dbg -> Inspector + console ----------
+    const $$ = (s,root=document)=>Array.from(root.querySelectorAll(s));
+
+    // ---------- BootUI Logger mit Leveln & getrennten Listen ----------
     const BootUI = (window.BootUI = window.BootUI || {});
-    const nativeConsoleLog = console.log.bind(console);
-    const logBox = document.getElementById('log');
-    function pushLog(args){
-      const ts = new Date();
-      const t = ts.toTimeString().slice(0,8);
-      const line = `[${t}] ` + Array.from(args).map(a=>{
+    const logBox = $('#log');
+    const logs = { game: [], editor: [] }; // {ts, lvl:'ok'|'warn'|'err', text}
+
+    function tsStr(d){ return d.toTimeString().slice(0,8); }
+    function lineHtml(e){
+      const css = e.lvl==='err'?'log-err':(e.lvl==='warn'?'log-warn':'log-ok');
+      return `<div class="logline ${css}"><span class="ts">[${tsStr(e.ts)}]</span> <span class="src">(${e.src})</span> ${e.text}</div>`;
+    }
+    function renderLog(){
+      const tab = (document.body.dataset.logTab || 'game');
+      const filter = $('#logFilter').value; // all|ok|warn|err
+      const data = logs[tab];
+      logBox.innerHTML = data
+        .filter(e=> filter==='all' || e.lvl===filter)
+        .map(lineHtml)
+        .join('');
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+    function pushLog(src,lvl,args){
+      const text = Array.from(args).map(a=>{
         try{ return (typeof a==='string')?a:JSON.stringify(a); }catch{ return String(a); }
       }).join(' ');
-      logBox.textContent += (logBox.textContent?'\n':'') + line;
-      logBox.scrollTop = logBox.scrollHeight;
-      nativeConsoleLog(line);
+      const entry = { ts:new Date(), lvl, text, src };
+      logs[src].push(entry);
+      renderLog();
+      // zusätzlich in die Browser-Konsole:
+      const tag = lvl==='err'?'error':(lvl==='warn'?'warn':'log');
+      console[tag](`[${tsStr(entry.ts)}] (${src}) ${text}`);
     }
-    BootUI.dbg = function(){ pushLog(arguments); };
+
+    // Öffentliche API für Spiel & Editor:
+    BootUI.logOK   = (...a)=>pushLog('game','ok',a);
+    BootUI.logWarn = (...a)=>pushLog('game','warn',a);
+    BootUI.logErr  = (...a)=>pushLog('game','err',a);
+    BootUI.edOK    = (...a)=>pushLog('editor','ok',a);
+    BootUI.edWarn  = (...a)=>pushLog('editor','warn',a);
+    BootUI.edErr   = (...a)=>pushLog('editor','err',a);
+    // Abwärtskompatibilität: dbg = OK
+    BootUI.dbg     = (...a)=>BootUI.logOK(...a);
 
     // ---------- Build-/HUD Versionsdatum ----------
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
-    document.getElementById('buildDate').textContent=`${y}${m}${d}`;
-    document.getElementById('versionDate').textContent=`${y}${m}${d}`;
+    $('#buildDate').textContent=`${y}${m}${d}`;
+    $('#versionDate').textContent=`${y}${m}${d}`;
 
     // ---------- Startpanel ----------
+    function hideStart(){ $('#startPanel').style.display='none'; }
+    function showStart(){ $('#startPanel').style.display='grid'; }
+
     $('#btnNew').addEventListener('click', async ()=>{
-      const map=$('#mapSelect').value;
+      const map = $('#mapSelect').value || './assets/maps/map-mini.json';
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){
-        hideStart(); await window.GameLoader.start(map);
+        hideStart();
+        try{
+          await window.GameLoader.start(map);
+          BootUI.logOK('NewGame start', map);
+        }catch(e){
+          BootUI.logErr('Map LOAD FAIL', String(e));
+          showStart(); // falls Laden scheitert, Startmenü wieder zeigen
+        }
       }
     });
     $('#btnCont').addEventListener('click', async ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); });
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
-    function hideStart(){ $('#startPanel').style.display='none'; }
 
     // ---------- Backdrop Fade ----------
-    (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
-      const tick=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
+    (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.logWarn('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
+      const tick=()=>{ if(window.Asset?.areTexturesReady?.()){clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.logOK('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
     })();
 
     // ---------- Toast/Inspector ----------
-    $('#btnMenu').addEventListener('click', ()=> { $('#startPanel').style.display='grid'; });
-    $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; });
+    $('#btnMenu').addEventListener('click', showStart);
+    $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; renderLog(); });
     $('#btnCloseInspector').addEventListener('click', ()=> { $('#inspector').style.display='none'; });
     $('#btnLogMax').addEventListener('click', ()=>{
       const i=$('#inspector'); i.classList.toggle('max');
       $('#btnLogMax').textContent = i.classList.contains('max') ? 'Min' : 'Max';
     });
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
-
-    // ---------- Editor öffnen (Hook: du kannst hier dein Editor-Panel zeigen) ----------
-    $('#btnEditor').addEventListener('click', ()=>{
-      BootUI.dbg('Editor öffnen – Hook hier verbinden');
-      // Beispiel: window.Editor?.open?.();
+    $('#btnEditor').addEventListener('click', ()=>{ 
+      // hier deinen Editor öffnen
+      BootUI.edOK('Editor öffnen (Hook)');
+      // window.Editor?.open?.();
+      document.body.dataset.logTab='editor'; // automatisch auf Editor-Log umschalten
+      $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active');
+      $('#inspector').style.display='block'; renderLog();
     });
+
+    // Tabs + Filter
+    document.body.dataset.logTab='game';
+    $('#tabGame').addEventListener('click', ()=>{ document.body.dataset.logTab='game'; $('#tabGame').classList.add('active'); $('#tabEditor').classList.remove('active'); renderLog(); });
+    $('#tabEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); renderLog(); });
+    $('#logFilter').addEventListener('change', renderLog);
 
     // ---------- Vollbild ----------
     const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
     fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
     fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
 
-    // ---------- Baumenü: Kategorien + Filter ----------
+    // ---------- Baumenü (Kategorien + Filter + close/reopen) ----------
     const bm=$('#buildMenu'), openBtn=$('#buildOpen'), row=$('#bmRow'), cats=$$('#bmCats .cat');
-    function $$(sel,root=document){ return Array.from(root.querySelectorAll(sel)); }
 
     const BUILD_CARDS = [
       // Infrastruktur
@@ -310,41 +372,58 @@
     function svgThumb(kind){
       if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>';
       if(kind==='hut')  return '<svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z" fill="#b88a5a"/></svg>';
-      return '';
+      return '<div class="thumb"></div>';
     }
-
     function renderCards(category){
       row.innerHTML='';
       const items = BUILD_CARDS.filter(c=>c.cat===category);
       for(const c of items){
         const btn=document.createElement('button');
         btn.className='bcard'; btn.dataset.tool=c.tool; btn.title=c.label;
-        btn.innerHTML = c.thumb ? `<img class="thumb" src="${c.thumb}" alt="">`
-                                : svgThumb(c.thumbSVG) || '<div class="thumb"></div>';
+        btn.innerHTML = c.thumb ? `<img class="thumb" src="${c.thumb}" alt="">` : svgThumb(c.thumbSVG);
         const cap=document.createElement('div'); cap.className='label'; cap.textContent=c.label; btn.appendChild(cap);
         btn.addEventListener('click', ()=>{
           const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[c.tool]);
-          if(!ok){ btn.classList.add('disabled'); BootUI.dbg('Build tool nicht verfügbar:', c.tool); return; }
+          if(!ok){ btn.classList.add('disabled'); BootUI.logWarn('Build-Tool nicht verfügbar:', c.tool); return; }
           $$('#bmRow .bcard').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
-          window.Game?.setActiveTool?.(c.tool); BootUI.dbg('Tool', c.tool);
+          window.Game?.setActiveTool?.(c.tool); BootUI.logOK('Tool', c.tool);
         });
         row.appendChild(btn);
       }
     }
-
-    cats.forEach(catBtn=>{
-      catBtn.addEventListener('click', ()=>{
-        cats.forEach(b=>b.classList.remove('active')); catBtn.classList.add('active');
-        renderCards(catBtn.dataset.cat);
+    $$('#bmCats .cat').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        $$('#bmCats .cat').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        renderCards(btn.dataset.cat);
       });
     });
-    renderCards('infra'); // Default
+    renderCards('infra'); // Default-Kategorie
 
     // Baumenü schließen/öffnen
     $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; $('#buildOpen').style.display='flex'; });
     $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; $('#buildOpen').style.display='none'; });
 
-    console.log('UI ready (index v1.16)');
+    // ---------- Weiterspielen ----------
+    BootUI.continueLastSnapshot = async function(){
+      try{
+        const raw=localStorage.getItem('lastSnapshot');
+        if(!raw){ alert('Kein Spielstand gefunden.'); showStart(); return; }
+        const snap=JSON.parse(raw);
+        await window.GameLoader.continueFrom(snap);
+        BootUI.logOK('Continue snapshot');
+      }catch(e){
+        BootUI.logErr('Continue FAIL', String(e));
+        showStart();
+      }
+    };
+
+    // ---------- Vollbild ----------
+    const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
+    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
+    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
+
+    BootUI.logOK('UI ready (index v1.17)');
   })();
   </script>
 </body>
