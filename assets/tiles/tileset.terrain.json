@@ -274,11 +274,11 @@
   },
   "animations": {},
   "meta": {
-    "image": "/assets/tiles/tileset.terrain.png",
-    "placeholder": "/assets/tex/placeholder64.PNG",
-    "tileSize": 64,
-    "size": { "w": 1024, "h": 1024 },
-    "grid": { "cols": 16, "rows": 16 },
-    "note": "Kompletter 16x16-Atlas à 64px. Absolute Pfade, damit der URL-Resolver deines Loaders sicher funktioniert."
+  "image": "/siedler-mini/assets/tiles/tileset.terrain.png",
+  "placeholder": "/siedler-mini/assets/tex/placeholder64.PNG",
+  "tileSize": 64,
+  "size": { "w": 1024, "h": 1024 },
+  "grid": { "cols": 16, "rows": 16 }
+}
   }
 }
