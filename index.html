@@ -8,13 +8,10 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.26
-       - SAFE: kein console-Patch (iOS Crash-Fix)
-       - Logger (BootUI), Error/Promise Hooks, Fetch-Trace
-       - Backdrop-Fade: sofort + 10s Fail-Safe + 60s Timeout
-       - Inspector (Tabs/Filter) + **NEU: Button „Log kopieren“**
-       - Editor-Hook, Build-Menü, Ressourcen-Toast
-       - Image-Diagnose (zeigt fehlende PNG/JPG)
+       index.html • v1.27
+       - Startpanel blockiert keine externen Klicks mehr
+         (pointer-events Fix + höhere z-index für Toast/Inspector/Editor)
+       - Rest wie v1.26 inkl. „Log kopieren“-Button
        ============================================================ -->
 
   <style>
@@ -25,18 +22,22 @@
     .btn{background:#1f2a3a;border:1px solid #ffffff1a;color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
     .btn.primary{background:#2a3b55;border-color:#3b82f650} .btn.danger{background:#3a2226;border-color:#ef444450}
 
+    /* Zeichenfläche & Logo */
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
     #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.96;transition:opacity .6s;pointer-events:none;z-index:5}
 
-    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
-    #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10}
+    /* Startpanel: schluckt keine Klicks außerhalb der Karte */
+    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px);pointer-events:none}
+    #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10;pointer-events:auto}
 
-    #hudToast{position:fixed;left:10px;right:10px;top:10px;z-index:12;display:flex;gap:16px;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14;overflow:auto;-webkit-overflow-scrolling:touch}
+    /* Ressourcen-Toast (oben) */
+    #hudToast{position:fixed;left:10px;right:10px;top:10px;z-index:56;display:flex;gap:16px;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14;overflow:auto;-webkit-overflow-scrolling:touch}
     .ico{width:18px;height:18px;opacity:.95;vertical-align:-3px}
     .resItem{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#0d1422;border-radius:12px;border:1px solid #ffffff10;white-space:nowrap}
     .resVal{min-width:32px;text-align:right}
 
-    #buildMenu{position:fixed;left:10px;right:10px;z-index:12;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff19;border-radius:16px;padding:8px;top:calc(10px + 54px + 10px)}
+    /* Build-Menü (kompakt) */
+    #buildMenu{position:fixed;left:10px;right:10px;z-index:57;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff19;border-radius:16px;padding:8px;top:calc(10px + 54px + 10px)}
     #bmHead{display:flex;align-items:center;gap:8px;margin-bottom:6px} #bmTitle{font-weight:800}
     #bmClose{margin-left:auto;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;background:#2a3347;border:1px solid #ffffff22}
     #bmCats,#bmRow{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:6px 4px 8px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
@@ -46,12 +47,14 @@
     .thumb{width:64px;height:64px;object-fit:contain;border-radius:6px;background:#0c1422;border:1px solid #ffffff10}
     .label{font-size:.78rem;line-height:1.2;text-align:center;color:#d7dfed;min-height:2.2em}
     .bcard.active{outline:2px solid var(--accent)} .bcard.disabled{opacity:.5;filter:saturate(.6)}
-    #buildOpen{position:fixed;left:10px;bottom:82px;z-index:13;width:44px;height:44px;border-radius:999px;border:1px solid #ffffff22;background:var(--glass);backdrop-filter:blur(var(--blur));display:none;align-items:center;justify-content:center;font-size:20px}
+    #buildOpen{position:fixed;left:10px;bottom:82px;z-index:58;width:44px;height:44px;border-radius:999px;border:1px solid #ffffff22;background:var(--glass);backdrop-filter:blur(var(--blur));display:none;align-items:center;justify-content:center;font-size:20px}
 
-    #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
+    /* Untere Toastleiste – TOP Priorität */
+    #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:60;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #verSmall{font-size:.78rem;color:#9fb0c8}
 
-    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px;max-height:36vh;overflow:hidden}
+    /* Inspector */
+    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:58;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px;max-height:36vh;overflow:hidden}
     #inspector.max{top:10px;bottom:70px;max-height:none}
     #logToolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
     #logTabs button{padding:8px 12px;border-radius:999px;border:1px solid #ffffff22;background:#162034;color:#d7dfed}
@@ -64,13 +67,19 @@
     .tag{font-size:.78rem;background:#0d1422;border:1px solid #ffffff20;color:#d7dfed;border-radius:999px;padding:4px 8px;white-space:nowrap}
     .tag.err{border-color:#ef4444aa;color:#ffb4b4;background:#2a1418}
     .tag.ok{border-color:#22c55e88;color:#c9f7d5;background:#0f2218}
+
+    /* Editor-Hook Panel */
+    #editorPanel{position:fixed;left:10px;right:10px;bottom:70px;z-index:59;display:none;background:#121a27;border:1px solid #ffffff14;border-radius:16px;padding:12px;max-height:50vh;overflow:auto}
+    #editorHead{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+    #editorTitle{font-weight:800}
+    .code{background:#0d121a;border:1px solid #ffffff10;border-radius:10px;padding:10px;white-space:pre-wrap}
   </style>
 
   <!-- BootUI: Logger / Hooks / Fetch-Trace -->
   <script>
   (function(){
     const BootUI = (window.BootUI = window.BootUI || {});
-    const logs = { game: [], editor: [] };  // {ts,lvl,text,src}
+    const logs = { game: [], editor: [] };
     function push(src,lvl,args){
       const txt = Array.from(args).map(a=>{ try{return typeof a==='string'?a:JSON.stringify(a)}catch{return String(a)} }).join(' ');
       logs[src].push({ ts:new Date(), lvl, text:txt, src });
@@ -277,7 +286,13 @@
     const $$ = (s,root=document)=>Array.from(root.querySelectorAll(s));
     const BootUI = window.BootUI;
 
-    const logBox = $('#log'), assetsPanel=$('#assetsPanel');
+    function $req(id){
+      const el = document.getElementById(id);
+      if(!el){ try{BootUI.logErr('DOM missing #' + id);}catch{} }
+      return el;
+    }
+
+    const logBox = $req('log'), assetsPanel=$req('assetsPanel');
 
     function tsStr(d){ return d.toTimeString().slice(0,8); }
     function lineText(e){ return `[${tsStr(e.ts)}] (${e.src}) ${e.text}`; }
@@ -287,8 +302,9 @@
     }
 
     window.__renderLogNow = function(){
+      if(!logBox) return;
       const tab = (document.body.dataset.logTab || 'game');
-      const filter = $('#logFilter').value || 'all';
+      const filter = ($req('logFilter')?.value) || 'all';
       const arr = (BootUI.__logs?.[tab]) || [];
       logBox.innerHTML = arr.filter(e=> filter==='all' || e.lvl===filter).map(lineHtml).join('');
       logBox.scrollTop = logBox.scrollHeight;
@@ -296,97 +312,91 @@
     };
 
     window.__renderAssets = function(){
+      if(!assetsPanel) return;
       const ok=BootUI.assets.ok, fail=BootUI.assets.fail;
       const okTags = ok.slice(-6).map(u=>`<span class="tag ok">OK: ${u.split('/').pop()}</span>`).join(' ');
       const failTags = fail.map(u=>`<span class="tag err">FEHLT: ${u}</span>`).join(' ');
       assetsPanel.innerHTML = (fail.length?failTags:'') + (ok.length?(' ' + okTags):'');
     };
 
-    // === NEU: LOG KOPIEREN ===
     async function copyCurrentLogToClipboard(){
       try{
         const tab = (document.body.dataset.logTab || 'game');
-        const filter = $('#logFilter').value || 'all';
+        const filter = ($req('logFilter')?.value) || 'all';
         const arr = (BootUI.__logs?.[tab]) || [];
-        const lines = arr
-          .filter(e=> filter==='all' || e.lvl===filter)
-          .map(lineText)
-          .join('\n');
+        const lines = arr.filter(e=> filter==='all' || e.lvl===filter).map(lineText).join('\n');
         const header = `# ${tab.toUpperCase()}-LOG (${filter}) — ${new Date().toISOString()}\n`;
         const text = header + lines + '\n';
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(text);
         } else {
-          // Fallback (iOS/Safari)
           const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position='fixed'; ta.style.left='-9999px';
+          ta.value = text; ta.style.position='fixed'; ta.style.left='-9999px';
           document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         }
-        BootUI.logOK('Log copied to clipboard', `${arr.length} entries`);
-        window.__renderLogNow();
+        BootUI.logOK('Log copied to clipboard', `${arr.length} entries`); window.__renderLogNow();
         alert('Log wurde in die Zwischenablage kopiert.');
       }catch(e){
         BootUI.logErr('Copy log failed', e && e.message ? e.message : String(e));
-        window.__renderLogNow();
-        alert('Kopieren fehlgeschlagen.');
+        window.__renderLogNow(); alert('Kopieren fehlgeschlagen.');
       }
     }
 
-    // Buttons Inspector
-    document.body.dataset.logTab='game';
-    $('#btnInspector').addEventListener('click', ()=>{ $('#inspector').style.display='block'; window.__renderLogNow(); });
-    $('#btnCloseInspector').addEventListener('click', ()=>{ $('#inspector').style.display='none'; });
-    $('#btnLogMax').addEventListener('click', ()=>{ const i=$('#inspector'); i.classList.toggle('max'); $('#btnLogMax').textContent=i.classList.contains('max')?'Min':'Max'; });
-    $('#btnCopyLog').addEventListener('click', copyCurrentLogToClipboard);
-    $('#tabGame').addEventListener('click', ()=>{ document.body.dataset.logTab='game'; $('#tabGame').classList.add('active'); $('#tabEditor').classList.remove('active'); window.__renderLogNow(); });
-    $('#tabEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); window.__renderLogNow(); });
-    $('#logFilter').addEventListener('change', window.__renderLogNow);
-
     // Build-Datum
     const now=new Date(), y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
-    $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
+    $req('buildDate') && ($req('buildDate').textContent=`${y}${m}${d}`);
+    $req('versionDate') && ($req('versionDate').textContent=`${y}${m}${d}`);
 
     // Startpanel + Backdrop
-    const start = $('#startPanel'); function hideStart(){ start.style.display='none'; } function showStart(){ start.style.display='grid'; }
-    const bd = $('#backdrop');
-    function backdropFadeNow(){ if(bd.style.display==='none') return; bd.style.opacity='0'; setTimeout(()=>{ bd.style.display='none'; BootUI.logOK('Backdrop hidden'); }, 700); }
-    setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop fail-safe 10s → fade'); backdropFadeNow(); } }, 10000);
-    setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop TIMEOUT 60s → fade'); backdropFadeNow(); } }, 60000);
-    (function tick(){ if(window.Asset?.areTexturesReady?.()){ BootUI.logOK('Textures READY → fade'); backdropFadeNow(); } else { requestAnimationFrame(tick); } })();
+    const start = $req('startPanel'); function hideStart(){ if(start) start.style.display='none'; } function showStart(){ if(start) start.style.display='grid'; }
+    const bd = $req('backdrop');
+    function backdropFadeNow(){ if(!bd || bd.style.display==='none') return; bd.style.opacity='0'; setTimeout(()=>{ if(bd){bd.style.display='none'; try{BootUI.logOK('Backdrop hidden')}catch{}} }, 700); }
+    setTimeout(()=>{ if(bd && bd.style.display!=='none'){ try{BootUI.logWarn('Backdrop fail-safe 10s → fade')}catch{}; backdropFadeNow(); } }, 10000);
+    setTimeout(()=>{ if(bd && bd.style.display!=='none'){ try{BootUI.logWarn('Backdrop TIMEOUT 60s → fade')}catch{}; backdropFadeNow(); } }, 60000);
+    (function tick(){ try{ if(window.Asset?.areTexturesReady?.()){ BootUI.logOK('Textures READY → fade'); backdropFadeNow(); } else { requestAnimationFrame(tick); } }catch{ requestAnimationFrame(tick); } })();
 
     // Start/Weiter/Reset
-    $('#btnNew').addEventListener('click', async ()=>{
-      const map = $('#mapSelect').value || './assets/maps/map-mini.json';
+    $req('btnNew')?.addEventListener('click', async ()=>{
+      const sel=$req('mapSelect'); const map = sel?.value || './assets/maps/map-mini.json';
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){
-        BootUI.logOK('NewGame start', map);
+        try{ BootUI.logOK('NewGame start', map);}catch{}
         hideStart(); backdropFadeNow();
         try{
           if(!window.GameLoader || typeof window.GameLoader.start!=='function'){ throw new Error('GameLoader.start fehlt (boot.js/game.js Reihenfolge?)'); }
           await window.GameLoader.start(map);
-          BootUI.logOK('Game started');
+          BootUI.logOK && BootUI.logOK('Game started');
         }catch(e){
-          BootUI.logErr('Map LOAD FAIL', (e && e.message) || String(e));
+          BootUI.logErr && BootUI.logErr('Map LOAD FAIL', (e && e.message) || String(e));
           alert('Karte konnte nicht geladen werden. Öffne Startmenü erneut.'); showStart();
-        } finally { window.__renderLogNow(); }
+        } finally { window.__renderLogNow && window.__renderLogNow(); }
       }
     });
-    $('#btnCont').addEventListener('click', ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); BootUI.logOK('Continue requested'); });
-    $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
-    $('#btnMenu').addEventListener('click', showStart);
+    $req('btnCont')?.addEventListener('click', ()=>{ hideStart(); try{BootUI.continueLastSnapshot?.(); BootUI.logOK('Continue requested');}catch{} });
+    $req('btnReset')?.addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
+    $req('btnMenu')?.addEventListener('click', showStart);
+
+    // Inspector/Editor/Cache Buttons (immer bedienbar)
+    document.body.dataset.logTab='game';
+    $req('btnInspector')?.addEventListener('click', ()=>{ const i=$req('inspector'); if(i){ i.style.display='block'; window.__renderLogNow && window.__renderLogNow(); }});
+    $req('btnCloseInspector')?.addEventListener('click', ()=>{ const i=$req('inspector'); if(i) i.style.display='none'; });
+    $req('btnLogMax')?.addEventListener('click', ()=>{ const i=$req('inspector'); if(!i) return; i.classList.toggle('max'); const b=$req('btnLogMax'); if(b) b.textContent=i.classList.contains('max')?'Min':'Max'; });
+    $req('btnCopyLog')?.addEventListener('click', ()=>copyCurrentLogToClipboard());
+    $req('tabGame')?.addEventListener('click', ()=>{ document.body.dataset.logTab='game'; $req('tabGame')?.classList.add('active'); $req('tabEditor')?.classList.remove('active'); window.__renderLogNow && window.__renderLogNow(); });
+    $req('tabEditor')?.addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $req('tabEditor')?.classList.add('active'); $req('tabGame')?.classList.remove('active'); window.__renderLogNow && window.__renderLogNow(); });
+    $req('logFilter')?.addEventListener('change', ()=>{ window.__renderLogNow && window.__renderLogNow(); });
 
     // Cache leeren
     async function clearCachesAndReload(){
-      BootUI.logWarn('Cache clear requested');
+      try{ BootUI.logWarn && BootUI.logWarn('Cache clear requested'); }catch{}
       try{ localStorage.clear(); }catch{} try{ sessionStorage.clear(); }catch{}
-      try{ if('caches' in window){ const names=await caches.keys(); await Promise.all(names.map(n=>caches.delete(n))); } }catch(e){ BootUI.logWarn('Cache API failed', String(e)); }
-      try{ if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister())); } }catch(e){ BootUI.logWarn('SW unregister failed', String(e)); }
+      try{ if('caches' in window){ const names=await caches.keys(); await Promise.all(names.map(n=>caches.delete(n))); } }catch(e){ try{BootUI.logWarn('Cache API failed', String(e))}catch{} }
+      try{ if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister())); } }catch(e){ try{BootUI.logWarn('SW unregister failed', String(e))}catch{} }
       location.replace(location.href.split('#')[0]);
     }
-    $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache wirklich leeren?')) clearCachesAndReload(); });
+    $req('btnCache')?.addEventListener('click', ()=>{ if(confirm('Cache wirklich leeren?')) clearCachesAndReload(); });
 
     // Build-Menü
-    const bm=$('#buildMenu'), row=$('#bmRow');
+    const bm=$req('buildMenu'), row=$req('bmRow');
     function svgThumb(kind){ if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64"/><rect x="0" y="28" width="64" height="8"/></svg>'; if(kind==='hut') return '<svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z"/></svg>'; return '<div class="thumb"></div>'; }
     const BUILD_CARDS=[
       {tool:'road',cat:'infra',label:'Straße',thumbSVG:'road'},
@@ -407,6 +417,7 @@
       {tool:'haeuser_wood2',cat:'housing',label:'Haus 2',thumb:'./assets/tex/building/wood/haeuser_wood2.PNG'},
     ];
     function renderCards(category){
+      if(!row) return;
       row.innerHTML='';
       BUILD_CARDS.filter(c=>c.cat===category).forEach(c=>{
         const btn=document.createElement('button'); btn.className='bcard'; btn.dataset.tool=c.tool; btn.title=c.label;
@@ -414,33 +425,19 @@
         const cap=document.createElement('div'); cap.className='label'; cap.textContent=c.label; btn.appendChild(cap);
         btn.addEventListener('click', ()=>{
           const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[c.tool]);
-          if(!ok){ btn.classList.add('disabled'); BootUI.logWarn('Build-Tool nicht verfügbar:', c.tool); return; }
+          if(!ok){ btn.classList.add('disabled'); try{BootUI.logWarn('Build-Tool nicht verfügbar:', c.tool)}catch{}; return; }
           $$('#bmRow .bcard').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
-          window.Game?.setActiveTool?.(c.tool); BootUI.logOK('Tool', c.tool);
+          window.Game?.setActiveTool?.(c.tool); try{BootUI.logOK('Tool', c.tool)}catch{};
         });
         row.appendChild(btn);
       });
     }
     $$('#bmCats .cat').forEach(btn=>btn.addEventListener('click', ()=>{ $$('#bmCats .cat').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderCards(btn.dataset.cat); }));
     renderCards('infra');
-    $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; $('#buildOpen').style.display='flex'; });
-    $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; $('#buildOpen').style.display='none'; });
+    $req('bmClose')?.addEventListener('click', ()=>{ if(bm) bm.style.display='none'; const bo=$req('buildOpen'); if(bo) bo.style.display='flex'; });
+    $req('buildOpen')?.addEventListener('click', ()=>{ if(bm) bm.style.display='block'; const bo=$req('buildOpen'); if(bo) bo.style.display='none'; });
 
-    // Editor-Hook
-    const Editor=(window.Editor=window.Editor||{}), $panel=$('#editorPanel');
-    Editor.open = ()=>{ $panel.style.display='block'; BootUI.edOK('Editor geöffnet'); window.__renderLogNow(); };
-    Editor.close= ()=>{ $panel.style.display='none';  BootUI.edOK('Editor geschlossen'); window.__renderLogNow(); };
-    Editor.toggle=()=>{ ($panel.style.display==='block')?Editor.close():Editor.open(); };
-    $('#btnEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); $('#inspector').style.display='block'; window.__renderLogNow(); Editor.open(); });
-
-    // Backdrop-Fade via Asset-Flag
-    const bd = $('#backdrop');
-    function backdropFadeNow(){ if(bd.style.display==='none') return; bd.style.opacity='0'; setTimeout(()=>{ bd.style.display='none'; BootUI.logOK('Backdrop hidden'); }, 700); }
-    setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop fail-safe 10s → fade'); backdropFadeNow(); } }, 10000);
-    setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop TIMEOUT 60s → fade'); backdropFadeNow(); } }, 60000);
-    (function tick(){ if(window.Asset?.areTexturesReady?.()){ BootUI.logOK('Textures READY → fade'); backdropFadeNow(); } else { requestAnimationFrame(tick); } })();
-
-    BootUI.logOK('UI ready (index v1.26)'); window.__renderLogNow();
+    BootUI.logOK && BootUI.logOK('UI ready (index v1.27)'); window.__renderLogNow && window.__renderLogNow();
   })();
   </script>
 </body>
