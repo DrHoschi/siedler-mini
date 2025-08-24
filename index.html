@@ -8,14 +8,11 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.19
+       index.html • v1.20
        Fixes:
-       - Start lädt Map OHNE Query-Cachebuster (Kompatibilität Loader)
-         und nutzt fetch mit cache:'reload' via GameLoader-wrapper
-       - Cache leeren: Local/SessionStorage, Caches-API, ServiceWorker,
-         danach harte Neu-Navigation (ohne Query-Anhang)
-       - Editor: echtes Panel + Hook (open/close/toggle)
-       - Inspector & Baumenü wie gehabt
+       - BootUI Logger VOR game.js/boot.js geladen ⇒ frühe Logs sichtbar
+       - Fetch-Trace (nur Logging, kein Verhalten geändert)
+       - Start / Editor / Cache-Leeren bleiben funktionsfähig
        ============================================================ -->
 
   <style>
@@ -130,6 +127,53 @@
     #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
   </style>
+
+  <!-- ================== BootUI LOGGER & FETCH-TRACE (früh!) ================== -->
+  <script>
+  (function(){
+    // Früher Logger — damit game.js/boot.js sofort loggen können
+    const BootUI = (window.BootUI = window.BootUI || {});
+    const logs = { game: [], editor: [] }; // {ts,lvl,text,src}
+    function tsStr(d){ return d.toTimeString().slice(0,8); }
+    function push(src,lvl,args){
+      const text = Array.from(args).map(a=>{ try{ return (typeof a==='string')?a:JSON.stringify(a); }catch{ return String(a); } }).join(' ');
+      const e = { ts:new Date(), lvl, text, src }; logs[src].push(e);
+      // Spiegel in Konsole:
+      const tag = (lvl==='err')?'error':(lvl==='warn'?'warn':'log');
+      console[tag](`[${tsStr(e.ts)}] (${src}) ${text}`);
+      // Falls UI schon existiert, nachtragen:
+      try{
+        if(window.__renderLogNow) window.__renderLogNow();
+      }catch{}
+    }
+    BootUI.__logs = logs;
+    BootUI.logOK=(...a)=>push('game','ok',a);
+    BootUI.logWarn=(...a)=>push('game','warn',a);
+    BootUI.logErr=(...a)=>push('game','err',a);
+    BootUI.edOK=(...a)=>push('editor','ok',a);
+    BootUI.edWarn=(...a)=>push('editor','warn',a);
+    BootUI.edErr=(...a)=>push('editor','err',a);
+    BootUI.dbg=(...a)=>BootUI.logOK(...a); // Alias
+
+    // Fetch-Trace (nur Logging, Verhalten unverändert)
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async function(input, init){
+      const url = (typeof input==='string')?input:(input && input.url)||'';
+      BootUI.logOK('fetch', url || '(req)');
+      try{
+        const res = await origFetch(input, init);
+        // Map-/Asset-Erkennung (heuristisch): json/png/jpg
+        const ok = res.ok ? 'ok' : 'warn';
+        BootUI[ ok==='ok' ? 'logOK' : 'logWarn' ]('fetch-res', res.status, res.statusText, url);
+        return res;
+      }catch(e){
+        BootUI.logErr('fetch-fail', (e && e.message)||String(e), url);
+        throw e;
+      }
+    };
+  })();
+  </script>
+  <!-- ======================================================================== -->
 </head>
 <body>
 
@@ -256,111 +300,80 @@
   })();
   </script>
 
+  <!-- Lade SPIELCODE (kann BootUI sofort nutzen) -->
   <script src="./game.js"></script>
   <script src="./boot.js"></script>
 
-  <!-- UI, Logger & Hooks -->
+  <!-- UI, Inspector & Hooks -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
     const $$ = (s,root=document)=>Array.from(root.querySelectorAll(s));
+    const BootUI = window.BootUI;
 
-    // ---------- BootUI Logger (Spiel/Editor; Level/Filter) ----------
-    const BootUI = (window.BootUI = window.BootUI || {});
+    // ==== Inspector-UI an BootUI Logs anbinden ====
     const logBox = $('#log');
-    const logs = { game: [], editor: [] }; // {ts, lvl:'ok'|'warn'|'err', text}
-
     function tsStr(d){ return d.toTimeString().slice(0,8); }
     function lineHtml(e){
       const css = e.lvl==='err'?'log-err':(e.lvl==='warn'?'log-warn':'log-ok');
       return `<div class="logline ${css}"><span class="ts">[${tsStr(e.ts)}]</span> <span class="src">(${e.src})</span> ${e.text}</div>`;
     }
-    function renderLog(){
+    window.__renderLogNow = function(){
       const tab = (document.body.dataset.logTab || 'game');
-      const filter = $('#logFilter').value;
-      const data = logs[tab];
-      logBox.innerHTML = data.filter(e=> filter==='all' || e.lvl===filter).map(lineHtml).join('');
+      const filter = $('#logFilter').value || 'all';
+      const arr = (BootUI.__logs?.[tab]) || [];
+      logBox.innerHTML = arr
+        .filter(e=> filter==='all' || e.lvl===filter)
+        .map(lineHtml)
+        .join('');
       logBox.scrollTop = logBox.scrollHeight;
-    }
-    function pushLog(src,lvl,args){
-      const text = Array.from(args).map(a=>{ try{ return (typeof a==='string')?a:JSON.stringify(a); }catch{ return String(a); } }).join(' ');
-      const entry = { ts:new Date(), lvl, text, src };
-      logs[src].push(entry); renderLog();
-      const tag = lvl==='err'?'error':(lvl==='warn'?'warn':'log'); console[tag](`[${tsStr(entry.ts)}] (${src}) ${text}`);
-    }
-    BootUI.logOK=(...a)=>pushLog('game','ok',a);
-    BootUI.logWarn=(...a)=>pushLog('game','warn',a);
-    BootUI.logErr=(...a)=>pushLog('game','err',a);
-    BootUI.edOK=(...a)=>pushLog('editor','ok',a);
-    BootUI.edWarn=(...a)=>pushLog('editor','warn',a);
-    BootUI.edErr=(...a)=>pushLog('editor','err',a);
-    BootUI.dbg=(...a)=>BootUI.logOK(...a); // Alias
+    };
 
-    // ---------- Build-/HUD Versionsdatum ----------
+    // Versionsdatum
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
     $('#buildDate').textContent=`${y}${m}${d}`;
     $('#versionDate').textContent=`${y}${m}${d}`;
 
-    // ---------- Startpanel ----------
+    // Startpanel + Buttons
     function hideStart(){ $('#startPanel').style.display='none'; }
     function showStart(){ $('#startPanel').style.display='grid'; }
-    // Wrapper, der GameLoader.start mit cache:'reload' ausführt,
-    // ohne die Map-URL zu verändern:
-    window.GameLoader = window.GameLoader || {};
-    const _origStart = window.GameLoader.start;
-    if (_origStart && !_origStart.__wrapped) {
-      window.GameLoader.start = async function(mapUrl){
-        // Patch: global fetch kurzzeitig auf cache:'reload' setzen
-        const origFetch = window.fetch;
-        window.fetch = function(input, init={}) {
-          // nur Map-JSON forcieren (heuristik: .json am Ende oder input===mapUrl)
-          const url = (typeof input==='string')?input:(input?.url||'');
-          const force = (url.endsWith('.json') || url===mapUrl);
-          return origFetch(input, force ? {...init, cache:'reload'} : init);
-        };
-        try { return await _origStart.call(this, mapUrl); }
-        finally { window.fetch = origFetch; }
-      };
-      window.GameLoader.start.__wrapped = true;
-    }
-
     $('#btnNew').addEventListener('click', async ()=>{
-      const sel = $('#mapSelect');
-      const map = (sel && sel.value) ? sel.value : './assets/maps/map-mini.json';
+      const map = $('#mapSelect').value || './assets/maps/map-mini.json';
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){
         hideStart();
         try{
-          await window.GameLoader.start(map);
           BootUI.logOK('NewGame start', map);
+          await window.GameLoader.start(map);
+          BootUI.logOK('Game started');
         }catch(e){
-          BootUI.logErr('Map LOAD FAIL', String(e && e.message || e));
-          alert('Konnte die Karte nicht laden. Öffne erneut das Menü.');
+          BootUI.logErr('Map LOAD FAIL', (e && e.message) || String(e));
+          alert('Karte konnte nicht geladen werden. Öffne Startmenü erneut.');
           showStart();
-        }
+        } finally { window.__renderLogNow(); }
       }
     });
     $('#btnCont').addEventListener('click', async ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); });
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     $('#btnMenu').addEventListener('click', showStart);
 
-    // ---------- Backdrop Fade ----------
+    // Backdrop Fade (ready/timeout)
     (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.logWarn('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
       const tick=()=>{ if(window.Asset?.areTexturesReady?.()){clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.logOK('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
     })();
 
-    // ---------- Inspector ----------
+    // Inspector
     document.body.dataset.logTab='game';
-    $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; renderLog(); });
+    $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; window.__renderLogNow(); });
     $('#btnCloseInspector').addEventListener('click', ()=> { $('#inspector').style.display='none'; });
     $('#btnLogMax').addEventListener('click', ()=>{
       const i=$('#inspector'); i.classList.toggle('max');
       $('#btnLogMax').textContent = i.classList.contains('max') ? 'Min' : 'Max';
     });
-    $('#tabGame').addEventListener('click', ()=>{ document.body.dataset.logTab='game'; $('#tabGame').classList.add('active'); $('#tabEditor').classList.remove('active'); renderLog(); });
-    $('#tabEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); renderLog(); });
-    $('#logFilter').addEventListener('change', renderLog);
+    $('#tabGame').addEventListener('click', ()=>{ document.body.dataset.logTab='game'; $('#tabGame').classList.add('active'); $('#tabEditor').classList.remove('active'); window.__renderLogNow(); });
+    $('#tabEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); window.__renderLogNow(); });
+    $('#logFilter').addEventListener('change', window.__renderLogNow);
 
-    // ---------- Aggressives Cache-Leeren ----------
+    // Aggressives Cache-Leeren
     async function clearCachesAndReload(){
       BootUI.logWarn('Cache clear requested');
       try{ localStorage.clear(); }catch{}
@@ -377,12 +390,11 @@
           await Promise.all(regs.map(r=>r.unregister()));
         }
       }catch(e){ BootUI.logWarn('SW unregister failed', String(e)); }
-      // harte Neu-Navigation (ohne Query-Buster)
       location.replace(location.href.split('#')[0]);
     }
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache wirklich leeren?')) clearCachesAndReload(); });
 
-    // ---------- Baumenü ----------
+    // Baumenü (Kategorien + Row)
     const bm=$('#buildMenu'), row=$('#bmRow');
     function svgThumb(kind){
       if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>';
@@ -404,7 +416,7 @@
       {tool:'hq_wood',cat:'housing',label:'HQ',thumb:'./assets/tex/building/wood/hq_wood.PNG'},
       {tool:'hq_wood_ug1',cat:'housing',label:'HQ UG1',thumb:'./assets/tex/building/wood/hq_wood_ug1.PNG'},
       {tool:'haeuser_wood1',cat:'housing',label:'Haus 1',thumb:'./assets/tex/building/wood/haeuser_wood1.PNG'},
-      {tool:'haeuser_wood1_ug1',cat:'housing',label:'Haus 1 UG1',thumb:'./assets/tex/building/wood/haeuser_wood1_ug1.PNG'},
+      {tool:'haeuser_wood1_ug1',cat:'housing',label:'Haus 1 UG1',thumb:'./assets/tex/building/wood/haeuser_wood_ug1.PNG'},
       {tool:'haeuser_wood2',cat:'housing',label:'Haus 2',thumb:'./assets/tex/building/wood/haeuser_wood2.PNG'},
     ];
     function renderCards(category){
@@ -433,26 +445,22 @@
     $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; $('#buildOpen').style.display='flex'; });
     $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; $('#buildOpen').style.display='none'; });
 
-    // ---------- Editor Hook ----------
+    // Editor Hook
     const Editor = (window.Editor = window.Editor || {});
     const $panel = $('#editorPanel');
-    Editor.open = function(){ $panel.style.display='block'; BootUI.edOK('Editor geöffnet'); };
-    Editor.close = function(){ $panel.style.display='none'; BootUI.edOK('Editor geschlossen'); };
+    Editor.open = function(){ $panel.style.display='block'; BootUI.edOK('Editor geöffnet'); window.__renderLogNow(); };
+    Editor.close = function(){ $panel.style.display='none'; BootUI.edOK('Editor geschlossen'); window.__renderLogNow(); };
     Editor.toggle = function(){ ($panel.style.display==='block') ? Editor.close() : Editor.open(); };
     $('#btnEditor').addEventListener('click', ()=>{
       document.body.dataset.logTab='editor';
       $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active');
-      $('#inspector').style.display='block'; renderLog();
-      Editor.open();
+      $('#inspector').style.display='block'; window.__renderLogNow(); Editor.open();
     });
     $('#editorClose').addEventListener('click', ()=> Editor.close());
 
-    // ---------- Vollbild ----------
-    const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
-    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
-    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
-
-    BootUI.logOK('UI ready (index v1.19)');
+    BootUI.logOK('UI ready (index v1.20)');
+    // Erste Sicht im Inspector aktualisieren (falls geöffnet wird)
+    window.__renderLogNow();
   })();
   </script>
 </body>
