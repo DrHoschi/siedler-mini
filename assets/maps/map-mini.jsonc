@@ -1,0 +1,36 @@
+{
+  // Sichtbare Kartenbreite/-höhe in Tiles:
+  "width": 22,
+  "height": 14,
+
+  // Muss zu deinem Atlas passen (dein Atlas nutzt 64px-Kacheln)
+  "tileSize": 64,
+
+  // Pfad zum Atlas (JSON), den dein Loader bereits erfolgreich lädt
+  "tileset": "./assets/tiles/tileset.terrain.json",
+
+  // Mindestens eine Layer. Dein Loader erkennt 2D-Arrays unter "tiles".
+  "layers": [
+    {
+      "name": "ground", // Basis-Layer: nur Gras als Start
+      "tiles": [
+        // 22 Spalten × 14 Zeilen; überall "terrain_r4_c0" = Gras
+        // Tipp: Später hier Auto‑Tiler/Flüsse/Straßen einsetzen
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"]
+      ]
+    }
+  ]
+}
