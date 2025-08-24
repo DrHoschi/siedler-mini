@@ -1,10 +1,14 @@
 /* =====================================================================
-   game.js  •  v1.16
-   - JSONC-Unterstützung (Kommentare strippen, ohne Strings zu zerstören)
-   - Tileset: .png ODER .json (Atlas) wird erkannt und geladen
-   - Toleranter Map-Parser (CSV ODER Array; Strings → Zahlen)
-   - Sichere Canvas/Context-Erzeugung
-   - Platzhalter-Renderer
+   game.js  •  v1.17
+   - JSONC-Unterstützung (Kommentare entfernen, Strings sicher)
+   - Tileset: .png ODER .json (Atlas). Falls Atlas KEIN image-Feld hat:
+     -> automatisch PNG gleichen Namens neben der .json laden.
+   - Map-Parser: sehr tolerant
+     * akzeptiert layers[], map/data, grid/matrix/tiles (2D)
+     * akzeptiert 'ground'/'roads'/'water' als getrennte Ebenen
+     * akzeptiert width/height/tilesize in mehreren Schreibweisen
+     * CSV oder Array; Strings → Zahlen
+   - Sichere Canvas-Erzeugung, Platzhalter-Renderer
    - Ausführliche BootUI-Logs
    - Asset.markTexturesReady(true) nach erfolgreichem Setup
    ===================================================================== */
@@ -64,16 +68,34 @@
     return Number.isFinite(n) ? n : fallback;
   }
 
+  function flatten2D(arr2d) {
+    // Erwartet Array<Array<number|string>>
+    const out = [];
+    for (let r = 0; r < arr2d.length; r++) {
+      const row = arr2d[r] || [];
+      for (let c = 0; c < row.length; c++) out.push(toInt(row[c], 0));
+    }
+    return out;
+  }
+
   function parseLayerData(raw) {
     if (raw == null) return [];
-    if (Array.isArray(raw)) return raw.map(v => toInt(v, 0));
+    if (Array.isArray(raw)) {
+      // 1D oder 2D?
+      if (raw.length && Array.isArray(raw[0])) return flatten2D(raw);
+      return raw.map(v => toInt(v, 0));
+    }
     if (typeof raw === 'string') {
       const parts = raw.split(/[\s,;]+/).filter(Boolean);
       return parts.map(v => toInt(v, 0));
     }
+    // JSON im String?
     try {
       const maybe = JSON.parse(String(raw));
-      if (Array.isArray(maybe)) return maybe.map(v => toInt(v, 0));
+      if (Array.isArray(maybe)) {
+        if (maybe.length && Array.isArray(maybe[0])) return flatten2D(maybe);
+        return maybe.map(v => toInt(v, 0));
+      }
     } catch (_) {}
     logWarn('Layer data: unbekanntes Format → leer');
     return [];
@@ -105,7 +127,6 @@
         if (!inStr && (c === '"' || c === "'")) {
           inStr = true; strChar = c; out += c; i++; continue;
         } else if (inStr) {
-          // escape?
           if (c === '\\') { out += c; if (i+1 < n) { out += source[i+1]; i+=2; continue; } }
           if (c === strChar) { inStr = false; strChar = ''; out += c; i++; continue; }
           out += c; i++; continue;
@@ -114,16 +135,13 @@
 
       // Kommentare
       if (!inStr) {
-        // Block-Kommentar /* ... */
         if (!inBlock && !inLine && c === '/' && c2 === '*') { inBlock = true; i += 2; continue; }
         if (inBlock) { if (c === '*' && c2 === '/') { inBlock = false; i += 2; } else { i++; } continue; }
 
-        // Zeilen-Kommentar // ...
         if (!inLine && c === '/' && c2 === '/') { inLine = true; i += 2; continue; }
         if (inLine) { if (c === '\n' || c === '\r') { inLine = false; out += c; } i++; continue; }
       }
 
-      // normaler Durchlauf
       out += c; i++;
     }
     return out;
@@ -147,33 +165,32 @@
   // ---------- Tileset laden (png oder atlas.json) ----------
   async function loadTilesetFromUrlLike(urlLike, baseFallback) {
     if (!urlLike) return null;
-
-    // Absolute/relative Pfade normalisieren
     const url = String(urlLike);
 
     // JSON-Atlas?
     if (url.toLowerCase().endsWith('.json')) {
       try {
         const atlas = await fetchJson(url);
-        // Häufige Felder:
-        //  - TexturePacker: { meta:{ image:"foo.png" }, frames:{...} }
-        //  - Tiled: { meta:{image:"..."}} oder { image:"..." }
         const imgRel =
           (atlas.meta && (atlas.meta.image || atlas.meta.imagePath)) ||
           atlas.image ||
           (atlas.atlas && atlas.atlas.image) ||
           null;
 
+        let imgUrl;
         if (imgRel) {
-          // URL für Bild relativ zur Atlas-JSON auflösen
-          const abs = new URL(imgRel, url).toString();
-          const img = await loadImage(abs);
-          logOK('Tileset (atlas) OK', url, '→', abs, `${img.naturalWidth}x${img.naturalHeight}`);
-          return img;
+          imgUrl = new URL(imgRel, url).toString();
+          logOK('Atlas JSON image', imgUrl);
         } else {
-          logWarn('Atlas JSON ohne image-Feld', url);
-          return null;
+          // Fallback: gleicher Name .png neben .json
+          const guessed = url.replace(/\.json(\?.*)?$/i, '.png$1');
+          logWarn('Atlas JSON ohne image-Feld', url, '→ fallback', guessed);
+          imgUrl = guessed;
         }
+
+        const img = await loadImage(imgUrl);
+        logOK('Tileset (atlas) OK', url, '→', imgUrl, `${img.naturalWidth}x${img.naturalHeight}`);
+        return img;
       } catch (e) {
         logWarn('Atlas JSON load fail', url, e.message || String(e));
         return null;
@@ -187,7 +204,6 @@
       return img;
     } catch (e) {
       logWarn('Tileset IMG fail', url);
-      // Fallback
       if (baseFallback) {
         try {
           const img = await loadImage(baseFallback);
@@ -208,43 +224,88 @@
       map.tileset || (map.meta && map.meta.tileset) || (map.atlas && map.atlas.image) || './assets/tiles/tileset.terrain.png';
 
     Game.state.tilesetImg = await loadTilesetFromUrlLike(tilesetUrl, './assets/tiles/tileset.terrain.png');
-    if (!Game.state.tilesetImg) {
-      logWarn('Tileset fehlt/optional', tilesetUrl);
-    }
+    if (!Game.state.tilesetImg) logWarn('Tileset fehlt/optional', tilesetUrl);
   }
 
-  // ---------- Map normalisieren ----------
-  function normalizeMap(json) {
-    const w = toInt(json.width, 0);
-    const h = toInt(json.height, 0);
-    if (!w || !h) throw new Error('Map: width/height fehlen oder sind 0');
-
-    const layers = Array.isArray(json.layers) ? json.layers : (json.map || json.data || []);
-    if (!Array.isArray(layers) || !layers.length) {
-      throw new Error('Map: layers fehlen/leer');
+  // ---------- Map normalisieren (tolerant) ----------
+  function tryExtractLayers(json, w, h) {
+    // 1) Standard: json.layers (Array von Ebenen-Objekten)
+    if (Array.isArray(json.layers) && json.layers.length) {
+      logOK('Map layers via json.layers');
+      return json.layers.map((L, idx) => {
+        const name = L.name || `layer${idx}`;
+        const kind = (L.type || L.kind || 'tiles').toLowerCase();
+        const raw = L.data != null ? L.data : (L.csv != null ? L.csv : L.values);
+        return { name, type: kind, data: parseLayerData(raw) };
+      });
     }
 
-    const normLayers = layers.map((L, idx) => {
-      const name = L.name || `layer${idx}`;
-      const kind = (L.type || L.kind || 'tiles').toLowerCase();
-      const raw = L.data != null ? L.data : (L.csv != null ? L.csv : L.values);
-      const data = parseLayerData(raw);
+    // 2) Alternative Container: json.map oder json.data (Array)
+    const alt = Array.isArray(json.map) ? json.map : (Array.isArray(json.data) ? json.data : null);
+    if (alt && alt.length) {
+      logOK('Map layers via json.map/json.data');
+      return alt.map((L, idx) => {
+        const name = L.name || `layer${idx}`;
+        const kind = (L.type || L.kind || 'tiles').toLowerCase();
+        const raw = L.data != null ? L.data : (L.csv != null ? L.csv : L.values);
+        return { name, type: kind, data: parseLayerData(raw) };
+      });
+    }
 
+    // 3) 2D-Daten in grid/matrix/tiles
+    const grid = Array.isArray(json.grid) ? json.grid
+             : Array.isArray(json.matrix) ? json.matrix
+             : Array.isArray(json.tiles) ? json.tiles
+             : null;
+    if (grid && grid.length) {
+      logOK('Map layer via 2D grid/matrix/tiles');
+      return [{ name:'ground', type:'tiles', data: parseLayerData(grid) }];
+    }
+
+    // 4) Getrennte thematische Ebenen (2D oder 1D): ground/roads/water
+    const themed = [];
+    if (json.ground) themed.push({key:'ground', raw: json.ground});
+    if (json.roads)  themed.push({key:'roads',  raw: json.roads });
+    if (json.water)  themed.push({key:'water',  raw: json.water });
+
+    if (themed.length) {
+      logOK('Map layers via ground/roads/water');
+      return themed.map((t)=>({ name:t.key, type:t.key, data: parseLayerData(t.raw) }));
+    }
+
+    // 5) Fallback: single layer from "values"
+    if (json.values) {
+      logOK('Map layer via json.values');
+      return [{ name:'layer0', type:'tiles', data: parseLayerData(json.values) }];
+    }
+
+    return null;
+  }
+
+  function normalizeMap(json) {
+    const w = toInt(json.width, toInt(json.w, 0));
+    const h = toInt(json.height, toInt(json.h, 0));
+    if (!w || !h) throw new Error('Map: width/height fehlen oder sind 0');
+
+    let layers = tryExtractLayers(json, w, h);
+    if (!layers || !layers.length) {
+      const keys = Object.keys(json||{}).slice(0, 12).join(', ');
+      throw new Error('Map: layers fehlen/leer (bekannte Schlüssel: ' + keys + ')');
+    }
+
+    // Größe erzwingen
+    for (const L of layers) {
       const needed = w * h;
-      if (data.length < needed) {
-        data.push(...new Array(needed - data.length).fill(0));
-      } else if (data.length > needed) {
-        data.length = needed;
-      }
-
-      return { name, type: kind, data };
-    });
+      L.data = L.data || [];
+      if (L.data.length < needed) L.data.push(...new Array(needed - L.data.length).fill(0));
+      else if (L.data.length > needed) L.data.length = needed;
+    }
 
     return {
       width: w,
       height: h,
       tileSize: Game.state.tileSize,
-      layers: normLayers
+      layers
     };
   }
 
@@ -278,12 +339,8 @@
 
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255,255,255,.06)';
-    for (let x = 0; x <= tw; x++) {
-      ctx.beginPath(); ctx.moveTo(x * ts, 0); ctx.lineTo(x * ts, th * ts); ctx.stroke();
-    }
-    for (let y = 0; y <= th; y++) {
-      ctx.beginPath(); ctx.moveTo(0, y * ts); ctx.lineTo(tw * ts, y * ts); ctx.stroke();
-    }
+    for (let x = 0; x <= tw; x++) { ctx.beginPath(); ctx.moveTo(x * ts, 0); ctx.lineTo(x * ts, th * ts); ctx.stroke(); }
+    for (let y = 0; y <= th; y++) { ctx.beginPath(); ctx.moveTo(0, y * ts); ctx.lineTo(tw * ts, y * ts); ctx.stroke(); }
   }
 
   // ---------- Public API ----------
@@ -345,5 +402,5 @@
     Game.state.activeTool = tool;
   };
 
-  logOK('script load ok','game.js v1.16');
+  logOK('script load ok','game.js v1.17');
 })();
