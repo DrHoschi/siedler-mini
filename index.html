@@ -8,14 +8,13 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.15
-       Änderungen
-       - Ressourcenleiste als Toast oben (mit Icons)
-       - Baumenü kompakt: EINZEILIG, horizontal scrollen
-       - Schließen-Button im Baumenü; runder Mini-Button (Werkzeug)
-         zum Wiederöffnen
-       - Versionstext klein unten in der Toast-/Inspector-Leiste
-       - Mal-/Editor-Buttons aus der Toast-Leiste entfernt
+       index.html • v1.16
+       Änderungen:
+       - Editor-Button zurück in der unteren Toast-Leiste
+       - Inspector: Max/Normal Toggle repariert
+       - Logger: BootUI.dbg() -> Inspector-Log + console.log
+       - Baumenü: Kategorien-Leiste (einzeilig, horizontal scroll)
+                 + gefilterte Gebäudezeile (einzeilig, horizontal scroll)
        ============================================================ -->
 
   <style>
@@ -50,20 +49,22 @@
     .resItem{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#0d1422;border-radius:12px;border:1px solid #ffffff10;white-space:nowrap}
     .resVal{min-width:32px;text-align:right}
 
-    /* Kompaktes Baumenü (einzeilig) */
+    /* Baumenü: Kategorien + Karten (beide einzeilig, horizontal) */
     #buildMenu{
-      position:fixed; left:10px; right:10px;
-      z-index:12; background:var(--glass); backdrop-filter:blur(var(--blur));
+      position:fixed; left:10px; right:10px; z-index:12;
+      background:var(--glass); backdrop-filter:blur(var(--blur));
       border:1px solid #ffffff19; border-radius:16px; padding:8px 8px;
       top: calc(10px + 54px + 10px); /* direkt unter HUD-Toast */
     }
-    #bmHead{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    #bmHead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
     #bmTitle{font-weight:800}
     #bmClose{margin-left:auto;border-radius:999px;width:34px;height:34px;display:grid;place-items:center;background:#2a3347;border:1px solid #ffffff22}
-    #bmRow{
+    #bmCats, #bmRow{
       display:flex; gap:8px; overflow-x:auto; overflow-y:hidden; padding:6px 4px 8px;
       -webkit-overflow-scrolling:touch; scrollbar-width:thin;
     }
+    .cat{flex:0 0 auto; padding:8px 12px;border-radius:999px;border:1px solid #ffffff1f;background:#162034;color:#d7dfed;font-weight:700}
+    .cat.active{outline:2px solid var(--accent)}
     .bcard{
       flex:0 0 auto; width:92px; border-radius:12px; border:1px solid #ffffff1a;
       background:#182233; display:flex; flex-direction:column; align-items:center;
@@ -78,11 +79,11 @@
     #buildOpen{
       position:fixed; left:10px; bottom:82px; z-index:13;
       width:44px; height:44px; border-radius:999px; border:1px solid #ffffff22;
-      background:var(--glass); backdrop-filter:blur(var(--blur)); display:none;
-      align-items:center; justify-content:center; font-size:20px;
+      background:var(--glass); backdrop-filter:blur(var(--blur));
+      display:none; align-items:center; justify-content:center; font-size:20px;
     }
 
-    /* Toast unten (Inspector + Version) */
+    /* Toast unten (Inspector + Version + Editor) */
     #toast{
       position:fixed; left:10px; right:10px; bottom:10px; z-index:30;
       display:flex; gap:12px; justify-content:space-between; align-items:center;
@@ -90,8 +91,15 @@
       backdrop-filter:blur(var(--blur)); border:1px solid #ffffff14
     }
     #verSmall{font-size:.78rem;color:var(--muted)}
-    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px}
-    #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10}
+
+    /* Inspector */
+    #inspector{
+      position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;
+      background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px;
+      max-height:32vh; overflow:hidden;
+    }
+    #inspector.max{top:10px; bottom:70px; max-height:none;}
+    #log{height:100%;max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10;white-space:pre-wrap}
 
     /* Vollbild */
     #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
@@ -136,41 +144,24 @@
     <div class="resItem"><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew. <span class="resVal" id="res-pop">0</span></div>
   </div>
 
-  <!-- Kompaktes Baumenü -->
+  <!-- Baumenü -->
   <div id="buildMenu">
     <div id="bmHead">
       <div id="bmTitle">Baumenü</div>
       <button id="bmClose" title="Menü schließen">✕</button>
     </div>
-    <div id="bmRow">
-      <!-- Infrastruktur -->
-      <button class="bcard" data-tool="road" title="Straße">
-        <svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>
-        <div class="label">Straße</div>
-      </button>
-      <button class="bcard" data-tool="hut" title="Hütte">
-        <svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z" fill="#b88a5a"/></svg>
-        <div class="label">Hütte</div>
-      </button>
-      <!-- Rohstoffe -->
-      <button class="bcard" data-tool="lumberjack_wood" title="Holzhütte"><img class="thumb" src="./assets/tex/building/wood/lumberjack_wood.PNG" alt=""><div class="label">Holzhütte</div></button>
-      <button class="bcard" data-tool="stonebraker_wood" title="Steinbrecher"><img class="thumb" src="./assets/tex/building/wood/stonebraker_wood.PNG" alt=""><div class="label">Steinbrecher</div></button>
-      <!-- Nahrung -->
-      <button class="bcard" data-tool="farm_wood" title="Farm"><img class="thumb" src="./assets/tex/building/wood/farm_wood.PNG" alt=""><div class="label">Farm</div></button>
-      <button class="bcard" data-tool="baeckerei_wood" title="Bäckerei"><img class="thumb" src="./assets/tex/building/wood/baeckerei_wood.PNG" alt=""><div class="label">Bäckerei</div></button>
-      <button class="bcard" data-tool="fischer_wood1" title="Fischerhütte"><img class="thumb" src="./assets/tex/building/wood/fischer_wood1.PNG" alt=""><div class="label">Fischer</div></button>
-      <button class="bcard" data-tool="wassermuehle_wood" title="Wassermühle"><img class="thumb" src="./assets/tex/building/wood/wassermuehle_wood.PNG" alt=""><div class="label">Wassermühle</div></button>
-      <button class="bcard" data-tool="windmuehle_wood" title="Windmühle"><img class="thumb" src="./assets/tex/building/wood/windmuehle_wood.PNG" alt=""><div class="label">Windmühle</div></button>
-      <!-- Lager -->
-      <button class="bcard" data-tool="depot_wood" title="Depot"><img class="thumb" src="./assets/tex/building/wood/depot_wood.PNG" alt=""><div class="label">Depot</div></button>
-      <button class="bcard" data-tool="depot_wood_ug" title="Depot UG"><img class="thumb" src="./assets/tex/building/wood/depot_wood_ug.PNG" alt=""><div class="label">Depot UG</div></button>
-      <!-- HQ / Wohnen -->
-      <button class="bcard" data-tool="hq_wood" title="HQ"><img class="thumb" src="./assets/tex/building/wood/hq_wood.PNG" alt=""><div class="label">HQ</div></button>
-      <button class="bcard" data-tool="hq_wood_ug1" title="HQ UG1"><img class="thumb" src="./assets/tex/building/wood/hq_wood_ug1.PNG" alt=""><div class="label">HQ UG1</div></button>
-      <button class="bcard" data-tool="haeuser_wood1" title="Haus 1"><img class="thumb" src="./assets/tex/building/wood/haeuser_wood1.PNG" alt=""><div class="label">Haus 1</div></button>
-      <button class="bcard" data-tool="haeuser_wood1_ug1" title="Haus 1 UG1"><img class="thumb" src="./assets/tex/building/wood/haeuser_wood1_ug1.PNG" alt=""><div class="label">Haus 1 UG1</div></button>
-      <button class="bcard" data-tool="haeuser_wood2" title="Haus 2"><img class="thumb" src="./assets/tex/building/wood/haeuser_wood2.PNG" alt=""><div class="label">Haus 2</div></button>
+
+    <!-- Kategorien (einzeilig) -->
+    <div id="bmCats">
+      <button class="cat active" data-cat="infra">Infrastruktur</button>
+      <button class="cat" data-cat="raw">Rohstoffe</button>
+      <button class="cat" data-cat="food">Nahrung</button>
+      <button class="cat" data-cat="storage">Lager</button>
+      <button class="cat" data-cat="housing">Wohnen/HQ</button>
     </div>
+
+    <!-- Kartenzeile (einzeilig) -->
+    <div id="bmRow"></div>
   </div>
 
   <!-- Reopen (Werkzeug) -->
@@ -182,7 +173,10 @@
 
   <!-- Toast unten -->
   <div id="toast">
-    <div class="left"><button id="btnMenu" class="btn">Menü</button></div>
+    <div class="left" style="display:flex;gap:8px">
+      <button id="btnMenu" class="btn">Menü</button>
+      <button id="btnEditor" class="btn">Editor öffnen</button>
+    </div>
     <div class="right" style="display:flex;gap:10px;align-items:center">
       <button id="btnInspector" class="btn">Inspector</button>
       <button id="btnCache" class="btn">Cache leeren</button>
@@ -192,9 +186,9 @@
 
   <!-- Inspector -->
   <div id="inspector">
-    <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;gap:8px;align-items:center">
       <strong>Dev‑Inspector</strong>
-      <div>
+      <div style="display:flex;gap:8px">
         <button id="btnLogMax" class="btn">Max</button>
         <button id="btnCopyPaths" class="btn">Copy Pfad‑Liste</button>
         <button id="btnExportJson" class="btn">Export JSON</button>
@@ -204,7 +198,7 @@
     <div id="log" aria-live="polite"></div>
   </div>
 
-  <!-- Asset-Loader (mini) -->
+  <!-- Mini Asset-Loader -->
   <script>
   window.Asset = window.Asset || (function(){
     const cache = new Map(); let texturesReady=false;
@@ -223,17 +217,32 @@
   <script src="./game.js"></script>
   <script src="./boot.js"></script>
 
-  <!-- UI Logik -->
+  <!-- UI / Logger / Menüs -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
-    BootUI = window.BootUI || {}; BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
+    // ---------- Logger: BootUI.dbg -> Inspector + console ----------
+    const BootUI = (window.BootUI = window.BootUI || {});
+    const nativeConsoleLog = console.log.bind(console);
+    const logBox = document.getElementById('log');
+    function pushLog(args){
+      const ts = new Date();
+      const t = ts.toTimeString().slice(0,8);
+      const line = `[${t}] ` + Array.from(args).map(a=>{
+        try{ return (typeof a==='string')?a:JSON.stringify(a); }catch{ return String(a); }
+      }).join(' ');
+      logBox.textContent += (logBox.textContent?'\n':'') + line;
+      logBox.scrollTop = logBox.scrollHeight;
+      nativeConsoleLog(line);
+    }
+    BootUI.dbg = function(){ pushLog(arguments); };
 
-    // Build-Date/V
+    // ---------- Build-/HUD Versionsdatum ----------
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
-    $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
+    document.getElementById('buildDate').textContent=`${y}${m}${d}`;
+    document.getElementById('versionDate').textContent=`${y}${m}${d}`;
 
-    // Startpanel
+    // ---------- Startpanel ----------
     $('#btnNew').addEventListener('click', async ()=>{
       const map=$('#mapSelect').value;
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){
@@ -244,50 +253,98 @@
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    // Backdrop Fade (ready/timeout)
+    // ---------- Backdrop Fade ----------
     (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
       const tick=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
     })();
 
-    // Inspector/Toast
+    // ---------- Toast/Inspector ----------
     $('#btnMenu').addEventListener('click', ()=> { $('#startPanel').style.display='grid'; });
     $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; });
     $('#btnCloseInspector').addEventListener('click', ()=> { $('#inspector').style.display='none'; });
+    $('#btnLogMax').addEventListener('click', ()=>{
+      const i=$('#inspector'); i.classList.toggle('max');
+      $('#btnLogMax').textContent = i.classList.contains('max') ? 'Min' : 'Max';
+    });
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
 
-    // Vollbild
+    // ---------- Editor öffnen (Hook: du kannst hier dein Editor-Panel zeigen) ----------
+    $('#btnEditor').addEventListener('click', ()=>{
+      BootUI.dbg('Editor öffnen – Hook hier verbinden');
+      // Beispiel: window.Editor?.open?.();
+    });
+
+    // ---------- Vollbild ----------
     const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
     fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
     fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
 
-    // Baumenü schließen/öffnen
-    const bm=$('#buildMenu'), openBtn=$('#buildOpen');
-    $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; openBtn.style.display='flex'; });
-    $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; openBtn.style.display='none'; });
+    // ---------- Baumenü: Kategorien + Filter ----------
+    const bm=$('#buildMenu'), openBtn=$('#buildOpen'), row=$('#bmRow'), cats=$$('#bmCats .cat');
+    function $$(sel,root=document){ return Array.from(root.querySelectorAll(sel)); }
 
-    // Tool-Bindings
-    const btns = Array.from(document.querySelectorAll('.bcard'));
-    function setActive(btn){ btns.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
-    btns.forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const tool = btn.dataset.tool;
-        const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[tool]);
-        if(!ok){ btn.classList.add('disabled'); BootUI.dbg('Build tool nicht verfügbar:', tool); return; }
-        setActive(btn); window.Game?.setActiveTool?.(tool); BootUI.dbg('Tool', tool);
+    const BUILD_CARDS = [
+      // Infrastruktur
+      {tool:'road',         cat:'infra',   label:'Straße',       thumbSVG:'road'},
+      {tool:'hut',          cat:'infra',   label:'Hütte',        thumbSVG:'hut'},
+      // Rohstoffe
+      {tool:'lumberjack_wood', cat:'raw',  label:'Holzhütte',    thumb:'./assets/tex/building/wood/lumberjack_wood.PNG'},
+      {tool:'stonebraker_wood',cat:'raw',  label:'Steinbrecher', thumb:'./assets/tex/building/wood/stonebraker_wood.PNG'},
+      // Nahrung
+      {tool:'farm_wood',    cat:'food',    label:'Farm',         thumb:'./assets/tex/building/wood/farm_wood.PNG'},
+      {tool:'baeckerei_wood',cat:'food',   label:'Bäckerei',     thumb:'./assets/tex/building/wood/baeckerei_wood.PNG'},
+      {tool:'fischer_wood1',cat:'food',    label:'Fischer',      thumb:'./assets/tex/building/wood/fischer_wood1.PNG'},
+      {tool:'wassermuehle_wood',cat:'food',label:'Wassermühle',  thumb:'./assets/tex/building/wood/wassermuehle_wood.PNG'},
+      {tool:'windmuehle_wood',cat:'food',  label:'Windmühle',    thumb:'./assets/tex/building/wood/windmuehle_wood.PNG'},
+      // Lager
+      {tool:'depot_wood',   cat:'storage', label:'Depot',        thumb:'./assets/tex/building/wood/depot_wood.PNG'},
+      {tool:'depot_wood_ug',cat:'storage', label:'Depot UG',     thumb:'./assets/tex/building/wood/depot_wood_ug.PNG'},
+      // Wohnen/HQ
+      {tool:'hq_wood',      cat:'housing', label:'HQ',           thumb:'./assets/tex/building/wood/hq_wood.PNG'},
+      {tool:'hq_wood_ug1',  cat:'housing', label:'HQ UG1',       thumb:'./assets/tex/building/wood/hq_wood_ug1.PNG'},
+      {tool:'haeuser_wood1',cat:'housing', label:'Haus 1',       thumb:'./assets/tex/building/wood/haeuser_wood1.PNG'},
+      {tool:'haeuser_wood1_ug1',cat:'housing',label:'Haus 1 UG1',thumb:'./assets/tex/building/wood/haeuser_wood1_ug1.PNG'},
+      {tool:'haeuser_wood2',cat:'housing', label:'Haus 2',       thumb:'./assets/tex/building/wood/haeuser_wood2.PNG'},
+    ];
+
+    function svgThumb(kind){
+      if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>';
+      if(kind==='hut')  return '<svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z" fill="#b88a5a"/></svg>';
+      return '';
+    }
+
+    function renderCards(category){
+      row.innerHTML='';
+      const items = BUILD_CARDS.filter(c=>c.cat===category);
+      for(const c of items){
+        const btn=document.createElement('button');
+        btn.className='bcard'; btn.dataset.tool=c.tool; btn.title=c.label;
+        btn.innerHTML = c.thumb ? `<img class="thumb" src="${c.thumb}" alt="">`
+                                : svgThumb(c.thumbSVG) || '<div class="thumb"></div>';
+        const cap=document.createElement('div'); cap.className='label'; cap.textContent=c.label; btn.appendChild(cap);
+        btn.addEventListener('click', ()=>{
+          const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[c.tool]);
+          if(!ok){ btn.classList.add('disabled'); BootUI.dbg('Build tool nicht verfügbar:', c.tool); return; }
+          $$('#bmRow .bcard').forEach(b=>b.classList.remove('active')); btn.classList.add('active');
+          window.Game?.setActiveTool?.(c.tool); BootUI.dbg('Tool', c.tool);
+        });
+        row.appendChild(btn);
+      }
+    }
+
+    cats.forEach(catBtn=>{
+      catBtn.addEventListener('click', ()=>{
+        cats.forEach(b=>b.classList.remove('active')); catBtn.classList.add('active');
+        renderCards(catBtn.dataset.cat);
       });
     });
+    renderCards('infra'); // Default
 
-    // Weiterspielen
-    BootUI.continueLastSnapshot = async function(){
-      try{
-        const raw=localStorage.getItem('lastSnapshot');
-        if(!raw){ alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
-        const snap=JSON.parse(raw);
-        await window.GameLoader.continueFrom(snap);
-      }catch{ alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid'; }
-    };
+    // Baumenü schließen/öffnen
+    $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; $('#buildOpen').style.display='flex'; });
+    $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; $('#buildOpen').style.display='none'; });
 
-    console.log('UI ready (index v1.15)');
+    console.log('UI ready (index v1.16)');
   })();
   </script>
 </body>
