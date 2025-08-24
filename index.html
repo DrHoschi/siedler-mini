@@ -8,16 +8,17 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.23
-       Fix: Kein Console-Recursion mehr (native Console benutzt).
-       - Früher Logger + Console-Bridge + Error-Hooks + Fetch-Trace
-       - Backdrop: sofortiges Fade + 10s Fail-Safe + 60s Timeout
-       - Inspector & Editor-Hook wie besprochen
+       index.html • v1.24 (SAFE MODE)
+       - KEIN console-Patching mehr (verhindert iOS/Safari-Crashs)
+       - Früher Logger + Error/Promise Hooks + Fetch-Trace
+       - Backdrop: sofortiges Fade + 10s Fail‑Safe + 60s Timeout
+       - Startmenü, Ressourcen-Toast, kompaktes Baumenü, Inspector, Editor-Hook
        ============================================================ -->
 
   <style>
     :root{ --glass:rgba(16,23,34,.65); --text:#e8eef6; --muted:#9fb0c8; --accent:#3b82f6; --danger:#ef4444; --blur:10px; --ok:#22c55e; --warn:#eab308; --err:#ef4444; }
-    *{box-sizing:border-box} html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     button{cursor:pointer}
     .btn{background:#1f2a3a;border:1px solid #ffffff1a;color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
     .btn.primary{background:#2a3b55;border-color:#3b82f650} .btn.danger{background:#3a2226;border-color:#ef444450}
@@ -46,7 +47,7 @@
     #buildOpen{position:fixed;left:10px;bottom:82px;z-index:13;width:44px;height:44px;border-radius:999px;border:1px solid #ffffff22;background:var(--glass);backdrop-filter:blur(var(--blur));display:none;align-items:center;justify-content:center;font-size:20px}
 
     #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
-    #verSmall{font-size:.78rem;color:var(--muted)}
+    #verSmall{font-size:.78rem;color:#9fb0c8}
 
     #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px;max-height:32vh;overflow:hidden}
     #inspector.max{top:10px;bottom:70px;max-height:none}
@@ -64,20 +65,9 @@
     #editorHint{color:#9fb0c8;margin-bottom:6px} pre.code{background:#0b1018;border:1px solid #ffffff12;border-radius:10px;padding:10px;overflow:auto}
   </style>
 
-  <!-- ===== Früh: Logger ohne Rekursion, Console-Bridge, Error-Hooks, Fetch-Trace ===== -->
+  <!-- ===== Früher Logger (ohne console-Patch) + Error/Promise Hooks + Fetch‑Trace ===== -->
   <script>
   (function(){
-    // Native Konsole sichern (gegen Rekursion/Crash)
-    if(!window.__NATIVE_CONSOLE__){
-      window.__NATIVE_CONSOLE__ = {
-        log: (console && console.log) ? console.log.bind(console) : function(){},
-        warn: (console && console.warn) ? console.warn.bind(console) : function(){},
-        error:(console && console.error)? console.error.bind(console): function(){},
-        info: (console && console.info) ? console.info.bind(console) : function(){},
-      };
-    }
-    const NATIVE = window.__NATIVE_CONSOLE__;
-
     const BootUI = (window.BootUI = window.BootUI || {});
     const logs = { game: [], editor: [] }; // {ts,lvl,text,src}
     function ts(d){return d.toTimeString().slice(0,8)}
@@ -86,9 +76,6 @@
       const e = { ts:new Date(), lvl, text:txt, src };
       logs[src].push(e);
       try{ window.__renderLogNow && window.__renderLogNow(); }catch{}
-      const tag = (lvl==='err')?'error':(lvl==='warn'?'warn':'log');
-      // WICHTIG: nur die NATIVEN Methoden aufrufen → keine Rekursion!
-      NATIVE[tag](`[${ts(e.ts)}] (${src}) ${txt}`);
     }
     BootUI.__logs = logs;
     BootUI.logOK=(...a)=>push('game','ok',a);
@@ -99,33 +86,15 @@
     BootUI.edErr=(...a)=>push('editor','err',a);
     BootUI.dbg=(...a)=>BootUI.logOK(...a);
 
-    // Console→Inspector Bridge (nur einmal patchen)
-    if(!window.__CONSOLE_PATCHED__){
-      window.__CONSOLE_PATCHED__ = true;
-      const orig = { ...NATIVE }; // referenzierte nativen Methoden
-      console.log=(...a)=>{ try{BootUI.logOK('[console.log]',...a)}catch{} orig.log(...a) };
-      console.warn=(...a)=>{ try{BootUI.logWarn('[console.warn]',...a)}catch{} orig.warn(...a) };
-      console.error=(...a)=>{ try{BootUI.logErr('[console.error]',...a)}catch{} orig.error(...a) };
-      console.info=(...a)=>{ try{BootUI.logOK('[console.info]',...a)}catch{} orig.info(...a) };
-    }
-
-    // Globale Fehler
     window.addEventListener('error', e=>BootUI.logErr('window.onerror', e.message||'Error', (e.filename||'')+':'+(e.lineno||'')+':'+(e.colno||'')));
     window.addEventListener('unhandledrejection', e=>BootUI.logErr('unhandledrejection', (e.reason && e.reason.message)||String(e.reason)));
 
-    // Fetch-Trace (nur Logging)
     const _fetch = window.fetch.bind(window);
     window.fetch = async function(input, init){
       const url = (typeof input==='string')?input:(input && input.url)||'';
       BootUI.logOK('fetch', url||'(req)');
-      try{
-        const res = await _fetch(input, init);
-        BootUI[res.ok?'logOK':'logWarn']('fetch-res', res.status, res.statusText, url);
-        return res;
-      }catch(err){
-        BootUI.logErr('fetch-fail', (err && err.message)||String(err), url);
-        throw err;
-      }
+      try{ const res = await _fetch(input, init); BootUI[res.ok?'logOK':'logWarn']('fetch-res', res.status, res.statusText, url); return res; }
+      catch(err){ BootUI.logErr('fetch-fail', (err && err.message)||String(err), url); throw err; }
     };
 
     BootUI.logOK('INDEX early boot');
@@ -282,7 +251,7 @@
     // Startpanel helpers
     const start = $('#startPanel'); function hideStart(){ start.style.display='none'; } function showStart(){ start.style.display='grid'; }
 
-    // Backdrop Fade: sofort + Fail‑Safes + Textur‑Signal
+    // Backdrop Fade
     const bd = $('#backdrop');
     function backdropFadeNow(){ if(bd.style.display==='none') return; bd.style.opacity='0'; setTimeout(()=>{ bd.style.display='none'; BootUI.logOK('Backdrop hidden'); }, 700); }
     setTimeout(()=>{ if(bd.style.display!=='none'){ BootUI.logWarn('Backdrop fail-safe 10s → fade'); backdropFadeNow(); } }, 10000);
@@ -330,7 +299,7 @@
 
     // Baumenü
     const bm=$('#buildMenu'), row=$('#bmRow');
-    function svgThumb(kind){ if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" /><rect x="0" y="28" width="64" height="8" /></svg>'; if(kind==='hut') return '<svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z"/></svg>'; return '<div class="thumb"></div>'; }
+    function svgThumb(kind){ if(kind==='road') return '<svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64"/><rect x="0" y="28" width="64" height="8"/></svg>'; if(kind==='hut') return '<svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z"/></svg>'; return '<div class="thumb"></div>'; }
     const BUILD_CARDS=[
       {tool:'road',cat:'infra',label:'Straße',thumbSVG:'road'},
       {tool:'hut',cat:'infra',label:'Hütte',thumbSVG:'hut'},
@@ -369,14 +338,14 @@
     $('#bmClose').addEventListener('click', ()=>{ bm.style.display='none'; $('#buildOpen').style.display='flex'; });
     $('#buildOpen').addEventListener('click', ()=>{ bm.style.display='block'; $('#buildOpen').style.display='none'; });
 
-    // Editor Hook
+    // Editor-Hook
     const Editor=(window.Editor=window.Editor||{}), $panel=$('#editorPanel');
     Editor.open = ()=>{ $panel.style.display='block'; BootUI.edOK('Editor geöffnet'); window.__renderLogNow(); };
     Editor.close= ()=>{ $panel.style.display='none';  BootUI.edOK('Editor geschlossen'); window.__renderLogNow(); };
     Editor.toggle=()=>{ ($panel.style.display==='block')?Editor.close():Editor.open(); };
     $('#btnEditor').addEventListener('click', ()=>{ document.body.dataset.logTab='editor'; $('#tabEditor').classList.add('active'); $('#tabGame').classList.remove('active'); $('#inspector').style.display='block'; window.__renderLogNow(); Editor.open(); });
 
-    BootUI.logOK('UI ready (index v1.23)'); window.__renderLogNow();
+    BootUI.logOK('UI ready (index v1.24)'); window.__renderLogNow();
   })();
   </script>
 </body>
