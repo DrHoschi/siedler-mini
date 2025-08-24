@@ -8,16 +8,10 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- ============================================================
-       index.html • v1.14
+       index.html • v1.14.1
        CHANGES:
-       - Baumenü neu: Kategorien (Infrastruktur, Rohstoffe,
-         Nahrung, Lagerung, HQ, Wohnen) als Accordion
-       - Je Kategorie: 1 horizontale Scroll-Zeile mit Thumbnails
-       - Buttons mit Sprite-Vorschau (assets/tex/building/wood)
-       - Mobile-first (iPhone): wenig Höhe, Scrollleisten
-       CONTENT:
-       - Road-Overlay-Render via game.js v1.13
-       - Render: Boden → Straßen → Units → Gebäude → HUD
+       - Hinweis im Baumenü: Live‑Malen Shortcuts (Alt=Fluss, Shift=Straße)
+       - sonst unverändert (Kategorien-Baumenü, Docking, Inspector ...)
        ============================================================ -->
 
   <style>
@@ -36,15 +30,12 @@
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
     .grow{flex:1 1 auto}
 
-    /* ====== Bühne / Hintergrund ====== */
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
     #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.9;transition:opacity .5s;pointer-events:none;z-index:5}
 
-    /* ====== Startpanel ====== */
     #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(0,0,0,.55);backdrop-filter: blur(6px)}
     #startCard{width:min(680px,92vw);padding:20px;border-radius:18px;background:#12161ccc;border:1px solid #ffffff10}
 
-    /* ====== HUD oben links (Ressourcen) ====== */
     #hud{position:fixed;left:8px;top:8px;z-index:12;min-width:280px;padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #versionSmall{font-weight:800;font-size:.85rem;opacity:.85;margin-bottom:8px}
     #resbar{display:flex;gap:18px;align-items:center;background:#0c101a80;border-radius:12px;padding:10px;border:1px solid #ffffff10}
@@ -52,7 +43,6 @@
     .res .val{min-width:28px;text-align:right}
     .ico{width:18px;height:18px;opacity:.92;display:inline-block;vertical-align:-3px}
 
-    /* ====== Build-Menü (angedockt) ====== */
     #buildMenu{
       position:fixed; left:8px; z-index:12;
       background:var(--glass); backdrop-filter:blur(var(--blur));
@@ -61,50 +51,32 @@
     }
     #buildTitle{font-weight:800;margin:2px 0 8px 2px}
 
-    /* Accordion Kategorien */
     .cat{margin:8px 0;border:1px solid #ffffff10;border-radius:12px;overflow:hidden;background:#0e1622b0}
-    .cat>summary{
-      list-style:none;cursor:pointer;padding:8px 10px;font-weight:700;
-      display:flex;align-items:center;gap:8px
-    }
+    .cat>summary{list-style:none;cursor:pointer;padding:8px 10px;font-weight:700;display:flex;align-items:center;gap:8px}
     .cat>summary::-webkit-details-marker{display:none}
     .cat[open]>summary{background:#162233b0}
-    .cat .scroller{
-      display:flex;gap:8px;padding:10px;overflow-x:auto;overflow-y:hidden;
-      -webkit-overflow-scrolling:touch; scrollbar-width:thin
-    }
-    .bcard{
-      flex:0 0 auto; width:92px; border-radius:12px; border:1px solid #ffffff1a;
-      background:#182233; display:flex; flex-direction:column; align-items:center;
-      padding:8px 6px; gap:6px
-    }
+    .cat .scroller{display:flex;gap:8px;padding:10px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch; scrollbar-width:thin}
+    .bcard{flex:0 0 auto; width:92px; border-radius:12px; border:1px solid #ffffff1a;background:#182233; display:flex; flex-direction:column; align-items:center;padding:8px 6px; gap:6px}
     .bcard.active{outline:2px solid var(--accent)}
     .bcard.disabled{opacity:.5;filter:saturate(.6)}
-    .thumb{
-      width:64px;height:64px;object-fit:contain;border-radius:6px;background:#0c1422;border:1px solid #ffffff10
-    }
+    .thumb{width:64px;height:64px;object-fit:contain;border-radius:6px;background:#0c1422;border:1px solid #ffffff10}
     .label{font-size:.78rem;line-height:1.2;text-align:center;color:#d7dfed;min-height:2.2em}
 
-    /* Reopen Button */
     #buildReopen{position:fixed;left:8px;z-index:12;display:none;background:var(--glass);border:1px solid #ffffff14;border-radius:12px;padding:8px 10px}
 
-    /* ====== Toast / Inspector ====== */
     #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid #ffffff14}
     #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:#1a2230;border:1px solid #ffffff14;border-radius:16px;padding:12px}
     #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid #ffffff10}
 
-    /* ====== Vollbild Buttons ====== */
     #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid #ffffff14;background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
   </style>
 </head>
 <body>
 
-  <!-- ================= STAGE / BACKDROP ================= -->
   <canvas id="stage"></canvas>
   <div id="backdrop" aria-hidden="true"></div>
 
-  <!-- ================= STARTPANEL ================= -->
   <div id="startPanel" role="dialog" aria-modal="true">
     <div id="startCard">
       <div class="row" style="justify-content:space-between;margin-bottom:8px">
@@ -129,39 +101,26 @@
     </div>
   </div>
 
-  <!-- ================= HUD (Ressourcen) ================= -->
   <div id="hud" aria-live="polite" aria-atomic="true">
     <div id="versionSmall">V?.?.? • <span id="versionDate"></span></div>
     <div id="resbar" class="res">
-      <span>
-        <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3l10 4-4 10-10-4z"/></svg> Holz
-      </span><span class="val" id="res-wood">0</span>
-      <span>
-        <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M4 16l4-10h8l4 10-8 5z"/></svg> Stein
-      </span><span class="val" id="res-stone">0</span>
-      <span>
-        <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung
-      </span><span class="val" id="res-food">0</span>
-      <span>
-        <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew.
-      </span><span class="val" id="res-pop">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3l10 4-4 10-10-4z"/></svg> Holz</span><span class="val" id="res-wood">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M4 16l4-10h8l4 10-8 5z"/></svg> Stein</span><span class="val" id="res-stone">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 20c2-4 14-4 16 0" fill="currentColor"/></svg> Nahrung</span><span class="val" id="res-food">0</span>
+      <span><svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M12 12a4 4 0 110-8 4 4 0 010 8zm-7 9a7 7 0 0114 0"/></svg> Bew.</span><span class="val" id="res-pop">0</span>
     </div>
   </div>
 
-  <!-- ================= BUILD-MENÜ (angedockt, Kategorien) ================= -->
   <div id="buildMenu">
-    <div id="buildTitle">Baumenü</div>
+    <div id="buildTitle">Baumenü <span style="opacity:.6;font-weight:600">• Live‑Malen: <kbd>Alt</kbd>=Fluss, <kbd>Shift</kbd>=Straße</span></div>
 
-    <!-- INFRASTRUKTUR -->
     <details class="cat" open>
       <summary>🔧 Infrastruktur</summary>
       <div class="scroller">
-        <!-- Straße (Icon als SVG) -->
         <button class="bcard" data-tool="road" title="Straße">
           <svg class="thumb" viewBox="0 0 64 64"><rect x="28" y="0" width="8" height="64" fill="#d9dde6"/><rect x="0" y="28" width="64" height="8" fill="#d9dde6"/></svg>
           <div class="label">Straße</div>
         </button>
-        <!-- Hütte (kleines Basisgebäude ohne dediziertes Holz-Sprite) -->
         <button class="bcard" data-tool="hut" title="Hütte">
           <svg class="thumb" viewBox="0 0 64 64"><path d="M8 36L32 18l24 18v20H8z" fill="#b88a5a"/></svg>
           <div class="label">Hütte</div>
@@ -169,7 +128,6 @@
       </div>
     </details>
 
-    <!-- ROHSTOFFE -->
     <details class="cat">
       <summary>🪵 Rohstoffe</summary>
       <div class="scroller">
@@ -184,7 +142,6 @@
       </div>
     </details>
 
-    <!-- NAHRUNG -->
     <details class="cat">
       <summary>🍞 Nahrung</summary>
       <div class="scroller">
@@ -211,7 +168,6 @@
       </div>
     </details>
 
-    <!-- LAGERUNG -->
     <details class="cat">
       <summary>📦 Lagerung</summary>
       <div class="scroller">
@@ -226,7 +182,6 @@
       </div>
     </details>
 
-    <!-- HQ -->
     <details class="cat">
       <summary>🏰 HQ</summary>
       <div class="scroller">
@@ -241,7 +196,6 @@
       </div>
     </details>
 
-    <!-- WOHNEN -->
     <details class="cat">
       <summary>🏠 Wohnen</summary>
       <div class="scroller">
@@ -262,7 +216,6 @@
   </div>
   <button id="buildReopen" title="Baumenü öffnen">🧱 Bauen</button>
 
-  <!-- ================= FS + TOAST + INSPECTOR ================= -->
   <button id="fsEnter" title="Vollbild">⛶</button>
   <button id="fsExit"  title="Vollbild verlassen">✕</button>
 
@@ -291,7 +244,6 @@
     <div id="log" aria-live="polite"></div>
   </div>
 
-  <!-- ================= SCRIPT-MODULE: ASSET LOADER ================= -->
   <script>
   window.Asset = window.Asset || (function(){
     const cache = new Map(); let texturesReady=false;
@@ -307,11 +259,9 @@
   })();
   </script>
 
-  <!-- ================= SPIEL/BOOT ================= -->
   <script src="./game.js"></script>
   <script src="./boot.js"></script>
 
-  <!-- ================= UI/LOGIK (Docking + Events) ================= -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
@@ -319,11 +269,9 @@
     BootUI = window.BootUI || {};
     BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
 
-    // ---- Version/Build Datum
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
     $('#buildDate').textContent=`${y}${m}${d}`; $('#versionDate').textContent=`${y}${m}${d}`;
 
-    // ---- Startpanel
     $('#btnNew').addEventListener('click', async ()=>{
       const map=$('#mapSelect').value;
       if(confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')){ hideStart(); await window.GameLoader.start(map); }
@@ -332,7 +280,6 @@
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände löschen?')){ try{localStorage.clear(); location.reload();}catch{} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    // ---- Toast / Inspector / FS
     $('#btnMenu').addEventListener('click', ()=> { $('#startPanel').style.display='grid'; });
     $('#btnInspector').addEventListener('click', ()=> { $('#inspector').style.display='block'; });
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ localStorage.clear(); location.reload(); }});
@@ -342,12 +289,10 @@
     fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, go=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; go?.call(el)?.then(()=>{fsEnter.style.display='none';fsExit.style.display='inline-block'}) });
     fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{fsExit.style.display='none';fsEnter.style.display='inline-block'}) });
 
-    // ---- Backdrop Fade (Textures Ready/Timeout)
     (function(){ const bd=$('#backdrop'); let t=setTimeout(()=>{BootUI.dbg('Textures TIMEOUT → fade');bd.style.opacity='0';setTimeout(()=>bd.style.display='none',1200)},60000);
       const tick=()=>{ if(window.Asset?.areTexturesReady?.()){BootUI.dbg('Textures READY -> fade');clearTimeout(t);bd.style.opacity='0';setTimeout(()=>{bd.style.display='none';BootUI.dbg('Backdrop hidden')},3000)} else requestAnimationFrame(tick) }; tick();
     })();
 
-    // ---- Build-Menü Show/Hide via Doppelklick + Reopen
     (function(){
       const m=$('#buildMenu'), r=$('#buildReopen');
       m.addEventListener('dblclick', ()=>{ m.style.display='none'; r.style.display='block'; dockReopen(); });
@@ -356,7 +301,6 @@
       window.addEventListener('resize', dockReopen);
     })();
 
-    // ---- Docking direkt unter HUD
     function dockBuildMenu(){
       const hud = $('#hud');
       const menu = $('#buildMenu');
@@ -367,30 +311,17 @@
     window.addEventListener('resize', dockBuildMenu);
     const ro = new ResizeObserver(()=>dockBuildMenu()); ro.observe($('#hud'));
 
-    // =========================================================
-    // BUILD-TOOLS Binding (alle .bcard Buttons)
-    // =========================================================
     const toolButtons = Array.from(document.querySelectorAll('.bcard'));
-    function setActive(btn){
-      toolButtons.forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-    }
+    function setActive(btn){ toolButtons.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
     toolButtons.forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const tool = btn.dataset.tool;
         const ok = !!(window.Game && window.Game.buildCosts && window.Game.buildCosts[tool]);
-        if(!ok){
-          btn.classList.add('disabled');
-          BootUI.dbg('Build tool nicht verfügbar:', tool);
-          return;
-        }
-        setActive(btn);
-        window.Game?.setActiveTool?.(tool);
-        BootUI.dbg('Tool', tool);
+        if(!ok){ btn.classList.add('disabled'); BootUI.dbg('Build tool nicht verfügbar:', tool); return; }
+        setActive(btn); window.Game?.setActiveTool?.(tool); BootUI.dbg('Tool', tool);
       });
     });
 
-    // „Weiterspielen“
     BootUI.continueLastSnapshot = async function(){
       try{
         const raw=localStorage.getItem('lastSnapshot');
@@ -403,7 +334,7 @@
       }
     };
 
-    log('UI ready (v1.14, Kategorien‑Baumenü aktiv)');
+    console.log('UI ready (v1.14.1, Kategorien‑Baumenü)');
   })();
   </script>
 </body>
