@@ -8,147 +8,68 @@
   <meta name="theme-color" content="#12161c" />
 
   <!-- =======================================================================
-       index.html • v1.8
-       - Live‑Malen direkt auf dem Canvas (Pinsel/Füllen/Löschen)
-       - Undo/Redo (Stacks; auch Drag-Operationen)
-       - Auto‑Tiler für Straßen & Gewässer (N/E/S/W-Bitmasken)
-       - Editor-Dock bleibt erhalten; Startpanel/HUD/Toast/Inspector/FS
+       index.html • v1.8.1
+       - FIX: HiDPI/DPR-Koordinaten → kein Stempel-Versatz mehr
+       - Neu: Tileset-Parser für tileset.terrain.json (Frames → Palette)
+       - Weiterhin: Live‑Malen, Undo/Redo, Auto‑Tiler, Editor-Dock
        ======================================================================= -->
 
   <style>
     :root{
-      --bg:#0f1318;
-      --panel:#1a2230;
-      --panel-2:#101722;
-      --glass:rgba(16,23,34,.65);
-      --text:#e8eef6;
-      --muted:#96a2b6;
-      --accent:#3b82f6;
-      --ok:#22c55e;
-      --warn:#eab308;
-      --danger:#ef4444;
-      --tile:32px;
-      --radius:14px;
-      --radius-sm:10px;
-      --blur:10px;
+      --bg:#0f1318;--panel:#1a2230;--panel-2:#101722;--glass:rgba(16,23,34,.65);
+      --text:#e8eef6;--muted:#96a2b6;--accent:#3b82f6;--ok:#22c55e;--warn:#eab308;--danger:#ef4444;
+      --tile:32px;--radius:14px;--radius-sm:10px;--blur:10px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:#0b0f14;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
     button{cursor:pointer}
-
     /* Canvas */
     #stage{position:fixed;inset:0;display:block;touch-action:none;background:#0b120b}
-
-    /* Backdrop mit Logo */
-    #backdrop{
-      position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;
-      opacity:.9;transition:opacity .5s ease;pointer-events:none;z-index:5;
-    }
-
+    /* Backdrop */
+    #backdrop{position:fixed;inset:0;background:#000 url("./assets/Logo.PNG") center/contain no-repeat;opacity:.9;transition:opacity .5s ease;pointer-events:none;z-index:5;}
     /* Startpanel */
-    #startPanel{
-      position:fixed;inset:0;display:grid;place-items:center;z-index:20;
-      background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.55));
-      backdrop-filter: blur(6px);
-    }
-    #startCard{
-      width:min(680px,92vw);padding:20px 20px 16px;border-radius:18px;
-      background:rgba(18,22,28,.8);box-shadow:0 10px 40px rgba(0,0,0,.4);
-      border:1px solid rgba(255,255,255,.06)
-    }
-    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-    .grow{flex:1 1 auto}
-    .btn{
-      background:#1f2a3a;border:1px solid rgba(255,255,255,.08);
-      color:#e9eef7;padding:10px 14px;border-radius:12px;
-      font-weight:600;letter-spacing:.2px;display:inline-flex;gap:8px;align-items:center
-    }
-    .btn:active{transform:translateY(1px)}
-    .btn.primary{background:#2a3b55;border-color:#3b82f650}
-    .btn.danger{background:#3a2226;border-color:#ef444450}
-    .sel{appearance:none;background:#1f2a3a;color:#e9eef7;border:1px solid rgba(255,255,255,.08);
-         padding:10px;border-radius:12px;min-width:180px}
+    #startPanel{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,.55));backdrop-filter: blur(6px);}
+    #startCard{width:min(680px,92vw);padding:20px 20px 16px;border-radius:18px;background:rgba(18,22,28,.8);box-shadow:0 10px 40px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.06)}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.grow{flex:1 1 auto}
+    .btn{background:#1f2a3a;border:1px solid rgba(255,255,255,.08);color:#e9eef7;padding:10px 14px;border-radius:12px;font-weight:600;letter-spacing:.2px;display:inline-flex;gap:8px;align-items:center}
+    .btn:active{transform:translateY(1px)}.btn.primary{background:#2a3b55;border-color:#3b82f650}.btn.danger{background:#3a2226;border-color:#ef444450}
+    .sel{appearance:none;background:#1f2a3a;color:#e9eef7;border:1px solid rgba(255,255,255,.08);padding:10px;border-radius:12px;min-width:180px}
     .note{color:var(--muted);font-size:.9rem;margin-top:6px}
-
     /* HUD */
-    #hud{
-      position:fixed;left:8px;top:8px;z-index:12;min-width:280px;
-      padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));
-      border:1px solid rgba(255,255,255,.08)
-    }
+    #hud{position:fixed;left:8px;top:8px;z-index:12;min-width:280px;padding:10px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)}
     #versionSmall{font-weight:800;font-size:.9rem;opacity:.85;margin-bottom:8px}
     #resbar{display:flex;gap:18px;align-items:center;background:rgba(12,16,22,.5);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,.06)}
-    .res{display:grid;grid-template-columns:auto auto;gap:8px 10px;align-items:center}
-    .res .val{min-width:28px;text-align:right}
+    .res{display:grid;grid-template-columns:auto auto;gap:8px 10px;align-items:center}.res .val{min-width:28px;text-align:right}
     .ico{width:18px;height:18px;opacity:.9;display:inline-block;vertical-align:-3px}
-
     /* Build-Menü */
-    #buildMenu{
-      position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:12;
-      background:var(--glass);backdrop-filter:blur(var(--blur));
-      border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px;min-width:260px
-    }
-    #buildTools{display:flex;gap:10px;flex-wrap:wrap}
-    .tool{padding:10px 12px;border-radius:12px;background:#1f2a3a;border:1px solid rgba(255,255,255,.08);min-width:44px;text-align:center}
+    #buildMenu{position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:12;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px;min-width:260px}
+    #buildTools{display:flex;gap:10px;flex-wrap:wrap}.tool{padding:10px 12px;border-radius:12px;background:#1f2a3a;border:1px solid rgba(255,255,255,.08);min-width:44px;text-align:center}
     .tool.active{outline:2px solid var(--accent)}
-    #buildReopen{
-      position:fixed;left:8px;top:88px;z-index:12;display:none;
-      background:var(--glass);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(var(--blur));
-      border-radius:12px;padding:8px 10px
-    }
-
+    #buildReopen{position:fixed;left:8px;top:88px;z-index:12;display:none;background:var(--glass);border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(var(--blur));border-radius:12px;padding:8px 10px}
     /* Toast */
-    #toast{
-      position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;
-      padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)
-    }
-    #toast .left, #toast .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-
+    #toast{position:fixed;left:10px;right:10px;bottom:10px;z-index:30;display:flex;gap:12px;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:16px;background:var(--glass);backdrop-filter:blur(var(--blur));border:1px solid rgba(255,255,255,.08)}
+    #toast .left,#toast .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
     /* Inspector */
-    #inspector{
-      position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;
-      background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px 12px 10px
-    }
-    #log{max-height:28vh;overflow:auto;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-         font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,.06)}
+    #inspector{position:fixed;left:10px;right:10px;bottom:70px;z-index:28;display:none;background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px 12px 10px}
+    #log{max-height:28vh;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.3;background:#0d121a;border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,.06)}
     .logline{white-space:pre}
-
-    /* Vollbild-Toggles */
-    #fsEnter,#fsExit{
-      position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid rgba(255,255,255,.08);
-      background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px
-    }
+    /* Vollbild */
+    #fsEnter,#fsExit{position:fixed;right:10px;top:10px;z-index:14;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:var(--glass);backdrop-filter:blur(var(--blur));padding:8px 10px}
     #fsExit{display:none}
-
-    /* Level-Editor Dock */
-    #editorDock{
-      position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);max-width:100vw;z-index:40;
-      display:none;background:var(--panel);border-left:1px solid rgba(255,255,255,.1);
-      box-shadow:-12px 0 30px rgba(0,0,0,.25)
-    }
+    /* Editor Dock */
+    #editorDock{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);max-width:100vw;z-index:40;display:none;background:var(--panel);border-left:1px solid rgba(255,255,255,.1);box-shadow:-12px 0 30px rgba(0,0,0,.25)}
     #editorHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
     #editorBody{padding:12px 14px;display:grid;gap:12px;overflow:auto;height:calc(100% - 52px)}
-    .grid{display:grid;gap:10px}
-    .cols2{grid-template-columns:1fr 1fr}
+    .grid{display:grid;gap:10px}.cols2{grid-template-columns:1fr 1fr}
     .field label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
-    input[type="number"], select{
-      width:100%;padding:8px 10px;border-radius:10px;background:#131a25;border:1px solid rgba(255,255,255,.08);color:var(--text)
-    }
-    .seg{display:flex;flex-wrap:wrap;gap:8px}
-    .seg .btn{padding:8px 10px}
+    input[type="number"],select{width:100%;padding:8px 10px;border-radius:10px;background:#131a25;border:1px solid rgba(255,255,255,.08);color:var(--text)}
+    .seg{display:flex;flex-wrap:wrap;gap:8px}.seg .btn{padding:8px 10px}
     #tilesPreview{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-    #tilesPreview button{aspect-ratio:1/1;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#111822}
-
-    /* Overlay-Hinweis beim Live-Malen */
-    #paintHUD{
-      position:fixed;left:50%;top:18px;transform:translateX(-50%);
-      background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(6px);
-      padding:6px 10px;border-radius:12px;z-index:50;display:none;font-size:.9rem
-    }
-
-    @media (max-width: 880px){
-      #editorDock{left:0;width:100vw}
-    }
+    #tilesPreview button{aspect-ratio:1/1;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:#111822;overflow:hidden}
+    .tileThumb{width:100%;height:100%;background-repeat:no-repeat;background-origin:content-box}
+    /* Live-Paint HUD */
+    #paintHUD{position:fixed;left:50%;top:18px;transform:translateX(-50%);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(6px);padding:6px 10px;border-radius:12px;z-index:50;display:none;font-size:.9rem}
+    @media (max-width: 880px){#editorDock{left:0;width:100vw}}
   </style>
 </head>
 <body>
@@ -156,7 +77,7 @@
   <!-- Canvas -->
   <canvas id="stage"></canvas>
 
-  <!-- Backdrop mit Logo -->
+  <!-- Backdrop -->
   <div id="backdrop" aria-hidden="true"></div>
 
   <!-- Startpanel -->
@@ -166,7 +87,6 @@
         <div style="font-weight:800;font-size:1.1rem;letter-spacing:.3px">Siedler Mini</div>
         <div style="opacity:.7">Build <span id="buildDate"></span></div>
       </div>
-
       <div class="row" style="margin-bottom:10px">
         <select id="mapSelect" class="sel grow" title="Map auswählen">
           <option value="./assets/maps/map-mini.json">Mini-Map (Test)</option>
@@ -177,14 +97,11 @@
         <button id="btnNew" class="btn primary">Neues Spiel</button>
         <button id="btnCont" class="btn">Weiterspielen</button>
       </div>
-
       <div class="row" style="margin-bottom:10px">
         <button id="btnReset" class="btn danger">Reset</button>
-        <div class="grow"></div>
-        <span class="note">Vollbild über das Symbol oben rechts.</span>
+        <div class="grow"></div><span class="note">Vollbild über das Symbol oben rechts.</span>
       </div>
-
-      <div class="note">Tipp: Den <b>Level‑Editor</b> oder das <b>Live‑Malen</b> kannst du unten in der Toast‑Leiste aktivieren.</div>
+      <div class="note">Tipp: <b>Level‑Editor</b> oder <b>Live‑Malen</b> unten in der Toast‑Leiste.</div>
     </div>
   </div>
 
@@ -217,9 +134,7 @@
 
   <!-- Toast -->
   <div id="toast" role="region" aria-label="Utility-Leiste">
-    <div class="left">
-      <button id="btnMenu" class="btn">Menü</button>
-    </div>
+    <div class="left"><button id="btnMenu" class="btn">Menü</button></div>
     <div class="right">
       <button id="btnInspector" class="btn">Inspector</button>
       <button id="btnCache" class="btn">Cache leeren</button>
@@ -248,25 +163,13 @@
   <div id="editorDock" role="dialog" aria-modal="true" aria-label="Level-Editor">
     <div id="editorHead">
       <div style="font-weight:800">Level‑Editor</div>
-      <div class="seg">
-        <button id="btnEditorTest" class="btn">Im Spiel testen</button>
-        <button id="btnEditorClose" class="btn">Schließen</button>
-      </div>
+      <div class="seg"><button id="btnEditorTest" class="btn">Im Spiel testen</button><button id="btnEditorClose" class="btn">Schließen</button></div>
     </div>
     <div id="editorBody">
       <div class="grid cols2">
-        <div class="field">
-          <label>Breite (Tiles)</label>
-          <input id="edWidth" type="number" min="4" max="256" value="32">
-        </div>
-        <div class="field">
-          <label>Höhe (Tiles)</label>
-          <input id="edHeight" type="number" min="4" max="256" value="18">
-        </div>
-        <div class="field">
-          <label>Kachelgröße (px)</label>
-          <input id="edTileSize" type="number" min="16" max="128" value="32">
-        </div>
+        <div class="field"><label>Breite (Tiles)</label><input id="edWidth" type="number" min="4" max="256" value="32"></div>
+        <div class="field"><label>Höhe (Tiles)</label><input id="edHeight" type="number" min="4" max="256" value="18"></div>
+        <div class="field"><label>Kachelgröße (px)</label><input id="edTileSize" type="number" min="16" max="128" value="32"></div>
         <div class="field">
           <label>Tileset</label>
           <select id="edTileset">
@@ -275,7 +178,6 @@
           </select>
         </div>
       </div>
-
       <div class="grid">
         <div class="field">
           <label>Pinsel</label>
@@ -295,21 +197,10 @@
           </div>
         </div>
         <div class="field">
-          <label>Tile‑Index auswählen</label>
+          <label>Tile‑Auswahl (aus Atlas)</label>
           <div id="tilesPreview"></div>
-          <div class="note">Der Index entspricht dem Zellen‑Index im Tileset‑Grid (0‑basiert).</div>
+          <div class="note">Die Kacheln werden aus dem Atlas‑JSON gelesen (Frames). Klick = Index wählen.</div>
         </div>
-
-        <div class="field">
-          <label>Gebäude (symbolisch platzieren)</label>
-          <div class="seg">
-            <button class="btn" data-ed="build" data-val="hut">Hütte</button>
-            <button class="btn" data-ed="build" data-val="lumber">Holzfäller</button>
-            <button class="btn" data-ed="build" data-val="mason">Steinbruch</button>
-            <button class="btn" data-ed="build" data-val="road">Straße</button>
-          </div>
-        </div>
-
         <div class="field">
           <label>Datei</label>
           <div class="seg">
@@ -323,36 +214,29 @@
     </div>
   </div>
 
-  <!-- Overlay-Hinweis Live-Paint -->
+  <!-- Live-Paint HUD -->
   <div id="paintHUD">Live‑Malen aktiv • Brush:<span id="hudBrush">paint</span> • Size:<span id="hudSize">1</span> • Tile:<span id="hudTile">0</span></div>
 
   <!-- ====================== SCRIPT-MODULE ==================================
        1) asset.js    – Image-Loader + TexturesReady-Fahne
-       2) game.js     – Spiel-Engine (bereits vorhanden)
+       2) game.js     – Spiel-Engine
        3) boot.js     – UI/Start/Inspector/FS
-       4) inline code – Editor-Glue + Live-Paint + Auto-Tiler + Undo/Redo
+       4) inline      – Editor + Live‑Paint + Auto‑Tiler + Undo/Redo + Atlas-Palette
        =================================================================== -->
 
   <script>
-  // (1) asset.js – minimaler Loader
+  // (1) asset.js – minimal
   window.Asset = window.Asset || (function(){
-    const cache = new Map();
-    let texturesReady = false;
+    const cache = new Map(); let texturesReady = false;
     async function loadImage(key, url){
       if (cache.has(url)) return cache.get(url);
       return new Promise((resolve,reject)=>{
         const img = new Image(); img.crossOrigin="anonymous";
         img.onload=()=>{ cache.set(url,img); resolve(img); };
-        img.onerror=()=>reject(new Error('IMG '+url));
-        img.src = url;
+        img.onerror=()=>reject(new Error('IMG '+url)); img.src = url;
       });
     }
-    return {
-      loadImage,
-      markTexturesReady(v){ texturesReady = !!v; },
-      areTexturesReady(){ return texturesReady; },
-      _cache: cache
-    };
+    return { loadImage, markTexturesReady(v){ texturesReady=!!v; }, areTexturesReady(){ return texturesReady; }, _cache: cache };
   })();
   </script>
 
@@ -362,295 +246,202 @@
   <!-- (3) boot.js -->
   <script src="./boot.js"></script>
 
-  <!-- (4) Inline: Editor + Live-Paint + Auto-Tiler + Undo/Redo -->
+  <!-- (4) Inline-Logik -->
   <script>
   (function(){
     const $ = (s)=>document.querySelector(s);
     const log = (...a)=> (window.BootUI?.dbg ? BootUI.dbg(...a) : console.log(...a));
     const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-
-    // ===== Version/Datum =====
+    // Version/Datum
     const today=new Date(), y=today.getFullYear(), m=String(today.getMonth()+1).padStart(2,'0'), d=String(today.getDate()).padStart(2,'0');
-    $('#buildDate').textContent = `${y}${m}${d}`;
-    $('#versionDate').textContent = `${y}${m}${d}`;
-    BootUI = window.BootUI || {};
-    BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
+    $('#buildDate').textContent = `${y}${m}${d}`; $('#versionDate').textContent = `${y}${m}${d}`;
+    BootUI = window.BootUI || {}; BootUI.dbg = BootUI.dbg || function(){ console.log('[DBG]', ...arguments); };
 
-    // ===== Startpanel =====
+    // Startpanel
     $('#btnNew').addEventListener('click', async ()=>{
       const map = $('#mapSelect').value;
-      if (confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')) {
-        hideStart(); await window.GameLoader.start(map);
-      }
+      if (confirm('Neues Spiel starten? Bestehende Spielstände können überschrieben werden.')) { hideStart(); await window.GameLoader.start(map); }
     });
     $('#btnCont').addEventListener('click', async ()=>{ hideStart(); BootUI.continueLastSnapshot?.(); });
     $('#btnReset').addEventListener('click', ()=>{ if(confirm('Wirklich alle Spielstände zurücksetzen (Cache leeren)?')){ try{ localStorage.clear(); log('[Reset] OK'); }catch(e){} }});
     function hideStart(){ $('#startPanel').style.display='none'; }
 
-    // ===== Build-Menü toggles =====
-    (function(){
-      const menu=$('#buildMenu'), reopen=$('#buildReopen');
-      menu.addEventListener('dblclick', ()=>{ menu.style.display='none'; reopen.style.display='block'; });
-      reopen.addEventListener('click', ()=>{ menu.style.display='block'; reopen.style.display='none'; });
-    })();
+    // Build-Menü toggle
+    (function(){ const m=$('#buildMenu'), r=$('#buildReopen'); m.addEventListener('dblclick', ()=>{ m.style.display='none'; r.style.display='block'; }); r.addEventListener('click', ()=>{ m.style.display='block'; r.style.display='none'; }); })();
 
-    // ===== Vollbild =====
+    // Vollbild
     const fsEnter=$('#fsEnter'), fsExit=$('#fsExit');
-    fsEnter.addEventListener('click', ()=>{
-      const el=document.documentElement, goFS=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen;
-      goFS?.call(el)?.then(()=>{ fsEnter.style.display='none'; fsExit.style.display='inline-block'; }).catch(()=>{});
-    });
-    fsExit.addEventListener('click', ()=>{
-      const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen;
-      ex?.call(document)?.finally(()=>{ fsExit.style.display='none'; fsEnter.style.display='inline-block'; });
-    });
+    fsEnter.addEventListener('click', ()=>{ const el=document.documentElement, goFS=el.requestFullscreen||el.webkitRequestFullscreen||el.msRequestFullscreen; goFS?.call(el)?.then(()=>{ fsEnter.style.display='none'; fsExit.style.display='inline-block'; }); });
+    fsExit.addEventListener('click', ()=>{ const ex=document.exitFullscreen||document.webkitExitFullscreen||document.msExitFullscreen; ex?.call(document)?.finally(()=>{ fsExit.style.display='none'; fsEnter.style.display='inline-block'; }); });
 
-    // ===== Toast Buttons =====
+    // Toast
     $('#btnMenu').addEventListener('click', ()=>{ $('#startPanel').style.display='grid'; });
     $('#btnInspector').addEventListener('click', ()=>{ $('#inspector').style.display='block'; });
     $('#btnCache').addEventListener('click', ()=>{ if(confirm('Cache leeren?')){ try{ localStorage.clear(); location.reload(); }catch(e){} } });
     $('#btnCloseInspector').addEventListener('click', ()=> $('#inspector').style.display='none');
 
-    // ===== Backdrop Fade =====
+    // Backdrop Fade
     (function waitTextures(){
       const bd = $('#backdrop');
       let timeout = setTimeout(()=>{ BootUI.dbg('Textures TIMEOUT → fade'); bd.style.opacity='0'; setTimeout(()=>bd.style.display='none', 1200); }, 60000);
-      const tick = ()=> {
-        if (window.Asset?.areTexturesReady?.()) {
-          BootUI.dbg('Textures READY -> fade');
-          clearTimeout(timeout);
-          bd.style.opacity='0';
-          setTimeout(()=>{ bd.style.display='none'; BootUI.dbg('Backdrop hidden'); }, 3000);
-        } else { requestAnimationFrame(tick); }
-      };
+      const tick = ()=> { if (window.Asset?.areTexturesReady?.()) { BootUI.dbg('Textures READY -> fade'); clearTimeout(timeout); bd.style.opacity='0'; setTimeout(()=>{ bd.style.display='none'; BootUI.dbg('Backdrop hidden'); }, 3000);} else requestAnimationFrame(tick); };
       tick();
     })();
 
-    // ===== Inspector Log API =====
-    BootUI.paintInspectorBasic = function(){};
-    BootUI.continueLastSnapshot = async function(){
-      try{
-        const raw = localStorage.getItem('lastSnapshot');
-        if (!raw) { alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; }
-        const snap = JSON.parse(raw);
-        await window.GameLoader.continueFrom(snap);
-      }catch(e){ alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid'; }
-    };
+    // Inspector Log
+    BootUI.dbg = function(){ const t=new Date(), stamp=`[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
+      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
+      const el=document.createElement('div'); el.className='logline'; el.textContent=`${stamp} ${line}`; const host=$('#log'); host.appendChild(el); host.scrollTop=host.scrollHeight; console.log(stamp, ...arguments); };
 
-    // ===================== Level-Editor (Dock) =============================
-    const ed = {
-      open:false, brush:'paint', size:1, tile:0,
-      width:32, height:18, tileSize:32, tileset:'./assets/tiles/tileset.terrain.json',
-      tiles: new Uint16Array(32*18),
-      builds: []
-    };
+    BootUI.continueLastSnapshot = async function(){ try{ const raw=localStorage.getItem('lastSnapshot'); if(!raw){ alert('Kein Spielstand gefunden.'); $('#startPanel').style.display='grid'; return; } const snap=JSON.parse(raw); await window.GameLoader.continueFrom(snap);}catch(e){ alert('Konnte Spielstand nicht laden.'); $('#startPanel').style.display='grid'; }};
+
+    // ================== Editor/Palette (Atlas-Parser) ======================
+    const ed = { open:false, brush:'paint', size:1, tile:0, width:32, height:18, tileSize:32, tileset:'./assets/tiles/tileset.terrain.json', tiles:new Uint16Array(32*18), builds:[], frames:[], atlasImage:null, atlasMeta:null };
     $('#btnEditor').addEventListener('click', ()=>openEditor(true));
     $('#btnEditorClose').addEventListener('click', ()=>openEditor(false));
     $('#edWidth').addEventListener('change', e=> ed.width = parseInt(e.target.value,10)||32);
     $('#edHeight').addEventListener('change', e=> ed.height = parseInt(e.target.value,10)||18);
     $('#edTileSize').addEventListener('change', e=> ed.tileSize = parseInt(e.target.value,10)||32);
-    $('#edTileset').addEventListener('change', e=> ed.tileset = e.target.value);
+    $('#edTileset').addEventListener('change', async (e)=>{ ed.tileset = e.target.value; await buildTilePreviewFromTileset(); });
     document.querySelectorAll('[data-ed="brush"]').forEach(b=> b.addEventListener('click', ()=>{ ed.brush = b.dataset.val; updatePaintHUD(); }));
     document.querySelectorAll('[data-ed="size"]').forEach(b=> b.addEventListener('click', ()=>{ ed.size = parseInt(b.dataset.val,10)||1; updatePaintHUD(); }));
-    document.querySelectorAll('[data-ed="build"]').forEach(b=> b.addEventListener('click', ()=> { ed.builds.push({type:b.dataset.val, tx:0, ty:0}); BootUI.dbg('Ed add building', b.dataset.val); }));
 
-    $('#btnEdNew').addEventListener('click', ()=>{
-      if (!confirm('Neues leeres Level erzeugen?')) return;
-      ed.tiles = new Uint16Array(ed.width*ed.height);
-      ed.builds = [];
-      BootUI.dbg('Editor: new map', {w:ed.width,h:ed.height,tile:ed.tileSize});
-    });
-    $('#btnEdExport').addEventListener('click', ()=>{
-      const data = editorToMap();
-      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'map-custom.json'; a.click(); URL.revokeObjectURL(a.href);
-      BootUI.dbg('Editor: export map-custom.json');
-    });
-    $('#fileImport').addEventListener('change', async (e)=>{
-      const file = e.target.files?.[0]; if(!file) return;
-      try{ const txt = await file.text(); const j = JSON.parse(txt); applyMapToEditor(j); BootUI.dbg('Editor: import OK', file.name); }
-      catch(err){ alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL', String(err?.message||err)); }
-      e.target.value='';
-    });
-    $('#btnEditorTest').addEventListener('click', async ()=>{
-      const data = editorToMap(); const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
-      const url = URL.createObjectURL(blob); openEditor(false); $('#startPanel').style.display='none'; await window.GameLoader.start(url);
-      setTimeout(()=> URL.revokeObjectURL(url), 10000); BootUI.dbg('Editor: test run');
-    });
+    $('#btnEdNew').addEventListener('click', ()=>{ if (!confirm('Neues leeres Level erzeugen?')) return; ed.tiles = new Uint16Array(ed.width*ed.height); ed.builds = []; BootUI.dbg('Editor: new map', {w:ed.width,h:ed.height,tile:ed.tileSize}); });
+    $('#btnEdExport').addEventListener('click', ()=>{ const data = editorToMap(); const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'map-custom.json'; a.click(); URL.revokeObjectURL(a.href); BootUI.dbg('Editor: export map-custom.json'); });
+    $('#fileImport').addEventListener('change', async (e)=>{ const file=e.target.files?.[0]; if(!file) return; try{ const txt=await file.text(); const j=JSON.parse(txt); applyMapToEditor(j); BootUI.dbg('Editor: import OK', file.name); }catch(err){ alert('Import fehlgeschlagen'); BootUI.dbg('Editor: import FAIL', String(err?.message||err)); } e.target.value=''; });
+    $('#btnEditorTest').addEventListener('click', async ()=>{ const data=editorToMap(); const blob=new Blob([JSON.stringify(data)],{type:'application/json'}); const url=URL.createObjectURL(blob); openEditor(false); $('#startPanel').style.display='none'; await window.GameLoader.start(url); setTimeout(()=> URL.revokeObjectURL(url), 10000); BootUI.dbg('Editor: test run'); });
 
-    (function buildTilePreview(){
-      const host = $('#tilesPreview');
-      for (let i=0;i<36;i++){
-        const b = document.createElement('button'); b.title = 'Tile '+i; b.textContent = i;
-        b.addEventListener('click', ()=>{ ed.tile = i; [...host.children].forEach(n=>n.style.outline=''); b.style.outline='2px solid var(--accent)'; updatePaintHUD(); });
-        host.appendChild(b);
+    // Palette auf Basis des Tilesets aufbauen
+    (async function initTiles(){ await buildTilePreviewFromTileset(); })();
+
+    async function buildTilePreviewFromTileset(){
+      const host = $('#tilesPreview'); host.innerHTML='';
+      ed.frames=[]; ed.atlasImage=null; ed.atlasMeta=null;
+
+      const url = ed.tileset;
+      if (url.endsWith('.json')){
+        // JSON lesen
+        const res = await fetch(url); const js = await res.json();
+        const base = new URL(url, location.href);
+        const imgUrl = new URL(js.meta?.image || 'tileset.terrain.png', base).toString();
+        ed.atlasMeta = {w: js.meta?.size?.w||1024, h: js.meta?.size?.h||1024};
+        ed.atlasImage = imgUrl;
+
+        // Frames in stabiler Reihenfolge sammeln
+        const frames = Object.entries(js.frames||{}).sort((a,b)=>a[0].localeCompare(b[0])).map(([key,f])=>({key, x:f.x|0, y:f.y|0, w:f.w|0, h:f.h|0}));
+        ed.frames = frames;
+
+        // Buttons mit Hintergrund-Ausschnitt
+        for (let i=0;i<frames.length;i++){
+          const f = frames[i];
+          const btn = document.createElement('button'); btn.title = `${i} • ${f.key}`;
+          const tile = document.createElement('div'); tile.className='tileThumb';
+          tile.style.backgroundImage = `url("${imgUrl}")`;
+          tile.style.backgroundPosition = `-${f.x}px -${f.y}px`;
+          tile.style.backgroundSize = `${ed.atlasMeta.w}px ${ed.atlasMeta.h}px`;
+          btn.appendChild(tile);
+          btn.addEventListener('click', ()=>{ ed.tile=i; paint.tile=i; markSelected(i); updatePaintHUD(); });
+          host.appendChild(btn);
+        }
+        markSelected(0);
+        BootUI.dbg('Palette: JSON‑Atlas geladen', {frames:frames.length,img:imgUrl});
+      } else {
+        // PNG als Grid (Fallback: 16x16, 64px)
+        const img = await Asset.loadImage('atlasPNG', url);
+        const TILE = 64, cols = Math.floor(img.width/TILE), rows = Math.floor(img.height/TILE);
+        ed.atlasMeta={w:img.width,h:img.height}; ed.atlasImage=url;
+        let idx=0;
+        for(let r=0;r<rows;r++){
+          for(let c=0;c<cols;c++){
+            const f={key:`r${r}c${c}`,x:c*TILE,y:r*TILE,w:TILE,h:TILE}; ed.frames.push(f);
+            const btn=document.createElement('button'); btn.title=String(idx);
+            const tile=document.createElement('div'); tile.className='tileThumb';
+            tile.style.backgroundImage=`url("${url}")`;
+            tile.style.backgroundPosition=`-${f.x}px -${f.y}px`;
+            tile.style.backgroundSize=`${img.width}px ${img.height}px`;
+            btn.appendChild(tile);
+            btn.addEventListener('click', ()=>{ ed.tile=idx; paint.tile=idx; markSelected(idx); updatePaintHUD(); });
+            host.appendChild(btn); idx++;
+          }
+        }
+        markSelected(0);
+        BootUI.dbg('Palette: PNG‑Grid geladen', {frames:ed.frames.length});
       }
-    })();
-    function openEditor(v){ ed.open=!!v; $('#editorDock').style.display = v ? 'block' : 'none'; }
-    function editorToMap(){ return {width:ed.width,height:ed.height,tileSize:ed.tileSize,tileset:ed.tileset,tiles:Array.from(ed.tiles)}; }
-    function applyMapToEditor(j){
-      ed.width=j.width|0; ed.height=j.height|0; ed.tileSize=j.tileSize|0; ed.tileset=j.tileset || './assets/tiles/tileset.terrain.json';
-      ed.tiles=new Uint16Array((j.tiles||[]).slice(0, ed.width*ed.height));
-      $('#edWidth').value=ed.width; $('#edHeight').value=ed.height; $('#edTileSize').value=ed.tileSize; $('#edTileset').value=ed.tileset;
+
+      function markSelected(i){
+        [...host.children].forEach(n=>n.style.outline='');
+        if (host.children[i]) host.children[i].style.outline='2px solid var(--accent)';
+      }
     }
 
-    // ===================== Live‑Malen direkt auf Canvas ====================
-    const paint = {
-      active:false, mode:'paint', size:1, tile:0,
-      dragging:false, batch:[], // gesammelt für Undo
-      undo:[], redo:[],
-      autoTile:true
-    };
+    function openEditor(v){ ed.open=!!v; $('#editorDock').style.display = v ? 'block' : 'none'; }
+    function editorToMap(){ return {width:ed.width,height:ed.height,tileSize:ed.tileSize,tileset:ed.tileset,tiles:Array.from(ed.tiles)}; }
+    function applyMapToEditor(j){ ed.width=j.width|0; ed.height=j.height|0; ed.tileSize=j.tileSize|0; ed.tileset=j.tileset || './assets/tiles/tileset.terrain.json'; ed.tiles=new Uint16Array((j.tiles||[]).slice(0, ed.width*ed.height));
+      $('#edWidth').value=ed.width; $('#edHeight').value=ed.height; $('#edTileSize').value=ed.tileSize; $('#edTileset').value=ed.tileset; }
+
+    // ================== Live‑Malen (mit DPR‑Fix!) ==========================
+    const paint = { active:false, mode:'paint', size:1, tile:0, dragging:false, batch:[], undo:[], redo:[], autoTile:true };
     const hud = {wrap: $('#paintHUD'), brush: $('#hudBrush'), size: $('#hudSize'), tile: $('#hudTile') };
     function updatePaintHUD(){ hud.brush.textContent = paint.mode; hud.size.textContent = paint.size; hud.tile.textContent = paint.tile; }
 
-    // *** Auto‑Tiler-Konfig ***
-    // Passe hier die Indizes an DEIN Tileset an:
+    // Auto‑Tiler-Beispiel (an Tileset anpassen)
     const AUTO_TILER = {
       ENABLED: true,
-      // Kategorien: welche Tile-Indices gelten als Straße / Wasser?
-      ROAD_SET: new Set([40]),   // <— Beispiel: 40 ist "Straße-Basis"
-      WATER_SET:new Set([50]),   // <— Beispiel: 50 ist "Wasser-Basis"
-      // Bitmask-zu-Index-Tabellen (0..15 → Index)
-      // Maske: N=1, E=2, S=4, W=8 (Summe)
-      ROAD_MASK_MAP: {
-        0:40, 1:41, 2:42, 4:43, 8:44,
-        3:45, 6:46, 9:47, 12:48,
-        5:49, 10:50,
-        7:51, 11:52, 13:53, 14:54, 15:55
-      },
-      WATER_MASK_MAP: {
-        0:50, 1:51, 2:52, 4:53, 8:54,
-        3:55, 6:56, 9:57, 12:58,
-        5:59, 10:60,
-        7:61, 11:62, 13:63, 14:64, 15:65
-      }
+      ROAD_SET: new Set([40]), WATER_SET:new Set([50]),
+      ROAD_MASK_MAP:{0:40,1:41,2:42,4:43,8:44,3:45,6:46,9:47,12:48,5:49,10:50,7:51,11:52,13:53,14:54,15:55},
+      WATER_MASK_MAP:{0:50,1:51,2:52,4:53,8:54,3:55,6:56,9:57,12:58,5:59,10:60,7:61,11:62,13:63,14:64,15:65}
     };
-    // Fallback, falls dein Tileset andere Indizes hat:
-    function autotileIndex(kind, mask, fallbackIdx){
-      if (!AUTO_TILER.ENABLED) return fallbackIdx;
-      if (kind==='road'){ return AUTO_TILER.ROAD_MASK_MAP[mask] ?? fallbackIdx; }
-      if (kind==='water'){ return AUTO_TILER.WATER_MASK_MAP[mask] ?? fallbackIdx; }
-      return fallbackIdx;
-    }
-    function isKind(idx, kind){
-      if (kind==='road') return AUTO_TILER.ROAD_SET.has(idx);
-      if (kind==='water') return AUTO_TILER.WATER_SET.has(idx);
-      return false;
-    }
+    function autotileIndex(kind, mask, fallbackIdx){ if (!AUTO_TILER.ENABLED) return fallbackIdx; if (kind==='road') return AUTO_TILER.ROAD_MASK_MAP[mask] ?? fallbackIdx; if (kind==='water') return AUTO_TILER.WATER_MASK_MAP[mask] ?? fallbackIdx; return fallbackIdx; }
+    function isKind(idx, kind){ if (kind==='road') return AUTO_TILER.ROAD_SET.has(idx); if (kind==='water') return AUTO_TILER.WATER_SET.has(idx); return false; }
 
-    // UI-Kopplung
     $('#btnPaint').addEventListener('click', ()=> togglePaint());
     $('#btnUndo').addEventListener('click', ()=> doUndo());
     $('#btnRedo').addEventListener('click', ()=> doRedo());
     window.addEventListener('keydown', (e)=>{
+      if ((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ e.preventDefault(); doUndo(); }
+      if (((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key.toLowerCase()==='z')||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y')){ e.preventDefault(); doRedo(); }
       if (e.key.toLowerCase()==='e'){ togglePaint(); }
-      if ((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); doUndo(); }
-      if (((e.ctrlKey||e.metaKey)&& e.shiftKey && e.key.toLowerCase()==='z') || ((e.ctrlKey||e.metaKey)&& e.key.toLowerCase()==='y')){ e.preventDefault(); doRedo(); }
       if (e.key.toLowerCase()==='r'){ paint.mode='paint'; paint.tile=[...AUTO_TILER.ROAD_SET][0]??paint.tile; paint.autoTile=true; updatePaintHUD(); flashHUD(); }
       if (e.key.toLowerCase()==='w'){ paint.mode='paint'; paint.tile=[...AUTO_TILER.WATER_SET][0]??paint.tile; paint.autoTile=true; updatePaintHUD(); flashHUD(); }
       if (e.key==='+'){ paint.size=clamp(paint.size+1,1,4); updatePaintHUD(); flashHUD(); }
       if (e.key==='-'){ paint.size=clamp(paint.size-1,1,4); updatePaintHUD(); flashHUD(); }
     });
 
-    function togglePaint(force){
-      paint.active = (typeof force==='boolean') ? force : !paint.active;
-      $('#paintHUD').style.display = paint.active ? 'block' : 'none';
-      updatePaintHUD();
-      if (paint.active) attachPaintHandlers(); else detachPaintHandlers();
-      log('Live‑Malen', paint.active?'ON':'OFF');
-    }
-    function flashHUD(){ const el=hud.wrap; el.style.transform='translateX(-50%) scale(1.05)'; setTimeout(()=>el.style.transform='translateX(-50%) scale(1)',150); }
-
-    // Zugriff auf Game-World & Koordinatenumrechnung
     const canvas = $('#stage');
-    function getWorld(){
-      return window.GameLoader? window.GameLoader._world : null;
+    function getWorld(){ return window.GameLoader? window.GameLoader._world : null; }
+
+    function getCanvasScale(){
+      // DPR/HiDPI-sicher: Client-Koords → Canvas-Pixel
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width  / rect.width;
+      const sy = canvas.height / rect.height;
+      return {sx, sy, rect};
     }
     function clientToTile(x,y){
       const w=getWorld(); if(!w) return {tx:-1,ty:-1};
-      const r=canvas.getBoundingClientRect();
-      const cx = (x - r.left)/w.zoom + w.camX;
-      const cy = (y - r.top )/w.zoom + w.camY;
-      const tx = Math.floor(cx / w.tileSize);
-      const ty = Math.floor(cy / w.tileSize);
-      return {tx,ty};
+      const {sx,sy,rect} = getCanvasScale();
+      // Mausposition in Canvas-Pixel:
+      const px = (x - rect.left) * sx;
+      const py = (y - rect.top ) * sy;
+      // Kamera/Zoom liegen in Pixeln → umrechnen
+      const cx = px / w.zoom + w.camX;
+      const cy = py / w.zoom + w.camY;
+      return { tx: Math.floor(cx / w.tileSize), ty: Math.floor(cy / w.tileSize) };
     }
 
-    // Undo/Redo
-    function pushBatchToUndo(batch){
-      if (!batch || !batch.length) return;
-      paint.undo.push(batch.map(e=>({...e})));
-      paint.redo.length=0; // clear redo
-    }
-    function doUndo(){
-      const w=getWorld(); if(!w) return;
-      const op=paint.undo.pop(); if(!op) return;
-      const redoBatch=[];
-      for(const e of op){
-        const idx = w.map.width*e.ty + e.tx;
-        const cur = w.tiles[idx];
-        redoBatch.push({tx:e.tx,ty:e.ty, prev:cur, next:e.prev});
-        w.tiles[idx]=e.prev;
-      }
-      paint.redo.push(redoBatch);
-      BootUI.dbg('Undo', op.length+' changes');
-    }
-    function doRedo(){
-      const w=getWorld(); if(!w) return;
-      const op=paint.redo.pop(); if(!op) return;
-      const undoBatch=[];
-      for(const e of op){
-        const idx = w.map.width*e.ty + e.tx;
-        const cur = w.tiles[idx];
-        undoBatch.push({tx:e.tx,ty:e.ty, prev:cur, next:e.next});
-        w.tiles[idx]=e.next;
-      }
-      paint.undo.push(undoBatch);
-      BootUI.dbg('Redo', op.length+' changes');
-    }
+    function togglePaint(force){ paint.active = (typeof force==='boolean') ? force : !paint.active; $('#paintHUD').style.display = paint.active ? 'block' : 'none'; updatePaintHUD(); if (paint.active) attachPaintHandlers(); else detachPaintHandlers(); log('Live‑Malen', paint.active?'ON':'OFF'); }
+    function flashHUD(){ const el=hud.wrap; el.style.transform='translateX(-50%) scale(1.05)'; setTimeout(()=>el.style.transform='translateX(-50%) scale(1)',150); }
+    function attachPaintHandlers(){ canvas.addEventListener('pointerdown', onDown, {passive:false}); canvas.addEventListener('pointermove', onMove, {passive:false}); canvas.addEventListener('pointerup', onUp, {passive:false}); canvas.addEventListener('pointercancel', onUp, {passive:false}); }
+    function detachPaintHandlers(){ canvas.removeEventListener('pointerdown', onDown); canvas.removeEventListener('pointermove', onMove); canvas.removeEventListener('pointerup', onUp); canvas.removeEventListener('pointercancel', onUp); }
 
-    // Malen/Füllen/Löschen
-    function attachPaintHandlers(){
-      canvas.addEventListener('pointerdown', onDown, {passive:false});
-      canvas.addEventListener('pointermove', onMove, {passive:false});
-      canvas.addEventListener('pointerup',   onUp,   {passive:false});
-      canvas.addEventListener('pointercancel', onUp, {passive:false});
-    }
-    function detachPaintHandlers(){
-      canvas.removeEventListener('pointerdown', onDown);
-      canvas.removeEventListener('pointermove', onMove);
-      canvas.removeEventListener('pointerup',   onUp);
-      canvas.removeEventListener('pointercancel', onUp);
-    }
-    function onDown(ev){
-      if (!paint.active) return;
-      ev.preventDefault();
-      paint.dragging=true; paint.batch=[];
-      const {tx,ty}=clientToTile(ev.clientX,ev.clientY);
-      applyBrush(tx,ty,true);
-    }
-    function onMove(ev){
-      if (!paint.active || !paint.dragging) return;
-      ev.preventDefault();
-      const {tx,ty}=clientToTile(ev.clientX,ev.clientY);
-      applyBrush(tx,ty,false);
-    }
-    function onUp(_ev){
-      if (!paint.active) return;
-      paint.dragging=false;
-      pushBatchToUndo(paint.batch);
-      paint.batch=[];
-    }
+    function onDown(ev){ if (!paint.active) return; ev.preventDefault(); paint.dragging=true; paint.batch=[]; const {tx,ty}=clientToTile(ev.clientX,ev.clientY); applyBrush(tx,ty,true); }
+    function onMove(ev){ if (!paint.active||!paint.dragging) return; ev.preventDefault(); const {tx,ty}=clientToTile(ev.clientX,ev.clientY); applyBrush(tx,ty,false); }
+    function onUp(){ if (!paint.active) return; paint.dragging=false; pushBatchToUndo(paint.batch); paint.batch=[]; }
 
     function applyBrush(tx,ty,first){
       const w=getWorld(); if(!w) return;
       if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
-
-      if (ed.brush==='fill' || paint.mode==='fill'){
-        if (first) floodFill(tx,ty, paint.tile);
-        return;
-      }
+      if (ed.brush==='fill' || paint.mode==='fill'){ if (first) floodFill(tx,ty, paint.tile); return; }
       const half = paint.size-1;
       for(let dy=-half; dy<=half; dy++){
         for(let dx=-half; dx<=half; dx++){
@@ -662,98 +453,39 @@
         }
       }
     }
-
-    function setTileWithRecord(tx,ty,newIdx){
-      const w=getWorld(); if(!w) return;
-      const i = w.map.width*ty + tx;
-      const prev = w.tiles[i]|0;
-      if (prev===newIdx) return;
-      w.tiles[i] = newIdx;
-      paint.batch.push({tx,ty,prev,next:newIdx});
-    }
-
+    function setTileWithRecord(tx,ty,newIdx){ const w=getWorld(); if(!w) return; const i=w.map.width*ty + tx; const prev=w.tiles[i]|0; if (prev===newIdx) return; w.tiles[i]=newIdx; paint.batch.push({tx,ty,prev,next:newIdx}); }
     function floodFill(tx,ty,newIdx){
-      const w=getWorld(); if(!w) return;
-      const W=w.map.width, H=w.map.height;
-      const i0=W*ty+tx, oldIdx=w.tiles[i0]|0;
-      if (oldIdx===newIdx) return;
-      const q=[[tx,ty]]; const seen=new Set([i0]);
-      const batch=[];
-      while(q.length){
-        const [x,y]=q.pop(); const ii=W*y+x; const cur=w.tiles[ii]|0;
-        if (cur!==oldIdx) continue;
-        w.tiles[ii]=newIdx; batch.push({tx:x,ty:y,prev:cur,next:newIdx});
-        if (x>0 && !seen.has(ii-1)){ seen.add(ii-1); q.push([x-1,y]); }
-        if (x<W-1 && !seen.has(ii+1)){ seen.add(ii+1); q.push([x+1,y]); }
-        if (y>0 && !seen.has(ii-W)){ seen.add(ii-W); q.push([x,y-1]); }
-        if (y<H-1 && !seen.has(ii+W)){ seen.add(ii+W); q.push([x,y+1]); }
+      const w=getWorld(); if(!w) return; const W=w.map.width, H=w.map.height; const i0=W*ty+tx, oldIdx=w.tiles[i0]|0; if (oldIdx===newIdx) return;
+      const q=[[tx,ty]], seen=new Set([i0]); const batch=[];
+      while(q.length){ const [x,y]=q.pop(); const ii=W*y+x; const cur=w.tiles[ii]|0; if (cur!==oldIdx) continue; w.tiles[ii]=newIdx; batch.push({tx:x,ty:y,prev:cur,next:newIdx});
+        if (x>0    && !seen.has(ii-1)){ seen.add(ii-1); q.push([x-1,y]); }
+        if (x<W-1  && !seen.has(ii+1)){ seen.add(ii+1); q.push([x+1,y]); }
+        if (y>0    && !seen.has(ii-W)){ seen.add(ii-W); q.push([x,y-1]); }
+        if (y<H-1  && !seen.has(ii+W)){ seen.add(ii+W); q.push([x,y+1]); }
       }
       paint.batch.push(...batch);
-      if (paint.autoTile){
-        // Nach dem Fill die Ränder nach-tilen:
-        for(const e of batch){ autoTileAround(e.tx,e.ty); }
-      }
+      if (paint.autoTile){ for(const e of batch){ autoTileAround(e.tx,e.ty); } }
     }
-
-    // Auto‑Tiler: N/E/S/W‑Maske bilden und Mapping anwenden
-    function autoTileAround(tx,ty){
-      applyAutoAt(tx,ty);
-      applyAutoAt(tx+1,ty); applyAutoAt(tx-1,ty);
-      applyAutoAt(tx,ty+1); applyAutoAt(tx,ty-1);
-    }
+    function autoTileAround(tx,ty){ applyAutoAt(tx,ty); applyAutoAt(tx+1,ty); applyAutoAt(tx-1,ty); applyAutoAt(tx,ty+1); applyAutoAt(tx,ty-1); }
     function applyAutoAt(tx,ty){
-      const w=getWorld(); if(!w) return;
-      if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
-      const W=w.map.width, H=w.map.height;
-      const i=W*ty+tx; const cur = w.tiles[i]|0;
-
-      let kind = null;
-      if (isKind(cur,'road')) kind='road';
-      else if (isKind(cur,'water')) kind='water';
-      else return; // keine automatische Kachel
-
-      const n = (ty>0      ? w.tiles[i-W]|0 : -1);
-      const e = (tx<W-1    ? w.tiles[i+1]|0 : -1);
-      const s = (ty<H-1    ? w.tiles[i+W]|0 : -1);
-      const ww= (tx>0      ? w.tiles[i-1]|0 : -1);
-
-      let mask=0;
-      if (isKind(n,kind)) mask |= 1; // N
-      if (isKind(e,kind)) mask |= 2; // E
-      if (isKind(s,kind)) mask |= 4; // S
-      if (isKind(ww,kind))mask |= 8; // W
-
-      const nextIdx = autotileIndex(kind, mask, cur);
-      if (nextIdx!==cur){
-        const prev=cur;
-        w.tiles[i]=nextIdx;
-        // nur speichern, wenn wir nicht schon in dieser Batch für dieselbe Zelle geschrieben haben
-        if (!paint.batch.some(e=>e.tx===tx && e.ty===ty)){
-          paint.batch.push({tx,ty,prev,next:nextIdx});
-        }
-      }
+      const w=getWorld(); if(!w) return; if (tx<0||ty<0||tx>=w.map.width||ty>=w.map.height) return;
+      const W=w.map.width; const i=W*ty+tx; const cur=w.tiles[i]|0; let kind=null;
+      if (isKind(cur,'road')) kind='road'; else if (isKind(cur,'water')) kind='water'; else return;
+      const n=(ty>0)? w.tiles[i-W]|0 : -1, e=(tx<W-1)? w.tiles[i+1]|0 : -1, s=(ty<w.map.height-1)? w.tiles[i+W]|0 : -1, ww=(tx>0)? w.tiles[i-1]|0 : -1;
+      let mask=0; if (isKind(n,kind)) mask|=1; if (isKind(e,kind)) mask|=2; if (isKind(s,kind)) mask|=4; if (isKind(ww,kind)) mask|=8;
+      const nextIdx=autotileIndex(kind, mask, cur); if (nextIdx!==cur){ const prev=cur; w.tiles[i]=nextIdx; if (!paint.batch.some(e=>e.tx===tx&&e.ty===ty)){ paint.batch.push({tx,ty,prev,next:nextIdx}); } }
     }
 
-    // ====== Paint HUD initial =====
-    $('#btnPaint').title = 'Live‑Malen (E) • Undo (Ctrl/Cmd+Z) • Redo (Ctrl/Cmd+Y oder Shift+Z) • R=Straße • W=Wasser • +/- Größe';
+    function pushBatchToUndo(batch){ if (!batch||!batch.length) return; paint.undo.push(batch.map(e=>({...e}))); paint.redo.length=0; }
+    function doUndo(){ const w=getWorld(); if(!w) return; const op=paint.undo.pop(); if(!op) return; const redo=[]; for(const e of op){ const idx=w.map.width*e.ty+e.tx; const cur=w.tiles[idx]; redo.push({tx:e.tx,ty:e.ty,prev:cur,next:e.prev}); w.tiles[idx]=e.prev; } paint.redo.push(redo); BootUI.dbg('Undo', op.length+' changes'); }
+    function doRedo(){ const w=getWorld(); if(!w) return; const op=paint.redo.pop(); if(!op) return; const undo=[]; for(const e of op){ const idx=w.map.width*e.ty+e.tx; const cur=w.tiles[idx]; undo.push({tx:e.tx,ty:e.ty,prev:cur,next:e.next}); w.tiles[idx]=e.next; } paint.undo.push(undo); BootUI.dbg('Redo', op.length+' changes'); }
+
+    // Paint HUD
+    $('#btnPaint').title = 'Live‑Malen (E) • Undo (Ctrl/Cmd+Z) • Redo (Ctrl/Cmd+Y/Shift+Z) • R=Straße • W=Wasser • +/- Größe';
+    function updatePaintSelectionFromPalette(i){ ed.tile=i; paint.tile=i; updatePaintHUD(); }
     updatePaintHUD();
 
-    // ===================== Editor+Spiel: Brücke ============================
-    $('#btnEditor').addEventListener('click', ()=> openEditor(true));
-    $('#btnEditorClose').addEventListener('click', ()=> openEditor(false));
-    $('#btnEditorTest').addEventListener('click', ()=> openEditor(false));
-
-    // ===================== Inspector Log‑Setup =============================
-    BootUI.dbg = function(){
-      const t = new Date();
-      const stamp = `[${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}]`;
-      const line = Array.from(arguments).map(v=> (typeof v==='string'? v : JSON.stringify(v))).join(' ');
-      const el = document.createElement('div'); el.className='logline'; el.textContent = `${stamp} ${line}`;
-      const logEl = $('#log'); logEl.appendChild(el); logEl.scrollTop = logEl.scrollHeight;
-      console.log(stamp, ...arguments);
-    };
-
-    // ===================== UI ready Log ===================================
+    // UI ready
     BootUI.dbg('UI ready');
   })();
   </script>
