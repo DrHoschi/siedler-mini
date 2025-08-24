@@ -273,7 +273,7 @@
     "terrain_r15_c15": { "x": 960, "y": 960, "w": 64, "h": 64 }
   },
   "meta": {
-    "image": "/siedler-mini/assets/tiles/tileset.terrain.png",
+    "image": "/tileset.terrain.png",
     "placeholder": "/siedler-mini/assets/tex/placeholder64.PNG",
     "tileSize": 64,
     "size": { "w": 1024, "h": 1024 },
