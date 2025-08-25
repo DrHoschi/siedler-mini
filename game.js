@@ -1,512 +1,223 @@
-/* game.js v1.18 — Siedler-mini
- * Ziel:
- * - Volle Debug-Ausgabe mit OK/WARN/ERR Icons + Filter + Copy
- * - Robust: Map-Parser (grid ODER layers) + Tileset-Atlas (relatives meta.image)
- * - Öffentliche API (BootAPI.*) fürs Startmenü/Inspektor
- * - Platzhalter-Renderer, bis echte Tiles/Assets integriert sind
- *
- * WICHTIG: Erwartete DOM-Struktur (IDs):
- *   #game-canvas (Canvas), #backdrop (div), #menu (Startpanel)
- *   #inspector (Container), #inspector-log (ul/ol/div für Zeilen),
- *   #inspector-filter (select|buttons mit values all|ok|warn|err),
- *   #copy-log (Button).
- */
+/* ============================================================================
+ * game.js — Siedler‑Mini • v11.1r6
+ * ---------------------------------------------------------------------------
+ * Features:
+ *  - GameLoader.start/reload mit zentralem Cache‑Bust + Reentrancy‑Guard
+ *  - startGame()/reloadGame() verändern URL NICHT mehr (kein doppelter Bust)
+ *  - Einfaches Canvas‑Rendering (Grid), damit immer etwas sichtbar ist
+ *  - Kamera‑API (Zoom 0.5–3.5, Position) für UI/Debug
+ *  - Sauberes Logging kompatibel zu dev‑inspector + saveDebugLog()
+ *  - Robust: legt #game‑Canvas an, falls nicht vorhanden
+ * ========================================================================== */
 
 (() => {
-  'use strict';
-
-  // -----------------------------
-  // Utilities
-  // -----------------------------
-  const VERSION = 'game.js v1.18';
-  const TAG = '(game)';
-  const nowTS = () => {
-    const d = new Date();
-    return `[${d.toTimeString().slice(0,8)}]`;
+  // -------- Version/Logger ---------------------------------------------------
+  const VERSION = 'v11.1r6';
+  const L = {
+    log : (...a) => console.log('[game]', ...a),
+    info: (...a) => console.info('[game]', ...a),
+    warn: (...a) => console.warn('[game]', ...a),
+    err : (...a) => console.error('[game]', ...a),
   };
 
-  const $ = (sel) => document.querySelector(sel);
+  // -------- Runtime State ----------------------------------------------------
+  const R = (window.__GAME_RUN__ = window.__GAME_RUN__ || {
+    starting   : false,                 // Start/Reload läuft?
+    currentMap : null,                  // akt. Map‑URL (inkl. Cache‑Bust)
+    mapData    : null,                  // geladene Map (JSON)
+    canvas     : null,
+    ctx        : null,
+    camera     : { x:0, y:0, zoom:1 },
+    tile       : 64,
+    rows       : 16,
+    cols       : 16,
+    dpr        : window.devicePixelRatio || 1,
+    rafId      : 0,
+    gridColor  : 'rgba(255,255,255,0.06)',
+    needsDraw  : true,
+  });
 
-  // Kleine URL-Helfer für relative Pfade (z.B. meta.image im Atlas)
-  const toAbsURL = (maybeRel, baseUrl) => {
-    try {
-      return new URL(maybeRel, baseUrl).href;
-    } catch (e) {
-      // Fallback: wenn baseUrl selbst relativ war, gegen location.href auflösen
-      try {
-        const absBase = new URL(baseUrl, location.href).href;
-        return new URL(maybeRel, absBase).href;
-      } catch (e2) {
-        return maybeRel; // Letzte Chance: unverändert zurück
-      }
+  // -------- Canvas‑Setup -----------------------------------------------------
+  function ensureCanvas() {
+    if (R.canvas && R.ctx) return;
+    let c = document.getElementById('game');              // bevorzugt #game
+    if (!c) {
+      c = document.createElement('canvas');
+      c.id = 'game';
+      c.style.display = 'block';
+      c.style.width = '100vw';
+      c.style.height = '100vh';
+      document.body.appendChild(c);
     }
-  };
-
-  // -----------------------------
-  // BootUI / Debug-Logger
-  // -----------------------------
-  const BootUI = {
-    els: {
-      insp: null,
-      list: null,
-      filter: null,
-      copyBtn: null
-    },
-    buffer: [],      // Rohdaten für Copy/Filter
-    filter: 'all',   // 'all'|'ok'|'warn'|'err'
-
-    init() {
-      this.els.insp = $('#inspector');
-      this.els.list = $('#inspector-log');
-      this.els.filter = $('#inspector-filter');
-      this.els.copyBtn = $('#copy-log');
-
-      // Event: Filter
-      if (this.els.filter) {
-        this.els.filter.addEventListener('change', (e) => {
-          this.filter = e.target.value || 'all';
-          this.render();
-        });
-      }
-
-      // Event: Copy
-      if (this.els.copyBtn) {
-        this.els.copyBtn.addEventListener('click', () => this.copyToClipboard());
-      }
-
-      this.logOK(`UI ready (${getIndexVersion()})`);
-      this.logOK(`script load ok ${VERSION}`);
-    },
-
-    // Öffentliche Log-Funktionen (mit Symbolen)
-    logOK(msg, scope='')  { this._push('ok', msg, scope); }
-    ,
-    logWarn(msg, scope='') { this._push('warn', msg, scope); }
-    ,
-    logErr(msg, scope='')  { this._push('err', msg, scope); }
-    ,
-    log(msg, scope='')     { this._push('ok', msg, scope); } // default=ok
-
-    _push(type, msg, scope) {
-      const line = {
-        ts: nowTS(),
-        type, // ok|warn|err
-        scope: scope || TAG,
-        text: msg
-      };
-      this.buffer.push(line);
-      // Direkt in Konsole mit typisiertem Prefix
-      const prefix = `${line.ts} ${line.scope}`;
-      if (type === 'err') console.error(prefix, msg);
-      else if (type === 'warn') console.warn(prefix, msg);
-      else console.log(prefix, msg);
-
-      // versuchen, in DOM zu zeichnen
-      this._appendDOM(line);
-    },
-
-    _icon(type) {
-      if (type === 'ok')   return '✅';
-      if (type === 'warn') return '⚠️';
-      return '❌';
-    },
-
-    _appendDOM(line) {
-      if (!this.els.list) return;
-      if (this.filter !== 'all' && this.filter !== line.type) return; // inaktiv
-
-      const el = document.createElement('div');
-      el.className = `log ${line.type}`;
-      el.textContent = `${line.ts} ${line.scope} ${line.text}`;
-      const ico = document.createElement('span');
-      ico.className = 'ico';
-      ico.textContent = this._icon(line.type);
-      el.prepend(ico);
-      this.els.list.appendChild(el);
-
-      // Scroll ans Ende
-      this.els.list.scrollTop = this.els.list.scrollHeight;
-    },
-
-    render() {
-      if (!this.els.list) return;
-      this.els.list.innerHTML = '';
-      for (const line of this.buffer) {
-        if (this.filter !== 'all' && this.filter !== line.type) continue;
-        this._appendDOM(line);
-      }
-    },
-
-    copyToClipboard() {
-      const text = this.buffer.map(l =>
-        `${l.ts} ${l.scope} ${l.text}`
-      ).join('\n');
-      navigator.clipboard.writeText(text).then(() => {
-        this.logOK('Log in Zwischenablage kopiert', 'copy');
-      }).catch(err => {
-        this.logErr(`Copy fehlgeschlagen: ${err}`, 'copy');
-      });
-    },
-
-    // Panel-Helpers
-    showBackdropFadeOutSoon() {
-      const bd = $('#backdrop');
-      if (!bd) return;
-      // 10s Fail-Safe wie vorher
-      setTimeout(() => {
-        this.logWarn('Backdrop fail-safe 10s → fade');
-        bd.classList.add('faded'); // CSS: opacity 0 + transition
-        // nach Übergang entfernen
-        setTimeout(() => { bd.style.display = 'none'; }, 1500);
-      }, 10000);
-    },
-    hideBackdropNow() {
-      const bd = $('#backdrop');
-      if (!bd) return;
-      bd.classList.add('faded');
-      setTimeout(() => { bd.style.display = 'none'; }, 1500);
-      this.logOK('Backdrop hidden');
-    }
-  };
-
-  // Hilfsfunktion: Index-Version aus Datenattribut (falls gesetzt)
-  function getIndexVersion() {
-    const root = document.documentElement;
-    return root?.dataset?.indexVersion || 'index v?';
+    R.canvas = c;
+    R.ctx = c.getContext('2d');
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
   }
 
-  // -----------------------------
-  // Canvas / Renderer (sehr einfach)
-  // -----------------------------
-  const Gfx = {
-    canvas: null,
-    ctx: null,
-    dpr: Math.max(1, Math.min(3, window.devicePixelRatio || 1)),
+  function resizeCanvas() {
+    const cssW = Math.max(1, R.canvas.clientWidth  || window.innerWidth);
+    const cssH = Math.max(1, R.canvas.clientHeight || window.innerHeight);
+    const W = Math.floor(cssW * R.dpr);
+    const H = Math.floor(cssH * R.dpr);
+    if (R.canvas.width !== W || R.canvas.height !== H) {
+      R.canvas.width  = W;
+      R.canvas.height = H;
+      R.needsDraw = true;
+    }
+  }
 
-    init() {
-      this.canvas = $('#game-canvas');
-      if (!this.canvas) {
-        BootUI.logErr('#game-canvas fehlt!');
-        return;
-      }
-      this.ctx = this.canvas.getContext('2d');
-      this.resize();
-      window.addEventListener('resize', () => this.resize());
+  // -------- Kamera‑API -------------------------------------------------------
+  const Camera = {
+    setZoom(z) {
+      const clamped = Math.max(0.5, Math.min(3.5, Number(z) || 1));
+      if (clamped !== R.camera.zoom) { R.camera.zoom = clamped; R.needsDraw = true; }
     },
-
-    resize() {
-      if (!this.canvas) return;
-      const cssW = this.canvas.clientWidth || this.canvas.parentElement?.clientWidth || 400;
-      const cssH = this.canvas.clientHeight || this.canvas.parentElement?.clientHeight || 300;
-      const w = Math.floor(cssW * this.dpr);
-      const h = Math.floor(cssH * this.dpr);
-      this.canvas.width = w;
-      this.canvas.height = h;
-      BootUI.logOK(`Canvas ${cssW}x${cssH} dpr:${this.dpr}`);
-      this.clear();
-    },
-
-    clear() {
-      if (!this.ctx) return;
-      this.ctx.fillStyle = '#1d2a22';
-      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    },
-
-    // Einfacher Placeholder: kariertes Muster
-    placeholder() {
-      const ctx = this.ctx; if (!ctx) return;
-      const size = 32 * this.dpr;
-      for (let y = 0; y < this.canvas.height; y += size) {
-        for (let x = 0; x < this.canvas.width; x += size) {
-          ctx.fillStyle = ((x/size + y/size) % 2 === 0) ? '#244133' : '#2b4d3b';
-          ctx.fillRect(x, y, size, size);
-        }
-      }
-    },
-
-    // Sehr vereinfachtes Tile-Rendern aus numeric grid (nur Demo)
-    drawTileGrid(grid, tileSize, atlasImg, frames, idToKey) {
-      const ctx = this.ctx; if (!ctx) return;
-      const px = tileSize * this.dpr;
-      for (let ty = 0; ty < grid.length; ty++) {
-        const row = grid[ty];
-        for (let tx = 0; tx < row.length; tx++) {
-          const id = row[tx];
-          // Mapping numeric -> frame key
-          const key = idToKey ? idToKey(id) : null;
-          const f = key && frames ? frames[key] : null;
-
-          const dx = Math.floor(tx * px);
-          const dy = Math.floor(ty * px);
-
-          if (atlasImg && f) {
-            ctx.drawImage(
-              atlasImg,
-              f.x, f.y, f.w, f.h,
-              dx, dy, px, px
-            );
-          } else {
-            // Fallback: Platzhalter-Feld
-            ctx.fillStyle = (id % 2 === 0) ? '#4f7a5f' : '#5e8d6e';
-            ctx.fillRect(dx, dy, px, px);
-          }
-        }
-      }
+    setPosition(x, y) {
+      x = Number.isFinite(x) ? x : 0;
+      y = Number.isFinite(y) ? y : 0;
+      if (x !== R.camera.x || y !== R.camera.y) { R.camera.x = x; R.camera.y = y; R.needsDraw = true; }
     }
   };
 
-  // -----------------------------
-  // AssetLoader (Bilder + JSON)
-  // -----------------------------
-  const Assets = {
-    images: new Map(), // url -> HTMLImageElement
-    atlases: new Map(), // url -> { json, image, frames }
+  // -------- Rendering (leichtes Grid) ---------------------------------------
+  function render() {
+    R.rafId = window.requestAnimationFrame(render);
+    if (!R.needsDraw || !R.ctx) return;
+    R.needsDraw = false;
 
-    IMG_PLACEHOLDER: './assets/tex/placeholder64.PNG',
+    const { ctx, canvas, camera, gridColor, tile, rows, cols } = R;
+    const W = canvas.width, H = canvas.height;
 
-    loadJSON(url) {
-      BootUI.log(`${TAG} fetch ${url}`);
-      return fetch(url).then(async (res) => {
-        BootUI.log(`${TAG} fetch-res ${res.status}  ${url}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      });
-    },
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0c1b2b';
+    ctx.fillRect(0, 0, W, H);
 
-    loadImage(url) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          BootUI.logOK(`IMG ok ${url} ${img.naturalWidth}x${img.naturalHeight}`);
-          this.images.set(url, img);
-          resolve(img);
-        };
-        img.onerror = () => {
-          BootUI.logErr(`IMG fail ${url}`);
-          resolve(null);
-        };
-        BootUI.log(`${TAG} IMG set ${url}`);
-        img.src = url;
-      });
-    },
+    ctx.translate(W/2, H/2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
 
-    async loadAtlas(atlasUrl) {
-      try {
-        const json = await this.loadJSON(atlasUrl);
-        // Bild-URL ermitteln:
-        // 1) meta.image (häufig in TexturePacker/LDtk)
-        // 2) Fallback: gleichnamige PNG
-        let imgUrl = json?.meta?.image;
-        if (!imgUrl) {
-          BootUI.logWarn(`Atlas JSON ohne image-Feld ${atlasUrl} → fallback ./assets/tiles/tileset.terrain.png`);
-          imgUrl = './assets/tiles/tileset.terrain.png';
-        }
-        // Relativ gegen das Atlas-JSON auflösen:
-        const absImg = toAbsURL(imgUrl, atlasUrl);
+    const worldW = cols * tile;
+    const worldH = rows * tile;
 
-        const img = await this.loadImage(absImg);
-        if (!img) throw new Error('Atlas-Image konnte nicht geladen werden');
+    // Rahmen
+    ctx.fillStyle = '#11263a';
+    ctx.fillRect(-worldW/2 - tile, -worldH/2 - tile, worldW + 2*tile, worldH + 2*tile);
 
-        const frames = json.frames || {};
-        this.atlases.set(atlasUrl, { json, image: img, frames });
-        BootUI.logOK(`Tileset (atlas) OK ${atlasUrl} → ${absImg} ${img.naturalWidth}x${img.naturalHeight}`);
-        return { json, image: img, frames };
-      } catch (e) {
-        BootUI.logErr(`Atlas JSON load fail ${atlasUrl} ${e.message}`);
-        // Kein Hard-Fail: gib null zurück, damit Renderer Platzhalter zeigt
-        return null;
-      }
+    // Grid
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1 / camera.zoom;
+    ctx.beginPath();
+    for (let r = 0; r <= rows; r++) {
+      const y = -worldH/2 + r * tile;
+      ctx.moveTo(-worldW/2, y); ctx.lineTo(worldW/2, y);
     }
-  };
-
-  // -----------------------------
-  // Map-Loader/Parser
-  // -----------------------------
-  const MapLoader = {
-    current: null, // { width, height, tileSize, layers|grid, atlas }
-    atlas: null,
-
-    // Numerisches ID->FrameKey Mapping (sehr simpel: 16x16 Raster rX_cY)
-    idToFrameKey(id) {
-      // id erwartet 0..255 (oder größer, wir modden).
-      if (id == null || isNaN(id)) return null;
-      const cols = 16;
-      const r = Math.floor(id / cols);
-      const c = id % cols;
-      return `terrain_r${r}_c${c}`;
-    },
-
-    async load(mapUrl) {
-      // Map JSON laden
-      const map = await Assets.loadJSON(mapUrl).catch((e) => {
-        BootUI.logErr(`Map fetch FAIL ${e.message}`);
-        return null;
-      });
-      if (!map) {
-        BootUI.logErr('Map LOAD FAIL fetch');
-        return null;
-      }
-
-      // Tileset (Atlas) optional laden
-      let atlas = null;
-      if (map.tileset) {
-        atlas = await Assets.loadAtlas(map.tileset);
-        if (!atlas) BootUI.logWarn(`Tileset fehlt/optional ${map.tileset}`);
-      }
-
-      // Map-Struktur erkennen
-      let width = map.width|0;
-      let height = map.height|0;
-      let tileSize = map.tileSize|0;
-      let grid = null;
-      let layers = null;
-
-      if (Array.isArray(map.layers) && map.layers.length > 0) {
-        BootUI.logOK('Map layers via json.layers');
-        layers = map.layers;
-        // Fallback für width/height, falls nur layers vorliegen
-        if (!width || !height) {
-          const l0 = layers[0];
-          if (l0 && Array.isArray(l0.data)) {
-            height = l0.height || Math.sqrt(l0.data.length)|0;
-            width = l0.width || (height ? (l0.data.length/height)|0 : 0);
-          }
-        }
-      } else if (Array.isArray(map.grid) && map.grid.length > 0) {
-        BootUI.logOK('Map layer via 2D grid/matrix/tiles');
-        grid = map.grid;
-        if (!width) width = grid[0]?.length|0;
-        if (!height) height = grid.length|0;
-      }
-
-      if (!width || !height) {
-        BootUI.logErr('Map parse FAIL Map: width/height fehlen oder sind 0');
-        return null;
-      }
-      if (!tileSize) {
-        tileSize = 64; // default
-      }
-
-      this.current = { width, height, tileSize, grid, layers, atlas };
-      BootUI.logOK(`Map OK size ${width}x${height} tile ${tileSize}`);
-      return this.current;
+    for (let c = 0; c <= cols; c++) {
+      const x = -worldW/2 + c * tile;
+      ctx.moveTo(x, -worldH/2); ctx.lineTo(x, worldH/2);
     }
-  };
+    ctx.stroke();
 
-  // -----------------------------
-  // Game-Loop (minimal)
-  // -----------------------------
-  const Game = {
-    running: false,
+    ctx.restore();
+  }
 
+  function startLoop() { if (!R.rafId) R.rafId = window.requestAnimationFrame(render); }
+  function stopLoop()  { if (R.rafId) cancelAnimationFrame(R.rafId); R.rafId = 0; }
+
+  // -------- Map laden & anwenden --------------------------------------------
+  async function loadMapJson(url) {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Map‑Fetch fehlgeschlagen: ${res.status} ${res.statusText}`);
+    return res.json();
+  }
+
+  function applyMapMeta(map) {
+    R.rows = Number.isFinite(map.rows) ? map.rows : R.rows;
+    R.cols = Number.isFinite(map.cols) ? map.cols : R.cols;
+    R.tile = Number.isFinite(map.tile) ? map.tile : R.tile;
+
+    // Kamera grob zentrieren
+    Camera.setZoom(1.0);
+    Camera.setPosition((R.cols * R.tile)/2, (R.rows * R.tile)/2);
+    R.needsDraw = true;
+  }
+
+  // -------- Start/Reload (ohne eigenen Bust) --------------------------------
+  async function startGame(mapUrl) {
+    try {
+      ensureCanvas();
+      L.log('Lade Map:', mapUrl);
+      const map = await loadMapJson(mapUrl);
+      R.mapData = map;
+      applyMapMeta(map);
+      L.log('Map OK:', map);
+      startLoop();
+      L.log('gestartet •', mapUrl);
+    } catch (e) {
+      L.err('Start fehlgeschlagen:', e);
+      throw e;
+    }
+  }
+
+  async function reloadGame(mapUrl) {
+    try {
+      ensureCanvas();
+      L.log('Reload •', mapUrl);
+      stopLoop();
+      const map = await loadMapJson(mapUrl);
+      R.mapData = map;
+      applyMapMeta(map);
+      startLoop();
+      L.log('Reload OK •', mapUrl);
+    } catch (e) {
+      L.err('Reload fehlgeschlagen:', e);
+      throw e;
+    }
+  }
+
+  // -------- Zentraler Loader (einziger Ort mit Cache‑Bust) ------------------
+  function withBust(url) {
+    const u = new URL(url, location.href);
+    u.searchParams.set('v', Date.now().toString());
+    return u.pathname + u.search;
+  }
+
+  window.GameLoader = {
     async start(mapUrl) {
-      BootUI.logOK(`GameLoader.start ${mapUrl}`);
-      Gfx.init();
-
-      // Backdrop auto-fade (Failsafe)
-      BootUI.showBackdropFadeOutSoon();
-
-      const m = await MapLoader.load(mapUrl);
-      if (!m) {
-        BootUI.logErr('Game cannot start (map load failed)');
-        return;
+      if (!mapUrl) throw new Error('Keine Map‑URL übergeben');
+      if (R.starting) { L.warn('Start ignoriert (busy)'); return; }
+      R.starting = true;
+      try {
+        const finalUrl = withBust(mapUrl);
+        R.currentMap = finalUrl;
+        L.log('Starte Karte:', finalUrl);
+        await startGame(finalUrl);           // HIER kein weiterer Bust
+      } finally {
+        R.starting = false;
       }
-
-      this.running = true;
-      // Backdrop gezielt ausblenden (Assets gemeldet ready)
-      BootUI.logOK('Textures READY → fade');
-      BootUI.hideBackdropNow();
-
-      // Erste Szene rendern
-      this.render();
-      BootUI.logOK('Game started');
     },
-
-    render() {
-      if (!this.running) return;
-      Gfx.clear();
-
-      const m = MapLoader.current;
-      if (!m) {
-        Gfx.placeholder();
-        BootUI.logWarn('Render PLACEHOLDER (no map)');
-        return;
-      }
-
-      // Einfacher Renderer: wenn grid vorhanden → zeichnen
-      // (layers ignorieren wir hier minimal; Platz für spätere Erweiterung)
-      if (m.grid) {
-        const atlas = m.atlas;
-        const img = atlas?.image || null;
-        const frames = atlas?.frames || null;
-        Gfx.drawTileGrid(m.grid, m.tileSize, img, frames, (id)=>MapLoader.idToFrameKey(id));
-      } else {
-        // Kein grid? Platzhalter
-        Gfx.placeholder();
-        BootUI.logWarn('Render PLACEHOLDER (no grid renderer)');
+    async reload(mapUrl) {
+      if (R.starting) { L.warn('Reload ignoriert (busy)'); return; }
+      R.starting = true;
+      try {
+        const base = mapUrl || R.currentMap || 'assets/maps/map-demo.json';
+        const finalUrl = withBust(base);
+        R.currentMap = finalUrl;
+        L.log('Reload Karte:', finalUrl);
+        await reloadGame(finalUrl);          // HIER kein weiterer Bust
+      } finally {
+        R.starting = false;
       }
     }
   };
 
-  // -----------------------------
-  // Öffentliche API fürs Startmenü/Inspektor
-  // -----------------------------
-  const BootAPI = {
-    startNew(mapUrl) {
-      BootUI.logOK(`NewGame start ${mapUrl}`);
-      // Menü einklappen, falls vorhanden
-      const menu = $('#menu');
-      if (menu) menu.style.display = 'none';
-      Game.start(mapUrl);
-    },
-    resume() {
-      BootUI.logWarn('Resume: noch nicht implementiert (lade letzten Save später)');
-    },
-    resetAll() {
-      localStorage.clear();
-      BootUI.logOK('Reset OK (localStorage cleared)');
-    },
-    toggleInspector() {
-      const insp = $('#inspector');
-      if (!insp) return;
-      const vis = getComputedStyle(insp).display !== 'none';
-      insp.style.display = vis ? 'none' : 'block';
-    },
-    openEditor() {
-      BootUI.logWarn('Editor öffnen: Hook noch nicht verdrahtet');
-    }
+  // -------- Kleine Kamera‑API -----------------------------------------------
+  window.GameCamera = {
+    setZoom: Camera.setZoom,
+    setPosition: Camera.setPosition,
   };
 
-  // -----------------------------
-  // Global machen
-  // -----------------------------
-  window.BootUI = BootUI;
-  window.BootAPI = BootAPI;
-
-  // -----------------------------
-  // DOM Ready
-  // -----------------------------
-  function onReady() {
-    try {
-      BootUI.init();
-    } catch (e) {
-      // Falls index.html noch alte Aufrufe macht:
-      console.error(nowTS(), TAG, 'window.onerror', e, location.href);
-      // alte Seiten könnten BootUI.logOK(...) direkt aufrufen → Defensiv:
-      if (!window.BootUI.logOK) {
-        window.BootUI.logOK = (...args) => console.log(nowTS(), TAG, ...args);
-        window.BootUI.logWarn = (...args) => console.warn(nowTS(), TAG, ...args);
-        window.BootUI.logErr = (...args) => console.error(nowTS(), TAG, ...args);
-      }
-    }
-
-    BootUI.logOK('DOM ready');
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', onReady);
-  } else {
-    onReady();
-  }
-
+  // -------- Initial‑Log (nur EINMAL pro Laden) ------------------------------
+  L.log('bereit •', VERSION);
 })();
