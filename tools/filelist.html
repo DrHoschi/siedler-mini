@@ -1,0 +1,149 @@
+<!--
+  Siedler-Mini — Filelist Checker (Browser)
+  Version: v1.0 (2025-08-25)
+  Zweck: Rekursives Scannen eines lokalen Ordners (z. B. MAIN/)
+  Output: filelist.txt + filelist.json als Download
+  Hinweise:
+  - Nutzt die File System Access API (Chrome/Edge/Brave, Safari ≥ 16.4 teilweise).
+  - Läuft komplett lokal, keine Daten verlassen den Rechner.
+  - iOS: In-App-Browser kann eingeschränkt sein; am Mac/PC öffnen empfohlen.
+-->
+
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>Siedler-Mini Filelist Checker (Browser)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }
+    button { padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
+    pre { background: #f6f8fa; padding: 12px; border-radius: 8px; overflow: auto; }
+    .muted { color:#666; font-size: 12px; }
+    .ok { color: #0a7; }
+    .warn { color: #c80; }
+  </style>
+</head>
+<body>
+  <h1>📂 Siedler‑Mini — Filelist Checker (Browser)</h1>
+  <p>Wähle deinen <b>MAIN/</b> Ordner. Ich erstelle dir <code>filelist.txt</code> & <code>filelist.json</code> zum Download.</p>
+  <p class="muted">Tipp: Am Desktop‑Browser öffnen (Chrome/Edge/Brave/Safari neu).</p>
+  <button id="pick">Ordner auswählen…</button>
+  <span id="status" class="muted"></span>
+  <pre id="preview">Noch keine Ausgabe.</pre>
+
+<script type="module">
+/* ──────────────────────────────────────────────────────────────────────────
+ * SECTION: Konstanten
+ * ────────────────────────────────────────────────────────────────────────── */
+const CODE_EXT = new Set([".js",".mjs",".cjs",".ts",".json",".jsonc",".html",".htm",".css",".md",".yaml",".yml",".svg"]);
+const EXCLUDE_DIR = new Set([".git",".github","node_modules",".DS_Store","__pycache__"]);
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * SECTION: Hilfsfunktionen
+ * ────────────────────────────────────────────────────────────────────────── */
+const $ = sel => document.querySelector(sel);
+
+function extOf(name) {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i).toLowerCase() : "";
+}
+
+function joinPath(a,b){ return a ? (a + "/" + b) : b; }
+
+async function sha1(file) {
+  // Optional: Hash pro Datei (kann man unten an-/abschalten)
+  const buf = await file.arrayBuffer();
+  const hash = await crypto.subtle.digest("SHA-1", buf);
+  return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+function downloadText(name, text) {
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function formatTree(entries) {
+  // Einfache “tree”-Ausgabe mit Größen
+  const lines = [];
+  for (const e of entries) {
+    const sizeStr = (e.type==="file") ? `  (${e.size} B)` : "";
+    lines.push(`${e.path}${sizeStr}`);
+  }
+  return lines.join("\n");
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * SECTION: Rekursives Scannen über File System Access API
+ * ────────────────────────────────────────────────────────────────────────── */
+async function scanDirectory(dirHandle, base="") {
+  const out = [];
+  for await (const [name, handle] of dirHandle.entries()) {
+    if (handle.kind === "directory") {
+      if (EXCLUDE_DIR.has(name)) continue;
+      const path = joinPath(base, name);
+      out.push({type:"dir", path});
+      const sub = await scanDirectory(handle, path);
+      out.push(...sub);
+    } else if (handle.kind === "file") {
+      const path = joinPath(base, name);
+      try {
+        const f = await handle.getFile();
+        const ext = extOf(name);
+        const isCode = CODE_EXT.has(ext);
+        // ⚙️ Hash aktivieren? -> true/false
+        const hash = isCode ? (await sha1(f)) : null;
+        out.push({
+          type: "file",
+          path,
+          name,
+          size: f.size,
+          ext,
+          isCode,
+          hash
+        });
+      } catch (err) {
+        out.push({type:"file", path, name, error: String(err)});
+      }
+    }
+  }
+  return out;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * SECTION: Main UI-Logik
+ * ────────────────────────────────────────────────────────────────────────── */
+$("#pick").addEventListener("click", async ()=>{
+  try {
+    $("#status").textContent = "…öffne Ordnerauswahl";
+    const dirHandle = await window.showDirectoryPicker({ mode: "read" });
+    $("#status").textContent = "…scanne Dateien";
+    const entries = await scanDirectory(dirHandle, "");
+
+    // Sortierung: erst Ordner, dann Dateien, alphabetisch
+    entries.sort((a,b)=>{
+      if (a.type !== b.type) return (a.type==="dir" ? -1 : 1);
+      return a.path.localeCompare(b.path);
+    });
+
+    const treeTxt = formatTree(entries);
+    const jsonTxt = JSON.stringify({ createdAt: new Date().toISOString(), rootName: dirHandle.name, entries }, null, 2);
+
+    $("#preview").textContent = treeTxt.slice(0, 5000) + (treeTxt.length>5000 ? "\n…(gekürzt)" : "");
+    $("#status").innerHTML = "<span class='ok'>Fertig.</span> Lade Dateien herunter…";
+
+    downloadText("filelist.txt", treeTxt + "\n");
+    downloadText("filelist.json", jsonTxt);
+
+    $("#status").innerHTML = "<span class='ok'>Downloads gestartet.</span>";
+  } catch (err) {
+    $("#status").innerHTML = "<span class='warn'>Abgebrochen oder nicht unterstützt: " + String(err) + "</span>";
+  }
+});
+</script>
+</body>
+</html>
