@@ -1,1 +1,1044 @@
-
+{
+  "createdAt": "2025-08-25T10:17:06.761Z",
+  "root": ".",
+  "count": 212,
+  "entries": [
+    {
+      "type": "dir",
+      "path": ".github/"
+    },
+    {
+      "type": "dir",
+      "path": ".github/workflows/"
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/filelist.yml",
+      "size": 1028
+    },
+    {
+      "type": "dir",
+      "path": "assets/"
+    },
+    {
+      "type": "dir",
+      "path": "assets/characters/"
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/builder.json",
+      "size": 743
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/builder.png",
+      "size": 1380667
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/carrier.json",
+      "size": 588
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/carrier.png",
+      "size": 144260
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/fisherman.json",
+      "size": 833
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/fisherman.PNG",
+      "size": 2054262
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/hunter.json",
+      "size": 747
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/hunter.PNG",
+      "size": 1213953
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/manifest.json",
+      "size": 674
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/manifest.jsonc",
+      "size": 842
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/porter.json",
+      "size": 836
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/porter.PNG",
+      "size": 1955268
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/Readme",
+      "size": 105
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/stonecutter.json",
+      "size": 746
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/stonecutter.PNG",
+      "size": 1468681
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/woodcutter.json",
+      "size": 745
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/woodcutter.PNG",
+      "size": 1449088
+    },
+    {
+      "type": "dir",
+      "path": "assets/icons/"
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/icons_spritesheet_256.json",
+      "size": 2774
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/icons_spritesheet_256.PNG",
+      "size": 5010893
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/icons_spritesheet_64.json",
+      "size": 2684
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/icons_spritesheet_64.png",
+      "size": 263254
+    },
+    {
+      "type": "dir",
+      "path": "assets/items/"
+    },
+    {
+      "type": "file",
+      "path": "assets/items/items_master_sprite.json",
+      "size": 24851
+    },
+    {
+      "type": "file",
+      "path": "assets/items/items_master_sprite.PNG",
+      "size": 2751652
+    },
+    {
+      "type": "file",
+      "path": "assets/items/items.js",
+      "size": 2057
+    },
+    {
+      "type": "file",
+      "path": "assets/items/items.PNG",
+      "size": 1534016
+    },
+    {
+      "type": "dir",
+      "path": "assets/maps/"
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-demo.json",
+      "size": 1689
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-mini-V0.json",
+      "size": 5209
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-mini-V0.jsonc",
+      "size": 5847
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-mini.json",
+      "size": 2875
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-mini.jsonc",
+      "size": 1025
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-pro.json",
+      "size": 2808
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-pro.jsonc",
+      "size": 3529
+    },
+    {
+      "type": "file",
+      "path": "assets/maps/map-test-all.json",
+      "size": 2298
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/"
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/building/"
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/building/stone/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/stone/readme",
+      "size": 118
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/building/wood/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/baeckerei_wood.PNG",
+      "size": 2833533
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/depot_wood_ug.PNG",
+      "size": 2901748
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/depot_wood.PNG",
+      "size": 2433602
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/farm_wood.PNG",
+      "size": 2382608
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/fischer_wood1.PNG",
+      "size": 1975790
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/haeuser_wood1_ug1.PNG",
+      "size": 2143490
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/haeuser_wood1.PNG",
+      "size": 2417754
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/haeuser_wood2.PNG",
+      "size": 2103550
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/hq_wood_ug1.PNG",
+      "size": 2165472
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/hq_wood.PNG",
+      "size": 2464426
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/lumberjack_wood.PNG",
+      "size": 2708632
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/readme",
+      "size": 206
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/stonebraker_wood.PNG",
+      "size": 2885259
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/wassermuehle_wood.PNG",
+      "size": 2750530
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/windmuehle_wood.PNG",
+      "size": 2618500
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/readme",
+      "size": 423
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/path/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/readme",
+      "size": 136
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path0.PNG",
+      "size": 2774350
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path1.PNG",
+      "size": 2908011
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path2.PNG",
+      "size": 3061973
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path3.PNG",
+      "size": 2910714
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path4.PNG",
+      "size": 1774127
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path5.PNG",
+      "size": 1999783
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path6.PNG",
+      "size": 2402168
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path7.PNG",
+      "size": 2281267
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path8.PNG",
+      "size": 3197098
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/path/topdown_path9.PNG",
+      "size": 2304754
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/river/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/resdme",
+      "size": 6
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/river_atlas.atlas",
+      "size": 1231
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/river_atlas.png",
+      "size": 38079
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_cross.png",
+      "size": 489173
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_curve_NE.png",
+      "size": 470566
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_curve_NW.png",
+      "size": 477027
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_curve_SE.png",
+      "size": 470900
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_curve_SW.png",
+      "size": 472752
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_straight_horizontal.png",
+      "size": 326547
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_straight_vertical.png",
+      "size": 367727
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_T_down.png",
+      "size": 415877
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_T_left.png",
+      "size": 447026
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_T_right.png",
+      "size": 443706
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/river/topdown_river_T_up.png",
+      "size": 422602
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/road/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/readme",
+      "size": 192
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/road_atlas.atlas",
+      "size": 1214
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/road_atlas.png",
+      "size": 37581
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/topdown_road_corner.png",
+      "size": 603014
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/topdown_road_cross.png",
+      "size": 1137194
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/topdown_road_straight.png",
+      "size": 769704
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/road/topdown_road_t.png",
+      "size": 982145
+    },
+    {
+      "type": "dir",
+      "path": "assets/tex/terrain/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/Readme",
+      "size": 160
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_dirt0.jpeg",
+      "size": 37848
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_earth0_ug1.jpeg",
+      "size": 44395
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_grass0.jpeg",
+      "size": 38057
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_meadow0_ug0.jpeg",
+      "size": 50670
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_meadow1_ug0.jpeg",
+      "size": 50670
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_moor_sumpf_ug0.PNG",
+      "size": 1497656
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_moor_sumpf0_ug0.jpeg",
+      "size": 24022
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_moor_sumpf1_ug0.jpeg",
+      "size": 24058
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_rock0_ug0.jpeg",
+      "size": 45644
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_rock1_ug0.jpeg",
+      "size": 45646
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_rock2_ug0.jpg",
+      "size": 45697
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_rock3_ug0.jpeg",
+      "size": 45702
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_nord_ug0.jpeg",
+      "size": 22074
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_nord_ug0.PNG",
+      "size": 1755691
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_nord_ug1.jpeg",
+      "size": 31519
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_ost_ug0.jpeg",
+      "size": 22535
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_ost_ug1.jpeg",
+      "size": 31505
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_sued_ug0.jpeg",
+      "size": 22072
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_sued_ug1.jpeg",
+      "size": 31514
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_west_ug0.jpeg",
+      "size": 22583
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_strand_west_ug1.jpg",
+      "size": 31512
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_tree_needle0_ug0.jpeg",
+      "size": 44814
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_tree_needle0_ug0.PNG",
+      "size": 2578681
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_tundra_snow0_ug0.PNG",
+      "size": 2408001
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/sm_topdown_water0_ug0.jpeg",
+      "size": 30587
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/topdown_dirt.PNG",
+      "size": 2012038
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/topdown_grass.PNG",
+      "size": 1603668
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/topdown_meadow.PNG",
+      "size": 1800221
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/topdown_rock.PNG",
+      "size": 1740571
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/topdown_shore.PNG",
+      "size": 1650804
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/placeholder64.PNG",
+      "size": 1149612
+    },
+    {
+      "type": "dir",
+      "path": "assets/tiles/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tiles/tileset.json",
+      "size": 1178
+    },
+    {
+      "type": "file",
+      "path": "assets/tiles/tileset.jsonc",
+      "size": 1594
+    },
+    {
+      "type": "file",
+      "path": "assets/tiles/tileset.png",
+      "size": 1928547
+    },
+    {
+      "type": "file",
+      "path": "assets/tiles/tileset.terrain.json",
+      "size": 16514
+    },
+    {
+      "type": "file",
+      "path": "assets/tiles/tileset.terrain.jsonc",
+      "size": 835
+    },
+    {
+      "type": "file",
+      "path": "assets/tiles/tileset.terrain.png",
+      "size": 1971497
+    },
+    {
+      "type": "file",
+      "path": "assets/depot.png",
+      "size": 2326119
+    },
+    {
+      "type": "file",
+      "path": "assets/dirt.png",
+      "size": 2339125
+    },
+    {
+      "type": "file",
+      "path": "assets/grass.png",
+      "size": 2347331
+    },
+    {
+      "type": "file",
+      "path": "assets/hq_stone.png",
+      "size": 1591626
+    },
+    {
+      "type": "file",
+      "path": "assets/Logo.PNG",
+      "size": 2016475
+    },
+    {
+      "type": "file",
+      "path": "assets/lumberjack.png",
+      "size": 1787853
+    },
+    {
+      "type": "file",
+      "path": "assets/readme",
+      "size": 1228
+    },
+    {
+      "type": "file",
+      "path": "assets/road_curve.png",
+      "size": 1555138
+    },
+    {
+      "type": "file",
+      "path": "assets/road_straight.png",
+      "size": 1425995
+    },
+    {
+      "type": "file",
+      "path": "assets/road.png",
+      "size": 2158575
+    },
+    {
+      "type": "file",
+      "path": "assets/rocky.png",
+      "size": 1417941
+    },
+    {
+      "type": "file",
+      "path": "assets/sand.png",
+      "size": 632803
+    },
+    {
+      "type": "file",
+      "path": "assets/shore.png",
+      "size": 1772402
+    },
+    {
+      "type": "file",
+      "path": "assets/sprites.json",
+      "size": 12329
+    },
+    {
+      "type": "file",
+      "path": "assets/sprites.png",
+      "size": 15494
+    },
+    {
+      "type": "file",
+      "path": "assets/water.png",
+      "size": 2409909
+    },
+    {
+      "type": "dir",
+      "path": "core/"
+    },
+    {
+      "type": "file",
+      "path": "core/actor.js",
+      "size": 3722
+    },
+    {
+      "type": "file",
+      "path": "core/asset.items.js",
+      "size": 4315
+    },
+    {
+      "type": "file",
+      "path": "core/asset.js",
+      "size": 1054
+    },
+    {
+      "type": "file",
+      "path": "core/camera.js",
+      "size": 2256
+    },
+    {
+      "type": "file",
+      "path": "core/carriers.js",
+      "size": 1864
+    },
+    {
+      "type": "file",
+      "path": "core/Readme",
+      "size": 13
+    },
+    {
+      "type": "file",
+      "path": "core/terrain.js",
+      "size": 1381
+    },
+    {
+      "type": "dir",
+      "path": "css/"
+    },
+    {
+      "type": "file",
+      "path": "css/android.css",
+      "size": 40
+    },
+    {
+      "type": "file",
+      "path": "css/base.css",
+      "size": 2287
+    },
+    {
+      "type": "file",
+      "path": "css/desktop.css",
+      "size": 146
+    },
+    {
+      "type": "file",
+      "path": "css/ios.css",
+      "size": 808
+    },
+    {
+      "type": "file",
+      "path": "css/mobile.css",
+      "size": 1433
+    },
+    {
+      "type": "file",
+      "path": "css/platform.css",
+      "size": 1595
+    },
+    {
+      "type": "dir",
+      "path": "gh-pages/"
+    },
+    {
+      "type": "file",
+      "path": "gh-pages/readme",
+      "size": 7
+    },
+    {
+      "type": "dir",
+      "path": "js/"
+    },
+    {
+      "type": "file",
+      "path": "js/characters.js",
+      "size": 3400
+    },
+    {
+      "type": "file",
+      "path": "js/ui.js",
+      "size": 3212
+    },
+    {
+      "type": "dir",
+      "path": "maps/"
+    },
+    {
+      "type": "file",
+      "path": "maps/start-map.json",
+      "size": 5742
+    },
+    {
+      "type": "dir",
+      "path": "tools/"
+    },
+    {
+      "type": "dir",
+      "path": "tools/level-editor/"
+    },
+    {
+      "type": "file",
+      "path": "tools/level-editor/boot.js",
+      "size": 8269
+    },
+    {
+      "type": "file",
+      "path": "tools/level-editor/editor.js",
+      "size": 38182
+    },
+    {
+      "type": "file",
+      "path": "tools/level-editor/index.html",
+      "size": 10221
+    },
+    {
+      "type": "file",
+      "path": "tools/debug-tools.js",
+      "size": 33189
+    },
+    {
+      "type": "file",
+      "path": "tools/dev-inspector.js",
+      "size": 8430
+    },
+    {
+      "type": "file",
+      "path": "tools/filelist-github.html",
+      "size": 4422
+    },
+    {
+      "type": "file",
+      "path": "tools/filelist-node.mjs",
+      "size": 2311
+    },
+    {
+      "type": "file",
+      "path": "tools/filelist.html",
+      "size": 6812
+    },
+    {
+      "type": "file",
+      "path": "tools/gen-manifest.mjs",
+      "size": 7491
+    },
+    {
+      "type": "file",
+      "path": "tools/map-editor-pro.html",
+      "size": 39968
+    },
+    {
+      "type": "file",
+      "path": "tools/map-runtime-demo.html",
+      "size": 5140
+    },
+    {
+      "type": "file",
+      "path": "tools/map-runtime.js",
+      "size": 3365
+    },
+    {
+      "type": "file",
+      "path": "tools/texture-checker.html",
+      "size": 6940
+    },
+    {
+      "type": "file",
+      "path": "app-v11.1r6.js",
+      "size": 12671
+    },
+    {
+      "type": "file",
+      "path": "boot.js",
+      "size": 14124
+    },
+    {
+      "type": "file",
+      "path": "buildingData.js",
+      "size": 953
+    },
+    {
+      "type": "file",
+      "path": "debug.js",
+      "size": 10213
+    },
+    {
+      "type": "file",
+      "path": "filelist.json",
+      "size": 1
+    },
+    {
+      "type": "file",
+      "path": "filelist.txt",
+      "size": 1
+    },
+    {
+      "type": "file",
+      "path": "fullscreen.js",
+      "size": 1284
+    },
+    {
+      "type": "file",
+      "path": "game.js",
+      "size": 7456
+    },
+    {
+      "type": "file",
+      "path": "index.html",
+      "size": 26647
+    },
+    {
+      "type": "file",
+      "path": "input.js",
+      "size": 2984
+    },
+    {
+      "type": "file",
+      "path": "main.js",
+      "size": 10280
+    },
+    {
+      "type": "file",
+      "path": "manifest.webmanifest",
+      "size": 392
+    },
+    {
+      "type": "file",
+      "path": "package.json",
+      "size": 208
+    },
+    {
+      "type": "file",
+      "path": "README.md",
+      "size": 1129
+    },
+    {
+      "type": "file",
+      "path": "render.js",
+      "size": 3977
+    },
+    {
+      "type": "file",
+      "path": "storage.js",
+      "size": 404
+    },
+    {
+      "type": "file",
+      "path": "style.css",
+      "size": 1698
+    },
+    {
+      "type": "file",
+      "path": "styles.css",
+      "size": 2583
+    },
+    {
+      "type": "file",
+      "path": "sw.js",
+      "size": 1890
+    },
+    {
+      "type": "file",
+      "path": "textures.js",
+      "size": 3859
+    },
+    {
+      "type": "file",
+      "path": "unitLogic.js",
+      "size": 2099
+    },
+    {
+      "type": "file",
+      "path": "world.js",
+      "size": 1818
+    }
+  ]
+}
