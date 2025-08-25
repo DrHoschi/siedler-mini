@@ -1,12 +1,15 @@
 name: Build filelist
 
 on:
-  workflow_dispatch:   # manuell startbar
+  workflow_dispatch:
   push:
     paths:
-      - '**'                         # auf alle Änderungen reagieren
-      - '!.github/workflows/**'      # (optional) Workflows selbst ausnehmen
+      - '**'
       - '.github/workflows/filelist.yml'
+
+# 🔑 Wichtig: Schreibrechte für Commit
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -20,7 +23,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Generate file list (repo root)
+      - name: Generate file list (scan repo root)
         run: |
           node -v
           if [ ! -f tools/filelist-node.mjs ]; then
