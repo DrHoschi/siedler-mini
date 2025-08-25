@@ -1,16 +1,16 @@
 name: Build filelist
 
 on:
-  workflow_dispatch:   # Manuell startbar im Actions-Tab
+  workflow_dispatch:   # manuell startbar
   push:
     paths:
-      - 'main/**'      # läuft bei Änderungen im main/-Ordner
+      - '**'                         # auf alle Änderungen reagieren
+      - '!.github/workflows/**'      # (optional) Workflows selbst ausnehmen
       - '.github/workflows/filelist.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,22 +20,19 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Generate file list
+      - name: Generate file list (repo root)
         run: |
           node -v
-          mkdir -p tools
-          # Falls Datei schon im Repo liegt, wird diese Zeile ignoriert.
-          # (Wir erstellen sie hier zur Sicherheit on-the-fly nur, wenn sie fehlt.)
           if [ ! -f tools/filelist-node.mjs ]; then
-            echo "tools/filelist-node.mjs fehlt – bitte ins Repo committen."
+            echo "❌ tools/filelist-node.mjs fehlt. Bitte committen."
             exit 1
           fi
-          node tools/filelist-node.mjs ./main
+          node tools/filelist-node.mjs .
 
       - name: Commit results
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add main/filelist.txt main/filelist.json || true
-          git commit -m "chore: update filelist" || echo "No changes"
+          git add filelist.txt filelist.json || true
+          git commit -m "chore: update filelist (root scan)" || echo "No changes"
           git push
