@@ -1,5 +1,5 @@
 {
-  "name": "map-mini",
+  "version": "16.0.3",
   "width": 16,
   "height": 10,
   "tileSize": 64,
@@ -7,7 +7,8 @@
   "layers": [
     {
       "name": "ground",
-      "tiles": [
+      "type": "tiles",
+      "data": [
         ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
         ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
         ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
@@ -19,6 +20,23 @@
         ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
         ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"]
       ]
+    },
+    {
+      "name": "roads",
+      "type": "tiles",
+      "data": [
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""]
+      ]
     }
-  ]
+  ],
+  "objects": []
 }
