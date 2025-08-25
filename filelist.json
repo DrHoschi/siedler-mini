@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-25T10:36:19.046Z",
+  "createdAt": "2025-08-25T11:27:52.547Z",
   "root": ".",
-  "count": 213,
+  "count": 214,
   "entries": [
     {
       "type": "dir",
@@ -892,6 +892,11 @@
     },
     {
       "type": "file",
+      "path": "tools/filelist-audit.mjs",
+      "size": 978
+    },
+    {
+      "type": "file",
       "path": "tools/filelist-github.html",
       "size": 4422
     },
@@ -958,12 +963,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 20891
+      "size": 20996
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 7928
+      "size": 7971
     },
     {
       "type": "file",
