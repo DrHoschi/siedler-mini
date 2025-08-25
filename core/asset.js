@@ -1,92 +1,53 @@
 /*
- * Siedler‑Mini — Assets (Loader + Registry)
- * Version: v1.3 (2025‑08‑25)
- * Features:
- *  - loadJSON / loadImage mit Fallback .png ⇄ .PNG
- *  - einfache Registry (Assets.get / set / has)
- *  - kleine Helper: resolvePNGCase(url)
- * Hinweise:
- *  - Keine externen Abhängigkeiten, nur fetch() / Image()
- *  - Alle Pfade relativ zum HTML (Root), wie in deiner filelist.txt
+ * Siedler‑Mini — Assets (mit PathIndex)
+ * - JSON/Image Loader mit resolve über /filelist.json
+ * - toleriert Case-Mismatch und .png/.PNG
  */
 
-const state = {
-  opts: {},
-  registry: new Map(),
-};
+import { PathIndex } from "./path-index.js";
 
-function delay(ms){ return new Promise(r=>setTimeout(r, ms)); }
+const cache = new Map();
 
-// --- PNG Case-Fallback -------------------------------------------------------
-async function fetchWithCase(url) {
-  // 1) erster Versuch: wie angegeben
-  let res = await fetch(url, { cache: "no-cache" });
-  if (res.ok) return res;
+function bust(u){ return u + (u.includes("?") ? "&" : "?") + "v=" + Date.now(); }
 
-  // 2) Fallback .png ⇄ .PNG (nur wenn Pfad nach PNG aussieht)
-  const isPNG = url.toLowerCase().endsWith(".png");
-  if (isPNG) {
-    const flip = url.endsWith(".PNG") ? url.slice(0, -4) + ".png"
-                                      : url.slice(0, -4) + ".PNG";
-    res = await fetch(flip, { cache: "no-cache" });
-    if (res.ok) return res;
-  }
-  // 3) letzter Versuch: kleine Wartezeit (CDN/Cache) und nochmal originär
-  await delay(50);
-  res = await fetch(url, { cache: "no-cache" });
-  return res;
+async function resolveOrThrow(path) {
+  await PathIndex.ready;
+  const real = PathIndex.resolve(path);
+  if (real) return real;
+  const hint = PathIndex.suggest(path.split("/").slice(0, -1).join("/") + "/", 5);
+  throw new Error(`Asset nicht gefunden: ${path}\nVorschläge:\n- ${hint.join("\n- ")}`);
 }
 
-async function loadJSON(url) {
-  const res = await fetchWithCase(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
-  return res.json();
-}
-
-function loadImage(url) {
-  return new Promise(async (resolve, reject)=>{
-    const tryLoad = (u) => {
-      const img = new Image();
-      img.onload = ()=> resolve(img);
-      img.onerror = ()=> reject(new Error("Image load failed: "+u));
-      img.src = u + (u.includes("?") ? "&" : "?") + "v=" + Date.now(); // cache-bust
-    };
-
-    // 1) normal
-    let res = await fetch(url, { method:"HEAD", cache:"no-cache" });
-    if (res.ok) { tryLoad(url); return; }
-
-    // 2) Fallback Case
-    if (url.toLowerCase().endsWith(".png")) {
-      const alt = url.endsWith(".PNG") ? url.slice(0,-4)+".png" : url.slice(0,-4)+".PNG";
-      res = await fetch(alt, { method:"HEAD", cache:"no-cache" });
-      if (res.ok) { tryLoad(alt); return; }
-    }
-
-    // 3) Letzter Versuch originär
-    tryLoad(url);
-  });
-}
-
-// --- Public API --------------------------------------------------------------
 export const Assets = {
-  setOptions(opts){ Object.assign(state.opts, opts||{}); },
   async json(path) {
     const key = "json:" + path;
-    if (state.registry.has(key)) return state.registry.get(key);
-    const data = await loadJSON(path);
-    state.registry.set(key, data);
+    if (cache.has(key)) return cache.get(key);
+    const real = await resolveOrThrow(path);
+    const res = await fetch(bust("/" + real), { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} @ ${real}`);
+    const data = await res.json();
+    cache.set(key, data);
     return data;
   },
+
   async image(path) {
     const key = "img:" + path;
-    if (state.registry.has(key)) return state.registry.get(key);
-    const img = await loadImage(path);
-    state.registry.set(key, img);
+    if (cache.has(key)) return cache.get(key);
+    const real = await resolveOrThrow(path);
+
+    const img = await new Promise((resolve, reject)=>{
+      const el = new Image();
+      el.onload = ()=> resolve(el);
+      el.onerror = ()=> reject(new Error("Bild-Load fehlgeschlagen: " + real));
+      el.src = bust("/" + real);
+    });
+
+    cache.set(key, img);
     return img;
   },
-  set(key, val){ state.registry.set(key, val); },
-  get(key){ return state.registry.get(key); },
-  has(key){ return state.registry.has(key); },
-  clear(){ state.registry.clear(); }
+
+  set(k, v){ cache.set(k, v); },
+  get(k){ return cache.get(k); },
+  has(k){ return cache.has(k); },
+  clear(){ cache.clear(); },
 };
