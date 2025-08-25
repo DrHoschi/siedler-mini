@@ -3,16 +3,22 @@ name: Build filelist
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ["Fix asset names (PNG → png, README)"]
+    workflows: ["Fix asset names (PNG → png, README)"]   # muss exakt zum name: oben passen
     types: [completed]
 
 permissions:
   contents: write
 
+concurrency:
+  group: filelist-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    # läuft nur bei Erfolg des vorgelagerten Workflows oder bei manuellem Start
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
