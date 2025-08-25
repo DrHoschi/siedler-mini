@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Siedler‑Mini — Filelist Viewer</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;padding:16px}
+  input,button{font-size:16px;padding:10px;border:1px solid #ccc;border-radius:8px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .muted{color:#666}
+  details{margin:10px 0}
+  summary{cursor:pointer}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;border-bottom:1px solid #eee;vertical-align:top}
+  code{background:#f6f8fa;padding:2px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<h1>📂 Siedler‑Mini — Filelist Viewer</h1>
+<p class="muted">Zeigt <code>filelist.json</code> als klickbare Liste mit GitHub/RAW‑Links.</p>
+
+<div class="row">
+  <label>Owner <input id="owner" value="DrHoschi"></label>
+  <label>Repo <input id="repo" value="siedler-mini"></label>
+  <label>Branch <input id="branch" value="main"></label>
+</div>
+
+<div class="row">
+  <label>Filter (Prefix) <input id="prefix" placeholder="z. B. assets/"></label>
+  <button id="load">Laden</button>
+  <span id="status" class="muted"></span>
+</div>
+
+<div id="out"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const ghBlob = (o,r,b,p)=>`https://github.com/${encodeURIComponent(o)}/${encodeURIComponent(r)}/blob/${encodeURIComponent(b)}/${p}`;
+const rawURL = (o,r,b,p)=>`https://raw.githubusercontent.com/${encodeURIComponent(o)}/${encodeURIComponent(r)}/${encodeURIComponent(b)}/${p}`;
+
+async function loadJSON(path){
+  const res = await fetch(path, {cache:'no-store'});
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function render(entries, owner, repo, branch){
+  const byDir = new Map();
+  for(const e of entries){
+    const p = e.path || '';
+    const top = p.includes('/') ? p.split('/')[0]+'/' : '(root)/';
+    if(!byDir.has(top)) byDir.set(top, []);
+    byDir.get(top).push(e);
+  }
+
+  const container = document.createElement('div');
+  for(const [dir, list] of [...byDir.entries()].sort()){
+    const det = document.createElement('details');
+    det.open = false;
+    det.innerHTML = `<summary><b>${dir}</b> <span class="muted">(${list.length})</span></summary>`;
+    const tbl = document.createElement('table');
+    tbl.innerHTML = `<thead><tr><th>Pfad</th><th>Größe</th><th>Links</th></tr></thead>`;
+    const tb = document.createElement('tbody');
+    list.forEach(e=>{
+      const path = e.path;
+      const size = (e.size!=null) ? `${e.size} B` : '—';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><code>${path || e.type}</code></td>
+        <td>${e.type==='file'?size:'—'}</td>
+        <td>
+          <a href="${ghBlob(owner,repo,branch,path)}" target="_blank" rel="noopener">GitHub</a>
+          ${e.type==='file' ? ' | <a href="'+rawURL(owner,repo,branch,path)+'" target="_blank" rel="noopener">RAW</a>' : ''}
+        </td>`;
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb);
+    det.appendChild(tbl);
+    container.appendChild(det);
+  }
+  return container;
+}
+
+$("#load").addEventListener("click", async ()=>{
+  const owner = $("#owner").value.trim();
+  const repo = $("#repo").value.trim();
+  const branch = $("#branch").value.trim();
+  const prefix = $("#prefix").value.trim();
+
+  $("#status").textContent = "Lade filelist.json …";
+  $("#out").innerHTML = "";
+
+  try{
+    const data = await loadJSON("/filelist.json"); // liegt im Repo‑Root
+    let entries = data.entries || [];
+    if(prefix) entries = entries.filter(e => (e.path||"").startsWith(prefix));
+    $("#out").appendChild(render(entries, owner, repo, branch));
+    $("#status").textContent = `OK: ${entries.length} Einträge angezeigt.`;
+  }catch(err){
+    $("#status").textContent = "Fehler: " + err.message;
+  }
+});
+</script>
+</body>
+</html>
