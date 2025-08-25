@@ -1,88 +1,82 @@
-/*
+/**
  * Siedler‑Mini — PathIndex
- * Liest /filelist.json und bietet schnelles Resolve/Exists auf echte Repo-Pfade.
- * Handhabt:
- *  - exakte Pfade
- *  - case-insensitive Match (lowercase-Map)
- *  - PNG-Case-Alias (.png <-> .PNG)
+ * Version: v16.0.0 (Baseline, 2025‑08‑25)
+ * Zweck:
+ *   - Liest EINMAL die im Repo erzeugte ./filelist.json (dein „Wahrheitsanker“).
+ *   - Baut schnelle Nachschlage-Strukturen für Pfade:
+ *       • exakte Pfade (Set)
+ *       • case‑insensitive Map (lowercase → echter Repo-Pfad)
+ *       • PNG‑Case‑Flip (.png ↔ .PNG) als Fallback
+ *   - Bietet resolve()/exists()/list()/suggest() an.
+ *
+ * Wirkung:
+ *   Jeder Asset‑Zugriff geht über PathIndex.resolve(rawPath) → realer Pfad.
+ *   So tolerieren wir Groß-/Kleinschreibung und .PNG/.png‑Mischungen,
+ *   ohne deine Dateien umbennen zu müssen.
  */
 
 const state = {
   loaded: false,
-  entries: [],
-  files: new Set(),          // exakte Pfade
-  lowerToReal: new Map(),    // lowercase -> real
+  files: new Set(),          // exakte Repo-Pfade
+  lowerToReal: new Map(),    // lowercase -> realer Pfad (wie in filelist.json)
 };
 
+/** interner Helper: .png ↔ .PNG umklappen */
+function flipPngCase(p) {
+  const lc = p.toLowerCase();
+  if (!lc.endsWith(".png")) return null;
+  return p.endsWith(".PNG") ? p.slice(0, -4) + ".png" : p.slice(0, -4) + ".PNG";
+}
+
+/** filelist.json laden und Indexe bauen */
 async function load() {
   if (state.loaded) return;
-  const res = await fetch("/filelist.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("filelist.json nicht gefunden");
+  const res = await fetch("./filelist.json", { cache: "no-store" });
+  if (!res.ok) throw new Error("filelist.json nicht gefunden – bitte den Workflow laufen lassen.");
   const data = await res.json();
   const entries = Array.isArray(data.entries) ? data.entries : [];
 
-  state.entries = entries;
   for (const e of entries) {
     if (e.type !== "file") continue;
-    const p = e.path;                 // z.B. 'assets/tex/terrain/topdown_grass.PNG'
-    state.files.add(p);
-    state.lowerToReal.set(p.toLowerCase(), p);
+    const real = e.path;                 // z. B. 'assets/tex/terrain/topdown_grass.PNG'
+    state.files.add(real);
+    state.lowerToReal.set(real.toLowerCase(), real);
   }
   state.loaded = true;
 }
 
-function flipPngCase(p) {
-  if (!p.toLowerCase().endsWith(".png")) return null;
-  return p.endsWith(".PNG") ? p.slice(0, -4) + ".png" : p.slice(0, -4) + ".PNG";
-}
-
+/** Resolve mit Fallbacks (exakt → lowercase → PNG‑Flip) */
 function tryResolve(raw) {
-  // 1) exakt?
   if (state.files.has(raw)) return raw;
-  // 2) lower-case?
-  const lc = raw.toLowerCase();
-  const real = state.lowerToReal.get(lc);
-  if (real) return real;
-  // 3) PNG-Flip?
+  const byLower = state.lowerToReal.get(raw.toLowerCase());
+  if (byLower) return byLower;
+
   const flip = flipPngCase(raw);
   if (flip && state.files.has(flip)) return flip;
   if (flip) {
-    const lf = flip.toLowerCase();
-    const rf = state.lowerToReal.get(lf);
-    if (rf) return rf;
+    const byLowerFlip = state.lowerToReal.get(flip.toLowerCase());
+    if (byLowerFlip) return byLowerFlip;
   }
   return null;
 }
 
-function suggestions(prefix, limit = 5) {
-  const pfx = prefix.toLowerCase();
-  const hits = [];
-  for (const [lc, real] of state.lowerToReal) {
-    if (lc.startsWith(pfx)) {
-      hits.push(real);
-      if (hits.length >= limit) break;
-    }
-  }
-  return hits;
-}
-
 export const PathIndex = {
-  /** Promise, resolved wenn der Index gebaut wurde */
-  ready: (async ()=> { await load(); })(),
+  /** Promise, resolved sobald Index gebaut ist */
+  ready: (async () => { await load(); })(),
 
-  /** true/false, ob Pfad (mit Case-Fallback) existiert */
-  exists(path) {
-    if (!state.loaded) throw new Error("PathIndex not ready");
-    return !!tryResolve(path);
-  },
-
-  /** liefert den realen Repo-Pfad (oder null) */
+  /** echten Repo‑Pfad (oder null) zurückgeben */
   resolve(path) {
     if (!state.loaded) throw new Error("PathIndex not ready");
     return tryResolve(path);
   },
 
-  /** Liste alle Dateien unter Präfix (z.B. "assets/tiles/") */
+  /** existiert der Pfad (mit Fallbacks)? */
+  exists(path) {
+    if (!state.loaded) throw new Error("PathIndex not ready");
+    return !!tryResolve(path);
+  },
+
+  /** alle Dateien unter einem Präfix listen (z. B. "assets/tiles/") */
   list(prefix = "") {
     if (!state.loaded) throw new Error("PathIndex not ready");
     const pfx = prefix.toLowerCase();
@@ -93,9 +87,17 @@ export const PathIndex = {
     return out;
   },
 
-  /** Vorschläge, wenn ein Pfad nicht gefunden wurde */
+  /** Vorschläge (nützlich für Fehlermeldungen) */
   suggest(prefix, limit = 5) {
     if (!state.loaded) throw new Error("PathIndex not ready");
-    return suggestions(prefix, limit);
+    const pfx = prefix.toLowerCase();
+    const hits = [];
+    for (const [lc, real] of state.lowerToReal) {
+      if (lc.startsWith(pfx)) {
+        hits.push(real);
+        if (hits.length >= limit) break;
+      }
+    }
+    return hits;
   }
 };
