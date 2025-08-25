@@ -274,7 +274,7 @@
   },
   "animations": {},
   "meta": {
-    "image": "tileset.terrain.png",
+    "image": "assets/tiles/tileset.terrain.png",
     "tileSize": 64,
     "size": { "w": 1024, "h": 1024 },
     "grid": { "cols": 16, "rows": 16 },
