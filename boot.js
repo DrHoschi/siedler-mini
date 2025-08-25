@@ -1,70 +1,39 @@
-/*
+/**
  * Siedler‑Mini — BOOT
- * Version: v1.3 (2025‑08‑25)
+ * Version: v16.0.0 (Baseline, 2025‑08‑25)
  * Aufgabe:
- *  - DOM ↔ game.js verbinden
- *  - Start-Overlay steuern (zuerst sichtbar)
- *  - Log-Spot (Debug) + Fehleranzeige
- *  - Map-Ladevorgang anstoßen (assets/maps/map-mini.json)
- * Hinweise:
- *  - Asset‑Lader & Case‑Fallback in core/asset.js (siehe unten)
- *  - game.js soll eine exportierte Funktion startGame(opts) anbieten
- *    mit Signatur: startGame({ canvas, mapUrl, onReady })
+ *   - Verbindet DOM ↔ game.js
+ *   - Start-Overlay steuern
+ *   - Map-Pfad zentral (hier auf map-mini.json)
  */
 
-import { Assets } from "./core/asset.js";
-
-const $ = (sel) => document.querySelector(sel);
-const logEl = $("#dbg");
-const log = (...a) => { console.log("[boot]", ...a); if (logEl){ logEl.hidden=false; logEl.textContent = [logEl.textContent, a.join(" ")].filter(Boolean).join("\n").slice(-2000); } };
-const showError = (msg) => { alert("Fehler: " + msg); log("ERROR:", msg); };
+const $ = (s) => document.querySelector(s);
+const log = (...a) => console.log("[boot]", ...a);
 
 async function main() {
-  log("INDEX early boot");
-
-  // DOM
-  const cv = $("#stage");
+  const canvas  = $("#stage");
   const overlay = $("#start");
-  const btnStart = $("#btnStart");
+  const btn     = $("#btnStart");
 
-  // Canvas fit
-  const fit = ()=> { cv.width = Math.floor(window.innerWidth); cv.height = Math.floor(window.innerHeight); };
-  window.addEventListener("resize", fit, { passive:true }); fit();
+  const fit = ()=>{ canvas.width = innerWidth|0; canvas.height = innerHeight|0; };
+  addEventListener("resize", fit, { passive:true }); fit();
 
-  // Prewarm: kleines Ping an Assets, damit fetch/headers etc. einmal initialisiert sind
-  Assets.setOptions({
-    // optional: Basisoptionen
-  });
-
-  btnStart.addEventListener("click", async ()=>{
-    try{
-      overlay.style.display = "none";
-      log("UI ready, starting game…");
-
-      // Map-URL: existiert lt. deiner filelist
-      const mapUrl = "assets/maps/map-mini.json";
-
-      // Lazy import von game.js (Root)
-      const mod = await import("./game.js");
-      if (typeof mod.startGame !== "function") {
-        showError("game.js: export startGame(opts) fehlt.");
-        overlay.style.display = ""; return;
-      }
-
-      await mod.startGame({
-        canvas: cv,
-        mapUrl,
-        onReady: ()=> log("Game started")
+  btn.addEventListener("click", async ()=>{
+    overlay.style.display = "none";
+    try {
+      const { startGame } = await import("./game.js");
+      await startGame({
+        canvas,
+        mapUrl: "assets/maps/map-mini.json",
+        onReady: ()=> log("Game ready")
       });
-
-    } catch (err) {
+    } catch (e) {
       overlay.style.display = "";
-      showError(String(err));
+      alert("Fehler beim Start: " + e.message);
+      console.error(e);
     }
   });
 
-  // Optional: Auto-Start bei ?autostart
-  if (location.search.includes("autostart")) btnStart.click();
+  if (location.search.includes("autostart")) btn.click();
 }
-
-main().catch((e)=> showError(String(e)));
+main();
