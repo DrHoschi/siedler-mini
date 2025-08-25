@@ -1,30 +1,26 @@
 name: Build filelist
 
 on:
-  workflow_dispatch:   # manuell starten
-  push:
-    paths:
-      - '**'
-      - '.github/workflows/filelist.yml'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Fix asset names (PNG → png, README)"]
+    types: [completed]
 
-# 🔑 wichtig: damit der Bot ins Repo committen darf
 permissions:
   contents: write
 
 jobs:
   build:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Generate file list (scan repo root)
+      - name: Generate file list (repo root)
         run: |
           node -v
           if [ ! -f tools/filelist-node.mjs ]; then
@@ -33,12 +29,12 @@ jobs:
           fi
           node tools/filelist-node.mjs .
 
-      - name: Run audit
+      - name: Run audit (optional)
         run: |
           if [ -f tools/filelist-audit.mjs ]; then
             node tools/filelist-audit.mjs
           else
-            echo "⚠️ tools/filelist-audit.mjs fehlt – Audit übersprungen"
+            echo "ℹ️  tools/filelist-audit.mjs nicht gefunden – Audit übersprungen."
           fi
 
       - name: Commit results
