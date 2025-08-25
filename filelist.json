@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-08-25T17:12:01.297Z",
+  "createdAt": "2025-08-25T20:49:49.715Z",
   "root": ".",
   "count": 218,
   "entries": [
@@ -184,12 +184,12 @@
     {
       "type": "file",
       "path": "assets/maps/map-mini.json",
-      "size": 2875
+      "size": 3587
     },
     {
       "type": "file",
       "path": "assets/maps/map-mini.jsonc",
-      "size": 1025
+      "size": 4102
     },
     {
       "type": "file",
@@ -665,12 +665,12 @@
     {
       "type": "file",
       "path": "assets/tiles/tileset.terrain.json",
-      "size": 16514
+      "size": 16530
     },
     {
       "type": "file",
       "path": "assets/tiles/tileset.terrain.jsonc",
-      "size": 835
+      "size": 853
     },
     {
       "type": "file",
@@ -998,12 +998,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 4930
+      "size": 6967
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 1643
+      "size": 6097
     },
     {
       "type": "file",
