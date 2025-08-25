@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-25T10:17:06.761Z",
+  "createdAt": "2025-08-25T10:36:19.046Z",
   "root": ".",
-  "count": 212,
+  "count": 213,
   "entries": [
     {
       "type": "dir",
@@ -902,6 +902,11 @@
     },
     {
       "type": "file",
+      "path": "tools/filelist-viewer.html",
+      "size": 3888
+    },
+    {
+      "type": "file",
       "path": "tools/filelist.html",
       "size": 6812
     },
@@ -953,12 +958,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 1
+      "size": 20891
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 1
+      "size": 7928
     },
     {
       "type": "file",
