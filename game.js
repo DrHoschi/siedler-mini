@@ -1,186 +1,309 @@
-/* Siedler‑Mini — game.js — v16.0.2
-   - Stellt global window.startGame bereit (Fix für "startGame is not a function")
-   - Leichtgewichtiger Loader (Map + optionales Tileset) + Logging in Inspector
-   - Robuste URL-Auflösung (Safari) + JSONC-Support + Placeholder-Fallback
-*/
-
+/* ========================================================================
+ * Siedler-Mini — game.js
+ * Version: 16.0.3  (Loader: Atlas + Fallback + Debug)
+ * ========================================================================
+ *
+ * Was ist neu?
+ * - Robuste Atlas-Ladung (JSON + Bild) mit relativer Pfadauflösung
+ * - Fallback-Platzhalter bei fehlenden Frames/Bildern
+ * - Ausführliche Debug-Logs (OK/Warn/Fehler) + Hooks für Inspector
+ * - Map-Parser akzeptiert 'layers' ODER 'tiles'-Matrix
+ *
+ * Öffentliche API:
+ *   window.startGame({
+ *     canvas: HTMLCanvasElement,
+ *     mapUrl: 'assets/maps/map-mini.json',
+ *     onReady: () => {}
+ *   })
+ * ===================================================================== */
 (() => {
-  // --------------------------------------------------------------------------
-  // Version & Globals
-  // --------------------------------------------------------------------------
-  const APP = { NAME: 'Siedler‑Mini', VERSION: '16.0.2' };
-  window.APP = APP;
+  const VERSION = '16.0.3';
 
-  // --------------------------------------------------------------------------
-  // Mini‑Inspector/BootUI
-  // --------------------------------------------------------------------------
-  const insp = {
-    box: document.getElementById('insp-log'),
-    count: document.getElementById('insp-count'),
-    _buffer: [],
-    push(line) {
-      const stamp = new Date().toTimeString().slice(0,8);
-      const s = `[${stamp}] ${line}`;
-      this._buffer.push(s);
-      if (this.box) {
-        const div = document.createElement('div');
-        div.textContent = s;
-        this.box.appendChild(div);
-        this.box.scrollTop = this.box.scrollHeight;
+  /* ----------------------------- Logging ----------------------------- */
+  const Log = (() => {
+    const buf = [];
+    const fmtTime = () => {
+      const d = new Date();
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mm = String(d.getMinutes()).padStart(2,'0');
+      const ss = String(d.getSeconds()).padStart(2,'0');
+      return `${hh}:${mm}:${ss}`;
+    };
+    const push = (level, msg) => {
+      const line = `[${fmtTime()}] (game) ${msg}`;
+      buf.push({ level, line });
+      // Console
+      if (level === 'err') console.error(line);
+      else if (level === 'warn') console.warn(line);
+      else console.log(line);
+
+      // Inspector-Hook (falls vorhanden)
+      try {
+        if (window.BootUI && typeof window.BootUI.logCustom === 'function') {
+          window.BootUI.logCustom(level, line);
+        }
+      } catch {}
+      // Global Buffer für „Log kopieren“
+      window.__gameLog = buf;
+      // DOM-Buttons optional verdrahten (falls vorhanden)
+      wireLogButtons();
+    };
+    const wireLogButtons = () => {
+      const copyBtn = document.getElementById('log-copy');
+      const clearBtn = document.getElementById('log-clear');
+      const countBadge = document.getElementById('log-count');
+      if (countBadge) countBadge.textContent = String(buf.length);
+
+      if (copyBtn && !copyBtn.__wired) {
+        copyBtn.__wired = true;
+        copyBtn.addEventListener('click', async () => {
+          const text = buf.map(x => x.line).join('\n');
+          try {
+            await navigator.clipboard.writeText(text);
+            push('ok', 'Log in Zwischenablage');
+          } catch (e) {
+            push('warn', 'Konnte Log nicht in Zwischenablage kopieren.');
+          }
+        });
       }
-      if (this.count) this.count.textContent = String(this._buffer.length);
-      console.log(line);
-    },
-    raw() { return `# GAME-LOG — ${new Date().toISOString()}\n` + this._buffer.join('\n'); },
-    clear() {
-      this._buffer = [];
-      if (this.box) this.box.textContent = '';
-      if (this.count) this.count.textContent = '0';
-    }
-  };
+      if (clearBtn && !clearBtn.__wired) {
+        clearBtn.__wired = true;
+        clearBtn.addEventListener('click', () => {
+          buf.length = 0;
+          if (countBadge) countBadge.textContent = '0';
+          push('ok', 'Log geleert');
+        });
+      }
+    };
+    return {
+      ok:  (m) => push('ok',   m),
+      warn:(m) => push('warn', m),
+      err: (m) => push('err',  m),
+    };
+  })();
 
-  window.BootUI = {
-    log: (m)=>insp.push(m),
-    logOK: (m,extra='')=>insp.push(`(game) ${m}${extra?(' '+extra):''}`),
-    logWarn: (m,extra='')=>insp.push(`(game) WARN ${m}${extra?(' '+extra):''}`),
-    logErr: (m,extra='')=>insp.push(`(game) ERROR ${m}${extra?(' '+extra):''}`),
-    raw: ()=>insp.raw(),
-    clear: ()=>insp.clear(),
-  };
+  Log.ok(`script load ok game.js ${VERSION}`);
 
-  BootUI.log(`(game) script load ok game.js ${APP.VERSION}`);
-
-  // --------------------------------------------------------------------------
-  // Utils: JSONC, URL, fetch
-  // --------------------------------------------------------------------------
-  function stripJsonComments(text) {
-    return text
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
+  /* -------------------------- Fetch/Assets --------------------------- */
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
   }
 
-  function toAbsoluteURL(pathOrUrl, baseHref = location.href) {
-    try {
-      return new URL(pathOrUrl, new URL(baseHref, location.href)).toString();
-    } catch {
-      return new URL(pathOrUrl, location.href).toString();
-    }
-  }
-
-  async function fetchJson(jsonUrl) {
-    const res = await fetch(jsonUrl);
-    if (!res.ok) throw new Error(`fetch ${jsonUrl} → ${res.status}`);
-    let txt = await res.text();
-    try { return JSON.parse(txt); }
-    catch {
-      const clean = stripJsonComments(txt);
-      return JSON.parse(clean);
-    }
-  }
-
-  // --------------------------------------------------------------------------
-  // Loader: Map + (optional) Tileset‑Atlas
-  // --------------------------------------------------------------------------
-  async function loadAtlas(atlasUrl) {
-    const atlas = await fetchJson(atlasUrl);
-    const name = atlas?.meta?.image || atlas?.image || 'tileset.terrain.png';
-    const imgUrl = toAbsoluteURL(name, toAbsoluteURL(atlasUrl));
-    const img = await loadImageSafe(imgUrl, './assets/tex/placeholder64.PNG');
-    if (!img) throw new Error('Atlas-Bild konnte nicht geladen werden');
-    BootUI.logOK('Tileset (atlas) OK', `${img.naturalWidth}x${img.naturalHeight}`);
-    return { atlas, image: img };
-  }
-
-  function loadImageSafe(src, fallbackSrc) {
-    return new Promise((resolve) => {
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = ()=>resolve(img);
-      img.onerror = ()=>{
-        if (!fallbackSrc) return resolve(null);
-        const fb = new Image();
-        fb.onload = ()=>resolve(fb);
-        fb.onerror = ()=>resolve(null);
-        fb.src = fallbackSrc;
-      };
-      img.src = toAbsoluteURL(src);
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`IMG fail ${url}`));
+      img.src = url;
     });
   }
 
-  async function loadMap(mapUrl) {
-    const map = await fetchJson(mapUrl);
-    const width  = map.width  || map.size?.w || 0;
-    const height = map.height || map.size?.h || 0;
-    const tile   = map.tileSize || 64;
-    if (!width || !height) throw new Error('Map: width/height fehlen oder sind 0');
+  function resolveRelative(baseUrl, maybeRel) {
+    try {
+      return new URL(maybeRel, new URL(baseUrl, location.href)).toString();
+    } catch {
+      // Fallback: im Zweifel unverändert zurück (Engine loggt das)
+      return maybeRel;
+    }
+  }
 
-    let tiles = null;
-    if (map.tileset) {
-      try {
-        tiles = await loadAtlas(map.tileset);
-      } catch (e) {
-        BootUI.logWarn('Tileset fehlgeschlagen → Placeholder', e.message||e);
+  /* ------------------------- Atlas/ Tileset -------------------------- */
+  /**
+   * Lädt Atlas-JSON + Bild. Erwartet Schema:
+   * {
+   *   frames:{ key:{x,y,w,h}, ... },
+   *   meta:{ image:"./assets/tiles/tileset.terrain.png", ... },
+   *   fallback?: { image:"./assets/tex/placeholder64.PNG", w:64, h:64 }
+   * }
+   */
+  async function loadTileset(atlasUrl) {
+    try {
+      const atlas = await fetchJSON(atlasUrl);
+
+      if (!atlas || !atlas.frames || !atlas.meta) {
+        Log.warn(`Atlas JSON ohne frames/meta ${atlasUrl}`);
+        return null;
       }
+
+      const imgUrl = atlas.meta?.image
+        ? resolveRelative(atlasUrl, atlas.meta.image)
+        : null;
+
+      if (!imgUrl) {
+        Log.warn(`Atlas JSON ohne image-Feld ${atlasUrl}`);
+        return null;
+      }
+
+      const img = await loadImage(imgUrl);
+      Log.ok(`Tileset (atlas) OK ${img.width}x${img.height}`);
+
+      // Fallback-Info (optional)
+      let fallback = null;
+      if (atlas.fallback?.image) {
+        fallback = {
+          url: resolveRelative(atlasUrl, atlas.fallback.image),
+          w: atlas.fallback.w || 64,
+          h: atlas.fallback.h || 64
+        };
+      }
+
+      return { atlas, img, fallback };
+    } catch (e) {
+      Log.warn(`Atlas JSON load fail ${atlasUrl} ${e.message || e}`);
+      return null;
     }
-    return { map, width, height, tile, tiles };
   }
 
-  // --------------------------------------------------------------------------
-  // Renderer (Minimal – zeigt etwas & beweist Startkette)
-  // --------------------------------------------------------------------------
-  function startRenderLoop(ctx) {
-    let t0 = performance.now();
-    function frame(t) {
-      const dt = (t - t0) / 1000; t0 = t;
-      // einfache Puls‑Animation im Hintergrund, damit man „Leben“ sieht
-      const w = ctx.canvas.width, h = ctx.canvas.height;
-      const p = (Math.sin(t/500)+1)/2;
-      ctx.clearRect(0,0,w,h);
-      ctx.fillStyle = `rgba(30,45,60,${0.25 + p*0.15})`;
-      ctx.fillRect(0,0,w,h);
-      requestAnimationFrame(frame);
+  /* ------------------------------ Map -------------------------------- */
+  /**
+   * Unterstützte Map-Formate:
+   * A) { width, height, tileSize, layers:[{data:number[][]}] }
+   * B) { width, height, tileSize, tiles:number[][] }
+   */
+  async function loadMap(mapUrl) {
+    const json = await fetchJSON(mapUrl);
+
+    // Normalisieren
+    let width = json.width|0;
+    let height = json.height|0;
+    const tileSize = json.tileSize|0 || 64;
+
+    let layers = null;
+    if (Array.isArray(json.layers) && json.layers.length > 0) {
+      layers = json.layers;
+      if (!width || !height) {
+        // versuche aus Layer zu lesen
+        const d0 = json.layers[0]?.data;
+        if (Array.isArray(d0) && d0.length) {
+          height = d0.length;
+          width = Array.isArray(d0[0]) ? d0[0].length : 0;
+        }
+      }
+      Log.ok('Map layers via json.layers');
+    } else if (Array.isArray(json.tiles)) {
+      layers = [{ name:'ground', data: json.tiles }];
+      if (!width || !height) {
+        height = json.tiles.length;
+        width  = Array.isArray(json.tiles[0]) ? json.tiles[0].length : 0;
+      }
+      Log.ok('Map layer via 2D grid/matrix/tiles');
     }
-    requestAnimationFrame(frame);
+
+    if (!width || !height) {
+      throw new Error('Map: width/height fehlen oder sind 0');
+    }
+    if (!layers || !layers[0] || !Array.isArray(layers[0].data)) {
+      throw new Error('Map: layers fehlen/leer');
+    }
+
+    Log.ok(`Map OK size ${width}x${height} tile ${tileSize}`);
+    return { width, height, tileSize, layers };
   }
 
-  // --------------------------------------------------------------------------
-  // PUBLIC API: startGame (global)
-  // --------------------------------------------------------------------------
-  async function startGame(opts) {
-    const { canvas, mapUrl, onReady } = Object.assign({ mapUrl:'./assets/maps/map-mini.json' }, opts||{});
-    if (!canvas) throw new Error('kein Canvas übergeben');
-
-    // Canvas DPI
-    const dpr = Math.max(1, Math.min(3, (window.devicePixelRatio||1)));
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.round(rect.width  * dpr);
-    canvas.height= Math.round(rect.height * dpr);
+  /* ---------------------------- Renderer ----------------------------- */
+  function makeRenderer(canvas, tileset) {
     const ctx = canvas.getContext('2d');
 
-    BootUI.log(`(game) GameLoader.start ${mapUrl}`);
-    // Map + Tileset laden
-    const world = await loadMap(mapUrl);
-    BootUI.logOK(`Map OK size ${world.width}x${world.height} tile ${world.tile}`);
+    function drawTile(tx, ty, tileIdx, tileSize) {
+      // Kein Tileset? Platzhalter-Farbe
+      if (!tileset) {
+        ctx.fillStyle = '#385a2a';
+        ctx.fillRect(tx*tileSize, ty*tileSize, tileSize, tileSize);
+        return;
+      }
 
-    // (hier würdest du dein echtes Zeichnen machen – ich starte nur eine Loop)
-    startRenderLoop(ctx);
+      // Frame-Key-Konvention: terrain_r{row}_c{col}
+      // Standard: 16x16 Raster (64px)
+      const COLS = (tileset.atlas?.meta?.grid?.cols)|0 || 16;
+      const row = Math.floor(tileIdx / COLS);
+      const col = tileIdx % COLS;
+      const key = `terrain_r${row}_c${col}`;
+      const f = tileset.atlas.frames[key];
 
-    // Callback
-    onReady && onReady();
-    BootUI.logOK('Game started');
+      if (f) {
+        ctx.drawImage(
+          tileset.img,
+          f.x, f.y, f.w, f.h,
+          tx*tileSize, ty*tileSize, tileSize, tileSize
+        );
+        return;
+      }
+
+      // Fallback: einzelnes Platzhalterbild laden/cachen
+      if (tileset.fallback && !tileset.__fallbackImg) {
+        tileset.__fallbackImg = new Image();
+        tileset.__fallbackImg.src = tileset.fallback.url;
+        tileset.__fallbackImg.onload = () => {
+          Log.ok('Fallback geladen');
+        };
+        tileset.__fallbackImg.onerror = () => {
+          Log.warn('Fallback konnte nicht geladen werden');
+        };
+      }
+
+      if (tileset.__fallbackImg && tileset.__fallbackImg.complete) {
+        ctx.drawImage(
+          tileset.__fallbackImg,
+          0, 0, tileset.fallback.w, tileset.fallback.h,
+          tx*tileSize, ty*tileSize, tileSize, tileSize
+        );
+      } else {
+        // Notnagel: kariertes Muster
+        ctx.fillStyle = '#3c3c3c';
+        ctx.fillRect(tx*tileSize, ty*tileSize, tileSize, tileSize);
+        ctx.strokeStyle = '#202020';
+        ctx.strokeRect(tx*tileSize, ty*tileSize, tileSize, tileSize);
+      }
+    }
+
+    function renderMap(map) {
+      const { width, height, tileSize, layers } = map;
+      canvas.width  = width  * tileSize;
+      canvas.height = height * tileSize;
+
+      const data = layers[0].data;
+      for (let y = 0; y < height; y++) {
+        const row = data[y];
+        for (let x = 0; x < width; x++) {
+          const idx = row[x]|0;
+          drawTile(x, y, idx, tileSize);
+        }
+      }
+    }
+
+    return { renderMap };
   }
 
-  // global machen → Fix für „startGame is not a function“
+  /* ---------------------------- Game Loop ---------------------------- */
+  async function startGame(opts) {
+    try {
+      const canvas = opts.canvas;
+      const mapUrl = opts.mapUrl;
+      const onReady = typeof opts.onReady === 'function' ? opts.onReady : () => {};
+
+      // Tileset/Atlas laden (optional)
+      const tileset = await loadTileset('./assets/tiles/tileset.terrain.json');
+
+      // Map laden
+      const map = await loadMap(mapUrl);
+
+      // Renderer
+      const r = makeRenderer(canvas, tileset);
+
+      // Rendern
+      r.renderMap(map);
+
+      Log.ok('Game started');
+      onReady();
+    } catch (e) {
+      Log.err(`Start FAIL ${e.message || e}`);
+      alert(`Fehler beim Start: ${e.message || e}`);
+      throw e;
+    }
+  }
+
+  // Public API
   window.startGame = startGame;
-
-  // Reflow/Resize: Canvas-Dimensionen aktuell halten
-  window.addEventListener('resize', () => {
-    const canvas = document.getElementById('game-canvas');
-    if (!canvas) return;
-    const dpr = Math.max(1, Math.min(3, (window.devicePixelRatio||1)));
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.round(rect.width  * dpr);
-    canvas.height= Math.round(rect.height * dpr);
-    BootUI.log(`(game) Canvas ${canvas.width}x${canvas.height} dpr:${dpr}`);
-  }, { passive:true });
-
 })();
