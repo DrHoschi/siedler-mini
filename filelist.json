@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-08-25T16:34:16.683Z",
+  "createdAt": "2025-08-25T17:12:01.297Z",
   "root": ".",
   "count": 218,
   "entries": [
@@ -774,7 +774,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 1569
+      "size": 2057
     },
     {
       "type": "file",
@@ -963,7 +963,7 @@
     {
       "type": "file",
       "path": "boot.js",
-      "size": 2192
+      "size": 1052
     },
     {
       "type": "file",
@@ -983,12 +983,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 21376
+      "size": 21464
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 8103
+      "size": 8129
     },
     {
       "type": "file",
@@ -998,7 +998,7 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 4767
+      "size": 4930
     },
     {
       "type": "file",
