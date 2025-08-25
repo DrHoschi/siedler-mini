@@ -1,28 +1,21 @@
 {
-  // v16.0.3 — Tileset-Atlas für 16x16 Kacheln à 64px = 1024x1024
-  // Pfad-Auflösung: "image" ist RELATIV zu dieser JSON-Datei.
+  // Atlas für 16x16 Tiles à 64px – Bild liegt neben der JSON
   "frames": {
-    // Namensschema: terrain_r{ROW}_c{COL}
-    // -> z.B. r4_c0: Wiese, r4_c1: Variante etc. (du kannst semantische Aliase später ergänzen)
-    "terrain_r0_c0": { "x": 0,   "y": 0,   "w": 64, "h": 64 },
-    "terrain_r0_c1": { "x": 64,  "y": 0,   "w": 64, "h": 64 },
-    // ... (vollständig wie in der JSON oben, alle r0..r15, c0..c15)
+    // Konvention: terrain_r{ROW}_c{COL}
+    "terrain_r0_c0": { "x": 0, "y": 0, "w": 64, "h": 64 },
+    // … (alle Einträge wie in der produktiven JSON – 256 Einträge) …
     "terrain_r15_c15": { "x": 960, "y": 960, "w": 64, "h": 64 }
   },
 
-  // Platz für spätere Animationen (nicht zwingend)
-  "animations": {
-    // "water_idle": ["terrain_r2_c5","terrain_r2_c6","terrain_r2_c7"]
-  },
+  // Platz für spätere Animationen (z. B. Wasser): "water_flow": ["terrain_r2_c5","terrain_r2_c6",...]
+  "animations": {},
 
   "meta": {
-    "image": "tileset.terrain.png",   // liegt im selben Ordner wie diese JSON
-    "tileSize": 64,                   // Kantenlänge einer Kachel
-    "size": { "w": 1024, "h": 1024 }, // Atlas-Gesamtgröße
+    // WICHTIG: Dateiname, nicht URL – GameLoader hängt den Pfad der JSON davor.
+    "image": "tileset.terrain.png",
+    "tileSize": 64,               // Einheitliche Kantenlänge
+    "size": { "w": 1024, "h": 1024 }, // Bildgröße
     "grid": { "cols": 16, "rows": 16 },
-
-    // Hinweis: Wenn ein Frame fehlt, solltest du in game.js auf
-    // ./assets/tex/placeholder64.PNG zurückfallen (das hast du schon abgelegt).
-    "note": "Generic grid mapping; rename or alias keys to semantic names as needed."
+    "note": "Keys können in game.js auf sprechende Namen gemappt werden (z.B. grass, road0, rock)."
   }
 }
