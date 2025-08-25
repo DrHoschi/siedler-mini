@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-25T11:28:59.509Z",
+  "createdAt": "2025-08-25T12:01:42.134Z",
   "root": ".",
-  "count": 214,
+  "count": 216,
   "entries": [
     {
       "type": "dir",
@@ -10,6 +10,11 @@
     {
       "type": "dir",
       "path": ".github/workflows/"
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/asset-fix.yml",
+      "size": 2073
     },
     {
       "type": "file",
@@ -959,6 +964,11 @@
       "type": "file",
       "path": "debug.js",
       "size": 10213
+    },
+    {
+      "type": "file",
+      "path": "filelist-audit.txt",
+      "size": 2799
     },
     {
       "type": "file",

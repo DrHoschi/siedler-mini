@@ -1,5 +1,6 @@
 .github/
 .github/workflows/
+.github/workflows/asset-fix.yml (2073 B)
 .github/workflows/filelist.yml (1318 B)
 assets/
 assets/characters/
@@ -194,6 +195,7 @@ app-v11.1r6.js (12671 B)
 boot.js (14124 B)
 buildingData.js (953 B)
 debug.js (10213 B)
+filelist-audit.txt (2799 B)
 filelist.json (21091 B)
 filelist.txt (8004 B)
 fullscreen.js (1284 B)
