@@ -1,7 +1,7 @@
 .github/
 .github/workflows/
-.github/workflows/asset-fix.yml (2860 B)
-.github/workflows/filelist.yml (1318 B)
+.github/workflows/asset-fix.yml (1783 B)
+.github/workflows/filelist.yml (1534 B)
 assets/
 assets/characters/
 assets/characters/builder.json (743 B)

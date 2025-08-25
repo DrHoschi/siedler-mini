@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-08-25T12:10:48.515Z",
+  "createdAt": "2025-08-25T12:15:30.440Z",
   "root": ".",
   "count": 217,
   "entries": [
@@ -14,12 +14,12 @@
     {
       "type": "file",
       "path": ".github/workflows/asset-fix.yml",
-      "size": 2860
+      "size": 1783
     },
     {
       "type": "file",
       "path": ".github/workflows/filelist.yml",
-      "size": 1318
+      "size": 1534
     },
     {
       "type": "dir",
