@@ -1,32 +1,57 @@
 {
-  "version": 1,
-  "name": "map-mini",
-  "tileSize": 64, // muss zu tileset.meta.tileSize passen
-  "tileset": "./assets/tiles/tileset.terrain.json", // relativ zur HTML/Location der Map geladen
+  // v16.0.3 — Minimale Testkarte, lädt sicher mit deinem Loader
+  "version": "16.0.3",
 
-  "size": { "w": 16, "h": 10 }, // Spalten x Zeilen
+  // Kartengröße in Tiles:
+  "width": 16,
+  "height": 10,
 
+  // Muss zum Tileset passen:
+  "tileSize": 64,
+
+  // RELATIVER Pfad (vom Map‑JSON aus gesehen!)
+  "tileset": "./assets/tiles/tileset.terrain.json",
+
+  // Layer-Array — dein Loader versteht sowohl json.layers (Tiles per Namen) als auch
+  // numerische Tiles. Wir nutzen hier die Frame‑Namen aus dem Atlas:
   "layers": [
     {
       "name": "ground",
-      "type": "tilegrid", // vom Loader unterstützt: Gitter aus Indizes
-      "legend": {
-        // Mappt Zahlenwerte in 'tiles' auf Frame-Keys aus dem Tileset
-        "0": "terrain_r4_c0" // sattes Gras
-      },
-      "tiles": [
-        // 10 Zeilen á 16 Spalten → reine Wiese
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+      "type": "tiles",
+
+      // 10 Zeilen à 16 Spalten → überall „terrain_r4_c0“ (Gras).
+      // Du kannst das später im Editor live ersetzen.
+      "data": [
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
+        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"]
+      ]
+    },
+    {
+      "name": "roads",
+      "type": "tiles",
+      "data": [
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""],
+        ["","","","","","","","","","","","","","","",""]
       ]
     }
-  ]
+  ],
+
+  // Optional: Objekt-Layer; bleibt leer.
+  "objects": []
 }
