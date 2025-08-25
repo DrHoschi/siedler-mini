@@ -1,0 +1,61 @@
+name: Fix asset names (PNG → png, README)
+
+on:
+  workflow_dispatch:   # manuell startbar
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Normalize filename case & READMEs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "🔎 Suche *.PNG …"
+          mapfile -d '' PNGS < <(find . -type f -iname '*.PNG' -print0 || true)
+          for f in "${PNGS[@]:-}"; do
+            new="${f%.*}.png"
+            if [[ "$f" != "$new" ]]; then
+              echo "→ git mv -f '$f' '$new'"
+              git mv -f "$f" "$new"
+            fi
+          done
+
+          echo "🔎 Fix READMEs/typos …"
+          # resdme → README.md
+          if [ -f assets/tex/river/resdme ]; then git mv -f assets/tex/river/resdme assets/tex/river/README.md; fi
+
+          # readme/Readme → README.md (mehrere Ordner)
+          while IFS= read -r -d '' r; do
+            dir="$(dirname "$r")"
+            if [ "$(basename "$r")" != "README.md" ]; then
+              git mv -f "$r" "$dir/README.md"
+            fi
+          done < <(find . -type f \( -iname 'readme' -o -iname 'readme.md' -o -iname 'readme.txt' \) -print0)
+
+      - name: Replace references (.PNG → .png) in text files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Nur in textbasierten Dateien ersetzen (kein Binärmist):
+          exts='js json jsonc ts tsx jsx html htm css md atlas txt yml yaml'
+          for ext in $exts; do
+            echo "✍️  Ersetze .PNG → .png in *.$ext"
+            # GNU sed in Actions-Runner vorhanden:
+            find . -type f -iname "*.${ext}" -print0 \
+              | xargs -0 -r sed -i 's/\.PNG\b/.png/g'
+          done
+
+      - name: Commit fixes
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: normalize assets (.PNG→.png) & README names" || echo "No changes"
+          git push
