@@ -51,7 +51,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 🔒 WICHTIG: Workflows NICHT committen, sonst gibt's 403-Fehler
+          # ⚠️ Workflows NICHT committen, sonst Permission-Fehler
           git add -A ':!**/.github/workflows/**'
 
           git commit -m "chore: normalize assets & references" || echo "No changes"
