@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-25T12:48:44.806Z",
+  "createdAt": "2025-08-25T16:34:16.683Z",
   "root": ".",
-  "count": 217,
+  "count": 218,
   "entries": [
     {
       "type": "dir",
@@ -774,7 +774,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 1054
+      "size": 1569
     },
     {
       "type": "file",
@@ -785,6 +785,11 @@
       "type": "file",
       "path": "core/carriers.js",
       "size": 1864
+    },
+    {
+      "type": "file",
+      "path": "core/path-index.js",
+      "size": 3341
     },
     {
       "type": "file",
@@ -958,7 +963,7 @@
     {
       "type": "file",
       "path": "boot.js",
-      "size": 14124
+      "size": 2192
     },
     {
       "type": "file",
@@ -993,12 +998,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 7456
+      "size": 4767
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 26647
+      "size": 1643
     },
     {
       "type": "file",
