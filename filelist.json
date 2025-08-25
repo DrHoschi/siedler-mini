@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-25T12:01:42.134Z",
+  "createdAt": "2025-08-25T12:05:13.308Z",
   "root": ".",
-  "count": 216,
+  "count": 217,
   "entries": [
     {
       "type": "dir",
@@ -922,6 +922,11 @@
     },
     {
       "type": "file",
+      "path": "tools/fix-assets.mjs",
+      "size": 2107
+    },
+    {
+      "type": "file",
       "path": "tools/gen-manifest.mjs",
       "size": 7491
     },
@@ -968,17 +973,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2799
+      "size": 2821
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 21091
+      "size": 21284
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 8004
+      "size": 8073
     },
     {
       "type": "file",
