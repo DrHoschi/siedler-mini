@@ -1,58 +1,135 @@
 /*
- * Siedler-Mini — game.js (Hotfix)
- * Version: v1.0 (2025-08-25)
+ * Siedler‑Mini — game.js (Adapter + Fallback)
+ * Version: v1.1 (2025‑08‑25)
+ *
  * Zweck:
- *   - Stellt eine startGame(opts) Funktion bereit (wird von boot.js aufgerufen)
- *   - Lädt Map-JSON, Tileset und zeichnet einfache Karte ins Canvas
+ *  1) Adapter: nutzt deine vorhandenen Einstiege (main.js, app-v11.1r6.js …)
+ *     und ruft eine der üblichen Startfunktionen auf:
+ *       - startGame(opts), start(opts), init(opts), run(opts), main(opts), default(opts)
+ *       - oder global: window.gameStart?.(opts), window.startGame?.(opts), window.start?.(opts)
+ *  2) Fallback: Wenn nichts davon existiert/klappt, rendert eine einfache Karte
+ *     mit deinem Tileset (assets/tiles/tileset.terrain.{json,png}).
  */
 
 import { Assets } from "./core/asset.js";
 
-export async function startGame({ canvas, mapUrl, onReady }) {
-  const ctx = canvas.getContext("2d");
+// ---- 1) Try existing entry points -------------------------------------------------
+async function tryExistingEntrypoints(opts) {
+  // Kandidaten-Module in deiner Repo-Root (siehe filelist)
+  const modulePaths = ["./main.js", "./app-v11.1r6.js"];
+  const fnNames = ["startGame", "start", "init", "run", "main", "default"];
 
-  console.log("[game] startGame", mapUrl);
-
-  // 1) Map laden
-  const map = await Assets.json(mapUrl);
-
-  // 2) Tileset laden (lt. deiner filelist: assets/tiles/tileset.terrain.png + tileset.terrain.json)
-  const atlas = await Assets.json("assets/tiles/tileset.terrain.json");
-  const img = await Assets.image("assets/tiles/tileset.terrain.png");
-
-  // 3) Test: gesamte Map zeichnen
-  // Erwartet: map.layers[0].data enthält tile-IDs (falls Tiled-Export)
-  // → sonst Dummy-Gitter mit Atlas-Frames
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-
-  const tileSize = atlas.meta.tileSize || 64;
-  let drawn = 0;
-
-  if (map.layers && map.layers[0] && map.layers[0].data) {
-    const w = map.width, h = map.height;
-    const data = map.layers[0].data;
-    data.forEach((tileId, i)=>{
-      if (tileId === 0) return;
-      const sx = (tileId-1) % atlas.meta.grid.cols;
-      const sy = Math.floor((tileId-1) / atlas.meta.grid.cols);
-      const dx = (i % w) * tileSize;
-      const dy = Math.floor(i / w) * tileSize;
-      ctx.drawImage(img, sx*tileSize, sy*tileSize, tileSize, tileSize, dx, dy, tileSize, tileSize);
-      drawn++;
-    });
-  } else {
-    // Fallback: alle Frames aus atlas nebeneinander zeichnen
-    const keys = Object.keys(atlas.frames);
-    keys.forEach((k, i)=>{
-      const f = atlas.frames[k];
-      const dx = (i % 10) * tileSize;
-      const dy = Math.floor(i / 10) * tileSize;
-      ctx.drawImage(img, f.x, f.y, f.w, f.h, dx, dy, f.w, f.h);
-      drawn++;
-    });
+  for (const p of modulePaths) {
+    try {
+      const m = await import(/* @vite-ignore */ p);
+      for (const fn of fnNames) {
+        if (typeof m?.[fn] === "function") {
+          console.log(`[adapter] Using ${p} -> ${fn}()`);
+          // Viele ältere Starts erwarten (canvas, mapUrl) oder nur (opts):
+          try {
+            // Versuch 1: (opts)
+            await m[fn](opts);
+          } catch {
+            // Versuch 2: (canvas, mapUrl)
+            await m[fn](opts.canvas, opts.mapUrl);
+          }
+          return true;
+        }
+      }
+    } catch (e) {
+      // Ignorieren, wenn Modul kein ES‑Module ist o.ä.
+      console.debug(`[adapter] Import failed for ${p}:`, e?.message);
+    }
   }
 
-  console.log(`[game] Tiles gezeichnet: ${drawn}`);
-  if (typeof onReady === "function") onReady();
+  // Fallback: globale Funktionen (falls alte Skripte global arbeiten)
+  const g = globalThis;
+  const globals = [
+    "gameStart", "startGame", "start", "init", "run", "main"
+  ].filter(n => typeof g[n] === "function");
+
+  if (globals.length) {
+    const name = globals[0];
+    console.log(`[adapter] Using global ${name}()`);
+    try {
+      await g[name](opts);
+    } catch {
+      await g[name](opts.canvas, opts.mapUrl);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// ---- 2) Minimaler Fallback‑Renderer ---------------------------------------------
+async function fallbackRender(opts) {
+  const { canvas, mapUrl } = opts;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+
+  // Hintergrund
+  ctx.fillStyle = "#0b0e12";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#8fb";
+  ctx.font = "14px system-ui, sans-serif";
+  ctx.fillText("Fallback-Renderer aktiv (Adapter hat keinen bestehenden Start gefunden).", 16, 24);
+
+  // Map + Tileset laden (dein Terrain-Set)
+  const atlas = await Assets.json("assets/tiles/tileset.terrain.json");
+  const img   = await Assets.image("assets/tiles/tileset.terrain.png");
+
+  // Versuche Tiled-Map (layers[0].data) – sonst zeichne einfach ein 20x12‑Demo‑Pattern
+  let gridW = 20, gridH = 12, tiles = null;
+  try {
+    const map = await Assets.json(mapUrl);
+    if (map?.layers?.[0]?.data && Number.isInteger(map.width) && Number.isInteger(map.height)) {
+      tiles = map.layers[0].data;
+      gridW = map.width; gridH = map.height;
+    }
+  } catch (_) {}
+
+  const tileSize = atlas?.meta?.tileSize || 64;
+  const cols = atlas?.meta?.grid?.cols || Math.max(1, Math.floor((img.width||tileSize) / tileSize));
+
+  const drawTile = (tileId, dx, dy) => {
+    if (!tileId) return;
+    const t = (tileId - 1);
+    const sx = t % cols;
+    const sy = Math.floor(t / cols);
+    ctx.drawImage(img, sx*tileSize, sy*tileSize, tileSize, tileSize, dx, dy, tileSize, tileSize);
+  };
+
+  // Daten vorbereiten
+  if (!tiles) {
+    // Dummy: paar verschiedene Tiles (1..N) im Schachbrett
+    const count = (atlas?.meta?.grid?.rows || 16) * cols;
+    tiles = Array.from({ length: gridW * gridH }, (_, i) => 1 + ((i + Math.floor(i/gridW)) % Math.min(count, 64)));
+  }
+
+  // Render
+  for (let y = 0; y < gridH; y++) {
+    for (let x = 0; x < gridW; x++) {
+      drawTile(tiles[y*gridW + x], x*tileSize, y*tileSize);
+    }
+  }
+
+  ctx.fillStyle = "#9ad";
+  ctx.fillText(`Tileset: tileset.terrain.png  |  Tile: ${tileSize}px`, 16, canvas.height - 32);
+  ctx.fillText(`Map: ${mapUrl}  |  ${gridW}×${gridH}`, 16, canvas.height - 12);
+}
+
+// ---- Public API ------------------------------------------------------------------
+export async function startGame(opts) {
+  // 1) Erst die bestehende Game-Logik versuchen
+  const usedExisting = await tryExistingEntrypoints(opts);
+  if (usedExisting) {
+    opts?.onReady?.();
+    return;
+  }
+
+  // 2) Wenn nichts existiert / ES‑Module fehlt → Fallback zeigen
+  console.warn("[adapter] Kein bekannter Start gefunden – Fallback aktiv.");
+  await fallbackRender(opts);
+  opts?.onReady?.();
 }
