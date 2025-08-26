@@ -1,194 +1,322 @@
-/*!
- * Datei: game.js
- * Version: v16.0.8
- * Zweck: Minimal lauffähiges Gerüst mit sauberem Init, GameLoader.start(),
- *        optionalen Editor/Inspector-Dummies und Texture-Atlas-Fallback.
- * Erwartet: wird von index.html mit ?v=16.0.8 geladen (Cache-Booster).
- */
+/* ============================================================================
+ * game.js — v16.1.0
+ * ----------------------------------------------------------------------------
+ * Ziele:
+ *  - Stabile Initialisierung mit klaren Logs (✅⚠️❌) inkl. Versionsnummern
+ *  - Kompatibler Map-Loader (width/height/tileSize, optional layers/tiles)
+ *  - Einfache Bau-Tools: "Hütte" & "Straße" (Platzhalter-Rendering)
+ *  - Sanfte Fallbacks: Editor/Inspector Hooks sind optional (Warnung statt Fehler)
+ * 
+ * Tastenkürzel:
+ *   B  -> Hütte bauen
+ *   R  -> Straße bauen
+ *   ESC-> Tool abwählen
+ * 
+ * Abhängigkeiten:
+ *   - Canvas-Element mit id="game"
+ *   - (Optional) Buttons können später via data-Attribut gebunden werden
+ * 
+ * Changelog:
+ *   v16.1.0  Erste „Bauen“-Iteration (Tools, Platzieren, Rendern)
+ * ========================================================================== */
 
-/* ============================== LOG HELPERS ============================== */
-(function(){
-  if(!window.__bus){
-    // Fallback, falls index.html nicht unser Log-Bus gesetzt hat.
-    const sub=[]; window.__bus={
-      emit:(t,m)=>{ const line = `[??:??:??] (${t}) ${m}`; console.log(line); (window.__LOG__=window.__LOG__||[]).push(line); },
-      on:(fn)=>sub.push(fn)
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------------------
+  // Version + kleines Log-System mit Icons
+  // ---------------------------------------------------------------------------
+  const GAME_VERSION = "16.1.0";
+
+  const log = {
+    ok:    (msg) => console.log(`[${time()}] ✅ (ok) ${msg}`),
+    warn:  (msg) => console.warn(`[${time()}] ⚠️ (warn) ${msg}`),
+    err:   (msg) => console.error(`[${time()}] ❌ (err) ${msg}`),
+    info:  (msg) => console.log(`[${time()}] ℹ️ (info) ${msg}`),
+  };
+  function time() {
+    const d = new Date();
+    return d.toTimeString().slice(0,8);
+  }
+
+  // Beim Laden einmalig Version melden
+  log.ok(`game.js geladen, game.js v${GAME_VERSION}`);
+
+  // ---------------------------------------------------------------------------
+  // Globale Game-Struktur auf window, damit index.html und Hooks Zugriff haben
+  // ---------------------------------------------------------------------------
+  const Game = {
+    version: GAME_VERSION,
+    canvas: null,
+    ctx: null,
+    dpr: Math.max(1, window.devicePixelRatio || 1),
+    state: {
+      map: null,         // {width, height, tileSize}
+      running: false,
+      tool: null,        // "build:hut" | "build:road" | null
+      buildings: [],     // {type:"hut", xTiles, yTiles}
+      roads: new Set(),  // Set von "x,y" Strings für Straßen-Tiles
+    },
+    start,
+    setTool,
+    clearTool,
+    placeAtPixel,
+    worldToTile,
+    tileToWorld,
+    render,
+  };
+  window.Game = Game;
+
+  // Optional bereitstellen, was der Loader erwartet:
+  window.GameLoader = {
+    start: start, // bleibt kompatibel: index ruft GameLoader.start(path) auf
+  };
+
+  // ---------------------------------------------------------------------------
+  // Canvas vorbereiten
+  // ---------------------------------------------------------------------------
+  const canvas = document.getElementById("game");
+  if (!canvas) {
+    log.err("Canvas mit id=\"game\" nicht gefunden – bitte index.html prüfen.");
+    return;
+  }
+  Game.canvas = canvas;
+  Game.ctx = canvas.getContext("2d");
+
+  function resizeCanvasToDisplaySize() {
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(rect.width  * Game.dpr));
+    const h = Math.max(1, Math.floor(rect.height * Game.dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Input (Tastatur & Maus/Touch)
+  // ---------------------------------------------------------------------------
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "b" || e.key === "B") {
+      setTool("build:hut");
+    } else if (e.key === "r" || e.key === "R") {
+      setTool("build:road");
+    } else if (e.key === "Escape") {
+      clearTool();
+    }
+  });
+
+  // Click/Tap: platzieren je nach Tool
+  canvas.addEventListener("click", (e) => {
+    placeAtPixel(e.clientX, e.clientY);
+  }, {passive:true});
+
+  // ---------------------------------------------------------------------------
+  // Tools
+  // ---------------------------------------------------------------------------
+  function setTool(toolName) {
+    Game.state.tool = toolName;
+    if (toolName === null) {
+      log.info("Tool abgewählt.");
+    } else {
+      log.ok(`Tool aktiv: ${toolName}`);
+    }
+    // Ein kleines „Ghost“-Render gibt's einfach durch Re-Render (siehe render()).
+    render();
+  }
+  function clearTool() { setTool(null); }
+
+  // Platzieren (entscheidet je nach aktivem Tool)
+  function placeAtPixel(clientX, clientY) {
+    if (!Game.state.map) { log.warn("Keine Map geladen – Platzieren übersprungen."); return; }
+    if (!Game.state.tool) { return; }
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * Game.dpr;
+    const y = (clientY - rect.top)  * Game.dpr;
+
+    const { tx, ty } = worldToTile(x, y);
+    if (tx < 0 || ty < 0 || tx >= Game.state.map.width || ty >= Game.state.map.height) {
+      log.warn("Platzieren außerhalb der Map ignoriert.");
+      return;
+    }
+
+    if (Game.state.tool === "build:hut") {
+      // einfache 1x1-Hütte
+      Game.state.buildings.push({ type:"hut", xTiles: tx, yTiles: ty });
+      log.ok(`Hütte platziert @ ${tx},${ty}`);
+    } else if (Game.state.tool === "build:road") {
+      const key = `${tx},${ty}`;
+      Game.state.roads.add(key);
+      log.ok(`Straße gesetzt @ ${tx},${ty}`);
+    }
+    render();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Koordinaten-Helfer
+  // ---------------------------------------------------------------------------
+  function worldToTile(wx, wy) {
+    const { tileSize } = Game.state.map || { tileSize: 64 };
+    // Canvas arbeitet in „Geräte-Pixeln“; unsere world coords sind bereits dpr-skalierte Canvas-Pixel
+    const tx = Math.floor(wx / (tileSize));
+    const ty = Math.floor(wy / (tileSize));
+    return { tx, ty };
+  }
+  function tileToWorld(tx, ty) {
+    const { tileSize } = Game.state.map || { tileSize: 64 };
+    return { x: tx * tileSize, y: ty * tileSize };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Start / Loader
+  // ---------------------------------------------------------------------------
+  async function start(mapPath) {
+    // index ruft uns mit dem gewählten Pfad auf
+    const chosen = mapPath || "./assets/maps/map-mini.json";
+    log.ok(`GameLoader.start ${chosen}`);
+
+    // Map laden
+    let mapJson = null;
+    try {
+      const res = await fetch(chosen, { cache: "no-store" });
+      const txt = await res.text();
+      mapJson = JSON.parse(txt);
+    } catch (err) {
+      log.err(`Map LOAD FAIL: ${err?.message || err}`);
+      return;
+    }
+
+    // Minimal-Validierung
+    const width    = mapJson.width  || (mapJson.mapWidth  ?? 0);
+    const height   = mapJson.height || (mapJson.mapHeight ?? 0);
+    const tileSize = mapJson.tileSize || 64;
+
+    if (!width || !height) {
+      log.err("Map: width/height fehlen oder sind 0");
+      return;
+    }
+
+    Game.state.map = { width, height, tileSize };
+    Game.state.buildings = [];
+    Game.state.roads.clear();
+
+    // Rendering starten
+    Game.state.running = true;
+    render();
+    log.ok("Game started");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rendering (Platzhalter-Grafik)
+  // ---------------------------------------------------------------------------
+  function render() {
+    if (!Game.ctx) return;
+    resizeCanvasToDisplaySize();
+    const ctx = Game.ctx;
+    const { width, height, tileSize } = Game.state.map || { width: 16, height: 10, tileSize: 64 };
+
+    // Hintergrund
+    ctx.save();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // Grün wie bisher
+    ctx.fillStyle = "#0f7c3a";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Grid zeichnen
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 1;
+    for (let x=0; x<=width; x++) {
+      const px = x * tileSize;
+      ctx.beginPath();
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, height * tileSize);
+      ctx.stroke();
+    }
+    for (let y=0; y<=height; y++) {
+      const py = y * tileSize;
+      ctx.beginPath();
+      ctx.moveTo(0, py);
+      ctx.lineTo(width * tileSize, py);
+      ctx.stroke();
+    }
+
+    // Straßen (Tiles dunkelgrau)
+    ctx.fillStyle = "#444";
+    for (const key of Game.state.roads) {
+      const [tx, ty] = key.split(",").map(n => parseInt(n, 10));
+      const { x, y } = tileToWorld(tx, ty);
+      ctx.fillRect(x, y, tileSize, tileSize);
+    }
+
+    // Gebäude (Hütte = braun)
+    for (const b of Game.state.buildings) {
+      const { x, y } = tileToWorld(b.xTiles, b.yTiles);
+      ctx.fillStyle = "#8b5a2b";
+      ctx.fillRect(x + 4, y + 4, tileSize - 8, tileSize - 8);
+      // kleine „Tür“
+      ctx.fillStyle = "#3c2a14";
+      ctx.fillRect(x + tileSize/2 - 6, y + tileSize - 16, 12, 12);
+    }
+
+    // Ghost-Preview für aktives Tool (snapping zum Maus-Tile)
+    if (Game.state.tool) {
+      const mouse = lastMouseOnCanvas; // evtl. null
+      if (mouse && Game.state.map) {
+        const { tx, ty } = worldToTile(mouse.x, mouse.y);
+        if (tx>=0 && ty>=0 && tx<width && ty<height) {
+          const { x, y } = tileToWorld(tx, ty);
+          ctx.globalAlpha = 0.45;
+          if (Game.state.tool === "build:hut") {
+            ctx.fillStyle = "#8b5a2b";
+            ctx.fillRect(x + 4, y + 4, tileSize - 8, tileSize - 8);
+          } else if (Game.state.tool === "build:road") {
+            ctx.fillStyle = "#444";
+            ctx.fillRect(x, y, tileSize, tileSize);
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // einfache Mausposition-Tracker (in Canvas-Koordinaten, dpr-korrigiert)
+  let lastMouseOnCanvas = null;
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    lastMouseOnCanvas = {
+      x: (e.clientX - rect.left) * Game.dpr,
+      y: (e.clientY - rect.top)  * Game.dpr
+    };
+    if (Game.state.tool) render(); // für Ghost-Preview
+  }, {passive:true});
+  canvas.addEventListener("mouseleave", () => {
+    lastMouseOnCanvas = null;
+    if (Game.state.tool) render();
+  }, {passive:true});
+
+  // ---------------------------------------------------------------------------
+  // Optionale Hooks (Editor/Inspector) – derzeit Dummy/Warnung
+  // ---------------------------------------------------------------------------
+  if (!window.GameEditor) {
+    window.GameEditor = {
+      open: () => log.warn("(Dummy) Editor.open() – echtes Modul noch nicht eingebunden."),
     };
   }
-})();
-
-const LOG = {
-  ok:   (m)=>window.__bus.emit("ok",   `game.js ${VERSION} → ${m}`),
-  warn: (m)=>window.__bus.emit("warn", `game.js ${VERSION} → ${m}`),
-  err:  (m)=>window.__bus.emit("err",  `game.js ${VERSION} → ${m}`)
-};
-
-/* ============================== VERSION TAG ============================== */
-const VERSION = "v16.0.8";
-
-// Direkt melden, dass game.js geladen wurde
-window.__bus?.emit("ok", `game.js geladen, game.js ${VERSION}`);
-
-/* ============================== CANVAS/CTX ============================== */
-const G = {
-  canvas: null,
-  ctx: null,
-  atlas: {
-    image: null,
-    json: null,
-    urlImage: "./assets/tiles/tileset.terrain.png",
-    urlJson:  "./assets/tiles/tileset.terrain.json"
-  },
-  state: {
-    ready: false,
-    started: false,
-    map: null,
-    tileSize: 64
+  if (!window.GameInspector) {
+    window.GameInspector = {
+      toggle: () => log.warn("(Dummy) Inspector.toggle() – echtes Modul noch nicht eingebunden."),
+    };
   }
-};
 
-function ensureCanvas() {
-  if (G.canvas && G.ctx) return;
-  // Bevorzugt Canvas vom Index
-  const existing = document.getElementById("gameCanvas");
-  G.canvas = existing || Object.assign(document.createElement("canvas"),{width:1024,height:640});
-  if(!existing) document.body.appendChild(G.canvas);
-  G.ctx = G.canvas.getContext("2d");
-  // Hintergrundfarbe, damit man etwas sieht
-  G.ctx.fillStyle = "#0e4f2d";
-  G.ctx.fillRect(0,0,G.canvas.width,G.canvas.height);
-}
+  // Index kann auf diese Funktionsnamen binden, ohne zu crashen:
+  window.__openEditor = () => window.GameEditor.open();
+  window.__toggleInspector = () => window.GameInspector.toggle();
 
-/* ============================== ATLAS LOADER ============================= */
-async function loadImage(src){
-  return new Promise((resolve,reject)=>{
-    const img = new Image();
-    img.onload = ()=>resolve(img);
-    img.onerror = ()=>reject(new Error("Bild konnte nicht geladen werden: "+src));
-    img.src = src;
-  });
-}
-
-async function fetchJson(url){
-  const res = await fetch(url,{cache:"no-store"});
-  if(!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  return res.json();
-}
-
-async function loadAtlas(){
-  // Versuch: JSON → image (falls "image" Feld existiert), sonst fester Pfad
-  try{
-    const json = await fetchJson(G.atlas.urlJson);
-    G.atlas.json = json;
-    let imgUrl = json.image || G.atlas.urlImage; // falls im JSON kein image-Feld
-    // Falls das JSON eine relative URL ohne Verzeichnis liefert, normieren
-    if(!/^\w+:\/\//.test(imgUrl) && !imgUrl.startsWith("./") && !imgUrl.startsWith("../") && !imgUrl.startsWith("/")){
-      // liegt neben der JSON
-      const base = G.atlas.urlJson.split("/").slice(0,-1).join("/");
-      imgUrl = `${base}/${imgUrl}`;
-    }
-    G.atlas.image = await loadImage(imgUrl+"?v="+VERSION);
-    window.__bus.emit("ok", `Tileset (atlas) OK ${G.atlas.image.width}x${G.atlas.image.height}`);
-  }catch(e){
-    // Fallback: nur Bild
-    try{
-      G.atlas.json = null;
-      G.atlas.image = await loadImage(G.atlas.urlImage+"?v="+VERSION);
-      window.__bus.emit("ok", `Tileset (IMG only) OK ${G.atlas.image.width}x${G.atlas.image.height}`);
-    }catch(e2){
-      window.__bus.emit("err", "Tileset konnte nicht geladen werden");
-      throw e2;
-    }
-  }
-}
-
-/* ============================== MAP LOADER =============================== */
-async function fetchMap(url){
-  const data = await fetchJson(url);
-  // akzeptiert: { width, height, tileSize, layers? } oder { layers:[{data,width,height,tileSize}] }
-  let width=0,height=0,tile=G.state.tileSize;
-  if (typeof data.width==="number" && typeof data.height==="number") {
-    width=data.width; height=data.height; if(data.tileSize) tile=data.tileSize;
-  } else if (Array.isArray(data.layers) && data.layers[0]) {
-    width=data.layers[0].width||0; height=data.layers[0].height||0; tile=data.layers[0].tileSize||tile;
-  }
-  if(!width || !height) throw new Error("Map: width/height fehlen oder sind 0");
-  G.state.map = { width, height, tileSize: tile, raw:data };
-  window.__bus.emit("ok", `Map OK size ${width}x${height} tile ${tile}`);
-}
-
-/* ============================== RENDER ================================== */
-function renderPlaceholder(){
-  ensureCanvas();
-  const {ctx,canvas} = G;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  // einfacher Checker
-  for(let y=0;y<canvas.height;y+=32){
-    for(let x=0;x<canvas.width;x+=32){
-      ctx.fillStyle = ((x/32 + y/32)&1) ? "#134e4a" : "#0f766e";
-      ctx.fillRect(x,y,32,32);
-    }
-  }
-  ctx.fillStyle="#e5e7eb";
-  ctx.font="16px ui-monospace, monospace";
-  ctx.fillText(`game.js ${VERSION} – Placeholder`, 16, 28);
-}
-
-/* ============================== INIT ==================================== */
-async function initGame(){
-  if(G.state.ready) return;
-  ensureCanvas();
-  try{
-    await loadAtlas();
-    G.state.ready = true;
-    window.__bus.emit("ok", `game.js initialisiert (${VERSION})`);
-  }catch(e){
-    window.__bus.emit("err","Init fehlgeschlagen: "+(e?.message||e));
-    throw e;
-  }
-}
-
-/* ============================== PUBLIC API ============================== */
-window.GameLoader = {
-  /**
-   * Startet das Spiel mit gegebener Map-URL.
-   * Sorgt dafür, dass Init einmalig läuft.
-   */
-  async start(mapUrl="./assets/maps/map-mini.json"){
-    if(!G.state.ready){
-      await initGame();
-    }
-    await fetchMap(mapUrl);
-    renderPlaceholder(); // bis die echte Render-Pipeline kommt
-    G.state.started = true;
-  }
-};
-
-/* ====================== OPTIONAL: EDITOR/INSPECTOR DUMMIES ============== */
-/*
-  Diese Dummies unterdrücken Warnungen. Sobald echte Module geladen werden,
-  können sie diese Objekte einfach überschreiben (gleiche API).
-*/
-if(!window.GameEditor){
-  window.GameEditor = {
-    open(){
-      window.__bus.emit("warn","(Dummy) Editor.open() – echtes Modul noch nicht eingebunden.");
-      // Beispiel: könnte ein Panel öffnen etc.
-    },
-    version: VERSION
-  };
-}
-if(!window.GameInspector){
-  window.GameInspector = {
-    toggle(){
-      window.__bus.emit("warn","(Dummy) Inspector.toggle() – echtes Modul noch nicht eingebunden.");
-    },
-    version: VERSION
-  };
-}
-
-/* ============================== READY PING ============================== */
-(function(){
-  // kleines Signal, dass game.js wirklich da ist
-  window.__bus.emit("ok", `game.js initialisiert (Index meldet ${window.__BUILD__?.indexVersion||"unbekannt"})`);
+  // ---------------------------------------------------------------------------
+  // Abschlussmeldung
+  // ---------------------------------------------------------------------------
+  log.ok(`game.js initialisiert (v${GAME_VERSION})`);
 })();
