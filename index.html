@@ -2,282 +2,247 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler-Mini • v16.0.3</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Siedler‑Mini</title>
 
   <!--
-    index.html  •  v16.0.3
-    Zweck:
-      - Minimaler Boot-Screen mit Start/Editor
-      - Robustes Logging (auch bei Fehlern VOR dem Spielstart)
-      - Sichere Verknüpfung: Start-Button -> GameLoader.start(...)
-      - Mobile-freundliche UI (Toast-Log unten)
-
-    WICHTIG:
-      - game.js muss NACH dieser Datei geladen sein und ein globales
-        window.GameLoader Objekt (mit start(opts)) bereitstellen.
-      - Map-URL ist standardmäßig ./assets/maps/map-mini.json
+    index.html v16.0.3
+    Ziele:
+      • GameLoader.start zuverlässig aufrufbar machen
+      • Start-UI erst aktivieren, wenn game.js geladen ist
+      • Robustere Logs + Copy/Paste + Cache-Leeren
+      • Version im UI anzeigen
   -->
 
   <style>
     :root{
-      --bg:#0f1614;         /* dunkler Rahmenhintergrund */
-      --panel:#161f1d;      /* Dialog & Log */
-      --panel-2:#0b1412;    /* Log-Hintergrund dunkler */
-      --txt:#e6f0ec;
-      --txt-dim:#a9b7b2;
-      --accent:#4ea38b;     /* Buttons */
-      --accent-2:#2b6c59;
-      --ok:#6BE675; --warn:#E6D86B; --err:#FF6B6B;
+      --bg:#0e1311;
+      --panel:#141b19;
+      --panel2:#101614;
+      --txt:#e8f2ed;
+      --muted:#9fb2aa;
+      --accent:#66d28f;
+      --warn:#ffd666;
+      --err:#ff6b6b;
+      --okdot:#4ade80;
+    }
+    html,body{height:100%}
+    body{
+      margin:0; background:#203b1f; color:var(--txt);
+      font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      overflow:hidden;
     }
 
-    html,body{height:100%;margin:0;background:#213f22;color:var(--txt);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
-    #wrap{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto;overflow:hidden;}
-
-    /* Canvas (Spielfläche) — wird von game.js benutzt */
-    #screen{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;}
-
-    /* Start-Overlay */
-    .center{
-      position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      background:linear-gradient(180deg,rgba(22,31,29,.96),rgba(11,20,18,.96));
-      border:1px solid rgba(255,255,255,.06);
-      box-shadow:0 20px 60px rgba(0,0,0,.45);
-      border-radius:14px; width:min(90vw,560px); padding:20px 18px;
-      backdrop-filter: blur(8px);
+    /* Backdrop Bild (Startscreen) */
+    .backdrop{
+      position:fixed; inset:0; display:grid; place-items:center;
+      background:radial-gradient(ellipse at 50% 40%, #0b1a17 0%, #0a1513 40%, #090f0e 100%);
     }
-    .title{display:flex;gap:.6rem;align-items:center;font-weight:700;font-size:22px;margin-bottom:.5rem}
-    .title .badge{width:22px;height:22px;border-radius:50%;
-      background:conic-gradient(from 0deg, #6be675, #4ea38b, #2b6c59, #6be675);
-      box-shadow:0 0 0 2px rgba(0,0,0,.35) inset;
+    .backdrop__img{
+      width:min(92vw,1100px); height:auto; border-radius:14px; box-shadow:0 30px 80px rgba(0,0,0,.5);
+      user-select:none; pointer-events:none; opacity:.92;
     }
-    .sub{color:var(--txt-dim);font-size:13px;margin-bottom:14px}
-    .row{display:flex;gap:12px;align-items:center;margin-top:8px;flex-wrap:wrap}
+
+    /* Startcard */
+    .card{
+      position:fixed; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:min(92vw,700px); background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%);
+      border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.55); padding:20px 22px 18px;
+      border:1px solid #1d2623;
+    }
+    .card h1{margin:0 0 6px; font-size:32px; letter-spacing:.2px; display:flex; align-items:center; gap:.6rem}
+    .led{width:.9rem; height:.9rem; border-radius:50%; background:var(--okdot); box-shadow:0 0 0 2px #0c1311 inset, 0 0 12px #3dd18f;}
+    .sub{color:var(--muted); font-size:14px; margin-bottom:14px}
+    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
     .btn{
-      appearance:none;border:0;border-radius:12px;padding:10px 16px;font-weight:600;
-      background:var(--accent);color:#0b1412;cursor:pointer;transition:.15s transform ease,.15s opacity;
+      appearance:none; border:0; padding:10px 16px; border-radius:12px; font-weight:600; cursor:pointer;
+      background:#213a31; color:#e7fff3; box-shadow:0 2px 0 #0b1512 inset, 0 6px 14px rgba(0,0,0,.25);
+      transition:.15s transform;
     }
     .btn:hover{transform:translateY(-1px)}
-    .btn.secondary{background:#243331;color:var(--txt)}
-    .ver{margin-top:10px;color:var(--txt-dim);font-size:12px}
+    .btn--pri{background:#1f6b45}
+    .btn--muted{background:#2a3431; color:#dfe9e4}
+    .ver{margin-top:10px; color:var(--muted); font-size:12px}
 
-    /* Log-Leiste */
-    #logbar{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border-top:1px solid rgba(255,255,255,.05)}
-    #logbox{
-      flex:1;max-height:160px;overflow:auto;background:var(--panel-2);border-radius:12px;padding:12px;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;font-size:12px;white-space:pre-wrap
+    /* Canvas (Spielfeld) */
+    #gameCanvas{
+      position:fixed; inset:0; width:100vw; height:100vh; display:block;
+      touch-action:manipulation; /* iOS */
     }
-    .chip{display:inline-flex;align-items:center;gap:.5rem;background:#1e2a28;border:1px solid rgba(255,255,255,.06);border-radius:999px;padding:8px 12px}
-    .chip b{opacity:.85}
-    .ghost{background:#1a2422;color:var(--txt);border:1px solid rgba(255,255,255,.08)}
-    .right{margin-left:auto;display:flex;gap:10px}
-    .tag-ok{color:var(--ok)} .tag-warn{color:var(--warn)} .tag-err{color:var(--err)}
 
-    /* Backdrop-Bild (Start) – kann von game.js ausgeblendet werden */
-    #backdrop{position:absolute;inset:0;background:#0b1412 url('./assets/ui/intro_fort.jpg') center/contain no-repeat; opacity:.18; transition:opacity .35s ease}
-    .hide{opacity:0;pointer-events:none}
+    /* Log-Dock (Inspector-Toast) */
+    .dock{
+      position:fixed; left:16px; right:16px; bottom:16px; display:flex; gap:12px; align-items:flex-end;
+      pointer-events:none;
+    }
+    .dock > *{pointer-events:auto}
+    .logpanel{
+      flex:1; background:rgba(12,18,16,.75); border:1px solid #1b2421; border-radius:14px; padding:12px;
+      backdrop-filter: blur(6px);
+    }
+    .logpanel pre{
+      margin:10px 0 0; max-height:160px; overflow:auto; white-space:pre-wrap; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size:12px; line-height:1.35; color:#bfe9cc;
+    }
+    .chip{background:#0f1513; border:1px solid #1b2521; color:#d5e9df; padding:10px 14px; border-radius:12px; font-weight:600}
+    .bar{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .bar .btn{background:#202a27}
+    .ok::before,.warn::before,.err::before{
+      content:""; display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.5em; vertical-align:-1px;
+    }
+    .ok::before{background:var(--accent)}
+    .warn::before{background:var(--warn)}
+    .err::before{background:var(--err)}
+    .hidden{display:none}
   </style>
 </head>
 <body>
-<div id="wrap">
+
   <!-- Spielfeld -->
-  <canvas id="screen" width="300" height="150" aria-label="Spielfeld"></canvas>
+  <canvas id="gameCanvas" width="1024" height="768" aria-label="Spielanzeige"></canvas>
 
-  <!-- Hintergrundmotiv (wird ausgeblendet) -->
-  <div id="backdrop" aria-hidden="true"></div>
-
-  <!-- Start-Overlay -->
-  <section id="start" class="center" role="dialog" aria-modal="true" aria-labelledby="h1">
-    <div class="title"><span class="badge" aria-hidden="true"></span><h1 id="h1" style="margin:0">Siedler-Mini</h1></div>
-    <div class="sub">Neues Spiel starten? <span style="opacity:.6">(Map: <code>assets/maps/map-mini.json</code>)</span></div>
-    <div class="row">
-      <button id="btnStart" class="btn">Start</button>
-      <button id="btnEditor" class="btn secondary">Editor öffnen</button>
+  <!-- Start-Hintergrund + Karte -->
+  <div class="backdrop" id="backdrop">
+    <img class="backdrop__img" alt="" src="./assets/tex/ui/fort_start.jpg" />
+    <div class="card" id="startCard" role="dialog" aria-modal="true">
+      <h1><span class="led" aria-hidden="true"></span> Siedler‑Mini</h1>
+      <div class="sub">Neues Spiel starten? <span id="mapInfo" class="sub">(Map: assets/maps/map-mini.json)</span></div>
+      <div class="row">
+        <button id="btnStart" class="btn btn--pri">Start</button>
+        <button id="btnEditor" class="btn btn--muted">Editor öffnen</button>
+      </div>
+      <div class="ver">v16.0.3</div>
     </div>
-    <div class="ver">v16.0.3</div>
-  </section>
+  </div>
 
-  <!-- Log/Controls unten -->
-  <footer id="logbar">
-    <div class="chip"><b>Log</b> <span id="logCount">0</span></div>
-    <button id="btnCopyLog" class="btn ghost">Log kopieren</button>
-    <button id="btnClearLog" class="btn ghost">Log leeren</button>
-    <div class="right">
-      <button id="btnClearCache" class="btn ghost">Cache leeren</button>
+  <!-- Log-Dock -->
+  <div class="dock">
+    <div class="chip" id="logCount">Log 0</div>
+    <div class="bar">
+      <button class="btn" id="btnCopyLog">Log kopieren</button>
+      <button class="btn" id="btnClearLog">Log leeren</button>
+      <button class="btn" id="btnClearCache">Cache leeren</button>
     </div>
-  </footer>
-</div>
+    <div class="logpanel">
+      <pre id="logOut"></pre>
+    </div>
+  </div>
 
-<!-- game.js MUSS nach dem DOM kommen -->
-<script src="./game.js" defer></script>
+  <!-- BootUI: kleines Logging- und Dialog-Helferlein -->
+  <script>
+  ;(function(){
+    const out = document.getElementById('logOut');
+    const cnt = document.getElementById('logCount');
+    const lines = [];
 
-<script>
-/* ============================================================
-   index.html v16.0.3 — Boot & UI-Glue
-   ============================================================ */
+    function stamp(){ return new Date().toTimeString().slice(0,8) }
 
-(() => {
-  "use strict";
-
-  /* ---------- leichtgewichtige Log-Hilfe ---------- */
-  const Log = {
-    _buf: [],
-    elBox: null,
-    elCount: null,
-
-    setup() {
-      this.elBox   = document.createElement('div');
-      this.elCount = document.getElementById('logCount');
-      // Unser sichtbarer Container ist #logbox – legen wir jetzt an:
-      const area = document.createElement('div');
-      area.id = 'logbox';
-      area.setAttribute('role','log');
-      area.setAttribute('aria-live','polite');
-      document.getElementById('logbar').appendChild(area);
-      this.elBox = area;
-    },
-
-    _stamp(){ return new Date().toTimeString().slice(0,8); },
-
-    add(kind, msg, src = "game") {
-      const line = `[${this._stamp()}] (${src}) ${msg}`;
-      this._buf.push({ kind, line });
-      // einfache farbliche Markierung per Emoji
-      const color =
-        kind === "ok"   ? "tag-ok" :
-        kind === "warn" ? "tag-warn" :
-        kind === "err"  ? "tag-err" : "";
-      const pretty = (kind === "ok" ? "✅ " : kind === "warn" ? "⚠️ " : kind === "err" ? "❌ " : "• ")
-                     + line;
-      const div = document.createElement('div');
-      if (color) div.className = color;
-      div.textContent = pretty;
-      this.elBox.appendChild(div);
-      this.elBox.scrollTop = this.elBox.scrollHeight;
-      if (this.elCount) this.elCount.textContent = String(this._buf.length);
-      // Zusätzlich in die echte Konsole
-      (kind === "err" ? console.error : kind === "warn" ? console.warn : console.log)(line);
-    },
-
-    ok(m, s){ this.add("ok",   m, s); },
-    info(m,s){ this.add("info", m, s); },
-    warn(m,s){ this.add("warn", m, s); },
-    err(m, s){ this.add("err",  m, s); },
-
-    copy() {
-      const text = this._buf.map(e => e.line).join("\n");
-      navigator.clipboard?.writeText(text).then(
-        () => this.ok("Log in Zwischenablage", "game"),
-        () => this.warn("Konnte Log nicht kopieren", "game")
-      );
-    },
-    clear(){
-      this._buf = [];
-      this.elBox.textContent = "";
-      if (this.elCount) this.elCount.textContent = "0";
+    function write(kind, msg){
+      const tag = kind==='ok' ? 'OK' : kind==='warn' ? 'WARN' : kind==='err' ? 'ERR' : 'game';
+      const line = `[${stamp()}] (${tag}) ${msg}`;
+      lines.push(line);
+      out.textContent = lines.join("\n");
+      cnt.textContent = `Log ${lines.length}`;
     }
-  };
 
-  /* ---------- globale Fehler in den Log schreiben ---------- */
-  window.onerror = (msg, src, line, col, err) => {
-    Log.err(`${msg} ${src? '('+src+':' + line + ':' + col + ')':''}`, "window.onerror");
-  };
-  window.onunhandledrejection = (ev) => {
-    Log.err(`Unhandled promise rejection: ${ev.reason}`, "promise");
-  };
+    const BootUI = {
+      ver: '16.0.3',
+      log: (m)      => write('game', m),
+      logOK: (m)    => write('ok',   m),
+      logWarn: (m)  => write('warn', m),
+      logErr: (m)   => write('err',  m),
+      copyLog(){
+        try{
+          navigator.clipboard.writeText(lines.join("\n"));
+          write('ok', 'Log in Zwischenablage');
+        }catch(e){
+          write('err', 'Clipboard fehlgeschlagen: '+ e);
+        }
+      },
+      clearLog(){ lines.length = 0; out.textContent=''; cnt.textContent='Log 0'; },
+      alert(msg){ window.alert(msg); },
+      hideBackdrop(){ document.getElementById('backdrop')?.classList.add('hidden'); },
+      showBackdrop(){ document.getElementById('backdrop')?.classList.remove('hidden'); },
+    };
 
-  /* ---------- DOM ready ---------- */
-  document.addEventListener("DOMContentLoaded", () => {
-    Log.setup();
-    Log.ok("UI ready (index v16.0.3)");
+    window.BootUI = BootUI;
+    BootUI.logOK('UI ready (index v'+BootUI.ver+')');
 
+    // Buttons verdrahten
+    document.getElementById('btnCopyLog').addEventListener('click', BootUI.copyLog);
+    document.getElementById('btnClearLog').addEventListener('click', BootUI.clearLog);
+    document.getElementById('btnClearCache').addEventListener('click', async () => {
+      try{
+        localStorage.clear();
+        sessionStorage.clear();
+        if ('caches' in window){ const keys = await caches.keys(); for (const k of keys) await caches.delete(k); }
+        BootUI.logOK('Cache geleert (local/session/caches)');
+      }catch(e){ BootUI.logWarn('Cache leeren: '+e); }
+    });
+  })();
+  </script>
+
+  <!-- game.js LADEN (defer) – muss VOR dem Boot-Skript kommen, damit GameLoader verfügbar ist -->
+  <script src="./game.js?v=16.0.3" defer></script>
+
+  <!-- Boot-Skript (verdrahtet Start/Editor und prüft GameLoader-Verfügbarkeit) -->
+  <script>
+  ;(function(){
     const $ = (id) => document.getElementById(id);
-    const startDlg   = $("start");
-    const backdrop   = $("backdrop");
-    const canvas     = $("screen");
-    const btnStart   = $("btnStart");
-    const btnEditor  = $("btnEditor");
-    const btnCopyLog = $("btnCopyLog");
-    const btnClear   = $("btnClearLog");
-    const btnCache   = $("btnClearCache");
 
-    /* ----- Buttons unten ----- */
-    btnCopyLog.addEventListener("click", () => Log.copy());
-    btnClear.addEventListener("click", () => Log.clear());
-    btnCache.addEventListener("click", async () => {
-      // leichter Cache-Nuke (ohne Service Worker): local/session + Hinweis
-      try { localStorage.clear(); sessionStorage.clear(); } catch {}
-      Log.warn("Cache/Storage gelöscht – Seite wird neu geladen …");
-      // kleiner Delay für den Log-Eintrag
-      setTimeout(() => location.reload(), 250);
-    });
+    // Warten bis DOM & alle deferred Skripte (inkl. game.js) fertig sind
+    window.addEventListener('DOMContentLoaded', () => {
+      const canvas = $('gameCanvas');
+      const startBtn = $('btnStart');
+      const editorBtn = $('btnEditor');
 
-    /* ----- Editor (Hook/Stub) ----- */
-    btnEditor.addEventListener("click", () => {
-      Log.info("Editor öffnen (Hook – später verknüpfen)");
-      alert("Editor-Start ist hier noch ein Platzhalter.");
-    });
-
-    /* ----- START ► GameLoader.start(...) robust verbinden ----- */
-    btnStart.addEventListener("click", async () => {
-      // 1) UI: Dialog zu, Backdrop weich ausblenden
-      startDlg.classList.add("hide");
-      backdrop.classList.add("hide");
-
-      // 2) Debug-Log: Start init
-      Log.info("GameLoader.start ./assets/maps/map-mini.json");
-
-      // 3) Sicherstellen, dass GameLoader erreichbar ist
-      const GL = window.GameLoader || window.gameLoader || null;
-      if (!GL || typeof GL.start !== "function") {
-        Log.err("GameLoader.start nicht verfügbar – stimmt game.js Version/Scope?");
-        alert("Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).");
-        // Sichtbarkeit des Dialogs wiederherstellen, damit man erneut starten kann
-        startDlg.classList.remove("hide");
-        backdrop.classList.remove("hide");
-        return;
+      function canStart(){
+        return !!(window.GameLoader && typeof window.GameLoader.start === 'function');
       }
 
-      // 4) Start-Aufruf mit Fallback-Callbacks, die ebenfalls loggen
-      try {
-        await GL.start({
-          canvas,
-          mapUrl: "./assets/maps/map-mini.json",
-          onReady: () => Log.ok("Game started"),
-          onAtlas: (ok, w, h, note) => {
-            if (ok) Log.ok(`Tileset (atlas) OK ${w}x${h}`);
-            else    Log.warn(`Tileset Hinweis: ${note || 'kein Atlas genutzt'}`);
-          },
-          onMap: (info) => {
-            // z.B. { width, height, tileSize, mode:'grid|layers' }
-            if (info && info.width && info.height)
-              Log.ok(`Map OK size ${info.width}x${info.height} tile ${info.tileSize ?? '?'}`);
-            else
-              Log.warn("Map geladen, aber Info unvollständig");
-          },
-          onError: (msg) => {
-            Log.err(msg || "Unbekannter Fehler beim Start");
-            alert("Fehler beim Start: " + (msg || "Unbekannt"));
-            // Bei hartem Fehler: Start-Dialog wieder anzeigen
-            startDlg.classList.remove("hide");
-            backdrop.classList.remove("hide");
-          }
-        });
-      } catch (e) {
-        Log.err(String(e));
-        alert("Fehler beim Start: " + e);
-        startDlg.classList.remove("hide");
-        backdrop.classList.remove("hide");
+      function startGame(){
+        // Prüfen, ob GameLoader verfügbar
+        if (!canStart()){
+          BootUI.logErr('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
+          BootUI.alert('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
+          return;
+        }
+        BootUI.log('GameLoader.start ./assets/maps/map-mini.json');
+        try{
+          window.GameLoader.start({
+            canvas,
+            mapUrl: './assets/maps/map-mini.json',
+            onReady: () => BootUI.log('Game ready'),
+          });
+          BootUI.hideBackdrop();
+        }catch(err){
+          BootUI.logErr('Start-Exception: ' + err);
+          BootUI.alert('Fehler beim Start: ' + err);
+        }
       }
+
+      startBtn.addEventListener('click', startGame);
+      editorBtn.addEventListener('click', () => {
+        BootUI.log('Editor öffnen (Hook – später verknüpfen)');
+        BootUI.alert('Editor‑Start ist hier noch ein Platzhalter.');
+      });
+
+      // Sicherheit: Wenn game.js später init meldet, einmal den Status loggen
+      window.addEventListener('GameLoaderReady', () => BootUI.logOK('GameLoader bereit'));
+
+      // Optionaler Poll-Fallback (falls ein anderes Script GameLoader später setzt)
+      let tries = 0;
+      const iv = setInterval(() => {
+        if (canStart()){
+          BootUI.logOK('GameLoader.start gefunden');
+          clearInterval(iv);
+        }else if (++tries > 50){
+          BootUI.logWarn('GameLoader.start nach 5s nicht gefunden (Start zeigt Hinweis).');
+          clearInterval(iv);
+        }
+      }, 100);
     });
-
-  });
-
-  /* ---------- „script load ok“ Marker direkt beim Parsen ---------- */
-  // Achtung: Dieser Log kommt, BEVOR DOMContentLoaded feuert – so sehen wir,
-  // dass index.html wirklich lief und nicht im Cache hängt.
-  // Der game.js Marker („script load ok game.js …“) kommt zusätzlich von game.js selbst.
-  console.log("[index] parsed v16.0.3");
-})();
-</script>
+  })();
+  </script>
 </body>
 </html>
