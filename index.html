@@ -1,241 +1,298 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!--
-    Projekt: City Builder (Dev UI)
-    Datei: index.html
-    Version: v16.0.8
-    Zweck: Start-/Debug-UI, lädt game.js mit Cache-Buster und zeigt Log.
-    Hinweise:
-    - Bitte Version hier und in game.js immer synchron erhöhen.
-    - Editor/Inspector sind optional; falls nicht eingebunden, bleiben Buttons inaktiv.
-  -->
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
-  <meta http-equiv="Expires" content="0" />
-  <title>City Builder — Dev UI v16.0.8</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CityBuilder — v16.0.9</title>
+
+  <!--
+    Projekt: CityBuilder
+    Datei : index.html
+    Build : v16.0.9
+    Zweck : Start-/Service-UI + Log + Bau-Menü-Einbindung
+    Merke : Alle Änderungen bitte Version hochzählen und oben anpassen.
+  -->
 
   <style>
     :root{
-      --bg:#0f172a;         /* slate-900 */
-      --panel:#111827cc;    /* semi dark */
-      --text:#e5e7eb;       /* gray-200 */
-      --muted:#9ca3af;
-      --ok:#16a34a;         /* green-600 */
-      --warn:#f59e0b;       /* amber-500 */
-      --err:#ef4444;        /* red-500 */
-      --btn:#374151;        /* gray-700 */
-      --btnH:#4b5563;
-      --accent:#60a5fa;     /* blue-400 */
+      --ui-bg:#0e1e16;
+      --ui-panel:#13271e;
+      --ui-panel-2:#0b1a13;
+      --ui-text:#cfe8d7;
+      --ui-dim:#86a595;
+      --ok:#22c55e;   /* ✅ */
+      --warn:#eab308; /* ⚠️ */
+      --err:#ef4444;  /* ❌ */
+      --accent:#38bdf8; /* UI Titel/Buttons */
+      --btn:#1f8a5f;
+      --btn-hover:#2aa373;
     }
-    html,body{height:100%}
-    body{
-      margin:0;background:linear-gradient(120deg,#0b1223,#0f172a);
-      color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;
-      display:flex;flex-direction:column;
+    html,body{height:100%;margin:0;background:#0b3a22;color:var(--ui-text);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    #game{position:fixed;inset:0;background:#2a5f43;}
+    canvas{display:block;width:100%;height:100%}
+
+    /* ---- Service UI ----------------------------------------------------- */
+    #ui {
+      position: fixed; inset: 0; pointer-events: none;
+      display: grid; grid-template-rows: auto 1fr auto; gap: 8px;
+      padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom);
     }
-    header{
-      padding:12px 16px;background:#0b1223;border-bottom:1px solid #1f2937;
-      display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    .row {display:flex; gap:8px; align-items:center; pointer-events:auto}
+    .spacer {flex:1}
+
+    #bar-top{
+      background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,0));
+      padding:8px;
     }
-    header .title{font-weight:700;letter-spacing:.2px}
-    header .ver{color:var(--muted)}
-    .row{display:flex;gap:8px;flex-wrap:wrap}
-    button{
-      appearance:none;border:1px solid #1f2937;border-radius:8px;
-      background:var(--btn);color:var(--text);padding:8px 12px;
-      cursor:pointer;font-weight:600
+    .chip{
+      background:var(--ui-panel); border:1px solid #1c3a2b; border-radius:12px;
+      padding:6px 10px; font-size:12px; color:var(--ui-dim);
     }
-    button:hover{background:var(--btnH)}
-    button.primary{background:var(--accent);border-color:#60a5fa;color:#071428}
-    button.primary:disabled{opacity:.5;cursor:not-allowed}
-    main{display:grid;grid-template-columns:360px 1fr;gap:12px;padding:12px;flex:1;min-height:0}
-    .panel{
-      background:var(--panel);backdrop-filter:blur(8px);border:1px solid #1f2937;border-radius:12px;padding:12px;min-height:0
+    .btn{
+      appearance:none; border:1px solid #1c3a2b; background:var(--btn);
+      color:#fff; border-radius:10px; padding:10px 12px; font-weight:600;
+      cursor:pointer; transition:.15s transform,.15s background;
     }
-    .panel h3{margin:.2rem 0 .8rem 0;font-size:14px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em}
-    #log{height:50vh;min-height:220px;overflow:auto;background:#0b1223;border-radius:8px;padding:8px;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:12px;line-height:1.35}
-    .line{white-space:pre}
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
-    .controls{display:flex;gap:8px;flex-wrap:wrap}
-    canvas{width:100%;height:100%;display:block;background:#114d2b}
-    .hint{color:var(--muted);font-size:12px}
-    @media (max-width: 900px){ main{grid-template-columns:1fr} #log{height:35vh} }
+    .btn:active{transform:translateY(1px)}
+    .btn:hover{background:var(--btn-hover)}
+    .btn.secondary{background:var(--ui-panel); color:var(--ui-text)}
+    .btn.warn{background:#7a5f12}
+    .btn.ghost{background:transparent; border-color:#2a4b39; color:var(--ui-text)}
+
+    /* Start-Panel */
+    #start {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      pointer-events: auto; background:rgba(0,0,0,.5); backdrop-filter: blur(6px);
+    }
+    #start .card{
+      width:min(720px,92vw); background:var(--ui-panel); border:1px solid #1c3a2b;
+      border-radius:16px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.35);
+    }
+    .grid{display:grid; gap:8px}
+    .grid.cols{grid-template-columns: 1fr auto}
+    label{font-size:12px; color:var(--ui-dim)}
+    select, input[type="text"]{
+      width:100%; padding:10px; border-radius:10px; border:1px solid #1c3a2b;
+      background:var(--ui-panel-2); color:var(--ui-text);
+    }
+
+    /* Log */
+    #log-wrap{
+      pointer-events:auto; max-height:36vh; overflow:auto; padding:8px;
+      background:linear-gradient(0deg, rgba(0,0,0,.35), rgba(0,0,0,0));
+    }
+    #log{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; line-height:1.35}
+    .logline{white-space:pre-wrap; word-break:break-word; margin:2px 0}
+    .ok   {color:var(--ok)}
+    .warn {color:var(--warn)}
+    .err  {color:var(--err)}
+    .muted{color:var(--ui-dim)}
+
+    /* Bau-Menü (separat auch in ui-build.css erweitert) */
+    #build-toggle {display:none} /* wird von JS eingeblendet, sobald ui-build.js geladen ist */
   </style>
 
+  <!-- Bau-Menü Styles -->
+  <link rel="stylesheet" href="./assets/ui/ui-build.css?v=16.0.9">
+
+  <!-- Dein Spiel -->
+  <script defer src="./game.js?v=16.0.9"></script>
+
+  <!-- Bau-Menü Modul -->
+  <script defer src="./assets/ui/ui-build.js?v=16.0.9"></script>
+
   <script>
-    // ---- Build/Version Info (vom Index aus sichtbar) ------------------------
-    window.__BUILD__ = {
-      indexVersion: "v16.0.8",
-      startedAt: new Date().toISOString()
-    };
-
-    // ---- Mini Log-Framework --------------------------------------------------
+    // ---- Mini-Logger mit Icons (✅⚠️❌) -----------------------------------
     (function(){
-      const sub = [];
-      const bus = {
-        emit(type, msg){
-          const t = new Date();
-          const hh = String(t.getHours()).padStart(2,'0');
-          const mm = String(t.getMinutes()).padStart(2,'0');
-          const ss = String(t.getSeconds()).padStart(2,'0');
-          const ts = `[${hh}:${mm}:${ss}]`;
-          let icon = "ℹ️", cls = "";
-          if(type==="ok"){ icon="✅"; cls="ok"; }
-          else if(type==="warn"){ icon="⚠️"; cls="warn"; }
-          else if(type==="err"){ icon="❌"; cls="err"; }
-          const text = `${ts} ${icon} (${type}) ${msg}`;
-          sub.forEach(fn=>fn(text, cls));
-          try { console[type==="err"?"error":type==="warn"?"warn":"log"](text); } catch(e){}
-          (window.__LOG__ = window.__LOG__ || []).push(text);
-        },
-        on(fn){ sub.push(fn); }
+      const startTs = Date.now();
+      const $log = () => document.getElementById('log');
+      const ts = () => {
+        const d = new Date();
+        return '[' +
+          d.toTimeString().slice(0,8) +
+          ']';
       };
-      window.__bus = bus;
+      function line(level, emoji, msg){
+        const el = document.createElement('div');
+        el.className = `logline ${level}`;
+        el.textContent = `${ts()} ${emoji} (${level}) ${msg}`;
+        $log()?.appendChild(el);
+        // auto-scroll
+        const wrap = document.getElementById('log-wrap');
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+      }
+      window.LogUI = {
+        ok  : (m)=>line('ok','✅',m),
+        warn: (m)=>line('warn','⚠️',m),
+        err : (m)=>line('err','❌',m),
+        info: (m)=>line('muted','ℹ️',m),
+        copy: ()=>{
+          const text = Array.from(document.querySelectorAll('.logline'))
+            .map(n=>n.textContent).join('\n');
+          navigator.clipboard?.writeText(text).then(
+            ()=>window.LogUI.ok('Log in Zwischenablage'),
+            ()=>window.LogUI.err('Kopieren fehlgeschlagen')
+          );
+        }
+      };
+
+      // Erste Zeile: UI ready (mit Version)
+      document.addEventListener('DOMContentLoaded', ()=>{
+        window.LogUI.ok(`UI ready (index v16.0.9)`);
+      });
+
+      // Spiel lädt?
+      window.addEventListener('load', ()=>{
+        window.LogUI.ok('Seite geladen (window.onload)');
+      });
+
+      // Spiel meldet sich?
+      window.addEventListener('GameJS:ready', (ev)=>{
+        const v = ev?.detail?.version || 'unbekannt';
+        window.LogUI.ok(`game.js geladen, game.js v${v}`);
+      });
     })();
-
-    // ---- DOM Ready -----------------------------------------------------------
-    document.addEventListener("DOMContentLoaded", () => {
-      const logEl = document.getElementById("log");
-      const btnStart = document.getElementById("btnStart");
-      const btnCopy  = document.getElementById("btnCopy");
-      const btnClear = document.getElementById("btnClear");
-      const btnEditor= document.getElementById("btnEditor");
-      const btnInsp  = document.getElementById("btnInspector");
-      const mapSel   = document.getElementById("mapSel");
-
-      // Log subscribe
-      __bus.on((text, cls)=>{
-        const d = document.createElement("div");
-        d.className = `line ${cls||""}`;
-        d.textContent = text;
-        logEl.appendChild(d);
-        logEl.scrollTop = logEl.scrollHeight;
-      });
-
-      __bus.emit("ok", `UI ready (index ${window.__BUILD__.indexVersion})`);
-
-      // Buttons
-      btnCopy.addEventListener("click", async ()=>{
-        const all = (window.__LOG__||[]).join("\n");
-        try {
-          await navigator.clipboard.writeText(all);
-          __bus.emit("ok", "Log in Zwischenablage");
-        } catch(e){
-          __bus.emit("err", "Clipboard-API fehlgeschlagen");
-        }
-      });
-
-      btnClear.addEventListener("click", async ()=>{
-        try {
-          // local/session + SW cache best effort
-          localStorage.clear(); sessionStorage.clear();
-          if('caches' in window){
-            const names = await caches.keys();
-            await Promise.all(names.map(n=>caches.delete(n)));
-          }
-          __bus.emit("ok", "Cache/Storage geleert – Seite ggf. neu laden");
-        } catch(e){
-          __bus.emit("warn", "Cache leeren teilweise fehlgeschlagen");
-        }
-      });
-
-      // Start Handler (wartet auf GameLoader.start)
-      let starting = false;
-      btnStart.addEventListener("click", async ()=>{
-        if(starting) return;
-        starting = true; btnStart.disabled = true;
-
-        const want = mapSel.value || "./assets/maps/map-mini.json";
-        __bus.emit("ok", `Start gedrückt → ${want}`);
-
-        const awaitStart = async (timeoutMs=8000)=>{
-          const t0 = performance.now();
-          while(performance.now()-t0 < timeoutMs){
-            if(window.GameLoader && typeof window.GameLoader.start === "function"){
-              return window.GameLoader.start;
-            }
-            await new Promise(r=>setTimeout(r,100));
-          }
-          return null;
-        };
-
-        const startFn = await awaitStart();
-        if(!startFn){
-          __bus.emit("err", "GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?");
-          btnStart.disabled = false; starting = false; return;
-        }
-        try{
-          __bus.emit("ok", `GameLoader.start ${want}`);
-          await startFn(want);
-          __bus.emit("ok", "Game started");
-        }catch(err){
-          __bus.emit("err", "Start fehlgeschlagen: " + (err?.message||err));
-        }finally{
-          btnStart.disabled = false; starting = false;
-        }
-      });
-
-      // Editor/Inspector Buttons – optional
-      btnEditor.addEventListener("click", ()=>{
-        if(window.GameEditor && typeof window.GameEditor.open === "function"){
-          window.GameEditor.open();
-        } else {
-          __bus.emit("warn","Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.");
-        }
-      });
-      btnInsp.addEventListener("click", ()=>{
-        if(window.GameInspector && typeof window.GameInspector.toggle === "function"){
-          window.GameInspector.toggle();
-        } else {
-          __bus.emit("warn","Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.");
-        }
-      });
-    });
   </script>
-
-  <!-- game.js mit Version-Query (Cache-Booster) -->
-  <script src="./game.js?v=16.0.8" defer></script>
 </head>
 <body>
-  <header>
-    <div class="title">City Builder — Dev UI</div>
-    <div class="ver">Index <strong>v16.0.8</strong></div>
-    <div class="row" style="margin-left:auto">
-      <button id="btnEditor" title="Editor öffnen">🛠️ Editor</button>
-      <button id="btnInspector" title="Inspector umschalten">🔎 Inspector</button>
+
+  <!-- Spielfläche -->
+  <div id="game">
+    <canvas id="game-canvas"></canvas>
+  </div>
+
+  <!-- Service-UI -->
+  <div id="ui">
+    <!-- Top-Bar -->
+    <div id="bar-top" class="row">
+      <div class="chip">CityBuilder <strong>v16.0.9</strong></div>
+      <div class="chip">Viewport: <span id="vp"></span></div>
+      <div class="spacer"></div>
+      <button id="btn-copy" class="btn secondary" title="Log kopieren">📋 Log</button>
+      <button id="btn-cache" class="btn ghost" title="Cache/Storage leeren">🧹 Cache</button>
+      <button id="btn-inspector" class="btn ghost" title="Inspector (Dummy/falls nicht verdrahtet)">🔍 Inspector</button>
+      <button id="btn-editor" class="btn ghost" title="Editor (Dummy/falls nicht verdrahtet)">🛠️ Editor</button>
+      <button id="build-toggle" class="btn" title="Bau-Menü umschalten">🏗️ Bauen</button>
     </div>
-  </header>
 
-  <main>
-    <div class="panel">
-      <h3>Aktionen</h3>
-      <div class="controls">
-        <select id="mapSel" title="Map wählen">
-          <option value="./assets/maps/map-mini.json">map-mini.json</option>
-          <option value="./assets/maps/map-demo.json">map-demo.json</option>
-          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
-          <option value="./assets/maps/map-pro.json">map-pro.json</option>
-        </select>
-        <button id="btnStart" class="primary">▶️ Start</button>
-        <button id="btnCopy">📋 Log kopieren</button>
-        <button id="btnClear">🧹 Cache leeren</button>
-      </div>
-      <p class="hint" style="margin-top:8px">
-        Tipp: Wenn Versionen nicht aktualisieren, erst „🧹 Cache leeren“ und Seite neu laden.
-      </p>
-
-      <h3>Log</h3>
+    <!-- Log -->
+    <div id="log-wrap">
       <div id="log" aria-live="polite"></div>
     </div>
 
-    <div class="panel" style="display:grid;grid-template-rows:auto 1fr;gap:8px;">
-      <h3>Spiel</h3>
-      <!-- Dein Canvas wird von game.js erzeugt/angepasst; dieses Element ist nur Fallback -->
-      <canvas id="gameCanvas" width="1024" height="640"></canvas>
+    <!-- Start-Overlay -->
+    <div id="start">
+      <div class="card grid" role="dialog" aria-modal="true" aria-label="Spiel starten">
+        <div class="grid">
+          <div style="font-weight:700; font-size:18px; color:var(--accent);">Spiel starten</div>
+          <div class="chip">Version: <strong>index v16.0.9</strong></div>
+        </div>
+        <div class="grid">
+          <label for="map">Karte</label>
+          <select id="map">
+            <option value="./assets/maps/map-mini.json">map-mini.json</option>
+            <option value="./assets/maps/map-pro.json">map-pro.json</option>
+            <option value="./assets/maps/map-demo.json">map-demo.json</option>
+            <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+          </select>
+        </div>
+        <div class="grid cols">
+          <div class="row" style="gap:8px; flex-wrap:wrap">
+            <button id="btn-start" class="btn">▶️ Start</button>
+            <button id="btn-hide" class="btn secondary">🙈 Overlay ausblenden</button>
+          </div>
+          <div class="row" style="justify-content:flex-end">
+            <button id="btn-close" class="btn ghost">✖️</button>
+          </div>
+        </div>
+      </div>
     </div>
-  </main>
+
+    <!-- Bau-Menü (DOM wird in ui-build.js ergänzt) -->
+    <div id="build-root"></div>
+  </div>
+
+  <!-- Page wiring -->
+  <script>
+    (function(){
+      const $ = sel => document.querySelector(sel);
+
+      function viewportInfo(){
+        const dpr = Math.round(window.devicePixelRatio*100)/100;
+        $('#vp').textContent = `${window.innerWidth}x${window.innerHeight} dpr:${dpr}`;
+      }
+      viewportInfo();
+      window.addEventListener('resize', viewportInfo);
+
+      // Buttons
+      $('#btn-copy').addEventListener('click', ()=>window.LogUI.copy());
+
+      $('#btn-cache').addEventListener('click', async ()=>{
+        // Versuch: Cache + Storage leeren
+        try{
+          if ('caches' in window){
+            const names = await caches.keys();
+            await Promise.all(names.map(n=>caches.delete(n)));
+          }
+          if (window.localStorage) localStorage.clear();
+          if (window.sessionStorage) sessionStorage.clear();
+          window.LogUI.ok('Cache/Storage geleert – Seite ggf. neu laden');
+        }catch(e){
+          window.LogUI.err('Cache löschen fehlgeschlagen');
+        }
+      });
+
+      // Inspector/Editor Hooks (Dummy-Fallback)
+      function callIfExists(path, args=[]){
+        try{
+          const fn = path.split('.').reduce((o,k)=>o?.[k], window);
+          if (typeof fn === 'function'){ fn(...args); return true; }
+        }catch(_){}
+        return false;
+      }
+
+      $('#btn-inspector').addEventListener('click', ()=>{
+        if (!callIfExists('GameInspector.toggle')){
+          window.LogUI.warn('Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
+        }
+      });
+
+      $('#btn-editor').addEventListener('click', ()=>{
+        if (!callIfExists('GameEditor.open')){
+          window.LogUI.warn('Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.');
+        }
+      });
+
+      // Start-Overlay
+      const $start = $('#start');
+      const $map = $('#map');
+
+      function tryStart(){
+        const url = $map.value;
+        // Bevor wir starten: prüfen, ob game.js initialisiert ist
+        const ready = !!(window.GameLoader && typeof window.GameLoader.start === 'function');
+        window.LogUI.ok(`Start gedrückt → ${url}`);
+        if (!ready){
+          window.LogUI.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
+          return;
+        }
+        window.LogUI.ok(`GameLoader.start ${url}`);
+        try{
+          window.GameLoader.start(url);
+          $start.style.display = 'none';
+        }catch(e){
+          window.LogUI.err(`Start fehlgeschlagen: ${e?.message || e}`);
+        }
+      }
+
+      $('#btn-start').addEventListener('click', tryStart);
+      $('#btn-hide').addEventListener('click', ()=>{ $start.style.display='none'; });
+      $('#btn-close').addEventListener('click', ()=>{ $start.style.display='none'; });
+
+      // Signal an Log, wenn game.js seine Version feuert (optional)
+      // -> game.js sollte bei init dispatchen:
+      //    window.dispatchEvent(new CustomEvent('GameJS:ready',{detail:{version:'16.x'}}));
+    })();
+  </script>
 </body>
 </html>
