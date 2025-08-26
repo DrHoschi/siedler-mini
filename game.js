@@ -1,108 +1,105 @@
-/* ==========================================================
-   game.js v16.0.5
-   - Globales Game-Objekt mit Logger (✅⚠️❌ + Sektionsfilter)
-   - GameLoader.start(canvas,mapUrl,onReady)
-   - Placeholder-Renderer (grüner Hintergrund + Wasserzeichen)
-   - Editor-Hook (stub) über window.Editor.open
-   ========================================================== */
+/* =========================================================
+   Projekt: City-Builder
+   Datei:   game.js
+   Version: v16.0.6
+   Zweck:   Minimal-Bootstrapping + GameLoader API + Debug-Events
+   ========================================================= */
 
-(function(){
-  const GV = 'game.js 16.0.5';
+(() => {
+  const GAME_VERSION = "16.0.6";
 
-  // ---------- Logger ----------
-  function now(){const d=new Date(); return '['+d.toTimeString().slice(0,8)+']';}
-  const _entries = [];
-  const logger = {
-    ok(msg, scope='game'){ push('ok',msg,scope); },
-    warn(msg, scope='game'){ push('warn',msg,scope); },
-    err(msg, scope='game'){ push('err',msg,scope); },
-    all(){ return _entries.slice(); },
-    size(){ return _entries.length; }
-  };
-  function ico(k){ return k==='ok'?'✅':(k==='warn'?'⚠️':'❌'); }
-  function push(kind, msg, scope){
-    const line = `${now()} ${ico(kind)} (${kind}) ${msg}`;
-    _entries.push({kind,scope,line});
-    // Mirror to UI log if available
-    if (window._UILog){
-      const f = kind==='ok'?_UILog.ok:kind==='warn'?_UILog.warn:_UILog.err;
-      f(msg, scope||'game');
-    }
-  }
+  // Kleines internes Log (für Konsolen-Debug; UI-Log macht index.html)
+  function klog(...a){ try { console.log("[game.js]", ...a); } catch(_){} }
 
-  // ---------- Public Game namespace ----------
-  const Game = {
-    version: GV,
-    logger,
-    log: (k,m,scope)=>{ (k==='ok'?logger.ok:k==='warn'?logger.warn:logger.err)(m,scope); }
-  };
-  window.Game = Game;
-  window.dispatchEvent(new Event('GameLoggerReady'));
-  logger.ok(`game.js geladen (${GV})`);
+  // Root-Element, an das das Canvas/Spiel gebunden werden kann
+  const root = document.getElementById("game-root") || document.body;
 
-  // ---------- Editor-Hook (stub) ----------
-  window.Editor = window.Editor || {};
-  if (typeof window.Editor.open !== 'function'){
-    window.Editor.open = function(opts){
-      logger.ok('Editor.open() aufgerufen (Hook; später verbinden)','editor');
-      alert('Editor-Start ist hier noch ein Platzhalter.');
-    };
-  }
+  // ----------------------------------------------------------------------------
+  // Minimaler GameLoader — liefert die API, die index.html erwartet.
+  // Deine eigentliche Logik kannst du hier nach und nach wieder einhängen.
+  // ----------------------------------------------------------------------------
+  const GameLoader = {
+    _started: false,
 
-  // ---------- Asset helpers ----------
-  async function fetchJSON(url){
-    const r = await fetch(url, {cache:'no-store'});
-    if (!r.ok) throw new Error(`Map fetch FAIL ${r.status}  ${url}`);
-    return await r.json();
-  }
-
-  // ---------- Minimal Renderer (placeholder) ----------
-  function drawPlaceholder(ctx, w, h){
-    ctx.save();
-    ctx.fillStyle = '#2c5e3f'; ctx.fillRect(0,0,w,h);
-    ctx.fillStyle = 'rgba(255,255,255,.06)';
-    ctx.font = '14px ui-monospace,monospace';
-    ctx.fillText('PLACEHOLDER-RENDER (game.js)', 10, 20);
-    ctx.restore();
-  }
-
-  // ---------- GameLoader ----------
-  window.GameLoader = {
-    async start({canvas, mapUrl, onReady}){
-      try{
-        logger.ok(`GameLoader.start ${mapUrl}`);
-        const dpr = Math.max(1, Math.floor(window.devicePixelRatio||1));
-        const rect = canvas.getBoundingClientRect();
-        const cw = Math.max(320, Math.round(rect.width||window.innerWidth));
-        const ch = Math.max(200, Math.round(rect.height||window.innerHeight));
-        canvas.width = cw * dpr; canvas.height = ch * dpr;
-        canvas.style.width = cw+'px'; canvas.style.height = ch+'px';
-        const ctx = canvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
-        logger.ok(`Canvas ${cw}x${ch} dpr:${dpr}`);
-
-        // Map laden (als Smoke-Test); tolerant: wenn width/height fehlen → trotzdem rendern
-        let map=null;
-        try{
-          map = await fetchJSON(mapUrl);
-        }catch(e){
-          logger.warn(`${e.message||e}`); // weiterlaufen – Placeholder rendern
-        }
-        if (map && map.width && map.height && map.tileSize){
-          logger.ok(`Map OK size ${map.width}x${map.height} tile ${map.tileSize}`);
-        }else{
-          logger.warn('Map-Metadaten unvollständig – continue with placeholder');
-        }
-
-        // Placeholder zeichnen
-        drawPlaceholder(ctx, canvas.width/dpr, canvas.height/dpr);
-
-        logger.ok('Game started');
-        if (typeof onReady==='function') onReady();
-      }catch(err){
-        logger.err(`Start FAIL ${err.message||err}`);
-        alert('Fehler beim Start: '+(err.message||err));
+    /**
+     * Startet das Spiel / lädt die Map.
+     * @param {string} mapPath - Pfad zur Map-JSON
+     */
+    start(mapPath = "./assets/maps/map-mini.json") {
+      if (this._started) {
+        klog("Start ignoriert (bereits gestartet).");
+        return;
       }
-    }
+      this._started = true;
+
+      // Canvas anlegen (Platzhalter, bis deine Engine rendert)
+      const cvs = document.createElement("canvas");
+      cvs.width = root.clientWidth || window.innerWidth;
+      cvs.height = root.clientHeight || window.innerHeight;
+      cvs.style.position = "absolute";
+      cvs.style.inset = "0";
+      root.appendChild(cvs);
+
+      const ctx = cvs.getContext("2d");
+      ctx.fillStyle = "#3f8f4a";
+      ctx.fillRect(0,0,cvs.width, cvs.height);
+      ctx.font = "16px ui-monospace, monospace";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("City-Builder v" + GAME_VERSION + " — Map lädt: " + mapPath, 16, 28);
+
+      // --- Hier würdest du nun:
+      // 1) Tileset/Atlas laden
+      // 2) Map JSON laden
+      // 3) Renderer initialisieren
+      // Für jetzt nur Dummy-Fetch, damit Fehler sichtbar werden.
+      fetch(mapPath, {cache:"no-store"})
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then(json => {
+          klog("Map geladen:", json);
+          // Minimalanzeige
+          ctx.fillText("Map OK: " + (json.width || "?") + "x" + (json.height || "?") + " (tile " + (json.tileSize || "?") + ")", 16, 50);
+          // Signal an UI wäre dort bereits geschehen (index schreibt selber „Game started“)
+        })
+        .catch(err => {
+          klog("Map Load FAIL:", err);
+          ctx.fillStyle = "#b00020";
+          ctx.fillText("Map Load FAIL: " + (err.message || err), 16, 50);
+          // Fehler fliegt NICHT weiter nach oben, damit UI nicht crasht.
+          // (index.html loggt Start/Fehler bereits)
+        });
+
+      // Resize (einfach gehalten)
+      const onResize = () => {
+        cvs.width = root.clientWidth || window.innerWidth;
+        cvs.height = root.clientHeight || window.innerHeight;
+        ctx.fillStyle = "#3f8f4a";
+        ctx.fillRect(0,0,cvs.width, cvs.height);
+        ctx.fillStyle = "#fff";
+        ctx.fillText("City-Builder v" + GAME_VERSION, 16, 28);
+      };
+      window.addEventListener("resize", onResize);
+    },
   };
 
+  // Exponieren
+  window.GameLoader = GameLoader;
+
+  // Editor-Hook / Inspector: index.html toggelt dieses Event
+  window.addEventListener('inspector:toggle', () => {
+    // Hier kannst du deinen bestehenden Inspector einhängen.
+    // Für jetzt: simpler Hinweis in der Konsole.
+    klog("Inspector toggled (Hook).");
+    alert("Inspector (Hook) – später verknüpfen.");
+  });
+
+  // Ready-Signal an die UI
+  window.dispatchEvent(new CustomEvent('game:ready', {
+    detail: { gameVersion: GAME_VERSION }
+  }));
+
+  // Zusätzlich: sichtbare Konsole
+  klog(`game.js init done (v${GAME_VERSION})`);
 })();
