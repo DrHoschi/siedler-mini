@@ -2,260 +2,265 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler-Mini</title>
-
-  <!-- =========================================================
-       Siedler-Mini • INDEX • v16.0.4
-       - Start-UI mit Status-Icons ✅⚠️❌
-       - Log-Overlay mit Copy/Clear/Cache
-       - Robuste Startlogik: wartet auf game.js / GameLoader.start
-       ========================================================= -->
-
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Siedler-Mini • v16.0.5</title>
   <style>
     :root{
-      --bg:#0f1a17;
-      --panel:#0e2923;
-      --panel-2:#0b201b;
-      --text:#dfe8e5;
-      --muted:#9fb4ad;
-      --accent:#49d39d;
-      --btn:#123b32;
-      --btn-h:#15463b;
-      --ok:#33d17a;
-      --warn:#f6d32d;
-      --err:#e01b24;
-      --badge:#1a3a32;
+      --bg:#0f1a17; --panel:#0f1f1b; --panel2:#0b1714; --text:#d7fbe8;
+      --muted:#9ac3b6; --ok:#35d07f; --warn:#ffd166; --err:#ff6b6b;
+      --chip:#13231e; --btn:#1b342d; --btn2:#132a24; --glass:rgba(15,31,27,.8);
+      --accent:#2ad1a2;
     }
+    html,body{height:100%;margin:0;background:#142a22;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
+    #root{position:relative;min-height:100%}
+    /* Canvas area */
+    #game-wrap{position:fixed;inset:0;display:grid;place-items:center}
+    canvas{display:block;touch-action:none}
 
-    html,body{height:100%; margin:0; background:#284d2e; color:var(--text); font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;}
-
-    /* Backdrop/Hintergrundbild – bleibt hinter UI */
-    .backdrop{
-      position:fixed; inset:0; background:#0b1a17;
-      background-image:url("./assets/tex/backdrop_fort.jpg");
-      background-position:center; background-size:contain; background-repeat:no-repeat;
-      opacity:.25; pointer-events:none; z-index:0;
+    /* Backdrop image (menu) */
+    #backdrop{
+      position:fixed;inset:0;pointer-events:none;
+      background:#0f1a17 url(assets/tex/ui/fort_bg.webp) center/cover no-repeat;
+      opacity:.85; transition:opacity .35s ease;
     }
+    .hide{opacity:0}
 
-    /* Start-Card */
-    .start-wrap{
-      position:fixed; inset:0; display:grid; place-items:center; z-index:3;
-      background:linear-gradient(180deg, rgba(15,26,23,.65), rgba(15,26,23,.35) 30%, rgba(15,26,23,0) 75%);
+    /* Start modal */
+    .modal{
+      position:fixed;inset:0;display:grid;place-items:center;
+      background:linear-gradient(180deg,rgba(0,0,0,.0),rgba(0,0,0,.35) 30%,rgba(0,0,0,.55));
     }
     .card{
-      width:min(680px, 92vw);
-      background:linear-gradient(180deg,var(--panel),var(--panel-2));
-      border:1px solid #133d33; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.35);
-      padding:20px 22px 18px 22px;
+      width:min(560px,92vw); padding:20px 22px; border-radius:16px;
+      background:linear-gradient(180deg,rgba(17,36,31,.92),rgba(13,28,24,.92));
+      box-shadow:0 10px 40px rgba(0,0,0,.45); backdrop-filter: blur(6px);
+      border:1px solid rgba(255,255,255,.06)
     }
-    .title{
-      display:flex; gap:10px; align-items:center; font-weight:800; font-size:clamp(22px,3.8vw,28px);
-    }
-    .dot{width:14px; height:14px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 4px rgba(73,211,157,.15);}
-    .subtitle{margin-top:6px; color:var(--muted); font-size:14px;}
-    .row{margin-top:16px; display:flex; gap:12px; flex-wrap:wrap}
+    .title{display:flex;align-items:center;gap:10px;font-weight:800;font-size:28px}
+    .dot{width:12px;height:12px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
+    .sub{opacity:.7;margin:.25rem 0 1rem;font-size:14px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
     .btn{
-      background:var(--btn); color:#e7fff6; border:1px solid #1c4a40; border-radius:12px; padding:12px 18px;
-      font-weight:700; cursor:pointer; transition:.15s transform, .15s background, .15s opacity;
-      user-select:none;
+      background:var(--btn);border:1px solid rgba(255,255,255,.08);
+      padding:10px 16px;border-radius:12px;color:var(--text);font-weight:600;cursor:pointer;
+      transition:transform .06s ease, background .2s ease; user-select:none
     }
-    .btn:hover{background:var(--btn-h)}
-    .btn[disabled]{opacity:.55; cursor:not-allowed}
-    .ver{margin-top:10px; color:var(--muted); font-size:12px}
+    .btn:active{transform:translateY(1px)}
+    .btn.sec{background:var(--btn2)}
+    .chip{display:inline-block;padding:6px 10px;border-radius:10px;background:var(--chip);opacity:.8;font-size:12px}
+    .right{margin-left:auto}
 
-    /* Canvas */
-    #gameCanvas{
-      position:fixed; inset:0; z-index:1; display:block; width:100vw; height:100dvh;
-      background:#2e5c33; /* Wiese */
+    /* Inspector dock */
+    #inspector{
+      position:fixed;left:12px;right:12px;bottom:12px;z-index:20;
+      display:flex;gap:12px;align-items:flex-end;pointer-events:none;
     }
-
-    /* Log-Overlay – immer OBEN */
-    .log-wrap{
-      position:fixed; left:10px; right:10px; bottom:10px; z-index:99999;
-      display:flex; gap:12px; align-items:flex-end; pointer-events:none;
-    }
-    .log-panel{
-      flex:1; background:rgba(8,18,16,.9); border:1px solid #12372f; border-radius:14px; padding:14px;
-      backdrop-filter: blur(6px);
+    .ins-panel{
       pointer-events:auto;
+      background:linear-gradient(180deg, rgba(12,26,22,.92), rgba(9,19,17,.92));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px; padding:12px; max-width:min(760px,92vw);
+      box-shadow:0 10px 24px rgba(0,0,0,.4);
     }
-    .log-head{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
-    .badge{background:var(--badge); padding:6px 12px; border-radius:12px; font-weight:800}
-    .tools{margin-left:auto; display:flex; gap:10px}
-    .log-btn{background:#112823; color:#daf6ee; border:1px solid #19483f; border-radius:10px; padding:10px 14px; cursor:pointer;}
-    .log-box{max-height:28vh; overflow:auto; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; white-space:pre-wrap;}
-    .log-line{padding:4px 0; border-bottom:1px dashed rgba(255,255,255,.06)}
-    .m-ok{color:var(--ok)}
-    .m-warn{color:var(--warn)}
-    .m-err{color:var(--err)}
+    .ins-toolbar{display:flex;gap:10px;align-items:center;margin:0 0 10px}
+    .seg{display:flex;background:var(--panel2);border-radius:12px;overflow:auto}
+    .seg button{background:transparent;border:0;color:var(--text);padding:8px 12px;opacity:.85}
+    .seg button.active{background:var(--btn);opacity:1}
+    .pill{min-width:70px;text-align:center;background:var(--panel2);padding:8px 12px;border-radius:12px}
+    .ghost{opacity:.7}
+    .logbox{
+      font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      white-space:pre-wrap; max-height:28vh; overflow:auto;
+      background:rgba(0,0,0,.25); border-radius:12px; padding:10px;
+    }
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+    .muted{color:var(--muted)}
 
-    /* Toast (Hinweis) */
-    .toast{
-      position:fixed; inset:20px auto auto 50%; transform:translateX(-50%);
-      background:#0d2b24; border:1px solid #145043; color:#e8fff7; padding:10px 14px; border-radius:10px;
-      z-index:9999; display:none;
+    /* Floating mini buttons (toggle inspector) */
+    #miniBtns{pointer-events:auto;display:flex;flex-direction:column;gap:10px}
+    .mini{
+      width:44px;height:44px;border-radius:12px;background:var(--panel);
+      display:grid;place-items:center;border:1px solid rgba(255,255,255,.08);cursor:pointer
+    }
+
+    /* Compact on small screens */
+    @media (max-width:480px){
+      .card{padding:16px}
+      .title{font-size:22px}
+      .logbox{max-height:40vh}
     }
   </style>
 </head>
 <body>
+<div id="root">
+  <!-- Backdrop image -->
+  <div id="backdrop"></div>
 
-  <div class="backdrop" aria-hidden="true"></div>
+  <!-- Game canvas -->
+  <div id="game-wrap">
+    <canvas id="gameCanvas" width="640" height="400"></canvas>
+  </div>
 
-  <!-- Game Canvas -->
-  <canvas id="gameCanvas"></canvas>
-
-  <!-- START CARD -->
-  <div class="start-wrap" id="startWrap">
+  <!-- Start modal -->
+  <div id="startModal" class="modal">
     <div class="card">
       <div class="title"><span class="dot"></span> Siedler-Mini</div>
-      <div class="subtitle">Neues Spiel starten? <span style="opacity:.7">(Map: <code id="mapLabel">assets/maps/map-mini.json</code>)</span></div>
-
+      <div class="sub">
+        Neues Spiel starten? <span class="muted">(Map: <code id="mapLabel">assets/maps/map-mini.json</code>)</span>
+      </div>
       <div class="row">
         <button id="btnStart" class="btn">Start</button>
-        <button id="btnEditor" class="btn" title="Level-Editor öffnen">Editor öffnen</button>
+        <button id="btnEditor" class="btn sec">Editor öffnen</button>
+        <span class="right chip">v16.0.5</span>
       </div>
-
-      <div class="ver">v16.0.4</div>
     </div>
   </div>
 
-  <!-- LOG OVERLAY -->
-  <div class="log-wrap" id="logWrap">
-    <div class="log-panel">
-      <div class="log-head">
-        <div class="badge">Log</div>
-        <div class="tools">
-          <button class="log-btn" id="btnCopy">Log kopieren</button>
-          <button class="log-btn" id="btnClear">Log leeren</button>
-          <button class="log-btn" id="btnCache">Cache leeren</button>
+  <!-- Inspector dock -->
+  <div id="inspector">
+    <div id="miniBtns">
+      <div id="btnToggleInspector" class="mini" title="Inspector ein/aus">🪵</div>
+    </div>
+
+    <div id="insPanel" class="ins-panel" hidden>
+      <div class="ins-toolbar">
+        <div class="pill" id="logCount">Log 0</div>
+        <div class="seg" role="tablist" aria-label="Filter">
+          <button id="fAll" class="active">Alle</button>
+          <button id="fOK">✅ OK</button>
+          <button id="fWarn">⚠️ Warn</button>
+          <button id="fErr">❌ Fehler</button>
+          <button id="fGame">🎮 Game</button>
+          <button id="fEditor">✏️ Editor</button>
+        </div>
+        <div class="right seg">
+          <button id="btnCopy">Log kopieren</button>
+          <button id="btnClear">Log leeren</button>
+          <button id="btnCache">Cache leeren</button>
         </div>
       </div>
-      <div class="log-box" id="logBox"></div>
+      <div class="logbox" id="logBox" aria-live="polite" aria-label="Debug Log"></div>
+      <div class="muted ghost" id="versionLine" style="margin-top:6px"></div>
     </div>
   </div>
+</div>
 
-  <!-- Toast/Hinweis -->
-  <div class="toast" id="toast"></div>
+<!-- Game script (defer = bereit vor Start-Klick) -->
+<script defer src="game.js"></script>
 
-  <!-- game.js wird globales window.GameLoader bereitstellen -->
-  <script src="./game.js" defer onload="BootUI?.logOK('game.js geladen');" onerror="BootUI?.logERR('game.js konnte nicht geladen werden');"></script>
+<script>
+/* =========================
+   index.html v16.0.5 – Boot & UI
+   ========================= */
 
-  <script>
-  /* =========================================================
-     BOOT / LOGGING
-     ========================================================= */
-  (function(){
-    const box = document.getElementById('logBox');
-    const toast = document.getElementById('toast');
-    const pad = n => String(n).padStart(2,'0');
-    const ts = () => {
-      const d = new Date();
-      return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
-    };
+(function(){
+  const VER = 'index v16.0.5';
+  // --- light logger, routes to game logger if available
+  const bootLog = [];
+  function stamp(){const d=new Date(); return '['+d.toTimeString().slice(0,8)+']';}
+  function push(kind, msg, scope='ui'){
+    const icon = kind==='ok'?'✅':(kind==='warn'?'⚠️':'❌');
+    const line = `${stamp()} ${icon} (${kind}) ${msg}`;
+    bootLog.push({kind,scope,line});
+    // mirror to game logger if already present
+    if (window.Game && Game.log){ Game.log(kind,msg,'ui'); }
+    renderLog();
+  }
+  // expose minimal UI logger in case game.js wants to use it early
+  window._UILog = { ok:(m,s)=>push('ok',m,s), warn:(m,s)=>push('warn',m,s), err:(m,s)=>push('err',m,s), dump:()=>bootLog.slice() };
 
-    const push = (css, icon, txt) => {
-      const line = document.createElement('div');
-      line.className = `log-line ${css}`;
-      line.textContent = `${ts()} ${icon} ${txt}`;
-      box.appendChild(line);
-      box.scrollTop = box.scrollHeight;
-    };
+  // DOM refs
+  const $ = sel => document.querySelector(sel);
+  const startModal = $('#startModal');
+  const backdrop = $('#backdrop');
+  const btnStart = $('#btnStart');
+  const btnEditor = $('#btnEditor');
+  const canvas = $('#gameCanvas');
+  const insPanel = $('#insPanel');
+  const btnToggleInspector = $('#btnToggleInspector');
+  const logBox = $('#logBox');
+  const logCount = $('#logCount');
+  const btnCopy = $('#btnCopy');
+  const btnClear = $('#btnClear');
+  const btnCache = $('#btnCache');
+  const mapLabel = $('#mapLabel');
+  const versionLine = $('#versionLine');
 
-    const showToast = (msg) => {
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      clearTimeout(showToast._t);
-      showToast._t = setTimeout(()=> toast.style.display='none', 4200);
-    };
+  // Inspector filters
+  let filter = { ok:true, warn:true, err:true, game:true, editor:true };
+  $('#fAll').onclick = ()=>{filter={ok:true,warn:true,err:true,game:true,editor:true}; renderLog(); setActive('#fAll');};
+  $('#fOK').onclick = ()=>{filter={ok:true,warn:false,err:false,game:true,editor:true}; renderLog(); setActive('#fOK');};
+  $('#fWarn').onclick = ()=>{filter={ok:false,warn:true,err:false,game:true,editor:true}; renderLog(); setActive('#fWarn');};
+  $('#fErr').onclick = ()=>{filter={ok:false,warn:false,err:true,game:true,editor:true}; renderLog(); setActive('#fErr');};
+  $('#fGame').onclick = ()=>{filter.game=!filter.game; renderLog();};
+  $('#fEditor').onclick = ()=>{filter.editor=!filter.editor; renderLog();};
+  function setActive(id){ document.querySelectorAll('.seg button').forEach(b=>b.classList.remove('active')); document.querySelector(id).classList.add('active'); }
 
-    window.BootUI = {
-      logOK: (m)   => push('m-ok','✅', `(ok) ${m}`),
-      logWARN:(m)  => push('m-warn','⚠️',`(warn) ${m}`),
-      logERR:(m)   => push('m-err','❌', `(err) ${m}`),
-      toast: showToast
-    };
+  btnToggleInspector.onclick = ()=>{ insPanel.hidden = !insPanel.hidden; };
 
-    BootUI.logOK('UI ready (index v16.0.4)');
+  btnCopy.onclick = async ()=>{
+    const txt = logBox.textContent || '';
+    try{ await navigator.clipboard.writeText(txt); push('ok','Log in Zwischenablage','ui'); }catch(e){ push('warn','Clipboard nicht verfügbar','ui');}
+  };
+  btnClear.onclick = ()=>{ bootLog.length=0; renderLog(); };
+  btnCache.onclick = ()=>{ try{
+      if(localStorage) localStorage.clear();
+      if(caches?.keys){ caches.keys().then(keys=>keys.forEach(k=>caches.delete(k))); }
+      push('ok','Cache/Storage geleert – Seite ggf. neu laden','ui');
+    }catch(e){ push('warn','Cache leeren nicht möglich','ui'); }
+  };
 
-    // Buttons Log
-    document.getElementById('btnCopy').onclick = async () => {
-      const text = Array.from(box.querySelectorAll('.log-line')).map(n=>n.textContent).join('\n');
-      try { await navigator.clipboard.writeText(text); BootUI.logOK('Log in Zwischenablage'); }
-      catch { BootUI.logERR('Clipboard fehlgeschlagen'); }
-    };
-    document.getElementById('btnClear').onclick = ()=> { box.innerHTML=''; };
-    document.getElementById('btnCache').onclick = async ()=>{
-      try{
-        if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
-        // Storage
-        if (navigator.storage && navigator.storage.estimate) {
-          // nothing to clear directly, but we show info
-        }
-        // Local/session
-        localStorage.clear(); sessionStorage.clear();
-        BootUI.logOK('Cache/Storage geleert – Seite ggf. neu laden');
-      }catch(e){ BootUI.logERR('Cache löschen fehlgeschlagen: '+e); }
-    };
-  })();
+  function renderLog(){
+    const lines = (Game?.logger?.all() || bootLog).filter(e=>{
+      if(!filter[e.kind]) return false;
+      const sc = (e.scope||'').toLowerCase();
+      const isGame = sc!=='editor';
+      if(isGame && !filter.game) return false;
+      if(!isGame && !filter.editor) return false;
+      return true;
+    }).map(e=>{
+      const cls = e.kind==='ok'?'ok':(e.kind==='warn'?'warn':'err');
+      return `<div class="${cls}">${escapeHTML(e.line||e)}</div>`;
+    }).join('');
+    logBox.innerHTML = lines || '<span class="muted">Keine Einträge.</span>';
+    const total = Game?.logger?.size() ?? bootLog.length;
+    logCount.textContent = `Log ${total}`;
+    versionLine.textContent = `UI: ${VER} • game.js: ${Game?.version||'n/a'}`;
+  }
+  function escapeHTML(s){return (s+'').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m]));}
 
-  /* =========================================================
-     START-LOGIK (wartet robust auf window.GameLoader.start)
-     ========================================================= */
-  (function(){
-    const btnStart  = document.getElementById('btnStart');
-    const btnEditor = document.getElementById('btnEditor');
-    const startWrap = document.getElementById('startWrap');
-    const canvas    = document.getElementById('gameCanvas');
-    const mapUrl    = 'assets/maps/map-mini.json';
-    document.getElementById('mapLabel').textContent = mapUrl;
-
-    let tried = false;
-
-    const tryStart = () => {
-      if (window.GameLoader && typeof window.GameLoader.start === 'function') {
-        BootUI.logOK(`GameLoader.start ${mapUrl}`);
-        startWrap.style.display = 'none';
-        try {
-          window.GameLoader.start({
-            canvas,
-            mapUrl,
-            onReady: ()=> BootUI.logOK('Game started')
-          });
-        } catch (e) {
-          BootUI.logERR('Start-Laufzeitfehler: ' + e.message);
-          startWrap.style.display = '';
-        }
-      } else {
-        BootUI.logWARN('GameLoader.start noch nicht verfügbar (Game initialisiert noch?).');
-      }
-    };
-
-    btnStart.addEventListener('click', ()=>{
-      // 1) Sofort versuchen
-      tryStart();
-      if (tried) return;
-      tried = true;
-
-      // 2) Bis zu 5s pollend warten (alle 250ms), danach Fehlerhinweis
-      const t0 = Date.now();
-      const iv = setInterval(()=>{
-        if (window.GameLoader && typeof window.GameLoader.start === 'function') {
-          clearInterval(iv);
-          tryStart();
-        } else if (Date.now() - t0 > 5000) {
-          clearInterval(iv);
-          BootUI.logERR('GameLoader.start nicht gefunden – Start deaktiviert.');
-          BootUI.toast('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
-        }
-      }, 250);
+  // Start logic
+  btnStart.onclick = ()=>{
+    if (!window.GameLoader || typeof GameLoader.start!=='function'){
+      push('err','GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?','ui');
+      alert('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
+      return;
+    }
+    startModal.remove(); backdrop.classList.add('hide');
+    GameLoader.start({
+      canvas,
+      mapUrl: mapLabel.textContent.trim(),
+      onReady: ()=>{ push('ok','Game started','ui'); renderLog(); }
     });
+  };
 
-    btnEditor.addEventListener('click', ()=>{
-      BootUI.logOK('Editor öffnen (Hook – später verknüpfen)');
-      BootUI.toast('Editor-Start ist hier noch ein Platzhalter.');
-    });
-  })();
-  </script>
+  btnEditor.onclick = ()=>{
+    // Hook: falls Editor angebunden, sonst Hinweis
+    if (window.Editor && typeof Editor.open==='function'){
+      Editor.open({ via:'menu' });
+      push('ok','Editor geöffnet','ui');
+    }else{
+      push('warn','Editor-Start ist hier noch ein Platzhalter.','ui');
+      alert('Editor-Start ist hier noch ein Platzhalter.');
+    }
+  };
+
+  // Initial UI log
+  push('ok',`UI ready (${VER})`,'ui');
+
+  // Re-render logs once game.js attaches its logger
+  window.addEventListener('GameLoggerReady', renderLog, {once:true});
+})();
+</script>
 </body>
 </html>
