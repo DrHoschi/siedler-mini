@@ -2,402 +2,285 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Siedler-Mini – v16.0.4</title>
 
   <!--
-    Siedler-Mini — Start/Boot-Seite
-    Version: v16.0.3 (Index)
-    Ziel:
-      - Game sauber starten, erst wenn game.js wirklich geladen ist
-      - Deutliche Logs (OK/WARN/ERR), Kopieren, Leeren
-      - Fallback-Hinweise, wenn GameLoader.start (noch) nicht vorhanden
-      - Editor-Hook als Platzhalter
+    Siedler-Mini – INDEX v16.0.4
+    - Start-UI mit Log-Konsole (✅⚠️❌)
+    - Wartet robust auf window.GameLoader.start (Retry + Hinweis)
+    - Cache leeren, Log kopieren/clearen
+    - Version wird im UI angezeigt
   -->
-
-  <title>Siedler-Mini</title>
 
   <style>
     :root{
-      --bg:#0f2012;           /* dunkles Grün */
-      --panel:#101518;        /* UI-Panel-Hintergrund */
-      --panel-2:#0b1013;
-      --text:#e7f0ea;
-      --text-dim:#a9b7ad;
-      --brand:#2fe96b;        /* LED-Grün */
-      --warn:#ffc042;
+      --bg:#0d1512;           /* dunkler Hintergrund */
+      --panel:#121c19;        /* Paneel */
+      --panel-2:#0f1916;      /* tieferes Paneel */
+      --text:#dfe9e4;         /* Primärtext */
+      --muted:#9fb2aa;        /* Sekundärtext */
+      --ok:#35c46a;
+      --warn:#e9b949;
       --err:#ff6b6b;
-      --ok:#7CFC90;
-      --btn:#1c2a30;
-      --btn-h:#1f333a;
-      --ring: 0 0 0 2px rgba(47,233,107,.25), 0 8px 20px rgba(0,0,0,.35);
-      --radius:16px;
-      --radius-sm:12px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      --btn:#203a33;
+      --btn-hi:#2b4d43;
+      --chip:#0b1311;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
     }
 
-    html,body{
-      height:100%;
-      margin:0;
-      background: radial-gradient(1200px 700px at 20% 0%, #17311d 0%, var(--bg) 60%, #0a140c 100%) fixed;
-      color:var(--text);
-      font-family:var(--sans);
-      -webkit-font-smoothing:antialiased;
-      -moz-osx-font-smoothing:grayscale;
-    }
+    html,body{height:100%;background:var(--bg);color:var(--text);margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
+    #app{position:relative;min-height:100%;display:grid;place-items:center;overflow:hidden;}
+    canvas{display:block;position:absolute;inset:0;width:100%;height:100%;}
 
-    /* zartes Hintergrundbild (optional) – kann auch entfernt werden */
-    .backdrop{
-      position:fixed; inset:0;
-      background:
-        radial-gradient(1100px 700px at 70% 35%, rgba(255,255,255,.06), transparent 60%),
-        linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,.15));
-      pointer-events:none;
-      opacity:.95;
-      transition:opacity .4s ease;
-    }
-    .backdrop.hidden{ opacity:0; }
-
-    /* Container für Dialog */
-    .boot-wrap{
-      position:fixed; inset:0;
-      display:grid; place-items:center;
-      padding:24px;
-    }
-
-    .card{
-      width:min(680px, calc(100vw - 32px));
-      background:linear-gradient(180deg, var(--panel), var(--panel-2));
-      border-radius:var(--radius);
-      box-shadow:var(--ring);
+    /* Start-Card */
+    .start-card{
+      position:relative;
+      z-index:4;
+      width:min(720px,calc(100% - 24px));
+      background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0)) , var(--panel);
       border:1px solid rgba(255,255,255,.06);
-      overflow:hidden;
+      box-shadow:var(--shadow);
+      border-radius:18px;
+      padding:22px 22px 16px;
+      backdrop-filter:saturate(140%) blur(6px);
     }
-
-    .card-head{
-      display:flex; align-items:center; gap:12px;
-      padding:20px 22px 8px;
-      font-size:28px; font-weight:800; letter-spacing:.2px;
-    }
-    .led{
-      width:14px; height:14px; border-radius:50%;
-      background: radial-gradient(circle at 30% 35%, #fff, #bdf6d1 15%, var(--brand) 55%, #1ea74a 100%);
-      box-shadow: 0 0 0 3px rgba(47,233,107,.18), 0 0 16px rgba(47,233,107,.45) inset;
-      flex:0 0 14px;
-    }
-
-    .card-sub{
-      color:var(--text-dim);
-      padding:0 22px 10px;
-      line-height:1.35;
-    }
-    .row{
-      display:flex; gap:12px; align-items:center;
-      padding:10px 22px 22px;
-      flex-wrap:wrap;
-    }
-
+    .title-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+    .badge{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%, #8df5b1 0 40%, #0a4426 60%);}
+    h1{font-size:32px;line-height:1;margin:0}
+    .subtitle{color:var(--muted);font-size:14px}
+    .actions{display:flex;gap:12px;margin:18px 0 8px}
     .btn{
-      appearance:none; border:0; cursor:pointer;
-      background:var(--btn); color:var(--text);
-      padding:14px 18px; border-radius:14px;
-      font-weight:700;
-      transition:transform .06s ease, background .12s ease, box-shadow .12s ease;
-      box-shadow:inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(0,0,0,.5);
-      user-select:none;
+      appearance:none;border:0;border-radius:12px;background:var(--btn);
+      color:var(--text);padding:12px 18px;font-weight:600;letter-spacing:.2px;
     }
-    .btn:hover{ background:var(--btn-h); }
-    .btn:active{ transform:translateY(1px); }
-    .btn.primary{ background:#2a5e3d; }
-    .btn.primary:hover{ background:#2f6b45; }
+    .btn:hover{background:var(--btn-hi)}
+    .btn.primary{background:#1f8a5f;}
+    .btn.primary:hover{background:#1a774f;}
+    .version{color:var(--muted);font-size:12px;margin-top:4px}
 
-    .muted{
-      color:var(--text-dim);
-      margin-left:auto; font-size:.9rem; padding-right:22px; padding-bottom:18px;
-    }
-
-    /* Log-Konsole (Toast-Leiste unten) */
-    .logbar{
-      position:fixed; left:12px; right:12px; bottom:12px;
-      background: rgba(12,18,16,.78);
-      border:1px solid rgba(255,255,255,.06);
-      border-radius:var(--radius);
-      backdrop-filter:saturate(120%) blur(6px);
-      box-shadow: 0 8px 24px rgba(0,0,0,.35);
-      overflow:hidden;
-    }
-    .log-controls{
-      display:flex; gap:12px; align-items:center;
-      padding:14px 14px 8px 14px; flex-wrap:wrap;
-    }
-    .badge{
-      display:inline-flex; align-items:center; justify-content:center;
-      min-width:64px; height:42px; padding:0 14px;
-      border-radius:12px; background:#0f1a16; color:#b6c6bd; font-weight:800;
-      box-shadow: inset 0 -1px 0 rgba(255,255,255,.06);
+    /* Log-Toast unten */
+    .log-dock{
+      position:fixed;left:16px;right:16px;bottom:16px;z-index:5;
+      display:flex;gap:12px;align-items:flex-end;pointer-events:none;
     }
     .log-panel{
-      max-height:min(32vh, 260px);
-      overflow:auto; margin:8px 12px 14px;
-      background:#0b130f; border:1px solid rgba(255,255,255,.06);
-      border-radius:12px; padding:12px;
-      font: 13px/1.45 var(--mono);
-      color:#bfe9c9;
-      white-space:pre-wrap;
+      pointer-events:auto;
+      background:var(--panel-2);border:1px solid rgba(255,255,255,.06);
+      border-radius:var(--radius);box-shadow:var(--shadow);
+      padding:14px;flex:1;min-height:92px;max-height:28vh;overflow:auto;
     }
-    .ok   { color:#9af7b3; }
-    .warn { color:#ffd285; }
-    .err  { color:#ff9e9e; }
+    .log-toolbar{display:flex;gap:10px;margin-right:12px;pointer-events:auto;flex-wrap:wrap}
+    .chip{background:var(--chip);border:1px solid rgba(255,255,255,.08);color:var(--text);
+      padding:10px 14px;border-radius:12px;font-weight:600}
+    .chip.small{padding:8px 12px;font-weight:700}
+    .logline{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; white-space:pre-wrap;}
+    .log-ok{color:var(--ok)}
+    .log-warn{color:var(--warn)}
+    .log-err{color:var(--err)}
 
-    /* kleines Dialog für Alerts */
+    /* Dialog */
     dialog{
-      border:0; padding:0; border-radius:14px;
-      width:min(520px, calc(100vw - 32px));
-      background:linear-gradient(180deg, var(--panel), var(--panel-2));
-      color:var(--text);
-      box-shadow: var(--ring);
+      border:0;border-radius:16px;padding:0;background:var(--panel);
+      color:var(--text);box-shadow:var(--shadow);
     }
-    dialog::backdrop{ background:rgba(0,0,0,.45); }
-    .dlg-body{ padding:20px; }
-    .dlg-actions{ display:flex; justify-content:flex-end; gap:12px; padding:0 20px 18px; }
+    dialog .dlg-body{padding:20px}
+    dialog::backdrop{background:rgba(0,0,0,.55)}
+    .dlg-actions{display:flex;justify-content:flex-end;gap:10px;padding:0 20px 16px}
+
+    /* Backdrop Bild optional (kann entfernt/ersetzt werden) */
+    .backdrop{
+      position:absolute;inset:0;z-index:1;
+      background:linear-gradient(#0b140f 10%, transparent 25%), url("./assets/tex/placeholder64.PNG");
+      background-size:cover;
+      opacity:.08;
+    }
+
+    @media (max-width:480px){
+      h1{font-size:26px}
+      .actions{gap:10px}
+      .log-panel{max-height:34vh}
+    }
   </style>
 </head>
-
 <body>
+  <div id="app">
+    <canvas id="game" width="0" height="0" aria-label="Spielfeld"></canvas>
 
-  <!-- dekorativer Hintergrund -->
-  <div id="backdrop" class="backdrop"></div>
+    <!-- dezentes Hintergrundbild; wird ausgeblendet wenn das Spiel rendert -->
+    <div class="backdrop" id="backdrop"></div>
 
-  <!-- Boot-UI -->
-  <div class="boot-wrap">
-    <div class="card" id="bootCard" aria-live="polite">
-      <div class="card-head">
-        <div class="led" aria-hidden="true"></div>
-        <div>Siedler-Mini</div>
+    <!-- Startkarte -->
+    <section class="start-card" id="startCard" role="dialog" aria-modal="true">
+      <div class="title-row">
+        <div class="badge" aria-hidden="true"></div>
+        <h1>Siedler-Mini</h1>
       </div>
-      <div class="card-sub" id="subtitle">
-        Neues Spiel starten? <span id="mapHint" style="opacity:.8">(Map: assets/maps/map-mini.json)</span>
-      </div>
-      <div class="row">
+      <div class="subtitle">Neues Spiel starten? <span id="mapLabel">(Map: <code>assets/maps/map-mini.json</code>)</span></div>
+      <div class="actions">
         <button class="btn primary" id="btnStart">Start</button>
         <button class="btn" id="btnEditor">Editor öffnen</button>
       </div>
-      <div class="muted">v16.0.3</div>
+      <div class="version">v16.0.4</div>
+    </section>
+
+    <!-- Log-Konsole unten -->
+    <div class="log-dock" id="logDock" aria-live="polite">
+      <div class="log-toolbar">
+        <span class="chip small" id="logCount">Log 0</span>
+        <button class="chip" id="btnCopy">Log kopieren</button>
+        <button class="chip" id="btnClear">Log leeren</button>
+        <button class="chip" id="btnCache">Cache leeren</button>
+      </div>
+      <div class="log-panel" id="logPanel" tabindex="0" aria-label="Debug-Log"></div>
     </div>
+
+    <!-- Hinweisdialoge -->
+    <dialog id="hintDialog">
+      <div class="dlg-body" id="hintBody">–</div>
+      <div class="dlg-actions">
+        <button class="btn" id="dlgClose">Schließen</button>
+      </div>
+    </dialog>
   </div>
 
-  <!-- Log / Debug unten -->
-  <div class="logbar">
-    <div class="log-controls">
-      <span class="badge" id="logCount">Log 0</span>
-      <button class="btn" id="btnCopyLog">Log kopieren</button>
-      <button class="btn" id="btnClearLog">Log leeren</button>
-      <button class="btn" id="btnClearCache">Cache leeren</button>
-    </div>
-    <pre class="log-panel" id="logPanel" aria-live="polite"></pre>
-  </div>
+  <!-- Game-Script (defer), gibt global window.GameLoader.start -->
+  <script defer src="./game.js"
+          onload="BootLog.ok('game.js geladen')"
+          onerror="BootLog.err('game.js konnte nicht geladen werden')"></script>
 
-  <!-- kleiner Alert-Dialog -->
-  <dialog id="alertDlg">
-    <div class="dlg-body" id="alertText">Hinweis</div>
-    <div class="dlg-actions">
-      <button class="btn primary" id="alertClose">Schließen</button>
-    </div>
-  </dialog>
-
-  <!-- ******************************************************************* -->
-  <!--  Boot-Script (Index-Logik)                                          -->
-  <!-- ******************************************************************* -->
   <script>
-  (function(){
-    'use strict';
-
-    /* ------------------------------*
-     * 1) Kleines Log-Framework
-     * ------------------------------*/
-    const logPanel = document.getElementById('logPanel');
-    const logCountBadge = document.getElementById('logCount');
-    let logCount = 0;
+  /* ============================
+     Kleine Boot/Log-Hilfen
+     ============================ */
+  const BootLog = (() => {
+    const el = {
+      panel: document.getElementById('logPanel'),
+      count: document.getElementById('logCount'),
+    };
+    const lines = [];
     const stamp = () => {
       const d = new Date();
       const pad = n => String(n).padStart(2,'0');
       return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
     };
-    function append(kind, msg){
-      logCount++; logCountBadge.textContent = `Log ${logCount}`;
-      const cls = kind==='ERR' ? 'err' : kind==='WARN' ? 'warn' : 'ok';
-      logPanel.insertAdjacentHTML('beforeend', `${stamp()} <span class="${cls}">(${kind.toLowerCase()})</span> ${msg}\n`);
-      logPanel.scrollTop = logPanel.scrollHeight;
-    }
-    const log = {
-      ok:   (m)=>append('OK',   m),
-      warn: (m)=>append('WARN', m),
-      err:  (m)=>append('ERR',  m)
+    const push = (cls, icon, msg) => {
+      const line = `${stamp()} ${icon} ${msg}`;
+      lines.push({ cls, line });
+      const div = document.createElement('div');
+      div.className = `logline ${cls}`;
+      div.textContent = line;
+      el.panel.appendChild(div);
+      el.panel.scrollTop = el.panel.scrollHeight;
+      el.count.textContent = `Log ${lines.length}`;
+      console[cls==='log-err'?'error':cls==='log-warn'?'warn':'log'](line);
     };
-
-    window.__INDEX_LOG__ = log; // optional: extern zugreifbar
-
-    // Buttons: Kopieren / Leeren / Cache
-    document.getElementById('btnCopyLog').addEventListener('click', async ()=>{
-      try {
-        await navigator.clipboard.writeText(logPanel.textContent || '');
-        log.ok('Log in Zwischenablage');
-      } catch(e){
-        log.err('Kopieren fehlgeschlagen: ' + (e && e.message || e));
+    return {
+      ok:   (m) => push('log-ok',   '✅', `(ok) ${m}`),
+      warn: (m) => push('log-warn', '⚠️', `(warn) ${m}`),
+      err:  (m) => push('log-err',  '❌', `(err) ${m}`),
+      raw:  (m) => push('', '', m),
+      copy: async () => {
+        try {
+          const text = lines.map(x=>x.line).join('\n');
+          await navigator.clipboard.writeText(text);
+          BootLog.ok('Log in Zwischenablage');
+        } catch(e){ BootLog.err('Kopieren fehlgeschlagen'); }
+      },
+      clear: () => {
+        lines.length = 0; el.panel.innerHTML=''; el.count.textContent='Log 0';
       }
-    });
-    document.getElementById('btnClearLog').addEventListener('click', ()=>{
-      logPanel.textContent = ''; logCount=0; logCountBadge.textContent = 'Log 0';
-    });
-    document.getElementById('btnClearCache').addEventListener('click', async ()=>{
-      try{
-        // Service Worker & Cache API sauber leeren (sofern vorhanden)
-        if ('caches' in window){
-          const keys = await caches.keys();
-          await Promise.all(keys.map(k => caches.delete(k)));
-        }
-        if ('serviceWorker' in navigator){
-          const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map(r => r.unregister()));
-        }
-        localStorage.clear(); sessionStorage.clear();
-        log.ok('Cache/Storage geleert – Seite ggf. neu laden');
-      }catch(e){
-        log.warn('Cache leeren nicht vollständig möglich: ' + (e && e.message || e));
-      }
-    });
-
-    // kleiner Alert-Helfer
-    const alertDlg = document.getElementById('alertDlg');
-    const alertText = document.getElementById('alertText');
-    document.getElementById('alertClose').addEventListener('click', ()=>alertDlg.close());
-    function showAlert(msg){
-      alertText.textContent = msg;
-      alertDlg.showModal();
-    }
-
-    /* ------------------------------*
-     * 2) Lade-Überwachung für game.js
-     * ------------------------------*/
-    const VERSION = '16.0.3';
-    const mapUrlDefault = 'assets/maps/map-mini.json';
-    const btnStart = document.getElementById('btnStart');
-    const btnEditor = document.getElementById('btnEditor');
-    const subtitle = document.getElementById('subtitle');
-    document.getElementById('mapHint').textContent = `(Map: ${mapUrlDefault})`;
-
-    // Status melden
-    log.ok(`UI ready (index v${VERSION})`);
-
-    // game.js dynamisch laden (mit Cache-Buster)
-    const scriptTag = document.createElement('script');
-    scriptTag.src = `./game.js?v=${VERSION}`;
-    scriptTag.defer = true;
-    scriptTag.crossOrigin = 'anonymous';
-    scriptTag.onload = ()=> {
-      log.ok('game.js geladen');
-      checkReady();   // nach onload direkt prüfen
     };
-    scriptTag.onerror = ()=> {
-      log.err('game.js konnte nicht geladen werden (Script-Error)');
-      showAlert('Fehler beim Laden von game.js – bitte neu laden.');
-    };
-    document.head.appendChild(scriptTag);
-
-    // Warten bis GameLoader.start verfügbar ist
-    let readyTick = 0, readyTimer = null, readyFound = false;
-    function checkReady(){
-      readyFound = !!(window.GameLoader && typeof window.GameLoader.start === 'function');
-      if (readyFound){
-        btnStart.disabled = false;
-        subtitle.innerHTML = `Neues Spiel starten? <span style="opacity:.8">(Map: ${mapUrlDefault})</span>`;
-        if (readyTimer){ clearInterval(readyTimer); readyTimer=null; }
-        return;
-      }
-      // max. 5s passiv warten, danach WARN ausgeben
-      if (!readyTimer){
-        readyTimer = setInterval(()=>{
-          readyTick++;
-          if (window.GameLoader && typeof window.GameLoader.start === 'function'){
-            log.ok('GameLoader.start gefunden');
-            btnStart.disabled = false;
-            clearInterval(readyTimer); readyTimer = null; readyFound = true;
-          } else if (readyTick === 5){
-            log.warn('GameLoader.start nach 5s noch nicht verfügbar (Game initialisiert noch?).');
-          } else if (readyTick > 12){ // ~12s – wir geben auf
-            clearInterval(readyTimer); readyTimer=null;
-            log.err('GameLoader.start nicht gefunden – Start deaktiviert.');
-          }
-        }, 1000);
-      }
-    }
-    // Button zunächst deaktivieren bis ready
-    btnStart.disabled = true;
-    checkReady();
-
-    /* ------------------------------*
-     * 3) Start/Editor Buttons
-     * ------------------------------*/
-    btnStart.addEventListener('click', ()=>{
-      if (!(window.GameLoader && typeof window.GameLoader.start === 'function')){
-        log.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-        showAlert('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
-        return;
-      }
-      // Boot-Dialog ausblenden
-      document.getElementById('bootCard').style.display = 'none';
-      document.getElementById('backdrop').classList.add('hidden');
-
-      // Canvas erstellen/finden
-      let canvas = document.getElementById('gameCanvas');
-      if (!canvas){
-        canvas = document.createElement('canvas');
-        canvas.id = 'gameCanvas';
-        canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio||1));
-        canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio||1));
-        canvas.style.position = 'fixed';
-        canvas.style.inset = '0';
-        canvas.style.width = '100vw';
-        canvas.style.height = '100vh';
-        document.body.appendChild(canvas);
-      }
-
-      // Start aufrufen (mit Logs)
-      try{
-        log.ok(`GameLoader.start ${mapUrlDefault}`);
-        window.GameLoader.start({
-          canvas,
-          mapUrl: `./${mapUrlDefault}`,
-          onReady: ()=>log.ok('Game started')
-        });
-      }catch(e){
-        log.err('Start-Fehler: ' + (e && e.message || e));
-        showAlert('Fehler beim Start (Details im Log).');
-      }
-    });
-
-    btnEditor.addEventListener('click', ()=>{
-      // Platzhalter: Hier verkabeln wir später den Level-Editor
-      log.ok('Editor öffnen (Hook – später verknüpfen)');
-      showAlert('Editor-Start ist hier noch ein Platzhalter.');
-    });
-
-    /* ------------------------------*
-     * 4) Resize: Canvas skaliert mit
-     * ------------------------------*/
-    window.addEventListener('resize', ()=>{
-      const cvs = document.getElementById('gameCanvas');
-      if (!cvs) return;
-      const dpr = window.devicePixelRatio || 1;
-      cvs.width  = Math.floor(window.innerWidth  * dpr);
-      cvs.height = Math.floor(window.innerHeight * dpr);
-      cvs.style.width = '100vw';
-      cvs.style.height = '100vh';
-    }, {passive:true});
-
   })();
+
+  /* ============================
+     Start-UI & Aktionen
+     ============================ */
+  const q = (id)=>document.getElementById(id);
+  const startCard = q('startCard');
+  const backdrop  = q('backdrop');
+  const canvasEl  = q('game');
+
+  // Buttons
+  q('btnCopy').addEventListener('click', ()=>BootLog.copy());
+  q('btnClear').addEventListener('click', ()=>BootLog.clear());
+  q('btnCache').addEventListener('click', async ()=>{
+    try{
+      localStorage.clear();
+      sessionStorage.clear();
+      if ('caches' in window){
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k=>caches.delete(k)));
+      }
+      BootLog.ok('Cache/Storage geleert – Seite ggf. neu laden');
+    }catch(e){ BootLog.err('Cache leeren fehlgeschlagen'); }
+  });
+
+  // kleiner Dialog-Helper
+  const dlg = q('hintDialog'), dlgBody = q('hintBody');
+  q('dlgClose').addEventListener('click', ()=>dlg.close());
+  function hint(html){
+    dlgBody.textContent = '';
+    dlgBody.insertAdjacentHTML('afterbegin', html);
+    dlg.showModal();
+  }
+
+  // Editor-Hook (Platzhalter)
+  q('btnEditor').addEventListener('click', ()=>{
+    BootLog.ok('Editor öffnen (Hook – später verknüpfen)');
+    hint('<p>Editor-Start ist hier noch ein Platzhalter.</p>');
+  });
+
+  // Spiel starten
+  q('btnStart').addEventListener('click', ()=>tryStart());
+
+  // Versuch, GameLoader.start aufzurufen (mit kurzen Retries)
+  async function tryStart(){
+    const wantMap = 'assets/maps/map-mini.json';
+    const tryMs   = [0, 250, 500, 1000, 1500, 2500];
+
+    for (let i=0;i<tryMs.length;i++){
+      await new Promise(r=>setTimeout(r, tryMs[i]));
+      const fn = window.GameLoader && window.GameLoader.start;
+      if (typeof fn === 'function'){
+        BootLog.ok(`GameLoader.start ${wantMap}`);
+        // Canvas grob initialisieren (Größe passt Game später an)
+        resizeCanvasToView();
+        startCard.style.display='none';
+        backdrop.style.display='none';
+        try{
+          fn({
+            canvas: canvasEl,
+            mapUrl: wantMap,
+            onReady: ()=>BootLog.ok('Game started')
+          });
+        }catch(e){
+          BootLog.err(`Start-Fehler: ${e.message||e}`);
+          hint(`<p><strong>❌ Fehler beim Start</strong><br>${String(e)}</p>`);
+        }
+        return;
+      }
+      if (i===2) BootLog.warn('GameLoader.start noch nicht verfügbar (Game initialisiert?)');
+    }
+
+    // nach allen Retries immer noch nicht da → Hinweis
+    BootLog.err('GameLoader.start nicht gefunden – Start deaktiviert.');
+    hint('<p><strong>❌ Fehler beim Start:</strong> <code>GameLoader.start</code> ist nicht verfügbar.<br>Ist <code>game.js</code> geladen?</p>');
+  }
+
+  function resizeCanvasToView(){
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+    const w = Math.floor(window.innerWidth  * dpr);
+    const h = Math.floor(window.innerHeight * dpr);
+    canvasEl.width  = w; canvasEl.height = h;
+    canvasEl.style.width  = '100%';
+    canvasEl.style.height = '100%';
+  }
+  window.addEventListener('resize', resizeCanvasToView, {passive:true});
+
+  // Boot-Meldungen
+  BootLog.ok('UI ready (index v16.0.4)');
   </script>
 </body>
 </html>
