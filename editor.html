@@ -1,0 +1,54 @@
+<!-- editor.html — Siedler-Mini Editor Shell vE1.0.0 -->
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Siedler-Mini – Editor (vE1.0.0)</title>
+  <style>
+    :root{color-scheme:dark; --bg:#0e1a17; --panel:#101c19; --text:#d9f3e7; --ok:#2bd67b;}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{display:flex;flex-direction:column;height:100%}
+    header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:linear-gradient(180deg,#0f201b,#0a1512)}
+    .title{font-weight:700}
+    .btn{appearance:none;border:0;border-radius:10px;padding:10px 14px;background:#1f3630;color:var(--text);cursor:pointer}
+    .btn:hover{filter:brightness(1.1)}
+    main{flex:1;display:grid;place-items:center}
+    .card{background:var(--panel);border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.35);max-width:720px;width:92%}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    footer{padding:10px 16px;opacity:.75}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">🛠️ Siedler-Mini • Editor <span class="mono">(vE1.0.0)</span></div>
+      <div>
+        <button class="btn" id="btnBack">Zurück zum Spiel</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="card">
+        <h2>Editor-Shell ist aktiv ✅</h2>
+        <p>Diese Seite ist ein schlanker Container für den Level-Editor.
+           Später hängen wir hier deinen bestehenden Editor ein (Tiles, Auto-Tiler, Undo/Redo etc.).</p>
+        <p class="mono" id="info"></p>
+      </div>
+    </main>
+
+    <footer class="mono">Editor-Shell vE1.0.0 • getrennt vom Spiel, damit später entfernbar</footer>
+  </div>
+
+  <script>
+    // Minimal-Init
+    const info = document.getElementById('info');
+    info.textContent = `[${new Date().toLocaleTimeString()}] Editor geladen (vE1.0.0)`;
+
+    document.getElementById('btnBack')?.addEventListener('click', () => {
+      // Zurück auf index.html (Spiel)
+      location.href = './';
+    });
+  </script>
+</body>
+</html>
