@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-25T20:49:49.715Z",
+  "createdAt": "2025-08-26T21:18:58.797Z",
   "root": ".",
-  "count": 218,
+  "count": 223,
   "entries": [
     {
       "type": "dir",
@@ -116,6 +116,15 @@
     },
     {
       "type": "dir",
+      "path": "assets/editor/"
+    },
+    {
+      "type": "file",
+      "path": "assets/editor/editor.js",
+      "size": 4187
+    },
+    {
+      "type": "dir",
       "path": "assets/icons/"
     },
     {
@@ -137,6 +146,15 @@
       "type": "file",
       "path": "assets/icons/icons_spritesheet_64.png",
       "size": 263254
+    },
+    {
+      "type": "dir",
+      "path": "assets/inspector/"
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.js",
+      "size": 3467
     },
     {
       "type": "dir",
@@ -665,7 +683,7 @@
     {
       "type": "file",
       "path": "assets/tiles/tileset.terrain.json",
-      "size": 16530
+      "size": 16425
     },
     {
       "type": "file",
@@ -977,6 +995,11 @@
     },
     {
       "type": "file",
+      "path": "editor.html",
+      "size": 2228
+    },
+    {
+      "type": "file",
       "path": "filelist-audit.txt",
       "size": 2821
     },
@@ -998,12 +1021,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 6967
+      "size": 11248
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 6097
+      "size": 9619
     },
     {
       "type": "file",
