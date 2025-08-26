@@ -2,246 +2,401 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Siedler‑Mini</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
   <!--
-    index.html v16.0.3
-    Ziele:
-      • GameLoader.start zuverlässig aufrufbar machen
-      • Start-UI erst aktivieren, wenn game.js geladen ist
-      • Robustere Logs + Copy/Paste + Cache-Leeren
-      • Version im UI anzeigen
+    Siedler-Mini — Start/Boot-Seite
+    Version: v16.0.3 (Index)
+    Ziel:
+      - Game sauber starten, erst wenn game.js wirklich geladen ist
+      - Deutliche Logs (OK/WARN/ERR), Kopieren, Leeren
+      - Fallback-Hinweise, wenn GameLoader.start (noch) nicht vorhanden
+      - Editor-Hook als Platzhalter
   -->
+
+  <title>Siedler-Mini</title>
 
   <style>
     :root{
-      --bg:#0e1311;
-      --panel:#141b19;
-      --panel2:#101614;
-      --txt:#e8f2ed;
-      --muted:#9fb2aa;
-      --accent:#66d28f;
-      --warn:#ffd666;
+      --bg:#0f2012;           /* dunkles Grün */
+      --panel:#101518;        /* UI-Panel-Hintergrund */
+      --panel-2:#0b1013;
+      --text:#e7f0ea;
+      --text-dim:#a9b7ad;
+      --brand:#2fe96b;        /* LED-Grün */
+      --warn:#ffc042;
       --err:#ff6b6b;
-      --okdot:#4ade80;
+      --ok:#7CFC90;
+      --btn:#1c2a30;
+      --btn-h:#1f333a;
+      --ring: 0 0 0 2px rgba(47,233,107,.25), 0 8px 20px rgba(0,0,0,.35);
+      --radius:16px;
+      --radius-sm:12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
-    html,body{height:100%}
-    body{
-      margin:0; background:#203b1f; color:var(--txt);
-      font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+
+    html,body{
+      height:100%;
+      margin:0;
+      background: radial-gradient(1200px 700px at 20% 0%, #17311d 0%, var(--bg) 60%, #0a140c 100%) fixed;
+      color:var(--text);
+      font-family:var(--sans);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* zartes Hintergrundbild (optional) – kann auch entfernt werden */
+    .backdrop{
+      position:fixed; inset:0;
+      background:
+        radial-gradient(1100px 700px at 70% 35%, rgba(255,255,255,.06), transparent 60%),
+        linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,.15));
+      pointer-events:none;
+      opacity:.95;
+      transition:opacity .4s ease;
+    }
+    .backdrop.hidden{ opacity:0; }
+
+    /* Container für Dialog */
+    .boot-wrap{
+      position:fixed; inset:0;
+      display:grid; place-items:center;
+      padding:24px;
+    }
+
+    .card{
+      width:min(680px, calc(100vw - 32px));
+      background:linear-gradient(180deg, var(--panel), var(--panel-2));
+      border-radius:var(--radius);
+      box-shadow:var(--ring);
+      border:1px solid rgba(255,255,255,.06);
       overflow:hidden;
     }
 
-    /* Backdrop Bild (Startscreen) */
-    .backdrop{
-      position:fixed; inset:0; display:grid; place-items:center;
-      background:radial-gradient(ellipse at 50% 40%, #0b1a17 0%, #0a1513 40%, #090f0e 100%);
+    .card-head{
+      display:flex; align-items:center; gap:12px;
+      padding:20px 22px 8px;
+      font-size:28px; font-weight:800; letter-spacing:.2px;
     }
-    .backdrop__img{
-      width:min(92vw,1100px); height:auto; border-radius:14px; box-shadow:0 30px 80px rgba(0,0,0,.5);
-      user-select:none; pointer-events:none; opacity:.92;
+    .led{
+      width:14px; height:14px; border-radius:50%;
+      background: radial-gradient(circle at 30% 35%, #fff, #bdf6d1 15%, var(--brand) 55%, #1ea74a 100%);
+      box-shadow: 0 0 0 3px rgba(47,233,107,.18), 0 0 16px rgba(47,233,107,.45) inset;
+      flex:0 0 14px;
     }
 
-    /* Startcard */
-    .card{
-      position:fixed; inset:auto; left:50%; top:50%; transform:translate(-50%,-50%);
-      width:min(92vw,700px); background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%);
-      border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.55); padding:20px 22px 18px;
-      border:1px solid #1d2623;
+    .card-sub{
+      color:var(--text-dim);
+      padding:0 22px 10px;
+      line-height:1.35;
     }
-    .card h1{margin:0 0 6px; font-size:32px; letter-spacing:.2px; display:flex; align-items:center; gap:.6rem}
-    .led{width:.9rem; height:.9rem; border-radius:50%; background:var(--okdot); box-shadow:0 0 0 2px #0c1311 inset, 0 0 12px #3dd18f;}
-    .sub{color:var(--muted); font-size:14px; margin-bottom:14px}
-    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .row{
+      display:flex; gap:12px; align-items:center;
+      padding:10px 22px 22px;
+      flex-wrap:wrap;
+    }
+
     .btn{
-      appearance:none; border:0; padding:10px 16px; border-radius:12px; font-weight:600; cursor:pointer;
-      background:#213a31; color:#e7fff3; box-shadow:0 2px 0 #0b1512 inset, 0 6px 14px rgba(0,0,0,.25);
-      transition:.15s transform;
+      appearance:none; border:0; cursor:pointer;
+      background:var(--btn); color:var(--text);
+      padding:14px 18px; border-radius:14px;
+      font-weight:700;
+      transition:transform .06s ease, background .12s ease, box-shadow .12s ease;
+      box-shadow:inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(0,0,0,.5);
+      user-select:none;
     }
-    .btn:hover{transform:translateY(-1px)}
-    .btn--pri{background:#1f6b45}
-    .btn--muted{background:#2a3431; color:#dfe9e4}
-    .ver{margin-top:10px; color:var(--muted); font-size:12px}
+    .btn:hover{ background:var(--btn-h); }
+    .btn:active{ transform:translateY(1px); }
+    .btn.primary{ background:#2a5e3d; }
+    .btn.primary:hover{ background:#2f6b45; }
 
-    /* Canvas (Spielfeld) */
-    #gameCanvas{
-      position:fixed; inset:0; width:100vw; height:100vh; display:block;
-      touch-action:manipulation; /* iOS */
+    .muted{
+      color:var(--text-dim);
+      margin-left:auto; font-size:.9rem; padding-right:22px; padding-bottom:18px;
     }
 
-    /* Log-Dock (Inspector-Toast) */
-    .dock{
-      position:fixed; left:16px; right:16px; bottom:16px; display:flex; gap:12px; align-items:flex-end;
-      pointer-events:none;
+    /* Log-Konsole (Toast-Leiste unten) */
+    .logbar{
+      position:fixed; left:12px; right:12px; bottom:12px;
+      background: rgba(12,18,16,.78);
+      border:1px solid rgba(255,255,255,.06);
+      border-radius:var(--radius);
+      backdrop-filter:saturate(120%) blur(6px);
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      overflow:hidden;
     }
-    .dock > *{pointer-events:auto}
-    .logpanel{
-      flex:1; background:rgba(12,18,16,.75); border:1px solid #1b2421; border-radius:14px; padding:12px;
-      backdrop-filter: blur(6px);
+    .log-controls{
+      display:flex; gap:12px; align-items:center;
+      padding:14px 14px 8px 14px; flex-wrap:wrap;
     }
-    .logpanel pre{
-      margin:10px 0 0; max-height:160px; overflow:auto; white-space:pre-wrap; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size:12px; line-height:1.35; color:#bfe9cc;
+    .badge{
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:64px; height:42px; padding:0 14px;
+      border-radius:12px; background:#0f1a16; color:#b6c6bd; font-weight:800;
+      box-shadow: inset 0 -1px 0 rgba(255,255,255,.06);
     }
-    .chip{background:#0f1513; border:1px solid #1b2521; color:#d5e9df; padding:10px 14px; border-radius:12px; font-weight:600}
-    .bar{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
-    .bar .btn{background:#202a27}
-    .ok::before,.warn::before,.err::before{
-      content:""; display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.5em; vertical-align:-1px;
+    .log-panel{
+      max-height:min(32vh, 260px);
+      overflow:auto; margin:8px 12px 14px;
+      background:#0b130f; border:1px solid rgba(255,255,255,.06);
+      border-radius:12px; padding:12px;
+      font: 13px/1.45 var(--mono);
+      color:#bfe9c9;
+      white-space:pre-wrap;
     }
-    .ok::before{background:var(--accent)}
-    .warn::before{background:var(--warn)}
-    .err::before{background:var(--err)}
-    .hidden{display:none}
+    .ok   { color:#9af7b3; }
+    .warn { color:#ffd285; }
+    .err  { color:#ff9e9e; }
+
+    /* kleines Dialog für Alerts */
+    dialog{
+      border:0; padding:0; border-radius:14px;
+      width:min(520px, calc(100vw - 32px));
+      background:linear-gradient(180deg, var(--panel), var(--panel-2));
+      color:var(--text);
+      box-shadow: var(--ring);
+    }
+    dialog::backdrop{ background:rgba(0,0,0,.45); }
+    .dlg-body{ padding:20px; }
+    .dlg-actions{ display:flex; justify-content:flex-end; gap:12px; padding:0 20px 18px; }
   </style>
 </head>
+
 <body>
 
-  <!-- Spielfeld -->
-  <canvas id="gameCanvas" width="1024" height="768" aria-label="Spielanzeige"></canvas>
+  <!-- dekorativer Hintergrund -->
+  <div id="backdrop" class="backdrop"></div>
 
-  <!-- Start-Hintergrund + Karte -->
-  <div class="backdrop" id="backdrop">
-    <img class="backdrop__img" alt="" src="./assets/tex/ui/fort_start.jpg" />
-    <div class="card" id="startCard" role="dialog" aria-modal="true">
-      <h1><span class="led" aria-hidden="true"></span> Siedler‑Mini</h1>
-      <div class="sub">Neues Spiel starten? <span id="mapInfo" class="sub">(Map: assets/maps/map-mini.json)</span></div>
-      <div class="row">
-        <button id="btnStart" class="btn btn--pri">Start</button>
-        <button id="btnEditor" class="btn btn--muted">Editor öffnen</button>
+  <!-- Boot-UI -->
+  <div class="boot-wrap">
+    <div class="card" id="bootCard" aria-live="polite">
+      <div class="card-head">
+        <div class="led" aria-hidden="true"></div>
+        <div>Siedler-Mini</div>
       </div>
-      <div class="ver">v16.0.3</div>
+      <div class="card-sub" id="subtitle">
+        Neues Spiel starten? <span id="mapHint" style="opacity:.8">(Map: assets/maps/map-mini.json)</span>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btnStart">Start</button>
+        <button class="btn" id="btnEditor">Editor öffnen</button>
+      </div>
+      <div class="muted">v16.0.3</div>
     </div>
   </div>
 
-  <!-- Log-Dock -->
-  <div class="dock">
-    <div class="chip" id="logCount">Log 0</div>
-    <div class="bar">
+  <!-- Log / Debug unten -->
+  <div class="logbar">
+    <div class="log-controls">
+      <span class="badge" id="logCount">Log 0</span>
       <button class="btn" id="btnCopyLog">Log kopieren</button>
       <button class="btn" id="btnClearLog">Log leeren</button>
       <button class="btn" id="btnClearCache">Cache leeren</button>
     </div>
-    <div class="logpanel">
-      <pre id="logOut"></pre>
-    </div>
+    <pre class="log-panel" id="logPanel" aria-live="polite"></pre>
   </div>
 
-  <!-- BootUI: kleines Logging- und Dialog-Helferlein -->
+  <!-- kleiner Alert-Dialog -->
+  <dialog id="alertDlg">
+    <div class="dlg-body" id="alertText">Hinweis</div>
+    <div class="dlg-actions">
+      <button class="btn primary" id="alertClose">Schließen</button>
+    </div>
+  </dialog>
+
+  <!-- ******************************************************************* -->
+  <!--  Boot-Script (Index-Logik)                                          -->
+  <!-- ******************************************************************* -->
   <script>
-  ;(function(){
-    const out = document.getElementById('logOut');
-    const cnt = document.getElementById('logCount');
-    const lines = [];
+  (function(){
+    'use strict';
 
-    function stamp(){ return new Date().toTimeString().slice(0,8) }
-
-    function write(kind, msg){
-      const tag = kind==='ok' ? 'OK' : kind==='warn' ? 'WARN' : kind==='err' ? 'ERR' : 'game';
-      const line = `[${stamp()}] (${tag}) ${msg}`;
-      lines.push(line);
-      out.textContent = lines.join("\n");
-      cnt.textContent = `Log ${lines.length}`;
+    /* ------------------------------*
+     * 1) Kleines Log-Framework
+     * ------------------------------*/
+    const logPanel = document.getElementById('logPanel');
+    const logCountBadge = document.getElementById('logCount');
+    let logCount = 0;
+    const stamp = () => {
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
+    };
+    function append(kind, msg){
+      logCount++; logCountBadge.textContent = `Log ${logCount}`;
+      const cls = kind==='ERR' ? 'err' : kind==='WARN' ? 'warn' : 'ok';
+      logPanel.insertAdjacentHTML('beforeend', `${stamp()} <span class="${cls}">(${kind.toLowerCase()})</span> ${msg}\n`);
+      logPanel.scrollTop = logPanel.scrollHeight;
     }
-
-    const BootUI = {
-      ver: '16.0.3',
-      log: (m)      => write('game', m),
-      logOK: (m)    => write('ok',   m),
-      logWarn: (m)  => write('warn', m),
-      logErr: (m)   => write('err',  m),
-      copyLog(){
-        try{
-          navigator.clipboard.writeText(lines.join("\n"));
-          write('ok', 'Log in Zwischenablage');
-        }catch(e){
-          write('err', 'Clipboard fehlgeschlagen: '+ e);
-        }
-      },
-      clearLog(){ lines.length = 0; out.textContent=''; cnt.textContent='Log 0'; },
-      alert(msg){ window.alert(msg); },
-      hideBackdrop(){ document.getElementById('backdrop')?.classList.add('hidden'); },
-      showBackdrop(){ document.getElementById('backdrop')?.classList.remove('hidden'); },
+    const log = {
+      ok:   (m)=>append('OK',   m),
+      warn: (m)=>append('WARN', m),
+      err:  (m)=>append('ERR',  m)
     };
 
-    window.BootUI = BootUI;
-    BootUI.logOK('UI ready (index v'+BootUI.ver+')');
+    window.__INDEX_LOG__ = log; // optional: extern zugreifbar
 
-    // Buttons verdrahten
-    document.getElementById('btnCopyLog').addEventListener('click', BootUI.copyLog);
-    document.getElementById('btnClearLog').addEventListener('click', BootUI.clearLog);
-    document.getElementById('btnClearCache').addEventListener('click', async () => {
+    // Buttons: Kopieren / Leeren / Cache
+    document.getElementById('btnCopyLog').addEventListener('click', async ()=>{
+      try {
+        await navigator.clipboard.writeText(logPanel.textContent || '');
+        log.ok('Log in Zwischenablage');
+      } catch(e){
+        log.err('Kopieren fehlgeschlagen: ' + (e && e.message || e));
+      }
+    });
+    document.getElementById('btnClearLog').addEventListener('click', ()=>{
+      logPanel.textContent = ''; logCount=0; logCountBadge.textContent = 'Log 0';
+    });
+    document.getElementById('btnClearCache').addEventListener('click', async ()=>{
       try{
-        localStorage.clear();
-        sessionStorage.clear();
-        if ('caches' in window){ const keys = await caches.keys(); for (const k of keys) await caches.delete(k); }
-        BootUI.logOK('Cache geleert (local/session/caches)');
-      }catch(e){ BootUI.logWarn('Cache leeren: '+e); }
+        // Service Worker & Cache API sauber leeren (sofern vorhanden)
+        if ('caches' in window){
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator){
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+        localStorage.clear(); sessionStorage.clear();
+        log.ok('Cache/Storage geleert – Seite ggf. neu laden');
+      }catch(e){
+        log.warn('Cache leeren nicht vollständig möglich: ' + (e && e.message || e));
+      }
     });
-  })();
-  </script>
 
-  <!-- game.js LADEN (defer) – muss VOR dem Boot-Skript kommen, damit GameLoader verfügbar ist -->
-  <script src="./game.js?v=16.0.3" defer></script>
+    // kleiner Alert-Helfer
+    const alertDlg = document.getElementById('alertDlg');
+    const alertText = document.getElementById('alertText');
+    document.getElementById('alertClose').addEventListener('click', ()=>alertDlg.close());
+    function showAlert(msg){
+      alertText.textContent = msg;
+      alertDlg.showModal();
+    }
 
-  <!-- Boot-Skript (verdrahtet Start/Editor und prüft GameLoader-Verfügbarkeit) -->
-  <script>
-  ;(function(){
-    const $ = (id) => document.getElementById(id);
+    /* ------------------------------*
+     * 2) Lade-Überwachung für game.js
+     * ------------------------------*/
+    const VERSION = '16.0.3';
+    const mapUrlDefault = 'assets/maps/map-mini.json';
+    const btnStart = document.getElementById('btnStart');
+    const btnEditor = document.getElementById('btnEditor');
+    const subtitle = document.getElementById('subtitle');
+    document.getElementById('mapHint').textContent = `(Map: ${mapUrlDefault})`;
 
-    // Warten bis DOM & alle deferred Skripte (inkl. game.js) fertig sind
-    window.addEventListener('DOMContentLoaded', () => {
-      const canvas = $('gameCanvas');
-      const startBtn = $('btnStart');
-      const editorBtn = $('btnEditor');
+    // Status melden
+    log.ok(`UI ready (index v${VERSION})`);
 
-      function canStart(){
-        return !!(window.GameLoader && typeof window.GameLoader.start === 'function');
+    // game.js dynamisch laden (mit Cache-Buster)
+    const scriptTag = document.createElement('script');
+    scriptTag.src = `./game.js?v=${VERSION}`;
+    scriptTag.defer = true;
+    scriptTag.crossOrigin = 'anonymous';
+    scriptTag.onload = ()=> {
+      log.ok('game.js geladen');
+      checkReady();   // nach onload direkt prüfen
+    };
+    scriptTag.onerror = ()=> {
+      log.err('game.js konnte nicht geladen werden (Script-Error)');
+      showAlert('Fehler beim Laden von game.js – bitte neu laden.');
+    };
+    document.head.appendChild(scriptTag);
+
+    // Warten bis GameLoader.start verfügbar ist
+    let readyTick = 0, readyTimer = null, readyFound = false;
+    function checkReady(){
+      readyFound = !!(window.GameLoader && typeof window.GameLoader.start === 'function');
+      if (readyFound){
+        btnStart.disabled = false;
+        subtitle.innerHTML = `Neues Spiel starten? <span style="opacity:.8">(Map: ${mapUrlDefault})</span>`;
+        if (readyTimer){ clearInterval(readyTimer); readyTimer=null; }
+        return;
+      }
+      // max. 5s passiv warten, danach WARN ausgeben
+      if (!readyTimer){
+        readyTimer = setInterval(()=>{
+          readyTick++;
+          if (window.GameLoader && typeof window.GameLoader.start === 'function'){
+            log.ok('GameLoader.start gefunden');
+            btnStart.disabled = false;
+            clearInterval(readyTimer); readyTimer = null; readyFound = true;
+          } else if (readyTick === 5){
+            log.warn('GameLoader.start nach 5s noch nicht verfügbar (Game initialisiert noch?).');
+          } else if (readyTick > 12){ // ~12s – wir geben auf
+            clearInterval(readyTimer); readyTimer=null;
+            log.err('GameLoader.start nicht gefunden – Start deaktiviert.');
+          }
+        }, 1000);
+      }
+    }
+    // Button zunächst deaktivieren bis ready
+    btnStart.disabled = true;
+    checkReady();
+
+    /* ------------------------------*
+     * 3) Start/Editor Buttons
+     * ------------------------------*/
+    btnStart.addEventListener('click', ()=>{
+      if (!(window.GameLoader && typeof window.GameLoader.start === 'function')){
+        log.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
+        showAlert('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
+        return;
+      }
+      // Boot-Dialog ausblenden
+      document.getElementById('bootCard').style.display = 'none';
+      document.getElementById('backdrop').classList.add('hidden');
+
+      // Canvas erstellen/finden
+      let canvas = document.getElementById('gameCanvas');
+      if (!canvas){
+        canvas = document.createElement('canvas');
+        canvas.id = 'gameCanvas';
+        canvas.width = Math.floor(window.innerWidth * (window.devicePixelRatio||1));
+        canvas.height = Math.floor(window.innerHeight * (window.devicePixelRatio||1));
+        canvas.style.position = 'fixed';
+        canvas.style.inset = '0';
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+        document.body.appendChild(canvas);
       }
 
-      function startGame(){
-        // Prüfen, ob GameLoader verfügbar
-        if (!canStart()){
-          BootUI.logErr('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-          BootUI.alert('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
-          return;
-        }
-        BootUI.log('GameLoader.start ./assets/maps/map-mini.json');
-        try{
-          window.GameLoader.start({
-            canvas,
-            mapUrl: './assets/maps/map-mini.json',
-            onReady: () => BootUI.log('Game ready'),
-          });
-          BootUI.hideBackdrop();
-        }catch(err){
-          BootUI.logErr('Start-Exception: ' + err);
-          BootUI.alert('Fehler beim Start: ' + err);
-        }
+      // Start aufrufen (mit Logs)
+      try{
+        log.ok(`GameLoader.start ${mapUrlDefault}`);
+        window.GameLoader.start({
+          canvas,
+          mapUrl: `./${mapUrlDefault}`,
+          onReady: ()=>log.ok('Game started')
+        });
+      }catch(e){
+        log.err('Start-Fehler: ' + (e && e.message || e));
+        showAlert('Fehler beim Start (Details im Log).');
       }
-
-      startBtn.addEventListener('click', startGame);
-      editorBtn.addEventListener('click', () => {
-        BootUI.log('Editor öffnen (Hook – später verknüpfen)');
-        BootUI.alert('Editor‑Start ist hier noch ein Platzhalter.');
-      });
-
-      // Sicherheit: Wenn game.js später init meldet, einmal den Status loggen
-      window.addEventListener('GameLoaderReady', () => BootUI.logOK('GameLoader bereit'));
-
-      // Optionaler Poll-Fallback (falls ein anderes Script GameLoader später setzt)
-      let tries = 0;
-      const iv = setInterval(() => {
-        if (canStart()){
-          BootUI.logOK('GameLoader.start gefunden');
-          clearInterval(iv);
-        }else if (++tries > 50){
-          BootUI.logWarn('GameLoader.start nach 5s nicht gefunden (Start zeigt Hinweis).');
-          clearInterval(iv);
-        }
-      }, 100);
     });
+
+    btnEditor.addEventListener('click', ()=>{
+      // Platzhalter: Hier verkabeln wir später den Level-Editor
+      log.ok('Editor öffnen (Hook – später verknüpfen)');
+      showAlert('Editor-Start ist hier noch ein Platzhalter.');
+    });
+
+    /* ------------------------------*
+     * 4) Resize: Canvas skaliert mit
+     * ------------------------------*/
+    window.addEventListener('resize', ()=>{
+      const cvs = document.getElementById('gameCanvas');
+      if (!cvs) return;
+      const dpr = window.devicePixelRatio || 1;
+      cvs.width  = Math.floor(window.innerWidth  * dpr);
+      cvs.height = Math.floor(window.innerHeight * dpr);
+      cvs.style.width = '100vw';
+      cvs.style.height = '100vh';
+    }, {passive:true});
+
   })();
   </script>
 </body>
