@@ -1,0 +1,7 @@
+assets/
+ └── buildings/
+      └── lumberjack/
+           ├── lumberjack_atlas.png        ← Sprite-Sheet (alle Frames/Upgrades)
+           ├── lumberjack_atlas.json       ← Atlas-Datei (Frames mit x,y,w,h)
+           ├── lumberjack_meta.csv         ← deine CSV (id, name, tier, role, frame)
+           └── preview/                     ← (optional: Vorschaubilder)
