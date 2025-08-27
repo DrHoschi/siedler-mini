@@ -1,107 +1,84 @@
-/*
-  Datei : assets/ui/ui-build.js
-  Build : v16.0.9
-  Zweck : Bau-Menü UI + Tool-Auswahl (Road/Bulldozer/Haus/etc.)
-  Hooks : 
-    - window.GameAPI?.setTool(toolId)
-    - window.Game?.setTool?.(toolId)
-    - document.dispatchEvent(new CustomEvent('game:tool', {detail: toolId}))
-  Log   : nutzt window.LogUI (✅⚠️❌)
-*/
+/* Datei: assets/ui/ui-build.js
+ * Version: v16.1.2
+ * Zweck:
+ *   - Bau-Menü inkl. Lumberjack-Kacheln
+ *   - Öffnen/Schließen via FAB oder Inspector
+ *   - Tools setzen -> delegiert an Game (window.GameTool.set)
+ * Hinweise:
+ *   - Buttons haben weißen BG, damit nicht-freigestellte Icons sauber aussehen.
+ *   - LUMBERJACK_FRAMES kommt aus buildings.lumberjack.js
+ */
 
 (function(){
-  const VERSION = '16.0.9';
+  const VERSION = "16.1.2";
 
-  function logOk(m){ window.LogUI?.ok(m); }
-  function logWarn(m){ window.LogUI?.warn(m); }
-  function logErr(m){ window.LogUI?.err(m); }
+  const root = document.body;
+  const bar  = document.createElement("div");
+  bar.id = "buildBar";
+  bar.innerHTML = `<div id="buildGrid" aria-label="Bau-Menü (v${VERSION})"></div>`;
+  root.appendChild(bar);
 
-  function ensureRoot(){
-    const root = document.getElementById('build-root');
-    if (!root) return null;
+  const grid = bar.querySelector("#buildGrid");
 
-    // Toggle-Button oben einblenden
-    const toggle = document.getElementById('build-toggle');
-    if (toggle){
-      toggle.style.display = 'inline-block';
-      toggle.addEventListener('click', ()=>panel.classList.toggle('hidden'));
-    }
+  // ---- Public API für Index/Inspector ----
+  window.UI = window.UI || {};
+  window.UI.toggleBuildMenu = function(state){
+    const open = (typeof state === "boolean") ? state : !bar.classList.contains("open");
+    bar.classList.toggle("open", open);
+    log(`Bau-Menü ${open ? "geöffnet" : "geschlossen"}`);
+  };
 
-    // Panel DOM
-    root.innerHTML = `
-      <div id="build-panel" class="hidden" role="dialog" aria-label="Bau-Menü" aria-modal="false">
-        <div id="build-header">
-          <div id="build-title">🏗️ Bauen (v${VERSION})</div>
-          <div id="build-spacer"></div>
-          <button id="build-close">⬇️</button>
-        </div>
-        <div id="build-grid">
-          <!-- Reihenfolge bewusst kompakt gehalten (iPad) -->
-          <button class="build-btn" data-tool="road"><span class="icon">🛣️</span>Straße</button>
-          <button class="build-btn" data-tool="path"><span class="icon">🚶</span>Weg</button>
-          <button class="build-btn" data-tool="bulldoze"><span class="icon">🪓</span>Abreißen</button>
-          <button class="build-btn" data-tool="house"><span class="icon">🏠</span>Haus</button>
-          <button class="build-btn" data-tool="factory"><span class="icon">🏭</span>Fabrik</button>
-          <button class="build-btn" data-tool="cancel"><span class="icon">⛔</span>Abbrechen</button>
-        </div>
-      </div>
+  // ---- Buttons aufbauen ----
+  function makeBtn(imgSrc, label, toolId){
+    const btn = document.createElement("button");
+    btn.className = "build-btn";
+    btn.title = label;
+    btn.innerHTML = `
+      <img loading="lazy" src="${imgSrc}" alt="${label}">
+      <small>${label}</small>
     `;
-    return root.querySelector('#build-panel');
+    btn.addEventListener("click", () => {
+      window.GameTool?.set?.(toolId);
+      log(`Tool gesetzt: ${toolId}`);
+    });
+    return btn;
   }
 
-  function callTool(toolId){
-    // 1) Bevorzugter Hook
-    if (window.GameAPI && typeof window.GameAPI.setTool === 'function'){
-      window.GameAPI.setTool(toolId);
-      return true;
+  function addLumberjackTiles(){
+    if(!window.LUMBERJACK_FRAMES){ return; }
+    // Wir nehmen die ug0-Varianten für das Menü
+    const menuFrames = window.LUMBERJACK_FRAMES.filter(f => f.role === "BuildMenu");
+    for(const f of menuFrames){
+      // Bildquelle: du hast grid.png – wir croppen nicht, sondern nutzen ganze Kachel-Preview
+      // Tipp: Wenn du Previews willst, lege assets/buildings/lumberjack/preview/ an
+      const img = `./assets/buildings/lumberjack/lumberjack_tiers_grid.png`;
+      const label = f.name.replace("lumberjack_", "").replace("_ug0","").replace("_ug1","");
+      const toolId = `lumberjack:${f.variant}`; // z.B. lumberjack:wood0
+      grid.appendChild(makeBtn(img, label, toolId));
     }
-    // 2) Alternativ alter Hook
-    if (window.Game && typeof window.Game.setTool === 'function'){
-      window.Game.setTool(toolId);
-      return true;
-    }
-    // 3) Event-Bridge
-    document.dispatchEvent(new CustomEvent('game:tool',{detail: toolId}));
-    return false; // keine Garantie, dass jemand zuhört
   }
 
-  const panel = ensureRoot();
-  if (!panel){
-    logErr('Bau-Menü konnte nicht initialisiert werden (build-root fehlt).');
-    return;
+  function addBaseTools(){
+    // Deine bestehenden Tools als Platzhalter
+    grid.appendChild(makeBtn("./assets/icons/icons_spritesheet_64.png", "Straße", "road"));
+    grid.appendChild(makeBtn("./assets/icons/icons_spritesheet_64.png", "Weg", "path"));
+    grid.appendChild(makeBtn("./assets/icons/icons_spritesheet_64.png", "Abreißen", "bulldoze"));
   }
 
-  // Buttons verdrahten
-  const closeBtn = panel.querySelector('#build-close');
-  closeBtn.addEventListener('click', ()=>panel.classList.add('hidden'));
-
-  const btns = Array.from(panel.querySelectorAll('.build-btn'));
-  let active = null;
-
-  function setActive(btn){
-    btns.forEach(b=>b.classList.toggle('active', b===btn));
-    active = btn;
+  function init(){
+    addBaseTools();
+    addLumberjackTiles();
+    log(`Bau-Menü bereit (ui-build.js v${VERSION})`);
   }
 
-  btns.forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const tool = btn.getAttribute('data-tool');
-      const ok = callTool(tool);
-      setActive(btn);
+  function log(msg){
+    if(typeof window.appendLog === "function"){ window.appendLog(`[UI] ${msg}`); }
+    else if(window.console) console.log("[UI]", msg);
+  }
 
-      if (ok){
-        logOk(`Tool gesetzt: ${tool}`);
-      }else{
-        logWarn(`Tool gewählt (${tool}), aber kein Game-Hook gefunden – nur Event 'game:tool' gesendet.`);
-      }
-      // Panel automatisch offen lassen, damit iPad-Pro Nutzer mehrfach tippen kann
-    }, {passive:true});
-  });
+  // Init nach load
+  if(document.readyState === "loading"){
+    window.addEventListener("load", init);
+  } else init();
 
-  // Sichtbarkeit nach Start automatisch öffnen (optional)
-  window.addEventListener('game:started', ()=>{
-    panel.classList.remove('hidden');
-  });
-
-  logOk(`Bau-Menü bereit (ui-build.js v${VERSION})`);
 })();
