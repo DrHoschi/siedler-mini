@@ -1,0 +1,7 @@
+id,name,tier,variant,role,frame.x,frame.y
+0,lumberjack_wood0_ug0,Tier 1 (Holz),ug0,BuildMenu,0,0
+1,lumberjack_wood0_ug1,Tier 1 (Holz),ug1,Placed,512,0
+2,lumberjack_wood1_ug0,Tier 2 (Teil-Stein),ug0,BuildMenu,0,512
+3,lumberjack_wood1_ug1,Tier 2 (Teil-Stein),ug1,Placed,512,512
+4,lumberjack_wood2_ug0,Tier 3 (Stein),ug0,BuildMenu,0,1024
+5,lumberjack_wood2_ug1,Tier 3 (Stein),ug1,Placed,512,1024
