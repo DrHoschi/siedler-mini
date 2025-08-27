@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-26T21:18:58.797Z",
+  "createdAt": "2025-08-27T18:27:18.119Z",
   "root": ".",
-  "count": 223,
+  "count": 238,
   "entries": [
     {
       "type": "dir",
@@ -24,6 +24,34 @@
     {
       "type": "dir",
       "path": "assets/"
+    },
+    {
+      "type": "dir",
+      "path": "assets/buildings/"
+    },
+    {
+      "type": "dir",
+      "path": "assets/buildings/lumberjack/"
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/lumberjack/lumberjack_tiers_grid_legend.csv",
+      "size": 393
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/lumberjack/lumberjack_tiers_grid.json",
+      "size": 2717
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/lumberjack/lumberjack_tiers_grid.png",
+      "size": 2851282
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/lumberjack/Readme",
+      "size": 407
     },
     {
       "type": "dir",
@@ -696,6 +724,20 @@
       "size": 1971497
     },
     {
+      "type": "dir",
+      "path": "assets/ui/"
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/ui-build.css",
+      "size": 1486
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/ui-build.js",
+      "size": 3682
+    },
+    {
       "type": "file",
       "path": "assets/depot.png",
       "size": 2326119
@@ -811,6 +853,11 @@
     },
     {
       "type": "file",
+      "path": "core/path-overlay.js",
+      "size": 9068
+    },
+    {
+      "type": "file",
       "path": "core/Readme",
       "size": 13
     },
@@ -884,6 +931,20 @@
       "type": "file",
       "path": "maps/start-map.json",
       "size": 5742
+    },
+    {
+      "type": "dir",
+      "path": "src/"
+    },
+    {
+      "type": "file",
+      "path": "src/assets.buildings.js",
+      "size": 2501
+    },
+    {
+      "type": "file",
+      "path": "src/ui-build.js",
+      "size": 2465
     },
     {
       "type": "dir",
@@ -990,6 +1051,11 @@
     },
     {
       "type": "file",
+      "path": "buildings.lumberjack.js",
+      "size": 1398
+    },
+    {
+      "type": "file",
       "path": "debug.js",
       "size": 10213
     },
@@ -1001,17 +1067,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2821
+      "size": 2836
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 21464
+      "size": 21877
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 8129
+      "size": 8256
     },
     {
       "type": "file",
@@ -1021,12 +1087,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 11248
+      "size": 4102
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 9619
+      "size": 8726
     },
     {
       "type": "file",
@@ -1082,6 +1148,11 @@
       "type": "file",
       "path": "textures.js",
       "size": 3859
+    },
+    {
+      "type": "file",
+      "path": "ui-build.js",
+      "size": 1739
     },
     {
       "type": "file",

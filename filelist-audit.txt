@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 198
+Gesamt Dateien: 209
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -47,6 +47,7 @@ Gesamt Dateien: 198
  - assets/Logo.PNG
 
 ## Dateien ohne Extension
+ - assets/buildings/lumberjack/Readme
  - assets/characters/Readme
  - assets/tex/building/stone/readme
  - assets/tex/building/wood/readme
@@ -61,6 +62,7 @@ Gesamt Dateien: 198
  - app-v11.1r6.js
  - boot.js
  - buildingData.js
+ - buildings.lumberjack.js
  - debug.js
  - editor.html
  - filelist-audit.txt
@@ -80,10 +82,12 @@ Gesamt Dateien: 198
  - styles.css
  - sw.js
  - textures.js
+ - ui-build.js
  - unitLogic.js
  - world.js
 
 ## Mögliche Tippfehler/Readme ohne .md
+ - assets/buildings/lumberjack/Readme
  - assets/characters/Readme
  - assets/tex/building/stone/readme
  - assets/tex/building/wood/readme
