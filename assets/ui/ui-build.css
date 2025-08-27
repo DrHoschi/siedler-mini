@@ -1,46 +1,28 @@
-/* 
-  Datei : assets/ui/ui-build.css
-  Build : v16.0.9
-  Zweck : Touch-freundliches Bau-Menü (iPad-tauglich)
+/* Datei: assets/ui/ui-build.css
+   Version: v16.1.2
+   Zweck: Build-Menü & simple UI-Kacheln
 */
 
-#build-root { pointer-events: none; }
+:root{
+  --btn-bg: #102d1c;
+  --btn-fg: #dff7ea;
+}
 
-#build-panel {
+#buildBar {
   position: fixed; left: 0; right: 0; bottom: 0;
-  background: rgba(10, 24, 18, .92);
-  border-top: 1px solid #1c3a2b;
-  padding: 10px env(safe-area-inset-right) calc(10px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
-  box-shadow: 0 -12px 40px rgba(0,0,0,.35);
-  pointer-events: auto;
-  transform: translateY(0);
-  transition: transform .2s ease;
+  background: rgba(10,20,15,.85);
+  border-top-left-radius: 1rem; border-top-right-radius: 1rem;
+  padding: .6rem .8rem; display: none; z-index: 55;
 }
+#buildBar.open { display:block; }
 
-#build-panel.hidden { transform: translateY(110%); }
-
-#build-grid {
+#buildGrid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(56px, 1fr));
-  gap: 8px;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: .6rem; overflow-x: auto; padding-bottom: .25rem;
 }
 
-@media (max-width: 680px){
-  #build-grid { grid-template-columns: repeat(4, minmax(56px, 1fr)); }
-}
+.build-btn { cursor: pointer; }
 
-.build-btn {
-  appearance:none; border:1px solid #204634; background:#1b3a2b; color:#eaf6ef;
-  border-radius:12px; padding:12px 10px; text-align:center; font-weight:700;
-  font-size:14px; line-height:1.1; cursor:pointer;
-}
 .build-btn:active { transform: translateY(1px); }
-.build-btn .icon { display:block; font-size:22px; margin-bottom:6px; }
-.build-btn.active { background:#285943; border-color:#2d7a59; }
-
-#build-header {
-  display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:0 2px;
-}
-#build-title { font-weight:800; color:#9bddc0 }
-#build-spacer { flex:1 }
-#build-close { background:transparent; border:1px solid #2a4b39; color:#eaf6ef; border-radius:10px; padding:8px 10px; }
