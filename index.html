@@ -2,300 +2,236 @@
 <html lang="de">
 <head>
   <!--
-    Siedler-Mini – UI Shell
-    Datei: index.html
-    Version: v16.1.0
-    Zweck:
-      - Fixed Top-Toolbar (Start, Editor, Inspector, Cache, Log)
-      - Log-Panel: ein/ausblendbar (über Button "Log" oder Taste L)
-      - Floating Action Button (FAB) "Bauen" zum Öffnen des Bau-Menüs
-      - Bottom-Sheet für Bau-Menü (öffnet/schließt unabhängig vom Log)
-      - Mobile/iPad-taugliches Layout (keine Überlappung des Logs)
-      - Cache-Busting über ?v=16.1.0 an Skript-URLs
-    Tastenkürzel:
-      L  → Log an/aus
-      B  → Bau-Menü an/aus
-      I  → Inspector toggeln (wenn verfügbar)
-      E  → Editor öffnen (wenn verfügbar)
-    Abhängigkeiten:
-      - game.js (stellt window.GameLoader.start bereit)
-      - ui-build.js (steuert Bau-Menü; diese Version: v16.1.0)
+    Projekt: Siedler-Mini
+    Datei:   index.html
+    Version: v16.1.1
+    Zweck:   UI-Shell, Log-Overlay, Build-FAB, Start-Flow & Cache-Tools
+    Hinweise:
+      - Start ist erst aktiv, wenn game.js "bereit" meldet.
+      - Alle Logs zeigen die jeweilige Dateiversion mit an.
+      - Cache-Busting via ?v=VERSION an allen Skript- & Asset-URLs.
   -->
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f2317" />
-  <title>Siedler-Mini v16.1.0</title>
-
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a1a0f" />
+  <title>Siedler-Mini v16.1.1</title>
   <style>
-    :root{
-      --bg:#0c1a14; --panel:#11261a; --panel2:#0f2118; --text:#d6ffe7; --muted:#8bc3a6;
-      --ok:#00d37f; --warn:#ffd24d; --err:#ff5a5a; --accent:#2fe39f; --fab:#23c389;
+    :root {
+      --bg:#0f2618; --bg2:#153121; --panel:#0d1f15; --txt:#e6ffee;
+      --ok:#32d26a; --warn:#f8d059; --err:#ff6b6b; --muted:#9ec3ae;
       --shadow: 0 10px 30px rgba(0,0,0,.35);
-      --radius:16px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
-      --safe-b: env(safe-area-inset-bottom);
-      --safe-t: env(safe-area-inset-top);
+      --radius: 14px;
+      --gap: 12px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     }
-    html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);}
+    html,body{height:100%;margin:0;background:radial-gradient(1200px 600px at 50% -200px,#0b1d13 30%,#0a1a0f), var(--bg); color:var(--txt);}
     *{box-sizing:border-box}
-    /* Canvas Fläche */
-    #game-wrap{position:fixed; inset:64px 0 calc(64px + var(--safe-b)) 0;}
-    #game{width:100%; height:100%; display:block; background:#254b31;}
-    /* Top-Toolbar */
-    .toolbar{
-      position:fixed; top:0; left:0; right:0; height:64px;
-      padding: max(8px, var(--safe-t)) 12px 8px 12px;
-      display:flex; align-items:center; gap:8px; background:linear-gradient(180deg,#0d2218, #0b1d14 70%);
-      border-bottom:1px solid #0f2b1d; box-shadow: var(--shadow); z-index:50;
-    }
-    .brand{font-weight:800; letter-spacing:.3px; opacity:.9}
-    .pill{
-      background:var(--panel); border:1px solid #173524; border-radius:12px; padding:8px 12px;
-      display:inline-flex; align-items:center; gap:8px; cursor:pointer; user-select:none;
-    }
-    .pill:active{transform:translateY(1px)}
-    .ghost{background:transparent; border:1px dashed #1c3a28}
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+    .wrap{min-height:100%; display:flex; flex-direction:column}
+    header{position:fixed; inset:0 0 auto 0; padding:16px; pointer-events:none}
+    .hud{display:flex; gap:10px; align-items:center; pointer-events:auto}
+    .chip{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08); padding:8px 12px; border-radius:999px; font-weight:600; box-shadow:var(--shadow)}
+    .btn{background:linear-gradient(#244e38,#1b3c2b); border:1px solid #204531; color:var(--txt); padding:10px 14px; border-radius:999px; font-weight:700; cursor:pointer; box-shadow:var(--shadow)}
+    .btn[disabled]{opacity:.5; cursor:not-allowed}
+    .grid{flex:1; display:flex; align-items:center; justify-content:center; padding:80px 16px 120px}
+    canvas#game{display:block; width:100%; max-width:min(1400px, 96vw); aspect-ratio: 16 / 10; background:#244e38; border-radius:var(--radius); box-shadow:var(--shadow)}
+    /* Log */
+    #logPanel{position:fixed; right:16px; bottom:16px; width:min(560px, 92vw); max-height:min(52vh, 520px); overflow:auto; background:rgba(6,14,10,.85); border:1px solid rgba(255,255,255,.08); padding:12px; border-radius:16px; backdrop-filter:blur(6px); box-shadow:var(--shadow)}
+    #logPanel.hidden{display:none}
+    .logline{font-family:var(--mono); font-size:13px; line-height:1.45; white-space:pre-wrap}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)} .muted{color:var(--muted)}
+    .toolbar{display:flex; gap:8px; margin:8px 0 6px}
+    .tbtn{background:#183626; border:1px solid #204a34; color:var(--txt); padding:6px 10px; border-radius:10px; cursor:pointer}
+    /* Floating Build-Button */
+    #fabBuild{position:fixed; right:16px; bottom:calc(16px + 0px); width:56px; height:56px; border-radius:50%; display:grid; place-items:center; font-size:22px}
+    /* Bottom Build-Bar */
+    #buildBar{position:fixed; left:0; right:0; bottom:0; background:linear-gradient(#0d2016,#0a1a10); border-top:1px solid rgba(255,255,255,.07); padding:10px 10px 14px; display:none; gap:10px; align-items:center; box-shadow:var(--shadow)}
+    #buildBar.open{display:flex; flex-wrap:wrap; justify-content:center}
+    .tool{min-width:120px; display:flex; align-items:center; gap:8px; justify-content:center; padding:10px 12px; border-radius:12px; background:#173c29; border:1px solid #205238; cursor:pointer}
+    .tool.active{outline:2px solid #58e29a}
     .spacer{flex:1}
-
-    /* Log Panel */
-    #log-wrap{
-      position:fixed; right:12px; bottom: calc(12px + var(--safe-b));
-      width:min(700px, 92vw); max-height:55vh; z-index:40;
-      background:var(--panel2); border:1px solid #173524; border-radius:16px;
-      padding:12px; box-shadow: var(--shadow); display:flex; flex-direction:column; gap:8px;
-      transform-origin: right bottom;
-    }
-    #log-wrap.hidden{display:none}
-    #log-title{display:flex; align-items:center; gap:8px}
-    #log{
-      font-family:var(--mono); font-size:14px; line-height:1.45; color:#b9f0ce;
-      background:#0b1d14; padding:12px; border-radius:12px; overflow:auto;
-      border:1px solid #173524;
-      white-space:pre-wrap; word-break:break-word;
-    }
-    .row{display:flex; gap:8px; flex-wrap:wrap}
-    .btn{background:#153b28; border:1px solid #1b4a33; color:#d6ffe7; border-radius:12px; padding:8px 12px; cursor:pointer}
-    .btn:active{transform:translateY(1px)}
-
-    /* FAB Bauen */
-    #fab-build{
-      position:fixed; right:16px; bottom: calc(16px + var(--safe-b));
-      width:56px; height:56px; border-radius:50%;
-      background: var(--fab); color:#052215; border:none; box-shadow: var(--shadow);
-      display:grid; place-items:center; font-size:26px; z-index:45; cursor:pointer;
-    }
-
-    /* Bottom Sheet (Bau-Menü) */
-    #sheet{
-      position:fixed; left:0; right:0; bottom:0; z-index:44;
-      background:var(--panel2); border-top:1px solid #173524; box-shadow: var(--shadow);
-      transform: translateY(105%); transition: transform .25s ease;
-      padding:12px 12px calc(12px + var(--safe-b));
-    }
-    #sheet.open{transform: translateY(0)}
-    #sheet .tools{display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap:12px}
-    #sheet .tool{
-      display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px;
-      background:#123a27; border:1px solid #1b4a33; border-radius:12px; text-align:center; cursor:pointer;
-    }
-    #sheet .tool:active{transform:translateY(1px)}
-    #sheet .title{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
-    #version{position:fixed; left:12px; bottom: calc(12px + var(--safe-b)); color:var(--muted); font-size:12px; opacity:.7}
-    @media (max-width:700px){
-      #log-wrap{width:92vw; left:4vw}
-      #sheet .tools{grid-template-columns: repeat(3, minmax(0,1fr))}
-    }
+    /* Status dot */
+    .dot{width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; box-shadow:0 0 0 2px rgba(0,0,0,.35) inset}
+    .dot.ok{background:#39d27c} .dot.off{background:#777}
+    /* Mobile helpers */
+    @media (max-width: 640px){ .tool{min-width:94px; font-size:14px} }
   </style>
 </head>
 <body>
-
-  <!-- Top-Toolbar -->
-  <div class="toolbar">
-    <div class="brand">Siedler-Mini</div>
-    <div class="pill" id="btn-start">▶️ Start</div>
-    <div class="pill ghost" id="btn-editor">🛠️ Editor</div>
-    <div class="pill ghost" id="btn-inspector">🔎 Inspector</div>
-    <div class="pill ghost" id="btn-cache">🧹 Cache</div>
-    <div class="pill" id="btn-log">🧾 Log</div>
-    <div class="spacer"></div>
-    <div class="muted">UI v16.1.0</div>
-  </div>
-
-  <!-- Spielfläche -->
-  <div id="game-wrap"><canvas id="game"></canvas></div>
-
-  <!-- Log Panel -->
-  <div id="log-wrap" class="">
-    <div id="log-title"><strong>Log</strong>
-      <div class="spacer"></div>
-      <button class="btn" id="btn-log-copy">Log kopieren</button>
-      <button class="btn" id="btn-log-clear">Log leeren</button>
-      <button class="btn" id="btn-log-hide">Schließen</button>
-    </div>
-    <div id="log"></div>
-  </div>
-
-  <!-- Floating Build Button -->
-  <button id="fab-build" title="Bauen (B)">
-    🧱
-  </button>
-
-  <!-- Bottom Sheet: Bau-Menü -->
-  <div id="sheet" aria-hidden="true">
-    <div class="title">
-      <strong>🧱 Bauen</strong>
-      <div>
-        <button class="btn" id="btn-sheet-close">Schließen</button>
+  <div class="wrap">
+    <header>
+      <div class="hud">
+        <span id="statusChip" class="chip"><span class="dot off" id="dot"></span>CityBuilder <strong id="ver">v16.1.1</strong></span>
+        <button id="btnStart" class="btn" disabled>Start</button>
+        <button id="btnInspector" class="btn">Inspector</button>
+        <button id="btnEditor" class="btn">Editor</button>
+        <button id="btnLog" class="btn">Log</button>
+        <button id="btnCache" class="btn">Cache</button>
       </div>
+    </header>
+
+    <div class="grid">
+      <canvas id="game" width="1280" height="800" aria-label="Game Canvas"></canvas>
     </div>
-    <div class="tools" id="tools">
-      <!-- Buttons werden von ui-build.js gefüllt -->
+
+    <!-- Log Panel -->
+    <div id="logPanel" class="hidden" aria-live="polite">
+      <div class="toolbar">
+        <button class="tbtn" id="btnCopy">Log kopieren</button>
+        <button class="tbtn" id="btnClear">Log leeren</button>
+        <div class="spacer"></div>
+        <span class="muted" id="logMeta"></span>
+      </div>
+      <div id="log"></div>
+    </div>
+
+    <!-- Floating Build Action Button -->
+    <button id="fabBuild" class="btn" title="Bauen">🛠️</button>
+
+    <!-- Build Bar -->
+    <div id="buildBar" role="group" aria-label="Bauen">
+      <button class="tool" data-tool="road">🛣️ Straße</button>
+      <button class="tool" data-tool="path">🚶 Weg</button>
+      <button class="tool" data-tool="bulldoze">🧹 Abreißen</button>
+      <button class="tool" data-tool="house">🏠 Haus</button>
+      <button class="tool" data-tool="factory">🏭 Fabrik</button>
+      <div class="spacer"></div>
+      <button class="tool" data-tool="cancel">⛔ Abbrechen</button>
     </div>
   </div>
 
-  <div id="version">v16.1.0</div>
-
-  <!-- Hauptscripts (mit Cache-Busting) -->
-  <script src="./game.js?v=16.1.0"></script>
-  <script src="./ui-build.js?v=16.1.0"></script>
+  <!-- UI-Skripte (mit Cache-Busting) -->
   <script>
-  // ------------------------------------------------------------
-  // UI Kernel (v16.1.0)
-  // ------------------------------------------------------------
-  (function(){
-    const UI_VERSION = '16.1.0';
-    const $ = sel => document.querySelector(sel);
-    const logEl = $('#log');
-    const logWrap = $('#log-wrap');
-    const sheet = $('#sheet');
-    const gameCanvas = $('#game');
-    const startBtn = $('#btn-start');
-
-    const ICON = { ok:'✅', warn:'⚠️', err:'❌' };
-
-    function stamp(){ const d=new Date();
-      return `[${d.toTimeString().slice(0,8)}]`; }
-
-    function write(level, msg){
-      const icon = ICON[level] || 'ℹ️';
-      logEl.textContent += `${stamp()} ${icon} (${level}) ${msg}\n`;
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    // Public Logger
-    window.UILog = {
-      ok:(m)=>write('ok',m),
-      warn:(m)=>write('warn',m),
-      err:(m)=>write('err',m),
-      clear:()=>{ logEl.textContent=''; },
-      copy:()=>{ navigator.clipboard.writeText(logEl.textContent||''); write('ok','Log in Zwischenablage'); }
+    // ---- Globale Versionen (werden im Log genutzt)
+    window.__VERSIONS__ = {
+      index: "v16.1.1",
+      game:  "v16.1.1",
+      ui:    "v16.1.1"
     };
+  </script>
+  <script src="./ui-build.js?v=16.1.1" defer></script>
+  <script src="./game.js?v=16.1.1" defer></script>
+  <script>
+    // ------------------------------------------------------------
+    // index bootstrap v16.1.1
+    // ------------------------------------------------------------
+    (function(){
+      const $ = sel => document.querySelector(sel);
+      const logEl = $("#log");
+      const logMeta = $("#logMeta");
+      const dot = $("#dot");
+      const btnStart = $("#btnStart");
+      const btnLog = $("#btnLog");
+      const btnCopy = $("#btnCopy");
+      const btnClear = $("#btnClear");
+      const btnCache = $("#btnCache");
+      const btnEditor = $("#btnEditor");
+      const btnInspector = $("#btnInspector");
+      const panel = $("#logPanel");
+      const buildBar = $("#buildBar");
+      const fabBuild = $("#fabBuild");
+      const ver = window.__VERSIONS__;
 
-    // Buttons
-    $('#btn-log').addEventListener('click', toggleLog);
-    $('#btn-log-hide').addEventListener('click', toggleLog);
-    $('#btn-log-clear').addEventListener('click', ()=>UILog.clear());
-    $('#btn-log-copy').addEventListener('click', ()=>UILog.copy());
-    $('#btn-cache').addEventListener('click', clearCache);
-    $('#btn-editor').addEventListener('click', ()=> {
-      if (window.GameEditor?.open) { window.GameEditor.open(); UILog.ok('Editor geöffnet'); }
-      else UILog.warn('Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.');
-    });
-    $('#btn-inspector').addEventListener('click', ()=> {
-      if (window.GameInspector?.toggle) { window.GameInspector.toggle(); UILog.ok('Inspector: toggle'); }
-      else UILog.warn('Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
-    });
+      const now = ()=> new Date().toTimeString().slice(0,8);
+      const line = (cls, icon, msg) => {
+        const p = document.createElement("div");
+        p.className = `logline ${cls}`;
+        p.textContent = `[${now()}] ${icon} ${msg}`;
+        logEl.appendChild(p);
+        panel.scrollTop = panel.scrollHeight;
+      };
+      const ok  = m=>line("ok","✅ (ok) ",m);
+      const warn= m=>line("warn","⚠️ (warn) ",m);
+      const err = m=>line("err","❌ (err) ",m);
+      const muted= m=>line("muted","ℹ️ ",m);
 
-    // Start-Handler: wählt standardmäßig map-mini.json
-    startBtn.addEventListener('click', ()=> startGame('./assets/maps/map-mini.json'));
+      function setReady(on){
+        btnStart.disabled = !on;
+        dot.classList.toggle("ok", !!on);
+        dot.classList.toggle("off", !on);
+      }
 
-    function toggleLog(){
-      logWrap.classList.toggle('hidden');
-    }
+      function copyLog(){
+        const txt = [...logEl.querySelectorAll(".logline")].map(n=>n.textContent).join("\n");
+        navigator.clipboard.writeText(txt).then(()=>ok("Log in Zwischenablage"));
+      }
 
-    // FAB und Sheet
-    $('#fab-build').addEventListener('click', toggleSheet);
-    $('#btn-sheet-close').addEventListener('click', toggleSheet);
-    function toggleSheet(){
-      const open = sheet.classList.toggle('open');
-      sheet.setAttribute('aria-hidden', String(!open));
-      if(open) UILog.ok('Bau-Menü geöffnet'); else UILog.ok('Bau-Menü geschlossen');
-      // Damit der Canvas bei offener Sheet nicht überlagert wirkt, Höhe wird automatisch von CSS geregelt.
-    }
+      function clearAllCaches(){
+        // Local/session storage
+        try { localStorage.clear(); sessionStorage.clear(); } catch(e){}
+        // Cache Storage (Service Worker Caches)
+        if (window.caches) caches.keys().then(keys=>Promise.all(keys.map(k=>caches.delete(k))));
+        ok("Cache/Storage geleert – Seite ggf. neu laden");
+      }
 
-    // Canvas: grobe Info
-    function reportCanvas(){
-      const dpr = Math.round(window.devicePixelRatio||1);
-      UILog.ok(`Canvas ${gameCanvas.clientWidth}x${gameCanvas.clientHeight} dpr:${dpr}`);
-    }
+      // Panel toggle
+      $("#btnLog").addEventListener("click", ()=> panel.classList.toggle("hidden"));
+      btnCopy.addEventListener("click", copyLog);
+      btnClear.addEventListener("click", ()=>{ logEl.innerHTML=""; });
+      btnCache.addEventListener("click", clearAllCaches);
 
-    // Cache & Storage löschen (sicher)
-    async function clearCache(){
-      try{
-        // Local/session Storage
-        localStorage.clear(); sessionStorage.clear();
-        // Cache Storage
-        if (window.caches && caches.keys) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map(k=>caches.delete(k)));
+      // Build bar toggle
+      fabBuild.addEventListener("click", ()=>{
+        buildBar.classList.toggle("open");
+        if (buildBar.classList.contains("open")) ok("Bau-Menü geöffnet");
+        else ok("Bau-Menü geschlossen");
+      });
+
+      // Tools
+      buildBar.addEventListener("click",(e)=>{
+        const btn = e.target.closest(".tool");
+        if(!btn) return;
+        buildBar.querySelectorAll(".tool").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        const tool = btn.dataset.tool;
+        ok(`Tool gesetzt: ${tool}`);
+        if (window.UI && window.UI.setTool) window.UI.setTool(tool);
+      });
+
+      // Editor / Inspector Hooks – funktionieren, sobald game.js sie anbietet
+      btnEditor.addEventListener("click", ()=>{
+        if (window.GameEditor?.open) { window.GameEditor.open(); ok("Editor geöffnet"); }
+        else warn("(Dummy) Editor.open() – echtes Modul noch nicht eingebunden.");
+      });
+      btnInspector.addEventListener("click", ()=>{
+        if (window.GameInspector?.toggle) { const st = window.GameInspector.toggle(); ok(`Inspector: ${st?'an':'aus'}`); }
+        else warn("(Dummy) Inspector.toggle() – echtes Modul noch nicht eingebunden.");
+      });
+
+      // Start-Button Logik
+      async function waitFor(fn, ms=7000, step=50){
+        const t0 = performance.now();
+        return new Promise(res=>{
+          const id = setInterval(()=>{
+            if (fn()){ clearInterval(id); res(true); }
+            else if (performance.now()-t0>ms){ clearInterval(id); res(false); }
+          }, step);
+        });
+      }
+      btnStart.addEventListener("click", async ()=>{
+        const map = "./assets/maps/map-mini.json";
+        ok(`Start gedrückt → ${map}`);
+        const ready = await waitFor(()=>window.GameLoader && typeof window.GameLoader.start==="function", 7000);
+        if(!ready){ err("GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?"); return; }
+        ok(`GameLoader.start ${map}`);
+        try{
+          await window.GameLoader.start(map);
+        }catch(e){
+          console.error(e);
+          err("Start fehlgeschlagen: Unbekannter Fehler");
         }
-        // ServiceWorker (falls irgendwann vorhanden)
-        if (navigator.serviceWorker?.getRegistrations){
-          const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map(r=>r.unregister()));
-        }
-        UILog.ok('Cache/Storage geleert – Seite ggf. neu laden');
-      }catch(e){
-        UILog.err('Cache löschen fehlgeschlagen: '+(e?.message||e));
-      }
-    }
+      });
 
-    // Spiel starten
-    async function startGame(mapPath){
-      UILog.ok(`Start gedrückt → ${mapPath}`);
-      if (!window.GameLoader?.start){
-        UILog.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-        return;
-      }
-      try{
-        UILog.ok(`GameLoader.start ${mapPath}`);
-        const res = await window.GameLoader.start(mapPath, { canvas: gameCanvas });
-        if (res?.ok){
-          // Optional: Map-Infos aus res loggen, falls geliefert
-          if (res.mapSize) UILog.ok(`Map OK size ${res.mapSize.w}x${res.mapSize.h} tile ${res.mapSize.tile}`);
-          UILog.ok('Game started');
-        } else {
-          UILog.err('Start fehlgeschlagen: '+ (res?.error || 'Unbekannter Fehler'));
-        }
-      }catch(err){
-        UILog.err('Start-Exception: '+(err?.message||err));
-      }
-      reportCanvas();
-    }
+      // Boot-Meldungen
+      ok(`UI ready (index ${ver.index})`);
+      logMeta.textContent = `index ${ver.index} | ui-build ${ver.ui} | game ${ver.game}`;
 
-    // Erstinitialisierung
-    window.addEventListener('load', ()=>{
-      UILog.ok(`UI ready (index v${UI_VERSION})`);
-      if (window.GameInfo?.version) {
-        UILog.ok(`game.js initialisiert (Index meldet v${window.GameInfo.version})`);
-      }
-      reportCanvas();
-    });
-
-    // Shortcuts (iPad externe Tastatur)
-    window.addEventListener('keydown', (e)=>{
-      if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;
-      if (e.key==='l' || e.key==='L') toggleLog();
-      if (e.key==='b' || e.key==='B') toggleSheet();
-      if (e.key==='i' || e.key==='I') $('#btn-inspector').click();
-      if (e.key==='e' || e.key==='E') $('#btn-editor').click();
-    });
-
-    // Expose für game.js (optionale Nutzung)
-    window.UI = { version:UI_VERSION, startGame, toggleLog, toggleSheet, log:UILog };
-  })();
+      // Auf game.js warten -> Start freigeben
+      (async ()=>{
+        const ready = await waitFor(()=>window.GameReady === true, 7000);
+        if(ready){ ok(`game.js initialisiert (Index meldet ${ver.game})`); setReady(true); }
+        else { warn("GameLoader.start nach 5s noch nicht verfügbar (Game initialisiert noch?)."); }
+      })();
+    })();
   </script>
 </body>
 </html>
