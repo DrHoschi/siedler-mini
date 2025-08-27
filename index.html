@@ -2,260 +2,181 @@
 <html lang="de">
 <head>
   <!--
-    Siedler-Mini – UI Shell
+    Projekt: Siedler-Mini
     Datei: index.html
-    Version: v16.0.10
-    Zweck:
-      - Start-UI, Log-Panel, Cache-Button, Editor/Inspector Hooks
-      - Lädt game.js und ui-build.js (gleiche Version)
+    Version: v16.1.0
+    Zweck: Start-UI, Log, Build-HUD & Loader
     Hinweise:
-      - Bitte bei jedem Patch die vX.Y.Z in *dieser* Datei, in game.js und ui-build.js anpassen.
-      - Log-Icons: ✅ ok · ⚠️ warn · ❌ err · 🔷 info
+    - Buttons oben rechts: Log, Cache, Inspector, Editor, Bauen
+    - Ressourcen-HUD & Free-Build unten
+    - game.js und ui-build.js Versionen werden im Log ausgewiesen
   -->
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler-Mini v16.0.10</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Siedler-Mini</title>
   <style>
-    :root {
-      --bg: #0f1b14;
-      --panel: #12251a;
-      --panel2:#0e1f17;
-      --muted:#7aa68e;
-      --ok:#20d078;
-      --warn:#ffd34d;
-      --err:#ff5c6c;
-      --ink:#cfe9dc;
-      --ink2:#a3c8b6;
-      --btn:#1c3c2b;
-      --btn2:#12251a;
-      --border: #234735;
-      --accent:#48d597;
-      --ghost-ok: rgba(64,255,128,0.35);
-      --ghost-bad: rgba(255,64,64,0.35);
+    :root{
+      --bg:#0f2018; --panel:#10261d; --panel-2:#0b1a14; --txt:#d8ffe4; --mut:#9bd1ae;
+      --ok:#34d399; --warn:#f59e0b; --err:#ef4444; --badge:#1f3b2e; --accent:#1b7d53;
     }
-    * { box-sizing: border-box; }
-    html,body { height:100%; margin:0; background:#274e37; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; color: var(--ink); }
-
-    /* Canvas Layer */
-    #game-root { position: fixed; inset: 0; }
-    #game-canvas { display:block; width:100%; height:100%; background:#2e5b3f; }
-
-    /* Top bar minimal (build version + quick actions) */
-    #topbar {
-      position: fixed; top: 0; left: 0; right: 0; height: 36px;
-      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-      color: var(--ink2); background: linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,0));
-      pointer-events: none;
-    }
-    #badge { pointer-events:auto; background: var(--panel2); border:1px solid var(--border);
-      border-radius: 10px; padding: 2px 8px; font-size: 12px; color: var(--muted); }
-    .chip { pointer-events:auto; background: var(--panel2); border:1px solid var(--border);
-      border-radius: 10px; padding: 2px 8px; font-size: 12px; color: var(--ink2); cursor: pointer; }
-    .chip:hover { filter: brightness(1.1); }
-
-    /* Start Card */
-    #start-card {
-      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: min(640px, 94vw); background: var(--panel); border:1px solid var(--border);
-      border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.45);
-      padding: 18px; display: grid; gap: 16px;
-    }
-    #start-card h1 { margin: 0; font-size: clamp(20px, 3.6vw, 34px); }
-    #actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    .btn {
-      background: var(--btn); border: 1px solid var(--border); color: #e7fff2;
-      padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 600;
-    }
-    .btn:hover { filter: brightness(1.1); }
-    .btn.primary { background: #1f6645; border-color:#1a5238; }
-    select, input[type="text"] {
-      background: var(--panel2); border:1px solid var(--border); color: var(--ink);
-      border-radius: 10px; padding: 8px 10px; min-width: 240px;
-    }
-
-    /* HUD: resources */
-    #hud {
-      position: fixed; top: 40px; left: 10px; display: flex; gap: 8px; flex-wrap: wrap;
-      background: var(--panel2); border:1px solid var(--border); border-radius: 12px;
-      padding: 6px 8px; font-size: 13px;
-    }
-    #hud .res { background: var(--btn2); border:1px solid var(--border); border-radius:10px; padding: 4px 8px; }
-    #hud .res.bad { outline:2px solid var(--err); }
-
-    /* Build bar */
-    #build-bar {
-      position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel);
-      border-top: 1px solid var(--border); padding: 10px; display:none;
-    }
-    #build-title { font-size: 13px; color: var(--muted); margin: 0 0 8px 2px; }
-    #tools { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; }
-    .tool {
-      background: var(--btn2); border: 1px solid var(--border); border-radius: 12px;
-      padding: 10px; text-align: center; cursor: pointer;
-    }
-    .tool.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(72,213,151,.25) inset; }
-    .tool .price { display:block; margin-top:4px; color: var(--muted); font-size: 12px; }
-    #toggle-build {
-      position: fixed; right: 10px; bottom: 10px; z-index: 5;
-      background:#1e6c48; border:1px solid #16533a; color:#eafff4; padding: 10px 14px; border-radius: 12px; cursor: pointer;
-      display:none;
-    }
-
-    /* Log panel */
-    #log {
-      position: fixed; left: 10px; bottom: 10px; width: min(720px, 92vw);
-      background: var(--panel); border:1px solid var(--border); border-radius: 16px;
-      padding: 10px; max-height: 46vh; overflow: auto; box-shadow: 0 15px 50px rgba(0,0,0,.45);
-    }
-    #log h3 { margin:0 0 8px 0; display:flex; align-items:center; gap:10px }
-    #log pre { margin:0; white-space: pre-wrap; word-wrap: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-    #log .bar { display:flex; gap:8px; margin-bottom:8px; flex-wrap: wrap; }
-    #log .mini { background: var(--btn2); border:1px solid var(--border); border-radius: 10px; padding: 6px 10px; font-size: 12px; cursor: pointer; color: var(--ink2); }
-
-    /* Ghost overlay (touch-safe) */
-    #ghost {
-      position: absolute; pointer-events: none; display:none;
-      outline: 2px solid #fff; outline-offset:-2px;
-    }
-
-    @media (max-width: 760px) {
-      #tools { grid-template-columns: repeat(2, 1fr); }
+    html,body{height:100%;margin:0;background:#143a2a;color:var(--txt);font:16px/1.4 ui-sans-serif,system-ui,-apple-system,segoe ui,roboto,ubuntu,cantarell,noto sans;}
+    #root{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto;}
+    /* Log Panel */
+    .log-wrap{position:absolute;left:16px;bottom:16px;max-width:min(720px,calc(100vw-32px));}
+    .card{background:rgba(16,38,29,.9);backdrop-filter:saturate(120%) blur(4px);border:1px solid #1f4536;border-radius:14px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);}
+    .buttons{display:flex;gap:12px;margin:10px 0 12px 0;flex-wrap:wrap}
+    .btn{background:#0b1a14;border:1px solid #1f3b2e;color:#c9f7de;border-radius:12px;padding:10px 14px;cursor:pointer}
+    .btn:hover{filter:brightness(1.05)}
+    .title-badge{display:inline-flex;align-items:center;gap:8px;background:var(--badge);padding:8px 12px;border-radius:12px;margin-right:10px}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+    .log{max-height:min(42vh,420px);overflow:auto;white-space:pre-wrap;font-size:14px;line-height:1.55}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+    /* Top actions */
+    .topbar{position:absolute;top:10px;right:10px;display:flex;gap:8px;z-index:5}
+    /* Canvas placeholder (dein Renderer zeichnet da rein) */
+    #game{position:absolute;inset:0}
+    /* Build HUD bottom */
+    .buildbar{grid-row:2;background:linear-gradient(180deg, rgba(16,38,29,.0) 0%, rgba(16,38,29,.85) 18%, rgba(16,38,29,.92) 100%);
+      border-top:1px solid #214a39;padding:10px 12px}
+    .build-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .pill{background:#0b1a14;border:1px solid #1e3a2f;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px}
+    .tool{min-width:116px;justify-content:center}
+    .spacer{flex:1}
+    .res{display:flex;gap:8px;align-items:center}
+    .chip{background:#0e221a;border:1px solid #214a39;border-radius:999px;padding:6px 10px;font-size:13px}
+    .switch{display:inline-flex;align-items:center;gap:8px}
+    input[type="checkbox"]{width:18px;height:18px}
+    @media (max-width: 680px){
+      .tool{min-width:98px}
+      .log-wrap{left:12px;right:12px;max-width:unset}
     }
   </style>
 </head>
 <body>
-  <div id="game-root">
-    <canvas id="game-canvas"></canvas>
-    <div id="ghost"></div>
-  </div>
+  <div id="root">
+    <canvas id="game"></canvas>
 
-  <div id="topbar">
-    <div id="badge">CityBuilder <strong>v16.0.10</strong></div>
-    <div class="chip" id="btn-log">📜 Log</div>
-    <div class="chip" id="btn-cache">♻️ Cache</div>
-    <div class="chip" id="btn-inspector">🧪 Inspector</div>
-    <div class="chip" id="btn-editor">🛠️ Editor</div>
-  </div>
-
-  <!-- HUD -->
-  <div id="hud" hidden>
-    <div class="res" id="res-coins">🟡 Coins: –</div>
-    <div class="res" id="res-wood">🪵 Wood: –</div>
-    <div class="res" id="res-stone">🪨 Stone: –</div>
-  </div>
-
-  <!-- Start Card -->
-  <div id="start-card" role="dialog" aria-modal="true">
-    <h1>🛡️ Siedler-Mini</h1>
-    <div>Neues Spiel starten? <span style="color:var(--muted)">(index <strong>v16.0.10</strong>)</span></div>
-    <div>
-      <label for="map">Map:</label>
-      <select id="map">
-        <option value="./assets/maps/map-mini.json">Mini (16×10)</option>
-        <option value="./assets/maps/map-pro.json">Pro (20×12)</option>
-        <option value="./assets/maps/map-demo.json">Demo (defekt – Test)</option>
-        <option value="./assets/maps/map-test-all.json">Test All (defekt – Test)</option>
-      </select>
+    <!-- Top actions -->
+    <div class="topbar">
+      <button class="btn" id="btnLog">🗂️ Log</button>
+      <button class="btn" id="btnCache">🧹 Cache</button>
+      <button class="btn" id="btnInspector">🧭 Inspector</button>
+      <button class="btn" id="btnEditor">🛠️ Editor</button>
+      <button class="btn" id="btnBuild">🧱 Bauen</button>
+      <button class="btn" id="btnStart">▶️ Start</button>
     </div>
-    <div id="actions">
-      <button class="btn primary" id="start">Start</button>
-      <button class="btn" id="open-editor">Editor öffnen</button>
-      <button class="btn" id="toggle-inspector">Inspector</button>
+
+    <!-- Log Panel -->
+    <div class="log-wrap" id="logPanel" style="display:block;">
+      <div class="card">
+        <div>
+          <span class="title-badge mono"><strong>Log</strong></span>
+          <span class="chip mono" id="badgeInfo"></span>
+        </div>
+        <div class="buttons">
+          <button class="btn" id="btnCopy">Log kopieren</button>
+          <button class="btn" id="btnClear">Log leeren</button>
+          <button class="btn" id="btnClearCache">Cache leeren</button>
+        </div>
+        <div class="mono log" id="logBox"></div>
+      </div>
     </div>
-    <div style="color:var(--muted); font-size:12px;">Tip: Falls „alte“ Dateien erscheinen → unten im Log „Cache leeren“ drücken.</div>
-  </div>
 
-  <!-- Build Bar -->
-  <button id="toggle-build">🏗️ Bauen</button>
-  <div id="build-bar" aria-live="polite">
-    <div id="build-title">🏗️ Bauen <span style="color:var(--muted)">(v16.0.10)</span></div>
-    <div id="tools"></div>
-  </div>
-
-  <!-- Log -->
-  <div id="log">
-    <h3>Log <span style="color:var(--muted)">v16.0.10</span></h3>
-    <div class="bar">
-      <button class="mini" id="copy-log">Log kopieren</button>
-      <button class="mini" id="clear-log">Log leeren</button>
-      <button class="mini" id="wipe-storage">Cache leeren</button>
+    <!-- Build HUD -->
+    <div class="buildbar">
+      <div class="build-row">
+        <div class="pill mono">Bauen (v16.1.0)</div>
+        <button class="btn tool" data-tool="road">🛣️ Straße</button>
+        <button class="btn tool" data-tool="path">🥾 Weg</button>
+        <button class="btn tool" data-tool="bulldoze">🪓 Abreißen</button>
+        <button class="btn tool" data-tool="house">🏠 Haus</button>
+        <button class="btn tool" data-tool="factory">🏭 Fabrik</button>
+        <button class="btn tool" data-tool="cancel">⛔ Abbrechen</button>
+        <div class="spacer"></div>
+        <div class="pill res mono">
+          <span class="chip">🌲 <span id="rWood">0</span></span>
+          <span class="chip">🪨 <span id="rStone">0</span></span>
+          <span class="chip">🪙 <span id="rCoins">0</span></span>
+          <button class="btn" id="btnGive100">+100</button>
+        </div>
+        <div class="pill switch mono">
+          <label><input type="checkbox" id="chkFree" /> Free-Build</label>
+        </div>
+      </div>
     </div>
-    <pre id="log-pre"></pre>
   </div>
 
+  <!-- Scripts -->
+  <script src="./game.js?v=16.1.0"></script>
+  <script src="./ui-build.js?v=16.1.0"></script>
   <script>
-    // -------- Logger (global) ----------
+    // ------- index boot -------
     (function(){
-      const pre = document.getElementById('log-pre');
-      const ts = () => new Date().toTimeString().slice(0,8);
-      window.APP_VERSION = 'v16.0.10';
+      const v = "v16.1.0";
+      const logBox = document.getElementById('logBox');
+      const badgeInfo = document.getElementById('badgeInfo');
 
-      const line = (icon, level, msg) => `[${ts()}] ${icon} (${level}) ${msg}`;
-      window.logOK   = (m)=>{ pre.textContent += line('✅','ok',m)+'\n'; pre.scrollTop = pre.scrollHeight; };
-      window.logWARN = (m)=>{ pre.textContent += line('⚠️','warn',m)+'\n'; pre.scrollTop = pre.scrollHeight; };
-      window.logERR  = (m)=>{ pre.textContent += line('❌','err',m)+'\n'; pre.scrollTop = pre.scrollHeight; };
-      window.logINFO = (m)=>{ pre.textContent += line('🔷','info',m)+'\n'; pre.scrollTop = pre.scrollHeight; };
-
-      document.getElementById('btn-log').onclick = ()=> document.getElementById('log').scrollIntoView({behavior:'smooth'});
-      document.getElementById('copy-log').onclick = ()=> { navigator.clipboard.writeText(pre.textContent); logOK('Log in Zwischenablage'); };
-      document.getElementById('clear-log').onclick = ()=> pre.textContent='';
-      document.getElementById('btn-cache').onclick = ()=> wipe();
-      document.getElementById('wipe-storage').onclick = ()=> wipe();
-      function wipe(){
-        try {
-          if('caches' in window) caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
-          localStorage.clear(); sessionStorage.clear();
-          logOK('Cache/Storage geleert – Seite ggf. neu laden');
-        } catch(e) { logERR('Cache leeren fehlgeschlagen: '+e.message); }
+      function time(){ const d=new Date(); return `[${d.toTimeString().slice(0,8)}]`; }
+      function line(symbol, cls, msg){
+        const el=document.createElement('div'); el.className=cls;
+        el.textContent = `${time()} ${symbol} ${msg}`;
+        logBox.appendChild(el); logBox.scrollTop = logBox.scrollHeight;
       }
-    })();
-  </script>
+      window.UIlog = {
+        ok:(m)=>line('✅ (ok)', 'ok', m),
+        warn:(m)=>line('⚠️ (warn)', 'warn', m),
+        err:(m)=>line('❌ (err)', 'err', m),
+      };
+      badgeInfo.textContent = `UI ready (index ${v})`;
+      UIlog.ok(`UI ready (index ${v})`);
 
-  <!-- Game & UI -->
-  <script src="game.js?v=16.0.10"></script>
-  <script src="ui-build.js?v=16.0.10"></script>
-
-  <script>
-    // -------- UI wiring ----------
-    (function(){
-      const startBtn = document.getElementById('start');
-      const mapSel   = document.getElementById('map');
-      const card     = document.getElementById('start-card');
-      const btnEd    = document.getElementById('open-editor');
-      const btnIns   = document.getElementById('toggle-inspector');
-
-      // Dummy hooks (werden später vom echten Editor/Inspector überschrieben)
-      window.GameEditor = window.GameEditor || { open(){ logWARN('(Dummy) Editor.open() – echtes Modul noch nicht eingebunden.'); } };
-      window.GameInspector = window.GameInspector || { toggle(){ logWARN('(Dummy) Inspector.toggle() – echtes Modul noch nicht eingebunden.'); } };
-
-      // Buttons
-      btnEd.onclick  = ()=> window.GameEditor.open();
-      btnIns.onclick = ()=> window.GameInspector.toggle();
-
-      startBtn.onclick = ()=>{
-        const map = mapSel.value;
-        logOK(`Start gedrückt → ${map}`);
-        if (window.GameLoader && typeof GameLoader.start === 'function') {
-          GameLoader.start(map).then(()=>{
-            card.style.display = 'none';
-            document.getElementById('hud').hidden = false;
-            document.getElementById('toggle-build').style.display = 'inline-block';
-          }).catch(err=>{
-            logERR('Start fehlgeschlagen: '+(err?.message||err));
-            alert('Fehler beim Start: '+(err?.message||err));
-          });
-        } else {
-          logERR('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-          alert('Fehler beim Start: GameLoader.start ist nicht verfügbar (siehe Log).');
-        }
+      // wire game logger to our UI logger
+      window.__gameLog = (type, m)=>{
+        ({ok:UIlog.ok, warn:UIlog.warn, err:UIlog.err}[type]?.(m));
       };
 
-      // topbar quick toggles
-      document.getElementById('btn-editor').onclick   = ()=> window.GameEditor.open();
-      document.getElementById('btn-inspector').onclick= ()=> window.GameInspector.toggle();
+      // Buttons
+      document.getElementById('btnCopy').onclick = ()=>{
+        const range = document.createRange(); range.selectNode(logBox);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        try{ document.execCommand('copy'); UIlog.ok('Log in Zwischenablage'); } finally{ sel.removeAllRanges(); }
+      };
+      document.getElementById('btnClear').onclick = ()=>{ logBox.textContent=''; };
+      document.getElementById('btnClearCache').onclick = clearCaches;
+      document.getElementById('btnCache').onclick = clearCaches;
+      function clearCaches(){
+        try {
+          localStorage.clear(); sessionStorage.clear();
+          if ('caches' in window){ caches.keys().then(keys=>keys.forEach(k=>caches.delete(k))); }
+          UIlog.ok('Cache/Storage geleert – Seite ggf. neu laden');
+        } catch(e){ UIlog.warn('Cache leeren nicht vollständig möglich'); }
+      }
 
-      logOK(`UI ready (index ${window.APP_VERSION})`);
+      // Start
+      const defaultMap = './assets/maps/map-mini.json';
+      document.getElementById('btnStart').onclick = ()=>{
+        UIlog.ok(`Start gedrückt → ${defaultMap}`);
+        if (window.GameLoader?.start){ window.GameLoader.start(defaultMap); }
+        else UIlog.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
+      };
+
+      // Inspector / Editor (Hooks)
+      document.getElementById('btnInspector').onclick = ()=>{
+        if (window.GameInspector?.toggle){ window.GameInspector.toggle(); }
+        else UIlog.warn('Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
+      };
+      document.getElementById('btnEditor').onclick = ()=>{
+        if (window.GameEditor?.open){ window.GameEditor.open(); }
+        else UIlog.warn('Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.');
+      };
+
+      // Build panel & resources wiring (ui-build.js exposes CityBuilderUI)
+      window.addEventListener('ui-build-ready', ()=>{
+        UIlog.ok('Bau-Menü bereit (ui-build.js v16.1.0)');
+      });
+
+      // expose helper for game.js to write into our log
+      window.__indexVersion = v;
     })();
   </script>
 </body>
