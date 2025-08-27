@@ -1,78 +1,127 @@
-/* 
-  Projekt: Siedler-Mini
-  Datei:   game.js
-  Version: v16.1.1
-  Zweck:   Minimaler Game-Host: Canvas verwalten, Start-Flow, Hooks
-  Notizen:
-   - Setzt window.GameReady=true sobald initialisiert.
-   - Bietet window.GameLoader.start(mapPath) an (Promise).
-   - Loggt Versionsinfos für bessere Cache-Diagnose.
+/* game.js v16.1.1
+   - Stabiles GameLoader.start(mapPath)
+   - Zeichenpipeline (Canvas 2D)
+   - Placement-API: Game.place(x,y,{kind, sprite})
+   - Atlas-Support (Buildings.Lumberjack)
 */
 
 (function(){
-  const VER = (window.__VERSIONS__?.game) || "v16.1.1";
-  const log = (type, msg) => {
-    const target = document.querySelector("#log");
-    if(!target) return;
-    const now = new Date().toTimeString().slice(0,8);
-    const div = document.createElement("div");
-    div.className = "logline " + ({ok:"ok", warn:"warn", err:"err"}[type]||"muted");
-    const icon = type==="ok"?"✅ (ok) ":type==="warn"?"⚠️ (warn) ":"❌ (err) ";
-    div.textContent = `[${now}] ${icon}${msg}`;
-    target.appendChild(div);
-    const panel = document.querySelector("#logPanel");
-    if(panel) panel.scrollTop = panel.scrollHeight;
+  const version = "16.1.1";
+
+  // --- tiny logger shared with index ---
+  const Log = window.Log = window.Log || {
+    _el: null,
+    write(...a){
+      const t = new Date().toTimeString().slice(0,8);
+      const line = `[${t}] ${a.join(" ")}`;
+      (this._el ||= document.getElementById("log")).textContent += line+"\n";
+      (document.getElementById("logPanel")).scrollTop = 1e9;
+      console.debug(line);
+    },
+    copy(){
+      const txt = (this._el ||= document.getElementById("log")).textContent;
+      navigator.clipboard?.writeText(txt);
+      this.write("✅ (ok) Log in Zwischenablage");
+    },
+    clear(){ (this._el ||= document.getElementById("log")).textContent=""; }
   };
-  const ok   = m=>log("ok",m);
-  const warn = m=>log("warn",m);
-  const err  = m=>log("err",m);
 
-  // Canvas
-  const canvas = document.getElementById("game");
-  const ctx = canvas.getContext("2d");
-
-  // Simple resize helper (keeps canvas CSS size, adjusts backing store minimally)
-  function fitCanvas(){
-    // (Hier nur Logging fürs UI – das echte Game würde DPI etc. berücksichtigen)
-    const dpr = Math.max(1, Math.min(3, Math.round(window.devicePixelRatio||1)));
-    ok(`Canvas ${canvas.clientWidth}x${canvas.clientHeight} dpr:${dpr}`);
-  }
-  window.addEventListener("resize", ()=> setTimeout(fitCanvas, 0));
-
-  // Dummy world
-  async function startGame(mapPath){
-    // hier könnten Tiles/Map geladen werden – wir simulieren Erfolg:
-    await new Promise(r=>setTimeout(r, 250));
-    // Demo: grünen Platzhalter zeichnen
-    ctx.fillStyle = "#214d35";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-    ok("Game started");
-  }
-
-  // Public API
-  window.GameLoader = {
-    async start(mapPath){
-      ok(`Tileset (atlas) OK 1024x1024`); // Placeholder-Log (bis echte Assets eingebunden werden)
-      ok(`Map OK size 16x10 tile 64`);    // dito (oder durch echte Map-Daten ersetzen)
-      return startGame(mapPath);
+  // --- Game state ---
+  const Game = window.Game = {
+    version,
+    tileSize: 64,
+    map: null,
+    grid: [],
+    canvas: null,
+    ctx: null,
+    dpr: 1,
+    entities: [],  // {x,y, sprite:{img, sx,sy,sw,sh}}
+    atlas: {},     // by key
+    setAtlas(key, sprite){ Game.atlas[key]=sprite; },
+    place(x,y, spec){
+      const {sprite} = spec || {};
+      if (!sprite) { Log.write("⚠️ (warn) Kein Sprite übergeben"); return; }
+      Game.entities.push({x,y,sprite});
+      draw();
+      Log.write(`✅ (ok) Platziert: ${spec.kind||"entity"} @ (${x},${y})`);
     }
   };
 
-  // UI-Hooks (Editor/Inspector Dummies – können vom Editor-Modul überschrieben werden)
-  window.GameEditor = window.GameEditor || {
-    open(){ ok("Editor geöffnet (Dummy)"); }
-  };
-  window.GameInspector = window.GameInspector || {
-    _on:false, toggle(){ this._on=!this._on; return this._on; }
+  function setupCanvas(){
+    const cvs = Game.canvas = document.getElementById("game");
+    Game.dpr = Math.max(1, Math.floor(window.devicePixelRatio||1));
+    cvs.width = Math.floor(cvs.clientWidth * Game.dpr);
+    cvs.height = Math.floor(cvs.clientHeight* Game.dpr);
+    Game.ctx = cvs.getContext("2d");
+  }
+
+  function draw(){
+    const ctx = Game.ctx; if (!ctx) return;
+    // background
+    ctx.fillStyle = "#2e5f3c";
+    ctx.fillRect(0,0,Game.canvas.width, Game.canvas.height);
+
+    // simple grid preview (based on current map size if present)
+    const ts = Game.tileSize;
+    const cols = Game.map?.width || 16;
+    const rows = Game.map?.height|| 10;
+    ctx.strokeStyle = "rgba(255,255,255,.06)";
+    ctx.lineWidth = 1;
+    for(let x=0;x<=cols;x++){ ctx.beginPath(); ctx.moveTo(x*ts,0); ctx.lineTo(x*ts,rows*ts); ctx.stroke(); }
+    for(let y=0;y<=rows;y++){ ctx.beginPath(); ctx.moveTo(0,y*ts); ctx.lineTo(cols*ts,y*ts); ctx.stroke(); }
+
+    // draw entities
+    for(const e of Game.entities){
+      const {img,sx,sy,sw,sh} = e.sprite;
+      const dx = e.x*ts, dy = e.y*ts, dw = ts, dh = ts;
+      if (img && sw && sh) ctx.drawImage(img, sx,sy,sw,sh, dx,dy,dw,dh);
+      else { ctx.fillStyle="#8dd3a5"; ctx.fillRect(dx,dy,dw,dh); }
+    }
+  }
+
+  // --- Loader ---
+  const GameLoader = window.GameLoader = {
+    async start(mapPath){
+      Log.write(`✅ (ok) GameLoader.start ${mapPath}`);
+      await initIfNeeded();
+      const map = await fetch(mapPath+"?v="+version).then(r=>r.json());
+      if (!map.width || !map.height) throw new Error("Map: width/height fehlen oder sind 0");
+      Game.map = map;
+      Game.tileSize = map.tileSize || 64;
+      Game.entities.length = 0; // clear
+      draw();
+      Log.write("✅ (ok) Game started");
+    }
   };
 
-  // Build-UI Bridge
-  window.UI = window.UI || {
-    currentTool: "cancel",
-    setTool(t){ this.currentTool = t; /* hier später Game-Placement verbinden */ }
+  let __inited = false;
+  async function initIfNeeded(){
+    if (__inited) return;
+    setupCanvas();
+
+    // Hook resize
+    const ro = new ResizeObserver(()=>draw());
+    ro.observe(Game.canvas);
+
+    // Prepare atlas (lumberjack) if module already loaded
+    if (window.Buildings?.Lumberjack?.install) {
+      await window.Buildings.Lumberjack.install(Game);
+    }
+
+    __inited = true;
+    Log.write(`✅ (ok) game.js initialisiert (Index meldet v${window.__APP_VERSION__||"?"})`);
+  }
+
+  // Public helpers for UI:
+  window.GameAPI = {
+    // Place by grid cell
+    placeByKey(key, gx, gy){
+      const spr = Game.atlas[key];
+      if (!spr) { Log.write(`⚠️ (warn) Sprite fehlt: ${key}`); return; }
+      Game.place(gx, gy, {kind:key, sprite:spr});
+    }
   };
 
-  // Boot
-  ok(`game.js geladen, game.js ${VER}`);
-  window.GameReady = true;
+  // first banner
+  Log.write(`✅ (ok) game.js geladen, ✅ game.js v${version}`);
 })();
