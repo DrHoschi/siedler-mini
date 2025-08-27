@@ -1,243 +1,342 @@
 <!doctype html>
 <html lang="de">
 <head>
+  <!-- =========================================================
+       CityBuilder Mini – Startseite
+       Version: UI v16.1.3   (bitte bei jeder Änderung +0.0.1)
+       Zweck:
+         - Lädt Spiel-Engine, Inspector/Test-Cockpit, Bau-Menü
+         - Aktiviert PathOverlay via Hook (ohne boot.js/game.js Patch)
+         - Mobile-first (iPad/Phone), Log/Toast adaptieren
+       ========================================================= -->
+
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler Mini – v16.1.2</title>
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#103a2c" />
 
-  <!--
-    Projekt: Siedler Mini
-    Datei: index.html
-    Version: v16.1.2
-    Zweck:
-      - Start-UI, Log, Inspector-Dock, Build-UI
-      - Responsive Toast-Statusleiste (HF: oben/unten, QF: links/rechts)
-    Wichtig:
-      - Alle JS/CSS mit ?v={VERSION} gegen Safari-Cache
-      - Editor/Inspector lassen sich einklappen
-  -->
+  <title>CityBuilder Mini v16.1.3</title>
 
-  <!-- Basis-Styles -->
-  <link rel="stylesheet" href="./css/base.css?v=16.1.2">
-  <link rel="stylesheet" href="./assets/ui/ui-build.css?v=16.1.2">
+  <!-- Basis-Styles (bestehende Dateien aus Repo; Reinfolge beibehalten) -->
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/platform.css">
+  <link rel="stylesheet" href="./css/mobile.css">
+  <link rel="stylesheet" href="./css/ios.css">
+  <link rel="stylesheet" href="./css/android.css">
+  <link rel="stylesheet" href="./css/desktop.css">
+  <!-- Projekt-Styles (falls beide genutzt werden, beide lassen) -->
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./styles.css">
 
+  <!-- Kleine Zusatz-Styles für Inspector/Toast/Layout-Fixes -->
   <style>
-    /* ===== Inline-Ergänzungen für v16.1.2 (knapp gehalten) ===== */
-
     :root{
-      --ui-bg: rgba(0,0,0,.5);
-      --ui-pill: rgba(20,30,24,.7);
-      --ui-green: #41e07a;
-      --ui-yellow: #ffd65a;
-      --ui-red: #ff6b6b;
-      --white: #fff;
+      --ui-bg: #0f3b2e;
+      --ui-panel: rgba(0,0,0,.28);
+      --ui-panel-solid: rgba(0,0,0,.45);
+      --ui-text: #cfeadd;
+      --ui-accent: #29c37a;
     }
 
-    /* Toast/Status: HF oben/unten; QF links/rechts */
-    .toast-rail {
-      position: fixed;
-      z-index: 50;
-      display: flex;
-      gap: .5rem;
-      padding: .5rem;
-      pointer-events: none; /* Einzel-Items sind klickbar */
-    }
-    .toast { 
-      pointer-events: auto;
-      background: var(--ui-pill);
-      color: #cfe;
-      padding: .4rem .6rem;
-      border-radius: .6rem;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: .9rem;
-      white-space: nowrap;
+    html, body {
+      margin:0; padding:0; background:#0b2b22; color:var(--ui-text);
+      height:100%; width:100%;
+      -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
     }
 
-    /* Hochformat: oben fix (du kannst bottom:0 für unten wählen) */
-    @media (orientation: portrait){
-      .toast-rail { top: env(safe-area-inset-top); left: 0; right: 0; justify-content: center; }
+    /* Canvas-Container – Spieloberfläche bleibt „clean“ */
+    #app { position:fixed; inset:0; overflow:hidden; }
+
+    /* Version-Toast – im Hochformat oben links, Querformat links oben (bleibt sichtbar) */
+    .ui-badge {
+      position: fixed; z-index: 5;
+      top: 8px; left: 8px;
+      padding: 4px 6px;
+      font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--ui-panel);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 6px; opacity:.9;
+      pointer-events:none;
     }
-    /* Querformat: links als vertikale Leiste */
     @media (orientation: landscape){
-      .toast-rail { top: env(safe-area-inset-top); bottom: env(safe-area-inset-bottom); left: env(safe-area-inset-left); flex-direction: column; }
+      .ui-badge{ top: 8px; left: 8px; }
     }
 
-    /* Log-Panel */
-    #logPanel {
-      position: fixed; right: .75rem; bottom: .75rem; left: .75rem;
-      max-height: 36vh; overflow: auto; padding: .75rem 1rem;
-      background: rgba(0,0,0,.35); color: #9f9; border-radius: 1rem;
-      font-family: ui-monospace, monospace; line-height: 1.35;
+    /* Log-Konsole – Hochformat unten, Querformat rechts (wegklappbar via Inspector) */
+    #log {
+      position: fixed; z-index:4; color:#baf7d7;
+      left:0; right:0; bottom:0; height:32vh;
+      background: var(--ui-panel);
+      border-top: 1px solid rgba(255,255,255,.07);
+      font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow:auto; white-space:pre-wrap; padding: 8px 10px;
     }
-    #logPanel small { opacity: .65 }
-    .pill { display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .55rem; border-radius:999px; }
-    .pill.ok { background: rgba(65,224,122,.15); }
-    .pill.warn { background: rgba(255,214,90,.15); }
-    .pill.err { background: rgba(255,107,107,.15); }
-
-    /* Canvas-Fit */
-    #gameRoot { position: fixed; inset: 0; }
-    canvas { display:block; width:100%; height:100%; }
-
-    /* Floating Build-Button (öffnet/ schließt Bau-Menü) */
-    #btnBuild {
-      position: fixed; right: 1rem; bottom: 1rem; z-index: 60;
-      width: 56px; height: 56px; border-radius: 50%;
-      background: var(--ui-green); color:#032; font-weight: 700;
-      display: grid; place-items: center; box-shadow: 0 6px 16px rgba(0,0,0,.35);
+    @media (orientation: landscape){
+      #log { top: 0; right: 0; width: 38vw; height: auto; bottom: 0; border-left: 1px solid rgba(255,255,255,.07); border-top:none; }
     }
 
-    /* Inspector-Dock (Test-Cockpit) */
-    #inspectorDock {
-      position: fixed; top: env(safe-area-inset-top); right: .5rem; z-index: 70;
-      width: min(380px, 92vw); max-height: 80vh; overflow:auto;
-      background: rgba(15,25,20,.92); color:#def; border-radius: .8rem;
-      padding: .8rem; backdrop-filter: blur(8px); display: none;
+    /* Inspector / Test-Cockpit – einklappbares Panel */
+    #inspector {
+      position: fixed; z-index: 6;
+      right: 8px; top: 8px;
+      background: var(--ui-panel-solid);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px; padding: 10px; min-width: 280px;
+      color: var(--ui-text);
     }
-    #inspectorDock.open { display:block; }
-    #inspectorDock h3 { margin:.2rem 0 .6rem; font-size: 1.05rem; }
-    #inspectorDock .row { display:flex; gap:.5rem; flex-wrap:wrap; margin:.5rem 0; }
-    #inspectorDock button, #inspectorDock select {
-      background: #2a3; color:#021; border:none; padding:.5rem .65rem; border-radius:.5rem;
+    #inspector h3 { margin: 0 0 8px 0; font-size: 14px; }
+    #inspector .row { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+    #inspector button {
+      background:#133f30; color:#dff7ea; border:1px solid rgba(255,255,255,.08);
+      border-radius:10px; padding:6px 10px; cursor:pointer;
     }
-    #inspectorDock .row .ghost { background:#223; color:#9ad; }
+    #inspector .pill { border-radius: 999px; padding: 6px 10px; }
+    #inspector .muted { color:#a6d3c1; font-size:12px; opacity:.85; }
 
-    /* Build-Buttons: weißer BG für nicht freigestellte Icons */
-    .build-btn {
-      background: #fff;            /* <— wichtig für deine PNGs */
-      border-radius: .75rem;
-      border: 1px solid rgba(0,0,0,.2);
-      width: 90px; height: 74px;
+    /* Floating Action Buttons (Bau-Menü, Cancel etc.) */
+    .fab {
+      position: fixed; z-index: 6; bottom: 14px; right: 14px;
+      width: 52px; height: 52px; border-radius: 999px;
+      display:grid; place-items:center; background:#1fb56e; color:#0f2e24;
+      border:none; box-shadow: 0 6px 20px rgba(0,0,0,.35);
+      font-size: 22px; user-select:none;
+    }
+    .fab.secondary { left: 14px; right:auto; background:#6b7a76; color:#e9fffa; }
+
+    /* Bau-Menü: unten (Portrait) / unten (Landscape = schmaler) */
+    #buildbar {
+      position: fixed; z-index: 5; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.38);
+      border-top: 1px solid rgba(255,255,255,.07);
+      backdrop-filter: blur(8px);
+      padding: 8px;
+      display: none;
+      overflow-x: auto;
+    }
+    #buildbar.open { display: block; }
+    #buildbar .btn {
+      min-width: 96px; height: 72px;
+      background: #fff; /* Buttons werden bewusst weiß, bis die PNGs transparent sind */
+      color: #123; border-radius: 12px; border:1px solid rgba(0,0,0,.08);
       display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:.25rem; box-shadow: 0 6px 14px rgba(0,0,0,.15);
+      margin-right: 10px; padding: 6px; gap: 6px;
     }
-    .build-btn img { width: 56px; height: 56px; object-fit: contain; }
-    .build-btn small { font-size: .7rem; color:#123; }
+    #buildbar .btn img { display:block; max-width: 86px; max-height: 46px; object-fit: contain; }
+    #buildbar .btn small { font-size: 11px; opacity:.85; }
   </style>
 </head>
 
 <body>
-  <!-- Status/Toast-Leiste -->
-  <div class="toast-rail" id="toastRail">
-    <div class="toast" id="toastVersion">UI v16.1.2</div>
-  </div>
+  <div id="app" aria-label="Game Surface"></div>
 
-  <!-- Spiel-Root -->
-  <div id="gameRoot">
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-  </div>
+  <!-- Version-Toast -->
+  <div class="ui-badge" id="uiVersion">UI v16.1.3</div>
 
-  <!-- Log -->
-  <div id="logPanel" aria-live="polite">
-    <div><span class="pill ok">✅ ok</span> UI ready (index v16.1.2)</div>
-  </div>
+  <!-- Log-Ausgabe -->
+  <pre id="log" aria-live="polite"></pre>
 
-  <!-- Floating Buttons -->
-  <button id="btnBuild" title="Bauen">🏗️</button>
-  <button id="btnInspector" style="position:fixed;left:1rem;bottom:1rem;z-index:60;width:56px;height:56px;border-radius:50%;background:#8af;color:#013;font-weight:700;box-shadow:0 6px 16px rgba(0,0,0,.35);" title="Inspector umschalten">🛠️</button>
+  <!-- Inspector / Test-Cockpit -->
+  <section id="inspector" role="region" aria-label="Inspector / Test-Cockpit">
+    <h3>Inspector / Test-Cockpit (v16.1.3)</h3>
 
-  <!-- Inspector-Dock (Test-Cockpit) -->
-  <section id="inspectorDock" role="dialog" aria-label="Inspector">
-    <h3>Inspector / Test-Cockpit (v16.1.2)</h3>
+    <!-- Start-Shortcuts -->
     <div class="row">
-      <button id="btnStartMini">Start map-mini.json</button>
-      <button id="btnStartPro" class="ghost">Start map-pro.json</button>
-      <button id="btnClearCache">Cache leeren</button>
-      <button id="btnCopyLog" class="ghost">Log kopieren</button>
+      <button id="btnStartMini" class="pill">Start <code>map-mini.json</code></button>
+      <button id="btnStartPro" class="pill">Start <code>map-pro.json</code></button>
+      <button id="btnClearCache" class="pill" title="Cache & Storage leeren">Cache leeren</button>
+      <button id="btnCopyLog" class="pill">Log kopieren</button>
     </div>
+
+    <!-- Bau-Menü Toggle -->
     <div class="row">
-      <button id="btnOpenBuild">Bau-Menü öffnen</button>
-      <button id="btnCloseBuild" class="ghost">Bau-Menü schließen</button>
+      <button id="btnBuildOpen" class="pill">Bau-Menü öffnen</button>
+      <button id="btnBuildClose" class="pill">Bau-Menü schließen</button>
     </div>
+
+    <!-- Ressourcen-Booster -->
     <div class="row">
-      <label>Ressourcen:</label>
-      <button data-r="+100">+100</button>
-      <button data-r="+1000" class="ghost">+1000</button>
-      <button data-r="max">∞</button>
-      <button data-r="zero" class="ghost">0</button>
+      <span>Ressourcen:</span>
+      <button data-add="100" class="pill">+100</button>
+      <button data-add="1000" class="pill">+1000</button>
+      <button data-add="0" class="pill">∞</button>
+      <button data-add="-1" class="pill">0</button>
     </div>
-    <div class="row">
-      <small>Alle Tools & Booster für Tests hier bündeln, damit die Spieloberfläche frei bleibt.</small>
-    </div>
+
+    <p class="muted">Alle Tools & Booster für Tests hier bündeln, damit die Spielfläche frei bleibt.</p>
   </section>
 
-  <!-- ===== Scripts (mit Versionstoken) ===== -->
+  <!-- Bau-Menü Leiste -->
+  <nav id="buildbar" aria-label="Bau-Menü"></nav>
+
+  <!-- FABs: links = Cancel, rechts = Bau-Menü -->
+  <button class="fab secondary" id="fabCancel" title="Abbrechen">✕</button>
+  <button class="fab" id="fabBuild" title="Bauen">🛠️</button>
+
+  <!-- =========================================================
+       Skripte – Reihenfolge wichtig!
+       1) Core-Hooks vor boot/game → PathOverlay wird eingehängt
+       2) Engine / Spiel
+       3) UI (Inspector + Bau-Menü)
+       4) Lumberjack-Integration
+       ========================================================= -->
+
+  <!-- 1) Overlay-Hooks (hängt PathOverlay in boot/game ein → erfüllt „Patch 2 & 3“) -->
+  <script src="./core/path-index.js"></script>
+  <script src="./core/path-overlay.js"></script>
+  <script src="./core/overlay-hooks.js"></script>
+  <!-- overlay-hooks.js ruft intern die PathOverlay.init-/update-/render-Hooks auf,
+       sobald die Map steht und der Main-Loop läuft. Kein direkter Code hier nötig. -->
+
+  <!-- 2) Engine / Spiel -->
+  <script src="./app-v11.1r6.js"></script>
+  <script src="./main.js"></script>
+  <script src="./world.js"></script>
+  <script src="./camera.js"></script><!-- (falls von world/render getrennt genutzt) -->
+  <script src="./render.js"></script>
+  <script src="./textures.js"></script>
+  <script src="./storage.js"></script>
+  <script src="./input.js"></script>
+  <script src="./game.js"></script>
+  <script src="./boot.js"></script>
+  <script src="./debug.js"></script>
+
+  <!-- 3) UI (Inspector + Bau-Menü) -->
+  <script src="./ui-build.js"></script>           <!-- Root-UI (Version taucht im Log auf) -->
+  <script src="./assets/ui/ui-build.js" defer></script><!-- optional: falls du die Assets-Variante zusätzlich nutzt -->
+
+  <!-- 4) Gebäude-Integration (Lumberjack) -->
+  <script src="./src/assets.buildings.js"></script>
+  <script src="./buildings.lumberjack.js"></script>
+
+  <!-- 5) Editor/Inspector-Module (Dummy oder echt – werden im Log erwähnt) -->
+  <script src="./assets/editor/editor.js"></script>
+  <script src="./assets/inspector/inspector.js"></script>
+
+  <!-- 6) Service Worker (Cache-Booster) -->
   <script>
-    // Kleine Hilfen global (Version + Cache-Token + Log + Toast)
-    const APP_VERSION = "16.1.2";
-    const VER_QS     = `?v=${APP_VERSION}-${Date.now().toString(36)}`;
-
-    const $ = sel => document.querySelector(sel);
-    function logOk(msg){ appendLog(`✅ (ok) ${msg}`); }
-    function logWarn(msg){ appendLog(`⚠️ (warn) ${msg}`); }
-    function logErr(msg){ appendLog(`❌ (err) ${msg}`); }
-    function appendLog(text){
-      const p = document.createElement("div");
-      p.textContent = `[${new Date().toTimeString().slice(0,8)}] ${text}`;
-      $("#logPanel").appendChild(p);
-      $("#logPanel").scrollTop = $("#logPanel").scrollHeight;
+    // -- SW Registrierung (für PWA + Cache-Booster im Inspector) -----------------
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
     }
-    function toast(text){ $("#toastVersion").textContent = text; }
 
-    // Inspector-Dock togglen
-    $("#btnInspector").addEventListener("click", () => {
-      $("#inspectorDock").classList.toggle("open");
-    });
+    // -- Mini Logger -------------------------------------------------------------
+    const $log = document.getElementById('log');
+    function logLine(kind, msg){
+      const t = new Date().toTimeString().slice(0,8);
+      $log.textContent += `[${t}] ${kind} ${msg}\n`;
+      $log.scrollTop = $log.scrollHeight;
+    }
+    logLine('✅','UI ready (index v16.1.3)');
 
-    // Cache-Booster (Storage + SW + Caches)
-    async function clearAllCaches(){
+    // -- Inspector Buttons -------------------------------------------------------
+    const $buildbar = document.getElementById('buildbar');
+    const $fabBuild = document.getElementById('fabBuild');
+    const $fabCancel = document.getElementById('fabCancel');
+
+    // Start-Shortcuts
+    document.getElementById('btnStartMini').onclick = ()=> {
+      window.GameLoader?.start?.('./assets/maps/map-mini.json')
+        ?? logLine('❌','GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
+    };
+    document.getElementById('btnStartPro').onclick = ()=> {
+      window.GameLoader?.start?.('./assets/maps/map-pro.json')
+        ?? logLine('❌','GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
+    };
+
+    // Cache-Booster
+    document.getElementById('btnClearCache').onclick = async ()=>{
       try {
+        // Storage
         localStorage.clear(); sessionStorage.clear();
-        if ('caches' in window){
+        // Caches API
+        if (window.caches) {
           const names = await caches.keys();
           await Promise.all(names.map(n => caches.delete(n)));
         }
-        if ('serviceWorker' in navigator){
-          const regs = await navigator.serviceWorker.getRegistrations();
-          for (const r of regs) await r.unregister();
-        }
-        logOk("Cache/Storage geleert – Seite ggf. neu laden");
+        // SW hart neu laden (optional)
+        if (navigator.serviceWorker?.controller) navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
+        logLine('✅','Cache/Storage geleert – Seite ggf. neu laden');
       } catch(e){
-        logWarn("Cache-Leeren: " + e.message);
+        logLine('⚠️', 'Konnte Cache nicht leeren: ' + (e?.message||e));
       }
-    }
-    $("#btnClearCache").addEventListener("click", clearAllCaches);
-    $("#btnCopyLog").addEventListener("click", async () => {
-      await navigator.clipboard.writeText($("#logPanel").innerText);
-      logOk("Log in Zwischenablage");
-    });
-  </script>
+    };
 
-  <!-- Core + Game (mit Token) -->
-  <script src="./core/asset.js?v=16.1.2"></script>
-  <script src="./core/overlay-hooks.js?v=16.1.2"></script>
-  <script src="./core/path-overlay.js?v=16.1.2"></script>
-  <script src="./game.js?v=16.1.2"></script>
+    // Log kopieren
+    document.getElementById('btnCopyLog').onclick = async ()=>{
+      try { await navigator.clipboard.writeText($log.textContent); logLine('✅','Log in Zwischenablage'); }
+      catch(e){ logLine('⚠️','Clipboard nicht verfügbar'); }
+    };
 
-  <!-- UI-Build & Lumberjack (mit Token) -->
-  <script src="./assets/ui/ui-build.js?v=16.1.2"></script>
-  <script src="./buildings.lumberjack.js?v=16.1.2"></script>
+    // Bau-Menü
+    const openBuild = ()=>{ $buildbar.classList.add('open');  logLine('[UI]','Bau-Menü geöffnet'); };
+    const closeBuild= ()=>{ $buildbar.classList.remove('open');logLine('[UI]','Bau-Menü geschlossen'); };
+    document.getElementById('btnBuildOpen').onclick = openBuild;
+    document.getElementById('btnBuildClose').onclick = closeBuild;
+    $fabBuild.onclick = openBuild;
+    $fabCancel.onclick = ()=> window?.GameUI?.setTool?.('cancel') ?? closeBuild();
 
-  <script>
-    // ===== Page-Wiring (nur Index-seitig, rest in ui-build.js / game.js) =====
-    window.addEventListener("load", () => {
-      toast(`UI v${APP_VERSION}`);
-      logOk(`UI ready (index v${APP_VERSION})`);
-
-      // Build-FAB
-      $("#btnBuild").addEventListener("click", () => window.UI?.toggleBuildMenu?.());
-
-      // Inspector-Start-Buttons
-      $("#btnStartMini").addEventListener("click", () => window.GameLoader?.start?.("./assets/maps/map-mini.json"));
-      $("#btnStartPro").addEventListener("click", () => window.GameLoader?.start?.("./assets/maps/map-pro.json"));
-
-      // Ressourcen-Knöpfe
-      $("#inspectorDock").addEventListener("click", ev => {
-        const v = ev.target?.dataset?.r;
-        if(!v) return;
-        window.GameDebug?.grantResources?.(v);
+    // Ressourcen-Booster Buttons
+    document.querySelectorAll('#inspector [data-add]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const v = parseInt(btn.dataset.add,10);
+        window.GameUI?.debugAddResources?.(isNaN(v)?0:v);
       });
     });
+
+    // -- Bau-Menü: Buttons aus deinen Lumberjack-Daten ---------------------------
+    // Erwartet: assets/buildings/lumberjack/lumberjack_tiers_grid.json + .png
+    // Die Zuordnung/Tools kommen aus buildings.lumberjack.js und src/assets.buildings.js
+    (function buildBarFromLumberjack(){
+      if (!window.BuildingUI || !window.BuildingUI.getLumberjackButtons){
+        logLine('⚠️','Lumberjack-UI noch nicht geladen'); return;
+      }
+      const buttons = window.BuildingUI.getLumberjackButtons(); // [{id,title,icon,tool}, ...]
+      const bar = document.getElementById('buildbar');
+      bar.innerHTML = ''; // sauber aufbauen
+      // Standard-Tools voran:
+      const std = [
+        { id:'road',     title:'Straße',  icon:'./assets/icons/icons_spritesheet_64.png#road' },
+        { id:'path',     title:'Weg',     icon:'./assets/icons/icons_spritesheet_64.png#path' },
+        { id:'bulldoze', title:'Abreißen',icon:'./assets/icons/icons_spritesheet_64.png#bulldoze' },
+      ];
+      const all = [...std, ...buttons, { id:'cancel', title:'Abbrechen', icon:'' }];
+      for (const b of all){
+        const el = document.createElement('button');
+        el.className = 'btn';
+        el.title = b.title;
+        el.onclick = ()=> {
+          window.GameUI?.setTool?.(b.id) ?? logLine('[UI]','Tool '+b.id);
+          logLine('[ok]','Tool gesetzt: ' + b.id);
+        };
+        // Icon: PNG aus Atlas (weißes Button-BG bis PNGs transparent sind)
+        if (b.iconImg) {
+          const img = new Image();
+          img.src = b.iconImg;
+          img.alt = b.title;
+          el.appendChild(img);
+        } else if (b.icon) {
+          const img = new Image();
+          // Falls später echte Atlas-Schnitte nötig sind, liefert buildings.lumberjack.js die vorbereiteten PNG-Slices.
+          img.src = b.icon;
+          img.alt = b.title;
+          el.appendChild(img);
+        }
+        const cap = document.createElement('small'); cap.textContent = b.title;
+        el.appendChild(cap);
+        $buildbar.appendChild(el);
+      }
+    })();
+
+    // -- Orientation-Hinweis: Log-Panel anpassen (CSS erledigt das meiste) -------
+    const mq = window.matchMedia("(orientation: landscape)");
+    mq.addEventListener?.("change", ()=>{/* Layout passt sich via CSS an */});
+
+    // -- Editor/Inspector Dummies melden ----------------------------------------
+    if (!window.GameEditor?.open)  logLine('⚠️','Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.');
+    if (!window.GameInspector?.toggle) logLine('⚠️','Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
   </script>
 </body>
 </html>
