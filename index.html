@@ -2,188 +2,219 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Siedler-Mini v16.1.1</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+  />
+  <title>CityBuilder v16.1.1</title>
 
-  <!--
-    Siedler-Mini – Bootstrap-UI
-    v16.1.1 (2025-08-27)
-
-    WICHTIG:
-    - Jede Script/CSS-URL hat ?v=16.1.1 als Cache-Buster.
-    - Log zeigt die geladene Version jeder Datei, damit man Cache-Probleme sofort sieht.
-    - UI: Log-Panel lässt sich ein/ausblenden (🧾), Build-Button rechts unten (🛠️).
-  -->
-
+  <!-- ===== Design / Grundlayout ===== -->
   <style>
     :root {
-      --bg:#0e2a1f; --panel:#132f24; --text:#c7f7d0; --muted:#86c9a3;
-      --ok:#34d399; --warn:#f59e0b; --err:#ef4444; --chip:#0f3a2d;
-      --btn:#134e4a; --btn2:#1f6f67; --btnTxt:#e6ffef;
+      --bg: #0e221a;
+      --panel: #152d23c0;
+      --text: #b7f7c6;
+      --muted: #7cc598;
+      --ok: #6ef19a;
+      --warn: #ffd166;
+      --err: #ff6b6b;
+      --btn: #223a2e;
+      --btn-hi: #2b4a3b;
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
-    html,body { margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
-    #root { position:relative; height:100%; overflow:hidden; }
-    canvas { display:block; width:100%; height:100%; background:#285a37; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(50% 50% at 50% 35%, #143424 0%, #0e221a 60%, #0a1b14 100%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+    #topbar {
+      position: fixed; inset: 0 0 auto 0; height: 42px;
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      background: linear-gradient(0deg, transparent, #0f2019aa);
+      z-index: 30;
+    }
+    .chip {
+      background: var(--panel); padding: 4px 10px; border-radius: 999px; font-size: 13px;
+      border: 1px solid #1f3a2f; box-shadow: 0 0 0 1px #0a1611 inset;
+    }
+    .btn {
+      background: var(--btn); border: 1px solid #244033;
+      padding: 8px 12px; border-radius: var(--radius); color: var(--text);
+      cursor: pointer; user-select: none;
+    }
+    .btn:hover { background: var(--btn-hi); }
+    #logpanel {
+      position: fixed; left: 12px; right: 12px; top: 56px; max-height: 46vh; overflow: auto;
+      border-radius: var(--radius); background: var(--panel);
+      border: 1px solid #1f3a2f; box-shadow: 0 8px 32px rgba(0,0,0,.25);
+      padding: 12px; z-index: 25;
+      font-family: var(--mono); font-size: 14px; line-height: 1.5;
+      backdrop-filter: blur(6px);
+    }
+    #logpanel h3 { margin: 0 0 8px 0; font-weight: 700; letter-spacing: .2px; }
+    #logtxt { white-space: pre-wrap; color: var(--text); }
+    .logline.ok   { color: var(--ok); }
+    .logline.warn { color: var(--warn); }
+    .logline.err  { color: var(--err); }
 
-    /* Floating toolbar (top-right) */
-    .toolbar { position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:30; }
-    .chip { background:var(--chip); border:1px solid #1a4b3b; color:var(--muted);
-      padding:6px 10px; border-radius:10px; font-size:12px; }
+    /* Spielfläche */
+    #gamewrap {
+      position: fixed; inset: 0; display: grid; place-items: center; z-index: 5;
+    }
+    #game {
+      display: block; max-width: 100%; max-height: 100%;
+      image-rendering: pixelated; background: transparent;
+    }
 
-    /* Buttons */
-    .btn { background:var(--btn); color:var(--btnTxt); border:1px solid #1b5a51;
-      padding:8px 12px; border-radius:10px; cursor:pointer; }
-    .btn:hover { filter:brightness(1.08); }
-    .btn.ghost { background:transparent; border-color:#2a6e61; color:#aef1ce; }
-
-    /* Log panel */
-    #logWrap { position:absolute; left:10px; bottom:10px; width:min(640px, calc(100% - 20px));
-      max-height:42vh; z-index:25; }
-    #logHead { display:flex; gap:8px; align-items:center; margin:0 0 6px 0; }
-    #logPanel { background:var(--panel); border:1px solid #214c3b; border-radius:16px; padding:12px 12px 6px 12px; overflow:auto; max-height:36vh; }
-    #logPanel pre { margin:0; white-space:pre-wrap; word-break:break-word; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; color:#b9ffd1; }
-    .hidden { display:none !important; }
-
-    /* Build menu bottom sheet */
-    #buildSheet { position:absolute; left:0; right:0; bottom:0; z-index:28;
-      background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(19,47,36,.85) 18%, rgba(19,47,36,.92) 100%);
-      padding:10px; backdrop-filter: blur(4px); }
-    #buildBar { display:flex; gap:10px; overflow:auto; padding:8px 2px; }
-    .tool { min-width:120px; flex:0 0 auto; background:var(--btn2); border:1px solid #2c8c82;
-      border-radius:14px; padding:10px; text-align:center; }
-    .tool small { display:block; color:#cfeee5; opacity:.85; }
-    .pill { padding:3px 8px; border-radius:999px; background:#0e3b32; color:#baf3e1; font-size:12px; display:inline-block; margin-bottom:6px; }
-
-    /* Floating round build toggle */
-    #fabBuild { position:absolute; right:14px; bottom:14px; z-index:29; width:54px; height:54px; border-radius:50%; background:#1a6f65; color:#eafff6; border:1px solid #2a8e83; font-size:20px; display:grid; place-items:center; box-shadow:0 6px 20px rgba(0,0,0,.35); }
-    #fabBuild:hover { filter:brightness(1.1); }
-
-    /* Toast stripe (top) */
-    #toast { position:absolute; left:50%; transform:translateX(-50%); top:56px; z-index:31;
-      background:#0f3a2d; color:#d7ffe9; border:1px solid #1f6a57; border-radius:12px;
-      padding:8px 12px; font-size:13px; display:none; }
+    /* Bau-Menü (unten andockend, per Button ein/aus) */
+    #buildbar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      padding: 10px; background: linear-gradient(0deg, #0f2019f0, #0f201900);
+      z-index: 40; display: none;
+    }
+    #buildbar .grid {
+      display: grid; gap: 10px; grid-template-columns: repeat(6, minmax(0,1fr));
+      background: var(--panel); border: 1px solid #1f3a2f; border-radius: var(--radius); padding: 10px;
+    }
+    .tool {
+      display: grid; place-items: center; gap: 6px; padding: 10px 6px;
+      background: #0f241c; border: 1px solid #244033; border-radius: 10px;
+      font-size: 13px; text-align: center; cursor: pointer;
+    }
+    .tool:active { transform: translateY(1px); }
+    .tool .icon { font-size: 20px; }
+    @media (orientation: portrait) {
+      #logpanel { max-height: 38vh; }
+      #buildbar .grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    }
+    /* Schwebe-Log ein-/aus */
+    .hidden { display: none !important; }
   </style>
+
+  <!-- App-Versionsflag für Log -->
+  <script>
+    window.APP_VERSION = "v16.1.1";
+  </script>
 </head>
 <body>
-  <div id="root">
-    <canvas id="game"></canvas>
-
-    <!-- Toolbar -->
-    <div class="toolbar">
-      <span class="chip" id="chipBuild">CityBuilder v16.1.1</span>
-      <button class="btn ghost" id="btnLog">🧾 Log</button>
-      <button class="btn ghost" id="btnCache">🧹 Cache</button>
-      <button class="btn ghost" id="btnEditor">🧩 Editor</button>
-      <button class="btn ghost" id="btnInspector">🔎 Inspector</button>
-      <button class="btn" id="btnStart">▶️ Start</button>
-    </div>
-
-    <!-- Log -->
-    <div id="logWrap">
-      <div id="logHead">
-        <strong>Log</strong>
-        <span class="chip" id="chipVersions">index v16.1.1</span>
-        <button class="btn ghost" id="btnCopy">Kopieren</button>
-        <button class="btn ghost" id="btnClear">Leeren</button>
-      </div>
-      <div id="logPanel"><pre id="log"></pre></div>
-    </div>
-
-    <!-- Build sheet -->
-    <div id="buildSheet" class="hidden" aria-live="polite">
-      <div class="pill">Bauen (v16.1.1)</div>
-      <div id="buildBar">
-        <!-- Basistools -->
-        <div class="tool" data-tool="road">🛣️<small>Straße</small></div>
-        <div class="tool" data-tool="path">🚶<small>Weg</small></div>
-        <div class="tool" data-tool="bulldoze">🧹<small>Abreißen</small></div>
-
-        <!-- Lumberjack – aus Atlas -->
-        <div class="tool" data-tool="lumberjack_ug0">🪵<small>Holzfäller (T1)</small></div>
-        <div class="tool" data-tool="lumberjack_ug1">🪓<small>Holzfäller (T2)</small></div>
-
-        <div class="tool" data-tool="cancel">⛔<small>Abbrechen</small></div>
-      </div>
-    </div>
-
-    <!-- Floating Build Button -->
-    <button id="fabBuild" title="Bauen">🛠️</button>
-
-    <div id="toast"></div>
+  <!-- Top-Bar -->
+  <div id="topbar">
+    <span class="chip">CityBuilder <strong id="badgeVer">v16.1.1</strong></span>
+    <span class="chip" id="chipViewport">Viewport: -</span>
+    <div style="flex:1"></div>
+    <button class="btn" id="btnToggleLog">📜 Log</button>
+    <button class="btn" id="btnClearCache">🧹 Cache</button>
+    <button class="btn" id="btnInspector">🧪 Inspector</button>
+    <button class="btn" id="btnEditor">📝 Editor</button>
+    <button class="btn" id="btnBuild">🏗️ Bauen</button>
   </div>
 
-  <!-- CORE Module -->
-  <script>window.__APP_VERSION__="16.1.1";</script>
-  <script src="./game.js?v=16.1.1"></script>
-  <script src="./ui-build.js?v=16.1.1"></script>
-  <script src="./buildings.lumberjack.js?v=16.1.1"></script>
-  <script type="module" src="./core/path-overlay.js"></script>
-  
+  <!-- Logpanel -->
+  <div id="logpanel">
+    <h3>Log</h3>
+    <div id="logtxt"></div>
+    <div style="margin-top:8px; display:flex; gap:8px;">
+      <button class="btn" id="btnCopy">Log kopieren</button>
+      <button class="btn" id="btnClear">Log leeren</button>
+    </div>
+  </div>
+
+  <!-- Spiel-Canvas -->
+  <div id="gamewrap">
+    <canvas id="game" width="1280" height="720"></canvas>
+  </div>
+
+  <!-- Bau-Menü -->
+  <div id="buildbar" aria-label="Bauen (v16.1.1)">
+    <div class="grid">
+      <div class="tool" data-tool="road"><div class="icon">🛣️</div>Straße</div>
+      <div class="tool" data-tool="path"><div class="icon">🥾</div>Weg</div>
+      <div class="tool" data-tool="bulldoze"><div class="icon">🔧</div>Abreißen</div>
+      <div class="tool" data-tool="house"><div class="icon">🏠</div>Haus</div>
+      <div class="tool" data-tool="factory"><div class="icon">🏭</div>Fabrik</div>
+      <div class="tool" data-tool="cancel"><div class="icon">⛔</div>Abbrechen</div>
+    </div>
+  </div>
+
+  <!-- ===== App-Skripte (Reihenfolge!) =====
+       - ui-build.js: dein Bau-Menü
+       - boot.js, game.js: deine eigentliche App
+       - overlay-hooks.js: Add-on, das PathOverlay initialisiert und in Update/Render einhängt
+  -->
+  <script type="module" src="./ui-build.js"></script>
+  <script type="module" src="./boot.js"></script>
+  <script type="module" src="./game.js"></script>
+  <script type="module" src="./core/overlay-hooks.js"></script>
+
+  <!-- ===== Kleinzeug für Log/Bedienung ===== -->
   <script>
-    // ---------- Page bootstrap ----------
-    (function(){
-      const $ = sel => document.querySelector(sel);
-      const log = (...a)=>window.Log.write(...a);
+    const logEl = document.getElementById('logtxt');
+    const vpEl  = document.getElementById('chipViewport');
 
-      // Wire buttons
-      $("#btnLog").onclick=()=>$("#logWrap").classList.toggle("hidden");
-      $("#btnCache").onclick = async ()=>{
-        try{
-          if ('caches' in window) {
-            const names = await caches.keys();
-            for (const n of names) await caches.delete(n);
-          }
-          localStorage.clear(); sessionStorage.clear();
-          log("✅ (ok) Cache/Storage geleert – Seite ggf. neu laden");
-          toast("Cache geleert");
-        }catch(e){ log("❌ (err) Konnte Cache nicht leeren: "+e.message); }
+    function log(kind, msg) {
+      const icon = kind === 'ok' ? '✅' : kind === 'warn' ? '⚠️' : '❌';
+      const cls  = kind === 'ok' ? 'ok' : kind === 'warn' ? 'warn' : 'err';
+      const t = new Date().toTimeString().slice(0,8);
+      const line = document.createElement('div');
+      line.className = `logline ${cls}`;
+      line.textContent = `[${t}] ${icon} (${kind}) ${msg}`;
+      logEl.appendChild(line);
+      logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
+      try { console[kind==='err'?'error':kind==='warn'?'warn':'log'](msg); } catch {}
+    }
+    window.__UILog = log;
+
+    // UI boot
+    (function uiInit(){
+      document.getElementById('badgeVer').textContent = window.APP_VERSION;
+      const dpr = Math.round(window.devicePixelRatio || 1);
+      vpEl.textContent = `Viewport: ${window.innerWidth}x${window.innerHeight} dpr:${dpr}`;
+      __UILog('ok', `UI ready (index ${window.APP_VERSION})`);
+      // Buttons
+      const panel = document.getElementById('logpanel');
+      document.getElementById('btnToggleLog').onclick = () => panel.classList.toggle('hidden');
+      document.getElementById('btnClear').onclick = () => { logEl.innerHTML = ''; };
+      document.getElementById('btnCopy').onclick = async () => {
+        const text = [...logEl.children].map(n=>n.textContent).join('\n');
+        await navigator.clipboard.writeText(text);
+        __UILog('ok','Log in Zwischenablage');
       };
-      $("#btnEditor").onclick = ()=> {
-        if (window.GameEditor?.open) { window.GameEditor.open(); }
-        else log("⚠️ (warn) Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.");
-      };
-      $("#btnInspector").onclick = ()=> {
-        if (window.GameInspector?.toggle) { window.GameInspector.toggle(); }
-        else log("⚠️ (warn) Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.");
-      };
-      $("#btnCopy").onclick = ()=>window.Log.copy();
-      $("#btnClear").onclick = ()=>window.Log.clear();
-      $("#btnStart").onclick = ()=> startGame("./assets/maps/map-mini.json");
-      $("#fabBuild").onclick = ()=> document.getElementById("buildSheet").classList.toggle("hidden");
-
-      const toast = (t)=>{ const n=$("#toast"); n.textContent=t; n.style.display="block"; setTimeout(()=>n.style.display="none",1400); };
-
-      // Initial log
-      log(`✅ (ok) UI ready (index v${window.__APP_VERSION__})`);
-      const cvs = document.getElementById('game');
-      const dpr = Math.max(1, Math.floor(window.devicePixelRatio||1));
-      cvs.width = Math.floor(cvs.clientWidth * dpr);
-      cvs.height= Math.floor(cvs.clientHeight* dpr);
-      log(`✅ (ok) Canvas ${cvs.width}x${cvs.height} dpr:${dpr}`);
-
-      // Build UI init
-      window.UIBuild?.init?.();
-
-      // Versionsanzeige anderer Dateien
-      const versions = [];
-      if (window.Game?.version) versions.push(`game.js v${window.Game.version}`);
-      if (window.UIBuild?.version) versions.push(`ui-build.js v${window.UIBuild.version}`);
-      if (window.Buildings?.Lumberjack?.version) versions.push(`lumberjack v${window.Buildings.Lumberjack.version}`);
-      document.getElementById("chipVersions").textContent = ["index v"+window.__APP_VERSION__].concat(versions).join(" | ");
-      if (versions.length) log(`✅ (ok) Module: ${versions.join(" | ")}`);
-
-      // Autostart erst nach kurzer Zeit (oder per Button)
-      async function startGame(path){
-        if (!window.GameLoader?.start) {
-          log("❌ (err) GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?");
-          return;
+      document.getElementById('btnClearCache').onclick = async () => {
+        try {
+          localStorage.clear();
+          if ('caches' in window) { const keys = await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
+          __UILog('ok','Cache/Storage geleert – Seite ggf. neu laden');
+        } catch (e) {
+          __UILog('warn','Cache-Leeren nicht vollständig verfügbar');
         }
-        log(`✅ (ok) Start gedrückt → ${path}`);
-        try { await window.GameLoader.start(path); }
-        catch(e){ log("❌ (err) Start fehlgeschlagen: "+(e?.message||"Unbekannter Fehler")); }
-      }
-
-      window.__startGame = startGame;
+      };
+      document.getElementById('btnInspector').onclick = () => {
+        if (window.GameInspector?.toggle) window.GameInspector.toggle();
+        else __UILog('warn','Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
+      };
+      document.getElementById('btnEditor').onclick = () => {
+        if (window.GameEditor?.open) window.GameEditor.open();
+        else __UILog('warn','Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.');
+      };
+      // Bau-Menü togglen
+      const build = document.getElementById('buildbar');
+      document.getElementById('btnBuild').onclick = () => {
+        const s = build.style.display;
+        build.style.display = (s === 'none' || !s) ? 'block' : 'none';
+        __UILog('ok', s === 'none' || !s ? 'Bau-Menü geöffnet' : 'Bau-Menü geschlossen');
+      };
+      // Tools -> an Game weiterreichen
+      build.addEventListener('click', e => {
+        const t = e.target.closest('.tool');
+        if (!t) return;
+        const tool = t.dataset.tool;
+        window.GameUI?.setTool?.(tool);
+        __UILog('ok', `Tool gesetzt: ${tool}`);
+      });
     })();
   </script>
 </body>
