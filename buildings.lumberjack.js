@@ -1,39 +1,18 @@
-/* buildings.lumberjack.js v16.1.1
-   Bindet deinen Lumberjack-Atlas ein
-   Erwartet Dateien:
-   - assets/buildings/lumberjack/lumberjack_tiers_grid.png
-   - assets/buildings/lumberjack/lumberjack_tiers_grid.json
-     (Array von Einträgen wie in deiner CSV: {id, name, tier, variant, role, "frame.x", "frame.y"})
-*/
+/* Datei: buildings.lumberjack.js
+ * Version: v16.1.2
+ * Zweck:
+ *   - Frames/Einträge aus deiner CSV (vereinfacht) bereitstellen
+ *   - UI nutzt role === "BuildMenu" für Buttons
+ *   - GameTool.set("lumberjack:wood0") etc. verarbeitet in game.js
+ */
 
 (function(){
-  const version = "16.1.1";
-
-  const Buildings = window.Buildings = window.Buildings || {};
-  Buildings.Lumberjack = {
-    version,
-    async install(Game){
-      const base = "./assets/buildings/lumberjack/";
-      // Bild laden
-      const img = await loadImage(base+"lumberjack_tiers_grid.png?v="+version);
-      // Meta laden
-      const meta = await fetch(base+"lumberjack_tiers_grid.json?v="+version).then(r=>r.json());
-
-      // Default-Frame-Größe = 512x512 in deinem Grid (laut Beispielen) → wir mappen auf 64x64 Tiles
-      const FW = 512, FH = 512;
-
-      // Einträge in Game.atlas registrieren
-      for (const it of meta){
-        const key = it.id || it.name;
-        const sx = it["frame.x"]|0, sy = it["frame.y"]|0;
-        Game.setAtlas(key, { img, sx, sy, sw:FW, sh:FH });
-      }
-
-      Log.write(`✅ (ok) Lumberjack-Atlas geladen (${meta.length} Frames)`);
-    }
-  };
-
-  function loadImage(src){
-    return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("IMG "+src)); i.src=src; });
-  }
+  window.LUMBERJACK_FRAMES = [
+    { id:0, name:"lumberjack_wood0_ug0", tier:"Tier 1 (Holz)", variant:"wood0", role:"BuildMenu", frame:{x:0,y:0} },
+    { id:1, name:"lumberjack_wood0_ug1", tier:"Tier 1 (Holz)", variant:"wood0", role:"Placed",    frame:{x:512,y:0} },
+    { id:2, name:"lumberjack_wood1_ug0", tier:"Tier 2 (Teil-Stein)", variant:"wood1", role:"BuildMenu", frame:{x:0,y:512} },
+    { id:3, name:"lumberjack_wood1_ug1", tier:"Tier 2 (Teil-Stein)", variant:"wood1", role:"Placed",    frame:{x:512,y:512} },
+    { id:4, name:"lumberjack_wood2_ug0", tier:"Tier 3 (Stein)", variant:"wood2", role:"BuildMenu", frame:{x:0,y:1024} },
+    { id:5, name:"lumberjack_wood2_ug1", tier:"Tier 3 (Stein)", variant:"wood2", role:"Placed",    frame:{x:512,y:1024} }
+  ];
 })();
