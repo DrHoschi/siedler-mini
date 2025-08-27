@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-27T18:42:47.956Z",
+  "createdAt": "2025-08-27T19:08:55.483Z",
   "root": ".",
-  "count": 238,
+  "count": 239,
   "entries": [
     {
       "type": "dir",
@@ -848,13 +848,18 @@
     },
     {
       "type": "file",
+      "path": "core/overlay-hooks.js",
+      "size": 4163
+    },
+    {
+      "type": "file",
       "path": "core/path-index.js",
       "size": 3341
     },
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 9068
+      "size": 2761
     },
     {
       "type": "file",
@@ -1092,7 +1097,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 8798
+      "size": 8827
     },
     {
       "type": "file",
