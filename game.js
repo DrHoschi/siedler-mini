@@ -1,145 +1,210 @@
-/* =========================================================================
- *  Siedler-Mini — game.js
- *  Version: v16.1.0
- *  Zweck: sehr einfache Spielschicht + Ressourcen & Build-API
- *  Public API (von index/ui genutzt):
- *    - window.GameLoader.start(mapPath)
- *    - window.CityBuilder (setTool/placeAt/addResources/toggleFreeBuild/getResources)
- *    - window.GameEditor.open()   (Dummy)
- *    - window.GameInspector.toggle() (Dummy)
- * ========================================================================= */
+<!-- game.js v16.1.1 -->
+<script>
+(() => {
+  const VERSION = '16.1.1';
 
-(function(){
-  const V = 'v16.1.0';
-  const log = (type,msg)=>window.__gameLog ? window.__gameLog(type, msg) : console.log(`[${type}] ${msg}`);
+  // ---- Utils --------------------------------------------------------------
+  const $ = (sel) => document.querySelector(sel);
+  const logEl = $('#logText') || {appendChild(){},scrollTop:0,scrollHeight:0};
 
-  // --- Canvas & simple state ------------------------------------------------
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-
-  const Game = {
-    map:{ width:0,height:0,tile:64 },
-    running:false,
-    tool:'cancel',
-    freeBuild:false,
-    resources:{ wood:30, stone:30, coins:50 }, // Startwerte (anpassbar)
-    costs:{
-      road:   { stone:2 },
-      path:   { wood:1 },
-      house:  { wood:10, stone:5, coins:20 },
-      factory:{ stone:20, coins:50 },
-      bulldoze:{}, cancel:{}
-    },
-    placed:[], // demo: merken was gesetzt wurde
+  const stamp = () => new Date().toTimeString().split(' ')[0];
+  const ICON = {
+    ok: '✅',
+    warn: '⚠️',
+    err: '❌',
+    info: 'ℹ️',
   };
-
-  function fitCanvas(){
-    const dpr = Math.max(1, Math.round(window.devicePixelRatio || 1));
-    const w = Math.floor(window.innerWidth);
-    const h = Math.floor(window.innerHeight - 120); // Platz für Build-Bar
-    canvas.width = w * dpr; canvas.height = h * dpr;
-    canvas.style.width = w+'px'; canvas.style.height = h+'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    log('ok', `Canvas ${w}x${h} dpr:${dpr}`);
-    renderPlaceholder();
+  function log(level, msg) {
+    const line = `[${stamp()}] ${ICON[level]||''} (${level}) ${msg}\n`;
+    if (logEl && logEl.textContent !== undefined) {
+      logEl.textContent += line;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    // console mirror
+    (level==='err' ? console.error : level==='warn' ? console.warn : console.log)(msg);
   }
-  window.addEventListener('resize', fitCanvas);
 
-  function renderPlaceholder(){
-    // sehr simpler Hintergrund
-    ctx.fillStyle = '#2c5a3e';
+  // ---- Canvas bootstrap ---------------------------------------------------
+  const canvas = $('#game');
+  const ctx = canvas?.getContext?.('2d') || null;
+
+  function setCanvasSize() {
+    if (!canvas) return;
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const w = Math.floor(canvas.clientWidth);
+    const h = Math.floor(canvas.clientHeight);
+    canvas.width  = Math.max(1, Math.floor(w * dpr));
+    canvas.height = Math.max(1, Math.floor(h * dpr));
+    ctx?.setTransform(dpr,0,0,dpr,0,0);
+    log('ok', `Canvas ${canvas.width/dpr|0}x${canvas.height/dpr|0} dpr:${dpr}`);
+  }
+
+  // initial canvas paint (placeholder)
+  function placeholder(text='PLACEHOLDER-RENDER') {
+    if (!ctx || !canvas) return;
+    ctx.fillStyle = '#2e5a2e';
     ctx.fillRect(0,0,canvas.width,canvas.height);
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '14px ui-sans-serif';
-    ctx.fillText('PLACEHOLDER-RENDER (game.js '+V+')', 12, 24);
-    ctx.globalAlpha = 1;
-    // grobes Grid
-    const t = Game.map.tile||64;
-    ctx.strokeStyle = 'rgba(255,255,255,.06)';
-    for(let x=0;x<canvas.width;x+=t){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvas.height); ctx.stroke(); }
-    for(let y=0;y<canvas.height;y+=t){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke(); }
-    // Zeichne platzierte Items
-    Game.placed.forEach(p=>{
-      const x=p.x*t, y=p.y*t;
-      ctx.fillStyle = {road:'#7aa4b2', path:'#d7c28a', house:'#e8f1ff', factory:'#d0d6ff', bulldoze:'#ffb4b4'}[p.type]||'#fff';
-      ctx.fillRect(x+4,y+4,t-8,t-8);
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText(`${text} (game.js)`, 10, 18);
+  }
+
+  // ---- Game namespace -----------------------------------------------------
+  const Game = {
+    version: VERSION,
+    state: { started:false, map:null, atlas:null },
+    setStarted(v) { this.state.started = v; },
+  };
+  window.Game = Game; // for inspector/editor hooks
+
+  // ---- Robust resource helpers -------------------------------------------
+  async function fetchJson(url) {
+    let res;
+    try {
+      res = await fetch(url, {cache:'no-store'});
+    } catch (e) {
+      throw new Error(`NET_FAIL ${url} – ${e?.message||e}`);
+    }
+    if (!res.ok) {
+      throw new Error(`HTTP_${res.status} ${url}`);
+    }
+    try {
+      return await res.json();
+    } catch (e) {
+      throw new Error(`JSON_PARSE_FAIL ${url} – ${e?.message||e}`);
+    }
+  }
+
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`IMG_FAIL ${url}`));
+      img.src = url + (url.includes('?') ? '&' : '?') + `cb=${Date.now()}`;
     });
   }
 
-  // --- Ressourcen -----------------------------------------------------------
-  function hasResources(cost){
-    if (Game.freeBuild) return true;
-    return Object.entries(cost).every(([k, v]) => (Game.resources[k]||0) >= v);
-  }
-  function spend(cost){
-    if (Game.freeBuild) return true;
-    Object.entries(cost).forEach(([k,v]) => Game.resources[k]=(Game.resources[k]||0)-v);
-    CityBuilderUI?.syncResources?.(Game.resources);
-  }
-  function addRes(delta){
-    Object.entries(delta).forEach(([k,v]) => Game.resources[k]=(Game.resources[k]||0)+v);
-    CityBuilderUI?.syncResources?.(Game.resources);
+  // ---- Map validation -----------------------------------------------------
+  function validateMap(map) {
+    if (!map || typeof map !== 'object') return 'MAP_EMPTY';
+    const {width, height, tileSize, tileset} = map;
+    if (!width || !height) return 'MAP_DIM_ZERO';
+    if (!tileSize) return 'TILESIZE_MISSING';
+    if (!tileset || !tileset.image) return 'TILESET_MISSING';
+    return null;
   }
 
-  // --- Platzieren -----------------------------------------------------------
-  function place(type, gx, gy){
-    const cost = Game.costs[type] || {};
-    if (!hasResources(cost)) { log('warn', `Zu wenig Ressourcen für ${type}`); return false; }
-    spend(cost);
-    Game.placed.push({type,x:gx,y:gy});
-    log('ok', `Platziert: ${type} @ (${gx},${gy})`);
-    renderPlaceholder();
-    return true;
-  }
+  // ---- Start pipeline -----------------------------------------------------
+  async function start(mapPath) {
+    const labelPath = mapPath || './assets/maps/map-mini.json';
+    log('ok', `Start gedrückt → ${labelPath}`);
 
-  // --- Map-Loader (Minimal) -------------------------------------------------
-  async function loadMap(path){
-    // Dummy: liest nur meta (width/height/tile) – genug für Demo
-    const res = await fetch(path, {cache:'reload'});
-    const json = await res.json();
-    const w=json.width|0, h=json.height|0, tile=json.tile||64;
-    if (!w || !h){ log('err','Start fehlgeschlagen: Map: width/height fehlen oder sind 0'); return false; }
-    Game.map.width=w; Game.map.height=h; Game.map.tile=tile;
-    log('ok', `Map OK size ${w}x${h} tile ${tile}`);
-    return true;
-  }
+    try {
+      // load map
+      const map = await fetchJson(labelPath);
+      const vErr = validateMap(map);
+      if (vErr) throw new Error(vErr);
 
-  // --- Öffentliche API ------------------------------------------------------
-  window.GameLoader = {
-    async start(path){
-      log('ok', `GameLoader.start ${path}`);
-      const ok = await loadMap(path);
-      if (!ok) return;
-      Game.running = true;
-      renderPlaceholder();
+      // load tileset image
+      const img = await loadImage(map.tileset.image);
+
+      // announce what we have
+      log('ok', `Tileset (atlas) OK ${img.width}x${img.height}`);
+      log('ok', `Map OK size ${map.width}x${map.height} tile ${map.tileSize}`);
+
+      // simple render
+      placeholder('RENDER');
+      // (demo) draw grid
+      if (ctx) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        for (let x=0;x<=map.width;x++) {
+          ctx.beginPath();
+          ctx.moveTo(x*map.tileSize, 0);
+          ctx.lineTo(x*map.tileSize, map.height*map.tileSize);
+          ctx.stroke();
+        }
+        for (let y=0;y<=map.height;y++) {
+          ctx.beginPath();
+          ctx.moveTo(0, y*map.tileSize);
+          ctx.lineTo(map.width*map.tileSize, y*map.tileSize);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      Game.state.map = map;
+      Game.state.atlas = img;
+      Game.setStarted(true);
       log('ok', 'Game started');
+    } catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      // map specific friendly messages
+      if (msg.startsWith('HTTP_') || msg.startsWith('NET_FAIL')) {
+        log('err', `Start fehlgeschlagen: Ressourcenfehler (${msg})`);
+      } else if (msg.startsWith('JSON_PARSE_FAIL')) {
+        log('err', `Start fehlgeschlagen: Defekte JSON (${msg})`);
+      } else if (msg === 'MAP_DIM_ZERO' || msg === 'MAP_EMPTY' || msg === 'TILESIZE_MISSING' || msg === 'TILESET_MISSING') {
+        const friendly = {
+          MAP_EMPTY: 'Map leer/ungültig',
+          MAP_DIM_ZERO: 'Map: width/height fehlen oder sind 0',
+          TILESIZE_MISSING: 'Map: tileSize fehlt',
+          TILESET_MISSING: 'Map: tileset.image fehlt',
+        }[msg];
+        log('err', `Start fehlgeschlagen: ${friendly}`);
+      } else {
+        log('err', `Start fehlgeschlagen: Unbekannter Fehler (${msg})`);
+      }
+      Game.setStarted(false);
+      throw e; // rethrow for dev console
+    }
+  }
+
+  // ---- Loader facade (exposed) -------------------------------------------
+  const GameLoader = {
+    version: VERSION,
+    async start(path) {
+      return start(path);
     }
   };
+  window.GameLoader = GameLoader;
 
-  // Editor / Inspector Dummies (Hooks von index)
-  window.GameEditor = {
-    open(){ log('ok','Editor geöffnet (Dummy)'); }
-  };
-  window.GameInspector = {
-    _on:false,
-    toggle(){ this._on=!this._on; log('ok', `Inspector: ${this._on?'an':'aus'}`); }
-  };
+  // ---- Editor/Inspector dummies (until real modules are wired) -----------
+  if (!window.GameEditor) {
+    window.GameEditor = {
+      open() { log('warn', '(Dummy) Editor.open() – echtes Modul noch nicht eingebunden.'); }
+    };
+  }
+  if (!window.GameInspector) {
+    window.GameInspector = {
+      toggle() {
+        const on = !document.body.classList.contains('inspector-on');
+        document.body.classList.toggle('inspector-on', on);
+        log('ok', `Inspector: ${on ? 'an' : 'aus'}`);
+      }
+    };
+  }
 
-  // CityBuilder API (von ui-build.js verwendet)
-  window.CityBuilder = {
-    version: V,
-    setTool(t){ Game.tool = t; log('ok', `Tool gesetzt: ${t}`); },
-    getTool(){ return Game.tool; },
-    placeAt(gx,gy){ return place(Game.tool, gx, gy); },
-    addResources(delta){ addRes(delta); log('ok', `Ressourcen +${JSON.stringify(delta)}`); },
-    toggleFreeBuild(on){ Game.freeBuild = on; log(on?'ok':'warn', `Free-Build ${on?'an':'aus'}`); },
-    getResources(){ return {...Game.resources}; },
-    getCosts(){ return JSON.parse(JSON.stringify(Game.costs)); }
-  };
+  // ---- Boot ---------------------------------------------------------------
+  window.addEventListener('resize', setCanvasSize);
+  window.addEventListener('orientationchange', setCanvasSize);
 
-  // Boot
-  fitCanvas();
-  log('ok', `game.js initialisiert (Index meldet ${window.__indexVersion||'unbekannt'})`);
-  log('ok', `game.js geladen, ${V}`);
+  window.addEventListener('load', () => {
+    setCanvasSize();
+    placeholder();
+    // self-report versions so der Log immer beide sieht
+    log('ok', `game.js initialisiert (Index meldet v${(window.__UI_VERSION__||'unbekannt')})`);
+    log('ok', `game.js geladen (v${VERSION})`);
+    // optional: auto-start map if URL has ?map=...
+    const params = new URLSearchParams(location.search);
+    const map = params.get('map');
+    if (map) {
+      GameLoader.start(map).catch(()=>{ /* already logged */ });
+    }
+  });
+
+  // expose for index buttons
+  window.__GameStart__ = (path) => GameLoader.start(path).catch(()=>{});
+  window.__GameVersion__ = VERSION;
 })();
+</script>
