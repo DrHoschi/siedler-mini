@@ -2,182 +2,110 @@
 <html lang="de">
 <head>
   <!--
-    Projekt: Siedler-Mini
-    Datei: index.html
-    Version: v16.1.0
-    Zweck: Start-UI, Log, Build-HUD & Loader
-    Hinweise:
-    - Buttons oben rechts: Log, Cache, Inspector, Editor, Bauen
-    - Ressourcen-HUD & Free-Build unten
-    - game.js und ui-build.js Versionen werden im Log ausgewiesen
+    Projekt:  Siedler-Mini
+    Datei:    index.html
+    Version:  v16.1.0
+    Zweck:    Einstieg + UI + Build-Menü + Logging
+    Hinweis:  Bitte Versionsnummer bei jedem Patch erhöhen (Cache-Busting).
   -->
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
   <title>Siedler-Mini</title>
+
   <style>
     :root{
-      --bg:#0f2018; --panel:#10261d; --panel-2:#0b1a14; --txt:#d8ffe4; --mut:#9bd1ae;
-      --ok:#34d399; --warn:#f59e0b; --err:#ef4444; --badge:#1f3b2e; --accent:#1b7d53;
+      --bg:#0e1a14; --panel:#0f241a; --panel2:#0b1b15; --br:14px;
+      --ok:#50fa7b; --warn:#ffd166; --err:#ff6b6b; --muted:#9db2a3;
+      --btn:#1c3a2b; --btn2:#12261d; --btnHi:#2f5b45;
+      --logFont: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     }
-    html,body{height:100%;margin:0;background:#143a2a;color:var(--txt);font:16px/1.4 ui-sans-serif,system-ui,-apple-system,segoe ui,roboto,ubuntu,cantarell,noto sans;}
-    #root{position:fixed;inset:0;display:grid;grid-template-rows:1fr auto;}
-    /* Log Panel */
-    .log-wrap{position:absolute;left:16px;bottom:16px;max-width:min(720px,calc(100vw-32px));}
-    .card{background:rgba(16,38,29,.9);backdrop-filter:saturate(120%) blur(4px);border:1px solid #1f4536;border-radius:14px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);}
-    .buttons{display:flex;gap:12px;margin:10px 0 12px 0;flex-wrap:wrap}
-    .btn{background:#0b1a14;border:1px solid #1f3b2e;color:#c9f7de;border-radius:12px;padding:10px 14px;cursor:pointer}
-    .btn:hover{filter:brightness(1.05)}
-    .title-badge{display:inline-flex;align-items:center;gap:8px;background:var(--badge);padding:8px 12px;border-radius:12px;margin-right:10px}
-    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
-    .log{max-height:min(42vh,420px);overflow:auto;white-space:pre-wrap;font-size:14px;line-height:1.55}
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
-    /* Top actions */
-    .topbar{position:absolute;top:10px;right:10px;display:flex;gap:8px;z-index:5}
-    /* Canvas placeholder (dein Renderer zeichnet da rein) */
-    #game{position:absolute;inset:0}
-    /* Build HUD bottom */
-    .buildbar{grid-row:2;background:linear-gradient(180deg, rgba(16,38,29,.0) 0%, rgba(16,38,29,.85) 18%, rgba(16,38,29,.92) 100%);
-      border-top:1px solid #214a39;padding:10px 12px}
-    .build-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .pill{background:#0b1a14;border:1px solid #1e3a2f;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px}
-    .tool{min-width:116px;justify-content:center}
-    .spacer{flex:1}
-    .res{display:flex;gap:8px;align-items:center}
-    .chip{background:#0e221a;border:1px solid #214a39;border-radius:999px;padding:6px 10px;font-size:13px}
-    .switch{display:inline-flex;align-items:center;gap:8px}
-    input[type="checkbox"]{width:18px;height:18px}
-    @media (max-width: 680px){
-      .tool{min-width:98px}
-      .log-wrap{left:12px;right:12px;max-width:unset}
-    }
+    html,body{height:100%;margin:0;background:#0f1d17;color:#dfeee5;font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue","Noto Sans",sans-serif;}
+    #app{position:fixed; inset:0; display:grid; grid-template-rows: 1fr auto;}
+    #stage{background:#335c3a;}
+    /* floating log */
+    .logWrap{position:absolute; right:18px; bottom:18px; width:min(620px, 90vw); z-index:30;}
+    .logBox{background:linear-gradient(180deg,var(--panel),var(--panel2)); border-radius:var(--br); padding:14px 16px; box-shadow:0 8px 22px rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.05);}
+    .logHead{display:flex; gap:10px; align-items:center; margin-bottom:6px;}
+    .logHead h3{margin:0; font-size:18px;}
+    .logBtns button{background:var(--btn); border:1px solid rgba(255,255,255,.06); color:#cfe8d8; padding:8px 12px; border-radius:10px; cursor:pointer}
+    .logBtns button:hover{background:var(--btnHi)}
+    .log{font:var(--logFont); color:#bfead1; white-space:pre-wrap; max-height:40vh; overflow:auto;}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)} .muted{color:var(--muted)}
+    /* build bar */
+    #buildBar{position:fixed; left:0; right:0; bottom:0; z-index:25; padding:12px 14px; background:linear-gradient(180deg, transparent, rgba(0,0,0,.35) 20%, rgba(0,0,0,.7));}
+    .buildPanel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:12px; display:flex; gap:12px; overflow:auto;}
+    .buildBtn{min-width:140px; display:flex; align-items:center; gap:10px; background:var(--btn2); border:1px solid rgba(255,255,255,.06); padding:10px 12px; border-radius:12px; cursor:pointer; color:#e8f6ee}
+    .buildBtn:hover{background:var(--btnHi)}
+    .ico{width:36px;height:36px;background-size:1024px 1024px;background-repeat:no-repeat;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+    /* Icons aus Lumberjack-Atlas */
+    .atlas-lj{ background-image:url("./assets/buildings/lumberjack/lumberjack_tiers_grid.png?v=1610"); }
+    /* Platzhalter für Karte */
+    #stageMsg{position:absolute; left:12px; top:8px; color:rgba(255,255,255,.2); font:600 12px/1.1 ui-monospace,monospace; z-index:10}
   </style>
 </head>
 <body>
-  <div id="root">
-    <canvas id="game"></canvas>
+  <div id="app">
+    <canvas id="stage"></canvas>
+    <div id="stageMsg">PLACEHOLDER-RENDER (game.js)</div>
 
-    <!-- Top actions -->
-    <div class="topbar">
-      <button class="btn" id="btnLog">🗂️ Log</button>
-      <button class="btn" id="btnCache">🧹 Cache</button>
-      <button class="btn" id="btnInspector">🧭 Inspector</button>
-      <button class="btn" id="btnEditor">🛠️ Editor</button>
-      <button class="btn" id="btnBuild">🧱 Bauen</button>
-      <button class="btn" id="btnStart">▶️ Start</button>
-    </div>
-
-    <!-- Log Panel -->
-    <div class="log-wrap" id="logPanel" style="display:block;">
-      <div class="card">
-        <div>
-          <span class="title-badge mono"><strong>Log</strong></span>
-          <span class="chip mono" id="badgeInfo"></span>
+    <div class="logWrap">
+      <div class="logBox">
+        <div class="logHead">
+          <h3>Log</h3>
+          <div class="logBtns">
+            <button id="btnCopy">Log kopieren</button>
+            <button id="btnClear">Log leeren</button>
+            <button id="btnCache">Cache leeren</button>
+          </div>
         </div>
-        <div class="buttons">
-          <button class="btn" id="btnCopy">Log kopieren</button>
-          <button class="btn" id="btnClear">Log leeren</button>
-          <button class="btn" id="btnClearCache">Cache leeren</button>
-        </div>
-        <div class="mono log" id="logBox"></div>
+        <div id="log" class="log"></div>
       </div>
     </div>
 
-    <!-- Build HUD -->
-    <div class="buildbar">
-      <div class="build-row">
-        <div class="pill mono">Bauen (v16.1.0)</div>
-        <button class="btn tool" data-tool="road">🛣️ Straße</button>
-        <button class="btn tool" data-tool="path">🥾 Weg</button>
-        <button class="btn tool" data-tool="bulldoze">🪓 Abreißen</button>
-        <button class="btn tool" data-tool="house">🏠 Haus</button>
-        <button class="btn tool" data-tool="factory">🏭 Fabrik</button>
-        <button class="btn tool" data-tool="cancel">⛔ Abbrechen</button>
-        <div class="spacer"></div>
-        <div class="pill res mono">
-          <span class="chip">🌲 <span id="rWood">0</span></span>
-          <span class="chip">🪨 <span id="rStone">0</span></span>
-          <span class="chip">🪙 <span id="rCoins">0</span></span>
-          <button class="btn" id="btnGive100">+100</button>
-        </div>
-        <div class="pill switch mono">
-          <label><input type="checkbox" id="chkFree" /> Free-Build</label>
-        </div>
-      </div>
+    <div id="buildBar" hidden>
+      <div class="buildPanel" id="buildPanel"></div>
     </div>
   </div>
 
-  <!-- Scripts -->
-  <script src="./game.js?v=16.1.0"></script>
-  <script src="./ui-build.js?v=16.1.0"></script>
+  <!-- Scripts: Reihenfolge beachten -->
   <script>
-    // ------- index boot -------
+    // ---- Mini Logger ---------------------------------------------------------
     (function(){
-      const v = "v16.1.0";
-      const logBox = document.getElementById('logBox');
-      const badgeInfo = document.getElementById('badgeInfo');
-
-      function time(){ const d=new Date(); return `[${d.toTimeString().slice(0,8)}]`; }
-      function line(symbol, cls, msg){
-        const el=document.createElement('div'); el.className=cls;
-        el.textContent = `${time()} ${symbol} ${msg}`;
-        logBox.appendChild(el); logBox.scrollTop = logBox.scrollHeight;
-      }
-      window.UIlog = {
-        ok:(m)=>line('✅ (ok)', 'ok', m),
-        warn:(m)=>line('⚠️ (warn)', 'warn', m),
-        err:(m)=>line('❌ (err)', 'err', m),
+      const logEl = document.getElementById('log');
+      function ts(){ const d=new Date(); return `[${d.toTimeString().slice(0,8)}]`; }
+      function line(icon, cls, msg){ logEl.innerHTML += `${ts()} ${icon} <span class="${cls}">${msg}</span>\n`; logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight; }
+      window.AppLog = {
+        ok:   m=>line('✅','ok',   m),
+        warn: m=>line('⚠️','warn', m),
+        err:  m=>line('❌','err',  m),
+        note: m=>line('•','muted', m),
+        copy(){ navigator.clipboard.writeText(logEl.textContent||'').then(()=>AppLog.ok('Log in Zwischenablage')); },
+        clear(){ logEl.textContent=''; },
       };
-      badgeInfo.textContent = `UI ready (index ${v})`;
-      UIlog.ok(`UI ready (index ${v})`);
-
-      // wire game logger to our UI logger
-      window.__gameLog = (type, m)=>{
-        ({ok:UIlog.ok, warn:UIlog.warn, err:UIlog.err}[type]?.(m));
-      };
-
-      // Buttons
-      document.getElementById('btnCopy').onclick = ()=>{
-        const range = document.createRange(); range.selectNode(logBox);
-        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-        try{ document.execCommand('copy'); UIlog.ok('Log in Zwischenablage'); } finally{ sel.removeAllRanges(); }
-      };
-      document.getElementById('btnClear').onclick = ()=>{ logBox.textContent=''; };
-      document.getElementById('btnClearCache').onclick = clearCaches;
-      document.getElementById('btnCache').onclick = clearCaches;
-      function clearCaches(){
-        try {
-          localStorage.clear(); sessionStorage.clear();
-          if ('caches' in window){ caches.keys().then(keys=>keys.forEach(k=>caches.delete(k))); }
-          UIlog.ok('Cache/Storage geleert – Seite ggf. neu laden');
-        } catch(e){ UIlog.warn('Cache leeren nicht vollständig möglich'); }
-      }
-
-      // Start
-      const defaultMap = './assets/maps/map-mini.json';
-      document.getElementById('btnStart').onclick = ()=>{
-        UIlog.ok(`Start gedrückt → ${defaultMap}`);
-        if (window.GameLoader?.start){ window.GameLoader.start(defaultMap); }
-        else UIlog.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-      };
-
-      // Inspector / Editor (Hooks)
-      document.getElementById('btnInspector').onclick = ()=>{
-        if (window.GameInspector?.toggle){ window.GameInspector.toggle(); }
-        else UIlog.warn('Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
-      };
-      document.getElementById('btnEditor').onclick = ()=>{
-        if (window.GameEditor?.open){ window.GameEditor.open(); }
-        else UIlog.warn('Editor ist (noch) nicht eingebunden – window.GameEditor.open() fehlt.');
-      };
-
-      // Build panel & resources wiring (ui-build.js exposes CityBuilderUI)
-      window.addEventListener('ui-build-ready', ()=>{
-        UIlog.ok('Bau-Menü bereit (ui-build.js v16.1.0)');
+      window.addEventListener('load', ()=>{
+        document.getElementById('btnCopy').onclick = AppLog.copy;
+        document.getElementById('btnClear').onclick = AppLog.clear;
+        document.getElementById('btnCache').onclick = async ()=>{
+          try{
+            if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
+            if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.unregister())); }
+            if(window.localStorage) localStorage.clear(); if(window.sessionStorage) sessionStorage.clear();
+            AppLog.ok('Cache/Storage geleert – Seite ggf. neu laden');
+          }catch(e){ AppLog.err('Cache/Storage leeren fehlgeschlagen'); }
+        };
       });
-
-      // expose helper for game.js to write into our log
-      window.__indexVersion = v;
+      AppLog.ok(`UI ready (index v16.1.0)`);
     })();
   </script>
+
+  <!-- Buildings-Atlas (neu) -->
+  <script src="./src/assets.buildings.js?v=16.1.0"></script>
+
+  <!-- Build-UI -->
+  <script src="./src/ui-build.js?v=16.1.0"></script>
+
+  <!-- Spiel-Logik (Platzhalter wie gehabt) -->
+  <script src="./src/game.js?v=16.1.0"></script>
 </body>
 </html>
