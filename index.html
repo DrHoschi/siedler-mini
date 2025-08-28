@@ -1,85 +1,248 @@
 <!doctype html>
 <html lang="de">
 <head>
+  <!-- =========================================================
+       CityBuilder / Start-UI + Inspector-Hook
+       Datei: index.html
+       Version: v16.1.4
+       Zweck:
+         - Start-Screen vor Spielstart (Map-Auswahl)
+         - feste Buttons (Inspector rechts, Bauen links)
+         - lädt ui-build.js (UI), inspector.js (Inspector)
+         - bindet Cache-Booster & Log-Integration ein
+       ========================================================= -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>CityBuilder Mini</title>
+  <meta name="theme-color" content="#0e2a1c" />
 
-  <!-- =========================================================
-       UI / Version-Badge / Basis-Styles
-       Hinweis: Styles so belassen, Inspector bringt seine eigenen mit.
-       ========================================================= -->
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="stylesheet" href="./style.css" />
-  <link rel="stylesheet" href="./styles.css" />
-  <!-- Build-UI (Buttons unten wie „Straße / Weg / …“) -->
-  <link rel="stylesheet" href="./assets/ui/ui-build.css" />
+  <title>CityBuilder UI v16.1.4</title>
+
+  <!-- Basestyles (deine vorhandenen CSS können bleiben; Reihenfolge: base -> platform -> ui) -->
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/platform.css">
+  <link rel="stylesheet" href="./css/mobile.css">
+  <link rel="stylesheet" href="./assets/ui/ui-build.css"><!-- enthält Start-Screen/Buttons Styles -->
+
+  <!-- Manifeste/Icons optional -->
+  <link rel="manifest" href="./manifest.webmanifest">
 
   <style>
-    /* --- kleine Hilfen: Version-Badge oben links --- */
-    .ui-version-badge {
-      position: fixed; top: 12px; left: 12px; z-index: 1200;
-      padding: 4px 8px; border-radius: 10px;
-      font: 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      background: rgba(0,0,0,.35); color: #fff; backdrop-filter: blur(4px);
-      pointer-events: none;
-    }
-    /* Platzhalter fürs Canvas (wird von game.js angelegt/geresized) */
-    #game-root { position: relative; width: 100vw; height: 100vh; overflow: hidden; background:#0e3b26; }
-  </style>
+    /* --- Minimal-Fallbacks, falls base.css nicht alles abdeckt --- */
+    html,body { height:100%; margin:0; background:#0f2d1f; color:#e6ffe6; }
+    #game-root { position:relative; width:100%; height:100%; overflow:hidden; }
 
-  <!-- =========================================================
-       Version-Info, damit alles im Log auftaucht
-       ========================================================= -->
-  <script>
-    window.AppVersion = {
-      index: "16.1.4",
-      note:  "Inspector+Logs integriert"
-    };
-  </script>
+    /* Start-Screen Overlay */
+    .start-overlay {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,0.6); z-index: 40;
+    }
+    .start-card {
+      width:min(720px,92vw); border-radius:16px; padding:18px 18px 14px;
+      background:rgba(17,42,30,0.9); backdrop-filter: blur(6px); box-shadow:0 10px 32px rgba(0,0,0,0.5);
+      border:1px solid rgba(255,255,255,0.12);
+    }
+    .start-card h1 { margin:0 0 8px; font-size:1.25rem; }
+    .start-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+    .start-row label { opacity:.9; }
+    .btn, .chip {
+      appearance:none; border:none; cursor:pointer; border-radius:14px; padding:10px 14px; font-weight:600;
+      background:#1d5c45; color:#eaffea; box-shadow:inset 0 -2px 0 rgba(0,0,0,.25);
+    }
+    .btn.secondary { background:#244b3b; }
+    select.map-select {
+      background:#0e3828; color:#eaffea; border-radius:10px; padding:8px 10px; border:1px solid rgba(255,255,255,.15);
+    }
+
+    /* Fixed Buttons (Inspector rechts unten – immer sichtbar; Build links unten – erst nach Start sichtbar) */
+    .fixed-btn {
+      position:fixed; bottom:14px; z-index:35;
+      display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:16px;
+      box-shadow:0 10px 28px rgba(0,0,0,.35), inset 0 -2px 0 rgba(0,0,0,.25);
+      font-weight:700; border:none; cursor:pointer;
+    }
+    #btn-inspector { right:14px; background:#274c40; color:#d6ffdf; }
+    #btn-build     { left:14px;  background:#274c40; color:#d6ffdf; display:none; /* wird nach Start aktiviert */ }
+
+    /* Inspector Overlay (Full-Screen) */
+    .inspector-overlay {
+      position:fixed; inset:0; z-index:50; display:none;
+      background:rgba(0,0,0,.65);
+    }
+    .inspector-panel {
+      position:absolute; inset:14px; border-radius:18px; overflow:hidden;
+      background:rgba(18,40,30,.98); backdrop-filter: blur(8px);
+      display:flex; flex-direction:column; border:1px solid rgba(255,255,255,.12);
+    }
+    .inspector-head, .inspector-foot {
+      padding:10px 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      background:rgba(255,255,255,.04);
+    }
+    .inspector-body { flex:1; overflow:auto; padding:12px; }
+    .tag { padding:6px 10px; border-radius:999px; background:#1c5e47; font-weight:700; }
+    .ghost { opacity:.65 }
+    .right { margin-left:auto; }
+
+    /* Log Box innen im Inspector */
+    .log-box {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size:13px; line-height:1.45; white-space:pre-wrap;
+      background:#0b2218; color:#b9ffbf; border-radius:10px; padding:12px; border:1px solid rgba(255,255,255,.06);
+      min-height:160px;
+    }
+  </style>
 </head>
 <body>
-  <div id="game-root"></div>
-  <div class="ui-version-badge" id="uiVersionBadge">UI v16.1.4</div>
+  <div id="game-root">
+    <!-- Hier rendert dein Canvas/Spiel (game.js) hinein -->
+    <canvas id="game-canvas"></canvas>
 
-  <!-- =========================================================
-       SPIEL-SCRIPTS
-       Reihenfolge: Boot → Kern → Spiel → UI
-       ========================================================= -->
-  <script src="./boot.js" defer></script>
-  <script src="./core/asset.js" defer></script>
-  <script src="./core/terrain.js" defer></script>
-  <script src="./core/camera.js" defer></script>
-  <script src="./core/actor.js" defer></script>
-  <script src="./core/asset.items.js" defer></script>
-  <script src="./core/path-index.js" defer></script>
-  <script src="./core/path-overlay.js" defer></script>
-  <script src="./render.js" defer></script>
-  <script src="./world.js" defer></script>
-  <script src="./game.js" defer></script>
-  <script src="./input.js" defer></script>
-  <script src="./ui-build.js" defer></script>
+    <!-- ============================ START-SCREEN ============================ -->
+    <div id="start-overlay" class="start-overlay" aria-hidden="false">
+      <div class="start-card">
+        <h1>CityBuilder starten <span id="ui-version" class="tag ghost">UI v16.1.4</span></h1>
+        <div class="start-row">
+          <label for="map-select">Karte:</label>
+          <select id="map-select" class="map-select">
+            <!-- WICHTIG: nur hier wählbar; im Inspector NICHT mehr -->
+            <option value="./assets/maps/map-mini.json" selected>map-mini.json (16×10)</option>
+            <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
+            <option value="./assets/maps/map-demo.json">map-demo.json (Demo)</option>
+            <option value="./assets/maps/map-test-all.json">map-test-all.json (Test)</option>
+          </select>
+          <button id="btn-start" class="btn">Start</button>
+          <button id="btn-reset" class="btn secondary">Neu starten</button>
+        </div>
+        <div class="start-row">
+          <button id="btn-clear" class="btn secondary">Cache leeren</button>
+          <button id="btn-copylog" class="btn secondary">Log kopieren</button>
+          <span class="chip">🔧 Tools hier (Start-Phase)</span>
+        </div>
+        <div id="start-tip" class="start-row" style="opacity:.75">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</div>
+      </div>
+    </div>
 
-  <!-- =========================================================
-       Inspector – jetzt inkl. Log-Konsole & Cache-Booster
-       Toggle-Button bleibt stets sichtbar, Panel ausblendbar
-       ========================================================= -->
+    <!-- =============== FIXED BUTTONS (ständig / nach Start) ================= -->
+    <button id="btn-inspector" class="fixed-btn" title="Inspector öffnen/schließen">🧭 Inspector</button>
+    <button id="btn-build"     class="fixed-btn" title="Bau-Menü öffnen/schließen">🏗️ Bauen</button>
+  </div>
+
+  <!-- =============== INSPECTOR (Full-Screen Overlay) ================= -->
+  <div id="inspector" class="inspector-overlay" aria-hidden="true">
+    <div class="inspector-panel">
+      <div class="inspector-head">
+        <strong>Inspector / Test-Cockpit</strong>
+        <span id="inspector-version" class="tag">v16.1.4</span>
+        <span id="game-version-tag" class="tag ghost">game.js: unbekannt</span>
+        <span class="right"></span>
+        <button id="ins-close" class="btn secondary">Schließen</button>
+      </div>
+      <div class="inspector-body">
+        <!-- Logs integriert (ersetzt lose Log-Felder auf der Spielfläche) -->
+        <h3>Log</h3>
+        <div id="log-box" class="log-box" aria-live="polite"></div>
+        <div class="start-row">
+          <button id="ins-copylog" class="btn secondary">Log kopieren</button>
+          <button id="ins-clear"   class="btn secondary">Cache leeren</button>
+          <span class="chip ghost">Alle Test-Tools hier gebündelt – Spieloberfläche bleibt frei.</span>
+        </div>
+
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,.08);margin:14px 0;">
+        <h3>Ressourcen (Schnelltest)</h3>
+        <div class="start-row">
+          <button class="btn" data-add-res="100">+100</button>
+          <button class="btn" data-add-res="1000">+1000</button>
+          <button class="btn secondary" data-add-res="0">0</button>
+          <span class="chip ghost">setzt interne Test-Ressourcen, wenn implementiert</span>
+        </div>
+      </div>
+      <div class="inspector-foot">
+        <span class="ghost">✅ Versionen im Log; Cache-Booster vorhanden.</span>
+        <span class="right"></span>
+        <button id="ins-close-2" class="btn">Inspector schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Skripte laden ===================== -->
+  <!-- WICHTIG: Reihenfolge (UI zuerst, dann Inspector; game.js lädt/initialisiert sich selbst) -->
+  <script src="./ui-build.js"></script>
+  <script src="./assets/inspector/inspector.js"></script>
+  <script src="./game.js"></script>
+
   <script>
-    // Minimaler Log-Helper (wird von inspector aufgegriffen)
+    // =========================================================
+    // Boot-Kleber: verbindet UI/Inspector mit deinem Spiel.
+    // NUR hier verdrahten – die eigentliche Logik steckt in ui-build.js & inspector.js
+    // =========================================================
     (function(){
-      const q = [];
-      const api = {
-        push(level, msg){
-          q.push({ts:new Date(), level, msg});
-          window.dispatchEvent(new CustomEvent("game:log",{detail:{level,msg}}));
+      const UI = window.UI;            // aus ui-build.js
+      const Inspector = window.Inspector; // aus inspector.js
+
+      // UI init
+      UI?.init({
+        version: "v16.1.4",
+        onStart: (mapPath) => {
+          // -> SPIEL STARTEN
+          try {
+            UI.log(`✅ (ok) Start gedrückt → ${mapPath}`);
+            if (window.GameLoader?.start) {
+              window.GameLoader.start(mapPath);
+              UI.log(`✅ (ok) GameLoader.start ${mapPath}`);
+              // Build-Button freischalten
+              document.getElementById('btn-build').style.display = 'inline-flex';
+              // Start-Screen ausblenden
+              UI.hideStart();
+            } else {
+              UI.log(`❌ (err) GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?`);
+            }
+          } catch (err){
+            UI.log(`❌ (err) Start fehlgeschlagen: ${err?.message || err}`);
+          }
         },
-        drain(){ return q.splice(0,q.length); }
-      };
-      window.TestLog = window.TestLog || api;
-      // kleine Startmeldung
-      api.push("ok", `UI ready (index v${(window.AppVersion||{}).index||"?"})`);
+        onReset: () => {
+          try {
+            // hier optional Spiel-Reset, ansonsten Seite reloaden
+            location.reload();
+          } catch(e){
+            UI.log(`⚠️ (warn) Reset: Seite neu laden nötig.`);
+            location.reload();
+          }
+        },
+        onClear: () => Inspector?.clearCache?.(),
+        onCopyLog: () => Inspector?.copyLog?.()
+      });
+
+      // Inspector init
+      Inspector?.init({
+        version: "v16.1.4",
+        getLogText: () => UI?.getLog?.() || "",
+        onCopyLog: () => UI?.copyLog?.(),
+        onClearCache: () => UI?.clearCache?.(),
+        onAddResources: (n) => {
+          // Hook in deine Ressourcen-Logik:
+          if (window.Game?.addTestResources) {
+            window.Game.addTestResources(n);
+            UI.log(`✅ (ok) Ressourcen geändert: ${n}`);
+          } else {
+            UI.log(`⚠️ (warn) Ressourcen-Hook noch nicht angebunden`);
+          }
+        }
+      });
+
+      // feste Buttons binden
+      document.getElementById('btn-inspector')?.addEventListener('click', Inspector.toggle);
+      document.getElementById('btn-build')?.addEventListener('click', () => {
+        if (window.UI?.toggleBuildMenu) return UI.toggleBuildMenu();
+        UI.log("⚠️ (warn) Bau-Menü-Hook noch nicht angebunden.");
+      });
+
+      // game.js → Version in Tag spiegeln (falls gemeldet)
+      window.addEventListener('game:version', (ev) => {
+        const tag = document.getElementById('game-version-tag');
+        tag.textContent = `game.js: ${ev.detail}`;
+        tag.classList.remove('ghost');
+      });
     })();
   </script>
-  <script src="./assets/inspector/inspector.js" defer></script>
 </body>
 </html>
