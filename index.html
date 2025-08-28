@@ -1,248 +1,115 @@
 <!doctype html>
 <html lang="de">
 <head>
+  <!--
+    CityBuilder UI – Index
+    Version: v16.1.6
+    Zweck:
+      - Start-Fenster (Karte wählen, Start/NeuStart/Cache)
+      - Inspector-Button immer sichtbar (rechts unten)
+      - Bau-Menü-Button erst NACH Spielstart (links unten)
+    Wichtige Hooks:
+      - 'cb:game-started' (wird in game.js gefeuert)
+    Cache-Booster:
+      - Query-Parameter ?v=16.1.6 an CSS/JS
+  -->
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>CityBuilder – v16.1.5</title>
-
-  <!-- Basis-Styles -->
-  <link rel="stylesheet" href="./css/base.css">
-  <link rel="stylesheet" href="./css/platform.css">
-  <link rel="stylesheet" href="./css/mobile.css">
-  <link rel="stylesheet" href="./css/ios.css">
-  <link rel="stylesheet" href="./css/desktop.css">
-  <!-- UI Styles (Build-Menü & Start-Overlay) -->
-  <link rel="stylesheet" href="./assets/ui/ui-build.css">
-
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>CityBuilder UI v16.1.6</title>
+  <link rel="manifest" href="./manifest.webmanifest?v=16.1.6" />
+  <link rel="stylesheet" href="./styles.css?v=16.1.6" />
+  <link rel="stylesheet" href="./css/base.css?v=16.1.6" />
+  <link rel="stylesheet" href="./assets/ui/ui-build.css?v=16.1.6" />
   <style>
-    /* ===== UI v16.1.5 – kleine, zentralisierte Helfer ===== */
-
-    /* Start-Overlay – liegt über allem, bis „Start“ gedrückt wurde */
-    #startOverlay {
-      position: fixed; inset: 0; z-index: 2000;
-      display: flex; align-items: flex-end; justify-content: center;
-      background: rgba(6,18,10,0.66); backdrop-filter: blur(3px);
-      pointer-events: auto;
+    /* --- Mini-UI hier, damit alles in EINER Datei klar ist --- */
+    :root {
+      --ui-v: "v16.1.6";
+      --panel-bg: rgba(20,40,30,.9);
+      --panel-br: 14px;
     }
-    #startCard {
-      width: min(900px, 96vw);
-      margin: 16px; padding: 16px;
-      border-radius: 14px;
-      background: rgba(10,40,26,0.9);
-      color: #e9ffee;
-      box-shadow: 0 12px 28px rgba(0,0,0,.35);
-    }
-    #startCard h1 { margin: 0 0 10px 0; font-size: 22px; }
-    #startCard .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin: 8px 0; }
-    #startCard select, #startCard button { font-size: 16px; }
-    #startCard .hint { opacity:.8; font-size:14px; margin-top:10px; }
+    body { margin:0; background:#0f2a20; color:#e8f4ec; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
-    /* Floating Buttons */
+    /* Start-Panel */
+    #startPanel {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      margin: 0 auto 16px; max-width: 720px;
+      background: var(--panel-bg);
+      border-radius: var(--panel-br);
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+      padding: 16px;
+      z-index: 1000;
+    }
+    #startPanel.hidden { display:none; }
+    #startPanel .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    #startPanel h1 { font-size: 20px; margin: 0 0 8px; }
+    .badge { background:#2e5e4b; border-radius:999px; padding:4px 10px; font-size:12px; margin-left:8px; }
+    select, button {
+      appearance:none; -webkit-appearance:none;
+      background:#214f3d; color:#e8f4ec; border:1px solid #2c6c54;
+      border-radius:12px; padding:10px 14px; font-weight:600;
+    }
+    button.primary { background:#236a52; }
+    button.ghost { background:#1b4234; }
+    button:disabled { opacity:.5; }
+
+    /* Schwebe-Buttons unten links/rechts */
     .fab {
-      position: fixed; bottom: 16px; width: 52px; height: 52px;
-      border-radius: 50%; border: 0;
-      display: grid; place-items: center;
-      background: rgba(24,90,60,.92);
-      color: #eafff1; font-weight: 600;
-      box-shadow: 0 10px 22px rgba(0,0,0,.35);
-      z-index: 1500;
+      position: fixed; bottom: 18px; width:56px; height:56px;
+      border-radius: 50%; border:1px solid #2c6c54;
+      background:#1b4234; display:grid; place-items:center;
+      color:#e8f4ec; z-index: 1100;
+      box-shadow: 0 6px 24px rgba(0,0,0,.35);
     }
-    .fab:active { transform: translateY(1px) scale(.98); }
-    #btnInspector { right: 16px; }       /* immer sichtbar */
-    #btnBuild     { left: 16px; display:none; } /* erst nach Start sichtbar */
+    .fab:active { transform: translateY(1px); }
+    #btnInspector { right: 18px; }  /* immer sichtbar */
+    #btnBuild     { left:  18px; display:none; } /* erst nach Spielstart */
 
-    /* Log-Badge oben links (UI-Version) */
-    #uiVersionBadge {
-      position: fixed; top: 10px; left: 10px; z-index: 1500;
-      background: rgba(10,40,26,0.85); color:#bef3cf;
-      border-radius: 12px; padding: 4px 8px; font-size: 12px;
-    }
-
-    /* Canvas füllt den verfügbaren Bereich – dein Game Code setzt Größe dynamisch */
-    #gameRoot, #gameCanvas { position: absolute; inset: 0; }
+    /* Platz für Canvas */
+    #gameRoot { position: fixed; inset: 0; }
   </style>
 </head>
 <body>
 
-  <!-- Versions-Badge -->
-  <div id="uiVersionBadge">UI v16.1.5</div>
+  <!-- Canvas/Spielbereich -->
+  <div id="gameRoot"></div>
 
-  <!-- Spiel-Container -->
-  <div id="gameRoot">
-    <canvas id="gameCanvas"></canvas>
-  </div>
+  <!-- Start-Panel (erscheint beim Laden / verschwindet nach Start) -->
+  <section id="startPanel" aria-label="CityBuilder starten">
+    <h1>CityBuilder starten <span class="badge">UI v16.1.6</span></h1>
 
-  <!-- ===== Start-Overlay (nur Start/Restart/Cache/Log – KEINE Dev-Tools) ===== -->
-  <div id="startOverlay" aria-modal="true">
-    <div id="startCard">
-      <h1>CityBuilder starten <span style="font-size:13px;opacity:.75;">UI v16.1.5</span></h1>
+    <div class="row" style="gap:10px 12px">
+      <label for="mapSelect">Karte:</label>
+      <select id="mapSelect">
+        <!-- Hinweis: Einträge sind bewusst „roh“; die Engine lädt selbst -->
+        <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
+        <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
+      </select>
 
-      <!-- Kartenwahl: nur die Maps, die es wirklich gibt -->
-      <div class="row">
-        <label for="mapSelect">Karte:</label>
-        <select id="mapSelect" aria-label="Karte wählen">
-          <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
-          <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
-        </select>
-        <button id="btnStart" class="primary">Start</button>
-      </div>
-
-      <div class="row">
-        <button id="btnRestart">Neu starten</button>
-        <button id="btnCacheClear">Cache leeren</button>
-        <button id="btnLogCopy">Log kopieren</button>
-      </div>
-
-      <div class="hint">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</div>
-
-      <!-- Kompakter Start-Log (nur wenn nötig sichtbar, der volle Log ist im Inspector) -->
-      <pre id="startMiniLog" style="margin-top:10px;max-height:120px;overflow:auto;background:rgba(0,0,0,.25);padding:8px;border-radius:8px;"></pre>
+      <button id="btnStart" class="primary">Start</button>
     </div>
-  </div>
 
-  <!-- ===== Floating Buttons ===== -->
+    <div class="row" style="margin-top:10px">
+      <button id="btnRestart" class="ghost">Neu starten</button>
+      <button id="btnCache" class="ghost">Cache leeren</button>
+      <button id="btnLogCopy" class="ghost">Log kopieren</button>
+    </div>
+
+    <details style="margin-top:12px">
+      <summary>🔧 Tools hier (Start-Phase)</summary>
+      <p style="opacity:.8;margin:.5em 0 0">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</p>
+    </details>
+  </section>
+
+  <!-- Inspector-Button (immer sichtbar, rechts unten) -->
   <button id="btnInspector" class="fab" title="Inspector öffnen/schließen">🛠️</button>
+
+  <!-- Bau-Menü-Button (links unten, NACH Spielstart sichtbar) -->
   <button id="btnBuild" class="fab" title="Bau-Menü öffnen">🏗️</button>
 
-  <!-- ===== Skripte (Reihenfolge beibehalten) =====
-       Wichtig: globale Objekte wie window.GameLoader, window.GameUI, window.GameLog
-  -->
-  <script src="./storage.js"></script>
-  <script src="./debug.js"></script>
-  <script src="./boot.js"></script>
-  <script src="./game.js"></script>
-  <script src="./render.js"></script>
-  <script src="./world.js"></script>
-  <script src="./textures.js"></script>
-  <script src="./input.js"></script>
-  <script src="./ui-build.js"></script> <!-- dein vorhandenes Build-Menü (Root) -->
-
-  <!-- Dev-Inspector (nur Tooling, KEINE Gameplay-Funktionen) -->
-  <script src="./assets/inspector/inspector.js"></script>
-
-  <!-- ===== Start-/UI-Glue (neu in v16.1.5) ===== -->
-  <script>
-    // ---------- kleines Log-Utility (leitet auch an Inspector weiter) ----------
-    window.GameLog = (function(){
-      const lines = [];
-      const listeners = new Set();
-      function push(kind, msg){
-        const stamp = new Date().toTimeString().slice(0,8);
-        const line = `[${stamp}] ${kind} ${msg}`;
-        lines.push(line);
-        // Mini-Start-Log aktualisieren (falls sichtbar)
-        const mini = document.getElementById('startMiniLog');
-        if (mini) {
-          mini.textContent = (lines.slice(-20).join('\n'));
-        }
-        // Inspector informieren
-        listeners.forEach(fn => fn(line));
-        // auch in Konsole (hilfreich am Desktop)
-        if (kind.includes('❌')) console.error(line);
-        else if (kind.includes('⚠️')) console.warn(line);
-        else console.log(line);
-      }
-      return {
-        ok: (m)=>push('✅ (ok)', m),
-        warn: (m)=>push('⚠️ (warn)', m),
-        err: (m)=>push('❌ (err)', m),
-        tap: (m)=>push('•', m),
-        get: ()=>lines.slice(),
-        on(fn){ listeners.add(fn); },
-        off(fn){ listeners.delete(fn); }
-      };
-    })();
-
-    GameLog.ok('UI bereit (index v16.1.5)');
-
-    // ---------- Start-Overlay Logik ----------
-    (function(){
-      const startOverlay = document.getElementById('startOverlay');
-      const btnStart      = document.getElementById('btnStart');
-      const btnRestart    = document.getElementById('btnRestart');
-      const btnCache      = document.getElementById('btnCacheClear');
-      const btnLogCopy    = document.getElementById('btnLogCopy');
-      const mapSelect     = document.getElementById('mapSelect');
-      const btnInspector  = document.getElementById('btnInspector');
-      const btnBuild      = document.getElementById('btnBuild');
-
-      // Inspector-Button (immer sichtbar, unten rechts)
-      btnInspector.addEventListener('click', ()=> {
-        if (window.GameInspector && window.GameInspector.toggle) {
-          window.GameInspector.toggle();
-        } else {
-          GameLog.warn('Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
-        }
-      });
-
-      // Bau-Button (erst nach Start sichtbar)
-      btnBuild.addEventListener('click', ()=> {
-        if (window.GameUI && window.GameUI.openBuildMenu) {
-          window.GameUI.openBuildMenu();
-        } else {
-          GameLog.warn('Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.');
-        }
-      });
-
-      // Start drückt: Karte laden, Overlay schließen, Bau-Button einschalten
-      btnStart.addEventListener('click', ()=> {
-        const map = mapSelect.value || './assets/maps/map-mini.json';
-        if (!window.GameLoader || !window.GameLoader.start) {
-          GameLog.err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-          return;
-        }
-        GameLog.ok(`Start gedrückt → ${map}`);
-        try {
-          window.GameLoader.start(map).then(()=>{
-            GameLog.ok('Game gestartet');
-            startOverlay.style.display = 'none';
-            btnBuild.style.display = 'grid'; // Bau-Button erst jetzt anbieten
-          }).catch(err=>{
-            GameLog.err('Start fehlgeschlagen: ' + (err?.message || String(err)));
-          });
-        } catch (err) {
-          GameLog.err('Start fehlgeschlagen: ' + (err?.message || String(err)));
-        }
-      });
-
-      // Neu starten: Overlay wieder zeigen, Bau-Button ausblenden
-      btnRestart.addEventListener('click', ()=> {
-        try {
-          if (window.GameLoader && window.GameLoader.reset) {
-            window.GameLoader.reset();
-          }
-        } catch(e){}
-        startOverlay.style.display = 'flex';
-        btnBuild.style.display = 'none';
-        GameLog.ok('Neu-Start angefordert');
-      });
-
-      // Cache leeren
-      btnCache.addEventListener('click', async ()=> {
-        try {
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-          }
-          if (window.localStorage) localStorage.clear();
-          if (window.sessionStorage) sessionStorage.clear();
-          GameLog.ok('Cache/Storage geleert – Seite ggf. neu laden');
-        } catch (e) {
-          GameLog.err('Cache leeren fehlgeschlagen: ' + (e?.message || String(e)));
-        }
-      });
-
-      // Log kopieren
-      btnLogCopy.addEventListener('click', async ()=> {
-        try {
-          const text = GameLog.get().join('\n');
-          await navigator.clipboard.writeText(text);
-          GameLog.ok('Log in Zwischenablage');
-        } catch (e) {
-          GameLog.err('Kopieren fehlgeschlagen: ' + (e?.message || String(e)));
-        }
-      });
-    })();
-  </script>
+  <!-- Scripts (mit Cache-Booster) -->
+  <!-- Reihenfolge: Inspector (UI), Build-UI, Game-UI „Wrapper“ -->
+  <script src="./assets/inspector/inspector.js?v=16.1.6"></script>
+  <script src="./assets/ui/ui-build.js?v=16.1.6"></script>
+  <script src="./game.js?v=16.1.6"></script>
 </body>
 </html>
