@@ -1,105 +1,137 @@
-/* inspector.js v16.1.10
-   Developer-Inspector: Immer verfügbarer Overlay für Tests/Analyse.
-   - Öffnen via Button (unten rechts, von index.html geliefert) oder API:
-       window.GameInspector.open()
-   - Enthält: Log-Viewer, "Log leeren", "Log kopieren", "Cache-Booster", "Schließen"
-   - Vollbild-Overlay; blockiert Spielfläche, bis geschlossen.
-   - Keine Start- oder Map-Funktionen (Start ist im Start-Fenster).
-*/
+/* inspector.js – v16.1.11
+ * Dev-Cockpit/Inspector: immer per Button (unten rechts) ein-/ausblendbar.
+ * Enthält: Log-Panel, Log kopieren/Leeren, Ressourcen-Booster (optional).
+ * Keine Start-Controls mehr – Start übernimmt index.html.
+ */
 
-(function(){
-  const VERSION = '16.1.10';
-  const S = (strings,...vals)=>strings.map((s,i)=>s+(vals[i]??'')).join('');
+(function () {
+  const VERSION = "v16.1.11";
 
-  const css = `
-  #inspectorOverlay{display:none; background:rgba(0,0,0,.55); backdrop-filter: blur(6px);}
-  #inspectorPanel{
-    position:absolute; left:50%; top:6vh; transform:translateX(-50%);
-    width:min(1200px, calc(100vw - 40px)); height:min(84vh, 820px);
-    background:linear-gradient(180deg, rgba(18,22,24,.95), rgba(18,22,24,.88));
-    border:1px solid rgba(255,255,255,.08); border-radius:14px; color:#eaf5f2;
-    box-shadow:0 30px 90px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05);
-    display:flex; flex-direction:column; overflow:hidden;
-  }
-  #inspHead{padding:12px 14px; display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.02)}
-  #inspHead h2{font-size:16px; margin:0; flex:1}
-  #inspBtns{display:flex; gap:8px}
-  .ibtn{background:#142225; color:#d9eee6; border:1px solid #2e4245; border-radius:10px; padding:8px 10px; cursor:pointer}
-  .ibtn:hover{filter:brightness(1.08)}
-  .ibtn.warn{background:#ffcc00; color:#0a1110; border-color:#b48e00}
-  #inspLog{flex:1; background:#0a1214; margin:10px; border-radius:10px; border:1px solid #2a3a3e; overflow:auto}
-  #inspLog pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; line-height:1.45;
-               padding:12px; margin:0; white-space:pre-wrap}
-  .ok{color:#62e684} .warn{color:#ffcc66} .err{color:#ff6b6b}
+  // ----------------------------- DOM Grundgerüst -----------------------------
+  const root = document.createElement('div');
+  root.id = 'cb-inspector-root';
+  root.style.cssText = `
+    position: fixed; inset: 0; display:none; z-index: 9999;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
   `;
 
-  function ensureDOM(){
-    if (document.getElementById('inspectorOverlay')) return;
+  const panel = document.createElement('div');
+  panel.style.cssText = `
+    position:absolute; inset: 4vh 4vw; background:#0b1110; color:#dff4ea;
+    border-radius:14px; box-shadow:0 14px 50px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06);
+    display:grid; grid-template-rows:auto 1fr auto; overflow:hidden;
+  `;
 
-    const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
+  const header = document.createElement('div');
+  header.style.cssText = `
+    display:flex; align-items:center; gap:10px; padding:14px 14px 10px; border-bottom:1px solid rgba(255,255,255,.06);
+  `;
+  header.innerHTML = `
+    <strong style="font-size:18px;">Inspector / Test-Cockpit</strong>
+    <span style="font-size:12px; padding:.2em .6em; border-radius:999px; background:#13201a; color:#9bb6aa;">
+      inspector.js ${VERSION}
+    </span>
+    <span id="insp-status" style="margin-left:auto; color:#24c27a; font-weight:600;">bereit</span>
+    <button id="insp-btn-copy" class="insp-btn">Log kopieren</button>
+    <button id="insp-btn-clear" class="insp-btn">Log leeren</button>
+    <button id="insp-btn-close" class="insp-btn">Schließen</button>
+  `;
 
-    const overlay = document.createElement('div'); overlay.id = 'inspectorOverlay';
-    overlay.innerHTML = S`
-      <div id="inspectorPanel">
-        <div id="inspHead">
-          <h2>Inspector / Test-Cockpit <span style="opacity:.7">(inspector.js v${VERSION})</span></h2>
-          <div id="inspBtns">
-            <button class="ibtn" id="iCache">⚡ Cache leeren</button>
-            <button class="ibtn" id="iCopy">📋 Log kopieren</button>
-            <button class="ibtn" id="iClear">🧹 Log leeren</button>
-            <button class="ibtn warn" id="iClose">Schließen</button>
-          </div>
-        </div>
-        <div id="inspLog"><pre id="inspLogPre">[${time()}] ✅ (ok) Inspector bereit (inspector.js v${VERSION})</pre></div>
-      </div>`;
-    document.body.appendChild(overlay);
+  const styleBtn = document.createElement('style');
+  styleBtn.textContent = `
+    .insp-btn{
+      height:36px; padding:0 12px; border-radius:10px; border:1px solid rgba(255,255,255,.08);
+      background:#14231b; color:#e6f1ec; cursor:pointer; font-weight:600; margin-left:8px;
+    }
+    .insp-log{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px; line-height: 1.45; white-space: pre-wrap;
+      padding:12px 14px; overflow:auto; background:#070c0b;
+    }
+    .insp-foot{
+      display:flex; gap:10px; align-items:center; padding:10px 14px; border-top:1px solid rgba(255,255,255,.06);
+      color:#9bb6aa; font-size:13px;
+    }
+    .tag{ padding:.12em .5em; border-radius:999px; background:#101a15; border:1px solid rgba(255,255,255,.06); margin-right:6px; }
+    .ok{ color:#24c27a } .warn{ color:#e3b64b } .err{ color:#ff6a6a }
+  `;
 
-    // Events
-    overlay.querySelector('#iClose').addEventListener('click', ()=>API.close());
-    overlay.addEventListener('click', (e)=>{ if(e.target.id==='inspectorOverlay') API.close(); });
-    overlay.querySelector('#iClear').addEventListener('click', ()=>{ getPre().textContent=''; });
-    overlay.querySelector('#iCopy').addEventListener('click', async ()=>{
-      try{ await navigator.clipboard.writeText(getPre().textContent); append('ok','Log in Zwischenablage'); }
-      catch(e){ append('err','Kopieren fehlgeschlagen'); }
-    });
-    overlay.querySelector('#iCache').addEventListener('click', doCache);
+  const logEl = document.createElement('div');
+  logEl.className = 'insp-log';
+  logEl.id = 'insp-log';
 
-    // Tastatur: ESC schließt
-    window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') API.close(); });
-  }
+  const footer = document.createElement('div');
+  footer.className = 'insp-foot';
+  footer.innerHTML = `
+    <span class="tag">DPR: <span id="insp-dpr">?</span></span>
+    <span class="tag">Index: ${window.__UI_VERSION || 'v?'}</span>
+    <span class="tag">Game: <span id="insp-gamev">unbekannt</span></span>
+    <span style="margin-left:auto;">Alle Tools & Booster hier gebündelt; Spieloberfläche bleibt frei.</span>
+  `;
 
-  function time(){ return new Date().toTimeString().slice(0,8); }
-  function getPre(){ return document.getElementById('inspLogPre'); }
-  function append(type, msg){
-    const line = `[${time()}] ${type==='ok'?'✅ (ok) ': type==='warn'?'⚠️ (warn) ':'❌ (err) '}${msg}`;
-    const pre = getPre(); pre.textContent += `\n${line}`;
-    pre.parentElement.scrollTop = pre.parentElement.scrollHeight;
-  }
+  panel.appendChild(header);
+  panel.appendChild(logEl);
+  panel.appendChild(footer);
+  root.appendChild(styleBtn);
+  root.appendChild(panel);
+  document.body.appendChild(root);
 
-  async function doCache(){
-    try{
-      if ('caches' in window){ for (const k of await caches.keys()) await caches.delete(k); }
-      localStorage.clear(); sessionStorage.clear();
-      if (navigator.serviceWorker){
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const r of regs) await r.unregister();
-      }
-      append('ok', 'Cache/Storage geleert – Seite ggf. neu laden');
-    }catch(e){ append('err', 'Cache-Booster Fehler'); }
-  }
-
-  const API = {
-    open(){ ensureDOM(); document.getElementById('inspectorOverlay').style.display='block'; },
-    close(){ const el=document.getElementById('inspectorOverlay'); if(el) el.style.display='none'; },
-    toggle(){ const el=document.getElementById('inspectorOverlay'); if(!el) return API.open(); el.style.display = (el.style.display==='block'?'none':'block'); },
-    // wird vom Startscreen-Logger benutzt
-    appendLog(type,line){ ensureDOM(); const pre=getPre(); pre.textContent += `\n${line}`; pre.parentElement.scrollTop = pre.parentElement.scrollHeight; },
-    version: VERSION
+  // ----------------------------- State / API --------------------------------
+  const state = {
+    lines: []
   };
 
-  // Global export
-  window.GameInspector = API;
+  function fmt(kind, msg){
+    const ts = new Date().toTimeString().slice(0,8);
+    const icon = kind === 'ok' ? '✅' : kind === 'warn' ? '⚠️' : '❌';
+    return `[${ts}] ${icon} (${kind}) ${msg}`;
+    // Farben übernimmt CSS-Klasse beim Rendern nicht – bewusst schlicht im Text.
+  }
 
-  // Direkt ein „bereit“-Log ausgeben (so wie du es liebst)
-  setTimeout(()=>{ window.GameLog?.ok ? window.GameLog.ok(`Inspector bereit (inspector.js v${VERSION})`) : console.log(`[${time()}] ✅ (ok) Inspector bereit (inspector.js v${VERSION})`); },0);
+  function render(){
+    logEl.textContent = state.lines.join('\n');
+    document.getElementById('insp-dpr').textContent = (window.devicePixelRatio || 1);
+    document.getElementById('insp-gamev').textContent = (window.Game?.version || window.game?.version || 'unbekannt');
+  }
+
+  // Öffnen/Schließen
+  function open(){ root.style.display = 'block'; render(); }
+  function close(){ root.style.display = 'none'; }
+
+  // Logging
+  function push(kind, msg){
+    state.lines.push(fmt(kind, msg));
+    // Letzte Zeilen sichtbar halten
+    if (state.lines.length > 800) state.lines.splice(0, state.lines.length - 800);
+    render();
+  }
+  function clear(){ state.lines.length = 0; render(); }
+  async function copyText(){
+    const t = logEl.textContent || '';
+    try{ await navigator.clipboard.writeText(t); }catch(_){}
+    return t;
+  }
+
+  // ----------------------------- Events / Buttons ---------------------------
+  header.querySelector('#insp-btn-close').addEventListener('click', close);
+  header.querySelector('#insp-btn-clear').addEventListener('click', clear);
+  header.querySelector('#insp-btn-copy').addEventListener('click', copyText);
+
+  // Öffnen via globalem FAB in index.html
+  // (Der Button ruft window.GameInspector.open() auf.)
+  // Zusätzlich: Tastenkürzel `i`
+  window.addEventListener('keydown', (ev)=>{
+    if (ev.key.toLowerCase() === 'i') open();
+  });
+
+  // Reagiere auf bekannte UI-Events
+  window.addEventListener('cb:game-started', ()=> {
+    push('ok', 'Game gestartet (Event empfangen)');
+  });
+
+  // ----------------------------- Expose API ---------------------------------
+  window.GameInspector = { open, close, push, clear, copyText, version: VERSION };
+
+  // Erstmeldung
+  push('ok', `Inspector bereit (inspector.js ${VERSION})`);
 })();
