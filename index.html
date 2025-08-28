@@ -3,253 +3,365 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>CityBuilder • Start (v16.1.12)</title>
+  <title>Siedler Mini – v16.1.12</title>
 
-  <!-- Basis-Styles (deine bestehenden Dateien) -->
-  <link rel="stylesheet" href="./css/base.css">
-  <link rel="stylesheet" href="./css/platform.css">
-  <link rel="stylesheet" href="./css/mobile.css">
-  <link rel="stylesheet" href="./assets/ui/ui-build.css"><!-- Styles für Bau-Menü -->
+  <!--
+    Projekt:  Siedler Mini
+    Datei:    index.html
+    Version:  v16.1.12
+    Zweck:    Start-Overlay, Map-Auswahl, Inspector-Button (immer sichtbar),
+              Build-Menü-Button (erst nach Spielstart), Cache-Booster,
+              Start-Progress/Log, robuste Engine-Init mit Retry.
+    Hinweise:
+      - Der Inspector ist NUR für Dev/Debug; Spiellogik bleibt separat.
+      - Start-Fenster verschwindet nach erfolgreichem Game-Start.
+      - Logging läuft in Konsole UND über CustomEvent in den Inspector.
+  -->
 
   <style>
-    /* ===== UI Chrome für Startfenster & Floating-Buttons ===== */
-    :root { --uiVersion: "index v16.1.12"; }
-    body { background:#0f2d22; margin:0; overscroll-behavior:none; }
-    #appCanvas { display:block; margin:0 auto; background:transparent; }
-
-    /* Start-Panel */
-    .start-panel {
-      position: fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-      width:min(720px, 92vw);
-      background:#11181b; color:#e8f1ee; border-radius:14px;
-      box-shadow:0 10px 40px rgba(0,0,0,.35); padding:18px 18px 12px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      z-index: 5000;
+    :root{
+      --bg:#0d1117;
+      --fg:#e6edf3;
+      --muted:#8b949e;
+      --ok:#22c55e;     /* ✅ */
+      --warn:#f59e0b;   /* ⚠️ */
+      --err:#ef4444;    /* ❌ */
+      --accent:#60a5fa; /* UI-Details */
+      --panel:#161b22;
+      --panel2:#0b1220;
+      --btn:#1f6feb;
+      --btn2:#30363d;
     }
-    .start-panel h1 { font-size:20px; margin:4px 0 14px; }
-    .badges { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:8px; }
-    .badge {
-      font-size:11px; padding:2px 8px; border-radius:9999px; background:#0b1f1a; color:#a9c9bf; border:1px solid #0f2a24;
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+    #game-root{position:relative;width:100%;height:100%;overflow:hidden;}
+    canvas#game{display:block;width:100%;height:100%;background:#1a2e1a;}
+
+    /* Fixed Utility Buttons (immer sichtbar) */
+    .fab{
+      position:fixed; z-index:50; width:54px; height:54px; border-radius:27px;
+      display:flex; align-items:center; justify-content:center; border:1px solid #2e3440;
+      background:linear-gradient(180deg,#1f2937,#0f172a); color:#fff; box-shadow:0 4px 16px rgba(0,0,0,.35);
+      cursor:pointer; user-select:none;
     }
-    .row { display:flex; gap:10px; align-items:center; margin:10px 0; }
-    .row .grow { flex:1; }
-    select, button { font-size:16px; border-radius:10px; border:none; height:44px; }
-    select { width:100%; background:#0a1412; color:#e8f1ee; padding:0 12px; border:1px solid #193431; }
-    .btn { padding:0 16px; background:#1b6b47; color:#fff; cursor:pointer; }
-    .btn.secondary { background:#243033; color:#d7e5e0; }
-    .btn.warn { background:#e5b70a; color:#1b1600; }
-    .hint { font-size:13px; color:#b6c9c3; margin-top:6px; border-top:1px dashed #26433c; padding-top:8px; }
+    .fab:hover{filter:brightness(1.12)}
+    #btn-inspector{right:16px; bottom:16px;}   /* immer sichtbar */
+    #btn-build{left:16px; bottom:16px; display:none;} /* erst nach Spielstart */
 
-    /* Floating Buttons */
-    .fab {
-      position: fixed; width:56px; height:56px; border-radius:50%;
-      display:flex; align-items:center; justify-content:center;
-      background:#0f1d1a; color:#d5ece5; border:1px solid #14352e;
-      box-shadow:0 6px 24px rgba(0,0,0,.35); cursor:pointer; z-index:4500;
-      user-select:none;
+    /* Start-Overlay */
+    #start-overlay{
+      position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.55); backdrop-filter:saturate(140%) blur(2px);
     }
-    .fab:hover { filter:brightness(1.05); }
+    .start-card{
+      width:min(680px,92vw); background:var(--panel); border:1px solid #30363d; border-radius:14px; padding:16px 16px 12px;
+      box-shadow:0 10px 32px rgba(0,0,0,.45);
+    }
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+    .row + .row{margin-top:10px}
+    h1{margin:0 0 8px; font-size:18px; letter-spacing:.2px}
+    small.muted{color:var(--muted)}
+    select,button{font:inherit}
+    select{
+      appearance:none; background:var(--panel2); color:var(--fg); border:1px solid #2e3440; border-radius:10px; padding:10px 12px;
+      min-width:260px;
+    }
+    .btn{
+      border:1px solid #2e3440; border-radius:10px; padding:10px 14px; background:var(--btn2); color:#fff; cursor:pointer
+    }
+    .btn.primary{background:var(--btn)}
+    .btn.warning{background:var(--warn); color:#111}
+    .btn.ghost{background:transparent}
+    .spacer{flex:1}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
 
-    /* Inspector FAB – immer sichtbar (unten rechts) */
-    #btnInspector { right:16px; bottom:16px; }
-    /* Bau-Menü FAB – erst nach Spielstart sichtbar (unten links) */
-    #btnBuild { left:16px; bottom:16px; display:none; }
-
-    /* kleines Tooltipp-Badge im Eck */
-    .fab .dot { position:absolute; right:6px; bottom:6px; width:8px; height:8px; border-radius:50%; background:#3dd68c; }
-
-    /* Canvas-Container */
-    #gameWrap { position:relative; width:100vw; height:100dvh; overflow:hidden; }
+    /* Progress Bar unter dem Start-Button */
+    .progress-wrap{margin-top:10px}
+    .progress-outer{
+      width:100%; height:10px; border-radius:6px; background:#0b1220; border:1px solid #2e3440; overflow:hidden;
+    }
+    .progress-inner{
+      width:0%; height:100%; background:linear-gradient(90deg,#22c55e,#60a5fa);
+      transition:width .18s ease-out;
+    }
+    .progress-text{margin-top:6px; font-size:12px; color:var(--muted)}
+    .badge{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:20px; border:1px solid #2e3440; background:#0b1220}
+    .badge.ok{border-color:#1f5133}
+    .badge.warn{border-color:#5a4208}
+    .badge.err{border-color:#552224}
   </style>
 </head>
 <body>
+  <div id="game-root">
+    <canvas id="game"></canvas>
 
-  <!-- Spielfläche -->
-  <div id="gameWrap">
-    <canvas id="appCanvas" width="1366" height="768"></canvas>
-  </div>
+    <!-- Inspector-Floating-Button (immer sichtbar, rechts unten) -->
+    <button id="btn-inspector" class="fab" title="Inspector öffnen/schließen" aria-label="Inspector">
+      <!-- kleines Werkzeug-Icon -->
+      <span style="font-size:22px; line-height:1">🛠️</span>
+    </button>
 
-  <!-- Startfenster -->
-  <section id="startPanel" class="start-panel" role="dialog" aria-modal="true">
-    <h1>City Builder · Start</h1>
-    <div class="badges">
-      <span class="badge" id="badgeIndex">index v16.1.12</span>
-      <span class="badge" id="badgeGame">game.js: unbekannt</span>
-      <span class="badge" id="badgeDpr">dpr: ?</span>
-    </div>
+    <!-- Build-Menü-Floating-Button (links unten, erst nach Spielstart sichtbar) -->
+    <button id="btn-build" class="fab" title="Bau-Menü öffnen" aria-label="Bau-Menü">
+      🧱
+    </button>
 
-    <div class="row">
-      <label for="mapSel" class="badge" style="background:#0b1f1a">Karte auswählen</label>
-      <div class="grow">
-        <!-- Bei Bedarf gern dynamisch füllen; hier stabil und simpel -->
-        <select id="mapSel">
-          <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
-          <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
-          <option value="./assets/maps/map-demo.json">map-demo.json</option>
-          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
-        </select>
+    <!-- Start-Overlay (bis Spiel gestartet ist sichtbar) -->
+    <div id="start-overlay" role="dialog" aria-modal="true">
+      <div class="start-card">
+        <h1>City Builder starten <small class="muted mono">index v16.1.12</small></h1>
+
+        <div class="row">
+          <span class="badge ok">✅ UI bereit</span>
+          <span id="badge-engine" class="badge warn">⚠️ Engine wartet</span>
+          <span id="badge-build" class="badge warn">⚠️ Bau-Menü wartet</span>
+          <span id="badge-inspector" class="badge ok">✅ Inspector bereit</span>
+          <div class="spacer"></div>
+          <button id="btn-cache" class="btn ghost" title="Cache/Storage leeren">🧹 Cache leeren</button>
+        </div>
+
+        <div class="row">
+          <label for="map-select" class="muted">Karte:</label>
+          <select id="map-select" aria-label="Karte auswählen">
+            <!-- Hinweis: Liste explizit, damit ohne Netzwerk sofort auswählbar -->
+            <option value="./assets/maps/map-mini.json" selected>map-mini.json (16x10)</option>
+            <option value="./assets/maps/map-pro.json">map-pro.json (20x12)</option>
+            <option value="./assets/maps/map-demo.json">map-demo.json</option>
+            <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+          </select>
+          <div class="spacer"></div>
+          <button id="btn-start" class="btn primary">▶️ Start</button>
+          <button id="btn-reset" class="btn">🔁 Neu starten</button>
+        </div>
+
+        <!-- Start-Progress + Live-Status -->
+        <div class="progress-wrap">
+          <div class="progress-outer"><div id="progress-bar" class="progress-inner"></div></div>
+          <div id="progress-text" class="progress-text mono">Warte auf Engine …</div>
+        </div>
       </div>
-      <button id="btnStart" class="btn">▶ Start</button>
-      <button id="btnFresh" class="btn warn">🗑 Neu-Start</button>
     </div>
-
-    <div class="row">
-      <button id="btnCache" class="btn secondary grow">✨ Cache-Booster</button>
-      <button id="btnCopyLog" class="btn secondary grow">📋 Log kopieren</button>
-    </div>
-
-    <div class="hint">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</div>
-  </section>
-
-  <!-- FAB: Inspector (immer sichtbar) -->
-  <div id="btnInspector" class="fab" title="Inspector öffnen">
-    🛠
-    <span class="dot" aria-hidden="true"></span>
   </div>
 
-  <!-- FAB: Bau-Menü (erscheint nach Spielstart) -->
-  <div id="btnBuild" class="fab" title="Bau-Menü öffnen">🏗</div>
-
-  <!-- ===== SCRIPTS ===== -->
-
-  <!-- Inspector immer laden (du hast v16.1.11/… live) -->
-  <script src="./assets/inspector/inspector.js"></script>
-
-  <!-- Bau-Menü UI (neu v16.1.12) -->
-  <script src="./assets/ui/ui-build.js"></script>
-
-  <!-- Deine Engine / Spiel -->
-  <script src="./game.js"></script>
+  <!-- Skripte laden: (Reihenfolge beibehalten) -->
+  <!-- Engine/Game -->
   <script src="./boot.js"></script>
-  <script src="./main.js"></script>
+  <script src="./game.js"></script>
+
+  <!-- UI/Build (kann vor Spielstart geladen werden, zeigt Buttons erst später) -->
+  <script src="./ui-build.js"></script>
+
+  <!-- Inspector (immer verfügbar, ein-/ausblendbar) -->
+  <script src="./inspector.js"></script>
 
   <script>
-    // =========================================================
-    // Hilfs-Logger: landet im Inspector (falls vorhanden)
-    // =========================================================
-    const Log = {
-      add(type, msg){
-        // type: 'ok' | 'warn' | 'err' | 'info'
-        if (window.Inspector?.log) window.Inspector.log(type, msg);
-        console[type === 'err' ? 'error' : (type === 'warn' ? 'warn' : 'log')](msg);
-      }
-    };
+    // ------------------------------------------------------------
+    //  Globale Hilfen & UI-Logger (mit Weiterleitung an den Inspector)
+    // ------------------------------------------------------------
+    (function initUILogger(){
+      const ICONS = { ok:'✅', warn:'⚠️', err:'❌' };
+      const stamp = () => new Date().toLocaleTimeString();
 
-    // Version & DPR anzeigen
-    document.getElementById('badgeDpr').textContent = 'dpr: ' + (window.devicePixelRatio || '?');
-    (function pingGameVersion(){
-      const v = window.Game?.version || window.game?.version || window.GAME_VERSION;
-      if (v) document.getElementById('badgeGame').textContent = 'game.js: ' + v;
+      function sendToInspector(level, msg){
+        try{
+          window.dispatchEvent(new CustomEvent('inspector:log', {
+            detail: { level, text: msg, t: Date.now() }
+          }));
+        }catch(_){}
+      }
+
+      window.LogUI = {
+        ok(msg){ const line = `[${stamp()}] ${ICONS.ok} (ok) ${msg}`; console.log(line); sendToInspector('ok', line); },
+        warn(msg){ const line = `[${stamp()}] ${ICONS.warn} (warn) ${msg}`; console.warn(line); sendToInspector('warn', line); },
+        err(msg){ const line = `[${stamp()}] ${ICONS.err} (err) ${msg}`; console.error(line); sendToInspector('err', line); },
+      };
+
+      LogUI.ok(`UI bereit (index v16.1.12)`);
     })();
 
-    // =========================================================
-    // Start-Flow: wartet robust auf GameLoader.start
-    // =========================================================
-    async function waitForEngineReady(timeoutMs = 4000){
-      const t0 = performance.now();
-      while (performance.now() - t0 < timeoutMs) {
-        if (window.GameLoader?.start) return true;
-        await new Promise(r => setTimeout(r, 50));
+    // ------------------------------------------------------------
+    //  DOM-Refs
+    // ------------------------------------------------------------
+    const $overlay   = document.getElementById('start-overlay');
+    const $map       = document.getElementById('map-select');
+    const $btnStart  = document.getElementById('btn-start');
+    const $btnReset  = document.getElementById('btn-reset');
+    const $btnCache  = document.getElementById('btn-cache');
+    const $btnBuild  = document.getElementById('btn-build');
+    const $btnInsp   = document.getElementById('btn-inspector');
+    const $bar       = document.getElementById('progress-bar');
+    const $ptext     = document.getElementById('progress-text');
+    const $bEngine   = document.getElementById('badge-engine');
+    const $bBuild    = document.getElementById('badge-build');
+    const $bInspector= document.getElementById('badge-inspector');
+
+    // ------------------------------------------------------------
+    //  Inspector-Button: immer verfügbar (öffnet/ schließt Panel)
+    // ------------------------------------------------------------
+    $btnInsp.addEventListener('click', () => {
+      try{
+        window.GameInspector?.toggle();
+      }catch(e){
+        LogUI.warn('Inspector ist (noch) nicht eingebunden – window.GameInspector.toggle() fehlt.');
       }
-      return false;
+    });
+
+    // ------------------------------------------------------------
+    //  Build-Menü-Button: erst sichtbar, wenn Spiel läuft
+    // ------------------------------------------------------------
+    function enableBuildButton(){
+      $btnBuild.style.display = 'flex';
+    }
+    $btnBuild.addEventListener('click', () => {
+      try{
+        window.GameUI?.openBuildMenu?.();
+      }catch(e){
+        LogUI.warn('Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.');
+      }
+    });
+
+    // ------------------------------------------------------------
+    //  Cache/Storage-Booster
+    // ------------------------------------------------------------
+    async function clearCaches(){
+      try{
+        localStorage.clear();
+        sessionStorage.clear();
+        if('caches' in window){
+          const names = await caches.keys();
+          await Promise.all(names.map(n => caches.delete(n)));
+        }
+        LogUI.ok('Cache/Storage geleert – Seite ggf. neu laden');
+      }catch(e){
+        LogUI.err('Cache-Booster Fehler: ' + (e?.message||e));
+      }
+    }
+    $btnCache.addEventListener('click', clearCaches);
+
+    // ------------------------------------------------------------
+    //  Progress-Bar helpers (loggt jeden Schritt sichtbar)
+    // ------------------------------------------------------------
+    let progressValue = 0;
+    function setProgress(pct, text){
+      progressValue = Math.max(0, Math.min(100, pct|0));
+      $bar.style.width = progressValue + '%';
+      if(text) $ptext.textContent = text;
+      // zusätzlich ins Log spiegeln (reduziert Spam: nur markante Stufen)
+      if([0,10,25,40,50,60,75,90,100].includes(progressValue)){
+        LogUI.ok(`Start-Progress ${progressValue}% – ${$ptext.textContent}`);
+      }
+    }
+
+    function setBadge($el, state){ // state: 'ok'|'warn'|'err'
+      $el.classList.remove('ok','warn','err');
+      $el.classList.add(state);
+      if($el === $bEngine){
+        if(state==='ok') $el.textContent = '✅ Engine bereit';
+        if(state==='warn') $el.textContent = '⚠️ Engine wartet';
+        if(state==='err') $el.textContent = '❌ Engine Fehler';
+      }
+      if($el === $bBuild){
+        if(state==='ok') $el.textContent = '✅ Bau-Menü bereit';
+        if(state==='warn') $el.textContent = '⚠️ Bau-Menü wartet';
+        if(state==='err') $el.textContent = '❌ Bau-Menü Fehler';
+      }
+      if($el === $bInspector){
+        if(state==='ok') $el.textContent = '✅ Inspector bereit';
+        if(state==='warn') $el.textContent = '⚠️ Inspector wartet';
+        if(state==='err') $el.textContent = '❌ Inspector Fehler';
+      }
+    }
+
+    // ------------------------------------------------------------
+    //  Start-Logik: robustes Warten auf GameLoader.start
+    // ------------------------------------------------------------
+    let startInFlight = false;
+
+    async function waitForEngineReady(timeoutMs=5000, pollMs=100){
+      const t0 = performance.now();
+      return new Promise((resolve,reject)=>{
+        (function tick(){
+          const ready = !!(window.GameLoader && typeof window.GameLoader.start === 'function');
+          if(ready){ return resolve(true); }
+          if(performance.now() - t0 > timeoutMs){ return reject(new Error('Timeout: Engine nicht bereit – game.js / Engine noch nicht initialisiert?')); }
+          setTimeout(tick, pollMs);
+        })();
+      });
     }
 
     async function startGame(selectedMap){
-      Log.add('info', `Start gedrückt → ${selectedMap}`);
-
-      const ready = await waitForEngineReady(4000);
-      if (!ready){
-        Log.add('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
-        // noch eine kurze Gnadenfrist:
-        const grace = await waitForEngineReady(1500);
-        if (!grace){
-          Log.add('err', 'Timeout: Engine nicht bereit – game.js / Engine noch nicht initialisiert?');
-          return;
-        }
-      }
-
+      if(startInFlight) return;
+      startInFlight = true;
       try{
-        await window.GameLoader.start(selectedMap);
-        Log.add('ok', 'Game gestartet');
+        LogUI.ok(`Start gedrückt → ${selectedMap}`);
+        setBadge($bEngine,'warn');
+        setProgress(10,'Warte auf Engine …');
+        await waitForEngineReady(6000, 120);
+        setBadge($bEngine,'ok');
+        setProgress(40,'Engine bereit – initialisiere …');
 
-        // Events an UI/Bau-Menü etc. durchreichen (dein Wunsch)
+        // Optional: UI-Bau-Menü init prüfen (nur Status, kein Blocker)
+        if(window.GameUI && typeof window.GameUI.openBuildMenu === 'function'){
+          setBadge($bBuild,'ok');
+        }else{
+          setBadge($bBuild,'warn');
+          LogUI.warn('Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.');
+        }
+
+        // Game starten
+        setProgress(60,'Starte Spiel …');
+        const res = await Promise.resolve(window.GameLoader.start(selectedMap));
+        // Erfolg wird per Event gespiegelt:
+        setProgress(90,'Karte laden …');
+
+        // Signal für andere Module:
         window.dispatchEvent(new CustomEvent('cb:game-started'));
         window.GameUI?.onGameStarted?.();
+        setProgress(100,'Spiel gestartet');
+        LogUI.ok('Game gestartet');
 
-        // Startfenster schließen, Bau-Menü-Button aktivieren
-        hideStartPanel();
-        document.getElementById('btnBuild').style.display = 'flex';
+        // UI umschalten
+        $overlay.style.display = 'none';
+        enableBuildButton();
+
       }catch(err){
-        Log.add('err', 'Start fehlgeschlagen: ' + (err?.message || err));
+        LogUI.err(err?.message || String(err));
+        setBadge($bEngine,'err');
+        setProgress(0,'Fehler beim Start');
+      }finally{
+        startInFlight = false;
       }
     }
 
-    function hideStartPanel(){
-      const el = document.getElementById('startPanel');
-      if (el) el.style.display = 'none';
-    }
-
-    function showStartPanel(){
-      const el = document.getElementById('startPanel');
-      if (el) el.style.display = '';
-      document.getElementById('btnBuild').style.display = 'none';
-    }
-
-    // =========================================================
     // Buttons verdrahten
-    // =========================================================
-    window.addEventListener('DOMContentLoaded', () => {
-      Log.add('ok', 'UI bereit (' + getComputedStyle(document.documentElement)
-        .getPropertyValue('--uiVersion').trim().replace(/(^"|"$)/g,'') + ')');
-
-      const sel = document.getElementById('mapSel');
-      document.getElementById('btnStart').addEventListener('click', () => startGame(sel.value));
-
-      document.getElementById('btnFresh').addEventListener('click', async () => {
-        Log.add('ok', 'Neu-Start angefordert');
-        // optional: Spiel zurücksetzen, dann Startpanel offen lassen
-        showStartPanel();
-      });
-
-      document.getElementById('btnCache').addEventListener('click', async () => {
-        try {
-          // Cache/Storage löschen (gleicher Effekt wie bisheriger Booster)
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-          }
-          localStorage.clear(); sessionStorage.clear();
-          Log.add('ok', 'Cache/Storage geleert – Seite ggf. neu laden');
-        } catch(e){
-          Log.add('err', 'Cache-Booster Fehler: ' + (e?.message || e));
-        }
-      });
-
-      document.getElementById('btnCopyLog').addEventListener('click', async () => {
-        try{
-          const txt = window.Inspector?.getLogText?.() || '[leer]';
-          await navigator.clipboard.writeText(txt);
-          Log.add('ok', 'Log in Zwischenablage');
-        }catch(e){
-          Log.add('err', 'Konnte Log nicht kopieren: ' + (e?.message || e));
-        }
-      });
-
-      // FABs
-      document.getElementById('btnInspector').addEventListener('click', () => {
-        if (window.Inspector?.open) window.Inspector.open(); // Vollfläche
-      });
-
-      document.getElementById('btnBuild').addEventListener('click', () => {
-        // öffnet/geschlossen über GameUI
-        window.GameUI?.openBuildMenu?.();
-      });
+    $btnStart.addEventListener('click', ()=> startGame($map.value));
+    $btnReset.addEventListener('click', ()=>{
+      LogUI.ok('Neu-Start angefordert');
+      // simples Reset: Overlay wieder anzeigen, Fortschritt zurücksetzen
+      $overlay.style.display = 'flex';
+      setBadge($bEngine,'warn');
+      setBadge($bBuild,'warn');
+      setProgress(0,'Bereit');
     });
 
-    // Falls Engine beim Laden automatisch startet, blenden wir nachträglich den Bau-Button ein:
-    window.addEventListener('cb:game-started', () => {
-      document.getElementById('btnBuild').style.display = 'flex';
+    // Wenn Engine selbst ein "ready"-Event feuert, den Badge aktualisieren
+    window.addEventListener('game:initialized', ()=>{
+      setBadge($bEngine,'ok');
+      LogUI.ok('game.js initialisiert (Index meldet v16.1.12)');
     });
+
+    // Aus dem Spiel kommend (falls schon beim Laden autostartet)
+    window.addEventListener('cb:game-started', ()=>{
+      $overlay.style.display = 'none';
+      enableBuildButton();
+    });
+
+    // Safety: falls game.js während Laufzeit nachlädt und ready wird
+    (function lateCheck(){
+      if(window.GameLoader?.start){
+        setBadge($bEngine,'ok');
+        $ptext.textContent = 'Engine erkannt – bereit';
+      }
+    })();
   </script>
 </body>
 </html>
