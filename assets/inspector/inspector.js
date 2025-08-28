@@ -1,137 +1,226 @@
-/* inspector.js – v16.1.11
- * Dev-Cockpit/Inspector: immer per Button (unten rechts) ein-/ausblendbar.
- * Enthält: Log-Panel, Log kopieren/Leeren, Ressourcen-Booster (optional).
- * Keine Start-Controls mehr – Start übernimmt index.html.
+/* assets/inspector/inspector.js
+ * v16.1.11
+ *
+ * Zweck
+ *  - Immer sichtbar: runder Inspector-Button rechts-unten (Werkzeug-Icon).
+ *  - Inspector als Overlay (vollflächig), öffnet/schließt per Button oder API.
+ *  - Keine Änderungen am Startfenster/Design nötig.
+ *
+ * API (global):
+ *  - window.GameInspector.mount(opts?)
+ *  - window.GameInspector.open()
+ *  - window.GameInspector.close()
+ *  - window.GameInspector.toggle()
+ *  - window.__CB_LOG__(line) -> hängt eine Logzeile unten an
  */
 
 (function () {
-  const VERSION = "v16.1.11";
+  const NS = 'cb-inspector';
+  const VERSION = (typeof document !== 'undefined' && (document.currentScript?.src.split('v=')[1])) || '16.1.11';
 
-  // ----------------------------- DOM Grundgerüst -----------------------------
-  const root = document.createElement('div');
-  root.id = 'cb-inspector-root';
-  root.style.cssText = `
-    position: fixed; inset: 0; display:none; z-index: 9999;
-    background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
-  `;
-
-  const panel = document.createElement('div');
-  panel.style.cssText = `
-    position:absolute; inset: 4vh 4vw; background:#0b1110; color:#dff4ea;
-    border-radius:14px; box-shadow:0 14px 50px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06);
-    display:grid; grid-template-rows:auto 1fr auto; overflow:hidden;
-  `;
-
-  const header = document.createElement('div');
-  header.style.cssText = `
-    display:flex; align-items:center; gap:10px; padding:14px 14px 10px; border-bottom:1px solid rgba(255,255,255,.06);
-  `;
-  header.innerHTML = `
-    <strong style="font-size:18px;">Inspector / Test-Cockpit</strong>
-    <span style="font-size:12px; padding:.2em .6em; border-radius:999px; background:#13201a; color:#9bb6aa;">
-      inspector.js ${VERSION}
-    </span>
-    <span id="insp-status" style="margin-left:auto; color:#24c27a; font-weight:600;">bereit</span>
-    <button id="insp-btn-copy" class="insp-btn">Log kopieren</button>
-    <button id="insp-btn-clear" class="insp-btn">Log leeren</button>
-    <button id="insp-btn-close" class="insp-btn">Schließen</button>
-  `;
-
-  const styleBtn = document.createElement('style');
-  styleBtn.textContent = `
-    .insp-btn{
-      height:36px; padding:0 12px; border-radius:10px; border:1px solid rgba(255,255,255,.08);
-      background:#14231b; color:#e6f1ec; cursor:pointer; font-weight:600; margin-left:8px;
-    }
-    .insp-log{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 13px; line-height: 1.45; white-space: pre-wrap;
-      padding:12px 14px; overflow:auto; background:#070c0b;
-    }
-    .insp-foot{
-      display:flex; gap:10px; align-items:center; padding:10px 14px; border-top:1px solid rgba(255,255,255,.06);
-      color:#9bb6aa; font-size:13px;
-    }
-    .tag{ padding:.12em .5em; border-radius:999px; background:#101a15; border:1px solid rgba(255,255,255,.06); margin-right:6px; }
-    .ok{ color:#24c27a } .warn{ color:#e3b64b } .err{ color:#ff6a6a }
-  `;
-
-  const logEl = document.createElement('div');
-  logEl.className = 'insp-log';
-  logEl.id = 'insp-log';
-
-  const footer = document.createElement('div');
-  footer.className = 'insp-foot';
-  footer.innerHTML = `
-    <span class="tag">DPR: <span id="insp-dpr">?</span></span>
-    <span class="tag">Index: ${window.__UI_VERSION || 'v?'}</span>
-    <span class="tag">Game: <span id="insp-gamev">unbekannt</span></span>
-    <span style="margin-left:auto;">Alle Tools & Booster hier gebündelt; Spieloberfläche bleibt frei.</span>
-  `;
-
-  panel.appendChild(header);
-  panel.appendChild(logEl);
-  panel.appendChild(footer);
-  root.appendChild(styleBtn);
-  root.appendChild(panel);
-  document.body.appendChild(root);
-
-  // ----------------------------- State / API --------------------------------
-  const state = {
-    lines: []
+  // -------- DOM Helpers ------------------------------------------------------
+  const el = (tag, cls, txt) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt != null) n.textContent = txt;
+    return n;
   };
 
-  function fmt(kind, msg){
-    const ts = new Date().toTimeString().slice(0,8);
-    const icon = kind === 'ok' ? '✅' : kind === 'warn' ? '⚠️' : '❌';
-    return `[${ts}] ${icon} (${kind}) ${msg}`;
-    // Farben übernimmt CSS-Klasse beim Rendern nicht – bewusst schlicht im Text.
+  const css = `
+/* === Inspector (v${VERSION}) ============================================ */
+.${NS}-fab {
+  position: fixed;
+  right: 16px; bottom: 16px;
+  width: 56px; height: 56px;
+  border-radius: 999px;
+  background: rgba(30,30,30,.9);
+  border: 1px solid rgba(255,255,255,.15);
+  backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+  color: #fff; font-size: 26px; line-height: 1;
+  cursor: pointer; z-index: 999999;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  user-select: none;
+}
+.${NS}-fab:hover { transform: translateY(-1px); }
+
+.${NS}-panel {
+  position: fixed; inset: 0;
+  background: rgba(10,14,16,.88);
+  color: #d7ece0;
+  z-index: 999998;
+  display: none; /* via JS: block */
+}
+
+.${NS}-wrap {
+  box-sizing: border-box;
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 16px;
+}
+
+.${NS}-card {
+  background: rgba(22, 28, 30, .75);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+
+.${NS}-row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.${NS}-spacer { flex: 1; }
+
+.${NS}-btn {
+  appearance: none;
+  border: 0; border-radius: 10px;
+  padding: 10px 14px;
+  background: #2f6f5b;
+  color: #fff; font-weight: 600;
+  cursor: pointer;
+}
+.${NS}-btn.secondary { background:#3a4247; }
+.${NS}-btn.warn { background:#8a3d2f; }
+
+.${NS}-badge {
+  display:inline-block; padding:4px 8px; border-radius: 999px;
+  font-size: 12px; font-weight: 700;
+  color:#0c1a16; background:#74d3b2;
+}
+
+.${NS}-log {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px; line-height: 1.4;
+  white-space: pre-wrap;
+  background: rgba(0,0,0,.45);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 10px;
+  padding: 10px;
+  max-height: 45vh; overflow: auto;
+  color: #dfe;
+}
+  `;
+
+  // -------- State ------------------------------------------------------------
+  let mounted = false;
+  let panel, logBox, fab;
+
+  function ensureStyle() {
+    if (document.getElementById(`${NS}-style`)) return;
+    const s = el('style');
+    s.id = `${NS}-style`;
+    s.textContent = css;
+    document.head.appendChild(s);
   }
 
-  function render(){
-    logEl.textContent = state.lines.join('\n');
-    document.getElementById('insp-dpr').textContent = (window.devicePixelRatio || 1);
-    document.getElementById('insp-gamev').textContent = (window.Game?.version || window.game?.version || 'unbekannt');
+  function createFab() {
+    if (fab && document.body.contains(fab)) return fab;
+    fab = el('button', `${NS}-fab`, '🛠️'); // Werkzeug-Icon
+    fab.title = 'Inspector öffnen (🛠️)';
+    fab.addEventListener('click', toggle);
+    document.body.appendChild(fab);
+    return fab;
   }
 
-  // Öffnen/Schließen
-  function open(){ root.style.display = 'block'; render(); }
-  function close(){ root.style.display = 'none'; }
+  function createPanel() {
+    if (panel && document.body.contains(panel)) return panel;
 
-  // Logging
-  function push(kind, msg){
-    state.lines.push(fmt(kind, msg));
-    // Letzte Zeilen sichtbar halten
-    if (state.lines.length > 800) state.lines.splice(0, state.lines.length - 800);
-    render();
+    panel = el('div', `${NS}-panel`);
+    const wrap = el('div', `${NS}-wrap`);
+    const card = el('div', `${NS}-card`);
+
+    const header = el('div', `${NS}-row`);
+    header.append(
+      el('div', '', 'Inspector / Test-Cockpit'),
+      el('span', `${NS}-badge`, `v${VERSION}`),
+      el('div', `${NS}-spacer`)
+    );
+
+    const ctrlRow = el('div', `${NS}-row`);
+    const btnClear = el('button', `${NS}-btn secondary`, 'Log leeren');
+    btnClear.addEventListener('click', () => { logBox.textContent = ''; });
+
+    const btnCopy = el('button', `${NS}-btn secondary`, 'Log kopieren');
+    btnCopy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(logBox.textContent || '');
+        appendLog('✅ (ok) Log in Zwischenablage');
+      } catch {
+        appendLog('❌ (err) Konnte Log nicht kopieren (Clipboard fehlgeschlagen).');
+      }
+    });
+
+    const btnClose = el('button', `${NS}-btn warn`, 'Schließen');
+    btnClose.addEventListener('click', close);
+
+    ctrlRow.append(btnClear, btnCopy, el('div', `${NS}-spacer`), btnClose);
+
+    logBox = el('div', `${NS}-log`);
+    logBox.textContent = `[${ts()}] ✅ (ok) Inspector bereit (inspector.js v${VERSION})\n`;
+
+    card.append(header, el('div','', ''), ctrlRow, el('div','', ''), logBox);
+    wrap.appendChild(card);
+    panel.appendChild(wrap);
+    panel.addEventListener('click', (e) => {
+      // Klick neben Karte => schließen
+      if (e.target === panel) close();
+    });
+    document.body.appendChild(panel);
+    return panel;
   }
-  function clear(){ state.lines.length = 0; render(); }
-  async function copyText(){
-    const t = logEl.textContent || '';
-    try{ await navigator.clipboard.writeText(t); }catch(_){}
-    return t;
+
+  function ts() {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    const ss = String(d.getSeconds()).padStart(2,'0');
+    return `${hh}:${mm}:${ss}`;
   }
 
-  // ----------------------------- Events / Buttons ---------------------------
-  header.querySelector('#insp-btn-close').addEventListener('click', close);
-  header.querySelector('#insp-btn-clear').addEventListener('click', clear);
-  header.querySelector('#insp-btn-copy').addEventListener('click', copyText);
+  function appendLog(line) {
+    if (!logBox) return;
+    const prefixed = line.startsWith('[') ? line : `[${ts()}] ${line}`;
+    logBox.textContent += (logBox.textContent ? '\n' : '') + prefixed;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
 
-  // Öffnen via globalem FAB in index.html
-  // (Der Button ruft window.GameInspector.open() auf.)
-  // Zusätzlich: Tastenkürzel `i`
-  window.addEventListener('keydown', (ev)=>{
-    if (ev.key.toLowerCase() === 'i') open();
-  });
+  // Öffnen/Schließen/Toggle ---------------------------------------------------
+  function open() {
+    createPanel().style.display = 'block';
+  }
+  function close() {
+    if (panel) panel.style.display = 'none';
+  }
+  function toggle() {
+    if (!panel || panel.style.display === 'none') open();
+    else close();
+  }
 
-  // Reagiere auf bekannte UI-Events
-  window.addEventListener('cb:game-started', ()=> {
-    push('ok', 'Game gestartet (Event empfangen)');
-  });
+  // Public API ----------------------------------------------------------------
+  const API = {
+    mount(opts = {}) {
+      if (mounted) return;
+      mounted = true;
+      ensureStyle();
+      createPanel();
+      createFab();
 
-  // ----------------------------- Expose API ---------------------------------
-  window.GameInspector = { open, close, push, clear, copyText, version: VERSION };
+      // kleine Statusmeldung ins Log:
+      appendLog(`✅ (ok) UI bereit (index v${opts.version || 'unbekannt'})`);
 
-  // Erstmeldung
-  push('ok', `Inspector bereit (inspector.js ${VERSION})`);
+      // externe Logs erlauben:
+      window.__CB_LOG__ = (msg) => appendLog(String(msg || ''));
+    },
+    open, close, toggle,
+    version: VERSION
+  };
+
+  // an Fenster hängen
+  window.GameInspector = API;
+
+  // Auto-Mount als Fallback (falls index onload nicht feuert)
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    try { API.mount(); } catch(e){}
+  } else {
+    document.addEventListener('DOMContentLoaded', () => { try { API.mount(); } catch(e){} });
+  }
 })();
