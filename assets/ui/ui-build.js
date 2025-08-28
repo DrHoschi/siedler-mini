@@ -1,188 +1,187 @@
-/* assets/ui/ui-build.js — v16.1.13
-   ----------------------------------------------------------
-   Aufgaben:
-   - Baut ein simples Bau-Menü (Tool-Picker) auf
-   - Aktiviert sich nach Spielstart (Event: 'cb:game-started')
-   - Tool setzen & Platzieren per Tap/Klick auf Canvas
-   - Robuste Fallbacks + Logging in den Inspector
-   ---------------------------------------------------------- */
+/* ===========================================================
+   ui-build.js — v16.1.13
+   Zweck: Leichtgewichtiges Bau-Menü (Panel), steuerbar über GameUI.
+   Sichtbarkeit:
+   - Panel wird von GameUI.openBuildMenu()/closeBuildMenu() kontrolliert.
+   - Build-Button in index.html öffnet dieses Panel.
+   Logging:
+   - UILog.* wird genutzt, zusätzlich inspector Events.
+   =========================================================== */
 
 (function(){
-  const VERSION = '16.1.13';
+  const VERSION = 'v16.1.13';
 
-  // ---------- kleine Log-Helfer ----------
-  function logOK(msg){ window.Inspector?.log?.('log', `✅ (ok) ${msg}`) || console.log(msg); }
-  function logWARN(msg){ window.Inspector?.log?.('warn', `⚠️ (warn) ${msg}`) || console.warn(msg); }
-  function logERR(msg){ window.Inspector?.log?.('err', `❌ (err) ${msg}`) || console.error(msg); }
+  // --- DOM bauen (einmalig) ---
+  let $panel, $backdrop, mounted = false;
 
-  // ---------- State ----------
-  const state = {
-    active: false,
-    tool: null,
-    tileSize: 64,
-    canvas: null,
-    placeHandler: null,
-  };
+  function logOk(msg){ window.UILog?.ok?.(`[ui-build ${VERSION}] ${msg}`); }
+  function logWarn(msg){ window.UILog?.warn?.(`[ui-build ${VERSION}] ${msg}`); }
+  function logErr(msg){ window.UILog?.err?.(`[ui-build ${VERSION}] ${msg}`); }
 
-  // ---------- Tools (einfach & erweiterbar) ----------
-  // label = Button-Text (neutraler Hintergrund, nur Icon/Text sichtbar)
-  const TOOLS = [
-    { id: 'road',    label: 'Straße' },
-    { id: 'path',    label: 'Pfad'   },
-    { id: 'house',   label: 'Haus'   },
-    { id: 'factory', label: 'Fabrik' },
-    // Lumberjack kommt später mit Icon/Sprite – Platzhalter hier:
-    { id: 'lumberjack', label: 'Lumber' },
-  ];
+  function mount() {
+    if (mounted) return;
 
-  // ---------- UI Wurzel anlegen ----------
-  let host = document.getElementById('cb-build-host');
-  if (!host) {
-    host = document.createElement('div');
-    host.id = 'cb-build-host';
-    document.body.appendChild(host);
+    // halbtransparenter Backdrop (klick schließt)
+    $backdrop = document.createElement('div');
+    $backdrop.style.position = 'fixed';
+    $backdrop.style.inset = '0';
+    $backdrop.style.background = 'rgba(0,0,0,.35)';
+    $backdrop.style.zIndex = '9500';
+    $backdrop.style.display = 'none';
+    $backdrop.addEventListener('click', close);
+
+    // Panel links unten, über dem Build-Button
+    $panel = document.createElement('div');
+    $panel.id = 'buildPanel';
+    $panel.style.position = 'fixed';
+    $panel.style.left = '14px';
+    $panel.style.bottom = '80px';
+    $panel.style.width = 'min(92vw, 420px)';
+    $panel.style.maxHeight = '70vh';
+    $panel.style.overflow = 'auto';
+    $panel.style.borderRadius = '14px';
+    $panel.style.border = '1px solid #243255';
+    $panel.style.boxShadow = '0 12px 34px rgba(0,0,0,.45)';
+    $panel.style.background = '#0f1730';
+    $panel.style.color = '#eaf0ff';
+    $panel.style.zIndex = '9600';
+    $panel.style.display = 'none';
+    $panel.style.padding = '12px';
+
+    // Header
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.justifyContent = 'space-between';
+    header.style.gap = '10px';
+    const hTitle = document.createElement('div');
+    hTitle.textContent = `Bau-Menü (${VERSION})`;
+    hTitle.style.fontWeight = '600';
+    const btnClose = document.createElement('button');
+    btnClose.textContent = '✖';
+    btnClose.style.background = '#1a2750';
+    btnClose.style.color = '#fff';
+    btnClose.style.border = '1px solid #2a3a66';
+    btnClose.style.borderRadius = '10px';
+    btnClose.style.padding = '6px 10px';
+    btnClose.addEventListener('click', close);
+    header.appendChild(hTitle);
+    header.appendChild(btnClose);
+
+    // Tools: nur EIN LUMBERJACK-Icon (wie gewünscht: nur Hauptsprite)
+    const tools = document.createElement('div');
+    tools.style.display = 'grid';
+    tools.style.gridTemplateColumns = 'repeat(auto-fill, minmax(88px,1fr))';
+    tools.style.gap = '10px';
+    tools.style.marginTop = '12px';
+
+    // Beispiel-Tool: lumberjack (nur 1 Kachel als Icon)
+    tools.appendChild(makeToolCard({
+      id: 'lumberjack',
+      label: 'Lumberjack',
+      // neutraler weißer „Button“-Hintergrund, Bild wirkt wie Icon
+      preview: 'assets/buildings/lumberjack/lumberjack_tiers_grid.png',
+      previewFrame: { x:0, y:0, w:256, h:256 }, // erstes Feld, du passt das später an
+      onPick: ()=> selectTool('lumberjack')
+    }));
+
+    // Beispiel-Tools (Road/Path) — optional
+    tools.appendChild(makeTextTool('road',  'Road',  ()=>selectTool('road')));
+    tools.appendChild(makeTextTool('path',  'Path',  ()=>selectTool('path')));
+    tools.appendChild(makeTextTool('house', 'House', ()=>selectTool('house')));
+
+    $panel.appendChild(header);
+    $panel.appendChild(tools);
+
+    document.body.appendChild($backdrop);
+    document.body.appendChild($panel);
+    mounted = true;
+    logOk('Bau-Menü bereit');
   }
 
-  host.style.position = 'fixed';
-  host.style.left = '12px';
-  host.style.bottom = '80px'; // Platz für HUD-Button
-  host.style.zIndex = 9000;
-  host.style.display = 'none'; // sichtbar, wenn Menü geöffnet
-  host.style.background = 'rgba(8,10,12,.9)';
-  host.style.backdropFilter = 'blur(2px)';
-  host.style.padding = '10px';
-  host.style.borderRadius = '10px';
-  host.style.boxShadow = '0 10px 24px rgba(0,0,0,.35)';
-
-  const grid = document.createElement('div');
-  grid.style.display = 'grid';
-  grid.style.gridTemplateColumns = 'repeat(3, 72px)';
-  grid.style.gap = '8px';
-
-  host.appendChild(grid);
-
-  // Button-Erstellung
-  function makeToolButton(tool) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = tool.label;
-    btn.title = tool.id;
-    Object.assign(btn.style, {
-      width:'72px', height:'72px',
-      borderRadius:'10px',
-      border:'1px solid #2a2f36',
-      background:'#fff', color:'#111',   // weißer Hintergrund → wirkt “nur Icon/Text”
-      fontSize:'13px',
-    });
-    btn.addEventListener('click', ()=>{
-      setTool(tool.id);
-      // Menü automatisch schließen (wie besprochen)
-      host.style.display = 'none';
-    });
-    return btn;
+  function makeTextTool(id, label, onClick){
+    const card = document.createElement('button');
+    card.style.border = '1px solid #2a3a66';
+    card.style.borderRadius = '12px';
+    card.style.background = '#fff';  // weißer Button-Hintergrund
+    card.style.color = '#0b1320';
+    card.style.padding = '12px';
+    card.style.fontWeight = '600';
+    card.style.cursor = 'pointer';
+    card.textContent = label;
+    card.title = id;
+    card.addEventListener('click', onClick);
+    return card;
   }
 
-  // Tool-Buttons aufbauen
-  for (const t of TOOLS) grid.appendChild(makeToolButton(t));
+  function makeToolCard({id, label, preview, previewFrame, onPick}) {
+    const card = document.createElement('button');
+    card.style.border = '1px solid #2a3a66';
+    card.style.borderRadius = '12px';
+    card.style.background = '#fff';  // weißer Button-Hintergrund
+    card.style.color = '#0b1320';
+    card.style.padding = '8px';
+    card.style.cursor = 'pointer';
+    card.style.display = 'flex';
+    card.style.flexDirection = 'column';
+    card.style.alignItems = 'center';
+    card.style.gap = '8px';
 
-  // ---------- Öffnen/Schließen vom übergeordneten Button ----------
-  // index.html feuert 'cb:build-toggle' wenn 🏗️ gedrückt wird
-  window.addEventListener('cb:build-toggle', ()=>{
-    host.style.display = (host.style.display === 'none') ? 'block' : 'none';
-    if (host.style.display === 'block') logOK(`Bau-Menü geöffnet (ui-build.js v${VERSION})`);
-  });
+    const holder = document.createElement('div');
+    holder.style.width = '72px';
+    holder.style.height = '72px';
+    holder.style.overflow = 'hidden';
+    holder.style.borderRadius = '10px';
+    holder.style.background = '#fff';
 
-  // ---------- Tool setzen ----------
-  function setTool(id){
-    state.tool = id;
-    logOK(`Tool gesetzt: ${id}`);
-    window.dispatchEvent(new CustomEvent('cb:tool-changed',{detail:{tool:id}}));
+    const img = document.createElement('img');
+    img.src = preview + '?v=16.1.13';
+    img.alt = label;
+    // Spriteframe simulieren (nur EIN Gebäude sichtbar)
+    img.style.width = 'auto';
+    img.style.height = 'auto';
+    img.style.transform = `translate(${-previewFrame.x}px, ${-previewFrame.y}px)`;
+    img.style.maxWidth = 'none'; // wichtig: keine Schrumpfung
+    holder.appendChild(img);
+
+    const cap = document.createElement('div');
+    cap.textContent = label;
+    cap.style.fontWeight = '600';
+
+    card.appendChild(holder);
+    card.appendChild(cap);
+
+    card.addEventListener('click', onPick);
+    return card;
   }
 
-  // ---------- Platzieren (Canvas-Klick/Tap) ----------
-  function toTileXY(evt){
-    const rect = state.canvas.getBoundingClientRect();
-    const px = (evt.clientX ?? (evt.touches?.[0]?.clientX||0)) - rect.left;
-    const py = (evt.clientY ?? (evt.touches?.[0]?.clientY||0)) - rect.top;
-    const ts = state.tileSize;
-    return { tx: Math.floor(px/ts), ty: Math.floor(py/ts) };
-  }
-
-  function placeAt(x,y){
-    // 1) bevorzugt Engine-Hook (wenn vorhanden)
-    if (window.GameUI?.place) {
-      try {
-        window.GameUI.place({tool: state.tool, x, y});
-        logOK(`Platziert: ${state.tool} @ (${x},${y})`);
-        return;
-      } catch(e){ logWARN(`GameUI.place fehlgeschlagen: ${e?.message||e}`); }
+  function selectTool(id){
+    // hier ggf. mit Engine verbinden (z.B. window.Game?.setTool)
+    if (window.Game?.setTool) {
+      window.Game.setTool(id);
     }
-    if (window.Game?.place) {
-      try {
-        window.Game.place({tool: state.tool, x, y});
-        logOK(`Platziert: ${state.tool} @ (${x},${y})`);
-        return;
-      } catch(e){ logWARN(`Game.place fehlgeschlagen: ${e?.message||e}`); }
-    }
-    // 2) Fallback: nur loggen (entwicklerisch ausreichend zum Testen)
-    logOK(`(Fallback) Platziert: ${state.tool} @ (${x},${y})`);
+    window.dispatchEvent(new CustomEvent('ui:log', { detail:{
+      level:'ok', line:`[✅ (ok)] Tool gesetzt: ${id}`, ts: Date.now(), src:`ui-build ${VERSION}`
+    }}));
+    logOk(`Tool gesetzt: ${id}`);
   }
 
-  function onCanvasPointer(evt){
-    if (!state.active) return;
-    if (!state.tool)  { logWARN('Kein Tool ausgewählt'); return; }
-    const {tx,ty} = toTileXY(evt);
-    placeAt(tx,ty);
-    evt.preventDefault();
+  // --- API ---
+  function open(){
+    mount();
+    $backdrop.style.display = 'block';
+    $panel.style.display = 'block';
+  }
+  function close(){
+    if (!mounted) return;
+    $panel.style.display = 'none';
+    $backdrop.style.display = 'none';
   }
 
-  // ---------- Aktivierung nach Game-Start ----------
-  function activate(){
-    if (state.active) return;
-    state.active = true;
+  // öffentlich machen
+  window.UIBuild = { open, close, version: VERSION };
 
-    // Tilegröße aus Engine, sonst 64
-    try {
-      state.tileSize = (window.Game?.getTileSize?.() || 64);
-    } catch(_) {}
-
-    // Canvas finden
-    state.canvas = document.getElementById('gameCanvas') || document.querySelector('canvas');
-    if (!state.canvas) {
-      logWARN('Kein Canvas gefunden – Platzieren deaktiviert');
-    } else {
-      // Pointer-Handling
-      state.placeHandler = (e)=>onCanvasPointer(e);
-      state.canvas.addEventListener('click', state.placeHandler, {passive:false});
-      state.canvas.addEventListener('touchstart', state.placeHandler, {passive:false});
-    }
-
-    logOK(`Bau-Menü bereit (ui-build.js v${VERSION})`);
-  }
-
-  // Engine meldet Start → aktivieren & default-Tool setzen
-  window.addEventListener('cb:game-started', ()=>{
-    activate();
-    if (!state.tool) setTool('path');
-  });
-
-  // Falls Engine sofort ready ist (Sicherheitsgurt)
-  if (document.readyState !== 'loading') {
-    // nichts tun – wir warten bewusst auf cb:game-started
-  }
-
-  // Aufräumen (optional, z.B. bei Reload im Inspector)
-  window.addEventListener('beforeunload', ()=>{
-    if (state.canvas && state.placeHandler) {
-      state.canvas.removeEventListener('click', state.placeHandler);
-      state.canvas.removeEventListener('touchstart', state.placeHandler);
-    }
-  });
-
-  // Exporte für Engine (optional)
-  window.GameUI = window.GameUI || {};
-  window.GameUI.openBuildMenu = ()=>{ host.style.display='block'; };
-  window.GameUI.closeBuildMenu = ()=>{ host.style.display='none'; };
-  window.GameUI.setTool = setTool;
-
+  // Beim Spielstart automatisch öffnen? → NEIN, nur per Button.
+  // Aber wir loggen die Bereitschaft noch einmal:
+  window.requestAnimationFrame(()=>logOk('Bau-Menü bereit (Panel montierbar)'));
 })();
