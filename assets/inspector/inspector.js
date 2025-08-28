@@ -1,118 +1,162 @@
-// assets/inspector/inspector.js  — v16.1.5
-// Dev-Inspector (Vollbild), einklappbar über window.GameInspector.toggle()
+<!-- Datei: assets/inspector/inspector.js -->
+/**
+ * Inspector Bootstrap (v16.1.6)
+ * - Erstellt bei Bedarf Panel + Button automatisch
+ * - Stellt window.GameInspector = { open, close, toggle, log } bereit
+ * - Hängt sich an: cb:game-started (optional)
+ */
+(function () {
+  const VERSION = '16.1.6';
 
-(function(){
-  const VERSION = 'inspector.js v16.1.5';
+  // ---------- Util: Log-Ausgabe auch in Panel spiegeln ----------
+  function ts() {
+    const d = new Date();
+    return d.toLocaleTimeString();
+  }
 
-  // Root-Element anlegen (einmal)
-  const root = document.createElement('div');
-  root.id = 'devInspector';
-  Object.assign(root.style, {
-    position: 'fixed', inset: '0', zIndex: 2500, display: 'none',
-    background: 'rgba(8, 12, 10, 0.88)', color: '#eafff3',
-    backdropFilter: 'blur(2px)'
-  });
+  // ---------- DOM: Button + Panel anlegen, falls nicht vorhanden ----------
+  function ensureDOM() {
+    // Button (unten rechts)
+    let btn = document.getElementById('btn-inspector');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'btn-inspector';
+      btn.type = 'button';
+      btn.title = 'Inspector öffnen/schließen';
+      btn.textContent = '🛠 Inspector';
+      btn.style.position = 'fixed';
+      btn.style.right = '12px';
+      btn.style.bottom = '12px';
+      btn.style.zIndex = '99998';
+      btn.style.padding = '10px 14px';
+      btn.style.borderRadius = '12px';
+      btn.style.border = '1px solid rgba(0,0,0,.15)';
+      btn.style.background = '#fff';
+      btn.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)';
+      btn.style.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      document.body.appendChild(btn);
+    }
 
-  // Panel-UI
-  root.innerHTML = `
-    <div style="max-width: 980px; margin: 18px auto; padding: 16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-        <h2 style="margin:0;">Inspector / Test-Cockpit <small style="opacity:.7;">(${VERSION})</small></h2>
-        <button id="inspClose" style="padding:8px 12px;border-radius:10px;border:0;background:#1f5b45;color:#eafff3">Schließen</button>
-      </div>
-
-      <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
-        <button id="inspCache"  style="padding:10px;border-radius:12px;border:0;background:#244f3a;color:#eafff3">Cache leeren</button>
-        <button id="inspLogCopy" style="padding:10px;border-radius:12px;border:0;background:#244f3a;color:#eafff3">Log kopieren</button>
-        <button id="inspLogClear" style="padding:10px;border-radius:12px;border:0;background:#244f3a;color:#eafff3">Log leeren</button>
-        <div style="padding:10px;border-radius:12px;background:#11261d;">
-          <div style="opacity:.9;margin-bottom:8px;">Ressourcen (Booster)</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button data-res="+100"  style="padding:8px;border-radius:12px;border:0;background:#2a6e52;color:#eafff3">+100</button>
-            <button data-res="+1000" style="padding:8px;border-radius:12px;border:0;background:#2a6e52;color:#eafff3">+1000</button>
-            <button data-res="0"     style="padding:8px;border-radius:12px;border:0;background:#2a6e52;color:#eafff3">0</button>
+    // Panel (Fullscreen Overlay)
+    let panel = document.getElementById('inspector-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'inspector-panel';
+      panel.style.position = 'fixed';
+      panel.style.inset = '0';
+      panel.style.background = 'rgba(17,17,17,0.96)';
+      panel.style.color = '#eaeaea';
+      panel.style.zIndex = '99999';
+      panel.style.display = 'none';
+      panel.style.overscrollBehavior = 'contain';
+      panel.innerHTML = `
+        <div id="inspector-head" style="
+          display:flex;align-items:center;gap:12px;justify-content:space-between;
+          padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);
+          background:rgba(0,0,0,.25);backdrop-filter:saturate(1.2) blur(6px);">
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span style="font-size:18px;">🛠</span>
+            <strong>Inspector</strong>
+            <small style="opacity:.7">v${VERSION}</small>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="inspector-clear" style="
+              padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);
+              background:#222;color:#eaeaea;">Log leeren</button>
+            <button id="inspector-close" style="
+              padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);
+              background:#222;color:#eaeaea;">Schließen ✖</button>
           </div>
         </div>
-      </div>
-
-      <div style="margin-top:14px;">
-        <div style="opacity:.85;margin-bottom:6px;">Log</div>
-        <pre id="inspLog" style="background:rgba(0,0,0,.25);padding:10px;border-radius:10px;max-height:45vh;overflow:auto;white-space:pre-wrap;"></pre>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(root);
-
-  // API-Objekt
-  window.GameInspector = {
-    toggle(){
-      const show = (root.style.display === 'none');
-      root.style.display = show ? 'block' : 'none';
-      if (show) refreshLog();
+        <div id="inspector-body" style="display:grid;grid-template-rows:auto 1fr; height:calc(100% - 0px);">
+          <div id="inspector-tools" style="display:flex;gap:8px;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.06);">
+            <span style="opacity:.8">Aktionen:</span>
+            <button data-act="start-mini" class="ins-btn">Start map-mini</button>
+            <button data-act="start-pro"  class="ins-btn">Start map-pro</button>
+            <button data-act="reset"      class="ins-btn">Neu-Start</button>
+            <style>
+              .ins-btn{padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:#1d1d1f;color:#eaeaea}
+              .ins-btn:hover{background:#2a2a2d}
+              #inspector-log{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;line-height:1.35;padding:12px 16px;overflow:auto}
+              .log-ok{color:#7CFC7C}
+              .log-warn{color:#FFD966}
+              .log-err{color:#FF6B6B}
+            </style>
+          </div>
+          <div id="inspector-log"></div>
+        </div>
+      `;
+      document.body.appendChild(panel);
     }
+    return { btn, panel };
+  }
+
+  // ---------- API ----------
+  function open() {
+    ensureDOM().panel.style.display = 'block';
+  }
+  function close() {
+    const el = document.getElementById('inspector-panel');
+    if (el) el.style.display = 'none';
+  }
+  function toggle() {
+    const el = ensureDOM().panel;
+    el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+  }
+  function log(line, level='ok') {
+    const wrap = document.getElementById('inspector-log') || ensureDOM().panel.querySelector('#inspector-log');
+    const cls = level === 'err' ? 'log-err' : level === 'warn' ? 'log-warn' : 'log-ok';
+    const row = document.createElement('div');
+    row.className = cls;
+    row.textContent = `[${ts()}] ${line}`;
+    wrap.appendChild(row);
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  // ---------- Bootstrap ----------
+  const { btn, panel } = ensureDOM();
+
+  // Button-Verkabelung
+  btn.onclick = () => toggle();
+
+  // Panel-Buttons
+  panel.querySelector('#inspector-close').onclick = () => close();
+  panel.querySelector('#inspector-clear').onclick = () => {
+    const area = panel.querySelector('#inspector-log');
+    area.textContent = '';
+    log('Log geleert', 'ok');
   };
 
-  // Events
-  root.querySelector('#inspClose').addEventListener('click', ()=>window.GameInspector.toggle());
-
-  root.querySelector('#inspCache').addEventListener('click', async ()=>{
-    try{
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-      if (window.localStorage) localStorage.clear();
-      if (window.sessionStorage) sessionStorage.clear();
-      GameLog?.ok?.('Cache/Storage geleert – Seite ggf. neu laden');
-      refreshLog();
-    }catch(e){
-      GameLog?.err?.('Cache leeren im Inspector fehlgeschlagen: ' + (e?.message || String(e)));
-      refreshLog();
+  // Tool-Aktionen im Inspector
+  panel.querySelector('#inspector-tools').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-act]');
+    if (!b) return;
+    const act = b.getAttribute('data-act');
+    if (act === 'start-mini') {
+      window.GameLoader?.start?.('./assets/maps/map-mini.json');
+    } else if (act === 'start-pro') {
+      window.GameLoader?.start?.('./assets/maps/map-pro.json');
+    } else if (act === 'reset') {
+      // gleiche Semantik wie im Startfenster
+      localStorage.clear(); sessionStorage.clear(); caches?.keys?.().then(keys => keys.forEach(k => caches.delete(k)));
+      location.reload();
     }
   });
 
-  root.querySelector('#inspLogCopy').addEventListener('click', async ()=>{
-    try{
-      const text = (window.GameLog?.get?.() || []).join('\n');
-      await navigator.clipboard.writeText(text);
-      GameLog?.ok?.('Log in Zwischenablage');
-      refreshLog();
-    }catch(e){
-      GameLog?.err?.('Kopieren fehlgeschlagen: ' + (e?.message || String(e)));
-      refreshLog();
+  // Auf Events hören
+  window.addEventListener('cb:game-started', () => log('Game gestartet (Event cb:game-started)', 'ok'));
+
+  // Globale API bereitstellen
+  window.GameInspector = { open, close, toggle, log, version: VERSION };
+
+  // Beim Laden einen Status loggen
+  log(`Inspector bereit (v${VERSION})`, 'ok');
+
+  // Tastatur-Shortcut (optional): i = Inspector
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'i' || e.key === 'I') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      toggle();
+      e.preventDefault();
     }
   });
-
-  root.querySelector('#inspLogClear').addEventListener('click', ()=>{
-    // Soft-Clear: nur Anzeige leert; Quelle bleibt fürs Debuggen erhalten
-    const pre = root.querySelector('#inspLog');
-    pre.textContent = '';
-  });
-
-  // Booster-Dummy (hooke dein echtes Ressourcen-System hier ein)
-  root.querySelectorAll('[data-res]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const val = btn.getAttribute('data-res');
-      // Beispiel-Event: dein Spiel kann hier zuhören
-      window.dispatchEvent(new CustomEvent('dev:addResources', { detail: { preset: val }}));
-      GameLog?.ok?.(`Ressourcen-Booster angewendet: ${val}`);
-      refreshLog();
-    });
-  });
-
-  // Log einblenden & live updaten
-  function refreshLog(){
-    const pre = root.querySelector('#inspLog');
-    const lines = (window.GameLog?.get?.() || []);
-    pre.textContent = lines.join('\n');
-    pre.scrollTop = pre.scrollHeight;
-  }
-  if (window.GameLog && window.GameLog.on) {
-    window.GameLog.on(()=> {
-      if (root.style.display !== 'none') refreshLog();
-    });
-  }
-
-  // Meldung
-  window.GameLog?.ok?.(`Inspector bereit (${VERSION})`);
 })();
