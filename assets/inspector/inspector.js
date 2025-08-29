@@ -1,126 +1,140 @@
-// assets/inspector/inspector.js
-// v16.1.13
-// ---------------------------------------------
-// Kompakter Inspector für Tests/Debug:
-// - Vollbild-Overlay mit Log-Ausgabe (puffert, live)
-// - Log leeren / Log kopieren
-// - Schließen-Button
-// - Öffnen/Schließen via window.GameInspector.toggle()
-// - Zeichnet ALLE Logs, weil die Konsole in index.html global in CBLog spiegelt.
-// - Layout/Größe bleiben stabil; reine Logik-Verbesserungen.
-// ---------------------------------------------
-(function(){
-  const VERSION = 'v16.1.13';
+/* =======================================================================
+ * Inspector (v16.1.14)
+ * – Vollbild-Overlay für Logs & Dev-Aktionen (nur Entwicklung)
+ * – Öffnen über window.GameInspector.toggle(true) oder FAB (🛠️)
+ * – Zeichnet ALLE Logs, die via window.Log(...) erzeugt werden.
+ * – Bietet "Log kopieren" API für index.html
+ * ======================================================================= */
 
-  // Root-Container muss in index.html vorhanden sein
-  const root = document.getElementById('inspectorRoot');
+(function(){
+  const VERSION = '16.1.14';
+
+  // Root-Element anlegen (einmalig)
+  let root = document.getElementById('inspector-root');
   if (!root) {
-    console.error('[inspector] Root-Element #inspectorRoot fehlt.');
-    return;
+    root = document.createElement('div');
+    root.id = 'inspector-root';
+    document.body.appendChild(root);
   }
 
-  // Grundaufbau – UI bewusst kompakt, Inhalt wie bisher
+  root.style.position = 'fixed';
+  root.style.inset = '0';
+  root.style.zIndex = '1000';
+  root.style.display = 'none'; // start hidden
+  root.style.background = 'rgba(10,10,10,0.96)';
+  root.style.color = '#e7e7e7';
+  root.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+
   root.innerHTML = `
-    <section role="dialog" aria-modal="true" style="
-      position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-      background:rgba(0,0,0,.55); backdrop-filter:saturate(120%) blur(8px);
-      color:#e8f6ef; z-index:2000;
-    ">
-      <div style="
-        width:min(980px, calc(100vw - 28px));
-        height:min(86vh, calc(100vh - 28px));
-        background:linear-gradient(180deg,#0e2a1c,#0a2015);
-        border-radius:16px; box-shadow:0 20px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.05);
-        display:flex; flex-direction:column; overflow:hidden;
-      ">
-        <header style="padding:14px 14px 12px; display:flex; gap:10px; align-items:center; background:rgba(255,255,255,.03);">
-          <strong style="font-size:18px;">Inspector / Test-Cockpit</strong>
-          <span style="margin-left:auto; opacity:.9;">${VERSION}</span>
-          <button id="inspBtnCopy" style="margin-left:12px; padding:8px 12px; border-radius:10px; background:#20372c; color:#eaf6ef; border:none; cursor:pointer;">Log kopieren</button>
-          <button id="inspBtnClear" style="padding:8px 12px; border-radius:10px; background:#20372c; color:#eaf6ef; border:none; cursor:pointer;">Log leeren</button>
-          <button id="inspBtnClose" style="padding:8px 12px; border-radius:10px; background:#7a2b2b; color:#fff; border:none; cursor:pointer;">Schließen</button>
-        </header>
-        <pre id="inspLog" style="margin:0; padding:14px; flex:1 1 auto; overflow:auto;
-          font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#cfe9dc; background:transparent;"></pre>
-        <footer style="padding:8px 12px; background:rgba(255,255,255,.03); color:#a9c8bb;">
-          <span id="inspStatus">Inspector bereit (inspector.js ${VERSION})</span>
-        </footer>
+    <div id="insp-wrap" style="position:absolute; inset:16px; display:flex; flex-direction:column; border:1px solid #2f363a; border-radius:12px; background:#151819;">
+      <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #2b2f31;">
+        <div style="font-weight:700">Inspector</div>
+        <div style="opacity:.8; font-size:12px">v${VERSION}</div>
+        <div id="insp-status" style="margin-left:auto; font-size:12px; opacity:.8"></div>
+        <button id="insp-close" style="margin-left:8px; background:#2b2f31; color:#e7e7e7; border:1px solid #3a4247; border-radius:8px; padding:6px 10px; cursor:pointer">Schließen ✖</button>
       </div>
-    </section>
+
+      <div style="display:flex; gap:12px; padding:10px 12px; border-bottom:1px solid #2b2f31; flex-wrap:wrap">
+        <button id="insp-copy"  title="Log kopieren"   style="background:#1f2326; border:1px solid #2f363a; border-radius:8px; padding:6px 10px; color:#e7e7e7; cursor:pointer">📋 Log kopieren</button>
+        <button id="insp-clear" title="Log leeren"     style="background:#1f2326; border:1px solid #2f363a; border-radius:8px; padding:6px 10px; color:#e7e7e7; cursor:pointer">🧼 Log leeren</button>
+        <button id="insp-retry" title="Engine starten" style="background:#1f2326; border:1px solid #2f363a; border-radius:8px; padding:6px 10px; color:#e7e7e7; cursor:pointer">▶️ Start (retry)</button>
+      </div>
+
+      <div id="insp-log" style="flex:1; overflow:auto; padding:10px 12px; background:#0f1112; font-size:13px; line-height:1.5;">
+        <!-- Logs -->
+      </div>
+    </div>
   `;
 
-  const inspLog = root.querySelector('#inspLog');
-  const inspStatus = root.querySelector('#inspStatus');
+  const elLog = root.querySelector('#insp-log');
+  const elStatus = root.querySelector('#insp-status');
 
-  // Hilfsfunktionen zum Zeichnen
-  function fmtLine(line){
-    if(!line) return '';
-    const pad = n => String(n).padStart(2,'0');
-    const t = line.t, ts = `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
-    const pref = line.level==='ok' ? '✅ (ok) ' : line.level==='warn' ? '⚠️ (warn) ' : line.level==='err' ? '❌ (err) ' : '';
-    return `[${ts}] ${pref}${line.msg}`;
-  }
-  function renderFull(){
-    const buf = (window.CBLog && window.CBLog.buffer) ? window.CBLog.buffer : [];
-    inspLog.textContent = buf.map(fmtLine).join('\n');
-    inspLog.scrollTop = inspLog.scrollHeight;
-  }
-  function appendLine(line){
-    if (!line) return renderFull();
-    inspLog.textContent += (inspLog.textContent ? '\n' : '') + fmtLine(line);
-    inspLog.scrollTop = inspLog.scrollHeight;
+  // interner Log-Puffer (als Fallback für Copy)
+  const records = [];
+
+  // Hilfsfunktionen
+  const icon = (type)=> type==='err'?'❌':(type==='warn'?'⚠️':'✅');
+
+  function add(rec) {
+    records.push(rec);
+    const div = document.createElement('div');
+    const klass = rec.type==='err'?'color:#ff8a8a':rec.type==='warn'?'color:#ffd27a':'color:#a0f0b2';
+    div.setAttribute('style', `${klass}`);
+    div.textContent = `[${rec.tstamp}] ${icon(rec.type)} ${rec.msg}`;
+    elLog.appendChild(div);
+    elLog.scrollTop = elLog.scrollHeight;
   }
 
-  // Erstbefüllung + Live-Stream
-  renderFull();
-  (function hookStream(){
-    if (window.CBLog && typeof window.CBLog.on === 'function'){
-      window.CBLog.on(appendLine);
-    } else {
-      // CBLog noch nicht da? kurz pollen
-      let tries = 0;
-      const iv = setInterval(()=>{
-        if (window.CBLog && window.CBLog.on){
-          clearInterval(iv);
-          renderFull();
-          window.CBLog.on(appendLine);
-        } else if (++tries>50){
-          clearInterval(iv);
-        }
-      }, 120);
-    }
-  })();
+  function setStatus(text) { elStatus.textContent = text || ''; }
 
-  // Aktionen
-  root.querySelector('#inspBtnClose').addEventListener('click', ()=> GameInspector.close());
-  root.querySelector('#inspBtnCopy').addEventListener('click', async ()=>{
-    try{
-      const txt = window.CBLog ? window.CBLog.exportText() : inspLog.textContent;
-      await navigator.clipboard.writeText(txt);
-      inspStatus.textContent = 'Log in Zwischenablage';
-      window.CBLog?.push('ok','Log in Zwischenablage');
-    }catch(e){
-      inspStatus.textContent = 'Kopieren fehlgeschlagen';
-      window.CBLog?.push('err','Log kopieren fehlgeschlagen: '+e.message);
+  // Öffnen/Schließen API
+  function toggle(open) {
+    const show = (open===true) ? true : (open===false ? false : (root.style.display==='none'));
+    root.style.display = show ? 'block' : 'none';
+    setStatus(show ? 'offen' : 'geschlossen');
+  }
+
+  // Buttons
+  root.querySelector('#insp-close').addEventListener('click', ()=>toggle(false));
+  root.querySelector('#insp-copy').addEventListener('click', async ()=>{
+    const text = getLogText();
+    try {
+      await navigator.clipboard.writeText(text);
+      add({tstamp: time(), type:'ok', msg:'Log in Zwischenablage'});
+    } catch(e) {
+      add({tstamp: time(), type:'warn', msg:'Clipboard API nicht verfügbar'});
     }
   });
-  root.querySelector('#inspBtnClear').addEventListener('click', ()=>{
-    window.CBLog?.clear();
-    inspLog.textContent = '';
-    window.CBLog?.push('ok','Log geleert');
+  root.querySelector('#insp-clear').addEventListener('click', ()=>{
+    elLog.innerHTML = '';
+    records.length = 0;
+    add({tstamp: time(), type:'ok', msg:'Log geleert'});
+  });
+  root.querySelector('#insp-retry').addEventListener('click', ()=>{
+    // Versuche zu starten mit aktuell gewählter Karte aus index (falls vorhanden)
+    const sel = document.querySelector('#map');
+    const path = sel?.value || './assets/maps/map-mini.json';
+    window.dispatchEvent(new CustomEvent('inspector:retry-start', { detail: { map:path }}));
+    add({tstamp: time(), type:'ok', msg:`Retry Start → ${path}`});
   });
 
-  // Öffentliche API
+  function time(){
+    const d=new Date(); const p=n=>String(n).padStart(2,'0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  function getLogText(){
+    return records.map(r=>`[${r.tstamp}] ${icon(r.type)} ${r.msg}`).join('\n');
+  }
+
+  // Events vom Index/Logger
+  window.addEventListener('cb:log', (ev)=>{
+    const rec = ev.detail;
+    if (!rec) return;
+    add(rec);
+  });
+  window.addEventListener('cb:flush-log', ()=>{ /* noop – UI ist live */ });
+
+  // Inspector → Index: retry start
+  window.addEventListener('inspector:retry-start', (ev)=>{
+    const map = ev.detail?.map;
+    const btnStart = document.getElementById('btn-start');
+    const sel = document.getElementById('map');
+    if (sel) sel.value = map;
+    if (btnStart) btnStart.click();
+  });
+
+  // Export API
   window.GameInspector = {
-    open(){ root.classList.add('show'); root.setAttribute('aria-hidden','false'); renderFull(); },
-    close(){ root.classList.remove('show'); root.setAttribute('aria-hidden','true'); },
-    toggle(){ root.classList.contains('show') ? this.close() : this.open(); },
-    version: VERSION
+    version: VERSION,
+    toggle,
+    open: ()=>toggle(true),
+    close: ()=>toggle(false),
+    getLogText
   };
 
-  // Badge im Log
-  window.CBLog?.push('ok', `Inspector bereit (inspector.js ${VERSION})`);
-
-  // Optional: auto-open via ?inspector=1
-  try{ const usp=new URLSearchParams(location.search); if(usp.get('inspector')==='1') window.GameInspector.open(); }catch(_){}
+  // Broadcast: bereit
+  window.dispatchEvent(new CustomEvent('inspector:ready'));
+  // Begrüßungslog
+  add({tstamp: time(), type:'ok', msg:`Inspector bereit (inspector.js v${VERSION})`});
 })();
