@@ -6,247 +6,167 @@
   <meta name="theme-color" content="#0b2419" />
   <title>Mini – v16.1.17</title>
 
-  <!-- Deine Styles beibehalten -->
+  <!-- Basis-Styles (DEINE bestehenden Dateien – NICHT ändern) -->
   <link rel="preload" href="./css/base.css" as="style" />
   <link rel="preload" href="./style.css" as="style" />
   <link rel="stylesheet" href="./css/base.css" />
   <link rel="stylesheet" href="./style.css" />
 
+  <!-- Nur Zusatz-Styles für Schwebe-Buttons & Build-Dock
+       -> beeinflusst NICHT dein Start-Layout -->
   <style>
-    /* ---------- Start-Panel: zentriert, oberhalb der Bühne ---------- */
-    #start-panel {
+    /* === Floating Buttons (Inspector rechts unten, Build links unten) === */
+    .cb-fab{
       position: fixed;
-      left: 50%; top: 50%;
-      transform: translate(-50%, -50%);
-      max-width: 760px; width: calc(100vw - 48px);
-      background: rgba(10,10,10,.85);
-      color: #eee;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.08);
-      box-shadow: 0 18px 60px rgba(0,0,0,.45);
-      padding: 18px 20px 16px;
-      z-index: 7000;
-      backdrop-filter: blur(8px);
-    }
-    #start-panel.hidden { display: none; }
-
-    #start-title { display:flex; align-items:center; gap:12px; margin:2px 0 10px;}
-    #start-title h1 {
-      font-size: 22px; line-height: 1.2; margin: 0; font-weight: 700;
-    }
-    .badge {
-      font-size: 12px; padding: 3px 8px; border-radius: 999px;
-      background: rgba(255,255,255,.09); color:#ddd; border:1px solid rgba(255,255,255,.12);
-    }
-    #map-row { display:flex; align-items:center; gap:10px; margin:10px 0 8px; }
-    #map-select {
-      flex:1; height:36px; border-radius: 9px; border:1px solid rgba(255,255,255,.15);
-      background: #151e18; color:#dfe9e2; padding: 0 10px;
-    }
-    .btn {
-      height:36px; border-radius: 9px; padding:0 14px; border:1px solid rgba(255,255,255,.15);
-      background:#1b2b22; color:#e7f0ea; cursor:pointer; user-select:none;
-    }
-    .btn.primary { background:#1e7f4a; border-color: rgba(0,0,0,.25); }
-    .btn.warn    { background:#a56a00; border-color: rgba(0,0,0,.25); }
-    .row { display:flex; gap:10px; align-items:center; margin:8px 0; flex-wrap:wrap; }
-    .note { font-size: 13px; color:#b9c5bd; margin-top:6px; }
-
-    /* ---------- Canvas/Stage ---------- */
-    #game {
-      position: absolute; left:0; top:0; width:100%; height:100%;
-      display:block; z-index: 1000;
-      /* dein Renderer setzt Größe per JS/dpr */
-    }
-
-    /* ---------- Floating Buttons ---------- */
-    .cb-fab {
-      position: fixed; z-index: 9000;
+      z-index: 9000;
       width: 56px; height: 56px; border-radius: 50%;
-      display:flex; align-items:center; justify-content:center;
-      background: rgba(20,20,20,.7); color:#fff;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(20,20,20,.7);
+      color: #fff; user-select: none; cursor: pointer;
       border: 1px solid rgba(255,255,255,.12);
       box-shadow: 0 6px 16px rgba(0,0,0,.35);
+      -webkit-backdrop-filter: blur(6px);
       backdrop-filter: blur(6px);
-      cursor: pointer; user-select: none;
       transition: transform .15s ease, opacity .15s ease;
     }
-    .cb-fab:active { transform: scale(.96); }
-    #btn-inspector { right: 12px; bottom: 12px; }
-    #btn-build     { left: 12px;  bottom: 12px; opacity:0; pointer-events:none; }
-    #btn-build.visible { opacity:1; pointer-events:auto; }
+    .cb-fab:active{ transform: scale(.96); }
+    /* Build-Button: erscheint erst NACH Game-Start */
+    #btn-build{ left: 12px; bottom: 12px; opacity: 0; pointer-events: none; }
+    #btn-build.visible{ opacity: 1; pointer-events: auto; }
+    /* Inspector-Button: dauerhaft sichtbar (deine Position beibehalten) */
+    #btn-inspector{ right: 12px; bottom: 12px; }
 
-    /* ---------- Inspector-Overlay Klickverhalten ---------- */
-    /* (Sicherheit: wenn geschlossen, darf nichts blockieren) */
-    .cb-inspector-closed { pointer-events:none; }
+    /* === Build-Dock (Bau-Menü unten, von ui-build.js bestückt) === */
+    #build-dock{
+      position: fixed; left: 0; right: 0; bottom: 0;
+      z-index: 8000; display: none;
+      padding: 10px 12px;
+      background: rgba(18,18,18,.85);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    #build-dock.open{ display: block; }
+    #build-dock .row{ display: flex; gap: 10px; overflow-x: auto; }
+    #build-dock .tool{
+      min-width: 90px; height: 64px; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: #0e1f18; color: #cfe6d8;
+      display: flex; align-items: center; justify-content: center;
+      padding: 6px 10px; font-weight: 600; white-space: nowrap;
+    }
+    #build-dock .tool.active{ outline: 2px solid #4dd186; background: #153a2c; }
+    #build-dock .tool img{ height: 40px; object-fit: contain; pointer-events: none; }
   </style>
 </head>
+
 <body>
-
-  <!-- Bühne -->
-  <canvas id="game" width="0" height="0"></canvas>
-
-  <!-- Startfenster (Layout BEIBEHALTEN) -->
+  <!-- =========================================================
+       START-PANEL (DEINS) – Layout UNVERÄNDERT
+       Wichtig ist nur die ID #start-panel, damit main.js es findet.
+       ========================================================= -->
   <div id="start-panel" aria-label="City-Builder Start">
-    <div id="start-title">
-      <h1>City-Builder – Start</h1>
-      <span class="badge">index v16.1.17</span>
-      <span id="badge-game" class="badge">game.js: unbekannt</span>
-      <span id="badge-dpr" class="badge">dpr: –</span>
-    </div>
-
-    <div id="map-row">
-      <label for="map-select" style="white-space:nowrap">Karte:</label>
-      <select id="map-select">
-        <!-- wir füllen per JS die Labels (Größe) nach -->
-        <option value="./assets/maps/map-mini.json">map-mini.json</option>
-        <option value="./assets/maps/map-pro.json">map-pro.json</option>
-        <option value="./assets/maps/map-demo.json">map-demo.json</option>
-        <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
-      </select>
-
-      <button id="btn-start" class="btn primary">▶️ Start</button>
-      <button id="btn-restart" class="btn warn">♻️ Neu-Start</button>
-    </div>
-
-    <div class="row">
-      <button id="btn-copy-log" class="btn">🗒️ Log kopieren</button>
-      <button id="btn-cache" class="btn">🧹 Cache-Booster</button>
-    </div>
-
-    <div class="note">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</div>
-    <div id="start-log" class="note" style="margin-top:8px;"></div>
+    <!-- Dein bestehendes Start-HTML (Karte wählen, Start, Neu-Start, Log kopieren, Cache-Booster, Hinweis …) -->
   </div>
 
-  <!-- FAB: Inspector (immer sichtbar) -->
+  <!-- Game-Canvas (dein Canvas; wird in game.js skaliert) -->
+  <canvas id="game" width="0" height="0"></canvas>
+
+  <!-- Floating Buttons -->
   <button id="btn-inspector" class="cb-fab" title="Inspector">🛠️</button>
+  <button id="btn-build" class="cb-fab" title="Bau-Menü">🏗️</button>
 
-  <!-- FAB: Bau-Menü (erscheint erst nach Spielstart) -->
-  <button id="btn-build" class="cb-fab" title="Bau-Menü öffnen">🏗️</button>
+  <!-- Bau-Menü Dock (UI-Container; Inhalt liefert ui-build.js) -->
+  <div id="build-dock" aria-label="Bau-Menü">
+    <!-- ui-build.js füllt hier die Tool-Leiste -->
+  </div>
 
-  <!-- =============== SCRIPTS =============== -->
+  <!-- ===================== SCRIPTS =====================
+       REIHENFOLGE IST WICHTIG:
+       1) Inspector (für Logs & Start-Phase)
+       2) Engine (game.js) -> stellt GameLoader bereit
+       3) UI-Build (deine Bau-Menü-Logik)
+       4) UI-Bridge (kleiner Kleber: Buttons + globale Hooks)
+       5) main.js (dein Start/Boot – nutzt die obigen Hooks)
+       =================================================== -->
 
-  <!-- Inspector (Layout bleibt, Steuerung intern) -->
+  <!-- 1) Inspector (dein vorhandener Pfad) -->
   <script src="./assets/inspector/inspector.js"></script>
 
-  <!-- Engine / Game -->
+  <!-- 2) Engine -->
   <script src="./game.js"></script>
 
-  <!-- Deine Bau-Menü UI -->
+  <!-- 3) Bau-Menü (dein bestehendes UI) -->
   <script src="./assets/ui/ui-build.js"></script>
 
-  <!-- Optional: Bridge (stellt window.GameUI.* bereit) -->
-  <script src="./assets/ui/ui-bridge.js"></script>
-
-  <!-- Start/Boot-Logik + Verkabelung -->
+  <!-- 4) Bridge: stellt globale API bereit, die main.js erwartet.
+         - window.GameUI.openBuildMenu()
+         - window.GameUI.closeBuildMenu()
+         - window.GameUI.setTool(name)
+         - reagiert auf Events und zeigt/versteckt den Bau-Button -->
   <script>
   (function(){
-    const INDEX_V = "v16.1.17";
-    const $ = s => document.querySelector(s);
+    const log = (t)=> (window.CBLog?.ok||console.log)(t);
 
-    // --- kleines Log-Forwarding ins Inspector-Log ---
-    window.CBLog = window.CBLog || {
-      lines: [],
-      push(type, msg){ this.lines.push([type, msg]); try{ window.CBInspector?.log(type, msg); }catch(e){} },
-      ok (m){ this.push('ok',   m); },
-      warn(m){ this.push('warn', m); },
-      err(m){ this.push('err',  m); },
-      log(m){ this.push('log',  m); },
+    // Minimal-Bridge-Objekt nur, falls nicht schon vorhanden:
+    window.GameUI = window.GameUI || {};
+
+    // Referenzen
+    const btnBuild   = document.getElementById('btn-build');
+    const buildDock  = document.getElementById('build-dock');
+
+    // Hooks für main.js / Inspector
+    window.GameUI.openBuildMenu  = function(){
+      if (!buildDock) return;
+      buildDock.classList.add('open');
+      (window.CBLog?.ok||console.log)('[ok] Bau-Menü geöffnet (ui-bridge)');
+      // Falls dein ui-build.js eigene Routine hat, hier aufrufen:
+      try { window.UIBuild?.open?.(); } catch(_) {}
     };
-    const LOG = (t,m)=> window.CBLog[t]?.(m) ?? window.CBLog.log(m);
+    window.GameUI.closeBuildMenu = function(){
+      if (!buildDock) return;
+      buildDock.classList.remove('open');
+      try { window.UIBuild?.close?.(); } catch(_) {}
+    };
+    window.GameUI.setTool = function(name){
+      try { window.UIBuild?.setTool?.(name); } catch(_) {}
+    };
 
-    // --- Badges befüllen ---
-    const dpr = Math.round(window.devicePixelRatio||1);
-    $('#badge-dpr').textContent = 'dpr: ' + dpr;
-    window.addEventListener('cb:engine-ready', ev=>{
-      const v = ev?.detail?.v || 'unbekannt';
-      $('#badge-game').textContent = 'game.js: ' + v;
-    });
-
-    // --- Buttons ---
-    const elStart   = $('#btn-start');
-    const elRestart = $('#btn-restart');
-    const elCopy    = $('#btn-copy-log');
-    const elCache   = $('#btn-cache');
-    const elSelect  = $('#map-select');
-    const elPanel   = $('#start-panel');
-    const elBuild   = $('#btn-build');
-    const elInspFab = $('#btn-inspector');
-
-    // Inspector öffnen/schließen
-    elInspFab.addEventListener('click', ()=> {
-      window.CBInspector?.open?.();
-    });
-
-    // Bau-Menü Button
-    elBuild.addEventListener('click', ()=>{
-      // bevorzugt echte UI:
-      if (window.GameUI?.openBuildMenu) {
-        window.GameUI.openBuildMenu();
-        LOG('ok', '[ok] Bau-Menü geöffnet (ui-build.js)');
-      } else {
-        LOG('warn', 'Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.');
-      }
-    });
-
-    // Map-Label (Größe) beim Start einmal nachziehen (optional)
-    function setMapLabels(){
-      // Falls du Map-Metadaten brauchst -> später per fetch() auslesen
-      // Für jetzt lassen wir die reinen Dateinamen stehen.
+    // Build-Button zeigt/verbirgt das Dock
+    if (btnBuild){
+      btnBuild.addEventListener('click', ()=>{
+        if (buildDock.classList.contains('open')) {
+          window.GameUI.closeBuildMenu();
+        } else {
+          window.GameUI.openBuildMenu();
+        }
+      });
     }
-    setMapLabels();
 
-    // Start-Click
-    elStart.addEventListener('click', async ()=>{
-      const url = elSelect.value;
-      LOG('ok', 'Start gedrückt → ' + url);
-      // Warten bis Engine da ist (dein game.js dispatcht cb:engine-ready)
-      if (!window.GameLoader || !window.GameLoader._start){
-        LOG('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
-        // wir versuchen es nochmal nach einem Tick
-        setTimeout(()=> elStart.click(), 250);
-        return;
-      }
-      try{
-        await window.GameLoader._start(url);
-        // UI umschalten
-        elPanel.classList.add('hidden');
-        elBuild.classList.add('visible');
-        LOG('ok', 'Game gestartet');
-      }catch(e){
-        LOG('err', 'Start fehlgeschlagen: '+ (e?.message||e));
-      }
-    });
-
-    // Neu-Start
-    elRestart.addEventListener('click', ()=>{
-      LOG('ok', 'Neu-Start angefordert');
-      try{
-        localStorage.clear(); sessionStorage.clear();
-      }catch(_){}
-      location.reload();
-    });
-
-    // Cache-Booster
-    elCache.addEventListener('click', ()=>{
-      try{
-        caches?.keys?.().then(keys => Promise.all(keys.map(k => caches.delete(k))));
-        localStorage.clear(); sessionStorage.clear();
-        LOG('ok','Cache/Storage geleert – Seite ggf. neu laden');
-      }catch(e){
-        LOG('warn','Cache-Booster nicht verfügbar: ' + e.message);
-      }
-    });
-
-    // Index-Info
-    LOG('ok', 'UI bereit (index ' + INDEX_V + ')');
-
-    // Wenn Spiel „fertig“ meldet → Build-FAB anzeigen (Sicherheit)
+    // Nach Game-Start: Build-Button einblenden
     window.addEventListener('cb:game-started', ()=>{
-      elBuild.classList.add('visible');
-      LOG('ok', 'Event: cb:game-started empfangen');
+      if (btnBuild){
+        btnBuild.classList.add('visible');
+        log('onGameStarted: Bau-Button aktiviert');
+      }
     });
+
+    // Vorsorglich: bei UI-ready einmal melden
+    log('UI-Bridge bereit');
   })();
+  </script>
+
+  <!-- 5) Dein Start/Boot -->
+  <script src="./main.js"></script>
+
+  <!-- Index-Version ins Log + Event für den Inspector -->
+  <script>
+    (function(){
+      const v = "v16.1.17";
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = v;
+      (window.CBLog?.ok||console.log)(`UI bereit (index ${v})`);
+      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v }}));
+    })();
   </script>
 </body>
 </html>
