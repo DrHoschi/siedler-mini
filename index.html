@@ -6,85 +6,161 @@
   <meta name="theme-color" content="#0b2419" />
   <title>Mini – v16.1.19</title>
 
-  <!-- Basis-Styles (deine bestehenden Dateien – UNVERÄNDERT lassen) -->
+  <!-- Basis-Styles (deine bestehenden Dateien) -->
   <link rel="preload" href="./css/base.css" as="style" />
   <link rel="preload" href="./style.css" as="style" />
   <link rel="stylesheet" href="./css/base.css" />
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- Kleine Zusatz-Styles nur für die Schwebe-Buttons & Build-Dock (Layout des Start-Panels bleibt unberührt) -->
+  <!-- Kleine Zusatz-Styles nur für Start-Panel & Floating-Buttons -->
   <style>
-    /* === Floating Buttons === */
-    .cb-fab{
-      position:fixed; z-index:9000; width:56px; height:56px; border-radius:50%;
-      display:flex; align-items:center; justify-content:center;
-      background:rgba(20,20,20,.7); color:#fff; user-select:none; cursor:pointer;
-      border:1px solid rgba(255,255,255,.12); box-shadow:0 6px 16px rgba(0,0,0,.35);
-      -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-      transition:transform .15s ease, opacity .15s ease;
+    /* --- Start-Panel-Container, zentriert --- */
+    #start-panel {
+      position: fixed;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(680px, 92vw);
+      background: rgba(12, 24, 19, 0.95);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.45);
+      padding: 16px 16px 12px;
+      color: #e9f6ee;
+      font: 500 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      z-index: 7000;
     }
-    .cb-fab:active{ transform:scale(.96); }
-    #btn-build{ left:12px; bottom:12px; opacity:0; pointer-events:none; }
-    #btn-build.visible{ opacity:1; pointer-events:auto; }
-    #btn-inspector{ right:12px; bottom:12px; } /* dein bestehender Inspector-Button (Icon bleibt) */
+    #start-panel h1 {
+      margin: 4px 0 12px;
+      font-size: 22px;
+      letter-spacing: .2px;
+    }
+    #start-meta { font-size: 12px; opacity: .7; margin-left: 8px; }
+    .sp-row { display: flex; gap: 10px; align-items: center; margin: 10px 0; }
+    .sp-grow { flex: 1 1 auto; min-width: 120px; }
+    select, button.sp-btn {
+      height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
+      background: #0f2019; color: #e9f6ee; padding: 0 12px; font-weight: 600;
+    }
+    button.sp-btn.primary { background: #1f6f4e; }
+    button.sp-btn.warn    { background: #9a6a0f; }
+    .sp-hint { opacity: .7; font-size: 12px; margin: 6px 2px 0; }
 
-    /* === Bau-Menü Dock (wird von ui-build.js bestückt) === */
+    /* Log im Startpanel (zum schnellen Debuggen) */
+    #start-log {
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 10px;
+      padding: 8px 10px; margin-top: 10px;
+      max-height: 28vh; overflow: auto; font: 600 13px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #dfffe8;
+    }
+
+    /* Floating Action Buttons (Inspector rechts unten, Bauen links unten) */
+    .cb-fab{
+      position: fixed; z-index: 9000; width: 56px; height: 56px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(20,20,20,.7); color: #fff;
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 6px 16px rgba(0,0,0,.35);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      cursor: pointer; user-select: none;
+      transition: transform .15s ease, opacity .15s ease;
+    }
+    .cb-fab:active{ transform: scale(.96); }
+    #btn-inspector{ right: 12px; bottom: 12px; }
+    #btn-build{ left: 12px; bottom: 12px; opacity: 0; pointer-events: none; }
+    #btn-build.visible{ opacity: 1; pointer-events: auto; }
+
+    /* Build-Dock (unten, wird von ui-build.js genutzt) */
     #build-dock{
-      position:fixed; left:0; right:0; bottom:0; z-index:8000; display:none;
-      padding:10px 12px; background:rgba(18,18,18,.85);
-      -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
-      border-top:1px solid rgba(255,255,255,.08);
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; display: none;
+      padding: 10px 12px;
+      background: rgba(18,18,18,.85);
+      -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,.08);
     }
-    #build-dock.open{ display:block; }
-    #build-dock .row{ display:flex; gap:10px; overflow:auto; }
-    #build-dock .tool{
-      min-width:90px; height:64px; border-radius:14px; border:1px solid rgba(255,255,255,.12);
-      background:#0e1f18; color:#cfe6d8; display:flex; align-items:center; justify-content:center;
-      padding:6px 10px; font-weight:600; white-space:nowrap;
-    }
-    #build-dock .tool.active{ outline:2px solid #4dd186; background:#153a2c; }
-    #build-dock .tool img{ height:40px; object-fit:contain; pointer-events:none; }
+    #build-dock.open{ display: block; }
   </style>
 </head>
 
 <body>
-  <!-- === Start-Panel: DEINS; bitte so lassen. Nur die ID ist wichtig. === -->
-  <div id="start-panel" aria-label="City-Builder Start">
-    <!-- Dein existierendes Start-HTML bleibt hier 1:1 stehen (Karte wählen, Start, Neu-Start, Log kopieren, Cache-Booster, Hinweis …). -->
+  <!-- ==== Start-Panel (sichtbar beim Laden) ==== -->
+  <div id="start-panel" aria-label="City-Builder – Start">
+    <h1>City-Builder – Start
+      <small id="start-meta">
+        <span id="meta-index">index v16.1.19</span>
+        · <span id="meta-game">game.js: unbekannt</span>
+        · <span id="meta-dpr">dpr: ?</span>
+      </small>
+    </h1>
+
+    <!-- Karten-Auswahl + Start/Neu-Start -->
+    <div class="sp-row">
+      <label for="map-select" style="min-width:70px;">Karte:</label>
+      <select id="map-select" class="sp-grow">
+        <!-- Wichtig: bekannte Karten aufnehmen -->
+        <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
+        <option value="./assets/maps/map-pro.json">map-pro.json</option>
+        <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+        <option value="./assets/maps/map-demo.json">map-demo.json</option>
+      </select>
+      <button id="btn-start" class="sp-btn primary">▶︎ Start</button>
+      <button id="btn-restart" class="sp-btn warn">♻︎ Neu-Start</button>
+    </div>
+
+    <!-- Tools: Cache-Booster + Log kopieren -->
+    <div class="sp-row">
+      <button id="btn-log-copy" class="sp-btn">📋 Log kopieren</button>
+      <button id="btn-cache" class="sp-btn">🧹 Cache-Booster</button>
+      <div class="sp-grow"></div>
+    </div>
+
+    <div class="sp-hint">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</div>
+
+    <!-- Start-Log (sichtbar im Panel) -->
+    <pre id="start-log"></pre>
   </div>
 
-  <!-- === Game-Canvas (deins) === -->
+  <!-- ==== Game-Canvas ==== -->
   <canvas id="game" width="0" height="0"></canvas>
 
-  <!-- === Floating Buttons === -->
+  <!-- ==== Floating Buttons ==== -->
   <button id="btn-inspector" class="cb-fab" title="Inspector">🛠️</button>
   <button id="btn-build" class="cb-fab" title="Bau-Menü">🏗️</button>
 
-  <!-- === Bau-Menü Dock (UI) – Inhalt füllt ui-build.js === -->
+  <!-- ==== Build-Dock (unten) – Inhalt kommt aus ui-build.js ==== -->
   <div id="build-dock" aria-label="Bau-Menü"></div>
 
-  <!-- ===================== SCRIPTS (Reihenfolge ist wichtig!) ===================== -->
+  <!-- ===== SCRIPTS: Reihenfolge ist wichtig! ===== -->
 
-  <!-- 1) Inspector (dein vorhandener Pfad) -->
+  <!-- Inspector (dein Plugin) -->
   <script src="./assets/inspector/inspector.js"></script>
 
-  <!-- 2) Engine/Game (stellt GameLoader bereit) -->
+  <!-- Spiel/Engine -->
   <script src="./game.js"></script>
 
-  <!-- 3) Bau-Menü + Bridge (UI API) -->
+  <!-- Bau-UI + Bridge (stellt window.GameUI.* bereit) -->
   <script src="./assets/ui/ui-build.js"></script>
   <script src="./assets/ui/ui-bridge.js"></script>
 
-  <!-- 4) Start/Boot-Logik: Verdrahtet Start-Buttons und wartet sauber auf GameLoader -->
+  <!-- Start/Boot-Logik (verkabelt Start-Panel, Buttons, Events) -->
   <script src="./main.js"></script>
 
-  <!-- 5) Index-Version ins Log + Event (damit du im Log die Index-Version siehst) -->
+  <!-- Index-Version → Log & Event für Inspector -->
   <script>
     (function(){
-      const v="v16.1.19";
-      window.__cb=window.__cb||{}; window.__cb.indexVersion=v;
-      (window.CBLog?.ok||console.log)(`UI bereit (index ${v})`);
-      window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{v}}));
+      const v = "v16.1.19";
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = v;
+
+      // DPR anzeigen
+      const dpr = Math.max(1, Math.round((window.devicePixelRatio||1)*100)/100);
+      document.getElementById('meta-dpr').textContent = 'dpr: ' + dpr;
+
+      // UI-ready ins Log + Event
+      if (window.CBLog && window.CBLog.ok) window.CBLog.ok(`UI bereit (index ${v})`);
+      else console.log(`[index] UI bereit (${v})`);
+      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v } }));
     })();
   </script>
 </body>
