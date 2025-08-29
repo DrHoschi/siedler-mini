@@ -3,245 +3,164 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>City Builder · Start (v16.1.13)</title>
+  <title>City Builder – Start (v16.1.14)</title>
 
   <!--
-    index.html v16.1.13
-    - Startfenster (Layout bewusst stabil gelassen)
-    - Engine-Ready-Gate: Start wartet, bis GameLoader.start vorhanden ist
-    - Events bei erfolgreichem Start: 'cb:game-started' + GameUI.onGameStarted()
-    - FABs: Inspector (rechts unten, immer), Bau-Menü (links unten, erst nach Start)
-    - Globales CBLog (puffert console.* und liefert an Inspector)
+    =======================================================================
+    CityBuilder Start-UI (Nur Oberfläche, keine Engine)
+    - Bitte Layout NICHT ändern; nur Logik in game.js / inspector.js anfassen.
+    - Versionen: index v16.1.14  · ui-build.js separat  · inspector separat
+    - Wichtig: Script-Ladereihenfolge unten einhalten!
+    =======================================================================
   -->
 
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./css/base.css" />
+  <link rel="stylesheet" href="./css/mobile.css" />
+  <link rel="stylesheet" href="./css/desktop.css" />
+  <link rel="stylesheet" href="./css/platform.css" />
+
   <style>
-    :root{ --bg:#0f2d1e; --panel:#0b2217; --panel2:#0d261b; --text:#eaf6ef; --muted:#a7c9bb; }
-    html,body{ height:100%; background:radial-gradient(1200px 800px at 50% 20%,#0f3524,#0b1c14 60%); margin:0; color:var(--text); font:16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
-    /* Start-Panel – Layout unverändert in Optik/Größe, nur minimal CSS */
-    .start-wrap{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(760px, calc(100vw - 32px)); background:linear-gradient(180deg,#0f2e20,#0a2015); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.05); padding:18px; }
-    .head{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-    .title{ font-weight:700; font-size:22px; letter-spacing:.2px; }
-    .ver{ margin-left:auto; font-size:12px; color:#9ec2b3; }
-    label{ display:block; font-weight:600; margin:10px 0 6px; color:#cfe9dc; }
-    select{ width:100%; padding:10px 12px; border-radius:10px; border:none; background:#0b2217; color:var(--text); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); }
-    .row{ display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
-    .btn{ appearance:none; border:none; border-radius:12px; padding:12px 16px; font-weight:700; color:#0b2217; background:#2fd07d; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.25), inset 0 -2px 0 rgba(0,0,0,.15); }
-    .btn.secondary{ background:#ffd24a; }
-    .btn.ghost{ background:#20372c; color:#eaf6ef; }
-    .btn.dim{ background:#172a20; color:#cfe9dc; }
-    .hint{ margin-top:12px; padding:14px; border-radius:12px; background:#0a1f16; color:#cfe9dc; }
-    .toast{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); max-width:min(720px, 92vw); background:#152a21; color:#eaf6ef; padding:12px 14px; border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,.45); display:none; }
-    .toast.warn{ background:#2a2415; }
-    .toast.err{ background:#2a1515; }
-    /* Floating Action Buttons */
-    .fab{ position:fixed; bottom:18px; width:56px; height:56px; border-radius:50%; display:grid; place-items:center; background:#20372c; color:#eaf6ef; box-shadow:0 10px 26px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06); cursor:pointer; user-select:none; }
-    #fabInspector{ right:18px; }
-    #fabBuild{ left:18px; display:none; } /* erst sichtbar nach Spielstart */
-    .fab img{ width:28px; height:28px; opacity:.95; }
-    /* Platz für Inspector-Overlay */
-    #inspectorRoot{ position:fixed; inset:0; display:none; }
-    #inspectorRoot.show{ display:block; }
+    /* ---- Startpanel & Buttons – Layout wie gehabt -------------------- */
+    :root { --panel-bg: #0f1716; --panel-fg:#e8f4ef; --chip:#1f2b29; --ok:#26c281; --warn:#ffc044; --err:#ff6b6b; }
+    body { margin:0; background:#0a2018; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#cfe7df; }
+    .hidden { display:none !important; }
+
+    #startPanel {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(740px, 92vw); background: #0b0f0e; border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.45); padding: 22px 22px 18px;
+    }
+    .titleRow { display:flex; align-items:center; gap:12px; margin:0 0 14px; }
+    .titleRow h1 { font-size: 24px; margin:0; letter-spacing:.2px; }
+    .chip { font-size:12px; background:#15211f; color:#a3c7be; padding:6px 10px; border-radius:14px; }
+    .row { display:flex; gap:14px; align-items:center; flex-wrap: wrap; }
+    .row + .row { margin-top: 12px; }
+
+    select, button {
+      border: 0; border-radius: 12px; padding: 10px 14px; font-size: 16px;
+      background:#121a18; color:#def3ec; outline: none;
+    }
+    select { flex:1; min-width: 260px; background:#0f1514; }
+    .btn-primary { background:#1a6b3f; }
+    .btn-primary:active { transform: translateY(1px); }
+    .btn-warn { background:#ffcc00; color:#1a1a1a; }
+    .btn-ghost { background:#101514; color:#d6eae3; }
+    .note { background:#0e1413; border-radius:12px; padding:12px 14px; color:#cbe3db; }
+    .badge { background:#13201d; padding:4px 8px; border-radius:10px; font-size:12px; color:#9bc9bd; }
+
+    /* Floating Buttons unten links/rechts */
+    .fab { position: fixed; bottom: 16px; width: 60px; height: 60px; border-radius: 50%;
+           display:grid; place-items:center; box-shadow: 0 10px 28px rgba(0,0,0,.35);
+           background: rgba(28,40,37,.85); backdrop-filter: blur(6px); }
+    #btnInspector { right: 16px; }       /* immer sichtbar */
+    #btnBuild { left: 16px; display:none; }  /* erst nach Game-Start sichtbar */
+
+    /* Inspector-Overlay (UI selbst kommt aus assets/inspector/inspector.js) */
+    #inspectorHost { position: fixed; inset: 0; display:none; z-index: 40; }
+    #inspectorBackdrop { position:absolute; inset:0; background:rgba(0,0,0,.55); }
+    #inspectorPanel { position:absolute; inset: 0; display:flex; }
+
+    /* Toasts (Log) – werden vom Inspector genutzt */
+    #toastArea { position: fixed; left: 50%; transform: translateX(-50%);
+                 bottom: 16px; display:grid; gap: 8px; z-index: 35; }
+    .toast { background:#101514; color:#d9efe7; padding:10px 12px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    .toast.ok { border-left: 6px solid var(--ok); }
+    .toast.warn { border-left: 6px solid var(--warn); }
+    .toast.err { border-left: 6px solid var(--err); }
   </style>
-
-  <!-- Inspector (neue Logik sitzt in assets/inspector/inspector.js) -->
-  <script defer src="./assets/inspector/inspector.js"></script>
-
-  <!-- game.js und Co werden separat geladen; wir rufen nichts, bis GameLoader.start existiert -->
-  <script defer src="./game.js"></script>
-  <script defer src="./ui-build.js"></script>
 </head>
+
 <body>
 
-  <!-- Start-Panel (Layout beibehalten) -->
-  <section class="start-wrap" id="startPanel" aria-live="polite">
-    <div class="head">
-      <div class="title">City Builder – Start</div>
-      <div class="ver">index <b>v16.1.13</b></div>
+  <!-- ======================== Start-Panel ============================= -->
+  <section id="startPanel" aria-label="CityBuilder Start">
+    <div class="titleRow">
+      <h1>City Builder – Start</h1>
+      <span class="badge">index v16.1.14</span>
     </div>
 
-    <label for="mapSel">Karte wählen:</label>
-    <select id="mapSel">
-      <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
-      <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
-      <option value="./assets/maps/map-demo.json">map-demo.json</option>
-      <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
-    </select>
-
-    <div class="hint">
-      <b>Hinweis</b> · Spiel lädt die gewählte Karte nach „Start“.
-    </div>
-
-    <div class="row">
-      <button class="btn" id="btnStart">▶ Start</button>
-      <button class="btn secondary" id="btnReset">🧹 Neu-Start</button>
-      <button class="btn dim" id="btnCopyLog">📋 Log kopieren</button>
+    <!-- Karten-Auswahl -->
+    <div class="row" aria-label="Karte wählen">
+      <label for="mapSelect" style="font-weight:600">Karte wählen:</label>
+      <select id="mapSelect">
+        <!-- Falls du Maps anpassen willst: einfach hier Einträge ergänzen -->
+        <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
+        <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
+        <option value="./assets/maps/map-demo.json">map-demo.json</option>
+        <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+      </select>
     </div>
 
     <div class="row">
-      <button class="btn ghost" id="btnCache">🧹 Cache-Booster</button>
+      <div class="note" style="flex:1">
+        <strong>Hinweis</strong> · Spiel lädt die gewählte Karte nach „Start“.
+      </div>
+    </div>
+
+    <!-- Start / Neu / Log / Cache -->
+    <div class="row">
+      <button id="btnStart" class="btn-primary">▶ Start</button>
+      <button id="btnRestart" class="btn-warn">⟲ Neu-Start</button>
+      <button id="btnLogCopy" class="btn-ghost">📋 Log kopieren</button>
+    </div>
+
+    <div class="row">
+      <button id="btnCache" class="btn-ghost">🧹 Cache-Booster</button>
     </div>
   </section>
 
-  <!-- FABs -->
-  <button class="fab" id="fabInspector" title="Inspector öffnen">
-    <img alt="Inspector" src="assets/Logo.PNG" />
+  <!-- ===================== Floating Buttons =========================== -->
+  <button id="btnBuild" class="fab" title="Bau-Menü öffnen" aria-label="Bau-Menü">
+    🧱
   </button>
 
-  <button class="fab" id="fabBuild" title="Bau-Menü öffnen">
-    <img alt="Bauen" src="assets/icons/icons_spritesheet_64.png" />
+  <button id="btnInspector" class="fab" title="Inspector öffnen" aria-label="Inspector">
+    🛠️
   </button>
 
-  <!-- Inspector-Overlay-Container (wird von assets/inspector/inspector.js gefüllt) -->
-  <div id="inspectorRoot" aria-hidden="true"></div>
+  <!-- ===================== Inspector Host ============================ -->
+  <div id="inspectorHost" aria-hidden="true">
+    <div id="inspectorBackdrop"></div>
+    <div id="inspectorPanel"></div>
+  </div>
 
-  <!-- Toast -->
-  <div class="toast" id="toast"></div>
+  <!-- Toasts (für kurze Hinweise) -->
+  <div id="toastArea"></div>
+
+  <!-- ==================================================================
+       SCRIPTS — Reihenfolge WICHTIG!
+       1) Engine/Runtime (deine bestehenden Dateien)
+       2) Inspector-UI (zeichnet Logs/Overlay)
+       3) Build-UI (Bau-Menü)
+       4) game.js (dieses Projekt – Start-Logik & Hook)
+      ================================================================== -->
+
+  <!-- (1) Engine / Runtime -->
+  <script src="./app-v11.1r6.js"></script>
+  <script src="./main.js"></script>
+  <script src="./render.js"></script>
+  <script src="./world.js"></script>
+  <script src="./textures.js"></script>
+  <script src="./buildingData.js"></script>
+  <script src="./game.js"></script>
+
+  <!-- (2) Inspector-UI -->
+  <script src="./assets/inspector/inspector.js"></script>
+
+  <!-- (3) Bau-Menü -->
+  <script src="./assets/ui/ui-build.js"></script>
+
+  <!-- (4) Start-/UI-Fassade -->
+  <!--  WICHTIG: Diese Datei MUSS NACH den obigen Scripts kommen,
+        damit der Hook auf GameLoader.start greifen kann. -->
+  <script src="./game.js"></script> <!-- belassen, falls du Double-include vermeiden willst, diesen zweiten Eintrag entfernen -->
 
   <script>
-  /* =========================
-     ZENTRALES LOG (CBLog)
-     - puffert Zeilen
-     - spiegelt console.*, ohne das Original zu verlieren
-     - Inspector holt sich den Stream über CBLog.on()
-  ========================== */
-  (function setupCBLog(){
-    const buffer = [];
-    const listeners = new Set();
-    const MAX = 2000;
-    function push(level,msg){
-      const line = { t:new Date(), level, msg };
-      buffer.push(line);
-      if (buffer.length>MAX) buffer.splice(0, buffer.length-MAX);
-      for (const fn of listeners) { try{ fn(line); }catch{} }
-    }
-    window.CBLog = {
-      buffer,
-      push,
-      on(fn){ listeners.add(fn); },
-      off(fn){ listeners.delete(fn); },
-      clear(){ buffer.length = 0; },
-      exportText(){
-        const pad = n => String(n).padStart(2,'0');
-        return buffer.map(l=>{
-          const d=l.t; const ts=`${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-          const pref = l.level==='ok'?'✅ (ok) ':l.level==='warn'?'⚠️ (warn) ':l.level==='err'?'❌ (err) ':'';
-          return `[${ts}] ${pref}${l.msg}`;
-        }).join('\n');
-      }
-    };
-
-    // Konsole anzapfen
-    const native = { log:console.log.bind(console), warn:console.warn.bind(console), error:console.error.bind(console) };
-    console.log = (...a)=>{ native.log(...a); try{ CBLog.push('ok', a.map(x=>String(x)).join(' ')); }catch{} };
-    console.warn = (...a)=>{ native.warn(...a); try{ CBLog.push('warn', a.map(x=>String(x)).join(' ')); }catch{} };
-    console.error= (...a)=>{ native.error(...a); try{ CBLog.push('err', a.map(x=>String(x)).join(' ')); }catch{} };
-
-    CBLog.push('ok','UI bereit (index v16.1.13)');
-  })();
-
-  /* =========================
-     HILFE: Toast
-  ========================== */
-  const Toast = (()=> {
-    const el = document.getElementById('toast');
-    let hid = 0;
-    function show(msg, kind=''){
-      el.textContent = msg;
-      el.className = 'toast'+(kind?(' '+kind):'');
-      el.style.display = 'block';
-      clearTimeout(hid);
-      hid = setTimeout(()=> el.style.display='none', 2800);
-    }
-    return { show };
-  })();
-
-  /* =========================
-     START-LOGIK mit Engine-Gate
-  ========================== */
-  const startPanel = document.getElementById('startPanel');
-  const mapSel = document.getElementById('mapSel');
-
-  // FABs
-  const fabInspector = document.getElementById('fabInspector');
-  const fabBuild = document.getElementById('fabBuild');
-
-  // Buttons
-  document.getElementById('btnCopyLog').addEventListener('click', async ()=>{
-    try{ await navigator.clipboard.writeText(CBLog.exportText()); CBLog.push('ok','Log in Zwischenablage'); }
-    catch(e){ CBLog.push('err','Log kopieren fehlgeschlagen: '+e.message); }
-  });
-
-  document.getElementById('btnCache').addEventListener('click', ()=>{
-    try{
-      localStorage.clear(); sessionStorage.clear(); caches?.keys?.().then(keys=>keys.forEach(k=>caches.delete(k)));
-      CBLog.push('ok','Cache/Storage geleert – Seite ggf. neu laden');
-      Toast.show('Cache geleert');
-    }catch(e){ CBLog.push('warn','Cache-Booster konnte nicht alles leeren: '+e.message); }
-  });
-
-  document.getElementById('btnReset').addEventListener('click', ()=>{
-    CBLog.push('ok','Neu-Start angefordert');
-    // hier bewusst nur Status; ggf. weitere Reset-Logik deiner Engine
-  });
-
-  document.getElementById('btnStart').addEventListener('click', ()=>{
-    const mapPath = mapSel.value || './assets/maps/map-mini.json';
-    CBLog.push('ok', `Start gedrückt → ${mapPath}`);
-    waitEngineAndStart(mapPath);
-  });
-
-  // Inspector-FAB
-  fabInspector.addEventListener('click', ()=> window.GameInspector?.toggle?.());
-
-  // Build-FAB (nach Start sichtbar)
-  fabBuild.addEventListener('click', ()=> window.GameUI?.openBuildMenu?.());
-
-  // Warte bis GameLoader.start da ist; falls nicht → kurze Poll-Phase
-  function waitEngineAndStart(mapPath){
-    let tries = 0;
-    const iv = setInterval(()=>{
-      if (window.GameLoader?.start){
-        clearInterval(iv);
-        try{
-          CBLog.push('ok', `Map laden → ${mapPath}`);
-          window.GameLoader.start(mapPath);
-          CBLog.push('ok', `GameLoader.start ${mapPath}`);
-          // Erfolgsmeldung kommt i.d.R. aus game.js – wir feuern aber sicherheitshalber:
-          dispatchGameStarted();
-          // Start-Panel schließen
-          startPanel.style.display='none';
-          // Bau-FAB sichtbar machen
-          fabBuild.style.display='grid';
-        }catch(e){
-          CBLog.push('err', 'Start fehlgeschlagen: '+e.message);
-          Toast.show('Start fehlgeschlagen', 'err');
-        }
-      } else {
-        if (tries===0) {
-          CBLog.push('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
-          Toast.show('Engine noch nicht bereit – warte …','warn');
-        }
-        if (++tries > 60){ // ~6–7s
-          clearInterval(iv);
-          CBLog.push('err','GameLoader.start ist nicht verfügbar – game.js / Engine noch nicht initialisiert?');
-          Toast.show('Engine nicht bereit', 'err');
-        }
-      }
-    }, 120);
-  }
-
-  // Bei erfolgreichem Start Event(s) feuern:
-  function dispatchGameStarted(){
-    try{ window.dispatchEvent(new CustomEvent('cb:game-started')); CBLog.push('ok','Event: cb:game-started gesendet'); }catch{}
-    try{ window.GameUI?.onGameStarted?.(); CBLog.push('ok','GameUI.onGameStarted() aufgerufen'); }catch{}
-  }
-
-  // Falls die Engine selbst signalisiert:
-  window.addEventListener('cb:game-started', ()=> {
-    // UI-Folgen doppelt auslösen ist ok/robust
-    startPanel.style.display='none';
-    fabBuild.style.display='grid';
-  });
+    /* Falls der Build-Prozess die doppelte Einbindung vermeiden soll:
+       Du kannst die obere game.js-Zeile aus der Engine-Liste entfernen und
+       NUR die untere (hier) behalten. Wichtig ist: game.js zuletzt laden. */
   </script>
 </body>
 </html>
