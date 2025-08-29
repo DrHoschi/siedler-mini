@@ -1,35 +1,58 @@
-/* ui-bridge.js – v16.1.16
- * Brücke zwischen deinem Bau-Menü (assets/ui/ui-build.js) und globalen Hooks,
- * damit index.html/Inspector NICHTS über interne Strukturen wissen muss.
- */
+// assets/ui/ui-bridge.js — v16.1.16
+// Stellt die globalen Hooks bereit, die dein Inspector & die Buttons erwarten.
+// Mapped auf dein bestehendes assets/ui/ui-build.js (falls vorhanden).
+
 (function(){
-  const V = "v16.1.16";
-  window.__cb = window.__cb || { logs: [] };
-  const log = (type, msg)=>{
-    window.__cb.logs.push({ t:Date.now(), type, msg });
-    window.dispatchEvent(new CustomEvent('cb:log', { detail:{ type, msg }}));
+  const V = 'v16.1.16';
+  const LOG = (lvl, msg)=> {
+    try{
+      if (window.CBLog) {
+        if (lvl==='ok')      CBLog.ok(msg);
+        else if (lvl==='warn') CBLog.warn(msg);
+        else if (lvl==='err')  CBLog.err(msg);
+        else CBLog.push(lvl||'log', msg);
+      } else {
+        console[lvl==='err'?'error':lvl==='warn'?'warn':'log'](msg);
+      }
+    }catch(_){}
   };
 
-  // Erwartete öffentliche API deines Bau-UI (falls anders, hier anpassen)
-  // Wir kapseln alles in window.GameUI.*
-  const GameUI = window.GameUI || (window.GameUI = {});
-  GameUI.version = V;
+  // Versuche das vorhandene UI-Modul zu finden (je nach deiner Datei)
+  function resolveBuildAPI(){
+    // Kandidaten, falls dein ui-build.js anders nennt:
+    const api = window.UIBuild || window.BuildUI || window.GameBuildUI || null;
+    return api;
+  }
 
-  // Falls dein ui-build.js eigene globale Funktionen anbietet, hier andocken.
-  // Andernfalls Dummy-Warnungen, damit der Log dir sagt, was fehlt.
-  GameUI.openBuildMenu = GameUI.openBuildMenu || function(){
-    if (window.UIBuild?.open) { window.UIBuild.open(); }
-    else log('warn','Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.');
-  };
-  GameUI.closeBuildMenu = GameUI.closeBuildMenu || function(){
-    if (window.UIBuild?.close) { window.UIBuild.close(); }
-  };
-  GameUI.setTool = GameUI.setTool || function(toolId){
-    if (window.UIBuild?.setTool) window.UIBuild.setTool(toolId);
+  // Globale Fassade
+  const GU = window.GameUI = window.GameUI || {};
+  GU.version = V;
+
+  GU.openBuildMenu = function(){
+    const api = resolveBuildAPI();
+    if (api?.open) { api.open(); LOG('ok', 'Bau-Menü geöffnet (ui-build.js)'); }
+    else LOG('warn', 'Bau-Menü API nicht gefunden – erwartete globale Variable z.B. window.UIBuild');
   };
 
-  // Wenn die Engine gemeldet hat, dass das Spiel läuft, lass optional den Build-Button blinken etc.
-  window.addEventListener('cb:game-started', ()=>{
-    log('log', `[ok] Bau-Menü-Bridge aktiv (ui-bridge.js ${V})`);
-  });
+  GU.closeBuildMenu = function(){
+    const api = resolveBuildAPI();
+    if (api?.close) { api.close(); LOG('ok', 'Bau-Menü geschlossen'); }
+  };
+
+  GU.setTool = function(toolId){
+    const api = resolveBuildAPI();
+    if (api?.setTool) { api.setTool(toolId); LOG('ok', `Tool gesetzt: ${toolId}`); }
+  };
+
+  // Hook nach Spielstart: Bau-Button sichtbar machen
+  GU.onGameStarted = function(){
+    const btn = document.getElementById('btn-build');
+    if (btn) btn.classList.add('visible');
+    LOG('ok', 'onGameStarted: Bau-Button aktiviert');
+  };
+
+  // Sicherheitshalber auch auf Event hören
+  window.addEventListener('cb:game-started', ()=> GU.onGameStarted());
+
+  LOG('ok', `Bau-Bridge bereit (ui-bridge.js ${V})`);
 })();
