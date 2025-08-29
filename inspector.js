@@ -1,142 +1,127 @@
-/* 
-  Projekt:  Siedler Mini
-  Datei:    inspector.js
-  Version:  v16.1.12
-  Zweck:    Dev/Inspector-Overlay (immer verfügbar, per Button 🛠️ ein-/ausblendbar)
-            - Log-Panel (empfängt 'inspector:log')
-            - Vollbild-Overlay, um Fokus auf Debug zu legen
-            - Copy-Log in Zwischenablage
-            - (optional) einfache Tools, ohne Spiellogik zu verändern
-*/
+/* inspector.js (v16.1.9)
+ * Minimal-invasive Dev-Werkzeuge für Tests/Fehleranalyse.
+ * – Vollbild-Overlay (öffnen/schließen)
+ * – Integrierter Log (spiegelt console.log/warn/error)
+ * – Log leeren / in Zwischenablage kopieren
+ * – Keine Spielfunktionen! (Start/Maps sind in index.html)
+ */
 
 (function(){
-  const VERSION = 'v16.1.12';
+  const VERSION = "v16.1.9";
 
-  // Falls mehrfach eingebunden/verzögert neu geladen:
-  if(window.GameInspector?.__alive){ 
-    try { window.GameInspector.show(); } catch(_) {}
-    return;
-  }
-
-  // Basis-DOM erzeugen
-  const root = document.createElement('div');
-  root.id = 'dev-inspector';
-  root.style.cssText = `
-    position:fixed; inset:0; z-index:1000; display:none;
-    background:rgba(2,6,23,.82); backdrop-filter:saturate(150%) blur(2px);
-    color:#e6edf3; font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  // ----------------------- DOM aufbauen
+  const overlay = document.createElement('section');
+  overlay.id = 'inspectorOverlay';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:2000; display:none;
+    background:rgba(0,0,0,.55); backdrop-filter:saturate(120%) blur(8px);
   `;
 
   const panel = document.createElement('div');
   panel.style.cssText = `
-    position:absolute; inset:16px; border:1px solid #30363d; border-radius:12px;
-    background:#0b1220; display:flex; flex-direction:column; overflow:hidden;
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:min(980px, calc(100vw - 28px)); height:min(86vh, calc(100vh - 28px));
+    background:linear-gradient(180deg,#0e2a1c,#0a2015);
+    border-radius:16px; box-shadow:0 20px 70px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,255,255,.05);
+    display:flex; flex-direction:column; overflow:hidden;
   `;
 
   const header = document.createElement('div');
   header.style.cssText = `
-    display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid #30363d;
-    background:#111827;
+    padding:14px 14px 12px; display:flex; gap:10px; align-items:center;
+    color:#e8f6ef; background:rgba(255,255,255,.03);
   `;
   header.innerHTML = `
-    <strong style="letter-spacing:.3px">Inspector <small style="color:#8b949e">${VERSION}</small></strong>
-    <div style="flex:1"></div>
-    <button id="ins-btn-copy" title="Log kopieren"
-      style="border:1px solid #2e3440; background:#1f2937; color:#fff; padding:6px 10px; border-radius:8px; cursor:pointer">📋 Log kopieren</button>
-    <button id="ins-btn-close" title="Schließen"
-      style="border:1px solid #2e3440; background:#1f2937; color:#fff; padding:6px 10px; border-radius:8px; cursor:pointer">✖︎</button>
+    <strong style="font-size:16px;">Inspector / Test-Cockpit</strong>
+    <span style="background:#0f3926;color:#cfe9dc;border-radius:999px;padding:2px 8px;margin-left:6px;">
+      v${VERSION}
+    </span>
+    <span style="flex:1 1 auto"></span>
+    <button id="insBtnClear" style="padding:8px 10px;border-radius:10px;border:0;background:#0b2216;color:#cfe9dc;cursor:pointer;">Log leeren</button>
+    <button id="insBtnClose" style="padding:8px 10px;border-radius:10px;border:0;background:#248f5c;color:#fff;cursor:pointer;">Schließen</button>
   `;
 
-  const body = document.createElement('div');
-  body.style.cssText = `display:flex; flex:1; min-height:0;`;
-
-  const colLog = document.createElement('div');
-  colLog.style.cssText = `flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid #30363d;`;
-
-  const logHead = document.createElement('div');
-  logHead.style.cssText = `padding:8px 10px; background:#0f172a; border-bottom:1px solid #30363d;`;
-  logHead.innerHTML = `<strong>Log</strong> <small style="color:#8b949e">(Live)</small>`;
-
-  const logList = document.createElement('div');
-  logList.id = 'ins-log';
-  logList.style.cssText = `
-    flex:1; overflow:auto; padding:10px; font-family:ui-monospace, Menlo, Consolas, monospace; font-size:12px; line-height:1.45;
+  const logBox = document.createElement('pre');
+  logBox.id = 'inspectorLog';
+  logBox.style.cssText = `
+    margin:0; padding:14px; flex:1 1 auto; overflow:auto;
+    font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:#cfe9dc; background:transparent;
   `;
 
-  // (Optional) rechte Spalte für spätere Tools/Shortcuts
-  const colTools = document.createElement('div');
-  colTools.style.cssText = `width:320px; display:flex; flex-direction:column;`;
-  const toolsHead = document.createElement('div');
-  toolsHead.style.cssText = `padding:8px 10px; background:#0f172a; border-bottom:1px solid #30363d;`;
-  toolsHead.innerHTML = `<strong>Tools</strong> <small style="color:#8b949e">(Dev)</small>`;
-
-  const toolsBody = document.createElement('div');
-  toolsBody.style.cssText = `padding:10px; overflow:auto; color:#cbd5e1; font-size:14px`;
-  toolsBody.innerHTML = `
-    <p>Der Inspector ist nur für Debug/Analyse gedacht.</p>
-    <ul style="margin:.3em 0 .2em 1.2em">
-      <li>Logs kommen automatisch hier an.</li>
-      <li>Start/Reset & Karten-Auswahl bleiben im Startfenster der App.</li>
-      <li>Build-Menü-Button bleibt außerhalb und erst nach Spielstart sichtbar.</li>
-    </ul>
+  const footer = document.createElement('div');
+  footer.style.cssText = `padding:8px 12px; display:flex; gap:8px; align-items:center; background:rgba(255,255,255,.03); color:#a9c8bb;`;
+  footer.innerHTML = `
+    <button id="insBtnCopy" style="padding:8px 10px;border-radius:10px;border:0;background:#0b2216;color:#cfe9dc;cursor:pointer;">📋 Log kopieren</button>
+    <span id="insStatus" style="font-size:12px">Inspector bereit (inspector.js ${VERSION})</span>
   `;
 
-  // Zusammenbauen
-  colLog.appendChild(logHead);
-  colLog.appendChild(logList);
-  colTools.appendChild(toolsHead);
-  colTools.appendChild(toolsBody);
-  body.appendChild(colLog);
-  body.appendChild(colTools);
-  panel.appendChild(header);
-  panel.appendChild(body);
-  root.appendChild(panel);
-  document.body.appendChild(root);
+  panel.append(header, logBox, footer);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
 
-  // Public API
-  function show(){ root.style.display = 'block'; }
-  function hide(){ root.style.display = 'none'; }
-  function toggle(){ root.style.display = (root.style.display === 'none') ? 'block' : 'none'; }
+  // Floating Toggle-Button existiert in index.html und ruft Inspector.open()
+  // (hier also keine zweite Kopie).
 
-  // Log Rendering
-  function appendLine(level, text){
-    const line = document.createElement('div');
-    const color = level==='ok' ? '#22c55e' : level==='warn' ? '#f59e0b' : '#ef4444';
-    line.style.cssText = `white-space:pre-wrap; margin:2px 0; color:${color}`;
-    line.textContent = text;
-    logList.appendChild(line);
-    logList.scrollTop = logList.scrollHeight;
+  // ----------------------- Logging
+  const state = { lines: [], max: 1200 };
+
+  function sym(level){ return level==='ok'?'✅':level==='warn'?'⚠️':level==='err'?'❌':'•'; }
+  function fmt(level, msg){
+    const ts = new Date().toTimeString().split(' ')[0];
+    return `[${ts}] ${sym(level)} ${msg}`;
+  }
+  function append(level, msg){
+    const line = fmt(level, msg);
+    state.lines.push(line);
+    if(state.lines.length > state.max) state.lines.splice(0, state.lines.length - state.max);
+    logBox.textContent = state.lines.join('\n');
+    logBox.scrollTop = logBox.scrollHeight;
   }
 
-  // Event: Logs aus index/Spiel
-  function onInspectorLog(ev){
-    const { level='ok', text='' } = ev.detail || {};
-    appendLine(level, text);
-  }
-  window.addEventListener('inspector:log', onInspectorLog);
+  // Spiegel console.* in den Inspector (ohne Original zu verlieren)
+  const native = {
+    log: console.log.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console)
+  };
+  console.log = (...a)=>{ native.log(...a); append('ok', a.map(x=>toStr(x)).join(' ')); };
+  console.warn = (...a)=>{ native.warn(...a); append('warn', a.map(x=>toStr(x)).join(' ')); };
+  console.error = (...a)=>{ native.error(...a); append('err', a.map(x=>toStr(x)).join(' ')); };
 
-  // Copy-Button
-  header.querySelector('#ins-btn-copy').addEventListener('click', ()=>{
-    try{
-      const lines = Array.from(logList.children).map(n => n.textContent).join('\n');
-      navigator.clipboard.writeText(lines).then(()=>{
-        appendLine('ok', `[${new Date().toLocaleTimeString()}] ✅ Log in Zwischenablage`);
-      });
-    }catch(e){
-      appendLine('err', `❌ Copy fehlgeschlagen: ${e?.message||e}`);
+  function toStr(v){
+    if (v==null) return String(v);
+    if (typeof v==='string') return v;
+    try{ return JSON.stringify(v); }catch{ return String(v); }
+  }
+
+  // ----------------------- API
+  const Inspector = {
+    version: VERSION,
+    open(){ overlay.style.display='block'; append('ok', `Inspector geöffnet (inspector.js ${VERSION})`); },
+    close(){ overlay.style.display='none'; },
+    toggle(){ (overlay.style.display==='block') ? Inspector.close() : Inspector.open(); },
+    clear(){ state.lines.length = 0; logBox.textContent = ''; },
+    log(level, msg){ append(level, msg); },
+    copyLog(){
+      const txt = state.lines.join('\n');
+      if(navigator.clipboard?.writeText){
+        navigator.clipboard.writeText(txt).then(()=>{
+          document.getElementById('insStatus').textContent = 'Log in Zwischenablage';
+          append('ok','Log in Zwischenablage');
+        });
+      }
     }
-  });
+  };
+  window.Inspector = Inspector;
 
-  // Close-Button
-  header.querySelector('#ins-btn-close').addEventListener('click', hide);
+  // ----------------------- Buttons
+  document.getElementById('insBtnClose').addEventListener('click', Inspector.close);
+  document.getElementById('insBtnClear').addEventListener('click', Inspector.clear);
+  document.getElementById('insBtnCopy').addEventListener('click', Inspector.copyLog);
 
-  // API exportieren
-  window.GameInspector = { show, hide, toggle, __alive:true };
-
-  // Erste Meldung
-  try{
-    window.dispatchEvent(new CustomEvent('inspector:log', {
-      detail: { level:'ok', text:`[${new Date().toLocaleTimeString()}] ✅ Inspector bereit (inspector.js ${VERSION})` }
-    }));
-  }catch(_){}
+  // First line:
+  append('ok', `Inspector bereit (inspector.js ${VERSION})`);
 })();
