@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-08-29T20:32:24.447Z",
+  "createdAt": "2025-08-29T23:40:25.183Z",
   "root": ".",
   "count": 246,
   "entries": [
@@ -745,7 +745,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 1952
+      "size": 2739
     },
     {
       "type": "file",
@@ -755,7 +755,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 2632
+      "size": 2957
     },
     {
       "type": "file",
@@ -1097,12 +1097,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 23612
+      "size": 24048
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 8861
+      "size": 9049
     },
     {
       "type": "file",
@@ -1112,12 +1112,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 5641
+      "size": 5471
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 10507
+      "size": 6418
     },
     {
       "type": "file",
@@ -1132,7 +1132,7 @@
     {
       "type": "file",
       "path": "main.js",
-      "size": 10280
+      "size": 5374
     },
     {
       "type": "file",
