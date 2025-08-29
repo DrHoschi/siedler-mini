@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-28T21:43:35.997Z",
+  "createdAt": "2025-08-29T20:32:24.447Z",
   "root": ".",
-  "count": 242,
+  "count": 246,
   "entries": [
     {
       "type": "dir",
@@ -182,7 +182,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 8210
+      "size": 4990
     },
     {
       "type": "dir",
@@ -350,8 +350,23 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/building/Baustelle_Rathaus_0.png",
+      "size": 205438
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/Holz_Rathaus_1.png",
+      "size": 440150
+    },
+    {
+      "type": "file",
       "path": "assets/tex/building/readme",
       "size": 423
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/Stein_Rathaus_1.png",
+      "size": 181131
     },
     {
       "type": "dir",
@@ -729,13 +744,18 @@
     },
     {
       "type": "file",
+      "path": "assets/ui/ui-bridge.js",
+      "size": 1952
+    },
+    {
+      "type": "file",
       "path": "assets/ui/ui-build.css",
       "size": 630
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 4202
+      "size": 2632
     },
     {
       "type": "file",
@@ -1072,17 +1092,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2954
+      "size": 3001
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 23361
+      "size": 23612
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 8796
+      "size": 8861
     },
     {
       "type": "file",
@@ -1092,12 +1112,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 6061
+      "size": 5641
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 10027
+      "size": 10507
     },
     {
       "type": "file",
@@ -1107,7 +1127,7 @@
     {
       "type": "file",
       "path": "inspector.js",
-      "size": 4395
+      "size": 5346
     },
     {
       "type": "file",
