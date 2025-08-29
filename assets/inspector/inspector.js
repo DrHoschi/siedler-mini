@@ -1,140 +1,104 @@
-/* =======================================================================
- * Inspector (v16.1.14)
- * – Vollbild-Overlay für Logs & Dev-Aktionen (nur Entwicklung)
- * – Öffnen über window.GameInspector.toggle(true) oder FAB (🛠️)
- * – Zeichnet ALLE Logs, die via window.Log(...) erzeugt werden.
- * – Bietet "Log kopieren" API für index.html
- * ======================================================================= */
-
+/* inspector.js – v16.1.16
+ * Ziel: Ein-/ausblendbares Overlay NUR für Tests/Logs.
+ * - Zeichnet ALLE Logs aus window.__cb.logs
+ * - Knöpfe: Log kopieren, Log leeren, Start (retry)
+ * - Layout bleibt stabil; keine Spiel-UI wird verändert.
+ */
 (function(){
-  const VERSION = '16.1.14';
+  const V = "v16.1.16";
 
-  // Root-Element anlegen (einmalig)
-  let root = document.getElementById('inspector-root');
-  if (!root) {
-    root = document.createElement('div');
-    root.id = 'inspector-root';
-    document.body.appendChild(root);
-  }
+  // Minimal-CSS per JS injizieren (damit unabhängig von sonstigen Styles)
+  const css = `
+  #cb-inspector{ position:fixed; inset:0; z-index:9998; display:none; background:rgba(8,8,10,.94); color:#dfe; }
+  #cb-inspector.open{ display:block; }
+  #cb-inspector .bar{ position:sticky; top:0; display:flex; gap:10px; align-items:center; padding:10px; background:rgba(0,0,0,.35); backdrop-filter: blur(6px); }
+  #cb-inspector .bar button{ padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:#26352c; color:#dfe; }
+  #cb-inspector .bar .right{ margin-left:auto; display:flex; gap:10px; align-items:center; }
+  #cb-inspector .log{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:13px; padding:12px; white-space:pre-wrap; }
+  .cb-pill{ padding:3px 8px; border-radius:999px; background:#1b2a22; border:1px solid rgba(255,255,255,.12); font-size:12px; opacity:.8;}
+  `;
+  const st = document.createElement('style');
+  st.textContent = css; document.head.appendChild(st);
 
-  root.style.position = 'fixed';
-  root.style.inset = '0';
-  root.style.zIndex = '1000';
-  root.style.display = 'none'; // start hidden
-  root.style.background = 'rgba(10,10,10,0.96)';
-  root.style.color = '#e7e7e7';
-  root.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
-
+  // Root
+  const root = document.createElement('div');
+  root.id = 'cb-inspector';
+  root.setAttribute('aria-label','Inspector');
   root.innerHTML = `
-    <div id="insp-wrap" style="position:absolute; inset:16px; display:flex; flex-direction:column; border:1px solid #2f363a; border-radius:12px; background:#151819;">
-      <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #2b2f31;">
-        <div style="font-weight:700">Inspector</div>
-        <div style="opacity:.8; font-size:12px">v${VERSION}</div>
-        <div id="insp-status" style="margin-left:auto; font-size:12px; opacity:.8"></div>
-        <button id="insp-close" style="margin-left:8px; background:#2b2f31; color:#e7e7e7; border:1px solid #3a4247; border-radius:8px; padding:6px 10px; cursor:pointer">Schließen ✖</button>
-      </div>
-
-      <div style="display:flex; gap:12px; padding:10px 12px; border-bottom:1px solid #2b2f31; flex-wrap:wrap">
-        <button id="insp-copy"  title="Log kopieren"   style="background:#1f2326; border:1px solid #2f363a; border-radius:8px; padding:6px 10px; color:#e7e7e7; cursor:pointer">📋 Log kopieren</button>
-        <button id="insp-clear" title="Log leeren"     style="background:#1f2326; border:1px solid #2f363a; border-radius:8px; padding:6px 10px; color:#e7e7e7; cursor:pointer">🧼 Log leeren</button>
-        <button id="insp-retry" title="Engine starten" style="background:#1f2326; border:1px solid #2f363a; border-radius:8px; padding:6px 10px; color:#e7e7e7; cursor:pointer">▶️ Start (retry)</button>
-      </div>
-
-      <div id="insp-log" style="flex:1; overflow:auto; padding:10px 12px; background:#0f1112; font-size:13px; line-height:1.5;">
-        <!-- Logs -->
+    <div class="bar">
+      <span class="cb-pill">Inspector <b>${V}</b></span>
+      <button id="cb-insp-copy">Log kopieren</button>
+      <button id="cb-insp-clear">Log leeren</button>
+      <button id="cb-insp-retry">Start (retry)</button>
+      <div class="right">
+        <span id="cb-insp-state" style="opacity:.75;"></span>
+        <button id="cb-insp-close">Schließen ✕</button>
       </div>
     </div>
+    <div id="cb-insp-log" class="log"></div>
   `;
-
-  const elLog = root.querySelector('#insp-log');
-  const elStatus = root.querySelector('#insp-status');
-
-  // interner Log-Puffer (als Fallback für Copy)
-  const records = [];
-
-  // Hilfsfunktionen
-  const icon = (type)=> type==='err'?'❌':(type==='warn'?'⚠️':'✅');
-
-  function add(rec) {
-    records.push(rec);
-    const div = document.createElement('div');
-    const klass = rec.type==='err'?'color:#ff8a8a':rec.type==='warn'?'color:#ffd27a':'color:#a0f0b2';
-    div.setAttribute('style', `${klass}`);
-    div.textContent = `[${rec.tstamp}] ${icon(rec.type)} ${rec.msg}`;
-    elLog.appendChild(div);
-    elLog.scrollTop = elLog.scrollHeight;
-  }
-
-  function setStatus(text) { elStatus.textContent = text || ''; }
+  document.body.appendChild(root);
 
   // Öffnen/Schließen API
-  function toggle(open) {
-    const show = (open===true) ? true : (open===false ? false : (root.style.display==='none'));
-    root.style.display = show ? 'block' : 'none';
-    setStatus(show ? 'offen' : 'geschlossen');
-  }
+  const api = {
+    open(){ root.classList.add('open'); api.render(); },
+    close(){ root.classList.remove('open'); },
+    toggle(force){
+      if (typeof force === 'boolean') force ? api.open() : api.close();
+      else root.classList.contains('open') ? api.close() : api.open();
+    },
+    render(){
+      const list = (window.__cb && window.__cb.logs) ? window.__cb.logs : [];
+      const lines = list.map(e=>{
+        const ts = new Date(e.t).toLocaleTimeString('de-DE');
+        const tag = (e.type||'log').toUpperCase().padEnd(5,' ');
+        return `[${ts}] ${tag} ${e.msg}`;
+      }).join('\n');
+      document.getElementById('cb-insp-log').textContent = lines || '(leer)';
+      document.getElementById('cb-insp-state').textContent = 'offen';
+    }
+  };
+  window.GameInspector = api; // globale Hooks
 
   // Buttons
-  root.querySelector('#insp-close').addEventListener('click', ()=>toggle(false));
-  root.querySelector('#insp-copy').addEventListener('click', async ()=>{
-    const text = getLogText();
-    try {
-      await navigator.clipboard.writeText(text);
-      add({tstamp: time(), type:'ok', msg:'Log in Zwischenablage'});
-    } catch(e) {
-      add({tstamp: time(), type:'warn', msg:'Clipboard API nicht verfügbar'});
+  root.querySelector('#cb-insp-close').addEventListener('click', ()=>api.close());
+  root.querySelector('#cb-insp-copy').addEventListener('click', ()=>{
+    const txt = document.getElementById('cb-insp-log').textContent;
+    navigator.clipboard?.writeText(txt);
+  });
+  root.querySelector('#cb-insp-clear').addEventListener('click', ()=>{
+    if (window.__cb?.logs) window.__cb.logs.length = 0;
+    api.render();
+  });
+  root.querySelector('#cb-insp-retry').addEventListener('click', ()=>{
+    const sel = document.querySelector('#map-select');
+    const mapUrl = sel?.value || './assets/maps/map-mini.json';
+    // Gleiche Start-Routine wie im Index:
+    if (window.GameLoader?.start) window.GameLoader.start(mapUrl);
+    else {
+      // Falls noch nicht ready, logge Hinweis – Index versucht ohnehin zu warten
+      (window.__cb?.logs||[]).push({ t: Date.now(), type:'warn', msg:'Inspector: Engine noch nicht bereit – retry' });
+      window.dispatchEvent(new CustomEvent('cb:log', { detail:{ type:'warn', msg:'Inspector: Engine noch nicht bereit – retry' }}));
     }
   });
-  root.querySelector('#insp-clear').addEventListener('click', ()=>{
-    elLog.innerHTML = '';
-    records.length = 0;
-    add({tstamp: time(), type:'ok', msg:'Log geleert'});
-  });
-  root.querySelector('#insp-retry').addEventListener('click', ()=>{
-    // Versuche zu starten mit aktuell gewählter Karte aus index (falls vorhanden)
-    const sel = document.querySelector('#map');
-    const path = sel?.value || './assets/maps/map-mini.json';
-    window.dispatchEvent(new CustomEvent('inspector:retry-start', { detail: { map:path }}));
-    add({tstamp: time(), type:'ok', msg:`Retry Start → ${path}`});
-  });
 
-  function time(){
-    const d=new Date(); const p=n=>String(n).padStart(2,'0');
-    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  }
+  // Erstinitialisierung in Log
+  (function initLog(){
+    window.__cb = window.__cb || { logs: [] };
+    const push = (type,msg)=>window.__cb.logs.push({ t:Date.now(), type, msg });
+    push('log', `Inspector bereit (inspector.js ${V})`);
+    window.dispatchEvent(new CustomEvent('cb:log', { detail:{ type:'log', msg:`Inspector bereit (inspector.js ${V})` }}));
+  })();
 
-  function getLogText(){
-    return records.map(r=>`[${r.tstamp}] ${icon(r.type)} ${r.msg}`).join('\n');
-  }
-
-  // Events vom Index/Logger
-  window.addEventListener('cb:log', (ev)=>{
-    const rec = ev.detail;
-    if (!rec) return;
-    add(rec);
-  });
-  window.addEventListener('cb:flush-log', ()=>{ /* noop – UI ist live */ });
-
-  // Inspector → Index: retry start
-  window.addEventListener('inspector:retry-start', (ev)=>{
-    const map = ev.detail?.map;
-    const btnStart = document.getElementById('btn-start');
-    const sel = document.getElementById('map');
-    if (sel) sel.value = map;
-    if (btnStart) btnStart.click();
+  // Realtime-Logs einsammeln
+  window.addEventListener('cb:log', ()=> api.render());
+  window.addEventListener('cb:ui-ready', ()=> api.render());
+  window.addEventListener('cb:game-started', (ev)=>{
+    (window.__cb?.logs||[]).push({ t:Date.now(), type:'log', msg:'Event: cb:game-started empfangen' });
+    api.render();
   });
 
-  // Export API
-  window.GameInspector = {
-    version: VERSION,
-    toggle,
-    open: ()=>toggle(true),
-    close: ()=>toggle(false),
-    getLogText
-  };
-
-  // Broadcast: bereit
-  window.dispatchEvent(new CustomEvent('inspector:ready'));
-  // Begrüßungslog
-  add({tstamp: time(), type:'ok', msg:`Inspector bereit (inspector.js v${VERSION})`});
+  // Inspector-Button (rechts unten) bedienen, falls vorhanden
+  const toggleBtn = document.getElementById('btn-inspector');
+  toggleBtn?.addEventListener('click', ()=> api.toggle());
 })();
