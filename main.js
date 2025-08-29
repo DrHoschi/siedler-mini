@@ -343,3 +343,62 @@ function boot() {
 }
 
 boot();
+// === Robust: Start-Queue & Engine-Wait (Append-Patch) ======================
+(function(){
+  const LOG = {
+    ok:(m)=> (window.CBLog?.ok ?? console.log)(m),
+    warn:(m)=> (window.CBLog?.warn ?? console.warn)(m),
+    err:(m)=> (window.CBLog?.err ?? console.error)(m),
+  };
+
+  let pendingMapUrl = null;
+  let trying = false;
+
+  async function tryStartNow(){
+    if(trying || !pendingMapUrl) return;
+    const GL = window.GameLoader;
+    if(!GL || !(GL._start instanceof Function)){
+      LOG.warn('Engine noch nicht bereit – warte auf GameLoader.start …');
+      return;
+    }
+    trying = true;
+    try{
+      await GL._start(pendingMapUrl);
+      LOG.ok('Game gestartet');
+      pendingMapUrl = null;
+    }catch(e){
+      LOG.err('Start fehlgeschlagen: '+e.message);
+    }finally{
+      trying = false;
+    }
+  }
+
+  // UI-Hook: rufe das hier auf, wenn "Start" gedrückt wurde:
+  window.__queueGameStart = function(mapUrl){
+    pendingMapUrl = mapUrl;
+    LOG.ok(`Start gedrückt → ${mapUrl}`);
+    tryStartNow();
+  };
+
+  // Falls deine Start-Schaltfläche bereits existiert: Hier ein universeller Hook:
+  const btn = document.querySelector('#start-panel button[data-action="start"]');
+  const select = document.querySelector('#start-panel select[name="map"]');
+  if(btn && select){
+    btn.addEventListener('click', ()=>{
+      const url = (select.value || '').trim();
+      if(url) window.__queueGameStart(url);
+    });
+  }
+
+  // Reagieren, wenn Engine ready wird
+  window.addEventListener('cb:engine-ready', tryStartNow);
+
+  // Poll als letzte Rückfallebene (1x/Sekunde kurz)
+  let pollCount=0;
+  const poll = setInterval(()=>{
+    if(!pendingMapUrl) { clearInterval(poll); return; }
+    pollCount++;
+    tryStartNow();
+    if(pollCount>10) clearInterval(poll);
+  }, 1000);
+})();
