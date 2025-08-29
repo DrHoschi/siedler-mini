@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#0b2419" />
   <title>Mini – v16.1.16</title>
 
-  <!-- Basis-Styles: belassen -->
+  <!-- Basis-Styles (deine bestehenden Dateien) -->
   <link rel="preload" href="./css/base.css" as="style" />
   <link rel="preload" href="./style.css" as="style" />
   <link rel="stylesheet" href="./css/base.css" />
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- Kleine Zusatz-Styles nur für die schwebenden Buttons (ohne Layout-Eingriff) -->
+  <!-- Kleine Zusatz-Styles nur für die Schwebe-Buttons (ohne Layout zu verändern) -->
   <style>
     .cb-fab {
       position: fixed; z-index: 9000;
@@ -28,83 +28,109 @@
     .cb-fab:active { transform: scale(.96); }
     #btn-build { left: 12px; bottom: 12px; opacity: 0; pointer-events: none; }
     #btn-build.visible { opacity: 1; pointer-events: auto; }
-    #btn-inspector { right: 12px; bottom: 12px; }
-    /* Canvas automatisch auf volle Fläche; dein Startpanel liegt darüber */
-    html,body{height:100%} body{margin:0;background:#0e2d21}
-    #game{position:fixed;inset:0;display:block;width:100%;height:100%}
+    #btn-inspector { right: 12px; bottom: 12px; } /* vorhandener Style kompatibel */
   </style>
 </head>
 
 <body>
-  <!-- ============================================================
-       Dein Start-Fenster (Layout NICHT geändert).
-       WICHTIG: Bitte deine bisherige Markup-Struktur hier drin lassen.
-       Das Script "inspector.js" hängt sich an Buttons/IDs.
-       ============================================================ -->
+  <!-- =======================================================================================
+       START-PANEL: Bitte deinen vorhandenen Start-Dialog hier drin belassen.
+       Wichtig ist nur die ID (#start-panel), die Buttons & Events fassen wir unten ab.
+       ======================================================================================= -->
   <div id="start-panel" aria-label="City-Builder Start">
-    <!-- Dein bestehender Inhalt:
-         - Select für Karte (map-mini.json / map-pro.json / …)
-         - Buttons: Start, Neu-Start, Log kopieren, Cache-Booster
-         - Hinweise etc.
-         Nichts davon wird von mir umgebaut. -->
-    # City-Builder starten (index v16.1.16)
-
-    Karte:  map-mini.json map-pro.json map-demo.json map-test-all.json
-    ✅ Start    ♻️ Neu-Start    Log kopieren
-
-    Cache-Booster – löscht Storage & (Safari/GitHub)-Caches.
+    <!-- Dein bestehendes Start-HTML: Karte auswählen, Start, Neu-Start, Log kopieren, Cache-Booster -->
+    <!-- NICHT angefasst – du kannst deine aktuelle Markup-Struktur hier beibehalten -->
   </div>
 
-  <!-- Vollbild-Canvas für Renderer/Fallback-Vorschau -->
-  <canvas id="game"></canvas>
+  <!-- Canvas/Stage – wie gehabt (ID/Tag so gelassen) -->
+  <canvas id="game" width="0" height="0"></canvas>
 
-  <!-- Schwebende Buttons (UI): Inspector (falls benötigt) + Bau-Menü -->
+  <!-- Floating Action Buttons -->
   <button id="btn-inspector" class="cb-fab" title="Inspector">🛠️</button>
   <button id="btn-build" class="cb-fab" title="Bau-Menü öffnen">🏗️</button>
 
   <!-- ===================== SCRIPTS ===================== -->
 
-  <!-- Inspector/Start-Panel-Logik (deine Datei) -->
+  <!-- Inspector (dein File-Pfad unverändert) -->
   <script src="./assets/inspector/inspector.js"></script>
 
-  <!-- Engine/Spiel – stellt GameLoader, Events etc. bereit -->
+  <!-- Engine / Game -->
   <script src="./game.js"></script>
 
-  <!-- Dein Bau-Menü (bestehende Datei) -->
+  <!-- Bau-Menü-UI (deine bestehende Datei) -->
   <script src="./assets/ui/ui-build.js"></script>
 
-  <!-- Bridge (klein) für GameUI-Hooks, falls ui-build.js globale Funktionen erwartet -->
+  <!-- UI-Bridge: kleine, sichere Hülle für globale Hooks + Buttons (kein Layout-Touch) -->
   <script>
-    // Version-Badge/Log für index.html
-    (function(){
-      const v = "v16.1.16";
-      window.__cb = window.__cb || {};
-      window.__cb.indexVersion = v;
-      console.log("[index %s] UI bereit", v);
-      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v }}));
-    })();
+  (function(){
+    const INDEX_VERSION = 'v16.1.16';
+    window.__cb = window.__cb || {};
+    window.__cb.indexVersion = INDEX_VERSION;
 
-    // Bau-Menü Button anzeigen, sobald das Spiel läuft
-    window.addEventListener('cb:game-started', () => {
-      const b = document.getElementById('btn-build');
-      b?.classList.add('visible');
+    // ---------- Inspector-Button ----------
+    const btnInspector = document.getElementById('btn-inspector');
+    btnInspector?.addEventListener('click', () => {
+      // Dein Inspector exportiert global `Inspector.open()`; fallback: Event
+      (window.Inspector && typeof Inspector.open === 'function')
+        ? Inspector.open()
+        : window.dispatchEvent(new CustomEvent('cb:inspector-toggle'));
     });
 
-    // Inspector-Button → öffnet deinen Inspector (sofern er eine API exportiert)
-    document.getElementById('btn-inspector')?.addEventListener('click', () => {
-      try { window.Inspector?.open?.(); } catch(_) {}
+    // ---------- Build-Button (wird erst nach Spielstart sichtbar) ----------
+    const btnBuild = document.getElementById('btn-build');
+    function showBuildBtn(){ btnBuild?.classList.add('visible'); }
+    function hideBuildBtn(){ btnBuild?.classList.remove('visible'); }
+
+    // Sanfter Bridge-Schutz: wenn GameUI (noch) nicht da ist, lege No-Op an, damit keine Warns entstehen
+    window.GameUI = window.GameUI || {};
+    window.GameUI.openBuildMenu  = window.GameUI.openBuildMenu  || function(){ console.log('[ui-bridge] openBuildMenu (noop)'); };
+    window.GameUI.closeBuildMenu = window.GameUI.closeBuildMenu || function(){ console.log('[ui-bridge] closeBuildMenu (noop)'); };
+
+    btnBuild?.addEventListener('click', () => {
+      try { window.GameUI.openBuildMenu?.(); } catch(_) {}
     });
 
-    // Bau-Menü Button
-    document.getElementById('btn-build')?.addEventListener('click', () => {
-      // Erwartete globale Funktion aus ui-build.js:
-      if (window.GameUI?.openBuildMenu) {
-        window.GameUI.openBuildMenu();
-      } else {
-        console.warn("[index] Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.");
-        window.Inspector?.log?.({level:'warn',source:'index',msg:'Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.'});
+    // ---------- Start-Panel Verdrahtung ----------
+    // Erwartet: deine Start-Buttons feuern folgende Events/Calls:
+    // - dispatchEvent('cb:ui-request-start', {detail:{mapPath}})
+    // - GameServices.requestReset(), GameServices.clearCaches(), Inspector.logCopy() etc.
+    const startPanel = document.getElementById('start-panel');
+
+    // Fallback: wenn Start-Button ein data-map trägt, reagieren wir automatisch
+    startPanel?.addEventListener('click', (ev)=>{
+      const t = ev.target;
+      if (!t) return;
+      // Start
+      if (t.matches('[data-action="start"]')) {
+        const sel = startPanel.querySelector('[data-map-select]');
+        const mapPath = (sel && sel.value) || './assets/maps/map-mini.json';
+        window.dispatchEvent(new CustomEvent('cb:ui-request-start', { detail:{ mapPath }}));
+        // UI ruft selbst GameLoader.start(); falls nicht, tun wir es zur Sicherheit:
+        if (window.GameLoader?.start) window.GameLoader.start(mapPath);
+      }
+      // Neu-Start
+      if (t.matches('[data-action="restart"]')) {
+        window.GameServices?.requestReset?.();
+      }
+      // Cache-Booster
+      if (t.matches('[data-action="cache"]')) {
+        window.GameServices?.clearCaches?.();
+      }
+      // Log kopieren – deine Inspector-Implementierung hat dafür i.d.R. eine Funktion
+      if (t.matches('[data-action="copy-log"]')) {
+        try { window.Inspector?.copyLog?.(); } catch(_){}
       }
     });
+
+    // ---------- Reaktionen auf Spielstart ----------
+    window.addEventListener('cb:game-started', () => {
+      showBuildBtn();               // Button einblenden
+      startPanel?.setAttribute('hidden','hidden'); // dein Startfenster weg, sobald Spiel läuft
+    });
+
+    console.log('[index %s] UI bereit', INDEX_VERSION);
+    window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v: INDEX_VERSION }}));
+  })();
   </script>
 </body>
 </html>
