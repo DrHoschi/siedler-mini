@@ -194,5 +194,56 @@
       window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v } }));
     })();
   </script>
+  <!-- === UI-Bridge: verbindet Start/Inspector mit ui-build ================== -->
+<script>
+// Registriere die Bridge nur einmal.
+(function(){
+  if (window.GameUI && window.GameUI.__bridge) return;
+
+  // Erwartete API von ui-build.js
+  function openBuild(){ try{ window.UIBuild?.open?.(); }catch(_){} }
+  function closeBuild(){ try{ window.UIBuild?.close?.(); }catch(_){} }
+  function toggleBuild(){ try{
+    const open = window.UIBuild?.isOpen?.() ?? false;
+    open ? closeBuild() : openBuild();
+  }catch(_){} }
+  function setTool(id){ try{ window.UIBuild?.setTool?.(id); }catch(_){} }
+
+  // Globale Hooks
+  window.GameUI = {
+    __bridge: true,
+    openBuildMenu: openBuild,
+    closeBuildMenu: closeBuild,
+    toggleBuildMenu: toggleBuild,
+    setTool,
+    onGameStarted(){
+      // Bau-Button sichtbar machen
+      const btn = document.getElementById('btn-build');
+      if (btn) btn.classList.add('visible');
+      CBLog.ok?.('onGameStarted: Bau-Button aktiviert');
+    }
+  };
+
+  // Buttons verdrahten, falls vorhanden
+  window.addEventListener('DOMContentLoaded', ()=>{
+    const fabBuild = document.getElementById('btn-build');
+    if (fabBuild && !fabBuild.__wired){
+      fabBuild.__wired = true;
+      fabBuild.addEventListener('click', ()=> window.GameUI.toggleBuildMenu());
+    }
+    const fabInspector = document.getElementById('btn-inspector');
+    if (fabInspector && !fabInspector.__wired){
+      fabInspector.__wired = true;
+      fabInspector.addEventListener('click', ()=>{
+        // Dein Inspector öffnet meist per globaler Funktion:
+        (window.GameInspector?.toggle?.() || window.GameInspector?.open?.() || window.Inspector?.open?.());
+      });
+    }
+  });
+
+  // Falls das Spiel schon lief, Button direkt zeigen
+  window.addEventListener('cb:game-started', ()=> window.GameUI.onGameStarted?.());
+})();
+</script>
 </body>
 </html>
