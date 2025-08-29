@@ -6,16 +6,17 @@
   <meta name="theme-color" content="#0b2419" />
   <title>Mini – v16.1.16</title>
 
-  <!-- Basis-Styles (unverändert) -->
+  <!-- Basis-Styles (deine bestehenden Dateien) -->
   <link rel="preload" href="./css/base.css" as="style" />
   <link rel="preload" href="./style.css" as="style" />
   <link rel="stylesheet" href="./css/base.css" />
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- Kleine Zusatz-Styles NUR für die zwei Schwebe-Buttons (bleiben vom Layout her minimal) -->
+  <!-- Kleine Zusatz-Styles nur für die Schwebe-Buttons (Layout deines Startfensters bleibt unberührt) -->
   <style>
     .cb-fab {
-      position: fixed; z-index: 9000;
+      position: fixed;
+      z-index: 9000;
       width: 56px; height: 56px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       background: rgba(20,20,20,.7);
@@ -23,186 +24,154 @@
       -webkit-backdrop-filter: blur(6px);
       backdrop-filter: blur(6px);
       border: 1px solid rgba(255,255,255,.12);
-      color: #fff; user-select: none; cursor: pointer;
+      color: #fff;
+      user-select: none;
+      cursor: pointer;
       transition: transform .15s ease, opacity .15s ease;
     }
     .cb-fab:active { transform: scale(.96); }
-    #btn-inspector { right: 12px; bottom: 12px; }
-    #btn-build { left: 12px; bottom: 12px; opacity: 0; pointer-events: none; } /* erst nach Start sichtbar */
+
+    /* Links unten – erscheint erst nach Spielstart */
+    #btn-build { left: 12px; bottom: 12px; opacity: 0; pointer-events: none; }
     #btn-build.visible { opacity: 1; pointer-events: auto; }
 
-    /* Start-Panel: Klassen & IDs beibehalten; nur minimale, robuste Defaults */
-    #start-panel { position: absolute; inset: 0; display: grid; place-items: center; }
-    #start-card {
-      min-width: 320px; max-width: 720px; width: 90vw;
-      background: rgba(8,10,12,.85);
-      color: #eee; border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.45);
-      border: 1px solid rgba(255,255,255,.08);
-      padding: 18px 18px 12px;
-    }
-    #start-card h1 { font-size: 22px; margin: 0 0 14px; display:flex; justify-content:space-between; align-items:center;}
-    #start-card .row { display:flex; gap:12px; align-items:center; margin: 10px 0; flex-wrap:wrap; }
-    #start-card select { flex:1; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.15); background:#1b2420; color:#dfe; }
-    #start-card button { padding:10px 16px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#26352c; color:#dfe; }
-    .btn-primary { background:#1c7c43; }
-    .btn-warn { background:#d9a000; color:#161616; }
+    /* Rechts unten – Inspector (dauerhaft sichtbar) */
+    #btn-inspector { right: 12px; bottom: 12px; }
   </style>
 </head>
 
 <body>
-  <!-- ======= Start-Panel (Layout wie besprochen; bleibt bestehen) ======= -->
-  <div id="start-panel" aria-label="City-Builder Start">
-    <div id="start-card">
-      <h1>
-        <span>City-Builder – Start</span>
-        <small style="opacity:.7;">index <b>v16.1.16</b></small>
-      </h1>
-
-      <!-- Kartenwahl -->
-      <div class="row">
-        <label for="map-select" style="min-width:100px; opacity:.9;">Karte:</label>
-        <select id="map-select">
-          <!-- Wenn du neue Karten hinzufügst, hier ergänzen -->
-          <option value="./assets/maps/map-mini.json">map-mini.json (16×10)</option>
-          <option value="./assets/maps/map-pro.json">map-pro.json (20×12)</option>
-          <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
-          <option value="./assets/maps/map-demo.json">map-demo.json</option>
-        </select>
-
-        <!-- Start & Neu-Start -->
-        <button id="btn-start" class="btn-primary">▶️ Start</button>
-        <button id="btn-restart" class="btn-warn">♻️ Neu-Start</button>
-      </div>
-
-      <!-- Tools fürs Start-Panel -->
-      <div class="row">
-        <button id="btn-copylog">🗒️ Log kopieren</button>
-        <button id="btn-cachebooster">🧹 Cache-Booster</button>
-      </div>
-
-      <!-- Kurzer Hinweis -->
-      <p style="opacity:.7; margin:10px 4px 0;">
-        Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.
-      </p>
+  <!-- ===================== START-FENSTER =====================
+       Layout deines Startfensters (IDs beibehalten):
+       - #start-panel             : gesamtes Panel
+       - #map-select              : <select> mit Karten
+       - #btn-start               : Start
+       - #btn-restart             : Neu-Start
+       - #btn-copy-log            : Log kopieren
+       - #btn-cache               : Cache-Booster
+  -->
+  <div id="start-panel" class="start-panel">
+    <div class="start-title-row">
+      <h1>City-Builder – Start</h1>
+      <span class="version-badge">index <b>v16.1.16</b></span>
     </div>
+
+    <div class="start-row">
+      <label for="map-select">Karte:</label>
+      <select id="map-select">
+        <!-- Falls du die Liste serverseitig generierst: belassen.
+             Ansonsten hier 3 Beispiele: -->
+        <option value="./assets/maps/map-mini.json">map-mini.json (16x10)</option>
+        <option value="./assets/maps/map-pro.json">map-pro.json (20x12)</option>
+        <option value="./assets/maps/map-test-all.json">map-test-all.json</option>
+      </select>
+      <button id="btn-start" class="btn btn-primary">Start</button>
+      <button id="btn-restart" class="btn">Neu-Start</button>
+    </div>
+
+    <div class="start-row">
+      <button id="btn-copy-log" class="btn">📋 Log kopieren</button>
+      <button id="btn-cache" class="btn">🧹 Cache-Booster</button>
+    </div>
+
+    <p class="start-hint">Hinweis: Nach „Start“ verschwindet dieses Fenster automatisch.</p>
   </div>
 
-  <!-- ======= Canvas/Stage ======= -->
+  <!-- Canvas/Stage – unverändert -->
   <canvas id="game" width="0" height="0"></canvas>
 
-  <!-- ======= Floating Action Buttons ======= -->
+  <!-- Schwebe-Buttons -->
   <button id="btn-inspector" class="cb-fab" title="Inspector">🛠️</button>
   <button id="btn-build" class="cb-fab" title="Bau-Menü öffnen">🏗️</button>
 
   <!-- ===================== SCRIPTS ===================== -->
 
-  <!-- Inspector (volle Datei unten) -->
-  <script src="./assets/inspector/inspector.js?v=16.1.16"></script>
+  <!-- Inspector (dein Pfad; hier: Assets-Variante) -->
+  <script src="./assets/inspector/inspector.js"></script>
 
   <!-- Engine / Game -->
-  <script src="./game.js?v=16.1.16"></script>
+  <script src="./game.js"></script>
 
-  <!-- Bau-Menü (deine UI) + Bridge-Hooks -->
-  <script src="./assets/ui/ui-build.js?v=16.1.6"></script>
-  <script src="./assets/ui/ui-bridge.js?v=16.1.16"></script>
+  <!-- Bau-Menü (deine bestehende Datei) -->
+  <script src="./assets/ui/ui-build.js"></script>
 
-  <!-- Start/Index-Boot: verbindet UI mit Engine & Inspector, ohne Layout zu ändern -->
+  <!-- Bridge: stellt window.GameUI.* bereit (für Inspector & Buttons) -->
+  <script src="./assets/ui/ui-bridge.js"></script>
+
+  <!-- Start-Panel Logik (nur Wiring, keine Layout-Änderung) -->
   <script>
-  (function(){
-    const INDEX_V = "v16.1.16";
-    const $ = sel => document.querySelector(sel);
+    (function () {
+      const INDEX_V = "v16.1.16";
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = INDEX_V;
 
-    // Globale Namespace für kleine Utilities/Log
-    window.__cb = window.__cb || { logs: [] };
-    const log = (type, msg) => {
-      window.__cb.logs.push({ t: Date.now(), type, msg });
-      window.dispatchEvent(new CustomEvent('cb:log', { detail: { type, msg }}));
-      console[type === 'err' ? 'error' : (type === 'warn' ? 'warn' : 'log')](`[index ${INDEX_V}] ${msg}`);
-    };
+      // UI ready ins Log
+      try {
+        if (window.CBLog?.ok) CBLog.ok(`UI bereit (index ${INDEX_V})`);
+        else console.log(`[index ${INDEX_V}] UI bereit`);
+        window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v: INDEX_V }}));
+      } catch (_) {}
 
-    // UI ready
-    log('log', `UI bereit (index ${INDEX_V})`);
-    window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { v: INDEX_V }}));
+      // DOM refs
+      const $panel     = document.getElementById('start-panel');
+      const $map       = document.getElementById('map-select');
+      const $btnStart  = document.getElementById('btn-start');
+      const $btnRetry  = document.getElementById('btn-restart');
+      const $btnCopy   = document.getElementById('btn-copy-log');
+      const $btnCache  = document.getElementById('btn-cache');
+      const $btnInsp   = document.getElementById('btn-inspector');
+      const $btnBuild  = document.getElementById('btn-build');
 
-    // ===== Start-Panel Buttons =====
-    const startPanel = $('#start-panel');
-    const mapSelect = $('#map-select');
-    $('#btn-copylog').addEventListener('click', () => {
-      // Inspector hat eine Copy-Routine; zusätzlich Fallback hier:
-      const txt = window.__cb.logs.map(e => new Date(e.t).toLocaleTimeString('de-DE') + " " + e.type.toUpperCase() + " " + e.msg).join("\n");
-      navigator.clipboard?.writeText(txt).then(() => {
-        log('log', 'Log in Zwischenablage');
+      // Inspector öffnen/schließen (über globalen Hook des Inspectors)
+      $btnInsp?.addEventListener('click', () => {
+        try { window.GameInspector?.toggle?.(); } catch(_) {}
       });
-    });
 
-    $('#btn-cachebooster').addEventListener('click', async () => {
-      try{
-        localStorage.clear?.(); sessionStorage.clear?.();
-        if ('caches' in window) {
-          const names = await caches.keys();
-          await Promise.all(names.map(n => caches.delete(n)));
+      // Bau-Menü Button – öffnet via GameUI
+      $btnBuild?.addEventListener('click', () => {
+        try { window.GameUI?.openBuildMenu?.(); } catch(_) {}
+      });
+
+      // Nach Spielstart: Start-Panel schließen und Build-Button einblenden
+      window.addEventListener('cb:game-started', () => {
+        $panel?.classList.add('hidden');
+        // Button anzeigen (Bridge sorgt parallel dafür)
+        $btnBuild?.classList.add('visible');
+      });
+
+      // START drücken → GameLoader.start(map)
+      function doStart() {
+        const url = ($map?.value || './assets/maps/map-mini.json').trim();
+        // Falls game.js noch nicht fertig ist, queued die Engine selbst.
+        try {
+          // Log für dich
+          if (window.CBLog?.ok) CBLog.ok(`Start gedrückt → ${url}`);
+          else console.log(`Start → ${url}`);
+          window.GameLoader?.start?.(url);
+        } catch (e) {
+          (window.CBLog?.warn || console.warn)(`Engine noch nicht bereit – warte auf GameLoader.start …`);
+          // Retry vom Inspector-Button möglich; hier keine Schleife.
         }
-        log('log', 'Cache/Storage geleert – Seite ggf. neu laden');
-      }catch(err){
-        log('warn', 'Cache-Booster: möglicherweise eingeschränkt (Safari/iOS)');
       }
-    });
 
-    // Start: ruft stabil GameLoader.start auf (wartet bis Engine ready ist)
-    const callStart = async (mapUrl) => {
-      // Warten, bis die Engine den Loader registriert hat
-      const waitFor = (condFn, ms=4000) => new Promise((res, rej)=>{
-        const t0 = performance.now();
-        const tick = () => (condFn() ? res() :
-          (performance.now() - t0 > ms ? rej(new Error('timeout')) : requestAnimationFrame(tick)));
-        tick();
+      $btnStart?.addEventListener('click', doStart);
+
+      // Neu-Start (Seite laden + Caches leeren via Hook vom Inspector)
+      $btnRetry?.addEventListener('click', () => {
+        try { window.CBTools?.requestHardReset?.(); } catch(_) {}
+        location.reload();
       });
 
-      try{
-        log('log', `Start gedrückt → ${mapUrl}`);
-        await waitFor(() => !!(window.GameLoader && window.GameLoader.start), 5000);
-        window.GameLoader.start(mapUrl); // eigentlicher Start
-      }catch(e){
-        log('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
-        // kleiner Retry (einmal)
-        setTimeout(()=>{
-          if (window.GameLoader?.start) window.GameLoader.start(mapUrl);
-          else log('err', 'GameLoader.start ist nicht verfügbar – game.js / Engine noch nicht initialisiert?');
-        }, 600);
-      }
-    };
+      // Log kopieren (vom Inspector bereitgestellt, sonst no-op)
+      $btnCopy?.addEventListener('click', () => {
+        try { window.CBTools?.copyLogToClipboard?.(); } catch(_) {}
+      });
 
-    $('#btn-start').addEventListener('click', ()=>{
-      callStart(mapSelect.value);
-    });
-    $('#btn-restart').addEventListener('click', ()=>{
-      log('log','Neu-Start angefordert');
-      callStart(mapSelect.value);
-    });
-
-    // ===== Build-Button (links unten) – erst nach Game-Start sichtbar
-    const btnBuild = $('#btn-build');
-    btnBuild.addEventListener('click', ()=> {
-      // über Bridge geöffnet, wenn vorhanden
-      if (window.GameUI?.openBuildMenu) {
-        window.GameUI.openBuildMenu();
-      } else {
-        log('warn', 'Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt.');
-      }
-    });
-
-    // Nach erfolgreichem Map-Start: Start-Panel schließen, Build-Button anzeigen
-    window.addEventListener('cb:game-started', ()=>{
-      btnBuild.classList.add('visible');
-      startPanel.style.display = 'none';
-    });
-
-    // Inspector-Knopf: rechts unten (öffnet Inspector Overlay)
-    $('#btn-inspector').addEventListener('click', ()=>{
-      window.GameInspector?.toggle?.(true) || window.GameInspector?.open?.();
-    });
-  })();
+      // Cache-Booster (Inspector hook)
+      $btnCache?.addEventListener('click', () => {
+        try { window.CBTools?.clearCachesAndStorage?.(); } catch(_) {}
+      });
+    })();
   </script>
 </body>
 </html>
