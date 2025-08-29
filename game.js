@@ -1,203 +1,161 @@
 /* ============================================================================
- * game.js — v16.1.10
- * Zweck: Engine-Bootstrap + Renderloop + Building-Layer (Lumberjack sichtbar)
- * WICHTIG: Keine Abhängigkeit auf Tilesets nötig; Buildings werden als Overlay
- *          direkt aus dem Lumberjack-Atlas gerendert (512→TileSize skaliert).
- * ========================================================================== */
-
+ * game.js (UI-Facade) – v16.1.14
+ *
+ * Zweck:
+ * - Start/NeuStart/Cache-Buttons verdrahten (Startpanel unverändert)
+ * - Robust auf GameLoader.start warten (kein 5s-Timeout mehr)
+ * - Bei Erfolg Events feuern:
+ *     window.dispatchEvent(new CustomEvent('cb:game-started'));
+ *     window.GameUI?.onGameStarted?.();
+ * - Bau-Menü-Button erst nach Spielstart anzeigen; Inspector-Button immer
+ * - Alle Logs in Konsole + Inspector (falls geladen)
+ *
+ * WICHTIG: Wir ersetzen NICHT deine Engine. Wir „umwickeln“ nur.
+ * ==========================================================================*/
 (() => {
-  const V = "v16.1.10";
-  const log = (...a) => console.log(`[${new Date().toLocaleTimeString()}]`, ...a);
-  const ok  = (m)=>log("✅ (ok)", m);
-  const warn= (m)=>log("⚠️ (warn)", m);
-  const err = (m)=>log("❌ (err)", m);
+  const UI_VERSION = "v16.1.14";
 
-  // --- Globale State-Struktur (minimal, nicht-invasiv) ----------------------
-  const GameState = {
-    version: V,
-    canvas: null, ctx: null,
-    dpr: Math.max(1, Math.round(window.devicePixelRatio||1)),
-    tileSize: 64,
-    map: { width: 16, height: 10, loaded: false },
-    buildings: [], // [{id, name, x, y, atlas:'...png', sx, sy, sw, sh}]
-    atlasCache: new Map(), // url -> HTMLImageElement
-    running: false,
-  };
-  window.GameState = GameState;
+  // --- Log Helper: Konsole + Inspector ------------------------------------
+  function logOK(msg){  console.log(`✅ (ok) ${msg}`);  window?.Inspector?.logOk?.(msg); }
+  function logWarn(msg){console.warn(`⚠️ (warn) ${msg}`); window?.Inspector?.logWarn?.(msg); }
+  function logErr(msg){ console.error(`❌ (err) ${msg}`); window?.Inspector?.logErr?.(msg); }
 
-  // --- Atlas Loader (einfaches Image-Caching) -------------------------------
-  async function loadAtlas(url){
-    if (GameState.atlasCache.has(url)) return GameState.atlasCache.get(url);
-    const img = new Image();
-    const p = new Promise((resolve, reject)=>{
-      img.onload = ()=>resolve(img);
-      img.onerror = ()=>reject(new Error("Atlas konnte nicht geladen werden: "+url));
-    });
-    img.src = url;
-    GameState.atlasCache.set(url, p);
-    return p;
-  }
+  // --- DOM ---------------------------------------------------------------
+  const $start       = document.getElementById("startPanel");
+  const $map         = document.getElementById("mapSelect");
+  const $btnStart    = document.getElementById("btnStart");
+  const $btnRestart  = document.getElementById("btnRestart");
+  const $btnCache    = document.getElementById("btnCache");
+  const $btnLogCopy  = document.getElementById("btnLogCopy");
+  const $btnInspector= document.getElementById("btnInspector");
+  const $btnBuild    = document.getElementById("btnBuild");
 
-  // --- Canvas Setup ----------------------------------------------------------
-  function setupCanvas(){
-    const c = document.getElementById("game-canvas");
-    GameState.canvas = c;
-    GameState.ctx = c.getContext("2d");
-    resizeCanvas();
-    ok(`game.js initialisiert (${V})`);
-  }
+  // --- Öffentliche UI-API (für Bau-UI etc.) ------------------------------
+  window.GameUI = window.GameUI || {};
 
-  function resizeCanvas(){
-    const { canvas, dpr } = GameState;
-    const w = Math.max(320, Math.floor(window.innerWidth));
-    const h = Math.max(200, Math.floor(window.innerHeight));
-    canvas.style.width = w+"px";
-    canvas.style.height= h+"px";
-    canvas.width  = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    GameState.ctx.setTransform(dpr,0,0,dpr,0,0);
-    ok(`Canvas ${w}x${h} dpr:${dpr}`);
-    requestRender();
-  }
-  window.addEventListener("resize", resizeCanvas);
-
-  // --- Map Loader (Stub: wir nutzen vorhandene Engine-Hooks, wenn vorhanden) -
-  async function startGame(mapPath){
-    ok(`GameLoader.start ${mapPath}`);
-    // Falls deine Engine eine eigene Start-Funktion hat, nutze sie:
-    if (window.GameLoader?.start) {
-      const r = await window.GameLoader.start(mapPath).catch(e=>{
-        err("GameLoader.start Fehler: " + (e?.message||e));
-        throw e;
-      });
-      GameState.map.loaded = true;
-      ok(`Game gestartet (Engine)`);
-    } else {
-      // Fallback: Markiere Map als geladen, damit wir sofort bauen/zeichnen können.
-      GameState.map.loaded = true;
-      warn("Engine noch nicht eingebunden – Fallback-Start genutzt.");
-    }
-
-    // Event-Integration wie besprochen:
-    window.dispatchEvent(new CustomEvent('cb:game-started'));
-    window.GameUI?.onGameStarted?.();
-    GameState.running = true;
-    requestRender();
-  }
-
-  // --- Building-Registry (Lumberjack) ---------------------------------------
-  // Quelle: assets/buildings/lumberjack/lumberjack_tiers_grid.png
-  // CSV-Ausschnitt (von dir): id,name,tier,variant,role,frame.x,frame.y
-  // Wir verwenden hier die 'BuildMenu'-Variante (ug0) als Thumb & die 'Placed'-Variante (ug1) im Spiel.
-  const LUMBERJACK_ATLAS = "assets/buildings/lumberjack/lumberjack_tiers_grid.png";
-  const SPRITES = {
-    // toolKey -> atlas frame
-    // Annahme: Einzelkachel 512x512 im Atlas
-    "wood0": { atlas: LUMBERJACK_ATLAS, sx: 0,   sy: 0,   sw: 512, sh: 512, name: "lumberjack_wood0_ug0" },
-    "wood1": { atlas: LUMBERJACK_ATLAS, sx: 0,   sy: 512, sw: 512, sh: 512, name: "lumberjack_wood1_ug0" },
-    "wood2": { atlas: LUMBERJACK_ATLAS, sx: 0,   sy: 1024,sw: 512, sh: 512, name: "lumberjack_wood2_ug0" },
-    // Wenn du lieber die "Placed"-Variante sehen willst, setze sx:512 beibehaltene sy:
-    // z.B. wood0_placed: { atlas:LUMBERJACK_ATLAS, sx:512, sy:0, sw:512, sh:512 }
+  // Wird nach Spielstart automatisch aufgerufen (Hook unten)
+  window.GameUI.onGameStarted = function(){
+    try {
+      $start?.classList.add("hidden");          // Startpanel weg
+      if ($btnBuild) $btnBuild.style.display = "grid"; // Bau-Button an
+      logOK(`Game gestartet (GameUI.onGameStarted) – UI ${UI_VERSION}`);
+    } catch(e){ logWarn("onGameStarted: " + (e?.message||e)); }
   };
 
-  // --- Platzieren aus UI (Listener auf CustomEvent von ui-build.js) ----------
-  window.addEventListener("cb:place", async (ev)=>{
-    const { tool, x, y } = ev.detail||{};
-    if (!GameState.map.loaded) { warn("Platzieren ignoriert – Map noch nicht geladen."); return; }
-    if (!tool) return;
-
-    // Roads/Paths überlässt du weiter deiner bestehenden Logik;
-    // Hier kümmern wir uns nur um bekannte Gebäude-Tools:
-    if (SPRITES[tool]) {
-      const s = SPRITES[tool];
-      GameState.buildings.push({
-        id: `${tool}@${x},${y}@${Date.now()}`,
-        name: s.name,
-        x, y,
-        atlas: s.atlas, sx: s.sx, sy: s.sy, sw: s.sw, sh: s.sh
-      });
-      ok(`Gebäude platziert: ${s.name} @ (${x},${y})`);
-      // Atlas ggf. laden (async), dann redraw:
-      try { await loadAtlas(s.atlas); } catch(e){ err(e.message); }
-      requestRender();
-    }
+  // Inspector-Toggle (UI)
+  $btnInspector?.addEventListener("click", () => {
+    try { window?.Inspector?.toggle?.(); }
+    catch(e){ logWarn("Inspector ist (noch) nicht eingebunden – window.Inspector.toggle() fehlt."); }
   });
 
-  // --- Rendering --------------------------------------------------------------
-  let needsRender = true;
-  function requestRender(){ needsRender = true; }
-  function render(){
-    const { ctx, canvas, tileSize } = GameState;
-    // Hintergrund
-    ctx.fillStyle = "#2d4f2d"; // grünlich
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+  // Bau-Menü öffnen
+  $btnBuild?.addEventListener("click", () => {
+    try { window?.GameUI?.openBuildMenu?.(); }
+    catch(e){ logWarn("Bau-Menü ist (noch) nicht eingebunden – window.GameUI.openBuildMenu() fehlt."); }
+  });
 
-    // einfache Grid-Anmutung (optional, debug)
-    ctx.globalAlpha = 0.2;
-    ctx.strokeStyle = "#ffffff";
-    for (let y=0; y<canvas.height/tileSize; y++){
-      ctx.beginPath();
-      ctx.moveTo(0, y*tileSize);
-      ctx.lineTo(canvas.width, y*tileSize);
-      ctx.stroke();
-    }
-    for (let x=0; x<canvas.width/tileSize; x++){
-      ctx.beginPath();
-      ctx.moveTo(x*tileSize, 0);
-      ctx.lineTo(x*tileSize, canvas.height);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+  // --- Start / Neu / Cache / Log ----------------------------------------
+  $btnStart?.addEventListener("click", async () => {
+    const mapPath = $map?.value || "./assets/maps/map-mini.json";
+    logOK(`Start gedrückt → ${mapPath}`);
 
-    // --- Building-Layer: alle platzierten Gebäude zeichnen
-    GameState.buildings.forEach(b=>{
-      const dx = b.x * tileSize;
-      const dy = b.y * tileSize;
-      const imgP = GameState.atlasCache.get(b.atlas);
-      if (imgP && typeof imgP.then === "function"){
-        // Promise noch pending → Platzhalter
-        ctx.fillStyle="#444";
-        ctx.fillRect(dx,dy,tileSize,tileSize);
-        ctx.fillStyle="#eee";
-        ctx.fillText("…", dx+tileSize/2-4, dy+tileSize/2+4);
-      } else if (imgP){ // Bereits ein Image-Objekt (geladen)
-        const img = imgP;
-        try{
-          ctx.imageSmoothingEnabled = true;
-          ctx.drawImage(
-            img,
-            b.sx, b.sy, b.sw, b.sh,        // Quelle 512x512 im Atlas
-            dx, dy, tileSize, tileSize     // Ziel: 64x64 (Tile)
-          );
-        }catch(e){
-          err("Render-Fehler (Building): "+e.message);
-        }
-      } else {
-        // Noch nicht geladen/angefordert
-        ctx.fillStyle="#222";
-        ctx.fillRect(dx,dy,tileSize,tileSize);
+    try {
+      // Falls Hook noch nicht aktiv ist, weisen wir darauf hin
+      if (!window.GameLoader?.start) {
+        logWarn("Engine noch nicht bereit – warte auf GameLoader.start …");
       }
-    });
-  }
-
-  function loop(){
-    if (needsRender){ render(); needsRender=false; }
-    requestAnimationFrame(loop);
-  }
-
-  // --- Öffentliche API (minimal) ---------------------------------------------
-  window.Game = {
-    version: V,
-    startGame,
-    requestRender,
-    getState: ()=>GameState
-  };
-
-  // --- Boot ------------------------------------------------------------------
-  window.addEventListener("DOMContentLoaded", ()=>{
-    ok(`game.js geladen, game.js ${V}`);
-    setupCanvas();
-    loop();
+      await waitForGameLoaderStart();           // hier blockierend warten
+      await window.GameLoader.start(mapPath);   // ruft unseren Wrapper (Hook)
+      // Der Wrapper feuert Events & Logs. (siehe unten)
+    } catch (e) {
+      logErr("Start fehlgeschlagen: " + (e?.message || e));
+    }
   });
 
+  $btnRestart?.addEventListener("click", () => {
+    try {
+      window?.GameLoader?.reset?.();
+      logOK("Neu-Start angefordert");
+      $start?.classList.remove("hidden");
+      $btnBuild && ($btnBuild.style.display = "none");
+    } catch(e){
+      logWarn("Neu-Start: Engine-Reset nicht verfügbar.");
+      $start?.classList.remove("hidden");
+      $btnBuild && ($btnBuild.style.display = "none");
+    }
+  });
+
+  $btnCache?.addEventListener("click", async () => {
+    try {
+      localStorage.clear(); sessionStorage.clear();
+      logOK("Cache/Storage geleert – Seite ggf. neu laden");
+      if (navigator.serviceWorker) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) await r.unregister().catch(()=>{});
+      }
+    } catch(e){ logWarn("Cache leeren: " + (e?.message||e)); }
+  });
+
+  $btnLogCopy?.addEventListener("click", () => {
+    try { window?.Inspector?.copyLog?.(); logOK("Log in Zwischenablage"); }
+    catch(e){ logWarn("Log kopieren: Inspector ist (noch) nicht verfügbar."); }
+  });
+
+  // --- ROBUSTER HOOK AUF GameLoader.start --------------------------------
+  // Idee: Wir ersetzen GameLoader.start durch einen Wrapper, sobald er existiert.
+  // Warte-Strategie: endlose Polling-Schleife + optionaler MutationObserver.
+  let hookApplied = false;
+
+  function applyHookIfPossible(){
+    const gl = window.GameLoader;
+    if (!gl || !gl.start || hookApplied) return false;
+
+    const originalStart = gl.start;
+    gl.start = async function(mapPath){
+      const t0 = performance.now();
+      const p = originalStart.call(this, mapPath);
+
+      try {
+        const result = p?.then ? await p : p;
+        const ms = Math.round(performance.now() - t0);
+
+        logOK(`Game gestartet (${ms} ms)`);
+        // ---- gewünschte Hooks:
+        window.dispatchEvent(new CustomEvent('cb:game-started'));
+        window.GameUI?.onGameStarted?.();
+        return result;
+      } catch (e) {
+        logErr("Start fehlgeschlagen: " + (e?.message||e));
+        throw e;
+      }
+    };
+
+    gl.__uiPatched = true;
+    hookApplied = true;
+    logOK("GameLoader.start Hook aktiv");
+    return true;
+  }
+
+  async function waitForGameLoaderStart(){
+    // 1) Versuch: ggf. sofort hooken
+    if (applyHookIfPossible()) return;
+
+    // 2) MutationObserver auf window.GameLoader via Polling
+    // (Es gibt keinen direkten Observer für window; darum Poll)
+    const start = performance.now();
+    while (!hookApplied) {
+      if (applyHookIfPossible()) break;
+      await new Promise(r => setTimeout(r, 60));
+      // Sicherheits-Log alle ~2 Sekunden
+      if ((performance.now() - start) > 2000 && Math.round((performance.now()-start)%2000) < 80) {
+        window?.Inspector?.logWarn?.("Engine noch nicht bereit – warte auf GameLoader.start …");
+      }
+    }
+  }
+
+  // Erstinitialisierung: versuchen, sofort zu hooken (falls Engine schon da)
+  applyHookIfPossible();
+
+  // UI initialisiert
+  logOK(`UI bereit (index ${UI_VERSION})`);
 })();
