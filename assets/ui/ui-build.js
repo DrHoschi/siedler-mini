@@ -1,99 +1,75 @@
-/* =============================================================================
- * ui-build.js — v16.1.10
- * Zweck: Bau-Menü + Platzier-Events in die Engine (cb:place) bridgen.
- * Änderungen:
- *  - Führt die Tools 'path','road','bulldozer','wood0','wood1','wood2'
- *  - Beim Klicken aufs Grid: dispatchEvent('cb:place', {tool,x,y})
- *  - Kein Karten-Start hier drin; das macht dein Start-Fenster/Inspector.
- * =========================================================================== */
-
-(() => {
-  const V = "v16.1.10";
-  const log = (...a)=>console.log(`[${new Date().toLocaleTimeString()}]`,...a);
-  const ok  = (m)=>log("✅ (ok)", m);
-  const warn= (m)=>log("⚠️ (warn)", m);
-
-  const UI = {
-    root: null,
-    isOpen: false,
-    currentTool: null,
-    tools: [
-      {id:"path",     label:"Pfad"},
-      {id:"road",     label:"Straße"},
-      {id:"bulldozer",label:"Bulldozer"},
-      {id:"wood0",    label:"Lumberjack T1"},
-      {id:"wood1",    label:"Lumberjack T2"},
-      {id:"wood2",    label:"Lumberjack T3"},
-    ]
+// assets/ui/ui-build.js — v16.1.17
+// ---------------------------------------------------------
+// Einfaches Bau-Dock (Bottom Sheet) für Touch/Tablet.
+// Stellt eine GLOBALE API bereit: window.UIBuild.{open,close,toggle,setTool}
+// Nutzt CBLog falls vorhanden. Reagiert auf 'cb:game-started'.
+// ---------------------------------------------------------
+(function(){
+  const V='v16.1.17';
+  const log = (lvl,msg)=>{
+    try{
+      if(window.CBLog){
+        (window.CBLog[lvl]||window.CBLog.push)(lvl,msg);
+      }else{
+        console[lvl==='err'?'error':lvl==='warn'?'warn':'log'](msg);
+      }
+    }catch(_){}
   };
-  window.GameUI = window.GameUI || {};
-  window.GameUI.version = V;
 
-  // --- UI Erzeugen -----------------------------------------------------------
-  function buildUI(){
-    const host = document.getElementById("ui-root");
-    UI.root = host;
+  const elDock = document.getElementById('build-dock');
+  if(!elDock){ console.warn('[ui-build] #build-dock fehlt'); return; }
 
-    const bar = document.createElement("div");
-    bar.id = "build-toolbar";
-    bar.style.position = "fixed";
-    bar.style.left = "12px";
-    bar.style.bottom = "12px";
-    bar.style.padding = "8px";
-    bar.style.background = "rgba(0,0,0,.55)";
-    bar.style.backdropFilter = "blur(6px)";
-    bar.style.borderRadius = "10px";
-    bar.style.display = "flex";
-    bar.style.gap = "8px";
-    bar.style.zIndex = "20";
+  // --- Tool-Definitionen (Icons optional – einfache Variante) ---
+  // NOTE: Für Lumberjack-Preview kannst du die PNGs später austauschen.
+  const TOOLS = [
+    {id:'road',      label:'Straße'},
+    {id:'path',      label:'Weg'},
+    {id:'bulldozer', label:'Abreißen'},
+    // Rathaus: nur Platzhalter-Button (bauen später ggf. gesperrt)
+    {id:'townhall_wood', label:'Rathaus'},
+  ];
 
-    UI.tools.forEach(t=>{
-      const b = document.createElement("button");
-      b.textContent = t.label;
-      b.title = t.id;
-      b.style.padding = "8px 10px";
-      b.style.minWidth = "78px";
-      b.addEventListener("click", ()=>{
-        UI.currentTool = t.id;
-        ok(`Tool gesetzt: ${t.id}`);
-      });
-      bar.appendChild(b);
+  // --- UI bauen ---
+  const row = document.createElement('div'); row.className='row';
+  TOOLS.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='tool'; b.dataset.id=t.id; b.type='button';
+    b.textContent=t.label;
+    b.addEventListener('click',()=>{
+      setActive(t.id);
+      emitTool(t.id);
     });
-
-    host.appendChild(bar);
-    ok(`Bau-Menü bereit (ui-build.js ${V})`);
-  }
-
-  // --- Platzieren auf Canvas -------------------------------------------------
-  function installCanvasPlacer(){
-    const c = document.getElementById("game-canvas");
-    if (!c){ warn("Kein Canvas gefunden – Platzieren deaktiviert."); return; }
-    c.addEventListener("click", (ev)=>{
-      if (!UI.currentTool) return;
-      const rect = c.getBoundingClientRect();
-      const dpr = Math.max(1, Math.round(window.devicePixelRatio||1));
-      const xPix = (ev.clientX - rect.left);
-      const yPix = (ev.clientY - rect.top);
-      const tileSize = window.Game?.getState()?.tileSize || 64;
-      const gx = Math.floor(xPix / tileSize);
-      const gy = Math.floor(yPix / tileSize);
-
-      // An Engine bridgen:
-      window.dispatchEvent(new CustomEvent('cb:place', {
-        detail:{ tool:UI.currentTool, x:gx, y:gy }
-      }));
-      ok(`Platziert: ${UI.currentTool} @ (${gx},${gy})`);
-    });
-  }
-
-  // --- UI Hooks, die von außen aufgerufen werden können ----------------------
-  window.GameUI.openBuildMenu  = function(){ /* Toolbar ist immer sichtbar */ };
-  window.GameUI.closeBuildMenu = function(){ /* belassen wir offen */ };
-  window.GameUI.onGameStarted  = function(){ ok("Event: cb:game-started empfangen"); };
-
-  // --- Boot ------------------------------------------------------------------
-  window.addEventListener("DOMContentLoaded", ()=>{
-    buildUI();
-    installCanvasPlacer();
+    row.appendChild(b);
   });
+  elDock.appendChild(row);
+
+  function setActive(id){
+    elDock.querySelectorAll('.tool').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.id===id);
+    });
+  }
+  function emitTool(id){
+    log('ok', `Tool gesetzt: ${id}`);
+    // Game-interner Event, damit deine Engine darauf reagieren kann
+    window.dispatchEvent(new CustomEvent('cb:tool-set',{detail:{id}}));
+    // Abwärtskompatibler Hook:
+    try{ window.GameUI?.onToolSelected?.(id); }catch(_){}
+  }
+
+  // --- Public API ---
+  const api = {
+    open(){ elDock.classList.add('open'); log('ok', 'Bau-Menü geöffnet (ui-build.js '+V+')'); },
+    close(){ elDock.classList.remove('open'); log('ok', 'Bau-Menü geschlossen'); },
+    toggle(){ elDock.classList.contains('open')?api.close():api.open(); },
+    setTool(id){ setActive(id); emitTool(id); },
+    version: V
+  };
+  window.UIBuild = api;
+
+  // --- Spielstart: optional automatisch öffnen, Button aktivieren via Bridge ---
+  window.addEventListener('cb:game-started', ()=>{
+    // nichts automatisch – Bridge blendet Button ein
+  });
+
+  log('ok', `[ok] UI bereit (ui-build.js ${V})`);
 })();
