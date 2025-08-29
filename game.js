@@ -1,241 +1,374 @@
 /* ============================================================================
- * game.js – Siedler Mini (Engine/Loader)
+ * game.js – CityBuilder Engine Bootstrap
  * Version: v16.1.15
- * ---------------------------------------------------------------------------
- * Aufgaben:
- *  - Stellt window.GameLoader.start(mapPath) bereit
- *  - Initialisiert die Engine und signalisiert Bereitschaft
- *  - Lädt/validiert eine Map (width/height) + optionalen Tileset/Atlas
- *  - Sendet Custom Events: 'cb:engine-ready', 'cb:map-loaded', 'cb:game-started'
- *  - Loggt in Inspector (falls vorhanden) + console
- *  - Keine Layout-Änderungen!
+ * Ziel:
+ *  - Engine sauber initialisieren
+ *  - Karten & Tileset-Atlas laden (kein Layout-Touch)
+ *  - Stabile Logs für den Inspector
+ *  - Events: 'cb:game-started' etc.
+ *  - Schlanke Hooks für das Bau-Menü
  * ========================================================================== */
 
 (() => {
+  'use strict';
+
+  // --------------------------------------------------------------------------
+  // Versions-/State-Info
+  // --------------------------------------------------------------------------
   const VERSION = 'v16.1.15';
-
-  // ------------------------------ Utilities ---------------------------------
-  const now = () => new Date().toISOString().slice(11, 19); // HH:MM:SS
-  const tag = (lvl) => ({
-    ok:  '✅ (ok)',
-    warn:'⚠️ (warn)',
-    err: '❌ (err)',
-    info:'ℹ️ (info)'
-  }[lvl] || 'ℹ️');
-
-  function log(lvl, msg) {
-    const line = `[${now()}] ${tag(lvl)} ${msg}`;
-    // Inspector-Bridge (nicht zwingend vorhanden)
-    try {
-      window.Inspector?.log?.(lvl, msg);
-    } catch {}
-    // Immer auch Konsole:
-    if (lvl === 'err') console.error(line);
-    else if (lvl === 'warn') console.warn(line);
-    else console.log(line);
-  }
-
-  function dispatch(name, detail = {}) {
-    try {
-      window.dispatchEvent(new CustomEvent(name, { detail }));
-    } catch (e) {
-      log('warn', `Event ${name} konnte nicht dispatcht werden: ${e?.message || e}`);
-    }
-  }
-
-  // ------------------------------ Globals -----------------------------------
-  // Ein globales Game-Objekt, falls anderes Code darauf schaut:
-  const Game = (window.Game = window.Game || {});
-  Game.version = VERSION;
-
-  // Engine-Status
-  const State = {
-    ready: false,
-    started: false,
+  const state = {
+    engineReady: false,
+    mapPath: null,
+    lastStartTs: 0,
     canvas: null,
     ctx: null,
-    map: null,
-    tileset: null,
-    startQueue: null,  // falls Start vor 'ready' gedrückt wurde
+    // Für Debug/Inspector:
+    atlasJsonUrl: 'assets/tiles/tileset.terrain.json',
+    atlasImgUrl:  'assets/tiles/tileset.terrain.png',
+    tileset: null,        // parsed JSON
+    tilesetImg: null,     // HTMLImageElement
+    map: null             // parsed map JSON
   };
 
-  // -------------------------- Engine Bootstrap -------------------------------
-  async function initEngine() {
-    if (State.ready) return;
-    // Falls ihr bereits einen Canvas im DOM habt, greift ihn – sonst erstellen wir keinen (Layout bleibt unberührt)
-    const canvasFromDom = document.getElementById('game-canvas');
-    if (canvasFromDom instanceof HTMLCanvasElement) {
-      State.canvas = canvasFromDom;
-      State.ctx = canvasFromDom.getContext('2d');
-      log('ok', `game.js initialisiert (${VERSION}) – Canvas gefunden (#game-canvas)`);
+  // Helfer zum loggen – alle Logs laufen zentral hier durch
+  function log(level, msg, extra) {
+    try {
+      // 1) Konsole (kurz)
+      const tag = `[game.js ${VERSION}]`;
+      if (level === 'err') console.error(tag, msg, extra ?? '');
+      else if (level === 'warn') console.warn(tag, msg, extra ?? '');
+      else console.log(tag, msg, extra ?? '');
+
+      // 2) Inspector (falls vorhanden)
+      // Erwartete Signaturen:
+      //   window.Inspector.log({ level:'ok'|'warn'|'err', source:'game', msg, data? })
+      //   oder Fallback: window.logEvent?.(level, source, message)
+      const payload = { level, source: 'game', msg, data: extra || null, ts: Date.now(), version: VERSION };
+      window.Inspector?.log?.(payload);
+      window.logEvent?.(level, 'game', msg, extra || null);
+    } catch(_) {}
+  }
+
+  // --------------------------------------------------------------------------
+  // DOM Ready
+  // --------------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', () => {
+    log('ok', `game.js geladen, game.js ${VERSION}`);
+    // Canvas vorbereiten (wenn das Rendering im Engine-Kern stattfindet, ist das hier harmless)
+    state.canvas = document.getElementById('game-canvas') || document.querySelector('canvas');
+    if (state.canvas) {
+      state.ctx = state.canvas.getContext?.('2d') || null;
+      const rect = state.canvas.getBoundingClientRect?.();
+      log('ok', `Canvas bereit${rect ? ` ${Math.round(rect.width)}x${Math.round(rect.height)}` : ''}`);
     } else {
-      // Kein Canvas gefunden: Wir loggen nur, damit klar ist, warum ggf. nichts zu sehen ist.
-      log('warn', `Kein Canvas (#game-canvas) im DOM gefunden – Rendering läuft vorerst ohne sichtbare Ausgabe (${VERSION}).`);
+      log('warn', 'Kein <canvas> gefunden – Rendering übernimmt ggf. die Engine.');
     }
+  });
 
-    State.ready = true;
-    dispatch('cb:engine-ready', { version: VERSION });
-    log('ok', `Engine bereit (game.js ${VERSION}) – Event cb:engine-ready gesendet`);
-
-    // Falls während des Ladens bereits start() versucht wurde:
-    if (State.startQueue) {
-      const queued = State.startQueue;
-      State.startQueue = null;
-      log('info', `Verarbeite verzögerten Start: ${queued.mapPath}`);
-      start(queued.mapPath);
-    }
-  }
-
-  // Wir initialisieren, sobald DOM parat ist.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initEngine, { once: true });
-  } else {
-    // DOM ist schon da
-    initEngine();
-  }
-
-  // ------------------------------ Loader -------------------------------------
+  // --------------------------------------------------------------------------
+  // Loader Utilities (Map/Atlas)
+  // --------------------------------------------------------------------------
   async function fetchJson(url) {
-    const res = await fetch(url, { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return await res.json();
+    const t0 = performance.now();
+    log('ok', `Lade JSON → ${url}`);
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
+    const json = await res.json();
+    log('ok', `JSON OK (${Math.round(performance.now() - t0)}ms) ← ${url}`);
+    return json;
   }
 
-  function validateMap(map, src) {
-    if (!map || typeof map !== 'object') throw new Error('Map JSON fehlt/ungültig');
-    const w = map.width ?? map.mapWidth ?? map.cols ?? 0;
-    const h = map.height ?? map.mapHeight ?? map.rows ?? 0;
-    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-      throw new Error('Map: width/height fehlen oder sind 0');
-    }
-    // Optional: Tilegröße prüfen
-    const tile = map.tile || map.tileSize || map.tileWidth || 64;
-    return { width: w|0, height: h|0, tile: tile|0 };
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      log('ok', `Lade Bild → ${url}`);
+      const img = new Image();
+      img.onload = () => { log('ok', `Bild OK ${img.width}x${img.height} ← ${url}`); resolve(img); };
+      img.onerror = () => { log('err', `Bild fehlgeschlagen ← ${url}`); reject(new Error('image load failed')); };
+      // Cache umgehen, damit Atlas-Updates sicher ankommen
+      img.crossOrigin = 'anonymous';
+      img.decoding = 'async';
+      img.src = `${url}?v=${Date.now()}`;
+    });
   }
 
-  async function loadTilesetFromMap(map) {
-    // Versuche, Tileset/Atlas aus der Map zu lesen
-    // Erwartete Felder (frei nach euren bisherigen Strukturen): map.tileset, map.atlas, map.tiles
-    let info = null;
+  // --------------------------------------------------------------------------
+  // Engine Bootstrap
+  // --------------------------------------------------------------------------
+  async function initEngineIfNeeded() {
+    if (state.engineReady) return true;
 
-    if (map.tileset && typeof map.tileset === 'object') {
-      info = { ...map.tileset };
-    } else if (map.atlas && typeof map.atlas === 'object') {
-      info = { ...map.atlas };
-    } else if (map.tiles && typeof map.tiles === 'object') {
-      info = { ...map.tiles };
-    }
-
-    // Fallback auf euer Standard-Set, falls nichts spezifiziert:
-    if (!info || (!info.png && !info.image && !info.atlas)) {
-      log('warn', 'Atlas nicht angegeben → Fallback-Farben');
-      return null; // Engine darf trotzdem starten; Renderer arbeitet mit Platzhalterfarben
-    }
-
-    // Häufige Feldnamen normalisieren:
-    const imageUrl =
-      info.png || info.image || info.atlasPng || info.src || './assets/tiles/tileset.terrain.png';
-    const metaUrl =
-      info.json || info.meta || info.atlasJson || './assets/tiles/tileset.terrain.json';
-
-    // Nur loggen; tatsächliches Bild-Decoding kann bei euch später passieren
-    log('ok', `Tileset/Atlas angegeben → png: ${imageUrl}${metaUrl ? `, meta: ${metaUrl}` : ''}`);
-
-    // Falls Metadaten vorhanden: laden
-    let meta = null;
-    if (metaUrl) {
-      try {
-        meta = await fetchJson(metaUrl);
-        log('ok', `Tileset-Metadaten geladen (${metaUrl})`);
-      } catch (e) {
-        log('warn', `Tileset-Metadaten konnten nicht geladen werden (${metaUrl}) – ${e.message}`);
+    // Wenn es eine eigene Engine-Init gibt, rufen wir sie auf
+    // Erwartete Signatur (locker): window.Engine?.init?.(options) → Promise|void
+    try {
+      if (window.Engine?.init) {
+        log('ok', 'Engine.init aufrufen …');
+        await window.Engine.init({ version: VERSION });
+        state.engineReady = true;
+        log('ok', 'Engine init → bereit');
+        return true;
       }
+    } catch (err) {
+      log('err', 'Engine.init hat einen Fehler geworfen', String(err));
+      return false;
     }
 
-    State.tileset = {
-      imageUrl,
-      metaUrl,
-      meta,
-    };
-    return State.tileset;
+    // Falls es keinen Engine-Kern gibt, betreiben wir Minimal-Betrieb.
+    // (Rendering übernimmt ggf. die Map-/Tileset-Demo unten.)
+    state.engineReady = true;
+    log('warn', 'Kein Engine-Kern gefunden – Fallback-Betrieb aktiv');
+    return true;
   }
 
-  // ------------------------------ Start --------------------------------------
-  async function start(mapPath) {
-    // Wird vom UI (Start-Button) gerufen.
-    const label = `game.js ${VERSION}`;
-    if (!State.ready) {
-      log('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
-      // Einmalige Queue, damit UI nicht in Fehler läuft
-      State.startQueue = { mapPath };
+  // --------------------------------------------------------------------------
+  // Map + Tileset laden und Engine/Renderer starten
+  // --------------------------------------------------------------------------
+  async function startGame(mapPath) {
+    state.lastStartTs = Date.now();
+    state.mapPath = mapPath;
+
+    log('ok', `Map laden → ${mapPath}`);
+
+    // 1) Engine init (falls nicht schon passiert)
+    const ok = await initEngineIfNeeded();
+    if (!ok) {
+      log('err', 'Engine konnte nicht initialisiert werden');
       return;
     }
 
+    // 2) Map/Atlas laden
     try {
-      log('ok', `GameLoader.start ${mapPath}`);
-      const map = await fetchJson(mapPath);
-      const dims = validateMap(map, mapPath);
-      State.map = { src: mapPath, data: map, ...dims };
+      const [map, tileset, tilesetImg] = await Promise.all([
+        fetchJson(mapPath),
+        fetchJson(state.atlasJsonUrl),
+        loadImage(state.atlasImgUrl)
+      ]);
+      state.map = map;
+      state.tileset = tileset;
+      state.tilesetImg = tilesetImg;
+    } catch (err) {
+      log('err', 'Map/Atlas laden fehlgeschlagen', String(err));
+      return;
+    }
 
-      // Tileset / Atlas laden (optional – darf fehlen)
-      await loadTilesetFromMap(map);
+    // 3) Engine informieren (wenn vorhanden)
+    try {
+      // Erwartete, lockere Signaturen:
+      //   window.Engine?.loadTileset?.(json, image)
+      //   window.Engine?.loadMap?.(mapJson)
+      //   window.Engine?.start?.()
+      window.Engine?.loadTileset?.(state.tileset, state.tilesetImg);
+      window.Engine?.loadMap?.(state.map);
 
-      // Simples Render-Kickoff (ohne Layout-Eingriff)
-      if (State.ctx && State.canvas) {
-        // Minimales Clear + Info (nur zum Sichtbarmachen; euer richtiger Renderer kann hier übernehmen)
-        State.ctx.clearRect(0, 0, State.canvas.width, State.canvas.height);
-        State.ctx.save();
-        State.ctx.font = '14px sans-serif';
-        State.ctx.fillStyle = '#00a000';
-        State.ctx.fillText(`Map OK ${State.map.width}x${State.map.height} tile ${State.map.tile}`, 12, 22);
-        State.ctx.restore();
-      }
-
-      // Events nach außen
-      dispatch('cb:map-loaded', { version: VERSION, mapPath, dims, tileset: State.tileset || null });
-      State.started = true;
-
-      // „Game started“ Events/Bridges
-      dispatch('cb:game-started', { version: VERSION, mapPath });
-      window.GameUI?.onGameStarted?.();
-
-      log('ok', `Game gestartet (${mapPath}) – ${label}`);
-    } catch (e) {
-      const msg = e?.message || String(e);
-      if (/width\/height/.test(msg)) {
-        log('err', 'Start fehlgeschlagen: Map: width/height fehlen oder sind 0');
+      if (typeof window.Engine?.start === 'function') {
+        window.Engine.start();
+        log('ok', `Game gestartet (${mapPath})`);
       } else {
-        log('err', `Start fehlgeschlagen: ${msg}`);
+        // Minimal-Renderer als Fallback, damit man "irgendwas" sieht.
+        renderMinimalPreview();
+        log('warn', 'Engine.start fehlt – Minimal-Preview gerendert');
       }
-      // Für UI-Retry/Fehleranzeige nützlich:
-      dispatch('cb:game-start-failed', { version: VERSION, mapPath, error: msg });
+
+      // 4) Events/Callbacks für UI/Build-Menü
+      window.dispatchEvent(new CustomEvent('cb:game-started', { detail: { mapPath, version: VERSION } }));
+      window.GameUI?.onGameStarted?.(state.map, { version: VERSION });
+
+      log('ok', 'Event: cb:game-started gesendet');
+
+    } catch (err) {
+      log('err', 'Start-Sequenz fehlgeschlagen', String(err));
     }
   }
 
-  // --------------------------- Public API (global) ---------------------------
+  // --------------------------------------------------------------------------
+  // Minimal-Preview (nur falls keine Engine vorhanden ist)
+  // - Zeichnet einfache Checker/Rect, damit klar ist: die Map ist da.
+  // - Verwendet KEIN Layout – nur Canvas.
+  // --------------------------------------------------------------------------
+  function renderMinimalPreview() {
+    if (!state.canvas || !state.ctx || !state.map) return;
+
+    const ctx = state.ctx;
+    const { width = 16, height = 10, tileSize = 64 } = guessMapSize(state.map);
+
+    // Fläche wischen
+    ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+
+    // Prüfen, ob Tileset-Frames verfügbar sind
+    const frames = extractFrames(state.tileset);
+    const hasFrames = frames.length > 0 && state.tilesetImg;
+
+    // Primitive Darstellung
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const dx = x * tileSize;
+        const dy = y * tileSize;
+
+        if (hasFrames) {
+          // Frame wählen (pseudo, damit wenigstens was Kachel-haftes zu sehen ist)
+          const f = frames[(x + y) % frames.length];
+          ctx.drawImage(
+            state.tilesetImg,
+            f.x, f.y, f.w, f.h,
+            dx, dy, tileSize, tileSize
+          );
+        } else {
+          // Fallback-Farben
+          ctx.fillStyle = ((x + y) % 2 === 0) ? '#7fbf7f' : '#9fd19f';
+          ctx.fillRect(dx, dy, tileSize, tileSize);
+        }
+
+        // hauchfeines Grid
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+        ctx.strokeRect(dx + 0.5, dy + 0.5, tileSize - 1, tileSize - 1);
+      }
+    }
+    log('ok', `Minimal-Preview gezeichnet ${width}x${height} tiles (tile=${tileSize})`);
+  }
+
+  function guessMapSize(mapJson) {
+    // Versucht width/height/tile zu raten – deine Map-Dateien haben die Felder meist gesetzt.
+    // Falls nicht vorhanden, wählen wir konservative Defaults.
+    const width = Number(mapJson?.width) || Number(mapJson?.cols) || 16;
+    const height = Number(mapJson?.height) || Number(mapJson?.rows) || 10;
+    const tileSize = Number(mapJson?.tile) || Number(mapJson?.tileSize) || 64;
+    return { width, height, tileSize };
+  }
+
+  function extractFrames(tilesetJson) {
+    // Erwartetes Format ähnlich TexturePacker: { frames: { key: { frame:{x,y,w,h}, ... }, ... } } ODER Array
+    if (!tilesetJson) return [];
+    const out = [];
+
+    if (Array.isArray(tilesetJson.frames)) {
+      for (const f of tilesetJson.frames) {
+        const fr = f?.frame || f;
+        if (fr && Number.isFinite(fr.x)) {
+          out.push({ x: fr.x, y: fr.y, w: fr.w || fr.width || 64, h: fr.h || fr.height || 64 });
+        }
+      }
+      return out;
+    }
+
+    if (tilesetJson.frames && typeof tilesetJson.frames === 'object') {
+      for (const k of Object.keys(tilesetJson.frames)) {
+        const fr = tilesetJson.frames[k]?.frame || tilesetJson.frames[k];
+        if (fr && Number.isFinite(fr.x)) {
+          out.push({ x: fr.x, y: fr.y, w: fr.w || fr.width || 64, h: fr.h || fr.height || 64 });
+        }
+      }
+      return out;
+    }
+
+    // ganz rudimentär
+    const tileW = Number(tilesetJson?.meta?.size?.w) || 1024;
+    const tileH = Number(tilesetJson?.meta?.size?.h) || 1024;
+    const step = 64;
+    for (let y = 0; y < tileH; y += step) {
+      for (let x = 0; x < tileW; x += step) {
+        out.push({ x, y, w: step, h: step });
+      }
+    }
+    return out;
+  }
+
+  // --------------------------------------------------------------------------
+  // Öffentliche API (global)
+  // --------------------------------------------------------------------------
   window.GameLoader = {
+    /**
+     * Startet das Spiel (Karte laden & Engine/Renderer anschieben)
+     * @param {string} mapPath Pfad zur Map (z.B. "./assets/maps/map-mini.json")
+     */
+    start(mapPath) {
+      if (!mapPath) {
+        log('err', 'GameLoader.start ohne mapPath aufgerufen');
+        return;
+      }
+      // Doppelklick/Spam-Blocker: keine Starts in derselben Animation-Frame-Schleife
+      const delta = Date.now() - state.lastStartTs;
+      if (delta < 200) {
+        log('warn', 'Start abgebrochen – zu schnell hintereinander');
+        return;
+      }
+      startGame(mapPath);
+    },
+
+    /**
+     * Exponiere Version & Status
+     */
     version: VERSION,
-    start, // GameLoader.start('./assets/maps/map-mini.json')
-    isReady: () => State.ready,
-    isStarted: () => State.started,
-    getState: () => ({ ...State }), // Debug/Inspector
+    get ready() { return !!state.engineReady; },
   };
 
-  // Für alte Hooks, die den Versionsstring ausgeben:
-  try {
-    log('ok', `game.js geladen, game.js ${VERSION}`);
-  } catch {}
-
-  // Optionaler Auto-Start via URL-Param ?autostart=path
-  try {
-    const url = new URL(window.location.href);
-    const auto = url.searchParams.get('autostart');
-    if (auto) {
-      // warten bis Engine ready, dann starten
-      const kick = () => start(auto);
-      if (State.ready) kick();
-      else window.addEventListener('cb:engine-ready', kick, { once: true });
-      log('info', `Autostart erkannt → ${auto}`);
+  // --------------------------------------------------------------------------
+  // Hooks für UI/Build-Menü – NICHT layout-relevant
+  // --------------------------------------------------------------------------
+  // Erwartung: ui-build.js hört auf 'cb:game-started' und blendet den Button ein.
+  // Hier zusätzlich ein einfacher Platzier-Hook, falls du direkt aus der UI feuern willst:
+  window.GameState = window.GameState || {};
+  window.GameState.place = function place(toolId, gridX, gridY) {
+    // 1) Event für Engine/Systems
+    window.dispatchEvent(new CustomEvent('cb:place', {
+      detail: { toolId, x: gridX, y: gridY }
+    }));
+    // 2) Log
+    log('ok', `Place-Request: ${toolId} @ (${gridX},${gridY})`);
+    // 3) Optional: Engine anstupsen
+    try {
+      window.Engine?.place?.({ toolId, x: gridX, y: gridY });
+    } catch (err) {
+      log('err', 'Engine.place Fehler', String(err));
     }
-  } catch {}
+  };
+
+  // --------------------------------------------------------------------------
+  // Debug/Service-Utilities (für Start-Dialog/Inspector)
+  // --------------------------------------------------------------------------
+  window.GameServices = window.GameServices || {};
+
+  /**
+   * Von außen aufrufbar: Engine-Reset (zerstört nichts im Layout).
+   * Nutzt der Start-Dialog z.B. für „Neu starten“.
+   */
+  window.GameServices.requestReset = async function requestReset() {
+    log('ok', 'Neu-Start angefordert');
+    try {
+      await window.Engine?.reset?.();
+    } catch (_e) {}
+    state.engineReady = false;
+    await initEngineIfNeeded();
+  };
+
+  /**
+   * Von außen: Cache löschen (Storage + SW), ohne Layout zu ändern.
+   */
+  window.GameServices.clearCaches = async function clearCaches() {
+    try {
+      // Local/session Storage
+      localStorage?.clear?.();
+      sessionStorage?.clear?.();
+
+      // Service Worker Cache
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      log('ok', 'Cache/Storage geleert – Seite ggf. neu laden');
+    } catch (err) {
+      log('err', 'Cache löschen fehlgeschlagen', String(err));
+    }
+  };
+
+  // --------------------------------------------------------------------------
+  // Safety: Alte Buttons/UI können prüfen, ob Engine bereit ist
+  // --------------------------------------------------------------------------
+  window.addEventListener('cb:ui-request-start', (ev) => {
+    const mapPath = ev?.detail?.mapPath || './assets/maps/map-mini.json';
+    if (!state.engineReady) {
+      log('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
+      // Der Start-Dialog ruft danach bewusst GameLoader.start auf.
+    }
+    // Nichts weiter – die UI triggert ohnehin GameLoader.start()
+  });
+
 })();
