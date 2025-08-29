@@ -150,3 +150,23 @@
   // Autoinit
   try { initEngine(); } catch(e){ LOG('err','Engine-Init Fehler: '+e.message); }
 })();
+<script>
+  (function(){
+    // aktuelles Tool im Spiel
+    let currentTool = 'road';
+
+    window.addEventListener('cb:tool-set', (ev)=>{
+      currentTool = ev.detail.id;
+      (window.CBLog?.ok||console.log)(`[game] Tool aktiv: ${currentTool}`);
+    });
+
+    // Beispiel-Klick auf die Map → nutzt currentTool (ersetze durch deine echte Platzierlogik)
+    const canvas = document.getElementById('game');
+    if(canvas){
+      canvas.addEventListener('click', (e)=>{
+        // TODO: hier deine Build-/Place-Logik je nach 'currentTool'
+        (window.CBLog?.ok||console.log)(`[place] ${currentTool} @ ${e.offsetX|0},${e.offsetY|0}`);
+      });
+    }
+  })();
+</script>
