@@ -6,6 +6,37 @@
   <meta name="theme-color" content="#0b2419" />
   <title>Mini – v16.1.19</title>
 
+  <!-- === CBLog Fallback (stabil, idempotent) ================== -->
+<script>
+// Legt window.CBLog an, sammelt Logs & feuert Events früh.
+(function(){
+  if (window.CBLog && window.CBLog.__stable) return; // schon vorhanden
+  const listeners = [];
+  function emit(level, msg){
+    try {
+      const line = { t: Date.now(), level, msg };
+      window.dispatchEvent(new CustomEvent('cb:log', { detail: line }));
+      listeners.forEach(fn => { try{ fn(line); }catch(_){} });
+      const c = (level==='err'?'error':level==='warn'?'warn':'log');
+      (console[c]||console.log)(msg);
+    } catch(_) {}
+  }
+  window.CBLog = {
+    ok:   (m)=> emit('ok', m),
+    warn: (m)=> emit('warn', m),
+    err:  (m)=> emit('err', m),
+    push: (lvl,m)=> emit(lvl||'log', m),
+    on(fn){
+      if (typeof fn==='function' && !listeners.includes(fn)) listeners.push(fn);
+      return ()=>{ const i=listeners.indexOf(fn); if(i>=0) listeners.splice(i,1); };
+    },
+    __stable: true
+  };
+  // Erste sichtbare Zeile für dich (damit du sofort was siehst)
+  emit('ok', `UI bereit (index v16.1.18)`);
+})();
+</script>
+  
   <!-- Basis-Styles (deine bestehenden Dateien) -->
   <link rel="preload" href="./css/base.css" as="style" />
   <link rel="preload" href="./style.css" as="style" />
