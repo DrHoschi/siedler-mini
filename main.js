@@ -1,404 +1,215 @@
-// main.js
-// Einstiegspunkt: Canvas, Kamera, Bau-Flow, Rendering
+// main.js – v16.1.19
+// Start-/Boot-Logik für das UI. Layout bleibt unberührt.
+// - Verdrahtet Start, Neu-Start, Cache-Booster, Log kopieren
+// - Wartet robust auf GameLoader (start/_start) und cb:engine-ready
+// - Zeigt Bau-Button erst nach cb:game-started
+// - Inspector-Fallback-Button (rechts unten) bleibt nutzbar
 
-import { ASSETS } from "./assets.js";
-import { TERRAIN } from "./terrain.js";
-import { UI } from "./js/ui.js";
-
-// ======= Canvas / DPI =======
-const TILE = 40;                 // Tile-Größe in px bei Zoom 1.0
-const DPR  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-
-// Canvas aus index.html (#gameCanvas) oder erzeugen
-const canvas = document.querySelector("#gameCanvas") || (() => {
-  const c = document.createElement("canvas");
-  c.id = "gameCanvas";
-  document.body.appendChild(c);
-  return c;
-})();
-const ctx = canvas.getContext("2d");
-
-const state = {
-  // Kamera
-  camX: 0,
-  camY: 0,
-  zoom: 1,
-  minZoom: 0.5,
-  maxZoom: 3,
-
-  // Eingabe
-  panning: false,
-  panStartX: 0,
-  panStartY: 0,
-  camStartX: 0,
-  camStartY: 0,
-  pinch: null, // {d0, zoom0}
-
-  // Welt
-  width: 80,   // Tiles in X (logisch)
-  height: 60,  // Tiles in Y (logisch)
-  terrain: [], // 2D Array mit Keys aus TERRAIN (optional)
-  buildings: [], // {id,key,x,y,img}
-
-  // Bau-Vorschau
-  buildSel: null,    // "hq" | "depot" | ...
-  ghost: { active:false, x:0, y:0, can:true, img:null }
-};
-
-// ======= Assets-Helfer =======
-const imageCache = new Map();
-function getImage(src) {
-  if (!src) return null;
-  if (imageCache.has(src)) return imageCache.get(src);
-  const img = new Image();
-  img.src = src;
-  imageCache.set(src, img);
-  return img;
-}
-
-// Gebäude-Key -> Bildquelle (aus deinen neuen Texturen)
-// Du kannst die Zuweisungen jederzeit anpassen/erweitern.
-const BUILD_IMG = {
-  hq:          ASSETS.building.hq,           // assets/tex/building/wood/hq_wood.PNG
-  depot:       ASSETS.building.depot,        // assets/tex/building/wood/depot_wood.PNG
-  farm:        ASSETS.building.farm,         // ...
-  lumberjack:  ASSETS.building.lumberjack,
-  fischer:     ASSETS.building.fischer,
-  haeuser1:    ASSETS.building.haeuser1,
-  haeuser2:    ASSETS.building.haeuser2,
-  stonebraker: ASSETS.building.stonebraker,
-  wassermuehle:ASSETS.building.wassermuehle,
-  windmuehle:  ASSETS.building.windmuehle,
-  baeckerei:   ASSETS.building.baeckerei
-};
-
-// ======= Größe/Resize =======
-function resize() {
-  const rect = canvas.getBoundingClientRect();
-  const w = Math.max(1, Math.floor(rect.width  * DPR));
-  const h = Math.max(1, Math.floor(rect.height * DPR));
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
-}
-resize();
-window.addEventListener("resize", resize);
-window.addEventListener("orientationchange", () => setTimeout(resize, 200));
-
-// ======= Koordinaten‑Helfer =======
-function toWorld(sx, sy) {
-  // sx/sy in CSS‑Pixel → auf DPR umrechnen → in Welt
-  const x = (sx * DPR - canvas.width/2)  / state.zoom + state.camX;
-  const y = (sy * DPR - canvas.height/2) / state.zoom + state.camY;
-  return { x, y };
-}
-function toScreen(wx, wy) {
-  const sx = (wx - state.camX) * state.zoom + canvas.width/2;
-  const sy = (wy - state.camY) * state.zoom + canvas.height/2;
-  return { sx, sy };
-}
-function snap(v) { return Math.round(v / TILE) * TILE; }
-
-// ======= Terrain (optional zeichnen) =======
-function drawTerrain() {
-  // Wenn du fertige Karten hast, kannst du hier über state.terrain laufen.
-  // Vorerst: Raster-Hintergrund aus TERRAIN.default (z.B. Gras)
-  const img = getImage(TERRAIN.default);
-  if (!img || !img.complete) {
-    drawGrid(); // Fallback nur Grid
-    return;
-  }
-  const step = TILE * state.zoom; // logical tile * zoom (aber wir zeichnen in Weltmaß!)
-  // Kachelweise zeichnen – nur Sichtbereich
-  const left   = Math.floor((state.camX - canvas.width/2  / state.zoom) / TILE) - 1;
-  const right  = Math.ceil ((state.camX + canvas.width/2  / state.zoom) / TILE) + 1;
-  const top    = Math.floor((state.camY - canvas.height/2 / state.zoom) / TILE) - 1;
-  const bottom = Math.ceil ((state.camY + canvas.height/2 / state.zoom) / TILE) + 1;
-
-  for (let ty = top; ty <= bottom; ty++) {
-    for (let tx = left; tx <= right; tx++) {
-      const wx = tx * TILE + TILE/2;
-      const wy = ty * TILE + TILE/2;
-      const { sx, sy } = toScreen(wx, wy);
-      const size = TILE * state.zoom;
-      ctx.drawImage(
-        img,
-        0, 0, img.naturalWidth, img.naturalHeight,
-        Math.round(sx - size/2), Math.round(sy - size/2),
-        Math.round(size), Math.round(size)
-      );
-    }
-  }
-}
-
-// ======= Grid (dezentes Hilfsraster) =======
-function drawGrid() {
-  ctx.save();
-  ctx.strokeStyle = "rgba(255,255,255,0.05)";
-  ctx.lineWidth = 1;
-  const step = TILE * state.zoom;
-  // Offset so, dass Grid mit Welt koordiniert
-  const ox = (canvas.width/2  - (state.camX*state.zoom)) % step;
-  const oy = (canvas.height/2 - (state.camY*state.zoom)) % step;
-
-  ctx.beginPath();
-  for (let x = ox; x <= canvas.width; x += step) {
-    ctx.moveTo(Math.round(x), 0);
-    ctx.lineTo(Math.round(x), canvas.height);
-  }
-  for (let y = oy; y <= canvas.height; y += step) {
-    ctx.moveTo(0, Math.round(y));
-    ctx.lineTo(canvas.width, Math.round(y));
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-// ======= Gebäude‑Render =======
-function drawBuildings() {
-  for (const b of state.buildings) {
-    const img = b.img || getImage(BUILD_IMG[b.key]);
-    if (!img) continue;
-    const { sx, sy } = toScreen(b.x + TILE/2, b.y + TILE/2);
-    const size = TILE * state.zoom; // 1x1 Tile; wenn 2x2 → *2
-    ctx.drawImage(
-      img,
-      0, 0, img.naturalWidth, img.naturalHeight,
-      Math.round(sx - size/2), Math.round(sy - size/2),
-      Math.round(size), Math.round(size)
-    );
-  }
-}
-
-// ======= Ghost‑Vorschau =======
-function drawGhost() {
-  if (!state.ghost.active || !state.ghost.img) return;
-  const { sx, sy } = toScreen(state.ghost.x + TILE/2, state.ghost.y + TILE/2);
-  const size = TILE * state.zoom;
-  ctx.save();
-  ctx.globalAlpha = 0.85;
-  ctx.drawImage(
-    state.ghost.img,
-    0, 0, state.ghost.img.naturalWidth, state.ghost.img.naturalHeight,
-    Math.round(sx - size/2), Math.round(sy - size/2),
-    Math.round(size), Math.round(size)
-  );
-  // Overlay: grün/rot Rahmen
-  ctx.globalAlpha = 1.0;
-  ctx.strokeStyle = state.ghost.can ? "rgba(80,220,120,0.9)" : "rgba(255,80,80,0.9)";
-  ctx.lineWidth = Math.max(1, Math.floor(2 * state.zoom));
-  ctx.strokeRect(
-    Math.round(sx - size/2),
-    Math.round(sy - size/2),
-    Math.round(size),
-    Math.round(size)
-  );
-  ctx.restore();
-}
-
-// ======= Baubarkeit prüfen (einfach: frei + im Feld) =======
-function canPlaceAt(xSnap, ySnap) {
-  // Im Sichtfeld / erlaubte Map
-  // (Hier nur triviale Prüfung: keine Überlappung mit bestehenden 1x1)
-  for (const b of state.buildings) {
-    if (b.x === xSnap && b.y === ySnap) return false;
-  }
-  return true;
-}
-
-// ======= Input =======
-function onWheel(e) {
-  e.preventDefault();
-  const delta = -Math.sign(e.deltaY) * 0.1;
-  const before = state.zoom;
-  state.zoom = Math.max(state.minZoom, Math.min(state.maxZoom, state.zoom + delta));
-  if (before !== state.zoom) {/*optional HUD*/ }
-}
-function onPointerDown(e) {
-  if (e.pointerType === "touch" && e.isPrimary === false) {
-    // zweiter Finger → Pinch Handling im move
-    return;
-  }
-  canvas.setPointerCapture?.(e.pointerId);
-  state.panning = true;
-  state.panStartX = e.clientX;
-  state.panStartY = e.clientY;
-  state.camStartX = state.camX;
-  state.camStartY = state.camY;
-
-  // Klick zum Bauen
-  if (state.buildSel) {
-    const { x, y } = toWorld(e.clientX, e.clientY);
-    const xs = snap(x - TILE/2) + TILE/2; // auf Zentrierung achten
-    const ys = snap(y - TILE/2) + TILE/2;
-
-    const gx = snap(xs - TILE/2);
-    const gy = snap(ys - TILE/2);
-
-    const ok = canPlaceAt(gx, gy);
-    if (ok) {
-      state.buildings.push({
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()+Math.random()),
-        key: state.buildSel,
-        x: gx,
-        y: gy,
-        img: getImage(BUILD_IMG[state.buildSel])
-      });
-    }
-  }
-}
-function onPointerMove(e) {
-  // Pinch auf Touch: 2 Pointer → über event nicht zuverlässig; iOS Safari hat eigene Gesten.
-  // Für Einfachheit hier nur Pan bei 1 Finger:
-  if (state.panning && (!state.buildSel)) {
-    const dx = (e.clientX - state.panStartX) / state.zoom;
-    const dy = (e.clientY - state.panStartY) / state.zoom;
-    state.camX = state.camStartX - dx;
-    state.camY = state.camStartY - dy;
-    return;
-  }
-
-  // Ghost-Vorschau aktualisieren, wenn ein Bau-Tool aktiv ist
-  if (state.buildSel) {
-    const { x, y } = toWorld(e.clientX, e.clientY);
-    const gx = snap(x);
-    const gy = snap(y);
-    const img = getImage(BUILD_IMG[state.buildSel]);
-    state.ghost.active = true;
-    state.ghost.x = gx;
-    state.ghost.y = gy;
-    state.ghost.can = canPlaceAt(gx, gy);
-    state.ghost.img = img;
-  } else {
-    state.ghost.active = false;
-  }
-}
-function onPointerUp(e) {
-  state.panning = false;
-  canvas.releasePointerCapture?.(e.pointerId);
-}
-
-// ======= Buttons/Utility =======
-function centerOn(x = 0, y = 0) {
-  state.camX = x;
-  state.camY = y;
-}
-
-function hookInputs() {
-  canvas.addEventListener("wheel", onWheel, { passive:false });
-  canvas.addEventListener("pointerdown", onPointerDown, { passive:false });
-  canvas.addEventListener("pointermove", onPointerMove, { passive:false });
-  canvas.addEventListener("pointerup", onPointerUp, { passive:false });
-  canvas.addEventListener("pointercancel", onPointerUp, { passive:false });
-}
-
-// ======= UI (Bau-Menü) =======
-const ui = new UI(/* gameRef falls nötig */);
-function pollUISelection() {
-  // Hole ausgewähltes Gebäude aus dem Menü
-  const sel = ui.getSelectedBuilding?.();
-  if (sel !== state.buildSel) {
-    state.buildSel = sel;
-    // Ghost sofort ausblenden, bis Maus bewegt wird
-    state.ghost.active = false;
-  }
-}
-
-// ======= Loop =======
-function tick() {
-  pollUISelection();
-
-  // Clear
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // Terrain & Grid
-  drawTerrain();
-  drawGrid();
-
-  // Buildings & Ghost
-  drawBuildings();
-  drawGhost();
-
-  requestAnimationFrame(tick);
-}
-
-// ======= Start =======
-function boot() {
-  hookInputs();
-  centerOn(0, 0);
-
-  // Optional: Start-HQ in Mitte setzen
-  const startX = snap(-TILE/2);
-  const startY = snap(-TILE/2);
-  state.buildings.push({
-    id: "hq_start",
-    key: "hq",
-    x: startX,
-    y: startY,
-    img: getImage(BUILD_IMG.hq)
-  });
-
-  tick();
-}
-
-boot();
-// === Robust: Start-Queue & Engine-Wait (Append-Patch) ======================
 (function(){
-  const LOG = {
-    ok:(m)=> (window.CBLog?.ok ?? console.log)(m),
-    warn:(m)=> (window.CBLog?.warn ?? console.warn)(m),
-    err:(m)=> (window.CBLog?.err ?? console.error)(m),
+  const UI_VERSION = 'v16.1.19';
+
+  // ---------- kleine Log-Helfer ----------
+  const log = {
+    ok:   (m)=> window.CBLog?.ok ? window.CBLog.ok(m)   : console.log(`OK ${m}`),
+    warn: (m)=> window.CBLog?.warn? window.CBLog.warn(m): console.warn(`WARN ${m}`),
+    err:  (m)=> window.CBLog?.err ? window.CBLog.err(m)  : console.error(`ERR ${m}`),
+    push: (lvl,m)=> window.CBLog?.push ? window.CBLog.push(lvl,m): console.log(`${lvl||'LOG'} ${m}`)
   };
 
-  let pendingMapUrl = null;
-  let trying = false;
+  // ---------- DOM-Griffe (IDs aus deinem Start-Panel) ----------
+  const $ = (sel)=> document.querySelector(sel);
+  const panel     = $('#start-panel');
+  const btnStart  = panel?.querySelector('button[data-action="start"]')    || panel?.querySelector('#btn-start');
+  const btnReset  = panel?.querySelector('button[data-action="reset"]')    || panel?.querySelector('#btn-reset');
+  const btnCopy   = panel?.querySelector('button[data-action="copy-log"]') || panel?.querySelector('#btn-copy-log');
+  const btnCache  = panel?.querySelector('button[data-action="cache"]')    || panel?.querySelector('#btn-cache');
+  const selMap    = panel?.querySelector('select[name="map"]')             || panel?.querySelector('#map-select');
 
-  async function tryStartNow(){
-    if(trying || !pendingMapUrl) return;
-    const GL = window.GameLoader;
-    if(!GL || !(GL._start instanceof Function)){
-      LOG.warn('Engine noch nicht bereit – warte auf GameLoader.start …');
-      return;
-    }
-    trying = true;
-    try{
-      await GL._start(pendingMapUrl);
-      LOG.ok('Game gestartet');
-      pendingMapUrl = null;
-    }catch(e){
-      LOG.err('Start fehlgeschlagen: '+e.message);
-    }finally{
-      trying = false;
-    }
-  }
+  // Fallback: falls keine Select-Box existiert, nutzen wir Standard-Pfade
+  const DEFAULT_MAPS = [
+    './assets/maps/map-mini.json',
+    './assets/maps/map-pro.json',
+    './assets/maps/map-test-all.json',
+    './assets/maps/map-demo.json'
+  ];
 
-  // UI-Hook: rufe das hier auf, wenn "Start" gedrückt wurde:
-  window.__queueGameStart = function(mapUrl){
-    pendingMapUrl = mapUrl;
-    LOG.ok(`Start gedrückt → ${mapUrl}`);
-    tryStartNow();
-  };
-
-  // Falls deine Start-Schaltfläche bereits existiert: Hier ein universeller Hook:
-  const btn = document.querySelector('#start-panel button[data-action="start"]');
-  const select = document.querySelector('#start-panel select[name="map"]');
-  if(btn && select){
-    btn.addEventListener('click', ()=>{
-      const url = (select.value || '').trim();
-      if(url) window.__queueGameStart(url);
+  // ---------- Inspector öffnen/schließen ----------
+  const btnInspector = $('#btn-inspector');
+  if (btnInspector) {
+    btnInspector.addEventListener('click', ()=>{
+      // dein Inspector sollte global verfügbar sein:
+      if (window.GameInspector?.toggle) {
+        window.GameInspector.toggle(true);
+      } else if (window.Inspector?.open) {
+        window.Inspector.open();
+      } else {
+        // absoluter Fallback: einfache Overlay-Konsole
+        fallbackInspector();
+      }
     });
   }
 
-  // Reagieren, wenn Engine ready wird
-  window.addEventListener('cb:engine-ready', tryStartNow);
+  // ---------- Bau-Menü öffnen ----------
+  const btnBuild = $('#btn-build');
+  function showBuildButton(){
+    if (!btnBuild) return;
+    btnBuild.classList.add('visible');
+  }
+  if (btnBuild) {
+    btnBuild.addEventListener('click', ()=>{
+      // bevorzugte API-Reihenfolge (was immer verfügbar ist)
+      if (window.GameUI?.openBuildMenu)      return void window.GameUI.openBuildMenu();
+      if (window.UIBuild?.open)              return void window.UIBuild.open();
+      if (window.UIBuild?.toggle)            return void window.UIBuild.toggle(true);
+      log.warn('Bau-Menü API nicht gefunden – erwarte globale Variable z.B. window.UIBuild oder window.GameUI.');
+    });
+  }
 
-  // Poll als letzte Rückfallebene (1x/Sekunde kurz)
-  let pollCount=0;
-  const poll = setInterval(()=>{
-    if(!pendingMapUrl) { clearInterval(poll); return; }
-    pollCount++;
-    tryStartNow();
-    if(pollCount>10) clearInterval(poll);
-  }, 1000);
+  // ---------- Events aus game.js anhören ----------
+  window.addEventListener('cb:engine-ready', (e)=>{
+    log.ok(`Engine bereit (game.js meldet ${e?.detail?.v||'unbekannt'})`);
+  });
+
+  window.addEventListener('cb:game-started', ()=>{
+    log.ok('Event: cb:game-started empfangen');
+    // Start-Panel schließen (wenn dein HTML dafür eine Klasse/Style nutzt)
+    try { panel?.classList.add('hidden'); panel?.style?.setProperty('display','none'); } catch(_) {}
+    // Bau-Menü-Button aktivieren
+    showBuildButton();
+    // optionaler Hook für deine UI
+    try{ window.GameUI?.onGameStarted?.(); }catch(_){}
+  });
+
+  // ---------- Start-Button Logik ----------
+  async function onStart(){
+    const mapUrl = getSelectedMap();
+    log.ok(`Start gedrückt → ${mapUrl}`);
+
+    try {
+      await startGameWithRetry(mapUrl, 1200, 12); // ~12 s Gesamttimeout
+    } catch (e) {
+      log.err(e.message || String(e));
+    }
+  }
+
+  function getSelectedMap(){
+    if (selMap && selMap.value) return selMap.value;
+    // Fallback auf erste Default-Map
+    return DEFAULT_MAPS[0];
+  }
+
+  // robust auf GameLoader warten und starten
+  async function startGameWithRetry(mapUrl, delayMs=800, maxTries=10){
+    // Engine vorbereiten lassen – manche game.js initialisieren asynchron
+    for (let i=0;i<maxTries;i++){
+      const GL = window.GameLoader || {};
+      const startFn = GL.start || GL._start;
+      if (typeof startFn === 'function'){
+        await startFn(mapUrl);
+        return;
+      }
+      if (i===0) log.warn('Engine noch nicht bereit – warte auf GameLoader.start …');
+      await sleep(delayMs);
+    }
+    throw new Error('GameLoader.start ist nicht verfügbar – game.js / Engine noch nicht initialisiert?');
+  }
+
+  const sleep = (ms)=> new Promise(r=>setTimeout(r,ms));
+
+  // ---------- Neu-Start & Cache ----------
+  function onReset(){
+    log.ok('Neu-Start angefordert');
+    try {
+      // Speicher/Caches die dein Spiel nutzt, gezielt löschen
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch(_){}
+    location.reload();
+  }
+
+  async function onCacheBoost(){
+    try{
+      // ServiceWorker cache löschen, falls vorhanden
+      if ('caches' in window){
+        const names = await caches.keys();
+        await Promise.all(names.map(n=>caches.delete(n)));
+      }
+      localStorage.clear(); sessionStorage.clear();
+      log.ok('Cache/Storage geleert – Seite ggf. neu laden');
+    }catch(e){
+      log.warn('Cache-Booster Problem: '+e.message);
+    }
+  }
+
+  async function onCopyLog(){
+    try{
+      const text = window.CBLog?.toText ? window.CBLog.toText() : collectConsoleFallback();
+      await navigator.clipboard.writeText(text);
+      log.ok('Log in Zwischenablage');
+    }catch(e){
+      log.warn('Kopieren fehlgeschlagen: '+e.message);
+    }
+  }
+  function collectConsoleFallback(){
+    // Minimaler Fallback – hier nur Hinweis
+    return `[${new Date().toLocaleTimeString()}] LOG-Fallback – nutze bitte den Inspector-Log.`;
+    // (Wenn du mein CBLog nutzt, kommt hier nie an.)
+  }
+
+  // ---------- Event-Handler verbinden (IDs aus deinem Start-Panel) ----------
+  btnStart && btnStart.addEventListener('click', onStart);
+  btnReset && btnReset.addEventListener('click', onReset);
+  btnCache && btnCache.addEventListener('click', onCacheBoost);
+  btnCopy  && btnCopy .addEventListener('click', onCopyLog);
+
+  // ---------- Inspector-Fallback (nur falls dein Inspector noch nicht eingebunden ist) ----------
+  function fallbackInspector(){
+    // Einfaches, abklickbares Overlay mit Log-Ausgabe
+    const old = document.getElementById('cb-fallback-inspector');
+    if (old) return; // einmal reicht
+    const box = document.createElement('div');
+    box.id = 'cb-fallback-inspector';
+    box.style.cssText = `
+      position:fixed; inset:0; background:rgba(0,0,0,.88); color:#cfe6d8; z-index:9500;
+      padding:12px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; overflow:auto;
+    `;
+    box.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;position:sticky;top:0;background:rgba(20,20,20,.8);padding:8px;border-radius:10px;">
+        <strong>Inspector (Fallback)</strong>
+        <button id="cb-fb-copy" style="margin-left:auto">Log kopieren</button>
+        <button id="cb-fb-clear">Log leeren</button>
+        <button id="cb-fb-close">Schließen</button>
+      </div>
+      <pre id="cb-fb-log" style="margin-top:10px;white-space:pre-wrap;"></pre>
+    `;
+    document.body.appendChild(box);
+
+    const pre = box.querySelector('#cb-fb-log');
+    const push = (t)=>{ pre.textContent += t + '\n'; };
+    push(time()+' ✅ UI bereit (index '+UI_VERSION+')');
+
+    document.getElementById('cb-fb-close').onclick = ()=> box.remove();
+    document.getElementById('cb-fb-clear').onclick = ()=> pre.textContent='';
+    document.getElementById('cb-fb-copy').onclick  = async ()=>{
+      await navigator.clipboard.writeText(pre.textContent||'');
+      alert('Log kopiert');
+    };
+
+    // minimal CBLog durchreichen
+    window.CBLog = window.CBLog || {
+      ok: (m)=> push(time()+` ✅ ${m}`),
+      warn:(m)=> push(time()+` ⚠️ ${m}`),
+      err: (m)=> push(time()+` ❌ ${m}`),
+      push:(_,m)=> push(time()+` LOG ${m}`),
+      toText: ()=> pre.textContent||''
+    };
+  }
+
+  function time(){
+    const d=new Date();
+    return `[${d.toTimeString().slice(0,8)}]`;
+  }
+
+  // ---------- Initiale Meldung ----------
+  log.ok(`UI bereit (index ${UI_VERSION})`);
 })();
