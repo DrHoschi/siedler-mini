@@ -51,7 +51,29 @@
     #cbfi-log{ padding:12px; white-space:pre-wrap; overflow:auto; height:calc(100vh - 58px); }
   </style>
 </head>
+<!-- === Diagnose / Loader-Guard (nur hinzufügen) === -->
+<script>
+(function(){
+  const v = 'v16.1.18-index-guard';
+  // 1) Fehler ins Log spiegeln
+  window.addEventListener('error', (e)=>{
+    (window.CBLog?.err ?? console.error)(`[index-guard] Scriptfehler: ${e.message} @ ${e.filename}:${e.lineno}`);
+  });
 
+  // 2) Lade-Reihenfolge prüfen
+  const haveGL = !!(window.GameLoader && (window.GameLoader._start instanceof Function));
+  if(!haveGL){
+    (window.CBLog?.warn ?? console.warn)('[index-guard] GameLoader._start fehlt – überprüfe Script-Reihenfolge/URL: ./game.js muss VOR main.js kommen.');
+  }else{
+    (window.CBLog?.ok ?? console.log)('[index-guard] GameLoader verfügbar.');
+  }
+
+  // 3) Index-Version melden
+  window.__cb = window.__cb || {};
+  window.__cb.indexVersion = (window.__cb.indexVersion || 'v?') + ' +guard';
+  (window.CBLog?.ok ?? console.log)(`UI bereit (index ${window.__cb.indexVersion})`);
+})();
+</script>
 <body>
   <!-- ===== Start-Panel (DEINS) =====
        Layout bitte so lassen; IDs für JS wichtig.
