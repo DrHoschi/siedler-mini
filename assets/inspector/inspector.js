@@ -1,226 +1,115 @@
-/* assets/inspector/inspector.js
- * v16.1.11
- *
- * Zweck
- *  - Immer sichtbar: runder Inspector-Button rechts-unten (Werkzeug-Icon).
- *  - Inspector als Overlay (vollflächig), öffnet/schließt per Button oder API.
- *  - Keine Änderungen am Startfenster/Design nötig.
- *
- * API (global):
- *  - window.GameInspector.mount(opts?)
- *  - window.GameInspector.open()
- *  - window.GameInspector.close()
- *  - window.GameInspector.toggle()
- *  - window.__CB_LOG__(line) -> hängt eine Logzeile unten an
- */
+// assets/inspector/inspector.js
+// v16.1.12
+// ---------------------------------------------
+// Kompakter Inspector für Tests/Debug:
+// - Vollbild-Overlay mit Log-Ausgabe (puffert, live)
+// - Log leeren / Log kopieren
+// - Schließen-Button
+// - Öffnen/Schließen via window.GameInspector.toggle()
+// - Zeichnet ALLE Logs, weil die Konsole global in index.html abgezapft wird.
+// ---------------------------------------------
 
-(function () {
-  const NS = 'cb-inspector';
-  const VERSION = (typeof document !== 'undefined' && (document.currentScript?.src.split('v=')[1])) || '16.1.11';
+(function(){
+  const VERSION = 'v16.1.12';
 
-  // -------- DOM Helpers ------------------------------------------------------
-  const el = (tag, cls, txt) => {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (txt != null) n.textContent = txt;
-    return n;
-  };
+  // Warte bis DOM vorhanden ist (Skript ist "defer", sollte also safe sein)
+  const root = document.getElementById('inspectorRoot');
+  if (!root) { console.error('[inspector] Root-Element #inspectorRoot fehlt.'); return; }
 
-  const css = `
-/* === Inspector (v${VERSION}) ============================================ */
-.${NS}-fab {
-  position: fixed;
-  right: 16px; bottom: 16px;
-  width: 56px; height: 56px;
-  border-radius: 999px;
-  background: rgba(30,30,30,.9);
-  border: 1px solid rgba(255,255,255,.15);
-  backdrop-filter: blur(6px);
-  display: grid; place-items: center;
-  color: #fff; font-size: 26px; line-height: 1;
-  cursor: pointer; z-index: 999999;
-  box-shadow: 0 6px 18px rgba(0,0,0,.35);
-  user-select: none;
-}
-.${NS}-fab:hover { transform: translateY(-1px); }
-
-.${NS}-panel {
-  position: fixed; inset: 0;
-  background: rgba(10,14,16,.88);
-  color: #d7ece0;
-  z-index: 999998;
-  display: none; /* via JS: block */
-}
-
-.${NS}-wrap {
-  box-sizing: border-box;
-  max-width: 1100px;
-  margin: 24px auto;
-  padding: 16px;
-}
-
-.${NS}-card {
-  background: rgba(22, 28, 30, .75);
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 14px;
-  padding: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.35);
-}
-
-.${NS}-row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-.${NS}-spacer { flex: 1; }
-
-.${NS}-btn {
-  appearance: none;
-  border: 0; border-radius: 10px;
-  padding: 10px 14px;
-  background: #2f6f5b;
-  color: #fff; font-weight: 600;
-  cursor: pointer;
-}
-.${NS}-btn.secondary { background:#3a4247; }
-.${NS}-btn.warn { background:#8a3d2f; }
-
-.${NS}-badge {
-  display:inline-block; padding:4px 8px; border-radius: 999px;
-  font-size: 12px; font-weight: 700;
-  color:#0c1a16; background:#74d3b2;
-}
-
-.${NS}-log {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 12px; line-height: 1.4;
-  white-space: pre-wrap;
-  background: rgba(0,0,0,.45);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 10px;
-  padding: 10px;
-  max-height: 45vh; overflow: auto;
-  color: #dfe;
-}
+  // Grundaufbau
+  root.innerHTML = `
+    <div id="inspBackdrop" style="
+      position:fixed;inset:0;background:rgba(6,12,10,.65);backdrop-filter: blur(4px);
+      display:flex;align-items:flex-start;justify-content:center;padding:24px;">
+      <div id="inspPanel" role="dialog" aria-label="Inspector" style="
+        width:min(1100px,95vw);height:min(88vh,900px);
+        background:#0b1110;border:1px solid #20352d;border-radius:14px;
+        box-shadow:0 14px 46px rgba(0,0,0,.5); color:#d7efe6; display:flex; flex-direction:column;">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #183129;background:#0f1715;border-radius:14px 14px 0 0">
+          <strong style="font-size:18px">Inspector / Test-Cockpit</strong>
+          <span style="margin-left:auto;background:#1b2a25;color:#aee4cf;border-radius:999px;padding:4px 9px;font-size:12px">${VERSION}</span>
+          <button id="inspBtnCopy"   style="margin-left:12px;border:0;border-radius:10px;padding:8px 10px;background:#152325;color:#d7efe6;cursor:pointer">Log kopieren</button>
+          <button id="inspBtnClear"  style="border:0;border-radius:10px;padding:8px 10px;background:#14201e;color:#c2ded5;cursor:pointer">Log leeren</button>
+          <button id="inspBtnClose"  style="border:0;border-radius:10px;padding:8px 12px;background:#803b3b;color:#fff;cursor:pointer">Schließen</button>
+        </div>
+        <div id="inspLog" style="
+          font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+          white-space:pre; overflow:auto; flex:1; padding:12px 14px; background:#050a09;">
+        </div>
+      </div>
+    </div>
   `;
 
-  // -------- State ------------------------------------------------------------
-  let mounted = false;
-  let panel, logBox, fab;
+  const inspLog = root.querySelector('#inspLog');
 
-  function ensureStyle() {
-    if (document.getElementById(`${NS}-style`)) return;
-    const s = el('style');
-    s.id = `${NS}-style`;
-    s.textContent = css;
-    document.head.appendChild(s);
+  function fmtLine(line){
+    const hh = String(line.t.getHours()).padStart(2,'0');
+    const mm = String(line.t.getMinutes()).padStart(2,'0');
+    const ss = String(line.t.getSeconds()).padStart(2,'0');
+    const prefix =
+      line.level==='ok'   ? '✅ (ok) '  :
+      line.level==='warn' ? '⚠️ (warn) ':
+      line.level==='err'  ? '❌ (err) ' : '';
+    return `[${hh}:${mm}:${ss}] ${prefix}${line.msg}`;
   }
 
-  function createFab() {
-    if (fab && document.body.contains(fab)) return fab;
-    fab = el('button', `${NS}-fab`, '🛠️'); // Werkzeug-Icon
-    fab.title = 'Inspector öffnen (🛠️)';
-    fab.addEventListener('click', toggle);
-    document.body.appendChild(fab);
-    return fab;
+  function renderFull(){
+    // komplette Neuzeichnung – robust, falls mal Events „verpasst“ wurden
+    const buf = (window.CBLog && window.CBLog.buffer) ? window.CBLog.buffer : [];
+    inspLog.textContent = buf.map(fmtLine).join('\n');
+    // Scroll ans Ende
+    inspLog.scrollTop = inspLog.scrollHeight;
   }
 
-  function createPanel() {
-    if (panel && document.body.contains(panel)) return panel;
-
-    panel = el('div', `${NS}-panel`);
-    const wrap = el('div', `${NS}-wrap`);
-    const card = el('div', `${NS}-card`);
-
-    const header = el('div', `${NS}-row`);
-    header.append(
-      el('div', '', 'Inspector / Test-Cockpit'),
-      el('span', `${NS}-badge`, `v${VERSION}`),
-      el('div', `${NS}-spacer`)
-    );
-
-    const ctrlRow = el('div', `${NS}-row`);
-    const btnClear = el('button', `${NS}-btn secondary`, 'Log leeren');
-    btnClear.addEventListener('click', () => { logBox.textContent = ''; });
-
-    const btnCopy = el('button', `${NS}-btn secondary`, 'Log kopieren');
-    btnCopy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(logBox.textContent || '');
-        appendLog('✅ (ok) Log in Zwischenablage');
-      } catch {
-        appendLog('❌ (err) Konnte Log nicht kopieren (Clipboard fehlgeschlagen).');
-      }
-    });
-
-    const btnClose = el('button', `${NS}-btn warn`, 'Schließen');
-    btnClose.addEventListener('click', close);
-
-    ctrlRow.append(btnClear, btnCopy, el('div', `${NS}-spacer`), btnClose);
-
-    logBox = el('div', `${NS}-log`);
-    logBox.textContent = `[${ts()}] ✅ (ok) Inspector bereit (inspector.js v${VERSION})\n`;
-
-    card.append(header, el('div','', ''), ctrlRow, el('div','', ''), logBox);
-    wrap.appendChild(card);
-    panel.appendChild(wrap);
-    panel.addEventListener('click', (e) => {
-      // Klick neben Karte => schließen
-      if (e.target === panel) close();
-    });
-    document.body.appendChild(panel);
-    return panel;
+  function appendLine(line){
+    if (!line) return renderFull();
+    inspLog.textContent += (inspLog.textContent ? '\n' : '') + fmtLine(line);
+    inspLog.scrollTop = inspLog.scrollHeight;
   }
 
-  function ts() {
-    const d = new Date();
-    const hh = String(d.getHours()).padStart(2,'0');
-    const mm = String(d.getMinutes()).padStart(2,'0');
-    const ss = String(d.getSeconds()).padStart(2,'0');
-    return `${hh}:${mm}:${ss}`;
-  }
-
-  function appendLog(line) {
-    if (!logBox) return;
-    const prefixed = line.startsWith('[') ? line : `[${ts()}] ${line}`;
-    logBox.textContent += (logBox.textContent ? '\n' : '') + prefixed;
-    logBox.scrollTop = logBox.scrollHeight;
-  }
-
-  // Öffnen/Schließen/Toggle ---------------------------------------------------
-  function open() {
-    createPanel().style.display = 'block';
-  }
-  function close() {
-    if (panel) panel.style.display = 'none';
-  }
-  function toggle() {
-    if (!panel || panel.style.display === 'none') open();
-    else close();
-  }
-
-  // Public API ----------------------------------------------------------------
-  const API = {
-    mount(opts = {}) {
-      if (mounted) return;
-      mounted = true;
-      ensureStyle();
-      createPanel();
-      createFab();
-
-      // kleine Statusmeldung ins Log:
-      appendLog(`✅ (ok) UI bereit (index v${opts.version || 'unbekannt'})`);
-
-      // externe Logs erlauben:
-      window.__CB_LOG__ = (msg) => appendLog(String(msg || ''));
-    },
-    open, close, toggle,
-    version: VERSION
-  };
-
-  // an Fenster hängen
-  window.GameInspector = API;
-
-  // Auto-Mount als Fallback (falls index onload nicht feuert)
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    try { API.mount(); } catch(e){}
+  // Erstbefüllung + Live-Updates
+  renderFull();
+  if (window.CBLog && typeof window.CBLog.on === 'function') {
+    window.CBLog.on(appendLine);
   } else {
-    document.addEventListener('DOMContentLoaded', () => { try { API.mount(); } catch(e){} });
+    // Falls CBLog noch nicht existiert, poll kurz – danach ist renderFull() dran.
+    let tries = 0;
+    const iv = setInterval(()=>{
+      if (window.CBLog && window.CBLog.on){ clearInterval(iv); renderFull(); window.CBLog.on(appendLine); }
+      else if (++tries > 50) { clearInterval(iv); }
+    }, 120);
   }
+
+  // Aktionen
+  root.querySelector('#inspBtnClose').addEventListener('click', ()=> GameInspector.close());
+  root.querySelector('#inspBtnCopy').addEventListener('click', async ()=>{
+    try{
+      const txt = window.CBLog ? window.CBLog.exportText() : inspLog.textContent;
+      await navigator.clipboard.writeText(txt);
+      if (window.CBLog) window.CBLog.push('ok','Log in Zwischenablage');
+    }catch(e){
+      if (window.CBLog) window.CBLog.push('err','Log kopieren fehlgeschlagen: '+e.message);
+    }
+  });
+  root.querySelector('#inspBtnClear').addEventListener('click', ()=>{
+    if (window.CBLog) window.CBLog.clear();
+    inspLog.textContent = '';
+    if (window.CBLog) window.CBLog.push('ok','Log geleert');
+  });
+
+  // API
+  const GameInspector = (window.GameInspector = {
+    open(){ root.classList.add('show'); root.setAttribute('aria-hidden','false'); renderFull(); },
+    close(){ root.classList.remove('show'); root.setAttribute('aria-hidden','true'); },
+    toggle(){ root.classList.contains('show') ? this.close() : this.open(); }
+  });
+
+  // Badge im Log
+  if (window.CBLog) window.CBLog.push('ok', `Inspector bereit (inspector.js ${VERSION})`);
+
+  // Optional: Inspector direkt öffnen, wenn URL ?inspector=1 enthält
+  try {
+    const usp = new URLSearchParams(location.search);
+    if (usp.get('inspector') === '1') GameInspector.open();
+  } catch(_) { /* ignore */ }
 })();
