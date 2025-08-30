@@ -1,170 +1,206 @@
-/*
-============================================================
-Datei: ui-start.js
+/* ===========================================================
+Datei: assets/ui/ui-start.js
 Projekt: Siedler-Mini
 Version: 16.1.19
-Zweck: Startfenster (Logik), nutzt Styles aus ui-start.css
-============================================================
-*/
+Zweck : Startfenster (Logik) – Styles liegen in ui-start.css
+Hinweis: ES5-kompatibel (keine modernen Syntaxfeatures)
+=========================================================== */
+(function () {
+  'use strict';
 
-/* 1) Imports */
-// keine externen Importe
+  // --- Meta / Utilities ---
+  var UI_START_VERSION = "16.1.19";
+  var START_BG_ID = "cb-start-bg";
+  var START_BG_URL = "./assets/ui/start-bg.jpeg";
 
-/* 2) Konstanten / Meta */
-const UI_START_VERSION = "16.1.19";
-const START_BG_ID = "cb-start-bg";
-const START_BG_URL = "./assets/ui/start-bg.jpeg";
+  function oneV(v) {
+    if (!v && v !== 0) return "?";
+    v = String(v).replace(/^v+/, "");
+    return "v" + v;
+  }
 
-/* 3) Hilfsfunktionen */
-const oneV = v => (v ? `v${String(v).replace(/^v+/, "")}` : "?");
+  function el(tag, attrs) {
+    var n = document.createElement(tag);
+    attrs = attrs || {};
+    for (var k in attrs) if (attrs.hasOwnProperty(k)) {
+      var v = attrs[k];
+      if (k === "class") n.className = v;
+      else if (k.indexOf("on") === 0 && typeof v === "function") n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v);
+    }
+    for (var i = 2; i < arguments.length; i++) {
+      var child = arguments[i];
+      if (child == null) continue;
+      if (Array.isArray(child)) for (var j = 0; j < child.length; j++) n.appendChild(child[j]);
+      else if (child.nodeType) n.appendChild(child);
+      else n.appendChild(document.createTextNode(String(child)));
+    }
+    return n;
+  }
 
-function el(tag, attrs = {}, ...children) {
-  const n = document.createElement(tag);
-  Object.entries(attrs).forEach(([k, v]) => {
-    if (k === "class") n.className = v;
-    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
-    else n.setAttribute(k, v);
-  });
-  children.flat().forEach(c => n.append(c));
-  return n;
-}
+  function btn(label, attrs) {
+    return el("button", merge({ "class": "cb-btn" }, attrs || {}), label);
+  }
 
-function btn(label, attrs = {}) {
-  return el("button", { class: "cb-btn", ...attrs }, label);
-}
+  function merge(a, b) {
+    var o = {};
+    for (var k in a) if (a.hasOwnProperty(k)) o[k] = a[k];
+    for (var k2 in b) if (b.hasOwnProperty(k2)) o[k2] = b[k2];
+    return o;
+  }
 
-/* 4) Hauptlogik */
-(function initUIStart() {
-  (window.CBLog?.ok || console.log)(`[ui-start] Modul geladen (${oneV(UI_START_VERSION)})`);
-  window.GameUI = window.GameUI || {};
+  function logOk(msg){ (window.CBLog && window.CBLog.ok ? window.CBLog.ok : console.log)(msg); }
+  function logWarn(msg){ (window.CBLog && window.CBLog.warn ? window.CBLog.warn : console.warn)(msg); }
 
-  // Hintergrundebene (falls CSS nicht greift, setzen wir fallback-style)
+  // --- Hintergrund-Ebene ---
   function ensureBg() {
-    let bg = document.getElementById(START_BG_ID);
+    var bg = document.getElementById(START_BG_ID);
     if (!bg) {
       bg = document.createElement("div");
       bg.id = START_BG_ID;
-      bg.style.background = `url('${START_BG_URL}') center/cover no-repeat, #093c2f`;
-      document.body.append(bg);
+      // Fallback-Style (eigentlich macht ui-start.css das Styling)
+      bg.style.position = "fixed";
+      bg.style.left = "0"; bg.style.top = "0"; bg.style.right = "0"; bg.style.bottom = "0";
+      bg.style.background = "url('" + START_BG_URL + "') center/cover no-repeat, #093c2f";
+      bg.style.zIndex = "900";
       bg.style.opacity = "1";
+      document.body.appendChild(bg);
     }
   }
   function removeBg() {
-    const bg = document.getElementById(START_BG_ID);
-    if (bg) bg.remove();
+    var bg = document.getElementById(START_BG_ID);
+    if (bg) bg.parentNode.removeChild(bg);
   }
 
-  // Start-Panel öffnen
-  window.GameUI.openStartPanel = function(opts = {}) {
+  // --- API / GameUI ---
+  if (!window.GameUI) window.GameUI = {};
+
+  window.GameUI.openStartPanel = function (opts) {
+    opts = opts || {};
     ensureBg();
 
-    const maps = Array.isArray(opts.maps) && opts.maps.length ? opts.maps : [
+    var maps = (opts.maps && opts.maps.length) ? opts.maps : [
       { label: "map-mini.json (16×)", url: "./assets/maps/map-mini.json" }
     ];
 
-    const host = document.getElementById("start-panel");
-    if (!host) {
-      (window.CBLog?.warn || console.warn)("[ui-start] #start-panel fehlt.");
-      return;
-    }
+    var host = document.getElementById("start-panel");
+    if (!host) { logWarn("[ui-start] #start-panel fehlt."); return; }
 
-    host.style.display = "flex"; // wichtig, falls index.html noch "display:none" hatte
+    // Sichtbar machen (falls inline display:none gesetzt war)
+    host.style.display = "flex";
     host.innerHTML = "";
 
+    var idxV = oneV((window.__cb && window.__cb.indexVersion) || UI_START_VERSION);
+    var gameV = (window.__cb && window.__cb.gameVersion) ? (" · game " + oneV(window.__cb.gameVersion)) : "";
+    var dpr = Math.round((window.devicePixelRatio || 1));
+
     // Header
-    const idxV = oneV(window.__cb?.indexVersion || UI_START_VERSION);
-    const gameV = window.__cb?.gameVersion ? ` · game ${oneV(window.__cb.gameVersion)}` : "";
-    const header = el("div", { class: "cb-start-header" },
+    var header = el("div", { "class": "cb-start-header" },
       el("h1", {}, "City-Builder – Start"),
-      el("small", {}, `index ${idxV}${gameV} · dpr: ${Math.round(window.devicePixelRatio || 1)}`)
+      el("small", {}, "index " + idxV + gameV + " · dpr: " + dpr)
     );
 
-    // Karte Auswahl
-    const select = el("select", { id: "cb-start-map" },
-      maps.map(m => {
-        const o = document.createElement("option");
-        o.value = m.url; o.textContent = m.label || m.url;
-        return o;
-      })
-    );
-    const last = localStorage.getItem("cb:lastMap"); if (last) select.value = last;
-    const label = el("label", { for: "cb-start-map" }, "Karte:");
+    // Map-Auswahl
+    var select = el("select", { id: "cb-start-map" });
+    for (var i = 0; i < maps.length; i++) {
+      var m = maps[i];
+      var o = document.createElement("option");
+      o.value = m.url;
+      o.textContent = m.label || m.url;
+      select.appendChild(o);
+    }
+    var last = null;
+    try { last = localStorage.getItem("cb:lastMap"); } catch (e) {}
+    if (last) select.value = last;
 
-    // Hauptbuttons
-    const rowMain = el("div", { class: "cb-start-row" },
-      btn("▶︎ Start", {
-        onclick: () => {
-          const mapUrl = select.value;
-          localStorage.setItem("cb:lastMap", mapUrl);
-          window.__cb = window.__cb || {}; window.__cb.selectedMap = mapUrl;
-          window.dispatchEvent(new CustomEvent("cb:game-start", { detail: { map: mapUrl } }));
-          if (window.GameBoot?.start) window.GameBoot.start(mapUrl);
-          else if (window.startGame) window.startGame(mapUrl);
-          else (window.CBLog?.warn || console.warn)("[ui-start] Kein GameBoot.start()/startGame() gefunden.");
-        }
-      }),
-      btn("⟳ Neu-Start", { onclick: () => location.reload() })
-    );
+    var label = el("label", { "for": "cb-start-map" }, "Karte:");
 
-    // Tools
-    const rowTools = el("div", { class: "cb-start-row" },
-      btn("🧹 Cache-Booster", {
-        onclick: () => {
-          try {
-            const u = new URL(location.href);
-            u.searchParams.set("v", Date.now().toString());
-            location.href = u.toString();
-          } catch (e) {
-            location.reload();
+    // Buttons
+    var startBtn = btn("▶︎ Start", {
+      onclick: function () {
+        var mapUrl = select.value;
+        try { localStorage.setItem("cb:lastMap", mapUrl); } catch (e) {}
+        if (!window.__cb) window.__cb = {};
+        window.__cb.selectedMap = mapUrl;
+        // Event für ggf. andere Module
+        try { window.dispatchEvent(new CustomEvent("cb:game-start", { detail: { map: mapUrl } })); } catch(e){}
+        if (window.GameBoot && typeof window.GameBoot.start === "function") window.GameBoot.start(mapUrl);
+        else if (typeof window.startGame === "function") window.startGame(mapUrl);
+        else logWarn("[ui-start] Kein GameBoot.start()/startGame() gefunden.");
+      }
+    });
+
+    var resetBtn = btn("⟳ Neu-Start", { onclick: function(){ location.reload(); } });
+
+    var cacheBtn = btn("🧹 Cache-Booster", {
+      onclick: function () {
+        try {
+          var u = new URL(location.href);
+          u.searchParams.set("v", Date.now().toString());
+          location.href = u.toString();
+        } catch (e) { location.reload(); }
+      }
+    });
+
+    var copyBtn = btn("📋 Log kopieren", {
+      onclick: function () {
+        try {
+          var txt = (window.CBLog && window.CBLog.dump ? window.CBLog.dump() : null);
+          if (!txt) {
+            var buf = (window.__cbLogBuffer || []);
+            txt = buf.length ? buf.join("\n") : "Kein Log vorhanden.";
           }
-        }
-      }),
-      btn("📋 Log kopieren", {
-        onclick: () => {
-          try {
-            const txt = (window.CBLog?.dump && window.CBLog.dump()) ||
-              (window.__cbLogBuffer || []).join("\n") || "Kein Log vorhanden.";
+          if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(txt);
-            (window.CBLog?.ok || console.log)("[ui-start] Log in Zwischenablage.");
-          } catch (e) {
-            (window.CBLog?.warn || console.warn)("[ui-start] Clipboard fehlgeschlagen.");
+            logOk("[ui-start] Log in Zwischenablage.");
+          } else {
+            // Fallback
+            var ta = document.createElement("textarea");
+            ta.value = txt;
+            document.body.appendChild(ta);
+            ta.select(); document.execCommand("copy");
+            document.body.removeChild(ta);
+            logOk("[ui-start] Log in Zwischenablage (fallback).");
           }
-        }
-      })
+        } catch (e) { logWarn("[ui-start] Clipboard fehlgeschlagen."); }
+      }
+    });
+
+    var rowMain  = el("div", { "class": "cb-start-row" }, startBtn, resetBtn);
+    var rowTools = el("div", { "class": "cb-start-row" }, cacheBtn, copyBtn);
+
+    var logline = el("pre", { id: "cb-start-log" },
+      "[" + new Date().toTimeString().slice(0, 8) + "] OK UI bereit (index " + idxV + ")"
     );
 
-    // Logzeile
-    const logline = el("pre", { id: "cb-start-log" },
-      `[${new Date().toTimeString().slice(0, 8)}] OK UI bereit (index ${idxV})`
-    );
+    var card = el("div", { "class": "cb-start-card" }, label, select, rowMain, rowTools, logline);
 
-    // Karte (Rahmen/Card)
-    const card = el("div", { class: "cb-start-card" }, label, select, rowMain, rowTools, logline);
+    host.appendChild(header);
+    host.appendChild(card);
 
-    // Alles ins Host-Panel
-    host.append(header, card);
+    logOk("[ui-start] Panel geöffnet (" + idxV + ")");
   };
 
-  // Auf Spielstart reagieren → Panel schließen + Hintergrund weg
-  window.GameUI.onGameStarted = function() {
-    const host = document.getElementById("start-panel");
+  window.GameUI.onGameStarted = function () {
+    var host = document.getElementById("start-panel");
     if (host) host.style.display = "none";
     removeBg();
   };
 
-  // Fallback: Auto-Open wenn index es nicht macht
-  window.addEventListener("cb:ui-ready", () => {
-    (window.CBLog?.ok || console.log)(`[ui-start] cb:ui-ready (${oneV(UI_START_VERSION)})`);
+  // Fallback: Auto-Open beim UI-Ready
+  window.addEventListener("cb:ui-ready", function () {
+    logOk("[ui-start] cb:ui-ready (" + oneV(UI_START_VERSION) + ")");
     try {
-      const host = document.getElementById("start-panel");
-      const isVisible = host && host.style.display !== "none" && host.childElementCount > 0;
+      var host = document.getElementById("start-panel");
+      var isVisible = !!(host && host.style.display !== "none" && host.childElementCount > 0);
       if (!isVisible) {
         window.GameUI.openStartPanel({
           maps: [{ label: "map-mini.json (16×)", url: "./assets/maps/map-mini.json" }]
         });
       }
-    } catch (e) {
-      (window.CBLog?.warn || console.warn)("[ui-start] Auto-Open fehlgeschlagen:", e);
-    }
+    } catch (e) { logWarn("[ui-start] Auto-Open fehlgeschlagen: " + (e && e.message ? e.message : e)); }
   });
+
+  // Modul-Load Log
+  logOk("[ui-start] Modul geladen (" + oneV(UI_START_VERSION) + ")");
 })();
