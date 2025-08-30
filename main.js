@@ -1,152 +1,100 @@
 // main.js – v16.1.19
-// Verdrahtet Start-Panel, Inspector-Button, Cache-Booster,
-// ruft GameLoader._start(mapUrl) auf und zeigt Status im Panel-Log.
+// ------------------------------------------------------------
+// - Start-Panel bedienbar halten
+// - GameLoader._start(mapUrl) aufrufen
+// - Log-Ausgaben an CBLog (falls vorhanden)
+// - auf 'cb:game-started' reagieren -> Build-Button einblenden
 
 (function(){
-  const logEl = document.getElementById('start-log');
+  const LOG = (t,m)=> (window.CBLog?.[t]||console.log)(m);
+
   const startPanel = document.getElementById('start-panel');
-  const mapSelect = document.getElementById('map-select');
-  const btnStart   = document.getElementById('btn-start');
-  const btnRestart = document.getElementById('btn-restart');
-  const btnCopyLog = document.getElementById('btn-log-copy');
-  const btnCache   = document.getElementById('btn-cache');
-  const btnInspector = document.getElementById('btn-inspector');
-  const btnBuild     = document.getElementById('btn-build');
+  const mapSelect  = startPanel?.querySelector('select, input[list]') || null;
+  const btnStart   = startPanel?.querySelector('[data-action="start"], .btn-start') || null;
+  const btnRestart = startPanel?.querySelector('[data-action="restart"], .btn-restart, .btn-reset') || null;
+  const btnCopyLog = startPanel?.querySelector('[data-action="copylog"], .btn-copylog') || null;
+  const btnCache   = startPanel?.querySelector('[data-action="cachebooster"], .btn-cache') || null;
 
-  // -------- kleines Log-Helferlein (spiegelt auch in Inspector) ----------
-  function panelLog(kind, txt){
-    const now = new Date().toTimeString().slice(0,8);
-    const line = `[${now}] ${kind.toUpperCase()} ${txt}\n`;
-    if (logEl) logEl.textContent += line;
+  // kleine Utils
+  function getMapUrl(){
+    // dein Select enthält z.B. "map-mini.json" – gleiche Logik wie bisher
+    let v = (mapSelect && (mapSelect.value || mapSelect.textContent || '')).trim();
+    if (!v) v = 'map-mini.json';
+    if (!v.endsWith('.json')) v += '.json';
+    if (!v.startsWith('./assets/maps/')) v = './assets/maps/' + v;
+    return v;
+  }
 
-    // Inspector-Hooks (falls vorhanden)
-    try{
-      if (window.CBLog) {
-        if (kind === 'ok')   window.CBLog.ok(txt);
-        else if (kind === 'warn') window.CBLog.warn(txt);
-        else if (kind === 'err')  window.CBLog.err(txt);
-        else window.CBLog.push('log', txt);
+  // Buttons verdrahten (einmalig)
+  if (btnStart && !btnStart.__wired){
+    btnStart.__wired = true;
+    btnStart.addEventListener('click', ()=>{
+      const url = getMapUrl();
+      LOG('ok', `Start gedrückt → ${url}`);
+      // Engine-Start
+      if (window.GameLoader?._start){
+        window.GameLoader._start(url).catch(e=>{
+          LOG('err', 'Start fehlgeschlagen: ' + (e?.message||e));
+        });
       } else {
-        console[kind==='err'?'error':kind==='warn'?'warn':'log'](txt);
+        LOG('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
+        // kleiner Retry nach kurzer Zeit (Safari-Cache helps)
+        setTimeout(()=>{
+          if (window.GameLoader?._start){
+            LOG('ok', 'Retry Start → ' + url);
+            window.GameLoader._start(url).catch(e=>LOG('err','Start fehlgeschlagen: '+(e?.message||e)));
+          }else{
+            LOG('err', 'GameLoader.start ist nicht verfügbar – game.js / Engine noch nicht initialisiert?');
+          }
+        }, 1200);
       }
-    }catch(_){}
+    }, { passive:true });
   }
 
-  // -------- Cache-Booster ----------
-  async function cacheBooster(){
-    try{
-      localStorage.clear();
-      sessionStorage.clear();
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-      panelLog('ok', 'Cache/Storage geleert – Seite ggf. neu laden');
-    }catch(e){
-      panelLog('warn', 'Cache-Booster: ' + e.message);
-    }
+  if (btnRestart && !btnRestart.__wired){
+    btnRestart.__wired = true;
+    btnRestart.addEventListener('click', ()=>{
+      LOG('ok', 'Neu-Start angefordert');
+      try{
+        localStorage.clear(); caches?.keys?.().then(keys=>keys.forEach(k=>caches.delete(k)));
+      }catch(_){}
+      location.reload();
+    }, { passive:true });
   }
 
-  // -------- Inspector-Button ----------
-  btnInspector?.addEventListener('click', ()=>{
-    try {
-      // Falls dein Inspector ein globales Toggle hat:
-      if (window.GameInspector?.toggle) {
-        window.GameInspector.toggle(true);
-      } else {
-        // Fallback: Minimal-Overlay anzeigen
-        alert('Inspector (Fallback) – kein GameInspector.toggle() gefunden.');
-      }
-    } catch(e) {
-      panelLog('warn', 'Inspector: ' + e.message);
-    }
-  });
-
-  // -------- Bau-Button (öffnet dein Build-UI) ----------
-  function setBuildButtonActive(active){
-    if (!btnBuild) return;
-    btnBuild.classList.toggle('visible', !!active);
-  }
-  btnBuild?.addEventListener('click', ()=>{
-    try{
-      // Erwartete globale Bridge aus ui-bridge.js:
-      window.GameUI?.openBuildMenu?.();
-      panelLog('ok', 'Bau-Menü geöffnet');
-    }catch(e){
-      panelLog('warn', 'Bau-Menü API nicht gefunden – erwarte window.GameUI.openBuildMenu()');
-    }
-  });
-
-  // -------- Start/Neu-Start ----------
-  async function startSelectedMap(){
-    const url = mapSelect?.value || './assets/maps/map-mini.json';
-    panelLog('ok', `Start gedrückt → ${url}`);
-
-    // Warten bis Engine fertig → GameLoader._start muss existieren
-    const T0 = performance.now();
-    while (!(window.GameLoader && typeof window.GameLoader._start === 'function')) {
-      if (performance.now() - T0 > 2500) { // 2.5s Timeout
-        panelLog('err', 'GameLoader.start ist nicht verfügbar – game.js / Engine noch nicht initialisiert?');
-        return;
-      }
-      panelLog('warn', 'Engine noch nicht bereit – warte auf GameLoader.start …');
-      await new Promise(r => setTimeout(r, 150));
-    }
-
-    try{
-      await window.GameLoader._start(url);
-      // Start-Panel ausblenden
-      startPanel?.setAttribute('hidden', 'hidden');
-      setBuildButtonActive(true);
-    }catch(e){
-      panelLog('err', 'Start fehlgeschlagen: ' + e.message);
-    }
+  if (btnCopyLog && !btnCopyLog.__wired){
+    btnCopyLog.__wired = true;
+    btnCopyLog.addEventListener('click', ()=>{
+      try{
+        const text = window.CBLog?.dump ? window.CBLog.dump() : (document.querySelector('#log')?.innerText||'');
+        navigator.clipboard.writeText(text||'').then(()=>LOG('ok','Log in Zwischenablage'));
+      }catch(e){ LOG('err','Konnte Log nicht kopieren: '+e.message); }
+    }, { passive:true });
   }
 
-  btnStart?.addEventListener('click', startSelectedMap);
-  btnRestart?.addEventListener('click', ()=> {
-    panelLog('ok', 'Neu-Start angefordert');
-    startSelectedMap();
-  });
+  if (btnCache && !btnCache.__wired){
+    btnCache.__wired = true;
+    btnCache.addEventListener('click', ()=>{
+      try{
+        localStorage.clear();
+        caches?.keys?.().then(keys=>keys.forEach(k=>caches.delete(k)));
+        LOG('ok', 'Cache/Storage geleert – Seite ggf. neu laden');
+      }catch(e){ LOG('warn','Cache-Booster Fehler: '+e.message); }
+    }, { passive:true });
+  }
 
-  btnCopyLog?.addEventListener('click', async ()=>{
-    try{
-      await navigator.clipboard.writeText(logEl?.textContent || '');
-      panelLog('ok', 'Log in Zwischenablage');
-    }catch(e){
-      panelLog('warn', 'Konnte Log nicht kopieren: ' + e.message);
-    }
-  });
+  // Game-Lifecycle: auf "game started" reagieren
+  function onGameStartedOnce(){
+    LOG('ok', 'Game gestartet');
+    try { window.GameUI?.onGameStarted?.(); } catch(_){}
+    // Startpanel kannst du hier automatisch ausblenden – falls das deine aktuelle Logik ist.
+    // (Lässt du das Panel sichtbar, bleibt das Layout 1:1 wie bei dir.)
+  }
+  window.addEventListener('cb:game-started', onGameStartedOnce, { once:true });
 
-  btnCache?.addEventListener('click', cacheBooster);
-
-  // -------- Events aus Engine/Index ----------
-  window.addEventListener('cb:ui-ready', (e)=>{
-    panelLog('ok', `UI bereit (index ${e.detail?.v || 'unbekannt'})`);
-    // index-Version in Meta bereits gesetzt; DPR aktualisiert der index.
-  });
-
-  window.addEventListener('cb:engine-ready', (e)=>{
-    const ver = e.detail?.v || 'unbekannt';
-    const metaGame = document.getElementById('meta-game');
-    if (metaGame) metaGame.textContent = 'game.js: ' + ver;
-    panelLog('ok', `game.js geladen, ${ver}`);
-  });
-
-  window.addEventListener('cb:game-started', ()=>{
-    panelLog('ok', 'Game gestartet');
-  });
-
-  // Beim ersten Laden schon mal die Index-Infos im Panel aktualisieren
-  try {
-    const metaIndex = document.getElementById('meta-index');
-    if (metaIndex && window.__cb?.indexVersion) {
-      metaIndex.textContent = 'index ' + window.__cb.indexVersion;
-    }
-    const metaDpr = document.getElementById('meta-dpr');
-    if (metaDpr) {
-      const dpr = Math.max(1, Math.round((window.devicePixelRatio||1)*100)/100);
-      metaDpr.textContent = 'dpr: ' + dpr;
-    }
-  } catch(_){}
+  // UI ready -> Log
+  (function(){
+    const v = (window.__cb && window.__cb.indexVersion) || 'unbekannt';
+    LOG('ok', `UI bereit (index ${v})`);
+  })();
 })();
