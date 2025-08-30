@@ -9,7 +9,28 @@ Zweck: Startfenster (Map-Auswahl, Start/Neustart, Log-Tools)
 
 /* 1) Imports */
 // (keine externen Importe – Standalone UI-Modul)
+// Hintergrundebene
+const bg = document.createElement("div");
+Object.assign(bg.style, {
+  position:"fixed", left:"0", top:"0", right:"0", bottom:"0",
+  background:`url('./assets/ui/start-bg.jpg') center/cover no-repeat`,
+  zIndex:"900"
+});
+document.body.append(bg);
 
+// Panel container
+Object.assign(host.style, {
+  display:"flex",
+  flexDirection:"column",
+  alignItems:"center",
+  justifyContent:"center",
+  position:"fixed",
+  left:"0", top:"0", right:"0", bottom:"0",
+  margin:"auto",
+  zIndex:"1000",
+  maxWidth:"720px",
+  color:"#e6f2ed"
+});
 /* 2) Konstanten / Meta */
 const UI_START_VERSION = "16.1.19";
 
