@@ -1,136 +1,202 @@
-/* ui-start.js (v16.1.5)
-   ------------------------------------------------------------
-   - Start-Overlay: Map wählen, Start/Neu starten/Cache/Log
-   - FABs: Inspector (immer), Build (nach Spielstart)
-   - Inspector-Panel: Vollbild, bündelt Log & Tools
-   - Robuste Logs für: Start-Klick, GameLoader verfügbar/nicht
-   ------------------------------------------------------------ */
+/*
+============================================================
+Datei: ui-start.js
+Projekt: Siedler-Mini
+Version: v16.1.19
+Zweck: Startfenster (Map-Auswahl, Start/Neustart, Log-Tools)
+============================================================
+*/
 
-(function () {
-  const $ = (sel) => document.querySelector(sel);
+/* 1) Imports */
+// (keine externen Importe – Standalone UI-Modul)
 
-  // ------- Hilfs-Log, geht ins Inspector-Log + Konsole -------
-  function log(type, msg){
-    const stamp = new Date().toTimeString().slice(0,8);
-    const line = `[${stamp}] ${type} ${msg}`;
-    console[type === 'err' ? 'error' : (type === 'warn' ? 'warn' : 'log')](line);
-    const box = $('#inspector-log');
-    if (box){
-      const div = document.createElement('div');
-      div.textContent = line;
-      box.appendChild(div);
-      box.scrollTop = box.scrollHeight;
-    }
-  }
-  const ok   = (m)=>log('log', `✅ (ok) ${m}`);
-  const warn = (m)=>log('warn',`⚠️ (warn) ${m}`);
-  const err  = (m)=>log('err', `❌ (err) ${m}`);
+/* 2) Konstanten / Meta */
+const UI_START_VERSION = "v16.1.19";
 
-  // ------- Buttons & Panels -------
-  const startOverlay = $('#start-overlay');
-  const btnStart     = $('#btn-start');
-  const btnRestart   = $('#btn-restart');
-  const btnStartCache= $('#btn-start-cache');
-  const btnStartLog  = $('#btn-start-logcopy');
-  const selMap       = $('#map-select');
+/* 3) Hilfsfunktionen */
+// ==============================================
+// Hilfsfunktion: DOM-Element erstellen
+// ==============================================
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  Object.entries(attrs).forEach(([k, v]) => {
+    if (k === "class") n.className = v;
+    else if (k === "style") Object.assign(n.style, v);
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else n.setAttribute(k, v);
+  });
+  children.flat().forEach(c => n.append(c));
+  return n;
+}
 
-  const fabInspector = $('#fab-inspector');
-  const fabBuild     = $('#fab-build');
+// ==============================================
+// Hilfsfunktion: simple Button
+// ==============================================
+function btn(label, attrs = {}) {
+  return el("button", {
+    class: "cb-btn",
+    style: {
+      padding: "10px 14px",
+      borderRadius: "10px",
+      border: "1px solid rgba(255,255,255,0.08)",
+      background: "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.2))",
+      color: "#e6f2ed",
+      cursor: "pointer",
+      fontSize: "15px"
+    },
+    ...attrs
+  }, label);
+}
 
-  const inspPanel    = $('#inspector-panel');
-  const inspClose    = $('#btn-inspector-close');
-  const btnMini      = $('#btn-start-mini');
-  const btnPro       = $('#btn-start-pro');
-  const btnCache     = $('#btn-cache');
-  const btnLogCopy   = $('#btn-log-copy');
-  const btnLogClear  = $('#btn-log-clear');
+/* 4) Klassen */
+// (hier nicht benötigt – UI ist funktional umgesetzt)
 
-  // ------- Clipboard Helfer -------
-  async function copyLog(){
-    const text = $('#inspector-log')?.innerText || '';
-    try { await navigator.clipboard.writeText(text); ok('Log in Zwischenablage'); }
-    catch { err('Kopieren fehlgeschlagen'); }
-  }
+/* 5) Hauptlogik (Init, Start) */
+(function initUIStart(){
+  const log = (window.CBLog?.ok || console.log);
+  log(`[ui-start] Modul geladen (v${UI_START_VERSION})`);
 
-  // ------- Cache leeren (Cache API + local/session) -------
-  async function clearCaches(){
-    try{
-      if ('caches' in window){
-        const names = await caches.keys();
-        await Promise.all(names.map(n => caches.delete(n)));
+  // Globales UI-Objekt bereitstellen
+  window.GameUI = window.GameUI || {};
+
+  // --------------------------------------------------------
+  // API: StartPanel öffnen
+  // --------------------------------------------------------
+  window.GameUI.openStartPanel = function(opts = {}) {
+    const maps = Array.isArray(opts.maps) && opts.maps.length ? opts.maps : [
+      { label: "map-mini.json (16×)", url: "./assets/maps/map-mini.json" }
+    ];
+
+    const host = document.getElementById("start-panel");
+    if (!host) return (window.CBLog?.warn || console.warn)("[ui-start] #start-panel fehlt.");
+    host.innerHTML = "";
+    host.style.display = "block";
+    host.style.position = "fixed";
+    host.style.left = "0";
+    host.style.right = "0";
+    host.style.bottom = "0";
+    host.style.margin = "0 auto";
+    host.style.zIndex = "1000";
+    host.style.maxWidth = "720px";
+    host.style.padding = "14px";
+    host.style.color = "#e6f2ed";
+
+    // Panel UI
+    const hdr = el("div", {
+      style: {
+        fontSize: "22px",
+        fontWeight: "700",
+        marginBottom: "8px"
       }
-      localStorage.clear(); sessionStorage.clear();
-      ok('Cache/Storage geleert – Seite ggf. neu laden');
-    }catch(e){ err('Cache leeren fehlgeschlagen'); }
-  }
+    }, "City-Builder – Start ", el("small", {style:{opacity:.7, fontWeight:"400"}}, ` index v${window.__cb?.indexVersion || "?"} · game.js`));
 
-  // ------- Spiel starten -------
-  async function startGameWith(mapPath){
-    // robust gegen Timing: existiert GameLoader?
-    const GL = window.GameLoader;
-    if (!GL || typeof GL.start !== 'function'){
-      err('GameLoader.start ist nicht verfügbar – game.js noch nicht initialisiert?');
-      return;
-    }
-    ok(`Start gedrückt → ${mapPath}`);
-    try{
-      await GL.start(mapPath);
-      ok(`GameLoader.start ${mapPath}`);
-      // Nach erfolgreichem Start: Start-Overlay ausblenden, Build-FAB einblenden
-      startOverlay.style.display = 'none';
-      fabBuild.style.display = 'flex';
-      ok('Game started');
-    }catch(e){
-      err(`Start fehlgeschlagen: ${e?.message || 'Unbekannter Fehler'}`);
-    }
-  }
+    const meta = el("div", {style:{opacity:.7, marginBottom:"8px"}}, `unbekannt · dpr: ${Math.round(window.devicePixelRatio||1)}`);
 
-  // ------- Wire Start-Overlay -------
-  btnStart?.addEventListener('click', () => {
-    const mapPath = selMap.value;
-    startGameWith(mapPath);
+    // Map Auswahl
+    const mapSelect = el("select", {
+      id: "cb-start-map",
+      style: {
+        appearance: "none",
+        padding: "10px 12px",
+        borderRadius: "10px",
+        border: "1px solid rgba(255,255,255,0.08)",
+        background: "rgba(0,0,0,0.25)",
+        color: "#e6f2ed",
+        minWidth: "260px",
+        marginRight: "10px"
+      }
+    }, maps.map(m => {
+      const o = document.createElement("option");
+      o.value = m.url; o.textContent = m.label || m.url;
+      return o;
+    }));
+
+    const row1 = el("div", {style:{display:"flex", gap:"10px", alignItems:"center", margin:"10px 0"}},
+      el("div", {style:{opacity:.9}}, "Karte:"),
+      mapSelect,
+      btn("▶︎ Start", { onclick: () => {
+        const mapUrl = mapSelect.value;
+        window.dispatchEvent(new CustomEvent('cb:game-start', { detail:{ map: mapUrl }}));
+        window.__cb = window.__cb || {};
+        window.__cb.selectedMap = mapUrl;
+        // Boot/Spielstart anstoßen
+        if (window.GameBoot?.start) {
+          window.GameBoot.start(mapUrl);
+        } else if (window.startGame) {
+          window.startGame(mapUrl);
+        } else {
+          (window.CBLog?.warn || console.warn)("[ui-start] Kein GameBoot.start()/startGame() gefunden.");
+        }
+      }}),
+      btn("⟳ Neu-Start", { onclick: () => location.reload() })
+    );
+
+    // Tools
+    const row2 = el("div", {style:{display:"flex", gap:"10px", margin:"10px 0"}},
+      btn("📋 Log kopieren", { onclick: () => {
+        try {
+          const txt = (window.CBLog?.dump && window.CBLog.dump()) || (window.__cbLogBuffer || []).join("\n") || "Kein Log vorhanden.";
+          navigator.clipboard.writeText(txt);
+          (window.CBLog?.ok || console.log)("[ui-start] Log in Zwischenablage.");
+        } catch(e) {
+          (window.CBLog?.warn || console.warn)("[ui-start] Clipboard fehlgeschlagen.");
+        }
+      }}),
+      btn("🧹 Cache-Booster", { onclick: () => {
+        try {
+          const u = new URL(location.href);
+          u.searchParams.set("v", Date.now().toString());
+          location.href = u.toString();
+        } catch(e) {
+          location.reload();
+        }
+      }})
+    );
+
+    // Fußzeile Log-Zeile
+    const logbox = el("pre", {
+      id: "cb-start-log",
+      style:{
+        marginTop:"10px",
+        padding:"10px",
+        borderRadius:"10px",
+        border:"1px solid rgba(255,255,255,0.08)",
+        background:"rgba(0,0,0,0.25)",
+        fontFamily:"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontSize:"13px",
+        color:"#bfe5d6",
+        whiteSpace:"pre-wrap"
+      }
+    }, `[${new Date().toTimeString().slice(0,8)}] OK UI bereit (index v${window.__cb?.indexVersion || "?"})`);
+
+    const frame = el("div", {
+      style:{
+        background:"linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.35))",
+        border:"1px solid rgba(255,255,255,0.08)",
+        borderRadius:"16px",
+        padding:"16px",
+        boxShadow:"0 12px 30px rgba(0,0,0,0.25)"
+      }
+    }, hdr, meta, row1, row2, logbox);
+
+    host.append(frame);
+  };
+
+  // --------------------------------------------------------
+  // API: auf Spielstart reagieren (Panel schließen)
+  // --------------------------------------------------------
+  window.GameUI.onGameStarted = function() {
+    const host = document.getElementById("start-panel");
+    if (host) host.style.display = "none";
+  };
+
+  // Auto-Open wenn UI ready
+  window.addEventListener('cb:ui-ready', () => {
+    // Öffnen erfolgt in index.html bereits – wir loggen nur
+    (window.CBLog?.ok || console.log)(`[ui-start] cb:ui-ready empfangen (v${UI_START_VERSION})`);
   });
-  btnRestart?.addEventListener('click', () => {
-    // Start-Fenster zurückholen, Build-FAB verstecken
-    startOverlay.style.display = 'block';
-    fabBuild.style.display = 'none';
-    ok('Neu starten (UI) – bitte Karte wählen & Start drücken');
-  });
-  btnStartCache?.addEventListener('click', clearCaches);
-  btnStartLog?.addEventListener('click', copyLog);
-
-  // ------- FAB: Inspector -------
-  fabInspector?.addEventListener('click', () => {
-    inspPanel.style.display = 'block';
-    ok('Inspector geöffnet');
-  });
-  inspClose?.addEventListener('click', () => {
-    inspPanel.style.display = 'none';
-    ok('Inspector geschlossen');
-  });
-
-  // ------- FAB: Build (öffnet dein Bau-Menü Modul) -------
-  fabBuild?.addEventListener('click', () => {
-    const ui = window.UIBuild || window.UI || {};
-    if (typeof ui.open === 'function'){
-      ui.open();
-      ok('Bau-Menü geöffnet');
-    } else {
-      warn('Bau-Menü Modul (UIBuild.open) nicht verfügbar');
-    }
-  });
-
-  // ------- Inspector Toolbar Aktionen -------
-  btnMini?.addEventListener('click', () => startGameWith('./assets/maps/map-mini.json'));
-  btnPro?.addEventListener('click',  () => startGameWith('./assets/maps/map-pro.json'));
-  btnCache?.addEventListener('click', clearCaches);
-  btnLogCopy?.addEventListener('click', copyLog);
-  btnLogClear?.addEventListener('click', () => { const box = $('#inspector-log'); if (box){ box.textContent=''; ok('Log geleert'); } });
-
-  // ------- UI init Log -------
-  ok('UI ready (ui-start.js v16.1.5)');
-
-  // Optional: wenn das Spiel selbst ein “started”-Event feuert, hier drauf reagieren:
-  // window.addEventListener('game:started', ()=>{ startOverlay.style.display='none'; fabBuild.style.display='flex'; });
 
 })();
+ 
+/* 6) Exports */
+// (keine – API hängt an window.GameUI)
