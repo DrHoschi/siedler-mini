@@ -1,7 +1,7 @@
-// game.js — v16.1.23 (ES5)  — Map, Pan/Zoom, Placement + Townhall-Auto
+// game.js — v16.1.24 (ES5)  — Map, Pan/Zoom, Placement + Townhall-Auto
 (function(){
   'use strict';
-  var VERSION = 'v16.1.23';
+  var VERSION = 'v16.1.24';
 
   // logging
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -27,13 +27,22 @@
 
   // building defs (Tilesize relativ zur Map-Tile)
   var BUILDINGS = {
-    townhall: { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
+    townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
     lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
-    farm: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.PNG" },
-    mill: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
-    depot:{ wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.PNG" },
-    tree:{ wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
+    farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.PNG" },
+    mill:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
+    depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.PNG" },
+    tree:       { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
+
+  // sanfte Aliase für alte Schlüssel
+  var BUILDING_ALIASES = {
+    wood0:   'lumberjack',
+    factory: 'mill'
+  };
+  function resolveBuildingKey(k){
+    return BUILDINGS[k] ? k : (BUILDING_ALIASES[k] || k);
+  }
 
   // tool state
   var tool = { mode:null, key:null }; // mode: 'build'|'road'|'path'|'bulldozer'
@@ -76,15 +85,40 @@
     return true;
   }
 
+  // Hilfsfunktion: Bildschirmpos -> Platzieren
+  function placeAtScreen(sx, sy){
+    var wx = cam.x + sx / cam.zoom;
+    var wy = cam.y + sy / cam.zoom;
+    var tile = currentMap.tile;
+    var tx = Math.floor(wx / tile);
+    var ty = Math.floor(wy / tile);
+
+    var key = resolveBuildingKey(tool.key);
+    if (!BUILDINGS[key]){
+      warn("[game] Unbekanntes Gebäude-Key:", key);
+      return;
+    }
+    if (canPlace(key, tx, ty)){
+      placeBuilding(key, tx, ty);
+      drawMap();
+    } else {
+      warn("[game] Platzierung nicht möglich @ tile", tx, ty, "für", key);
+    }
+  }
+
   // public tool api
   Game.setTool = function(mode, payload){
     // mode 'build' mit payload.key  ODER direkte tools 'road' 'path' 'bulldozer'
     if (mode === 'build'){
+      var k = payload && payload.key;
+      k = resolveBuildingKey(k);
       tool.mode = 'build';
-      tool.key = payload && payload.key;
+      tool.key = k;
+      ok("[ok] Tool gesetzt (build): " + k);
     } else {
       tool.mode = mode;
       tool.key = null;
+      ok("[ok] Tool gesetzt: " + mode);
     }
   };
 
@@ -138,8 +172,19 @@
       var dy = Math.floor((e.y - cam.y)*cam.zoom);
       var dw = Math.ceil(e.w*cam.zoom);
       var dh = Math.ceil(e.h*cam.zoom);
-      if (e.img) { try { ctx.drawImage(e.img, dx,dy,dw,dh); } catch(_){} }
-      else { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(dx,dy,dw,dh); }
+      if (e.img) {
+        try { ctx.drawImage(e.img, dx,dy,dw,dh); }
+        catch(_){
+          // Fallback-Rahmen, falls drawImage scheitert
+          ctx.strokeStyle = '#ffbf47'; ctx.lineWidth = Math.max(1, Math.floor(2*cam.zoom));
+          ctx.strokeRect(dx+0.5, dy+0.5, dw-1, dh-1);
+        }
+      } else {
+        // Sichtbarer Platzhalter
+        ctx.fillStyle = "rgba(255, 223, 128, .18)"; ctx.fillRect(dx,dy,dw,dh);
+        ctx.strokeStyle = '#ffbf47'; ctx.lineWidth = Math.max(1, Math.floor(2*cam.zoom));
+        ctx.strokeRect(dx+0.5, dy+0.5, dw-1, dh-1);
+      }
     }
   }
 
@@ -175,47 +220,48 @@
 
   // input
   function bindInput(){
-    var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
+    var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0, tapStart:0, tapSX:0, tapSY:0 };
 
+    // Maus-Drag
     canvas.addEventListener('mousedown', function(e){ drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y; });
     window.addEventListener('mousemove', function(e){ if(!drag.on || drag.pinch) return; cam.x=drag.cx-(e.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(e.clientY-drag.sy)/cam.zoom; clampCam(); drawMap(); });
     window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; });
 
-    canvas.addEventListener('wheel', function(e){ e.preventDefault?e.preventDefault():(e.returnValue=false); var rect=canvas.getBoundingClientRect(); zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top); }, {passive:false});
+    // Wheel-Zoom
+    canvas.addEventListener('wheel', function(e){
+      e.preventDefault ? e.preventDefault() : (e.returnValue=false);
+      var rect=canvas.getBoundingClientRect();
+      zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top);
+    }, {passive:false});
 
-    // Tap/Klick für Platzierung
+    // Klick (Desktop) → Platzieren
     canvas.addEventListener('click', function(e){
       if (tool.mode!=='build' || !tool.key || !currentMap) return;
       var rect = canvas.getBoundingClientRect();
-      var sx = e.clientX - rect.left;
-      var sy = e.clientY - rect.top;
-      var wx = cam.x + sx / cam.zoom;
-      var wy = cam.y + sy / cam.zoom;
-      var tile = currentMap.tile;
-      var tx = Math.floor(wx / tile);
-      var ty = Math.floor(wy / tile);
-      if (canPlace(tool.key, tx, ty)){
-        placeBuilding(tool.key, tx, ty);
-        drawMap();
-      } else {
-        warn("[game] Platzierung nicht möglich.");
-      }
+      var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+      placeAtScreen(sx, sy);
     });
 
-    // Touch (Pan + Pinch)
+    // Touch (Pan + Pinch + Tap-Placement)
     canvas.addEventListener('touchstart', function(e){
       if (e.touches.length===1){
-        var t=e.touches[0]; drag.on=true; drag.pinch=false; drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=cam.x; drag.cy=cam.y;
+        var t=e.touches[0];
+        drag.on=true; drag.pinch=false;
+        drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=cam.x; drag.cy=cam.y;
+        drag.tapStart = Date.now(); drag.tapSX=t.clientX; drag.tapSY=t.clientY;
       } else if (e.touches.length>=2){
         drag.on=true; drag.pinch=true;
         var a=e.touches[0], b=e.touches[1];
         drag.last = Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
       }
     }, {passive:true});
+
     canvas.addEventListener('touchmove', function(e){
       if (!drag.on) return;
       if (!drag.pinch && e.touches.length===1){
-        var t=e.touches[0]; cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom; clampCam(); drawMap();
+        var t=e.touches[0];
+        cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom;
+        clampCam(); drawMap();
       } else if (e.touches.length>=2){
         var a=e.touches[0], b=e.touches[1];
         var d=Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
@@ -226,7 +272,24 @@
         drag.last=d;
       }
     }, {passive:true});
-    window.addEventListener('touchend', function(){ drag.on=false; drag.pinch=false; drag.last=0; });
+
+    window.addEventListener('touchend', function(){
+      // Tap erkennen: kurzer, kleiner Move, 1-Finger
+      if (!drag.pinch && drag.tapStart){
+        var dt = Date.now() - drag.tapStart;
+        var dx = Math.abs((drag.tapSX||0) - (drag.sx||0));
+        var dy = Math.abs((drag.tapSY||0) - (drag.sy||0));
+        if (dt < 300 && dx < 6 && dy < 6){
+          if (tool.mode==='build' && tool.key && currentMap){
+            var rect=canvas.getBoundingClientRect();
+            var sx = (drag.tapSX - rect.left);
+            var sy = (drag.tapSY - rect.top);
+            placeAtScreen(sx, sy);
+          }
+        }
+      }
+      drag.on=false; drag.pinch=false; drag.last=0; drag.tapStart=0;
+    });
 
     // Keyboard
     window.addEventListener('keydown', function(e){
