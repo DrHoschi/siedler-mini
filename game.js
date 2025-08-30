@@ -1,339 +1,321 @@
-// game.js — v16.1.22 (ES5)
-// ---------------------------------------------------------
-// Engine + Loader + Map-Renderer (Tiles) mit Pan & Zoom.
-// Events: 'cb:engine-ready', 'cb:game-started'.
-// ES5-kompatibel (iOS Safari).
-// ---------------------------------------------------------
+// game.js — v16.1.23 (ES5)  — Map, Pan/Zoom, Placement + Townhall-Auto
 (function(){
   'use strict';
-  var VERSION = 'v16.1.22';
+  var VERSION = 'v16.1.23';
 
-  // ---- Logging --------------------------------------------------------------
-  var log = {
-    ok:   function(m){ return (window.CBLog && window.CBLog.ok   ? window.CBLog.ok   : console.log)(m); },
-    warn: function(m){ return (window.CBLog && window.CBLog.warn ? window.CBLog.warn : console.warn)(m); },
-    err:  function(m){ return (window.CBLog && window.CBLog.err  ? window.CBLog.err  : console.error)(m); }
+  // logging
+  function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
+  function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
+  function err(){ (window.CBLog && CBLog.err ? CBLog.err : console.error).apply(console, arguments); }
+
+  // public namespaces
+  var GL = (window.GameLoader = window.GameLoader || {});
+  var Game = (window.Game = window.Game || {});
+
+  // render state
+  var canvas=null, ctx=null, DPR=1, viewW=0, viewH=0;
+  var engineReady=false;
+
+  // map
+  var currentMap=null, tilesetImg=null, atlas=null;
+
+  // camera
+  var cam = { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 };
+
+  // entities (Gebäude)
+  var entities = []; // {key,x,y,w,h,img}
+
+  // building defs (Tilesize relativ zur Map-Tile)
+  var BUILDINGS = {
+    townhall: { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
+    lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
+    farm: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.PNG" },
+    mill: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
+    depot:{ wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.PNG" },
+    tree:{ wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
 
-  // Public Namespace
-  var GL = (window.GameLoader = window.GameLoader || {});
+  // tool state
+  var tool = { mode:null, key:null }; // mode: 'build'|'road'|'path'|'bulldozer'
 
-  // ---- Engine State ---------------------------------------------------------
-  var engineReady = false;
-  var canvas = null, ctx = null;
-  var viewW = 0, viewH = 0, DPR = 1;
+  // utils
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=function(){rej(new Error("img "+src))}; i.src=src; }); }
+  function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
+  function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
 
-  // Kamera in Welt-Pixeln (linke obere Ecke) + Zoom
-  var camera = { x: 0, y: 0, zoom: 1, minZ: 0.5, maxZ: 3.0 };
+  // placement helpers
+  function worldToTile(px,py){ var t=currentMap.tile; return { x: Math.floor(px/t), y: Math.floor(py/t) }; }
+  function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
 
-  // Tileset / Atlas – deine Pfade
-  var TILESET_PNG  = './assets/tiles/tileset.terrain.png';
-  var TILESET_JSON = './assets/tiles/tileset.terrain.json';
+  function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
-  // Map & Assets
-  var currentMap = null;
-  var tilesetImg = null;
-  var atlas = null;
-
-  // ---- Helpers --------------------------------------------------------------
-  function loadImage(src){
-    return new Promise(function(resolve, reject){
-      var img = new Image();
-      img.onload = function(){ resolve(img); };
-      img.onerror = function(){ reject(new Error('Bild konnte nicht geladen werden: '+src)); };
-      img.src = src;
-    });
-  }
-  function loadJSON(url){
-    return fetch(url).then(function(r){
-      if(!r.ok) throw new Error('HTTP '+r.status+' beim Laden: '+url);
-      return r.json();
-    });
-  }
-  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-
-  function mapPixelSize(){
-    if (!currentMap) return { w:0, h:0 };
-    return { w: currentMap.width * currentMap.tile, h: currentMap.height * currentMap.tile };
+  function canPlace(key, tx, ty){
+    var def = BUILDINGS[key]; if (!def || !currentMap) return false;
+    // map bounds
+    if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
+    // simple collision with other entities
+    var t = currentMap.tile;
+    var r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
+    for (var i=0;i<entities.length;i++){
+      var e=entities[i];
+      var er = { x:e.x, y:e.y, w:e.w, h:e.h };
+      if (rectsOverlap(r,er)) return false;
+    }
+    return true;
   }
 
-  function clampCamera(){
-    var sz = mapPixelSize();
-    var maxX = Math.max(0, sz.w - viewW / camera.zoom);
-    var maxY = Math.max(0, sz.h - viewH / camera.zoom);
-    camera.x = clamp(camera.x, 0, maxX);
-    camera.y = clamp(camera.y, 0, maxY);
+  function placeBuilding(key, tx, ty){
+    var def = BUILDINGS[key]; if (!def) return false;
+    var t = currentMap.tile;
+    var pos = tileToWorld(tx,ty);
+    var img = def._img;
+    var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:img };
+    entities.push(e);
+    ok("[ok] Gebäude platziert:", key, "at", tx, ty);
+    return true;
   }
 
-  // Bildschirm → Welt (vor Zoom/Offset)
-  function screenToWorld(px, py){
-    return {
-      x: camera.x + px / camera.zoom,
-      y: camera.y + py / camera.zoom
-    };
-  }
+  // public tool api
+  Game.setTool = function(mode, payload){
+    // mode 'build' mit payload.key  ODER direkte tools 'road' 'path' 'bulldozer'
+    if (mode === 'build'){
+      tool.mode = 'build';
+      tool.key = payload && payload.key;
+    } else {
+      tool.mode = mode;
+      tool.key = null;
+    }
+  };
 
-  // Zoom an einem Mittelpunkt (Weltkoordinate unter Cursor/Fingern halten)
-  function zoomAt(factor, centerPx, centerPy){
-    var pre = screenToWorld(centerPx, centerPy);
-    camera.zoom = clamp(camera.zoom * factor, camera.minZ, camera.maxZ);
-    var post = screenToWorld(centerPx, centerPy);
-    camera.x += (pre.x - post.x);
-    camera.y += (pre.y - post.y);
-    clampCamera();
-    renderMap();
-  }
-
-  // ---- Renderer -------------------------------------------------------------
-  function renderMap(){
+  // draw
+  function drawMap(){
     if(!ctx || !currentMap) return;
-
-    var tile = currentMap.tile;
-    var w    = currentMap.width;
-    var h    = currentMap.height;
-
-    // Bildschirm löschen (physikalische Größe!)
+    var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Sichtfenster in Tile-Koordinaten
-    var left   = Math.floor(camera.x / tile);
-    var top    = Math.floor(camera.y / tile);
-    var right  = Math.ceil((camera.x + viewW / camera.zoom) / tile);
-    var bottom = Math.ceil((camera.y + viewH / camera.zoom) / tile);
+    // sichtfenster bounds (in Tiles)
+    var left   = Math.floor(cam.x / t);
+    var top    = Math.floor(cam.y / t);
+    var right  = Math.ceil((cam.x + viewW/cam.zoom) / t);
+    var bottom = Math.ceil((cam.y + viewH/cam.zoom) / t);
+    left=clamp(left,0,w-1); top=clamp(top,0,h-1); right=clamp(right,0,w); bottom=clamp(bottom,0,h);
 
-    left   = clamp(left,   0, w-1);
-    top    = clamp(top,    0, h-1);
-    right  = clamp(right,  0, w);
-    bottom = clamp(bottom, 0, h);
+    var layers=currentMap.layers||[];
+    var colors=['#5a7a39','#6b8f3e','#7aa346','#90b45a'];
 
-    var layers = currentMap.layers || [];
-    if (!layers.length){
-      // Fallback: einfärben
-      var colors = ['#5a7a39', '#6b8f3e', '#7aa346', '#90b45a'];
-      for(var ty=top; ty<bottom; ty++){
-        for(var tx=left; tx<right; tx++){
-          var sx = Math.floor((tx*tile - camera.x) * camera.zoom);
-          var sy = Math.floor((ty*tile - camera.y) * camera.zoom);
-          var sz = Math.ceil(tile * camera.zoom);
-          ctx.fillStyle = colors[(tx + ty) % colors.length];
-          ctx.fillRect(sx, sy, sz, sz);
+    if (!atlas || !tilesetImg || !layers.length){
+      for (var ty=top; ty<bottom; ty++){
+        for (var tx=left; tx<right; tx++){
+          var sx = Math.floor((tx*t - cam.x)*cam.zoom);
+          var sy = Math.floor((ty*t - cam.y)*cam.zoom);
+          var ss = Math.ceil(t*cam.zoom);
+          ctx.fillStyle = colors[(tx+ty)%colors.length];
+          ctx.fillRect(sx,sy,ss,ss);
         }
       }
-      return;
+    } else {
+      var L0=layers[0], data=L0.data||[];
+      for (var ty2=top; ty2<bottom; ty2++){
+        for (var tx2=left; tx2<right; tx2++){
+          var i = ty2*w+tx2, idx=data[i]|0;
+          var drawX = Math.floor((tx2*t - cam.x)*cam.zoom);
+          var drawY = Math.floor((ty2*t - cam.y)*cam.zoom);
+          var drawS = Math.ceil(t*cam.zoom);
+          var ti = atlas.tiles && atlas.tiles[idx];
+          if (ti){
+            try { ctx.drawImage(tilesetImg, ti.x,ti.y,ti.w,ti.h, drawX,drawY,drawS,drawS); }
+            catch(e){ ctx.fillStyle='#5a7a39'; ctx.fillRect(drawX,drawY,drawS,drawS); }
+          } else { ctx.fillStyle='#5a7a39'; ctx.fillRect(drawX,drawY,drawS,drawS); }
+        }
+      }
     }
 
-    var L0 = layers[0];
-    var data = L0.data || [];
-
-    for (var ty2=top; ty2<bottom; ty2++){
-      for (var tx2=left; tx2<right; tx2++){
-        var i = ty2 * w + tx2;
-        var idx = data[i]|0;
-
-        var drawX = Math.floor((tx2*tile - camera.x) * camera.zoom);
-        var drawY = Math.floor((ty2*tile - camera.y) * camera.zoom);
-        var drawS = Math.ceil(tile * camera.zoom);
-
-        if (atlas && tilesetImg && atlas.tiles && atlas.tiles[idx]){
-          var t = atlas.tiles[idx];
-          try {
-            ctx.drawImage(tilesetImg, t.x, t.y, t.w, t.h, drawX, drawY, drawS, drawS);
-          } catch(e){
-            ctx.fillStyle = '#5a7a39';
-            ctx.fillRect(drawX, drawY, drawS, drawS);
-          }
-        } else {
-          ctx.fillStyle = '#5a7a39';
-          ctx.fillRect(drawX, drawY, drawS, drawS);
-        }
-      }
+    // Entities oben drauf
+    for (var k=0;k<entities.length;k++){
+      var e=entities[k];
+      var dx = Math.floor((e.x - cam.x)*cam.zoom);
+      var dy = Math.floor((e.y - cam.y)*cam.zoom);
+      var dw = Math.ceil(e.w*cam.zoom);
+      var dh = Math.ceil(e.h*cam.zoom);
+      if (e.img) { try { ctx.drawImage(e.img, dx,dy,dw,dh); } catch(_){} }
+      else { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(dx,dy,dw,dh); }
     }
   }
 
-  // ---- Engine-Init ----------------------------------------------------------
-  function initEngine(){
-    if (engineReady) return;
+  // fit canvas / clamp camera
+  function clampCam(){
+    var size = mapPx();
+    var maxX = Math.max(0, size.w - viewW/cam.zoom);
+    var maxY = Math.max(0, size.h - viewH/cam.zoom);
+    cam.x = clamp(cam.x, 0, maxX);
+    cam.y = clamp(cam.y, 0, maxY);
+  }
+  function fit(){
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+    var w = Math.max(320, Math.floor(window.innerWidth || document.documentElement.clientWidth || 800));
+    var h = Math.max(240, Math.floor(window.innerHeight || document.documentElement.clientHeight || 600));
+    canvas.width=Math.floor(w*DPR); canvas.height=Math.floor(h*DPR);
+    canvas.style.width=w+"px"; canvas.style.height=h+"px";
+    if (ctx.setTransform) ctx.setTransform(DPR,0,0,DPR,0,0);
+    viewW=w; viewH=h; clampCam(); drawMap();
+  }
 
-    canvas = document.getElementById('game')
-          || document.getElementById('stage')
-          || (function(){ var c = document.createElement('canvas'); c.id='game'; document.body.appendChild(c); return c; })();
+  // zoom helper
+  function zoomAt(f, cx, cy){
+    var preX = cam.x + cx / cam.zoom;
+    var preY = cam.y + cy / cam.zoom;
+    cam.zoom = clamp(cam.zoom*f, cam.minZ, cam.maxZ);
+    var postX = cam.x + cx / cam.zoom;
+    var postY = cam.y + cy / cam.zoom;
+    cam.x += (preX - postX);
+    cam.y += (preY - postY);
+    clampCam(); drawMap();
+  }
 
-    ctx = canvas.getContext('2d');
+  // input
+  function bindInput(){
+    var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
-    function fit(){
-      DPR = Math.max(1, Math.min(3, window.devicePixelRatio||1));
-      var w = Math.max(320, Math.floor(window.innerWidth || document.documentElement.clientWidth || 800));
-      var h = Math.max(240, Math.floor(window.innerHeight || document.documentElement.clientHeight || 600));
-      canvas.width  = Math.floor(w * DPR);
-      canvas.height = Math.floor(h * DPR);
-      canvas.style.width  = w + 'px';
-      canvas.style.height = h + 'px';
-      if (ctx.setTransform) ctx.setTransform(DPR,0,0,DPR,0,0);
-      viewW = w; viewH = h;
-      clampCamera();
-      renderMap();
-    }
-    window.addEventListener('resize', fit);
-    fit();
+    canvas.addEventListener('mousedown', function(e){ drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y; });
+    window.addEventListener('mousemove', function(e){ if(!drag.on || drag.pinch) return; cam.x=drag.cx-(e.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(e.clientY-drag.sy)/cam.zoom; clampCam(); drawMap(); });
+    window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; });
 
-    // --- Input: Pan & Zoom ---------------------------------------------------
-    var drag = { active:false, sx:0, sy:0, camX:0, camY:0, pinch:false, idA:null, idB:null, lastDist:0 };
+    canvas.addEventListener('wheel', function(e){ e.preventDefault?e.preventDefault():(e.returnValue=false); var rect=canvas.getBoundingClientRect(); zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top); }, {passive:false});
 
-    // Maus
-    canvas.addEventListener('mousedown', function(e){
-      drag.active = true; drag.pinch = false;
-      drag.sx = e.clientX; drag.sy = e.clientY;
-      drag.camX = camera.x; drag.camY = camera.y;
-    });
-    window.addEventListener('mousemove', function(e){
-      if (!drag.active || drag.pinch) return;
-      var dx = (e.clientX - drag.sx) / camera.zoom;
-      var dy = (e.clientY - drag.sy) / camera.zoom;
-      camera.x = drag.camX - dx;
-      camera.y = drag.camY - dy;
-      clampCamera();
-      renderMap();
-    });
-    window.addEventListener('mouseup', function(){ drag.active=false; drag.pinch=false; });
-
-    // Wheel-Zoom
-    canvas.addEventListener('wheel', function(e){
-      e.preventDefault ? e.preventDefault() : (e.returnValue=false);
-      var factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+    // Tap/Klick für Platzierung
+    canvas.addEventListener('click', function(e){
+      if (tool.mode!=='build' || !tool.key || !currentMap) return;
       var rect = canvas.getBoundingClientRect();
-      var cx = (e.clientX - rect.left);
-      var cy = (e.clientY - rect.top);
-      zoomAt(factor, cx, cy);
-    }, { passive:false });
+      var sx = e.clientX - rect.left;
+      var sy = e.clientY - rect.top;
+      var wx = cam.x + sx / cam.zoom;
+      var wy = cam.y + sy / cam.zoom;
+      var tile = currentMap.tile;
+      var tx = Math.floor(wx / tile);
+      var ty = Math.floor(wy / tile);
+      if (canPlace(tool.key, tx, ty)){
+        placeBuilding(tool.key, tx, ty);
+        drawMap();
+      } else {
+        warn("[game] Platzierung nicht möglich.");
+      }
+    });
 
     // Touch (Pan + Pinch)
     canvas.addEventListener('touchstart', function(e){
-      if (e.touches.length === 1){
-        var t = e.touches[0];
-        drag.active = true; drag.pinch = false;
-        drag.sx = t.clientX; drag.sy = t.clientY;
-        drag.camX = camera.x; drag.camY = camera.y;
-        drag.idA = t.identifier; drag.idB = null;
-      } else if (e.touches.length >= 2){
-        drag.active = true; drag.pinch = true;
-        var a = e.touches[0], b = e.touches[1];
-        drag.idA = a.identifier; drag.idB = b.identifier;
-        drag.lastDist = Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
-        drag.camX = camera.x; drag.camY = camera.y;
+      if (e.touches.length===1){
+        var t=e.touches[0]; drag.on=true; drag.pinch=false; drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=cam.x; drag.cy=cam.y;
+      } else if (e.touches.length>=2){
+        drag.on=true; drag.pinch=true;
+        var a=e.touches[0], b=e.touches[1];
+        drag.last = Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
       }
-    }, { passive:true });
-
+    }, {passive:true});
     canvas.addEventListener('touchmove', function(e){
-      if (!drag.active) return;
-      if (!drag.pinch && e.touches.length === 1){
-        var t = e.touches[0];
-        var dx = (t.clientX - drag.sx) / camera.zoom;
-        var dy = (t.clientY - drag.sy) / camera.zoom;
-        camera.x = drag.camX - dx;
-        camera.y = drag.camY - dy;
-        clampCamera();
-        renderMap();
-      } else if (e.touches.length >= 2){
-        // Pinch
-        var a = e.touches[0], b = e.touches[1];
-        var dist = Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
-        if (drag.lastDist){
-          var factor = dist / drag.lastDist;
-          // Mittelpunkt
-          var rect = canvas.getBoundingClientRect();
-          var cx = ( (a.clientX + b.clientX)/2 ) - rect.left;
-          var cy = ( (a.clientY + b.clientY)/2 ) - rect.top;
-          zoomAt(factor, cx, cy);
+      if (!drag.on) return;
+      if (!drag.pinch && e.touches.length===1){
+        var t=e.touches[0]; cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom; clampCam(); drawMap();
+      } else if (e.touches.length>=2){
+        var a=e.touches[0], b=e.touches[1];
+        var d=Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
+        if (drag.last){
+          var factor = d/drag.last; var r=canvas.getBoundingClientRect();
+          zoomAt(factor, ((a.clientX+b.clientX)/2)-r.left, ((a.clientY+b.clientY)/2)-r.top);
         }
-        drag.lastDist = dist;
+        drag.last=d;
       }
-    }, { passive:true });
+    }, {passive:true});
+    window.addEventListener('touchend', function(){ drag.on=false; drag.pinch=false; drag.last=0; });
 
-    window.addEventListener('touchend', function(){
-      drag.active = false; drag.pinch = false; drag.lastDist = 0;
-    });
-
-    // Keyboard (Pfeile/WASD)
+    // Keyboard
     window.addEventListener('keydown', function(e){
-      var k = (e.key || '').toLowerCase();
-      var step = Math.max(16, Math.floor(120 / camera.zoom));
-      if (k==='arrowleft' || k==='a'){ camera.x -= step; }
-      else if (k==='arrowright' || k==='d'){ camera.x += step; }
-      else if (k==='arrowup' || k==='w'){ camera.y -= step; }
-      else if (k==='arrowdown' || k==='s'){ camera.y += step; }
-      else { return; }
-      clampCamera();
-      renderMap();
+      var k=(e.key||'').toLowerCase(), step=Math.max(16, Math.floor(120/cam.zoom));
+      if(k==='arrowleft'||k==='a'){ cam.x-=step; } else if(k==='arrowright'||k==='d'){ cam.x+=step; }
+      else if(k==='arrowup'||k==='w'){ cam.y-=step; } else if(k==='arrowdown'||k==='s'){ cam.y+=step; } else return;
+      clampCam(); drawMap();
     });
-
-    engineReady = true;
-    log.ok("game.js geladen, game.js " + VERSION);
-    try { window.dispatchEvent(new CustomEvent('cb:engine-ready', { detail:{ v: VERSION }})); } catch(_){}
-    try { if (GL._flush) GL._flush(); } catch(_){}
   }
 
-  // ---- Loader/Start ---------------------------------------------------------
+  // engine init
+  function initEngine(){
+    if (engineReady) return;
+    canvas = document.getElementById('game') || document.getElementById('stage') || (function(){var c=document.createElement('canvas');c.id='game';document.body.appendChild(c);return c;})();
+    ctx = canvas.getContext('2d');
+    window.addEventListener('resize', fit); fit();
+    bindInput();
+    engineReady=true; ok("game.js geladen, game.js "+VERSION);
+    try{ window.dispatchEvent(new CustomEvent('cb:engine-ready',{detail:{v:VERSION}})); }catch(_){}
+  }
+
+  // loader / start
   GL._start = function(mapUrl){
-    return new Promise(function(resolve, reject){
-      function startNow(){
-        log.ok("GameLoader.start " + mapUrl);
-
+    return new Promise(function(resolve,reject){
+      function start(){
+        ok("GameLoader.start "+mapUrl);
         loadJSON(mapUrl).then(function(map){
-
-          // Map normalisieren (width/height ODER w/h; tile/tileSize/tile_size)
-          var width  = (map.width  != null ? map.width  : (map.w != null ? map.w : 16));
-          var height = (map.height != null ? map.height : (map.h != null ? map.h : 10));
-          var tile   = (map.tile   != null ? map.tile   :
-                       (map.tileSize != null ? map.tileSize :
-                       (map.tile_size != null ? map.tile_size : 32)));
+          // map normalisieren
+          function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
+          var ms = map.mapSize || map.size || null;
+          var width  = pickNum(map.width, map.w,  ms && ms.w,  ms && ms.width)  || 16;
+          var height = pickNum(map.height,map.h,  ms && ms.h,  ms && ms.height) || 10;
+          var tile   = pickNum(map.tile, map.tileSize, map.tile_size, map.tilePX) || 64;
 
           currentMap = {
-            width:  width,
-            height: height,
-            tile:   tile,
-            layers: map.layers ? map.layers :
-                    (map.tiles ? [{ name:'ground', data: map.tiles }] : [])
+            width:width, height:height, tile:tile,
+            layers: map.layers ? map.layers : (map.tiles ? [{name:'ground', data:map.tiles}] : [])
           };
+          ok("Map geladen: "+width+"×"+height+" · Tile "+tile);
 
-          // Kamera beim Start in die Mitte der Map setzen
-          var sz = mapPixelSize();
-          camera.zoom = 1;
-          camera.x = clamp( (sz.w - viewW / camera.zoom) * 0.5, 0, Math.max(0, sz.w - viewW / camera.zoom) );
-          camera.y = clamp( (sz.h - viewH / camera.zoom) * 0.5, 0, Math.max(0, sz.h - viewH / camera.zoom) );
+          // Assets für Gebäude vorbereiten
+          var preload = [];
+          for (var k in BUILDINGS) if (BUILDINGS.hasOwnProperty(k)){
+            (function(key){
+              preload.push(loadImage(BUILDINGS[key].img).then(function(img){ BUILDINGS[key]._img=img; }));
+            })(k);
+          }
 
-          log.ok("Map geladen: " + width + "×" + height + " · Tile " + tile);
+          // Tileset/Atlas
+          var TILESET_PNG  = './assets/tiles/tileset.terrain.png';
+          var TILESET_JSON = './assets/tiles/tileset.terrain.json';
 
-          // Atlas + Tileset
-          Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ])
-            .then(function(results){ atlas = results[0]; tilesetImg = results[1]; })
-            .catch(function(e){ atlas=null; tilesetImg=null; log.warn("Atlas/Textures nicht geladen: " + e.message); })
-            .then(function(){
-              renderMap();
-              log.ok("Game gestartet (" + mapUrl + ")");
-              try { window.dispatchEvent(new CustomEvent('cb:game-started', { detail:{ map: mapUrl }})); } catch(_){}
-              try { if (window.GameUI && typeof window.GameUI.onGameStarted === 'function') window.GameUI.onGameStarted(); } catch(_){}
-              resolve(true);
-            });
+          Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ].concat(preload))
+          .then(function(res){
+            atlas = res[0]; tilesetImg = res[1];
+          })
+          .catch(function(e){ atlas=null; tilesetImg=null; warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); })
+          .then(function(){
+            // Rathaus auto-spawn in Kartenmitte (sofern noch nicht vorhanden)
+            var cx = Math.floor(width/2), cy = Math.floor(height/2);
+            if (!hasEntity('townhall')){
+              if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
+            }
+            // Kamera mittig aufs Rathaus
+            var center = tileToWorld(cx, cy);
+            cam.zoom = 1;
+            cam.x = clamp(center.x - viewW/2, 0, Math.max(0, mapPx().w - viewW));
+            cam.y = clamp(center.y - viewH/2, 0, Math.max(0, mapPx().h - viewH));
 
-        }).catch(function(e){
-          log.err("Start fehlgeschlagen: " + e.message);
-          reject(e);
-        });
+            drawMap();
+
+            try{ window.dispatchEvent(new CustomEvent('cb:game-started',{detail:{map:mapUrl}})); }catch(_){}
+            if (window.GameUI && typeof window.GameUI.onGameStarted==='function') window.GameUI.onGameStarted();
+            ok("Game gestartet"); resolve(true);
+          });
+        }).catch(function(e){ err("Start fehlgeschlagen: "+e.message); reject(e); });
       }
-
-      try{
-        if(!engineReady) initEngine();
-        startNow();
-      }catch(e){
-        log.err("Engine-Init Fehler: " + e.message);
-        reject(e);
-      }
+      try{ if(!engineReady) initEngine(); start(); } catch(e){ err("Engine-Init Fehler: "+e.message); reject(e); }
     });
   };
 
-  // Auto-Init
-  try { initEngine(); } catch(e){ log.err('Engine-Init Fehler: ' + e.message); }
+  function hasEntity(key){
+    for (var i=0;i<entities.length;i++) if (entities[i].key===key) return true;
+    return false;
+  }
 
-  // Version sichtbar
+  // boot
+  try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
+
+  // expose version
   GL.version = VERSION;
 })();
