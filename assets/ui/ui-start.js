@@ -2,19 +2,19 @@
 ============================================================
 Datei: assets/ui/ui-start.js
 Projekt: Siedler-Mini
-Version: v16.1.20
+Version: 16.1.21
 Zweck : Startfenster (Logik) – Styles in ui-start.css
-Hinweis: ES5-kompatibel + Diagnose-Probe
+Hinweis: ES5-kompatibel (keine modernen Syntaxfeatures)
 ============================================================
 */
 (function () {
   'use strict';
-  // ---- PROBE: Merker, dass die Datei betreten wurde ----
+  // Diagnose-Flag: Datei betreten
   window.__uiStartEntered = true;
 
   try {
     /* 2) Konstanten / Meta */
-    var UI_START_VERSION = "16.1.20";
+    var UI_START_VERSION = "16.1.21";
     var START_BG_ID = "cb-start-bg";
     var START_BG_URL = "./assets/ui/start-bg.jpeg";
 
@@ -45,6 +45,7 @@ Hinweis: ES5-kompatibel + Diagnose-Probe
       var bg = document.getElementById(START_BG_ID);
       if (!bg) {
         bg = document.createElement("div"); bg.id = START_BG_ID;
+        // Fallback-Style (ui-start.css macht das Styling eigentlich)
         bg.style.background = "url('" + START_BG_URL + "') center/cover no-repeat, #093c2f";
         bg.style.position = "fixed"; bg.style.left="0"; bg.style.top="0"; bg.style.right="0"; bg.style.bottom="0";
         bg.style.zIndex = "900"; bg.style.opacity = "1";
@@ -88,15 +89,43 @@ Hinweis: ES5-kompatibel + Diagnose-Probe
 
       var label = el("label", { "for": "cb-start-map" }, "Karte:");
 
+      // --- Start-Button mit Fallback-Reihenfolge (#2): GameBoot.start → startGame → GameLoader._start ---
       var startBtn = btn("▶︎ Start", { onclick: function () {
         var mapUrl = select.value;
         try { localStorage.setItem("cb:lastMap", mapUrl); } catch(e){}
         if (!window.__cb) window.__cb = {}; window.__cb.selectedMap = mapUrl;
-        try { window.dispatchEvent(new CustomEvent("cb:game-start", { detail:{ map: mapUrl }})); } catch(e){}
-        if (window.GameBoot && typeof window.GameBoot.start === "function") window.GameBoot.start(mapUrl);
-        else if (typeof window.startGame === "function") window.startGame(mapUrl);
-        else logWarn("[ui-start] Kein GameBoot.start()/startGame() gefunden.");
+
+        // vor Start: globales Start-Event
+        try { window.dispatchEvent(new CustomEvent("cb:game-start", { detail:{ map: mapUrl } })); } catch(e){}
+
+        // 1) Bevorzugt: GameBoot.start
+        if (window.GameBoot && typeof window.GameBoot.start === "function") {
+          try { window.GameBoot.start(mapUrl); } catch(e1){ logWarn("[ui-start] GameBoot.start Exception: " + (e1 && e1.message ? e1.message : e1)); }
+          return;
+        }
+
+        // 2) Historischer Alias: startGame
+        if (typeof window.startGame === "function") {
+          try { window.startGame(mapUrl); } catch(e2){ logWarn("[ui-start] startGame Exception: " + (e2 && e2.message ? e2.message : e2)); }
+          return;
+        }
+
+        // 3) Direkter Fallback auf Loader: GameLoader._start
+        if (window.GameLoader && typeof window.GameLoader._start === "function") {
+          window.GameLoader._start(mapUrl).then(function(){
+            // nach Start: Startfenster schließen via Event + UI-Hook bedienen
+            try { window.dispatchEvent(new CustomEvent("cb:game-started", { detail:{ map: mapUrl }})); } catch(_){}
+            try { if (window.GameUI && typeof window.GameUI.onGameStarted === "function") window.GameUI.onGameStarted(); } catch(_){}
+          }).catch(function(err){
+            logWarn("[ui-start] GameLoader._start Fehler: " + (err && err.message ? err.message : err));
+          });
+          return;
+        }
+
+        // Kein Start-Entry vorhanden
+        logWarn("[ui-start] Kein Start-Entry gefunden (GameBoot.start/startGame/GameLoader._start).");
       }});
+
       var resetBtn = btn("⟳ Neu-Start", { onclick: function(){ location.reload(); } });
       var cacheBtn = btn("🧹 Cache-Booster", { onclick: function(){
         try { var u=new URL(location.href); u.searchParams.set("v", Date.now().toString()); location.href=u.toString(); }
@@ -139,8 +168,7 @@ Hinweis: ES5-kompatibel + Diagnose-Probe
 
     logOk("[ui-start] Modul geladen ("+oneV(UI_START_VERSION)+")");
   } catch (err) {
-    // ---- PROBE: Fehlerobjekt für index.html-Diagnose bereitstellen ----
-    window.__uiStartErr = err;
+    window.__uiStartErr = err; // Diagnose für index.html
     try { console.error("[ui-start] Fehler beim Ausführen:", err && err.message ? err.message : err); } catch(e){}
   }
 })();
