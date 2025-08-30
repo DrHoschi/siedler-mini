@@ -1,16 +1,14 @@
-/* assets/ui/ui-build.js  —  Build-UI mit Tabs
-   Version v16.1.7  (ES5)  */
+/* assets/ui/ui-build.js  —  Build-UI mit Tabs/Kategorien
+   Version v16.1.7 (ES5) */
 (function () {
   'use strict';
 
   var VERSION = "v16.1.7";
   var STYLE_ID = "cb-ui-build-style";
 
-  // --- Log helpers (benutzen CBLog, wenn vorhanden) ---
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
   function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
 
-  // --- Styles (klein & kompakt) ---
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     var css =
@@ -37,8 +35,7 @@
     var el = document.createElement("style"); el.id = STYLE_ID; el.textContent = css; document.head.appendChild(el);
   }
 
-  // --- Katalog (Tabs -> Einträge) ---
-  // keys werden 1:1 an Game.setTool('build', {key:'...'}) weitergegeben
+  // Kategorien + Einträge → Keys passen zu game.js: BUILDINGS
   var CATALOG = {
     "Infrastruktur": [
       { key:"road",      label:"Straße",    img:"assets/tex/road/topdown_road_straight.png", type:"tool" },
@@ -46,21 +43,19 @@
       { key:"bulldozer", label:"Abreißen",  img:"assets/icons/icons_spritesheet_64.png",     type:"tool" }
     ],
     "Gebäude": [
-      { key:"townhall",  label:"Rathaus",   img:"assets/tex/building/Holz_Rathaus_1.png",    type:"building" },
-      { key:"lumberjack",label:"Holzfäller",img:"assets/tex/building/wood/lumberjack_wood.PNG", type:"building" },
-      { key:"farm",      label:"Farm",      img:"assets/tex/building/wood/farm_wood.PNG",    type:"building" },
-      { key:"mill",      label:"Mühle",     img:"assets/tex/building/wood/windmuehle_wood.PNG", type:"building" },
-      { key:"depot",     label:"Lager",     img:"assets/tex/building/wood/depot_wood.PNG",   type:"building" }
+      { key:"townhall",   label:"Rathaus",    img:"assets/tex/building/Holz_Rathaus_1.png",         type:"building" },
+      { key:"lumberjack", label:"Holzfäller", img:"assets/tex/building/wood/lumberjack_wood.PNG",   type:"building" },
+      { key:"farm",       label:"Farm",       img:"assets/tex/building/wood/farm_wood.PNG",         type:"building" },
+      { key:"mill",       label:"Mühle",      img:"assets/tex/building/wood/windmuehle_wood.PNG",   type:"building" },
+      { key:"depot",      label:"Lager",      img:"assets/tex/building/wood/depot_wood.PNG",        type:"building" }
     ],
     "Deko": [
-      { key:"tree",      label:"Baum",      img:"assets/tex/terrain/sm_topdown_tree_needle0_ug0.PNG", type:"building" }
+      { key:"tree",       label:"Baum",       img:"assets/tex/terrain/sm_topdown_tree_needle0_ug0.PNG", type:"building" }
     ]
   };
 
-  // --- DOM refs / state ---
   var fab, backdrop, panel, tabsWrap, grid;
-  var currentTab = null;
-  var isOpen = false, started = false;
+  var currentTab = null, isOpen = false, started = false;
 
   function createFab(){
     if (fab) return fab;
@@ -111,7 +106,6 @@
     document.body.appendChild(backdrop);
     document.body.appendChild(panel);
 
-    // Tabs füllen
     for (var tab in CATALOG){
       if (!CATALOG.hasOwnProperty(tab)) continue;
       (function(tabName){
@@ -123,10 +117,8 @@
       })(tab);
     }
 
-    // erste Kategorie aktiv
     var first = tabsWrap.querySelector(".cb-tab");
     if (first){ first.classList.add("is-active"); currentTab = first.textContent; fillGrid(); }
-
     return panel;
   }
 
@@ -173,30 +165,22 @@
   function close(){ if (!panel || !isOpen) return; isOpen = false; panel.classList.remove("is-open"); backdrop.classList.remove("is-open"); ok("[ok] Bau-Menü geschlossen"); }
   function toggle(){ if (isOpen) close(); else open(); }
 
-  // Events: Game gestartet → FAB zeigen
   function onGameStarted(){ if (started) return; started = true; showFab(); ok("[ok] Bau-Menü bereit (ui-build.js "+VERSION+")"); }
 
-  // Tastatur
   function onKey(ev){ var k=(ev.key||"").toLowerCase(); if(k==="b") toggle(); }
 
-  // Init
   function init(){
     injectStyles();
-    createFab(); // bleibt unsichtbar bis onGameStarted
+    createFab();
     window.addEventListener("keydown", onKey);
     window.addEventListener("cb:game-started", onGameStarted, { passive:true });
     ok("[ok] UI bereit (ui-build.js "+VERSION+")");
   }
-
   init();
 
-  // API
   window.GameUI = (function(prev){
     prev = prev || {};
-    prev.openBuildMenu = open;
-    prev.closeBuildMenu = close;
-    prev.toggleBuildMenu = toggle;
-    prev.onGameStarted = onGameStarted;
+    prev.openBuildMenu = open; prev.closeBuildMenu = close; prev.toggleBuildMenu = toggle; prev.onGameStarted = onGameStarted;
     return prev;
   })(window.GameUI);
 })();
