@@ -63,10 +63,54 @@
   <script src="./tools/debug-tools.js?v=16.1.19" defer></script>
   <script src="./tools/dev-inspector.js?v=16.1.19" defer></script>
 
-  <!-- UI -->
-  <!-- ⚠️ KORREKTER PFAD: liegt unter assets/ui/ -->
-  <script src="./assets/ui/ui-start.js?v=16.1.19" defer></script>
+    <!-- UI -->
+  <!-- KORREKTER PFAD + sichtbarer onerror-Hinweis -->
+  <script src="./assets/ui/ui-start.js?v=16.1.19" defer
+          onerror="alert('ui-start.js konnte nicht geladen werden (Pfad/404). Prüfe: assets/ui/ui-start.js');"></script>
   <script src="./ui-build.js?v=16.1.19" defer></script>
+
+  <!-- Diagnose: zeigt klar, wenn openStartPanel nicht erreichbar ist -->
+  <script>
+    (function(){
+      const showDiag = (msg) => {
+        const d = document.createElement('div');
+        Object.assign(d.style, {
+          position:'fixed', left:'8px', top:'8px', zIndex: 99999,
+          background:'rgba(0,0,0,.7)', color:'#ffdede', padding:'6px 8px',
+          border:'1px solid rgba(255,255,255,.2)', borderRadius:'8px',
+          font:'12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+        });
+        d.textContent = msg;
+        document.body.appendChild(d);
+        console.warn(msg);
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+        let tries = 0, ok = false;
+        const maxTries = 50; // ~5s
+        const timer = setInterval(() => {
+          tries++;
+          if (window.GameUI?.openStartPanel) {
+            clearInterval(timer);
+            ok = true;
+            window.GameUI.openStartPanel({
+              maps: [{ label:'map-mini.json (16×)', url:'./assets/maps/map-mini.json' }]
+            });
+          }
+          if (tries >= maxTries && !ok) {
+            clearInterval(timer);
+            showDiag('GameUI.openStartPanel nicht verfügbar. ui-start.js wurde nicht ausgeführt.');
+          }
+        }, 100);
+
+        // Inspector-FAB
+        document.getElementById('btn-inspector')?.addEventListener('click', () => {
+          if (window.GameInspector?.toggle) window.GameInspector.toggle();
+          else showDiag('GameInspector.toggle() nicht verfügbar (tools/dev-inspector.js?)');
+        });
+      });
+    })();
+  </script>
 
   <!-- Game -->
   <script src="./boot.js?v=16.1.19" defer></script>
