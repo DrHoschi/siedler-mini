@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-30T11:58:23.390Z",
+  "createdAt": "2025-08-30T15:29:14.837Z",
   "root": ".",
-  "count": 246,
+  "count": 248,
   "entries": [
     {
       "type": "dir",
@@ -744,6 +744,11 @@
     },
     {
       "type": "file",
+      "path": "assets/ui/start-bg.jpeg",
+      "size": 564395
+    },
+    {
+      "type": "file",
       "path": "assets/ui/ui-bridge.js",
       "size": 3443
     },
@@ -756,6 +761,11 @@
       "type": "file",
       "path": "assets/ui/ui-build.js",
       "size": 2957
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/ui-start.js",
+      "size": 5858
     },
     {
       "type": "file",
@@ -1002,7 +1012,7 @@
     {
       "type": "file",
       "path": "tools/dev-inspector.js",
-      "size": 8430
+      "size": 8205
     },
     {
       "type": "file",
@@ -1112,12 +1122,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 7724
+      "size": 6033
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 3120
+      "size": 3809
     },
     {
       "type": "file",
@@ -1191,8 +1201,8 @@
     },
     {
       "type": "file",
-      "path": "ui-start.js",
-      "size": 5101
+      "path": "ui-start.css",
+      "size": 2695
     },
     {
       "type": "file",
