@@ -3,210 +3,101 @@
 <head>
   <!--
   ============================================================
-  Datei: index.html
+  Datei : index.html
   Projekt: Siedler-Mini
-  Version: v16.1.19
-  Zweck: Einstiegspunkt (DOM-Struktur, Imports, Init-Events)
+  Version: v16.1.21
+  Zweck : Einstiegspunkt (DOM, Imports, Init-Events)
   ============================================================
   -->
-  <meta charset="utf-8" />
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Siedler-Mini – v16.1.19</title>
+  <title>Siedler-Mini – v16.1.21</title>
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="./css/base.css?v=16.1.19">
-  <link rel="stylesheet" href="./css/platform.css?v=16.1.19">
-  <link rel="stylesheet" href="./css/mobile.css?v=16.1.19">
-  <link rel="stylesheet" href="./css/ios.css?v=16.1.19">
-  <link rel="stylesheet" href="./ui-build.css?v=16.1.19">
-  <link rel="stylesheet" href="./ui-start.css?v=16.1.19">
+  <!-- Basis-Styles -->
+  <link rel="stylesheet" href="./css/base.css?v=16.1.21">
+  <link rel="stylesheet" href="./css/platform.css?v=16.1.21">
+  <link rel="stylesheet" href="./css/mobile.css?v=16.1.21">
+  <link rel="stylesheet" href="./css/ios.css?v=16.1.21">
+
+  <!-- UI: Start-Panel (eigene CSS-Datei) -->
+  <link rel="stylesheet" href="./ui-start.css?v=16.1.21">
 
   <style>
-    html, body { height:100%; }
-    body { margin:0; background:#093c2f; overflow:hidden; }
+    html,body{height:100%}
+    body{margin:0;background:#093c2f;overflow:hidden}
+    /* optional: Canvas sichtbar machen */
+    canvas#game, canvas#stage { position:fixed; inset:0; width:100vw; height:100vh; display:block; z-index:10; background:transparent; }
   </style>
 </head>
 <body>
-  <!-- DOM-Struktur -->
+  <!-- DOM-Wurzel -->
   <div id="start-panel" aria-label="Startfenster"></div>
   <canvas id="game" aria-label="Spielfeld" width="0" height="0"></canvas>
 
   <!-- Inspector-FAB -->
-  <button id="btn-inspector" aria-label="Inspektor öffnen" style="
-    position:fixed;
-    right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    width:64px; height:64px; border-radius:50%; border:none;
-    background:rgba(0,0,0,.35); backdrop-filter: blur(4px); cursor:pointer;">🛠️</button>
+  <button id="btn-inspector" aria-label="Inspektor öffnen"
+    style="position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));
+           width:64px;height:64px;border-radius:50%;border:none;background:rgba(0,0,0,.35);backdrop-filter:blur(4px);cursor:pointer;z-index:2001">🛠️</button>
 
-  <div id="build-dock" aria-label="Baumenü" style="display:none"></div>
+  <!-- Core -->
+  <script src="./core/asset.js?v=16.1.21" defer></script>
+  <script src="./core/asset.items.js?v=16.1.21" defer></script>
+  <script src="./core/terrain.js?v=16.1.21" defer></script>
+  <script src="./core/actor.js?v=16.1.21" defer></script>
 
-  <!-- Scripts: Core -->
-  <script src="./core/asset.js?v=16.1.19" defer></script>
-  <script src="./core/asset.items.js?v=16.1.19" defer></script>
-  <script src="./core/terrain.js?v=16.1.19" defer></script>
-  <script src="./core/actor.js?v=16.1.19" defer></script>
+  <!-- Tools -->
+  <script src="./tools/debug-tools.js?v=16.1.21" defer></script>
+  <script src="./tools/dev-inspector.js?v=16.1.21" defer></script>
 
-  <!-- Scripts: Tools -->
-  <script src="./tools/debug-tools.js?v=16.1.19" defer></script>
-  <script src="./tools/dev-inspector.js?v=16.1.19" defer></script>
+  <!-- UI -->
+  <script src="./assets/ui/ui-start.js?v=16.1.21" defer></script>
 
-  <!-- Scripts: UI -->
-  <!-- WICHTIG: ui-start.js liegt unter assets/ui/ -->
-  <script src="./assets/ui/ui-start.js?v=16.1.19" defer
-          onerror="alert('ui-start.js konnte nicht geladen werden (Pfad/404). Prüfe: assets/ui/ui-start.js');"></script>
-  <script src="./ui-build.js?v=16.1.19" defer></script>
+  <!-- ⚠️ Nur EINE Build-UI laden: die neue mit Tabs/kleinen Thumbs -->
+  <script src="./assets/ui/ui-build.js?v=16.1.8" defer></script>
 
-  <!-- Scripts: Game -->
-  <script src="./boot.js?v=16.1.19" defer></script>
-  <script src="./game.js?v=16.1.19" defer></script>
-  <script src="./boot.compat.js" defer></script>
-  <script src="./main.js?v=16.1.19" defer></script>
-  <!-- NEU: das neue Menü aus assets/ -->
-  <script src="./assets/ui/ui-build.js?v=16.1.7" defer></script>
-  <!-- Init + Ultimate Fallback -->
+  <!-- Game -->
+  <script src="./boot.js?v=16.1.21" defer></script>
+  <script src="./game.js?v=16.1.23" defer></script>
+  <!-- Start-Bridge (stellt GameBoot.start/startGame bereit) -->
+  <script src="./boot.compat.js?v=1" defer></script>
+
+  <!-- Init + Diagnose + Fallback-Schließen -->
   <script>
-    // Meta/Version
-    window.__cb = window.__cb || {};
-    window.__cb.indexVersion = "16.1.19";
-
-    // kleine Diagnose-Bubble (ein-/aus mit ` Taste)
-    (function makeDiag(){
-      const d = document.createElement('div');
-      d.id = 'cb-diag';
-      Object.assign(d.style, {
-        position:'fixed', left:'8px', top:'8px', zIndex: 99999,
-        background:'rgba(0,0,0,.70)', color:'#ffdede',
-        padding:'6px 8px', border:'1px solid rgba(255,255,255,.2)',
-        borderRadius:'8px', font:'12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        display:'none'
-      });
-      d.textContent = 'diag…';
-      document.body.appendChild(d);
-      document.addEventListener('keydown', (e)=>{ if(e.key==='`'){ d.style.display = (d.style.display==='none'?'block':'none'); }});
-      window.__cbDiag = (msg)=>{ d.style.display='block'; d.textContent = msg; console.warn('[diag]', msg); };
-    })();
-
-    document.addEventListener('DOMContentLoaded', () => {
-      (window.CBLog?.ok || console.log)(`[index] UI bereit (index v${window.__cb.indexVersion})`);
-      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { version: window.__cb.indexVersion }}));
-
-      const maps = [{ label:'map-mini.json (16×)', url:'./assets/maps/map-mini.json' }];
-
-      // Versuch: reguläres Startpanel aus ui-start.js
-      let tries = 0, opened = false;
-      const maxTries = 50; // ~5s
-      const t = setInterval(() => {
-        tries++;
-        if (window.GameUI?.openStartPanel) {
-          clearInterval(t);
-          opened = true;
-          window.GameUI.openStartPanel({ maps });
-        }
-        if (tries >= maxTries && !opened) {
-          clearInterval(t);
-          window.__cbDiag?.('GameUI.openStartPanel nicht verfügbar. ui-start.js wurde nicht ausgeführt.');
-          // === ULTIMATE FALLBACK: Minimal-Startfenster + einfacher Inspector ===
-          (function fallbackUI(){
-            // BG
-            if(!document.getElementById('cb-start-bg')){
-              const bg = document.createElement('div');
-              bg.id = 'cb-start-bg';
-              Object.assign(bg.style, {
-                position:'fixed', left:0, top:0, right:0, bottom:0,
-                background:"url('./assets/ui/start-bg.jpeg') center/cover no-repeat, #093c2f",
-                zIndex:900
-              });
-              document.body.appendChild(bg);
-            }
-            // Startpanel
-            const host = document.getElementById('start-panel');
-            host.style.display = 'flex';
-            host.style.position = 'fixed';
-            host.style.left = 0; host.style.top = 0; host.style.right = 0; host.style.bottom = 0;
-            host.style.alignItems = 'center'; host.style.justifyContent = 'center';
-            host.style.zIndex = 1000;
-            host.innerHTML = `
-              <div style="width:min(92vw,720px);background:rgba(0,0,0,.45);
-                          border:1px solid rgba(255,255,255,.1);border-radius:16px;
-                          padding:18px;backdrop-filter:blur(8px);color:#e6f2ed;">
-                <div style="font-weight:800;font-size:26px;margin-bottom:6px;">City-Builder – Start</div>
-                <div style="opacity:.75;margin-bottom:12px;font-size:13px;">index v${window.__cb.indexVersion}</div>
-                <label style="display:block;margin:4px 0 6px 2px;opacity:.9;">Karte:</label>
-                <select id="cb-start-map" style="width:100%;padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.25);color:#e6f2ed;border:1px solid rgba(255,255,255,.12);margin-bottom:14px;">
-                  <option value="./assets/maps/map-mini.json">map-mini.json (16×)</option>
-                </select>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                  <button id="cb-start-go" style="padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(0,0,0,.24));color:#e6f2ed;">▶︎ Start</button>
-                  <button onclick="location.reload()" style="padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(0,0,0,.24));color:#e6f2ed;">⟳ Neu-Start</button>
-                </div>
-              </div>`;
-            document.getElementById('cb-start-go').onclick = () => {
-              const url = document.getElementById('cb-start-map').value;
-              window.__cb.selectedMap = url;
-              if (window.GameBoot?.start) window.GameBoot.start(url);
-              else if (window.startGame) window.startGame(url);
-              else alert('GameBoot.start() fehlt – prüfe game.js Einbindung.');
-            };
-
-            // einfacher Inspector-Fallback (nur Logs/Runtime dump)
-            if (!window.GameInspector?.toggle) {
-              window.GameInspector = window.GameInspector || {};
-              window.GameInspector.toggle = function(){
-                let p = document.getElementById('cb-dev-inspector');
-                if (!p) {
-                  p = document.createElement('div');
-                  p.id = 'cb-dev-inspector';
-                  Object.assign(p.style, {
-                    position:'fixed',
-                    right:'calc(16px + env(safe-area-inset-right, 0px))',
-                    bottom:'calc(96px + env(safe-area-inset-bottom, 0px))',
-                    width:'340px', maxHeight:'60vh', overflow:'auto',
-                    padding:'12px', borderRadius:'12px',
-                    border:'1px solid rgba(255,255,255,.08)',
-                    background:'rgba(0,0,0,.55)', color:'#e6f2ed',
-                    backdropFilter:'blur(6px)', zIndex:1200, display:'none'
-                  });
-                  const pre = document.createElement('pre');
-                  pre.id = 'cb-dev-inspector-pre';
-                  pre.style.whiteSpace = 'pre-wrap';
-                  pre.style.fontSize = '12px';
-                  pre.style.margin = '0';
-                  p.append('Inspector (Fallback)\n\n', pre);
-                  document.body.appendChild(p);
-                }
-                p.style.display = (p.style.display==='none'?'block':'none');
-                const rt = (window.__cb && window.__cb.runtime) || null;
-                document.getElementById('cb-dev-inspector-pre').textContent =
-                  rt ? JSON.stringify(rt, null, 2) : 'Keine Runtime-Daten.';
-              };
-            }
-          })();
-        }
-      }, 100);
-
-      // Inspector-FAB
-      document.getElementById('btn-inspector')?.addEventListener('click', () => {
-        if (window.GameInspector?.toggle) window.GameInspector.toggle();
-        else window.__cbDiag?.('GameInspector.toggle() nicht verfügbar.');
-      });
-    });
-  </script>
-  <script>
-  // Startfenster IMMER schließen, sobald Spiel startet – funktioniert für
-  // echtes ui-start.js UND für den Fallback.
   (function(){
+    // Startfenster beim Spielstart schließen (echt + Fallback)
     function closeStartPanel(){
       var host = document.getElementById('start-panel');
       if (host) host.style.display = 'none';
       var bg = document.getElementById('cb-start-bg');
       if (bg && bg.parentNode) bg.parentNode.removeChild(bg);
     }
-    // 1) Wenn unser Start-Button (Fallback) geklickt wurde und GameBoot.start() feuert:
     window.addEventListener('cb:game-start', closeStartPanel);
-    // 2) Falls dein Game irgendwo 'cb:game-started' dispatcht:
     window.addEventListener('cb:game-started', closeStartPanel);
+
+    // Inspector-FAB
+    var fab = document.getElementById('btn-inspector');
+    if (fab){
+      fab.addEventListener('click', function(){
+        if (window.GameInspector && typeof window.GameInspector.toggle==='function'){
+          window.GameInspector.toggle();
+        } else {
+          console.warn('[diag] GameInspector.toggle() nicht verfügbar.');
+        }
+      });
+    }
+
+    // UI Ready -> Startpanel öffnen
+    document.addEventListener('DOMContentLoaded', function(){
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = "16.1.21";
+      // Wenn ui-start.js nicht auto-öffnet, dann leicht verzögert probieren:
+      setTimeout(function(){
+        if (window.GameUI && typeof window.GameUI.openStartPanel === 'function'){
+          try { window.GameUI.openStartPanel({ maps:[{label:'map-mini.json (16×)', url:'./assets/maps/map-mini.json'}] }); } catch(e){}
+        }
+      }, 120);
+    });
   })();
-</script>
+  </script>
 </body>
 </html>
