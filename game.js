@@ -1,19 +1,19 @@
-// game.js — v16.1.20 (ES5)
+// game.js — v16.1.21 (ES5)
 // ---------------------------------------------------------
 // Initialisiert die Engine, registriert GameLoader._start(mapUrl)
 // und sendet Events ('cb:engine-ready', 'cb:game-started').
-// Zeigt ausführliche Logs über CBLog (falls vorhanden).
+// Zeichnet eine Map (Tiles) – mit Fallback, falls Atlas fehlt.
 // ---------------------------------------------------------
 (function(){
   'use strict';
-  var VERSION = 'v16.1.20';
+  var VERSION = 'v16.1.21';
 
   // ---- Logging Helper -------------------------------------------------------
   var log = {
-    ok: function(m){ return (window.CBLog && window.CBLog.ok ? window.CBLog.ok : console.log)(m); },
+    ok:   function(m){ return (window.CBLog && window.CBLog.ok   ? window.CBLog.ok   : console.log)(m); },
     warn: function(m){ return (window.CBLog && window.CBLog.warn ? window.CBLog.warn : console.warn)(m); },
-    err: function(m){ return (window.CBLog && window.CBLog.err ? window.CBLog.err : console.error)(m); },
-    raw: function(m){ return (window.CBLog && window.CBLog.push ? window.CBLog.push : console.log)('LOG', m); }
+    err:  function(m){ return (window.CBLog && window.CBLog.err  ? window.CBLog.err  : console.error)(m); },
+    raw:  function(m){ return (window.CBLog && window.CBLog.push ? window.CBLog.push : console.log)('LOG', m); }
   };
 
   // Public Namespace
@@ -152,17 +152,28 @@
     return new Promise(function(resolve, reject){
       function startNow(){
         log.ok("GameLoader.start " + mapUrl);
+
         // 1) Map laden/normalisieren
         loadJSON(mapUrl).then(function(map){
-          var width  = (map.width  != null ? map.width  : 16);
-          var height = (map.height != null ? map.height : 10);
-          var tile   = (map.tile != null ? map.tile : (map.tileSize != null ? map.tileSize : 64));
+
+          // --- Map normalisieren (unterstützt width/height ODER w/h) ---
+          var width  = (map.width  != null ? map.width  : (map.w != null ? map.w : 16));
+          var height = (map.height != null ? map.height : (map.h != null ? map.h : 10));
+          var tile   = (map.tile   != null ? map.tile   :
+                       (map.tileSize != null ? map.tileSize :
+                       (map.tile_size != null ? map.tile_size : 32)));
+
           currentMap = {
-            width: width,
+            width:  width,
             height: height,
-            tile: tile,
-            layers: map.layers || [{ name: 'ground', data: map.tiles || [] }]
+            tile:   tile,
+            // Layer-Formate abdecken:
+            layers:  map.layers ? map.layers
+                    : (map.tiles ? [{ name: 'ground', data: map.tiles }] : [])
           };
+
+          log.ok("Map geladen: " + width + "×" + height + " · Tile " + tile);
+
           // 2) Atlas + Tileset
           Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ])
             .then(function(results){
@@ -188,6 +199,7 @@
               } catch(_){}
               resolve(true);
             });
+
         }).catch(function(e){
           log.err("Start fehlgeschlagen: " + e.message);
           reject(e);
