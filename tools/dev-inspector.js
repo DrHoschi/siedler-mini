@@ -2,29 +2,28 @@
 ============================================================
 Datei: tools/dev-inspector.js
 Projekt: Siedler-Mini
-Version: v16.1.19
-Zweck: Einfacher Developer-Inspector (toggle per FAB)
+Version: 16.1.19
+Zweck: Developer-Inspector (toggle per FAB, Live-Runtime)
 ============================================================
 */
 
 /* 1) Imports */
-// (keine externen Importe)
+// – keine
 
 /* 2) Konstanten / Meta */
-const DEV_INSP_VERSION = "v16.1.19";
+const DEV_INSP_VERSION = "16.1.19";
 
 /* 3) Hilfsfunktionen */
 function ensurePanel() {
   let panel = document.getElementById("cb-dev-inspector");
   if (panel) return panel;
-
   panel = document.createElement("div");
   panel.id = "cb-dev-inspector";
   Object.assign(panel.style, {
     position: "fixed",
     right: "16px",
     bottom: "96px",
-    width: "320px",
+    width: "340px",
     maxHeight: "60vh",
     overflow: "auto",
     padding: "12px",
@@ -34,10 +33,9 @@ function ensurePanel() {
     color: "#e6f2ed",
     boxShadow: "0 10px 24px rgba(0,0,0,0.4)",
     backdropFilter: "blur(6px)",
-    zIndex: "1200",
+    zIndex: "900",           // unter dem Start-Panel
     display: "none"
   });
-
   const h = document.createElement("div");
   h.textContent = "Inspector";
   h.style.fontWeight = "700";
@@ -47,41 +45,40 @@ function ensurePanel() {
   pre.id = "cb-dev-inspector-pre";
   pre.style.whiteSpace = "pre-wrap";
   pre.style.fontSize = "12px";
-  pre.textContent = "No data.";
+  pre.style.margin = "0";
 
   panel.append(h, pre);
   document.body.append(panel);
   return panel;
 }
-
 function renderInspector() {
   const pre = document.getElementById("cb-dev-inspector-pre");
   if (!pre) return;
-  const data = {
+  const rt = (window.__cb && window.__cb.runtime) || null;
+  const data = rt ? {
     version: DEV_INSP_VERSION,
-    indexVersion: window.__cb?.indexVersion,
-    canvas: {
-      size: (() => {
-        const c = document.getElementById("game");
-        return c ? { w: c.width, h: c.height, cssW: c.style.width, cssH: c.style.height } : null;
-      })()
-    },
-    map: window.__cb?.selectedMap || null,
-    dpr: window.devicePixelRatio || 1,
-    perfNow: Math.round(performance.now())
-  };
+    index: rt.indexVersion,
+    game: rt.version,
+    canvas: { pxW: rt.canvas.pxW, pxH: rt.canvas.pxH, cssW: rt.canvas.cssW, cssH: rt.canvas.cssH },
+    dpr: rt.dpr,
+    fps: rt.fps,
+    map: rt.map,
+    mapSize: rt.mapSize,
+    tile: rt.tile,
+    perfNow: rt.perfNow
+  } : { note: "Keine Runtime-Daten. Spiel noch nicht gestartet?" };
   pre.textContent = JSON.stringify(data, null, 2);
 }
 
 /* 4) Klassen */
-// (nicht nötig)
+// – keine
 
 /* 5) Hauptlogik */
 (function initDevInspector(){
   (window.CBLog?.ok || console.log)(`[inspector] Modul geladen (v${DEV_INSP_VERSION})`);
+  ensurePanel();
 
   window.GameInspector = window.GameInspector || {};
-
   window.GameInspector.toggle = function(){
     const panel = ensurePanel();
     const isOpen = panel.style.display !== "none";
@@ -93,9 +90,10 @@ function renderInspector() {
     }
   };
 
-  // Automatisch aktualisieren, wenn Spiel gestartet wurde
+  // Live-Update, wenn Runtime neue Daten liefert
+  window.addEventListener('cb:runtime-tick', () => {
+    const panel = document.getElementById("cb-dev-inspector");
+    if (panel && panel.style.display !== "none") renderInspector();
+  });
   window.addEventListener('cb:game-started', renderInspector);
 })();
-
-/* 6) Exports */
-// (API an window.GameInspector)
