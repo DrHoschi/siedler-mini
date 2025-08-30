@@ -1,14 +1,15 @@
-/* assets/ui/ui-build.js  —  Build-UI mit Tabs/Kategorien
-   Version v16.1.7 (ES5) */
+/* assets/ui/ui-build.js  —  Build-UI mit Tabs/Kategorien (kompakte Thumbs)
+   Version v16.1.8 (ES5) */
 (function () {
   'use strict';
 
-  var VERSION = "v16.1.7";
+  var VERSION = "v16.1.8";
   var STYLE_ID = "cb-ui-build-style";
 
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
   function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
 
+  // Kompakt: kleinere Kacheln/Thumbnails, responsive Grid
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     var css =
@@ -24,18 +25,27 @@
       +".cb-build__head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px}"
       +".cb-build__title{font:700 16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#dfe7df}"
       +".cb-build__close{appearance:none;border:none;border-radius:8px;padding:8px 10px;background:rgba(255,255,255,.08);color:#e7efe7;font-weight:600;cursor:pointer}"
-      +".cb-tabs{display:flex;gap:8px;padding:0 12px 8px}"
-      +".cb-tab{appearance:none;border:none;border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.08);color:#e7efe7;cursor:pointer;font-weight:600}"
-      +".cb-tab.is-active{background:rgba(92,205,139,.2);outline:1px solid rgba(92,205,139,.4)}"
-      +".cb-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:10px 12px 14px}"
-      +".cb-tile{height:72px;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}"
-      +".cb-tile__img{max-width:92%;max-height:92%;image-rendering:auto}"
-      +".cb-tile__label{position:absolute;left:8px;bottom:6px;right:8px;font-size:12px;color:#e8efe8;text-shadow:0 1px 0 rgba(0,0,0,.6);font-weight:700;text-align:center}"
+
+      +".cb-tabs{display:flex;gap:8px;padding:0 12px 8px;flex-wrap:wrap}"
+      +".cb-tab{appearance:none;border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.08);color:#e7efe7;cursor:pointer;font-weight:600;font-size:13px}"
+      +".cb-tab.is-active{background:rgba(92,205,139,.22);outline:1px solid rgba(92,205,139,.4)}"
+
+      /* Responsive Grid: mobil 3, tablet 4, desktop 6 Spalten */
+      +".cb-grid{display:grid;gap:10px;padding:8px 12px 12px;grid-template-columns:repeat(3,minmax(0,1fr))}"
+      +"@media(min-width:600px){.cb-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}"
+      +"@media(min-width:1000px){.cb-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}"
+
+      /* Kompakte Kachel: 64px Höhe, Bild skaliert via object-fit */
+      +".cb-tile{height:64px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.12);"
+      +"background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}"
+      +".cb-tile__img{max-width:90%;max-height:90%;width:auto;height:auto;object-fit:contain;image-rendering:auto}"
+      +".cb-tile__label{position:absolute;left:6px;bottom:4px;right:6px;font-size:11px;color:#e8efe8;text-shadow:0 1px 0 rgba(0,0,0,.6);font-weight:700;text-align:center;opacity:.95}"
+
       +"@media(min-width:840px){.cb-build{left:10vw;right:10vw;border-radius:16px 16px 0 0}}";
     var el = document.createElement("style"); el.id = STYLE_ID; el.textContent = css; document.head.appendChild(el);
   }
 
-  // Kategorien + Einträge → Keys passen zu game.js: BUILDINGS
+  // Kategorien + Einträge (Keys passen zu game.js -> BUILDINGS)
   var CATALOG = {
     "Infrastruktur": [
       { key:"road",      label:"Straße",    img:"assets/tex/road/topdown_road_straight.png", type:"tool" },
@@ -135,11 +145,8 @@
         t.addEventListener("click", function(){
           try{
             if (window.Game && typeof window.Game.setTool === "function"){
-              if (item.type === "tool"){
-                window.Game.setTool(item.key, null);
-              } else {
-                window.Game.setTool("build", { key: item.key });
-              }
+              if (item.type === "tool"){ window.Game.setTool(item.key, null); }
+              else { window.Game.setTool("build", { key: item.key }); }
               ok("[ok] Tool gesetzt: " + item.key);
             }
           }catch(e){ warn("[ui-build] Tool setzen fehlgeschlagen: "+ (e && e.message ? e.message : e)); }
