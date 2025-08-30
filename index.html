@@ -15,12 +15,12 @@
   <title>Siedler-Mini – v16.1.19</title>
 
   <!-- 2) Imports / Styles -->
-  <link rel="stylesheet" href="./css/base.css">
-  <link rel="stylesheet" href="./css/platform.css">
-  <link rel="stylesheet" href="./css/mobile.css">
-  <link rel="stylesheet" href="./css/ios.css">
-  <link rel="stylesheet" href="./ui-build.css">
-  <link rel="stylesheet" href="./ui-start.css">
+  <link rel="stylesheet" href="./css/base.css?v=16.1.19">
+  <link rel="stylesheet" href="./css/platform.css?v=16.1.19">
+  <link rel="stylesheet" href="./css/mobile.css?v=16.1.19">
+  <link rel="stylesheet" href="./css/ios.css?v=16.1.19">
+  <link rel="stylesheet" href="./ui-build.css?v=16.1.19">
+  <link rel="stylesheet" href="./ui-start.css?v=16.1.19">
 
   <style>
     /* Fallback-Hintergrund (falls kein Bild geladen wird) */
@@ -37,7 +37,7 @@
 
   <canvas id="game" aria-label="Spielfeld" width="0" height="0"></canvas>
 
-  <!-- Inspector-FAB -->
+  <!-- Inspector-FAB (Safe-Area aware) -->
   <button id="btn-inspector" aria-label="Inspektor öffnen" style="
     position:fixed;
     right: calc(16px + env(safe-area-inset-right, 0px));
@@ -54,23 +54,24 @@
 
   <!-- 2) Imports / Scripts -->
   <!-- Core -->
-  <script src="./core/asset.js" defer></script>
-  <script src="./core/asset.items.js" defer></script>
-  <script src="./core/terrain.js" defer></script>
-  <script src="./core/actor.js" defer></script>
+  <script src="./core/asset.js?v=16.1.19" defer></script>
+  <script src="./core/asset.items.js?v=16.1.19" defer></script>
+  <script src="./core/terrain.js?v=16.1.19" defer></script>
+  <script src="./core/actor.js?v=16.1.19" defer></script>
 
   <!-- Tools / Debug -->
-  <script src="./tools/debug-tools.js" defer></script>
-  <script src="./tools/dev-inspector.js" defer></script>
+  <script src="./tools/debug-tools.js?v=16.1.19" defer></script>
+  <script src="./tools/dev-inspector.js?v=16.1.19" defer></script>
 
   <!-- UI -->
-  <script src="./ui-start.js" defer></script>
-  <script src="./ui-build.js" defer></script>
+  <!-- ⚠️ KORREKTER PFAD: liegt unter assets/ui/ -->
+  <script src="./assets/ui/ui-start.js?v=16.1.19" defer></script>
+  <script src="./ui-build.js?v=16.1.19" defer></script>
 
   <!-- Game -->
-  <script src="./boot.js" defer></script>
-  <script src="./game.js" defer></script>
-  <script src="./main.js" defer></script>
+  <script src="./boot.js?v=16.1.19" defer></script>
+  <script src="./game.js?v=16.1.19" defer></script>
+  <script src="./main.js?v=16.1.19" defer></script>
 
   <!-- 7) Logs & Init Events -->
   <script>
@@ -84,9 +85,7 @@
       }));
 
       // Robust: Versuche Startfenster zu öffnen
-      const maps = [
-        { label:'map-mini.json (16×)', url:'./assets/maps/map-mini.json' }
-      ];
+      const maps = [{ label:'map-mini.json (16×)', url:'./assets/maps/map-mini.json' }];
       let tries = 0;
       const maxTries = 50; // ~5s
       const timer = setInterval(() => {
@@ -97,20 +96,15 @@
         } else if (tries >= maxTries) {
           clearInterval(timer);
           (window.CBLog?.warn || console.warn)(
-            "[index] GameUI.openStartPanel nicht verfügbar (Timeout). Prüfe ui-start.js!"
+            "[index] GameUI.openStartPanel nicht verfügbar (Timeout). Prüfe assets/ui/ui-start.js!"
           );
         }
       }, 100);
 
       // Inspector-FAB verbinden
       document.getElementById('btn-inspector')?.addEventListener('click', () => {
-        if (window.GameInspector?.toggle) {
-          window.GameInspector.toggle();
-        } else {
-          (window.CBLog?.warn || console.warn)(
-            "Inspector (Fallback) – kein GameInspector.toggle() gefunden."
-          );
-        }
+        if (window.GameInspector?.toggle) window.GameInspector.toggle();
+        else (window.CBLog?.warn || console.warn)("Inspector – GameInspector.toggle() nicht verfügbar.");
       });
     });
   </script>
