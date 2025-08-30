@@ -1,187 +1,101 @@
-/* ============================================================================
- * Dev‑Inspector v2.1 — integrierter Bildschirm‑Log + Asset‑Zähler
- * Datei: tools/dev-inspector.js
- * Änderungen:
- *  • Fix: Min/Max-Button war im Minimiert-Zustand nicht klickbar (pointer-events)
- *  • Stabiler Toggle (#diToggle), startet minimiert, jederzeit klickbar
- * Public API:
- *  window.DevInspector.push(kind,url,meta?)   // "img" | "json" | "js"
- *  window.DevInspector.log(text)              // Logzeile anhängen
- *  window.DevInspector.setMinimized(bool)     // Min/Max
- * ========================================================================= */
+/*
+============================================================
+Datei: tools/dev-inspector.js
+Projekt: Siedler-Mini
+Version: v16.1.19
+Zweck: Einfacher Developer-Inspector (toggle per FAB)
+============================================================
+*/
 
-(() => {
-  if (window.DevInspector) return; // Mehrfach-Init verhindern
+/* 1) Imports */
+// (keine externen Importe)
 
-  // ---------- Styles --------------------------------------------------------
-  const css = `
-  #devInspector{
-    position:fixed; left:8px; right:8px; bottom:8px; z-index:99990;
-    color:#cfe3ff; font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto
-  }
-  #devInspector .panel{
-    background:#0e1b2c; border:1px solid #1b2a40; border-radius:12px;
-    box-shadow:0 12px 40px rgba(0,0,0,.35); overflow:hidden
-  }
-  #devInspector header{
-    display:flex; gap:8px; align-items:center; padding:8px 10px;
-    border-bottom:1px solid #1b2a40
-  }
-  #devInspector header .title{font-weight:600; opacity:.9}
-  #devInspector header .sp{flex:1}
-  #devInspector header button{
-    background:#0f1b29; border:1px solid #1b2a40; color:#cfe3ff;
-    border-radius:10px; padding:5px 10px; cursor:pointer
-  }
-  #devInspector .body{display:grid; grid-template-columns:1fr; gap:10px; padding:10px}
+/* 2) Konstanten / Meta */
+const DEV_INSP_VERSION = "v16.1.19";
 
-  /* Karten-/Zählerbereich */
-  #devInspector .grid{
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px
-  }
-  #devInspector .card{background:#0b1522; border:1px solid #192537; border-radius:10px; padding:8px}
-  #devInspector .muted{opacity:.7}
+/* 3) Hilfsfunktionen */
+function ensurePanel() {
+  let panel = document.getElementById("cb-dev-inspector");
+  if (panel) return panel;
 
-  /* Minimiert: nur Header sichtbar (Button bleibt klickbar!) */
-  #devInspector.min .body{display:none}
-  #devInspector.min header{border-bottom:0}
-
-  /* LOG-Bereich */
-  #diLog{background:#0b1320; border:1px solid #18263a; border-radius:10px; padding:8px}
-  #diLog pre{max-height:45vh; overflow:auto; margin:0; white-space:pre-wrap}
-  #diLog .toolbar{display:flex; gap:8px; margin-bottom:6px}
-  #diLog .toolbar button{
-    background:#0f1b29; border:1px solid #1b2a40; color:#cfe3ff;
-    border-radius:10px; padding:4px 10px; cursor:pointer
-  }
-  `;
-  const style = document.createElement('style'); style.textContent = css; document.head.appendChild(style);
-
-  // ---------- DOM -----------------------------------------------------------
-  const root = document.createElement('div'); root.id = 'devInspector'; root.className = 'min';
-  root.innerHTML = `
-    <div class="panel">
-      <header>
-        <span class="title">Dev‑Inspector</span>
-        <span class="muted" id="diSummary">Items: 0 • Images: 0 • JSON: 0 • JS: 0</span>
-        <span class="sp"></span>
-        <button id="diToggle" title="Maximieren/Minimieren">Max</button>
-        <button id="diCopy">Copy Pfad‑Liste</button>
-        <button id="diExport">Export JSON</button>
-        <button id="diClear">Clear</button>
-        <button id="diHide">Hide</button>
-      </header>
-      <div class="body">
-        <div class="grid">
-          <div class="card"><div class="muted">Items</div><div id="diItems">0</div></div>
-          <div class="card"><div class="muted">Images</div><div id="diImages">0</div></div>
-          <div class="card"><div class="muted">JSON</div><div id="diJson">0</div></div>
-          <div class="card"><div class="muted">JS</div><div id="diJs">0</div></div>
-        </div>
-        <div id="diLog">
-          <div class="toolbar">
-            <button id="diLogSave">Debug speichern</button>
-            <button id="diLogCopy">Log kopieren</button>
-            <span class="muted">Bildschirm‑Log</span>
-          </div>
-          <pre id="diLogPre">(noch keine Einträge)</pre>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(root);
-
-  // ---------- State + Helper -----------------------------------------------
-  const state = {items:[], counts:{items:0, images:0, json:0, js:0}, lines:[]};
-  const pre = root.querySelector('#diLogPre');
-
-  function refresh() {
-    root.querySelector('#diItems').textContent  = state.counts.items;
-    root.querySelector('#diImages').textContent = state.counts.images;
-    root.querySelector('#diJson').textContent   = state.counts.json;
-    root.querySelector('#diJs').textContent     = state.counts.js;
-    root.querySelector('#diSummary').textContent =
-      `Items: ${state.counts.items} • Images: ${state.counts.images} • JSON: ${state.counts.json} • JS: ${state.counts.js}`;
-  }
-
-  function push(kind, url, meta={}) {
-    state.items.push({t:kind, url, meta});
-    state.counts.items++;
-    if (kind==='img')  state.counts.images++;
-    if (kind==='json') state.counts.json++;
-    if (kind==='js')   state.counts.js++;
-    refresh();
-  }
-
-  function logLine(text) {
-    const s = `[${new Date().toISOString()}] ${text}`;
-    state.lines.push(s);
-    if (state.lines.length>5000) state.lines.shift();           // Ringpuffer
-    pre.textContent = state.lines.slice(-1200).join('\n');      // letzte n Zeilen
-  }
-
-  // ---------- Buttons -------------------------------------------------------
-  const btnToggle = root.querySelector('#diToggle');
-  btnToggle.addEventListener('click', () => {
-    const isMin = root.classList.toggle('min');
-    // toggle() gibt true, wenn Klasse *jetzt* vorhanden ist → dann minimiert
-    // Wir wollen Button-Text passend setzen:
-    root.classList.toggle('min', isMin);
-    btnToggle.textContent = isMin ? 'Max' : 'Min';
+  panel = document.createElement("div");
+  panel.id = "cb-dev-inspector";
+  Object.assign(panel.style, {
+    position: "fixed",
+    right: "16px",
+    bottom: "96px",
+    width: "320px",
+    maxHeight: "60vh",
+    overflow: "auto",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(0,0,0,0.5)",
+    color: "#e6f2ed",
+    boxShadow: "0 10px 24px rgba(0,0,0,0.4)",
+    backdropFilter: "blur(6px)",
+    zIndex: "1200",
+    display: "none"
   });
 
-  root.querySelector('#diCopy').onclick = () => {
-    const txt = state.items.map(it=>`${it.t}\t${it.url}`).join('\n');
-    navigator.clipboard?.writeText(txt).catch(()=>{});
-  };
-  root.querySelector('#diExport').onclick = () => {
-    const blob = new Blob([JSON.stringify({items:state.items, counts:state.counts, log:state.lines},null,2)], {type:'application/json'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dev-inspector.json'; a.click(); URL.revokeObjectURL(a.href);
-  };
-  root.querySelector('#diClear').onclick = () => {
-    state.items.length=0; state.counts={items:0,images:0,json:0,js:0}; refresh();
-  };
-  root.querySelector('#diHide').onclick = () => { root.style.display='none'; };
+  const h = document.createElement("div");
+  h.textContent = "Inspector";
+  h.style.fontWeight = "700";
+  h.style.marginBottom = "8px";
 
-  root.querySelector('#diLogCopy').onclick = () => {
-    const txt = pre.textContent || state.lines.join('\n'); navigator.clipboard?.writeText(txt).catch(()=>{});
+  const pre = document.createElement("pre");
+  pre.id = "cb-dev-inspector-pre";
+  pre.style.whiteSpace = "pre-wrap";
+  pre.style.fontSize = "12px";
+  pre.textContent = "No data.";
+
+  panel.append(h, pre);
+  document.body.append(panel);
+  return panel;
+}
+
+function renderInspector() {
+  const pre = document.getElementById("cb-dev-inspector-pre");
+  if (!pre) return;
+  const data = {
+    version: DEV_INSP_VERSION,
+    indexVersion: window.__cb?.indexVersion,
+    canvas: {
+      size: (() => {
+        const c = document.getElementById("game");
+        return c ? { w: c.width, h: c.height, cssW: c.style.width, cssH: c.style.height } : null;
+      })()
+    },
+    map: window.__cb?.selectedMap || null,
+    dpr: window.devicePixelRatio || 1,
+    perfNow: Math.round(performance.now())
   };
-  root.querySelector('#diLogSave').onclick = () => {
-    // bevorzugt zentrale saveDebugLog() aus debug.js
-    if (typeof window.saveDebugLog === 'function') { window.saveDebugLog(); return; }
-    // Fallback – Inspector-Log speichern
-    const blob = new Blob([state.lines.join('\n')],{type:'text/plain'}); const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download='siedler-mini-debug.txt'; a.click(); URL.revokeObjectURL(a.href);
-  };
+  pre.textContent = JSON.stringify(data, null, 2);
+}
 
-  // ---------- console‑Hook + debug.js‑Integration ---------------------------
-  const orig = {log:console.log, warn:console.warn, error:console.error, info:console.info};
-  console.log  = (...a)=>{ logLine('LOG:  '+a.map(String).join(' '));  orig.log(...a);  };
-  console.warn = (...a)=>{ logLine('WARN: '+a.map(String).join(' '));  orig.warn(...a); };
-  console.error= (...a)=>{ logLine('ERROR:'+a.map(String).join(' '));  orig.error(...a);};
-  console.info = (...a)=>{ logLine('INFO: '+a.map(String).join(' '));  orig.info(...a); };
+/* 4) Klassen */
+// (nicht nötig)
 
-  // Wenn debug.js vorhanden ist, dessen Ringpuffer regelmäßig spiegeln
-  if (typeof window.debugGetLog === 'function') {
-    setInterval(() => {
-      const txt = window.debugGetLog();
-      if (txt) pre.textContent = txt.split('\n').slice(-1200).join('\n');
-    }, 800);
-  }
+/* 5) Hauptlogik */
+(function initDevInspector(){
+  (window.CBLog?.ok || console.log)(`[inspector] Modul geladen (v${DEV_INSP_VERSION})`);
 
-  // ---------- Expose --------------------------------------------------------
-  window.DevInspector = {
-    push, log: logLine,
-    note: (t)=>logLine(t),
-    json: (url)=>push('json', url),
-    img:  (url)=>push('img',  url),
-    js:   (url)=>push('js',   url),
-    setMinimized:(b)=>{
-      root.classList.toggle('min', !!b);
-      btnToggle.textContent = b ? 'Max' : 'Min';
+  window.GameInspector = window.GameInspector || {};
+
+  window.GameInspector.toggle = function(){
+    const panel = ensurePanel();
+    const isOpen = panel.style.display !== "none";
+    if (isOpen) {
+      panel.style.display = "none";
+    } else {
+      renderInspector();
+      panel.style.display = "block";
     }
   };
 
-  // Start minimiert (Button bleibt klickbar!)
-  window.DevInspector.setMinimized(true);
+  // Automatisch aktualisieren, wenn Spiel gestartet wurde
+  window.addEventListener('cb:game-started', renderInspector);
 })();
+
+/* 6) Exports */
+// (API an window.GameInspector)
