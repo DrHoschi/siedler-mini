@@ -7,9 +7,7 @@ Zweck: Developer-Inspector (toggle per FAB, Live-Runtime)
 ============================================================
 */
 
-/* 1) Imports */
-// – keine
-
+/* 1) Imports */ // – keine
 /* 2) Konstanten / Meta */
 const DEV_INSP_VERSION = "16.1.19";
 
@@ -21,8 +19,8 @@ function ensurePanel() {
   panel.id = "cb-dev-inspector";
   Object.assign(panel.style, {
     position: "fixed",
-    right: "16px",
-    bottom: "96px",
+    right: "calc(16px + env(safe-area-inset-right, 0px))",
+    bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
     width: "340px",
     maxHeight: "60vh",
     overflow: "auto",
@@ -33,7 +31,7 @@ function ensurePanel() {
     color: "#e6f2ed",
     boxShadow: "0 10px 24px rgba(0,0,0,0.4)",
     backdropFilter: "blur(6px)",
-    zIndex: "900",           // unter dem Start-Panel
+    zIndex: "900",     // unter dem Start-Panel
     display: "none"
   });
   const h = document.createElement("div");
@@ -51,6 +49,7 @@ function ensurePanel() {
   document.body.append(panel);
   return panel;
 }
+
 function renderInspector() {
   const pre = document.getElementById("cb-dev-inspector-pre");
   if (!pre) return;
@@ -61,7 +60,7 @@ function renderInspector() {
     game: rt.version,
     canvas: { pxW: rt.canvas.pxW, pxH: rt.canvas.pxH, cssW: rt.canvas.cssW, cssH: rt.canvas.cssH },
     dpr: rt.dpr,
-    fps: rt.fps,
+    fps: (rt.fps === null ? "—" : rt.fps),
     map: rt.map,
     mapSize: rt.mapSize,
     tile: rt.tile,
@@ -70,8 +69,7 @@ function renderInspector() {
   pre.textContent = JSON.stringify(data, null, 2);
 }
 
-/* 4) Klassen */
-// – keine
+/* 4) Klassen */ // – keine
 
 /* 5) Hauptlogik */
 (function initDevInspector(){
@@ -90,7 +88,6 @@ function renderInspector() {
     }
   };
 
-  // Live-Update, wenn Runtime neue Daten liefert
   window.addEventListener('cb:runtime-tick', () => {
     const panel = document.getElementById("cb-dev-inspector");
     if (panel && panel.style.display !== "none") renderInspector();
