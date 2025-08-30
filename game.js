@@ -165,6 +165,12 @@
     }
   };
 
+// --- Start-Signal & Bridge-Hook ---
+CBLog.ok?.(`Game gestartet (${mapUrl})`);
+window.dispatchEvent(new CustomEvent('cb:game-started', { detail: { map: mapUrl }}));
+// Optionaler Bridge-Hook (zeigt Bau-Button an)
+try { window.GameUI?.onGameStarted?.(); } catch(_){}
+  
   // Auto-Init sofort beim Laden der Datei
   try{ initEngine(); }catch(e){ log.err('Engine-Init Fehler: '+e.message); }
 
