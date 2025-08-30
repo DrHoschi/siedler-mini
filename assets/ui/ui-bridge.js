@@ -1,80 +1,100 @@
-<!-- Ablage: ./assets/ui/ui-bridge.js -->
-<script>
-/**
- * ui-bridge.js  v16.1.18
- * -----------------------------------------------------------
- * Brücke zwischen Spiel (Events/Buttons) und dem Bau-Menü.
- * - zeigt/versteckt den Build-FAB wenn das Spiel startet
- * - ruft window.UIBuild.open/close/setTool() falls vorhanden
- * - loggt alles via CBLog (falls aktiv)
- */
+// assets/ui/ui-bridge.js
+// v16.1.19 – Stabile, globale Hooks für Inspector und Bau-Menü
+// ------------------------------------------------------------
+// Liefert: window.GameInspector.toggle(), window.GameUI.{openBuildMenu,closeBuildMenu,onGameStarted,setTool}
+
 (function(){
-  const V = "v16.1.18";
-  const log = (lvl,msg)=>{
-    try{
-      if (window.CBLog){
-        const f = window.CBLog[lvl] || window.CBLog.ok;
-        f(`${msg}`);
-      }else{
-        console[lvl==="err"?"error":lvl==="warn"?"warn":"log"](`[ui-bridge] ${msg}`);
-      }
-    }catch(_){}
+  const LOG = (t,m)=> (window.CBLog?.[t]||console.log)(m);
+
+  // ===== Inspector-Hook ======================================================
+  // Nutzt bevorzugt die echte Inspector-API; ansonsten Fallback-Modal.
+  function openInspector(){
+    if (window.CBInspector?.open) { window.CBInspector.open(); return; }
+    alert("Inspector (Fallback) – kein Game-Inspector.toggle() gefunden.");
+  }
+  function closeInspector(){
+    if (window.CBInspector?.close) { window.CBInspector.close(); return; }
+  }
+  window.GameInspector = window.GameInspector || {
+    toggle(){
+      // wenn offen -> schließen, sonst öffnen (CBInspector verwaltet Zustand selbst)
+      openInspector();
+    },
+    open: openInspector,
+    close: closeInspector
   };
 
-  // Elements aus index.html (Layout bleibt unberührt)
-  const btnBuild   = document.getElementById("btn-build");
-  const btnInspect = document.getElementById("btn-inspector");
+  // ===== Build-UI Hook =======================================================
+  const $buildBtn = ()=> document.getElementById('btn-build');
+  const $dock     = ()=> document.getElementById('build-dock');
 
-  // — Inspector-Button (nur öffnen, eigentlicher Inspector bleibt deiner) —
-  if (btnInspect && !btnInspect.__wired){
-    btnInspect.__wired = true;
-    btnInspect.addEventListener("click", ()=> {
-      // Dein Inspector Script hängt sich global an:
-      try { window.Inspector?.open?.(); } catch(_){}
-    }, {passive:true});
+  // Wird von main.js aufgerufen, wenn das Spiel gestartet hat.
+  function onGameStarted(){
+    const b = $buildBtn();
+    if (!b) return;
+    b.classList.add('visible');
   }
 
-  // — Build-Button an UI-Bibliothek anbinden —
-  function wireBuildButton(){
-    if (!btnBuild || btnBuild.__wired) return;
-    btnBuild.__wired = true;
-    btnBuild.addEventListener("click", ()=>{
-      try{
-        if (window.UIBuild?.isOpen?.()){
-          window.UIBuild.close();
-        }else{
-          window.UIBuild?.open?.();
-        }
-      }catch(e){
-        log("warn", "Bau-Menü API nicht gefunden – erwartete globale Variable z.B. window.UIBuild");
-      }
-    }, {passive:true});
-  }
-  wireBuildButton();
+  function openBuildMenu(){
+    const dock = $dock();
+    if (!dock){ LOG('warn', 'Build-Dock fehlt (#build-dock).'); return; }
 
-  // — auf Spielstart warten → Build-Button einblenden —
-  window.addEventListener("cb:game-started", ()=>{
-    if (btnBuild){
-      btnBuild.classList.add("visible");
-      log("ok", "onGameStarted: Bau-Button aktiviert");
+    // Falls deine ui-build.js eine eigene API bereitstellt, nutze sie:
+    if (window.UIBuild?.open) {
+      window.UIBuild.open(dock);
+      LOG('ok', '[ok] Bau-Menü geöffnet (ui-build.js)');
+      return;
     }
-  });
 
-  // — Falls Engine erst später lädt: FAB erst nach UI-Ready verdecken —
-  window.addEventListener("cb:ui-ready", ()=>{
-    // nichts tun – nur sicherstellen, dass Bridge lebt
-    log("log", `UI-Bridge bereit (${V})`);
-  });
+    // Minimaler Fallback (nur Dock sichtbar machen)
+    dock.classList.add('open');
+    LOG('warn', 'Bau-Menü API nicht gefunden — erwartete globale Variable z.B. window.UIBuild');
+  }
 
-  // — Public shim für GameUI.* (optional, wird von dir genutzt) —
-  window.GameUI = window.GameUI || {};
-  window.GameUI.openBuildMenu  = ()=> window.UIBuild?.open?.();
-  window.GameUI.closeBuildMenu = ()=> window.UIBuild?.close?.();
-  window.GameUI.setTool        = (t)=> window.UIBuild?.setTool?.(t);
-  window.GameUI.onGameStarted  = ()=> {
-    // für ältere Stellen die diesen Hook nutzen
-    if (btnBuild){ btnBuild.classList.add("visible"); }
-    log("ok", "GameUI.onGameStarted → Bau-Button sichtbar");
+  function closeBuildMenu(){
+    const dock = $dock();
+    if (!dock) return;
+    if (window.UIBuild?.close) {
+      window.UIBuild.close(dock);
+      return;
+    }
+    dock.classList.remove('open');
+  }
+
+  function setTool(name){
+    if (window.UIBuild?.setTool) {
+      window.UIBuild.setTool(name);
+    }
+    // Optional: hier könntest du dein Tool auch an die Engine weiterreichen.
+  }
+
+  // Globale API (wird im Log referenziert)
+  window.GameUI = window.GameUI || {
+    onGameStarted,
+    openBuildMenu,
+    closeBuildMenu,
+    setTool
   };
+
+  // ===== Buttons verdrahten (einmalig) =======================================
+  // Wir hängen click-Handler hier dran, damit nichts doppelt feuert.
+  function wireButtonsOnce(){
+    const buildBtn = $buildBtn();
+    if (buildBtn && !buildBtn.__wired){
+      buildBtn.__wired = true;
+      buildBtn.addEventListener('click', ()=> window.GameUI.openBuildMenu(), { passive:true });
+    }
+    const inspBtn = document.getElementById('btn-inspector');
+    if (inspBtn && !inspBtn.__wired){
+      inspBtn.__wired = true;
+      inspBtn.addEventListener('click', ()=> window.GameInspector.toggle(), { passive:true });
+    }
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', wireButtonsOnce, { once:true });
+  } else {
+    wireButtonsOnce();
+  }
+
+  LOG('ok', 'UI-Bridge bereit (ui-bridge.js v16.1.19)');
 })();
-</script>
