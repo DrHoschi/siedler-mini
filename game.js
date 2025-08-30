@@ -1,219 +1,153 @@
-// game.js — v16.1.20
-// ---------------------------------------------------------
-// Aufgaben dieses Moduls:
-//  - Engine initialisieren (Canvas, Resize, DPR)
-//  - Karten/Atlas laden und rendern
-//  - Öffentliche Start-Funktion bereitstellen: GameLoader.start(mapUrl)
-//  - Events & Logging:
-//      * 'cb:engine-ready'  sobald Engine steht
-//      * 'cb:game-started'  sobald Map gerendert ist
-//      * optionale Hooks:   GameUI.onEngineReady(), GameUI.onGameStarted()
-//  - Kompatibel zu deinem Inspector-Log (CBLog), ohne Layout zu beeinflussen
-// ---------------------------------------------------------
+/*
+============================================================
+Datei: game.js
+Projekt: Siedler-Mini
+Version: v16.1.19
+Zweck: Game-Start, Map-Laden, Canvas-Setup, Renderloop, Events
+============================================================
+*/
 
-(function(){
-  // ===== Version/Logging =====================================================
-  const VERSION = 'v16.1.20';
+/* 1) Imports */
+// (keine ES-Module; dieses File ist klassisch via <script> eingebunden)
 
-  // LOG-Helfer: nutzt CBLog (falls vorhanden), sonst Console
-  const LOG = (lvl, msg) => {
-    try {
-      if (window.CBLog) {
-        if (lvl === 'ok')        window.CBLog.ok(msg);
-        else if (lvl === 'warn') window.CBLog.warn(msg);
-        else if (lvl === 'err')  window.CBLog.err(msg);
-        else                     window.CBLog.push(lvl || 'log', msg);
-      } else {
-        console[lvl === 'err' ? 'error' : (lvl === 'warn' ? 'warn' : 'log')](msg);
-      }
-    } catch(_){}
-  };
+/* 2) Konstanten / Meta */
+const GAME_VERSION = "v16.1.19";
+const TILE_SIZE = 32;
 
-  // ===== Öffentlicher Namespace =============================================
-  const GL = window.GameLoader = window.GameLoader || {};
-  // Für alte Aufrufer (Index/Inspector): sorge dafür, dass .start existiert
-  if (!GL.start) GL.start = (...args) => GL._start?.(...args);
+/* 3) Hilfsfunktionen */
+// =====================================================
+// Hilfsfunktion: Log
+// =====================================================
+function cbLogOk(msg){ (window.CBLog?.ok || console.log)(msg); }
+function cbLogWarn(msg){ (window.CBLog?.warn || console.warn)(msg); }
 
-  // ===== Engine-State ========================================================
-  let engineReady = false;
-  let canvas = null, ctx = null;
+// =====================================================
+// Hilfsfunktion: Map laden (JSON)
+// =====================================================
+async function loadMapJson(url){
+  cbLogOk(`[game] Lade Map ${url}`);
+  const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`);
+  if (!res.ok) throw new Error(`Map-HTTP-Fehler ${res.status}`);
+  return res.json();
+}
 
-  // Tileset/Atlas – belasse deine Pfade
-  const TILESET_PNG  = './assets/tiles/tileset.terrain.png';
-  const TILESET_JSON = './assets/tiles/tileset.terrain.json';
-
-  // Aktuelle Map/Assets
-  let currentMap = null;
-  let tilesetImg = null;
-  let atlas = null;
-
-  // ===== Hilfsfunktionen (Loader) ===========================================
-  function loadImage(src){
-    return new Promise((resolve, reject)=>{
-      const img = new Image();
-      img.onload  = () => resolve(img);
-      img.onerror = () => reject(new Error('Bild konnte nicht geladen werden: '+src));
-      img.src = src;
-    });
+/* 4) Klassen */
+// =====================================================
+// Klasse: GameRuntime
+// Zweck: Minimale Spiellogik/Loop für Platzhalterbetrieb
+// =====================================================
+class GameRuntime {
+  constructor(canvas){
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.t0 = 0;
+    this.anim = null;
+    this.map = null;
   }
 
-  async function loadJSON(url){
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('HTTP '+r.status+' beim Laden: '+url);
-    return await r.json();
+  setMap(mapData){
+    this.map = mapData;
   }
 
-  // ===== Renderer (minimal) ==================================================
-  function renderMap(){
-    if (!ctx || !currentMap) return;
+  resizeToViewport(){
+    // Feste Strategie: Canvas füllt Viewport (CSS + echte Größe)
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.floor(window.innerWidth);
+    const h = Math.floor(window.innerHeight);
+    this.canvas.style.width = `${w}px`;
+    this.canvas.style.height = `${h}px`;
+    this.canvas.width = Math.floor(w * dpr);
+    this.canvas.height = Math.floor(h * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 
-    // Fallback-Farben, falls kein Atlas geladen werden konnte
-    if (!atlas || !tilesetImg){
-      const { width, height, tile } = currentMap;
-      const colors = ['#5a7a39','#6b8f3e','#7aa346','#90b45a'];
-      for (let y=0; y<height; y++){
-        for (let x=0; x<width; x++){
-          ctx.fillStyle = colors[(x+y)%colors.length];
-          ctx.fillRect(x*tile, y*tile, tile, tile);
-        }
-      }
-      LOG('warn', 'Atlas nicht angegeben → Fallback-Farben');
+  start(){
+    const loop = (t)=>{
+      if (!this.t0) this.t0 = t;
+      const dt = t - this.t0;
+      this.render(dt);
+      this.anim = requestAnimationFrame(loop);
+    };
+    this.resizeToViewport();
+    window.addEventListener("resize", () => this.resizeToViewport());
+    this.anim = requestAnimationFrame(loop);
+    cbLogOk(`[game] Renderloop gestartet (v${GAME_VERSION})`);
+  }
+
+  stop(){
+    if (this.anim) cancelAnimationFrame(this.anim);
+    this.anim = null;
+  }
+
+  render(t){
+    const ctx = this.ctx;
+    const W = this.canvas.width / (window.devicePixelRatio || 1);
+    const H = this.canvas.height / (window.devicePixelRatio || 1);
+
+    // Hintergrund (dein dunkles Grün – identisch zu index)
+    ctx.fillStyle = "#093c2f";
+    ctx.fillRect(0,0,W,H);
+
+    // Kleine Lebenszeichen-Anzeige
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillStyle = "rgba(230,242,237,0.9)";
+    ctx.fillText(`Siedler-Mini v${GAME_VERSION} · dpr ${Math.round(window.devicePixelRatio||1)} · t ${Math.round(t)}ms`, 10, 20);
+
+    if (this.map && this.map.size) {
+      ctx.fillText(`Map: ${this.map.size?.w || "?"}×${this.map.size?.h || "?"} · Tile ${TILE_SIZE}`, 10, 38);
+    }
+  }
+}
+
+/* 5) Hauptlogik (Init, Start) */
+// Namespace für externen Start (UI ruft das auf)
+window.GameBoot = window.GameBoot || {};
+window.startGame = window.startGame || function(mapUrl){ // Fallback-API
+  window.GameBoot.start(mapUrl);
+};
+
+window.GameBoot.start = async function(mapUrl){
+  try {
+    cbLogOk("[game] NewGame start " + (mapUrl || "(keine Map übergeben)"));
+
+    // Canvas besorgen
+    const canvas = document.getElementById("game");
+    if (!canvas) {
+      cbLogWarn("[game] Canvas #game fehlt – Abbruch.");
       return;
     }
 
-    // Einfacher Kachel-Renderer: nutzt ersten Layer und map/layers[].data (Tile-IDs)
-    const { width, height, tile, layers } = currentMap;
-    const layer = Array.isArray(layers) ? layers[0] : null;
-    const data  = layer && Array.isArray(layer.data) ? layer.data : null;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    for (let y=0; y<height; y++){
-      for (let x=0; x<width; x++){
-        const idx = y*width + x;
-        const tileId = data ? data[idx] : 0;          // 0 = leer
-        const frame  = atlas?.frames?.[tileId];       // erwartet {x,y,w,h}
-        if (frame){
-          ctx.drawImage(
-            tilesetImg,
-            frame.x, frame.y, frame.w, frame.h,
-            x*tile,  y*tile,  tile,   tile
-          );
-        } else {
-          // unbekannte ID → neutraler Platzhalter
-          ctx.fillStyle = '#889';
-          ctx.fillRect(x*tile, y*tile, tile, tile);
-        }
+    // Map laden (wenn vorhanden), ansonsten Dummy
+    let mapData = { size: { w: 64, h: 64 } };
+    if (mapUrl) {
+      try {
+        mapData = await loadMapJson(mapUrl);
+        cbLogOk(`[game] Map geladen: ${mapUrl}`);
+      } catch(e) {
+        cbLogWarn(`[game] Map-Load fehlgeschlagen: ${e?.message || e}`);
       }
     }
+
+    // Runtime starten
+    const runtime = new GameRuntime(canvas);
+    runtime.setMap(mapData);
+    runtime.start();
+
+    // 8) Events: Einheitlich nach erfolgreichem Start
+    window.dispatchEvent(new CustomEvent('cb:game-started', { detail: { map: mapUrl || null }}));
+    window.GameUI?.onGameStarted?.();   // Startfenster schließen
+
+    cbLogOk("[game] Game started");
+  } catch(err){
+    cbLogWarn("[game] Startfehler: " + (err?.message || err));
   }
+};
 
-  // ===== Engine-Initialisierung =============================================
-  function initEngine(){
-    if (engineReady) return;
+// Optional: Automatischer Start, wenn UI keine Karte übergibt (nur Dev)
+window.addEventListener('cb:ui-ready', () => {
+  cbLogOk(`[game] cb:ui-ready empfangen (v${GAME_VERSION})`);
+  // Kein Autostart hier – Start erfolgt über UI-Panel
+});
 
-    // Nimm vorhandenes Canvas, falls vorhanden – ansonsten anlegen
-    canvas = document.getElementById('game') || (function(){
-      const c = document.createElement('canvas');
-      c.id = 'game';
-      document.body.appendChild(c);
-      return c;
-    })();
-    ctx = canvas.getContext('2d');
-
-    // Responsive Größe (bewahrt dein Layout; greift nur aufs Canvas zu)
-    function fit(){
-      const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-      const w = Math.max(320, Math.floor(window.innerWidth));
-      const h = Math.max(240, Math.floor(window.innerHeight * 0.7));
-      canvas.width  = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-      canvas.style.width  = w + 'px';
-      canvas.style.height = h + 'px';
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      LOG('ok', `Canvas ${w}x${h} dpr:${dpr}`);
-      if (currentMap) renderMap();
-    }
-    window.addEventListener('resize', fit, { passive:true });
-    fit();
-
-    engineReady = true;
-    LOG('ok', `game.js geladen, ${VERSION}`);
-
-    // Event + optionaler Hook für die UI
-    window.dispatchEvent(new CustomEvent('cb:engine-ready', { detail:{ v: VERSION }}));
-    try { window.GameUI?.onEngineReady?.(); } catch(_){}
-
-    // Falls der Index/Inspector einen Start-Klick vor Engine-Init gepuffert hat:
-    try { GL._flush?.(); } catch(_){}
-  }
-
-  // ===== Öffentliche Start-Funktion =========================================
-  GL._start = async function(mapUrl){
-    try{
-      if (!engineReady) initEngine();
-
-      LOG('ok', `GameLoader.start ${mapUrl}`);
-
-      // 1) Map laden – robuste Defaults
-      const map = await loadJSON(mapUrl);
-      const width  = map.width  || 16;
-      const height = map.height || 10;
-      const tile   = map.tile   || map.tileSize || 64;
-
-      // Map-Daten ins interne Format überführen
-      currentMap = {
-        width, height, tile,
-        // Erlaubt: map.layers[].data ODER map.tiles[]
-        layers: map.layers || [{ name:'ground', data: map.tiles || [] }]
-      };
-
-      // 2) Atlas + Tileset laden
-      try{
-        const [json, img] = await Promise.all([
-          loadJSON(TILESET_JSON),
-          loadImage(TILESET_PNG)
-        ]);
-        atlas = json;
-        tilesetImg = img;
-      }catch(e){
-        atlas = null;
-        tilesetImg = null;
-        LOG('warn', 'Atlas/Textures nicht geladen: '+e.message);
-      }
-
-      // 3) Rendern
-      renderMap();
-
-      // 4) Events/Logs  ---------------------------------------------
-      LOG('ok', `Game gestartet (${mapUrl})`);
-
-      // >>> GENAU HIER: Deine gewünschten Events/Hooks <<<
-      window.dispatchEvent(new CustomEvent('cb:game-started', { detail:{ map: mapUrl }}));
-      window.GameUI?.onGameStarted?.();   // optionaler Hook
-
-      return true;
-    }catch(e){
-      LOG('err', 'Start fehlgeschlagen: '+e.message);
-      throw e;
-    }
-  };
-
-  // Stelle sicher, dass auch GL.start existiert (Alias für _start)
-  GL.start = GL._start;
-
-  // ===== Auto-Init ===========================================================
-  try {
-    initEngine();
-  } catch(e){
-    LOG('err', 'Engine-Init Fehler: '+e.message);
-  }
-
-  // ===== Optionale, harmlose Fallback-API für den Inspector ==================
-  // (Falls dein Inspector ein globales Objekt erwartet. Nicht layoutrelevant.)
-  window.GameInspector = window.GameInspector || {
-    // Kein echtes Panel hier – dein inspector.js kümmert sich darum.
-    // Diese Stub-Funktion verhindert nur Fallback-Alerts im Notfall.
-    toggle(){ window.dispatchEvent(new CustomEvent('cb:inspector-toggle')); }
-  };
-})();
+/* 6) Exports */
+// (über window.GameBoot / window.startGame)
