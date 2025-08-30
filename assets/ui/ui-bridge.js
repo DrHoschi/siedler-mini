@@ -1,100 +1,127 @@
-// assets/ui/ui-bridge.js
-// v16.1.19 – Stabile, globale Hooks für Inspector und Bau-Menü
-// ------------------------------------------------------------
-// Liefert: window.GameInspector.toggle(), window.GameUI.{openBuildMenu,closeBuildMenu,onGameStarted,setTool}
+// assets/ui/ui-bridge.js  — v16.1.19
+// Bridge zwischen Start/Engine/Inspector und deiner Bau-UI (UIBuild).
+// - zeigt den Build-Button erst nach cb:game-started
+// - öffnet/schließt das Build-Dock über UIBuild.open/close
+// - bietet window.GameUI.{openBuildMenu,closeBuildMenu,setTool,onGameStarted}
+// - Inspector-Button ruft GameInspector.toggle() (mit Fallback-Alert)
+// -----------------------------------------------------------------------------
 
 (function(){
-  const LOG = (t,m)=> (window.CBLog?.[t]||console.log)(m);
-
-  // ===== Inspector-Hook ======================================================
-  // Nutzt bevorzugt die echte Inspector-API; ansonsten Fallback-Modal.
-  function openInspector(){
-    if (window.CBInspector?.open) { window.CBInspector.open(); return; }
-    alert("Inspector (Fallback) – kein Game-Inspector.toggle() gefunden.");
-  }
-  function closeInspector(){
-    if (window.CBInspector?.close) { window.CBInspector.close(); return; }
-  }
-  window.GameInspector = window.GameInspector || {
-    toggle(){
-      // wenn offen -> schließen, sonst öffnen (CBInspector verwaltet Zustand selbst)
-      openInspector();
-    },
-    open: openInspector,
-    close: closeInspector
+  const V = 'v16.1.19';
+  const LOG = (lvl,msg)=>{
+    const fn = window.CBLog?.[lvl] || console[lvl==='err'?'error':lvl==='warn'?'warn':'log'];
+    try{ fn.call(console, msg); }catch(_){ /* no-op */ }
   };
 
-  // ===== Build-UI Hook =======================================================
-  const $buildBtn = ()=> document.getElementById('btn-build');
-  const $dock     = ()=> document.getElementById('build-dock');
+  // Nur einmal initialisieren
+  if (window.__cb_uiBridgeReady) return;
+  window.__cb_uiBridgeReady = true;
 
-  // Wird von main.js aufgerufen, wenn das Spiel gestartet hat.
-  function onGameStarted(){
-    const b = $buildBtn();
-    if (!b) return;
-    b.classList.add('visible');
+  // Elemente
+  const btnInspector = document.getElementById('btn-inspector');
+  const btnBuild     = document.getElementById('btn-build');
+  const buildDock    = document.getElementById('build-dock');
+
+  // --- Inspector-Button verdrahten ------------------------------------------
+  if (btnInspector){
+    btnInspector.addEventListener('click', ()=>{
+      try{
+        // Bevorzugt deine Inspector-API
+        if (window.GameInspector?.toggle){
+          window.GameInspector.toggle(true);
+          LOG('ok', 'Inspector geöffnet (GameInspector.toggle).');
+        } else {
+          // Fallback: kleine Info, damit Nutzer weiß, warum kein großes UI aufpoppt
+          alert('Inspector (Fallback) – kein GameInspector.toggle() gefunden.');
+          LOG('warn','Inspector Fallback aktiv – window.GameInspector.toggle() fehlt.');
+        }
+      }catch(e){
+        LOG('err','Inspector öffnen fehlgeschlagen: '+e.message);
+      }
+    });
   }
 
+  // --- Build-Button anfangs verborgen ----------------------------------------
+  function showBuildButton(){
+    if (!btnBuild) return;
+    btnBuild.classList.add('visible');
+  }
+  function hideBuildButton(){
+    if (!btnBuild) return;
+    btnBuild.classList.remove('visible');
+  }
+
+  // --- Bau-Menü via UIBuild API ----------------------------------------------
   function openBuildMenu(){
-    const dock = $dock();
-    if (!dock){ LOG('warn', 'Build-Dock fehlt (#build-dock).'); return; }
-
-    // Falls deine ui-build.js eine eigene API bereitstellt, nutze sie:
-    if (window.UIBuild?.open) {
-      window.UIBuild.open(dock);
-      LOG('ok', '[ok] Bau-Menü geöffnet (ui-build.js)');
-      return;
+    if (!buildDock){ LOG('warn','Build-Dock Element (#build-dock) fehlt.'); return; }
+    try{
+      // Deine vorhandene API:
+      if (window.UIBuild?.open){
+        window.UIBuild.open(buildDock);
+      }
+      // Sichtbar markieren (falls UIBuild nichts am display macht)
+      buildDock.classList.add('open');
+      LOG('ok','Bau-Menü geöffnet (ui-bridge.js).');
+    }catch(e){
+      LOG('err','Bau-Menü öffnen fehlgeschlagen: '+e.message);
     }
-
-    // Minimaler Fallback (nur Dock sichtbar machen)
-    dock.classList.add('open');
-    LOG('warn', 'Bau-Menü API nicht gefunden — erwartete globale Variable z.B. window.UIBuild');
   }
-
   function closeBuildMenu(){
-    const dock = $dock();
-    if (!dock) return;
-    if (window.UIBuild?.close) {
-      window.UIBuild.close(dock);
-      return;
+    if (!buildDock) return;
+    try{
+      if (window.UIBuild?.close){
+        window.UIBuild.close(buildDock);
+      }
+      buildDock.classList.remove('open');
+      LOG('ok','Bau-Menü geschlossen (ui-bridge.js).');
+    }catch(e){
+      LOG('err','Bau-Menü schließen fehlgeschlagen: '+e.message);
     }
-    dock.classList.remove('open');
   }
-
   function setTool(name){
-    if (window.UIBuild?.setTool) {
-      window.UIBuild.setTool(name);
-    }
-    // Optional: hier könntest du dein Tool auch an die Engine weiterreichen.
-  }
-
-  // Globale API (wird im Log referenziert)
-  window.GameUI = window.GameUI || {
-    onGameStarted,
-    openBuildMenu,
-    closeBuildMenu,
-    setTool
-  };
-
-  // ===== Buttons verdrahten (einmalig) =======================================
-  // Wir hängen click-Handler hier dran, damit nichts doppelt feuert.
-  function wireButtonsOnce(){
-    const buildBtn = $buildBtn();
-    if (buildBtn && !buildBtn.__wired){
-      buildBtn.__wired = true;
-      buildBtn.addEventListener('click', ()=> window.GameUI.openBuildMenu(), { passive:true });
-    }
-    const inspBtn = document.getElementById('btn-inspector');
-    if (inspBtn && !inspBtn.__wired){
-      inspBtn.__wired = true;
-      inspBtn.addEventListener('click', ()=> window.GameInspector.toggle(), { passive:true });
+    try{
+      if (window.UIBuild?.setTool){
+        window.UIBuild.setTool(name);
+        LOG('ok',`Tool gesetzt: ${name}`);
+      } else {
+        LOG('warn','UIBuild.setTool(name) nicht vorhanden.');
+      }
+    }catch(e){
+      LOG('err','Tool setzen fehlgeschlagen: '+e.message);
     }
   }
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', wireButtonsOnce, { once:true });
-  } else {
-    wireButtonsOnce();
+
+  // Build-Button klick öffnet/ schließt das Dock
+  if (btnBuild){
+    btnBuild.addEventListener('click', ()=>{
+      const isOpen = buildDock?.classList.contains('open');
+      if (isOpen) closeBuildMenu(); else openBuildMenu();
+    });
   }
 
-  LOG('ok', 'UI-Bridge bereit (ui-bridge.js v16.1.19)');
+  // --- GameUI: globale Hooks für andere Module -------------------------------
+  window.GameUI = Object.assign(window.GameUI||{}, {
+    openBuildMenu, closeBuildMenu, setTool,
+    onGameStarted(){
+      showBuildButton();
+      LOG('ok','onGameStarted: Bau-Button aktiviert.');
+    },
+    __version: V
+  });
+
+  // --- Events auswerten -------------------------------------------------------
+  // a) Wenn die UI (index.html) bereit ist, nur loggen:
+  window.addEventListener('cb:ui-ready', (e)=>{
+    LOG('ok', `UI-Bridge geladen ${V} – index meldet ${e.detail?.v||'unbekannt'}`);
+  });
+
+  // b) Wenn das Spiel startet → Bau-Button zeigen
+  window.addEventListener('cb:game-started', ()=>{
+    showBuildButton();
+    LOG('ok','Event: cb:game-started empfangen → Bau-Button sichtbar.');
+  });
+
+  // c) Optional: Inspector-Nachladehilfe (falls dein Inspector Lazy lädt)
+  // Nichts tun – nur Platzhalter, damit später leicht erweiterbar.
+
 })();
