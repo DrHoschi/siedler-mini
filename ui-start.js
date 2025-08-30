@@ -13,7 +13,7 @@ Zweck: Startfenster (Map-Auswahl, Start/Neustart, Log-Tools)
 const bg = document.createElement("div");
 Object.assign(bg.style, {
   position:"fixed", left:"0", top:"0", right:"0", bottom:"0",
-  background:`url('./assets/ui/start-bg.jpg') center/cover no-repeat`,
+  background:`url('./assets/ui/start-bg.jpeg') center/cover no-repeat`,
   zIndex:"900"
 });
 document.body.append(bg);
