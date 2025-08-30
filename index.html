@@ -190,5 +190,21 @@
       });
     });
   </script>
+  <script>
+  // Startfenster IMMER schließen, sobald Spiel startet – funktioniert für
+  // echtes ui-start.js UND für den Fallback.
+  (function(){
+    function closeStartPanel(){
+      var host = document.getElementById('start-panel');
+      if (host) host.style.display = 'none';
+      var bg = document.getElementById('cb-start-bg');
+      if (bg && bg.parentNode) bg.parentNode.removeChild(bg);
+    }
+    // 1) Wenn unser Start-Button (Fallback) geklickt wurde und GameBoot.start() feuert:
+    window.addEventListener('cb:game-start', closeStartPanel);
+    // 2) Falls dein Game irgendwo 'cb:game-started' dispatcht:
+    window.addEventListener('cb:game-started', closeStartPanel);
+  })();
+</script>
 </body>
 </html>
