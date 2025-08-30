@@ -1,190 +1,212 @@
-/*
-============================================================
-Datei: game.js
-Projekt: Siedler-Mini
-Version: 16.1.19
-Zweck: Game-Start, Map-Laden, Canvas-Setup, Renderloop, Events
-============================================================
-*/
+// game.js — v16.1.20 (ES5)
+// ---------------------------------------------------------
+// Initialisiert die Engine, registriert GameLoader._start(mapUrl)
+// und sendet Events ('cb:engine-ready', 'cb:game-started').
+// Zeigt ausführliche Logs über CBLog (falls vorhanden).
+// ---------------------------------------------------------
+(function(){
+  'use strict';
+  var VERSION = 'v16.1.20';
 
-/* 1) Imports */
-// – klassische <script>-Einbindung
+  // ---- Logging Helper -------------------------------------------------------
+  var log = {
+    ok: function(m){ return (window.CBLog && window.CBLog.ok ? window.CBLog.ok : console.log)(m); },
+    warn: function(m){ return (window.CBLog && window.CBLog.warn ? window.CBLog.warn : console.warn)(m); },
+    err: function(m){ return (window.CBLog && window.CBLog.err ? window.CBLog.err : console.error)(m); },
+    raw: function(m){ return (window.CBLog && window.CBLog.push ? window.CBLog.push : console.log)('LOG', m); }
+  };
 
-/* 2) Konstanten / Meta */
-const GAME_VERSION = "16.1.19";
-const TILE_SIZE = 32;
+  // Public Namespace
+  var GL = (window.GameLoader = window.GameLoader || {});
 
-/* 3) Hilfsfunktionen */
-// ==============================================
-// Log-Helfer
-// ==============================================
-function cbLogOk(msg){ (window.CBLog?.ok || console.log)(msg); }
-function cbLogWarn(msg){ (window.CBLog?.warn || console.warn)(msg); }
+  // Engine State
+  var engineReady = false;
+  var canvas = null, ctx = null;
 
-// ==============================================
-// Viewport (mobile-sicher, inkl. Safari-UI)
-// ==============================================
-function getViewportSize(){
-  const vv = window.visualViewport;
-  if (vv) return { w: Math.floor(vv.width), h: Math.floor(vv.height) };
-  return { w: Math.floor(window.innerWidth), h: Math.floor(window.innerHeight) };
-}
+  // Tileset / Atlas – deine Pfade
+  var TILESET_PNG  = './assets/tiles/tileset.terrain.png';
+  var TILESET_JSON = './assets/tiles/tileset.terrain.json';
 
-// ==============================================
-// Map laden
-// ==============================================
-async function loadMapJson(url){
-  cbLogOk(`[game] Lade Map ${url}`);
-  const res = await fetch(`${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`);
-  if (!res.ok) throw new Error(`Map-HTTP-Fehler ${res.status}`);
-  return res.json();
-}
+  // aktuelle Map & Assets
+  var currentMap = null;
+  var tilesetImg = null;
+  var atlas = null;
 
-/* 4) Klassen */
-// ==============================================
-// Klasse: GameRuntime
-// ==============================================
-class GameRuntime {
-  constructor(canvas){
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
-    this.tPrev = 0;
-    this.anim = null;
-    this.map = null;
-    this.fps = undefined; // erst nach 2. Frame vorhanden
+  // -- Utils ------------------------------------------------------------------
+  function loadImage(src){
+    return new Promise(function(resolve, reject){
+      var img = new Image();
+      img.onload = function(){ resolve(img); };
+      img.onerror = function(){ reject(new Error('Bild konnte nicht geladen werden: '+src)); };
+      img.src = src;
+    });
   }
 
-  setMap(mapData){ this.map = mapData; }
-
-  resizeToViewport(){
-    const { w, h } = getViewportSize();
-    const dpr = window.devicePixelRatio || 1;
-
-    // CSS-Größe (sichtbar)
-    this.canvas.style.width  = `${w}px`;
-    this.canvas.style.height = `${h}px`;
-
-    // Pixel-Backbuffer
-    this.canvas.width  = Math.max(1, Math.floor(w * dpr));
-    this.canvas.height = Math.max(1, Math.floor(h * dpr));
-
-    // DPI-Korrektur
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  function loadJSON(url){
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status+' beim Laden: '+url);
+      return r.json();
+    });
   }
 
-  start(){
-    const loop = (t)=>{
-      // dt berechnen (Infinity/NaN vermeiden)
-      let dt = 0;
-      if (this.tPrev > 0) dt = t - this.tPrev;
-      this.tPrev = t;
+  // -- Minimal-Renderer (Kacheln) --------------------------------------------
+  function renderMap(){
+    if(!ctx || !currentMap) return;
 
-      // fps nur berechnen, wenn dt > 0
-      if (dt > 0 && Number.isFinite(dt)) {
-        const inst = 1000 / dt;
-        this.fps = this.fps === undefined ? inst : (this.fps * 0.9 + inst * 0.1);
+    var width  = currentMap.width;
+    var height = currentMap.height;
+    var tile   = currentMap.tile;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(!atlas || !tilesetImg){
+      // Fallback: einfache Farbkacheln
+      var colors = ['#5a7a39', '#6b8f3e', '#7aa346', '#90b45a'];
+      for(var y=0; y<height; y++){
+        for(var x=0; x<width; x++){
+          ctx.fillStyle = colors[(x + y) % colors.length];
+          ctx.fillRect(x*tile, y*tile, tile, tile);
+        }
+      }
+      return;
+    }
+
+    // Wenn ein Layer mit tileIndices vorhanden ist:
+    var layers = currentMap.layers || [];
+    if (!layers.length){
+      // alles gras
+      for(var yy=0; yy<height; yy++){
+        for(var xx=0; xx<width; xx++){
+          drawTileIndex(0, xx, yy, tile);
+        }
+      }
+      return;
+    }
+
+    // simplestes Rendering: nur erster Layer
+    var L0 = layers[0];
+    var data = L0.data || [];
+    for (var i=0;i<data.length;i++){
+      var idx = data[i]|0;
+      var tx = i % width;
+      var ty = Math.floor(i / width);
+      drawTileIndex(idx, tx, ty, tile);
+    }
+  }
+
+  // Zeichnet eine Tile basierend auf atlas (index -> src rect)
+  function drawTileIndex(idx, tx, ty, tile){
+    // atlas-Format erwartet: atlas.tiles[idx] = {x,y,w,h}
+    var t = atlas && atlas.tiles ? atlas.tiles[idx] : null;
+    if (!t){
+      // Fallback: einfärben
+      ctx.fillStyle = '#5a7a39';
+      ctx.fillRect(tx*tile, ty*tile, tile, tile);
+      return;
+    }
+    try {
+      ctx.drawImage(tilesetImg, t.x, t.y, t.w, t.h, tx*tile, ty*tile, tile, tile);
+    } catch(e){
+      // falls out-of-bounds o.ä.
+      ctx.fillStyle = '#5a7a39';
+      ctx.fillRect(tx*tile, ty*tile, tile, tile);
+    }
+  }
+
+  // -- Engine-Init ------------------------------------------------------------
+  function initEngine(){
+    if (engineReady) return;
+
+    canvas = document.getElementById('game')
+          || document.getElementById('stage')
+          || (function(){ var c = document.createElement('canvas'); c.id='game'; document.body.appendChild(c); return c; })();
+
+    ctx = canvas.getContext('2d');
+
+    function fit(){
+      var dpr = Math.max(1, Math.min(3, window.devicePixelRatio||1));
+      var w = Math.max(320, Math.floor(window.innerWidth || document.documentElement.clientWidth || 800));
+      var h = Math.max(240, Math.floor(window.innerHeight || document.documentElement.clientHeight || 600));
+      canvas.width  = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width  = w + 'px';
+      canvas.style.height = h + 'px';
+      if (ctx.setTransform) ctx.setTransform(dpr,0,0,dpr,0,0);
+      if (currentMap) renderMap();
+    }
+    window.addEventListener('resize', fit);
+    fit();
+
+    engineReady = true;
+    log.ok("game.js geladen, game.js " + VERSION);
+    try {
+      window.dispatchEvent(new CustomEvent('cb:engine-ready', { detail:{ v: VERSION }}));
+    } catch(_){}
+    try {
+      if (GL._flush) GL._flush();
+    } catch(_){}
+  }
+
+  // -- Public Start -----------------------------------------------------------
+  GL._start = function(mapUrl){
+    return new Promise(function(resolve, reject){
+      function startNow(){
+        log.ok("GameLoader.start " + mapUrl);
+        // 1) Map laden/normalisieren
+        loadJSON(mapUrl).then(function(map){
+          var width  = (map.width  != null ? map.width  : 16);
+          var height = (map.height != null ? map.height : 10);
+          var tile   = (map.tile != null ? map.tile : (map.tileSize != null ? map.tileSize : 64));
+          currentMap = {
+            width: width,
+            height: height,
+            tile: tile,
+            layers: map.layers || [{ name: 'ground', data: map.tiles || [] }]
+          };
+          // 2) Atlas + Tileset
+          Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ])
+            .then(function(results){
+              atlas = results[0];
+              tilesetImg = results[1];
+            })
+            .catch(function(e){
+              atlas = null; tilesetImg = null;
+              log.warn("Atlas/Textures nicht geladen: " + e.message);
+            })
+            .then(function(){
+              // 3) Render
+              renderMap();
+              // 4) Events/Logs
+              log.ok("Game gestartet (" + mapUrl + ")");
+              try {
+                window.dispatchEvent(new CustomEvent('cb:game-started', { detail:{ map: mapUrl }}));
+              } catch(_){}
+              try {
+                if (window.GameUI && typeof window.GameUI.onGameStarted === 'function'){
+                  window.GameUI.onGameStarted();
+                }
+              } catch(_){}
+              resolve(true);
+            });
+        }).catch(function(e){
+          log.err("Start fehlgeschlagen: " + e.message);
+          reject(e);
+        });
       }
 
-      this.render(t);
-      publishRuntime(this, t);
-
-      this.anim = requestAnimationFrame(loop);
-      window.dispatchEvent(new CustomEvent('cb:runtime-tick'));
-    };
-
-    this.resizeToViewport();
-    window.addEventListener("resize", () => this.resizeToViewport());
-    window.visualViewport?.addEventListener("resize", () => this.resizeToViewport());
-    window.addEventListener("orientationchange", () => {
-      // leichte Verzögerung, bis iOS-UI eingefahren ist
-      setTimeout(()=>this.resizeToViewport(), 120);
+      try{
+        if(!engineReady) initEngine();
+        startNow();
+      }catch(e){
+        log.err("Engine-Init Fehler: " + e.message);
+        reject(e);
+      }
     });
-
-    this.anim = requestAnimationFrame(loop);
-    cbLogOk(`[game] Renderloop gestartet (${vStr(GAME_VERSION)})`);
-  }
-
-  stop(){ if (this.anim) cancelAnimationFrame(this.anim); this.anim = null; }
-
-  render(){
-    const ctx = this.ctx;
-    const cssW = this.canvas.clientWidth;
-    const cssH = this.canvas.clientHeight;
-
-    // Hintergrund
-    ctx.fillStyle = "#093c2f";
-    ctx.fillRect(0,0,cssW,cssH);
-
-    // HUD-Text
-    ctx.font = "12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
-    ctx.fillStyle = "rgba(230,242,237,0.9)";
-
-    const fpsText = (this.fps !== undefined && Number.isFinite(this.fps))
-      ? `${Math.round(this.fps)}`
-      : "—";
-
-    ctx.fillText(`Siedler-Mini ${vStr(GAME_VERSION)} · dpr ${Math.round(window.devicePixelRatio||1)} · fps ${fpsText}`, 10, 20);
-
-    if (this.map && this.map.size) {
-      ctx.fillText(`Map: ${this.map.size?.w || "?"}×${this.map.size?.h || "?"} · Tile ${TILE_SIZE}`, 10, 38);
-    }
-  }
-}
-
-/* 5) Hauptlogik */
-const vStr = v => `v${String(v).replace(/^v+/,'')}`;
-
-function publishRuntime(rt, nowMs){
-  window.__cb = window.__cb || {};
-  window.__cb.runtime = {
-    version: vStr(GAME_VERSION),
-    indexVersion: vStr(window.__cb.indexVersion || GAME_VERSION),
-    canvas: {
-      pxW: rt.canvas.width,
-      pxH: rt.canvas.height,
-      cssW: `${rt.canvas.clientWidth}px`,
-      cssH: `${rt.canvas.clientHeight}px`
-    },
-    map: window.__cb.selectedMap || null,
-    mapSize: rt.map?.size || null,
-    tile: TILE_SIZE,
-    dpr: window.devicePixelRatio || 1,
-    fps: (rt.fps !== undefined && Number.isFinite(rt.fps)) ? Math.round(rt.fps) : null,
-    perfNow: Math.round(nowMs)
   };
-  window.__cb.gameVersion = GAME_VERSION;
-}
 
-window.GameBoot = window.GameBoot || {};
-window.startGame = window.startGame || function(mapUrl){ window.GameBoot.start(mapUrl); };
+  // Auto-Init sofort beim Laden der Datei
+  try { initEngine(); } catch(e){ log.err('Engine-Init Fehler: ' + e.message); }
 
-window.GameBoot.start = async function(mapUrl){
-  try {
-    cbLogOk("[game] NewGame start " + (mapUrl || "(keine Map übergeben)"));
-    const canvas = document.getElementById("game");
-    if (!canvas) { cbLogWarn("[game] Canvas #game fehlt – Abbruch."); return; }
-
-    let mapData = { size: { w: 64, h: 64 } };
-    if (mapUrl) {
-      try { mapData = await loadMapJson(mapUrl); cbLogOk(`[game] Map geladen: ${mapUrl}`); }
-      catch(e) { cbLogWarn(`[game] Map-Load fehlgeschlagen: ${e?.message || e}`); }
-    }
-
-    const runtime = new GameRuntime(canvas);
-    runtime.setMap(mapData);
-    runtime.start();
-
-    window.dispatchEvent(new CustomEvent('cb:game-started', { detail: { map: mapUrl || null }}));
-    window.GameUI?.onGameStarted?.();
-    cbLogOk("[game] Game started");
-  } catch(err){
-    cbLogWarn("[game] Startfehler: " + (err?.message || err));
-  }
-};
-
-window.addEventListener('cb:ui-ready', () => {
-  cbLogOk(`[game] cb:ui-ready empfangen (${vStr(GAME_VERSION)})`);
-});
-
-/* 6) Exports */
-// (über window.GameBoot / window.startGame)
+  // Globale Version sichtbar machen (optional)
+  GL.version = VERSION;
+})();
