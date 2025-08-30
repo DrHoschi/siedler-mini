@@ -1,7 +1,7 @@
-// game.js — v16.1.24 (ES5)  — Map, Pan/Zoom, Placement + Townhall-Auto
+// game.js — v16.1.25 (ES5) — Map, Pan/Zoom, Placement, Roads/Paths + Townhall-Auto
 (function(){
   'use strict';
-  var VERSION = 'v16.1.24';
+  var VERSION = 'v16.1.25';
 
   // logging
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -25,6 +25,10 @@
   // entities (Gebäude)
   var entities = []; // {key,x,y,w,h,img}
 
+  // OVERLAY: Straßen & Wege (pro Tile bool)
+  // Speicherung: over.road["x,y"]=true  / over.path["x,y"]=true
+  var over = { road:{}, path:{} };
+
   // building defs (Tilesize relativ zur Map-Tile)
   var BUILDINGS = {
     townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
@@ -36,34 +40,28 @@
   };
 
   // sanfte Aliase für alte Schlüssel
-  var BUILDING_ALIASES = {
-    wood0:   'lumberjack',
-    factory: 'mill'
-  };
-  function resolveBuildingKey(k){
-    return BUILDINGS[k] ? k : (BUILDING_ALIASES[k] || k);
-  }
+  var BUILDING_ALIASES = { wood0:'lumberjack', factory:'mill' };
+  function resolveBuildingKey(k){ return BUILDINGS[k] ? k : (BUILDING_ALIASES[k] || k); }
 
   // tool state
-  var tool = { mode:null, key:null }; // mode: 'build'|'road'|'path'|'bulldozer'
+  var tool = { mode:null, key:null }; // 'build'|'road'|'path'|'bulldozer'
 
   // utils
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
   function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=function(){rej(new Error("img "+src))}; i.src=src; }); }
   function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
   function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
+  function keyXY(tx,ty){ return tx + "," + ty; }
 
   // placement helpers
-  function worldToTile(px,py){ var t=currentMap.tile; return { x: Math.floor(px/t), y: Math.floor(py/t) }; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
-
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
   function canPlace(key, tx, ty){
     var def = BUILDINGS[key]; if (!def || !currentMap) return false;
     // map bounds
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
-    // simple collision with other entities
+    // collision mit anderen Gebäuden
     var t = currentMap.tile;
     var r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
     for (var i=0;i<entities.length;i++){
@@ -85,30 +83,47 @@
     return true;
   }
 
-  // Hilfsfunktion: Bildschirmpos -> Platzieren
-  function placeAtScreen(sx, sy){
-    var wx = cam.x + sx / cam.zoom;
-    var wy = cam.y + sy / cam.zoom;
-    var tile = currentMap.tile;
-    var tx = Math.floor(wx / tile);
-    var ty = Math.floor(wy / tile);
+  // Straßen/Wege setzen
+  function setRoad(tx,ty){ over.road[keyXY(tx,ty)] = true; }
+  function setPath(tx,ty){ over.path[keyXY(tx,ty)] = true; }
+  function clearOverlaysAt(tx,ty){
+    delete over.road[keyXY(tx,ty)];
+    delete over.path[keyXY(tx,ty)];
+  }
 
-    var key = resolveBuildingKey(tool.key);
-    if (!BUILDINGS[key]){
-      warn("[game] Unbekanntes Gebäude-Key:", key);
-      return;
+  // Bulldozer – löscht Entity unter Tile + Overlays
+  function bulldozeAt(tx,ty){
+    // Gebäude
+    var t = currentMap.tile;
+    var rx = tx*t, ry = ty*t;
+    for (var i=entities.length-1; i>=0; i--){
+      var e=entities[i];
+      if (rx >= e.x && rx < e.x+e.w && ry >= e.y && ry < e.y+e.h){
+        entities.splice(i,1);
+        ok("[ok] Abgerissen:", e.key, "at", tx, ty);
+        break;
+      }
     }
-    if (canPlace(key, tx, ty)){
-      placeBuilding(key, tx, ty);
-      drawMap();
-    } else {
-      warn("[game] Platzierung nicht möglich @ tile", tx, ty, "für", key);
+    // Overlays
+    clearOverlaysAt(tx,ty);
+  }
+
+  // Linienzeichnen (Bresenham) in Tile-Koordinaten
+  function lineTiles(x0,y0,x1,y1, cb){
+    var dx = Math.abs(x1-x0), sx = x0<x1 ? 1 : -1;
+    var dy = -Math.abs(y1-y0), sy = y0<y1 ? 1 : -1;
+    var err = dx + dy, e2;
+    while(true){
+      cb(x0,y0);
+      if (x0===x1 && y0===y1) break;
+      e2 = 2*err;
+      if (e2 >= dy){ err += dy; x0 += sx; }
+      if (e2 <= dx){ err += dx; y0 += sy; }
     }
   }
 
   // public tool api
   Game.setTool = function(mode, payload){
-    // mode 'build' mit payload.key  ODER direkte tools 'road' 'path' 'bulldozer'
     if (mode === 'build'){
       var k = payload && payload.key;
       k = resolveBuildingKey(k);
@@ -128,16 +143,16 @@
     var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // sichtfenster bounds (in Tiles)
+    // sichtfenster (Tiles)
     var left   = Math.floor(cam.x / t);
     var top    = Math.floor(cam.y / t);
     var right  = Math.ceil((cam.x + viewW/cam.zoom) / t);
     var bottom = Math.ceil((cam.y + viewH/cam.zoom) / t);
     left=clamp(left,0,w-1); top=clamp(top,0,h-1); right=clamp(right,0,w); bottom=clamp(bottom,0,h);
 
+    // Boden
     var layers=currentMap.layers||[];
     var colors=['#5a7a39','#6b8f3e','#7aa346','#90b45a'];
-
     if (!atlas || !tilesetImg || !layers.length){
       for (var ty=top; ty<bottom; ty++){
         for (var tx=left; tx<right; tx++){
@@ -165,25 +180,50 @@
       }
     }
 
+    // Overlays: Straße/Weg (einfaches, aber klares Styling)
+    // Straße: dunkelgrau, Weg: sandfarben
+    for (var ty3=top; ty3<bottom; ty3++){
+      for (var tx3=left; tx3<right; tx3++){
+        var kxy = keyXY(tx3,ty3);
+        var hasRoad = !!over.road[kxy];
+        var hasPath = !!over.path[kxy];
+        if (!hasRoad && !hasPath) continue;
+
+        var dx = Math.floor((tx3*t - cam.x)*cam.zoom);
+        var dy = Math.floor((ty3*t - cam.y)*cam.zoom);
+        var ds = Math.ceil(t*cam.zoom);
+
+        if (hasPath){
+          ctx.fillStyle = "rgba(210, 180, 140, 0.85)"; // tan
+          ctx.fillRect(dx+Math.floor(0.10*ds), dy+Math.floor(0.10*ds), Math.floor(0.80*ds), Math.floor(0.80*ds));
+        }
+        if (hasRoad){
+          ctx.fillStyle = "rgba(80, 80, 80, 0.92)"; // dark gray
+          ctx.fillRect(dx+Math.floor(0.08*ds), dy+Math.floor(0.08*ds), Math.floor(0.84*ds), Math.floor(0.84*ds));
+          ctx.strokeStyle = "rgba(255,255,255,0.08)";
+          ctx.lineWidth = Math.max(1, Math.floor(2*cam.zoom));
+          ctx.strokeRect(dx+0.5, dy+0.5, ds-1, ds-1);
+        }
+      }
+    }
+
     // Entities oben drauf
     for (var k=0;k<entities.length;k++){
       var e=entities[k];
-      var dx = Math.floor((e.x - cam.x)*cam.zoom);
-      var dy = Math.floor((e.y - cam.y)*cam.zoom);
-      var dw = Math.ceil(e.w*cam.zoom);
-      var dh = Math.ceil(e.h*cam.zoom);
+      var ex = Math.floor((e.x - cam.x)*cam.zoom);
+      var ey = Math.floor((e.y - cam.y)*cam.zoom);
+      var ew = Math.ceil(e.w*cam.zoom);
+      var eh = Math.ceil(e.h*cam.zoom);
       if (e.img) {
-        try { ctx.drawImage(e.img, dx,dy,dw,dh); }
+        try { ctx.drawImage(e.img, ex,ey,ew,eh); }
         catch(_){
-          // Fallback-Rahmen, falls drawImage scheitert
           ctx.strokeStyle = '#ffbf47'; ctx.lineWidth = Math.max(1, Math.floor(2*cam.zoom));
-          ctx.strokeRect(dx+0.5, dy+0.5, dw-1, dh-1);
+          ctx.strokeRect(ex+0.5, ey+0.5, ew-1, eh-1);
         }
       } else {
-        // Sichtbarer Platzhalter
-        ctx.fillStyle = "rgba(255, 223, 128, .18)"; ctx.fillRect(dx,dy,dw,dh);
+        ctx.fillStyle = "rgba(255, 223, 128, .18)"; ctx.fillRect(ex,ey,ew,eh);
         ctx.strokeStyle = '#ffbf47'; ctx.lineWidth = Math.max(1, Math.floor(2*cam.zoom));
-        ctx.strokeRect(dx+0.5, dy+0.5, dw-1, dh-1);
+        ctx.strokeRect(ex+0.5, ey+0.5, ew-1, eh-1);
       }
     }
   }
@@ -220,12 +260,34 @@
 
   // input
   function bindInput(){
-    var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0, tapStart:0, tapSX:0, tapSY:0 };
+    var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0, tapStart:0, tapSX:0, tapSY:0,
+                 painting:false, lastTileX:null, lastTileY:null };
 
-    // Maus-Drag
-    canvas.addEventListener('mousedown', function(e){ drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y; });
-    window.addEventListener('mousemove', function(e){ if(!drag.on || drag.pinch) return; cam.x=drag.cx-(e.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(e.clientY-drag.sy)/cam.zoom; clampCam(); drawMap(); });
-    window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; });
+    // Maus-Down: evtl. Painting starten
+    canvas.addEventListener('mousedown', function(e){
+      drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y;
+      if (tool.mode==='road' || tool.mode==='path' || tool.mode==='bulldozer'){
+        drag.painting = true;
+        var rect = canvas.getBoundingClientRect();
+        paintAtScreen(e.clientX-rect.left, e.clientY-rect.top, true);
+      } else {
+        drag.painting = false;
+      }
+    });
+
+    // Maus-Move: entweder pannen oder malen
+    window.addEventListener('mousemove', function(e){
+      if (!drag.on) return;
+      if (drag.painting && (tool.mode==='road' || tool.mode==='path' || tool.mode==='bulldozer')){
+        var rect = canvas.getBoundingClientRect();
+        paintAtScreen(e.clientX-rect.left, e.clientY-rect.top, false);
+      } else if (!drag.pinch){
+        cam.x=drag.cx-(e.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(e.clientY-drag.sy)/cam.zoom;
+        clampCam(); drawMap();
+      }
+    });
+
+    window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; drag.painting=false; drag.lastTileX=null; drag.lastTileY=null; });
 
     // Wheel-Zoom
     canvas.addEventListener('wheel', function(e){
@@ -234,23 +296,30 @@
       zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top);
     }, {passive:false});
 
-    // Klick (Desktop) → Platzieren
+    // Desktop-Klick: Gebäude platzieren
     canvas.addEventListener('click', function(e){
       if (tool.mode!=='build' || !tool.key || !currentMap) return;
       var rect = canvas.getBoundingClientRect();
-      var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-      placeAtScreen(sx, sy);
+      placeAtScreen(e.clientX-rect.left, e.clientY-rect.top);
     });
 
-    // Touch (Pan + Pinch + Tap-Placement)
+    // Touch (Pan/Pinch/Tap & Painting)
     canvas.addEventListener('touchstart', function(e){
       if (e.touches.length===1){
         var t=e.touches[0];
         drag.on=true; drag.pinch=false;
         drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=cam.x; drag.cy=cam.y;
         drag.tapStart = Date.now(); drag.tapSX=t.clientX; drag.tapSY=t.clientY;
+
+        if (tool.mode==='road' || tool.mode==='path' || tool.mode==='bulldozer'){
+          drag.painting = true;
+          var rect = canvas.getBoundingClientRect();
+          paintAtScreen(t.clientX-rect.left, t.clientY-rect.top, true);
+        } else {
+          drag.painting = false;
+        }
       } else if (e.touches.length>=2){
-        drag.on=true; drag.pinch=true;
+        drag.on=true; drag.pinch=true; drag.painting=false;
         var a=e.touches[0], b=e.touches[1];
         drag.last = Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
       }
@@ -258,7 +327,10 @@
 
     canvas.addEventListener('touchmove', function(e){
       if (!drag.on) return;
-      if (!drag.pinch && e.touches.length===1){
+      if (drag.painting && e.touches.length===1 && (tool.mode==='road' || tool.mode==='path' || tool.mode==='bulldozer')){
+        var t=e.touches[0], rect=canvas.getBoundingClientRect();
+        paintAtScreen(t.clientX-rect.left, t.clientY-rect.top, false);
+      } else if (!drag.pinch && e.touches.length===1){
         var t=e.touches[0];
         cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom;
         clampCam(); drawMap();
@@ -274,21 +346,17 @@
     }, {passive:true});
 
     window.addEventListener('touchend', function(){
-      // Tap erkennen: kurzer, kleiner Move, 1-Finger
-      if (!drag.pinch && drag.tapStart){
+      // kurzer Tap -> Gebäude setzen
+      if (!drag.pinch && drag.tapStart && (tool.mode==='build' && tool.key)){
         var dt = Date.now() - drag.tapStart;
         var dx = Math.abs((drag.tapSX||0) - (drag.sx||0));
         var dy = Math.abs((drag.tapSY||0) - (drag.sy||0));
         if (dt < 300 && dx < 6 && dy < 6){
-          if (tool.mode==='build' && tool.key && currentMap){
-            var rect=canvas.getBoundingClientRect();
-            var sx = (drag.tapSX - rect.left);
-            var sy = (drag.tapSY - rect.top);
-            placeAtScreen(sx, sy);
-          }
+          var rect=canvas.getBoundingClientRect();
+          placeAtScreen(drag.tapSX-rect.left, drag.tapSY-rect.top);
         }
       }
-      drag.on=false; drag.pinch=false; drag.last=0; drag.tapStart=0;
+      drag.on=false; drag.pinch=false; drag.last=0; drag.tapStart=0; drag.painting=false; drag.lastTileX=null; drag.lastTileY=null;
     });
 
     // Keyboard
@@ -298,6 +366,34 @@
       else if(k==='arrowup'||k==='w'){ cam.y-=step; } else if(k==='arrowdown'||k==='s'){ cam.y+=step; } else return;
       clampCam(); drawMap();
     });
+
+    // Painting-Helfer: aus Bildschirmpos -> Tile, dann setzen/zeichnen
+    function paintAtScreen(sx,sy, isStart){
+      if (!currentMap) return;
+      var wx = cam.x + sx / cam.zoom;
+      var wy = cam.y + sy / cam.zoom;
+      var t = currentMap.tile;
+      var tx = Math.floor(wx / t);
+      var ty = Math.floor(wy / t);
+      tx = clamp(tx, 0, currentMap.width-1);
+      ty = clamp(ty, 0, currentMap.height-1);
+
+      if (isStart || drag.lastTileX===null){
+        applyPaint(tx,ty);
+        drag.lastTileX = tx; drag.lastTileY = ty;
+      } else {
+        // Linie zwischen letzter und aktueller Kachel
+        lineTiles(drag.lastTileX, drag.lastTileY, tx, ty, applyPaint);
+        drag.lastTileX = tx; drag.lastTileY = ty;
+      }
+      drawMap();
+    }
+
+    function applyPaint(tx,ty){
+      if (tool.mode==='road') setRoad(tx,ty);
+      else if (tool.mode==='path') setPath(tx,ty);
+      else if (tool.mode==='bulldozer') bulldozeAt(tx,ty);
+    }
   }
 
   // engine init
