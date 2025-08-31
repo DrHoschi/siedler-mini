@@ -2,8 +2,8 @@
 ============================================
 Datei: core/camera.js
 Projekt: Siedler-Mini
-Version: v16.3.1
-Zweck: Kameralogik (Pan/Zoom)
+Version: v16.3.2
+Zweck: Kameralogik (Pan/Zoom/Clamp)
 ============================================
 */
 (function(){
@@ -12,10 +12,10 @@ Zweck: Kameralogik (Pan/Zoom)
   var Cam = (window.GameCamera = window.GameCamera || {});
   var cam = { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 };
 
-  // ===================== Getter =====================
+  // ---------- Getter ----------
   Cam.get = function(){ return Object.assign({}, cam); };
 
-  // ===================== Setter =====================
+  // ---------- Setter ----------
   Cam.set = function(nx,ny,nz){
     if (typeof nx==='number') cam.x = nx;
     if (typeof ny==='number') cam.y = ny;
@@ -23,6 +23,7 @@ Zweck: Kameralogik (Pan/Zoom)
   };
 
   Cam.pan = function(dx,dy){ cam.x+=dx; cam.y+=dy; };
+
   Cam.zoomAt = function(f, cx, cy, viewW, viewH){
     var preX = cam.x + cx / cam.zoom;
     var preY = cam.y + cy / cam.zoom;
@@ -40,5 +41,5 @@ Zweck: Kameralogik (Pan/Zoom)
     cam.y = Math.max(0, Math.min(cam.y, maxY));
   };
 
-  (window.CBLog?.ok || console.log)('[camera.js] Modul geladen (v16.3.1)');
+  (window.CBLog?.ok || console.log)('[camera.js] Modul geladen (v16.3.2)');
 })();
