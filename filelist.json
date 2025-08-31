@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-31T12:01:21.560Z",
+  "createdAt": "2025-08-31T12:09:50.751Z",
   "root": ".",
-  "count": 253,
+  "count": 254,
   "entries": [
     {
       "type": "dir",
@@ -913,6 +913,11 @@
     },
     {
       "type": "file",
+      "path": "core/pathfinder.js",
+      "size": 3278
+    },
+    {
+      "type": "file",
       "path": "core/Readme",
       "size": 13
     },
@@ -1132,12 +1137,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24788
+      "size": 24789
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9355
+      "size": 9356
     },
     {
       "type": "file",
