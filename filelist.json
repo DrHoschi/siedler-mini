@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-31T21:11:28.025Z",
+  "createdAt": "2025-08-31T21:26:22.674Z",
   "root": ".",
-  "count": 252,
+  "count": 250,
   "entries": [
     {
       "type": "dir",
@@ -1031,11 +1031,6 @@
     },
     {
       "type": "file",
-      "path": "tools/dev-inspector.js",
-      "size": 8205
-    },
-    {
-      "type": "file",
       "path": "tools/filelist-audit.mjs",
       "size": 978
     },
@@ -1127,17 +1122,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2842
+      "size": 2827
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24878
+      "size": 24708
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9383
+      "size": 9337
     },
     {
       "type": "file",
@@ -1158,11 +1153,6 @@
       "type": "file",
       "path": "input.js",
       "size": 2984
-    },
-    {
-      "type": "file",
-      "path": "inspector.js",
-      "size": 9907
     },
     {
       "type": "file",
