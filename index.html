@@ -1,60 +1,74 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- CODE_STYLE · Siedler 2020 · index.html v16.2.1 -->
+  <!-- CODE_STYLE · Siedler 2020 · index.html v16.2.3 -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-  <title>Neue Siedler (index v16.2.1)</title>
+  <title>Neue Siedler · Start (index v16.2.3)</title>
   <meta name="description" content="Siedler 2020 · Mini City-Builder">
   <meta name="theme-color" content="#0b1610">
+  <meta name="version" content="16.2.3">
 
-  <!-- Preloads (Tileset wird sehr früh gebraucht) -->
-  <link rel="preload" href="./assets/tiles/tileset.terrain.png" as="image">
+  <!-- Preload -->
+  <link rel="preload" href="./assets/tiles/tileset.terrain.png?v=16.2.3" as="image">
 
-  <!-- Base Styles (deine bestehenden CSS-Dateien) -->
-  <link rel="stylesheet" href="./css/base.css">
-  <link rel="stylesheet" href="./css/platform.css">
-  <link rel="stylesheet" href="./css/mobile.css">
-  <link rel="stylesheet" href="./css/ios.css">
-  <link rel="stylesheet" href="./css/android.css">
-  <link rel="stylesheet" href="./css/desktop.css">
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./style.css">
+  <!-- Base Styles -->
+  <link rel="stylesheet" href="./css/base.css?v=16.2.3">
+  <link rel="stylesheet" href="./css/platform.css?v=16.2.3">
+  <link rel="stylesheet" href="./css/mobile.css?v=16.2.3">
+  <link rel="stylesheet" href="./css/ios.css?v=16.2.3">
+  <link rel="stylesheet" href="./css/android.css?v=16.2.3">
+  <link rel="stylesheet" href="./css/desktop.css?v=16.2.3">
+  <link rel="stylesheet" href="./styles.css?v=16.2.3">
+  <link rel="stylesheet" href="./style.css?v=16.2.3">
 
-  <!-- UI Styles (Startfenster & Bauen) -->
-  <link rel="stylesheet" href="./ui-start.css">
-  <link rel="stylesheet" href="./ui-build.css">
+  <!-- UI Styles -->
+  <link rel="stylesheet" href="./ui-start.css?v=16.2.3">
+  <link rel="stylesheet" href="./ui-build.css?v=16.2.3">
 
-  <!-- PWA (optional, bei dir vorhanden) -->
-  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="manifest" href="./manifest.webmanifest?v=16.2.3">
 </head>
 <body>
-  <!-- Spielfläche -->
   <canvas id="game" aria-label="Spielfläche" role="img"></canvas>
 
-  <!-- Inspector-Button (Debug) -->
+  <!-- Fallback-Inspector-Knopf (wird von inspector.js gestylt/ersetzt) -->
   <button id="inspectorToggle" style="position:fixed;right:.5rem;bottom:.5rem;z-index:9999">Inspector</button>
 
   <!-- ================== SCRIPT-REIHENFOLGE (wichtig!) ================== -->
+  <!-- 0) NOTFALL: Service Worker deaktivieren (außer ?keep-sw) -->
+  <script>
+  (function(){
+    if ('serviceWorker' in navigator && !location.search.includes('keep-sw')) {
+      navigator.serviceWorker.getRegistrations().then(function(rs){
+        rs.forEach(function(r){ r.unregister(); });
+        // Zusätzlich alle Caches leeren (nur falls vorhanden)
+        if (window.caches && caches.keys) {
+          caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); });
+        }
+      });
+    }
+  })();
+  </script>
+
   <!-- 1) Debug/Inspector & UI -->
-  <script defer src="./inspector.js"></script>
-  <script defer src="./assets/ui/ui-bridge.js"></script>
-  <script defer src="./assets/ui/ui-start.js"></script>
-  <script defer src="./assets/ui/ui-build.js"></script>
+  <script defer src="./inspector.js?v=16.2.3"></script>
+  <script defer src="./assets/ui/ui-bridge.js?v=16.2.3"></script>
+  <script defer src="./assets/ui/ui-start.js?v=16.2.3"></script>
+  <script defer src="./assets/ui/ui-build.js?v=16.2.3"></script>
 
-  <!-- 2) Boot/Fullscreen (bestehende Projekt-Skripte) -->
-  <script defer src="./boot.js"></script>
-  <script defer src="./fullscreen.js"></script>
+  <!-- 2) Boot/Fullscreen -->
+  <script defer src="./boot.js?v=16.2.3"></script>
+  <script defer src="./fullscreen.js?v=16.2.3"></script>
 
-  <!-- 3) NEU: Pathfinder & Carrier müssen vor game.js kommen -->
-  <script defer src="./core/pathfinder.js"></script>
-  <script defer src="./core/carriers.js"></script>
+  <!-- 3) Pathfinder & Carrier (müssen vor game.js kommen) -->
+  <script defer src="./core/pathfinder.js?v=16.2.3"></script>
+  <script defer src="./core/carriers.js?v=16.2.3"></script>
 
   <!-- 4) Spiel -->
-  <script defer src="./game.js"></script>
-  <script defer src="./main.js"></script>
+  <script defer src="./game.js?v=16.2.3"></script>
+  <script defer src="./main.js?v=16.2.3"></script>
   <!-- ================================================================== -->
 
   <noscript>Bitte JavaScript aktivieren, um „Neue Siedler“ zu spielen.</noscript>
