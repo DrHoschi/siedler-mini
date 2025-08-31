@@ -1,7 +1,7 @@
-// game.js — v16.1.27 (ES5) — Map, Pan/Zoom, Placement, Roads/Paths + Townhall-Auto
+// game.js — v16.1.28 (ES5) — Map, Pan/Zoom, Placement, Roads/Paths + Townhall-Auto + Ghost + QuickSave
 (function(){
   'use strict';
-  var VERSION = 'v16.1.27';
+  var VERSION = 'v16.1.28';
 
   // logging
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -65,6 +65,9 @@
   // tool state
   var tool = { mode:null, key:null }; // 'build'|'road'|'path'|'bulldozer'
 
+  // ghost preview (für Bauen)
+  var ghost = { on:false, tx:0, ty:0, key:null, can:false };
+
   // utils
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
   function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=function(){rej(new Error("img "+src))}; i.src=src; }); }
@@ -113,6 +116,32 @@
     var tx = Math.floor(wx / t), ty = Math.floor(wy / t);
     if (canPlace(key, tx, ty)){ placeBuilding(key, tx, ty); drawMap(); }
     else { warn("[build] Platzierung nicht möglich @", tx, ty, "für", key, "(Bounds? Kollision?)"); }
+  }
+
+  // Ghost aktualisieren
+  function updateGhostFromScreen(sx, sy){
+    ghost.on = false;
+    if (!currentMap) return;
+    var mode = normMode(tool.mode);
+    if (mode !== 'build' || !tool.key) return;
+
+    var wx = cam.x + sx / cam.zoom;
+    var wy = cam.y + sy / cam.zoom;
+    var t  = currentMap.tile;
+    var tx = Math.floor(wx / t);
+    var ty = Math.floor(wy / t);
+
+    var key = resolveBuildingKey(tool.key);
+    if (!BUILDINGS[key]) return;
+
+    tx = Math.max(0, Math.min(currentMap.width - 1, tx));
+    ty = Math.max(0, Math.min(currentMap.height - 1, ty));
+
+    ghost.on  = true;
+    ghost.tx  = tx;
+    ghost.ty  = ty;
+    ghost.key = key;
+    ghost.can = canPlace(key, tx, ty);
   }
 
   // Straßen/Wege
@@ -246,6 +275,30 @@
         ctx.strokeRect(ex+0.5, ey+0.5, ew-1, eh-1);
       }
     }
+
+    // Ghost-Vorschau (nach Entities)
+    if (ghost.on && ghost.key && BUILDINGS[ghost.key]){
+      var tG   = currentMap.tile;
+      var defG = BUILDINGS[ghost.key];
+      var gx   = ghost.tx * tG, gy = ghost.ty * tG;
+      var gw   = defG.wTiles * tG, gh = defG.hTiles * tG;
+
+      var dxG = Math.floor((gx - cam.x) * cam.zoom);
+      var dyG = Math.floor((gy - cam.y) * cam.zoom);
+      var dwG = Math.ceil(gw * cam.zoom);
+      var dhG = Math.ceil(gh * cam.zoom);
+
+      if (defG._img){
+        ctx.globalAlpha = ghost.can ? 0.65 : 0.35;
+        try { ctx.drawImage(defG._img, dxG, dyG, dwG, dhG); } catch(_){}
+        ctx.globalAlpha = 1;
+      }
+      ctx.lineWidth = Math.max(1, Math.floor(2 * cam.zoom));
+      ctx.strokeStyle = ghost.can ? 'rgba(60,200,120,0.95)' : 'rgba(220,70,60,0.95)';
+      ctx.strokeRect(dxG + 0.5, dyG + 0.5, dwG - 1, dhG - 1);
+      ctx.fillStyle = ghost.can ? 'rgba(60,200,120,0.12)' : 'rgba(220,70,60,0.12)';
+      ctx.fillRect(dxG, dyG, dwG, dhG);
+    }
   }
 
   // fit / clamp camera
@@ -292,6 +345,13 @@
       } else {
         drag.painting = false;
       }
+    });
+
+    // Zusätzlicher MouseMove am Canvas für Ghost
+    canvas.addEventListener('mousemove', function(e){
+      var rect = canvas.getBoundingClientRect();
+      updateGhostFromScreen(e.clientX - rect.left, e.clientY - rect.top);
+      drawMap();
     });
 
     window.addEventListener('mousemove', function(e){
@@ -352,12 +412,15 @@
         var t=e.touches[0];
         cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom;
         clampCam(); drawMap();
+        // Ghost aktualisieren
+        var r = canvas.getBoundingClientRect();
+        updateGhostFromScreen(t.clientX - r.left, t.clientY - r.top);
       } else if (e.touches.length>=2){
         var a=e.touches[0], b=e.touches[1];
         var d=Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
         if (drag.last){
-          var factor = d/drag.last; var r=canvas.getBoundingClientRect();
-          zoomAt(factor, ((a.clientX+b.clientX)/2)-r.left, ((a.clientY+b.clientY)/2)-r.top);
+          var factor = d/drag.last; var r2=canvas.getBoundingClientRect();
+          zoomAt(factor, ((a.clientX+b.clientX)/2)-r2.left, ((a.clientY+b.clientY)/2)-r2.top);
         }
         drag.last=d;
       }
@@ -374,13 +437,31 @@
         }
       }
       drag.on=false; drag.pinch=false; drag.last=0; drag.tapStart=0; drag.painting=false; drag.lastTileX=null; drag.lastTileY=null;
+      ghost.on=false; // Ghost aus
     });
 
     // Keyboard
     window.addEventListener('keydown', function(e){
-      var k=(e.key||'').toLowerCase(), step=Math.max(16, Math.floor(120/cam.zoom));
-      if(k==='arrowleft'||k==='a'){ cam.x-=step; } else if(k==='arrowright'||k==='d'){ cam.x+=step; }
-      else if(k==='arrowup'||k==='w'){ cam.y-=step; } else if(k==='arrowdown'||k==='s'){ cam.y+=step; } else return;
+      var k=(e.key||'').toLowerCase();
+
+      // QuickSave/Load
+      if (k === 's' && (e.ctrlKey || e.metaKey || (!e.altKey && !e.shiftKey))){
+        e.preventDefault && e.preventDefault();
+        quickSave(); 
+        return;
+      }
+      if (k === 'l' && (e.ctrlKey || e.metaKey || (!e.altKey && !e.shiftKey))){
+        e.preventDefault && e.preventDefault();
+        quickLoad(); 
+        return;
+      }
+
+      var step=Math.max(16, Math.floor(120/cam.zoom));
+      if(k==='arrowleft'||k==='a'){ cam.x-=step; } 
+      else if(k==='arrowright'||k==='d'){ cam.x+=step; }
+      else if(k==='arrowup'||k==='w'){ cam.y-=step; } 
+      else if(k==='arrowdown'||k==='s'){ cam.y+=step; } 
+      else return;
       clampCam(); drawMap();
     });
 
@@ -406,6 +487,68 @@
       else if (tool.mode==='bulldozer') bulldozeAt(tx,ty);
     }
   }
+
+  // QuickSave / QuickLoad
+  function serializeWorld(){
+    var ents = [];
+    for (var i=0;i<entities.length;i++){
+      var e = entities[i];
+      ents.push({ key:e.key, x:e.x, y:e.y, w:e.w, h:e.h });
+    }
+    return {
+      entities: ents,
+      over: { road: over.road, path: over.path },
+      cam: { x: cam.x, y: cam.y, zoom: cam.zoom }
+    };
+  }
+
+  function deserializeWorld(snap){
+    if (!snap) return;
+    entities = [];
+    var ents = snap.entities || [];
+    for (var i=0;i<ents.length;i++){
+      var e = ents[i];
+      var def = BUILDINGS[e.key];
+      entities.push({
+        key:e.key, x:e.x, y:e.y, w:e.w, h:e.h, img: def ? def._img : null
+      });
+    }
+    over.road = snap.over && snap.over.road ? snap.over.road : {};
+    over.path = snap.over && snap.over.path ? snap.over.path : {};
+    if (snap.cam){
+      cam.x = +snap.cam.x || cam.x;
+      cam.y = +snap.cam.y || cam.y;
+      cam.zoom = +snap.cam.zoom || cam.zoom;
+      clampCam();
+    }
+    drawMap();
+  }
+
+  function quickSave(){
+    try{
+      var data = serializeWorld();
+      localStorage.setItem('siedler-mini.save', JSON.stringify(data));
+      ok('[ok] Save geschrieben');
+    } catch(e){
+      err('[err] Save fehlgeschlagen: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  function quickLoad(){
+    try{
+      var raw = localStorage.getItem('siedler-mini.save');
+      if (!raw){ warn('[warn] Kein Save gefunden'); return; }
+      var data = JSON.parse(raw);
+      deserializeWorld(data);
+      ok('[ok] Save geladen');
+    } catch(e){
+      err('[err] Load fehlgeschlagen: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // optional fürs UI exportieren
+  Game.save = quickSave;
+  Game.load = quickLoad;
 
   // engine init
   function initEngine(){
