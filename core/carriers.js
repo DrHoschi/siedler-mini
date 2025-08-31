@@ -2,7 +2,7 @@
 ============================================
 Datei: core/carriers.js
 Projekt: Siedler-Mini
-Version: v16.3.1
+Version: v16.3.2
 Zweck: Träger-Logik (Carrier Agents, Pfade)
 ============================================
 */
@@ -13,9 +13,9 @@ Zweck: Träger-Logik (Carrier Agents, Pfade)
   var carriers = []; // {x,y,tx,ty,path,idx,speed,state,job}
   var tileSize = 64;
   var mapW=0,mapH=0;
-  var onDrawOverlay = null; // optional (Game kann hier einen Drawer registrieren)
+  var onDrawOverlay = null;
 
-  // ===================== Init =====================
+  // ---------- Init ----------
   Carriers.init = function(opts){
     opts = opts || {};
     tileSize = opts.tile || tileSize;
@@ -24,11 +24,9 @@ Zweck: Träger-Logik (Carrier Agents, Pfade)
     carriers.length=0;
   };
 
-  Carriers.registerOverlay = function(drawFn){
-    onDrawOverlay = drawFn;
-  };
+  Carriers.registerOverlay = function(drawFn){ onDrawOverlay = drawFn; };
 
-  // ===================== Spawning =====================
+  // ---------- Spawn ----------
   Carriers.spawn = function(tx,ty){
     var c = { x:tx, y:ty, tx:tx, ty:ty, path:null, idx:0, speed:2/tileSize, state:'idle', job:null };
     carriers.push(c);
@@ -43,13 +41,13 @@ Zweck: Träger-Logik (Carrier Agents, Pfade)
     return true;
   };
 
-  // ===================== Pathfinding =====================
+  // ---------- Pathfinding ----------
   function findPathWrap(ax,ay,bx,by){
     if (!window.GamePathfinder || !GamePathfinder.findPath) return null;
     return GamePathfinder.findPath(ax,ay,bx,by);
   }
 
-  // ===================== Carrier Update =====================
+  // ---------- Update ----------
   function stepCarrier(c, dt){
     if (c.state==='idle'){ return; }
 
@@ -83,7 +81,7 @@ Zweck: Träger-Logik (Carrier Agents, Pfade)
 
   Carriers.getAll = function(){ return carriers.slice(); };
 
-  // ===================== Zeichnen =====================
+  // ---------- Draw ----------
   Carriers.drawOverlay = function(ctx, cam, zoom){
     if (typeof onDrawOverlay === 'function'){ onDrawOverlay(ctx, cam, zoom, tileSize, carriers); return; }
     ctx.save();
@@ -101,7 +99,7 @@ Zweck: Träger-Logik (Carrier Agents, Pfade)
     ctx.restore();
   };
 
-  // ===================== Bootstrapping =====================
+  // ---------- Bootstrap ----------
   Carriers.bootstrapForMap = function(map, isWalkableFn){
     if (!map) return;
     var t = map.tile || 64;
@@ -111,5 +109,5 @@ Zweck: Träger-Logik (Carrier Agents, Pfade)
     }
   };
 
-  (window.CBLog?.ok || console.log)('[carriers.js] Modul geladen (v16.3.1)');
+  (window.CBLog?.ok || console.log)('[carriers.js] Modul geladen (v16.3.2)');
 })();
