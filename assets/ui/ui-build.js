@@ -1,4 +1,4 @@
-/*! ui-build.js v16.3.0 — Build-Menü mit Tabs/Kategorien (ES5) */
+/*! ui-build.js v16.3.0 — Build-Menü mit Tabs/Kategorien/Thumbs (ES5) */
 (function(){
   'use strict';
   var VERSION='v16.3.0';
@@ -9,57 +9,51 @@
   function ok(){ (window.CBLog&&CBLog.ok?CBLog.ok:console.log).apply(console, arguments); }
 
   // Kategorien & Items
+  // -> kannst du hier einfach erweitern (label, key/tool, optional icon/thumb)
   var CATS = [
-    { id:'wohnen',      label:'Wohnen',      items:[
-      { key:'house0',  label:'Haus I' },
-      { key:'house1',  label:'Haus II' }
+    { id:'wohnen',      label:'Wohnen', items:[
+      { key:'house0',  label:'Haus I',  icon:'🏠', thumb:'./assets/tex/building/wood/haeuser_wood1.PNG' },
+      { key:'house1',  label:'Haus II', icon:'🏘️', thumb:'./assets/tex/building/wood/haeuser_wood2.PNG' }
     ]},
-    { id:'produktion',  label:'Produktion',  items:[
-      { key:'lumberjack', label:'Holzfäller' },
-      { key:'farm',       label:'Farm' },
-      { key:'mill',       label:'Mühle' }
+    { id:'produktion',  label:'Produktion', items:[
+      { key:'lumberjack', label:'Holzfäller', icon:'🪓', thumb:'./assets/tex/building/wood/lumberjack_wood.PNG' },
+      { key:'farm',       label:'Farm',       icon:'🌾', thumb:'./assets/tex/building/wood/farm_wood.PNG' },
+      { key:'mill',       label:'Mühle',      icon:'🌬️', thumb:'./assets/tex/building/wood/windmuehle_wood.PNG' }
     ]},
-    { id:'lager',       label:'Lager',       items:[
-      { key:'depot',      label:'Depot' },
-      { key:'townhall',   label:'Rathaus' }
+    { id:'lager',       label:'Lager', items:[
+      { key:'depot',      label:'Depot',   icon:'📦', thumb:'./assets/tex/building/wood/depot_wood.PNG' },
+      { key:'townhall',   label:'Rathaus', icon:'🏰', thumb:'./assets/tex/building/Holz_Rathaus_1.png' }
     ]},
-    { id:'wege',        label:'Wege',        items:[
-      { tool:'path', label:'Weg' },
-      { tool:'road', label:'Straße' }
+    { id:'wege',        label:'Wege', items:[
+      { tool:'path', label:'Weg',   icon:'🟩' },
+      { tool:'road', label:'Straße',icon:'🛤️' }
     ]},
-    { id:'tools',       label:'Tools',       items:[
-      { tool:'bulldozer', label:'Abriss' }
+    { id:'tools',       label:'Tools', items:[
+      { tool:'bulldozer', label:'Abriss', icon:'❌' }
     ]}
   ];
 
   function ensureDock(){
-    // Tabs-Leiste
+    // Tabs
     var tabs = $('#build-tabs');
-    if (!tabs){
-      tabs = document.createElement('div');
-      tabs.id = 'build-tabs';
-      document.body.appendChild(tabs);
-    }
+    if (!tabs){ tabs = document.createElement('div'); tabs.id='build-tabs'; document.body.appendChild(tabs); }
     tabs.innerHTML = CATS.map(function(c,i){
       return '<button type="button" data-tab="'+c.id+'" class="'+(i===0?'active':'')+'">'+c.label+'</button>';
     }).join('');
 
-    // Dock (untere Buttonleiste)
+    // Dock
     var dock = $('#build-dock');
-    if (!dock){
-      dock = document.createElement('nav');
-      dock.id = 'build-dock';
-      document.body.appendChild(dock);
-    }
+    if (!dock){ dock = document.createElement('nav'); dock.id='build-dock'; document.body.appendChild(dock); }
 
     function renderCat(catId){
       var cat = CATS.filter(function(c){return c.id===catId;})[0] || CATS[0];
       dock.innerHTML = cat.items.map(function(it){
-        var icon = it.icon || (it.key ? '🏗️' : '🧰');
+        var icon = it.icon || '🏗️';
+        var thumb = it.thumb ? '<span class="thumb" style="background-image:url('+it.thumb+')"></span>' : '';
         if (it.key){
-          return '<button data-tool="build" data-key="'+it.key+'" title="'+(it.label||it.key)+'">'+icon+' '+it.label+'</button>';
+          return '<button data-tool="build" data-key="'+it.key+'" title="'+(it.label||it.key)+'">'+thumb+(thumb?'':' '+icon+' ')+(it.label||it.key)+'</button>';
         } else {
-          return '<button data-tool="'+it.tool+'" title="'+(it.label||it.tool)+'">'+icon+' '+it.label+'</button>';
+          return '<button data-tool="'+it.tool+'" title="'+(it.label||it.tool)+'">'+icon+' '+(it.label||it.tool)+'</button>';
         }
       }).join('');
       bindButtons();
@@ -67,18 +61,18 @@
 
     function bindButtons(){
       var root = document.body;
-      $all('#build-dock [data-tool]', root).forEach(function(btn){
+      $all('#build-dock [data-tool]').forEach(function(btn){
         on(btn,'click', function(){
           var t = btn.getAttribute('data-tool');
           var k = btn.getAttribute('data-key');
 
-          // Toggle: bereits aktiv? -> Tool zurücksetzen
+          // Toggle: bereits aktiv? -> clear
           if (btn.classList.contains('active')){
             if (window.Game && Game.clearTool) Game.clearTool();
             $all('#build-dock [data-tool].active', root).forEach(function(b){b.classList.remove('active');});
             return;
           }
-          // sonst aktivieren
+          // Aktivieren
           $all('#build-dock [data-tool].active', root).forEach(function(b){b.classList.remove('active');});
           btn.classList.add('active');
 
@@ -91,7 +85,7 @@
       });
     }
 
-    // Tab-Handler
+    // Tab-Clicks
     $all('#build-tabs [data-tab]').forEach(function(tb){
       on(tb,'click', function(){
         $all('#build-tabs [data-tab].active').forEach(function(b){b.classList.remove('active');});
@@ -103,7 +97,7 @@
     // initial
     renderCat(CATS[0].id);
 
-    // Game→UI: Tool-Clear spiegelt UI
+    // Callback aus Game → UI-Status resetten
     if (!window.GameUI) window.GameUI = {};
     window.GameUI.onToolCleared = function(){
       $all('#build-dock [data-tool].active').forEach(function(b){b.classList.remove('active');});
@@ -112,6 +106,6 @@
     ok('[ok] Bau-Menü bereit (ui-build.js '+VERSION+')');
   }
 
-  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', ensureDock); }
+  if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', ensureDock); }
   else { ensureDock(); }
 })();
