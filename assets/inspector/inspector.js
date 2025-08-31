@@ -1,111 +1,165 @@
-<script>
-/* Inspector – schlank, zeigt Logs & Live; Button unten rechts */
+// assets/inspector/inspector.js — v16.3.3
 (function(){
   'use strict';
-  var VERSION='v16.3.3';
-  var log = (window.CBLog && CBLog.ok) ? function(){ CBLog.ok.apply(CBLog, arguments); } : console.log;
 
-  var fab, panel, liveTab, logsTab, area;
+  var VERSION = 'v16.3.3';
+  var root, btn, liveBox, logBox, tabLive, tabLogs;
+  var buffer = [];
 
-  function ensure(){
-    if (panel) return;
+  // ------- CBLog shim so alles konsistent landet ---------------------------
+  window.CBLog = window.CBLog || (function(){
+    var list = [];
+    function push(prefix, args){ try{ list.push(time() + ' ' + prefix + ' ' + Array.prototype.slice.call(args).join(' ')); flush(); }catch(_){ } }
+    function time(){ var d=new Date(); return '['+d.toTimeString().slice(0,8)+']'; }
+    return {
+      log: function(){ console.log.apply(console, arguments); push('LOG', arguments); },
+      ok : function(){ console.log.apply(console, arguments); push('OK ', arguments); },
+      warn:function(){ console.warn.apply(console, arguments); push('WARN', arguments); },
+      err: function(){ console.error.apply(console, arguments); push('ERR', arguments); },
+      dump: function(){ return list.join('\n'); }
+    };
+  })();
 
-    // FAB
-    fab = document.createElement('button');
-    fab.id = 'inspectorFab';
-    fab.style.cssText = [
-      'position:fixed;right:14px;bottom:96px;width:56px;height:56px;border-radius:50%;',
-      'z-index:1200;background:radial-gradient(120% 140% at 10% 10%,rgba(255,255,255,.08),rgba(0,0,0,.36));',
-      'border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 24px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1);',
-      'color:#f6f8f5;display:grid;place-content:center'
-    ].join('');
-    fab.title='Inspector';
-    fab.innerHTML='<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M19.43 12.98l1.77 1.77-1.41 1.41-1.77-1.77a7.96 7.96 0 01-4.02 1.98V20h-2v-3.63a8 8 0 117.43-3.39zM12 6a6 6 0 100 12 6 6 0 000-12z"/></svg>';
-    fab.addEventListener('click', toggle);
-    document.body.appendChild(fab);
+  // hook console.* zusätzlich in den Inspector-Puffer
+  ['log','warn','error'].forEach(function(k){
+    var orig = console[k];
+    console[k] = function(){
+      try {
+        buffer.push({lvl:k, msg:Array.prototype.slice.call(arguments).join(' ')});
+        flush();
+      } catch(_){}
+      orig.apply(console, arguments);
+    };
+  });
+
+  function injectStyle(){
+    if (document.getElementById('inspector-style')) return;
+    var css = `
+      .insp-toggle{
+        position:fixed; right:14px; bottom:18px; z-index:9;
+        width:56px;height:56px;border-radius:50%;
+        background:rgba(26,34,29,.85); color:#cde6ff; border:1px solid rgba(255,255,255,.08);
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
+        backdrop-filter: blur(10px);
+        cursor:pointer; user-select:none; font-size:26px;
+      }
+      .insp{
+        position:fixed; left:12px; right:12px; bottom:92px; z-index:10;
+        background:rgba(17,25,21,.92); color:#e8efe8; border-radius:16px; padding:14px;
+        border:1px solid rgba(255,255,255,.06); box-shadow:0 18px 60px rgba(0,0,0,.4);
+        backdrop-filter: blur(10px); transform:translateY(110%); transition:transform .25s ease;
+      }
+      .insp.open{ transform:translateY(0); }
+      .insp-h{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+      .insp-tabs{ display:flex; gap:8px; }
+      .insp-tab{ padding:6px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.1); cursor:pointer; }
+      .insp-tab.active{ background:#2c3b32; }
+      .insp-box{ height:180px; overflow:auto; background:rgba(0,0,0,.25); border-radius:10px; padding:10px; font:12px/1.4 monospace; }
+      .insp-btns{ display:flex; gap:10px; margin-top:10px; }
+      .insp-btn{ padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.05); cursor:pointer; }
+    `;
+    var st=document.createElement('style'); st.id='inspector-style'; st.textContent=css; document.head.appendChild(st);
+  }
+
+  function flush(){
+    if (!logBox) return;
+    // Inhalte setzen
+    try {
+      if (buffer.length){
+        var frag = document.createDocumentFragment();
+        buffer.splice(0).forEach(function(r){
+          var div = document.createElement('div');
+          div.textContent = r.lvl.toUpperCase()+': '+r.msg;
+          frag.appendChild(div);
+        });
+        logBox.appendChild(frag);
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    } catch(_){}
+  }
+
+  function build(){
+    injectStyle();
+
+    // Toggle btn
+    btn = document.createElement('div');
+    btn.className = 'insp-toggle';
+    btn.title = 'Inspector';
+    btn.textContent = '🛠';
+    document.body.appendChild(btn);
 
     // Panel
-    panel = document.createElement('div');
-    panel.style.cssText = [
-      'position:fixed;left:5%;right:5%;bottom:86px;min-height:220px;max-height:60vh;',
-      'background:rgba(8,12,10,.9);backdrop-filter:blur(12px) saturate(120%);',
-      'border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;z-index:1199;',
-      'box-shadow:0 10px 40px rgba(0,0,0,.5);display:none;color:#e7eee7'
-    ].join('');
-    panel.innerHTML = [
-      '<div style="font-weight:700;margin:2px 0 10px;">Inspector ',
-      '<small style="opacity:.7">(',VERSION,')</small></div>',
-      '<div style="display:flex;gap:8px;margin-bottom:10px">',
-        '<button id="inspLive"  style="padding:6px 10px;border-radius:10px;border:0;background:#234;">Live</button>',
-        '<button id="inspLogs"  style="padding:6px 10px;border-radius:10px;border:0;background:#234;">Logs</button>',
-        '<span style="flex:1"></span>',
-        '<button id="inspClear" style="padding:6px 10px;border-radius:10px;border:0;background:#342;">Leeren</button>',
-      '</div>',
-      '<pre id="inspArea" style="margin:0;background:rgba(0,0,0,.35);border-radius:10px;padding:12px;overflow:auto;max-height:42vh;white-space:pre-wrap"></pre>'
-    ].join('');
-    document.body.appendChild(panel);
+    root = document.createElement('div');
+    root.className = 'insp';
+    root.innerHTML = `
+      <div class="insp-h">
+        <div>Inspector <small>(v${VERSION})</small></div>
+        <div class="insp-tabs">
+          <div class="insp-tab active" data-k="live">Live</div>
+          <div class="insp-tab" data-k="logs">Logs</div>
+        </div>
+      </div>
+      <div class="insp-box insp-live"></div>
+      <div class="insp-box insp-logs" style="display:none"></div>
+      <div class="insp-btns">
+        <button class="insp-btn insp-copy">Kopieren</button>
+        <button class="insp-btn insp-clear">Leeren</button>
+      </div>
+    `;
+    document.body.appendChild(root);
 
-    liveTab = panel.querySelector('#inspLive');
-    logsTab = panel.querySelector('#inspLogs');
-    area    = panel.querySelector('#inspArea');
+    liveBox = root.querySelector('.insp-live');
+    logBox  = root.querySelector('.insp-logs');
+    tabLive = root.querySelector('.insp-tab[data-k="live"]');
+    tabLogs = root.querySelector('.insp-tab[data-k="logs"]');
 
-    liveTab.addEventListener('click', function(){ mode='live'; render(); });
-    logsTab.addEventListener('click', function(){ mode='logs'; render(); });
-    panel.querySelector('#inspClear').addEventListener('click', function(){ buffer=[]; render(); });
-
-    hookConsole();
-    log('[inspector] bereit', VERSION);
-  }
-
-  function toggle(){ ensure(); panel.style.display = (panel.style.display==='none'?'block':'none'); render(); }
-
-  // Puffer
-  var buffer = [];
-  var mode   = 'live';
-
-  function pushLine(kind, args){
-    try{
-      var t = new Date().toTimeString().slice(0,8);
-      buffer.push('['+t+'] '+kind.toUpperCase()+': '+[].map.call(args, toStr).join(' '));
-      if (buffer.length>500) buffer.shift();
-      if (mode==='live') render();
-    }catch(_){}
-  }
-  function toStr(v){
-    if (v===undefined) return 'undefined';
-    if (v===null) return 'null';
-    if (typeof v==='object'){ try{return JSON.stringify(v);}catch(_){ return '[Object]'; } }
-    return String(v);
-  }
-  function render(){
-    if (!area) return;
-    if (mode==='live'){
-      // kleine Live-Info
-      var info = [
-        'index: ', (window.INDEX_VERSION||'–'),
-        '   dpr: ', (window.devicePixelRatio||1),
-        '\nGameLoader: ', !!window.GameLoader,
-        '   Game: ', !!window.Game,
-        '   GameUI: ', !!window.GameUI
-      ].join('');
-      area.textContent = info;
-    } else {
-      area.textContent = buffer.join('\n');
-    }
-  }
-
-  function hookConsole(){
-    ['log','warn','error'].forEach(function(k){
-      var orig = console[k].bind(console);
-      console[k] = function(){
-        try{ pushLine(k, arguments); }catch(_){}
-        return orig.apply(console, arguments);
-      };
+    tabLive.addEventListener('click', function(){
+      tabLive.classList.add('active'); tabLogs.classList.remove('active');
+      liveBox.style.display='block'; logBox.style.display='none';
     });
+    tabLogs.addEventListener('click', function(){
+      tabLogs.classList.add('active'); tabLive.classList.remove('active');
+      liveBox.style.display='none'; logBox.style.display='block'; flush();
+    });
+
+    root.querySelector('.insp-copy').addEventListener('click', function(){
+      var txt = (window.CBLog && CBLog.dump ? CBLog.dump() : '');
+      try { navigator.clipboard.writeText(txt); CBLog.ok('[inspector] Log kopiert'); } catch(_){}
+    });
+    root.querySelector('.insp-clear').addEventListener('click', function(){
+      logBox.innerHTML=''; CBLog.ok('[inspector] Log geleert');
+    });
+
+    btn.addEventListener('click', function(){ root.classList.toggle('open'); });
+
+    updateLive();
+    setInterval(updateLive, 1000);
+
+    CBLog.ok('[inspector] Modul geladen ('+VERSION+')');
   }
 
-  // init nach UI
-  window.addEventListener('cb:ui-ready', ensure);
+  function updateLive(){
+    if (!liveBox) return;
+    var data = {
+      index: (window.INDEX_VERSION || 'n/a'),
+      uiStart: 'ok',
+      uiBuild: 'ok',
+      dpr: window.devicePixelRatio || 1,
+      GameLoader: !!window.GameLoader,
+      Game: !!window.Game,
+      GameUI: !!window.GameUI
+    };
+    liveBox.textContent = JSON.stringify(data, null, 2);
+  }
 
+  // Public toggle/open helpers (optional external use)
+  window.InspectorUI = {
+    open:  function(){ root && root.classList.add('open'); },
+    close: function(){ root && root.classList.remove('open'); },
+    toggle:function(){ root && root.classList.toggle('open'); }
+  };
+
+  if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', build); }
+  else { build(); }
 })();
-</script>
