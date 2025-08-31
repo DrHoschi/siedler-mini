@@ -1,107 +1,113 @@
-// core/pathfinder.js — v1.0.0 — A* Pfadfinder (ES5, ohne Deps)
+/*! core/pathfinder.js v16.3.0 — A* auf Kachelraster (ES5) */
 (function(){
   'use strict';
+  var PF = (window.GamePathfinder = window.GamePathfinder || {});
 
-  function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
+  var gridW=0, gridH=0, walk=null; // walk[y][x] = true/false
+  var allowDiag = true;            // Diagonalen erlauben
+  var diagCost  = 1.41421356237;   // √2
+  var orthoCost = 1.0;
 
-  var PF = {};
-  var cfg = {
-    getSize: function(){ return {w:0,h:0}; },
-    isBlocked: function(tx,ty){ return false; },
-    moveCost: function(tx,ty){ return 10; },  // Straße/Weg günstiger
-    allowDiag: false
+  function inBounds(x,y){ return x>=0 && y>=0 && x<gridW && y<gridH; }
+
+  PF.init = function(map, isWalkableFn){
+    gridW = map && map.width  || 0;
+    gridH = map && map.height || 0;
+    walk = new Array(gridH);
+    for (var y=0;y<gridH;y++){
+      walk[y] = new Array(gridW);
+      for (var x=0;x<gridW;x++){
+        walk[y][x] = !!(isWalkableFn ? isWalkableFn(x,y) : true);
+      }
+    }
   };
 
-  PF.init = function(opts){
-    cfg.getSize   = (opts && opts.getSize)   || cfg.getSize;
-    cfg.isBlocked = (opts && opts.isBlocked) || cfg.isBlocked;
-    cfg.moveCost  = (opts && opts.moveCost)  || cfg.moveCost;
-    cfg.allowDiag = !!(opts && opts.allowDiag);
-    ok("[pathfinder] Modul geladen (v1.0.0)");
+  PF.rebuild = function(updateFn){
+    // optional: einzelne Felder neu setzen
+    if (!updateFn || !walk) return;
+    for (var y=0;y<gridH;y++) for (var x=0;x<gridW;x++){
+      var v = updateFn(x,y, walk[y][x]);
+      if (typeof v==='boolean') walk[y][x] = v;
+    }
   };
 
-  function key(tx,ty){ return tx+"|"+ty; }
-
-  function heuristic(ax,ay,bx,by){
-    var dx = Math.abs(ax-bx), dy = Math.abs(ay-by);
-    if (!cfg.allowDiag) return 10*(dx+dy); // Manhattan * 10
-    // Diagonal: 10 & 14
-    var dmin = Math.min(dx,dy), dmax = Math.max(dx,dy);
-    return 14*dmin + 10*(dmax-dmin);
-  }
+  PF.setDiagonal = function(v){ allowDiag = !!v; };
 
   function neighbors(x,y){
-    var list = [
-      {x:x+1,y:y},{x:x-1,y:y},{x:x,y:y+1},{x:x,y:y-1}
+    var res = [
+      [x+1,y, orthoCost],[x-1,y, orthoCost],[x,y+1, orthoCost],[x,y-1, orthoCost]
     ];
-    if (cfg.allowDiag){
-      list.push({x:x+1,y:y+1},{x:x-1,y:y+1},{x:x+1,y:y-1},{x:x-1,y:y-1});
+    if (allowDiag){
+      res.push([x+1,y+1, diagCost],[x-1,y+1, diagCost],[x+1,y-1, diagCost],[x-1,y-1, diagCost]);
     }
-    return list;
+    return res;
   }
 
-  PF.find = function(params){
-    var sx=params.sx|0, sy=params.sy|0, gx=params.gx|0, gy=params.gy|0;
-    var size = cfg.getSize(), W=size.w|0, H=size.h|0;
-    var maxIter = Math.max(1000, params.maxIter|0 || 20000);
+  function heuristic(ax,ay,bx,by){
+    // Octile-Heuristik (gut für 8-Nachbarn)
+    var dx = Math.abs(ax-bx), dy = Math.abs(ay-by);
+    var F = diagCost - orthoCost;
+    return (dx<dy) ? F*dx + dy : F*dy + dx;
+  }
 
-    function inBounds(x,y){ return x>=0 && y>=0 && x<W && y<H; }
+  PF.findPath = function(sx,sy,tx,ty, opts){
+    if (!walk || !inBounds(sx,sy) || !inBounds(tx,ty)) return null;
+    if (!walk[sy][sx] || !walk[ty][tx]) return null;
 
-    if (!inBounds(sx,sy) || !inBounds(gx,gy)) return null;
-    if (cfg.isBlocked(gx,gy)) return null;
+    var w=gridW,h=gridH;
+    var open = [];
+    var came = new Array(h), g=new Array(h), f=new Array(h);
+    for (var y=0;y<h;y++){ came[y]=new Array(w); g[y]=new Array(w); f[y]=new Array(w); }
+    function push(o){ open.push(o); }
+    function pop(){ // einfache PriorityQueue (linear) reicht für kleine Karten
+      var bi=0,bf=open[0].f,i;
+      for(i=1;i<open.length;i++){ if(open[i].f<bf){ bf=open[i].f; bi=i; } }
+      return open.splice(bi,1)[0];
+    }
+    function key(x,y){ return x+'#'+y; }
 
-    var open = []; // (Array statt Heap: genügt hier)
-    var openMap = {};
-    var closed = {};
-    var came   = {};
-    var gScore = {};
+    g[sy][sx]=0; f[sy][sx]=heuristic(sx,sy,tx,ty);
+    push({x:sx,y:sy,f:f[sy][sx]});
+    var closed = Object.create(null);
 
-    var sk = key(sx,sy), gk=key(gx,gy);
-    gScore[sk] = 0;
-    open.push({k:sk,x:sx,y:sy,f:heuristic(sx,sy,gx,gy)});
-    openMap[sk]=true;
-
-    var iter=0;
-    while(open.length && iter++ < maxIter){
-      // kleinstes f finden
-      var bestIdx=0, best=open[0];
-      for (var i=1;i<open.length;i++){
-        if (open[i].f < best.f){ bestIdx=i; best=open[i]; }
-      }
-      var current = best; open.splice(bestIdx,1); delete openMap[current.k];
-      if (current.k===gk){
-        // reconstruct
-        var path=[{x:gx,y:gy}], ck=gk;
-        while(came[ck]){ ck=came[ck]; var parts=ck.split('|'); path.push({x:+parts[0],y:+parts[1]}); }
+    while (open.length){
+      var cur = pop();
+      var cx=cur.x, cy=cur.y;
+      var ck=key(cx,cy);
+      if (cx===tx && cy===ty){
+        // rekonstruieren
+        var path=[[tx,ty]];
+        while (came[cy][cx]){
+          var p=came[cy][cx]; cx=p[0]; cy=p[1]; path.push([cx,cy]);
+        }
         path.reverse();
         return path;
       }
-      closed[current.k]=true;
+      closed[ck]=1;
 
-      var nb = neighbors(current.x,current.y);
-      for (var n=0;n<nb.length;n++){
-        var nx=nb[n].x, ny=nb[n].y, nk=key(nx,ny);
-        if (!inBounds(nx,ny) || closed[nk]) continue;
-        if (cfg.isBlocked(nx,ny)) continue;
+      var ns = neighbors(cx,cy);
+      for (var i=0;i<ns.length;i++){
+        var nx=ns[i][0], ny=ns[i][1], cost=ns[i][2];
+        if (!inBounds(nx,ny) || !walk[ny][nx]) continue;
+        if (closed[key(nx,ny)]) continue;
 
-        var step = 10; // 4-Nachbarn
-        if (cfg.allowDiag){
-          var diag = (nx!==current.x && ny!==current.y);
-          step = diag ? 14 : 10;
-        }
-        var tileCost = cfg.moveCost(nx,ny) | 0;
-        var tentative = (gScore[current.k]||1e9) + step + tileCost;
-
-        if (!openMap[nk] || tentative < (gScore[nk]||1e12)){
-          came[nk]=current.k;
-          gScore[nk]=tentative;
-          var f = tentative + heuristic(nx,ny,gx,gy);
-          if (!openMap[nk]){ open.push({k:nk,x:nx,y:ny,f:f}); openMap[nk]=true; }
+        var ng = (g[cy][cx]||0) + cost;
+        if (g[ny][nx]===undefined || ng < g[ny][nx]){
+          came[ny][nx] = [cx,cy];
+          g[ny][nx] = ng;
+          f[ny][nx] = ng + heuristic(nx,ny,tx,ty);
+          // falls schon in open → aktualisieren; sonst push
+          var found=false;
+          for (var j=0;j<open.length;j++){ if (open[j].x===nx && open[j].y===ny){ open[j].f=f[ny][nx]; found=true; break; } }
+          if (!found) push({x:nx,y:ny,f:f[ny][nx]});
         }
       }
     }
-    return null; // kein Pfad gefunden
+    return null; // kein Pfad
   };
 
-  window.PathFinder = PF;
+  PF.debugIsWalkable = function(x,y){ return !!(walk && inBounds(x,y) && walk[y][x]); };
+
+  // expose
+  if (!window.GamePathfinder) window.GamePathfinder = PF;
 })();
