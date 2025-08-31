@@ -1,67 +1,133 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- CODE_STYLE · Siedler 2020 · index.html v16.2.5 -->
+  <!-- CODE_STYLE · Siedler 2020 · index.html v16.2.6 -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Neue Siedler · Start (index v16.2.5)</title>
-  <meta name="description" content="Siedler 2020 · Mini City-Builder">
+  <title>Neue Siedler · Start (index v16.2.6)</title>
   <meta name="theme-color" content="#0b1610">
-  <meta name="version" content="16.2.5">
+  <meta name="version" content="16.2.6">
 
-  <!-- Styles (nur vorhandene Pfade) -->
-  <link rel="stylesheet" href="./css/base.css?v=16.2.5">
-  <link rel="stylesheet" href="./css/platform.css?v=16.2.5">
-  <link rel="stylesheet" href="./css/mobile.css?v=16.2.5">
-  <link rel="stylesheet" href="./css/ios.css?v=16.2.5">
-  <link rel="stylesheet" href="./css/android.css?v=16.2.5">
-  <link rel="stylesheet" href="./css/desktop.css?v=16.2.5">
-  <link rel="stylesheet" href="./styles.css?v=16.2.5">
-  <link rel="stylesheet" href="./style.css?v=16.2.5">
+  <!-- Styles (nur vorhandene Pfade in deinem Repo) -->
+  <link rel="stylesheet" href="./css/base.css?v=16.2.6">
+  <link rel="stylesheet" href="./css/platform.css?v=16.2.6">
+  <link rel="stylesheet" href="./css/mobile.css?v=16.2.6">
+  <link rel="stylesheet" href="./css/ios.css?v=16.2.6">
+  <link rel="stylesheet" href="./css/android.css?v=16.2.6">
+  <link rel="stylesheet" href="./css/desktop.css?v=16.2.6">
+  <link rel="stylesheet" href="./styles.css?v=16.2.6">
+  <link rel="stylesheet" href="./style.css?v=16.2.6">
   <!-- UI styles -->
-  <link rel="stylesheet" href="./ui-start.css?v=16.2.5">
-  <link rel="stylesheet" href="./ui-build.css?v=16.2.5">
-  <link rel="manifest" href="./manifest.webmanifest?v=16.2.5">
+  <link rel="stylesheet" href="./ui-start.css?v=16.2.6">
+  <link rel="stylesheet" href="./ui-build.css?v=16.2.6">
+  <link rel="manifest" href="./manifest.webmanifest?v=16.2.6">
+
+  <style>
+    /* Diagnose-Overlay */
+    #diag{position:fixed;left:8px;top:8px;z-index:99999;font:12px ui-monospace,Menlo,Consolas,monospace;color:#e6f3ea;background:#193830;border:1px solid #2a4a41;border-radius:8px;padding:8px 10px;max-width:94vw;box-shadow:0 8px 26px rgba(0,0,0,.35)}
+    #diag h3{margin:0 0 6px 0;font-size:12px}
+    #diag pre{margin:0;white-space:pre-wrap}
+    #diag.ok{display:none}
+  </style>
 </head>
 <body>
   <canvas id="game" aria-label="Spielfläche" role="img"></canvas>
   <button id="inspectorToggle" style="position:fixed;right:.5rem;bottom:.5rem;z-index:9999">Inspector</button>
 
-  <!-- 0) SW/Caches killen (außer ?keep-sw) -->
+  <!-- Diagnose-Box -->
+  <div id="diag" class="ok" hidden>
+    <h3>Diagnose</h3>
+    <pre id="diaglog">…</pre>
+  </div>
+
+  <!-- 0) SW/Caches killen (außer ?keep-sw) + Diagnose-Helfer -->
   <script>
   (function(){
-    if ('serviceWorker' in navigator && !location.search.includes('keep-sw')) {
-      navigator.serviceWorker.getRegistrations().then(function(rs){
-        rs.forEach(function(r){ r.unregister(); });
-        if (window.caches && caches.keys) {
-          caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); });
-        }
-      });
+    var Q=Object.fromEntries(new URLSearchParams(location.search));
+    var log=[]; function note(s){try{log.push(s)}catch(e){}}
+    window.__DIAG_NOTE__=note;
+
+    // globale Error-Hooks
+    window.onerror=function(m,src,ln,col){note("JS-Error: "+m+" @ "+(src||'')+":"+ln+":"+col);showSoon()};
+    window.addEventListener('unhandledrejection',e=>{note("Rejection: "+(e.reason && (e.reason.stack||e.reason.message)||e.reason));showSoon()});
+
+    function show(){
+      var el=document.getElementById('diag'), pre=document.getElementById('diaglog');
+      if(!el||!pre) return;
+      el.hidden=false; el.classList.remove('ok');
+      var checks=[
+        "URL: "+location.href,
+        "keep-sw: "+!!Q['keep-sw'],
+        "GameLoader: "+!!window.GameLoader,
+        "Game: "+!!window.Game,
+        "GameUI: "+!!window.GameUI,
+        "InspectorReady: "+(typeof window.CBInspectorReady!=='undefined' || !!document.querySelector('[data-inspector-ready]')),
+      ];
+      pre.textContent=(log.join("\n")+"\n"+checks.join("\n")).trim();
     }
+    var t=null; function showSoon(){ if(t) return; t=setTimeout(show,250); }
+
+    if('serviceWorker' in navigator && !('keep-sw' in Q)){
+      navigator.serviceWorker.getRegistrations().then(rs=>{
+        rs.forEach(r=>r.unregister());
+        if(window.caches && caches.keys) caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+        note("SW: unregistered + caches cleared");
+      }).catch(e=>note("SW-err: "+e));
+    }
+
+    // Wenn in 2500ms kein Engine/Game-Event -> Diagnose anzeigen
+    var ok=false; function ping(){ ok=true; }
+    window.addEventListener('cb:engine-ready', ping, {once:true});
+    window.addEventListener('cb:game-started', ping, {once:true});
+    setTimeout(function(){ if(!ok) show(); }, 2500);
   })();
   </script>
 
+  <!-- ================== SCRIPT-REIHENFOLGE ================== -->
   <!-- 1) Inspector + UI -->
-  <script defer src="./inspector.js?v=16.2.5"></script>
-  <!-- HINWEIS: ui-bridge.js entfernt -->
-  <script defer src="./assets/ui/ui-start.js?v=16.2.5"></script>
-  <script defer src="./assets/ui/ui-build.js?v=16.2.5"></script>
+  <script defer src="./inspector.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: inspector.js')"
+          onerror="__DIAG_NOTE__('404: inspector.js');"></script>
+
+  <!-- ui-bridge.js ENTFERNT -->
+  <script defer src="./assets/ui/ui-start.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: assets/ui/ui-start.js')"
+          onerror="__DIAG_NOTE__('404: assets/ui/ui-start.js');"></script>
+
+  <script defer src="./assets/ui/ui-build.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: assets/ui/ui-build.js')"
+          onerror="__DIAG_NOTE__('404: assets/ui/ui-build.js');"></script>
 
   <!-- 2) Boot -->
-  <script defer src="./boot.js?v=16.2.5"></script>
+  <script defer src="./boot.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: boot.js')"
+          onerror="__DIAG_NOTE__('404: boot.js');"></script>
 
   <!-- 3) Module/Compat -->
-  <!-- fullscreen.js ist ein ES-Modul -->
-  <script type="module" src="./fullscreen.js?v=16.2.5"></script>
+  <!-- fullscreen.js ist ESM -->
+  <script type="module" src="./fullscreen.js?v=16.2.6"
+          onload="window.__DIAG_NOTE__ && __DIAG_NOTE__('ok: fullscreen.js (module)')"
+          onerror="__DIAG_NOTE__('404/ESM: fullscreen.js');"></script>
 
   <!-- 4) Core vor game.js -->
-  <script defer src="./core/pathfinder.js?v=16.2.5"></script>
-  <script defer src="./core/carriers.js?v=16.2.5"></script>
+  <script defer src="./core/pathfinder.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: core/pathfinder.js')"
+          onerror="__DIAG_NOTE__('404: core/pathfinder.js');"></script>
+
+  <script defer src="./core/carriers.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: core/carriers.js')"
+          onerror="__DIAG_NOTE__('404: core/carriers.js');"></script>
 
   <!-- 5) Spiel -->
-  <script defer src="./game.js?v=16.2.5"></script>
-  <script defer src="./main.js?v=16.2.5"></script>
+  <script defer src="./game.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: game.js')"
+          onerror="__DIAG_NOTE__('404: game.js');"></script>
+
+  <script defer src="./main.js?v=16.2.6"
+          onload="__DIAG_NOTE__('ok: main.js')"
+          onerror="__DIAG_NOTE__('404: main.js');"></script>
+  <!-- ======================================================== -->
 
   <noscript>Bitte JavaScript aktivieren, um „Neue Siedler“ zu spielen.</noscript>
 </body>
