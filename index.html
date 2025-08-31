@@ -1,133 +1,149 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- CODE_STYLE · Siedler 2020 · index.html v16.2.6 -->
+  <!-- Siedler 2020 · CODE_STYLE · index.html v16.2.7 -->
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Neue Siedler · Start (index v16.2.6)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b1610">
-  <meta name="version" content="16.2.6">
+  <meta name="version" content="16.2.7">
+  <title>Neue Siedler · Start (index v16.2.7)</title>
+  <meta name="description" content="Neue Siedler · Mini City-Builder (Siedler 2020)">
 
-  <!-- Styles (nur vorhandene Pfade in deinem Repo) -->
-  <link rel="stylesheet" href="./css/base.css?v=16.2.6">
-  <link rel="stylesheet" href="./css/platform.css?v=16.2.6">
-  <link rel="stylesheet" href="./css/mobile.css?v=16.2.6">
-  <link rel="stylesheet" href="./css/ios.css?v=16.2.6">
-  <link rel="stylesheet" href="./css/android.css?v=16.2.6">
-  <link rel="stylesheet" href="./css/desktop.css?v=16.2.6">
-  <link rel="stylesheet" href="./styles.css?v=16.2.6">
-  <link rel="stylesheet" href="./style.css?v=16.2.6">
-  <!-- UI styles -->
-  <link rel="stylesheet" href="./ui-start.css?v=16.2.6">
-  <link rel="stylesheet" href="./ui-build.css?v=16.2.6">
-  <link rel="manifest" href="./manifest.webmanifest?v=16.2.6">
+  <!-- Basis-Styles (Pfad entspricht deinem Repo) -->
+  <link rel="stylesheet" href="./css/base.css?v=16.2.7">
+  <link rel="stylesheet" href="./css/platform.css?v=16.2.7">
+  <link rel="stylesheet" href="./css/mobile.css?v=16.2.7">
+  <link rel="stylesheet" href="./css/ios.css?v=16.2.7">
+  <link rel="stylesheet" href="./css/android.css?v=16.2.7">
+  <link rel="stylesheet" href="./css/desktop.css?v=16.2.7">
+  <link rel="stylesheet" href="./styles.css?v=16.2.7">
+  <link rel="stylesheet" href="./style.css?v=16.2.7">
+
+  <!-- UI-Styles -->
+  <link rel="stylesheet" href="./ui-start.css?v=16.2.7">
+  <link rel="stylesheet" href="./ui-build.css?v=16.2.7">
+
+  <link rel="manifest" href="./manifest.webmanifest?v=16.2.7">
 
   <style>
-    /* Diagnose-Overlay */
-    #diag{position:fixed;left:8px;top:8px;z-index:99999;font:12px ui-monospace,Menlo,Consolas,monospace;color:#e6f3ea;background:#193830;border:1px solid #2a4a41;border-radius:8px;padding:8px 10px;max-width:94vw;box-shadow:0 8px 26px rgba(0,0,0,.35)}
-    #diag h3{margin:0 0 6px 0;font-size:12px}
-    #diag pre{margin:0;white-space:pre-wrap}
-    #diag.ok{display:none}
+    /* Kleine Defaults, stören dein CSS nicht */
+    html,body{height:100%;background:#0d392f;color:#e6f3ea;margin:0}
+    #game{display:block;width:100vw;height:100vh}
+    /* Fallback-Startpanel (wird von assets/ui/ui-start.js übernommen/gestylt) */
+    #start-panel{
+      position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+      min-width:300px;max-width:92vw;z-index:50;
+      background:rgba(7,18,14,.85);border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.45);
+      backdrop-filter:saturate(1.2) blur(6px);
+    }
+    #start-panel h1{margin:.1rem 0 1rem;font-size:1.4rem}
+    #start-panel .row{display:flex;gap:14px;align-items:center;margin:.6rem 0}
+    #start-panel .row > *{flex:1}
+    #start-panel select, #start-panel button{
+      font:600 14px/1.1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      padding:.8rem 1rem;border-radius:12px;border:1px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.06);color:#e6f3ea;letter-spacing:.02em
+    }
+    #start-panel .sub{opacity:.7;font:12px ui-monospace,Menlo,Consolas,monospace}
+    #btn-inspector{position:fixed;right:.66rem;bottom:.66rem;z-index:99}
   </style>
 </head>
 <body>
+  <!-- Spielfläche -->
   <canvas id="game" aria-label="Spielfläche" role="img"></canvas>
-  <button id="inspectorToggle" style="position:fixed;right:.5rem;bottom:.5rem;z-index:9999">Inspector</button>
 
-  <!-- Diagnose-Box -->
-  <div id="diag" class="ok" hidden>
-    <h3>Diagnose</h3>
-    <pre id="diaglog">…</pre>
-  </div>
+  <!-- Startpanel (Fallback). ui-start.js greift diese IDs auf. -->
+  <section id="start-panel" aria-live="polite">
+    <h1>City-Builder — Start <span class="sub" id="index-version">index v16.2.7</span></h1>
+    <div class="sub" id="meta-line">unbekannt · dpr: <span id="dpr">?</span></div>
 
-  <!-- 0) SW/Caches killen (außer ?keep-sw) + Diagnose-Helfer -->
+    <div class="row">
+      <label for="map-select" style="min-width:64px">Karte:</label>
+      <select id="map-select">
+        <option value="./assets/maps/map-mini.json">map-mini.json (16×)</option>
+        <option value="./assets/maps/map-pro.json">map-pro.json</option>
+        <option value="./assets/maps/map-demo.json">map-demo.json</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button id="btn-start" aria-label="Start">▶ Start</button>
+      <button id="btn-restart" aria-label="Neu-Start">↺ Neu-Start</button>
+    </div>
+
+    <div class="row">
+      <button id="btn-cache" aria-label="Cache-Booster">🧹 Cache-Booster</button>
+      <button id="btn-copylog" aria-label="Log kopieren">📋 Log kopieren</button>
+    </div>
+
+    <div class="row">
+      <div id="start-log" class="sub">[–:–:–] OK UI bereit (index v16.2.7)</div>
+    </div>
+  </section>
+
+  <!-- Inspector-Schalter (wird von inspector.js hübsch ersetzt) -->
+  <button id="btn-inspector">Inspector</button>
+
+  <!-- 0) SW/Caches einmalig leeren (außer ?keep-sw) -->
   <script>
   (function(){
-    var Q=Object.fromEntries(new URLSearchParams(location.search));
-    var log=[]; function note(s){try{log.push(s)}catch(e){}}
-    window.__DIAG_NOTE__=note;
-
-    // globale Error-Hooks
-    window.onerror=function(m,src,ln,col){note("JS-Error: "+m+" @ "+(src||'')+":"+ln+":"+col);showSoon()};
-    window.addEventListener('unhandledrejection',e=>{note("Rejection: "+(e.reason && (e.reason.stack||e.reason.message)||e.reason));showSoon()});
-
-    function show(){
-      var el=document.getElementById('diag'), pre=document.getElementById('diaglog');
-      if(!el||!pre) return;
-      el.hidden=false; el.classList.remove('ok');
-      var checks=[
-        "URL: "+location.href,
-        "keep-sw: "+!!Q['keep-sw'],
-        "GameLoader: "+!!window.GameLoader,
-        "Game: "+!!window.Game,
-        "GameUI: "+!!window.GameUI,
-        "InspectorReady: "+(typeof window.CBInspectorReady!=='undefined' || !!document.querySelector('[data-inspector-ready]')),
-      ];
-      pre.textContent=(log.join("\n")+"\n"+checks.join("\n")).trim();
-    }
-    var t=null; function showSoon(){ if(t) return; t=setTimeout(show,250); }
-
-    if('serviceWorker' in navigator && !('keep-sw' in Q)){
-      navigator.serviceWorker.getRegistrations().then(rs=>{
-        rs.forEach(r=>r.unregister());
-        if(window.caches && caches.keys) caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
-        note("SW: unregistered + caches cleared");
-      }).catch(e=>note("SW-err: "+e));
-    }
-
-    // Wenn in 2500ms kein Engine/Game-Event -> Diagnose anzeigen
-    var ok=false; function ping(){ ok=true; }
-    window.addEventListener('cb:engine-ready', ping, {once:true});
-    window.addEventListener('cb:game-started', ping, {once:true});
-    setTimeout(function(){ if(!ok) show(); }, 2500);
+    try{
+      if('serviceWorker' in navigator && !location.search.includes('keep-sw')){
+        navigator.serviceWorker.getRegistrations().then(rs=>{
+          rs.forEach(r=>r.unregister());
+          if(window.caches && caches.keys) caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
+        });
+      }
+      // Version exportieren (für Logs/UI)
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = "v16.2.7";
+      document.getElementById('index-version').textContent = "index v16.2.7";
+      document.getElementById('dpr').textContent = String(Math.round((window.devicePixelRatio||1)*10)/10);
+      // Buttons: minimaler Fallback (falls ui-start.js noch nicht gebunden hat)
+      var qs = s=>document.querySelector(s);
+      (qs('#btn-start')||{}).onclick = function(){
+        try{
+          var map = (qs('#map-select')||{}).value || './assets/maps/map-mini.json';
+          if (window.GameBoot && typeof GameBoot.start==='function'){ GameBoot.start(map); }
+          else if (window.GameLoader && typeof GameLoader._start==='function'){ GameLoader._start(map); }
+          (qs('#start-panel')||{}).style.display='none';
+        }catch(e){ console.error(e); }
+      };
+      (qs('#btn-restart')||{}).onclick = function(){ location.reload(); };
+      (qs('#btn-cache')||{}).onclick = function(){ location.href = location.pathname + '?keep-sw'; };
+      (qs('#btn-copylog')||{}).onclick = function(){
+        try{
+          var t = (window.CBLog && CBLog.dump) ? CBLog.dump() : (console.history ? console.history.join('\n') : 'Log nicht verfügbar');
+          navigator.clipboard && navigator.clipboard.writeText(t);
+        }catch(_){}
+      };
+    }catch(e){ console.error(e); }
   })();
   </script>
 
-  <!-- ================== SCRIPT-REIHENFOLGE ================== -->
+  <!-- ===================== SCRIPT-REIHENFOLGE ===================== -->
   <!-- 1) Inspector + UI -->
-  <script defer src="./inspector.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: inspector.js')"
-          onerror="__DIAG_NOTE__('404: inspector.js');"></script>
-
-  <!-- ui-bridge.js ENTFERNT -->
-  <script defer src="./assets/ui/ui-start.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: assets/ui/ui-start.js')"
-          onerror="__DIAG_NOTE__('404: assets/ui/ui-start.js');"></script>
-
-  <script defer src="./assets/ui/ui-build.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: assets/ui/ui-build.js')"
-          onerror="__DIAG_NOTE__('404: assets/ui/ui-build.js');"></script>
+  <script defer src="./inspector.js?v=16.2.7"></script>
+  <!-- ui-bridge.js NICHT laden (war Quelle der 404/HTML-Antwort) -->
+  <script defer src="./assets/ui/ui-start.js?v=16.2.7"></script>
+  <script defer src="./assets/ui/ui-build.js?v=16.2.7"></script>
 
   <!-- 2) Boot -->
-  <script defer src="./boot.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: boot.js')"
-          onerror="__DIAG_NOTE__('404: boot.js');"></script>
+  <script defer src="./boot.js?v=16.2.7"></script>
 
   <!-- 3) Module/Compat -->
-  <!-- fullscreen.js ist ESM -->
-  <script type="module" src="./fullscreen.js?v=16.2.6"
-          onload="window.__DIAG_NOTE__ && __DIAG_NOTE__('ok: fullscreen.js (module)')"
-          onerror="__DIAG_NOTE__('404/ESM: fullscreen.js');"></script>
+  <script type="module" src="./fullscreen.js?v=16.2.7"></script>
 
   <!-- 4) Core vor game.js -->
-  <script defer src="./core/pathfinder.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: core/pathfinder.js')"
-          onerror="__DIAG_NOTE__('404: core/pathfinder.js');"></script>
-
-  <script defer src="./core/carriers.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: core/carriers.js')"
-          onerror="__DIAG_NOTE__('404: core/carriers.js');"></script>
+  <script defer src="./core/pathfinder.js?v=16.2.7"></script>
+  <script defer src="./core/carriers.js?v=16.2.7"></script>
 
   <!-- 5) Spiel -->
-  <script defer src="./game.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: game.js')"
-          onerror="__DIAG_NOTE__('404: game.js');"></script>
-
-  <script defer src="./main.js?v=16.2.6"
-          onload="__DIAG_NOTE__('ok: main.js')"
-          onerror="__DIAG_NOTE__('404: main.js');"></script>
-  <!-- ======================================================== -->
+  <script defer src="./game.js?v=16.2.7"></script>
+  <script defer src="./main.js?v=16.2.7"></script>
+  <!-- ============================================================= -->
 
   <noscript>Bitte JavaScript aktivieren, um „Neue Siedler“ zu spielen.</noscript>
 </body>
