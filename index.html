@@ -1,192 +1,124 @@
-<!-- index.html — v16.3.3 | Neue Siedler: Start + UI-Wiring (Build/Inspector) -->
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0f3a30">
-  <title>Neue Siedler</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Neue Siedler • City-Builder</title>
 
-  <!-- FONTS / BASE STYLES -->
-  <link rel="manifest" href="manifest.webmanifest?v=16.3.3">
-  <link rel="icon" href="assets/Logo.PNG">
-  <link rel="apple-touch-icon" href="assets/Logo.PNG">
+  <!-- Base Styles -->
+  <link rel="stylesheet" href="style.css?v=16.3.3" />
+  <link rel="stylesheet" href="ui-start.css?v=16.3.3" />
+  <!-- einzig produktive Bau-Menü-Styles -->
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=16.3.3" />
 
-  <!-- Baseline styles (deine bestehenden globalen) -->
-  <link rel="stylesheet" href="style.css?v=16.3.3">
-  <link rel="stylesheet" href="styles.css?v=16.3.3">
-
-  <!-- UI Styles: Start-Panel + Bau-Menü (Quelle ist NUR assets/ui/ …) -->
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=16.3.3">
-  <link rel="stylesheet" href="ui-start.css?v=16.3.3">
-
-  <!-- iOS/Android Plattform Tweaks (optional, falls genutzt) -->
-  <link rel="stylesheet" href="css/platform.css?v=16.3.3">
-  <link rel="stylesheet" href="css/mobile.css?v=16.3.3">
-  <link rel="stylesheet" href="css/ios.css?v=16.3.3">
-  <link rel="stylesheet" href="css/desktop.css?v=16.3.3">
+  <style>
+    /* Hard-hide helper, falls irgendwas früh rendert */
+    .is-hidden { display:none !important; }
+    /* Canvas Vollfläche */
+    html,body { height:100%; }
+    body { margin:0; background:#0d3b2e; overflow:hidden; }
+    #game { display:block; width:100vw; height:100vh; }
+    /* Floating Action Buttons (Bau / Inspector) – initial unsichtbar; JS schaltet frei */
+    .fab {
+      position: fixed; z-index: 30; width:56px; height:56px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      background: rgba(20,20,20,.7); backdrop-filter: blur(6px);
+      box-shadow: 0 4px 16px rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08);
+      color:#fff; font-size:22px; user-select:none; -webkit-tap-highlight-color:transparent;
+      opacity:0; pointer-events:none; transform: translateY(6px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .fab.show { opacity:1; pointer-events:auto; transform: translateY(0); }
+    #btn-build { left: 16px; bottom: 16px; }
+    #btn-inspector { right: 16px; bottom: 16px; }
+  </style>
 </head>
-<body class="app app-dark">
+<body>
 
-  <!-- Start-BG -->
-  <div id="start-bg" class="start-bg" style="background-image:url('assets/ui/start-bg.jpeg');"></div>
+  <!-- Spielfeld -->
+  <canvas id="game" aria-label="Spielfeld"></canvas>
 
-  <!-- Game Canvas -->
-  <canvas id="game" class="stage" role="img" aria-label="Spielfeld"></canvas>
+  <!-- Floating Buttons (werden per JS erst nach Game-Start eingeblendet) -->
+  <button id="btn-build" class="fab" title="Bau-Menü öffnen" aria-label="Bau-Menü">🧱</button>
+  <button id="btn-inspector" class="fab" title="Inspector" aria-label="Inspector">🛠️</button>
 
-  <!-- Start-Panel (aus assets/ui/ui-start.js gesteuert) -->
-  <section id="start-panel" class="start-panel" aria-modal="true">
-    <header class="sp-head">
-      <h1>City-Builder — Start <small>index v16.3.3</small></h1>
-      <div class="meta"><span id="info-res">unbekannt</span> · <span id="info-dpr">dpr: 1</span></div>
-    </header>
-    <div class="sp-body">
-      <label for="map-select">Karte:</label>
-      <div class="row">
-        <input id="map-select" class="input" value="map-mini.json" list="map-datalist" autocomplete="off">
-        <datalist id="map-datalist">
-          <option value="map-mini.json"></option>
-          <option value="map-pro.json"></option>
-          <option value="map-demo.json"></option>
-        </datalist>
-      </div>
+  <!-- Start-Panel wird komplett per JS aufgebaut (assets/ui/ui-start.js).
+       Optionaler Mount-Container (falls gebraucht) -->
+  <div id="start-mount" class="is-hidden"></div>
 
-      <div class="grid">
-        <button id="btn-start" class="btn btn-primary">▶ Start</button>
-        <button id="btn-restart" class="btn">⟳ Neu-Start</button>
-        <button id="btn-cache" class="btn">🧹 Cache-Booster</button>
-        <button id="btn-logcopy" class="btn">📋 Log kopieren</button>
-      </div>
+  <!-- ===== Script-Reihenfolge (wichtig!) ===== -->
+  <!-- Logger/Inspector zuerst, damit alle Logs von Anfang an gefangen werden -->
+  <script src="assets/inspector/inspector.js?v=16.3.3" defer></script>
 
-      <div id="start-note" class="note">[-:-:-] OK UI bereit (index v16.3.3)</div>
-    </div>
-  </section>
+  <!-- Boot / Kompat-Wrapper (stellt GameBoot etc.) -->
+  <script src="boot.compat.js?v=16.3.3" defer></script>
+  <script src="boot.js?v=16.3.3" defer></script>
 
-  <!-- FABs -->
-  <button id="fab-build" class="fab fab-left" aria-label="Bau-Menü öffnen" title="Bau-Menü">
-    🧱
-  </button>
-  <button id="fab-inspector" class="fab fab-right" aria-label="Inspector" title="Inspector">
-    🛠️
-  </button>
+  <!-- Engine + Game -->
+  <script src="game.js?v=16.3.3" defer></script>
 
-  <!-- ===== Scripts: REIHENFOLGE WICHTIG ===== -->
+  <!-- Produktives Bau-Menü (einzige Quelle) -->
+  <script src="assets/ui/ui-build.js?v=16.3.3" defer></script>
 
-  <!-- Bootstrap / Helfer -->
-  <script src="boot.compat.js?v=16.3.3"></script>
-  <script src="boot.js?v=16.3.3"></script>
-  <script src="fullscreen.js?v=16.3.3" type="module"></script>
+  <!-- Start-UI (Panel, Start-Button, Map-Select) -->
+  <script src="assets/ui/ui-start.js?v=16.3.3" defer></script>
 
-  <!-- Game Core -->
-  <script src="game.js?v=16.3.3"></script>
-
-  <!-- UI Brücke & Module (Produktivquelle NUR unter assets/ui/) -->
-  <script src="assets/ui/ui-bridge.js?v=16.3.3"></script>
-  <script src="assets/ui/ui-start.js?v=16.3.3"></script>
-  <script src="assets/ui/ui-build.js?v=16.3.3"></script>
-
-  <!-- Inspector (neue Version unter assets/inspector/) -->
-  <script src="assets/inspector/inspector.js?v=16.3.3"></script>
-
-  <!-- Optional: Main Hooks (falls genutzt) -->
-  <script src="main.js?v=16.3.3"></script>
-
-  <!-- ===== Inline Wiring: garantiertes Verhalten ===== -->
+  <!-- Main verbindet die Buttons und Panels nach DOMContentLoaded -->
   <script>
   (function(){
     'use strict';
 
-    const V = 'v16.3.3';
+    function qs(id){ return document.getElementById(id); }
 
-    // 1) Start: Bau-Menü sicher ausblenden
-    function hideBuildSafe(){
-      try {
-        if (window.UIBuild && typeof UIBuild.hide === 'function') UIBuild.hide();
-        const panel = document.getElementById('build-panel');
-        if (panel) panel.classList.add('is-hidden');
-      } catch(_) {}
-    }
+    // Warten bis wirklich alles da ist
+    window.addEventListener('DOMContentLoaded', function(){
+      // Start-UI initialisieren
+      if (window.GameUI && typeof GameUI.initStartPanel === 'function') {
+        GameUI.initStartPanel({
+          mount: document.getElementById('start-mount') || document.body,
+          onStart: function(mapUrl){
+            // Start callback – Game starten und Buttons erst nach 'cb:game-started' freigeben
+            if (window.GameLoader && typeof GameLoader._start === 'function') {
+              GameLoader._start(mapUrl);
+            }
+          },
+          // Panels beim Laden nie autoöffnen:
+          autoOpenBuild: false,
+          autoOpenInspector: false
+        });
+      }
 
-    // 2) FAB: Bau-Menü links unten (toggle)
-    const fabBuild = document.getElementById('fab-build');
-    fabBuild.addEventListener('click', function(){
-      try {
-        if (window.UIBuild && typeof UIBuild.toggle === 'function') {
-          UIBuild.toggle();
-        } else {
-          // Fallback: Class-Toggle
-          const p = document.getElementById('build-panel');
-          if (p) p.classList.toggle('is-hidden');
+      // FAB Buttons verdrahten (bleiben bis Game-Start unsichtbar)
+      var btnBuild = qs('btn-build');
+      var btnInsp  = qs('btn-inspector');
+
+      if (btnBuild) btnBuild.addEventListener('click', function(){
+        if (window.GameUI && typeof GameUI.toggleBuildPanel === 'function') {
+          GameUI.toggleBuildPanel();
         }
-      } catch(e){ console.warn('[ui] toggle build failed', e); }
-    });
-
-    // 3) FAB: Inspector rechts unten (toggle)
-    const fabInspector = document.getElementById('fab-inspector');
-    fabInspector.addEventListener('click', function(){
-      try {
-        if (window.CBInspector && typeof CBInspector.toggle === 'function') {
-          CBInspector.toggle();
-        } else if (window.Inspector && typeof Inspector.toggle === 'function') {
-          Inspector.toggle();
-        } else {
-          console.warn('[ui] Inspector nicht initialisiert.');
-        }
-      } catch(e){ console.warn('[ui] inspector toggle failed', e); }
-    });
-
-    // 4) UI ready: Sofort Bau-Menü verstecken
-    window.addEventListener('cb:ui-ready', function(){
-      hideBuildSafe();
-    });
-
-    // 5) Game gestartet: NICHT auto-open — Benutzer nutzt FAB
-    window.addEventListener('cb:game-started', function(){
-      hideBuildSafe();
-      // Start-Panel schließen übernimmt ui-start.js, wir erzwingen nur Build-Menü zu
-      // (Falls ui-start es schon schließt, macht das doppelt nix aus.)
-    });
-
-    // 6) Diagnose: Versions-Info in Start-Panel
-    try {
-      const note = document.getElementById('start-note');
-      if (note) note.textContent = 'OK UI bereit (index ' + V + ')';
-      const dpr = document.getElementById('info-dpr');
-      if (dpr) dpr.textContent = 'dpr: ' + (window.devicePixelRatio||1);
-    } catch(_) {}
-
-    // 7) Defensive: falls jemand per Query ?auto-build=1 testen will
-    if (/\bauto-build=1\b/.test(location.search)) {
-      window.addEventListener('cb:game-started', function(){
-        setTimeout(function(){
-          if (window.UIBuild && typeof UIBuild.open === 'function') UIBuild.open();
-        }, 50);
       });
-    }
+
+      if (btnInsp) btnInsp.addEventListener('click', function(){
+        if (window.Inspector && typeof Inspector.toggle === 'function') {
+          Inspector.toggle();
+        } else if (window.GameUI && typeof GameUI.toggleInspector === 'function') {
+          GameUI.toggleInspector();
+        }
+      });
+
+      // Nach erfolgreichem Start Buttons zeigen
+      window.addEventListener('cb:game-started', function(){
+        if (btnBuild) btnBuild.classList.add('show');
+        if (btnInsp)  btnInsp.classList.add('show');
+
+        // Sicherheit: Panels NICHT automatisch öffnen
+        if (window.GameUI) {
+          if (typeof GameUI.closeBuildPanel === 'function')  GameUI.closeBuildPanel();
+          if (typeof GameUI.closeInspector === 'function')   GameUI.closeInspector();
+        }
+      });
+    });
   })();
   </script>
-
-  <!-- Inline minimal CSS für FAB-Positionen, falls nicht schon in ui-build.css -->
-  <style>
-    .fab{position:fixed; bottom:88px; z-index:1000; width:56px;height:56px;border-radius:28px;
-         background:rgba(20,20,20,.7); color:#fff; border:1px solid rgba(255,255,255,.15);
-         backdrop-filter:saturate(1.2) blur(6px); -webkit-backdrop-filter:saturate(1.2) blur(6px);
-         display:flex;align-items:center;justify-content:center; font-size:22px;}
-    .fab-left{left:16px;}
-    .fab-right{right:16px;}
-    .is-hidden{display:none!important;}
-    .start-bg{position:fixed; inset:0; background-size:cover; background-position:center; z-index:-1;}
-    .start-panel{position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
-      width:min(720px,92vw); background:rgba(16,16,16,.72); color:#e6efe9; border-radius:16px;
-      box-shadow:0 8px 40px rgba(0,0,0,.45); padding:18px; z-index:900;}
-    .sp-head h1{margin:.25rem 0 0; font-weight:700}
-    .sp-head small{opacity:.6; font-weight:400}
-    .sp-body .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px}
-    .btn{appearance:none; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.06);
-      padding:12px 14px; border-radius:12px; color:#e6efe9}
-    .btn-primary{background:linear-gradient(#2e7d32, #275e2f);}
-    .note{opacity:.8; margin-top:10px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;}
-    .stage{display:block; width:100vw; height:100vh;}
-  </style>
 </body>
 </html>
