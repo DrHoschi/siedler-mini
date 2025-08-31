@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-08-31T09:46:13.532Z",
+  "createdAt": "2025-08-31T12:01:21.560Z",
   "root": ".",
   "count": 253,
   "entries": [
@@ -780,7 +780,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 9508
+      "size": 10217
     },
     {
       "type": "file",
@@ -1127,17 +1127,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 3002
+      "size": 2842
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24237
+      "size": 24788
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9114
+      "size": 9355
     },
     {
       "type": "file",
@@ -1147,7 +1147,7 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 20289
+      "size": 24952
     },
     {
       "type": "file",
