@@ -1,114 +1,104 @@
 <script>
-/* assets/ui/ui-build.js — v16.3.1
-   Bau-Menü: startet versteckt, Toggle unten links, ruft Game.setTool(...) */
-
+/* ui-build.js – produktiv – zeigt/verbirgt das Baumenü erst nach Start */
 (function(){
   'use strict';
+  var VERSION = 'v16.3.3';
+  var log = (window.CBLog && CBLog.ok) ? function(){ CBLog.ok.apply(CBLog, arguments); } : console.log;
 
-  var VERSION = 'v16.3.1';
-  var root, bar, toggleBtn, isOpen = false;
+  var bar, fab;
+  var current = { mode:null, key:null };
 
-  // kleine Log-Helfer (landet im Inspector)
-  function log(){ (window.CBLog && CBLog.ok ? CBLog.ok:console.log)('[ok] Bau-Menü', Array.prototype.slice.call(arguments).join(' ')); }
-  function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn:console.warn)('[warn] Bau-Menü', Array.prototype.slice.call(arguments).join(' ')); }
+  // Hilfen
+  function qs(s, r){ return (r||document).querySelector(s); }
+  function qsa(s, r){ return [].slice.call((r||document).querySelectorAll(s)); }
 
-  // Button-Fabrik
-  function mkBtn(label, opts){
-    var b = document.createElement('button');
-    b.className = 'uib-btn';
-    b.type = 'button';
-    if (opts && opts.title) b.title = opts.title;
-    b.innerHTML = label;
-    if (opts && opts.on) b.addEventListener('click', opts.on);
-    return b;
-  }
+  // --- API so dass ui-start & game.js schalten können ----------------
+  var API = (window.GameUI = window.GameUI || {});
+  API.openBuild = function(){ if (bar) bar.classList.add('show'); if (fab) fab.classList.add('show'); };
+  API.closeBuild = function(){ if (bar) bar.classList.remove('show'); };
+  API.toggleBuild = function(){ if (!bar) return; bar.classList.toggle('show'); };
 
-  // Sichtbarkeit
-  function renderVisibility(){
-    if (!root) return;
-    root.style.display = isOpen ? 'block':'none';
-    if (toggleBtn){
-      toggleBtn.setAttribute('aria-pressed', isOpen?'true':'false');
-      toggleBtn.classList.toggle('active', isOpen);
+  // Tool setzen (ruft Game.setTool falls vorhanden)
+  function setTool(mode, key){
+    current.mode = mode; current.key = key || null;
+    if (window.Game && typeof Game.setTool === 'function'){
+      Game.setTool(mode, key ? {key:key} : null);
     }
+    // Buttons markieren
+    qsa('#buildBar button').forEach(function(b){ b.classList.remove('active'); });
+    var sel = '#buildBar button[data-mode="'+mode+'"]' + (key? '[data-key="'+key+'"]':'');
+    var btn = qs(sel); if (btn) btn.classList.add('active');
+    log('[ok] Tool gesetzt:', key||mode);
   }
 
-  // API
-  var API = {
-    version: VERSION,
-    open: function(){ isOpen = true; renderVisibility(); log('geöffnet (ui-build.js', VERSION+')'); },
-    close: function(){ isOpen = false; renderVisibility(); log('geschlossen'); },
-    toggle: function(){ isOpen = !isOpen; renderVisibility(); },
-    init: function(){
-      if (root) return API; // schon gebaut
+  // Buttons erzeugen (deine aktuelle Auswahl)
+  var groups = [
+    { label:'Bauen', items:[
+      {t:'🏛️ Rathaus',    mode:'build', key:'townhall'},
+      {t:'🪓 Holzfäller',  mode:'build', key:'lumberjack'},
+      {t:'🌾 Farm',        mode:'build', key:'farm'},
+      {t:'📦 Depot',       mode:'build', key:'depot'},
+      {t:'🏠 Haus I',      mode:'build', key:'house0'},
+      {t:'🏠 Haus II',     mode:'build', key:'house1'},
+      {t:'🧱 Straße',      mode:'road'},
+      {t:'❌ Abriss',      cls:'danger', mode:'bulldozer'}
+    ]}
+  ];
 
-      // Container
-      root = document.createElement('div');
-      root.id = 'build-bar';
-      root.className = 'build-bar';     // Styling kommt aus ui-build.css
-      root.style.display = 'none';      // initial: versteckt
-
-      // Buttonzeilen – wie im Screenshot
-      var row = document.createElement('div'); row.className = 'uib-row';
-
-      // — Gebäude:
-      row.appendChild(mkBtn('🏰 Rathaus', {title:'Rathaus', on:function(){ setToolBuild('townhall'); }}));
-      row.appendChild(mkBtn('🪓 Holzfäller', {title:'Holzfäller', on:function(){ setToolBuild('lumberjack'); }}));
-      row.appendChild(mkBtn('🌾 Farm', {title:'Farm', on:function(){ setToolBuild('farm'); }}));
-      // (Mühle ist im Code vorhanden – hier behalten wir die drei wie im UI-Screenshot)
-
-      row.appendChild(mkBtn('📦 Depot', {title:'Depot', on:function(){ setToolBuild('depot'); }}));
-      row.appendChild(mkBtn('🏠 Haus I', {title:'Haus I', on:function(){ setToolBuild('house0'); }}));
-      row.appendChild(mkBtn('🏠 Haus II', {title:'Haus II', on:function(){ setToolBuild('house1'); }}));
-
-      // — Tools:
-      row.appendChild(mkBtn('🛣️ Straße', {title:'Straße', on:function(){ setToolDirect('road'); }}));
-      row.appendChild(mkBtn('❌ Abriss', {title:'Abriss', on:function(){ setToolDirect('bulldozer'); }}));
-
-      root.appendChild(row);
-      document.body.appendChild(root);
-
-      // Toggle unten links (Backstein)
-      toggleBtn = document.createElement('button');
-      toggleBtn.type = 'button';
-      toggleBtn.className = 'build-toggle';
-      toggleBtn.setAttribute('aria-label','Bau-Menü öffnen/schließen');
-      toggleBtn.innerHTML = '🧱';
-      toggleBtn.addEventListener('click', API.toggle);
-      document.body.appendChild(toggleBtn);
-
-      // Events aus dem Spiel:
-      // — nach Game-Start bleibt das Menü geschlossen (wie gewünscht)
-      window.addEventListener('cb:game-started', function(){ /* bewusst nichts auto-öffnen */ }, {passive:true});
-
-      log('bereit (ui-build.js '+VERSION+')');
-      return API;
-    }
-  };
-
-  function setToolBuild(key){
-    try{
-      if (window.Game && typeof Game.setTool==='function'){
-        Game.setTool('build', {key:key});
-        log('Tool gesetzt: build/'+key);
-      } else warn('Game.setTool nicht verfügbar');
-    }catch(e){ warn('setToolBuild Fehler: '+e.message); }
-  }
-  function setToolDirect(name){
-    try{
-      if (window.Game && typeof Game.setTool==='function'){
-        Game.setTool(name);
-        log('Tool gesetzt: '+name);
-      } else warn('Game.setTool nicht verfügbar');
-    }catch(e){ warn('setToolDirect Fehler: '+e.message); }
+  function makeBar(){
+    if (bar) return;
+    bar = document.createElement('div');
+    bar.id = 'buildBar';
+    var row = document.createElement('div'); row.className='row';
+    groups[0].items.forEach(function(it){
+      var b = document.createElement('button');
+      b.textContent = it.t;
+      if (it.cls) b.classList.add(it.cls);
+      b.dataset.mode = it.mode;
+      if (it.key) b.dataset.key = it.key;
+      b.addEventListener('click', function(){
+        if (it.mode==='build') setTool('build', it.key);
+        else setTool(it.mode);
+      });
+      row.appendChild(b);
+    });
+    bar.appendChild(row);
+    document.body.appendChild(bar);
   }
 
-  // Auto-Init sobald DOM bereit
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', function(){ API.init(); });
-  } else { API.init(); }
+  // Floating Action Button links unten
+  function makeFab(){
+    if (fab) return;
+    fab = document.createElement('button');
+    fab.id = 'buildFab';
+    fab.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm18.37-10.88a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+    fab.addEventListener('click', API.toggleBuild);
+    document.body.appendChild(fab);
+  }
 
-  // nach außen geben
-  window.UIBuild = API;
+  // Events aus dem Game/Boot
+  function onGameStarted(){
+    makeBar(); makeFab();
+    API.openBuild();                 // ab Game-Start sichtbar
+    setTool('road');                 // Start-Tool (gerne ändern)
+  }
+  function onGameEnding(){
+    API.closeBuild();
+    if (fab) fab.classList.remove('show');
+    current.mode=null; current.key=null;
+  }
+
+  // Hook Events
+  window.addEventListener('cb:game-started', onGameStarted);
+  window.addEventListener('cb:game-ending', onGameEnding);
+
+  // UI fertig – aber NICHT automatisch öffnen (bis Spiel startet)
+  window.addEventListener('cb:ui-ready', function(){
+    makeBar(); makeFab();
+    API.closeBuild();
+    if (fab) fab.classList.remove('show');
+    log('[ok] Bau-Menü bereit (ui-build.js '+VERSION+')');
+  });
+
 })();
 </script>
