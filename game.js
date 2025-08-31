@@ -1,7 +1,7 @@
-// game.js — v16.1.26 (ES5) — Map, Pan/Zoom, Placement, Roads/Paths + Townhall-Auto
+// game.js — v16.1.27 (ES5) — Map, Pan/Zoom, Placement, Roads/Paths + Townhall-Auto
 (function(){
   'use strict';
-  var VERSION = 'v16.1.26';
+  var VERSION = 'v16.1.27';
 
   // logging
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -25,21 +25,41 @@
   // entities (Gebäude)
   var entities = []; // {key,x,y,w,h,img}
 
-  // OVERLAY: Straßen & Wege (pro Tile bool)
+  // OVERLAY: Straßen & Wege
   var over = { road:{}, path:{} };
 
   // building defs (Tilesize relativ zur Map-Tile)
   var BUILDINGS = {
+    // Kern
     townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
+    depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png" },
     lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
-    farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.PNG" },
+    farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png" },
     mill:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
-    depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.PNG" },
+    watermill:  { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wassermuehle_wood.PNG" },
+
+    // Handwerk / Produktion
+    bakery:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/baecker_wood.png" },
+    blacksmith:  { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Schmied_wood0.png" },
+    stonecutter: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/steinmetz_wood.png" },
+
+    // Wohnen / Militär
+    house0:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png" },
+    house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" },
+    watchtower: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wachturm _wood.png" }, // Achtung: Leerzeichen im Dateinamen!
+
+    // Deko
     tree:       { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
 
-  // sanfte Aliase für alte Schlüssel
-  var BUILDING_ALIASES = { wood0:'lumberjack', factory:'mill' };
+  // sanfte Aliase (deutsch/alt → intern)
+  var BUILDING_ALIASES = {
+    holzfaeller:'lumberjack', baecker:'bakery', schmied:'blacksmith', steinmetz:'stonecutter',
+    wohnhaus0:'house0', wohnhaus1:'house1', wachturm:'watchtower', windmuehle:'mill',
+    wassermuehle:'watermill', lager:'depot', rathaus:'townhall',
+    // Alt-Bestand
+    wood0:'lumberjack', factory:'mill'
+  };
   function resolveBuildingKey(k){ return BUILDINGS[k] ? k : (BUILDING_ALIASES[k] || k); }
 
   // tool state
@@ -51,23 +71,15 @@
   function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
   function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
   function keyXY(tx,ty){ return tx + "," + ty; }
+  function normMode(m){ m=(m||'').toLowerCase(); return m==='building'?'build':m; } // UI-Schutz
 
-  // Normalisierung von Tool-Modi (falls UI "building" sendet)
-  function normMode(m){
-    m = (m||'').toLowerCase();
-    if (m === 'building') m = 'build';
-    return m;
-  }
-
-  // placement helpers
+  // helpers
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
   function canPlace(key, tx, ty){
     var def = BUILDINGS[key]; if (!def || !currentMap) return false;
-    // map bounds
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
-    // collision mit anderen Gebäuden
     var t = currentMap.tile;
     var r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
     for (var i=0;i<entities.length;i++){
@@ -89,42 +101,28 @@
     return true;
   }
 
-  // Hilfsfunktion: Bildschirmpos -> Platzieren
   function placeAtScreen(sx, sy){
     if (!currentMap){ warn("[build] Abgebrochen: keine Map geladen."); return; }
     var mode = normMode(tool.mode);
     if (mode !== 'build'){ warn("[build] Abgebrochen: falscher Modus:", tool.mode); return; }
     if (!tool.key){ warn("[build] Abgebrochen: kein Gebäude-Key gesetzt."); return; }
-
     var key = resolveBuildingKey(tool.key);
     if (!BUILDINGS[key]){ warn("[build] Unbekanntes Gebäude-Key:", key); return; }
-
-    var wx = cam.x + sx / cam.zoom;
-    var wy = cam.y + sy / cam.zoom;
-    var tile = currentMap.tile;
-    var tx = Math.floor(wx / tile);
-    var ty = Math.floor(wy / tile);
-
-    if (canPlace(key, tx, ty)){
-      placeBuilding(key, tx, ty);
-      drawMap();
-    } else {
-      warn("[build] Platzierung nicht möglich @", tx, ty, "für", key, "(Bounds? Kollision?)");
-    }
+    var wx = cam.x + sx / cam.zoom, wy = cam.y + sy / cam.zoom;
+    var t  = currentMap.tile;
+    var tx = Math.floor(wx / t), ty = Math.floor(wy / t);
+    if (canPlace(key, tx, ty)){ placeBuilding(key, tx, ty); drawMap(); }
+    else { warn("[build] Platzierung nicht möglich @", tx, ty, "für", key, "(Bounds? Kollision?)"); }
   }
 
-  // Straßen/Wege setzen
+  // Straßen/Wege
   function setRoad(tx,ty){ over.road[keyXY(tx,ty)] = true; }
   function setPath(tx,ty){ over.path[keyXY(tx,ty)] = true; }
-  function clearOverlaysAt(tx,ty){
-    delete over.road[keyXY(tx,ty)];
-    delete over.path[keyXY(tx,ty)];
-  }
+  function clearOverlaysAt(tx,ty){ delete over.road[keyXY(tx,ty)]; delete over.path[keyXY(tx,ty)]; }
 
-  // Bulldozer – löscht Entity unter Tile + Overlays
+  // Bulldozer
   function bulldozeAt(tx,ty){
-    var t = currentMap.tile;
-    var rx = tx*t, ry = ty*t;
+    var t = currentMap.tile, rx = tx*t, ry = ty*t;
     for (var i=entities.length-1; i>=0; i--){
       var e=entities[i];
       if (rx >= e.x && rx < e.x+e.w && ry >= e.y && ry < e.y+e.h){
@@ -136,7 +134,7 @@
     clearOverlaysAt(tx,ty);
   }
 
-  // Linienzeichnen (Bresenham) in Tile-Koordinaten
+  // Linie (Bresenham) in Tile-Koordinaten
   function lineTiles(x0,y0,x1,y1, cb){
     var dx = Math.abs(x1-x0), sx = x0<x1 ? 1 : -1;
     var dy = -Math.abs(y1-y0), sy = y0<y1 ? 1 : -1;
@@ -154,15 +152,10 @@
   Game.setTool = function(mode, payload){
     mode = normMode(mode);
     if (mode === 'build'){
-      var k = payload && payload.key;
-      k = resolveBuildingKey(k);
-      tool.mode = 'build';
-      tool.key  = k;
-      ok("[ok] Tool gesetzt (build): " + k);
+      var k = payload && payload.key; k = resolveBuildingKey(k);
+      tool.mode = 'build'; tool.key  = k; ok("[ok] Tool gesetzt (build): " + k);
     } else {
-      tool.mode = mode;
-      tool.key  = null;
-      ok("[ok] Tool gesetzt: " + mode);
+      tool.mode = mode; tool.key  = null; ok("[ok] Tool gesetzt: " + mode);
     }
   };
 
@@ -172,12 +165,13 @@
     var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // sichtfenster (Tiles)
+    // Sichtfenster (Tiles)
     var left   = Math.floor(cam.x / t);
     var top    = Math.floor(cam.y / t);
     var right  = Math.ceil((cam.x + viewW/cam.zoom) / t);
     var bottom = Math.ceil((cam.y + viewH/cam.zoom) / t);
-    left=clamp(left,0,w-1); top=clamp(top,0,h-1); right=clamp(right,0,w); bottom=clamp(bottom,0,h);
+    left=Math.max(0,Math.min(w-1,left)); top=Math.max(0,Math.min(h-1,top));
+    right=Math.max(0,Math.min(w,right)); bottom=Math.max(0,Math.min(h,bottom));
 
     // Boden
     var layers=currentMap.layers||[];
@@ -209,18 +203,16 @@
       }
     }
 
-    // Overlays: Straße/Weg
+    // Overlays: Weg/Straße
     for (var ty3=top; ty3<bottom; ty3++){
       for (var tx3=left; tx3<right; tx3++){
         var kxy = keyXY(tx3,ty3);
         var hasRoad = !!over.road[kxy];
         var hasPath = !!over.path[kxy];
         if (!hasRoad && !hasPath) continue;
-
         var dx = Math.floor((tx3*t - cam.x)*cam.zoom);
         var dy = Math.floor((ty3*t - cam.y)*cam.zoom);
         var ds = Math.ceil(t*cam.zoom);
-
         if (hasPath){
           ctx.fillStyle = "rgba(210, 180, 140, 0.85)";
           ctx.fillRect(dx+Math.floor(0.10*ds), dy+Math.floor(0.10*ds), Math.floor(0.80*ds), Math.floor(0.80*ds));
@@ -256,7 +248,7 @@
     }
   }
 
-  // fit canvas / clamp camera
+  // fit / clamp camera
   function clampCam(){
     var size = mapPx();
     var maxX = Math.max(0, size.w - viewW/cam.zoom);
@@ -291,7 +283,6 @@
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0, tapStart:0, tapSX:0, tapSY:0,
                  painting:false, lastTileX:null, lastTileY:null };
 
-    // Maus-Down: evtl. Painting starten
     canvas.addEventListener('mousedown', function(e){
       drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y;
       if (tool.mode==='road' || tool.mode==='path' || tool.mode==='bulldozer'){
@@ -303,7 +294,6 @@
       }
     });
 
-    // Maus-Move: entweder pannen oder malen
     window.addEventListener('mousemove', function(e){
       if (!drag.on) return;
       if (drag.painting && (tool.mode==='road' || tool.mode==='path' || tool.mode==='bulldozer')){
@@ -319,7 +309,6 @@
       drag.on=false; drag.pinch=false; drag.painting=false; drag.lastTileX=null; drag.lastTileY=null;
     });
 
-    // Wheel-Zoom
     canvas.addEventListener('wheel', function(e){
       e.preventDefault ? e.preventDefault() : (e.returnValue=false);
       var rect=canvas.getBoundingClientRect();
@@ -375,7 +364,6 @@
     }, {passive:true});
 
     window.addEventListener('touchend', function(){
-      // kurzer Tap -> Gebäude setzen
       if (!drag.pinch && drag.tapStart && tool.key && normMode(tool.mode)==='build'){
         var dt = Date.now() - drag.tapStart;
         var dx = Math.abs((drag.tapSX||0) - (drag.sx||0));
@@ -396,28 +384,22 @@
       clampCam(); drawMap();
     });
 
-    // Painting-Helfer: aus Bildschirmpos -> Tile, dann setzen/zeichnen
+    // Painting-Helpers
     function paintAtScreen(sx,sy, isStart){
       if (!currentMap) return;
-      var wx = cam.x + sx / cam.zoom;
-      var wy = cam.y + sy / cam.zoom;
+      var wx = cam.x + sx / cam.zoom, wy = cam.y + sy / cam.zoom;
       var t = currentMap.tile;
-      var tx = Math.floor(wx / t);
-      var ty = Math.floor(wy / t);
-      tx = clamp(tx, 0, currentMap.width-1);
-      ty = clamp(ty, 0, currentMap.height-1);
-
+      var tx = Math.max(0, Math.min(currentMap.width-1,  Math.floor(wx/t)));
+      var ty = Math.max(0, Math.min(currentMap.height-1, Math.floor(wy/t)));
       if (isStart || drag.lastTileX===null){
         applyPaint(tx,ty);
         drag.lastTileX = tx; drag.lastTileY = ty;
       } else {
-        // Linie zwischen letzter und aktueller Kachel
         lineTiles(drag.lastTileX, drag.lastTileY, tx, ty, applyPaint);
         drag.lastTileX = tx; drag.lastTileY = ty;
       }
       drawMap();
     }
-
     function applyPaint(tx,ty){
       if (tool.mode==='road') setRoad(tx,ty);
       else if (tool.mode==='path') setPath(tx,ty);
@@ -442,7 +424,6 @@
       function start(){
         ok("GameLoader.start "+mapUrl);
         loadJSON(mapUrl).then(function(map){
-          // map normalisieren
           function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
           var ms = map.mapSize || map.size || null;
           var width  = pickNum(map.width, map.w,  ms && ms.w,  ms && ms.width)  || 16;
@@ -455,12 +436,10 @@
           };
           ok("Map geladen: "+width+"×"+height+" · Tile "+tile);
 
-          // Assets für Gebäude vorbereiten
+          // Gebäude-Assets preloaden
           var preload = [];
           for (var k in BUILDINGS) if (BUILDINGS.hasOwnProperty(k)){
-            (function(key){
-              preload.push(loadImage(BUILDINGS[key].img).then(function(img){ BUILDINGS[key]._img=img; }));
-            })(k);
+            (function(key){ preload.push(loadImage(BUILDINGS[key].img).then(function(img){ BUILDINGS[key]._img=img; })); })(k);
           }
 
           // Tileset/Atlas
@@ -468,21 +447,19 @@
           var TILESET_JSON = './assets/tiles/tileset.terrain.json';
 
           Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ].concat(preload))
-          .then(function(res){
-            atlas = res[0]; tilesetImg = res[1];
-          })
+          .then(function(res){ atlas = res[0]; tilesetImg = res[1]; })
           .catch(function(e){ atlas=null; tilesetImg=null; warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); })
           .then(function(){
-            // Rathaus auto-spawn in Kartenmitte (sofern noch nicht vorhanden)
+            // Rathaus auto-spawn
             var cx = Math.floor(width/2), cy = Math.floor(height/2);
             if (!hasEntity('townhall')){
               if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
             }
-            // Kamera mittig aufs Rathaus
+            // Kamera auf Mitte
             var center = tileToWorld(cx, cy);
             cam.zoom = 1;
-            cam.x = clamp(center.x - viewW/2, 0, Math.max(0, mapPx().w - viewW));
-            cam.y = clamp(center.y - viewH/2, 0, Math.max(0, mapPx().h - viewH));
+            cam.x = Math.max(0, Math.min(mapPx().w - viewW, center.x - viewW/2));
+            cam.y = Math.max(0, Math.min(mapPx().h - viewH, center.y - viewH/2));
 
             drawMap();
 
@@ -496,10 +473,7 @@
     });
   };
 
-  function hasEntity(key){
-    for (var i=0;i<entities.length;i++) if (entities[i].key===key) return true;
-    return false;
-  }
+  function hasEntity(key){ for (var i=0;i<entities.length;i++) if (entities[i].key===key) return true; return false; }
 
   // boot
   try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
