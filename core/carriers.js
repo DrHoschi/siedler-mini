@@ -1,133 +1,115 @@
-// core/carriers.js — v1.0.0 — Carrier/Porter Agenten (ES5, ohne Deps)
+/* 
+============================================
+Datei: core/carriers.js
+Projekt: Siedler-Mini
+Version: v16.3.1
+Zweck: Träger-Logik (Carrier Agents, Pfade)
+============================================
+*/
 (function(){
   'use strict';
+  var Carriers = (window.Carriers = window.Carriers || {});
 
-  function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
+  var carriers = []; // {x,y,tx,ty,path,idx,speed,state,job}
+  var tileSize = 64;
+  var mapW=0,mapH=0;
+  var onDrawOverlay = null; // optional (Game kann hier einen Drawer registrieren)
 
-  var CR = {};
-  var U = {
-    toWorld: function(tx,ty){ return {x:tx*64,y:ty*64}; },
-    toTile:  function(px,py){ return {x:Math.floor(px/64),y:Math.floor(py/64)}; },
-    markTrail: function(tx,ty,a){},
-    requestPath: function(sx,sy,gx,gy){ return null; }
+  // ===================== Init =====================
+  Carriers.init = function(opts){
+    opts = opts || {};
+    tileSize = opts.tile || tileSize;
+    mapW = opts.width || 0;
+    mapH = opts.height|| 0;
+    carriers.length=0;
   };
 
-  var list = []; // {id, tx,ty, x,y, speed, path, i, state}
-  var _id = 1;
-
-  CR.init = function(opts){
-    U.toWorld     = (opts && opts.toWorld)     || U.toWorld;
-    U.toTile      = (opts && opts.toTile)      || U.toTile;
-    U.markTrail   = (opts && opts.markTrail)   || U.markTrail;
-    U.requestPath = (opts && opts.requestPath) || U.requestPath;
-    ok("[carriers] Modul geladen (v1.0.0)");
+  Carriers.registerOverlay = function(drawFn){
+    onDrawOverlay = drawFn;
   };
 
-  CR.spawn = function(opt){
-    var tx=opt.tx|0, ty=opt.ty|0, speedTiles = Math.max(0.5, +opt.speedTilesPerSec || 4);
-    var w = U.toWorld(tx,ty);
-    var c = {
-      id:_id++,
-      tx:tx, ty:ty,
-      x:w.x+32, y:w.y+32,                 // Tile-Mitte
-      speed: speedTiles,                  // Tiles/Sekunde
-      path:null, i:0,
-      state:'idle'
-    };
-    list.push(c);
-    return c.id;
+  // ===================== Spawning =====================
+  Carriers.spawn = function(tx,ty){
+    var c = { x:tx, y:ty, tx:tx, ty:ty, path:null, idx:0, speed:2/tileSize, state:'idle', job:null };
+    carriers.push(c);
+    return c;
   };
 
-  CR.orderMove = function(id, target){
-    var c = get(id); if (!c) return false;
-    var path = U.requestPath(c.tx, c.ty, target.gx|0, target.gy|0);
-    if (!path || path.length<2){ c.state='idle'; c.path=null; c.i=0; return false; }
-    c.path = path; c.i = 1; c.state='walking'; // index 1 = erste Zielkachel
+  Carriers.assignJob = function(c, job){
+    if (!c) return false;
+    c.job = job || null;
+    c.state = job ? 'toSource' : 'idle';
+    c.path = null; c.idx = 0;
     return true;
   };
 
-  function get(id){
-    for (var i=0;i<list.length;i++) if (list[i].id===id) return list[i];
-    return null;
+  // ===================== Pathfinding =====================
+  function findPathWrap(ax,ay,bx,by){
+    if (!window.GamePathfinder || !GamePathfinder.findPath) return null;
+    return GamePathfinder.findPath(ax,ay,bx,by);
   }
 
-  CR.update = function(dt){
-    for (var i=0;i<list.length;i++){
-      var c=list[i];
-      if (c.state!=='walking' || !c.path || c.i>=c.path.length) { c.state='idle'; continue; }
-      var tgt = c.path[c.i];
-      var wCur = U.toWorld(c.tx,c.ty);
-      var wTgt = U.toWorld(tgt.x,tgt.y);
-      var cx = wCur.x + 32, cy = wCur.y + 32; // von Tile-Mitte
-      var txw = wTgt.x + 32, tyw = wTgt.y + 32; // zu Tile-Mitte
+  // ===================== Carrier Update =====================
+  function stepCarrier(c, dt){
+    if (c.state==='idle'){ return; }
 
-      var dx = txw - cx, dy = tyw - cy;
-      var dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      var stepPxPerSec = c.speed * 64; // Tiles/s -> px/s
-      var step = stepPxPerSec * dt;
+    var target = null;
+    if (c.state==='toSource' && c.job){ target = c.job.from; }
+    else if (c.state==='toTarget' && c.job){ target = c.job.to; }
 
-      if (step >= dist){
-        // Zieltile erreicht
-        c.tx = tgt.x; c.ty = tgt.y;
-        var w2 = U.toWorld(c.tx,c.ty); c.x = w2.x+32; c.y=w2.y+32;
-        U.markTrail(c.tx,c.ty,1.0);
-        c.i++;
-        if (c.i>=c.path.length){ c.state='idle'; c.path=null; c.i=0; }
-      } else {
-        // nur Interpolations-Pos (optional sichtbar in draw)
-        var nx = cx + dx/dist * step, ny = cy + dy/dist * step;
-        c.x = nx; c.y = ny;
-        // Spur auf aktueller Tile
-        U.markTrail(c.tx,c.ty, 0.05);
-      }
+    if (!c.path && target){
+      c.path = findPathWrap(c.x,c.y, target[0], target[1]);
+      c.idx = 0;
+      if (!c.path){ c.state='idle'; c.job=null; return; }
+    }
+
+    if (!target){ c.state='idle'; c.job=null; return; }
+    if (c.x===target[0] && c.y===target[1]){
+      if (c.state==='toSource'){ c.state='toTarget'; c.path=null; c.idx=0; }
+      else if (c.state==='toTarget'){ c.state='idle'; c.job=null; }
+      return;
+    }
+
+    if (c.path && c.idx < c.path.length){
+      var nx = c.path[c.idx][0], ny = c.path[c.idx][1];
+      if (nx===c.x && ny===c.y){ c.idx++; return; }
+      c.x = nx; c.y = ny; c.idx++;
+    }
+  }
+
+  Carriers.update = function(dt){
+    for (var i=0;i<carriers.length;i++) stepCarrier(carriers[i], dt);
+  };
+
+  Carriers.getAll = function(){ return carriers.slice(); };
+
+  // ===================== Zeichnen =====================
+  Carriers.drawOverlay = function(ctx, cam, zoom){
+    if (typeof onDrawOverlay === 'function'){ onDrawOverlay(ctx, cam, zoom, tileSize, carriers); return; }
+    ctx.save();
+    ctx.lineWidth = Math.max(1, Math.round(1.5*zoom));
+    ctx.strokeStyle = 'rgba(80,180,220,.75)';
+    ctx.fillStyle = 'rgba(80,180,220,.15)';
+    for (var i=0;i<carriers.length;i++){
+      var c = carriers[i];
+      var px = Math.floor((c.x*tileSize - cam.x)*zoom);
+      var py = Math.floor((c.y*tileSize - cam.y)*zoom);
+      ctx.beginPath();
+      ctx.arc(px+tileSize*zoom/2, py+tileSize*zoom/2, Math.max(3, Math.round(4*zoom)), 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
+  // ===================== Bootstrapping =====================
+  Carriers.bootstrapForMap = function(map, isWalkableFn){
+    if (!map) return;
+    var t = map.tile || 64;
+    Carriers.init({ tile:t, width:map.width, height:map.height });
+    if (window.GamePathfinder && GamePathfinder.init){
+      GamePathfinder.init(map, isWalkableFn);
     }
   };
 
-  CR.draw = function(ctx, cam, tile, zoom){
-    if (!ctx) return;
-    for (var i=0;i<list.length;i++){
-      var c = list[i];
-      var dx = Math.floor((c.x - cam.x)*zoom);
-      var dy = Math.floor((c.y - cam.y)*zoom);
-      var r = Math.max(2, Math.floor(3*zoom));
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.beginPath(); ctx.arc(dx,dy,r,0,Math.PI*2); ctx.fill();
-      if (c.state==='walking'){
-        ctx.strokeStyle="rgba(255,255,255,0.35)";
-        ctx.beginPath(); ctx.moveTo(dx,dy); ctx.lineTo(dx,dy-r*2-2); ctx.stroke();
-      }
-    }
-  };
-
-  CR.serialize = function(){
-    var out=[];
-    for (var i=0;i<list.length;i++){
-      var c=list[i];
-      out.push({
-        id:c.id, tx:c.tx, ty:c.ty,
-        x:c.x, y:c.y, speed:c.speed,
-        state:c.state,
-        path:c.path, i:c.i
-      });
-    }
-    return out;
-  };
-
-  CR.deserialize = function(arr){
-    list = [];
-    if (!arr || !arr.length) return;
-    for (var i=0;i<arr.length;i++){
-      var a = arr[i];
-      list.push({
-        id:a.id|0, tx:a.tx|0, ty:a.ty|0,
-        x:+a.x||0, y:+a.y||0, speed:+a.speed||4,
-        state:a.state||'idle',
-        path:a.path||null, i:a.i|0
-      });
-      if (a.id>=_id) _id=a.id+1;
-    }
-  };
-
-  // Expose
-  window.Carriers = CR;
+  (window.CBLog?.ok || console.log)('[carriers.js] Modul geladen (v16.3.1)');
 })();
