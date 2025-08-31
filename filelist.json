@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-31T19:21:52.277Z",
+  "createdAt": "2025-08-31T21:11:28.025Z",
   "root": ".",
-  "count": 254,
+  "count": 252,
   "entries": [
     {
       "type": "dir",
@@ -182,7 +182,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 7192
+      "size": 5565
     },
     {
       "type": "dir",
@@ -780,7 +780,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 6913
+      "size": 4411
     },
     {
       "type": "file",
@@ -889,12 +889,12 @@
     {
       "type": "file",
       "path": "core/camera.js",
-      "size": 1445
+      "size": 1408
     },
     {
       "type": "file",
       "path": "core/carriers.js",
-      "size": 3703
+      "size": 3491
     },
     {
       "type": "file",
@@ -1000,11 +1000,6 @@
       "type": "file",
       "path": "src/assets.buildings.js",
       "size": 2501
-    },
-    {
-      "type": "file",
-      "path": "src/ui-build.js",
-      "size": 2465
     },
     {
       "type": "dir",
@@ -1137,12 +1132,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24879
+      "size": 24878
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9384
+      "size": 9383
     },
     {
       "type": "file",
@@ -1222,12 +1217,7 @@
     {
       "type": "file",
       "path": "ui-build.css",
-      "size": 2005
-    },
-    {
-      "type": "file",
-      "path": "ui-build.js",
-      "size": 9975
+      "size": 5917
     },
     {
       "type": "file",
