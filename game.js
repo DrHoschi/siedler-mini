@@ -1,7 +1,7 @@
-// game.js — v16.2.0 — Map, Pan/Zoom, Placement, Roads/Paths, Ghost, QuickSave + Carrier/Pathfinder Hooks
+// game.js — v16.2.2 — Map, Pan/Zoom, Placement, Roads/Paths, Ghost, QuickSave + Carrier/Pathfinder Hooks + Cancel (ESC/Right-Click)
 (function(){
   'use strict';
-  var VERSION = 'v16.2.0';
+  var VERSION = 'v16.2.2';
 
   // logging
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -41,15 +41,16 @@
     stonecutter: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/steinmetz_wood.png" },
     house0:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png" },
     house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" },
-    watchtower: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wachturm _wood.png" }, // Achtung: Leerzeichen!
+    watchtower: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wachturm _wood.png" }, // Achtung: Leerzeichen im Dateinamen!
     tree:       { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
 
-  // sanfte Aliase für alte Schlüssel
+  // sanfte Aliase (deutsch/alt → intern)
   var BUILDING_ALIASES = {
     holzfaeller:'lumberjack', baecker:'bakery', schmied:'blacksmith', steinmetz:'stonecutter',
     wohnhaus0:'house0', wohnhaus1:'house1', wachturm:'watchtower', windmuehle:'mill',
     wassermuehle:'watermill', lager:'depot', rathaus:'townhall',
+    // Alt-Bestand
     wood0:'lumberjack', factory:'mill'
   };
   function resolveBuildingKey(k){ return BUILDINGS[k] ? k : (BUILDING_ALIASES[k] || k); }
@@ -66,7 +67,7 @@
   function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
   function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
   function keyXY(tx,ty){ return tx + "," + ty; }
-  function normMode(m){ m=(m||'').toLowerCase(); return m==='building'?'build':m; }
+  function normMode(m){ m=(m||'').toLowerCase(); return m==='building'?'build':m; } // UI-Schutz
   function worldToTile(px,py){ var t=currentMap.tile; return {x:Math.floor(px/t), y:Math.floor(py/t)}; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
@@ -74,7 +75,9 @@
   // placement helpers
   function canPlace(key, tx, ty){
     var def = BUILDINGS[key]; if (!def || !currentMap) return false;
+    // map bounds
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
+    // simple collision mit anderen Entities
     var t = currentMap.tile;
     var r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
     for (var i=0;i<entities.length;i++){
@@ -89,7 +92,8 @@
     var def = BUILDINGS[key]; if (!def) return false;
     var t = currentMap.tile;
     var pos = tileToWorld(tx,ty);
-    var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:def._img };
+    var img = def._img;
+    var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:img };
     entities.push(e);
     ok("[ok] Gebäude platziert:", key, "at", tx, ty);
     return true;
@@ -163,6 +167,16 @@
     } else {
       tool.mode = mode; tool.key  = null; ok("[ok] Tool gesetzt: " + mode);
     }
+  };
+
+  // NEU: Tool leeren/abbrechen (ESC & Rechtsklick)
+  Game.clearTool = function(){
+    tool.mode = null;
+    tool.key  = null;
+    ghost.on = false;
+    ghost.key = null;
+    ok("[ok] Tool abgewählt");
+    drawMap();
   };
 
   // draw
@@ -274,7 +288,7 @@
       Carriers.draw(ctx, cam, t, cam.zoom);
     }
 
-    // Ghost-Vorschau
+    // Ghost-Vorschau (nach Entities)
     if (ghost.on && ghost.key && BUILDINGS[ghost.key]){
       var tG   = currentMap.tile;
       var defG = BUILDINGS[ghost.key];
@@ -343,6 +357,13 @@
       } else {
         drag.painting = false;
       }
+    });
+
+    // Rechtsklick: Tool abwählen
+    canvas.addEventListener('contextmenu', function(e){
+      e.preventDefault ? e.preventDefault() : (e.returnValue = false);
+      Game.clearTool();
+      return false;
     });
 
     // Ghost bei Mausbewegung
@@ -440,6 +461,12 @@
     // Keyboard
     window.addEventListener('keydown', function(e){
       var k=(e.key||'').toLowerCase();
+
+      // Abbrechen: ESC -> Tool abwählen
+      if (k === 'escape') {
+        Game.clearTool();
+        return;
+      }
 
       // QuickSave/Load
       if (k === 's' && (e.ctrlKey || e.metaKey || (!e.altKey && !e.shiftKey))){
@@ -632,10 +659,12 @@
           };
           ok("Map geladen: "+width+"×"+height+" · Tile "+tile);
 
-          // Gebäude-Assets preloaden
+          // Assets für Gebäude vorbereiten
           var preload = [];
           for (var k in BUILDINGS) if (BUILDINGS.hasOwnProperty(k)){
-            (function(key){ preload.push(loadImage(BUILDINGS[key].img).then(function(img){ BUILDINGS[key]._img=img; })); })(k);
+            (function(key){
+              preload.push(loadImage(BUILDINGS[key].img).then(function(img){ BUILDINGS[key]._img=img; }));
+            })(k);
           }
 
           // Tileset/Atlas
@@ -643,15 +672,17 @@
           var TILESET_JSON = './assets/tiles/tileset.terrain.json';
 
           Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ].concat(preload))
-          .then(function(res){ atlas = res[0]; tilesetImg = res[1]; })
+          .then(function(res){
+            atlas = res[0]; tilesetImg = res[1];
+          })
           .catch(function(e){ atlas=null; tilesetImg=null; warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); })
           .then(function(){
-            // Rathaus auto-spawn in Mitte
+            // Rathaus auto-spawn in Kartenmitte (sofern noch nicht vorhanden)
             var cx = Math.floor(width/2), cy = Math.floor(height/2);
             if (!hasEntity('townhall')){
               if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
             }
-            // Kamera auf Mitte
+            // Kamera mittig aufs Rathaus
             var center = tileToWorld(cx, cy);
             cam.zoom = 1;
             cam.x = Math.max(0, Math.min(mapPx().w - viewW, center.x - viewW/2));
