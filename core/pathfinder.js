@@ -2,6 +2,8 @@
 (function(){
   'use strict';
 
+  function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
+
   var PF = {};
   var cfg = {
     getSize: function(){ return {w:0,h:0}; },
@@ -11,10 +13,11 @@
   };
 
   PF.init = function(opts){
-    cfg.getSize  = opts && opts.getSize  || cfg.getSize;
-    cfg.isBlocked= opts && opts.isBlocked|| cfg.isBlocked;
-    cfg.moveCost = opts && opts.moveCost || cfg.moveCost;
+    cfg.getSize   = (opts && opts.getSize)   || cfg.getSize;
+    cfg.isBlocked = (opts && opts.isBlocked) || cfg.isBlocked;
+    cfg.moveCost  = (opts && opts.moveCost)  || cfg.moveCost;
     cfg.allowDiag = !!(opts && opts.allowDiag);
+    ok("[pathfinder] Modul geladen (v1.0.0)");
   };
 
   function key(tx,ty){ return tx+"|"+ty; }
@@ -47,7 +50,7 @@
     if (!inBounds(sx,sy) || !inBounds(gx,gy)) return null;
     if (cfg.isBlocked(gx,gy)) return null;
 
-    var open = []; // binary-heap wäre schöner; hier simple array für Klarheit
+    var open = []; // (Array statt Heap: genügt hier)
     var openMap = {};
     var closed = {};
     var came   = {};
