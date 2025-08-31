@@ -1,7 +1,7 @@
-// game.js — v16.1.28 (ES5) — Map, Pan/Zoom, Placement, Roads/Paths + Townhall-Auto + Ghost + QuickSave
+// game.js — v16.2.0 — Map, Pan/Zoom, Placement, Roads/Paths, Ghost, QuickSave + Carrier/Pathfinder Hooks
 (function(){
   'use strict';
-  var VERSION = 'v16.1.28';
+  var VERSION = 'v16.2.0';
 
   // logging
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -25,39 +25,31 @@
   // entities (Gebäude)
   var entities = []; // {key,x,y,w,h,img}
 
-  // OVERLAY: Straßen & Wege
-  var over = { road:{}, path:{} };
+  // Overlays: Wege/Straßen + Trails (Carrier-Spuren)
+  var over = { road:{}, path:{}, trail:{} };
 
   // building defs (Tilesize relativ zur Map-Tile)
   var BUILDINGS = {
-    // Kern
     townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
     depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png" },
     lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
     farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png" },
     mill:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
     watermill:  { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wassermuehle_wood.PNG" },
-
-    // Handwerk / Produktion
     bakery:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/baecker_wood.png" },
     blacksmith:  { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Schmied_wood0.png" },
     stonecutter: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/steinmetz_wood.png" },
-
-    // Wohnen / Militär
     house0:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png" },
     house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" },
-    watchtower: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wachturm _wood.png" }, // Achtung: Leerzeichen im Dateinamen!
-
-    // Deko
+    watchtower: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/wachturm _wood.png" }, // Achtung: Leerzeichen!
     tree:       { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
 
-  // sanfte Aliase (deutsch/alt → intern)
+  // sanfte Aliase für alte Schlüssel
   var BUILDING_ALIASES = {
     holzfaeller:'lumberjack', baecker:'bakery', schmied:'blacksmith', steinmetz:'stonecutter',
     wohnhaus0:'house0', wohnhaus1:'house1', wachturm:'watchtower', windmuehle:'mill',
     wassermuehle:'watermill', lager:'depot', rathaus:'townhall',
-    // Alt-Bestand
     wood0:'lumberjack', factory:'mill'
   };
   function resolveBuildingKey(k){ return BUILDINGS[k] ? k : (BUILDING_ALIASES[k] || k); }
@@ -74,12 +66,12 @@
   function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
   function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
   function keyXY(tx,ty){ return tx + "," + ty; }
-  function normMode(m){ m=(m||'').toLowerCase(); return m==='building'?'build':m; } // UI-Schutz
-
-  // helpers
+  function normMode(m){ m=(m||'').toLowerCase(); return m==='building'?'build':m; }
+  function worldToTile(px,py){ var t=currentMap.tile; return {x:Math.floor(px/t), y:Math.floor(py/t)}; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
+  // placement helpers
   function canPlace(key, tx, ty){
     var def = BUILDINGS[key]; if (!def || !currentMap) return false;
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
@@ -97,8 +89,7 @@
     var def = BUILDINGS[key]; if (!def) return false;
     var t = currentMap.tile;
     var pos = tileToWorld(tx,ty);
-    var img = def._img;
-    var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:img };
+    var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:def._img };
     entities.push(e);
     ok("[ok] Gebäude platziert:", key, "at", tx, ty);
     return true;
@@ -138,43 +129,29 @@
     ty = Math.max(0, Math.min(currentMap.height - 1, ty));
 
     ghost.on  = true;
-    ghost.tx  = tx;
-    ghost.ty  = ty;
-    ghost.key = key;
-    ghost.can = canPlace(key, tx, ty);
+    ghost.tx  = tx;  ghost.ty  = ty;
+    ghost.key = key; ghost.can = canPlace(key, tx, ty);
   }
 
-  // Straßen/Wege
+  // Overlays (Straße/Weg/Trail)
   function setRoad(tx,ty){ over.road[keyXY(tx,ty)] = true; }
   function setPath(tx,ty){ over.path[keyXY(tx,ty)] = true; }
   function clearOverlaysAt(tx,ty){ delete over.road[keyXY(tx,ty)]; delete over.path[keyXY(tx,ty)]; }
-
-  // Bulldozer
-  function bulldozeAt(tx,ty){
-    var t = currentMap.tile, rx = tx*t, ry = ty*t;
-    for (var i=entities.length-1; i>=0; i--){
-      var e=entities[i];
-      if (rx >= e.x && rx < e.x+e.w && ry >= e.y && ry < e.y+e.h){
-        entities.splice(i,1);
-        ok("[ok] Abgerissen:", e.key, "at", tx, ty);
-        break;
-      }
-    }
-    clearOverlaysAt(tx,ty);
+  function markTrail(tx,ty,amount){
+    var k = keyXY(tx,ty);
+    var v = (over.trail[k]||0) + (+amount||0.05);
+    over.trail[k] = Math.max(0, Math.min(1.0, v));
   }
-
-  // Linie (Bresenham) in Tile-Koordinaten
-  function lineTiles(x0,y0,x1,y1, cb){
-    var dx = Math.abs(x1-x0), sx = x0<x1 ? 1 : -1;
-    var dy = -Math.abs(y1-y0), sy = y0<y1 ? 1 : -1;
-    var err = dx + dy, e2;
-    while(true){
-      cb(x0,y0);
-      if (x0===x1 && y0===y1) break;
-      e2 = 2*err;
-      if (e2 >= dy){ err += dy; x0 += sx; }
-      if (e2 <= dx){ err += dx; y0 += sy; }
+  function decayTrails(dt){
+    var keys = Object.keys(over.trail);
+    if (!keys.length) return;
+    var keep = {};
+    var factor = Math.pow(0.5, dt/10); // Halbwertszeit ~10s
+    for (var i=0;i<keys.length;i++){
+      var k=keys[i], v=over.trail[k]*factor;
+      if (v>0.02){ keep[k]=v; }
     }
+    over.trail = keep;
   }
 
   // public tool api
@@ -194,7 +171,7 @@
     var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Sichtfenster (Tiles)
+    // sichtfenster bounds (in Tiles)
     var left   = Math.floor(cam.x / t);
     var top    = Math.floor(cam.y / t);
     var right  = Math.ceil((cam.x + viewW/cam.zoom) / t);
@@ -202,9 +179,9 @@
     left=Math.max(0,Math.min(w-1,left)); top=Math.max(0,Math.min(h-1,top));
     right=Math.max(0,Math.min(w,right)); bottom=Math.max(0,Math.min(h,bottom));
 
-    // Boden
     var layers=currentMap.layers||[];
     var colors=['#5a7a39','#6b8f3e','#7aa346','#90b45a'];
+
     if (!atlas || !tilesetImg || !layers.length){
       for (var ty=top; ty<bottom; ty++){
         for (var tx=left; tx<right; tx++){
@@ -256,6 +233,22 @@
       }
     }
 
+    // Trails (Carrier-Laufspuren)
+    var trailKeys = Object.keys(over.trail);
+    for (var it=0; it<trailKeys.length; it++){
+      var k = trailKeys[it];
+      var parts = k.split(','); var tx4=+parts[0], ty4=+parts[1];
+      if (tx4<left || tx4>=right || ty4<top || ty4>=bottom) continue;
+      var strength = over.trail[k]; if (!strength) continue;
+      var dx4 = Math.floor((tx4*t - cam.x)*cam.zoom);
+      var dy4 = Math.floor((ty4*t - cam.y)*cam.zoom);
+      var ds4 = Math.ceil(t*cam.zoom);
+      var band = Math.floor(0.36*ds4);
+      var off  = Math.floor((ds4 - band)/2);
+      ctx.fillStyle = "rgba(255,255,255," + Math.min(0.6, 0.08 + 0.5*strength) + ")";
+      ctx.fillRect(dx4+off, dy4+off, band, band);
+    }
+
     // Entities oben drauf
     for (var k=0;k<entities.length;k++){
       var e=entities[k];
@@ -276,7 +269,12 @@
       }
     }
 
-    // Ghost-Vorschau (nach Entities)
+    // Carrier (kleine Marker)
+    if (window.Carriers && Carriers.draw){
+      Carriers.draw(ctx, cam, t, cam.zoom);
+    }
+
+    // Ghost-Vorschau
     if (ghost.on && ghost.key && BUILDINGS[ghost.key]){
       var tG   = currentMap.tile;
       var defG = BUILDINGS[ghost.key];
@@ -347,7 +345,7 @@
       }
     });
 
-    // Zusätzlicher MouseMove am Canvas für Ghost
+    // Ghost bei Mausbewegung
     canvas.addEventListener('mousemove', function(e){
       var rect = canvas.getBoundingClientRect();
       updateGhostFromScreen(e.clientX - rect.left, e.clientY - rect.top);
@@ -375,13 +373,13 @@
       zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top);
     }, {passive:false});
 
-    // Desktop-Klick: Gebäude platzieren
+    // Klick: Bauen
     canvas.addEventListener('click', function(e){
       var rect = canvas.getBoundingClientRect();
       placeAtScreen(e.clientX-rect.left, e.clientY-rect.top);
     });
 
-    // Touch (Pan/Pinch/Tap & Painting)
+    // Touch
     canvas.addEventListener('touchstart', function(e){
       if (e.touches.length===1){
         var t=e.touches[0];
@@ -412,7 +410,6 @@
         var t=e.touches[0];
         cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom;
         clampCam(); drawMap();
-        // Ghost aktualisieren
         var r = canvas.getBoundingClientRect();
         updateGhostFromScreen(t.clientX - r.left, t.clientY - r.top);
       } else if (e.touches.length>=2){
@@ -437,7 +434,7 @@
         }
       }
       drag.on=false; drag.pinch=false; drag.last=0; drag.tapStart=0; drag.painting=false; drag.lastTileX=null; drag.lastTileY=null;
-      ghost.on=false; // Ghost aus
+      ghost.on=false;
     });
 
     // Keyboard
@@ -446,13 +443,18 @@
 
       // QuickSave/Load
       if (k === 's' && (e.ctrlKey || e.metaKey || (!e.altKey && !e.shiftKey))){
-        e.preventDefault && e.preventDefault();
-        quickSave(); 
-        return;
+        e.preventDefault && e.preventDefault(); quickSave(); return;
       }
       if (k === 'l' && (e.ctrlKey || e.metaKey || (!e.altKey && !e.shiftKey))){
-        e.preventDefault && e.preventDefault();
-        quickLoad(); 
+        e.preventDefault && e.preventDefault(); quickLoad(); return;
+      }
+
+      // Debug: Carrier-Spawn (C) und Move-Ziel (M = View-Mitte)
+      if (k==='c' && window.Carriers) { spawnCarrierAtCenter(); return; }
+      if (k==='m' && window.Carriers){
+        var cx = cam.x + viewW/2/cam.zoom, cy = cam.y + viewH/2/cam.zoom;
+        var tt = worldToTile(cx,cy);
+        if (_demoCarrierId) Carriers.orderMove(_demoCarrierId, {gx:tt.x, gy:tt.y});
         return;
       }
 
@@ -488,6 +490,34 @@
     }
   }
 
+  // Linie (Bresenham) in Tile-Koordinaten
+  function lineTiles(x0,y0,x1,y1, cb){
+    var dx = Math.abs(x1-x0), sx = x0<x1 ? 1 : -1;
+    var dy = -Math.abs(y1-y0), sy = y0<y1 ? 1 : -1;
+    var err = dx + dy, e2;
+    while(true){
+      cb(x0,y0);
+      if (x0===x1 && y0===y1) break;
+      e2 = 2*err;
+      if (e2 >= dy){ err += dy; x0 += sx; }
+      if (e2 <= dx){ err += dx; y0 += sy; }
+    }
+  }
+
+  // Bulldozer
+  function bulldozeAt(tx,ty){
+    var t = currentMap.tile, rx = tx*t, ry = ty*t;
+    for (var i=entities.length-1; i>=0; i--){
+      var e=entities[i];
+      if (rx >= e.x && rx < e.x+e.w && ry >= e.y && ry < e.y+e.h){
+        entities.splice(i,1);
+        ok("[ok] Abgerissen:", e.key, "at", tx, ty);
+        break;
+      }
+    }
+    clearOverlaysAt(tx,ty);
+  }
+
   // QuickSave / QuickLoad
   function serializeWorld(){
     var ents = [];
@@ -495,11 +525,16 @@
       var e = entities[i];
       ents.push({ key:e.key, x:e.x, y:e.y, w:e.w, h:e.h });
     }
-    return {
+    var out = {
       entities: ents,
       over: { road: over.road, path: over.path },
+      trail: over.trail,
       cam: { x: cam.x, y: cam.y, zoom: cam.zoom }
     };
+    if (window.Carriers && Carriers.serialize){
+      out.carriers = Carriers.serialize();
+    }
+    return out;
   }
 
   function deserializeWorld(snap){
@@ -515,40 +550,57 @@
     }
     over.road = snap.over && snap.over.road ? snap.over.road : {};
     over.path = snap.over && snap.over.path ? snap.over.path : {};
+    over.trail= snap.trail || {};
     if (snap.cam){
       cam.x = +snap.cam.x || cam.x;
       cam.y = +snap.cam.y || cam.y;
       cam.zoom = +snap.cam.zoom || cam.zoom;
       clampCam();
     }
+    if (window.Carriers && Carriers.deserialize){
+      Carriers.deserialize(snap.carriers || []);
+    }
     drawMap();
   }
 
   function quickSave(){
-    try{
-      var data = serializeWorld();
-      localStorage.setItem('siedler-mini.save', JSON.stringify(data));
-      ok('[ok] Save geschrieben');
-    } catch(e){
-      err('[err] Save fehlgeschlagen: ' + (e && e.message ? e.message : e));
-    }
+    try{ localStorage.setItem('siedler-mini.save', JSON.stringify(serializeWorld())); ok('[ok] Save geschrieben'); }
+    catch(e){ err('[err] Save fehlgeschlagen: ' + (e && e.message ? e.message : e)); }
   }
-
   function quickLoad(){
     try{
       var raw = localStorage.getItem('siedler-mini.save');
       if (!raw){ warn('[warn] Kein Save gefunden'); return; }
-      var data = JSON.parse(raw);
-      deserializeWorld(data);
+      deserializeWorld(JSON.parse(raw));
       ok('[ok] Save geladen');
-    } catch(e){
-      err('[err] Load fehlgeschlagen: ' + (e && e.message ? e.message : e));
+    } catch(e){ err('[err] Load fehlgeschlagen: ' + (e && e.message ? e.message : e)); }
+  }
+  Game.save = quickSave; Game.load = quickLoad;
+
+  // Ticker
+  var _lastTs=0, _demoCarrierId=null;
+  function tick(ts){
+    if (!_lastTs) _lastTs = ts;
+    var dt = Math.min(0.05, (ts - _lastTs)/1000);
+    _lastTs = ts;
+
+    if (window.Carriers && Carriers.update){
+      Carriers.update(dt);
     }
+    decayTrails(dt);
+
+    drawMap();
+    requestAnimationFrame(tick);
   }
 
-  // optional fürs UI exportieren
-  Game.save = quickSave;
-  Game.load = quickLoad;
+  function spawnCarrierAtCenter(){
+    if (!window.Carriers || !currentMap) return;
+    var cx = Math.floor(currentMap.width/2), cy = Math.floor(currentMap.height/2);
+    if (!_demoCarrierId){
+      _demoCarrierId = Carriers.spawn({ tx:cx, ty:cy, speedTilesPerSec:4 });
+      ok('[ok] Carrier gespawnt @', cx, cy);
+    }
+  }
 
   // engine init
   function initEngine(){
@@ -567,6 +619,7 @@
       function start(){
         ok("GameLoader.start "+mapUrl);
         loadJSON(mapUrl).then(function(map){
+          // map normalisieren
           function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
           var ms = map.mapSize || map.size || null;
           var width  = pickNum(map.width, map.w,  ms && ms.w,  ms && ms.width)  || 16;
@@ -593,7 +646,7 @@
           .then(function(res){ atlas = res[0]; tilesetImg = res[1]; })
           .catch(function(e){ atlas=null; tilesetImg=null; warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); })
           .then(function(){
-            // Rathaus auto-spawn
+            // Rathaus auto-spawn in Mitte
             var cx = Math.floor(width/2), cy = Math.floor(height/2);
             if (!hasEntity('townhall')){
               if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
@@ -604,11 +657,52 @@
             cam.x = Math.max(0, Math.min(mapPx().w - viewW, center.x - viewW/2));
             cam.y = Math.max(0, Math.min(mapPx().h - viewH, center.y - viewH/2));
 
+            // PathFinder/Carriers initialisieren
+            if (window.PathFinder){
+              PathFinder.init({
+                getSize: function(){ return {w: currentMap.width, h: currentMap.height}; },
+                isBlocked: function(tx,ty){
+                  // blockiert, wenn ein Entity-Rechteck die Tile belegt
+                  var t=currentMap.tile, rx=tx*t, ry=ty*t;
+                  for (var i=0;i<entities.length;i++){
+                    var e=entities[i];
+                    if (rx < e.x+e.w && rx+t > e.x && ry < e.y+e.h && ry+t > e.y) return true;
+                  }
+                  return false;
+                },
+                moveCost: function(tx,ty){
+                  var k=keyXY(tx,ty);
+                  if (over.road[k]) return 4;
+                  if (over.path[k]) return 6;
+                  return 10;
+                },
+                allowDiag: false
+              });
+            }
+            if (window.Carriers){
+              Carriers.init({
+                toWorld: function(tx,ty){ return tileToWorld(tx,ty); },
+                toTile:  function(px,py){ return worldToTile(px,py); },
+                markTrail: markTrail,
+                requestPath: function(sx,sy,gx,gy){
+                  if (!window.PathFinder) return null;
+                  return PathFinder.find({sx:sx,sy:sy,gx:gx,gy:gy, maxIter: 20000});
+                }
+              });
+              // Demo: 1 Carrier in der Mitte
+              _demoCarrierId = Carriers.spawn({ tx:cx, ty:cy, speedTilesPerSec:4 });
+            }
+
             drawMap();
 
             try{ window.dispatchEvent(new CustomEvent('cb:game-started',{detail:{map:mapUrl}})); }catch(_){}
             if (window.GameUI && typeof window.GameUI.onGameStarted==='function') window.GameUI.onGameStarted();
-            ok("Game gestartet"); resolve(true);
+            ok("Game gestartet");
+
+            // Ticker starten (für Carrier/Trails)
+            requestAnimationFrame(tick);
+
+            resolve(true);
           });
         }).catch(function(e){ err("Start fehlgeschlagen: "+e.message); reject(e); });
       }
@@ -616,7 +710,10 @@
     });
   };
 
-  function hasEntity(key){ for (var i=0;i<entities.length;i++) if (entities[i].key===key) return true; return false; }
+  function hasEntity(key){
+    for (var i=0;i<entities.length;i++) if (entities[i].key===key) return true;
+    return false;
+  }
 
   // boot
   try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
