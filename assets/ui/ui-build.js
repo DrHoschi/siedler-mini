@@ -1,214 +1,192 @@
-/* ui-build.js — v16.2.9  |  Siedler-Mini
- * - Bau-Menü wird erst nach Game-Start eingeblendet
- * - ES5, keine Module, hängt an window.GameUI
- */
-(function () {
+/*! ui-build.js v16.3.2 — Build-Menü mit Tabs/Kategorien, manuelles Toggle über #btn-build (ES5) */
+(function(){
   'use strict';
 
-  var VER = 'v16.2.9';
-  var root = window;
-  var d = document;
+  var VERSION='v16.3.2';
 
-  // kleines Log-Shim (geht an CBLog, sonst console)
-  function log()   { (root.CBLog && CBLog.ok   ? CBLog.ok   : console.log).apply(console, arguments); }
-  function warn()  { (root.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
-  function error() { (root.CBLog && CBLog.err  ? CBLog.err  : console.error).apply(console, arguments); }
+  function $(s,r){return (r||document).querySelector(s);}
+  function $all(s,r){return [].slice.call((r||document).querySelectorAll(s));}
+  function on(el,ev,fn,opt){el&&el.addEventListener&&el.addEventListener(ev,fn,opt||false);}
+  function ok(){ (window.CBLog&&CBLog.ok?CBLog.ok:console.log).apply(console, arguments); }
+  function warn(){ (window.CBLog&&CBLog.warn?CBLog.warn:console.warn).apply(console, arguments); }
 
-  // ---------- DOM helpers
-  function $(sel, ctx){ return (ctx||d).querySelector(sel); }
-  function $all(sel, ctx){ return Array.prototype.slice.call((ctx||d).querySelectorAll(sel)); }
-  function el(tag, cls, txt){
-    var e = d.createElement(tag);
-    if (cls) e.className = cls;
-    if (txt!=null) e.textContent = txt;
-    return e;
-  }
-
-  // ---------- State
-  var ui = {
-    bar: null,
-    tabs: null,
-    list: null,
-    visible: false,
-    currentCat: 'house'
-  };
-
-  // Kategorien + Einträge (Icons/Keys müssen zu game.js passen)
+  // Kategorien & Items (Labels/Keys müssen zu game.js passen)
   var CATS = [
-    { id: 'house', title: 'Wohnen', items: [
-      { key:'house0', title:'Haus I',  icon:'assets/tex/building/wood/haeuser_wood1.PNG' },
-      { key:'house1', title:'Haus II', icon:'assets/tex/building/wood/haeuser_wood2.PNG' }
+    { id:'wohnen',      label:'Wohnen', items:[
+      { key:'house0',  label:'Haus I',  icon:'🏠', thumb:'./assets/tex/building/wood/haeuser_wood1.PNG' },
+      { key:'house1',  label:'Haus II', icon:'🏘️', thumb:'./assets/tex/building/wood/haeuser_wood2.PNG' }
     ]},
-    { id: 'prod', title: 'Produktion', items: [
-      { key:'lumberjack', title:'Holzfäller', icon:'assets/tex/building/wood/lumberjack_wood.PNG' },
-      { key:'farm',       title:'Farm',       icon:'assets/tex/building/wood/farm_wood.PNG' },
-      { key:'mill',       title:'Mühle',      icon:'assets/tex/building/wood/windmuehle_wood.PNG' }
+    { id:'produktion',  label:'Produktion', items:[
+      { key:'lumberjack', label:'Holzfäller', icon:'🪓', thumb:'./assets/tex/building/wood/lumberjack_wood.PNG' },
+      { key:'farm',       label:'Farm',       icon:'🌾', thumb:'./assets/tex/building/wood/farm_wood.PNG' },
+      { key:'mill',       label:'Mühle',      icon:'🌬️', thumb:'./assets/tex/building/wood/windmuehle_wood.PNG' }
     ]},
-    { id: 'store', title: 'Lager', items: [
-      { key:'depot', title:'Depot', icon:'assets/tex/building/wood/depot_wood.PNG' }
+    { id:'lager',       label:'Lager', items:[
+      { key:'depot',      label:'Depot',   icon:'📦', thumb:'./assets/tex/building/wood/depot_wood.PNG' },
+      { key:'townhall',   label:'Rathaus', icon:'🏰', thumb:'./assets/tex/building/Holz_Rathaus_1.png' }
     ]},
-    { id: 'roads', title: 'Wege', items: [
-      { tool:'road',      title:'Straße' },
-      { tool:'path',      title:'Weg'    },
-      { tool:'bulldozer', title:'Abreißen' }
+    { id:'wege',        label:'Wege', items:[
+      { tool:'path', label:'Weg',   icon:'🟩' },
+      { tool:'road', label:'Straße',icon:'🛤️' }
     ]},
-    { id: 'tools', title: 'Tools', items: [
-      { tool:'none', title:'Auswahl aufheben' }
+    { id:'tools',       label:'Tools', items:[
+      { tool:'bulldozer', label:'Abriss', icon:'❌' },
+      { tool:'none',      label:'Abbrechen', icon:'⛔' }
     ]}
   ];
 
-  // ---------- Build Bar erstellen
-  function createBar(){
-    if (ui.bar) return ui.bar;
+  var ui = {
+    tabs:null, dock:null, visible:false, activeCat:null,
+    btnBuild:null
+  };
 
-    var bar = el('div', 'buildbar');
-    bar.setAttribute('data-ver', VER);
-    bar.style.position = 'fixed';
-    bar.style.left = '0';
-    bar.style.right = '0';
-    bar.style.bottom = '0';
-    bar.style.zIndex = '20';
-    bar.style.padding = '8px 10px';
-    bar.style.background = 'rgba(10,20,15,.45)';
-    bar.style.backdropFilter = 'blur(8px)';
-    bar.style.webkitBackdropFilter = 'blur(8px)';
-    bar.style.transition = 'transform .22s ease';
-    bar.style.transform = 'translateY(110%)';    // initial versteckt
-
-    // Tabs
-    var tabs = el('div', 'buildbar-tabs');
-    tabs.style.display = 'flex';
-    tabs.style.gap = '8px';
-    tabs.style.margin = '0 0 10px 0';
-    CATS.forEach(function(c){
-      var t = el('button', 'bb-tab', c.title);
-      t.type = 'button';
-      t.dataset.cat = c.id;
-      t.style.border = '0';
-      t.style.borderRadius = '16px';
-      t.style.padding = '8px 14px';
-      t.style.opacity = '.85';
-      t.style.background = 'rgba(18,30,24,.75)';
-      t.style.color = '#d9ead7';
-      t.onclick = function(){
-        ui.currentCat = c.id;
-        updateList();
-        $all('.bb-tab', tabs).forEach(function(b){ b.classList.toggle('active', b===t); b.style.opacity = b===t ? '1' : '.85'; });
-      };
-      tabs.appendChild(t);
-    });
-
-    // Liste
-    var list = el('div', 'buildbar-list');
-    list.style.display = 'flex';
-    list.style.gap = '12px';
-    list.style.overflowX = 'auto';
-    list.style.padding = '6px 2px 2px 2px';
-
-    // Zusammenbauen
-    bar.appendChild(tabs);
-    bar.appendChild(list);
-    d.body.appendChild(bar);
-
-    ui.bar = bar; ui.tabs = tabs; ui.list = list;
-
-    // Ersten Tab aktivieren
-    setTimeout(function(){
-      var first = $('.bb-tab', tabs); if (first) first.click();
-    }, 0);
-
-    log('[ok] Bau-Menü bereit (ui-build.js ' + VER + ')');
-    return bar;
+  function ensureButton(){
+    // Toggle-Button (falls nicht in index.html vorhanden, erzeugen wir einen)
+    var b = $('#btn-build');
+    if (!b){
+      b = document.createElement('button');
+      b.id = 'btn-build';
+      b.title = 'Bau-Menü';
+      b.textContent = '🧱';
+      // schlichte FAB neben Inspector
+      b.style.position='fixed';
+      b.style.right='.66rem';
+      b.style.bottom='4.6rem';
+      b.style.zIndex='95';
+      b.style.width='48px';
+      b.style.height='48px';
+      b.style.border='0';
+      b.style.borderRadius='12px';
+      b.style.background='rgba(20,32,26,.88)';
+      b.style.color='#e6f3ea';
+      b.style.fontSize='22px';
+      b.style.boxShadow='0 10px 28px rgba(0,0,0,.35)';
+      document.body.appendChild(b);
+    }
+    ui.btnBuild = b;
+    on(b,'click', function(){ toggle(); });
   }
 
-  function updateList(){
-    if (!ui.list) return;
-    ui.list.innerHTML = '';
-    var cat = CATS.filter(function(c){ return c.id===ui.currentCat; })[0];
+  function ensureTabs(){
+    var t = $('#build-tabs');
+    if (!t){
+      t = document.createElement('div');
+      t.id = 'build-tabs';
+      // zunächst verborgen; ui-build.css kümmert sich um Position
+      t.style.display = 'none';
+      document.body.appendChild(t);
+    }
+    t.innerHTML = CATS.map(function(c,i){
+      return '<button type="button" data-tab="'+c.id+'" class="'+(i===0?'active':'')+'">'+c.label+'</button>';
+    }).join('');
+    ui.tabs = t;
+
+    // Tab-Clicks
+    $all('#build-tabs [data-tab]').forEach(function(tb,idx){
+      on(tb,'click', function(){
+        $all('#build-tabs [data-tab].active').forEach(function(b){b.classList.remove('active');});
+        tb.classList.add('active');
+        renderCat(tb.getAttribute('data-tab'));
+      });
+      if (idx===0) ui.activeCat = tb.getAttribute('data-tab');
+    });
+  }
+
+  function ensureDock(){
+    var d = $('#build-dock');
+    if (!d){
+      d = document.createElement('nav');
+      d.id = 'build-dock';
+      // zunächst verborgen
+      d.style.display = 'none';
+      document.body.appendChild(d);
+    }
+    ui.dock = d;
+  }
+
+  function renderCat(catId){
+    ui.activeCat = catId || ui.activeCat || (CATS[0] && CATS[0].id);
+    var cat = CATS.filter(function(c){return c.id===ui.activeCat;})[0] || CATS[0];
     if (!cat) return;
 
-    cat.items.forEach(function(it){
-      var btn = el('button', 'bb-item');
-      btn.type = 'button';
-      btn.style.minWidth = '160px';
-      btn.style.height = '64px';
-      btn.style.border = '0';
-      btn.style.borderRadius = '12px';
-      btn.style.background = 'rgba(22,32,26,.9)';
-      btn.style.color = '#e9f7e7';
-      btn.style.display = 'flex';
-      btn.style.alignItems = 'center';
-      btn.style.justifyContent = 'flex-start';
-      btn.style.gap = '10px';
-      btn.style.padding = '6px 10px';
-
-      // Icon (klein halten)
-      var icon = el('div');
-      icon.style.width = '44px';
-      icon.style.height = '44px';
-      icon.style.borderRadius = '8px';
-      icon.style.flex = '0 0 44px';
-      icon.style.background = 'rgba(255,255,255,.08)';
-      if (it.icon){
-        icon.style.backgroundImage = 'url('+it.icon+')';
-        icon.style.backgroundSize = 'cover';
-        icon.style.backgroundPosition = 'center';
+    ui.dock.innerHTML = cat.items.map(function(it){
+      var icon = it.icon || '🏗️';
+      var thumb = it.thumb ? '<span class="thumb" style="background-image:url('+it.thumb+')"></span>' : '';
+      if (it.key){
+        return '<button data-tool="build" data-key="'+it.key+'" title="'+(it.label||it.key)+'">'+thumb+(thumb?'':' '+icon+' ')+(it.label||it.key)+'</button>';
+      } else {
+        return '<button data-tool="'+it.tool+'" title="'+(it.label||it.tool)+'">'+icon+' '+(it.label||it.tool)+'</button>';
       }
-      btn.appendChild(icon);
+    }).join('');
 
-      var label = el('div', '', it.title || it.key || it.tool);
-      label.style.fontWeight = '600';
-      btn.appendChild(label);
+    // Button-Binds
+    $all('#build-dock [data-tool]').forEach(function(btn){
+      on(btn,'click', function(){
+        var t = btn.getAttribute('data-tool');
+        var k = btn.getAttribute('data-key');
 
-      btn.onclick = function(){
-        if (!root.Game || !root.Game.setTool){ warn('[ui-build] Game.setTool fehlt'); return; }
-        if (it.key){
-          root.Game.setTool('build', {key: it.key});
-          log('[ok] Tool gesetzt:', it.key);
-        } else if (it.tool) {
-          if (it.tool === 'none'){
-            root.Game.setTool(null, null);
-          } else {
-            root.Game.setTool(it.tool, null);
-          }
-          log('[ok] Tool gesetzt:', it.tool);
+        // Toggle innerhalb der Liste: aktiven Button markieren
+        $all('#build-dock [data-tool].active').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+
+        if (t==='build' && k){
+          if (window.Game && Game.setTool) Game.setTool('build', {key:k});
+          ok('[ok] Tool gesetzt:', k);
+        } else {
+          if (t==='none'){ if (window.Game && Game.clearTool) Game.clearTool(); }
+          else if (window.Game && Game.setTool){ Game.setTool(t||null); }
+          ok('[ok] Tool gesetzt:', t);
         }
-        // Nach Auswahl das Menü kurz schließen (Mobile UX)
-        hide();
-      };
-
-      ui.list.appendChild(btn);
+        // Menü optional schließen? (Mobile UX)
+        // close();
+      });
     });
   }
 
-  // ---------- Sichtbarkeit steuern
-  function show(){
-    if (!ui.bar) createBar();
-    if (!ui.visible){
-      ui.bar.style.transform = 'translateY(0)';
-      ui.visible = true;
-      log('[ok] Bau-Menü geöffnet (ui-build.js ' + VER + ')');
-    }
+  function open(){
+    if (ui.visible) return;
+    if (!ui.tabs || !ui.dock) { ensureTabs(); ensureDock(); }
+    ui.tabs.style.display = '';
+    ui.dock.style.display = '';
+    // initiale Kategorie gerendert?
+    if (!ui.dock.innerHTML) renderCat(ui.activeCat);
+    ui.visible = true;
+    ok('[ok] Bau-Menü geöffnet (ui-build.js '+VERSION+')');
   }
-  function hide(){
-    if (ui.bar && ui.visible){
-      ui.bar.style.transform = 'translateY(110%)';
-      ui.visible = false;
-      log('[ok] Bau-Menü geschlossen');
-    }
+  function close(){
+    if (!ui.visible) return;
+    ui.tabs.style.display = 'none';
+    ui.dock.style.display = 'none';
+    ui.visible = false;
+    ok('[ok] Bau-Menü geschlossen');
+    // aktiven UI-Button (Liste) entmarkieren
+    $all('#build-dock [data-tool].active').forEach(function(b){ b.classList.remove('active'); });
+    // aktives Tool optional zurücksetzen? (nein, User entscheidet)
+  }
+  function toggle(){ ui.visible ? close() : open(); }
+
+  // Game → UI Hook (wenn Tool gecleart wurde)
+  if (!window.GameUI) window.GameUI = {};
+  window.GameUI.onToolCleared = function(){
+    $all('#build-dock [data-tool].active').forEach(function(b){ b.classList.remove('active'); });
+  };
+  // Öffnen/Schließen als API
+  window.GameUI.openBuildMenu = open;
+  window.GameUI.closeBuildMenu = close;
+  window.GameUI.toggleBuildMenu = toggle;
+
+  function init(){
+    ensureButton();
+    ensureTabs();
+    ensureDock();
+
+    // WICHTIG: Menü bleibt geschlossen – kein Auto-Open!
+    // Falls du Auto-Open später willst: window.addEventListener('cb:game-started', open);
+
+    ok('[ok] Bau-Menü bereit (ui-build.js '+VERSION+')');
   }
 
-  // ---------- Lifecycle: erst nach Game-Start zeigen
-  function onGameStarted(){ show(); }
-  function onUIReady(){ /* absichtlich leer: Menü bleibt bis Start verborgen */ }
-
-  // Events
-  window.addEventListener('cb:ui-ready', onUIReady);
-  window.addEventListener('cb:game-started', onGameStarted);
-
-  // ---------- Public API
-  var API = (root.GameUI = root.GameUI || {});
-  API.openBuildMenu  = show;
-  API.closeBuildMenu = hide;
+  if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', init); }
+  else { init(); }
 
 })();
