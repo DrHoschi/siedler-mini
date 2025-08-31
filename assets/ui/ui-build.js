@@ -1,18 +1,18 @@
-/*! ui-build.js v16.2.9 — Build-Menü mit Tabs/Kategorien (ES5) */
+/*! ui-build.js v16.3.0 — Build-Menü mit Tabs/Kategorien (ES5) */
 (function(){
   'use strict';
-  var VERSION='v16.2.9';
+  var VERSION='v16.3.0';
 
   function $(s,r){return (r||document).querySelector(s);}
   function $all(s,r){return [].slice.call((r||document).querySelectorAll(s));}
   function on(el,ev,fn,opt){el&&el.addEventListener&&el.addEventListener(ev,fn,opt||false);}
   function ok(){ (window.CBLog&&CBLog.ok?CBLog.ok:console.log).apply(console, arguments); }
 
-  // Kategorien & Items (sichtbar im Menü)
+  // Kategorien & Items
   var CATS = [
     { id:'wohnen',      label:'Wohnen',      items:[
       { key:'house0',  label:'Haus I' },
-      { key:'house1',  label:'Haus II' },
+      { key:'house1',  label:'Haus II' }
     ]},
     { id:'produktion',  label:'Produktion',  items:[
       { key:'lumberjack', label:'Holzfäller' },
@@ -33,6 +33,18 @@
   ];
 
   function ensureDock(){
+    // Tabs-Leiste
+    var tabs = $('#build-tabs');
+    if (!tabs){
+      tabs = document.createElement('div');
+      tabs.id = 'build-tabs';
+      document.body.appendChild(tabs);
+    }
+    tabs.innerHTML = CATS.map(function(c,i){
+      return '<button type="button" data-tab="'+c.id+'" class="'+(i===0?'active':'')+'">'+c.label+'</button>';
+    }).join('');
+
+    // Dock (untere Buttonleiste)
     var dock = $('#build-dock');
     if (!dock){
       dock = document.createElement('nav');
@@ -40,27 +52,14 @@
       document.body.appendChild(dock);
     }
 
-    // Tabsleisten erzeugen (falls nicht vorhanden)
-    var tabs = $('#build-tabs');
-    if (!tabs){
-      tabs = document.createElement('div');
-      tabs.id = 'build-tabs';
-      document.body.appendChild(tabs);
-    }
-
-    // Render Tabs
-    tabs.innerHTML = CATS.map(function(c,i){
-      return '<button type="button" data-tab="'+c.id+'" class="'+(i===0?'active':'')+'">'+c.label+'</button>';
-    }).join('');
-
-    // Render Dock-Buttons der aktiven Kategorie
     function renderCat(catId){
       var cat = CATS.filter(function(c){return c.id===catId;})[0] || CATS[0];
       dock.innerHTML = cat.items.map(function(it){
+        var icon = it.icon || (it.key ? '🏗️' : '🧰');
         if (it.key){
-          return '<button data-tool="build" data-key="'+it.key+'" title="'+(it.label||it.key)+'">'+(it.icon||'🏗️')+' '+it.label+'</button>';
+          return '<button data-tool="build" data-key="'+it.key+'" title="'+(it.label||it.key)+'">'+icon+' '+it.label+'</button>';
         } else {
-          return '<button data-tool="'+it.tool+'" title="'+(it.label||it.tool)+'">'+(it.icon||'🧰')+' '+it.label+'</button>';
+          return '<button data-tool="'+it.tool+'" title="'+(it.label||it.tool)+'">'+icon+' '+it.label+'</button>';
         }
       }).join('');
       bindButtons();
@@ -72,7 +71,8 @@
         on(btn,'click', function(){
           var t = btn.getAttribute('data-tool');
           var k = btn.getAttribute('data-key');
-          // Toggle: aktiv? -> clear
+
+          // Toggle: bereits aktiv? -> Tool zurücksetzen
           if (btn.classList.contains('active')){
             if (window.Game && Game.clearTool) Game.clearTool();
             $all('#build-dock [data-tool].active', root).forEach(function(b){b.classList.remove('active');});
@@ -91,7 +91,7 @@
       });
     }
 
-    // Tab-Click
+    // Tab-Handler
     $all('#build-tabs [data-tab]').forEach(function(tb){
       on(tb,'click', function(){
         $all('#build-tabs [data-tab].active').forEach(function(b){b.classList.remove('active');});
@@ -103,7 +103,7 @@
     // initial
     renderCat(CATS[0].id);
 
-    // Callback für Game → UI entaktivieren wenn Tool geklärt
+    // Game→UI: Tool-Clear spiegelt UI
     if (!window.GameUI) window.GameUI = {};
     window.GameUI.onToolCleared = function(){
       $all('#build-dock [data-tool].active').forEach(function(b){b.classList.remove('active');});
