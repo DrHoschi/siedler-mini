@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-08-30T15:29:14.837Z",
+  "createdAt": "2025-08-31T09:46:13.532Z",
   "root": ".",
-  "count": 248,
+  "count": 253,
   "entries": [
     {
       "type": "dir",
@@ -275,23 +275,18 @@
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/baeckerei_wood.PNG",
-      "size": 2833533
+      "path": "assets/tex/building/wood/baecker_wood.png",
+      "size": 451059
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/depot_wood_ug.PNG",
-      "size": 2901748
+      "path": "assets/tex/building/wood/depot_wood.png",
+      "size": 305075
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/depot_wood.PNG",
-      "size": 2433602
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/farm_wood.PNG",
-      "size": 2382608
+      "path": "assets/tex/building/wood/farm_wood.png",
+      "size": 288712
     },
     {
       "type": "file",
@@ -326,7 +321,7 @@
     {
       "type": "file",
       "path": "assets/tex/building/wood/lumberjack_wood.PNG",
-      "size": 2708632
+      "size": 290638
     },
     {
       "type": "file",
@@ -335,8 +330,23 @@
     },
     {
       "type": "file",
+      "path": "assets/tex/building/wood/Schmied_wood0.png",
+      "size": 297126
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/steinmetz_wood.png",
+      "size": 317995
+    },
+    {
+      "type": "file",
       "path": "assets/tex/building/wood/stonebraker_wood.PNG",
       "size": 2885259
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/wachturm _wood.png",
+      "size": 236119
     },
     {
       "type": "file",
@@ -346,7 +356,17 @@
     {
       "type": "file",
       "path": "assets/tex/building/wood/windmuehle_wood.PNG",
-      "size": 2618500
+      "size": 255831
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/Wohnhaus_wood0_ug0.png",
+      "size": 283934
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/building/wood/Wohnhaus_wood1_ug0.png",
+      "size": 286979
     },
     {
       "type": "file",
@@ -656,11 +676,6 @@
     },
     {
       "type": "file",
-      "path": "assets/tex/terrain/sm_topdown_tree_needle0_ug0.jpeg",
-      "size": 44814
-    },
-    {
-      "type": "file",
       "path": "assets/tex/terrain/sm_topdown_tree_needle0_ug0.PNG",
       "size": 2578681
     },
@@ -698,6 +713,11 @@
       "type": "file",
       "path": "assets/tex/terrain/topdown_shore.PNG",
       "size": 1650804
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/terrain/topdown_tree_needle0_ug0.jpeg",
+      "size": 44814
     },
     {
       "type": "file",
@@ -760,12 +780,12 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 2957
+      "size": 9508
     },
     {
       "type": "file",
       "path": "assets/ui/ui-start.js",
-      "size": 5858
+      "size": 8264
     },
     {
       "type": "file",
@@ -956,7 +976,7 @@
     {
       "type": "file",
       "path": "js/ui.js",
-      "size": 3212
+      "size": 3942
     },
     {
       "type": "dir",
@@ -1007,7 +1027,7 @@
     {
       "type": "file",
       "path": "tools/debug-tools.js",
-      "size": 33189
+      "size": 14025
     },
     {
       "type": "file",
@@ -1076,6 +1096,11 @@
     },
     {
       "type": "file",
+      "path": "boot.compat.js",
+      "size": 1464
+    },
+    {
+      "type": "file",
       "path": "boot.js",
       "size": 1052
     },
@@ -1102,17 +1127,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 3001
+      "size": 3002
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24046
+      "size": 24237
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9047
+      "size": 9114
     },
     {
       "type": "file",
@@ -1122,12 +1147,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 6033
+      "size": 20289
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 3809
+      "size": 4011
     },
     {
       "type": "file",
@@ -1197,7 +1222,7 @@
     {
       "type": "file",
       "path": "ui-build.js",
-      "size": 10116
+      "size": 9975
     },
     {
       "type": "file",
