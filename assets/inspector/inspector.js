@@ -1,142 +1,111 @@
 <script>
-/* assets/inspector/inspector.js — v16.3.1
-   Live/Logs: sammelt CBLog + console als Fallback */
-
+/* Inspector – schlank, zeigt Logs & Live; Button unten rechts */
 (function(){
   'use strict';
-  var VERSION = 'v16.3.1';
+  var VERSION='v16.3.3';
+  var log = (window.CBLog && CBLog.ok) ? function(){ CBLog.ok.apply(CBLog, arguments); } : console.log;
 
-  // ===== Log-Puffer / Bus =====
-  var bus = { listeners:[] };
-  function emit(entry){ for (var i=0;i<bus.listeners.length;i++) try{ bus.listeners[i](entry);}catch(_){ } }
+  var fab, panel, liveTab, logsTab, area;
 
-  // CBLog-Abgriff (falls vorhanden)
-  var store = [];
-  function push(kind, msg){
-    var line = '['+new Date().toLocaleTimeString()+'] '+kind+' '+msg;
-    store.push(line);
-    // flag auch global lesbar
-    window.__INSPECTOR_LOGS__ = store;
-    emit(line);
-  }
+  function ensure(){
+    if (panel) return;
 
-  // Fallback: console patchen, aber schonend
-  try{
-    var _log = console.log, _warn = console.warn, _err = console.error;
-    console.log = function(){ _log.apply(console, arguments); push('LOG', Array.prototype.join.call(arguments,' ')); };
-    console.warn = function(){ _warn.apply(console, arguments); push('WARN', Array.prototype.join.call(arguments,' ')); };
-    console.error = function(){ _err.apply(console, arguments); push('ERR', Array.prototype.join.call(arguments,' ')); };
-  }catch(_){}
+    // FAB
+    fab = document.createElement('button');
+    fab.id = 'inspectorFab';
+    fab.style.cssText = [
+      'position:fixed;right:14px;bottom:96px;width:56px;height:56px;border-radius:50%;',
+      'z-index:1200;background:radial-gradient(120% 140% at 10% 10%,rgba(255,255,255,.08),rgba(0,0,0,.36));',
+      'border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 24px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.1);',
+      'color:#f6f8f5;display:grid;place-content:center'
+    ].join('');
+    fab.title='Inspector';
+    fab.innerHTML='<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M19.43 12.98l1.77 1.77-1.41 1.41-1.77-1.77a7.96 7.96 0 01-4.02 1.98V20h-2v-3.63a8 8 0 117.43-3.39zM12 6a6 6 0 100 12 6 6 0 000-12z"/></svg>';
+    fab.addEventListener('click', toggle);
+    document.body.appendChild(fab);
 
-  // Falls ein vorhandenes CBLog existiert → anhängen
-  if (window.CBLog && typeof CBLog.on==='function'){
-    try{
-      CBLog.on(function(line){ push('LOG', String(line)); });
-    }catch(_){}
-  } else {
-    // Minimal-CBLog bereitstellen, damit andere Module sauber loggen können
-    window.CBLog = window.CBLog || {
-      ok:   function(){ push('LOG', Array.prototype.join.call(arguments,' ')); },
-      warn: function(){ push('WARN',Array.prototype.join.call(arguments,' ')); },
-      err:  function(){ push('ERR', Array.prototype.join.call(arguments,' ')); },
-      on:   function(fn){ bus.listeners.push(fn); },
-      entries: store
-    };
-  }
-
-  // ===== UI =====
-  var panel, tabLive, tabLogs, bodyLive, bodyLogs, shown=false;
-
-  function open(){
-    if (shown) return;
-    shown = true;
-    panel.style.display = 'block';
-    renderLive(); renderLogs();
-  }
-  function close(){ shown=false; panel.style.display='none'; }
-  function toggle(){ shown?close():open(); }
-
-  function mk(tag, cls, html){ var n=document.createElement(tag); if(cls) n.className=cls; if(html!=null) n.innerHTML=html; return n; }
-
-  function renderLive(){
-    var v = {
-      version: VERSION,
-      dpr: Math.round((window.devicePixelRatio||1)*10)/10,
-      index: (window.__INDEX_VERSION__||'unbekannt'),
-      GameLoader: !!window.GameLoader,
-      Game: !!window.Game,
-      GameUI: !!window.GameUI
-    };
-    bodyLive.textContent = JSON.stringify(v, null, 2);
-  }
-  function renderLogs(){
-    var list = window.CBLog && CBLog.entries ? CBLog.entries : (window.__INSPECTOR_LOGS__ || []);
-    bodyLogs.textContent = (list && list.length) ? list.join('\n') : '(keine Logs)';
-  }
-
-  function build(){
-    panel = mk('div','insp-panel');
-    panel.style.display='none';
-
-    var head = mk('div','insp-head','Inspector <small>(v'+VERSION+')</small>');
-    panel.appendChild(head);
-
-    // Tabs
-    var tabs = mk('div','insp-tabs','');
-    tabLive = mk('button','insp-tab active','Live');
-    tabLogs = mk('button','insp-tab','Logs');
-    tabs.appendChild(tabLive); tabs.appendChild(tabLogs);
-    panel.appendChild(tabs);
-
-    bodyLive = mk('pre','insp-body',''); panel.appendChild(bodyLive);
-    bodyLogs = mk('pre','insp-body',''); bodyLogs.style.display='none'; panel.appendChild(bodyLogs);
-
-    tabLive.addEventListener('click', function(){
-      tabLive.classList.add('active'); tabLogs.classList.remove('active');
-      bodyLive.style.display='block'; bodyLogs.style.display='none'; renderLive();
-    });
-    tabLogs.addEventListener('click', function(){
-      tabLogs.classList.add('active'); tabLive.classList.remove('active');
-      bodyLogs.style.display='block'; bodyLive.style.display='none'; renderLogs();
-    });
-
-    // Action-Buttons
-    var bar = mk('div','insp-actions','');
-    var bCopy = mk('button','insp-btn','Kopieren');
-    var bExport = mk('button','insp-btn','Export (.txt)');
-    var bClear = mk('button','insp-btn','Leeren');
-    bar.appendChild(bCopy); bar.appendChild(bExport); bar.appendChild(bClear);
-    panel.appendChild(bar);
-
-    bCopy.addEventListener('click', function(){
-      var txt = (bodyLogs.style.display!=='none'?bodyLogs:bodyLive).textContent || '';
-      navigator.clipboard && navigator.clipboard.writeText(txt).then(function(){ CBLog.ok('[inspector] Log in Zwischenablage.'); });
-    });
-    bExport.addEventListener('click', function(){
-      var txt = (bodyLogs.style.display!=='none'?bodyLogs:bodyLive).textContent || '';
-      var blob = new Blob([txt], {type:'text/plain'});
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'logs.txt'; a.click();
-    });
-    bClear.addEventListener('click', function(){
-      store.length = 0; window.__INSPECTOR_LOGS__ = store; renderLogs();
-    });
-
+    // Panel
+    panel = document.createElement('div');
+    panel.style.cssText = [
+      'position:fixed;left:5%;right:5%;bottom:86px;min-height:220px;max-height:60vh;',
+      'background:rgba(8,12,10,.9);backdrop-filter:blur(12px) saturate(120%);',
+      'border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px;z-index:1199;',
+      'box-shadow:0 10px 40px rgba(0,0,0,.5);display:none;color:#e7eee7'
+    ].join('');
+    panel.innerHTML = [
+      '<div style="font-weight:700;margin:2px 0 10px;">Inspector ',
+      '<small style="opacity:.7">(',VERSION,')</small></div>',
+      '<div style="display:flex;gap:8px;margin-bottom:10px">',
+        '<button id="inspLive"  style="padding:6px 10px;border-radius:10px;border:0;background:#234;">Live</button>',
+        '<button id="inspLogs"  style="padding:6px 10px;border-radius:10px;border:0;background:#234;">Logs</button>',
+        '<span style="flex:1"></span>',
+        '<button id="inspClear" style="padding:6px 10px;border-radius:10px;border:0;background:#342;">Leeren</button>',
+      '</div>',
+      '<pre id="inspArea" style="margin:0;background:rgba(0,0,0,.35);border-radius:10px;padding:12px;overflow:auto;max-height:42vh;white-space:pre-wrap"></pre>'
+    ].join('');
     document.body.appendChild(panel);
 
-    // Floating Toggle (Schraubenschlüssel rechts unten – wie gehabt)
-    var flo = mk('button','insp-fab','🛠️');
-    flo.title = 'Inspector';
-    flo.addEventListener('click', toggle);
-    document.body.appendChild(flo);
+    liveTab = panel.querySelector('#inspLive');
+    logsTab = panel.querySelector('#inspLogs');
+    area    = panel.querySelector('#inspArea');
 
-    // live updates
-    window.addEventListener('cb:ui-ready', renderLive, {passive:true});
-    window.addEventListener('cb:game-started', renderLive, {passive:true});
-    bus.listeners.push(function(){ if (shown && tabLogs.classList.contains('active')) renderLogs(); });
+    liveTab.addEventListener('click', function(){ mode='live'; render(); });
+    logsTab.addEventListener('click', function(){ mode='logs'; render(); });
+    panel.querySelector('#inspClear').addEventListener('click', function(){ buffer=[]; render(); });
+
+    hookConsole();
+    log('[inspector] bereit', VERSION);
   }
 
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', build);
-  } else { build(); }
+  function toggle(){ ensure(); panel.style.display = (panel.style.display==='none'?'block':'none'); render(); }
+
+  // Puffer
+  var buffer = [];
+  var mode   = 'live';
+
+  function pushLine(kind, args){
+    try{
+      var t = new Date().toTimeString().slice(0,8);
+      buffer.push('['+t+'] '+kind.toUpperCase()+': '+[].map.call(args, toStr).join(' '));
+      if (buffer.length>500) buffer.shift();
+      if (mode==='live') render();
+    }catch(_){}
+  }
+  function toStr(v){
+    if (v===undefined) return 'undefined';
+    if (v===null) return 'null';
+    if (typeof v==='object'){ try{return JSON.stringify(v);}catch(_){ return '[Object]'; } }
+    return String(v);
+  }
+  function render(){
+    if (!area) return;
+    if (mode==='live'){
+      // kleine Live-Info
+      var info = [
+        'index: ', (window.INDEX_VERSION||'–'),
+        '   dpr: ', (window.devicePixelRatio||1),
+        '\nGameLoader: ', !!window.GameLoader,
+        '   Game: ', !!window.Game,
+        '   GameUI: ', !!window.GameUI
+      ].join('');
+      area.textContent = info;
+    } else {
+      area.textContent = buffer.join('\n');
+    }
+  }
+
+  function hookConsole(){
+    ['log','warn','error'].forEach(function(k){
+      var orig = console[k].bind(console);
+      console[k] = function(){
+        try{ pushLine(k, arguments); }catch(_){}
+        return orig.apply(console, arguments);
+      };
+    });
+  }
+
+  // init nach UI
+  window.addEventListener('cb:ui-ready', ensure);
+
 })();
 </script>
