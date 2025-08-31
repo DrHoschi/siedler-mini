@@ -9,7 +9,7 @@
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
   function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
 
-  // Styles für kompakte Thumbnails
+  // Styles: kompakte Kacheln, responsives Grid
   function injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
     var css =
@@ -24,21 +24,16 @@
       +".cb-build.is-open{transform:translateY(0)}"
       +".cb-build__head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px}"
       +".cb-build__title{font:700 16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#dfe7df}"
-      +".cb-build__close{appearance:none;border:none;border-radius:8px;padding:8px 10px;background:rgba(255,255,255,.08);color:#e7efe7;font-weight:600;cursor:pointer}"
-
+      +".cb-build__close{appearance:none;border:none;border-radius:8px;padding:6px 10px;background:rgba(255,255,255,.08);color:#e7efe7;font-weight:600;cursor:pointer}"
       +".cb-tabs{display:flex;gap:8px;padding:0 12px 8px;flex-wrap:wrap}"
-      +".cb-tab{appearance:none;border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.08);color:#e7efe7;cursor:pointer;font-weight:600;font-size:13px}"
+      +".cb-tab{appearance:none;border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.08);color:#e7efe7;cursor:pointer;font-weight:700;font-size:13px}"
       +".cb-tab.is-active{background:rgba(92,205,139,.22);outline:1px solid rgba(92,205,139,.4)}"
-
       +".cb-grid{display:grid;gap:10px;padding:8px 12px 12px;grid-template-columns:repeat(3,minmax(0,1fr))}"
       +"@media(min-width:600px){.cb-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}"
       +"@media(min-width:1000px){.cb-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}"
-
-      +".cb-tile{height:64px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.12);"
-      +"background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}"
-      +".cb-tile__img{max-width:90%;max-height:90%;width:auto;height:auto;object-fit:contain;image-rendering:auto}"
-      +".cb-tile__label{position:absolute;left:6px;bottom:4px;right:6px;font-size:11px;color:#e8efe8;text-shadow:0 1px 0 rgba(0,0,0,.6);font-weight:700;text-align:center;opacity:.95}"
-
+      +".cb-tile{height:64px;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer}"
+      +".cb-tile__img{max-width:90%;max-height:90%;object-fit:contain;image-rendering:auto}"
+      +".cb-tile__label{position:absolute;left:6px;bottom:4px;right:6px;font-size:11px;color:#e8efe8;text-shadow:0 1px 0 rgba(0,0,0,.6);font-weight:800;text-align:center;opacity:.95}"
       +"@media(min-width:840px){.cb-build{left:10vw;right:10vw;border-radius:16px 16px 0 0}}";
     var el = document.createElement("style"); el.id = STYLE_ID; el.textContent = css; document.head.appendChild(el);
   }
@@ -51,22 +46,22 @@
       { key:"bulldozer", label:"Abreißen",  img:"assets/icons/icons_spritesheet_64.png",     type:"tool" }
     ],
     "Gebäude": [
-      { key:"townhall",   label:"Rathaus",     img:"assets/tex/building/Holz_Rathaus_1.png",        type:"building" },
-      { key:"depot",      label:"Lager",       img:"assets/tex/building/wood/depot_wood.PNG",       type:"building" },
-      { key:"lumberjack", label:"Holzfäller",  img:"assets/tex/building/wood/lumberjack_wood.PNG",  type:"building" },
-      { key:"farm",       label:"Farm",        img:"assets/tex/building/wood/farm_wood.PNG",        type:"building" },
-      { key:"mill",       label:"Windmühle",   img:"assets/tex/building/wood/windmuehle_wood.PNG",  type:"building" },
-      { key:"watermill",  label:"Wassermühle", img:"assets/tex/building/wood/wassermuehle_wood.PNG",type:"building" },
-      { key:"bakery",     label:"Bäckerei",    img:"assets/tex/building/wood/baeckerei_wood.PNG",   type:"building" },
-      { key:"blacksmith", label:"Schmied",     img:"assets/tex/building/wood/Schmied_wood0.png",    type:"building" },
-      { key:"stonecutter",label:"Steinmetz",   img:"assets/tex/building/wood/steinmetz_wood.png",   type:"building" }
+      { key:"townhall",   label:"Rathaus",     img:"assets/tex/building/Holz_Rathaus_1.png",         type:"building" },
+      { key:"depot",      label:"Lager",       img:"assets/tex/building/wood/depot_wood.png",        type:"building" },
+      { key:"lumberjack", label:"Holzfäller",  img:"assets/tex/building/wood/lumberjack_wood.PNG",   type:"building" },
+      { key:"farm",       label:"Farm",        img:"assets/tex/building/wood/farm_wood.png",         type:"building" },
+      { key:"mill",       label:"Windmühle",   img:"assets/tex/building/wood/windmuehle_wood.PNG",   type:"building" },
+      { key:"watermill",  label:"Wassermühle", img:"assets/tex/building/wood/wassermuehle_wood.PNG", type:"building" },
+      { key:"bakery",     label:"Bäckerei",    img:"assets/tex/building/wood/baecker_wood.png",      type:"building" },
+      { key:"blacksmith", label:"Schmied",     img:"assets/tex/building/wood/Schmied_wood0.png",     type:"building" },
+      { key:"stonecutter",label:"Steinmetz",   img:"assets/tex/building/wood/steinmetz_wood.png",    type:"building" }
     ],
     "Wohnen": [
-      { key:"house0",     label:"Wohnhaus A",  img:"assets/tex/building/wood/haeuser_wood1.PNG",    type:"building" },
-      { key:"house1",     label:"Wohnhaus B",  img:"assets/tex/building/wood/haeuser_wood2.PNG",    type:"building" }
+      { key:"house0",     label:"Wohnhaus A",  img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png", type:"building" },
+      { key:"house1",     label:"Wohnhaus B",  img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png", type:"building" }
     ],
     "Militär": [
-      { key:"watchtower", label:"Wachturm",    img:"assets/tex/building/wood/wachturm _wood.png",   type:"building" }
+      { key:"watchtower", label:"Wachturm",    img:"assets/tex/building/wood/wachturm _wood.png",     type:"building" }
     ],
     "Deko": [
       { key:"tree",       label:"Baum",        img:"assets/tex/terrain/sm_topdown_tree_needle0_ug0.PNG", type:"building" }
@@ -83,4 +78,120 @@
     fab.title = "Bau-Menü öffnen (B)";
     var img = document.createElement("img");
     img.src = "assets/icons/icons_spritesheet_64.png";
-    img.alt = "B
+    img.alt = "Bauen";
+    fab.appendChild(img);
+    fab.addEventListener("click", toggle);
+    document.body.appendChild(fab);
+    return fab;
+  }
+  function showFab(){ createFab(); fab.classList.add("is-visible"); }
+  function hideFab(){ if (fab) fab.classList.remove("is-visible"); }
+
+  function buildPanel(){
+    if (panel) return panel;
+    backdrop = document.createElement("div");
+    backdrop.className = "cb-build-backdrop";
+    backdrop.addEventListener("click", close);
+
+    panel = document.createElement("div");
+    panel.className = "cb-build";
+
+    var head = document.createElement("div");
+    head.className = "cb-build__head";
+    var title = document.createElement("div");
+    title.className = "cb-build__title";
+    title.textContent = "Bauen";
+    var btnClose = document.createElement("button");
+    btnClose.className = "cb-build__close";
+    btnClose.textContent = "Schließen";
+    btnClose.addEventListener("click", close);
+    head.appendChild(title); head.appendChild(btnClose);
+
+    tabsWrap = document.createElement("div");
+    tabsWrap.className = "cb-tabs";
+
+    grid = document.createElement("div");
+    grid.className = "cb-grid";
+
+    panel.appendChild(head);
+    panel.appendChild(tabsWrap);
+    panel.appendChild(grid);
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(panel);
+
+    for (var tab in CATALOG){
+      if (!CATALOG.hasOwnProperty(tab)) continue;
+      (function(tabName){
+        var b = document.createElement("button");
+        b.className = "cb-tab";
+        b.textContent = tabName;
+        b.addEventListener("click", function(){ activateTab(tabName); });
+        tabsWrap.appendChild(b);
+      })(tab);
+    }
+
+    var first = tabsWrap.querySelector(".cb-tab");
+    if (first){ first.classList.add("is-active"); currentTab = first.textContent; fillGrid(); }
+    return panel;
+  }
+
+  function fillGrid(){
+    grid.innerHTML = "";
+    var list = CATALOG[currentTab] || [];
+    for (var i=0;i<list.length;i++){
+      (function(item){
+        var t = document.createElement("div");
+        t.className = "cb-tile";
+        var img = document.createElement("img"); img.className = "cb-tile__img"; img.src = item.img; img.alt = item.label;
+        var lab = document.createElement("div"); lab.className = "cb-tile__label"; lab.textContent = item.label;
+        t.appendChild(img); t.appendChild(lab);
+        t.addEventListener("click", function(){
+          try{
+            if (window.Game && typeof window.Game.setTool === "function"){
+              if (item.type === "tool"){ window.Game.setTool(item.key, null); }
+              else { window.Game.setTool("build", { key: item.key }); }
+              ok("[ok] Tool gesetzt: " + item.key);
+            }
+          }catch(e){ warn("[ui-build] Tool setzen fehlgeschlagen: "+ (e && e.message ? e.message : e)); }
+          close();
+        });
+        grid.appendChild(t);
+      })(list[i]);
+    }
+  }
+
+  function activateTab(tabName){
+    currentTab = tabName;
+    var bs = tabsWrap.querySelectorAll(".cb-tab");
+    for (var i=0;i<bs.length;i++){
+      var b = bs[i];
+      if (b.textContent === tabName) b.classList.add("is-active");
+      else b.classList.remove("is-active");
+    }
+    fillGrid();
+  }
+
+  function open(){ buildPanel(); if (isOpen) return; isOpen = true; panel.classList.add("is-open"); backdrop.classList.add("is-open"); ok("[ok] Bau-Menü geöffnet (ui-build.js "+VERSION+")"); }
+  function close(){ if (!panel || !isOpen) return; isOpen = false; panel.classList.remove("is-open"); backdrop.classList.remove("is-open"); ok("[ok] Bau-Menü geschlossen"); }
+  function toggle(){ if (isOpen) close(); else open(); }
+
+  function onGameStarted(){ if (started) return; started = true; showFab(); ok("[ok] Bau-Menü bereit (ui-build.js "+VERSION+")"); }
+
+  function onKey(ev){ var k=(ev.key||"").toLowerCase(); if(k==="b") toggle(); }
+
+  function init(){
+    injectStyles();
+    createFab();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("cb:game-started", onGameStarted, { passive:true });
+    ok("[ok] UI bereit (ui-build.js "+VERSION+")");
+  }
+  init();
+
+  window.GameUI = (function(prev){
+    prev = prev || {};
+    prev.openBuildMenu = open; prev.closeBuildMenu = close; prev.toggleBuildMenu = toggle; prev.onGameStarted = onGameStarted;
+    return prev;
+  })(window.GameUI);
+})();
