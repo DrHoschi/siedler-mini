@@ -1,167 +1,192 @@
+<!-- index.html — v16.3.3 | Neue Siedler: Start + UI-Wiring (Build/Inspector) -->
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- Siedler 2020 · CODE_STYLE · index.html v16.2.8 -->
   <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1610">
-  <meta name="version" content="16.2.8">
-  <title>Neue Siedler · Start (index v16.2.8)</title>
-  <meta name="description" content="Neue Siedler · Mini City-Builder (Siedler 2020)">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f3a30">
+  <title>Neue Siedler</title>
 
-  <!-- Basis-Styles (deine vorhandenen Dateien) -->
-  <link rel="stylesheet" href="./css/base.css?v=16.2.8">
-  <link rel="stylesheet" href="./css/platform.css?v=16.2.8">
-  <link rel="stylesheet" href="./css/mobile.css?v=16.2.8">
-  <link rel="stylesheet" href="./css/ios.css?v=16.2.8">
-  <link rel="stylesheet" href="./css/android.css?v=16.2.8">
-  <link rel="stylesheet" href="./css/desktop.css?v=16.2.8">
-  <link rel="stylesheet" href="./styles.css?v=16.2.8">
-  <link rel="stylesheet" href="./style.css?v=16.2.8">
+  <!-- FONTS / BASE STYLES -->
+  <link rel="manifest" href="manifest.webmanifest?v=16.3.3">
+  <link rel="icon" href="assets/Logo.PNG">
+  <link rel="apple-touch-icon" href="assets/Logo.PNG">
 
-  <!-- UI-Styles -->
-  <link rel="stylesheet" href="./ui-start.css?v=16.2.8">
-  <link rel="stylesheet" href="./ui-build.css?v=16.2.8">
+  <!-- Baseline styles (deine bestehenden globalen) -->
+  <link rel="stylesheet" href="style.css?v=16.3.3">
+  <link rel="stylesheet" href="styles.css?v=16.3.3">
 
-  <link rel="manifest" href="./manifest.webmanifest?v=16.2.8">
+  <!-- UI Styles: Start-Panel + Bau-Menü (Quelle ist NUR assets/ui/ …) -->
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=16.3.3">
+  <link rel="stylesheet" href="ui-start.css?v=16.3.3">
 
-  <style>
-    /* unaufdringliche Defaults, kollidieren nicht mit deinem CSS */
-    html,body{height:100%;background:#0d392f;color:#e6f3ea;margin:0}
-    #game{display:block;width:100vw;height:100vh}
-    /* Fallback-Startpanel (wird von assets/ui/ui-start.js übernommen) */
-    #start-panel{
-      position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
-      min-width:300px;max-width:92vw;z-index:50;
-      background:rgba(7,18,14,.85);border:1px solid rgba(255,255,255,.08);
-      border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.45);
-      backdrop-filter:saturate(1.2) blur(6px);
-    }
-    #start-panel h1{margin:.1rem 0 1rem;font-size:1.4rem}
-    #start-panel .row{display:flex;gap:14px;align-items:center;margin:.6rem 0}
-    #start-panel .row > *{flex:1}
-    #start-panel select, #start-panel button{
-      font:600 14px/1.1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      padding:.8rem 1rem;border-radius:12px;border:1px solid rgba(255,255,255,.1);
-      background:rgba(255,255,255,.06);color:#e6f3ea;letter-spacing:.02em
-    }
-    #start-panel .sub{opacity:.7;font:12px ui-monospace,Menlo,Consolas,monospace}
-    #btn-inspector{position:fixed;right:.66rem;bottom:.66rem;z-index:99}
-  </style>
+  <!-- iOS/Android Plattform Tweaks (optional, falls genutzt) -->
+  <link rel="stylesheet" href="css/platform.css?v=16.3.3">
+  <link rel="stylesheet" href="css/mobile.css?v=16.3.3">
+  <link rel="stylesheet" href="css/ios.css?v=16.3.3">
+  <link rel="stylesheet" href="css/desktop.css?v=16.3.3">
 </head>
-<body>
-  <!-- Spielfläche -->
-  <canvas id="game" aria-label="Spielfläche" role="img"></canvas>
+<body class="app app-dark">
 
-  <!-- Startpanel (Fallback). ui-start.js greift diese IDs auf. -->
-  <section id="start-panel" aria-live="polite">
-    <h1>City-Builder — Start <span class="sub" id="index-version">index v16.2.8</span></h1>
-    <div class="sub" id="meta-line">unbekannt · dpr: <span id="dpr">?</span></div>
+  <!-- Start-BG -->
+  <div id="start-bg" class="start-bg" style="background-image:url('assets/ui/start-bg.jpeg');"></div>
 
-    <div class="row">
-      <label for="map-select" style="min-width:64px">Karte:</label>
-      <select id="map-select">
-        <option value="./assets/maps/map-mini.json">map-mini.json</option>
-        <option value="./assets/maps/map-pro.json">map-pro.json</option>
-        <option value="./assets/maps/map-demo.json">map-demo.json</option>
-      </select>
-    </div>
+  <!-- Game Canvas -->
+  <canvas id="game" class="stage" role="img" aria-label="Spielfeld"></canvas>
 
-    <div class="row">
-      <button id="btn-start" aria-label="Start">▶ Start</button>
-      <button id="btn-restart" aria-label="Neu-Start">↺ Neu-Start</button>
-    </div>
+  <!-- Start-Panel (aus assets/ui/ui-start.js gesteuert) -->
+  <section id="start-panel" class="start-panel" aria-modal="true">
+    <header class="sp-head">
+      <h1>City-Builder — Start <small>index v16.3.3</small></h1>
+      <div class="meta"><span id="info-res">unbekannt</span> · <span id="info-dpr">dpr: 1</span></div>
+    </header>
+    <div class="sp-body">
+      <label for="map-select">Karte:</label>
+      <div class="row">
+        <input id="map-select" class="input" value="map-mini.json" list="map-datalist" autocomplete="off">
+        <datalist id="map-datalist">
+          <option value="map-mini.json"></option>
+          <option value="map-pro.json"></option>
+          <option value="map-demo.json"></option>
+        </datalist>
+      </div>
 
-    <div class="row">
-      <button id="btn-cache" aria-label="Cache-Booster">🧹 Cache-Booster</button>
-      <button id="btn-copylog" aria-label="Log kopieren">📋 Log kopieren</button>
-    </div>
+      <div class="grid">
+        <button id="btn-start" class="btn btn-primary">▶ Start</button>
+        <button id="btn-restart" class="btn">⟳ Neu-Start</button>
+        <button id="btn-cache" class="btn">🧹 Cache-Booster</button>
+        <button id="btn-logcopy" class="btn">📋 Log kopieren</button>
+      </div>
 
-    <div class="row">
-      <div id="start-log" class="sub">[–:–:–] OK UI bereit (index v16.2.8)</div>
+      <div id="start-note" class="note">[-:-:-] OK UI bereit (index v16.3.3)</div>
     </div>
   </section>
 
-  <!-- Inspector-Schalter (wird von inspector.js ersetzt) -->
-  <button id="btn-inspector">Inspector</button>
+  <!-- FABs -->
+  <button id="fab-build" class="fab fab-left" aria-label="Bau-Menü öffnen" title="Bau-Menü">
+    🧱
+  </button>
+  <button id="fab-inspector" class="fab fab-right" aria-label="Inspector" title="Inspector">
+    🛠️
+  </button>
 
-  <!-- Build-Dock (Bau-Menü) -->
-  <nav id="build-dock" aria-label="Bau-Menü">
-    <!-- Gebäude -->
-    <button data-tool="build" data-key="townhall"   title="Rathaus (2×2)">🏰 Rathaus</button>
-    <button data-tool="build" data-key="lumberjack" title="Holzfäller (2×2)">🪓 Holzfäller</button>
-    <button data-tool="build" data-key="farm"       title="Farm (2×2)">🌾 Farm</button>
-    <button data-tool="build" data-key="mill"       title="Mühle (2×2)">🌬️ Mühle</button>
-    <button data-tool="build" data-key="depot"      title="Depot (2×2)">📦 Depot</button>
-    <button data-tool="build" data-key="house0"     title="Haus I (2×2)">🏠 Haus I</button>
-    <button data-tool="build" data-key="house1"     title="Haus II (2×2)">🏘️ Haus II</button>
-    <!-- Wege -->
-    <button data-tool="path"      title="Fußweg (zeichnen)">🟩 Weg</button>
-    <button data-tool="road"      title="Straße (zeichnen)">🛤️ Straße</button>
-    <!-- Abriss -->
-    <button data-tool="bulldozer" title="Abreißen">❌ Abriss</button>
-  </nav>
+  <!-- ===== Scripts: REIHENFOLGE WICHTIG ===== -->
 
-  <!-- 0) SW/Caches einmalig leeren (außer ?keep-sw) + Fallback-Init -->
+  <!-- Bootstrap / Helfer -->
+  <script src="boot.compat.js?v=16.3.3"></script>
+  <script src="boot.js?v=16.3.3"></script>
+  <script src="fullscreen.js?v=16.3.3" type="module"></script>
+
+  <!-- Game Core -->
+  <script src="game.js?v=16.3.3"></script>
+
+  <!-- UI Brücke & Module (Produktivquelle NUR unter assets/ui/) -->
+  <script src="assets/ui/ui-bridge.js?v=16.3.3"></script>
+  <script src="assets/ui/ui-start.js?v=16.3.3"></script>
+  <script src="assets/ui/ui-build.js?v=16.3.3"></script>
+
+  <!-- Inspector (neue Version unter assets/inspector/) -->
+  <script src="assets/inspector/inspector.js?v=16.3.3"></script>
+
+  <!-- Optional: Main Hooks (falls genutzt) -->
+  <script src="main.js?v=16.3.3"></script>
+
+  <!-- ===== Inline Wiring: garantiertes Verhalten ===== -->
   <script>
   (function(){
-    try{
-      if('serviceWorker' in navigator && !location.search.includes('keep-sw')){
-        navigator.serviceWorker.getRegistrations().then(function(rs){
-          rs.forEach(function(r){ r.unregister(); });
-          if(window.caches && caches.keys){ caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }); }
-        });
-      }
-      // Version exportieren (für Logs/Inspector/Startpanel)
-      window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v16.2.8";
-      var v = document.getElementById('index-version'); if (v) v.textContent = "index v16.2.8";
-      var dpr = document.getElementById('dpr'); if (dpr) dpr.textContent = String(Math.round((window.devicePixelRatio||1)*10)/10);
+    'use strict';
 
-      // Mini-Fallback für Start-Buttons, falls ui-start.js noch nicht gebunden hat
-      var $ = function(s){ return document.querySelector(s); };
-      var btnStart = $('#btn-start');
-      if (btnStart && !btnStart.__cb){
-        btnStart.__cb = true;
-        btnStart.onclick = function(){
-          try{
-            var map = ($('#map-select')||{}).value || './assets/maps/map-mini.json';
-            if (window.GameBoot && typeof GameBoot.start==='function'){ GameBoot.start(map); }
-            else if (window.GameLoader && typeof GameLoader._start==='function'){ GameLoader._start(map); }
-            var sp = document.getElementById('start-panel'); if (sp) sp.style.display = 'none';
-          }catch(e){ console.error(e); }
-        };
-      }
-      var btnRestart = $('#btn-restart'); if (btnRestart) btnRestart.onclick = function(){ location.reload(); };
-      var btnCache = $('#btn-cache'); if (btnCache) btnCache.onclick = function(){ location.href = location.pathname + '?keep-sw'; };
-      var btnCopy = $('#btn-copylog'); if (btnCopy) btnCopy.onclick = function(){ try{ var t=(window.CBLog&&CBLog.dump)?CBLog.dump():'Log nicht verfügbar'; navigator.clipboard && navigator.clipboard.writeText(t); }catch(_){ } };
-    }catch(e){ console.error(e); }
+    const V = 'v16.3.3';
+
+    // 1) Start: Bau-Menü sicher ausblenden
+    function hideBuildSafe(){
+      try {
+        if (window.UIBuild && typeof UIBuild.hide === 'function') UIBuild.hide();
+        const panel = document.getElementById('build-panel');
+        if (panel) panel.classList.add('is-hidden');
+      } catch(_) {}
+    }
+
+    // 2) FAB: Bau-Menü links unten (toggle)
+    const fabBuild = document.getElementById('fab-build');
+    fabBuild.addEventListener('click', function(){
+      try {
+        if (window.UIBuild && typeof UIBuild.toggle === 'function') {
+          UIBuild.toggle();
+        } else {
+          // Fallback: Class-Toggle
+          const p = document.getElementById('build-panel');
+          if (p) p.classList.toggle('is-hidden');
+        }
+      } catch(e){ console.warn('[ui] toggle build failed', e); }
+    });
+
+    // 3) FAB: Inspector rechts unten (toggle)
+    const fabInspector = document.getElementById('fab-inspector');
+    fabInspector.addEventListener('click', function(){
+      try {
+        if (window.CBInspector && typeof CBInspector.toggle === 'function') {
+          CBInspector.toggle();
+        } else if (window.Inspector && typeof Inspector.toggle === 'function') {
+          Inspector.toggle();
+        } else {
+          console.warn('[ui] Inspector nicht initialisiert.');
+        }
+      } catch(e){ console.warn('[ui] inspector toggle failed', e); }
+    });
+
+    // 4) UI ready: Sofort Bau-Menü verstecken
+    window.addEventListener('cb:ui-ready', function(){
+      hideBuildSafe();
+    });
+
+    // 5) Game gestartet: NICHT auto-open — Benutzer nutzt FAB
+    window.addEventListener('cb:game-started', function(){
+      hideBuildSafe();
+      // Start-Panel schließen übernimmt ui-start.js, wir erzwingen nur Build-Menü zu
+      // (Falls ui-start es schon schließt, macht das doppelt nix aus.)
+    });
+
+    // 6) Diagnose: Versions-Info in Start-Panel
+    try {
+      const note = document.getElementById('start-note');
+      if (note) note.textContent = 'OK UI bereit (index ' + V + ')';
+      const dpr = document.getElementById('info-dpr');
+      if (dpr) dpr.textContent = 'dpr: ' + (window.devicePixelRatio||1);
+    } catch(_) {}
+
+    // 7) Defensive: falls jemand per Query ?auto-build=1 testen will
+    if (/\bauto-build=1\b/.test(location.search)) {
+      window.addEventListener('cb:game-started', function(){
+        setTimeout(function(){
+          if (window.UIBuild && typeof UIBuild.open === 'function') UIBuild.open();
+        }, 50);
+      });
+    }
   })();
   </script>
 
-  <!-- ===================== SCRIPT-REIHENFOLGE ===================== -->
-  <!-- 1) Inspector + UI -->
-  <script defer src="./inspector.js?v=16.2.8"></script>
-  <!-- ui-bridge.js NICHT laden -->
-  <script defer src="./assets/ui/ui-start.js?v=16.2.8"></script>
-  <script defer src="./assets/ui/ui-build.js?v=16.2.8"></script>
-
-  <!-- 2) Boot -->
-  <script defer src="./boot.js?v=16.2.8"></script>
-
-  <!-- 3) Module/Compat -->
-  <script type="module" src="./fullscreen.js?v=16.2.8"></script>
-
-  <!-- 4) Core vor game.js -->
-  <script defer src="./core/pathfinder.js?v=16.2.8"></script>
-  <script defer src="./core/carriers.js?v=16.2.8"></script>
-
-  <!-- 5) Spiel -->
-  <script defer src="./game.js?v=16.2.8"></script>
-  <script defer src="./main.js?v=16.2.8"></script>
-  <!-- ============================================================= -->
-
-  <noscript>Bitte JavaScript aktivieren, um „Neue Siedler“ zu spielen.</noscript>
+  <!-- Inline minimal CSS für FAB-Positionen, falls nicht schon in ui-build.css -->
+  <style>
+    .fab{position:fixed; bottom:88px; z-index:1000; width:56px;height:56px;border-radius:28px;
+         background:rgba(20,20,20,.7); color:#fff; border:1px solid rgba(255,255,255,.15);
+         backdrop-filter:saturate(1.2) blur(6px); -webkit-backdrop-filter:saturate(1.2) blur(6px);
+         display:flex;align-items:center;justify-content:center; font-size:22px;}
+    .fab-left{left:16px;}
+    .fab-right{right:16px;}
+    .is-hidden{display:none!important;}
+    .start-bg{position:fixed; inset:0; background-size:cover; background-position:center; z-index:-1;}
+    .start-panel{position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+      width:min(720px,92vw); background:rgba(16,16,16,.72); color:#e6efe9; border-radius:16px;
+      box-shadow:0 8px 40px rgba(0,0,0,.45); padding:18px; z-index:900;}
+    .sp-head h1{margin:.25rem 0 0; font-weight:700}
+    .sp-head small{opacity:.6; font-weight:400}
+    .sp-body .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px}
+    .btn{appearance:none; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.06);
+      padding:12px 14px; border-radius:12px; color:#e6efe9}
+    .btn-primary{background:linear-gradient(#2e7d32, #275e2f);}
+    .note{opacity:.8; margin-top:10px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;}
+    .stage{display:block; width:100vw; height:100vh;}
+  </style>
 </body>
 </html>
