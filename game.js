@@ -1,21 +1,21 @@
-// game.js — v16.4.1 (ES5)
-// Map, Pan/Zoom, Build-Mode + Ghost-Preview + Mini-Glue (RoadSet, Camera, PathFinder init)
+// game.js — v16.4.2 (ES5)
+// Map, Pan/Zoom, Build-Mode + Ghost-Preview + Mini-Glue + Roads + Carrier-Loop
 (function(){
   'use strict';
-  var VERSION = 'v16.4.1';
+  var VERSION = 'v16.4.2';
 
-  // ---------- logging helpers ----------
+  // ---------- logging ----------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
   function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
   function err(){ (window.CBLog && CBLog.err ? CBLog.err : console.error).apply(console, arguments); }
 
-  // ---------- public namespaces ----------
+  // ---------- namespaces ----------
   var GL = (window.GameLoader = window.GameLoader || {});
   var Game = (window.Game = window.Game || {});
 
   // ---------- render state ----------
   var canvas=null, ctx=null, DPR=1, viewW=0, viewH=0;
-  var engineReady=false;
+  var engineReady=false, loopOn=false, lastTS=0;
 
   // ---------- map ----------
   var currentMap=null, tilesetImg=null, atlas=null;
@@ -23,14 +23,13 @@
   // ---------- camera ----------
   var cam = { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 };
 
-  // ---------- entities (Gebäude) ----------
+  // ---------- entities ----------
   var entities = []; // {key,x,y,w,h,img}
 
-  // ---------- Ghost-Preview ----------
-  // ghost = { key, x, y, w, h, img, ok }
+  // ---------- ghost ----------
   var ghost = null;
 
-  // ---------- building defs ----------
+  // ---------- buildings ----------
   var BUILDINGS = {
     townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
     lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
@@ -41,9 +40,12 @@
     house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" }
   };
 
-  // ---------- tool state ----------
+  // ---------- tool ----------
   // mode: 'build'|'road'|'path'|'bulldozer'|null
   var tool = { mode:null, key:null };
+
+  // ---------- roads (Set "x,y") ----------
+  var _roadSet = new Set();
 
   // ---------- utils ----------
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
@@ -52,7 +54,6 @@
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
-  // Bild-Loader mit PNG/png Fallback (verhindert Groß/Klein-Probleme)
   function loadImage(src){
     return new Promise(function(res,rej){
       var triedAlt=false, i=new Image();
@@ -70,7 +71,7 @@
   }
   function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
 
-  // ---------- placement helpers ----------
+  // ---------- placement ----------
   function canPlace(key, tx, ty){
     var def = BUILDINGS[key]; if (!def || !currentMap) return false;
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
@@ -104,9 +105,10 @@
     tool.mode = mode || null;
     tool.key = null;
     ghost = null;
+    ok('[ok] Tool gesetzt:', tool.mode||'none');
     drawMap();
   };
-  Game.clearTool = function(){ Game.setTool(null); };
+  Game.clearTool = function(){ tool.mode=null; tool.key=null; ghost=null; ok('[ok] Tool zurückgesetzt'); drawMap(); };
 
   // ---------- draw ----------
   function drawMap(){
@@ -114,7 +116,7 @@
     var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // sichtfenster bounds (in Tiles)
+    // sichtfenster
     var left   = Math.floor(cam.x / t);
     var top    = Math.floor(cam.y / t);
     var right  = Math.ceil((cam.x + viewW/cam.zoom) / t);
@@ -151,6 +153,22 @@
       }
     }
 
+    // Roads Overlay
+    if (_roadSet.size){
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#8b8b8b';
+      _roadSet.forEach(function(k){
+        var s=k.split(','), tx=+s[0], ty=+s[1];
+        if (tx<left||tx>=right||ty<top||ty>=bottom) return;
+        var dx = Math.floor((tx*t - cam.x)*cam.zoom);
+        var dy = Math.floor((ty*t - cam.y)*cam.zoom);
+        var ds = Math.ceil(t*cam.zoom);
+        ctx.fillRect(dx,dy,ds,ds);
+      });
+      ctx.restore();
+    }
+
     // Entities
     for (var k=0;k<entities.length;k++){
       var e=entities[k];
@@ -162,26 +180,44 @@
       else { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(dx,dy,dw,dh); }
     }
 
-    // Ghost-Preview
+    // Ghost
     if (ghost && tool.mode==='build' && tool.key){
       var gx = Math.floor((ghost.x - cam.x)*cam.zoom);
       var gy = Math.floor((ghost.y - cam.y)*cam.zoom);
       var gw = Math.ceil(ghost.w*cam.zoom);
       var gh = Math.ceil(ghost.h*cam.zoom);
-
       ctx.save();
       ctx.globalAlpha = 0.75;
       if (ghost.img){ try { ctx.drawImage(ghost.img, gx,gy,gw,gh); } catch(_){} }
       else { ctx.fillStyle = "rgba(255,255,255,.3)"; ctx.fillRect(gx,gy,gw,gh); }
       ctx.restore();
-
       ctx.lineWidth = Math.max(2, Math.floor(2*cam.zoom));
       ctx.strokeStyle = ghost.ok ? "rgba(60,220,120,.95)" : "rgba(255,80,80,.95)";
       ctx.strokeRect(gx+0.5, gy+0.5, gw-1, gh-1);
     }
+
+    // Carriers oben drauf
+    try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
   }
 
-  // ---------- fit/clamp ----------
+  // ---------- loop ----------
+  function loop(ts){
+    if (!loopOn) return;
+    if (!lastTS) lastTS = ts;
+    var dt = (ts - lastTS)/1000; lastTS = ts;
+
+    try{ if (window.Carriers && Carriers.tick) Carriers.tick(dt); }catch(_){}
+    drawMap();
+    requestAnimationFrame(loop);
+  }
+  function startLoop(){
+    if (loopOn) return;
+    loopOn=true; lastTS=0;
+    ok('[game] Renderloop gestartet (v'+VERSION+')');
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- fit/clamp/zoom ----------
   function clampCam(){
     var size = mapPx();
     var maxX = Math.max(0, size.w - viewW/cam.zoom);
@@ -198,8 +234,6 @@
     if (ctx.setTransform) ctx.setTransform(DPR,0,0,DPR,0,0);
     viewW=w; viewH=h; clampCam(); drawMap();
   }
-
-  // ---------- zoom helper ----------
   function zoomAt(f, cx, cy){
     var preX = cam.x + cx / cam.zoom;
     var preY = cam.y + cy / cam.zoom;
@@ -231,11 +265,24 @@
     ghost.ok = canPlace(tool.key, tx, ty);
   }
 
+  function setRoadAt(tx,ty,on){
+    var k = tx+','+ty;
+    var changed=false;
+    if (on){ if(!_roadSet.has(k)){ _roadSet.add(k); changed=true; } }
+    else   { if(_roadSet.delete(k)) changed=true; }
+    if (changed){
+      try{ if (window.PathFinder && PathFinder.invalidateRoads) PathFinder.invalidateRoads(); }catch(_){}
+    }
+  }
+
   function bindInput(){
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
     canvas.addEventListener('mousedown', function(e){
-      if (e.button===2){ Game.clearTool(); drawMap(); return; } // Rechtsklick = abbrechen
+      if (e.button===2){
+        Game.clearTool(); // Rechtsklick = abbrechen
+        return;
+      }
       drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y;
     });
     window.addEventListener('mousemove', function(e){
@@ -254,20 +301,45 @@
       zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top);
     }, {passive:false});
 
-    // Platzieren
+    // Aktionen auf Klick
     canvas.addEventListener('click', function(e){
-      if (tool.mode!=='build' || !tool.key || !currentMap) return;
       var rect = canvas.getBoundingClientRect();
       var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
       var wx = cam.x + sx / cam.zoom, wy = cam.y + sy / cam.zoom;
       var tile = currentMap.tile;
       var tx = Math.floor(wx / tile), ty = Math.floor(wy / tile);
-      if (canPlace(tool.key, tx, ty)){
-        placeBuilding(tool.key, tx, ty);
-        updateGhostAtScreen(e.clientX, e.clientY);
-        drawMap();
-      } else {
-        warn("[game] Platzierung nicht möglich.");
+
+      if (tool.mode==='build' && tool.key){
+        if (canPlace(tool.key, tx, ty)){
+          placeBuilding(tool.key, tx, ty);
+          updateGhostAtScreen(e.clientX, e.clientY);
+          drawMap();
+        } else {
+          warn("[game] Platzierung nicht möglich.");
+        }
+        return;
+      }
+      if (tool.mode==='road' || tool.mode==='path'){
+        setRoadAt(tx, ty, true); drawMap();
+        return;
+      }
+      if (tool.mode==='bulldozer'){
+        // Beispiel: Straße abreißen
+        setRoadAt(tx, ty, false); drawMap();
+        return;
+      }
+    });
+
+    // Draggen zum Straßenmalen
+    canvas.addEventListener('mousemove', function(e){
+      if (!drag.on) return;
+      if (tool.mode==='road' || tool.mode==='path'){
+        var rect = canvas.getBoundingClientRect();
+        var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+        var wx = cam.x + sx / cam.zoom, wy = cam.y + sy / cam.zoom;
+        var tile = currentMap.tile;
+        var tx = Math.floor(wx / tile), ty = Math.floor(wy / tile);
+        setRoadAt(tx, ty, true); drawMap();
       }
     });
 
@@ -305,7 +377,7 @@
     // Keyboard
     window.addEventListener('keydown', function(e){
       var k=(e.key||'').toLowerCase(), step=Math.max(16, Math.floor(120/cam.zoom));
-      if(k==='escape'){ Game.clearTool(); drawMap(); return; }
+      if(k==='escape'){ Game.clearTool(); return; }
       if(k==='arrowleft'||k==='a'){ cam.x-=step; } 
       else if(k==='arrowright'||k==='d'){ cam.x+=step; }
       else if(k==='arrowup'||k==='w'){ cam.y-=step; } 
@@ -332,7 +404,6 @@
       function start(){
         ok("GameLoader.start "+mapUrl);
         loadJSON(mapUrl).then(function(map){
-          // map normalisieren
           function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
           var ms = map.mapSize || map.size || null;
           var width  = pickNum(map.width, map.w,  ms && ms.w,  ms && ms.width)  || 16;
@@ -345,7 +416,7 @@
           };
           ok("Map geladen: "+width+"×"+height+" · Tile "+tile);
 
-          // Gebäude-Assets vorladen
+          // Gebäude-Assets
           var preload = [];
           for (var k in BUILDINGS) if (BUILDINGS.hasOwnProperty(k)){
             (function(key){
@@ -363,22 +434,21 @@
             atlas = res[0]||null; tilesetImg = res[1]||null;
           })
           .then(function(){
-            // Rathaus auto-spawn in Kartenmitte
+            // Rathaus
             var cx = Math.floor(width/2), cy = Math.floor(height/2);
-            if (!hasEntity('townhall')){
-              if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
-            }
-            // Kamera mittig aufs Rathaus
+            if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
+
+            // Kamera zentrieren
             var center = tileToWorld(cx, cy);
             cam.zoom = 1;
             cam.x = clamp(center.x - viewW/2, 0, Math.max(0, mapPx().w - viewW));
             cam.y = clamp(center.y - viewH/2, 0, Math.max(0, mapPx().h - viewH));
 
             drawMap();
+            startLoop();
 
-            // ---- Mini-Glue: Game-Infos exposen ----
-            Game.currentMap = currentMap; // (read-only usage)
-            Game.cam = cam;
+            // Glue exposen
+            Game.currentMap = currentMap; Game.cam = cam;
 
             try{ window.dispatchEvent(new CustomEvent('cb:game-started',{detail:{map:mapUrl}})); }catch(_){}
             if (window.GameUI && typeof window.GameUI.onGameStarted==='function') window.GameUI.onGameStarted();
@@ -395,29 +465,18 @@
     return false;
   }
 
-  // sofort initialisieren
+  // sofort init
   try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
 
   // expose version
   GL.version = VERSION;
 
-  // =========================================================================
-  // === Mini-Glue: RoadSet, Getter für Pfadfinder/Carrier, Init-Hooks     ===
-  // =========================================================================
-
-  // 1) Road-Set (wird von deiner Straßen-Logik gepflegt)
-  var _roadSet = new Set(); // Strings "x,y"
-
-  // Beispiel-Hooks (falls du schon Road-Tools hast, rufe diese hier):
-  // Game._onRoadBuilt  = function(tx,ty){ _roadSet.add(tx+','+ty); if (window.PathFinder) PathFinder.invalidateRoads(); };
-  // Game._onRoadRemoved= function(tx,ty){ _roadSet.delete(tx+','+ty); if (window.PathFinder) PathFinder.invalidateRoads(); };
-
-  // 2) Getter für externe Module (PathFinder/Carriers)
+  // ---------- Mini-Glue Getter ----------
   Game.getRoadSet  = function(){ return _roadSet; };
   Game.getTileSize = function(){ return (currentMap && currentMap.tile) || 64; };
   Game.getCamera   = function(){ return { x:cam.x, y:cam.y, zoom:cam.zoom }; };
 
-  // 3) PathFinder initialisieren, sobald das Spiel läuft
+  // PathFinder init on start
   window.addEventListener('cb:game-started', function(){
     if (window.PathFinder && typeof PathFinder.init === 'function') {
       PathFinder.init(function(){
