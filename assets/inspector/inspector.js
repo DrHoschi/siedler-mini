@@ -1,128 +1,100 @@
-/*! inspector.js — City Builder Inspector (v16.3.5)
-    - FAB rechts unten öffnet/schließt Panel
-    - Live/Logs; nutzt CBLog, fällt auf lokalen Buffer zurück
-    - fixed Overlay (zoomt NICHT mit), Events werden NICHT zur Canvas gebubbelt
-*/
+// inspector.js — v16.3.6
+// Kleiner Inspector: Live/Logs, fix am unteren Rand, öffnet nur per Button.
+// Keine Auto-Öffnung im Startscreen.
+
 (function(){
   'use strict';
-  var VERSION = 'v16.3.5';
+  var VERSION = 'v16.3.6';
 
-  // --- log buffer ------------------------------------------------------------
-  var localBuf = [];
-  function pushBuf(level, args){
-    try {
-      var line = '['+new Date().toLocaleTimeString()+'] '+level+' '+Array.prototype.map.call(args,function(a){
-        try { return (typeof a==='object') ? JSON.stringify(a) : String(a); }
-        catch(_){ return String(a); }
-      }).join(' ');
-      localBuf.push(line);
-      if (localBuf.length>500) localBuf.shift();
-    } catch(_){}
-  }
+  // Logging
+  function ok(){  (window.CBLog && CBLog.ok  ? CBLog.ok  : console.log).apply(console, arguments); }
+  function warn(){(window.CBLog && CBLog.warn? CBLog.warn : console.warn).apply(console, arguments); }
 
-  // Hook CBLog (wenn nicht vorhanden)
-  if (!window.CBLog){
-    var orig = {
-      log: console.log.bind(console),
-      warn: console.warn.bind(console),
-      error: console.error.bind(console)
-    };
-    window.CBLog = {
-      ok: function(){ orig.log.apply(console, arguments); pushBuf('OK ', arguments); },
-      warn: function(){ orig.warn.apply(console, arguments); pushBuf('WARN', arguments); },
-      err: function(){ orig.error.apply(console, arguments); pushBuf('ERR', arguments); },
-      copy: function(){
-        var t = (localBuf.join('\n')||'');
-        try{ navigator.clipboard.writeText(t); }catch(_){}
-      },
-      buffer: localBuf
-    };
-  }
+  var api = (window.Inspector = window.Inspector || {});
+  var state = { root:null, body:null, live:null, logs:null, open:false, _wire:false };
+  api._ready = false;
 
-  // --- DOM helpers -----------------------------------------------------------
-  function $el(tag, cls, html){ var n=document.createElement(tag); if(cls) n.className=cls; if(html!=null) n.innerHTML=html; return n; }
-  function stopAll(e){ if(e){ if(e.preventDefault) e.preventDefault(); if(e.stopPropagation) e.stopPropagation(); } return false; }
+  function ce(tag, cls, html){ var n=document.createElement(tag); if(cls) n.className=cls; if(html!=null) n.innerHTML=html; return n; }
 
-  // --- UI --------------------------------------------------------------------
-  var UI = { root:null, panel:null, fab:null, live:null, logs:null, tabLive:null, tabLogs:null, open:false, built:false };
+  function ensurePanel(){
+    if (state.root) return state.root;
 
-  function buildUI(){
-    if (UI.built) return;
-    UI.built = true;
+    var root = ce('div','insp-root');
+    root.style.position = 'fixed';
+    root.style.left = '0';
+    root.style.right = '0';
+    root.style.bottom = '0';
+    root.style.zIndex = '2147483639';
+    root.style.display = 'none';
 
-    var root = $el('div','cb-inspector-root');
-    root.addEventListener('click', stopAll, {passive:false});
-    root.addEventListener('wheel', stopAll, {passive:false});
-    root.addEventListener('touchstart', stopAll, {passive:false});
-    root.addEventListener('touchmove', stopAll, {passive:false});
+    var chrome = ce('div','insp-chrome');
+    var title  = ce('div','insp-title','Inspector <small>(' + VERSION + ')</small>');
+    var tabs   = ce('div','insp-tabs');
+    var btnLive= ce('button','insp-tab active','Live');
+    var btnLogs= ce('button','insp-tab','Logs');
+    tabs.appendChild(btnLive); tabs.appendChild(btnLogs);
 
-    var panel = $el('div','cb-inspector-panel');
-    var head  = $el('div','cb-insp-head','<strong>Inspector</strong> <span class="muted">(v'+VERSION+')</span>');
-    var tabs  = $el('div','cb-insp-tabs');
-    var tabLive = $el('button','active','Live');
-    var tabLogs = $el('button','','Logs');
-    tabs.appendChild(tabLive); tabs.appendChild(tabLogs);
+    var body   = ce('div','insp-body');
+    var live   = ce('div','insp-live');
+    var logs   = ce('textarea','insp-logs'); logs.readOnly = true;
 
-    var live = $el('div','cb-insp-live');    // (hier könnten Live-Werte erscheinen)
-    var logs = $el('pre','cb-insp-logs');    // Textpuffer
-
-    panel.appendChild(head);
-    panel.appendChild(tabs);
-    panel.appendChild(live);
-    panel.appendChild(logs);
-
-    // FAB
-    var fab = $el('button','cb-fab cb-fab-insp','<span class="wrench">🛠️</span>');
-    fab.title = 'Inspector';
-    fab.addEventListener('click', function(e){ stopAll(e); toggle(); }, {passive:false});
-
-    // Tabs
-    tabLive.addEventListener('click', function(e){
-      stopAll(e);
-      tabLive.classList.add('active'); tabLogs.classList.remove('active');
-      live.style.display='block'; logs.style.display='none';
-    });
-    tabLogs.addEventListener('click', function(e){
-      stopAll(e);
-      tabLogs.classList.add('active'); tabLive.classList.remove('active');
-      live.style.display='none'; logs.style.display='block';
-      refreshLogs();
-    });
-
-    root.appendChild(panel);
-    root.appendChild(fab);
+    body.appendChild(live); body.appendChild(logs);
+    chrome.appendChild(title); chrome.appendChild(tabs);
+    root.appendChild(chrome); root.appendChild(body);
     document.body.appendChild(root);
 
-    UI.root=root; UI.panel=panel; UI.fab=fab; UI.live=live; UI.logs=logs; UI.tabLive=tabLive; UI.tabLogs=tabLogs;
+    // Tabs
+    function show(which){
+      btnLive.classList.toggle('active', which==='live');
+      btnLogs.classList.toggle('active', which==='logs');
+      live.style.display = (which==='live'?'':'none');
+      logs.style.display = (which==='logs'?'':'none');
+    }
+    btnLive.onclick = function(){ show('live'); };
+    btnLogs.onclick = function(){ show('logs'); };
 
-    setOpen(false);
-    CBLog.ok('[inspector] Modul geladen (v'+VERSION+')');
+    // store
+    state.root=root; state.body=body; state.live=live; state.logs=logs;
+    show('live');
+
+    return root;
   }
 
-  function refreshLogs(){
-    try {
-      var buf = (window.CBLog && CBLog.buffer) ? CBLog.buffer : localBuf;
-      UI.logs.textContent = (buf && buf.join('\n')) || '';
-    } catch(_){}
+  function wireConsole(){
+    if (state._wire) return;
+    state._wire = true;
+
+    var _log  = console.log.bind(console);
+    var _warn = console.warn.bind(console);
+    var _err  = console.error.bind(console);
+
+    function append(kind, args){
+      if (!state.logs) return;
+      var line = '['+kind+'] ' + Array.prototype.map.call(args, function(a){
+        try { return (typeof a === 'object') ? JSON.stringify(a) : String(a); }
+        catch(_){ return String(a); }
+      }).join(' ') + '\n';
+      state.logs.value += line;
+      state.logs.scrollTop = state.logs.scrollHeight;
+    }
+
+    console.log = function(){ append('LOG', arguments); _log.apply(console, arguments); };
+    console.warn= function(){ append('WARN',arguments); _warn.apply(console, arguments); };
+    console.error=function(){ append('ERR', arguments); _err.apply(console, arguments); };
   }
 
-  function setOpen(flag){
-    UI.open = !!flag;
-    if (!UI.root) return;
-    UI.root.classList.toggle('open', UI.open);
-    document.documentElement.classList.toggle('cb-inspector-open', UI.open);
-    if (UI.open) refreshLogs();
-  }
-  function toggle(){ setOpen(!UI.open); }
+  // ---------- Public API ----------
+  api.init = function(opts){
+    ensurePanel();
+    wireConsole();
+    api._ready = true;
+    var autoOpen = opts && opts.autoOpen;
+    if (autoOpen) api.open(); else api.close(); // kein Start-Overlay
+    ok('[inspector] Modul geladen ('+VERSION+')');
+  };
 
-  // Public
-  window.InspectorUI = window.InspectorUI || {};
-  window.InspectorUI.open   = function(){ setOpen(true); };
-  window.InspectorUI.close  = function(){ setOpen(false); };
-  window.InspectorUI.toggle = toggle;
-  window.InspectorUI.version = VERSION;
-
-  // Lifecycle
-  window.addEventListener('DOMContentLoaded', buildUI);
+  api.open = function(){ ensurePanel(); state.root.style.display=''; state.open=true; return true; };
+  api.close= function(){ if(!state.root) return false; state.root.style.display='none'; state.open=false; return false; };
+  api.toggle=function(){ return state.open ? api.close() : api.open(); };
 
 })();
