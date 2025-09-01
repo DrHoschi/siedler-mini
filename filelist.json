@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-01T19:24:30.316Z",
+  "createdAt": "2025-09-01T20:30:07.708Z",
   "root": ".",
-  "count": 247,
+  "count": 249,
   "entries": [
     {
       "type": "dir",
@@ -76,6 +76,16 @@
       "type": "file",
       "path": "assets/characters/carrier.png",
       "size": 144260
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/characters_sprite_atlas_2048.json",
+      "size": 13630
+    },
+    {
+      "type": "file",
+      "path": "assets/characters/characters_sprite_highend.png",
+      "size": 2140303
     },
     {
       "type": "file",
@@ -884,7 +894,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 790
+      "size": 4792
     },
     {
       "type": "file",
@@ -894,7 +904,7 @@
     {
       "type": "file",
       "path": "core/carriers.js",
-      "size": 1552
+      "size": 3784
     },
     {
       "type": "file",
@@ -914,7 +924,7 @@
     {
       "type": "file",
       "path": "core/pathfinder.js",
-      "size": 3431
+      "size": 9480
     },
     {
       "type": "file",
@@ -1122,12 +1132,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24288
+      "size": 24289
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9227
+      "size": 9228
     },
     {
       "type": "file",
