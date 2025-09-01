@@ -1,7 +1,7 @@
-/* core/pathfinder.js — v16.5.0
+/* core/pathfinder.js — v16.5.1
    Hybrid-PF: Roads (4-Nb) bevorzugt, sonst Offroad (8-Nb, Diagonal)
-   Heatmap (Trampelpfade) + optionales Draw-Overlay
-   Blocker per Provider-Hook (z.B. Gebäude + 1 Tile Puffer)
+   Heatmap (Trampelpfade) + Overlay
+   Blocker via Provider-Hook: Game.getObstacleAt(tx,ty) (inkl. Puffer aus game.js)
 */
 (function(){
   'use strict';
@@ -10,9 +10,8 @@
   var _w=0, _h=0;
   var _heat = null;             // Float32Array[w*h]
   var _roadSet = null;          // Set("x,y") oder null
-  var _blockerProvider = null;  // fn(tx,ty) => true wenn blockiert
-  var _lastPaths = [];          // zuletzt gezeichnete Pfade für Overlay
-  var _diagAllowed = true;
+  var _blockerProvider = null;  // fn(tx,ty) => true, wenn blockiert
+  var _lastPaths = [];          // zuletzt gezeichnete Pfade (Overlay)
 
   function idx(x,y){ return y*_w + x; }
   function inb(x,y){ return x>=0 && y>=0 && x<_w && y<_h; }
@@ -24,7 +23,7 @@
     return false;
   }
 
-  // --- API ---
+  // ---------- API ----------
   PF.init = function(getMapSize){
     try{
       var s = getMapSize && getMapSize();
@@ -37,8 +36,8 @@
     }
   };
   PF.setRoadMask = function(set){ _roadSet = set || null; };
-  PF.setObstacleProvider = function(fn){ _blockerProvider = typeof fn==='function' ? fn : null; };
-  PF.invalidateRoads = function(){ /* Placeholder: Road-Cache könnte hier geleert werden */ };
+  PF.setObstacleProvider = function(fn){ _blockerProvider = (typeof fn==='function') ? fn : null; };
+  PF.invalidateRoads = function(){ /* Platzhalter: Road-Cache leeren falls benötigt */ };
 
   PF.applyHeat = function(path){
     if (!_heat || !path || !path.length) return;
@@ -51,7 +50,7 @@
     }
   };
 
-  // --- Verbindet Start/Ziel rein über Road-Zellen? (BFS 4-Nb) ---
+  // ---------- Road-Connectivity (BFS 4-NB) ----------
   function roadConnected(sx,sy, tx,ty){
     if (!_roadSet) return false;
     if (!isRoad(sx,sy) || !isRoad(tx,ty)) return false;
@@ -75,64 +74,56 @@
     return false;
   }
 
-  // --- A* ---
+  // ---------- A* nur über Roads (4-NB) ----------
   function findPathRoads(sx,sy, tx,ty){
-    // 4-Nachbarn, nur Road-Zellen erlaubt
-    var openH=0, openT=0, cap=_w*_h;
-    var ox=new Int16Array(cap), oy=new Int16Array(cap);
+    var cap=_w*_h;
     var og=new Int32Array(_w*_h); for(var i=0;i<og.length;i++) og[i]=1e9;
     var cameX=new Int16Array(_w*_h), cameY=new Int16Array(_w*_h);
     var inOpen=new Uint8Array(_w*_h), closed=new Uint8Array(_w*_h);
+    var ox=new Int16Array(cap), oy=new Int16Array(cap); var oh=0;
 
-    function push(x,y, g, f){
-      ox[openH]=x; oy[openH]=y; openH++;
-      inOpen[idx(x,y)]=1; og[idx(x,y)]=g;
-    }
-    function pop(){
-      var best=-1, bestF=1e9;
-      for (var i=openT;i<openH;i++){
-        var x=ox[i], y=oy[i];
-        var id=idx(x,y); if(!inOpen[id]) continue;
+    function push(x,y){ var id=idx(x,y); if (inOpen[id]) return; inOpen[id]=1; ox[oh]=x; oy[oh]=y; oh++; }
+    function bestPop(){
+      var best=-1, bF=1e9, bx=0,by=0;
+      for (var i=0;i<oh;i++){
+        var x=ox[i], y=oy[i]; var id=idx(x,y); if(!inOpen[id]) continue;
         var g=og[id];
-        var h = (Math.abs(x-tx)+Math.abs(y-ty))*10;
-        var f = g+h;
-        if (f<bestF){ bestF=f; best=i; }
+        var h=(Math.abs(x-tx)+Math.abs(y-ty))*10;
+        var f=g+h;
+        if (f<bF){ bF=f; best=i; bx=x; by=y; }
       }
       if (best<0) return null;
-      var bx=ox[best], by=oy[best];
       inOpen[idx(bx,by)]=0;
       return {x:bx,y:by};
     }
 
-    var startId=idx(sx,sy); og[startId]=0; push(sx,sy,0,0);
-    var nx=[1,-1,0,0], ny=[0,0,1,-1];
+    og[idx(sx,sy)]=0; push(sx,sy);
+    var dirs = [[1,0],[ -1,0],[0,1],[0,-1]];
 
     while(true){
-      var cur=pop(); if(!cur) break;
-      if (cur.x===tx && cur.y===ty) return reconstruct(cameX,cameY, sx,sy, tx,ty);
+      var cur=bestPop(); if(!cur) break;
+      if (cur.x===tx && cur.y===ty) return reconstruct(cameX,cameY,sx,sy,tx,ty);
       closed[idx(cur.x,cur.y)]=1;
 
-      for (var k=0;k<4;k++){
-        var nx1=cur.x+nx[k], ny1=cur.y+ny[k];
+      for (var k=0;k<dirs.length;k++){
+        var nx1=cur.x+dirs[k][0], ny1=cur.y+dirs[k][1];
         if (!inb(nx1,ny1)) continue;
         var id=idx(nx1,ny1);
         if (closed[id]) continue;
         if (!isRoad(nx1,ny1)) continue;
 
-        var step=10;
-        var newG = og[idx(cur.x,cur.y)] + step;
+        var newG = og[idx(cur.x,cur.y)] + 10;
         if (newG < og[id]){
           cameX[id]=cur.x; cameY[id]=cur.y;
-          og[id]=newG;
-          if (!inOpen[id]) push(nx1,ny1,newG,0);
+          og[id]=newG; push(nx1,ny1);
         }
       }
     }
     return null;
   }
 
+  // ---------- A* Offroad (8-NB, Diagonalen, Kosten-Bias: Road/Heat) ----------
   function findPathOffroad(sx,sy, tx,ty){
-    // 8-Nachbarn, Diagonalen erlaubt, Kosten-Bias: Road < Trampel < normal
     var cap=_w*_h;
     var og=new Int32Array(_w*_h); for(var i=0;i<og.length;i++) og[i]=1e9;
     var cameX=new Int16Array(_w*_h), cameY=new Int16Array(_w*_h);
@@ -146,7 +137,7 @@
         var x=qx[i], y=qy[i]; var id=idx(x,y); if(!inOpen[id]) continue;
         var g=og[id];
         var dx = Math.abs(x-tx), dy = Math.abs(y-ty);
-        var h = (Math.max(dx,dy)*14 + Math.min(dx,dy)*0); // Chebyshev-ähnlich (grober Heuristikmix)
+        var h = Math.max(dx,dy)*14; // Chebyshev-ähnlich
         var f = g+h;
         if (f<bF){ bF=f; best=i; bx=x; by=y; }
       }
@@ -180,8 +171,8 @@
         var heat = _heat ? _heat[id] : 0;
         if (heat>0){ var bias = 1.0 - Math.min(0.4, heat*0.02); costMul *= bias; }
 
-        var step = Math.floor(base * costMul);
-        var newG = og[idx(cur.x,cur.y)] + (step||1);
+        var step = Math.floor(base * costMul) || 1;
+        var newG = og[idx(cur.x,cur.y)] + step;
         if (newG < og[id]){
           cameX[id]=cur.x; cameY[id]=cur.y;
           og[id]=newG; push(nx1,ny1);
@@ -198,9 +189,7 @@
       if (x===sx && y===sy) break;
       var id=idx(x,y);
       var px=cX[id], py=cY[id];
-      if (px===0 && py===0 && !(x===sx && y===sy)){ // keine Eltern → kein Pfad
-        return null;
-      }
+      if (px===0 && py===0 && !(x===sx && y===sy)){ return null; }
       x=px; y=py;
     }
     out.reverse();
@@ -215,12 +204,11 @@
     var mode = opts.mode||'auto';
     _lastPaths.length=0;
 
-    // 1) Road-only, wenn verbunden
+    // 1) Road-only (falls verbunden)
     if (mode!=='offroad' && _roadSet && roadConnected(sx,sy,tx,ty)){
       var r = findPathRoads(sx,sy,tx,ty);
       if (r && r.length){ _lastPaths.push({path:r, type:'road'}); return r; }
     }
-
     // 2) Offroad mit Diagonalen
     var o = findPathOffroad(sx,sy,tx,ty);
     if (o && o.length){ _lastPaths.push({path:o, type:'offroad'}); return o; }
@@ -228,7 +216,7 @@
     return null;
   };
 
-  // --- Overlay ---
+  // ---------- Overlay ----------
   PF.drawOverlay = function(ctx, cam){
     if (!window.DEBUG_PATH_OVERLAY) return;
     if (!_lastPaths.length && !_heat) return;
@@ -245,9 +233,8 @@
           var dx = Math.floor((x*tile - cam.x)*cam.zoom);
           var dy = Math.floor((y*tile - cam.y)*cam.zoom);
           var ds = Math.ceil(tile*cam.zoom);
-          // einfache farbe: stärker = heller
           var a = Math.min(0.45, 0.08 + v*0.02);
-          ctx.fillStyle = 'rgba(255,215,64,'+a.toFixed(3)+')'; // gelblich
+          ctx.fillStyle = 'rgba(255,215,64,'+a.toFixed(3)+')';
           ctx.fillRect(dx,dy,ds,ds);
         }
       }
