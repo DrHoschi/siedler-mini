@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-01T20:30:07.708Z",
+  "createdAt": "2025-09-01T20:41:03.430Z",
   "root": ".",
-  "count": 249,
+  "count": 248,
   "entries": [
     {
       "type": "dir",
@@ -1132,12 +1132,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24289
+      "size": 24536
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9228
+      "size": 9351
     },
     {
       "type": "file",
@@ -1198,11 +1198,6 @@
       "type": "file",
       "path": "textures.js",
       "size": 3859
-    },
-    {
-      "type": "file",
-      "path": "ui-build.css",
-      "size": 5917
     },
     {
       "type": "file",

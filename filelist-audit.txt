@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 220
+Gesamt Dateien: 219
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -77,7 +77,6 @@ Gesamt Dateien: 220
  - storage.js
  - sw.js
  - textures.js
- - ui-build.css
  - ui-start.css
  - unitLogic.js
  - world.js
