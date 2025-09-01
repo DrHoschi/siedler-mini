@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-01T07:56:05.202Z",
+  "createdAt": "2025-09-01T08:08:17.657Z",
   "root": ".",
   "count": 247,
   "entries": [
@@ -1117,17 +1117,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2811
+      "size": 2784
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24531
+      "size": 24288
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9284
+      "size": 9227
     },
     {
       "type": "file",
