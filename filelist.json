@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-01T08:08:17.657Z",
+  "createdAt": "2025-09-01T19:24:30.316Z",
   "root": ".",
   "count": 247,
   "entries": [
@@ -182,7 +182,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 4790
+      "size": 13357
     },
     {
       "type": "dir",
@@ -770,17 +770,17 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 8681
+      "size": 2746
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 4169
+      "size": 4119
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 5729
+      "size": 7394
     },
     {
       "type": "file",
@@ -894,7 +894,7 @@
     {
       "type": "file",
       "path": "core/carriers.js",
-      "size": 3491
+      "size": 1552
     },
     {
       "type": "file",
@@ -914,7 +914,7 @@
     {
       "type": "file",
       "path": "core/pathfinder.js",
-      "size": 3651
+      "size": 3431
     },
     {
       "type": "file",
@@ -1137,12 +1137,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 16237
+      "size": 20563
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 4864
+      "size": 5104
     },
     {
       "type": "file",
