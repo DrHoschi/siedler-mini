@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-01T07:49:19.163Z",
+  "createdAt": "2025-09-01T07:56:05.202Z",
   "root": ".",
-  "count": 250,
+  "count": 247,
   "entries": [
     {
       "type": "dir",
@@ -979,11 +979,6 @@
       "size": 3400
     },
     {
-      "type": "file",
-      "path": "js/ui.js",
-      "size": 3942
-    },
-    {
       "type": "dir",
       "path": "maps/"
     },
@@ -1127,12 +1122,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24530
+      "size": 24531
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9283
+      "size": 9284
     },
     {
       "type": "file",
@@ -1183,16 +1178,6 @@
       "type": "file",
       "path": "storage.js",
       "size": 404
-    },
-    {
-      "type": "file",
-      "path": "style.css",
-      "size": 4629
-    },
-    {
-      "type": "file",
-      "path": "styles.css",
-      "size": 2583
     },
     {
       "type": "file",
