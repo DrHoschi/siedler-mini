@@ -1,97 +1,115 @@
 // ui-bridge.js — v16.3.6
-// Verbindet Startpanel, Build-Bar und Inspector + FAB-Buttons.
-// - Build-Bar ist nach Game-Start geschlossen
-// - FABs werden sichtbar, springen bei offenem Menü höher (nicht vom Kartenzoom betroffen)
-// - Inspector öffnet/schließt nur per Button
-(function(){
+// Brücke zwischen Game, Start-UI, Bau-Menü und Inspector.
+// - Erzeugt die Floating-Buttons (Bauen / Inspector) fix am Viewport
+// - Öffnet Bau-Menü NICHT automatisch: erst per Button
+// - Bindet sich an cb:ui-ready / cb:game-started Events
+// - Achtet darauf, dass nichts mit dem Canvas mit-zoomt
+
+(function () {
   'use strict';
-  var VER = 'v16.3.6';
 
-  // Log Helper (nutzt Inspector wenn vorhanden)
-  function log(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
+  var VERSION = 'v16.3.6';
 
-  var $ = function(q){ return document.querySelector(q); };
-  var buildBarEl = null;
-  var fabBuild = null, fabInspector = null;
+  // ---------- Logging ----------
+  function log(){ (window.CBLog && CBLog.log ? CBLog.log : console.log).apply(console, arguments); }
+  function ok(){  (window.CBLog && CBLog.ok  ? CBLog.ok  : console.log).apply(console, arguments); }
+  function warn(){(window.CBLog && CBLog.warn? CBLog.warn : console.warn).apply(console, arguments); }
 
-  // Exponierte, einfache Bridge-API
-  var Bridge = (window.UIBridge = window.UIBridge || {});
-  Bridge.openBuildBar  = function(){ ensureBuildBar(); openBuild(true); };
-  Bridge.closeBuildBar = function(){ ensureBuildBar(); openBuild(false); };
-  Bridge.toggleBuildBar= function(){ ensureBuildBar(); openBuild(!buildBarEl.classList.contains('open')); };
+  // ---------- Singletons ----------
+  var Bridge = (window.GameUI = window.GameUI || {});
+  var BuildUI = window.BuildUI || {};           // aus assets/ui/ui-build.js
+  var Inspector = (window.Inspector || {});     // aus assets/inspector/inspector.js
 
-  function ensureBuildBar(){
-    if (buildBarEl) return;
-    buildBarEl = document.getElementById('cb-buildbar') || createBuildBarPlaceholder();
+  // ---------- DOM Helpers ----------
+  function qs(sel, root){ return (root||document).querySelector(sel); }
+  function ce(tag, cls, html){
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
   }
 
-  // Falls ui-build.js den Container selbst erzeugt, fassen wir nur Klassen an.
-  function createBuildBarPlaceholder(){
-    var el = document.createElement('div');
-    el.id = 'cb-buildbar';
+  // einen Button nur einmal bauen
+  function ensureBtn(id, html, side, bottomPx){
+    var el = qs('#'+id);
+    if (el) return el;
+    el = ce('button','cb-fab '+side, html);
+    el.id = id;
+    el.type = 'button';
+    el.setAttribute('aria-label', id);
+    // fix am Viewport, nicht zoombar:
+    el.style.position = 'fixed';
+    el.style.zIndex = '2147483640';
+    el.style.bottom = (bottomPx||18)+'px';
+    if (side === 'left')  el.style.left  = '18px';
+    if (side === 'right') el.style.right = '18px';
     document.body.appendChild(el);
     return el;
   }
 
-  function setFabsRaised(raised){
-    [fabBuild, fabInspector].forEach(function(btn){
-      if (!btn) return;
-      btn.classList.toggle('fab--raised', !!raised);
-    });
+  // beim offenen Bau-Menü die Buttons etwas hochschieben
+  function liftFloatingButtons(isOpen){
+    var lift = isOpen ? 88 : 18;
+    var btnBuild = qs('#cb-btn-build');
+    var btnInsp  = qs('#cb-btn-inspector');
+    if (btnBuild) btnBuild.style.bottom = lift + 'px';
+    if (btnInsp)  btnInsp.style.bottom  = lift + 'px';
   }
 
-  function openBuild(on){
-    if (!buildBarEl) return;
-    buildBarEl.classList.toggle('open', !!on);
-    setFabsRaised(!!on);
-    // dem Baumenü sagen, dass es sichtbar ist (damit aktive States gesetzt werden können)
-    if (window.GameUI && typeof GameUI.onBuildVisibility==='function'){
-      try { GameUI.onBuildVisibility(!!on); } catch(_){}
-    }
+  // ---------- Bridge-Setup ----------
+  function install(){
+    // FABs erstellen (sind fix, zoomen nicht mit)
+    var btnBuild = ensureBtn('cb-btn-build', '🧱', 'left', 18);
+    var btnInsp  = ensureBtn('cb-btn-inspector', '🛠️', 'right', 18);
+
+    // zunächst ausblenden – erst im Spiel sichtbar
+    btnBuild.style.display = 'none';
+    btnInsp.style.display  = 'none';
+
+    // Klick-Handler
+    btnBuild.onclick = function(){
+      if (!BuildUI || !BuildUI.toggle) return warn('[bridge] BuildUI.toggle fehlt');
+      var opened = BuildUI.toggle();           // true/false zurück
+      liftFloatingButtons(opened);
+    };
+
+    btnInsp.onclick = function(){
+      if (!window.Inspector || !Inspector.toggle) return warn('[bridge] Inspector.toggle fehlt');
+      Inspector.toggle();
+    };
+
+    ok('[ui-bridge] Buttons bereit ('+VERSION+')');
   }
 
-  function initFabs(){
-    fabBuild = $('#fab-build');
-    fabInspector = $('#fab-inspector');
-
-    if (fabBuild){
-      fabBuild.addEventListener('click', function(e){
-        e.preventDefault();
-        Bridge.toggleBuildBar();
-      }, {passive:true});
+  // ---------- Event-Bindings ----------
+  // Start-Panel öffnen, wenn UI steht
+  window.addEventListener('cb:ui-ready', function(){
+    if (Bridge && typeof Bridge.openStartPanel === 'function') {
+      try { Bridge.openStartPanel(); } catch(e){}
     }
-    if (fabInspector){
-      fabInspector.addEventListener('click', function(e){
-        e.preventDefault();
-        // Inspector-API: toggle()
-        if (window.Inspector && typeof Inspector.toggle==='function'){
-          Inspector.toggle();
-        }else{
-          // Fallback: Element sichtbar schalten
-          var p = document.getElementById('cb-inspector');
-          if (p) p.classList.toggle('minimized');
-        }
-      }, {passive:true});
-    }
-  }
+  });
 
-  // UI erst zeigen, wenn das Spiel wirklich läuft
+  // Wenn Spiel fertig ist:
   window.addEventListener('cb:game-started', function(){
-    ensureBuildBar();
-    openBuild(false); // geschlossen starten
-    // FABs einblenden
-    [fabBuild, fabInspector].forEach(function(btn){
-      if (btn) btn.classList.remove('fab--hide');
-    });
-    log('[ui-bridge] bereit ('+VER+')');
+    // Inspector init (aber nicht auto-offen)
+    if (window.Inspector && Inspector.init && !Inspector._ready){
+      try { Inspector.init({autoOpen:false}); } catch(e){}
+    }
+
+    // Bau-Menü initialisieren und geschlossen lassen
+    if (window.BuildUI && BuildUI.init){
+      try { BuildUI.init(); BuildUI.close(); } catch(e){}
+    }
+
+    // Floating-Buttons anzeigen
+    var b = qs('#cb-btn-build'), i = qs('#cb-btn-inspector');
+    if (b) b.style.display = '';
+    if (i) i.style.display = '';
+
+    liftFloatingButtons(false);
+    ok('[ui-bridge] game-started → UI aktiv');
   });
 
-  // Wenn ui-build.js sein DOM fertig hat, preferiere dessen Container
-  window.addEventListener('cb:buildbar-ready', function(e){
-    var el = e && e.detail && e.detail.el;
-    if (el && el.id === 'cb-buildbar') buildBarEl = el;
-  });
-
-  // Beim Start direkt Buttons initialisieren (noch unsichtbar bis game-started)
-  document.addEventListener('DOMContentLoaded', initFabs, {once:true});
+  // einmalig beim Laden
+  try { install(); } catch(e){ warn('[ui-bridge] install error', e); }
 })();
