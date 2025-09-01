@@ -1,8 +1,9 @@
-// game.js — v16.4.3 (ES5)
+// game.js — v16.4.4 (ES5)
 // Map, Pan/Zoom, Build-Mode + Ghost-Preview + Mini-Glue + Roads + Carrier-Loop
+// + Auto-Carrier bei Farm/Holzfäller + Schmied-Fix
 (function(){
   'use strict';
-  var VERSION = 'v16.4.3';
+  var VERSION = 'v16.4.4';
 
   // ---------- logging ----------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -32,13 +33,20 @@
   // ---------- buildings ----------
   var BUILDINGS = {
     townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
+    depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png" },
+
     lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
-    farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.PNG" },
+    farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png" },
     mill:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
-    depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.PNG" },
+
     house0:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png" },
-    house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" }
+    house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" },
+
+    // Schmied (Fix) — Key "smith" + Alias "schmied"
+    smith:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Schmied_wood0.png" }
   };
+  // UI-Kompatibilität: falls das UI "schmied" sendet → auf "smith" mappen
+  function normalizeKey(k){ if(k==='schmied') return 'smith'; return k; }
 
   // ---------- tool ----------
   // mode: 'build'|'road'|'path'|'bulldozer'|null
@@ -73,6 +81,7 @@
 
   // ---------- placement ----------
   function canPlace(key, tx, ty){
+    key = normalizeKey(key);
     var def = BUILDINGS[key]; if (!def || !currentMap) return false;
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
     var t = currentMap.tile;
@@ -83,22 +92,53 @@
     }
     return true;
   }
+
   function placeBuilding(key, tx, ty){
+    key = normalizeKey(key);
     var def = BUILDINGS[key]; if (!def) return false;
     var t = currentMap.tile;
     var pos = tileToWorld(tx,ty);
     var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:def._img||null };
     entities.push(e);
     ok("[ok] Gebäude platziert:", key, "at", tx, ty);
+
+    // Auto-Carrier: bei Farm & Holzfäller sofort einen Träger Richtung nächster Ablage senden
+    if (key==='farm' || key==='lumberjack'){
+      trySpawnAutoCarrier(tx, ty);
+    }
     return true;
+  }
+
+  // ---------- Auto-Carrier Helfer ----------
+  function nearestDrop(tx, ty){
+    var best=null, bestD=1e9, t=currentMap.tile;
+    for (var i=0;i<entities.length;i++){
+      var e=entities[i];
+      if (e.key==='townhall' || e.key==='depot'){
+        var ex = Math.floor(e.x / t), ey = Math.floor(e.y / t);
+        var d = Math.abs(ex - tx) + Math.abs(ey - ty);
+        if (d<bestD){ bestD=d; best={tx:ex, ty:ey, key:e.key}; }
+      }
+    }
+    return best;
+  }
+  function trySpawnAutoCarrier(fromTx, fromTy){
+    if (!window.Carriers || !Carriers.spawn){ warn('[auto] Carriers.spawn fehlt'); return; }
+    var dst = nearestDrop(fromTx, fromTy) || {tx:fromTx+2, ty:fromTy+2};
+    var c = Carriers.spawn({ from:{x:fromTx, y:fromTy}, to:{x:dst.tx, y:dst.ty} });
+    if (c) ok('[auto] Carrier gestartet von', fromTx, fromTy, 'nach', dst.tx, dst.ty, '('+(dst.key||'demo')+')');
+    else   warn('[auto] Carrier-Start fehlgeschlagen (kein Pfad?)');
   }
 
   // ---------- public tool api ----------
   Game.setTool = function(mode, payload){
     if (mode === 'build'){
+      var k = payload && payload.key || null;
+      k = normalizeKey(k);
       tool.mode = 'build';
-      tool.key = payload && payload.key || null;
-      ghost = { key:tool.key, x:0,y:0,w:0,h:0,img:(tool.key && BUILDINGS[tool.key] && BUILDINGS[tool.key]._img)||null, ok:false };
+      tool.key = k;
+      var def = k && BUILDINGS[k];
+      ghost = def ? { key:k, x:0,y:0,w:0,h:0,img:def._img||null, ok:false } : null;
       drawMap();
       return;
     }
@@ -196,7 +236,7 @@
       ctx.strokeRect(gx+0.5, gy+0.5, gw-1, gh-1);
     }
 
-    // Carriers oben drauf
+    // Carriers
     try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
   }
 
@@ -245,6 +285,17 @@
     clampCam(); drawMap();
   }
 
+  // ---------- roads ----------
+  function setRoadAt(tx,ty,on){
+    var k = tx+','+ty;
+    var changed=false;
+    if (on){ if(!_roadSet.has(k)){ _roadSet.add(k); changed=true; } }
+    else   { if(_roadSet.delete(k)) changed=true; }
+    if (changed){
+      try{ if (window.PathFinder && PathFinder.invalidateRoads) PathFinder.invalidateRoads(); }catch(_){}
+    }
+  }
+
   // ---------- input ----------
   function updateGhostAtScreen(sx, sy){
     if (!(tool.mode==='build' && tool.key && currentMap)) return;
@@ -265,24 +316,11 @@
     ghost.ok = canPlace(tool.key, tx, ty);
   }
 
-  function setRoadAt(tx,ty,on){
-    var k = tx+','+ty;
-    var changed=false;
-    if (on){ if(!_roadSet.has(k)){ _roadSet.add(k); changed=true; } }
-    else   { if(_roadSet.delete(k)) changed=true; }
-    if (changed){
-      try{ if (window.PathFinder && PathFinder.invalidateRoads) PathFinder.invalidateRoads(); }catch(_){}
-    }
-  }
-
   function bindInput(){
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
     canvas.addEventListener('mousedown', function(e){
-      if (e.button===2){
-        Game.clearTool(); // Rechtsklick = abbrechen
-        return;
-      }
+      if (e.button===2){ Game.clearTool(); return; }
       drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y;
     });
     window.addEventListener('mousemove', function(e){
@@ -301,7 +339,7 @@
       zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top);
     }, {passive:false});
 
-    // Aktionen auf Klick
+    // Klickaktion
     canvas.addEventListener('click', function(e){
       var rect = canvas.getBoundingClientRect();
       var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
@@ -475,7 +513,7 @@
   Game.getTileSize = function(){ return (currentMap && currentMap.tile) || 64; };
   Game.getCamera   = function(){ return { x:cam.x, y:cam.y, zoom:cam.zoom }; };
 
-  // (einmalige) PathFinder-Init bei Game-Start (Basishook — zusätzlich Patch A unten)
+  // (Basishook) PF-Init
   window.addEventListener('cb:game-started', function(){
     if (window.PathFinder && typeof PathFinder.init === 'function') {
       PathFinder.init(function(){
@@ -485,9 +523,7 @@
     }
   });
 
-  // =========================
-  // === Patch A: robustes PF-Init mit Retry (Timing-Fix)
-  // =========================
+  // === Patch A: robustes PF-Init mit Retry ===
   (function(){
     function tryInitPF(attempts){
       attempts = attempts || 0;
@@ -501,27 +537,24 @@
         try { (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[boot] PathFinder.init OK (try '+attempts+')'); } catch(_){}
         return;
       }
-      if (attempts < 50){ // ~10s total
-        setTimeout(function(){ tryInitPF(attempts+1); }, 200);
-      } else {
-        try { (window.CBLog && CBLog.warn ? CBLog.warn : console.warn)('[boot] PathFinder.init ABGEBROCHEN'); } catch(_){}
-      }
+      if (attempts < 50){ setTimeout(function(){ tryInitPF(attempts+1); }, 200); }
+      else { try { (window.CBLog && CBLog.warn ? CBLog.warn : console.warn)('[boot] PathFinder.init ABGEBROCHEN'); } catch(_){ } }
     }
     window.addEventListener('cb:game-started', function(){ tryInitPF(0); });
     setTimeout(function(){ tryInitPF(0); }, 0);
   })();
 
-  // =========================
-  // === Patch B: optionaler Carrier-Autotest
-  // =========================
+  // === Patch B: optionaler Carrier-Autotest ===
   (function(){
     window.addEventListener('cb:game-started', function(){
       if (!window.DEV_CARRIER_AUTOTEST) return;
       setTimeout(function(){
         try {
           if (window.Carriers && typeof Carriers.spawn === 'function'){
-            // Beispiel: Rathaus -> leicht versetztes Ziel
-            Carriers.spawn({ from:{x:7,y:4}, to:{x:10,y:8} });
+            // Beispiel: Rathaus (Mitte) -> versetztes Ziel
+            var m = Game.currentMap || {width:16,height:10};
+            var cx=(m.width/2)|0, cy=(m.height/2)|0;
+            Carriers.spawn({ from:{x:cx,y:cy}, to:{x:Math.min(cx+3,m.width-1), y:Math.min(cy+2,m.height-1)} });
             (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[dev] Carrier-Autotest gestartet');
           }
         } catch(e){
