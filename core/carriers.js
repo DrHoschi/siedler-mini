@@ -1,91 +1,59 @@
-/* core/carriers.js — v16.5.1
-   Träger-Manager: spawn → A*-Pfad → laufen → Ziel → idle
-   Lazy-Init des PathFinders (holt Mapgröße aus Game)
+/* 
+========================================
+ Datei: core/carriers.js
+ Projekt: Siedler-Mini
+ Version: v16.5.1
+ Zweck: Carrier-Logik (Träger bewegen
+        sich über PathFinder)
+========================================
 */
+
 (function(){
   'use strict';
+  var VERSION = 'v16.5.1';
+  var Car = (window.Carriers = window.Carriers || {});
 
-  var CR = (window.Carriers = window.Carriers || {});
-  var _list = []; // {x,y, path:[{x,y}], seg:0, t:0, speedTilesPS, done}
-  var SPEED = 2.0; // tiles/sec
+  var carriers=[];
+  var ctx=null, cam=null;
 
-  function getTile(){ return (window.Game && Game.getTileSize && Game.getTileSize()) || 64; }
-
-  // Liefert Mapgröße für PF.ensureInit()
-  function getMapSize(){
-    var gm = (window.Game && Game.currentMap) ? Game.currentMap : null;
-    if (!gm && window.Game && typeof Game.getMapSize==='function') return Game.getMapSize();
-    if (gm) return { w:(gm.width|0), h:(gm.height|0) };
-    // Fallback (verhindert harte Crashes, aber Logik braucht echte Map)
-    return { w:16, h:10 };
-  }
-
-  function ensurePFReady(){
-    if (!window.PathFinder){ console.warn('[carriers] PathFinder fehlt'); return false; }
-    if (PathFinder.isReady) return true;
-    var ok = PathFinder.ensureInit(getMapSize);
-    if (ok) console.log('[carriers] PathFinder lazy-init durchgeführt');
-    return ok;
-  }
-
-  CR.spawn = function(opts){
-    opts=opts||{};
-    var sx=(opts.from&&opts.from.x)|0, sy=(opts.from&&opts.from.y)|0;
-    var tx=(opts.to&&opts.to.x)|0,   ty=(opts.to&&opts.to.y)|0;
-
-    if (!ensurePFReady()){ console.warn('[carriers] PF nicht bereit – spawn abgebrochen'); return null; }
-
-    try{
-      if (PathFinder.setRoadMask && window.Game && Game.getRoadSet){
-        PathFinder.setRoadMask(Game.getRoadSet());
-      }
-      if (PathFinder.setObstacleProvider && window.Game && typeof Game.getObstacleAt==='function'){
-        PathFinder.setObstacleProvider(Game.getObstacleAt);
-      }
-    }catch(_){}
-
-    var path = (PathFinder.findPath ? PathFinder.findPath({from:{x:sx,y:sy}, to:{x:tx,y:ty}, mode:'auto'}) : null);
-    if (!path || path.length<2){ console.warn('[carriers] kein Pfad', sx,sy,'→',tx,ty); return null; }
-
-    try{ if (PathFinder.applyHeat) PathFinder.applyHeat(path); }catch(_){}
-
-    var c = { x:sx, y:sy, path:path, seg:0, t:0, speedTilesPS:SPEED, done:false };
-    _list.push(c);
-    return c;
+  Car.spawn = function(job){
+    if(!window.PathFinder){ warn("PathFinder fehlt"); return; }
+    var path=PathFinder.findPath(job.from,job.to,'auto');
+    if(!path||path.length<2){ warn("[carriers] kein Pfad",job.from.x,job.from.y,"→",job.to.x,job.to.y); return; }
+    carriers.push({ path:path, pos:0, t:0 });
+    log("[carriers] spawn OK",job.from,"→",job.to);
   };
 
-  CR.tick = function(dt){
-    if (!_list.length) return;
-    for (var i=_list.length-1;i>=0;i--){
-      var c=_list[i]; if (c.done) continue;
-      var p=c.path, s=c.seg;
-      if (s>=p.length-1){ c.done=true; continue; }
-      var a=p[s], b=p[s+1];
-      var dx=b.x-a.x, dy=b.y-a.y;
-      var segLen = Math.sqrt(dx*dx+dy*dy) || 1;
-      var adv = (c.speedTilesPS * dt) / segLen;
-      c.t += adv;
-      if (c.t>=1){ c.seg++; c.t=0; if (c.seg>=p.length-1){ c.x=b.x; c.y=b.y; c.done=true; continue; } a=p[c.seg]; b=p[c.seg+1]; dx=b.x-a.x; dy=b.y-a.y; segLen=Math.sqrt(dx*dx+dy*dy)||1; }
-      c.x = a.x + dx*c.t;
-      c.y = a.y + dy*c.t;
+  Car.tick = function(dt){
+    for(var i=0;i<carriers.length;i++){
+      var c=carriers[i];
+      if(c.pos>=c.path.length-1) continue;
+      c.t+=dt*2;
+      if(c.t>=1){
+        c.t=0; c.pos++;
+      }
     }
   };
 
-  CR.draw = function(ctx, cam){
-    try{ if (window.PathFinder && PathFinder.drawOverlay) PathFinder.drawOverlay(ctx, cam); }catch(_){}
-    if (!_list.length) return;
-    var tile=getTile();
-    for (var i=0;i<_list.length;i++){
-      var c=_list[i];
-      var wx=c.x*tile+tile/2, wy=c.y*tile+tile/2;
-      var sx=Math.floor((wx-cam.x)*cam.zoom), sy=Math.floor((wy-cam.y)*cam.zoom);
-      ctx.save();
-      ctx.fillStyle = c.done ? 'rgba(255,255,0,.7)' : 'rgba(255,200,0,.95)';
-      var r=Math.max(3, Math.floor(4*cam.zoom));
-      ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2,false); ctx.fill();
-      ctx.restore();
-    }
+  Car.draw = function(gctx,gcam){
+    ctx=gctx; cam=gcam;
+    carriers.forEach(drawCarrier);
   };
 
-  console.log('[carriers.js] Modul geladen (v16.5.1)');
+  function drawCarrier(c){
+    var p=c.path[c.pos];
+    if(!p) return;
+    var x=(p.x*64-cam.x)*cam.zoom;
+    var y=(p.y*64-cam.y)*cam.zoom;
+    var s=8*cam.zoom;
+    ctx.fillStyle="yellow";
+    ctx.beginPath();
+    ctx.arc(x+s,y+s,s,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  function log(){ (window.CBLog?.ok||console.log).apply(console,arguments); }
+  function warn(){ (window.CBLog?.warn||console.warn).apply(console,arguments); }
+
+  log("[carriers.js] Modul geladen",VERSION);
 })();
