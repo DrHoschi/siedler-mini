@@ -45,3 +45,64 @@
 
 /* Safety: falls jemand alte, runde FABs manuell im HTML hatte */
 .round-btn, .fab, .floating-button { z-index: 25; }
+/* --- Fixed Overlay Basics (nicht mitzoomen) ------------------------------ */
+.cb-build-root, .cb-inspector-root {
+  position: fixed;
+  left: 0; right: 0; bottom: 0; top: 0;
+  pointer-events: none;
+  z-index: 30; /* über der Canvas */
+}
+
+.cb-build-root .cb-build-bar,
+.cb-build-root .cb-fab,
+.cb-inspector-root .cb-inspector-panel,
+.cb-inspector-root .cb-fab {
+  pointer-events: auto;
+}
+
+.cb-build-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  backdrop-filter: blur(8px);
+  background: rgba(16,24,16,0.7);
+  padding: 10px 12px 16px;
+  transform: translateY(110%);
+  transition: transform .25s ease;
+}
+
+.cb-build-root.open .cb-build-bar { transform: translateY(0); }
+
+.cb-build-tabs { display:flex; gap:8px; padding:6px 4px; }
+.cb-build-tabs .cb-tab,
+.cb-build-tabs button { border:0; border-radius:999px; padding:8px 12px; background:#233; color:#cfe; opacity:.8; }
+.cb-build-tabs .active { background:#2e4; color:#042; opacity:1; }
+
+.cb-build-list { display:flex; flex-wrap:wrap; gap:10px; padding:8px 4px; }
+.cb-item { border:0; border-radius:12px; background:#1f2a1f; color:#def; padding:10px 12px; display:flex; align-items:center; gap:8px; }
+.cb-item .cb-emoji { filter: drop-shadow(0 0 1px #0008); }
+
+.cb-fab { position: fixed; bottom: 14px; width:58px; height:58px; border-radius:50%; border:0; background:#1b2b1b; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.35); }
+.cb-fab:active { transform: translateY(1px); }
+.cb-fab-build { left: 14px; }
+.cb-fab-insp  { right:14px; }
+
+/* FABs anheben, wenn Menü offen */
+.cb-build-open .cb-fab { bottom: 88px; }
+
+/* Inspector */
+.cb-inspector-panel {
+  position: fixed; left: 16px; right: 16px; bottom: 88px;
+  max-height: 55vh; overflow:auto;
+  border-radius: 16px; background: rgba(16,24,16,.78);
+  color:#dfe; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  transform: translateY(110%); transition: transform .25s ease;
+}
+.cb-inspector-root.open .cb-inspector-panel { transform: translateY(0); }
+
+.cb-insp-head { font-weight:600; margin-bottom:8px; }
+.cb-insp-head .muted { opacity:.6; margin-left:.5em; }
+.cb-insp-tabs { display:flex; gap:8px; margin-bottom:8px; }
+.cb-insp-tabs button { border:0; border-radius:999px; padding:6px 12px; background:#233; color:#cfe; opacity:.8; }
+.cb-insp-tabs .active { background:#2e4; color:#042; opacity:1; }
+.cb-insp-live { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.cb-insp-logs { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; background:#101810; padding:10px; border-radius:10px; }
