@@ -1,162 +1,158 @@
-// game.js — v16.4.4 (ES5)
-// Map, Pan/Zoom, Build-Mode + Ghost-Preview + Mini-Glue + Roads + Carrier-Loop
-// + Auto-Carrier bei Farm/Holzfäller + Schmied-Fix
+// game.js — v16.5.1 (ES5)
+// Map, Pan/Zoom, Building-Placement, Entities, Produktion/Überschuss, Obstacles(+1 Puffer), Carrier-Glue
 (function(){
   'use strict';
-  var VERSION = 'v16.4.4';
 
-  // ---------- logging ----------
+  var VERSION = 'v16.5.1';
+
+  // --- logging helpers ---
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
   function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
   function err(){ (window.CBLog && CBLog.err ? CBLog.err : console.error).apply(console, arguments); }
 
-  // ---------- namespaces ----------
+  // public namespaces
   var GL = (window.GameLoader = window.GameLoader || {});
   var Game = (window.Game = window.Game || {});
 
-  // ---------- render state ----------
+  // render state
   var canvas=null, ctx=null, DPR=1, viewW=0, viewH=0;
-  var engineReady=false, loopOn=false, lastTS=0;
+  var engineReady=false;
 
-  // ---------- map ----------
+  // map
   var currentMap=null, tilesetImg=null, atlas=null;
 
-  // ---------- camera ----------
+  // camera
   var cam = { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 };
 
-  // ---------- entities ----------
-  var entities = []; // {key,x,y,w,h,img}
+  // entities (Gebäude)
+  // e: { id, key, tx,ty, wTiles,hTiles, x,y,w,h, img, stock:{}, prod?:{type,rate,cap,keep}, tickAcc }
+  var entities = [];
+  var nextEntityId = 1;
 
-  // ---------- ghost ----------
-  var ghost = null;
+  // obstacles grid (tile-blocker) inkl. 1-Tile-Puffer um Gebäude
+  var obstW=0, obstH=0, obstacles=null;  // Uint8Array
+  function allocObstacles(w,h){ obstW=w|0; obstH=h|0; obstacles = new Uint8Array(obstW*obstH); }
+  function obIdx(x,y){ return y*obstW + x; }
+  function inb(x,y){ return x>=0 && y>=0 && x<obstW && y<obstH; }
+  function setBlocked(x,y){ if(inb(x,y)) obstacles[obIdx(x,y)] = 1; }
+  function clearObstacles(){ if(!obstacles) return; for(var i=0;i<obstacles.length;i++) obstacles[i]=0; }
 
-  // ---------- buildings ----------
+  // road/path data (wenn du Straßen/Tiles als Road markierst, pflegen wir ein Set("x,y"))
+  var roadSet = new Set(); // optional: kann leer sein
+
+  // tool state
+  var tool = { mode:null, key:null }; // mode: 'build'|'road'|'path'|'bulldozer'
+
+  // assets buildings definition (Tilesize relativ zur Map-Tile)
   var BUILDINGS = {
-    townhall:   { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
-    depot:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png" },
-
-    lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
-    farm:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png" },
-    mill:       { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
-
-    house0:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png" },
-    house1:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" },
-
-    // Schmied (Fix) — Key "smith" + Alias "schmied"
-    smith:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Schmied_wood0.png" }
+    townhall:  { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
+    hq:        { wTiles:2, hTiles:2, img:"assets/tex/building/wood/hq_wood.PNG" },
+    depot:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png" },
+    lumberjack:{ wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG",
+      prod:{ type:'wood', rate:0.35, cap:20, keep:6 } },
+    farm:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png",
+      prod:{ type:'grain', rate:0.30, cap:20, keep:6 } },
+    mill:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
+    smith:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Schmied_wood0.png" },
+    house0:    { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png" },
+    house1:    { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png" },
+    tree:      { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
-  // UI-Kompatibilität: falls das UI "schmied" sendet → auf "smith" mappen
-  function normalizeKey(k){ if(k==='schmied') return 'smith'; return k; }
 
-  // ---------- tool ----------
-  // mode: 'build'|'road'|'path'|'bulldozer'|null
-  var tool = { mode:null, key:null };
+  // alias mapping (de → en keys)
+  var ALIAS = { schmied:'smith', rathaus:'townhall', holzfaeller:'lumberjack', bauernhof:'farm', wohnhaus0:'house0', wohnhaus1:'house1' };
 
-  // ---------- roads (Set "x,y") ----------
-  var _roadSet = new Set();
-
-  // ---------- utils ----------
+  // utils
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=function(){rej(new Error("img "+src))}; i.src=src; }); }
+  function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
   function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
+
+  // coords
   function worldToTile(px,py){ var t=currentMap.tile; return { x: Math.floor(px/t), y: Math.floor(py/t) }; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
+
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
-  function loadImage(src){
-    return new Promise(function(res,rej){
-      var triedAlt=false, i=new Image();
-      i.onload=function(){ res(i); };
-      i.onerror=function(){
-        if (triedAlt) return rej(new Error("img "+src));
-        triedAlt=true;
-        if (src.slice(-4).toLowerCase()==='.png'){
-          var alt = src.slice(0,-4) + (src.slice(-4)==='.png'?'.PNG':'.png');
-          i.src = alt;
-        } else { rej(new Error("img "+src)); }
-      };
-      i.src=src;
-    });
-  }
-  function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
+  // --- PUBLIC API (needed by PF/Carriers/UI) ---
+  Game.getTileSize = function(){ return currentMap ? currentMap.tile : 64; };
+  Game.getCamera   = function(){ return cam; };
+  Game.getRoadSet  = function(){ return roadSet; };
 
-  // ---------- placement ----------
+  // *** HIER: Blocker-Provider inkl. 1 Tile Puffer um Gebäude ***
+  Game.getObstacleAt = function(tx,ty){
+    if (!obstacles) return false;
+    if (!inb(tx,ty)) return true;
+    return obstacles[obIdx(tx,ty)] === 1;
+  };
+
+  // --- Placement rules ---
+  function resolveKey(key){ if(BUILDINGS[key]) return key; if(ALIAS[key]) return ALIAS[key]; return key; }
+
   function canPlace(key, tx, ty){
-    key = normalizeKey(key);
-    var def = BUILDINGS[key]; if (!def || !currentMap) return false;
+    var def = BUILDINGS[key = resolveKey(key)]; if (!def || !currentMap) return false;
+    // bounds
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
-    var t = currentMap.tile;
-    var r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
+    // collision with other entities
+    var t = currentMap.tile, r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
     for (var i=0;i<entities.length;i++){
       var e=entities[i];
-      if (rectsOverlap(r, {x:e.x,y:e.y,w:e.w,h:e.h})) return false;
+      var er = { x:e.x, y:e.y, w:e.w, h:e.h };
+      if (rectsOverlap(r,er)) return false;
     }
     return true;
+  }
+
+  function registerObstaclesFromEntities(){
+    if (!currentMap) return;
+    if (!obstacles || obstW!==currentMap.width || obstH!==currentMap.height){
+      allocObstacles(currentMap.width, currentMap.height);
+    } else {
+      clearObstacles();
+    }
+    // Gebäude + 1 Tile Puffer markieren
+    for (var i=0;i<entities.length;i++){
+      var e=entities[i];
+      var px = Math.max(0, e.tx-1), py = Math.max(0, e.ty-1);
+      var pw = Math.min(obstW-1, e.tx + e.wTiles), ph = Math.min(obstH-1, e.ty + e.hTiles);
+      for (var y=py; y<=ph; y++){
+        for (var x=px; x<=pw; x++){
+          setBlocked(x,y);
+        }
+      }
+    }
   }
 
   function placeBuilding(key, tx, ty){
-    key = normalizeKey(key);
+    key = resolveKey(key);
     var def = BUILDINGS[key]; if (!def) return false;
     var t = currentMap.tile;
     var pos = tileToWorld(tx,ty);
-    var e = { key:key, x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t, img:def._img||null };
-    entities.push(e);
-    ok("[ok] Gebäude platziert:", key, "at", tx, ty);
-
-    // Auto-Carrier: bei Farm & Holzfäller sofort einen Träger Richtung nächster Ablage senden
-    if (key==='farm' || key==='lumberjack'){
-      trySpawnAutoCarrier(tx, ty);
+    var img = def._img;
+    var e = {
+      id: nextEntityId++,
+      key:key, tx:tx, ty:ty, wTiles:def.wTiles, hTiles:def.hTiles,
+      x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t,
+      img:img, stock:{}, tickAcc:0
+    };
+    // Produktionsprofil (optional je nach Gebäude)
+    if (def.prod){
+      e.prod = { type:def.prod.type, rate:def.prod.rate, cap:def.prod.cap, keep:def.prod.keep };
     }
+    entities.push(e);
+    registerObstaclesFromEntities(); // -> Obstacles aktualisieren
+    ok("[ok] Gebäude platziert:", key, "at", tx, ty);
+    // Auto-Überschuss-Transport: wird in tickProduction() getriggert, wenn überschuss vorhanden
     return true;
   }
 
-  // ---------- Auto-Carrier Helfer ----------
-  function nearestDrop(tx, ty){
-    var best=null, bestD=1e9, t=currentMap.tile;
-    for (var i=0;i<entities.length;i++){
-      var e=entities[i];
-      if (e.key==='townhall' || e.key==='depot'){
-        var ex = Math.floor(e.x / t), ey = Math.floor(e.y / t);
-        var d = Math.abs(ex - tx) + Math.abs(ey - ty);
-        if (d<bestD){ bestD=d; best={tx:ex, ty:ey, key:e.key}; }
-      }
-    }
-    return best;
-  }
-  function trySpawnAutoCarrier(fromTx, fromTy){
-    if (!window.Carriers || !Carriers.spawn){ warn('[auto] Carriers.spawn fehlt'); return; }
-    var dst = nearestDrop(fromTx, fromTy) || {tx:fromTx+2, ty:fromTy+2};
-    var c = Carriers.spawn({ from:{x:fromTx, y:fromTy}, to:{x:dst.tx, y:dst.ty} });
-    if (c) ok('[auto] Carrier gestartet von', fromTx, fromTy, 'nach', dst.tx, dst.ty, '('+(dst.key||'demo')+')');
-    else   warn('[auto] Carrier-Start fehlgeschlagen (kein Pfad?)');
-  }
-
-  // ---------- public tool api ----------
-  Game.setTool = function(mode, payload){
-    if (mode === 'build'){
-      var k = payload && payload.key || null;
-      k = normalizeKey(k);
-      tool.mode = 'build';
-      tool.key = k;
-      var def = k && BUILDINGS[k];
-      ghost = def ? { key:k, x:0,y:0,w:0,h:0,img:def._img||null, ok:false } : null;
-      drawMap();
-      return;
-    }
-    tool.mode = mode || null;
-    tool.key = null;
-    ghost = null;
-    ok('[ok] Tool gesetzt:', tool.mode||'none');
-    drawMap();
-  };
-  Game.clearTool = function(){ tool.mode=null; tool.key=null; ghost=null; ok('[ok] Tool zurückgesetzt'); drawMap(); };
-
-  // ---------- draw ----------
+  // --- draw map/entities ---
   function drawMap(){
     if(!ctx || !currentMap) return;
     var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // sichtfenster
+    // sichtfenster bounds (in Tiles)
     var left   = Math.floor(cam.x / t);
     var top    = Math.floor(cam.y / t);
     var right  = Math.ceil((cam.x + viewW/cam.zoom) / t);
@@ -193,23 +189,7 @@
       }
     }
 
-    // Roads Overlay
-    if (_roadSet.size){
-      ctx.save();
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = '#8b8b8b';
-      _roadSet.forEach(function(k){
-        var s=k.split(','), tx=+s[0], ty=+s[1];
-        if (tx<left||tx>=right||ty<top||ty>=bottom) return;
-        var dx = Math.floor((tx*t - cam.x)*cam.zoom);
-        var dy = Math.floor((ty*t - cam.y)*cam.zoom);
-        var ds = Math.ceil(t*cam.zoom);
-        ctx.fillRect(dx,dy,ds,ds);
-      });
-      ctx.restore();
-    }
-
-    // Entities
+    // Entities oben drauf
     for (var k=0;k<entities.length;k++){
       var e=entities[k];
       var dx = Math.floor((e.x - cam.x)*cam.zoom);
@@ -220,44 +200,11 @@
       else { ctx.fillStyle = "rgba(255,255,255,.2)"; ctx.fillRect(dx,dy,dw,dh); }
     }
 
-    // Ghost
-    if (ghost && tool.mode==='build' && tool.key){
-      var gx = Math.floor((ghost.x - cam.x)*cam.zoom);
-      var gy = Math.floor((ghost.y - cam.y)*cam.zoom);
-      var gw = Math.ceil(ghost.w*cam.zoom);
-      var gh = Math.ceil(ghost.h*cam.zoom);
-      ctx.save();
-      ctx.globalAlpha = 0.75;
-      if (ghost.img){ try { ctx.drawImage(ghost.img, gx,gy,gw,gh); } catch(_){} }
-      else { ctx.fillStyle = "rgba(255,255,255,.3)"; ctx.fillRect(gx,gy,gw,gh); }
-      ctx.restore();
-      ctx.lineWidth = Math.max(2, Math.floor(2*cam.zoom));
-      ctx.strokeStyle = ghost.ok ? "rgba(60,220,120,.95)" : "rgba(255,80,80,.95)";
-      ctx.strokeRect(gx+0.5, gy+0.5, gw-1, gh-1);
-    }
-
-    // Carriers
+    // Carrier layer
     try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
   }
 
-  // ---------- loop ----------
-  function loop(ts){
-    if (!loopOn) return;
-    if (!lastTS) lastTS = ts;
-    var dt = (ts - lastTS)/1000; lastTS = ts;
-
-    try{ if (window.Carriers && Carriers.tick) Carriers.tick(dt); }catch(_){}
-    drawMap();
-    requestAnimationFrame(loop);
-  }
-  function startLoop(){
-    if (loopOn) return;
-    loopOn=true; lastTS=0;
-    ok('[game] Renderloop gestartet (v'+VERSION+')');
-    requestAnimationFrame(loop);
-  }
-
-  // ---------- fit/clamp/zoom ----------
+  // fit canvas / clamp camera
   function clampCam(){
     var size = mapPx();
     var maxX = Math.max(0, size.w - viewW/cam.zoom);
@@ -274,6 +221,8 @@
     if (ctx.setTransform) ctx.setTransform(DPR,0,0,DPR,0,0);
     viewW=w; viewH=h; clampCam(); drawMap();
   }
+
+  // zoom helper
   function zoomAt(f, cx, cy){
     var preX = cam.x + cx / cam.zoom;
     var preY = cam.y + cy / cam.zoom;
@@ -285,107 +234,39 @@
     clampCam(); drawMap();
   }
 
-  // ---------- roads ----------
-  function setRoadAt(tx,ty,on){
-    var k = tx+','+ty;
-    var changed=false;
-    if (on){ if(!_roadSet.has(k)){ _roadSet.add(k); changed=true; } }
-    else   { if(_roadSet.delete(k)) changed=true; }
-    if (changed){
-      try{ if (window.PathFinder && PathFinder.invalidateRoads) PathFinder.invalidateRoads(); }catch(_){}
-    }
-  }
-
-  // ---------- input ----------
-  function updateGhostAtScreen(sx, sy){
-    if (!(tool.mode==='build' && tool.key && currentMap)) return;
-    var rect = canvas.getBoundingClientRect();
-    var wx = cam.x + (sx - rect.left) / cam.zoom;
-    var wy = cam.y + (sy - rect.top)  / cam.zoom;
-    var tile = currentMap.tile;
-    var tx = Math.floor(wx / tile);
-    var ty = Math.floor(wy / tile);
-    var def = BUILDINGS[tool.key];
-    if (!def) return;
-    if (!ghost) ghost = {};
-    var pos = tileToWorld(tx,ty);
-    ghost.key = tool.key;
-    ghost.x = pos.x; ghost.y = pos.y;
-    ghost.w = def.wTiles*tile; ghost.h = def.hTiles*tile;
-    ghost.img = def._img || null;
-    ghost.ok = canPlace(tool.key, tx, ty);
-  }
-
+  // input
   function bindInput(){
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
-    canvas.addEventListener('mousedown', function(e){
-      if (e.button===2){ Game.clearTool(); return; }
-      drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y;
-    });
-    window.addEventListener('mousemove', function(e){
-      if (!canvas) return;
-      updateGhostAtScreen(e.clientX, e.clientY);
-      if(!drag.on || drag.pinch) { drawMap(); return; }
-      cam.x=drag.cx-(e.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(e.clientY-drag.sy)/cam.zoom; clampCam(); drawMap();
-    });
+    canvas.addEventListener('mousedown', function(e){ drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=cam.x; drag.cy=cam.y; });
+    window.addEventListener('mousemove', function(e){ if(!drag.on || drag.pinch) return; cam.x=drag.cx-(e.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(e.clientY-drag.sy)/cam.zoom; clampCam(); drawMap(); });
     window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; });
 
-    canvas.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+    canvas.addEventListener('wheel', function(e){ e.preventDefault?e.preventDefault():(e.returnValue=false); var rect=canvas.getBoundingClientRect(); zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top); }, {passive:false});
 
-    canvas.addEventListener('wheel', function(e){
-      e.preventDefault ? e.preventDefault() : (e.returnValue=false);
-      var rect=canvas.getBoundingClientRect();
-      zoomAt(e.deltaY<0?1.15:1/1.15, e.clientX-rect.left, e.clientY-rect.top);
-    }, {passive:false});
-
-    // Klickaktion
+    // Tap/Klick für Platzierung
     canvas.addEventListener('click', function(e){
+      if (tool.mode!=='build' || !tool.key || !currentMap) return;
       var rect = canvas.getBoundingClientRect();
-      var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-      var wx = cam.x + sx / cam.zoom, wy = cam.y + sy / cam.zoom;
+      var sx = e.clientX - rect.left;
+      var sy = e.clientY - rect.top;
+      var wx = cam.x + sx / cam.zoom;
+      var wy = cam.y + sy / cam.zoom;
       var tile = currentMap.tile;
-      var tx = Math.floor(wx / tile), ty = Math.floor(wy / tile);
-
-      if (tool.mode==='build' && tool.key){
-        if (canPlace(tool.key, tx, ty)){
-          placeBuilding(tool.key, tx, ty);
-          updateGhostAtScreen(e.clientX, e.clientY);
-          drawMap();
-        } else {
-          warn("[game] Platzierung nicht möglich.");
-        }
-        return;
-      }
-      if (tool.mode==='road' || tool.mode==='path'){
-        setRoadAt(tx, ty, true); drawMap();
-        return;
-      }
-      if (tool.mode==='bulldozer'){
-        setRoadAt(tx, ty, false); drawMap();
-        return;
-      }
-    });
-
-    // Draggen zum Straßenmalen
-    canvas.addEventListener('mousemove', function(e){
-      if (!drag.on) return;
-      if (tool.mode==='road' || tool.mode==='path'){
-        var rect = canvas.getBoundingClientRect();
-        var sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-        var wx = cam.x + sx / cam.zoom, wy = cam.y + sy / cam.zoom;
-        var tile = currentMap.tile;
-        var tx = Math.floor(wx / tile), ty = Math.floor(wy / tile);
-        setRoadAt(tx, ty, true); drawMap();
+      var tx = Math.floor(wx / tile);
+      var ty = Math.floor(wy / tile);
+      if (canPlace(tool.key, tx, ty)){
+        placeBuilding(tool.key, tx, ty);
+        drawMap();
+      } else {
+        warn("[game] Platzierung nicht möglich.");
       }
     });
 
     // Touch (Pan + Pinch)
     canvas.addEventListener('touchstart', function(e){
       if (e.touches.length===1){
-        var t=e.touches[0];
-        drag.on=true; drag.pinch=false; drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=cam.x; drag.cy=cam.y;
-        updateGhostAtScreen(t.clientX, t.clientY);
+        var t=e.touches[0]; drag.on=true; drag.pinch=false; drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=cam.x; drag.cy=cam.y;
       } else if (e.touches.length>=2){
         drag.on=true; drag.pinch=true;
         var a=e.touches[0], b=e.touches[1];
@@ -395,10 +276,7 @@
     canvas.addEventListener('touchmove', function(e){
       if (!drag.on) return;
       if (!drag.pinch && e.touches.length===1){
-        var t=e.touches[0];
-        cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom; clampCam();
-        updateGhostAtScreen(t.clientX, t.clientY);
-        drawMap();
+        var t=e.touches[0]; cam.x=drag.cx-(t.clientX-drag.sx)/cam.zoom; cam.y=drag.cy-(t.clientY-drag.sy)/cam.zoom; clampCam(); drawMap();
       } else if (e.touches.length>=2){
         var a=e.touches[0], b=e.touches[1];
         var d=Math.sqrt(Math.pow(a.clientX-b.clientX,2)+Math.pow(a.clientY-b.clientY,2));
@@ -414,17 +292,109 @@
     // Keyboard
     window.addEventListener('keydown', function(e){
       var k=(e.key||'').toLowerCase(), step=Math.max(16, Math.floor(120/cam.zoom));
-      if(k==='escape'){ Game.clearTool(); return; }
-      if(k==='arrowleft'||k==='a'){ cam.x-=step; } 
-      else if(k==='arrowright'||k==='d'){ cam.x+=step; }
-      else if(k==='arrowup'||k==='w'){ cam.y-=step; } 
-      else if(k==='arrowdown'||k==='s'){ cam.y+=step; } 
-      else return;
+      if(k==='arrowleft'||k==='a'){ cam.x-=step; } else if(k==='arrowright'||k==='d'){ cam.x+=step; }
+      else if(k==='arrowup'||k==='w'){ cam.y-=step; } else if(k==='arrowdown'||k==='s'){ cam.y+=step; } else return;
       clampCam(); drawMap();
     });
   }
 
-  // ---------- engine init ----------
+  // Game tool API
+  Game.setTool = function(mode, payload){
+    if (mode === 'build'){ tool.mode='build'; tool.key = payload && payload.key; }
+    else { tool.mode = mode; tool.key = null; }
+    if (mode===null){ ok('[ok] Tool zurückgesetzt'); }
+  };
+
+  // --- Produktion / Überschuss / Carrier-Glue ---
+  // sehr einfacher Sim-Tick – ruft auch Carriers.tick auf
+  var lastTS = performance.now();
+  function tick(){
+    var now = performance.now();
+    var dt = Math.min(0.1, (now - lastTS)/1000); // clamp dt
+    lastTS = now;
+
+    // Produktion
+    tickProduction(dt);
+
+    // Carrier bewegen
+    try{ if (window.Carriers && Carriers.tick) Carriers.tick(dt); }catch(_){}
+
+    drawMap();
+    requestAnimationFrame(tick);
+  }
+
+  function tickProduction(dt){
+    for (var i=0;i<entities.length;i++){
+      var e=entities[i];
+      if (!e.prod) continue;
+      // produzieren
+      e.tickAcc = (e.tickAcc||0) + dt*e.prod.rate;
+      if (e.tickAcc >= 1){
+        var add = Math.floor(e.tickAcc); e.tickAcc -= add;
+        var t = e.prod.type;
+        var cur = (e.stock[t]|0);
+        var cap = e.prod.cap|0;
+        if (cur < cap){ e.stock[t] = Math.min(cap, cur+add); }
+      }
+      // Überschuss versenden
+      var type = e.prod.type, keep = e.prod.keep|0;
+      var have = (e.stock[type]|0);
+      if (have > keep){
+        // Ziel = nearest depot/townhall/hq
+        var src = { x:e.tx+Math.floor(e.wTiles/2), y:e.ty+Math.floor(e.hTiles/2) };
+        var dst = findNearestDrop(src.x, src.y); // tiles
+        if (dst){
+          // nur einmal pro Sek. versuchen → simple throttle
+          e._sendAcc = (e._sendAcc||0) + dt;
+          if (e._sendAcc > 1.0){
+            e._sendAcc = 0;
+            var c = trySpawnCarrier(src, dst);
+            if (c){
+              // reduziere Lager um z.B. 1 Einheit (Demo)
+              e.stock[type] = Math.max(keep, e.stock[type]-1);
+              ok('[auto] Carrier gestartet von', src.x,src.y, 'nach', dst.x,dst.y);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function trySpawnCarrier(from, to){
+    try{
+      if (window.PathFinder && PathFinder.setRoadMask && Game.getRoadSet) PathFinder.setRoadMask(Game.getRoadSet());
+      if (window.PathFinder && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt);
+      if (window.Carriers && Carriers.spawn){
+        return Carriers.spawn({ from:from, to:to });
+      }
+    }catch(_){}
+    return null;
+  }
+
+  function findNearestDrop(sx,sy){
+    var best=null, bestD=1e9;
+    for (var i=0;i<entities.length;i++){
+      var e=entities[i];
+      if (e.key!=='depot' && e.key!=='townhall' && e.key!=='hq') continue;
+      var cx = e.tx + Math.floor(e.wTiles/2);
+      var cy = e.ty + Math.floor(e.hTiles/2);
+      var d = Math.abs(cx-sx) + Math.abs(cy-sy);
+      if (d < bestD){ bestD=d; best={x:cx,y:cy}; }
+    }
+    // falls kein Depot/HQ existiert → townhall fallback (sollte vorhanden sein)
+    if (!best){
+      var th = getFirstEntity('townhall');
+      if (th) best = { x: th.tx+Math.floor(th.wTiles/2), y: th.ty+Math.floor(th.hTiles/2) };
+    }
+    return best;
+  }
+
+  function getFirstEntity(key){
+    for (var i=0;i<entities.length;i++) if(entities[i].key===key) return entities[i];
+    return null;
+  }
+
+  // engine init
   function initEngine(){
     if (engineReady) return;
     canvas = document.getElementById('game') || document.getElementById('stage') || (function(){var c=document.createElement('canvas');c.id='game';document.body.appendChild(c);return c;})();
@@ -433,14 +403,16 @@
     bindInput();
     engineReady=true; ok("game.js geladen, game.js "+VERSION);
     try{ window.dispatchEvent(new CustomEvent('cb:engine-ready',{detail:{v:VERSION}})); }catch(_){}
+    requestAnimationFrame(tick);
   }
 
-  // ---------- loader / start ----------
+  // loader / start
   GL._start = function(mapUrl){
     return new Promise(function(resolve,reject){
       function start(){
         ok("GameLoader.start "+mapUrl);
         loadJSON(mapUrl).then(function(map){
+          // map normalisieren
           function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
           var ms = map.mapSize || map.size || null;
           var width  = pickNum(map.width, map.w,  ms && ms.w,  ms && ms.width)  || 16;
@@ -453,39 +425,41 @@
           };
           ok("Map geladen: "+width+"×"+height+" · Tile "+tile);
 
-          // Gebäude-Assets
+          // Obstacles init
+          allocObstacles(width,height);
+          clearObstacles();
+
+          // Assets für Gebäude vorbereiten
           var preload = [];
           for (var k in BUILDINGS) if (BUILDINGS.hasOwnProperty(k)){
             (function(key){
               preload.push(loadImage(BUILDINGS[key].img).then(function(img){ BUILDINGS[key]._img=img; })
-                .catch(function(e){ warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); }));
+              .catch(function(e){ warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); }));
             })(k);
           }
 
-          // Tileset/Atlas (optional)
+          // Tileset/Atlas
           var TILESET_PNG  = './assets/tiles/tileset.terrain.png';
           var TILESET_JSON = './assets/tiles/tileset.terrain.json';
 
-          Promise.all([ loadJSON(TILESET_JSON).catch(function(){return null;}), loadImage(TILESET_PNG).catch(function(){return null;}) ].concat(preload))
+          Promise.all([ loadJSON(TILESET_JSON), loadImage(TILESET_PNG) ].concat(preload))
           .then(function(res){
-            atlas = res[0]||null; tilesetImg = res[1]||null;
+            atlas = res[0]; tilesetImg = res[1];
           })
+          .catch(function(e){ atlas=null; tilesetImg=null; warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); })
           .then(function(){
-            // Rathaus
+            // Rathaus auto-spawn in Kartenmitte (sofern noch nicht vorhanden)
             var cx = Math.floor(width/2), cy = Math.floor(height/2);
-            if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
-
-            // Kamera zentrieren
+            if (!getFirstEntity('townhall')){
+              if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
+            }
+            // Kamera mittig aufs Rathaus
             var center = tileToWorld(cx, cy);
             cam.zoom = 1;
             cam.x = clamp(center.x - viewW/2, 0, Math.max(0, mapPx().w - viewW));
             cam.y = clamp(center.y - viewH/2, 0, Math.max(0, mapPx().h - viewH));
 
             drawMap();
-            startLoop();
-
-            // Glue exposen
-            Game.currentMap = currentMap; Game.cam = cam;
 
             try{ window.dispatchEvent(new CustomEvent('cb:game-started',{detail:{map:mapUrl}})); }catch(_){}
             if (window.GameUI && typeof window.GameUI.onGameStarted==='function') window.GameUI.onGameStarted();
@@ -497,71 +471,18 @@
     });
   };
 
-  function hasEntity(key){
-    for (var i=0;i<entities.length;i++) if (entities[i].key===key) return true;
-    return false;
-  }
+  // helpers for obstacles when bulldozing or placing/removing roads
+  Game.notifyRoadChanged = function(tx,ty,isRoad){
+    var k = tx+','+ty;
+    if (isRoad) roadSet.add(k); else roadSet.delete(k);
+    try{ if (window.PathFinder && PathFinder.invalidateRoads) PathFinder.invalidateRoads(); }catch(_){}
+  };
 
-  // sofort init
+  // --- boot ---
   try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
 
-  // expose version
+  // expose current map & version
   GL.version = VERSION;
-
-  // ---------- Mini-Glue Getter ----------
-  Game.getRoadSet  = function(){ return _roadSet; };
-  Game.getTileSize = function(){ return (currentMap && currentMap.tile) || 64; };
-  Game.getCamera   = function(){ return { x:cam.x, y:cam.y, zoom:cam.zoom }; };
-
-  // (Basishook) PF-Init
-  window.addEventListener('cb:game-started', function(){
-    if (window.PathFinder && typeof PathFinder.init === 'function') {
-      PathFinder.init(function(){
-        var m = currentMap || {width:0,height:0};
-        return { w: m.width|0, h: m.height|0 };
-      });
-    }
-  });
-
-  // === Patch A: robustes PF-Init mit Retry ===
-  (function(){
-    function tryInitPF(attempts){
-      attempts = attempts || 0;
-      var okPF = (window.PathFinder && typeof PathFinder.init === 'function');
-      var okMap = (window.Game && Game.currentMap && Game.currentMap.width != null);
-      if (okPF && okMap){
-        PathFinder.init(function(){
-          var m = Game.currentMap || {width:0,height:0};
-          return { w: m.width|0, h: m.height|0 };
-        });
-        try { (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[boot] PathFinder.init OK (try '+attempts+')'); } catch(_){}
-        return;
-      }
-      if (attempts < 50){ setTimeout(function(){ tryInitPF(attempts+1); }, 200); }
-      else { try { (window.CBLog && CBLog.warn ? CBLog.warn : console.warn)('[boot] PathFinder.init ABGEBROCHEN'); } catch(_){ } }
-    }
-    window.addEventListener('cb:game-started', function(){ tryInitPF(0); });
-    setTimeout(function(){ tryInitPF(0); }, 0);
-  })();
-
-  // === Patch B: optionaler Carrier-Autotest ===
-  (function(){
-    window.addEventListener('cb:game-started', function(){
-      if (!window.DEV_CARRIER_AUTOTEST) return;
-      setTimeout(function(){
-        try {
-          if (window.Carriers && typeof Carriers.spawn === 'function'){
-            // Beispiel: Rathaus (Mitte) -> versetztes Ziel
-            var m = Game.currentMap || {width:16,height:10};
-            var cx=(m.width/2)|0, cy=(m.height/2)|0;
-            Carriers.spawn({ from:{x:cx,y:cy}, to:{x:Math.min(cx+3,m.width-1), y:Math.min(cy+2,m.height-1)} });
-            (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[dev] Carrier-Autotest gestartet');
-          }
-        } catch(e){
-          (window.CBLog && CBLog.warn ? CBLog.warn : console.warn)('[dev] Autotest fehlgeschlagen:', e && e.message);
-        }
-      }, 500);
-    });
-  })();
+  Game.currentMap = currentMap;
 
 })();
