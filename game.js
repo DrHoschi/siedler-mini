@@ -1,8 +1,8 @@
-// game.js — v16.4.2 (ES5)
+// game.js — v16.4.3 (ES5)
 // Map, Pan/Zoom, Build-Mode + Ghost-Preview + Mini-Glue + Roads + Carrier-Loop
 (function(){
   'use strict';
-  var VERSION = 'v16.4.2';
+  var VERSION = 'v16.4.3';
 
   // ---------- logging ----------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -324,7 +324,6 @@
         return;
       }
       if (tool.mode==='bulldozer'){
-        // Beispiel: Straße abreißen
         setRoadAt(tx, ty, false); drawMap();
         return;
       }
@@ -476,7 +475,7 @@
   Game.getTileSize = function(){ return (currentMap && currentMap.tile) || 64; };
   Game.getCamera   = function(){ return { x:cam.x, y:cam.y, zoom:cam.zoom }; };
 
-  // PathFinder init on start
+  // (einmalige) PathFinder-Init bei Game-Start (Basishook — zusätzlich Patch A unten)
   window.addEventListener('cb:game-started', function(){
     if (window.PathFinder && typeof PathFinder.init === 'function') {
       PathFinder.init(function(){
@@ -485,5 +484,51 @@
       });
     }
   });
+
+  // =========================
+  // === Patch A: robustes PF-Init mit Retry (Timing-Fix)
+  // =========================
+  (function(){
+    function tryInitPF(attempts){
+      attempts = attempts || 0;
+      var okPF = (window.PathFinder && typeof PathFinder.init === 'function');
+      var okMap = (window.Game && Game.currentMap && Game.currentMap.width != null);
+      if (okPF && okMap){
+        PathFinder.init(function(){
+          var m = Game.currentMap || {width:0,height:0};
+          return { w: m.width|0, h: m.height|0 };
+        });
+        try { (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[boot] PathFinder.init OK (try '+attempts+')'); } catch(_){}
+        return;
+      }
+      if (attempts < 50){ // ~10s total
+        setTimeout(function(){ tryInitPF(attempts+1); }, 200);
+      } else {
+        try { (window.CBLog && CBLog.warn ? CBLog.warn : console.warn)('[boot] PathFinder.init ABGEBROCHEN'); } catch(_){}
+      }
+    }
+    window.addEventListener('cb:game-started', function(){ tryInitPF(0); });
+    setTimeout(function(){ tryInitPF(0); }, 0);
+  })();
+
+  // =========================
+  // === Patch B: optionaler Carrier-Autotest
+  // =========================
+  (function(){
+    window.addEventListener('cb:game-started', function(){
+      if (!window.DEV_CARRIER_AUTOTEST) return;
+      setTimeout(function(){
+        try {
+          if (window.Carriers && typeof Carriers.spawn === 'function'){
+            // Beispiel: Rathaus -> leicht versetztes Ziel
+            Carriers.spawn({ from:{x:7,y:4}, to:{x:10,y:8} });
+            (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[dev] Carrier-Autotest gestartet');
+          }
+        } catch(e){
+          (window.CBLog && CBLog.warn ? CBLog.warn : console.warn)('[dev] Autotest fehlgeschlagen:', e && e.message);
+        }
+      }, 500);
+    });
+  })();
 
 })();
