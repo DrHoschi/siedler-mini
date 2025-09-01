@@ -1,166 +1,271 @@
-// assets/ui/ui-build.js — v16.3.3
-(function(){
+// assets/ui/ui-build.js — v16.3.4
+(function () {
   'use strict';
 
-  var VERSION = 'v16.3.3';
-  window.GameUI = window.GameUI || {};
-  var GameUI = window.GameUI;
+  var VERSION = 'v16.3.4';
 
-  // ---- styles (scoped) -----------------------------------------------------
-  function injectStyle(){
-    if (document.getElementById('ui-build-style')) return;
-    var css = `
-    .build-toggle{
-      position:fixed; left:14px; bottom:18px; z-index:9;
-      width:56px;height:56px;border-radius:50%;
-      background:rgba(26,34,29,.85); color:#ffd08a; border:1px solid rgba(255,255,255,.08);
-      display:flex;align-items:center;justify-content:center;
-      box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
-      backdrop-filter: blur(10px);
-      cursor:pointer; user-select:none; font-size:26px;
-    }
-    .buildbar{
-      position:fixed; left:0; right:0; bottom:0; z-index:8;
-      padding:10px 10px 12px;
-      background:linear-gradient(180deg, rgba(15,20,18,0) 0%, rgba(15,20,18,.75) 25%, rgba(15,20,18,.92) 100%);
-      transform: translateY(110%); transition: transform .28s ease;
-    }
-    .buildbar.open{ transform: translateY(0); }
-    .bb-row{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
-    .bb-btn{
-      display:flex; align-items:center; gap:8px;
-      height:44px; padding:0 14px; border-radius:14px; border:1px solid rgba(255,255,255,.08);
-      background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
-      color:#e8efe8; font-size:15px; letter-spacing:.2px; cursor:pointer; user-select:none;
-    }
-    .bb-btn.active{ outline:2px solid #2fd17a; }
-    .bb-tabs{ display:flex; gap:10px; justify-content:center; margin:0 0 8px; }
-    .bb-tab{ padding:8px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.10); color:#d9e6dc; cursor:pointer; }
-    .bb-tab.active{ background:#2c3b32; border-color:#3e5447; }
-    .hidden{ display:none !important; }
-    `;
-    var st = document.createElement('style'); st.id='ui-build-style'; st.textContent = css; document.head.appendChild(st);
-  }
+  // Logging-Helfer (nutzt CBLog wenn vorhanden)
+  function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
+  function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
+  function err(){ (window.CBLog && CBLog.err ? CBLog.err : console.error).apply(console, arguments); }
 
-  // ---- DOM -----------------------------------------------------------------
-  var bar, toggleBtn, rows = {}, currentTab = 'wohnen';
+  // Namespaces
+  var GameUI = (window.GameUI = window.GameUI || {});
+  var Game   = (window.Game   = window.Game   || {});
 
-  // Minimaler Katalog (nutzt die Keys wie in game.js BUILDINGS)
-  var CATALOG = {
-    wohnen: [
-      { key:'house0',  label:'Haus I' },
-      { key:'house1',  label:'Haus II' },
-      { key:'townhall',label:'Rathaus' }
-    ],
-    produktion: [
-      { key:'lumberjack', label:'Holzfäller' },
-      { key:'farm',       label:'Farm' },
-      { key:'mill',       label:'Mühle' },
-      { key:'depot',      label:'Depot' }
-    ],
-    wege: [
-      { key:'road', label:'Straße' },
-      { key:'bulldozer', label:'Abriss' }
-    ]
+  // DOM-Refs / State
+  var root    = null;     // <div id="cb-build">
+  var bar     = null;     // Button-Bar mit Tabs/Items
+  var tabsBar = null;     // Tabs-Leiste
+  var itemsBar= null;     // Item-Leiste
+  var toggleBtn = null;   // Schwebe-Button links unten
+  var currentTab = 'wohnen';
+  var ready = false;
+  var opened = false;
+
+  // Konfiguration der Kategorien & Items
+  // key == Game-Building-Key, tool == direkte Tools (road / path / bulldozer)
+  var CATS = [
+    { id:'wohnen',    label:'Wohnen',    items:[
+      {type:'build',key:'house0', label:'Haus I', icon:'🏠'},
+      {type:'build',key:'house1', label:'Haus II',icon:'🏘️'},
+      {type:'build',key:'townhall', label:'Rathaus', icon:'🏰'}
+    ]},
+    { id:'produktion',label:'Produktion',items:[
+      {type:'build',key:'lumberjack', label:'Holzfäller', icon:'🪓'},
+      {type:'build',key:'farm',       label:'Farm',       icon:'🌾'},
+      {type:'build',key:'mill',       label:'Mühle',      icon:'🌬️'}
+    ]},
+    { id:'lager',     label:'Lager',     items:[
+      {type:'build',key:'depot', label:'Depot', icon:'📦'}
+    ]},
+    { id:'wege',      label:'Wege',      items:[
+      {type:'tool', tool:'road', label:'Straße', icon:'🛣️'}
+      // {type:'tool', tool:'path', label:'Weg', icon:'🚶'} // optional
+    ]},
+    { id:'tools',     label:'Tools',     items:[
+      {type:'tool', tool:'bulldozer', label:'Abriss', icon:'❌'}
+    ]}
+  ];
+
+  // Public API ---------------------------------------------------------------
+
+  GameUI.openBuildMenu = function(){
+    if (!ready) return;
+    root.classList.remove('cb-build--hidden');
+    opened = true;
+    if (toggleBtn) toggleBtn.classList.add('active');
   };
 
-  function makeButton(def){
-    var b = document.createElement('button');
-    b.className = 'bb-btn';
-    b.textContent = def.label;
-    b.dataset.tool = def.key;
-    b.addEventListener('click', function(){
-      if (!window.Game){ console.warn('[ui-build] Game API fehlt'); return; }
-      if (def.key === 'road' || def.key === 'bulldozer'){
-        Game.setTool(def.key);
+  GameUI.closeBuildMenu = function(){
+    if (!ready) return;
+    root.classList.add('cb-build--hidden');
+    opened = false;
+    if (toggleBtn) toggleBtn.classList.remove('active');
+    // aktives Build-Tool beim Schließen zurücksetzen
+    if (Game && typeof Game.setTool === 'function') {
+      Game.setTool(null);
+    }
+  };
+
+  GameUI.toggleBuildMenu = function(){
+    if (!ready) return;
+    if (opened) GameUI.closeBuildMenu();
+    else GameUI.openBuildMenu();
+  };
+
+  GameUI.isBuildMenuOpen = function(){
+    return !!opened;
+  };
+
+  // Setzt das Tool und spiegelt Status in der UI
+  GameUI.setTool = function(mode, payload){
+    try {
+      if (Game && typeof Game.setTool === 'function') {
+        Game.setTool(mode, payload);
       } else {
-        Game.setTool('build', { key:def.key });
+        warn('[ui-build] Game.setTool nicht vorhanden.');
       }
-      // aktive Markierung
-      var all = bar.querySelectorAll('.bb-btn'); [].forEach.call(all, function(x){ x.classList.remove('active'); });
-      b.classList.add('active');
-      try { (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[ok] Tool gesetzt:', def.key); } catch(_){}
-    });
-    return b;
-  }
+      // UI-Highlight aktualisieren
+      highlightActive(mode, payload);
+    } catch(e){
+      err('[ui-build] setTool Fehler:', e && e.message ? e.message : e);
+    }
+  };
 
-  function renderRow(key){
-    if (rows[key]) return rows[key];
-    var r = document.createElement('div'); r.className='bb-row'; r.dataset.tab=key;
-    (CATALOG[key] || []).forEach(function(item){ r.appendChild(makeButton(item)); });
-    rows[key] = r;
-    return r;
-  }
+  // Internes Rendering -------------------------------------------------------
 
-  function switchTab(key){
-    currentTab = key;
-    var content = bar.querySelector('.bb-content');
-    content.innerHTML = '';
-    content.appendChild(renderRow(key));
-    var tabs = bar.querySelectorAll('.bb-tab');
-    [].forEach.call(tabs, function(t){ t.classList.toggle('active', t.dataset.tab===key); });
-  }
+  function buildDOM(){
+    // Root
+    root = document.createElement('div');
+    root.id = 'cb-build';
+    root.className = 'cb-build cb-build--hidden'; // Start: versteckt
+    root.setAttribute('data-version', VERSION);
 
-  function buildBar(){
-    injectStyle();
-    // Toggle
-    toggleBtn = document.createElement('div');
-    toggleBtn.className = 'build-toggle hidden';
-    toggleBtn.title = 'Bau-Menü';
-    toggleBtn.textContent = '🧱';
+    // Innere Struktur
+    var wrap = document.createElement('div');
+    wrap.className = 'cb-build__wrap';
+
+    // Tabs
+    tabsBar = document.createElement('div');
+    tabsBar.className = 'cb-build__tabs';
+
+    // Items
+    itemsBar = document.createElement('div');
+    itemsBar.className = 'cb-build__items';
+
+    wrap.appendChild(tabsBar);
+    wrap.appendChild(itemsBar);
+    root.appendChild(wrap);
+
+    // Toggle-Button (links unten)
+    toggleBtn = document.createElement('button');
+    toggleBtn.id = 'cb-build-toggle';
+    toggleBtn.className = 'cb-build__toggle';
+    toggleBtn.title = 'Bau-Menü ein/aus';
+    // kleines Ziegel/Block-Emoji als Default
+    toggleBtn.innerHTML = '<span class="cb-ico">🧱</span>';
+
+    // DOM anhängen
+    document.body.appendChild(root);
     document.body.appendChild(toggleBtn);
 
-    // Bar
-    bar = document.createElement('div');
-    bar.className = 'buildbar';
-    bar.innerHTML = `
-      <div class="bb-tabs">
-        <div class="bb-tab" data-tab="wohnen">Wohnen</div>
-        <div class="bb-tab" data-tab="produktion">Produktion</div>
-        <div class="bb-tab" data-tab="wege">Wege</div>
-      </div>
-      <div class="bb-content"></div>
-    `;
-    document.body.appendChild(bar);
-
-    // tab click
-    bar.querySelectorAll('.bb-tab').forEach(function(t){
-      t.addEventListener('click', function(){ switchTab(t.dataset.tab); });
+    // Events
+    toggleBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      GameUI.toggleBuildMenu();
     });
 
-    // toggle button
-    toggleBtn.addEventListener('click', function(){
-      bar.classList.toggle('open');
+    // ESC schließt Menü
+    window.addEventListener('keydown', function(e){
+      if ((e.key||'').toLowerCase() === 'escape' && opened) {
+        GameUI.closeBuildMenu();
+      }
     });
 
-    // Startzustand
+    // Tabs rendern
+    renderTabs();
+    // Items der Start-Kategorie
     switchTab(currentTab);
-    // Toggle-Button erst nach Game-Start sichtbar
-    toggleBtn.classList.add('hidden');
-    bar.classList.remove('open');
+
+    ready = true;
   }
 
-  // ---- Public API ----------------------------------------------------------
-  GameUI.openBuildBar  = function(){ if(bar){ bar.classList.add('open'); } };
-  GameUI.closeBuildBar = function(){ if(bar){ bar.classList.remove('open'); } };
-  GameUI.toggleBuildBar= function(){ if(bar){ bar.classList.toggle('open'); } };
+  function renderTabs(){
+    tabsBar.innerHTML = '';
+    CATS.forEach(function(cat){
+      var b = document.createElement('button');
+      b.className = 'cb-tab';
+      b.setAttribute('data-tab', cat.id);
+      b.textContent = cat.label;
+      if (cat.id === currentTab) b.classList.add('active');
+      b.addEventListener('click', function(){
+        switchTab(cat.id);
+      });
+      tabsBar.appendChild(b);
+    });
+  }
 
-  // ---- Lifecycle Hooks -----------------------------------------------------
+  function switchTab(id){
+    currentTab = id;
+    // Tab Active-Markierung
+    var all = tabsBar.querySelectorAll('.cb-tab');
+    for (var i=0;i<all.length;i++){
+      var el = all[i];
+      if (el.getAttribute('data-tab') === id) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+    // Items rendern
+    renderItems(CATS.find(function(c){return c.id===id; }));
+  }
+
+  function renderItems(cat){
+    itemsBar.innerHTML = '';
+    if (!cat) return;
+    cat.items.forEach(function(it){
+      var btn = document.createElement('button');
+      btn.className = 'cb-item';
+      btn.setAttribute('data-type', it.type);
+      var label = (it.icon ? (it.icon + ' ') : '') + it.label;
+
+      if (it.type === 'build'){
+        btn.setAttribute('data-key', it.key);
+        btn.innerHTML = label;
+        btn.addEventListener('click', function(){
+          GameUI.setTool('build', { key: it.key });
+          // beim Auswählen geöffnet lassen – Nutzer platziert danach auf der Karte
+        });
+      } else if (it.type === 'tool'){
+        btn.setAttribute('data-tool', it.tool);
+        btn.innerHTML = label;
+        btn.addEventListener('click', function(){
+          GameUI.setTool(it.tool);
+        });
+      }
+      itemsBar.appendChild(btn);
+    });
+    // Nach dem (Neu-)Rendern aktives Tool hervorheben
+    highlightActive();
+  }
+
+  function highlightActive(mode, payload){
+    // Alles zurücksetzen
+    var all = itemsBar.querySelectorAll('.cb-item');
+    for (var i=0;i<all.length;i++) all[i].classList.remove('active');
+
+    // Aktuell gesetztes Tool/Building markieren
+    // Wir fragen Game.toolState ab, falls bereitgestellt — fallback: letzte Aufruf-Args
+    var activeMode = mode;
+    var activeKey  = payload && payload.key;
+
+    try {
+      if ((!activeMode) && Game && Game.toolState) {
+        activeMode = Game.toolState.mode;
+        activeKey  = Game.toolState.key;
+      }
+    } catch(_){}
+
+    if (!activeMode) return;
+
+    var selector = '';
+    if (activeMode === 'build' && activeKey){
+      selector = '.cb-item[data-type="build"][data-key="'+activeKey+'"]';
+    } else {
+      selector = '.cb-item[data-type="tool"][data-tool="'+activeMode+'"]';
+    }
+    var el = itemsBar.querySelector(selector);
+    if (el) el.classList.add('active');
+  }
+
+  // Lifecycle / Boot ---------------------------------------------------------
+
   function onGameStarted(){
-    if (!toggleBtn) buildBar();
-    // Button sichtbar machen, Bar bleibt zu
-    toggleBtn.classList.remove('hidden');
-    bar.classList.remove('open');
-    (window.CBLog && CBLog.ok ? CBLog.ok : console.log)('[ok] Bau-Menü bereit (ui-build.js ' + VERSION + ')');
+    // Beim Spielstart bleibt das Menü ZU
+    GameUI.closeBuildMenu();
+    // Button sichtbar lassen
+    if (toggleBtn) toggleBtn.style.display = '';
+    ok('[ok] Bau-Menü bereit (ui-build.js '+VERSION+')');
   }
 
-  function init(){
-    if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', init); return; }
-    buildBar(); // bringt DOM in Stellung, aber Toggle verborgen
-    // Engine/Game hat eigenes Event
-    window.addEventListener('cb:game-started', onGameStarted);
-    // Fallback: falls Start über GameLoader._start passiert, kommt das Event trotzdem (siehe game.js)
+  function ensure(){
+    if (ready) return;
+    buildDOM();
   }
 
-  init();
+  // Init jetzt – aber noch nicht öffnen
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ensure);
+  } else {
+    ensure();
+  }
+
+  // Auf Game-Start reagieren
+  window.addEventListener('cb:game-started', onGameStarted);
+
+  // Auch auf Fenstergröße reagieren, falls CSS damit arbeitet (keine Pflicht)
+  window.addEventListener('resize', function(){
+    // keine spezielle Logik nötig; CSS ist responsiv
+  });
+
+  ok('[ui-build] Modul geladen ('+VERSION+')');
 })();
