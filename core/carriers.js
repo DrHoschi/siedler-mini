@@ -1,109 +1,187 @@
 /* core/carriers.js — v16.5.2
-   Carrier-Manager: spawn → Pfad (Hybrid-PF) → laufen → Ziel → idle
-   Auto-Init PathFinder (holt Größe aus Game bei Bedarf)
-   Overlay-Zeichnung via PathFinder.drawOverlay
-*/
-(function(){
+ * -------------------------------------------------------------------
+ * Zweck
+ *  - Einfache „Träger“-Simulation, die Pfade vom PathFinder nutzt.
+ *  - Bewegungsmode:
+ *      • spawn({from:{x,y}, to:{x,y}}) – erzeugt einen Carrier
+ *      • tick(dt) – bewegt Carrier entlang des Pfads (dt in Sekunden)
+ *      • draw(ctx, cam) – zeichnet Carrier-Punkte (und optional PF-Overlay)
+ *  - Heatmap („applyHeat“) wird pro erzeugtem Pfad aktualisiert.
+ *
+ * Öffentliche API
+ *  - Carriers.spawn({from:{x,y}, to:{x,y}}) → {x,y,done,...} | null
+ *  - Carriers.tick(dt)
+ *  - Carriers.draw(ctx, cam)
+ *
+ * Erwartete Game-Hooks (falls vorhanden)
+ *  - Game.getTileSize(): number
+ *  - Game.getRoadSet(): Set<string "x,y">      (optional; wird an PF gesetzt)
+ *  - Game.getObstacleAt(tx,ty): boolean       (optional; wird an PF gesetzt)
+ * -------------------------------------------------------------------
+ */
+(function () {
   'use strict';
 
   var CR = (window.Carriers = window.Carriers || {});
-  var _list = []; // {x,y, path:[{x,y}], seg:0, t:0..1, speedTilesPS, done}
-  var SPEED = 2.0; // tiles/s
+  var _list = [];  // Elemente: { x,y, path:[{x,y}], seg, t, speedTilesPS, done }
 
-  function getTile(){ return (window.Game && Game.getTileSize && Game.getTileSize()) || 64; }
+  var SPEED = 2.0; // Tiles pro Sekunde (einfach, konstant)
 
-  function ensurePFReady(){
-    try{
-      if (window.PathFinder){
-        if (!PathFinder.isReady || !PathFinder.isReady()){
-          PathFinder.init(function(){
-            var G=window.Game||{}, cm=G.currentMap||null;
-            if (cm && cm.width && cm.height) return {w:cm.width|0, h:cm.height|0};
-            // Fallback: versuche Dimensionen grob zu schätzen (nicht ideal, aber verhindert „ohne init“)
-            return { w: (cm&&cm.width)|0 || 16, h: (cm&&cm.height)|0 || 10 };
-          });
-        }
-        // Road-/Obstacle-Hooks updaten
-        if (typeof PathFinder.setRoadMask==='function' && window.Game && Game.getRoadSet){
-          PathFinder.setRoadMask(Game.getRoadSet());
-        }
-        if (typeof PathFinder.setObstacleProvider==='function' && window.Game && typeof Game.getObstacleAt==='function'){
-          PathFinder.setObstacleProvider(Game.getObstacleAt);
-        }
+  function LOG(lvl, msg) {
+    try {
+      if (window.CBLog) {
+        if (lvl === 'ok') window.CBLog.ok(msg);
+        else if (lvl === 'warn') window.CBLog.warn(msg);
+        else if (lvl === 'err') window.CBLog.err(msg);
+        else window.CBLog.push(lvl || 'log', msg);
+      } else {
+        console[lvl === 'err' ? 'error' : lvl === 'warn' ? 'warn' : 'log'](msg);
       }
-    }catch(_){}
+    } catch (_) {}
   }
 
-  CR.spawn = function(opts){
-    opts=opts||{};
-    var sx=(opts.from&&opts.from.x)|0, sy=(opts.from&&opts.from.y)|0;
-    var tx=(opts.to&&opts.to.x)|0,   ty=(opts.to&&opts.to.y)|0;
+  function getTile() {
+    return (window.Game && Game.getTileSize && Game.getTileSize()) || 64;
+  }
 
-    ensurePFReady();
+  // ------------------------------------------------------------------
+  // Carrier erzeugen
+  // ------------------------------------------------------------------
+  CR.spawn = function (opts) {
+    opts = opts || {};
+    var sx = (opts.from && opts.from.x) | 0,
+        sy = (opts.from && opts.from.y) | 0;
+    var tx = (opts.to && opts.to.x) | 0,
+        ty = (opts.to && opts.to.y) | 0;
 
+    // PathFinder vorbereiten (RoadMask / ObstacleProvider aktualisieren, falls vorhanden)
+    try {
+      if (window.PathFinder) {
+        if (typeof PathFinder.setRoadMask === 'function' && window.Game && Game.getRoadSet) {
+          PathFinder.setRoadMask(Game.getRoadSet());
+        }
+        if (typeof PathFinder.setObstacleProvider === 'function') {
+          if (window.Game && typeof Game.getObstacleAt === 'function') {
+            PathFinder.setObstacleProvider(Game.getObstacleAt);
+          } else {
+            PathFinder.setObstacleProvider(null);
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Pfad bestimmen (Hybrid)
     var path = (window.PathFinder && PathFinder.findPath)
-      ? PathFinder.findPath({from:{x:sx,y:sy}, to:{x:tx,y:ty}, mode:'auto'})
+      ? PathFinder.findPath({ from: { x: sx, y: sy }, to: { x: tx, y: ty }, mode: 'auto' })
       : null;
 
-    if (!path || path.length<2){
-      console.warn('[carriers] kein Pfad', sx,sy, '→', tx,ty);
+    if (!path || path.length < 2) {
+      LOG('warn', `[carriers] kein Pfad ${sx},${sy} → ${tx},${ty}`);
       return null;
     }
 
-    try{ if (window.PathFinder && PathFinder.applyHeat) PathFinder.applyHeat(path); }catch(_){}
+    // Heatmap „aufheizen“
+    try {
+      if (window.PathFinder && PathFinder.applyHeat) PathFinder.applyHeat(path);
+    } catch (_) {}
 
-    var c = { x:sx, y:sy, path:path, seg:0, t:0, speedTilesPS:SPEED, done:false };
+    var c = {
+      x: sx, y: sy,
+      path: path,
+      seg: 0,   // aktuelles Segment-Index (von path[seg] → path[seg+1])
+      t: 0,     // 0..1 innerhalb des Segments
+      speedTilesPS: SPEED,
+      done: false
+    };
     _list.push(c);
     return c;
   };
 
-  CR.tick = function(dt){
+  // ------------------------------------------------------------------
+  // Fortschritt berechnen
+  //  dt: Sekunden (z.B. 1/60)
+  // ------------------------------------------------------------------
+  CR.tick = function (dt) {
     if (!_list.length) return;
-    for (var i=_list.length-1;i>=0;i--){
-      var c=_list[i]; if (c.done) continue;
-      var p=c.path, s=c.seg;
-      if (s>=p.length-1){ c.done=true; continue; }
-      var a=p[s], b=p[s+1];
-      var dx=b.x-a.x, dy=b.y-a.y;
-      var segLen = Math.sqrt(dx*dx + dy*dy) || 1;
-      var adv = (c.speedTilesPS * dt) / segLen;
+
+    for (var i = _list.length - 1; i >= 0; i--) {
+      var c = _list[i];
+      if (c.done) continue;
+
+      var p = c.path, s = c.seg;
+      if (s >= p.length - 1) { c.done = true; continue; }
+
+      var a = p[s], b = p[s + 1];
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var segLen = Math.sqrt(dx * dx + dy * dy) || 1;
+
+      var adv = (c.speedTilesPS * dt) / segLen; // Anteil entlang Segment
       c.t += adv;
-      if (c.t>=1){
-        c.seg++; c.t=0;
-        if (c.seg>=p.length-1){ c.x=b.x; c.y=b.y; c.done=true; continue; }
-        a=p[c.seg]; b=p[c.seg+1];
-        dx=b.x-a.x; dy=b.y-a.y;
-        segLen = Math.sqrt(dx*dx + dy*dy) || 1;
+
+      if (c.t >= 1) {
+        // Segment abgeschlossen → weiter
+        c.seg++;
+        c.t = 0;
+        if (c.seg >= p.length - 1) {
+          c.x = b.x; c.y = b.y;
+          c.done = true;
+          continue;
+        }
+        // nächstes Segment
+        a = p[c.seg]; b = p[c.seg + 1];
+        dx = b.x - a.x; dy = b.y - a.y;
+        segLen = Math.sqrt(dx * dx + dy * dy) || 1;
       }
-      c.x = a.x + dx*c.t;
-      c.y = a.y + dy*c.t;
+
+      // Interpolation
+      c.x = a.x + dx * c.t;
+      c.y = a.y + dy * c.t;
     }
   };
 
-  CR.draw = function(ctx, cam){
-    try{ if (window.PathFinder && PathFinder.drawOverlay) PathFinder.drawOverlay(ctx, cam); }catch(_){}
+  // ------------------------------------------------------------------
+  // Zeichnen
+  //  - PF-Overlay optional (window.DEBUG_PATH_OVERLAY)
+  //  - Carrier als kleine Punkte
+  // ------------------------------------------------------------------
+  CR.draw = function (ctx, cam) {
+    // Debug-Overlay vom PathFinder (falls aktiv)
+    try {
+      if (window.PathFinder && PathFinder.drawOverlay) PathFinder.drawOverlay(ctx, cam);
+    } catch (_) {}
 
     if (!_list.length) return;
+
     var tile = getTile();
 
-    for (var i=0;i<_list.length;i++){
-      var c=_list[i];
-      var wx = c.x*tile + tile/2, wy = c.y*tile + tile/2;
-      var sx = Math.floor((wx - cam.x)*cam.zoom);
-      var sy = Math.floor((wy - cam.y)*cam.zoom);
+    for (var i = 0; i < _list.length; i++) {
+      var c = _list[i];
+
+      // Welt → Screen
+      var wx = c.x * tile + tile / 2;
+      var wy = c.y * tile + tile / 2;
+      var sx = Math.floor((wx - cam.x) * cam.zoom);
+      var sy = Math.floor((wy - cam.y) * cam.zoom);
 
       ctx.save();
-      ctx.fillStyle = c.done ? 'rgba(255,255,0,.75)' : 'rgba(255,200,0,.95)';
-      var r = Math.max(3, Math.floor(4*cam.zoom));
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2, false); ctx.fill();
+      ctx.fillStyle = c.done ? 'rgba(255,255,0,.7)' : 'rgba(255,200,0,.95)';
+      var r = Math.max(3, Math.floor(4 * cam.zoom));
+      ctx.beginPath();
+      ctx.arc(sx, sy, r, 0, Math.PI * 2, false);
+      ctx.fill();
 
-      if (!c.done){
-        ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = Math.max(1, Math.floor(1*cam.zoom));
-        ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+r*1.5, sy); ctx.stroke();
+      // kleiner „Schatten“ / Pfeil nach rechts (nur wenn in Bewegung)
+      if (!c.done) {
+        ctx.strokeStyle = 'rgba(0,0,0,.45)';
+        ctx.lineWidth = Math.max(1, Math.floor(1 * cam.zoom));
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + r * 1.5, sy);
+        ctx.stroke();
       }
       ctx.restore();
     }
   };
 
-  console.log('[carriers.js] Modul geladen (v16.5.2)');
+  LOG('ok', '[carriers.js] Modul geladen (v16.5.2)');
 })();
