@@ -29,9 +29,9 @@
   var BUILDINGS = {
     townhall  : { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
     lumberjack: { wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG" },
-    farm      : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.PNG" },
+    farm      : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png" },
     mill      : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG" },
-    depot     : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.PNG" },
+    depot     : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png" },
     tree      : { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" },
     house0    : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/haeuser_wood1.PNG" },
     house1    : { wTiles:2, hTiles:2, img:"assets/tex/building/wood/haeuser_wood2.PNG" }
