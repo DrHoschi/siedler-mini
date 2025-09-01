@@ -1,113 +1,159 @@
-/*! core/pathfinder.js v16.3.0 — A* auf Kachelraster (ES5) */
-(function(){
+// core/pathfinder.js — v16.4.0
+// Leichter Pfadfinder (Gitter, 4-Nachbarn). Bevorzugt Straßen, wenn verfügbar.
+// Public API: window.PathFinder.init(getSizeFn), window.PathFinder.find(a, b, opts)
+// a/b sind {x:tileX, y:tileY}; opts: {preferRoads:true, maxLen:1000}
+
+(function () {
   'use strict';
-  var PF = (window.GamePathfinder = window.GamePathfinder || {});
 
-  var gridW=0, gridH=0, walk=null; // walk[y][x] = true/false
-  var allowDiag = true;            // Diagonalen erlauben
-  var diagCost  = 1.41421356237;   // √2
-  var orthoCost = 1.0;
+  var VERSION = 'v16.4.0';
+  var log = (window.CBLog && CBLog.ok) ? CBLog.ok : console.log;
+  var warn = (window.CBLog && CBLog.warn) ? CBLog.warn : console.warn;
 
-  function inBounds(x,y){ return x>=0 && y>=0 && x<gridW && y<gridH; }
+  var api = {};
+  var getSize = null; // function -> {w,h}
+  var cachedRoads = null; // Set("x,y")
 
-  PF.init = function(map, isWalkableFn){
-    gridW = map && map.width  || 0;
-    gridH = map && map.height || 0;
-    walk = new Array(gridH);
-    for (var y=0;y<gridH;y++){
-      walk[y] = new Array(gridW);
-      for (var x=0;x<gridW;x++){
-        walk[y][x] = !!(isWalkableFn ? isWalkableFn(x,y) : true);
-      }
-    }
-  };
+  function key(x, y) { return x + ',' + y; }
 
-  PF.rebuild = function(updateFn){
-    // optional: einzelne Felder neu setzen
-    if (!updateFn || !walk) return;
-    for (var y=0;y<gridH;y++) for (var x=0;x<gridW;x++){
-      var v = updateFn(x,y, walk[y][x]);
-      if (typeof v==='boolean') walk[y][x] = v;
-    }
-  };
-
-  PF.setDiagonal = function(v){ allowDiag = !!v; };
-
-  function neighbors(x,y){
-    var res = [
-      [x+1,y, orthoCost],[x-1,y, orthoCost],[x,y+1, orthoCost],[x,y-1, orthoCost]
-    ];
-    if (allowDiag){
-      res.push([x+1,y+1, diagCost],[x-1,y+1, diagCost],[x+1,y-1, diagCost],[x-1,y-1, diagCost]);
-    }
-    return res;
+  function isInside(x, y) {
+    var s = getSize ? getSize() : { w: 0, h: 0 };
+    return (x >= 0 && y >= 0 && x < s.w && y < s.h);
   }
 
-  function heuristic(ax,ay,bx,by){
-    // Octile-Heuristik (gut für 8-Nachbarn)
-    var dx = Math.abs(ax-bx), dy = Math.abs(ay-by);
-    var F = diagCost - orthoCost;
-    return (dx<dy) ? F*dx + dy : F*dy + dx;
-  }
-
-  PF.findPath = function(sx,sy,tx,ty, opts){
-    if (!walk || !inBounds(sx,sy) || !inBounds(tx,ty)) return null;
-    if (!walk[sy][sx] || !walk[ty][tx]) return null;
-
-    var w=gridW,h=gridH;
-    var open = [];
-    var came = new Array(h), g=new Array(h), f=new Array(h);
-    for (var y=0;y<h;y++){ came[y]=new Array(w); g[y]=new Array(w); f[y]=new Array(w); }
-    function push(o){ open.push(o); }
-    function pop(){ // einfache PriorityQueue (linear) reicht für kleine Karten
-      var bi=0,bf=open[0].f,i;
-      for(i=1;i<open.length;i++){ if(open[i].f<bf){ bf=open[i].f; bi=i; } }
-      return open.splice(bi,1)[0];
-    }
-    function key(x,y){ return x+'#'+y; }
-
-    g[sy][sx]=0; f[sy][sx]=heuristic(sx,sy,tx,ty);
-    push({x:sx,y:sy,f:f[sy][sx]});
-    var closed = Object.create(null);
-
-    while (open.length){
-      var cur = pop();
-      var cx=cur.x, cy=cur.y;
-      var ck=key(cx,cy);
-      if (cx===tx && cy===ty){
-        // rekonstruieren
-        var path=[[tx,ty]];
-        while (came[cy][cx]){
-          var p=came[cy][cx]; cx=p[0]; cy=p[1]; path.push([cx,cy]);
+  function isRoad(x, y) {
+    if (!cachedRoads) {
+      // Versuche Road-Set vom Spiel zu holen
+      try {
+        if (window.Game && typeof Game.getRoadSet === 'function') {
+          cachedRoads = Game.getRoadSet();
         }
+      } catch (_) {}
+      if (!cachedRoads) cachedRoads = new Set();
+    }
+    return cachedRoads.has(key(x, y));
+  }
+
+  function neighbors(x, y) {
+    // 4er Nachbarschaft
+    return [
+      { x: x - 1, y: y },
+      { x: x + 1, y: y },
+      { x: x, y: y - 1 },
+      { x: x, y: y + 1 }
+    ];
+  }
+
+  // ein kleines A*-Light: g=Schrittkosten, h=Manhattan, f=g+h
+  function heuristic(ax, ay, bx, by) {
+    return Math.abs(ax - bx) + Math.abs(ay - by);
+  }
+
+  function findPath(a, b, opts) {
+    opts = opts || {};
+    var preferRoads = (opts.preferRoads !== false); // default true
+    var maxLen = opts.maxLen || 1000;
+
+    if (!a || !b) return null;
+    if (!isInside(a.x, a.y) || !isInside(b.x, b.y)) return null;
+    if (a.x === b.x && a.y === b.y) return [{ x: a.x, y: a.y }];
+
+    // Open-Set (als Map key->node), Priority-Queue per linearem Scan (klein, ok)
+    var open = {};
+    var openList = [];
+
+    // Closed-Set
+    var closed = new Set();
+
+    function push(node) {
+      open[key(node.x, node.y)] = node;
+      openList.push(node);
+    }
+    function popLowestF() {
+      var bestIdx = -1, bestF = Infinity;
+      for (var i = 0; i < openList.length; i++) {
+        var n = openList[i];
+        if (n.f < bestF) { bestF = n.f; bestIdx = i; }
+      }
+      var out = openList.splice(bestIdx, 1)[0];
+      delete open[key(out.x, out.y)];
+      return out;
+    }
+
+    var start = {
+      x: a.x, y: a.y,
+      g: 0,
+      h: heuristic(a.x, a.y, b.x, b.y),
+      f: 0,
+      parent: null
+    };
+    start.f = start.g + start.h;
+    push(start);
+
+    var steps = 0;
+
+    while (openList.length && steps < maxLen) {
+      steps++;
+
+      var cur = popLowestF();
+      var ck = key(cur.x, cur.y);
+      if (closed.has(ck)) continue;
+      closed.add(ck);
+
+      if (cur.x === b.x && cur.y === b.y) {
+        // rekonstruiere pfad
+        var path = [];
+        var p = cur;
+        while (p) { path.push({ x: p.x, y: p.y }); p = p.parent; }
         path.reverse();
         return path;
       }
-      closed[ck]=1;
 
-      var ns = neighbors(cx,cy);
-      for (var i=0;i<ns.length;i++){
-        var nx=ns[i][0], ny=ns[i][1], cost=ns[i][2];
-        if (!inBounds(nx,ny) || !walk[ny][nx]) continue;
-        if (closed[key(nx,ny)]) continue;
+      var nb = neighbors(cur.x, cur.y);
+      for (var i = 0; i < nb.length; i++) {
+        var nx = nb[i].x, ny = nb[i].y;
+        if (!isInside(nx, ny)) continue;
 
-        var ng = (g[cy][cx]||0) + cost;
-        if (g[ny][nx]===undefined || ng < g[ny][nx]){
-          came[ny][nx] = [cx,cy];
-          g[ny][nx] = ng;
-          f[ny][nx] = ng + heuristic(nx,ny,tx,ty);
-          // falls schon in open → aktualisieren; sonst push
-          var found=false;
-          for (var j=0;j<open.length;j++){ if (open[j].x===nx && open[j].y===ny){ open[j].f=f[ny][nx]; found=true; break; } }
-          if (!found) push({x:nx,y:ny,f:f[ny][nx]});
+        var nk = key(nx, ny);
+        if (closed.has(nk)) continue;
+
+        // Kosten: Straße 1, sonst 2 (damit Straßen bevorzugt werden)
+        var stepCost = (preferRoads && isRoad(nx, ny)) ? 1 : 2;
+        var g = cur.g + stepCost;
+
+        var existing = open[nk];
+        if (existing && g >= existing.g) continue;
+
+        var h = heuristic(nx, ny, b.x, b.y);
+        var node = { x: nx, y: ny, g: g, h: h, f: g + h, parent: cur };
+
+        if (existing) {
+          // update
+          existing.g = g; existing.h = h; existing.f = node.f; existing.parent = cur;
+        } else {
+          push(node);
         }
       }
     }
-    return null; // kein Pfad
+
+    warn('[pathfinder] kein Pfad gefunden / Abbruch (steps=%s)', steps);
+    return null;
+  }
+
+  api.init = function (getSizeFn) {
+    getSize = getSizeFn;
+    cachedRoads = null; // Road-Cache invalidieren
+    log('[pathfinder] init', VERSION);
   };
 
-  PF.debugIsWalkable = function(x,y){ return !!(walk && inBounds(x,y) && walk[y][x]); };
+  api.invalidateRoads = function () {
+    cachedRoads = null;
+  };
 
-  // expose
-  if (!window.GamePathfinder) window.GamePathfinder = PF;
+  api.find = function (a, b, opts) {
+    return findPath(a, b, opts);
+  };
+
+  // export
+  window.PathFinder = api;
 })();
