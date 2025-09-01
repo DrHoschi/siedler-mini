@@ -1,26 +1,38 @@
-// assets/inspector/inspector.js — v16.3.3
+/* 
+========================================
+   Datei: assets/inspector/inspector.js
+   Projekt: Siedler-Mini
+   Version: v16.3.4
+   Zweck: Debug-Inspector (Logs + Live)
+========================================
+*/
 (function(){
   'use strict';
 
-  var VERSION = 'v16.3.3';
+  var VERSION = 'v16.3.4';
   var root, btn, liveBox, logBox, tabLive, tabLogs;
   var buffer = [];
 
-  // ------- CBLog shim so alles konsistent landet ---------------------------
+  // ---------------- Logger-Hooks ----------------
   window.CBLog = window.CBLog || (function(){
     var list = [];
-    function push(prefix, args){ try{ list.push(time() + ' ' + prefix + ' ' + Array.prototype.slice.call(args).join(' ')); flush(); }catch(_){ } }
+    function push(prefix, args){
+      try {
+        list.push(time() + ' ' + prefix + ' ' + Array.prototype.slice.call(args).join(' '));
+        flush();
+      } catch(_){}
+    }
     function time(){ var d=new Date(); return '['+d.toTimeString().slice(0,8)+']'; }
     return {
-      log: function(){ console.log.apply(console, arguments); push('LOG', arguments); },
-      ok : function(){ console.log.apply(console, arguments); push('OK ', arguments); },
-      warn:function(){ console.warn.apply(console, arguments); push('WARN', arguments); },
-      err: function(){ console.error.apply(console, arguments); push('ERR', arguments); },
+      log:  function(){ console.log.apply(console, arguments); push('LOG', arguments); },
+      ok:   function(){ console.log.apply(console, arguments); push('OK ', arguments); },
+      warn: function(){ console.warn.apply(console, arguments); push('WARN', arguments); },
+      err:  function(){ console.error.apply(console, arguments); push('ERR ', arguments); },
       dump: function(){ return list.join('\n'); }
     };
   })();
 
-  // hook console.* zusätzlich in den Inspector-Puffer
+  // hook console.* zusätzlich
   ['log','warn','error'].forEach(function(k){
     var orig = console[k];
     console[k] = function(){
@@ -32,26 +44,32 @@
     };
   });
 
+  // ---------------- Styles ----------------
   function injectStyle(){
     if (document.getElementById('inspector-style')) return;
     var css = `
       .insp-toggle{
-        position:fixed; right:14px; bottom:18px; z-index:9;
+        position:fixed; right:14px; bottom:18px; z-index:99;
         width:56px;height:56px;border-radius:50%;
-        background:rgba(26,34,29,.85); color:#cde6ff; border:1px solid rgba(255,255,255,.08);
+        background:rgba(26,34,29,.85); color:#cde6ff;
+        border:1px solid rgba(255,255,255,.08);
         display:flex;align-items:center;justify-content:center;
         box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
         backdrop-filter: blur(10px);
-        cursor:pointer; user-select:none; font-size:26px;
+        cursor:pointer; font-size:26px; user-select:none;
       }
       .insp{
-        position:fixed; left:12px; right:12px; bottom:92px; z-index:10;
-        background:rgba(17,25,21,.92); color:#e8efe8; border-radius:16px; padding:14px;
-        border:1px solid rgba(255,255,255,.06); box-shadow:0 18px 60px rgba(0,0,0,.4);
-        backdrop-filter: blur(10px); transform:translateY(110%); transition:transform .25s ease;
+        position:fixed; left:12px; right:12px; bottom:92px; z-index:98;
+        background:rgba(17,25,21,.92); color:#e8efe8;
+        border-radius:16px; padding:14px;
+        border:1px solid rgba(255,255,255,.06);
+        box-shadow:0 18px 60px rgba(0,0,0,.4);
+        backdrop-filter: blur(10px);
+        transform:translateY(110%); transition:transform .25s ease;
+        display:none; /* <— Start: unsichtbar */
       }
-      .insp.open{ transform:translateY(0); }
-      .insp-h{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+      .insp.open{ display:block; transform:translateY(0); }
+      .insp-h{ display:flex; justify-content:space-between; margin-bottom:10px; }
       .insp-tabs{ display:flex; gap:8px; }
       .insp-tab{ padding:6px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.1); cursor:pointer; }
       .insp-tab.active{ background:#2c3b32; }
@@ -59,12 +77,13 @@
       .insp-btns{ display:flex; gap:10px; margin-top:10px; }
       .insp-btn{ padding:8px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.05); cursor:pointer; }
     `;
-    var st=document.createElement('style'); st.id='inspector-style'; st.textContent=css; document.head.appendChild(st);
+    var st=document.createElement('style'); st.id='inspector-style'; st.textContent=css;
+    document.head.appendChild(st);
   }
 
+  // ---------------- UI ----------------
   function flush(){
     if (!logBox) return;
-    // Inhalte setzen
     try {
       if (buffer.length){
         var frag = document.createDocumentFragment();
@@ -82,7 +101,7 @@
   function build(){
     injectStyle();
 
-    // Toggle btn
+    // FAB
     btn = document.createElement('div');
     btn.className = 'insp-toggle';
     btn.title = 'Inspector';
@@ -91,7 +110,7 @@
 
     // Panel
     root = document.createElement('div');
-    root.className = 'insp';
+    root.className = 'insp'; // Start: hidden
     root.innerHTML = `
       <div class="insp-h">
         <div>Inspector <small>(v${VERSION})</small></div>
@@ -142,9 +161,7 @@
   function updateLive(){
     if (!liveBox) return;
     var data = {
-      index: (window.INDEX_VERSION || 'n/a'),
-      uiStart: 'ok',
-      uiBuild: 'ok',
+      index: (window.__cb?.indexVersion || 'n/a'),
       dpr: window.devicePixelRatio || 1,
       GameLoader: !!window.GameLoader,
       Game: !!window.Game,
@@ -153,13 +170,14 @@
     liveBox.textContent = JSON.stringify(data, null, 2);
   }
 
-  // Public toggle/open helpers (optional external use)
+  // Public API
   window.InspectorUI = {
     open:  function(){ root && root.classList.add('open'); },
     close: function(){ root && root.classList.remove('open'); },
     toggle:function(){ root && root.classList.toggle('open'); }
   };
 
-  if (document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', build); }
-  else { build(); }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', build);
+  else build();
 })();
