@@ -1,9 +1,9 @@
-/* core/carriers.js — v16.5.1
+/* core/carriers.js — v16.5.2
    Träger-Manager:
-     - spawn({from:{x,y}, to:{x,y}}) → A*-Pfad via PathFinder (Hybrid)
-     - tick(dt) bewegt Carrier entlang der Tiles (diagonal möglich)
-     - draw(ctx, cam) zeichnet Carrier-Punkt + optionales PF-Overlay
-     - Carrier idlen am Ziel (kein Auto-Return)
+   - spawn({from:{x,y}, to:{x,y}}) → A*-Pfad via PathFinder (Hybrid)
+   - tick(dt) bewegt Carrier entlang der Tiles (diagonal möglich)
+   - draw(ctx, cam) zeichnet Carrier-Punkt + optionales PF-Overlay
+   - Carrier idlen am Ziel (kein Auto-Return)
 */
 (function(){
   'use strict';
@@ -35,9 +35,16 @@
       }
     }catch(_){}
 
-    var path = (window.PathFinder && PathFinder.findPath) ? PathFinder.findPath({from:{x:sx,y:sy}, to:{x:tx,y:ty}, mode:'auto'}) : null;
-    if (!path || path.length<2){ console.warn('[carriers] kein Pfad', sx,sy,'→',tx,ty); return null; }
+    var path = (window.PathFinder && PathFinder.findPath)
+      ? PathFinder.findPath({from:{x:sx,y:sy}, to:{x:tx,y:ty}, mode:'auto'})
+      : null;
 
+    if (!path || path.length<2){
+      console.warn('[carriers] kein Pfad', sx,sy,'→',tx,ty);
+      return null;
+    }
+
+    // Heat anwenden (Trampelpfade)
     try{ if (window.PathFinder && PathFinder.applyHeat) PathFinder.applyHeat(path); }catch(_){}
 
     var c = { x:sx, y:sy, path:path, seg:0, t:0, speedTilesPS:SPEED, done:false };
@@ -48,7 +55,9 @@
   CR.tick = function(dt){
     if (!_list.length) return;
     for (var i=_list.length-1;i>=0;i--){
-      var c=_list[i]; if (c.done) continue;
+      var c=_list[i];
+      if (c.done) continue;
+
       var p=c.path, s=c.seg;
       if (s>=p.length-1){ c.done=true; continue; }
 
@@ -59,10 +68,16 @@
       c.t += adv;
 
       if (c.t>=1){
-        c.seg++; c.t=0;
-        if (c.seg>=p.length-1){ c.x=b.x; c.y=b.y; c.done=true; continue; }
-        a=p[c.seg]; b=p[c.seg+1]; dx=b.x-a.x; dy=b.y-a.y; segLen=Math.sqrt(dx*dx+dy*dy);
+        c.seg++;
+        c.t=0;
+        if (c.seg>=p.length-1){
+          c.x=b.x; c.y=b.y; c.done=true; continue;
+        }
+        a=p[c.seg]; b=p[c.seg+1];
+        dx=b.x-a.x; dy=b.y-a.y;
+        segLen=Math.sqrt(dx*dx+dy*dy);
       }
+
       c.x = a.x + dx*c.t;
       c.y = a.y + dy*c.t;
     }
@@ -73,16 +88,20 @@
     try{ if (window.PathFinder && PathFinder.drawOverlay) PathFinder.drawOverlay(ctx, cam); }catch(_){}
 
     if (!_list.length) return;
+
     var tile=getTile();
     for (var i=0;i<_list.length;i++){
-      var c=_list[i], wx=c.x*tile+tile/2, wy=c.y*tile+tile/2;
+      var c=_list[i];
+      var wx=c.x*tile+tile/2, wy=c.y*tile+tile/2;
       var sx=Math.floor((wx - cam.x)*cam.zoom), sy=Math.floor((wy - cam.y)*cam.zoom);
 
       ctx.save();
+      // Carrier-Punkt
       ctx.fillStyle = c.done ? 'rgba(255,255,0,.7)' : 'rgba(255,200,0,.95)';
       var r=Math.max(3, Math.floor(4*cam.zoom));
       ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2, false); ctx.fill();
 
+      // kleiner „Schnabel“ nach rechts (nur während Bewegung)
       if (!c.done){
         ctx.strokeStyle='rgba(0,0,0,.45)';
         ctx.lineWidth=Math.max(1, Math.floor(1*cam.zoom));
@@ -92,5 +111,6 @@
     }
   };
 
-  console.log('[carriers.js] Modul geladen (v16.5.1)');
+  console.log('[carriers.js] Modul geladen (v16.5.2)');
+
 })();
