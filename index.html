@@ -1,124 +1,67 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Neue Siedler</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#0f3a2f">
+  <title>Neue Siedler – City-Builder</title>
 
-  <!-- Base Styles -->
-  <link rel="stylesheet" href="style.css?v=16.3.3" />
-  <link rel="stylesheet" href="ui-start.css?v=16.3.3" />
-  <!-- einzig produktive Bau-Menü-Styles -->
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=16.3.3" />
+  <!-- CORE CSS -->
+  <link rel="stylesheet" href="style.css?v=16.3.6">
+  <link rel="stylesheet" href="ui-start.css?v=16.3.6">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=16.3.6">
 
+  <!-- kleine Basishilfen für Fixed-UI -->
   <style>
-    /* Hard-hide helper, falls irgendwas früh rendert */
-    .is-hidden { display:none !important; }
-    /* Canvas Vollfläche */
-    html,body { height:100%; }
-    body { margin:0; background:#0d3b2e; overflow:hidden; }
-    #game { display:block; width:100vw; height:100vh; }
-    /* Floating Action Buttons (Bau / Inspector) – initial unsichtbar; JS schaltet frei */
-    .fab {
-      position: fixed; z-index: 30; width:56px; height:56px; border-radius:50%;
+    html,body{height:100%;overflow:hidden;background:#0f3a2f;}
+    /* Canvas-Stage */
+    #game{display:block;touch-action:none}
+    /* FABs (rund) – Grundlayout; Details in ui-build.css ergänzt */
+    .fab{
+      position:fixed; z-index:1100; width:64px; height:64px; border-radius:50%;
       display:flex; align-items:center; justify-content:center;
-      background: rgba(20,20,20,.7); backdrop-filter: blur(6px);
-      box-shadow: 0 4px 16px rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.08);
-      color:#fff; font-size:22px; user-select:none; -webkit-tap-highlight-color:transparent;
-      opacity:0; pointer-events:none; transform: translateY(6px);
-      transition: opacity .18s ease, transform .18s ease;
+      background:rgba(27,33,31,.92); box-shadow:0 6px 24px rgba(0,0,0,.35);
+      backdrop-filter:saturate(120%) blur(6px); -webkit-backdrop-filter:saturate(120%) blur(6px);
+      color:#e7e7e7; border:1px solid rgba(255,255,255,.08); user-select:none;
+      touch-action:manipulation;
     }
-    .fab.show { opacity:1; pointer-events:auto; transform: translateY(0); }
-    #btn-build { left: 16px; bottom: 16px; }
-    #btn-inspector { right: 16px; bottom: 16px; }
+    #fab-build{left:16px; bottom:16px}
+    #fab-inspector{right:16px; bottom:16px}
+    /* Wenn das Baumenü offen ist, heben wir die FABs höher an */
+    .fab--raised{ transform:translateY(-120px) }
+    /* versteckt bis Game gestartet ist */
+    .fab--hide{opacity:0; pointer-events:none}
   </style>
 </head>
 <body>
 
-  <!-- Spielfeld -->
-  <canvas id="game" aria-label="Spielfeld"></canvas>
+  <!-- Stage -->
+  <canvas id="game" aria-label="Game Stage"></canvas>
 
-  <!-- Floating Buttons (werden per JS erst nach Game-Start eingeblendet) -->
-  <button id="btn-build" class="fab" title="Bau-Menü öffnen" aria-label="Bau-Menü">🧱</button>
-  <button id="btn-inspector" class="fab" title="Inspector" aria-label="Inspector">🛠️</button>
+  <!-- Startpanel + Build-Bar werden von ihren Modulen selbst erzeugt -->
 
-  <!-- Start-Panel wird komplett per JS aufgebaut (assets/ui/ui-start.js).
-       Optionaler Mount-Container (falls gebraucht) -->
-  <div id="start-mount" class="is-hidden"></div>
+  <!-- Floating-Buttons (nur die Trigger, Logik in ui-bridge.js) -->
+  <button id="fab-build" class="fab fab--hide" aria-label="Bau-Menü"
+          title="Bau-Menü öffnen/schließen">🧱</button>
+  <button id="fab-inspector" class="fab fab--hide" aria-label="Inspector"
+          title="Inspector öffnen/schließen">🛠️</button>
 
-  <!-- ===== Script-Reihenfolge (wichtig!) ===== -->
-  <!-- Logger/Inspector zuerst, damit alle Logs von Anfang an gefangen werden -->
-  <script src="assets/inspector/inspector.js?v=16.3.3" defer></script>
+  <!-- SCRIPT LADEREIHENFOLGE — v16.3.6 -->
+  <!-- Boot/Kompatibilität vor dem Game, damit globales Boot-API da ist -->
+  <script src="boot.compat.js?v=16.3.6"></script>
+  <script src="boot.js?v=16.3.6"></script>
 
-  <!-- Boot / Kompat-Wrapper (stellt GameBoot etc.) -->
-  <script src="boot.compat.js?v=16.3.3" defer></script>
-  <script src="boot.js?v=16.3.3" defer></script>
+  <!-- Engine/Game -->
+  <script src="game.js?v=16.3.6"></script>
 
-  <!-- Engine + Game -->
-  <script src="game.js?v=16.3.3" defer></script>
+  <!-- UI-Module -->
+  <script src="assets/ui/ui-start.js?v=16.3.6"></script>
+  <script src="assets/ui/ui-build.js?v=16.3.6"></script>
 
-  <!-- Produktives Bau-Menü (einzige Quelle) -->
-  <script src="assets/ui/ui-build.js?v=16.3.3" defer></script>
+  <!-- Inspector -->
+  <script src="assets/inspector/inspector.js?v=16.3.6"></script>
 
-  <!-- Start-UI (Panel, Start-Button, Map-Select) -->
-  <script src="assets/ui/ui-start.js?v=16.3.3" defer></script>
-
-  <!-- Main verbindet die Buttons und Panels nach DOMContentLoaded -->
-  <script>
-  (function(){
-    'use strict';
-
-    function qs(id){ return document.getElementById(id); }
-
-    // Warten bis wirklich alles da ist
-    window.addEventListener('DOMContentLoaded', function(){
-      // Start-UI initialisieren
-      if (window.GameUI && typeof GameUI.initStartPanel === 'function') {
-        GameUI.initStartPanel({
-          mount: document.getElementById('start-mount') || document.body,
-          onStart: function(mapUrl){
-            // Start callback – Game starten und Buttons erst nach 'cb:game-started' freigeben
-            if (window.GameLoader && typeof GameLoader._start === 'function') {
-              GameLoader._start(mapUrl);
-            }
-          },
-          // Panels beim Laden nie autoöffnen:
-          autoOpenBuild: false,
-          autoOpenInspector: false
-        });
-      }
-
-      // FAB Buttons verdrahten (bleiben bis Game-Start unsichtbar)
-      var btnBuild = qs('btn-build');
-      var btnInsp  = qs('btn-inspector');
-
-      if (btnBuild) btnBuild.addEventListener('click', function(){
-        if (window.GameUI && typeof GameUI.toggleBuildPanel === 'function') {
-          GameUI.toggleBuildPanel();
-        }
-      });
-
-      if (btnInsp) btnInsp.addEventListener('click', function(){
-        if (window.Inspector && typeof Inspector.toggle === 'function') {
-          Inspector.toggle();
-        } else if (window.GameUI && typeof GameUI.toggleInspector === 'function') {
-          GameUI.toggleInspector();
-        }
-      });
-
-      // Nach erfolgreichem Start Buttons zeigen
-      window.addEventListener('cb:game-started', function(){
-        if (btnBuild) btnBuild.classList.add('show');
-        if (btnInsp)  btnInsp.classList.add('show');
-
-        // Sicherheit: Panels NICHT automatisch öffnen
-        if (window.GameUI) {
-          if (typeof GameUI.closeBuildPanel === 'function')  GameUI.closeBuildPanel();
-          if (typeof GameUI.closeInspector === 'function')   GameUI.closeInspector();
-        }
-      });
-    });
-  })();
-  </script>
+  <!-- Bridge zwischen Game/Start/Build/Inspector -->
+  <script src="assets/ui/ui-bridge.js?v=16.3.6"></script>
 </body>
 </html>
