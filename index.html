@@ -1,12 +1,12 @@
 <!doctype html>
 <!--
   Neue Siedler – Index
-  Version: v16.4.6
+  Version: v16.5.2
   CODE_STYLE:
-    - Klare Abschnitts-Kommentare
-    - Eindeutige Versionsparameter (?v=...)
-    - Reihenfolge: Core/Engine → Game → Core-Logic (PF/Carriers) → UI → Inspector → Boot
-    - Keine UI-Elemente im Canvas zoomen; UI fixed + hohe z-index
+    - Abschnitts-Kommentare
+    - ?v= Versionsanhang
+    - Reihenfolge: Game → PF/Carriers → UI-Bridge → UI (Start/Build) → Inspector → Boot
+    - UI-Buttons fixed (nicht zoombar), Body-Klasse wenn Build offen
 -->
 <html lang="de">
 <head>
@@ -15,18 +15,17 @@
   <meta name="theme-color" content="#0b0f0d">
   <title>Neue Siedler</title>
 
-  <!-- Styles: Basis + UI -->
-  <link rel="stylesheet" href="style.css?v=16.4.6">
-  <link rel="stylesheet" href="ui-start.css?v=16.4.6">
-  <link rel="stylesheet" href="ui-build.css?v=16.4.6">
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css?v=16.5.2">
+  <link rel="stylesheet" href="ui-start.css?v=16.5.2">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=16.5.2">
   <link rel="manifest" href="manifest.webmanifest">
 
-  <!-- Mini-Fixes (Buttons immer sichtbar, nicht zoomend) -->
+  <!-- Buttons fix + Layout Bump, wenn Bau-Menü offen -->
   <style>
-    /* Canvas füllt die Seite, UI schwebt fix darüber */
     html, body { height:100%; margin:0; background:#0c120f; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; }
-    /* Button-Deck links unten (Build) + rechts unten (Inspector) */
+
     .ui-fab { position:fixed; z-index:100000; pointer-events:auto; user-select:none; }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
@@ -36,18 +35,16 @@
       box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px);
       cursor:pointer;
     }
-    /* Wenn das Bau-Menü geöffnet ist, Buttons leicht anheben (über dem Panel) */
-    body.has-build-open #btn-build { bottom:240px; }
+    body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom:240px; }
-    /* Startfenster dominiert; Bau-Menü & Inspector starten geschlossen */
   </style>
 </head>
 <body>
 
-  <!-- Canvas / Stage -->
+  <!-- Bühne -->
   <canvas id="game"></canvas>
 
-  <!-- Schwebende UI-Buttons (nicht zoombar) -->
+  <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
     <button type="button" aria-label="Bau-Menü" onclick="try{GameUI && GameUI.toggleBuild && GameUI.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
   </div>
@@ -55,39 +52,25 @@
     <button type="button" aria-label="Inspector" onclick="try{GameUI && GameUI.toggleInspector && GameUI.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
   </div>
 
-  <!-- ===================== Scripts ===================== -->
+  <!-- Scripts -->
+  <script defer src="game.js?v=16.5.1"></script>
+  <script defer src="core/pathfinder.js?v=16.5.0"></script>
+  <script defer src="core/carriers.js?v=16.5.0"></script>
 
-  <!-- Game Engine (unser Renderer + Input etc.) -->
-  <script defer src="game.js?v=16.4.4"></script>
-
-  <!-- Core Logic: Pfadfinder + Träger (müssen vor der UI verfügbar sein) -->
-  <script defer src="core/pathfinder.js?v=16.5.1"></script>
-  <script defer src="core/carriers.js?v=16.5.1"></script>
-
-  <!-- UI Bridge (stellt GameBoot.start & UI-Hooks bereit) -->
-  <script defer src="assets/ui/ui-bridge.js?v=16.3.6"></script>
-
-  <!-- Startpanel (zeigt Startfenster; ruft GameBoot.start bei "Start") -->
+  <script defer src="assets/ui/ui-bridge.js?v=16.5.2"></script>
   <script defer src="assets/ui/ui-start.js?v=16.3.3"></script>
+  <script defer src="assets/ui/ui-build.js?v=16.5.2"></script>
 
-  <!-- Bau-Menü (Tabs, Kategorien; initial geschlossen) -->
-  <script defer src="assets/ui/ui-build.js?v=16.3.4"></script>
-
-  <!-- Inspector (Logs, Live, Tests) – eigener Button rechts unten -->
-  <script defer src="assets/inspector/inspector.js?v=16.4.5"></script>
-
-  <!-- Boot-Kompat Layer (Logik, die GameBoot.start für alte/versch. Einstiege kapselt) -->
+  <script defer src="assets/inspector/inspector.js?v=16.5.0"></script>
   <script defer src="boot.compat.js?v=16.4.6"></script>
 
-  <!-- Optional: Service Worker (offline), nur wenn gewünscht -->
+  <!-- SW optional (nur mit keep-sw=1 aktiv) -->
   <script>
-    (function registerSW(){
-      /* Hinweis: nur aktiv lassen, wenn du bewusst cachen möchtest.
-         Für Debug/Entwicklung ggf. weglassen bzw. mit keep-sw steuern. */
-      if ('serviceWorker' in navigator) {
+    (function(){
+      if ('serviceWorker' in navigator){
         var keep = location.search.indexOf('keep-sw=1') !== -1;
-        if (keep) {
-          navigator.serviceWorker.register('sw.js?v=16.4.6').catch(function(e){
+        if (keep){
+          navigator.serviceWorker.register('sw.js?v=16.5.2').catch(function(e){
             console.warn('[sw] Registrierung fehlgeschlagen:', e && e.message);
           });
         } else {
@@ -96,20 +79,10 @@
           });
         }
       }
-    })();
-  </script>
-
-  <!-- Auto-Start Schutz: Startfenster zuerst; Bau-Menü & Inspector bleiben zu -->
-  <script>
-    (function initIndex(){
-      console.log('UI bereit (index v16.4.6)');
-      // Bau-Menü beim Start sicher geschlossen halten:
-      document.body.classList.remove('has-build-open');
+      console.log('UI bereit (index v16.5.2)');
+      // Body-Klasse auf Events reagieren (wird von Bridge gepusht)
       window.addEventListener('cb:build-open', function(){ document.body.classList.add('has-build-open'); });
       window.addEventListener('cb:build-close', function(){ document.body.classList.remove('has-build-open'); });
-
-      // Startpanel öffnen (ui-start initialisiert sich selbst); GameBoot.start erfolgt erst nach Klick
-      // Inspector bleibt geschlossen; eigener Toggle-Button im Eck.
     })();
   </script>
 </body>
