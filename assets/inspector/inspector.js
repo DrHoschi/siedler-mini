@@ -1,13 +1,13 @@
-/* assets/inspector/inspector.js — v16.4.4
+/* assets/inspector/inspector.js — v16.4.5
    Floating Inspector mit Tabs: Live • Logs • Tests
-   - Logs: fängt console.log/warn/error + CBLog.* ab, zeigt alles im Panel
+   - Logs: fängt console.log/warn/error + CBLog.* ab und zeigt sie im Panel
    - Tests: Carrier-Buttons (Autotest-Flag, einmaliger Spawn)
-   - UI ist fixed (kein Map-Zoom), öffnet/schließt per GameUI.* API
+   - UI ist fixed (kein Map-Zoom), extrem hoher z-index + pointer-events: auto
 */
 (function(){
   'use strict';
 
-  var VERSION = 'v16.4.4';
+  var VERSION = 'v16.4.5';
 
   // ---------- util: logger facade ----------
   var _rawConsole = { log:console.log, warn:console.warn, error:console.error };
@@ -39,9 +39,9 @@
   // wrap console.* and CBLog.*
   if (!console.__cbWrapped){
     console.__cbWrapped = true;
-    console.log = function(){ _rawConsole.log.apply(console, arguments); if(!muted) push('LOG', arguments); };
+    console.log  = function(){ _rawConsole.log.apply(console, arguments);  if(!muted) push('LOG',  arguments); };
     console.warn = function(){ _rawConsole.warn.apply(console, arguments); if(!muted) push('WARN', arguments); };
-    console.error= function(){ _rawConsole.error.apply(console, arguments); if(!muted) push('ERR', arguments); };
+    console.error= function(){ _rawConsole.error.apply(console, arguments);if(!muted) push('ERR',  arguments); };
   }
   if (!window.CBLog){
     window.CBLog = {
@@ -52,9 +52,9 @@
   } else if (!window.CBLog.__cbWrapped){
     window.CBLog.__cbWrapped = true;
     var _ok=CBLog.ok, _w=CBLog.warn, _e=CBLog.err;
-    CBLog.ok   = function(){ try{ _ok.apply(CBLog, arguments); }catch(_){ console.log.apply(console, arguments); } if(!muted) push('OK',   arguments); };
-    CBLog.warn = function(){ try{ _w.apply(CBLog, arguments); }catch(_){ console.warn.apply(console, arguments);} if(!muted) push('WARN', arguments); };
-    CBLog.err  = function(){ try{ _e.apply(CBLog, arguments); }catch(_){ console.error.apply(console, arguments);} if(!muted) push('ERR',  arguments); };
+    CBLog.ok   = function(){ try{ _ok.apply(CBLog, arguments); }catch(_){ console.log.apply(console, arguments); }   if(!muted) push('OK',   arguments); };
+    CBLog.warn = function(){ try{ _w.apply(CBLog, arguments); }catch(_){ console.warn.apply(console, arguments);}    if(!muted) push('WARN', arguments); };
+    CBLog.err  = function(){ try{ _e.apply(CBLog, arguments); }catch(_){ console.error.apply(console, arguments);}   if(!muted) push('ERR',  arguments); };
   }
 
   // ---------- UI ----------
@@ -71,10 +71,10 @@
 
     injectCSS();
 
-    // open button (unten rechts, klein)
+    // open button (unten rechts, sehr hoher z-index)
     $btnOpen = el('button','cb-ins-open','<span>🛠</span>');
     $btnOpen.title = 'Inspector öffnen';
-    $btnOpen.addEventListener('click', open); 
+    $btnOpen.addEventListener('click', open);
     document.body.appendChild($btnOpen);
 
     // panel
@@ -177,13 +177,8 @@
     $logList = el('div','log-list');
     c.appendChild($logList);
 
-    // existierende Einträge initial malen
     renderList(true);
-
-    // live nachschieben
-    listeners.push(function(entry){
-      appendEntry(entry);
-    });
+    listeners.push(function(entry){ appendEntry(entry); });
   }
 
   function renderList(clear){
@@ -217,10 +212,7 @@
     b1.title = 'Setzt DEV_CARRIER_AUTOTEST=true und triggert einen Demo-Lauf nach Start';
     b1.addEventListener('click', function(){
       window.DEV_CARRIER_AUTOTEST = true;
-      // wenn Game schon läuft, sofort einen Carrier erzeugen:
-      setTimeout(function(){
-        trySpawnCarrierDemo(true);
-      }, 200);
+      setTimeout(function(){ trySpawnCarrierDemo(true); }, 200);
       console.log('[tests] DEV_CARRIER_AUTOTEST = true gesetzt');
     });
 
@@ -231,17 +223,15 @@
     wrap.appendChild(b1);
     wrap.appendChild(b2);
 
-    // ggf. mehr Test-Buttons hier ergänzen…
-
     c.appendChild(wrap);
   }
 
   function trySpawnCarrierDemo(isAuto){
     try{
-      var PF = window.PathFinder, CR = window.Carriers, GM = window.Game;
+      var CR = window.Carriers, GM = window.Game;
       if (!CR || !CR.spawn){ console.warn('[tests] Carriers.spawn fehlt'); return; }
       var m = GM && GM.currentMap ? GM.currentMap : {width:16, height:10};
-      var cx = (m.width/2)|0, cy = (m.height/2)|0;         // Zentrum ~ Rathaus
+      var cx = (m.width/2)|0, cy = (m.height/2)|0;
       var tx = Math.min(m.width-1,  cx + 3);
       var ty = Math.min(m.height-1, cy + 2);
       var c = CR.spawn({ from:{x:cx, y:cy}, to:{x:tx, y:ty} });
@@ -257,9 +247,10 @@
   function close(){ state.open=false; $panel.classList.remove('open'); $btnOpen.classList.remove('hide'); }
   function toggle(){ state.open ? close() : open(); }
 
-  UI.openInspector   = open;
-  UI.closeInspector  = close;
-  UI.toggleInspector = toggle;
+  var UIpub = (window.GameUI = window.GameUI || {});
+  UIpub.openInspector   = open;
+  UIpub.closeInspector  = close;
+  UIpub.toggleInspector = toggle;
 
   // ---------- Events ----------
   window.addEventListener('cb:engine-ready', function(){ console.log('[inspector] cb:engine-ready'); });
@@ -276,33 +267,33 @@
   function injectCSS(){
     if (document.getElementById('cb-ins-css')) return;
     var css = [
-      '.cb-ins-open{position:fixed;right:16px;bottom:16px;z-index:10001;width:48px;height:48px;border-radius:50%;border:none;background:rgba(30,30,30,.85);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px);pointer-events:auto;}',
+      '.cb-ins-open{position:fixed;right:16px;bottom:16px;z-index:200000;pointer-events:auto;user-select:none;width:48px;height:48px;border-radius:50%;border:none;background:rgba(30,30,30,.92);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px);} ',
       '.cb-ins-open.hide{display:none;}',
-      '.cb-ins-panel{position:fixed;inset:4% 4%;z-index:10002;background:rgba(10,14,12,.92);border:1px solid rgba(255,255,255,.08);border-radius:16px;backdrop-filter:blur(10px);box-shadow:0 20px 60px rgba(0,0,0,.6);display:none;color:#fff;}',
+      '.cb-ins-panel{position:fixed;inset:4% 4%;z-index:200001;background:rgba(10,14,12,.96);border:1px solid rgba(255,255,255,.08);border-radius:16px;backdrop-filter:blur(10px);box-shadow:0 20px 60px rgba(0,0,0,.6);display:none;color:#fff;pointer-events:auto;}',
       '.cb-ins-panel.open{display:block;}',
       '.cb-ins-head{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font-size:14px;}',
       '.cb-ins-head .v{opacity:.65;}',
-      '.cb-ins-close{margin-left:auto;width:36px;height:36px;border:none;border-radius:8px;background:rgba(255,255,255,.08);color:#fff;font-size:18px;}',
+      '.cb-ins-close{margin-left:auto;width:36px;height:36px;border:none;border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:18px;cursor:pointer;}',
       '.cb-ins-tabs{display:flex;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);} ',
-      '.cb-ins-tabs .cb-tab{border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.08);color:#fff;}',
-      '.cb-ins-tabs .cb-tab.active{background:rgba(76,175,80,.3);} ',
+      '.cb-ins-tabs .cb-tab{border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;}',
+      '.cb-ins-tabs .cb-tab.active{background:rgba(76,175,80,.35);} ',
       '.cb-ins-body{position:absolute;left:0;right:0;top:108px;bottom:16px;padding:12px 14px;overflow:auto;}',
       /* Live */
-      '.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;max-width:480px;}',
+      '.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;max-width:520px;}',
       '.kv .row .k{opacity:.75;margin-right:6px;}',
       '.kv .row .v{font-weight:600;}',
       /* Logs */
       '.log-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px;}',
       '.log-bar .chk{display:flex;align-items:center;gap:6px;opacity:.9;}',
       '.log-bar .stats{margin-left:auto;opacity:.75;}',
-      '.log-list{font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); border-radius:8px; padding:8px; height:calc(100% - 48px); overflow:auto;}',
+      '.log-list{font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:8px; height:calc(100% - 48px); overflow:auto;}',
       '.line{white-space:pre-wrap; word-break:break-word; padding:2px 0;}',
       '.line .t{opacity:.6; margin-right:6px;}',
       '.line .lvl{opacity:.8; margin-right:6px;}',
       '.line.ok{color:#cfe9c9;} .line.log{color:#e8e8e8;} .line.warn{color:#ffd27f;} .line.err{color:#ff8a8a;}',
       /* Tests */
       '.tests{display:flex;gap:10px;flex-wrap:wrap;}',
-      '.tbtn{border:none;border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.08);color:#fff;}'
+      '.tbtn{border:none;border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;}'
     ].join('');
     var st=document.createElement('style'); st.id='cb-ins-css'; st.textContent=css; document.head.appendChild(st);
   }
