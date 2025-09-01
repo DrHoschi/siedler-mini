@@ -1,135 +1,148 @@
-/* assets/ui/ui-build.css — v16.3.6 */
+/*
+  assets/ui/ui-build.css — v16.5.2
+  CODE_STYLE:
+    - Lesbare Abschnitte
+    - Keine globalen Resets, nur Namespaces
+    - Mobile-first, responsive Grid
+*/
 
-/* ---------- FABs (aus ui-bridge.js) */
-.cb-fab-holder {
+/* Panel-Container (unten) */
+#build-panel {
   position: fixed;
-  inset: auto 0 1.25rem 0;
-  pointer-events: none;
-  z-index: 10010;
-}
-.cb-fab {
-  pointer-events: auto;
-  width: 54px; height: 54px;
-  border-radius: 50%;
-  border: 0;
-  margin: 0 1rem;
-  background: rgba(20,20,20,.85);
-  box-shadow: 0 6px 18px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
-  color: #eee;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100050; /* unter Inspector-Panel, über Buttons */
+  display: none;   /* initial geschlossen */
+  padding: 12px 14px 16px;
+  background: linear-gradient(to top, rgba(8,12,10,.94), rgba(8,12,10,.86));
+  border-top: 1px solid rgba(255,255,255,.07);
+  box-shadow: 0 -24px 60px rgba(0,0,0,.45);
   backdrop-filter: blur(8px);
-}
-.cb-fab:active { transform: translateY(1px) scale(.98); }
-.cb-fab--build { position: fixed; left: .75rem; bottom: .75rem; }
-.cb-fab--inspector { position: fixed; right: .75rem; bottom: .75rem; }
-.icon-bricks::before { content: "🧱"; font-size: 22px; }
-.icon-wrench::before { content: "🛠️"; font-size: 22px; }
-
-/* ---------- Build-Bar (unten) */
-:root{
-  --cb-build-scale: 1;
-}
-@media (max-width: 900px){
-  :root{ --cb-build-scale: 1.05; }
-}
-.cb-build {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 10000;
-  transform: translateY(calc(100% - 12px)); /* zu, nur Trennkante sichtbar */
-  transition: transform .25s ease;
-  pointer-events: none; /* geschlossen nicht klickbar */
-}
-.cb-build.is-open {
-  transform: translateY(0);
-  pointer-events: auto;
+  color: #fff;
+  user-select: none;
 }
 
-/* Plate */
-.cb-build__plate{
-  margin: 0;
-  padding: calc(14px * var(--cb-build-scale)) calc(18px * var(--cb-build-scale));
-  background: linear-gradient(180deg, rgba(14,25,20,.92), rgba(10,18,15,.92));
-  border-top: 1px solid rgba(255,255,255,.06);
-  backdrop-filter: blur(10px) saturate(115%);
-  box-shadow: 0 -12px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
+/* wenn offen */
+#build-panel.open { display: block; }
+
+/* Header (Tabs + Schließen) */
+#build-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+#build-head .title {
+  font-weight: 700;
+  letter-spacing: .2px;
+  opacity: .9;
+}
+#build-head .spacer { flex: 1; }
+#build-close {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.10);
+  color: #fff;
+  cursor: pointer;
 }
 
 /* Tabs */
-.cb-build__tabs{
+#build-tabs {
   display: flex;
-  gap: calc(8px * var(--cb-build-scale));
   flex-wrap: wrap;
-  margin-bottom: calc(10px * var(--cb-build-scale));
+  gap: 8px;
 }
-.cb-build__tab{
-  font: 600 calc(13px * var(--cb-build-scale)) / 1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  padding: calc(8px * var(--cb-build-scale)) calc(11px * var(--cb-build-scale));
+#build-tabs .tab {
+  border: none;
   border-radius: 999px;
-  background: rgba(255,255,255,.10);
-  color: #e9efe9;
-  border: 1px solid rgba(255,255,255,.08);
+  padding: 6px 12px;
+  background: rgba(255,255,255,.12);
+  color: #fff;
   cursor: pointer;
-  user-select: none;
+  font-size: 13px;
 }
-.cb-build__tab.is-active{
-  background: rgba(32,168,100,.18);
-  border-color: rgba(74,214,146,.35);
+#build-tabs .tab.active {
+  background: rgba(76,175,80,.30);
 }
 
-/* Items Grid */
-.cb-build__items{
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(calc(108px * var(--cb-build-scale)), 1fr));
-  gap: calc(10px * var(--cb-build-scale));
-  max-height: min(34vh, 320px);
-  overflow: auto;
-  padding-bottom: calc(6px * var(--cb-build-scale));
+/* Body */
+#build-body {
+  margin-top: 8px;
 }
-.cb-build__item{
+
+/* Grid der Items */
+.build-grid {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: repeat( auto-fill, minmax(92px, 1fr) );
+  gap: 10px;
+}
+
+/* Item-Karte */
+.build-item {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-items: center;
-  gap: calc(6px * var(--cb-build-scale));
-  padding: calc(10px * var(--cb-build-scale));
+  gap: 6px;
+  padding: 10px;
   border-radius: 12px;
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,255,255,.08);
-  color: #e8eee9;
   cursor: pointer;
-  transition: transform .06s ease, background .2s ease;
-  min-height: calc(118px * var(--cb-build-scale));
+  transition: transform .06s ease, background .12s ease, border-color .12s ease;
 }
-.cb-build__item:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
-.cb-build__item.is-active{ outline: 2px solid rgba(80,220,150,.9); }
+.build-item:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.16);
+}
+.build-item.active {
+  outline: 2px solid rgba(120,200,255,.65);
+  background: rgba(120,200,255,.12);
+}
 
-/* Thumbs */
-.cb-build__thumb{
-  width: calc(72px * var(--cb-build-scale));
-  height: calc(72px * var(--cb-build-scale));
-  background: rgba(0,0,0,.25) center/contain no-repeat;
-  border-radius: 8px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+/* Thumbnail */
+.build-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.28);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
 }
-.cb-build__label{
-  font: 600 calc(12.5px * var(--cb-build-scale)) / 1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+.build-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+/* Titel */
+.build-name {
+  font-size: 12px;
+  line-height: 1.15;
   text-align: center;
-  color: #e8eee9;
+  letter-spacing: .2px;
+  opacity: .92;
 }
 
-/* Wenn Build offen, die FABs etwas hochschieben */
-.cb-build.is-open ~ .cb-fab--build,
-.cb-build.is-open ~ .cb-fab--inspector{
-  transform: translateY(-18vh);
+/* Hinweiszeile unten */
+#build-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .7;
 }
 
-/* Kleine optische Kante bei geschlossenem Zustand */
-.cb-build::before{
-  content:'';
-  position:absolute; left: 50%; transform: translateX(-50%);
-  bottom: calc(100% - 2px);
-  width: 64px; height: 6px; border-radius: 3px;
-  background: rgba(255,255,255,.16);
+/* Kleinere Screens */
+@media (max-width: 480px) {
+  .build-thumb { width: 64px; height: 64px; }
+  .build-grid { gap: 8px; }
 }
 
-/* Fullscreen Inspector Overlay wird in inspector.js gestylt */
+/* Wenn Panel offen: Buttons im Index hochrücken (per body-Klasse) */
+body.has-build-open #btn-build,
+body.has-build-open #btn-inspector {
+  bottom: 240px; /* gleich wie in index.html */
+}
