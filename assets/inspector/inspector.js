@@ -1,240 +1,316 @@
-/* assets/inspector/inspector.js — v16.5.0
-   Tabs: Live • Logs • Tests
-   Neu: Pfad-Overlay Toggle + Ressourcen-Hinzufügen (Input + Button)
-*/
-(function(){
+/* ============================================================================
+ * core/pathfinder.js — v16.5.3
+ * Projekt: Siedler-Mini
+ * Zweck:
+ *   - Hybrid-Pathfinding (A*):
+ *       • mode 'roads': 4-Nachbarn, nutzt Road-Maske (Set "x,y")
+ *       • mode 'offroad': 8-Nachbarn (Octile), mit Diagonalregeln
+ *       • mode 'auto': versucht roads, fällt zurück auf offroad
+ *   - Heatmap (Trampelpfade) zum Debuggen / Soft-Costs
+ *   - Overlay-Zeichnung (optional) für Inspector-Ansicht
+ *
+ * Öffentliche API:
+ *   PathFinder.init(getMapSizeFn)
+ *   PathFinder.setRoadMask(Set|null)
+ *   PathFinder.setObstacleProvider(fn|null)   // fn(tx,ty)=>true wenn blockiert
+ *   PathFinder.invalidateRoads()
+ *   PathFinder.applyHeat(path)                // path: [{x,y},...]
+ *   PathFinder.findPath({from:{x,y}, to:{x,y}, mode:'auto'|'offroad'|'roads'})
+ *   PathFinder.drawOverlay(ctx, cam)          // cam: {x,y,zoom} in Tiles
+ *
+ * Erwartete Game-Hooks (optional):
+ *   Game.getTileSize() : number
+ *   Game.getRoadSet()  : Set
+ *   Game.getMapSize()  : {w,h}
+ *   Game.getObstacleAt(tx,ty) : boolean
+ *
+ * Debug:
+ *   window.DEBUG_PATH_OVERLAY = true → Heatmap & Pfadlinien sichtbar
+ * ========================================================================== */
+(function () {
   'use strict';
 
-  var VERSION = 'v16.5.0';
+  // ---------------------------------------------------------------------------
+  // internes State
+  // ---------------------------------------------------------------------------
+  var PF = (window.PathFinder = window.PathFinder || {});
+  var _w = 0, _h = 0;                // Map-Größe in Tiles
+  var _heat = null;                  // Float32Array[w*h]
+  var _roadSet = null;               // Set("x,y") oder null
+  var _blockerProvider = null;       // fn(tx,ty)=>true wenn blockiert
+  var _lastPaths = [];               // für Overlay: Liste jüngster Pfade
+  var _didLazyInit = false;          // einmaliger Lazy-Init-Schutz
 
-  // ---------- console capture ----------
-  var _rawConsole = { log:console.log, warn:console.warn, error:console.error };
-  var buffer = [];  var maxBuffer = 2000; var listeners = []; var muted = false;
-
-  function ts(){ var d=new Date(); function p2(n){return (n<10?'0':'')+n;} return '['+p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds())+']'; }
-  function safeStr(v){ if(v===null) return 'null'; if(v===undefined) return 'undefined'; if(typeof v==='object'){ try{return JSON.stringify(v);}catch(_){return'[Object]';} } return String(v); }
-  function push(level, args){ var entry={ t:ts(), level:level, msg:Array.prototype.slice.call(args).map(safeStr).join(' ') }; buffer.push(entry); if(buffer.length>maxBuffer) buffer.shift(); for(var i=0;i<listeners.length;i++) try{listeners[i](entry);}catch(_){ } }
-
-  if (!console.__cbWrapped){
-    console.__cbWrapped=true;
-    console.log=function(){ _rawConsole.log.apply(console,arguments); if(!muted) push('LOG',arguments); };
-    console.warn=function(){ _rawConsole.warn.apply(console,arguments); if(!muted) push('WARN',arguments); };
-    console.error=function(){ _rawConsole.error.apply(console,arguments); if(!muted) push('ERR',arguments); };
-  }
-  if (!window.CBLog){
-    window.CBLog = { ok:function(){console.log.apply(console,arguments);}, warn:function(){console.warn.apply(console,arguments);}, err:function(){console.error.apply(console,arguments);} };
-  } else if (!window.CBLog.__cbWrapped){
-    window.CBLog.__cbWrapped = true;
-    var _ok=CBLog.ok, _w=CBLog.warn, _e=CBLog.err;
-    CBLog.ok=function(){ try{_ok.apply(CBLog,arguments);}catch(_){console.log.apply(console,arguments);} if(!muted) push('OK',arguments); };
-    CBLog.warn=function(){ try{_w.apply(CBLog,arguments);}catch(_){console.warn.apply(console,arguments);} if(!muted) push('WARN',arguments); };
-    CBLog.err=function(){ try{_e.apply(CBLog,arguments);}catch(_){console.error.apply(console,arguments);} if(!muted) push('ERR',arguments); };
-  }
-
-  // ---------- UI ----------
-  var UI = (window.GameUI = window.GameUI || {});
-  var $root,$panel,$tabs,$live,$logs,$tests,$btnOpen,$btnClose,$logList,$logStats;
-
-  function el(tag, cls, html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
-
-  function ensureRoot(){
-    if ($root) return;
-    injectCSS();
-
-    $btnOpen = el('button','cb-ins-open','<span>🛠</span>'); $btnOpen.title='Inspector öffnen';
-    $btnOpen.addEventListener('click', open); document.body.appendChild($btnOpen);
-
-    $panel = el('div','cb-ins-panel'); document.body.appendChild($panel);
-    var $head = el('div','cb-ins-head','<strong>Inspector</strong> <em class="v">('+VERSION+')</em>'); $panel.appendChild($head);
-    $btnClose = el('button','cb-ins-close','×'); $btnClose.title='Schließen'; $btnClose.addEventListener('click', close); $head.appendChild($btnClose);
-
-    $tabs = el('div','cb-ins-tabs');
-    $tabs.appendChild(tabBtn('live','Live'));
-    $tabs.appendChild(tabBtn('logs','Logs'));
-    $tabs.appendChild(tabBtn('tests','Tests'));
-    $panel.appendChild($tabs);
-
-    $live = el('div','cb-ins-body'); $panel.appendChild($live);
-    $logs = el('div','cb-ins-body'); $panel.appendChild($logs);
-    $tests= el('div','cb-ins-body'); $panel.appendChild($tests);
-
-    buildLive($live); buildLogs($logs); buildTests($tests);
-    switchTab('logs'); close();
-  }
-
-  function tabBtn(id,label){ var b=el('button','cb-tab',label); b.dataset.tab=id; b.addEventListener('click',function(){switchTab(id);}); return b; }
-  function switchTab(id){
-    var btns=$tabs.querySelectorAll('.cb-tab'); for(var i=0;i<btns.length;i++){ var b=btns[i]; if(b.dataset.tab===id) b.classList.add('active'); else b.classList.remove('active'); }
-    $live.style.display = id==='live'?'block':'none';
-    $logs.style.display = id==='logs'?'block':'none';
-    $tests.style.display= id==='tests'?'block':'none';
-  }
-
-  // --- Live ---
-  function buildLive(c){
-    c.innerHTML='';
-    var g=el('div','kv'); c.appendChild(g);
-    function row(k,v){ var r=el('div','row'); r.appendChild(el('span','k',k)); r.appendChild(el('span','v',v)); g.appendChild(r); }
-    function refresh(){
-      var cam=(window.Game&&Game.getCamera&&Game.getCamera())||{};
-      var map=(window.Game&&Game.currentMap)||{};
-      g.innerHTML='';
-      row('Map', (map.width|0)+' × '+(map.height|0));
-      row('Kamera', 'x:'+(cam.x|0)+' y:'+(cam.y|0)+' z:'+(cam.zoom!=null?cam.zoom.toFixed(2):'?'));
-      row('Tile', (window.Game&&Game.getTileSize&&Game.getTileSize())||'?');
-      row('Roads', (window.Game&&Game.getRoadSet&&Game.getRoadSet().size)||0);
-      row('Overlay', window.DEBUG_PATH_OVERLAY? 'AN':'AUS');
-    }
-    setInterval(refresh, 500); refresh();
-  }
-
-  // --- Logs ---
-  function buildLogs(c){
-    c.innerHTML='';
-    var bar=el('div','log-bar');
-    var btnClr=el('button','', 'Leeren');
-    var btnCopy=el('button','', 'In Zwischenablage');
-    var chkAuto=el('label','chk','<input type="checkbox" checked> Auto-Scroll');
-    $logStats=el('span','stats','');
-
-    btnClr.addEventListener('click', function(){ buffer.length=0; renderList(true); });
-    btnCopy.addEventListener('click', function(){
-      var text=buffer.map(function(e){ return e.t+' '+e.level+' '+e.msg; }).join('\n');
-      try{ navigator.clipboard.writeText(text); }catch(_){}
-    });
-    chkAuto.querySelector('input').addEventListener('change', function(){ state.autoscroll=this.checked; });
-
-    bar.appendChild(btnClr); bar.appendChild(btnCopy); bar.appendChild(chkAuto); bar.appendChild($logStats);
-    c.appendChild(bar);
-
-    $logList = el('div','log-list'); c.appendChild($logList);
-    renderList(true); listeners.push(function(e){ appendEntry(e); });
-  }
-  var state={autoscroll:true};
-  function renderList(clear){ if(clear) $logList.innerHTML=''; for(var i=0;i<buffer.length;i++) appendEntry(buffer[i],true); updateStats(); if(state.autoscroll) $logList.scrollTop=$logList.scrollHeight; }
-  function appendEntry(e, silent){
-    var div=el('div','line '+e.level.toLowerCase(), '<span class="t">'+e.t+'</span> <span class="lvl">['+e.level+']</span> <span class="msg"></span>');
-    div.querySelector('.msg').textContent = e.msg; $logList.appendChild(div);
-    if(!silent&&state.autoscroll) $logList.scrollTop=$logList.scrollHeight; updateStats();
-  }
-  function updateStats(){
-    var n=buffer.length, w=0, er=0; for(var i=0;i<n;i++){ if(buffer[i].level==='WARN') w++; else if(buffer[i].level==='ERR') er++; }
-    $logStats.textContent = n+' Einträge · '+w+' Warn · '+er+' Fehler';
-  }
-
-  // --- Tests ---
-  function buildTests(c){
-    c.innerHTML='';
-    var wrap=el('div','tests');
-
-    // 1) Carrier Autotest
-    var b1 = el('button','tbtn','Carrier Autotest (1x)');
-    b1.addEventListener('click', function(){
-      window.DEV_CARRIER_AUTOTEST = true;
-      setTimeout(function(){ trySpawnCarrierDemo(true); }, 200);
-      console.log('[tests] DEV_CARRIER_AUTOTEST = true gesetzt');
-    });
-
-    // 2) Carrier: Rathaus → Demo-Ziel
-    var b2 = el('button','tbtn','Carrier: Rathaus → Demo-Ziel');
-    b2.addEventListener('click', function(){ trySpawnCarrierDemo(false); });
-
-    // 3) Pfad-Overlay an/aus
-    var b3 = el('button','tbtn','Pfad-Overlay (AN/AUS)');
-    b3.addEventListener('click', function(){
-      window.DEBUG_PATH_OVERLAY = !window.DEBUG_PATH_OVERLAY;
-      console.log('[tests] DEBUG_PATH_OVERLAY =', window.DEBUG_PATH_OVERLAY);
-    });
-
-    // 4) Ressourcen hinzufügen (Typ + Anzahl)
-    var box = el('div','resbox');
-    var sel = el('select','res-sel'); // kleine Vorauswahl üblicher Ressourcen
-    ['wood','grain','stone','iron','fish','tools'].forEach(function(t){
-      var o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o);
-    });
-    var inp = el('input','res-amt'); inp.type='number'; inp.value='10'; inp.min='-9999'; inp.max='9999';
-    var add = el('button','tbtn','Ressource +');
-    add.addEventListener('click', function(){
-      var t = sel.value||'wood'; var a = parseInt(inp.value||'0',10)|0;
-      if (!a) return;
-      addResource(t,a);
-    });
-    box.appendChild(sel); box.appendChild(inp); box.appendChild(add);
-
-    wrap.appendChild(b1); wrap.appendChild(b2); wrap.appendChild(b3);
-    wrap.appendChild(el('div','hr','')); // Trennung
-    wrap.appendChild(box);
-
-    c.appendChild(wrap);
-  }
-
-  function trySpawnCarrierDemo(isAuto){
+  // sanfte Logs (fallen auf console.* zurück)
+  function LOG(lvl, msg){
     try{
-      var CR = window.Carriers, GM = window.Game;
-      if (!CR || !CR.spawn){ console.warn('[tests] Carriers.spawn fehlt'); return; }
-      var m = GM && GM.currentMap ? GM.currentMap : {width:16, height:10};
-      var cx = (m.width/2)|0, cy = (m.height/2)|0;
-      var tx = Math.min(m.width-1,  cx + 3);
-      var ty = Math.min(m.height-1, cy + 2);
-      var c = CR.spawn({ from:{x:cx, y:cy}, to:{x:tx, y:ty} });
-      if (c) console.log('[tests] Carrier gestartet von', cx,cy, 'nach', tx,ty, (isAuto?'(auto)':''));
-      else   console.warn('[tests] Carrier-Start fehlgeschlagen (kein Pfad?)');
-    } catch(e){
-      console.error('[tests] Fehler beim Start:', e && e.message);
-    }
-  }
-
-  // fallback Resource-API
-  function addResource(type, amt){
-    try{
-      var G = window.Game = window.Game || {};
-      if (!G.inventory) G.inventory = {};
-      if (typeof G.addResource !== 'function'){
-        G.addResource = function(t,a){
-          var n = (G.inventory[t]|0) + (a|0);
-          G.inventory[t] = n;
-          console.log('[res] +'+a+' '+t+' → '+n);
-          return n;
-        };
+      if (window.CBLog){
+        if (lvl==='ok')   return window.CBLog.ok(msg);
+        if (lvl==='warn') return window.CBLog.warn(msg);
+        if (lvl==='err')  return window.CBLog.err(msg);
+        return window.CBLog.push(lvl||'log', msg);
       }
-      G.addResource(type, amt);
-    }catch(e){
-      console.warn('[res] addResource Fehler:', e && e.message);
+    }catch(_){}
+    var c = (lvl==='err' ? 'error' : lvl==='warn' ? 'warn' : 'log');
+    (console[c]||console.log)(msg);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Utilities / Gitter
+  // ---------------------------------------------------------------------------
+  function idx(x,y){ return y*_w + x; }
+  function inb(x,y){ return x>=0 && y>=0 && x<_w && y<_h; }
+  function key(x,y){ return x + ',' + y; }
+  function isRoad(x,y){ return _roadSet && _roadSet.has(key(x,y)); }
+  function isBlocked(x,y){
+    if (!inb(x,y)) return true;
+    if (_blockerProvider && _blockerProvider(x,y)) return true;
+    return false;
+  }
+
+  function heuristic(x0,y0,x1,y1){
+    // Octile (für 8-Nachbarn), guter Allrounder
+    var dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+    var F = Math.SQRT2 - 1;
+    return (dx<dy) ? F*dx + dy : F*dy + dx;
+  }
+
+  // 4-Nachbarn
+  var N4 = [[1,0],[-1,0],[0,1],[0,-1]];
+  // 8-Nachbarn (Diagonalen ohne "Ecken schneiden": beide Orthogonalen prüfen)
+  var N8 = [
+    [1,0],[-1,0],[0,1],[0,-1],
+    [1,1],[1,-1],[-1,1],[-1,-1]
+  ];
+
+  function neighborsRoad(x,y, out){
+    for (var i=0;i<4;i++){
+      var dx=N4[i][0], dy=N4[i][1], nx=x+dx, ny=y+dy;
+      if (!inb(nx,ny)) continue;
+      if (isBlocked(nx,ny)) continue;
+      if (!isRoad(nx,ny)) continue;
+      out.push([nx,ny,1]);
     }
+    return out;
   }
 
-  // open/close
-  function open(){ $panel.classList.add('open'); $btnOpen.classList.add('hide'); }
-  function close(){ $panel.classList.remove('open'); $btnOpen.classList.remove('hide'); }
-  UI.openInspector=open; UI.closeInspector=close; UI.toggleInspector=function(){ ($panel.classList.contains('open')?close:open)(); };
+  function neighborsOffroad(x,y,out){
+    for (var i=0;i<N8.length;i++){
+      var dx=N8[i][0], dy=N8[i][1], nx=x+dx, ny=y+dy;
+      if (!inb(nx,ny)) continue;
+      if (isBlocked(nx,ny)) continue;
 
-  // DOM Ready
-  function init(){ ensureRoot(); console.log('[inspector] Modul geladen (v'+VERSION+')'); }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
-
-  // Styles
-  function injectCSS(){
-    if (document.getElementById('cb-ins-css')) return;
-    var css=[
-      '.cb-ins-open{position:fixed;right:16px;bottom:16px;z-index:200000;pointer-events:auto;user-select:none;width:48px;height:48px;border-radius:50%;border:none;background:rgba(30,30,30,.92);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px);} ',
-      '.cb-ins-open.hide{display:none;}',
-      '.cb-ins-panel{position:fixed;inset:4% 4%;z-index:200001;background:rgba(10,14,12,.96);border:1px solid rgba(255,255,255,.08);border-radius:16px;backdrop-filter:blur(10px);box-shadow:0 20px 60px rgba(0,0,0,.6);display:none;color:#fff;pointer-events:auto;}',
-      '.cb-ins-panel.open{display:block;}',
-      '.cb-ins-head{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);font-size:14px;}',
-      '.cb-ins-head .v{opacity:.65;}',
-      '.cb-ins-close{margin-left:auto;width:36px;height:36px;border:none;border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:18px;cursor:pointer;}',
-      '.cb-ins-tabs{display:flex;gap:8px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);} ',
-      '.cb-ins-tabs .cb-tab{border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;}',
-      '.cb-ins-tabs .cb-tab.active{background:rgba(76,175,80,.35);} ',
-      '.cb-ins-body{position:absolute;left:0;right:0;top:108px;bottom:16px;padding:12px 14px;overflow:auto;}',
-      '.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;max-width:520px;} .kv .row .k{opacity:.75;margin-right:6px;} .kv .row .v{font-weight:600;}',
-      '.log-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px;} .log-bar .chk{display:flex;align-items:center;gap:6px;opacity:.9;} .log-bar .stats{margin-left:auto;opacity:.75;}',
-      '.log-list{font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding:8px; height:calc(100% - 48px); overflow:auto;}',
-      '.line{white-space:pre-wrap; word-break:break-word; padding:2px 0;} .line .t{opacity:.6; margin-right:6px;} .line .lvl{opacity:.8; margin-right:6px;} .line.ok{color:#cfe9c9;} .line.log{color:#e8e8e8;} .line.warn{color:#ffd27f;} .line.err{color:#ff8a8a;}',
-      '.tests{display:flex;gap:10px;flex-wrap:wrap;align-items:center;} .tbtn{border:none;border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;} .hr{flex-basis:100%;height:1px;background:rgba(255,255,255,.08);margin:6px 0;}',
-      '.resbox{display:flex;gap:8px;align-items:center;} .res-amt{width:84px;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;}'
-    ].join('');
-    var st=document.createElement('style'); st.id='cb-ins-css'; st.textContent=css; document.head.appendChild(st);
+      // Diagonalen nur erlauben, wenn nicht beide Orthogonalen blockiert sind
+      if (dx!==0 && dy!==0){
+        var b1 = isBlocked(x+dx, y);
+        var b2 = isBlocked(x, y+dy);
+        if (b1 && b2) continue;
+      }
+      var cost = (dx===0 || dy===0) ? 1 : Math.SQRT2;
+      // Heatmap: oft belaufene Felder minimal günstiger (Soft-Cost)
+      if (_heat){
+        var h = _heat[idx(nx,ny)] || 0;
+        cost = Math.max(0.05, cost * (1.0 - Math.min(0.2, h*0.01)));
+      }
+      out.push([nx,ny,cost]);
+    }
+    return out;
   }
+
+  // A* auf Grid
+  function astar(sx,sy, tx,ty, mode){
+    if (sx===tx && sy===ty) return [{x:sx,y:sy}];
+    var open = new MinHeap();
+    var g = new Float32Array(_w*_h); for (var i=0;i<g.length;i++) g[i]=Infinity;
+    var came = new Int32Array(_w*_h); for (var j=0;j<came.length;j++) came[j]=-1;
+
+    function push(x,y, gval, fval){ open.push({x:x,y:y,f:fval}); g[idx(x,y)]=gval; }
+    function pop(){ return open.pop(); }
+
+    push(sx,sy, 0, heuristic(sx,sy,tx,ty));
+    var iter=0, maxIter = _w*_h*4;
+
+    while (!open.empty() && iter++<maxIter){
+      var cur = pop(); var cx=cur.x, cy=cur.y; var ci=idx(cx,cy);
+      if (cx===tx && cy===ty){
+        // reconstruct
+        var path=[{x:tx,y:ty}];
+        while (came[ci]!==-1){
+          var pi=came[ci], py=(pi/_w)|0, px=(pi%_w)|0;
+          path.push({x:px,y:py}); ci=pi;
+        }
+        path.reverse();
+        return path;
+      }
+      var neigh=[];
+      if (mode==='roads') neighborsRoad(cx,cy,neigh);
+      else neighborsOffroad(cx,cy,neigh);
+
+      for (var k=0;k<neigh.length;k++){
+        var nx=neigh[k][0], ny=neigh[k][1], step=neigh[k][2];
+        var ni=idx(nx,ny);
+        var ng=g[ci]+step;
+        if (ng<g[ni]){
+          came[ni]=ci;
+          g[ni]=ng;
+          var h = heuristic(nx,ny,tx,ty);
+          var f = ng + (mode==='roads'? (h*1.2) : h);
+          open.push({x:nx,y:ny,f:f});
+        }
+      }
+    }
+    return null;
+  }
+
+  // kleiner Bin-Heap für Open-Liste
+  function MinHeap(){
+    this.a=[];
+  }
+  MinHeap.prototype.empty=function(){ return this.a.length===0; };
+  MinHeap.prototype.push=function(n){
+    var a=this.a; a.push(n); var i=a.length-1;
+    while(i>0){ var p=((i-1)>>1); if (a[p].f<=n.f) break; a[i]=a[p]; i=p; }
+    a[i]=n;
+  };
+  MinHeap.prototype.pop=function(){
+    var a=this.a; var n=a[0]; var x=a.pop(); if(a.length){ var i=0;
+      while(true){ var l=i*2+1, r=l+1, s=i;
+        if (l<a.length && a[l].f<a[s].f) s=l;
+        if (r<a.length && a[r].f<a[s].f) s=r;
+        if (s===i) break; a[i]=a[s]; i=s;
+      }
+      // place x
+      while(i>0){ var p=((i-1)>>1); if (a[p].f<=x.f) break; a[i]=a[p]; i=p; }
+      a[i]=x;
+    }
+    return n;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Öffentliche API
+  // ---------------------------------------------------------------------------
+  PF.init = function(getMapSize){
+    try{
+      var s = getMapSize && getMapSize();
+      _w = (s && s.w)|0; _h=(s && s.h)|0;
+      if (_w<=0 || _h<=0){ LOG('warn', '[PF] init: ungültige Größe '+JSON.stringify(s)); return; }
+      _heat = new Float32Array(_w*_h);
+      LOG('ok', '[PF] init OK '+_w+'x'+_h);
+    }catch(e){
+      LOG('warn', '[PF] init Fehler: '+(e&&e.message));
+    }
+  };
+
+  PF.setRoadMask = function(set){ _roadSet = set||null; };
+  PF.setObstacleProvider = function(fn){ _blockerProvider = (typeof fn==='function') ? fn : null; };
+  PF.invalidateRoads = function(){ /* später evtl. Cache leeren */ };
+
+  PF.applyHeat = function(path){
+    if (!_heat || !path) return;
+    for (var i=0;i<path.length;i++){
+      var p=path[i]; if (inb(p.x,p.y)) _heat[idx(p.x,p.y)] += 1;
+    }
+    _lastPaths.push(path);
+    if (_lastPaths.length>6) _lastPaths.shift();
+  };
+
+  // --- LAZY-INIT: falls vergessen wurde, init() nachzuholen -------------------
+  function tryLazyInit(){
+    if (_didLazyInit) return;
+    if (_w>0 && _h>0 && _heat) return;
+    try{
+      if (window.Game && typeof Game.getMapSize==='function'){
+        PF.init(Game.getMapSize);
+        _didLazyInit = true;
+        if (window.Game && typeof Game.getObstacleAt==='function') PF.setObstacleProvider(Game.getObstacleAt);
+        if (window.Game && typeof Game.getRoadSet==='function')   PF.setRoadMask(Game.getRoadSet());
+        LOG('ok','[PF] Lazy-Init durchgeführt.');
+      }
+    }catch(_){}
+  }
+
+  PF.findPath = function(cfg){
+    tryLazyInit();
+
+    if (!cfg || !cfg.from || !cfg.to){
+      LOG('warn','[PF] findPath: ungültige Parameter'); return null;
+    }
+    if (!_w || !_h || !_heat){
+      LOG('warn','[PF] findPath ohne init() aufgerufen'); return null;
+    }
+
+    var sx=(cfg.from.x|0), sy=(cfg.from.y|0);
+    var tx=(cfg.to.x|0),   ty=(cfg.to.y|0);
+    var mode = cfg.mode || 'auto';
+
+    if (isBlocked(sx,sy) || isBlocked(tx,ty)){
+      LOG('warn','[PF] Start/Ziel blockiert'); return null;
+    }
+
+    var path=null;
+    if (mode==='roads'){
+      if (isRoad(sx,sy) && isRoad(tx,ty)){
+        path = astar(sx,sy,tx,ty,'roads');
+      } else {
+        path = null;
+      }
+    } else if (mode==='offroad'){
+      path = astar(sx,sy,tx,ty,'offroad');
+    } else {
+      // auto: erst roads, dann offroad
+      if (isRoad(sx,sy) && isRoad(tx,ty)){
+        path = astar(sx,sy,tx,ty,'roads');
+      }
+      if (!path) path = astar(sx,sy,tx,ty,'offroad');
+    }
+
+    if (path && path.length){
+      PF.applyHeat(path);
+      return path;
+    } else {
+      LOG('warn','[PF] kein Pfad '+sx+','+sy+' → '+tx+','+ty);
+      return null;
+    }
+  };
+
+  PF.drawOverlay = function(ctx, cam){
+    try{
+      if (!window.DEBUG_PATH_OVERLAY) return;
+      if (!ctx || !_heat) return;
+
+      var tile = 64;
+      try { tile = (window.Game && Game.getTileSize) ? (Game.getTileSize()|0) : 64; } catch(_){}
+
+      var camx = (cam && typeof cam.x==='number') ? cam.x : 0;
+      var camy = (cam && typeof cam.y==='number') ? cam.y : 0;
+      var zoom = (cam && typeof cam.zoom==='number') ? cam.zoom : 1;
+
+      // Heatmap
+      var max=0; for (var i=0;i<_heat.length;i++) if (_heat[i]>max) max=_heat[i];
+      if (max>0){
+        for (var y=0;y<_h;y++){
+          for (var x=0;x<_w;x++){
+            var v=_heat[idx(x,y)]/max; if (v<=0) continue;
+            var a = Math.min(0.35, 0.05 + v*0.3);
+            ctx.fillStyle = 'rgba(255,0,0,'+a+')';
+            ctx.fillRect(x*tile - camx*tile, y*tile - camy*tile, tile, tile);
+          }
+        }
+      }
+      // letzte Pfade
+      ctx.lineWidth = Math.max(1, (2/zoom));
+      for (var i=0;i<_lastPaths.length;i++){
+        var p=_lastPaths[i]; if (!p || p.length<2) continue;
+        ctx.beginPath();
+        for (var k=0;k<p.length;k++){
+          var xx=p[k].x*tile - camx*tile + tile/2;
+          var yy=p[k].y*tile - camy*tile + tile/2;
+          if (k===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+        }
+        ctx.strokeStyle = 'rgba(0,128,255,0.9)';
+        ctx.stroke();
+      }
+    }catch(_){}
+  };
 
 })();
