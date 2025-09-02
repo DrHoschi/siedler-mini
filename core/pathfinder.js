@@ -4,22 +4,25 @@
  * Zweck:
  *   - Hybrid-Pathfinding (A*):
  *       • mode 'roads': 4-Nachbarn, nutzt Road-Maske (Set "x,y")
- *       • mode 'offroad': 8-Nachbarn (Octile), Diagonalen ohne Ecken-Schneiden
+ *       • mode 'offroad': 8-Nachbarn (Octile), mit Diagonalregeln
  *       • mode 'auto': versucht roads, fällt zurück auf offroad
- *   - Heatmap (Trampelpfade) für Debug / Soft-Costs
- *   - Overlay-Zeichnung (optional) für Inspector
+ *   - Heatmap (Trampelpfade) zum Debuggen / Soft-Costs
+ *   - Overlay-Zeichnung (optional) für Inspector-Ansicht
  *
- * Öffentl. API:
+ * Öffentliche API:
  *   PathFinder.init(getMapSizeFn)
  *   PathFinder.setRoadMask(Set|null)
- *   PathFinder.setObstacleProvider(fn|null)   // fn(tx,ty)=>true = blockiert
+ *   PathFinder.setObstacleProvider(fn|null)   // fn(tx,ty)=>true wenn blockiert
  *   PathFinder.invalidateRoads()
  *   PathFinder.applyHeat(path)                // path: [{x,y},...]
  *   PathFinder.findPath({from:{x,y}, to:{x,y}, mode:'auto'|'offroad'|'roads'})
  *   PathFinder.drawOverlay(ctx, cam)          // cam: {x,y,zoom} in Tiles
  *
  * Erwartete Game-Hooks (optional):
- *   Game.getTileSize(), Game.getRoadSet(), Game.getMapSize(), Game.getObstacleAt(tx,ty)
+ *   Game.getTileSize() : number
+ *   Game.getRoadSet()  : Set
+ *   Game.getMapSize()  : {w,h}
+ *   Game.getObstacleAt(tx,ty) : boolean
  *
  * Debug:
  *   window.DEBUG_PATH_OVERLAY = true → Heatmap & Pfadlinien sichtbar
@@ -29,10 +32,10 @@
 
   var PF = (window.PathFinder = window.PathFinder || {});
   var _w = 0, _h = 0;
-  var _heat = null;                  // Float32Array[w*h]
-  var _roadSet = null;               // Set("x,y")
-  var _blockerProvider = null;       // fn(tx,ty)=>true wenn blockiert
-  var _lastPaths = [];               // für Overlay: Liste jüngster Pfade
+  var _heat = null;
+  var _roadSet = null;
+  var _blockerProvider = null;
+  var _lastPaths = [];
   var _didLazyInit = false;
 
   function LOG(lvl, msg){
@@ -65,10 +68,7 @@
   }
 
   var N4 = [[1,0],[-1,0],[0,1],[0,-1]];
-  var N8 = [
-    [1,0],[-1,0],[0,1],[0,-1],
-    [1,1],[1,-1],[-1,1],[-1,-1]
-  ];
+  var N8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
 
   function neighborsRoad(x,y,out){
     for (var i=0;i<4;i++){
@@ -83,7 +83,7 @@
     for (var i=0;i<N8.length;i++){
       var dx=N8[i][0], dy=N8[i][1], nx=x+dx, ny=y+dy;
       if (!inb(nx,ny) || isBlocked(nx,ny)) continue;
-      if (dx!==0 && dy!==0){ // Diagonale: keine "Ecke schneiden"
+      if (dx!==0 && dy!==0){
         var b1=isBlocked(x+dx,y), b2=isBlocked(x,y+dy);
         if (b1 && b2) continue;
       }
@@ -103,7 +103,7 @@
     var g=new Float32Array(_w*_h); for (var i=0;i<g.length;i++) g[i]=Infinity;
     var came=new Int32Array(_w*_h); for (var j=0;j<came.length;j++) came[j]=-1;
 
-    function push(x,y,gval,fval){ open.push({x:x,y:y,f:fval}); g[idx(x,y)]=gval; }
+    function push(x,y, gval, fval){ open.push({x:x,y:y,f:fval}); g[idx(x,y)]=gval; }
     function pop(){ return open.pop(); }
 
     push(sx,sy,0,heuristic(sx,sy,tx,ty));
@@ -114,7 +114,7 @@
       if (cx===tx && cy===ty){
         var path=[{x:tx,y:ty}];
         while(came[ci]!==-1){
-          var pi=came[ci], py=(pi/_w)|0, px=(pi%_w)|0;
+          var pi=came[ci], py=(pi/_w)|0, px=(pi%*_w)|0;
           path.push({x:px,y:py}); ci=pi;
         }
         path.reverse(); return path;
@@ -140,7 +140,7 @@
   MinHeap.prototype.empty=function(){ return this.a.length===0; };
   MinHeap.prototype.push=function(n){
     var a=this.a; a.push(n); var i=a.length-1;
-    while(i>0){ var p=((i-1)>>1); if(a[p].f<=n.f) break; a[i]=a[p]; i=p; }
+    while(i>0){ var p=((i-1)>>1); if (a[p].f<=n.f) break; a[i]=a[p]; i=p; }
     a[i]=n;
   };
   MinHeap.prototype.pop=function(){
@@ -153,7 +153,7 @@
         if (r<a.length && a[r].f<a[s].f) s=r;
         if (s===i) break; a[i]=a[s]; i=s;
       }
-      while(i>0){ var p=((i-1)>>1); if(a[p].f<=x.f) break; a[i]=a[p]; i=p; }
+      while(i>0){ var p=((i-1)>>1); if (a[p].f<=x.f) break; a[i]=a[p]; i=p; }
       a[i]=x;
     }
     return n;
