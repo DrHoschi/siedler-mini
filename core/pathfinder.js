@@ -2,21 +2,21 @@
  * core/pathfinder.js — v16.5.3
  * Projekt: Siedler-Mini
  * Zweck:
- *   - Hybrid-Pathfinding:
- *       • 'roads': 4-Nachbarn, bevorzugt Straßennetz (wenn vorhanden)
- *       • 'offroad': 8-Nachbarn (Diagonalen), ohne Straßenbevorzugung
- *       • 'auto': versucht 'roads', sonst 'offroad'
- *   - Heatmap (Trampelpfade) zur Visualisierung / Wiederverwendung
- *   - Overlay-Darstellung (optional) für Debug/Inspektor
+ *   - Hybrid-Pathfinding (A*):
+ *       • mode 'roads': 4-Nachbarn, nutzt Road-Maske (Set "x,y")
+ *       • mode 'offroad': 8-Nachbarn (Octile), mit Diagonalregeln
+ *       • mode 'auto': versucht roads, fällt zurück auf offroad
+ *   - Heatmap (Trampelpfade) zum Debuggen / Soft-Costs
+ *   - Overlay-Zeichnung (optional) für Inspector-Ansicht
  *
  * Öffentliche API:
  *   PathFinder.init(getMapSizeFn)
- *   PathFinder.setRoadMask(Set|null)              // Keys "x,y"
- *   PathFinder.setObstacleProvider(fn|null)       // fn(tx,ty)=>boolean (true = blockiert)
- *   PathFinder.invalidateRoads()                  // Platzhalter (Cache)
- *   PathFinder.applyHeat(path)                    // [{x,y},...]
+ *   PathFinder.setRoadMask(Set|null)
+ *   PathFinder.setObstacleProvider(fn|null)   // fn(tx,ty)=>true wenn blockiert
+ *   PathFinder.invalidateRoads()
+ *   PathFinder.applyHeat(path)                // path: [{x,y},...]
  *   PathFinder.findPath({from:{x,y}, to:{x,y}, mode:'auto'|'offroad'|'roads'})
- *   PathFinder.drawOverlay(ctx, cam)              // cam: {x,y,zoom}, nutzt Game.getTileSize()
+ *   PathFinder.drawOverlay(ctx, cam)          // cam: {x,y,zoom} in Tiles
  *
  * Erwartete Game-Hooks (optional):
  *   Game.getTileSize() : number
@@ -26,8 +26,7 @@
  *
  * Debug:
  *   window.DEBUG_PATH_OVERLAY = true → Heatmap & Pfadlinien sichtbar
- * ============================================================================
- */
+ * ========================================================================== */
 (function () {
   'use strict';
 
@@ -35,7 +34,7 @@
   // internes State
   // ---------------------------------------------------------------------------
   var PF = (window.PathFinder = window.PathFinder || {});
-  var _w = 0, _h = 0;                // Map-Größe (Tiles)
+  var _w = 0, _h = 0;                // Map-Größe in Tiles
   var _heat = null;                  // Float32Array[w*h]
   var _roadSet = null;               // Set("x,y") oder null
   var _blockerProvider = null;       // fn(tx,ty)=>true wenn blockiert
@@ -78,7 +77,7 @@
 
   // 4-Nachbarn
   var N4 = [[1,0],[-1,0],[0,1],[0,-1]];
-  // 8-Nachbarn (Diagonalen ohne "Ecken schneiden": beide Orthogonalen müssen frei sein)
+  // 8-Nachbarn (Diagonalen ohne "Ecken schneiden": beide Orthogonalen prüfen)
   var N8 = [
     [1,0],[-1,0],[0,1],[0,-1],
     [1,1],[1,-1],[-1,1],[-1,-1]
@@ -101,14 +100,14 @@
       if (!inb(nx,ny)) continue;
       if (isBlocked(nx,ny)) continue;
 
-      // Diagonalen nur erlauben, wenn beide orthogonalen Nachbarn nicht beide blockiert sind
+      // Diagonalen nur erlauben, wenn nicht beide Orthogonalen blockiert sind
       if (dx!==0 && dy!==0){
         var b1 = isBlocked(x+dx, y);
         var b2 = isBlocked(x, y+dy);
         if (b1 && b2) continue;
       }
       var cost = (dx===0 || dy===0) ? 1 : Math.SQRT2;
-      // leichte Heatmap-Gewichtung (belaufene Felder werden minimal günstiger)
+      // Heatmap: oft belaufene Felder minimal günstiger (Soft-Cost)
       if (_heat){
         var h = _heat[idx(nx,ny)] || 0;
         cost = Math.max(0.05, cost * (1.0 - Math.min(0.2, h*0.01)));
@@ -278,7 +277,13 @@
     try{
       if (!window.DEBUG_PATH_OVERLAY) return;
       if (!ctx || !_heat) return;
-      var tile = (window.Game && Game.getTileSize) ? (Game.getTileSize()|0) : 64;
+
+      var tile = 64;
+      try { tile = (window.Game && Game.getTileSize) ? (Game.getTileSize()|0) : 64; } catch(_){}
+
+      var camx = (cam && typeof cam.x==='number') ? cam.x : 0;
+      var camy = (cam && typeof cam.y==='number') ? cam.y : 0;
+      var zoom = (cam && typeof cam.zoom==='number') ? cam.zoom : 1;
 
       // Heatmap
       var max=0; for (var i=0;i<_heat.length;i++) if (_heat[i]>max) max=_heat[i];
@@ -288,18 +293,18 @@
             var v=_heat[idx(x,y)]/max; if (v<=0) continue;
             var a = Math.min(0.35, 0.05 + v*0.3);
             ctx.fillStyle = 'rgba(255,0,0,'+a+')';
-            ctx.fillRect(x*tile - cam.x*tile, y*tile - cam.y*tile, tile, tile);
+            ctx.fillRect(x*tile - camx*tile, y*tile - camy*tile, tile, tile);
           }
         }
       }
       // letzte Pfade
-      ctx.lineWidth = Math.max(1, (2/cam.zoom));
+      ctx.lineWidth = Math.max(1, (2/zoom));
       for (var i=0;i<_lastPaths.length;i++){
         var p=_lastPaths[i]; if (!p || p.length<2) continue;
         ctx.beginPath();
         for (var k=0;k<p.length;k++){
-          var xx=p[k].x*tile - cam.x*tile + tile/2;
-          var yy=p[k].y*tile - cam.y*tile + tile/2;
+          var xx=p[k].x*tile - camx*tile + tile/2;
+          var yy=p[k].y*tile - camy*tile + tile/2;
           if (k===0) ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
         }
         ctx.strokeStyle = 'rgba(0,128,255,0.9)';
