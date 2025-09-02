@@ -1,36 +1,134 @@
 /* ============================================================================
- * Inspector: Tests-Panel — v16.5.5
+ * Inspector — v16.6.0
  * Projekt: Siedler-Mini
- * Features:
- *   - Pfad-Overlay Toggle (window.DEBUG_PATH_OVERLAY)
- *   - Ressourcen-Adder (type + amount)
- * Events:
- *   - dispatchEvent('cb:toggle-path-overlay', { detail:{ enabled } })
- *   - dispatchEvent('cb:add-resources',      { detail:{ type, amount } })
- * Verhalten:
- *   - Hängt sich NUR an den echten Inspector (#inspector), niemals Autocreate.
- *   - MutationObserver + sanftes Polling, damit das Panel andockt, auch wenn
- *     der Inspector erst beim Button-Klick gebaut wird.
- * Hinweise:
- *   - Diese Datei enthält KEINEN PathFinder-Code. PF bleibt in core/pathfinder.js.
+ *
+ * Teil A: Inspector-Core
+ *   - Erstellt/verwaltet den Inspector-Root (#inspector) NUR auf Nachfrage
+ *   - API: GameUI.openInspector(), GameUI.closeInspector(), GameUI.toggleInspector()
+ *   - Keine Autocreate/Auto-Open auf Landing-Page
+ *
+ * Teil B: Tests-Panel (vv16.5.5)
+ *   - Overlay-Toggle & Ressourcen-Adder
+ *   - Dockt robust an #inspector an (MutationObserver + sanftes Polling)
+ * ========================================================================== */
+(function(){
+  'use strict';
+
+  var UI = (window.GameUI = window.GameUI || {});
+  var CORE_VERSION = 'v16.6.0';
+
+  // ---------- Style nur einmal injizieren ----------
+  function ensureStyleOnce(){
+    if (document.getElementById('inspector-style')) return;
+    var css = `
+      #inspector{
+        position:fixed; right:12px; bottom:12px; z-index:99999;
+        max-height:60vh; overflow:auto;
+        min-width:260px;
+        display:none;
+      }
+      .cb-ins-panel{
+        background:rgba(20,20,20,.92);
+        border:1px solid #333; border-radius:8px;
+        color:#eee; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+        padding:10px;
+      }
+      .cb-ins-panel.open{ display:block; }
+      .cb-ins-head{ display:flex; align-items:center; gap:8px; margin:0 0 8px; }
+      .cb-ins-title{ font-weight:700; }
+      .cb-ins-spacer{ flex:1; }
+      .cb-ins-btn{ background:#2b6cb0; border:1px solid #2a4365; color:#fff; border-radius:4px; cursor:pointer; padding:4px 8px; }
+    `;
+    var st=document.createElement('style'); st.id='inspector-style'; st.textContent=css; document.head.appendChild(st);
+  }
+
+  // ---------- Root sichern (ohne Autocreate bis zum Öffnen) ----------
+  function ensureRoot(){
+    ensureStyleOnce();
+    var root =
+      document.querySelector('#inspector') ||
+      document.querySelector('#inspector-root') ||
+      document.querySelector('.inspector-root') ||
+      document.querySelector('[data-role="inspector"]');
+
+    if (!root){
+      // Erst JETZT (auf Nachfrage) minimalen Root anlegen
+      root = document.createElement('div');
+      root.id = 'inspector';
+      document.body.appendChild(root);
+    }
+    // Pane-Container
+    var pane = root.querySelector('.cb-ins-panel');
+    if (!pane){
+      pane = document.createElement('div');
+      pane.className = 'cb-ins-panel';
+      // Kopf (Titel + Close)
+      var head = document.createElement('div'); head.className='cb-ins-head';
+      var title = document.createElement('div'); title.className='cb-ins-title'; title.textContent='Inspector';
+      var sp = document.createElement('div'); sp.className='cb-ins-spacer';
+      var btn = document.createElement('button'); btn.className='cb-ins-btn'; btn.textContent='Schließen';
+      btn.addEventListener('click', function(){ UI.closeInspector(); });
+      head.appendChild(title); head.appendChild(sp); head.appendChild(btn);
+      pane.appendChild(head);
+
+      root.appendChild(pane);
+    }
+    return { root:root, pane:pane };
+  }
+
+  function open(){
+    var parts = ensureRoot();
+    parts.root.style.display = 'block';
+    parts.pane.classList.add('open');
+    try { window.dispatchEvent(new Event('cb:inspector-open')); } catch(_){}
+    try { window.CBLog && CBLog.ok && CBLog.ok('[inspector.core] geöffnet ('+CORE_VERSION+')'); } catch(_){}
+  }
+  function close(){
+    var r = document.querySelector('#inspector, #inspector-root, .inspector-root, [data-role="inspector"]');
+    var p = r && r.querySelector('.cb-ins-panel');
+    if (r){ r.style.display='none'; }
+    if (p){ p.classList.remove('open'); }
+  }
+  function toggle(){
+    var r = document.querySelector('#inspector, #inspector-root, .inspector-root, [data-role="inspector"]');
+    var p = r && r.querySelector('.cb-ins-panel');
+    if (p && p.classList.contains('open')) close(); else open();
+  }
+
+  // ESC schließt (nur wenn offen)
+  window.addEventListener('keydown', function(e){
+    if ((e.key||'').toLowerCase()==='escape'){
+      var p = document.querySelector('.cb-ins-panel.open');
+      if (p) close();
+    }
+  });
+
+  // Exporte
+  UI.openInspector = open;
+  UI.closeInspector = close;
+  UI.toggleInspector = toggle;
+
+})();
+
+/* ============================================================================
+ * Inspector: Tests-Panel — vv16.5.5
+ *   - Overlay-Toggle & Ressourcen-Adder
+ *   - Dockt robust an #inspector an (Observer + Poll)
  * ========================================================================== */
 (function () {
   'use strict';
 
   var MOD = '[inspector.tests]';
 
-  // kleine, leise Logger (fallen auf console zurück)
   function ok(m){ try{ (window.CBLog?.ok || console.log)(m); }catch(_){} }
   function warn(m){ try{ (window.CBLog?.warn || console.warn)(m); }catch(_){} }
 
-  var panelAttached = false;   // wurde unser Tests-Panel schon angehängt?
-  var pollTimer = 0;           // sanftes Polling (Sicherheitsnetz)
+  var panelAttached = false;
+  var pollTimer = 0;
   var pollDeadline = 0;
-  var observer = null;         // MutationObserver-Instanz
+  var observer = null;
 
-  // ---------------------------------------------------------------------------
-  // Panel bauen und an echten Inspector (#inspector) hängen
-  // ---------------------------------------------------------------------------
+  // Panel bauen und an echten Inspector hängen
   function buildPanel(root){
     if (!root || panelAttached) return;
 
@@ -41,14 +139,13 @@
     panel.style.borderTop  = '1px dashed #3a3a3a';
     panel.style.background = 'rgba(0,0,0,.12)';
 
-    // Titel
     var title = document.createElement('div');
     title.textContent = 'Tests';
     title.style.fontWeight = '700';
     title.style.margin = '0 0 8px';
     panel.appendChild(title);
 
-    // --- Toggle: Pfad-Overlay -------------------------------------------------
+    // Toggle: Pfad-Overlay
     var row = document.createElement('div');
     row.style.display = 'flex';
     row.style.alignItems = 'center';
@@ -69,17 +166,14 @@
       window.DEBUG_PATH_OVERLAY = enabled;
       window.dispatchEvent(new CustomEvent('cb:toggle-path-overlay', { detail:{ enabled } }));
       ok(MOD + ' Pfad-Overlay: ' + (enabled ? 'AN' : 'AUS'));
-      try {
-        // sanfter Repaint-Impuls für das Overlay
-        window.requestAnimationFrame?.(() => window.dispatchEvent(new Event('cb:request-repaint')));
-      } catch(_){}
+      try { window.requestAnimationFrame?.(()=>window.dispatchEvent(new Event('cb:request-repaint'))); } catch(_){}
     });
 
     row.appendChild(chk);
     row.appendChild(lbl);
     panel.appendChild(row);
 
-    // --- Ressourcen-Adder (Typ + Menge) --------------------------------------
+    // Ressourcen-Adder
     var grid = document.createElement('div');
     grid.style.display = 'grid';
     grid.style.gridTemplateColumns = '1fr 110px';
@@ -122,7 +216,7 @@
     btn.textContent = 'Ressourcen hinzufügen';
     btn.style.padding = '6px 10px';
     btn.style.background = '#2b6cb0';
-    btn.style.border = '1px solid #2a4365';   // ← FIX: korrekter CSS-String
+    btn.style.border = '1px solid #2a4365';
     btn.style.color = '#fff';
     btn.style.borderRadius = '4px';
     btn.style.cursor = 'pointer';
@@ -169,29 +263,29 @@
     action.appendChild(status);
     panel.appendChild(action);
 
-    // Panel anhängen
-    root.appendChild(panel);
+    var rootPane = (root.querySelector && root.querySelector('.cb-ins-panel')) ? root.querySelector('.cb-ins-panel') : root;
+    rootPane.appendChild(panel);
     panelAttached = true;
-    ok(MOD + ' angehängt (v16.5.5)');
+    ok(MOD + ' angehängt (vv16.5.5)');
   }
 
-  // ---------------------------------------------------------------------------
-  // Root-Finder: robust (Observer + Polling)
-  // ---------------------------------------------------------------------------
+  function pickRoot(){
+    return document.querySelector('#inspector') ||
+           document.querySelector('#inspector-root') ||
+           document.querySelector('.inspector-root') ||
+           document.querySelector('[data-role="inspector"]');
+  }
+
   function tryAttach(){
-    var root = document.querySelector('#inspector');
+    var root = pickRoot();
     if (root && !panelAttached) buildPanel(root);
   }
 
   function startPolling(ms, maxMs){
     if (pollTimer) clearInterval(pollTimer);
-    pollDeadline = Date.now() + (maxMs || 60000); // Sicherheitsgrenze
+    pollDeadline = Date.now() + (maxMs || 60000);
     pollTimer = setInterval(function(){
-      if (panelAttached || Date.now() > pollDeadline){
-        clearInterval(pollTimer);
-        pollTimer = 0;
-        return;
-      }
+      if (panelAttached || Date.now()>pollDeadline){ clearInterval(pollTimer); pollTimer=0; return; }
       tryAttach();
     }, ms || 250);
   }
@@ -204,8 +298,8 @@
           var list = muts[i].addedNodes;
           for (var j=0;j<list.length;j++){
             var n = list[j];
-            if (n && n.nodeType === 1){
-              if (n.id === 'inspector' || (n.querySelector && n.querySelector('#inspector'))){
+            if (n && n.nodeType===1){
+              if (n.id==='inspector' || (n.querySelector && n.querySelector('#inspector'))){
                 tryAttach();
               }
             }
@@ -216,27 +310,13 @@
     }catch(_){}
   }
 
-  // ---------------------------------------------------------------------------
-  // Hooks: auf Spielstart / Inspector-Open reagieren
-  // ---------------------------------------------------------------------------
+  // Hooks
   window.addEventListener('cb:game-started', function(){
-    startObserver();
-    startPolling(250, 60000);
-    tryAttach();
+    startObserver(); startPolling(250, 60000); tryAttach();
   });
-
-  // Optional: falls euer Inspector beim Öffnen ein Event feuert
   window.addEventListener('cb:inspector-open', function(){
-    startObserver();
-    startPolling(250, 60000);
-    tryAttach();
+    startObserver(); startPolling(250, 60000); tryAttach();
   });
-
-  // Fallback: auch ohne Events kurz nachladen probieren
-  setTimeout(function(){
-    startObserver();
-    startPolling(250, 10000);
-    tryAttach();
-  }, 1500);
+  setTimeout(function(){ startObserver(); startPolling(250, 10000); tryAttach(); }, 1500);
 
 })();
