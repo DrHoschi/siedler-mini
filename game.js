@@ -1,11 +1,25 @@
-// game.js — v16.5.1 (ES5)
-// Map, Pan/Zoom, Building-Placement, Entities, Produktion/Überschuss, Obstacles(+1 Puffer), Carrier-Glue
+// ============================================================================
+// game.js — v16.5.3-monolith (ES5)
+// Projekt: Siedler-Mini
+// Inhalt:
+//   • Engine/Renderer (Map, Camera, Input)
+//   • Gebäude-Placement, Obstacles (+1 Tile Puffer), Produktion, Carriers-Glue
+//   • PUBLIC API: Game.getTileSize(), Game.getCamera(), Game.getRoadSet(),
+//                  Game.getObstacleAt(), Game.setTool(...)
+//   • Add-on (integriert):
+//       - Sicheres PathFinder.init() nach Map-Load (Poll → einmalig)
+//       - Inspector-Events: cb:toggle-path-overlay / cb:add-resources
+//       - Separates Overlay-Canvas (#pf-overlay) mit eigenem Loop (Debug)
+//       - Fallback Game.addResources(type, amount)
+// Hinweise:
+//   • Pfad-Overlay-Schalter/Settings liegen im Inspector (empfohlen).
+// ============================================================================
 (function(){
   'use strict';
 
-  var VERSION = 'v16.5.1';
+  var VERSION = 'v16.5.3-monolith';
 
-  // --- logging helpers ---
+  // --- logging helpers -------------------------------------------------------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
   function warn(){ (window.CBLog && CBLog.warn ? CBLog.warn : console.warn).apply(console, arguments); }
   function err(){ (window.CBLog && CBLog.err ? CBLog.err : console.error).apply(console, arguments); }
@@ -14,22 +28,22 @@
   var GL = (window.GameLoader = window.GameLoader || {});
   var Game = (window.Game = window.Game || {});
 
-  // render state
+  // render state --------------------------------------------------------------
   var canvas=null, ctx=null, DPR=1, viewW=0, viewH=0;
   var engineReady=false;
 
-  // map
+  // map -----------------------------------------------------------------------
   var currentMap=null, tilesetImg=null, atlas=null;
 
-  // camera
+  // camera --------------------------------------------------------------------
   var cam = { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 };
 
-  // entities (Gebäude)
+  // entities (Gebäude) --------------------------------------------------------
   // e: { id, key, tx,ty, wTiles,hTiles, x,y,w,h, img, stock:{}, prod?:{type,rate,cap,keep}, tickAcc }
   var entities = [];
   var nextEntityId = 1;
 
-  // obstacles grid (tile-blocker) inkl. 1-Tile-Puffer um Gebäude
+  // obstacles grid (tile-blocker) inkl. 1-Tile-Puffer um Gebäude --------------
   var obstW=0, obstH=0, obstacles=null;  // Uint8Array
   function allocObstacles(w,h){ obstW=w|0; obstH=h|0; obstacles = new Uint8Array(obstW*obstH); }
   function obIdx(x,y){ return y*obstW + x; }
@@ -37,13 +51,14 @@
   function setBlocked(x,y){ if(inb(x,y)) obstacles[obIdx(x,y)] = 1; }
   function clearObstacles(){ if(!obstacles) return; for(var i=0;i<obstacles.length;i++) obstacles[i]=0; }
 
-  // road/path data (wenn du Straßen/Tiles als Road markierst, pflegen wir ein Set("x,y"))
+  // road/path data (Straßenmasken) -------------------------------------------
   var roadSet = new Set(); // optional: kann leer sein
+  Game.getRoadSet = function(){ return roadSet; };
 
-  // tool state
+  // tool state ----------------------------------------------------------------
   var tool = { mode:null, key:null }; // mode: 'build'|'road'|'path'|'bulldozer'
 
-  // assets buildings definition (Tilesize relativ zur Map-Tile)
+  // assets buildings definition (Tilesize relativ zur Map-Tile) ---------------
   var BUILDINGS = {
     townhall:  { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
     hq:        { wTiles:2, hTiles:2, img:"assets/tex/building/wood/hq_wood.PNG" },
@@ -59,34 +74,33 @@
     tree:      { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg" }
   };
 
-  // alias mapping (de → en keys)
+  // alias mapping (de → en keys) ---------------------------------------------
   var ALIAS = { schmied:'smith', rathaus:'townhall', holzfaeller:'lumberjack', bauernhof:'farm', wohnhaus0:'house0', wohnhaus1:'house1' };
 
-  // utils
+  // utils ---------------------------------------------------------------------
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
   function loadImage(src){ return new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i)}; i.onerror=function(){rej(new Error("img "+src))}; i.src=src; }); }
   function loadJSON(url){ return fetch(url).then(function(r){ if(!r.ok) throw new Error("http "+r.status+" "+url); return r.json(); }); }
   function mapPx(){ if(!currentMap) return {w:0,h:0}; return {w: currentMap.width*currentMap.tile, h: currentMap.height*currentMap.tile}; }
 
-  // coords
+  // coords --------------------------------------------------------------------
   function worldToTile(px,py){ var t=currentMap.tile; return { x: Math.floor(px/t), y: Math.floor(py/t) }; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
 
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
-  // --- PUBLIC API (needed by PF/Carriers/UI) ---
+  // --- PUBLIC API (needed by PF/Carriers/UI) ---------------------------------
   Game.getTileSize = function(){ return currentMap ? currentMap.tile : 64; };
   Game.getCamera   = function(){ return cam; };
-  Game.getRoadSet  = function(){ return roadSet; };
 
-  // *** HIER: Blocker-Provider inkl. 1 Tile Puffer um Gebäude ***
+  // *** Blocker-Provider inkl. 1 Tile Puffer um Gebäude ***
   Game.getObstacleAt = function(tx,ty){
     if (!obstacles) return false;
     if (!inb(tx,ty)) return true;
     return obstacles[obIdx(tx,ty)] === 1;
   };
 
-  // --- Placement rules ---
+  // --- Placement rules -------------------------------------------------------
   function resolveKey(key){ if(BUILDINGS[key]) return key; if(ALIAS[key]) return ALIAS[key]; return key; }
 
   function canPlace(key, tx, ty){
@@ -135,18 +149,17 @@
       x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t,
       img:img, stock:{}, tickAcc:0
     };
-    // Produktionsprofil (optional je nach Gebäude)
+    // Produktionsprofil (optional)
     if (def.prod){
       e.prod = { type:def.prod.type, rate:def.prod.rate, cap:def.prod.cap, keep:def.prod.keep };
     }
     entities.push(e);
     registerObstaclesFromEntities(); // -> Obstacles aktualisieren
     ok("[ok] Gebäude platziert:", key, "at", tx, ty);
-    // Auto-Überschuss-Transport: wird in tickProduction() getriggert, wenn überschuss vorhanden
     return true;
   }
 
-  // --- draw map/entities ---
+  // --- draw map/entities -----------------------------------------------------
   function drawMap(){
     if(!ctx || !currentMap) return;
     var t=currentMap.tile, w=currentMap.width, h=currentMap.height;
@@ -163,6 +176,7 @@
     var colors=['#5a7a39','#6b8f3e','#7aa346','#90b45a'];
 
     if (!atlas || !tilesetImg || !layers.length){
+      // Fallback-Farbkacheln
       for (var ty=top; ty<bottom; ty++){
         for (var tx=left; tx<right; tx++){
           var sx = Math.floor((tx*t - cam.x)*cam.zoom);
@@ -173,6 +187,7 @@
         }
       }
     } else {
+      // Tileset/Atlas zeichnen
       var L0=layers[0], data=L0.data||[];
       for (var ty2=top; ty2<bottom; ty2++){
         for (var tx2=left; tx2<right; tx2++){
@@ -202,9 +217,18 @@
 
     // Carrier layer
     try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
+
+    // (Optional) INLINE-DRAW der PF-Overlay-Grafik:
+    // Wenn du KEIN separates Overlay-Canvas möchtest, kannst du diese Guard aktiv lassen.
+    // Standardmäßig nutzen wir aber das separate Overlay-Canvas (siehe Add-on unten).
+    /*
+    if (window.DEBUG_PATH_OVERLAY && window.PathFinder && PathFinder.drawOverlay) {
+      PathFinder.drawOverlay(ctx, { x:(cam.x/currentMap.tile), y:(cam.y/currentMap.tile), zoom:cam.zoom });
+    }
+    */
   }
 
-  // fit canvas / clamp camera
+  // fit canvas / clamp camera -------------------------------------------------
   function clampCam(){
     var size = mapPx();
     var maxX = Math.max(0, size.w - viewW/cam.zoom);
@@ -222,7 +246,7 @@
     viewW=w; viewH=h; clampCam(); drawMap();
   }
 
-  // zoom helper
+  // zoom helper ---------------------------------------------------------------
   function zoomAt(f, cx, cy){
     var preX = cam.x + cx / cam.zoom;
     var preY = cam.y + cy / cam.zoom;
@@ -234,7 +258,7 @@
     clampCam(); drawMap();
   }
 
-  // input
+  // input ---------------------------------------------------------------------
   function bindInput(){
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
@@ -298,15 +322,14 @@
     });
   }
 
-  // Game tool API
+  // Game tool API -------------------------------------------------------------
   Game.setTool = function(mode, payload){
     if (mode === 'build'){ tool.mode='build'; tool.key = payload && payload.key; }
     else { tool.mode = mode; tool.key = null; }
     if (mode===null){ ok('[ok] Tool zurückgesetzt'); }
   };
 
-  // --- Produktion / Überschuss / Carrier-Glue ---
-  // sehr einfacher Sim-Tick – ruft auch Carriers.tick auf
+  // --- Produktion / Überschuss / Carrier-Glue --------------------------------
   var lastTS = performance.now();
   function tick(){
     var now = performance.now();
@@ -340,17 +363,15 @@
       var type = e.prod.type, keep = e.prod.keep|0;
       var have = (e.stock[type]|0);
       if (have > keep){
-        // Ziel = nearest depot/townhall/hq
         var src = { x:e.tx+Math.floor(e.wTiles/2), y:e.ty+Math.floor(e.hTiles/2) };
         var dst = findNearestDrop(src.x, src.y); // tiles
         if (dst){
-          // nur einmal pro Sek. versuchen → simple throttle
+          // simple throttle
           e._sendAcc = (e._sendAcc||0) + dt;
           if (e._sendAcc > 1.0){
             e._sendAcc = 0;
             var c = trySpawnCarrier(src, dst);
             if (c){
-              // reduziere Lager um z.B. 1 Einheit (Demo)
               e.stock[type] = Math.max(keep, e.stock[type]-1);
               ok('[auto] Carrier gestartet von', src.x,src.y, 'nach', dst.x,dst.y);
             }
@@ -381,7 +402,6 @@
       var d = Math.abs(cx-sx) + Math.abs(cy-sy);
       if (d < bestD){ bestD=d; best={x:cx,y:cy}; }
     }
-    // falls kein Depot/HQ existiert → townhall fallback (sollte vorhanden sein)
     if (!best){
       var th = getFirstEntity('townhall');
       if (th) best = { x: th.tx+Math.floor(th.wTiles/2), y: th.ty+Math.floor(th.hTiles/2) };
@@ -394,19 +414,19 @@
     return null;
   }
 
-  // engine init
+  // engine init ---------------------------------------------------------------
   function initEngine(){
     if (engineReady) return;
     canvas = document.getElementById('game') || document.getElementById('stage') || (function(){var c=document.createElement('canvas');c.id='game';document.body.appendChild(c);return c;})();
     ctx = canvas.getContext('2d');
     window.addEventListener('resize', fit); fit();
     bindInput();
-    engineReady=true; ok("game.js geladen, game.js "+VERSION);
+    engineReady=true; ok("game.js geladen, "+VERSION);
     try{ window.dispatchEvent(new CustomEvent('cb:engine-ready',{detail:{v:VERSION}})); }catch(_){}
     requestAnimationFrame(tick);
   }
 
-  // loader / start
+  // loader / start ------------------------------------------------------------
   GL._start = function(mapUrl){
     return new Promise(function(resolve,reject){
       function start(){
@@ -471,43 +491,24 @@
     });
   };
 
-  // helpers for obstacles when bulldozing or placing/removing roads
+  // helpers for obstacles when bulldozing or placing/removing roads -----------
   Game.notifyRoadChanged = function(tx,ty,isRoad){
     var k = tx+','+ty;
     if (isRoad) roadSet.add(k); else roadSet.delete(k);
     try{ if (window.PathFinder && PathFinder.invalidateRoads) PathFinder.invalidateRoads(); }catch(_){}
   };
 
-  // --- boot ---
+  // --- boot ------------------------------------------------------------------
   try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
 
-  // expose current map & version
+  // expose current map & version ----------------------------------------------
   GL.version = VERSION;
   Game.currentMap = currentMap;
 
-})();
-/* ============================================================================
- * game.js Add-on — v16.5.3
- * Zweck:
- *   - PathFinder.init() einmalig nach Map-Load sicherstellen (Lazy/Poll)
- *   - Inspector-Events verarbeiten:
- *       • cb:toggle-path-overlay  → Flag setzen
- *       • cb:add-resources        → Game.addResources(type, amount) (Fallback)
- *   - Overlay-Canvas anlegen und PF-Overlay zeichnen (unabhängig vom Renderloop)
- *   - Fallback-Hooks Game.getMapSize / Game.getTileSize, falls nicht definiert
- * Hinweise:
- *   - Minimal-invasiv; bestehende Logik bleibt unangetastet.
- * ========================================================================== */
-(function(){
-  'use strict';
-  var MOD='[game.addon]';
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){} }
-
-  // ---------------------------------------------------------------------------
-  // Fallback-Hooks (nur setzen, wenn fehlen)
-  // ---------------------------------------------------------------------------
-  window.Game = window.Game || {};
+  // ===========================================================================
+  //  INTEGRIERTES ADD-ON: PF-Init + Inspector-Events + separates Overlay-Canvas
+  // ===========================================================================
+  // Fallback-Hooks (nur setzen, wenn fehlen) ----------------------------------
   if (typeof Game.getMapSize!=='function'){
     Game.getMapSize = function(){
       try {
@@ -517,15 +518,8 @@
       return { w:0, h:0 };
     };
   }
-  if (typeof Game.getTileSize!=='function'){
-    Game.getTileSize = function(){
-      try { return (window.currentMap && (currentMap.tile|0)) || 64; } catch(_){ return 64; }
-    };
-  }
 
-  // ---------------------------------------------------------------------------
-  // PF init (einmalig) sobald Map-Größe vorliegt
-  // ---------------------------------------------------------------------------
+  // Sicheres PF-Init nach Map-Load (Poll bis Größe bekannt) -------------------
   var pfReady=false;
   function tryPFInit(){
     if (pfReady) return;
@@ -535,23 +529,19 @@
       PathFinder.init(Game.getMapSize);
       try{ if (Game.getObstacleAt && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt); }catch(_){}
       try{ if (Game.getRoadSet && PathFinder.setRoadMask) PathFinder.setRoadMask(Game.getRoadSet()); }catch(_){}
-      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (addon)');
-    }catch(e){ warn('[PF] init Fehler (addon): '+(e&&e.message)); }
+      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (monolith)');
+    }catch(e){ warn('[PF] init Fehler (monolith): '+(e&&e.message)); }
   }
   var pfTimer = setInterval(function(){ if (pfReady) return clearInterval(pfTimer); tryPFInit(); }, 200);
 
-  // ---------------------------------------------------------------------------
-  // Inspector → Toggle Path Overlay
-  // ---------------------------------------------------------------------------
+  // Inspector → Toggle Path Overlay -------------------------------------------
   window.addEventListener('cb:toggle-path-overlay', function(e){
     var enabled = !!(e && e.detail && e.detail.enabled);
     window.DEBUG_PATH_OVERLAY = enabled;
-    ok(MOD+' overlay='+(enabled?'AN':'AUS'));
+    ok('[game.monolith] overlay='+(enabled?'AN':'AUS'));
   });
 
-  // ---------------------------------------------------------------------------
-  // Inspector → Ressourcen hinzufügen (Fallback, wenn Game.addResources fehlt)
-  // ---------------------------------------------------------------------------
+  // Inspector → Ressourcen hinzufügen (Fallback) ------------------------------
   if (typeof Game.addResources!=='function'){
     Game.resources = Game.resources || { wood:0, stone:0, food:0, gold:0 };
     Game.addResources = function(type, amount){
@@ -563,344 +553,12 @@
       // TODO: UI-Refresh einhängen, sobald verfügbar
       return true;
     };
-    ok(MOD+' Game.addResources bereit (fallback)');
+    ok('[game.monolith] Game.addResources bereit (fallback)');
   }
 
-  // ---------------------------------------------------------------------------
-  // PF Overlay-Zeichnung: eigenes Canvas über #game (unabhängig vom Renderloop)
-  // ---------------------------------------------------------------------------
+  // Separates PF-Overlay auf eigenem Canvas (#pf-overlay) ---------------------
   var overlayCanvas = null, overlayCtx = null;
-  function ensureOverlayCanvas(){
-    if (overlayCanvas && overlayCtx) return;
-    var base = document.getElementById('game'); // erwarteter Canvas id="game"
-    // wenn es kein Canvas ist, versuchen wir das erste <canvas>
-    if (!base){
-      base = document.querySelector('canvas');
-      if (!base) return;
-    }
-    // Canvas erstellen (oder vorhandenes mit gleicher id nutzen)
-    overlayCanvas = document.getElementById('pf-overlay');
-    if (!overlayCanvas){
-      overlayCanvas = document.createElement('canvas');
-      overlayCanvas.id = 'pf-overlay';
-      overlayCanvas.style.position = 'absolute';
-      overlayCanvas.style.left = base.offsetLeft+'px';
-      overlayCanvas.style.top = base.offsetTop+'px';
-      overlayCanvas.style.pointerEvents = 'none';
-      overlayCanvas.style.zIndex = (parseInt(getComputedStyle(base).zIndex||'0',10)+1).toString();
-      // Canvas im selben Container wie base einhängen
-      (base.parentElement || document.body).appendChild(overlayCanvas);
-    }
-    overlayCtx = overlayCanvas.getContext('2d');
 
-    // Größe & Position synchronisieren
-    syncOverlaySize();
-    // bei Resize/Layout-Änderung nachziehen
-    window.addEventListener('resize', syncOverlaySize);
-    window.addEventListener('orientationchange', syncOverlaySize);
-  }
-
-  function syncOverlaySize(){
-    var base = document.getElementById('game') || document.querySelector('canvas');
-    if (!base || !overlayCanvas) return;
-    var rect = base.getBoundingClientRect();
-    overlayCanvas.width = Math.max(1, Math.floor(rect.width));
-    overlayCanvas.height = Math.max(1, Math.floor(rect.height));
-    // Position relativ zum Viewport
-    overlayCanvas.style.left = Math.floor(rect.left + window.scrollX) + 'px';
-    overlayCanvas.style.top  = Math.floor(rect.top  + window.scrollY) + 'px';
-    overlayCanvas.style.width  = overlayCanvas.width + 'px';
-    overlayCanvas.style.height  = overlayCanvas.height + 'px';
-  }
-
-  function getCameraTiles(){
-    // Versucht mehrere mögliche Kamera-Hooks zu respektieren
-    var tile = Game.getTileSize ? (Game.getTileSize()|0) : 64;
-    var cam = { x:0, y:0, zoom:1 };
-    try {
-      if (Game.getCamera && typeof Game.getCamera==='function'){
-        var c = Game.getCamera();
-        if (c && typeof c.x==='number') cam = { x:c.x, y:c.y, zoom: (typeof c.zoom==='number'? c.zoom : 1) };
-      } else if (Game.getCameraPixels && typeof Game.getCameraPixels==='function'){
-        var cp = Game.getCameraPixels();
-        if (cp && typeof cp.x==='number') cam = { x:(cp.x/tile), y:(cp.y/tile), zoom:(typeof cp.zoom==='number'? cp.zoom : 1) };
-      }
-    }catch(_){}
-    return { cam:cam, tile:tile };
-  }
-
-  function clearOverlay(){
-    if (!overlayCtx || !overlayCanvas) return;
-    overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height);
-  }
-
-  // Renderloop für Overlay (60 FPS, wenn Overlay aktiv)
-  var rafId = 0;
-  function loop(){
-    rafId = window.requestAnimationFrame(loop);
-    if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
-    ensureOverlayCanvas(); if (!overlayCtx) return;
-
-    // Canvas-Size aktuell halten (falls CSS geändert)
-    syncOverlaySize();
-
-    // Kamerawerte holen; PF zeichnet in Tile-Koordinaten
-    var camInfo = getCameraTiles();
-
-    // Zeichen-Kontext temporär in "Weltmaßstab" (Pixel) setzen
-    // PathFinder.drawOverlay erwartet ctx mit Pixelkoordinaten; wir geben cam in Tiles
-    try{
-      clearOverlay();
-      if (window.PathFinder && PathFinder.drawOverlay){
-        PathFinder.drawOverlay(overlayCtx, camInfo.cam);
-      }
-    }catch(_){}
-  }
-
-  // Starten
-  if ('requestAnimationFrame' in window){
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(loop);
-  }
-
-  // Soft-Trigger für Repaint
-  window.addEventListener('cb:request-repaint', function(){ /* Overlay loop läuft permanent */ });
-
-})();
-/* ============================================================================
- * game.js Add-on — v16.5.3
- * Zweck:
- *   - PathFinder.init() einmalig nach Map-Load sicherstellen (Lazy/Poll)
- *   - Inspector-Events verarbeiten:
- *       • cb:toggle-path-overlay  → Flag setzen
- *       • cb:add-resources        → Game.addResources(type, amount) (Fallback)
- *   - Overlay-Canvas anlegen und PF-Overlay zeichnen (unabhängig vom Renderloop)
- *   - Fallback-Hooks Game.getMapSize / Game.getTileSize, falls nicht definiert
- * Hinweise:
- *   - Minimal-invasiv; bestehende Logik bleibt unangetastet.
- * ========================================================================== */
-(function(){
-  'use strict';
-  var MOD='[game.addon]';
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){} }
-
-  // ---------------------------------------------------------------------------
-  // Fallback-Hooks (nur setzen, wenn fehlen)
-  // ---------------------------------------------------------------------------
-  window.Game = window.Game || {};
-  if (typeof Game.getMapSize!=='function'){
-    Game.getMapSize = function(){
-      try {
-        var m = window.currentMap;
-        if (m && m.width && m.height) return { w:m.width|0, h:m.height|0 };
-      } catch(_){}
-      return { w:0, h:0 };
-    };
-  }
-  if (typeof Game.getTileSize!=='function'){
-    Game.getTileSize = function(){
-      try { return (window.currentMap && (currentMap.tile|0)) || 64; } catch(_){ return 64; }
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // PF init (einmalig) sobald Map-Größe vorliegt
-  // ---------------------------------------------------------------------------
-  var pfReady=false;
-  function tryPFInit(){
-    if (pfReady) return;
-    try{
-      if (!window.PathFinder || !PathFinder.init) return;
-      var s = Game.getMapSize(); if (!s || !s.w || !s.h) return;
-      PathFinder.init(Game.getMapSize);
-      try{ if (Game.getObstacleAt && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt); }catch(_){}
-      try{ if (Game.getRoadSet && PathFinder.setRoadMask) PathFinder.setRoadMask(Game.getRoadSet()); }catch(_){}
-      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (addon)');
-    }catch(e){ warn('[PF] init Fehler (addon): '+(e&&e.message)); }
-  }
-  var pfTimer = setInterval(function(){ if (pfReady) return clearInterval(pfTimer); tryPFInit(); }, 200);
-
-  // ---------------------------------------------------------------------------
-  // Inspector → Toggle Path Overlay
-  // ---------------------------------------------------------------------------
-  window.addEventListener('cb:toggle-path-overlay', function(e){
-    var enabled = !!(e && e.detail && e.detail.enabled);
-    window.DEBUG_PATH_OVERLAY = enabled;
-    ok(MOD+' overlay='+(enabled?'AN':'AUS'));
-  });
-
-  // ---------------------------------------------------------------------------
-  // Inspector → Ressourcen hinzufügen (Fallback, wenn Game.addResources fehlt)
-  // ---------------------------------------------------------------------------
-  if (typeof Game.addResources!=='function'){
-    Game.resources = Game.resources || { wood:0, stone:0, food:0, gold:0 };
-    Game.addResources = function(type, amount){
-      var t = String(type||'').toLowerCase(); var n=(amount|0)||0;
-      if (!t || !n) return false;
-      if (!Object.prototype.hasOwnProperty.call(Game.resources, t)) Game.resources[t]=0;
-      Game.resources[t]+=n;
-      ok('[res] +'+n+' '+t+' (store='+Game.resources[t]+')');
-      // TODO: UI-Refresh einhängen, sobald verfügbar
-      return true;
-    };
-    ok(MOD+' Game.addResources bereit (fallback)');
-  }
-
-  // ---------------------------------------------------------------------------
-  // PF Overlay-Zeichnung: eigenes Canvas über #game (unabhängig vom Renderloop)
-  // ---------------------------------------------------------------------------
-  var overlayCanvas = null, overlayCtx = null;
-  function ensureOverlayCanvas(){
-    if (overlayCanvas && overlayCtx) return;
-    var base = document.getElementById('game'); // erwarteter Canvas id="game"
-    if (!base){
-      base = document.querySelector('canvas');
-      if (!base) return;
-    }
-    overlayCanvas = document.getElementById('pf-overlay');
-    if (!overlayCanvas){
-      overlayCanvas = document.createElement('canvas');
-      overlayCanvas.id = 'pf-overlay';
-      overlayCanvas.style.position = 'absolute';
-      overlayCanvas.style.left = base.offsetLeft+'px';
-      overlayCanvas.style.top = base.offsetTop+'px';
-      overlayCanvas.style.pointerEvents = 'none';
-      overlayCanvas.style.zIndex = (parseInt(getComputedStyle(base).zIndex||'0',10)+1).toString();
-      (base.parentElement || document.body).appendChild(overlayCanvas);
-    }
-    overlayCtx = overlayCanvas.getContext('2d');
-    syncOverlaySize();
-    window.addEventListener('resize', syncOverlaySize);
-    window.addEventListener('orientationchange', syncOverlaySize);
-  }
-
-  function syncOverlaySize(){
-    var base = document.getElementById('game') || document.querySelector('canvas');
-    if (!base || !overlayCanvas) return;
-    var rect = base.getBoundingClientRect();
-    overlayCanvas.width = Math.max(1, Math.floor(rect.width));
-    overlayCanvas.height = Math.max(1, Math.floor(rect.height));
-    overlayCanvas.style.left = Math.floor(rect.left + window.scrollX) + 'px';
-    overlayCanvas.style.top  = Math.floor(rect.top  + window.scrollY) + 'px';
-    overlayCanvas.style.width  = overlayCanvas.width + 'px';
-    overlayCanvas.style.height  = overlayCanvas.height + 'px';
-  }
-
-  function getCameraTiles(){
-    var tile = Game.getTileSize ? (Game.getTileSize()|0) : 64;
-    var cam = { x:0, y:0, zoom:1 };
-    try {
-      if (Game.getCamera && typeof Game.getCamera==='function'){
-        var c = Game.getCamera();
-        if (c && typeof c.x==='number') cam = { x:c.x, y:c.y, zoom: (typeof c.zoom==='number'? c.zoom : 1) };
-      } else if (Game.getCameraPixels && typeof Game.getCameraPixels==='function'){
-        var cp = Game.getCameraPixels();
-        if (cp && typeof cp.x==='number') cam = { x:(cp.x/tile), y:(cp.y/tile), zoom:(typeof cp.zoom==='number'? cp.zoom : 1) };
-      }
-    }catch(_){}
-    return { cam:cam, tile:tile };
-  }
-
-  function clearOverlay(){
-    if (!overlayCtx || !overlayCanvas) return;
-    overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height);
-  }
-
-  // Renderloop für Overlay (60 FPS, wenn Overlay aktiv)
-  var rafId = 0;
-  function loop(){
-    rafId = window.requestAnimationFrame(loop);
-    if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
-    ensureOverlayCanvas(); if (!overlayCtx) return;
-    syncOverlaySize();
-    var camInfo = getCameraTiles();
-    try{
-      clearOverlay();
-      if (window.PathFinder && PathFinder.drawOverlay){
-        PathFinder.drawOverlay(overlayCtx, camInfo.cam);
-      }
-    }catch(_){}
-  }
-  if ('requestAnimationFrame' in window){
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(loop);
-  }
-  window.addEventListener('cb:request-repaint', function(){ /* Overlay loop läuft permanent */ });
-
-})();
-/* ============================================================================
- * game.js Add-on — v16.5.3
- * Zweck:
- *   - PathFinder.init() einmalig nach Map-Load sicherstellen (Lazy/Poll)
- *   - Inspector-Events verarbeiten:
- *       • cb:toggle-path-overlay  → Flag setzen
- *       • cb:add-resources        → Game.addResources(type, amount) (Fallback)
- *   - Overlay-Canvas über #game anlegen und PF-Overlay zeichnen
- *   - Fallback-Hooks Game.getMapSize / Game.getTileSize, falls nicht definiert
- * ========================================================================== */
-(function(){
-  'use strict';
-  var MOD='[game.addon]';
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){} }
-
-  // ---- Fallback-Hooks (nur setzen, wenn fehlen) -----------------------------
-  window.Game = window.Game || {};
-  if (typeof Game.getMapSize!=='function'){
-    Game.getMapSize = function(){
-      try {
-        var m = window.currentMap;
-        if (m && m.width && m.height) return { w:m.width|0, h:m.height|0 };
-      } catch(_){}
-      return { w:0, h:0 };
-    };
-  }
-  if (typeof Game.getTileSize!=='function'){
-    Game.getTileSize = function(){
-      try { return (window.currentMap && (currentMap.tile|0)) || 64; } catch(_){ return 64; }
-    };
-  }
-
-  // ---- PF init (einmalig) sobald Map-Größe vorliegt -------------------------
-  var pfReady=false;
-  function tryPFInit(){
-    if (pfReady) return;
-    try{
-      if (!window.PathFinder || !PathFinder.init) return;
-      var s = Game.getMapSize(); if (!s || !s.w || !s.h) return;
-      PathFinder.init(Game.getMapSize);
-      try{ if (Game.getObstacleAt && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt); }catch(_){}
-      try{ if (Game.getRoadSet && PathFinder.setRoadMask) PathFinder.setRoadMask(Game.getRoadSet()); }catch(_){}
-      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (addon)');
-    }catch(e){ warn('[PF] init Fehler (addon): '+(e&&e.message)); }
-  }
-  var pfTimer = setInterval(function(){ if (pfReady) return clearInterval(pfTimer); tryPFInit(); }, 200);
-
-  // ---- Inspector → Toggle Path Overlay --------------------------------------
-  window.addEventListener('cb:toggle-path-overlay', function(e){
-    var enabled = !!(e && e.detail && e.detail.enabled);
-    window.DEBUG_PATH_OVERLAY = enabled;
-    ok(MOD+' overlay='+(enabled?'AN':'AUS'));
-  });
-
-  // ---- Inspector → Ressourcen hinzufügen (Fallback) -------------------------
-  if (typeof Game.addResources!=='function'){
-    Game.resources = Game.resources || { wood:0, stone:0, food:0, gold:0 };
-    Game.addResources = function(type, amount){
-      var t = String(type||'').toLowerCase(); var n=(amount|0)||0;
-      if (!t || !n) return false;
-      if (!Object.prototype.hasOwnProperty.call(Game.resources, t)) Game.resources[t]=0;
-      Game.resources[t]+=n;
-      ok('[res] +'+n+' '+t+' (store='+Game.resources[t]+')');
-      // TODO: UI-Refresh einhängen, wenn deine Anzeige da ist
-      return true;
-    };
-    ok(MOD+' Game.addResources bereit (fallback)');
-  }
-
-  // ---- PF Overlay-Zeichnung: eigenes Canvas über #game -----------------------
-  var overlayCanvas = null, overlayCtx = null;
   function ensureOverlayCanvas(){
     if (overlayCanvas && overlayCtx) return;
     var base = document.getElementById('game') || document.querySelector('canvas');
@@ -931,22 +589,16 @@
     overlayCanvas.style.left = Math.floor(rect.left + window.scrollX) + 'px';
     overlayCanvas.style.top  = Math.floor(rect.top  + window.scrollY) + 'px';
     overlayCanvas.style.width  = overlayCanvas.width + 'px';
-    overlayCanvas.style.height  = overlayCanvas.height + 'px';
+    overlayCanvas.style.height = overlayCanvas.height + 'px';
   }
 
   function getCameraTiles(){
     var tile = Game.getTileSize ? (Game.getTileSize()|0) : 64;
-    var cam = { x:0, y:0, zoom:1 };
-    try {
-      if (Game.getCamera && typeof Game.getCamera==='function'){
-        var c = Game.getCamera();
-        if (c && typeof c.x==='number') cam = { x:c.x, y:c.y, zoom:(typeof c.zoom==='number'? c.zoom : 1) };
-      } else if (Game.getCameraPixels && typeof Game.getCameraPixels==='function'){
-        var cp = Game.getCameraPixels();
-        if (cp && typeof cp.x==='number') cam = { x:(cp.x/tile), y:(cp.y/tile), zoom:(typeof cp.zoom==='number'? cp.zoom : 1) };
-      }
-    }catch(_){}
-    return { cam:cam, tile:tile };
+    var c = Game.getCamera ? Game.getCamera() : null;
+    var camTiles = (c && typeof c.x==='number')
+      ? { x:c.x, y:c.y, zoom:(typeof c.zoom==='number' ? c.zoom : 1) }
+      : { x:0, y:0, zoom:1 };
+    return { cam:camTiles, tile:tile };
   }
 
   function clearOverlay(){
@@ -954,9 +606,10 @@
     overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height);
   }
 
+  // Eigenes Overlay-Loop (leichtgewichtig) -----------------------------------
   var rafId = 0;
-  function loop(){
-    rafId = window.requestAnimationFrame(loop);
+  function overlayLoop(){
+    rafId = window.requestAnimationFrame(overlayLoop);
     if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
     ensureOverlayCanvas(); if (!overlayCtx) return;
     syncOverlaySize();
@@ -970,9 +623,8 @@
   }
   if ('requestAnimationFrame' in window){
     if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(loop);
+    rafId = requestAnimationFrame(overlayLoop);
   }
+  window.addEventListener('cb:request-repaint', function(){ /* Overlay loop tickt ohnehin */ });
 
-  window.addEventListener('cb:request-repaint', function(){ /* Overlay loop läuft permanent */ });
-
-})();
+})();  // <<< end monolith
