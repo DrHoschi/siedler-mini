@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-02T06:26:26.319Z",
+  "createdAt": "2025-09-02T20:56:44.134Z",
   "root": ".",
-  "count": 248,
+  "count": 257,
   "entries": [
     {
       "type": "dir",
@@ -154,6 +154,50 @@
     },
     {
       "type": "dir",
+      "path": "assets/core/"
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.entities.js",
+      "size": 7426
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.env.js",
+      "size": 3010
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.input.js",
+      "size": 5308
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.map.js",
+      "size": 6611
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.pfglue.js",
+      "size": 6362
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.production.js",
+      "size": 3039
+    },
+    {
+      "type": "file",
+      "path": "assets/core/core.render.js",
+      "size": 7422
+    },
+    {
+      "type": "file",
+      "path": "assets/core/game.bootstrap.js",
+      "size": 7042
+    },
+    {
+      "type": "dir",
       "path": "assets/editor/"
     },
     {
@@ -192,7 +236,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 13357
+      "size": 7527
     },
     {
       "type": "dir",
@@ -780,7 +824,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 6641
+      "size": 5989
     },
     {
       "type": "file",
@@ -795,7 +839,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-start.js",
-      "size": 6832
+      "size": 6387
     },
     {
       "type": "file",
@@ -884,7 +928,7 @@
     {
       "type": "file",
       "path": "core/actor.js",
-      "size": 3722
+      "size": 3718
     },
     {
       "type": "file",
@@ -904,7 +948,7 @@
     {
       "type": "file",
       "path": "core/carriers.js",
-      "size": 6043
+      "size": 7703
     },
     {
       "type": "file",
@@ -924,7 +968,7 @@
     {
       "type": "file",
       "path": "core/pathfinder.js",
-      "size": 12846
+      "size": 8909
     },
     {
       "type": "file",
@@ -1132,12 +1176,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24452
+      "size": 24454
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9329
+      "size": 9331
     },
     {
       "type": "file",
@@ -1147,12 +1191,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 20563
+      "size": 2090
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 3639
+      "size": 4061
     },
     {
       "type": "file",
