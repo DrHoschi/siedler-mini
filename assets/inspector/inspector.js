@@ -1,88 +1,116 @@
 /* ============================================================================
- * Datei: assets/ui/ui-bridge.js
- * Version: v17.1.3
+ * Datei: assets/inspector/inspector.js
+ * Projekt: Siedler-Mini
+ * Version: v17.2.0
  * Zweck:
- *   - Stabile UI-Fassade (window.GameUI)
- *   - Kompatibles Toggle fürs Bau-Menü (ruft vorhandene APIs + Events)
- *   - Inspector-Öffnen/Schließen ohne Core zu ersetzen
- *   - KEIN Erzeugen/Überschreiben von #inspector mehr
- * ============================================================================ */
-(function(){
+ *   - Inspector-Core (UI-Fenster mit Tabs)
+ *   - Zeigt Logs & Debug-Infos
+ *   - Reagiert auf cb:inspector-open / cb:inspector-close
+ *   - Erweiterbar (Tabs für Ressourcen, Entities, Pfade, Tests via Add-ons)
+ * ============================================================================
+ */
+(function () {
   'use strict';
 
-  var UI = (window.GameUI = window.GameUI || {});
+  var MOD = '[inspector.core]';
+  function ok(){ try{ (window.CBLog?.ok||console.log)(...arguments);}catch(_){console.log(...arguments);} }
+  function warn(){ try{ (window.CBLog?.warn||console.warn)(...arguments);}catch(_){console.warn(...arguments);} }
 
-  function ok(){ try{ (window.CBLog?.ok||console.log).apply(console, arguments);}catch(_){console.log.apply(console, arguments);} }
-  function warn(){ try{ (window.CBLog?.warn||console.warn).apply(console, arguments);}catch(_){console.warn.apply(console, arguments);} }
+  var root=null, tabs=null, open=false;
 
-  // -------------------- Bau-Menü: robustes Toggle -----------------------------
-  // Unterstützt:
-  //  - window.UIBuild.toggle(open?)
-  //  - window.GameUIBuild.toggle(open?)
-  //  - Events: cb:build-open / cb:build-close / cb:build-toggle{open}
-  function setBuildOpen(open){
-    // Body-Klasse (Layout)
-    document.body.classList.toggle('has-build-open', !!open);
+  // ---------- Core bauen ----------
+  function buildCore(){
+    if (root) return root;
 
-    // Events
-    try {
-      window.dispatchEvent(new CustomEvent('cb:build-toggle', { detail:{ open:!!open } }));
-      window.dispatchEvent(new CustomEvent(open ? 'cb:build-open' : 'cb:build-close'));
-    } catch(_){}
+    root = document.createElement('div');
+    root.id = 'inspector';
+    root.setAttribute('role','dialog');
+    root.setAttribute('aria-label','Inspector');
+    root.style.position='fixed';
+    root.style.right='12px'; root.style.bottom='80px';
+    root.style.width='400px'; root.style.maxWidth='90vw';
+    root.style.maxHeight='70vh'; root.style.overflow='auto';
+    root.style.background='rgba(20,20,20,.94)';
+    root.style.border='1px solid #333'; root.style.borderRadius='8px';
+    root.style.boxShadow='0 14px 40px rgba(0,0,0,.45)';
+    root.style.backdropFilter='blur(6px)';
+    root.style.color='#eaeaea';
+    root.style.font='14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    root.style.zIndex='100001';
+    root.style.display='none';
 
-    ok('[ui] Build:', open ? 'auf' : 'zu');
+    // Kopf
+    var head=document.createElement('div');
+    head.style.display='flex'; head.style.alignItems='center'; head.style.justifyContent='space-between';
+    head.style.padding='10px 12px'; head.style.borderBottom='1px solid #2d2d2d';
+    var title=document.createElement('div'); title.textContent='Inspector';
+    title.style.fontWeight='700';
+    var close=document.createElement('button'); close.textContent='✕';
+    close.style.background='transparent'; close.style.border='1px solid #3a3a3a';
+    close.style.borderRadius='4px'; close.style.color='#ddd'; close.style.cursor='pointer';
+    close.onclick=function(){ toggle(false); };
+    head.appendChild(title); head.appendChild(close);
+    root.appendChild(head);
+
+    // Tabs
+    tabs=document.createElement('div');
+    tabs.id='inspector-tabs';
+    tabs.style.display='block';
+    tabs.style.padding='8px 10px';
+    root.appendChild(tabs);
+
+    document.body.appendChild(root);
+    ok(MOD+' gebaut (v17.2.0)');
+    return root;
   }
 
-  UI.toggleBuild = function(force){
-    try {
-      var open;
-      // Direkt-APIs bevorzugen
-      if (window.UIBuild && typeof window.UIBuild.toggle === 'function'){
-        open = (typeof force === 'boolean') ? !!force : undefined;
-        window.UIBuild.toggle(open);
-        // Rückfall: Body/Events trotzdem konsistent setzen
-        if (typeof open === 'boolean') setBuildOpen(open);
-        return;
-      }
-      if (window.GameUIBuild && typeof window.GameUIBuild.toggle === 'function'){
-        open = (typeof force === 'boolean') ? !!force : undefined;
-        window.GameUIBuild.toggle(open);
-        if (typeof open === 'boolean') setBuildOpen(open);
-        return;
-      }
+  // ---------- Tabs ----------
+  function addLogTab(){
+    var tab=document.createElement('div');
+    tab.id='inspector-logs';
+    tab.style.padding='6px';
+    tab.style.fontFamily='monospace';
+    tab.style.fontSize='12px';
+    tab.style.whiteSpace='pre-wrap';
+    tab.style.maxHeight='200px';
+    tab.style.overflowY='auto';
+    tab.textContent='[Inspector Logs]\n';
+    tabs.appendChild(tab);
 
-      // Kein UI-Module? → Nur Body/Events
-      var isOpen = document.body.classList.contains('has-build-open');
-      open = (typeof force === 'boolean') ? !!force : !isOpen;
-      setBuildOpen(open);
-
-    } catch(e){
-      warn('[ui] Build-Toggle Fehler:', e && e.message);
+    // CBLog-Hook
+    if (window.CBLog){
+      var orig=window.CBLog.push;
+      window.CBLog.push=function(type,msg){
+        try{
+          var line='['+type.toUpperCase()+'] '+msg;
+          tab.textContent+=line+'\n';
+          tab.scrollTop=tab.scrollHeight;
+        }catch(_){}
+        return orig.call(this,type,msg);
+      };
     }
-  };
-
-  // -------------------- Inspector: nur öffnen/schließen -----------------------
-  // Greift NICHT mehr in den DOM-Core ein – überlässt dies deiner inspector.js.
-  // Feuert kompatible Events, damit dein Inspector reagieren kann.
-  function isInspectorOpen(){
-    var el = document.getElementById('inspector');
-    return el && el.style.display !== 'none';
   }
 
-  UI.toggleInspector = function(force){
+  // ---------- Toggle ----------
+  function toggle(show){
+    buildCore();
+    open=!!show;
+    root.style.display=open?'block':'none';
     try {
-      var wantOpen = (typeof force === 'boolean') ? !!force : !isInspectorOpen();
-      // Wenn dein Inspector eigene API hat, nutzen:
-      if (window.Inspector && typeof window.Inspector.toggle === 'function'){
-        window.Inspector.toggle(wantOpen);
-      }
-      // Events, damit dein Code die Sichtbarkeit steuern kann:
-      window.dispatchEvent(new CustomEvent(wantOpen ? 'cb:inspector-open' : 'cb:inspector-close'));
-      ok('[ui] Inspector:', wantOpen ? 'auf' : 'zu');
-    } catch(e){
-      warn('[ui] Inspector-Toggle Fehler:', e && e.message);
-    }
-  };
+      window.dispatchEvent(new CustomEvent(open?'cb:inspector-open':'cb:inspector-close'));
+    }catch(_){}
+    ok(MOD+' '+(open?'geöffnet':'geschlossen')+' (v17.2.0)');
+  }
 
-  ok('[ui-bridge] bereit (v17.1.3)');
+  // ---------- Init ----------
+  window.addEventListener('cb:inspector-open', function(){ toggle(true); });
+  window.addEventListener('cb:inspector-close', function(){ toggle(false); });
+
+  // Export API
+  window.Inspector = { toggle:toggle };
+
+  // Core initial bauen + Tab hinzufügen
+  buildCore();
+  addLogTab();
+
 })();
