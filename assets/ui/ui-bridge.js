@@ -1,9 +1,4 @@
-/* assets/ui/ui-bridge.js — v16.5.2
-   Brücke zwischen UI (Start/Build/Inspector) und Game
-   - verwaltet Build-Panel Open/Close
-   - sendet Events cb:build-open / cb:build-close
-   - stellt GameBoot.start bereit (falls ui-start das nicht direkt macht)
-*/
+/* assets/ui/ui-bridge.js — v16.5.2 */
 (function(){
   'use strict';
 
@@ -11,13 +6,8 @@
   var VERSION = 'v16.5.2';
 
   var $panel, $tabs, $grid, $hint, $btnClose;
-  var state = {
-    open: false,
-    tab: 'basic',
-    selection: null
-  };
+  var state = { open:false, tab:'basic', selection:null };
 
-  // Kategorien + Items (Keys müssen zu deinen BUILDINGS in game.js passen)
   var CATS = [
     { id:'basic', label:'Basis', items:[
       {key:'road',   name:'Straße',    thumb:'assets/tex/road/road_atlas.png'},
@@ -35,27 +25,22 @@
       {key:'smith',  name:'Schmied',     thumb:'assets/tex/building/wood/Schmied_wood0.png'}
     ]},
     { id:'lager', label:'Lager & HQ', items:[
-      {key:'depot',     name:'Depot',    thumb:'assets/tex/building/wood/depot_wood.png'},
-      {key:'townhall',  name:'Rathaus',  thumb:'assets/tex/building/Holz_Rathaus_1.png'},
-      {key:'hq',        name:'HQ',       thumb:'assets/tex/building/wood/hq_wood.PNG'}
+      {key:'depot',    name:'Depot',   thumb:'assets/tex/building/wood/depot_wood.png'},
+      {key:'townhall', name:'Rathaus', thumb:'assets/tex/building/Holz_Rathaus_1.png'},
+      {key:'hq',       name:'HQ',      thumb:'assets/tex/building/wood/hq_wood.PNG'}
     ]}
   ];
 
-  // ---------- DOM ----------
   function el(tag, cls, html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
 
   function ensurePanel(){
     if ($panel) return;
 
-    $panel = document.createElement('div');
-    $panel.id = 'build-panel';
-
-    var $head = el('div','', '');
-    $head.id = 'build-head';
+    $panel = document.createElement('div'); $panel.id = 'build-panel';
+    var $head = el('div','', ''); $head.id = 'build-head';
     $head.appendChild(el('div','title','Bau-Menü'));
     var spacer = el('div','spacer',''); $head.appendChild(spacer);
-    $btnClose = el('button','', 'Schließen');
-    $btnClose.id='build-close';
+    $btnClose = el('button','', 'Schließen'); $btnClose.id='build-close';
     $btnClose.addEventListener('click', close);
     $head.appendChild($btnClose);
     $panel.appendChild($head);
@@ -99,20 +84,16 @@
 
       card.appendChild(th);
       card.appendChild(name);
-      card.addEventListener('click', function(){
-        selectItem(it.key, card);
-      });
+      card.addEventListener('click', function(){ selectItem(it.key, card); });
 
       $grid.appendChild(card);
     });
   }
 
   function selectItem(key, cardNode){
-    // visuelles „active“
     Array.prototype.forEach.call($grid.querySelectorAll('.build-item'), function(n){ n.classList.remove('active'); });
     if (cardNode) cardNode.classList.add('active');
 
-    // Tool setzen
     if (key==='road' || key==='path' || key==='bulldozer'){
       try { window.Game && Game.setTool && Game.setTool(key); } catch(_){}
       state.selection = null;
@@ -123,16 +104,12 @@
   }
 
   function bindGlobalCancel(){
-    // ESC / Rechtsklick → Tool zurücksetzen
     window.addEventListener('keydown', function(e){
-      if ((e.key||'').toLowerCase()==='escape'){
-        resetTool();
-      }
+      if ((e.key||'').toLowerCase()==='escape'){ resetTool(); }
     });
     window.addEventListener('contextmenu', function(e){
-      if ($panel.classList.contains('open')){
-        e.preventDefault();
-        resetTool();
+      if ($panel && $panel.classList.contains('open')){
+        e.preventDefault(); resetTool();
       }
     });
   }
@@ -143,7 +120,6 @@
     Array.prototype.forEach.call($grid.querySelectorAll('.build-item'), function(n){ n.classList.remove('active'); });
   }
 
-  // ---------- API ----------
   function open(){
     ensurePanel();
     if (state.open) return;
@@ -167,22 +143,19 @@
   UI.closeBuild = close;
   UI.toggleBuild = toggle;
 
-  // Inspector-Bridge (Button ruft das auf)
+  // Inspector vom Button
   UI.toggleInspector = function(){
-    // tatsächliche Implementierung sitzt im inspector.js
     try {
-      if (window.GameUI && typeof window.GameUI.openInspector==='function'){
-        var p = document.querySelector('.cb-ins-panel');
-        if (p && p.classList.contains('open')) { window.GameUI.closeInspector(); }
-        else { window.GameUI.openInspector(); }
+      if (window.GameUI && typeof window.GameUI.toggleInspector==='function'){
+        window.GameUI.toggleInspector();
+      } else if (window.GameUI && typeof window.GameUI.openInspector==='function'){
+        // Fallback: wenigstens öffnen
+        window.GameUI.openInspector();
       }
     } catch(_){}
   };
 
-  // Start: NICHT auto-öffnen! (Startfenster hat eigenen Flow)
-  window.addEventListener('cb:game-started', function(){
-    // no-op; Panel bleibt zu
-  });
+  window.addEventListener('cb:game-started', function(){ /* no auto-open */ });
 
   console.log('[ui-bridge] bereit (v'+VERSION+')');
 })();
