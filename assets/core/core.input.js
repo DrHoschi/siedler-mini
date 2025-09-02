@@ -1,14 +1,11 @@
 /* ============================================================================
  * Datei: core.input.js
  * Projekt: Siedler-Mini
- * Version: v17.0.0
+ * Version: v17.1.1
  * Zweck:
  *   - Maus/Touch/Keyboard: Pan/Zoom
- *   - Platzieren per Klick (build-Tool). Akzeptiert:
- *       • Game.setTool('build','farm')
- *       • Game.setTool('build',{key:'farm'})
+ *   - Platzieren per Klick (build-Tool)
  *   - Delegiert: Entities.canPlace/place + Render.draw
- *   - Schreibt aktuelle Toolwahl in window.__GC_TOOL__ (kompatibel zur Fassade)
  * ============================================================================
  */
 (function(ns){
@@ -19,18 +16,15 @@
   var U = ns.util;
 
   var canvas=null, ctx=null;
-
-  // Internes Tool-State (fallback, wenn keine Game-Fassade genutzt wird)
   var TOOL = window.__GC_TOOL__ || { mode:null, key:null };
 
-  // --------------------------- Helpers ---------------------------------------
   function setTool(mode, payload){
     if (mode === 'build'){
       var key = (typeof payload==='string') ? payload : (payload && payload.key) || null;
       TOOL.mode = 'build';
       TOOL.key = key ? ns.Entities.resolveKey(key) : null;
       window.__GC_TOOL__ = TOOL;
-      ns.ok('[build] Tool gesetzt:', TOOL.key || '(none)');
+      ns.ok('[build] Tool gesetzt: '+(TOOL.key||'(none)'));
     } else {
       TOOL.mode = mode || null;
       TOOL.key = null;
@@ -51,11 +45,9 @@
     ns.Render.draw();
   }
 
-  // --------------------------- Bindings --------------------------------------
   function bind(c){
     canvas = c; ctx = c.getContext && c.getContext('2d');
 
-    // Drag / Pan
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
     canvas.addEventListener('mousedown', function(e){
@@ -69,7 +61,6 @@
     });
     window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; });
 
-    // Wheel Zoom
     canvas.addEventListener('wheel', function(e){
       e.preventDefault ? e.preventDefault() : (e.returnValue=false);
       var rect = canvas.getBoundingClientRect();
@@ -78,7 +69,6 @@
       zoomAt(e.deltaY<0 ? 1.15 : 1/1.15, cx, cy);
     }, {passive:false});
 
-    // Click → Build
     canvas.addEventListener('click', function(e){
       if (TOOL.mode!=='build' || !TOOL.key || !S.map) return;
       var rect = canvas.getBoundingClientRect();
@@ -93,7 +83,7 @@
         ns.Entities.place(TOOL.key, tx, ty);
         ns.Render.draw();
       } else {
-        ns.warn('[game] Platzierung nicht möglich.');
+        ns.warn('[game] Platzierung nicht möglich bei '+tx+','+ty+' für '+TOOL.key);
       }
     });
 
@@ -141,7 +131,7 @@
       ns.Map.clampCam(); ns.Render.draw();
     });
 
-    ns.ok('[input] Modul gebunden (v17.0.0)');
+    ns.ok('[input] Modul gebunden (v17.1.1)');
   }
 
   // --------------------------- Export ----------------------------------------
