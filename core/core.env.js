@@ -1,49 +1,75 @@
 /* ============================================================================
- * Datei: assets/core/core.env.js
- * Version: v1.0.0
+ * core.env.js — v17.0.0
+ * Projekt: Siedler-Mini
  * Zweck:
  *   - Gemeinsamer Namespace (window.GameCore)
- *   - Logging-Helfer (ok/warn/err) → nutzt CBLog falls vorhanden
- *   - Gemeinsamer State (map, camera, entities, roads etc.)
- *   - Kleine Utilities, die andere Module gefahrlos nutzen können
+ *   - Logging-Helfer (ok/warn/err) → nutzt CBLog, fällt auf console zurück
+ *   - Zentraler Shared-State (Map, Kamera, Entities, Obstacles, Roads, Atlas)
+ *   - Kleine Event-Hilfen (emit/on/off) via window-Events (CustomEvent)
+ * Richtlinien:
+ *   - Kein DOM-Zwang außer window-Events
+ *   - Keine Abhängigkeit von anderen Core-Modulen
  * ========================================================================== */
 (function(ns){
   'use strict';
 
-  // --------------------------------------------------------------------------
-  // Logging-Helfer (fallen sanft auf console zurück)
-  // --------------------------------------------------------------------------
-  function ok(){ (window.CBLog?.ok || console.log).apply(console, arguments); }
-  function warn(){ (window.CBLog?.warn || console.warn).apply(console, arguments); }
-  function err(){ (window.CBLog?.err || console.error).apply(console, arguments); }
+  if (window.GameCore && window.GameCore.__ENV_READY__) {
+    // Mehrfachladen vermeiden (Dev-Reload)
+    return;
+  }
 
-  // --------------------------------------------------------------------------
-  // Gemeinsamer State
-  //   - map: { width, height, tile, layers, ... } (nach Map-Load gesetzt)
-  //   - cam: Kamera in Pixelkoordinaten (x,y) + zoom
-  //   - entities: Liste aller Gebäudeobjekte
-  //   - roads: Set("x,y") mit Straßenkacheln (optional)
-  //   - atlas / tilesetImg: Terrain-Atlas (falls vorhanden)
-  // --------------------------------------------------------------------------
-  var state = {
-    map: null,
+  // --------------------------- Logging ---------------------------------------
+  function _log(method, args){
+    try {
+      if (window.CBLog) {
+        if (method === 'ok')   return window.CBLog.ok.apply(window.CBLog, args);
+        if (method === 'warn') return window.CBLog.warn.apply(window.CBLog, args);
+        if (method === 'err')  return window.CBLog.err.apply(window.CBLog, args);
+        return window.CBLog.push.apply(window.CBLog, [method].concat([].slice.call(args)));
+      }
+    } catch(_) {}
+    var c = (method==='err'?'error':method==='warn'?'warn':'log');
+    (console[c]||console.log).apply(console, args);
+  }
+  ns.ok   = function(){ _log('ok',   arguments); };
+  ns.warn = function(){ _log('warn', arguments); };
+  ns.err  = function(){ _log('err',  arguments); };
+
+  // --------------------------- Shared State ----------------------------------
+  ns.state = {
+    version: 'env:17.0.0',
+    // Map/Atlas
+    map: null,              // { width, height, tile, layers? }
+    atlas: null,            // Tileset JSON
+    tilesetImg: null,       // Image
+    // Kamera
     cam: { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 },
-    entities: [],
-    roads: new Set(),
-    atlas: null,
-    tilesetImg: null
+    // Entities
+    entities: [],           // Array von Gebäude-Objekten
+    nextEntityId: 1,
+    // Obstacles (Tiles)
+    obstacles: null,        // Uint8Array[w*h], 1 = blockiert
+    obstW: 0, obstH: 0,
+    // Straßen
+    roads: new Set(),       // Set("x,y")
   };
 
-  // --------------------------------------------------------------------------
-  // Utilities
-  // --------------------------------------------------------------------------
-  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  // --------------------------- Utils -----------------------------------------
+  ns.util = {
+    clamp: function(v,a,b){ return Math.max(a, Math.min(b, v)); },
+    inb: function(x,y,w,h){ return x>=0 && y>=0 && x<w && y<h; },
+    key: function(x,y){ return x+','+y; },
+    // Event-Helfer: emit/on/off (thin wrapper um window)
+    emit: function(name, detail){
+      try { window.dispatchEvent(new CustomEvent(name, { detail: detail||null })); }
+      catch(_) { /* IE etc. – ignorieren */ }
+    },
+    on: function(name, fn){ try{ window.addEventListener(name, fn); }catch(_){ /* noop */ } },
+    off:function(name, fn){ try{ window.removeEventListener(name, fn); }catch(_){ /* noop */ } }
+  };
 
-  // Public-Exports
-  ns.ok   = ok;
-  ns.warn = warn;
-  ns.err  = err;
-  ns.state = state;
-  ns.util = { clamp: clamp };
+  // Marker
+  ns.__ENV_READY__ = true;
+  ns.ok('[env] Core-Umgebung bereit (v17.0.0)');
 
 })(window.GameCore = window.GameCore || {});
