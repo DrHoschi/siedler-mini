@@ -1,18 +1,19 @@
-/* core/carriers.js — v16.5.2
+/* core/carriers.js — v16.6.0
  * -------------------------------------------------------------------
  * Zweck
  *  - Einfache „Träger“-Simulation, die Pfade vom PathFinder nutzt.
  *  - Bewegungsmode:
  *      • spawn({from:{x,y}, to:{x,y}}) – erzeugt einen Carrier
  *      • tick(dt) – bewegt Carrier entlang des Pfads (dt in Sekunden)
- *      • draw(ctx, cam) – zeichnet Carrier-Punkte (und optional PF-Overlay)
+ *      • draw(ctx, cam) – zeichnet Carrier (Sprite, wenn da; sonst Punkt)
  *  - Heatmap („applyHeat“) wird pro erzeugtem Pfad aktualisiert.
  *
  * Öffentliche API
- *  - Carriers.spawn({from:{x,y}, to:{x,y}}) → {x,y,done,...} | null
+ *  - Carriers.spawn({from:{x,y}, to:{x,y}}) → carrier | null
  *  - Carriers.tick(dt)
  *  - Carriers.draw(ctx, cam)
- *
+ *  - Carriers.list() -> Array
+ *  - Carriers.clear()
  * Erwartete Game-Hooks (falls vorhanden)
  *  - Game.getTileSize(): number
  *  - Game.getRoadSet(): Set<string "x,y">      (optional; wird an PF gesetzt)
@@ -23,9 +24,9 @@
   'use strict';
 
   var CR = (window.Carriers = window.Carriers || {});
-  var _list = [];  // Elemente: { x,y, path:[{x,y}], seg, t, speedTilesPS, done }
+  var _list = [];  // { x,y, path:[{x,y}], seg, t, speedTilesPS, done }
 
-  var SPEED = 2.0; // Tiles pro Sekunde (einfach, konstant)
+  var SPEED = 2.0; // Tiles pro Sekunde
 
   function LOG(lvl, msg) {
     try {
@@ -43,6 +44,12 @@
   function getTile() {
     return (window.Game && Game.getTileSize && Game.getTileSize()) || 64;
   }
+
+  // ------------------------------------------------------------------
+  // Public helpers
+  // ------------------------------------------------------------------
+  CR.list = function(){ return _list; };
+  CR.clear = function(){ _list.length = 0; };
 
   // ------------------------------------------------------------------
   // Carrier erzeugen
@@ -76,20 +83,18 @@
       : null;
 
     if (!path || path.length < 2) {
-      LOG('warn', `[carriers] kein Pfad ${sx},${sy} → ${tx},${ty}`);
+      LOG('warn', '[carriers] kein Pfad '+sx+','+sy+' → '+tx+','+ty);
       return null;
     }
 
     // Heatmap „aufheizen“
-    try {
-      if (window.PathFinder && PathFinder.applyHeat) PathFinder.applyHeat(path);
-    } catch (_) {}
+    try { if (window.PathFinder && PathFinder.applyHeat) PathFinder.applyHeat(path); } catch (_) {}
 
     var c = {
-      x: sx, y: sy,
+      x: sx, y: sy,                 // in Tiles
       path: path,
-      seg: 0,   // aktuelles Segment-Index (von path[seg] → path[seg+1])
-      t: 0,     // 0..1 innerhalb des Segments
+      seg: 0,                       // aktuelles Segment (von path[seg] → path[seg+1])
+      t: 0,                         // 0..1 innerhalb des Segments
       speedTilesPS: SPEED,
       done: false
     };
@@ -142,7 +147,7 @@
   // ------------------------------------------------------------------
   // Zeichnen
   //  - PF-Overlay optional (window.DEBUG_PATH_OVERLAY)
-  //  - Carrier als kleine Punkte
+  //  - Carrier: Sprite, wenn verfügbar → sonst Punkt-Fallback
   // ------------------------------------------------------------------
   CR.draw = function (ctx, cam) {
     // Debug-Overlay vom PathFinder (falls aktiv)
@@ -157,31 +162,50 @@
     for (var i = 0; i < _list.length; i++) {
       var c = _list[i];
 
-      // Welt → Screen
+      // Welt → Screen (Tiles -> Pixel)
       var wx = c.x * tile + tile / 2;
       var wy = c.y * tile + tile / 2;
       var sx = Math.floor((wx - cam.x) * cam.zoom);
       var sy = Math.floor((wy - cam.y) * cam.zoom);
 
-      ctx.save();
-      ctx.fillStyle = c.done ? 'rgba(255,255,0,.7)' : 'rgba(255,200,0,.95)';
-      var r = Math.max(3, Math.floor(4 * cam.zoom));
-      ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, Math.PI * 2, false);
-      ctx.fill();
+      // --- Versuch: Sprite-Renderer benutzen (wenn vorhanden) ----------------
+      var drawn = false;
+      try {
+        // Erwartete API: Assets.drawSprite(ctx, key, frameName, px, py, opts)
+        if (window.Assets && typeof Assets.drawSprite === 'function') {
+          // Framewahl sehr simpel (4er Loop anhand Position)
+          var f = ((Math.floor((c.x+c.y+c.t*10)) % 4) + 4) % 4;
+          var frameName = 'carrier_walk_' + f;
+          drawn = Assets.drawSprite(ctx, 'carrier', frameName, sx, sy, { anchor:'center' });
+          if (!drawn) {
+            // Fallback: ein Single-Frame
+            drawn = Assets.drawSprite(ctx, 'carrier', 'carrier', sx, sy, { anchor:'center' });
+          }
+        }
+      } catch(_) {}
 
-      // kleiner „Schatten“ / Pfeil nach rechts (nur wenn in Bewegung)
-      if (!c.done) {
-        ctx.strokeStyle = 'rgba(0,0,0,.45)';
-        ctx.lineWidth = Math.max(1, Math.floor(1 * cam.zoom));
+      if (!drawn) {
+        // --- Punkt-Fallback ---------------------------------------------------
+        ctx.save();
+        ctx.fillStyle = c.done ? 'rgba(255,255,0,.7)' : 'rgba(255,200,0,.95)';
+        var r = Math.max(3, Math.floor(4 * cam.zoom));
         ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx + r * 1.5, sy);
-        ctx.stroke();
+        ctx.arc(sx, sy, r, 0, Math.PI * 2, false);
+        ctx.fill();
+
+        // kleiner „Schatten“ / Pfeil nach rechts (nur wenn in Bewegung)
+        if (!c.done) {
+          ctx.strokeStyle = 'rgba(0,0,0,.45)';
+          ctx.lineWidth = Math.max(1, Math.floor(1 * cam.zoom));
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + r * 1.5, sy);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
-      ctx.restore();
     }
   };
 
-  LOG('ok', '[carriers.js] Modul geladen (v16.5.2)');
+  LOG('ok', '[carriers] Modul geladen (v16.6.0)');
 })();
