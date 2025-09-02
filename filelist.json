@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-01T20:41:03.430Z",
+  "createdAt": "2025-09-02T06:26:26.319Z",
   "root": ".",
   "count": 248,
   "entries": [
@@ -780,17 +780,17 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 2746
+      "size": 6641
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 4119
+      "size": 2959
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 7394
+      "size": 1307
     },
     {
       "type": "file",
@@ -894,7 +894,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 4792
+      "size": 14409
     },
     {
       "type": "file",
@@ -904,7 +904,7 @@
     {
       "type": "file",
       "path": "core/carriers.js",
-      "size": 3784
+      "size": 6043
     },
     {
       "type": "file",
@@ -924,7 +924,7 @@
     {
       "type": "file",
       "path": "core/pathfinder.js",
-      "size": 9480
+      "size": 12846
     },
     {
       "type": "file",
@@ -1127,17 +1127,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2784
+      "size": 2768
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24536
+      "size": 24452
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9351
+      "size": 9329
     },
     {
       "type": "file",
@@ -1152,7 +1152,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5104
+      "size": 3639
     },
     {
       "type": "file",
