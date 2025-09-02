@@ -1,15 +1,14 @@
 /* ============================================================================
- * core.entities.js — v17.0.0
+ * Datei: core.entities.js
  * Projekt: Siedler-Mini
+ * Version: v17.1.1
  * Zweck:
- *   - Zentrale Gebäudedaten (BUILDINGS) inkl. festen Tür-Definitionen (doors)
- *   - Aliase/resolveKey
- *   - Platzieren/Kollision (nur Innenfläche blockieren)
+ *   - Zentrale Gebäudedaten (BUILDINGS) inkl. Türen (doors)
+ *   - Platzieren/Kollision (Innenflächen blockieren)
  *   - Obstacles-Grid pflegen
  *   - Türwahl (konfigurierte Türen → Fallback Perimeter)
- * Export: GameCore.Entities = { BUILDINGS, resolveKey, canPlace, place, registerObstacles,
- *                               getObstacleAt, pickExitDoor, pickEntryDoor }
- * ========================================================================== */
+ *   - Debug-Helfer: getConfiguredDoorsTiles(e) für Overlay
+ * ============================================================================ */
 (function(ns){
   'use strict';
   if (!ns || !ns.state) { console.error('[entities] GameCore.env fehlt'); return; }
@@ -18,8 +17,6 @@
   var U = ns.util;
 
   // --------------------------- BUILDINGS (+ doors) ----------------------------
-  // Tür-Offsets sind relativ zur linken oberen Gebäudeecke (tx,ty),
-  // und zeigen auf eine Kachel *außerhalb* der Gebäude-Innenfläche.
   var BUILDINGS = {
     townhall:  { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png",
       doors: [ {x:1, y:2}, {x:0, y:2}, {x:-1,y:0}, {x:2,y:0} ] },
@@ -42,11 +39,10 @@
     house1:    { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png",
       doors: [ {x:1, y:2} ] },
     tree:      { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg",
-      doors: [] } // keine Tür
+      doors: [] }
   };
 
   var ALIAS = { schmied:'smith', rathaus:'townhall', holzfaeller:'lumberjack', bauernhof:'farm', wohnhaus0:'house0', wohnhaus1:'house1' };
-
   function resolveKey(key){ if (BUILDINGS[key]) return key; if (ALIAS[key]) return ALIAS[key]; return key; }
 
   // --------------------------- Obstacles-Grid --------------------------------
@@ -73,7 +69,7 @@
       var e=S.entities[i];
       for (var y=e.ty; y<e.ty+e.hTiles; y++){
         for (var x=e.tx; x<e.tx+e.wTiles; x++){
-          _setBlocked(x,y); // nur Innenfläche blockieren
+          _setBlocked(x,y);
         }
       }
     }
@@ -102,7 +98,7 @@
 
     var t = S.map.tile;
     var x = tx*t, y = ty*t;
-    var img = def._img; // wird typischerweise vom Loader befüllt
+    var img = def._img;
 
     var e = {
       id: S.nextEntityId++,
@@ -115,7 +111,8 @@
     }
     S.entities.push(e);
     registerObstacles();
-    ns.ok('[ok] Gebäude platziert:', key, 'at', tx, ty);
+    // 👉 CBLog erwartet oft EINEN String
+    ns.ok('[ok] Gebäude platziert: '+key+' at '+tx+','+ty);
     return e;
   }
 
@@ -123,7 +120,17 @@
   function _isWalk(x,y){ try{ return !getObstacleAt(x,y); }catch(_){ return true; } }
   function _isRoad(x,y){ try{ return !!S.roads.has(U.key(x,y)); }catch(_){ return false; } }
 
-  // 1) Konfigurierte Türen → beste (Straße > Nähe zur Mitte)
+  function getConfiguredDoorsTiles(e){
+    var def = BUILDINGS[e.key]; if (!def || !def.doors || !def.doors.length) return [];
+    var list=[];
+    for (var i=0;i<def.doors.length;i++){
+      var d=def.doors[i], dx=e.tx+d.x, dy=e.ty+d.y;
+      if (!_isWalk(dx,dy)) continue;
+      list.push({x:dx,y:dy});
+    }
+    return list;
+  }
+
   function pickConfiguredDoor(e){
     var def = BUILDINGS[e.key]; if (!def || !def.doors || !def.doors.length) return null;
     var cx = e.tx + (e.wTiles>>1), cy = e.ty + (e.hTiles>>1);
@@ -138,7 +145,6 @@
     return {x:cand[0].x, y:cand[0].y};
   }
 
-  // 2) Fallback: Perimeter (Ring um das Gebäude)
   function pickDoorFallbackPerimeter(e){
     var w=e.wTiles|0, h=e.hTiles|0, cand=[];
     for (var y=e.ty-1; y<=e.ty+h; y++){
@@ -169,9 +175,10 @@
     registerObstacles: registerObstacles,
     getObstacleAt: getObstacleAt,
     pickExitDoor: pickExitDoor,
-    pickEntryDoor: pickEntryDoor
+    pickEntryDoor: pickEntryDoor,
+    getConfiguredDoorsTiles: getConfiguredDoorsTiles
   };
 
-  ns.ok('[entities] Modul geladen (v17.0.0)');
+  ns.ok('[entities] Modul geladen (v17.1.1)');
 
 })(window.GameCore = window.GameCore || {});
