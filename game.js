@@ -829,3 +829,150 @@
   window.addEventListener('cb:request-repaint', function(){ /* Overlay loop läuft permanent */ });
 
 })();
+/* ============================================================================
+ * game.js Add-on — v16.5.3
+ * Zweck:
+ *   - PathFinder.init() einmalig nach Map-Load sicherstellen (Lazy/Poll)
+ *   - Inspector-Events verarbeiten:
+ *       • cb:toggle-path-overlay  → Flag setzen
+ *       • cb:add-resources        → Game.addResources(type, amount) (Fallback)
+ *   - Overlay-Canvas über #game anlegen und PF-Overlay zeichnen
+ *   - Fallback-Hooks Game.getMapSize / Game.getTileSize, falls nicht definiert
+ * ========================================================================== */
+(function(){
+  'use strict';
+  var MOD='[game.addon]';
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){} }
+
+  // ---- Fallback-Hooks (nur setzen, wenn fehlen) -----------------------------
+  window.Game = window.Game || {};
+  if (typeof Game.getMapSize!=='function'){
+    Game.getMapSize = function(){
+      try {
+        var m = window.currentMap;
+        if (m && m.width && m.height) return { w:m.width|0, h:m.height|0 };
+      } catch(_){}
+      return { w:0, h:0 };
+    };
+  }
+  if (typeof Game.getTileSize!=='function'){
+    Game.getTileSize = function(){
+      try { return (window.currentMap && (currentMap.tile|0)) || 64; } catch(_){ return 64; }
+    };
+  }
+
+  // ---- PF init (einmalig) sobald Map-Größe vorliegt -------------------------
+  var pfReady=false;
+  function tryPFInit(){
+    if (pfReady) return;
+    try{
+      if (!window.PathFinder || !PathFinder.init) return;
+      var s = Game.getMapSize(); if (!s || !s.w || !s.h) return;
+      PathFinder.init(Game.getMapSize);
+      try{ if (Game.getObstacleAt && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt); }catch(_){}
+      try{ if (Game.getRoadSet && PathFinder.setRoadMask) PathFinder.setRoadMask(Game.getRoadSet()); }catch(_){}
+      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (addon)');
+    }catch(e){ warn('[PF] init Fehler (addon): '+(e&&e.message)); }
+  }
+  var pfTimer = setInterval(function(){ if (pfReady) return clearInterval(pfTimer); tryPFInit(); }, 200);
+
+  // ---- Inspector → Toggle Path Overlay --------------------------------------
+  window.addEventListener('cb:toggle-path-overlay', function(e){
+    var enabled = !!(e && e.detail && e.detail.enabled);
+    window.DEBUG_PATH_OVERLAY = enabled;
+    ok(MOD+' overlay='+(enabled?'AN':'AUS'));
+  });
+
+  // ---- Inspector → Ressourcen hinzufügen (Fallback) -------------------------
+  if (typeof Game.addResources!=='function'){
+    Game.resources = Game.resources || { wood:0, stone:0, food:0, gold:0 };
+    Game.addResources = function(type, amount){
+      var t = String(type||'').toLowerCase(); var n=(amount|0)||0;
+      if (!t || !n) return false;
+      if (!Object.prototype.hasOwnProperty.call(Game.resources, t)) Game.resources[t]=0;
+      Game.resources[t]+=n;
+      ok('[res] +'+n+' '+t+' (store='+Game.resources[t]+')');
+      // TODO: UI-Refresh einhängen, wenn deine Anzeige da ist
+      return true;
+    };
+    ok(MOD+' Game.addResources bereit (fallback)');
+  }
+
+  // ---- PF Overlay-Zeichnung: eigenes Canvas über #game -----------------------
+  var overlayCanvas = null, overlayCtx = null;
+  function ensureOverlayCanvas(){
+    if (overlayCanvas && overlayCtx) return;
+    var base = document.getElementById('game') || document.querySelector('canvas');
+    if (!base) return;
+    overlayCanvas = document.getElementById('pf-overlay');
+    if (!overlayCanvas){
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.id = 'pf-overlay';
+      overlayCanvas.style.position = 'absolute';
+      overlayCanvas.style.left = base.offsetLeft+'px';
+      overlayCanvas.style.top = base.offsetTop+'px';
+      overlayCanvas.style.pointerEvents = 'none';
+      overlayCanvas.style.zIndex = (parseInt(getComputedStyle(base).zIndex||'0',10)+1).toString();
+      (base.parentElement || document.body).appendChild(overlayCanvas);
+    }
+    overlayCtx = overlayCanvas.getContext('2d');
+    syncOverlaySize();
+    window.addEventListener('resize', syncOverlaySize);
+    window.addEventListener('orientationchange', syncOverlaySize);
+  }
+
+  function syncOverlaySize(){
+    var base = document.getElementById('game') || document.querySelector('canvas');
+    if (!base || !overlayCanvas) return;
+    var rect = base.getBoundingClientRect();
+    overlayCanvas.width  = Math.max(1, Math.floor(rect.width));
+    overlayCanvas.height = Math.max(1, Math.floor(rect.height));
+    overlayCanvas.style.left = Math.floor(rect.left + window.scrollX) + 'px';
+    overlayCanvas.style.top  = Math.floor(rect.top  + window.scrollY) + 'px';
+    overlayCanvas.style.width  = overlayCanvas.width + 'px';
+    overlayCanvas.style.height  = overlayCanvas.height + 'px';
+  }
+
+  function getCameraTiles(){
+    var tile = Game.getTileSize ? (Game.getTileSize()|0) : 64;
+    var cam = { x:0, y:0, zoom:1 };
+    try {
+      if (Game.getCamera && typeof Game.getCamera==='function'){
+        var c = Game.getCamera();
+        if (c && typeof c.x==='number') cam = { x:c.x, y:c.y, zoom:(typeof c.zoom==='number'? c.zoom : 1) };
+      } else if (Game.getCameraPixels && typeof Game.getCameraPixels==='function'){
+        var cp = Game.getCameraPixels();
+        if (cp && typeof cp.x==='number') cam = { x:(cp.x/tile), y:(cp.y/tile), zoom:(typeof cp.zoom==='number'? cp.zoom : 1) };
+      }
+    }catch(_){}
+    return { cam:cam, tile:tile };
+  }
+
+  function clearOverlay(){
+    if (!overlayCtx || !overlayCanvas) return;
+    overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height);
+  }
+
+  var rafId = 0;
+  function loop(){
+    rafId = window.requestAnimationFrame(loop);
+    if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
+    ensureOverlayCanvas(); if (!overlayCtx) return;
+    syncOverlaySize();
+    var camInfo = getCameraTiles();
+    try{
+      clearOverlay();
+      if (window.PathFinder && PathFinder.drawOverlay){
+        PathFinder.drawOverlay(overlayCtx, camInfo.cam);
+      }
+    }catch(_){}
+  }
+  if ('requestAnimationFrame' in window){
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('cb:request-repaint', function(){ /* Overlay loop läuft permanent */ });
+
+})();
