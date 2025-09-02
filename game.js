@@ -1,25 +1,27 @@
 // ============================================================================
-// game.js — v16.5.5 (ES5)  [ROOT-VERSION]
+// game.js — v16.5.6 (ES5)  [ROOT]
 // Projekt: Siedler-Mini
 // Inhalt:
 //   • Engine/Renderer (Map, Camera, Input)
-//   • Gebäude-Placement, Obstacles (nur Innenfläche blockiert – kein Puffer),
-//     Produktion mit Carrier-Glue (mit Tür-/Exit-Kacheln)
+//   • Gebäude-Placement, Obstacles (nur Innenfläche blockiert – kein Puffer)
+//   • Produktion mit Carrier-Glue (Tür-/Exit-Kacheln)
 //   • PUBLIC API: Game.getTileSize(), Game.getCamera(), Game.getRoadSet(),
 //                  Game.getObstacleAt(), Game.setTool(...),
 //                  Game.tileToWorld(), Game.worldToTile()
-//   • Add-ons (integriert):
-//       - Sicheres PathFinder.init() nach Map-Load (Poll → einmalig)
-//       - Inspector-Events: cb:toggle-path-overlay / cb:add-resources / cb:pf-heat-reset
-//       - Separates Overlay-Canvas (#pf-overlay) mit eigenem Loop (Debug)
+//   • Add-ons:
+//       - Sicheres PathFinder.init() (RoadMask + ObstacleProvider)
+//       - Inspector-Events: cb:toggle-path-overlay / cb:pf-heat-reset
+//       - Separates Overlay-Canvas (#pf-overlay)
 //       - Fallback Game.addResources(type, amount)
-// Hinweise:
-//   • Pfad-Overlay-Schalter/Settings liegen im Inspector (empfohlen).
+//
+// Änderungen in v16.5.6:
+//   • Game.setTool akzeptiert jetzt sowohl Strings ("farm") als auch Objekte ({key:"farm"})
+//   • Logs bei Tool-Wechsel verbessert
 // ============================================================================
 (function(){
   'use strict';
 
-  var VERSION = 'v16.5.5';
+  var VERSION = 'v16.5.6';
 
   // --- logging helpers -------------------------------------------------------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -60,7 +62,7 @@
   // tool state ----------------------------------------------------------------
   var tool = { mode:null, key:null }; // mode: 'build'|'road'|'path'|'bulldozer'
 
-  // assets buildings definition (Tilesize relativ zur Map-Tile) ---------------
+  // assets buildings definition ----------------------------------------------
   var BUILDINGS = {
     townhall:  { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png" },
     hq:        { wTiles:2, hTiles:2, img:"assets/tex/building/wood/hq_wood.PNG" },
@@ -107,9 +109,7 @@
 
   function canPlace(key, tx, ty){
     var def = BUILDINGS[key = resolveKey(key)]; if (!def || !currentMap) return false;
-    // bounds
     if (tx<0 || ty<0 || tx+def.wTiles>currentMap.width || ty+def.hTiles>currentMap.height) return false;
-    // collision with other entities
     var t = currentMap.tile, r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
     for (var i=0;i<entities.length;i++){
       var e=entities[i];
@@ -119,7 +119,7 @@
     return true;
   }
 
-  // NUR Innenfläche blockieren (kein „+1“-Puffer, damit Tür-Kacheln frei bleiben)
+  // NUR Innenfläche blockieren (kein „+1“-Puffer, Tür-Kacheln frei) -----------
   function registerObstaclesFromEntities(){
     if (!currentMap) return;
     if (!obstacles || obstW!==currentMap.width || obstH!==currentMap.height){
@@ -153,10 +153,51 @@
       e.prod = { type:def.prod.type, rate:def.prod.rate, cap:def.prod.cap, keep:def.prod.keep };
     }
     entities.push(e);
-    registerObstaclesFromEntities(); // -> Obstacles aktualisieren
+    registerObstaclesFromEntities();
     ok("[ok] Gebäude platziert:", key, "at", tx, ty);
     return true;
   }
+
+  // ---------------- Tür-/Exit-Kacheln (für Carrier-Start/Ziel) ---------------
+  // Bevorzugt Straßen, sonst begehbare Randkacheln am Gebäude.
+  function pickExitTileForBuilding(e){
+    var cand = [];
+    var w = e.wTiles|0, h=e.hTiles|0;
+
+    // Ring direkt um das Gebäude
+    for (var y=e.ty-1; y<=e.ty+h; y++){
+      for (var x=e.tx-1; x<=e.tx+w; x++){
+        var inside = (x>=e.tx && x<e.tx+w && y>=e.ty && y<e.ty+h);
+        if (inside) continue;
+        var onHorizontal = (y===e.ty-1 || y===e.ty+h);
+        var onVertical   = (x===e.tx-1 || x===e.tx+w);
+        if (!(onHorizontal || onVertical)) continue;
+
+        if (!Game.getObstacleAt(x,y)){
+          var road = Game.getRoadSet && Game.getRoadSet().has(x+','+y) ? 1 : 0;
+          var d = Math.abs(x-(e.tx+(w>>1))) + Math.abs(y-(e.ty+(h>>1)));
+          cand.push({x:x,y:y,road:road,d:d});
+        }
+      }
+    }
+    if (cand.length){
+      cand.sort(function(a,b){ if (b.road!==a.road) return b.road-a.road; return a.d-b.d; });
+      return {x:cand[0].x, y:cand[0].y};
+    }
+    // Fallback: kleiner Umkreis
+    var best=null, bestD=1e9;
+    for (var yy=e.ty-2; yy<=e.ty+h+1; yy++){
+      for (var xx=e.tx-2; xx<=e.tx+w+1; xx++){
+        if (!inb(xx,yy)) continue;
+        if (!Game.getObstacleAt(xx,yy)){
+          var d=Math.abs(xx-(e.tx+(w>>1)))+Math.abs(yy-(e.ty+(h>>1)));
+          if (d<bestD){bestD=d; best={x:xx,y:yy};}
+        }
+      }
+    }
+    return best;
+  }
+  function pickEntryTileForDrop(e){ return pickExitTileForBuilding(e); }
 
   // --- draw map/entities -----------------------------------------------------
   function drawMap(){
@@ -218,7 +259,7 @@
     try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
   }
 
-  // fit canvas / clamp camera -------------------------------------------------
+  // fit / zoom / input --------------------------------------------------------
   function clampCam(){
     var size = mapPx();
     var maxX = Math.max(0, size.w - viewW/cam.zoom);
@@ -235,8 +276,6 @@
     if (ctx.setTransform) ctx.setTransform(DPR,0,0,DPR,0,0);
     viewW=w; viewH=h; clampCam(); drawMap();
   }
-
-  // zoom helper ---------------------------------------------------------------
   function zoomAt(f, cx, cy){
     var preX = cam.x + cx / cam.zoom;
     var preY = cam.y + cy / cam.zoom;
@@ -247,8 +286,6 @@
     cam.y += (preY - postY);
     clampCam(); drawMap();
   }
-
-  // input ---------------------------------------------------------------------
   function bindInput(){
     var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
 
@@ -312,45 +349,24 @@
     });
   }
 
-  // ---------------- Tür-/Exit-Kacheln (für Carrier-Start/Ziel) ---------------
-  // Bevorzugt Straßen, sonst begehbare Randkacheln am Gebäude.
-  function pickExitTileForBuilding(e){
-    var cand = [];
-    var w = e.wTiles|0, h=e.hTiles|0;
-
-    for (var y=e.ty-1; y<=e.ty+h; y++){
-      for (var x=e.tx-1; x<=e.tx+w; x++){
-        var isInside = (x>=e.tx && x<e.tx+w && y>=e.ty && y<e.ty+h);
-        if (isInside) continue;
-        var onHorizontal = (y===e.ty-1 || y===e.ty+h);
-        var onVertical   = (x===e.tx-1 || x===e.tx+w);
-        if (!(onHorizontal || onVertical)) continue;
-        if (!Game.getObstacleAt(x,y)){
-          var key = x+','+y;
-          var road = Game.getRoadSet && Game.getRoadSet().has(key);
-          var distCenter = Math.abs(x - (e.tx + (w>>1))) + Math.abs(y - (e.ty + (h>>1)));
-          cand.push({x:x,y:y, road: road?1:0, d:distCenter});
-        }
+  // ---------------- Tool-API (Fix: String- und Objekt-Payload) ---------------
+  Game.setTool = function(mode, payload){
+    if (mode === 'build'){
+      tool.mode = 'build';
+      if (typeof payload === 'string'){
+        tool.key = resolveKey(payload);
+      } else if (payload && typeof payload.key === 'string'){
+        tool.key = resolveKey(payload.key);
+      } else {
+        tool.key = null;
       }
+      ok('[build] Tool gesetzt:', tool.key || '(none)');
+    } else {
+      tool.mode = mode;
+      tool.key = null;
+      if (mode===null){ ok('[ok] Tool zurückgesetzt'); }
     }
-    if (cand.length){
-      cand.sort(function(a,b){ if (b.road!==a.road) return b.road - a.road; return a.d - b.d; });
-      return {x:cand[0].x, y:cand[0].y};
-    }
-    // Fallback: 2er Radius
-    var best=null, bestD=1e9;
-    for (var yy=e.ty-2; yy<=e.ty+h+1; yy++){
-      for (var xx=e.tx-2; xx<=e.tx+w+1; xx++){
-        if (!inb(xx,yy)) continue;
-        if (!Game.getObstacleAt(xx,yy)){
-          var d=Math.abs(xx-(e.tx+(w>>1)))+Math.abs(yy-(e.ty+(h>>1)));
-          if (d<bestD){bestD=d; best={x:xx,y:yy};}
-        }
-      }
-    }
-    return best;
-  }
-  function pickEntryTileForDrop(e){ return pickExitTileForBuilding(e); }
+  };
 
   // --- Produktion / Überschuss / Carrier-Glue --------------------------------
   var lastTS = performance.now();
@@ -359,12 +375,14 @@
     var dt = Math.min(0.1, (now - lastTS)/1000); // clamp dt
     lastTS = now;
 
-    tickProduction(dt);               // Produktion
+    tickProduction(dt);
     try{ if (window.Carriers && Carriers.tick) Carriers.tick(dt); }catch(_){}
-    drawMap();
 
+    drawMap();
     requestAnimationFrame(tick);
   }
+
+  function pickEntryTileForDrop(e){ return pickExitTileForBuilding(e); }
 
   function tickProduction(dt){
     for (var i=0;i<entities.length;i++){
@@ -406,7 +424,6 @@
         var dst = dstDoor || dstCenter;
 
         if (dst){
-          // simple throttle
           e._sendAcc = (e._sendAcc||0) + dt;
           if (e._sendAcc > 1.0){
             e._sendAcc = 0;
@@ -442,6 +459,10 @@
       var d = Math.abs(cx-sx) + Math.abs(cy-sy);
       if (d < bestD){ bestD=d; best={x:cx,y:cy}; }
     }
+    if (!best){
+      var th = getFirstEntity('townhall');
+      if (th) best = { x: th.tx+Math.floor(th.wTiles/2), y: th.ty+Math.floor(th.hTiles/2) };
+    }
     return best;
   }
 
@@ -468,7 +489,6 @@
       function start(){
         ok("GameLoader.start "+mapUrl);
         loadJSON(mapUrl).then(function(map){
-          // map normalisieren
           function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
           var ms = map.mapSize || map.size || null;
           var width  = pickNum(map.width, map.w,  ms && ms.w,  ms && ms.width)  || 16;
@@ -481,11 +501,9 @@
           };
           ok("Map geladen: "+width+"×"+height+" · Tile "+tile);
 
-          // Obstacles init
           allocObstacles(width,height);
           clearObstacles();
 
-          // Assets für Gebäude vorbereiten
           var preload = [];
           for (var k in BUILDINGS) if (BUILDINGS.hasOwnProperty(k)){
             (function(key){
@@ -494,7 +512,6 @@
             })(k);
           }
 
-          // Tileset/Atlas
           var TILESET_PNG  = './assets/tiles/tileset.terrain.png';
           var TILESET_JSON = './assets/tiles/tileset.terrain.json';
 
@@ -504,12 +521,10 @@
           })
           .catch(function(e){ atlas=null; tilesetImg=null; warn("Atlas/Textures nicht geladen: "+(e&&e.message?e.message:e)); })
           .then(function(){
-            // Rathaus auto-spawn in Kartenmitte (sofern noch nicht vorhanden)
             var cx = Math.floor(width/2), cy = Math.floor(height/2);
             if (!getFirstEntity('townhall')){
               if (canPlace('townhall', cx-1, cy-1)) placeBuilding('townhall', cx-1, cy-1);
             }
-            // Kamera mittig aufs Rathaus
             var center = tileToWorld(cx, cy);
             cam.zoom = 1;
             cam.x = clamp(center.x - viewW/2, 0, Math.max(0, mapPx().w - viewW));
@@ -527,7 +542,7 @@
     });
   };
 
-  // helpers for obstacles when bulldozing or placing/removing roads -----------
+  // roads changed -------------------------------------------------------------
   Game.notifyRoadChanged = function(tx,ty,isRoad){
     var k = tx+','+ty;
     if (isRoad) roadSet.add(k); else roadSet.delete(k);
@@ -536,13 +551,11 @@
 
   // --- boot ------------------------------------------------------------------
   try{ initEngine(); }catch(e){ err('Engine-Init Fehler: '+e.message); }
-
-  // expose current map & version ----------------------------------------------
   GL.version = VERSION;
   Game.currentMap = currentMap;
 
   // ===========================================================================
-  //  ADD-ONS: PF-Init + Inspector-Events + separates Overlay-Canvas
+  //  PF-Init + Inspector-Events + separates Overlay-Canvas
   // ===========================================================================
   if (typeof Game.getMapSize!=='function'){
     Game.getMapSize = function(){
@@ -561,7 +574,7 @@
       PathFinder.init(Game.getMapSize);
       try{ if (Game.getObstacleAt && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt); }catch(_){}
       try{ if (Game.getRoadSet && PathFinder.setRoadMask) PathFinder.setRoadMask(Game.getRoadSet()); }catch(_){}
-      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (v16.5.5)');
+      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (v'+VERSION+')');
     }catch(e){ warn('[PF] init Fehler (monolith): '+(e&&e.message)); }
   }
   var pfTimer = setInterval(function(){ if (pfReady) return clearInterval(pfTimer); tryPFInit(); }, 200);
@@ -636,7 +649,11 @@
     if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
     ensureOverlayCanvas(); if (!overlayCtx) return;
     syncOverlaySize();
-    try{ if (window.PathFinder && PathFinder.drawOverlay) PathFinder.drawOverlay(overlayCtx, Game.getCamera()); }catch(_){}
+    try{
+      if (window.PathFinder && PathFinder.drawOverlay){
+        PathFinder.drawOverlay(overlayCtx, { x:(cam.x/currentMap.tile), y:(cam.y/currentMap.tile), zoom:cam.zoom });
+      }
+    }catch(_){}
   }
   if ('requestAnimationFrame' in window){ if (rafId) cancelAnimationFrame(rafId); rafId = requestAnimationFrame(overlayLoop); }
   window.addEventListener('cb:request-repaint', function(){ /* Overlay loop tickt ohnehin */ });
