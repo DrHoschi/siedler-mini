@@ -1,14 +1,15 @@
 // ============================================================================
-// game.js — v16.5.3-monolith (ES5)
+// game.js — v16.5.4-monolith (ES5)
 // Projekt: Siedler-Mini
 // Inhalt:
 //   • Engine/Renderer (Map, Camera, Input)
 //   • Gebäude-Placement, Obstacles (+1 Tile Puffer), Produktion, Carriers-Glue
 //   • PUBLIC API: Game.getTileSize(), Game.getCamera(), Game.getRoadSet(),
-//                  Game.getObstacleAt(), Game.setTool(...)
+//                  Game.getObstacleAt(), Game.setTool(...),
+//                  Game.tileToWorld(), Game.worldToTile()
 //   • Add-on (integriert):
 //       - Sicheres PathFinder.init() nach Map-Load (Poll → einmalig)
-//       - Inspector-Events: cb:toggle-path-overlay / cb:add-resources
+//       - Inspector-Events: cb:toggle-path-overlay / cb:add-resources / cb:pf-heat-reset
 //       - Separates Overlay-Canvas (#pf-overlay) mit eigenem Loop (Debug)
 //       - Fallback Game.addResources(type, amount)
 // Hinweise:
@@ -17,7 +18,7 @@
 (function(){
   'use strict';
 
-  var VERSION = 'v16.5.3-monolith';
+  var VERSION = 'v16.5.4-monolith';
 
   // --- logging helpers -------------------------------------------------------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -86,6 +87,10 @@
   // coords --------------------------------------------------------------------
   function worldToTile(px,py){ var t=currentMap.tile; return { x: Math.floor(px/t), y: Math.floor(py/t) }; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
+
+  // >>> öffentlich machen (für Carriers etc.)
+  Game.worldToTile = function(px,py){ return worldToTile(px,py); };
+  Game.tileToWorld = function(tx,ty){ return tileToWorld(tx,ty); };
 
   function rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
 
@@ -218,9 +223,7 @@
     // Carrier layer
     try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
 
-    // (Optional) INLINE-DRAW der PF-Overlay-Grafik:
-    // Wenn du KEIN separates Overlay-Canvas möchtest, kannst du diese Guard aktiv lassen.
-    // Standardmäßig nutzen wir aber das separate Overlay-Canvas (siehe Add-on unten).
+    // Optional: Inline-Overlay (Standard = separates Canvas)
     /*
     if (window.DEBUG_PATH_OVERLAY && window.PathFinder && PathFinder.drawOverlay) {
       PathFinder.drawOverlay(ctx, { x:(cam.x/currentMap.tile), y:(cam.y/currentMap.tile), zoom:cam.zoom });
@@ -541,6 +544,18 @@
     ok('[game.monolith] overlay='+(enabled?'AN':'AUS'));
   });
 
+  // Inspector → Heatmap zurücksetzen -----------------------------------------
+  window.addEventListener('cb:pf-heat-reset', function(){
+    try{
+      if (window.PathFinder && typeof PathFinder.resetHeat==='function'){
+        PathFinder.resetHeat();
+        ok('[PF] Heatmap reset (via event).');
+      } else {
+        warn('[PF] resetHeat() nicht verfügbar.');
+      }
+    }catch(_){}
+  });
+
   // Inspector → Ressourcen hinzufügen (Fallback) ------------------------------
   if (typeof Game.addResources!=='function'){
     Game.resources = Game.resources || { wood:0, stone:0, food:0, gold:0 };
@@ -550,7 +565,6 @@
       if (!Object.prototype.hasOwnProperty.call(Game.resources, t)) Game.resources[t]=0;
       Game.resources[t]+=n;
       ok('[res] +'+n+' '+t+' (store='+Game.resources[t]+')');
-      // TODO: UI-Refresh einhängen, sobald verfügbar
       return true;
     };
     ok('[game.monolith] Game.addResources bereit (fallback)');
