@@ -1,5 +1,5 @@
 // ============================================================================
-// game.js — v16.5.4-monolith (ES5)
+// game.js — v16.5.4-monolith (ES5)  [ROOT-VERSION]
 // Projekt: Siedler-Mini
 // Inhalt:
 //   • Engine/Renderer (Map, Camera, Input)
@@ -515,7 +515,7 @@
   if (typeof Game.getMapSize!=='function'){
     Game.getMapSize = function(){
       try {
-        var m = window.currentMap;
+        var m = window.currentMap || currentMap;
         if (m && m.width && m.height) return { w:m.width|0, h:m.height|0 };
       } catch(_){}
       return { w:0, h:0 };
