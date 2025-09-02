@@ -1,68 +1,49 @@
 /* ============================================================================
- * core.env.js — v0.1.0
- * Projekt: Siedler-Mini
+ * Datei: assets/core/core.env.js
+ * Version: v1.0.0
  * Zweck:
  *   - Gemeinsamer Namespace (window.GameCore)
- *   - Logging-Wrapper (CBLog-freundlich)
- *   - Globaler State: map, cam, entities, obstacles, roads, atlas, tilesetImg
- *   - Utility-Funktionen (Indexierung, Bounds, Events)
- * Design:
- *   - ES5 + IIFE, keine externen Abhängigkeiten
- *   - Bewusst „schlank“ gehalten, damit andere Module locker darauf aufbauen
+ *   - Logging-Helfer (ok/warn/err) → nutzt CBLog falls vorhanden
+ *   - Gemeinsamer State (map, camera, entities, roads etc.)
+ *   - Kleine Utilities, die andere Module gefahrlos nutzen können
  * ========================================================================== */
-(function (ns) {
+(function(ns){
   'use strict';
 
-  // ----------------------------------------------------------
-  // Logging (sanft; fällt auf console.* zurück)
-  // ----------------------------------------------------------
-  function ok()  { try { (window.CBLog?.ok   || console.log  ).apply(console, arguments); } catch(_){} }
-  function warn(){ try { (window.CBLog?.warn || console.warn ).apply(console, arguments); } catch(_){} }
-  function err() { try { (window.CBLog?.err  || console.error).apply(console, arguments); } catch(_){} }
+  // --------------------------------------------------------------------------
+  // Logging-Helfer (fallen sanft auf console zurück)
+  // --------------------------------------------------------------------------
+  function ok(){ (window.CBLog?.ok || console.log).apply(console, arguments); }
+  function warn(){ (window.CBLog?.warn || console.warn).apply(console, arguments); }
+  function err(){ (window.CBLog?.err || console.error).apply(console, arguments); }
 
-  // ----------------------------------------------------------
-  // Event-Helpers
-  // ----------------------------------------------------------
-  function emit(name, detail){
-    try { window.dispatchEvent(new CustomEvent(name, { detail: detail || {} })); } catch(_){}
-  }
-
-  // ----------------------------------------------------------
-  // Globaler State (wird von Modulen gemeinsam verwendet)
-  // ----------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // Gemeinsamer State
+  //   - map: { width, height, tile, layers, ... } (nach Map-Load gesetzt)
+  //   - cam: Kamera in Pixelkoordinaten (x,y) + zoom
+  //   - entities: Liste aller Gebäudeobjekte
+  //   - roads: Set("x,y") mit Straßenkacheln (optional)
+  //   - atlas / tilesetImg: Terrain-Atlas (falls vorhanden)
+  // --------------------------------------------------------------------------
   var state = {
-    // Karte & Kamera
-    map: null, // {width,height,tile,layers?}
+    map: null,
     cam: { x:0, y:0, zoom:1, minZ:0.5, maxZ:3 },
-
-    // Entities & Blocking
-    entities: [], // Array<entity>
-    obstacles: null, // Uint8Array[w*h] (1 = blockiert)
-    obstW: 0, obstH: 0,
-
-    // Straßen als Set("x,y")
+    entities: [],
     roads: new Set(),
-
-    // Rendering-Assets (optional)
     atlas: null,
     tilesetImg: null
   };
 
-  // ----------------------------------------------------------
-  // Utilities (Tile-Grid)
-  // ----------------------------------------------------------
-  function idx(x,y,w){ return y*w + x; }
-  function inb(x,y,w,h){ return x>=0 && y>=0 && x<w && y<h; }
+  // --------------------------------------------------------------------------
+  // Utilities
+  // --------------------------------------------------------------------------
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
-  // ----------------------------------------------------------
-  // Namespace exportieren
-  // ----------------------------------------------------------
-  ns.ok = ok; ns.warn = warn; ns.err = err;
-  ns.emit = emit;
+  // Public-Exports
+  ns.ok   = ok;
+  ns.warn = warn;
+  ns.err  = err;
   ns.state = state;
-  ns.u = { idx: idx, inb: inb };
-  ns.VERSION_ENV = 'v0.1.0';
-
-  ok('[core.env] bereit (%s)', ns.VERSION_ENV);
+  ns.util = { clamp: clamp };
 
 })(window.GameCore = window.GameCore || {});
