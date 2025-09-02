@@ -340,7 +340,6 @@
   var pollDeadline = 0;
   var observer = null;
 
-  // --------- Panel bauen und anhängen ----------------------------------------
   function buildPanel(root){
     if (!root || panelAttached) return;
 
@@ -357,7 +356,7 @@
     title.style.margin='0 0 8px';
     panel.appendChild(title);
 
-    // Toggle: Pfad-Overlay
+    // Toggle
     var row=document.createElement('div');
     row.style.display='flex'; row.style.alignItems='center';
     row.style.gap='8px'; row.style.margin='6px 0 8px';
@@ -389,8 +388,12 @@
 
     var action=document.createElement('div'); action.style.display='flex'; action.style.alignItems='center'; action.style.gap='8px';
     var btn=document.createElement('button'); btn.textContent='Ressourcen hinzufügen';
-    btn.style.padding='6px 10px'; btn.style.background='#2b6cb0'; btn.style.border='1px solid '#2a4365';
-    btn.style.color='#fff'; btn.style.borderRadius='4px'; btn.style.cursor='pointer';
+    btn.style.padding='6px 10px';
+    btn.style.background='#2b6cb0';
+    btn.style.border='1px solid #2a4365';   // ← FIX
+    btn.style.color='#fff';
+    btn.style.borderRadius='4px';
+    btn.style.cursor='pointer';
     var status=document.createElement('div'); status.id='res-status'; status.style.flex='1'; status.style.minHeight='1.2em';
     btn.addEventListener('click', function(){
       var type=String(inpType.value||'').trim(); var amount=Math.max(1, parseInt(inpAmt.value||'0',10)||0);
@@ -398,8 +401,8 @@
       window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}}));
       var okDirect=false;
       try{ if(window.Game && typeof Game.addResources==='function'){ Game.addResources(type,amount); okDirect=true; } }catch(_){}
-      if(okDirect){ status.textContent=`+${amount} ${type}`; status.style.color='#68d391'; ok(MOD+` add-res OK: +${amount} ${type}`); }
-      else { status.textContent=`Event gesendet: +${amount} ${type} (Game.addResources nicht gefunden)`; status.style.color='#63b3ed'; warn(MOD+' add-res: Event gesendet, direkte API nicht verfügbar'); }
+      if(okDirect){ status.textContent='+'+amount+' '+type; status.style.color='#68d391'; ok(MOD+' add-res OK: +'+amount+' '+type); }
+      else { status.textContent='Event gesendet: +'+amount+' '+type+' (Game.addResources nicht gefunden)'; status.style.color='#63b3ed'; warn(MOD+' add-res: Event gesendet, direkte API nicht verfügbar'); }
     });
     action.appendChild(btn); action.appendChild(status);
     panel.appendChild(action);
@@ -407,12 +410,8 @@
     root.appendChild(panel);
     panelAttached = true;
     ok(MOD+' angehängt (v16.5.5)');
-
-    // Wenn der Inspector später neu aufgebaut wird, dürfen wir erneut anhängen
-    // → wir beobachten weiterhin das DOM (observer bleibt aktiv).
   }
 
-  // --------- Root-Finder: robust (Observer + Poll) ---------------------------
   function tryAttach(){
     var root = document.querySelector('#inspector');
     if (root && !panelAttached) buildPanel(root);
@@ -436,9 +435,8 @@
           for (var j=0;j<list.length;j++){
             var n = list[j];
             if (n && n.nodeType===1){
-              if (n.id==='inspector' || n.querySelector?.('#inspector')){
+              if (n.id==='inspector' || (n.querySelector && n.querySelector('#inspector'))){
                 tryAttach();
-                if (panelAttached){ /* weiter beobachten, falls Inspector recycelt wird */ }
               }
             }
           }
@@ -448,22 +446,11 @@
     }catch(_){}
   }
 
-  // --------- Hooks: auf Spielstart & potentielle UI-Events hören -------------
   window.addEventListener('cb:game-started', function(){
-    // Ab jetzt wissen wir: der Button kann den Inspector erzeugen -> wir horchen & pollen
-    startObserver();
-    startPolling(250, 60000);
-    tryAttach();
+    startObserver(); startPolling(250, 60000); tryAttach();
   });
-
-  // Optionaler Hook: falls euer Inspector beim Öffnen ein Event feuert
   window.addEventListener('cb:inspector-open', function(){
-    startObserver();
-    startPolling(250, 60000);
-    tryAttach();
+    startObserver(); startPolling(250, 60000); tryAttach();
   });
-
-  // Falls Spielseite ohne Events → trotzdem nach kurzer Zeit mal probieren
-  // (schadet nicht und läuft nur kurz)
   setTimeout(function(){ startObserver(); startPolling(250, 10000); tryAttach(); }, 1500);
 })();
