@@ -1,5 +1,5 @@
 /* ================================================================================================
-   Siedler‑Mini V14.7‑hf2 — core/actor.js
+   Siedler-Mini V14.7-hf2 — core/actor.js
    Zweck: Minimale Actor-Klasse + Rendering-Helfer auf Basis des Carry-Attach-Systems.
    Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Exports
    ================================================================================================ */
