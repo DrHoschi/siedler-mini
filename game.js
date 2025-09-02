@@ -1,13 +1,14 @@
 // ============================================================================
-// game.js — v16.5.4-monolith (ES5)  [ROOT-VERSION]
+// game.js — v16.5.5 (ES5)  [ROOT-VERSION]
 // Projekt: Siedler-Mini
 // Inhalt:
 //   • Engine/Renderer (Map, Camera, Input)
-//   • Gebäude-Placement, Obstacles (+1 Tile Puffer), Produktion, Carriers-Glue
+//   • Gebäude-Placement, Obstacles (nur Innenfläche blockiert – kein Puffer),
+//     Produktion mit Carrier-Glue (mit Tür-/Exit-Kacheln)
 //   • PUBLIC API: Game.getTileSize(), Game.getCamera(), Game.getRoadSet(),
 //                  Game.getObstacleAt(), Game.setTool(...),
 //                  Game.tileToWorld(), Game.worldToTile()
-//   • Add-on (integriert):
+//   • Add-ons (integriert):
 //       - Sicheres PathFinder.init() nach Map-Load (Poll → einmalig)
 //       - Inspector-Events: cb:toggle-path-overlay / cb:add-resources / cb:pf-heat-reset
 //       - Separates Overlay-Canvas (#pf-overlay) mit eigenem Loop (Debug)
@@ -18,7 +19,7 @@
 (function(){
   'use strict';
 
-  var VERSION = 'v16.5.4-monolith';
+  var VERSION = 'v16.5.5';
 
   // --- logging helpers -------------------------------------------------------
   function ok(){ (window.CBLog && CBLog.ok ? CBLog.ok : console.log).apply(console, arguments); }
@@ -44,13 +45,13 @@
   var entities = [];
   var nextEntityId = 1;
 
-  // obstacles grid (tile-blocker) inkl. 1-Tile-Puffer um Gebäude --------------
+  // obstacles grid (tile-blocker) — NUR Innenfläche blockieren ----------------
   var obstW=0, obstH=0, obstacles=null;  // Uint8Array
   function allocObstacles(w,h){ obstW=w|0; obstH=h|0; obstacles = new Uint8Array(obstW*obstH); }
   function obIdx(x,y){ return y*obstW + x; }
   function inb(x,y){ return x>=0 && y>=0 && x<obstW && y<obstH; }
   function setBlocked(x,y){ if(inb(x,y)) obstacles[obIdx(x,y)] = 1; }
-  function clearObstacles(){ if(!obstacles) return; for(var i=0;i<obstacles.length;i++) obstacles[i]=0; }
+  function clearObstacles(){ if(!obstacles) return; obstacles.fill(0); }
 
   // road/path data (Straßenmasken) -------------------------------------------
   var roadSet = new Set(); // optional: kann leer sein
@@ -87,8 +88,6 @@
   // coords --------------------------------------------------------------------
   function worldToTile(px,py){ var t=currentMap.tile; return { x: Math.floor(px/t), y: Math.floor(py/t) }; }
   function tileToWorld(tx,ty){ var t=currentMap.tile; return { x: tx*t, y: ty*t }; }
-
-  // >>> öffentlich machen (für Carriers etc.)
   Game.worldToTile = function(px,py){ return worldToTile(px,py); };
   Game.tileToWorld = function(tx,ty){ return tileToWorld(tx,ty); };
 
@@ -97,8 +96,6 @@
   // --- PUBLIC API (needed by PF/Carriers/UI) ---------------------------------
   Game.getTileSize = function(){ return currentMap ? currentMap.tile : 64; };
   Game.getCamera   = function(){ return cam; };
-
-  // *** Blocker-Provider inkl. 1 Tile Puffer um Gebäude ***
   Game.getObstacleAt = function(tx,ty){
     if (!obstacles) return false;
     if (!inb(tx,ty)) return true;
@@ -122,6 +119,7 @@
     return true;
   }
 
+  // NUR Innenfläche blockieren (kein „+1“-Puffer, damit Tür-Kacheln frei bleiben)
   function registerObstaclesFromEntities(){
     if (!currentMap) return;
     if (!obstacles || obstW!==currentMap.width || obstH!==currentMap.height){
@@ -129,13 +127,10 @@
     } else {
       clearObstacles();
     }
-    // Gebäude + 1 Tile Puffer markieren
     for (var i=0;i<entities.length;i++){
       var e=entities[i];
-      var px = Math.max(0, e.tx-1), py = Math.max(0, e.ty-1);
-      var pw = Math.min(obstW-1, e.tx + e.wTiles), ph = Math.min(obstH-1, e.ty + e.hTiles);
-      for (var y=py; y<=ph; y++){
-        for (var x=px; x<=pw; x++){
+      for (var y=e.ty; y<e.ty+e.hTiles; y++){
+        for (var x=e.tx; x<e.tx+e.wTiles; x++){
           setBlocked(x,y);
         }
       }
@@ -154,7 +149,6 @@
       x:pos.x, y:pos.y, w:def.wTiles*t, h:def.hTiles*t,
       img:img, stock:{}, tickAcc:0
     };
-    // Produktionsprofil (optional)
     if (def.prod){
       e.prod = { type:def.prod.type, rate:def.prod.rate, cap:def.prod.cap, keep:def.prod.keep };
     }
@@ -222,13 +216,6 @@
 
     // Carrier layer
     try{ if (window.Carriers && Carriers.draw) Carriers.draw(ctx, cam); }catch(_){}
-
-    // Optional: Inline-Overlay (Standard = separates Canvas)
-    /*
-    if (window.DEBUG_PATH_OVERLAY && window.PathFinder && PathFinder.drawOverlay) {
-      PathFinder.drawOverlay(ctx, { x:(cam.x/currentMap.tile), y:(cam.y/currentMap.tile), zoom:cam.zoom });
-    }
-    */
   }
 
   // fit canvas / clamp camera -------------------------------------------------
@@ -325,12 +312,45 @@
     });
   }
 
-  // Game tool API -------------------------------------------------------------
-  Game.setTool = function(mode, payload){
-    if (mode === 'build'){ tool.mode='build'; tool.key = payload && payload.key; }
-    else { tool.mode = mode; tool.key = null; }
-    if (mode===null){ ok('[ok] Tool zurückgesetzt'); }
-  };
+  // ---------------- Tür-/Exit-Kacheln (für Carrier-Start/Ziel) ---------------
+  // Bevorzugt Straßen, sonst begehbare Randkacheln am Gebäude.
+  function pickExitTileForBuilding(e){
+    var cand = [];
+    var w = e.wTiles|0, h=e.hTiles|0;
+
+    for (var y=e.ty-1; y<=e.ty+h; y++){
+      for (var x=e.tx-1; x<=e.tx+w; x++){
+        var isInside = (x>=e.tx && x<e.tx+w && y>=e.ty && y<e.ty+h);
+        if (isInside) continue;
+        var onHorizontal = (y===e.ty-1 || y===e.ty+h);
+        var onVertical   = (x===e.tx-1 || x===e.tx+w);
+        if (!(onHorizontal || onVertical)) continue;
+        if (!Game.getObstacleAt(x,y)){
+          var key = x+','+y;
+          var road = Game.getRoadSet && Game.getRoadSet().has(key);
+          var distCenter = Math.abs(x - (e.tx + (w>>1))) + Math.abs(y - (e.ty + (h>>1)));
+          cand.push({x:x,y:y, road: road?1:0, d:distCenter});
+        }
+      }
+    }
+    if (cand.length){
+      cand.sort(function(a,b){ if (b.road!==a.road) return b.road - a.road; return a.d - b.d; });
+      return {x:cand[0].x, y:cand[0].y};
+    }
+    // Fallback: 2er Radius
+    var best=null, bestD=1e9;
+    for (var yy=e.ty-2; yy<=e.ty+h+1; yy++){
+      for (var xx=e.tx-2; xx<=e.tx+w+1; xx++){
+        if (!inb(xx,yy)) continue;
+        if (!Game.getObstacleAt(xx,yy)){
+          var d=Math.abs(xx-(e.tx+(w>>1)))+Math.abs(yy-(e.ty+(h>>1)));
+          if (d<bestD){bestD=d; best={x:xx,y:yy};}
+        }
+      }
+    }
+    return best;
+  }
+  function pickEntryTileForDrop(e){ return pickExitTileForBuilding(e); }
 
   // --- Produktion / Überschuss / Carrier-Glue --------------------------------
   var lastTS = performance.now();
@@ -339,13 +359,10 @@
     var dt = Math.min(0.1, (now - lastTS)/1000); // clamp dt
     lastTS = now;
 
-    // Produktion
-    tickProduction(dt);
-
-    // Carrier bewegen
+    tickProduction(dt);               // Produktion
     try{ if (window.Carriers && Carriers.tick) Carriers.tick(dt); }catch(_){}
-
     drawMap();
+
     requestAnimationFrame(tick);
   }
 
@@ -353,6 +370,7 @@
     for (var i=0;i<entities.length;i++){
       var e=entities[i];
       if (!e.prod) continue;
+
       // produzieren
       e.tickAcc = (e.tickAcc||0) + dt*e.prod.rate;
       if (e.tickAcc >= 1){
@@ -362,12 +380,31 @@
         var cap = e.prod.cap|0;
         if (cur < cap){ e.stock[t] = Math.min(cap, cur+add); }
       }
+
       // Überschuss versenden
       var type = e.prod.type, keep = e.prod.keep|0;
       var have = (e.stock[type]|0);
       if (have > keep){
-        var src = { x:e.tx+Math.floor(e.wTiles/2), y:e.ty+Math.floor(e.hTiles/2) };
-        var dst = findNearestDrop(src.x, src.y); // tiles
+        // Quelle: begehbare Exit-Kachel
+        var srcDoor = pickExitTileForBuilding(e) || { x:e.tx+Math.floor(e.wTiles/2), y:e.ty+Math.floor(e.hTiles/2) };
+
+        // Ziel: nächstes Depot/HQ/TH (Zentroid), dann Entry-Kachel bestimmen
+        var dstCenter = findNearestDrop(srcDoor.x, srcDoor.y);
+        var dstDoor = null;
+        if (dstCenter){
+          var targetE = null;
+          for (var ii=0; ii<entities.length; ii++){
+            var ee = entities[ii];
+            var cx = ee.tx + Math.floor(ee.wTiles/2);
+            var cy = ee.ty + Math.floor(ee.hTiles/2);
+            if (cx===dstCenter.x && cy===dstCenter.y){ targetE=ee; break; }
+          }
+          if (targetE) dstDoor = pickEntryTileForDrop(targetE);
+        }
+
+        var src = srcDoor;
+        var dst = dstDoor || dstCenter;
+
         if (dst){
           // simple throttle
           e._sendAcc = (e._sendAcc||0) + dt;
@@ -404,10 +441,6 @@
       var cy = e.ty + Math.floor(e.hTiles/2);
       var d = Math.abs(cx-sx) + Math.abs(cy-sy);
       if (d < bestD){ bestD=d; best={x:cx,y:cy}; }
-    }
-    if (!best){
-      var th = getFirstEntity('townhall');
-      if (th) best = { x: th.tx+Math.floor(th.wTiles/2), y: th.ty+Math.floor(th.hTiles/2) };
     }
     return best;
   }
@@ -509,20 +542,16 @@
   Game.currentMap = currentMap;
 
   // ===========================================================================
-  //  INTEGRIERTES ADD-ON: PF-Init + Inspector-Events + separates Overlay-Canvas
+  //  ADD-ONS: PF-Init + Inspector-Events + separates Overlay-Canvas
   // ===========================================================================
-  // Fallback-Hooks (nur setzen, wenn fehlen) ----------------------------------
   if (typeof Game.getMapSize!=='function'){
     Game.getMapSize = function(){
-      try {
-        var m = window.currentMap || currentMap;
-        if (m && m.width && m.height) return { w:m.width|0, h:m.height|0 };
-      } catch(_){}
+      try { var m = currentMap; if (m && m.width && m.height) return { w:m.width|0, h:m.height|0 }; }
+      catch(_){}
       return { w:0, h:0 };
     };
   }
 
-  // Sicheres PF-Init nach Map-Load (Poll bis Größe bekannt) -------------------
   var pfReady=false;
   function tryPFInit(){
     if (pfReady) return;
@@ -532,19 +561,17 @@
       PathFinder.init(Game.getMapSize);
       try{ if (Game.getObstacleAt && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(Game.getObstacleAt); }catch(_){}
       try{ if (Game.getRoadSet && PathFinder.setRoadMask) PathFinder.setRoadMask(Game.getRoadSet()); }catch(_){}
-      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (monolith)');
+      pfReady=true; ok('[PF] init OK '+s.w+'x'+s.h+' (v16.5.5)');
     }catch(e){ warn('[PF] init Fehler (monolith): '+(e&&e.message)); }
   }
   var pfTimer = setInterval(function(){ if (pfReady) return clearInterval(pfTimer); tryPFInit(); }, 200);
 
-  // Inspector → Toggle Path Overlay -------------------------------------------
   window.addEventListener('cb:toggle-path-overlay', function(e){
     var enabled = !!(e && e.detail && e.detail.enabled);
     window.DEBUG_PATH_OVERLAY = enabled;
-    ok('[game.monolith] overlay='+(enabled?'AN':'AUS'));
+    ok('[game] overlay='+(enabled?'AN':'AUS'));
   });
 
-  // Inspector → Heatmap zurücksetzen -----------------------------------------
   window.addEventListener('cb:pf-heat-reset', function(){
     try{
       if (window.PathFinder && typeof PathFinder.resetHeat==='function'){
@@ -556,7 +583,6 @@
     }catch(_){}
   });
 
-  // Inspector → Ressourcen hinzufügen (Fallback) ------------------------------
   if (typeof Game.addResources!=='function'){
     Game.resources = Game.resources || { wood:0, stone:0, food:0, gold:0 };
     Game.addResources = function(type, amount){
@@ -567,12 +593,11 @@
       ok('[res] +'+n+' '+t+' (store='+Game.resources[t]+')');
       return true;
     };
-    ok('[game.monolith] Game.addResources bereit (fallback)');
+    ok('[game] Game.addResources bereit (fallback)');
   }
 
   // Separates PF-Overlay auf eigenem Canvas (#pf-overlay) ---------------------
   var overlayCanvas = null, overlayCtx = null;
-
   function ensureOverlayCanvas(){
     if (overlayCanvas && overlayCtx) return;
     var base = document.getElementById('game') || document.querySelector('canvas');
@@ -593,7 +618,6 @@
     window.addEventListener('resize', syncOverlaySize);
     window.addEventListener('orientationchange', syncOverlaySize);
   }
-
   function syncOverlaySize(){
     var base = document.getElementById('game') || document.querySelector('canvas');
     if (!base || !overlayCanvas) return;
@@ -605,40 +629,16 @@
     overlayCanvas.style.width  = overlayCanvas.width + 'px';
     overlayCanvas.style.height = overlayCanvas.height + 'px';
   }
-
-  function getCameraTiles(){
-    var tile = Game.getTileSize ? (Game.getTileSize()|0) : 64;
-    var c = Game.getCamera ? Game.getCamera() : null;
-    var camTiles = (c && typeof c.x==='number')
-      ? { x:c.x, y:c.y, zoom:(typeof c.zoom==='number' ? c.zoom : 1) }
-      : { x:0, y:0, zoom:1 };
-    return { cam:camTiles, tile:tile };
-  }
-
-  function clearOverlay(){
-    if (!overlayCtx || !overlayCanvas) return;
-    overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height);
-  }
-
-  // Eigenes Overlay-Loop (leichtgewichtig) -----------------------------------
+  function clearOverlay(){ if (!overlayCtx || !overlayCanvas) return; overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height); }
   var rafId = 0;
   function overlayLoop(){
     rafId = window.requestAnimationFrame(overlayLoop);
     if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
     ensureOverlayCanvas(); if (!overlayCtx) return;
     syncOverlaySize();
-    var camInfo = getCameraTiles();
-    try{
-      clearOverlay();
-      if (window.PathFinder && PathFinder.drawOverlay){
-        PathFinder.drawOverlay(overlayCtx, camInfo.cam);
-      }
-    }catch(_){}
+    try{ if (window.PathFinder && PathFinder.drawOverlay) PathFinder.drawOverlay(overlayCtx, Game.getCamera()); }catch(_){}
   }
-  if ('requestAnimationFrame' in window){
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(overlayLoop);
-  }
+  if ('requestAnimationFrame' in window){ if (rafId) cancelAnimationFrame(rafId); rafId = requestAnimationFrame(overlayLoop); }
   window.addEventListener('cb:request-repaint', function(){ /* Overlay loop tickt ohnehin */ });
 
-})();  // <<< end monolith
+})();  // end IIFE
