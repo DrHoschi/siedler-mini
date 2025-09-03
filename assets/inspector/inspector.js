@@ -1,6 +1,8 @@
 /* ============================================================================
- * assets/inspector/inspector.js — v17.3.3
+ * assets/inspector/inspector.js — v17.4.1
  * Kombi: Core-Fenster + Logs-Tab + Tests-Tab (Pfad/Entity Toggle, Ressourcen)
+ * Robuster Auto-Build: reagiert auf cb:inspector-open/ -toggle,
+ * baut sich selbst und setzt display:block – auch wenn sehr früh getriggert.
  * ============================================================================ */
 (function () {
   'use strict';
@@ -13,13 +15,13 @@
     if(attrs) for(let k in attrs){ if(k==='text') el.textContent=attrs[k]; else el.setAttribute(k, attrs[k]); }
     if(css) for(let c in css){ el.style[c]=css[c]; } return el; }
 
-  function build(){
+  function buildCore(){
     if (built && root && tabs) return root;
     root = byId('inspector') || mk('div',{id:'inspector',role:'dialog','aria-label':'Inspector'},{
       position:'fixed',right:'12px',bottom:'80px',width:'400px',maxWidth:'90vw',maxHeight:'70vh',overflow:'auto',
-      background:'rgba(20,20,20,.94)',border:'1px solid #333',borderRadius:'8px',
-      boxShadow:'0 14px 40px rgba(0,0,0,.45)',backdropFilter:'blur(6px)',color:'#eaeaea',
-      font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',zIndex:100001,display:'none'
+      background:'rgba(20,20,20,.94)',border:'1px solid #333',borderRadius:'8px',boxShadow:'0 14px 40px rgba(0,0,0,.45)',
+      backdropFilter:'blur(6px)',color:'#eaeaea',font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
+      zIndex:100001,display:'none'
     });
     if (!root.parentNode) document.body.appendChild(root);
 
@@ -49,15 +51,15 @@
     if (!byId('inspector-tests',tabs)){
       const panel=mk('div',{id:'inspector-tests','aria-label':'Inspector Tests'},{padding:'10px',borderTop:'1px dashed #3a3a3a',background:'rgba(0,0,0,.12)',marginTop:'8px'});
       const title2=mk('div'); title2.textContent='Tests'; title2.style.fontWeight='700'; title2.style.margin='0 0 8px'; panel.appendChild(title2);
-      const mkRow=(id,text,ev)=>{ const r=mk('div',null,{display:'flex',alignItems:'center',gap:'8px',margin:'6px 0 8px'});
+      const row=(id,text,ev)=>{ const r=mk('div',null,{display:'flex',alignItems:'center',gap:'8px',margin:'6px 0 8px'});
         const c=mk('input',{type:'checkbox',id}); c.checked=!!window[id.toUpperCase().replaceAll('-','_')];
         const l=mk('label',{for:id}); l.textContent=text;
         c.addEventListener('change',()=>{ const enabled=!!c.checked; window[id.toUpperCase().replaceAll('-','_')]=enabled;
           try{ window.dispatchEvent(new CustomEvent(ev,{detail:{enabled}})); }catch(_){}
           ok('[inspector] '+id+' '+(enabled?'AN':'AUS')); try{ requestAnimationFrame(()=>window.dispatchEvent(new Event('cb:request-repaint')));}catch(_){}
         }); r.appendChild(c); r.appendChild(l); return r; };
-      panel.appendChild(mkRow('dbg-path-overlay',   'Pfad-Overlay anzeigen',   'cb:toggle-path-overlay'));
-      panel.appendChild(mkRow('dbg-entity-overlay', 'Entity-Overlay anzeigen', 'cb:toggle-entity-overlay'));
+      panel.appendChild(row('dbg-path-overlay',   'Pfad-Overlay anzeigen',   'cb:toggle-path-overlay'));
+      panel.appendChild(row('dbg-entity-overlay', 'Entity-Overlay anzeigen', 'cb:toggle-entity-overlay'));
 
       const grid=mk('div',null,{display:'grid',gridTemplateColumns:'1fr 110px',gap:'6px',margin:'6px 0'});
       const t=mk('input',{type:'text',id:'res-type',placeholder:'Typ (wood, stone, …)',autocomplete:'off'},{padding:'6px 8px',background:'#181818',border:'1px solid #333',color:'#eee'}); t.value='wood';
@@ -77,16 +79,21 @@
       tabs.appendChild(panel);
     }
 
-    built=true; ok(MOD+' gebaut (v17.3.3)');
+    built=true; ok(MOD+' gebaut (v17.4.1)');
     return root;
   }
 
-  function toggle(show){ build(); root.style.display = show?'block':'none'; }
+  function toggle(show){ buildCore(); root.style.display = show?'block':'none'; }
 
-  window.addEventListener('cb:inspector-open', ()=>{ build(); toggle(true); });
-  window.addEventListener('cb:inspector-close', ()=>{ build(); toggle(false); });
-  window.addEventListener('cb:game-started', ()=>{ build(); });
+  // reagiert auf beide Ereignisse
+  window.addEventListener('cb:inspector-open',  ()=>{ buildCore(); toggle(true);  });
+  window.addEventListener('cb:inspector-toggle', e=>{ buildCore(); toggle(!!(e&&e.detail&&e.detail.open)); });
+  window.addEventListener('cb:inspector-close', ()=>{ buildCore(); toggle(false); });
+  window.addEventListener('cb:game-started',    ()=>{ buildCore(); });
 
+  // globale API
   window.Inspector = { toggle: toggle };
-  build(); toggle(false);
+
+  // vorbereitet, aber geschlossen
+  buildCore(); toggle(false);
 })();
