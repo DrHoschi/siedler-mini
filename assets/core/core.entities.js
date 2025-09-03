@@ -1,184 +1,119 @@
 /* ============================================================================
- * Datei: core.entities.js
- * Projekt: Siedler-Mini
- * Version: v17.1.1
- * Zweck:
- *   - Zentrale Gebäudedaten (BUILDINGS) inkl. Türen (doors)
- *   - Platzieren/Kollision (Innenflächen blockieren)
- *   - Obstacles-Grid pflegen
- *   - Türwahl (konfigurierte Türen → Fallback Perimeter)
- *   - Debug-Helfer: getConfiguredDoorsTiles(e) für Overlay
- * ============================================================================ */
-(function(ns){
+ * core.entities.js — Entity-Verwaltung (leichtgewichtig)
+ * Version: v17.5.0
+ * Projekt: Neue Siedler
+ *
+ * Aufgaben
+ *  - Zentrale, minimale Entity-Liste (id, type, x, y)
+ *  - Platzierung über cb:place-building (von core.input/ui-build)
+ *  - Kollision rudimentär: einfache Tile-Belegung (1x1-Bauten)
+ *  - Repaint anstoßen (cb:request-repaint)
+ *
+ * Events (listen)
+ *  - cb:place-building {type,x,y}
+ *
+ * API (global)
+ *  - window.CoreEntities.list()              → Array der Entities
+ *  - window.CoreEntities.findAt(x,y)         → Entity | null
+ *  - window.CoreEntities.create(type,x,y)    → Entity | null
+ *  - window.CoreEntities.removeAt(x,y)       → boolean
+ *
+ * Notizen
+ *  - Rendering übernimmt core.render.js; hier nur Datenhaltung + Events.
+ *  - Für größere Gebäude später Footprints/Tür-Offsets ergänzen.
+ * ========================================================================== */
+(function(){
   'use strict';
-  if (!ns || !ns.state) { console.error('[entities] GameCore.env fehlt'); return; }
 
-  var S = ns.state;
-  var U = ns.util;
+  var VER = 'v17.5.0';
+  var MOD = '[entities]';
 
-  // --------------------------- BUILDINGS (+ doors) ----------------------------
-  var BUILDINGS = {
-    townhall:  { wTiles:2, hTiles:2, img:"assets/tex/building/Holz_Rathaus_1.png",
-      doors: [ {x:1, y:2}, {x:0, y:2}, {x:-1,y:0}, {x:2,y:0} ] },
-    hq:        { wTiles:2, hTiles:2, img:"assets/tex/building/wood/hq_wood.PNG",
-      doors: [ {x:1, y:2}, {x:0, y:2} ] },
-    depot:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/depot_wood.png",
-      doors: [ {x:-1, y:1}, {x:2, y:1} ] },
-    lumberjack:{ wTiles:2, hTiles:2, img:"assets/tex/building/wood/lumberjack_wood.PNG",
-      prod:{ type:'wood', rate:0.35, cap:20, keep:6 },
-      doors: [ {x:1, y:2} ] },
-    farm:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/farm_wood.png",
-      prod:{ type:'grain', rate:0.30, cap:20, keep:6 },
-      doors: [ {x:1, y:-1}, {x:0, y:-1} ] },
-    mill:      { wTiles:2, hTiles:2, img:"assets/tex/building/wood/windmuehle_wood.PNG",
-      doors: [ {x:-1, y:1}, {x:2, y:1}, {x:1, y:-1}, {x:1, y:2} ] },
-    smith:     { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Schmied_wood0.png",
-      doors: [ {x:2, y:1} ] },
-    house0:    { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood0_ug0.png",
-      doors: [ {x:1, y:2} ] },
-    house1:    { wTiles:2, hTiles:2, img:"assets/tex/building/wood/Wohnhaus_wood1_ug0.png",
-      doors: [ {x:1, y:2} ] },
-    tree:      { wTiles:1, hTiles:1, img:"assets/tex/terrain/topdown_tree_needle0_ug0.jpeg",
-      doors: [] }
+  // ---- Logging --------------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){ console.warn(m);} }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){ console.error(m);} }
+
+  // ---- Core-State -----------------------------------------------------------
+  var _nextId = 1;
+  var _list = [];              // {id,type,x,y}
+  var _grid = new Map();       // key "x,y" → id
+
+  function key(x,y){ return x+','+y; }
+
+  // ---- API ------------------------------------------------------------------
+  var CoreEntities = (window.CoreEntities = window.CoreEntities || {});
+
+  CoreEntities.list = function(){ return _list.slice(0); };
+
+  CoreEntities.findAt = function(x,y){
+    var id = _grid.get(key(x|0,y|0));
+    if (!id) return null;
+    for (var i=0;i<_list.length;i++){
+      if (_list[i].id === id) return _list[i];
+    }
+    return null;
   };
 
-  var ALIAS = { schmied:'smith', rathaus:'townhall', holzfaeller:'lumberjack', bauernhof:'farm', wohnhaus0:'house0', wohnhaus1:'house1' };
-  function resolveKey(key){ if (BUILDINGS[key]) return key; if (ALIAS[key]) return ALIAS[key]; return key; }
-
-  // --------------------------- Obstacles-Grid --------------------------------
-  function _obIdx(x,y){ return y*S.obstW + x; }
-  function _ensureObstacles(){
-    if (!S.map) return;
-    if (!S.obstacles || S.obstW!==S.map.width || S.obstH!==S.map.height){
-      S.obstW = S.map.width|0; S.obstH = S.map.height|0;
-      S.obstacles = new Uint8Array(S.obstW * S.obstH);
-    }
-  }
-  function _clearObstacles(){ if (S.obstacles) S.obstacles.fill(0); }
-  function _setBlocked(x,y){ if (U.inb(x,y,S.obstW,S.obstH)) S.obstacles[_obIdx(x,y)] = 1; }
-
-  function getObstacleAt(tx,ty){
-    if (!S.obstacles) return false;
-    if (!U.inb(tx,ty,S.obstW,S.obstH)) return true;
-    return S.obstacles[_obIdx(tx,ty)] === 1;
-  }
-
-  function registerObstacles(){
-    _ensureObstacles(); _clearObstacles();
-    for (var i=0;i<S.entities.length;i++){
-      var e=S.entities[i];
-      for (var y=e.ty; y<e.ty+e.hTiles; y++){
-        for (var x=e.tx; x<e.tx+e.wTiles; x++){
-          _setBlocked(x,y);
-        }
+  CoreEntities.create = function(type, x, y){
+    try{
+      x|=0; y|=0;
+      if (!type){ warn(MOD+' create: kein Typ'); return null; }
+      var k = key(x,y);
+      if (_grid.has(k)){
+        warn(MOD+' create: Feld belegt @'+k);
+        return null;
       }
+      var e = { id:_nextId++, type:String(type), x:x, y:y };
+      _list.push(e);
+      _grid.set(k, e.id);
+      ok('[ok] Gebäude platziert: '+e.type+' at '+x+' '+y);
+      // Repaint anstoßen
+      try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch(_){}
+      return e;
+    }catch(e){
+      err(MOD+' create Fehler: '+(e&&e.message));
+      return null;
     }
-  }
-
-  // --------------------------- Platzieren / Kollision ------------------------
-  function _rectsOverlap(a,b){ return !(a.x+a.w<=b.x || b.x+b.w<=a.x || a.y+a.h<=b.y || b.y+b.h<=a.y); }
-
-  function canPlace(key, tx, ty){
-    if (!S.map) return false;
-    var def = BUILDINGS[key = resolveKey(key)]; if (!def) return false;
-    if (tx<0 || ty<0 || tx+def.wTiles>S.map.width || ty+def.hTiles>S.map.height) return false;
-
-    var t = S.map.tile, r = { x:tx*t, y:ty*t, w:def.wTiles*t, h:def.hTiles*t };
-    for (var i=0;i<S.entities.length;i++){
-      var e=S.entities[i], er = { x:e.x, y:e.y, w:e.w, h:e.h };
-      if (_rectsOverlap(r,er)) return false;
-    }
-    return true;
-  }
-
-  function place(key, tx, ty){
-    if (!S.map) return false;
-    key = resolveKey(key);
-    var def = BUILDINGS[key]; if (!def) return false;
-
-    var t = S.map.tile;
-    var x = tx*t, y = ty*t;
-    var img = def._img;
-
-    var e = {
-      id: S.nextEntityId++,
-      key:key, tx:tx, ty:ty, wTiles:def.wTiles|0, hTiles:def.hTiles|0,
-      x:x, y:y, w:(def.wTiles|0)*t, h:(def.hTiles|0)*t,
-      img:img, stock:{}, tickAcc:0
-    };
-    if (def.prod){
-      e.prod = { type:def.prod.type, rate:def.prod.rate, cap:def.prod.cap, keep:def.prod.keep };
-    }
-    S.entities.push(e);
-    registerObstacles();
-    // 👉 CBLog erwartet oft EINEN String
-    ns.ok('[ok] Gebäude platziert: '+key+' at '+tx+','+ty);
-    return e;
-  }
-
-  // --------------------------- Türwahl ---------------------------------------
-  function _isWalk(x,y){ try{ return !getObstacleAt(x,y); }catch(_){ return true; } }
-  function _isRoad(x,y){ try{ return !!S.roads.has(U.key(x,y)); }catch(_){ return false; } }
-
-  function getConfiguredDoorsTiles(e){
-    var def = BUILDINGS[e.key]; if (!def || !def.doors || !def.doors.length) return [];
-    var list=[];
-    for (var i=0;i<def.doors.length;i++){
-      var d=def.doors[i], dx=e.tx+d.x, dy=e.ty+d.y;
-      if (!_isWalk(dx,dy)) continue;
-      list.push({x:dx,y:dy});
-    }
-    return list;
-  }
-
-  function pickConfiguredDoor(e){
-    var def = BUILDINGS[e.key]; if (!def || !def.doors || !def.doors.length) return null;
-    var cx = e.tx + (e.wTiles>>1), cy = e.ty + (e.hTiles>>1);
-    var cand = [];
-    for (var i=0;i<def.doors.length;i++){
-      var d=def.doors[i], dx=e.tx+d.x, dy=e.ty+d.y;
-      if (!_isWalk(dx,dy)) continue;
-      cand.push({x:dx,y:dy, road:_isRoad(dx,dy)?1:0, d:Math.abs(dx-cx)+Math.abs(dy-cy)});
-    }
-    if (!cand.length) return null;
-    cand.sort(function(a,b){ if (b.road!==a.road) return b.road-a.road; return a.d-b.d; });
-    return {x:cand[0].x, y:cand[0].y};
-  }
-
-  function pickDoorFallbackPerimeter(e){
-    var w=e.wTiles|0, h=e.hTiles|0, cand=[];
-    for (var y=e.ty-1; y<=e.ty+h; y++){
-      for (var x=e.tx-1; x<=e.tx+w; x++){
-        var inside=(x>=e.tx && x<e.tx+w && y>=e.ty && y<e.ty+h);
-        if (inside) continue;
-        var onEdge=(y===e.ty-1||y===e.ty+h||x===e.tx-1||x===e.tx+w);
-        if (!onEdge) continue;
-        if (!_isWalk(x,y)) continue;
-        var cx=e.tx+(w>>1), cy=e.ty+(h>>1);
-        cand.push({x:x,y:y, road:_isRoad(x,y)?1:0, d:Math.abs(x-cx)+Math.abs(y-cy)});
-      }
-    }
-    if (!cand.length) return null;
-    cand.sort(function(a,b){ if (b.road!==a.road) return b.road-a.road; return a.d-b.d; });
-    return {x:cand[0].x, y:cand[0].y};
-  }
-
-  function pickExitDoor(e){ return pickConfiguredDoor(e) || pickDoorFallbackPerimeter(e); }
-  function pickEntryDoor(e){ return pickConfiguredDoor(e) || pickDoorFallbackPerimeter(e); }
-
-  // --------------------------- Export ----------------------------------------
-  ns.Entities = {
-    BUILDINGS: BUILDINGS,
-    resolveKey: resolveKey,
-    canPlace: canPlace,
-    place: place,
-    registerObstacles: registerObstacles,
-    getObstacleAt: getObstacleAt,
-    pickExitDoor: pickExitDoor,
-    pickEntryDoor: pickEntryDoor,
-    getConfiguredDoorsTiles: getConfiguredDoorsTiles
   };
 
-  ns.ok('[entities] Modul geladen (v17.1.1)');
+  CoreEntities.removeAt = function(x,y){
+    x|=0; y|=0;
+    var k = key(x,y);
+    var id = _grid.get(k);
+    if (!id) return false;
+    _grid.delete(k);
+    for (var i=0;i<_list.length;i++){
+      if (_list[i].id === id){
+        _list.splice(i,1);
+        ok(MOD+' remove id='+id+' @'+k);
+        try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch(_){}
+        return true;
+      }
+    }
+    return false;
+  };
 
-})(window.GameCore = window.GameCore || {});
+  // ---- Event-Brücken --------------------------------------------------------
+  window.addEventListener('cb:place-building', function(ev){
+    try{
+      var d = ev?.detail||{};
+      var type = d.type||'';
+      var x = d.x|0, y = d.y|0;
+
+      // einfache Kollision: 1x1-Platz belegt?
+      if (CoreEntities.findAt(x,y)){
+        warn(MOD+' Platz belegt @'+x+','+y);
+        return;
+      }
+      var e = CoreEntities.create(type,x,y);
+      if (!e) return;
+
+      // Optional: hier Footprint/Tür-Handling / Produktion etc. anhängen.
+
+    }catch(e){
+      err(MOD+' cb:place-building Fehler: '+(e&&e.message));
+    }
+  });
+
+  ok(MOD+' Modul geladen ('+VER+')');
+})();
