@@ -73,7 +73,6 @@ Gesamt Dateien: 227
  - manifest.webmanifest
  - package.json
  - README.md
- - render.js
  - storage.js
  - sw.js
  - textures.js

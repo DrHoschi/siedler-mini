@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-02T20:56:44.134Z",
+  "createdAt": "2025-09-03T08:02:01.240Z",
   "root": ".",
   "count": 257,
   "entries": [
@@ -189,12 +189,12 @@
     {
       "type": "file",
       "path": "assets/core/core.render.js",
-      "size": 7422
+      "size": 4904
     },
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
-      "size": 7042
+      "size": 1627
     },
     {
       "type": "dir",
@@ -236,7 +236,12 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 7527
+      "size": 7584
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.tests.js",
+      "size": 6524
     },
     {
       "type": "dir",
@@ -824,7 +829,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 5989
+      "size": 3929
     },
     {
       "type": "file",
@@ -834,7 +839,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 1307
+      "size": 793
     },
     {
       "type": "file",
@@ -1141,7 +1146,7 @@
     {
       "type": "file",
       "path": "boot.compat.js",
-      "size": 1464
+      "size": 1134
     },
     {
       "type": "file",
@@ -1176,12 +1181,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 24454
+      "size": 25300
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9331
+      "size": 9631
     },
     {
       "type": "file",
@@ -1191,12 +1196,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 2090
+      "size": 1095
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 4061
+      "size": 3984
     },
     {
       "type": "file",
@@ -1222,11 +1227,6 @@
       "type": "file",
       "path": "README.md",
       "size": 1129
-    },
-    {
-      "type": "file",
-      "path": "render.js",
-      "size": 3977
     },
     {
       "type": "file",
