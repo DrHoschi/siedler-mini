@@ -1,31 +1,92 @@
 /*
-  assets/ui/ui-start.css — v17.7.0
+  assets/ui/ui-start.css — v17.7.2
   Zweck:
-    - Zeigt auf der Startseite ein Vollbild-Hintergrundbild
-    - Keine Interaktion blockieren (reine Optik)
-    - Wird von ui-start.js via <body class="has-start-bg"> gesetzt/entfernt
+    - Visuelles Startmenü vor Spielstart
+    - Vollbild-Hintergrundbild
+    - Zentrales Panel mit Animation
+    - Start-UI wird per ui-start.js gesteuert
+  CODE_STYLE:
+    - Nur Namespaces (.ui-start-…)
+    - Keine globalen Resets
 */
 
-/* Body-Base */
-html, body { height:100%; }
-
-/* Startseiten-Hintergrund rein per CSS-Pseudo */
-body.has-start-bg::before{
-  content:"";
-  position:fixed;
-  inset:0;
+/* Hintergrund (wenn body.has-start-bg aktiv) */
+body.has-start-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
   background:
-    radial-gradient(ellipse at 50% 20%, rgba(0,0,0,.25), rgba(0,0,0,.65)),
+    linear-gradient(to bottom, rgba(0,0,0,.3), rgba(0,0,0,.7)),
     url("../ui/start-bg.jpeg") center/cover no-repeat;
-  z-index:0;              /* unter Canvas & UI */
-  pointer-events:none;    /* blockiert nichts */
+  z-index: 0;
+  pointer-events: none;
+  animation: fadeInBg 0.8s ease forwards;
 }
 
-/* Canvas liegt drüber */
-#game{ position:relative; z-index:1; }
+/* sanftes Fade-In fürs Bild */
+@keyframes fadeInBg {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
-/* FABs bleiben ganz oben */
-#btn-build, #btn-inspector{
-  position:fixed;
-  z-index:2147483647 !important;
+/* Panel-Wrapper (zentriert) */
+.ui-start-panel {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 28px;
+  background: rgba(20,20,20,.88);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0,0,0,.5);
+  color: #eee;
+  text-align: center;
+  max-width: 90vw;
+  animation: fadeInPanel 0.6s ease forwards;
+}
+
+/* Panel-Animation */
+@keyframes fadeInPanel {
+  from { opacity: 0; transform: translate(-50%, -42%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+/* Titel */
+.ui-start-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+/* Start-Button */
+.ui-start-button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid #3a3a3a;
+  background: #1d4ed8;
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.ui-start-button:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+.ui-start-button:active {
+  background: #1e40af;
+  transform: translateY(0);
+}
+
+/* Hinweiszeile */
+.ui-start-hint {
+  font-size: 12px;
+  opacity: .75;
 }
