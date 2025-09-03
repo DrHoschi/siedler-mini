@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
  * Projekt: Siedler-Mini
- * Version: v18.1.1
+ * Version: v18.2.0
  *
  * Garantie:
  *  - Stellt IMMER window.GameUI.toggleInspector bereit.
@@ -10,13 +10,26 @@
  *
  * Tabs:
  *  - Logs (funktional)
- *  - Tests / Ressourcen / Pfade (Platzhalter, folgen)
+ *  - Tests (Platzhalter)
+ *  - Ressourcen (Platzhalter)
+ *  - Pfade (JETZT FUNKTIONAL: Toggles, Redraw, Random-Tests, Kennzahlen)
+ *
+ * Events (dispatch):
+ *  - cb:inspector-open / cb:inspector-close
+ *  - cb:log-refresh
+ *  - cb:toggle-path-overlay      {detail:{enabled}}
+ *  - cb:toggle-heatmap           {detail:{enabled}}
+ *  - cb:toggle-collision         {detail:{enabled}}
+ *  - cb:toggle-trample           {detail:{enabled}}
+ *  - cb:toggle-doors             {detail:{enabled}}
+ *  - cb:path-test                {detail:{mode, count}}
+ *  - cb:request-repaint
  * ========================================================================== */
 (function(){
   'use strict';
 
   var MOD='[inspector.core]';
-  var VER='v18.1.1';
+  var VER='v18.2.0';
 
   // ---------- sanfte Logger --------------------------------------------------
   function L_ok(m){ try{ (window.CBLog?.ok||console.log)(MOD+' '+m);}catch(_){console.log(MOD+' '+m);} }
@@ -37,7 +50,6 @@
       document.body.appendChild(el);
       var x=document.getElementById('inspector-fallback-close');
       x.onclick=function(){ el.style.display='none'; };
-      // einfache Loganzeige
       try{
         var box=document.getElementById('inspector-fallback-logs');
         box.textContent=(window.CBLog? '[Log aktiviert]':'[Lokales Log]')+' — '+new Date().toLocaleTimeString();
@@ -65,7 +77,7 @@
     };
   })();
 
-  // tappe CBLog.push, wenn vorhanden
+  // CBLog-Hook (nicht-invasiv)
   try{
     if (window.CBLog && typeof window.CBLog.push==='function'){
       var __origPush = window.CBLog.push.bind(window.CBLog);
@@ -78,6 +90,9 @@
 
   // ---------- DOM & State ----------------------------------------------------
   var ov=null, panel=null, tabsBar=null, body=null, isOpen=false, active='logs';
+  var pfUi = { // Referenzen für Pfad-Tab-Anzeigen
+    fps:null, active:null, avglen:null, blocked:null
+  };
 
   // ---------- Styles ---------------------------------------------------------
   var CSS = `
@@ -94,11 +109,19 @@
 #cb-inspector .content{ padding:12px; }
 .cb-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .cb-col{ display:flex; flex-direction:column; gap:8px; }
+.cb-grid{ display:grid; gap:8px; }
+.cb-grid-2{ grid-template-columns: 1fr 1fr; }
+.cb-grid-3{ grid-template-columns: repeat(3, 1fr); }
 .cb-group{ border:1px solid #2a3139; border-radius:8px; padding:10px; background:#0f1317; }
 .cb-note{ font-size:12px; opacity:.7; }
 .cb-btn{ border:1px solid #3a4454; border-radius:8px; padding:6px 10px; cursor:pointer; background:#1f2937; color:#e5e7eb; }
 .cb-btn.primary{ background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
 .cb-btn.warn{ background:#9a3412; border-color:#9a3412; color:#fff; }
+.cb-switch{ display:flex; align-items:center; gap:6px; }
+.cb-switch input[type="checkbox"]{ width:18px; height:18px; }
+.cb-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.cb-table th, .cb-table td{ border-bottom:1px solid #2a2f35; padding:6px 8px; }
+.cb-table th{ text-align:left; opacity:.8; }
 .cb-loglist{ max-height:44vh; overflow:auto; border:1px solid #2a3139; border-radius:8px; }
 .cb-logitem{ display:flex; gap:8px; padding:6px 8px; border-bottom:1px solid #1b2026; align-items:flex-start; }
 .cb-logitem:last-child{ border-bottom:none; }
@@ -116,11 +139,9 @@
     document.head.appendChild(st);
   }
 
-  // ---------- Aufbau (try/catch gehärtet) -----------------------------------
+  // ---------- Aufbau (gehärtet) ---------------------------------------------
   function build(){
     injectStyle();
-
-    // bereits vorhanden?
     if (document.getElementById('cb-inspector-ov')) return true;
 
     ov=document.createElement('div');
@@ -157,12 +178,11 @@
       tabsBar.appendChild(b);
     });
 
+    var content=document.createElement('div'); content.className='content';
+    body=content;
+
     head.appendChild(title); head.appendChild(btnClose); head.appendChild(tabsBar);
-
-    body=document.createElement('div');
-    body.className='content';
-
-    panel.appendChild(head); panel.appendChild(body);
+    panel.appendChild(head); panel.appendChild(content);
     ov.appendChild(panel);
     document.body.appendChild(ov);
 
@@ -175,7 +195,7 @@
     for (var i=0;i<bs.length;i++){ bs[i].classList.toggle('active', bs[i].dataset.tab===active); }
   }
 
-  // ---------- Logs (funktionsfähig) -----------------------------------------
+  // ---------- LOGS (funktional) ---------------------------------------------
   function getHistory(){
     try{
       if (window.CBLog && Array.isArray(window.CBLog._history)) return window.CBLog._history;
@@ -191,14 +211,12 @@
   }
   function renderLogs(){
     var wrap=document.createElement('div'); wrap.className='cb-col';
-
     var actions=document.createElement('div'); actions.className='cb-row cb-group';
     var btnCopy = mkBtn('Kopieren','cb-btn');
     var btnExport = mkBtn('Exportieren','cb-btn');
     var btnRefresh = mkBtn('Aktualisieren','cb-btn');
     var stat=document.createElement('div'); stat.className='cb-note'; stat.style.marginLeft='auto';
     actions.appendChild(btnCopy); actions.appendChild(btnExport); actions.appendChild(btnRefresh); actions.appendChild(stat);
-
     var list=document.createElement('div'); list.className='cb-loglist';
 
     function apply(){
@@ -231,21 +249,136 @@
         setTimeout(()=>URL.revokeObjectURL(url), 1500); L_ok('Logs exportiert');
       }catch(e){ L_warn('Export fehlgeschlagen: '+(e&&e.message)); }
     });
-
-    // auto-refresh
     window.addEventListener('cb:log-refresh', function(){ if (active==='logs') apply(); });
     apply();
-
     wrap.appendChild(actions); wrap.appendChild(list);
     return wrap;
   }
 
-  // ---------- Platzhalter-Tabs ----------------------------------------------
-  function renderTests(){ var box=document.createElement('div'); box.className='cb-group'; box.innerHTML='<div class="cb-note">Tests-Tab wird aufgebaut …</div>'; return box; }
-  function renderResources(){ var box=document.createElement('div'); box.className='cb-group'; box.innerHTML='<div class="cb-note">Ressourcen-Tab folgt …</div>'; return box; }
-  function renderPaths(){ var box=document.createElement('div'); box.className='cb-group'; box.innerHTML='<div class="cb-note">Pfade-Tab folgt …</div>'; return box; }
+  // ---------- TESTS (Placeholder) -------------------------------------------
+  function renderTests(){
+    var box=document.createElement('div'); box.className='cb-group';
+    box.innerHTML='<div class="cb-note">Tests-Tab wird aufgebaut …</div>';
+    return box;
+  }
+
+  // ---------- RESSOURCEN (Placeholder) --------------------------------------
+  function renderResources(){
+    var box=document.createElement('div'); box.className='cb-group';
+    box.innerHTML='<div class="cb-note">Ressourcen-Tab (Lesen/Setzen) folgt …</div>';
+    return box;
+  }
+
+  // ---------- PFADE (JETZT FUNKTIONAL) --------------------------------------
+  function mkCheck(label, checked){
+    var el=document.createElement('label'); el.className='cb-switch';
+    var inp=document.createElement('input'); inp.type='checkbox'; inp.checked=!!checked;
+    var span=document.createElement('span'); span.textContent=label;
+    el.appendChild(inp); el.appendChild(span);
+    return { el:el, input:inp };
+  }
+  function setFlag(name, on){
+    try{ window[name]=!!on; }catch(_){}
+    try{ if (window.Game && typeof Game.setDebugFlag==='function') Game.setDebugFlag(name, !!on); }catch(_){}
+  }
+  function send(evt, detail){
+    try{ window.dispatchEvent(new CustomEvent(evt, {detail:detail||{}})); }catch(_){}
+  }
+
+  function renderPaths(){
+    var wrap=document.createElement('div'); wrap.className='cb-col';
+
+    // Toggles (Flags + Events)
+    var gTog=document.createElement('div'); gTog.className='cb-grid cb-grid-2 cb-group';
+    var sOverlay = mkCheck('Pfad-Overlay', !!window.DEBUG_PATH_OVERLAY);
+    var sHeat    = mkCheck('Heatmap',      !!window.DEBUG_HEATMAP);
+    var sColl    = mkCheck('Kollision',    !!window.DEBUG_COLLISION);
+    var sTramp   = mkCheck('Trampelpfade', !!window.DEBUG_TRAMPEL);
+    var sDoor    = mkCheck('Türkacheln',   !!window.DEBUG_DOORS);
+
+    [sOverlay,sHeat,sColl,sTramp,sDoor].forEach(function(s){ gTog.appendChild(s.el); });
+
+    sOverlay.input.addEventListener('change', function(){
+      var on=!!sOverlay.input.checked; setFlag('DEBUG_PATH_OVERLAY', on); send('cb:toggle-path-overlay', {enabled:on}); send('cb:request-repaint');
+      L_ok('Pfad-Overlay '+(on?'AN':'AUS'));
+    });
+    sHeat.input.addEventListener('change', function(){
+      var on=!!sHeat.input.checked; setFlag('DEBUG_HEATMAP', on); send('cb:toggle-heatmap', {enabled:on}); send('cb:request-repaint');
+      L_ok('Heatmap '+(on?'AN':'AUS'));
+    });
+    sColl.input.addEventListener('change', function(){
+      var on=!!sColl.input.checked; setFlag('DEBUG_COLLISION', on); send('cb:toggle-collision', {enabled:on}); send('cb:request-repaint');
+      L_ok('Kollision '+(on?'AN':'AUS'));
+    });
+    sTramp.input.addEventListener('change', function(){
+      var on=!!sTramp.input.checked; setFlag('DEBUG_TRAMPEL', on); send('cb:toggle-trample', {enabled:on}); send('cb:request-repaint');
+      L_ok('Trampelpfade '+(on?'AN':'AUS'));
+    });
+    sDoor.input.addEventListener('change', function(){
+      var on=!!sDoor.input.checked; setFlag('DEBUG_DOORS', on); send('cb:toggle-doors', {enabled:on}); send('cb:request-repaint');
+      L_ok('Türkacheln '+(on?'AN':'AUS'));
+    });
+
+    // Aktionen: Redraw + Pfadtests
+    var gRun=document.createElement('div'); gRun.className='cb-group';
+    var r1=document.createElement('div'); r1.className='cb-row';
+    var btnRepaint = mkBtn('Redraw', 'cb-btn');
+    var inpCount=document.createElement('input'); inpCount.type='number'; inpCount.min='1'; inpCount.value='5';
+    inpCount.style.cssText='width:80px;padding:6px 8px;border:1px solid #3a3a3a;border-radius:6px;background:#0f172a;color:#e5e7eb;';
+    var btnRand = mkBtn('Zufällige Pfade', 'cb-btn primary');
+    var btnSingle = mkBtn('Single-Test', 'cb-btn');
+
+    r1.appendChild(btnRepaint); r1.appendChild(inpCount); r1.appendChild(btnRand); r1.appendChild(btnSingle);
+    gRun.appendChild(r1);
+
+    btnRepaint.addEventListener('click', function(){
+      send('cb:request-repaint');
+      L_ok('Redraw angefordert');
+    });
+    btnRand.addEventListener('click', function(){
+      var n=Math.max(1, parseInt(inpCount.value||'1',10)||1);
+      send('cb:path-test', {mode:'random', count:n});
+      L_ok('Path-Test random x'+n);
+    });
+    btnSingle.addEventListener('click', function(){
+      send('cb:path-test', {mode:'single'});
+      L_ok('Path-Test single');
+    });
+
+    // Kennzahlen (werden von Engine/Overlay via Events aktualisiert, falls vorhanden)
+    var gInfo=document.createElement('div'); gInfo.className='cb-group';
+    var table=document.createElement('table'); table.className='cb-table';
+    table.innerHTML = '<tr><th>FPS (PF)</th><td id="pf-fps">–</td></tr>\
+<tr><th>Aktive Pfade</th><td id="pf-active">–</td></tr>\
+<tr><th>Ø Pfadlänge</th><td id="pf-avglen">–</td></tr>\
+<tr><th>Blockierte Pfade</th><td id="pf-blocked">–</td></tr>';
+    gInfo.appendChild(table);
+
+    pfUi.fps     = table.querySelector('#pf-fps');
+    pfUi.active  = table.querySelector('#pf-active');
+    pfUi.avglen  = table.querySelector('#pf-avglen');
+    pfUi.blocked = table.querySelector('#pf-blocked');
+
+    wrap.appendChild(gTog);
+    wrap.appendChild(gRun);
+    wrap.appendChild(gInfo);
+    return wrap;
+  }
+
+  // Live-Update-Hooks (freiwillig; Engine kann diese Events feuern)
+  window.addEventListener('cb:pf-stats', function(ev){
+    try{
+      var d=ev.detail||{};
+      if (pfUi.fps)     pfUi.fps.textContent = (d.fps!=null ? String(d.fps) : '–');
+      if (pfUi.active)  pfUi.active.textContent = (d.active!=null ? String(d.active) : '–');
+      if (pfUi.avglen)  pfUi.avglen.textContent = (d.avglen!=null ? String(d.avglen) : '–');
+      if (pfUi.blocked) pfUi.blocked.textContent = (d.blocked!=null ? String(d.blocked) : '–');
+    }catch(_){}
+  });
 
   // ---------- Render-Switch --------------------------------------------------
+  function mkBtn(label, cls){ var b=document.createElement('button'); b.className=cls||'cb-btn'; b.textContent=label; return b; }
+
   function render(){
     try{
       body.innerHTML='';
@@ -287,25 +420,17 @@
     setOpen(want);
   }
 
-  // ---------- Helpers --------------------------------------------------------
-  function mkBtn(label, cls){ var b=document.createElement('button'); b.className=cls||'cb-btn'; b.textContent=label; return b; }
-
   // ---------- Hotkey & API ---------------------------------------------------
   try{
     window.addEventListener('keydown', function(ev){ if (ev.key==='Escape' && isOpen) toggle(false); });
   }catch(_){}
   window.GameUI = window.GameUI || {};
-  window.GameUI.toggleInspector = toggle;           // <- WICHTIG: immer setzen
+  window.GameUI.toggleInspector = toggle;           // <- WICHTIG
   window.__InspectorFallbackToggle = fallbackToggle; // optionaler direkter Fallback
 
-  // ---------- Init robust ----------------------------------------------------
-  function safeInit(){
-    try{ build(); L_ok('bereit ('+VER+')'); }
-    catch(e){ L_err('Init-Fehler: '+(e&&e.message)); fallbackToggle(true); }
-  }
-  if (document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', safeInit, {once:true});
-  } else {
-    safeInit();
-  }
+  // ---------- Init -----------------------------------------------------------
+  function safeInit(){ try{ build(); L_ok('bereit ('+VER+')'); } catch(e){ L_err('Init-Fehler: '+(e&&e.message)); fallbackToggle(true); } }
+  if (document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', safeInit, {once:true}); }
+  else { safeInit(); }
+
 })();
