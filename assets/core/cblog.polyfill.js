@@ -1,55 +1,64 @@
 /* ============================================================================
- * cblog.polyfill.js — Minimal-Logger/Bridge für Inspector
- * Version: v1.0.0
- * API: CBLog.ok/warn/err/push(tag,msg), CBLog.dump()
- *  - Pusht auch console.* in den Ring (ohne Endlosschleifen)
- *  - Sendet Event 'cb:log-updated' bei neuen Einträgen
+ * Datei: assets/core/cblog.polyfill.js
+ * Projekt: Siedler-Mini
+ * Version: v1.1.0
+ * Zweck:
+ *   - Einheitliche Log-Sammelstelle (CBLog) bereitstellen
+ *   - Optional: console.* an CBLog spiegeln (bindConsole=true)
+ *   - Inspector-Refresh via 'cb:log-refresh'
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
-  if (window.CBLog && typeof window.CBLog.dump === 'function') return; // echter Logger vorhanden
+  var MOD='[CBLog]';
 
-  var MOD = '[CBLog]';
-  var buf = [];
-  var MAX = 1000;
-  var startedAt = new Date();
-
-  function stamp(level, tag, msg) {
-    var t = new Date();
-    var hh = String(t.getHours()).padStart(2,'0');
-    var mm = String(t.getMinutes()).padStart(2,'0');
-    var ss = String(t.getSeconds()).padStart(2,'0');
-    return `[${hh}:${mm}:${ss}] ${level} ${tag ? (tag+' ') : ''}${msg}`;
+  if (!window.CBLog){
+    window.CBLog = {};
   }
-  function push(level, tag, msg){
+  var L = window.CBLog;
+
+  // History (öffentlich lesbar für Inspector)
+  L._history = Array.isArray(L._history) ? L._history : [];
+
+  function push(level, msg){
+    var entry = {
+      ts: new Date().toISOString(),
+      level: (''+level).toLowerCase(),
+      msg: (msg==null ? '' : (typeof msg==='string' ? msg : (msg.message || JSON.stringify(msg))))
+    };
+    L._history.push(entry);
+    if (L._history.length > 3000) L._history.shift();
+    try{ window.dispatchEvent(new Event('cb:log-refresh')); }catch(_){}
+    return entry;
+  }
+
+  // Public API
+  L.push = push;
+  L.ok   = function(m){ return push('ok',   m); };
+  L.info = function(m){ return push('info', m); };
+  L.warn = function(m){ return push('warn', m); };
+  L.err  = function(m){ return push('err',  m); };
+
+  // Optional: console binding (einmalig aktivierbar)
+  if (L.bindConsole === true && !L._consoleBound){
     try{
-      var line = stamp(level, tag||'', String(msg??''));
-      buf.push(line);
-      if (buf.length > MAX) buf.splice(0, buf.length - MAX);
-      try { window.dispatchEvent(new CustomEvent('cb:log-updated')); } catch(_) {}
+      var c = window.console || {};
+      ['log','info','warn','error'].forEach(function(k){
+        var orig = c[k] ? c[k].bind(c) : function(){};
+        c[k] = function(){
+          var args = Array.prototype.slice.call(arguments);
+          // in CBLog kippen
+          if (k==='error')      push('err', args.join(' '));
+          else if (k==='warn')  push('warn', args.join(' '));
+          else if (k==='info')  push('info', args.join(' '));
+          else                  push('info', args.join(' '));
+          // original weiterhin ausgeben
+          try{ orig.apply(null, args); }catch(_){}
+        };
+      });
+      L._consoleBound = true;
     }catch(_){}
   }
 
-  window.CBLog = {
-    ok:   (m)=>push('OK', '', m),
-    warn: (m)=>push('WARN', '', m),
-    err:  (m)=>push('ERR', '', m),
-    push: (tag, m)=>push('LOG', tag||'', m||''),
-    dump: function(){ 
-      var hdr = `CBLog Polyfill aktiv seit ${startedAt.toLocaleString()}\n`;
-      return hdr + (buf.join('\n') || '(leer)');
-    }
-  };
-
-  // Console-Brücke (loops vermeiden)
-  var orig = {
-    log: console.log.bind(console),
-    warn: console.warn.bind(console),
-    error: console.error.bind(console)
-  };
-  console.log = function(){ try{ push('OK', '[console]', Array.from(arguments).join(' ')); }catch(_){} orig.log.apply(console, arguments); };
-  console.warn = function(){ try{ push('WARN', '[console]', Array.from(arguments).join(' ')); }catch(_){} orig.warn.apply(console, arguments); };
-  console.error = function(){ try{ push('ERR', '[console]', Array.from(arguments).join(' ')); }catch(_){} orig.error.apply(console, arguments); };
-
-  try { console.log(MOD+' Polyfill aktiv'); } catch(_) {}
+  // Boot-Marker
+  L.ok('Polyfill aktiv v1.1.0');
 })();
