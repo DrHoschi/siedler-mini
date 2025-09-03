@@ -1,10 +1,15 @@
 /*
-  assets/ui/ui-build.css — v16.5.2
+  assets/ui/ui-build.css — v17.6.0
   CODE_STYLE:
     - Lesbare Abschnitte
     - Keine globalen Resets, nur Namespaces
     - Mobile-first, responsive Grid
+    - Abwärtskompatibel: Legacy (#build-panel …) + neues Dock (#build-dock …)
 */
+
+/* ============================================================================
+   LEGACY: Bottom-Panel (Rückwärtskompatibilität)
+   ========================================================================== */
 
 /* Panel-Container (unten) */
 #build-panel {
@@ -145,4 +150,119 @@
 body.has-build-open #btn-build,
 body.has-build-open #btn-inspector {
   bottom: 240px; /* gleich wie in index.html */
+}
+
+
+/* ============================================================================
+   NEU: Seitliches Dock (auto-generiert von ui-build.js v17.6+)
+   ========================================================================== */
+
+#build-dock {
+  /* visuelle Details kommen großteils aus Inline-Styles (JS),
+     hier nur Ergänzungen & harte Defaults */
+  contain: layout paint;
+  overflow: auto;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Tabs-Leiste */
+#build-dock #build-tabs {
+  gap: 8px;
+}
+#build-dock #build-tabs button {
+  outline: none;
+}
+#build-dock #build-tabs button:focus-visible {
+  box-shadow: 0 0 0 2px #93c5fd, 0 0 0 4px #1d4ed8;
+}
+
+/* Items-Grid */
+#build-dock #build-items {
+  /* Fallback, falls JS-Stile fehlen */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
+  gap: 10px;
+}
+
+/* Karten (neu) – zusätzliche Zustände */
+#build-dock .build-item:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 3px;
+}
+#build-dock .build-item[disabled],
+#build-dock .build-item:disabled {
+  cursor: not-allowed !important;
+  opacity: .6;
+  filter: saturate(.6);
+}
+
+/* Kleine Badge „bald“ / „todo“ */
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: .2px;
+  background: rgba(148,163,184,.25);
+  color: #e5e7eb;
+  border: 1px solid rgba(148,163,184,.35);
+  user-select: none;
+}
+.badge.badge-ok {
+  background: rgba(34,197,94,.20);
+  border-color: rgba(34,197,94,.35);
+  color: #d1fae5;
+}
+.badge.badge-warn {
+  background: rgba(251,191,36,.20);
+  border-color: rgba(251,191,36,.35);
+  color: #fef3c7;
+}
+
+/* Deutlich sichtbarer Fokus für Tastaturnutzer auf allen Buttons */
+#build-dock button:focus-visible,
+#build-panel button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* Sanfte Scrollbars (WebKit/Blink) – optional */
+#build-dock::-webkit-scrollbar,
+#build-panel::-webkit-scrollbar {
+  width: 10px; height: 10px;
+}
+#build-dock::-webkit-scrollbar-thumb,
+#build-panel::-webkit-scrollbar-thumb {
+  background: rgba(100,116,139,.45);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+#build-dock::-webkit-scrollbar-thumb:hover,
+#build-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(148,163,184,.55);
+}
+#build-dock::-webkit-scrollbar-track,
+#build-panel::-webkit-scrollbar-track {
+  background: rgba(15,23,42,.35);
+  border-radius: 10px;
+}
+
+/* Firefox: dezente Scrollbar */
+@supports (scrollbar-width: thin) {
+  #build-dock { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.55) rgba(15,23,42,.35); }
+  #build-panel { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.55) rgba(15,23,42,.35); }
+}
+
+/* Touch: etwas größere Touch-Ziele */
+@media (hover: none) and (pointer: coarse) {
+  #build-dock #build-tabs button { padding: 10px 14px; }
+  #build-dock .build-item { padding: 12px; }
+}
+
+/* Sicherheit: Dock soll FABs nicht überdecken */
+#btn-build, #btn-inspector {
+  position: fixed;
+  z-index: 2147483647 !important;
 }
