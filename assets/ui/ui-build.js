@@ -1,212 +1,300 @@
 /* ============================================================================
- * ui-build.js — Bau-UI (gehärtet, non-blocking)
- * Version: v17.4.7
+ * ui-build.js — Tab-Dock fürs Bauen (auto aus BUILD_CATEGORIES)
+ * Version: v17.6.0
  * Projekt: Neue Siedler
  *
  * Ziele
- *  - Stabiles Öffnen/Schließen: GameUI.toggleBuild(force?)
- *  - Backdrop blockiert NUR im offenen Zustand (pointer-events)
- *  - FAB-Buttons bleiben bedienbar (hoher z-index)
- *  - Fallback-Inhalt bis Spezial-Panel wieder da ist
- *  - Saubere Events und Logs
+ *  - Tabs und Items automatisch aus window.BUILD_CATEGORIES generieren
+ *  - „todo“-Items deaktiviert (klicksicher)
+ *  - Auswahl sendet cb:build-select {type}
+ *  - Abwärtskompatibel: Fallback-Kategorien, falls BUILD_CATEGORIES fehlt
+ *  - Saubere Open/Close-Logik, keine Pointer-Blockade im Closed-State
  *
  * Events (dispatch)
- *  - cb:build-toggle {open}
- *  - cb:build-open
- *  - cb:build-close
+ *  - cb:build-open / cb:build-close
  *  - cb:build-select {type}
+ *
+ * Abhängigkeiten
+ *  - optional: window.BUILD_CATEGORIES (build.categories.js)
+ *  - CBLog (Polyfill reicht)
+ *  - index.html: <link rel="stylesheet" href="assets/ui/ui-build.css?...">
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
 
-  var VER = 'v17.4.7';
+  var VER = 'v17.6.0';
   var MOD = '[ui-build]';
 
-  // ---- Logging --------------------------------------------------------------
-  function ok(){ try{ (window.CBLog?.ok||console.log).apply(console, arguments); }catch(_){ console.log.apply(console, arguments);} }
-  function warn(){ try{ (window.CBLog?.warn||console.warn).apply(console, arguments); }catch(_){ console.warn.apply(console, arguments);} }
-  function err(){ try{ (window.CBLog?.err||console.error).apply(console, arguments); }catch(_){ console.error.apply(console, arguments);} }
+  // --- Logging ---------------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){ console.log(m); } }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){ console.warn(m); } }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m); }catch(_){ console.error(m); } }
 
-  // ---- Helpers --------------------------------------------------------------
-  function byId(id){ return document.getElementById(id); }
-  function on(el, ev, fn, opt){ if (el) try{ el.addEventListener(ev, fn, opt||false);}catch(_){} }
-  function off(el, ev, fn, opt){ if (el) try{ el.removeEventListener(ev, fn, opt||false);}catch(_){} }
+  // --- DOM-Refs / State ------------------------------------------------------
+  var root = null;       // Dock-Container
+  var tabs = null;       // Tabs-Leiste
+  var pane = null;       // Items-Panel
+  var _open = false;
+  var _built = false;
+  var _activeCat = null;
 
-  // ---- State ----------------------------------------------------------------
-  var root=null, panel=null, content=null, closeBtn=null;
-  var escBound=false;
-
-  // ---- FAB-Schutz -----------------------------------------------------------
-  function hardenFABs(){
-    try{
-      var css='z-index:2147483647 !important; pointer-events:auto !important;';
-      var b1=byId('btn-build'), b2=byId('btn-inspector');
-      if (b1) b1.style.cssText=(b1.getAttribute('style')||'')+';'+css;
-      if (b2) b2.style.cssText=(b2.getAttribute('style')||'')+';'+css;
-    }catch(_){}
+  // --- Fallback-Kategorien (abwärtskompatibel) -------------------------------
+  function getFallbackCategories(){
+    return [
+      { id:'general', title:'Allg.', items:[
+        { id:'hq',     label:'Hauptquartier', icon:(window.BUILD_ASSETS?.building?.hq)||null },
+        { id:'depot',  label:'Depot',         icon:(window.BUILD_ASSETS?.building?.depot)||null },
+      ]},
+      { id:'production_food', title:'Produktion', items:[
+        { id:'farm',        label:'Farm',        icon:(window.BUILD_ASSETS?.building?.farm)||null },
+        { id:'lumberjack',  label:'Holzfäller',  icon:(window.BUILD_ASSETS?.building?.lumberjack)||null },
+      ]},
+      { id:'housing', title:'Wohnen', items:[
+        { id:'haeuser1', label:'Haus I',  icon:(window.BUILD_ASSETS?.building?.haeuser1)||null },
+        { id:'haeuser2', label:'Haus II', icon:(window.BUILD_ASSETS?.building?.haeuser2)||null },
+      ]},
+    ];
   }
 
-  // ---- Aufbau ---------------------------------------------------------------
+  function getCategories(){
+    try{
+      var cats = window.BUILD_CATEGORIES;
+      if (!Array.isArray(cats) || !cats.length) return getFallbackCategories();
+      return cats;
+    }catch(_){
+      return getFallbackCategories();
+    }
+  }
+
+  // --- UI-Bau ----------------------------------------------------------------
   function ensureRoot(){
     if (root) return root;
 
-    // Backdrop
-    root=document.createElement('div');
-    root.id='ui-build';
-    root.setAttribute('role','dialog');
-    Object.assign(root.style,{
-      position:'fixed', inset:'0', zIndex:'2147483600',
-      display:'none', opacity:'0',
-      background:'rgba(0,0,0,0.25)',
-      transition:'opacity .18s ease',
-      pointerEvents:'none' // geschlossen: niemals blockieren
-    });
-
-    // Panel
-    panel=document.createElement('div');
-    panel.id='ui-build-card';
-    Object.assign(panel.style,{
-      position:'absolute', left:'50%', bottom:'88px', transform:'translateX(-50%)',
-      width:'min(640px,92vw)', maxHeight:'64vh', overflow:'auto',
-      background:'rgba(20,20,20,.95)', border:'1px solid #2f2f2f', borderRadius:'12px',
-      boxShadow:'0 18px 48px rgba(0,0,0,.45)', backdropFilter:'blur(6px)',
-      color:'#eaeaea', font:'14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
-      pointerEvents:'auto'
-    });
+    root = document.createElement('div');
+    root.id = 'build-dock';
+    // Hardening: z-Index unter FABs, geschlossen inert
+    root.style.cssText = [
+      'position:fixed',
+      'left:12px',
+      'bottom:96px',
+      'width:min(520px, 94vw)',
+      'max-height:66vh',
+      'overflow:auto',
+      'background:rgba(18,18,18,.96)',
+      'color:#eaeaea',
+      'border:1px solid #2f2f2f',
+      'border-radius:12px',
+      'box-shadow:0 18px 48px rgba(0,0,0,.45)',
+      'backdrop-filter:blur(6px)',
+      'z-index:2147483602',
+      'display:none',
+      'opacity:0',
+      'pointer-events:none',
+      'transition:opacity .18s ease',
+    ].join(';');
 
     // Header
-    var head=document.createElement('div');
-    Object.assign(head.style,{
-      display:'flex', alignItems:'center', justifyContent:'space-between',
-      padding:'10px 12px', borderBottom:'1px solid #2a2a2a', position:'sticky', top:'0',
-      background:'inherit', zIndex:'1'
-    });
-    var title=document.createElement('div'); title.textContent='Bau-Menü'; title.style.fontWeight='800';
-    var ver=document.createElement('div'); ver.textContent=VER; ver.style.cssText='opacity:.55;font-size:12px;margin-left:auto;margin-right:8px;';
-    closeBtn=document.createElement('button'); closeBtn.textContent='✕';
-    Object.assign(closeBtn.style,{background:'transparent',border:'1px solid #3a3a3a',color:'#ddd',borderRadius:'6px',cursor:'pointer',padding:'6px 10px'});
-    on(closeBtn,'click',function(){ toggle(false); });
-    head.appendChild(title); head.appendChild(ver); head.appendChild(closeBtn);
+    var head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #2b2b2b;position:sticky;top:0;background:inherit;z-index:1;';
+    var title = document.createElement('div');
+    title.textContent = 'Bau-Menü';
+    title.style.fontWeight = '800';
+    var ver = document.createElement('div');
+    ver.textContent = VER;
+    ver.style.cssText = 'opacity:.55;font-size:12px;margin-left:auto;margin-right:8px;';
+    var close = document.createElement('button');
+    close.textContent = 'Schließen';
+    close.style.cssText = 'background:transparent;border:1px solid #3a3a3a;color:#ddd;border-radius:6px;cursor:pointer;padding:6px 10px';
+    close.addEventListener('click', function(){ toggle(false); });
+    head.appendChild(title); head.appendChild(ver); head.appendChild(close);
 
-    // Content (Fallback)
-    content=document.createElement('div'); content.id='ui-build-content'; content.style.cssText='padding:10px 12px;';
-    var fallback=document.createElement('div');
-    fallback.id='ui-build-fallback';
-    fallback.innerHTML='' +
-      '<div style="opacity:.85;margin:0 0 8px">Fallback aktiviert – spezielles Bau-UI nicht gefunden.</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:8px;">' +
-        '<button data-b="house" class="ui-bbtn">🏠 Haus</button>' +
-        '<button data-b="farm" class="ui-bbtn">🌾 Farm</button>' +
-        '<button data-b="depot" class="ui-bbtn">📦 Depot</button>' +
-        '<button data-b="hq" class="ui-bbtn">🏛️ Rathaus</button>' +
-        '<button data-b="smith" class="ui-bbtn">⚒️ Schmiede</button>' +
-        '<button data-b="lumberjack" class="ui-bbtn">🪵 Holzfäller</button>' +
-      '</div>' +
-      '<style>.ui-bbtn{padding:10px;border-radius:8px;background:#1f2937;border:1px solid #374151;color:#e2e8f0;cursor:pointer;} .ui-bbtn:hover{filter:brightness(1.05);}</style>';
-    content.appendChild(fallback);
+    // Tabs
+    tabs = document.createElement('div');
+    tabs.id = 'build-tabs';
+    tabs.style.cssText = 'display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid #232323;position:sticky;top:48px;background:inherit;z-index:1;overflow:auto;';
 
-    // Delegation für Buttons
-    on(content,'click',function(ev){
-      var b = ev.target && ev.target.closest('.ui-bbtn'); if (!b) return;
-      var type = b.getAttribute('data-b') || '';
-      try{ window.dispatchEvent(new CustomEvent('cb:build-select',{detail:{type}})); }catch(_){}
-      try{
-        if (window.Game?.setBuildTool){ Game.setBuildTool(type); ok(MOD+' Tool gesetzt: '+type); }
-        else { ok(MOD+' Build-Select: '+type+' (Game.setBuildTool nicht gefunden)'); }
-      }catch(e){ warn(MOD+' Fehler Tool-Set: '+(e&&e.message)); }
-    });
+    // Pane
+    pane = document.createElement('div');
+    pane.id = 'build-items';
+    pane.style.cssText = 'padding:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:10px;';
 
-    panel.appendChild(head);
-    panel.appendChild(content);
-    root.appendChild(panel);
+    root.appendChild(head);
+    root.appendChild(tabs);
+    root.appendChild(pane);
+
     document.body.appendChild(root);
-
-    // Backdrop-Klick schließt, wenn neben Panel
-    on(root,'mousedown',function(ev){ if (!panel.contains(ev.target)) toggle(false); });
-
-    // ESC
-    if (!escBound){
-      escBound=true;
-      on(window,'keydown',function(ev){ if (ev.key==='Escape') toggle(false); });
-    }
-
-    hardenFABs();
-    ok(MOD+' gebaut ('+VER+')');
     return root;
   }
 
-  // ---- Öffnen/Schließen -----------------------------------------------------
+  function applyTabStyles(btn, active){
+    btn.style.padding = '8px 12px';
+    btn.style.borderRadius = '10px';
+    btn.style.border = '1px solid ' + (active ? '#1d4ed8' : '#2f2f2f');
+    btn.style.background = active ? '#1d4ed8' : '#0f172a';
+    btn.style.color = active ? '#fff' : '#c7d2fe';
+    btn.style.cursor = 'pointer';
+    btn.style.fontWeight = '700';
+    btn.style.whiteSpace = 'nowrap';
+  }
+
+  function buildTabs(cats){
+    tabs.innerHTML = '';
+    cats.forEach(function(cat, idx){
+      var b = document.createElement('button');
+      b.textContent = cat.title || cat.id;
+      b.dataset.tab = cat.id;
+      applyTabStyles(b, idx===0);
+      b.addEventListener('click', function(){
+        _activeCat = cat.id;
+        // re-style alle
+        Array.prototype.forEach.call(tabs.querySelectorAll('button'), function(btn){
+          applyTabStyles(btn, btn.dataset.tab===_activeCat);
+        });
+        buildItems(cat);
+      });
+      tabs.appendChild(b);
+    });
+    _activeCat = cats[0] && cats[0].id || null;
+  }
+
+  function buildItems(cat){
+    pane.innerHTML = '';
+    if (!cat || !Array.isArray(cat.items)) return;
+
+    cat.items.forEach(function(it){
+      var card = document.createElement('button');
+      card.className = 'build-item';
+      var disabled = !!it.todo;
+      card.disabled = disabled;
+      card.style.cssText = [
+        'display:flex','flex-direction:column','align-items:center','justify-content:center',
+        'gap:8px','padding:10px','border-radius:10px',
+        'border:1px solid ' + (disabled ? '#3a3a3a' : '#2f2f2f'),
+        'background:' + (disabled ? '#111827' : '#1f2937'),
+        'color:' + (disabled ? '#9ca3af' : '#e2e8f0'),
+        'cursor:' + (disabled ? 'not-allowed' : 'pointer'),
+        'min-height:110px','text-align:center'
+      ].join(';');
+
+      // Icon
+      var img = document.createElement('img');
+      img.alt = it.label || it.id;
+      img.draggable = false;
+      img.style.cssText = 'width:48px;height:48px;object-fit:contain;opacity:'+(disabled?'.55':'1');
+      img.src = it.icon || (window.BUILD_ASSETS?.ui?.buildMarker) || '';
+      card.appendChild(img);
+
+      // Label
+      var lbl = document.createElement('div');
+      lbl.textContent = (it.label || it.id);
+      lbl.style.cssText = 'font-weight:700;font-size:14px;';
+      card.appendChild(lbl);
+
+      // Badge „TODO“
+      if (disabled){
+        var badge = document.createElement('div');
+        badge.textContent = 'bald';
+        badge.style.cssText = 'margin-top:-2px;font-size:11px;opacity:.75;';
+        card.appendChild(badge);
+      }
+
+      if (!disabled){
+        card.addEventListener('click', function(){
+          try{
+            // UI → Engine
+            window.dispatchEvent(new CustomEvent('cb:build-select', { detail:{ type: it.id } }));
+            (window.CBLog?.ok||console.log)(MOD+' Tool gesetzt: '+it.id);
+            // (optional) Dock offen lassen, bis explizit geschlossen
+          }catch(e){
+            warn(MOD+' Select-Fehler: '+(e&&e.message));
+          }
+        });
+      }
+
+      pane.appendChild(card);
+    });
+  }
+
+  function buildDock(){
+    if (_built) return;
+    ensureRoot();
+
+    var cats = getCategories();
+    if (!cats.length){
+      pane.innerHTML = '<div style="opacity:.7">Keine Einträge</div>';
+    } else {
+      buildTabs(cats);
+      buildItems(cats[0]);
+    }
+
+    _built = true;
+    ok(MOD+' gebaut ('+VER+')');
+  }
+
+  // --- Open / Close ----------------------------------------------------------
   function setOpen(open){
     ensureRoot();
     if (open){
-      root.style.display='block';
-      root.style.pointerEvents='auto';  // jetzt darf der Backdrop blocken
-      root.style.opacity='1';
-      document.body.classList.add('has-build-open');
-      try{
-        window.dispatchEvent(new CustomEvent('cb:build-toggle',{detail:{open:true}}));
-        window.dispatchEvent(new CustomEvent('cb:build-open'));
-      }catch(_){}
+      root.style.display = 'block';
+      // async, damit der Browser den Style anwenden kann
+      requestAnimationFrame(function(){
+        root.style.opacity = '1';
+        root.style.pointerEvents = 'auto';
+      });
+      try{ window.dispatchEvent(new Event('cb:build-open')); }catch(_){}
+      _open = true;
       ok(MOD+' geöffnet ('+VER+')');
     } else {
-      root.style.opacity='0';
-      root.style.pointerEvents='none';
-      document.body.classList.remove('has-build-open');
+      root.style.opacity = '0';
+      root.style.pointerEvents = 'none';
       setTimeout(function(){
-        root.style.display='none';
-        try{
-          window.dispatchEvent(new CustomEvent('cb:build-toggle',{detail:{open:false}}));
-          window.dispatchEvent(new CustomEvent('cb:build-close'));
-        }catch(_){}
-        ok(MOD+' geschlossen');
+        root.style.display = 'none';
+        try{ window.dispatchEvent(new Event('cb:build-close')); }catch(_){}
       }, 180);
+      _open = false;
+      ok(MOD+' geschlossen');
     }
   }
 
-  function isOpen(){ return !!(root && root.style.display!=='none' && root.style.opacity!=='0'); }
-
   function toggle(force){
-    try{ ensureRoot(); }catch(e){ err(MOD+' ensureRoot: '+(e && e.message)); }
-    var want = (typeof force==='boolean') ? !!force : !isOpen();
+    var want = (typeof force === 'boolean') ? !!force : !_open;
+    if (want && !_built) buildDock();
     setOpen(want);
   }
 
-  // ---- Mount/Unmount Custom-Panel ------------------------------------------
-  function mount(node){
-    ensureRoot();
-    try{
-      content.innerHTML='';
-      if (node && node.nodeType===1) content.appendChild(node);
-      ok(MOD+' mount() OK');
-    }catch(e){ err(MOD+' mount() Fehler: '+(e && e.message)); }
-  }
-  function unmount(){
-    ensureRoot();
-    try{
-      content.innerHTML='';
-      var fb=document.createElement('div');
-      fb.id='ui-build-fallback';
-      fb.textContent='Fallback aktiviert – spezielles Bau-UI nicht gefunden.';
-      content.appendChild(fb);
-      ok(MOD+' unmount() OK');
-    }catch(e){ err(MOD+' unmount() Fehler: '+(e && e.message)); }
-  }
-
-  // ---- Public API -----------------------------------------------------------
-  window.GameUIBuild = window.GameUIBuild || {};
-  window.GameUIBuild.toggle = toggle;
-  window.GameUIBuild.mount  = mount;
-  window.GameUIBuild.unmount= unmount;
-
+  // --- Öffentliche API -------------------------------------------------------
   window.GameUI = window.GameUI || {};
-  window.GameUI.toggleBuild = function(force){ try{ toggle(force); }catch(e){ warn(MOD+' toggleBuild Fehler: '+(e && e.message)); } };
-
-  // ---- Auto-Init ------------------------------------------------------------
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', ensureRoot, {once:true});
-  } else {
-    ensureRoot();
+  if (typeof window.GameUI.toggleBuild !== 'function'){
+    window.GameUI.toggleBuild = function(force){
+      try{ toggle(force); }catch(e){ err(MOD+' toggleBuild: '+(e&&e.message)); }
+    };
   }
 
-  ok(MOD+' geladen ('+VER+')');
+  // --- Reaktion auf dynamisch nachladbare Kategorien -------------------------
+  window.addEventListener('cb:build-categories-ready', function(ev){
+    try{
+      var cats = ev?.detail?.categories;
+      if (!Array.isArray(cats) || !cats.length) return;
+      // Nur neu bauen, wenn wir noch nicht gebaut haben
+      if (_built) return;
+      buildDock();
+    }catch(e){
+      warn(MOD+' cats-ready: '+(e&&e.message));
+    }
+  });
+
+  // --- Init ------------------------------------------------------------------
+  function init(){
+    try{
+      // nichts automatisch öffnen; nur bauen, wenn nötig
+      ok(MOD+' geladen ('+VER+')');
+    }catch(e){
+      err(MOD+' Init-Fehler: '+(e&&e.message));
+    }
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, {once:true});
+  } else {
+    init();
+  }
 })();
