@@ -1,11 +1,9 @@
 /* ============================================================================
- * assets/ui/ui-bridge.js — v17.4.1
- * Stabile Fassade:
- *   GameUI.toggleBuild(force?)      // true/false oder toggle
- *   GameUI.toggleInspector(force?)
- * - feuert Events (cb:build-open/close, cb:inspector-open/close)
- * - rendert Fallback-Baupanel (#ui-build), wenn kein eigenes vorhanden ist
- * - NEU: Inspector-Fallback -> baut/minimal öffnet selbst, falls Core fehlt
+ * assets/ui/ui-bridge.js — v17.4.2
+ * GameUI.toggleBuild(force?), GameUI.toggleInspector(force?)
+ * - Build: Fallback-Panel, Events
+ * - Inspector: Fallback-Core + HARTE Sichtbarkeits-Garantie
+ * - Extra: kleines Troubleshoot-Badge, falls Inspector nicht erscheint
  * ============================================================================ */
 (function(){
   'use strict';
@@ -32,7 +30,6 @@
     body.innerHTML='<div style="opacity:.8">Dein spezielles Bau-UI wurde nicht gefunden – dieses Panel ist ein Platzhalter.</div>';
     el.appendChild(body); document.body.appendChild(el); return el;
   }
-
   function setBuildOpen(open){
     document.body.classList.toggle('has-build-open', !!open);
     if (window.UIBuild?.toggle){ window.UIBuild.toggle(open); }
@@ -44,17 +41,16 @@
     }catch(_){}
     ok('[ui] Build:', open?'auf':'zu');
   }
-
   UI.toggleBuild=function(force){
     try{
-      var fallbackEl=document.getElementById('ui-build');
+      var el=document.getElementById('ui-build');
       var isOpen = document.body.classList.contains('has-build-open') ||
-                   (fallbackEl && fallbackEl.style.display!=='none');
-      var wantOpen=(typeof force==='boolean')?!!force:!isOpen; setBuildOpen(wantOpen);
+                   (el && el.style.display!=='none');
+      setBuildOpen((typeof force==='boolean')?!!force:!isOpen);
     }catch(e){ warn('[ui] Build-Toggle Fehler:', e?.message); }
   };
 
-  // ---------- Inspector (mit Fallback-Core) ----------
+  // ---------- Inspector (Fallback-Core + Garantie) ----------
   function ensureInspectorCore(){
     var el=document.getElementById('inspector'); if (el) return el;
     el=document.createElement('div'); el.id='inspector'; el.setAttribute('role','dialog');
@@ -64,28 +60,56 @@
       font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',zIndex:100001,display:'none'});
     var head=document.createElement('div'); Object.assign(head.style,{display:'flex',alignItems:'center',
       justifyContent:'space-between',padding:'10px 12px',borderBottom:'1px solid #2d2d2d'});
-    var title=document.createElement('div'); title.textContent='Inspector (Fallback-Core)'; title.style.fontWeight='700';
+    var title=document.createElement('div'); title.textContent='Inspector'; title.style.fontWeight='700';
     var close=document.createElement('button'); close.textContent='✕';
     Object.assign(close.style,{background:'transparent',border:'1px solid #3a3a3a',borderRadius:'4px',color:'#ddd',cursor:'pointer'});
     close.onclick=function(){ UI.toggleInspector(false); };
     head.appendChild(title); head.appendChild(close); el.appendChild(head);
     var body=document.createElement('div'); body.id='inspector-tabs'; body.style.padding='8px 10px';
-    body.innerHTML='<div style="opacity:.8">Inspector-Core lädt… (oder Tests-Core baut sich gleich)</div>';
+    body.innerHTML='<div style="opacity:.8">Inspector lädt…</div>';
     el.appendChild(body); document.body.appendChild(el);
     return el;
   }
 
+  // kleines Troubleshoot-Badge, falls etwas unsichtbar bleibt
+  function pingBadge(msg){
+    try{
+      var b=document.getElementById('ui-ping-badge'); if(!b){
+        b=document.createElement('div'); b.id='ui-ping-badge';
+        Object.assign(b.style,{position:'fixed',right:'16px',bottom:'16px',zIndex:100005,
+          padding:'6px 10px',background:'rgba(0,0,0,.7)',color:'#fff',borderRadius:'6px',font:'12px system-ui'});
+        document.body.appendChild(b);
+      }
+      b.textContent=msg; setTimeout(()=>{ if(b&&b.parentNode) b.parentNode.removeChild(b); }, 1800);
+    }catch(_){}
+  }
+
   function setInspectorOpen(open){
-    // Wenn das echte Inspector-Modul da ist → bevorzugen
-    if (window.Inspector?.toggle){ window.Inspector.toggle(open); }
-    // Immer Events feuern (damit das Inspector-Modul sich aufbauen kann)
+    // 1) Events feuern (echter Inspector kann sich so initialisieren)
     try{
       window.dispatchEvent(new CustomEvent('cb:inspector-toggle',{detail:{open:!!open}}));
       window.dispatchEvent(new CustomEvent(open?'cb:inspector-open':'cb:inspector-close'));
     }catch(_){}
-    // Falls Inspector-Core (noch) nicht da → Fallback sichtbar machen
+
+    // 2) Falls ein echtes Modul existiert → vorrangig
+    if (window.Inspector?.toggle){ window.Inspector.toggle(open); }
+
+    // 3) Fallback-Core erzwingen + sichtbar schalten
     var el = ensureInspectorCore();
     el.style.display = open ? 'block' : 'none';
+
+    // 4) Sichtbarkeits-Garantie: kurz danach prüfen & notfalls hart nachziehen
+    setTimeout(function(){
+      var visible = !!(el && el.style.display!=='none' && el.offsetWidth>0 && el.offsetHeight>0);
+      if (!visible && open){
+        el.style.display='block';
+        el.style.visibility='visible';
+        el.style.opacity='1';
+        el.style.zIndex='100005';
+        pingBadge('Inspector geöffnet (Failsafe)');
+      }
+    }, 0);
+
     ok('[ui] Inspector:', open?'auf':'zu');
   }
 
@@ -93,10 +117,9 @@
     try{
       var el=document.getElementById('inspector');
       var isOpen = !!(el && el.style.display!=='none');
-      var wantOpen=(typeof force==='boolean')?!!force:!isOpen;
-      setInspectorOpen(wantOpen);
+      setInspectorOpen((typeof force==='boolean')?!!force:!isOpen);
     }catch(e){ warn('[ui] Inspector-Toggle Fehler:', e?.message); }
   };
 
-  ok('[ui-bridge] bereit (v17.4.1)');
+  ok('[ui-bridge] bereit (v17.4.2)');
 })();
