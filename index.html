@@ -1,17 +1,11 @@
 <!doctype html>
 <!--
-  Datei: index.html
-  Projekt: Siedler-Mini
-  Version: v17.7.1
-  Zweck:
-    - Einstiegspunkt für UI und Engine
-    - Start-Hintergrund, Canvas, FAB-Buttons
-    - Lädt Core-, UI- und Inspector-Module in korrekter Reihenfolge
+  Neue Siedler – Index
+  Version: v17.7.5
   CODE_STYLE:
-    - ?v= Versionsanhang
-    - Reihenfolge: Core → PF/Carriers → UI-Bridge → UI (Start/Build) → Inspector → Boot
-    - UI-Buttons fixed (nicht zoombar)
-    - Body-Klasse wenn Build offen
+    - Reihenfolge: Polyfill → Core → OverlayHooks → Renderer → Bootstrap → UI → Inspector → BootCompat
+    - UI: Start-Panel, Canvas, FAB-Buttons, Build-Dock
+    - Inspector: Vollbild-Overlay, Tabs Logs/Tests/Ressourcen/Pfade
 -->
 <html lang="de">
 <head>
@@ -24,15 +18,15 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css?v=17.7.1">
-  <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.7.1">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.7.1">
+  <link rel="stylesheet" href="style.css?v=17.7.5">
+  <link rel="stylesheet" href="ui-start.css?v=17.7.5">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.7.5">
 
   <style>
     html, body { height:100%; margin:0; background:#0c120f; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; }
 
-    /* FABs ganz nach oben und klickbar */
+    /* FABs */
     .ui-fab {
       position:fixed;
       z-index:2147483647 !important;
@@ -48,112 +42,70 @@
     }
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom:240px; }
-
-    /* Start-Overlay darf nicht blockieren */
-    .ui-start-bg,
-    .ui-start-panel {
-      pointer-events:none !important;
-    }
   </style>
 </head>
 <body>
 
+  <!-- Start-Panel -->
+  <div id="start-panel" aria-label="Startmenü" class="ui-start">
+    <div class="ui-start-bg"></div>
+    <div class="ui-start-panel">
+      <h1>Neue Siedler</h1>
+      <button id="btnStart">Spiel starten</button>
+    </div>
+  </div>
+
   <!-- Bühne -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- FAB: Build -->
+  <!-- Build-Dock -->
+  <div id="build-panel" aria-label="Bau-Menü"></div>
+
+  <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
+    <button type="button" aria-label="Bau-Menü" onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
   </div>
-
-  <!-- FAB: Inspector (Failsafe-Version) -->
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" onclick="(function(){
-      try{ if(window.GameUI?.toggleInspector){ GameUI.toggleInspector(); return; } }catch(_){}
-      var el=document.getElementById('inspector');
-      if(!el){
-        el=document.createElement('div');
-        el.id='inspector';
-        el.style.cssText='position:fixed;right:12px;bottom:96px;width:400px;max-width:90vw;max-height:70vh;overflow:auto;background:rgba(20,20,20,.94);border:1px solid #333;border-radius:8px;z-index:2147483646;color:#eee;padding:8px;display:block;';
-        el.textContent='Inspector (Failsafe aktiv)';
-        document.body.appendChild(el);
-      } else {
-        el.style.display = (el.style.display==="none" ? "block" : "none");
-      }
-    })(); return false;">🛠</button>
+    <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
   </div>
 
-  <!-- Core -->
-  <!-- ganz oben in der Scriptliste -->
-  <script>window.CBLog = window.CBLog || {}; window.CBLog.bindConsole = true;</script>
+  <!-- Core + Polyfills -->
   <script src="assets/core/cblog.polyfill.js?v=1.1.0"></script>
-  <script src="assets/core/core.env.js?v=17.7.1"></script>
-  <script src="assets/core/core.entities.js?v=17.7.1"></script>
-  <script src="assets/core/core.render.js?v=17.7.1"></script>
-  <script src="assets/core/core.production.js?v=17.7.1"></script>
-  <script src="assets/core/core.pfglue.js?v=17.7.1"></script>
-  <script src="assets/core/core.map.js?v=17.7.1"></script>
-  <script src="assets/core/core.input.js?v=17.7.1"></script>
-  <script src="assets/core/carriers.js?v=17.7.1"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.7.1"></script>
+  <script src="assets/core/core.env.js?v=17.7.5"></script>
+  <script src="assets/core/core.entities.js?v=17.7.5"></script>
+  <script src="assets/core/core.production.js?v=17.7.5"></script>
+  <script src="assets/core/core.pfglue.js?v=17.7.5"></script>
+  <script src="assets/core/core.map.js?v=17.7.5"></script>
+  <script src="assets/core/core.input.js?v=17.7.5"></script>
+  <script src="assets/core/carriers.js?v=17.7.5"></script>
+  <script src="assets/core/overlay-hooks.js?v=17.7.5"></script>
+  <script src="assets/core/core.render.js?v=17.7.5"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.7.5"></script>
 
-  <!-- Legacy -->
-  <script defer src="game.js?v=17.7.1"></script>
+  <!-- Legacy-Fassade -->
+  <script defer src="game.js?v=17.7.5"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.7.1"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.7.1"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.7.1"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.7.5"></script>
+  <script defer src="assets/ui/ui-start.js?v=17.7.5"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.7.5"></script>
 
   <!-- Inspector -->
-  <script defer src="assets/inspector/inspector.js?v=17.7.1"></script>
+  <script defer src="assets/inspector/inspector.js?v=17.7.5"></script>
 
   <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=17.7.1"></script>
+  <script defer src="boot.compat.js?v=17.7.5"></script>
 
-  <!-- Meta -->
+  <!-- Marker -->
   <script>
-    (function(){
-      window.__cb = window.__cb||{};
-      window.__cb.indexVersion="v17.7.1";
-      window.dispatchEvent(new CustomEvent("cb:ui-ready",{detail:{version:"v17.7.1"}}));
-      console.log("[index] UI bereit (v17.7.1)");
-    })();
+    window.__cb = window.__cb||{};
+    window.__cb.indexVersion="v17.7.5";
+    (window.CBLog?.info||console.log)("[index] UI bereit (v17.7.5)");
+
+    // Build-Dock Body-Klasse
+    window.addEventListener('cb:build-open', ()=>document.body.classList.add('has-build-open'));
+    window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
   </script>
-  <script>
-  // Inspector-Hard-Failsafe: greift, wenn inspector.js nicht geladen wurde
-  (function(){
-    function hardToggle(){
-      try{
-        if (window.GameUI && typeof GameUI.toggleInspector==='function'){
-          GameUI.toggleInspector();
-          return;
-        }
-      }catch(_){}
-      // letzter Notanker: simples Panel
-      var el=document.getElementById('inspector-hard-fallback');
-      if(!el){
-        el=document.createElement('div');
-        el.id='inspector-hard-fallback';
-        el.style.cssText='position:fixed;right:12px;bottom:96px;width:380px;max-width:92vw;max-height:70vh;overflow:auto;background:#111;border:1px solid #333;border-radius:8px;color:#eee;padding:8px;z-index:2147483647';
-        el.textContent='Inspector (Hard-Fallback): inspector.js nicht geladen?';
-        document.body.appendChild(el);
-      } else {
-        el.style.display = (el.style.display==='none' ? 'block' : 'none');
-      }
-    }
-    // Falls dein Button KEIN onclick hat:
-    try{
-      var btn = document.querySelector('#btn-inspector button');
-      if (btn && !btn.__inspectorWired){
-        btn.addEventListener('click', function(ev){ ev.preventDefault(); hardToggle(); }, {passive:false});
-        btn.__inspectorWired = true;
-      }
-    }catch(_){}
-    // Exponiere optional
-    window.__toggleInspectorHard = hardToggle;
-  })();
-</script>
 </body>
 </html>
