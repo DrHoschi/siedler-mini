@@ -1,129 +1,227 @@
 /* ============================================================================
- * core.render.js — v17.3.2
- * Zweck:
- *   - Karten/Entity-Rendering ohne Tile-Seams (runden + overdraw)
- *   - Carrier-Layer draw()
- *   - Entity-Debug-Overlay (via window.DEBUG_ENTITY_OVERLAY)
- * Events:
- *   - cb:toggle-entity-overlay {detail:{enabled}}
- * ============================================================================ */
-(function(ns){
+ * core.render.js — Rendering-Orchestrierung (Overlay für Entities + Hover)
+ * Version: v17.5.0
+ * Projekt: Neue Siedler
+ *
+ * Ziele
+ *  - Terrain bleibt auf #game (Basis-Renderer, unverändert)
+ *  - Neues Overlay-Canvas #game-overlay für:
+ *      • Entities (aus CoreEntities) — vorerst als einfache Kacheln
+ *      • Hover-Highlight (aktuelles Tile unter Cursor)
+ *      • (optional) Pfad-Overlay via PathFinder.drawOverlay
+ *  - Kein „Trail“: Overlay wird pro Frame vollständig neu gezeichnet
+ *  - Saubere Repaint-Steuerung via cb:request-repaint, Size/Camera/Hover-Events
+ *
+ * Events (listen)
+ *  - cb:request-repaint
+ *  - cb:hover-tile            {tx,ty,screenX,screenY}
+ *  - cb:camera-changed        {x,y,zoom}
+ *  - cb:place-building        {type,x,y}   → nur, um Repaint auszulösen
+ *
+ * Abhängigkeiten
+ *  - window.Game.getTileSize()
+ *  - window.CoreEntities.list() (falls nicht vorhanden → graceful fallback)
+ *  - window.PathFinder.drawOverlay(ctx,{x,y,zoom}) (optional)
+ *
+ * Hinweise
+ *  - #game füllt per index.html die gesamte Viewport-Größe → Overlay deckt 1:1
+ *  - Overlay ist pointer-events:none, stört Interaktionen nicht
+ * ========================================================================== */
+(function(){
   'use strict';
-  if (!ns || !ns.state) { console.error('[render] GameCore.env fehlt'); return; }
 
-  var S = ns.state, U = ns.util;
-  var canvas=null, ctx=null, DPR=1, viewW=0, viewH=0;
+  var VER = 'v17.5.0';
+  var MOD = '[render]';
 
-  function init(c, context){
-    canvas=c; ctx=context||c.getContext('2d'); fit();
-    try{ ctx.imageSmoothingEnabled=false; }catch(_){}
-    window.addEventListener('resize', fit);
-    U.on('cb:toggle-entity-overlay', e=>{
-      window.DEBUG_ENTITY_OVERLAY=!!(e&&e.detail&&e.detail.enabled);
-      ns.ok('[render] entity-overlay='+(window.DEBUG_ENTITY_OVERLAY?'AN':'AUS'));
-      draw();
-    });
-    ns.ok('[render] Modul geladen (v17.3.2)');
+  // ---- Logging --------------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){ console.warn(m);} }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){ console.error(m);} }
+
+  // ---- DOM / Canvas ---------------------------------------------------------
+  var base = null;            // #game (Basis-Canvas → Terrain)
+  var ov   = null;            // #game-overlay (neu)
+  var ctx  = null;            // 2D-Kontext Overlay
+
+  // ---- State ----------------------------------------------------------------
+  var tile = 64;
+  var cam  = { x:0, y:0, zoom:1 };     // Kamera in Tiles
+  var hover = { has:false, x:0, y:0 }; // Hover-Tile in Kartencoords
+  var needsRepaint = true;
+
+  // ---- Helpers --------------------------------------------------------------
+  function updTileSize(){
+    try{ tile = (window.Game?.getTileSize?.()|0) || 64; }catch(_){}
+    if (tile<=0) tile=64;
   }
-
-  function fit(){
-    if(!canvas) return;
-    ctx=canvas.getContext('2d');
-    DPR=Math.max(1, Math.min(3, window.devicePixelRatio||1));
-    let w=Math.max(320, Math.floor(window.innerWidth));
-    let h=Math.max(240, Math.floor(window.innerHeight));
-    canvas.width=Math.floor(w*DPR); canvas.height=Math.floor(h*DPR);
-    canvas.style.width=w+'px'; canvas.style.height=h+'px';
-    ctx.setTransform(DPR,0,0,DPR,0,0); try{ctx.imageSmoothingEnabled=false;}catch(_){}
-    viewW=w; viewH=h; clampCam(); draw();
-  }
-
-  function clampCam(){
-    if(!S.map) return;
-    var size={w:S.map.width*S.map.tile, h:S.map.height*S.map.tile}, z=S.cam.zoom||1;
-    S.cam.x=U.clamp(S.cam.x,0,Math.max(0,size.w-viewW/z));
-    S.cam.y=U.clamp(S.cam.y,0,Math.max(0,size.h-viewH/z));
-  }
-
-  function draw(){
-    if(!ctx||!S.map) return;
-    var t=S.map.tile|0, w=S.map.width|0, h=S.map.height|0, z=S.cam.zoom||1;
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    var left=Math.max(0, Math.floor(S.cam.x/t));
-    var top =Math.max(0, Math.floor(S.cam.y/t));
-    var right =Math.min(w, Math.ceil((S.cam.x+viewW/z)/t));
-    var bottom=Math.min(h, Math.ceil((S.cam.y+viewH/z)/t));
-
-    var layers=S.map.layers||[], colors=['#678F4B','#739A53','#7FA65B','#8CB367'];
-
-    if (!S.atlas || !S.tilesetImg || !layers.length){
-      for (let ty=top; ty<bottom; ty++){
-        for (let tx=left; tx<right; tx++){
-          let dx=Math.round((tx*t - S.cam.x)*z);
-          let dy=Math.round((ty*t - S.cam.y)*z);
-          let ds=Math.round(t*z)+1;
-          ctx.fillStyle=colors[(tx+ty)%colors.length];
-          ctx.fillRect(dx,dy,ds,ds);
-        }
-      }
-    } else {
-      let L0=layers[0], data=L0.data||[];
-      for (let ty=top; ty<bottom; ty++){
-        for (let tx=left; tx<right; tx++){
-          let i=ty*w+tx, idx=data[i]|0;
-          let dx=Math.round((tx*t - S.cam.x)*z);
-          let dy=Math.round((ty*t - S.cam.y)*z);
-          let ds=Math.round(t*z)+1;
-          let ti=S.atlas.tiles && S.atlas.tiles[idx];
-          if (ti){
-            try{ ctx.drawImage(S.tilesetImg, ti.x,ti.y,ti.w,ti.h, dx,dy,ds,ds); }
-            catch(_){ ctx.fillStyle='#678F4B'; ctx.fillRect(dx,dy,ds,ds); }
-          } else {
-            ctx.fillStyle='#678F4B'; ctx.fillRect(dx,dy,ds,ds);
-          }
-        }
-      }
+  function resizeOverlayToViewport(){
+    // #game ist 100vw x 100vh → Overlay auch
+    var w = Math.max(1, (window.innerWidth | 0));
+    var h = Math.max(1, (window.innerHeight| 0));
+    if (!ov) return;
+    if (ov.width !== w || ov.height !== h){
+      ov.width = w; ov.height = h;
+      needsRepaint = true;
     }
-
-    // Entities
-    for (let i=0;i<S.entities.length;i++){
-      let e=S.entities[i], ex=Math.round((e.x-S.cam.x)*z), ey=Math.round((e.y-S.cam.y)*z);
-      let ew=Math.round(e.w*z), eh=Math.round(e.h*z);
-      if (e.img){ try{ ctx.drawImage(e.img, ex,ey,ew,eh); }catch(_){}
-      } else { ctx.fillStyle="rgba(255,220,0,.65)"; ctx.fillRect(ex,ey,ew,eh);
-               ctx.lineWidth=Math.max(2,(2/z)); ctx.strokeStyle="rgba(60,50,0,.9)";
-               ctx.strokeRect(ex+0.5,ey+0.5,ew-1,eh-1); }
-    }
-
-    // Carrier-Layer
-    try{ if (window.Carriers?.draw) Carriers.draw(ctx, S.cam); }catch(_){}
-
-    if (window.DEBUG_ENTITY_OVERLAY) drawEntityOverlay(ctx);
+  }
+  function clearOverlay(){
+    if (!ctx || !ov) return;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,ov.width, ov.height);
+  }
+  function toScreenXY(tx, ty){
+    // Kartentile → Screen (px)
+    var px = Math.round((tx - cam.x) * tile * cam.zoom);
+    var py = Math.round((ty - cam.y) * tile * cam.zoom);
+    return { x:px, y:py };
   }
 
-  function drawEntityOverlay(ctx){
-    let t=S.map.tile|0, z=S.cam.zoom||1;
+  // ---- Entities-Zeichnung (einfach) ----------------------------------------
+  function drawEntities(){
+    var list = null;
+    try{ list = window.CoreEntities?.list?.(); }catch(_){}
+    if (!list || !list.length) return;
 
-    if (S.obstacles){
-      ctx.save(); ctx.globalAlpha=.22; ctx.fillStyle='#ff00ff';
-      for(let y=0;y<S.obstH;y++) for(let x=0;x<S.obstW;x++){
-        if(!S.obstacles[y*S.obstW+x]) continue;
-        let dx=Math.round((x*t-S.cam.x)*z), dy=Math.round((y*t-S.cam.y)*z), ds=Math.round(t*z)+1;
-        ctx.fillRect(dx,dy,ds,ds);
+    ctx.lineWidth = Math.max(1, Math.round(2/cam.zoom));
+    for (var i=0;i<list.length;i++){
+      var e = list[i];
+      var p = toScreenXY(e.x, e.y);
+      var sz = Math.round(tile * cam.zoom);
+
+      // Fallback-Style je Typ (später durch Texturen/Atlas ersetzen)
+      var fill = '#3b82f6';
+      var stroke = '#1d4ed8';
+      switch(String(e.type)){
+        case 'house':      fill='#a78bfa'; stroke='#7c3aed'; break;
+        case 'farm':       fill='#34d399'; stroke='#059669'; break;
+        case 'depot':      fill='#fbbf24'; stroke='#d97706'; break;
+        case 'hq':         fill='#f87171'; stroke='#b91c1c'; break;
+        case 'smith':      fill='#f59e0b'; stroke='#b45309'; break;
+        case 'lumberjack': fill='#60a5fa'; stroke='#2563eb'; break;
       }
+
+      // Kachel
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = stroke;
+      ctx.beginPath();
+      ctx.rect(p.x, p.y, sz, sz);
+      ctx.fill();
+      ctx.stroke();
+
+      // Label
+      ctx.save();
+      ctx.font = Math.max(10, Math.round(12*cam.zoom))+'px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,.7)';
+      ctx.fillText(e.type, p.x+4, p.y+Math.min(sz-4, 14*cam.zoom));
       ctx.restore();
     }
-
-    ctx.save(); ctx.lineWidth=Math.max(1,2/z);
-    for (let e of S.entities){
-      let bx=Math.round((e.x-S.cam.x)*z), by=Math.round((e.y-S.cam.y)*z);
-      let bw=Math.round(e.w*z), bh=Math.round(e.h*z);
-      ctx.strokeStyle='rgba(0,255,255,.9)'; ctx.strokeRect(bx+0.5,by+0.5,bw-1,bh-1);
-    }
-    ctx.restore();
   }
 
-  ns.Render = { init:init, draw:draw, fit:fit, clampCam:clampCam };
+  // ---- Hover-Highlight ------------------------------------------------------
+  function drawHover(){
+    if (!hover.has) return;
+    var p = toScreenXY(hover.x, hover.y);
+    var sz = Math.round(tile * cam.zoom);
+    ctx.lineWidth = Math.max(1, Math.round(2/cam.zoom));
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.setLineDash([Math.max(2,Math.round(3/cam.zoom)), Math.max(2,Math.round(3/cam.zoom))]);
+    ctx.beginPath();
+    ctx.rect(p.x+0.5, p.y+0.5, sz-1, sz-1);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
-})(window.GameCore = window.GameCore || {});
+  // ---- Optional: Path-Overlay (Heatmap/Wege) --------------------------------
+  function drawPathOverlay(){
+    try{
+      if (!window.DEBUG_PATH_OVERLAY) return;
+      if (window.PathFinder?.drawOverlay && typeof PathFinder.drawOverlay === 'function'){
+        PathFinder.drawOverlay(ctx, cam); // erwartet cam={x,y,zoom} in Tiles
+      }
+    }catch(_){}
+  }
+
+  // ---- Repaint --------------------------------------------------------------
+  function repaint(){
+    if (!needsRepaint || !ctx) return;
+    needsRepaint = false;
+
+    clearOverlay();
+    // Zeichenreihenfolge: Pfade (unter), Entities, Hover (ober)
+    drawPathOverlay();
+    drawEntities();
+    drawHover();
+  }
+
+  function requestRepaint(){ needsRepaint = true; }
+
+  // ---- Event-Wiring ---------------------------------------------------------
+  function bindEvents(){
+    window.addEventListener('resize', function(){ resizeOverlayToViewport(); requestRepaint(); }, {passive:true});
+    window.addEventListener('cb:request-repaint', function(){ requestRepaint(); });
+    window.addEventListener('cb:camera-changed', function(ev){
+      var d = ev?.detail||{};
+      if (typeof d.x==='number')   cam.x = d.x;
+      if (typeof d.y==='number')   cam.y = d.y;
+      if (typeof d.zoom==='number')cam.zoom = d.zoom;
+      requestRepaint();
+    });
+    window.addEventListener('cb:hover-tile', function(ev){
+      var d = ev?.detail||{};
+      hover.has = true;
+      hover.x = d.tx|0; hover.y = d.ty|0;
+      requestRepaint();
+    });
+    // Wenn die Maus die Bühne verlässt, Hover löschen (optional)
+    document.getElementById('game')?.addEventListener('pointerleave', function(){
+      hover.has = false; requestRepaint();
+    });
+    // Platzierung → Repaint
+    window.addEventListener('cb:place-building', function(){ requestRepaint(); });
+  }
+
+  // ---- Loop (leichtgewichtig) ----------------------------------------------
+  function tick(){
+    try{ repaint(); }catch(e){ err(MOD+' repaint: '+(e&&e.message)); }
+    window.requestAnimationFrame(tick);
+  }
+
+  // ---- Init -----------------------------------------------------------------
+  function init(){
+    try{
+      base = document.getElementById('game');
+      if (!base){ warn(MOD+' #game nicht gefunden'); return; }
+
+      // Overlay erzeugen, falls nicht vorhanden
+      ov = document.getElementById('game-overlay');
+      if (!ov){
+        ov = document.createElement('canvas');
+        ov.id = 'game-overlay';
+        // füllt die Viewport-Fläche analog #game
+        ov.style.position = 'fixed';
+        ov.style.left = '0'; ov.style.top = '0';
+        ov.style.width = '100vw'; ov.style.height = '100vh';
+        ov.style.pointerEvents = 'none';
+        ov.style.zIndex = '2147483601'; // über Terrain, unter FABs (die 2147483647 haben)
+        document.body.appendChild(ov);
+      }
+      ctx = ov.getContext('2d', { alpha:true, desynchronized:true });
+
+      updTileSize();
+      resizeOverlayToViewport();
+      bindEvents();
+      requestRepaint();
+      tick();
+
+      ok(MOD+' Modul geladen ('+VER+')');
+    }catch(e){
+      err(MOD+' Init-Fehler: '+(e&&e.message));
+    }
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, {once:true});
+  } else {
+    init();
+  }
+})();
