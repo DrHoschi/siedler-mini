@@ -1,9 +1,9 @@
 <!doctype html>
 <!--
   Neue Siedler – Index
-  Version: v17.3.2
+  Version: v17.4.1
   CODE_STYLE:
-    - ?v= Versionsanhang
+    - ?v= Versionsanhang (Cache-Buster)
     - Reihenfolge: Core → PF/Carriers → UI-Bridge → UI (Start/Build) → Inspector → Boot
     - Keine Altlasten (render.js NICHT mehr einbinden)
 -->
@@ -15,15 +15,14 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css?v=17.3.2">
-  <link rel="stylesheet" href="ui-start.css?v=17.3.2">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.3.2">
+  <link rel="stylesheet" href="style.css?v=17.4.1">
+  <link rel="stylesheet" href="ui-start.css?v=17.4.1">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.4.1">
   <link rel="manifest" href="manifest.webmanifest">
 
   <style>
     html, body { height:100%; margin:0; background:#0c120f; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; }
-
     .ui-fab { position:fixed; z-index:100000; pointer-events:auto; user-select:none; }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
@@ -51,30 +50,30 @@
   </div>
 
   <!-- Core -->
-  <script src="assets/core/core.env.js?v=17.3.2"></script>
-  <script src="assets/core/core.entities.js?v=17.3.2"></script>
-  <script src="assets/core/core.render.js?v=17.3.2"></script>
-  <script src="assets/core/core.production.js?v=17.3.2"></script>
-  <script src="assets/core/core.pfglue.js?v=17.3.2"></script>
-  <script src="assets/core/core.map.js?v=17.3.2"></script>
-  <script src="assets/core/core.input.js?v=17.3.2"></script>
-  <script src="assets/core/carriers.js?v=17.3.2"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.3.2"></script>
+  <script src="assets/core/core.env.js?v=17.4.1"></script>
+  <script src="assets/core/core.entities.js?v=17.4.1"></script>
+  <script src="assets/core/core.render.js?v=17.4.1"></script>
+  <script src="assets/core/core.production.js?v=17.4.1"></script>
+  <script src="assets/core/core.pfglue.js?v=17.4.1"></script>
+  <script src="assets/core/core.map.js?v=17.4.1"></script>
+  <script src="assets/core/core.input.js?v=17.4.1"></script>
+  <script src="assets/core/carriers.js?v=17.4.1"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.4.0"></script>
 
   <!-- Legacy-Fassade (falls noch genutzt) -->
-  <script defer src="game.js?v=17.3.2"></script>
+  <script defer src="game.js?v=17.4.1"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.3.2"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.3.2"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.3.2"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.4.1"></script>
+  <script defer src="assets/ui/ui-start.js?v=17.4.1"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.4.1"></script>
 
   <!-- Inspector (Kombi Core+Tabs) -->
-  <script defer src="assets/inspector/inspector.js?v=17.3.2"></script>
+  <script defer src="assets/inspector/inspector.js?v=17.4.1"></script>
 
   <!-- Boot-Compat (nur Fallback, kein Doppelstart) -->
-  <script defer src="boot.compat.js?v=17.3.2"></script>
+  <script defer src="boot.compat.js?v=17.4.1"></script>
 
   <!-- SW optional -->
   <script>
@@ -82,15 +81,15 @@
       if ('serviceWorker' in navigator){
         var keep = location.search.includes('keep-sw=1');
         if (keep){
-          navigator.serviceWorker.register('sw.js?v=17.3.2').catch(e=>console.warn('[sw] reg fail:', e?.message));
+          navigator.serviceWorker.register('sw.js?v=17.4.1').catch(e=>console.warn('[sw] reg fail:', e?.message));
         } else {
           navigator.serviceWorker.getRegistrations?.().then(list=>list.forEach(r=>r.unregister()));
         }
       }
-      window.__cb = window.__cb||{}; window.__cb.indexVersion="v17.3.2";
+      window.__cb = window.__cb||{}; window.__cb.indexVersion="v17.4.1";
       window.addEventListener('cb:build-open', ()=>document.body.classList.add('has-build-open'));
       window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
-      console.log('UI bereit (index v17.3.2)');
+      console.log('UI bereit (index v17.4.1)');
     })();
   </script>
 </body>
