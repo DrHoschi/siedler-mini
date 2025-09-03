@@ -1,12 +1,11 @@
 <!doctype html>
 <!--
   Neue Siedler – Index
-  Version: v17.1.3
+  Version: v17.3.2
   CODE_STYLE:
-    - Abschnitts-Kommentare
     - ?v= Versionsanhang
     - Reihenfolge: Core → PF/Carriers → UI-Bridge → UI (Start/Build) → Inspector → Boot
-    - UI-Buttons fixed (nicht zoombar), Body-Klasse wenn Build offen
+    - Keine Altlasten (render.js NICHT mehr einbinden)
 -->
 <html lang="de">
 <head>
@@ -16,12 +15,11 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css?v=17.1.3">
-  <link rel="stylesheet" href="ui-start.css?v=17.1.3">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.1.3">
+  <link rel="stylesheet" href="style.css?v=17.3.2">
+  <link rel="stylesheet" href="ui-start.css?v=17.3.2">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.3.2">
   <link rel="manifest" href="manifest.webmanifest">
 
-  <!-- Buttons fix + Layout Bump -->
   <style>
     html, body { height:100%; margin:0; background:#0c120f; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; }
@@ -41,9 +39,6 @@
 </head>
 <body>
 
-  <!-- Start-Panel -->
-  <div id="start-panel" aria-label="Startmenü"></div>
-
   <!-- Bühne -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
@@ -55,52 +50,47 @@
     <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
   </div>
 
-  <!-- Scripts: Core -->
-  <script src="assets/core/core.env.js?v=17.1.3"></script>
-  <script src="assets/core/core.entities.js?v=17.1.3"></script>
-  <script src="assets/core/core.render.js?v=17.1.3"></script>
-  <script src="assets/core/core.production.js?v=17.1.3"></script>
-  <script src="assets/core/core.pfglue.js?v=17.1.3"></script>
-  <script src="assets/core/core.map.js?v=17.1.3"></script>
-  <script src="assets/core/core.input.js?v=17.1.3"></script>
-  <script src="assets/core/carriers.js?v=17.1.3"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.1.3"></script>
+  <!-- Core -->
+  <script src="assets/core/core.env.js?v=17.3.2"></script>
+  <script src="assets/core/core.entities.js?v=17.3.2"></script>
+  <script src="assets/core/core.render.js?v=17.3.2"></script>
+  <script src="assets/core/core.production.js?v=17.3.2"></script>
+  <script src="assets/core/core.pfglue.js?v=17.3.2"></script>
+  <script src="assets/core/core.map.js?v=17.3.2"></script>
+  <script src="assets/core/core.input.js?v=17.3.2"></script>
+  <script src="assets/core/carriers.js?v=17.3.2"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.3.2"></script>
 
-  <!-- Legacy game.js -->
-  <script defer src="game.js?v=17.1.3"></script>
+  <!-- Legacy-Fassade (falls noch genutzt) -->
+  <script defer src="game.js?v=17.3.2"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.1.3"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.1.3"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.1.3"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.3.2"></script>
+  <script defer src="assets/ui/ui-start.js?v=17.3.2"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.3.2"></script>
 
-  <!-- Inspector -->
-  <script defer src="assets/inspector/inspector.js?v=17.3.0"></script>
+  <!-- Inspector (Kombi Core+Tabs) -->
+  <script defer src="assets/inspector/inspector.js?v=17.3.2"></script>
 
-  <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=16.4.6"></script>
+  <!-- Boot-Compat (nur Fallback, kein Doppelstart) -->
+  <script defer src="boot.compat.js?v=17.3.2"></script>
 
   <!-- SW optional -->
   <script>
     (function(){
       if ('serviceWorker' in navigator){
-        var keep = location.search.indexOf('keep-sw=1') !== -1;
+        var keep = location.search.includes('keep-sw=1');
         if (keep){
-          navigator.serviceWorker.register('sw.js?v=17.1.3').catch(e=>{
-            console.warn('[sw] Registrierung fehlgeschlagen:', e?.message);
-          });
+          navigator.serviceWorker.register('sw.js?v=17.3.2').catch(e=>console.warn('[sw] reg fail:', e?.message));
         } else {
-          navigator.serviceWorker.getRegistrations?.().then(list=>{
-            list.forEach(reg=>reg.unregister());
-          });
+          navigator.serviceWorker.getRegistrations?.().then(list=>list.forEach(r=>r.unregister()));
         }
       }
-      console.log('UI bereit (index v17.1.3)');
-      window.__cb = window.__cb||{}; window.__cb.indexVersion="v17.1.3";
-      window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{version:"v17.1.3"}}));
+      window.__cb = window.__cb||{}; window.__cb.indexVersion="v17.3.2";
       window.addEventListener('cb:build-open', ()=>document.body.classList.add('has-build-open'));
       window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
+      console.log('UI bereit (index v17.3.2)');
     })();
   </script>
 </body>
