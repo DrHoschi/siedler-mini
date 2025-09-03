@@ -1,193 +1,173 @@
 /* ============================================================================
- * assets/core/game.bootstrap.js — Game-Facade
- * Version: v17.4.9
- * Projekt: Neue Siedler
+ * Datei: assets/core/game.bootstrap.js
+ * Projekt: Siedler-Mini
+ * Version: v17.6.1
  *
- * Aufgaben
- *  - Einmaliger Game-Start (Doppelstart verhindern)
- *  - Öffentliche Game-API für UI-Module:
- *      Game.setBuildTool(type) / Game.resetBuildTool()
- *      Game.addResources(type, amount)
- *      Game.getTileSize() / Game.getMapSize()
- *      Game.getObstacleAt(tx,ty) / Game.getRoadSet()
- *  - Brücke zu UI-Events (ui-start / ui-build / inspector tests)
- *  - Sanftes Logging via CBLog (Polyfill-kompatibel)
+ * Ziele / Garantien
+ *  - Verbindet Engine ↔ Render neutral (kein harter Game-State hier)
+ *  - Pro Frame genau EIN Zeichnen (via 'cb:render-frame' oder direkter Aufruf)
+ *  - Doppelt-Start vermeiden (idempotent)
+ *  - OverlayHooks anbinden (requestRepaint → sofortiges Rendern)
+ *  - Kompatibel zu:
+ *      • index.html (FABs / Body-Klassen / Reihenfolge)
+ *      • boot.compat.js (GameBoot.start)
+ *      • Legacy game.js (falls vorhanden, wird bevorzugt gestartet)
+ *
+ * Öffentliche API:
+ *   - window.GameBoot.start(mapUrl?:string)
+ *
+ * Eingehende Events:
+ *   - 'cb:boot-request'      → optionaler Fallback-Start (boot.compat.js oder UI)
+ *   - 'cb:engine-repaint'    → sofort Render.frame()
+ *   - 'cb:render-frame'      → Render.frame()
+ *
+ * Ausgehende Events:
+ *   - 'cb:engine-ready'      → sobald das Bootstrap bereit ist
+ *   - 'cb:render-ready'      → kommt aus core.render.js
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
 
-  var VER = 'v17.4.9';
-  var MOD = '[engine]';
+  var MOD='[bootstrap]';
+  var VER='v17.6.1';
 
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){ console.log(m); } }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){ console.warn(m); } }
-  function err(m){ try{ (window.CBLog?.err||console.error)(m); }catch(_){ console.error(m); } }
+  // --- kleine Logger ---------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(MOD+' '+m);}catch(_){console.log(MOD+' '+m);} }
+  function info(m){ try{ (window.CBLog?.info||console.log)(MOD+' '+m);}catch(_){console.log(MOD+' '+m);} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(MOD+' '+m);}catch(_){console.warn(MOD+' '+m);} }
+  function err(m){ try{ (window.CBLog?.err||console.error)(MOD+' '+m);}catch(_){console.error(MOD+' '+m);} }
 
-  // ---------------------------------------------------------------------------
-  // Interner Zustand
-  // ---------------------------------------------------------------------------
-  var started = false;
-  var state = {
-    mapUrl: null,
-    tileSize: 64,
-    buildTool: null,   // z.B. 'house' | 'farm' | ...
-  };
+  // --- State -----------------------------------------------------------------
+  var _started = false;
+  var _rafId   = 0;
+  var _useEventPump = true;  // Standard: per Event "cb:render-frame"
+  var _running = false;
 
-  // kleine Helpers (ohne harte Engine-Abhängigkeiten)
-  function readMapSize(){
+  // --- Render Binding --------------------------------------------------------
+  function ensureRenderInstalled(){
     try{
-      if (window.CoreMap && typeof CoreMap.getSize === 'function') {
-        return CoreMap.getSize(); // {w,h}
+      if (!window.Render || typeof Render.frame!=='function'){
+        warn('Render nicht bereit – versuche Auto-Init');
+        try{ window.Render?.init?.(); }catch(_){}
       }
-    }catch(_){}
-    return null;
-  }
-  function readObstacleAt(tx,ty){
-    try{
-      if (window.CoreMap && typeof CoreMap.isBlocked === 'function') {
-        return !!CoreMap.isBlocked(tx,ty);
+
+      // OverlayHooks: dem Renderer eine Repaint-Schnittstelle geben
+      if (window.OverlayHooks && typeof OverlayHooks.installToRenderer==='function'){
+        OverlayHooks.installToRenderer({
+          requestRepaint: function(){
+            // Entweder sofort zeichnen oder Event pumpen
+            if (!_useEventPump){
+              try{ Render.frame(); }catch(e){ warn('frame() fail: '+(e&&e.message)); }
+            } else {
+              try{ window.dispatchEvent(new Event('cb:render-frame')); }catch(_){}
+            }
+          }
+        });
       }
-    }catch(_){}
-    return false;
-  }
-  function readRoadSet(){
-    try{
-      if (window.CoreMap && typeof CoreMap.getRoadSet === 'function') {
-        return CoreMap.getRoadSet(); // Set("x,y")
-      }
-    }catch(_){}
-    return null;
+    }catch(e){ warn('ensureRenderInstalled: '+(e&&e.message)); }
   }
 
-  // ---------------------------------------------------------------------------
-  // Öffentliche API (globales Game-Objekt)
-  // ---------------------------------------------------------------------------
-  var Game = (window.Game = window.Game || {});
-
-  Game.version = 'Facade '+VER;
-
-  Game.start = function start(cfg){
-    if (started){ warn('[bootstrap] bereits gestartet'); return; }
-    started = true;
-
-    // Bühne
-    var canvas = (cfg && (cfg.canvas || document.getElementById('game'))) || document.getElementById('game');
-    if (!canvas){ err(MOD+' Canvas nicht gefunden (#game)'); return; }
-
-    // Map
-    state.mapUrl = (cfg && cfg.mapUrl) || canvas.getAttribute('data-map') || 'assets/maps/map-mini.json';
-
-    // Minimal-Engine Hinweis (Rendering steckt in core.render.js)
-    ok(MOD+' Minimal-Engine aktiv (v17.4.0)');
-
-    // Map laden
-    try{
-      window.dispatchEvent(new CustomEvent('cb:engine-start', {detail:{canvas}}));
-      window.dispatchEvent(new CustomEvent('cb:map-load', {detail:{url: state.mapUrl}}));
-      ok('GameLoader.start '+state.mapUrl);
-    }catch(e){
-      warn(MOD+' Map-Init Events fehlgeschlagen: '+(e&&e.message));
-    }
-
-    ok('Game gestartet ('+Game.version+')');
-    window.dispatchEvent(new Event('cb:game-started'));
-    return true;
-  };
-
-  // ---- Build-Tools ----------------------------------------------------------
-  Game.setBuildTool = function(type){
-    state.buildTool = (type || null);
-    ok('[build] Tool gesetzt: '+(state.buildTool||'(none)'));
-    try{
-      window.dispatchEvent(new CustomEvent('cb:set-build-tool',{detail:{type: state.buildTool}}));
-      window.dispatchEvent(new Event('cb:request-repaint'));
-    }catch(_){}
-  };
-
-  Game.resetBuildTool = function(){
-    if (!state.buildTool) return;
-    state.buildTool = null;
-    ok('[ok] Tool zurückgesetzt');
-    try{
-      window.dispatchEvent(new CustomEvent('cb:set-build-tool',{detail:{type:null}}));
-      window.dispatchEvent(new Event('cb:request-repaint'));
-    }catch(_){}
-  };
-
-  // ---- Ressourcen (für Inspector Tests) ------------------------------------
-  Game.addResources = function(type, amount){
-    try{
-      window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}}));
-      ok('[res] +'+amount+' '+type);
-    }catch(e){
-      warn('[res] Event fehlgeschlagen: '+(e&&e.message));
-    }
-  };
-
-  // ---- PF/Map Hooks (für PathFinder & Inspector) ---------------------------
-  Game.getTileSize = function(){ return state.tileSize|0 || 64; };
-  Game.getMapSize  = function(){ return readMapSize() || {w:0,h:0}; };
-  Game.getObstacleAt = function(tx,ty){ return !!readObstacleAt(tx,ty); };
-  Game.getRoadSet = function(){ return readRoadSet(); };
-
-  // ---------------------------------------------------------------------------
-  // UI-Brücken
-  //  - ui-start: Start-Button löst cb:boot/start aus → wir rufen Game.start()
-  //  - ui-build: sendet cb:build-select {type} → hier setzen wir Build-Tool
-  //  - Inspector Tests: Path-Overlay Toggle via DEBUG_PATH_OVERLAY
-  // ---------------------------------------------------------------------------
-
-  // ui-start ruft i.d.R. GameUI.startGame(); wir absorbieren auch Direktaufrufe:
-  window.addEventListener('cb:boot/start', function(ev){
-    if (started) { warn('[bootstrap] bereits gestartet'); return; }
-    var url = ev?.detail?.mapUrl || null;
-    Game.start({ mapUrl:url });
-  });
-
-  // ui-build: gewünschtes Tool
-  window.addEventListener('cb:build-select', function(ev){
-    var t = ev && ev.detail && ev.detail.type;
-    if (!t){ Game.resetBuildTool(); return; }
-    Game.setBuildTool(t);
-  });
-
-  // Inspector: Path-Overlay-Toggle
-  window.addEventListener('cb:toggle-path-overlay', function(ev){
-    var enabled = !!(ev && ev.detail && ev.detail.enabled);
-    window.DEBUG_PATH_OVERLAY = enabled;
-    ok('[overlay] path '+(enabled?'AN':'AUS'));
-    try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch(_){}
-  });
-
-  // Optional: einfache Click-Place-Demo, falls die eigentliche Engine (core.input)
-  // Platzierung NICHT übernimmt. Aktivierbar via Flag.
-  var ALLOW_SIMPLE_PLACE = false;
-  if (ALLOW_SIMPLE_PLACE){
-    document.addEventListener('pointerdown', function(ev){
-      if (!state.buildTool) return;
-      try{
-        var rect = (document.getElementById('game')||{}).getBoundingClientRect?.()||{left:0,top:0};
-        var tile = Game.getTileSize();
-        var tx = Math.max(0, Math.floor((ev.clientX - rect.left)/tile));
-        var ty = Math.max(0, Math.floor((ev.clientY - rect.top)/tile));
-        window.dispatchEvent(new CustomEvent('cb:place-building',{detail:{type:state.buildTool, x:tx, y:ty}}));
-        ok('[ok] Gebäude platziert: '+state.buildTool+' at '+tx+' '+ty);
-        Game.resetBuildTool();
-      }catch(e){
-        warn('[build] Simple-Place Fehler: '+(e&&e.message));
-      }
-    }, {passive:true});
+  // --- Frame Pump ------------------------------------------------------------
+  function pumpEventFrame(){
+    try{ window.dispatchEvent(new Event('cb:render-frame')); }catch(_){}
   }
 
-  // Auto-Start falls index.html direkt lädt (wie bisher)
+  function tick(){
+    _rafId = 0;
+    if (!_running) return;
+    try{
+      if (_useEventPump) pumpEventFrame();
+      else Render?.frame?.();
+    }catch(e){ warn('tick: '+(e&&e.message)); }
+    _rafId = requestAnimationFrame(tick);
+  }
+
+  function startLoop(){
+    if (_running) return;
+    _running = true;
+    _rafId = requestAnimationFrame(tick);
+  }
+  function stopLoop(){
+    _running = false;
+    if (_rafId){ cancelAnimationFrame(_rafId); _rafId=0; }
+  }
+
+  // Optional: bei Tab-Wechsel sparen
   try{
-    if (!started) {
-      var canvas = document.getElementById('game');
-      if (canvas){ Game.start({ canvas, mapUrl: canvas.getAttribute('data-map') }); }
-    }
-  }catch(e){
-    err(MOD+' Startfehler: '+(e&&e.message));
+    document.addEventListener('visibilitychange', function(){
+      if (document.hidden) stopLoop(); else startLoop();
+    });
+  }catch(_){}
+
+  // --- Public Start ----------------------------------------------------------
+  function doStart(mapUrl){
+    if (_started){ warn('bereits gestartet'); return; }
+    _started = true;
+
+    ensureRenderInstalled();
+    startLoop();
+
+    // Legacy-Game.js bevorzugt starten, wenn vorhanden
+    var usedLegacy = false;
+    try{
+      if (window.startGame && typeof startGame==='function'){
+        usedLegacy = true;
+        startGame({
+          canvas: document.getElementById('game'),
+          mapUrl: mapUrl || (document.getElementById('game')?.dataset?.map) || 'assets/maps/map-mini.json',
+          onReady: function(){ ok('Legacy-Start (startGame) bereit'); }
+        });
+      } else if (window.Game && typeof Game.start==='function'){
+        usedLegacy = true;
+        Game.start(mapUrl || (document.getElementById('game')?.dataset?.map) || 'assets/maps/map-mini.json');
+      }
+    }catch(e){ err('Legacy-Start fehlgeschlagen: '+(e&&e.message)); }
+
+    ok('ready ('+VER+')'+(usedLegacy?' [Legacy-Bridge aktiv]':' [Minimal-Engine aktiv]'));
+    try{ window.dispatchEvent(new Event('cb:engine-ready')); }catch(_){}
   }
 
-  ok(MOD+' ready ('+Game.version+')');
+  // --- Event-Wires -----------------------------------------------------------
+  // 1) Render-Frame aus Event heraus anstoßen (Engine kann das feuern)
+  try{
+    window.addEventListener('cb:render-frame', function(){
+      try{ Render?.frame?.(); }catch(e){ warn('Render.frame() Fehler: '+(e&&e.message)); }
+    });
+  }catch(_){}
+
+  // 2) „Sofort neu zeichnen“ Shortcuts (von Inspector/Overlay)
+  try{
+    window.addEventListener('cb:engine-repaint', function(){
+      try{ Render?.frame?.(); }catch(e){ warn('Repaint Fehler: '+(e&&e.message)); }
+    });
+  }catch(_){}
+
+  // 3) Fallback-Boot: wenn jemand „cb:boot-request“ feuert
+  try{
+    window.addEventListener('cb:boot-request', function(ev){
+      var url = ev?.detail?.mapUrl || null;
+      doStart(url);
+    });
+  }catch(_){}
+
+  // --- Öffentliche API -------------------------------------------------------
+  window.GameBoot = window.GameBoot || {};
+  window.GameBoot.start = function(mapUrl){
+    doStart(mapUrl);
+  };
+
+  // --- Auto-Init (sanft) -----------------------------------------------------
+  function safeInit(){
+    try{
+      ensureRenderInstalled();
+      // Falls jemand bereits cb:boot-request geschickt hat, sind wir startklar.
+      ok('Modul geladen ('+VER+')');
+    }catch(e){ warn('Init: '+(e&&e.message)); }
+  }
+  if (document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', safeInit, {once:true});
+  } else {
+    safeInit();
+  }
+
 })();
