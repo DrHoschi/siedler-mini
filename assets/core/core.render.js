@@ -1,227 +1,195 @@
 /* ============================================================================
- * core.render.js — Rendering-Orchestrierung (Overlay für Entities + Hover)
- * Version: v17.5.0
- * Projekt: Neue Siedler
+ * Datei: assets/core/core.render.js
+ * Projekt: Siedler-Mini
+ * Version: v17.6.0
  *
- * Ziele
- *  - Terrain bleibt auf #game (Basis-Renderer, unverändert)
- *  - Neues Overlay-Canvas #game-overlay für:
- *      • Entities (aus CoreEntities) — vorerst als einfache Kacheln
- *      • Hover-Highlight (aktuelles Tile unter Cursor)
- *      • (optional) Pfad-Overlay via PathFinder.drawOverlay
- *  - Kein „Trail“: Overlay wird pro Frame vollständig neu gezeichnet
- *  - Saubere Repaint-Steuerung via cb:request-repaint, Size/Camera/Hover-Events
+ * CODE_STYLE / Garantien
+ *  - Keine eigene Game-Loop – nur Zeichenfunktionen (pull-basiert).
+ *  - Sanfte Logs via CBLog (fällt auf console.* zurück).
+ *  - Abwärtskompatible Provider-Hooks:
+ *      • setCameraProvider(fn)      -> fn() => {x,y,zoom} in Tiles
+ *      • setMapDrawer(fn)           -> fn(ctx, cam)
+ *      • setEntityDrawer(fn)        -> fn(ctx, cam)
+ *  - Fallback-Zeichner (stubs), damit nie „schwarz“ gerendert wird.
+ *  - OverlayHooks-Integration: OverlayHooks.draw(ctx, cam) nach Entities.
  *
- * Events (listen)
- *  - cb:request-repaint
- *  - cb:hover-tile            {tx,ty,screenX,screenY}
- *  - cb:camera-changed        {x,y,zoom}
- *  - cb:place-building        {type,x,y}   → nur, um Repaint auszulösen
+ * Öffentliche API: window.Render
+ *   Render.init({ canvas?:HTMLCanvasElement, ctx?:CanvasRenderingContext2D })
+ *   Render.setCameraProvider(fn)
+ *   Render.setMapDrawer(fn)
+ *   Render.setEntityDrawer(fn)
+ *   Render.frame()               // genau EIN Frame rendern
+ *   Render.setEnabled(on)        // Renderer vorübergehend deaktivieren
+ *   Render.getContext()          // ctx zurückgeben
  *
- * Abhängigkeiten
- *  - window.Game.getTileSize()
- *  - window.CoreEntities.list() (falls nicht vorhanden → graceful fallback)
- *  - window.PathFinder.drawOverlay(ctx,{x,y,zoom}) (optional)
+ * Events (empfangen):
+ *   'cb:render-frame'            // Engine kann dieses Event feuern → Render.frame()
  *
- * Hinweise
- *  - #game füllt per index.html die gesamte Viewport-Größe → Overlay deckt 1:1
- *  - Overlay ist pointer-events:none, stört Interaktionen nicht
+ * Events (senden):
+ *   'cb:render-ready'            // wenn init abgeschlossen ist
  * ========================================================================== */
 (function(){
   'use strict';
 
-  var VER = 'v17.5.0';
-  var MOD = '[render]';
+  var MOD='[render]';
+  var VER='v17.6.0';
 
-  // ---- Logging --------------------------------------------------------------
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){ console.warn(m);} }
-  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){ console.error(m);} }
-
-  // ---- DOM / Canvas ---------------------------------------------------------
-  var base = null;            // #game (Basis-Canvas → Terrain)
-  var ov   = null;            // #game-overlay (neu)
-  var ctx  = null;            // 2D-Kontext Overlay
+  // ---- Logger ---------------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(MOD+' '+m);}catch(_){console.log(MOD+' '+m);} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(MOD+' '+m);}catch(_){console.warn(MOD+' '+m);} }
+  function err(m){ try{ (window.CBLog?.err||console.error)(MOD+' '+m);}catch(_){console.error(MOD+' '+m);} }
 
   // ---- State ----------------------------------------------------------------
-  var tile = 64;
-  var cam  = { x:0, y:0, zoom:1 };     // Kamera in Tiles
-  var hover = { has:false, x:0, y:0 }; // Hover-Tile in Kartencoords
-  var needsRepaint = true;
+  var _canvas = null;
+  var _ctx    = null;
+  var _enabled = true;
+
+  // Provider (werden von Engine/Bootstrap gesetzt)
+  var _getCam = function(){
+    try{
+      if (window.Game && typeof Game.getCamera==='function') return Game.getCamera();
+    }catch(_){}
+    return { x:0, y:0, zoom:1 };
+  };
+  var _drawMap = function(ctx, cam){
+    // Fallback: leichte Hintergrund-Markierung, damit man ein Bild hat
+    try{
+      var w = _canvas ? _canvas.width : (ctx.canvas?.width||800);
+      var h = _canvas ? _canvas.height: (ctx.canvas?.height||600);
+      ctx.save();
+      ctx.fillStyle = '#0e1411';
+      ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = 'rgba(255,255,255,.06)';
+      for (var y=0;y<h;y+=64) for (var x=0;x<w;x+=64) ctx.fillRect(x,y,63,63);
+      ctx.restore();
+    }catch(_){}
+  };
+  var _drawEntities = function(ctx, cam){
+    // Fallback: wenn Game.Entities existieren, minimal darstellen
+    try{
+      if (!window.Game || !Game.getEntities) return;
+      var list = Game.getEntities(); if (!Array.isArray(list)) return;
+      var tile = (Game.getTileSize && Game.getTileSize()) || 64;
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      for (var i=0;i<list.length;i++){
+        var e = list[i]; if (!e || typeof e.tx!=='number') continue;
+        var sx = (e.tx - cam.x) * tile, sy = (e.ty - cam.y) * tile;
+        // einfache Kachel (Placeholder)
+        ctx.fillStyle = e.color || '#4ade80';
+        ctx.fillRect(sx+2, sy+2, tile-4, tile-4);
+      }
+      ctx.restore();
+    }catch(_){}
+  };
 
   // ---- Helpers --------------------------------------------------------------
-  function updTileSize(){
-    try{ tile = (window.Game?.getTileSize?.()|0) || 64; }catch(_){}
-    if (tile<=0) tile=64;
-  }
-  function resizeOverlayToViewport(){
-    // #game ist 100vw x 100vh → Overlay auch
-    var w = Math.max(1, (window.innerWidth | 0));
-    var h = Math.max(1, (window.innerHeight| 0));
-    if (!ov) return;
-    if (ov.width !== w || ov.height !== h){
-      ov.width = w; ov.height = h;
-      needsRepaint = true;
-    }
-  }
-  function clearOverlay(){
-    if (!ctx || !ov) return;
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.clearRect(0,0,ov.width, ov.height);
-  }
-  function toScreenXY(tx, ty){
-    // Kartentile → Screen (px)
-    var px = Math.round((tx - cam.x) * tile * cam.zoom);
-    var py = Math.round((ty - cam.y) * tile * cam.zoom);
-    return { x:px, y:py };
-  }
-
-  // ---- Entities-Zeichnung (einfach) ----------------------------------------
-  function drawEntities(){
-    var list = null;
-    try{ list = window.CoreEntities?.list?.(); }catch(_){}
-    if (!list || !list.length) return;
-
-    ctx.lineWidth = Math.max(1, Math.round(2/cam.zoom));
-    for (var i=0;i<list.length;i++){
-      var e = list[i];
-      var p = toScreenXY(e.x, e.y);
-      var sz = Math.round(tile * cam.zoom);
-
-      // Fallback-Style je Typ (später durch Texturen/Atlas ersetzen)
-      var fill = '#3b82f6';
-      var stroke = '#1d4ed8';
-      switch(String(e.type)){
-        case 'house':      fill='#a78bfa'; stroke='#7c3aed'; break;
-        case 'farm':       fill='#34d399'; stroke='#059669'; break;
-        case 'depot':      fill='#fbbf24'; stroke='#d97706'; break;
-        case 'hq':         fill='#f87171'; stroke='#b91c1c'; break;
-        case 'smith':      fill='#f59e0b'; stroke='#b45309'; break;
-        case 'lumberjack': fill='#60a5fa'; stroke='#2563eb'; break;
-      }
-
-      // Kachel
-      ctx.fillStyle = fill;
-      ctx.strokeStyle = stroke;
-      ctx.beginPath();
-      ctx.rect(p.x, p.y, sz, sz);
-      ctx.fill();
-      ctx.stroke();
-
-      // Label
-      ctx.save();
-      ctx.font = Math.max(10, Math.round(12*cam.zoom))+'px system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(0,0,0,.7)';
-      ctx.fillText(e.type, p.x+4, p.y+Math.min(sz-4, 14*cam.zoom));
-      ctx.restore();
-    }
-  }
-
-  // ---- Hover-Highlight ------------------------------------------------------
-  function drawHover(){
-    if (!hover.has) return;
-    var p = toScreenXY(hover.x, hover.y);
-    var sz = Math.round(tile * cam.zoom);
-    ctx.lineWidth = Math.max(1, Math.round(2/cam.zoom));
-    ctx.strokeStyle = 'rgba(255,255,255,.85)';
-    ctx.setLineDash([Math.max(2,Math.round(3/cam.zoom)), Math.max(2,Math.round(3/cam.zoom))]);
-    ctx.beginPath();
-    ctx.rect(p.x+0.5, p.y+0.5, sz-1, sz-1);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // ---- Optional: Path-Overlay (Heatmap/Wege) --------------------------------
-  function drawPathOverlay(){
+  function _ensureCtx(){
+    if (_ctx) return true;
     try{
-      if (!window.DEBUG_PATH_OVERLAY) return;
-      if (window.PathFinder?.drawOverlay && typeof PathFinder.drawOverlay === 'function'){
-        PathFinder.drawOverlay(ctx, cam); // erwartet cam={x,y,zoom} in Tiles
-      }
+      if (!_canvas) _canvas = document.getElementById('game');
+      if (_canvas && !_ctx) _ctx = _canvas.getContext('2d');
+    }catch(e){
+      _ctx = null;
+    }
+    return !!_ctx;
+  }
+
+  function _clear(ctx){
+    try{
+      var w = _canvas ? _canvas.width : (ctx.canvas?.width||0);
+      var h = _canvas ? _canvas.height: (ctx.canvas?.height||0);
+      if (w && h) ctx.clearRect(0,0,w,h);
     }catch(_){}
   }
 
-  // ---- Repaint --------------------------------------------------------------
-  function repaint(){
-    if (!needsRepaint || !ctx) return;
-    needsRepaint = false;
+  // ---- Ein Frame zeichnen ---------------------------------------------------
+  function frame(){
+    if (!_enabled) return;
+    if (!_ensureCtx()){
+      warn('kein Canvas/Context – frame() übersprungen');
+      return;
+    }
 
-    clearOverlay();
-    // Zeichenreihenfolge: Pfade (unter), Entities, Hover (ober)
-    drawPathOverlay();
-    drawEntities();
-    drawHover();
-  }
+    var ctx = _ctx;
+    var cam = _getCam() || {x:0,y:0,zoom:1};
 
-  function requestRepaint(){ needsRepaint = true; }
-
-  // ---- Event-Wiring ---------------------------------------------------------
-  function bindEvents(){
-    window.addEventListener('resize', function(){ resizeOverlayToViewport(); requestRepaint(); }, {passive:true});
-    window.addEventListener('cb:request-repaint', function(){ requestRepaint(); });
-    window.addEventListener('cb:camera-changed', function(ev){
-      var d = ev?.detail||{};
-      if (typeof d.x==='number')   cam.x = d.x;
-      if (typeof d.y==='number')   cam.y = d.y;
-      if (typeof d.zoom==='number')cam.zoom = d.zoom;
-      requestRepaint();
-    });
-    window.addEventListener('cb:hover-tile', function(ev){
-      var d = ev?.detail||{};
-      hover.has = true;
-      hover.x = d.tx|0; hover.y = d.ty|0;
-      requestRepaint();
-    });
-    // Wenn die Maus die Bühne verlässt, Hover löschen (optional)
-    document.getElementById('game')?.addEventListener('pointerleave', function(){
-      hover.has = false; requestRepaint();
-    });
-    // Platzierung → Repaint
-    window.addEventListener('cb:place-building', function(){ requestRepaint(); });
-  }
-
-  // ---- Loop (leichtgewichtig) ----------------------------------------------
-  function tick(){
-    try{ repaint(); }catch(e){ err(MOD+' repaint: '+(e&&e.message)); }
-    window.requestAnimationFrame(tick);
-  }
-
-  // ---- Init -----------------------------------------------------------------
-  function init(){
     try{
-      base = document.getElementById('game');
-      if (!base){ warn(MOD+' #game nicht gefunden'); return; }
+      // (1) clear
+      _clear(ctx);
 
-      // Overlay erzeugen, falls nicht vorhanden
-      ov = document.getElementById('game-overlay');
-      if (!ov){
-        ov = document.createElement('canvas');
-        ov.id = 'game-overlay';
-        // füllt die Viewport-Fläche analog #game
-        ov.style.position = 'fixed';
-        ov.style.left = '0'; ov.style.top = '0';
-        ov.style.width = '100vw'; ov.style.height = '100vh';
-        ov.style.pointerEvents = 'none';
-        ov.style.zIndex = '2147483601'; // über Terrain, unter FABs (die 2147483647 haben)
-        document.body.appendChild(ov);
-      }
-      ctx = ov.getContext('2d', { alpha:true, desynchronized:true });
+      // (2) Map
+      _drawMap(ctx, cam);
 
-      updTileSize();
-      resizeOverlayToViewport();
-      bindEvents();
-      requestRepaint();
-      tick();
+      // (3) Entities
+      _drawEntities(ctx, cam);
 
-      ok(MOD+' Modul geladen ('+VER+')');
+      // (4) Debug-Overlays (PF, Heatmap, etc.) – genau HIER
+      try{
+        if (window.OverlayHooks && typeof OverlayHooks.draw==='function'){
+          OverlayHooks.draw(ctx, cam); // <— Integration
+        }
+      }catch(e){ warn('Overlay draw: '+(e&&e.message)); }
+
+      // (5) HUD/UI: außerhalb dieses Moduls, wir zeichnen absichtlich nichts
+
     }catch(e){
-      err(MOD+' Init-Fehler: '+(e&&e.message));
+      err('Frame-Fehler: '+(e&&e.message));
     }
   }
 
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', init, {once:true});
-  } else {
-    init();
-  }
+  // ---- Öffentliche API ------------------------------------------------------
+  var API = {
+    version: VER,
+    init: function(opt){
+      opt = opt||{};
+      _canvas = opt.canvas || _canvas || document.getElementById('game') || null;
+      _ctx    = opt.ctx    || (_canvas ? _canvas.getContext('2d') : null);
+
+      // sanftes Resize (optional, wenn Canvas existiert)
+      try{
+        if (_canvas && !opt.noResizeHandler){
+          var fit = function(){
+            _canvas.width  = Math.max(1, window.innerWidth|0);
+            _canvas.height = Math.max(1, window.innerHeight|0);
+          };
+          window.addEventListener('resize', fit, {passive:true});
+          fit();
+        }
+      }catch(_){}
+
+      ok('Modul geladen ('+VER+')');
+      try{ window.dispatchEvent(new Event('cb:render-ready')); }catch(_){}
+      return API;
+    },
+    setCameraProvider: function(fn){
+      if (typeof fn==='function') _getCam = fn;
+      return API;
+    },
+    setMapDrawer: function(fn){
+      if (typeof fn==='function') _drawMap = fn;
+      return API;
+    },
+    setEntityDrawer: function(fn){
+      if (typeof fn==='function') _drawEntities = fn;
+      return API;
+    },
+    frame: frame,
+    setEnabled: function(on){ _enabled = !!on; return API; },
+    getContext: function(){ _ensureCtx(); return _ctx; }
+  };
+
+  // ---- Event-Wire -----------------------------------------------------------
+  // Deine Engine kann pro Tick dieses Event feuern → wir zeichnen genau 1 Frame
+  try{
+    window.addEventListener('cb:render-frame', function(){ frame(); });
+  }catch(_){}
+
+  // ---- Export ---------------------------------------------------------------
+  window.Render = API;
+
+  // ---- Auto-Init (sanft) ----------------------------------------------------
+  // Wir initialisieren uns direkt, blockieren aber nichts, falls kein Canvas da ist.
+  try{ API.init(); }catch(_){}
+
 })();
