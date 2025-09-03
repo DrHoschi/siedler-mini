@@ -1,140 +1,148 @@
 /* ============================================================================
- * Datei: core.input.js
- * Projekt: Siedler-Mini
- * Version: v17.1.1
- * Zweck:
- *   - Maus/Touch/Keyboard: Pan/Zoom
- *   - Platzieren per Klick (build-Tool)
- *   - Delegiert: Entities.canPlace/place + Render.draw
- * ============================================================================
- */
-(function(ns){
+ * core.input.js — Eingabe & Build-Interaktion
+ * Version: v17.5.0
+ * Projekt: Neue Siedler
+ *
+ * Aufgaben
+ *  - Pointer/Touch auf dem Canvas (#game) in Tile-Koordinaten übersetzen
+ *  - Build-Tool setzen/platzieren (Events mit Engine-agnostischer Fassade)
+ *  - Hover-Tile publizieren (cb:hover-tile)
+ *  - ESC/Right-Click → Tool zurücksetzen
+ *  - Kamera-Offsets berücksichtigen (optional via cb:camera-changed)
+ *
+ * Events (listen)
+ *  - cb:set-build-tool        {type|null}
+ *  - cb:camera-changed        {x,y,zoom}  (Tiles)
+ *
+ * Events (dispatch)
+ *  - cb:hover-tile            {tx,ty,screenX,screenY}
+ *  - cb:place-building        {type,x,y}
+ *  - cb:request-repaint
+ *
+ * Abhängigkeiten
+ *  - window.Game (getTileSize)
+ *  - CBLog (Polyfill reicht)
+ * ========================================================================== */
+(function(){
   'use strict';
-  if (!ns || !ns.state) { console.error('[input] GameCore.env fehlt'); return; }
 
-  var S = ns.state;
-  var U = ns.util;
+  var VER = 'v17.5.0';
+  var MOD = '[input]';
 
-  var canvas=null, ctx=null;
-  var TOOL = window.__GC_TOOL__ || { mode:null, key:null };
+  // ---- Logging --------------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){ console.warn(m);} }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){ console.error(m);} }
 
-  function setTool(mode, payload){
-    if (mode === 'build'){
-      var key = (typeof payload==='string') ? payload : (payload && payload.key) || null;
-      TOOL.mode = 'build';
-      TOOL.key = key ? ns.Entities.resolveKey(key) : null;
-      window.__GC_TOOL__ = TOOL;
-      ns.ok('[build] Tool gesetzt: '+(TOOL.key||'(none)'));
-    } else {
-      TOOL.mode = mode || null;
-      TOOL.key = null;
-      window.__GC_TOOL__ = TOOL;
-      if (mode===null) ns.ok('[ok] Tool zurückgesetzt');
+  // ---- State ----------------------------------------------------------------
+  var stage = null;            // Canvas #game
+  var tileSize = 64;           // px
+  var cam = { x:0, y:0, zoom:1 }; // Karten-Kamera in Tiles (fallback)
+  var buildTool = null;        // aktuelles Bau-Werkzeug (string)
+
+  // ---- Helpers --------------------------------------------------------------
+  function updTileSize(){
+    try{ tileSize = (window.Game?.getTileSize?.()|0) || 64; }catch(_){}
+    if (tileSize<=0) tileSize = 64;
+  }
+  function screenToTile(clientX, clientY){
+    var rect = stage.getBoundingClientRect ? stage.getBoundingClientRect() : {left:0, top:0, width:stage.width, height:stage.height};
+    var sx = (clientX - rect.left);
+    var sy = (clientY - rect.top);
+    // Zoom/Kamera in Tile-Einheiten berücksichtigen
+    var tx = Math.floor((sx / (tileSize*cam.zoom)) + cam.x);
+    var ty = Math.floor((sy / (tileSize*cam.zoom)) + cam.y);
+    if (tx<0) tx=0; if (ty<0) ty=0;
+    return { tx:tx, ty:ty, sx:sx, sy:sy };
+  }
+
+  // ---- Event-Wiring ---------------------------------------------------------
+  function bindPointer(){
+    if (!stage) return;
+
+    // Hover → cb:hover-tile
+    stage.addEventListener('pointermove', function(ev){
+      try{
+        var p = screenToTile(ev.clientX, ev.clientY);
+        window.dispatchEvent(new CustomEvent('cb:hover-tile', { detail:{
+          tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy
+        }}));
+      }catch(_){}
+    }, {passive:true});
+
+    // Platzierung mit Linksklick/Touch
+    stage.addEventListener('pointerdown', function(ev){
+      // Nur Linksklick (0) oder Touch (button==0/undefined)
+      if (ev.button != null && ev.button !== 0) return;
+      if (!buildTool) return;
+      try{
+        var p = screenToTile(ev.clientX, ev.clientY);
+        window.dispatchEvent(new CustomEvent('cb:place-building', { detail:{
+          type: buildTool, x:p.tx, y:p.ty
+        }}));
+        ok('[ok] Gebäude platziert: '+buildTool+' at '+p.tx+' '+p.ty);
+        // Tool zurücksetzen (klassisches Verhalten)
+        window.Game?.resetBuildTool?.();
+      }catch(e){
+        warn(MOD+' Platzierung fehlgeschlagen: '+(e&&e.message));
+      }
+    }, {passive:true});
+
+    // Rechtsklick → Tool resetten (verhindert Kontextmenü)
+    stage.addEventListener('contextmenu', function(ev){
+      if (buildTool){
+        ev.preventDefault();
+        window.Game?.resetBuildTool?.();
+      }
+    });
+
+    // ESC → Tool resetten
+    window.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape' && buildTool){
+        try{ window.Game?.resetBuildTool?.(); }catch(_){}
+      }
+    });
+  }
+
+  function bindGlobal(){
+    // Build-Tool Änderungen
+    window.addEventListener('cb:set-build-tool', function(ev){
+      var t = ev?.detail?.type || null;
+      buildTool = t;
+      // Cursor optional leicht ändern (nur Stage)
+      try{
+        stage.style.cursor = buildTool ? 'crosshair' : 'default';
+      }catch(_){}
+    });
+
+    // Kamera-Änderungen (Tiles)
+    window.addEventListener('cb:camera-changed', function(ev){
+      try{
+        var d = ev?.detail||{};
+        cam.x = (typeof d.x==='number')? d.x : cam.x;
+        cam.y = (typeof d.y==='number')? d.y : cam.y;
+        cam.zoom = (typeof d.zoom==='number')? d.zoom : cam.zoom;
+      }catch(_){}
+    });
+  }
+
+  // ---- Init -----------------------------------------------------------------
+  function init(){
+    try{
+      stage = document.getElementById('game');
+      if (!stage){ warn(MOD+' Canvas #game nicht gefunden'); return; }
+      updTileSize();
+      bindGlobal();
+      bindPointer();
+      ok(MOD+' Modul gebunden ('+VER+')');
+    }catch(e){
+      err(MOD+' Init-Fehler: '+(e&&e.message));
     }
   }
 
-  function zoomAt(factor, cx, cy){
-    var preX = S.cam.x + cx / (S.cam.zoom||1);
-    var preY = S.cam.y + cy / (S.cam.zoom||1);
-    S.cam.zoom = U.clamp((S.cam.zoom||1)*factor, S.cam.minZ||0.5, S.cam.maxZ||3);
-    var postX = S.cam.x + cx / (S.cam.zoom||1);
-    var postY = S.cam.y + cy / (S.cam.zoom||1);
-    S.cam.x += (preX - postX);
-    S.cam.y += (preY - postY);
-    ns.Map.clampCam();
-    ns.Render.draw();
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, {once:true});
+  } else {
+    init();
   }
-
-  function bind(c){
-    canvas = c; ctx = c.getContext && c.getContext('2d');
-
-    var drag = { on:false, sx:0, sy:0, cx:0, cy:0, pinch:false, last:0 };
-
-    canvas.addEventListener('mousedown', function(e){
-      drag.on=true; drag.pinch=false; drag.sx=e.clientX; drag.sy=e.clientY; drag.cx=S.cam.x; drag.cy=S.cam.y;
-    });
-    window.addEventListener('mousemove', function(e){
-      if(!drag.on || drag.pinch) return;
-      S.cam.x = drag.cx - (e.clientX - drag.sx) / (S.cam.zoom||1);
-      S.cam.y = drag.cy - (e.clientY - drag.sy) / (S.cam.zoom||1);
-      ns.Map.clampCam(); ns.Render.draw();
-    });
-    window.addEventListener('mouseup', function(){ drag.on=false; drag.pinch=false; });
-
-    canvas.addEventListener('wheel', function(e){
-      e.preventDefault ? e.preventDefault() : (e.returnValue=false);
-      var rect = canvas.getBoundingClientRect();
-      var cx = e.clientX - rect.left;
-      var cy = e.clientY - rect.top;
-      zoomAt(e.deltaY<0 ? 1.15 : 1/1.15, cx, cy);
-    }, {passive:false});
-
-    canvas.addEventListener('click', function(e){
-      if (TOOL.mode!=='build' || !TOOL.key || !S.map) return;
-      var rect = canvas.getBoundingClientRect();
-      var sx = e.clientX - rect.left;
-      var sy = e.clientY - rect.top;
-      var wx = S.cam.x + sx / (S.cam.zoom||1);
-      var wy = S.cam.y + sy / (S.cam.zoom||1);
-      var tile = ns.Map.getTileSize();
-      var tx = Math.floor(wx / tile);
-      var ty = Math.floor(wy / tile);
-      if (ns.Entities.canPlace(TOOL.key, tx, ty)){
-        ns.Entities.place(TOOL.key, tx, ty);
-        ns.Render.draw();
-      } else {
-        ns.warn('[game] Platzierung nicht möglich bei '+tx+','+ty+' für '+TOOL.key);
-      }
-    });
-
-    // Touch
-    canvas.addEventListener('touchstart', function(e){
-      if (e.touches.length===1){
-        var t=e.touches[0]; drag.on=true; drag.pinch=false; drag.sx=t.clientX; drag.sy=t.clientY; drag.cx=S.cam.x; drag.cy=S.cam.y;
-      } else if (e.touches.length>=2){
-        drag.on=true; drag.pinch=true;
-        var a=e.touches[0], b=e.touches[1];
-        drag.last = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-      }
-    }, {passive:true});
-    canvas.addEventListener('touchmove', function(e){
-      if (!drag.on) return;
-      if (!drag.pinch && e.touches.length===1){
-        var t=e.touches[0];
-        S.cam.x = drag.cx - (t.clientX - drag.sx) / (S.cam.zoom||1);
-        S.cam.y = drag.cy - (t.clientY - drag.sy) / (S.cam.zoom||1);
-        ns.Map.clampCam(); ns.Render.draw();
-      } else if (e.touches.length>=2){
-        var a=e.touches[0], b=e.touches[1];
-        var d=Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-        if (drag.last){
-          var factor = d / drag.last;
-          var r = canvas.getBoundingClientRect();
-          var cx = ((a.clientX+b.clientX)/2) - r.left;
-          var cy = ((a.clientY+b.clientY)/2) - r.top;
-          zoomAt(factor, cx, cy);
-        }
-        drag.last=d;
-      }
-    }, {passive:true});
-    window.addEventListener('touchend', function(){ drag.on=false; drag.pinch=false; drag.last=0; });
-
-    // Keyboard-Pan
-    window.addEventListener('keydown', function(e){
-      var k=(e.key||'').toLowerCase();
-      var step=Math.max(16, Math.floor(120/(S.cam.zoom||1)));
-      if(k==='arrowleft'||k==='a'){ S.cam.x-=step; }
-      else if(k==='arrowright'||k==='d'){ S.cam.x+=step; }
-      else if(k==='arrowup'||k==='w'){ S.cam.y-=step; }
-      else if(k==='arrowdown'||k==='s'){ S.cam.y+=step; }
-      else return;
-      ns.Map.clampCam(); ns.Render.draw();
-    });
-
-    ns.ok('[input] Modul gebunden (v17.1.1)');
-  }
-
-  // --------------------------- Export ----------------------------------------
-  ns.Input = { bind:bind, setTool:setTool };
-
-})(window.GameCore = window.GameCore || {});
+})();
