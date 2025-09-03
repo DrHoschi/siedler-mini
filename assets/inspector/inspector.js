@@ -1,8 +1,7 @@
 /* ============================================================================
- * assets/inspector/inspector.js — v17.4.1
- * Kombi: Core-Fenster + Logs-Tab + Tests-Tab (Pfad/Entity Toggle, Ressourcen)
- * Robuster Auto-Build: reagiert auf cb:inspector-open/ -toggle,
- * baut sich selbst und setzt display:block – auch wenn sehr früh getriggert.
+ * assets/inspector/inspector.js — v17.4.2
+ * Kombi-Core (Logs + Tests). Reagiert auf cb:inspector-open/-toggle und
+ * übernimmt ggf. den vom UI-Fallback erstellten #inspector-Knoten.
  * ============================================================================ */
 (function () {
   'use strict';
@@ -17,18 +16,20 @@
 
   function buildCore(){
     if (built && root && tabs) return root;
-    root = byId('inspector') || mk('div',{id:'inspector',role:'dialog','aria-label':'Inspector'},{
-      position:'fixed',right:'12px',bottom:'80px',width:'400px',maxWidth:'90vw',maxHeight:'70vh',overflow:'auto',
-      background:'rgba(20,20,20,.94)',border:'1px solid #333',borderRadius:'8px',boxShadow:'0 14px 40px rgba(0,0,0,.45)',
-      backdropFilter:'blur(6px)',color:'#eaeaea',font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
-      zIndex:100001,display:'none'
-    });
+    root = byId('inspector') || mk('div',{id:'inspector',role:'dialog','aria-label':'Inspector'});
     if (!root.parentNode) document.body.appendChild(root);
+    Object.assign(root.style,{position:'fixed',right:'12px',bottom:'80px',width:'400px',maxWidth:'90vw',maxHeight:'70vh',
+      overflow:'auto',background:'rgba(20,20,20,.94)',border:'1px solid #333',borderRadius:'8px',
+      boxShadow:'0 14px 40px rgba(0,0,0,.45)',backdropFilter:'blur(6px)',color:'#eaeaea',
+      font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',zIndex:'100005'}); // etwas höher
 
-    var head=mk('div',null,{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 12px',borderBottom:'1px solid #2d2d2d'});
-    var title=mk('div'); title.textContent='Inspector'; title.style.fontWeight='700';
-    var close=mk('button'); close.textContent='✕'; Object.assign(close.style,{background:'transparent',border:'1px solid #3a3a3a',borderRadius:'4px',color:'#ddd',cursor:'pointer'});
-    close.onclick=()=>toggle(false); head.appendChild(title); head.appendChild(close); root.appendChild(head);
+    // Header nur einmal hinzufügen, wenn nicht vorhanden
+    if (!byId('inspector-head', root)){
+      var head=mk('div',{id:'inspector-head'}, {display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 12px',borderBottom:'1px solid #2d2d2d'});
+      var title=mk('div'); title.textContent='Inspector'; title.style.fontWeight='700';
+      var close=mk('button'); close.textContent='✕'; Object.assign(close.style,{background:'transparent',border:'1px solid #3a3a3a',borderRadius:'4px',color:'#ddd',cursor:'pointer'});
+      close.onclick=()=>toggle(false); head.appendChild(title); head.appendChild(close); root.appendChild(head);
+    }
 
     tabs=byId('inspector-tabs',root)||mk('div',{id:'inspector-tabs'},{display:'block',padding:'8px 10px'}); if(!tabs.parentNode) root.appendChild(tabs);
 
@@ -56,11 +57,10 @@
         const l=mk('label',{for:id}); l.textContent=text;
         c.addEventListener('change',()=>{ const enabled=!!c.checked; window[id.toUpperCase().replaceAll('-','_')]=enabled;
           try{ window.dispatchEvent(new CustomEvent(ev,{detail:{enabled}})); }catch(_){}
-          ok('[inspector] '+id+' '+(enabled?'AN':'AUS')); try{ requestAnimationFrame(()=>window.dispatchEvent(new Event('cb:request-repaint')));}catch(_){}
         }); r.appendChild(c); r.appendChild(l); return r; };
       panel.appendChild(row('dbg-path-overlay',   'Pfad-Overlay anzeigen',   'cb:toggle-path-overlay'));
       panel.appendChild(row('dbg-entity-overlay', 'Entity-Overlay anzeigen', 'cb:toggle-entity-overlay'));
-
+      // Ressourcen
       const grid=mk('div',null,{display:'grid',gridTemplateColumns:'1fr 110px',gap:'6px',margin:'6px 0'});
       const t=mk('input',{type:'text',id:'res-type',placeholder:'Typ (wood, stone, …)',autocomplete:'off'},{padding:'6px 8px',background:'#181818',border:'1px solid #333',color:'#eee'}); t.value='wood';
       const n=mk('input',{type:'number',id:'res-amount',min:'1',step:'1',placeholder:'Menge'},{padding:'6px 8px',background:'#181818',border:'1px solid #333',color:'#eee'}); n.value='10';
@@ -72,28 +72,24 @@
         if(!type){ status.textContent='Bitte Ressourcentyp angeben.'; status.style.color='#f6ad55'; warn('[inspector] add-res: fehlender Typ'); return; }
         try{ window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}})); }catch(_){}
         let direct=false; try{ if(window.Game?.addResources){ Game.addResources(type,amount); direct=true; } }catch(_){}
-        if(direct){ status.textContent='+'+amount+' '+type; status.style.color='#68d391'; ok('[inspector] add-res OK: +'+amount+' '+type); }
-        else { status.textContent='Event gesendet: +'+amount+' '+type+' (Game.addResources nicht gefunden)'; status.style.color='#63b3ed'; warn('[inspector] add-res: Event gesendet, direkte API nicht verfügbar'); }
+        status.textContent = direct ? ('+'+amount+' '+type) : ('Event gesendet: +'+amount+' '+type);
+        status.style.color = direct ? '#68d391' : '#63b3ed';
       });
       act.appendChild(btn); act.appendChild(status); panel.appendChild(act);
       tabs.appendChild(panel);
     }
 
-    built=true; ok(MOD+' gebaut (v17.4.1)');
+    built=true; ok(MOD+' gebaut (v17.4.2)');
     return root;
   }
 
   function toggle(show){ buildCore(); root.style.display = show?'block':'none'; }
 
-  // reagiert auf beide Ereignisse
   window.addEventListener('cb:inspector-open',  ()=>{ buildCore(); toggle(true);  });
-  window.addEventListener('cb:inspector-toggle', e=>{ buildCore(); toggle(!!(e&&e.detail&&e.detail.open)); });
+  window.addEventListener('cb:inspector-toggle', e =>{ buildCore(); toggle(!!(e&&e.detail&&e.detail.open)); });
   window.addEventListener('cb:inspector-close', ()=>{ buildCore(); toggle(false); });
   window.addEventListener('cb:game-started',    ()=>{ buildCore(); });
 
-  // globale API
   window.Inspector = { toggle: toggle };
-
-  // vorbereitet, aber geschlossen
   buildCore(); toggle(false);
 })();
