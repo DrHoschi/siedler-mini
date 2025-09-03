@@ -1,116 +1,211 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
  * Projekt: Siedler-Mini
- * Version: v17.2.0
- * Zweck:
- *   - Inspector-Core (UI-Fenster mit Tabs)
- *   - Zeigt Logs & Debug-Infos
- *   - Reagiert auf cb:inspector-open / cb:inspector-close
- *   - Erweiterbar (Tabs für Ressourcen, Entities, Pfade, Tests via Add-ons)
- * ============================================================================
- */
+ * Version: v17.3.0 (Kombi: Core + Logs-Tab + Tests-Tab)
+ *
+ * Features:
+ *   - Inspector-Core (Fenster + Tabs, robust & idempotent)
+ *   - Logs-Tab: zeigt CBLog-Meldungen (hooked, non-destructive)
+ *   - Tests-Tab:
+ *       • Toggle Pfad-Overlay  (window.DEBUG_PATH_OVERLAY)
+ *       • Toggle Entity-Overlay(window.DEBUG_ENTITY_OVERLAY)
+ *       • Ressourcen-Adder (type + amount) + Event 'cb:add-resources'
+ *
+ * Events für Integrationen:
+ *   - 'cb:inspector-open' / 'cb:inspector-close'   (sichtbar / verborgen)
+ *   - 'cb:toggle-path-overlay'     {detail:{enabled:boolean}}
+ *   - 'cb:toggle-entity-overlay'   {detail:{enabled:boolean}}
+ *   - 'cb:add-resources'           {detail:{type:string, amount:number}}
+ *
+ * Verhalten:
+ *   - Öffnen/Schließen via window.Inspector.toggle(true|false)
+ *     oder über GameUI.toggleInspector() (ruft Events)
+ *   - Baut sich beim ersten Aufruf einmalig auf, sonst Wiederverwendung
+ *   - Keine Fremd-Frameworks, defensives DOM-Handling
+ * ============================================================================ */
 (function () {
   'use strict';
 
   var MOD = '[inspector.core]';
-  function ok(){ try{ (window.CBLog?.ok||console.log)(...arguments);}catch(_){console.log(...arguments);} }
-  function warn(){ try{ (window.CBLog?.warn||console.warn)(...arguments);}catch(_){console.warn(...arguments);} }
+  var root=null, tabs=null, open=false, built=false, logsTabEl=null;
+  var cbHookInstalled = false;
 
-  var root=null, tabs=null, open=false;
+  // ------------------------------ Utils --------------------------------------
+  function ok(){ try{ (window.CBLog?.ok||console.log).apply(console, arguments);}catch(_){console.log.apply(console, arguments);} }
+  function warn(){ try{ (window.CBLog?.warn||console.warn).apply(console, arguments);}catch(_){console.warn.apply(console, arguments);} }
 
-  // ---------- Core bauen ----------
+  function byId(id, host){ return (host||document).getElementById(id); }
+  function mk(tag, props, styles){
+    var el=document.createElement(tag);
+    if (props) for (var k in props){ if (k==='text') el.textContent=props[k]; else el.setAttribute(k, props[k]); }
+    if (styles) for (var s in styles){ el.style[s]=styles[s]; }
+    return el;
+  }
+
+  // ------------------------------ Core bauen ---------------------------------
   function buildCore(){
-    if (root) return root;
+    if (built && root && tabs) return root;
 
-    root = document.createElement('div');
-    root.id = 'inspector';
-    root.setAttribute('role','dialog');
-    root.setAttribute('aria-label','Inspector');
-    root.style.position='fixed';
-    root.style.right='12px'; root.style.bottom='80px';
-    root.style.width='400px'; root.style.maxWidth='90vw';
-    root.style.maxHeight='70vh'; root.style.overflow='auto';
-    root.style.background='rgba(20,20,20,.94)';
-    root.style.border='1px solid #333'; root.style.borderRadius='8px';
-    root.style.boxShadow='0 14px 40px rgba(0,0,0,.45)';
-    root.style.backdropFilter='blur(6px)';
-    root.style.color='#eaeaea';
-    root.style.font='14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-    root.style.zIndex='100001';
-    root.style.display='none';
+    root = byId('inspector') || mk('div', { id:'inspector', role:'dialog', 'aria-label':'Inspector' }, {
+      position:'fixed', right:'12px', bottom:'80px',
+      width:'400px', maxWidth:'90vw', maxHeight:'70vh', overflow:'auto',
+      background:'rgba(20,20,20,.94)', border:'1px solid #333', borderRadius:'8px',
+      boxShadow:'0 14px 40px rgba(0,0,0,.45)', backdropFilter:'blur(6px)',
+      color:'#eaeaea', font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
+      zIndex:'100001', display:'none'
+    });
 
-    // Kopf
-    var head=document.createElement('div');
-    head.style.display='flex'; head.style.alignItems='center'; head.style.justifyContent='space-between';
-    head.style.padding='10px 12px'; head.style.borderBottom='1px solid #2d2d2d';
-    var title=document.createElement('div'); title.textContent='Inspector';
-    title.style.fontWeight='700';
-    var close=document.createElement('button'); close.textContent='✕';
+    if (!root.parentNode) document.body.appendChild(root);
+
+    // Header
+    var head = mk('div', null, {
+      display:'flex', alignItems:'center', justifyContent:'space-between',
+      padding:'10px 12px', borderBottom:'1px solid #2d2d2d'
+    });
+    var title = mk('div'); title.textContent = 'Inspector'; title.style.fontWeight='700';
+    var close = mk('button'); close.textContent='✕';
     close.style.background='transparent'; close.style.border='1px solid #3a3a3a';
     close.style.borderRadius='4px'; close.style.color='#ddd'; close.style.cursor='pointer';
     close.onclick=function(){ toggle(false); };
     head.appendChild(title); head.appendChild(close);
     root.appendChild(head);
 
-    // Tabs
-    tabs=document.createElement('div');
-    tabs.id='inspector-tabs';
-    tabs.style.display='block';
-    tabs.style.padding='8px 10px';
-    root.appendChild(tabs);
+    // Tabs-Host
+    tabs = byId('inspector-tabs', root) || mk('div', { id:'inspector-tabs' }, { display:'block', padding:'8px 10px' });
+    if (!tabs.parentNode) root.appendChild(tabs);
 
-    document.body.appendChild(root);
-    ok(MOD+' gebaut (v17.2.0)');
+    built = true;
+    ok(MOD+' gebaut (v17.3.0)');
     return root;
   }
 
-  // ---------- Tabs ----------
+  // ------------------------------ Logs-Tab -----------------------------------
   function addLogTab(){
-    var tab=document.createElement('div');
-    tab.id='inspector-logs';
-    tab.style.padding='6px';
-    tab.style.fontFamily='monospace';
-    tab.style.fontSize='12px';
-    tab.style.whiteSpace='pre-wrap';
-    tab.style.maxHeight='200px';
-    tab.style.overflowY='auto';
-    tab.textContent='[Inspector Logs]\n';
-    tabs.appendChild(tab);
+    if (byId('inspector-logs', tabs)) return; // schon vorhanden
+    logsTabEl = mk('div', { id:'inspector-logs' }, {
+      padding:'6px', fontFamily:'monospace', fontSize:'12px',
+      whiteSpace:'pre-wrap', maxHeight:'200px', overflowY:'auto',
+      background:'rgba(0,0,0,.08)', border:'1px solid #2a2a2a', borderRadius:'4px'
+    });
+    logsTabEl.textContent='[Inspector Logs]\n';
+    tabs.appendChild(logsTabEl);
 
-    // CBLog-Hook
-    if (window.CBLog){
-      var orig=window.CBLog.push;
-      window.CBLog.push=function(type,msg){
-        try{
-          var line='['+type.toUpperCase()+'] '+msg;
-          tab.textContent+=line+'\n';
-          tab.scrollTop=tab.scrollHeight;
-        }catch(_){}
-        return orig.call(this,type,msg);
-      };
-    }
+    // CBLog hooken, aber nicht zerstören
+    try {
+      if (!cbHookInstalled && window.CBLog && typeof window.CBLog.push === 'function'){
+        var origPush = window.CBLog.push.bind(window.CBLog);
+        window.CBLog.push = function(type, msg){
+          try {
+            if (logsTabEl){
+              var line='['+String(type||'log').toUpperCase()+'] '+String(msg||'');
+              logsTabEl.textContent += line+'\n';
+              logsTabEl.scrollTop = logsTabEl.scrollHeight;
+            }
+          } catch(_){}
+          return origPush(type, msg);
+        };
+        cbHookInstalled = true;
+      }
+    } catch(_){}
   }
 
-  // ---------- Toggle ----------
+  // ------------------------------ Tests-Tab ----------------------------------
+  function addTestsTab(){
+    if (byId('inspector-tests', tabs)) return;
+
+    var panel = mk('div', { id:'inspector-tests', 'aria-label':'Inspector Tests' }, {
+      padding:'10px', borderTop:'1px dashed #3a3a3a', background:'rgba(0,0,0,.12)', marginTop:'8px'
+    });
+
+    var title = mk('div'); title.textContent='Tests'; title.style.fontWeight='700'; title.style.margin='0 0 8px';
+    panel.appendChild(title);
+
+    // --- Toggle: Pfad-Overlay ---
+    var row1 = mk('div', null, { display:'flex', alignItems:'center', gap:'8px', margin:'6px 0 8px' });
+    var chk1 = mk('input', { type:'checkbox', id:'dbg-path-overlay' }); chk1.checked = !!window.DEBUG_PATH_OVERLAY;
+    var lbl1 = mk('label', { for:'dbg-path-overlay' }); lbl1.textContent='Pfad-Overlay anzeigen';
+    chk1.addEventListener('change', function(){
+      var enabled=!!chk1.checked; window.DEBUG_PATH_OVERLAY=enabled;
+      try{ window.dispatchEvent(new CustomEvent('cb:toggle-path-overlay',{detail:{enabled}})); }catch(_){}
+      ok('[inspector] PF-Overlay '+(enabled?'AN':'AUS'));
+      try{ window.requestAnimationFrame?.(()=>window.dispatchEvent(new Event('cb:request-repaint')));}catch(_){}
+    });
+    row1.appendChild(chk1); row1.appendChild(lbl1);
+    panel.appendChild(row1);
+
+    // --- Toggle: Entity-Overlay ---
+    var row2 = mk('div', null, { display:'flex', alignItems:'center', gap:'8px', margin:'6px 0 8px' });
+    var chk2 = mk('input', { type:'checkbox', id:'dbg-entity-overlay' }); chk2.checked = !!window.DEBUG_ENTITY_OVERLAY;
+    var lbl2 = mk('label', { for:'dbg-entity-overlay' }); lbl2.textContent='Entity-Overlay anzeigen';
+    chk2.addEventListener('change', function(){
+      var enabled=!!chk2.checked; window.DEBUG_ENTITY_OVERLAY=enabled;
+      try{ window.dispatchEvent(new CustomEvent('cb:toggle-entity-overlay',{detail:{enabled}})); }catch(_){}
+      ok('[inspector] Entity-Overlay '+(enabled?'AN':'AUS'));
+      try{ window.requestAnimationFrame?.(()=>window.dispatchEvent(new Event('cb:request-repaint')));}catch(_){}
+    });
+    row2.appendChild(chk2); row2.appendChild(lbl2);
+    panel.appendChild(row2);
+
+    // --- Ressourcen-Adder ---
+    var grid = mk('div', null, { display:'grid', gridTemplateColumns:'1fr 110px', gap:'6px', margin:'6px 0' });
+    var inpType = mk('input', { type:'text', id:'res-type', placeholder:'Typ (wood, stone, …)', autocomplete:'off' }, {
+      padding:'6px 8px', background:'#181818', border:'1px solid #333', color:'#eee'
+    }); inpType.value='wood';
+    var inpAmt = mk('input', { type:'number', id:'res-amount', min:'1', step:'1', placeholder:'Menge' }, {
+      padding:'6px 8px', background:'#181818', border:'1px solid #333', color:'#eee'
+    }); inpAmt.value='10';
+    grid.appendChild(inpType); grid.appendChild(inpAmt);
+    panel.appendChild(grid);
+
+    var action = mk('div', null, { display:'flex', alignItems:'center', gap:'8px' });
+    var btn = mk('button'); btn.textContent='Ressourcen hinzufügen';
+    btn.style.padding='6px 10px'; btn.style.background='#2b6cb0'; btn.style.border='1px solid #2a4365';
+    btn.style.color='#fff'; btn.style.borderRadius='4px'; btn.style.cursor='pointer';
+    var status = mk('div', { id:'res-status' }, { flex:'1', minHeight:'1.2em' });
+    btn.addEventListener('click', function(){
+      var type=String(inpType.value||'').trim(); var amount=Math.max(1, parseInt(inpAmt.value||'0',10)||0);
+      if(!type){ status.textContent='Bitte Ressourcentyp angeben.'; status.style.color='#f6ad55'; warn('[inspector] add-res: fehlender Typ'); return; }
+      try{ window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}})); }catch(_){}
+      var okDirect=false;
+      try{ if(window.Game && typeof Game.addResources==='function'){ Game.addResources(type,amount); okDirect=true; } }catch(_){}
+      if(okDirect){ status.textContent='+'+amount+' '+type; status.style.color='#68d391'; ok('[inspector] add-res OK: +'+amount+' '+type); }
+      else { status.textContent='Event gesendet: +'+amount+' '+type+' (Game.addResources nicht gefunden)'; status.style.color='#63b3ed'; warn('[inspector] add-res: Event gesendet, direkte API nicht verfügbar'); }
+    });
+    action.appendChild(btn); action.appendChild(status);
+    panel.appendChild(action);
+
+    tabs.appendChild(panel);
+  }
+
+  // ------------------------------ Toggle / API -------------------------------
   function toggle(show){
     buildCore();
-    open=!!show;
-    root.style.display=open?'block':'none';
+    open = !!show;
+    root.style.display = open ? 'block' : 'none';
     try {
-      window.dispatchEvent(new CustomEvent(open?'cb:inspector-open':'cb:inspector-close'));
-    }catch(_){}
-    ok(MOD+' '+(open?'geöffnet':'geschlossen')+' (v17.2.0)');
+      window.dispatchEvent(new CustomEvent(open ? 'cb:inspector-open' : 'cb:inspector-close'));
+    } catch(_){}
+    ok(MOD+' '+(open?'geöffnet':'geschlossen')+' (v17.3.0)');
   }
 
-  // ---------- Init ----------
-  window.addEventListener('cb:inspector-open', function(){ toggle(true); });
+  // ------------------------------ Init & Events ------------------------------
+  function ensureAll(){
+    buildCore();
+    addLogTab();
+    addTestsTab();
+  }
+
+  // Öffnen/Schließen über globale Events (von UI-Bridge / Buttons)
+  window.addEventListener('cb:inspector-open', function(){ ensureAll(); toggle(true); });
   window.addEventListener('cb:inspector-close', function(){ toggle(false); });
 
-  // Export API
-  window.Inspector = { toggle:toggle };
+  // Bei Spielstart sicherstellen, dass Tabs vorhanden sind (nicht öffnen)
+  window.addEventListener('cb:game-started', function(){ ensureAll(); });
 
-  // Core initial bauen + Tab hinzufügen
-  buildCore();
-  addLogTab();
+  // Export öffentliche API
+  window.Inspector = { toggle: toggle };
 
+  // Vorbereiten (bauen, aber geschlossen lassen)
+  ensureAll();
+  toggle(false);
 })();
