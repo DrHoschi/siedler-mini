@@ -1,11 +1,8 @@
 <!doctype html>
 <!--
   Neue Siedler – Index
-  Version: v17.7.5
-  CODE_STYLE:
-    - Reihenfolge: Polyfill → Core → OverlayHooks → Renderer → Bootstrap → UI → Inspector → BootCompat
-    - UI: Start-Panel, Canvas, FAB-Buttons, Build-Dock
-    - Inspector: Vollbild-Overlay, Tabs Logs/Tests/Ressourcen/Pfade
+  Version: v17.7.6
+  Reihenfolge: Polyfill → Core → OverlayHooks/Renderer → Bootstrap → UI → Inspector → BootCompat
 -->
 <html lang="de">
 <head>
@@ -18,20 +15,15 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css?v=17.7.5">
-  <link rel="stylesheet" href="ui-start.css?v=17.7.5">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.7.5">
-
+  <link rel="stylesheet" href="style.css?v=17.7.6">
+  <link rel="stylesheet" href="ui-start.css?v=17.7.6">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.7.6">
+  <!-- Inspector-Styles (Farben/Abstände gemäß Vorgabe) -->
+  <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.3.0">
   <style>
     html, body { height:100%; margin:0; background:#0c120f; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; }
-
-    /* FABs */
-    .ui-fab {
-      position:fixed;
-      z-index:2147483647 !important;
-      pointer-events:auto !important;
-    }
+    .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
     .ui-fab button{
@@ -71,41 +63,40 @@
 
   <!-- Core + Polyfills -->
   <script src="assets/core/cblog.polyfill.js?v=1.1.0"></script>
-  <script src="assets/core/core.env.js?v=17.7.5"></script>
-  <script src="assets/core/core.entities.js?v=17.7.5"></script>
-  <script src="assets/core/core.production.js?v=17.7.5"></script>
-  <script src="assets/core/core.pfglue.js?v=17.7.5"></script>
-  <script src="assets/core/core.map.js?v=17.7.5"></script>
-  <script src="assets/core/core.input.js?v=17.7.5"></script>
-  <script src="assets/core/carriers.js?v=17.7.5"></script>
-  <script src="assets/core/overlay-hooks.js?v=17.7.5"></script>
-  <script src="assets/core/core.render.js?v=17.7.5"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.7.5"></script>
+  <script src="assets/core/core.env.js?v=17.7.6"></script>
+  <script src="assets/core/core.entities.js?v=17.7.6"></script>
+  <script src="assets/core/core.production.js?v=17.7.6"></script>
+  <script src="assets/core/core.pfglue.js?v=17.7.6"></script>
+  <script src="assets/core/core.map.js?v=17.7.6"></script>
+  <script src="assets/core/core.input.js?v=17.7.6"></script>
+  <script src="assets/core/carriers.js?v=17.7.6"></script>
+  <script src="assets/core/overlay-hooks.js?v=17.7.6"></script>
+  <script src="assets/core/core.render.js?v=17.7.6"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.7.6"></script>
 
-  <!-- Legacy-Fassade -->
-  <script defer src="game.js?v=17.7.5"></script>
+  <!-- Legacy-Fassade (falls noch genutzt) -->
+  <script defer src="game.js?v=17.7.6"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.7.5"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.7.5"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.7.5"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.7.6"></script>
+  <script defer src="assets/ui/ui-start.js?v=17.7.6"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.7.6"></script>
 
   <!-- Inspector -->
-  <script defer src="assets/inspector/inspector.js?v=18.3.0"></script>
+  <script defer src="assets/inspector/inspector.js?v=18.3.3"></script>
 
   <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=17.7.5"></script>
+  <script defer src="boot.compat.js?v=17.7.6"></script>
 
-  <!-- Marker -->
+  <!-- Marker / body-Klassen -->
   <script>
-    window.__cb = window.__cb||{};
-    window.__cb.indexVersion="v17.7.5";
-    (window.CBLog?.info||console.log)("[index] UI bereit (v17.7.5)");
-
-    // Build-Dock Body-Klasse
-    window.addEventListener('cb:build-open', ()=>document.body.classList.add('has-build-open'));
-    window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
+    (function(){
+      window.__cb = window.__cb || {}; window.__cb.indexVersion = "v17.7.6";
+      (window.CBLog?.info || console.log)("[index] UI bereit (v17.7.6)");
+      window.addEventListener('cb:build-open',  ()=>document.body.classList.add('has-build-open'));
+      window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
+    })();
   </script>
 </body>
 </html>
