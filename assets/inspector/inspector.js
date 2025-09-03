@@ -1,27 +1,10 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
  * Projekt: Siedler-Mini
- * Version: v17.3.0 (Kombi: Core + Logs-Tab + Tests-Tab)
- *
- * Features:
- *   - Inspector-Core (Fenster + Tabs, robust & idempotent)
- *   - Logs-Tab: zeigt CBLog-Meldungen (hooked, non-destructive)
- *   - Tests-Tab:
- *       • Toggle Pfad-Overlay  (window.DEBUG_PATH_OVERLAY)
- *       • Toggle Entity-Overlay(window.DEBUG_ENTITY_OVERLAY)
- *       • Ressourcen-Adder (type + amount) + Event 'cb:add-resources'
- *
- * Events für Integrationen:
- *   - 'cb:inspector-open' / 'cb:inspector-close'   (sichtbar / verborgen)
- *   - 'cb:toggle-path-overlay'     {detail:{enabled:boolean}}
- *   - 'cb:toggle-entity-overlay'   {detail:{enabled:boolean}}
- *   - 'cb:add-resources'           {detail:{type:string, amount:number}}
- *
- * Verhalten:
- *   - Öffnen/Schließen via window.Inspector.toggle(true|false)
- *     oder über GameUI.toggleInspector() (ruft Events)
- *   - Baut sich beim ersten Aufruf einmalig auf, sonst Wiederverwendung
- *   - Keine Fremd-Frameworks, defensives DOM-Handling
+ * Version: v17.3.1 (Kombi: Core + Logs-Tab + Tests-Tab)
+ * Änderungen ggü. 17.3.0:
+ *   - robuster auf cb:inspector-open (bauen + anzeigen, egal Reihenfolge)
+ *   - kleine Styles, kein Überschreiben fremder Fenster
  * ============================================================================ */
 (function () {
   'use strict';
@@ -30,7 +13,6 @@
   var root=null, tabs=null, open=false, built=false, logsTabEl=null;
   var cbHookInstalled = false;
 
-  // ------------------------------ Utils --------------------------------------
   function ok(){ try{ (window.CBLog?.ok||console.log).apply(console, arguments);}catch(_){console.log.apply(console, arguments);} }
   function warn(){ try{ (window.CBLog?.warn||console.warn).apply(console, arguments);}catch(_){console.warn.apply(console, arguments);} }
 
@@ -42,7 +24,6 @@
     return el;
   }
 
-  // ------------------------------ Core bauen ---------------------------------
   function buildCore(){
     if (built && root && tabs) return root;
 
@@ -54,15 +35,11 @@
       color:'#eaeaea', font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',
       zIndex:'100001', display:'none'
     });
-
     if (!root.parentNode) document.body.appendChild(root);
 
-    // Header
-    var head = mk('div', null, {
-      display:'flex', alignItems:'center', justifyContent:'space-between',
-      padding:'10px 12px', borderBottom:'1px solid #2d2d2d'
-    });
-    var title = mk('div'); title.textContent = 'Inspector'; title.style.fontWeight='700';
+    var head = mk('div', null, { display:'flex', alignItems:'center', justifyContent:'space-between',
+      padding:'10px 12px', borderBottom:'1px solid #2d2d2d' });
+    var title = mk('div'); title.textContent='Inspector'; title.style.fontWeight='700';
     var close = mk('button'); close.textContent='✕';
     close.style.background='transparent'; close.style.border='1px solid #3a3a3a';
     close.style.borderRadius='4px'; close.style.color='#ddd'; close.style.cursor='pointer';
@@ -70,18 +47,16 @@
     head.appendChild(title); head.appendChild(close);
     root.appendChild(head);
 
-    // Tabs-Host
     tabs = byId('inspector-tabs', root) || mk('div', { id:'inspector-tabs' }, { display:'block', padding:'8px 10px' });
     if (!tabs.parentNode) root.appendChild(tabs);
 
     built = true;
-    ok(MOD+' gebaut (v17.3.0)');
+    ok(MOD+' gebaut (v17.3.1)');
     return root;
   }
 
-  // ------------------------------ Logs-Tab -----------------------------------
   function addLogTab(){
-    if (byId('inspector-logs', tabs)) return; // schon vorhanden
+    if (byId('inspector-logs', tabs)) return;
     logsTabEl = mk('div', { id:'inspector-logs' }, {
       padding:'6px', fontFamily:'monospace', fontSize:'12px',
       whiteSpace:'pre-wrap', maxHeight:'200px', overflowY:'auto',
@@ -90,9 +65,8 @@
     logsTabEl.textContent='[Inspector Logs]\n';
     tabs.appendChild(logsTabEl);
 
-    // CBLog hooken, aber nicht zerstören
     try {
-      if (!cbHookInstalled && window.CBLog && typeof window.CBLog.push === 'function'){
+      if (!cbHookInstalled && window.CBLog?.push){
         var origPush = window.CBLog.push.bind(window.CBLog);
         window.CBLog.push = function(type, msg){
           try {
@@ -109,18 +83,16 @@
     } catch(_){}
   }
 
-  // ------------------------------ Tests-Tab ----------------------------------
   function addTestsTab(){
     if (byId('inspector-tests', tabs)) return;
 
     var panel = mk('div', { id:'inspector-tests', 'aria-label':'Inspector Tests' }, {
       padding:'10px', borderTop:'1px dashed #3a3a3a', background:'rgba(0,0,0,.12)', marginTop:'8px'
     });
-
     var title = mk('div'); title.textContent='Tests'; title.style.fontWeight='700'; title.style.margin='0 0 8px';
     panel.appendChild(title);
 
-    // --- Toggle: Pfad-Overlay ---
+    // Pfad-Overlay
     var row1 = mk('div', null, { display:'flex', alignItems:'center', gap:'8px', margin:'6px 0 8px' });
     var chk1 = mk('input', { type:'checkbox', id:'dbg-path-overlay' }); chk1.checked = !!window.DEBUG_PATH_OVERLAY;
     var lbl1 = mk('label', { for:'dbg-path-overlay' }); lbl1.textContent='Pfad-Overlay anzeigen';
@@ -133,7 +105,7 @@
     row1.appendChild(chk1); row1.appendChild(lbl1);
     panel.appendChild(row1);
 
-    // --- Toggle: Entity-Overlay ---
+    // Entity-Overlay
     var row2 = mk('div', null, { display:'flex', alignItems:'center', gap:'8px', margin:'6px 0 8px' });
     var chk2 = mk('input', { type:'checkbox', id:'dbg-entity-overlay' }); chk2.checked = !!window.DEBUG_ENTITY_OVERLAY;
     var lbl2 = mk('label', { for:'dbg-entity-overlay' }); lbl2.textContent='Entity-Overlay anzeigen';
@@ -146,7 +118,7 @@
     row2.appendChild(chk2); row2.appendChild(lbl2);
     panel.appendChild(row2);
 
-    // --- Ressourcen-Adder ---
+    // Ressourcen-Adder
     var grid = mk('div', null, { display:'grid', gridTemplateColumns:'1fr 110px', gap:'6px', margin:'6px 0' });
     var inpType = mk('input', { type:'text', id:'res-type', placeholder:'Typ (wood, stone, …)', autocomplete:'off' }, {
       padding:'6px 8px', background:'#181818', border:'1px solid #333', color:'#eee'
@@ -177,35 +149,28 @@
     tabs.appendChild(panel);
   }
 
-  // ------------------------------ Toggle / API -------------------------------
   function toggle(show){
     buildCore();
     open = !!show;
     root.style.display = open ? 'block' : 'none';
-    try {
-      window.dispatchEvent(new CustomEvent(open ? 'cb:inspector-open' : 'cb:inspector-close'));
-    } catch(_){}
-    ok(MOD+' '+(open?'geöffnet':'geschlossen')+' (v17.3.0)');
+    try { window.dispatchEvent(new CustomEvent(open ? 'cb:inspector-open' : 'cb:inspector-close')); }catch(_){}
+    ok(MOD+' '+(open?'geöffnet':'geschlossen')+' (v17.3.1)');
   }
 
-  // ------------------------------ Init & Events ------------------------------
   function ensureAll(){
-    buildCore();
-    addLogTab();
-    addTestsTab();
+    buildCore(); addLogTab(); addTestsTab();
   }
 
-  // Öffnen/Schließen über globale Events (von UI-Bridge / Buttons)
-  window.addEventListener('cb:inspector-open', function(){ ensureAll(); toggle(true); });
-  window.addEventListener('cb:inspector-close', function(){ toggle(false); });
+  // robust auf Reihenfolge: build+open sobald Event kommt
+  window.addEventListener('cb:inspector-open', function(){ ensureAll(); root.style.display='block'; });
+  window.addEventListener('cb:inspector-close', function(){ if (buildCore()) root.style.display='none'; });
 
-  // Bei Spielstart sicherstellen, dass Tabs vorhanden sind (nicht öffnen)
+  // Bei Spielstart Tabs bereitstellen (ohne zu öffnen)
   window.addEventListener('cb:game-started', function(){ ensureAll(); });
 
-  // Export öffentliche API
+  // API
   window.Inspector = { toggle: toggle };
 
-  // Vorbereiten (bauen, aber geschlossen lassen)
-  ensureAll();
-  toggle(false);
+  // Vorbereiten (gebaut, aber geschlossen)
+  ensureAll(); toggle(false);
 })();
