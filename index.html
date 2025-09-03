@@ -119,5 +119,39 @@
       console.log("[index] UI bereit (v17.7.1)");
     })();
   </script>
+  <script>
+  // Inspector-Hard-Failsafe: greift, wenn inspector.js nicht geladen wurde
+  (function(){
+    function hardToggle(){
+      try{
+        if (window.GameUI && typeof GameUI.toggleInspector==='function'){
+          GameUI.toggleInspector();
+          return;
+        }
+      }catch(_){}
+      // letzter Notanker: simples Panel
+      var el=document.getElementById('inspector-hard-fallback');
+      if(!el){
+        el=document.createElement('div');
+        el.id='inspector-hard-fallback';
+        el.style.cssText='position:fixed;right:12px;bottom:96px;width:380px;max-width:92vw;max-height:70vh;overflow:auto;background:#111;border:1px solid #333;border-radius:8px;color:#eee;padding:8px;z-index:2147483647';
+        el.textContent='Inspector (Hard-Fallback): inspector.js nicht geladen?';
+        document.body.appendChild(el);
+      } else {
+        el.style.display = (el.style.display==='none' ? 'block' : 'none');
+      }
+    }
+    // Falls dein Button KEIN onclick hat:
+    try{
+      var btn = document.querySelector('#btn-inspector button');
+      if (btn && !btn.__inspectorWired){
+        btn.addEventListener('click', function(ev){ ev.preventDefault(); hardToggle(); }, {passive:false});
+        btn.__inspectorWired = true;
+      }
+    }catch(_){}
+    // Exponiere optional
+    window.__toggleInspectorHard = hardToggle;
+  })();
+</script>
 </body>
 </html>
