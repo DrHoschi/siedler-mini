@@ -1,15 +1,15 @@
 /* ============================================================================
- * inspector.js — Kombi-Core + Tabs (robust)
- * Version: v17.4.7
+ * inspector.js — Kombi-Core + Tabs (robust, Live-Logs)
+ * Version: v17.4.8
  * Projekt: Neue Siedler
  *
- * Ziele
- *  - Immer bedienbar: GameUI.toggleInspector(force?)
- *  - Eigenständiges Panel (Übersicht, Logs, Build, Tests)
- *  - Blockiert nur im offenen Zustand (Backdrop), sonst nie
- *  - Höchster z-index; FAB-Buttons bleiben klickbar
- *  - Logs-Tab liest CBLog (Polyfill/Modul) wenn vorhanden
- *  - Tests: Pfad-Overlay Toggle + Ressourcen-Adder (Event)
+ * Garantien
+ *  - Funktioniert auf Startseite und im Spiel (selbsttragend)
+ *  - Eigene Toggle-API: GameUI.toggleInspector(force?)
+ *  - Backdrop blockiert nur im offenen Zustand; sonst nie
+ *  - Höchster z-index; FAB-Buttons bleiben klickbar (Härtung)
+ *  - Logs-Tab: Live-Updates via 'cb:log-updated' + CBLog.dump()
+ *  - Tests-Tab: Pfad-Overlay-Toggle + Ressourcen-Adder
  *
  * Events (dispatch)
  *  - cb:inspector-open / cb:inspector-close / cb:inspector-toggle {open}
@@ -19,7 +19,7 @@
 (function(){
   'use strict';
 
-  var VER = 'v17.4.7';
+  var VER = 'v17.4.8';
   var MOD = '[inspector.core]';
 
   // --- Logging ---------------------------------------------------------------
@@ -43,6 +43,7 @@
   // --- State -----------------------------------------------------------------
   var root=null, panel=null, content=null, tabs=null;
   var escBound=false;
+  var logBox=null;
 
   // --- UI-Bau ----------------------------------------------------------------
   function ensureRoot(){
@@ -55,7 +56,7 @@
       position:'fixed', inset:'0', zIndex:'2147483600',
       display:'none', opacity:'0', background:'rgba(0,0,0,0.2)',
       transition:'opacity .18s ease',
-      pointerEvents:'none' // wenn zu: niemals blockieren
+      pointerEvents:'none' // geschlossen: niemals blockieren
     });
 
     // Panel
@@ -110,7 +111,7 @@
       '<div>Inspector '+VER+' geladen.</div>';
 
     var secLogs=document.createElement('div'); secLogs.id='tab-logs';
-    var logBox=document.createElement('pre');
+    logBox=document.createElement('pre');
     logBox.id='inspector-logbox';
     logBox.style.cssText='margin:0;padding:10px;background:#0b0b0b;border:1px solid #2b2b2b;border-radius:8px;min-height:180px;white-space:pre-wrap;';
     secLogs.appendChild(document.createTextNode(''));
@@ -183,17 +184,22 @@
       on(window,'keydown', function(ev){ if(ev.key==='Escape') toggle(false); });
     }
 
-    // Logs initial einlesen
-    try{
-      if (window.CBLog && typeof CBLog.dump==='function'){
-        var s=CBLog.dump(); byId('inspector-logbox').textContent = s || '[leer]';
-      } else {
-        byId('inspector-logbox').textContent = '[CBLog nicht verfügbar]';
+    // Live-Logs
+    function refreshLogs(){
+      try{
+        if (window.CBLog && typeof CBLog.dump==='function') {
+          logBox.textContent = CBLog.dump();
+        } else {
+          logBox.textContent = '[CBLog nicht verfügbar]';
+        }
+      }catch(_){
+        logBox.textContent = '[Log-Lese-Fehler]';
       }
-    }catch(_){}
+    }
+    window.addEventListener('cb:log-updated', refreshLogs);
+    refreshLogs(); // initial
 
     hardenFABs();
-    ok(MOD+' geöffnet ('+VER+')'); // wir loggen beim ersten Build, tatsächliches Open/Close unten
     return root;
   }
 
@@ -218,7 +224,7 @@
       root.style.display='block';
       root.style.pointerEvents='auto';
       root.style.opacity='1';
-      showTab('logs'); // default: Logs
+      showTab('logs'); // default
       try{
         window.dispatchEvent(new CustomEvent('cb:inspector-toggle',{detail:{open:true}}));
         window.dispatchEvent(new CustomEvent('cb:inspector-open'));
@@ -250,7 +256,7 @@
     try{ toggle(force); }catch(e){ warn(MOD+' toggleInspector Fehler: '+(e && e.message)); }
   };
 
-  // --- Auto-Init -------------------------------------------------------------
+  // --- Auto-Init (Startseite + Spiel) ---------------------------------------
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ ensureRoot(); setOpen(false); }, {once:true});
   } else {
