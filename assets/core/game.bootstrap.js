@@ -1,158 +1,193 @@
 /* ============================================================================
- * assets/core/game.bootstrap.js — v17.4.0
- * Startet das Spiel GENAU EINMAL.
- * Wenn keine neue Engine vorhanden ist, stellt dieses Modul
- * einen kompatiblen Minimal-Fallback bereit, damit:
- *   - die Map geladen und gezeichnet wird,
- *   - Events (cb:game-started) sicher feuern,
- *   - Inspector/Overlays wieder funktionieren.
- * ============================================================================ */
-(function(ns){
+ * assets/core/game.bootstrap.js — Game-Facade
+ * Version: v17.4.9
+ * Projekt: Neue Siedler
+ *
+ * Aufgaben
+ *  - Einmaliger Game-Start (Doppelstart verhindern)
+ *  - Öffentliche Game-API für UI-Module:
+ *      Game.setBuildTool(type) / Game.resetBuildTool()
+ *      Game.addResources(type, amount)
+ *      Game.getTileSize() / Game.getMapSize()
+ *      Game.getObstacleAt(tx,ty) / Game.getRoadSet()
+ *  - Brücke zu UI-Events (ui-start / ui-build / inspector tests)
+ *  - Sanftes Logging via CBLog (Polyfill-kompatibel)
+ * ========================================================================== */
+(function () {
   'use strict';
-  if (!ns) ns = (window.GameCore = window.GameCore || {});
-  var LOG = {
-    ok:   (window.CBLog?.ok   || console.log).bind(console),
-    warn: (window.CBLog?.warn || console.warn).bind(console),
-    err:  (window.CBLog?.err  || console.error).bind(console),
-    log:  (window.CBLog?.push || console.log).bind(console)
-  };
+
+  var VER = 'v17.4.9';
+  var MOD = '[engine]';
+
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){ console.log(m); } }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){ console.warn(m); } }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m); }catch(_){ console.error(m); } }
 
   // ---------------------------------------------------------------------------
-  // 1) Boot-Guard
+  // Interner Zustand
   // ---------------------------------------------------------------------------
-  if (window.__CB_BOOT_LOCK__) { LOG.warn('[bootstrap] bereits gestartet'); return; }
   var started = false;
-  window.__CB_BOOT_LOCK__ = true;
-
-  // ---------------------------------------------------------------------------
-  // 2) Minimal-Engine, falls keine vorhanden ist
-  // ---------------------------------------------------------------------------
-  (function ensureMinimalEngine(){
-    if (ns.Engine && typeof ns.Engine.start === 'function') return; // neue Engine vorhanden
-
-    // State-Grundstruktur sicherstellen
-    ns.state = ns.state || {
-      cam: { x:0, y:0, zoom:1 },
-      map: null,
-      entities: [],
-      obstacles: null, obstW:0, obstH:0,
-      atlas: null, tilesetImg: null
-    };
-    ns.util = ns.util || {};
-    // kleines Event-Bus-Utility (falls nicht vorhanden)
-    if (typeof ns.util.on !== 'function' || typeof ns.util.emit !== 'function'){
-      var _e = {};
-      ns.util.on = function(type, fn){ (_e[type] = _e[type] || []).push(fn); };
-      ns.util.emit = function(type, detail){ (_e[type]||[]).forEach(fn=>{ try{ fn(detail); }catch(_){} }); };
-    }
-
-    // Minimal-Renderer sicher initialisieren (nutzt core.render.js)
-    function initRenderer(){
-      try{
-        var cvs = document.getElementById('game');
-        if (!cvs){ LOG.warn('[engine] Canvas #game fehlt'); return; }
-        if (!ns.Render || typeof ns.Render.init!=='function'){ LOG.warn('[engine] Render.init fehlt'); return; }
-        ns.Render.init(cvs, cvs.getContext('2d'));
-      }catch(e){ LOG.warn('[engine] Render-Init Fehler: '+(e?.message||e)); }
-    }
-
-    // Mini-Loader fürs Tileset (optional)
-    async function loadTilesetIfPresent(){
-      try{
-        // Tileset optional (wenn vorhanden → schöner als Fallback-Farben)
-        const res = await fetch('assets/tiles/tileset.json');
-        if (!res.ok) return;
-        ns.state.atlas = await res.json();
-        const img = new Image(); img.decoding = 'async'; img.loading = 'eager';
-        await new Promise((resolve,reject)=>{
-          img.onload=resolve; img.onerror=reject; img.src='assets/tiles/tileset.png';
-        });
-        ns.state.tilesetImg = img;
-      }catch(_){}
-    }
-
-    // Minimal-Engine: lädt Map & bereitet State vor
-    async function startMinimalEngine(mapUrl){
-      try{
-        LOG.ok('[engine] Minimal-Engine aktiv (v17.4.0)');
-        const cvs = document.getElementById('game');
-        if (!cvs){ LOG.warn('[engine] Kein #game Canvas gefunden'); return; }
-
-        // 1) Map laden
-        const url = mapUrl || cvs.getAttribute('data-map') || 'assets/maps/map-mini.json';
-        LOG.ok('GameLoader.start '+url);
-        const r = await fetch(url);
-        if (!r.ok) { LOG.warn('[engine] Map-Load fehlgeschlagen: '+url); return; }
-        const map = await r.json();
-
-        // 2) Map in State übernehmen
-        var tile = (map.tile|0) || 64;
-        ns.state.map = {
-          width:  map.width|0,
-          height: map.height|0,
-          tile:   tile,
-          layers: map.layers || []
-        };
-        // Kamera: Mittelpunkt
-        ns.state.cam.x = Math.max(0, (ns.state.map.width*tile - cvs.clientWidth)/(2*ns.state.cam.zoom));
-        ns.state.cam.y = Math.max(0, (ns.state.map.height*tile - cvs.clientHeight)/(2*ns.state.cam.zoom));
-
-        // 3) Tileset optional
-        await loadTilesetIfPresent();
-
-        // 4) Renderer initialisieren & ersten Draw anstoßen
-        initRenderer();
-        window.dispatchEvent(new CustomEvent('cb:game-started'));
-        window.dispatchEvent(new Event('cb:request-repaint'));
-        LOG.ok('Map geladen: '+ns.state.map.width+'×'+ns.state.map.height+' · Tile '+tile);
-        LOG.ok('Game gestartet');
-      }catch(e){
-        LOG.warn('[engine] Start-Fehler: '+(e?.message||e));
-      }
-    }
-
-    ns.Engine = {
-      start: startMinimalEngine
-    };
-  })();
-
-  // ---------------------------------------------------------------------------
-  // 3) Öffentliche Boot-API
-  // ---------------------------------------------------------------------------
-  window.GameBoot = window.GameBoot || {};
-  GameBoot.start = function(mapUrl){
-    if (started){ LOG.warn('[bootstrap] bereits gestartet'); return; }
-    started = true;
-    LOG.ok('[boot] Start via GameBoot.start');
-    try{
-      // neue Engine?
-      if (ns.Engine && typeof ns.Engine.start==='function'){
-        const cvs = document.getElementById('game');
-        const url = mapUrl || cvs?.getAttribute('data-map') || 'assets/maps/map-mini.json';
-        LOG.ok('[boot.compat] Start: '+url);
-        ns.Engine.start(url);
-      } else if (window.Game && typeof Game.start==='function'){
-        // Legacy-Fassade
-        const cvs = document.getElementById('game');
-        const url = mapUrl || cvs?.getAttribute('data-map') || 'assets/maps/map-mini.json';
-        LOG.ok('[boot.compat] Start (legacy): '+url);
-        Game.start(url);
-      } else if (window.GameLoader && typeof GameLoader.start==='function'){
-        // ganz alter Pfad
-        const cvs = document.getElementById('game');
-        const url = mapUrl || cvs?.getAttribute('data-map') || 'assets/maps/map-mini.json';
-        LOG.ok('[boot.compat] Start (GameLoader): '+url);
-        GameLoader.start(url);
-      } else {
-        LOG.warn('[boot] Keine Start-Implementierung gefunden');
-      }
-    }catch(e){ LOG.warn('[boot] Fehler: '+(e?.message||e)); }
+  var state = {
+    mapUrl: null,
+    tileSize: 64,
+    buildTool: null,   // z.B. 'house' | 'farm' | ...
   };
 
-  // Auto-Start, sobald UI ready
-  window.addEventListener('cb:ui-ready', function(){
-    if (!started) GameBoot.start();
+  // kleine Helpers (ohne harte Engine-Abhängigkeiten)
+  function readMapSize(){
+    try{
+      if (window.CoreMap && typeof CoreMap.getSize === 'function') {
+        return CoreMap.getSize(); // {w,h}
+      }
+    }catch(_){}
+    return null;
+  }
+  function readObstacleAt(tx,ty){
+    try{
+      if (window.CoreMap && typeof CoreMap.isBlocked === 'function') {
+        return !!CoreMap.isBlocked(tx,ty);
+      }
+    }catch(_){}
+    return false;
+  }
+  function readRoadSet(){
+    try{
+      if (window.CoreMap && typeof CoreMap.getRoadSet === 'function') {
+        return CoreMap.getRoadSet(); // Set("x,y")
+      }
+    }catch(_){}
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Öffentliche API (globales Game-Objekt)
+  // ---------------------------------------------------------------------------
+  var Game = (window.Game = window.Game || {});
+
+  Game.version = 'Facade '+VER;
+
+  Game.start = function start(cfg){
+    if (started){ warn('[bootstrap] bereits gestartet'); return; }
+    started = true;
+
+    // Bühne
+    var canvas = (cfg && (cfg.canvas || document.getElementById('game'))) || document.getElementById('game');
+    if (!canvas){ err(MOD+' Canvas nicht gefunden (#game)'); return; }
+
+    // Map
+    state.mapUrl = (cfg && cfg.mapUrl) || canvas.getAttribute('data-map') || 'assets/maps/map-mini.json';
+
+    // Minimal-Engine Hinweis (Rendering steckt in core.render.js)
+    ok(MOD+' Minimal-Engine aktiv (v17.4.0)');
+
+    // Map laden
+    try{
+      window.dispatchEvent(new CustomEvent('cb:engine-start', {detail:{canvas}}));
+      window.dispatchEvent(new CustomEvent('cb:map-load', {detail:{url: state.mapUrl}}));
+      ok('GameLoader.start '+state.mapUrl);
+    }catch(e){
+      warn(MOD+' Map-Init Events fehlgeschlagen: '+(e&&e.message));
+    }
+
+    ok('Game gestartet ('+Game.version+')');
+    window.dispatchEvent(new Event('cb:game-started'));
+    return true;
+  };
+
+  // ---- Build-Tools ----------------------------------------------------------
+  Game.setBuildTool = function(type){
+    state.buildTool = (type || null);
+    ok('[build] Tool gesetzt: '+(state.buildTool||'(none)'));
+    try{
+      window.dispatchEvent(new CustomEvent('cb:set-build-tool',{detail:{type: state.buildTool}}));
+      window.dispatchEvent(new Event('cb:request-repaint'));
+    }catch(_){}
+  };
+
+  Game.resetBuildTool = function(){
+    if (!state.buildTool) return;
+    state.buildTool = null;
+    ok('[ok] Tool zurückgesetzt');
+    try{
+      window.dispatchEvent(new CustomEvent('cb:set-build-tool',{detail:{type:null}}));
+      window.dispatchEvent(new Event('cb:request-repaint'));
+    }catch(_){}
+  };
+
+  // ---- Ressourcen (für Inspector Tests) ------------------------------------
+  Game.addResources = function(type, amount){
+    try{
+      window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}}));
+      ok('[res] +'+amount+' '+type);
+    }catch(e){
+      warn('[res] Event fehlgeschlagen: '+(e&&e.message));
+    }
+  };
+
+  // ---- PF/Map Hooks (für PathFinder & Inspector) ---------------------------
+  Game.getTileSize = function(){ return state.tileSize|0 || 64; };
+  Game.getMapSize  = function(){ return readMapSize() || {w:0,h:0}; };
+  Game.getObstacleAt = function(tx,ty){ return !!readObstacleAt(tx,ty); };
+  Game.getRoadSet = function(){ return readRoadSet(); };
+
+  // ---------------------------------------------------------------------------
+  // UI-Brücken
+  //  - ui-start: Start-Button löst cb:boot/start aus → wir rufen Game.start()
+  //  - ui-build: sendet cb:build-select {type} → hier setzen wir Build-Tool
+  //  - Inspector Tests: Path-Overlay Toggle via DEBUG_PATH_OVERLAY
+  // ---------------------------------------------------------------------------
+
+  // ui-start ruft i.d.R. GameUI.startGame(); wir absorbieren auch Direktaufrufe:
+  window.addEventListener('cb:boot/start', function(ev){
+    if (started) { warn('[bootstrap] bereits gestartet'); return; }
+    var url = ev?.detail?.mapUrl || null;
+    Game.start({ mapUrl:url });
   });
 
-  LOG.ok('[engine] ready (v17.4.0)');
-})(window.GameCore = window.GameCore || {});
+  // ui-build: gewünschtes Tool
+  window.addEventListener('cb:build-select', function(ev){
+    var t = ev && ev.detail && ev.detail.type;
+    if (!t){ Game.resetBuildTool(); return; }
+    Game.setBuildTool(t);
+  });
+
+  // Inspector: Path-Overlay-Toggle
+  window.addEventListener('cb:toggle-path-overlay', function(ev){
+    var enabled = !!(ev && ev.detail && ev.detail.enabled);
+    window.DEBUG_PATH_OVERLAY = enabled;
+    ok('[overlay] path '+(enabled?'AN':'AUS'));
+    try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch(_){}
+  });
+
+  // Optional: einfache Click-Place-Demo, falls die eigentliche Engine (core.input)
+  // Platzierung NICHT übernimmt. Aktivierbar via Flag.
+  var ALLOW_SIMPLE_PLACE = false;
+  if (ALLOW_SIMPLE_PLACE){
+    document.addEventListener('pointerdown', function(ev){
+      if (!state.buildTool) return;
+      try{
+        var rect = (document.getElementById('game')||{}).getBoundingClientRect?.()||{left:0,top:0};
+        var tile = Game.getTileSize();
+        var tx = Math.max(0, Math.floor((ev.clientX - rect.left)/tile));
+        var ty = Math.max(0, Math.floor((ev.clientY - rect.top)/tile));
+        window.dispatchEvent(new CustomEvent('cb:place-building',{detail:{type:state.buildTool, x:tx, y:ty}}));
+        ok('[ok] Gebäude platziert: '+state.buildTool+' at '+tx+' '+ty);
+        Game.resetBuildTool();
+      }catch(e){
+        warn('[build] Simple-Place Fehler: '+(e&&e.message));
+      }
+    }, {passive:true});
+  }
+
+  // Auto-Start falls index.html direkt lädt (wie bisher)
+  try{
+    if (!started) {
+      var canvas = document.getElementById('game');
+      if (canvas){ Game.start({ canvas, mapUrl: canvas.getAttribute('data-map') }); }
+    }
+  }catch(e){
+    err(MOD+' Startfehler: '+(e&&e.message));
+  }
+
+  ok(MOD+' ready ('+Game.version+')');
+})();
