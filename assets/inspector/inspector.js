@@ -1,95 +1,261 @@
 /* ============================================================================
- * assets/inspector/inspector.js — v17.4.2
- * Kombi-Core (Logs + Tests). Reagiert auf cb:inspector-open/-toggle und
- * übernimmt ggf. den vom UI-Fallback erstellten #inspector-Knoten.
- * ============================================================================ */
-(function () {
+ * inspector.js — Kombi-Core + Tabs (robust)
+ * Version: v17.4.7
+ * Projekt: Neue Siedler
+ *
+ * Ziele
+ *  - Immer bedienbar: GameUI.toggleInspector(force?)
+ *  - Eigenständiges Panel (Übersicht, Logs, Build, Tests)
+ *  - Blockiert nur im offenen Zustand (Backdrop), sonst nie
+ *  - Höchster z-index; FAB-Buttons bleiben klickbar
+ *  - Logs-Tab liest CBLog (Polyfill/Modul) wenn vorhanden
+ *  - Tests: Pfad-Overlay Toggle + Ressourcen-Adder (Event)
+ *
+ * Events (dispatch)
+ *  - cb:inspector-open / cb:inspector-close / cb:inspector-toggle {open}
+ *  - cb:toggle-path-overlay {enabled}
+ *  - cb:add-resources {type, amount}
+ * ========================================================================== */
+(function(){
   'use strict';
-  var MOD='[inspector.core]', root=null, tabs=null, built=false, logsTabEl=null, hook=false;
 
-  function ok(){ try{ (window.CBLog?.ok||console.log).apply(console, arguments);}catch(_){console.log.apply(console, arguments);} }
-  function warn(){ try{ (window.CBLog?.warn||console.warn).apply(console, arguments);}catch(_){console.warn.apply(console, arguments);} }
-  function byId(id,host){ return (host||document).getElementById(id); }
-  function mk(tag, attrs, css){ var el=document.createElement(tag);
-    if(attrs) for(let k in attrs){ if(k==='text') el.textContent=attrs[k]; else el.setAttribute(k, attrs[k]); }
-    if(css) for(let c in css){ el.style[c]=css[c]; } return el; }
+  var VER = 'v17.4.7';
+  var MOD = '[inspector.core]';
 
-  function buildCore(){
-    if (built && root && tabs) return root;
-    root = byId('inspector') || mk('div',{id:'inspector',role:'dialog','aria-label':'Inspector'});
-    if (!root.parentNode) document.body.appendChild(root);
-    Object.assign(root.style,{position:'fixed',right:'12px',bottom:'80px',width:'400px',maxWidth:'90vw',maxHeight:'70vh',
-      overflow:'auto',background:'rgba(20,20,20,.94)',border:'1px solid #333',borderRadius:'8px',
-      boxShadow:'0 14px 40px rgba(0,0,0,.45)',backdropFilter:'blur(6px)',color:'#eaeaea',
-      font:'14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif',zIndex:'100005'}); // etwas höher
+  // --- Logging ---------------------------------------------------------------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){ console.log(m); } }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){ console.warn(m); } }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m); }catch(_){ console.error(m); } }
 
-    // Header nur einmal hinzufügen, wenn nicht vorhanden
-    if (!byId('inspector-head', root)){
-      var head=mk('div',{id:'inspector-head'}, {display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 12px',borderBottom:'1px solid #2d2d2d'});
-      var title=mk('div'); title.textContent='Inspector'; title.style.fontWeight='700';
-      var close=mk('button'); close.textContent='✕'; Object.assign(close.style,{background:'transparent',border:'1px solid #3a3a3a',borderRadius:'4px',color:'#ddd',cursor:'pointer'});
-      close.onclick=()=>toggle(false); head.appendChild(title); head.appendChild(close); root.appendChild(head);
+  // --- Helpers ---------------------------------------------------------------
+  function byId(id){ return document.getElementById(id); }
+  function on(el,ev,fn,opt){ if(el) try{ el.addEventListener(ev,fn,opt||false);}catch(_){ } }
+  function cls(el, o){ Object.assign(el.style,o); }
+  function hardenFABs(){
+    try{
+      var css='z-index:2147483647 !important; pointer-events:auto !important;';
+      var b1=byId('btn-build'), b2=byId('btn-inspector');
+      if (b1) b1.style.cssText=(b1.getAttribute('style')||'')+';'+css;
+      if (b2) b2.style.cssText=(b2.getAttribute('style')||'')+';'+css;
+    }catch(_){}
+  }
+
+  // --- State -----------------------------------------------------------------
+  var root=null, panel=null, content=null, tabs=null;
+  var escBound=false;
+
+  // --- UI-Bau ----------------------------------------------------------------
+  function ensureRoot(){
+    if (root) return root;
+
+    // Backdrop
+    root = document.createElement('div');
+    root.id = 'inspector-backdrop';
+    cls(root, {
+      position:'fixed', inset:'0', zIndex:'2147483600',
+      display:'none', opacity:'0', background:'rgba(0,0,0,0.2)',
+      transition:'opacity .18s ease',
+      pointerEvents:'none' // wenn zu: niemals blockieren
+    });
+
+    // Panel
+    panel = document.createElement('div');
+    panel.id = 'inspector';
+    cls(panel, {
+      position:'absolute', right:'12px', bottom:'96px',
+      width:'min(520px, 94vw)', maxHeight:'66vh', overflow:'auto',
+      background:'rgba(20,20,20,.96)', color:'#eaeaea',
+      border:'1px solid #2f2f2f', borderRadius:'12px',
+      boxShadow:'0 18px 48px rgba(0,0,0,.45)', backdropFilter:'blur(6px)',
+      pointerEvents:'auto'
+    });
+
+    // Header
+    var head=document.createElement('div');
+    cls(head,{display:'flex',alignItems:'center',justifyContent:'space-between',
+      padding:'12px 14px',borderBottom:'1px solid #2b2b2b',position:'sticky',top:'0',background:'inherit',zIndex:'1'});
+    var title=document.createElement('div'); title.textContent='Inspector'; title.style.fontWeight='800';
+    var ver=document.createElement('div'); ver.textContent=VER; ver.style.cssText='opacity:.55;font-size:12px;margin-left:auto;margin-right:8px;';
+    var close=document.createElement('button'); close.textContent='Schließen';
+    cls(close,{background:'transparent',border:'1px solid #3a3a3a',color:'#ddd',borderRadius:'6px',cursor:'pointer',padding:'6px 10px'});
+    on(close,'click',function(){ toggle(false); });
+    head.appendChild(title); head.appendChild(ver); head.appendChild(close);
+
+    // Tabs
+    tabs=document.createElement('div');
+    cls(tabs,{display:'flex',gap:'8px',padding:'10px 12px',borderBottom:'1px solid #232323',position:'sticky',top:'48px',background:'inherit',zIndex:'1'});
+    function mkTab(id,label){
+      var b=document.createElement('button');
+      b.textContent=label;
+      b.dataset.tab=id;
+      cls(b,{padding:'8px 12px',borderRadius:'10px',border:'1px solid #2f2f2f',
+        background:'#0f172a',color:'#c7d2fe',cursor:'pointer',fontWeight:'700'});
+      on(b,'click',function(){ showTab(id); });
+      return b;
     }
+    tabs.appendChild(mkTab('info','Übersicht'));
+    tabs.appendChild(mkTab('logs','Logs'));
+    tabs.appendChild(mkTab('build','Build'));
+    tabs.appendChild(mkTab('tests','Tests'));
 
-    tabs=byId('inspector-tabs',root)||mk('div',{id:'inspector-tabs'},{display:'block',padding:'8px 10px'}); if(!tabs.parentNode) root.appendChild(tabs);
+    // Content
+    content=document.createElement('div');
+    content.id='inspector-content';
+    content.style.cssText='padding:12px; min-height:220px;';
 
-    // Logs
-    if (!byId('inspector-logs',tabs)){
-      logsTabEl=mk('div',{id:'inspector-logs'},{padding:'6px',fontFamily:'monospace',fontSize:'12px',whiteSpace:'pre-wrap',maxHeight:'200px',overflowY:'auto',background:'rgba(0,0,0,.08)',border:'1px solid #2a2a2a',borderRadius:'4px'});
-      logsTabEl.textContent='[Inspector Logs]\n'; tabs.appendChild(logsTabEl);
+    // Sections
+    var secInfo=document.createElement('div'); secInfo.id='tab-info';
+    secInfo.innerHTML =
+      '<div style="opacity:.8;margin-bottom:8px">Projekt: <b>Neue Siedler</b></div>'+
+      '<div>Inspector '+VER+' geladen.</div>';
+
+    var secLogs=document.createElement('div'); secLogs.id='tab-logs';
+    var logBox=document.createElement('pre');
+    logBox.id='inspector-logbox';
+    logBox.style.cssText='margin:0;padding:10px;background:#0b0b0b;border:1px solid #2b2b2b;border-radius:8px;min-height:180px;white-space:pre-wrap;';
+    secLogs.appendChild(document.createTextNode(''));
+    secLogs.appendChild(logBox);
+    var copyBtn=document.createElement('button');
+    copyBtn.textContent='📋 Kopieren';
+    cls(copyBtn,{marginTop:'8px',padding:'8px 10px',borderRadius:'8px',border:'1px solid #2f2f2f',background:'#1f2937',color:'#e2e8f0',cursor:'pointer'});
+    on(copyBtn,'click',function(){
+      try{ navigator.clipboard.writeText(logBox.textContent||''); ok(MOD+' Logs kopiert'); }catch(e){ warn(MOD+' Copy fehlgeschlagen: '+(e&&e.message)); }
+    });
+    secLogs.appendChild(copyBtn);
+
+    var secBuild=document.createElement('div'); secBuild.id='tab-build';
+    var openBuild=document.createElement('button'); openBuild.textContent='🧱 Bau-Menü öffnen';
+    cls(openBuild,{padding:'10px 12px',borderRadius:'10px',border:'1px solid #2f2f2f',background:'#1f2937',color:'#e2e8f0',cursor:'pointer'});
+    on(openBuild,'click',function(){ try{ window.GameUI?.toggleBuild(true); }catch(_){ warn(MOD+' toggleBuild nicht verfügbar'); }});
+    secBuild.appendChild(openBuild);
+
+    var secTests=document.createElement('div'); secTests.id='tab-tests';
+    // Toggle Pfad-Overlay
+    var row=document.createElement('div'); cls(row,{display:'flex',alignItems:'center',gap:'8px',margin:'2px 0 10px'});
+    var chk=document.createElement('input'); chk.type='checkbox'; chk.id='dbg-path-overlay'; chk.checked=!!window.DEBUG_PATH_OVERLAY;
+    var lbl=document.createElement('label'); lbl.htmlFor='dbg-path-overlay'; lbl.textContent='Pfad-Overlay anzeigen';
+    on(chk,'change',function(){
+      var enabled=!!chk.checked;
+      window.DEBUG_PATH_OVERLAY=enabled;
+      try{ window.dispatchEvent(new CustomEvent('cb:toggle-path-overlay',{detail:{enabled}})); }catch(_){}
+      ok(MOD+' Path-Overlay '+(enabled?'AN':'AUS'));
+      try{ window.requestAnimationFrame?.(()=>window.dispatchEvent(new Event('cb:request-repaint')));}catch(_){}
+    });
+    row.appendChild(chk); row.appendChild(lbl);
+    secTests.appendChild(row);
+
+    // Ressourcen-Adder
+    var grid=document.createElement('div'); cls(grid,{display:'grid',gridTemplateColumns:'1fr 110px auto',gap:'6px',maxWidth:'420px'});
+    var inpType=document.createElement('input'); inpType.type='text'; inpType.placeholder='wood / stone …'; inpType.value='wood';
+    var inpAmt=document.createElement('input'); inpAmt.type='number'; inpAmt.min='1'; inpAmt.step='1'; inpAmt.value='10';
+    var btnAdd=document.createElement('button'); btnAdd.textContent='Ressourcen hinzufügen';
+    cls(btnAdd,{padding:'8px 10px',borderRadius:'8px',border:'1px solid #2f2f2f',background:'#1f2937',color:'#e2e8f0',cursor:'pointer'});
+    on(btnAdd,'click',function(){
+      var type=(inpType.value||'').trim(); var amount=Math.max(1, parseInt(inpAmt.value||'0',10)||0);
+      if(!type){ warn(MOD+' add-res: kein Typ'); return; }
+      try{ window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}})); }catch(_){}
       try{
-        if(!hook && window.CBLog?.push){
-          const orig=window.CBLog.push.bind(window.CBLog);
-          window.CBLog.push=function(type,msg){ try{
-            if(logsTabEl){ logsTabEl.textContent+='['+String(type||'log').toUpperCase()+'] '+String(msg||'')+'\n'; logsTabEl.scrollTop=logsTabEl.scrollHeight; }
-          }catch(_){} return orig(type,msg); };
-          hook=true;
-        }
-      }catch(_){}
+        if (window.Game?.addResources){ Game.addResources(type,amount); ok(MOD+' +'+amount+' '+type); }
+        else { warn(MOD+' add-res Event gesendet (Game.addResources nicht gefunden)'); }
+      }catch(e){ warn(MOD+' add-res Fehler: '+(e&&e.message)); }
+    });
+    grid.appendChild(inpType); grid.appendChild(inpAmt); grid.appendChild(btnAdd);
+    secTests.appendChild(grid);
+
+    // Content zusammenführen
+    content.appendChild(secInfo);
+    content.appendChild(secLogs);
+    content.appendChild(secBuild);
+    content.appendChild(secTests);
+
+    panel.appendChild(head);
+    panel.appendChild(tabs);
+    panel.appendChild(content);
+    root.appendChild(panel);
+    document.body.appendChild(root);
+
+    // Backdrop-Klick schließt, wenn neben Panel
+    on(root,'mousedown', function(ev){ if(!panel.contains(ev.target)) toggle(false); });
+
+    // ESC
+    if (!escBound){
+      escBound=true;
+      on(window,'keydown', function(ev){ if(ev.key==='Escape') toggle(false); });
     }
 
-    // Tests
-    if (!byId('inspector-tests',tabs)){
-      const panel=mk('div',{id:'inspector-tests','aria-label':'Inspector Tests'},{padding:'10px',borderTop:'1px dashed #3a3a3a',background:'rgba(0,0,0,.12)',marginTop:'8px'});
-      const title2=mk('div'); title2.textContent='Tests'; title2.style.fontWeight='700'; title2.style.margin='0 0 8px'; panel.appendChild(title2);
-      const row=(id,text,ev)=>{ const r=mk('div',null,{display:'flex',alignItems:'center',gap:'8px',margin:'6px 0 8px'});
-        const c=mk('input',{type:'checkbox',id}); c.checked=!!window[id.toUpperCase().replaceAll('-','_')];
-        const l=mk('label',{for:id}); l.textContent=text;
-        c.addEventListener('change',()=>{ const enabled=!!c.checked; window[id.toUpperCase().replaceAll('-','_')]=enabled;
-          try{ window.dispatchEvent(new CustomEvent(ev,{detail:{enabled}})); }catch(_){}
-        }); r.appendChild(c); r.appendChild(l); return r; };
-      panel.appendChild(row('dbg-path-overlay',   'Pfad-Overlay anzeigen',   'cb:toggle-path-overlay'));
-      panel.appendChild(row('dbg-entity-overlay', 'Entity-Overlay anzeigen', 'cb:toggle-entity-overlay'));
-      // Ressourcen
-      const grid=mk('div',null,{display:'grid',gridTemplateColumns:'1fr 110px',gap:'6px',margin:'6px 0'});
-      const t=mk('input',{type:'text',id:'res-type',placeholder:'Typ (wood, stone, …)',autocomplete:'off'},{padding:'6px 8px',background:'#181818',border:'1px solid #333',color:'#eee'}); t.value='wood';
-      const n=mk('input',{type:'number',id:'res-amount',min:'1',step:'1',placeholder:'Menge'},{padding:'6px 8px',background:'#181818',border:'1px solid #333',color:'#eee'}); n.value='10';
-      grid.appendChild(t); grid.appendChild(n); panel.appendChild(grid);
-      const act=mk('div',null,{display:'flex',alignItems:'center',gap:'8px'});
-      const btn=mk('button'); btn.textContent='Ressourcen hinzufügen'; Object.assign(btn.style,{padding:'6px 10px',background:'#2b6cb0',border:'1px solid #2a4365',color:'#fff',borderRadius:'4px',cursor:'pointer'});
-      const status=mk('div',{id:'res-status'},{flex:'1',minHeight:'1.2em'});
-      btn.addEventListener('click',()=>{ const type=String(t.value||'').trim(); const amount=Math.max(1, parseInt(n.value||'0',10)||0);
-        if(!type){ status.textContent='Bitte Ressourcentyp angeben.'; status.style.color='#f6ad55'; warn('[inspector] add-res: fehlender Typ'); return; }
-        try{ window.dispatchEvent(new CustomEvent('cb:add-resources',{detail:{type,amount}})); }catch(_){}
-        let direct=false; try{ if(window.Game?.addResources){ Game.addResources(type,amount); direct=true; } }catch(_){}
-        status.textContent = direct ? ('+'+amount+' '+type) : ('Event gesendet: +'+amount+' '+type);
-        status.style.color = direct ? '#68d391' : '#63b3ed';
-      });
-      act.appendChild(btn); act.appendChild(status); panel.appendChild(act);
-      tabs.appendChild(panel);
-    }
+    // Logs initial einlesen
+    try{
+      if (window.CBLog && typeof CBLog.dump==='function'){
+        var s=CBLog.dump(); byId('inspector-logbox').textContent = s || '[leer]';
+      } else {
+        byId('inspector-logbox').textContent = '[CBLog nicht verfügbar]';
+      }
+    }catch(_){}
 
-    built=true; ok(MOD+' gebaut (v17.4.2)');
+    hardenFABs();
+    ok(MOD+' geöffnet ('+VER+')'); // wir loggen beim ersten Build, tatsächliches Open/Close unten
     return root;
   }
 
-  function toggle(show){ buildCore(); root.style.display = show?'block':'none'; }
+  function showTab(id){
+    ['info','logs','build','tests'].forEach(function(k){
+      var sec = byId('tab-'+k); if (!sec) return;
+      sec.style.display = (k===id ? 'block':'none');
+    });
+    // Tabs optisch markieren
+    Array.prototype.forEach.call(tabs.querySelectorAll('button'), function(btn){
+      var on = (btn.dataset.tab===id);
+      btn.style.background = on ? '#1d4ed8' : '#0f172a';
+      btn.style.color = on ? '#fff' : '#c7d2fe';
+      btn.style.borderColor = on ? '#1d4ed8' : '#2f2f2f';
+    });
+  }
 
-  window.addEventListener('cb:inspector-open',  ()=>{ buildCore(); toggle(true);  });
-  window.addEventListener('cb:inspector-toggle', e =>{ buildCore(); toggle(!!(e&&e.detail&&e.detail.open)); });
-  window.addEventListener('cb:inspector-close', ()=>{ buildCore(); toggle(false); });
-  window.addEventListener('cb:game-started',    ()=>{ buildCore(); });
+  // --- Öffnen/Schließen ------------------------------------------------------
+  function setOpen(open){
+    ensureRoot();
+    if (open){
+      root.style.display='block';
+      root.style.pointerEvents='auto';
+      root.style.opacity='1';
+      showTab('logs'); // default: Logs
+      try{
+        window.dispatchEvent(new CustomEvent('cb:inspector-toggle',{detail:{open:true}}));
+        window.dispatchEvent(new CustomEvent('cb:inspector-open'));
+      }catch(_){}
+      ok(MOD+' geöffnet ('+VER+')');
+    } else {
+      root.style.opacity='0';
+      root.style.pointerEvents='none';
+      setTimeout(function(){
+        root.style.display='none';
+        try{
+          window.dispatchEvent(new CustomEvent('cb:inspector-toggle',{detail:{open:false}}));
+          window.dispatchEvent(new CustomEvent('cb:inspector-close'));
+        }catch(_){}
+        ok(MOD+' geschlossen');
+      }, 180);
+    }
+  }
+  function isOpen(){ return !!(root && root.style.display!=='none' && root.style.opacity!=='0'); }
+  function toggle(force){
+    try{ ensureRoot(); }catch(e){ err(MOD+' ensureRoot: '+(e && e.message)); }
+    var want = (typeof force==='boolean') ? !!force : !isOpen();
+    setOpen(want);
+  }
 
-  window.Inspector = { toggle: toggle };
-  buildCore(); toggle(false);
+  // --- Public API ------------------------------------------------------------
+  window.GameUI = window.GameUI || {};
+  window.GameUI.toggleInspector = function(force){
+    try{ toggle(force); }catch(e){ warn(MOD+' toggleInspector Fehler: '+(e && e.message)); }
+  };
+
+  // --- Auto-Init -------------------------------------------------------------
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ ensureRoot(); setOpen(false); }, {once:true});
+  } else {
+    ensureRoot(); setOpen(false);
+  }
+
+  ok(MOD+' geladen ('+VER+')');
 })();
