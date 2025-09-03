@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-03T11:26:14.573Z",
+  "createdAt": "2025-09-03T22:27:57.108Z",
   "root": ".",
-  "count": 256,
+  "count": 260,
   "entries": [
     {
       "type": "dir",
@@ -158,8 +158,23 @@
     },
     {
       "type": "file",
+      "path": "assets/core/build.assets.js",
+      "size": 2084
+    },
+    {
+      "type": "file",
+      "path": "assets/core/build.categories.js",
+      "size": 3884
+    },
+    {
+      "type": "file",
+      "path": "assets/core/cblog.polyfill.js",
+      "size": 2147
+    },
+    {
+      "type": "file",
       "path": "assets/core/core.entities.js",
-      "size": 7426
+      "size": 3870
     },
     {
       "type": "file",
@@ -169,7 +184,7 @@
     {
       "type": "file",
       "path": "assets/core/core.input.js",
-      "size": 5308
+      "size": 5251
     },
     {
       "type": "file",
@@ -189,12 +204,12 @@
     {
       "type": "file",
       "path": "assets/core/core.render.js",
-      "size": 4904
+      "size": 6770
     },
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
-      "size": 6608
+      "size": 6336
     },
     {
       "type": "dir",
@@ -235,13 +250,13 @@
     },
     {
       "type": "file",
-      "path": "assets/inspector/inspector.js",
-      "size": 6823
+      "path": "assets/inspector/inspector.css",
+      "size": 2672
     },
     {
       "type": "file",
-      "path": "assets/inspector/inspector.tests.js",
-      "size": 6524
+      "path": "assets/inspector/inspector.js",
+      "size": 11038
     },
     {
       "type": "dir",
@@ -829,22 +844,27 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 6805
+      "size": 757
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 2959
+      "size": 6318
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 10382
+      "size": 10945
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/ui-start.css",
+      "size": 1900
     },
     {
       "type": "file",
       "path": "assets/ui/ui-start.js",
-      "size": 7559
+      "size": 6849
     },
     {
       "type": "file",
@@ -958,7 +978,7 @@
     {
       "type": "file",
       "path": "core/overlay-hooks.js",
-      "size": 4163
+      "size": 9517
     },
     {
       "type": "file",
@@ -1146,7 +1166,7 @@
     {
       "type": "file",
       "path": "boot.compat.js",
-      "size": 1134
+      "size": 2081
     },
     {
       "type": "file",
@@ -1171,17 +1191,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2755
+      "size": 2744
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 25325
+      "size": 25248
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9656
+      "size": 9641
     },
     {
       "type": "file",
@@ -1196,7 +1216,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 3835
+      "size": 4365
     },
     {
       "type": "file",
