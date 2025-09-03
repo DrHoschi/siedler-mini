@@ -1,0 +1,31 @@
+/*
+  assets/ui/ui-start.css — v17.7.0
+  Zweck:
+    - Zeigt auf der Startseite ein Vollbild-Hintergrundbild
+    - Keine Interaktion blockieren (reine Optik)
+    - Wird von ui-start.js via <body class="has-start-bg"> gesetzt/entfernt
+*/
+
+/* Body-Base */
+html, body { height:100%; }
+
+/* Startseiten-Hintergrund rein per CSS-Pseudo */
+body.has-start-bg::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(0,0,0,.25), rgba(0,0,0,.65)),
+    url("../ui/start-bg.jpeg") center/cover no-repeat;
+  z-index:0;              /* unter Canvas & UI */
+  pointer-events:none;    /* blockiert nichts */
+}
+
+/* Canvas liegt drüber */
+#game{ position:relative; z-index:1; }
+
+/* FABs bleiben ganz oben */
+#btn-build, #btn-inspector{
+  position:fixed;
+  z-index:2147483647 !important;
+}
