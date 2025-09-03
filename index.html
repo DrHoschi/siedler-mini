@@ -10,9 +10,10 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="style.css?v=17.4.6">
-  <link rel="stylesheet" href="ui-start.css?v=17.4.6">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.4.6">
+  <link rel="stylesheet" href="style.css?v=17.4.8">
+  <link rel="stylesheet" href="ui-start.css?v=17.4.8">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.4.8">
+  <link rel="manifest" href="manifest.webmanifest">
 
   <style>
     html, body { height:100%; margin:0; background:#0c120f; }
@@ -23,6 +24,7 @@
       position:fixed;
       z-index:2147483647 !important;
       pointer-events:auto !important;
+      user-select:none;
     }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
@@ -36,63 +38,73 @@
     body.has-build-open #btn-inspector { bottom:240px; }
 
     /* Start-Overlay darf nicht blockieren */
-    .ui-start-bg,
-    .ui-start-panel {
-      pointer-events:none !important;
-    }
+    .ui-start-bg, .ui-start-panel { pointer-events:none !important; }
   </style>
 </head>
 <body>
 
   <!-- Bühne -->
-  <canvas id="game" data-map="assets/maps/map-mini.json"></canvas>
+  <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
   <!-- FAB: Build -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
+    <button type="button" aria-label="Bau-Menü"
+      onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
   </div>
 
-  <!-- FAB: Inspector (Failsafe-Version) -->
+  <!-- FAB: Inspector (Failsafe inklusive) -->
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" onclick="(function(){
-      try{ if(window.GameUI?.toggleInspector){ GameUI.toggleInspector(); return; } }catch(_){}
-      var el=document.getElementById('inspector');
-      if(!el){
-        el=document.createElement('div');
-        el.id='inspector'; el.style.cssText='position:fixed;right:12px;bottom:96px;width:400px;max-width:90vw;max-height:70vh;overflow:auto;background:rgba(20,20,20,.94);border:1px solid #333;border-radius:8px;z-index:2147483646;color:#eee;padding:8px;display:block;';
-        el.textContent='Inspector (Failsafe aktiv)';
-        document.body.appendChild(el);
-      } else {
-        el.style.display = (el.style.display==='none' ? 'block' : 'none');
-      }
-    })(); return false;">🛠</button>
+    <button type="button" aria-label="Inspector"
+      onclick="(function(){
+        try{ if(window.GameUI?.toggleInspector){ GameUI.toggleInspector(); return; } }catch(_){}
+        var el=document.getElementById('inspector');
+        if(!el){
+          el=document.createElement('div');
+          el.id='inspector';
+          el.style.cssText='position:fixed;right:12px;bottom:96px;width:400px;max-width:90vw;max-height:70vh;overflow:auto;background:rgba(20,20,20,.94);border:1px solid #333;border-radius:8px;z-index:2147483646;color:#eee;padding:8px;display:block;';
+          el.textContent='Inspector (Failsafe aktiv)';
+          document.body.appendChild(el);
+        } else {
+          el.style.display = (el.style.display==='none' ? 'block' : 'none');
+        }
+      })(); return false;">🛠</button>
   </div>
+
+  <!-- Logger zuerst, damit Logs überall ankommen -->
+  <script src="assets/core/cblog.polyfill.js?v=1.0.0"></script>
 
   <!-- Core -->
-  <script src="assets/core/cblog.polyfill.js?v=1.0.0"></script>
-  <script src="assets/core/core.env.js?v=17.4.6"></script>
-  <script src="assets/core/core.entities.js?v=17.4.6"></script>
-  <script src="assets/core/core.render.js?v=17.4.6"></script>
-  <script src="assets/core/core.production.js?v=17.4.6"></script>
-  <script src="assets/core/core.pfglue.js?v=17.4.6"></script>
-  <script src="assets/core/core.map.js?v=17.4.6"></script>
-  <script src="assets/core/core.input.js?v=17.4.6"></script>
-  <script src="assets/core/carriers.js?v=17.4.6"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.4.6"></script>
+  <script src="assets/core/core.env.js?v=17.4.8"></script>
+  <script src="assets/core/core.entities.js?v=17.4.8"></script>
+  <script src="assets/core/core.render.js?v=17.4.8"></script>
+  <script src="assets/core/core.production.js?v=17.4.8"></script>
+  <script src="assets/core/core.pfglue.js?v=17.4.8"></script>
+  <script src="assets/core/core.map.js?v=17.4.8"></script>
+  <script src="assets/core/core.input.js?v=17.4.8"></script>
+  <script src="assets/core/carriers.js?v=17.4.8"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.4.8"></script>
 
-  <!-- Legacy -->
-  <script defer src="game.js?v=17.4.6"></script>
+  <!-- Legacy (falls noch referenziert) -->
+  <script defer src="game.js?v=17.4.8"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.4.6"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.4.6"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.4.6"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.4.8"></script>
+  <script defer src="assets/ui/ui-start.js?v=17.4.8"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.4.8"></script>
 
-  <!-- Inspector -->
-  <script defer src="assets/inspector/inspector.js?v=17.4.6"></script>
+  <!-- Inspector (selbsttragend, Live-Logs) -->
+  <script defer src="assets/inspector/inspector.js?v=17.4.8"></script>
 
-  <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=17.4.6"></script>
+  <!-- Boot-Compat am Ende (nur Fallback; vermeidet Doppelstart) -->
+  <script defer src="boot.compat.js?v=17.4.8"></script>
+
+  <!-- Kleine Body-States für FAB-Position bei geöffnetem Build -->
+  <script>
+    (function(){
+      window.addEventListener('cb:build-open',  ()=>document.body.classList.add('has-build-open'));
+      window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
+    })();
+  </script>
 </body>
 </html>
