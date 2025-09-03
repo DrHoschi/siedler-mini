@@ -1,230 +1,95 @@
-/* ============================================================================
- * Datei: assets/inspector/inspector.css
- * Projekt: Siedler-Mini
- * Version: v18.3.0
- *
- * Zweck
- *   - Vollständiges Styling für den Inspector im „grauen“ Dark-Theme
- *   - Passt zu inspector.js v18.3.x (Tabs: Übersicht, Logs, Build, Ressourcen, Pfade, Tests)
- *
- * Design-Prinzipien
- *   - Hoher Kontrast, aber weich (Glas/Blur, zarte Ränder)
- *   - Kapsel-Tabs (grau), aktive Tabs hellgrau
- *   - Karten/Grids für Inhalte, monospace für Zahlen/Logs
- *   - Schlanke Scrollbars, saubere Fokus-Stile
- * ========================================================================== */
+/*
+==============================================================================
+ Datei: assets/inspector/inspector.css
+ Projekt: Siedler-Mini
+ Version: v18.3.2
+ Zweck: Graues, klares Inspector-UI (laut Vorgabe)
+==============================================================================
+*/
 
-/* Root-Panel */
-#inspector{
-  position: fixed;
-  right: 16px;
-  bottom: 96px;
-  width: min(920px, 92vw);
-  max-height: 74vh;
-  overflow: hidden;
-  background: rgba(18,19,18,0.97);
-  color: #e9ecef;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  box-shadow: 0 24px 72px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
-  backdrop-filter: blur(8px);
-  z-index: 2147483646; /* unter FAB-Buttons (die haben 2147483647), aber über allem anderen */
-  display: none;
-  font: 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
-}
-#inspector.open{ display:block; }
+.inspector{
+  position:fixed;
+  right:20px; bottom:92px;
+  width:520px; max-width:96vw; max-height:72vh;
+  display:none; z-index:2147483646;
 
-/* Header */
-#inspector .head{
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-bottom: 1px solid rgba(255,255,255,.07);
-  background: linear-gradient(to top, rgba(255,255,255,.04), rgba(255,255,255,.08));
+  background:#171717;            /* Grundfläche dunkel */
+  border:1px solid #2f2f2f;      /* feine Kante */
+  border-radius:12px;
+  box-shadow:
+    0 16px 40px rgba(0,0,0,.55),
+    0 1px 0 rgba(255,255,255,.03) inset;
+  color:#e8e8e8;
+  font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  overflow:hidden;
 }
-#inspector .title{
-  font-weight: 800;
-  letter-spacing: .25px;
-  font-size: 18px;
-  color: #f3f5f4;
-}
-#inspector .spacer{ flex: 1; }
 
-#inspector .close{
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: rgba(255,255,255,.10);
-  color: #e9ecef;
-  cursor: pointer;
+/* Kopfzeile */
+.insp-head{
+  display:flex; align-items:center; gap:12px;
+  padding:10px 12px;
+  background:linear-gradient(to bottom, #1e1e1e, #191919);
+  border-bottom:1px solid #2b2b2b;
 }
-#inspector .close:focus-visible{
-  outline: 2px solid rgba(140,200,255,.55);
-  outline-offset: 2px;
+.insp-head .title{
+  font-weight:700; letter-spacing:.2px;
 }
+.insp-head .ver{
+  margin-left:8px; font-weight:500; color:#9aa0a6; font-size:12px;
+}
+.insp-head .btn-close{
+  margin-left:auto;
+  background:#2b2b2b; color:#d9d9d9;
+  border:1px solid #3a3a3a; border-radius:8px;
+  padding:6px 10px; cursor:pointer;
+}
+.insp-head .btn-close:hover{ background:#323232; }
 
 /* Tabs */
-#inspector .tabs{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+.insp-tabs{
+  display:flex; gap:6px; padding:8px 8px;
+  background:#1c1c1c; border-bottom:1px solid #2b2b2b;
 }
-#inspector .tab{
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(26,29,27,.90);
-  color: #e9ecef;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background .12s ease, border-color .12s ease, transform .06s ease;
+.insp-tabs .tab{
+  background:#232323; color:#cfcfcf;
+  border:1px solid #343434; border-radius:999px;
+  padding:6px 10px; cursor:pointer; font-size:13px;
 }
-#inspector .tab:hover{ transform: translateY(-1px); }
-#inspector .tab:focus-visible{
-  outline: 2px solid rgba(140,200,255,.55);
-  outline-offset: 2px;
-}
-#inspector .tab.active{
-  background: rgba(220,226,224,.28);
-  color: #111;
-  border-color: rgba(220,226,224,.65);
+.insp-tabs .tab.active{
+  background:#3a3a3a; color:#fff; border-color:#4a4a4a;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset;
 }
 
 /* Body */
-#inspector .body{
-  padding: 12px 14px 14px;
-  overflow: auto;
-  max-height: calc(74vh - 112px); /* Header + Tabs */
-}
-
-/* Layout-Helfer */
-#inspector .row{ display:flex; align-items:center; gap:10px; margin:8px 0; }
-#inspector .grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
-#inspector .muted{ opacity:.72; }
-#inspector .small{ font-size:12px; }
-#inspector .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-#inspector .hr{
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgba(255,255,255,.18), transparent);
-  margin: 10px 0;
-}
-
-/* Karten / Panels */
-#inspector .card{
-  background: rgba(0,0,0,.28);
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 12px;
-  padding: 10px;
-  color: #dbe1df;
-}
-#inspector .card h3{
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: .2px;
-}
-
-/* Key/Value – kompakt */
-#inspector .kvs{
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 12px;
-  font-size: 13px;
-}
-#inspector .kvs .key{ opacity:.7; }
-#inspector .kvs .val{}
-
-/* Buttons */
-#inspector .btn{
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.08);
-  color: #e9ecef;
-  border-radius: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  transition: background .12s ease, border-color .12s ease, transform .06s ease;
-}
-#inspector .btn:hover{ transform: translateY(-1px); }
-#inspector .btn:disabled{ opacity:.55; cursor:not-allowed; }
-#inspector .btn:focus-visible{
-  outline: 2px solid rgba(140,200,255,.55);
-  outline-offset: 2px;
-}
-
-/* Switch/Checkbox-Zeile */
-#inspector .switch{ display:inline-flex; align-items:center; gap:8px; }
-#inspector .switch input{ width:18px; height:18px; }
-
-/* Listen (z.B. letzte Pfade) */
-#inspector .list{ margin:0; padding:0; list-style:none; }
-#inspector .list li{
-  padding: 6px 8px;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 8px;
-  background: rgba(255,255,255,.04);
-  margin: 6px 0;
-}
-
-/* Badges / Pills (für kleine Live-Markierungen) */
-#inspector .badge{
-  display:inline-block;
-  font-size:11px;
-  line-height:1;
-  padding:4px 6px;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.16);
-  background: rgba(255,255,255,.08);
-  color:#e9ecef;
-}
-#inspector .pill-green{
-  border-color: rgba(120,200,150,.45);
-  background: rgba(90,160,110,.25);
-  color:#eaf3ec;
+.insp-body{
+  background:#151515;
+  padding:10px; height:calc(72vh - 92px); /* grob, passt zu Gesamt-Höhe */
+  overflow:auto;
 }
 
 /* Logs */
-#inspector textarea.log{
-  width: 100%;
-  height: 240px;
-  background: #0c0c0c;
-  color: #d6d6d6;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 10px;
-  resize: vertical;
+.log-wrap{ display:flex; flex-direction:column; gap:8px; height:100%; }
+.log-area{
+  flex:1; min-height:160px;
+  background:#0f0f0f;
+  border:1px solid #2a2a2a; border-radius:8px;
+  padding:8px; overflow:auto; white-space:pre-wrap;
+  font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color:#d6d6d6;
+}
+.log-toolbar{ display:flex; gap:8px; justify-content:flex-start; }
+.log-toolbar .btn{
+  background:#2b2b2b; color:#ddd; border:1px solid #3a3a3a;
+  border-radius:8px; padding:6px 10px; cursor:pointer;
+}
+.log-toolbar .btn:hover{ background:#323232; }
+
+/* Platzhalter für leere Tabs */
+.placeholder{
+  opacity:.7; font-style:italic; padding:6px 2px;
 }
 
-/* Eingaben */
-#inspector input[type="text"],
-#inspector input[type="number"]{
-  padding: 8px 10px;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  background: rgba(0,0,0,.25);
-  color: #e9ecef;
-  min-width: 0;
-}
-#inspector input:focus-visible{
-  outline: 2px solid rgba(140,200,255,.55);
-  outline-offset: 2px;
-}
-
-/* Scrollbars (schmal & neutral) */
-#inspector .body{
-  scrollbar-width: thin;
-  scrollbar-color: rgba(160,170,168,.6) transparent;
-}
-#inspector .body::-webkit-scrollbar{ width: 8px; height: 8px; }
-#inspector .body::-webkit-scrollbar-thumb{
-  background: rgba(160,170,168,.6);
-  border-radius: 8px;
-}
-
-/* Responsiv */
-@media (max-width: 520px){
-  #inspector{ right: 8px; left: 8px; width: auto; }
-  #inspector .grid{ grid-template-columns: 1fr; }
+/* Mobile Anpassungen */
+@media (max-width: 560px){
+  .inspector{ right:10px; left:10px; width:auto; }
 }
