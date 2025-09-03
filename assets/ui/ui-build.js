@@ -1,300 +1,292 @@
 /* ============================================================================
- * ui-build.js — Tab-Dock fürs Bauen (auto aus BUILD_CATEGORIES)
- * Version: v17.6.0
+ * ui-build.js — v17.7.0
  * Projekt: Neue Siedler
  *
- * Ziele
- *  - Tabs und Items automatisch aus window.BUILD_CATEGORIES generieren
- *  - „todo“-Items deaktiviert (klicksicher)
+ * Neu:
+ *  - Tabs automatisch aus window.BUILD_CATEGORIES
+ *  - Einzeilige, horizontal scrollende Icon-Leiste mit Pfeilen (← →)
+ *  - todo:true Items sind deaktiviert
  *  - Auswahl sendet cb:build-select {type}
- *  - Abwärtskompatibel: Fallback-Kategorien, falls BUILD_CATEGORIES fehlt
- *  - Saubere Open/Close-Logik, keine Pointer-Blockade im Closed-State
- *
- * Events (dispatch)
- *  - cb:build-open / cb:build-close
- *  - cb:build-select {type}
- *
- * Abhängigkeiten
- *  - optional: window.BUILD_CATEGORIES (build.categories.js)
- *  - CBLog (Polyfill reicht)
- *  - index.html: <link rel="stylesheet" href="assets/ui/ui-build.css?...">
+ *  - Rückwärtskompatibel: Falls BUILD_CATEGORIES fehlt → Fallback
+ *  - Keine Pointer-Blockade im Closed-State
  * ========================================================================== */
 (function(){
   'use strict';
+  var VER='v17.7.0', MOD='[ui-build]';
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){console.log(m);} }
+  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){console.warn(m);} }
+  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){console.error(m);} }
 
-  var VER = 'v17.6.0';
-  var MOD = '[ui-build]';
-
-  // --- Logging ---------------------------------------------------------------
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m); }catch(_){ console.log(m); } }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m); }catch(_){ console.warn(m); } }
-  function err(m){ try{ (window.CBLog?.err||console.error)(m); }catch(_){ console.error(m); } }
-
-  // --- DOM-Refs / State ------------------------------------------------------
-  var root = null;       // Dock-Container
-  var tabs = null;       // Tabs-Leiste
-  var pane = null;       // Items-Panel
-  var _open = false;
-  var _built = false;
-  var _activeCat = null;
-
-  // --- Fallback-Kategorien (abwärtskompatibel) -------------------------------
-  function getFallbackCategories(){
+  // ---------- Kategorien (Fallback) -----------------------------------------
+  function fallbackCats(){
     return [
       { id:'general', title:'Allg.', items:[
-        { id:'hq',     label:'Hauptquartier', icon:(window.BUILD_ASSETS?.building?.hq)||null },
-        { id:'depot',  label:'Depot',         icon:(window.BUILD_ASSETS?.building?.depot)||null },
+        { id:'hq',    label:'HQ' },
+        { id:'depot', label:'Depot' },
       ]},
-      { id:'production_food', title:'Produktion', items:[
-        { id:'farm',        label:'Farm',        icon:(window.BUILD_ASSETS?.building?.farm)||null },
-        { id:'lumberjack',  label:'Holzfäller',  icon:(window.BUILD_ASSETS?.building?.lumberjack)||null },
+      { id:'production', title:'Produktion', items:[
+        { id:'farm',       label:'Farm' },
+        { id:'lumberjack', label:'Holzfäller' },
       ]},
       { id:'housing', title:'Wohnen', items:[
-        { id:'haeuser1', label:'Haus I',  icon:(window.BUILD_ASSETS?.building?.haeuser1)||null },
-        { id:'haeuser2', label:'Haus II', icon:(window.BUILD_ASSETS?.building?.haeuser2)||null },
+        { id:'haeuser1', label:'Haus1' },
+        { id:'haeuser2', label:'Haus2' },
       ]},
+      { id:'mil', title:'Militär (später)', items:[
+        { id:'turm', label:'Turm', todo:true }
+      ]}
     ];
   }
-
-  function getCategories(){
+  function getCats(){
     try{
-      var cats = window.BUILD_CATEGORIES;
-      if (!Array.isArray(cats) || !cats.length) return getFallbackCategories();
-      return cats;
-    }catch(_){
-      return getFallbackCategories();
-    }
+      var c = window.BUILD_CATEGORIES;
+      return (Array.isArray(c) && c.length) ? c : fallbackCats();
+    } catch(_){ return fallbackCats(); }
   }
 
-  // --- UI-Bau ----------------------------------------------------------------
+  // ---------- DOM + State ----------------------------------------------------
+  var root, head, tabs, trackWrap, track, leftBtn, rightBtn;
+  var _built=false, _open=false, _activeCat=null;
+
   function ensureRoot(){
     if (root) return root;
-
     root = document.createElement('div');
-    root.id = 'build-dock';
-    // Hardening: z-Index unter FABs, geschlossen inert
+    root.id='build-dock';
     root.style.cssText = [
-      'position:fixed',
-      'left:12px',
-      'bottom:96px',
-      'width:min(520px, 94vw)',
-      'max-height:66vh',
-      'overflow:auto',
-      'background:rgba(18,18,18,.96)',
-      'color:#eaeaea',
-      'border:1px solid #2f2f2f',
-      'border-radius:12px',
-      'box-shadow:0 18px 48px rgba(0,0,0,.45)',
-      'backdrop-filter:blur(6px)',
-      'z-index:2147483602',
-      'display:none',
-      'opacity:0',
-      'pointer-events:none',
-      'transition:opacity .18s ease',
+      'position:fixed','left:12px','right:12px','bottom:96px',
+      'margin:auto','max-width:1200px',
+      'background:rgba(18,18,18,.96)','border:1px solid #2f2f2f',
+      'border-radius:12px','box-shadow:0 18px 48px rgba(0,0,0,.45)',
+      'backdrop-filter:blur(6px)','color:#eaeaea',
+      'display:none','opacity:0','pointer-events:none','transition:opacity .18s',
+      'z-index:2147483602'
     ].join(';');
 
     // Header
-    var head = document.createElement('div');
-    head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #2b2b2b;position:sticky;top:0;background:inherit;z-index:1;';
-    var title = document.createElement('div');
-    title.textContent = 'Bau-Menü';
-    title.style.fontWeight = '800';
-    var ver = document.createElement('div');
-    ver.textContent = VER;
-    ver.style.cssText = 'opacity:.55;font-size:12px;margin-left:auto;margin-right:8px;';
-    var close = document.createElement('button');
-    close.textContent = 'Schließen';
-    close.style.cssText = 'background:transparent;border:1px solid #3a3a3a;color:#ddd;border-radius:6px;cursor:pointer;padding:6px 10px';
+    head = document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #232323;';
+    var title = document.createElement('div'); title.textContent='Menü'; title.style.cssText='font-weight:800';
+    var ver   = document.createElement('div'); ver.textContent=VER; ver.style.cssText='opacity:.55;margin-left:auto;font-size:12px';
+    var close = document.createElement('button'); close.textContent='Schließen';
+    close.style.cssText='border:1px solid #3a3a3a;background:transparent;color:#ddd;border-radius:8px;padding:6px 10px;cursor:pointer';
     close.addEventListener('click', function(){ toggle(false); });
-    head.appendChild(title); head.appendChild(ver); head.appendChild(close);
+    head.appendChild(title);
 
-    // Tabs
+    // Tabs-Zeile
     tabs = document.createElement('div');
-    tabs.id = 'build-tabs';
-    tabs.style.cssText = 'display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid #232323;position:sticky;top:48px;background:inherit;z-index:1;overflow:auto;';
+    tabs.id='build-tabs';
+    tabs.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:12px';
+    head.appendChild(tabs);
 
-    // Pane
-    pane = document.createElement('div');
-    pane.id = 'build-items';
-    pane.style.cssText = 'padding:12px; display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:10px;';
+    head.appendChild(ver); head.appendChild(close);
+
+    // --- Einzeilige Leiste mit Pfeilen --------------------------------------
+    var row = document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:10px';
+
+    leftBtn = document.createElement('button');
+    leftBtn.innerHTML='&#x25C0;'; // ◀
+    styleArrow(leftBtn);
+    leftBtn.addEventListener('click', function(){ scrollBy(-1); });
+
+    rightBtn = document.createElement('button');
+    rightBtn.innerHTML='&#x25B6;'; // ▶
+    styleArrow(rightBtn);
+    rightBtn.addEventListener('click', function(){ scrollBy(1); });
+
+    trackWrap = document.createElement('div');
+    trackWrap.style.cssText = [
+      'position:relative','flex:1 1 auto','overflow:hidden',
+      'border:1px solid #2a2a2a','border-radius:10px','background:#0f172a'
+    ].join(';');
+
+    track = document.createElement('div');
+    track.style.cssText = [
+      'display:flex','gap:10px','align-items:center',
+      'padding:10px','overflow:auto','scrollbar-width:thin'
+    ].join(';');
+    trackWrap.appendChild(track);
+
+    row.appendChild(leftBtn);
+    row.appendChild(trackWrap);
+    row.appendChild(rightBtn);
+
+    // Hinweislinie (optional)
+    var hint = document.createElement('div');
+    hint.id='build-hint';
+    hint.style.cssText='padding:6px 10px;border-top:1px solid #232323;opacity:.7;font-size:12px';
+    hint.textContent='Einzeilige Icon-Leiste. Wischen/Scrollen oder Pfeile nutzen.';
 
     root.appendChild(head);
-    root.appendChild(tabs);
-    root.appendChild(pane);
-
+    root.appendChild(row);
+    root.appendChild(hint);
     document.body.appendChild(root);
+
+    // Scroll per Wheel / Touch ist nativ; Pfeile bewegen seitenweise
+    track.addEventListener('wheel', function(ev){
+      if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX)) {
+        track.scrollLeft += ev.deltaY;
+        ev.preventDefault();
+      }
+      updateArrows();
+    }, {passive:false});
+    track.addEventListener('scroll', updateArrows);
+
     return root;
   }
 
-  function applyTabStyles(btn, active){
-    btn.style.padding = '8px 12px';
-    btn.style.borderRadius = '10px';
-    btn.style.border = '1px solid ' + (active ? '#1d4ed8' : '#2f2f2f');
-    btn.style.background = active ? '#1d4ed8' : '#0f172a';
-    btn.style.color = active ? '#fff' : '#c7d2fe';
-    btn.style.cursor = 'pointer';
-    btn.style.fontWeight = '700';
-    btn.style.whiteSpace = 'nowrap';
+  function styleArrow(btn){
+    btn.style.cssText='width:42px;height:42px;border-radius:10px;border:1px solid #2f2f2f;background:#111827;color:#e5e7eb;cursor:pointer';
+    btn.onfocus = ()=> btn.style.outline='2px solid #93c5fd';
+    btn.onblur  = ()=> btn.style.outline='none';
+  }
+  function scrollBy(dir){
+    var page = Math.max(100, trackWrap.clientWidth * 0.85);
+    track.scrollTo({ left: track.scrollLeft + dir*page, behavior:'smooth' });
+  }
+  function updateArrows(){
+    var max = track.scrollWidth - track.clientWidth - 1;
+    leftBtn.disabled  = track.scrollLeft <= 0;
+    rightBtn.disabled = track.scrollLeft >= max;
+    var dis = 'opacity:.5;cursor:not-allowed';
+    leftBtn.style.opacity  = leftBtn.disabled ? '.5': '1';
+    rightBtn.style.opacity = rightBtn.disabled? '.5': '1';
   }
 
+  // ---------- UI-Aufbau ------------------------------------------------------
   function buildTabs(cats){
-    tabs.innerHTML = '';
-    cats.forEach(function(cat, idx){
-      var b = document.createElement('button');
+    tabs.innerHTML='';
+    cats.forEach(function(cat, i){
+      var b=document.createElement('button');
       b.textContent = cat.title || cat.id;
       b.dataset.tab = cat.id;
-      applyTabStyles(b, idx===0);
+      styleTab(b, i===0);
       b.addEventListener('click', function(){
         _activeCat = cat.id;
-        // re-style alle
         Array.prototype.forEach.call(tabs.querySelectorAll('button'), function(btn){
-          applyTabStyles(btn, btn.dataset.tab===_activeCat);
+          styleTab(btn, btn.dataset.tab===_activeCat);
         });
-        buildItems(cat);
+        buildRow(cat);
       });
       tabs.appendChild(b);
     });
-    _activeCat = cats[0] && cats[0].id || null;
+    _activeCat = (cats[0] && cats[0].id) || null;
+  }
+  function styleTab(btn, active){
+    btn.style.cssText=[
+      'border:1px solid '+(active?'#1d4ed8':'#2f2f2f'),
+      'background:'+(active?'#1d4ed8':'#0f172a'),
+      'color:'+(active?'#fff':'#c7d2fe'),
+      'border-radius:999px','padding:6px 12px',
+      'cursor:pointer','font-weight:700'
+    ].join(';');
   }
 
-  function buildItems(cat){
-    pane.innerHTML = '';
+  function buildRow(cat){
+    track.innerHTML='';
     if (!cat || !Array.isArray(cat.items)) return;
-
     cat.items.forEach(function(it){
       var card = document.createElement('button');
-      card.className = 'build-item';
       var disabled = !!it.todo;
+      card.className='build-item';
       card.disabled = disabled;
-      card.style.cssText = [
+      card.style.cssText=[
         'display:flex','flex-direction:column','align-items:center','justify-content:center',
-        'gap:8px','padding:10px','border-radius:10px',
-        'border:1px solid ' + (disabled ? '#3a3a3a' : '#2f2f2f'),
-        'background:' + (disabled ? '#111827' : '#1f2937'),
-        'color:' + (disabled ? '#9ca3af' : '#e2e8f0'),
-        'cursor:' + (disabled ? 'not-allowed' : 'pointer'),
-        'min-height:110px','text-align:center'
+        'gap:6px','width:72px','min-width:72px','height:72px',
+        'border-radius:10px','border:1px solid '+(disabled?'#3a3a3a':'#2f2f2f'),
+        'background:'+(disabled?'#111827':'#1f2937'),
+        'color:'+(disabled?'#9ca3af':'#e2e8f0'),
+        'cursor:'+(disabled?'not-allowed':'pointer')
       ].join(';');
 
-      // Icon
-      var img = document.createElement('img');
-      img.alt = it.label || it.id;
-      img.draggable = false;
-      img.style.cssText = 'width:48px;height:48px;object-fit:contain;opacity:'+(disabled?'.55':'1');
+      var img=document.createElement('img');
+      img.alt = it.label||it.id;
       img.src = it.icon || (window.BUILD_ASSETS?.ui?.buildMarker) || '';
+      img.style.cssText='width:28px;height:28px;object-fit:contain;opacity:'+(disabled?'.6':'1');
       card.appendChild(img);
 
-      // Label
-      var lbl = document.createElement('div');
-      lbl.textContent = (it.label || it.id);
-      lbl.style.cssText = 'font-weight:700;font-size:14px;';
+      var lbl=document.createElement('div');
+      lbl.textContent=it.label||it.id;
+      lbl.style.cssText='font-size:11px;line-height:1.1;opacity:.9';
       card.appendChild(lbl);
 
-      // Badge „TODO“
       if (disabled){
-        var badge = document.createElement('div');
-        badge.textContent = 'bald';
-        badge.style.cssText = 'margin-top:-2px;font-size:11px;opacity:.75;';
+        var badge=document.createElement('div');
+        badge.textContent='bald';
+        badge.className='badge';
+        badge.style.marginTop='-2px';
         card.appendChild(badge);
-      }
-
-      if (!disabled){
+      } else {
         card.addEventListener('click', function(){
           try{
-            // UI → Engine
-            window.dispatchEvent(new CustomEvent('cb:build-select', { detail:{ type: it.id } }));
+            window.dispatchEvent(new CustomEvent('cb:build-select',{detail:{type:it.id}}));
             (window.CBLog?.ok||console.log)(MOD+' Tool gesetzt: '+it.id);
-            // (optional) Dock offen lassen, bis explizit geschlossen
-          }catch(e){
-            warn(MOD+' Select-Fehler: '+(e&&e.message));
-          }
+          }catch(e){ warn(MOD+' Select-Fehler: '+(e&&e.message)); }
         });
       }
 
-      pane.appendChild(card);
+      track.appendChild(card);
     });
+    // Nach Neuaufbau zum Anfang und Pfeile setzen
+    track.scrollLeft = 0;
+    updateArrows();
   }
 
   function buildDock(){
     if (_built) return;
     ensureRoot();
-
-    var cats = getCategories();
-    if (!cats.length){
-      pane.innerHTML = '<div style="opacity:.7">Keine Einträge</div>';
-    } else {
-      buildTabs(cats);
-      buildItems(cats[0]);
-    }
-
+    var cats = getCats();
+    buildTabs(cats);
+    buildRow(cats[0]);
     _built = true;
     ok(MOD+' gebaut ('+VER+')');
   }
 
-  // --- Open / Close ----------------------------------------------------------
+  // ---------- Open/Close -----------------------------------------------------
   function setOpen(open){
     ensureRoot();
     if (open){
+      if(!_built) buildDock();
       root.style.display = 'block';
-      // async, damit der Browser den Style anwenden kann
       requestAnimationFrame(function(){
-        root.style.opacity = '1';
-        root.style.pointerEvents = 'auto';
+        root.style.opacity='1';
+        root.style.pointerEvents='auto';
       });
       try{ window.dispatchEvent(new Event('cb:build-open')); }catch(_){}
-      _open = true;
-      ok(MOD+' geöffnet ('+VER+')');
+      _open=true; ok(MOD+' geöffnet ('+VER+')');
     } else {
-      root.style.opacity = '0';
-      root.style.pointerEvents = 'none';
+      root.style.opacity='0';
+      root.style.pointerEvents='none';
       setTimeout(function(){
-        root.style.display = 'none';
+        root.style.display='none';
         try{ window.dispatchEvent(new Event('cb:build-close')); }catch(_){}
       }, 180);
-      _open = false;
-      ok(MOD+' geschlossen');
+      _open=false; ok(MOD+' geschlossen');
     }
   }
-
   function toggle(force){
-    var want = (typeof force === 'boolean') ? !!force : !_open;
-    if (want && !_built) buildDock();
+    var want = (typeof force==='boolean') ? force : !_open;
     setOpen(want);
   }
 
-  // --- Öffentliche API -------------------------------------------------------
+  // ---------- API ------------------------------------------------------------
   window.GameUI = window.GameUI || {};
-  if (typeof window.GameUI.toggleBuild !== 'function'){
-    window.GameUI.toggleBuild = function(force){
-      try{ toggle(force); }catch(e){ err(MOD+' toggleBuild: '+(e&&e.message)); }
-    };
+  if (typeof window.GameUI.toggleBuild!=='function'){
+    window.GameUI.toggleBuild = function(force){ try{ toggle(force);}catch(e){ err(MOD+' toggle: '+(e&&e.message)); } };
   }
 
-  // --- Reaktion auf dynamisch nachladbare Kategorien -------------------------
+  // Optionaler Hook: falls Kategorien später kommen
   window.addEventListener('cb:build-categories-ready', function(ev){
-    try{
-      var cats = ev?.detail?.categories;
-      if (!Array.isArray(cats) || !cats.length) return;
-      // Nur neu bauen, wenn wir noch nicht gebaut haben
-      if (_built) return;
+    if (_built) return;
+    var cats = ev?.detail?.categories;
+    if (Array.isArray(cats) && cats.length){
       buildDock();
-    }catch(e){
-      warn(MOD+' cats-ready: '+(e&&e.message));
     }
   });
 
-  // --- Init ------------------------------------------------------------------
-  function init(){
-    try{
-      // nichts automatisch öffnen; nur bauen, wenn nötig
-      ok(MOD+' geladen ('+VER+')');
-    }catch(e){
-      err(MOD+' Init-Fehler: '+(e&&e.message));
-    }
-  }
-  if (document.readyState === 'loading'){
+  // ---------- Init -----------------------------------------------------------
+  function init(){ ok(MOD+' geladen ('+VER+')'); }
+  if (document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', init, {once:true});
-  } else {
-    init();
-  }
+  } else { init(); }
 })();
