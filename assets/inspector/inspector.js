@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
  * Projekt: Siedler-Mini — Inspector (Fullscreen)
- * Version: v18.10.0
+ * Version: v18.10.1
  *
  * Ziele:
  *  - Vollbild-Overlay (mobile/desktop), Header & Tabs sticky, Footer fix
@@ -13,7 +13,7 @@
  * ========================================================================== */
 
 (function () {
-  const VERSION = "v18.10.0";
+  const VERSION = "v18.10.1";
 
   // -- Logging helpers --------------------------------------------------------
   const CB = (window.__cb = window.__cb || {});
@@ -64,14 +64,12 @@
       "pointer-events:auto",
     ].join(";");
 
-    // Panel: nimmt den ganzen Viewport ein
+    // Panel: nimmt den *ganzen* Viewport ein (Padding = Safe-Areas + 8px)
     panel = document.createElement("div");
     panel.style.cssText = [
       "position:absolute",
-      `top:calc(${SA_T} + 8px)`,
-      `right:calc(${SA_R} + 8px)`,
-      `bottom:calc(${SA_B} + 8px)`,
-      `left:calc(${SA_L} + 8px)`,
+      "inset:0",
+      `padding:calc(${SA_T} + 8px) calc(${SA_R} + 8px) calc(${SA_B} + 8px) calc(${SA_L} + 8px)`,
       "display:flex",
       "flex-direction:column",
       "background:rgba(12,12,12,.96)",
@@ -93,7 +91,7 @@
       "border-bottom:1px solid rgba(255,255,255,.06)"
     ].join(";");
     const title = document.createElement("div");
-    title.textContent = `Inspector  ${VERSION}`;
+    title.textContent = `Inspector v${VERSION}`;
     title.style.cssText = "font-weight:700;opacity:.92";
     const spacer = document.createElement("div"); spacer.style.flex = "1";
     const btnClose = button("Schließen", close);
@@ -104,7 +102,7 @@
     tabsEl = document.createElement("div");
     tabsEl.style.cssText = [
       "position:sticky","top:48px","z-index:2",
-      "display:flex","gap:8px",
+      "display:flex","gap:8px","flex-wrap:wrap",
       "padding:8px 12px",
       "background:linear-gradient(to bottom, rgba(18,18,18,.98), rgba(18,18,18,.95))",
       "border-bottom:1px solid rgba(255,255,255,.06)"
@@ -118,7 +116,7 @@
     footerEl = document.createElement("div");
     footerEl.style.cssText = [
       "position:sticky","bottom:0","z-index:2",
-      "display:flex","gap:10px",
+      "display:flex","gap:10px","flex-wrap:wrap",
       "padding:12px",
       "background:linear-gradient(to top, rgba(18,18,18,1), rgba(18,18,18,.96))",
       "border-top:1px solid rgba(255,255,255,.06)"
@@ -149,6 +147,11 @@
 
     // Standardansicht: Logs
     activateTab("logs");
+
+    // ESC = schließen
+    window.addEventListener("keydown", (e)=>{
+      if (e.key === "Escape" && root.style.display !== "none") close();
+    });
   }
 
   // -- Utilities --------------------------------------------------------------
@@ -214,11 +217,11 @@
   function activateTab(id){
     TABS.forEach(t=>{
       const active = (t.id === id);
-      tabBtn.get(t.id)?.classList.toggle("active", active);
-      // kleine aktive Optik
-      tabBtn.get(t.id).style.background = active ? "rgba(120,200,120,.28)" : "rgba(255,255,255,.10)";
+      const btn = tabBtn.get(t.id);
+      if (!btn) return;
+      btn.classList.toggle("active", active);
+      btn.style.background = active ? "rgba(120,200,120,.28)" : "rgba(255,255,255,.10)";
     });
-    // Render
     const tab = TABS.find(t=>t.id===id) || TABS[0];
     tab.render();
   }
@@ -258,7 +261,8 @@
       "border-radius:10px",
       "font-family:ui-monospace, Menlo, Consolas, monospace",
       "font-size:14px","line-height:1.35",
-      "color:#e6e6e6","white-space:pre-wrap"
+      "color:#e6e6e6","white-space:pre-wrap",
+      "min-height:40vh"
     ].join(";");
 
     const buf = currentBuffer();
@@ -369,7 +373,7 @@
     ensureDOM();
     root.style.display = "block";
     window.dispatchEvent(new CustomEvent("cb:inspector:open"));
-    info("[inspector.core] geöffnet", `(${VERSION})`);
+    info("[inspector.core] geöffnet", `v${VERSION}`);
   }
 
   function close() {
@@ -389,5 +393,5 @@
   window.GameUI.closeInspector = close;
 
   // Bereitmeldung (kein Auto-Open)
-  info("[inspector.core] bereit", `(${VERSION})`);
+  info("[inspector.core] bereit", `v${VERSION}`);
 })();
