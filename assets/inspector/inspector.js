@@ -1,307 +1,229 @@
 /* ============================================================================
- *  assets/inspector/inspector.js
- *  Inspector-Core (stabil)
- *  Version: v18.9.3
- *  CODE-STYLE:
- *    - Keine Abhängigkeit zur Game-Engine nötig
- *    - Öffnet immer, auch auf Startseite
- *    - Tabs: Übersicht | Logs | Build | Pfade | Tests
- *    - Logs: CBLog-Puffer + Live-Stream; robust falls CBLog fehlt
- *    - Build/Pfade: aus Vorgaben integriert
+ * Datei: assets/inspector/inspector.js
+ * Projekt: Siedler-Mini — Inspector
+ * Version: v18.9.5
+ * Changelog:
+ *   - FIX: Tabs (Build/Pfade) löschen keine Logs mehr
+ *   - Stabiler Log-Puffer in window.__cb._logBuf
+ *   - Kopieren/Leeren/Aktualisieren Buttons erhalten
+ *   - Tabs: Übersicht, Logs, Build (BUILD_CATEGORIES), Pfade, Tests (stub)
+ * CODE-STYLE:
+ *   - Keine Fremd-Resets; Inspector kapselt sein DOM
+ *   - Events: cb:inspector:open/close, cb:build-select, cb:paths:toggle/reset
+ *   - Bridge: window.GameUI.toggleInspector/openInspector/closeInspector
  * ========================================================================== */
 
 (function () {
-  "use strict";
+  const VERSION = "v18.9.5";
+  const log = (...a) => (window.CBLog?.log || console.log).call(console, ...a);
+  const info = (...a) => (window.CBLog?.info || console.info).call(console, ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn).call(console, ...a);
 
-  const VERSION = "v18.9.3";
-  const log = (...a) => (window.CBLog?.info || console.log)("[inspector.core]", ...a);
+  // ---------------------------------------------------------------------------
+  // 0) Puffer (nie löschen außer über "Leeren"-Button)
+  // ---------------------------------------------------------------------------
+  const CB = (window.__cb = window.__cb || {});
+  CB._logBuf = CB._logBuf || [];           // [{ts:Date, level:'LOG'|'INFO'|'WARN'|'ERR', text:string}]
+  CB._logMax = CB._logMax || 400;
 
-  // --------- DOM Grundgerüst -------------------------------------------------
-  const rootId = "inspector";
-  let root, headerEl, tabsEl, bodyEl, footerEl, preLog;
+  // winzige Proxy-Konsole, falls CBLog fehlt
+  if (!window.CBLog) {
+    window.CBLog = {
+      log: (...a) => { CB._logBuf.push({ ts: new Date(), level: "LOG", text: a.map(String).join(" ") }); cap(); console.log(...a); },
+      info: (...a) => { CB._logBuf.push({ ts: new Date(), level: "INFO", text: a.map(String).join(" ") }); cap(); console.info(...a); },
+      warn: (...a) => { CB._logBuf.push({ ts: new Date(), level: "WARN", text: a.map(String).join(" ") }); cap(); console.warn(...a); },
+      error: (...a) => { CB._logBuf.push({ ts: new Date(), level: "ERR", text: a.map(String).join(" ") }); cap(); console.error(...a); },
+      getBuffer: () => CB._logBuf.slice(),
+      clear: () => { CB._logBuf.length = 0; }
+    };
+    info("[CBLog] Polyfill aktiv (Inspector-Fallback)");
+  }
 
-  // State
-  const State = {
-    isOpen: false,
-    currentTab: "logs",
-    stopLogStream: null, // disposer
-  };
+  function cap() {
+    const over = CB._logBuf.length - CB._logMax;
+    if (over > 0) CB._logBuf.splice(0, over);
+  }
 
-  // Hilfsfunktionen -----------------------------------------------------------
-  function ensureRoot() {
+  // ---------------------------------------------------------------------------
+  // 1) Grundgerüst/DOM
+  // ---------------------------------------------------------------------------
+  let root, panel, bodyEl, footerEl, preLog;
+
+  function ensureDOM() {
     if (root) return;
-
     root = document.createElement("div");
-    root.id = rootId;
+    root.id = "inspector";
     root.style.cssText =
-      "position:fixed;left:50%;top:64px;transform:translateX(-50%);" +
-      "max-width:960px;width:calc(100vw - 32px);max-height:70vh;overflow:hidden;" +
-      "z-index:2147483646;background:rgba(18,18,18,.94);border:1px solid #2b2b2b;border-radius:12px;" +
-      "box-shadow:0 30px 90px rgba(0,0,0,.5);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;display:none;";
+      "position:fixed;inset:auto 12px 96px 12px;z-index:2147483646;" +
+      "max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%);";
+    panel = document.createElement("div");
+    panel.style.cssText =
+      "background:rgba(18,18,18,.96);border:1px solid rgba(255,255,255,.08);" +
+      "border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.55);" +
+      "backdrop-filter:blur(8px);color:#e8e8e8;overflow:hidden";
 
     // Header
-    headerEl = document.createElement("div");
-    headerEl.style.cssText = "display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #2b2b2b;";
-    const title = document.createElement("div");
-    title.textContent = "Inspector";
-    title.style.cssText = "font-weight:700;letter-spacing:.2px;opacity:.95";
-    const ver = document.createElement("div");
-    ver.textContent = " " + VERSION;
-    ver.style.cssText = "opacity:.5;font-size:12px;margin-top:1px";
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)";
+    const hTitle = document.createElement("div");
+    hTitle.textContent = `Inspector  ${VERSION}`;
+    hTitle.style.cssText = "font-weight:700;opacity:.92";
     const spacer = document.createElement("div"); spacer.style.flex = "1";
     const btnClose = document.createElement("button");
     btnClose.textContent = "Schließen";
-    btnClose.style.cssText = "border:none;border-radius:12px;padding:6px 10px;background:#494949;color:#fff;cursor:pointer;";
+    btnClose.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer";
     btnClose.addEventListener("click", close);
-    headerEl.appendChild(title);
-    headerEl.appendChild(ver);
-    headerEl.appendChild(spacer);
-    headerEl.appendChild(btnClose);
+
+    head.appendChild(hTitle);
+    head.appendChild(spacer);
+    head.appendChild(btnClose);
 
     // Tabs
-    tabsEl = document.createElement("div");
-    tabsEl.style.cssText = "display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid #2b2b2b;flex-wrap:wrap;";
+    const tabsWrap = document.createElement("div");
+    tabsWrap.style.cssText = "display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.06)";
     const tabs = [
-      ["overview", "Übersicht"],
-      ["logs", "Logs"],
-      ["build", "Build"],
-      ["paths", "Pfade"],
-      ["tests", "Tests"],
+      { id: "overview", label: "Übersicht", render: renderOverview },
+      { id: "logs",     label: "Logs",      render: renderLogs },
+      { id: "build",    label: "Build",     render: renderBuild },
+      { id: "paths",    label: "Pfade",     render: renderPaths },
+      { id: "tests",    label: "Tests",     render: renderTests },
     ];
-    tabs.forEach(([id, label]) => {
+    const tabBtns = new Map();
+    function setActive(id) {
+      tabs.forEach(t => {
+        tabBtns.get(t.id).classList.toggle("active", t.id === id);
+      });
+    }
+    tabs.forEach(t => {
       const b = document.createElement("button");
-      b.dataset.tab = id;
-      b.textContent = label;
-      b.style.cssText =
-        "border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);" +
-        "color:#eee;cursor:pointer;outline:none;";
-      b.addEventListener("click", () => selectTab(id));
-      tabsEl.appendChild(b);
+      b.textContent = t.label;
+      b.style.cssText = "border:none;border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer";
+      b.addEventListener("click", () => {
+        setActive(t.id);
+        t.render();
+      });
+      tabBtns.set(t.id, b);
+      tabsWrap.appendChild(b);
     });
 
-    // Body
+    // Body + Footer
     bodyEl = document.createElement("div");
-    bodyEl.style.cssText = "padding:12px;overflow:auto;max-height:48vh;";
-    preLog = document.createElement("pre");
-    preLog.style.cssText =
-      "margin:0;padding:12px;background:#121212;border:1px solid #2b2b2b;border-radius:8px;" +
-      "min-height:240px;color:#d6d6d6;white-space:pre-wrap;word-break:break-word;font-family:Menlo,Consolas,ui-monospace,monospace;";
-    bodyEl.appendChild(preLog);
-
-    // Footer (Buttons unten)
+    bodyEl.style.cssText = "padding:12px;max-height:60vh;overflow:auto";
     footerEl = document.createElement("div");
-    footerEl.style.cssText = "display:flex;gap:10px;padding:12px;border-top:1px solid #2b2b2b;";
-    const btnCopy = mkBtn("Kopieren", () => copyLogs());
-    const btnClear = mkBtn("Leeren", () => clearLogs());
-    const btnRefresh = mkBtn("Aktualisieren", () => refreshLogs());
-    footerEl.append(btnCopy, btnClear, btnRefresh);
+    footerEl.style.cssText = "display:flex;gap:10px;padding:12px;border-top:1px solid rgba(255,255,255,.06)";
 
-    root.append(headerEl, tabsEl, bodyEl, footerEl);
+    // Footer-Buttons (werden nur im Log-Tab angezeigt)
+    const btnCopy = mkBtn("Kopieren", () => {
+      try {
+        const txt = formatBuffer(CB._logBuf);
+        navigator.clipboard.writeText(txt);
+        info("[inspector.core] Logs kopiert");
+      } catch (e) { warn("Clipboard fehlgeschlagen:", e?.message); }
+    });
+    const btnClear = mkBtn("Leeren", () => {
+      window.CBLog?.clear?.();
+      if (preLog) preLog.textContent = "[Log geleert]";
+      info("[inspector.core] Log geleert");
+    });
+    const btnRefresh = mkBtn("Aktualisieren", () => {
+      renderLogs();
+    });
+    footerEl.appendChild(btnCopy);
+    footerEl.appendChild(btnClear);
+    footerEl.appendChild(btnRefresh);
+
+    panel.appendChild(head);
+    panel.appendChild(tabsWrap);
+    panel.appendChild(bodyEl);
+    panel.appendChild(footerEl);
+    root.appendChild(panel);
     document.body.appendChild(root);
 
-    // Tastaturkürzel
-    window.addEventListener("keydown", (ev) => {
-      if (!State.isOpen) return;
-      if (ev.key === "Escape") close();
-    });
+    // Startansicht: Logs
+    setActive("logs");
+    renderLogs();
   }
 
   function mkBtn(label, onClick) {
     const b = document.createElement("button");
     b.textContent = label;
-    b.style.cssText =
-      "border:none;border-radius:12px;padding:8px 12px;background:rgba(255,255,255,.10);" +
-      "color:#fff;cursor:pointer;";
+    b.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer";
     b.addEventListener("click", onClick);
     return b;
   }
 
-  // --------- Logs: Buffer + Stream ------------------------------------------
-  function getCBLog() {
-    return window.CBLog || null;
+  function formatBuffer(arr) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return (arr || []).map(it => {
+      const d = it.ts instanceof Date ? it.ts : new Date(it.ts);
+      const hh = pad(d.getHours()), mm = pad(d.getMinutes()), ss = pad(d.getSeconds());
+      const level = (it.level || "LOG").toUpperCase().padEnd(4, " ");
+      return `[${hh}:${mm}:${ss}] ${level} ${it.text}`;
+    }).join("\n");
   }
 
-  function clearLogs() {
-    preLog.textContent = "";
-  }
+  // ---------------------------------------------------------------------------
+  // 2) Renders
+  // ---------------------------------------------------------------------------
 
-  function copyLogs() {
-    const txt = preLog.textContent || "";
-    try {
-      navigator.clipboard?.writeText(txt);
-    } catch {}
-  }
-
-  function refreshLogs() {
-    // Puffer einlesen
-    preLog.textContent = "";
-    const CBL = getCBLog();
-    if (CBL?.getBuffer) {
-      const buf = CBL.getBuffer();
-      if (Array.isArray(buf)) {
-        for (const line of buf) preLog.textContent += line + "\n";
-      }
-    }
-  }
-
-  function startLogStream() {
-    const CBL = getCBLog();
-    if (!CBL || !CBL.LogStream || !CBL.LogStream.start) {
-      // Minimal-Proxy (falls kein CBLog vorhanden): höre auf console.log etc. – sehr simpel
-      const orig = console.log;
-      console.log = function (...args) {
-        try {
-          const line = (args && args.length ? args.join(" ") : "");
-          preLog.textContent += (line || "LOG") + "\n";
-        } catch {}
-        orig.apply(console, args);
-      };
-      return () => {
-        // kein sauberer Restore hier (nur Fallback-Zweig)
-      };
-    }
-
-    const stop = CBL.LogStream.start((line) => {
-      preLog.textContent += line + "\n";
-    });
-    return stop;
-  }
-
-  // --------- Tabs Umschalten (fix) ------------------------------------------
-  function setActiveTabButton(id) {
-    tabsEl.querySelectorAll("button").forEach((b) => {
-      if (b.dataset.tab === id) {
-        b.style.background = "rgba(80,160,100,.25)";
-      } else {
-        b.style.background = "rgba(255,255,255,.10)";
-      }
-    });
-  }
-
-  function unmountTab(tab) {
-    // beim Verlassen aufräumen
-    if (tab === "logs" && typeof State.stopLogStream === "function") {
-      try { State.stopLogStream(); } catch {}
-      State.stopLogStream = null;
-    }
-  }
-
-  function mountTab(tab) {
-    // beim Betreten initialisieren
-    if (tab === "logs") {
-      footerEl.style.display = "flex";
-      bodyEl.innerHTML = "";
-      bodyEl.appendChild(preLog);
-      refreshLogs();
-      State.stopLogStream = startLogStream();
-    } else if (tab === "overview") {
-      renderOverview();
-    } else if (tab === "build") {
-      renderBuild();
-    } else if (tab === "paths") {
-      renderPaths();
-    } else if (tab === "tests") {
-      renderTests();
-    }
-  }
-
-  function selectTab(next) {
-    if (State.currentTab === next) return;
-    unmountTab(State.currentTab);
-    State.currentTab = next;
-    setActiveTabButton(next);
-    mountTab(next);
-  }
-
-  // --------- Öffnen/Schließen -----------------------------------------------
-  function open() {
-    ensureRoot();
-    if (State.isOpen) return;
-    State.isOpen = true;
-    root.style.display = "block";
-    setActiveTabButton(State.currentTab);
-    mountTab(State.currentTab);
-    log("geöffnet", VERSION);
-  }
-
-  function close() {
-    if (!State.isOpen) return;
-    unmountTab(State.currentTab);
-    State.isOpen = false;
-    root.style.display = "none";
-  }
-
-  // --------- Öffentliche Bridge für FAB/UX -----------------------------------
-  window.GameUI = window.GameUI || {};
-  window.GameUI.toggleInspector = function (force) {
-    ensureRoot();
-    const wantOpen = typeof force === "boolean" ? force : !State.isOpen;
-    wantOpen ? open() : close();
-  };
-  window.GameUI.openInspector = open;
-  window.GameUI.closeInspector = close;
-
-  // --------- Autostart-Badge / Garantierte Sichtbarkeit ----------------------
-  // Falls gewünscht direkt initialisieren (nicht automatisch öffnen):
-  // -> wir initialisieren nur das Gerüst, öffnen via FAB
-  ensureRoot();
-  log("bereit", VERSION);
-
-  // ========================================================================== 
-  // TABS – Inhalte
-  // ==========================================================================
-
-  // Übersicht (Platzhalter)
+  // Übersicht (minimal)
   function renderOverview() {
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
-
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:grid;gap:8px";
-
-    const p = (k, v) => {
-      const row = document.createElement("div");
-      row.style.cssText = "display:flex;justify-content:space-between;gap:12px;background:rgba(255,255,255,.06);padding:8px 10px;border-radius:8px";
-      const l = document.createElement("div"); l.style.opacity = ".75"; l.textContent = k;
-      const r = document.createElement("div"); r.style.fontWeight = "600"; r.textContent = v;
-      row.append(l, r);
-      wrap.appendChild(row);
-    };
-
-    const size = `${Math.round(innerWidth)}×${Math.round(innerHeight)}`;
-    const mapName = document.querySelector("#game")?.dataset?.map || "unbekannt";
-    p("Version", VERSION);
-    p("Canvas-Viewport", size);
-    p("Map", mapName);
-
+    wrap.innerHTML = `
+      <div style="opacity:.85">Version: <b>${VERSION}</b></div>
+      <div style="opacity:.85">Canvas: <span id="ov-canvas">–</span></div>
+      <div style="opacity:.85">Map: <span id="ov-map">–</span></div>
+    `;
     bodyEl.appendChild(wrap);
+    // kleine Live-Daten (sofern vorhanden)
+    try {
+      const cvs = document.getElementById("game");
+      if (cvs) wrap.querySelector("#ov-canvas").textContent = `${cvs.width || cvs.clientWidth}×${cvs.height || cvs.clientHeight}`;
+      const mapName = (document.getElementById("game")?.dataset?.map || "–").split("/").pop();
+      wrap.querySelector("#ov-map").textContent = mapName;
+    } catch {}
   }
 
-  // === REPLACE in assets/inspector/inspector.js ==============================
-  // 1) Build-Tab – liest optional window.BUILD_CATEGORIES
-  function renderBuild(){
-    // UI-Container vorbereiten
+  // Logs
+  function renderLogs() {
+    bodyEl.innerHTML = "";
+    footerEl.style.display = "flex";
+
+    preLog = document.createElement("pre");
+    preLog.style.cssText =
+      "margin:0;padding:12px;background:rgba(10,10,10,.85);border:1px solid rgba(255,255,255,.08);border-radius:10px;" +
+      "font-family:ui-monospace, Menlo, Consolas, monospace;font-size:14px;line-height:1.35;color:#e6e6e6;white-space:pre-wrap";
+
+    const buf = window.CBLog?.getBuffer ? window.CBLog.getBuffer() : CB._logBuf.slice();
+    preLog.textContent = buf.length ? formatBuffer(buf) : "[Keine Log-Einträge vorhanden]";
+    bodyEl.appendChild(preLog);
+  }
+
+  // Build (DEIN Code – ohne Log-Reset!)
+  function renderBuild() {
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
+
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
 
-    // Quelle: BUILD_CATEGORIES oder Fallback
     const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES) ? window.BUILD_CATEGORIES : [
       { id:"general", title:"Allg.", items:[
-        { id:"hq", label:"Hauptquartier" },
+        { id:"hq",    label:"Hauptquartier" },
         { id:"depot", label:"Depot" },
-        { id:"house", label:"Haus" }
+        { id:"house", label:"Haus" },
       ]},
       { id:"production_food", title:"Produktion", items:[
-        { id:"farm", label:"Farm" },
-        { id:"fischer", label:"Fischer" }
-      ]}
+        { id:"farm",    label:"Farm" },
+        { id:"fischer", label:"Fischer" },
+      ]},
     ]);
 
-    // kleine Helper
     const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.8;font-weight:700;margin-top:4px"; return h; };
-    const mkBtn = (label, disabled=false)=>{
+    const mkBtnLite = (label, disabled=false)=>{
       const b=document.createElement("button");
       b.textContent = label;
       b.disabled = !!disabled;
@@ -311,13 +233,12 @@
       return b;
     };
 
-    // Render
     cats.forEach(cat=>{
       wrap.appendChild(mkH(cat.title || cat.id));
       const row = document.createElement("div");
       row.style.cssText = "display:flex;flex-wrap:wrap";
       (cat.items||[]).forEach(it=>{
-        const btn = mkBtn(it.label || it.id, !!it.todo);
+        const btn = mkBtnLite(it.label || it.id, !!it.todo);
         if (!it.todo){
           btn.addEventListener("click", ()=>{
             const detail = { type: it.id };
@@ -333,8 +254,8 @@
     bodyEl.appendChild(wrap);
   }
 
-  // 2) Pfade-Tab – nur Events toggeln/resetten
-  function renderPaths(){
+  // Pfade
+  function renderPaths() {
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
 
@@ -349,7 +270,6 @@
       return b;
     };
 
-    // Statusanzeige (aus __cb, falls vorhanden)
     const status = document.createElement("div");
     status.style.cssText = "opacity:.8;margin-top:6px";
     const refreshStatus = ()=>{
@@ -358,7 +278,6 @@
     };
     refreshStatus();
 
-    // Buttons
     box.appendChild(mk("Overlay umschalten", ()=>{
       try { window.dispatchEvent(new CustomEvent("cb:paths:toggle")); } catch {}
       setTimeout(refreshStatus, 50);
@@ -376,8 +295,36 @@
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
     const d = document.createElement("div");
-    d.textContent = "Tests – Platzhalter.";
+    d.textContent = "Tests folgen …";
     d.style.opacity = ".8";
     bodyEl.appendChild(d);
   }
+
+  // ---------------------------------------------------------------------------
+  // 3) Öffnen/Schließen + Bridge
+  // ---------------------------------------------------------------------------
+  function open() {
+    ensureDOM();
+    root.style.display = "block";
+    window.dispatchEvent(new CustomEvent("cb:inspector:open"));
+    info("[inspector.core] geöffnet", `(${VERSION})`);
+  }
+
+  function close() {
+    if (!root) return;
+    root.style.display = "none";
+    window.dispatchEvent(new CustomEvent("cb:inspector:close"));
+  }
+
+  window.GameUI = window.GameUI || {};
+  window.GameUI.toggleInspector = function (force) {
+    ensureDOM();
+    const wantOpen = (typeof force === "boolean") ? force : (root.style.display === "none" || !root.style.display);
+    wantOpen ? open() : close();
+  };
+  window.GameUI.openInspector  = open;
+  window.GameUI.closeInspector = close;
+
+  // Beim Laden verfügbar machen (ohne auto-open, um UX ruhig zu halten)
+  info("[inspector.core] bereit", `(${VERSION})`);
 })();
