@@ -1,27 +1,27 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
  * Projekt: Siedler-Mini — Inspector (Fullscreen)
- * Version: v18.10.2
+ * Version: v18.10.3
  *
  * Ziele:
  *  - Vollbild-Overlay (mobile/desktop), Header & Tabs sticky, Footer fix
  *  - Stabile Logs (persistenter Puffer in window.__cb._logBuf)
- *  - Tabs: Übersicht · Logs · Build (BUILD_CATEGORIES) · Pfade · Tests
+ *  - Tabs: Übersicht · Logs (mit Filter & Suche) · Build (BUILD_CATEGORIES) · Pfade · Tests
  *  - Keine Log-Löschung beim Tabwechsel
- *  - Optional: „Prettifier“ für bekannte Log-Zeilen (lesbarere Texte)
  *  - Öffnen/Schließen via window.GameUI.toggleInspector/openInspector/closeInspector
  *  - Events: cb:inspector:open/close, cb:build-select, cb:paths:toggle/reset
  * ========================================================================== */
 
 (function () {
-  const VERSION = "v18.10.2";
+  const VERSION = "v18.10.3";
 
   // -- Logging helpers --------------------------------------------------------
   const CB = (window.__cb = window.__cb || {});
   CB._logBuf = CB._logBuf || [];   // [{ ts, level, text }]
-  CB._logMax = CB._logMax || 500;
+  CB._logMax = CB._logMax || 800;
 
-  function trimBuf() {
+  function push(level, arr) {
+    CB._logBuf.push({ ts: new Date(), level, text: arr.map(String).join(" ") });
     const over = CB._logBuf.length - CB._logMax;
     if (over > 0) CB._logBuf.splice(0, over);
   }
@@ -29,10 +29,10 @@
   // Fallback-Konsole (falls kein CBLog vorhanden)
   if (!window.CBLog) {
     window.CBLog = {
-      log  : (...a) => { CB._logBuf.push({ts:new Date(),level:"LOG" ,text:a.map(String).join(" ")}); trimBuf(); console.log (...a); },
-      info : (...a) => { CB._logBuf.push({ts:new Date(),level:"INFO",text:a.map(String).join(" ")}); trimBuf(); console.info(...a); },
-      warn : (...a) => { CB._logBuf.push({ts:new Date(),level:"WARN",text:a.map(String).join(" ")}); trimBuf(); console.warn(...a); },
-      error: (...a) => { CB._logBuf.push({ts:new Date(),level:"ERR" ,text:a.map(String).join(" ")}); trimBuf(); console.error(...a); },
+      log  : (...a) => { push("LOG" , a); console.log (...a); },
+      info : (...a) => { push("INFO", a); console.info(...a); },
+      warn : (...a) => { push("WARN", a); console.warn(...a); },
+      error: (...a) => { push("ERR" , a); console.error(...a); },
       getBuffer: () => CB._logBuf.slice(),
       clear: () => { CB._logBuf.length = 0; }
     };
@@ -44,108 +44,50 @@
   const warn = (...a) => (window.CBLog.warn || console.warn).apply(console, a);
 
   // -- DOM-Grundgerüst --------------------------------------------------------
-  let root, panel, headEl, tabsEl, bodyEl, footerEl, preLog;
-
-  const SA_T = "env(safe-area-inset-top)";
-  const SA_R = "env(safe-area-inset-right)";
-  const SA_B = "env(safe-area-inset-bottom)";
-  const SA_L = "env(safe-area-inset-left)";
+  let root, headEl, tabsEl, bodyEl, footerEl, preLog;
+  let filterState = { LOG:true, INFO:true, WARN:true, ERR:true, q:"" };
 
   function ensureDOM() {
     if (root) return;
 
-    // Root: Vollbild, klickt nicht durch
+    // Root + Panel
     root = document.createElement("div");
     root.id = "inspector";
-    root.style.cssText = [
-      "position:fixed",
-      "inset:0",
-      "z-index:2147483646",
-      "display:none",
-      "pointer-events:auto",
-    ].join(";");
+    root.setAttribute("role","dialog");
+    root.setAttribute("aria-label","Inspector");
+    root.style.display = "none";
 
-    // Panel: nimmt den ganzen Viewport ein
-    panel = document.createElement("div");
-    panel.style.cssText = [
-      "position:absolute",
-      "inset:0",
-      `padding:calc(${SA_T} + 8px) calc(${SA_R} + 8px) calc(${SA_B} + 8px) calc(${SA_L} + 8px)`,
-      "display:flex",
-      "flex-direction:column",
-      "background:rgba(12,12,12,.96)",
-      "border:1px solid rgba(255,255,255,.08)",
-      "border-radius:12px",
-      "box-shadow:0 30px 80px rgba(0,0,0,.55)",
-      "backdrop-filter:blur(8px)",
-      "color:#e8e8e8",
-      "overflow:hidden"
-    ].join(";");
+    const panel = document.createElement("div");
+    panel.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column";
+    root.append(panel);
 
-    // Header (sticky)
+    // Header
     headEl = document.createElement("div");
-    headEl.style.cssText = [
-      "position:sticky","top:0","z-index:2",
-      "display:flex","align-items:center","gap:10px",
-      "padding:10px 12px",
-      "background:linear-gradient(to bottom, rgba(18,18,18,1), rgba(18,18,18,.96))",
-      "border-bottom:1px solid rgba(255,255,255,.06)"
-    ].join(";");
+    headEl.id = "ins-head";
     const title = document.createElement("div");
+    title.id = "ins-title";
     title.textContent = `Inspector v${VERSION}`;
-    title.style.cssText = "font-weight:700;opacity:.92";
-    const spacer = document.createElement("div"); spacer.style.flex = "1";
-    const btnClose = button("Schließen", close);
-    btnClose.style.borderRadius = "12px";
-    headEl.append(title, spacer, btnClose);
+    const closeBtn = document.createElement("button");
+    closeBtn.id = "ins-close";
+    closeBtn.textContent = "Schließen";
+    closeBtn.addEventListener("click", close);
+    headEl.append(title, closeBtn);
 
-    // Tabs (sticky)
+    // Tabs
     tabsEl = document.createElement("div");
-    tabsEl.style.cssText = [
-      "position:sticky","top:48px","z-index:2",
-      "display:flex","gap:8px","flex-wrap:wrap",
-      "padding:8px 12px",
-      "background:linear-gradient(to bottom, rgba(18,18,18,.98), rgba(18,18,18,.95))",
-      "border-bottom:1px solid rgba(255,255,255,.06)"
-    ].join(";");
+    tabsEl.id = "ins-tabs";
 
-    // Body (scrollt)
+    // Body + Footer
     bodyEl = document.createElement("div");
-    bodyEl.style.cssText = "flex:1; overflow:auto; padding:12px; min-height:0";
+    bodyEl.id = "ins-body";
 
-    // Footer (Buttons nur im Log-Tab sichtbar)
     footerEl = document.createElement("div");
-    footerEl.style.cssText = [
-      "position:sticky","bottom:0","z-index:2",
-      "display:flex","gap:10px","flex-wrap:wrap",
-      "padding:12px",
-      "background:linear-gradient(to top, rgba(18,18,18,1), rgba(18,18,18,.96))",
-      "border-top:1px solid rgba(255,255,255,.06)"
-    ].join(";");
-
-    const btnCopy   = button("Kopieren", () => {
-      try {
-        const txt = formatBuffer(currentBuffer(), true); // true = prettified
-        navigator.clipboard.writeText(txt);
-        info("[inspector.core] Logs kopiert");
-      } catch (e) { warn("Clipboard fehlgeschlagen:", e?.message); }
-    });
-    const btnClear  = button("Leeren", () => {
-      window.CBLog?.clear?.();
-      if (preLog) preLog.textContent = "[Log geleert]";
-      info("[inspector.core] Log geleert");
-    });
-    const btnRefresh = button("Aktualisieren", renderLogs);
-    footerEl.append(btnCopy, btnClear, btnRefresh);
+    footerEl.id = "ins-foot";
 
     panel.append(headEl, tabsEl, bodyEl, footerEl);
-    root.append(panel);
-    document.body.append(root);
+    document.body.appendChild(root);
 
-    // Tabs registrieren
     initTabs();
-
-    // Standardansicht: Logs
     activateTab("logs");
 
     // ESC = schließen
@@ -155,36 +97,17 @@
   }
 
   // -- Utilities --------------------------------------------------------------
-  function button(label, onClick) {
-    const b = document.createElement("button");
-    b.textContent = label;
-    b.addEventListener("click", onClick);
-    b.style.cssText = [
-      "border:none","border-radius:10px",
-      "padding:8px 12px",
-      "background:rgba(255,255,255,.12)",
-      "color:#fff","cursor:pointer"
-    ].join(";");
-    return b;
-  }
-
-  function pill(label) {
-    const b = document.createElement("button");
-    b.textContent = label;
-    b.style.cssText = [
-      "border:none","border-radius:999px",
-      "padding:8px 12px",
-      "background:rgba(255,255,255,.10)",
-      "color:#ddd","cursor:pointer"
-    ].join(";");
-    return b;
-  }
-
-  function currentBuffer() {
-    return window.CBLog?.getBuffer ? window.CBLog.getBuffer() : CB._logBuf.slice();
-  }
-
   const pad2 = (n)=>String(n).padStart(2,"0");
+  function currentBuffer(){ return window.CBLog?.getBuffer ? window.CBLog.getBuffer() : CB._logBuf.slice(); }
+
+  function pill(label, id){
+    const b = document.createElement("button");
+    b.className = "ins-tab";
+    b.textContent = label;
+    b.dataset.tab = id;
+    b.addEventListener("click", ()=>activateTab(id));
+    return b;
+  }
 
   // Pretty-Mapping für bekannte Meldungen
   function labelForBuild(id) {
@@ -195,27 +118,18 @@
     return id;
   }
   function prettify(text) {
-    // [ui] Build-Select <id>
     let m = text.match(/\[ui\]\s+Build-Select\s+(\w[\w-]*)/i);
     if (m) return `[Build] Auswahl: ${labelForBuild(m[1])} (${m[1]})`;
-
-    // [ui-start] Start → <map>
     m = text.match(/\[ui-start\].*Start\s*[→=>]\s*(.+)$/i);
     if (m) return `[Start] Map geladen: ${m[1]}`;
-
-    // [bootstrap] bereits gestartet
     if (/bootstrap\].*bereits gestartet/i.test(text)) return "[Bootstrap] Bereits aktiv (kein erneuter Start)";
-
-    return text; // sonst unverändert
+    return text;
   }
-
-  function formatBuffer(arr, pretty=false){
+  function fmt(arr, pretty){
     return (arr||[]).map(it=>{
       const d = it.ts instanceof Date ? it.ts : new Date(it.ts);
       const ts = `[${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}]`;
-      const lv = (it.level||"LOG").toUpperCase().padEnd(4," ");
-      const line = pretty ? prettify(it.text) : it.text;
-      return `${ts} ${lv} ${line}`;
+      return `${ts} ${String(it.level||"LOG").toUpperCase().padEnd(4," ")} ${pretty?prettify(it.text):it.text}`;
     }).join("\n");
   }
 
@@ -232,8 +146,7 @@
   function initTabs(){
     tabsEl.innerHTML = "";
     TABS.forEach(t=>{
-      const b = pill(t.label);
-      b.addEventListener("click", ()=> activateTab(t.id));
+      const b = pill(t.label, t.id);
       tabBtn.set(t.id, b);
       tabsEl.appendChild(b);
     });
@@ -243,15 +156,13 @@
     TABS.forEach(t=>{
       const active = (t.id === id);
       const btn = tabBtn.get(t.id);
-      if (!btn) return;
-      btn.classList.toggle("active", active);
-      btn.style.background = active ? "rgba(120,200,120,.28)" : "rgba(255,255,255,.10)";
+      if (btn) btn.classList.toggle("active", active);
     });
     const tab = TABS.find(t=>t.id===id) || TABS[0];
     tab.render();
   }
 
-  // -- Render-Funktionen ------------------------------------------------------
+  // -- Render: Übersicht ------------------------------------------------------
   function renderOverview(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
@@ -274,28 +185,93 @@
     } catch {}
   }
 
+  // -- Render: Logs (Filter + Suche) -----------------------------------------
   function renderLogs(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "flex";
 
-    preLog = document.createElement("pre");
-    preLog.style.cssText = [
-      "margin:0","padding:12px",
-      "background:rgba(10,10,10,.85)",
-      "border:1px solid rgba(255,255,255,.08)",
-      "border-radius:10px",
-      "font-family:ui-monospace, Menlo, Consolas, monospace",
-      "font-size:14px","line-height:1.35",
-      "color:#e6e6e6","white-space:pre-wrap",
-      "min-height:40vh"
-    ].join(";");
+    // Toolbar
+    const tools = document.createElement("div");
+    tools.className = "ins-logtools";
 
-    const buf = currentBuffer();
-    preLog.textContent = buf.length ? formatBuffer(buf, /*pretty*/true) : "[Keine Log-Einträge vorhanden]";
+    const mkPill = (label, key, cls="")=>{
+      const p = document.createElement("button");
+      p.className = `ins-pill ${cls}`;
+      p.textContent = label;
+      p.dataset.key = key;
+      p.classList.toggle("active", !!filterState[key]);
+      p.addEventListener("click", ()=>{
+        filterState[key] = !filterState[key];
+        p.classList.toggle("active", !!filterState[key]);
+        update();
+      });
+      return p;
+    };
+
+    const pLog  = mkPill("LOG",  "LOG",  "badge-log");
+    const pInfo = mkPill("INFO", "INFO", "badge-info");
+    const pWarn = mkPill("WARN", "WARN", "badge-warn");
+    const pErr  = mkPill("ERR",  "ERR",  "badge-err");
+
+    const q = document.createElement("input");
+    q.className = "ins-search";
+    q.type = "search";
+    q.placeholder = "Suche (Regex oder Text)…";
+    q.value = filterState.q || "";
+    q.addEventListener("input", ()=>{
+      filterState.q = q.value;
+      update();
+    });
+
+    tools.append(pLog,pInfo,pWarn,pErr,q);
+    bodyEl.appendChild(tools);
+
+    // Logbox
+    preLog = document.createElement("pre");
+    preLog.className = "ins-logbox";
     bodyEl.appendChild(preLog);
+
+    // Footer-Buttons
+    footerEl.innerHTML = "";
+    const btnCopy = mkBtn("Kopieren", ()=>{
+      try {
+        navigator.clipboard.writeText(preLog.textContent || "");
+        info("[inspector.core] Logs kopiert");
+      } catch(e){ warn("Clipboard fehlgeschlagen:", e?.message); }
+    });
+    const btnClear = mkBtn("Leeren", ()=>{
+      window.CBLog?.clear?.();
+      update();
+      info("[inspector.core] Log geleert");
+    });
+    const btnRefresh = mkBtn("Aktualisieren", update);
+    footerEl.append(btnCopy, btnClear, btnRefresh);
+
+    function mkBtn(label, cb){
+      const b = document.createElement("button");
+      b.className = "ins-btn";
+      b.textContent = label;
+      b.addEventListener("click", cb);
+      return b;
+    }
+
+    function update(){
+      // Filter: Level
+      let buf = currentBuffer().filter(it => !!filterState[String(it.level||"LOG").toUpperCase()]);
+      // Filter: Suche
+      if ((filterState.q||"").trim()){
+        const q = filterState.q.trim();
+        let re = null;
+        try { re = new RegExp(q, "i"); } catch { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), "i"); }
+        buf = buf.filter(it => re.test(it.text));
+      }
+      preLog.textContent = buf.length ? fmt(buf, true) : "[Keine Log-Einträge vorhanden]";
+    }
+
+    update();
   }
 
-  // Build-Tab – nutzt optional window.BUILD_CATEGORIES
+  // -- Render: Build ----------------------------------------------------------
   function renderBuild(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
@@ -317,7 +293,7 @@
           ]}
         ]);
 
-    const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.8;font-weight:700;margin-top:4px"; return h; };
+    const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.85;font-weight:700;margin-top:4px"; return h; };
     const mkBtn = (label, disabled=false)=>{
       const b=document.createElement("button");
       b.textContent = label;
@@ -349,7 +325,7 @@
     bodyEl.appendChild(wrap);
   }
 
-  // Pfade-Tab – nur Control-Events
+  // -- Render: Pfade ----------------------------------------------------------
   function renderPaths(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
@@ -359,64 +335,67 @@
 
     const mk = (label, fn)=>{
       const b=document.createElement("button");
+      b.className = "ins-btn";
       b.textContent = label;
-      b.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
       b.addEventListener("click", fn);
       return b;
     };
 
     const status = document.createElement("div");
-    status.style.cssText = "opacity:.8;margin-top:6px";
+    status.style.cssText = "opacity:.85;margin-top:6px";
     const refreshStatus = ()=>{
       const on = !!(window.__cb && window.__cb.pathsEnabled);
       status.textContent = `Pfade-Overlay: ${on ? "AN" : "AUS"}`;
     };
     refreshStatus();
 
-    box.appendChild(mk("Overlay umschalten", ()=>{
-      try { window.dispatchEvent(new CustomEvent("cb:paths:toggle")); } catch {}
-      setTimeout(refreshStatus, 50);
-    }));
-    box.appendChild(mk("Heatmap zurücksetzen", ()=>{
-      try { window.dispatchEvent(new CustomEvent("cb:paths:reset")); } catch {}
-    }));
+    box.append(
+      mk("Overlay umschalten", ()=>{
+        try { window.dispatchEvent(new CustomEvent("cb:paths:toggle")); } catch {}
+        setTimeout(refreshStatus, 40);
+      }),
+      mk("Heatmap zurücksetzen", ()=>{
+        try { window.dispatchEvent(new CustomEvent("cb:paths:reset")); } catch {}
+      })
+    );
 
     bodyEl.append(box, status);
   }
 
+  // -- Render: Tests (Stub) ---------------------------------------------------
   function renderTests(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
     const d = document.createElement("div");
     d.textContent = "Tests folgen …";
-    d.style.opacity = ".8";
+    d.style.opacity = ".85";
     bodyEl.appendChild(d);
   }
 
   // -- Öffnen/Schließen + Bridge ---------------------------------------------
   function open() {
     ensureDOM();
-    root.style.display = "block";
+    root.classList.add("open");
     window.dispatchEvent(new CustomEvent("cb:inspector:open"));
     info("[inspector.core] geöffnet", `v${VERSION}`);
   }
 
   function close() {
     if (!root) return;
-    root.style.display = "none";
+    root.classList.remove("open");
     window.dispatchEvent(new CustomEvent("cb:inspector:close"));
   }
 
   window.GameUI = window.GameUI || {};
   window.GameUI.toggleInspector = function (force) {
     ensureDOM();
-    const isHidden = (root.style.display === "none" || !root.style.display);
-    const wantOpen = (typeof force === "boolean") ? force : isHidden;
+    const isOpen = root.classList.contains("open");
+    const wantOpen = (typeof force === "boolean") ? force : !isOpen;
     wantOpen ? open() : close();
   };
   window.GameUI.openInspector  = open;
   window.GameUI.closeInspector = close;
 
   // Bereitmeldung (kein Auto-Open)
-  info("[inspector.core] bereit", `v${VERSION}`);
+  info("[inspector.core] bereit", `vv${VERSION}`);
 })();
