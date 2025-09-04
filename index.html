@@ -1,8 +1,11 @@
 <!doctype html>
 <!--
-  Neue Siedler – Index
-  Version: v17.7.7 (Index)
-  Reihenfolge: Polyfill → Core → Renderer → Bootstrap → UI → Inspector (split) → BootCompat
+  Neue Siedler — Index
+  Version: v17.7.7
+  Reihenfolge: Polyfill → Core → OverlayHooks/Renderer → Bootstrap → UI → Inspector (split) → BootCompat
+  Hinweis:
+    * Keine doppelte Inspector-Einbindung mehr.
+    * Fallback-Badge aus ui-bridge bleibt aktiv (hilfreich bei Ladeproblemen).
 -->
 <html lang="de">
 <head>
@@ -18,12 +21,15 @@
   <link rel="stylesheet" href="style.css?v=17.7.7">
   <link rel="stylesheet" href="ui-start.css?v=17.7.7">
   <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.7.7">
-  <!-- Inspector-Styles (nur EINMAL einbinden) -->
-  <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.10.6&nocache=2025-09-04-2250">
+
+  <!-- Inspector Styles (nur EINMAL laden) -->
+  <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.10.5">
 
   <style>
     html, body { height:100%; margin:0; background:#0c120f; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; }
+
+    /* FABs */
     .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
@@ -62,34 +68,32 @@
     <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
   </div>
 
-  <!-- Core + Polyfill (Polyfill MUSS ohne defer und ganz oben stehen) -->
-  <script src="assets/core/cblog.polyfill.js?v=1.2.2&nocache=2025-09-04-2250"></script>
-  <script defer src="assets/core/core.env.js?v=17.7.7"></script>
-  <script defer src="assets/core/core.entities.js?v=17.7.7"></script>
-  <script defer src="assets/core/core.production.js?v=17.7.7"></script>
-  <script defer src="assets/core/core.pfglue.js?v=17.7.7"></script>
-  <script defer src="assets/core/core.map.js?v=17.7.7"></script>
-  <script defer src="assets/core/core.input.js?v=17.7.7"></script>
-  <script defer src="assets/core/carriers.js?v=17.7.7"></script>
-  <script defer src="assets/core/overlay-hooks.js?v=17.7.7"></script>
-  <script defer src="assets/core/core.render.js?v=17.7.7"></script>
-  <script defer src="assets/core/game.bootstrap.js?v=17.7.7"></script>
+  <!-- Core + Polyfills -->
+  <script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
+  <script src="assets/core/core.env.js?v=17.7.7"></script>
+  <script src="assets/core/core.entities.js?v=17.7.7"></script>
+  <script src="assets/core/core.production.js?v=17.7.7"></script>
+  <script src="assets/core/core.pfglue.js?v=17.7.7"></script>
+  <script src="assets/core/core.map.js?v=17.7.7"></script>
+  <script src="assets/core/core.input.js?v=17.7.7"></script>
+  <script src="assets/core/carriers.js?v=17.7.7"></script>
+  <script src="assets/core/overlay-hooks.js?v=17.7.7"></script>
+  <script src="assets/core/core.render.js?v=17.7.7"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.7.7"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.8.0&nocache=2025-09-04-2250"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.8.0"></script>
   <script defer src="assets/ui/ui-start.js?v=17.7.7"></script>
   <script defer src="assets/ui/ui-build.js?v=17.7.7"></script>
 
-  <!-- Inspector (split) – NUR diese fünf Dateien, keine alte inspector.js mehr -->
-  <script defer src="assets/inspector/inspector.core.js?v=18.10.6&nocache=2025-09-04-2250"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.10.6&nocache=2025-09-04-2250"></script>
-  <script defer src="assets/inspector/inspector.build.js?v=18.10.6&nocache=2025-09-04-2250"></script>
-  <script defer src="assets/inspector/inspector.paths.js?v=18.10.6&nocache=2025-09-04-2250"></script>
-  <script defer src="assets/inspector/inspector.tests.js?v=18.10.6&nocache=2025-09-04-2250"></script>
+  <!-- Inspector (split) — NUR diese Variante verwenden -->
+  <script defer src="assets/inspector/inspector.core.js?v=18.10.5"></script>
+  <script defer src="assets/inspector/inspector.logs.js?v=18.10.5"></script>
+  <script defer src="assets/inspector/inspector.build.js?v=18.10.5"></script>
+  <script defer src="assets/inspector/inspector.paths.js?v=18.10.5"></script>
+  <script defer src="assets/inspector/inspector.tests.js?v=18.10.5"></script>
 
-  <!-- KEIN altes: assets/inspector/inspector.js  und KEIN inspector.logfix.js mehr! -->
-
-  <!-- Legacy-Fassade (falls noch genutzt) -->
+  <!-- Legacy-Fassade (falls genutzt) -->
   <script defer src="game.js?v=17.7.7"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
@@ -103,52 +107,6 @@
       (window.CBLog?.info || console.log)("[index] UI bereit (v17.7.7)");
       window.addEventListener('cb:build-open',  ()=>document.body.classList.add('has-build-open'));
       window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
-    })();
-  </script>
-
-  <!-- Mini-Failsafe: Falls der Split-Inspector wegen Cache nicht initialisiert,
-       stellen wir nach kurzer Wartezeit eine minimale API bereit,
-       damit der FAB sofort wieder funktioniert. -->
-  <script>
-    (function(){
-      function ensureFailsafe(){
-        if (window.__INSPECTOR_API__) return; // echter Inspector ist da
-        const panelId = "inspector-failsafe";
-        function ensurePanel(){
-          let el = document.getElementById(panelId);
-          if (!el){
-            el = document.createElement("div");
-            el.id = panelId;
-            el.style.cssText =
-              "position:fixed;inset:6vh 6vw;z-index:2147483646;display:none;overflow:auto;" +
-              "background:rgba(18,18,20,.96);color:#e5e7eb;border:1px solid #2a2f36;border-radius:12px;" +
-              "box-shadow:0 24px 80px rgba(0,0,0,.55);padding:14px";
-            el.innerHTML =
-              '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
-                '<strong style="font-size:18px">Inspector (Failsafe)</strong>' +
-                '<button id="__fsClose" style="margin-left:auto;border:none;border-radius:10px;padding:8px 10px;background:#39424b;color:#fff;cursor:pointer">Schließen</button>' +
-              '</div>' +
-              '<pre style="margin:0;padding:10px;border-radius:10px;background:#0f1216;border:1px solid #26303a;max-height:70vh;overflow:auto">[Hinweis] Gesplittete Inspector-Dateien scheinen noch nicht geladen (Cache?).\nFallback aktiv.\n</pre>';
-            document.body.appendChild(el);
-            el.querySelector("#__fsClose").onclick = ()=> api.close();
-          }
-          return el;
-        }
-        const api = {
-          open(){ const el = ensurePanel(); el.style.display = "block"; window.dispatchEvent(new CustomEvent("cb:inspector-open")); (window.CBLog?.info||console.log)("[inspector.failsafe] geöffnet"); },
-          close(){ const el = document.getElementById(panelId); if(el){ el.style.display = "none"; } window.dispatchEvent(new CustomEvent("cb:inspector-close")); (window.CBLog?.info||console.log)("[inspector.failsafe] geschlossen"); },
-          toggle(force){
-            const el = document.getElementById(panelId);
-            const willOpen = (force==null) ? !(el && el.style.display!=="none") : !!force;
-            willOpen ? api.open() : api.close();
-          }
-        };
-        window.__INSPECTOR_API__ = api; // stellt die API für ui-bridge bereit
-        window.dispatchEvent(new CustomEvent("cb:inspector-ready",{detail:{mode:"failsafe"}}));
-        (window.CBLog?.info||console.log)("[inspector.failsafe] API bereit");
-      }
-      // nach onload + 1.5s prüfen
-      window.addEventListener("load", ()=> setTimeout(ensureFailsafe, 1500));
     })();
   </script>
 </body>
