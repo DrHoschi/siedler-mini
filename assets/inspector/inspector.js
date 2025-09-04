@@ -1,295 +1,333 @@
 /* ============================================================================
- *  assets/inspector/inspector.js — v18.7.0
+ *  assets/inspector/inspector.js — v18.7.1
  *  Projekt: Neue Siedler
- *  CODE-STYLE / VORGABEN
- *  - Klare Abschnitts-Kommentare
- *  - Stabiles Log-Streaming (CBLog-Polyfill + Console-Proxy Fallback)
- *  - Keine Doppel-Definition der GameUI-Bridge (toggle/open/close)
- *  - UI: Tabs (Übersicht, Logs, Build, Pfade, Tests) — Logs funktionsfähig
- *  - Hard-Sichtbarkeitsgarantie (z-index, pointer-events) + Fallback-Badge
- *  - Auto-Open beim Seitenstart (konfigurierbar über Query/LocalStorage)
- * ========================================================================== */
+ *  CODE_STYLE:
+ *    - Ein Datei-Monolith (UI, Log-Stream, Bridge)
+ *    - Defensive DOM-Erstellung (idempotent)
+ *    - Harte Sichtbarkeits-Garantie: hoher z-index, pointer-events
+ *    - Logging über CBLog; falls nicht vorhanden: schlanke Proxy-Konsole
+ *  CHANGELOG:
+ *    v18.7.1  Kein Auto-Open mehr. Optional via ?inspector=1 oder „Auto“-Pin.
+ *              Stabilere Log-Pipeline + Puffer-Flush bei Open.
+ * ==========================================================================*/
 
-(function(){
-  "use strict";
+(function () {
+  const VERSION = "v18.7.1";
 
-  const VERSION = "v18.7.0";
-  const LOG_NS  = "[inspector.core]";
-  const $id = (s)=> document.getElementById(s);
-
-  // ---------------------------------------------------------------------------
-  // 0) Ultra-sicheres CBLog & Console-Proxy Fallback
-  // ---------------------------------------------------------------------------
-  // Ziel: Immer Logs sehen – auch wenn der Polyfill zu spät oder gar nicht lädt.
-  const BootClock = ()=> {
-    const d = new Date();
-    const pad = (n)=> (n<10?"0":"")+n;
-    return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
+  // ---------- Mini-Helfer
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "style" && typeof v === "string") n.style.cssText = v;
+      else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+      else if (v != null) n.setAttribute(k, v);
+    }
+    for (const k of kids) n.appendChild(typeof k === "string" ? document.createTextNode(k) : k);
+    return n;
   };
+  const once = (fn) => { let done = false; return (...a)=>{ if(!done){ done=true; return fn(...a);} }; };
 
-  // Interner Ringpuffer, falls (noch) kein CBLog existiert
-  const _bootBuf = [];
-  const BUF_MAX  = 2000;
-
-  function _bufPush(kind, ns, msg){
-    const line = `${BootClock()} ${kind} ${ns} ${msg}`;
-    _bootBuf.push(line);
-    if (_bootBuf.length > BUF_MAX) _bootBuf.shift();
-  }
-
-  // Minimaler Proxy -> schreibt sowohl in Konsole als auch in _bootBuf
-  const consoleProxy = {
-    info: (...a)=>{ try{console.info(...a);}catch(_){} _bufPush("INFO", "", a.join(" ")); },
-    log:  (...a)=>{ try{console.log(...a);}catch(_){}  _bufPush("LOG",  "", a.join(" ")); },
-    warn: (...a)=>{ try{console.warn(...a);}catch(_){} _bufPush("WARN", "", a.join(" ")); },
-    error:(...a)=>{ try{console.error(...a);}catch(_){} _bufPush("ERROR","", a.join(" ")); }
-  };
-
-  // CBLog-Schnittstelle robust machen
-  (function ensureCBLog(){
-    const w = window; w.CBLog = w.CBLog || {};
-    const bus = w.CBLog._bus = w.CBLog._bus || new EventTarget();
-
-    // interne Queue (falls Init zu früh)
-    w.CBLog._q = w.CBLog._q || [];
-
-    // Public API
-    w.CBLog.info = function(ns, msg){ consoleProxy.info(`[${ns}] ${msg}`); bus.dispatchEvent(new CustomEvent("cb:log",{detail:{k:"INFO",ns, msg}})); };
-    w.CBLog.log  = function(ns, msg){ consoleProxy.log (`[${ns}] ${msg}`); bus.dispatchEvent(new CustomEvent("cb:log",{detail:{k:"LOG", ns, msg}})); };
-    w.CBLog.warn = function(ns, msg){ consoleProxy.warn(`[${ns}] ${msg}`); bus.dispatchEvent(new CustomEvent("cb:log",{detail:{k:"WARN",ns, msg}})); };
-    w.CBLog.error=function(ns, msg){ consoleProxy.error(`[${ns}] ${msg}`);bus.dispatchEvent(new CustomEvent("cb:log",{detail:{k:"ERROR",ns,msg}})); };
-
-    // Hilfen
-    w.CBLog.getBuffer = function(){ return _bootBuf.slice(0); };
-    w.CBLog.on = function(fn){
-      const h = (ev)=> fn(ev.detail);
-      bus.addEventListener("cb:log", h);
-      return ()=> bus.removeEventListener("cb:log", h);
+  // ---------- CBLog / Console Bridge
+  const CBLog = (function makeCBLog(){
+    const bus = [];
+    const api = (type, ...a) => {
+      const line = stamp(type, ...a);
+      bus.push(line);
+      (console[type] || console.log).call(console, ...a);
+      window.dispatchEvent(new CustomEvent("cb:log", { detail: line }));
     };
-    // Marker
-    consoleProxy.info(`[CBLog] Polyfill aktiv`);
+    const stamp = (type, ...a) => {
+      const ts = new Date();
+      const pad = (n)=> String(n).padStart(2,"0");
+      const h=`${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`;
+      return `[${h}] ${type.toUpperCase().padEnd(4)} ${a.join(" ")}`;
+    };
+    api.getBuffer = ()=> bus.slice();
+    // Falls bereits vorhanden, diese Implementierung nicht doppeln
+    if (window.CBLog && typeof window.CBLog.getBuffer === "function") return window.CBLog;
+    // Minimal-Proxy für console -> CBLog
+    const wrap = (t)=> (...a)=> api(t, ...a);
+    const prox = { info:wrap("info"), log:wrap("log"), warn:wrap("warn"), error:wrap("error"), getBuffer:api.getBuffer };
+    window.CBLog = prox;
+    prox.info("[CBLog] Polyfill aktiv (Inspector-Fallback)");
+    return prox;
   })();
 
-  // Ab hier CBLog nutzbar
-  const logI = (m)=> window.CBLog.info("inspector.core", m);
-  const logL = (m)=> window.CBLog.log ("inspector.core", m);
-  const logW = (m)=> window.CBLog.warn("inspector.core", m);
-  const logE = (m)=> window.CBLog.error("inspector.core", m);
-
-  // ---------------------------------------------------------------------------
-  // 1) DOM-Panel erzeugen (einmalig)
-  // ---------------------------------------------------------------------------
-  let state = {
+  // ---------- Zustand
+  const state = {
     open: false,
-    unsub: null,  // Log-Subscription
+    activeTab: "logs",
+    el: null,
+    auto: (localStorage.getItem("__cbInspectorAuto") === "1")
   };
 
-  function ensurePanel(){
-    let root = $id("inspector");
-    if (root) return root;
+  // ---------- UI erstellen (idempotent)
+  function ensureUI() {
+    if (state.el) return state.el;
 
-    root = document.createElement("div");
-    root.id = "inspector";
-    // minimale Inlines, falls CSS (assets/inspector/inspector.css) mal fehlt
-    root.style.cssText = [
-      "position:fixed","left:50%","top:50%","transform:translate(-50%,-50%)",
-      "min-width:300px","max-width:92vw","width:760px","max-height:80vh",
-      "z-index:2147483646","background:rgba(18,18,18,.96)","border:1px solid rgba(255,255,255,.10)",
-      "border-radius:14px","box-shadow:0 30px 80px rgba(0,0,0,.55)","color:#e9eef1",
-      "backdrop-filter:blur(10px)","display:none","pointer-events:auto"
-    ].join(";");
-
-    root.innerHTML = `
-      <div class="insp-head" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08);">
-        <div class="insp-title" style="font-weight:800;letter-spacing:.2px">Inspector</div>
-        <div class="insp-ver"   style="opacity:.65;font-size:12px;margin-left:6px">${VERSION}</div>
-        <div style="flex:1"></div>
-        <button id="insp-close" style="border:none;border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer">Schließen</button>
-      </div>
-      <div class="insp-tabs" style="display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)">
-        <button class="tab" data-tab="overview">Übersicht</button>
-        <button class="tab active" data-tab="logs">Logs</button>
-        <button class="tab" data-tab="build">Build</button>
-        <button class="tab" data-tab="paths">Pfade</button>
-        <button class="tab" data-tab="tests">Tests</button>
-      </div>
-      <div id="insp-body" style="padding:14px;overflow:auto;max-height:calc(80vh - 110px)">
-        <pre id="insp-logs" style="margin:0;padding:12px;border-radius:10px;background:#0c0f10;border:1px solid rgba(255,255,255,.06);white-space:pre-wrap;line-height:1.35;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;font-size:12.5px;color:#cfe3d5">[Log wird geladen…]</pre>
-      </div>
-      <div class="insp-foot" style="display:flex;gap:10px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.08)">
-        <button id="insp-clear"   style="border:none;border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer">Leeren</button>
-        <button id="insp-refresh" style="border:none;border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer">Aktualisieren</button>
-      </div>
-    `;
-    document.body.appendChild(root);
-
-    // Buttons
-    root.querySelector("#insp-close").addEventListener("click", close);
-    root.querySelector("#insp-clear").addEventListener("click", ()=> setLogsText("[Keine Log-Einträge vorhanden]"));
-    root.querySelector("#insp-refresh").addEventListener("click", refreshLogs);
-
-    // Tabs (nur Logs mit Inhalt, Rest Platzhalter)
-    root.querySelectorAll(".tab").forEach(btn=>{
-      btn.style.cssText="border:none;border-radius:999px;padding:7px 12px;background:rgba(255,255,255,.10);color:#eaeff2;cursor:pointer;font-size:13px";
-      btn.addEventListener("click", ()=>{
-        root.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
-        btn.classList.add("active");
-        const t = btn.getAttribute("data-tab");
-        switchTab(t);
-      });
+    const root = el("div", {
+      id: "inspector",
+      style: `
+        position:fixed; inset:auto 12px 96px 12px; 
+        max-width:920px; margin:0 auto;
+        z-index:2147483646; color:#e6e6e6;
+        font: 14px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+        pointer-events:auto; display:none;
+      `
     });
 
-    // Fallback-Badge, falls Panel verdeckt sein könnte
-    ensureBadge();
+    // Rahmen
+    const panel = el("div", { style: `
+      background:linear-gradient(180deg, rgba(28,28,30,.98), rgba(20,20,22,.98));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      box-shadow:0 30px 80px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.03);
+      overflow:hidden;
+    `});
 
+    const head = el("div", { style: `
+      display:flex; align-items:center; gap:8px; padding:12px 12px 10px 16px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      position:relative;
+    `},
+      el("div", { style:"font-weight:700; letter-spacing:.2px;" }, "Inspector"),
+      el("div", { style:"opacity:.65; font-size:12px; margin-left:6px;" }, VERSION),
+      el("div", { style:"flex:1" }),
+      // Auto-Pin
+      el("button", {
+        id:"ins-auto",
+        title:"Inspector beim Laden automatisch öffnen (umschalten)",
+        style: btnStyle(false),
+        onclick(){
+          state.auto = !state.auto;
+          localStorage.setItem("__cbInspectorAuto", state.auto ? "1" : "0");
+          this.style.cssText = btnStyle(state.auto);
+        }
+      }, "Auto"),
+      // Close
+      el("button", {
+        title:"Schließen",
+        style: btnStyle(false),
+        onclick: close
+      }, "Schließen")
+    );
+
+    const tabs = el("div", { style:"display:flex; gap:10px; padding:10px 12px 8px 12px; border-bottom:1px solid rgba(255,255,255,.06);" });
+    const body = el("div", { id:"ins-body", style:"padding:12px; min-height:240px;" });
+
+    panel.append(head, tabs, body);
+    root.append(panel);
+    document.body.appendChild(root);
+
+    // Tabs
+    const TAB_DEF = [
+      { id:"overview", label:"Übersicht", render: renderOverview },
+      { id:"logs",     label:"Logs",     render: renderLogs },
+      { id:"build",    label:"Build",    render: renderBuild },
+      { id:"paths",    label:"Pfade",    render: renderPaths },
+      { id:"tests",    label:"Tests",    render: renderTests },
+    ];
+    TAB_DEF.forEach(t => {
+      const b = el("button", {
+        "data-tab": t.id,
+        style: pillStyle(t.id==="logs"),
+        onclick(){
+          state.activeTab = t.id;
+          // Buttons visuell aktualisieren
+          [...tabs.children].forEach(btn=>{
+            btn.style.cssText = pillStyle(btn.getAttribute("data-tab") === state.activeTab);
+          });
+          renderActive();
+        }
+      }, t.label);
+      tabs.appendChild(b);
+    });
+
+    // Auto Button initialer Zustand
+    $("#ins-auto", head).style.cssText = btnStyle(state.auto);
+
+    state.el = root;
     return root;
   }
 
-  function ensureBadge(){
-    if ($id("insp-badge")) return;
-    const b = document.createElement("div");
-    b.id = "insp-badge";
-    b.textContent = "Inspector lädt…";
-    b.style.cssText = "position:fixed;right:12px;bottom:86px;z-index:2147483647;background:rgba(20,20,20,.75);color:#ddd;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.10);font-size:12px;pointer-events:none";
-    document.body.appendChild(b);
-    setTimeout(()=>{ b.remove(); }, 2000);
+  // ---------- Styles
+  function btnStyle(active){
+    return `
+      border:none; cursor:pointer; user-select:none;
+      padding:8px 12px; border-radius:10px; 
+      background:${active ? "rgba(90,200,120,.18)" : "rgba(255,255,255,.08)"};
+      color:#fff; box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+    `;
+  }
+  function pillStyle(active){
+    return `
+      border:none; cursor:pointer; user-select:none;
+      padding:8px 14px; border-radius:18px; font-weight:600;
+      background:${active ? "rgba(120,200,255,.22)" : "rgba(255,255,255,.10)"};
+      color:#eaeaea; box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+    `;
   }
 
-  function setLogsText(txt){
-    const el = $id("insp-logs");
-    if (el) el.textContent = txt;
-  }
-
-  // ---------------------------------------------------------------------------
-  // 2) Tabs-Inhalte (nur Logs echt, andere erstmal Platzhalter)
-  // ---------------------------------------------------------------------------
-  function switchTab(name){
-    const body = $id("insp-body");
-    if (!body) return;
-
-    if (name === "logs"){
-      body.innerHTML = `<pre id="insp-logs" style="margin:0;padding:12px;border-radius:10px;background:#0c0f10;border:1px solid rgba(255,255,255,.06);white-space:pre-wrap;line-height:1.35;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;font-size:12.5px;color:#cfe3d5">[Log wird geladen…]</pre>`;
-      refreshLogs();
-      return;
-    }
-
-    // Platzhalter für weitere Tabs; werden später gefüllt
-    const ph = (t)=> `<div style="opacity:.7">${t}</div>`;
-    if (name === "overview"){
-      body.innerHTML = ph("Übersicht (kommt als Nächstes: FPS, Canvas, Map…)"); return;
-    }
-    if (name === "build"){
-      body.innerHTML = ph("Build-Tab (UI-States, aktuelles Tool, etc.)"); return;
-    }
-    if (name === "paths"){
-      body.innerHTML = ph("Pfade-Tab (Overlay-Toggle, Heatmap, letzte Pfade… )"); return;
-    }
-    if (name === "tests"){
-      body.innerHTML = ph("Tests-Tab (kleine Checks/Buttons)"); return;
+  // ---------- Render-Tab-Body
+  function renderActive(){
+    const body = $("#ins-body", state.el);
+    body.innerHTML = "";
+    switch (state.activeTab){
+      case "overview": renderOverview(body); break;
+      case "logs":     renderLogs(body); break;
+      case "build":    renderBuild(body); break;
+      case "paths":    renderPaths(body); break;
+      case "tests":    renderTests(body); break;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // 3) Log-Streaming — stabil
-  // ---------------------------------------------------------------------------
-  function refreshLogs(){
-    try {
-      // 1) Bestehenden Buffer (frühere Einträge) übernehmen
-      const buf = (window.CBLog && typeof window.CBLog.getBuffer === "function")
-        ? window.CBLog.getBuffer()
-        : _bootBuf.slice(0);
+  function renderOverview(body){
+    const rows = [
+      ["Version (Inspector)", VERSION],
+      ["Canvas", findCanvasInfo()],
+      ["Map", window.Game?.map?.name || getCanvasDataMap() || "unbekannt"],
+      ["FPS (wenn vorhanden)", window.Game?.stats?.fps?.toFixed?.(1) || "—"]
+    ];
+    body.appendChild(kvTable(rows));
+  }
 
-      // 2) Wenn bereits abonniert, einmal abmelden (Doppel vermeiden)
-      if (state.unsub) { try{ state.unsub(); }catch(_){} state.unsub = null; }
+  function findCanvasInfo(){
+    const c = $("#game");
+    if (!c) return "—";
+    return `${c.width || c.clientWidth}×${c.height || c.clientHeight} @${(window.devicePixelRatio||1)}x`;
+  }
+  function getCanvasDataMap(){
+    return $("#game")?.getAttribute("data-map") || null;
+  }
+  function kvTable(rows){
+    const wrap = el("div", { style:"display:grid; grid-template-columns: 160px 1fr; gap:8px; align-items:center;" });
+    rows.forEach(([k,v])=>{
+      wrap.append(
+        el("div", { style:"opacity:.75;" }, k),
+        el("div", {}, String(v))
+      );
+    });
+    return wrap;
+  }
 
-      // 3) Ab hier live mitschreiben
-      state.unsub = window.CBLog.on(({k,ns,msg})=>{
-        appendLine(`${BootClock()} ${k} [${ns||"?"}] ${msg}`);
-      });
+  // LOGS
+  let logBox, copyBtn, clearBtn, refreshBtn;
+  function renderLogs(body){
+    const box = el("pre", {
+      id:"ins-logbox",
+      style: `
+        background:#131416; border:1px solid rgba(255,255,255,.08);
+        border-radius:10px; padding:12px; margin-bottom:10px;
+        max-height:48vh; overflow:auto; white-space:pre-wrap;
+        font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      `
+    }, "[Log wird geladen…]");
 
-      // 4) Anzeige setzen
-      if (buf && buf.length){
-        setLogsText(buf.join("\n"));
-      } else {
-        setLogsText("[Keine Log-Einträge vorhanden]");
-      }
-    } catch (e){
-      setLogsText(`[Fehler beim Laden der Logs]\n${String(e?.message||e)}`);
+    const bar = el("div", { style:"display:flex; gap:10px;" },
+      clearBtn = el("button", { style: btnStyle(false), onclick(){ setLogText(""); } }, "Leeren"),
+      refreshBtn = el("button", { style: btnStyle(false), onclick(){ flushBufferIntoBox(true); } }, "Aktualisieren"),
+      copyBtn = el("button", { style: btnStyle(false), onclick(){ copyLogs(); } }, "Kopieren")
+    );
+
+    body.append(box, bar);
+    logBox = box;
+    // Initial füllen
+    flushBufferIntoBox(false);
+
+    // Live-Stream abonnieren
+    window.addEventListener("cb:log", onLogEvent);
+  }
+  function onLogEvent(ev){
+    if (!logBox) return;
+    const line = ev.detail || "";
+    appendLine(line);
+  }
+  function flushBufferIntoBox(scrollEnd){
+    if (!logBox) return;
+    const buf = (window.CBLog?.getBuffer?.() || []);
+    setLogText(buf.join("\n"));
+    if (scrollEnd) logBox.scrollTop = logBox.scrollHeight;
+  }
+  function appendLine(line){
+    if (logBox.textContent === "[Log wird geladen…]" || logBox.textContent === "[Keine Log-Einträge vorhanden]"){
+      logBox.textContent = line;
+    } else {
+      logBox.textContent += (logBox.textContent.endsWith("\n") ? "" : "\n") + line;
+    }
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+  function setLogText(txt){
+    logBox.textContent = txt && txt.length ? txt : "[Keine Log-Einträge vorhanden]";
+  }
+  async function copyLogs(){
+    try{
+      await navigator.clipboard.writeText(logBox.textContent || "");
+      (window.CBLog?.info||console.log)("[inspector.core] Logs kopiert");
+    }catch(e){
+      alert("Kopieren nicht möglich.");
     }
   }
 
-  function appendLine(t){
-    const el = $id("insp-logs"); if (!el) return;
-    // Performance: nicht unendlich wachsen
-    if (el.textContent.length > 200_000){
-      el.textContent = el.textContent.slice(-150_000);
-    }
-    el.textContent += (el.textContent ? "\n" : "") + t;
-    // nach unten scrollen
-    el.parentElement?.scrollTo({ top: el.parentElement.scrollHeight });
+  // Build (Platzhalter)
+  function renderBuild(body){
+    body.appendChild(el("div", {}, "Hier kommen Build-Infos (Tool, Vorschau, etc.)"));
   }
 
-  // ---------------------------------------------------------------------------
-  // 4) Open/Close API + Sichtbarkeit
-  // ---------------------------------------------------------------------------
-  function open(){
-    const root = ensurePanel();
-    root.style.display = "block";
+  // Pfade (Platzhalter)
+  function renderPaths(body){
+    body.appendChild(el("div", {}, "Pfad-Overlay / Heatmap (später)"));
+  }
+
+  // Tests (Platzhalter)
+  function renderTests(body){
+    body.appendChild(el("div", {}, "Schnelltests / Buttons folgen."));
+  }
+
+  // ---------- Open/Close
+  function open() {
+    ensureUI();
+    // Tab sicherstellen
+    const tabsRow = state.el.querySelectorAll("[data-tab]");
+    tabsRow.forEach(btn=>{
+      btn.style.cssText = pillStyle(btn.getAttribute("data-tab") === state.activeTab);
+    });
+
+    state.el.style.display = "block";
     state.open = true;
-    // Immer vor andere Overlays/FABs
-    root.style.zIndex = "2147483646";
-    refreshLogs();
-    logI(`geöffnet (${VERSION})`);
+    renderActive();
+    // Beim Öffnen Puffer in Log holen
+    if (state.activeTab === "logs") flushBufferIntoBox(true);
+    (window.CBLog?.info||console.log)(`[inspector.core] geöffnet (${VERSION})`);
   }
-
-  function close(){
-    const root = ensurePanel();
-    root.style.display = "none";
+  function close() {
+    if (!state.el) return;
+    state.el.style.display = "none";
     state.open = false;
-    if (state.unsub){ try{state.unsub();}catch(_){} state.unsub=null; }
+    // Listener lösen, wenn Logs aktiv waren
+    window.removeEventListener("cb:log", onLogEvent);
+  }
+  function toggle() {
+    if (state.open) close();
+    else open();
   }
 
-  function toggle(){
-    if (state.open) close(); else open();
-  }
-
-  // ---------------------------------------------------------------------------
-  // 5) Öffentliche Bridge für FABs/UX – ohne Doppel-Überschreiben
-  // ---------------------------------------------------------------------------
+  // ---------- Öffentliche Bridge (für FABs/UX)
   window.GameUI = window.GameUI || {};
-  if (!window.GameUI._inspBound){
-    window.GameUI.toggleInspector = toggle;
-    window.GameUI.openInspector   = open;
-    window.GameUI.closeInspector  = close;
-    window.GameUI._inspBound = true;
-  }
+  window.GameUI.toggleInspector = toggle;
+  window.GameUI.openInspector   = open;
+  window.GameUI.closeInspector  = close;
 
-  // ---------------------------------------------------------------------------
-  // 6) Auto-Open beim Seitenstart (hart & zuverlässig)
-  //     - Standard: true (sofort sichtbares Debug)
-  //     - steuerbar via: ?inspector=0|1, oder localStorage.cb_insp= "0"/"1"
-  // ---------------------------------------------------------------------------
-  (function autoOpen(){
-    const qs  = new URLSearchParams(location.search);
-    const qsv = qs.get("inspector");   // "1" / "0" / null
-    const lsv = (localStorage.getItem("cb_insp")||"").trim(); // "1" / "0"
-    const def = true;                  // <-- gewünschtes Standardverhalten
+  // ---------- Start-Heuristik (ohne Auto-Open by default)
+  const tryAuto = once(()=>{
+    const wants = /\binspector=1\b/.test(location.search) || state.auto;
+    if (wants) open();
+  });
 
-    const want =
-      (qsv === "1") ? true :
-      (qsv === "0") ? false :
-      (lsv === "1") ? true :
-      (lsv === "0") ? false : def;
+  // UI früh erstellen (damit FAB sofort funktioniert), aber NICHT automatisch öffnen
+  ensureUI();
+  // minimal verzögert Auto-Heuristik prüfen
+  setTimeout(tryAuto, 50);
 
-    // Badge früh zeigen, Panel kurz danach öffnen
-    ensureBadge();
-    // kleine Verzögerung, damit DOM/CSS sicher stehen (und Log-Puffer gefüllt ist)
-    setTimeout(()=>{ if (want) open(); }, 100);
-  })();
-
-  // ---------------------------------------------------------------------------
-  // 7) Start-Marker
-  // ---------------------------------------------------------------------------
-  logI(`bereit (${VERSION})`);
-
+  (window.CBLog?.info||console.log)(`[inspector.core] bereit (${VERSION})`);
 })();
