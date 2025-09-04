@@ -1,229 +1,263 @@
 /* ============================================================================
-   assets/inspector/inspector.core.js — v18.10.5
-   Zweck:
-     - Stellt das Inspector-Overlay, Tabs-Gerüst und die öffentliche API bereit.
-     - Erlaubt Tab-Module (logs/build/paths/tests) sich dynamisch zu registrieren.
-     - Fallback-freundlich: funktioniert auch ohne geladene Tab-Module.
-   CODE-STYLE:
-     - Reihenfolge: Consts → State → DOM → Helpers → API → Init → Logs
-     - Sanfte Logs via CBLog, sonst console.log
-     - Events: cb:inspector-open / cb:inspector-close / inspector:tab:changed
-   ============================================================================ */
-
+ * assets/inspector/inspector.core.js — v18.10.6
+ * Projekt: Siedler-Mini
+ * Zweck:
+ *   - Kern des Inspectors (Overlay, Tabs, API, Fallbacks)
+ *   - Bietet window.__INSPECTOR_API__ (open/close/toggle/registerTab/switchTab)
+ *   - Öffnet NICHT automatisch; UI-Bridge/FAB steuert toggle()
+ *   - Zeigt Fallback-Logs, falls inspector.logs.js noch nicht geladen ist
+ *
+ * CODE-STYLE:
+ *   - Keine externen Abhängigkeiten
+ *   - Sanfte Logs via CBLog (fällt auf console.* zurück)
+ *   - Defensive Inline-Styles (falls inspector.css fehlt)
+ * ========================================================================== */
 (function(){
   "use strict";
 
-  const VERSION = "v18.10.5";
-  const log  = (t,...a)=>(window.CBLog?.info||console.log)(`[inspector.core] ${t}`,...a);
-  const warn = (t,...a)=>(window.CBLog?.warn||console.warn)(`[inspector.core] ${t}`,...a);
+  var VERSION = "v18.10.6";
+  var MOD = "[inspector.core]";
+  var log  = function(){ try{ (window.CBLog?.info||console.log).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.log.apply(console, [MOD].concat(arguments)); } };
+  var warn = function(){ try{ (window.CBLog?.warn||console.warn).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.warn.apply(console, [MOD].concat(arguments)); } };
 
   // ---------------------------------------------------------------------------
-  // State
+  // DOM helpers
   // ---------------------------------------------------------------------------
-  const state = {
-    isOpen: false,
-    activeTab: "logs",
-    tabs: new Map(), // id -> { id, title, render, onShow?, order? }
-  };
+  function el(tag, cls, txt){
+    var e=document.createElement(tag);
+    if (cls) e.className=cls;
+    if (txt!=null) e.textContent=txt;
+    return e;
+  }
+  function css(e, s){ e.style.cssText = s; return e; }
 
   // ---------------------------------------------------------------------------
-  // DOM (wird einmal erzeugt)
+  // State & Registry
   // ---------------------------------------------------------------------------
-  const dom = {};
-  function ensureDOM(){
-    if (dom.root) return dom;
+  var root      = null;   // #inspector
+  var headEl    = null;   // Kopf (Titel, Close)
+  var tabsEl    = null;   // Tab-Leiste
+  var bodyEl    = null;   // Inhalt
+  var footEl    = null;   // Fuß (Optionen)
+  var isOpen    = false;
+  var tabs      = [];     // [{id,title,render,order}]
+  var activeId  = null;
 
-    const root = document.createElement("div");
-    root.id = "inspector-root";
-    root.className = "ins-root";
-    root.style.cssText =
-      "position:fixed;inset:0;display:none;z-index:2147483646;" + // Vollbild-Overlay
-      "align-items:center;justify-content:center;";
+  // ---------------------------------------------------------------------------
+  // Build Overlay Skeleton (defensive / CSS-Fallback)
+  // ---------------------------------------------------------------------------
+  function ensureRoot(){
+    if (root) return root;
 
-    // Panel
-    const panel = document.createElement("div");
-    panel.className = "ins-panel"; // Styles in inspector.css
-    panel.setAttribute("role","dialog");
-    panel.setAttribute("aria-label","Inspector");
+    root = el("div", "inspector");
+    root.id = "inspector";
+    // Falls CSS fehlt: Inline-Fallback, damit das Layout nie „kaputt“ wirkt
+    css(root,
+      "position:fixed;inset:0;z-index:2147483646;display:none;"+
+      "background:rgba(10,12,14,.72);backdrop-filter:blur(4px);"+
+      "color:#e5e7eb;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
+    );
+
+    var panel = el("div", "inspector-panel");
+    css(panel,
+      "position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);"+
+      "width:min(1024px,90vw);height:min(84vh,90vh);"+
+      "background:linear-gradient(180deg,rgba(24,28,31,.98),rgba(20,23,26,.98));"+
+      "border:1px solid rgba(255,255,255,.08);border-radius:12px;"+
+      "box-shadow:0 24px 64px rgba(0,0,0,.55);display:flex;flex-direction:column;overflow:hidden;"
+    );
 
     // Header
-    const head = document.createElement("div");
-    head.className = "ins-head";
+    headEl = el("div","inspector-head");
+    css(headEl,
+      "display:flex;align-items:center;gap:12px;padding:12px 12px;"+
+      "border-bottom:1px solid rgba(255,255,255,.08);"
+    );
+    var title = el("div","inspector-title","Inspector");
+    css(title,"font-weight:700;letter-spacing:.2px;opacity:.92;");
+    var spacer = el("div"); css(spacer,"flex:1;");
+    var btnClose = el("button","inspector-close","×");
+    css(btnClose,
+      "position:relative;margin:0;padding:6px 10px;border:none;border-radius:8px;"+
+      "background:rgba(255,255,255,.08);color:#e5e7eb;cursor:pointer;font-size:16px;"+
+      "line-height:1;min-width:36px;min-height:32px;"
+    );
+    btnClose.title = "Schließen (Esc)";
+    btnClose.addEventListener("click", close);
 
-    const title = document.createElement("div");
-    title.className = "ins-title";
-    title.textContent = "Inspector";
-    const ver = document.createElement("span");
-    ver.className = "ins-ver";
-    ver.textContent = `v${VERSION}`;
-    title.appendChild(ver);
+    headEl.appendChild(title);
+    headEl.appendChild(spacer);
+    headEl.appendChild(btnClose);
 
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "ins-close";
-    closeBtn.type = "button";
-    closeBtn.textContent = "Schließen";
-    closeBtn.addEventListener("click", ()=>API.close());
+    // Tabs
+    tabsEl = el("div","inspector-tabs");
+    css(tabsEl,"display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px 0 12px;");
 
-    const tabs = document.createElement("div");
-    tabs.className = "ins-tabs";
+    // Body
+    bodyEl = el("div","inspector-body");
+    css(bodyEl,"flex:1;min-height:0;overflow:auto;padding:12px;");
 
-    head.appendChild(title);
-    head.appendChild(closeBtn);
-    head.appendChild(tabs);
+    // Footer
+    footEl = el("div","inspector-foot");
+    css(footEl,
+      "display:flex;align-items:center;gap:8px;padding:10px 12px;"+
+      "border-top:1px solid rgba(255,255,255,.08);opacity:.85;font-size:12px;"
+    );
+    var ver = el("div", null, "core "+VERSION);
+    footEl.appendChild(ver);
 
-    // Body + Footer
-    const body = document.createElement("div");
-    body.className = "ins-body";
-
-    const foot = document.createElement("div");
-    foot.className = "ins-foot";
-
-    panel.appendChild(head);
-    panel.appendChild(body);
-    panel.appendChild(foot);
+    panel.appendChild(headEl);
+    panel.appendChild(tabsEl);
+    panel.appendChild(bodyEl);
+    panel.appendChild(footEl);
     root.appendChild(panel);
     document.body.appendChild(root);
 
-    dom.root = root;
-    dom.panel = panel;
-    dom.head = head;
-    dom.tabs = tabs;
-    dom.body = body;
-    dom.foot = foot;
+    // ESC schließt
+    window.addEventListener("keydown", function(ev){
+      if (!isOpen) return;
+      if (ev.key === "Escape"){ close(); }
+    });
 
-    return dom;
+    // Fallback Diagnose: meldet, dass Core aktiv ist
+    log("bereit ("+VERSION+")");
+    return root;
   }
 
   // ---------------------------------------------------------------------------
-  // Helpers
+  // Tab-Handling
   // ---------------------------------------------------------------------------
   function renderTabs(){
-    ensureDOM();
-    dom.tabs.innerHTML = "";
-
-    // Sortierung nach "order" (Default 100)
-    const ordered = [...state.tabs.values()].sort((a,b)=>(a.order??100)-(b.order??100));
-    for (const t of ordered){
-      const btn = document.createElement("button");
-      btn.className = "ins-tab";
-      btn.type = "button";
-      btn.dataset.tab = t.id;
-      btn.textContent = t.title || t.id;
-      btn.addEventListener("click", ()=>API.setTab(t.id));
-      dom.tabs.appendChild(btn);
-    }
-    // aktive Markierung
-    updateActiveTabClass();
-  }
-
-  function updateActiveTabClass(){
-    const btns = dom.tabs?.querySelectorAll(".ins-tab") || [];
-    btns.forEach(b=>{
-      b.classList.toggle("active", b.dataset.tab === state.activeTab);
+    tabsEl.innerHTML = "";
+    // Sort by order, then title
+    var sorted = tabs.slice().sort(function(a,b){
+      var ao=(a.order|0), bo=(b.order|0);
+      if (ao!==bo) return ao-bo;
+      return String(a.title||a.id).localeCompare(String(b.title||b.id));
+    });
+    sorted.forEach(function(t){
+      var b = el("button","inspector-tab", t.title || t.id);
+      css(b,
+        "border:none;border-radius:999px;padding:6px 12px;cursor:pointer;"+
+        "background:rgba(255,255,255,.10);color:#e5e7eb;"
+      );
+      if (t.id === activeId){
+        b.classList.add("active");
+        b.style.background = "rgba(120,200,255,.22)";
+      }
+      b.addEventListener("click", function(){ switchTab(t.id); });
+      tabsEl.appendChild(b);
     });
   }
 
-  function showContentFor(tabId){
-    ensureDOM();
-    dom.body.innerHTML = "";
-    dom.foot.innerHTML = "";
-
-    const tab = state.tabs.get(tabId);
-    if (!tab){
-      const info = document.createElement("div");
-      info.className = "ins-empty";
-      info.textContent = "Kein Tab-Modul geladen.";
-      dom.body.appendChild(info);
-      return;
-    }
+  function switchTab(id){
+    var t = tabs.find(function(x){ return x.id===id; });
+    if (!t){ warn("Tab nicht gefunden:", id); return; }
+    activeId = id;
+    renderTabs();
     try{
-      tab.render(dom.body, dom.foot);   // Modul zeichnet in Body/Foot
-      tab.onShow?.();                   // optionaler Hook
+      bodyEl.innerHTML = "";
+      footEl.style.display = ""; // module kann hide aktivieren wenn nötig
+      t.render({ bodyEl: bodyEl, footEl: footEl, api: __INSPECTOR_API__ });
     }catch(e){
-      warn("Tab-Render-Fehler (%s): %o", tabId, e);
-      const err = document.createElement("pre");
-      err.className = "ins-error";
-      err.textContent = String(e && e.stack || e);
-      dom.body.appendChild(err);
+      warn("Tab-Render Fehler:", e && e.message);
+      bodyEl.textContent = "Fehler beim Rendern des Tabs.";
+    }
+  }
+
+  function registerTab(def){
+    // def: { id, title, order?, render(body) }
+    if (!def || !def.id || !def.render){ warn("Ungültiger Tab:", def); return; }
+    var exists = tabs.some(function(t){ return t.id===def.id; });
+    if (exists){
+      // Update (z.B. Logs-Tab überschreibt Fallback)
+      for (var i=0;i<tabs.length;i++){ if (tabs[i].id===def.id){ tabs[i]=def; break; } }
+    } else {
+      tabs.push(def);
+    }
+    // Wenn noch kein aktiver Tab -> diesen setzen (Logs zuerst attraktiv)
+    if (!activeId){
+      activeId = def.id;
+    }
+    // Wenn offen, Tabs neu zeichnen und ggf. aktiv neu rendern
+    if (isOpen){
+      renderTabs();
+      if (activeId === def.id) switchTab(def.id);
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Öffentliche API (für ui-bridge + Module)
+  // Public API
   // ---------------------------------------------------------------------------
-  const API = {
-    open(){
-      ensureDOM();
-      if (state.isOpen) return;
-      state.isOpen = true;
-      dom.root.style.display = "flex";
-      // Standardtab = logs, falls vorhanden
-      if (!state.tabs.has(state.activeTab)) {
-        state.activeTab = state.tabs.has("logs") ? "logs" : ([...state.tabs.keys()][0] || "logs");
-      }
-      updateActiveTabClass();
-      showContentFor(state.activeTab);
+  function open(){
+    ensureRoot();
+    if (isOpen) return;
+    isOpen = true;
+    root.style.display = "block";
+    renderTabs();
+    // Falls noch kein Tab aktiv, setze auf ersten
+    if (!activeId && tabs.length){ activeId = tabs[0].id; }
+    if (activeId) switchTab(activeId);
+    window.dispatchEvent(new CustomEvent("cb:inspector-open"));
+    log("geöffnet ("+VERSION+")");
+  }
 
-      // Badge aus ui-bridge entfernen, falls vorhanden
-      const probe = document.getElementById("inspector-probe");
-      if (probe) try{ probe.remove(); } catch {}
+  function close(){
+    if (!root || !isOpen) return;
+    isOpen = false;
+    root.style.display = "none";
+    window.dispatchEvent(new CustomEvent("cb:inspector-close"));
+    log("geschlossen");
+  }
 
-      window.dispatchEvent(new CustomEvent("cb:inspector-open"));
-      log("geöffnet (v%s)", VERSION);
-    },
-    close(){
-      if (!state.isOpen) return;
-      state.isOpen = false;
-      dom.root.style.display = "none";
-      window.dispatchEvent(new CustomEvent("cb:inspector-close"));
-      log("geschlossen");
-    },
-    toggle(force){
-      (force == null ? !state.isOpen : !!force) ? API.open() : API.close();
-    },
-    setTab(id){
-      if (!state.tabs.has(id)) return;
-      state.activeTab = id;
-      updateActiveTabClass();
-      showContentFor(id);
-      window.dispatchEvent(new CustomEvent("inspector:tab:changed",{detail:{id}}));
-    },
-    /** Von Tab-Modulen aufzurufen, um sich zu registrieren. */
-    registerTab(def){
-      // def: { id, title, render(body,foot), onShow?, order? }
-      if (!def || !def.id || typeof def.render!=="function"){
-        return warn("Ungültige Tab-Definition: %o", def);
+  function toggle(force){
+    var willOpen = (force==null) ? !isOpen : !!force;
+    willOpen ? open() : close();
+  }
+
+  // API-Objekt global bereitstellen
+  var __INSPECTOR_API__ = (window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {});
+  __INSPECTOR_API__.open       = open;
+  __INSPECTOR_API__.close      = close;
+  __INSPECTOR_API__.toggle     = toggle;
+  __INSPECTOR_API__.registerTab= registerTab;
+  __INSPECTOR_API__.switchTab  = switchTab;
+  __INSPECTOR_API__.version    = VERSION;
+
+  // ---------------------------------------------------------------------------
+  // Minimaler Logs-Fallback (falls inspector.logs.js noch nicht geladen ist)
+  // wird beim ersten Open angezeigt und später automatisch von logs.js ersetzt
+  // ---------------------------------------------------------------------------
+  registerTab({
+    id: "logs",
+    title: "Logs",
+    order: 10,
+    render: function(ctx){
+      var wrap = el("div", null, "");
+      var hint = el("div", null, "Logs werden initialisiert …");
+      css(hint, "opacity:.8;margin-bottom:8px");
+      var pre = el("pre", null, "");
+      css(pre, "margin:0;padding:10px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);border-radius:8px;white-space:pre-wrap;");
+
+      // Fülle mit CBLog-Buffer, falls vorhanden
+      try{
+        var buf = (window.CBLog && Array.isArray(CBLog._buffer)) ? CBLog._buffer : null;
+        if (buf && buf.length){
+          pre.textContent = buf.map(function(line){ return line.ts+" "+line.level+" "+line.msg; }).join("\n");
+          hint.textContent = "Logs (Fallback) — werden ersetzt, sobald inspector.logs.js geladen ist.";
+        }else{
+          pre.textContent = "Noch keine Logs …";
+        }
+      }catch(_){
+        pre.textContent = "Noch keine Logs …";
       }
-      state.tabs.set(def.id, def);
-      renderTabs();
-      // Falls dies der erste registrierte Tab ist, gleich sichtbar machen
-      if (state.tabs.size === 1) {
-        state.activeTab = def.id;
-        updateActiveTabClass();
-        if (state.isOpen) showContentFor(def.id);
-      }
+
+      wrap.appendChild(hint);
+      wrap.appendChild(pre);
+      ctx.bodyEl.appendChild(wrap);
     }
-  };
+  });
 
-  // globale API bereitstellen (für ui-bridge)
-  window.__INSPECTOR_API__ = API;
-
-  // ---------------------------------------------------------------------------
-  // Init
-  // ---------------------------------------------------------------------------
-  ensureDOM();
-  renderTabs(); // Tabs (noch leer) werden erzeugt → Module registrieren sich nach und nach
-
-  // Optional: Inspector automatisch öffnen, wenn ?inspector=1 gesetzt
-  try{
-    const p = new URLSearchParams(location.search);
-    if (p.get("inspector")==="1") {
-      setTimeout(API.open, 120);
-    }
-  }catch{}
-
-  // ---------------------------------------------------------------------------
-  // Logs
-  // ---------------------------------------------------------------------------
-  log("bereit (v%s)", VERSION);
+  // Panel vorbereiten, aber nicht automatisch öffnen (FAB/Bridge steuert)
+  ensureRoot();
 })();
