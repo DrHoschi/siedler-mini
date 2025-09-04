@@ -1,95 +1,168 @@
 /*
-==============================================================================
- Datei: assets/inspector/inspector.css
- Projekt: Siedler-Mini
- Version: v18.3.2
- Zweck: Graues, klares Inspector-UI (laut Vorgabe)
-==============================================================================
+  assets/inspector/inspector.css — v18.10.slate
+  Ziel:
+    - Exakte Graupalette lt. Vorgabe
+    - Tabs: aktiv hellgrau, inaktiv dunkelgrau
+    - Sanfte Ränder/Schattierungen
+    - Mobile-first, Fullscreen-fähig
 */
 
-.inspector{
-  position:fixed;
-  right:20px; bottom:92px;
-  width:520px; max-width:96vw; max-height:72vh;
-  display:none; z-index:2147483646;
+/* ===== Design Tokens (Slate) ============================================= */
+:root {
+  --ins-bg:          #121616;         /* Panel-Hintergrund */
+  --ins-bg-elev:     #0f1414;         /* Header/Foot-Leisten leicht dunkler */
+  --ins-border:      rgba(255,255,255,.08);
+  --ins-border-strong: rgba(255,255,255,.12);
+  --ins-shadow:      0 20px 60px rgba(0,0,0,.45), 0 2px 12px rgba(0,0,0,.35);
 
-  background:#171717;            /* Grundfläche dunkel */
-  border:1px solid #2f2f2f;      /* feine Kante */
-  border-radius:12px;
-  box-shadow:
-    0 16px 40px rgba(0,0,0,.55),
-    0 1px 0 rgba(255,255,255,.03) inset;
-  color:#e8e8e8;
-  font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  overflow:hidden;
-}
+  --ins-text:        rgba(240,245,243,.96);
+  --ins-text-dim:    rgba(240,245,243,.72);
+  --ins-text-mute:   rgba(240,245,243,.56);
 
-/* Kopfzeile */
-.insp-head{
-  display:flex; align-items:center; gap:12px;
-  padding:10px 12px;
-  background:linear-gradient(to bottom, #1e1e1e, #191919);
-  border-bottom:1px solid #2b2b2b;
-}
-.insp-head .title{
-  font-weight:700; letter-spacing:.2px;
-}
-.insp-head .ver{
-  margin-left:8px; font-weight:500; color:#9aa0a6; font-size:12px;
-}
-.insp-head .btn-close{
-  margin-left:auto;
-  background:#2b2b2b; color:#d9d9d9;
-  border:1px solid #3a3a3a; border-radius:8px;
-  padding:6px 10px; cursor:pointer;
-}
-.insp-head .btn-close:hover{ background:#323232; }
+  --tab-bg:          rgba(255,255,255,.08);   /* inaktiv */
+  --tab-text:        var(--ins-text-dim);
+  --tab-bg-active:   rgba(255,255,255,.18);   /* aktiv = heller */
+  --tab-text-active: var(--ins-text);
 
-/* Tabs */
-.insp-tabs{
-  display:flex; gap:6px; padding:8px 8px;
-  background:#1c1c1c; border-bottom:1px solid #2b2b2b;
-}
-.insp-tabs .tab{
-  background:#232323; color:#cfcfcf;
-  border:1px solid #343434; border-radius:999px;
-  padding:6px 10px; cursor:pointer; font-size:13px;
-}
-.insp-tabs .tab.active{
-  background:#3a3a3a; color:#fff; border-color:#4a4a4a;
-  box-shadow:0 1px 0 rgba(255,255,255,.04) inset;
+  --pill-radius:     16px;
+  --panel-radius:    14px;
+  --gap:             12px;
+
+  --btn-bg:          rgba(255,255,255,.12);
+  --btn-bg-hover:    rgba(255,255,255,.16);
+  --btn-bg-active:   rgba(255,255,255,.22);
+  --btn-text:        var(--ins-text);
+
+  --log-bg:          rgba(8,10,10,.85);
+  --log-border:      rgba(255,255,255,.10);
+
+  --badge-err:       #ff6b6b;
+  --badge-warn:      #ffd166;
+  --badge-info:      #76c7ff;
+  --badge-ok:        #86e29b;
 }
 
-/* Body */
-.insp-body{
-  background:#151515;
-  padding:10px; height:calc(72vh - 92px); /* grob, passt zu Gesamt-Höhe */
-  overflow:auto;
+/* ===== Root/Container ===================================================== */
+#inspector {
+  position: fixed;
+  inset: 24px; /* fullscreen mit Rand – mobilfreundlich */
+  z-index: 2147483646;
+  background: var(--ins-bg);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--ins-shadow);
+  display: none; /* wird per JS getoggelt */
 }
 
-/* Logs */
-.log-wrap{ display:flex; flex-direction:column; gap:8px; height:100%; }
-.log-area{
-  flex:1; min-height:160px;
-  background:#0f0f0f;
-  border:1px solid #2a2a2a; border-radius:8px;
-  padding:8px; overflow:auto; white-space:pre-wrap;
-  font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color:#d6d6d6;
-}
-.log-toolbar{ display:flex; gap:8px; justify-content:flex-start; }
-.log-toolbar .btn{
-  background:#2b2b2b; color:#ddd; border:1px solid #3a3a3a;
-  border-radius:8px; padding:6px 10px; cursor:pointer;
-}
-.log-toolbar .btn:hover{ background:#323232; }
+#inspector.open { display: block; }
+#inspector * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* Platzhalter für leere Tabs */
-.placeholder{
-  opacity:.7; font-style:italic; padding:6px 2px;
+/* ===== Header ============================================================= */
+#ins-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--gap);
+  padding: 14px 16px 10px;
+  background: var(--ins-bg-elev);
+  border-bottom: 1px solid var(--ins-border);
+  border-radius: var(--panel-radius) var(--panel-radius) 0 0;
 }
 
-/* Mobile Anpassungen */
-@media (max-width: 560px){
-  .inspector{ right:10px; left:10px; width:auto; }
+#ins-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: var(--ins-text);
+}
+
+#ins-close {
+  border: 1px solid var(--ins-border-strong);
+  background: var(--tab-bg);
+  color: var(--ins-text);
+  border-radius: var(--pill-radius);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+#ins-close:hover { background: var(--btn-bg-hover); }
+
+/* ===== Tabs-Leiste ======================================================== */
+#ins-tabs {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 10px 16px 6px;
+  background: var(--ins-bg-elev);
+  border-bottom: 1px solid var(--ins-border);
+}
+
+.ins-tab {
+  border: 1px solid var(--ins-border-strong);
+  background: var(--tab-bg);
+  color: var(--tab-text);
+  border-radius: var(--pill-radius);
+  padding: 8px 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.ins-tab:hover { background: var(--btn-bg-hover); color: var(--ins-text); }
+.ins-tab.active {
+  background: var(--tab-bg-active);
+  color: var(--tab-text-active);
+}
+
+/* ===== Body =============================================================== */
+#ins-body {
+  padding: 14px 16px 12px;
+  height: calc(100% - 142px); /* Header + Tabs + Footer */
+  overflow: auto;
+}
+#ins-body::-webkit-scrollbar { height: 8px; width: 8px; }
+#ins-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 10px; }
+
+/* ===== Logkonsole ========================================================= */
+.ins-logbox {
+  background: var(--log-bg);
+  border: 1px solid var(--log-border);
+  border-radius: 10px;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--ins-text);
+  min-height: 240px;
+}
+
+/* Level-Badges im Text (wenn mit gerendert) */
+.badge { display:inline-block; padding:.1em .55em; border-radius:999px; font-size:.85em; margin-right:.35em; }
+.badge.err  { background: color-mix(in srgb, var(--badge-err) 22%, transparent); color: var(--badge-err); }
+.badge.warn { background: color-mix(in srgb, var(--badge-warn) 22%, transparent); color: #f6ce3a; }
+.badge.info { background: color-mix(in srgb, var(--badge-info) 22%, transparent); color: #a7daff; }
+.badge.ok   { background: color-mix(in srgb, var(--badge-ok) 22%,  transparent); color: #b6f1c2; }
+
+/* ===== Footer / Buttons =================================================== */
+#ins-foot {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px 14px;
+  background: var(--ins-bg-elev);
+  border-top: 1px solid var(--ins-border);
+  border-radius: 0 0 var(--panel-radius) var(--panel-radius);
+}
+
+.ins-btn {
+  border: 1px solid var(--ins-border-strong);
+  border-radius: var(--pill-radius);
+  padding: 8px 14px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  cursor: pointer;
+}
+.ins-btn:hover { background: var(--btn-bg-hover); }
+.ins-btn:active { background: var(--btn-bg-active); }
+
+/* ===== Mobile Tweaks ====================================================== */
+@media (max-width: 480px) {
+  #inspector { inset: 12px; }
+  #ins-title { font-size: 18px; }
+  .ins-logbox { font-size: 13px; }
 }
