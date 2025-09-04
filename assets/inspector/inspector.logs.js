@@ -156,3 +156,73 @@
   }
 
 })();
+// ---- inspector.logs.js: SAFE-INIT PATCH v1 ----
+(function(){
+  const log = (window.CBLog?.info || console.log);
+  const warn = (window.CBLog?.warn || console.warn);
+
+  // 1) UI-Ziele besorgen (an deine IDs/Klassen anpassen, falls nötig)
+  const pre = document.querySelector('.ins-logs pre, #ins-logs-pre, pre#inspector-logs');
+  const box = pre?.parentElement || document.querySelector('.ins-logs');
+
+  if(!pre){
+    warn('[inspector.logs.safe] Log <pre> nicht gefunden – bitte IDs/Klassen prüfen.');
+    return;
+  }
+
+  // 2) Sanfter Buffer-Reader (Polyfill/Console-Proxy)
+  function getBuffer(){
+    // Prioritäten: CBLog API → globaler Buffer → unser Not-Fallback
+    if (window.CBLog?.getBuffer) return window.CBLog.getBuffer();
+    if (Array.isArray(window.__cb_log_buffer)) return window.__cb_log_buffer;
+    return []; // leer statt Fehler
+  }
+
+  // 3) Einmalige Initialanzeige
+  function renderAll(){
+    const buf = getBuffer();
+    pre.textContent = (buf.length ? buf.join('\n') : '[Noch keine Logs …]');
+  }
+
+  // 4) Live-Subscribe (wenn vorhanden)
+  let unsub = null;
+  function ensureLive(){
+    try{
+      if (window.CBLog?.LogStream?.subscribe){
+        // remove previous subscription to avoid duplicates
+        if (typeof unsub === 'function'){ try{unsub();}catch{}; unsub=null; }
+        unsub = window.CBLog.LogStream.subscribe((line)=>{
+          // Append effizient
+          pre.textContent += (pre.textContent ? '\n' : '') + line;
+          // optional autoscroll:
+          pre.parentElement && (pre.parentElement.scrollTop = pre.parentElement.scrollHeight);
+        });
+      }
+    }catch(e){
+      warn('[inspector.logs.safe] subscribe fehlgeschlagen:', e);
+    }
+  }
+
+  // 5) Stream wirklich starten (idempotent)
+  function ensureStarted(){
+    try{
+      if (window.CBLog?.LogStream?.start) window.CBLog.LogStream.start();
+    }catch(e){
+      warn('[inspector.logs.safe] start() fehlgeschlagen:', e);
+    }
+  }
+
+  // 6) Bei Öffnen des Inspectors bitte neu initialisieren
+  window.addEventListener('cb:inspector-open', ()=>{
+    ensureStarted();
+    renderAll();
+    ensureLive();
+  });
+
+  // 7) Sofort (für den Fall, dass schon offen)
+  ensureStarted();
+  renderAll();
+  ensureLive();
+
+  log('[inspector.logs.safe] Patch aktiv – Stream gesichert.');
+})();
