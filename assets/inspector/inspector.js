@@ -1,19 +1,20 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
  * Projekt: Siedler-Mini — Inspector (Fullscreen)
- * Version: v18.10.1
+ * Version: v18.10.2
  *
  * Ziele:
  *  - Vollbild-Overlay (mobile/desktop), Header & Tabs sticky, Footer fix
  *  - Stabile Logs (persistenter Puffer in window.__cb._logBuf)
  *  - Tabs: Übersicht · Logs · Build (BUILD_CATEGORIES) · Pfade · Tests
  *  - Keine Log-Löschung beim Tabwechsel
+ *  - Optional: „Prettifier“ für bekannte Log-Zeilen (lesbarere Texte)
  *  - Öffnen/Schließen via window.GameUI.toggleInspector/openInspector/closeInspector
  *  - Events: cb:inspector:open/close, cb:build-select, cb:paths:toggle/reset
  * ========================================================================== */
 
 (function () {
-  const VERSION = "v18.10.1";
+  const VERSION = "v18.10.2";
 
   // -- Logging helpers --------------------------------------------------------
   const CB = (window.__cb = window.__cb || {});
@@ -25,7 +26,7 @@
     if (over > 0) CB._logBuf.splice(0, over);
   }
 
-  // Fallback-Konsole, falls kein CBLog vorhanden ist
+  // Fallback-Konsole (falls kein CBLog vorhanden)
   if (!window.CBLog) {
     window.CBLog = {
       log  : (...a) => { CB._logBuf.push({ts:new Date(),level:"LOG" ,text:a.map(String).join(" ")}); trimBuf(); console.log (...a); },
@@ -64,7 +65,7 @@
       "pointer-events:auto",
     ].join(";");
 
-    // Panel: nimmt den *ganzen* Viewport ein (Padding = Safe-Areas + 8px)
+    // Panel: nimmt den ganzen Viewport ein
     panel = document.createElement("div");
     panel.style.cssText = [
       "position:absolute",
@@ -108,11 +109,11 @@
       "border-bottom:1px solid rgba(255,255,255,.06)"
     ].join(";");
 
-    // Body (flex:1, scrollt)
+    // Body (scrollt)
     bodyEl = document.createElement("div");
     bodyEl.style.cssText = "flex:1; overflow:auto; padding:12px; min-height:0";
 
-    // Footer (sticky bottom innerhalb Panels)
+    // Footer (Buttons nur im Log-Tab sichtbar)
     footerEl = document.createElement("div");
     footerEl.style.cssText = [
       "position:sticky","bottom:0","z-index:2",
@@ -122,10 +123,9 @@
       "border-top:1px solid rgba(255,255,255,.06)"
     ].join(";");
 
-    // Footer Buttons (werden im Log-Tab eingeblendet)
     const btnCopy   = button("Kopieren", () => {
       try {
-        const txt = formatBuffer(currentBuffer());
+        const txt = formatBuffer(currentBuffer(), true); // true = prettified
         navigator.clipboard.writeText(txt);
         info("[inspector.core] Logs kopiert");
       } catch (e) { warn("Clipboard fehlgeschlagen:", e?.message); }
@@ -185,12 +185,37 @@
   }
 
   const pad2 = (n)=>String(n).padStart(2,"0");
-  function formatBuffer(arr){
+
+  // Pretty-Mapping für bekannte Meldungen
+  function labelForBuild(id) {
+    try {
+      const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES)) ? window.BUILD_CATEGORIES : [];
+      for (const c of cats) for (const it of (c.items||[])) if (it.id === id) return it.label || id;
+    } catch {}
+    return id;
+  }
+  function prettify(text) {
+    // [ui] Build-Select <id>
+    let m = text.match(/\[ui\]\s+Build-Select\s+(\w[\w-]*)/i);
+    if (m) return `[Build] Auswahl: ${labelForBuild(m[1])} (${m[1]})`;
+
+    // [ui-start] Start → <map>
+    m = text.match(/\[ui-start\].*Start\s*[→=>]\s*(.+)$/i);
+    if (m) return `[Start] Map geladen: ${m[1]}`;
+
+    // [bootstrap] bereits gestartet
+    if (/bootstrap\].*bereits gestartet/i.test(text)) return "[Bootstrap] Bereits aktiv (kein erneuter Start)";
+
+    return text; // sonst unverändert
+  }
+
+  function formatBuffer(arr, pretty=false){
     return (arr||[]).map(it=>{
       const d = it.ts instanceof Date ? it.ts : new Date(it.ts);
       const ts = `[${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}]`;
       const lv = (it.level||"LOG").toUpperCase().padEnd(4," ");
-      return `${ts} ${lv} ${it.text}`;
+      const line = pretty ? prettify(it.text) : it.text;
+      return `${ts} ${lv} ${line}`;
     }).join("\n");
   }
 
@@ -266,7 +291,7 @@
     ].join(";");
 
     const buf = currentBuffer();
-    preLog.textContent = buf.length ? formatBuffer(buf) : "[Keine Log-Einträge vorhanden]";
+    preLog.textContent = buf.length ? formatBuffer(buf, /*pretty*/true) : "[Keine Log-Einträge vorhanden]";
     bodyEl.appendChild(preLog);
   }
 
@@ -313,7 +338,7 @@
           btn.addEventListener("click", ()=>{
             const detail = { type: it.id };
             try { window.dispatchEvent(new CustomEvent("cb:build-select", { detail })); } catch {}
-            try { (window.CBLog?.log||console.log)("[ui] Build-Select", it.id); } catch {}
+            try { (window.CBLog?.log||console.log)(`[ui] Build-Select ${it.id}`); } catch {}
           });
         }
         row.appendChild(btn);
