@@ -1,110 +1,56 @@
-/* =========================================================================
-   assets/inspector/inspector.logfix.js — v1.0.0
-   Zweck: Stabilisiert die Log-Anzeige im Inspector:
-          - Puffer sofort anzeigen
-          - Live-Stream anhängen
-          - Bei Tab-Wechsel erneut synchronisieren
-   ========================================================================= */
+/* ============================================================================
+   assets/inspector/inspector.logfix.js — v1.2.0
+   Zweck:
+   - Wenn CBLog (noch) nicht verfügbar ist, bauen wir eine sehr kleine
+     Proxy-Pipeline auf console.* auf und stellen:
+       - window.__CBLOG_PIPE__.buf  (Array<String>)
+       - Events 'cb:log' / 'cb:log-flush'
+   - Sobald CBLog später auftaucht, stören wir es nicht.
+   ============================================================================ */
+
 (function(){
-  const W = window;
-  const wait = (sel, t=8000)=>new Promise((resolve,reject)=>{
-    const t0 = performance.now();
-    (function loop(){
-      const el = document.querySelector(sel);
-      if (el) return resolve(el);
-      if (performance.now()-t0 > t) return reject(new Error('timeout '+sel));
-      requestAnimationFrame(loop);
-    })();
-  });
+  "use strict";
+  if (window.__CBLOG_PIPE__) return; // schon aktiv
 
-  function renderBuffer(into) {
-    try {
-      const buf = (W.CBLog?.getBuffer?.() || []);
-      into.textContent = buf.length ? buf.join('\n') : '[Keine Log-Einträge vorhanden]';
-    } catch (e) {
-      into.textContent = '[Log konnte nicht gelesen werden]';
-    }
-  }
+  const BUF_MAX = 2000;
+  const pipe = { buf: [] };
+  window.__CBLOG_PIPE__ = pipe;
 
-  function armLiveStream(into) {
-    if (!W.CBLog?.on) return;
-    // Doppelte Listener vermeiden
-    if (into.__live_armed__) return;
-    into.__live_armed__ = true;
+  const orig = {
+    log: console.log, info: console.info, warn: console.warn, error: console.error
+  };
 
-    const onLine = (line)=>{
-      try {
-        // performant anhängen
-        into.textContent += (into.textContent ? '\n' : '') + line;
-        // Scrollen, falls der Nutzer unten ist
-        if (into.parentElement && into.parentElement.scrollTop + into.parentElement.clientHeight >= into.parentElement.scrollHeight - 8) {
-          into.parentElement.scrollTop = into.parentElement.scrollHeight;
-        }
-      } catch {}
-    };
-    into.__cblog_listener__ = onLine;
-    W.CBLog.on(onLine);
-  }
-
-  function disarmLiveStream(into){
-    if (into?.__cblog_listener__ && window.CBLog?.off){
-      window.CBLog.off(into.__cblog_listener__);
-      into.__cblog_listener__ = null;
-      into.__live_armed__ = false;
-    }
-  }
-
-  // Sobald die Inspector-UI existiert, Logs initial füllen + streamen
-  function syncLogsOnce(root){
+  function push(kind, args){
     try{
-      const pane = root.querySelector?.('#insp-logs-pane .insp-logview') || root.querySelector?.('.insp-logview');
-      if (!pane) return;
-      renderBuffer(pane);
-      armLiveStream(pane);
-    }catch{}
+      const time = new Date();
+      const stamp = `[${String(time.getHours()).padStart(2,"0")}:${String(time.getMinutes()).padStart(2,"0")}:${String(time.getSeconds()).padStart(2,"0")}]`;
+      const line = `${stamp} ${String(kind).toUpperCase()}  ${args.map(safe).join(" ")}`;
+      pipe.buf.push(line);
+      if (pipe.buf.length > BUF_MAX) pipe.buf.splice(0, pipe.buf.length - BUF_MAX);
+      window.dispatchEvent(new CustomEvent("cb:log", { detail: { line } }));
+    }catch(_){}
   }
 
-  // Öffnen/Schließen des Inspectors abfangen, falls GameUI vorhanden
-  (function hookGameUI(){
-    const GUI = W.GameUI = W.GameUI || {};
-    const origOpen   = GUI.openInspector;
-    const origToggle = GUI.toggleInspector;
-
-    GUI.openInspector = function(){
-      try { origOpen?.apply(this, arguments); } catch {}
-      // leicht verzögert sicherstellen, dass DOM da ist
-      setTimeout(()=>wait('#inspector').then(syncLogsOnce).catch(()=>{}), 50);
-    };
-    GUI.toggleInspector = function(){
-      try { origToggle?.apply(this, arguments); } catch {}
-      setTimeout(()=>wait('#inspector').then(syncLogsOnce).catch(()=>{}), 50);
-    };
-  })();
-
-  // Falls der Inspector bereits offen ist (Startseite), sofort synchronisieren
-  document.addEventListener('DOMContentLoaded', ()=>{
-    const root = document.querySelector('#inspector');
-    if (root) setTimeout(()=>syncLogsOnce(root), 0);
-  });
-
-  // Tab-Wechsel im Inspector beobachten (delegiert)
-  document.addEventListener('click', (ev)=>{
-    const btn = ev.target.closest?.('[data-insp-tab]');
-    if (!btn) return;
-    const tab = btn.getAttribute('data-insp-tab');
-    const root = document.querySelector('#inspector');
-    if (!root) return;
-
-    const pane = root.querySelector('#insp-logs-pane .insp-logview');
-    if (!pane) return;
-
-    if (tab === 'logs'){
-      // Beim Wechsel auf „Logs“: erneut Puffer laden + stream sicher
-      renderBuffer(pane);
-      armLiveStream(pane);
-    } else {
-      // Beim Wechsel weg: Stream abklemmen (spart CPU)
-      disarmLiveStream(pane);
+  function safe(v){
+    try{
+      if (typeof v === "string") return v;
+      if (v && typeof v.stack === "string") return v.stack;
+      return JSON.stringify(v);
+    }catch(_){
+      try{ return String(v); } catch(__){ return "[unserializable]"; }
     }
+  }
+
+  console.log  = function(...a){ push("log", a);  return orig.log.apply(console,  a); };
+  console.info = function(...a){ push("info", a); return orig.info.apply(console, a); };
+  console.warn = function(...a){ push("warn", a); return orig.warn.apply(console, a); };
+  console.error= function(...a){ push("error",a); return orig.error.apply(console,a); };
+
+  // Manuelles Flush (wird von UI benutzt)
+  window.addEventListener("cb:log-flush", ()=>{
+    pipe.buf.length = 0;
   });
+
+  // Kleines Lebenszeichen
+  orig.info.call(console, "[CBLog] Polyfill aktiv (Inspector-Fallback)");
 })();
