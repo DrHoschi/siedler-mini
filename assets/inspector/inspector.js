@@ -1,46 +1,34 @@
 /* ============================================================================
  *  assets/inspector/inspector.js
- *  Neue Siedler – Inspector (stabile Minimal-Core)
- *  Version: v18.8.3
- *  CODE_STYLE:
- *    - Keine externen Abhängigkeiten (CBLog optional; eigener Fallback)
- *    - Idempotent (Guard gegen Doppel-Init; sauberer Toggle)
- *    - Tabs: Übersicht | Logs | Build | Pfade | Tests
+ *  Neue Siedler – Inspector (stabil + Tabs)
+ *  Version: v18.9.0
+ *  CODE_STYLE
+ *    - Keine externen Abhängigkeiten; nutzt CBLog wenn vorhanden, sonst Polyfill
+ *    - Idempotent (Guard gegen Doppel-Init)
+ *    - Tabs: Übersicht | Logs | Build | Pfade | Tests (Tests nur Platzhalter)
  *    - Öffnen via window.GameUI.toggleInspector()
  *    - Auto-Open NUR via ?inspector=1 oder Event 'cb:inspector-open'
- *    - Neu: „Kopieren“-Button (Logs in Zwischenablage)
+ *    - Logs: Puffer + Live-Stream, Leerzeilen gefiltert, Kopieren/Leeren/Aktualisieren
+ *    - Änderungen sind rückwärtskompatibel – nichts, was bereits lief, wird gebrochen
  * ========================================================================== */
 (function () {
   "use strict";
 
-  // --- Guard gegen Doppel-Init -----------------------------------------------
+  // ---- Doppel-Init verhindern -----------------------------------------------
   if (window.__INSPECTOR_CORE_READY__) return;
   window.__INSPECTOR_CORE_READY__ = true;
 
-  const VERSION = "v18.8.3";
+  const VERSION = "v18.9.0";
   const NS = "[inspector.core]";
 
-  // --- Helpers ----------------------------------------------------------------
+  // ---- Helpers ---------------------------------------------------------------
   const $ = (sel, root = document) => root.querySelector(sel);
-  const el = (tag, cls, html) => {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (html != null) n.innerHTML = html;
-    return n;
-  };
-  const toStr = (v) => {
-    if (v == null) return "";
-    if (typeof v === "string") return v;
-    try { return JSON.stringify(v); } catch { return String(v); }
-  };
+  const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html!=null) n.innerHTML = html; return n; };
   const pad2 = (n) => (n < 10 ? "0" + n : "" + n);
-  const tsFmt = (t) => {
-    const d = new Date(t || Date.now());
-    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  };
+  const tsFmt = (t) => { const d = new Date(t || Date.now()); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
+  const toStr = (v) => { if (v == null) return ""; if (typeof v === "string") return v; try { return JSON.stringify(v); } catch { return String(v); } };
 
-  // --- CBLog-Brücke / Fallback ------------------------------------------------
-  // Nutzt vorhandenes CBLog, sonst minimalen Shim (inkl. Console-Proxy).
+  // ---- CBLog-Brücke (oder Polyfill) -----------------------------------------
   const CB = (function ensureCBLog() {
     if (window.CBLog && typeof window.CBLog.on === "function") return window.CBLog;
 
@@ -48,136 +36,115 @@
     const subs = new Set();
     const push = (level, args, tag) => {
       const arr = Array.from(args || []);
-      // Nur loggen, wenn wirklich Inhalt vorhanden ist
-      if (!arr.length) return;
+      if (!arr.length) return;                      // keine leeren Logzeilen
       const entry = { ts: Date.now(), level, tag, args: arr };
       buf.push(entry);
-      subs.forEach((fn) => { try { fn(entry); } catch {} });
+      subs.forEach(fn => { try { fn(entry); } catch {} });
     };
 
-    // Console-Proxy nur einmal patchen
     if (!window.__CBLOG_CONSOLE_PATCHED__) {
       window.__CBLOG_CONSOLE_PATCHED__ = true;
-      ["log", "info", "warn", "error"].forEach((m) => {
+      ["log","info","warn","error"].forEach(m=>{
         const orig = console[m].bind(console);
-        console[m] = function () {
-          try { push(m.toUpperCase(), arguments, "console"); } catch {}
-          orig.apply(console, arguments);
-        };
+        console[m] = function(){ try { push(m.toUpperCase(), arguments, "console"); } catch {} ; orig.apply(console, arguments); };
       });
       try { console.info("[CBLog] Polyfill aktiv"); } catch {}
     }
 
     return {
-      info:  function () { push("INFO",  arguments); },
-      log:   function () { push("LOG",   arguments); },
-      warn:  function () { push("WARN",  arguments); },
-      error: function () { push("ERROR", arguments); },
-      on:    function (fn){ subs.add(fn); },
-      off:   function (fn){ subs.delete(fn); },
-      getBuffer: function () { return buf.slice(); },
+      info:  function(){ push("INFO",  arguments); },
+      log:   function(){ push("LOG",   arguments); },
+      warn:  function(){ push("WARN",  arguments); },
+      error: function(){ push("ERROR", arguments); },
+      on:    function(fn){ subs.add(fn); },
+      off:   function(fn){ subs.delete(fn); },
+      getBuffer(){ return buf.slice(); }
     };
   })();
 
   try { CB.info(`${NS} bereit (${VERSION})`); } catch {}
 
-  // --- Log-Normalisierung -----------------------------------------------------
-  function formatEntry(e) {
-    try {
-      // Strings direkt anzeigen (sofern nicht leer)
+  // ---- Log-Normalisierung ----------------------------------------------------
+  function formatEntry(e){
+    try{
       if (typeof e === "string") return e.trim() ? e : "";
-
-      // Arrayform: [ts, lvl, tag?, ...args]
-      if (Array.isArray(e)) {
-        const [ts, lvl, tg, ...rest] = e;
+      if (Array.isArray(e)){
+        const [ts,lvl,tag,...rest] = e;
         const msg = rest.map(toStr).join(" ").trim();
         if (!msg) return "";
-        return `[${tsFmt(ts)}] ${(lvl || "LOG").toString().toUpperCase()}${tg ? " ["+tg+"]" : ""} ${msg}`;
+        return `[${tsFmt(ts)}] ${(lvl||"LOG").toString().toUpperCase()}${tag ? " ["+tag+"]" : ""} ${msg}`;
       }
-
-      // Objektform
       const t   = e.ts || e.time || Date.now();
       const lvl = (e.level || e.lvl || e.type || "LOG").toString().toUpperCase();
       const tag = e.tag || e.scope || "";
       let payload = "";
-
       if (Array.isArray(e.args)) payload = e.args.map(toStr).join(" ");
-      else if (e.message != null) payload = toStr(e.message);
-      else if (e.text    != null) payload = toStr(e.text);
-      else if (e.msg     != null) payload = toStr(e.msg);
-
-      payload = (payload || "").trim();
-      if (!payload && !tag) return ""; // leere Zeilen unterdrücken
-
+      else if (e.message!=null)  payload = toStr(e.message);
+      else if (e.text!=null)     payload = toStr(e.text);
+      else if (e.msg!=null)      payload = toStr(e.msg);
+      payload = payload.trim();
+      if (!payload && !tag) return "";
       return `[${tsFmt(t)}] ${lvl}${tag ? " ["+tag+"]" : ""} ${payload}`.trim();
-    } catch {
-      return ""; // konservativ
-    }
+    }catch{ return ""; }
   }
 
-  // --- UI (lazy build) --------------------------------------------------------
-  let root, tabsEl, bodyEl, txtArea, footerEl;
+  // ---- UI (lazy) -------------------------------------------------------------
+  let root, tabsEl, bodyEl, footerEl, preLog;
   let currentTab = "logs";
 
-  function buildUI() {
+  function buildUI(){
     if (root) return;
 
-    root = el("div", "inspector");
+    // Shell
+    root = el("div","inspector");
     root.id = "inspector";
     root.setAttribute("role","dialog");
-    root.setAttribute("aria-label","Inspector");
     root.style.cssText =
-      "position:fixed; inset:auto 2.5vw 8vh 2.5vw; max-width:980px; margin:0 auto;"+
-      "background:rgba(20,20,20,.94); border:1px solid rgba(255,255,255,.08);"+
-      "border-radius:12px; color:#eee; z-index:2147483646; box-shadow:0 40px 120px rgba(0,0,0,.55);";
+      "position:fixed;left:2.5vw;right:2.5vw;bottom:8vh;max-width:980px;margin:0 auto;"+
+      "background:rgba(20,20,20,.94);border:1px solid rgba(255,255,255,.08);border-radius:12px;"+
+      "color:#eee;z-index:2147483646;box-shadow:0 40px 120px rgba(0,0,0,.55)";
 
     // Header
     const head = el("div","insp-head");
-    head.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px 8px;";
+    head.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px 8px";
     head.appendChild(el("div","insp-title", `<strong>Inspector</strong><span style="opacity:.55;margin-left:8px">${VERSION}</span>`));
-    const spacer = el("div"); spacer.style.flex = "1"; head.appendChild(spacer);
+    const spacer = el("div"); spacer.style.flex="1"; head.appendChild(spacer);
     const btnClose = el("button","insp-close","Schließen");
-    btnClose.style.cssText = "border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;";
+    btnClose.style.cssText="border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
     btnClose.addEventListener("click", close);
     head.appendChild(btnClose);
     root.appendChild(head);
 
     // Tabs
     tabsEl = el("div","insp-tabs");
-    tabsEl.style.cssText = "display:flex;gap:8px;padding:0 12px 10px;";
-    [["overview","Übersicht"],["logs","Logs"],["build","Build"],["paths","Pfade"],["tests","Tests"]]
-      .forEach(([id,label])=>{
-        const b = el("button","insp-tab",label);
-        b.dataset.tab = id;
-        b.style.cssText = "border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer;";
-        b.addEventListener("click",()=>switchTab(id));
-        tabsEl.appendChild(b);
-      });
+    tabsEl.style.cssText = "display:flex;gap:8px;padding:0 12px 10px";
+    [["overview","Übersicht"],["logs","Logs"],["build","Build"],["paths","Pfade"],["tests","Tests"]].forEach(([id,label])=>{
+      const b = el("button","insp-tab",label);
+      b.dataset.tab = id;
+      b.style.cssText = "border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer";
+      b.addEventListener("click",()=>switchTab(id));
+      tabsEl.appendChild(b);
+    });
     root.appendChild(tabsEl);
 
     // Body
     bodyEl = el("div","insp-body");
-    bodyEl.style.cssText = "padding:0 12px 12px;";
+    bodyEl.style.cssText = "padding:0 12px 12px";
 
-    const box = el("div","insp-logbox");
-    box.style.cssText = "background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;";
-    txtArea = el("pre","insp-pre");
-    txtArea.style.cssText = "margin:0;padding:12px;white-space:pre-wrap;font:13px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#dfe8f0;min-height:200px;max-height:48vh;overflow:auto;";
-    box.appendChild(txtArea);
+    // Log-Box (auch als generische Box für Info-Texte genutzt)
+    const box = el("div","insp-box");
+    box.style.cssText="background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden";
+    preLog = el("pre","insp-pre");
+    preLog.style.cssText="margin:0;padding:12px;white-space:pre-wrap;font:13px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#dfe8f0;min-height:200px;max-height:48vh;overflow:auto";
+    box.appendChild(preLog);
     bodyEl.appendChild(box);
 
-    // Footer (mit Kopieren)
+    // Footer
     footerEl = el("div","insp-foot");
-    footerEl.style.cssText = "display:flex;gap:8px;padding:10px 12px 12px;";
-    const btnCopy = el("button","insp-btn","Kopieren");
-    const btnClear = el("button","insp-btn","Leeren");
-    const btnRefresh = el("button","insp-btn","Aktualisieren");
-    [btnCopy, btnClear, btnRefresh].forEach(b=>{
-      b.style.cssText = "border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;";
-    });
-    btnCopy.addEventListener("click", copyLogs);
-    btnClear.addEventListener("click",()=>{ txtArea.textContent = ""; });
-    btnRefresh.addEventListener("click", refreshLogs);
+    footerEl.style.cssText = "display:flex;gap:8px;padding:10px 12px 12px";
+    const btnCopy     = mkBtn("Kopieren", copyLogs);
+    const btnClear    = mkBtn("Leeren",   ()=>{ preLog.textContent=""; });
+    const btnRefresh  = mkBtn("Aktualisieren", refreshLogs);
     footerEl.append(btnCopy, btnClear, btnRefresh);
     bodyEl.appendChild(footerEl);
 
@@ -185,6 +152,13 @@
     document.body.appendChild(root);
 
     switchTab(currentTab);
+  }
+
+  function mkBtn(label, fn){
+    const b = el("button","insp-btn",label);
+    b.style.cssText="border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
+    b.addEventListener("click", fn);
+    return b;
   }
 
   function switchTab(id){
@@ -195,76 +169,131 @@
       b.style.color      = active ? "#e9f6ec"           : "#ddd";
     });
 
+    footerEl.style.display = (id === "logs") ? "" : "none";
+
     if (id === "logs") {
-      footerEl.style.display = "";
       refreshLogs();
+    } else if (id === "overview") {
+      renderOverview();
+    } else if (id === "build") {
+      renderBuild();
+    } else if (id === "paths") {
+      renderPaths();
+    } else if (id === "tests") {
+      preLog.textContent = "[Tests: Platzhalter – folgt]";
     } else {
-      footerEl.style.display = "none";
-      if (id === "overview")      txtArea.textContent = "[Übersicht kommt …]";
-      else if (id === "build")    txtArea.textContent = "[Build-Werkzeuge folgen …]";
-      else if (id === "paths")    txtArea.textContent = "[Pfade-Overlay & Stats folgen …]";
-      else if (id === "tests")    txtArea.textContent = "[Mini-Tests folgen …]";
-      else                        txtArea.textContent = "";
+      preLog.textContent = "";
     }
   }
 
-  // --- Log-Stream -------------------------------------------------------------
+  // ---- Logs ------------------------------------------------------------------
   let streamOn = false;
   function startStream(){
     if (streamOn) return;
     streamOn = true;
-    refreshLogs();                           // Vergangenheit laden
-    if (CB && typeof CB.on === "function") { // Live mithören
-      CB.on(onLogEntry);
-    }
+    refreshLogs();
+    if (CB && typeof CB.on === "function") CB.on(onLogEntry);
   }
   function onLogEntry(e){
-    if (!txtArea || currentTab !== "logs") return;
+    if (!preLog || currentTab !== "logs") return;
     const line = formatEntry(e);
-    if (!line) return;                       // Leere Zeilen raus
-    txtArea.textContent += (txtArea.textContent ? "\n" : "") + line;
-    txtArea.scrollTop = txtArea.scrollHeight;
+    if (!line) return;
+    preLog.textContent += (preLog.textContent ? "\n" : "") + line;
+    preLog.scrollTop = preLog.scrollHeight;
   }
   function refreshLogs(){
     try {
-      const buf =
-        (CB && typeof CB.getBuffer === "function" && CB.getBuffer()) ||
-        window.__CBLOG_BUF ||
-        [];
+      const buf = (CB && CB.getBuffer && CB.getBuffer()) || window.__CBLOG_BUF || [];
       const lines = buf.map(formatEntry).filter(Boolean);
-      txtArea.textContent = lines.length ? lines.join("\n") : "[Keine Log-Einträge vorhanden]";
-      txtArea.scrollTop = txtArea.scrollHeight;
+      preLog.textContent = lines.length ? lines.join("\n") : "[Keine Log-Einträge vorhanden]";
+      preLog.scrollTop = preLog.scrollHeight;
     } catch (e) {
-      txtArea.textContent = "[Log konnte nicht gelesen werden]";
+      preLog.textContent = "[Log konnte nicht gelesen werden]";
       try { console.warn(NS, "refreshLogs failed:", e); } catch {}
     }
   }
-
-  // --- Kopieren ---------------------------------------------------------------
   async function copyLogs(){
-    try {
-      const text = txtArea?.textContent || "";
+    try{
+      const text = preLog?.textContent || "";
       if (!text) return toast("Kein Log vorhanden");
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-        document.body.appendChild(ta); ta.select();
-        document.execCommand("copy"); document.body.removeChild(ta);
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const ta = document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+        document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
       }
       toast("Logs kopiert");
-    } catch (e) {
+    }catch(e){
       toast("Kopieren fehlgeschlagen");
       try { console.warn(NS, "copyLogs failed:", e); } catch {}
     }
   }
 
+  // ---- Übersicht -------------------------------------------------------------
+  let fpsAvg = 0, fpsSamples = [];
+  (function trackFPS(){
+    let last = performance.now();
+    function tick(t){
+      const dt = Math.max(1, t-last); last = t;
+      const fps = 1000/dt;
+      fpsSamples.push(fps); if (fpsSamples.length>30) fpsSamples.shift();
+      fpsAvg = Math.round(fpsSamples.reduce((a,b)=>a+b,0)/fpsSamples.length);
+      requestAnimationFrame(tick);
+    }
+    try { requestAnimationFrame(tick); } catch {}
+  })();
+
+  function renderOverview(){
+    try{
+      const canvas = $("#game");
+      const size = canvas ? `${canvas.width||canvas.clientWidth||0}×${canvas.height||canvas.clientHeight||0}` : "–";
+      const map   = canvas?.dataset?.map || window.__cb?.mapName || "unbekannt";
+      const zoom  = (window.__cb?.camera?.zoom != null) ? window.__cb.camera.zoom.toFixed(2) : "–";
+      const runtime = (performance.now()/1000).toFixed(1) + "s";
+
+      preLog.textContent =
+        `Runtime: ${runtime}\n`+
+        `FPS (glatt): ${fpsAvg||"–"}\n`+
+        `Canvas: ${size}\n`+
+        `Map: ${map}\n`+
+        `Zoom: ${zoom}\n`+
+        `[Übersicht wird später erweitert]`;
+    }catch(e){
+      preLog.textContent = "[Übersicht nicht verfügbar]";
+    }
+  }
+
+  // ---- Build-Tab -------------------------------------------------------------
+  function renderBuild(){
+    // Minimal: zeigt aktuellen Build-Status und bietet Beispiel-Aktionen.
+    const tool = (window.__cb?.buildTool) || "(kein Tool)";
+    preLog.textContent =
+      `Aktives Build-Tool: ${tool}\n\n`+
+      `Aktionen:\n`+
+      `• Haus auswählen → cb:build-select { type:'house' }\n`+
+      `• HQ auswählen   → cb:build-select { type:'hq' }\n\n`+
+      `Tipp: Die UI kann diese Events senden, der Core muss sie nur abfangen.`;
+
+    // kleine Click-Handler am Panel selbst (Buttons brauchen wir nicht - reine Textfläche),
+    // wer Buttons will, kann später echtes UI ergänzen.
+  }
+
+  // ---- Pfade-Tab -------------------------------------------------------------
+  function renderPaths(){
+    const enabled = !!window.__cb?.pathsEnabled;
+    preLog.textContent =
+      `Pfade-Overlay: ${enabled ? "AN" : "AUS"}\n\n`+
+      `Aktionen:\n`+
+      `• Overlay toggeln → Event 'cb:paths:toggle'\n`+
+      `• Heatmap reset  → Event 'cb:paths:reset'\n\n`+
+      `Hinweis: OverlayHooks in core/overlay-hooks.js lauscht auf diese Events.`;
+  }
+
+  // ---- Toast -----------------------------------------------------------------
   function toast(msg){
     try{
       let t = $("#insp-toast");
       if(!t){
-        t = el("div", "", "");
+        t = el("div","", "");
         t.id = "insp-toast";
         t.style.cssText = "position:fixed;left:50%;bottom:12vh;transform:translateX(-50%);"+
           "background:rgba(0,0,0,.78);color:#fff;padding:8px 12px;border-radius:10px;"+
@@ -272,43 +301,45 @@
           "z-index:2147483647;opacity:0;transition:opacity .15s ease";
         document.body.appendChild(t);
       }
-      t.textContent = msg;
-      t.style.opacity = "1";
+      t.textContent = msg; t.style.opacity = "1";
       setTimeout(()=>{ t.style.opacity="0"; }, 900);
     }catch{}
   }
 
-  // --- API (für FAB & andere UIs) --------------------------------------------
-  function open()  { buildUI(); root.style.display = "block"; startStream(); try{ CB.info(`${NS} geöffnet (${VERSION})`);}catch{} }
-  function close() { if (!root) return; root.style.display = "none"; }
-  function toggle(){ if (!root || root.style.display === "none" || !root.style.display) open(); else close(); }
+  // ---- Öffentliche API -------------------------------------------------------
+  function open(){ buildUI(); root.style.display="block"; startStream(); try{ CB.info(`${NS} geöffnet (${VERSION})`);}catch{} }
+  function close(){ if (!root) return; root.style.display="none"; }
+  function toggle(){ if (!root || root.style.display==="none" || !root.style.display) open(); else close(); }
 
-  // Öffentliche Bridge schonend setzen
   window.GameUI = window.GameUI || {};
   if (window.GameUI.toggleInspector !== toggle) window.GameUI.toggleInspector = toggle;
   window.GameUI.openInspector  = open;
   window.GameUI.closeInspector = close;
 
-  // --- Auto-Open nur auf Wunsch ----------------------------------------------
-  try {
-    if (/\binspector=1\b/.test(location.search)) {
-      setTimeout(open, 60); // minimaler Delay, bis <body> steht
-    }
+  // ---- Auto-Open nur auf Wunsch ---------------------------------------------
+  try{
+    if (/\binspector=1\b/.test(location.search)) setTimeout(open, 60);
     window.addEventListener("cb:inspector-open", open);
-  } catch {}
+  }catch{}
 
-  // --- Mini-Failsafe-Badge ----------------------------------------------------
+  // ---- Mini-Failsafe-Badge (nur wenn kein FAB vorhanden ist) -----------------
   (function ensureBadge(){
-    try {
+    try{
       if (document.getElementById("btn-inspector")) return;
       const b = el("button","", "🛠");
       b.title = "Inspector öffnen";
       b.style.cssText =
         "position:fixed;right:14px;bottom:14px;width:48px;height:48px;border:none;border-radius:50%;"+
-        "background:rgba(30,30,30,.92);color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.35);z-index:2147483647;cursor:pointer;";
+        "background:rgba(30,30,30,.92);color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.35);z-index:2147483647;cursor:pointer";
       b.addEventListener("click", toggle);
       document.addEventListener("DOMContentLoaded", ()=>document.body.appendChild(b));
-    } catch {}
+    }catch{}
   })();
 
+  // ---- Event-Brücken (für Build/Pfade) --------------------------------------
+  // Du kannst überall im Code diese CustomEvents dispatchen:
+  //   window.dispatchEvent(new CustomEvent('cb:build-select', { detail:{ type:'house' } }));
+  //   window.dispatchEvent(new CustomEvent('cb:paths:toggle'));
+  //   window.dispatchEvent(new CustomEvent('cb:paths:reset'));
+  // Der Inspector selbst sendet hier noch nichts automatisch – nur Doku.
 })();
