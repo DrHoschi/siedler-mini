@@ -1,193 +1,78 @@
 /*
-  assets/inspector/inspector.css — v18.10.slate
-  Ziel:
-    - Exakte Graupalette lt. Vorgabe
-    - Tabs: aktiv hellgrau, inaktiv dunkelgrau
-    - Sanfte Ränder/Schattierungen
-    - Mobile-first, Fullscreen-fähig
+  assets/inspector/inspector.css — v18.10.3
+  Stil: Dark, weiche Kanten, klares Grau-Spektrum
+  Hinweis: inspector.js bringt ein Inline-Fallback mit. Diese Datei
+           überschreibt/verschönert, wenn eingebunden.
 */
 
-/* ===== Design Tokens (Slate) ============================================= */
-:root {
-  --ins-bg:          #121616;         /* Panel-Hintergrund */
-  --ins-bg-elev:     #0f1414;         /* Header/Foot-Leisten leicht dunkler */
-  --ins-border:      rgba(255,255,255,.08);
-  --ins-border-strong: rgba(255,255,255,.12);
-  --ins-shadow:      0 20px 60px rgba(0,0,0,.45), 0 2px 12px rgba(0,0,0,.35);
-
-  --ins-text:        rgba(240,245,243,.96);
-  --ins-text-dim:    rgba(240,245,243,.72);
-  --ins-text-mute:   rgba(240,245,243,.56);
-
-  --tab-bg:          rgba(255,255,255,.08);   /* inaktiv */
-  --tab-text:        var(--ins-text-dim);
-  --tab-bg-active:   rgba(255,255,255,.18);   /* aktiv = heller */
-  --tab-text-active: var(--ins-text);
-
-  --pill-radius:     16px;
-  --panel-radius:    14px;
-  --gap:             12px;
-
-  --btn-bg:          rgba(255,255,255,.12);
-  --btn-bg-hover:    rgba(255,255,255,.16);
-  --btn-bg-active:   rgba(255,255,255,.22);
-  --btn-text:        var(--ins-text);
-
-  --log-bg:          rgba(8,10,10,.85);
-  --log-border:      rgba(255,255,255,.10);
-
-  --badge-err:       #ff6b6b;
-  --badge-warn:      #ffd166;
-  --badge-info:      #76c7ff;
-  --badge-ok:        #86e29b;
-}
-
-/* ===== Root/Container ===================================================== */
-#inspector {
+/* Container */
+#inspector{
   position: fixed;
-  inset: 24px; /* fullscreen mit Rand – mobilfreundlich */
+  inset: 6vh 2vw auto 2vw;
+  max-height: 86vh;
   z-index: 2147483646;
-  background: var(--ins-bg);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
-  border-radius: var(--panel-radius);
-  box-shadow: var(--ins-shadow);
-  display: none; /* wird per JS getoggelt */
+  display: none;
+  color: #ececec;
+  background: rgba(24,26,27,.96);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  box-shadow: 0 28px 80px rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+}
+#inspector.open{ display:block; }
+
+/* Kopf */
+#inspector .ins-head{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 16px 10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+#inspector .ins-title{ font-weight:800; letter-spacing:.2px; opacity:.95; }
+#inspector .ins-ver{ opacity:.55; font-weight:600; margin-left:.35rem; }
+#inspector .ins-close{
+  margin-left:auto;border:none;border-radius:12px;padding:8px 12px;
+  background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
 }
 
-#inspector.open { display: block; }
-#inspector * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-/* ===== Header ============================================================= */
-#ins-head {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: var(--gap);
-  padding: 14px 16px 10px;
-  background: var(--ins-bg-elev);
-  border-bottom: 1px solid var(--ins-border);
-  border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+/* Tabs */
+#inspector .ins-tabs{ display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px 0; }
+#inspector .ins-tab{
+  border:none;border-radius:999px;padding:6px 12px;
+  background:#2b2f31; color:#d7d7d7; cursor:pointer;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+#inspector .ins-tab.active{
+  background:#3a463b; color:#f2fff2;
+  box-shadow: inset 0 0 0 1px rgba(140,210,140,.35);
 }
 
-#ins-title {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: .2px;
-  color: var(--ins-text);
+/* Body & Footer */
+#inspector .ins-body{
+  padding:12px 16px 0;
+  overflow:auto; max-height:calc(86vh - 118px);
+}
+#inspector .ins-footer{
+  padding:10px 16px 14px; display:flex; gap:10px;
+  border-top:1px solid rgba(255,255,255,.06);
 }
 
-#ins-close {
-  border: 1px solid var(--ins-border-strong);
-  background: var(--tab-bg);
-  color: var(--ins-text);
-  border-radius: var(--pill-radius);
-  padding: 8px 12px;
-  cursor: pointer;
+/* Buttons */
+#inspector .ins-btn{
+  border:none;border-radius:12px;padding:8px 12px;
+  background:rgba(255,255,255,.12); color:#fff; cursor:pointer;
 }
-#ins-close:hover { background: var(--btn-bg-hover); }
+#inspector .ins-btn:focus{ outline:2px solid rgba(120,200,255,.6); outline-offset:2px; }
 
-/* ===== Tabs-Leiste ======================================================== */
-#ins-tabs {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  padding: 10px 16px 6px;
-  background: var(--ins-bg-elev);
-  border-bottom: 1px solid var(--ins-border);
+/* Logbereich */
+#inspector pre{
+  margin:0;padding:10px 12px;background:#0e0f10;
+  border:1px solid rgba(255,255,255,.08);border-radius:10px;
+  white-space:pre-wrap; word-break:break-word;
+  font:13.5px/1.48 ui-monospace,SFMono-Regular,Menlo,Monaco,"Roboto Mono",Consolas,"Liberation Mono","Courier New",monospace;
 }
 
-.ins-tab {
-  border: 1px solid var(--ins-border-strong);
-  background: var(--tab-bg);
-  color: var(--tab-text);
-  border-radius: var(--pill-radius);
-  padding: 8px 14px;
-  font-weight: 650;
-  cursor: pointer;
-}
-.ins-tab:hover { background: var(--btn-bg-hover); color: var(--ins-text); }
-.ins-tab.active {
-  background: var(--tab-bg-active);
-  color: var(--tab-text-active);
-}
-
-/* ===== Body =============================================================== */
-#ins-body {
-  padding: 14px 16px 12px;
-  height: calc(100% - 142px); /* Header + Tabs + Footer */
-  overflow: auto;
-}
-#ins-body::-webkit-scrollbar { height: 8px; width: 8px; }
-#ins-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 10px; }
-
-/* ===== Logtoolbar (Filter + Suche) ======================================= */
-.ins-logtools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.ins-pill {
-  border: 1px solid var(--ins-border-strong);
-  border-radius: var(--pill-radius);
-  padding: 6px 10px;
-  background: var(--tab-bg);
-  color: var(--tab-text);
-  cursor: pointer;
-  user-select: none;
-}
-.ins-pill.active { background: var(--tab-bg-active); color: var(--tab-text-active); }
-.ins-pill.badge-log  { }
-.ins-pill.badge-info { }
-.ins-pill.badge-warn { }
-.ins-pill.badge-err  { }
-.ins-search {
-  min-width: 140px;
-  flex: 1 1 180px;
-  padding: 8px 10px;
-  border: 1px solid var(--ins-border-strong);
-  border-radius: 10px;
-  background: rgba(255,255,255,.06);
-  color: var(--ins-text);
-}
-
-/* ===== Logkonsole ========================================================= */
-.ins-logbox {
-  background: var(--log-bg);
-  border: 1px solid var(--log-border);
-  border-radius: 10px;
-  padding: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 13.5px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  color: var(--ins-text);
-  min-height: 240px;
-}
-
-/* ===== Footer / Buttons =================================================== */
-#ins-foot {
-  display: flex; gap: 10px; flex-wrap: wrap;
-  padding: 10px 16px 14px;
-  background: var(--ins-bg-elev);
-  border-top: 1px solid var(--ins-border);
-  border-radius: 0 0 var(--panel-radius) var(--panel-radius);
-}
-
-.ins-btn {
-  border: 1px solid var(--ins-border-strong);
-  border-radius: var(--pill-radius);
-  padding: 8px 14px;
-  background: var(--btn-bg);
-  color: var(--btn-text);
-  cursor: pointer;
-}
-.ins-btn:hover { background: var(--btn-bg-hover); }
-.ins-btn:active { background: var(--btn-bg-active); }
-
-/* ===== Mobile Tweaks ====================================================== */
-@media (max-width: 480px) {
-  #inspector { inset: 12px; }
-  #ins-title { font-size: 18px; }
-  .ins-logbox { font-size: 13px; }
+/* Mobile: vollflächig */
+@media (max-width:780px){
+  #inspector{ inset:0; max-height:100vh; border-radius:0; }
+  #inspector .ins-body{ max-height:calc(100vh - 116px); }
 }
