@@ -1,64 +1,87 @@
-/* ============================================================================
- * Datei: assets/core/cblog.polyfill.js
- * Projekt: Siedler-Mini
- * Version: v1.1.0
- * Zweck:
- *   - Einheitliche Log-Sammelstelle (CBLog) bereitstellen
- *   - Optional: console.* an CBLog spiegeln (bindConsole=true)
- *   - Inspector-Refresh via 'cb:log-refresh'
- * ========================================================================== */
-(function(){
-  'use strict';
-  var MOD='[CBLog]';
+/* =========================================================================
+   assets/core/cblog.polyfill.js — v1.2.2
+   Zweck: Stabile Console→CBLog-Bridge mit Puffer + Events.
+   - Idempotent (kann mehrfach geladen werden)
+   - Startet sofort, bevor andere Module laufen
+   - Liefert API: CBLog.getBuffer(), .on(fn), .off(fn), .dump(), .info/warn/error
+   ========================================================================= */
+(function () {
+  const W = typeof window !== 'undefined' ? window : globalThis;
+  const NS = '__CBLOG__v122';
+  if (W[NS]) { /* schon aktiv */ return; }
+  W[NS] = true;
 
-  if (!window.CBLog){
-    window.CBLog = {};
-  }
-  var L = window.CBLog;
+  // Zustand
+  const buf = [];
+  const listeners = new Set();
+  const MAX = 2000;
 
-  // History (öffentlich lesbar für Inspector)
-  L._history = Array.isArray(L._history) ? L._history : [];
+  // Timestamp helper
+  const ts = () => {
+    const d = new Date();
+    const pad = (n)=> (n<10?'0'+n:n);
+    return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
+  };
 
-  function push(level, msg){
-    var entry = {
-      ts: new Date().toISOString(),
-      level: (''+level).toLowerCase(),
-      msg: (msg==null ? '' : (typeof msg==='string' ? msg : (msg.message || JSON.stringify(msg))))
-    };
-    L._history.push(entry);
-    if (L._history.length > 3000) L._history.shift();
-    try{ window.dispatchEvent(new Event('cb:log-refresh')); }catch(_){}
-    return entry;
-  }
+  // Originale Console merken (einmal)
+  const orig = W.__cblog_orig__ || {
+    log:   console.log.bind(console),
+    info:  console.info?.bind(console)  || console.log.bind(console),
+    warn:  console.warn?.bind(console)  || console.log.bind(console),
+    error: console.error?.bind(console) || console.log.bind(console),
+  };
+  W.__cblog_orig__ = orig;
 
-  // Public API
-  L.push = push;
-  L.ok   = function(m){ return push('ok',   m); };
-  L.info = function(m){ return push('info', m); };
-  L.warn = function(m){ return push('warn', m); };
-  L.err  = function(m){ return push('err',  m); };
-
-  // Optional: console binding (einmalig aktivierbar)
-  if (L.bindConsole === true && !L._consoleBound){
-    try{
-      var c = window.console || {};
-      ['log','info','warn','error'].forEach(function(k){
-        var orig = c[k] ? c[k].bind(c) : function(){};
-        c[k] = function(){
-          var args = Array.prototype.slice.call(arguments);
-          // in CBLog kippen
-          if (k==='error')      push('err', args.join(' '));
-          else if (k==='warn')  push('warn', args.join(' '));
-          else if (k==='info')  push('info', args.join(' '));
-          else                  push('info', args.join(' '));
-          // original weiterhin ausgeben
-          try{ orig.apply(null, args); }catch(_){}
-        };
-      });
-      L._consoleBound = true;
-    }catch(_){}
+  // Eintrag erstellen
+  function push(kind, args) {
+    try {
+      const msg = Array.from(args).map(x=>{
+        if (typeof x === 'string') return x;
+        try { return JSON.stringify(x); } catch { return String(x); }
+      }).join(' ');
+      const line = `${ts()} ${kind.toUpperCase()} ${msg}`;
+      buf.push(line);
+      if (buf.length > MAX) buf.splice(0, buf.length - MAX);
+      listeners.forEach(fn => { try { fn(line); } catch {} });
+    } catch {}
   }
 
-  // Boot-Marker
-  L.ok('Polyfill aktiv v1.1.0');
+  // Proxy-Console (idempotent)
+  function armConsoleProxy() {
+    if (console.__cblog_patched__) return;
+    console.__cblog_patched__ = true;
+
+    ['log','info','warn','error'].forEach(kind=>{
+      const base = orig[kind] || orig.log;
+      const patch = function () {
+        try { push(kind, arguments); } catch {}
+        try { base.apply(console, arguments); } catch {}
+      };
+      // non-destructive: nur überschreiben, wenn nicht bereits ausgerüstet
+      const already = console[kind]?.__is_cblog__;
+      if (!already) {
+        patch.__is_cblog__ = true;
+        console[kind] = patch;
+      }
+    });
+  }
+  armConsoleProxy();
+
+  // Öffentliche API
+  const CBLog = W.CBLog || {};
+  CBLog.getBuffer = () => buf.slice(0);
+  CBLog.on   = (fn)=>{ if (typeof fn==='function') listeners.add(fn); };
+  CBLog.off  = (fn)=>{ listeners.delete(fn); };
+  CBLog.dump = ()=> buf.join('\n');
+
+  // Komfort
+  CBLog.log   = (...a)=> console.log(...a);
+  CBLog.info  = (...a)=> console.info(...a);
+  CBLog.warn  = (...a)=> console.warn(...a);
+  CBLog.error = (...a)=> console.error(...a);
+
+  // Selbsttest / Banner (einmalig)
+  try { CBLog.info('[CBLog] Polyfill aktiv'); } catch {}
+
+  W.CBLog = CBLog;
 })();
