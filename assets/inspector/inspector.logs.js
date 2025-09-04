@@ -1,254 +1,158 @@
 /* ============================================================================
-   Datei: assets/inspector/inspector.logs.js
-   Projekt: Neue Siedler – Inspector (Split)
-   Version: v18.10.6
-   Zweck: "Logs"-Tab – CBLog-Puffer anzeigen, filtern, kopieren/exportieren
-   Abhängigkeiten: 
-     - inspector.core.js (stellt window.__INSPECTOR_API__ bereit)
-     - optional CBLog (Polyfill oder Echt)
+   assets/inspector/inspector.logs.js — v18.10.6
+   Aufgabe:
+   - "Logs"-Tab des Inspectors rendern
+   - Einträge stabil beziehen:
+       1) CBLog.getBuffer() + Event 'cb:log'
+       2) Fallback: eigener console-Proxy (via window.__CBLOG_PIPE__)
+   - Keine Abhängigkeit zur Reihenfolge außer: inspector.core.js definiert __INSPECTOR_API__
    CODE-STYLE:
-     - Keine Frameworks, nur DOM
-     - Defensiv (läuft auch ohne CBLog → zeigt Hinweis)
-     - Keine globalen Leaks (nur Registrierung am __INSPECTOR_API__)
+   - Defensive (try/catch), kein Throw, immer weiter anzeigen
    ============================================================================ */
 
 (function () {
   "use strict";
 
-  const VERSION = "v18.10.6";
-  const API_NAME = "__INSPECTOR_API__";
+  const MOD = "[inspector.logs]";
+  const ok   = (...a)=> (window.CBLog?.ok||console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
 
-  // ------------------------------------------------------------
-  // Hilfsfunktionen (defensiv)
-  // ------------------------------------------------------------
-  const cblog = () => (window.CBLog || window.__CBLog || null);
+  // Warten bis Core den Inspector-Body bereitstellt
+  function onInspectorReady(fn){
+    if (window.__INSPECTOR_API__ && typeof window.__INSPECTOR_API__.mountTab === "function"){
+      fn();
+      return;
+    }
+    let tries = 0;
+    const t = setInterval(()=>{
+      if (++tries > 200) { clearInterval(t); warn("Core nicht gefunden."); return; }
+      if (window.__INSPECTOR_API__?.mountTab){ clearInterval(t); fn(); }
+    }, 50);
+  }
 
-  function nowTime() {
+  onInspectorReady(function initLogsTab(){
+    // UI-Renderer registrieren
+    window.__INSPECTOR_API__.mountTab("logs", renderLogsUI, { title: "Logs" });
+    ok("Logs-Tab registriert (v18.10.6).");
+  });
+
+  // ------------------------------- Datenquelle --------------------------------
+
+  function nowStamp(){
     const d = new Date();
-    const hh = `${d.getHours()}`.padStart(2, "0");
-    const mm = `${d.getMinutes()}`.padStart(2, "0");
-    const ss = `${d.getSeconds()}`.padStart(2, "0");
-    return `${hh}:${mm}:${ss}`;
+    const pad = (n)=> String(n).padStart(2,"0");
+    return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
   }
 
-  function normalizeEntries(raw) {
-    // Akzeptiere diverse Formen: Array von Strings/Objekten, String mit \n …
-    if (!raw) return [];
-    if (typeof raw === "string") {
-      return raw.split(/\r?\n/).filter(Boolean);
-    }
-    if (Array.isArray(raw)) {
-      // Objekt -> versuche msg/level/time-Felder zu formen
-      return raw.map((entry) => {
-        if (typeof entry === "string") return entry;
-        try {
-          const t = entry.time || entry.ts || entry.t || nowTime();
-          const lvl = (entry.level || entry.lvl || entry.type || "LOG").toString().toUpperCase();
-          const src = entry.tag || entry.source || entry.src || "";
-          const msg = entry.msg || entry.message || entry.text || JSON.stringify(entry);
-          return `[${t}] ${lvl} ${src ? `[${src}] ` : ""}${msg}`;
-        } catch {
-          return String(entry);
-        }
-      });
-    }
-    // Objekt mit .buf / .buffer / .getBuffer
-    try {
-      if (typeof raw.getBuffer === "function") return normalizeEntries(raw.getBuffer());
-      if (raw.buffer) return normalizeEntries(raw.buffer);
-      if (raw.buf) return normalizeEntries(raw.buf);
-    } catch {}
+  // Liefert stets ein Array von Textzeilen
+  function getBuffer(){
+    // 1) CBLog-Puffer
+    try{
+      if (window.CBLog?.getBuffer){
+        const arr = window.CBLog.getBuffer() || [];
+        if (Array.isArray(arr) && arr.length) return arr.map(String);
+      }
+    }catch(_){}
+
+    // 2) Fallback-Pipe
+    try{
+      const buf = window.__CBLOG_PIPE__?.buf;
+      if (Array.isArray(buf) && buf.length) return buf.map(String);
+    }catch(_){}
+
     return [];
   }
 
-  function fetchLogEntries() {
-    // Versuche alle bekannten Quellen in stabiler Reihenfolge
-    try {
-      const L = cblog();
-      if (L?.getEntries) return normalizeEntries(L.getEntries());
-      if (L?.getBuffer)  return normalizeEntries(L.getBuffer());
-      if (L?.dump)       return normalizeEntries(L.dump());
-      if (L?.buf)        return normalizeEntries(L.buf);
-    } catch {}
-    // Fallback auf evtl. globale Buffer
-    try { if (Array.isArray(window.__CBLOG_BUF__)) return normalizeEntries(window.__CBLOG_BUF__); } catch {}
-    try { if (Array.isArray(window.__cblog?.buf))  return normalizeEntries(window.__cblog.buf); } catch {}
-    return [];
-  }
+  // --------------------------------- UI --------------------------------------
 
-  function clearLog() {
-    try {
-      const L = cblog();
-      if (L?.clear) return L.clear();
-      if (L?.reset) return L.reset();
-      if (Array.isArray(window.__CBLOG_BUF__)) window.__CBLOG_BUF__.length = 0;
-      if (Array.isArray(window.__cblog?.buf)) window.__cblog.buf.length = 0;
-    } catch {}
-  }
+  function renderLogsUI(ctx){
+    const { bodyEl, footerEl } = ctx; // kommt aus inspector.core.js
 
-  // ------------------------------------------------------------
-  // UI – Renderer
-  // ------------------------------------------------------------
-  function renderLogsTab(ctx) {
-    // ctx wird vom Core geliefert:
-    // { rootEl, headEl, bodyEl, footerEl, setStatus(text), version }
-    const { bodyEl, footerEl, setStatus } = ctx;
-
-    // Grundlayout
     bodyEl.innerHTML = "";
-    footerEl.innerHTML = "";
 
-    const tools = document.createElement("div");
-    tools.className = "ins-tools";
-
-    // Filter: Level
-    const levelWrap = document.createElement("div");
-    levelWrap.className = "ins-levels";
-    const LEVELS = ["ALL", "INFO", "LOG", "WARN", "ERROR"];
-    let activeLevel = "ALL";
-    LEVELS.forEach((lv) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "ins-badge" + (lv === "ALL" ? " active" : "");
-      b.dataset.level = lv;
-      b.textContent = lv;
-      b.addEventListener("click", () => {
-        levelWrap.querySelectorAll(".ins-badge").forEach((x) => x.classList.remove("active"));
-        b.classList.add("active");
-        activeLevel = lv;
-        refresh();
-      });
-      levelWrap.appendChild(b);
-    });
-
-    // Suche
-    const search = document.createElement("input");
-    search.type = "search";
-    search.placeholder = "Suche (Regex/Teilwort)…";
-    search.className = "ins-search";
-    let query = "";
-    search.addEventListener("input", () => {
-      query = search.value.trim();
-      refresh();
-    });
-
-    // Buttons
-    const btnCopy = document.createElement("button");
-    btnCopy.type = "button";
-    btnCopy.textContent = "Kopieren";
-    btnCopy.className = "ins-btn";
-    btnCopy.addEventListener("click", () => {
-      navigator.clipboard
-        .writeText(pre.textContent || "")
-        .then(() => setStatus("Logs kopiert."))
-        .catch(() => setStatus("Kopieren nicht möglich."));
-    });
-
-    const btnClear = document.createElement("button");
-    btnClear.type = "button";
-    btnClear.textContent = "Leeren";
-    btnClear.className = "ins-btn";
-    btnClear.addEventListener("click", () => {
-      clearLog();
-      refresh(true);
-    });
-
-    const btnRefresh = document.createElement("button");
-    btnRefresh.type = "button";
-    btnRefresh.textContent = "Aktualisieren";
-    btnRefresh.className = "ins-btn";
-    btnRefresh.addEventListener("click", () => refresh());
-
-    const btnExport = document.createElement("button");
-    btnExport.type = "button";
-    btnExport.textContent = "Export (.txt)";
-    btnExport.className = "ins-btn";
-    btnExport.addEventListener("click", () => {
-      const blob = new Blob([pre.textContent || ""], { type: "text/plain;charset=utf-8" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `inspector-log-${Date.now()}.txt`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-
-    tools.appendChild(levelWrap);
-    tools.appendChild(search);
-    bodyEl.appendChild(tools);
-
-    // Hinweis + Log-View
-    const note = document.createElement("div");
-    note.className = "ins-note";
-    note.textContent = "Logs werden initialisiert …";
-    bodyEl.appendChild(note);
+    const status = document.createElement("div");
+    status.className = "ins-status";
+    status.textContent = "Logs werden initialisiert …";
+    bodyEl.appendChild(status);
 
     const pre = document.createElement("pre");
     pre.className = "ins-pre";
-    pre.textContent = "[Noch keine Logs …]";
+    pre.textContent = "Noch keine Logs …";
     bodyEl.appendChild(pre);
 
     // Footer-Buttons
-    footerEl.appendChild(btnCopy);
-    footerEl.appendChild(btnClear);
-    footerEl.appendChild(btnRefresh);
-    footerEl.appendChild(btnExport);
+    footerEl.innerHTML = "";
+    const btnCopy  = mkBtn("Kopieren", ()=> copyToClipboard(pre.textContent));
+    const btnClear = mkBtn("Leeren",   ()=> clearLogs(pre, status));
+    const btnRefresh = mkBtn("Aktualisieren", ()=> render());
+    footerEl.append(btnCopy, btnClear, btnRefresh);
 
-    // Live-Refresh minimal (stoppt, wenn Tab gewechselt wird – Core ruft onHide())
-    let timer = null;
-    function startLive() {
-      stopLive();
-      timer = setInterval(() => refresh(false, true), 800);
-    }
-    function stopLive() {
-      if (timer) clearInterval(timer);
-      timer = null;
-    }
-    ctx.onHide = stopLive;
+    // Live-Update via Events
+    const onEvt = ()=> render();
+    window.addEventListener("cb:log", onEvt);
+    window.addEventListener("cb:log-flush", onEvt);
 
-    // Render-Funktion
-    function refresh(justCleared = false, silent = false) {
-      const list = fetchLogEntries();
-      const rx = query ? new RegExp(query, "i") : null;
+    // Beim Tab-Verlassen Listener entfernen (Core ruft optional onDispose)
+    ctx.onDispose = ()=> {
+      window.removeEventListener("cb:log", onEvt);
+      window.removeEventListener("cb:log-flush", onEvt);
+    };
 
-      const filtered = list.filter((line) => {
-        // Level-Filter rudimentär: prüfe auf „ INFO “, „ WARN “ etc. im String
-        if (activeLevel !== "ALL") {
-          if (!new RegExp(`\\b${activeLevel}\\b`).test(line)) return false;
+    // Erstrender + sanftes Polling (falls Events nicht kommen)
+    render();
+    const poll = setInterval(render, 1000);
+    ctx.onDisposePoll = ()=> clearInterval(poll);
+
+    function render(){
+      try{
+        const lines = getBuffer();
+        if (!lines.length){
+          status.textContent = "Keine Log-Einträge vorhanden";
+          pre.textContent = "—";
+          return;
         }
-        if (rx && !rx.test(line)) return false;
-        return true;
-      });
-
-      pre.textContent = filtered.join("\n") || (justCleared ? "[Log geleert]" : "[Keine Log-Einträge vorhanden]");
-      if (!silent) setStatus(`Log-Zeilen: ${filtered.length}`);
-      note.style.display = list.length ? "none" : "block";
+        status.textContent = "";
+        pre.textContent = lines.join("\n");
+      }catch(err){
+        warn("Render-Fehler:", err);
+      }
     }
-
-    // Initial
-    refresh();
-    startLive();
   }
 
-  // ------------------------------------------------------------
-  // Registrierung am Core (defensiv, auch bei verzögerter Core-Ladung)
-  // ------------------------------------------------------------
-  function attach() {
-    const api = window[API_NAME];
-    if (!api || typeof api.registerTab !== "function") return false;
-    api.registerTab({
-      id: "logs",
-      title: "Logs",
-      onShow: renderLogsTab
-    });
-    (api.log || console.log)(`[inspector.logs] registriert (${VERSION})`);
-    return true;
+  function mkBtn(label, onClick){
+    const b = document.createElement("button");
+    b.className = "ins-btn";
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    return b;
   }
 
-  if (!attach()) {
-    // Core noch nicht da → später erneut versuchen
-    const i = setInterval(() => {
-      if (attach()) clearInterval(i);
-    }, 100);
-    setTimeout(() => clearInterval(i), 10000);
+  function copyToClipboard(text){
+    try{
+      navigator.clipboard?.writeText(text)
+        .then(()=> ok("Logs kopiert."))
+        .catch(()=> fallbackCopy(text));
+    }catch(_){ fallbackCopy(text); }
+    function fallbackCopy(t){
+      const ta = document.createElement("textarea");
+      ta.value = t; document.body.appendChild(ta);
+      ta.select(); document.execCommand("copy"); ta.remove();
+      ok("Logs kopiert (fallback).");
+    }
   }
+
+  function clearLogs(pre, status){
+    // CBLog bevorzugen
+    let cleared = false;
+    try{
+      if (window.CBLog?.clear){ window.CBLog.clear(); cleared = true; }
+    }catch(_){}
+    try{
+      if (window.__CBLOG_PIPE__?.buf){ window.__CBLOG_PIPE__.buf.length = 0; cleared = true; }
+    }catch(_){}
+    pre.textContent = "—";
+    status.textContent = cleared ? "Log-Puffer geleert" : "Kein Puffer gefunden";
+    window.dispatchEvent(new CustomEvent("cb:log-flush"));
+  }
+
 })();
