@@ -1,263 +1,226 @@
 /* ============================================================================
- * assets/inspector/inspector.core.js — v18.10.6
+ * Datei: assets/inspector/inspector.core.js
  * Projekt: Siedler-Mini
- * Zweck:
- *   - Kern des Inspectors (Overlay, Tabs, API, Fallbacks)
- *   - Bietet window.__INSPECTOR_API__ (open/close/toggle/registerTab/switchTab)
- *   - Öffnet NICHT automatisch; UI-Bridge/FAB steuert toggle()
- *   - Zeigt Fallback-Logs, falls inspector.logs.js noch nicht geladen ist
+ * Version: v18.10.6
  *
- * CODE-STYLE:
- *   - Keine externen Abhängigkeiten
- *   - Sanfte Logs via CBLog (fällt auf console.* zurück)
- *   - Defensive Inline-Styles (falls inspector.css fehlt)
+ * Zweck:
+ *  - Kern-Overlay + Tabs (Übersicht/Logs/Build/Pfade/Tests)
+ *  - Öffnen/Schließen/Toggle via __INSPECTOR_API__ und GameUI-Bridge
+ *  - Fallback-Sichtbarkeit & minimale Statusmeldungen
+ *  - Startet LogStream automatisch, sobald Logs-Tab angezeigt wird
+ *
+ * Abhängigkeiten:
+ *  - cblog.polyfill.js (muss zuerst geladen sein)
+ *  - optionale Module: inspector.logs.js / inspector.build.js / inspector.paths.js / inspector.tests.js
  * ========================================================================== */
-(function(){
-  "use strict";
+(function () {
+  'use strict';
 
-  var VERSION = "v18.10.6";
-  var MOD = "[inspector.core]";
-  var log  = function(){ try{ (window.CBLog?.info||console.log).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.log.apply(console, [MOD].concat(arguments)); } };
-  var warn = function(){ try{ (window.CBLog?.warn||console.warn).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.warn.apply(console, [MOD].concat(arguments)); } };
+  var MOD = '[inspector.core]';
+  var VER = 'v18.10.6';
 
-  // ---------------------------------------------------------------------------
-  // DOM helpers
-  // ---------------------------------------------------------------------------
-  function el(tag, cls, txt){
-    var e=document.createElement(tag);
-    if (cls) e.className=cls;
-    if (txt!=null) e.textContent=txt;
+  // sanfte Logger
+  function ok()  { try{ (window.CBLog?.ok   || console.log).apply(console, arguments);}catch(_){ console.log.apply(console, arguments);} }
+  function info(){ try{ (window.CBLog?.info || console.log).apply(console, arguments);}catch(_){ console.log.apply(console, arguments);} }
+  function warn(){ try{ (window.CBLog?.warn || console.warn).apply(console, arguments);}catch(_){ console.warn.apply(console, arguments);} }
+  function err() { try{ (window.CBLog?.err  || console.error).apply(console, arguments);}catch(_){ console.error.apply(console, arguments);} }
+
+  // Root-Refs
+  var root, panel, head, body, foot;
+  var currentTab = 'logs';
+  var isOpen = false;
+
+  // Hilfen -------------------------------------------------------------------
+  function el(tag, cls, html){
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html!=null) e.innerHTML = html;
     return e;
   }
-  function css(e, s){ e.style.cssText = s; return e; }
+  function setActiveTab(id){
+    currentTab = id;
+    var tabs = head.querySelectorAll('[data-tab]');
+    tabs.forEach(function(t){ t.classList.toggle('active', t.dataset.tab===id); });
+    renderTab(id);
+  }
 
-  // ---------------------------------------------------------------------------
-  // State & Registry
-  // ---------------------------------------------------------------------------
-  var root      = null;   // #inspector
-  var headEl    = null;   // Kopf (Titel, Close)
-  var tabsEl    = null;   // Tab-Leiste
-  var bodyEl    = null;   // Inhalt
-  var footEl    = null;   // Fuß (Optionen)
-  var isOpen    = false;
-  var tabs      = [];     // [{id,title,render,order}]
-  var activeId  = null;
-
-  // ---------------------------------------------------------------------------
-  // Build Overlay Skeleton (defensive / CSS-Fallback)
-  // ---------------------------------------------------------------------------
-  function ensureRoot(){
+  // UI aufbauen ---------------------------------------------------------------
+  function ensureUI(){
     if (root) return root;
 
-    root = el("div", "inspector");
-    root.id = "inspector";
-    // Falls CSS fehlt: Inline-Fallback, damit das Layout nie „kaputt“ wirkt
-    css(root,
-      "position:fixed;inset:0;z-index:2147483646;display:none;"+
-      "background:rgba(10,12,14,.72);backdrop-filter:blur(4px);"+
-      "color:#e5e7eb;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
-    );
+    // Overlay
+    root = el('div','ins-root');
+    root.setAttribute('role','dialog');
+    root.style.display = 'none';
 
-    var panel = el("div", "inspector-panel");
-    css(panel,
-      "position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);"+
-      "width:min(1024px,90vw);height:min(84vh,90vh);"+
-      "background:linear-gradient(180deg,rgba(24,28,31,.98),rgba(20,23,26,.98));"+
-      "border:1px solid rgba(255,255,255,.08);border-radius:12px;"+
-      "box-shadow:0 24px 64px rgba(0,0,0,.55);display:flex;flex-direction:column;overflow:hidden;"
-    );
+    // Panel
+    panel = el('div','ins-panel');
+    var bar = el('div','ins-bar');
+    var title = el('div','ins-title','Inspector <span class="ins-ver">v'+VER+'</span>');
+    var close = el('button','ins-close','Schließen');
+    close.addEventListener('click', closeInspector);
 
-    // Header
-    headEl = el("div","inspector-head");
-    css(headEl,
-      "display:flex;align-items:center;gap:12px;padding:12px 12px;"+
-      "border-bottom:1px solid rgba(255,255,255,.08);"
-    );
-    var title = el("div","inspector-title","Inspector");
-    css(title,"font-weight:700;letter-spacing:.2px;opacity:.92;");
-    var spacer = el("div"); css(spacer,"flex:1;");
-    var btnClose = el("button","inspector-close","×");
-    css(btnClose,
-      "position:relative;margin:0;padding:6px 10px;border:none;border-radius:8px;"+
-      "background:rgba(255,255,255,.08);color:#e5e7eb;cursor:pointer;font-size:16px;"+
-      "line-height:1;min-width:36px;min-height:32px;"
-    );
-    btnClose.title = "Schließen (Esc)";
-    btnClose.addEventListener("click", close);
-
-    headEl.appendChild(title);
-    headEl.appendChild(spacer);
-    headEl.appendChild(btnClose);
+    bar.appendChild(title);
+    bar.appendChild(close);
+    panel.appendChild(bar);
 
     // Tabs
-    tabsEl = el("div","inspector-tabs");
-    css(tabsEl,"display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px 0 12px;");
+    head = el('div','ins-tabs');
+    [
+      ['overview','Übersicht'],
+      ['logs','Logs'],
+      ['build','Build'],
+      ['paths','Pfade'],
+      ['tests','Tests']
+    ].forEach(function(def){
+      var b = el('button','ins-tab',def[1]);
+      b.dataset.tab = def[0];
+      b.type='button';
+      b.addEventListener('click', function(){ setActiveTab(def[0]); });
+      head.appendChild(b);
+    });
+    panel.appendChild(head);
 
-    // Body
-    bodyEl = el("div","inspector-body");
-    css(bodyEl,"flex:1;min-height:0;overflow:auto;padding:12px;");
+    // Body + Footer
+    body = el('div','ins-body');
+    foot = el('div','ins-foot');
+    foot.innerHTML = '<small class="ins-foot-note">core '+VER+'</small>';
 
-    // Footer
-    footEl = el("div","inspector-foot");
-    css(footEl,
-      "display:flex;align-items:center;gap:8px;padding:10px 12px;"+
-      "border-top:1px solid rgba(255,255,255,.08);opacity:.85;font-size:12px;"
-    );
-    var ver = el("div", null, "core "+VERSION);
-    footEl.appendChild(ver);
+    panel.appendChild(body);
+    panel.appendChild(foot);
 
-    panel.appendChild(headEl);
-    panel.appendChild(tabsEl);
-    panel.appendChild(bodyEl);
-    panel.appendChild(footEl);
+    // Mount
     root.appendChild(panel);
     document.body.appendChild(root);
 
-    // ESC schließt
-    window.addEventListener("keydown", function(ev){
-      if (!isOpen) return;
-      if (ev.key === "Escape"){ close(); }
-    });
-
-    // Fallback Diagnose: meldet, dass Core aktiv ist
-    log("bereit ("+VERSION+")");
+    // Anfangszustand
+    setActiveTab(currentTab);
     return root;
   }
 
-  // ---------------------------------------------------------------------------
-  // Tab-Handling
-  // ---------------------------------------------------------------------------
-  function renderTabs(){
-    tabsEl.innerHTML = "";
-    // Sort by order, then title
-    var sorted = tabs.slice().sort(function(a,b){
-      var ao=(a.order|0), bo=(b.order|0);
-      if (ao!==bo) return ao-bo;
-      return String(a.title||a.id).localeCompare(String(b.title||b.id));
-    });
-    sorted.forEach(function(t){
-      var b = el("button","inspector-tab", t.title || t.id);
-      css(b,
-        "border:none;border-radius:999px;padding:6px 12px;cursor:pointer;"+
-        "background:rgba(255,255,255,.10);color:#e5e7eb;"
-      );
-      if (t.id === activeId){
-        b.classList.add("active");
-        b.style.background = "rgba(120,200,255,.22)";
+  // Render pro Tab ------------------------------------------------------------
+  function renderTab(id){
+    body.innerHTML = '';
+
+    if (id==='logs'){
+      // Minimale Platzhalter-UI, bis inspector.logs.js übernimmt
+      var init = el('div','ins-note','Logs werden initialisiert …');
+      var pre  = el('pre','ins-pre','Noch keine Logs …');
+      body.appendChild(init);
+      body.appendChild(pre);
+
+      // Falls das Logs-Modul da ist, übergeben
+      try{
+        if (window.InspectorLogs && typeof window.InspectorLogs.mount==='function'){
+          window.InspectorLogs.mount({container: body, pre: pre, onReady: function(){
+            init.remove();
+          }});
+        }else{
+          // Kleiner Autostart für Polyfill-Puffer
+          try{ window.CBLog && window.CBLog.getBuffer && pre && (pre.textContent = (window.CBLog.getBuffer().join('\n')||'') || pre.textContent); }catch(_){}
+        }
+      }catch(e){ err(MOD,'Logs-Mount-Fehler', e); }
+      return;
+    }
+
+    if (id==='build'){
+      if (window.InspectorBuild && typeof window.InspectorBuild.mount==='function'){
+        window.InspectorBuild.mount({container: body});
+      }else{
+        body.appendChild(el('div','ins-note','Build-Tab wird geladen …'));
       }
-      b.addEventListener("click", function(){ switchTab(t.id); });
-      tabsEl.appendChild(b);
-    });
-  }
+      return;
+    }
 
-  function switchTab(id){
-    var t = tabs.find(function(x){ return x.id===id; });
-    if (!t){ warn("Tab nicht gefunden:", id); return; }
-    activeId = id;
-    renderTabs();
+    if (id==='paths'){
+      if (window.InspectorPaths && typeof window.InspectorPaths.mount==='function'){
+        window.InspectorPaths.mount({container: body});
+      }else{
+        body.appendChild(el('div','ins-note','Pfade-Tab wird geladen …'));
+      }
+      return;
+    }
+
+    if (id==='tests'){
+      if (window.InspectorTests && typeof window.InspectorTests.mount==='function'){
+        window.InspectorTests.mount({container: body});
+      }else{
+        body.appendChild(el('div','ins-note','Tests-Tab wird geladen …'));
+      }
+      return;
+    }
+
+    // Übersicht (default)
+    var wrap = el('div','ins-overview');
+    wrap.innerHTML =
+      '<div class="ins-kv"><b>Runtime</b><span>'+ (navigator.userAgent||'') +'</span></div>'+
+      '<div class="ins-kv"><b>Canvas</b><span id="ins-canvas-info">—</span></div>'+
+      '<div class="ins-kv"><b>Map</b><span id="ins-map-info">—</span></div>';
+    body.appendChild(wrap);
+
+    // kleine Live-Infos (defensiv)
     try{
-      bodyEl.innerHTML = "";
-      footEl.style.display = ""; // module kann hide aktivieren wenn nötig
-      t.render({ bodyEl: bodyEl, footEl: footEl, api: __INSPECTOR_API__ });
-    }catch(e){
-      warn("Tab-Render Fehler:", e && e.message);
-      bodyEl.textContent = "Fehler beim Rendern des Tabs.";
-    }
+      var cv = document.getElementById('game');
+      var cInfo = wrap.querySelector('#ins-canvas-info');
+      if (cv && cInfo){ cInfo.textContent = cv.width+' × '+cv.height; }
+      var mInfo = wrap.querySelector('#ins-map-info');
+      var url = cv?.dataset?.map || '—';
+      if (mInfo){ mInfo.textContent = url; }
+    }catch(_){}
   }
 
-  function registerTab(def){
-    // def: { id, title, order?, render(body) }
-    if (!def || !def.id || !def.render){ warn("Ungültiger Tab:", def); return; }
-    var exists = tabs.some(function(t){ return t.id===def.id; });
-    if (exists){
-      // Update (z.B. Logs-Tab überschreibt Fallback)
-      for (var i=0;i<tabs.length;i++){ if (tabs[i].id===def.id){ tabs[i]=def; break; } }
-    } else {
-      tabs.push(def);
-    }
-    // Wenn noch kein aktiver Tab -> diesen setzen (Logs zuerst attraktiv)
-    if (!activeId){
-      activeId = def.id;
-    }
-    // Wenn offen, Tabs neu zeichnen und ggf. aktiv neu rendern
-    if (isOpen){
-      renderTabs();
-      if (activeId === def.id) switchTab(def.id);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Public API
-  // ---------------------------------------------------------------------------
-  function open(){
-    ensureRoot();
+  // Öffnen/Schließen/Toggle ---------------------------------------------------
+  function openInspector(){
+    ensureUI();
     if (isOpen) return;
     isOpen = true;
-    root.style.display = "block";
-    renderTabs();
-    // Falls noch kein Tab aktiv, setze auf ersten
-    if (!activeId && tabs.length){ activeId = tabs[0].id; }
-    if (activeId) switchTab(activeId);
-    window.dispatchEvent(new CustomEvent("cb:inspector-open"));
-    log("geöffnet ("+VERSION+")");
+    root.style.display = 'block';
+    document.body.classList.add('inspector-open');
+    try{ window.dispatchEvent(new CustomEvent('cb:inspector-open')); }catch(_){}
+    info(MOD,'geöffnet (v'+VER+')');
+
+    // Wenn Logs-Tab aktiv ist, LogStream starten (modular)
+    if (currentTab==='logs' && window.InspectorLogs && typeof window.InspectorLogs.start==='function'){
+      try{ window.InspectorLogs.start(); }catch(e){ warn(MOD,'LogStream start warn',e); }
+    }
   }
 
-  function close(){
+  function closeInspector(){
     if (!root || !isOpen) return;
     isOpen = false;
-    root.style.display = "none";
-    window.dispatchEvent(new CustomEvent("cb:inspector-close"));
-    log("geschlossen");
+    root.style.display = 'none';
+    document.body.classList.remove('inspector-open');
+    try{ window.dispatchEvent(new CustomEvent('cb:inspector-close')); }catch(_){}
+    info(MOD,'geschlossen');
   }
 
-  function toggle(force){
-    var willOpen = (force==null) ? !isOpen : !!force;
-    willOpen ? open() : close();
+  function toggleInspector(force){
+    (force==null ? !isOpen : !!force) ? openInspector() : closeInspector();
   }
 
-  // API-Objekt global bereitstellen
-  var __INSPECTOR_API__ = (window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {});
-  __INSPECTOR_API__.open       = open;
-  __INSPECTOR_API__.close      = close;
-  __INSPECTOR_API__.toggle     = toggle;
-  __INSPECTOR_API__.registerTab= registerTab;
-  __INSPECTOR_API__.switchTab  = switchTab;
-  __INSPECTOR_API__.version    = VERSION;
+  // API registrieren + Bridge absichern --------------------------------------
+  function installAPI(){
+    window.__INSPECTOR_API__ = { open: openInspector, close: closeInspector, toggle: toggleInspector, setTab:setActiveTab };
+    window.GameUI = window.GameUI || {};
+    window.GameUI.toggleInspector = toggleInspector;
+    window.GameUI.openInspector   = openInspector;
+    window.GameUI.closeInspector  = closeInspector;
+  }
 
-  // ---------------------------------------------------------------------------
-  // Minimaler Logs-Fallback (falls inspector.logs.js noch nicht geladen ist)
-  // wird beim ersten Open angezeigt und später automatisch von logs.js ersetzt
-  // ---------------------------------------------------------------------------
-  registerTab({
-    id: "logs",
-    title: "Logs",
-    order: 10,
-    render: function(ctx){
-      var wrap = el("div", null, "");
-      var hint = el("div", null, "Logs werden initialisiert …");
-      css(hint, "opacity:.8;margin-bottom:8px");
-      var pre = el("pre", null, "");
-      css(pre, "margin:0;padding:10px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.06);border-radius:8px;white-space:pre-wrap;");
-
-      // Fülle mit CBLog-Buffer, falls vorhanden
-      try{
-        var buf = (window.CBLog && Array.isArray(CBLog._buffer)) ? CBLog._buffer : null;
-        if (buf && buf.length){
-          pre.textContent = buf.map(function(line){ return line.ts+" "+line.level+" "+line.msg; }).join("\n");
-          hint.textContent = "Logs (Fallback) — werden ersetzt, sobald inspector.logs.js geladen ist.";
-        }else{
-          pre.textContent = "Noch keine Logs …";
-        }
-      }catch(_){
-        pre.textContent = "Noch keine Logs …";
-      }
-
-      wrap.appendChild(hint);
-      wrap.appendChild(pre);
-      ctx.bodyEl.appendChild(wrap);
+  // Boot ----------------------------------------------------------------------
+  function boot(){
+    try{
+      ensureUI();
+      installAPI();
+      ok(MOD,'bereit (v'+VER+')');
+    }catch(e){
+      err(MOD,'Init-Fehler', e);
     }
-  });
+  }
 
-  // Panel vorbereiten, aber nicht automatisch öffnen (FAB/Bridge steuert)
-  ensureRoot();
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', boot);
+  }else{
+    boot();
+  }
 })();
