@@ -1,326 +1,429 @@
-<!-- Datei: assets/inspector/inspector.js -->
-/* =======================================================================
-   Inspector (Kern + UI)
-   Projekt: Siedler-Mini
-   Version: v18.4.1
-   CODE_STYLE:
-     - Selbstheilend: eigener CBLog-Fallback, wenn global nicht vorhanden
-     - Tabs: Übersicht | Logs | Build | Pfade | Tests (nur Logs aktiv)
-     - Öffnen per GameUI.toggleInspector() und ?inspector=1
-     - Keine externen Abhängigkeiten
-   ======================================================================= */
+/* ============================================================================
+ * Inspector – Kombi-Core (UI + Tabs)
+ * Version: v18.5.0
+ * CODE_STYLE:
+ *   - Defensive (try/catch), niemals werfen
+ *   - Saubere Logs über CBLog (Polyfill kompatibel)
+ *   - Öffentliche API: window.GameUI.{openInspector,closeInspector,toggleInspector}
+ *   - Tabs: Übersicht, Logs, Build, Pfade, Tests
+ *   - Fallbacks: funktionieren auch auf Startseite (ohne laufendes Spiel)
+ * ========================================================================== */
 
-(function () {
+(function(){
   "use strict";
 
-  const VERSION = "v18.4.1";
-  const NS = "[inspector.core]";
-
-  /* ---------------------------------------------------------------------
-   * 1) Minimal-CBLog, falls nicht vorhanden
-   *    - puffert Einträge
-   *    - proxyt console.* => Events + Buffer
-   * ------------------------------------------------------------------- */
-  (function ensureCBLog() {
-    if (window.CBLog && typeof CBLog.getBuffer === "function") {
-      (CBLog.info || console.log) && (CBLog.info?.(`${NS} CBLog vorhanden`) || console.log(`${NS} CBLog vorhanden`));
-      return;
-    }
-
-    const BUF_MAX = 2000;
-    const buf = [];
-    const listeners = new Set();
-
-    function push(line) {
-      buf.push(line);
-      if (buf.length > BUF_MAX) buf.shift();
-      listeners.forEach((fn) => {
-        try { fn(line); } catch (_) {}
-      });
-    }
-
-    function fmt(ts, level, tag, parts) {
-      const hh = ts.getHours().toString().padStart(2, "0");
-      const mm = ts.getMinutes().toString().padStart(2, "0");
-      const ss = ts.getSeconds().toString().padStart(2, "0");
-      return `[${hh}:${mm}:${ss}] ${level} ${tag ? `[${tag}] ` : ""}${parts.join(" ")}`;
-    }
-
-    const original = {
-      log: console.log.bind(console),
-      info: console.info.bind(console),
-      warn: console.warn.bind(console),
-      error: console.error.bind(console),
-    };
-
-    function wrapConsole(level) {
-      return function (...args) {
-        try {
-          original[level](...args);
-          const line = fmt(new Date(), level.toUpperCase(), "console", args.map(String));
-          push(line);
-        } catch (_) {
-          // not fatal
-        }
-      };
-    }
-
-    console.log = wrapConsole("log");
-    console.info = wrapConsole("info");
-    console.warn = wrapConsole("warn");
-    console.error = wrapConsole("error");
-
-    window.CBLog = {
-      /* API, die der Inspector nutzt */
-      getBuffer() { return buf.slice(); },
-      on(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-      off(fn) { listeners.delete(fn); },
-
-      /* Bequeme Shortcuts, falls Code sie nutzt */
-      ok:   (...a) => push(fmt(new Date(), "OK",   "", a.map(String))),
-      info: (...a) => push(fmt(new Date(), "INFO", "", a.map(String))),
-      warn: (...a) => push(fmt(new Date(), "WARN", "", a.map(String))),
-      error:(...a) => push(fmt(new Date(), "ERROR","", a.map(String))),
-    };
-
-    // Kennzeichnung im Log
-    window.CBLog.info?.("[CBLog] Polyfill aktiv (Inspector-Fallback)");
-  })();
-
-  /* ---------------------------------------------------------------------
-   * 2) DOM-Helfer
-   * ------------------------------------------------------------------- */
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const el = (tag, cls, text) => {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
+  // ---- Kurzhelfer ----------------------------------------------------------
+  const L = (level, tag, ...a) => {
+    try {
+      const log = (window.CBLog && CBLog[level]) ? CBLog[level] : console.log;
+      log(`[inspector.core] ${tag}`, ...a);
+    } catch(_){}
   };
+  const ok   = (...a)=>L("ok",   ...a);
+  const info = (...a)=>L("info", ...a);
+  const warn = (...a)=>L("warn", ...a);
 
-  /* ---------------------------------------------------------------------
-   * 3) Panel-UI (leichtgewichtig, grau/anthrazit)
-   * ------------------------------------------------------------------- */
-  let rootEl = null;
-  let logsBox, copyBtn, unsubLogs;
+  const VERSION = "v18.5.0";
 
-  function ensureStyles() {
-    // Schlanke, integrierte Styles (stören nichts, wenn inspector.css zusätzlich existiert)
-    if ($("#inspector-inline-style")) return;
-    const s = el("style");
-    s.id = "inspector-inline-style";
-    s.textContent = `
-      .inspector-wrap {
-        position: fixed; inset: 6vh 5vw auto 5vw;
-        background: linear-gradient(180deg, rgba(20,20,20,.96), rgba(20,20,20,.93));
-        color: #e8eaec; border:1px solid rgba(255,255,255,.08); border-radius: 14px;
-        box-shadow: 0 28px 90px rgba(0,0,0,.55), 0 2px 0 rgba(255,255,255,.04) inset;
-        z-index: 2147483646; backdrop-filter: blur(8px);
-      }
-      .inspector-head {
-        display:flex; align-items:center; gap:10px; padding:10px 12px 8px;
-        border-bottom:1px solid rgba(255,255,255,.06);
-      }
-      .inspector-title { font-weight:700; letter-spacing:.2px; opacity:.95; }
-      .inspector-ver   { opacity:.6; font-size:12px; margin-left:6px; }
-      .inspector-spacer{ flex:1; }
-      .inspector-close {
-        border:none; border-radius:10px; padding:6px 10px; cursor:pointer;
-        color:#e8eaec; background:rgba(255,255,255,.12);
-      }
-      .inspector-tabs { display:flex; gap:8px; padding:10px 12px 8px; flex-wrap:wrap; }
-      .inspector-tab {
-        border:none; border-radius:999px; padding:6px 12px; cursor:pointer;
-        color:#e8eaec; background:rgba(255,255,255,.12); font-size:13px;
-      }
-      .inspector-tab.active { background:rgba(110,170,255,.25); }
-      .inspector-body { padding:12px; }
-      .inspector-mono {
-        width:100%; height:48vh; resize:none; border-radius:10px; padding:10px 12px;
-        background:#121416; color:#d9dbdf; border:1px solid rgba(255,255,255,.08);
-        font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      }
-      .inspector-actions { padding:8px 12px 12px; display:flex; gap:8px; }
-      .inspector-btn {
-        border:none; border-radius:10px; padding:8px 12px; cursor:pointer;
-        color:#e8eaec; background:rgba(255,255,255,.12);
-      }
+  // ---- Root & Minimal-Styles (Failsafe) ------------------------------------
+  let root, tabsEl, bodyEl, logBox, overviewBox, buildBox, pathsBox, testsBox, copyBtn, closeBtn, verBadge;
 
-      @media (max-width: 640px) {
-        .inspector-wrap { inset: 6vh 3vw auto 3vw; }
-        .inspector-mono { height:55vh; }
-      }
+  function ensureRoot(){
+    if (root && root.isConnected) return root;
+
+    root = document.getElementById("inspector");
+    if (!root){
+      root = document.createElement("div");
+      root.id = "inspector";
+      root.setAttribute("role","dialog");
+      // Failsafe-Styles: stören dein CSS nicht, sichern aber Sichtbarkeit
+      root.style.cssText = [
+        "position:fixed","left:50%","top:14%","transform:translateX(-50%)",
+        "width:min(960px, 92vw)","max-height:72vh","overflow:hidden",
+        "background:rgba(18,18,19,.96)","border:1px solid rgba(255,255,255,.08)",
+        "border-radius:12px","box-shadow:0 30px 80px rgba(0,0,0,.55)",
+        "backdrop-filter:blur(8px)","color:#eee","z-index:2147483646",
+        "display:none"
+      ].join(";");
+
+      document.body.appendChild(root);
+    }
+    root.innerHTML = `
+      <div id="insp-head" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08)">
+        <div style="font-weight:800;letter-spacing:.2px">Inspector</div>
+        <small id="insp-ver" style="opacity:.6">${VERSION}</small>
+        <div style="flex:1"></div>
+        <button id="insp-close" style="border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer">Schließen</button>
+      </div>
+      <div id="insp-tabs" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.06)">
+        ${["Übersicht","Logs","Build","Pfade","Tests"].map((t,i)=>(
+          `<button data-tab="${t.toLowerCase()}" class="insp-tab${i===1?" active":""}" style="border:none;border-radius:999px;padding:6px 12px;background:${i===1?"rgba(76,175,80,.25)":"rgba(255,255,255,.12)"};color:#fff;cursor:pointer;font-size:13px">${t}</button>`
+        )).join("")}
+      </div>
+      <div id="insp-body" style="padding:12px 14px;overflow:auto;max-height:calc(72vh - 112px)">
+        <div id="pane-uebersicht" style="display:none"></div>
+        <div id="pane-logs"></div>
+        <div id="pane-build" style="display:none"></div>
+        <div id="pane-pfade" style="display:none"></div>
+        <div id="pane-tests" style="display:none"></div>
+      </div>
+      <div id="insp-foot" style="padding:10px 14px;border-top:1px solid rgba(255,255,255,.06);display:flex;gap:10px;align-items:center">
+        <button id="insp-copy" style="border:none;border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer">Kopieren</button>
+        <span id="insp-footmsg" style="opacity:.6;font-size:12px"></span>
+      </div>
     `;
-    document.head.appendChild(s);
+
+    tabsEl      = root.querySelector("#insp-tabs");
+    bodyEl      = root.querySelector("#insp-body");
+    overviewBox = root.querySelector("#pane-uebersicht");
+    logBox      = root.querySelector("#pane-logs");
+    buildBox    = root.querySelector("#pane-build");
+    pathsBox    = root.querySelector("#pane-pfade");
+    testsBox    = root.querySelector("#pane-tests");
+    copyBtn     = root.querySelector("#insp-copy");
+    closeBtn    = root.querySelector("#insp-close");
+    verBadge    = root.querySelector("#insp-ver");
+
+    // Grundlayout Inhalt
+    logBox.innerHTML = buildLogPane();
+    buildBox.innerHTML = buildBuildPane();
+    pathsBox.innerHTML = buildPathsPane();
+    testsBox.innerHTML = buildTestsPane();
+    overviewBox.innerHTML = buildOverviewPane();
+
+    bindUI();
+    return root;
   }
 
-  function renderPanel() {
-    ensureStyles();
-
-    // Hülle
-    rootEl = el("div", "inspector-wrap");
-    rootEl.id = "inspector";
-    rootEl.setAttribute("role", "dialog");
-    rootEl.setAttribute("aria-label", "Inspector");
-    document.body.appendChild(rootEl);
-
-    // Kopf
-    const head = el("div", "inspector-head");
-    head.append(
-      el("div", "inspector-title", "Inspector"),
-      el("div", "inspector-ver", VERSION),
-      el("div", "inspector-spacer"),
-    );
-    const btnClose = el("button", "inspector-close", "Schließen");
-    btnClose.addEventListener("click", close);
-    head.append(btnClose);
-
-    // Tabs
-    const tabsBar = el("div", "inspector-tabs");
-    const tabs = [
-      { id: "overview", label: "Übersicht" },
-      { id: "logs",     label: "Logs" },
-      { id: "build",    label: "Build" },
-      { id: "paths",    label: "Pfade" },
-      { id: "tests",    label: "Tests" },
-    ];
-    const body = el("div", "inspector-body");
-
-    tabs.forEach(t => {
-      const b = el("button", "inspector-tab", t.label);
-      b.dataset.tab = t.id;
-      b.addEventListener("click", () => switchTab(t.id));
-      tabsBar.appendChild(b);
-    });
-
-    // Body-Inhalt (nur Logs sofort bauen)
-    const logsArea = el("textarea", "inspector-mono");
-    logsArea.readOnly = true;
-    logsArea.placeholder = "[Log wird geladen…]";
-    logsBox = logsArea;
-
-    const actions = el("div", "inspector-actions");
-    copyBtn = el("button", "inspector-btn", "Kopieren");
-    copyBtn.addEventListener("click", () => {
-      try { navigator.clipboard.writeText(logsBox.value || ""); }
-      catch(_) {}
-    });
-    actions.append(copyBtn);
-
-    // Zusammenfügen
-    rootEl.append(head, tabsBar, body, actions);
-
-    // Starttab = Logs
-    body.innerHTML = "";
-    body.append(logsArea);
-    activateTabButton("logs");
-    startLogs();
+  // ---- TABS: Layout --------------------------------------------------------
+  function buildOverviewPane(){
+    return `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+        <div class="card"><div class="k">FPS</div><div class="v" id="ov-fps">–</div></div>
+        <div class="card"><div class="k">Canvas</div><div class="v" id="ov-canvas">–</div></div>
+        <div class="card"><div class="k">Map</div><div class="v" id="ov-map">–</div></div>
+        <div class="card"><div class="k">Engine</div><div class="v" id="ov-engine">–</div></div>
+      </div>
+      <style>
+        #inspector .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
+          border-radius:10px;padding:10px}
+        #inspector .k{opacity:.7;font-size:12px;margin-bottom:4px}
+        #inspector .v{font-weight:700;letter-spacing:.2px}
+      </style>
+    `;
   }
 
-  function activateTabButton(id) {
-    document.querySelectorAll(".inspector-tab").forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.tab === id);
-    });
+  function buildLogPane(){
+    return `
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <pre id="insp-log" style="margin:0;padding:12px;border-radius:8px;background:#111;min-height:200px;color:#cfd3d6;overflow:auto;white-space:pre-wrap">[Log wird geladen…]</pre>
+      </div>
+    `;
   }
 
-  function switchTab(id) {
-    const body = $(".inspector-body", rootEl);
-    body.innerHTML = "";
-    activateTabButton(id);
+  function buildBuildPane(){
+    return `
+      <div class="card">
+        <div class="k">Aktuelles Build-Tool</div>
+        <div class="v" id="build-current">–</div>
+      </div>
+    `;
+  }
 
-    if (id === "logs") {
-      body.append(logsBox);
-      startLogs();
+  function buildPathsPane(){
+    return `
+      <div class="card">
+        <div class="k">Heatmap-Max</div>
+        <div class="v" id="pf-heatmax">–</div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="k">Letzte Pfade</div>
+        <ul id="pf-last" style="margin:6px 0 0;padding-left:18px;max-height:220px;overflow:auto"></ul>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <label style="display:flex;gap:6px;align-items:center;opacity:.9">
+          <input type="checkbox" id="pf-toggle" />
+          Pfad-Overlay anzeigen
+        </label>
+      </div>
+    `;
+  }
+
+  function buildTestsPane(){
+    return `
+      <div class="card">
+        <div class="k">Tests</div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button id="tests-run" style="border:none;border-radius:8px;padding:8px 10px;background:rgba(120,200,255,.18);color:#fff;cursor:pointer">Alle Tests ausführen</button>
+        </div>
+        <pre id="tests-out" style="margin:10px 0 0;padding:10px;border-radius:8px;background:#111;color:#cfd3d6;min-height:120px;white-space:pre-wrap">Bereit.</pre>
+      </div>
+    `;
+  }
+
+  // ---- State ----------------------------------------------------------------
+  let isOpen = false;
+  let fpsLoopId = 0;
+  let fpsAvg = 0;
+  let lastBuildTool = "–";
+  const lastPaths = [];
+
+  // ---- FPS ------------------------------------------------------------------
+  function startFPS(){
+    stopFPS();
+    let last = performance.now(), acc=0, frames=0;
+    function loop(t){
+      const dt = t - last; last = t;
+      acc += dt; frames++;
+      if (acc >= 500){
+        const fps = (1000*frames/acc);
+        fpsAvg = Math.round(fps);
+        const el = root?.querySelector("#ov-fps");
+        if (el) el.textContent = `${fpsAvg}`;
+        acc = 0; frames = 0;
+      }
+      fpsLoopId = requestAnimationFrame(loop);
+    }
+    fpsLoopId = requestAnimationFrame(loop);
+  }
+  function stopFPS(){
+    if (fpsLoopId) cancelAnimationFrame(fpsLoopId);
+    fpsLoopId = 0;
+  }
+
+  // ---- Logs -----------------------------------------------------------------
+  function refreshLogs(){
+    try{
+      const pre = root?.querySelector("#insp-log");
+      if (!pre) return;
+
+      // Versuche zuerst gepufferten Log-Stream
+      if (window.CBLog?.getBuffer){
+        const buf = CBLog.getBuffer(); // Array<string>
+        pre.textContent = buf && buf.length ? buf.join("\n") : "[Keine Log-Einträge vorhanden]";
+        return;
+      }
+
+      // Fallback: interne Sammelstelle (Polyfill schreibt oft auf window.__cbLogBuf)
+      const poly = (window.__cbLogBuf || window.__cb?.logBuffer);
+      if (Array.isArray(poly) && poly.length){
+        pre.textContent = poly.join("\n");
+      } else {
+        pre.textContent = "[Keine Log-Einträge vorhanden]";
+      }
+    } catch(e){
+      warn("logs.refresh.fail", e?.message||e);
+    }
+  }
+
+  // Live mitlauschen (wenn Polyfill Events feuert)
+  function bindLogStream(){
+    try{
+      if (window.CBLog?.on){
+        CBLog.on("append", refreshLogs);
+      }
+      addEventListener("cb:log-append", refreshLogs);
+    }catch(_){}
+  }
+
+  // ---- Übersicht füllen -----------------------------------------------------
+  function fillOverview(){
+    try{
+      const cvs = document.getElementById("game");
+      const mapName = (cvs?.dataset?.map || "").split("/").pop() || "–";
+      const size = cvs ? `${cvs.width || cvs.clientWidth || 0}×${cvs.height || cvs.clientHeight || 0}` : "–";
+      const engine = [
+        (window.__cb && (window.__cb.engineVersion||window.__cb.indexVersion)) || "",
+        (window.Renderer && Renderer.VERSION) || ""
+      ].filter(Boolean).join(" / ") || "–";
+
+      const $ = s=>root?.querySelector(s);
+      $("#ov-map").textContent = mapName;
+      $("#ov-canvas").textContent = size;
+      $("#ov-engine").textContent = engine;
+    }catch(e){
+      warn("overview.fill.fail", e?.message||e);
+    }
+  }
+
+  // ---- Build-Tab: aktuelles Tool -------------------------------------------
+  function setBuildToolName(name){
+    lastBuildTool = name || "–";
+    const el = root?.querySelector("#build-current");
+    if (el) el.textContent = lastBuildTool;
+  }
+  function bindBuildEvents(){
+    addEventListener("cb:build-select", (ev)=>{
+      try{
+        const type = ev?.detail?.type || ev?.detail || "–";
+        ok("build.select", type);
+        setBuildToolName(type);
+      }catch(_){}
+    }, { passive:true });
+  }
+
+  // ---- Pfade-Tab ------------------------------------------------------------
+  function tryGetPathStats(){
+    try{
+      if (window.PathOverlay?.getStats) return PathOverlay.getStats();
+      if (window.OverlayHooks?.getStats) return OverlayHooks.getStats();
+    }catch(_){}
+    return null;
+  }
+  function setPathOverlayEnabled(on){
+    try{
+      if (window.PathOverlay?.setEnabled) return PathOverlay.setEnabled(!!on);
+      if (window.OverlayHooks?.set) return OverlayHooks.set("paths", !!on);
+    }catch(_){}
+  }
+  function pushLastPath(entry){
+    lastPaths.unshift(entry);
+    if (lastPaths.length > 20) lastPaths.pop();
+    const ul = root?.querySelector("#pf-last");
+    if (!ul) return;
+    ul.innerHTML = lastPaths.map(p=>`<li>${p}</li>`).join("");
+  }
+  function updatePathPane(){
+    const stats = tryGetPathStats();
+    const heatEl = root?.querySelector("#pf-heatmax");
+    if (!heatEl) return;
+    if (stats && typeof stats.heatMax !== "undefined"){
+      heatEl.textContent = String(stats.heatMax);
+    } else {
+      heatEl.textContent = "Keine Daten";
+    }
+  }
+  // Falls dein Overlay Events feuert (hier defensiv generisch):
+  function bindPathEvents(){
+    addEventListener("pf:path-computed", (ev)=>{
+      const d = ev?.detail || {};
+      const from = d.from ? `${d.from.x},${d.from.y}` : "?";
+      const to   = d.to   ? `${d.to.x},${d.to.y}`   : "?";
+      const len  = (d.length != null) ? d.length : (d.path?.length ?? "?");
+      pushLastPath(`Pfad ${from} → ${to} (L=${len})`);
+      updatePathPane();
+    }, { passive:true });
+  }
+
+  // ---- Tests ----------------------------------------------------------------
+  function runTests(){
+    const out = root?.querySelector("#tests-out");
+    if (!out) return;
+    try{
+      if (window.InspectorTests?.runAll){
+        out.textContent = "Läuft…";
+        Promise.resolve(window.InspectorTests.runAll()).then(res=>{
+          out.textContent = (typeof res === "string") ? res : JSON.stringify(res,null,2);
+        }).catch(e=>{
+          out.textContent = "Fehler: " + (e?.message||e);
+        });
+      } else {
+        out.textContent = "Keine Tests gefunden (assets/inspector/inspector.tests.js).";
+      }
+    }catch(e){
+      out.textContent = "Fehler: " + (e?.message||e);
+    }
+  }
+
+  // ---- UI-Binding -----------------------------------------------------------
+  function bindUI(){
+    // Tab-Switch
+    tabsEl.addEventListener("click", (ev)=>{
+      const btn = ev.target.closest("button[data-tab]");
+      if (!btn) return;
+      tabsEl.querySelectorAll("button").forEach(b=>{
+        b.classList.toggle("active", b===btn);
+        b.style.background = b===btn ? "rgba(76,175,80,.25)" : "rgba(255,255,255,.12)";
+      });
+      const tab = btn.dataset.tab;
+      bodyEl.querySelectorAll("[id^='pane-']").forEach(p=>p.style.display="none");
+      const pane = bodyEl.querySelector(`#pane-${tab}`);
+      if (pane) pane.style.display = "";
+
+      // Tab-spezifische Refreshes
+      if (tab==="logs") refreshLogs();
+      if (tab==="uebersicht") fillOverview();
+      if (tab==="pfade") updatePathPane();
+    }, { passive:true });
+
+    // Copy
+    copyBtn.addEventListener("click", ()=>{
+      try{
+        const txt = root.querySelector("#insp-log")?.textContent || "";
+        navigator.clipboard?.writeText(txt);
+        const msg = root.querySelector("#insp-footmsg");
+        if (msg){ msg.textContent = "Logs kopiert"; setTimeout(()=>msg.textContent="", 1200); }
+      }catch(_){}
+    });
+
+    // Close
+    closeBtn.addEventListener("click", ()=> close());
+
+    // Pfad-Overlay Toggle
+    root.querySelector("#pf-toggle")?.addEventListener("change", (ev)=>{
+      setPathOverlayEnabled(ev.target.checked);
+    });
+
+    // Tests
+    root.querySelector("#tests-run")?.addEventListener("click", runTests);
+  }
+
+  // ---- Öffnen/Schließen -----------------------------------------------------
+  function open(){
+    ensureRoot();
+    root.style.display = "block";
+    isOpen = true;
+    verBadge.textContent = VERSION;
+
+    // Startzustand: auf Logs
+    tabsEl.querySelector("button[data-tab='logs']")?.click();
+
+    // Live-Features
+    startFPS();
+    bindLogStream();
+    refreshLogs();
+    fillOverview();
+    updatePathPane();
+
+    (CBLog?.ok || console.log)(`[inspector.core] geöffnet (${VERSION})`);
+  }
+  function close(){
+    if (!root) return;
+    root.style.display = "none";
+    isOpen = false;
+    stopFPS();
+    (CBLog?.ok || console.log)(`[inspector.core] geschlossen`);
+  }
+  function toggle(force){
+    if (typeof force === "boolean"){
+      force ? open() : close();
       return;
     }
-
-    // Platzhalter für die übrigen Tabs
-    const ph = el("div");
-    ph.style.cssText = "opacity:.8";
-    ph.textContent = "Tab \"" + id + "\" ist vorbereitet und wird später befüllt.";
-    body.append(ph);
-
-    // Logs-Stream anhalten, wenn wir wegschalten
-    stopLogs();
+    isOpen ? close() : open();
   }
 
-  /* ---------------------------------------------------------------------
-   * 4) Logs – Buffer + Live-Abo
-   * ------------------------------------------------------------------- */
-  function startLogs() {
-    // Erst Puffer anzeigen
-    try {
-      const buf = (window.CBLog?.getBuffer?.() || []);
-      logsBox.value = buf.join("\n") || "[Keine Log-Einträge vorhanden]";
-      logsBox.scrollTop = logsBox.scrollHeight;
-    } catch (e) {
-      logsBox.value = "[CBLog nicht verfügbar]";
-    }
-
-    // Live-Stream (nur einmal)
-    stopLogs();
-    if (window.CBLog?.on) {
-      unsubLogs = window.CBLog.on((line) => {
-        if (!logsBox || !rootEl || rootEl.style.display === "none") return;
-        const atEnd = (logsBox.scrollTop + logsBox.clientHeight + 8) >= logsBox.scrollHeight;
-        logsBox.value += (logsBox.value ? "\n" : "") + line;
-        if (atEnd) logsBox.scrollTop = logsBox.scrollHeight;
-      });
-    }
-  }
-
-  function stopLogs() {
-    if (typeof unsubLogs === "function") {
-      try { unsubLogs(); } catch(_) {}
-    }
-    unsubLogs = null;
-  }
-
-  /* ---------------------------------------------------------------------
-   * 5) Öffnen/Schließen + Bridge
-   * ------------------------------------------------------------------- */
-  function open() {
-    try {
-      if (!rootEl) renderPanel();
-      rootEl.style.display = "block";
-      startLogs();
-      (window.CBLog?.ok || console.log)(`${NS} geöffnet (${VERSION})`);
-    } catch (e) {
-      console.error(`${NS} open()`, e);
-    }
-  }
-
-  function close() {
-    try {
-      if (!rootEl) return;
-      rootEl.style.display = "none";
-      stopLogs();
-      (window.CBLog?.ok || console.log)(`${NS} geschlossen`);
-    } catch (e) {
-      console.error(`${NS} close()`, e);
-    }
-  }
-
-  function toggle(force) {
-    if (!rootEl || rootEl.style.display === "none") return open();
-    if (force === true) return open();
-    if (force === false) return close();
-    // toggle
-    (rootEl.style.display === "none") ? open() : close();
-  }
-
-  // Öffentliche Bridge für die FABs/UX
+  // ---- Public API für FAB/Bridge -------------------------------------------
   window.GameUI = window.GameUI || {};
   window.GameUI.toggleInspector = toggle;
   window.GameUI.openInspector   = open;
   window.GameUI.closeInspector  = close;
 
-  // Optional: auto-open via ?inspector=1
-  try {
-    if (location.search.indexOf("inspector=1") !== -1) {
-      setTimeout(open, 0);
-    }
-  } catch (_) {}
+  // ---- Initial: bereit & Fallback öffnen per ?inspector=1 -------------------
+  try{
+    (CBLog?.ok || console.log)(`[inspector.core] bereit (${VERSION})`);
 
-  (window.CBLog?.ok || console.log)(`${NS} bereit (${VERSION})`);
+    // Build-Events & Pfad-Events
+    bindBuildEvents();
+    bindPathEvents();
+
+    // Direkt öffnen, wenn gewünscht
+    if (location.search.indexOf("inspector=1") !== -1){
+      setTimeout(open, 80);
+    }
+  } catch(_){}
+
+  // ---- Öffentliche Helfer für andere Module --------------------------------
+  // Wird vom Build-UI benutzt, falls GameUI nicht greift:
+  window.__inspSetBuildTool = setBuildToolName;
+
 })();
