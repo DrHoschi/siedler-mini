@@ -1,170 +1,288 @@
-<script>
-/*
-  ==========================================================
-  assets/inspector/inspector.js — v18.7.2 (STABIL)
-  CODE_STYLE:
-    - Eigenständiges Panel (kein Build/Start-Overlay blockiert)
-    - Tabs: Übersicht, Logs, Build, Pfade, Tests (Platzhalter)
-    - Robuster LogStream: nutzt CBLog.getBuffer() + 'cblog:append'
-    - Öffentliche Bridge: GameUI.toggleInspector/openInspector/closeInspector
-    - Keine Doppel-Initialisierung (idempotent)
-  ==========================================================
-*/
-(function(){
-  if (window.__INSPECTOR_READY__) return;
-  window.__INSPECTOR_READY__ = true;
+/* ============================================================================
+ *  assets/inspector/inspector.js
+ *  Neue Siedler – Inspector (stabile Minimal-Core)
+ *  Version: v18.7.2
+ *  CODE_STYLE:
+ *    - Keine externen Abhängigkeiten nötig (CBLog optional)
+ *    - Idempotent (keine Doppel-Init; sauberer Toggle)
+ *    - Tabs: Übersicht | Logs (aktiv) | Build | Pfade | Tests
+ *    - Öffnen via window.GameUI.toggleInspector()
+ *    - ?inspector=1 öffnet automatisch
+ * ========================================================================== */
+(function () {
+  "use strict";
+
+  // --- Guard gegen Doppel-Init ------------------------------------------------
+  if (window.__INSPECTOR_CORE_READY__) return;
+  window.__INSPECTOR_CORE_READY__ = true;
 
   const VERSION = "v18.7.2";
-  const d = (sel,root=document)=> root.querySelector(sel);
+  const NS = "[inspector.core]";
 
-  // ---------- UI Factory ----------
-  function el(tag, attrs={}, ...kids){
+  // --- Hilfen -----------------------------------------------------------------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const el = (tag, cls, html) => {
     const n = document.createElement(tag);
-    for (const [k,v] of Object.entries(attrs||{})){
-      if (k === "class") n.className = v;
-      else if (k === "style") n.style.cssText = v;
-      else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
-      else n.setAttribute(k, v);
-    }
-    for (const k of kids){
-      if (k==null) continue;
-      n.appendChild(typeof k === "string" ? document.createTextNode(k) : k);
-    }
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
     return n;
-  }
+  };
+  const toStr = (v) => {
+    if (v == null) return "";
+    if (typeof v === "string") return v;
+    try { return JSON.stringify(v); } catch { return String(v); }
+  };
+  const pad2 = (n) => (n < 10 ? "0" + n : "" + n);
+  const tsFmt = (t) => {
+    const d = new Date(t || Date.now());
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  };
 
-  // ---------- Styles (eingebettet, sanft) ----------
-  const STYLE_ID = "inspector-inline-style-1872";
-  if (!document.getElementById(STYLE_ID)){
-    document.head.appendChild(el("style", { id: STYLE_ID }, `
-      .insp-wrap{position:fixed;left:50%;top:56px;transform:translateX(-50%);
-        width:min(920px,calc(100vw - 24px));max-height:calc(100vh - 120px);
-        z-index:2147483646;background:rgba(18,18,18,.95);
-        border:1px solid rgba(255,255,255,.08);border-radius:14px;
-        box-shadow:0 30px 120px rgba(0,0,0,.55);color:#eaeaea;overflow:hidden;}
-      .insp-head{display:flex;align-items:center;gap:10px;padding:10px 12px 8px;
-        border-bottom:1px solid rgba(255,255,255,.06);
-        background:linear-gradient(#222,#1a1a1a);}
-      .insp-title{font-weight:800;letter-spacing:.2px}
-      .insp-ver{opacity:.6;margin-left:6px;font-size:12px}
-      .insp-close{margin-left:auto;border:0;border-radius:10px;padding:6px 10px;
-        background:rgba(255,255,255,.10);color:#fff;cursor:pointer;}
-      .insp-tabs{display:flex;gap:8px;padding:10px 12px 8px;border-bottom:1px solid rgba(255,255,255,.06)}
-      .insp-tab{border:0;border-radius:999px;padding:7px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;font-size:14px}
-      .insp-tab.active{background:rgba(120,200,150,.28)}
-      .insp-body{padding:12px;max-height:calc(100vh - 220px);overflow:auto}
-      .insp-box{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px}
-      .insp-pre{white-space:pre-wrap;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size:13px;line-height:1.45;color:#dfe6e3}
-      .insp-actions{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid rgba(255,255,255,.06)}
-      .insp-btn{border:0;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer}
-    `));
-  }
+  // --- CBLog Brücke / Fallback -----------------------------------------------
+  // Nimmt bestehendes CBLog, sonst legt einen kleinen Shim an.
+  const CB = (function ensureCBLog() {
+    if (window.CBLog && typeof window.CBLog.on === "function") return window.CBLog;
 
-  // ---------- Panel erstellen ----------
-  let root = null, pre = null, tabState = "Logs";
+    // Fallback: kleiner Logger, der console mitprotokolliert.
+    const buf = [];
+    const subs = new Set();
+    const push = (level, args, tag) => {
+      const entry = { ts: Date.now(), level, tag, args: Array.from(args || []) };
+      buf.push(entry);
+      subs.forEach((fn) => { try { fn(entry); } catch {} });
+    };
 
-  function makePanel(){
-    if (root) return root;
+    // Console-Proxy nur einmal setzen
+    if (!window.__CBLOG_CONSOLE_PATCHED__) {
+      window.__CBLOG_CONSOLE_PATCHED__ = true;
+      ["log", "info", "warn", "error"].forEach((m) => {
+        const orig = console[m].bind(console);
+        console[m] = function () {
+          try { push(m.toUpperCase(), arguments, "console"); } catch {}
+          orig.apply(console, arguments);
+        };
+      });
+      console.info("[CBLog] Polyfill aktiv");
+    }
 
-    const head = el("div",{class:"insp-head"},
-      el("div",{class:"insp-title"},"Inspector"),
-      el("div",{class:"insp-ver"}, VERSION),
-      el("button",{class:"insp-close", onclick: close},"Schließen")
-    );
+    return {
+      info: function () { push("INFO", arguments); },
+      log: function () { push("LOG", arguments); },
+      warn: function () { push("WARN", arguments); },
+      error: function () { push("ERROR", arguments); },
+      on: function (fn) { subs.add(fn); },
+      off: function (fn) { subs.delete(fn); },
+      getBuffer: function () { return buf.slice(); },
+    };
+  })();
 
-    const tabs = ["Übersicht","Logs","Build","Pfade","Tests"];
-    const tabsEl = el("div",{class:"insp-tabs"},
-      ...tabs.map(name => el("button",{
-        class:"insp-tab"+(name===tabState?" active":""), onclick:()=>activate(name)
-      }, name))
-    );
+  // sofort ein „bereit“-Eintrag (hilft beim Debug)
+  try { CB.info(`${NS} bereit (${VERSION})`); } catch {}
 
-    pre = el("pre",{class:"insp-pre", "aria-label":"Logs-Anzeige"},"[Log wird geladen…]");
-    const body = el("div",{class:"insp-body"}, el("div",{class:"insp-box"}, pre));
+  // --- Normalisierung verschiedener Buffer-Formate ---------------------------
+  function formatEntry(e) {
+    // mögliche Formen:
+    // 1) {ts, level, tag, args[]}
+    // 2) {time, lvl, scope, message/text}
+    // 3) ["ts","LEVEL","tag",...args]
+    // 4) string
+    try {
+      if (typeof e === "string") return e;
 
-    const actions = el("div",{class:"insp-actions"},
-      el("button",{class:"insp-btn",onclick:clearLogs},"Leeren"),
-      el("button",{class:"insp-btn",onclick:refreshLogs},"Aktualisieren")
-    );
+      // Array-Variante
+      if (Array.isArray(e)) {
+        const [ts, lvl, tg, ...rest] = e;
+        const msg = rest.map(toStr).join(" ");
+        return `[${tsFmt(ts)}] ${(lvl || "LOG").toString().toUpperCase()}${tg ? " [" + tg + "]" : ""} ${msg}`.trim();
+      }
 
-    root = el("div",{class:"insp-wrap", id:"inspector", role:"dialog","aria-label":"Inspector"}, head, tabsEl, body, actions);
-    document.body.appendChild(root);
-    return root;
-  }
+      // Objekt-Variante
+      const t = e.ts || e.time || Date.now();
+      const lvl = (e.level || e.lvl || e.type || "LOG").toString().toUpperCase();
+      const tag = e.tag || e.scope || "";
+      let payload = "";
 
-  function setActiveTab(name){
-    tabState = name;
-    document.querySelectorAll(".insp-tab").forEach(b=>{
-      b.classList.toggle("active", b.textContent===name);
-    });
-  }
+      if (Array.isArray(e.args)) payload = e.args.map(toStr).join(" ");
+      else if (e.message != null) payload = toStr(e.message);
+      else if (e.text != null) payload = toStr(e.text);
+      else if (e.msg != null) payload = toStr(e.msg);
 
-  function activate(name){
-    setActiveTab(name);
-    if (name === "Logs") refreshLogs();
-    else if (pre) pre.textContent = `[${name}] — Noch ohne Inhalt.`;
-  }
-
-  function open(){
-    makePanel().style.display = "block";
-    setActiveTab(tabState || "Logs");
-    refreshLogs();
-    try{ (window.CBLog?.info||console.log)("inspector.core","geöffnet ("+VERSION+")"); }catch(_){}
-  }
-  function close(){
-    if (makePanel()) root.style.display = "none";
-  }
-  function toggle(){
-    const p = makePanel();
-    p.style.display = (p.style.display==="none" || !p.style.display) ? "block" : "none";
-    if (p.style.display === "block") refreshLogs();
-  }
-
-  // ---------- LogStream (stabil) ----------
-  let streamBound = false;
-  function formatItem(it){
-    const pad = (n)=> String(n).padStart(2,"0");
-    const t = it.ts instanceof Date ? it.ts : new Date(it.ts);
-    const hh = pad(t.getHours()), mm = pad(t.getMinutes()), ss = pad(t.getSeconds());
-    const lvl = (it.level||"LOG").toUpperCase().padEnd(5," ");
-    const tag = it.tag ? ` [${it.tag}]` : "";
-    return `[${hh}:${mm}:${ss}] ${lvl}${tag} ${it.text}`;
-  }
-
-  function clearLogs(){
-    try{ window.CBLog?.clear?.(); }catch(_){}
-    if (pre) pre.textContent = "";
-  }
-
-  function refreshLogs(){
-    if (!pre) return;
-    const buf = (window.CBLog?.getBuffer?.() || []);
-    pre.textContent = buf.length ? buf.map(formatItem).join("\n")
-                                 : "[Keine Log-Einträge vorhanden]";
-    // Live-Append nur einmal anbinden
-    if (!streamBound){
-      streamBound = true;
-      window.addEventListener("cblog:append", (ev)=>{
-        if (!pre || root?.style.display==="none") return;
-        const it = ev.detail;
-        pre.appendChild(document.createTextNode("\n"+formatItem(it)));
-        // optional auto-scroll:
-        pre.parentElement?.scrollTo({ top: pre.parentElement.scrollHeight, behavior: "instant" });
-      }, { passive:true });
+      return `[${tsFmt(t)}] ${lvl}${tag ? " [" + tag + "]" : ""} ${payload}`.trim();
+    } catch {
+      return "[??:??:??] LOG (unlesbar)";
     }
   }
 
-  // ---------- Public Bridge ----------
-  window.GameUI = window.GameUI || {};
-  window.GameUI.toggleInspector = toggle;
-  window.GameUI.openInspector   = open;
-  window.GameUI.closeInspector  = close;
+  // --- UI bauen (lazy) --------------------------------------------------------
+  let root, tabsEl, bodyEl, txtArea, footerEl;
+  let currentTab = "logs";
 
-  // ---------- Auto-Init (sichtbar lassen; beim Start nicht forcieren) ----------
-  // Wir initialisieren nur leise, ohne das Panel automatisch zu öffnen,
-  // damit nichts „reinpoppt“. Öffnen bleibt über FAB / GameUI.
-  makePanel().style.display = "none";
-  try{ (window.CBLog?.info||console.log)("inspector.core","bereit ("+VERSION+")"); }catch(_){}
+  function buildUI() {
+    if (root) return;
+
+    root = el("div", "inspector");
+    root.id = "inspector";
+    root.setAttribute("role", "dialog");
+    root.setAttribute("aria-label", "Inspector");
+    root.style.cssText =
+      "position:fixed; inset:auto 2.5vw 8vh 2.5vw; max-width:980px; margin:0 auto; " +
+      "background:rgba(20,20,20,.94); border:1px solid rgba(255,255,255,.08); " +
+      "border-radius:12px; color:#eee; z-index:2147483646; box-shadow:0 40px 120px rgba(0,0,0,.55);";
+
+    // Kopf
+    const head = el("div", "insp-head");
+    head.style.cssText = "display:flex; align-items:center; gap:10px; padding:10px 12px 8px;";
+    head.appendChild(el("div", "insp-title", `<strong>Inspector</strong><span style="opacity:.55;margin-left:8px">${VERSION}</span>`));
+    const spacer = el("div"); spacer.style.flex = "1";
+    head.appendChild(spacer);
+    const btnClose = el("button", "insp-close", "Schließen");
+    btnClose.style.cssText = "border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;";
+    btnClose.addEventListener("click", close);
+    head.appendChild(btnClose);
+    root.appendChild(head);
+
+    // Tabs
+    tabsEl = el("div", "insp-tabs");
+    tabsEl.style.cssText = "display:flex;gap:8px; padding:0 12px 10px;";
+    [["overview","Übersicht"],["logs","Logs"],["build","Build"],["paths","Pfade"],["tests","Tests"]]
+      .forEach(([id, label])=>{
+        const b = el("button", "insp-tab", label);
+        b.dataset.tab = id;
+        b.style.cssText = "border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer;";
+        b.addEventListener("click", ()=>switchTab(id));
+        tabsEl.appendChild(b);
+      });
+    root.appendChild(tabsEl);
+
+    // Body
+    bodyEl = el("div", "insp-body");
+    bodyEl.style.cssText = "padding:0 12px 12px;";
+    // Logs Textarea
+    const box = el("div", "insp-logbox");
+    box.style.cssText = "background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.08); border-radius:8px; overflow:hidden;";
+    txtArea = el("pre", "insp-pre");
+    txtArea.style.cssText = "margin:0; padding:12px; white-space:pre-wrap; font:13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#dfe8f0; min-height:200px; max-height:48vh; overflow:auto;";
+    box.appendChild(txtArea);
+    bodyEl.appendChild(box);
+
+    // Footer
+    footerEl = el("div", "insp-foot");
+    footerEl.style.cssText = "display:flex;gap:8px; padding:10px 12px 12px;";
+    const btnClear = el("button", "insp-btn", "Leeren");
+    btnClear.style.cssText = "border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;";
+    btnClear.addEventListener("click", ()=>{ txtArea.textContent = ""; });
+    const btnRefresh = el("button", "insp-btn", "Aktualisieren");
+    btnRefresh.style.cssText = btnClear.style.cssText;
+    btnRefresh.addEventListener("click", refreshLogs);
+    footerEl.append(btnClear, btnRefresh);
+    bodyEl.appendChild(footerEl);
+
+    root.appendChild(bodyEl);
+    document.body.appendChild(root);
+
+    switchTab(currentTab);
+  }
+
+  function switchTab(id) {
+    currentTab = id;
+    // Tabs optisch
+    [...tabsEl.querySelectorAll("button")].forEach(b=>{
+      b.style.background = (b.dataset.tab===id) ? "rgba(76,175,80,.28)" : "rgba(255,255,255,.10)";
+      b.style.color = (b.dataset.tab===id) ? "#e9f6ec" : "#ddd";
+    });
+
+    // Inhalte: aktuell nur Logs "aktiv"
+    if (id === "logs") {
+      footerEl.style.display = "";
+      refreshLogs(); // immer füllen
+    } else {
+      footerEl.style.display = "none";
+      if (id === "overview") {
+        txtArea.textContent = "[Übersicht kommt …]";
+      } else if (id === "build") {
+        txtArea.textContent = "[Build-Werkzeuge folgen …]";
+      } else if (id === "paths") {
+        txtArea.textContent = "[Pfade-Overlay & Stats folgen …]";
+      } else if (id === "tests") {
+        txtArea.textContent = "[Mini-Tests folgen …]";
+      } else {
+        txtArea.textContent = "";
+      }
+    }
+  }
+
+  // --- Log-Stream -------------------------------------------------------------
+  let streamOn = false;
+  function startStream() {
+    if (streamOn) return;
+    streamOn = true;
+    // Vergangene Einträge
+    refreshLogs();
+    // Live
+    if (CB && typeof CB.on === "function") {
+      CB.on(onLogEntry);
+    }
+  }
+  function onLogEntry(e) {
+    if (!txtArea || currentTab !== "logs") return;
+    const line = formatEntry(e);
+    if (!line) return;
+    txtArea.textContent += (txtArea.textContent ? "\n" : "") + line;
+    // Scroll ans Ende
+    txtArea.scrollTop = txtArea.scrollHeight;
+  }
+  function refreshLogs() {
+    try {
+      const buf =
+        (CB && typeof CB.getBuffer === "function" && CB.getBuffer()) ||
+        window.__CBLOG_BUF ||
+        [];
+      const lines = buf.map(formatEntry).filter(Boolean);
+      txtArea.textContent = lines.length ? lines.join("\n") : "[Keine Log-Einträge vorhanden]";
+      txtArea.scrollTop = txtArea.scrollHeight;
+    } catch (e) {
+      txtArea.textContent = "[Log konnte nicht gelesen werden]";
+      console.warn(NS, "refreshLogs failed:", e);
+    }
+  }
+
+  // --- API (für FAB & andere UIs) --------------------------------------------
+  function open()  { buildUI(); root.style.display = "block"; startStream(); CB.info(`${NS} geöffnet (${VERSION})`); }
+  function close() { if (!root) return; root.style.display = "none"; }
+  function toggle(){ if (!root || root.style.display === "none" || !root.style.display) open(); else close(); }
+
+  // Public Bridge
+  window.GameUI = window.GameUI || {};
+  // keine Überschreibung, wenn identisch vorhanden
+  if (window.GameUI.toggleInspector !== toggle) window.GameUI.toggleInspector = toggle;
+  window.GameUI.openInspector  = open;
+  window.GameUI.closeInspector = close;
+
+  // --- Auto-Open (nur wenn explizit gewünscht) -------------------------------
+  // 1) ?inspector=1
+  // 2) CustomEvent 'cb:inspector-open'
+  // 3) Failsafe-Badge (optional)
+  try {
+    if (/\binspector=1\b/.test(location.search)) {
+      // sehr frühes Öffnen (nach minimalem Timeout, damit <body> steht)
+      setTimeout(open, 60);
+    }
+    window.addEventListener("cb:inspector-open", open);
+  } catch {}
+
+  // Mini-Failsafe-Badge: nur wenn Inspector mal „unsichtbar“ wäre
+  (function ensureBadge(){
+    try {
+      // wenn ein FAB vorhanden ist, nichts tun
+      if (document.getElementById("btn-inspector")) return;
+      const b = el("button", "", "🛠");
+      b.title = "Inspector öffnen";
+      b.style.cssText =
+        "position:fixed;right:14px;bottom:14px;width:48px;height:48px;border:none;border-radius:50%;"+
+        "background:rgba(30,30,30,.92);color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.35);z-index:2147483647;cursor:pointer;";
+      b.addEventListener("click", toggle);
+      document.addEventListener("DOMContentLoaded", ()=>document.body.appendChild(b));
+    } catch {}
+  })();
+
 })();
-</script>
