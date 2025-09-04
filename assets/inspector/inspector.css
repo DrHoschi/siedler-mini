@@ -119,6 +119,38 @@
 #ins-body::-webkit-scrollbar { height: 8px; width: 8px; }
 #ins-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 10px; }
 
+/* ===== Logtoolbar (Filter + Suche) ======================================= */
+.ins-logtools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.ins-pill {
+  border: 1px solid var(--ins-border-strong);
+  border-radius: var(--pill-radius);
+  padding: 6px 10px;
+  background: var(--tab-bg);
+  color: var(--tab-text);
+  cursor: pointer;
+  user-select: none;
+}
+.ins-pill.active { background: var(--tab-bg-active); color: var(--tab-text-active); }
+.ins-pill.badge-log  { }
+.ins-pill.badge-info { }
+.ins-pill.badge-warn { }
+.ins-pill.badge-err  { }
+.ins-search {
+  min-width: 140px;
+  flex: 1 1 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--ins-border-strong);
+  border-radius: 10px;
+  background: rgba(255,255,255,.06);
+  color: var(--ins-text);
+}
+
 /* ===== Logkonsole ========================================================= */
 .ins-logbox {
   background: var(--log-bg);
@@ -132,13 +164,6 @@
   color: var(--ins-text);
   min-height: 240px;
 }
-
-/* Level-Badges im Text (wenn mit gerendert) */
-.badge { display:inline-block; padding:.1em .55em; border-radius:999px; font-size:.85em; margin-right:.35em; }
-.badge.err  { background: color-mix(in srgb, var(--badge-err) 22%, transparent); color: var(--badge-err); }
-.badge.warn { background: color-mix(in srgb, var(--badge-warn) 22%, transparent); color: #f6ce3a; }
-.badge.info { background: color-mix(in srgb, var(--badge-info) 22%, transparent); color: #a7daff; }
-.badge.ok   { background: color-mix(in srgb, var(--badge-ok) 22%,  transparent); color: #b6f1c2; }
 
 /* ===== Footer / Buttons =================================================== */
 #ins-foot {
