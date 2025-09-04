@@ -1,24 +1,24 @@
 /* ============================================================================
  *  assets/inspector/inspector.js
  *  Neue Siedler – Inspector (stabil + Tabs)
- *  Version: v18.9.0
+ *  Version: v18.9.3
  *  CODE_STYLE
  *    - Keine externen Abhängigkeiten; nutzt CBLog wenn vorhanden, sonst Polyfill
  *    - Idempotent (Guard gegen Doppel-Init)
- *    - Tabs: Übersicht | Logs | Build | Pfade | Tests (Tests nur Platzhalter)
+ *    - Tabs: Übersicht | Logs | Build | Pfade | Tests (Tests Platzhalter)
  *    - Öffnen via window.GameUI.toggleInspector()
- *    - Auto-Open NUR via ?inspector=1 oder Event 'cb:inspector-open'
- *    - Logs: Puffer + Live-Stream, Leerzeilen gefiltert, Kopieren/Leeren/Aktualisieren
- *    - Änderungen sind rückwärtskompatibel – nichts, was bereits lief, wird gebrochen
+ *    - Auto-Open nur via ?inspector=1 oder Event 'cb:inspector-open'
+ *    - Logs: Puffer + Live-Stream, Kopieren/Leeren/Aktualisieren
+ *    - Rückwärtskompatibel – bricht nichts, was schon lief
  * ========================================================================== */
 (function () {
   "use strict";
 
-  // ---- Doppel-Init verhindern -----------------------------------------------
+  // ---- Doppel-Init verhindern ------------------------------------------------
   if (window.__INSPECTOR_CORE_READY__) return;
   window.__INSPECTOR_CORE_READY__ = true;
 
-  const VERSION = "v18.9.0";
+  const VERSION = "v18.9.3";
   const NS = "[inspector.core]";
 
   // ---- Helpers ---------------------------------------------------------------
@@ -63,30 +63,6 @@
   })();
 
   try { CB.info(`${NS} bereit (${VERSION})`); } catch {}
-
-  // ---- Log-Normalisierung ----------------------------------------------------
-  function formatEntry(e){
-    try{
-      if (typeof e === "string") return e.trim() ? e : "";
-      if (Array.isArray(e)){
-        const [ts,lvl,tag,...rest] = e;
-        const msg = rest.map(toStr).join(" ").trim();
-        if (!msg) return "";
-        return `[${tsFmt(ts)}] ${(lvl||"LOG").toString().toUpperCase()}${tag ? " ["+tag+"]" : ""} ${msg}`;
-      }
-      const t   = e.ts || e.time || Date.now();
-      const lvl = (e.level || e.lvl || e.type || "LOG").toString().toUpperCase();
-      const tag = e.tag || e.scope || "";
-      let payload = "";
-      if (Array.isArray(e.args)) payload = e.args.map(toStr).join(" ");
-      else if (e.message!=null)  payload = toStr(e.message);
-      else if (e.text!=null)     payload = toStr(e.text);
-      else if (e.msg!=null)      payload = toStr(e.msg);
-      payload = payload.trim();
-      if (!payload && !tag) return "";
-      return `[${tsFmt(t)}] ${lvl}${tag ? " ["+tag+"]" : ""} ${payload}`.trim();
-    }catch{ return ""; }
-  }
 
   // ---- UI (lazy) -------------------------------------------------------------
   let root, tabsEl, bodyEl, footerEl, preLog;
@@ -139,7 +115,7 @@
     box.appendChild(preLog);
     bodyEl.appendChild(box);
 
-    // Footer
+    // Footer (nur im Log-Tab sichtbar)
     footerEl = el("div","insp-foot");
     footerEl.style.cssText = "display:flex;gap:8px;padding:10px 12px 12px";
     const btnCopy     = mkBtn("Kopieren", copyLogs);
@@ -201,6 +177,28 @@
     preLog.textContent += (preLog.textContent ? "\n" : "") + line;
     preLog.scrollTop = preLog.scrollHeight;
   }
+  function formatEntry(e){
+    try{
+      if (typeof e === "string") return e.trim() ? e : "";
+      if (Array.isArray(e)){
+        const [ts,lvl,tag,...rest] = e;
+        const msg = rest.map(toStr).join(" ").trim();
+        if (!msg) return "";
+        return `[${tsFmt(ts)}] ${(lvl||"LOG").toString().toUpperCase()}${tag ? " ["+tag+"]" : ""} ${msg}`;
+      }
+      const t   = e.ts || e.time || Date.now();
+      const lvl = (e.level || e.lvl || e.type || "LOG").toString().toUpperCase();
+      const tag = e.tag || e.scope || "";
+      let payload = "";
+      if (Array.isArray(e.args)) payload = e.args.map(toStr).join(" ");
+      else if (e.message!=null)  payload = toStr(e.message);
+      else if (e.text!=null)     payload = toStr(e.text);
+      else if (e.msg!=null)      payload = toStr(e.msg);
+      payload = payload.trim();
+      if (!payload && !tag) return "";
+      return `[${tsFmt(t)}] ${lvl}${tag ? " ["+tag+"]" : ""} ${payload}`.trim();
+    }catch{ return ""; }
+  }
   function refreshLogs(){
     try {
       const buf = (CB && CB.getBuffer && CB.getBuffer()) || window.__CBLOG_BUF || [];
@@ -228,7 +226,7 @@
     }
   }
 
-  // ---- Übersicht -------------------------------------------------------------
+  // ---- Übersicht (kleines Runtime-Panel) ------------------------------------
   let fpsAvg = 0, fpsSamples = [];
   (function trackFPS(){
     let last = performance.now();
@@ -262,31 +260,106 @@
     }
   }
 
-  // ---- Build-Tab -------------------------------------------------------------
+  // === REPLACE in assets/inspector/inspector.js ==============================
+  // 1) Build-Tab – liest optional window.BUILD_CATEGORIES
   function renderBuild(){
-    // Minimal: zeigt aktuellen Build-Status und bietet Beispiel-Aktionen.
-    const tool = (window.__cb?.buildTool) || "(kein Tool)";
-    preLog.textContent =
-      `Aktives Build-Tool: ${tool}\n\n`+
-      `Aktionen:\n`+
-      `• Haus auswählen → cb:build-select { type:'house' }\n`+
-      `• HQ auswählen   → cb:build-select { type:'hq' }\n\n`+
-      `Tipp: Die UI kann diese Events senden, der Core muss sie nur abfangen.`;
+    // UI-Container vorbereiten
+    preLog.textContent = "";
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
 
-    // kleine Click-Handler am Panel selbst (Buttons brauchen wir nicht - reine Textfläche),
-    // wer Buttons will, kann später echtes UI ergänzen.
+    // Quelle: BUILD_CATEGORIES oder Fallback
+    const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES) ? window.BUILD_CATEGORIES : [
+      { id:"general", title:"Allg.", items:[
+        { id:"hq", label:"Hauptquartier" },
+        { id:"depot", label:"Depot" },
+        { id:"house", label:"Haus" }
+      ]},
+      { id:"production_food", title:"Produktion", items:[
+        { id:"farm", label:"Farm" },
+        { id:"fischer", label:"Fischer" }
+      ]}
+    ]);
+
+    // kleine Helper
+    const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.8;font-weight:700;margin-top:4px"; return h; };
+    const mkBtn = (label, disabled=false)=>{
+      const b=document.createElement("button");
+      b.textContent = label;
+      b.disabled = !!disabled;
+      b.style.cssText = "border:none;border-radius:999px;padding:6px 10px;margin:4px 6px 0 0;cursor:pointer;" +
+        (disabled ? "background:rgba(255,255,255,.06);color:#777;cursor:not-allowed;"
+                  : "background:rgba(255,255,255,.10);color:#ddd;");
+      return b;
+    };
+
+    // Render
+    cats.forEach(cat=>{
+      wrap.appendChild(mkH(cat.title || cat.id));
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;flex-wrap:wrap";
+      (cat.items||[]).forEach(it=>{
+        const btn = mkBtn(it.label || it.id, !!it.todo);
+        if (!it.todo){
+          btn.addEventListener("click", ()=>{
+            const detail = { type: it.id };
+            try { window.dispatchEvent(new CustomEvent("cb:build-select", { detail })); } catch {}
+            try { (window.CBLog?.log||console.log)("[ui] Build-Select", it.id); } catch {}
+            // kleine Rückmeldung
+            try{
+              preLog.textContent = `Aktives Build-Tool: ${it.id}\n(Event cb:build-select gesendet)`;
+            }catch{}
+          });
+        }
+        row.appendChild(btn);
+      });
+      wrap.appendChild(row);
+    });
+
+    // Ersetz den Log-Bereich durch unser kleines Build-UI
+    bodyEl.innerHTML = "";
+    bodyEl.appendChild(wrap);
+    footerEl.style.display = "none"; // im Build-Tab brauchen wir die Log-Buttons nicht
   }
 
-  // ---- Pfade-Tab -------------------------------------------------------------
+  // 2) Pfade-Tab – nur Events toggeln/resetten
   function renderPaths(){
-    const enabled = !!window.__cb?.pathsEnabled;
-    preLog.textContent =
-      `Pfade-Overlay: ${enabled ? "AN" : "AUS"}\n\n`+
-      `Aktionen:\n`+
-      `• Overlay toggeln → Event 'cb:paths:toggle'\n`+
-      `• Heatmap reset  → Event 'cb:paths:reset'\n\n`+
-      `Hinweis: OverlayHooks in core/overlay-hooks.js lauscht auf diese Events.`;
+    bodyEl.innerHTML = "";
+    footerEl.style.display = "none";
+
+    const box = document.createElement("div");
+    box.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+
+    const mk = (label, fn)=>{
+      const b=document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
+      b.addEventListener("click", fn);
+      return b;
+    };
+
+    // Statusanzeige (aus __cb, falls vorhanden)
+    const status = document.createElement("div");
+    status.style.cssText = "opacity:.8;margin-top:6px";
+    const refreshStatus = ()=>{
+      const on = !!(window.__cb && window.__cb.pathsEnabled);
+      status.textContent = `Pfade-Overlay: ${on ? "AN" : "AUS"}`;
+    };
+    refreshStatus();
+
+    // Buttons
+    box.appendChild(mk("Overlay umschalten", ()=>{
+      try { window.dispatchEvent(new CustomEvent("cb:paths:toggle")); } catch {}
+      setTimeout(refreshStatus, 50);
+    }));
+    box.appendChild(mk("Heatmap zurücksetzen", ()=>{
+      try { window.dispatchEvent(new CustomEvent("cb:paths:reset")); } catch {}
+    }));
+
+    bodyEl.appendChild(box);
+    bodyEl.appendChild(status);
   }
+  // === /REPLACE ===============================================================
 
   // ---- Toast -----------------------------------------------------------------
   function toast(msg){
@@ -316,13 +389,13 @@
   window.GameUI.openInspector  = open;
   window.GameUI.closeInspector = close;
 
-  // ---- Auto-Open nur auf Wunsch ---------------------------------------------
+  // ---- Auto-Open (nur auf Wunsch) -------------------------------------------
   try{
     if (/\binspector=1\b/.test(location.search)) setTimeout(open, 60);
     window.addEventListener("cb:inspector-open", open);
   }catch{}
 
-  // ---- Mini-Failsafe-Badge (nur wenn kein FAB vorhanden ist) -----------------
+  // ---- Mini-Failsafe-Badge ---------------------------------------------------
   (function ensureBadge(){
     try{
       if (document.getElementById("btn-inspector")) return;
@@ -336,10 +409,8 @@
     }catch{}
   })();
 
-  // ---- Event-Brücken (für Build/Pfade) --------------------------------------
-  // Du kannst überall im Code diese CustomEvents dispatchen:
+  // ---- Event-Doku ------------------------------------------------------------
   //   window.dispatchEvent(new CustomEvent('cb:build-select', { detail:{ type:'house' } }));
   //   window.dispatchEvent(new CustomEvent('cb:paths:toggle'));
   //   window.dispatchEvent(new CustomEvent('cb:paths:reset'));
-  // Der Inspector selbst sendet hier noch nichts automatisch – nur Doku.
 })();
