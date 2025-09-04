@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-03T22:27:57.108Z",
+  "createdAt": "2025-09-04T18:39:06.471Z",
   "root": ".",
-  "count": 260,
+  "count": 267,
   "entries": [
     {
       "type": "dir",
@@ -169,7 +169,7 @@
     {
       "type": "file",
       "path": "assets/core/cblog.polyfill.js",
-      "size": 2147
+      "size": 2776
     },
     {
       "type": "file",
@@ -250,13 +250,48 @@
     },
     {
       "type": "file",
+      "path": "assets/inspector/inspector.build.js",
+      "size": 2231
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.core.js",
+      "size": 6519
+    },
+    {
+      "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 2672
+      "size": 2018
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 11038
+      "size": 14780
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.logfix.js",
+      "size": 3807
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.logs.js",
+      "size": 4402
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.md",
+      "size": 137
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.paths.js",
+      "size": 1359
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.tests.js",
+      "size": 601
     },
     {
       "type": "dir",
@@ -844,7 +879,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 757
+      "size": 5095
     },
     {
       "type": "file",
@@ -1196,12 +1231,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 25248
+      "size": 25640
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9641
+      "size": 9785
     },
     {
       "type": "file",
@@ -1216,7 +1251,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 4365
+      "size": 4578
     },
     {
       "type": "file",
