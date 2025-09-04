@@ -1,13 +1,14 @@
 /* ============================================================================
  *  assets/inspector/inspector.js
  *  Neue Siedler – Inspector (stabile Minimal-Core)
- *  Version: v18.8.2
+ *  Version: v18.8.3
  *  CODE_STYLE:
- *    - Keine externen Abhängigkeiten nötig (CBLog optional)
- *    - Idempotent (keine Doppel-Init; sauberer Toggle)
- *    - Tabs: Übersicht | Logs (aktiv) | Build | Pfade | Tests
+ *    - Keine externen Abhängigkeiten (CBLog optional; eigener Fallback)
+ *    - Idempotent (Guard gegen Doppel-Init; sauberer Toggle)
+ *    - Tabs: Übersicht | Logs | Build | Pfade | Tests
  *    - Öffnen via window.GameUI.toggleInspector()
- *    - Auto-Open nur via ?inspector=1 oder Event 'cb:inspector-open'
+ *    - Auto-Open NUR via ?inspector=1 oder Event 'cb:inspector-open'
+ *    - Neu: „Kopieren“-Button (Logs in Zwischenablage)
  * ========================================================================== */
 (function () {
   "use strict";
@@ -16,7 +17,7 @@
   if (window.__INSPECTOR_CORE_READY__) return;
   window.__INSPECTOR_CORE_READY__ = true;
 
-  const VERSION = "v18.8.2";
+  const VERSION = "v18.8.3";
   const NS = "[inspector.core]";
 
   // --- Helpers ----------------------------------------------------------------
@@ -47,7 +48,7 @@
     const subs = new Set();
     const push = (level, args, tag) => {
       const arr = Array.from(args || []);
-      // (Fix) Nur loggen, wenn auch wirklich Inhalt vorhanden ist
+      // Nur loggen, wenn wirklich Inhalt vorhanden ist
       if (!arr.length) return;
       const entry = { ts: Date.now(), level, tag, args: arr };
       buf.push(entry);
@@ -68,12 +69,12 @@
     }
 
     return {
-      info: function () { push("INFO", arguments); },
-      log:  function () { push("LOG",  arguments); },
-      warn: function () { push("WARN", arguments); },
-      error:function () { push("ERROR",arguments); },
-      on:   function (fn){ subs.add(fn); },
-      off:  function (fn){ subs.delete(fn); },
+      info:  function () { push("INFO",  arguments); },
+      log:   function () { push("LOG",   arguments); },
+      warn:  function () { push("WARN",  arguments); },
+      error: function () { push("ERROR", arguments); },
+      on:    function (fn){ subs.add(fn); },
+      off:   function (fn){ subs.delete(fn); },
       getBuffer: function () { return buf.slice(); },
     };
   })();
@@ -106,11 +107,11 @@
       else if (e.msg     != null) payload = toStr(e.msg);
 
       payload = (payload || "").trim();
-      if (!payload && !tag) return "";           // (Fix) Leere Zeilen unterdrücken
+      if (!payload && !tag) return ""; // leere Zeilen unterdrücken
 
       return `[${tsFmt(t)}] ${lvl}${tag ? " ["+tag+"]" : ""} ${payload}`.trim();
     } catch {
-      return ""; // konservativ: besser nichts als kaputte Zeilen
+      return ""; // konservativ
     }
   }
 
@@ -165,16 +166,19 @@
     box.appendChild(txtArea);
     bodyEl.appendChild(box);
 
-    // Footer
+    // Footer (mit Kopieren)
     footerEl = el("div","insp-foot");
     footerEl.style.cssText = "display:flex;gap:8px;padding:10px 12px 12px;";
+    const btnCopy = el("button","insp-btn","Kopieren");
     const btnClear = el("button","insp-btn","Leeren");
-    btnClear.style.cssText = "border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;";
-    btnClear.addEventListener("click",()=>{ txtArea.textContent = ""; });
     const btnRefresh = el("button","insp-btn","Aktualisieren");
-    btnRefresh.style.cssText = btnClear.style.cssText;
+    [btnCopy, btnClear, btnRefresh].forEach(b=>{
+      b.style.cssText = "border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer;";
+    });
+    btnCopy.addEventListener("click", copyLogs);
+    btnClear.addEventListener("click",()=>{ txtArea.textContent = ""; });
     btnRefresh.addEventListener("click", refreshLogs);
-    footerEl.append(btnClear, btnRefresh);
+    footerEl.append(btnCopy, btnClear, btnRefresh);
     bodyEl.appendChild(footerEl);
 
     root.appendChild(bodyEl);
@@ -209,15 +213,15 @@
   function startStream(){
     if (streamOn) return;
     streamOn = true;
-    refreshLogs();                           // Vergangenheit
-    if (CB && typeof CB.on === "function") { // Live
+    refreshLogs();                           // Vergangenheit laden
+    if (CB && typeof CB.on === "function") { // Live mithören
       CB.on(onLogEntry);
     }
   }
   function onLogEntry(e){
     if (!txtArea || currentTab !== "logs") return;
     const line = formatEntry(e);
-    if (!line) return;                       // (Fix) Leere Zeilen ausfiltern
+    if (!line) return;                       // Leere Zeilen raus
     txtArea.textContent += (txtArea.textContent ? "\n" : "") + line;
     txtArea.scrollTop = txtArea.scrollHeight;
   }
@@ -234,6 +238,44 @@
       txtArea.textContent = "[Log konnte nicht gelesen werden]";
       try { console.warn(NS, "refreshLogs failed:", e); } catch {}
     }
+  }
+
+  // --- Kopieren ---------------------------------------------------------------
+  async function copyLogs(){
+    try {
+      const text = txtArea?.textContent || "";
+      if (!text) return toast("Kein Log vorhanden");
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+      toast("Logs kopiert");
+    } catch (e) {
+      toast("Kopieren fehlgeschlagen");
+      try { console.warn(NS, "copyLogs failed:", e); } catch {}
+    }
+  }
+
+  function toast(msg){
+    try{
+      let t = $("#insp-toast");
+      if(!t){
+        t = el("div", "", "");
+        t.id = "insp-toast";
+        t.style.cssText = "position:fixed;left:50%;bottom:12vh;transform:translateX(-50%);"+
+          "background:rgba(0,0,0,.78);color:#fff;padding:8px 12px;border-radius:10px;"+
+          "border:1px solid rgba(255,255,255,.12);font:12px/1.2 system-ui,Segoe UI,Arial,sans-serif;"+
+          "z-index:2147483647;opacity:0;transition:opacity .15s ease";
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.opacity = "1";
+      setTimeout(()=>{ t.style.opacity="0"; }, 900);
+    }catch{}
   }
 
   // --- API (für FAB & andere UIs) --------------------------------------------
