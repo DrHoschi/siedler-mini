@@ -1,175 +1,233 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.js
- * Projekt: Siedler-Mini — Inspector
- * Version: v18.9.5
- * Changelog:
- *   - FIX: Tabs (Build/Pfade) löschen keine Logs mehr
- *   - Stabiler Log-Puffer in window.__cb._logBuf
- *   - Kopieren/Leeren/Aktualisieren Buttons erhalten
- *   - Tabs: Übersicht, Logs, Build (BUILD_CATEGORIES), Pfade, Tests (stub)
- * CODE-STYLE:
- *   - Keine Fremd-Resets; Inspector kapselt sein DOM
- *   - Events: cb:inspector:open/close, cb:build-select, cb:paths:toggle/reset
- *   - Bridge: window.GameUI.toggleInspector/openInspector/closeInspector
+ * Projekt: Siedler-Mini — Inspector (Fullscreen)
+ * Version: v18.10.0
+ *
+ * Ziele:
+ *  - Vollbild-Overlay (mobile/desktop), Header & Tabs sticky, Footer fix
+ *  - Stabile Logs (persistenter Puffer in window.__cb._logBuf)
+ *  - Tabs: Übersicht · Logs · Build (BUILD_CATEGORIES) · Pfade · Tests
+ *  - Keine Log-Löschung beim Tabwechsel
+ *  - Öffnen/Schließen via window.GameUI.toggleInspector/openInspector/closeInspector
+ *  - Events: cb:inspector:open/close, cb:build-select, cb:paths:toggle/reset
  * ========================================================================== */
 
 (function () {
-  const VERSION = "v18.9.5";
-  const log = (...a) => (window.CBLog?.log || console.log).call(console, ...a);
-  const info = (...a) => (window.CBLog?.info || console.info).call(console, ...a);
-  const warn = (...a) => (window.CBLog?.warn || console.warn).call(console, ...a);
+  const VERSION = "v18.10.0";
 
-  // ---------------------------------------------------------------------------
-  // 0) Puffer (nie löschen außer über "Leeren"-Button)
-  // ---------------------------------------------------------------------------
+  // -- Logging helpers --------------------------------------------------------
   const CB = (window.__cb = window.__cb || {});
-  CB._logBuf = CB._logBuf || [];           // [{ts:Date, level:'LOG'|'INFO'|'WARN'|'ERR', text:string}]
-  CB._logMax = CB._logMax || 400;
+  CB._logBuf = CB._logBuf || [];   // [{ ts, level, text }]
+  CB._logMax = CB._logMax || 500;
 
-  // winzige Proxy-Konsole, falls CBLog fehlt
-  if (!window.CBLog) {
-    window.CBLog = {
-      log: (...a) => { CB._logBuf.push({ ts: new Date(), level: "LOG", text: a.map(String).join(" ") }); cap(); console.log(...a); },
-      info: (...a) => { CB._logBuf.push({ ts: new Date(), level: "INFO", text: a.map(String).join(" ") }); cap(); console.info(...a); },
-      warn: (...a) => { CB._logBuf.push({ ts: new Date(), level: "WARN", text: a.map(String).join(" ") }); cap(); console.warn(...a); },
-      error: (...a) => { CB._logBuf.push({ ts: new Date(), level: "ERR", text: a.map(String).join(" ") }); cap(); console.error(...a); },
-      getBuffer: () => CB._logBuf.slice(),
-      clear: () => { CB._logBuf.length = 0; }
-    };
-    info("[CBLog] Polyfill aktiv (Inspector-Fallback)");
-  }
-
-  function cap() {
+  function trimBuf() {
     const over = CB._logBuf.length - CB._logMax;
     if (over > 0) CB._logBuf.splice(0, over);
   }
 
-  // ---------------------------------------------------------------------------
-  // 1) Grundgerüst/DOM
-  // ---------------------------------------------------------------------------
-  let root, panel, bodyEl, footerEl, preLog;
+  // Fallback-Konsole, falls kein CBLog vorhanden ist
+  if (!window.CBLog) {
+    window.CBLog = {
+      log  : (...a) => { CB._logBuf.push({ts:new Date(),level:"LOG" ,text:a.map(String).join(" ")}); trimBuf(); console.log (...a); },
+      info : (...a) => { CB._logBuf.push({ts:new Date(),level:"INFO",text:a.map(String).join(" ")}); trimBuf(); console.info(...a); },
+      warn : (...a) => { CB._logBuf.push({ts:new Date(),level:"WARN",text:a.map(String).join(" ")}); trimBuf(); console.warn(...a); },
+      error: (...a) => { CB._logBuf.push({ts:new Date(),level:"ERR" ,text:a.map(String).join(" ")}); trimBuf(); console.error(...a); },
+      getBuffer: () => CB._logBuf.slice(),
+      clear: () => { CB._logBuf.length = 0; }
+    };
+    (window.CBLog.info || console.info)("[CBLog] Polyfill aktiv (Inspector-Fallback)");
+  }
+
+  const log  = (...a) => (window.CBLog.log  || console.log ).apply(console, a);
+  const info = (...a) => (window.CBLog.info || console.info).apply(console, a);
+  const warn = (...a) => (window.CBLog.warn || console.warn).apply(console, a);
+
+  // -- DOM-Grundgerüst --------------------------------------------------------
+  let root, panel, headEl, tabsEl, bodyEl, footerEl, preLog;
+
+  const SA_T = "env(safe-area-inset-top)";
+  const SA_R = "env(safe-area-inset-right)";
+  const SA_B = "env(safe-area-inset-bottom)";
+  const SA_L = "env(safe-area-inset-left)";
 
   function ensureDOM() {
     if (root) return;
+
+    // Root: Vollbild, klickt nicht durch
     root = document.createElement("div");
     root.id = "inspector";
-    root.style.cssText =
-      "position:fixed;inset:auto 12px 96px 12px;z-index:2147483646;" +
-      "max-width:980px;margin:0 auto;left:50%;transform:translateX(-50%);";
+    root.style.cssText = [
+      "position:fixed",
+      "inset:0",
+      "z-index:2147483646",
+      "display:none",
+      "pointer-events:auto",
+    ].join(";");
+
+    // Panel: nimmt den ganzen Viewport ein
     panel = document.createElement("div");
-    panel.style.cssText =
-      "background:rgba(18,18,18,.96);border:1px solid rgba(255,255,255,.08);" +
-      "border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.55);" +
-      "backdrop-filter:blur(8px);color:#e8e8e8;overflow:hidden";
+    panel.style.cssText = [
+      "position:absolute",
+      `top:calc(${SA_T} + 8px)`,
+      `right:calc(${SA_R} + 8px)`,
+      `bottom:calc(${SA_B} + 8px)`,
+      `left:calc(${SA_L} + 8px)`,
+      "display:flex",
+      "flex-direction:column",
+      "background:rgba(12,12,12,.96)",
+      "border:1px solid rgba(255,255,255,.08)",
+      "border-radius:12px",
+      "box-shadow:0 30px 80px rgba(0,0,0,.55)",
+      "backdrop-filter:blur(8px)",
+      "color:#e8e8e8",
+      "overflow:hidden"
+    ].join(";");
 
-    // Header
-    const head = document.createElement("div");
-    head.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06)";
-    const hTitle = document.createElement("div");
-    hTitle.textContent = `Inspector  ${VERSION}`;
-    hTitle.style.cssText = "font-weight:700;opacity:.92";
+    // Header (sticky)
+    headEl = document.createElement("div");
+    headEl.style.cssText = [
+      "position:sticky","top:0","z-index:2",
+      "display:flex","align-items:center","gap:10px",
+      "padding:10px 12px",
+      "background:linear-gradient(to bottom, rgba(18,18,18,1), rgba(18,18,18,.96))",
+      "border-bottom:1px solid rgba(255,255,255,.06)"
+    ].join(";");
+    const title = document.createElement("div");
+    title.textContent = `Inspector  ${VERSION}`;
+    title.style.cssText = "font-weight:700;opacity:.92";
     const spacer = document.createElement("div"); spacer.style.flex = "1";
-    const btnClose = document.createElement("button");
-    btnClose.textContent = "Schließen";
-    btnClose.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer";
-    btnClose.addEventListener("click", close);
+    const btnClose = button("Schließen", close);
+    btnClose.style.borderRadius = "12px";
+    headEl.append(title, spacer, btnClose);
 
-    head.appendChild(hTitle);
-    head.appendChild(spacer);
-    head.appendChild(btnClose);
+    // Tabs (sticky)
+    tabsEl = document.createElement("div");
+    tabsEl.style.cssText = [
+      "position:sticky","top:48px","z-index:2",
+      "display:flex","gap:8px",
+      "padding:8px 12px",
+      "background:linear-gradient(to bottom, rgba(18,18,18,.98), rgba(18,18,18,.95))",
+      "border-bottom:1px solid rgba(255,255,255,.06)"
+    ].join(";");
 
-    // Tabs
-    const tabsWrap = document.createElement("div");
-    tabsWrap.style.cssText = "display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.06)";
-    const tabs = [
-      { id: "overview", label: "Übersicht", render: renderOverview },
-      { id: "logs",     label: "Logs",      render: renderLogs },
-      { id: "build",    label: "Build",     render: renderBuild },
-      { id: "paths",    label: "Pfade",     render: renderPaths },
-      { id: "tests",    label: "Tests",     render: renderTests },
-    ];
-    const tabBtns = new Map();
-    function setActive(id) {
-      tabs.forEach(t => {
-        tabBtns.get(t.id).classList.toggle("active", t.id === id);
-      });
-    }
-    tabs.forEach(t => {
-      const b = document.createElement("button");
-      b.textContent = t.label;
-      b.style.cssText = "border:none;border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer";
-      b.addEventListener("click", () => {
-        setActive(t.id);
-        t.render();
-      });
-      tabBtns.set(t.id, b);
-      tabsWrap.appendChild(b);
-    });
-
-    // Body + Footer
+    // Body (flex:1, scrollt)
     bodyEl = document.createElement("div");
-    bodyEl.style.cssText = "padding:12px;max-height:60vh;overflow:auto";
-    footerEl = document.createElement("div");
-    footerEl.style.cssText = "display:flex;gap:10px;padding:12px;border-top:1px solid rgba(255,255,255,.06)";
+    bodyEl.style.cssText = "flex:1; overflow:auto; padding:12px; min-height:0";
 
-    // Footer-Buttons (werden nur im Log-Tab angezeigt)
-    const btnCopy = mkBtn("Kopieren", () => {
+    // Footer (sticky bottom innerhalb Panels)
+    footerEl = document.createElement("div");
+    footerEl.style.cssText = [
+      "position:sticky","bottom:0","z-index:2",
+      "display:flex","gap:10px",
+      "padding:12px",
+      "background:linear-gradient(to top, rgba(18,18,18,1), rgba(18,18,18,.96))",
+      "border-top:1px solid rgba(255,255,255,.06)"
+    ].join(";");
+
+    // Footer Buttons (werden im Log-Tab eingeblendet)
+    const btnCopy   = button("Kopieren", () => {
       try {
-        const txt = formatBuffer(CB._logBuf);
+        const txt = formatBuffer(currentBuffer());
         navigator.clipboard.writeText(txt);
         info("[inspector.core] Logs kopiert");
       } catch (e) { warn("Clipboard fehlgeschlagen:", e?.message); }
     });
-    const btnClear = mkBtn("Leeren", () => {
+    const btnClear  = button("Leeren", () => {
       window.CBLog?.clear?.();
       if (preLog) preLog.textContent = "[Log geleert]";
       info("[inspector.core] Log geleert");
     });
-    const btnRefresh = mkBtn("Aktualisieren", () => {
-      renderLogs();
-    });
-    footerEl.appendChild(btnCopy);
-    footerEl.appendChild(btnClear);
-    footerEl.appendChild(btnRefresh);
+    const btnRefresh = button("Aktualisieren", renderLogs);
+    footerEl.append(btnCopy, btnClear, btnRefresh);
 
-    panel.appendChild(head);
-    panel.appendChild(tabsWrap);
-    panel.appendChild(bodyEl);
-    panel.appendChild(footerEl);
-    root.appendChild(panel);
-    document.body.appendChild(root);
+    panel.append(headEl, tabsEl, bodyEl, footerEl);
+    root.append(panel);
+    document.body.append(root);
 
-    // Startansicht: Logs
-    setActive("logs");
-    renderLogs();
+    // Tabs registrieren
+    initTabs();
+
+    // Standardansicht: Logs
+    activateTab("logs");
   }
 
-  function mkBtn(label, onClick) {
+  // -- Utilities --------------------------------------------------------------
+  function button(label, onClick) {
     const b = document.createElement("button");
     b.textContent = label;
-    b.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer";
     b.addEventListener("click", onClick);
+    b.style.cssText = [
+      "border:none","border-radius:10px",
+      "padding:8px 12px",
+      "background:rgba(255,255,255,.12)",
+      "color:#fff","cursor:pointer"
+    ].join(";");
     return b;
   }
 
-  function formatBuffer(arr) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return (arr || []).map(it => {
+  function pill(label) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText = [
+      "border:none","border-radius:999px",
+      "padding:8px 12px",
+      "background:rgba(255,255,255,.10)",
+      "color:#ddd","cursor:pointer"
+    ].join(";");
+    return b;
+  }
+
+  function currentBuffer() {
+    return window.CBLog?.getBuffer ? window.CBLog.getBuffer() : CB._logBuf.slice();
+  }
+
+  const pad2 = (n)=>String(n).padStart(2,"0");
+  function formatBuffer(arr){
+    return (arr||[]).map(it=>{
       const d = it.ts instanceof Date ? it.ts : new Date(it.ts);
-      const hh = pad(d.getHours()), mm = pad(d.getMinutes()), ss = pad(d.getSeconds());
-      const level = (it.level || "LOG").toUpperCase().padEnd(4, " ");
-      return `[${hh}:${mm}:${ss}] ${level} ${it.text}`;
+      const ts = `[${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}]`;
+      const lv = (it.level||"LOG").toUpperCase().padEnd(4," ");
+      return `${ts} ${lv} ${it.text}`;
     }).join("\n");
   }
 
-  // ---------------------------------------------------------------------------
-  // 2) Renders
-  // ---------------------------------------------------------------------------
+  // -- Tabs -------------------------------------------------------------------
+  const TABS = [
+    { id:"overview", label:"Übersicht", render: renderOverview },
+    { id:"logs"    , label:"Logs"     , render: renderLogs     },
+    { id:"build"   , label:"Build"    , render: renderBuild    },
+    { id:"paths"   , label:"Pfade"    , render: renderPaths    },
+    { id:"tests"   , label:"Tests"    , render: renderTests    },
+  ];
+  const tabBtn = new Map();
 
-  // Übersicht (minimal)
-  function renderOverview() {
+  function initTabs(){
+    tabsEl.innerHTML = "";
+    TABS.forEach(t=>{
+      const b = pill(t.label);
+      b.addEventListener("click", ()=> activateTab(t.id));
+      tabBtn.set(t.id, b);
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function activateTab(id){
+    TABS.forEach(t=>{
+      const active = (t.id === id);
+      tabBtn.get(t.id)?.classList.toggle("active", active);
+      // kleine aktive Optik
+      tabBtn.get(t.id).style.background = active ? "rgba(120,200,120,.28)" : "rgba(255,255,255,.10)";
+    });
+    // Render
+    const tab = TABS.find(t=>t.id===id) || TABS[0];
+    tab.render();
+  }
+
+  // -- Render-Funktionen ------------------------------------------------------
+  function renderOverview(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
+
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:grid;gap:8px";
     wrap.innerHTML = `
@@ -178,52 +236,60 @@
       <div style="opacity:.85">Map: <span id="ov-map">–</span></div>
     `;
     bodyEl.appendChild(wrap);
-    // kleine Live-Daten (sofern vorhanden)
+
     try {
       const cvs = document.getElementById("game");
-      if (cvs) wrap.querySelector("#ov-canvas").textContent = `${cvs.width || cvs.clientWidth}×${cvs.height || cvs.clientHeight}`;
+      if (cvs) wrap.querySelector("#ov-canvas").textContent =
+        `${cvs.width||cvs.clientWidth}×${cvs.height||cvs.clientHeight}`;
       const mapName = (document.getElementById("game")?.dataset?.map || "–").split("/").pop();
       wrap.querySelector("#ov-map").textContent = mapName;
     } catch {}
   }
 
-  // Logs
-  function renderLogs() {
+  function renderLogs(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "flex";
 
     preLog = document.createElement("pre");
-    preLog.style.cssText =
-      "margin:0;padding:12px;background:rgba(10,10,10,.85);border:1px solid rgba(255,255,255,.08);border-radius:10px;" +
-      "font-family:ui-monospace, Menlo, Consolas, monospace;font-size:14px;line-height:1.35;color:#e6e6e6;white-space:pre-wrap";
+    preLog.style.cssText = [
+      "margin:0","padding:12px",
+      "background:rgba(10,10,10,.85)",
+      "border:1px solid rgba(255,255,255,.08)",
+      "border-radius:10px",
+      "font-family:ui-monospace, Menlo, Consolas, monospace",
+      "font-size:14px","line-height:1.35",
+      "color:#e6e6e6","white-space:pre-wrap"
+    ].join(";");
 
-    const buf = window.CBLog?.getBuffer ? window.CBLog.getBuffer() : CB._logBuf.slice();
+    const buf = currentBuffer();
     preLog.textContent = buf.length ? formatBuffer(buf) : "[Keine Log-Einträge vorhanden]";
     bodyEl.appendChild(preLog);
   }
 
-  // Build (DEIN Code – ohne Log-Reset!)
-  function renderBuild() {
+  // Build-Tab – nutzt optional window.BUILD_CATEGORIES
+  function renderBuild(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
 
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
 
-    const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES) ? window.BUILD_CATEGORIES : [
-      { id:"general", title:"Allg.", items:[
-        { id:"hq",    label:"Hauptquartier" },
-        { id:"depot", label:"Depot" },
-        { id:"house", label:"Haus" },
-      ]},
-      { id:"production_food", title:"Produktion", items:[
-        { id:"farm",    label:"Farm" },
-        { id:"fischer", label:"Fischer" },
-      ]},
-    ]);
+    const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES)
+      ? window.BUILD_CATEGORIES
+      : [
+          { id:"general", title:"Allg.", items:[
+            { id:"hq",    label:"Hauptquartier" },
+            { id:"depot", label:"Depot" },
+            { id:"house", label:"Haus" }
+          ]},
+          { id:"production_food", title:"Produktion", items:[
+            { id:"farm",    label:"Farm" },
+            { id:"fischer", label:"Fischer" }
+          ]}
+        ]);
 
     const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.8;font-weight:700;margin-top:4px"; return h; };
-    const mkBtnLite = (label, disabled=false)=>{
+    const mkBtn = (label, disabled=false)=>{
       const b=document.createElement("button");
       b.textContent = label;
       b.disabled = !!disabled;
@@ -238,7 +304,7 @@
       const row = document.createElement("div");
       row.style.cssText = "display:flex;flex-wrap:wrap";
       (cat.items||[]).forEach(it=>{
-        const btn = mkBtnLite(it.label || it.id, !!it.todo);
+        const btn = mkBtn(it.label || it.id, !!it.todo);
         if (!it.todo){
           btn.addEventListener("click", ()=>{
             const detail = { type: it.id };
@@ -254,8 +320,8 @@
     bodyEl.appendChild(wrap);
   }
 
-  // Pfade
-  function renderPaths() {
+  // Pfade-Tab – nur Control-Events
+  function renderPaths(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
 
@@ -286,12 +352,10 @@
       try { window.dispatchEvent(new CustomEvent("cb:paths:reset")); } catch {}
     }));
 
-    bodyEl.appendChild(box);
-    bodyEl.appendChild(status);
+    bodyEl.append(box, status);
   }
 
-  // Tests (Platzhalter)
-  function renderTests() {
+  function renderTests(){
     bodyEl.innerHTML = "";
     footerEl.style.display = "none";
     const d = document.createElement("div");
@@ -300,9 +364,7 @@
     bodyEl.appendChild(d);
   }
 
-  // ---------------------------------------------------------------------------
-  // 3) Öffnen/Schließen + Bridge
-  // ---------------------------------------------------------------------------
+  // -- Öffnen/Schließen + Bridge ---------------------------------------------
   function open() {
     ensureDOM();
     root.style.display = "block";
@@ -319,12 +381,13 @@
   window.GameUI = window.GameUI || {};
   window.GameUI.toggleInspector = function (force) {
     ensureDOM();
-    const wantOpen = (typeof force === "boolean") ? force : (root.style.display === "none" || !root.style.display);
+    const isHidden = (root.style.display === "none" || !root.style.display);
+    const wantOpen = (typeof force === "boolean") ? force : isHidden;
     wantOpen ? open() : close();
   };
   window.GameUI.openInspector  = open;
   window.GameUI.closeInspector = close;
 
-  // Beim Laden verfügbar machen (ohne auto-open, um UX ruhig zu halten)
+  // Bereitmeldung (kein Auto-Open)
   info("[inspector.core] bereit", `(${VERSION})`);
 })();
