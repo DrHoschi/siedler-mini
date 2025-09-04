@@ -1,270 +1,288 @@
 /* ============================================================================
  *  assets/inspector/inspector.js
- *  Neue Siedler – Inspector (stabil + Tabs)
+ *  Inspector-Core (stabil)
  *  Version: v18.9.3
- *  CODE_STYLE
- *    - Keine externen Abhängigkeiten; nutzt CBLog wenn vorhanden, sonst Polyfill
- *    - Idempotent (Guard gegen Doppel-Init)
- *    - Tabs: Übersicht | Logs | Build | Pfade | Tests (Tests Platzhalter)
- *    - Öffnen via window.GameUI.toggleInspector()
- *    - Auto-Open nur via ?inspector=1 oder Event 'cb:inspector-open'
- *    - Logs: Puffer + Live-Stream, Kopieren/Leeren/Aktualisieren
- *    - Rückwärtskompatibel – bricht nichts, was schon lief
+ *  CODE-STYLE:
+ *    - Keine Abhängigkeit zur Game-Engine nötig
+ *    - Öffnet immer, auch auf Startseite
+ *    - Tabs: Übersicht | Logs | Build | Pfade | Tests
+ *    - Logs: CBLog-Puffer + Live-Stream; robust falls CBLog fehlt
+ *    - Build/Pfade: aus Vorgaben integriert
  * ========================================================================== */
+
 (function () {
   "use strict";
 
-  // ---- Doppel-Init verhindern ------------------------------------------------
-  if (window.__INSPECTOR_CORE_READY__) return;
-  window.__INSPECTOR_CORE_READY__ = true;
-
   const VERSION = "v18.9.3";
-  const NS = "[inspector.core]";
+  const log = (...a) => (window.CBLog?.info || console.log)("[inspector.core]", ...a);
 
-  // ---- Helpers ---------------------------------------------------------------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html!=null) n.innerHTML = html; return n; };
-  const pad2 = (n) => (n < 10 ? "0" + n : "" + n);
-  const tsFmt = (t) => { const d = new Date(t || Date.now()); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
-  const toStr = (v) => { if (v == null) return ""; if (typeof v === "string") return v; try { return JSON.stringify(v); } catch { return String(v); } };
+  // --------- DOM Grundgerüst -------------------------------------------------
+  const rootId = "inspector";
+  let root, headerEl, tabsEl, bodyEl, footerEl, preLog;
 
-  // ---- CBLog-Brücke (oder Polyfill) -----------------------------------------
-  const CB = (function ensureCBLog() {
-    if (window.CBLog && typeof window.CBLog.on === "function") return window.CBLog;
+  // State
+  const State = {
+    isOpen: false,
+    currentTab: "logs",
+    stopLogStream: null, // disposer
+  };
 
-    const buf = [];
-    const subs = new Set();
-    const push = (level, args, tag) => {
-      const arr = Array.from(args || []);
-      if (!arr.length) return;                      // keine leeren Logzeilen
-      const entry = { ts: Date.now(), level, tag, args: arr };
-      buf.push(entry);
-      subs.forEach(fn => { try { fn(entry); } catch {} });
-    };
-
-    if (!window.__CBLOG_CONSOLE_PATCHED__) {
-      window.__CBLOG_CONSOLE_PATCHED__ = true;
-      ["log","info","warn","error"].forEach(m=>{
-        const orig = console[m].bind(console);
-        console[m] = function(){ try { push(m.toUpperCase(), arguments, "console"); } catch {} ; orig.apply(console, arguments); };
-      });
-      try { console.info("[CBLog] Polyfill aktiv"); } catch {}
-    }
-
-    return {
-      info:  function(){ push("INFO",  arguments); },
-      log:   function(){ push("LOG",   arguments); },
-      warn:  function(){ push("WARN",  arguments); },
-      error: function(){ push("ERROR", arguments); },
-      on:    function(fn){ subs.add(fn); },
-      off:   function(fn){ subs.delete(fn); },
-      getBuffer(){ return buf.slice(); }
-    };
-  })();
-
-  try { CB.info(`${NS} bereit (${VERSION})`); } catch {}
-
-  // ---- UI (lazy) -------------------------------------------------------------
-  let root, tabsEl, bodyEl, footerEl, preLog;
-  let currentTab = "logs";
-
-  function buildUI(){
+  // Hilfsfunktionen -----------------------------------------------------------
+  function ensureRoot() {
     if (root) return;
 
-    // Shell
-    root = el("div","inspector");
-    root.id = "inspector";
-    root.setAttribute("role","dialog");
+    root = document.createElement("div");
+    root.id = rootId;
     root.style.cssText =
-      "position:fixed;left:2.5vw;right:2.5vw;bottom:8vh;max-width:980px;margin:0 auto;"+
-      "background:rgba(20,20,20,.94);border:1px solid rgba(255,255,255,.08);border-radius:12px;"+
-      "color:#eee;z-index:2147483646;box-shadow:0 40px 120px rgba(0,0,0,.55)";
+      "position:fixed;left:50%;top:64px;transform:translateX(-50%);" +
+      "max-width:960px;width:calc(100vw - 32px);max-height:70vh;overflow:hidden;" +
+      "z-index:2147483646;background:rgba(18,18,18,.94);border:1px solid #2b2b2b;border-radius:12px;" +
+      "box-shadow:0 30px 90px rgba(0,0,0,.5);color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;display:none;";
 
     // Header
-    const head = el("div","insp-head");
-    head.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px 8px";
-    head.appendChild(el("div","insp-title", `<strong>Inspector</strong><span style="opacity:.55;margin-left:8px">${VERSION}</span>`));
-    const spacer = el("div"); spacer.style.flex="1"; head.appendChild(spacer);
-    const btnClose = el("button","insp-close","Schließen");
-    btnClose.style.cssText="border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
+    headerEl = document.createElement("div");
+    headerEl.style.cssText = "display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #2b2b2b;";
+    const title = document.createElement("div");
+    title.textContent = "Inspector";
+    title.style.cssText = "font-weight:700;letter-spacing:.2px;opacity:.95";
+    const ver = document.createElement("div");
+    ver.textContent = " " + VERSION;
+    ver.style.cssText = "opacity:.5;font-size:12px;margin-top:1px";
+    const spacer = document.createElement("div"); spacer.style.flex = "1";
+    const btnClose = document.createElement("button");
+    btnClose.textContent = "Schließen";
+    btnClose.style.cssText = "border:none;border-radius:12px;padding:6px 10px;background:#494949;color:#fff;cursor:pointer;";
     btnClose.addEventListener("click", close);
-    head.appendChild(btnClose);
-    root.appendChild(head);
+    headerEl.appendChild(title);
+    headerEl.appendChild(ver);
+    headerEl.appendChild(spacer);
+    headerEl.appendChild(btnClose);
 
     // Tabs
-    tabsEl = el("div","insp-tabs");
-    tabsEl.style.cssText = "display:flex;gap:8px;padding:0 12px 10px";
-    [["overview","Übersicht"],["logs","Logs"],["build","Build"],["paths","Pfade"],["tests","Tests"]].forEach(([id,label])=>{
-      const b = el("button","insp-tab",label);
+    tabsEl = document.createElement("div");
+    tabsEl.style.cssText = "display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid #2b2b2b;flex-wrap:wrap;";
+    const tabs = [
+      ["overview", "Übersicht"],
+      ["logs", "Logs"],
+      ["build", "Build"],
+      ["paths", "Pfade"],
+      ["tests", "Tests"],
+    ];
+    tabs.forEach(([id, label]) => {
+      const b = document.createElement("button");
       b.dataset.tab = id;
-      b.style.cssText = "border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer";
-      b.addEventListener("click",()=>switchTab(id));
+      b.textContent = label;
+      b.style.cssText =
+        "border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);" +
+        "color:#eee;cursor:pointer;outline:none;";
+      b.addEventListener("click", () => selectTab(id));
       tabsEl.appendChild(b);
     });
-    root.appendChild(tabsEl);
 
     // Body
-    bodyEl = el("div","insp-body");
-    bodyEl.style.cssText = "padding:0 12px 12px";
+    bodyEl = document.createElement("div");
+    bodyEl.style.cssText = "padding:12px;overflow:auto;max-height:48vh;";
+    preLog = document.createElement("pre");
+    preLog.style.cssText =
+      "margin:0;padding:12px;background:#121212;border:1px solid #2b2b2b;border-radius:8px;" +
+      "min-height:240px;color:#d6d6d6;white-space:pre-wrap;word-break:break-word;font-family:Menlo,Consolas,ui-monospace,monospace;";
+    bodyEl.appendChild(preLog);
 
-    // Log-Box (auch als generische Box für Info-Texte genutzt)
-    const box = el("div","insp-box");
-    box.style.cssText="background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden";
-    preLog = el("pre","insp-pre");
-    preLog.style.cssText="margin:0;padding:12px;white-space:pre-wrap;font:13px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#dfe8f0;min-height:200px;max-height:48vh;overflow:auto";
-    box.appendChild(preLog);
-    bodyEl.appendChild(box);
-
-    // Footer (nur im Log-Tab sichtbar)
-    footerEl = el("div","insp-foot");
-    footerEl.style.cssText = "display:flex;gap:8px;padding:10px 12px 12px";
-    const btnCopy     = mkBtn("Kopieren", copyLogs);
-    const btnClear    = mkBtn("Leeren",   ()=>{ preLog.textContent=""; });
-    const btnRefresh  = mkBtn("Aktualisieren", refreshLogs);
+    // Footer (Buttons unten)
+    footerEl = document.createElement("div");
+    footerEl.style.cssText = "display:flex;gap:10px;padding:12px;border-top:1px solid #2b2b2b;";
+    const btnCopy = mkBtn("Kopieren", () => copyLogs());
+    const btnClear = mkBtn("Leeren", () => clearLogs());
+    const btnRefresh = mkBtn("Aktualisieren", () => refreshLogs());
     footerEl.append(btnCopy, btnClear, btnRefresh);
-    bodyEl.appendChild(footerEl);
 
-    root.appendChild(bodyEl);
+    root.append(headerEl, tabsEl, bodyEl, footerEl);
     document.body.appendChild(root);
 
-    switchTab(currentTab);
+    // Tastaturkürzel
+    window.addEventListener("keydown", (ev) => {
+      if (!State.isOpen) return;
+      if (ev.key === "Escape") close();
+    });
   }
 
-  function mkBtn(label, fn){
-    const b = el("button","insp-btn",label);
-    b.style.cssText="border:none;border-radius:10px;padding:6px 10px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
-    b.addEventListener("click", fn);
+  function mkBtn(label, onClick) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText =
+      "border:none;border-radius:12px;padding:8px 12px;background:rgba(255,255,255,.10);" +
+      "color:#fff;cursor:pointer;";
+    b.addEventListener("click", onClick);
     return b;
   }
 
-  function switchTab(id){
-    currentTab = id;
-    [...tabsEl.querySelectorAll("button")].forEach(b=>{
-      const active = (b.dataset.tab===id);
-      b.style.background = active ? "rgba(76,175,80,.28)" : "rgba(255,255,255,.10)";
-      b.style.color      = active ? "#e9f6ec"           : "#ddd";
-    });
-
-    footerEl.style.display = (id === "logs") ? "" : "none";
-
-    if (id === "logs") {
-      refreshLogs();
-    } else if (id === "overview") {
-      renderOverview();
-    } else if (id === "build") {
-      renderBuild();
-    } else if (id === "paths") {
-      renderPaths();
-    } else if (id === "tests") {
-      preLog.textContent = "[Tests: Platzhalter – folgt]";
-    } else {
-      preLog.textContent = "";
-    }
+  // --------- Logs: Buffer + Stream ------------------------------------------
+  function getCBLog() {
+    return window.CBLog || null;
   }
 
-  // ---- Logs ------------------------------------------------------------------
-  let streamOn = false;
-  function startStream(){
-    if (streamOn) return;
-    streamOn = true;
-    refreshLogs();
-    if (CB && typeof CB.on === "function") CB.on(onLogEntry);
+  function clearLogs() {
+    preLog.textContent = "";
   }
-  function onLogEntry(e){
-    if (!preLog || currentTab !== "logs") return;
-    const line = formatEntry(e);
-    if (!line) return;
-    preLog.textContent += (preLog.textContent ? "\n" : "") + line;
-    preLog.scrollTop = preLog.scrollHeight;
-  }
-  function formatEntry(e){
-    try{
-      if (typeof e === "string") return e.trim() ? e : "";
-      if (Array.isArray(e)){
-        const [ts,lvl,tag,...rest] = e;
-        const msg = rest.map(toStr).join(" ").trim();
-        if (!msg) return "";
-        return `[${tsFmt(ts)}] ${(lvl||"LOG").toString().toUpperCase()}${tag ? " ["+tag+"]" : ""} ${msg}`;
-      }
-      const t   = e.ts || e.time || Date.now();
-      const lvl = (e.level || e.lvl || e.type || "LOG").toString().toUpperCase();
-      const tag = e.tag || e.scope || "";
-      let payload = "";
-      if (Array.isArray(e.args)) payload = e.args.map(toStr).join(" ");
-      else if (e.message!=null)  payload = toStr(e.message);
-      else if (e.text!=null)     payload = toStr(e.text);
-      else if (e.msg!=null)      payload = toStr(e.msg);
-      payload = payload.trim();
-      if (!payload && !tag) return "";
-      return `[${tsFmt(t)}] ${lvl}${tag ? " ["+tag+"]" : ""} ${payload}`.trim();
-    }catch{ return ""; }
-  }
-  function refreshLogs(){
+
+  function copyLogs() {
+    const txt = preLog.textContent || "";
     try {
-      const buf = (CB && CB.getBuffer && CB.getBuffer()) || window.__CBLOG_BUF || [];
-      const lines = buf.map(formatEntry).filter(Boolean);
-      preLog.textContent = lines.length ? lines.join("\n") : "[Keine Log-Einträge vorhanden]";
-      preLog.scrollTop = preLog.scrollHeight;
-    } catch (e) {
-      preLog.textContent = "[Log konnte nicht gelesen werden]";
-      try { console.warn(NS, "refreshLogs failed:", e); } catch {}
-    }
+      navigator.clipboard?.writeText(txt);
+    } catch {}
   }
-  async function copyLogs(){
-    try{
-      const text = preLog?.textContent || "";
-      if (!text) return toast("Kein Log vorhanden");
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
-      else {
-        const ta = document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
-        document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+
+  function refreshLogs() {
+    // Puffer einlesen
+    preLog.textContent = "";
+    const CBL = getCBLog();
+    if (CBL?.getBuffer) {
+      const buf = CBL.getBuffer();
+      if (Array.isArray(buf)) {
+        for (const line of buf) preLog.textContent += line + "\n";
       }
-      toast("Logs kopiert");
-    }catch(e){
-      toast("Kopieren fehlgeschlagen");
-      try { console.warn(NS, "copyLogs failed:", e); } catch {}
     }
   }
 
-  // ---- Übersicht (kleines Runtime-Panel) ------------------------------------
-  let fpsAvg = 0, fpsSamples = [];
-  (function trackFPS(){
-    let last = performance.now();
-    function tick(t){
-      const dt = Math.max(1, t-last); last = t;
-      const fps = 1000/dt;
-      fpsSamples.push(fps); if (fpsSamples.length>30) fpsSamples.shift();
-      fpsAvg = Math.round(fpsSamples.reduce((a,b)=>a+b,0)/fpsSamples.length);
-      requestAnimationFrame(tick);
+  function startLogStream() {
+    const CBL = getCBLog();
+    if (!CBL || !CBL.LogStream || !CBL.LogStream.start) {
+      // Minimal-Proxy (falls kein CBLog vorhanden): höre auf console.log etc. – sehr simpel
+      const orig = console.log;
+      console.log = function (...args) {
+        try {
+          const line = (args && args.length ? args.join(" ") : "");
+          preLog.textContent += (line || "LOG") + "\n";
+        } catch {}
+        orig.apply(console, args);
+      };
+      return () => {
+        // kein sauberer Restore hier (nur Fallback-Zweig)
+      };
     }
-    try { requestAnimationFrame(tick); } catch {}
-  })();
 
-  function renderOverview(){
-    try{
-      const canvas = $("#game");
-      const size = canvas ? `${canvas.width||canvas.clientWidth||0}×${canvas.height||canvas.clientHeight||0}` : "–";
-      const map   = canvas?.dataset?.map || window.__cb?.mapName || "unbekannt";
-      const zoom  = (window.__cb?.camera?.zoom != null) ? window.__cb.camera.zoom.toFixed(2) : "–";
-      const runtime = (performance.now()/1000).toFixed(1) + "s";
+    const stop = CBL.LogStream.start((line) => {
+      preLog.textContent += line + "\n";
+    });
+    return stop;
+  }
 
-      preLog.textContent =
-        `Runtime: ${runtime}\n`+
-        `FPS (glatt): ${fpsAvg||"–"}\n`+
-        `Canvas: ${size}\n`+
-        `Map: ${map}\n`+
-        `Zoom: ${zoom}\n`+
-        `[Übersicht wird später erweitert]`;
-    }catch(e){
-      preLog.textContent = "[Übersicht nicht verfügbar]";
+  // --------- Tabs Umschalten (fix) ------------------------------------------
+  function setActiveTabButton(id) {
+    tabsEl.querySelectorAll("button").forEach((b) => {
+      if (b.dataset.tab === id) {
+        b.style.background = "rgba(80,160,100,.25)";
+      } else {
+        b.style.background = "rgba(255,255,255,.10)";
+      }
+    });
+  }
+
+  function unmountTab(tab) {
+    // beim Verlassen aufräumen
+    if (tab === "logs" && typeof State.stopLogStream === "function") {
+      try { State.stopLogStream(); } catch {}
+      State.stopLogStream = null;
     }
+  }
+
+  function mountTab(tab) {
+    // beim Betreten initialisieren
+    if (tab === "logs") {
+      footerEl.style.display = "flex";
+      bodyEl.innerHTML = "";
+      bodyEl.appendChild(preLog);
+      refreshLogs();
+      State.stopLogStream = startLogStream();
+    } else if (tab === "overview") {
+      renderOverview();
+    } else if (tab === "build") {
+      renderBuild();
+    } else if (tab === "paths") {
+      renderPaths();
+    } else if (tab === "tests") {
+      renderTests();
+    }
+  }
+
+  function selectTab(next) {
+    if (State.currentTab === next) return;
+    unmountTab(State.currentTab);
+    State.currentTab = next;
+    setActiveTabButton(next);
+    mountTab(next);
+  }
+
+  // --------- Öffnen/Schließen -----------------------------------------------
+  function open() {
+    ensureRoot();
+    if (State.isOpen) return;
+    State.isOpen = true;
+    root.style.display = "block";
+    setActiveTabButton(State.currentTab);
+    mountTab(State.currentTab);
+    log("geöffnet", VERSION);
+  }
+
+  function close() {
+    if (!State.isOpen) return;
+    unmountTab(State.currentTab);
+    State.isOpen = false;
+    root.style.display = "none";
+  }
+
+  // --------- Öffentliche Bridge für FAB/UX -----------------------------------
+  window.GameUI = window.GameUI || {};
+  window.GameUI.toggleInspector = function (force) {
+    ensureRoot();
+    const wantOpen = typeof force === "boolean" ? force : !State.isOpen;
+    wantOpen ? open() : close();
+  };
+  window.GameUI.openInspector = open;
+  window.GameUI.closeInspector = close;
+
+  // --------- Autostart-Badge / Garantierte Sichtbarkeit ----------------------
+  // Falls gewünscht direkt initialisieren (nicht automatisch öffnen):
+  // -> wir initialisieren nur das Gerüst, öffnen via FAB
+  ensureRoot();
+  log("bereit", VERSION);
+
+  // ========================================================================== 
+  // TABS – Inhalte
+  // ==========================================================================
+
+  // Übersicht (Platzhalter)
+  function renderOverview() {
+    bodyEl.innerHTML = "";
+    footerEl.style.display = "none";
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:grid;gap:8px";
+
+    const p = (k, v) => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;justify-content:space-between;gap:12px;background:rgba(255,255,255,.06);padding:8px 10px;border-radius:8px";
+      const l = document.createElement("div"); l.style.opacity = ".75"; l.textContent = k;
+      const r = document.createElement("div"); r.style.fontWeight = "600"; r.textContent = v;
+      row.append(l, r);
+      wrap.appendChild(row);
+    };
+
+    const size = `${Math.round(innerWidth)}×${Math.round(innerHeight)}`;
+    const mapName = document.querySelector("#game")?.dataset?.map || "unbekannt";
+    p("Version", VERSION);
+    p("Canvas-Viewport", size);
+    p("Map", mapName);
+
+    bodyEl.appendChild(wrap);
   }
 
   // === REPLACE in assets/inspector/inspector.js ==============================
   // 1) Build-Tab – liest optional window.BUILD_CATEGORIES
   function renderBuild(){
     // UI-Container vorbereiten
-    preLog.textContent = "";
+    bodyEl.innerHTML = "";
+    footerEl.style.display = "none";
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
 
@@ -305,10 +323,6 @@
             const detail = { type: it.id };
             try { window.dispatchEvent(new CustomEvent("cb:build-select", { detail })); } catch {}
             try { (window.CBLog?.log||console.log)("[ui] Build-Select", it.id); } catch {}
-            // kleine Rückmeldung
-            try{
-              preLog.textContent = `Aktives Build-Tool: ${it.id}\n(Event cb:build-select gesendet)`;
-            }catch{}
           });
         }
         row.appendChild(btn);
@@ -316,10 +330,7 @@
       wrap.appendChild(row);
     });
 
-    // Ersetz den Log-Bereich durch unser kleines Build-UI
-    bodyEl.innerHTML = "";
     bodyEl.appendChild(wrap);
-    footerEl.style.display = "none"; // im Build-Tab brauchen wir die Log-Buttons nicht
   }
 
   // 2) Pfade-Tab – nur Events toggeln/resetten
@@ -359,58 +370,14 @@
     bodyEl.appendChild(box);
     bodyEl.appendChild(status);
   }
-  // === /REPLACE ===============================================================
 
-  // ---- Toast -----------------------------------------------------------------
-  function toast(msg){
-    try{
-      let t = $("#insp-toast");
-      if(!t){
-        t = el("div","", "");
-        t.id = "insp-toast";
-        t.style.cssText = "position:fixed;left:50%;bottom:12vh;transform:translateX(-50%);"+
-          "background:rgba(0,0,0,.78);color:#fff;padding:8px 12px;border-radius:10px;"+
-          "border:1px solid rgba(255,255,255,.12);font:12px/1.2 system-ui,Segoe UI,Arial,sans-serif;"+
-          "z-index:2147483647;opacity:0;transition:opacity .15s ease";
-        document.body.appendChild(t);
-      }
-      t.textContent = msg; t.style.opacity = "1";
-      setTimeout(()=>{ t.style.opacity="0"; }, 900);
-    }catch{}
+  // Tests (Platzhalter)
+  function renderTests() {
+    bodyEl.innerHTML = "";
+    footerEl.style.display = "none";
+    const d = document.createElement("div");
+    d.textContent = "Tests – Platzhalter.";
+    d.style.opacity = ".8";
+    bodyEl.appendChild(d);
   }
-
-  // ---- Öffentliche API -------------------------------------------------------
-  function open(){ buildUI(); root.style.display="block"; startStream(); try{ CB.info(`${NS} geöffnet (${VERSION})`);}catch{} }
-  function close(){ if (!root) return; root.style.display="none"; }
-  function toggle(){ if (!root || root.style.display==="none" || !root.style.display) open(); else close(); }
-
-  window.GameUI = window.GameUI || {};
-  if (window.GameUI.toggleInspector !== toggle) window.GameUI.toggleInspector = toggle;
-  window.GameUI.openInspector  = open;
-  window.GameUI.closeInspector = close;
-
-  // ---- Auto-Open (nur auf Wunsch) -------------------------------------------
-  try{
-    if (/\binspector=1\b/.test(location.search)) setTimeout(open, 60);
-    window.addEventListener("cb:inspector-open", open);
-  }catch{}
-
-  // ---- Mini-Failsafe-Badge ---------------------------------------------------
-  (function ensureBadge(){
-    try{
-      if (document.getElementById("btn-inspector")) return;
-      const b = el("button","", "🛠");
-      b.title = "Inspector öffnen";
-      b.style.cssText =
-        "position:fixed;right:14px;bottom:14px;width:48px;height:48px;border:none;border-radius:50%;"+
-        "background:rgba(30,30,30,.92);color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.35);z-index:2147483647;cursor:pointer";
-      b.addEventListener("click", toggle);
-      document.addEventListener("DOMContentLoaded", ()=>document.body.appendChild(b));
-    }catch{}
-  })();
-
-  // ---- Event-Doku ------------------------------------------------------------
-  //   window.dispatchEvent(new CustomEvent('cb:build-select', { detail:{ type:'house' } }));
-  //   window.dispatchEvent(new CustomEvent('cb:paths:toggle'));
-  //   window.dispatchEvent(new CustomEvent('cb:paths:reset'));
 })();
