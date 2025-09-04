@@ -1,69 +1,72 @@
 /* ============================================================================
-   assets/ui/ui-bridge.js — v17.8.0
+   assets/ui/ui-bridge.js — v17.8.1
    Aufgaben:
    - Öffnen/Schließen: Build-Panel & Inspector
-   - Einheitliche Events: cb:build-open/close, cb:inspector-open/close
-   - Body-Klasse "has-build-open" pflegen (für FAB-Hochrücken)
-   - Defensive: funktioniert auch, wenn Inspector/Build noch nicht geladen
-   CODE-STYLE:
-   - Keine externen Abhängigkeiten
-   - Sanfte Logs via CBLog (falls vorhanden), sonst console.log
+   - Events: cb:build-open/close, cb:inspector-open/close, cb:inspector-ready (listener)
+   - Body-Klasse "has-build-open" pflegen
+   - Robust gegen „Inspector noch nicht geladen“
    ============================================================================ */
-
 (function () {
   "use strict";
 
-  const VERSION = "v17.8.0";
-  const log  = (t, ...a) => (window.CBLog?.ok || console.log)(`[ui-bridge] ${t}`, ...a);
+  const VERSION = "v17.8.1";
+  const ok   = (t, ...a) => (window.CBLog?.ok   || console.log)(`[ui-bridge] ${t}`, ...a);
   const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`[ui-bridge] ${t}`, ...a);
 
-  // --- Build-Dock Steuerung -------------------------------------------------
+  // ----------------------------- Build-Dock ----------------------------------
   const Build = (() => {
-    let open = false;
+    let isOpen = false;
     const panel = () => document.getElementById("build-panel");
 
-    function ensurePanel() {
+    const ensure = () => {
       const el = panel();
-      if (!el) { warn("Build-Panel fehlt (id=build-panel)."); }
+      if (!el) warn("Build-Panel fehlt (id=build-panel).");
       return el;
-    }
+    };
 
-    function _open() {
-      const el = ensurePanel();
-      if (!el) return;
-      if (open) return;
-      open = true;
+    function open() {
+      const el = ensure(); if (!el || isOpen) return;
+      isOpen = true;
       el.classList.add("open");
       document.body.classList.add("has-build-open");
       window.dispatchEvent(new CustomEvent("cb:build-open"));
-      log("Build geöffnet (%s).", VERSION);
+      ok("Build geöffnet (%s).", VERSION);
     }
-
-    function _close() {
-      const el = ensurePanel();
-      if (!el) return;
-      if (!open) return;
-      open = false;
+    function close() {
+      const el = ensure(); if (!el || !isOpen) return;
+      isOpen = false;
       el.classList.remove("open");
       document.body.classList.remove("has-build-open");
       window.dispatchEvent(new CustomEvent("cb:build-close"));
-      log("Build geschlossen.");
+      ok("Build geschlossen.");
     }
-
     function toggle(force) {
-      const el = ensurePanel();
-      if (!el) return;
-      (force == null ? !open : !!force) ? _open() : _close();
+      const targetOpen = (force == null) ? !isOpen : !!force;
+      targetOpen ? open() : close();
     }
-
-    return { open: _open, close: _close, toggle };
+    return { open, close, toggle };
   })();
 
-  // --- Inspector Bridge (nur API, UI kommt aus assets/inspector/inspector.js)
+  // --------------------------- Inspector Bridge ------------------------------
   const InspectorBridge = (() => {
-    // Diese drei Funktionen werden von inspector.js überschrieben.
-    // Falls inspector.js noch nicht geladen ist, liefern wir eine Fallback-UI.
-    function fallbackEnsureBox() {
+    let probeEl = null;
+
+    function removeProbe() {
+      if (probeEl) { probeEl.remove(); probeEl = null; }
+    }
+    function ensureProbe() {
+      if (probeEl || window.__INSPECTOR_API__) return;
+      probeEl = document.createElement("div");
+      probeEl.id = "inspector-probe";
+      probeEl.textContent = "Inspector lädt…";
+      probeEl.style.cssText =
+        "position:fixed;right:16px;bottom:64px;font:12px/1.2 system-ui;opacity:.55;color:#cbd5e1;z-index:2147483646;" +
+        "background:rgba(30,30,35,.72);padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.06)";
+      document.body.appendChild(probeEl);
+    }
+
+    // Fallback-Panel (nur bis __INSPECTOR_API__ da ist)
+    function fallbackOpen() {
       let box = document.getElementById("inspector-fallback");
       if (!box) {
         box = document.createElement("div");
@@ -75,36 +78,56 @@
         box.textContent = "Inspector lädt…";
         document.body.appendChild(box);
       }
-      return box;
+      box.style.display = "block";
+    }
+    function fallbackClose() {
+      const box = document.getElementById("inspector-fallback");
+      if (box) box.style.display = "none";
+    }
+    function fallbackDestroy() {
+      const box = document.getElementById("inspector-fallback");
+      if (box) box.remove();
     }
 
     function open() {
-      if (window.__INSPECTOR_API__?.open) return window.__INSPECTOR_API__.open();
-      const box = fallbackEnsureBox();
-      box.style.display = "block";
+      if (window.__INSPECTOR_API__?.open) {
+        fallbackDestroy(); removeProbe();
+        return window.__INSPECTOR_API__.open();
+      }
+      fallbackOpen();
       window.dispatchEvent(new CustomEvent("cb:inspector-open"));
-      log("Inspector (Fallback) geöffnet.");
+      ok("Inspector (Fallback) geöffnet.");
     }
-
     function close() {
       if (window.__INSPECTOR_API__?.close) return window.__INSPECTOR_API__.close();
-      const box = document.getElementById("inspector-fallback");
-      if (box) box.style.display = "none";
+      fallbackClose();
       window.dispatchEvent(new CustomEvent("cb:inspector-close"));
-      log("Inspector (Fallback) geschlossen.");
+      ok("Inspector (Fallback) geschlossen.");
     }
-
     function toggle(force) {
-      if (window.__INSPECTOR_API__?.toggle) return window.__INSPECTOR_API__.toggle(force);
+      if (window.__INSPECTOR_API__?.toggle) {
+        fallbackDestroy(); removeProbe();
+        return window.__INSPECTOR_API__.toggle(force);
+      }
       const box = document.getElementById("inspector-fallback");
-      const willOpen = force == null ? (box ? box.style.display === "none" : true) : !!force;
+      const willOpen = (force == null) ? !(box && box.style.display !== "none") : !!force;
       willOpen ? open() : close();
     }
+
+    // Nach ~1,2s kleine Probe einblenden (kein Flackern direkt beim Laden)
+    setTimeout(() => { if (!window.__INSPECTOR_API__) ensureProbe(); }, 1200);
+
+    // Wenn der Inspector bereit ist: Probe + Fallback weg
+    window.addEventListener("cb:inspector-ready", () => {
+      removeProbe();
+      fallbackDestroy();
+      ok("Inspector ready signal empfangen.");
+    }, { once: false });
 
     return { open, close, toggle };
   })();
 
-  // --- Öffentliche API für die FAB-Buttons ---------------------------------
+  // ----------------------------- Public API ---------------------------------
   window.GameUI = window.GameUI || {};
   window.GameUI.toggleBuild     = Build.toggle;
   window.GameUI.openBuild       = Build.open;
@@ -114,21 +137,5 @@
   window.GameUI.openInspector   = InspectorBridge.open;
   window.GameUI.closeInspector  = InspectorBridge.close;
 
-  // Diagnose-Badge (klein rechts unten), falls Inspector nicht initialisiert wird
-  (function tinyProbe() {
-    setTimeout(() => {
-      if (!window.__INSPECTOR_API__) {
-        const probe = document.createElement("div");
-        probe.textContent = "Inspector lädt…";
-        probe.style.cssText =
-          "position:fixed;right:16px;bottom:64px;font:12px/1.2 system-ui;opacity:.55;color:#cbd5e1;z-index:2147483646;" +
-          "background:rgba(30,30,35,.72);padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.06)";
-        probe.id = "inspector-probe";
-        document.body.appendChild(probe);
-        setTimeout(() => probe.remove(), 4000);
-      }
-    }, 800);
-  })();
-
-  log("bereit (%s).", VERSION);
+  ok("bereit (%s).", VERSION);
 })();
