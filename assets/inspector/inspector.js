@@ -1,285 +1,251 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.js
- * Projekt: Siedler-Mini — Inspector (Fullscreen)
- * Version: v18.10.3
+ *  assets/inspector/inspector.js
+ *  Version: v18.10.3 (stabil, „nie wieder hängt beim Laden“)
+ *  Projekt: Neue Siedler — Inspector Core
  *
- * Ziele:
- *  - Vollbild-Overlay (mobile/desktop), Header & Tabs sticky, Footer fix
- *  - Stabile Logs (persistenter Puffer in window.__cb._logBuf)
- *  - Tabs: Übersicht · Logs (mit Filter & Suche) · Build (BUILD_CATEGORIES) · Pfade · Tests
- *  - Keine Log-Löschung beim Tabwechsel
- *  - Öffnen/Schließen via window.GameUI.toggleInspector/openInspector/closeInspector
- *  - Events: cb:inspector:open/close, cb:build-select, cb:paths:toggle/reset
+ *  Ziele:
+ *    - Öffnet/zeichnet sich ohne Warten (keine Hänger „Inspektor lädt…“)
+ *    - Harte Sichtbarkeits-Garantie (z-index, Inline-Fallback-CSS)
+ *    - CBLog-Integration: liest vorhandenen Buffer (getBuffer/_buf/Polyfill)
+ *    - Tabs: Übersicht / Logs / Build / Pfade / Tests
+ *    - Build-Tab liest optional window.BUILD_CATEGORIES (Fallback enthalten)
+ *    - Pfade-Tab: Toggle + Reset-Events
+ *    - Globale Bridge: GameUI.openInspector / closeInspector / toggleInspector
+ *    - Events: cb:inspector:ready, cb:inspector:open, cb:inspector:close
+ *  Hinweis:
+ *    - Diese Datei ist autark. Sie funktioniert auch, wenn CSS fehlt
+ *      (setzt dann ein knappes Inline-Fallback-CSS).
  * ========================================================================== */
 
-(function () {
-  const VERSION = "v18.10.3";
+(function(){
+  "use strict";
 
-  // -- Logging helpers --------------------------------------------------------
-  const CB = (window.__cb = window.__cb || {});
-  CB._logBuf = CB._logBuf || [];   // [{ ts, level, text }]
-  CB._logMax = CB._logMax || 800;
+  // -------- Mini-Logs (Polyfill freundlich) --------------------------------
+  const L = (lvl, ...a)=> (window.CBLog?.[lvl]||console[lvl]||console.log).call(console, "[inspector.core]", ...a);
+  const info = (...a)=> L("info", ...a);
+  const warn = (...a)=> L("warn", ...a);
 
-  function push(level, arr) {
-    CB._logBuf.push({ ts: new Date(), level, text: arr.map(String).join(" ") });
-    const over = CB._logBuf.length - CB._logMax;
-    if (over > 0) CB._logBuf.splice(0, over);
-  }
+  // -------- Einmalige Initialisierungsschutz --------------------------------
+  if (window.__InspectorInitialized__) { return; }
+  window.__InspectorInitialized__ = true;
 
-  // Fallback-Konsole (falls kein CBLog vorhanden)
-  if (!window.CBLog) {
-    window.CBLog = {
-      log  : (...a) => { push("LOG" , a); console.log (...a); },
-      info : (...a) => { push("INFO", a); console.info(...a); },
-      warn : (...a) => { push("WARN", a); console.warn(...a); },
-      error: (...a) => { push("ERR" , a); console.error(...a); },
-      getBuffer: () => CB._logBuf.slice(),
-      clear: () => { CB._logBuf.length = 0; }
-    };
-    (window.CBLog.info || console.info)("[CBLog] Polyfill aktiv (Inspector-Fallback)");
-  }
+  // -------- Inline-Fallback-CSS (falls externe CSS ausfällt) ----------------
+  (function injectInlineCSS(){
+    if (document.getElementById("inspector-inline-css")) return;
+    const css = `
+    #inspector{position:fixed;inset:8vh 2vw auto 2vw;z-index:2147483646;
+      max-height:84vh;display:none;background:rgba(22,22,22,.96);
+      border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 28px 80px rgba(0,0,0,.55);
+      color:#e8e8e8;font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+      backdrop-filter: blur(8px); }
+    #inspector.open{display:block;}
+    #inspector .ins-head{display:flex;align-items:center;gap:12px;padding:14px 16px 10px;border-bottom:1px solid rgba(255,255,255,.06);}
+    #inspector .ins-title{font-weight:700;letter-spacing:.2px;opacity:.92}
+    #inspector .ins-close{margin-left:auto;border:none;border-radius:12px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+    #inspector .ins-tabs{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px 0}
+    #inspector .ins-tab{border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);color:#ddd;cursor:pointer}
+    #inspector .ins-tab.active{background:rgba(120,200,120,.22);color:#f4fff4}
+    #inspector .ins-body{padding:12px 16px 0;overflow:auto;max-height:calc(84vh - 116px);}
+    #inspector .ins-footer{padding:10px 16px 14px;display:flex;gap:10px;border-top:1px solid rgba(255,255,255,.06)}
+    #inspector .ins-btn{border:none;border-radius:12px;padding:8px 12px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+    #inspector pre{margin:0;padding:10px 12px;background:#111;border:1px solid rgba(255,255,255,.08);border-radius:10px;
+      white-space:pre-wrap;word-break:break-word;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,"Roboto Mono",Consolas,"Liberation Mono","Courier New",monospace;}
+    @media (max-width:780px){
+      #inspector{inset:0;max-height:100vh;border-radius:0}
+      #inspector .ins-body{max-height:calc(100vh - 114px);}
+    }`;
+    const style = document.createElement("style");
+    style.id = "inspector-inline-css"; style.textContent = css;
+    document.head.appendChild(style);
+  })();
 
-  const log  = (...a) => (window.CBLog.log  || console.log ).apply(console, a);
-  const info = (...a) => (window.CBLog.info || console.info).apply(console, a);
-  const warn = (...a) => (window.CBLog.warn || console.warn).apply(console, a);
+  // -------- DOM-Bausteine ---------------------------------------------------
+  let root, headEl, bodyEl, footerEl, preLog;
+  let activeTab = "logs"; // Standard: Logs
 
-  // -- DOM-Grundgerüst --------------------------------------------------------
-  let root, headEl, tabsEl, bodyEl, footerEl, preLog;
-  let filterState = { LOG:true, INFO:true, WARN:true, ERR:true, q:"" };
-
-  function ensureDOM() {
+  function ensureRoot(){
+    root = document.getElementById("inspector");
     if (root) return;
 
-    // Root + Panel
     root = document.createElement("div");
     root.id = "inspector";
     root.setAttribute("role","dialog");
     root.setAttribute("aria-label","Inspector");
-    root.style.display = "none";
 
-    const panel = document.createElement("div");
-    panel.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column";
-    root.append(panel);
-
-    // Header
-    headEl = document.createElement("div");
-    headEl.id = "ins-head";
-    const title = document.createElement("div");
-    title.id = "ins-title";
-    title.textContent = `Inspector v${VERSION}`;
-    const closeBtn = document.createElement("button");
-    closeBtn.id = "ins-close";
-    closeBtn.textContent = "Schließen";
-    closeBtn.addEventListener("click", close);
-    headEl.append(title, closeBtn);
-
-    // Tabs
-    tabsEl = document.createElement("div");
-    tabsEl.id = "ins-tabs";
-
-    // Body + Footer
-    bodyEl = document.createElement("div");
-    bodyEl.id = "ins-body";
-
-    footerEl = document.createElement("div");
-    footerEl.id = "ins-foot";
-
-    panel.append(headEl, tabsEl, bodyEl, footerEl);
+    root.innerHTML = `
+      <div class="ins-head">
+        <div class="ins-title">Inspector <span class="ins-ver">v18.10.3</span></div>
+        <button class="ins-close" type="button" aria-label="Schließen">Schließen</button>
+      </div>
+      <div class="ins-tabs" role="tablist">
+        <button class="ins-tab" data-tab="overview">Übersicht</button>
+        <button class="ins-tab" data-tab="logs">Logs</button>
+        <button class="ins-tab" data-tab="build">Build</button>
+        <button class="ins-tab" data-tab="paths">Pfade</button>
+        <button class="ins-tab" data-tab="tests">Tests</button>
+      </div>
+      <div class="ins-body"></div>
+      <div class="ins-footer"></div>
+    `;
     document.body.appendChild(root);
 
-    initTabs();
-    activateTab("logs");
+    headEl   = root.querySelector(".ins-head");
+    bodyEl   = root.querySelector(".ins-body");
+    footerEl = root.querySelector(".ins-footer");
 
-    // ESC = schließen
-    window.addEventListener("keydown", (e)=>{
-      if (e.key === "Escape" && root.style.display !== "none") close();
+    // Schließen
+    root.querySelector(".ins-close").addEventListener("click", close);
+
+    // Tabs
+    root.querySelectorAll(".ins-tab").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        setActiveTab(btn.dataset.tab);
+      });
     });
+
+    // Erstes Rendern
+    setActiveTab(activeTab);
+
+    // Signal: bereit
+    window.dispatchEvent(new CustomEvent("cb:inspector:ready"));
+    // evtl. „Inspektor lädt…“-Badge entfernen
+    const badge = document.getElementById("inspector-loader");
+    if (badge) try{ badge.remove(); }catch{}
+    info("bereit (v18.10.3)");
   }
 
-  // -- Utilities --------------------------------------------------------------
-  const pad2 = (n)=>String(n).padStart(2,"0");
-  function currentBuffer(){ return window.CBLog?.getBuffer ? window.CBLog.getBuffer() : CB._logBuf.slice(); }
-
-  function pill(label, id){
-    const b = document.createElement("button");
-    b.className = "ins-tab";
-    b.textContent = label;
-    b.dataset.tab = id;
-    b.addEventListener("click", ()=>activateTab(id));
-    return b;
-  }
-
-  // Pretty-Mapping für bekannte Meldungen
-  function labelForBuild(id) {
-    try {
-      const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES)) ? window.BUILD_CATEGORIES : [];
-      for (const c of cats) for (const it of (c.items||[])) if (it.id === id) return it.label || id;
-    } catch {}
-    return id;
-  }
-  function prettify(text) {
-    let m = text.match(/\[ui\]\s+Build-Select\s+(\w[\w-]*)/i);
-    if (m) return `[Build] Auswahl: ${labelForBuild(m[1])} (${m[1]})`;
-    m = text.match(/\[ui-start\].*Start\s*[→=>]\s*(.+)$/i);
-    if (m) return `[Start] Map geladen: ${m[1]}`;
-    if (/bootstrap\].*bereits gestartet/i.test(text)) return "[Bootstrap] Bereits aktiv (kein erneuter Start)";
-    return text;
-  }
-  function fmt(arr, pretty){
-    return (arr||[]).map(it=>{
-      const d = it.ts instanceof Date ? it.ts : new Date(it.ts);
-      const ts = `[${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}]`;
-      return `${ts} ${String(it.level||"LOG").toUpperCase().padEnd(4," ")} ${pretty?prettify(it.text):it.text}`;
-    }).join("\n");
-  }
-
-  // -- Tabs -------------------------------------------------------------------
-  const TABS = [
-    { id:"overview", label:"Übersicht", render: renderOverview },
-    { id:"logs"    , label:"Logs"     , render: renderLogs     },
-    { id:"build"   , label:"Build"    , render: renderBuild    },
-    { id:"paths"   , label:"Pfade"    , render: renderPaths    },
-    { id:"tests"   , label:"Tests"    , render: renderTests    },
-  ];
-  const tabBtn = new Map();
-
-  function initTabs(){
-    tabsEl.innerHTML = "";
-    TABS.forEach(t=>{
-      const b = pill(t.label, t.id);
-      tabBtn.set(t.id, b);
-      tabsEl.appendChild(b);
+  // -------- Tabs ------------------------------------------------------------
+  function setActiveTab(id){
+    activeTab = id;
+    // Klasse pflegen
+    root?.querySelectorAll(".ins-tab").forEach(t=>{
+      t.classList.toggle("active", t.dataset.tab===id);
     });
+
+    // Render-Switch
+    switch(id){
+      case "overview": renderOverview(); break;
+      case "logs":     renderLogs();     break;
+      case "build":    renderBuild();    break;
+      case "paths":    renderPaths();    break;
+      case "tests":    renderTests();    break;
+      default:         renderLogs();
+    }
   }
 
-  function activateTab(id){
-    TABS.forEach(t=>{
-      const active = (t.id === id);
-      const btn = tabBtn.get(t.id);
-      if (btn) btn.classList.toggle("active", active);
-    });
-    const tab = TABS.find(t=>t.id===id) || TABS[0];
-    tab.render();
-  }
-
-  // -- Render: Übersicht ------------------------------------------------------
+  // -------- Overview --------------------------------------------------------
   function renderOverview(){
     bodyEl.innerHTML = "";
-    footerEl.style.display = "none";
+    footerEl.innerHTML = "";
 
     const wrap = document.createElement("div");
-    wrap.style.cssText = "display:grid;gap:8px";
     wrap.innerHTML = `
-      <div style="opacity:.85">Version: <b>${VERSION}</b></div>
-      <div style="opacity:.85">Canvas: <span id="ov-canvas">–</span></div>
-      <div style="opacity:.85">Map: <span id="ov-map">–</span></div>
+      <div style="opacity:.85;margin-bottom:8px"><b>Runtime</b></div>
+      <div style="display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;opacity:.92">
+        <div>Canvas:</div><div id="ov-canvas">?</div>
+        <div>Map:</div><div id="ov-map">?</div>
+        <div>FPS:</div><div id="ov-fps">?</div>
+      </div>
+      <div style="opacity:.65;margin-top:10px">Hinweis: Werte werden vereinfacht aus der Engine/DOM gelesen.</div>
     `;
     bodyEl.appendChild(wrap);
 
+    // einfache Füllung
     try {
       const cvs = document.getElementById("game");
-      if (cvs) wrap.querySelector("#ov-canvas").textContent =
-        `${cvs.width||cvs.clientWidth}×${cvs.height||cvs.clientHeight}`;
-      const mapName = (document.getElementById("game")?.dataset?.map || "–").split("/").pop();
-      wrap.querySelector("#ov-map").textContent = mapName;
+      wrap.querySelector("#ov-canvas").textContent = cvs ? `${cvs.width||cvs.clientWidth}×${cvs.height||cvs.clientHeight}` : "–";
+    } catch {}
+    try {
+      const map = document.getElementById("game")?.dataset?.map;
+      wrap.querySelector("#ov-map").textContent = map || "–";
+    } catch {}
+    try {
+      wrap.querySelector("#ov-fps").textContent = window.__cb?.fps ? `${window.__cb.fps}` : "–";
     } catch {}
   }
 
-  // -- Render: Logs (Filter + Suche) -----------------------------------------
-  function renderLogs(){
-    bodyEl.innerHTML = "";
-    footerEl.style.display = "flex";
-
-    // Toolbar
-    const tools = document.createElement("div");
-    tools.className = "ins-logtools";
-
-    const mkPill = (label, key, cls="")=>{
-      const p = document.createElement("button");
-      p.className = `ins-pill ${cls}`;
-      p.textContent = label;
-      p.dataset.key = key;
-      p.classList.toggle("active", !!filterState[key]);
-      p.addEventListener("click", ()=>{
-        filterState[key] = !filterState[key];
-        p.classList.toggle("active", !!filterState[key]);
-        update();
-      });
-      return p;
-    };
-
-    const pLog  = mkPill("LOG",  "LOG",  "badge-log");
-    const pInfo = mkPill("INFO", "INFO", "badge-info");
-    const pWarn = mkPill("WARN", "WARN", "badge-warn");
-    const pErr  = mkPill("ERR",  "ERR",  "badge-err");
-
-    const q = document.createElement("input");
-    q.className = "ins-search";
-    q.type = "search";
-    q.placeholder = "Suche (Regex oder Text)…";
-    q.value = filterState.q || "";
-    q.addEventListener("input", ()=>{
-      filterState.q = q.value;
-      update();
-    });
-
-    tools.append(pLog,pInfo,pWarn,pErr,q);
-    bodyEl.appendChild(tools);
-
-    // Logbox
-    preLog = document.createElement("pre");
-    preLog.className = "ins-logbox";
-    bodyEl.appendChild(preLog);
-
-    // Footer-Buttons
-    footerEl.innerHTML = "";
-    const btnCopy = mkBtn("Kopieren", ()=>{
-      try {
-        navigator.clipboard.writeText(preLog.textContent || "");
-        info("[inspector.core] Logs kopiert");
-      } catch(e){ warn("Clipboard fehlgeschlagen:", e?.message); }
-    });
-    const btnClear = mkBtn("Leeren", ()=>{
-      window.CBLog?.clear?.();
-      update();
-      info("[inspector.core] Log geleert");
-    });
-    const btnRefresh = mkBtn("Aktualisieren", update);
-    footerEl.append(btnCopy, btnClear, btnRefresh);
-
-    function mkBtn(label, cb){
-      const b = document.createElement("button");
-      b.className = "ins-btn";
-      b.textContent = label;
-      b.addEventListener("click", cb);
-      return b;
-    }
-
-    function update(){
-      // Filter: Level
-      let buf = currentBuffer().filter(it => !!filterState[String(it.level||"LOG").toUpperCase()]);
-      // Filter: Suche
-      if ((filterState.q||"").trim()){
-        const q = filterState.q.trim();
-        let re = null;
-        try { re = new RegExp(q, "i"); } catch { re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"), "i"); }
-        buf = buf.filter(it => re.test(it.text));
-      }
-      preLog.textContent = buf.length ? fmt(buf, true) : "[Keine Log-Einträge vorhanden]";
-    }
-
-    update();
+  // -------- Logs ------------------------------------------------------------
+  function readCBLogBuffer(){
+    // robust: mehrere mögliche Speicherorte
+    if (window.CBLog?.getBuffer) return window.CBLog.getBuffer();
+    if (Array.isArray(window.CBLog?._buf)) return window.CBLog._buf;
+    if (Array.isArray(window.__CBLOG_BUFFER__)) return window.__CBLOG_BUFFER__;
+    return [];
   }
 
-  // -- Render: Build ----------------------------------------------------------
+  function formatEntry(e){
+    // e kann string oder {time,level,scope,msg} sein
+    if (typeof e === "string") return e;
+    const ts = e.time || e.t || "";
+    const lvl = (e.level||e.lvl||"LOG").toUpperCase().padEnd(5," ");
+    const scope = e.scope ? `[${e.scope}] ` : "";
+    const msg = e.msg || e.message || "";
+    return `[${ts}] ${lvl} ${scope}${msg}`;
+  }
+
+  function renderLogs(){
+    bodyEl.innerHTML = "";
+    footerEl.innerHTML = "";
+
+    preLog = document.createElement("pre");
+    preLog.setAttribute("aria-live","polite");
+    bodyEl.appendChild(preLog);
+
+    const btnCopy = mkBtn("Kopieren", ()=> {
+      try {
+        const txt = preLog.textContent || "";
+        navigator.clipboard?.writeText(txt);
+      } catch {}
+    });
+    const btnClear = mkBtn("Leeren", ()=> {
+      try { window.CBLog?.clear?.(); } catch {}
+      preLog.textContent = "";
+    });
+    const btnRefresh = mkBtn("Aktualisieren", ()=> fillLog(true));
+
+    footerEl.append(btnCopy, btnClear, btnRefresh);
+
+    // initial
+    fillLog(false);
+
+    // Live-Refresh (versch. Eventnamen akzeptieren)
+    const onAppend = ()=> {
+      if (activeTab==="logs") fillLog(false);
+    };
+    window.addEventListener("cblog:append", onAppend);
+    window.addEventListener("CBLog:append", onAppend);
+    window.addEventListener("cb:log", onAppend);
+    // beim Tab-Wechsel wird neu gerendert; hier reicht das
+  }
+
+  function fillLog(forceScrollToEnd){
+    const buf = readCBLogBuffer();
+    if (!buf || !buf.length){
+      preLog.textContent = "[Keine Log-Einträge vorhanden]";
+      return;
+    }
+    const wasAtEnd = isScrolledToEnd(bodyEl);
+    preLog.textContent = buf.map(formatEntry).join("\n");
+    if (forceScrollToEnd || wasAtEnd){
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+  }
+
+  function isScrolledToEnd(scroller){
+    const EPS = 8;
+    return (scroller.scrollTop + scroller.clientHeight) >= (scroller.scrollHeight - EPS);
+  }
+
+  // -------- Build (aus BUILD_CATEGORIES, Fallback vorhanden) ----------------
   function renderBuild(){
     bodyEl.innerHTML = "";
-    footerEl.style.display = "none";
+    footerEl.innerHTML = "";
 
     const wrap = document.createElement("div");
     wrap.style.cssText = "display:flex;flex-direction:column;gap:10px";
+    bodyEl.appendChild(wrap);
 
-    const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES)
+    const cats = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES))
       ? window.BUILD_CATEGORIES
       : [
           { id:"general", title:"Allg.", items:[
@@ -291,111 +257,120 @@
             { id:"farm",    label:"Farm" },
             { id:"fischer", label:"Fischer" }
           ]}
-        ]);
+        ];
 
-    const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.85;font-weight:700;margin-top:4px"; return h; };
-    const mkBtn = (label, disabled=false)=>{
+    const mkH = (txt)=>{ const h=document.createElement("div"); h.textContent=txt; h.style.cssText="opacity:.85;font-weight:700;margin-top:6px"; return h; };
+    const mkPill = (label, disabled=false)=>{
       const b=document.createElement("button");
       b.textContent = label;
       b.disabled = !!disabled;
-      b.style.cssText = "border:none;border-radius:999px;padding:6px 10px;margin:4px 6px 0 0;cursor:pointer;" +
-        (disabled ? "background:rgba(255,255,255,.06);color:#777;cursor:not-allowed;"
-                  : "background:rgba(255,255,255,.10);color:#ddd;");
+      b.className = "ins-btn";
+      b.style.borderRadius = "999px";
+      b.style.background = disabled ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.12)";
+      b.style.opacity = disabled ? ".55" : "1";
       return b;
     };
 
     cats.forEach(cat=>{
-      wrap.appendChild(mkH(cat.title || cat.id));
+      wrap.appendChild(mkH(cat.title||cat.id));
       const row = document.createElement("div");
-      row.style.cssText = "display:flex;flex-wrap:wrap";
+      row.style.cssText = "display:flex;flex-wrap:wrap;gap:6px";
       (cat.items||[]).forEach(it=>{
-        const btn = mkBtn(it.label || it.id, !!it.todo);
+        const btn = mkPill(it.label||it.id, !!it.todo);
         if (!it.todo){
           btn.addEventListener("click", ()=>{
             const detail = { type: it.id };
             try { window.dispatchEvent(new CustomEvent("cb:build-select", { detail })); } catch {}
-            try { (window.CBLog?.log||console.log)(`[ui] Build-Select ${it.id}`); } catch {}
+            (window.CBLog?.log||console.log)("[Build] Auswahl:", `${it.label||it.id} (${it.id})`);
           });
         }
         row.appendChild(btn);
       });
       wrap.appendChild(row);
     });
-
-    bodyEl.appendChild(wrap);
   }
 
-  // -- Render: Pfade ----------------------------------------------------------
+  // -------- Paths (Overlay/Heatmap steuern) ---------------------------------
   function renderPaths(){
     bodyEl.innerHTML = "";
-    footerEl.style.display = "none";
+    footerEl.innerHTML = "";
 
     const box = document.createElement("div");
-    box.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
-
-    const mk = (label, fn)=>{
-      const b=document.createElement("button");
-      b.className = "ins-btn";
-      b.textContent = label;
-      b.addEventListener("click", fn);
-      return b;
-    };
+    box.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+    bodyEl.appendChild(box);
 
     const status = document.createElement("div");
-    status.style.cssText = "opacity:.85;margin-top:6px";
+    status.style.cssText = "opacity:.8";
     const refreshStatus = ()=>{
       const on = !!(window.__cb && window.__cb.pathsEnabled);
       status.textContent = `Pfade-Overlay: ${on ? "AN" : "AUS"}`;
     };
     refreshStatus();
 
-    box.append(
-      mk("Overlay umschalten", ()=>{
-        try { window.dispatchEvent(new CustomEvent("cb:paths:toggle")); } catch {}
-        setTimeout(refreshStatus, 40);
-      }),
-      mk("Heatmap zurücksetzen", ()=>{
-        try { window.dispatchEvent(new CustomEvent("cb:paths:reset")); } catch {}
-      })
-    );
-
-    bodyEl.append(box, status);
+    box.appendChild(mkBtn("Overlay umschalten", ()=>{
+      try { window.dispatchEvent(new CustomEvent("cb:paths:toggle")); } catch {}
+      setTimeout(refreshStatus, 60);
+    }));
+    box.appendChild(mkBtn("Heatmap zurücksetzen", ()=>{
+      try { window.dispatchEvent(new CustomEvent("cb:paths:reset")); } catch {}
+    }));
+    box.appendChild(status);
   }
 
-  // -- Render: Tests (Stub) ---------------------------------------------------
+  // -------- Tests (Platzhalter) ---------------------------------------------
   function renderTests(){
     bodyEl.innerHTML = "";
-    footerEl.style.display = "none";
-    const d = document.createElement("div");
-    d.textContent = "Tests folgen …";
-    d.style.opacity = ".85";
-    bodyEl.appendChild(d);
+    footerEl.innerHTML = "";
+    const p = document.createElement("div");
+    p.style.opacity = ".8";
+    p.textContent = "Tests – Platzhalter.";
+    bodyEl.appendChild(p);
   }
 
-  // -- Öffnen/Schließen + Bridge ---------------------------------------------
-  function open() {
-    ensureDOM();
+  // -------- Helpers ---------------------------------------------------------
+  function mkBtn(label, onClick){
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ins-btn";
+    b.textContent = label;
+    if (onClick) b.addEventListener("click", onClick);
+    return b;
+  }
+
+  // -------- API: open/close/toggle ------------------------------------------
+  function open(){
+    ensureRoot();
     root.classList.add("open");
+    setActiveTab(activeTab||"logs");
     window.dispatchEvent(new CustomEvent("cb:inspector:open"));
-    info("[inspector.core] geöffnet", `v${VERSION}`);
+    info("geöffnet (v18.10.3)");
   }
-
-  function close() {
+  function close(){
     if (!root) return;
     root.classList.remove("open");
     window.dispatchEvent(new CustomEvent("cb:inspector:close"));
+    info("geschlossen");
+  }
+  function toggle(){
+    ensureRoot();
+    if (root.classList.contains("open")) close(); else open();
   }
 
+  // -------- Bridge für FAB/UI -----------------------------------------------
   window.GameUI = window.GameUI || {};
-  window.GameUI.toggleInspector = function (force) {
-    ensureDOM();
-    const isOpen = root.classList.contains("open");
-    const wantOpen = (typeof force === "boolean") ? force : !isOpen;
-    wantOpen ? open() : close();
-  };
   window.GameUI.openInspector  = open;
   window.GameUI.closeInspector = close;
+  window.GameUI.toggleInspector= toggle;
 
-  // Bereitmeldung (kein Auto-Open)
-  info("[inspector.core] bereit", `vv${VERSION}`);
+  // -------- Auto-Init (ohne Warten) -----------------------------------------
+  // Sofort melden, dass wir da sind, und Loader-Badge loswerden
+  try{ window.dispatchEvent(new CustomEvent("cb:inspector:ready")); }catch{}
+  const maybeBadge = document.getElementById("inspector-loader");
+  if (maybeBadge) try{ maybeBadge.remove(); }catch{}
+
+  // Optional: per Query ?inspector=1 direkt öffnen
+  if (location.search.includes("inspector=1")) {
+    // kurzer Timeout lässt DOM ankommen, blockiert aber nicht
+    setTimeout(open, 50);
+  }
 })();
