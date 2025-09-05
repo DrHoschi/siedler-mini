@@ -1,10 +1,10 @@
 <!doctype html>
 <!--
   Neue Siedler – Index
-  Version: v17.8.1
-  Reihenfolge: Polyfill → Core → UI → Inspector (split) → Legacy → BootCompat
+  Version: v17.8.2
+  Reihenfolge: Polyfill → Core → UI → Inspector (split) → BootCompat
   Hinweise:
-    • Einmalige Inspector-CSS-Einbindung
+    • Inspector- und UI-Styles nur einmal einbinden
     • Fallbacks bleiben aktiv (ui-bridge & inspector.core zeigen „Inspector lädt…“)
 -->
 <html lang="de">
@@ -18,11 +18,11 @@
   <title>Neue Siedler</title>
 
   <!-- Projekt-Styles -->
-  <link rel="stylesheet" href="style.css?v=17.8.1">
-  <link rel="stylesheet" href="ui-start.css?v=17.8.1">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.8.1">
-
-  <!-- Inspector-Styles (einmalig) -->
+  <link rel="stylesheet" href="style.css?v=17.8.2">
+  <!-- UI-Styles (genau 1x, aus assets/ui/) -->
+  <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.2">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.8.2">
+  <!-- Inspector-Styles (genau 1x) -->
   <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.10.6">
 
   <style>
@@ -62,55 +62,50 @@
 
   <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" aria-label="Bau-Menü" onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
+    <button type="button" aria-label="Bau-Menü"
+      onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
+    <button type="button" aria-label="Inspector"
+      onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
   </div>
 
-  <!-- Polyfill immer ganz oben -->
-<script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
+  <!-- Polyfill (immer ganz oben vor Core) -->
+  <script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
 
-<!-- Core (nur assets/core/) -->
-<script src="assets/core/core.env.js?v=17.x"></script>
-<script src="assets/core/core.entities.js?v=17.x"></script>
-<script src="assets/core/core.production.js?v=17.x"></script>
-<script src="assets/core/core.pfglue.js?v=17.x"></script>
-<script src="assets/core/core.map.js?v=17.x"></script>
-<script src="assets/core/core.input.js?v=17.x"></script>
-<script src="assets/core/carriers.js?v=17.x"></script>
-<script src="assets/core/overlay-hooks.js?v=17.x"></script>
-<script src="assets/core/core.render.js?v=17.x"></script>
-<script src="assets/core/game.bootstrap.js?v=17.x"></script>
+  <!-- Core (nur assets/core/) -->
+  <script src="assets/core/core.env.js?v=17.8.2"></script>
+  <script src="assets/core/core.entities.js?v=17.8.2"></script>
+  <script src="assets/core/core.production.js?v=17.8.2"></script>
+  <script src="assets/core/core.pfglue.js?v=17.8.2"></script>
+  <script src="assets/core/core.map.js?v=17.8.2"></script>
+  <script src="assets/core/core.input.js?v=17.8.2"></script>
+  <script src="assets/core/carriers.js?v=17.8.2"></script>
+  <script src="assets/core/overlay-hooks.js?v=17.8.2"></script>
+  <script src="assets/core/core.render.js?v=17.8.2"></script>
+  <script src="assets/core/game.bootstrap.js?v=17.8.2"></script>
 
-<!-- UI -->
-<link rel="stylesheet" href="assets/ui/ui-build.css?v=17.x">
-<link rel="stylesheet" href="assets/ui/ui-start.css?v=17.x"><!-- nur diese eine -->
-<script defer src="assets/ui/ui-bridge.js?v=17.x"></script>
-<script defer src="assets/ui/ui-start.js?v=17.x"></script>
-<script defer src="assets/ui/ui-build.js?v=17.x"></script>
+  <!-- UI -->
+  <script defer src="assets/ui/ui-bridge.js?v=17.8.2"></script>
+  <script defer src="assets/ui/ui-start.js?v=17.8.2"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.8.2"></script>
 
-<!-- Inspector (Split) -->
-<link rel="stylesheet" href="assets/inspector/inspector.css?v=18.x">
-<script defer src="assets/inspector/inspector.core.js?v=18.x"></script>
-<script defer src="assets/inspector/inspector.logs.js?v=18.x"></script>
-<script defer src="assets/inspector/inspector.build.js?v=18.x"></script>
-<script defer src="assets/inspector/inspector.paths.js?v=18.x"></script>
-<script defer src="assets/inspector/inspector.tests.js?v=18.x"></script>
+  <!-- Inspector (Split) -->
+  <script defer src="assets/inspector/inspector.core.js?v=18.10.6"></script>
+  <script defer src="assets/inspector/inspector.logs.js?v=18.10.6"></script>
+  <script defer src="assets/inspector/inspector.build.js?v=18.10.6"></script>
+  <script defer src="assets/inspector/inspector.paths.js?v=18.10.6"></script>
+  <script defer src="assets/inspector/inspector.tests.js?v=18.10.6"></script>
 
-<!-- Optional: Legacy-Fassade (nur falls wirklich nötig) -->
-<!-- <script defer src="game.js?v=17.x"></script> -->
-<!-- <script defer src="core/pathfinder.js?v=16.5.0"></script>  --> <!-- nur falls du wirklich noch das ROOT-File brauchst -->
- 
   <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=17.8.1"></script>
+  <script defer src="boot.compat.js?v=17.8.2"></script>
 
   <!-- Marker / Body-Klassen -->
   <script>
     (function(){
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v17.8.1";
-      (window.CBLog?.info || console.log)("[index] UI bereit (v17.8.1)");
+      window.__cb.indexVersion = "v17.8.2";
+      (window.CBLog?.info || console.log)("[index] UI bereit (v17.8.2)");
 
       window.addEventListener('cb:build-open',  ()=>document.body.classList.add('has-build-open'));
       window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
