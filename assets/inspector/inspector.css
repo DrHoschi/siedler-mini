@@ -1,176 +1,128 @@
-/* ============================================================================
-   Datei: assets/inspector/inspector.css
-   Projekt: Neue Siedler – Inspector (Split)
-   Version: v18.10.6
-   Zweck: Vollbild-Overlay, Tabs, Buttons, Log-Ansicht
-   Design: laut PDF-Vorgabe (dunkles Grau, dezente Ränder/Schattierung)
-   ============================================================================ */
+/*
+  assets/inspector/inspector.css — v18.10.8
+  Ziel:
+    - Vollbild-Overlay, mobil-freundlich, sichere Z-Reihenfolge
+    - Farben/Abstände gemäß Vorgabe (helles Grau auf dunklem Hintergrund)
+    - Tabs + Body + Footer
+*/
 
-/* Root-Layer (Panel) */
-#inspector-panel {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483646;
-  display: none; /* core → display:block beim Öffnen */
-  align-items: center;
-  justify-content: center;
-  background: rgba(4, 6, 8, 0.65);
-  -webkit-backdrop-filter: blur(6px);
+/* Root-Overlay */
+#inspector.inspector-root{
+  position:fixed;
+  inset:0;
+  z-index:2147483646;
+  display:none; /* via .open sichtbar */
+  pointer-events:none; /* nur Surface bekommt Events */
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+/* sichtbar */
+#inspector.open{ display:block; }
+
+/* Surface = Fullscreen-Layer, zentriert Panel */
+#inspector .inspector-surface{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+           max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(12,18,15,.48);
   backdrop-filter: blur(6px);
+  pointer-events:auto;
 }
 
-#inspector-panel.open { display: flex; }
-
-/* Card */
-.ins-card {
-  width: min(100vw - 24px, 980px);
-  height: min(100vh - 24px, 86vh);
-  background: linear-gradient(to bottom, rgba(27,30,33,.98), rgba(22,24,27,.98));
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 14px;
-  box-shadow:
-    0 22px 70px rgba(0,0,0,.55),
-    0 2px 0 rgba(255,255,255,.02) inset;
-  color: #e6edf3;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  overflow: hidden;
+/* Panel */
+#inspector .inspector-panel{
+  width:min(960px, 96vw);
+  height:min(720px, 92vh);
+  display:flex;
+  flex-direction:column;
+  background: #151a17;             /* dunkles Grau-Grün */
+  color:#e6e8e7;                    /* helles Grau */
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.25) inset;
+  overflow:hidden;
 }
 
-/* Header */
-.ins-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+/* Mobile: Fullscreen */
+@media (max-width: 640px){
+  #inspector .inspector-panel{
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
 }
-.ins-title {
-  font-weight: 700;
-  letter-spacing: .2px;
-  opacity: .92;
+
+/* Kopf */
+#inspector .insp-head{
+  display:flex; align-items:center; gap:10px;
+  padding:12px 12px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  background: linear-gradient(to bottom, rgba(255,255,255,.03), rgba(255,255,255,.00));
 }
-.ins-version {
-  margin-left: 6px;
-  font-size: 12px;
-  opacity: .6;
+#inspector .insp-title{ font-weight:800; letter-spacing:.2px; }
+#inspector .insp-sub{ opacity:.55; font-size:12px; }
+#inspector .insp-spacer{ flex:1; }
+#inspector .insp-close{
+  border:none; border-radius:8px; padding:6px 10px; cursor:pointer;
+  background: rgba(255,255,255,.10); color:#fff;
 }
-.ins-close {
-  margin-left: auto;
-  appearance: none;
-  border: none;
-  border-radius: 10px;
-  padding: 8px 12px;
-  background: rgba(255,255,255,.10);
-  color: #e6edf3;
-  cursor: pointer;
-}
+#inspector .insp-close:hover{ background: rgba(255,255,255,.16); }
 
 /* Tabs */
-.ins-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
+#inspector .insp-tabs{
+  display:flex; gap:8px; padding:10px 12px; flex-wrap:wrap;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background: #161c18;
 }
-.ins-tab {
-  appearance: none;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.08);
-  color: #dbe6ee;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 13px;
-  cursor: pointer;
+#inspector .insp-tab{
+  border:none; border-radius:999px; padding:6px 12px; cursor:pointer;
+  background: rgba(255,255,255,.10); color:#e7e7e7; font-size:13px;
 }
-.ins-tab.active {
-  background: rgba(120, 200, 130, .22);
-  border-color: rgba(120, 200, 130, .35);
+#inspector .insp-tab.active{
+  background: rgba(120,200,255,.24);
+  color:#fff;
 }
 
-/* Body + Footer */
-.ins-body {
-  padding: 12px 14px;
-  overflow: auto;
-}
-.ins-footer {
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  border-top: 1px solid rgba(255,255,255,.06);
-  background: rgba(255,255,255,.04);
+/* Body */
+#inspector .insp-body{
+  flex:1 1 auto;
+  overflow:auto;
+  padding:12px;
 }
 
-/* Buttons einheitlich */
-.ins-btn {
-  appearance: none;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 10px;
-  padding: 8px 12px;
-  background: rgba(255,255,255,.08);
-  color: #e6edf3;
-  cursor: pointer;
-}
-.ins-btn:hover { background: rgba(255,255,255,.12); }
-
-/* Tools/Badges/Suche (Logs) */
-.ins-tools {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-.ins-levels { display: flex; gap: 6px; }
-.ins-badge {
-  appearance: none;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.08);
-  color: #dbe6ee;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.ins-badge.active {
-  background: rgba(120,200,130,.22);
-  border-color: rgba(120,200,130,.35);
-}
-.ins-search {
-  min-width: 220px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,14,16,.55);
-  color: #e6edf3;
+/* Footer */
+#inspector .insp-footer{
+  padding:10px 12px;
+  border-top:1px solid rgba(255,255,255,.08);
+  background: #141a16;
 }
 
-/* Hinweise + Log-View */
-.ins-note {
-  font-size: 13px;
-  opacity: .75;
-  margin-bottom: 8px;
-}
-.ins-pre {
-  display: block;
-  width: 100%;
-  min-height: 360px;
-  max-height: calc(72vh - 140px);
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(4,6,8,.65);
-  border: 1px solid rgba(255,255,255,.08);
-  color: #d1e7ff;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow: auto;
+/* Logs-Pre (Standard-Höhe) */
+#inspector .insp-logs-pre{
+  width:100%;
+  min-height: 50vh;
+  max-height: 70vh;
+  overflow:auto;
+  margin:0;
+  padding:12px;
+  background: #111613;
+  color:#dfe4e2;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
-/* Kleinere Screens */
-@media (max-width: 480px) {
-  .ins-card { height: min(100vh - 18px, 90vh); }
-  .ins-pre  { min-height: 260px; }
+/* Scrollbars dezent */
+#inspector .insp-body::-webkit-scrollbar,
+#inspector .insp-logs-pre::-webkit-scrollbar{ width:10px; height:10px; }
+#inspector .insp-body::-webkit-scrollbar-thumb,
+#inspector .insp-logs-pre::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.15);
+  border-radius: 10px;
 }
