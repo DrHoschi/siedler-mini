@@ -1,208 +1,153 @@
+<script>
 /* ============================================================================
  * assets/inspector/inspector.core.js — v18.10.8
  * Projekt: Siedler-Mini
  * Zweck:
- *   - Stabiles Inspector-Overlay (Vollbild, mobil-freundlich, safe-area)
- *   - Tabs-Gerüst (Logs / Build / Pfade / Tests), Outlets für Split-Module
- *   - API: window.__INSPECTOR_API__ { open, close, toggle, selectTab(id) }
- *
- * WICHTIG:
- *   - Dieses File enthält KEINE Logik zum Füllen der Tabs.
- *     Das machen die Split-Module (z.B. inspector.logs.js) über die Outlets.
- *   - IDs und Struktur sind stabil: #inspector, #insp-tabs, #insp-body, …
- *   - Fallback-tauglich: zeigt sofort ein lauffähiges Panel an.
- *
- * Events:
- *   - dispatchEvent('cb:inspector-open') / ('cb:inspector-close')
- *   - dispatchEvent('inspector:ready', { detail: { selectTab, getOutlets } })
- * Outlets:
- *   getOutlets() -> {
- *     root, head, tabsEl, bodyEl, footerEl,
- *     ensureTab(id), selectTab(id), // Utilities
- *     areas: {
- *       logs:   { tab, body, pre },           // #inspector-logs-pre
- *       build:  { tab, body },
- *       paths:  { tab, body },
- *       tests:  { tab, body }
- *     }
- *   }
+ *   - Vollbild-Overlay (Inspektor) mit Tabsystem
+ *   - Öffentliche API auf window.__INSPECTOR_API__
+ *   - Events: cb:inspector-open / cb:inspector-close
+ * Code-Style:
+ *   - Defensive, keine harten Throws, sanfte Logs über CBLog/console
+ *   - Keine CSS-Abhängigkeit notwendig (Inline-Styles als Fallback)
  * ========================================================================== */
-(function(){
-  'use strict';
+(function () {
+  "use strict";
 
-  const MOD = '[inspector.core]';
-  const VER = 'v18.10.8';
-  const ok   = (m,...a)=> (window.CBLog?.info||console.log)(`${MOD} ${m}`,...a);
-  const warn = (m,...a)=> (window.CBLog?.warn||console.warn)(`${MOD} ${m}`,...a);
+  const MOD = "[inspector.core]";
+  const ok   = (...a)=> (window.CBLog?.info||console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
 
-  // -------------------------- Element-Fabrik ---------------------------------
-  function el(tag, cls, attrs){
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (attrs){
-      for (const k in attrs){
-        if (k === 'text') n.textContent = attrs[k];
-        else if (k === 'html') n.innerHTML = attrs[k];
-        else n.setAttribute(k, attrs[k]);
-      }
-    }
-    return n;
-  }
+  // DOM einmalig aufbauen
+  let root, panel, headEl, tabsEl, bodyEl, footerEl, closeBtn;
+  let isOpen = false;
+  let currentTab = null;
+  const renderers = Object.create(null);   // id -> fn(ctx)
+  const disposers = Object.create(null);   // id -> () => void
 
-  // -------------------------- DOM Aufbauen -----------------------------------
-  let root, surface, head, tabsEl, bodyEl, footerEl;
-  let tabButtons = new Map();   // id -> button
-  let tabBodies  = new Map();   // id -> container
+  function ensureDOM(){
+    if (root) return;
+    // Root (Vollbild, klicksicher)
+    root = document.createElement("div");
+    root.id = "inspector";
+    root.setAttribute("role","dialog");
+    root.setAttribute("aria-label","Inspector");
+    root.style.cssText = [
+      "position:fixed","inset:0","z-index:2147483646","display:none",
+      "background:rgba(0,0,0,.50)","backdrop-filter:blur(2px)"
+    ].join(";");
+    // Panel (zentrales Dock)
+    panel = document.createElement("div");
+    panel.style.cssText = [
+      "position:absolute","left:50%","top:50%","transform:translate(-50%,-50%)",
+      "width:min(940px,96vw)","height:min(80vh,90vh)","display:flex",
+      "flex-direction:column","background:rgba(18,18,22,.96)","color:#e6e7ea",
+      "border:1px solid rgba(255,255,255,.08)","border-radius:12px",
+      "box-shadow:0 24px 80px rgba(0,0,0,.55)","overflow:hidden"
+    ].join(";");
+    root.appendChild(panel);
 
-  function buildDOM(){
-    if (root && root.isConnected) return;
+    // Kopf (Titel+Tabs+Close)
+    headEl = document.createElement("div");
+    headEl.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08)";
+    const title = document.createElement("div");
+    title.textContent = "Inspector";
+    title.style.cssText = "font-weight:800;letter-spacing:.3px;opacity:.9";
+    tabsEl = document.createElement("div");
+    tabsEl.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-left:auto";
+    closeBtn = document.createElement("button");
+    closeBtn.textContent = "Schließen";
+    closeBtn.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
+    closeBtn.addEventListener("click", close);
+    headEl.append(title, tabsEl, closeBtn);
+    panel.appendChild(headEl);
 
-    root = el('div','inspector-root', { id:'inspector' });
-    // (Wichtig: direkt unter Body)
+    // Body / Footer
+    bodyEl = document.createElement("div");
+    bodyEl.style.cssText = "flex:1;overflow:auto;padding:12px";
+    footerEl = document.createElement("div");
+    footerEl.style.cssText = "display:flex;gap:8px;align-items:center;padding:8px 12px;border-top:1px solid rgba(255,255,255,.08)";
+    panel.append(bodyEl, footerEl);
+
     document.body.appendChild(root);
-
-    // Oberfläche (zentriert / fullscreen)
-    surface = el('div','inspector-surface');
-    root.appendChild(surface);
-
-    // Panel (scrollbar)
-    const panel = el('div','inspector-panel');
-    surface.appendChild(panel);
-
-    // Header: Title + Close
-    head = el('div','insp-head');
-    const title = el('div','insp-title',{ text:'Inspector' });
-    const ver   = el('div','insp-sub',  { text: VER });
-    const sp    = el('div','insp-spacer');
-    const btnX  = el('button','insp-close',{ 'aria-label':'Schließen', type:'button', text:'×' });
-    btnX.addEventListener('click', ()=> API.close());
-    head.appendChild(title);
-    head.appendChild(ver);
-    head.appendChild(sp);
-    head.appendChild(btnX);
-    panel.appendChild(head);
-
-    // Tabs
-    tabsEl = el('div','insp-tabs', { id:'insp-tabs', role:'tablist' });
-    panel.appendChild(tabsEl);
-
-    // Body
-    bodyEl = el('div','insp-body',{ id:'insp-body' });
-    panel.appendChild(bodyEl);
-
-    // Footer (Buttons für Logs-Tools etc.)
-    footerEl = el('div','insp-footer',{ id:'insp-footer' });
-    panel.appendChild(footerEl);
-
-    // Tabs definieren
-    defineTab('logs',  'Logs');
-    defineTab('build', 'Build');
-    defineTab('paths', 'Pfade');
-    defineTab('tests', 'Tests');
-
-    // Logs-Tab mit einem <pre> vorbefüllen (Outlets für inspector.logs.js)
-    const pre = el('pre','insp-logs-pre',{ id:'inspector-logs-pre' });
-    ensureBody('logs').appendChild(pre);
-
-    // Als offen/geschlossen steuern wir per Klasse .open
-    root.classList.remove('open');
+    ok("bereit (v18.10.8)");
   }
 
-  function defineTab(id, label){
-    if (tabButtons.has(id)) return;
-    const btn = el('button','insp-tab',{ 'data-tab':id, role:'tab', text: label });
-    btn.addEventListener('click', ()=> selectTab(id));
-    tabsEl.appendChild(btn);
-    tabButtons.set(id, btn);
-
-    const body = el('div','insp-tabbody',{ 'data-body':id });
-    body.style.display = 'none';
-    bodyEl.appendChild(body);
-    tabBodies.set(id, body);
-  }
-
-  function ensureBody(id){
-    if (!tabBodies.has(id)) defineTab(id, id);
-    return tabBodies.get(id);
-  }
-
-  function selectTab(id){
-    tabButtons.forEach((b, tid)=>{
-      b.classList.toggle('active', tid===id);
-      b.setAttribute('aria-selected', tid===id ? 'true':'false');
-    });
-    tabBodies.forEach((box, tid)=>{
-      box.style.display = (tid===id ? 'block':'none');
-    });
-    return id;
-  }
-
-  // -------------------------- API & Outlets ----------------------------------
-  function getOutlets(){
-    return {
-      root, head, tabsEl, bodyEl, footerEl,
-      ensureTab, selectTab,
-      areas:{
-        logs:  { tab: tabButtons.get('logs'),  body: ensureBody('logs'),  pre: document.getElementById('inspector-logs-pre') },
-        build: { tab: tabButtons.get('build'), body: ensureBody('build') },
-        paths: { tab: tabButtons.get('paths'), body: ensureBody('paths') },
-        tests: { tab: tabButtons.get('tests'), body: ensureBody('tests') },
-      }
-    };
-  }
-
-  function open(forceTab){
-    buildDOM();
-    root.classList.add('open');
-    // Standard-Tab: logs
-    selectTab(forceTab || 'logs');
-    // Fokus/Scroll-Schutz
-    try{ root.focus({ preventScroll:true }); }catch(_){}
-    window.dispatchEvent(new CustomEvent('cb:inspector-open'));
-    ok('geöffnet (%s)', VER);
+  function open(){
+    ensureDOM();
+    if (isOpen) return;
+    isOpen = true;
+    root.style.display = "block";
+    window.dispatchEvent(new CustomEvent("cb:inspector-open"));
   }
 
   function close(){
-    buildDOM();
-    root.classList.remove('open');
-    window.dispatchEvent(new CustomEvent('cb:inspector-close'));
-    ok('geschlossen');
+    if (!root || !isOpen) return;
+    isOpen = false;
+    root.style.display = "none";
+    window.dispatchEvent(new CustomEvent("cb:inspector-close"));
   }
 
   function toggle(force){
-    buildDOM();
-    const willOpen = (force==null) ? !root.classList.contains('open') : !!force;
-    willOpen ? open() : close();
+    (force == null ? !isOpen : !!force) ? open() : close();
   }
 
-  const API = (window.__INSPECTOR_API__ = {
+  function setActiveTab(id){
+    if (!id || !renderers[id]) return;
+    // Tabs optisch
+    Array.from(tabsEl.children).forEach(el=>{
+      el.classList.toggle("active", el.dataset.id === id);
+      el.style.background = el.classList.contains("active")
+        ? "rgba(120,200,255,.16)" : "rgba(255,255,255,.10)";
+    });
+    // bisherigen Tab sauber abbauen
+    if (currentTab && typeof disposers[currentTab] === "function"){
+      try{ disposers[currentTab](); }catch(_){}
+      disposers[currentTab] = null;
+    }
+    currentTab = id;
+    // Body/Foot leeren und Renderer aufrufen
+    bodyEl.innerHTML = "";
+    footerEl.innerHTML = "";
+    try{
+      const ctx = {
+        bodyEl, footerEl,
+        onDispose: (fn)=>{ disposers[id] = fn; },
+      };
+      renderers[id](ctx);
+    }catch(e){
+      warn("Renderer-Fehler in Tab:", id, e?.message);
+      bodyEl.textContent = "Tab konnte nicht gerendert werden.";
+    }
+  }
+
+  function mountTab(id, renderFn, meta){
+    ensureDOM();
+    if (!id || typeof renderFn!=="function") return;
+    renderers[id] = renderFn;
+    // Tab-Button anlegen (wenn noch nicht vorhanden)
+    let btn = tabsEl.querySelector(`[data-id="${id}"]`);
+    if (!btn){
+      btn = document.createElement("button");
+      btn.dataset.id = id;
+      btn.textContent = (meta?.title || id);
+      btn.style.cssText = "border:none;border-radius:999px;padding:6px 12px;color:#fff;cursor:pointer;background:rgba(255,255,255,.10)";
+      btn.addEventListener("click", ()=> setActiveTab(id));
+      tabsEl.appendChild(btn);
+    }
+    // Falls dies der erste Tab ist → aktivieren
+    if (!currentTab) setActiveTab(id);
+  }
+
+  // Public API
+  window.__INSPECTOR_API__ = {
     open, close, toggle,
-    selectTab: (id)=> selectTab(id)
-  });
+    mountTab,
+    selectTab: setActiveTab,
+    getNodes: ()=>({ root, panel, headEl, tabsEl, bodyEl, footerEl }),
+  };
 
-  // -------------------------- Bootstrap --------------------------------------
-  // 1) Immer DOM bauen (sofort sichtbar & korrekt positioniert)
-  buildDOM();
+  // Optional: Fallback-Badge entfernen, wenn vorhanden
+  setTimeout(()=>{ try{ document.getElementById("inspector-probe")?.remove(); }catch(_){}} , 50);
 
-  // 2) Bridge anbinden (GameUI-Toggle nutzt unsere API)
-  (function bindBridge(){
-    try{
-      window.GameUI = window.GameUI || {};
-      if (!window.GameUI.toggleInspector) window.GameUI.toggleInspector = toggle;
-      if (!window.GameUI.openInspector)   window.GameUI.openInspector   = open;
-      if (!window.GameUI.closeInspector)  window.GameUI.closeInspector  = close;
-    }catch(_){}
-  })();
-
-  // 3) „ready“ an Split-Module
-  //    → z.B. inspector.logs.js kann hier seine Listener registrieren
-  setTimeout(()=>{
-    try{
-      window.dispatchEvent(new CustomEvent('inspector:ready', {
-        detail: { selectTab, getOutlets }
-      }));
-    }catch(_){}
-  }, 0);
-
-  ok('bereit (%s)', VER);
 })();
+</script>
