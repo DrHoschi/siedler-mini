@@ -1,141 +1,83 @@
 /* ============================================================================
-   assets/ui/ui-bridge.js — v17.8.1
-   Aufgaben:
-   - Öffnen/Schließen: Build-Panel & Inspector
-   - Events: cb:build-open/close, cb:inspector-open/close, cb:inspector-ready (listener)
-   - Body-Klasse "has-build-open" pflegen
-   - Robust gegen „Inspector noch nicht geladen“
-   ============================================================================ */
+ * assets/ui/ui-bridge.js — v17.8.3
+ * Aufgaben:
+ *  - Öffnen/Schließen: Build-Panel & Inspector (über __INSPECTOR_API__)
+ *  - Events: cb:build-open/close, cb:inspector-open/close (kommen aus Core)
+ *  - Fallback: kleines "Inspector lädt…" Badge, falls Core noch nicht da
+ *  - Body-Klasse "has-build-open" pflegen
+ * ========================================================================== */
 (function () {
   "use strict";
 
-  const VERSION = "v17.8.1";
-  const ok   = (t, ...a) => (window.CBLog?.ok   || console.log)(`[ui-bridge] ${t}`, ...a);
+  const VER = "v17.8.3";
+  const log  = (t, ...a) => (window.CBLog?.ok   || console.log)(`[ui-bridge] ${t}`, ...a);
   const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`[ui-bridge] ${t}`, ...a);
 
-  // ----------------------------- Build-Dock ----------------------------------
+  // Build-Dock
   const Build = (() => {
-    let isOpen = false;
+    let open = false;
     const panel = () => document.getElementById("build-panel");
+    function ensurePanel(){ const el = panel(); if(!el) warn("Build-Panel fehlt (id=build-panel)"); return el; }
 
-    const ensure = () => {
-      const el = panel();
-      if (!el) warn("Build-Panel fehlt (id=build-panel).");
-      return el;
-    };
-
-    function open() {
-      const el = ensure(); if (!el || isOpen) return;
-      isOpen = true;
+    function _open(){
+      const el = ensurePanel(); if(!el || open) return;
+      open = true;
       el.classList.add("open");
       document.body.classList.add("has-build-open");
-      window.dispatchEvent(new CustomEvent("cb:build-open"));
-      ok("Build geöffnet (%s).", VERSION);
+      try { window.dispatchEvent(new CustomEvent("cb:build-open")); } catch {}
+      log("Build geöffnet (%s).", VER);
     }
-    function close() {
-      const el = ensure(); if (!el || !isOpen) return;
-      isOpen = false;
+    function _close(){
+      const el = ensurePanel(); if(!el || !open) return;
+      open = false;
       el.classList.remove("open");
       document.body.classList.remove("has-build-open");
-      window.dispatchEvent(new CustomEvent("cb:build-close"));
-      ok("Build geschlossen.");
+      try { window.dispatchEvent(new CustomEvent("cb:build-close")); } catch {}
+      log("Build geschlossen.");
     }
-    function toggle(force) {
-      const targetOpen = (force == null) ? !isOpen : !!force;
-      targetOpen ? open() : close();
+    function toggle(force){
+      const el = ensurePanel(); if(!el) return;
+      (force == null ? !open : !!force) ? _open() : _close();
     }
-    return { open, close, toggle };
+    return { open:_open, close:_close, toggle };
   })();
 
-  // --------------------------- Inspector Bridge ------------------------------
-  const InspectorBridge = (() => {
-    let probeEl = null;
-
-    function removeProbe() {
-      if (probeEl) { probeEl.remove(); probeEl = null; }
-    }
-    function ensureProbe() {
-      if (probeEl || window.__INSPECTOR_API__) return;
-      probeEl = document.createElement("div");
-      probeEl.id = "inspector-probe";
-      probeEl.textContent = "Inspector lädt…";
-      probeEl.style.cssText =
-        "position:fixed;right:16px;bottom:64px;font:12px/1.2 system-ui;opacity:.55;color:#cbd5e1;z-index:2147483646;" +
-        "background:rgba(30,30,35,.72);padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.06)";
-      document.body.appendChild(probeEl);
-    }
-
-    // Fallback-Panel (nur bis __INSPECTOR_API__ da ist)
-    function fallbackOpen() {
-      let box = document.getElementById("inspector-fallback");
-      if (!box) {
-        box = document.createElement("div");
-        box.id = "inspector-fallback";
-        box.style.cssText =
-          "position:fixed;right:16px;bottom:96px;max-width:90vw;width:420px;max-height:70vh;overflow:auto;" +
-          "background:rgba(20,20,20,.94);color:#eee;border:1px solid #333;border-radius:10px;padding:12px;z-index:2147483646;" +
-          "box-shadow:0 24px 64px rgba(0,0,0,.45)";
-        box.textContent = "Inspector lädt…";
-        document.body.appendChild(box);
+  // Inspector Bridge
+  const Inspector = (() => {
+    function badge(){
+      let probe = document.getElementById("inspector-probe");
+      if (!probe){
+        probe = document.createElement("div");
+        probe.id = "inspector-probe";
+        probe.textContent = "Inspector lädt…";
+        probe.style.cssText = "position:fixed;right:16px;bottom:64px;font:12px/1.2 system-ui;" +
+          "opacity:.65;color:#cbd5e1;z-index:2147483646;background:rgba(30,30,35,.72);" +
+          "padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.06)";
+        document.body.appendChild(probe);
+        setTimeout(()=>probe.remove(), 3000);
       }
-      box.style.display = "block";
     }
-    function fallbackClose() {
-      const box = document.getElementById("inspector-fallback");
-      if (box) box.style.display = "none";
+    function open(){
+      if (window.__INSPECTOR_API__?.open) return window.__INSPECTOR_API__.open();
+      badge(); log("Inspector-Core fehlt noch → Probe gezeigt.");
     }
-    function fallbackDestroy() {
-      const box = document.getElementById("inspector-fallback");
-      if (box) box.remove();
-    }
-
-    function open() {
-      if (window.__INSPECTOR_API__?.open) {
-        fallbackDestroy(); removeProbe();
-        return window.__INSPECTOR_API__.open();
-      }
-      fallbackOpen();
-      window.dispatchEvent(new CustomEvent("cb:inspector-open"));
-      ok("Inspector (Fallback) geöffnet.");
-    }
-    function close() {
+    function close(){
       if (window.__INSPECTOR_API__?.close) return window.__INSPECTOR_API__.close();
-      fallbackClose();
-      window.dispatchEvent(new CustomEvent("cb:inspector-close"));
-      ok("Inspector (Fallback) geschlossen.");
+      // kein eigener Fallback-Container mehr
     }
-    function toggle(force) {
-      if (window.__INSPECTOR_API__?.toggle) {
-        fallbackDestroy(); removeProbe();
-        return window.__INSPECTOR_API__.toggle(force);
-      }
-      const box = document.getElementById("inspector-fallback");
-      const willOpen = (force == null) ? !(box && box.style.display !== "none") : !!force;
-      willOpen ? open() : close();
+    function toggle(force){
+      if (window.__INSPECTOR_API__?.toggle) return window.__INSPECTOR_API__.toggle(force);
+      // kein Core: pragmatisch öffnen → Badge
+      if (force !== false) open(); else close();
     }
-
-    // Nach ~1,2s kleine Probe einblenden (kein Flackern direkt beim Laden)
-    setTimeout(() => { if (!window.__INSPECTOR_API__) ensureProbe(); }, 1200);
-
-    // Wenn der Inspector bereit ist: Probe + Fallback weg
-    window.addEventListener("cb:inspector-ready", () => {
-      removeProbe();
-      fallbackDestroy();
-      ok("Inspector ready signal empfangen.");
-    }, { once: false });
-
     return { open, close, toggle };
   })();
 
-  // ----------------------------- Public API ---------------------------------
-  window.GameUI = window.GameUI || {};
-  window.GameUI.toggleBuild     = Build.toggle;
-  window.GameUI.openBuild       = Build.open;
-  window.GameUI.closeBuild      = Build.close;
+  // Export
+  window.GameUI = Object.assign(window.GameUI || {}, {
+    toggleBuild: Build.toggle, openBuild: Build.open, closeBuild: Build.close,
+    toggleInspector: Inspector.toggle, openInspector: Inspector.open, closeInspector: Inspector.close
+  });
 
-  window.GameUI.toggleInspector = InspectorBridge.toggle;
-  window.GameUI.openInspector   = InspectorBridge.open;
-  window.GameUI.closeInspector  = InspectorBridge.close;
-
-  ok("bereit (%s).", VERSION);
+  log("bereit (%s).", VER);
 })();
