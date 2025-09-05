@@ -1,109 +1,130 @@
 /* ============================================================================
    Datei: assets/inspector/inspector.css
-   Projekt: Siedler-Mini – Inspector Skin (Tabs + Logs)
+   Projekt: Siedler-Mini — Inspector (gemeinsame Styles + Log-Toolbar)
    Version: v18.10.6
-   ========================================================================= */
+   Design: dunkles UI, dezente Ränder/Glows, hellgraue Typo wie Vorgabe
+   ========================================================================== */
 
-/* ----- Panel Grundlayout -------------------------------------------------- */
-#inspector {
-  position: fixed;
-  inset: 48px 24px 24px 24px; /* großzügig, aber sichtbar */
-  z-index: 2147483646;
-  display: none;
-  background: linear-gradient(to top, #0f1311, #0f1110);
-  border: 1px solid rgba(255,255,255,.08);
+/* Basis: Panel (nur sicherstellen, dass die Logbar absolut platzierbar ist) */
+#inspector .ins-panel {
+  position: relative;                  /* wichtig für absolute Logbar */
   border-radius: 14px;
-  box-shadow: 0 40px 120px rgba(0,0,0,.55);
-  color: #e7ecea;
-}
-#inspector.open { display: block; }
-
-.ins-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px 8px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-}
-.ins-title { font-weight: 700; letter-spacing:.2px; opacity:.9; }
-.ins-close {
-  margin-left: auto;
-  border: none; border-radius: 10px;
-  background: rgba(255,255,255,.10); color:#e7ecea;
-  padding: 8px 10px; cursor: pointer;
+  background: linear-gradient(180deg, #1a1c1f 0%, #17191c 100%);
+  border: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 24px 80px rgba(0,0,0,.55);
+  color: #e6e7ea;
 }
 
-/* Tabs */
-.ins-tabs {
-  display: flex; gap: 8px; padding: 8px 14px 10px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-}
-.ins-tab {
-  border: none; border-radius: 999px; cursor: pointer;
-  padding: 6px 12px; background: rgba(255,255,255,.10); color:#e7ecea;
-}
-.ins-tab.active { background: rgba(80,180,120,.28); }
-
-/* Body + Footer */
-.ins-body {
-  padding: 12px 14px;
-  height: calc(100% - 140px);
+/* Logausgabe */
+#inspector pre {
+  margin: 12px 16px 76px;              /* unten Platz für die Logbar lassen */
+  padding: 10px 12px;
+  min-height: 180px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.28);
+  border: 1px solid rgba(255,255,255,.06);
+  color: #e6e7ea;
+  font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
   overflow: auto;
 }
-.ins-footer {
-  padding: 10px 14px 12px;
-  border-top: 1px solid rgba(255,255,255,.06);
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-}
 
-/* ----- LOGS: Toolbar im Footer ------------------------------------------- */
-.ins-footer--tools { justify-content: space-between; }
-
-.ins-log-toolbar{
+/* --- Log-Toolbar ---------------------------------------------------------- */
+.ins-logbar {
+  position: absolute;                  /* im Panel „angedockt“ */
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 10px; width: 100%;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15,15,18,.78);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  z-index: 2;
 }
 
-.ins-log-badges{
-  display:flex; gap:6px; flex-wrap:wrap; align-items:center;
+.ins-logbar-left,
+.ins-logbar-mid,
+.ins-logbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.ins-badge{
-  border:none; border-radius:999px; padding:6px 10px;
-  background: rgba(255,255,255,.10); color:#e7ecea; cursor:pointer;
-  font-weight:600; letter-spacing:.2px;
+/* Badges (Level) */
+.ins-badge {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.08);
+  color: #cfd4dd;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font: 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  cursor: pointer;
+  transition: transform .06s ease, background .12s ease, border-color .12s ease;
 }
-.ins-badge.active{ background:rgba(120,200,255,.25); }
+.ins-badge:hover { transform: translateY(-1px); }
+.ins-badge.on { background: rgba(76,175,80,.25); border-color: rgba(76,175,80,.35); color:#e9fcec; }
+.ins-badge[data-key="ERR"].on  { background: rgba(244, 67, 54, .28);  border-color: rgba(244, 67, 54, .42);  color:#ffecec; }
+.ins-badge[data-key="WARN"].on { background: rgba(255,193,  7, .26);  border-color: rgba(255,193,  7, .42);  color:#fff7e2; }
+.ins-badge[data-key="OK"].on   { background: rgba( 76,175, 80, .26);  border-color: rgba( 76,175, 80, .42);  color:#eaffea; }
+.ins-badge[data-key="INFO"].on { background: rgba(100,181,246, .26);  border-color: rgba(100,181,246, .42);  color:#e9f5ff; }
+.ins-badge[data-key="DBG"].on  { background: rgba(158,158,158, .22);  border-color: rgba(158,158,158, .36);  color:#f3f3f3; }
 
-.ins-log-search{ display:flex; align-items:center; }
-.ins-log-search input[type="search"]{
-  width: min(340px, 100%);
-  border:none; outline:none;
-  border-radius:10px; padding:8px 10px;
-  background: rgba(0,0,0,.30); color:#e7ecea;
+/* Suche */
+.ins-logsearch {
+  width: 100%;
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.26);
+  color: #e6e7ea;
+  outline: none;
+}
+.ins-logsearch::placeholder { color: rgba(230,231,234,.55); }
+.ins-logsearch:focus { border-color: rgba(120,200,255,.55); }
+
+/* Buttons */
+.ins-btn {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.10);
+  color: #e6e7ea;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font: 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+.ins-btn:hover { background: rgba(255,255,255,.16); }
+
+/* Mini-Toast (Kopie/Export bestätigt) */
+.ins-toast {
+  position: absolute;
+  right: 16px;
+  bottom: 64px;
+  background: rgba(20,20,24,.92);
+  color: #e6e7ea;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  font: 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  pointer-events: none;
+  animation: ins-toast-fade 1.6s ease forwards;
+}
+@keyframes ins-toast-fade {
+  0%   { opacity: 0; transform: translateY(6px); }
+  10%  { opacity: 1; transform: translateY(0); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(4px); }
 }
 
-.ins-log-actions{ display:flex; gap:8px; }
-.ins-btn{
-  border:none; border-radius:10px; padding:8px 12px;
-  background: rgba(255,255,255,.10); color:#e7ecea; cursor:pointer;
+/* Mobile: engeres Grid */
+@media (max-width: 520px) {
+  .ins-logbar { grid-template-columns: 1fr; gap: 8px; }
+  .ins-logbar-left { flex-wrap: wrap; }
 }
-
-/* Logliste */
-.ins-log-list{
-  margin:0; padding:12px; border-radius:10px;
-  background: rgba(0,0,0,.35);
-  border:1px solid rgba(255,255,255,.06);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px; line-height: 1.45; color:#e7ecea;
-  white-space: pre-wrap; word-break: break-word;
-}
-
-/* ----- Mobile Tweaks ------------------------------------------------------ */
-@media (max-width: 640px){
-  #inspector{ inset: 24px 10px 12px 10px; }
-  .ins-body{ height: calc(100% - 160px); }
-  .ins-log-search input[type="search"]{ width: 100%; }
-}
-
-/* ----- Altlasten sauber verbergen ---------------------------------------- */
-#ins-logbar-floating, .ins-log-probe, .ins-logs-fab { display:none !important; }
