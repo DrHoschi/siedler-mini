@@ -180,7 +180,6 @@
   };
 
   // ---- Event-Wire -----------------------------------------------------------
-  // Deine Engine kann pro Tick dieses Event feuern → wir zeichnen genau 1 Frame
   try{
     window.addEventListener('cb:render-frame', function(){ frame(); });
   }catch(_){}
@@ -189,7 +188,6 @@
   window.Render = API;
 
   // ---- Auto-Init (sanft) ----------------------------------------------------
-  // Wir initialisieren uns direkt, blockieren aber nichts, falls kein Canvas da ist.
   try{ API.init(); }catch(_){}
 
 })();
