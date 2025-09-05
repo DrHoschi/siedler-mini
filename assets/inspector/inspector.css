@@ -1,126 +1,203 @@
-/* ============================================================================
-   assets/inspector/inspector.css — v18.10.8
-   Farben nach Vorgabe (hellgrau/dunkelgrau), mobil Vollbild
-   - Root: .inspector (fixed)
-   - Header: .insp-head (Close)
-   - Tabs:   .insp-tabs .insp-tab
-   - Body:   .insp-body
-   - Foot:   .insp-foot (+ .insp-foot-left/right)
-   - Logs:   .insp-logs-top, .insp-badges, .insp-search, .insp-loglist, .insp-logrow
-   ========================================================================== */
+/*
+  assets/inspector/inspector.css — v18.10.5
+  Zweck:
+    - Grundlayout Inspector (neutral grau)
+    - Logs-Tab: Badges, Filterleiste, Liste, Status, Buttons
+  Hinweis:
+    - Klassen sind "ins-*" namespaced, kollidieren nicht mit UI/Spiel
+*/
 
-.inspector {
-  position: fixed;
-  z-index: 2147483646;
-  inset: 0; /* Vollbild – mobil wie gewünscht */
-  display: block;
-  background: rgba(24,24,26,.96);
-  color: #e5e7eb;
-  border: 1px solid rgba(255,255,255,.06);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 24px 64px rgba(0,0,0,.45);
-  font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-}
+/* ====== Grundfarben nach Vorgabe (hell/dunkel grau) ======================= */
+:root{
+  --ins-bg: #1a1d21;
+  --ins-bg-2: #20242a;
+  --ins-surface: #252a31;
+  --ins-border: rgba(255,255,255,.08);
+  --ins-border-strong: rgba(255,255,255,.14);
+  --ins-text: #e5e7eb;
+  --ins-text-dim: #cbd5e1;
+  --ins-text-muted: #94a3b8;
+  --ins-accent: #8ab4f8;
 
-.inspector.is-hidden { display:none; }
-
-@media (min-width: 1024px) {
-  .inspector {
-    width: 520px;
-    max-width: calc(100vw - 24px);
-    height: calc(100vh - 24px);
-    right: 12px; left: auto;
-    top: 12px; bottom: auto;
-    border-radius: 12px;
-    inset: unset;
-  }
+  --ins-err: #ef4444;   /* rot */
+  --ins-warn:#f59e0b;   /* gelb */
+  --ins-ok:  #22c55e;   /* grün */
+  --ins-info:#60a5fa;   /* blau */
+  --ins-log: #a3a3a3;   /* grau */
 }
 
-.insp-head{
-  display:flex; align-items:center; gap:8px;
-  padding:10px 12px;
-  border-bottom:1px solid rgba(255,255,255,.08);
-  background: linear-gradient(to bottom, rgba(255,255,255,.06), rgba(255,255,255,.03));
-}
-.insp-close{
-  margin-left:auto;
-  border:none; border-radius:10px; padding:8px 12px;
-  background:rgba(255,255,255,.10); color:#fff; cursor:pointer;
-}
-.insp-close:hover{ background:rgba(255,255,255,.16); }
-
-.insp-tabs{
-  display:flex; flex-wrap:wrap; gap:8px;
-  padding:8px 12px 4px;
-  border-bottom:1px solid rgba(255,255,255,.06);
-}
-.insp-tab{
-  border:none; border-radius:999px; padding:6px 12px;
-  background:rgba(255,255,255,.10); color:#e5e7eb; cursor:pointer;
-}
-.insp-tab.is-active{ background:rgba(120,200,255,.22); }
-
-.insp-body{
-  padding:12px;
-  overflow:auto;
-  max-height: calc(100vh - 200px);
-}
-@media (min-width:1024px){
-  .insp-body{ max-height: calc(100vh - 220px); }
+/* ====== Inspector-Rahmen (nur falls dein Core dies nutzt) ================= */
+.ins-root{
+  background: var(--ins-bg);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+  box-shadow: 0 18px 48px rgba(0,0,0,.45);
 }
 
-.insp-foot{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:10px 12px; gap:12px;
-  border-top:1px solid rgba(255,255,255,.08);
-  background: linear-gradient(to top, rgba(255,255,255,.06), rgba(255,255,255,.03));
+/* ====== Logs: Layout ====================================================== */
+.ins-logs-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding: 12px;
 }
-.insp-foot.is-hidden{ display:none; }
-.insp-foot-left, .insp-foot-right{ display:flex; align-items:center; gap:8px; }
-.insp-foot-btn{
-  border:none; border-radius:10px; padding:8px 12px;
-  background:rgba(76,175,80,.22); color:#fff; cursor:pointer;
-}
-.insp-foot-btn:hover{ background:rgba(76,175,80,.30); }
 
-/* Logs UI */
-.insp-logs-top{
-  display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;
+/* Filter- / Action-Leiste */
+.ins-logbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  background: var(--ins-bg-2);
+  border: 1px solid var(--ins-border);
+  border-radius: 10px;
+  padding: 8px;
 }
-.insp-search{
-  flex:1 1 220px;
-  border:1px solid rgba(255,255,255,.10);
-  background:#1a1a1e; color:#e5e7eb;
-  border-radius:10px; padding:8px 10px;
-}
-.insp-badges{ display:flex; gap:6px; flex-wrap:wrap; }
-.insp-badge{
-  border:none; border-radius:999px; padding:6px 10px;
-  background:rgba(255,255,255,.08); color:#e5e7eb; cursor:pointer;
-  opacity:.85;
-}
-.insp-badge.is-on{ outline:2px solid rgba(120,200,255,.35); }
-.insp-count{ margin-left:auto; opacity:.75; }
 
-.insp-loglist{
+/* Level-Toggles */
+.ins-lvls{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.ins-lvl-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  user-select:none;
+  font-size:13px;
+  color: var(--ins-text-dim);
+}
+.ins-lvl-toggle input{
+  accent-color: var(--ins-accent);
+  transform: translateY(1px);
+}
+
+/* Suche */
+.ins-search{
+  min-width: 180px;
+  flex:1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ins-border);
+  background: var(--ins-surface);
+  color: var(--ins-text);
+  outline: none;
+}
+.ins-search::placeholder{ color: var(--ins-text-muted); }
+
+/* Buttons */
+.ins-actions{
+  display:flex;
+  gap:8px;
+}
+.ins-btn{
+  border:none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,.10);
+  color: var(--ins-text);
+  cursor:pointer;
+}
+.ins-btn:hover{
+  background: rgba(255,255,255,.16);
+}
+
+/* Liste */
+.ins-loglist{
   display:block;
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:10px;
-  background: rgba(0,0,0,.18);
-  padding:8px;
-  max-height: 60vh;
+  max-height: 52vh;
   overflow:auto;
+  background: var(--ins-bg-2);
+  border: 1px solid var(--ins-border);
+  border-radius: 10px;
+  padding: 8px;
 }
-.insp-logrow{
-  padding:4px 6px; border-radius:8px; margin:2px 0;
-  display:flex; gap:6px; align-items:baseline;
-}
-.insp-logrow .ts{ opacity:.65; min-width:64px; }
-.insp-logrow .lvl{ font-weight:700; opacity:.85; min-width:52px; }
-.insp-logrow .msg{ white-space:pre-wrap; word-break:break-word; flex:1; }
 
-.insp-logrow.lvl-ok    { background: rgba(76,175,80,.10); }
-.insp-logrow.lvl-info  { background: rgba(33,150,243,.10); }
-.insp-logrow.lvl-log   { background: rgba(255,255,255,.06); }
-.insp-logrow.lvl-warn  { background: rgba(255,193,7,.12); }
-.insp-logrow.lvl-error { background: rgba(244,67,54,.12); }
+/* Zeilen */
+.ins-log-row{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  padding: 6px 8px;
+  border-bottom: 1px dashed var(--ins-border);
+  line-height:1.2;
+  word-break: break-word;
+}
+.ins-log-row:last-child{ border-bottom: none; }
+
+/* Badges + Farben */
+.ins-badge{
+  display:inline-grid;
+  place-items:center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(255,255,255,.08);
+  color: var(--ins-text);
+}
+.lvl-err .ins-badge{ background: color-mix(in srgb, var(--ins-err) 35%, transparent); color: #fee2e2; }
+.lvl-warn .ins-badge{ background: color-mix(in srgb, var(--ins-warn) 35%, transparent); color: #fef3c7; }
+.lvl-ok .ins-badge{ background: color-mix(in srgb, var(--ins-ok) 35%, transparent);   color: #dcfce7; }
+.lvl-info .ins-badge{ background: color-mix(in srgb, var(--ins-info) 35%, transparent); color: #dbeafe; }
+.lvl-log .ins-badge{ background: rgba(255,255,255,.10); color:#e5e7eb; }
+
+/* Zeit & Quelle */
+.ins-time{
+  opacity:.70;
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+}
+.ins-src{
+  opacity:.85;
+  color: var(--ins-text-dim);
+  font-weight:600;
+}
+
+/* Text */
+.ins-text{
+  color: var(--ins-text);
+}
+
+/* Statuszeile */
+.ins-logstatus{
+  opacity:.80;
+  font-size: 12px;
+  padding: 0 4px;
+  color: var(--ins-text-dim);
+}
+
+/* Toast */
+.ins-toast{
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 12px;
+  background: rgba(30,35,42,.92);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border-strong);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all .18s ease;
+  z-index: 2147483646;
+}
+.ins-toast.show{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Scrollbar dezent */
+.ins-loglist::-webkit-scrollbar{
+  width: 10px;
+  height: 10px;
+}
+.ins-loglist::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 8px;
+}
+.ins-loglist{
+  scrollbar-gutter: stable both-edges;
+}
