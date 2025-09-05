@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-05T13:35:35.078Z",
+  "createdAt": "2025-09-05T21:06:46.554Z",
   "root": ".",
-  "count": 256,
+  "count": 262,
   "entries": [
     {
       "type": "dir",
@@ -18,8 +18,23 @@
     },
     {
       "type": "file",
+      "path": ".github/workflows/ci.yml",
+      "size": 2451
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/danger.yml",
+      "size": 311
+    },
+    {
+      "type": "file",
       "path": ".github/workflows/filelist.yml",
       "size": 1534
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/preview.yml",
+      "size": 544
     },
     {
       "type": "dir",
@@ -256,22 +271,22 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.build.js",
-      "size": 2231
+      "size": 3370
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.core.js",
-      "size": 5613
+      "size": 10585
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 6215
+      "size": 7669
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.logs.js",
-      "size": 11250
+      "size": 13034
     },
     {
       "type": "file",
@@ -281,7 +296,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.paths.js",
-      "size": 5367
+      "size": 3051
     },
     {
       "type": "file",
@@ -879,7 +894,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 5380
+      "size": 6090
     },
     {
       "type": "file",
@@ -1093,6 +1108,15 @@
     },
     {
       "type": "dir",
+      "path": "tests/"
+    },
+    {
+      "type": "file",
+      "path": "tests/inspector.spec.ts:",
+      "size": 810
+    },
+    {
+      "type": "dir",
       "path": "tools/"
     },
     {
@@ -1191,6 +1215,11 @@
     },
     {
       "type": "file",
+      "path": "dangerfile.js",
+      "size": 870
+    },
+    {
+      "type": "file",
       "path": "editor.html",
       "size": 2228
     },
@@ -1222,7 +1251,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 4703
+      "size": 5012
     },
     {
       "type": "file",

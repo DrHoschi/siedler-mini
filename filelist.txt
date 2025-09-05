@@ -1,7 +1,10 @@
 .github/
 .github/workflows/
 .github/workflows/asset-fix.yml (1883 B)
+.github/workflows/ci.yml (2451 B)
+.github/workflows/danger.yml (311 B)
 .github/workflows/filelist.yml (1534 B)
+.github/workflows/preview.yml (544 B)
 assets/
 assets/buildings/
 assets/buildings/lumberjack/
@@ -50,12 +53,12 @@ assets/icons/icons_spritesheet_256.PNG (5010893 B)
 assets/icons/icons_spritesheet_64.json (2684 B)
 assets/icons/icons_spritesheet_64.png (263254 B)
 assets/inspector/
-assets/inspector/inspector.build.js (2231 B)
-assets/inspector/inspector.core.js (5613 B)
-assets/inspector/inspector.css (6215 B)
-assets/inspector/inspector.logs.js (11250 B)
+assets/inspector/inspector.build.js (3370 B)
+assets/inspector/inspector.core.js (10585 B)
+assets/inspector/inspector.css (7669 B)
+assets/inspector/inspector.logs.js (13034 B)
 assets/inspector/inspector.md (137 B)
-assets/inspector/inspector.paths.js (5367 B)
+assets/inspector/inspector.paths.js (3051 B)
 assets/inspector/inspector.resources.js (7452 B)
 assets/inspector/inspector.tests.js (601 B)
 assets/items/
@@ -177,7 +180,7 @@ assets/tiles/tileset.terrain.jsonc (853 B)
 assets/tiles/tileset.terrain.png (1971497 B)
 assets/ui/
 assets/ui/start-bg.jpeg (564395 B)
-assets/ui/ui-bridge.js (5380 B)
+assets/ui/ui-bridge.js (6090 B)
 assets/ui/ui-build.css (6318 B)
 assets/ui/ui-build.js (10945 B)
 assets/ui/ui-start.css (1900 B)
@@ -221,6 +224,8 @@ maps/
 maps/start-map.json (5742 B)
 src/
 src/assets.buildings.js (2501 B)
+tests/
+tests/inspector.spec.ts: (810 B)
 tools/
 tools/level-editor/
 tools/level-editor/boot.js (8269 B)
@@ -241,13 +246,14 @@ tools/texture-checker.html (6940 B)
 boot.compat.js (2081 B)
 buildingData.js (953 B)
 buildings.lumberjack.js (1040 B)
+dangerfile.js (870 B)
 editor.html (2228 B)
 filelist-audit.txt (2648 B)
 filelist.json (25484 B)
 filelist.txt (9865 B)
 fullscreen.js (1284 B)
 game.js (1095 B)
-index.html (4703 B)
+index.html (5012 B)
 manifest.webmanifest (392 B)
 package.json (208 B)
 README.md (1129 B)

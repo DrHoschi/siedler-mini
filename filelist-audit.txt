@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 227
+Gesamt Dateien: 232
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -58,6 +58,7 @@ Gesamt Dateien: 227
  - boot.compat.js
  - buildingData.js
  - buildings.lumberjack.js
+ - dangerfile.js
  - editor.html
  - filelist-audit.txt
  - filelist.json
