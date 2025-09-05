@@ -1,298 +1,252 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.logs.js
- * Projekt: Siedler-Mini — Inspector (Logs-Tab)
- * Version: v18.10.6
+ * Projekt: Siedler-Mini
+ * Version: v18.11.0
  *
  * Zweck
- *  - Robuste Log-Ansicht inkl. Filter (Badges), Suche, Kopieren & Export.
- *  - Hängt sich *automatisch* in das Inspector-Panel ein (bei Open-Event).
- *  - Liest CBLog-Puffer (Polyfill oder echtes CBLog) — fällt auf Polling zurück.
+ *   - Logs-Tab mit Level-Badges, Suche, Kopieren/Export
+ *   - Bevorzugt INSIDE des Inspector-Panels rendern
+ *   - Fallback: kleines Floating-Dock unten rechts (nur wenn Panel fehlt)
  *
- * Einbindung
- *  - Nach inspector.core.js laden.
- *  - Keine weiteren Abhängigkeiten.
+ * Abhängigkeiten
+ *   - Optional CBLog (nutzt getBuffer() | _buf)
+ *   - Inspector-Core (wenn vorhanden): <div id="inspector"> mit .ins-body
  *
- * Events
- *  - hört:  'cb:inspector-open', 'cb:inspector-close'
- *  - sendet: keine
+ * Events / Hooks
+ *   - Reagiert auf:  cb:inspector-open, cb:inspector-close
+ *   - Reagiert auf:  inspector:show:logs  (custom – z.B. wenn Tabs schalten)
  *
- * Sicherheit / Fallbacks
- *  - Findet Panel dynamisch (#inspector .ins-panel). Setzt es zur Not auf
- *    position:relative, damit die Toolbar absolut im Panel positioniert werden kann.
- *  - Liest Log-Puffer über mehrere mögliche Quellen (CBLog.getBuffer, __CBLOG, …).
- *  - Wenn kein Live-Event erhältlich ist, wird im 1s-Intervall sanft gepollt.
+ * Garantie
+ *   - Wenn Panel vorhanden -> Inside-Render
+ *   - Wenn nicht -> Fallback-Floating-Dock
  * ========================================================================== */
-
 (function () {
   "use strict";
 
   const MOD = "[inspector.logs]";
-  const VER = "v18.10.6";
+  const VER = "v18.11.0";
 
-  // -- kleine Logger ----------------------------------------------------------
-  const log  = (t, ...a) => (window.CBLog?.ok   || console.log   )(`${MOD} ${t}`, ...a);
-  const warn = (t, ...a) => (window.CBLog?.warn || console.warn  )(`${MOD} ${t}`, ...a);
+  const log = (t, ...a) => (window.CBLog?.ok || console.log)(`${MOD} ${t}`, ...a);
+  const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`${MOD} ${t}`, ...a);
 
-  // -- State ------------------------------------------------------------------
-  let mounted = false;
-  let dom = { panel:null, body:null, pre:null, bar:null, search:null };
-  let pollTimer = null;
-
-  // Filter-State (Level → sichtbar?)
-  const filt = {
-    ERR: true,
-    WARN: true,
-    OK: true,
-    INFO: true,
-    DBG: false
+  // --- STATE ---------------------------------------------------------------
+  const state = {
+    levels: { ERR: true, WARN: true, OK: true, INFO: true },
+    query: "",
+    mountedMode: null,          // 'panel' | 'float'
+    els: { root: null, pre: null, search: null, levelBtns: {} },
+    autoRefreshTimer: null,
   };
-  let query = "";
 
-  // -- Hilfen: Inspector-Panel suchen -----------------------------------------
-  function findPanel() {
-    const root = document.getElementById("inspector");
-    if (!root) return null;
-    // bekannte Struktur: .ins-panel (Panel), .ins-body (Inhalt)
-    const panel = root.querySelector(".ins-panel") || root;
-    const body  = root.querySelector(".ins-body")  || root;
-    // pre-Element (Logausgabe) suchen oder anlegen
-    let pre = body.querySelector("pre");
-    if (!pre) {
-      pre = document.createElement("pre");
-      pre.setAttribute("aria-label", "Protokollausgabe");
-      body.appendChild(pre);
-    }
-    // relative Position sicherstellen (für die Logbar)
-    if (getComputedStyle(panel).position === "static") {
-      panel.style.position = "relative";
-    }
-    return { panel, body, pre };
+  // --------- CBLog Zugriff (robust) ---------------------------------------
+  function getLogBuffer() {
+    try {
+      if (window.CBLog?.getBuffer) return window.CBLog.getBuffer();
+      if (Array.isArray(window.CBLog?._buf)) return window.CBLog._buf;
+    } catch (_) {}
+    return [];
   }
 
-  // -- Toolbar erzeugen -------------------------------------------------------
-  function mkBadge(key, label, title) {
+  // --------- Render Utilities ---------------------------------------------
+  function makeBtn(txt, title, toggled, onClick, dataset = {}) {
     const b = document.createElement("button");
+    b.className = "ins-badge" + (toggled ? " active" : "");
     b.type = "button";
-    b.className = "ins-badge";
-    b.dataset.key = key;
-    b.title = title || label;
-    b.textContent = label;
-    b.setAttribute("aria-pressed", String(!!filt[key]));
-    if (filt[key]) b.classList.add("on");
-    b.addEventListener("click", () => {
-      filt[key] = !filt[key];
-      b.classList.toggle("on", filt[key]);
-      b.setAttribute("aria-pressed", String(filt[key]));
-      render();
-    });
+    b.textContent = txt;
+    if (title) b.title = title;
+    Object.assign(b.dataset, dataset);
+    b.addEventListener("click", onClick);
     return b;
   }
 
-  function createBar(where) {
+  function makeControls(container) {
+    // Leiste
     const bar = document.createElement("div");
     bar.className = "ins-logbar";
-    bar.setAttribute("role", "group");
-    bar.setAttribute("aria-label", "Log-Filter und Aktionen");
 
-    // Badges
-    const left = document.createElement("div");
-    left.className = "ins-logbar-left";
-    left.append(
-      mkBadge("ERR", "ERR", "Fehler anzeigen"),
-      mkBadge("WARN","WARN","Warnungen anzeigen"),
-      mkBadge("OK",  "OK",  "OK/Erfolg anzeigen"),
-      mkBadge("INFO","INFO","Info anzeigen"),
-      mkBadge("DBG", "DBG", "Debug anzeigen")
-    );
+    // Level-Badges
+    const lvWrap = document.createElement("div");
+    lvWrap.className = "ins-logbar-left";
+    const mkLevel = (key, label) =>
+      makeBtn(label, `Level ${label} ein/aus`, state.levels[key], () => {
+        state.levels[key] = !state.levels[key];
+        state.els.levelBtns[key].classList.toggle("active", state.levels[key]);
+        renderLogText();
+      });
+    state.els.levelBtns.ERR = lvWrap.appendChild(mkLevel("ERR", "ERR"));
+    state.els.levelBtns.WARN = lvWrap.appendChild(mkLevel("WARN", "WARN"));
+    state.els.levelBtns.OK = lvWrap.appendChild(mkLevel("OK", "OK"));
+    state.els.levelBtns.INFO = lvWrap.appendChild(mkLevel("INFO", "INFO"));
 
     // Suche
     const mid = document.createElement("div");
     mid.className = "ins-logbar-mid";
-    const input = document.createElement("input");
-    input.type = "search";
-    input.placeholder = "Suche…";
-    input.className = "ins-logsearch";
-    input.addEventListener("input", () => {
-      query = (input.value || "").trim().toLowerCase();
-      render();
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "ins-search";
+    search.placeholder = "Suche…";
+    search.addEventListener("input", () => {
+      state.query = (search.value || "").trim();
+      renderLogText();
     });
-    mid.appendChild(input);
+    state.els.search = search;
+    mid.appendChild(search);
 
-    // Aktionen
+    // Kopieren / Export
     const right = document.createElement("div");
     right.className = "ins-logbar-right";
 
-    const btnCopy = document.createElement("button");
-    btnCopy.type = "button";
-    btnCopy.className = "ins-btn";
-    btnCopy.textContent = "Kopieren";
-    btnCopy.addEventListener("click", doCopy);
+    right.appendChild(
+      makeBtn("Kopieren", "In Zwischenablage", false, async () => {
+        try {
+          await navigator.clipboard.writeText(state.els.pre?.textContent || "");
+          (window.CBLog?.ok || console.log)(`${MOD} kopiert.`);
+        } catch (e) {
+          warn("Clipboard: " + (e && e.message));
+        }
+      })
+    );
+    right.appendChild(
+      makeBtn("Export", "Als .log speichern", false, () => {
+        const blob = new Blob([state.els.pre?.textContent || ""], {
+          type: "text/plain;charset=utf-8",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `siedler-log-${Date.now()}.log`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 500);
+      })
+    );
 
-    const btnExport = document.createElement("button");
-    btnExport.type = "button";
-    btnExport.className = "ins-btn";
-    btnExport.textContent = "Export";
-    btnExport.addEventListener("click", doExport);
-
-    right.append(btnCopy, btnExport);
-
-    bar.append(left, mid, right);
-    where.appendChild(bar);
-
-    dom.bar = bar;
-    dom.search = input;
+    bar.appendChild(lvWrap);
+    bar.appendChild(mid);
+    bar.appendChild(right);
+    container.appendChild(bar);
   }
 
-  // -- Log-Puffer lesen (robust) ----------------------------------------------
-  function readBuffer() {
-    // bevorzugt: CBLog.getBuffer()
-    try {
-      if (typeof window.CBLog?.getBuffer === "function") {
-        return window.CBLog.getBuffer() || [];
-      }
-    } catch (_) {}
-
-    // alternativer Namespace (__CBLOG oder __cblog)
-    try {
-      const alt = window.__CBLOG || window.__cblog || window.__cblog_buf || window.__buf;
-      if (Array.isArray(alt)) return alt;
-      if (alt && Array.isArray(alt.buf)) return alt.buf;
-    } catch (_) {}
-
-    // kein Buffer → leer
-    return [];
+  function makePre(container) {
+    const pre = document.createElement("pre");
+    pre.className = "ins-logpre";
+    pre.textContent = "Logs werden initialisiert …";
+    container.appendChild(pre);
+    state.els.pre = pre;
   }
 
-  // Level ableiten aus Eintrag (best effort)
-  function entryLevel(e) {
-    const s = (e && (e.level || e[1] || e.tag || "")).toString().toUpperCase();
-    if (s.includes("ERR"))  return "ERR";
-    if (s.includes("WARN")) return "WARN";
-    if (s.includes("OK"))   return "OK";
-    if (s.includes("INFO")) return "INFO";
-    if (s.includes("DBG") || s.includes("DEBUG")) return "DBG";
-    return "INFO";
+  // --------- Rendering der Logzeilen --------------------------------------
+  function lineMatchesFilters(line) {
+    // Level Heuristik: [xx:xx:xx] (ERR|WARN|OK|INFO) [...]
+    const L = line.toUpperCase();
+    const hasErr = L.includes(" ERR ") || L.includes("ERROR") || L.includes("ERR]");
+    const hasWarn = L.includes(" WARN ") || L.includes("WARN]");
+    const hasOk = L.includes(" OK ") || L.includes(" OK]");
+    const hasInfo = L.includes(" INFO ") || L.includes("INFO]");
+
+    if (hasErr && !state.levels.ERR) return false;
+    if (hasWarn && !state.levels.WARN) return false;
+    if (hasOk && !state.levels.OK) return false;
+    if (hasInfo && !state.levels.INFO) return false;
+
+    if (state.query) {
+      return L.includes(state.query.toUpperCase());
+    }
+    return true;
   }
 
-  // Text erzeugen (best effort)
-  function entryText(e) {
-    // Varianten: {ts, level, scope, msg} … oder String/Array
-    if (typeof e === "string") return e;
-    if (Array.isArray(e)) return e.join(" ");
-    const ts = e.ts || e.time || "";
-    const lvl = e.level || e.tag || "";
-    const scope = e.scope || e.mod || e.src || "";
-    const msg = e.msg || e.text || e.message || "";
-    const t = ts ? `[${ts}] ` : "";
-    const L = lvl ? `${String(lvl).toUpperCase()}` : "";
-    const S = scope ? ` [${scope}]` : "";
-    const M = msg ? ` ${msg}` : "";
-    return `${t}${L}${S}${M}`.trim();
-  }
+  function renderLogText() {
+    if (!state.els.pre) return;
+    const buf = getLogBuffer();
+    if (!buf || !buf.length) {
+      state.els.pre.textContent = "Noch keine Logs …";
+      return;
+    }
 
-  // Filter anwenden + zeichnen
-  function render() {
-    if (!dom.pre) return;
-    const buf = readBuffer();
-
-    const lines = [];
+    const out = [];
     for (let i = 0; i < buf.length; i++) {
-      const e = buf[i];
-      const lvl = entryLevel(e);
-      if (!filt[lvl]) continue;
-
-      const text = entryText(e);
-      if (query && !text.toLowerCase().includes(query)) continue;
-
-      lines.push(text);
+      const s = String(buf[i] ?? "");
+      if (!s) continue;
+      if (lineMatchesFilters(s)) out.push(s);
     }
-
-    dom.pre.textContent = lines.length ? lines.join("\n") : "[Noch keine passenden Logs …]";
+    state.els.pre.textContent = out.join("\n");
+    // Auto-Scroll ans Ende
+    state.els.pre.scrollTop = state.els.pre.scrollHeight;
   }
 
-  // -- Aktionen ---------------------------------------------------------------
-  async function doCopy() {
-    const txt = dom.pre?.textContent || "";
-    try {
-      await navigator.clipboard.writeText(txt);
-      toast("Logs kopiert.");
-    } catch (e) {
-      warn("Clipboard fehlgeschlagen: " + (e && e.message));
-      // Fallback: Auswahl markieren
-      window.getSelection().removeAllRanges();
-      const r = document.createRange();
-      r.selectNodeContents(dom.pre);
-      window.getSelection().addRange(r);
-      toast("Markiert – zum Kopieren drücken.");
-    }
-  }
-
-  function doExport() {
-    const blob = new Blob([dom.pre?.textContent || ""], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `logs_${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function toast(msg) {
-    try {
-      const t = document.createElement("div");
-      t.className = "ins-toast";
-      t.textContent = msg;
-      (dom.panel || document.body).appendChild(t);
-      setTimeout(() => t.remove(), 1600);
-    } catch (_) {}
-  }
-
-  // -- Mount/Unmount ----------------------------------------------------------
-  function mount() {
-    if (mounted) return;
-    const found = findPanel();
-    if (!found) return;
-    dom.panel = found.panel;
-    dom.body  = found.body;
-    dom.pre   = found.pre;
-
-    // vorhandene, alte "schwebende" Leisten einsammeln
-    document.querySelectorAll(".ins-logbar, .ins-floating-logbar").forEach(el => el.remove());
-    createBar(dom.panel);
-
-    // erster Render
-    render();
-
-    // Live-Events (falls CBLog Event-API besitzt)
-    try {
-      if (typeof window.CBLog?.on === "function") {
-        window.CBLog.on("append", render); // eigener Eventname im Polyfill
-      }
-    } catch (_) {}
-
-    // Poll als Fallback
-    pollTimer = setInterval(render, 1000);
-
-    mounted = true;
-    log("Log-UI montiert (" + VER + ").");
+  // --------- Mounting: Panel bevorzugt, sonst Floating ---------------------
+  function findPanelBody() {
+    const root = document.getElementById("inspector");
+    if (!root) return null;
+    // generischer Body-Container:
+    return root.querySelector(".ins-body") || root.querySelector("[data-inspector-body]") || null;
   }
 
   function unmount() {
-    mounted = false;
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    if (dom.bar && dom.bar.parentNode) dom.bar.parentNode.removeChild(dom.bar);
-    dom = { panel:null, body:null, pre:null, bar:null, search:null };
-    log("Log-UI demontiert.");
+    if (state.autoRefreshTimer) {
+      clearInterval(state.autoRefreshTimer);
+      state.autoRefreshTimer = null;
+    }
+    if (state.els.root && state.els.root.parentNode) {
+      state.els.root.parentNode.removeChild(state.els.root);
+    }
+    state.els = { root: null, pre: null, search: null, levelBtns: {} };
+    state.mountedMode = null;
+
+    // Legacy Floating-Dock ggf. entfernen
+    const legacy = document.getElementById("ins-logdock");
+    if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
   }
 
-  // -- Events verdrahten ------------------------------------------------------
-  window.addEventListener("cb:inspector-open", mount, { passive:true });
-  window.addEventListener("cb:inspector-close", unmount, { passive:true });
+  function mountInsidePanel(bodyEl) {
+    unmount();
+    const wrap = document.createElement("div");
+    wrap.className = "ins-logwrap";
+    makeControls(wrap);
+    makePre(wrap);
+    bodyEl.innerHTML = "";            // Tab-Inhalt exklusiv
+    bodyEl.appendChild(wrap);
+    state.els.root = wrap;
+    state.mountedMode = "panel";
 
-  // Falls der Inspector bereits offen ist (z. B. Auto-Open): sofort versuchen
+    // Auto-Refresh wenn offen
+    state.autoRefreshTimer = setInterval(renderLogText, 800);
+    renderLogText();
+    log(`Logs im Panel eingebettet (${VER}).`);
+  }
+
+  function mountFloating() {
+    unmount();
+    const dock = document.createElement("div");
+    dock.id = "ins-logdock"; // -> CSS hat Positionierung nur für Fallback!
+    dock.className = "ins-logwrap ins-fallback";
+    makeControls(dock);
+    makePre(dock);
+    document.body.appendChild(dock);
+    state.els.root = dock;
+    state.mountedMode = "float";
+
+    state.autoRefreshTimer = setInterval(renderLogText, 800);
+    renderLogText();
+    log(`Logs als Floating-Dock eingeblendet (${VER}).`);
+  }
+
+  // --------- Router: in Panel oder Fallback --------------------------------
+  function showLogs() {
+    const body = findPanelBody();
+    if (body) mountInsidePanel(body);
+    else mountFloating();
+  }
+
+  // --------- Event-Wire -----------------------------------------------------
+  window.addEventListener("cb:inspector-open", showLogs);
+  window.addEventListener("inspector:show:logs", showLogs);
+
+  // Falls der Inspector bereits offen ist (Reload etc.)
   setTimeout(() => {
-    if (document.getElementById("inspector")) mount();
-  }, 50);
+    const body = findPanelBody();
+    if (body && document.getElementById("inspector")?.style?.display !== "none") {
+      mountInsidePanel(body);
+    }
+  }, 200);
 
-  log("bereit (" + VER + ").");
+  log(`bereit (${VER})`);
 })();
