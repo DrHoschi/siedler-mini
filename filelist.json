@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-05T10:43:57.870Z",
+  "createdAt": "2025-09-05T13:35:35.078Z",
   "root": ".",
   "count": 256,
   "entries": [
@@ -261,17 +261,17 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.core.js",
-      "size": 6002
+      "size": 5613
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 4574
+      "size": 6215
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.logs.js",
-      "size": 8887
+      "size": 11250
     },
     {
       "type": "file",
@@ -1197,17 +1197,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2744
+      "size": 2648
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 26592
+      "size": 25484
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10179
+      "size": 9865
     },
     {
       "type": "file",
@@ -1222,7 +1222,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 4997
+      "size": 4703
     },
     {
       "type": "file",
