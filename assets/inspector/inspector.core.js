@@ -1,167 +1,157 @@
 /* ============================================================================
- * Inspector Core (split)
- * Datei: assets/inspector/inspector.core.js
- * Version: v18.10.9
- *
- * Aufgaben:
- *  - Root/Panel erzeugen (fixed, fullscreen, hoher z-index)
- *  - Tabs/Tools/Body-Slots bereitstellen (#ins-tabs, #ins-tools, #ins-body)
- *  - Öffnen/Schließen/Toggle; Fallback-Badge entfernen; Events dispatchen
- *
- * Öffentliche API (global): window.__INSPECTOR_API__ = { open, close, toggle, isOpen,
- *                          getSlots, mountTools, setActiveTab }
- *
- * Abhängigkeiten:
- *  - CSS: assets/inspector/inspector.css (stellt Safe-Area & Layout sicher)
- *  - Weitere Module (logs/build/paths/tests) befüllen die Slots.
+ * assets/inspector/inspector.core.js — v18.10.6
+ * Zweck:
+ *   - Zentrales Overlay (#inspector-root) erzeugen (immer mittig, fullscreen)
+ *   - Tabs/Slots verwalten (Logs/Build/Pfade/Tests etc.)
+ *   - Stabiles API unter window.__INSPECTOR_API__ (open/close/toggle)
+ *   - Fallback-sicher (wenn CSS fehlt → minimal inline)
+ * Events:
+ *   sendet:  cb:inspector-open / cb:inspector-close
+ *   erwartet: Slots registrieren sich auf window.__INSPECTOR_SLOTS__
  * ========================================================================== */
-(function () {
+(function(){
   "use strict";
 
-  const MOD = "[inspector.core]";
-  const VER = "v18.10.9";
+  var MOD = "[inspector.core]";
+  var VER = "v18.10.6";
+  var log = (m)=> (window.CBLog?.info||console.log)(`${MOD} ${m}`);
 
-  const ok   = (t, ...a) => (window.CBLog?.ok   || console.log)(`${MOD} ${t}`, ...a);
-  const info = (t, ...a) => (window.CBLog?.info || console.info)(`${MOD} ${t}`, ...a);
-  const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`${MOD} ${t}`, ...a);
+  // ---------- Slot-Registry --------------------------------------------------
+  window.__INSPECTOR_SLOTS__ = window.__INSPECTOR_SLOTS__ || {};
+  // Erwartete Keys: logs, build, paths, tests
+  function getSlot(name){
+    var s = window.__INSPECTOR_SLOTS__ && window.__INSPECTOR_SLOTS__[name];
+    return s && typeof s.mount==="function" ? s : null;
+  }
 
-  /** @type {HTMLDivElement|null} */ let $root   = null;
-  /** @type {HTMLDivElement|null} */ let $panel  = null;
-  /** @type {HTMLDivElement|null} */ let $head   = null;
-  /** @type {HTMLDivElement|null} */ let $tabs   = null;
-  /** @type {HTMLDivElement|null} */ let $tools  = null;
-  /** @type {HTMLDivElement|null} */ let $body   = null;
-  let _isOpen = false;
+  // ---------- Root-Erzeugung -------------------------------------------------
+  var root, backdrop, panel, head, tabs, body, footer;
+  var currentTab = "logs";
 
-  function ensureDOM() {
-    if ($root) return;
+  function cssIfMissing(){
+    // Minimal-Absicherung falls inspector.css nicht geladen ist
+    if (getComputedStyle(document.documentElement).getPropertyValue("--ins-z") === "") {
+      // Nichts definieren – unsere CSS-Datei liefert die Optik.
+      // Falls sie fehlt, greift das Inline-Fallback unter ui-bridge bereits.
+    }
+  }
 
-    // Root
-    $root = document.createElement("div");
-    $root.id = "ins-root";
-    $root.setAttribute("role", "dialog");
-    $root.setAttribute("aria-label", "Inspector");
-    $root.style.display = "none"; // wird via .open sichtbar gemacht
+  function el(tag, cls, txt){
+    var e=document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt!=null) e.textContent = txt;
+    return e;
+  }
 
-    // Panel
-    $panel = document.createElement("div");
-    $panel.id = "ins-panel";
-    $root.appendChild($panel);
+  function buildDom(){
+    if (root) return;
+    root = el("div","inspector-root");  // Vollbild-Overlay
+    // Safety inline (falls CSS fehlt):
+    root.style.position="fixed"; root.style.inset="0";
+    root.style.zIndex="2147483646"; root.style.display="none";
 
-    // Header
-    $head = document.createElement("div");
-    $head.id = "ins-head";
+    backdrop = el("div","inspector-backdrop");
+    panel    = el("div","inspector-panel");
+    head     = el("div","inspector-head");
+    tabs     = el("div","inspector-tabs");
+    body     = el("div","inspector-body");
+    footer   = el("div","inspector-footer");
 
-    const $title = document.createElement("div");
-    $title.className = "ins-title";
-    $title.textContent = "Inspector";
-    $head.appendChild($title);
+    // Head: Titel + Close
+    var title = el("div","ins-title","Inspector");
+    var spacer = el("div","ins-spacer");
+    var btnClose = el("button","ins-btn ins-close","×");
+    btnClose.title="Schließen (Esc)";
 
-    const $spacer = document.createElement("div");
-    $spacer.className = "ins-spacer";
-    $head.appendChild($spacer);
+    btnClose.addEventListener("click", close);
+    backdrop.addEventListener("click", close);
+    window.addEventListener("keydown", (ev)=>{ if (ev.key==="Escape") close(); });
 
-    const $btnClose = document.createElement("button");
-    $btnClose.className = "ins-close";
-    $btnClose.type = "button";
-    $btnClose.setAttribute("aria-label", "Schließen");
-    $btnClose.textContent = "Schließen";
-    $btnClose.addEventListener("click", close);
-    $head.appendChild($btnClose);
-
-    $panel.appendChild($head);
+    head.appendChild(title);
+    head.appendChild(spacer);
+    head.appendChild(btnClose);
 
     // Tabs
-    $tabs = document.createElement("div");
-    $tabs.id = "ins-tabs";
-    $panel.appendChild($tabs);
+    var tabList = [
+      ["logs","Logs"],
+      ["build","Build"],
+      ["paths","Pfade"],
+      ["tests","Tests"]
+    ];
+    tabList.forEach(function(t){
+      var b = el("button","ins-tab",t[1]);
+      b.dataset.tab = t[0];
+      b.addEventListener("click", ()=> switchTab(t[0]));
+      tabs.appendChild(b);
+    });
 
-    // Tools/Controls
-    $tools = document.createElement("div");
-    $tools.id = "ins-tools";
-    $panel.appendChild($tools);
+    // Footer (rechts: Version)
+    var ver = el("div","ins-version", VER);
+    footer.appendChild(ver);
 
-    // Body
-    $body = document.createElement("div");
-    $body.id = "ins-body";
-    $panel.appendChild($body);
+    panel.appendChild(head);
+    panel.appendChild(tabs);
+    panel.appendChild(body);
+    panel.appendChild(footer);
+    root.appendChild(backdrop);
+    root.appendChild(panel);
+    document.body.appendChild(root);
 
-    // Footer
-    const $foot = document.createElement("div");
-    $foot.id = "ins-foot";
-    $foot.textContent = `core ${VER}`;
-    $panel.appendChild($foot);
-
-    document.body.appendChild($root);
+    // Anfangszustand: Logs
+    switchTab("logs");
   }
 
-  function getSlots() {
-    ensureDOM();
-    return { root:$root, panel:$panel, head:$head, tabs:$tabs, tools:$tools, body:$body };
+  // ---------- Tab-Wechsel ----------------------------------------------------
+  function activateTabButton(name){
+    var bs = tabs.querySelectorAll(".ins-tab");
+    bs.forEach((b)=> b.classList.toggle("active", b.dataset.tab===name));
   }
 
-  function mountTools(node) {
-    ensureDOM();
-    while ($tools.firstChild) $tools.removeChild($tools.firstChild);
-    if (node) $tools.appendChild(node);
-  }
-
-  function setActiveTab(tabId) {
-    ensureDOM();
-    const btns = $tabs.querySelectorAll(".ins-tab");
-    btns.forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
-  }
-
-  function open() {
-    ensureDOM();
-    if (_isOpen) return;
-
-    // sicherstellen, dass wir direkt unter <body> hängen
-    if ($root.parentNode !== document.body) document.body.appendChild($root);
-    // etwaige Fallback-Badges entfernen
-    try { document.getElementById("inspector-probe")?.remove(); } catch {}
-
-    $root.classList.add("open");
-    $root.style.display = "block";
-    document.body.classList.add("inspector-open");
-    _isOpen = true;
-
-    // Events für Bridge/Analytics
-    try { window.dispatchEvent(new Event("cb:inspector-open")); } catch {}
-    info(`geöffnet (${VER})`);
-  }
-
-  function close() {
-    if (!_isOpen) return;
-    ensureDOM();
-    $root.classList.remove("open");
-    $root.style.display = "none";
-    document.body.classList.remove("inspector-open");
-    _isOpen = false;
-    try { window.dispatchEvent(new Event("cb:inspector-close")); } catch {}
-  }
-
-  function toggle(force) {
-    const willOpen = force == null ? !_isOpen : !!force;
-    willOpen ? open() : close();
-  }
-
-  // Default-Tab „Logs“ vormontieren (bis Module laden)
-  (function mountDefaultTab() {
-    ensureDOM();
-    if (!$tabs.querySelector("[data-tab='logs']")) {
-      const t = document.createElement("button");
-      t.className = "ins-tab active";
-      t.dataset.tab = "logs";
-      t.textContent = "Logs";
-      $tabs.appendChild(t);
+  function switchTab(name){
+    currentTab = name;
+    activateTabButton(name);
+    // Body leeren und Slot mounten
+    body.innerHTML = "";
+    footer.style.display = ""; // Slot kann Footer ausblenden
+    var slot = getSlot(name);
+    if (slot){
+      try { slot.mount({ root, head, tabs, body, footer, version:VER }); }
+      catch(e){ (window.CBLog?.err||console.error)(`${MOD} Slot '${name}' Fehler:`, e); }
+    } else {
+      body.textContent = "Tab noch nicht implementiert.";
     }
-  })();
+  }
 
-  // Export
-  window.__INSPECTOR_API__ = Object.freeze({
-    open, close, toggle, isOpen: () => _isOpen, getSlots, mountTools, setActiveTab
-  });
+  // ---------- API ------------------------------------------------------------
+  function open(){
+    buildDom(); cssIfMissing();
+    root.style.display = "flex"; root.classList.add("is-open");
+    // Zentrieren: stellt inspector.css sicher (flex-center). Fallback: inline:
+    root.style.display = "flex"; root.style.alignItems="center"; root.style.justifyContent="center";
+    window.dispatchEvent(new CustomEvent("cb:inspector-open"));
+    log(`geöffnet (${VER})`);
+  }
+  function close(){
+    if (!root) return;
+    root.style.display = "none"; root.classList.remove("is-open");
+    window.dispatchEvent(new CustomEvent("cb:inspector-close"));
+    log("geschlossen");
+  }
+  function toggle(force){
+    if (!root || root.style.display==="none") return open();
+    if (force===true) return open();
+    if (force===false) return close();
+    return (root.style.display==="none") ? open() : close();
+  }
 
-  ok(`bereit (${VER})`);
+  window.__INSPECTOR_API__ = { open, close, toggle, switchTab };
+
+  // ---------- Auto-Init (nur DOM warten, sonst nichts) ----------------------
+  if (document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", buildDom, { once:true });
+  } else {
+    buildDom();
+  }
+
+  log(`bereit (${VER})`);
 })();
