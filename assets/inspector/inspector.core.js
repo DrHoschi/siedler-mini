@@ -1,67 +1,65 @@
 /* ============================================================================
  * Inspector Core (split)
  * Datei: assets/inspector/inspector.core.js
- * Version: v18.10.8
+ * Version: v18.10.9
  *
  * Aufgaben:
- *   - Root/Panel erzeugen (fixed, fullscreen, hoher z-index)
- *   - Tabs/Slots vorbereiten (#ins-body, #ins-tools, #ins-tabs)
- *   - Öffnen/Schließen/Toggle + Fallback-Badge entfernen
+ *  - Root/Panel erzeugen (fixed, fullscreen, hoher z-index)
+ *  - Tabs/Tools/Body-Slots bereitstellen (#ins-tabs, #ins-tools, #ins-body)
+ *  - Öffnen/Schließen/Toggle; Fallback-Badge entfernen; Events dispatchen
  *
- * Öffentliche API (global): window.__INSPECTOR_API__ { open, close, toggle, isOpen,
- *                           getSlots, mountTools }
+ * Öffentliche API (global): window.__INSPECTOR_API__ = { open, close, toggle, isOpen,
+ *                          getSlots, mountTools, setActiveTab }
  *
  * Abhängigkeiten:
- *   - CSS: assets/inspector/inspector.css (stellt Safe-Area & Layout sicher)
- *   - Weitere Module (logs/build/paths/tests) befüllen die Slots.
+ *  - CSS: assets/inspector/inspector.css (stellt Safe-Area & Layout sicher)
+ *  - Weitere Module (logs/build/paths/tests) befüllen die Slots.
  * ========================================================================== */
 (function () {
   "use strict";
 
   const MOD = "[inspector.core]";
-  const VER = "v18.10.8";
+  const VER = "v18.10.9";
 
-  const log  = (t, ...a) => (window.CBLog?.ok   || console.log)(`${MOD} ${t}`, ...a);
+  const ok   = (t, ...a) => (window.CBLog?.ok   || console.log)(`${MOD} ${t}`, ...a);
   const info = (t, ...a) => (window.CBLog?.info || console.info)(`${MOD} ${t}`, ...a);
   const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`${MOD} ${t}`, ...a);
 
-  // DOM-Referenzen
-  /** @type {HTMLDivElement|null} */ let $root   = null;   // fullscreen wrapper (#ins-root)
-  /** @type {HTMLDivElement|null} */ let $panel  = null;   // card             (#ins-panel)
-  /** @type {HTMLDivElement|null} */ let $header = null;   // header           (#ins-head)
-  /** @type {HTMLDivElement|null} */ let $tabs   = null;   // tabs-slot        (#ins-tabs)
-  /** @type {HTMLDivElement|null} */ let $tools  = null;   // toolbar-slot     (#ins-tools)
-  /** @type {HTMLDivElement|null} */ let $body   = null;   // content-slot     (#ins-body)
+  /** @type {HTMLDivElement|null} */ let $root   = null;
+  /** @type {HTMLDivElement|null} */ let $panel  = null;
+  /** @type {HTMLDivElement|null} */ let $head   = null;
+  /** @type {HTMLDivElement|null} */ let $tabs   = null;
+  /** @type {HTMLDivElement|null} */ let $tools  = null;
+  /** @type {HTMLDivElement|null} */ let $body   = null;
   let _isOpen = false;
 
-  // Erzeugt bei Bedarf die Grund-Struktur
   function ensureDOM() {
     if ($root) return;
 
-    // Root (immer Fullscreen, ganz oben; CSS erledigt das Feintuning)
+    // Root
     $root = document.createElement("div");
     $root.id = "ins-root";
     $root.setAttribute("role", "dialog");
     $root.setAttribute("aria-label", "Inspector");
-    $root.style.display = "none"; // hidden by default
+    $root.style.display = "none"; // wird via .open sichtbar gemacht
 
     // Panel
     $panel = document.createElement("div");
     $panel.id = "ins-panel";
     $root.appendChild($panel);
 
-    // Header (Titel + Close)
-    $header = document.createElement("div");
-    $header.id = "ins-head";
+    // Header
+    $head = document.createElement("div");
+    $head.id = "ins-head";
 
     const $title = document.createElement("div");
     $title.className = "ins-title";
     $title.textContent = "Inspector";
-    $header.appendChild($title);
+    $head.appendChild($title);
 
-    const $sp = document.createElement("div");
-    $sp.className = "ins-spacer";
-    $header.appendChild($sp);
+    const $spacer = document.createElement("div");
+    $spacer.className = "ins-spacer";
+    $head.appendChild($spacer);
 
     const $btnClose = document.createElement("button");
     $btnClose.className = "ins-close";
@@ -69,16 +67,16 @@
     $btnClose.setAttribute("aria-label", "Schließen");
     $btnClose.textContent = "Schließen";
     $btnClose.addEventListener("click", close);
-    $header.appendChild($btnClose);
+    $head.appendChild($btnClose);
 
-    $panel.appendChild($header);
+    $panel.appendChild($head);
 
-    // Tab-Leiste
+    // Tabs
     $tabs = document.createElement("div");
     $tabs.id = "ins-tabs";
     $panel.appendChild($tabs);
 
-    // Toolbar-Slot (z. B. Log-Filter/Badges)
+    // Tools/Controls
     $tools = document.createElement("div");
     $tools.id = "ins-tools";
     $panel.appendChild($tools);
@@ -88,7 +86,7 @@
     $body.id = "ins-body";
     $panel.appendChild($body);
 
-    // Footer (kleine Build-Zeile)
+    // Footer
     const $foot = document.createElement("div");
     $foot.id = "ins-foot";
     $foot.textContent = `core ${VER}`;
@@ -97,50 +95,50 @@
     document.body.appendChild($root);
   }
 
-  // Öffentliche Slots für andere Module
   function getSlots() {
     ensureDOM();
-    return { root: $root, panel: $panel, head: $header, tabs: $tabs, tools: $tools, body: $body };
+    return { root:$root, panel:$panel, head:$head, tabs:$tabs, tools:$tools, body:$body };
   }
 
-  // Toolbar-/Controls-Knoten einsetzen (z. B. aus inspector.logs.js)
   function mountTools(node) {
     ensureDOM();
-    if (!node) return;
     while ($tools.firstChild) $tools.removeChild($tools.firstChild);
-    $tools.appendChild(node);
+    if (node) $tools.appendChild(node);
   }
 
-  // --- öffnen ---------------------------------------------------------------
-  function open() {
-    if (_isOpen) return;
+  function setActiveTab(tabId) {
     ensureDOM();
+    const btns = $tabs.querySelectorAll(".ins-tab");
+    btns.forEach(b => b.classList.toggle("active", b.dataset.tab === tabId));
+  }
 
-    // an Body-Ende hängen (falls Skriptreihenfolge verspätet war)
-    if ($root.parentNode !== document.body) {
-      document.body.appendChild($root);
-    }
+  function open() {
+    ensureDOM();
+    if (_isOpen) return;
 
-    // Fallback-Badge entfernen, falls ui-bridge eines gelegt hat
+    // sicherstellen, dass wir direkt unter <body> hängen
+    if ($root.parentNode !== document.body) document.body.appendChild($root);
+    // etwaige Fallback-Badges entfernen
     try { document.getElementById("inspector-probe")?.remove(); } catch {}
 
-    $root.style.display = "block";
     $root.classList.add("open");
-    document.body.classList.add("inspector-open"); // wichtig für Safe-Area/Scroll-Lock
+    $root.style.display = "block";
+    document.body.classList.add("inspector-open");
     _isOpen = true;
 
+    // Events für Bridge/Analytics
+    try { window.dispatchEvent(new Event("cb:inspector-open")); } catch {}
     info(`geöffnet (${VER})`);
   }
 
-  // --- schließen ------------------------------------------------------------
   function close() {
     if (!_isOpen) return;
     ensureDOM();
-
     $root.classList.remove("open");
     $root.style.display = "none";
     document.body.classList.remove("inspector-open");
     _isOpen = false;
+    try { window.dispatchEvent(new Event("cb:inspector-close")); } catch {}
   }
 
   function toggle(force) {
@@ -148,15 +146,10 @@
     willOpen ? open() : close();
   }
 
-  // API exportieren
-  window.__INSPECTOR_API__ = Object.freeze({
-    open, close, toggle, isOpen: () => _isOpen, getSlots, mountTools
-  });
-
-  // Minimaler Default-Tab (damit etwas klickbar ist, bis echte Module montieren)
+  // Default-Tab „Logs“ vormontieren (bis Module laden)
   (function mountDefaultTab() {
     ensureDOM();
-    if (!$tabs.querySelector(".ins-tab[data-tab='logs']")) {
+    if (!$tabs.querySelector("[data-tab='logs']")) {
       const t = document.createElement("button");
       t.className = "ins-tab active";
       t.dataset.tab = "logs";
@@ -165,5 +158,10 @@
     }
   })();
 
-  log(`bereit (${VER})`);
+  // Export
+  window.__INSPECTOR_API__ = Object.freeze({
+    open, close, toggle, isOpen: () => _isOpen, getSlots, mountTools, setActiveTab
+  });
+
+  ok(`bereit (${VER})`);
 })();
