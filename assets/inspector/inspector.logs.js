@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.logs.js
  * Projekt: Siedler-Mini
- * Version: v18.10.8
+ * Version: v18.10.9
  *
  * Zweck:
  *  - Log-Tab UI (Filter, Badges, Suche, Kopieren/Export)
@@ -14,14 +14,75 @@
  *      • core.api.signal(name, payload?)  (optional)
  *  - CBLog Polyfill/Impl:
  *      • CBLog.getBuffer() -> Array<string> oder [{t:...,lvl:'info|ok|warn|err',msg:'...'}]
- *      • optional: CBLog.on('append', fn)
+ *      • optional: CBLog.on('append', fn) / CBLog.off('append', fn)
  * ========================================================================== */
+
+
+/* --- LOG-STREAM SAFETY HOOK (läuft einmal global, unabhängig vom Tab) --------
+   - Holt beim Öffnen die Historie und hängt live an (wenn CBLog.on vorhanden).
+   - Fällt auf Polling/console-Hook zurück, falls CBLog minimal/fehlt.
+   - Spricht NICHT mehr __INSPECTOR_API__ an, sondern eine kleine Bridge:
+       window.__INS_LOG_BRIDGE__  { push(entry), render() }
+   - Die Bridge wird vom Logs-Tab beim Mount gesetzt (siehe weiter unten).
+----------------------------------------------------------------------------- */
+(function attachLogStreamOnce(){
+  if (window.__INS_LOGS_WIRED__) return;               // nur einmal verdrahten
+  window.__INS_LOGS_WIRED__ = true;
+
+  function pumpHistoryOnce(){
+    try {
+      const buf = (window.CBLog?.getBuffer?.() || []);
+      if (Array.isArray(buf) && buf.length && window.__INS_LOG_BRIDGE__) {
+        buf.forEach(entry => window.__INS_LOG_BRIDGE__.push(entry));
+        window.__INS_LOG_BRIDGE__.render();
+      }
+    } catch(_) {}
+  }
+
+  // 1) Beim Öffnen Historie holen + optionalen Stream starten
+  window.addEventListener('cb:inspector-open', () => {
+    pumpHistoryOnce();
+    try { window.CBLog?.LogStream?.start?.(); } catch(_){}
+  });
+
+  // 2) Beim Schließen optional stoppen (Ressourcen)
+  window.addEventListener('cb:inspector-close', () => {
+    try { window.CBLog?.LogStream?.stop?.(); } catch(_){}
+  });
+
+  // 3) Wenn bereits offen (AutoOpen etc.), gleich initial befüllen
+  if (document.body.classList.contains('inspector-open')) {
+    pumpHistoryOnce();
+    try { window.CBLog?.LogStream?.start?.(); } catch(_){}
+  }
+
+  // 4) Minimaler Fallback ohne CBLog: console.* hooken
+  if (!window.CBLog) {
+    ['log','info','warn','error'].forEach(k=>{
+      const orig = console[k];
+      console[k] = function(...args){
+        try {
+          const line = {
+            ts: Date.now(),
+            lvl: (k==='error'?'err':(k==='warn'?'warn':(k==='info'?'info':'ok'))),
+            src: 'console',
+            msg: args.map(a=>String(a)).join(' ')
+          };
+          window.__INS_LOG_BRIDGE__?.push(line);
+          window.__INS_LOG_BRIDGE__?.render();
+        } catch(_) {}
+        return orig.apply(this, args);
+      };
+    });
+  }
+})();
+
 
 (function () {
   "use strict";
 
   const MOD = "[inspector.logs]";
-  const VER = "v18.10.8";
+  const VER = "v18.10.9";
   const core = window.__INSPECTOR_CORE__;
   if (!core || !core.api || typeof core.api.mount !== "function") {
     console.warn(MOD, "core API fehlt – breche ab.");
@@ -29,8 +90,8 @@
   }
 
   // ---------- Hilfen --------------------------------------------------------
-  const logOk   = (...a) => (window.CBLog?.ok || console.log)(`${MOD}`, ...a);
-  const logWarn = (...a) => (window.CBLog?.warn || console.warn)(`${MOD}`, ...a);
+  const logOk   = (...a) => (window.CBLog?.ok   || console.log  )(`${MOD}`, ...a);
+  const logWarn = (...a) => (window.CBLog?.warn || console.warn )(`${MOD}`, ...a);
 
   function qSlot(name) {
     // akzeptiert neue Slot-Namen und ein paar defensive Fallbacks
@@ -48,7 +109,6 @@
     warn: "log-warn",
     err:  "log-error",
     error:"log-error",
-    // Konsole-Text-Fallbacks
     INFO: "log-info",
     OK:   "log-ok",
     WARN: "log-warn",
@@ -56,7 +116,6 @@
   };
 
   function detectLevel(line) {
-    // Versucht, aus einem String oder Objekt den Level zu bestimmen
     if (!line) return "info";
     if (typeof line === "object") {
       return (line.lvl || line.level || "info").toString().toLowerCase();
@@ -64,16 +123,15 @@
     const s = String(line);
     if (/\bERR(OR)?\b/i.test(s)) return "err";
     if (/\bWARN(ING)?\b/i.test(s)) return "warn";
-    if (/\bOK\b/i.test(s)) return "ok";
-    if (/\bINFO\b/i.test(s)) return "info";
+    if (/\bOK\b/i.test(s))        return "ok";
+    if (/\bINFO\b/i.test(s))      return "info";
     return "info";
   }
 
   function toText(line) {
     if (!line && line !== 0) return "";
     if (typeof line === "object") {
-      // häufige Objektformate tolerant zusammenfassen
-      const t = line.t || line.time || "";
+      const t   = line.t || line.time || line.ts || "";
       const src = line.src || line.source || "";
       const msg = line.msg ?? line.message ?? line.text ?? JSON.stringify(line);
       return t ? `[${t}] ${src ? src + " " : ""}${msg}` : `${src ? src + " " : ""}${msg}`;
@@ -82,26 +140,30 @@
   }
 
   // ---------- Log-Puffer + Stream ------------------------------------------
-  let cache = [];               // komplette, gefilterte Anzeigequelle (Strings)
-  let rawBuffer = [];           // Rohpuffer aus CBLog
-  let lastLen = 0;              // zur Erkennung von Änderungen
-  let pollTimer = null;         // Fallback-Poll
+  let cache     = [];   // komplette, gefilterte Anzeigequelle (Strings)
+  let rawBuffer = [];   // Rohpuffer aus CBLog / console-hook
+  let lastLen   = 0;    // zur Erkennung von Änderungen
+  let pollTimer = null; // Fallback-Poll
 
   function readBufferSafe() {
     try {
       const buf = window.CBLog?.getBuffer?.();
       if (!buf) return [];
-      // Normalisieren: Strings oder Objekte akzeptieren
       return Array.isArray(buf) ? buf.slice() : [];
     } catch (_e) {
       return [];
     }
   }
 
+  function onAppend(entry) {
+    rawBuffer.push(entry);
+    pushLine(entry); // inkrementell rendern (respektiert Filter)
+  }
+
   function startStream() {
     // 1) Initial lesen
     rawBuffer = readBufferSafe();
-    lastLen = rawBuffer.length;
+    lastLen   = rawBuffer.length;
 
     // 2) Event-Stream, falls vorhanden
     if (typeof window.CBLog?.on === "function") {
@@ -132,12 +194,6 @@
     }
   }
 
-  function onAppend(entry) {
-    rawBuffer.push(entry);
-    // nur die UI aktualisieren; Filtering greift in renderList()
-    pushLine(entry);
-  }
-
   // ---------- UI / Filter ---------------------------------------------------
   const state = {
     showInfo: true,
@@ -149,7 +205,6 @@
   };
 
   let els = {
-    controls: null,
     view: null,
     search: null,
     badgeInfo: null,
@@ -162,13 +217,12 @@
     const host = qSlot("logs-controls");
     if (!host) return;
 
-    // Leeren (wichtiger Fix, damit NICHT versehentlich im body doppelt landet)
     host.innerHTML = "";
 
     const wrap = document.createElement("div");
     wrap.className = "ins-controls";
 
-    // Helpers
+    // Toggle-Helper
     const mkToggle = (label, key, title) => {
       const b = document.createElement("button");
       b.className = "ins-toggle";
@@ -232,14 +286,13 @@
     btnExport.textContent = "Export";
     btnExport.addEventListener("click", () => {
       const blob = new Blob([cache.join("\n")], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
       a.href = url; a.download = "logs.txt";
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
     });
 
-    // Zusammenbauen
     wrap.append(tInfo, tOk, tWarn, tErr, search, btnCopy, btnExport);
     host.appendChild(wrap);
   }
@@ -271,17 +324,14 @@
     // Zähler zurücksetzen
     state.counts.info = state.counts.ok = state.counts.warn = state.counts.err = 0;
 
-    // Filter + Render
     const frag = document.createDocumentFragment();
     for (let i = 0; i < rawBuffer.length; i++) {
       const obj = rawBuffer[i];
       const txt = toText(obj);
       const lvl = detectLevel(obj).toLowerCase();
 
-      // Zähler
       if (lvl in state.counts) state.counts[lvl]++;
 
-      // Level-Filter
       if (
         (lvl === "info" && !state.showInfo) ||
         (lvl === "ok"   && !state.showOk)   ||
@@ -289,7 +339,6 @@
         (lvl === "err"  && !state.showErr)
       ) continue;
 
-      // Text-Filter
       if (q && !txt.toLowerCase().includes(q)) continue;
 
       const line = document.createElement("div");
@@ -311,17 +360,12 @@
   }
 
   function pushLine(entry) {
-    // neue Zeile in Ansicht einfügen (inkrementell), respektiert Filter
-    const host = els.view;
-    if (!host) return;
-
+    if (!els.view) return;
     const txt = toText(entry);
     const lvl = detectLevel(entry).toLowerCase();
 
-    // Zählerpflege
     if (lvl in state.counts) state.counts[lvl]++;
 
-    // Ggf. sichtbar rendern
     const q = state.query;
     const passLevel =
       (lvl !== "info" || state.showInfo) &&
@@ -334,8 +378,8 @@
       const div = document.createElement("div");
       div.className = LVL[lvl] || "log-info";
       div.textContent = txt;
-      host.appendChild(div);
-      host.scrollTop = host.scrollHeight; // autoscroll ans Ende
+      els.view.appendChild(div);
+      els.view.scrollTop = els.view.scrollHeight; // autoscroll ans Ende
     }
 
     updateBadges();
@@ -343,27 +387,35 @@
 
   // ---------- Tab-Mount -----------------------------------------------------
   core.api.mount("logs", () => {
-    // Wichtig: UI ausschließlich in Slots montieren (kein body.appendChild!)
+    // Slots streng verwenden (keine body-Nodes!)
     buildControls();
     mountView();
 
+    // Bridge für den globalen Safety-Hook bereitstellen
+    window.__INS_LOG_BRIDGE__ = {
+      push:   (e) => onAppend(e),
+      render: ()  => renderList()
+    };
+
     // Rohpuffer initial
     rawBuffer = readBufferSafe();
-    lastLen = rawBuffer.length;
+    lastLen   = rawBuffer.length;
     rebuildCacheFromRaw();
     renderList();
 
     // Stream starten
     startStream();
 
-    // Cleanup bei Tab-Verlassen (optional, falls core.signal('tab:leave') gesendet wird)
     core.api?.signal?.("logs:ready", { version: VER });
-
     logOk(MOD, "bereit", VER);
 
-    // Rückgabe: optionaler Unmount
+    // Unmount/Cleanup
     return () => {
       stopStream();
+      // Bridge nur entfernen, wenn niemand anders sie gerade nutzt
+      if (window.__INS_LOG_BRIDGE__) {
+        window.__INS_LOG_BRIDGE__ = null;
+      }
     };
   });
 
