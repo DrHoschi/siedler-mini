@@ -1,129 +1,144 @@
 /* ============================================================================
-   assets/inspector/inspector.css
-   Version: v18.10.8
-   Zweck:
-     - Vollbild-Overlay (#ins-root) & Panel (#ins-panel)
-     - Tabs/Tools/Body Slots
-     - Log-Ansicht (.ins-logview) inkl. Badges/Filter (.ins-badge)
-     - Controls (.ins-controls, .ins-toggle), Close-Button, Safe-Area
-   ========================================================================== */
+ * assets/inspector/inspector.css — v18.10.7
+ * Projekt: Siedler-Mini
+ *
+ * Farbschema (laut Vorgabe):
+ *   Background dunkel: #101316 / #0c1012
+ *   Panel:             rgba(18,22,26,.94)
+ *   Border:            rgba(255,255,255,.08)
+ *   Header/Footer:     rgba(255,255,255,.06)
+ *   Text:              #e7edf3  (90%), Muted #aab3bd
+ *   Akzent aktiv:      #7cc4ff  (Badges/Active Tab)
+ *   Akzent passiv:     rgba(255,255,255,.12)
+ * ========================================================================== */
 
-/* Fullscreen Root */
-#ins-root{
-  position:fixed; inset:0;
-  z-index:2147483646;
-  display:none; /* via .open sichtbar */
-  padding:env(safe-area-inset-top) env(safe-area-inset-right)
-          env(safe-area-inset-bottom) env(safe-area-inset-left);
-  background:rgba(12,18,15,.50); /* leichter Dimmer */
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-}
-#ins-root.open{ display:block; }
-
-/* Panel: mobile = fullscreen, ab ~800px = zentrierte Karte */
-#ins-panel{
-  box-sizing:border-box;
-  position:relative;
-  width:100%; height:100%;
-  background:linear-gradient(to bottom, rgba(22,26,24,.98), rgba(14,18,16,.98));
-  color:#e5e7eb;
-  display:flex; flex-direction:column;
+.ins-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646; /* direkt unter FABs (die haben +1) */
+  display: block;
 }
 
-/* Kopfzeile */
-#ins-head{
-  display:flex; align-items:center; gap:12px;
-  padding:14px 16px;
-  border-bottom:1px solid rgba(255,255,255,.06);
-  background:rgba(28,32,30,.85);
-  box-shadow:0 6px 18px rgba(0,0,0,.25) inset;
-}
-.ins-title{ font-weight:800; letter-spacing:.2px; opacity:.95; }
-.ins-spacer{ flex:1; }
-.ins-close{
-  border:none; border-radius:10px; padding:8px 12px;
-  background:rgba(255,255,255,.10); color:#fff; cursor:pointer;
+.ins-root[hidden] { display: none !important; }
+
+.ins-root .ins-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.25);
+  backdrop-filter: blur(3px);
 }
 
-/* Tabs */
-#ins-tabs{
-  display:flex; flex-wrap:wrap; gap:8px; padding:10px 14px 6px;
-  border-bottom:1px solid rgba(255,255,255,.06);
-  background:rgba(20,24,22,.7);
-}
-.ins-tab{
-  border:none; border-radius:999px; padding:6px 12px;
-  background:rgba(255,255,255,.10); color:#e5e7eb;
-  cursor:pointer; font-size:13px;
-}
-.ins-tab.active{ background:rgba(120,200,255,.22); }
-
-/* Tools/Controls-Zeile */
-#ins-tools{
-  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
-  padding:10px 14px;
-  border-bottom:1px solid rgba(255,255,255,.06);
-  background:rgba(16,20,18,.7);
-}
-.ins-controls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.ins-toggle{
-  display:inline-flex; align-items:center; gap:6px;
-  border:1px solid rgba(255,255,255,.12); border-radius:999px;
-  padding:6px 10px; background:rgba(255,255,255,.06); color:#e5e7eb;
-  cursor:pointer; user-select:none;
-}
-.ins-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  border:1px solid rgba(255,255,255,.12); border-radius:999px;
-  padding:4px 8px; font:12px/1.2 system-ui;
-  background:rgba(255,255,255,.06); color:#e5e7eb;
-}
-.ins-badge .dot{ width:8px; height:8px; border-radius:50%; background:#9ca3af; }
-.ins-badge.ok   .dot{ background:#22c55e; }
-.ins-badge.warn .dot{ background:#f59e0b; }
-.ins-badge.err  .dot{ background:#ef4444; }
-
-/* Body */
-#ins-body{
-  position:relative; flex:1; min-height:0;
-  padding:12px 14px;
-  overflow:auto;
+.ins-root .ins-panel {
+  position: absolute;
+  inset: 24px;
+  margin: auto;
+  max-width: 1100px;
+  min-width: min(320px, 96vw);
+  max-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: rgba(18,22,26,.94);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.55);
+  color: #e7edf3;
+  overflow: hidden;
 }
 
-/* Log-Ansicht */
-.ins-logview{
-  box-sizing:border-box;
-  width:100%; height:100%;
-  background:rgba(0,0,0,.35);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:10px;
-  padding:10px 12px; margin:0;
-  color:#d1d5db; font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  white-space:pre-wrap; overflow:auto;
+/* „Herzschlag“ beim Mounten (dezent) */
+.ins-root.mounted .ins-panel { animation: ins-pop .28s ease-out; }
+@keyframes ins-pop {
+  0% { transform: scale(.985); opacity: .0; }
+  100% { transform: scale(1); opacity: 1; }
 }
+
+/* Header (Tabs + Controls) */
+.ins-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.06);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.ins-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ins-tab {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,.12);
+  color: #e7edf3;
+  font: 600 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  cursor: pointer;
+}
+.ins-tab.active {
+  background: rgba(124,196,255,.28);
+  outline: 2px solid rgba(124,196,255,.35);
+}
+
+/* optionale Header-Controls rechts */
+.ins-controls { margin-left: auto; display:flex; align-items:center; gap:8px; }
+.ins-badge {
+  display:inline-block; padding:3px 8px; border-radius:999px;
+  background: rgba(255,255,255,.10); color:#cfe5ff; font-size:12px;
+}
+
+/* Body + Slots */
+.ins-body { padding: 12px 14px; overflow: auto; }
+.ins-slot[hidden] { display: none !important; }
 
 /* Footer */
-#ins-foot{
-  padding:8px 12px; font:12px/1.2 system-ui; opacity:.55;
-  border-top:1px solid rgba(255,255,255,.06);
-  background:rgba(20,24,22,.6);
+.ins-footer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.06);
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.ins-close {
+  border: none; border-radius: 10px; padding: 8px 12px;
+  background: rgba(255,255,255,.12); color:#e7edf3; cursor: pointer;
+}
+.ins-version { margin-left: auto; opacity: .7; font-size: 12px; }
+
+/* ——— Logs-Tab (Basis-Klassen, damit inspector.logs.js sofort hübsch rendert) */
+.ins-logtoolbar {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin-bottom: 10px;
+}
+.ins-toggle {
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color:#e7edf3; cursor:pointer; border-radius:8px; padding:6px 10px;
+}
+.ins-badges { display:flex; align-items:center; gap:6px; }
+.ins-badge.muted { opacity:.7 }
+.ins-search {
+  min-width: 180px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.25);
+  color:#e7edf3; border-radius:8px; padding:6px 8px;
 }
 
-/* Micro-Animation (z.B. copy/clear Feedback) */
-@keyframes ins-flash-kf { 0%{background:rgba(120,200,255,.25);} 100%{background:transparent;} }
-.ins-flash{ animation:ins-flash-kf .4s ease-out; }
-
-/* Desktop-Panel (zentriert) – optional aktivieren, wenn nicht fullscreen gewünscht */
-/*
-@media (min-width: 900px){
-  #ins-panel{
-    position:absolute; inset:auto; left:50%; top:52%;
-    transform:translate(-50%,-50%);
-    width:min(1100px, 96vw); height:min(90vh, 880px);
-    border:1px solid rgba(255,255,255,.10);
-    border-radius:14px;
-    box-shadow:0 40px 120px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06) inset;
-  }
+.ins-logview {
+  width: 100%; height: 52vh; min-height: 220px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: #0c1012;
+  color: #e7edf3;
+  padding: 10px;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
 }
-*/
+
+/* dezent aufblitzen, wenn neue Logs kommen */
+.ins-flash { animation: ins-flash 280ms ease-out; }
+@keyframes ins-flash {
+  0% { box-shadow: 0 0 0 rgba(124,196,255,0); }
+  100% { box-shadow: 0 0 0 rgba(124,196,255,0); }
+}
+
+/* Mobile: Panel kleinerer Rand */
+@media (max-width: 640px) {
+  .ins-root .ins-panel { inset: 10px; }
+}
