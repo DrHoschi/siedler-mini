@@ -1,219 +1,129 @@
 /* ============================================================================
-   Inspector CSS – v18.10.8 (fullscreen + safe-area + neue Slots)
-   - Vollbild-Overlay, immer ganz vorn
-   - iOS Safe Area (unten) wird berücksichtigt
-   - Keine "fixed" Controls mehr: alles lebt im Panel-Header/Slots
-   - Reset alter Klassen (.ins-controls etc.), damit nichts mehr unten klebt
-   ============================================================================ */
+   assets/inspector/inspector.css
+   Version: v18.10.8
+   Zweck:
+     - Vollbild-Overlay (#ins-root) & Panel (#ins-panel)
+     - Tabs/Tools/Body Slots
+     - Log-Ansicht (.ins-logview) inkl. Badges/Filter (.ins-badge)
+     - Controls (.ins-controls, .ins-toggle), Close-Button, Safe-Area
+   ========================================================================== */
 
-:root{
-  --ins-backdrop: rgba(0,0,0,.40);
-  --ins-panel-bg: #0f1412;
-  --ins-panel-bd: rgba(255,255,255,.06);
-  --ins-text: #e5ece8;
-  --ins-muted: #94a3a0;
-  --ins-accent: #2a7f5f;
-  --ins-surface: rgba(255,255,255,.04);
-  --ins-surface-2: rgba(255,255,255,.08);
-  --ins-shadow: 0 18px 60px rgba(0,0,0,.45);
+/* Fullscreen Root */
+#ins-root{
+  position:fixed; inset:0;
+  z-index:2147483646;
+  display:none; /* via .open sichtbar */
+  padding:env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background:rgba(12,18,15,.50); /* leichter Dimmer */
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+#ins-root.open{ display:block; }
+
+/* Panel: mobile = fullscreen, ab ~800px = zentrierte Karte */
+#ins-panel{
+  box-sizing:border-box;
+  position:relative;
+  width:100%; height:100%;
+  background:linear-gradient(to bottom, rgba(22,26,24,.98), rgba(14,18,16,.98));
+  color:#e5e7eb;
+  display:flex; flex-direction:column;
 }
 
-html, body { background-color: #0c120f; } /* unkritisch, matcht dein Theme */
-
-/* --- Vollbild-Overlay ---------------------------------------------------- */
-#inspector {
-  position: fixed;
-  inset: 0;                           /* top/right/bottom/left = 0 */
-  z-index: 2147483646;
-  display: none;                      /* .open blendet ein */
-  background: var(--ins-backdrop);
-  padding: max(16px, env(safe-area-inset-top)) 
-           16px 
-           calc(16px + env(safe-area-inset-bottom));
-  pointer-events: auto;
-  box-sizing: border-box;
+/* Kopfzeile */
+#ins-head{
+  display:flex; align-items:center; gap:12px;
+  padding:14px 16px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:rgba(28,32,30,.85);
+  box-shadow:0 6px 18px rgba(0,0,0,.25) inset;
 }
-
-/* Body scollen sperren, wenn Inspector offen */
-body.inspector-open { overflow: hidden; }
-
-/* Sichtbar schalten */
-#inspector.open { display: block; }
-
-/* --- Panel --------------------------------------------------------------- */
-.ins-panel {
-  max-width: 1100px;
-  height: 100%;
-  margin: 0 auto;
-  background: var(--ins-panel-bg);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-panel-bd);
-  border-radius: 14px;
-  box-shadow: var(--ins-shadow);
-  display: grid;
-  grid-template-rows: auto 1fr auto;  /* header | content | footer */
-  overflow: hidden;
-}
-
-/* Header mit Titel, Tabs und den Log-Controls (Slots) */
-.ins-header {
-  display: grid;
-  grid-template-columns: 1fr auto;    /* links: Tabs/Title | rechts: Schließen */
-  gap: 12px;
-  align-items: center;
-  padding: 14px 16px 10px 16px;
-  border-bottom: 1px solid var(--ins-panel-bd);
-  background: rgba(255,255,255,.02);
-}
-
-/* Titel */
-.ins-title {
-  font-family: ui-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: .2px;
-  color: var(--ins-text);
+.ins-title{ font-weight:800; letter-spacing:.2px; opacity:.95; }
+.ins-spacer{ flex:1; }
+.ins-close{
+  border:none; border-radius:10px; padding:8px 12px;
+  background:rgba(255,255,255,.10); color:#fff; cursor:pointer;
 }
 
 /* Tabs */
-.ins-tabs {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
+#ins-tabs{
+  display:flex; flex-wrap:wrap; gap:8px; padding:10px 14px 6px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:rgba(20,24,22,.7);
 }
-.ins-tab {
-  appearance: none;
-  border: 1px solid var(--ins-panel-bd);
-  background: var(--ins-surface);
-  color: var(--ins-text);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 14px;
-  cursor: pointer;
+.ins-tab{
+  border:none; border-radius:999px; padding:6px 12px;
+  background:rgba(255,255,255,.10); color:#e5e7eb;
+  cursor:pointer; font-size:13px;
 }
-.ins-tab.active {
-  background: #163026;
-  border-color: #214d3c;
-}
+.ins-tab.active{ background:rgba(120,200,255,.22); }
 
-/* Close-Button */
-.ins-close {
-  appearance: none;
-  border: 1px solid var(--ins-panel-bd);
-  background: var(--ins-surface);
-  color: var(--ins-text);
-  border-radius: 10px;
-  padding: 6px 10px;
-  font-size: 14px;
-  cursor: pointer;
+/* Tools/Controls-Zeile */
+#ins-tools{
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  padding:10px 14px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:rgba(16,20,18,.7);
 }
-.ins-close:hover { background: var(--ins-surface-2); }
-
-/* --- Slots (Logs) -------------------------------------------------------- */
-/* Core setzt Inhalte in diese Slots ein. Wir sorgen nur für Layout. */
-
-#ins-logs-controls, .slot-logs-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-
-#ins-logs-view, .slot-logs-view {
-  position: relative;
-  height: 100%;
-  overflow: auto;
-  background: rgba(0,0,0,.25);
-  border-top: 1px solid var(--ins-panel-bd);
-}
-
-/* --- Toolbar-Elemente (Filter / Suche / Badges / Export) ---------------- */
-.ins-toggle {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 6px 10px; border-radius: 999px;
-  border: 1px solid var(--ins-panel-bd);
-  background: var(--ins-surface);
-  color: var(--ins-text); cursor: pointer; user-select: none;
-}
-.ins-toggle input { accent-color: var(--ins-accent); }
-.ins-toggle:hover { background: var(--ins-surface-2); }
-
-.ins-badge {
+.ins-controls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ins-toggle{
   display:inline-flex; align-items:center; gap:6px;
-  padding: 6px 10px; border-radius: 999px; font-size: 13px;
-  border: 1px solid var(--ins-panel-bd);
-  background: var(--ins-surface);
-  color: var(--ins-text);
+  border:1px solid rgba(255,255,255,.12); border-radius:999px;
+  padding:6px 10px; background:rgba(255,255,255,.06); color:#e5e7eb;
+  cursor:pointer; user-select:none;
 }
-.ins-badge.ok   { background:#15321f; border-color:#1f4d34; }
-.ins-badge.info { background:#152a32; border-color:#204454; }
-.ins-badge.warn { background:#332a14; border-color:#4e3e1c; }
-.ins-badge.err  { background:#3a1b1b; border-color:#5a2a2a; }
-
-.ins-input {
-  min-width: 160px; max-width: 280px;
-  padding: 8px 10px; border-radius: 10px;
-  border: 1px solid var(--ins-panel-bd);
-  background: #0b1010; color: var(--ins-text);
+.ins-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  border:1px solid rgba(255,255,255,.12); border-radius:999px;
+  padding:4px 8px; font:12px/1.2 system-ui;
+  background:rgba(255,255,255,.06); color:#e5e7eb;
 }
+.ins-badge .dot{ width:8px; height:8px; border-radius:50%; background:#9ca3af; }
+.ins-badge.ok   .dot{ background:#22c55e; }
+.ins-badge.warn .dot{ background:#f59e0b; }
+.ins-badge.err  .dot{ background:#ef4444; }
 
-/* Hauptbereich */
-.ins-body { padding: 0; }
-.ins-content {
-  height: 100%;
-  display: grid;
-  grid-template-rows: 1fr; /* Content füllt alles; Logs-View hat eigene Höhe */
+/* Body */
+#ins-body{
+  position:relative; flex:1; min-height:0;
+  padding:12px 14px;
+  overflow:auto;
 }
 
-/* Log-Pre */
-.ins-logview {
-  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #dfe7e2;
-  padding: 14px 16px;
-  white-space: pre-wrap;
-  word-break: break-word;
+/* Log-Ansicht */
+.ins-logview{
+  box-sizing:border-box;
+  width:100%; height:100%;
+  background:rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;
+  padding:10px 12px; margin:0;
+  color:#d1d5db; font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space:pre-wrap; overflow:auto;
 }
 
-/* kleiner Kicker unten, der NICHT hinter iOS-Leiste versinkt */
-.ins-footer {
-  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--ins-panel-bd);
-  background: rgba(255,255,255,.02);
-  color: var(--ins-muted);
-  font-size: 12px;
+/* Footer */
+#ins-foot{
+  padding:8px 12px; font:12px/1.2 system-ui; opacity:.55;
+  border-top:1px solid rgba(255,255,255,.06);
+  background:rgba(20,24,22,.6);
 }
 
-/* Sanfter Flash bei neuen Logs */
-@keyframes insFlash {
-  0%   { background-color: rgba(255,255,255,.10); }
-  100% { background-color: transparent; }
-}
-.ins-flash { animation: insFlash 700ms ease-out; }
+/* Micro-Animation (z.B. copy/clear Feedback) */
+@keyframes ins-flash-kf { 0%{background:rgba(120,200,255,.25);} 100%{background:transparent;} }
+.ins-flash{ animation:ins-flash-kf .4s ease-out; }
 
-/* --- Reset ALT: alles was früher "unten fest" war, entschärfen ----------- */
-.ins-controls,
-.ins-toolbar,
-.ins-dock,
-.ins-floating,
-#inspector-floating,
-#inspector-controls {
-  position: static !important;
-  inset: auto !important;
-  bottom: auto !important;
-  right: auto !important;
-  left: auto !important;
-  z-index: auto !important;
-  box-shadow: none !important;
-  background: transparent !important;
-  border: none !important;
+/* Desktop-Panel (zentriert) – optional aktivieren, wenn nicht fullscreen gewünscht */
+/*
+@media (min-width: 900px){
+  #ins-panel{
+    position:absolute; inset:auto; left:50%; top:52%;
+    transform:translate(-50%,-50%);
+    width:min(1100px, 96vw); height:min(90vh, 880px);
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:14px;
+    box-shadow:0 40px 120px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06) inset;
+  }
 }
-
-/* Für sehr kleine Displays etwas kompakter */
-@media (max-width: 420px) {
-  .ins-title { font-size: 18px; }
-  .ins-tab   { padding: 5px 10px; font-size: 13px; }
-  .ins-badge, .ins-toggle { padding: 5px 8px; }
-  .ins-input { min-width: 140px; max-width: 200px; }
-}
+*/
