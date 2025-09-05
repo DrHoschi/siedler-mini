@@ -1,117 +1,141 @@
 /* ============================================================================
-   Inspector Styles (split)
-   Datei: assets/inspector/inspector.css
-   Version: v18.10.7
-   Ziel: Vollbild-Overlay, zentriertes Panel, Slots für Tabs/Tools/Body
-   ========================================================================== */
+ * Datei: assets/inspector/inspector.css
+ * Projekt: Siedler-Mini
+ * Version: v18.10.7
+ * Zweck: Styles für Inspector (Overlay, Tabs, Logs, Controls)
+ * ----------------------------------------------------------------------------
+ * Style-Vorgaben:
+ *  - Vollbild-Overlay, dunkler Hintergrund
+ *  - Tabs: aktiver Tab hellgrau, inaktiv dunkelgrau
+ *  - Konsistente Controls mit Badges, Buttons, Toggles
+ *  - Logs mit Symbolen, Farben und Statuszeile
+ * ========================================================================== */
 
-:root{
-  --ins-z: 2147483600;             /* hoch genug über FABs */
-  --ins-bg: rgba(6,10,8,.55);       /* Scrim */
-  --ins-card: #121617;
-  --ins-border: rgba(255,255,255,.08);
-  --ins-border-strong: rgba(255,255,255,.12);
-  --ins-shadow: 0 20px 60px rgba(0,0,0,.55);
-  --ins-fg: #e7eef0;
-  --ins-fg-dim: #b7c3c7;
-  --ins-accent: #8ed28f;           /* aktiver Tab */
-  --ins-badge-err: #ff6b6b;
-  --ins-badge-warn:#ffca59;
-  --ins-badge-ok:  #7fdc92;
-}
-
-/* Fullscreen Root */
-#ins-root{
+/* === Grundlayout ========================================================== */
+#inspector {
   position: fixed;
-  inset: 0;
-  z-index: var(--ins-z);
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(10,12,14,.96);
+  color: #eee;
+  z-index: 2147483646;
   display: none;
-  background: var(--ins-bg);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-           max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  box-sizing: border-box;
-}
-
-/* Panel (zentriert, skaliert bei kleinen Screens auf 96% Breite/Höhe) */
-#ins-panel{
-  max-width: 1100px;
-  width: min(1100px, 96vw);
-  height: min(80vh, calc(96vh - env(safe-area-inset-bottom)));
-  margin: 0 auto;
-  background: var(--ins-card);
-  color: var(--ins-fg);
-  border: 1px solid var(--ins-border);
-  border-radius: 12px;
-  box-shadow: var(--ins-shadow);
-  display: flex;
   flex-direction: column;
-  overflow: hidden;
+  font-family: system-ui, sans-serif;
 }
 
-/* Header */
-#ins-head{
-  display:flex; align-items:center; gap:10px;
-  padding:12px 12px 10px 14px;
-  border-bottom:1px solid var(--ins-border);
-}
-#ins-head .ins-title{ font-weight:700; opacity:.92; }
-#ins-head .ins-spacer{ flex:1; }
-#ins-head .ins-close{
-  border:1px solid var(--ins-border);
-  background:rgba(255,255,255,.06);
-  color:var(--ins-fg);
-  border-radius:10px;
-  padding:6px 10px;
-  cursor:pointer;
+#inspector.open {
+  display: flex;
 }
 
-/* Tabs */
-#ins-tabs{
-  display:flex; gap:8px; padding:8px 12px 6px 12px;
-  border-bottom:1px solid var(--ins-border);
-}
-#ins-tabs .ins-tab{
-  border:none; border-radius:999px; padding:6px 12px;
-  background:rgba(255,255,255,.08); color:var(--ins-fg);
-  cursor:pointer; font-size:14px;
-}
-#ins-tabs .ins-tab.active{
-  background: rgba(142,210,143,.22);
-  outline: 1px solid rgba(142,210,143,.45);
+/* === Header mit Tabs ====================================================== */
+.ins-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #1a1d20;
+  border-bottom: 1px solid rgba(255,255,255,.08);
 }
 
-/* Tools (z.B. Log-Filter/Badges) */
-#ins-tools{
-  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-  padding:8px 12px;
-  border-bottom:1px solid var(--ins-border);
-}
-.ins-badge{
-  display:inline-flex; align-items:center; gap:6px;
-  border:1px solid var(--ins-border);
-  background:rgba(255,255,255,.06);
-  padding:4px 8px; border-radius:999px; font-size:12px;
-}
-.ins-badge.err{  background: rgba(255,107,107,.14);  border-color: rgba(255,107,107,.35); }
-.ins-badge.warn{ background: rgba(255,202,89,.16);  border-color: rgba(255,202,89,.38); }
-.ins-badge.ok{   background: rgba(127,220,146,.14); border-color: rgba(127,220,146,.38); }
-
-.ins-toggle{ display:inline-flex; gap:6px; align-items:center; }
-.ins-toggle input{ width:16px; height:16px; }
-
-/* Body */
-#ins-body{
-  flex:1; overflow:auto;
-  padding:10px 12px 12px 12px;
+.ins-tab {
+  padding: 6px 14px;
+  margin-right: 6px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  background: #2a2d30;
+  color: #bbb;
+  font-size: 14px;
+  transition: background .15s, color .15s;
 }
 
-/* Foot */
-#ins-foot{
-  padding:8px 12px; border-top:1px solid var(--ins-border);
-  color:var(--ins-fg-dim); font-size:12px; opacity:.7;
+.ins-tab.active {
+  background: #3a3d40;
+  color: #eee;
+  font-weight: 600;
 }
 
-/* Wenn Inspector offen: Hintergrund leicht abdunkeln (optional) */
-html.ins-active { overflow: hidden; }
+/* === Content ============================================================= */
+.ins-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+/* === Controls-Bereich (Filter, Buttons) ================================== */
+.ins-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ins-controls button,
+.ins-controls .ins-toggle {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: rgba(255,255,255,.08);
+  color: #ddd;
+  cursor: pointer;
+  transition: background .12s;
+}
+
+.ins-controls button:hover,
+.ins-controls .ins-toggle:hover {
+  background: rgba(255,255,255,.16);
+}
+
+/* Toggle aktiv */
+.ins-controls .ins-toggle.active {
+  background: rgba(76,175,80,.3);
+  color: #fff;
+}
+
+/* Badges (z. B. Zähler) */
+.ins-badge {
+  display: inline-block;
+  background: rgba(255,255,255,.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+/* === Log-Ansicht ========================================================== */
+.ins-logview {
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  background: #111315;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+/* Log-Einträge farblich */
+.ins-logview .log-info    { color: #4eaaff; }
+.ins-logview .log-ok      { color: #6fcf97; }
+.ins-logview .log-warn    { color: #ffcc00; }
+.ins-logview .log-error   { color: #ff6666; }
+
+/* Flash-Effekt beim neuen Log */
+.ins-flash {
+  animation: flash-bg 1s ease-out;
+}
+@keyframes flash-bg {
+  from { background: rgba(255,255,255,.2); }
+  to   { background: transparent; }
+}
+
+/* === Footer (z. B. Statuszeile) ========================================== */
+.ins-footer {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #aaa;
+  border-top: 1px solid rgba(255,255,255,.08);
+  background: #1a1d20;
+}
