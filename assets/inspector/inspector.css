@@ -142,3 +142,67 @@
 @media (max-width: 640px) {
   .ins-root .ins-panel { inset: 10px; }
 }
+/* Vollbild + Safe Area + höchste Ebene */
+#inspector {
+  position: fixed;
+  inset: 0; /* top/right/bottom/left */
+  z-index: 2147483646;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  pointer-events: auto;
+}
+
+/* Beim Öffnen: Scrollen im Hintergrund verhindern */
+body.inspector-open {
+  overflow: hidden;
+}
+
+/* Controls- und View-Slots – defensiv sichtbar halten */
+#ins-logs-controls, .slot-logs-controls { display:block; }
+#ins-logs-view,     .slot-logs-view     { display:block; }
+
+/* Log-Ansicht */
+.ins-logview{
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40vh;
+  max-height: calc(100vh - 240px);
+  overflow: auto;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: rgba(0,0,0,.24);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #cbd5e1;
+}
+
+/* Empty-State */
+.ins-logview:empty::before{
+  content: "Noch keine Logs …";
+  opacity: .6;
+}
+
+/* Toggles + Badges + Flash wie zuvor */
+.ins-controls{
+  display:flex; flex-wrap:wrap; gap:8px;
+  margin-bottom:12px;
+}
+.ins-toggle{
+  border:none; border-radius:999px; padding:6px 12px;
+  background:rgba(255,255,255,.08); color:#d1d5db;
+  cursor:pointer;
+}
+.ins-toggle.active{ background:rgba(148,163,184,.22); color:#fff; }
+.ins-badge{
+  margin-left:6px; font-size:11px; opacity:.85;
+  background:rgba(0,0,0,.35); border-radius:10px; padding:2px 6px;
+}
+.ins-search{
+  flex:1 1 180px; min-width:140px;
+  border-radius:10px; border:1px solid rgba(255,255,255,.08);
+  background:rgba(0,0,0,.28); color:#e5e7eb; padding:6px 10px;
+}
+.ins-flash{ animation: insFlash .6s ease; }
+@keyframes insFlash{
+  0%{ box-shadow:0 0 0 0 rgba(99,102,241,.0); }
+  100%{ box-shadow:0 0 0 14px rgba(99,102,241,.0); }
+}
