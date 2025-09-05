@@ -1,142 +1,94 @@
 /* ============================================================================
- * assets/inspector/inspector.paths.js — v18.10.5
- * Projekt: Neue Siedler
+ * assets/inspector/inspector.paths.js
+ * Version: v18.10.6
  * Zweck:
- *   - Inspector-Tab „Pfade“
- *   - Overlay-Toggle (window.DEBUG_PATH_OVERLAY) + Heatmap-Reset
- *   - Live-Statistik (sofern vorhanden): __CB.pathsStats {heatMax, lastPaths:[{len,ts}]}
- *   - Events: cb:paths:toggle, cb:paths:reset
+ *   - Inspector-Tab "Pfade": Overlay an/aus, Heatmap reset
+ *   - Statusanzeige (on/off) liest optional window.__cb.pathsEnabled
  *
- * CODE-STYLE:
- *   - Robust, keine harten Abhängigkeiten
- *   - Sanfte Logs via CBLog
- *   - Verträglich mit PathFinder.drawOverlay(ctx, cam)
+ * Abhängigkeiten:
+ *   - __INSPECTOR_CORE__ (aus inspector.core.js)
+ *   - Engine/Renderer, die Events bedienen:
+ *       • 'cb:paths:toggle'
+ *       • 'cb:paths:reset'
+ *   - Optional: window.__cb.pathsEnabled (boolean)
  * ========================================================================== */
-
 (function(){
   'use strict';
 
-  var MOD = '[inspector.paths]';
-  var info = (window.CBLog?.info || console.log).bind(console, MOD);
-  var warn = (window.CBLog?.warn || console.warn).bind(console, MOD);
+  var MOD='[inspector.paths]';
+  var VER='v18.10.6';
+  var Core=window.__INSPECTOR_CORE__;
+  if(!Core){ (console.warn||console.log)(MOD+' Core fehlt – Modul beendet.'); return; }
 
-  window.__CB = window.__CB || {};
-  var STATE = window.__CB;
-  STATE.pathsEnabled = !!STATE.pathsEnabled;          // persistentes Flag
-  window.DEBUG_PATH_OVERLAY = !!window.DEBUG_PATH_OVERLAY || !!STATE.pathsEnabled;
+  function logOk(m){ try{ (window.CBLog?.ok||console.log)(MOD+' '+m); }catch(_){ console.log(MOD+' '+m); } }
 
-  function toggleOverlay(){
-    var newVal = !window.DEBUG_PATH_OVERLAY;
-    window.DEBUG_PATH_OVERLAY = newVal;
-    STATE.pathsEnabled = newVal;
-    try { window.dispatchEvent(new CustomEvent('cb:paths:toggle',{detail:{enabled:newVal}})); } catch(_){}
-    info('overlay %s', newVal?'on':'off');
+  function mkButton(label, cls, onClick){
+    var b=document.createElement('button');
+    b.className = 'ins-btn '+(cls||'');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+  function mkBadge(txt, kind){
+    var s=document.createElement('span');
+    s.className='ins-badge '+(kind||'muted');
+    s.textContent=txt;
+    return s;
   }
 
-  function resetHeat(){
-    try { window.dispatchEvent(new CustomEvent('cb:paths:reset')); } catch(_){}
-    if (STATE.pathsStats){ STATE.pathsStats.heatMax = 0; STATE.pathsStats.lastPaths = []; }
-    info('heat reset');
+  function getStatus(){
+    try { return !!(window.__cb && window.__cb.pathsEnabled); } catch(_){ return false; }
   }
 
-  // UI-Render
-  function renderPathsTab(target){
-    var box = document.createElement('div');
-    box.style.cssText = 'display:flex;flex-direction:column;gap:10px';
+  function mount(slot){
+    var wrap=document.createElement('div');
+    wrap.className='ins-vert';
 
-    // Aktionen
-    var row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    // Kopfzeile mit Status
+    var head=document.createElement('div');
+    head.className='ins-row';
+    var title=document.createElement('div');
+    title.className='ins-title';
+    title.textContent='Pfade / Debug';
+    var status = mkBadge(getStatus()? 'AN':'AUS', getStatus()?'ok':'muted');
+    status.id='ins-paths-status';
+    head.appendChild(title);
+    head.appendChild(status);
+    wrap.appendChild(head);
 
-    var btnToggle = document.createElement('button');
-    btnToggle.textContent = (window.DEBUG_PATH_OVERLAY?'Overlay AUS':'Overlay AN');
-    btnToggle.style.cssText = 'border:none;border-radius:10px;padding:8px 12px;background:#3A6FD8;color:#fff;cursor:pointer';
-    btnToggle.onclick = function(){
-      toggleOverlay();
-      btnToggle.textContent = (window.DEBUG_PATH_OVERLAY?'Overlay AUS':'Overlay AN');
-      refreshStats();
-    };
+    // Buttons
+    var row=document.createElement('div');
+    row.className='ins-rowgap';
+    row.appendChild(mkButton('Overlay umschalten','primary', function(){
+      try{ window.dispatchEvent(new CustomEvent('cb:paths:toggle')); }catch(_){}
+      setTimeout(function(){
+        var on = getStatus();
+        status.textContent = on?'AN':'AUS';
+        status.className = 'ins-badge ' + (on?'ok':'muted');
+        Core.flash('Pfade-Overlay: '+(on?'AN':'AUS'));
+      }, 60);
+    }));
+    row.appendChild(mkButton('Heatmap zurücksetzen','', function(){
+      try{ window.dispatchEvent(new CustomEvent('cb:paths:reset')); }catch(_){}
+      Core.flash('Heatmap zurückgesetzt');
+    }));
+    wrap.appendChild(row);
 
-    var btnReset = document.createElement('button');
-    btnReset.textContent = 'Heatmap zurücksetzen';
-    btnReset.style.cssText = 'border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer';
-    btnReset.onclick = function(){ resetHeat(); refreshStats(); };
+    // Hinweis
+    var hint=document.createElement('div');
+    hint.className='ins-hint';
+    hint.textContent='Erfordert OverlayHooks.draw(ctx, cam) im Renderer.';
+    wrap.appendChild(hint);
 
-    row.appendChild(btnToggle);
-    row.appendChild(btnReset);
-    box.appendChild(row);
-
-    // Status
-    var stat = document.createElement('div');
-    stat.style.cssText = 'opacity:.85;display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:6px;border-top:1px dashed rgba(255,255,255,.10);padding-top:8px';
-
-    function addKV(k,v){
-      var l = document.createElement('div'); l.textContent = k; l.style.cssText='opacity:.75';
-      var r = document.createElement('div'); r.textContent = v; r.style.cssText='text-align:right';
-      stat.appendChild(l); stat.appendChild(r);
-    }
-
-    function refreshStats(){
-      stat.innerHTML = '';
-      addKV('Overlay', window.DEBUG_PATH_OVERLAY ? 'AN' : 'AUS');
-
-      var ps = STATE.pathsStats || { heatMax:0, lastPaths:[] };
-      addKV('Heatmap-Max', String(ps.heatMax|0));
-
-      var last = (ps.lastPaths||[]).slice(-5).reverse();
-      var listBox = document.createElement('div');
-      listBox.style.cssText = 'grid-column:1 / span 2;display:flex;flex-direction:column;gap:4px;margin-top:6px';
-
-      if (!last.length){
-        var em = document.createElement('div');
-        em.textContent = 'Keine Pfade geloggt.';
-        em.style.cssText = 'opacity:.6';
-        listBox.appendChild(em);
-      } else {
-        for (var i=0;i<last.length;i++){
-          var it = last[i];
-          var li = document.createElement('div');
-          li.textContent = 'Pfad #' + (i+1) + ' — Länge: ' + (it && it.len || '?');
-          li.style.cssText = 'font-size:12px;opacity:.9;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px';
-          listBox.appendChild(li);
-        }
-      }
-      stat.appendChild(listBox);
-    }
-
-    refreshStats();
-    box.appendChild(stat);
-
-    target.innerHTML='';
-    target.appendChild(box);
+    slot.body.innerHTML='';
+    slot.body.appendChild(wrap);
   }
 
-  // Registrierung bei Inspector-Core
-  function tryRegister(){
-    if (!window.__INSPECTOR_API__ || typeof window.__INSPECTOR_API__.registerTab!=='function') return false;
-    window.__INSPECTOR_API__.registerTab({
-      id: 'paths',
-      title: 'Pfade',
-      order: 40,
-      render: function(ctx){
-        renderPathsTab(ctx.body);
-        if (ctx.footer) ctx.footer.style.display='none';
-      }
-    });
-    info('Tab registriert (v18.10.5)');
-    return true;
-  }
-
-  if(!tryRegister()){
-    var tries=0, t=setInterval(function(){ tries++; if(tryRegister() || tries>40) clearInterval(t); }, 200);
-  }
-
-  // Globale Events auch ohne Tab nutzbar
-  window.addEventListener('cb:toggle-path-overlay', function(ev){
-    var en = !!(ev && ev.detail && ev.detail.enabled);
-    window.DEBUG_PATH_OVERLAY = en;
-    STATE.pathsEnabled = en;
-    info('toggle via event → %s', en?'on':'off');
+  Core.registerTab('paths', {
+    title:'Pfade',
+    mount: mount,
+    unmount: function(){ /* nichts */ }
   });
 
+  logOk('geladen ('+VER+')');
 })();
