@@ -1,40 +1,44 @@
 /* ============================================================================
  * Inspector Core (split)
  * Datei: assets/inspector/inspector.core.js
- * Version: v18.10.7
+ * Version: v18.10.8
+ *
  * Aufgaben:
  *   - Root/Panel erzeugen (fixed, fullscreen, hoher z-index)
  *   - Tabs/Slots vorbereiten (#ins-body, #ins-tools, #ins-tabs)
  *   - Öffnen/Schließen/Toggle + Fallback-Badge entfernen
- * Public API (global): window.__INSPECTOR_API__ {open, close, toggle, isOpen, mountTools}
+ *
+ * Öffentliche API (global): window.__INSPECTOR_API__ { open, close, toggle, isOpen,
+ *                           getSlots, mountTools }
+ *
  * Abhängigkeiten:
- *   - CSS: assets/inspector/inspector.css
- *   - Optional: weitere Module (logs/build/paths/tests) nutzen die Slots
+ *   - CSS: assets/inspector/inspector.css (stellt Safe-Area & Layout sicher)
+ *   - Weitere Module (logs/build/paths/tests) befüllen die Slots.
  * ========================================================================== */
 (function () {
   "use strict";
 
   const MOD = "[inspector.core]";
-  const VER = "v18.10.7";
+  const VER = "v18.10.8";
 
   const log  = (t, ...a) => (window.CBLog?.ok   || console.log)(`${MOD} ${t}`, ...a);
   const info = (t, ...a) => (window.CBLog?.info || console.info)(`${MOD} ${t}`, ...a);
   const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`${MOD} ${t}`, ...a);
 
-  // ---------------------------------------------------------------------------
-
-  let $root   = null;   // fullscreen wrapper
-  let $panel  = null;   // card
-  let $header = null;   // title + close
-  let $tabs   = null;   // tab strip (slot)
-  let $tools  = null;   // small toolbar slot (e.g. logs-filter)
-  let $body   = null;   // main content
+  // DOM-Referenzen
+  /** @type {HTMLDivElement|null} */ let $root   = null;   // fullscreen wrapper (#ins-root)
+  /** @type {HTMLDivElement|null} */ let $panel  = null;   // card             (#ins-panel)
+  /** @type {HTMLDivElement|null} */ let $header = null;   // header           (#ins-head)
+  /** @type {HTMLDivElement|null} */ let $tabs   = null;   // tabs-slot        (#ins-tabs)
+  /** @type {HTMLDivElement|null} */ let $tools  = null;   // toolbar-slot     (#ins-tools)
+  /** @type {HTMLDivElement|null} */ let $body   = null;   // content-slot     (#ins-body)
   let _isOpen = false;
 
+  // Erzeugt bei Bedarf die Grund-Struktur
   function ensureDOM() {
     if ($root) return;
 
-    // Root (immer Fullscreen, ganz oben)
+    // Root (immer Fullscreen, ganz oben; CSS erledigt das Feintuning)
     $root = document.createElement("div");
     $root.id = "ins-root";
     $root.setAttribute("role", "dialog");
@@ -46,7 +50,7 @@
     $panel.id = "ins-panel";
     $root.appendChild($panel);
 
-    // Header
+    // Header (Titel + Close)
     $header = document.createElement("div");
     $header.id = "ins-head";
 
@@ -74,7 +78,7 @@
     $tabs.id = "ins-tabs";
     $panel.appendChild($tabs);
 
-    // Tools/Toolbar-Slot (für Log-Filter/Badges etc.)
+    // Toolbar-Slot (z. B. Log-Filter/Badges)
     $tools = document.createElement("div");
     $tools.id = "ins-tools";
     $panel.appendChild($tools);
@@ -99,63 +103,67 @@
     return { root: $root, panel: $panel, head: $header, tabs: $tabs, tools: $tools, body: $body };
   }
 
-  // Andere Module (z. B. inspector.logs.js) können hier eine Toolbar montieren.
+  // Toolbar-/Controls-Knoten einsetzen (z. B. aus inspector.logs.js)
   function mountTools(node) {
     ensureDOM();
     if (!node) return;
-    // leer machen, dann einhängen
     while ($tools.firstChild) $tools.removeChild($tools.firstChild);
     $tools.appendChild(node);
   }
 
-  // --- öffnen ------------------------------------------------------------
-function open(){
-  if (_isOpen) return;
-  _isOpen = true;
+  // --- öffnen ---------------------------------------------------------------
+  function open() {
+    if (_isOpen) return;
+    ensureDOM();
 
-  // Root sicherstellen/ans Body-Ende hängen
-  if (!_root) _root = buildRoot();             // deine bisherige Factory
-  if (_root.parentNode !== document.body) {
-    document.body.appendChild(_root);
+    // an Body-Ende hängen (falls Skriptreihenfolge verspätet war)
+    if ($root.parentNode !== document.body) {
+      document.body.appendChild($root);
+    }
+
+    // Fallback-Badge entfernen, falls ui-bridge eines gelegt hat
+    try { document.getElementById("inspector-probe")?.remove(); } catch {}
+
+    $root.style.display = "block";
+    $root.classList.add("open");
+    document.body.classList.add("inspector-open"); // wichtig für Safe-Area/Scroll-Lock
+    _isOpen = true;
+
+    info(`geöffnet (${VER})`);
   }
 
-  _root.classList.add('open');
-  document.body.classList.add('inspector-open'); // <-- wichtig für CSS
+  // --- schließen ------------------------------------------------------------
+  function close() {
+    if (!_isOpen) return;
+    ensureDOM();
 
-  try { (window.CBLog?.info||console.log)('[inspector.core] geöffnet (core v18.10.8)'); } catch(_){}
-}
-
-// --- schließen ---------------------------------------------------------
-function close(){
-  if (!_isOpen) return;
-  _isOpen = false;
-  if (_root) _root.classList.remove('open');
-  document.body.classList.remove('inspector-open'); // <-- zurücksetzen
-}
+    $root.classList.remove("open");
+    $root.style.display = "none";
+    document.body.classList.remove("inspector-open");
+    _isOpen = false;
+  }
 
   function toggle(force) {
     const willOpen = force == null ? !_isOpen : !!force;
     willOpen ? open() : close();
   }
 
-  // Exporte
-  window.__INSPECTOR_API__ = {
-    open, close, toggle, isOpen: () => _isOpen,
-    getSlots, mountTools
-  };
+  // API exportieren
+  window.__INSPECTOR_API__ = Object.freeze({
+    open, close, toggle, isOpen: () => _isOpen, getSlots, mountTools
+  });
 
-  // Minimal-Tab (Logs) – damit sofort was klickbar ist, echte Module können ersetzen
-  function mountDefaultTabs() {
-    const { tabs } = getSlots();
-    if (!tabs.querySelector(".ins-tab[data-tab='logs']")) {
+  // Minimaler Default-Tab (damit etwas klickbar ist, bis echte Module montieren)
+  (function mountDefaultTab() {
+    ensureDOM();
+    if (!$tabs.querySelector(".ins-tab[data-tab='logs']")) {
       const t = document.createElement("button");
       t.className = "ins-tab active";
       t.dataset.tab = "logs";
       t.textContent = "Logs";
-      tabs.appendChild(t);
+      $tabs.appendChild(t);
     }
-  }
-  mountDefaultTabs();
+  })();
 
-  info(`bereit (${VER})`);
+  log(`bereit (${VER})`);
 })();
