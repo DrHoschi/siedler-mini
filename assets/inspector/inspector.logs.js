@@ -1,137 +1,238 @@
-<script>
 /* ============================================================================
  * assets/inspector/inspector.logs.js — v18.10.8
- * Tab: Logs
- * Datenquellen:
- *   1) CBLog.getBuffer() + Events 'cb:log' / 'cb:log-flush'
- *   2) Fallback: window.__CBLOG_PIPE__.buf (console-Proxy aus Polyfill)
- * Verhalten:
- *   - Live-Update (Event + sanftes Polling)
- *   - Buttons: Kopieren, Leeren, Aktualisieren
+ * Zweck:
+ *   - Logs-Tab rendern (mit Suchfeld + Badge-Filtern)
+ *   - CBLog-Integration:
+ *       • Vorhandenen Puffer übernehmen (mehrere Kandidaten)
+ *       • CBLog-Methoden sanft hooken (wrap), neue Einträge mitschreiben
+ *       • Fallback: console.* hooken, falls CBLog fehlt
+ *   - Live-Refresh (Mutation beobachtet / Tick)
  * ========================================================================== */
 (function(){
-  "use strict";
-  const MOD  = "[inspector.logs]";
-  const info = (...a)=> (window.CBLog?.info||console.log)(MOD, ...a);
-  const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
+  'use strict';
 
-  // Warten, bis Core seine API gesetzt hat
-  function onReady(fn){
-    if (window.__INSPECTOR_API__?.mountTab) return fn();
-    let i=0; const t=setInterval(()=>{ if (++i>200){ clearInterval(t); warn("Core nicht gefunden."); return; }
-      if (window.__INSPECTOR_API__?.mountTab){ clearInterval(t); fn(); }
-    },50);
-  }
+  var MOD = '[inspector.logs]';
+  var ok   = (window.CBLog?.info || console.log).bind(console);
+  var warn = (window.CBLog?.warn || console.warn).bind(console);
 
-  onReady(function registerLogs(){
-    window.__INSPECTOR_API__.mountTab("logs", renderLogs, { title:"Logs" });
-    info("Logs-Tab registriert (v18.10.8)");
+  // Interner Speicher
+  var STORE = (window.__INSPECTOR_LOGS__ = window.__INSPECTOR_LOGS__ || {
+    buf: [],
+    max: 2000
   });
 
-  function readBuffer(){
-    try{
-      if (window.CBLog?.getBuffer){
-        const arr = window.CBLog.getBuffer() || [];
-        if (arr.length) return arr.map(String);
-      }
-    }catch(_){}
-    try{
-      const arr = window.__CBLOG_PIPE__?.buf;
-      if (Array.isArray(arr) && arr.length) return arr.map(String);
-    }catch(_){}
-    return [];
+  // ---- Helfer ---------------------------------------------------------------
+  function nowISO(){
+    var d=new Date();
+    var hh=('0'+d.getHours()).slice(-2);
+    var mm=('0'+d.getMinutes()).slice(-2);
+    var ss=('0'+d.getSeconds()).slice(-2);
+    return hh+':'+mm+':'+ss;
   }
-
-  function renderLogs(ctx){
-    const { bodyEl, footerEl } = ctx;
-
-    // UI
-    bodyEl.innerHTML = "";
-    const status = document.createElement("div");
-    status.style.cssText = "opacity:.8;margin:2px 0 8px";
-    status.textContent = "Logs werden initialisiert …";
-    const scroller = document.createElement("div");
-    scroller.style.cssText = "max-height:calc(80vh - 160px);overflow:auto;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.04);padding:8px";
-    const pre = document.createElement("pre");
-    pre.style.cssText = "margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;color:#e7eaf0";
-    pre.textContent = "—";
-    scroller.appendChild(pre);
-    bodyEl.append(status, scroller);
-
-    // Footer
-    footerEl.innerHTML = "";
-    footerEl.append(
-      mkBtn("Kopieren", ()=> copy(pre.textContent)),
-      mkBtn("Leeren",   ()=> clearLogs(pre, status)),
-      mkBtn("Aktualisieren", ()=> renderOnce()),
-    );
-
-    // Live-Events
-    const onLog = ()=> renderOnce();
-    window.addEventListener("cb:log", onLog);
-    window.addEventListener("cb:log-flush", onLog);
-
-    // sanftes Polling (falls Events nicht ankommen)
-    const poll = setInterval(renderOnce, 1000);
-
-    // Disposer registrieren (Tabwechsel)
-    ctx.onDispose?.(function(){
-      try{
-        window.removeEventListener("cb:log", onLog);
-        window.removeEventListener("cb:log-flush", onLog);
-        clearInterval(poll);
-      }catch(_){}
-    });
-
-    // Initial
-    renderOnce();
-
-    function renderOnce(){
-      try{
-        const lines = readBuffer();
-        if (!lines.length){
-          status.textContent = "Keine Log-Einträge vorhanden.";
-          pre.textContent = "—";
-          return;
+  function push(level, msg){
+    var line = { t: Date.now(), ts: nowISO(), lvl: level, msg: msg };
+    STORE.buf.push(line);
+    if (STORE.buf.length>STORE.max) STORE.buf.splice(0, STORE.buf.length-STORE.max);
+  }
+  function importExisting(){
+    try{
+      // Häufigste Kandidaten für Polyfill-Puffer
+      var c1 = window.__CBLOG_BUFFER__;
+      var c2 = window.__cbLogBuffer;
+      var c3 = window.CBLog && window.CBLog.buffer;
+      var src = c1 || c2 || c3;
+      if (Array.isArray(src)){
+        for (var i=0;i<src.length;i++){
+          var e = src[i];
+          var lvl = (e.level||e.lvl||e[0]||'LOG').toString().toUpperCase();
+          var msg = e.msg || e.message || e[1] || '';
+          push(lvl, msg);
         }
-        status.textContent = "";
-        pre.textContent = lines.join("\n");
-        // Auto-Scroll an das Ende
-        scroller.scrollTop = scroller.scrollHeight;
-      }catch(e){
-        warn("Render-Fehler:", e?.message);
+        ok(MOD+' importierte Puffer: '+src.length);
+      } else {
+        // manche Polyfills legen objekt mit lines an
+        var lns = window.CBLog && window.CBLog.lines;
+        if (Array.isArray(lns)){
+          for (var j=0;j<lns.length;j++){
+            var L=lns[j];
+            push((L.level||'LOG').toString().toUpperCase(), L.text||L.msg||'');
+          }
+          ok(MOD+' importierte CBLog.lines: '+lns.length);
+        }
       }
+    }catch(e){
+      warn(MOD+' Import-Fehler: '+(e&&e.message));
     }
   }
 
-  function mkBtn(label, onClick){
-    const b=document.createElement("button");
-    b.textContent = label;
-    b.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
-    b.addEventListener("click", onClick);
+  // ---- Hooks an CBLog / console --------------------------------------------
+  var hooked = false;
+  function hook(){
+    if (hooked) return; hooked = true;
+
+    // 1) CBLog vorhanden? Wrappe seine Methoden.
+    if (window.CBLog){
+      ['ok','info','log','warn','error'].forEach(function(k){
+        var fn = window.CBLog[k];
+        if (typeof fn==='function'){
+          window.CBLog[k] = function(){
+            try{
+              var txt = Array.prototype.map.call(arguments, a=>String(a)).join(' ');
+              push(k.toUpperCase(), txt);
+            }catch(_){}
+            return fn.apply(this, arguments);
+          };
+        }
+      });
+      ok(MOD+' CBLog-Hook aktiv');
+      return;
+    }
+
+    // 2) Fallback: console wrap
+    ['log','info','warn','error'].forEach(function(k){
+      var orig = console[k] || console.log;
+      console[k] = function(){
+        try{
+          var txt = Array.prototype.map.call(arguments, a=>String(a)).join(' ');
+          push(k.toUpperCase(), txt);
+        }catch(_){}
+        return orig.apply(console, arguments);
+      };
+    });
+    ok(MOD+' console-Hook aktiv (Fallback)');
+  }
+
+  // ---- Renderer -------------------------------------------------------------
+  var body, footer, footAPI;
+  var listEl, inputSearch, badgeWrap, countEl;
+
+  var ACTIVE = { INFO:true, LOG:true, WARN:true, ERROR:true, OK:true };
+
+  function makeBadge(lbl, key){
+    var b = document.createElement('button');
+    b.type='button';
+    b.className='insp-badge is-on';
+    b.textContent = lbl;
+    b.setAttribute('aria-pressed','true');
+    b.addEventListener('click', function(){
+      var on = b.classList.toggle('is-on');
+      b.setAttribute('aria-pressed', on?'true':'false');
+      ACTIVE[key]=on;
+      renderList();
+    });
     return b;
   }
 
-  function copy(text){
+  function renderUI(){
+    // Suche + Badges + Counter
+    var top = document.createElement('div');
+    top.className = 'insp-logs-top';
+
+    inputSearch = document.createElement('input');
+    inputSearch.type='search';
+    inputSearch.placeholder='Suchen…';
+    inputSearch.className='insp-search';
+    inputSearch.addEventListener('input', renderList);
+
+    countEl = document.createElement('div');
+    countEl.className='insp-count';
+
+    badgeWrap = document.createElement('div');
+    badgeWrap.className='insp-badges';
+    badgeWrap.appendChild(makeBadge('OK','OK'));
+    badgeWrap.appendChild(makeBadge('INFO','INFO'));
+    badgeWrap.appendChild(makeBadge('LOG','LOG'));
+    badgeWrap.appendChild(makeBadge('WARN','WARN'));
+    badgeWrap.appendChild(makeBadge('ERROR','ERROR'));
+
+    top.appendChild(inputSearch);
+    top.appendChild(badgeWrap);
+    top.appendChild(countEl);
+
+    // Liste
+    listEl = document.createElement('div');
+    listEl.className='insp-loglist';
+
+    // Fuß: Kopieren/Export
+    footAPI.clear();
+    var btnCopy = document.createElement('button');
+    btnCopy.type='button';
+    btnCopy.className='insp-foot-btn';
+    btnCopy.textContent='Logs kopieren';
+    btnCopy.addEventListener('click', copyLogs);
+
+    footAPI.left().appendChild(document.createTextNode('Puffer: max '+STORE.max));
+    footAPI.right().appendChild(btnCopy);
+    footAPI.show();
+
+    body.appendChild(top);
+    body.appendChild(listEl);
+  }
+
+  function copyLogs(){
     try{
-      navigator.clipboard?.writeText(text).then(()=> (window.CBLog?.ok||console.log)("Logs kopiert."));
-    }catch(_){
-      try{
-        const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
-        ta.select(); document.execCommand("copy"); ta.remove();
-        (window.CBLog?.ok||console.log)("Logs kopiert (Fallback).");
-      }catch(_){}
+      var text = STORE.buf.map(function(l){
+        return '['+l.ts+'] '+l.lvl+' '+l.msg;
+      }).join('\n');
+      navigator.clipboard?.writeText(text).then(function(){
+        ok(MOD+' Logs kopiert ('+STORE.buf.length+')');
+      }).catch(function(){
+        // Fallback
+        var ta=document.createElement('textarea'); ta.value=text;
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+        ok(MOD+' Logs kopiert (ExecCommand)');
+      });
+    }catch(e){ warn(MOD+' Kopieren fehlgeschlagen: '+(e&&e.message)); }
+  }
+
+  function renderList(){
+    if (!listEl) return;
+    var q = (inputSearch?.value||'').toLowerCase().trim();
+    var out = document.createDocumentFragment();
+    var n=0;
+
+    for (var i=STORE.buf.length-1; i>=0; i--){
+      var L = STORE.buf[i];
+      if (!ACTIVE[L.lvl]) continue;
+      if (q && (L.msg.toLowerCase().indexOf(q)===-1)) continue;
+
+      var row = document.createElement('div');
+      row.className = 'insp-logrow lvl-'+L.lvl.toLowerCase();
+      var ts  = document.createElement('span'); ts.className='ts';  ts.textContent = '['+L.ts+']';
+      var lv  = document.createElement('span'); lv.className='lvl'; lv.textContent = L.lvl;
+      var msg = document.createElement('span'); msg.className='msg'; msg.textContent = ' '+L.msg;
+      row.appendChild(ts); row.appendChild(lv); row.appendChild(msg);
+      out.appendChild(row);
+      n++;
     }
+    listEl.innerHTML='';
+    listEl.appendChild(out);
+    if (countEl) countEl.textContent = n+' Einträge';
   }
 
-  function clearLogs(pre, status){
-    let cleared=false;
-    try{ if (window.CBLog?.clear){ window.CBLog.clear(); cleared=true; } }catch(_){}
-    try{ if (window.__CBLOG_PIPE__?.buf){ window.__CBLOG_PIPE__.buf.length=0; cleared=true; } }catch(_){}
-    pre.textContent="—";
-    status.textContent = cleared ? "Log-Puffer geleert." : "Kein Puffer gefunden.";
-    window.dispatchEvent(new CustomEvent("cb:log-flush"));
+  // ---- Tab Binding ----------------------------------------------------------
+  window.addEventListener('insp:render:logs', function(ev){
+    var core = window.__INSPECTOR_API__;
+    if (!core) return;
+    body   = ev.detail?.body || core.getBody();
+    var foot = ev.detail?.footer || core.getFooter();
+    footAPI = core.getFootAPI();
+    footAPI.show();
+
+    body.innerHTML='';
+    renderUI();
+    renderList();
+  });
+
+  // ---- Init: Puffer importieren & hooken ------------------------------------
+  importExisting();
+  hook();
+
+  // Erste Sichtprüfung (falls Inspector schon offen → neu zeichnen)
+  if (window.__INSPECTOR_API__){
+    // Nichts tun; Render kommt beim Tab-Aufruf.
   }
 
+  ok(MOD+' bereit');
 })();
-</script>
