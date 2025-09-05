@@ -1,228 +1,137 @@
+<script>
 /* ============================================================================
-   assets/inspector/inspector.logs.js — v18.10.6
-   Aufgabe:
-   - "Logs"-Tab des Inspectors rendern
-   - Einträge stabil beziehen:
-       1) CBLog.getBuffer() + Event 'cb:log'
-       2) Fallback: eigener console-Proxy (via window.__CBLOG_PIPE__)
-   - Keine Abhängigkeit zur Reihenfolge außer: inspector.core.js definiert __INSPECTOR_API__
-   CODE-STYLE:
-   - Defensive (try/catch), kein Throw, immer weiter anzeigen
-   ============================================================================ */
-
-(function () {
+ * assets/inspector/inspector.logs.js — v18.10.8
+ * Tab: Logs
+ * Datenquellen:
+ *   1) CBLog.getBuffer() + Events 'cb:log' / 'cb:log-flush'
+ *   2) Fallback: window.__CBLOG_PIPE__.buf (console-Proxy aus Polyfill)
+ * Verhalten:
+ *   - Live-Update (Event + sanftes Polling)
+ *   - Buttons: Kopieren, Leeren, Aktualisieren
+ * ========================================================================== */
+(function(){
   "use strict";
-
-  const MOD = "[inspector.logs]";
-  const ok   = (...a)=> (window.CBLog?.ok||console.log)(MOD, ...a);
+  const MOD  = "[inspector.logs]";
+  const info = (...a)=> (window.CBLog?.info||console.log)(MOD, ...a);
   const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
 
-  // Warten bis Core den Inspector-Body bereitstellt
-  function onInspectorReady(fn){
-    if (window.__INSPECTOR_API__ && typeof window.__INSPECTOR_API__.mountTab === "function"){
-      fn();
-      return;
-    }
-    let tries = 0;
-    const t = setInterval(()=>{
-      if (++tries > 200) { clearInterval(t); warn("Core nicht gefunden."); return; }
+  // Warten, bis Core seine API gesetzt hat
+  function onReady(fn){
+    if (window.__INSPECTOR_API__?.mountTab) return fn();
+    let i=0; const t=setInterval(()=>{ if (++i>200){ clearInterval(t); warn("Core nicht gefunden."); return; }
       if (window.__INSPECTOR_API__?.mountTab){ clearInterval(t); fn(); }
-    }, 50);
+    },50);
   }
 
-  onInspectorReady(function initLogsTab(){
-    // UI-Renderer registrieren
-    window.__INSPECTOR_API__.mountTab("logs", renderLogsUI, { title: "Logs" });
-    ok("Logs-Tab registriert (v18.10.6).");
+  onReady(function registerLogs(){
+    window.__INSPECTOR_API__.mountTab("logs", renderLogs, { title:"Logs" });
+    info("Logs-Tab registriert (v18.10.8)");
   });
 
-  // ------------------------------- Datenquelle --------------------------------
-
-  function nowStamp(){
-    const d = new Date();
-    const pad = (n)=> String(n).padStart(2,"0");
-    return `[${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}]`;
-  }
-
-  // Liefert stets ein Array von Textzeilen
-  function getBuffer(){
-    // 1) CBLog-Puffer
+  function readBuffer(){
     try{
       if (window.CBLog?.getBuffer){
         const arr = window.CBLog.getBuffer() || [];
-        if (Array.isArray(arr) && arr.length) return arr.map(String);
+        if (arr.length) return arr.map(String);
       }
     }catch(_){}
-
-    // 2) Fallback-Pipe
     try{
-      const buf = window.__CBLOG_PIPE__?.buf;
-      if (Array.isArray(buf) && buf.length) return buf.map(String);
+      const arr = window.__CBLOG_PIPE__?.buf;
+      if (Array.isArray(arr) && arr.length) return arr.map(String);
     }catch(_){}
-
     return [];
   }
 
-  // --------------------------------- UI --------------------------------------
+  function renderLogs(ctx){
+    const { bodyEl, footerEl } = ctx;
 
-  function renderLogsUI(ctx){
-    const { bodyEl, footerEl } = ctx; // kommt aus inspector.core.js
-
+    // UI
     bodyEl.innerHTML = "";
-
     const status = document.createElement("div");
-    status.className = "ins-status";
+    status.style.cssText = "opacity:.8;margin:2px 0 8px";
     status.textContent = "Logs werden initialisiert …";
-    bodyEl.appendChild(status);
-
+    const scroller = document.createElement("div");
+    scroller.style.cssText = "max-height:calc(80vh - 160px);overflow:auto;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.04);padding:8px";
     const pre = document.createElement("pre");
-    pre.className = "ins-pre";
-    pre.textContent = "Noch keine Logs …";
-    bodyEl.appendChild(pre);
+    pre.style.cssText = "margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;color:#e7eaf0";
+    pre.textContent = "—";
+    scroller.appendChild(pre);
+    bodyEl.append(status, scroller);
 
-    // Footer-Buttons
+    // Footer
     footerEl.innerHTML = "";
-    const btnCopy  = mkBtn("Kopieren", ()=> copyToClipboard(pre.textContent));
-    const btnClear = mkBtn("Leeren",   ()=> clearLogs(pre, status));
-    const btnRefresh = mkBtn("Aktualisieren", ()=> render());
-    footerEl.append(btnCopy, btnClear, btnRefresh);
+    footerEl.append(
+      mkBtn("Kopieren", ()=> copy(pre.textContent)),
+      mkBtn("Leeren",   ()=> clearLogs(pre, status)),
+      mkBtn("Aktualisieren", ()=> renderOnce()),
+    );
 
-    // Live-Update via Events
-    const onEvt = ()=> render();
-    window.addEventListener("cb:log", onEvt);
-    window.addEventListener("cb:log-flush", onEvt);
+    // Live-Events
+    const onLog = ()=> renderOnce();
+    window.addEventListener("cb:log", onLog);
+    window.addEventListener("cb:log-flush", onLog);
 
-    // Beim Tab-Verlassen Listener entfernen (Core ruft optional onDispose)
-    ctx.onDispose = ()=> {
-      window.removeEventListener("cb:log", onEvt);
-      window.removeEventListener("cb:log-flush", onEvt);
-    };
+    // sanftes Polling (falls Events nicht ankommen)
+    const poll = setInterval(renderOnce, 1000);
 
-    // Erstrender + sanftes Polling (falls Events nicht kommen)
-    render();
-    const poll = setInterval(render, 1000);
-    ctx.onDisposePoll = ()=> clearInterval(poll);
-
-    function render(){
+    // Disposer registrieren (Tabwechsel)
+    ctx.onDispose?.(function(){
       try{
-        const lines = getBuffer();
+        window.removeEventListener("cb:log", onLog);
+        window.removeEventListener("cb:log-flush", onLog);
+        clearInterval(poll);
+      }catch(_){}
+    });
+
+    // Initial
+    renderOnce();
+
+    function renderOnce(){
+      try{
+        const lines = readBuffer();
         if (!lines.length){
-          status.textContent = "Keine Log-Einträge vorhanden";
+          status.textContent = "Keine Log-Einträge vorhanden.";
           pre.textContent = "—";
           return;
         }
         status.textContent = "";
         pre.textContent = lines.join("\n");
-      }catch(err){
-        warn("Render-Fehler:", err);
+        // Auto-Scroll an das Ende
+        scroller.scrollTop = scroller.scrollHeight;
+      }catch(e){
+        warn("Render-Fehler:", e?.message);
       }
     }
   }
 
   function mkBtn(label, onClick){
-    const b = document.createElement("button");
-    b.className = "ins-btn";
+    const b=document.createElement("button");
     b.textContent = label;
+    b.style.cssText = "border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer";
     b.addEventListener("click", onClick);
     return b;
   }
 
-  function copyToClipboard(text){
+  function copy(text){
     try{
-      navigator.clipboard?.writeText(text)
-        .then(()=> ok("Logs kopiert."))
-        .catch(()=> fallbackCopy(text));
-    }catch(_){ fallbackCopy(text); }
-    function fallbackCopy(t){
-      const ta = document.createElement("textarea");
-      ta.value = t; document.body.appendChild(ta);
-      ta.select(); document.execCommand("copy"); ta.remove();
-      ok("Logs kopiert (fallback).");
+      navigator.clipboard?.writeText(text).then(()=> (window.CBLog?.ok||console.log)("Logs kopiert."));
+    }catch(_){
+      try{
+        const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
+        ta.select(); document.execCommand("copy"); ta.remove();
+        (window.CBLog?.ok||console.log)("Logs kopiert (Fallback).");
+      }catch(_){}
     }
   }
 
   function clearLogs(pre, status){
-    // CBLog bevorzugen
-    let cleared = false;
-    try{
-      if (window.CBLog?.clear){ window.CBLog.clear(); cleared = true; }
-    }catch(_){}
-    try{
-      if (window.__CBLOG_PIPE__?.buf){ window.__CBLOG_PIPE__.buf.length = 0; cleared = true; }
-    }catch(_){}
-    pre.textContent = "—";
-    status.textContent = cleared ? "Log-Puffer geleert" : "Kein Puffer gefunden";
+    let cleared=false;
+    try{ if (window.CBLog?.clear){ window.CBLog.clear(); cleared=true; } }catch(_){}
+    try{ if (window.__CBLOG_PIPE__?.buf){ window.__CBLOG_PIPE__.buf.length=0; cleared=true; } }catch(_){}
+    pre.textContent="—";
+    status.textContent = cleared ? "Log-Puffer geleert." : "Kein Puffer gefunden.";
     window.dispatchEvent(new CustomEvent("cb:log-flush"));
   }
 
 })();
-// ---- inspector.logs.js: SAFE-INIT PATCH v1 ----
-(function(){
-  const log = (window.CBLog?.info || console.log);
-  const warn = (window.CBLog?.warn || console.warn);
-
-  // 1) UI-Ziele besorgen (an deine IDs/Klassen anpassen, falls nötig)
-  const pre = document.querySelector('.ins-logs pre, #ins-logs-pre, pre#inspector-logs');
-  const box = pre?.parentElement || document.querySelector('.ins-logs');
-
-  if(!pre){
-    warn('[inspector.logs.safe] Log <pre> nicht gefunden – bitte IDs/Klassen prüfen.');
-    return;
-  }
-
-  // 2) Sanfter Buffer-Reader (Polyfill/Console-Proxy)
-  function getBuffer(){
-    // Prioritäten: CBLog API → globaler Buffer → unser Not-Fallback
-    if (window.CBLog?.getBuffer) return window.CBLog.getBuffer();
-    if (Array.isArray(window.__cb_log_buffer)) return window.__cb_log_buffer;
-    return []; // leer statt Fehler
-  }
-
-  // 3) Einmalige Initialanzeige
-  function renderAll(){
-    const buf = getBuffer();
-    pre.textContent = (buf.length ? buf.join('\n') : '[Noch keine Logs …]');
-  }
-
-  // 4) Live-Subscribe (wenn vorhanden)
-  let unsub = null;
-  function ensureLive(){
-    try{
-      if (window.CBLog?.LogStream?.subscribe){
-        // remove previous subscription to avoid duplicates
-        if (typeof unsub === 'function'){ try{unsub();}catch{}; unsub=null; }
-        unsub = window.CBLog.LogStream.subscribe((line)=>{
-          // Append effizient
-          pre.textContent += (pre.textContent ? '\n' : '') + line;
-          // optional autoscroll:
-          pre.parentElement && (pre.parentElement.scrollTop = pre.parentElement.scrollHeight);
-        });
-      }
-    }catch(e){
-      warn('[inspector.logs.safe] subscribe fehlgeschlagen:', e);
-    }
-  }
-
-  // 5) Stream wirklich starten (idempotent)
-  function ensureStarted(){
-    try{
-      if (window.CBLog?.LogStream?.start) window.CBLog.LogStream.start();
-    }catch(e){
-      warn('[inspector.logs.safe] start() fehlgeschlagen:', e);
-    }
-  }
-
-  // 6) Bei Öffnen des Inspectors bitte neu initialisieren
-  window.addEventListener('cb:inspector-open', ()=>{
-    ensureStarted();
-    renderAll();
-    ensureLive();
-  });
-
-  // 7) Sofort (für den Fall, dass schon offen)
-  ensureStarted();
-  renderAll();
-  ensureLive();
-
-  log('[inspector.logs.safe] Patch aktiv – Stream gesichert.');
-})();
+</script>
