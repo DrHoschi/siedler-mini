@@ -1,173 +1,160 @@
 /* ============================================================================
- * assets/inspector/inspector.core.js — v18.10.8
- * Projekt: Siedler-Mini
- * Zweck:
- *   - Zentrale Inspector-UI (Overlay, Tabs, Body/Foot)
- *   - Öffnen/Schließen API: window.__INSPECTOR_API__
- *   - Entfernt Fallback-Box ("Inspector lädt…") & Probe-Badge
- *   - Mobil: Vollbild (fixed, inset:0), Desktop: Panel rechts
- * Logs:
- *   - Sanfte Logs via CBLog, sonst console.log
- *   - Keine harten Abhängigkeiten (Tabs werden dynamisch angebunden)
+ * Inspector Core (split)
+ * Datei: assets/inspector/inspector.core.js
+ * Version: v18.10.7
+ * Aufgaben:
+ *   - Root/Panel erzeugen (fixed, fullscreen, hoher z-index)
+ *   - Tabs/Slots vorbereiten (#ins-body, #ins-tools, #ins-tabs)
+ *   - Öffnen/Schließen/Toggle + Fallback-Badge entfernen
+ * Public API (global): window.__INSPECTOR_API__ {open, close, toggle, isOpen, mountTools}
+ * Abhängigkeiten:
+ *   - CSS: assets/inspector/inspector.css
+ *   - Optional: weitere Module (logs/build/paths/tests) nutzen die Slots
  * ========================================================================== */
 (function () {
-  'use strict';
+  "use strict";
 
-  var VERSION = 'v18.10.8';
-  var MOD = '[inspector.core]';
-  var ok   = (window.CBLog?.info || console.log).bind(console);
-  var warn = (window.CBLog?.warn || console.warn).bind(console);
-  var err  = (window.CBLog?.error || console.error).bind(console);
+  const MOD = "[inspector.core]";
+  const VER = "v18.10.7";
 
-  // ---------------------------------------------------------------------------
-  // DOM Helpers
-  // ---------------------------------------------------------------------------
-  function $(sel, root){ return (root||document).querySelector(sel); }
-  function el(tag, cls, html){
-    var n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (html!=null) n.innerHTML = html;
-    return n;
-  }
+  const log  = (t, ...a) => (window.CBLog?.ok   || console.log)(`${MOD} ${t}`, ...a);
+  const info = (t, ...a) => (window.CBLog?.info || console.info)(`${MOD} ${t}`, ...a);
+  const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`${MOD} ${t}`, ...a);
 
   // ---------------------------------------------------------------------------
-  // Root erstellen (id=inspector) — wenn bereits vorhanden, wiederverwenden
-  // ---------------------------------------------------------------------------
-  var root = $('#inspector');
-  if (!root) {
-    root = el('div', 'inspector is-hidden');
-    root.id = 'inspector';
-    document.body.appendChild(root);
+
+  let $root   = null;   // fullscreen wrapper
+  let $panel  = null;   // card
+  let $header = null;   // title + close
+  let $tabs   = null;   // tab strip (slot)
+  let $tools  = null;   // small toolbar slot (e.g. logs-filter)
+  let $body   = null;   // main content
+  let _isOpen = false;
+
+  function ensureDOM() {
+    if ($root) return;
+
+    // Root (immer Fullscreen, ganz oben)
+    $root = document.createElement("div");
+    $root.id = "ins-root";
+    $root.setAttribute("role", "dialog");
+    $root.setAttribute("aria-label", "Inspector");
+    $root.style.display = "none"; // hidden by default
+
+    // Panel
+    $panel = document.createElement("div");
+    $panel.id = "ins-panel";
+    $root.appendChild($panel);
+
+    // Header
+    $header = document.createElement("div");
+    $header.id = "ins-head";
+
+    const $title = document.createElement("div");
+    $title.className = "ins-title";
+    $title.textContent = "Inspector";
+    $header.appendChild($title);
+
+    const $sp = document.createElement("div");
+    $sp.className = "ins-spacer";
+    $header.appendChild($sp);
+
+    const $btnClose = document.createElement("button");
+    $btnClose.className = "ins-close";
+    $btnClose.type = "button";
+    $btnClose.setAttribute("aria-label", "Schließen");
+    $btnClose.textContent = "Schließen";
+    $btnClose.addEventListener("click", close);
+    $header.appendChild($btnClose);
+
+    $panel.appendChild($header);
+
+    // Tab-Leiste
+    $tabs = document.createElement("div");
+    $tabs.id = "ins-tabs";
+    $panel.appendChild($tabs);
+
+    // Tools/Toolbar-Slot (für Log-Filter/Badges etc.)
+    $tools = document.createElement("div");
+    $tools.id = "ins-tools";
+    $panel.appendChild($tools);
+
+    // Body
+    $body = document.createElement("div");
+    $body.id = "ins-body";
+    $panel.appendChild($body);
+
+    // Footer (kleine Build-Zeile)
+    const $foot = document.createElement("div");
+    $foot.id = "ins-foot";
+    $foot.textContent = `core ${VER}`;
+    $panel.appendChild($foot);
+
+    document.body.appendChild($root);
   }
 
-  // Struktur
-  root.innerHTML = '';
-  var header = el('div','insp-head');
-  var tabs   = el('div','insp-tabs','');
-  var body   = el('div','insp-body');
-  var footer = el('div','insp-foot');
-
-  // Buttons + Tabs
-  var btnClose = el('button','insp-close','Schließen ✕');
-  btnClose.type = 'button';
-  btnClose.addEventListener('click', function(){ api.close(); });
-  header.appendChild(btnClose);
-
-  // Tab-Buttons (Core hängt nur die Platzhalter an; die Module registrieren sich)
-  // Standard-Tabs: Logs, Build, Pfade, Tests
-  var defaultTabs = [
-    { id:'logs',  label:'Logs' },
-    { id:'build', label:'Build' },
-    { id:'paths', label:'Pfade' },
-    { id:'tests', label:'Tests' },
-  ];
-  defaultTabs.forEach(function(t){
-    var b = el('button','insp-tab', t.label);
-    b.dataset.tab = t.id;
-    b.type = 'button';
-    b.addEventListener('click', function(){
-      setActiveTab(t.id);
-      dispatch('insp:tab-change', { tab:t.id });
-    });
-    tabs.appendChild(b);
-  });
-
-  // Footer (Standard: wird von Modulen per Bedarf sichtbar gemacht)
-  var footLeft  = el('div','insp-foot-left');
-  var footRight = el('div','insp-foot-right');
-  footer.appendChild(footLeft);
-  footer.appendChild(footRight);
-
-  // Zusammenbauen
-  root.appendChild(header);
-  root.appendChild(tabs);
-  root.appendChild(body);
-  root.appendChild(footer);
-
-  // ---------------------------------------------------------------------------
-  // Events / API
-  // ---------------------------------------------------------------------------
-  function dispatch(name, detail){
-    try { window.dispatchEvent(new CustomEvent(name, { detail: detail||{} })); }
-    catch(e){ /* noop */ }
+  // Öffentliche Slots für andere Module
+  function getSlots() {
+    ensureDOM();
+    return { root: $root, panel: $panel, head: $header, tabs: $tabs, tools: $tools, body: $body };
   }
 
-  function ensureVisible(){
-    root.classList.remove('is-hidden');
-    // Mobile: Vollbild; Desktop: CSS regelt Breite/Position
+  // Andere Module (z. B. inspector.logs.js) können hier eine Toolbar montieren.
+  function mountTools(node) {
+    ensureDOM();
+    if (!node) return;
+    // leer machen, dann einhängen
+    while ($tools.firstChild) $tools.removeChild($tools.firstChild);
+    $tools.appendChild(node);
   }
 
-  function open(forceTab){
-    ensureVisible();
-    root.setAttribute('aria-hidden','false');
-    root.style.display = 'block';
-    // Tab aktivieren (präferiert Logs)
-    setActiveTab(forceTab || 'logs');
-    removeFallbackArtifacts();
-    dispatch('cb:inspector-open', { source:'core' });
-    ok(MOD+' geöffnet ('+VERSION+')');
+  function open() {
+    ensureDOM();
+    if (_isOpen) return;
+    _isOpen = true;
+    $root.style.display = "block";
+    document.documentElement.classList.add("ins-active");
+
+    // Fallback-Badge (aus ui-bridge) entfernen, damit es nicht drüber liegt
+    const probe = document.getElementById("inspector-probe");
+    if (probe) try { probe.remove(); } catch (_) {}
+
+    window.dispatchEvent(new CustomEvent("cb:inspector-open"));
+    info(`geöffnet (${VER})`);
   }
 
-  function close(){
-    root.setAttribute('aria-hidden','true');
-    root.style.display = 'none';
-    dispatch('cb:inspector-close', { source:'core' });
-    ok(MOD+' geschlossen');
+  function close() {
+    if (!$root || !_isOpen) return;
+    _isOpen = false;
+    $root.style.display = "none";
+    document.documentElement.classList.remove("ins-active");
+    window.dispatchEvent(new CustomEvent("cb:inspector-close"));
+    info("geschlossen");
   }
 
-  function toggle(force){
-    if (force==null){
-      (root.style.display === 'none' || !root.style.display) ? open() : close();
-    } else {
-      force ? open() : close();
-    }
+  function toggle(force) {
+    const willOpen = force == null ? !_isOpen : !!force;
+    willOpen ? open() : close();
   }
 
-  function setActiveTab(tabId){
-    // Tabs markieren
-    Array.prototype.forEach.call(tabs.querySelectorAll('.insp-tab'), function(b){
-      b.classList.toggle('is-active', b.dataset.tab===tabId);
-    });
-    // Body zurücksetzen → Modul rendert hinein
-    body.innerHTML = '';
-    footer.classList.add('is-hidden');
-    dispatch('insp:render:'+tabId, { body: body, footer: footer });
-  }
-
-  // Öffentliche Fußleisten-API (von Modulen genutzt)
-  var footAPI = {
-    show: function(){ footer.classList.remove('is-hidden'); },
-    hide: function(){ footer.classList.add('is-hidden'); },
-    left: function(){ return footLeft; },
-    right:function(){ return footRight; },
-    clear:function(){ footLeft.innerHTML=''; footRight.innerHTML=''; }
+  // Exporte
+  window.__INSPECTOR_API__ = {
+    open, close, toggle, isOpen: () => _isOpen,
+    getSlots, mountTools
   };
 
-  // Inspector-API veröffentlichen
-  var api = (window.__INSPECTOR_API__ = {
-    open: open,
-    close: close,
-    toggle: toggle,
-    setTab: setActiveTab,
-    getBody: function(){ return body; },
-    getFooter: function(){ return footer; },
-    getFootAPI: function(){ return footAPI; },
-    getRoot: function(){ return root; },
-    version: VERSION
-  });
-
-  // ---------------------------------------------------------------------------
-  // Fallback-Elemente entfernen (wenn ui-bridge einen Platzhalter gebaut hat)
-  // ---------------------------------------------------------------------------
-  function removeFallbackArtifacts(){
-    var fb = document.getElementById('inspector-fallback'); if (fb) fb.remove();
-    var pr = document.getElementById('inspector-probe');    if (pr) pr.remove();
+  // Minimal-Tab (Logs) – damit sofort was klickbar ist, echte Module können ersetzen
+  function mountDefaultTabs() {
+    const { tabs } = getSlots();
+    if (!tabs.querySelector(".ins-tab[data-tab='logs']")) {
+      const t = document.createElement("button");
+      t.className = "ins-tab active";
+      t.dataset.tab = "logs";
+      t.textContent = "Logs";
+      tabs.appendChild(t);
+    }
   }
-  removeFallbackArtifacts();
+  mountDefaultTabs();
 
-  // Direkt öffnen? Nein — per Button. Aber: Immer sofort bereit
-  root.style.display = 'none';
-  root.setAttribute('aria-hidden','true');
-
-  ok(MOD+' bereit ('+VERSION+')');
+  info(`bereit (${VER})`);
 })();
