@@ -108,29 +108,30 @@
     $tools.appendChild(node);
   }
 
-  function open() {
-    ensureDOM();
-    if (_isOpen) return;
-    _isOpen = true;
-    $root.style.display = "block";
-    document.documentElement.classList.add("ins-active");
+  // --- öffnen ------------------------------------------------------------
+function open(){
+  if (_isOpen) return;
+  _isOpen = true;
 
-    // Fallback-Badge (aus ui-bridge) entfernen, damit es nicht drüber liegt
-    const probe = document.getElementById("inspector-probe");
-    if (probe) try { probe.remove(); } catch (_) {}
-
-    window.dispatchEvent(new CustomEvent("cb:inspector-open"));
-    info(`geöffnet (${VER})`);
+  // Root sicherstellen/ans Body-Ende hängen
+  if (!_root) _root = buildRoot();             // deine bisherige Factory
+  if (_root.parentNode !== document.body) {
+    document.body.appendChild(_root);
   }
 
-  function close() {
-    if (!$root || !_isOpen) return;
-    _isOpen = false;
-    $root.style.display = "none";
-    document.documentElement.classList.remove("ins-active");
-    window.dispatchEvent(new CustomEvent("cb:inspector-close"));
-    info("geschlossen");
-  }
+  _root.classList.add('open');
+  document.body.classList.add('inspector-open'); // <-- wichtig für CSS
+
+  try { (window.CBLog?.info||console.log)('[inspector.core] geöffnet (core v18.10.8)'); } catch(_){}
+}
+
+// --- schließen ---------------------------------------------------------
+function close(){
+  if (!_isOpen) return;
+  _isOpen = false;
+  if (_root) _root.classList.remove('open');
+  document.body.classList.remove('inspector-open'); // <-- zurücksetzen
+}
 
   function toggle(force) {
     const willOpen = force == null ? !_isOpen : !!force;
