@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-04T18:39:06.471Z",
+  "createdAt": "2025-09-05T10:12:14.030Z",
   "root": ".",
-  "count": 267,
+  "count": 269,
   "entries": [
     {
       "type": "dir",
@@ -204,12 +204,17 @@
     {
       "type": "file",
       "path": "assets/core/core.render.js",
-      "size": 6770
+      "size": 6601
     },
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
       "size": 6336
+    },
+    {
+      "type": "file",
+      "path": "assets/core/overlay-hooks.js",
+      "size": 3572
     },
     {
       "type": "dir",
@@ -256,27 +261,27 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.core.js",
-      "size": 6519
+      "size": 6002
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 2018
+      "size": 4574
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.js",
-      "size": 14780
+      "size": 2783
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.logfix.js",
-      "size": 3807
+      "size": 2148
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.logs.js",
-      "size": 4402
+      "size": 8887
     },
     {
       "type": "file",
@@ -286,7 +291,12 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.paths.js",
-      "size": 1359
+      "size": 5367
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.resources.js",
+      "size": 7452
     },
     {
       "type": "file",
@@ -879,7 +889,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 5095
+      "size": 5380
     },
     {
       "type": "file",
@@ -1231,12 +1241,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 25640
+      "size": 26381
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9785
+      "size": 10092
     },
     {
       "type": "file",
@@ -1251,7 +1261,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 4578
+      "size": 4888
     },
     {
       "type": "file",
