@@ -1,167 +1,133 @@
 /* ============================================================================
- * assets/inspector/inspector.css — v18.10.7
+ * Datei: assets/inspector/inspector.css
  * Projekt: Siedler-Mini
+ * Version: v18.10.9
  *
- * Farbschema (laut Vorgabe):
- *   Background dunkel: #101316 / #0c1012
- *   Panel:             rgba(18,22,26,.94)
- *   Border:            rgba(255,255,255,.08)
- *   Header/Footer:     rgba(255,255,255,.06)
- *   Text:              #e7edf3  (90%), Muted #aab3bd
- *   Akzent aktiv:      #7cc4ff  (Badges/Active Tab)
- *   Akzent passiv:     rgba(255,255,255,.12)
+ * Zweck:
+ *  - Inspector Overlay vollflächig und zentriert darstellen
+ *  - Safe-Area beachten (iOS/Browserleisten)
+ *  - Styles für Tabs, Header/Footer, Controls und Logs
+ *  - Einheitliches Design (dunkel, abgerundet, modern)
  * ========================================================================== */
 
-.ins-root {
+/* === Root / Vollbild Overlay =============================================== */
+#inspector {
   position: fixed;
-  inset: 0;
-  z-index: 2147483646; /* direkt unter FABs (die haben +1) */
-  display: block;
+  inset: 0; /* top/right/bottom/left */
+  z-index: 2147483646;
+  display: none; /* wird per JS auf block gesetzt */
+  background: rgba(12, 18, 15, .92);
+  color: #e5e7eb;
+  font-family: system-ui, sans-serif;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  padding: 32px;
+  box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  pointer-events: auto;
 }
+body.inspector-open { overflow: hidden; }
 
-.ins-root[hidden] { display: none !important; }
-
-.ins-root .ins-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,.25);
-  backdrop-filter: blur(3px);
-}
-
-.ins-root .ins-panel {
-  position: absolute;
-  inset: 24px;
-  margin: auto;
-  max-width: 1100px;
-  min-width: min(320px, 96vw);
-  max-height: calc(100vh - 48px);
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  background: rgba(18,22,26,.94);
+/* Panel zentrieren */
+.ins-root {
+  max-width: 960px;
+  margin: 0 auto;
+  background: rgba(17, 24, 20, .95);
   border: 1px solid rgba(255,255,255,.08);
-  border-radius: 14px;
-  box-shadow: 0 24px 80px rgba(0,0,0,.55);
-  color: #e7edf3;
-  overflow: hidden;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-/* „Herzschlag“ beim Mounten (dezent) */
-.ins-root.mounted .ins-panel { animation: ins-pop .28s ease-out; }
-@keyframes ins-pop {
-  0% { transform: scale(.985); opacity: .0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-/* Header (Tabs + Controls) */
+/* === Header / Tabs ========================================================= */
 .ins-header {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px;
-  background: rgba(255,255,255,.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
 
-.ins-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.ins-tabs {
+  display: flex;
+  gap: 8px;
+}
 
 .ins-tab {
   border: none;
   border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(255,255,255,.12);
-  color: #e7edf3;
-  font: 600 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  padding: 6px 14px;
+  font-size: 14px;
+  background: rgba(255,255,255,.08);
+  color: #d1d5db;
   cursor: pointer;
 }
 .ins-tab.active {
-  background: rgba(124,196,255,.28);
-  outline: 2px solid rgba(124,196,255,.35);
+  background: rgba(148,163,184,.22);
+  color: #fff;
 }
 
-/* optionale Header-Controls rechts */
-.ins-controls { margin-left: auto; display:flex; align-items:center; gap:8px; }
-.ins-badge {
-  display:inline-block; padding:3px 8px; border-radius:999px;
-  background: rgba(255,255,255,.10); color:#cfe5ff; font-size:12px;
+/* === Body / Content ======================================================== */
+.ins-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
 }
 
-/* Body + Slots */
-.ins-body { padding: 12px 14px; overflow: auto; }
-.ins-slot[hidden] { display: none !important; }
-
-/* Footer */
+/* === Footer ================================================================ */
 .ins-footer {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px;
-  background: rgba(255,255,255,.06);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #9ca3af;
   border-top: 1px solid rgba(255,255,255,.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-.ins-close {
-  border: none; border-radius: 10px; padding: 8px 12px;
-  background: rgba(255,255,255,.12); color:#e7edf3; cursor: pointer;
-}
-.ins-version { margin-left: auto; opacity: .7; font-size: 12px; }
 
-/* ——— Logs-Tab (Basis-Klassen, damit inspector.logs.js sofort hübsch rendert) */
-.ins-logtoolbar {
-  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-  margin-bottom: 10px;
+/* === Controls + Badges (Logs) ============================================== */
+.ins-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .ins-toggle {
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  color:#e7edf3; cursor:pointer; border-radius:8px; padding:6px 10px;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255,255,255,.08);
+  color: #d1d5db;
+  cursor: pointer;
+  font-size: 13px;
 }
-.ins-badges { display:flex; align-items:center; gap:6px; }
-.ins-badge.muted { opacity:.7 }
-.ins-search {
-  min-width: 180px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.25);
-  color:#e7edf3; border-radius:8px; padding:6px 8px;
+.ins-toggle.active {
+  background: rgba(148,163,184,.22);
+  color: #fff;
 }
-
-.ins-logview {
-  width: 100%; height: 52vh; min-height: 220px;
-  resize: vertical;
+.ins-badge {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: .85;
+  background: rgba(0,0,0,.35);
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: #0c1012;
-  color: #e7edf3;
-  padding: 10px;
-  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  white-space: pre-wrap;
+  padding: 2px 6px;
 }
 
-/* dezent aufblitzen, wenn neue Logs kommen */
-.ins-flash { animation: ins-flash 280ms ease-out; }
-@keyframes ins-flash {
-  0% { box-shadow: 0 0 0 rgba(124,196,255,0); }
-  100% { box-shadow: 0 0 0 rgba(124,196,255,0); }
+/* Suchfeld */
+.ins-search {
+  flex: 1 1 180px;
+  min-width: 140px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.28);
+  color: #e5e7eb;
+  padding: 6px 10px;
 }
 
-/* Mobile: Panel kleinerer Rand */
-@media (max-width: 640px) {
-  .ins-root .ins-panel { inset: 10px; }
-}
-/* Vollbild + Safe Area + höchste Ebene */
-#inspector {
-  position: fixed;
-  inset: 0; /* top/right/bottom/left */
-  z-index: 2147483646;
-  padding-bottom: env(safe-area-inset-bottom, 0);
-  pointer-events: auto;
-}
-
-/* Beim Öffnen: Scrollen im Hintergrund verhindern */
-body.inspector-open {
-  overflow: hidden;
-}
-
-/* Controls- und View-Slots – defensiv sichtbar halten */
-#ins-logs-controls, .slot-logs-controls { display:block; }
-#ins-logs-view,     .slot-logs-view     { display:block; }
-
-/* Log-Ansicht */
-.ins-logview{
+/* === Logs Ansicht ========================================================== */
+.ins-logview {
   box-sizing: border-box;
   width: 100%;
   min-height: 40vh;
@@ -174,99 +140,24 @@ body.inspector-open {
   padding: 12px 14px;
   color: #cbd5e1;
 }
-
-/* Empty-State */
-.ins-logview:empty::before{
+.ins-logview:empty::before {
   content: "Noch keine Logs …";
   opacity: .6;
 }
 
-/* Toggles + Badges + Flash wie zuvor */
-.ins-controls{
-  display:flex; flex-wrap:wrap; gap:8px;
-  margin-bottom:12px;
-}
-.ins-toggle{
-  border:none; border-radius:999px; padding:6px 12px;
-  background:rgba(255,255,255,.08); color:#d1d5db;
-  cursor:pointer;
-}
-.ins-toggle.active{ background:rgba(148,163,184,.22); color:#fff; }
-.ins-badge{
-  margin-left:6px; font-size:11px; opacity:.85;
-  background:rgba(0,0,0,.35); border-radius:10px; padding:2px 6px;
-}
-.ins-search{
-  flex:1 1 180px; min-width:140px;
-  border-radius:10px; border:1px solid rgba(255,255,255,.08);
-  background:rgba(0,0,0,.28); color:#e5e7eb; padding:6px 10px;
-}
-.ins-flash{ animation: insFlash .6s ease; }
-@keyframes insFlash{
-  0%{ box-shadow:0 0 0 0 rgba(99,102,241,.0); }
+/* Farbige Zeilen je nach Level */
+.log-info  { color:#93c5fd; }
+.log-ok    { color:#86efac; }
+.log-warn  { color:#facc15; }
+.log-error { color:#f87171; }
+
+/* === Feedback / Copy Flash ================================================ */
+.ins-flash { animation: insFlash .6s ease; }
+@keyframes insFlash {
+  0% { box-shadow:0 0 0 0 rgba(99,102,241,.0); }
   100%{ box-shadow:0 0 0 14px rgba(99,102,241,.0); }
 }
-/* Vollbild + Safe Area + höchste Ebene */
-#inspector {
-  position: fixed;
-  inset: 0; /* top/right/bottom/left */
-  z-index: 2147483646;
-  padding-bottom: env(safe-area-inset-bottom, 0);
-  pointer-events: auto;
-}
 
-/* Beim Öffnen: Scrollen im Hintergrund verhindern */
-body.inspector-open {
-  overflow: hidden;
-}
-
-/* Controls- und View-Slots – defensiv sichtbar halten */
+/* === Slots Sichtbarkeit (Safety) =========================================== */
 #ins-logs-controls, .slot-logs-controls { display:block; }
 #ins-logs-view,     .slot-logs-view     { display:block; }
-
-/* Log-Ansicht */
-.ins-logview{
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 40vh;
-  max-height: calc(100vh - 240px);
-  overflow: auto;
-  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: rgba(0,0,0,.24);
-  border: 1px solid rgba(255,255,255,.06);
-  border-radius: 8px;
-  padding: 12px 14px;
-  color: #cbd5e1;
-}
-
-/* Empty-State */
-.ins-logview:empty::before{
-  content: "Noch keine Logs …";
-  opacity: .6;
-}
-
-/* Toggles + Badges + Flash wie zuvor */
-.ins-controls{
-  display:flex; flex-wrap:wrap; gap:8px;
-  margin-bottom:12px;
-}
-.ins-toggle{
-  border:none; border-radius:999px; padding:6px 12px;
-  background:rgba(255,255,255,.08); color:#d1d5db;
-  cursor:pointer;
-}
-.ins-toggle.active{ background:rgba(148,163,184,.22); color:#fff; }
-.ins-badge{
-  margin-left:6px; font-size:11px; opacity:.85;
-  background:rgba(0,0,0,.35); border-radius:10px; padding:2px 6px;
-}
-.ins-search{
-  flex:1 1 180px; min-width:140px;
-  border-radius:10px; border:1px solid rgba(255,255,255,.08);
-  background:rgba(0,0,0,.28); color:#e5e7eb; padding:6px 10px;
-}
-.ins-flash{ animation: insFlash .6s ease; }
-@keyframes insFlash{
-  0%{ box-shadow:0 0 0 0 rgba(99,102,241,.0); }
-  100%{ box-shadow:0 0 0 14px rgba(99,102,241,.0); }
-}
