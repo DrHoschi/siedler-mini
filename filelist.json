@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-05T10:12:14.030Z",
+  "createdAt": "2025-09-05T10:43:57.870Z",
   "root": ".",
-  "count": 269,
+  "count": 256,
   "entries": [
     {
       "type": "dir",
@@ -267,16 +267,6 @@
       "type": "file",
       "path": "assets/inspector/inspector.css",
       "size": 4574
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.js",
-      "size": 2783
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.logfix.js",
-      "size": 2148
     },
     {
       "type": "file",
@@ -1022,11 +1012,6 @@
     },
     {
       "type": "file",
-      "path": "core/overlay-hooks.js",
-      "size": 9517
-    },
-    {
-      "type": "file",
       "path": "core/path-index.js",
       "size": 3341
     },
@@ -1034,11 +1019,6 @@
       "type": "file",
       "path": "core/path-overlay.js",
       "size": 2761
-    },
-    {
-      "type": "file",
-      "path": "core/pathfinder.js",
-      "size": 8909
     },
     {
       "type": "file",
@@ -1092,15 +1072,6 @@
       "type": "file",
       "path": "gh-pages/readme",
       "size": 7
-    },
-    {
-      "type": "dir",
-      "path": "js/"
-    },
-    {
-      "type": "file",
-      "path": "js/characters.js",
-      "size": 3400
     },
     {
       "type": "dir",
@@ -1205,11 +1176,6 @@
     },
     {
       "type": "file",
-      "path": "app-v11.1r6.js",
-      "size": 12671
-    },
-    {
-      "type": "file",
       "path": "boot.compat.js",
       "size": 2081
     },
@@ -1225,11 +1191,6 @@
     },
     {
       "type": "file",
-      "path": "debug.js",
-      "size": 10213
-    },
-    {
-      "type": "file",
       "path": "editor.html",
       "size": 2228
     },
@@ -1241,12 +1202,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 26381
+      "size": 26592
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10092
+      "size": 10179
     },
     {
       "type": "file",
@@ -1261,17 +1222,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 4888
-    },
-    {
-      "type": "file",
-      "path": "input.js",
-      "size": 2984
-    },
-    {
-      "type": "file",
-      "path": "main.js",
-      "size": 4007
+      "size": 4997
     },
     {
       "type": "file",
@@ -1300,23 +1251,8 @@
     },
     {
       "type": "file",
-      "path": "textures.js",
-      "size": 3859
-    },
-    {
-      "type": "file",
-      "path": "ui-start.css",
-      "size": 1920
-    },
-    {
-      "type": "file",
       "path": "unitLogic.js",
       "size": 2099
-    },
-    {
-      "type": "file",
-      "path": "world.js",
-      "size": 1818
     }
   ]
 }
