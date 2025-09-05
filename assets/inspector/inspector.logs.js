@@ -1,249 +1,326 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.logs.js
+ * Projekt: Siedler-Mini — Inspector (Logs-Tab)
  * Version: v18.10.7
- * Zweck : Logs-Tab für Inspector-Panel (Filter, Suche, Kopieren, Export)
  *
- * WICHTIG:
- *  - Entfernt alte schwebende Log-Docks am <body>, damit nichts „unten hängt“.
- *  - Baut die Toolbar im Panel-Header des Inspectors auf.
- *  - Nutzt CBLog, fällt sanft auf console.* zurück (nur Anzeige, kein Patch).
+ * Ziel
+ * - Registriert den "Logs"-Tab am Inspector-Core (Slot-Struktur).
+ * - Liest vorhandenen CBLog-Puffer ein + hört live auf neue Log-Events.
+ * - UI: Level-Filter (ERR/WARN/OK/INFO), Suche, Kopieren, Export, Leeren.
  *
- * Erwartete DOM-Struktur (aus inspector.core.js):
- *   #inspector .ins-panel
- *     .ins-head  (Headerleiste)
- *     .ins-tabs  (Tab-Buttons)
- *     .ins-body  (Panel-Inhalt)
- *     .ins-foot  (Fußzeile / Versionshinweis)
- *   Ein Tab-Button mit data-tab="logs" existiert (wird aktiv geschaltet).
+ * Abhängigkeiten (sanft, optional)
+ * - window.__INS__ (Inspector-Core mit .registerTab)
+ * - window.CBLog (Polyfill oder echte Bridge)
+ *
+ * Events
+ * - Empfängt:  window  →  "cb:log"              (detail: {time,level,scope,msg})
+ * - Sendet:    keine (nur UI-Interaktion)
+ *
+ * Fallbacks
+ * - Wenn __INS__ kurz noch fehlt, wird bis zu 3s gewartet.
+ * - Wenn CBLog fehlt, wird ein kleiner Shim gebaut, damit wenigstens
+ *   das UI funktioniert (Leere Liste, keine Live-Events).
  * ========================================================================== */
-
-(function(){
+(function () {
   "use strict";
 
-  const MOD = "[inspector.logs]";
-  const VER = "v18.10.7";
-  const log  = (t,...a)=> (window.CBLog?.info || console.log)(`${MOD} ${t}`, ...a);
-  const warn = (t,...a)=> (window.CBLog?.warn || console.warn)(`${MOD} ${t}`, ...a);
+  // ---- Meta / Logger --------------------------------------------------------
+  var MOD = "[inspector.logs]";
+  var VER = "v18.10.7";
+  var log  = (t, ...a) => (window.CBLog?.ok   || console.log   )(`${MOD} ${t}`, ...a);
+  var warn = (t, ...a) => (window.CBLog?.warn || console.warn  )(`${MOD} ${t}`, ...a);
+  var err  = (t, ...a) => (window.CBLog?.err  || console.error )(`${MOD} ${t}`, ...a);
 
-  // --- Legacy Floating Dock killen ------------------------------------------
-  function killLegacyDock(){
-    try {
-      const killers = [
-        "#ins-logdock", ".ins-logdock", "#log-dock",
-        ".log-dock", ".logdock", "[data-legacy-logdock]"
-      ];
-      killers.forEach(sel => document.querySelectorAll(sel).forEach(n => n.remove()));
-    } catch(_) {}
+  // ---- State ----------------------------------------------------------------
+  /** @type {{time:number, level:string, scope?:string, msg:string}[]} */
+  var BUFFER = [];
+  var FILTER = { ERR:true, WARN:true, OK:true, INFO:true };
+  var SEARCH = "";
+  var DOM = { root:null, pre:null, lblCount:null, find:null,
+              fErr:null, fWarn:null, fOk:null, fInfo:null };
+
+  // ---- Utilities -------------------------------------------------------------
+  function pad2(n){ n|=0; return (n<10?"0":"")+n; }
+  function fmtTime(ts){
+    var d = new Date(ts || Date.now());
+    return "["+pad2(d.getHours())+":"+pad2(d.getMinutes())+":"+pad2(d.getSeconds())+"]";
+  }
+  function normLevel(x){
+    if (!x) return "INFO";
+    x = (""+x).toUpperCase();
+    if (x.startsWith("ER")) return "ERR";
+    if (x.startsWith("WA")) return "WARN";
+    if (x==="OK"||x==="SUCCESS") return "OK";
+    return (x==="INFO"||x==="LOG") ? "INFO" : x;
+  }
+  function passFilters(item){
+    if (!FILTER[normLevel(item.level)]) return false;
+    if (!SEARCH) return true;
+    var s = SEARCH.toLowerCase();
+    return (item.msg?.toLowerCase().includes(s)) || (item.scope?.toLowerCase().includes(s));
+  }
+  function asLine(item){
+    var L = normLevel(item.level);
+    var scope = item.scope ? ` [${item.scope}]` : "";
+    return `${fmtTime(item.time)} ${L}${scope} ${item.msg}`;
   }
 
-  // --- Panel-Zugriffe --------------------------------------------------------
-  const $ = (sel, root=document)=> root.querySelector(sel);
-  function panelRoot(){ return $("#inspector"); }
-  function headEl(){ return $("#inspector .ins-head"); }
-  function bodyEl(){ return $("#inspector .ins-body"); }
-
-  // --- State ----------------------------------------------------------------
-  let filter = { err:true, warn:true, ok:true, info:true };
-  let query  = "";
-  let buffer = [];      // {time, level, scope, text}
-  let preEl  = null;    // <pre> für Logausgabe
-  let searchInput = null;
-
-  // --- Datenquelle -----------------------------------------------------------
-  function pullInitialBuffer(){
+  // ---- CBLog Adapter (defensiv) ---------------------------------------------
+  function readInitialBuffer(){
     try{
-      // bevorzugt: CBLog.getBuffer() → [{time, level, scope, text}]
-      if (window.CBLog && typeof CBLog.getBuffer === "function") {
-        return CBLog.getBuffer() || [];
+      if (Array.isArray(window.__CBLOG_BUF__)) return window.__CBLOG_BUF__;
+      if (window.CBLog?.getBuffer){
+        var b = window.CBLog.getBuffer();
+        if (Array.isArray(b)) return b;
       }
-    }catch(_){}
+    }catch(e){ warn("Initialbuffer nicht lesbar:", e); }
     return [];
   }
+  function startLiveStream(onEntry){
+    // bevorzugtes Event vom Polyfill:
+    var handler = (ev)=>{
+      try{
+        var e = ev?.detail || ev;
+        if (!e) return;
+        onEntry({
+          time: e.time || Date.now(),
+          level: normLevel(e.level || e.type),
+          scope: e.scope || e.tag || e.mod || e.source || "",
+          msg: (e.msg!=null ? (""+e.msg) : (e.text || "")),
+        });
+      }catch(ex){ warn("cb:log handler:", ex); }
+    };
+    window.addEventListener("cb:log", handler, { passive:true });
 
-  function subscribe(){
-    // CBLog sendet optional Events; sonst keine Subskription notwendig.
+    // zusätzlich: falls ein Polyfill eine Callback-API besitzt
     try{
-      if (window.CBLog && CBLog.on) {
-        CBLog.on("append", onIncomingLog);
-      } else {
-        // Minimal-Fallback: NICHT patchen – nur Hinweis
-        warn("CBLog-Events nicht verfügbar – es werden nur Initial-Logs angezeigt.");
-      }
+      window.CBLog?.on?.("entry", (e)=>handler({detail:e}));
     }catch(_){}
+
+    return ()=> window.removeEventListener("cb:log", handler);
   }
 
-  function onIncomingLog(entry){
-    try{
-      // Normalisieren
-      const e = normalize(entry);
-      buffer.push(e);
-      // Nur anhängen, wenn Logs-Tab aktiv
-      const tabActive = $("#inspector .ins-tabs .ins-tab.active[data-tab='logs']");
-      if (tabActive && preEl) {
-        if (match(e)) {
-          preEl.textContent += formatLine(e) + "\n";
-          preEl.scrollTop = preEl.scrollHeight;
-        }
-      }
-    }catch(_){}
+  // ---- Render: Controls ------------------------------------------------------
+  function makeBadge(txt, cls, title){
+    var b = document.createElement("span");
+    b.className = "ins-badge "+cls;
+    b.textContent = txt;
+    if (title) b.title = title;
+    return b;
   }
-
-  function normalize(e){
-    // Erwartet: { time?, level?, scope?, text? }  – macht defaults draus
-    const time  = e?.time  || new Date();
-    const lvl   = (e?.level || "LOG").toUpperCase();
-    const scope = e?.scope || "console";
-    const text  = (typeof e?.text === "string") ? e.text
-                 : (Array.isArray(e?.args) ? e.args.join(" ") : (e?.msg || e?.message || "" ));
-    return { time, level:lvl, scope, text };
-  }
-
-  // --- Rendering -------------------------------------------------------------
-  function renderIntoPanel(){
-    const head = headEl();
-    const body = bodyEl();
-    if (!head || !body) return;
-
-    // erst alles säubern (Toolbar + Body)
-    head.querySelectorAll(".ins-log-toolbar").forEach(n=>n.remove());
-    body.innerHTML = "";
-
-    // Toolbar in den Header
-    const bar = document.createElement("div");
-    bar.className = "ins-log-toolbar";
-    bar.innerHTML = `
-      <div class="ins-filters">
-        <button type="button" class="ins-chip ins-err"  data-k="err"  aria-pressed="true"><span>✖</span> ERR</button>
-        <button type="button" class="ins-chip ins-warn" data-k="warn" aria-pressed="true"><span>⚠️</span> WARN</button>
-        <button type="button" class="ins-chip ins-ok"   data-k="ok"   aria-pressed="true"><span>✔</span> OK</button>
-        <button type="button" class="ins-chip ins-info" data-k="info" aria-pressed="true"><span>ℹ︎</span> INFO</button>
-      </div>
-      <div class="ins-tools">
-        <input type="search" class="ins-search" placeholder="Suche…" aria-label="Logs durchsuchen">
-        <button type="button" class="ins-btn" data-act="copy">Kopieren</button>
-        <button type="button" class="ins-btn" data-act="export">Export</button>
-      </div>
-    `;
-    head.appendChild(bar);
-
-    // Body: Log-Ausgabe
-    const wrap = document.createElement("div");
-    wrap.className = "ins-log-wrap";
-    preEl = document.createElement("pre");
-    preEl.className = "ins-log-pre";
-    preEl.textContent = "Logs werden initialisiert …\n";
-    wrap.appendChild(preEl);
-    body.appendChild(wrap);
-
-    // UI-Hooks
-    bar.querySelectorAll(".ins-chip").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const k = btn.dataset.k;
-        filter[k] = !filter[k];
-        btn.setAttribute("aria-pressed", String(filter[k]));
-        drawAll();
-      });
+  function makeToggle(label, cls, key){
+    var wrap = document.createElement("label");
+    wrap.className = "ins-toggle "+cls;
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!FILTER[key];
+    cb.addEventListener("change", ()=>{
+      FILTER[key] = cb.checked;
+      renderList();
     });
-    searchInput = bar.querySelector(".ins-search");
-    searchInput.addEventListener("input", ()=>{
-      query = searchInput.value.trim();
-      drawAll();
-    });
-    bar.querySelector("[data-act='copy']").addEventListener("click", copyToClipboard);
-    bar.querySelector("[data-act='export']").addEventListener("click", exportToFile);
+    var cap = document.createElement("span");
+    cap.textContent = label;
+    wrap.appendChild(cb); wrap.appendChild(cap);
+    return { el:wrap, cb };
   }
+  function buildControls(container){
+    var row = document.createElement("div");
+    row.className = "ins-controls";
 
-  function formatTime(d){
-    const hh = String(d.getHours()).padStart(2,"0");
-    const mm = String(d.getMinutes()).padStart(2,"0");
-    const ss = String(d.getSeconds()).padStart(2,"0");
-    return `${hh}:${mm}:${ss}`;
-  }
-  function formatLine(e){
-    const t = (e.time instanceof Date) ? e.time : new Date(e.time);
-    return `[${formatTime(t)}] ${e.level.padEnd(5)} [${e.scope}] ${e.text}`;
-  }
-  function match(e){
-    // Filter nach Level
-    const lvl = e.level.toUpperCase();
-    const inLvl =
-      (lvl.includes("ERR")  && filter.err ) ||
-      (lvl.includes("WARN") && filter.warn) ||
-      (lvl.includes("OK")   && filter.ok  ) ||
-      (lvl.includes("INFO") && filter.info) ||
-      (lvl === "LOG"        && (filter.ok || filter.info)); // „LOG“ zählt neutral
-    if (!inLvl) return false;
+    // Badges (kleine Legende)
+    row.appendChild(makeBadge("ERR", "level-err",  "Fehler"));
+    row.appendChild(makeBadge("WARN","level-warn", "Warnungen"));
+    row.appendChild(makeBadge("OK",  "level-ok",   "Erfolg/OK"));
+    row.appendChild(makeBadge("INFO","level-info", "Informationen"));
+
+    // Toggles (Filter)
+    var spacer = document.createElement("div"); spacer.className="ins-controls-spacer";
+    var tErr  = makeToggle("", "level-err",  "ERR");
+    var tWarn = makeToggle("", "level-warn", "WARN");
+    var tOk   = makeToggle("", "level-ok",   "OK");
+    var tInfo = makeToggle("", "level-info", "INFO");
+    row.appendChild(spacer);
+    row.appendChild(tErr.el); row.appendChild(tWarn.el);
+    row.appendChild(tOk.el);  row.appendChild(tInfo.el);
+
     // Suche
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return (
-      (e.text  || "").toLowerCase().includes(q) ||
-      (e.scope || "").toLowerCase().includes(q) ||
-      (e.level || "").toLowerCase().includes(q)
-    );
+    var find = document.createElement("input");
+    find.type = "search";
+    find.className = "ins-find";
+    find.placeholder = "Suche…";
+    find.addEventListener("input", ()=>{
+      SEARCH = (find.value||"").trim().toLowerCase();
+      renderList();
+    });
+
+    // Buttons
+    var btnCopy = document.createElement("button");
+    btnCopy.className="ins-btn";
+    btnCopy.textContent="Kopieren";
+    btnCopy.addEventListener("click", doCopy);
+
+    var btnExport = document.createElement("button");
+    btnExport.className="ins-btn";
+    btnExport.textContent="Export";
+    btnExport.addEventListener("click", doExport);
+
+    var btnClear = document.createElement("button");
+    btnClear.className="ins-btn subtle";
+    btnClear.textContent="Leeren";
+    btnClear.addEventListener("click", ()=>{
+      BUFFER.length = 0;
+      renderList();
+    });
+
+    // Counter
+    var lblCount = document.createElement("span");
+    lblCount.className="ins-count";
+    lblCount.textContent = "0 Einträge";
+
+    // rechte Funktionsgruppe
+    var right = document.createElement("div");
+    right.className = "ins-controls-right";
+    right.appendChild(find);
+    right.appendChild(btnCopy);
+    right.appendChild(btnExport);
+    right.appendChild(btnClear);
+    right.appendChild(lblCount);
+
+    row.appendChild(right);
+
+    // DOM-Refs ablegen
+    DOM.find = find;
+    DOM.fErr = tErr.cb; DOM.fWarn = tWarn.cb; DOM.fOk = tOk.cb; DOM.fInfo = tInfo.cb;
+    DOM.lblCount = lblCount;
+
+    container.appendChild(row);
   }
 
-  function drawAll(){
-    if (!preEl) return;
-    preEl.textContent = "";
-    const out = buffer.filter(match).map(formatLine).join("\n");
-    preEl.textContent = out || "Noch keine Logs …";
-    preEl.scrollTop = preEl.scrollHeight;
+  // ---- Render: Liste --------------------------------------------------------
+  function buildList(container){
+    var pre = document.createElement("pre");
+    pre.className = "ins-logview";
+    pre.setAttribute("aria-live", "polite");
+    pre.textContent = "[Logs werden initialisiert …]\n";
+    container.appendChild(pre);
+    DOM.pre = pre;
   }
-
-  function copyToClipboard(){
-    try{
-      const text = preEl?.textContent || "";
-      navigator.clipboard?.writeText(text).then(()=>{},()=>{});
-    }catch(_){}
-  }
-  function exportToFile(){
-    try{
-      const text = preEl?.textContent || "";
-      const blob = new Blob([text], {type:"text/plain"});
-      const url  = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "logs.txt";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
-    }catch(_){}
-  }
-
-  // --- Tab-Handling ----------------------------------------------------------
-  function activateLogsTab(){
-    const tabs = $("#inspector .ins-tabs");
-    if (!tabs) return;
-    tabs.querySelectorAll(".ins-tab").forEach(b=>b.classList.remove("active"));
-    const btn = tabs.querySelector(".ins-tab[data-tab='logs']");
-    if (btn) btn.classList.add("active");
-  }
-
-  function renderLogsTab(){
-    killLegacyDock();
-    activateLogsTab();
-    renderIntoPanel();
-
-    // Daten laden/anzeigen
-    buffer = pullInitialBuffer().map(normalize);
-    drawAll();
-    subscribe();
-  }
-
-  // --- Wire: Wenn Inspector geöffnet wird, Logs-Tab anzeigen -----------------
-  function onOpen(){
-    try{
-      renderLogsTab();
-    }catch(e){
-      warn("Render-Fehler: " + (e && e.message));
+  function renderList(){
+    if (!DOM.pre) return;
+    var out = [];
+    for (var i=0;i<BUFFER.length;i++){
+      var it = BUFFER[i];
+      if (passFilters(it)) out.push(asLine(it));
     }
+    DOM.pre.textContent = (out.length ? out.join("\n") : "[Keine Log-Einträge vorhanden]");
+    if (DOM.lblCount) DOM.lblCount.textContent = out.length+" Einträge";
+    DOM.pre.scrollTop = DOM.pre.scrollHeight;
   }
 
-  window.addEventListener("cb:inspector-open", onOpen, {passive:true});
-  // Falls der Inspector bereits offen war, sofort einmal rendern:
-  if (panelRoot() && $("#inspector").classList.contains("open")) {
-    onOpen();
+  // ---- Actions: Copy / Export ----------------------------------------------
+  function doCopy(){
+    try{
+      var txt = DOM.pre ? DOM.pre.textContent : "";
+      navigator.clipboard?.writeText?.(txt).then(()=>flash("Kopiert"));
+    }catch(_){ /* egal */ }
+  }
+  function doExport(){
+    try{
+      var txt = DOM.pre ? DOM.pre.textContent : "";
+      var blob = new Blob([txt], {type:"text/plain;charset=utf-8"});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "logs_"+Date.now()+".txt";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+    }catch(_){}
+  }
+  function flash(msg){
+    try{
+      var n = document.createElement("div");
+      n.className = "ins-flash";
+      n.textContent = msg;
+      document.body.appendChild(n);
+      setTimeout(()=>n.classList.add("on"), 10);
+      setTimeout(()=>{ n.classList.remove("on"); n.remove(); }, 1400);
+    }catch(_){}
   }
 
-  log("bereit ("+VER+")");
+  // ---- Compose (Tab-Mount) --------------------------------------------------
+  function mount(slots){
+    // Container leeren, Root erzeugen
+    slots.body.innerHTML = "";
+    var root = document.createElement("div");
+    root.className = "ins-tab ins-tab-logs";
+    slots.body.appendChild(root);
+    DOM.root = root;
+
+    // Controls + Log-View
+    buildControls(root);
+    buildList(root);
+
+    // initialer Puffer
+    var initial = readInitialBuffer();
+    if (Array.isArray(initial) && initial.length){
+      for (var i=0;i<initial.length;i++){
+        var e = initial[i];
+        BUFFER.push({
+          time: e.time || e.ts || Date.now(),
+          level: normLevel(e.level || e.type || e.lvl),
+          scope: e.scope || e.tag || e.mod || e.source || "",
+          msg:   (e.msg!=null ? (""+e.msg) : (e.text || ""+e))
+        });
+      }
+    }
+    renderList();
+
+    // Live-Stream starten
+    var stop = startLiveStream(function push(entry){
+      BUFFER.push(entry);
+      // nur delta anhängen, wenn sichtbar + Filter passt; sonst Gesamtrender
+      if (passFilters(entry) && DOM.pre){
+        var addLine = asLine(entry);
+        if (DOM.pre.textContent === "[Keine Log-Einträge vorhanden]"){
+          DOM.pre.textContent = addLine;
+        } else {
+          DOM.pre.textContent += "\n"+addLine;
+        }
+        if (DOM.lblCount){
+          var current = (DOM.lblCount.textContent||"0").split(" ")[0]|0;
+          DOM.lblCount.textContent = (current+1)+" Einträge";
+        }
+        DOM.pre.scrollTop = DOM.pre.scrollHeight;
+      } else {
+        renderList();
+      }
+    });
+
+    // Unmount-Hook zurückgeben (optional vom Core genutzt)
+    return function unmount(){
+      try{ stop && stop(); }catch(_){}
+      DOM = { root:null, pre:null, lblCount:null, find:null, fErr:null, fWarn:null, fOk:null, fInfo:null };
+    };
+  }
+
+  // ---- Bootstrapping an Core ------------------------------------------------
+  function waitCore(msLeft){
+    if (window.__INS__ && typeof window.__INS__.registerTab === "function"){
+      try{
+        window.__INS__.registerTab("logs", {
+          title: "Logs",
+          mount,                // (slots) => unmountFn
+          onShow: renderList,   // sicherstellen, dass bei Rückkehr aktualisiert wird
+          order: 10             // frühe Position
+        });
+        log("Tab registriert (%s).", VER);
+      }catch(e){ err("registerTab fehlgeschlagen:", e); }
+      return;
+    }
+    if ((msLeft|0) <= 0){
+      warn("Core nicht gefunden – Logs-Tab nicht registriert.");
+      return;
+    }
+    setTimeout(()=>waitCore(msLeft-100), 100);
+  }
+
+  waitCore(3000);
 })();
