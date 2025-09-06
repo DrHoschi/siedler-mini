@@ -1,89 +1,117 @@
-<script>
-/*
-  ==========================================================
-  assets/core/cblog.polyfill.js — v1.2.1
-  Zweck:
-    • Stabiler Client-Logpuffer (CBLog) mit Zeitstempel & Level
-    • Einmaliger, idempotenter Console-Proxy (kein Doppel-Hook)
-    • Events:  window.dispatchEvent(new CustomEvent('cblog:append',{detail:item}))
-  Protokoll-Item:
-    { ts: Date, level: "INFO|LOG|WARN|ERROR", tag: string, text: string }
-  ==========================================================
-*/
+/* ============================================================================
+ * Datei: assets/core/cblog.polyfill.js
+ * Projekt: Siedler-Mini
+ * Version: v1.2.3
+ *
+ * Zweck:
+ *  - Sanfter Log-Polyfill (CBLog), falls keine eigene Log-Infrastruktur existiert
+ *  - Puffer (Ringpuffer optional), Events (append), Stream-Hook für console.*
+ *
+ * Öffentliche API (global: window.CBLog):
+ *  - ok/info/warn/err(msg, ...args)     // loggt + puffert
+ *  - log(...)                            // Alias auf info
+ *  - getBuffer() -> Array<any>          // Kopie des Puffers (Objekte!)
+ *  - clear()
+ *  - on(event, fn) / off(event, fn)     // Event-Emitter (append)
+ *  - LogStream.start() / .stop()        // hijackt console.* (reversibel)
+ *
+ * Events:
+ *  - 'append' : (entryObj) => void
+ *    entryObj: { ts:number, t:string, lvl:'info|ok|warn|err', src:string, msg:string }
+ * ========================================================================== */
 (function(){
-  if (window.__CBLOG_READY__) return;           // idempotent
-  window.__CBLOG_READY__ = true;
+  'use strict';
 
-  const fmt = (v)=>{
-    try{
-      if (v === undefined) return "undefined";
-      if (v === null) return "null";
-      if (typeof v === "string") return v;
-      if (v instanceof Error) return (v.stack || (v.name+": "+v.message));
-      return JSON.stringify(v, (_k, val)=>{
-        if (typeof val === "bigint") return String(val);
-        return val;
-      }, 0);
-    }catch(_){ return String(v); }
-  };
-
-  const buffer = [];               // Ringpuffer (optional begrenzen)
-  const MAX_BUF = 5000;
-
-  const push = (level, tag, args)=>{
-    const text = (Array.isArray(args)? args : [args]).map(fmt).join(" ");
-    const item = { ts:new Date(), level, tag: tag||"", text };
-    buffer.push(item);
-    if (buffer.length > MAX_BUF) buffer.splice(0, buffer.length - MAX_BUF);
-    try{
-      window.dispatchEvent(new CustomEvent('cblog:append', { detail: item }));
-    }catch(_){}
-    return item;
-  };
-
-  // öffentliches API
-  const CBLog = window.CBLog = window.CBLog || {};
-  CBLog.push       = push;
-  CBLog.getBuffer  = ()=> buffer.slice();              // Kopie
-  CBLog.clear      = ()=> { buffer.length = 0; };
-  CBLog.version    = "v1.2.1";
-
-  // einmaliger Console-Proxy (falls nicht schon gesetzt)
-  if (!window.__CBLOG_CONSOLE_WRAPPED__){
-    window.__CBLOG_CONSOLE_WRAPPED__ = true;
-    const org = {
-      log   : console.log.bind(console),
-      info  : console.info?.bind(console)  || console.log.bind(console),
-      warn  : console.warn?.bind(console)  || console.log.bind(console),
-      error : console.error?.bind(console) || console.log.bind(console),
-    };
-    console.log   = (...a)=>{ push("LOG","console",a);   org.log(...a); };
-    console.info  = (...a)=>{ push("INFO","console",a);  org.info(...a); };
-    console.warn  = (...a)=>{ push("WARN","console",a);  org.warn(...a); };
-    console.error = (...a)=>{ push("ERROR","console",a); org.error(...a); };
+  if (window.CBLog && typeof window.CBLog.getBuffer === 'function') {
+    // Bereits vorhanden → nur markieren.
+    try { (window.CBLog.info||console.log)('[CBLog] Polyfill übersprungen (bereits vorhanden)'); } catch(_){}
+    return;
   }
 
-  // Komfort-Shortcuts
-  CBLog.info  = (tag,...a)=>push("INFO", tag, a);
-  CBLog.log   = (tag,...a)=>push("LOG",  tag, a);
-  CBLog.warn  = (tag,...a)=>push("WARN", tag, a);
-  CBLog.error = (tag,...a)=>push("ERROR",tag, a);
+  var MOD = '[CBLog]';
+  var VER = 'v1.2.3';
 
-  CBLog.info("CBLog", "Polyfill aktiv");
-})();
-</script>
-// assets/core/cblog.polyfill.js – ganz unten ergänzen
-(function(){
-  if (!window.CBLog) return;
-  const listeners = { append: new Set() };
-  const origPush = (window.CBLog._push || null);
+  var _buf = [];          // Roh-Objekte (NICHT nur Strings)
+  var _max = 5000;        // optionales Limit (0 = unendlich)
+  var _ev  = Object.create(null);
 
-  // Wrap Push (falls vorhanden) – oder ersetze deine interne Stelle, die in den Buffer schreibt
-  window.CBLog._push = function(entry){
-    try { origPush && origPush(entry); } catch(_){}
-    listeners.append.forEach(fn => { try{ fn(entry); }catch(_){} });
+  function pad(n){ return (n<10?'0':'')+n; }
+  function tsStr(ts){
+    var d = new Date(ts);
+    return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  }
+  function emit(ev, payload){
+    var list = _ev[ev]; if (!list) return;
+    for (var i=0;i<list.length;i++){
+      try{ list[i](payload); }catch(_){}
+    }
+  }
+  function on(ev, fn){
+    if(!_ev[ev]) _ev[ev] = [];
+    if (_ev[ev].indexOf(fn)===-1) _ev[ev].push(fn);
+  }
+  function off(ev, fn){
+    var list = _ev[ev]; if(!list) return;
+    var i = list.indexOf(fn); if (i!==-1) list.splice(i,1);
+  }
+  function pushEntry(lvl, src, msg){
+    var ts = Date.now();
+    var entry = { ts: ts, t: tsStr(ts), lvl: String(lvl||'info'), src: String(src||'console'), msg: String(msg||'') };
+    _buf.push(entry);
+    if (_max>0 && _buf.length>_max) _buf.shift();
+    emit('append', entry);
+  }
+
+  var api = {
+    version: VER,
+    ok:   function(){ var m = [].slice.call(arguments).join(' '); try{ console.log(m);}catch(_){}
+                     pushEntry('ok','console',m); },
+    info: function(){ var m = [].slice.call(arguments).join(' '); try{ console.info(m);}catch(_){}
+                     pushEntry('info','console',m); },
+    warn: function(){ var m = [].slice.call(arguments).join(' '); try{ console.warn(m);}catch(_){}
+                     pushEntry('warn','console',m); },
+    err:  function(){ var m = [].slice.call(arguments).join(' '); try{ console.error(m);}catch(_){}
+                     pushEntry('err','console',m); },
+    log:  function(){ return api.info.apply(null, arguments); },
+
+    getBuffer: function(){ return _buf.slice(); },
+    clear: function(){ _buf.length = 0; },
+
+    on: on,
+    off: off,
+
+    LogStream: (function(){
+      var wired = false;
+      var orig = {};
+      function start(){
+        if (wired) return;
+        wired = true;
+        ['log','info','warn','error'].forEach(function(k){
+          orig[k] = console[k];
+          console[k] = function(){
+            var txt = Array.prototype.map.call(arguments, function(a){ try{return String(a);}catch(_){return '[obj]';} }).join(' ');
+            try{
+              if (k==='error') pushEntry('err','console',txt);
+              else if (k==='warn') pushEntry('warn','console',txt);
+              else if (k==='log') pushEntry('ok','console',txt);
+              else pushEntry('info','console',txt);
+            }catch(_){}
+            return orig[k].apply(this, arguments);
+          };
+        });
+      }
+      function stop(){
+        if (!wired) return;
+        wired = false;
+        ['log','info','warn','error'].forEach(function(k){
+          if (orig[k]) { console[k] = orig[k]; }
+        });
+      }
+      return { start:start, stop:stop, isActive:function(){return wired;} };
+    })()
   };
 
-  window.CBLog.on  = function(evt, fn){ if(evt==='append' && fn) listeners.append.add(fn); };
-  window.CBLog.off = function(evt, fn){ if(evt==='append' && fn) listeners.append.delete(fn); };
+  window.CBLog = api;
+
+  try { api.info(MOD, 'Polyfill aktiv'); } catch(_){}
 })();
