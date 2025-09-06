@@ -1,315 +1,209 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.css
- * Projekt: Siedler-Mini
- * Version: v18.11.0 (Logs-Tab UI final: Icons, Badges, Statuszeile)
- *
- * CODE-STYLE
- *  - Nur Inspector-spezifische Klassen (kein globales Reset)
- *  - Mobile-first, responsive, klare Kontraste
- *  - Variablenähnliche Palette als Kommentare
- *
- * Farb-Gedanke (hell/dunkel wie Vorgabe):
- *  - Hintergrund (Panel): #171A1F / #1C2228
- *  - Inaktiver Tab/Toggle: #2A3138
- *  - Aktiver Tab/Toggle:   #39424B
- *  - Rahmen hell:          rgba(255,255,255,.08)
- *  - Text primär:          #E5E9F0
- *  - Text sekundär:        #BAC3CE
- *  - Badge BG:             rgba(255,255,255,.10)
- *  - Button Hover:         rgba(255,255,255,.16)
- * ========================================================================== */
+   Datei: assets/inspector/inspector.css
+   Projekt: Siedler-Mini
+   Version: v18.10.12
 
-/* Root des Overlays – wird von inspector.core.js erzeugt */
+   Ziel:
+   - Vollbild-Overlay
+   - Hellgraue Pane-Optik gemäß Vorgabe
+   - Tabs oben, Inhalt füllt den Rest
+   - Log-Ansicht scrollt eigenständig (Mobil & Desktop)
+   - Hintergrund-Scroll sperren, wenn Inspector offen
+   ========================================================================== */
+
+/* Body sperren, wenn Inspector offen */
+body.inspector-open {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+}
+
+/* Overlay */
 #inspector {
   position: fixed;
   inset: 0;
-  z-index: 2147483646;
-  display: none; /* core.js toggelt display */
-  color: #E5E9F0;
-  font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  z-index: 2147483000; /* unterhalb FAB-Buttons, aber über Spiel */
+  display: none;       /* per JS auf block */
+  pointer-events: none; /* Grundzustand – aktivieren wir innerhalb */
 }
 
-/* Vollflächen-Wrapper mit semitransparentem BG */
-#inspector .ins-backdrop {
+/* Pane (hellgrau) */
+#inspector .ins-wrap {
+  pointer-events: auto;
   position: absolute;
   inset: 0;
-  background: rgba(5, 7, 9, .55);
-}
-
-/* Panel zentriert & skalierend */
-#inspector .ins-panel {
-  position: absolute;
-  inset: 24px 16px 24px 16px; /* randlos auf kleinen Screens */
-  display: grid;
-  grid-template-rows: auto auto 1fr auto; /* header, tabs, body, footer */
-  gap: 12px;
-  background: linear-gradient(180deg, #1B2026 0%, #171A1F 100%);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0,0,0,.55);
-  overflow: hidden;
-}
-
-/* Header (Titel + Close) */
-#inspector .ins-header {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 12px 8px 12px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-}
-#inspector .ins-title {
-  font-weight: 700; letter-spacing: .2px; color: #E5E9F0;
-}
-#inspector .ins-spacer { flex: 1; }
-#inspector .ins-close {
-  border: 1px solid rgba(255,255,255,.08);
-  background: #2A3138; color: #E5E9F0;
-  border-radius: 10px; padding: 8px 10px; cursor: pointer;
-}
-#inspector .ins-close:hover { background: #39424B; }
-
-/* Tabs */
-#inspector .ins-tabs {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  padding: 0 12px 8px 12px;
-  border-bottom: 1px solid rgba(255,255,255,.06);
-}
-#inspector .ins-tab {
-  border: 1px solid rgba(255,255,255,.08);
-  background: #2A3138; color: #BAC3CE;
-  border-radius: 999px; padding: 6px 12px;
-  cursor: pointer; user-select: none;
-}
-#inspector .ins-tab.active {
-  background: #39424B; color: #E5E9F0;
-}
-
-/* Body */
-#inspector .ins-body {
-  min-height: 0; /* wichtig für overflow */
-  padding: 12px;
-  overflow: hidden; /* Slot-Container regelt eigenen Overflow */
-}
-
-/* Footer (Statusleiste, optional) */
-#inspector .ins-footer {
-  padding: 8px 12px;
-  border-top: 1px solid rgba(255,255,255,.06);
-  color: #BAC3CE; font-size: 12px;
-}
-
-/* ---------- Logs-Tab UI --------------------------------------------------- */
-
-/* Controls-Zeile */
-.ins-controls {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  margin-bottom: 8px;
-}
-
-/* Toggle-Chips */
-.ins-toggle {
-  border: 1px solid rgba(255,255,255,.08);
-  background: #2A3138; color: #BAC3CE;
-  border-radius: 999px; padding: 6px 10px;
-  cursor: pointer; user-select: none;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.ins-toggle.active {
-  background: #39424B; color: #E5E9F0;
-}
-.ins-toggle:hover { background: rgba(255,255,255,.16); }
-
-/* Badge-Zähler */
-.ins-badge {
-  display: inline-block; min-width: 20px; text-align: center;
-  padding: 2px 6px; border-radius: 999px;
-  background: rgba(255,255,255,.10); color: #E5E9F0;
-  font-size: 11px;
-}
-
-/* Suche + Buttons */
-.ins-search {
-  flex: 1 1 200px;
-  min-width: 140px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: #101317; color: #E5E9F0;
-  border-radius: 8px; padding: 6px 10px;
-}
-.ins-btn {
-  border: 1px solid rgba(255,255,255,.08);
-  background: #2A3138; color: #E5E9F0;
-  border-radius: 8px; padding: 6px 10px; cursor: pointer;
-}
-.ins-btn:hover { background: rgba(255,255,255,.16); }
-
-/* Log-Ansicht */
-.ins-logview {
-  height: calc(100% - 0px);
-  overflow: auto;
-  background: #111419;
-  border: 1px solid rgba(255,255,255,.06);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: #e6e7ea;                     /* hellgrau nach Vorgabe */
+  color: #1c1f24;
+  border: 1px solid rgba(0,0,0,.12);
+  box-shadow:
+    0 18px 34px rgba(0,0,0,.25),
+    0  2px  0 rgba(255,255,255,.55) inset; /* leichte Glas-Kante */
   border-radius: 10px;
-  padding: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 12px; line-height: 1.45;
-  color: #E5E9F0;
-}
-
-/* Einzelzeile */
-.ins-logline {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-  align-items: start;
-  padding: 3px 2px;
-  border-radius: 6px;
-}
-.ins-logline:hover { background: rgba(255,255,255,.04); }
-
-/* Icon-Spalte (Level) */
-.ins-level-icon {
-  width: 18px; text-align: center; opacity: .95;
-}
-
-/* Level-Farben (dezente Tönung) */
-.log-info  { color: #CBD5E1; }
-.log-ok    { color: #BBF7D0; }
-.log-warn  { color: #FDE68A; }
-.log-error { color: #FCA5A5; }
-
-/* Kopieren-Feedback */
-.ins-flash {
-  animation: insFlash .6s ease;
-}
-@keyframes insFlash {
-  0% { box-shadow: 0 0 0 0 rgba(120,200,255,.0); }
-  50%{ box-shadow: 0 0 0 6px rgba(120,200,255,.35); }
-  100%{ box-shadow: 0 0 0 0 rgba(120,200,255,.0); }
-}
-
-/* Statuszeile (unten im Logs-Tab Body – optional) */
-.ins-statusbar {
-  margin-top: 8px; font-size: 12px; color: #BAC3CE;
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-}
-.ins-statusbar .dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  display: inline-block; margin-right: 6px;
-}
-.ins-statusbar .dot.info { background:#CBD5E1; }
-.ins-statusbar .dot.ok   { background:#BBF7D0; }
-.ins-statusbar .dot.warn { background:#FDE68A; }
-.ins-statusbar .dot.err  { background:#FCA5A5; }
-
-/* Kleiner Safe-Overlay (Fallback-Hinweis), wenn core noch lädt */
-#inspector .ins-safe {
-  position: absolute; right: 12px; bottom: 12px;
-  font-size: 12px; color: #BAC3CE;
-  background: rgba(0,0,0,.35);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 8px; padding: 6px 8px;
-}
-/* =========================
-   INSPECTOR – LIGHT SKIN
-   Aktiv, wenn #inspector die Klasse .skin-light trägt
-   ========================= */
-#inspector.skin-light{
-  --ins-surface:        #f3f4f6;   /* Panel-Hintergrund (hellgrau) */
-  --ins-surface-2:      #ffffff;   /* Karten/Logflächen (weiß)    */
-  --ins-border:         #d1d5db;   /* Rahmen                       */
-  --ins-text:           #111827;   /* Text dunkel                  */
-  --ins-muted:          #6b7280;   /* gedämpfter Text              */
-  --ins-pill:           #e5e7eb;   /* graue Chips/Tabs             */
-  --ins-pill-active:    #dbeafe;   /* aktiver Tab Chip             */
-  --ins-pill-active-t:  #1e3a8a;   /* aktiver Tab Text             */
-  --ins-btn:            #e5e7eb;   /* neutrale Buttonfläche        */
-  --ins-btn-hover:      #dfe3e7;
-  --ins-search-bg:      #ffffff;
-  --ins-search-border:  #cbd5e1;
-
-  --ins-ok:   #16a34a;
-  --ins-warn: #d97706;
-  --ins-err:  #dc2626;
-  --ins-info: #334155;
-}
-
-/* Panel */
-#inspector.skin-light .ins-window{
-  background: var(--ins-surface);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
-  box-shadow: 0 24px 70px rgba(0,0,0,.28);
+  margin: 8px;
 }
 
 /* Header */
-#inspector.skin-light .ins-title{ color: var(--ins-text); }
-#inspector.skin-light .ins-close{
-  background: var(--ins-btn);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
+#inspector .ins-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  background: linear-gradient(#f2f3f5, #e7e8eb);
 }
-#inspector.skin-light .ins-close:hover{ background: var(--ins-btn-hover); }
+#inspector .ins-title {
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+#inspector .ins-close {
+  margin-left: auto;
+  border: none;
+  border-radius: 8px;
+  background: #d0d3d8;
+  color: #222;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+#inspector .ins-close:hover { filter: brightness(0.95); }
 
-/* Tabs (oben: LOGS/BUILD/PFADE/TESTS) */
-#inspector.skin-light .ins-tabs .ins-tab{
-  background: var(--ins-pill);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
+/* Tabs */
+#inspector .ins-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  background: #eceef1;
 }
-#inspector.skin-light .ins-tabs .ins-tab.active{
-  background: var(--ins-pill-active);
-  color: var(--ins-pill-active-t);
-  border-color: #bfdbfe;
+#inspector .ins-tab {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  background: #d7dae0;
+  color: #222;
+  font-size: 13px;
 }
-
-/* Zähler-Badges (INFO/OK/WARN/ERR) + Filtertoggles */
-#inspector.skin-light .ins-controls{ color: var(--ins-text); }
-#inspector.skin-light .ins-toggle{
-  background: var(--ins-pill);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
-}
-#inspector.skin-light .ins-toggle.active{
-  background: var(--ins-surface-2);
-  border-color: var(--ins-pill-active);
-}
-#inspector.skin-light .ins-badge{
-  background: var(--ins-surface-2);
-  color: var(--ins-muted);
-  border: 1px solid var(--ins-border);
-}
-
-/* Suche + Buttons */
-#inspector.skin-light .ins-search{
-  background: var(--ins-search-bg);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-search-border);
-}
-#inspector.skin-light .ins-actions button{
-  background: var(--ins-btn);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
-}
-#inspector.skin-light .ins-actions button:hover{
-  background: var(--ins-btn-hover);
+#inspector .ins-tab[aria-selected="true"] {
+  background: #9fb7ff;   /* helles Blau für aktiv */
 }
 
-/* Log-Container */
-#inspector.skin-light .ins-logview{
-  background: var(--ins-surface-2);
-  color: var(--ins-text);
-  border: 1px solid var(--ins-border);
-  font-variant-ligatures: none;
+/* Content */
+#inspector .ins-content {
+  flex: 1 1 auto;
+  min-height: 0;         /* WICHTIG: sorgt dafür, dass der Bereich schrumpfen darf */
+  overflow: hidden;      /* Inhalt steuert eigenes Scrollen */
 }
 
-/* einzelne Logzeilen (Level-Farben) */
-#inspector.skin-light .ins-logview .log-info{  color: var(--ins-info); }
-#inspector.skin-light .ins-logview .log-ok{    color: var(--ins-ok); }
-#inspector.skin-light .ins-logview .log-warn{  color: var(--ins-warn); }
-#inspector.skin-light .ins-logview .log-error{ color: var(--ins-err); }
+/* Body (Slots-Halter) */
+#inspector .ins-body {
+  position: relative;
+  display: block;
+  height: 100%;
+  min-height: 0;         /* WICHTIG für eigenständiges Scrollen der Kinder */
+  overflow: hidden;      /* verhindert Page-Scroll; Kinder bekommen Scroll */
+  padding: 10px 12px 12px;
+}
 
-/* kleine Effekte */
-#inspector.skin-light .ins-flash{ 
-  outline: 2px solid #93c5fd; 
-  outline-offset: 2px; 
-  transition: outline-color .6s ease; 
+/* Slots (pro Tab) */
+#inspector .ins-slot {
+  display: none;
+  height: 100%;
+  min-height: 0;
+}
+#inspector .ins-slot.is-active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* LOGS – Controls oben, View füllt Rest */
+#inspector .slot.logs-controls {
+  margin-bottom: 8px;
+}
+#inspector .slot.logs-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden; /* Container selbst: kein Scroll, die Liste scrollt */
+}
+
+/* Logliste scrollt eigenständig */
+#inspector .ins-logview {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px;
+  background: #f7f8fa;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 8px;
+  font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #1c1f24;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+/* Log-Zeilen */
+#inspector .ins-logview .log-info  { color:#334155; }
+#inspector .ins-logview .log-ok    { color:#166534; }
+#inspector .ins-logview .log-warn  { color:#92400e; }
+#inspector .ins-logview .log-error { color:#991b1b; }
+
+/* Controls: Toggles + Suche + Buttons */
+#inspector .ins-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+#inspector .ins-toggle {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: #d7dae0;
+  color: #222;
+  cursor: pointer;
+}
+#inspector .ins-toggle.active {
+  background: #9fb7ff;
+}
+#inspector .ins-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  border-radius: 999px;
+  background: rgba(0,0,0,.12);
+}
+#inspector .ins-search {
+  margin-left: auto;
+  min-width: 140px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.12);
+  padding: 6px 8px;
+  background: #fff;
+}
+
+/* Kopieren/Export Feedback */
+#inspector .ins-flash {
+  animation: insFlash .6s ease;
+}
+@keyframes insFlash {
+  0% { box-shadow: 0 0 0 0 rgba(0,140,255,.0); }
+  30%{ box-shadow: 0 0 0 6px rgba(0,140,255,.25); }
+  100%{ box-shadow: 0 0 0 0 rgba(0,140,255,.0); }
+}
+
+/* Mobile – kleine Ränder */
+@media (max-width: 480px) {
+  #inspector .ins-wrap { margin: 6px; border-radius: 8px; }
+  #inspector .ins-header, #inspector .ins-tabs { padding: 8px; }
+  #inspector .ins-body { padding: 8px; }
 }
