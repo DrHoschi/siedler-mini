@@ -4,9 +4,8 @@
   Version: v17.8.2
   Reihenfolge: Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split) → BootCompat
   Hinweise:
-    - Inspector ist gesplittet; KEIN altes assets/inspector/inspector.js mehr einbinden.
+    - Inspector ist gesplittet; KEIN altes assets/inspector/inspector.js und KEIN inspector.overview.js einbinden.
     - Z-Layer der FABs extrem hoch, damit sie immer klickbar bleiben.
-    - Startpanel vorhanden (ui-start.css steuert Optik).
 -->
 <html lang="de">
 <head>
@@ -22,8 +21,9 @@
   <link rel="stylesheet" href="style.css?v=17.8.2">
   <link rel="stylesheet" href="ui-start.css?v=17.8.2">
   <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.8.2">
+
   <!-- Inspector Styles (split) -->
-  <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.10.6">
+  <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.11.0">
 
   <style>
     /* Baseline + FABs immer bedienbar */
@@ -86,16 +86,15 @@
   <script src="assets/core/overlay-hooks.js?v=17.8.2"></script>
   <script src="assets/core/core.render.js?v=17.8.2"></script>
   <script src="assets/core/game.bootstrap.js?v=17.8.2"></script>
-  <script defer src="assets/inspector/inspector.overview.js?v=18.11.0"></script>
-  
-  <!-- Inspector (split) – nur diese fünf, KEIN altes inspector.js mehr -->
-  <script defer src="assets/inspector/inspector.core.js?v=18.10.6"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.10.6"></script>
-  <script defer src="assets/inspector/inspector.build.js?v=18.10.6"></script>
-  <script defer src="assets/inspector/inspector.paths.js?v=18.10.6"></script>
-  <script defer src="assets/inspector/inspector.tests.js?v=18.10.6"></script>
 
-  <!-- Legacy-Fassade (solange wir noch Übergang haben) -->
+  <!-- Inspector (split) – genau diese fünf -->
+  <script defer src="assets/inspector/inspector.core.js?v=18.11.0"></script>
+  <script defer src="assets/inspector/inspector.logs.js?v=18.11.0"></script>
+  <script defer src="assets/inspector/inspector.build.js?v=18.11.0"></script>
+  <script defer src="assets/inspector/inspector.paths.js?v=18.11.0"></script>
+  <script defer src="assets/inspector/inspector.tests.js?v=18.11.0"></script>
+
+  <!-- Legacy-Fassade -->
   <script defer src="game.js?v=17.8.2"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
