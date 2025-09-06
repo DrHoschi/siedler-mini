@@ -156,3 +156,48 @@ body.inspector-open{ overflow: hidden; }
   outline: 2px solid rgba(255,255,255,.2);
   transition: outline-color .6s ease;
 }
+/* === Inspector: Pane-Layout + Scroll-Fix ============================== */
+/* Das Overlay selbst bleibt ganz vorne und blockiert das Seiten-Scrollen */
+#inspector{ position:fixed; inset:0; z-index:2147483646; }
+
+/* Body nicht mehr scrollen, wenn Inspector offen ist */
+body.inspector-open { overflow: hidden; }
+
+/* Der mittlere Bereich (dein Content-Container) soll Höhe annehmen */
+#inspector .ins-body{
+  display:flex;
+  flex-direction:column;
+  height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  min-height:0; /* WICHTIG: erlaubt Kindern echtes Flex-Shrink */
+}
+
+/* Jede Tab-Pane füllt die Höhe und ist spaltenbasiert */
+#inspector .ins-pane{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  flex:1 1 auto;
+  min-height:0; /* WICHTIG: sonst wachsen Kinder über die Höhe hinaus */
+}
+
+/* Steuerleiste (Filterleiste) bleibt oben, nicht scrollend */
+#inspector .ins-controls{
+  flex:0 0 auto;
+}
+
+/* Die eigentliche Log-Ausgabe – hier wird gescrollt */
+#inspector .ins-logview{
+  flex:1 1 auto;
+  min-height:0;                /* Kern des Fixes */
+  overflow:auto;               /* nur die Liste scrollt */
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain; /* verhindert Gummiband-Effekt ins Seiten-Scrollen */
+}
+
+/* Optional: einheitliche Scrollbar (nicht zwingend) */
+#inspector .ins-logview::-webkit-scrollbar{ width:8px; }
+#inspector .ins-logview::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.12);
+  border-radius:8px;
+}
