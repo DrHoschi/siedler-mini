@@ -1,13 +1,18 @@
 /* ============================================================================
- * Inspector CSS – v18.11.3
+ * Datei: assets/inspector/inspector.css
+ * Projekt: Siedler-Mini
+ * Version: v18.11.5
+ *
+ * Ziel:
  *  - Helles Grau-Design (Panels)
- *  - Vollbild + Safe-Area
- *  - Jeder Tab füllt die Pane; Log-Pane hat eigenen Scroller
+ *  - Vollbild-Overlay (Topmost), Safe-Area, Centered Panel
+ *  - JEDER Tab füllt die Pane; Logs haben eigenen Scroller
+ *  - Deutliche Filter-Toggles (aktiv/inaktiv)
  * ========================================================================== */
 
 :root{
   --ins-bg: rgba(20,20,20,0.55);      /* Overlay-Dimmung */
-  --ins-panel: #EAECEE;               /* Panel-Hintergrund hell */
+  --ins-panel: #EAECEE;               /* Panel hell */
   --ins-panel-2: #D5D8DC;             /* Header/Foot/Logview */
   --ins-border: #BFC9CA;              /* Kante */
   --ins-text: #2C3E50;                /* Text dunkel */
@@ -20,12 +25,12 @@
   --ins-radius: 10px;
 }
 
-/* Vollbild + Safe Area + Topmost */
+/* Vollbild + Safe Area + Topmost (standardmäßig versteckt; JS setzt display:flex) */
 #inspector{
   position: fixed;
   inset: 0;
   z-index: 2147483646;
-  display: none; /* wird per JS auf flex gesetzt */
+  display: none; /* JS setzt "flex" beim Öffnen */
   padding:
     max(env(safe-area-inset-top),0px)
     max(env(safe-area-inset-right),0px)
@@ -34,6 +39,8 @@
   background: var(--ins-bg);
   backdrop-filter: blur(4px);
   pointer-events: auto;
+
+  /* Zentrierung des Panels */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -57,7 +64,7 @@ body.inspector-open{ overflow: hidden; }
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0; /* wichtig für Scroller im Body */
+  min-height: 0; /* wichtig: erlaubt Scroller im Body */
 }
 
 /* Header */
@@ -80,6 +87,7 @@ body.inspector-open{ overflow: hidden; }
   color:var(--ins-text);
   padding:6px 12px;
   cursor:pointer;
+  user-select: none;
 }
 .ins-tab.active{
   background:var(--ins-panel-2);
@@ -111,9 +119,10 @@ body.inspector-open{ overflow: hidden; }
 }
 .ins-pane.active{ display:flex; }
 
-/* Logs: Controls und eigener Viewport */
+/* Logs: Controls und eigener Viewport (beide Selektoren unterstützt) */
 .slot-logs-controls{ display:block; }
-.slot-logs-view{
+.slot-logs-view,
+.ins-logview{
   flex:1;
   border:1px solid var(--ins-border);
   border-radius:6px;
@@ -142,30 +151,39 @@ body.inspector-open{ overflow: hidden; }
 }
 .ins-foot .muted{ color:var(--ins-text); opacity:.85; font-size:13px; }
 
-/* Scrollbar (hell) */
-#inspector .slot-logs-view::-webkit-scrollbar{ width:10px; }
-#inspector .slot-logs-view::-webkit-scrollbar-track{ background: transparent; }
-#inspector .slot-logs-view::-webkit-scrollbar-thumb{
+/* Deutlichere Zustände für Filter-Toggles (Logs-Tab) */
+.ins-controls{
+  display:flex; flex-wrap:wrap; gap:8px 10px;
+  align-items:center;
+}
+.ins-toggle{
+  padding: 6px 10px;
+  border:1px solid var(--ins-border);
+  border-radius:6px;
+  background:#F2F4F6;          /* inaktiv heller */
+  color:var(--ins-text);
+  cursor:pointer;
+}
+.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
+.ins-toggle.active{
+  background:#C9D6E2;          /* aktiv dunkler */
+  border-color:#AFC0CE;
+}
+.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
+.ins-badge{ margin-left:6px; padding:2px 6px; border-radius:999px; background:rgba(0,0,0,.08); font-size:12px; }
+.ins-search{
+  margin-left:auto; padding:6px 10px; min-width:140px;
+  border:1px solid var(--ins-border); border-radius:6px; background:#fff; color:#111;
+}
+
+/* Scrollbar (hell) für Log-Viewport */
+#inspector .slot-logs-view::-webkit-scrollbar,
+#inspector .ins-logview::-webkit-scrollbar{ width:10px; }
+#inspector .slot-logs-view::-webkit-scrollbar-track,
+#inspector .ins-logview::-webkit-scrollbar-track{ background: transparent; }
+#inspector .slot-logs-view::-webkit-scrollbar-thumb,
+#inspector .ins-logview::-webkit-scrollbar-thumb{
   background: var(--ins-border);
   border-radius:10px;
   border:2px solid var(--ins-panel-2);
 }
-/* Deutlichere Zustände für Filter-Toggles */
-.ins-toggle {
-  padding: 6px 10px;
-  border:1px solid var(--ins-border);
-  border-radius:6px;
-  background: #F2F4F6;          /* inaktiv heller */
-  color: var(--ins-text);
-}
-.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
-.ins-toggle.active{
-  background: #C9D6E2;          /* aktiv dunkler */
-  border-color: #AFC0CE;
-}
-.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
-.ins-controls .ins-btn{
-  padding:6px 10px; border:1px solid var(--ins-border);
-  border-radius:6px; background:#F2F4F6; cursor:pointer;
-}
-.ins-controls .ins-btn:hover{ background:#e9edf1; }
