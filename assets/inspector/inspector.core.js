@@ -1,197 +1,265 @@
 /* ============================================================================
- * Inspector Core (split) – v18.11.1
- *  - Erstellt Overlay + Tabs + Slot-Registry
- *  - Stellt API für Submodule bereit (mount/getSlot/signal)
- *  - Kein DOM-Append außerhalb des Overlays
+ * Datei: assets/inspector/inspector.core.js
+ * Projekt: Siedler-Mini
+ * Version: v18.11.2
+ *
+ * Zweck:
+ *  - Vollbild-Overlay für den Inspector mit fester Struktur (Panel, Kopf, Body, Fuß)
+ *  - Tabs: Logs / Build / Pfade / Tests (sichtbar schalten + Slots bereitstellen)
+ *  - Stabile, schlanke API für Module: __INSPECTOR_CORE__.api.{mount,getSlot,signal}
+ *  - Brücke für UI-Buttons: __INSPECTOR_API__.{open,close,toggle}
+ *
+ * Garantien / Code-Style:
+ *  - KEINE Logs hier sammeln – das macht inspector.logs.js
+ *  - KEINE „body.appendChild“ außerhalb des Overlays – Slots nur innerhalb des Panels
+ *  - body bekommt Klasse "inspector-open" (Hintergrundscroll sperren; siehe CSS)
+ *  - Defensive: überlebt fehlende Module (Tabs bleiben leer, aber UI bleibt stabil)
  * ========================================================================== */
-(function(){
-  'use strict';
 
-  const VERSION = 'v18.11.1';
-  const MOD = '[inspector.core]';
+(function () {
+  "use strict";
 
-  // --- Slots-Registry & Core-API -------------------------------------------
-  const __SLOTS__ = Object.create(null);
-  const __MOUNTED__ = Object.create(null); // tabId -> unmount()
+  const MOD = "[inspector.core]";
+  const VER = "v18.11.2";
 
-  window.__INSPECTOR_CORE__ = window.__INSPECTOR_CORE__ || {};
-  window.__INSPECTOR_CORE__.api = {
-    mount(tabId, renderFn){
-      if (typeof renderFn !== 'function') return;
-      // Lazy: renderFn wird erst beim ersten Aktivieren ausgeführt
-      __MOUNTED__[tabId] = null;
-      // Wir rufen renderFn beim ersten ShowTab(tabId) auf.
-      __ON_DEMAND_RENDER__[tabId] = renderFn;
-    },
-    getSlot(name){ return __SLOTS__[name] || null; },
-    signal(name,payload){ 
-      try{ document.dispatchEvent(new CustomEvent('ins:'+name,{detail:payload})); }catch(_){}
-    },
-    version: VERSION
+  // ---- Logging (sanft) ------------------------------------------------------
+  const log  = (...a) => (window.CBLog?.info || console.log)(`${MOD}`, ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn)(`${MOD}`, ...a);
+
+  // ---- DOM Grundgerüst ------------------------------------------------------
+  // Einmalige Erstellung des Overlays (wenn nicht vorhanden)
+  let root = document.getElementById("inspector");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "inspector";
+    // WICHTIG: CSS kümmert sich um Position/Look; wir nur Struktur.
+    // Hidden by default – wir schalten via open()/close().
+    root.hidden = true;
+
+    root.innerHTML = `
+      <div class="ins-wrap">
+        <div class="ins-panel" role="dialog" aria-modal="true" aria-labelledby="ins-title">
+          <div class="ins-head">
+            <div class="ins-title" id="ins-title">
+              <span>Inspector</span>
+              <span class="ins-ver">v${VER}</span>
+            </div>
+            <div class="ins-tabs" role="tablist" aria-label="Inspector Tabs">
+              <button class="ins-tab active" data-tab="logs"  role="tab" aria-selected="true">Logs</button>
+              <button class="ins-tab"         data-tab="build" role="tab" aria-selected="false">Build</button>
+              <button class="ins-tab"         data-tab="paths" role="tab" aria-selected="false">Pfade</button>
+              <button class="ins-tab"         data-tab="tests" role="tab" aria-selected="false">Tests</button>
+            </div>
+            <button class="ins-close" title="Schließen" aria-label="Inspector schließen"></button>
+          </div>
+
+          <div class="ins-body">
+            <!-- LOGS -->
+            <section class="slot logs" data-slot="logs">
+              <div id="ins-logs-controls" class="slot-logs-controls"></div>
+              <div id="ins-logs-view"     class="slot-logs-view"></div>
+            </section>
+
+            <!-- BUILD -->
+            <section id="ins-build" class="slot build" data-slot="build" hidden></section>
+
+            <!-- PFAD/OVERLAY -->
+            <section id="ins-paths" class="slot paths" data-slot="paths" hidden></section>
+
+            <!-- TESTS -->
+            <section id="ins-tests" class="slot tests" data-slot="tests" hidden></section>
+          </div>
+
+          <div class="ins-foot">
+            <span class="muted">Inspector bereit</span>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(root);
+  }
+
+  // Referenzen
+  const panel   = root.querySelector(".ins-panel");
+  const tabsEl  = root.querySelector(".ins-tabs");
+  const tabBtns = Array.from(root.querySelectorAll(".ins-tab"));
+  const sections = {
+    logs:  root.querySelector('[data-slot="logs"]'),
+    build: root.querySelector('[data-slot="build"]'),
+    paths: root.querySelector('[data-slot="paths"]'),
+    tests: root.querySelector('[data-slot="tests"]'),
   };
 
-  // On-demand Registry der Tab-Renderer
-  const __ON_DEMAND_RENDER__ = Object.create(null);
+  // Slot-Map (für Module)
+  const slotMap = {
+    "logs-controls": document.getElementById("ins-logs-controls"),
+    "logs-view":     document.getElementById("ins-logs-view"),
+    "build":         document.getElementById("ins-build"),
+    "paths":         document.getElementById("ins-paths"),
+    "tests":         document.getElementById("ins-tests"),
+  };
 
-  // --- DOM aufbauen ---------------------------------------------------------
-  const root = document.createElement('div');
-  root.id = 'inspector';
-  const wrap = document.createElement('div');
-  wrap.className = 'ins-wrap';
+  // ---- Zustand --------------------------------------------------------------
+  let activeTab = loadTab() || "logs";
+  const mounts = Object.create(null); // tabId -> () => {unmount?}
 
-  const panel = document.createElement('div');
-  panel.className = 'ins-panel';
+  // ---- API für Module -------------------------------------------------------
+  const api = {
+    /** Module registrieren ihren Tab-Renderer */
+    mount(tabId, renderFn) {
+      if (typeof renderFn === "function") {
+        mounts[tabId] = renderFn;
+        // Falls dieser Tab bereits aktiv ist → sofort rendern
+        if (tabId === activeTab) renderActiveTab();
+      }
+    },
+    /** Benannte Slots ausgeben (innerhalb des Panels!) */
+    getSlot(name) {
+      return slotMap[name] || null;
+    },
+    /** Optionales Signal-System für lose Kopplung */
+    signal(name, payload) {
+      try {
+        window.dispatchEvent(new CustomEvent(`ins:${name}`, { detail: payload }));
+      } catch (_) {}
+    },
+    /** Version ausgeben */
+    version: VER,
+  };
 
-  // Header
-  const head = document.createElement('div');
-  head.className = 'ins-head';
+  // Export Kernobjekt (für Sub-Module)
+  window.__INSPECTOR_CORE__ = { api, version: VER };
 
-  const titleWrap = document.createElement('div');
-  titleWrap.className = 'ins-title';
-  const title = document.createElement('div');
-  title.textContent = 'Inspector';
-  const ver = document.createElement('div');
-  ver.className = 'ins-ver';
-  ver.textContent = VERSION;
-  titleWrap.append(title, ver);
-
-  const tabs = document.createElement('div');
-  tabs.className = 'ins-tabs';
-
-  const btnClose = document.createElement('button');
-  btnClose.className = 'ins-close';
-  btnClose.type = 'button';
-  btnClose.textContent = 'Schließen';
-  btnClose.addEventListener('click', close);
-
-  head.append(titleWrap, tabs, btnClose);
-
-  // Body (+ Pane-Container)
-  const body = document.createElement('div');
-  body.className = 'ins-body';
-
-  // Footer
-  const foot = document.createElement('div');
-  foot.className = 'ins-foot';
-  const footLeft = document.createElement('div');
-  footLeft.className = 'muted';
-  footLeft.textContent = 'Inspector ' + VERSION;
-  foot.append(footLeft);
-
-  panel.append(head, body, foot);
-  wrap.append(panel);
-  root.append(wrap);
-  document.body.appendChild(root);
-
-  // --- Tabs & Panes ---------------------------------------------------------
-  const TAB_DEF = [
-    { id:'logs',  label:'Logs'  },
-    { id:'build', label:'Build' },
-    { id:'paths', label:'Pfade' },
-    { id:'tests', label:'Tests' },
-  ];
-
-  const panes = Object.create(null);
-
-  TAB_DEF.forEach(def=>{
-    const t = document.createElement('button');
-    t.className = 'ins-tab';
-    t.type = 'button';
-    t.dataset.tab = def.id;
-    t.textContent = def.label.toUpperCase();
-    t.addEventListener('click', ()=> showTab(def.id));
-    tabs.appendChild(t);
-
-    const pane = document.createElement('div');
-    pane.className = `ins-pane ins-pane-${def.id}`;
-    pane.style.display = 'none';
-    pane.setAttribute('role','tabpanel');
-
-    // Slots je nach Tab
-    if (def.id === 'logs'){
-      pane.innerHTML = `
-        <div id="ins-logs-controls" class="slot-logs-controls"></div>
-        <div id="ins-logs-view" class="slot-logs-view"></div>
-      `;
-      __SLOTS__['logs-controls'] = pane.querySelector('#ins-logs-controls');
-      __SLOTS__['logs-view']     = pane.querySelector('#ins-logs-view');
-    }else{
-      // Ein leerer Container für Submodule, sie können beliebige Strukturen einfügen
-      const host = document.createElement('div');
-      host.className = `slot-${def.id}-host`;
-      pane.appendChild(host);
-      __SLOTS__[`${def.id}-host`] = host;
+  // Für die FAB/Bridge (ui-bridge) zusätzlich eine einfache UI-API anbieten
+  window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {};
+  Object.assign(window.__INSPECTOR_API__, {
+    open, close, toggle,
+    // kleine Logs-Brücke, falls Module sowas brauchen möchten:
+    logs: {
+      // no-op Platzhalter; echte Log-UI liefert inspector.logs.js
+      push:  function(){ /* noop */ },
+      render:function(){ /* noop */ },
     }
-
-    panes[def.id] = pane;
-    body.appendChild(pane);
   });
 
-  // --- Helpers --------------------------------------------------------------
-  function activateTabButton(id){
-    tabs.querySelectorAll('.ins-tab').forEach(b=>{
-      b.classList.toggle('active', b.dataset.tab === id);
-    });
+  // ---- Öffnen/Schließen -----------------------------------------------------
+  function open() {
+    // evtl. Fallback-Badge entfernen
+    try { document.getElementById("inspector-fallback")?.remove(); } catch {}
+
+    root.hidden = false;
+    document.body.classList.add("inspector-open");
+    // Focus ins Panel
+    try { panel.focus({ preventScroll: true }); } catch {}
+    // Render aktiven Tab (falls noch nicht)
+    renderActiveTab();
+
+    // Event raus
+    try { window.dispatchEvent(new CustomEvent("cb:inspector-open")); } catch {}
+    log("geöffnet (", VER, ")");
   }
 
-  function showTab(id){
-    // Sichtbarkeit
-    Object.keys(panes).forEach(k=>{
-      panes[k].style.display = (k===id) ? 'flex' : 'none';
-      panes[k].style.flexDirection = 'column';
-      panes[k].style.gap = '10px';
-      panes[k].style.minHeight = '0'; // wichtig für Scrollinhalte
-    });
-    activateTabButton(id);
-
-    // Erstes Mount, wenn noch nicht passiert
-    if (__MOUNTED__[id] === null && typeof __ON_DEMAND_RENDER__[id] === 'function'){
-      const unmount = __ON_DEMAND_RENDER__[id]();
-      __MOUNTED__[id] = typeof unmount === 'function' ? unmount : undefined;
-    }
+  function close() {
+    document.body.classList.remove("inspector-open");
+    root.hidden = true;
+    try { window.dispatchEvent(new CustomEvent("cb:inspector-close")); } catch {}
+    log("geschlossen");
   }
 
-  // --- Public API (Bridge) --------------------------------------------------
-  window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {};
-  window.__INSPECTOR_API__.open = open;
-  window.__INSPECTOR_API__.close = close;
-  window.__INSPECTOR_API__.toggle = toggle;
-
-  function open(){
-    if (root.style.display === 'block') return;
-    root.style.display = 'block';
-    document.body.classList.add('inspector-open');
-    try{ window.dispatchEvent(new CustomEvent('cb:inspector-open')); }catch(_){}
-    showTab('logs'); // Default-Tab
-  }
-  function close(){
-    if (root.style.display !== 'block') return;
-    root.style.display = 'none';
-    document.body.classList.remove('inspector-open');
-    try{ window.dispatchEvent(new CustomEvent('cb:inspector-close')); }catch(_){}
-  }
-  function toggle(force){
-    const willOpen = (force==null) ? (root.style.display!=='block') : !!force;
+  function toggle(force) {
+    const willOpen = force == null ? root.hidden : !!force;
     willOpen ? open() : close();
   }
 
-  // Kleines Diagnose-Badge (nur beim ersten Page-Load, wenn API noch nicht verdrahtet war)
-  setTimeout(()=>{
-    try{
-      (window.CBLog?.info||console.log)(`${MOD} bereit (${VERSION})`);
-    }catch(_){}
-  },0);
-})();
-// === Height-Safety für Mobile/iOS (einmal setzen & bei Resize aktualisieren)
-(function(){
-  const root = document.getElementById('inspector');
-  if(!root) return;
+  // Buttons / Interaktion
+  root.querySelector(".ins-close")?.addEventListener("click", close);
+  // Overlay-Hintergrund KLICK → schließen? (nur wenn außerhalb des Panels)
+  root.addEventListener("mousedown", (ev) => {
+    if (!panel.contains(ev.target)) close();
+  });
+  // Innerhalb Panel keine Schließ-Propagation
+  panel.addEventListener("mousedown", (ev) => ev.stopPropagation());
 
-  function applyVH(){
-    // reale Viewport-Höhe (iOS berücksichtigt Safe-Area in CSS schon via env())
-    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-    root.style.setProperty('--ins-vh', vh + 'px');
+  // Tabs-Klick
+  tabsEl.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".ins-tab");
+    if (!btn) return;
+    const id = btn.dataset.tab;
+    if (!id || id === activeTab) return;
+    switchTab(id);
+  });
+
+  function switchTab(id) {
+    if (!sections[id]) return;
+    // Buttons markieren
+    tabBtns.forEach(b => {
+      const on = b.dataset.tab === id;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    // Sections ein/aus
+    Object.entries(sections).forEach(([key, sec]) => {
+      sec.hidden = key !== id;
+    });
+    activeTab = id;
+    saveTab(id);
+    renderActiveTab();
   }
-  applyVH();
-  window.addEventListener('resize', applyVH, {passive:true});
+
+  function renderActiveTab() {
+    // Unmount vorheriger Content, wenn Tab erneut gerendert wird
+    // (Jedes mount() darf optional eine Unmount-Fn zurückgeben – hier unterstützt.)
+    if (renderActiveTab._unmount) {
+      try { renderActiveTab._unmount(); } catch (_) {}
+      renderActiveTab._unmount = null;
+    }
+    const fn = mounts[activeTab];
+    if (typeof fn === "function") {
+      const maybeUnmount = fn(); // Module rendert sich in seine Slots
+      if (typeof maybeUnmount === "function") renderActiveTab._unmount = maybeUnmount;
+    }
+  }
+
+  // ---- Focus-Trap (einfach) -------------------------------------------------
+  panel.setAttribute("tabindex", "-1");
+  root.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") { ev.preventDefault(); close(); return; }
+    // einfache Trap: bei Tab innerhalb Panel bleiben
+    if (ev.key === "Tab") {
+      const focusables = root.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
+      const list = Array.from(focusables).filter(el => panel.contains(el) && !el.disabled && el.offsetParent !== null);
+      if (!list.length) return;
+      const first = list[0], last = list[list.length - 1];
+      const active = document.activeElement;
+      if (ev.shiftKey && active === first) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && active === last) { ev.preventDefault(); first.focus(); }
+    }
+  });
+
+  // ---- Persistenz aktiver Tab ----------------------------------------------
+  function saveTab(id) {
+    try { localStorage.setItem("ins.activeTab", id); } catch (_) {}
+  }
+  function loadTab() {
+    try { return localStorage.getItem("ins.activeTab") || ""; } catch (_) { return ""; }
+  }
+
+  // ---- Auto-Wiring & Ready-Log ---------------------------------------------
+  // Falls jemand schon vor uns "Inspector lädt…" Fallback gesetzt hatte
+  try { document.getElementById("inspector-probe")?.remove(); } catch {}
+
+  log("bereit (", VER, ")");
+
+  // Exponierte komfort-Methoden für FAB:
+  //  - window.GameUI.toggleInspector() ruft __INSPECTOR_API__.toggle() (via ui-bridge)
+  // Nichts weiter zu tun – das Panel bleibt geschlossen bis der Nutzer öffnet.
+
+  // Optional: Wenn URL ?open-ins=1 → auto-öffnen (nur Dev-Helfer)
+  try {
+    if (/\bopen-ins=1\b/.test(location.search)) open();
+  } catch(_) {}
+
+  // Beim Hot-Reload / Neuinitialisierung sicherstellen, dass aktiver Tab sichtbar ist
+  switchTab(activeTab); // wendet Sichtbarkeiten sofort an
+
 })();
