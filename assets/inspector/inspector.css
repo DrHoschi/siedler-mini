@@ -1,266 +1,272 @@
 /* ============================================================================
- * Inspector CSS – v18.11.1
- * - Angepasst an helles Grau-Design & mit Scroll-Fix
+ * Datei: assets/inspector/inspector.css
+ * Version: v18.11.2 (Light-Grey Theme + Scroll-Fix + slot-basiert)
+ * Vorgaben:
+ *  - Vollbild-Overlay (zentriert), hellgraues Panel
+ *  - Tabs/Controls gemäß Slot-Struktur (keine body-Anhängsel)
+ *  - Log-Viewport mit eigenem Scroller (auch auf iOS)
+ *  - Farben/Abstände nach Vorgabe (hellgrau), dunkle Schrift
  * ========================================================================== */
 
 :root{
-  --ins-bg: rgba(30,30,30,0.6); /* Hintergrund des Overlays */
-  --ins-panel: #EAECEE; /* NEU: Heller, neutraler Panel-Hintergrund */
-  --ins-panel-2: #D5D8DC; /* NEU: Etwas dunklerer Hintergrund für Header/Logview */
-  --ins-border: #BFC9CA; /* NEU: Passender grauer Rand */
-  --ins-text: #2C3E50; /* NEU: Dunkle Textfarbe für Lesbarkeit */
-  --ins-dim: #5D6D7E; /* NEU: Gedimmter Text in dunklerem Grau */
-  --ins-pill: #D5D8DC; /* NEU: Hintergrund für inaktive Buttons */
-  --ins-pill-active: #BFC9CA; /* NEU: Hintergrund für aktive Buttons */
-  --ins-ok: #27AE60;
+  /* Palette */
+  --ins-bg: rgba(30,30,30,0.60);  /* Overlay-Hintergrund */
+  --ins-panel:   #EAECEE;         /* Panel hell */
+  --ins-panel-2: #D5D8DC;         /* Header / Log-Hintergrund */
+  --ins-border:  #BFC9CA;         /* Rahmen */
+  --ins-text:    #2C3E50;         /* Text dunkel */
+  --ins-dim:     #5D6D7E;         /* gedimmt */
+  --ins-pill:        #D5D8DC;     /* inaktive Buttons */
+  --ins-pill-active: #BFC9CA;     /* aktive Buttons */
+
+  --ins-ok:   #27AE60;
   --ins-warn: #F39C12;
-  --ins-err: #E74C3C;
+  --ins-err:  #E74C3C;
   --ins-info: #3498DB;
-  --ins-shadow: 0 8px 25px rgba(0,0,0,.25); /* Angepasster Schatten für hellen Modus */
+
+  --ins-shadow: 0 8px 25px rgba(0,0,0,.25);
   --ins-radius: 8px;
 }
 
-/* Vollbild + Safe Area + Topmost */
+/* Overlay */
 #inspector{
   position: fixed;
   inset: 0;
   z-index: 2147483646;
-  display: block;
-  padding: max(env(safe-area-inset-top),0px)
-           max(env(safe-area-inset-right),0px)
-           calc(max(env(safe-area-inset-bottom),0px))
-           max(env(safe-area-inset-left),0px);
   background: var(--ins-bg);
   backdrop-filter: blur(4px);
-  pointer-events: auto;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  padding:
+    max(env(safe-area-inset-top),0px)
+    max(env(safe-area-inset-right),0px)
+    max(env(safe-area-inset-bottom),0px)
+    max(env(safe-area-inset-left),0px);
+  pointer-events: auto;
 }
 
-/* Body scrollt nicht, wenn Overlay offen */
+/* Body darf nicht scrollen, solange Overlay offen ist */
 body.inspector-open{ overflow: hidden; }
 
-/* Panel Wrap - angepasst für das Bild */
+/* Wrapper begrenzt die Panelgröße */
 #inspector .ins-wrap{
   position: relative;
-  width: 400px;
-  max-width: 90vw;
-  max-height: 90vh; /* Maximale Höhe wird hier definiert */
-  padding: 0;
-  display: flex; /* Wichtig für die Kinder-Elemente */
+  width: 420px;
+  max-width: 96vw;
+  max-height: 92vh;
+  display: flex;
   flex-direction: column;
   gap: 0;
+  /* wichtig, damit Kinder ordentlich schrumpfen können */
+  min-height: 0;
 }
 
+/* Panel */
 #inspector .ins-panel{
   background: var(--ins-panel);
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
   box-shadow: var(--ins-shadow);
-  color: var(--ins-text); /* NEU: Dunkle Textfarbe */
+  color: var(--ins-text);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  flex: 1; /* KORREKTUR: Lässt das Panel den Platz im Wrap füllen, was das Scrollen ermöglicht */
-  min-height: 0; /* KORREKTUR: Wichtig für Flexbox-Verhalten */
+  overflow: hidden;  /* Kanten sauber */
+  flex: 1;           /* füllt ins-wrap */
+  min-height: 0;     /* Flex-Fix: erlaubt eigenständigen Scroller darunter */
 }
 
-/* Header */
+/* Kopfzeile */
 .ins-head{
   display:flex;
   align-items:center;
-  justify-content:space-between;
   gap:12px;
   padding:10px 16px;
   background: var(--ins-panel-2);
   border-bottom:1px solid var(--ins-border);
-  border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
 .ins-title{
-  display:flex; align-items:center; gap:8px;
-  font-weight:600; font-size:18px; letter-spacing:.1px;
-  margin-right: auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-weight:600;
+  font-size:18px;
+  letter-spacing:.1px;
+  margin-right:auto;
 }
-.ins-ver{ display: none; }
+.ins-ver{
+  font-size:12px;
+  color: var(--ins-dim);
+  opacity:.9;
+}
+.ins-close{
+  border:none;
+  background:transparent;
+  color:var(--ins-dim);
+  font-size:20px;
+  line-height:1;
+  padding:4px;
+  border-radius:999px;
+  cursor:pointer;
+}
+.ins-close::before{ content:"✕"; }
 
 /* Tabs */
 .ins-tabs{
-  display:flex; gap:0px;
+  display:flex;
+  gap:0;
   flex-wrap:nowrap;
-  margin-left: -1px;
+  margin-left:-1px; /* optische Linie mit Panelkante */
 }
 .ins-tab{
   border:1px solid var(--ins-border);
-  border-left: none;
-  border-top: none;
-  cursor:pointer; padding:8px 14px;
+  border-top:none;
+  border-left:none;
   border-radius:0;
   background:var(--ins-panel);
   color:var(--ins-text);
-  font-size: 14px;
-  white-space: nowrap;
+  padding:8px 14px;
+  font-size:14px;
+  white-space:nowrap;
+  cursor:pointer;
 }
+.ins-tab:first-child{ border-left:1px solid var(--ins-border); }
 .ins-tab.active{
   background:var(--ins-panel-2);
-  border-bottom-color: var(--ins-panel-2);
-  position: relative;
-  z-index: 1;
-}
-.ins-tab:first-child {
-    border-left: 1px solid var(--ins-border);
+  border-bottom-color:var(--ins-panel-2);
+  position:relative;
+  z-index:1;
 }
 
-/* Close */
-.ins-close{
-  border:none; cursor:pointer;
-  padding:4px;
-  border-radius:999px;
-  background: transparent;
-  color:var(--ins-dim);
-  font-size: 20px;
-  line-height: 1;
-}
-.ins-close::before {
-    content: "✕";
-}
-
-/* Body */
+/* Inhalt */
 .ins-body{
-  flex:1; display:flex; flex-direction:column; gap:8px;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
   padding:14px 16px 10px 16px;
-  overflow:hidden;
-  min-height: 0; /* KORREKTUR: Wichtig für Flexbox */
+  overflow:hidden;  /* kein Body-Scroll – nur die View scrollt */
+  min-height:0;     /* Flex-Fix */
 }
 
-/* Filter/Controls-Reihe */
+/* Controls / Filterzeile */
 .ins-controls{
-  display:flex; flex-wrap:wrap; gap:6px 10px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 10px;
   align-items:center;
-  margin-bottom: 8px;
-  flex-direction: column;
-  align-items: flex-start;
+  margin-bottom:8px;
 }
 .ins-toggle{
-  border:none; cursor:pointer; padding:0;
-  border-radius:0; background:transparent; color:var(--ins-text);
-  display: flex;
-  align-items: center;
-  font-size: 15px;
+  border:none;
+  background:transparent;
+  color:var(--ins-text);
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  font-size:14px;
+  padding:4px 0;
 }
-.ins-toggle.active{ background:transparent; }
-.ins-toggle::before {
-    content: '☑';
-    margin-right: 8px;
-    font-size: 1.2em;
-    line-height: 1;
-    color: var(--ins-info);
+.ins-toggle::before{
+  content:'☑';
+  margin-right:8px;
+  font-size:1.1em;
+  line-height:1;
+  color:var(--ins-info);
 }
-.ins-toggle:not(.active)::before {
-    content: '☐';
-    color: var(--ins-dim);
+.ins-toggle:not(.active)::before{
+  content:'☐';
+  color:var(--ins-dim);
+}
+.ins-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:18px;
+  height:18px;
+  padding:0 6px;
+  margin-left:6px;
+  border-radius:999px;
+  background:var(--ins-pill);
+  border:1px solid var(--ins-border);
+  font-size:11px;
+  color:var(--ins-text);
+}
+.ins-search{
+  margin-left:auto;
+  padding:6px 10px;
+  border-radius:6px;
+  border:1px solid var(--ins-border);
+  background:#fff;
+  color:#111;
+  font-size:14px;
 }
 
-.ins-badge{ display: none; }
-.ins-search{ display: none; }
-
-/* Log-Viewport: eigener Scroller */
+/* Log-Viewport – der eigentliche Scroller */
 .ins-logview{
-  flex:1; overflow:auto; /* Dieses Overflow funktioniert jetzt korrekt */
-  min-height: 0; /* KORREKTUR: Essentiell für das Scrollen in einem Flex-Container */
+  flex:1;
+  overflow:auto;
+  min-height:0; /* essenziell für Flex-Scroll */
   border:1px solid var(--ins-border);
   border-radius:6px;
   background: var(--ins-panel-2);
   padding:10px 14px;
   font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--ins-text);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  -webkit-overflow-scrolling: touch; /* iOS */
 }
 
-/* Log-Zeilen-Farben */
-.log-line {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
+/* Log-Zeilen – auf die Klassen, die das Log-Modul setzt */
+.log-info, .log-ok, .log-warn, .log-error{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  word-break: break-word;
 }
-.log-line::before {
-    content: '';
-    font-size: 1.2em;
-    line-height: 1;
-    flex-shrink: 0;
-    width: 1em;
-    text-align: center;
-}
-.log-info.log-line::before { content: 'ⓘ'; color: var(--ins-info); }
-.log-ok.log-line::before { content: '✔'; color: var(--ins-ok); }
-.log-warn.log-line::before { content: '⚠'; color: var(--ins-warn); }
-.log-error.log-line::before { content: '✖'; color: var(--ins-err); }
+.log-info::before { content:'ⓘ'; color:var(--ins-info); }
+.log-ok::before   { content:'✔'; color:var(--ins-ok); }
+.log-warn::before { content:'⚠'; color:var(--ins-warn); }
+.log-error::before{ content:'✖'; color:var(--ins-err); }
 
-/* Buttons im Log-View */
-.ins-logview .btn-row {
-    display: flex;
-    justify-content: space-around;
-    gap: 10px;
-    margin-top: 15px;
-}
-.ins-logview .btn {
-    flex: 1;
-    padding: 10px 15px;
-    border-radius: 5px;
-    border: 1px solid var(--ins-border);
-    background: var(--ins-pill);
-    color: var(--ins-text);
-    cursor: pointer;
-    font-size: 15px;
-    text-align: center;
-}
-.ins-logview .btn:hover {
-    background: var(--ins-pill-active);
-}
-
-/* Footer */
+/* Fußzeile */
 .ins-foot{
-  display:flex; justify-content:flex-start;
-  align-items:center; gap:10px;
+  display:flex;
+  align-items:center;
+  gap:10px;
   padding:10px 16px;
   border-top:1px solid var(--ins-border);
-  border-radius: 0 0 var(--ins-radius) var(--ins-radius);
   background: var(--ins-panel-2);
-  min-height: 40px;
 }
 .ins-foot .muted{
-    font-size:13px;
-    margin-right:auto;
-    color: var(--ins-text);
+  font-size:13px;
+  color:var(--ins-text);
+  opacity:.9;
+  margin-right:auto;
 }
 
-/* Zusätzlicher Styling für den unteren rechten Infobutton */
-.floating-info-button {
-    position: absolute;
-    right: 20px;
-    bottom: 20px;
-    width: 45px;
-    height: 45px;
-    background-color: var(--ins-info);
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: white; /* Weißes 'i' auf blauem Grund */
-    font-size: 24px;
-    font-weight: bold;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    cursor: pointer;
-    z-index: 10;
+/* kleine Feedback-Animation (z.B. Kopieren) */
+.ins-flash{ animation: insFlash .6s ease; }
+@keyframes insFlash{
+  from{ box-shadow:0 0 0 0 rgba(52,152,219,.6); }
+  to  { box-shadow:0 0 0 14px rgba(52,152,219,0); }
 }
 
-/* Scrollbar Styling für den hellen Modus */
+/* Scrollbar (WebKit) */
 #inspector .ins-logview::-webkit-scrollbar{ width:10px; }
-#inspector .ins-logview::-webkit-scrollbar-track{ background: transparent; }
+#inspector .ins-logview::-webkit-scrollbar-track{ background:transparent; }
 #inspector .ins-logview::-webkit-scrollbar-thumb{
-  background: var(--ins-border); /* NEU: Scrollbar-Farbe passend zum Design */
+  background:var(--ins-border);
   border-radius:10px;
-  border: 2px solid var(--ins-panel-2); /* NEU: Rand um die Scrollbar für besseren Kontrast */
+  border:2px solid var(--ins-panel-2);
+}
+
+/* Kleinere Screens */
+@media (max-width: 480px){
+  #inspector .ins-wrap{ width: 96vw; }
+  .ins-head{ padding:10px 12px; }
+  .ins-body{ padding:12px; }
+  .ins-tab{ padding:8px 10px; font-size:13px; }
 }
