@@ -1,173 +1,102 @@
 /* ============================================================================
- * Datei: assets/core/game.bootstrap.js
- * Projekt: Siedler-Mini
- * Version: v17.6.1
- *
- * Ziele / Garantien
- *  - Verbindet Engine ↔ Render neutral (kein harter Game-State hier)
- *  - Pro Frame genau EIN Zeichnen (via 'cb:render-frame' oder direkter Aufruf)
- *  - Doppelt-Start vermeiden (idempotent)
- *  - OverlayHooks anbinden (requestRepaint → sofortiges Rendern)
- *  - Kompatibel zu:
- *      • index.html (FABs / Body-Klassen / Reihenfolge)
- *      • boot.compat.js (GameBoot.start)
- *      • Legacy game.js (falls vorhanden, wird bevorzugt gestartet)
- *
- * Öffentliche API:
- *   - window.GameBoot.start(mapUrl?:string)
- *
- * Eingehende Events:
- *   - 'cb:boot-request'      → optionaler Fallback-Start (boot.compat.js oder UI)
- *   - 'cb:engine-repaint'    → sofort Render.frame()
- *   - 'cb:render-frame'      → Render.frame()
- *
- * Ausgehende Events:
- *   - 'cb:engine-ready'      → sobald das Bootstrap bereit ist
- *   - 'cb:render-ready'      → kommt aus core.render.js
- * ========================================================================== */
+ * Datei: assets/core/game.bootstrap.js  (Ausschnitt – EVENTS für Inspector-Tests)
+ * Version: v17.7.8-tests-bridge
+ * Zweck: Konsumiert Test-Events vom Inspector und delegiert an Spielsysteme
+ * ========================================================================= */
+
 (function(){
-  'use strict';
+  "use strict";
+  const MOD = "[bootstrap.tests]";
+  const ok   = (...a)=> (window.CBLog?.ok   || console.log)(MOD, ...a);
+  const info = (...a)=> (window.CBLog?.info || console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn || console.warn)(MOD, ...a);
 
-  var MOD='[bootstrap]';
-  var VER='v17.6.1';
-
-  // --- kleine Logger ---------------------------------------------------------
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(MOD+' '+m);}catch(_){console.log(MOD+' '+m);} }
-  function info(m){ try{ (window.CBLog?.info||console.log)(MOD+' '+m);}catch(_){console.log(MOD+' '+m);} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(MOD+' '+m);}catch(_){console.warn(MOD+' '+m);} }
-  function err(m){ try{ (window.CBLog?.err||console.error)(MOD+' '+m);}catch(_){console.error(MOD+' '+m);} }
-
-  // --- State -----------------------------------------------------------------
-  var _started = false;
-  var _rafId   = 0;
-  var _useEventPump = true;  // Standard: per Event "cb:render-frame"
-  var _running = false;
-
-  // --- Render Binding --------------------------------------------------------
-  function ensureRenderInstalled(){
+  // Helper: HQ/Depot finden (sehr defensiv)
+  function findHQandDepot(){
     try{
-      if (!window.Render || typeof Render.frame!=='function'){
-        warn('Render nicht bereit – versuche Auto-Init');
-        try{ window.Render?.init?.(); }catch(_){}
+      const ents = window.Game?.getEntities?.() || [];
+      let hq = null, depot = null;
+      for (const e of ents){
+        const id = (e?.id || e?.type || "").toLowerCase();
+        if (!hq && (id==="hq" || id==="hauptquartier")) hq = e;
+        if (!depot && id==="depot") depot = e;
+      }
+      return { hq, depot };
+    }catch(_){ return { hq:null, depot:null }; }
+  }
+
+  // Pfad-Test: HQ ⇄ Depot
+  window.addEventListener("cb:test:path-hq-depot", ()=>{
+    const { hq, depot } = findHQandDepot();
+    if (!hq || !depot){
+      warn("HQ/Depot nicht gefunden.");
+      window.dispatchEvent(new CustomEvent("cb:test:err", { detail:{ msg:"HQ/Depot nicht gefunden" } }));
+      return;
+    }
+    // Versuche Pfadfinder zu benutzen (API unbekannt → defensiv):
+    try{
+      const pf  = window.PathFinder || window.Game?.pathfinder;
+      const res = pf?.findPath
+        ? pf.findPath({ from:{tx:hq.tx,ty:hq.ty}, to:{tx:depot.tx,ty:depot.ty} })
+        : null;
+
+      if (res && res.path && res.path.length){
+        ok("Pfad gefunden HQ→Depot, Länge:", res.path.length);
+        // Falls OverlayHooks Heatmap/Highlight hat:
+        try{ window.OverlayHooks?.highlight?.(res.path); }catch(_){}
+        window.dispatchEvent(new CustomEvent("cb:test:ok", { detail:{ msg:`Pfad HQ→Depot Länge=${res.path.length}` } }));
+      } else {
+        warn("Kein Pfad zurückgegeben.");
+        window.dispatchEvent(new CustomEvent("cb:test:warn", { detail:{ msg:"Pfad nicht gefunden / leer" } }));
+      }
+    }catch(e){
+      warn("Pfad-Test Fehler:", e?.message||e);
+      window.dispatchEvent(new CustomEvent("cb:test:err", { detail:{ msg:"Pfad-Test Fehler" } }));
+    }
+  });
+
+  // Carrier-Test: HQ ⇄ Depot, count Zyklen
+  window.addEventListener("cb:test:carrier-hq-depot", (ev)=>{
+    const count = Math.max(1, ev.detail?.count|0 || 1);
+    const { hq, depot } = findHQandDepot();
+    if (!hq || !depot){
+      warn("Carrier-Test: HQ/Depot nicht gefunden");
+      window.dispatchEvent(new CustomEvent("cb:test:err", { detail:{ msg:"Carrier: HQ/Depot fehlt" } }));
+      return;
+    }
+    try{
+      // Mögliche APIs: Game.Carriers.spawn / Game.spawnCarrier / Carriers.spawn …
+      const spawn = window.Game?.Carriers?.spawn
+                 || window.Game?.spawnCarrier
+                 || window.Carriers?.spawn;
+
+      if (typeof spawn !== "function"){
+        warn("Keine Carrier-Spawn-API gefunden.");
+        window.dispatchEvent(new CustomEvent("cb:test:warn", { detail:{ msg:"Carrier-API fehlt" } }));
+        return;
       }
 
-      // OverlayHooks: dem Renderer eine Repaint-Schnittstelle geben
-      if (window.OverlayHooks && typeof OverlayHooks.installToRenderer==='function'){
-        OverlayHooks.installToRenderer({
-          requestRepaint: function(){
-            // Entweder sofort zeichnen oder Event pumpen
-            if (!_useEventPump){
-              try{ Render.frame(); }catch(e){ warn('frame() fail: '+(e&&e.message)); }
-            } else {
-              try{ window.dispatchEvent(new Event('cb:render-frame')); }catch(_){}
-            }
-          }
-        });
+      for (let i=0;i<count;i++){
+        spawn({ from:{tx:hq.tx,ty:hq.ty}, to:{tx:depot.tx,ty:depot.ty}, loop:true });
       }
-    }catch(e){ warn('ensureRenderInstalled: '+(e&&e.message)); }
-  }
+      ok(`Carrier-Test gestartet (Zyklen=${count})`);
+      window.dispatchEvent(new CustomEvent("cb:test:ok", { detail:{ msg:`Carrier gestartet (x${count})` } }));
+    }catch(e){
+      warn("Carrier-Test Fehler:", e?.message||e);
+      window.dispatchEvent(new CustomEvent("cb:test:err", { detail:{ msg:"Carrier-Test Fehler" } }));
+    }
+  });
 
-  // --- Frame Pump ------------------------------------------------------------
-  function pumpEventFrame(){
-    try{ window.dispatchEvent(new Event('cb:render-frame')); }catch(_){}
-  }
-
-  function tick(){
-    _rafId = 0;
-    if (!_running) return;
+  // Stopp
+  window.addEventListener("cb:test:stop", ()=>{
     try{
-      if (_useEventPump) pumpEventFrame();
-      else Render?.frame?.();
-    }catch(e){ warn('tick: '+(e&&e.message)); }
-    _rafId = requestAnimationFrame(tick);
-  }
+      window.Game?.Carriers?.stopAll?.();
+      ok("Tests gestoppt.");
+      window.dispatchEvent(new CustomEvent("cb:test:ok", { detail:{ msg:"Tests gestoppt" } }));
+    }catch(_){
+      window.dispatchEvent(new CustomEvent("cb:test:warn", { detail:{ msg:"Kein Stop-Hook vorhanden" } }));
+    }
+  });
 
-  function startLoop(){
-    if (_running) return;
-    _running = true;
-    _rafId = requestAnimationFrame(tick);
-  }
-  function stopLoop(){
-    _running = false;
-    if (_rafId){ cancelAnimationFrame(_rafId); _rafId=0; }
-  }
-
-  // Optional: bei Tab-Wechsel sparen
-  try{
-    document.addEventListener('visibilitychange', function(){
-      if (document.hidden) stopLoop(); else startLoop();
-    });
-  }catch(_){}
-
-  // --- Public Start ----------------------------------------------------------
-  function doStart(mapUrl){
-    if (_started){ warn('bereits gestartet'); return; }
-    _started = true;
-
-    ensureRenderInstalled();
-    startLoop();
-
-    // Legacy-Game.js bevorzugt starten, wenn vorhanden
-    var usedLegacy = false;
-    try{
-      if (window.startGame && typeof startGame==='function'){
-        usedLegacy = true;
-        startGame({
-          canvas: document.getElementById('game'),
-          mapUrl: mapUrl || (document.getElementById('game')?.dataset?.map) || 'assets/maps/map-mini.json',
-          onReady: function(){ ok('Legacy-Start (startGame) bereit'); }
-        });
-      } else if (window.Game && typeof Game.start==='function'){
-        usedLegacy = true;
-        Game.start(mapUrl || (document.getElementById('game')?.dataset?.map) || 'assets/maps/map-mini.json');
-      }
-    }catch(e){ err('Legacy-Start fehlgeschlagen: '+(e&&e.message)); }
-
-    ok('ready ('+VER+')'+(usedLegacy?' [Legacy-Bridge aktiv]':' [Minimal-Engine aktiv]'));
-    try{ window.dispatchEvent(new Event('cb:engine-ready')); }catch(_){}
-  }
-
-  // --- Event-Wires -----------------------------------------------------------
-  // 1) Render-Frame aus Event heraus anstoßen (Engine kann das feuern)
-  try{
-    window.addEventListener('cb:render-frame', function(){
-      try{ Render?.frame?.(); }catch(e){ warn('Render.frame() Fehler: '+(e&&e.message)); }
-    });
-  }catch(_){}
-
-  // 2) „Sofort neu zeichnen“ Shortcuts (von Inspector/Overlay)
-  try{
-    window.addEventListener('cb:engine-repaint', function(){
-      try{ Render?.frame?.(); }catch(e){ warn('Repaint Fehler: '+(e&&e.message)); }
-    });
-  }catch(_){}
-
-  // 3) Fallback-Boot: wenn jemand „cb:boot-request“ feuert
-  try{
-    window.addEventListener('cb:boot-request', function(ev){
-      var url = ev?.detail?.mapUrl || null;
-      doStart(url);
-    });
-  }catch(_){}
-
-  // --- Öffentliche API -------------------------------------------------------
-  window.GameBoot = window.GameBoot || {};
-  window.GameBoot.start = function(mapUrl){
-    doStart(mapUrl);
-  };
-
-  // --- Auto-Init (sanft) -----------------------------------------------------
-  function safeInit(){
-    try{
-      ensureRenderInstalled();
-      // Falls jemand bereits cb:boot-request geschickt hat, sind wir startklar.
-      ok('Modul geladen ('+VER+')');
-    }catch(e){ warn('Init: '+(e&&e.message)); }
-  }
-  if (document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', safeInit, {once:true});
-  } else {
-    safeInit();
-  }
-
+  info("Test-Event-Bridge aktiv.");
 })();
