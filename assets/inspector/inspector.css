@@ -150,3 +150,22 @@ body.inspector-open{ overflow: hidden; }
   border-radius:10px;
   border:2px solid var(--ins-panel-2);
 }
+/* Deutlichere Zustände für Filter-Toggles */
+.ins-toggle {
+  padding: 6px 10px;
+  border:1px solid var(--ins-border);
+  border-radius:6px;
+  background: #F2F4F6;          /* inaktiv heller */
+  color: var(--ins-text);
+}
+.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
+.ins-toggle.active{
+  background: #C9D6E2;          /* aktiv dunkler */
+  border-color: #AFC0CE;
+}
+.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
+.ins-controls .ins-btn{
+  padding:6px 10px; border:1px solid var(--ins-border);
+  border-radius:6px; background:#F2F4F6; cursor:pointer;
+}
+.ins-controls .ins-btn:hover{ background:#e9edf1; }
