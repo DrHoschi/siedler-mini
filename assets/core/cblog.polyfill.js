@@ -72,3 +72,18 @@
   CBLog.info("CBLog", "Polyfill aktiv");
 })();
 </script>
+// assets/core/cblog.polyfill.js – ganz unten ergänzen
+(function(){
+  if (!window.CBLog) return;
+  const listeners = { append: new Set() };
+  const origPush = (window.CBLog._push || null);
+
+  // Wrap Push (falls vorhanden) – oder ersetze deine interne Stelle, die in den Buffer schreibt
+  window.CBLog._push = function(entry){
+    try { origPush && origPush(entry); } catch(_){}
+    listeners.append.forEach(fn => { try{ fn(entry); }catch(_){} });
+  };
+
+  window.CBLog.on  = function(evt, fn){ if(evt==='append' && fn) listeners.append.add(fn); };
+  window.CBLog.off = function(evt, fn){ if(evt==='append' && fn) listeners.append.delete(fn); };
+})();
