@@ -208,3 +208,108 @@
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 8px; padding: 6px 8px;
 }
+/* =========================
+   INSPECTOR – LIGHT SKIN
+   Aktiv, wenn #inspector die Klasse .skin-light trägt
+   ========================= */
+#inspector.skin-light{
+  --ins-surface:        #f3f4f6;   /* Panel-Hintergrund (hellgrau) */
+  --ins-surface-2:      #ffffff;   /* Karten/Logflächen (weiß)    */
+  --ins-border:         #d1d5db;   /* Rahmen                       */
+  --ins-text:           #111827;   /* Text dunkel                  */
+  --ins-muted:          #6b7280;   /* gedämpfter Text              */
+  --ins-pill:           #e5e7eb;   /* graue Chips/Tabs             */
+  --ins-pill-active:    #dbeafe;   /* aktiver Tab Chip             */
+  --ins-pill-active-t:  #1e3a8a;   /* aktiver Tab Text             */
+  --ins-btn:            #e5e7eb;   /* neutrale Buttonfläche        */
+  --ins-btn-hover:      #dfe3e7;
+  --ins-search-bg:      #ffffff;
+  --ins-search-border:  #cbd5e1;
+
+  --ins-ok:   #16a34a;
+  --ins-warn: #d97706;
+  --ins-err:  #dc2626;
+  --ins-info: #334155;
+}
+
+/* Panel */
+#inspector.skin-light .ins-window{
+  background: var(--ins-surface);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+  box-shadow: 0 24px 70px rgba(0,0,0,.28);
+}
+
+/* Header */
+#inspector.skin-light .ins-title{ color: var(--ins-text); }
+#inspector.skin-light .ins-close{
+  background: var(--ins-btn);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+}
+#inspector.skin-light .ins-close:hover{ background: var(--ins-btn-hover); }
+
+/* Tabs (oben: LOGS/BUILD/PFADE/TESTS) */
+#inspector.skin-light .ins-tabs .ins-tab{
+  background: var(--ins-pill);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+}
+#inspector.skin-light .ins-tabs .ins-tab.active{
+  background: var(--ins-pill-active);
+  color: var(--ins-pill-active-t);
+  border-color: #bfdbfe;
+}
+
+/* Zähler-Badges (INFO/OK/WARN/ERR) + Filtertoggles */
+#inspector.skin-light .ins-controls{ color: var(--ins-text); }
+#inspector.skin-light .ins-toggle{
+  background: var(--ins-pill);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+}
+#inspector.skin-light .ins-toggle.active{
+  background: var(--ins-surface-2);
+  border-color: var(--ins-pill-active);
+}
+#inspector.skin-light .ins-badge{
+  background: var(--ins-surface-2);
+  color: var(--ins-muted);
+  border: 1px solid var(--ins-border);
+}
+
+/* Suche + Buttons */
+#inspector.skin-light .ins-search{
+  background: var(--ins-search-bg);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-search-border);
+}
+#inspector.skin-light .ins-actions button{
+  background: var(--ins-btn);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+}
+#inspector.skin-light .ins-actions button:hover{
+  background: var(--ins-btn-hover);
+}
+
+/* Log-Container */
+#inspector.skin-light .ins-logview{
+  background: var(--ins-surface-2);
+  color: var(--ins-text);
+  border: 1px solid var(--ins-border);
+  font-variant-ligatures: none;
+}
+
+/* einzelne Logzeilen (Level-Farben) */
+#inspector.skin-light .ins-logview .log-info{  color: var(--ins-info); }
+#inspector.skin-light .ins-logview .log-ok{    color: var(--ins-ok); }
+#inspector.skin-light .ins-logview .log-warn{  color: var(--ins-warn); }
+#inspector.skin-light .ins-logview .log-error{ color: var(--ins-err); }
+
+/* kleine Effekte */
+#inspector.skin-light .ins-flash{ 
+  outline: 2px solid #93c5fd; 
+  outline-offset: 2px; 
+  transition: outline-color .6s ease; 
+}
