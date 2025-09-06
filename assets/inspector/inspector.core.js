@@ -182,3 +182,16 @@
     }catch(_){}
   },0);
 })();
+// === Height-Safety für Mobile/iOS (einmal setzen & bei Resize aktualisieren)
+(function(){
+  const root = document.getElementById('inspector');
+  if(!root) return;
+
+  function applyVH(){
+    // reale Viewport-Höhe (iOS berücksichtigt Safe-Area in CSS schon via env())
+    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    root.style.setProperty('--ins-vh', vh + 'px');
+  }
+  applyVH();
+  window.addEventListener('resize', applyVH, {passive:true});
+})();
