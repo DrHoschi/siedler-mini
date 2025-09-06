@@ -4,84 +4,57 @@
  * Version: v18.10.9
  *
  * Zweck:
- *  - Log-Tab UI (Filter, Badges, Suche, Kopieren/Export)
- *  - Striktes Slot-Rendering in das Inspector-Overlay (KEIN body-Append!)
- *  - Safety-Hooks: Historie + Live-Stream + Fallback auf console.*,
- *    wenn CBLog fehlt / kein .on('append') bietet.
- *
- * Abhängigkeiten:
- *  - inspector.core.js stellt window.__INSPECTOR_CORE__ bereit:
- *      • core.api.mount(tabId, renderFn)
- *      • core.api.getSlot(name)  -> DOM-Element ('logs-controls', 'logs-view')
- *      • core.api.signal(name, payload?)  (optional)
- *  - CBLog (Polyfill/Impl):
- *      • CBLog.getBuffer() -> Array<string|object>
- *      • optional: CBLog.on('append', fn) / CBLog.off('append', fn)
+ *  - Log-Tab UI (Filter/Badges/Suche/Kopieren/Export)
+ *  - Striktes Slot-Rendering (nur in die vom Core bereitgestellten Slots)
+ *  - Safety-Hook: beim Öffnen Historie laden + live streamen (CBLog oder Fallback)
  * ========================================================================== */
 
-/* --- SAFETY-HOOK (einmalig) -------------------------------------------------
-   Holt Historie beim Öffnen & versucht Live-Stream zu starten. Wenn CBLog
-   fehlt, wird console.* sanft gespiegelt, sodass trotzdem Logs sichtbar sind.
-   -> Dieser Block ist bewusst VOR dem Modul platziert und läuft einmal. */
+/* --- LOG-STREAM SAFETY HOOK -------------------------------------------------
+   Holt beim Öffnen die Historie + hängt live an. Läuft auch mit Polyfill.
+   -> Dieser Block darf VOR dem Modul stehen, damit er früh aktiv ist.       */
 (function attachLogStreamOnce(){
   if (window.__INS_LOGS_WIRED__) return;
   window.__INS_LOGS_WIRED__ = true;
 
-  const hasCBLog = !!window.CBLog;
-
-  // Historie (falls vorhanden) in die spätere Log-Ansicht pumpen
-  function pumpHistory() {
+  const pumpHistory = () => {
     try {
-      const buf =
-        (window.CBLog?.getBuffer?.() ||
-         window.CBLog?.buffer ||
-         window.__CBLOG_BUFFER ||
-         []);
+      const buf = (window.CBLog?.getBuffer?.() || []);
       if (Array.isArray(buf) && buf.length) {
-        const api = window.__INSPECTOR_API__?.logs;
-        if (api && typeof api.push === "function") {
-          buf.forEach(entry => api.push(entry));
-          api.render?.();
-        }
+        buf.forEach(entry => window.__INSPECTOR_API__?.logs?.push?.(entry));
+        window.__INSPECTOR_API__?.logs?.render?.();
       }
     } catch(_){}
-  }
+  };
 
-  // Bei Öffnen: Historie + Live-Start (falls vorhanden)
+  // Beim Öffnen Historie übernehmen + Live-Stream (falls vorhanden)
   window.addEventListener('cb:inspector-open', () => {
-    try { pumpHistory(); } catch(_){}
+    pumpHistory();
     try { window.CBLog?.LogStream?.start?.(); } catch(_){}
   });
 
-  // Bei Schließen: Live-Stop (schont Akku)
+  // Beim Schließen evtl. stoppen (Ressourcen sparen)
   window.addEventListener('cb:inspector-close', () => {
     try { window.CBLog?.LogStream?.stop?.(); } catch(_){}
   });
 
-  // Falls direkt schon offen (AutoOpen)
+  // Wenn beim Laden bereits offen (AutoOpen), direkt anstoßen
   if (document.body.classList.contains('inspector-open')) {
-    try { pumpHistory(); } catch(_){}
+    pumpHistory();
     try { window.CBLog?.LogStream?.start?.(); } catch(_){}
   }
 
-  // Fallback: console.* spiegeln, falls kein CBLog existiert
-  if (!hasCBLog) {
-    ['log','info','warn','error'].forEach(k=>{
+  // Minimaler Fallback: console.* abgreifen, wenn kein CBLog existiert
+  if (!window.CBLog) {
+    ["log","info","warn","error"].forEach(k=>{
       const orig = console[k];
       console[k] = function(...args){
         try {
-          const api = window.__INSPECTOR_API__?.logs;
-          api?.push?.({
-            ts: Date.now(),
-            level: k.toUpperCase(),
-            scope: 'console',
-            msg: args.map(a => {
-              try { return typeof a === 'string' ? a : JSON.stringify(a); }
-              catch(_) { return String(a); }
-            }).join(' ')
+          window.__INSPECTOR_API__?.logs?.push?.({
+            ts: Date.now(), lvl: k.toUpperCase(), src: "console",
+            msg: args.map(a=>String(a)).join(" ")
           });
-          api?.render?.();
-        } catch (_){}
+          window.__INSPECTOR_API__?.logs?.render?.();
+        } catch(_){}
         return orig.apply(this, args);
       };
     });
@@ -100,163 +73,103 @@
     return;
   }
 
-  // Hilfslogger (sanft)
-  const logOk   = (...a) => (window.CBLog?.ok   || console.log  )(`${MOD}`, ...a);
-  const logWarn = (...a) => (window.CBLog?.warn || console.warn )(`${MOD}`, ...a);
+  // Hilfen
+  const ok   = (...a)=> (window.CBLog?.ok   || console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn || console.warn)(MOD, ...a);
 
-  // Slot-Resolver (neue Slots + defensive Fallbacks)
-  function qSlot(name) {
-    return (
-      core.api.getSlot?.(name) ||
-      document.getElementById(`ins-${name}`) ||
-      document.querySelector(`#inspector .slot-${name}`)
-    );
-  }
+  // Level → CSS
+  const LVL = { info:"log-info", ok:"log-ok", warn:"log-warn", err:"log-error",
+                INFO:"log-info", OK:"log-ok", WARN:"log-warn", ERR:"log-error", error:"log-error" };
 
-  // Level-Mapping für CSS
-  const LVL = {
-    info: "log-info",
-    ok:   "log-ok",
-    warn: "log-warn",
-    err:  "log-error",
-    error:"log-error",
-    INFO: "log-info",
-    OK:   "log-ok",
-    WARN: "log-warn",
-    ERR:  "log-error",
-  };
-
-  function detectLevel(line) {
-    if (!line) return "info";
-    if (typeof line === "object") {
-      return (line.lvl || line.level || "info").toString().toLowerCase();
+  function detectLevel(entry){
+    if (!entry) return "info";
+    if (typeof entry === "object"){
+      return (entry.lvl || entry.level || "info").toString().toLowerCase();
     }
-    const s = String(line);
+    const s = String(entry);
     if (/\bERR(OR)?\b/i.test(s)) return "err";
     if (/\bWARN(ING)?\b/i.test(s)) return "warn";
-    if (/\bOK\b/i.test(s))       return "ok";
-    if (/\bINFO\b/i.test(s))     return "info";
+    if (/\bOK\b/i.test(s))        return "ok";
     return "info";
   }
-
-  function toText(line) {
-    if (!line && line !== 0) return "";
-    if (typeof line === "object") {
-      const t   = line.t || line.time || line.ts || "";
-      const src = line.src || line.source || line.scope || "";
-      const msg = line.msg ?? line.message ?? line.text ?? (()=>{
-        try { return JSON.stringify(line); } catch(_) { return String(line); }
-      })();
-      return t ? `[${t}] ${src ? src + " " : ""}${msg}` : `${src ? src + " " : ""}${msg}`;
+  function toText(entry){
+    if (entry == null) return "";
+    if (typeof entry === "object"){
+      const t = entry.t || entry.time || entry.ts || "";
+      const src = entry.src || entry.source || "";
+      const msg = entry.msg ?? entry.message ?? entry.text ?? JSON.stringify(entry);
+      return t ? `[${t}] ${src ? src+" " : ""}${msg}` : `${src ? src+" " : ""}${msg}`;
     }
-    return String(line);
+    return String(entry);
   }
 
-  // ----- Quellenzugriff (robust) -------------------------------------------
-  function readBufferSafe() {
-    try {
-      const buf =
-        window.CBLog?.getBuffer?.() ||
-        window.CBLog?.buffer ||
-        window.__CBLOG_BUFFER ||
-        [];
-      return Array.isArray(buf) ? buf.slice() : [];
-    } catch (_e) {
-      return [];
-    }
-  }
-
-  // ----- State --------------------------------------------------------------
-  let rawBuffer = [];     // Rohdaten aller Logs
-  let lastLen   = 0;      // Pufferlänge für Poll
-  let pollTimer = null;   // Poll-Fallback
-
+  // State
   const state = {
-    showInfo: true,
-    showOk:   true,
-    showWarn: true,
-    showErr:  true,
-    query:    "",
-    counts:   { info:0, ok:0, warn:0, err:0 },
+    showInfo:true, showOk:true, showWarn:true, showErr:true,
+    query:"", counts:{info:0, ok:0, warn:0, err:0}
   };
+  let els = { view:null, search:null, bInfo:null, bOk:null, bWarn:null, bErr:null };
 
-  let els = {
-    view: null,
-    search: null,
-    badgeInfo: null,
-    badgeOk: null,
-    badgeWarn: null,
-    badgeErr: null,
-  };
+  // Rohpuffer (liest CBLog tolerant)
+  let raw = [];
+  let pollTimer = null;
 
-  // ----- Controls -----------------------------------------------------------
-  function buildControls() {
-    const host = qSlot("logs-controls");
-    if (!host) return;
+  function readBuffer(){
+    try { const b = window.CBLog?.getBuffer?.(); return Array.isArray(b) ? b.slice() : []; }
+    catch(_){ return []; }
+  }
+
+  // UI -----------------------------------------------------------------------
+  function qSlot(n){ return core.api.getSlot(n); }
+
+  function buildControls(){
+    const host = qSlot("logs-controls"); if (!host) return;
     host.innerHTML = "";
 
     const wrap = document.createElement("div");
     wrap.className = "ins-controls";
 
-    const mkToggle = (label, key, title) => {
+    const mkToggle = (label, key, title)=>{
       const b = document.createElement("button");
       b.className = "ins-toggle";
-      b.dataset.key = key;
       b.textContent = label;
-      b.title = title || "";
-      b.classList.toggle("active", !!state[key]);
-      b.addEventListener("click", () => {
+      b.title = title||"";
+      if (state[key]) b.classList.add("active");
+      b.addEventListener("click", ()=>{
         state[key] = !state[key];
-        b.classList.toggle("active", !!state[key]);
+        b.classList.toggle("active", state[key]);
         renderList();
       });
-      return b;
-    };
-    const mkBadge = () => {
-      const s = document.createElement("span");
-      s.className = "ins-badge";
-      s.textContent = "0";
-      return s;
+      const badge = document.createElement("span");
+      badge.className = "ins-badge";
+      badge.textContent = "0";
+      b.appendChild(badge);
+      return {btn:b, badge};
     };
 
-    const tInfo = mkToggle("INFO", "showInfo", "Info ein/aus");
-    const bInfo = mkBadge();  tInfo.appendChild(bInfo); els.badgeInfo = bInfo;
-
-    const tOk   = mkToggle("OK", "showOk", "OK ein/aus");
-    const bOk   = mkBadge();  tOk.appendChild(bOk);     els.badgeOk   = bOk;
-
-    const tWarn = mkToggle("WARN","showWarn","Warnungen ein/aus");
-    const bWarn = mkBadge();  tWarn.appendChild(bWarn); els.badgeWarn = bWarn;
-
-    const tErr  = mkToggle("ERR", "showErr", "Fehler ein/aus");
-    const bErr  = mkBadge();  tErr.appendChild(bErr);   els.badgeErr  = bErr;
+    const i = mkToggle("INFO","showInfo","Info ein/aus");  els.bInfo=i.badge;
+    const o = mkToggle("OK","showOk","OK ein/aus");        els.bOk=o.badge;
+    const w = mkToggle("WARN","showWarn","Warnungen ein/aus"); els.bWarn=w.badge;
+    const e = mkToggle("ERR","showErr","Fehler ein/aus");  els.bErr=e.badge;
 
     const search = document.createElement("input");
-    search.type = "search";
-    search.placeholder = "Suche…";
-    search.className = "ins-search";
-    search.addEventListener("input", () => {
-      state.query = (search.value || "").trim().toLowerCase();
-      renderList();
-    });
+    search.type="search"; search.placeholder="Suche…"; search.className="ins-search";
+    search.addEventListener("input", ()=>{ state.query=(search.value||"").toLowerCase().trim(); renderList(); });
     els.search = search;
 
-    const btnCopy = document.createElement("button");
-    btnCopy.textContent = "Kopieren";
-    btnCopy.addEventListener("click", async () => {
-      try {
-        const text = rawBuffer.map(toText).join("\n");
-        await navigator.clipboard.writeText(text);
-        flash(btnCopy);
-      } catch (_e) {
-        alert("Kopieren nicht möglich (Clipboard)");
-      }
+    const bCopy = document.createElement("button");
+    bCopy.textContent = "Kopieren";
+    bCopy.addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText(raw.map(toText).join("\n"));
+        bCopy.classList.add("ins-flash"); setTimeout(()=>bCopy.classList.remove("ins-flash"),600);
+      }catch{ alert("Kopieren nicht möglich."); }
     });
 
-    const btnExport = document.createElement("button");
-    btnExport.textContent = "Export";
-    btnExport.addEventListener("click", () => {
-      const blob = new Blob([rawBuffer.map(toText).join("\n")], { type: "text/plain" });
+    const bExport = document.createElement("button");
+    bExport.textContent = "Export";
+    bExport.addEventListener("click", ()=>{
+      const blob = new Blob([raw.map(toText).join("\n")], {type:"text/plain"});
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = "logs.txt";
@@ -264,97 +177,38 @@
       URL.revokeObjectURL(url);
     });
 
-    wrap.append(tInfo, tOk, tWarn, tErr, search, btnCopy, btnExport);
+    wrap.append(i.btn, o.btn, w.btn, e.btn, search, bCopy, bExport);
     host.appendChild(wrap);
   }
 
-  function flash(el) {
-    el.classList.add("ins-flash");
-    setTimeout(() => el.classList.remove("ins-flash"), 600);
-  }
-
-  // ----- View ---------------------------------------------------------------
-  function mountView() {
-    const host = qSlot("logs-view");
-    if (!host) return;
+  function mountView(){
+    const host = qSlot("logs-view"); if (!host) return;
     host.innerHTML = "";
-    const pre = document.createElement("div");
-    pre.className = "ins-logview";
-    host.appendChild(pre);
-    els.view = pre;
-
-    // API-Bridge für den Safety-Hook (oben)
-    window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {};
-    window.__INSPECTOR_API__.logs = {
-      push(entry){ onAppend(entry); },
-      render(){ renderList(); }
-    };
+    const v = document.createElement("div");
+    v.className = "ins-logview";
+    host.appendChild(v);
+    els.view = v;
   }
 
-  // ----- Stream -------------------------------------------------------------
-  function startStream() {
-    rawBuffer = readBufferSafe();
-    lastLen = rawBuffer.length;
-
-    // Initial render
-    renderList();
-
-    // Live via CBLog.on
-    if (typeof window.CBLog?.on === "function") {
-      try {
-        window.CBLog.on("append", onAppend);
-        logOk("Stream verbunden (append)");
-        return;
-      } catch (_e) {}
-    }
-
-    // Poll-Fallback
-    pollTimer = window.setInterval(() => {
-      const buf = readBufferSafe();
-      if (!Array.isArray(buf)) return;
-      if (buf.length !== lastLen) {
-        const diff = buf.slice(lastLen);
-        lastLen = buf.length;
-        diff.forEach(onAppend);
-      }
-    }, 800);
-    logWarn("nutze Poll-Fallback (kein CBLog.on)");
-  }
-
-  function stopStream() {
-    if (pollTimer) window.clearInterval(pollTimer);
-    pollTimer = null;
-    if (typeof window.CBLog?.off === "function") {
-      try { window.CBLog.off("append", onAppend); } catch(_e) {}
-    }
-  }
-
-  function onAppend(entry) {
-    rawBuffer.push(entry);
-    pushLine(entry);
-  }
-
-  // ----- Renderlogik --------------------------------------------------------
-  function renderList() {
+  // Render --------------------------------------------------------------------
+  function renderList(){
     if (!els.view) return;
-
     const q = state.query;
+
     state.counts.info = state.counts.ok = state.counts.warn = state.counts.err = 0;
 
     const frag = document.createDocumentFragment();
-    for (let i = 0; i < rawBuffer.length; i++) {
-      const obj = rawBuffer[i];
-      const txt = toText(obj);
-      const lvl = detectLevel(obj).toLowerCase();
+    for (let i=0;i<raw.length;i++){
+      const entry = raw[i];
+      const lvl = detectLevel(entry);
+      const txt = toText(entry);
 
       if (lvl in state.counts) state.counts[lvl]++;
 
-      if (
-        (lvl === "info" && !state.showInfo) ||
-        (lvl === "ok"   && !state.showOk)   ||
-        (lvl === "warn" && !state.showWarn) ||
-        (lvl === "err"  && !state.showErr)
-      ) continue;
+      if ((lvl==="info" && !state.showInfo) ||
+          (lvl==="ok"   && !state.showOk)   ||
+          (lvl==="warn" && !state.showWarn) ||
+          (lvl==="err"  && !state.showErr)) continue;
 
       if (q && !txt.toLowerCase().includes(q)) continue;
 
@@ -363,56 +217,101 @@
       line.textContent = txt;
       frag.appendChild(line);
     }
-
     els.view.innerHTML = "";
     els.view.appendChild(frag);
     updateBadges();
-    // ans Ende scrollen
-    els.view.scrollTop = els.view.scrollHeight || 0;
+    els.view.scrollTop = els.view.scrollHeight;
   }
 
-  function updateBadges() {
-    if (els.badgeInfo) els.badgeInfo.textContent = String(state.counts.info);
-    if (els.badgeOk)   els.badgeOk.textContent   = String(state.counts.ok);
-    if (els.badgeWarn) els.badgeWarn.textContent = String(state.counts.warn);
-    if (els.badgeErr)  els.badgeErr.textContent  = String(state.counts.err);
+  function updateBadges(){
+    if (els.bInfo) els.bInfo.textContent = String(state.counts.info);
+    if (els.bOk)   els.bOk.textContent   = String(state.counts.ok);
+    if (els.bWarn) els.bWarn.textContent = String(state.counts.warn);
+    if (els.bErr)  els.bErr.textContent  = String(state.counts.err);
   }
 
-  function pushLine(entry) {
-    if (!els.view) return;
-
+  function pushLine(entry){
+    raw.push(entry);
+    // inkrementelles Rendering (Filter beachten)
+    const lvl = detectLevel(entry);
     const txt = toText(entry);
-    const lvl = detectLevel(entry).toLowerCase();
-
     if (lvl in state.counts) state.counts[lvl]++;
 
     const passLevel =
-      (lvl !== "info" || state.showInfo) &&
-      (lvl !== "ok"   || state.showOk)   &&
-      (lvl !== "warn" || state.showWarn) &&
-      (lvl !== "err"  || state.showErr);
-
+      (lvl!=="info" || state.showInfo) &&
+      (lvl!=="ok"   || state.showOk)   &&
+      (lvl!=="warn" || state.showWarn) &&
+      (lvl!=="err"  || state.showErr);
     const passText = !state.query || txt.toLowerCase().includes(state.query);
-    if (passLevel && passText) {
-      const div = document.createElement("div");
-      div.className = LVL[lvl] || "log-info";
-      div.textContent = txt;
-      els.view.appendChild(div);
+
+    if (passLevel && passText && els.view){
+      const line = document.createElement("div");
+      line.className = LVL[lvl] || "log-info";
+      line.textContent = txt;
+      els.view.appendChild(line);
       els.view.scrollTop = els.view.scrollHeight;
     }
     updateBadges();
   }
 
-  // ----- Tab-Mount ----------------------------------------------------------
-  core.api.mount("logs", () => {
+  // Stream (CBLog.on / Poll) -------------------------------------------------
+  function startStream(){
+    // Initial lesen
+    raw = readBuffer();
+
+    // Event-Stream, falls verfügbar
+    if (typeof window.CBLog?.on === "function"){
+      try {
+        window.CBLog.on("append", pushLine);
+        ok("Stream verbunden (append)");
+        return;
+      } catch(e){ warn("Stream-Setup:", e && e.message); }
+    }
+
+    // Poll-Fallback
+    let last = raw.length;
+    pollTimer = window.setInterval(()=>{
+      const b = readBuffer();
+      if (b.length !== last){
+        b.slice(last).forEach(pushLine);
+        last = b.length;
+      }
+    }, 800);
+    warn("nutze Poll-Fallback (kein CBLog.on)");
+  }
+  function stopStream(){
+    if (pollTimer) window.clearInterval(pollTimer);
+    pollTimer = null;
+    if (typeof window.CBLog?.off === "function"){
+      try{ window.CBLog.off("append", pushLine); }catch(_){}
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Tab-Mount beim Core registrieren
+  // --------------------------------------------------------------------------
+  core.api.mount("logs", ()=>{
     buildControls();
     mountView();
+
+    // Historie + erster Render
+    raw = readBuffer();
+    renderList();
+
+    // Live-Stream starten
     startStream();
 
-    core.api?.signal?.("logs:ready", { version: VER });
-    logOk(MOD, "bereit", VER);
+    // __INSPECTOR_API__.logs bereitstellen/aktualisieren (für Safety-Hook)
+    if (!window.__INSPECTOR_API__) window.__INSPECTOR_API__ = {};
+    window.__INSPECTOR_API__.logs = {
+      push: pushLine,
+      render: renderList
+    };
 
-    return () => { stopStream(); };
+    ok("bereit", VER);
+
+    // Unmount
+    return ()=>{ stopStream(); };
   });
 
 })();
