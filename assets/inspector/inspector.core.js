@@ -182,7 +182,13 @@
       p.classList.toggle("active", p.id === "tab-"+id);
       p.hidden = (p.id !== "tab-"+id);
     });
-
+    
+    // nach dem Aktivieren eines Tabs:
+    try {
+      const id = activeTabId; // oder dein lokaler Variablenname
+      document.dispatchEvent(new CustomEvent('ins:tab:enter:' + id));
+    } catch {}
+    
     // Lazy-Mount: Renderer nur einmal ausführen
     if (__RENDER__[id] && !__MOUNTED__[id]) {
       __MOUNTED__[id] = __RENDER__[id]() || true;
