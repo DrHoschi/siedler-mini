@@ -1,209 +1,158 @@
 /* ============================================================================
-   Datei: assets/inspector/inspector.css
-   Projekt: Siedler-Mini
-   Version: v18.10.12
+ * Inspector CSS – v18.11.1
+ * - Vollbild-Overlay, Safe-Area, hoher z-index
+ * - Einheitliches Layout für Tabs, Controls und Log-Ansicht
+ * - KEINE Positions-Tricks in JS nötig
+ * ========================================================================== */
 
-   Ziel:
-   - Vollbild-Overlay
-   - Hellgraue Pane-Optik gemäß Vorgabe
-   - Tabs oben, Inhalt füllt den Rest
-   - Log-Ansicht scrollt eigenständig (Mobil & Desktop)
-   - Hintergrund-Scroll sperren, wenn Inspector offen
-   ========================================================================== */
-
-/* Body sperren, wenn Inspector offen */
-body.inspector-open {
-  overflow: hidden !important;
-  position: fixed !important;
-  width: 100% !important;
+:root{
+  --ins-bg: #0e1311;
+  --ins-panel: #131a17;
+  --ins-panel-2: #0f1613;
+  --ins-border: rgba(255,255,255,.08);
+  --ins-text: #cbd5e1;
+  --ins-dim: #8fa3a0;
+  --ins-pill: rgba(255,255,255,.06);
+  --ins-pill-active: rgba(255,255,255,.14);
+  --ins-ok: #22c55e;
+  --ins-warn: #f59e0b;
+  --ins-err: #ef4444;
+  --ins-info: #60a5fa;
+  --ins-shadow: 0 24px 80px rgba(0,0,0,.5);
+  --ins-radius: 14px;
 }
 
-/* Overlay */
-#inspector {
+/* Vollbild + Safe Area + Topmost */
+#inspector{
   position: fixed;
   inset: 0;
-  z-index: 2147483000; /* unterhalb FAB-Buttons, aber über Spiel */
-  display: none;       /* per JS auf block */
-  pointer-events: none; /* Grundzustand – aktivieren wir innerhalb */
+  z-index: 2147483646;
+  display: none;                 /* via JS auf block */
+  padding: max(env(safe-area-inset-top),0px)
+           max(env(safe-area-inset-right),0px)
+           calc(max(env(safe-area-inset-bottom),0px))
+           max(env(safe-area-inset-left),0px);
+  background: rgba(8,10,9,.66);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
 }
 
-/* Pane (hellgrau) */
-#inspector .ins-wrap {
-  pointer-events: auto;
+/* Body scrollt nicht, wenn Overlay offen */
+body.inspector-open{ overflow: hidden; }
+
+/* Panel */
+#inspector .ins-wrap{
   position: absolute;
   inset: 0;
-  margin: 0;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: #e6e7ea;                     /* hellgrau nach Vorgabe */
-  color: #1c1f24;
-  border: 1px solid rgba(0,0,0,.12);
-  box-shadow:
-    0 18px 34px rgba(0,0,0,.25),
-    0  2px  0 rgba(255,255,255,.55) inset; /* leichte Glas-Kante */
-  border-radius: 10px;
-  margin: 8px;
+  gap: 12px;
+}
+
+#inspector .ins-panel{
+  background: var(--ins-panel);
+  border: 1px solid var(--ins-border);
+  border-radius: var(--ins-radius);
+  box-shadow: var(--ins-shadow);
+  color: var(--ins-text);
+  display: flex;
+  flex-direction: column;
+  min-height: 60vh;
+  height: calc(100% - 2px);
 }
 
 /* Header */
-#inspector .ins-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(0,0,0,.08);
-  background: linear-gradient(#f2f3f5, #e7e8eb);
+.ins-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px 16px;
+  background: var(--ins-panel-2);
+  border-bottom:1px solid var(--ins-border);
+  border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
-#inspector .ins-title {
-  font-weight: 700;
-  letter-spacing: .2px;
+.ins-title{
+  display:flex; align-items:center; gap:14px;
+  font-weight:700; font-size:20px; letter-spacing:.2px;
 }
-#inspector .ins-close {
-  margin-left: auto;
-  border: none;
-  border-radius: 8px;
-  background: #d0d3d8;
-  color: #222;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-#inspector .ins-close:hover { filter: brightness(0.95); }
+.ins-ver{ font-size:12px; opacity:.6; }
 
 /* Tabs */
-#inspector .ins-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(0,0,0,.08);
-  background: #eceef1;
+.ins-tabs{
+  display:flex; gap:8px; flex-wrap:wrap;
 }
-#inspector .ins-tab {
-  border: none;
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
-  background: #d7dae0;
-  color: #222;
-  font-size: 13px;
+.ins-tab{
+  border:none; cursor:pointer; padding:8px 14px;
+  border-radius:12px; background:var(--ins-pill); color:var(--ins-text);
 }
-#inspector .ins-tab[aria-selected="true"] {
-  background: #9fb7ff;   /* helles Blau für aktiv */
+.ins-tab.active{ background:var(--ins-pill-active); }
+
+/* Close */
+.ins-close{ border:none; cursor:pointer;
+  padding:8px 14px; border-radius:999px;
+  background:var(--ins-pill); color:var(--ins-text);
 }
 
-/* Content */
-#inspector .ins-content {
-  flex: 1 1 auto;
-  min-height: 0;         /* WICHTIG: sorgt dafür, dass der Bereich schrumpfen darf */
-  overflow: hidden;      /* Inhalt steuert eigenes Scrollen */
+/* Body */
+.ins-body{
+  flex:1; display:flex; flex-direction:column; gap:10px;
+  padding:14px 16px 10px 16px;
+  overflow:hidden;                 /* damit nur der Content scrollt */
 }
 
-/* Body (Slots-Halter) */
-#inspector .ins-body {
-  position: relative;
-  display: block;
-  height: 100%;
-  min-height: 0;         /* WICHTIG für eigenständiges Scrollen der Kinder */
-  overflow: hidden;      /* verhindert Page-Scroll; Kinder bekommen Scroll */
-  padding: 10px 12px 12px;
+/* Filter/Controls-Reihe */
+.ins-controls{
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+.ins-toggle{
+  border:none; cursor:pointer; padding:8px 12px; border-radius:10px;
+  background:var(--ins-pill); color:var(--ins-text);
+}
+.ins-toggle.active{ background:var(--ins-pill-active); }
+.ins-badge{
+  margin-left:8px; padding:2px 8px; border-radius:999px;
+  font-size:12px; background:rgba(255,255,255,.1); color:var(--ins-text);
+}
+.ins-search{
+  min-width: 160px; flex:1 1 220px;
+  padding:8px 10px; border-radius:10px; border:1px solid var(--ins-border);
+  background:rgba(0,0,0,.25); color:var(--ins-text);
 }
 
-/* Slots (pro Tab) */
-#inspector .ins-slot {
-  display: none;
-  height: 100%;
-  min-height: 0;
-}
-#inspector .ins-slot.is-active {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+/* Log-Viewport: eigener Scroller */
+.ins-logview{
+  flex:1; overflow:auto;
+  border:1px solid var(--ins-border);
+  border-radius:12px;
+  background:#0c1210;
+  padding:14px;
+  font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ins-text);
 }
 
-/* LOGS – Controls oben, View füllt Rest */
-#inspector .slot.logs-controls {
-  margin-bottom: 8px;
-}
-#inspector .slot.logs-view {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden; /* Container selbst: kein Scroll, die Liste scrollt */
-}
+/* Log-Zeilen-Farben */
+.log-info{ color:var(--ins-info); }
+.log-ok{ color:var(--ins-ok); }
+.log-warn{ color:var(--ins-warn); }
+.log-error{ color:var(--ins-err); }
 
-/* Logliste scrollt eigenständig */
-#inspector .ins-logview {
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  padding: 8px;
-  background: #f7f8fa;
-  border: 1px solid rgba(0,0,0,.08);
-  border-radius: 8px;
-  font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #1c1f24;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+/* Footer */
+.ins-foot{
+  display:flex; justify-content:flex-end; align-items:center; gap:10px;
+  padding:10px 16px 14px 16px;
+  border-top:1px solid var(--ins-border);
+  border-radius: 0 0 var(--ins-radius) var(--ins-radius);
 }
+.ins-foot .muted{ font-size:12px; opacity:.6; margin-right:auto; }
 
-/* Log-Zeilen */
-#inspector .ins-logview .log-info  { color:#334155; }
-#inspector .ins-logview .log-ok    { color:#166534; }
-#inspector .ins-logview .log-warn  { color:#92400e; }
-#inspector .ins-logview .log-error { color:#991b1b; }
+/* Slots (Failsafe: Module dürfen vor Core laden) */
+#ins-logs-controls,.slot-logs-controls{ display:block; }
+#ins-logs-view,.slot-logs-view{ display:block; }
 
-/* Controls: Toggles + Suche + Buttons */
-#inspector .ins-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-#inspector .ins-toggle {
-  border: none;
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: #d7dae0;
-  color: #222;
-  cursor: pointer;
-}
-#inspector .ins-toggle.active {
-  background: #9fb7ff;
-}
-#inspector .ins-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: 11px;
-  line-height: 1.2;
-  border-radius: 999px;
-  background: rgba(0,0,0,.12);
-}
-#inspector .ins-search {
-  margin-left: auto;
-  min-width: 140px;
-  border-radius: 8px;
-  border: 1px solid rgba(0,0,0,.12);
-  padding: 6px 8px;
-  background: #fff;
-}
-
-/* Kopieren/Export Feedback */
-#inspector .ins-flash {
-  animation: insFlash .6s ease;
-}
-@keyframes insFlash {
-  0% { box-shadow: 0 0 0 0 rgba(0,140,255,.0); }
-  30%{ box-shadow: 0 0 0 6px rgba(0,140,255,.25); }
-  100%{ box-shadow: 0 0 0 0 rgba(0,140,255,.0); }
-}
-
-/* Mobile – kleine Ränder */
-@media (max-width: 480px) {
-  #inspector .ins-wrap { margin: 6px; border-radius: 8px; }
-  #inspector .ins-header, #inspector .ins-tabs { padding: 8px; }
-  #inspector .ins-body { padding: 8px; }
+/* Micro flash (e.g. Copy) */
+.ins-flash{
+  outline: 2px solid rgba(255,255,255,.2);
+  transition: outline-color .6s ease;
 }
