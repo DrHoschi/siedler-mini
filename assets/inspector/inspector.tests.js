@@ -1,37 +1,45 @@
 /* ============================================================================
  * Datei: assets/inspector/inspector.tests.js
  * Projekt: Siedler-Mini
- * Version: v18.11.3
+ * Version: v18.12.0
  *
  * Zweck:
- *  - Live-Status im TESTS-Tab (FPS, TPS, Entities, Canvas, Input, Map, Versionen)
- *  - Keine Seiteneffekte; arbeitet nur lesend + eigene Timer
+ *   - "Tests"-Tab im Inspector (Pfad-Diagnose, Carrier-Probe, Heatmap-Reset)
+ *   - Keine direkte Engine-Kopplung: es werden NUR Custom-Events gefeuert
+ *     • cb:test:path-hq-depot
+ *     • cb:test:carrier-hq-depot
+ *     • cb:test:stop
+ *     • cb:paths:reset   (bestehendes Overlay-Feature)
  *
  * Abhängigkeiten:
- *  - inspector.core.js  -> window.__INSPECTOR_CORE__.api.mount/getSlot/signal
- *  - Optionale Signale/Ereignisse:
- *      • 'cb:render-frame'  (wenn eure Engine das feuert)
- *      • 'cb:tick'          (optional; falls ihr einen Game-Tick auslöst)
- *  - Optionale Game/Render APIs:
- *      • window.Render.getContext()
- *      • window.Game.getEntities(), window.Game.getCamera(), window.Game.getTileSize()
+ *   - inspector.core.js stellt window.__INSPECTOR_CORE__.api bereit:
+ *       • core.api.mount(tabId, renderFn)  → Tab registrieren + rendern
+ *       • core.api.getSlot(name)           → Slot-Element im Panel
+ *       • core.api.signal(name, payload?)  → optionales Signal zurück an Core
+ *   - CBLog Polyfill/Impl (sanfte Logs):
+ *       • CBLog.ok / info / warn / err     → optional
+ *       • fällt auf console.* zurück
  * ========================================================================== */
 
-(function () {
+(function(){
   "use strict";
 
   const MOD = "[inspector.tests]";
-  const VER = "v18.11.3";
+  const VER = "v18.12.0";
   const core = window.__INSPECTOR_CORE__;
+
   if (!core || !core.api || typeof core.api.mount !== "function") {
     console.warn(MOD, "core API fehlt – breche ab.");
     return;
   }
 
-  // ---- kleine Helfer -------------------------------------------------------
-  const log = (...a) => (window.CBLog?.ok || console.log)(MOD, ...a);
+  // --- Logging helpers (sanft) ----------------------------------------------
+  const log  = (...a)=> (window.CBLog?.info || console.log)(MOD, ...a);
+  const ok   = (...a)=> (window.CBLog?.ok   || console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn || console.warn)(MOD, ...a);
 
-  function qSlot(name) {
+  // Slot helper (akzeptiert alte + neue Slotnamen)
+  function qSlot(name){
     return (
       core.api.getSlot?.(name) ||
       document.getElementById(`ins-${name}`) ||
@@ -39,128 +47,141 @@
     );
   }
 
-  // ---- Messung: FPS/TPS ----------------------------------------------------
-  let frames = 0, ticks = 0;
-  let fps = 0, tps = 0;
-  let fpsTimer = null;
+  // Kleine UI-Bausteine
+  const mkBtn = (label, title, onClick, className="ins-btn")=>{
+    const b = document.createElement("button");
+    b.className = className;
+    b.type = "button";
+    b.textContent = label;
+    if (title) b.title = title;
+    if (onClick) b.addEventListener("click", onClick);
+    return b;
+  };
 
-  function startMeters() {
-    stopMeters();
+  const mkRow = (...children)=>{
+    const d = document.createElement("div");
+    d.style.cssText = "display:flex;flex-wrap:wrap;gap:10px;align-items:center";
+    children.forEach(c=>d.appendChild(c));
+    return d;
+  };
 
-    // Wenn eure Engine Events feuert, zählen wir komfortabel mit
-    window.addEventListener("cb:render-frame", onFrame, { passive: true });
-    window.addEventListener("cb:tick", onTick, { passive: true });
+  const mkField = (label, type="number", val="", min=null, max=null, step="1")=>{
+    const wrap = document.createElement("label");
+    wrap.style.cssText = "display:flex;align-items:center;gap:6px";
+    const span = document.createElement("span");
+    span.className = "muted";
+    span.textContent = label;
+    const inp = document.createElement("input");
+    inp.type = type;
+    inp.value = val;
+    inp.step = step;
+    if (min!=null) inp.min = String(min);
+    if (max!=null) inp.max = String(max);
+    wrap.append(span, inp);
+    return {wrap, input:inp};
+  };
 
-    // Fallback: falls nichts feuert, versuchen wir per rAF Frames mitzuzählen
-    let rafId = null;
-    (function rafLoop(){
-      frames++;
-      rafId = window.requestAnimationFrame(rafLoop);
-    })();
-    // speichern, damit wir es stoppen können
-    window.__INS_TESTS_RAF__ = rafId;
-
-    // 1-Sekunden-Fenster
-    fpsTimer = setInterval(() => {
-      fps = frames; frames = 0;
-      tps = ticks;  ticks  = 0;
-      // UI wird im render() aktualisiert
-    }, 1000);
-  }
-  function stopMeters() {
-    window.removeEventListener("cb:render-frame", onFrame);
-    window.removeEventListener("cb:tick", onTick);
-    clearInterval(fpsTimer); fpsTimer = null;
-    if (window.__INS_TESTS_RAF__) {
-      cancelAnimationFrame(window.__INS_TESTS_RAF__);
-      window.__INS_TESTS_RAF__ = null;
-    }
-  }
-  function onFrame(){ frames++; }
-  function onTick(){ ticks++; }
-
-  // ---- UI ------------------------------------------------------------------
-  let viewEl = null;
-  let uiTimer = null;
-
-  function mountView() {
-    const host = qSlot("tests-view");
-    if (!host) return;
-    host.innerHTML = "";
-
-    // Wir nutzen dasselbe „Karten“-Layout wie Logs (heller Kasten)
-    const box = document.createElement("div");
-    box.className = "ins-logview"; // bewusst, weil es bereits schön gestylt ist
-    box.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-    box.style.fontSize = "14px";
-    box.style.lineHeight = "1.45";
-    host.appendChild(box);
-    viewEl = box;
-  }
-
-  function render() {
-    if (!viewEl) return;
-
-    const ctx = window.Render?.getContext?.() || null;
-    const cvs = ctx?.canvas || document.getElementById("game") || null;
-
-    const ents = (window.Game?.getEntities?.() || []);
-    const cam  = (window.Game?.getCamera?.() || { x:0, y:0, zoom:1 });
-    const tile = (window.Game?.getTileSize?.() || 64);
-    const mapName = (document.getElementById("game")?.dataset?.map || "–");
-
-    const ok = (s) => `<span style="color:#27AE60">●</span> ${s}`;
-    const no = (s) => `<span style="color:#E74C3C">●</span> ${s}`;
-
-    // Best-Effort Status
-    const hasCtx   = !!ctx;
-    const hasInput = !!window.Input || !!window.Game?.input;
-    const hasMap   = !!mapName && mapName !== "–";
-
-    const rows = [
-      `<div style="margin-bottom:8px;"><strong>Live-Status</strong> (Tests v${VER})</div>`,
-
-      `<div><strong>FPS / TPS:</strong> ${fps} / ${tps}</div>`,
-
-      `<div><strong>Canvas:</strong> ${cvs ? `${cvs.width}×${cvs.height}` : "–"}</div>`,
-      `<div><strong>Render-Context:</strong> ${hasCtx ? ok("ok") : no("fehlt")}</div>`,
-
-      `<div><strong>Entities:</strong> ${ents.length}</div>`,
-      `<div><strong>Camera:</strong> x=${cam.x|0}, y=${cam.y|0}, zoom=${(cam.zoom||1).toFixed(2)}</div>`,
-      `<div><strong>Tile-Size:</strong> ${tile}</div>`,
-
-      `<div><strong>Map:</strong> ${hasMap ? ok(mapName) : no("unbekannt")}</div>`,
-      `<div><strong>Input:</strong> ${hasInput ? ok("gebunden") : no("fehlt")}</div>`,
-
-      `<hr style="border:none;border-top:1px solid rgba(0,0,0,.1);margin:10px 0;">`,
-
-      `<div style="opacity:.8">
-         <strong>Module:</strong>
-         Render ${window.Render?.version || "?"} ·
-         Inspector ${window.__INSPECTOR_CORE__?.version || "?"}
-       </div>`
-    ];
-
-    viewEl.innerHTML = rows.join("");
-  }
-
-  // ---- Mount ins Inspector-Tab --------------------------------------------
+  // ---- Tab-Mount -----------------------------------------------------------
   core.api.mount("tests", () => {
-    mountView();
-    startMeters();
+    // Slots besorgen (defensiv)
+    const body    = qSlot("tests-body")    || qSlot("body") || qSlot("logs-view");   // Fallbacks
+    const controls= qSlot("tests-controls")|| qSlot("controls");
 
-    // Regelmäßig die Werte aktualisieren
-    uiTimer = setInterval(render, 300);
-    render();
+    if (controls) controls.innerHTML = "";
+    if (body)     body.innerHTML = "";
 
-    // Meldung nach „außen“
-    core.api?.signal?.("tests:ready", { version: VER });
+    // --- Controls -----------------------------------------------------------
+    if (controls){
+      const btnPath = mkBtn("Pfad: HQ ⇄ Depot testen", "Versucht HQ und Depot zu finden und prüft die Strecke.", ()=>{
+        try {
+          window.dispatchEvent(new CustomEvent("cb:test:path-hq-depot"));
+          ok("Pfad-Test ausgelöst: HQ ⇄ Depot");
+        } catch(e){
+          warn("Event cb:test:path-hq-depot fehlgeschlagen:", e?.message||e);
+        }
+      });
+
+      const {wrap: fCount, input: inCount} = mkField("Carrier-Zyklen", "number", "3", 1, 50, "1");
+      const btnCarrier = mkBtn("Carrier-Test starten", "Simuliert Carrier zwischen HQ und Depot", ()=>{
+        const count = Math.max(1, parseInt(inCount.value||"1",10) || 1);
+        try {
+          window.dispatchEvent(new CustomEvent("cb:test:carrier-hq-depot", { detail:{ count } }));
+          ok(`Carrier-Test ausgelöst (Zyklen=${count})`);
+        } catch(e){
+          warn("Event cb:test:carrier-hq-depot fehlgeschlagen:", e?.message||e);
+        }
+      });
+
+      const btnStop = mkBtn("Tests stoppen", "Beendet laufende Test-Tasks", ()=>{
+        try {
+          window.dispatchEvent(new CustomEvent("cb:test:stop"));
+          ok("Test-Stop angefordert");
+        } catch(e){
+          warn("Event cb:test:stop fehlgeschlagen:", e?.message||e);
+        }
+      });
+
+      const btnHeatReset = mkBtn("Heatmap zurücksetzen", "Setzt Pfad-Heatmap (Overlay) zurück", ()=>{
+        try {
+          window.dispatchEvent(new CustomEvent("cb:paths:reset"));
+          ok("Heatmap-Reset angefordert");
+        } catch(e){
+          warn("Event cb:paths:reset fehlgeschlagen:", e?.message||e);
+        }
+      });
+
+      controls.append(
+        mkRow(btnPath, fCount, btnCarrier, btnStop, btnHeatReset)
+      );
+    }
+
+    // --- Body / Status-Anzeige ---------------------------------------------
+    if (body){
+      // Kompakter Status-Block
+      const status = document.createElement("div");
+      status.className = "ins-card";
+      status.style.padding = "10px 12px";
+      status.innerHTML = `
+        <div class="muted" style="margin-bottom:6px">Laufende / letzte Aktionen</div>
+        <div id="ins-tests-stream" class="ins-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      `;
+      const stream = status.querySelector("#ins-tests-stream");
+
+      // Helfer um Events in der UI zu spiegeln:
+      function pushLine(txt, cls="log-info"){
+        const line = document.createElement("div");
+        line.className = `log-line ${cls}`;
+        line.textContent = txt;
+        stream.appendChild(line);
+        stream.parentElement.scrollTop = stream.parentElement.scrollHeight;
+      }
+
+      // Spiegel externe Signale (falls Engine welche sendet)
+      const onOK   = e=> pushLine(e.detail?.msg || "OK", "log-ok");
+      const onWARN = e=> pushLine(e.detail?.msg || "WARN", "log-warn");
+      const onERR  = e=> pushLine(e.detail?.msg || "ERR", "log-error");
+
+      window.addEventListener("cb:test:ok",   onOK);
+      window.addEventListener("cb:test:warn", onWARN);
+      window.addEventListener("cb:test:err",  onERR);
+
+      // kleiner Hint
+      const hint = document.createElement("div");
+      hint.className = "muted";
+      hint.style.marginTop = "6px";
+      hint.textContent = "Hinweis: Die Test-Buttons senden nur Events. Die Spiel-Engine muss darauf reagieren.";
+
+      body.append(status, hint);
+
+      // Unmount-Cleanup
+      return ()=>{
+        window.removeEventListener("cb:test:ok",   onOK);
+        window.removeEventListener("cb:test:warn", onWARN);
+        window.removeEventListener("cb:test:err",  onERR);
+      };
+    }
+
     log("bereit", VER);
-
-    // Unmount/Cleanup
-    return () => {
-      stopMeters();
-      clearInterval(uiTimer); uiTimer = null;
-    };
   });
+
 })();
