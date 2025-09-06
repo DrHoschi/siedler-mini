@@ -1,25 +1,23 @@
 /* ============================================================================
  * Inspector CSS – v18.11.1
- * - Vollbild-Overlay, Safe-Area, hoher z-index
- * - Einheitliches Layout für Tabs, Controls und Log-Ansicht
- * - KEINE Positions-Tricks in JS nötig
+ * - Angepasst an helles Grau-Design & mit Scroll-Fix
  * ========================================================================== */
 
 :root{
-  --ins-bg: rgba(0,0,0,0.7); /* Hintergrund des Overlays, dunkler und weniger durchsichtig */
-  --ins-panel: #2B3A49; /* Hintergrund des Hauptpanels, dunkles Blau-Grau */
-  --ins-panel-2: #3E5062; /* Hintergrund des Headers und aktiver Tabs, etwas heller */
-  --ins-border: #4A5C6D; /* Ränder, ein dunkles Grau-Blau */
-  --ins-text: #E0E6EB; /* Helle Textfarbe */
-  --ins-dim: #A8B8C8; /* Gedimmter Text */
-  --ins-pill: #52677C; /* Hintergrund von inaktiven Tabs/Buttons */
-  --ins-pill-active: #4A5C6D; /* Hintergrund von aktiven Tabs/Buttons */
-  --ins-ok: #4CAF50; /* Grün für OK */
-  --ins-warn: #FFC107; /* Gelb für Warnungen */
-  --ins-err: #F44336; /* Rot für Fehler */
-  --ins-info: #2196F3; /* Blau für Infos */
-  --ins-shadow: 0 8px 20px rgba(0,0,0,.4); /* Angepasster Schatten */
-  --ins-radius: 8px; /* Weniger abgerundete Ecken */
+  --ins-bg: rgba(30,30,30,0.6); /* Hintergrund des Overlays */
+  --ins-panel: #EAECEE; /* NEU: Heller, neutraler Panel-Hintergrund */
+  --ins-panel-2: #D5D8DC; /* NEU: Etwas dunklerer Hintergrund für Header/Logview */
+  --ins-border: #BFC9CA; /* NEU: Passender grauer Rand */
+  --ins-text: #2C3E50; /* NEU: Dunkle Textfarbe für Lesbarkeit */
+  --ins-dim: #5D6D7E; /* NEU: Gedimmter Text in dunklerem Grau */
+  --ins-pill: #D5D8DC; /* NEU: Hintergrund für inaktive Buttons */
+  --ins-pill-active: #BFC9CA; /* NEU: Hintergrund für aktive Buttons */
+  --ins-ok: #27AE60;
+  --ins-warn: #F39C12;
+  --ins-err: #E74C3C;
+  --ins-info: #3498DB;
+  --ins-shadow: 0 8px 25px rgba(0,0,0,.25); /* Angepasster Schatten für hellen Modus */
+  --ins-radius: 8px;
 }
 
 /* Vollbild + Safe Area + Topmost */
@@ -27,17 +25,17 @@
   position: fixed;
   inset: 0;
   z-index: 2147483646;
-  display: block;                 /* Standardmäßig sichtbar für die Darstellung */
+  display: block;
   padding: max(env(safe-area-inset-top),0px)
            max(env(safe-area-inset-right),0px)
            calc(max(env(safe-area-inset-bottom),0px))
            max(env(safe-area-inset-left),0px);
-  background: var(--ins-bg); /* Dunkleres, undurchsichtigeres Overlay */
-  backdrop-filter: blur(4px); /* Etwas weniger Blur */
+  background: var(--ins-bg);
+  backdrop-filter: blur(4px);
   pointer-events: auto;
-  display: flex; /* Für Zentrierung */
-  justify-content: center; /* Für Zentrierung */
-  align-items: center; /* Für Zentrierung */
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Body scrollt nicht, wenn Overlay offen */
@@ -45,14 +43,14 @@ body.inspector-open{ overflow: hidden; }
 
 /* Panel Wrap - angepasst für das Bild */
 #inspector .ins-wrap{
-  position: relative; /* Nicht absolut, da das Panel zentriert wird */
-  width: 400px; /* Feste Breite wie im Bild */
-  max-width: 90vw; /* Maximalbreite für Responsivität */
-  max-height: 90vh; /* Maximalhöhe für Responsivität */
-  padding: 0; /* Kein internes Padding im Wrap, das Panel hat eigenes Padding */
-  display: flex;
+  position: relative;
+  width: 400px;
+  max-width: 90vw;
+  max-height: 90vh; /* Maximale Höhe wird hier definiert */
+  padding: 0;
+  display: flex; /* Wichtig für die Kinder-Elemente */
   flex-direction: column;
-  gap: 0; /* Kein Gap zwischen Wrap und Panel */
+  gap: 0;
 }
 
 #inspector .ins-panel{
@@ -60,12 +58,12 @@ body.inspector-open{ overflow: hidden; }
   border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
   box-shadow: var(--ins-shadow);
-  color: var(--ins-text);
+  color: var(--ins-text); /* NEU: Dunkle Textfarbe */
   display: flex;
   flex-direction: column;
-  min-height: auto; /* Keine feste Mindesthöhe */
-  height: auto; /* Höhe passt sich Inhalt an */
-  overflow: hidden; /* Für abgerundete Ecken des Headers */
+  overflow: hidden;
+  flex: 1; /* KORREKTUR: Lässt das Panel den Platz im Wrap füllen, was das Scrollen ermöglicht */
+  min-height: 0; /* KORREKTUR: Wichtig für Flexbox-Verhalten */
 }
 
 /* Header */
@@ -74,112 +72,111 @@ body.inspector-open{ overflow: hidden; }
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:10px 16px; /* Etwas weniger Padding oben/unten */
+  padding:10px 16px;
   background: var(--ins-panel-2);
   border-bottom:1px solid var(--ins-border);
   border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
 .ins-title{
-  display:flex; align-items:center; gap:8px; /* Weniger Gap */
-  font-weight:600; font-size:18px; letter-spacing:.1px; /* Angepasste Schrift */
-  margin-right: auto; /* Schiebt "Inspector" und "Logs" auseinander */
+  display:flex; align-items:center; gap:8px;
+  font-weight:600; font-size:18px; letter-spacing:.1px;
+  margin-right: auto;
 }
-.ins-ver{ display: none; } /* Versionsnummer im Bild nicht vorhanden */
+.ins-ver{ display: none; }
 
 /* Tabs */
 .ins-tabs{
-  display:flex; gap:0px; /* Tabs direkt aneinander */
-  flex-wrap:nowrap; /* Tabs nicht umbrechen */
-  margin-left: -1px; /* Überlappende Ränder ausgleichen */
+  display:flex; gap:0px;
+  flex-wrap:nowrap;
+  margin-left: -1px;
 }
 .ins-tab{
-  border:1px solid var(--ins-border); /* Tabs haben Ränder */
-  border-left: none; /* Nur rechte und untere Ränder, linker Rand vom vorherigen Tab */
-  border-top: none; /* Kein oberer Rand */
+  border:1px solid var(--ins-border);
+  border-left: none;
+  border-top: none;
   cursor:pointer; padding:8px 14px;
-  border-radius:0; /* Keine abgerundeten Ecken für Tabs */
-  background:var(--ins-panel); /* Inaktive Tabs im Panel-Hintergrund */
+  border-radius:0;
+  background:var(--ins-panel);
   color:var(--ins-text);
   font-size: 14px;
-  white-space: nowrap; /* Tabs brechen nicht um */
+  white-space: nowrap;
 }
 .ins-tab.active{
-  background:var(--ins-panel-2); /* Aktiver Tab wie Header-Hintergrund */
-  border-bottom-color: var(--ins-panel-2); /* Aktiver Tab blendet den Border unten aus */
+  background:var(--ins-panel-2);
+  border-bottom-color: var(--ins-panel-2);
   position: relative;
-  z-index: 1; /* Aktiver Tab liegt über dem Border */
+  z-index: 1;
 }
 .ins-tab:first-child {
-    border-left: 1px solid var(--ins-border); /* Erster Tab braucht linken Rand */
+    border-left: 1px solid var(--ins-border);
 }
 
 /* Close */
 .ins-close{
   border:none; cursor:pointer;
-  padding:4px; /* Kleinerer Padding */
+  padding:4px;
   border-radius:999px;
-  background: transparent; /* Kein Hintergrund für den Schließen-Button */
-  color:var(--ins-dim); /* Leicht gedimmt */
+  background: transparent;
+  color:var(--ins-dim);
   font-size: 20px;
   line-height: 1;
 }
 .ins-close::before {
-    content: "✕"; /* X-Symbol für den Close-Button */
+    content: "✕";
 }
-
 
 /* Body */
 .ins-body{
-  flex:1; display:flex; flex-direction:column; gap:8px; /* Weniger Gap */
+  flex:1; display:flex; flex-direction:column; gap:8px;
   padding:14px 16px 10px 16px;
   overflow:hidden;
-  min-height: 250px; /* Mindesthöhe für den Inhalt */
+  min-height: 0; /* KORREKTUR: Wichtig für Flexbox */
 }
 
 /* Filter/Controls-Reihe */
 .ins-controls{
-  display:flex; flex-wrap:wrap; gap:6px 10px; /* Anpassung des Gaps */
+  display:flex; flex-wrap:wrap; gap:6px 10px;
   align-items:center;
-  margin-bottom: 8px; /* Abstand nach unten */
-  flex-direction: column; /* Vertikale Anordnung der Checkboxen */
-  align-items: flex-start; /* Links ausgerichtet */
+  margin-bottom: 8px;
+  flex-direction: column;
+  align-items: flex-start;
 }
 .ins-toggle{
-  border:none; cursor:pointer; padding:0; /* Kein Padding/Border für Checkboxen */
+  border:none; cursor:pointer; padding:0;
   border-radius:0; background:transparent; color:var(--ins-text);
   display: flex;
   align-items: center;
   font-size: 15px;
 }
-.ins-toggle.active{ background:transparent; } /* Aktive Toggle keine besondere Hintergrundfarbe */
+.ins-toggle.active{ background:transparent; }
 .ins-toggle::before {
-    content: '☑'; /* Checkbox-Symbol */
+    content: '☑';
     margin-right: 8px;
     font-size: 1.2em;
     line-height: 1;
-    color: var(--ins-info); /* Checkboxen-Farbe */
+    color: var(--ins-info);
 }
 .ins-toggle:not(.active)::before {
-    content: '☐'; /* Ungecheckte Checkbox */
+    content: '☐';
     color: var(--ins-dim);
 }
 
-
-.ins-badge{ display: none; } /* Im Bild nicht vorhanden */
-.ins-search{ display: none; } /* Im Bild nicht vorhanden */
+.ins-badge{ display: none; }
+.ins-search{ display: none; }
 
 /* Log-Viewport: eigener Scroller */
 .ins-logview{
-  flex:1; overflow:auto;
+  flex:1; overflow:auto; /* Dieses Overflow funktioniert jetzt korrekt */
+  min-height: 0; /* KORREKTUR: Essentiell für das Scrollen in einem Flex-Container */
   border:1px solid var(--ins-border);
-  border-radius:6px; /* Etwas weniger abgerundet */
-  background: var(--ins-panel-2); /* Hintergrund wie Header */
-  padding:10px 14px; /* Anpassung des Paddings */
+  border-radius:6px;
+  background: var(--ins-panel-2);
+  padding:10px 14px;
   font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--ins-text);
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Abstand zwischen Log-Zeilen */
+  gap: 8px;
 }
 
 /* Log-Zeilen-Farben */
@@ -193,7 +190,7 @@ body.inspector-open{ overflow: hidden; }
     font-size: 1.2em;
     line-height: 1;
     flex-shrink: 0;
-    width: 1em; /* Feste Breite für Icon */
+    width: 1em;
     text-align: center;
 }
 .log-info.log-line::before { content: 'ⓘ'; color: var(--ins-info); }
@@ -206,7 +203,7 @@ body.inspector-open{ overflow: hidden; }
     display: flex;
     justify-content: space-around;
     gap: 10px;
-    margin-top: 15px; /* Abstand zu den Log-Zeilen */
+    margin-top: 15px;
 }
 .ins-logview .btn {
     flex: 1;
@@ -225,78 +222,19 @@ body.inspector-open{ overflow: hidden; }
 
 /* Footer */
 .ins-foot{
-  display:flex; justify-content:flex-start; /* Linksbündig */
+  display:flex; justify-content:flex-start;
   align-items:center; gap:10px;
-  padding:10px 16px; /* Angepasstes Padding */
+  padding:10px 16px;
   border-top:1px solid var(--ins-border);
   border-radius: 0 0 var(--ins-radius) var(--ins-radius);
-  background: var(--ins-panel-2); /* Footer Hintergrund wie Header */
-  min-height: 40px; /* Mindesthöhe des Footers */
+  background: var(--ins-panel-2);
+  min-height: 40px;
 }
 .ins-foot .muted{
-    font-size:13px; opacity:1; /* Volle Opazität für Text */
+    font-size:13px;
     margin-right:auto;
-    color: var(--ins-text); /* Footer Textfarbe */
+    color: var(--ins-text);
 }
-
-/* Slots (Failsafe: Module dürfen vor Core laden) */
-#ins-logs-controls,.slot-logs-controls{ display:block; }
-#ins-logs-view,.slot-logs-view{ display:block; }
-
-/* Micro flash (e.g. Copy) */
-.ins-flash{
-  outline: 2px solid rgba(255,255,255,.2);
-  transition: outline-color .6s ease;
-}
-/* === Inspector: Pane-Layout + Scroll-Fix ============================== */
-/* Das Overlay selbst bleibt ganz vorne und blockiert das Seiten-Scrollen */
-#inspector{ position:fixed; inset:0; z-index:2147483646; }
-
-/* Body nicht mehr scrollen, wenn Inspector offen ist */
-body.inspector-open { overflow: hidden; }
-
-/* Der mittlere Bereich (dein Content-Container) soll Höhe annehmen */
-#inspector .ins-body{
-  display:flex;
-  flex-direction:column;
-  height: auto; /* Höhe wird vom Inhalt bestimmt */
-  padding-bottom:10px; /* Padding im Body */
-  min-height:0; /* WICHTIG: erlaubt Kindern echtes Flex-Shrink */
-}
-
-/* Jede Tab-Pane füllt die Höhe und ist spaltenbasiert */
-#inspector .ins-pane{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  flex:1 1 auto;
-  min-height:0; /* WICHTIG: sonst wachsen Kinder über die Höhe hinaus */
-}
-
-/* Steuerleiste (Filterleiste) bleibt oben, nicht scrollend */
-#inspector .ins-controls{
-  flex:0 0 auto;
-}
-
-/* Die eigentliche Log-Ausgabe – hier wird gescrollt */
-#inspector .ins-logview{
-  flex:1 1 auto;
-  min-height:0;                /* Kern des Fixes */
-  overflow:auto;               /* nur die Liste scrollt */
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior:contain; /* verhindert Gummiband-Effekt ins Seiten-Scrollen */
-}
-
-/* Optional: einheitliche Scrollbar (nicht zwingend) */
-#inspector .ins-logview::-webkit-scrollbar{ width:8px; }
-#inspector .ins-logview::-webkit-scrollbar-thumb{
-  background:rgba(255,255,255,.12);
-  border-radius:8px;
-}
-/* Defensive: stelle sicher, dass nur die Liste scrollt */
-#inspector .ins-body { overflow: hidden; }
-#inspector .ins-pane  { min-height: 0; }
-#inspector .ins-logview { flex: 1 1 auto; min-height: 0; overflow: auto; }
 
 /* Zusätzlicher Styling für den unteren rechten Infobutton */
 .floating-info-button {
@@ -310,10 +248,19 @@ body.inspector-open { overflow: hidden; }
     display: flex;
     justify-content: center;
     align-items: center;
-    color: white;
+    color: white; /* Weißes 'i' auf blauem Grund */
     font-size: 24px;
     font-weight: bold;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     cursor: pointer;
     z-index: 10;
+}
+
+/* Scrollbar Styling für den hellen Modus */
+#inspector .ins-logview::-webkit-scrollbar{ width:10px; }
+#inspector .ins-logview::-webkit-scrollbar-track{ background: transparent; }
+#inspector .ins-logview::-webkit-scrollbar-thumb{
+  background: var(--ins-border); /* NEU: Scrollbar-Farbe passend zum Design */
+  border-radius:10px;
+  border: 2px solid var(--ins-panel-2); /* NEU: Rand um die Scrollbar für besseren Kontrast */
 }
