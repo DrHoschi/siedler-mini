@@ -6,20 +6,20 @@
  * ========================================================================== */
 
 :root{
-  --ins-bg: #0e1311;
-  --ins-panel: #131a17;
-  --ins-panel-2: #0f1613;
-  --ins-border: rgba(255,255,255,.08);
-  --ins-text: #cbd5e1;
-  --ins-dim: #8fa3a0;
-  --ins-pill: rgba(255,255,255,.06);
-  --ins-pill-active: rgba(255,255,255,.14);
-  --ins-ok: #22c55e;
-  --ins-warn: #f59e0b;
-  --ins-err: #ef4444;
-  --ins-info: #60a5fa;
-  --ins-shadow: 0 24px 80px rgba(0,0,0,.5);
-  --ins-radius: 14px;
+  --ins-bg: rgba(0,0,0,0.7); /* Hintergrund des Overlays, dunkler und weniger durchsichtig */
+  --ins-panel: #2B3A49; /* Hintergrund des Hauptpanels, dunkles Blau-Grau */
+  --ins-panel-2: #3E5062; /* Hintergrund des Headers und aktiver Tabs, etwas heller */
+  --ins-border: #4A5C6D; /* Ränder, ein dunkles Grau-Blau */
+  --ins-text: #E0E6EB; /* Helle Textfarbe */
+  --ins-dim: #A8B8C8; /* Gedimmter Text */
+  --ins-pill: #52677C; /* Hintergrund von inaktiven Tabs/Buttons */
+  --ins-pill-active: #4A5C6D; /* Hintergrund von aktiven Tabs/Buttons */
+  --ins-ok: #4CAF50; /* Grün für OK */
+  --ins-warn: #FFC107; /* Gelb für Warnungen */
+  --ins-err: #F44336; /* Rot für Fehler */
+  --ins-info: #2196F3; /* Blau für Infos */
+  --ins-shadow: 0 8px 20px rgba(0,0,0,.4); /* Angepasster Schatten */
+  --ins-radius: 8px; /* Weniger abgerundete Ecken */
 }
 
 /* Vollbild + Safe Area + Topmost */
@@ -27,27 +27,32 @@
   position: fixed;
   inset: 0;
   z-index: 2147483646;
-  display: none;                 /* via JS auf block */
+  display: block;                 /* Standardmäßig sichtbar für die Darstellung */
   padding: max(env(safe-area-inset-top),0px)
            max(env(safe-area-inset-right),0px)
            calc(max(env(safe-area-inset-bottom),0px))
            max(env(safe-area-inset-left),0px);
-  background: rgba(8,10,9,.66);
-  backdrop-filter: blur(6px);
+  background: var(--ins-bg); /* Dunkleres, undurchsichtigeres Overlay */
+  backdrop-filter: blur(4px); /* Etwas weniger Blur */
   pointer-events: auto;
+  display: flex; /* Für Zentrierung */
+  justify-content: center; /* Für Zentrierung */
+  align-items: center; /* Für Zentrierung */
 }
 
 /* Body scrollt nicht, wenn Overlay offen */
 body.inspector-open{ overflow: hidden; }
 
-/* Panel */
+/* Panel Wrap - angepasst für das Bild */
 #inspector .ins-wrap{
-  position: absolute;
-  inset: 0;
-  padding: 18px;
+  position: relative; /* Nicht absolut, da das Panel zentriert wird */
+  width: 400px; /* Feste Breite wie im Bild */
+  max-width: 90vw; /* Maximalbreite für Responsivität */
+  max-height: 90vh; /* Maximalhöhe für Responsivität */
+  padding: 0; /* Kein internes Padding im Wrap, das Panel hat eigenes Padding */
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0; /* Kein Gap zwischen Wrap und Panel */
 }
 
 #inspector .ins-panel{
@@ -58,8 +63,9 @@ body.inspector-open{ overflow: hidden; }
   color: var(--ins-text);
   display: flex;
   flex-direction: column;
-  min-height: 60vh;
-  height: calc(100% - 2px);
+  min-height: auto; /* Keine feste Mindesthöhe */
+  height: auto; /* Höhe passt sich Inhalt an */
+  overflow: hidden; /* Für abgerundete Ecken des Headers */
 }
 
 /* Header */
@@ -68,84 +74,170 @@ body.inspector-open{ overflow: hidden; }
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:14px 16px;
+  padding:10px 16px; /* Etwas weniger Padding oben/unten */
   background: var(--ins-panel-2);
   border-bottom:1px solid var(--ins-border);
   border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
 .ins-title{
-  display:flex; align-items:center; gap:14px;
-  font-weight:700; font-size:20px; letter-spacing:.2px;
+  display:flex; align-items:center; gap:8px; /* Weniger Gap */
+  font-weight:600; font-size:18px; letter-spacing:.1px; /* Angepasste Schrift */
+  margin-right: auto; /* Schiebt "Inspector" und "Logs" auseinander */
 }
-.ins-ver{ font-size:12px; opacity:.6; }
+.ins-ver{ display: none; } /* Versionsnummer im Bild nicht vorhanden */
 
 /* Tabs */
 .ins-tabs{
-  display:flex; gap:8px; flex-wrap:wrap;
+  display:flex; gap:0px; /* Tabs direkt aneinander */
+  flex-wrap:nowrap; /* Tabs nicht umbrechen */
+  margin-left: -1px; /* Überlappende Ränder ausgleichen */
 }
 .ins-tab{
-  border:none; cursor:pointer; padding:8px 14px;
-  border-radius:12px; background:var(--ins-pill); color:var(--ins-text);
+  border:1px solid var(--ins-border); /* Tabs haben Ränder */
+  border-left: none; /* Nur rechte und untere Ränder, linker Rand vom vorherigen Tab */
+  border-top: none; /* Kein oberer Rand */
+  cursor:pointer; padding:8px 14px;
+  border-radius:0; /* Keine abgerundeten Ecken für Tabs */
+  background:var(--ins-panel); /* Inaktive Tabs im Panel-Hintergrund */
+  color:var(--ins-text);
+  font-size: 14px;
+  white-space: nowrap; /* Tabs brechen nicht um */
 }
-.ins-tab.active{ background:var(--ins-pill-active); }
+.ins-tab.active{
+  background:var(--ins-panel-2); /* Aktiver Tab wie Header-Hintergrund */
+  border-bottom-color: var(--ins-panel-2); /* Aktiver Tab blendet den Border unten aus */
+  position: relative;
+  z-index: 1; /* Aktiver Tab liegt über dem Border */
+}
+.ins-tab:first-child {
+    border-left: 1px solid var(--ins-border); /* Erster Tab braucht linken Rand */
+}
 
 /* Close */
-.ins-close{ border:none; cursor:pointer;
-  padding:8px 14px; border-radius:999px;
-  background:var(--ins-pill); color:var(--ins-text);
+.ins-close{
+  border:none; cursor:pointer;
+  padding:4px; /* Kleinerer Padding */
+  border-radius:999px;
+  background: transparent; /* Kein Hintergrund für den Schließen-Button */
+  color:var(--ins-dim); /* Leicht gedimmt */
+  font-size: 20px;
+  line-height: 1;
 }
+.ins-close::before {
+    content: "✕"; /* X-Symbol für den Close-Button */
+}
+
 
 /* Body */
 .ins-body{
-  flex:1; display:flex; flex-direction:column; gap:10px;
+  flex:1; display:flex; flex-direction:column; gap:8px; /* Weniger Gap */
   padding:14px 16px 10px 16px;
-  overflow:hidden;                 /* damit nur der Content scrollt */
+  overflow:hidden;
+  min-height: 250px; /* Mindesthöhe für den Inhalt */
 }
 
 /* Filter/Controls-Reihe */
 .ins-controls{
-  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  display:flex; flex-wrap:wrap; gap:6px 10px; /* Anpassung des Gaps */
+  align-items:center;
+  margin-bottom: 8px; /* Abstand nach unten */
+  flex-direction: column; /* Vertikale Anordnung der Checkboxen */
+  align-items: flex-start; /* Links ausgerichtet */
 }
 .ins-toggle{
-  border:none; cursor:pointer; padding:8px 12px; border-radius:10px;
-  background:var(--ins-pill); color:var(--ins-text);
+  border:none; cursor:pointer; padding:0; /* Kein Padding/Border für Checkboxen */
+  border-radius:0; background:transparent; color:var(--ins-text);
+  display: flex;
+  align-items: center;
+  font-size: 15px;
 }
-.ins-toggle.active{ background:var(--ins-pill-active); }
-.ins-badge{
-  margin-left:8px; padding:2px 8px; border-radius:999px;
-  font-size:12px; background:rgba(255,255,255,.1); color:var(--ins-text);
+.ins-toggle.active{ background:transparent; } /* Aktive Toggle keine besondere Hintergrundfarbe */
+.ins-toggle::before {
+    content: '☑'; /* Checkbox-Symbol */
+    margin-right: 8px;
+    font-size: 1.2em;
+    line-height: 1;
+    color: var(--ins-info); /* Checkboxen-Farbe */
 }
-.ins-search{
-  min-width: 160px; flex:1 1 220px;
-  padding:8px 10px; border-radius:10px; border:1px solid var(--ins-border);
-  background:rgba(0,0,0,.25); color:var(--ins-text);
+.ins-toggle:not(.active)::before {
+    content: '☐'; /* Ungecheckte Checkbox */
+    color: var(--ins-dim);
 }
+
+
+.ins-badge{ display: none; } /* Im Bild nicht vorhanden */
+.ins-search{ display: none; } /* Im Bild nicht vorhanden */
 
 /* Log-Viewport: eigener Scroller */
 .ins-logview{
   flex:1; overflow:auto;
   border:1px solid var(--ins-border);
-  border-radius:12px;
-  background:#0c1210;
-  padding:14px;
+  border-radius:6px; /* Etwas weniger abgerundet */
+  background: var(--ins-panel-2); /* Hintergrund wie Header */
+  padding:10px 14px; /* Anpassung des Paddings */
   font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--ins-text);
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Abstand zwischen Log-Zeilen */
 }
 
 /* Log-Zeilen-Farben */
-.log-info{ color:var(--ins-info); }
-.log-ok{ color:var(--ins-ok); }
-.log-warn{ color:var(--ins-warn); }
-.log-error{ color:var(--ins-err); }
+.log-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.log-line::before {
+    content: '';
+    font-size: 1.2em;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 1em; /* Feste Breite für Icon */
+    text-align: center;
+}
+.log-info.log-line::before { content: 'ⓘ'; color: var(--ins-info); }
+.log-ok.log-line::before { content: '✔'; color: var(--ins-ok); }
+.log-warn.log-line::before { content: '⚠'; color: var(--ins-warn); }
+.log-error.log-line::before { content: '✖'; color: var(--ins-err); }
+
+/* Buttons im Log-View */
+.ins-logview .btn-row {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+    margin-top: 15px; /* Abstand zu den Log-Zeilen */
+}
+.ins-logview .btn {
+    flex: 1;
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: 1px solid var(--ins-border);
+    background: var(--ins-pill);
+    color: var(--ins-text);
+    cursor: pointer;
+    font-size: 15px;
+    text-align: center;
+}
+.ins-logview .btn:hover {
+    background: var(--ins-pill-active);
+}
 
 /* Footer */
 .ins-foot{
-  display:flex; justify-content:flex-end; align-items:center; gap:10px;
-  padding:10px 16px 14px 16px;
+  display:flex; justify-content:flex-start; /* Linksbündig */
+  align-items:center; gap:10px;
+  padding:10px 16px; /* Angepasstes Padding */
   border-top:1px solid var(--ins-border);
   border-radius: 0 0 var(--ins-radius) var(--ins-radius);
+  background: var(--ins-panel-2); /* Footer Hintergrund wie Header */
+  min-height: 40px; /* Mindesthöhe des Footers */
 }
-.ins-foot .muted{ font-size:12px; opacity:.6; margin-right:auto; }
+.ins-foot .muted{
+    font-size:13px; opacity:1; /* Volle Opazität für Text */
+    margin-right:auto;
+    color: var(--ins-text); /* Footer Textfarbe */
+}
 
 /* Slots (Failsafe: Module dürfen vor Core laden) */
 #ins-logs-controls,.slot-logs-controls{ display:block; }
@@ -167,8 +259,8 @@ body.inspector-open { overflow: hidden; }
 #inspector .ins-body{
   display:flex;
   flex-direction:column;
-  height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  padding-bottom:env(safe-area-inset-bottom);
+  height: auto; /* Höhe wird vom Inhalt bestimmt */
+  padding-bottom:10px; /* Padding im Body */
   min-height:0; /* WICHTIG: erlaubt Kindern echtes Flex-Shrink */
 }
 
@@ -205,3 +297,23 @@ body.inspector-open { overflow: hidden; }
 #inspector .ins-body { overflow: hidden; }
 #inspector .ins-pane  { min-height: 0; }
 #inspector .ins-logview { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Zusätzlicher Styling für den unteren rechten Infobutton */
+.floating-info-button {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    width: 45px;
+    height: 45px;
+    background-color: var(--ins-info);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    cursor: pointer;
+    z-index: 10;
+}
