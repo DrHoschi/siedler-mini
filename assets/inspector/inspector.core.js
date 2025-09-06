@@ -1,212 +1,174 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.core.js
- * Projekt: Siedler-Mini
- * Version: v18.10.11
- *
- * Zweck:
- *  - Inspector-Overlay (Vollbild) mit Tabs (Logs/Build/Pfade/Tests)
- *  - Slot-Rendering-API für Modul-Tabs (keine body-SideEffects)
- *  - Öffnen/Schließen/Toggle via window.GameUI.* oder __INSPECTOR_API__
- *
- * Öffentliche APIs:
- * 1) window.__INSPECTOR_CORE__.api
- *    - mount(tabId, renderFn)      → Tab registrieren (renderFn → optional Unmount-Fn)
- *    - getSlot(name)               → Slot-Element (z.B. 'logs-controls', 'logs-view')
- *    - signal(name, payload?)      → Broadcast/Hooks (optional)
- *    - select(tabId)               → Tab aktivieren
- *
- * 2) window.__INSPECTOR_API__
- *    - open()/close()/toggle(force?)  → Overlay steuern, Events dispatchen
- *    - select(tabId)                  → Tab wechseln
- *
- * Events:
- *  - cb:inspector-open / cb:inspector-close
- *  - cb:inspector-ready (einmal nach Init)
+ * Inspector Core – v18.10.12
+ *  - Overlay, Tabs, Slot-Registry für Submodule (logs/build/paths/tests)
+ *  - KEIN body-append außerhalb des #inspector
  * ========================================================================== */
-(function(){
-  'use strict';
+(function () {
+  "use strict";
 
-  var MOD='[inspector.core]';
-  var VER='v18.10.11';
-  var log = function(){ (window.CBLog?.info||console.log).apply(console, arguments); };
+  const MOD = "[inspector.core]";
+  const VER = "v18.10.12";
 
-  if (window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api) {
-    log(MOD, 'bereits initialisiert', VER);
-    return;
-  }
+  // --- Slots-Registry -------------------------------------------------------
+  const __SLOTS__ = Object.create(null);
+  const __mounted = Object.create(null);
 
-  // ---- Root-Overlay erzeugen ------------------------------------------------
-  var root = document.createElement('div');
-  root.id = 'inspector';
-  // Minimalstyles, damit das Panel IMMER sichtbar und oben liegt (CSS darf überschreiben)
-  root.style.cssText = [
-    'position:fixed','inset:0','z-index:2147483646','display:none',
-    'background:rgba(12,18,15,.80)','backdrop-filter:blur(2px)'
-  ].join(';');
-
-  // Panel
-  var panel = document.createElement('div');
-  panel.className = 'ins-panel';
-  panel.style.cssText = [
-    'position:absolute','top:50%','left:50%','transform:translate(-50%,-50%)',
-    'width:min(980px,94vw)','height:min(80vh,92vh)',
-    'background:#161b18','border:1px solid rgba(255,255,255,.08)',
-    'border-radius:12px','box-shadow:0 32px 96px rgba(0,0,0,.55)',
-    'display:flex','flex-direction:column','color:#e5e7eb'
-  ].join(';');
-
-  // Header (Tabs + Close)
-  var header = document.createElement('div');
-  header.className = 'ins-header';
-  header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.07)';
-
-  var title = document.createElement('div');
-  title.textContent = 'Inspector';
-  title.style.cssText = 'font-weight:800;opacity:.9;margin-right:6px';
-
-  var tabsBar = document.createElement('div');
-  tabsBar.className = 'ins-tabs';
-  tabsBar.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-left:auto';
-
-  var btnClose = document.createElement('button');
-  btnClose.textContent = 'Schließen';
-  btnClose.className = 'ins-close';
-  btnClose.style.cssText = 'margin-left:8px;border:none;border-radius:10px;padding:8px 12px;background:rgba(255,255,255,.08);color:#fff;cursor:pointer';
-
-  // Body (Tabs → Slots)
-  var body = document.createElement('div');
-  body.className = 'ins-body';
-  body.style.cssText = 'flex:1;min-height:0;display:flex;flex-direction:column';
-
-  // Footer
-  var footer = document.createElement('div');
-  footer.className = 'ins-footer';
-  footer.style.cssText = 'padding:8px 12px;border-top:1px solid rgba(255,255,255,.07);opacity:.8;font-size:12px';
-  footer.textContent = 'v' + VER + ' — Siedler-Mini';
-
-  panel.appendChild(header);
-  panel.appendChild(body);
-  panel.appendChild(footer);
-  root.appendChild(panel);
-  document.body.appendChild(root);
-
-  // ---- Tabs + Slots ---------------------------------------------------------
-  var TABS = ['logs','build','paths','tests'];
-  var tabButtons = {};
-  var currentTab = null;
-  var mounts = Object.create(null);      // tabId -> renderFn
-  var unmounts = Object.create(null);    // tabId -> unmountFn (optional)
-
-  // Tab Buttons erstellen
-  TABS.forEach(function(id){
-    var b = document.createElement('button');
-    b.dataset.tab = id;
-    b.textContent = id.toUpperCase();
-    b.className = 'ins-tab';
-    b.style.cssText = 'border:none;border-radius:999px;padding:6px 12px;background:rgba(255,255,255,.10);color:#fff;cursor:pointer';
-    b.addEventListener('click', function(){ api.select(id); });
-    tabsBar.appendChild(b);
-    tabButtons[id] = b;
-  });
-
-  // Header zusammensetzen
-  header.appendChild(title);
-  header.appendChild(tabsBar);
-  header.appendChild(btnClose);
-
-  // Body-Slots (statische Slot-Container pro Tab)
-  var slots = {}; // name->Element
-  function mkTabPage(id){
-    var page = document.createElement('div');
-    page.id = 'ins-page-'+id;
-    page.className = 'ins-page';
-    page.style.cssText = 'flex:1;min-height:0;display:none;overflow:auto;padding:10px 12px';
-    // pro Tab eigene Slots:
-    if (id==='logs'){
-      var c = document.createElement('div'); c.id='ins-logs-controls'; c.className='slot-logs-controls';
-      var v = document.createElement('div'); v.id='ins-logs-view';     v.className='slot-logs-view';
-      page.appendChild(c); page.appendChild(v);
-      slots['logs-controls'] = c;
-      slots['logs-view']     = v;
-    } else {
-      var g = document.createElement('div'); g.id='ins-'+id+'-body'; g.className='slot-'+id+'-body';
-      g.textContent = '('+id+' – noch leer)';
-      page.appendChild(g);
-      slots[id+'-body'] = g;
-    }
-    return page;
-  }
-  var pages = {};
-  TABS.forEach(function(id){
-    var p = mkTabPage(id);
-    pages[id] = p;
-    body.appendChild(p);
-  });
-
-  // ---- API: Core ------------------------------------------------------------
-  var api = {
-    mount: function(tabId, renderFn){
-      mounts[tabId] = renderFn;
-      // Wenn gerade aktiv, remount:
-      if (currentTab === tabId) {
-        try { if (unmounts[tabId]) { unmounts[tabId](); } } catch(_){}
-        unmounts[tabId] = (typeof renderFn==='function' ? renderFn() : null) || null;
+  // Core-API für Submodule
+  window.__INSPECTOR_CORE__ = window.__INSPECTOR_CORE__ || {};
+  window.__INSPECTOR_CORE__.api = {
+    mount(tabId, renderFn) {
+      if (typeof renderFn === "function") {
+        // wir mounten sofort (du hast nur wenige Tabs)
+        __mounted[tabId] = renderFn() || null; // optional: unmount-Fn
       }
-      return api;
     },
-    getSlot: function(name){ return slots[name] || null; },
-    signal: function(name, payload){
-      // Broadcast-Hook (derzeit nur Deko)
-      try { (window.CBLog?.info||console.log)('[inspector.core] signal', name, payload||''); } catch(_){}
-    },
-    select: function(tabId){
-      if (!pages[tabId]) tabId = 'logs';
-      // Seitenumschaltung
-      Object.keys(pages).forEach(function(id){
-        var on = (id===tabId);
-        pages[id].style.display = on ? 'block' : 'none';
-        tabButtons[id]?.classList?.toggle('active', on);
-      });
-      // Unmount previous
-      if (currentTab && unmounts[currentTab]) {
-        try { unmounts[currentTab](); } catch(_){}
-        unmounts[currentTab] = null;
-      }
-      currentTab = tabId;
-      // Mount new
-      var fn = mounts[tabId];
-      unmounts[tabId] = (typeof fn==='function' ? fn() : null) || null;
+    getSlot(name) { return __SLOTS__[name] || null; },
+    signal(name, payload) {
+      try { document.dispatchEvent(new CustomEvent("ins:"+name, {detail: payload})); } catch(_){}
     }
   };
 
-  window.__INSPECTOR_CORE__ = { api: api, version: VER };
+  // --- Overlay Grundgerüst --------------------------------------------------
+  let root, titleEl, navEl, contentWrap, footerEl;
+  function ensureOverlay() {
+    if (root) return;
 
-  // ---- API: Overlay / Bridge ------------------------------------------------
-  function open(){
-    root.style.display = 'block';
-    document.body.classList.add('inspector-open');
-    try { window.dispatchEvent(new CustomEvent('cb:inspector-open')); } catch(_){}
+    root = document.createElement("div");
+    root.id = "inspector";
+    root.setAttribute("role","dialog");
+    root.setAttribute("aria-modal","true");
+    root.innerHTML = `
+      <div class="ins-panel">
+        <div class="ins-header">
+          <div class="ins-title">Inspector</div>
+          <div class="ins-nav" id="ins-nav"></div>
+          <button class="ins-close" id="ins-close" type="button">Schließen</button>
+        </div>
+        <div class="ins-content" id="ins-content"></div>
+        <div class="ins-footer" id="ins-footer">
+          <span class="ins-ver">Inspector v${VER}</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(root);
+    titleEl   = root.querySelector(".ins-title");
+    navEl     = root.querySelector("#ins-nav");
+    contentWrap = root.querySelector("#ins-content");
+    footerEl  = root.querySelector("#ins-footer");
+
+    // Navigation
+    const tabs = [
+      { id:"logs",  label:"Logs"  },
+      { id:"build", label:"Build" },
+      { id:"paths", label:"Paths" },
+      { id:"tests", label:"Tests" }
+    ];
+    tabs.forEach(t=>{
+      const b=document.createElement("button");
+      b.className="ins-tab";
+      b.dataset.tab=t.id;
+      b.textContent=t.label.toUpperCase();
+      b.addEventListener("click", ()=> setActiveTab(t.id));
+      navEl.appendChild(b);
+    });
+
+    // --- PANE: LOGS (Slots) -------------------------------------------------
+    const paneLogs = document.createElement("div");
+    paneLogs.id = "tab-logs";
+    paneLogs.className = "ins-pane ins-pane-logs active";
+    paneLogs.setAttribute("role","tabpanel");
+    paneLogs.innerHTML = `
+      <div id="ins-logs-controls" class="slot-logs-controls"></div>
+      <div id="ins-logs-view" class="slot-logs-view"></div>
+    `;
+    __SLOTS__["logs-controls"] = paneLogs.querySelector("#ins-logs-controls");
+    __SLOTS__["logs-view"]     = paneLogs.querySelector("#ins-logs-view");
+    contentWrap.appendChild(paneLogs);
+
+    // --- PANE: BUILD --------------------------------------------------------
+    const paneBuild = document.createElement("div");
+    paneBuild.id = "tab-build";
+    paneBuild.className = "ins-pane ins-pane-build";
+    paneBuild.setAttribute("role","tabpanel");
+    paneBuild.innerHTML = `<div id="ins-build-body" class="slot-build-body"></div>`;
+    __SLOTS__["build-body"] = paneBuild.querySelector("#ins-build-body");
+    contentWrap.appendChild(paneBuild);
+
+    // --- PANE: PATHS --------------------------------------------------------
+    const panePaths = document.createElement("div");
+    panePaths.id = "tab-paths";
+    panePaths.className = "ins-pane ins-pane-paths";
+    panePaths.setAttribute("role","tabpanel");
+    panePaths.innerHTML = `<div id="ins-paths-body" class="slot-paths-body"></div>`;
+    __SLOTS__["paths-body"] = panePaths.querySelector("#ins-paths-body");
+    contentWrap.appendChild(panePaths);
+
+    // --- PANE: TESTS (NEU – Slots) -----------------------------------------
+    const paneTests = document.createElement("div");
+    paneTests.id = "tab-tests";
+    paneTests.className = "ins-pane ins-pane-tests";
+    paneTests.setAttribute("role","tabpanel");
+    paneTests.innerHTML = `
+      <div id="ins-tests-controls" class="slot-tests-controls"></div>
+      <div id="ins-tests-view" class="slot-tests-view"></div>
+    `;
+    __SLOTS__["tests-controls"] = paneTests.querySelector("#ins-tests-controls");
+    __SLOTS__["tests-view"]     = paneTests.querySelector("#ins-tests-view");
+    contentWrap.appendChild(paneTests);
+
+    // Close
+    root.querySelector("#ins-close").addEventListener("click", close);
   }
-  function close(){
-    root.style.display = 'none';
-    document.body.classList.remove('inspector-open');
-    try { window.dispatchEvent(new CustomEvent('cb:inspector-close')); } catch(_){}
+
+  function setActiveTab(id){
+    // Nav
+    navEl.querySelectorAll(".ins-tab").forEach(btn=>{
+      btn.classList.toggle("active", btn.dataset.tab===id);
+    });
+    // Panes
+    contentWrap.querySelectorAll(".ins-pane").forEach(p=>{
+      p.classList.toggle("active", p.id === "tab-"+id);
+    });
+    try { document.dispatchEvent(new CustomEvent("ins:tab", {detail:{id}})); } catch(_){}
+  }
+
+  function open() {
+    ensureOverlay();
+    document.body.classList.add("inspector-open");
+    root.style.display = "block";
+    setActiveTab("logs");
+    try { window.dispatchEvent(new Event("cb:inspector-open")); } catch(_){}
+  }
+  function close() {
+    if (!root) return;
+    root.style.display = "none";
+    document.body.classList.remove("inspector-open");
+    try { window.dispatchEvent(new Event("cb:inspector-close")); } catch(_){}
   }
   function toggle(force){
-    var willOpen = (force==null) ? (root.style.display==='none' || !root.style.display) : !!force;
-    return willOpen ? open() : close();
+    const willOpen = force==null ? (root? root.style.display!=="block":true) : !!force;
+    willOpen ? open() : close();
   }
-  function select(tabId){ return api.select(tabId); }
 
-  var pub = (window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {});
-  pub.open = open; pub.close = close; pub.toggle = toggle; pub.select = select;
+  // Bridge-API für UI-Buttons
+  window.__INSPECTOR_API__ = window.__INSPECTOR_API__ || {};
+  window.__INSPECTOR_API__.open   = open;
+  window.__INSPECTOR_API__.close  = close;
+  window.__INSPECTOR_API__.toggle = toggle;
 
-  // Close-Button
-  btnClose.addEventListener('click', close);
+  // Auto-init (nur Struktur bauen; Submodule rendern sich selbst in Slots)
+  ensureOverlay();
 
-  // Marker + Default-Tab
-  try { window.dispatchEvent(new CustomEvent('cb:inspector-ready',{detail:{version:VER}})); } catch(_){}
-  api.select('logs'); // Standard: Logs
+  // Style-Sicherungen (Safe Area + oben liegend)
+  // (Deine inspector.css enthält die eigentliche Optik)
+  try {
+    const css = document.createElement("style");
+    css.textContent = `
+      #inspector{position:fixed;inset:0;z-index:2147483646;padding-bottom:env(safe-area-inset-bottom,0);pointer-events:auto}
+      body.inspector-open{overflow:hidden}
+    `;
+    document.head.appendChild(css);
+  } catch(_){}
 
-  log(MOD,'bereit',VER);
+  (window.CBLog?.info || console.log)(`${MOD} bereit v${VER}`);
 })();
