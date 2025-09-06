@@ -1,94 +1,148 @@
 /* ============================================================================
- * assets/inspector/inspector.paths.js
- * Version: v18.10.6
- * Zweck:
- *   - Inspector-Tab "Pfade": Overlay an/aus, Heatmap reset
- *   - Statusanzeige (on/off) liest optional window.__cb.pathsEnabled
+ * Datei: assets/inspector/inspector.paths.js
+ * Projekt: Siedler-Mini
+ * Version: v18.11.0
  *
- * Abhängigkeiten:
- *   - __INSPECTOR_CORE__ (aus inspector.core.js)
- *   - Engine/Renderer, die Events bedienen:
- *       • 'cb:paths:toggle'
- *       • 'cb:paths:reset'
- *   - Optional: window.__cb.pathsEnabled (boolean)
+ * Zweck:
+ *   - Pfade-Tab mit:
+ *       • Overlay umschalten  (cb:paths:toggle)
+ *       • Heatmap zurücksetzen (cb:paths:reset)
+ *       • Live-Status + kleine Statistik (Heatmap-Max, "letzte Pfade")
+ *
+ * Events/Bridge:
+ *   Eingehend (vom UI):
+ *     - cb:paths:toggle
+ *     - cb:paths:reset
+ *   Optional aus Engine:
+ *     - window.__cb.pathsEnabled (bool)
+ *     - window.__cb.pathStats { heatMax:number, recent:[{from:[x,y],to:[x,y],len:number}] }
  * ========================================================================== */
 (function(){
-  'use strict';
+  "use strict";
 
-  var MOD='[inspector.paths]';
-  var VER='v18.10.6';
-  var Core=window.__INSPECTOR_CORE__;
-  if(!Core){ (console.warn||console.log)(MOD+' Core fehlt – Modul beendet.'); return; }
+  const MOD = "[inspector.paths]";
+  const VER = "v18.11.0";
 
-  function logOk(m){ try{ (window.CBLog?.ok||console.log)(MOD+' '+m); }catch(_){ console.log(MOD+' '+m); } }
-
-  function mkButton(label, cls, onClick){
-    var b=document.createElement('button');
-    b.className = 'ins-btn '+(cls||'');
-    b.textContent = label;
-    b.addEventListener('click', onClick);
-    return b;
+  const core = window.__INSPECTOR_CORE__;
+  if (!core?.api?.mount){
+    console.warn(MOD, "core API fehlt – breche ab.");
+    return;
   }
-  function mkBadge(txt, kind){
-    var s=document.createElement('span');
-    s.className='ins-badge '+(kind||'muted');
-    s.textContent=txt;
-    return s;
+  const ok = (...a)=> (window.CBLog?.ok || console.log)(MOD, ...a);
+
+  function qSlot(name){
+    return core.api.getSlot?.(name)
+        || document.getElementById(`ins-${name}`)
+        || document.querySelector(`#inspector .slot-${name}`)
+        || document.querySelector(`#inspector .ins-body`);
   }
 
-  function getStatus(){
-    try { return !!(window.__cb && window.__cb.pathsEnabled); } catch(_){ return false; }
+  function pathsEnabled(){
+    try{ return !!(window.__cb && window.__cb.pathsEnabled); }catch(_){}
+    return false;
+  }
+  function pathStats(){
+    try{ return window.__cb?.pathStats || {}; }catch(_){}
+    return {};
   }
 
-  function mount(slot){
-    var wrap=document.createElement('div');
-    wrap.className='ins-vert';
+  function render(){
+    const host = qSlot("paths-body");
+    if (!host) return;
+    host.innerHTML = "";
 
-    // Kopfzeile mit Status
-    var head=document.createElement('div');
-    head.className='ins-row';
-    var title=document.createElement('div');
-    title.className='ins-title';
-    title.textContent='Pfade / Debug';
-    var status = mkBadge(getStatus()? 'AN':'AUS', getStatus()?'ok':'muted');
-    status.id='ins-paths-status';
-    head.appendChild(title);
-    head.appendChild(status);
-    wrap.appendChild(head);
+    // Controls
+    const ctr = document.createElement("div");
+    ctr.className = "ins-controls";
 
-    // Buttons
-    var row=document.createElement('div');
-    row.className='ins-rowgap';
-    row.appendChild(mkButton('Overlay umschalten','primary', function(){
-      try{ window.dispatchEvent(new CustomEvent('cb:paths:toggle')); }catch(_){}
-      setTimeout(function(){
-        var on = getStatus();
-        status.textContent = on?'AN':'AUS';
-        status.className = 'ins-badge ' + (on?'ok':'muted');
-        Core.flash('Pfade-Overlay: '+(on?'AN':'AUS'));
-      }, 60);
-    }));
-    row.appendChild(mkButton('Heatmap zurücksetzen','', function(){
-      try{ window.dispatchEvent(new CustomEvent('cb:paths:reset')); }catch(_){}
-      Core.flash('Heatmap zurückgesetzt');
-    }));
-    wrap.appendChild(row);
+    const btnToggle = document.createElement("button");
+    btnToggle.className = "ins-toggle active";
+    btnToggle.textContent = "Overlay umschalten";
+    btnToggle.addEventListener("click", ()=>{
+      try{ window.dispatchEvent(new CustomEvent("cb:paths:toggle")); }catch(_){}
+      setTimeout(refresh, 60);
+    });
 
-    // Hinweis
-    var hint=document.createElement('div');
-    hint.className='ins-hint';
-    hint.textContent='Erfordert OverlayHooks.draw(ctx, cam) im Renderer.';
-    wrap.appendChild(hint);
+    const btnReset = document.createElement("button");
+    btnReset.textContent = "Heatmap zurücksetzen";
+    btnReset.addEventListener("click", ()=>{
+      try{ window.dispatchEvent(new CustomEvent("cb:paths:reset")); }catch(_){}
+      setTimeout(refresh, 60);
+    });
 
-    slot.body.innerHTML='';
-    slot.body.appendChild(wrap);
+    const badge = document.createElement("span");
+    badge.className = "ins-badge";
+    badge.id = "paths-badge";
+    badge.textContent = pathsEnabled() ? "AN" : "AUS";
+
+    ctr.append(btnToggle, btnReset, badge);
+    host.appendChild(ctr);
+
+    // Statusbox
+    const box = document.createElement("div");
+    box.className = "ins-grid";
+    const add = (k,v,id)=>{
+      const row = document.createElement("div");
+      row.className = "kv";
+      const l = document.createElement("div"); l.className = "k"; l.textContent = k;
+      const r = document.createElement("div"); r.className = "v"; r.textContent = v; if (id) r.id=id;
+      row.append(l,r); box.appendChild(row);
+    };
+    add("Overlay", pathsEnabled() ? "AN" : "AUS", "paths-state");
+    add("Heatmap-Max", String(pathStats().heatMax ?? 0), "paths-heatmax");
+
+    host.appendChild(box);
+
+    // Letzte Pfade
+    const recWrap = document.createElement("div");
+    recWrap.style.marginTop = "10px";
+    const recTitle = document.createElement("div");
+    recTitle.style.opacity = ".85"; recTitle.style.fontWeight = "700";
+    recTitle.textContent = "Letzte Pfade:";
+    const list = document.createElement("div");
+    list.id = "paths-recent";
+    list.style.maxHeight = "30vh";
+    list.style.overflow = "auto";
+    list.style.padding = "6px 0";
+    host.append(recTitle, list);
+
+    refresh();
   }
 
-  Core.registerTab('paths', {
-    title:'Pfade',
-    mount: mount,
-    unmount: function(){ /* nichts */ }
+  function refresh(){
+    // Badge + Status
+    const on = pathsEnabled();
+    const badge = document.getElementById("paths-badge");
+    const st    = document.getElementById("paths-state");
+    if (badge) badge.textContent = on ? "AN" : "AUS";
+    if (st)    st.textContent    = on ? "AN" : "AUS";
+
+    const s = pathStats();
+    const hm = document.getElementById("paths-heatmax");
+    if (hm) hm.textContent = String(s.heatMax ?? 0);
+
+    const list = document.getElementById("paths-recent");
+    if (list){
+      list.innerHTML = "";
+      const items = Array.isArray(s.recent) ? s.recent.slice(-20).reverse() : [];
+      items.forEach((p,i)=>{
+        const row = document.createElement("div");
+        row.className = "log-ok";
+        const from = Array.isArray(p.from)? p.from.join(","): String(p.from);
+        const to   = Array.isArray(p.to)  ? p.to.join(",")  : String(p.to);
+        row.textContent = `#${i+1}  ${from} → ${to}  (len: ${p.len ?? "?"})`;
+        list.appendChild(row);
+      });
+    }
+  }
+
+  core.api.mount("paths", ()=>{
+    render();
+    // kleiner Status-Update-Loop, falls Engine __cb.pathStats aktualisiert
+    const t = setInterval(refresh, 1000);
+    core.api?.signal?.("paths:ready", { version: VER });
+    ok("bereit", VER);
+    return ()=> clearInterval(t);
   });
 
-  logOk('geladen ('+VER+')');
 })();
