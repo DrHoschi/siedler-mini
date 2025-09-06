@@ -114,30 +114,6 @@
     paneTests.innerHTML = `<div id="ins-tests" class="slot-tests"></div>`;
     __SLOTS__["tests"] = paneTests.querySelector("#ins-tests");
 
-<!-- im <section id="tab-build" …> -->
-<div class="pane-inner">
-  <div class="slot-build-controls"></div>
-  <div class="slot-build-view">
-    <div class="ins-empty">Build-Werkzeuge kommen hierhin …</div>
-  </div>
-</div>
-
-<!-- im <section id="tab-paths" …> -->
-<div class="pane-inner">
-  <div class="slot-paths-controls"></div>
-  <div class="slot-paths-view">
-    <div class="ins-empty">Pfade/Resolver folgen …</div>
-  </div>
-</div>
-
-<!-- im <section id="tab-tests" …> -->
-<div class="pane-inner">
-  <div class="slot-tests-controls"></div>
-  <div class="slot-tests-view">
-    <div class="ins-empty">Tests/Checks folgen …</div>
-  </div>
-</div>
-    
     body.append(paneLogs, paneBuild, panePaths, paneTests);
 
     // ---- Footer -------------------------------------------------------------
