@@ -1,36 +1,54 @@
 /* ============================================================================
- * Inspector Paths – v18.11.1
- *  - Overlay-Path-Tools (toggle/reset) + kleiner Status
+ * Inspector Paths – v18.12.3
+ * - Zeigt/prüft Pfad-Daten über Game-Hooks (wenn vorhanden)
+ *   Erwartete Hooks (optional):
+ *     Game.Paths?.list() -> Array<{id,len,from,to,blocked?:bool}>
+ *     Game.Paths?.rebuild()
+ *     OverlayHooks?.drawPaths(list)
  * ========================================================================== */
 (function(){
   'use strict';
-  const core = window.__INSPECTOR_CORE__;
-  if(!core?.api) return;
+  const core = window.__INSPECTOR_CORE__; if (!core?.api) return;
+  const MOD='[inspector.paths]';
+  const log=(...a)=>(window.CBLog?.ok||console.log)(MOD,...a);
+  const warn=(...a)=>(window.CBLog?.warn||console.warn)(MOD,...a);
+
+  function el(tag,cls,html){ const e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
 
   core.api.mount('paths', ()=>{
-    const host = core.api.getSlot('paths-host'); if(!host) return;
+    const host = core.api.getSlot('paths'); if (!host) return;
     host.innerHTML='';
 
-    const row = document.createElement('div'); row.className='ins-controls';
-    const b1 = document.createElement('button'); b1.className='ins-toggle'; b1.textContent='Overlay umschalten';
-    const b2 = document.createElement('button'); b2.className='ins-toggle'; b2.textContent='Heatmap zurücksetzen';
-    row.append(b1,b2);
+    const top = el('div','ins-controls');
+    const btnReload = el('button','ins-btn','Neu laden');
+    const btnRebuild = el('button','ins-btn','Pfad-Cache neu aufbauen');
+    top.append(btnReload, btnRebuild);
 
-    const st = document.createElement('div');
-    st.style.cssText='opacity:.8;margin-top:6px';
+    const view = el('div','slot-logs-view'); // wir nutzen das schöne Monospace-Panel
+    view.style.background='var(--ins-panel-2)';
 
-    const refresh = ()=>{
-      const on = !!(window.__cb && window.__cb.pathsEnabled);
-      st.textContent = `Pfade-Overlay: ${on?'AN':'AUS'}`;
-    };
-    refresh();
+    function renderList(){
+      view.innerHTML='';
+      try{
+        const list = window.Game?.Paths?.list?.() || [];
+        if (!list.length){ view.textContent='Keine Pfade gefunden.'; return; }
+        const f = document.createDocumentFragment();
+        list.forEach(p=>{
+          const line=el('div','log-line log-info', `[${p.id}] len=${p.len} ${p.from}→${p.to}${p.blocked?' (BLOCKED)':''}`);
+          if (p.blocked) line.className='log-line log-warn';
+          f.appendChild(line);
+        });
+        view.appendChild(f);
+      }catch(e){ warn('list', e?.message); view.textContent='Fehler beim Lesen der Pfade.'; }
+    }
 
-    b1.addEventListener('click',()=>{ try{ window.dispatchEvent(new CustomEvent('cb:paths:toggle')); }catch(_){}
-      setTimeout(refresh,50);
+    btnReload.addEventListener('click', renderList);
+    btnRebuild.addEventListener('click', ()=>{
+      try{ window.Game?.Paths?.rebuild?.(); log('rebuild angestoßen'); }catch(e){ warn('rebuild',e?.message); }
+      renderList();
     });
-    b2.addEventListener('click',()=>{ try{ window.dispatchEvent(new CustomEvent('cb:paths:reset')); }catch(_){}
-    });
 
-    host.append(row, st);
+    host.append(top, view);
+    renderList();
   });
 })();
