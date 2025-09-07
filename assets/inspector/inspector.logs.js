@@ -1,154 +1,247 @@
 /* ============================================================================
- * Inspector Logs – v18.12.3
- * - Filter (INFO/OK/WARN/ERR) + Badges
- * - Suche, Kopieren, Export
- * - Stream: CBLog.on('append') oder Poll-Fallback
- * - striktes Slot-Rendering (keine body-Appends)
- * ========================================================================== */
+ * Datei: assets/inspector/inspector.logs.js
+ * Projekt: Siedler-Mini
+ * Version: v18.13.0
+ *
+ * Zweck:
+ *  - Log-Tab UI (Filter, Suche, Kopieren, Export)
+ *  - Zuverlässiger Stream: CBLog.on('append') ODER Poll-Fallback
+ *  - Reines Slot-Rendering (ins-logs-controls, ins-logs-view)
+ * ========================================================================= */
 (function(){
   'use strict';
-  const core = window.__INSPECTOR_CORE__;
-  const MOD  = '[inspector.logs]';
-  const VER  = 'v18.12.3';
-  if (!core || !core.api){ console.warn(MOD, 'Core fehlt'); return; }
-  const ok   = (...a)=> (window.CBLog?.ok||console.log)(MOD, ...a);
-  const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
 
-  const LVLCLASS = { info:'log-info log-line', ok:'log-ok log-line', warn:'log-warn log-line', err:'log-error log-line', error:'log-error log-line' };
+  const MOD='[inspector.logs]';
+  const VER='v18.13.0';
+  const core = window.__INSPECTOR_CORE__;
+  if (!core || !core.api){ console.warn(MOD,'core fehlt'); return; }
+
+  const LVL_CLASS = { info:'log-info', ok:'log-ok', warn:'log-warn', err:'log-error', error:'log-error' };
+
+  // ---- State ---------------------------------------------------------------
+  let raw = [];          // gesamte Rohpuffer (Strings oder Objekte)
+  let lastLen = 0;
+  let poll = null;
 
   const state = {
-    showInfo:true, showOk:true, showWarn:true, showErr:true,
-    query:'', counts:{info:0, ok:0, warn:0, err:0}
+    info:true, ok:true, warn:true, err:true,
+    q:''
   };
-  let els = { controls:null, view:null, search:null, badges:{} };
-  let raw = []; let lastLen = 0; let poll = null;
 
-  function getSlot(n){ return core.api.getSlot(n); }
+  const el = { controls:null, view:null };
 
-  function toText(entry){
-    if (entry==null) return '';
-    if (typeof entry==='object'){
-      const t=entry.t||entry.time||entry.ts||''; const src=entry.src||entry.scope||''; const m=entry.msg??entry.message??entry.text??JSON.stringify(entry);
-      return t ? `[${t}] ${src?src+' ':''}${m}` : `${src?src+' ':''}${m}`;
+  // ---- Utils ---------------------------------------------------------------
+  const toText = (line)=>{
+    if (line == null) return '';
+    if (typeof line === 'string') return line;
+    if (typeof line === 'object'){
+      const t = line.t || line.ts || line.time || '';
+      const scope = line.scope || line.src || '';
+      const msg = line.msg ?? line.message ?? line.text ?? JSON.stringify(line);
+      return t ? `[${t}] ${scope?scope+' ':''}${msg}` : `${scope?scope+' ':''}${msg}`;
     }
-    return String(entry);
-  }
-  function levelOf(entry){
-    const s = (typeof entry==='object' ? (entry.lvl||entry.level||'info') : String(entry)).toLowerCase();
-    if (s.includes('err')) return 'err';
-    if (s.includes('warn')) return 'warn';
-    if (s.includes('ok')) return 'ok';
+    return String(line);
+  };
+  const toLevel = (line)=>{
+    if (line && typeof line === 'object'){
+      const l=(line.lvl||line.level||'info').toString().toLowerCase();
+      return (l==='error') ? 'err' : l;
+    }
+    const s = String(line||'');
+    if (/err(or)?/i.test(s)) return 'err';
+    if (/warn(ing)?/i.test(s)) return 'warn';
+    if (/\bok\b/i.test(s))    return 'ok';
+    if (/info/i.test(s))      return 'info';
     return 'info';
+  };
+
+  function readBuffer(){
+    try{
+      const buf = window.CBLog?.getBuffer?.();
+      return Array.isArray(buf) ? buf.slice() : [];
+    }catch(_){ return []; }
   }
 
-  function buildControls(){
-    const host = getSlot('logs-controls'); if (!host) return;
-    host.innerHTML = '';
-    const wrap = document.createElement('div'); wrap.className='ins-controls';
-    const mkT = (label,key)=>{
-      const b = document.createElement('button'); b.className='ins-toggle'; b.dataset.key=key;
-      b.innerHTML = `<span class="tbox">${label}</span><span class="ins-badge">0</span>`;
+  // ---- Stream --------------------------------------------------------------
+  function onAppend(entry){
+    raw.push(entry);
+    renderAppend(entry);
+  }
+  function startStream(){
+    raw = readBuffer();
+    lastLen = raw.length;
+
+    // Event-Stream wenn vorhanden
+    if (typeof window.CBLog?.on === 'function'){
+      try{
+        window.CBLog.on('append', onAppend);
+      }catch(_){}
+    } else {
+      // Poll-Fallback
+      poll = setInterval(()=>{
+        const buf = readBuffer();
+        if (buf.length !== lastLen){
+          const diff = buf.slice(lastLen);
+          lastLen = buf.length;
+          diff.forEach(onAppend);
+        }
+      }, 800);
+    }
+  }
+  function stopStream(){
+    if (poll){ clearInterval(poll); poll=null; }
+    if (typeof window.CBLog?.off === 'function'){
+      try{ window.CBLog.off('append', onAppend); }catch(_){}
+    }
+  }
+
+  // ---- UI ------------------------------------------------------------------
+  function mountControls(host){
+    host.innerHTML='';
+    const wrap = document.createElement('div');
+    wrap.className='ins-controls';
+
+    const mkToggle=(label,key)=>{
+      const b=document.createElement('button');
+      b.className='ins-toggle';
+      const t=document.createElement('span'); t.className='tbox'; t.textContent=label;
+      b.appendChild(t);
       b.classList.toggle('active', !!state[key]);
-      b.addEventListener('click', ()=>{ state[key]=!state[key]; b.classList.toggle('active', !!state[key]); renderAll(); });
-      els.badges[key] = b.querySelector('.ins-badge'); return b;
+      b.addEventListener('click', ()=>{
+        state[key]=!state[key]; b.classList.toggle('active', !!state[key]); renderAll();
+      });
+      return b;
     };
-    const tInfo = mkT('INFO','showInfo');
-    const tOk   = mkT('OK','showOk');
-    const tWarn = mkT('WARN','showWarn');
-    const tErr  = mkT('ERR','showErr');
 
-    const search = document.createElement('input'); search.type='search'; search.placeholder='Suche…'; search.className='ins-search';
-    search.addEventListener('input', ()=>{ state.query=(search.value||'').trim().toLowerCase(); renderAll(); });
-    els.search = search;
+    const tInfo=mkToggle('INFO','info');
+    const tOk  =mkToggle('OK','ok');
+    const tWarn=mkToggle('WARN','warn');
+    const tErr =mkToggle('ERR','err');
 
-    const copy = document.createElement('button'); copy.className='ins-btn'; copy.textContent='Kopieren';
-    copy.addEventListener('click', async ()=>{
-      try{ await navigator.clipboard.writeText(raw.map(toText).join('\n')); copy.textContent='Kopiert'; setTimeout(()=>copy.textContent='Kopieren', 900); }
-      catch(_){ alert('Clipboard nicht verfügbar'); }
+    const search=document.createElement('input');
+    search.type='search'; search.placeholder='Suche…';
+    search.className='ins-search';
+    search.addEventListener('input',()=>{ state.q=(search.value||'').trim().toLowerCase(); renderAll(); });
+
+    const btnCopy=document.createElement('button');
+    btnCopy.className='ins-btn';
+    btnCopy.textContent='Kopieren';
+    btnCopy.addEventListener('click', async ()=>{
+      const lines = filterRaw().map(toText).join('\n');
+      try{ await navigator.clipboard.writeText(lines); btnCopy.classList.add('ins-flash'); setTimeout(()=>btnCopy.classList.remove('ins-flash'),500); }
+      catch(_){ alert('Kopieren nicht möglich'); }
     });
-    const exp = document.createElement('button'); exp.className='ins-btn'; exp.textContent='Export';
-    exp.addEventListener('click', ()=>{
-      const blob = new Blob([raw.map(toText).join('\n')], {type:'text/plain'});
-      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='logs.txt';
+
+    const btnExport=document.createElement('button');
+    btnExport.className='ins-btn';
+    btnExport.textContent='Export';
+    btnExport.addEventListener('click', ()=>{
+      const lines = filterRaw().map(toText).join('\n');
+      const blob = new Blob([lines],{type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='logs.txt';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     });
 
-    wrap.append(tInfo,tOk,tWarn,tErr,search,copy,exp);
+    wrap.append(tInfo,tOk,tWarn,tErr,search,btnCopy,btnExport);
     host.appendChild(wrap);
-    els.controls = wrap;
   }
 
-  function mountView(){
-    const host = getSlot('logs-view'); if (!host) return;
-    host.innerHTML=''; const div = document.createElement('div'); div.className='slot-logs-view'; host.appendChild(div);
-    els.view = div;
+  function filterRaw(){
+    const q = state.q;
+    return raw.filter(entry=>{
+      const lvl = toLevel(entry);
+      if ((lvl==='info' && !state.info) ||
+          (lvl==='ok'   && !state.ok)   ||
+          (lvl==='warn' && !state.warn) ||
+          (lvl==='err'  && !state.err)) return false;
+      if (q){ const s = toText(entry).toLowerCase(); if (!s.includes(q)) return false; }
+      return true;
+    });
   }
 
   function renderAll(){
-    if (!els.view) return;
-    const q = state.query;
-
-    state.counts.info=state.counts.ok=state.counts.warn=state.counts.err=0;
-    const frag=document.createDocumentFragment();
-
-    for (let i=0;i<raw.length;i++){
-      const ent = raw[i];
-      const lvl = levelOf(ent);
-      const txt = toText(ent);
-      state.counts[lvl] = (state.counts[lvl]||0)+1;
-
-      if ((lvl==='info' && !state.showInfo) || (lvl==='ok' && !state.showOk) || (lvl==='warn' && !state.showWarn) || (lvl==='err' && !state.showErr)) continue;
-      if (q && !txt.toLowerCase().includes(q)) continue;
-
-      const line=document.createElement('div'); line.className=LVLCLASS[lvl]||'log-info log-line'; line.textContent=txt;
-      frag.appendChild(line);
+    if (!el.view) return;
+    const list = filterRaw();
+    const frag = document.createDocumentFragment();
+    for (let i=0;i<list.length;i++){
+      const e = list[i];
+      const div = document.createElement('div');
+      div.className = (LVL_CLASS[toLevel(e)] || 'log-info') + ' log-line';
+      div.textContent = toText(e);
+      frag.appendChild(div);
     }
-    els.view.innerHTML=''; els.view.appendChild(frag);
-
-    // Badges
-    if (els.badges.showInfo) els.badges.showInfo.textContent=String(state.counts.info||0);
-    if (els.badges.showOk)   els.badges.showOk.textContent  =String(state.counts.ok||0);
-    if (els.badges.showWarn) els.badges.showWarn.textContent=String(state.counts.warn||0);
-    if (els.badges.showErr)  els.badges.showErr.textContent =String(state.counts.err||0);
-    // Autoscroll ans Ende
-    els.view.scrollTop = els.view.scrollHeight;
+    el.view.innerHTML='';
+    el.view.appendChild(frag);
+    // autoscroll ans Ende
+    el.view.scrollTop = el.view.scrollHeight;
   }
 
-  function onAppend(entry){ raw.push(entry); renderAll(); }
+  function renderAppend(entry){
+    // nur wenn durch Filter kommt
+    const lvl = toLevel(entry);
+    if ((lvl==='info' && !state.info) ||
+        (lvl==='ok'   && !state.ok)   ||
+        (lvl==='warn' && !state.warn) ||
+        (lvl==='err'  && !state.err)) return;
+    const s = toText(entry).toLowerCase();
+    if (state.q && !s.includes(state.q)) return;
 
-  function readBuffer(){ try{ const b=window.CBLog?.getBuffer?.(); return Array.isArray(b)? b.slice():[]; }catch(_){ return []; } }
-
-  function startStream(){
-    raw = readBuffer(); lastLen = raw.length; renderAll();
-
-    if (typeof window.CBLog?.on==='function'){
-      try{ window.CBLog.on('append', onAppend); ok('Stream aktiv', VER); return; }catch(_){}
-    }
-    // Poll-Fallback
-    if (poll) clearInterval(poll);
-    poll = setInterval(()=>{
-      const buf = readBuffer();
-      if (buf.length!==lastLen){
-        const diff = buf.slice(lastLen);
-        lastLen = buf.length; diff.forEach(onAppend);
-      }
-    }, 800);
-    warn('nutze Poll-Fallback (kein CBLog.on)');
-  }
-  function stopStream(){
-    if (poll) clearInterval(poll); poll=null;
-    try{ window.CBLog?.off?.('append', onAppend); }catch(_){}
+    if (!el.view) return;
+    const div = document.createElement('div');
+    div.className = (LVL_CLASS[lvl] || 'log-info') + ' log-line';
+    div.textContent = toText(entry);
+    el.view.appendChild(div);
+    el.view.scrollTop = el.view.scrollHeight;
   }
 
-  // Mount in Core
+  // ---- Mount in Core -------------------------------------------------------
+  const el = {};
   core.api.mount('logs', ()=>{
-    buildControls();
-    mountView();
+    el.controls = core.api.getSlot('logs-controls');
+    el.view     = core.api.getSlot('logs-view');
+    if (!el.controls || !el.view) return;
+
+    // Aufbau
+    mountControls(el.controls);
+    el.view.innerHTML='';
+
+    // Historie + Stream
+    raw = readBuffer(); lastLen = raw.length;
+    renderAll();
     startStream();
-    ok('bereit', VER);
-    return ()=> stopStream();
+
+    // Reaktionen auf open/close
+    const onOpen = ()=>{ /* beim Öffnen: Liste aktualisieren */ renderAll(); };
+    const onClose= ()=>{ /* nichts nötig */ };
+
+    window.addEventListener('cb:inspector-open', onOpen);
+    window.addEventListener('cb:inspector-close', onClose);
+
+    (window.CBLog?.info||console.log)(MOD,'bereit', VER);
+
+    return ()=>{
+      stopStream();
+      window.removeEventListener('cb:inspector-open', onOpen);
+      window.removeEventListener('cb:inspector-close', onClose);
+    };
   });
 
-  // Sicherheit: beim Öffnen neu ausrichten (Mobile Orientation)
-  window.addEventListener('cb:inspector-open', ()=> setTimeout(renderAll, 0));
+  // --- Safety-Hook: Falls kein CBLog existiert, console umbiegen ------------
+  (function ensureConsoleHookOnce(){
+    if (window.__INS_CONSOLE_HOOKED__) return;
+    window.__INS_CONSOLE_HOOKED__ = true;
+    if (window.CBLog) return; // echte CBLog vorhanden → nicht hooken
+    ['log','info','warn','error'].forEach(k=>{
+      const orig = console[k];
+      console[k] = function(...args){
+        try{
+          raw.push({ level:k, scope:'console', msg: args.map(a=>String(a)).join(' ') });
+          renderAppend(raw[raw.length-1]);
+        }catch(_){}
+        return orig.apply(this,args);
+      };
+    });
+  })();
+
 })();
