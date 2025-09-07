@@ -1,217 +1,154 @@
 /* ============================================================================
- * Inspector Logs – v18.12.1 (stabil)
- * - Filter (INFO/OK/WARN/ERR), Suche, Kopieren, Export
- * - Sofortige Anzeige des CBLog-Buffers + Live-Stream (mit Poll-Fallback)
- * - Reines Slot-Rendering: #ins-logs-controls, #ins-logs-view
+ * Inspector Logs – v18.12.3
+ * - Filter (INFO/OK/WARN/ERR) + Badges
+ * - Suche, Kopieren, Export
+ * - Stream: CBLog.on('append') oder Poll-Fallback
+ * - striktes Slot-Rendering (keine body-Appends)
  * ========================================================================== */
 (function(){
   'use strict';
+  const core = window.__INSPECTOR_CORE__;
+  const MOD  = '[inspector.logs]';
+  const VER  = 'v18.12.3';
+  if (!core || !core.api){ console.warn(MOD, 'Core fehlt'); return; }
+  const ok   = (...a)=> (window.CBLog?.ok||console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
 
-  var MOD='[inspector.logs]';
-  var VER='v18.12.1';
-  var core = window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api;
-  if (!core){ console.warn(MOD,'core API fehlt'); return; }
+  const LVLCLASS = { info:'log-info log-line', ok:'log-ok log-line', warn:'log-warn log-line', err:'log-error log-line', error:'log-error log-line' };
 
-  // --- State ----------------------------------------------------------------
-  var state = { showInfo:true, showOk:true, showWarn:true, showErr:true, q:'' };
-  var els   = { controls:null, view:null, badges:{} };
-  var raw   = [];     // Rohpuffer (Objekte/Strings)
-  var wired = false;  // Stream verbunden?
-  var poll  = null;   // Poll-Timer
+  const state = {
+    showInfo:true, showOk:true, showWarn:true, showErr:true,
+    query:'', counts:{info:0, ok:0, warn:0, err:0}
+  };
+  let els = { controls:null, view:null, search:null, badges:{} };
+  let raw = []; let lastLen = 0; let poll = null;
 
-  // --- Utils ----------------------------------------------------------------
-  function ok(){ try{ (window.CBLog?.ok||console.log).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.log.apply(console, [MOD].concat(arguments)); } }
-  function warn(){ try{ (window.CBLog?.warn||console.warn).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.warn.apply(console, [MOD].concat(arguments)); } }
+  function getSlot(n){ return core.api.getSlot(n); }
 
-  function detectLevel(x){
-    if (x && typeof x==='object'){ return (x.lvl||x.level||'info').toString().toLowerCase(); }
-    var s = String(x||'');
-    if (/\berr(or)?\b/i.test(s)) return 'err';
-    if (/\bwarn(ing)?\b/i.test(s)) return 'warn';
-    if (/\bok\b/i.test(s)) return 'ok';
+  function toText(entry){
+    if (entry==null) return '';
+    if (typeof entry==='object'){
+      const t=entry.t||entry.time||entry.ts||''; const src=entry.src||entry.scope||''; const m=entry.msg??entry.message??entry.text??JSON.stringify(entry);
+      return t ? `[${t}] ${src?src+' ':''}${m}` : `${src?src+' ':''}${m}`;
+    }
+    return String(entry);
+  }
+  function levelOf(entry){
+    const s = (typeof entry==='object' ? (entry.lvl||entry.level||'info') : String(entry)).toLowerCase();
+    if (s.includes('err')) return 'err';
+    if (s.includes('warn')) return 'warn';
+    if (s.includes('ok')) return 'ok';
     return 'info';
   }
-  function asText(x){
-    if (x && typeof x==='object'){
-      var t = x.t || x.time || x.ts || '';
-      var src = x.src || x.source || '';
-      var msg = x.msg ?? x.message ?? x.text ?? JSON.stringify(x);
-      return (t?('['+t+'] '):'') + (src?src+' ':'') + msg;
-    }
-    return String(x||'');
-  }
-  function buffer(){
-    try{
-      var b = window.CBLog?.getBuffer?.();
-      return Array.isArray(b) ? b.slice() : [];
-    }catch(_){ return []; }
-  }
 
-  // --- Controls --------------------------------------------------------------
-  function mkToggle(label, key){
-    var b = document.createElement('button');
-    b.className = 'ins-toggle'+(state[key]?' active':'');
-    b.innerHTML = '<span class="tbox">'+label+'</span>';
-    b.addEventListener('click', function(){
-      state[key] = !state[key];
-      b.classList.toggle('active', state[key]);
-      render();
-    });
-    return b;
-  }
   function buildControls(){
-    var host = core.getSlot('logs-controls');
-    if (!host) return;
+    const host = getSlot('logs-controls'); if (!host) return;
     host.innerHTML = '';
-    var wrap = document.createElement('div'); wrap.className='ins-controls';
+    const wrap = document.createElement('div'); wrap.className='ins-controls';
+    const mkT = (label,key)=>{
+      const b = document.createElement('button'); b.className='ins-toggle'; b.dataset.key=key;
+      b.innerHTML = `<span class="tbox">${label}</span><span class="ins-badge">0</span>`;
+      b.classList.toggle('active', !!state[key]);
+      b.addEventListener('click', ()=>{ state[key]=!state[key]; b.classList.toggle('active', !!state[key]); renderAll(); });
+      els.badges[key] = b.querySelector('.ins-badge'); return b;
+    };
+    const tInfo = mkT('INFO','showInfo');
+    const tOk   = mkT('OK','showOk');
+    const tWarn = mkT('WARN','showWarn');
+    const tErr  = mkT('ERR','showErr');
 
-    wrap.appendChild(mkToggle('INFO','showInfo'));
-    wrap.appendChild(mkToggle('OK','showOk'));
-    wrap.appendChild(mkToggle('WARN','showWarn'));
-    wrap.appendChild(mkToggle('ERR','showErr'));
+    const search = document.createElement('input'); search.type='search'; search.placeholder='Suche…'; search.className='ins-search';
+    search.addEventListener('input', ()=>{ state.query=(search.value||'').trim().toLowerCase(); renderAll(); });
+    els.search = search;
 
-    var search = document.createElement('input');
-    search.type='search'; search.placeholder='Suche…'; search.className='ins-search';
-    search.addEventListener('input', function(){ state.q = (search.value||'').toLowerCase(); render(); });
-    wrap.appendChild(search);
-
-    var copy = document.createElement('button'); copy.className='ins-btn'; copy.textContent='Kopieren';
-    copy.addEventListener('click', async function(){
-      try{
-        var txt = raw.map(asText).join('\n');
-        await navigator.clipboard.writeText(txt);
-        copy.classList.add('ins-flash'); setTimeout(function(){ copy.classList.remove('ins-flash'); }, 600);
-      }catch(_){ alert('Clipboard nicht verfügbar'); }
+    const copy = document.createElement('button'); copy.className='ins-btn'; copy.textContent='Kopieren';
+    copy.addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(raw.map(toText).join('\n')); copy.textContent='Kopiert'; setTimeout(()=>copy.textContent='Kopieren', 900); }
+      catch(_){ alert('Clipboard nicht verfügbar'); }
     });
-    var ex = document.createElement('button'); ex.className='ins-btn'; ex.textContent='Export';
-    ex.addEventListener('click', function(){
-      var blob = new Blob([raw.map(asText).join('\n')], {type:'text/plain'});
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a'); a.href = url; a.download = 'logs.txt';
+    const exp = document.createElement('button'); exp.className='ins-btn'; exp.textContent='Export';
+    exp.addEventListener('click', ()=>{
+      const blob = new Blob([raw.map(toText).join('\n')], {type:'text/plain'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='logs.txt';
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     });
-    wrap.appendChild(copy); wrap.appendChild(ex);
 
+    wrap.append(tInfo,tOk,tWarn,tErr,search,copy,exp);
     host.appendChild(wrap);
     els.controls = wrap;
   }
 
-  // --- View ------------------------------------------------------------------
   function mountView(){
-    var host = core.getSlot('logs-view');
-    if (!host) return;
-    host.innerHTML = '';
-    var box = document.createElement('div');
-    box.className = 'ins-logview';
-    host.appendChild(box);
-    els.view = box;
+    const host = getSlot('logs-view'); if (!host) return;
+    host.innerHTML=''; const div = document.createElement('div'); div.className='slot-logs-view'; host.appendChild(div);
+    els.view = div;
   }
 
-  function render(){
+  function renderAll(){
     if (!els.view) return;
-    var q = state.q;
-    var frag = document.createDocumentFragment();
+    const q = state.query;
 
-    for (var i=0;i<raw.length;i++){
-      var obj = raw[i];
-      var lvl = detectLevel(obj);
-      if ((lvl==='info' && !state.showInfo) ||
-          (lvl==='ok'   && !state.showOk)   ||
-          (lvl==='warn' && !state.showWarn) ||
-          (lvl==='err'  && !state.showErr)) continue;
+    state.counts.info=state.counts.ok=state.counts.warn=state.counts.err=0;
+    const frag=document.createDocumentFragment();
 
-      var txt = asText(obj);
-      if (q && txt.toLowerCase().indexOf(q)===-1) continue;
+    for (let i=0;i<raw.length;i++){
+      const ent = raw[i];
+      const lvl = levelOf(ent);
+      const txt = toText(ent);
+      state.counts[lvl] = (state.counts[lvl]||0)+1;
 
-      var div = document.createElement('div');
-      div.className = 'log-line '+(
-        lvl==='ok'   ? 'log-ok'   :
-        lvl==='warn' ? 'log-warn' :
-        lvl==='err'  ? 'log-error': 'log-info'
-      );
-      div.textContent = txt;
-      frag.appendChild(div);
+      if ((lvl==='info' && !state.showInfo) || (lvl==='ok' && !state.showOk) || (lvl==='warn' && !state.showWarn) || (lvl==='err' && !state.showErr)) continue;
+      if (q && !txt.toLowerCase().includes(q)) continue;
+
+      const line=document.createElement('div'); line.className=LVLCLASS[lvl]||'log-info log-line'; line.textContent=txt;
+      frag.appendChild(line);
     }
-    els.view.innerHTML = '';
-    els.view.appendChild(frag);
-    // am Ende bleiben wir unten
+    els.view.innerHTML=''; els.view.appendChild(frag);
+
+    // Badges
+    if (els.badges.showInfo) els.badges.showInfo.textContent=String(state.counts.info||0);
+    if (els.badges.showOk)   els.badges.showOk.textContent  =String(state.counts.ok||0);
+    if (els.badges.showWarn) els.badges.showWarn.textContent=String(state.counts.warn||0);
+    if (els.badges.showErr)  els.badges.showErr.textContent =String(state.counts.err||0);
+    // Autoscroll ans Ende
     els.view.scrollTop = els.view.scrollHeight;
   }
 
-  // --- Stream (CBLog.on oder Poll) ------------------------------------------
-  function onAppend(entry){ raw.push(entry); push(entry); }
-  function push(entry){
-    if (!els.view) return;
-    var lvl = detectLevel(entry);
-    var txt = asText(entry);
+  function onAppend(entry){ raw.push(entry); renderAll(); }
 
-    if ((lvl==='info' && !state.showInfo) ||
-        (lvl==='ok'   && !state.showOk)   ||
-        (lvl==='warn' && !state.showWarn) ||
-        (lvl==='err'  && !state.showErr)) return;
-    if (state.q && txt.toLowerCase().indexOf(state.q)===-1) return;
+  function readBuffer(){ try{ const b=window.CBLog?.getBuffer?.(); return Array.isArray(b)? b.slice():[]; }catch(_){ return []; } }
 
-    var div = document.createElement('div');
-    div.className = 'log-line '+(
-      lvl==='ok'   ? 'log-ok'   :
-      lvl==='warn' ? 'log-warn' :
-      lvl==='err'  ? 'log-error': 'log-info'
-    );
-    div.textContent = txt;
-    els.view.appendChild(div);
-    els.view.scrollTop = els.view.scrollHeight;
-  }
+  function startStream(){
+    raw = readBuffer(); lastLen = raw.length; renderAll();
 
-  function wire(){
-    if (wired) return;
-    wired = true;
-
-    // Historie
-    raw = buffer();
-    render();
-
-    // Live
-    if (typeof window.CBLog?.on === 'function'){
-      try { window.CBLog.on('append', onAppend); ok('Stream aktiv'); return; }
-      catch(_){}
+    if (typeof window.CBLog?.on==='function'){
+      try{ window.CBLog.on('append', onAppend); ok('Stream aktiv', VER); return; }catch(_){}
     }
     // Poll-Fallback
-    var last = raw.length;
-    poll = window.setInterval(function(){
-      var b = buffer();
-      if (!Array.isArray(b)) return;
-      if (b.length>last){
-        for (var i=last; i<b.length; i++){ onAppend(b[i]); }
-        last = b.length;
+    if (poll) clearInterval(poll);
+    poll = setInterval(()=>{
+      const buf = readBuffer();
+      if (buf.length!==lastLen){
+        const diff = buf.slice(lastLen);
+        lastLen = buf.length; diff.forEach(onAppend);
       }
-    }, 700);
+    }, 800);
     warn('nutze Poll-Fallback (kein CBLog.on)');
   }
-
-  function unwire(){
-    if (poll){ clearInterval(poll); poll=null; }
-    if (typeof window.CBLog?.off === 'function'){
-      try { window.CBLog.off('append', onAppend); } catch(_){}
-    }
-    wired = false;
+  function stopStream(){
+    if (poll) clearInterval(poll); poll=null;
+    try{ window.CBLog?.off?.('append', onAppend); }catch(_){}
   }
 
-  // Beim Sichtbarwerden der Logs einmal sicher rendern
-  window.addEventListener('cb:inspector-logs-show', function(){
-    // falls Module früher geladen hat
-    if (!els.controls) buildControls();
-    if (!els.view)     mountView();
-    if (!wired)        wire();
-    render();
-  });
-
-  // Mount sofort ausführen (Core ruft mount() direkt)
-  core.mount('logs', function(){
+  // Mount in Core
+  core.api.mount('logs', ()=>{
     buildControls();
     mountView();
-    wire();
+    startStream();
     ok('bereit', VER);
-    return function(){ unwire(); };
+    return ()=> stopStream();
   });
 
+  // Sicherheit: beim Öffnen neu ausrichten (Mobile Orientation)
+  window.addEventListener('cb:inspector-open', ()=> setTimeout(renderAll, 0));
 })();
