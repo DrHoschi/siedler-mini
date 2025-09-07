@@ -1,45 +1,61 @@
 /* ============================================================================
- * Inspector Resources – v18.12.3
- * - Zeigt einfache Ressourcen-/Assets-Infos falls vorhanden
- *   Erwartete Hooks (optional):
- *     Game.Resources?.list() -> Array<{name, amount}>
- *     Game.Assets?.stats()   -> {textures:number, sounds:number, sprites:number}
- * ========================================================================== */
+ * Datei: assets/inspector/inspector.resources.js
+ * Projekt: Siedler-Mini
+ * Version: v18.13.0
+ *
+ * Zweck:
+ *  - Ressourcen-Tab: einfache Buttons zum Hinzufügen/Leeren
+ *    • cb:res:add { kind }
+ *    • cb:res:clear
+ * ========================================================================= */
 (function(){
   'use strict';
-  const core = window.__INSPECTOR_CORE__; if (!core?.api) return;
+
   const MOD='[inspector.resources]';
-  const log=(...a)=>(window.CBLog?.ok||console.log)(MOD,...a);
+  const VER='v18.13.0';
+  const core = window.__INSPECTOR_CORE__;
+  if (!core || !core.api){ console.warn(MOD,'core fehlt'); return; }
 
-  function el(t,c,h){ const e=document.createElement(t); if(c) e.className=c; if(h!=null) e.innerHTML=h; return e; }
+  const ITEMS = [
+    { id:'wood',  label:'Holz' },
+    { id:'stone', label:'Stein' },
+    { id:'wheat', label:'Weizen' },
+    { id:'fish',  label:'Fisch' },
+  ];
 
-  core.api.mount('build', ()=>{ /* Build-Tab bleibt Build – diese Datei nutzt eigenes Tab 'resources' nicht */ });
+  core.api.mount('resources', ()=>{
+    const host = core.api.getSlot('resources');
+    if (!host) return;
 
-  // Wenn du später einen eigenen Ressourcen-Tab willst:
-  // 1) Im Core einen Tab "resources" hinzufügen
-  // 2) Hier mount('resources', ...) aktivieren.
-  // Aktuell nutzen wir im Build-Tab nur Infos aus diesem Modul.
-  core.api.mount('build', ()=>{
-    const host = core.api.getSlot('build'); if (!host) return;
-    const box = el('div', '', '');
-    const res = (window.Game?.Resources?.list?.() || []).slice(0, 50);
-    const assets = window.Game?.Assets?.stats?.() || null;
+    const wrap = document.createElement('div');
+    wrap.className='ins-reswrap';
 
-    const lines = [];
-    if (assets){
-      lines.push(`<div><b>Assets</b>: Textures=${assets.textures??'-'}, Sprites=${assets.sprites??'-'}, Sounds=${assets.sounds??'-'}</div>`);
-    }
-    if (res.length){
-      lines.push('<div><b>Ressourcen (Top 50)</b></div>');
-      lines.push('<pre style="margin:6px 0;white-space:pre-wrap">'+
-                 res.map(r=>`${r.name.padEnd(20,' ')} ${String(r.amount).padStart(6,' ')}`).join('\n')
-                 +'</pre>');
-    }else{
-      lines.push('<div>Keine Ressourcen-Infos verfügbar.</div>');
-    }
-    box.innerHTML = lines.join('');
-    host.appendChild(box);
-    log('ressourcen-info eingeblendet');
+    const row = document.createElement('div');
+    row.className='row';
+    ITEMS.forEach(it=>{
+      const b=document.createElement('button');
+      b.className='ins-btn';
+      b.textContent = `+ ${it.label}`;
+      b.addEventListener('click', ()=>{
+        try{ window.dispatchEvent(new CustomEvent('cb:res:add', { detail:{ kind: it.id }})); }catch(_){}
+        (window.CBLog?.ok||console.log)('[res] add', it.id);
+      });
+      row.appendChild(b);
+    });
+
+    const controls = document.createElement('div');
+    controls.className='row';
+    const clr = document.createElement('button'); clr.className='ins-btn'; clr.textContent='Alles leeren';
+    clr.addEventListener('click', ()=>{
+      try{ window.dispatchEvent(new Event('cb:res:clear')); }catch(_){}
+      (window.CBLog?.warn||console.warn)('[res] clear');
+    });
+
+    controls.appendChild(clr);
+    wrap.append(row, controls);
+    host.innerHTML=''; host.appendChild(wrap);
+
+    (window.CBLog?.ok||console.log)(MOD,'bereit', VER);
   });
 
 })();
