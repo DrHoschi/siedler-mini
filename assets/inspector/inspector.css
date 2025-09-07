@@ -1,8 +1,8 @@
 /* ============================================================================
- * Inspector CSS – v18.13.0
- * - Helles Grau-Design (Panels)
- * - Vollbild + Safe-Area
- * - Jede Pane füllt den Body; Logs haben eigenen Scroller
+ * Inspector CSS – v18.13.1
+ *  - Portrait: Tabs oben
+ *  - Landscape: Sidebar links (Tabs + Logs-Filter)
+ *  - Log-Viewport hat eigenen Scroller
  * ========================================================================== */
 
 :root{
@@ -12,109 +12,59 @@
   --ins-border: #BFC9CA;
   --ins-text: #2C3E50;
   --ins-dim: #6B7B8C;
-  --ins-ok:   #27AE60;
-  --ins-warn: #F39C12;
-  --ins-err:  #E74C3C;
-  --ins-info: #3498DB;
+  --ins-ok:#27AE60; --ins-warn:#F39C12; --ins-err:#E74C3C; --ins-info:#3498DB;
   --ins-shadow: 0 12px 36px rgba(0,0,0,.22);
   --ins-radius: 10px;
 }
 
-/* Vollbild-Overlay */
 #inspector{
-  position: fixed; inset: 0;
-  z-index: 2147483646;
-  display: none; /* JS setzt 'flex' bei open() */
-  padding:
-    max(env(safe-area-inset-top),0px)
-    max(env(safe-area-inset-right),0px)
-    max(env(safe-area-inset-bottom),0px)
-    max(env(safe-area-inset-left),0px);
-  background: var(--ins-bg);
-  backdrop-filter: blur(4px);
-  pointer-events: auto;
-  justify-content: center; align-items: center;
+  position:fixed; inset:0; z-index:2147483646;
+  display:none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background:var(--ins-bg); backdrop-filter: blur(4px);
+  align-items:center; justify-content:center;
 }
 body.inspector-open{ overflow:hidden; }
 
-/* Wrapper + Panel */
-#inspector .ins-wrap{
-  width: min(980px, 96vw);
-  height: min(92vh, 860px);
-  display: flex;
-}
-#inspector .ins-panel{
-  background: var(--ins-panel);
-  border: 1px solid var(--ins-border);
-  border-radius: var(--ins-radius);
-  box-shadow: var(--ins-shadow);
-  color: var(--ins-text);
-  display: flex; flex-direction: column;
-  flex: 1; min-height: 0;
+.ins-wrap{ width:min(980px,96vw); height:min(92vh,860px); display:flex; }
+.ins-panel{
+  background:var(--ins-panel); border:1px solid var(--ins-border);
+  border-radius:var(--ins-radius); box-shadow:var(--ins-shadow);
+  display:flex; flex-direction:column; color:var(--ins-text); flex:1; min-height:0;
 }
 
-/* Kopf */
-.ins-head{
-  display:flex; align-items:center; gap:12px;
-  padding:10px 16px;
-  background: var(--ins-panel-2);
-  border-bottom:1px solid var(--ins-border);
+/* Header */
+.ins-head{ display:flex; align-items:center; gap:12px; padding:10px 14px;
+  background:var(--ins-panel-2); border-bottom:1px solid var(--ins-border);
   border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
-.ins-title{ display:flex; gap:10px; align-items:center; font-weight:600; font-size:18px; }
-.ins-ver{ opacity:.65; font-size:12px; }
-
-/* Tabs */
-.ins-tabs{ display:flex; gap:6px; margin-left:auto; }
-.ins-tab{
-  border:1px solid var(--ins-border);
-  border-radius:6px;
-  background:var(--ins-panel);
-  color:var(--ins-text);
-  padding:6px 12px;
-  cursor:pointer;
-}
+.ins-title{ font-weight:700; font-size:18px; display:flex; gap:10px; align-items:center; }
+.ins-ver{ font-size:12px; opacity:.7; }
+.ins-tabs{ display:flex; gap:8px; margin-left:auto; overflow-x:auto; }
+.ins-tabs button{ white-space:nowrap; }
+.ins-tab{ border:1px solid var(--ins-border); border-radius:6px; background:var(--ins-panel); padding:6px 12px; cursor:pointer; }
 .ins-tab.active{ background:var(--ins-panel-2); }
-
-/* Close */
-.ins-close{ margin-left:8px; border:none; background:transparent; color:var(--ins-dim); font-size:20px; line-height:1; cursor:pointer; }
+.ins-close{ margin-left:8px; border:none; background:transparent; color:var(--ins-dim); font-size:20px; cursor:pointer; }
 .ins-close::before{ content:"✕"; }
 
-/* Body/Panes */
-.ins-body{ flex:1; display:flex; flex-direction:column; padding:12px 16px; gap:10px; min-height:0; }
-.ins-pane{ flex:1; display:none; flex-direction:column; gap:10px; min-height:0; }
+/* Body */
+.ins-body{ flex:1; min-height:0; display:grid; grid-template-columns: 0 1fr; /* Portrait: keine Sidebar */ gap:0; }
+.ins-pane{ display:none; flex-direction:column; gap:10px; min-height:0; padding:12px 14px; }
 .ins-pane.active{ display:flex; }
 
-/* Logs */
-.slot-logs-controls{ display:block; }
+/* Sidebar (wird in Landscape aktiv) */
+.ins-sidebar{ display:none; padding:12px 10px; border-right:1px solid var(--ins-border); background:var(--ins-panel); }
+.ins-sidebar .ins-tabs.side{ display:flex; flex-direction:column; gap:8px; }
+.ins-side-extra{ margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+
+/* Logs Slots */
+.slot-logs-controls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .slot-logs-view{
-  flex:1; min-height:0; overflow:auto;
-  border:1px solid var(--ins-border);
-  border-radius:6px;
-  background: var(--ins-panel-2);
-  padding:10px 14px;
-  font: 14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  color: var(--ins-text);
-  -webkit-overflow-scrolling: touch;
+  flex:1; border:1px solid var(--ins-border); border-radius:6px; background:var(--ins-panel-2);
+  padding:10px 14px; overflow:auto; min-height:0;
+  font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* Filterleiste */
-.ins-controls{ display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center; }
-.ins-search{ padding:6px 10px; border:1px solid var(--ins-border); border-radius:6px; background:#F7F9FB; color:var(--ins-text); }
-.ins-btn{
-  padding:6px 10px; border:1px solid var(--ins-border); border-radius:6px;
-  background:#F2F4F6; color:var(--ins-text); cursor:pointer;
-}
-.ins-btn:hover{ background:#e9edf1; }
-.ins-toggle{
-  padding:6px 10px; border:1px solid var(--ins-border); border-radius:6px;
-  background:#F2F4F6; color:var(--ins-text); cursor:pointer;
-}
-.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
-.ins-toggle.active{ background:#C9D6E2; border-color:#AFC0CE; }
-.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
-
-/* Log-Zeilen */
+/* Log Lines */
 .log-line{ display:flex; gap:8px; }
 .log-line::before{ width:1.2em; text-align:center; content:""; }
 .log-info.log-line::before { content:"ⓘ"; color:var(--ins-info); }
@@ -122,20 +72,28 @@ body.inspector-open{ overflow:hidden; }
 .log-warn.log-line::before { content:"⚠"; color:var(--ins-warn); }
 .log-error.log-line::before{ content:"✖"; color:var(--ins-err); }
 
-/* Fuß */
-.ins-foot{ padding:10px 16px; background:var(--ins-panel-2); border-top:1px solid var(--ins-border);
+/* Footer */
+.ins-foot{ padding:10px 14px; border-top:1px solid var(--ins-border); background:var(--ins-panel-2);
   border-radius: 0 0 var(--ins-radius) var(--ins-radius); }
-.ins-foot .muted{ color:var(--ins-text); opacity:.85; font-size:13px; }
 
-/* Scrollbar (hell) */
+/* Scrollbar hell */
 #inspector .slot-logs-view::-webkit-scrollbar{ width:10px; }
-#inspector .slot-logs-view::-webkit-scrollbar-track{ background:transparent; }
-#inspector .slot-logs-view::-webkit-scrollbar-thumb{
-  background: var(--ins-border); border-radius:10px; border:2px solid var(--ins-panel-2);
-}
+#inspector .slot-logs-view::-webkit-scrollbar-thumb{ background:var(--ins-border); border-radius:10px; border:2px solid var(--ins-panel-2); }
 
-/* Handy: im Landscape Tabs kompakter */
-@media (orientation:landscape) {
-  .ins-tabs{ gap:4px; }
-  .ins-tab{ padding:6px 10px; }
+/* Fallback */
+.ins-fallback{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.35); z-index:2147483647; }
+.ins-fallback.hidden{ display:none; }
+.ins-fb-card{ width:min(520px,92vw); background:#1f2529; color:#fff; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,.45); overflow:hidden; }
+.ins-fb-head{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#161b1f; }
+.ins-fb-body{ padding:16px; opacity:.95; }
+.ins-fb-close{ border:none; border-radius:24px; background:#35414a; color:#fff; padding:6px 12px; cursor:pointer; }
+
+/* ================= Landscape: Sidebar links ================= */
+@media (orientation: landscape){
+  .ins-body{
+    grid-template-columns: 240px 1fr; /* Sidebar | Content */
+  }
+  .ins-sidebar{ display:block; }
+  /* obere Tabbar ausblenden, wenn Sidebar aktiv */
+  .ins-head .ins-tabs{ display:none; }
 }
