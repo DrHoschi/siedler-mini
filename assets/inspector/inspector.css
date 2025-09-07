@@ -1,10 +1,8 @@
 /* ============================================================================
- * Inspector CSS – v18.12.0
- *  - Helles Grau-Design (Panels)
- *  - Vollbild + Safe-Area
- *  - Portrait: Tabs/Controls oben
- *  - Landscape: Sidebar links (Tabs + Controls), großer View rechts
- *  - Log-View hat eigenen Scroller
+ * Inspector CSS – v18.12.1
+ *  - Helles Grau-Design
+ *  - Portrait: Tabs oben · Landscape: Tabs links (Sidebar)
+ *  - Log-Pane eigener Scroller (touch-freundlich)
  * ========================================================================== */
 
 :root{
@@ -22,12 +20,12 @@
   --ins-radius: 10px;
 }
 
-/* Overlay */
+/* Vollbild + Safe Area + Topmost */
 #inspector{
   position: fixed;
   inset: 0;
   z-index: 2147483646;
-  display: none; /* JS -> flex */
+  display: none; /* JS zeigt/hide */
   padding:
     max(env(safe-area-inset-top),0px)
     max(env(safe-area-inset-right),0px)
@@ -37,15 +35,16 @@
   backdrop-filter: blur(4px);
   pointer-events: auto;
 
-  /* zentriert (Portrait); in Landscape passt die Pane automatisch */
+  /* Center Panel im Portrait (wird in Landscape per Flex-Richtung geändert) */
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
+/* Body darf nicht scrollen, wenn Overlay offen */
 body.inspector-open{ overflow: hidden; }
 
-/* Wrap + Panel */
+/* Wrapper + Panel */
 #inspector .ins-wrap{
   width: min(980px, 96vw);
   height: min(92vh, 860px);
@@ -60,7 +59,7 @@ body.inspector-open{ overflow: hidden; }
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
+  min-height: 0; /* wichtig für Scroller im Body */
 }
 
 /* Header */
@@ -73,7 +72,9 @@ body.inspector-open{ overflow: hidden; }
 }
 .ins-title{ display:flex; gap:10px; align-items:center; font-weight:600; font-size:18px; }
 .ins-ver{ opacity:.65; font-size:12px; }
-.ins-tabs{ display:flex; gap:6px; margin-left:auto; }
+
+/* Tabs (Portrait: oben) */
+.ins-tabs{ display:flex; gap:8px; margin-left:auto; }
 .ins-tab{
   border:1px solid var(--ins-border);
   border-radius:6px;
@@ -81,11 +82,11 @@ body.inspector-open{ overflow: hidden; }
   color:var(--ins-text);
   padding:6px 12px;
   cursor:pointer;
-  white-space: nowrap;
+  white-space:nowrap;
 }
 .ins-tab.active{ background:var(--ins-panel-2); }
 
-/* Close */
+/* Close (rechts im Header) */
 .ins-close{
   margin-left:8px;
   border:none; background:transparent; color:var(--ins-dim);
@@ -93,19 +94,15 @@ body.inspector-open{ overflow: hidden; }
 }
 .ins-close::before{ content:"✕"; }
 
-/* Body-Grundlayout (Portrait) */
+/* Body (Tabfläche) */
 .ins-body{
   flex:1; display:flex; flex-direction:column;
   padding:12px 16px;
   gap:10px;
-  min-height:0;
+  min-height:0; /* macht die darunterliegenden Panes scrollfähig */
 }
 
-/* In Portrait: Side (Controls oben), Main (View darunter) */
-.ins-side{ display:block; }
-.ins-main{ flex:1; display:flex; min-height:0; }
-
-/* Pane-Container in Main */
+/* Pane-Grundlayout */
 .ins-pane{
   flex:1;
   display:none;
@@ -115,60 +112,33 @@ body.inspector-open{ overflow: hidden; }
 }
 .ins-pane.active{ display:flex; }
 
-/* Slots (Controls + Views) */
-.slot-logs-controls,
-.slot-build-controls,
-.slot-paths-controls,
-.slot-tests-controls{
-  display:none; /* wird per JS auf block gesetzt, wenn Tab aktiv */
-}
-
-.slot-logs-view,
-.slot-build-view,
-.slot-paths-view,
-.slot-tests-view{
+/* Logs: Controls- und View-Slots */
+.slot-logs-controls{ display:block; }
+.slot-logs-view{
   flex:1;
   border:1px solid var(--ins-border);
   border-radius:6px;
   background: var(--ins-panel-2);
   padding:10px 14px;
-  overflow:auto;
-  min-height:0;
+  font: 14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color: var(--ins-text);
+  overflow: auto;                 /* eigener Scroller */
+  min-height: 0;                  /* essenziell */
   -webkit-overflow-scrolling: touch;
 }
 
-/* Controls-Zeile (Buttons, Suche) */
-.ins-controls{
-  display:flex; flex-wrap:wrap; gap:8px 10px;
+/* Platzhalter-Panes */
+.ins-placeholder{
+  flex:1;
+  display:flex;
   align-items:center;
-}
-.ins-toggle{
-  padding:6px 10px;
-  border:1px solid var(--ins-border);
+  justify-content:center;
+  color:#c0392b;
+  font: 600 32px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--ins-panel-2);
+  border:1px dashed var(--ins-border);
   border-radius:6px;
-  background:#F2F4F6; /* inaktiv */
-  color: var(--ins-text);
-  cursor:pointer;
 }
-.ins-toggle.active{
-  background:#C9D6E2;        /* aktiv */
-  border-color:#AFC0CE;
-}
-.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
-.ins-controls .ins-btn{
-  padding:6px 10px; border:1px solid var(--ins-border);
-  border-radius:6px; background:#F2F4F6; cursor:pointer;
-}
-.ins-controls .ins-btn:hover{ background:#e9edf1; }
-.ins-badge{ margin-left:8px; padding:0 6px; border-radius:999px; background:#e1e7ec; font-size:12px; }
-
-/* Log-Zeilen */
-.log-line{ display:flex; gap:8px; font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-.log-line::before{ width:1.2em; text-align:center; content:""; }
-.log-info.log-line::before { content:"ⓘ"; color:var(--ins-info); }
-.log-ok.log-line::before   { content:"✔"; color:var(--ins-ok); }
-.log-warn.log-line::before { content:"⚠"; color:var(--ins-warn); }
-.log-error.log-line::before{ content:"✖"; color:var(--ins-err); }
 
 /* Footer */
 .ins-foot{
@@ -178,7 +148,7 @@ body.inspector-open{ overflow: hidden; }
 }
 .ins-foot .muted{ color:var(--ins-text); opacity:.85; font-size:13px; }
 
-/* Scrollbar hell */
+/* Scrollbar (hell) */
 #inspector .slot-logs-view::-webkit-scrollbar{ width:10px; }
 #inspector .slot-logs-view::-webkit-scrollbar-track{ background: transparent; }
 #inspector .slot-logs-view::-webkit-scrollbar-thumb{
@@ -187,118 +157,34 @@ body.inspector-open{ overflow: hidden; }
   border:2px solid var(--ins-panel-2);
 }
 
-/* ====================== Landscape: Sidebar links ============================
-   - Links: Tabs + Controls (fixe Spalte)
-   - Rechts: große View (Pane)
-============================================================================= */
-@media (orientation: landscape) and (min-width: 720px){
+/* ---------------------- Landscape: Tabs links als Sidebar ----------------- */
+@media (orientation: landscape) and (min-width: 720px) {
+  /* Panel als Zeile: links Tabs, rechts Body */
+  .ins-panel{ flex-direction: row; }
+
+  .ins-head{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    width: 220px;
+    min-width: 200px;
+    border-right:1px solid var(--ins-border);
+    border-bottom:none;
+    border-radius: var(--ins-radius) 0 0 var(--ins-radius);
+  }
+
+  .ins-title{ justify-content: space-between; }
+  .ins-tabs{ flex-direction: column; gap:8px; margin-left:0; }
+  .ins-close{ align-self: flex-end; }
+
   .ins-body{
-    flex-direction: row;
-    gap: 12px;
+    padding:16px;
+    gap:12px;
   }
-  .ins-side{
-    width: 260px;
-    flex: 0 0 260px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+
+  .ins-foot{
+    border-top:none;
+    border-left:1px solid var(--ins-border);
+    border-radius: 0 var(--ins-radius) var(--ins-radius) 0;
   }
-  /* Tabs in eine kleine Karte links */
-  .ins-head .ins-tabs{ display:none; } /* Tabs wandern in die Side */
-  .ins-side::before{
-    content: "Tabs";
-    font-weight:600;
-    opacity:.75;
-  }
-  .ins-side .ins-tabs{
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-  }
-  /* Wir spiegeln die Tabs in die Side via CSS? – einfacher: core lässt die Head-Tabs, aber
-     wir duplizieren sie nicht. Lösung: Head-Tabs bleiben; für Platz reicht es,
-     aber bei sehr flachem Landscape blenden wir Head-Tabs aus und zeigen sie in Controls:
-     -> logs.js/andere Module dürfen in '...-controls' eigene Filter rendern; Tabs bleiben oben aus.
-  */
-
-  /* Controls bekommen optisch einen Card-Rahmen */
-  .ins-controls{
-    border:1px solid var(--ins-border);
-    border-radius:6px;
-    background:#F7F9FB;
-    padding:10px;
-  }
-}
-
-/* Kleinere Portrait-Displays: Export-Button sichtbar halten */
-@media (max-width: 380px){
-  .ins-controls{ gap:6px; }
-  .ins-controls .ins-btn{ padding:6px 8px; font-size:13px; }
-  .ins-toggle{ padding:6px 8px; font-size:13px; }
-}
-/* === Responsive Ergänzungen: Sidebar (Landscape) + Controls/Viewport ===== */
-
-/* Portrait: nichts tun – dein vorhandenes Layout bleibt. */
-
-/* Sidebar-Modus aktivieren, wenn .layout-side auf der Tabfläche sitzt */
-#inspector .ins-body.layout-side{
-  display: grid;                  /* statt flex */
-  grid-template-columns: 250px 1fr;
-  grid-template-rows: 1fr;
-  gap: 12px;
-  min-height: 0;
-}
-
-/* Links: Tabs + Filter (Controls) in die Sidebar stapeln */
-#inspector .ins-body.layout-side .ins-tabs{
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-#inspector .ins-body.layout-side .ins-controls{
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: stretch;
-}
-
-/* Die beiden Slots zuweisen: Controls links, Log-Viewport rechts */
-#inspector .ins-body.layout-side .slot-logs-controls{
-  grid-column: 1; grid-row: 1;
-  overflow: auto;                 /* Sidebar darf selbst scrollen */
-  min-height: 0;
-}
-#inspector .ins-body.layout-side .slot-logs-view{
-  grid-column: 2; grid-row: 1;    /* rechts der Log-Viewport */
-  overflow: auto;
-  min-height: 0;
-}
-
-/* Export/Kopieren Buttons in der Sidebar sollen sichtbar bleiben */
-#inspector .ins-body.layout-side .ins-controls .ins-btn{
-  width: 100%;
-}
-
-/* Kleines Hilfs-Tip unten – nur zeigen, wenn Platz da ist */
-#inspector .ins-foot .landscape-tip{ display:none; }
-@media (orientation: landscape){
-  #inspector .ins-foot .landscape-tip{ display:inline; opacity:.8; }
-}
-
-/* Kleiner Fix: der Export-Button soll nicht hinter Rändern verschwinden */
-#inspector .slot-logs-view a.ins-dl {
-  display: inline-block;
-  text-decoration: none;
-}
-/* Standard: Tabs oben */
-.ins-tabs { flex-direction: row; }
-
-/* Querformat (breiter als hoch) → Tabs seitlich links */
-@media (orientation: landscape) {
-  .ins-tabs {
-    flex-direction: column;
-    min-width: 160px;
-  }
-  .ins-panel { flex-direction: row; }
-  .ins-body { flex: 1; }
 }
