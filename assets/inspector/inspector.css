@@ -290,3 +290,15 @@ body.inspector-open{ overflow: hidden; }
   display: inline-block;
   text-decoration: none;
 }
+/* Standard: Tabs oben */
+.ins-tabs { flex-direction: row; }
+
+/* Querformat (breiter als hoch) → Tabs seitlich links */
+@media (orientation: landscape) {
+  .ins-tabs {
+    flex-direction: column;
+    min-width: 160px;
+  }
+  .ins-panel { flex-direction: row; }
+  .ins-body { flex: 1; }
+}
