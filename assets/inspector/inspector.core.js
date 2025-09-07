@@ -1,174 +1,276 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.core.js
- * Projekt: Siedler-Mini
- * Version: v18.13.0
- *
- * Zweck:
- *  - Zentrales Overlay (ein Fenster, keine Fallback-Duplikate)
- *  - Tabs: Logs / Tests / Ressourcen / Pfade
- *  - Slot-API für Split-Module (logs/tests/resources/paths)
- *  - Public API auf window.__INSPECTOR_API__ (open/close/toggle)
- *
- * Events:
- *  - sendet:   cb:inspector-open / cb:inspector-close / cb:inspector-tab
- *  - empfängt: (keine Pflicht)
- *
- * Abhängigkeiten:
- *  - CSS: assets/inspector/inspector.css
- *  - Split-Module registrieren sich via core.api.mount(tabId, renderFn)
- * ========================================================================= */
+ * Inspector Core – v18.13.1
+ *  - Overlay + Tabs
+ *  - Fallback-Overlay: robust, 1x, korrekt schließbar
+ *  - Landscape: Sidebar links (Tabs) + Side-Extra-Slot für Logs-Filter
+ *  - Events: cb:inspector-open / cb:inspector-close
+ * ========================================================================== */
 (function(){
-  'use strict';
+  "use strict";
 
-  if (window.__INSPECTOR_CORE__) return; // Doppel-Init verhindern
+  const MOD = "[inspector.core]";
+  const VER = "v18.13.1";
 
-  const MOD = '[inspector.core]';
-  const VER = 'v18.13.0';
-  const log = (...a)=> (window.CBLog?.info || console.log)(MOD, ...a);
-
-  // ---- DOM erstellen -------------------------------------------------------
-  const root = document.createElement('div');
-  root.id = 'inspector';
-  root.style.display = 'none'; // wird bei open() auf flex gesetzt
-  root.innerHTML = `
-    <div class="ins-wrap">
-      <div class="ins-panel" role="dialog" aria-modal="true" aria-label="Inspector">
-        <div class="ins-head">
-          <div class="ins-title">
-            <span>Inspector</span>
-            <span class="ins-ver">${VER}</span>
-          </div>
-          <div class="ins-tabs" role="tablist" aria-label="Inspector Tabs">
-            <button class="ins-tab active" data-tab="logs" aria-selected="true" role="tab">Logs</button>
-            <button class="ins-tab" data-tab="tests" role="tab">Tests</button>
-            <button class="ins-tab" data-tab="resources" role="tab">Ressourcen</button>
-            <button class="ins-tab" data-tab="paths" role="tab">Pfade</button>
-          </div>
-          <button class="ins-close" aria-label="Schließen"></button>
-        </div>
-
-        <div class="ins-body">
-          <!-- Pane: LOGS -->
-          <section class="ins-pane active" data-pane="logs" role="tabpanel" aria-labelledby="tab-logs">
-            <div class="slot-logs-controls" id="ins-logs-controls"></div>
-            <div class="slot-logs-view" id="ins-logs-view"></div>
-          </section>
-
-          <!-- Pane: TESTS -->
-          <section class="ins-pane" data-pane="tests" role="tabpanel" aria-labelledby="tab-tests">
-            <div class="slot-tests" id="ins-tests"></div>
-          </section>
-
-          <!-- Pane: RESSOURCEN -->
-          <section class="ins-pane" data-pane="resources" role="tabpanel" aria-labelledby="tab-resources">
-            <div class="slot-res" id="ins-res"></div>
-          </section>
-
-          <!-- Pane: PFADE -->
-          <section class="ins-pane" data-pane="paths" role="tabpanel" aria-labelledby="tab-paths">
-            <div class="slot-paths" id="ins-paths"></div>
-          </section>
-        </div>
-
-        <div class="ins-foot">
-          <span class="muted">© Inspector – Siedler-Mini</span>
-        </div>
-      </div>
-    </div>`;
-  document.body.appendChild(root);
-
-  // ---- State ---------------------------------------------------------------
-  const el = {
-    root,
-    tabs: Array.from(root.querySelectorAll('.ins-tab')),
-    panes: Array.from(root.querySelectorAll('.ins-pane')),
-    btnClose: root.querySelector('.ins-close'),
-  };
-
-  let currentTab = 'logs';
-  let isOpen = false;
-
-  // ---- Tab-Steuerung -------------------------------------------------------
-  function setTab(name){
-    currentTab = name;
-    el.tabs.forEach(b=>{
-      const on = b.dataset.tab === name;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', String(on));
-    });
-    el.panes.forEach(p=>{
-      p.classList.toggle('active', p.dataset.pane === name);
-    });
-    // Event an Außenwelt
-    try{ window.dispatchEvent(new CustomEvent('cb:inspector-tab', { detail:{ tab:name }})); }catch(_){}
-  }
-
-  el.tabs.forEach(btn=>{
-    btn.addEventListener('click', ()=> setTab(btn.dataset.tab));
-  });
-
-  // ---- Öffnen/Schließen ----------------------------------------------------
-  function open(){
-    if (isOpen) return;
-    isOpen = true;
-    document.body.classList.add('inspector-open');
-    el.root.style.display = 'flex';
-    setTab(currentTab || 'logs');
-    try{ window.dispatchEvent(new Event('cb:inspector-open')); }catch(_){}
-  }
-  function close(){
-    if (!isOpen) return;
-    isOpen = false;
-    document.body.classList.remove('inspector-open');
-    el.root.style.display = 'none';
-    try{ window.dispatchEvent(new Event('cb:inspector-close')); }catch(_){}
-  }
-  function toggle(force){
-    (force == null ? !isOpen : !!force) ? open() : close();
-  }
-
-  el.btnClose.addEventListener('click', close);
-
-  // ESC schließt
-  window.addEventListener('keydown', (ev)=>{
-    if (!isOpen) return;
-    if (ev.key === 'Escape') close();
-  });
-
-  // ---- Slot-API für Split-Module ------------------------------------------
-  const mounts = new Map(); // tabId -> unmount()
-  const api = {
-    mount(tabId, renderFn){
-      // Aufrufen, sobald Tab das erste Mal sichtbar wird
-      if (typeof renderFn !== 'function') return;
-      // Lazy: sofort mounten, aber Pane existiert bereits
-      const unmount = renderFn();
-      mounts.set(tabId, (typeof unmount === 'function') ? unmount : null);
-      return api;
-    },
-    getSlot(name){
-      // unterstützte IDs (siehe Markup)
-      switch(name){
-        case 'logs-controls': return document.getElementById('ins-logs-controls');
-        case 'logs-view':     return document.getElementById('ins-logs-view');
-        case 'tests':         return document.getElementById('ins-tests');
-        case 'resources':     return document.getElementById('ins-res');
-        case 'paths':         return document.getElementById('ins-paths');
-        default: return document.getElementById(name) || null;
-      }
-    },
-    signal(name, payload){
-      // einfache Verteilstelle, falls ein Modul anderen informieren will
-      try{ window.dispatchEvent(new CustomEvent(`ins:${name}`, { detail: payload })); }catch(_){}
+  // ---------- State ----------------------------------------------------------
+  const S = {
+    open: false,
+    active: "logs",
+    el: {
+      root: null, wrap: null, panel: null,
+      head: null, title: null, ver: null,
+      tabsTop: null, // ursprüngliche Tabbar (im Header)
+      body: null, foot: null,
+      // Panes:
+      paneLogs: null, panePaths: null, paneTests: null, paneRes: null,
+      // Landscape-Sidebar:
+      sidebar: null, sideTablist: null, sideExtra: null,
+      // Slots für Submodule:
+      logsControls: null, logsView: null,
+      // Fallback:
+      fallback: null
     }
   };
 
-  // ---- Externes API bereitstellen -----------------------------------------
-  window.__INSPECTOR_CORE__ = { api, version: VER };
-  window.__INSPECTOR_API__  = { open, close, toggle };
+  // ---------- Utilities ------------------------------------------------------
+  const $ = (sel,root=document) => root.querySelector(sel);
+  const el = (tag,cls) => { const n=document.createElement(tag); if(cls) n.className=cls; return n; };
+  const on = (t,ev,fn,opt)=> t.addEventListener(ev,fn,opt||false);
+  const emit = (name,detail)=> window.dispatchEvent(new CustomEvent(name,{detail}));
 
-  // Diagnose
-  log('bereit', VER);
+  const isLandscape = () => window.matchMedia("(orientation: landscape)").matches;
 
-  // NICHT auto-openen!
+  // ---------- DOM Build ------------------------------------------------------
+  function buildDOM(){
+    // Root
+    const root = el("div"); root.id = "inspector"; root.setAttribute("role","dialog"); root.setAttribute("aria-modal","true");
+    const wrap = el("div","ins-wrap");
+    const panel = el("div","ins-panel");
+    root.appendChild(wrap); wrap.appendChild(panel);
+
+    // Header
+    const head = el("div","ins-head");
+    const title = el("div","ins-title"); title.textContent = "Inspector";
+    const ver = el("span","ins-ver"); ver.textContent = VER.replace(/^v/,"");
+    title.appendChild(ver);
+
+    const tabsTop = el("div","ins-tabs"); // Portrait-Tabbar (wird in Landscape versteckt)
+    tabsTop.innerHTML = `
+      <button class="ins-tab" data-tab="logs">Logs</button>
+      <button class="ins-tab" data-tab="tests">Tests</button>
+      <button class="ins-tab" data-tab="resources">Ressourcen</button>
+      <button class="ins-tab" data-tab="paths">Pfade</button>
+    `;
+
+    const btnClose = el("button","ins-close"); btnClose.title = "Schließen";
+    btnClose.addEventListener("click", close);
+
+    head.appendChild(title);
+    head.appendChild(tabsTop);
+    head.appendChild(btnClose);
+
+    // Body + Sidebar-Struktur
+    const body = el("div","ins-body");
+
+    // Sidebar (nur sichtbar im Landscape)
+    const sidebar = el("aside","ins-sidebar");
+    const sideTablist = el("div","ins-tabs side");         // hier hängen wir tabsTop hinein (um)
+    const sideExtra   = el("div","ins-side-extra");        // hierhin wandern im Logs-Tab die Filter
+    sidebar.appendChild(sideTablist);
+    sidebar.appendChild(sideExtra);
+
+    // Panes (Content rechts)
+    const paneLogs = el("div","ins-pane ins-pane-logs active");
+    const panePaths= el("div","ins-pane ins-pane-paths");
+    const paneTests= el("div","ins-pane ins-pane-tests");
+    const paneRes  = el("div","ins-pane ins-pane-resources");
+
+    // Slots (Logs)
+    paneLogs.innerHTML = `
+      <div id="ins-logs-controls" class="slot-logs-controls"></div>
+      <div id="ins-logs-view" class="slot-logs-view"></div>
+    `;
+
+    // Platzhalter für andere Tabs (Inhalte liefert jeweiliges Modul)
+    panePaths.innerHTML = `<div id="ins-paths-root" class="slot-paths-root"></div>`;
+    paneTests.innerHTML = `<div id="ins-tests-root" class="slot-tests-root"></div>`;
+    paneRes.innerHTML   = `<div id="ins-res-root" class="slot-res-root"></div>`;
+
+    // Fuß
+    const foot = el("div","ins-foot");
+    foot.innerHTML = `<span class="muted">© Inspector — Siedler-Mini</span>`;
+
+    // Zusammenbau
+    panel.appendChild(head);
+    panel.appendChild(body);
+    panel.appendChild(foot);
+
+    // Body befüllen: Sidebar + Content-Stack
+    body.appendChild(sidebar);
+    body.appendChild(paneLogs);
+    body.appendChild(paneTests);
+    body.appendChild(paneRes);
+    body.appendChild(panePaths);
+
+    // Fallback (lazy erstellt)
+    const fb = el("div","ins-fallback hidden");
+    fb.innerHTML = `
+      <div class="ins-fb-card">
+        <div class="ins-fb-head">
+          <strong>Inspector (Fallback)</strong>
+          <button class="ins-fb-close" type="button">Schließen</button>
+        </div>
+        <div class="ins-fb-body">Inspector lädt…</div>
+      </div>`;
+    document.body.appendChild(fb);
+
+    // Store refs
+    Object.assign(S.el,{root,wrap,panel,head,title,ver,tabsTop,body,foot,
+      sidebar, sideTablist, sideExtra,
+      paneLogs,panePaths,paneTests,paneRes,
+      logsControls: $("#ins-logs-controls",paneLogs),
+      logsView    : $("#ins-logs-view",paneLogs),
+      fallback: fb
+    });
+
+    // Events
+    // Tab-Klick
+    head.addEventListener("click", (ev)=>{
+      const b = ev.target.closest(".ins-tab"); if(!b) return;
+      activate(b.dataset.tab);
+    });
+
+    // Fallback schließen (nur das Fallback!)
+    $(".ins-fb-close", fb).addEventListener("click", ()=> {
+      fb.classList.add("hidden");
+    });
+
+    // Orientation/Layout Umschalten
+    on(window,"resize",layout);
+    on(window,"orientationchange",layout);
+
+    // In DOM hängen (aber erst sichtbar, wenn open())
+    document.body.appendChild(root);
+  }
+
+  // ---------- Layout ---------------------------------------------------------
+  function layout(){
+    const L = isLandscape();
+    // Tabs in Sidebar umhängen (1:1 Node verschieben; keine Duplikate)
+    if (L) {
+      if (!S.el.sideTablist.contains(S.el.tabsTop)) {
+        S.el.sideTablist.appendChild(S.el.tabsTop);
+      }
+      // Im Logs-Tab Filter links anzeigen
+      if (S.active === "logs" && !S.el.sideExtra.contains(S.el.logsControls)) {
+        S.el.sideExtra.appendChild(S.el.logsControls);
+      }
+    } else {
+      // Tabs zurück in Header
+      if (!S.el.head.contains(S.el.tabsTop)) {
+        S.el.head.insertBefore(S.el.tabsTop, S.el.head.querySelector(".ins-close"));
+      }
+      // Filter zurück in das Pane
+      if (!S.el.paneLogs.contains(S.el.logsControls)) {
+        const before = S.el.logsView;
+        S.el.paneLogs.insertBefore(S.el.logsControls, before);
+      }
+    }
+    // Header-Tab-Active neu markieren (weil verschoben)
+    markActiveTab();
+  }
+
+  function markActiveTab(){
+    const all = S.el.root.querySelectorAll(".ins-tab");
+    all.forEach(b => b.classList.toggle("active", b.dataset.tab === S.active));
+  }
+
+  function activate(tab){
+    S.active = tab;
+    // Panes schalten
+    S.el.paneLogs.classList.toggle("active", tab==="logs");
+    S.el.paneTests.classList.toggle("active", tab==="tests");
+    S.el.paneRes.classList.toggle("active", tab==="resources");
+    S.el.panePaths.classList.toggle("active", tab==="paths");
+    markActiveTab();
+    layout(); // sorgt u.a. dafür, dass Logs-Filter bei Landscape links landet
+    // Signal an Submodule
+    window.dispatchEvent(new CustomEvent("ins:tab-change",{detail:{tab}}));
+  }
+
+  // ---------- Open / Close ---------------------------------------------------
+  function open(){
+    if (S.open) return;
+    S.open = true;
+    document.body.classList.add("inspector-open");
+    S.el.root.style.display = "flex";
+    layout();
+    activate(S.active || "logs");
+    emit("cb:inspector-open");
+  }
+
+  function close(){
+    if (!S.open) return;
+    S.open = false;
+    document.body.classList.remove("inspector-open");
+    S.el.root.style.display = "none";
+    emit("cb:inspector-close");
+  }
+
+  // ---------- Public API für Submodule --------------------------------------
+  const CORE_API = {
+    ver: VER,
+    getSlot(name){
+      if (name==="logs-controls") return S.el.logsControls;
+      if (name==="logs-view")     return S.el.logsView;
+      if (name==="paths-root")    return $("#ins-paths-root");
+      if (name==="tests-root")    return $("#ins-tests-root");
+      if (name==="res-root")      return $("#ins-res-root");
+      return null;
+    },
+    mount(tabId, renderFn){
+      // sofort rendern; optional Unmount ignorieren (kleine App)
+      try { renderFn(); } catch(e){ console.warn(MOD,"mount error",e); }
+    },
+    open, close,
+    // helper für außen (UI-Bridge)
+    toggle(){ S.open ? close() : open(); }
+  };
+
+  // ---------- Bootstrap ------------------------------------------------------
+  function showFallbackOnce(){
+    // Blende Fallback kurz ein, falls Core länger braucht
+    // (Wir halten ihn bereit, aber zeigen ihn nur
+    // falls der Inspector nach 800ms noch nicht offen ist.)
+    const fb = S.el.fallback;
+    fb.classList.add("hidden");
+    setTimeout(()=>{
+      if (!S.open && S.el.root && S.el.root.style.display!=="flex") {
+        fb.classList.remove("hidden");
+      }
+    }, 800);
+    // Sobald Core geöffnet hat, Fallback sicher ausblenden
+    on(window,"cb:inspector-open",()=> fb.classList.add("hidden"),{once:true});
+  }
+
+  function wireGlobal(){
+    // API veröffentlichen
+    window.__INSPECTOR_CORE__ = window.__INSPECTOR_CORE__ || {};
+    window.__INSPECTOR_CORE__.api = CORE_API;
+
+    // UI-Bridge kompatible Toggles
+    window.GameUI = window.GameUI || {};
+    window.GameUI.toggleInspector = CORE_API.toggle;
+
+    // Start-Log
+    (window.CBLog?.ok || console.log)(MOD, "bereit", VER);
+  }
+
+  // Build & init
+  buildDOM();
+  wireGlobal();
+  showFallbackOnce();
+
+  // Standard-Start: geschlossen
+  CORE_API.close();
+
 })();
