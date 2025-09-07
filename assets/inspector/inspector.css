@@ -1,30 +1,32 @@
 /* ============================================================================
- * Inspector CSS – v18.12.1
- * - Helles Panel-Design
- * - Vollbild + Safe-Area
- * - Logs haben eigenen, funktionierenden Scroller
- * - Responsive: nichts verschwindet im Querformat
+ * Inspector CSS – v18.12.3
+ *  - Helles Grau-Design (Panels)
+ *  - Vollbild + Safe-Area + iOS Fix
+ *  - Portrait: Tabs oben; Landscape: Sidebar links (Tabs + Filter)
+ *  - Log-Pane hat eigenen Scroller
  * ========================================================================== */
 
 :root{
-  --ins-bg: rgba(20,20,20,.55);
+  --ins-bg: rgba(20,20,20,0.55);
   --ins-panel: #EAECEE;
-  --ins-panel-2:#D5D8DC;
-  --ins-border:#BFC9CA;
-  --ins-text:#2C3E50;
-  --ins-dim:#6B7B8C;
-  --ins-ok:#27AE60;
-  --ins-warn:#F39C12;
-  --ins-err:#E74C3C;
-  --ins-info:#3498DB;
+  --ins-panel-2: #D5D8DC;
+  --ins-border: #BFC9CA;
+  --ins-text: #2C3E50;
+  --ins-dim: #6B7B8C;
+  --ins-ok:   #27AE60;
+  --ins-warn: #F39C12;
+  --ins-err:  #E74C3C;
+  --ins-info: #3498DB;
   --ins-shadow: 0 12px 36px rgba(0,0,0,.22);
   --ins-radius: 10px;
 }
 
-/* Overlay: initial versteckt (JS entfernt aria-hidden) */
+/* Overlay */
 #inspector{
-  position: fixed; inset: 0; z-index: 2147483646;
-  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: none;                 /* per JS auf flex */
   padding:
     max(env(safe-area-inset-top),0px)
     max(env(safe-area-inset-right),0px)
@@ -33,18 +35,27 @@
   background: var(--ins-bg);
   backdrop-filter: blur(4px);
   pointer-events: auto;
+  justify-content: center;
+  align-items: center;
 }
-body.inspector-open #inspector{ display:flex; justify-content:center; align-items:center; }
+body.inspector-open{ overflow: hidden; }
 
-/* Wrap + Panel */
-#inspector .ins-wrap{ width:min(980px,96vw); height:min(92vh,860px); display:flex; }
+/* Panel */
+#inspector .ins-wrap{
+  width: min(980px, 96vw);
+  height: min(92vh, 860px);
+  display: flex;
+}
 #inspector .ins-panel{
   background: var(--ins-panel);
-  border:1px solid var(--ins-border);
+  border: 1px solid var(--ins-border);
   border-radius: var(--ins-radius);
   box-shadow: var(--ins-shadow);
   color: var(--ins-text);
-  display:flex; flex-direction:column; flex:1; min-height:0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Header */
@@ -55,60 +66,81 @@ body.inspector-open #inspector{ display:flex; justify-content:center; align-item
   border-bottom:1px solid var(--ins-border);
   border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
-.ins-title{ display:flex; gap:10px; align-items:center; font-weight:600; font-size:18px; }
+.ins-title{
+  display:flex; gap:10px; align-items:center;
+  font-weight:700; font-size:20px;
+}
 .ins-ver{ opacity:.7; font-size:12px; }
 .ins-tabs{ display:flex; gap:6px; margin-left:auto; }
 .ins-tab{
-  border:1px solid var(--ins-border); border-radius:6px;
-  background:var(--ins-panel); color:var(--ins-text);
+  border:1px solid var(--ins-border);
+  border-radius:6px; background:var(--ins-panel);
+  color:var(--ins-text);
   padding:6px 12px; cursor:pointer;
 }
 .ins-tab.active{ background:var(--ins-panel-2); }
-.ins-close{ margin-left:8px; border:none; background:transparent; color:var(--ins-dim); font-size:20px; line-height:1; cursor:pointer; }
+.ins-close{
+  margin-left:8px; border:none; background:transparent;
+  color:var(--ins-dim); font-size:20px; line-height:1; cursor:pointer;
+}
 .ins-close::before{ content:"✕"; }
 
-/* Body / Panes */
-.ins-body{ flex:1; display:flex; flex-direction:column; padding:12px 16px; gap:10px; min-height:0; }
-.ins-pane{ flex:1; display:none; flex-direction:column; gap:10px; min-height:0; }
-.ins-pane.active{ display:flex; }
-.ins-empty{
-  flex:1; display:flex; align-items:center; justify-content:center;
-  color:#c33; font: 700 28px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial;
-  background: var(--ins-panel-2); border:1px solid var(--ins-border); border-radius:6px;
+/* Layout-Bereich */
+.ins-body{
+  flex:1; display:flex; gap:12px; padding:12px 16px; min-height:0;
 }
 
-/* Logs: Controls + eigener Scroller */
-.slot-logs-controls{ display:block; }
-.slot-logs-view{
-  flex:1; overflow:auto; min-height:0;
-  -webkit-overflow-scrolling: touch;
-  border:1px solid var(--ins-border); border-radius:6px;
-  background: var(--ins-panel-2);
-  padding:10px 14px;
-  font: 14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  color: var(--ins-text);
-}
+/* Portrait: nur Content */
+.ins-side{ display:none; }
 
-/* Controls */
-.ins-controls{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+/* Landscape: Sidebar links sichtbar */
+.ins-land .ins-body{ flex-direction:row; }
+.ins-land .ins-side{
+  display:flex; flex-direction:column; gap:10px;
+  width: 260px; min-width: 220px;
+}
+.ins-land .ins-main{ flex:1; min-width:0; min-height:0; }
+
+/* Portrait: Tabs/Filter oben, Content unten */
+.ins-main{ display:flex; flex-direction:column; gap:10px; min-height:0; }
+
+/* Controls / Filter */
+.ins-controls{
+  display:flex; flex-wrap:wrap; gap:8px 8px; align-items:center;
+}
+.ins-toggle{
+  padding:6px 10px; border:1px solid var(--ins-border);
+  border-radius:6px; background:#F2F4F6; color:var(--ins-text); cursor:pointer;
+}
+.ins-toggle.active{ background:#C9D6E2; border-color:#AFC0CE; }
+.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
+.ins-badge{
+  margin-left:6px; padding:2px 6px; border-radius:10px;
+  background:#fff; border:1px solid var(--ins-border); font-size:12px;
+}
 .ins-search{
-  appearance:none; border:1px solid var(--ins-border); background:#F2F4F6; color:var(--ins-text);
-  border-radius:6px; padding:6px 10px; min-width:160px;
+  flex:1; min-width:160px; padding:7px 10px; border-radius:6px;
+  border:1px solid var(--ins-border); background:#fff; color:#111;
 }
 .ins-btn{
   padding:6px 10px; border:1px solid var(--ins-border);
   border-radius:6px; background:#F2F4F6; cursor:pointer;
 }
 .ins-btn:hover{ background:#e9edf1; }
-.ins-flash{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
 
-.ins-toggle{
-  padding:6px 10px; border:1px solid var(--ins-border);
-  border-radius:6px; background:#F2F4F6; color:var(--ins-text); cursor:pointer;
+/* Pane-Grundlayout */
+.ins-pane{ display:none; flex-direction:column; gap:10px; min-height:0; }
+.ins-pane.active{ display:flex; }
+
+/* Logs: eigener Scroller */
+.slot-logs-view{
+  flex:1; border:1px solid var(--ins-border); border-radius:6px;
+  background:var(--ins-panel-2);
+  padding:10px 14px;
+  font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ins-text);
+  overflow:auto; min-height:0; -webkit-overflow-scrolling: touch;
 }
-.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
-.ins-toggle.active{ background:#C9D6E2; border-color:#AFC0CE; }
-.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
 
 /* Log-Zeilen */
 .log-line{ display:flex; gap:8px; }
@@ -130,6 +162,5 @@ body.inspector-open #inspector{ display:flex; justify-content:center; align-item
 #inspector .slot-logs-view::-webkit-scrollbar{ width:10px; }
 #inspector .slot-logs-view::-webkit-scrollbar-track{ background: transparent; }
 #inspector .slot-logs-view::-webkit-scrollbar-thumb{
-  background: var(--ins-border);
-  border-radius:10px; border:2px solid var(--ins-panel-2);
+  background: var(--ins-border); border-radius:10px; border:2px solid var(--ins-panel-2);
 }
