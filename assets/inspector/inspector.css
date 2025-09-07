@@ -236,3 +236,57 @@ body.inspector-open{ overflow: hidden; }
   .ins-controls .ins-btn{ padding:6px 8px; font-size:13px; }
   .ins-toggle{ padding:6px 8px; font-size:13px; }
 }
+/* === Responsive Ergänzungen: Sidebar (Landscape) + Controls/Viewport ===== */
+
+/* Portrait: nichts tun – dein vorhandenes Layout bleibt. */
+
+/* Sidebar-Modus aktivieren, wenn .layout-side auf der Tabfläche sitzt */
+#inspector .ins-body.layout-side{
+  display: grid;                  /* statt flex */
+  grid-template-columns: 250px 1fr;
+  grid-template-rows: 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* Links: Tabs + Filter (Controls) in die Sidebar stapeln */
+#inspector .ins-body.layout-side .ins-tabs{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#inspector .ins-body.layout-side .ins-controls{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+/* Die beiden Slots zuweisen: Controls links, Log-Viewport rechts */
+#inspector .ins-body.layout-side .slot-logs-controls{
+  grid-column: 1; grid-row: 1;
+  overflow: auto;                 /* Sidebar darf selbst scrollen */
+  min-height: 0;
+}
+#inspector .ins-body.layout-side .slot-logs-view{
+  grid-column: 2; grid-row: 1;    /* rechts der Log-Viewport */
+  overflow: auto;
+  min-height: 0;
+}
+
+/* Export/Kopieren Buttons in der Sidebar sollen sichtbar bleiben */
+#inspector .ins-body.layout-side .ins-controls .ins-btn{
+  width: 100%;
+}
+
+/* Kleines Hilfs-Tip unten – nur zeigen, wenn Platz da ist */
+#inspector .ins-foot .landscape-tip{ display:none; }
+@media (orientation: landscape){
+  #inspector .ins-foot .landscape-tip{ display:inline; opacity:.8; }
+}
+
+/* Kleiner Fix: der Export-Button soll nicht hinter Rändern verschwinden */
+#inspector .slot-logs-view a.ins-dl {
+  display: inline-block;
+  text-decoration: none;
+}
