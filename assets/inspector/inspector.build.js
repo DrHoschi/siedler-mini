@@ -1,46 +1,32 @@
 /* ============================================================================
- * Inspector Build – v18.11.1
- *  - Einfache Buttons aus window.BUILD_CATEGORIES (oder Fallback)
- *  - Sendet CustomEvent('cb:build-select',{detail:{type:id}})
+ * Inspector Build – v18.12.3
+ * - Zeigt kleine Laufzeitinfos + "Neu laden"
  * ========================================================================== */
 (function(){
   'use strict';
-  const core = window.__INSPECTOR_CORE__;
-  if(!core?.api) return;
+  const core = window.__INSPECTOR_CORE__; if (!core?.api) return;
+  const MOD='[inspector.build]';
+  const ok=(...a)=>(window.CBLog?.ok||console.log)(MOD,...a);
+
+  function el(tag, cls, html){ const e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
 
   core.api.mount('build', ()=>{
-    const host = core.api.getSlot('build-host'); if(!host) return;
+    const host = core.api.getSlot('build'); if (!host) return;
     host.innerHTML='';
+    const box = el('div','ins-build');
+    const line = (k,v)=> `<div style="display:flex;gap:8px"><b style="min-width:140px">${k}</b><span>${v}</span></div>`;
 
-    const cats = (Array.isArray(window.BUILD_CATEGORIES) && window.BUILD_CATEGORIES.length)
-      ? window.BUILD_CATEGORIES
-      : [
-          { id:'general', title:'Allg.', items:[
-            {id:'hq',label:'Hauptquartier'},
-            {id:'depot',label:'Depot'},
-            {id:'house',label:'Haus'}
-          ]},
-          { id:'production', title:'Produktion', items:[
-            {id:'farm',label:'Farm'},
-            {id:'fischer',label:'Fischer'}
-          ]},
-        ];
+    box.innerHTML = `
+      ${line('UserAgent', navigator.userAgent)}
+      ${line('Viewport', `${window.innerWidth} × ${window.innerHeight}`)}
+      ${line('Lang', navigator.language)}
+      <div style="margin-top:10px;display:flex;gap:10px">
+        <button class="ins-btn" id="ins-reload">Neu laden</button>
+      </div>
+    `;
+    host.appendChild(box);
+    host.querySelector('#ins-reload')?.addEventListener('click', ()=> location.reload());
 
-    const mkH = (t)=>{ const d=document.createElement('div'); d.textContent=t; d.style.cssText='opacity:.85;margin:6px 0 4px;font-weight:700'; return d; };
-    const mkBtn=(txt)=>{ const b=document.createElement('button'); b.className='ins-toggle active'; b.textContent=txt; return b; };
-
-    cats.forEach(cat=>{
-      host.appendChild(mkH(cat.title||cat.id));
-      const row=document.createElement('div'); row.className='ins-controls';
-      (cat.items||[]).forEach(it=>{
-        const btn = mkBtn(it.label||it.id);
-        btn.addEventListener('click',()=>{
-          try{ window.dispatchEvent(new CustomEvent('cb:build-select',{detail:{type:it.id}})); }catch(_){}
-          try{ (window.CBLog?.ok||console.log)(`[ui] Build-Select ${it.id}`); }catch(_){}
-        });
-        row.appendChild(btn);
-      });
-      host.appendChild(row);
-    });
+    ok('bereit');
   });
 })();
