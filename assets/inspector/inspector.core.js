@@ -1,148 +1,156 @@
 /* ============================================================================
- * Inspector Core – v18.12.1 (stabil)
- * - Vollbild-Overlay (initial geschlossen)
- * - Tabs: logs / build / paths / tests
- * - Slots: #ins-logs-controls, #ins-logs-view
- * - Öffnen/Schließen via window.Inspector.open()/close() oder Events
- *     -> window.dispatchEvent(new Event('cb:inspector-open'))
- *     -> window.dispatchEvent(new Event('cb:inspector-close'))
+ * Inspector Core – v18.12.3
+ * - Overlay, Tabs, Slots-API
+ * - Portrait: Tabs/Filter oben; Landscape: Sidebar links
+ * - Öffnen/Schließen via Events:
+ *     window.dispatchEvent(new Event('cb:inspector-open'))
+ *     window.dispatchEvent(new Event('cb:inspector-close'))
+ * - Exponiert: window.__INSPECTOR_CORE__.api: { mount(tab,fn), getSlot(name), signal(name,payload) }
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
 
-  var MOD = '[inspector.core]';
-  var VER = 'v18.12.1';
+  const VER = 'v18.12.3';
+  const MOD = '[inspector.core]';
+  const log = (...a)=> (window.CBLog?.ok||console.log)(MOD, ...a);
+  const warn = (...a)=> (window.CBLog?.warn||console.warn)(MOD, ...a);
 
-  // ------------------------------------------------------------
-  // Ein einziges Overlay erzeugen (falls noch nicht vorhanden)
-  // ------------------------------------------------------------
-  var root = document.getElementById('inspector');
-  if (root) { try { root.remove(); } catch(_){} } // harte Säuberung
-  root = document.createElement('div');
-  root.id = 'inspector';
-  root.setAttribute('aria-hidden', 'true'); // initial zu
-  document.body.appendChild(root);
+  // --- Slots-Registry -------------------------------------------------------
+  const __SLOTS__ = Object.create(null);
+  const mounted = Object.create(null);
 
-  // Wrapper + Panel
-  root.innerHTML =
-    '<div class="ins-wrap">'+
-      '<div class="ins-panel" role="dialog" aria-modal="true" aria-label="Inspector">'+
-        '<div class="ins-head">'+
-          '<div class="ins-title">'+
-            '<span class="ins-name">Inspector</span>'+
-            '<span class="ins-ver" id="ins-ver">'+VER+'</span>'+
-          '</div>'+
-          '<div class="ins-tabs" role="tablist">'+
-            '<button class="ins-tab active" data-tab="logs"  role="tab" aria-selected="true">Logs</button>'+
-            '<button class="ins-tab"        data-tab="build" role="tab" aria-selected="false">Build</button>'+
-            '<button class="ins-tab"        data-tab="paths" role="tab" aria-selected="false">Pfade</button>'+
-            '<button class="ins-tab"        data-tab="tests" role="tab" aria-selected="false">Tests</button>'+
-          '</div>'+
-          '<button class="ins-close" title="Schließen" aria-label="Schließen"></button>'+
-        '</div>'+
-        '<div class="ins-body">'+
-          '<div class="ins-pane ins-pane-logs active" id="tab-logs" role="tabpanel">'+
-            '<div id="ins-logs-controls" class="slot-logs-controls"></div>'+
-            '<div id="ins-logs-view" class="slot-logs-view"></div>'+
-          '</div>'+
-          '<div class="ins-pane" id="tab-build" role="tabpanel">'+
-            '<div class="ins-empty">Build-Info (Platzhalter)</div>'+
-          '</div>'+
-          '<div class="ins-pane" id="tab-paths" role="tabpanel">'+
-            '<div class="ins-empty">Pfade (Platzhalter)</div>'+
-          '</div>'+
-          '<div class="ins-pane" id="tab-tests" role="tabpanel">'+
-            '<div class="ins-empty">Tests (Platzhalter)</div>'+
-          '</div>'+
-        '</div>'+
-        '<div class="ins-foot"><span class="muted">Inspector bereit</span></div>'+
-      '</div>'+
-    '</div>';
+  // --- Root DOM -------------------------------------------------------------
+  let root = document.getElementById('inspector');
+  if (!root){
+    root = document.createElement('div');
+    root.id = 'inspector';
+    document.body.appendChild(root);
+  }
 
-  // ------------------------------------------------------------
-  // Core-API für Submodule (Logs, …)
-  // ------------------------------------------------------------
-  var __SLOTS__ = Object.create(null);
+  // Build panel structure
+  root.innerHTML = `
+    <div class="ins-wrap">
+      <div class="ins-panel">
+        <div class="ins-head">
+          <div class="ins-title">Inspector <span class="ins-ver">${VER}</span></div>
+          <div class="ins-tabs" role="tablist" aria-label="Inspector Tabs">
+            <button class="ins-tab" data-tab="logs">Logs</button>
+            <button class="ins-tab" data-tab="build">Build</button>
+            <button class="ins-tab" data-tab="paths">Pfade</button>
+            <button class="ins-tab" data-tab="tests">Tests</button>
+          </div>
+          <button class="ins-close" aria-label="Schließen"></button>
+        </div>
+        <div class="ins-body">
+          <aside class="ins-side" aria-label="Sidebar">
+            <div class="ins-controls slot-logs-controls"></div>
+          </aside>
+          <main class="ins-main">
+            <!-- Logs -->
+            <section id="tab-logs" class="ins-pane active" role="tabpanel">
+              <div id="ins-logs-controls" class="slot-logs-controls"></div>
+              <div id="ins-logs-view" class="slot-logs-view"></div>
+            </section>
+            <!-- Build -->
+            <section id="tab-build" class="ins-pane" role="tabpanel">
+              <div id="ins-build" class="slot-build"></div>
+            </section>
+            <!-- Paths -->
+            <section id="tab-paths" class="ins-pane" role="tabpanel">
+              <div id="ins-paths" class="slot-paths"></div>
+            </section>
+            <!-- Tests -->
+            <section id="tab-tests" class="ins-pane" role="tabpanel">
+              <div id="ins-tests" class="slot-tests"></div>
+            </section>
+          </main>
+        </div>
+        <div class="ins-foot">
+          <span class="muted">Tip: In Landscape stehen Tabs & Filter links als Sidebar.</span>
+        </div>
+      </div>
+    </div>
+  `;
 
+  // Register slots
+  __SLOTS__['logs-controls'] = root.querySelector('#ins-logs-controls');
+  __SLOTS__['logs-view']     = root.querySelector('#ins-logs-view');
+  __SLOTS__['build']         = root.querySelector('#ins-build');
+  __SLOTS__['paths']         = root.querySelector('#ins-paths');
+  __SLOTS__['tests']         = root.querySelector('#ins-tests');
+
+  // --- API nach außen -------------------------------------------------------
   window.__INSPECTOR_CORE__ = window.__INSPECTOR_CORE__ || {};
   window.__INSPECTOR_CORE__.api = {
-    mount: function(tabId, renderFn){
-      // In dieser Version: sofort rendern (Tabs sind leichtgewichtig)
-      if (typeof renderFn === 'function'){ renderFn(); }
-      return function unmount(){};
+    mount(tabId, renderFn){
+      if (typeof renderFn === 'function'){
+        // Lazy wäre möglich; hier: sofort rendern
+        mounted[tabId] = renderFn() || null;
+      }
     },
-    getSlot: function(name){ return __SLOTS__[name] || null; },
-    signal: function(name, payload){
-      try { document.dispatchEvent(new CustomEvent('ins:'+name, {detail:payload||{}})); } catch(_){}
+    getSlot(name){ return __SLOTS__[name] || null; },
+    signal(name, payload){
+      try{
+        document.dispatchEvent(new CustomEvent('ins:'+name, { detail: payload||null }));
+      }catch(_){}
     }
   };
 
-  // Slots registrieren
-  __SLOTS__['logs-controls'] = root.querySelector('#ins-logs-controls');
-  __SLOTS__['logs-view']     = root.querySelector('#ins-logs-view');
+  // --- Open/Close + Tab-Switch ---------------------------------------------
+  const btnClose = root.querySelector('.ins-close');
+  const tabBtns  = Array.from(root.querySelectorAll('.ins-tab'));
+  const panes    = {
+    logs:  root.querySelector('#tab-logs'),
+    build: root.querySelector('#tab-build'),
+    paths: root.querySelector('#tab-paths'),
+    tests: root.querySelector('#tab-tests'),
+  };
 
-  // ------------------------------------------------------------
-  // Open/Close
-  // ------------------------------------------------------------
-  var isOpen = false;
-
-  function open(){
-    if (isOpen) return;
-    isOpen = true;
-    root.removeAttribute('aria-hidden');
-    document.body.classList.add('inspector-open');
-    window.dispatchEvent(new Event('cb:inspector-open'));
-    logOk('geöffnet', VER);
+  function setOpen(on){
+    root.style.display = on ? 'flex' : 'none';
+    document.body.classList.toggle('inspector-open', !!on);
+    if (on){
+      layoutUpdate();
+      try{ window.dispatchEvent(new Event('cb:inspector-open')); }catch(_){}
+      log('geöffnet', VER);
+    }else{
+      try{ window.dispatchEvent(new Event('cb:inspector-close')); }catch(_){}
+      log('geschlossen');
+    }
   }
-  function close(){
-    if (!isOpen) return;
-    isOpen = false;
-    root.setAttribute('aria-hidden','true');
-    document.body.classList.remove('inspector-open');
-    window.dispatchEvent(new Event('cb:inspector-close'));
-    logOk('geschlossen');
-  }
-  function toggle(){ isOpen ? close() : open(); }
 
-  // Close-Button
-  root.querySelector('.ins-close').addEventListener('click', close);
-
-  // ESC
-  window.addEventListener('keydown', function(ev){
-    if (!isOpen) return;
-    if (ev.key === 'Escape'){ ev.preventDefault(); close(); }
-  }, {passive:false});
-
-  // Exporte
-  window.Inspector = { open:open, close:close, toggle:toggle, version:VER };
-
-  // ------------------------------------------------------------
-  // Tabs
-  // ------------------------------------------------------------
-  var tabs = Array.prototype.slice.call(root.querySelectorAll('.ins-tab'));
-  function setActive(tab){
-    tabs.forEach(function(b){
-      var on = (b.dataset.tab === tab);
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', String(on));
-      var pane = root.querySelector('#tab-'+b.dataset.tab);
-      if (pane) pane.classList.toggle('active', on);
+  function activateTab(id){
+    Object.keys(panes).forEach(key=>{
+      panes[key].classList.toggle('active', key===id);
+      tabBtns.find(b=>b.dataset.tab===key)?.classList.toggle('active', key===id);
     });
-    // Logs beim ersten Sichtbarwerden anstoßen
-    if (tab === 'logs'){ try { window.dispatchEvent(new Event('cb:inspector-logs-show')); } catch(_){ } }
+    layoutUpdate();
   }
-  tabs.forEach(function(b){
-    b.addEventListener('click', function(){ setActive(b.dataset.tab); });
-  });
 
-  // ------------------------------------------------------------
-  // Logging (sanft über CBLog/console)
-  // ------------------------------------------------------------
-  function logOk(){ try{ (window.CBLog?.ok || console.log).apply(console, [MOD].concat([].slice.call(arguments))); }catch(_){ console.log.apply(console, [MOD].concat(arguments)); } }
+  // Events
+  btnClose.addEventListener('click', ()=> setOpen(false));
+  tabBtns.forEach(b=> b.addEventListener('click', ()=> activateTab(b.dataset.tab)));
 
-  logOk('bereit', VER);
+  window.addEventListener('cb:inspector-open', ()=> setOpen(true));
+  window.addEventListener('cb:inspector-close',()=> setOpen(false));
 
-  // **WICHTIG**: NICHT auto-open!  (nur für Entwicklung per Console)
-  // window.Inspector.open();
+  // NICHT automatisch öffnen!
+  setOpen(false);
 
+  // --- Layout Umschaltung (Portrait/Landscape) ------------------------------
+  function layoutUpdate(){
+    const land = window.innerWidth > window.innerHeight;
+    root.classList.toggle('ins-land', land);
+    // In Landscape: Filter der Logs zusätzlich in Sidebar spiegeln
+    try{
+      const side = root.querySelector('.ins-side .slot-logs-controls');
+      const top  = root.querySelector('#ins-logs-controls');
+      // Controls in beiden Bereichen sichtbar halten → klonen
+      side.innerHTML = ''; if (top && top.firstChild) side.appendChild(top.firstChild.cloneNode(true));
+    }catch(_){}
+  }
+  window.addEventListener('resize', layoutUpdate, {passive:true});
+  window.addEventListener('orientationchange', layoutUpdate);
+
+  log('bereit', VER);
 })();
