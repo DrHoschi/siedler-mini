@@ -1,9 +1,8 @@
 /* ============================================================================
- * Inspector CSS – v18.12.3
- *  - Helles Grau-Design (Panels)
- *  - Vollbild + Safe-Area + iOS Fix
- *  - Portrait: Tabs oben; Landscape: Sidebar links (Tabs + Filter)
- *  - Log-Pane hat eigenen Scroller
+ * Inspector CSS – v18.13.0
+ * - Helles Grau-Design (Panels)
+ * - Vollbild + Safe-Area
+ * - Jede Pane füllt den Body; Logs haben eigenen Scroller
  * ========================================================================== */
 
 :root{
@@ -21,12 +20,11 @@
   --ins-radius: 10px;
 }
 
-/* Overlay */
+/* Vollbild-Overlay */
 #inspector{
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   z-index: 2147483646;
-  display: none;                 /* per JS auf flex */
+  display: none; /* JS setzt 'flex' bei open() */
   padding:
     max(env(safe-area-inset-top),0px)
     max(env(safe-area-inset-right),0px)
@@ -35,12 +33,11 @@
   background: var(--ins-bg);
   backdrop-filter: blur(4px);
   pointer-events: auto;
-  justify-content: center;
-  align-items: center;
+  justify-content: center; align-items: center;
 }
-body.inspector-open{ overflow: hidden; }
+body.inspector-open{ overflow:hidden; }
 
-/* Panel */
+/* Wrapper + Panel */
 #inspector .ins-wrap{
   width: min(980px, 96vw);
   height: min(92vh, 860px);
@@ -52,13 +49,11 @@ body.inspector-open{ overflow: hidden; }
   border-radius: var(--ins-radius);
   box-shadow: var(--ins-shadow);
   color: var(--ins-text);
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  display: flex; flex-direction: column;
+  flex: 1; min-height: 0;
 }
 
-/* Header */
+/* Kopf */
 .ins-head{
   display:flex; align-items:center; gap:12px;
   padding:10px 16px;
@@ -66,81 +61,58 @@ body.inspector-open{ overflow: hidden; }
   border-bottom:1px solid var(--ins-border);
   border-radius: var(--ins-radius) var(--ins-radius) 0 0;
 }
-.ins-title{
-  display:flex; gap:10px; align-items:center;
-  font-weight:700; font-size:20px;
-}
-.ins-ver{ opacity:.7; font-size:12px; }
+.ins-title{ display:flex; gap:10px; align-items:center; font-weight:600; font-size:18px; }
+.ins-ver{ opacity:.65; font-size:12px; }
+
+/* Tabs */
 .ins-tabs{ display:flex; gap:6px; margin-left:auto; }
 .ins-tab{
   border:1px solid var(--ins-border);
-  border-radius:6px; background:var(--ins-panel);
+  border-radius:6px;
+  background:var(--ins-panel);
   color:var(--ins-text);
-  padding:6px 12px; cursor:pointer;
+  padding:6px 12px;
+  cursor:pointer;
 }
 .ins-tab.active{ background:var(--ins-panel-2); }
-.ins-close{
-  margin-left:8px; border:none; background:transparent;
-  color:var(--ins-dim); font-size:20px; line-height:1; cursor:pointer;
-}
+
+/* Close */
+.ins-close{ margin-left:8px; border:none; background:transparent; color:var(--ins-dim); font-size:20px; line-height:1; cursor:pointer; }
 .ins-close::before{ content:"✕"; }
 
-/* Layout-Bereich */
-.ins-body{
-  flex:1; display:flex; gap:12px; padding:12px 16px; min-height:0;
-}
-
-/* Portrait: nur Content */
-.ins-side{ display:none; }
-
-/* Landscape: Sidebar links sichtbar */
-.ins-land .ins-body{ flex-direction:row; }
-.ins-land .ins-side{
-  display:flex; flex-direction:column; gap:10px;
-  width: 260px; min-width: 220px;
-}
-.ins-land .ins-main{ flex:1; min-width:0; min-height:0; }
-
-/* Portrait: Tabs/Filter oben, Content unten */
-.ins-main{ display:flex; flex-direction:column; gap:10px; min-height:0; }
-
-/* Controls / Filter */
-.ins-controls{
-  display:flex; flex-wrap:wrap; gap:8px 8px; align-items:center;
-}
-.ins-toggle{
-  padding:6px 10px; border:1px solid var(--ins-border);
-  border-radius:6px; background:#F2F4F6; color:var(--ins-text); cursor:pointer;
-}
-.ins-toggle.active{ background:#C9D6E2; border-color:#AFC0CE; }
-.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
-.ins-badge{
-  margin-left:6px; padding:2px 6px; border-radius:10px;
-  background:#fff; border:1px solid var(--ins-border); font-size:12px;
-}
-.ins-search{
-  flex:1; min-width:160px; padding:7px 10px; border-radius:6px;
-  border:1px solid var(--ins-border); background:#fff; color:#111;
-}
-.ins-btn{
-  padding:6px 10px; border:1px solid var(--ins-border);
-  border-radius:6px; background:#F2F4F6; cursor:pointer;
-}
-.ins-btn:hover{ background:#e9edf1; }
-
-/* Pane-Grundlayout */
-.ins-pane{ display:none; flex-direction:column; gap:10px; min-height:0; }
+/* Body/Panes */
+.ins-body{ flex:1; display:flex; flex-direction:column; padding:12px 16px; gap:10px; min-height:0; }
+.ins-pane{ flex:1; display:none; flex-direction:column; gap:10px; min-height:0; }
 .ins-pane.active{ display:flex; }
 
-/* Logs: eigener Scroller */
+/* Logs */
+.slot-logs-controls{ display:block; }
 .slot-logs-view{
-  flex:1; border:1px solid var(--ins-border); border-radius:6px;
-  background:var(--ins-panel-2);
+  flex:1; min-height:0; overflow:auto;
+  border:1px solid var(--ins-border);
+  border-radius:6px;
+  background: var(--ins-panel-2);
   padding:10px 14px;
-  font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color: var(--ins-text);
-  overflow:auto; min-height:0; -webkit-overflow-scrolling: touch;
+  -webkit-overflow-scrolling: touch;
 }
+
+/* Filterleiste */
+.ins-controls{ display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center; }
+.ins-search{ padding:6px 10px; border:1px solid var(--ins-border); border-radius:6px; background:#F7F9FB; color:var(--ins-text); }
+.ins-btn{
+  padding:6px 10px; border:1px solid var(--ins-border); border-radius:6px;
+  background:#F2F4F6; color:var(--ins-text); cursor:pointer;
+}
+.ins-btn:hover{ background:#e9edf1; }
+.ins-toggle{
+  padding:6px 10px; border:1px solid var(--ins-border); border-radius:6px;
+  background:#F2F4F6; color:var(--ins-text); cursor:pointer;
+}
+.ins-toggle .tbox{ font-weight:600; letter-spacing:.2px; }
+.ins-toggle.active{ background:#C9D6E2; border-color:#AFC0CE; }
+.ins-toggle:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
 
 /* Log-Zeilen */
 .log-line{ display:flex; gap:8px; }
@@ -150,17 +122,20 @@ body.inspector-open{ overflow: hidden; }
 .log-warn.log-line::before { content:"⚠"; color:var(--ins-warn); }
 .log-error.log-line::before{ content:"✖"; color:var(--ins-err); }
 
-/* Footer */
-.ins-foot{
-  padding:10px 16px; background:var(--ins-panel-2);
-  border-top:1px solid var(--ins-border);
-  border-radius: 0 0 var(--ins-radius) var(--ins-radius);
-}
+/* Fuß */
+.ins-foot{ padding:10px 16px; background:var(--ins-panel-2); border-top:1px solid var(--ins-border);
+  border-radius: 0 0 var(--ins-radius) var(--ins-radius); }
 .ins-foot .muted{ color:var(--ins-text); opacity:.85; font-size:13px; }
 
 /* Scrollbar (hell) */
 #inspector .slot-logs-view::-webkit-scrollbar{ width:10px; }
-#inspector .slot-logs-view::-webkit-scrollbar-track{ background: transparent; }
+#inspector .slot-logs-view::-webkit-scrollbar-track{ background:transparent; }
 #inspector .slot-logs-view::-webkit-scrollbar-thumb{
   background: var(--ins-border); border-radius:10px; border:2px solid var(--ins-panel-2);
+}
+
+/* Handy: im Landscape Tabs kompakter */
+@media (orientation:landscape) {
+  .ins-tabs{ gap:4px; }
+  .ins-tab{ padding:6px 10px; }
 }
