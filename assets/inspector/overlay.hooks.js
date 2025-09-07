@@ -1,156 +1,127 @@
 /* ============================================================================
- * Datei: assets/inspector/overlay.hooks.js
- * Zweck:
- *   - Öffnen/Schließen des Inspector-Overlays per Button oder Event
- *   - Fallback-Modal nur zeigen, wenn das echte Overlay nicht rechtzeitig da ist
- *   - Fallback automatisch schließen, sobald #inspector sichtbar ist
- *   - KEIN Auto-Open beim Laden der Seite
- *
- * Abhängigkeiten:
- *   - Das eigentliche Overlay wird von assets/inspector/inspector.core.js aufgebaut.
- *   - Diese Datei darf alleine laufen; sie enthält robustes DOM-Finden.
+ * overlay.hooks.js  –  v1.4
+ * Aufgaben:
+ *  - Auf Inspector-Core warten und erst dann öffnen/schließen
+ *  - Fallback-Modal nur zeigen, wenn Core wirklich nicht rechtzeitig da ist
+ *  - Keinerlei Auto-Open; reagiert nur auf Events/Buttons
+ * Events (vom UI/Spiel):
+ *  - window.dispatchEvent(new Event('cb:inspector-open'))
+ *  - window.dispatchEvent(new Event('cb:inspector-close'))
  * ========================================================================== */
 
 (function () {
   "use strict";
 
+  if (window.__INS_OVERLAY_HOOKS__) return;
+  window.__INS_OVERLAY_HOOKS__ = "v1.4";
+
   const MOD = "[overlay-hooks]";
-  const FALLBACK_TIMEOUT_MS = 900;  // nur kurz warten
-  const FIND_OVERLAY_EVERY_MS = 150;
+  const log = (...a) => (window.CBLog?.info || console.log)(MOD, ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn)(MOD, ...a);
 
-  // --- kleine Utils ---------------------------------------------------------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  // --- kleine Helfer --------------------------------------------------------
+  const coreReady = () => !!(window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.open);
+  const on = (ev, fn, opt)=> window.addEventListener(ev, fn, opt);
+  const off = (ev, fn)=> window.removeEventListener(ev, fn);
 
-  const hasInspector = () => !!$("#inspector");
-  const isOpen = () => document.body.classList.contains("inspector-open");
-
-  // --- Fallback-Modal -------------------------------------------------------
-  let fbEl = null;
+  // --- Fallback-Modal --------------------------------------------------------
+  let $fb = null;
   function ensureFallback() {
-    if (fbEl) return fbEl;
-    fbEl = document.createElement("div");
-    fbEl.id = "inspector-fallback";
-    fbEl.style.position = "fixed";
-    fbEl.style.inset = "0";
-    fbEl.style.zIndex = "2147483647";
-    fbEl.style.background = "rgba(0,0,0,.35)";
-    fbEl.style.backdropFilter = "blur(1px)";
-    fbEl.style.display = "flex";
-    fbEl.style.alignItems = "center";
-    fbEl.style.justifyContent = "center";
-
-    const box = document.createElement("div");
-    box.style.minWidth = "260px";
-    box.style.maxWidth = "92vw";
-    box.style.borderRadius = "12px";
-    box.style.background = "rgba(20,25,30,.92)";
-    box.style.color = "#e6eef6";
-    box.style.boxShadow = "0 10px 30px rgba(0,0,0,.45)";
-    box.style.border = "1px solid rgba(255,255,255,.08)";
-
-    box.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);">
-        <strong style="font-size:16px">Inspector (Fallback)</strong>
-        <button id="ins-fb-close" style="padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#e6eef6;cursor:pointer">Schließen</button>
-      </div>
-      <div style="padding:16px 16px 18px 16px;font-size:15px;opacity:.9">
-        Inspector lädt…
-      </div>`;
-    fbEl.appendChild(box);
-
-    fbEl.addEventListener("click", (ev) => {
-      // nur außerhalb der Box schließen
-      if (ev.target === fbEl) closeFallback();
+    if ($fb) return $fb;
+    const wrap = document.createElement("div");
+    wrap.id = "inspector-fallback";
+    Object.assign(wrap.style, {
+      position: "fixed", inset: "0", display: "flex",
+      alignItems: "center", justifyContent: "center",
+      background: "rgba(0,0,0,.45)", zIndex: "2147483646"
     });
-    box.querySelector("#ins-fb-close").addEventListener("click", closeFallback);
+    wrap.innerHTML = `
+      <div style="
+        min-width:280px; max-width:90vw; border-radius:12px;
+        background:#161b1e; color:#e9eef2; box-shadow:0 12px 36px rgba(0,0,0,.35);
+        border:1px solid rgba(255,255,255,.08); overflow:hidden">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.08)">
+          <strong style="font:600 16px/1.2 system-ui,Segoe UI,Roboto,Helvetica,Arial">Inspector (Fallback)</strong>
+          <button id="ins-fb-close" style="padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,.15); background:#2b3135; color:#e9eef2; cursor:pointer">Schließen</button>
+        </div>
+        <div style="padding:14px 14px 16px 14px; font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial">
+          Inspector lädt…
+        </div>
+      </div>`;
+    wrap.querySelector("#ins-fb-close").addEventListener("click", hideFallback);
+    $fb = wrap;
+    return $fb;
+  }
+  function showFallback() {
+    if (!document.getElementById("inspector-fallback")) {
+      document.body.appendChild(ensureFallback());
+    } else {
+      $fb.style.display = "flex";
+    }
+  }
+  function hideFallback() {
+    if ($fb) $fb.style.display = "none";
+  }
 
-    return fbEl;
-  }
-  function openFallback() {
-    if (!fbEl) ensureFallback();
-    if (!fbEl.isConnected) document.body.appendChild(fbEl);
-  }
-  function closeFallback() {
-    if (fbEl && fbEl.isConnected) fbEl.remove();
+  // --- Warten, bis der Core wirklich da ist ---------------------------------
+  function whenCoreReady(cb, opts) {
+    const timeout = opts?.timeout ?? 4000;
+    const interval = opts?.interval ?? 60;
+    const start = Date.now();
+
+    // schon bereit?
+    if (coreReady()) return void cb();
+
+    const t = setInterval(() => {
+      if (coreReady()) {
+        clearInterval(t);
+        cb();
+      } else if (Date.now() - start > timeout) {
+        clearInterval(t);
+        (opts?.onTimeout || (()=>{}))();
+      }
+    }, interval);
   }
 
-  // --- Overlay open/close ---------------------------------------------------
+  // --- Öffnen/Schließen orchestrieren ---------------------------------------
   function openInspector() {
-    // Body-Flag setzen (core.css sperrt dann Body-Scroll)
-    document.body.classList.add("inspector-open");
-
-    // Wenn das echte Overlay nicht sofort da ist: kurz warten und zur Not Fallback zeigen
-    let elapsed = 0;
-    let shown = false;
-
-    const poll = setInterval(() => {
-      elapsed += FIND_OVERLAY_EVERY_MS;
-
-      if (hasInspector()) {
-        closeFallback();
-        clearInterval(poll);
-        return;
+    // 1) warten wir auf den Core …
+    whenCoreReady(() => {
+      hideFallback();
+      try {
+        window.__INSPECTOR_CORE__.open();
+      } catch (e) {
+        warn("open() fehlgeschlagen:", e);
+        showFallback();
       }
-      if (!shown && elapsed >= FALLBACK_TIMEOUT_MS) {
-        openFallback();
-        shown = true;
+    }, {
+      timeout: 900,  // kurz probieren …
+      onTimeout: () => {
+        // 2) … und wenn er noch nicht da ist, Fallback zeigen …
+        showFallback();
+        // 3) … aber parallel weiter warten und bei Erfolg übernehmen:
+        whenCoreReady(() => {
+          hideFallback();
+          try { window.__INSPECTOR_CORE__.open(); } catch(e){ warn("open() takeover:", e); }
+        }, { timeout: 4000, interval: 80 });
       }
-    }, FIND_OVERLAY_EVERY_MS);
+    });
   }
 
   function closeInspector() {
-    document.body.classList.remove("inspector-open");
-    closeFallback();
-    // core entfernt #inspector selbst (unmount) – hier kein hartes DOM-Remove
-  }
-
-  // --- Reaktion, wenn das echte Overlay auftaucht ---------------------------
-  // Egal wodurch es kommt (Button, Event, Auto-Build) -> Fallback schließen
-  const mo = new MutationObserver(() => {
-    if (hasInspector()) {
-      closeFallback();
+    hideFallback();
+    if (coreReady()) {
+      try { window.__INSPECTOR_CORE__.close(); } catch(e){ warn("close() err", e); }
     }
-  });
-  mo.observe(document.documentElement, { childList: true, subtree: true });
-
-  // --- Event-Brücken --------------------------------------------------------
-  // 1) Custom-Events, die dein Projekt bereits nutzt:
-  window.addEventListener("cb:inspector-open", openInspector);
-  window.addEventListener("cb:inspector-close", closeInspector);
-
-  // 2) Buttons robust anbinden (ID, Klasse oder data-Attr)
-  function wireButtons() {
-    const candidates = [
-      "#btn-inspector",
-      ".inspector-toggle",
-      "[data-inspector-toggle]",
-      "#open-inspector",
-      ".tool-inspector"
-    ];
-    const btns = candidates.flatMap(sel => $$(sel));
-    btns.forEach(btn => {
-      // doppelte Listener vermeiden
-      if (btn.__ins_hooked) return;
-      btn.__ins_hooked = true;
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (isOpen()) closeInspector();
-        else openInspector();
-      });
-    });
   }
-  wireButtons();
 
-  // Falls Buttons später dynamisch kommen:
-  const moBtns = new MutationObserver(wireButtons);
-  moBtns.observe(document.body, { childList: true, subtree: true });
+  // --- Events aus dem UI / Deinen Buttons -----------------------------------
+  on("cb:inspector-open",  openInspector);
+  on("cb:inspector-close", closeInspector);
 
-  // --- Sicherheitsnetz: wenn core signalisiert, schließen wir Fallback ------
-  // (core.api.signal('overlay:ready') oder DOM vorhanden – beides greift)
-  window.addEventListener("ins:overlay-ready", closeFallback);
+  // Falls der Core seine eigene „bin da“-Meldung sendet, Fallback sofort schließen
+  on("ins:ready", hideFallback);
 
-  // Debug
-  (window.CBLog?.ok || console.log)(`${MOD} bereit`);
+  // Nur Infos ins Log
+  log("bereit", window.__INS_OVERLAY_HOOKS__);
 })();
