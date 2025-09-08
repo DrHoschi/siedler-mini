@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-05T21:06:46.554Z",
+  "createdAt": "2025-09-08T08:27:51.040Z",
   "root": ".",
-  "count": 262,
+  "count": 264,
   "entries": [
     {
       "type": "dir",
@@ -184,7 +184,7 @@
     {
       "type": "file",
       "path": "assets/core/cblog.polyfill.js",
-      "size": 2776
+      "size": 4281
     },
     {
       "type": "file",
@@ -224,7 +224,7 @@
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
-      "size": 6336
+      "size": 4157
     },
     {
       "type": "file",
@@ -271,22 +271,22 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.build.js",
-      "size": 3370
+      "size": 1328
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.core.js",
-      "size": 10585
+      "size": 10159
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 7669
+      "size": 5717
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.logs.js",
-      "size": 13034
+      "size": 7913
     },
     {
       "type": "file",
@@ -295,18 +295,28 @@
     },
     {
       "type": "file",
+      "path": "assets/inspector/inspector.overview.js",
+      "size": 6046
+    },
+    {
+      "type": "file",
       "path": "assets/inspector/inspector.paths.js",
-      "size": 3051
+      "size": 1913
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.resources.js",
-      "size": 7452
+      "size": 1537
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.tests.js",
-      "size": 601
+      "size": 1876
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/overlay.hooks.js",
+      "size": 5352
     },
     {
       "type": "dir",
@@ -1226,17 +1236,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2648
+      "size": 2665
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 25484
+      "size": 26016
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 9865
+      "size": 10037
     },
     {
       "type": "file",
@@ -1251,7 +1261,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5012
+      "size": 5028
     },
     {
       "type": "file",
