@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-08T08:27:51.040Z",
+  "createdAt": "2025-09-08T19:08:09.236Z",
   "root": ".",
   "count": 264,
   "entries": [
@@ -270,6 +270,11 @@
     },
     {
       "type": "file",
+      "path": "assets/inspector/inspector.api-compat.js",
+      "size": 2567
+    },
+    {
+      "type": "file",
       "path": "assets/inspector/inspector.build.js",
       "size": 1328
     },
@@ -295,11 +300,6 @@
     },
     {
       "type": "file",
-      "path": "assets/inspector/inspector.overview.js",
-      "size": 6046
-    },
-    {
-      "type": "file",
       "path": "assets/inspector/inspector.paths.js",
       "size": 1913
     },
@@ -316,7 +316,7 @@
     {
       "type": "file",
       "path": "assets/inspector/overlay.hooks.js",
-      "size": 5352
+      "size": 4544
     },
     {
       "type": "dir",
@@ -904,7 +904,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 6090
+      "size": 4250
     },
     {
       "type": "file",
@@ -1241,12 +1241,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 26016
+      "size": 26232
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10037
+      "size": 10129
     },
     {
       "type": "file",
@@ -1261,7 +1261,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5028
+      "size": 5111
     },
     {
       "type": "file",
