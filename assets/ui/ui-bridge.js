@@ -1,56 +1,114 @@
 /* ============================================================================
- * ui-bridge.js  –  minimale Brücke zwischen UI-Buttons und App-Events
- * Version: v17.8.3
- *  - Stellt GameUI bereit
- *  - Feuert CustomEvents für Inspector/Build
- *  - KEIN Fallback-Overlay/HTML!
- * ========================================================================== */
+ * UI Bridge – Siedler-Mini
+ * Version: v17.8.3 (clean)
+ * - Keine Fallback-Overlays mehr
+ * - Stabile Inspector-Toggles (ruft direkt __INSPECTOR_CORE__ auf)
+ * - Sanfte Signale, falls Core noch lädt
+ * ===========================================================================*/
+
 (function () {
-  "use strict";
+  'use strict';
 
-  const MOD = "[ui-bridge]";
-  const ok   = (...a) => (window.CBLog?.ok   || console.log).call(console, MOD, ...a);
-  const warn = (...a) => (window.CBLog?.warn || console.warn).call(console, MOD, ...a);
+  // ------------------------------------------------------------
+  // Kleines Log-Helferlein (geht über CBLog, fällt auf console zurück)
+  // ------------------------------------------------------------
+  const log = {
+    info:  (m) => (window.CBLog?.info  || console.log)   (m),
+    warn:  (m) => (window.CBLog?.warn  || console.warn)  (m),
+    error: (m) => (window.CBLog?.error || console.error) (m),
+  };
 
-  // Hilfsfunktion: sicheres Event-Dispatching
-  function emit(name, detail) {
-    try {
-      document.dispatchEvent(new CustomEvent(name, { detail }));
-    } catch (e) {
-      warn("Event-Dispatch fehlgeschlagen:", name, e);
-    }
+  // Marker, damit andere Module wissen, dass die UI-Bridge geladen ist
+  window.__UI_BRIDGE__ = { version: 'v17.8.3' };
+  log.info('[ui-bridge] bereit (v17.8.3)');
+
+  // ------------------------------------------------------------
+  // Build-Dock (unverändert – Stub für deinen Build-Button)
+  // ------------------------------------------------------------
+  function isBuildOpen() {
+    return document.body.classList.contains('has-build-open');
+  }
+  function openBuild() {
+    if (isBuildOpen()) return;
+    document.body.classList.add('has-build-open');
+    window.dispatchEvent(new CustomEvent('cb:build-open'));
+  }
+  function closeBuild() {
+    if (!isBuildOpen()) return;
+    document.body.classList.remove('has-build-open');
+    window.dispatchEvent(new CustomEvent('cb:build-close'));
+  }
+  function toggleBuild() {
+    (isBuildOpen() ? closeBuild : openBuild)();
   }
 
-  // Public API-Container
-  const API = (window.GameUI = window.GameUI || {});
+  // ------------------------------------------------------------
+  // Inspector – saubere Steuerung ohne Fallback-Modal
+  // ------------------------------------------------------------
 
-  // --- Inspector ------------------------------------------------------------
-  API.openInspector = () => {
-    emit("cb:inspector-open");
-    ok("Inspector open requested");
-  };
+  // Merker, falls Nutzer schon klickt, bevor Core fertig ist
+  let wantInspector = false;
 
-  API.closeInspector = () => {
-    emit("cb:inspector-close");
-    ok("Inspector close requested");
-  };
+  function isInspectorOpen() {
+    return document.body.classList.contains('inspector-open');
+  }
 
-  API.toggleInspector = () => {
-    // Primär über Events (darauf hört inspector.core.js)
-    emit("cb:inspector-toggle");
+  function inspectorOpen() {
+    const core = window.__INSPECTOR_CORE__;
+    if (core?.open) {
+      core.open();
+      return;
+    }
+    // Core noch nicht bereit → Wunsch merken + Signal feuern
+    wantInspector = true;
+    window.dispatchEvent(new CustomEvent('cb:inspector-wanted'));
+    log.info('[ui-bridge] Inspector gewünscht, warte auf Core…');
+  }
 
-    // Optionaler Direktaufruf, falls Core-API schon bereit ist (No-Op, wenn nicht)
-    try {
-      window.__INSPECTOR_CORE__?.api?.toggle?.();
-    } catch (_e) {}
-    ok("Inspector toggle requested");
-  };
+  function inspectorClose() {
+    const core = window.__INSPECTOR_CORE__;
+    if (core?.close) {
+      core.close();
+      return;
+    }
+    // Falls Core noch nicht da ist: Wunsch zurücknehmen
+    wantInspector = false;
+  }
 
-  // --- Build-Dock (nur Weitergabe des Toggles, wie bisher) ------------------
-  API.toggleBuild = () => {
-    emit("cb:build-toggle");
-    ok("Build toggle requested");
-  };
+  function toggleInspector() {
+    if (isInspectorOpen()) inspectorClose();
+    else inspectorOpen();
+  }
 
-  ok("gebunden (v17.8.3)");
+  // Wenn der Core sich meldet („bereit“), erfüllen wir evtl. Wunsch
+  window.addEventListener('cb:inspector-core-ready', () => {
+    log.info('[ui-bridge] Inspector-Core meldet bereit.');
+    if (wantInspector) {
+      wantInspector = false;
+      // kleine Verzögerung, damit Slots/DOM stehen
+      setTimeout(() => {
+        try { window.__INSPECTOR_CORE__?.open?.(); }
+        catch (e) { log.error('[ui-bridge] open() nach ready fehlgeschlagen: ' + e); }
+      }, 0);
+    }
+  }, { once: false });
+
+  // Zur Sicherheit: Falls der Core sehr früh da ist, direkt prüfen
+  if (window.__INSPECTOR_CORE__?.api) {
+    // einige Implementationen dispatchen das Event nicht noch einmal
+    window.dispatchEvent(new CustomEvent('cb:inspector-core-ready'));
+  }
+
+  // ------------------------------------------------------------
+  // Öffentliche API für deine Buttons (index.html ruft diese auf)
+  // ------------------------------------------------------------
+  window.GameUI = Object.assign(window.GameUI || {}, {
+    // Build
+    openBuild, closeBuild, toggleBuild,
+    // Inspector
+    openInspector:  inspectorOpen,
+    closeInspector: inspectorClose,
+    toggleInspector,
+  });
+
 })();
