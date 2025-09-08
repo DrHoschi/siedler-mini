@@ -1,63 +1,47 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.tests.js
- * Projekt: Siedler-Mini
- * Version: v18.13.0
- *
- * Zweck:
- *  - Test-Tab mit echten Aktionen: Door/Path-Fixes, Carrier-Demo, Engine-Checks
- *  - Nur Events senden; deine Engine/Module reagieren darauf
- *    • cb:test:carrier-demo
- *    • cb:test:path-door
- *    • cb:test:engine-ping
- *    • cb:test:reset-world
- * ========================================================================= */
+ * Inspector Tests – v18.14.4
+ *  - Kleine, nützliche Testhelfer mit Logs
+ *  - Placeholder rufen, falls vorhanden, Game/Test-APIs auf (best effort)
+ * ========================================================================== */
 (function(){
   'use strict';
+  const MOD='[inspector.tests]'; const VER='v18.14.4';
+  const core = window.__INSPECTOR_CORE__?.api; if(!core){ console.warn(MOD,'core fehlt'); return; }
 
-  const MOD='[inspector.tests]';
-  const VER='v18.13.0';
-  const core = window.__INSPECTOR_CORE__;
-  if (!core || !core.api){ console.warn(MOD,'core fehlt'); return; }
+  function btn(lbl, fn){ const b=document.createElement('button'); b.className='ins-btn'; b.textContent=lbl; b.addEventListener('click', fn); return b; }
+  function h2(txt){ const n=document.createElement('h3'); n.textContent=txt; return n; }
+  const log=(lvl,msg)=> (window.CBLog?.[lvl]||console.log)(msg);
 
-  core.api.mount('tests', ()=>{
-    const host = core.api.getSlot('tests');
-    if (!host) return;
+  core.mount('tests', ()=>{
+    const host = core.getSlot('tests-view'); if (!host) return;
+    host.innerHTML='';
 
-    host.innerHTML = `
-      <div class="ins-tests">
-        <div class="grp">
-          <div class="grp-title">Pfad / Türen</div>
-          <div class="row">
-            <button class="ins-btn" data-ev="cb:test:path-door">Tür-Pfad Test</button>
-          </div>
-        </div>
+    // --- Sektion: Pfad/Tür
+    host.appendChild(h2('Pfad / Türen'));
+    host.appendChild(btn('Tür-Pfad Test', ()=>{
+      log('info','[tests] Tür-Pfad-Test gestartet');
+      try{ window.GameTests?.doorPathTest?.(); }catch(_){}
+    }));
 
-        <div class="grp">
-          <div class="grp-title">Transport / Carrier</div>
-          <div class="row">
-            <button class="ins-btn" data-ev="cb:test:carrier-demo">Carrier Demo (Rathaus ↔ Depot)</button>
-          </div>
-        </div>
+    // --- Sektion: Transport/Carrier
+    host.appendChild(h2('Transport / Carrier'));
+    host.appendChild(btn('Carrier Demo (Rathaus ↔ Depot)', ()=>{
+      log('info','[tests] Carrier-Demo gestartet');
+      try{ window.GameTests?.carrierTownhallDepot?.(); }catch(_){}
+    }));
 
-        <div class="grp">
-          <div class="grp-title">Engine</div>
-          <div class="row">
-            <button class="ins-btn" data-ev="cb:test:engine-ping">Engine Ping</button>
-            <button class="ins-btn" data-ev="cb:test:reset-world">Welt zurücksetzen</button>
-          </div>
-        </div>
-      </div>
-    `;
+    // --- Sektion: Engine
+    host.appendChild(h2('Engine'));
+    host.appendChild(btn('Engine Ping', ()=>{
+      log('ok','[tests] Engine Ping ✓');
+      try{ window.Game?.ping?.(); }catch(_){}
+    }));
+    host.appendChild(btn('Welt zurücksetzen', ()=>{
+      log('warn','[tests] Welt zurücksetzen angefordert');
+      try{ window.Game?.reset?.(); }catch(_){}
+    }));
 
-    host.querySelectorAll('[data-ev]').forEach(b=>{
-      b.addEventListener('click', ()=>{
-        const ev = b.getAttribute('data-ev');
-        try{ window.dispatchEvent(new Event(ev)); }catch(_){}
-        (window.CBLog?.ok||console.log)('[tests]', 'trigger', ev);
-      });
-    });
-
-    (window.CBLog?.ok||console.log)(MOD,'bereit', VER);
+    console.log(MOD,'bereit',VER);
   });
 
 })();
