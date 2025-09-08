@@ -1,59 +1,48 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.paths.js
- * Projekt: Siedler-Mini
- * Version: v18.13.0
- *
- * Zweck:
- *  - Pfade-Tab: Overlay toggeln, Heatmap resetten, kleine Stats
- *    • cb:paths:toggle
- *    • cb:paths:reset
- * ========================================================================= */
+ * Inspector Pfade – v18.14.4
+ *  - Overlay/Heatmap Demo (best effort Hooks auf overlay-hooks / Game)
+ * ========================================================================== */
 (function(){
   'use strict';
+  const MOD='[inspector.paths]'; const VER='v18.14.4';
+  const core = window.__INSPECTOR_CORE__?.api; if(!core){ console.warn(MOD,'core fehlt'); return; }
+  const log=(lvl,msg)=> (window.CBLog?.[lvl]||console.log)(msg);
 
-  const MOD='[inspector.paths]';
-  const VER='v18.13.0';
-  const core = window.__INSPECTOR_CORE__;
-  if (!core || !core.api){ console.warn(MOD,'core fehlt'); return; }
+  core.mount('paths', ()=>{
+    const host = core.getSlot('paths-view'); if(!host) return;
+    host.innerHTML='';
 
-  core.api.mount('paths', ()=>{
-    const host = core.api.getSlot('paths');
-    if (!host) return;
+    const btnOverlay = document.createElement('button'); btnOverlay.className='ins-btn'; btnOverlay.textContent='Overlay umschalten';
+    const btnResetHM = document.createElement('button'); btnResetHM.className='ins-btn'; btnResetHM.textContent='Heatmap zurücksetzen';
 
-    host.innerHTML = `
-      <div class="ins-paths">
-        <div class="row">
-          <button class="ins-btn" id="p-toggle">Overlay umschalten</button>
-          <button class="ins-btn" id="p-reset">Heatmap zurücksetzen</button>
-        </div>
-        <div class="stat">
-          <div>Overlay: <span id="p-state">unbekannt</span></div>
-          <div>Heatmap-Max: <span id="p-max">–</span></div>
-        </div>
-      </div>
-    `;
+    const stat = document.createElement('pre'); stat.style.marginTop='10px';
 
-    const elState = host.querySelector('#p-state');
-    const elMax   = host.querySelector('#p-max');
+    let overlayOn = false; let heatMax = 0;
 
-    function refresh(){
-      const on = !!(window.__cb && window.__cb.pathsEnabled);
-      const max = (window.__cb && window.__cb.pathsHeatMax) || 0;
-      elState.textContent = on ? 'AN' : 'AUS';
-      elMax.textContent = String(max);
-    }
-    refresh();
-
-    host.querySelector('#p-toggle').addEventListener('click', ()=>{
-      try{ window.dispatchEvent(new Event('cb:paths:toggle')); }catch(_){}
-      setTimeout(refresh,60);
+    btnOverlay.addEventListener('click',()=>{
+      overlayOn = !overlayOn;
+      try{ window.dispatchEvent(new CustomEvent('cb:overlay-toggle',{detail:{on:overlayOn}})); }catch(_){}
+      log('info',`[paths] Overlay: ${overlayOn?'AN':'AUS'}`);
+      render();
     });
-    host.querySelector('#p-reset').addEventListener('click', ()=>{
-      try{ window.dispatchEvent(new Event('cb:paths:reset')); }catch(_){}
-      setTimeout(refresh,60);
+    btnResetHM.addEventListener('click',()=>{
+      heatMax = 0;
+      try{ window.dispatchEvent(new CustomEvent('cb:overlay-heat-reset')); }catch(_){}
+      log('warn','[paths] Heatmap zurückgesetzt');
+      render();
     });
 
-    (window.CBLog?.ok||console.log)(MOD,'bereit', VER);
+    function render(){ stat.textContent = `Overlay: ${overlayOn?'AN':'AUS'}\nHeatmap-Max: ${heatMax}`; }
+
+    host.append(btnOverlay, btnResetHM, stat);
+    render();
+
+    // best effort Listener (falls Overlay Daten liefert)
+    window.addEventListener('overlay:heatmax', (e)=>{
+      heatMax = e?.detail?.max ?? heatMax; render();
+    });
+
+    console.log(MOD,'bereit',VER);
   });
 
 })();
