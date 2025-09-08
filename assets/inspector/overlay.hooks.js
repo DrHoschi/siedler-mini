@@ -1,142 +1,122 @@
-<script>
 /* ============================================================================
- * overlay.hooks.js – Inspector-Fallback nur, wenn Core NICHT rechtzeitig kommt
- * v1.4
- *  - zeigt nach kurzem Delay einen "Inspector lädt…" Dialog
- *  - verschwindet SOFORT, sobald der Core "ready" meldet
- *  - Close im Fallback schließt NUR den Fallback, NICHT den Inspector
+ * Datei: assets/inspector/overlay.hooks.js
+ * Zweck: Nur ein leichter „Sicherheitsgurt“, der bei Bedarf ein kleines
+ *        Fallback-Modal zeigt – und es automatisch wieder entfernt, sobald
+ *        der echte Inspector läuft.
+ * Version: v1.4
  * ========================================================================== */
 (function(){
   "use strict";
 
-  const MOD = "[overlay-hooks]";
-  const FALLBACK_ID = "inspector-fallback";
-  let tFallback = null;        // Timer, der das Fallback später einblendet
-  let mountedOnce = false;     // nur 1x globale Listener setzen
+  // --- Doppel-Laden verhindern ---------------------------------------------
+  if (window.__INS_OVERLAY_HOOKS__) return;
+  window.__INS_OVERLAY_HOOKS__ = "v1.4";
 
-  // Utility: Element-Factory
-  function make(tag, cls, text){
-    const el = document.createElement(tag);
-    if (cls) el.className = cls;
-    if (text != null) el.textContent = text;
-    return el;
+  const MOD = "[overlay.hooks]";
+  const log = (...a)=> (window.CBLog?.info || console.log)(MOD, ...a);
+  const warn= (...a)=> (window.CBLog?.warn || console.warn)(MOD, ...a);
+
+  let fallbackEl = null;
+  let watchdog = null;
+  let armed = false;        // wurde das Fallback überhaupt mal „scharf“ gemacht?
+
+  function hasInspectorDOM(){
+    return !!document.getElementById("inspector");
+  }
+  function hasInspectorReadyFlag(){
+    return !!window.__INSPECTOR_CORE__;
   }
 
-  // Fallback erzeugen (Singleton)
-  function ensureFallback(){
-    let host = document.getElementById(FALLBACK_ID);
-    if (host) return host;
+  // --- Fallback UI ----------------------------------------------------------
+  function buildFallback(){
+    if (fallbackEl) return;
+    const wrap = document.createElement("div");
+    wrap.id = "inspector-fallback";
+    wrap.style.cssText = `
+      position:fixed; inset:0; z-index:2147483646;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.35); backdrop-filter:blur(2px);
+    `;
+    wrap.innerHTML = `
+      <div style="
+        min-width: 280px; max-width: 92vw;
+        background:#1f252b; color:#fff; border-radius:12px;
+        box-shadow:0 20px 50px rgba(0,0,0,.45);
+        overflow:hidden; font: 16px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Inter,Arial;
+      ">
+        <div style="display:flex; align-items:center; justify-content:space-between;
+                    padding:12px 16px; background:#242b31; border-bottom:1px solid rgba(255,255,255,.06)">
+          <strong>Inspector (Fallback)</strong>
+          <button id="ins-fallback-close" type="button" style="
+            border:none; border-radius:999px; padding:6px 12px; cursor:pointer;
+            background:#3a4450; color:#fff;">Schließen</button>
+        </div>
+        <div style="padding:14px 16px; color:#cfd8e3">Inspector lädt…</div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
 
-    host = make("div", "ins-fallback-wrap");
-    host.id = FALLBACK_ID;
-
-    const panel = make("div", "ins-fallback");
-    const head  = make("div", "ins-fallback-head");
-    const title = make("div", "ins-fallback-title", "Inspector (Fallback)");
-    const btnX  = make("button", "ins-fallback-close");
-    btnX.type = "button";
-    btnX.setAttribute("aria-label","Schließen");
-    btnX.textContent = "Schließen";
-    btnX.addEventListener("click", (ev)=>{
-      ev.stopPropagation();
-      hideFallback(); // nur Dialog ausblenden
+    // Wichtig: Nur den Fallback schließen – KEIN globales Close-Event!
+    wrap.querySelector("#ins-fallback-close")?.addEventListener("click", ()=>{
+      removeFallback();
     });
 
-    head.append(title, btnX);
-    const body  = make("div", "ins-fallback-body", "Inspector lädt…");
-    panel.append(head, body);
-    host.append(panel);
-    document.body.append(host);
-    return host;
+    fallbackEl = wrap;
+    log("Fallback angezeigt");
   }
 
-  function showFallback(){
-    const host = ensureFallback();
-    host.style.display = "block";
-  }
-  function hideFallback(){
-    const host = document.getElementById(FALLBACK_ID);
-    if (host) host.style.display = "none";
-    if (tFallback){ clearTimeout(tFallback); tFallback = null; }
-  }
   function removeFallback(){
-    const host = document.getElementById(FALLBACK_ID);
-    if (host && host.parentNode) host.parentNode.removeChild(host);
-    if (tFallback){ clearTimeout(tFallback); tFallback = null; }
+    if (fallbackEl){
+      try { fallbackEl.remove(); } catch(_){}
+      fallbackEl = null;
+      log("Fallback entfernt");
+    }
   }
 
-  // Startet die Fallback-Uhr – wird gecleart, wenn Core rechtzeitig ready ist
-  function armFallbackTimer(){
-    if (tFallback) { clearTimeout(tFallback); tFallback = null; }
-    tFallback = setTimeout(()=>{
-      // nur zeigen, wenn der Inspector nicht schon sichtbar & ready ist
-      const ins = document.getElementById("inspector");
-      const ready = !!window.__INS_READY__;
-      const open  = !!document.body.classList.contains("inspector-open");
-      if (!ready || !ins || !open) showFallback();
-    }, 900); // Delay: < 1s fühlt sich reaktiv an, reicht aber als Safety
-  }
+  // --- Wachhund: zeigt Fallback nur, wenn nötig ----------------------------
+  function armWatchdog(){
+    if (watchdog) return;
 
-  // ── Globale Events vom Core ────────────────────────────────────────────────
-  function wireOnce(){
-    if (mountedOnce) return;
-    mountedOnce = true;
+    // erst „scharf“ schalten, wenn tatsächlich jemand öffnen will
+    function onOpenIntent(){
+      armed = true;
+      // kleine Verzögerung: gibt dem echten Inspector Zeit zum Mounten
+      // und vermeidet Flackern auf schnellen Geräten.
+      watchdog = window.setTimeout(()=>{
+        if (!hasInspectorDOM() && !hasInspectorReadyFlag()){
+          buildFallback();
+        }
+      }, 450);
+    }
 
-    // Core kündigt "wir öffnen jetzt" an → Fallback-Countdown starten
-    document.addEventListener("cb:inspector-open", armFallbackTimer, {passive:true});
+    // Wenn der Inspector wirklich da ist -> Fallback sicher weg
+    function onBecameReady(){
+      if (!armed) return;      // nie „bewaffnet“ gewesen -> ignorieren
+      clearTimeout(watchdog); watchdog = null;
+      removeFallback();
+    }
 
-    // Core meldet "sichtbar" → Fallback sofort weg
-    document.addEventListener("cb:inspector-opened", hideFallback, {passive:true});
+    // Öffnen/Schließen-Hooks (werden von deinem Core gesendet)
+    window.addEventListener("cb:inspector-open",  onOpenIntent);
+    window.addEventListener("cb:inspector-close", ()=>{ removeFallback(); armed=false; });
 
-    // Core meldet "UI fertig gemountet" → Marker setzen + Fallback weg
-    document.addEventListener("cb:inspector-ready", ()=>{
-      window.__INS_READY__ = true;
-      hideFallback();
-    }, {passive:true});
+    // „Ready“-Signale vom Core/Logs und ein generischer Mutations-Check
+    window.addEventListener("inspector:ready", onBecameReady);
+    window.addEventListener("logs:ready",      onBecameReady);
 
-    // Bei Schließen immer aufräumen
-    document.addEventListener("cb:inspector-close", removeFallback, {passive:true});
+    // Falls der Core schon lief (Auto-Open etc.): sofort versuchen zu räumen
+    if (hasInspectorDOM() || hasInspectorReadyFlag()){
+      onBecameReady();
+    }
 
-    // Hard-Safety: Wenn #inspector im DOM auftaucht, fallback sicher aus
-    const mo = new MutationObserver(()=>{
-      if (document.getElementById("inspector")) hideFallback();
+    // Letzte Sicherheitsleine: falls DOM-Element später auftaucht
+    const obs = new MutationObserver(()=>{
+      if (hasInspectorDOM()) onBecameReady();
     });
-    mo.observe(document.documentElement, {childList:true, subtree:true});
+    obs.observe(document.documentElement, {childList:true, subtree:true});
   }
 
-  // sofort aktivieren
-  wireOnce();
-
-  // Minimal-CSS (nur falls nicht in inspector.css vorhanden)
-  const css = `
-  .ins-fallback-wrap{
-    position:fixed; inset:0; z-index:2147483647; display:none;
-    background:rgba(0,0,0,.28); backdrop-filter: blur(2px);
-  }
-  .ins-fallback{
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    min-width: 280px; max-width: 86vw;
-    background:#1f2428; color:#e9eef3; border-radius:12px;
-    box-shadow:0 18px 48px rgba(0,0,0,.45);
-    overflow:hidden; border:1px solid rgba(255,255,255,.08);
-  }
-  .ins-fallback-head{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.08);
-  }
-  .ins-fallback-title{ font-weight:700; }
-  .ins-fallback-close{
-    border:none; border-radius:999px; padding:6px 12px; cursor:pointer;
-    background:#32414d; color:#fff;
-  }
-  .ins-fallback-close:active{ transform:translateY(1px); }
-  .ins-fallback-body{ padding:14px 12px; opacity:.9; }
-  `;
-  const styleTag = document.createElement("style");
-  styleTag.setAttribute("data-ins","fallback-css");
-  styleTag.textContent = css;
-  document.head.appendChild(styleTag);
-
-  (window.CBLog?.ok || console.log)(MOD, "bereit v1.4");
+  // Start
+  armWatchdog();
+  log("aktiv", window.__INS_OVERLAY_HOOKS__);
 })();
-</script>
