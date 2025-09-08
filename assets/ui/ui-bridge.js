@@ -1,201 +1,115 @@
 /* ============================================================================
  * Datei: assets/ui/ui-bridge.js
- * Projekt: Siedler-Mini
  * Version: v17.8.3
- *
  * Aufgaben:
- *  - Einheitliche UI-Brücke für:
- *      • Build-Dock öffnen/schließen/togglen
- *      • Inspector öffnen/schließen/togglen (ohne großes Fallback-Fenster!)
- *  - Saubere Events:
- *      • sendet:  cb:build-open / cb:build-close
- *                 cb:inspector-open-request / cb:inspector-close-request / cb:inspector-toggle-request
- *      • reagiert auf: cb:inspector-ready (vom Inspector-Core)
- *
- * Design-Entscheidung:
- *  - Keine HTML-Injektion eines großen Fallback-Overlays mehr.
- *  - Lediglich ein kleines Diagnose-Badge („Inspector lädt…“) für max. 3s,
- *    damit du Feedback hast, ohne den späteren Inspector zu „verdoppeln“.
- *
- * Garantien:
- *  - Safe to call: Funktionen funktionieren auch, wenn der Inspector-Core noch nicht da ist.
- *  - Kein Auto-Open; der Inspector öffnet nur auf Button/Kommando.
- *  - Keine Doppel-Toggles: Wir halten internen State nur für Build.
- *  - Logging via CBLog (sanft, fällt auf console.* zurück).
- * ========================================================================== */
-
+ *  - FAB-Buttons (Build/Inspector) zuverlässig schalten
+ *  - Einheitliche CustomEvents: cb:build-open/close, cb:inspector-open/close/toggle
+ *  - Fallback-Badge "Inspector lädt…" (nicht-blockierend)
+ *  - Defensive: Funktioniert auch, wenn Inspector-Core noch nicht geladen ist
+ * ============================================================================
+ */
 (function () {
   "use strict";
 
-  var VER = "v17.8.3";
-  var MOD = "[ui-bridge]";
+  const VER = "v17.8.3";
+  const log  = (t, ...a) => (window.CBLog?.ok   || console.log)(`[ui-bridge] ${t}`, ...a);
+  const warn = (t, ...a) => (window.CBLog?.warn || console.warn)(`[ui-bridge] ${t}`, ...a);
 
-  var log  = function(t){ (window.CBLog?.log  || console.log)(MOD+" "+t); };
-  var info = function(t){ (window.CBLog?.info || console.info)(MOD+" "+t); };
-  var warn = function(t){ (window.CBLog?.warn || console.warn)(MOD+" "+t); };
+  // ----------------------- Build-Dock ---------------------------------------
+  const Build = (() => {
+    let open = false;
+    const $ = id => document.getElementById(id);
 
-  // ----------------------------------------------------------------------------
-  // Build-Dock
-  // ----------------------------------------------------------------------------
-  var Build = (function(){
-    var open = false;
-    var el = null;
-
-    function ensure(){
-      if (!el) el = document.getElementById("build-panel");
-      if (!el) warn("Build-Panel fehlt (id=build-panel).");
-      return !!el;
+    function ensurePanel() {
+      const el = $("build-panel");
+      if (!el) warn("Build-Panel fehlt (id=build-panel)");
+      return el;
     }
-
-    function _open(){
-      if (!ensure()) return;
-      if (open) return;
+    function doOpen() {
+      const el = ensurePanel(); if (!el || open) return;
       open = true;
       el.classList.add("open");
       document.body.classList.add("has-build-open");
-      try { window.dispatchEvent(new CustomEvent("cb:build-open")); } catch(_){}
+      window.dispatchEvent(new CustomEvent("cb:build-open"));
       log("Build geöffnet.");
     }
-
-    function _close(){
-      if (!ensure()) return;
-      if (!open) return;
+    function doClose() {
+      const el = ensurePanel(); if (!el || !open) return;
       open = false;
       el.classList.remove("open");
       document.body.classList.remove("has-build-open");
-      try { window.dispatchEvent(new CustomEvent("cb:build-close")); } catch(_){}
+      window.dispatchEvent(new CustomEvent("cb:build-close"));
       log("Build geschlossen.");
     }
-
-    function toggle(force){
-      if (!ensure()) return;
-      var willOpen = (force == null) ? !open : !!force;
-      willOpen ? _open() : _close();
+    function toggle(force) {
+      const el = ensurePanel(); if (!el) return;
+      (force == null ? !open : !!force) ? doOpen() : doClose();
     }
-
-    return { open:_open, close:_close, toggle:toggle };
+    return { open: doOpen, close: doClose, toggle };
   })();
 
-  // ----------------------------------------------------------------------------
-  // Inspector-Bridge
-  //   – keine große Fallback-UI, nur Event-Brücke + Mini-Diagnose
-  // ----------------------------------------------------------------------------
-  var Inspector = (function(){
-    var READY = false;
-    var PROBE_ID = "inspector-probe-badge";
-    var probeTimer = null;
-
-    // Wird vom Inspector-Core gemeldet, sobald __INSPECTOR_API__ bereit ist
-    window.addEventListener("cb:inspector-ready", function(){
-      READY = true;
-      // nachträgliches Badge weg
-      var p = document.getElementById(PROBE_ID);
-      if (p) p.remove();
-      info("Inspector-Core meldet READY.");
-    });
-
-    function showProbeOnce(){
-      if (document.getElementById(PROBE_ID)) return;
-      var badge = document.createElement("div");
-      badge.id = PROBE_ID;
-      badge.textContent = "Inspector lädt…";
-      badge.style.cssText =
-        "position:fixed;right:16px;bottom:74px;z-index:2147483646;padding:6px 10px;" +
-        "font:12px system-ui;color:#cbd5e1;background:rgba(30,30,35,.72);border:1px solid rgba(255,255,255,.08);" +
-        "border-radius:8px;backdrop-filter:blur(3px)";
-      document.body.appendChild(badge);
-      probeTimer = window.setTimeout(function(){ try{badge.remove();}catch(_){}} , 3000);
+  // ----------------------- Inspector Bridge ---------------------------------
+  const Inspector = (() => {
+    // Kleines, unaufdringliches “lädt…”-Badge, falls Core noch nicht da ist
+    function showProbe() {
+      if (document.getElementById("inspector-probe")) return;
+      const probe = document.createElement("div");
+      probe.id = "inspector-probe";
+      probe.textContent = "Inspector lädt…";
+      probe.style.cssText =
+        "position:fixed;right:16px;bottom:64px;z-index:2147483646;font:12px system-ui;" +
+        "padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.12);" +
+        "background:rgba(30,30,35,.72);color:#cbd5e1;opacity:.85";
+      document.body.appendChild(probe);
+      setTimeout(() => probe.remove(), 2500);
     }
 
-    function api(){
-      return (window.__INSPECTOR_API__ || null);
-    }
-
-    function open(){
-      // 1) Wenn API schon da: direkt öffnen
-      if (api()?.open) {
-        api().open();
-        return;
+    function _open() {
+      // 1) Wenn die API da ist, direkt nutzen
+      if (window.__INSPECTOR_API__?.open) {
+        window.__INSPECTOR_API__.open();
+      } else {
+        // 2) Sonst Event feuern (wird von compat-Shim/inspector.core gehandelt)
+        window.dispatchEvent(new CustomEvent("cb:inspector-open"));
+        showProbe();
       }
-      // 2) Noch nicht bereit → Request + kurzes Probe-Badge
-      try { window.dispatchEvent(new CustomEvent("cb:inspector-open-request")); } catch(_){}
-      showProbeOnce();
-
-      // 3) Kleiner Retry-Loop (nur kurz), falls der Core in diesem Tick nachlädt
-      var tries = 0;
-      var t = window.setInterval(function(){
-        tries++;
-        if (api()?.open){
-          window.clearInterval(t);
-          api().open();
-        }else if (tries > 8){ // ~1.6s
-          window.clearInterval(t);
-          warn("Inspector-Core nicht bereit – später nochmal versuchen.");
-        }
-      }, 200);
+      log("Inspector open requested.");
     }
 
-    function close(){
-      if (api()?.close) {
-        api().close();
-        return;
+    function _close() {
+      if (window.__INSPECTOR_API__?.close) {
+        window.__INSPECTOR_API__.close();
+      } else {
+        window.dispatchEvent(new CustomEvent("cb:inspector-close"));
+        showProbe();
       }
-      // Wenn er noch nicht ready ist, senden wir den Intent (Core kann es aufnehmen)
-      try { window.dispatchEvent(new CustomEvent("cb:inspector-close-request")); } catch(_){}
+      log("Inspector close requested.");
     }
 
-    function toggle(force){
-      // wenn die API da ist, deren toggle nutzen
-      if (api()?.toggle) {
-        api().toggle(force);
-        return;
+    function _toggle(force) {
+      if (window.__INSPECTOR_API__?.toggle) {
+        window.__INSPECTOR_API__.toggle(force);
+      } else {
+        // Kein API? → kompatibles Toggle-Event
+        window.dispatchEvent(new CustomEvent("cb:inspector-toggle", { detail: { force } }));
+        showProbe();
       }
-      // Andernfalls: semantischer Toggle-Intent
-      try {
-        window.dispatchEvent(new CustomEvent("cb:inspector-toggle-request", { detail:{ force: (force==null?undefined:!!force) } }));
-      } catch(_){}
-      showProbeOnce();
-
-      // kurzer Retry (wie bei open)
-      var tries = 0;
-      var t = window.setInterval(function(){
-        tries++;
-        if (api()?.toggle){
-          window.clearInterval(t);
-          api().toggle(force);
-        }else if (api()?.open && (force===true)){
-          window.clearInterval(t);
-          api().open();
-        }else if (tries > 8){
-          window.clearInterval(t);
-          warn("Inspector-Core nicht bereit – später nochmal togglen.");
-        }
-      }, 200);
+      log("Inspector toggle requested.", force);
     }
 
-    // Sicherheit: wenn ein Alt-Fallback existiert, räumen wir ihn leise weg,
-    // sobald der Core das erste Mal „ready“ meldet.
-    window.addEventListener("cb:inspector-ready", function(){
-      try{
-        var legacy = document.getElementById("inspector-fallback");
-        if (legacy) legacy.remove();
-      }catch(_){}
-    });
-
-    return { open:open, close:close, toggle:toggle };
+    // Doppel-Toggle vermeiden: wenn Core die Events konsumiert, sind wir kompatibel.
+    return { open: _open, close: _close, toggle: _toggle };
   })();
 
-  // ----------------------------------------------------------------------------
-  // Öffentliche API
-  // ----------------------------------------------------------------------------
+  // Öffentliche Oberfläche für die FABs
   window.GameUI = window.GameUI || {};
-  window.GameUI.toggleBuild     = Build.toggle;
   window.GameUI.openBuild       = Build.open;
   window.GameUI.closeBuild      = Build.close;
+  window.GameUI.toggleBuild     = Build.toggle;
 
-  window.GameUI.toggleInspector = Inspector.toggle;
   window.GameUI.openInspector   = Inspector.open;
   window.GameUI.closeInspector  = Inspector.close;
+  window.GameUI.toggleInspector = Inspector.toggle;
 
-  info("bereit ("+VER+").");
+  log(`bereit (${VER}).`);
 })();
