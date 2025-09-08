@@ -197,5 +197,11 @@
   } else {
     init();
   }
-
+/* Start-Hintergrund fix (Pfad + Cover) */
+.ui-start-bg{
+  position:absolute; inset:0;
+  background: #0c120f url("./start-bg.jpeg") center/cover no-repeat; /* WICHTIG: ./ */
+  opacity:.28;
+  pointer-events:none;
+}
 })();
