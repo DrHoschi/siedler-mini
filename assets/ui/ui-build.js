@@ -289,4 +289,32 @@
   if (document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', init, {once:true});
   } else { init(); }
+
+  // ---- Build-Panel Initialisierung ----
+(function(){
+  const log = (m)=> (window.CBLog?.info||console.log)(`[ui-build] ${m}`);
+  const $panel = document.getElementById('build-panel');
+
+  function ensurePanel(){
+    if(!$panel) return;
+    // hier minimaler Inhalt, damit du sofort wieder was siehst:
+    // (später ersetzt durch deine echten Kategorien/Assets)
+    if(!$panel.dataset.__inited){
+      $panel.innerHTML = `
+        <div class="ui-build-wrap">
+          <h3>Bau-Menü</h3>
+          <div class="grid">
+            <button data-b="hq">Rathaus</button>
+            <button data-b="depot">Depot</button>
+            <button data-b="lumberjack">Holzfäller</button>
+          </div>
+        </div>`;
+      $panel.dataset.__inited = "1";
+      log('bereit');
+    }
+  }
+
+  // Öffnen/Schließen via GameUI.toggleBuild() (lässt deine FAB-Animation wie gehabt)
+  window.addEventListener('cb:ui-ready', ensurePanel, {once:true});
+
 })();
