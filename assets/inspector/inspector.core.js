@@ -1,17 +1,20 @@
 /* ============================================================================
- * Inspector Core – v18.14.4
- *  - Overlay, Tabs, Slots, Responsive (Portrait/ Landscape)
- *  - Keine Auto-Open-Logik; Öffnen/Schließen nur via Events + Button
- *  - Signals:
- *      window.dispatchEvent(new CustomEvent('cb:inspector-open'))
- *      window.dispatchEvent(new CustomEvent('cb:inspector-close'))
- *  - Layout-Event für Submodule:
- *      window.dispatchEvent(new CustomEvent('ins:layout', {detail:{mode:'portrait'|'landscape'}}))
+ * Inspector Core – v18.14.5
+ *  - Overlay, Tabs, Slots, Responsive (Portrait/Landscape)
+ *  - Öffnen/Schließen NUR über Events/Button (keine Auto-Open-Logik)
+ *  - Anti-Doppel-Toggle + Fallback-Entkopplung
+ *
+ * Signals (außen):
+ *   window.dispatchEvent(new CustomEvent('cb:inspector-open'))
+ *   window.dispatchEvent(new CustomEvent('cb:inspector-close'))
+ *
+ * Layout-Event (für Submodule):
+ *   window.dispatchEvent(new CustomEvent('ins:layout', {detail:{mode:'portrait'|'landscape'}}))
  * ========================================================================== */
 (function () {
   'use strict';
 
-  const VER = 'v18.14.4';
+  const VER = 'v18.14.5';
   const MOD = '[inspector.core]';
 
   // --------------------------------------------------------------------------
@@ -61,9 +64,9 @@
     const head = el('div','ins-head');
     const title = el('div','ins-title');
     title.innerHTML = `<strong>Inspector</strong> <span class="ins-ver">${VER}</span>`;
-    tabsRow = el('div','ins-tabs'); // wird im Portrait oben angezeigt
+    tabsRow = el('div','ins-tabs'); // Portrait: Tabs oben
     const btnClose = el('button','ins-close'); btnClose.type = 'button';
-    btnClose.addEventListener('click', closeOverlay);
+    btnClose.addEventListener('click', ()=>api.signal('cb:inspector-close', {origin:'button'}));
     head.append(title, tabsRow, btnClose);
     panel.appendChild(head);
 
@@ -128,17 +131,13 @@
     panel.appendChild(foot);
 
     // Slots registrieren
-    __SLOTS__['logs-controls'] = slotLogsControls;
-    __SLOTS__['logs-view']     = slotLogsView;
-    __SLOTS__['tests-view']    = slotTests;
-    __SLOTS__['paths-view']    = slotPaths;
-    __SLOTS__['resources-view']= slotRes;
+    __SLOTS__['logs-controls']  = slotLogsControls;
+    __SLOTS__['logs-view']      = slotLogsView;
+    __SLOTS__['tests-view']     = slotTests;
+    __SLOTS__['paths-view']     = slotPaths;
+    __SLOTS__['resources-view'] = slotRes;
 
     document.body.appendChild(overlay);
-
-    // Body-Scroll sperren während offen
-    window.addEventListener('cb:inspector-open', openOverlay);
-    window.addEventListener('cb:inspector-close', closeOverlay);
 
     // Layout initial + on rotate/resize
     const applyLayout = () => {
@@ -147,14 +146,37 @@
       if (newMode !== layoutMode) {
         layoutMode = newMode;
         overlay.setAttribute('data-layout', layoutMode);
-        // Logs-Controls ggf. in Sidebar „umparken“
-        moveLogControls(layoutMode);
+        moveLogControls(layoutMode); // Logs-Filter in Sidebar (Landscape)
         window.dispatchEvent(new CustomEvent('ins:layout',{detail:{mode:layoutMode}}));
       }
     };
     applyLayout();
-    window.addEventListener('resize', applyLayout);
-    window.addEventListener('orientationchange', applyLayout);
+    window.addEventListener('resize', applyLayout, {passive:true});
+    window.addEventListener('orientationchange', applyLayout, {passive:true});
+
+    // --- Event-Wiring (mit Guards) -----------------------------------------
+    // Anti-Doppel-Open: wenn schon offen, ignoriere.
+    const onReqOpen = (ev) => {
+      if (overlay.style.display === 'flex') return; // bereits offen
+      openOverlay();
+    };
+
+    // Close-Guard:
+    // - wenn Event vom Fallback kommt -> ignorieren (Fallback soll nur sich selbst schließen)
+    // - wenn Inspector bereits geschlossen -> ignorieren
+    const onReqClose = (ev) => {
+      const origin = ev?.detail && ev.detail.origin;
+      if (origin === 'fallback') return;                 // entkoppelt
+      if (overlay.style.display !== 'flex') return;      // schon zu
+      closeOverlay();
+    };
+
+    window.addEventListener('cb:inspector-open',  onReqOpen);
+    window.addEventListener('cb:inspector-close', onReqClose);
+
+    // Fallback-spezifische Signale aus overlay.hooks.js (nur informativ)
+    window.addEventListener('ins:fallback-open',  ()=>{/* bewusst nichts */});
+    window.addEventListener('ins:fallback-close', ()=>{/* bewusst nichts */});
 
     console.log(MOD,'bereit',VER);
     window.dispatchEvent(new CustomEvent('inspector:ready',{detail:{version:VER}}));
@@ -182,15 +204,20 @@
     ensureBuilt();
     overlay.style.display = 'flex';
     document.body.classList.add('inspector-open');
-    // Tab aktivieren (beide Tab-Reihen synchronisieren)
+    // aktiven Tab anzeigen (Buttons oben + links synchron)
     activateTab(activeTab || 'logs', true);
+    // für Submodule (z. B. logs.stream) ein neutrales Open-Signal
     window.dispatchEvent(new CustomEvent('inspector:open',{detail:{version:VER}}));
+    // Viele bestehende Hooks hören noch auf "cb:inspector-open" -> feuern wir weiterhin
+    window.dispatchEvent(new CustomEvent('cb:inspector-open',{detail:{origin:'core'}}));
   }
+
   function closeOverlay(){
     if (!overlay) return;
     overlay.style.display = 'none';
     document.body.classList.remove('inspector-open');
     window.dispatchEvent(new CustomEvent('inspector:close',{detail:{version:VER}}));
+    window.dispatchEvent(new CustomEvent('cb:inspector-close',{detail:{origin:'core'}}));
   }
 
   function activateTab(id, skipFocus){
@@ -205,7 +232,6 @@
     panePaths.classList.toggle('active', id==='paths');
     paneRes .classList.toggle('active', id==='resources');
     if (!skipFocus) {
-      // optional Fokus auf ersten interaktiven Bereich
       const target = overlay.querySelector('.ins-pane.active') || overlay;
       target.focus?.();
     }
