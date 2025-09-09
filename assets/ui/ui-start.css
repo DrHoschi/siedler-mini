@@ -1,69 +1,21 @@
-/*
-  assets/ui/ui-start.css — v17.8.0
-  Zweck: Start-Hintergrund & Panel mittig, klickbar, blockiert nichts im Spiel.
-  Style: sanftes Grün, weiches Panel; FABs bleiben darüber.
-*/
-
-/* Vollflächiger Hintergrund */
-.ui-start {
-  position: fixed;
-  inset: 0;
-  z-index: 1000; /* unter FABs und Inspector */
-  pointer-events: none; /* blockiert nichts, Panel selbst aktiviert pointer-events wieder */
+/* ui-start.css — v17.8.3 (stabil) */
+.ui-start { position:fixed; inset:0; z-index:20; display:flex; }
+.ui-start-bg{
+  position:absolute; inset:0;
+  background: #0b0f0d url("assets/ui/start-bg.jpeg") center/cover no-repeat;
+  filter: brightness(0.9);
 }
-
-/* Textur / Bild */
-.ui-start-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(40% 60% at 50% 40%, rgba(255,255,255,0.06), transparent 60%),
-    linear-gradient(#2f5731, #2d4f2d 40%, #253d26);
-  filter: saturate(0.9) brightness(0.9);
-  animation: startbg 18s ease-in-out infinite alternate;
+.ui-start-panel{
+  position:relative; z-index:1;
+  margin:auto; padding:24px 28px; border-radius:12px;
+  background:rgba(20,24,22,.72);
+  color:#e8f0ec; text-align:center; backdrop-filter: blur(6px);
+  border:1px solid rgba(255,255,255,.08);
 }
-@keyframes startbg {
-  0% { filter: saturate(0.95) brightness(0.92); }
-  100% { filter: saturate(1.05) brightness(0.98); }
+.ui-start-panel h1{ margin:0 0 14px; font:700 22px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.ui-start-panel button{
+  padding:10px 16px; border-radius:10px; border:none; cursor:pointer;
+  background:#1f8a55; color:white; font-weight:600;
+  box-shadow:0 10px 24px rgba(0,0,0,.25);
 }
-
-/* Panel mittig */
-.ui-start-panel {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  min-width: min(680px, 92vw);
-  padding: 18px 22px;
-  border-radius: 16px;
-  background: rgba(10,12,10,0.86);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 32px 120px rgba(0,0,0,0.55), 0 6px 18px rgba(0,0,0,0.35);
-  color: #eaf3ec;
-  pointer-events: auto; /* das Panel darf geklickt werden */
-}
-
-/* Typografie */
-.ui-start-panel h1{
-  margin: 0 0 10px 0;
-  font-weight: 800;
-  letter-spacing: .2px;
-}
-.ui-start-panel p{ margin: 0 0 10px 0; opacity: .8; }
-
-/* Button */
-#btnStart{
-  display:inline-block;
-  border: 1px solid rgba(120,200,150,.45);
-  background: linear-gradient(180deg, rgba(90,160,110,.50), rgba(70,130,95,.55));
-  color:#eaf3ec;
-  padding: 10px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0,0,0,.35);
-}
-#btnStart:active{ transform: translateY(1px); }
-
-/* Responsiv */
-@media (max-width: 420px){
-  .ui-start-panel{ min-width: min(360px, 92vw); padding: 14px 16px; }
-}
+.ui-start.hide{ display:none; }
