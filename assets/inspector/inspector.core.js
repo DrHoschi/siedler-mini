@@ -1,252 +1,192 @@
 /* ============================================================================
- * Inspector Core – v18.14.5
- *  - Overlay, Tabs, Slots, Responsive (Portrait/Landscape)
- *  - Öffnen/Schließen NUR über Events/Button (keine Auto-Open-Logik)
- *  - Anti-Doppel-Toggle + Fallback-Entkopplung
- *
- * Signals (außen):
- *   window.dispatchEvent(new CustomEvent('cb:inspector-open'))
- *   window.dispatchEvent(new CustomEvent('cb:inspector-close'))
- *
- * Layout-Event (für Submodule):
- *   window.dispatchEvent(new CustomEvent('ins:layout', {detail:{mode:'portrait'|'landscape'}}))
+ * inspector.core.js – v18.12.5
+ * Ziel:
+ *  - Garantiert bedienbares Overlay (kein Auto-Open)
+ *  - Exponiert __INSPECTOR_API__ {open,close,toggle,version}
+ *  - Feuert cb:inspector-open/close
+ *  - Mount-Punkte (Slots) für Logs/Build/Paths/Tests/Resources
+ *  - Idempotent: kein doppeltes Mounting
+ *  - Keine Fallback-Fenster mehr – das übernimmt ui-bridge als kleines Badge
  * ========================================================================== */
-(function () {
-  'use strict';
 
-  const VER = 'v18.14.5';
-  const MOD = '[inspector.core]';
+(function(){
+  "use strict";
 
-  // --------------------------------------------------------------------------
-  // public API shell
-  // --------------------------------------------------------------------------
-  const __SLOTS__ = Object.create(null);
-  const api = {
-    mount(tabId, renderFn){                 // Submodule registrieren
-      if (typeof renderFn === 'function') {
-        const un = renderFn();
-        (api.__mounted || (api.__mounted = {}))[tabId] = un || null;
-      }
-    },
-    getSlot(name){ return __SLOTS__[name] || null; },
-    signal(name, payload){ try{
-      window.dispatchEvent(new CustomEvent(name, {detail: payload||{}}));
-    }catch(_){/*noop*/} }
-  };
+  if (window.__INSPECTOR_CORE_INIT__) return; // idempotent
+  window.__INSPECTOR_CORE_INIT__ = true;
 
-  // global export (früh)
-  window.__INSPECTOR_CORE__ = window.__INSPECTOR_CORE__ || {};
-  window.__INSPECTOR_CORE__.api = api;
-  window.__INSPECTOR_CORE__.version = VER;
+  const VER = "v18.12.5";
+  const ok   = (t,...a)=>(window.CBLog?.ok||console.log)(`[inspector.core] ${t}`,...a);
+  const warn = (t,...a)=>(window.CBLog?.warn||console.warn)(`[inspector.core] ${t}`,...a);
 
-  // --------------------------------------------------------------------------
-  // minimal DOM helpers
-  // --------------------------------------------------------------------------
-  const $ = sel => document.querySelector(sel);
-  const el = (tag, cls) => { const n = document.createElement(tag); if(cls) n.className = cls; return n; };
+  // ---------- DOM-Grundgerüst -----------------------------------------------
+  let root, panel, slotBody, slotTabs;
+  const slots = Object.create(null);
 
-  // --------------------------------------------------------------------------
-  // Overlay erstellen (einmal)
-  // --------------------------------------------------------------------------
-  let overlay, body, side, main, paneLogs, paneTests, panePaths, paneRes, tabsRow, foot;
-  let activeTab = 'logs';
-  let layoutMode = null; // 'portrait'/'landscape'
+  function el(tag, cls, html){
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html!=null) n.innerHTML = html;
+    return n;
+  }
 
-  function buildOverlay(){
-    // Container
-    overlay = el('div'); overlay.id = 'inspector'; overlay.setAttribute('aria-modal','true');
-    const wrap = el('div','ins-wrap'); overlay.appendChild(wrap);
+  function ensureDom(){
+    if (document.getElementById("inspector")) {
+      // falls schon vorhanden (z.B. hot-reload)
+      root = document.getElementById("inspector");
+      panel = root.querySelector(".ins-panel");
+      slotBody = root.querySelector(".ins-body");
+      slotTabs = root.querySelector(".ins-tabs");
+      // Slots registrieren
+      registerSlots();
+      return;
+    }
 
-    // Panel
-    const panel = el('div','ins-panel'); wrap.appendChild(panel);
+    root = el("div","inspector-root");
+    root.id = "inspector";
+    root.style.display = "none"; // sichtbar via open()
+
+    const wrap  = el("div","ins-wrap");
+    panel = el("div","ins-panel");
 
     // Header
-    const head = el('div','ins-head');
-    const title = el('div','ins-title');
-    title.innerHTML = `<strong>Inspector</strong> <span class="ins-ver">${VER}</span>`;
-    tabsRow = el('div','ins-tabs'); // Portrait: Tabs oben
-    const btnClose = el('button','ins-close'); btnClose.type = 'button';
-    btnClose.addEventListener('click', ()=>api.signal('cb:inspector-close', {origin:'button'}));
-    head.append(title, tabsRow, btnClose);
-    panel.appendChild(head);
+    const head  = el("div","ins-head");
+    const title = el("div","ins-title");
+    title.textContent = "Inspector";
+    const ver   = el("div","ins-ver", VER);
+    const tabs  = el("div","ins-tabs");
+    slotTabs = tabs;
 
-    // Body -> 2-Spalten-Layout in Landscape
-    body = el('div','ins-body ins-layout');
-    // linke Sidebar (Landscape)
-    side = el('div','ins-side');
-    // Hauptbereich
-    main = el('div','ins-main');
-    body.append(side, main);
-    panel.appendChild(body);
+    const btnClose = el("button","ins-close");
+    btnClose.type="button";
+    btnClose.title="Schließen";
+    btnClose.addEventListener("click", close);
 
-    // Tabs (echte Buttons, arbeiten für Portrait und Landscape)
-    const mkTab = (id, label) => {
-      const b = el('button','ins-tab'); b.dataset.tab = id; b.textContent = label;
-      b.addEventListener('click',()=>activateTab(id));
-      return b;
-    };
-    const TABS = [
-      ['logs','Logs'], ['tests','Tests'], ['resources','Ressourcen'], ['paths','Pfade']
-    ];
-    TABS.forEach(([id, label])=>{
-      const b1 = mkTab(id,label);
-      const b2 = b1.cloneNode(true); // Duplikat für Sidebar (Landscape)
-      // Portrait: Tabs oben
-      tabsRow.appendChild(b1);
-      // Landscape: Tabs links
-      side.appendChild(b2);
-    });
+    head.append(title, ver, tabs, btnClose);
 
-    // Slots (Portrait: Filter im Hauptbereich, Landscape: in der Sidebar)
-    const sideControlsWrap = el('div','ins-side-controls');
-    side.appendChild(sideControlsWrap);
-
-    const mainControlsWrap = el('div','ins-main-controls');
-    main.appendChild(mainControlsWrap);
-
-    // Panes (je Tab)
-    paneLogs = el('div','ins-pane ins-pane-logs active');
-    paneTests = el('div','ins-pane ins-pane-tests');
-    panePaths = el('div','ins-pane ins-pane-paths');
-    paneRes  = el('div','ins-pane ins-pane-res');
-
-    // Log-Pane enthält 2 Slots
-    const slotLogsControls = el('div','slot-logs-controls'); slotLogsControls.id = 'ins-logs-controls';
-    const slotLogsView     = el('div','slot-logs-view');     slotLogsView.id   = 'ins-logs-view';
-    paneLogs.append(slotLogsControls, slotLogsView);
-
-    // andere Panes enthalten je einen Slot
-    const slotTests = el('div','slot-tests-view'); slotTests.id = 'ins-tests-view';
-    const slotPaths = el('div','slot-paths-view'); slotPaths.id = 'ins-paths-view';
-    const slotRes   = el('div','slot-resources-view'); slotRes.id = 'ins-resources-view';
-    paneTests.appendChild(slotTests);
-    panePaths.appendChild(slotPaths);
-    paneRes.appendChild(slotRes);
-
-    main.append(paneLogs, paneTests, panePaths, paneRes);
+    // Body
+    const body = el("div","ins-body");
+    slotBody = body;
 
     // Footer
-    foot = el('div','ins-foot');
-    foot.innerHTML = `<span class="muted">© Inspector — Siedler-Mini</span>`;
-    panel.appendChild(foot);
+    const foot = el("div","ins-foot");
+    const muted = el("div","muted","Logs mit CBLog • Tabs: Logs / Build / Pfade / Tests / Ressourcen");
+    foot.append(muted);
 
-    // Slots registrieren
-    __SLOTS__['logs-controls']  = slotLogsControls;
-    __SLOTS__['logs-view']      = slotLogsView;
-    __SLOTS__['tests-view']     = slotTests;
-    __SLOTS__['paths-view']     = slotPaths;
-    __SLOTS__['resources-view'] = slotRes;
+    panel.append(head, body, foot);
+    wrap.append(panel);
+    root.append(wrap);
+    document.body.appendChild(root);
 
-    document.body.appendChild(overlay);
+    registerSlots();
+  }
 
-    // Layout initial + on rotate/resize
-    const applyLayout = () => {
-      const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-      const newMode = isLandscape ? 'landscape' : 'portrait';
-      if (newMode !== layoutMode) {
-        layoutMode = newMode;
-        overlay.setAttribute('data-layout', layoutMode);
-        moveLogControls(layoutMode); // Logs-Filter in Sidebar (Landscape)
-        window.dispatchEvent(new CustomEvent('ins:layout',{detail:{mode:layoutMode}}));
+  function registerSlots(){
+    // Pane-Container je Tab
+    const mkPane = (id,label)=>{
+      const pane = el("div","ins-pane");
+      pane.dataset.tab = id;
+
+      // Controls+View Slots für Logs, einfache Body-Slots für andere
+      if (id==="logs"){
+        const c = el("div","slot-logs-controls"); c.dataset.slot="logs-controls";
+        const v = el("div","slot-logs-view");     v.dataset.slot="logs-view";
+        pane.append(c,v);
+        slots["logs-controls"]=c;
+        slots["logs-view"]=v;
+      } else {
+        const s = el("div","slot-generic");
+        s.dataset.slot = `${id}-body`;
+        pane.append(s);
+        slots[`${id}-body`] = s;
       }
-    };
-    applyLayout();
-    window.addEventListener('resize', applyLayout, {passive:true});
-    window.addEventListener('orientationchange', applyLayout, {passive:true});
-
-    // --- Event-Wiring (mit Guards) -----------------------------------------
-    // Anti-Doppel-Open: wenn schon offen, ignoriere.
-    const onReqOpen = (ev) => {
-      if (overlay.style.display === 'flex') return; // bereits offen
-      openOverlay();
+      return pane;
     };
 
-    // Close-Guard:
-    // - wenn Event vom Fallback kommt -> ignorieren (Fallback soll nur sich selbst schließen)
-    // - wenn Inspector bereits geschlossen -> ignorieren
-    const onReqClose = (ev) => {
-      const origin = ev?.detail && ev.detail.origin;
-      if (origin === 'fallback') return;                 // entkoppelt
-      if (overlay.style.display !== 'flex') return;      // schon zu
-      closeOverlay();
-    };
+    // Tabs definieren
+    const defs = [
+      { id:"logs",       label:"Logs" },
+      { id:"build",      label:"Build" },
+      { id:"paths",      label:"Pfade" },
+      { id:"tests",      label:"Tests" },
+      { id:"resources",  label:"Ressourcen" },
+    ];
 
-    window.addEventListener('cb:inspector-open',  onReqOpen);
-    window.addEventListener('cb:inspector-close', onReqClose);
+    // Tabs rendern
+    slotTabs.innerHTML = "";
+    defs.forEach((d,i)=>{
+      const b = el("button","ins-tab", d.label);
+      b.dataset.tab = d.id;
+      b.addEventListener("click", ()=>activateTab(d.id));
+      slotTabs.appendChild(b);
 
-    // Fallback-spezifische Signale aus overlay.hooks.js (nur informativ)
-    window.addEventListener('ins:fallback-open',  ()=>{/* bewusst nichts */});
-    window.addEventListener('ins:fallback-close', ()=>{/* bewusst nichts */});
-
-    console.log(MOD,'bereit',VER);
-    window.dispatchEvent(new CustomEvent('inspector:ready',{detail:{version:VER}}));
-  }
-
-  function moveLogControls(mode){
-    // Zeige Logs-Filter in Landscape links (Sidebar), sonst oben im Pane
-    const lc = __SLOTS__['logs-controls'];
-    if (!lc) return;
-    if (mode === 'landscape') {
-      if (!side.contains(lc)) side.querySelector('.ins-side-controls').appendChild(lc);
-    } else {
-      if (!paneLogs.contains(lc)) paneLogs.insertBefore(lc, paneLogs.firstChild);
-    }
-  }
-
-  function ensureBuilt(){
-    if (!overlay) buildOverlay();
-  }
-
-  // --------------------------------------------------------------------------
-  // Open/Close + Tab
-  // --------------------------------------------------------------------------
-  function openOverlay(){
-    ensureBuilt();
-    overlay.style.display = 'flex';
-    document.body.classList.add('inspector-open');
-    // aktiven Tab anzeigen (Buttons oben + links synchron)
-    activateTab(activeTab || 'logs', true);
-    // für Submodule (z. B. logs.stream) ein neutrales Open-Signal
-    window.dispatchEvent(new CustomEvent('inspector:open',{detail:{version:VER}}));
-    // Viele bestehende Hooks hören noch auf "cb:inspector-open" -> feuern wir weiterhin
-    window.dispatchEvent(new CustomEvent('cb:inspector-open',{detail:{origin:'core'}}));
-  }
-
-  function closeOverlay(){
-    if (!overlay) return;
-    overlay.style.display = 'none';
-    document.body.classList.remove('inspector-open');
-    window.dispatchEvent(new CustomEvent('inspector:close',{detail:{version:VER}}));
-    window.dispatchEvent(new CustomEvent('cb:inspector-close',{detail:{origin:'core'}}));
-  }
-
-  function activateTab(id, skipFocus){
-    activeTab = id;
-    // Buttons synchronisieren (oben + links)
-    overlay.querySelectorAll('.ins-tab').forEach(b=>{
-      b.classList.toggle('active', b.dataset.tab === id);
+      // Pane
+      const p = mkPane(d.id, d.label);
+      p.id = `ins-pane-${d.id}`;
+      slotBody.appendChild(p);
     });
-    // Panes umschalten
-    paneLogs.classList.toggle('active', id==='logs');
-    paneTests.classList.toggle('active', id==='tests');
-    panePaths.classList.toggle('active', id==='paths');
-    paneRes .classList.toggle('active', id==='resources');
-    if (!skipFocus) {
-      const target = overlay.querySelector('.ins-pane.active') || overlay;
-      target.focus?.();
-    }
+
+    // Standard: Logs aktiv
+    activateTab("logs");
   }
 
-  // --------------------------------------------------------------------------
-  // init once
-  // --------------------------------------------------------------------------
-  if (!document.getElementById('inspector')) {
-    // verzögert aufbauen, damit CSS geladen ist
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', buildOverlay, {once:true});
-    } else {
-      buildOverlay();
-    }
+  function activateTab(id){
+    // Tabs
+    Array.from(slotTabs.children).forEach(btn=>{
+      btn.classList.toggle("active", btn.dataset.tab===id);
+    });
+    // Panes
+    Array.from(slotBody.children).forEach(p=>{
+      p.classList.toggle("active", p.dataset.tab===id);
+    });
+    // Signal für Module
+    try{ window.dispatchEvent(new CustomEvent("ins:tab-change",{detail:{tab:id}})); }catch{}
   }
 
+  // ---------- Public Core API für Module ------------------------------------
+  const coreApi = {
+    version: VER,
+    getSlot(name){ return slots[name] || null; },
+    mount(tabId, mountFn){
+      // Module rufen mount("logs", fn) etc.
+      try {
+        const unmount = mountFn?.();
+        return (typeof unmount==="function") ? unmount : ()=>{};
+      } catch(e){
+        warn("mount-Fehler:", e && e.message);
+        return ()=>{};
+      }
+    }
+  };
+
+  // ---------- Open / Close ---------------------------------------------------
+  let isOpen = false;
+
+  function open(){
+    if (isOpen) return;
+    ensureDom();
+    root.style.display = "flex";
+    document.body.classList.add("inspector-open");
+    isOpen = true;
+    try{ window.dispatchEvent(new CustomEvent("cb:inspector-open")); }catch{}
+    ok("geöffnet (%s)", VER);
+  }
+  function close(){
+    if (!isOpen) return;
+    root.style.display = "none";
+    document.body.classList.remove("inspector-open");
+    isOpen = false;
+    try{ window.dispatchEvent(new CustomEvent("cb:inspector-close")); }catch{}
+    ok("geschlossen");
+  }
+  function toggle(force){
+    (force==null ? !isOpen : !!force) ? open() : close();
+  }
+
+  // ---------- Export / Ready -------------------------------------------------
+  window.__INSPECTOR_CORE__ = { api: coreApi, open, close, toggle, version: VER };
+  // Kompatibler API-Name für ui-bridge:
+  window.__INSPECTOR_API__  = window.__INSPECTOR_CORE__;
+
+  ok(`bereit ${VER}`);
 })();
