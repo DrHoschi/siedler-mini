@@ -1,43 +1,26 @@
-/* ============================================================================
- * UI-Start – Startbildschirm + Startknopf
- * Version: v17.8.3
- * ========================================================================== */
+/* ui-start.js — v17.8.3 */
 (function(){
-  const LOG = (lvl, msg, ...a) =>
-    (window.CBLog && CBLog[lvl] ? CBLog[lvl] : console.log).call(null, `[ui-start] ${msg}`, ...a);
+  "use strict";
+  const log = (t,...a)=>(window.CBLog?.ok||console.log)(`[ui-start] ${t}`,...a);
 
-  const startPanel = document.getElementById('start-panel');
-  const btnStart   = document.getElementById('btnStart');
-  const canvas     = document.getElementById('game');
+  function dispatch(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})); }catch(_){} }
 
-  function showStartPanel(show){
-    if(!startPanel) return;
-    startPanel.style.display = show ? 'block' : 'none';
-  }
+  function wire(){
+    const root   = document.getElementById("start-panel");
+    const btn    = document.getElementById("btnStart");
+    if(!root || !btn){ return; }
 
-  function startGame(){
-    // Startpanel schließen, Bootstrap anstoßen
-    showStartPanel(false);
-    window.dispatchEvent(new CustomEvent('cb:ui-ready'));   // Historisch: “UI ist bereit”
-    window.dispatchEvent(new CustomEvent('cb:game-start')); // Spielstart
-    LOG('info', 'cb:ui-ready & cb:game-start dispatcht');
-  }
+    btn.addEventListener("click", ()=>{
+      // 1) Startpanel schließen
+      root.classList.add("hide");
 
-  // Startbutton
-  if(btnStart) btnStart.addEventListener('click', (e)=>{
-    e.preventDefault();
-    startGame();
-  });
+      // 2) Spielstart-Events senden
+      dispatch("cb:ui-ready");        // bleibt zur Abwärtskompatibilität
+      dispatch("cb:game-start");      // neuer, klarer Trigger
 
-  // Canvas als sichere Größe
-  if(canvas){
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    window.addEventListener('resize', () => {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
+      log("cb:ui-ready & cb:game-start dispatcht");
     });
   }
 
-  LOG('info', 'geladen (v17.8.3)');
+  document.readyState !== "loading" ? wire() : document.addEventListener("DOMContentLoaded", wire);
 })();
