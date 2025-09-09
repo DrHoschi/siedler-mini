@@ -4,6 +4,11 @@
  * - Zeigt/verbirgt das Panel zuverlässig
  * - Lässt Platzhalter-Buttons erscheinen, damit es “nicht leer” ist
  * ========================================================================== */
+
+const CATS = (window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES))
+  ? window.BUILD_CATEGORIES
+  : (window.BUILD_FALLBACK_CATEGORIES || []);
+
 (function(){
   const LOG = (lvl, msg, ...a) =>
     (window.CBLog && CBLog[lvl] ? CBLog[lvl] : console.log).call(null, `[ui-build] ${msg}`, ...a);
