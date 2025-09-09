@@ -1,0 +1,67 @@
+digraph SiedlerMiniOrtho {
+  rankdir=LR;
+  splines=ortho;
+  nodesep=0.6;
+  ranksep=1.6;
+  labelloc="t";
+  fontsize=12;
+  pad=0.2;
+  label="Siedler-Mini · Blockschaltbild (kreuzungsarm, orthogonale Kanten)\nStand: 2025-09-09";
+
+  node [shape=rect, style="rounded,filled", fillcolor="#f7f7f7", color="#999999", fontname="Helvetica", fontsize=11];
+
+  subgraph cluster_ui {
+    label="UI-Layer"; color="#c0c0c0"; style="rounded";
+    index [label="index.html\n• Einstiegspunkt\n• Canvas/Panels\n• bindet JS/CSS ein"];
+    hud   [label="ui-build.js\n• Bau-Menü / HUD\n• Aktionen/Logs"];
+    insp  [label="inspector.js\n• Tabs Logs/Tests/Assets\n• PF/Heatmap/Overlay Toggles"];
+    debug [label="debug-tools.js\n• Kurztests\n• Dev-Shortcuts"];
+    rank=same;
+  }
+
+  subgraph cluster_boot {
+    label="Boot / Loader"; color="#c0c0c0"; style="rounded";
+    boot   [label="boot.js (GameBoot)\n• Preload & Start\n• cb:assets-ready\n• lädt Map"];
+    assets [label="core/asset.js\n• lädt Atlanten/Sprites\n• draw*\n• Manifest/Cache"];
+    maprun [label="map-runtime.js\n• Map laden/prüfen\n• Grid/Tiles/Spawn\n• Übergabe an Game"];
+    rank=same;
+  }
+
+  subgraph cluster_core {
+    label="Game-Core"; color="#c0c0c0"; style="rounded";
+    game    [label="game.js\n• Loop update/render\n• State/Registry\n• getObstacleAt(tx,ty)"];
+    build   [label="buildings/*.js\n• Bau-Phasen\n• Platzierung\n• Hitbox/Collisions"];
+    pf      [label="core/v-adfinder.js\n• Hybrid-PF (Grid)\n• Kosten/Heuristik\n• Heatmap/Debug"];
+    carrier [label="core/carrier.js\n• Träger/Tasks\n• Puffer/Depot-Regeln"];
+    overlay [label="core/path-overlay.js\n• Trampelpfad-Overlay\n• Stempel + Decay"];
+    rank=same;
+  }
+
+  subgraph cluster_data {
+    label="Daten / Assets"; color="#c0c0c0"; style="rounded";
+    maps  [label="assets/maps/map-mini.json\n• Kartenlayout\n• Startobjekte"];
+    atlas [label="assets/characters/…\n• characters_sprite_highend.png\n• characters_sprite_atlas_2048.json"];
+    tex   [label="assets/tex/**\n• Terrain/Wege/Icons\n• Gebäude-Sprites"];
+    icons [label="assets/icons/**\n• UI-Symbole\n• Kategorien/Status"];
+    rank=same;
+  }
+
+  index -> boot  [label="GameBoot.start", minlen=2];
+  boot -> assets [label="Preload"];
+  boot -> maprun [label="Map laden"];
+  assets -> game [label="Sprites/Draw", minlen=2];
+  maprun -> game [label="init(game,map)", minlen=2];
+  atlas -> assets [label="lädt"];
+  tex   -> assets [label="lädt"];
+  maps  -> maprun [label="lädt"];
+  hud   -> build  [label="Platzieren"];
+  build -> game   [label="Registrieren/Rendern"];
+  hud   -> game   [label="Aktionen", minlen=2];
+  insp  -> game   [label="Toggles/Tests"];
+  debug -> game   [label="Shortcuts"];
+  game -> pf      [label="Kollisionen"];
+  carrier -> pf   [label="Routen"];
+  overlay -> pf   [label="Kosten/Wege"];
+  overlay -> game [label="Render-Layer"];
+  game -> index   [label="Canvas render", minlen=2];
+}
