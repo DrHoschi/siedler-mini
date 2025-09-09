@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siedler‑Mini · Node‑Block Playground (offline)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#151823; --fg:#e6e6e6; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; --ok:#7bd88f; --err:#fc618d; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  header{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border)}
+  header h1{font-size:16px;margin:0}
+  #toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}
+  select,button,input,textarea{background:#1a1f2e;color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+  button{cursor:pointer}
+  #wrap{display:grid;grid-template-columns:280px 1fr;gap:12px;height:calc(100% - 52px);padding:12px}
+  #palette, #right{background:var(--panel);border:1px solid var(--border);border-radius:8px;min-height:0}
+  #palette{display:flex;flex-direction:column}
+  #palette h2, #right h2{margin:0;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+  #pal-content{padding:8px;overflow:auto;display:grid;grid-template-columns:1fr;gap:6px}
+  .pal-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px dashed #2a3146;border-radius:6px}
+  .pal-item span{font-size:12px;color:#cbd5e1}
+  #stage{position:relative;height:100%;overflow:auto;background:#0b0e17}
+  #canvas{position:relative; width:2000px; height:1200px; background-size:20px 20px; background-image:
+    linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px);}
+  svg.wires{position:absolute; inset:0; pointer-events:none}
+  .node{position:absolute; min-width:160px; background:#111524; border:1px solid #2a3146; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.2)}
+  .node .head{padding:6px 10px; border-bottom:1px solid #2a3146; display:flex; justify-content:space-between; align-items:center; font-size:12px}
+  .node .title{font-weight:600}
+  .node .body{display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:8px}
+  .port{display:flex; align-items:center; gap:6px; font-size:11px; color:#cbd5e1}
+  .p-dot{width:10px; height:10px; border-radius:50%; background:#3b82f6; border:1px solid #1f2937}
+  .port.out .p-dot{background:#10b981}
+  .node.selected{outline:2px solid #64748b}
+  .ghost{position:absolute; pointer-events:none; border:1px dashed #475569; background:rgba(148,163,184,.08)}
+  .badge{font-size:10px; color:#a3bffa}
+  #status{padding:8px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--border)}
+  .small{font-size:11px; color:#aab}
+  .row{display:flex; gap:6px; align-items:center}
+  #iobox{width:100%; height:120px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Siedler‑Mini · Node‑Block Playground</h1>
+  <div id="toolbar">
+    <select id="sel-add">
+      <option value="">Baustein hinzufügen…</option>
+      <optgroup label="UI">
+        <option>index.html</option>
+        <option>ui-build.js</option>
+        <option>inspector.js</option>
+        <option>debug-tools.js</option>
+      </optgroup>
+      <optgroup label="Boot/Loader">
+        <option>boot.js</option>
+        <option>core/asset.js</option>
+        <option>map-runtime.js</option>
+      </optgroup>
+      <optgroup label="Core">
+        <option>game.js</option>
+        <option>core/v-adfinder.js</option>
+        <option>core/carrier.js</option>
+        <option>core/path-overlay.js</option>
+      </optgroup>
+      <optgroup label="Daten/Assets">
+        <option>assets/maps/map-mini.json</option>
+        <option>assets/characters/atlas</option>
+        <option>assets/tex/**</option>
+        <option>assets/icons/**</option>
+      </optgroup>
+    </select>
+    <button id="btn-ortho">Auto‑Layout (links → rechts)</button>
+    <button id="btn-snap">Snap (an/aus)</button>
+    <button id="btn-del">Löschen</button>
+    <button id="btn-save">Speichern (JSON)</button>
+    <button id="btn-load">Laden (JSON)</button>
+    <button id="btn-dot">Export DOT</button>
+    <span class="small">Klick auf Port → Verbindung starten, dann Ziel-Port klicken</span>
+  </div>
+</header>
+
+<div id="wrap">
+  <section id="palette">
+    <h2>Eigenschaften</h2>
+    <div id="pal-content">
+      <div class="row"><span class="small">Ausgewählt:</span><span id="sel-name" class="badge">—</span></div>
+      <label class="small">Titel
+        <input id="prop-title" type="text" placeholder="Titel…">
+      </label>
+      <label class="small">Inputs (kommagetrennt)
+        <input id="prop-in" type="text" placeholder="cb:ui-ready, UserClick …">
+      </label>
+      <label class="small">Outputs (kommagetrennt)
+        <input id="prop-out" type="text" placeholder="cb:assets-ready, toggle.…">
+      </label>
+      <label class="small">Position / Größe</label>
+      <div class="row">
+        <input id="prop-x" type="number" placeholder="x" style="width:70px">
+        <input id="prop-y" type="number" placeholder="y" style="width:70px">
+        <input id="prop-w" type="number" placeholder="w" style="width:70px">
+      </div>
+      <div class="row">
+        <button id="prop-apply">Übernehmen</button>
+      </div>
+      <hr style="border-color:#2a3146; width:100%">
+      <label class="small">Modell (JSON)</label>
+      <textarea id="iobox" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="btn-io-load">Aus Text laden</button>
+        <button id="btn-io-copy">Kopieren</button>
+      </div>
+    </div>
+    <div id="status">Bereit.</div>
+  </section>
+
+  <section id="right">
+    <h2>Arbeitsfläche</h2>
+    <div id="stage">
+      <div id="canvas"></div>
+      <svg class="wires"></svg>
+    </div>
+  </section>
+</div>
+
+<script>
+const model = { nodes:{}, links:[], snap:true };
+let selId=null, portStart=null;
+const PORT_SIZE = 12, GRID=20;
+const canvas = document.getElementById('canvas');
+const wires = document.querySelector('svg.wires');
+const status = (s)=>document.getElementById('status').textContent=s;
+
+function uid(){ return 'n'+Math.random().toString(36).slice(2,8); }
+function snapf(v){ return model.snap ? Math.round(v/GRID)*GRID : v; }
+
+function createNode(title, x=100, y=100, inputs=[], outputs=[], w=180){
+  const id = uid();
+  model.nodes[id] = { id, title, x, y, w, inputs:[...inputs], outputs:[...outputs] };
+  drawNode(model.nodes[id]);
+  return id;
+}
+
+function drawNode(n){
+  let el = document.getElementById(n.id);
+  if(!el){
+    el = document.createElement('div');
+    el.className='node'; el.id=n.id;
+    el.addEventListener('mousedown', (e)=>selectNode(n.id, e));
+    canvas.appendChild(el);
+    dragify(el, n);
+  }
+  el.style.left = n.x+'px'; el.style.top = n.y+'px'; el.style.width=(n.w||180)+'px';
+  el.innerHTML='';
+  const head=document.createElement('div'); head.className='head';
+  head.innerHTML = `<div class="title">${n.title}</div><div class="badge">${n.id}</div>`;
+  const body=document.createElement('div'); body.className='body';
+  const left=document.createElement('div'); const right=document.createElement('div');
+  n.inputs.forEach((name, idx)=>{
+    const port=document.createElement('div'); port.className='port in';
+    const dot=document.createElement('div'); dot.className='p-dot'; dot.title='Input: '+name;
+    dot.addEventListener('click', ()=>portClick(n.id,'in',idx));
+    const lab=document.createElement('div'); lab.textContent=name; lab.style.userSelect='none';
+    port.append(dot, lab); left.appendChild(port);
+  });
+  n.outputs.forEach((name, idx)=>{
+    const port=document.createElement('div'); port.className='port out';
+    const dot=document.createElement('div'); dot.className='p-dot'; dot.title='Output: '+name;
+    dot.addEventListener('click', ()=>portClick(n.id,'out',idx));
+    const lab=document.createElement('div'); lab.textContent=name; lab.style.userSelect='none';
+    port.append(dot, lab); right.appendChild(port);
+  });
+  body.append(left,right); el.append(head,body);
+  updateWires();
+}
+
+function dragify(el, node){
+  let drag=false,sx=0,sy=0,nx=0,ny=0;
+  el.addEventListener('mousedown', (e)=>{
+    if(e.target.classList.contains('p-dot')) return;
+    drag=true; sx=e.clientX; sy=e.clientY; nx=node.x; ny=node.y;
+    document.body.style.userSelect='none';
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if(!drag) return;
+    node.x = snapf(nx + (e.clientX - sx));
+    node.y = snapf(ny + (e.clientY - sy));
+    el.style.left=node.x+'px'; el.style.top=node.y+'px';
+    updateWires();
+  });
+  window.addEventListener('mouseup', ()=>{ drag=false; document.body.style.userSelect=''; saveIOBox(); });
+}
+
+function selectNode(id){
+  selId=id;
+  document.querySelectorAll('.node').forEach(n=>n.classList.remove('selected'));
+  document.getElementById(id).classList.add('selected');
+  const n=model.nodes[id];
+  document.getElementById('sel-name').textContent=n.title;
+  document.getElementById('prop-title').value=n.title;
+  document.getElementById('prop-in').value=n.inputs.join(', ');
+  document.getElementById('prop-out').value=n.outputs.join(', ');
+  document.getElementById('prop-x').value=n.x;
+  document.getElementById('prop-y').value=n.y;
+  document.getElementById('prop-w').value=n.w||180;
+}
+
+function portClick(nodeId, type, idx){
+  if(!portStart){ portStart={nodeId,type,idx}; status('Verbindung starten…'); return; }
+  const a=portStart, b={nodeId,type,idx};
+  if(a.nodeId===b.nodeId){ portStart=null; status('Abgebrochen.'); return; }
+  if(a.type==='out' && b.type==='in'){ model.links.push({from:a,to:b}); }
+  else if(a.type==='in' && b.type==='out'){ model.links.push({from:b,to:a}); }
+  else { status('Ungültig (benötigt out → in).'); portStart=null; return; }
+  portStart=null; updateWires(); saveIOBox();
+}
+
+function nodePortCenter(nodeId, type, idx){
+  const n=model.nodes[nodeId]; const el=document.getElementById(nodeId);
+  if(!el) return {x:n.x,y:n.y};
+  const ports=el.querySelectorAll('.port.'+(type==='in'?'in':'out'));
+  const p=ports[idx]; const dot=p.querySelector('.p-dot');
+  const r=dot.getBoundingClientRect(); const c=canvas.getBoundingClientRect();
+  return { x:(r.left-c.left)+PORT_SIZE/2, y:(r.top-c.top)+PORT_SIZE/2 };
+}
+
+function updateWires(){
+  wires.innerHTML='';
+  model.links.forEach((L,i)=>{
+    const a=nodePortCenter(L.from.nodeId,'out',L.from.idx);
+    const b=nodePortCenter(L.to.nodeId,'in',L.to.idx);
+    const mid=(a.x+b.x)/2;
+    const path=`M ${a.x},${a.y} C ${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',path); p.setAttribute('stroke','#4ade80'); p.setAttribute('fill','none'); p.setAttribute('stroke-width','2');
+    p.addEventListener('click', ()=>{ model.links.splice(i,1); updateWires(); saveIOBox(); });
+    wires.appendChild(p);
+  });
+}
+
+function saveIOBox(){ document.getElementById('iobox').value = JSON.stringify(model,null,2); }
+
+function loadFromJSON(json){
+  try{
+    const m=JSON.parse(json);
+    // clear dom
+    Object.keys(model.nodes).forEach(id=>{ const el=document.getElementById(id); if(el) el.remove(); });
+    model.nodes={}; model.links=[]; model.snap=!!m.snap;
+    Object.values(m.nodes).forEach(n=> drawNode(Object.assign({}, n)));
+    model.links=m.links||[]; updateWires(); saveIOBox(); status('Modell geladen.');
+  }catch(e){ status('JSON-Fehler: '+e.message); }
+}
+
+function exportDOT(){
+  let s='digraph G {\n  rankdir=LR; splines=ortho;\n';
+  Object.values(model.nodes).forEach(n=> s+=`  "${n.title.replace(/"/g,'\\"')}" [shape=box];\n`);
+  model.links.forEach(L=>{
+    const A=model.nodes[L.from.nodeId].title.replace(/"/g,'\\"');
+    const B=model.nodes[L.to.nodeId].title.replace(/"/g,'\\"');
+    const outL = model.nodes[L.from.nodeId].outputs[L.from.idx]||'';
+    const inL  = model.nodes[L.to.nodeId].inputs[L.to.idx]||'';
+    const lbl = (outL||inL)?` [label="${(outL||inL).replace(/"/g,'\\"')}"]`:'';
+    s+=`  "${A}" -> "${B}"${lbl};\n`;
+  });
+  s+='}\n';
+  document.getElementById('iobox').value=s; status('Als DOT exportiert.');
+}
+
+function autoLayout(){
+  const groups={ UI:[], Boot:[], Core:[], Data:[] };
+  for(const n of Object.values(model.nodes)){
+    if(/index|ui-build|inspector|debug/.test(n.title)) groups.UI.push(n);
+    else if(/boot|asset|map-runtime/.test(n.title)) groups.Boot.push(n);
+    else if(/game|v-adfinder|carrier|path-overlay/.test(n.title)) groups.Core.push(n);
+    else groups.Data.push(n);
+  }
+  const cols=[groups.UI, groups.Boot, groups.Core, groups.Data];
+  const colX=[80,420,760,1100];
+  cols.forEach((arr,ci)=> arr.forEach((n,ri)=>{ n.x=snapf(colX[ci]); n.y=snapf(80+ri*150); drawNode(n); }));
+  updateWires(); saveIOBox();
+}
+
+// UI bindings
+document.getElementById('btn-snap').onclick=()=>{ model.snap=!model.snap; status('Snap '+(model.snap?'an':'aus')); };
+document.getElementById('btn-ortho').onclick=autoLayout;
+document.getElementById('btn-del').onclick=()=>{
+  if(!selId){ status('Kein Block selektiert.'); return; }
+  model.links = model.links.filter(L=> L.from.nodeId!==selId && L.to.nodeId!==selId );
+  const el=document.getElementById(selId); if(el) el.remove();
+  delete model.nodes[selId]; selId=null; updateWires(); saveIOBox();
+};
+document.getElementById('btn-save').onclick=()=>{
+  saveIOBox();
+  const blob=new Blob([document.getElementById('iobox').value],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='siedler-node-model.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+};
+document.getElementById('btn-load').onclick=()=>{
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='application/json,.json';
+  inp.onchange=(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=()=>loadFromJSON(r.result); r.readAsText(f); };
+  inp.click();
+};
+document.getElementById('btn-dot').onclick=exportDOT;
+document.getElementById('prop-apply').onclick=()=>{
+  if(!selId) return;
+  const n=model.nodes[selId];
+  n.title=document.getElementById('prop-title').value||n.title;
+  n.inputs=(document.getElementById('prop-in').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  n.outputs=(document.getElementById('prop-out').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  n.x=parseInt(document.getElementById('prop-x').value||n.x,10);
+  n.y=parseInt(document.getElementById('prop-y').value||n.y,10);
+  n.w=parseInt(document.getElementById('prop-w').value||n.w||180,10);
+  drawNode(n); saveIOBox();
+};
+
+document.getElementById('btn-io-load').onclick=()=> loadFromJSON(document.getElementById('iobox').value);
+document.getElementById('btn-io-copy').onclick=()=>{ const t=document.getElementById('iobox'); t.select(); document.execCommand('copy'); status('In Zwischenablage kopiert.'); };
+
+document.getElementById('sel-add').onchange=(e)=>{
+  const val=e.target.value; if(!val) return;
+  const presets={
+    "index.html":{in:["DOMContentLoaded","cb:assets-ready"],out:["cb:ui-ready","GameBoot.start"]},
+    "ui-build.js":{in:["cb:build-open","hover(tile)"],out:["cb:build-place","cb:build-cancel"]},
+    "inspector.js":{in:["log-feed","user.toggle.*"],out:["toggle.*","tests.*","resources.set"]},
+    "debug-tools.js":{in:["DevShortcuts","GameRef"],out:["cb:debug-action"]},
+    "boot.js":{in:["cb:ui-ready","start.map"],out:["cb:assets-load","cb:assets-ready","Game.init"]},
+    "core/asset.js":{in:["manifest","load() calls"],out:["cb:assets-ready","draw* API"]},
+    "map-runtime.js":{in:["map.json"],out:["validated map","Game.init(game,map)"]},
+    "game.js":{in:["init(map)","input"],out:["render(canvas)","state/events"]},
+    "core/v-adfinder.js":{in:["obstacles","targets"],out:["route","heatmap"]},
+    "core/carrier.js":{in:["tasks","depot rules"],out:["deliver","idle"]},
+    "core/path-overlay.js":{in:["pf.costs","map"],out:["overlay render","decay"]},
+    "assets/maps/map-mini.json":{in:[],out:["tiles","objects","size"]},
+    "assets/characters/atlas":{in:[],out:["sprites","atlas json"]},
+    "assets/tex/**":{in:[],out:["textures"]},
+    "assets/icons/**":{in:[],out:["icons"]},
+  };
+  const p=presets[val]||{in:[],out:[]};
+  const id=createNode(val,120,120,p.in,p.out,220);
+  selectNode(id); e.target.value='';
+};
+
+(function seed(){
+  const a=createNode("index.html",80,100,["DOMContentLoaded","cb:assets-ready"],["cb:ui-ready","GameBoot.start"],220);
+  const b=createNode("boot.js",420,100,["cb:ui-ready","start.map"],["cb:assets-load","cb:assets-ready","Game.init"],220);
+  const c=createNode("core/asset.js",760,60,["manifest","load() calls"],["cb:assets-ready","draw* API"],220);
+  const d=createNode("map-runtime.js",760,200,["map.json"],["validated map","Game.init(game,map)"],220);
+  const e=createNode("game.js",1100,130,["init(map)","input"],["render(canvas)","state/events"],220);
+  model.links.push(
+    {from:{nodeId:b,type:'out',idx:1}, to:{nodeId:a,type:'in',idx:1}},
+    {from:{nodeId:a,type:'out',idx:1}, to:{nodeId:b,type:'in',idx:0}},
+    {from:{nodeId:b,type:'out',idx:0}, to:{nodeId:c,type:'in',idx:0}},
+    {from:{nodeId:c,type:'out',idx:0}, to:{nodeId:b,type:'in',idx:1}},
+    {from:{nodeId:b,type:'out',idx:2}, to:{nodeId:e,type:'in',idx:0}},
+    {from:{nodeId:d,type:'out',idx:1}, to:{nodeId:e,type:'in',idx:0}}
+  );
+  document.getElementById('iobox').value=JSON.stringify(model,null,2);
+})();
+</script>
+</body>
+</html>
