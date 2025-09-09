@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Siedler-Mini · DOT/Graphviz Editor + Vorschau</title>
+  <!-- 
+  ======================================================================
+  Datei: docs/tools/dot-editor.html
+  Projekt: Siedler-Mini
+  Version: v16.6.1
+  Zweck: Kleiner Editor mit Vorschaufenster für DOT/Graphviz-Quellen
+         (für Blockschaltbilder & Architekturdiagramme)
+  Autor: ChatGPT (GPT-5 Thinking) · 2025-09-09
+  ======================================================================
+  -->
+  <style>
+    :root {
+      --bg: #0f1115;
+      --bg-panel: #151823;
+      --fg: #e6e6e6;
+      --muted: #9aa3b2;
+      --accent: #66d9ef;
+      --ok: #7bd88f;
+      --warn: #ffd866;
+      --err: #fc618d;
+      --border: #23283b;
+      --btn: #22273a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: #11141c;
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 2;
+    }
+    header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+    header .meta { color: var(--muted); font-size: 12px; }
+    .wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      padding: 12px;
+      height: calc(100% - 58px);
+    }
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      min-height: 0;
+    }
+    .panel header {
+      background: transparent;
+      border: 0;
+      padding: 10px 12px;
+      position: static;
+    }
+    .panel header h2 { font-size: 14px; margin: 0; }
+    .panel .content { padding: 12px; display: contents; }
+    .toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      padding: 8px 12px 12px;
+      border-top: 1px dashed var(--border);
+    }
+    button, .btn {
+      border: 1px solid var(--border);
+      background: var(--btn);
+      color: var(--fg);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { filter: brightness(1.1); }
+    textarea {
+      width: 100%; height: 100%;
+      background: #0e1220;
+      color: #eaeef7;
+      border: 0;
+      outline: none;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px; line-height: 1.5;
+      resize: none;
+    }
+    #preview {
+      background: #0b0e17;
+      display: block;
+      width: 100%; height: 100%;
+      overflow: auto;
+      padding: 8px;
+    }
+    .status {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+    .status.ok { color: var(--ok); }
+    .status.warn { color: var(--warn); }
+    .status.err { color: var(--err); white-space: pre-wrap; }
+    .kbd { font-family: ui-monospace, monospace; background: #1a1f2e; padding: 1px 6px; border-radius: 4px; border:1px solid #2a3146; }
+    @media (max-width: 1100px) {
+      .wrap { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+    }
+  </style>
+  <!-- Viz.js (Graphviz in WebAssembly). Für Offline-Nutzung ggf. lokal einbinden. -->
+  <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/dist/viz.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/viz.js@2.1.2/dist/lite.render.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Siedler-Mini · DOT/Graphviz Editor</h1>
+    <div class="meta">Render: <span id="viz-status" class="kbd">Viz.js</span> · Shortcut: <span class="kbd">Ctrl/Cmd + Enter</span></div>
+  </header>
+
+  <div class="wrap">
+    <!-- Editor -->
+    <section class="panel" style="grid-column: 1;">
+      <header><h2>Editor (DOT)</h2></header>
+      <div class="content">
+        <textarea id="editor" aria-label="DOT Editor"></textarea>
+      </div>
+      <div class="toolbar">
+        <button id="btn-render">Rendern (Ctrl/Cmd+Enter)</button>
+        <button id="btn-reset">Template laden</button>
+        <button id="btn-export-svg">Als SVG exportieren</button>
+        <button id="btn-export-png">Als PNG exportieren</button>
+        <span style="flex:1"></span>
+        <button id="btn-sample-mini">Mini-Template</button>
+        <button id="btn-sample-full">Projekt-Template</button>
+      </div>
+      <div id="status" class="status">Bereit.</div>
+    </section>
+
+    <!-- Vorschau -->
+    <section class="panel" style="grid-column: 2;">
+      <header><h2>Vorschau</h2></header>
+      <div id="preview" aria-label="Vorschau (SVG)">
+        <!-- Gerendertes SVG wird hier eingefügt -->
+      </div>
+      <div class="status">Hinweis: Die Vorschau rendert als SVG. Für sehr große Graphen dauert das ggf. einen Moment.</div>
+    </section>
+  </div>
+
+  <script>
+  const el = {
+    editor: document.getElementById('editor'),
+    preview: document.getElementById('preview'),
+    status: document.getElementById('status'),
+    btnRender: document.getElementById('btn-render'),
+    btnReset: document.getElementById('btn-reset'),
+    btnExportSVG: document.getElementById('btn-export-svg'),
+    btnExportPNG: document.getElementById('btn-export-png'),
+    btnMini: document.getElementById('btn-sample-mini'),
+    btnFull: document.getElementById('btn-sample-full'),
+  };
+
+  const DOT_MINI = `digraph G {
+  rankdir=LR;
+  node [shape=rect, style="rounded,filled", color="#999999", fillcolor="#f7f7f7", fontname="Helvetica"];
+  label="Mini-Beispiel · Blockschaltbild"; labelloc=t; fontsize=12;
+  "index.html" -> "boot.js" [label="Start"];
+  "boot.js" -> "core/asset.js" [label="Preload"];
+  "boot.js" -> "map-runtime.js" [label="Map laden"];
+  "map-runtime.js" -> "game.js" [label="init(map)"];
+  "ui-build.js" -> "game.js" [label="bauen"];
+  "inspector.js" -> "game.js" [label="toggles"];
+  "game.js" -> "index.html" [label="render"];
+}`;
+
+  const DOT_FULL = `digraph "Siedler-Mini" {
+  rankdir=LR; pad=0.2; fontsize=12; labelloc=t;
+  label="Siedler-Mini · Blockschaltbild (Dateien & Funktionen)\\nStand: 2025-09-09";
+  node [shape=rect, style="rounded,filled", color="#999999", fillcolor="#f7f7f7", fontname="Helvetica", fontsize=11];
+
+  subgraph cluster_ui {
+    label="UI-Layer"; color="#c0c0c0"; style="rounded";
+    index [label="index.html\\n• Einstiegspunkt\\n• <canvas> + Panels\\n• bindet JS/CSS ein"];
+    css   [label="styles.css\\n• Theme/Variablen\\n• Layout Panels"];
+    hud   [label="ui-build.js\\n• Bau-Menü / HUD\\n• Buttons/Handling\\n• Logs"];
+    insp  [label="inspector.js\\n• Tabs: Logs/Tests/Assets\\n• Toggles: Heatmap/PF/Overlay"];
+    debug [label="debug-tools.js\\n• Kurztests\\n• Konsolen-Logs\\n• Dev-Shortcuts"];
+  }
+  subgraph cluster_boot {
+    label="Boot / Loader"; color="#c0c0c0"; style="rounded";
+    boot   [label="boot.js (GameBoot)\\n• Preload & Start\\n• cb:assets-ready\\n• lädt Map"];
+    assets [label="core/asset.js (Assets)\\n• Laden Sprites/Atlanten\\n• draw*\\n• Manifest/Cache"];
+    maprun [label="map-runtime.js\\n• Map laden/validieren\\n• Grid/Tiles/Spawn\\n• Übergabe an Game"];
+  }
+  subgraph cluster_core {
+    label="Game-Core"; color="#c0c0c0"; style="rounded";
+    game    [label="game.js\\n• Loop update/render\\n• State/Registry\\n• getObstacleAt(tx,ty)"];
+    build   [label="buildings/*.js\\n• Bau-Logik/Phasen\\n• Platzierung\\n• Hitbox/Collisions"];
+    pf      [label="core/v-adfinder.js\\n• Hybrid-PF (Grid)\\n• Kosten/Heuristik\\n• Heatmap/Debug"];
+    carrier [label="core/carrier.js\\n• Tasks/Warenfluss\\n• Idle/Puffer\\n• Depot/Rathaus Regeln"];
+    overlay [label="core/path-overlay.js\\n• Trampelpfad-Overlay\\n• Stempel + Decay\\n• Debug-Toggle"];
+  }
+  subgraph cluster_data {
+    label="Daten / Assets"; color="#c0c0c0"; style="rounded";
+    maps  [label="assets/maps/map-mini.json\\n• Kartenlayout\\n• Startobjekte\\n• Tile-Größe"];
+    atlas [label="assets/characters/...\\n• characters_sprite_highend.png\\n• characters_sprite_atlas_2048.json"];
+    tex   [label="assets/tex/**\\n• Terrain/Wege/Icons\\n• Gebäude-Sprites"];
+    icons [label="assets/icons/**\\n• UI-Symbole\\n• Kategorien/Status"];
+  }
+
+  index -> boot  [label="GameBoot.start"];
+  assets -> game [label="Sprites/Draw"];
+  atlas -> assets [label="lädt"];
+  tex   -> assets [label="lädt"];
+  maprun -> game [label="init(game,map)"];
+  maps -> maprun [label="lädt"];
+  hud -> game [label="Aktionen"];
+  insp -> game [label="Toggles/Tests"];
+  debug -> game [label="Shortcuts"];
+  hud -> build [label="Platzieren"];
+  build -> game [label="Registrieren/Rendern"];
+  game -> pf [label="Kollisionen"];
+  carrier -> pf [label="Routen"];
+  overlay -> pf [label="Kosten/Wege"];
+  overlay -> game [label="Render-Layer"];
+  game -> index [label="Canvas render"];
+}`;
+
+  const LS_KEY = "siedlerMini.dotEditor.content";
+
+  function setStatus(text, type="") {
+    el.status.className = "status " + (type||"");
+    el.status.textContent = text;
+  }
+
+  function renderDOT() {
+    const src = el.editor.value;
+    setStatus("Rendern…");
+    try {
+      const viz = new Viz();
+      viz.renderSVGElement(src).then(svg => {
+        el.preview.innerHTML = "";
+        el.preview.appendChild(svg);
+        setStatus("OK: Diagramm gerendert.", "ok");
+        try { localStorage.setItem(LS_KEY, src); } catch {}
+      }).catch(err => {
+        console.error(err);
+        setStatus("Fehler beim Rendern:\\n" + (err && err.message ? err.message : String(err)), "err");
+      });
+    } catch (e) {
+      console.error(e);
+      setStatus("Fehler: Viz.js konnte nicht initialisiert werden.", "err");
+    }
+  }
+
+  function download(filename, data, type="image/svg+xml;charset=utf-8") {
+    const blob = new Blob([data], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    requestAnimationFrame(()=>{
+      URL.revokeObjectURL(url);
+      a.remove();
+    });
+  }
+
+  function exportSVG() {
+    const svg = el.preview.querySelector("svg");
+    if (!svg) { setStatus("Kein SVG zum Exportieren vorhanden.", "warn"); return; }
+    const xml = new XMLSerializer().serializeToString(svg);
+    download("diagramm.svg", xml);
+    setStatus("SVG exportiert.", "ok");
+  }
+
+  function exportPNG() {
+    const svg = el.preview.querySelector("svg");
+    if (!svg) { setStatus("Kein SVG zum Exportieren vorhanden.", "warn"); return; }
+    const xml = new XMLSerializer().serializeToString(svg);
+    const svg64 = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const bbox = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal : {width: svg.clientWidth, height: svg.clientHeight, x:0, y:0};
+      const w = Math.max(1, bbox.width || svg.clientWidth || 1200);
+      const h = Math.max(1, bbox.height || svg.clientHeight || 800);
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob((blob)=>{
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "diagramm.png";
+        document.body.appendChild(a);
+        a.click();
+        requestAnimationFrame(()=>{
+          URL.revokeObjectURL(url);
+          a.remove();
+        });
+        setStatus("PNG exportiert.", "ok");
+      });
+    };
+    img.onerror = () => setStatus("PNG-Export fehlgeschlagen (SVG konnte nicht geladen werden).", "err");
+    img.src = svg64;
+  }
+
+  function loadTemplate(which="full") {
+    const tpl = which === "mini" ? DOT_MINI : DOT_FULL;
+    el.editor.value = tpl;
+    setStatus("Template geladen. Rendern mit Ctrl/Cmd+Enter.", "ok");
+  }
+
+  function autoResizeEditor() {
+    const panel = el.editor.closest(".panel");
+    const toolbar = panel.querySelector(".toolbar");
+    const header = panel.querySelector("header");
+    const panelRect = panel.getBoundingClientRect();
+    const others = (toolbar?.offsetHeight||0) + (header?.offsetHeight||0) + 60;
+    el.editor.style.height = (panelRect.height - others) + "px";
+  }
+
+  window.addEventListener('resize', autoResizeEditor);
+  el.btnRender.addEventListener('click', renderDOT);
+  el.btnReset.addEventListener('click', () => loadTemplate("full"));
+  el.btnExportSVG.addEventListener('click', exportSVG);
+  el.btnExportPNG.addEventListener('click', exportPNG);
+  el.btnMini.addEventListener('click', () => loadTemplate("mini"));
+  el.btnFull.addEventListener('click', () => loadTemplate("full"));
+  window.addEventListener('keydown', (ev)=>{
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+      ev.preventDefault();
+      renderDOT();
+    }
+  });
+
+  (function init(){
+    let restored = "";
+    try { restored = localStorage.getItem(LS_KEY) || ""; } catch {}
+    if (restored) {
+      el.editor.value = restored;
+      setStatus("Letzten Stand geladen. Rendern mit Ctrl/Cmd+Enter.");
+    } else {
+      loadTemplate("full");
+    }
+    autoResizeEditor();
+  })();
+  </script>
+</body>
+</html>
