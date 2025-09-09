@@ -60,4 +60,49 @@
   }
 
   boot();
+// === DIAGNOSE: Map-Start sichtbar machen =========================
+(function(){
+  try{
+    // nur einmal verkabeln
+    if (window.__MAP_DIAG_WIRED__) return;
+    window.__MAP_DIAG_WIRED__ = true;
+
+    const ok   = (window.CBLog?.ok   || console.log).bind(console, "[map]");
+    const info = (window.CBLog?.info || console.log).bind(console, "[ui-start]");
+    const err  = (window.CBLog?.err  || console.error).bind(console, "[map]");
+
+    async function tryLoadMap(){
+      const canvas = document.getElementById("game");
+      const url = canvas?.dataset?.map;
+      info("Start → %s", url || "(kein data-map)");
+
+      if (!url){
+        err("Kein data-map am #game Canvas gefunden.");
+        return;
+      }
+      try{
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP "+res.status);
+        await res.json(); // nur zum Validieren
+        ok("geladen: %s", url);
+        // Optional: nach erfolgreichem Laden Event senden
+        try { window.dispatchEvent(new CustomEvent("cb:map-ready", { detail:{ url } })); } catch(_){}
+      }catch(e){
+        err("Laden fehlgeschlagen: %s → %s", url, e && e.message || e);
+      }
+    }
+
+    // Wenn das UI startbereit ist, versuchen wir den Map-Load anzustoßen
+    window.addEventListener("cb:game-start", tryLoadMap);
+
+    // Falls dein Button bereits cb:game-start gefeuert hat, sofort testen:
+    // (z.B. wenn dieses Snippet später geladen wurde)
+    setTimeout(()=>{
+      try {
+        // kleiner Probelauf, ohne doppelt zu nerven
+        tryLoadMap();
+      } catch(_){}
+    }, 0);
+
+  }catch(_){}
 })();
