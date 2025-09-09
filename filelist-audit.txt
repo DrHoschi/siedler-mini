@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 234
+Gesamt Dateien: 247
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -69,6 +69,9 @@ Gesamt Dateien: 234
  - manifest.webmanifest
  - package.json
  - README.md
+ - siedler-node-playground-codegen.html
+ - siedler-node-playground-trace.html
+ - siedler-node-playground.html
  - storage.js
  - sw.js
  - unitLogic.js

@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-08T19:08:09.236Z",
+  "createdAt": "2025-09-09T21:29:18.508Z",
   "root": ".",
-  "count": 264,
+  "count": 280,
   "entries": [
     {
       "type": "dir",
@@ -224,7 +224,7 @@
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
-      "size": 4157
+      "size": 3699
     },
     {
       "type": "file",
@@ -281,17 +281,17 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.core.js",
-      "size": 10159
+      "size": 5663
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 5717
+      "size": 5292
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.logs.js",
-      "size": 7913
+      "size": 7943
     },
     {
       "type": "file",
@@ -904,27 +904,27 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 4250
+      "size": 3180
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 6318
+      "size": 6862
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 10945
+      "size": 2635
     },
     {
       "type": "file",
       "path": "assets/ui/ui-start.css",
-      "size": 1900
+      "size": 834
     },
     {
       "type": "file",
       "path": "assets/ui/ui-start.js",
-      "size": 6849
+      "size": 875
     },
     {
       "type": "file",
@@ -1131,6 +1131,68 @@
     },
     {
       "type": "dir",
+      "path": "tools/dot-editor/"
+    },
+    {
+      "type": "dir",
+      "path": "tools/dot-editor/vendor/"
+    },
+    {
+      "type": "dir",
+      "path": "tools/dot-editor/vendor/viz/"
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/vendor/viz/lite.render.js",
+      "size": 1439383
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/vendor/viz/viz.js",
+      "size": 11468
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/dot-editor-pro.html",
+      "size": 7991
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/dot-editor.html",
+      "size": 13589
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/dot-editor.md",
+      "size": 1162
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/siedler-mini-blockschaltbild-ortho.dot",
+      "size": 2995
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/siedler-mini-blockschaltbild.dot",
+      "size": 3052
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/siedler-mini-blockschaltbild.png",
+      "size": 300925
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/siedler-mini-blockschaltbild.svg",
+      "size": 28511
+    },
+    {
+      "type": "file",
+      "path": "tools/dot-editor/Viz.render.txt.pdf",
+      "size": 542327
+    },
+    {
+      "type": "dir",
       "path": "tools/level-editor/"
     },
     {
@@ -1241,12 +1303,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 26232
+      "size": 26234
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10129
+      "size": 10131
     },
     {
       "type": "file",
@@ -1261,7 +1323,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5111
+      "size": 5057
     },
     {
       "type": "file",
@@ -1277,6 +1339,21 @@
       "type": "file",
       "path": "README.md",
       "size": 1129
+    },
+    {
+      "type": "file",
+      "path": "siedler-node-playground-codegen.html",
+      "size": 26098
+    },
+    {
+      "type": "file",
+      "path": "siedler-node-playground-trace.html",
+      "size": 20276
+    },
+    {
+      "type": "file",
+      "path": "siedler-node-playground.html",
+      "size": 17526
     },
     {
       "type": "file",
