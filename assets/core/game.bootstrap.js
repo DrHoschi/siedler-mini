@@ -1,50 +1,63 @@
-/* ============================================================================
- * Game Bootstrap – minimaler Starter, damit Karte & Systeme hochfahren
- * Version: v17.8.3
- * - Registriert “cb:game-start” und lädt die Map aus <canvas data-map="...">
- * - Sendet Log-Marker wie in deinen bisherigen Logs
- * ========================================================================== */
+/* game.bootstrap.js — v17.8.3 (stabil) */
 (function(){
-  const LOG = (lvl, msg, ...a) =>
-    (window.CBLog && CBLog[lvl] ? CBLog[lvl] : console.log).call(null, `[bootstrap] ${msg}`, ...a);
+  "use strict";
+  const MOD='[bootstrap]';
+  const ok  =(m)=> (window.CBLog?.ok||console.log)(`${MOD} ${m}`);
+  const warn=(m)=> (window.CBLog?.warn||console.warn)(`${MOD} ${m}`);
 
-  const canvas = document.getElementById('game');
+  // kleine Helfer
+  function on(evt, fn){ try{ window.addEventListener(evt, fn); }catch(_){} }
+  function fire(evt, detail){ try{ window.dispatchEvent(new CustomEvent(evt,{detail})); }catch(_){} }
 
-  async function loadJSON(url){
-    const res = await fetch(url, { cache:'no-store' });
-    if(!res.ok) throw new Error(`Map laden fehlgeschlagen: ${res.status}`);
-    return await res.json();
-  }
-
-  async function start(){
+  // Map laden (Datei aus data-map am Canvas)
+  async function loadMapFromCanvas(){
+    const cvs = document.getElementById("game");
+    const url = cvs?.getAttribute("data-map") || "assets/maps/map-mini.json";
     try{
-      const mapUrl = canvas?.dataset?.map;
-      if(!mapUrl) throw new Error('Keine Map angegeben (data-map fehlt).');
-
-      LOG('info', 'Modul geladen (v17.6.1)');
-      const data = await loadJSON(mapUrl);
-
-      // simple Hintergrundfarbe/“sichtbar machen”, bis Renderer übernimmt
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#243035';
-      ctx.fillRect(0,0,canvas.width,canvas.height);
-      ctx.fillStyle = '#bdc3c7';
-      ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
-      ctx.fillText(`Map geladen: ${mapUrl}`, 16, 24);
-
-      // Signal an Renderer/Engine (deine bestehenden Module können darauf hören)
-      window.dispatchEvent(new CustomEvent('cb:map-loaded', { detail:{ data } }));
-
-      LOG('info', 'ready (v17.6.1) [Legacy-Bridge aktiv]');
-    }catch(err){
-      console.error(err);
-      LOG('warn', 'Startfehler: ' + (err?.message || err));
+      const res = await fetch(url, { cache:"no-store" });
+      const data = await res.json();
+      // Übergib der Engine
+      if(window.Game?.Map?.load) { await window.Game.Map.load(data); }
+      // Falls deine Engine nur Overlay-Hooks nutzt:
+      window.__CURRENT_MAP__ = data;
+      return true;
+    }catch(e){
+      warn("Map konnte nicht geladen werden: "+(e&&e.message));
+      return false;
     }
   }
 
-  // Start wenn UI “Start” drückt:
-  window.addEventListener('cb:game-start', start, { once: true });
+  // Render anschieben (ein einfacher Ticker → Event-gesteuert zeichnen)
+  function startRender(){
+    // Deine Renderer-Datei registriert auf 'cb:render-frame'
+    function tick(){ try{ fire('cb:render-frame'); requestAnimationFrame(tick); }catch(_){ requestAnimationFrame(tick); } }
+    tick();
+  }
 
-  // Marker wie in deinen Logs:
-  (window.CBLog?.info || console.log)('[bootstrap.tests] Test-Event-Bridge aktiv.');
+  // Demo: Carrier/Tests brücken (damit bekannte Demos wieder funktionieren)
+  function wireTestBridge(){
+    // Tests feuern eigene Logs; hier nur „Brücke“, damit nichts crasht
+    ok("Test-Event-Bridge aktiv.");
+  }
+
+  async function boot(){
+    ok("Modul geladen (v17.6.1)");
+
+    // Reihenfolge:
+    // 1) Renderer initialisiert sich selbst beim Laden (core.render.js)
+    // 2) Map laden (nach cb:game-start)
+    // 3) UI & Build getrennt
+
+    on('cb:game-start', async ()=>{
+      // Map
+      await loadMapFromCanvas();
+      // Render-Loop
+      startRender();
+      // Tests/Demos anklemmen
+      wireTestBridge();
+      ok("ready (v17.6.1) [Legacy-Bridge aktiv]");
+    });
+  }
+
+  boot();
 })();
