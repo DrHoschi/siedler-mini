@@ -1,268 +1,185 @@
-/*
-  assets/ui/ui-build.css — v17.6.0
-  CODE_STYLE:
-    - Lesbare Abschnitte
-    - Keine globalen Resets, nur Namespaces
-    - Mobile-first, responsive Grid
-    - Abwärtskompatibel: Legacy (#build-panel …) + neues Dock (#build-dock …)
-*/
-
 /* ============================================================================
-   LEGACY: Bottom-Panel (Rückwärtskompatibilität)
-   ========================================================================== */
+ * Datei: assets/ui/ui-build.js
+ * Projekt: Siedler-Mini
+ * Version: v17.8.4
+ *
+ * Aufgaben
+ *  - Bau-Menü im Panel #build-panel rendern
+ *  - Kategorien + Einträge aus window.BUILD_CATEGORIES (Fallback vorhanden)
+ *  - Auswahl als Event nach außen geben:  cb:build-select { detail:{ type } }
+ *  - Komfort: aktuelles Tool hervorheben, "Kein Tool" zum Abwählen
+ *  - Bootstrap-Hook: Beim 'cb:game-start' einen Test-Carrier-Durchlauf starten
+ *
+ * Garantien / Stil
+ *  - Keine externen Abhängigkeiten
+ *  - Sanfte Logs via CBLog (fällt auf console.* zurück)
+ *  - Defensive Fallbacks (UI rendert auch ohne Datenquellen)
+ * ========================================================================== */
 
-/* Panel-Container (unten) */
-#build-panel {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 100050; /* unter Inspector-Panel, über Buttons */
-  display: none;   /* initial geschlossen */
-  padding: 12px 14px 16px;
-  background: linear-gradient(to top, rgba(8,12,10,.94), rgba(8,12,10,.86));
-  border-top: 1px solid rgba(255,255,255,.07);
-  box-shadow: 0 -24px 60px rgba(0,0,0,.45);
-  backdrop-filter: blur(8px);
-  color: #fff;
-  user-select: none;
-}
+(function () {
+  "use strict";
 
-/* wenn offen */
-#build-panel.open { display: block; }
+  var MOD = "[ui-build]";
+  var VER = "v17.8.4";
 
-/* Header (Tabs + Schließen) */
-#build-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-#build-head .title {
-  font-weight: 700;
-  letter-spacing: .2px;
-  opacity: .9;
-}
-#build-head .spacer { flex: 1; }
-#build-close {
-  border: none;
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: rgba(255,255,255,.10);
-  color: #fff;
-  cursor: pointer;
-}
+  // --- Logger ---------------------------------------------------------------
+  var ok   = function(m){ try{ (window.CBLog?.ok   || console.log   )(MOD+" "+m); }catch(_){ console.log(MOD+" "+m); } };
+  var info = function(m){ try{ (window.CBLog?.info || console.log   )(MOD+" "+m); }catch(_){ console.log(MOD+" "+m); } };
+  var warn = function(m){ try{ (window.CBLog?.warn || console.warn  )(MOD+" "+m); }catch(_){ console.warn(MOD+" "+m); } };
+  var err  = function(m){ try{ (window.CBLog?.err  || console.error )(MOD+" "+m); }catch(_){ console.error(MOD+" "+m); } };
 
-/* Tabs */
-#build-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-#build-tabs .tab {
-  border: none;
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(255,255,255,.12);
-  color: #fff;
-  cursor: pointer;
-  font-size: 13px;
-}
-#build-tabs .tab.active {
-  background: rgba(76,175,80,.30);
-}
+  // --- DOM Helper -----------------------------------------------------------
+  function byId(id){ return document.getElementById(id); }
+  function el(tag, cls, txt){
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt != null) n.textContent = txt;
+    return n;
+  }
 
-/* Body */
-#build-body {
-  margin-top: 8px;
-}
+  // --- Datenquellen (defensiv) ----------------------------------------------
+  // Bevorzugt: extern bereitgestellte Kategorien
+  // Format erwartet: [{ id, title, items:[{id,label,todo?}] }]
+  function getCategories(){
+    var cats = window.BUILD_CATEGORIES;
+    if (cats && Array.isArray(cats) && cats.length) return cats;
 
-/* Grid der Items */
-.build-grid {
-  display: grid;
-  grid-template-columns: repeat( auto-fill, minmax(92px, 1fr) );
-  gap: 10px;
-}
+    // Fallback – klein, aber sofort nutzbar
+    return [
+      { id:"general", title:"Allgemein", items:[
+        { id:"place-road",        label:"Straße" },
+        { id:"place-remove",      label:"Abreißen" }
+      ]},
+      { id:"production", title:"Produktion", items:[
+        { id:"place-lumberjack",  label:"Holzfäller" },
+        { id:"place-stonecutter", label:"Steinmetz" },
+        { id:"place-fisher",      label:"Fischer", todo:true } // Beispiel: noch WIP
+      ]}
+    ];
+  }
 
-/* Item-Karte */
-.build-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 12px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.08);
-  cursor: pointer;
-  transition: transform .06s ease, background .12s ease, border-color .12s ease;
-}
-.build-item:hover {
-  transform: translateY(-1px);
-  background: rgba(255,255,255,.10);
-  border-color: rgba(255,255,255,.16);
-}
-.build-item.active {
-  outline: 2px solid rgba(120,200,255,.65);
-  background: rgba(120,200,255,.12);
-}
+  // --- State ----------------------------------------------------------------
+  var state = {
+    currentTool: null
+  };
 
-/* Thumbnail */
-.build-thumb {
-  width: 72px;
-  height: 72px;
-  border-radius: 10px;
-  background: rgba(0,0,0,.28);
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-}
-.build-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  image-rendering: auto;
-}
+  // --- Auswahl weiterreichen ------------------------------------------------
+  function selectTool(type){
+    state.currentTool = type || null;
+    try {
+      window.dispatchEvent(new CustomEvent("cb:build-select", { detail: { type: state.currentTool } }));
+    } catch(_){}
+    highlightSelection();
+    info("Build-Aktion: " + (state.currentTool || "(kein Tool)"));
+  }
 
-/* Titel */
-.build-name {
-  font-size: 12px;
-  line-height: 1.15;
-  text-align: center;
-  letter-spacing: .2px;
-  opacity: .92;
-}
+  // --- Rendering -------------------------------------------------------------
+  function render(){
+    var host = byId("build-panel");
+    if (!host){
+      warn("Build-Panel (id=build-panel) fehlt.");
+      return;
+    }
 
-/* Hinweiszeile unten */
-#build-hint {
-  margin-top: 10px;
-  font-size: 12px;
-  opacity: .7;
-}
+    // Container-Grundlayout (CSS kommt aus assets/ui/ui-build.css)
+    host.innerHTML = "";
+    var wrap  = el("div", "uib-wrap");
+    var head  = el("div", "uib-head");
+    var title = el("div", "uib-title", "Bau-Menü");
+    var btnNone = el("button", "uib-none", "Kein Tool");
+    btnNone.type = "button";
+    btnNone.addEventListener("click", function(){ selectTool(null); });
 
-/* Kleinere Screens */
-@media (max-width: 480px) {
-  .build-thumb { width: 64px; height: 64px; }
-  .build-grid { gap: 8px; }
-}
+    head.appendChild(title);
+    head.appendChild(btnNone);
+    wrap.appendChild(head);
 
-/* Wenn Panel offen: Buttons im Index hochrücken (per body-Klasse) */
-body.has-build-open #btn-build,
-body.has-build-open #btn-inspector {
-  bottom: 240px; /* gleich wie in index.html */
-}
+    // Kategorien + Items
+    var cats = getCategories();
+    cats.forEach(function(cat){
+      var sec  = el("section", "uib-sec");
+      var h    = el("h3", "uib-sec-title", cat.title || cat.id);
+      var row  = el("div", "uib-row");
+      sec.appendChild(h);
 
+      (cat.items||[]).forEach(function(it){
+        var b = el("button", "uib-item", it.label || it.id);
+        b.type = "button";
+        if (it.todo){
+          b.disabled = true;
+          b.classList.add("is-disabled");
+        } else {
+          b.dataset.tool = it.id;
+          b.addEventListener("click", function(){
+            selectTool(it.id);
+          });
+        }
+        row.appendChild(b);
+      });
 
-/* ============================================================================
-   NEU: Seitliches Dock (auto-generiert von ui-build.js v17.6+)
-   ========================================================================== */
+      sec.appendChild(row);
+      wrap.appendChild(sec);
+    });
 
-#build-dock {
-  /* visuelle Details kommen großteils aus Inline-Styles (JS),
-     hier nur Ergänzungen & harte Defaults */
-  contain: layout paint;
-  overflow: auto;
-  scrollbar-gutter: stable both-edges;
-}
+    host.appendChild(wrap);
+    highlightSelection();
+  }
 
-/* Tabs-Leiste */
-#build-dock #build-tabs {
-  gap: 8px;
-}
-#build-dock #build-tabs button {
-  outline: none;
-}
-#build-dock #build-tabs button:focus-visible {
-  box-shadow: 0 0 0 2px #93c5fd, 0 0 0 4px #1d4ed8;
-}
+  // Aktive Auswahl visuell anmarkern
+  function highlightSelection(){
+    var host = byId("build-panel");
+    if (!host) return;
+    var btns = host.querySelectorAll(".uib-item");
+    btns.forEach(function(b){
+      var isActive = (b.dataset.tool === state.currentTool);
+      b.classList.toggle("is-active", !!isActive);
+    });
+  }
 
-/* Items-Grid */
-#build-dock #build-items {
-  /* Fallback, falls JS-Stile fehlen */
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px,1fr));
-  gap: 10px;
-}
+  // --- Bridge: Build öffnen/schließen ---------------------------------------
+  // Das Öffnen/Schließen übernimmt ui-bridge.js, wir reagieren nur auf Events
+  window.addEventListener("cb:build-open", function(){
+    // Panel ist sichtbar — sicherstellen, dass Rendering steht
+    try{ render(); }catch(e){ err("Render bei open: "+e.message); }
+    ok("Build geöffnet ("+VER+").");
+  });
 
-/* Karten (neu) – zusätzliche Zustände */
-#build-dock .build-item:focus-visible {
-  outline: 2px solid #93c5fd;
-  outline-offset: 3px;
-}
-#build-dock .build-item[disabled],
-#build-dock .build-item:disabled {
-  cursor: not-allowed !important;
-  opacity: .6;
-  filter: saturate(.6);
-}
+  window.addEventListener("cb:build-close", function(){
+    ok("Build geschlossen.");
+  });
 
-/* Kleine Badge „bald“ / „todo“ */
-.badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: .2px;
-  background: rgba(148,163,184,.25);
-  color: #e5e7eb;
-  border: 1px solid rgba(148,163,184,.35);
-  user-select: none;
-}
-.badge.badge-ok {
-  background: rgba(34,197,94,.20);
-  border-color: rgba(34,197,94,.35);
-  color: #d1fae5;
-}
-.badge.badge-warn {
-  background: rgba(251,191,36,.20);
-  border-color: rgba(251,191,36,.35);
-  color: #fef3c7;
-}
+  // --- Bootstrap-Hook --------------------------------------------------------
+  // Dein Wunsch: Beim Spielstart automatisch Carrier-Demo anstoßen
+  window.addEventListener("cb:game-start", function(){
+    try{
+      window.dispatchEvent(new CustomEvent("tests:carrier-demo"));
+      (window.CBLog?.ok || console.log)("[tests] Carrier-Demo gestartet (Bootstrap)");
+    }catch(_){}
+  });
 
-/* Deutlich sichtbarer Fokus für Tastaturnutzer auf allen Buttons */
-#build-dock button:focus-visible,
-#build-panel button:focus-visible {
-  outline: 2px solid #93c5fd;
-  outline-offset: 2px;
-}
+  // --- UI-Integration --------------------------------------------------------
+  // Falls Du das Panel auch ohne die FABs direkt testen willst:
+  // window.GameUI?.openBuild() kommt aus assets/ui/ui-bridge.js
+  try{
+    window.GameUI = window.GameUI || {};
+    // kleine bequeme API (optional)
+    window.GameUI.setBuildTool = selectTool;
+  }catch(_){}
 
-/* Sanfte Scrollbars (WebKit/Blink) – optional */
-#build-dock::-webkit-scrollbar,
-#build-panel::-webkit-scrollbar {
-  width: 10px; height: 10px;
-}
-#build-dock::-webkit-scrollbar-thumb,
-#build-panel::-webkit-scrollbar-thumb {
-  background: rgba(100,116,139,.45);
-  border-radius: 10px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-#build-dock::-webkit-scrollbar-thumb:hover,
-#build-panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(148,163,184,.55);
-}
-#build-dock::-webkit-scrollbar-track,
-#build-panel::-webkit-scrollbar-track {
-  background: rgba(15,23,42,.35);
-  border-radius: 10px;
-}
+  // --- Auto-Init -------------------------------------------------------------
+  // Wenn die UI bereit ist, initial ein erstes Rendern (Panel bleibt zu)
+  window.addEventListener("cb:ui-ready", function(){
+    try{ render(); }catch(e){ err("Initiales Rendern: "+e.message); }
+    ok("geladen ("+VER+")");
+  });
 
-/* Firefox: dezente Scrollbar */
-@supports (scrollbar-width: thin) {
-  #build-dock { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.55) rgba(15,23,42,.35); }
-  #build-panel { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.55) rgba(15,23,42,.35); }
-}
+  // Fallback, falls cb:ui-ready in sehr früher Phase schon feuert
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    try{ render(); }catch(e){ err("Render (DOM ready): "+e.message); }
+  } else {
+    document.addEventListener("DOMContentLoaded", function(){
+      try{ render(); }catch(e){ err("Render (DOMContentLoaded): "+e.message); }
+    });
+  }
 
-/* Touch: etwas größere Touch-Ziele */
-@media (hover: none) and (pointer: coarse) {
-  #build-dock #build-tabs button { padding: 10px 14px; }
-  #build-dock .build-item { padding: 12px; }
-}
-
-/* Sicherheit: Dock soll FABs nicht überdecken */
-#btn-build, #btn-inspector {
-  position: fixed;
-  z-index: 2147483647 !important;
-}
+})();
