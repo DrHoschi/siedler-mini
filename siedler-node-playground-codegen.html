@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siedler-Mini · Node-Playground + Code-Export + Vorschau</title>
+<style>
+  :root { --bg:#0f1115; --panel:#151823; --fg:#e6e6e6; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; --ok:#7bd88f; --edge:#4ade80; --edgeHL:#a7f3d0; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  header{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  header h1{font-size:16px;margin:0}
+  #toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}
+  select,button,input,textarea{background:#1a1f2e;color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+  button{cursor:pointer}
+  #wrap{display:grid;grid-template-columns:320px 1fr 420px;gap:12px;height:calc(100% - 58px);padding:12px}
+  #left,#right,#side{background:var(--panel);border:1px solid var(--border);border-radius:8px;min-height:0}
+  #left h2,#right h2,#side h2{margin:0;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+  #pal-content{padding:8px;overflow:auto;display:grid;gap:8px}
+  #stage{position:relative;height:100%;overflow:auto;background:#0b0e17}
+  #canvas{position:relative; width:2400px; height:1400px; background-size:20px 20px; background-image:
+    linear-gradient(to right, rgba(255,255,255,.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.04) 1px, transparent 1px);}
+  svg.wires{position:absolute; inset:0; pointer-events:none}
+  .node{position:absolute; min-width:160px; background:#111524; border:1px solid #2a3146; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.2); transition:box-shadow .2s, transform .15s}
+  .node .head{padding:6px 10px; border-bottom:1px solid #2a3146; display:flex; justify-content:space-between; align-items:center; font-size:12px}
+  .node .title{font-weight:600}
+  .node .body{display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:8px}
+  .port{display:flex; align-items:center; gap:6px; font-size:11px; color:#cbd5e1}
+  .p-dot{width:10px; height:10px; border-radius:50%; background:#3b82f6; border:1px solid #1f2937}
+  .port.out .p-dot{background:#10b981}
+  .node.selected{outline:2px solid #64748b}
+  .node.active{box-shadow:0 0 0 2px #38bdf8, 0 8px 30px rgba(56,189,248,.25); transform:translateY(-2px)}
+  .badge{font-size:10px; color:#a3bffa}
+  #status{padding:8px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--border)}
+  .small{font-size:11px; color:#aab}
+  .row{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+  #iobox{width:100%; height:140px}
+  .edgeHL{stroke:var(--edgeHL) !important; stroke-width:4 !important; filter: drop-shadow(0 0 4px rgba(167,243,208,0.6));}
+  /* code / preview panel */
+  #codeTabs{display:flex; gap:6px; padding:8px; border-bottom:1px dashed var(--border)}
+  #codeTabs button{font-size:12px}
+  .codeview{height:260px; overflow:auto; border-bottom:1px solid var(--border); background:#0e1220}
+  pre{margin:0; padding:12px; font-size:12px; line-height:1.4; color:#eaeef7}
+  .fileRow{display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px dashed #2a3146; font-size:12px}
+  #preview{height:300px; background:#000; border-top:1px solid var(--border)}
+  #preview iframe{width:100%; height:100%; border:0; background:#111}
+  .hint{color:#9aa3b2; font-size:12px; padding:6px 8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Node-Playground + Code-Export + Vorschau</h1>
+  <div id="toolbar">
+    <select id="sel-add">
+      <option value="">Baustein hinzufügen…</option>
+      <optgroup label="UI">
+        <option>index.html</option>
+        <option>ui-build.js</option>
+        <option>inspector.js</option>
+        <option>debug-tools.js</option>
+      </optgroup>
+      <optgroup label="Boot/Loader">
+        <option>boot.js</option>
+        <option>core/asset.js</option>
+        <option>map-runtime.js</option>
+      </optgroup>
+      <optgroup label="Core">
+        <option>game.js</option>
+        <option>core/v-adfinder.js</option>
+        <option>core/carrier.js</option>
+        <option>core/path-overlay.js</option>
+      </optgroup>
+      <optgroup label="Daten/Assets">
+        <option>assets/maps/map-mini.json</option>
+        <option>assets/characters/atlas</option>
+        <option>assets/tex/**</option>
+        <option>assets/icons/**</option>
+      </optgroup>
+    </select>
+    <button id="btn-ortho">Auto-Layout</button>
+    <button id="btn-snap">Snap</button>
+    <button id="btn-del">Löschen</button>
+    <button id="btn-save">Speichern</button>
+    <button id="btn-load">Laden</button>
+    <button id="btn-dot">Export DOT</button>
+  </div>
+  <div class="row">
+    <strong>Trace:</strong>
+    <button id="t-play">▶︎ Play</button>
+    <button id="t-step">Step</button>
+    <button id="t-pause">Pause</button>
+    <label class="small">Intervall <input id="t-interval" type="number" value="800" style="width:80px"> ms</label>
+    <button id="t-build">Pfad vorschlagen</button>
+  </div>
+</header>
+
+<div id="wrap">
+  <!-- LEFT: properties -->
+  <section id="left">
+    <h2>Eigenschaften</h2>
+    <div id="pal-content">
+      <div class="row"><span class="small">Ausgewählt:</span><span id="sel-name" class="badge">—</span></div>
+      <label class="small">Titel <input id="prop-title" type="text" placeholder="Titel…"></label>
+      <label class="small">Inputs <input id="prop-in" type="text" placeholder="cb:ui-ready, UserClick …"></label>
+      <label class="small">Outputs <input id="prop-out" type="text" placeholder="cb:assets-ready, toggle.…"></label>
+      <div class="row">
+        <label class="small">x <input id="prop-x" type="number" style="width:70px"></label>
+        <label class="small">y <input id="prop-y" type="number" style="width:70px"></label>
+        <label class="small">w <input id="prop-w" type="number" style="width:70px"></label>
+        <button id="prop-apply">Übernehmen</button>
+      </div>
+      <hr style="border-color:#2a3146">
+      <label class="small">Modell (JSON)</label>
+      <textarea id="iobox" spellcheck="false"></textarea>
+      <div class="row"><button id="btn-io-load">Aus Text laden</button><button id="btn-io-copy">Kopieren</button></div>
+      <div id="status">Bereit.</div>
+    </div>
+  </section>
+
+  <!-- MIDDLE: canvas -->
+  <section id="right">
+    <h2>Arbeitsfläche</h2>
+    <div id="stage">
+      <div id="canvas"></div>
+      <svg class="wires"></svg>
+    </div>
+  </section>
+
+  <!-- SIDE: code export + preview -->
+  <section id="side">
+    <h2>Code-Export & Vorschau</h2>
+    <div id="codeTabs">
+      <button id="btn-gen">Export Code (generieren)</button>
+      <button id="btn-run">Run Preview</button>
+    </div>
+    <div class="codeview"><pre id="code-out">// Klicke „Export Code“, um generierte Dateien zu sehen…</pre></div>
+    <div id="files"></div>
+    <div class="hint">Die Vorschau erzeugt zur Laufzeit eine kleine App mit Buttons für UI-Events (z. B. „cb:ui-ready“). Logs erscheinen in der eingebauten Konsole.</div>
+    <div id="preview"><iframe></iframe></div>
+  </section>
+</div>
+
+<script>
+/* ====================== Model & Editor ======================= */
+const model = { nodes:{}, links:[], snap:true };
+let selId=null, portStart=null;
+const PORT_SIZE=12, GRID=20;
+const canvas=document.getElementById('canvas'), wires=document.querySelector('svg.wires');
+const status=(s)=>document.getElementById('status').textContent=s;
+
+function uid(){return 'n'+Math.random().toString(36).slice(2,8)}
+function snapf(v){return model.snap?Math.round(v/GRID)*GRID:v}
+
+function createNode(title,x=100,y=100,inputs=[],outputs=[],w=200){
+  const id=uid(); model.nodes[id]={id,title,x,y,w,inputs:[...inputs],outputs:[...outputs]}; drawNode(model.nodes[id]); return id;
+}
+function drawNode(n){
+  let el=document.getElementById(n.id);
+  if(!el){ el=document.createElement('div'); el.className='node'; el.id=n.id; el.addEventListener('mousedown',()=>selectNode(n.id)); canvas.appendChild(el); dragify(el,n); }
+  el.style.left=n.x+'px'; el.style.top=n.y+'px'; el.style.width=(n.w||200)+'px';
+  el.innerHTML='';
+  const head=document.createElement('div'); head.className='head';
+  head.innerHTML=`<div class="title">${n.title}</div><div class="badge">${n.id}</div>`;
+  const body=document.createElement('div'); body.className='body';
+  const left=document.createElement('div'); const right=document.createElement('div');
+  n.inputs.forEach((name,idx)=>{ const p=document.createElement('div'); p.className='port in';
+    const dot=document.createElement('div'); dot.className='p-dot'; dot.addEventListener('click',()=>portClick(n.id,'in',idx));
+    const lab=document.createElement('div'); lab.textContent=name; p.append(dot,lab); left.appendChild(p);
+  });
+  n.outputs.forEach((name,idx)=>{ const p=document.createElement('div'); p.className='port out';
+    const dot=document.createElement('div'); dot.className='p-dot'; dot.addEventListener('click',()=>portClick(n.id,'out',idx));
+    const lab=document.createElement('div'); lab.textContent=name; p.append(dot,lab); right.appendChild(p);
+  });
+  el.append(head,body); body.append(left,right); updateWires();
+}
+function dragify(el,node){
+  let drag=false,sx=0,sy=0,nx=0,ny=0;
+  el.addEventListener('mousedown',(e)=>{ if(e.target.classList.contains('p-dot'))return; drag=true;sx=e.clientX;sy=e.clientY;nx=node.x;ny=node.y; document.body.style.userSelect='none'; });
+  window.addEventListener('mousemove',(e)=>{ if(!drag)return; node.x=snapf(nx+(e.clientX-sx)); node.y=snapf(ny+(e.clientY-sy)); el.style.left=node.x+'px'; el.style.top=node.y+'px'; updateWires(); });
+  window.addEventListener('mouseup',()=>{drag=false; document.body.style.userSelect=''; saveIOBox(); });
+}
+function selectNode(id){
+  selId=id; document.querySelectorAll('.node').forEach(n=>n.classList.remove('selected','active')); document.getElementById(id).classList.add('selected');
+  const n=model.nodes[id]; document.getElementById('sel-name').textContent=n.title;
+  ['title','x','y','w'].forEach(k=>document.getElementById('prop-'+k).value=n[k]||'');
+  document.getElementById('prop-in').value=n.inputs.join(', ');
+  document.getElementById('prop-out').value=n.outputs.join(', ');
+}
+function portClick(nodeId,type,idx){
+  if(!portStart){ portStart={nodeId,type,idx}; status('Verbindung starten …'); return; }
+  const a=portStart, b={nodeId,type,idx};
+  if(a.nodeId===b.nodeId){ portStart=null; status('Abgebrochen.'); return; }
+  if(a.type==='out' && b.type==='in'){ model.links.push({from:a,to:b}); }
+  else if(a.type==='in' && b.type==='out'){ model.links.push({from:b,to:a}); }
+  else { status('Ungültige Richtung (out→in)'); portStart=null; return; }
+  portStart=null; updateWires(); saveIOBox();
+}
+function nodePortCenter(nodeId,type,idx){
+  const n=model.nodes[nodeId]; const el=document.getElementById(nodeId); if(!el) return {x:n.x,y:n.y};
+  const ports=el.querySelectorAll('.port.'+(type==='in'?'in':'out')); const p=ports[idx]; if(!p) return {x:n.x,y:n.y};
+  const r=p.querySelector('.p-dot').getBoundingClientRect(); const c=canvas.getBoundingClientRect();
+  return {x:(r.left-c.left)+PORT_SIZE/2, y:(r.top-c.top)+PORT_SIZE/2};
+}
+function updateWires(){
+  wires.innerHTML='';
+  model.links.forEach((L,i)=>{
+    const a=nodePortCenter(L.from.nodeId,'out',L.from.idx);
+    const b=nodePortCenter(L.to.nodeId,'in',L.to.idx);
+    const mid=(a.x+b.x)/2;
+    const path=`M ${a.x},${a.y} C ${mid},${a.y} ${mid},${b.y} ${b.x},${b.y}`;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',path); p.setAttribute('stroke','var(--edge)'); p.setAttribute('fill','none'); p.setAttribute('stroke-width','2');
+    p.dataset.index=i; wires.appendChild(p);
+  });
+}
+function saveIOBox(){ document.getElementById('iobox').value=JSON.stringify(model,null,2); }
+function loadFromJSON(json){
+  try{ const m=JSON.parse(json);
+    Object.keys(model.nodes).forEach(id=>{ const el=document.getElementById(id); if(el) el.remove(); });
+    model.nodes={}; model.links=[]; model.snap=!!m.snap;
+    Object.values(m.nodes).forEach(n=> drawNode(Object.assign({},n)));
+    model.links=m.links||[]; updateWires(); saveIOBox(); status('Modell geladen.');
+  }catch(e){ status('JSON-Fehler: '+e.message); }
+}
+function exportDOT(){
+  let s='digraph G {\\n  rankdir=LR; splines=ortho;\\n';
+  Object.values(model.nodes).forEach(n=> s+=`  "${n.title.replace(/"/g,'\\\\\"')}" [shape=box];\\n`);
+  model.links.forEach(L=>{
+    const A=model.nodes[L.from.nodeId].title.replace(/"/g,'\\\\\"');
+    const B=model.nodes[L.to.nodeId].title.replace(/"/g,'\\\\\"');
+    const outL = model.nodes[L.from.nodeId].outputs[L.from.idx]||'';
+    const inL  = model.nodes[L.to.nodeId].inputs[L.to.idx]||'';
+    const lbl = (outL||inL)?` [label="${(outL||inL).replace(/"/g,'\\\\\"')}"]`:'';
+    s+=`  "${A}" -> "${B}"${lbl};\\n`;
+  });
+  s+='}\\n'; document.getElementById('iobox').value=s; status('Als DOT exportiert.');
+}
+function autoLayout(){
+  const groups={UI:[],Boot:[],Core:[],Data:[]};
+  for(const n of Object.values(model.nodes)){
+    if(/index|ui-build|inspector|debug/.test(n.title)) groups.UI.push(n);
+    else if(/boot|asset|map-runtime/.test(n.title)) groups.Boot.push(n);
+    else if(/game|v-adfinder|carrier|path-overlay/.test(n.title)) groups.Core.push(n);
+    else groups.Data.push(n);
+  }
+  const cols=[groups.UI,groups.Boot,groups.Core,groups.Data], colX=[80,420,760,1100];
+  cols.forEach((arr,ci)=> arr.forEach((n,ri)=>{ n.x=snapf(colX[ci]); n.y=snapf(80+ri*150); drawNode(n); }));
+  updateWires(); saveIOBox();
+}
+
+// UI wires
+document.getElementById('btn-snap').onclick=()=>{ model.snap=!model.snap; status('Snap '+(model.snap?'an':'aus')); };
+document.getElementById('btn-ortho').onclick=autoLayout;
+document.getElementById('btn-del').onclick=()=>{
+  if(!selId){ status('Kein Block selektiert.'); return; }
+  model.links=model.links.filter(L=> L.from.nodeId!==selId && L.to.nodeId!==selId);
+  const el=document.getElementById(selId); if(el) el.remove();
+  delete model.nodes[selId]; selId=null; updateWires(); saveIOBox();
+};
+document.getElementById('btn-save').onclick=()=>{
+  const blob=new Blob([JSON.stringify(model,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='siedler-node-model.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+document.getElementById('btn-load').onclick=()=>{
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='application/json,.json';
+  inp.onchange=(e)=>{ const f=e.target.files[0]; const r=new FileReader(); r.onload=()=>loadFromJSON(r.result); r.readAsText(f); }; inp.click();
+};
+document.getElementById('btn-dot').onclick=exportDOT;
+document.getElementById('prop-apply').onclick=()=>{
+  if(!selId) return; const n=model.nodes[selId];
+  n.title=document.getElementById('prop-title').value||n.title;
+  n.inputs=(document.getElementById('prop-in').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  n.outputs=(document.getElementById('prop-out').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  n.x=parseInt(document.getElementById('prop-x').value||n.x,10);
+  n.y=parseInt(document.getElementById('prop-y').value||n.y,10);
+  n.w=parseInt(document.getElementById('prop-w').value||n.w||200,10);
+  drawNode(n); saveIOBox();
+};
+document.getElementById('btn-io-load').onclick=()=> loadFromJSON(document.getElementById('iobox').value);
+document.getElementById('btn-io-copy').onclick=()=>{ const t=document.getElementById('iobox'); t.select(); document.execCommand('copy'); status('In Zwischenablage kopiert.'); };
+
+document.getElementById('sel-add').onchange=(e)=>{
+  const val=e.target.value; if(!val) return;
+  const presets={
+    "index.html":{in:["DOMContentLoaded","cb:assets-ready"],out:["cb:ui-ready","GameBoot.start"]},
+    "ui-build.js":{in:["cb:build-open","hover(tile)"],out:["cb:build-place","cb:build-cancel"]},
+    "inspector.js":{in:["log-feed","user.toggle.*"],out:["toggle.*","tests.*","resources.set"]},
+    "debug-tools.js":{in:["DevShortcuts","GameRef"],out:["cb:debug-action"]},
+    "boot.js":{in:["cb:ui-ready","start.map"],out:["cb:assets-load","cb:assets-ready","Game.init"]},
+    "core/asset.js":{in:["manifest","load() calls"],out:["cb:assets-ready","draw* API"]},
+    "map-runtime.js":{in:["map.json"],out:["validated map","Game.init(game,map)"]},
+    "game.js":{in:["init(map)","input"],out:["render(canvas)","state/events","getObstacleAt(tx,ty)"]},
+    "core/v-adfinder.js":{in:["obstacles","targets"],out:["route","costs/heatmap"]},
+    "core/carrier.js":{in:["tasks","depot rules","idle"],out:["deliver","request.route"]},
+    "core/path-overlay.js":{in:["pf.costs","map"],out:["overlay render","decay"]},
+    "assets/maps/map-mini.json":{in:[],out:["tiles","objects","size"]},
+    "assets/characters/atlas":{in:[],out:["sprites","atlas json"]},
+    "assets/tex/**":{in:[],out:["textures"]},
+    "assets/icons/**":{in:[],out:["icons"]},
+  };
+  const p=presets[val]||{in:[],out:[]}; const id=createNode(val,120,120,p.in,p.out,220); selectNode(id); e.target.value='';
+};
+
+/* ====================== Trace Player ======================= */
+let trace=[], tIdx=0, timer=null;
+function buildDefaultTrace(){
+  // Try to follow: index.html -> boot.js -> core/asset.js -> boot.js -> map-runtime.js -> game.js
+  const adj={}; Object.keys(model.nodes).forEach(id=>adj[id]=[]);
+  model.links.forEach(L=> adj[L.from.nodeId].push({to:L.to.nodeId, link:L}));
+  function findByTitle(rx){ for(const [id,n] of Object.entries(model.nodes)) if(rx.test(n.title)) return id; }
+  const way=[/index\.html/,/boot\.js/,/core\/asset\.js/,/boot\.js/,/map-runtime\.js/,/game\.js/].map(findByTitle).filter(Boolean);
+  trace=[];
+  for(let i=0;i<way.length-1;i++){ const a=way[i], b=way[i+1]; const nx=(adj[a]||[]).find(x=>x.to===b); if(nx) trace.push(nx.link); }
+  return trace.length;
+}
+function setActive(nodeId){ document.querySelectorAll('.node').forEach(n=>n.classList.remove('active')); const el=document.getElementById(nodeId); if(el) el.classList.add('active'); }
+function nodePortCenter(nodeId,type,idx){
+  const n=model.nodes[nodeId]; const el=document.getElementById(nodeId); if(!el) return {x:n.x,y:n.y};
+  const ports=el.querySelectorAll('.port.'+(type==='in'?'in':'out')); const p=ports[idx]; if(!p) return {x:n.x,y:n.y};
+  const r=p.querySelector('.p-dot').getBoundingClientRect(); const c=canvas.getBoundingClientRect();
+  return {x:(r.left-c.left)+PORT_SIZE/2, y:(r.top-c.top)+PORT_SIZE/2};
+}
+function updateWiresHL(i,on){
+  const path=wires.querySelectorAll('path')[i]; if(path){ if(on) path.classList.add('edgeHL'); else path.classList.remove('edgeHL'); }
+}
+function clearHL(){ wires.querySelectorAll('path').forEach(p=>p.classList.remove('edgeHL')); document.querySelectorAll('.node').forEach(n=>n.classList.remove('active')); }
+function stepOnce(){
+  if(trace.length===0){ buildDefaultTrace(); if(trace.length===0){ status('Trace: kein Pfad.'); return; } }
+  const L=trace[tIdx]; updateWiresHL(tIdx,true); setActive(L.to.nodeId); tIdx=(tIdx+1)%trace.length;
+}
+function play(){ pause(); clearHL(); tIdx=0; if(buildDefaultTrace()===0){ status('Trace: kein Pfad.'); return; } const iv=parseInt(document.getElementById('t-interval').value||800,10); timer=setInterval(()=>{ if(tIdx>=trace.length){ pause(); return; } stepOnce(); }, iv); }
+function pause(){ if(timer){ clearInterval(timer); timer=null; } }
+document.getElementById('t-play').onclick=play;
+document.getElementById('t-step').onclick=stepOnce;
+document.getElementById('t-pause').onclick=pause;
+document.getElementById('t-build').onclick=()=>{ buildDefaultTrace(); clearHL(); };
+
+/* ====================== Code Generator ======================= */
+function ident(n){ return n.replace(/[^a-zA-Z0-9_]/g,'_'); }
+function codeHeader(name){ return `// === ${name} ===\n'use strict';\n`; }
+function genModule(name, inputs, outputs){
+  const id=ident(name);
+  let s=codeHeader(name);
+  // listeners for inputs
+  inputs.forEach(evt=>{
+    s+=`window.addEventListener('${evt}', (e)=>{\n  console.log('[${name}] in:', '${evt}', e.detail||null);\n  // TODO: implement logic for ${evt}\n});\n\n`;
+  });
+  // helpers for outputs
+  outputs.forEach(evt=>{
+    s+=`export function emit_${ident(evt)}(detail={}){\n  console.log('[${name}] out:', '${evt}', detail);\n  window.dispatchEvent(new CustomEvent('${evt}', { detail }));\n}\n\n`;
+  });
+  return s;
+}
+function generateFiles(){
+  // Build per-node JS files
+  const files = [];
+  const nodes = Object.values(model.nodes);
+  nodes.forEach(n=>{
+    // only generate modules for "code" nodes (skip pure data assets)
+    const isData = /assets\//.test(n.title);
+    if(isData) return;
+    const fName = n.title.replace(/\*\*/g,'star').replace(/[^a-z0-9\.\-_]/gi,'_') + '.js';
+    files.push({name:fName, content: genModule(n.title, n.inputs, n.outputs)});
+  });
+  // Create a main "index.html" for preview with buttons for UI outputs
+  const uiNodes = nodes.filter(n=>/index\.html|ui-build\.js|inspector\.js|debug-tools\.js/.test(n.title));
+  const allOutputs = uiNodes.flatMap(n=> n.outputs.map(o=>({from:n.title, evt:o})));
+  const buttons = allOutputs.map(o=>`<button data-evt="${o.evt}" class="evt">${o.from}: ${o.evt}</button>`).join('\n        ');
+  const imports = files.map(f=>`import * as m_${ident(f.name)} from './${f.name}';`).join('\n');
+  const emitMap  = `{\n  ${allOutputs.map(o=> `'${o.evt}': (detail)=>{ console.log('[emit]', '${o.evt}', detail); window.dispatchEvent(new CustomEvent('${o.evt}', {detail})); }`).join(',\n  ')}\n}`;
+  const previewHTML =
+`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Preview</title>
+<style>body{font-family:system-ui;background:#0b0e17;color:#eaeef7;margin:0}header{padding:8px 10px;border-bottom:1px solid #23283b}
+main{display:grid;grid-template-columns:1fr 340px;gap:10px;height:calc(100vh - 46px)}#ui{padding:12px}#ui .evt{margin:6px;padding:8px 10px;background:#1a1f2e;color:#eaeef7;border:1px solid #23283b;border-radius:6px;cursor:pointer}
+#log{background:#0e1220;border-left:1px solid #23283b;overflow:auto;padding:10px;font-size:12px;white-space:pre-wrap}</style>
+</head>
+<body>
+<header><strong>Preview</strong> · Buttons feuern UI-Events</header>
+<main>
+  <section id="ui">
+    ${buttons || '<em>Keine UI-Events definiert. Lege Outputs an den UI-Blöcken an.</em>'}
+  </section>
+  <aside id="log"></aside>
+</main>
+<script type="module">
+${imports}
+const emit = ${emitMap};
+const logEl = document.getElementById('log'); const log=(...a)=>{logEl.textContent += a.join(' ') + '\\n'; logEl.scrollTop = logEl.scrollHeight;}
+['log','warn','error'].forEach(k=>{const orig=console[k]; console[k]=(...a)=>{orig.apply(console,a); log('[console.'+k+']', ...a);} });
+
+document.querySelectorAll('button.evt').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const evt=b.dataset.evt;
+    log('[UI] emit', evt);
+    (emit[evt]||(()=>log('No emitter for',evt)))({from:'preview'});
+  });
+});
+
+// Auto-boot: simulate cb:ui-ready if present
+setTimeout(()=>{
+  if(emit['cb:ui-ready']){ log('[auto]', 'cb:ui-ready'); emit['cb:ui-ready']({from:'auto'}); }
+}, 500);
+</script>
+</body></html>`;
+  files.push({name:'index.html', content: previewHTML});
+  // a basic module loader (empty because we use native ES modules)
+  return files;
+}
+
+/* UI: show files & allow download */
+function showFiles(files){
+  const out=document.getElementById('code-out');
+  out.textContent = files.map(f=>`// File: ${f.name}\n${f.content}`).join('\n\n');
+  const list=document.getElementById('files'); list.innerHTML='';
+  files.forEach(f=>{
+    const row=document.createElement('div'); row.className='fileRow';
+    row.innerHTML=`<span>${f.name}</span><div><button>Download</button></div>`;
+    const btn=row.querySelector('button');
+    btn.onclick=()=>{ const blob=new Blob([f.content],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=f.name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
+    list.appendChild(row);
+  });
+}
+
+/* Preview runner: build a Blob URL FS and load iframe */
+function runPreview(files){
+  const iframe=document.querySelector('#preview iframe');
+  // Create a simple in-memory FS via Blob URLs & rewrite imports
+  const urlMap=new Map();
+  files.forEach(f=>{
+    const blob=new Blob([f.content],{type: f.name.endsWith('.html')?'text/html':'text/javascript'});
+    urlMap.set(f.name, URL.createObjectURL(blob));
+  });
+  // Rewrite index.html to import correct blob URLs (already absolute within module imports)
+  iframe.src = urlMap.get('index.html');
+}
+
+/* Bind buttons */
+document.getElementById('btn-gen').onclick=()=>{
+  const files=generateFiles(); showFiles(files);
+};
+document.getElementById('btn-run').onclick=()=>{
+  const files=generateFiles(); runPreview(files);
+};
+
+/* Seed initial nodes/links for convenience */
+(function seed(){
+  const mk=(title,x,y,ins,outs)=>createNode(title,x,y,ins,outs,220);
+  const n_index = mk("index.html",80,100,["DOMContentLoaded","cb:assets-ready"],["cb:ui-ready","GameBoot.start"]);
+  const n_boot  = mk("boot.js",420,100,["cb:ui-ready","start.map"],["cb:assets-load","cb:assets-ready","Game.init"]);
+  const n_assets= mk("core/asset.js",760,60,["manifest","load() calls"],["cb:assets-ready","draw* API"]);
+  const n_mapr  = mk("map-runtime.js",760,200,["map.json"],["validated map","Game.init(game,map)"]);
+  const n_game  = mk("game.js",1100,130,["init(map)","input"],["render(canvas)","state/events","getObstacleAt(tx,ty)"]);
+  const link=(from,outIdx,to,inIdx)=> model.links.push({from:{nodeId:from,type:'out',idx:outIdx}, to:{nodeId:to,type:'in',idx:inIdx}});
+  link(n_index,0,n_boot,0);
+  link(n_boot,0,n_assets,0); link(n_boot,0,n_assets,1);
+  link(n_assets,0,n_boot,1);
+  link(n_boot,2,n_game,0);
+  link(n_mapr,1,n_game,0);
+  saveIOBox(); autoLayout();
+})();
+</script>
+</body>
+</html>
