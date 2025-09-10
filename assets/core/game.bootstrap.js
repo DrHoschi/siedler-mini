@@ -1,188 +1,108 @@
-/* game.bootstrap.js — v17.8.3 (stabil) */
-(function(){
+/* game.bootstrap.js — v17.8.3 (stabil, bereinigt) */
+(function () {
   "use strict";
-  const MOD='[bootstrap]';
-  const ok  =(m)=> (window.CBLog?.ok||console.log)(`${MOD} ${m}`);
-  const warn=(m)=> (window.CBLog?.warn||console.warn)(`${MOD} ${m}`);
 
-  // kleine Helfer
-  function on(evt, fn){ try{ window.addEventListener(evt, fn); }catch(_){} }
-  function fire(evt, detail){ try{ window.dispatchEvent(new CustomEvent(evt,{detail})); }catch(_){} }
+  // ---- Logging-Helfer -------------------------------------------------------
+  const MOD = "[bootstrap]";
+  const info = (window.CBLog?.info || console.log).bind(console, MOD);
+  const ok   = (window.CBLog?.ok   || console.log).bind(console, MOD);
+  const warn = (window.CBLog?.warn || console.warn).bind(console, MOD);
+  const err  = (window.CBLog?.err  || console.error).bind(console, MOD);
 
-  // Map laden (Datei aus data-map am Canvas)
-  async function loadMapFromCanvas(){
+  // Mehrfach-Init verhindern
+  if (window.__BOOT_WIRED__) { warn("bereits verkabelt – skip"); return; }
+  window.__BOOT_WIRED__ = true;
+
+  // ---- Utils ----------------------------------------------------------------
+  const on   = (evt, fn) => { try { window.addEventListener(evt, fn); } catch(_){} };
+  const fire = (evt, detail) => { try { window.dispatchEvent(new CustomEvent(evt,{detail})); } catch(_){} };
+
+  // ---- Map-Laden (aus data-map am Canvas) -----------------------------------
+  async function loadMapFromCanvas() {
     const cvs = document.getElementById("game");
-    const url = cvs?.getAttribute("data-map") || "assets/maps/map-mini.json";
-    try{
-      const res = await fetch(url, { cache:"no-store" });
+    if (!cvs) { err("Canvas #game fehlt"); return false; }
+
+    const url = cvs.getAttribute("data-map") || "assets/maps/map-mini.json";
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      // Übergib der Engine
-      if(window.Game?.Map?.load) { await window.Game.Map.load(data); }
-      // Falls deine Engine nur Overlay-Hooks nutzt:
+
+      // Übergabe an deine Engine (neu/alt)
+      if (window.Game?.Map?.load) {
+        await window.Game.Map.load(data);
+      } else if (window.CBGame?.start) {
+        // Fallback – ältere API erwartet direkten Start
+        await window.CBGame.start(cvs, url);
+      }
+      // für Debug/Tests
       window.__CURRENT_MAP__ = data;
+
+      ok(`Map geladen: ${url}`);
+      fire("cb:map-ready", { url });
       return true;
-    }catch(e){
-      warn("Map konnte nicht geladen werden: "+(e&&e.message));
+    } catch (e) {
+      err("Map konnte nicht geladen werden:", e?.message || e);
       return false;
     }
   }
 
-  // Render anschieben (ein einfacher Ticker → Event-gesteuert zeichnen)
-  function startRender(){
-    // Deine Renderer-Datei registriert auf 'cb:render-frame'
-    function tick(){ try{ fire('cb:render-frame'); requestAnimationFrame(tick); }catch(_){ requestAnimationFrame(tick); } }
+  // ---- Render anschieben (Event-getriebener Ticker) -------------------------
+  function startRender() {
+    function tick() {
+      try { fire("cb:render-frame"); } finally { requestAnimationFrame(tick); }
+    }
     tick();
   }
 
-  // Demo: Carrier/Tests brücken (damit bekannte Demos wieder funktionieren)
-  function wireTestBridge(){
-    // Tests feuern eigene Logs; hier nur „Brücke“, damit nichts crasht
+  // ---- Test-/Demo-Brücke (nur Logs, keine harte Abhängigkeit) --------------
+  function wireTestBridge() {
     ok("Test-Event-Bridge aktiv.");
+    // Beispiel: fire("tests:ready");
   }
 
-  async function boot(){
+  // ---- Start-Panel sauber entfernen -----------------------------------------
+  function removeStartPanelIfAny() {
+    const sp = document.getElementById("start-panel");
+    if (sp && sp.parentNode) { sp.remove(); ok("start-panel entfernt."); }
+  }
+
+  // ---- Boot-Sequenz ----------------------------------------------------------
+  async function boot() {
     ok("Modul geladen (v17.6.1)");
 
-    // Reihenfolge:
-    // 1) Renderer initialisiert sich selbst beim Laden (core.render.js)
-    // 2) Map laden (nach cb:game-start)
-    // 3) UI & Build getrennt
+    // Auf UI-Start warten (Button „Neues Spiel“ feuert cb:game-start)
+    on("cb:game-start", async () => {
+      removeStartPanelIfAny();
 
-    on('cb:game-start', async ()=>{
-      // Map
+      // Map laden
       await loadMapFromCanvas();
-      // Render-Loop
+
+      // Render-Loop starten (falls dein Renderer event-getrieben arbeitet)
       startRender();
-      // Tests/Demos anklemmen
+
+      // Tests/Demos
       wireTestBridge();
+
       ok("ready (v17.6.1) [Legacy-Bridge aktiv]");
     });
   }
 
-  boot();
-// === DIAGNOSE: Map-Start sichtbar machen =========================
-(function(){
-  try{
-    // nur einmal verkabeln
-    if (window.__MAP_DIAG_WIRED__) return;
-    window.__MAP_DIAG_WIRED__ = true;
-
-    const ok   = (window.CBLog?.ok   || console.log).bind(console, "[map]");
-    const info = (window.CBLog?.info || console.log).bind(console, "[ui-start]");
-    const err  = (window.CBLog?.err  || console.error).bind(console, "[map]");
-
-    async function tryLoadMap(){
-      const canvas = document.getElementById("game");
-      const url = canvas?.dataset?.map;
-      info("Start → %s", url || "(kein data-map)");
-
-      if (!url){
-        err("Kein data-map am #game Canvas gefunden.");
-        return;
-      }
-      try{
-        const res = await fetch(url, { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP "+res.status);
-        await res.json(); // nur zum Validieren
-        ok("geladen: %s", url);
-        // Optional: nach erfolgreichem Laden Event senden
-        try { window.dispatchEvent(new CustomEvent("cb:map-ready", { detail:{ url } })); } catch(_){}
-      }catch(e){
-        err("Laden fehlgeschlagen: %s → %s", url, e && e.message || e);
-      }
-    }
-
-    // Wenn das UI startbereit ist, versuchen wir den Map-Load anzustoßen
-    window.addEventListener("cb:game-start", tryLoadMap);
-
-    // Falls dein Button bereits cb:game-start gefeuert hat, sofort testen:
-    // (z.B. wenn dieses Snippet später geladen wurde)
-    setTimeout(()=>{
-      try {
-        // kleiner Probelauf, ohne doppelt zu nerven
-        tryLoadMap();
-      } catch(_){}
-    }, 0);
-
-  }catch(_){}
-  // Neue Siedler – Bootstrap Start-Hook (v17.6.2)
-(function(){
-  const info = (window.CBLog?.info || console.log);
-  const ok   = (window.CBLog?.ok   || console.log);
-  const err  = (window.CBLog?.err  || console.error);
-
-  // Hilfsfunktion: Map starten
-  async function startGameFromCanvas(){
-    try{
-      const canvas = document.getElementById('game');
-      if (!canvas) throw new Error("Canvas #game fehlt");
-      const mapUrl = canvas.dataset.map || '';
-      info("[bootstrap] start() → map:", mapUrl || "(leer)");
-
-      // Falls deine Engine so heißt:
-      if (window.CBGame?.start) {
-        await window.CBGame.start(canvas, mapUrl);
-        ok("[bootstrap] ready (v17.6.2)");
-      } else if (window.Game?.start) {
-        await window.Game.start(canvas, mapUrl);
-        ok("[bootstrap] ready (legacy)");
-      } else {
-        err("[bootstrap] Keine start()-Funktion gefunden.");
-      }
-    }catch(e){
-      err("[bootstrap] start() fehlgeschlagen:", e);
-    }
-  }
-
-  // 1) Sofort starten, wenn Legacy-Flow es erwartet
+  // ---- Optional: Auto-Start für Legacy-Flows --------------------------------
   if (window.__cb?.autostart) {
-    startGameFromCanvas();
+    // Autostart simuliert den Button-Klick
+    setTimeout(() => fire("cb:game-start"), 0);
   }
 
-  // 2) Moderner Flow: auf Start-Event warten
-  window.addEventListener('cb:game-start', () => {
-    info("[bootstrap] cb:game-start empfangen");
-    startGameFromCanvas();
-  });
+  // ---- Diagnose (optional einschalten) --------------------------------------
+  // Setze window.__BOOT_DIAG__ = true in der Konsole, um einen einmaligen Probe-Load zu sehen.
+  if (window.__BOOT_DIAG__) {
+    on("cb:game-start", async () => {
+      const cvs = document.getElementById("game");
+      info("DIAG: cb:game-start empfangen – data-map:", cvs?.dataset?.map || "(leer)");
+    });
+  }
 
-  // 3) Sichtbares Fehler-Logging beim Map-Load
-  const _fetch = window.fetch;
-  window.fetch = async function(url, opts){
-    const res = await _fetch(url, opts);
-    if (!res.ok) {
-      (window.CBLog?.err||console.error)(
-        "[bootstrap] fetch failed:", url, res.status, res.statusText
-      );
-    }
-    return res;
-  };
-/* Neue Siedler – Bootstrap Start-Hook (Patch) */
-(function () {
-  const ok   = (window.CBLog?.ok   ?? console.log).bind(console);
-  const warn = (window.CBLog?.warn ?? console.warn).bind(console);
-  const err  = (window.CBLog?.err  ?? console.error).bind(console);
-
-  // Reagiert auf den Start-Button aus ui-start.js
-  window.addEventListener('cb:game-start', async () => {
-    try {
-      // 1) Start-Panel sicher entfernen (falls noch sichtbar)
-      const sp = document.getElementById('start-panel');
-      if (sp && sp.parentNode) { sp.remove(); ok('[bootstrap] start-panel entfernt.'); }
-
-      // 2) Canvas prüfen
-      const cvs = document.getElementById('game');
-      if (!cvs) throw new Error('Canvas #game fehlt');
-
-      // 3) Map-Start/Refresh anstoßen – je nach verfügbarer API
-      //    (dein bestehender Code oben lädt die Map bereits; das hier ist ein „Kick“, falls ein Overlay/State blockiert)
-      if (window.Game?.Engine?.tick) {
-        window.Game.Engine.tick(); // leichter Kick
-      }
-
-      // Optional sichtbares Log-Event für den Inspector
-      (window.CBLog?.info ?? console.log)('[bootstrap] Start-Impuls gesendet (Hook aktiv).');
-    } catch (e) {
-      err('[bootstrap] Start-Hook Fehler:', e?.message || e);
-    }
-  });
+  // ---- Start -----------------------------------------------------------------
+  boot();
 })();
