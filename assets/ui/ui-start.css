@@ -1,78 +1,67 @@
-/* ui-start.css  v17.8.8  – zentriertes Start-Panel im Inspector-Look
-   Entfernt alte, in der Seite “eingebackene” Start-Buttons.
-*/
-
+/* ui-start.css — v17.8.8 */
 :root{
-  --ui-bg: #0c120f;
-  --panel-bg: #eef3f7;
-  --panel-head: #dfe8f2;
-  --panel-text: #1c2833;
-  --btn-bg: #fff;
-  --btn-hl: #d9e7f5;
-  --shadow: 0 16px 40px rgba(0,0,0,.35);
+  --ui-bg:#0c120f;
+  --panel-bg:#e9eef5;
+  --panel-fg:#1c2630;
+  --btn-bg:#f8fbff;
+  --btn-fg:#1b2733;
+  --btn-ac:#cfe8fb;
+  --shadow:0 10px 28px rgba(0,0,0,.35);
 }
 
-/* Seite */
-html,body{height:100%;margin:0;background:var(--ui-bg);}
-#game{display:block;width:100vw;height:100vh;}
-
-/* ---------- Legacy-Kram sicher ausblenden ---------- */
-#btnStart,
-.ui-start-inline,
-.ui-start-legacy,
-.start-inline,
-.start-debug { display:none !important; }
-
-/* ---------- Start-Panel ---------- */
+/* Vollflächen-Wrapper, blockiert NICHT die FABs */
 .ui-start{
-  position:fixed;
-  inset:auto;           /* NICHT full-screen */
-  left:50%;
-  top:28%;
-  transform:translate(-50%,-0%);
-  z-index: 9999;        /* unter FABs, über Canvas */
-  pointer-events:auto;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
-  color:var(--panel-text);
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;              /* wichtig: nur Panel fängt Klicks */
+  z-index:10;
 }
 
+/* Hintergrundbild – URL relativ zur CSS-Datei! */
+.ui-start-bg{
+  position:absolute; inset:0;
+  background-image:url("start-bg.jpeg");  /* <— FIX */
+  background-size:cover;
+  background-position:center;
+  filter:brightness(.55);
+  z-index:-1;
+}
+
+/* Panel */
 .ui-start-panel{
-  min-width: 520px;
-  max-width: min(92vw, 640px);
-  background:var(--panel-bg);
-  border-radius:14px;
+  pointer-events:auto;               /* klickbar */
+  min-width: min(92vw, 680px);
+  border-radius:12px;
+  background:#fff;
   box-shadow:var(--shadow);
   overflow:hidden;
-  border:1px solid rgba(0,0,0,.08);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
 }
 
+/* Kopfzeile */
 .ui-start-head{
-  background:var(--panel-head);
-  padding:16px 18px;
+  padding:14px 18px;
+  background: var(--panel-bg);
+  color: var(--panel-fg);
   font-weight:700;
   letter-spacing:.2px;
+  border-bottom:1px solid rgba(0,0,0,.06);
 }
 
-.ui-start-body{ padding:18px; }
-
-.ui-start-btn{
+/* Buttonliste */
+.ui-start-actions{ padding:18px; display:grid; gap:12px; }
+.ui-start-actions button{
   width:100%;
-  display:block;
-  text-align:center;
   padding:14px 16px;
-  margin:0 0 12px 0;
   background:var(--btn-bg);
+  color:var(--btn-fg);
   border:1px solid rgba(0,0,0,.12);
   border-radius:8px;
   cursor:pointer;
-  user-select:none;
-  transition:background .15s ease, transform .03s ease;
+  font-size:16px;
 }
-.ui-start-btn:active{ transform:translateY(1px); }
-.ui-start-btn.is-primary{ background:var(--btn-hl); }
+.ui-start-actions button:hover{ background:#fff; border-color:var(--btn-ac); }
+.ui-start-actions button:active{ transform:translateY(1px); }
 
-/* Responsiv */
-@media (max-width:520px){
-  .ui-start{ top:22%; }
-  .ui-start-panel{ min-width:calc(100vw - 24px); }
-}
+/* Ausblenden nach Start */
+.ui-start.hidden{ display:none; }
