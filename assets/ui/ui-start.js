@@ -1,71 +1,57 @@
 /* ============================================================================
- * UI Start-Layer (v17.8.5)
- *  - Initialisiert Startscreen
- *  - feuert 'cb:ui-ready' direkt nach Setup
- *  - blendet beim Start aus und feuert anschließend 'cb:game-start'
+ * UI-Start – v17.8.6
+ * - Start-Overlay initialisieren
+ * - Klick auf "Spiel starten" blendet Overlay aus, entfernt es
+ * - Events: cb:ui-ready (beim Setup), cb:game-start (beim Start)
  * ========================================================================== */
+
 (function(){
-  const log = (window.CBLog?.info || console.log).bind(console, "[ui-start]");
-  const ok  = (window.CBLog?.ok   || console.log).bind(console, "[ui-start]");
-  const warn= (window.CBLog?.warn || console.warn).bind(console, "[ui-start]");
+  const log = (msg)=> (window.CBLog?.info || console.log)(`[ui-start] ${msg}`);
 
-  function qs(sel){ return document.querySelector(sel); }
+  // DOM-Hooks
+  const startEl  = document.getElementById('start-panel');   // .ui-start
+  const btnStart = document.getElementById('btnStart');
 
-  function dispatch(name, detail){
-    try { window.dispatchEvent(new CustomEvent(name, { detail })); }
-    catch(e){ console.warn("[ui-start] Event-Dispatch fehlgeschlagen:", name, e); }
+  if(!startEl || !btnStart){
+    console.warn('[ui-start] Startpanel-Elemente fehlen.');
+    return;
   }
 
-  function setup(){
-    const panel = qs("#start-panel");
-    const bg    = panel?.querySelector(".ui-start-bg");
-    const btn   = qs("#btnStart");
+  // Marker & Initial-Event
+  document.body.classList.add('ui-start-mounted');
+  log('geladen (v17.8.6)');
+  window.dispatchEvent(new CustomEvent('cb:ui-ready'));
 
-    if(!panel || !btn){
-      warn("Start-Panel oder Button fehlt – überspringe Start-Layer.");
-      // Falls das Panel fehlt, trotzdem das Ready-Event schicken:
-      dispatch("cb:ui-ready");
-      return;
+  // Start-Klick
+  const onStart = ()=>{
+    try{
+      log('Start klick');
+      // Spielstart-Ereignis an Engine/Bootstrap
+      window.dispatchEvent(new CustomEvent('cb:game-start'));
+
+      // UI: Overlay sauber ausblenden und danach entfernen
+      startEl.classList.add('is-hiding');
+      // Sicherheitsnetz: auch wenn transitionend ausbleibt -> nach 400ms entfernen
+      const removeNow = ()=>{
+        if(startEl && startEl.parentNode){
+          startEl.parentNode.removeChild(startEl);
+          document.body.classList.remove('ui-start-mounted');
+          document.body.classList.add('ui-start-removed'); // Marker, falls gewünscht
+        }
+      };
+      const once = ()=>{ startEl.removeEventListener('transitionend', once); removeNow(); };
+      startEl.addEventListener('transitionend', once);
+      setTimeout(removeNow, 400);
+    }catch(err){
+      console.error('[ui-start] Fehler beim Start:', err);
     }
+  };
 
-    // Ready-Event direkt nach Setup
-    dispatch("cb:ui-ready");
-    ok("geladen (v17.8.5)");
-
-    // Klick-Handler robust (einmalig binden)
-    if(!btn.__bound){
-      btn.addEventListener("click", ()=>{
-        ok("Start klick");
-        // sanft ausblenden
-        panel.classList.add("hidden");
-
-        // nach Ende der Transition Interaktionen deaktivieren & playing-Flag setzen
-        const after = ()=>{
-          panel.removeEventListener("transitionend", after);
-          document.body.classList.add("playing"); // CSS entfernt Panel komplett
-          // Signal an Bootstrap/Spielwelt
-          dispatch("cb:game-start");
-          log("cb:game-start dispatcht");
-        };
-
-        // Fallback, falls „transitionend“ nicht feuert (ältere Browser)
-        setTimeout(after, 400);
-        panel.addEventListener("transitionend", after);
-      }, { passive: true });
-      btn.__bound = true;
+  btnStart.addEventListener('click', onStart);
+  // Tastatur: Enter/Space auf Button
+  btnStart.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter' || e.key === ' '){
+      e.preventDefault(); onStart();
     }
-
-    // Falls jemand den Start früher extern triggern will:
-    window.addEventListener("ui:start", ()=>{
-      if(panel && !panel.classList.contains("hidden")){
-        btn?.click();
-      }
-    });
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", setup, { once:true });
-  }else{
-    setup();
-  }
+  });
 })();
