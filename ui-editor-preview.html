@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI-Editor & Live-Vorschau (offline)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#151823; --fg:#e6e6e6; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  header{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  header h1{margin:0;font-size:16px}
+  button,input,select,textarea{background:#1a1f2e;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+  button{cursor:pointer}
+  main{display:grid;grid-template-columns:300px 1fr 420px;gap:12px;padding:12px;height:calc(100% - 56px)}
+  section{background:#121728;border:1px solid var(--border);border-radius:10px;min-height:0;display:flex;flex-direction:column}
+  section h2{margin:0;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+  #palette .list{padding:10px;display:grid;gap:8px;overflow:auto}
+  .tool{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border:1px solid #26304a;border-radius:8px}
+  #canvasWrap{display:flex;flex-direction:column}
+  #canvasHeader{display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--border)}
+  #canvas{flex:1;background:#0b0e17;padding:10px;overflow:auto}
+  iframe{width:100%;height:100%;border:0;background:#111}
+  #editor pre, #codeOut pre{margin:0;padding:12px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;font-size:12px;line-height:1.45;color:#eaeef7;white-space:pre;overflow:auto;background:#0e1220}
+  #editor textarea{width:100%;height:180px;background:#0e1220;color:#eaeef7;border-radius:8px}
+  #props .row{display:grid;grid-template-columns:120px 1fr;gap:6px;padding:6px 10px;align-items:center}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .hint{color:#9aa3b2;font-size:12px;padding:8px 10px}
+  .sep{border-top:1px dashed #2a3146;margin:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>UI-Editor & Live-Vorschau</h1>
+  <input type="file" id="openFile" accept=".html,.htm,.js,.txt">
+  <button id="btnLoadSample">Beispiel laden</button>
+  <button id="btnRun">Vorschau aktualisieren</button>
+  <button id="btnCopy">Code kopieren</button>
+  <button id="btnDownload">Datei herunterladen</button>
+  <button id="btnZip">ZIP exportieren</button>
+</header>
+
+<main>
+  <section id="palette">
+    <h2>Vorlagen & Bausteine</h2>
+    <div class="list" id="tplList">
+      <!-- Templates werden via JS erzeugt -->
+    </div>
+    <div class="sep"></div>
+    <div class="list">
+      <div class="tool"><span>Button</span><button data-snippet="&lt;button id='btn1'&gt;Klick&lt;/button&gt;">Einfügen</button></div>
+      <div class="tool"><span>Input Text</span><button data-snippet="&lt;input id='inp1' placeholder='Text...'&gt;">Einfügen</button></div>
+      <div class="tool"><span>Checkbox</span><button data-snippet="&lt;label&gt;&lt;input type='checkbox' id='chk1'&gt; Option&lt;/label&gt;">Einfügen</button></div>
+      <div class="tool"><span>Container</span><button data-snippet="&lt;div id='panel1' class='panel'&gt;&lt;/div&gt;">Einfügen</button></div>
+      <div class="tool"><span>Script-Hook</span><button data-snippet="&lt;script&gt;document.getElementById('btn1')?.addEventListener('click',()=>alert('hi'));&lt;/script&gt;">Einfügen</button></div>
+    </div>
+    <div class="hint">Tipp: IDs nach dem Einfügen im Code unten anpassen. Mit „Vorschau aktualisieren“ direkt testen.</div>
+  </section>
+
+  <section id="canvasWrap">
+    <h2>Vorschau</h2>
+    <div id="canvasHeader" class="row">
+      <label>Datei-Typ 
+        <select id="fileKind">
+          <option value="html">HTML</option>
+          <option value="js">JS (in HTML eingebettet)</option>
+        </select>
+      </label>
+      <label>Theme 
+        <select id="theme">
+          <option value="light">Light</option>
+          <option value="dark" selected>Dark</option>
+        </select>
+      </label>
+      <label>Auto-Boot Script 
+        <select id="autoBoot">
+          <option value="">(kein)</option>
+          <option value="uiReady">cb:ui-ready emit</option>
+        </select>
+      </label>
+    </div>
+    <div id="canvas"><iframe id="frame"></iframe></div>
+  </section>
+
+  <section id="editor">
+    <h2>Editor & Eigenschaften</h2>
+    <div class="row" style="padding:8px 10px">
+      <label>Dateiname <input id="fname" placeholder="ui-panel.html" value="ui-snippet.html"></label>
+    </div>
+
+    <div id="props">
+      <div class="row"><strong>Property-Editor (Element auswählen):</strong></div>
+      <div class="row">
+        <label>Selector / ID <input id="selInput" placeholder="#btnStart oder .class oder button"></label>
+        <button id="btnPick">Im Preview wählen</button>
+        <button id="btnApplyProps">Eigenschaften anwenden</button>
+      </div>
+      <div class="row">
+        <label>Text <input id="propText" placeholder="Innere Text/HTML"></label>
+      </div>
+      <div class="row">
+        <label>ID <input id="propId" placeholder="neue-id"></label>
+      </div>
+      <div class="row">
+        <label>Klassen <input id="propClass" placeholder="class-a class-b"></label>
+      </div>
+      <div class="row">
+        <label>OnClick (JS) <input id="propOnclick" placeholder="alert('hi')"></label>
+      </div>
+      <div class="hint">Hinweis: „Im Preview wählen“ aktiviert einen Picker – klicke ein Element, um dessen Selector automatisch zu übernehmen.</div>
+    </div>
+
+    <textarea id="code"></textarea>
+    <div class="hint">Nach Änderungen: „Vorschau aktualisieren“ drücken. Zum Einbauen ins Projekt: „Code kopieren“ oder „Datei herunterladen“ (oder ZIP).</div>
+    <div id="codeOut"><pre>// Hier erscheint die finale HTML-Datei, wenn „Vorschau aktualisieren“ gedrückt wurde.</pre></div>
+  </section>
+</main>
+
+<script>
+/* =================== Basis-Setup =================== */
+const frame=document.getElementById('frame'), code=document.getElementById('code'), fname=document.getElementById('fname');
+const fileKind=document.getElementById('fileKind'), themeSel=document.getElementById('theme'), autoBoot=document.getElementById('autoBoot');
+
+/* =================== Vorlagen (Komponenten) =================== */
+const Templates = [
+  {
+    name: 'Start-Panel',
+    html: `<div class="panel" id="start-panel">
+  <h3>Start-Panel</h3>
+  <button id="btnStart">Start</button>
+  <button id="btnContinue">Continue</button>
+</div>
+<script>
+document.getElementById('btnStart')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'start'}})));
+document.getElementById('btnContinue')?.addEventListener('click',()=> alert('Continue…'));
+</script>`,
+    assets: []
+  },
+  {
+    name: 'HUD-BuildDock',
+    html: `<div class="hud" id="hud-build">
+  <button id="btnBuild">Build</button>
+  <label><input type="checkbox" id="chkGrid"> Grid</label>
+</div>
+<script>
+document.getElementById('btnBuild')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{from:'hud'}})));
+document.getElementById('chkGrid')?.addEventListener('change',(e)=> window.dispatchEvent(new CustomEvent('hud:grid',{detail:{enabled:e.target.checked}})));
+</script>`,
+    assets: []
+  },
+  {
+    name: 'Inspector',
+    html: `<div class="panel" id="inspector">
+  <h3>Inspector</h3>
+  <button id="btnToggle">Toggle Overlay</button>
+  <div id="log" class="log"></div>
+</div>
+<script>
+document.getElementById('btnToggle')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('toggle.overlay',{detail:{}})));
+window.addEventListener('log-feed', (e)=> {
+  const el=document.getElementById('log'); el.textContent += JSON.stringify(e.detail)+'\\n';
+});
+</script>`,
+    assets: []
+  },
+  {
+    name: 'Debug-Overlay',
+    html: `<div class="panel" id="debug-overlay">
+  <h3>Debug</h3>
+  <button id="btnPF">Path-Overlay</button>
+  <button id="btnTests">Run Tests</button>
+</div>
+<script>
+document.getElementById('btnPF')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('debug:path-overlay',{detail:{enable:true}})));
+document.getElementById('btnTests')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('tests.run',{detail:{suite:'smoke'}})));
+</script>`,
+    assets: []
+  }
+];
+
+(function renderTplList(){
+  const wrap=document.getElementById('tplList');
+  Templates.forEach((t,i)=>{
+    const row=document.createElement('div'); row.className='tool';
+    row.innerHTML = `<span>${t.name}</span><button data-tpl="${i}">Einfügen</button>`;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('button[data-tpl]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const tpl=Templates[btn.getAttribute('data-tpl')|0];
+      insertAtCursor(code, tpl.html + "\\n");
+    });
+  });
+})();
+
+/* =================== Snippets =================== */
+document.querySelectorAll('[data-snippet]').forEach(b=> b.addEventListener('click', ()=>{ const s=b.getAttribute('data-snippet'); insertAtCursor(code, s + "\\n"); }));
+
+function insertAtCursor(textarea, text){ const start=textarea.selectionStart, end=textarea.selectionEnd; const before=textarea.value.substring(0,start), after=textarea.value.substring(end); textarea.value=before+text+after; textarea.selectionStart=textarea.selectionEnd=start+text.length; textarea.focus(); }
+
+/* =================== Beispiel laden =================== */
+document.getElementById('btnLoadSample').onclick=()=>{
+  fileKind.value='html'; fname.value='ui-start-panel.html';
+  code.value = sampleHTML();
+  run();
+};
+
+/* =================== Datei öffnen =================== */
+document.getElementById('openFile').onchange=(e)=>{
+  const f=e.target.files[0]; if(!f) return; fname.value=f.name;
+  const reader=new FileReader(); reader.onload=()=>{ 
+    const txt=reader.result;
+    if(/<html|<body|<div|<button|<!doctype/i.test(txt)){ fileKind.value='html'; code.value=txt; }
+    else { fileKind.value='js'; code.value=txt; }
+    run();
+  }; reader.readAsText(f);
+};
+
+/* =================== Code kopieren / Download =================== */
+document.getElementById('btnCopy').onclick=()=>{ const out=document.querySelector('#codeOut pre').textContent; navigator.clipboard.writeText(out).then(()=> alert('In Zwischenablage kopiert.')); };
+document.getElementById('btnDownload').onclick=()=>{ const out=document.querySelector('#codeOut pre').textContent; const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([out],{type:'text/html'})); a.download=fname.value||'ui-snippet.html'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
+
+/* =================== ZIP-Export (reines JS, „stored“ ZIP) =================== */
+document.getElementById('btnZip').onclick=()=>{ 
+  const htmlStr=document.querySelector('#codeOut pre').textContent || normalizeHTML(code.value);
+  const files = [{name: fname.value || 'ui-snippet.html', content: new TextEncoder().encode(htmlStr)}];
+  // Assets aus Templates (falls gewünscht später erweiterbar)
+  // Templates.forEach(t=> t.assets.forEach(a=> files.push(a)));
+
+  const zipBlob = makeZip(files); 
+  const a=document.createElement('a'); a.href=URL.createObjectURL(zipBlob); a.download=(fname.value||'ui-snippet')+'.zip'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+
+/* Minimaler ZIP-Builder (nur „store“), inkl. CRC32 */
+function makeZip(files){
+  const encoder = new TextEncoder();
+  const records = [];
+  let offset = 0;
+  const chunks = [];
+  files.forEach(f=>{
+    const nameBytes = encoder.encode(f.name);
+    const data = f.content instanceof Uint8Array ? f.content : encoder.encode(String(f.content||''));
+    const crc = crc32(data);
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    // Local file header signature
+    write32(localHeader, 0, 0x04034b50);
+    write16(localHeader, 4, 20); // version needed
+    write16(localHeader, 6, 0);  // flags
+    write16(localHeader, 8, 0);  // compression=0 (store)
+    write16(localHeader,10, 0);  // mod time
+    write16(localHeader,12, 0);  // mod date
+    write32(localHeader,14, crc>>>0);
+    write32(localHeader,18, data.length);
+    write32(localHeader,22, data.length);
+    write16(localHeader,26, nameBytes.length);
+    write16(localHeader,28, 0); // extra length
+    localHeader.set(nameBytes, 30);
+
+    chunks.push(localHeader, data);
+    records.push({nameBytes, crc, size:data.length, compSize:data.length, offset});
+    offset += localHeader.length + data.length;
+  });
+
+  const central = [];
+  let centralSize = 0;
+  records.forEach(r=>{
+    const c = new Uint8Array(46 + r.nameBytes.length);
+    write32(c, 0, 0x02014b50);
+    write16(c, 4, 20); // version made by
+    write16(c, 6, 20); // version needed
+    write16(c, 8, 0);  // flags
+    write16(c,10, 0);  // method
+    write16(c,12, 0);  // time
+    write16(c,14, 0);  // date
+    write32(c,16, r.crc>>>0);
+    write32(c,20, r.compSize);
+    write32(c,24, r.size);
+    write16(c,28, r.nameBytes.length);
+    write16(c,30, 0); // extra
+    write16(c,32, 0); // comment
+    write16(c,34, 0); // disk number
+    write16(c,36, 0); // internal attrs
+    write32(c,38, 0); // external attrs
+    write32(c,42, r.offset);
+    c.set(r.nameBytes, 46);
+    central.push(c);
+    centralSize += c.length;
+  });
+
+  const end = new Uint8Array(22);
+  write32(end, 0, 0x06054b50);
+  write16(end, 4, 0); // disk
+  write16(end, 6, 0); // start disk
+  write16(end, 8, records.length);
+  write16(end,10, records.length);
+  write32(end,12, centralSize);
+  write32(end,16, offset);
+  write16(end,20, 0); // comment
+
+  const total = chunks.reduce((n,a)=>n+a.length,0) + centralSize + end.length;
+  const out = new Uint8Array(total);
+  let p=0;
+  chunks.forEach(ch=>{ out.set(ch,p); p+=ch.length; });
+  central.forEach(ch=>{ out.set(ch,p); p+=ch.length; });
+  out.set(end,p);
+  return new Blob([out], {type:'application/zip'});
+}
+function write16(arr, pos, v){ arr[pos]=v&255; arr[pos+1]=(v>>>8)&255; }
+function write32(arr, pos, v){ arr[pos]=v&255; arr[pos+1]=(v>>>8)&255; arr[pos+2]=(v>>>16)&255; arr[pos+3]=(v>>>24)&255; }
+const CRC_TABLE = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=~0; for(let i=0;i<u8.length;i++) c=CRC_TABLE[(c^u8[i])&255]^(c>>>8); return (~c)>>>0; }
+
+/* =================== Vorschau & HTML-Build =================== */
+document.getElementById('btnRun').onclick=run;
+function buildHTML(shell, bodyHTML, jsInline){
+  const theme=themeSel.value;
+  const css = theme==='dark' ? darkCSS() : lightCSS();
+  let auto = '';
+  if(autoBoot.value==='uiReady'){
+    auto = `setTimeout(()=>{ window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'auto'}})); }, 300);`;
+  }
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${shell}</title>
+<style>${css}</style></head>
+<body>
+<div id="app" class="app">${bodyHTML}</div>
+<script>
+${jsInline||''}
+${auto}
+window.addEventListener('click', (e)=>{ 
+  if(window.parent && window.parent !== window){
+    try{
+      const p = computeSelector(e.target);
+      parent.postMessage({type:'previewClick', selector:p}, '*');
+    }catch(err){}
+  }
+});
+function computeSelector(el){
+  if(!el) return '';
+  if(el.id) return '#'+el.id;
+  let s = el.tagName.toLowerCase();
+  if(el.classList && el.classList.length) s += '.'+[...el.classList].join('.');
+  return s;
+}
+</script>
+</body></html>`;
+}
+
+function run(){
+  let html='';
+  if(fileKind.value==='html'){
+    html = normalizeHTML(code.value);
+  }else{
+    const js=code.value;
+    html = buildHTML(fname.value||'UI', '<h3>Container</h3><div id="mount"></div>', `try{ ${js} }catch(e){ console.error(e); }`);
+  }
+  const blob=new Blob([html],{type:'text/html'}); const url=URL.createObjectURL(blob);
+  frame.src = url;
+  document.querySelector('#codeOut pre').textContent = html;
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+
+/* Wrap Snippets zu vollständigem HTML */
+function normalizeHTML(src){
+  const hasHTML=/<html|<!doctype/i.test(src);
+  if(hasHTML) return src;
+  const scripts = [];
+  let bodyHTML = src.replace(/<script[\\s\\S]*?>[\\s\\S]*?<\\/script>/gi, m=>{ scripts.push(m.replace(/^<script[^>]*>|<\\/script>$/gi,'')); return ''; });
+  return buildHTML(fname.value||'UI', bodyHTML, scripts.join('\\n'));
+}
+
+/* =================== Property-Editor =================== */
+const selInput=document.getElementById('selInput');
+const propText=document.getElementById('propText');
+const propId=document.getElementById('propId');
+const propClass=document.getElementById('propClass');
+const propOnclick=document.getElementById('propOnclick');
+
+window.addEventListener('message',(ev)=>{
+  if(!ev.data || ev.data.type!=='previewClick') return;
+  selInput.value = ev.data.selector || '';
+});
+
+document.getElementById('btnPick').onclick=()=>{
+  alert('Im Preview klicken, um Element zu wählen.');
+  // (Listener ist bereits in Preview aktiv – Auswahl kommt via postMessage)
+};
+
+document.getElementById('btnApplyProps').onclick=()=>{
+  // parse aktuellen Code als DOM, finde Element per Selector, ändere Eigenschaften, schreibe zurück als HTML
+  try{
+    const html = normalizeHTML(code.value);
+    const dom = new DOMParser().parseFromString(html, 'text/html');
+    const selector = (selInput.value||'').trim();
+    if(!selector){ alert('Bitte Selector/ID angeben (z.B. #btnStart)'); return; }
+    const el = dom.querySelector(selector);
+    if(!el){ alert('Element nicht gefunden: '+selector); return; }
+    // Text/HTML
+    if(propText.value) el.innerHTML = propText.value;
+    // ID
+    if(propId.value){ el.id = propId.value; }
+    // Klassen
+    if(propClass.value){ el.setAttribute('class', propClass.value); }
+    // OnClick
+    if(propOnclick.value){
+      el.setAttribute('onclick', propOnclick.value);
+      // Sicherheit: vorhandene gleichnamige Listener bleiben – hier nur Inline onclick
+    }
+    // Back to source textarea (als Snippet ohne <html>, wenn Original kein volles HTML war)
+    const origWasFull = /<html|<!doctype/i.test(code.value);
+    if(origWasFull){
+      const ser = new XMLSerializer().serializeToString(dom);
+      code.value = ser;
+    }else{
+      const app = dom.querySelector('#app');
+      code.value = app ? app.innerHTML.trim() : dom.body.innerHTML.trim();
+    }
+    run();
+  }catch(err){
+    console.error(err);
+    alert('Konnte Eigenschaften nicht anwenden: '+err.message);
+  }
+};
+
+/* =================== Themes =================== */
+function darkCSS(){
+  return `:root{--bg:#0b0e17;--fg:#eaeef7;--muted:#9aa3b2;--accent:#3b82f6}
+body{background:var(--bg);color:var(--fg);font-family:system-ui;margin:0;padding:16px}
+button,input,select{background:#111827;color:var(--fg);border:1px solid #2b3245;border-radius:8px;padding:6px 10px}
+.panel{background:#0f1424;border:1px solid #26304a;border-radius:10px;padding:10px;margin:8px 0}
+.hud{position:fixed;bottom:12px;left:12px;right:12px;background:#0f1424;border:1px solid #26304a;border-radius:12px;padding:8px}
+.log{white-space:pre-wrap;font-family:ui-monospace;background:#0b0f1c;border:1px solid #26304a;border-radius:8px;padding:6px;margin-top:8px}`;
+}
+function lightCSS(){
+  return `:root{--bg:#f7f8fb;--fg:#0b1220;--muted:#5b6170;--accent:#2563eb}
+body{background:var(--bg);color:var(--fg);font-family:system-ui;margin:0;padding:16px}
+button,input,select{background:#fff;color:#0b1220;border:1px solid #d5d9e4;border-radius:8px;padding:6px 10px}
+.panel{background:#ffffff;border:1px solid #d5d9e4;border-radius:10px;padding:10px;margin:8px 0}
+.hud{position:fixed;bottom:12px;left:12px;right:12px;background:#ffffff;border:1px solid #d5d9e4;border-radius:12px;padding:8px}
+.log{white-space:pre-wrap;font-family:ui-monospace;background:#fff;border:1px solid #d5d9e4;border-radius:8px;padding:6px;margin-top:8px}`;
+}
+
+/* =================== Beispielinhalt =================== */
+function sampleHTML(){
+  return `<div class="panel"><h3>Start-Panel</h3>
+  <button id="btnStart">Start</button>
+  <button id="btnContinue">Continue</button>
+</div>
+<div class="hud">
+  <button id="btnBuild">Build</button>
+  <label><input type="checkbox" id="chkGrid"> Grid</label>
+</div>
+<script>
+document.getElementById('btnStart')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'start'}})));
+document.getElementById('btnContinue')?.addEventListener('click',()=> alert('Continue…'));
+document.getElementById('btnBuild')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{from:'hud'}})));
+document.getElementById('chkGrid')?.addEventListener('change',(e)=> console.log('Grid', e.target.checked));
+</script>`;
+}
+
+/* =================== Init =================== */
+code.value=sampleHTML();
+run();
+</script>
+</body>
+</html>
