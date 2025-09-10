@@ -156,5 +156,33 @@
     }
     return res;
   };
-})();
+/* Neue Siedler – Bootstrap Start-Hook (Patch) */
+(function () {
+  const ok   = (window.CBLog?.ok   ?? console.log).bind(console);
+  const warn = (window.CBLog?.warn ?? console.warn).bind(console);
+  const err  = (window.CBLog?.err  ?? console.error).bind(console);
+
+  // Reagiert auf den Start-Button aus ui-start.js
+  window.addEventListener('cb:game-start', async () => {
+    try {
+      // 1) Start-Panel sicher entfernen (falls noch sichtbar)
+      const sp = document.getElementById('start-panel');
+      if (sp && sp.parentNode) { sp.remove(); ok('[bootstrap] start-panel entfernt.'); }
+
+      // 2) Canvas prüfen
+      const cvs = document.getElementById('game');
+      if (!cvs) throw new Error('Canvas #game fehlt');
+
+      // 3) Map-Start/Refresh anstoßen – je nach verfügbarer API
+      //    (dein bestehender Code oben lädt die Map bereits; das hier ist ein „Kick“, falls ein Overlay/State blockiert)
+      if (window.Game?.Engine?.tick) {
+        window.Game.Engine.tick(); // leichter Kick
+      }
+
+      // Optional sichtbares Log-Event für den Inspector
+      (window.CBLog?.info ?? console.log)('[bootstrap] Start-Impuls gesendet (Hook aktiv).');
+    } catch (e) {
+      err('[bootstrap] Start-Hook Fehler:', e?.message || e);
+    }
+  });
 })();
