@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siedler · UI-Editor Advanced (Compact + Snap-Guides + CSS-Inline + Grid-Snap)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#151823; --fg:#e6eaf0; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; --ok:#7bd88f; --warn:#ffb454; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  header h1{margin:0;font-size:15px}
+  button,input,select,textarea{background:#1a1f2e;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+  button{cursor:pointer}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #2a3552;border-radius:999px;background:#0e1322}
+  main{display:grid;grid-template-columns:320px 1fr 420px;gap:10px;padding:10px;height:calc(100% - 58px)}
+  section{background:#121728;border:1px solid var(--border);border-radius:10px;min-height:0;display:flex;flex-direction:column}
+  section h2{margin:0;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px}
+  details{border-top:1px dashed #2a3146}
+  details>summary{cursor:pointer;list-style:none;padding:10px;font-weight:600}
+  details[open]{background:#0f1420}
+  .pad{padding:10px}
+  .list{display:grid;gap:8px}
+  .tool,.assetRow,.libRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px;border:1px solid #26304a;border-radius:8px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #canvasHeader{display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--border)}
+  #canvas{flex:1;background:#0b0e17;padding:8px;overflow:auto}
+  iframe{width:100%;height:100%;border:0;background:#111}
+  pre{margin:0;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:12px;line-height:1.45;color:#eaeef7;white-space:pre;overflow:auto;background:#0e1220;border-radius:8px}
+  #code{width:100%;height:140px;background:#0e1220;color:#eaeef7;border-radius:8px}
+  #styleArea{width:100%;height:96px;background:#0e1220;color:#eaeef7;border-radius:8px}
+  #props .grid{display:grid;grid-template-columns:120px 1fr;gap:6px;align-items:center}
+  #styleQuick .grid{display:grid;grid-template-columns:repeat(2, 1fr);gap:6px}
+  #dataList{display:grid;gap:6px}
+  .dataRow{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
+  #dropOverlay{position:fixed;inset:0;background:rgba(102,217,239,.07);border:3px dashed #66d9ef;display:none;align-items:center;justify-content:center;color:#66d9ef;font-size:18px;z-index:9999}
+  .token{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #2a3146;border-radius:999px;background:#0e1322;cursor:pointer}
+  .token:hover{outline:2px solid #3b82f6}
+  #errorBar{display:none;align-items:center;gap:8px;padding:6px 10px;background:#2a1620;border-bottom:1px solid #4a1f2d;color:#ff9fb0}
+</style>
+</head>
+<body>
+<header>
+  <h1>UI-Editor Advanced</h1>
+  <input type="file" id="openFile" multiple accept=".html,.htm,.js,.txt,.css,.json,.svg,.md">
+  <button id="btnLoadSample">Beispiel</button>
+  <button id="btnRun">Vorschau</button>
+  <button id="btnCopy">Kopieren</button>
+  <button id="btnDownload">Speichern</button>
+  <button id="btnZip">ZIP</button>
+  <button id="btnInlineCSS" title="Externe CSS-Links in <style> umwandeln (gleiche Origin/CORS)">CSS inline holen</button>
+  <span class="pill"><label class="row" title="WYSIWYG Overlay aktivieren"><input type="checkbox" id="wysiwyg" checked>WYSIWYG</label></span>
+  <span class="pill">Grid <select id="snapGrid"><option>8</option><option>10</option><option selected>12</option><option>16</option><option>24</option></select>px</span>
+  <span class="pill"><label class="row"><input type="checkbox" id="snapNeighbors" checked>Nachbarn</label></span>
+  <span class="pill"><label class="row"><input type="checkbox" id="showGuides" checked>Guides</label></span>
+  <span class="pill">Tol <select id="snapTol"><option>4</option><option selected>6</option><option>8</option><option>12</option></select>px</span>
+  <span class="pill"><label class="row"><input type="checkbox" id="snapCssGrid" checked>CSS-Grid Snap</label></span>
+</header>
+
+<div id="errorBar"></div>
+<div id="dropOverlay">Dateien hier ablegen, um sie zu importieren…</div>
+
+<main>
+  <!-- LINKS -->
+  <section id="left">
+    <h2>Vorlagen · Snippets · Assets</h2>
+    <details open>
+      <summary>Komponenten-Vorlagen</summary>
+      <div class="pad">
+        <div class="list" id="tplList"></div>
+        <div class="row">
+          <input id="libName" placeholder="Komponenten-Name">
+          <button id="libAddFromCode">Aus Code übernehmen</button>
+        </div>
+      </div>
+    </details>
+    <details>
+      <summary>Bibliothek (eigene · JSON)</summary>
+      <div class="pad">
+        <div class="row">
+          <button id="libSave">Speichern</button>
+          <input type="file" id="libLoadFile" accept=".json">
+          <button id="libLoad">Laden</button>
+        </div>
+        <div class="list" id="libList"></div>
+      </div>
+    </details>
+    <details>
+      <summary>Snippets</summary>
+      <div class="pad list">
+        <div class="tool"><span>Button</span><button data-snippet="&lt;button id='btn1'&gt;Klick&lt;/button&gt;">Einfügen</button></div>
+        <div class="tool"><span>Input</span><button data-snippet="&lt;input id='inp1' placeholder='Text…'&gt;">Einfügen</button></div>
+        <div class="tool"><span>Checkbox</span><button data-snippet="&lt;label&gt;&lt;input type='checkbox' id='chk1'&gt; Option&lt;/label&gt;">Einfügen</button></div>
+        <div class="tool"><span>Container</span><button data-snippet="&lt;div id='panel1' class='panel'&gt;&lt;/div&gt;">Einfügen</button></div>
+        <div class="tool"><span>Script-Hook</span><button data-snippet="&lt;script&gt;document.getElementById('btn1')?.addEventListener('click',()=>alert('hi'));&lt;/script&gt;">Einfügen</button></div>
+      </div>
+    </details>
+    <details>
+      <summary>Assets & GitHub</summary>
+      <div class="pad">
+        <div class="row">
+          <input id="assetUrl" placeholder="https://… (JS/CSS/IMG/JSON)">
+          <button id="assetAdd">Einfügen</button>
+        </div>
+        <div class="row">
+          <input id="ghOwner" placeholder="owner" style="width:110px">
+          <input id="ghRepo"  placeholder="repo"  style="width:110px">
+          <input id="ghBranch" placeholder="branch (main)" style="width:120px">
+          <input id="ghPath"   placeholder="Pfad im Repo" style="flex:1">
+          <button id="ghList">GitHub-Liste</button>
+        </div>
+        <div class="pad"><div class="list" id="assetList"></div></div>
+        <div class="pad" style="padding-top:0"><span class="token">💡 Zieh CSS/JS/HTML/JSON rein → wir betten es ein (CSS als &lt;style&gt;).</span></div>
+      </div>
+    </details>
+    <details open>
+      <summary>Schnell-Einfügen</summary>
+      <div class="pad">
+        <textarea id="quickPaste" placeholder="Code hier reinkopieren… (HTML/JS/CSS/JSON)"></textarea>
+        <div class="row" style="margin-top:6px">
+          <button id="quickInsertTop">Oben</button>
+          <button id="quickInsertCursor">Am Cursor</button>
+          <button id="quickInsertBottom">Unten</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- MITTE -->
+  <section id="canvasWrap">
+    <h2>Vorschau</h2>
+    <div id="canvasHeader" class="row">
+      <label>Datei <input id="fname" value="ui-snippet.html" style="min-width:180px"></label>
+      <label>Typ <select id="fileKind"><option value="html">HTML</option><option value="js">JS (einbetten)</option></select></label>
+      <label>Theme <select id="theme"><option value="light">Light</option><option value="dark" selected>Dark</option></select></label>
+      <label>Auto <select id="autoBoot"><option value="">(kein)</option><option value="uiReady">cb:ui-ready</option></select></label>
+    </div>
+    <div id="canvas"><iframe id="frame"></iframe></div>
+  </section>
+
+  <!-- RECHTS -->
+  <section id="editorCol">
+    <h2>Editor & Eigenschaften</h2>
+    <details open>
+      <summary>Code</summary>
+      <div class="pad"><textarea id="code" placeholder="HTML- oder JS-Code…"></textarea></div>
+    </details>
+    <details open>
+      <summary>Property-Editor</summary>
+      <div class="pad" id="props">
+        <div class="row"><input id="selInput" placeholder="Selector (z.B. #btnStart)"> <button id="btnPick">Im Preview wählen</button> <button id="btnApplyProps">Anwenden</button></div>
+        <div class="grid" style="margin-top:6px">
+          <div>Text/HTML</div><input id="propText">
+          <div>ID</div><input id="propId">
+          <div>Klassen</div><input id="propClass">
+          <div>OnClick (JS)</div><input id="propOnclick" placeholder="alert('hi')">
+        </div>
+      </div>
+    </details>
+    <details>
+      <summary>Style-Editor & Tokens</summary>
+      <div class="pad">
+        <div id="styleQuick" class="row" style="width:100%">
+          <div class="grid" style="width:100%">
+            <label>Breite<input id="stW" type="number" placeholder="px"></label>
+            <label>Höhe<input id="stH" type="number" placeholder="px"></label>
+            <label>Padding<input id="stPad" type="number" placeholder="px"></label>
+            <label>Radius<input id="stRad" type="number" placeholder="px"></label>
+            <label>Hintergrund<input id="stBg" placeholder="# / var(--panel)"></label>
+            <label>Farbe<input id="stColor" placeholder="# / var(--fg)"></label>
+          </div>
+        </div>
+        <div class="row" id="tokenPalette" style="flex-wrap:wrap;margin:8px 0"></div>
+        <textarea id="styleArea" placeholder="Inline CSS, z.B. display:flex; gap:8px;"></textarea>
+      </div>
+    </details>
+    <details>
+      <summary>Data-Attributes</summary>
+      <div class="pad">
+        <div class="row" style="margin-bottom:6px"><button id="dataAdd">+ Attribut</button></div>
+        <div id="dataList"></div>
+      </div>
+    </details>
+    <details open>
+      <summary>Build & Export</summary>
+      <div class="pad">
+        <div class="row">
+          <button id="btnRun2">Vorschau</button>
+          <button id="btnCopy2">Kopieren</button>
+          <button id="btnDownload2">Speichern</button>
+          <button id="btnZip2">ZIP</button>
+        </div>
+        <div id="codeOut"><pre>// „Vorschau“ bauen → hier erscheint die finale HTML-Datei</pre></div>
+      </div>
+    </details>
+    <details>
+      <summary>Bedienungsanleitung</summary>
+      <div class="pad" style="font-size:13px;line-height:1.5">
+        <p><strong>Schnellstart:</strong> Code einfügen (oder Dateien droppen) → „Vorschau“.  
+        WYSIWYG aktiv → Element im Preview anklicken → ziehen oder Ecken ziehen. Snap-Grid, Nachbar-Snap, CSS-Grid-Snap oben schalten.  
+        „CSS inline holen“ wandelt `<link>` in `<style>` um (CORS/Origin erforderlich).</p>
+        <ul>
+          <li><strong>Kein CSS sichtbar?</strong> Button „CSS inline holen“ nutzen oder lokal hosten (z. B. <code>npx http-server</code>).</li>
+          <li><strong>WYSIWYG-Guides:</strong> Container-Ränder (L/R/T/B/Mitte), Nachbarn (Kanten & Mitte), optional Grid-Spalten.</li>
+          <li><strong>Export:</strong> Alle Inline-Styles vom WYSIWYG werden übernommen (Kopieren/ZIP).</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+</main>
+
+<div id="errorBar"></div>
+
+<script>
+/* ===== Basis-Refs ===== */
+const frame=document.getElementById('frame'), code=document.getElementById('code'), fname=document.getElementById('fname');
+const fileKind=document.getElementById('fileKind'), themeSel=document.getElementById('theme'), autoBoot=document.getElementById('autoBoot');
+const dropOverlay=document.getElementById('dropOverlay');
+const wysiwyg=document.getElementById('wysiwyg'), snapGridSel=document.getElementById('snapGrid'), snapTolSel=document.getElementById('snapTol');
+const snapNeighbors=document.getElementById('snapNeighbors'), showGuides=document.getElementById('showGuides'), snapCssGrid=document.getElementById('snapCssGrid');
+const errorBar=document.getElementById('errorBar');
+const btnInlineCSS=document.getElementById('btnInlineCSS');
+
+/* ===== Built-In Vorlagen ===== */
+const BuiltInTemplates = [
+  { name:'Start-Panel', html:`<div class="panel" id="start-panel">
+  <h3>Start-Panel</h3>
+  <button id="btnStart">Start</button>
+  <button id="btnContinue">Continue</button>
+</div>
+<script>
+document.getElementById('btnStart')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'start'}})));
+document.getElementById('btnContinue')?.addEventListener('click',()=> alert('Continue…'));
+</script>`},
+  { name:'HUD-BuildDock (exakt)', html:`<div class="hud" id="hud-build" style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 10px;">
+  <div style="display:flex;gap:8px;align-items:center">
+    <button id="btnRoad">Straße</button>
+    <button id="btnHouse">Haus</button>
+    <button id="btnDepot">Depot</button>
+    <button id="btnCancel">Abbrechen</button>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="chkGrid"> Grid</label>
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="chkSnap"> Snap</label>
+  </div>
+</div>
+<script>
+const emit=(ev,detail)=>window.dispatchEvent(new CustomEvent(ev,{detail}));
+document.getElementById('btnRoad')?.addEventListener('click',()=> emit('cb:build-open',{tool:'road'}));
+document.getElementById('btnHouse')?.addEventListener('click',()=> emit('cb:build-open',{tool:'house'}));
+document.getElementById('btnDepot')?.addEventListener('click',()=> emit('cb:build-open',{tool:'depot'}));
+document.getElementById('btnCancel')?.addEventListener('click',()=> emit('cb:build-cancel',{}));
+document.getElementById('chkGrid')?.addEventListener('change',(e)=> emit('hud:grid',{enabled:e.target.checked}));
+document.getElementById('chkSnap')?.addEventListener('change',(e)=> emit('hud:snap',{enabled:e.target.checked}));
+</script>`},
+  { name:'Inspector', html:`<div class="panel" id="inspector">
+  <h3>Inspector</h3>
+  <button id="btnToggle">Toggle Overlay</button>
+  <div id="log" class="log"></div>
+</div>
+<script>
+document.getElementById('btnToggle')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('toggle.overlay',{detail:{}})));
+window.addEventListener('log-feed', (e)=> {
+  const el=document.getElementById('log'); el.textContent += JSON.stringify(e.detail)+'\\n';
+});
+</script>`},
+  { name:'Debug-Overlay', html:`<div class="panel" id="debug-overlay">
+  <h3>Debug</h3>
+  <button id="btnPF">Path-Overlay</button>
+  <button id="btnTests">Run Tests</button>
+</div>
+<script>
+document.getElementById('btnPF')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('debug:path-overlay',{detail:{enable:true}})));
+document.getElementById('btnTests')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('tests.run',{detail:{suite:'smoke'}})));
+</script>`},
+];
+let CustomLibrary=[];
+
+/* ===== Templates & Library Renders (unverändert) ===== */
+const tplList=document.getElementById('tplList');
+const libList=document.getElementById('libList');
+const libName=document.getElementById('libName');
+const libLoadFile=document.getElementById('libLoadFile');
+
+function renderTemplates(){
+  tplList.innerHTML='';
+  [...BuiltInTemplates, ...CustomLibrary].forEach((t,i)=>{
+    const isCustom = i >= BuiltInTemplates.length;
+    const row=document.createElement('div'); row.className='tool';
+    row.innerHTML = `<span>${isCustom?'⭐ ':''}${t.name}</span>
+      <span class="row">
+        <button data-idx="${i}" data-kind="insert">Einfügen</button>
+        ${isCustom?'<button data-idx="'+i+'" data-kind="delete">Löschen</button>':''}
+      </span>`;
+    tplList.appendChild(row);
+  });
+  tplList.querySelectorAll('button[data-kind="insert"]').forEach(b=> b.onclick=()=> {
+    const idx=+b.dataset.idx;
+    const t = idx < BuiltInTemplates.length ? BuiltInTemplates[idx] : CustomLibrary[idx - BuiltInTemplates.length];
+    insertAtCursor(code, (t.html || '') + "\n");
+  });
+  tplList.querySelectorAll('button[data-kind="delete"]').forEach(b=> b.onclick=()=> {
+    const idx=+b.dataset.idx - BuiltInTemplates.length;
+    if(idx>=0){ CustomLibrary.splice(idx,1); renderTemplates(); renderLibrary(); }
+  });
+}
+function renderLibrary(){
+  libList.innerHTML='';
+  CustomLibrary.forEach((t,i)=>{
+    const row=document.createElement('div'); row.className='libRow';
+    row.innerHTML = `<div><strong>${t.name}</strong></div>
+     <div class="row"><button data-i="${i}" data-k="ins">Einfügen</button>
+       <button data-i="${i}" data-k="up">Umbenennen</button>
+       <button data-i="${i}" data-k="del">Löschen</button></div>`;
+    libList.appendChild(row);
+  });
+  libList.querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    const i=+b.dataset.i, k=b.dataset.k;
+    if(k==='ins') insertAtCursor(code, CustomLibrary[i].html + "\n");
+    if(k==='up'){ const nv=prompt('Neuer Name:', CustomLibrary[i].name)||CustomLibrary[i].name; CustomLibrary[i].name=nv; renderLibrary(); renderTemplates(); }
+    if(k==='del'){ CustomLibrary.splice(i,1); renderLibrary(); renderTemplates(); }
+  });
+}
+document.getElementById('libAddFromCode').onclick=()=>{
+  const name=(libName.value||'Komponente').trim(); if(!name) return;
+  const html=code.value.trim(); if(!html) return alert('Kein Code im Editor.');
+  CustomLibrary.push({name, html}); libName.value=''; renderLibrary(); renderTemplates();
+};
+document.getElementById('libSave').onclick=()=>{
+  const data=JSON.stringify(CustomLibrary,null,2);
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+  a.download='ui-components-library.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+document.getElementById('libLoad').onclick=()=> libLoadFile.click();
+libLoadFile.onchange=(e)=>{
+  const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{
+    try{ CustomLibrary=JSON.parse(r.result)||[]; renderLibrary(); renderTemplates(); }
+    catch(err){ alert('JSON ungültig: '+err.message); }
+  }; r.readAsText(f);
+};
+
+/* ===== Snippets & Quick Insert ===== */
+document.querySelectorAll('[data-snippet]').forEach(b=> b.onclick=()=> insertAtCursor(code, b.getAttribute('data-snippet') + "\n"));
+function insertAtCursor(textarea, text){ const st=textarea.selectionStart, en=textarea.selectionEnd, before=textarea.value.slice(0,st), after=textarea.value.slice(en); textarea.value=before+text+after; textarea.selectionStart=textarea.selectionEnd=st+text.length; textarea.focus(); }
+document.getElementById('quickInsertTop').onclick=()=>{ code.value = document.getElementById('quickPaste').value + "\n" + code.value; };
+document.getElementById('quickInsertCursor').onclick=()=> insertAtCursor(code, document.getElementById('quickPaste').value + "\n");
+document.getElementById('quickInsertBottom').onclick=()=>{ code.value = code.value + "\n" + document.getElementById('quickPaste').value + "\n"; };
+
+/* ===== Drag & Drop ===== */
+;['dragenter','dragover'].forEach(ev=> window.addEventListener(ev, e=>{ e.preventDefault(); dropOverlay.style.display='flex'; }));
+;['dragleave','drop'].forEach(ev=> window.addEventListener(ev, e=>{ e.preventDefault(); dropOverlay.style.display='none'; }));
+window.addEventListener('drop', async (e)=>{
+  const files = e.dataTransfer.files; if(!files?.length) return;
+  for(const f of files){ await importFile(f); }
+});
+document.getElementById('openFile').onchange=async (e)=>{ for (const f of e.target.files){ await importFile(f); } };
+async function importFile(f){
+  try{
+    if(/^text|json|svg|javascript|css|xml/.test(f.type) || /\.(html?|js|css|json|svg|md|txt)$/i.test(f.name)){
+      const txt = await f.text();
+      if(/<\/?\w+/.test(txt) || /<!doctype/i.test(txt)) insertAtCursor(code, txt + "\n");
+      else if(/\b(function|const|let|var|=>|addEventListener)\b/.test(txt)) insertAtCursor(code, `<script>\n${txt}\n</script>\n`);
+      else if(/[{;]\s*[\w-]+\s*:\s*[^;]+;/.test(txt)) insertAtCursor(code, `<style>\n${txt}\n</style>\n`);
+      else insertAtCursor(code, txt + "\n");
+    } else {
+      const url=URL.createObjectURL(f); insertAsset(url, f.name);
+    }
+  }catch(err){ console.error(err); }
+}
+
+/* ===== Assets & GitHub ===== */
+const assetUrl=document.getElementById('assetUrl');
+const assetList=document.getElementById('assetList');
+const ghOwner=document.getElementById('ghOwner'), ghRepo=document.getElementById('ghRepo'), ghBranch=document.getElementById('ghBranch'), ghPath=document.getElementById('ghPath');
+const collectedAssets=[];
+document.getElementById('assetAdd').onclick=()=>{ const url=assetUrl.value.trim(); if(!url) return; insertAsset(url); assetUrl.value=''; };
+document.getElementById('ghList').onclick=async()=>{
+  const owner=ghOwner.value.trim(), repo=ghRepo.value.trim(), branch=ghBranch.value.trim()||'main', path=ghPath.value.trim()||'';
+  if(!owner || !repo){ alert('Owner und Repo angeben.'); return; }
+  const api = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`;
+  try{
+    const res=await fetch(api); if(!res.ok) throw new Error('HTTP '+res.status);
+    const list=await res.json();
+    assetList.innerHTML='';
+    (Array.isArray(list)?list:[list]).forEach(item=>{
+      if(item.type!=='file') return;
+      const row=document.createElement('div'); row.className='assetRow';
+      const raw=item.download_url || item.html_url || item.url;
+      row.innerHTML = `<div><strong>${item.name}</strong><br><small>${item.path}</small></div><div class="row"><button data-url="${raw}">Einfügen</button></div>`;
+      row.querySelector('button').onclick=()=> insertAsset(raw);
+      assetList.appendChild(row);
+    });
+  }catch(e){ console.error(e); alert('GitHub-Dateien nicht geladen: '+e.message); }
+};
+function insertAsset(url, filename=''){
+  const u=(url.split('?')[0]||'').toLowerCase(); let tag='';
+  if(u.endsWith('.js')) tag = `<script src="${url}"></script>`;
+  else if(u.endsWith('.css')) tag = `<link rel="stylesheet" href="${url}">`;
+  else if(/\.(png|jpe?g|gif|webp|bmp|svg)$/.test(u)) tag = `<img src="${url}" alt="">`;
+  else if(u.endsWith('.json')) tag = `<script type="application/json" data-src="${url}"></script>`;
+  else if(filename){
+    const ext = filename.split('.').pop().toLowerCase();
+    if(['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext)) tag=`<img src="${url}" alt="">`;
+    else if(ext==='js') tag=`<script src="${url}"></script>`;
+    else if(ext==='css') tag=`<link rel="stylesheet" href="${url}">`;
+    else if(ext==='json') tag=`<script type="application/json" data-src="${url}"></script>`;
+    else tag=`<!-- Unbekannter Typ: ${filename} (${url}) -->`;
+  } else tag=`<!-- Unbekannter Typ: ${url} -->`;
+  const src=code.value;
+  if(/<\/body>/i.test(src)) code.value = src.replace(/<\/body>/i, tag + "\n</body>");
+  else code.value = src + "\n" + tag + "\n";
+  collectedAssets.push(url);
+}
+
+/* ===== CSS-Tokens ===== */
+const TOKENS = {
+  Farben: ['var(--bg)','var(--panel)','var(--fg)','var(--muted)','var(--accent)','#0b0e17','#eaeef7','#3b82f6','#0f1424','#26304a'],
+  Spacing: ['2px','4px','6px','8px','10px','12px','16px','20px','24px','32px','40px'],
+  Radii: ['2px','4px','6px','8px','10px','12px'],
+  Shadow: ['0 2px 8px rgba(0,0,0,.2)','0 6px 24px rgba(0,0,0,.25)']
+};
+const tokenPalette=document.getElementById('tokenPalette');
+function renderTokens(){
+  tokenPalette.innerHTML='';
+  Object.entries(TOKENS).forEach(([cat, arr])=>{
+    const label=document.createElement('div'); label.className='row'; label.innerHTML=`<strong>${cat}:</strong>`;
+    tokenPalette.appendChild(label);
+    const wrap=document.createElement('div'); wrap.className='row'; wrap.style.flexWrap='wrap';
+    arr.forEach(v=>{ const b=document.createElement('span'); b.className='token'; b.textContent=v; b.title='Klick: in Style/Editor einfügen'; b.onclick=()=> insertToken(v); wrap.appendChild(b); });
+    tokenPalette.appendChild(wrap);
+  });
+}
+function insertToken(v){ const target = document.activeElement === code ? code : document.getElementById('styleArea'); insertAtCursor(target, v); }
+
+/* ===== Build / Preview / Export ===== */
+document.getElementById('btnRun').onclick=run; document.getElementById('btnRun2').onclick=run;
+document.getElementById('btnCopy').onclick=copyOut; document.getElementById('btnCopy2').onclick=copyOut;
+document.getElementById('btnDownload').onclick=downloadOut; document.getElementById('btnDownload2').onclick=downloadOut;
+document.getElementById('btnZip').onclick=zipOut; document.getElementById('btnZip2').onclick=zipOut;
+
+function copyOut(){ const out=document.querySelector('#codeOut pre').textContent; navigator.clipboard.writeText(out).then(()=> alert('In Zwischenablage kopiert.')); }
+function downloadOut(){ const out=document.querySelector('#codeOut pre').textContent; const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([out],{type:'text/html'})); a.download=fname.value||'ui-snippet.html'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function zipOut(){ const htmlStr=document.querySelector('#codeOut pre').textContent || normalizeHTML(code.value); const files=[{name: fname.value || 'ui-snippet.html', content: new TextEncoder().encode(htmlStr)}]; const readme = `UI ZIP Export\n\nDatei: ${fname.value||'ui-snippet.html'}\nAssets (URLs):\n${collectedAssets.map(u=>'- '+u).join('\n')}`; files.push({name:'README.txt', content:new TextEncoder().encode(readme)}); const zipBlob = makeZip(files); const a=document.createElement('a'); a.href=URL.createObjectURL(zipBlob); a.download=(fname.value||'ui-snippet')+'.zip'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+
+function run(){
+  errorBar.style.display='none'; errorBar.textContent='';
+  let html=''; if(fileKind.value==='html'){ html = normalizeHTML(code.value); } else { const js=code.value; html = buildHTML(fname.value||'UI', '<h3>Container</h3><div id="mount"></div>', `try{ ${js} }catch(e){ console.error(e); }`); }
+  const blob=new Blob([html],{type:'text/html'}); const url=URL.createObjectURL(blob);
+  frame.src = url; document.querySelector('#codeOut pre').textContent = html;
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+function darkCSS(){ return `:root{--bg:#0b0e17;--fg:#eaeef7;--muted:#9aa3b2;--accent:#3b82f6}
+body{background:var(--bg);color:var(--fg);font-family:system-ui;margin:0;padding:16px}
+button,input,select{background:#111827;color:var(--fg);border:1px solid #2b3245;border-radius:8px;padding:6px 10px}
+.panel{background:#0f1424;border:1px solid #26304a;border-radius:10px;padding:10px;margin:8px 0}
+.hud{position:fixed;bottom:12px;left:12px;right:12px;background:#0f1424;border:1px solid #26304a;border-radius:12px;padding:8px}
+.log{white-space:pre-wrap;font-family:ui-monospace;background:#0b0f1c;border:1px solid #26304a;border-radius:8px;padding:6px;margin-top:8px}`; }
+function lightCSS(){ return `:root{--bg:#f7f8fb;--fg:#0b1220;--muted:#5b6170;--accent:#2563eb}
+body{background:var(--bg);color:var(--fg);font-family:system-ui;margin:0;padding:16px}
+button,input,select{background:#fff;color:#0b1220;border:1px solid #d5d9e4;border-radius:8px;padding:6px 10px}
+.panel{background:#ffffff;border:1px solid #d5d9e4;border-radius:10px;padding:10px;margin:8px 0}
+.hud{position:fixed;bottom:12px;left:12px;right:12px;background:#ffffff;border:1px solid #d5d9e4;border-radius:12px;padding:8px}
+.log{white-space:pre-wrap;font-family:ui-monospace;background:#fff;border:1px solid #d5d9e4;border-radius:8px;padding:6px;margin-top:8px}`; }
+
+function buildHTML(shell, bodyHTML, jsInline){
+  const theme=themeSel.value; const css = theme==='dark' ? darkCSS() : lightCSS();
+  let auto = ''; if(autoBoot.value==='uiReady'){ auto = `setTimeout(()=>{ window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'auto'}})); }, 300);`; }
+  const cfg = { 
+    grid: Number(snapGridSel.value||12)||12, 
+    tol: Number(snapTolSel.value||6)||6, 
+    neighbors: !!snapNeighbors.checked, 
+    guides: !!showGuides.checked,
+    cssGrid: !!snapCssGrid.checked
+  };
+  const wysi = wysiwyg.checked ? wysiOverlayScript(cfg) : '';
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${shell}</title>
+<style>${css}</style></head>
+<body>
+<div id="app" class="app">${bodyHTML}</div>
+<script>
+${jsInline||''}
+${auto}
+${wysi}
+// Fehler an Parent melden
+window.addEventListener('error', e=> parent.postMessage({type:'previewError', msg:String(e.message||e.error||e)}, '*'));
+window.addEventListener('unhandledrejection', e=> parent.postMessage({type:'previewError', msg:String(e.reason||e)}, '*'));
+// Klick-Selector an Parent
+window.addEventListener('click', (e)=>{ 
+  if(window.parent && window.parent !== window){
+    try{
+      const p = computeSelector(e.target);
+      parent.postMessage({type:'previewClick', selector:p}, '*');
+    }catch(err){}
+  }
+});
+function computeSelector(el){
+  if(!el) return '';
+  if(el.id) return '#'+el.id;
+  let s = el.tagName.toLowerCase();
+  if(el.classList && el.classList.length) s += '.'+[...el.classList].join('.');
+  return s;
+}
+</script>
+</body></html>`;
+}
+function normalizeHTML(src){
+  const hasHTML=/<html|<!doctype/i.test(src);
+  if(hasHTML) return src;
+  const scripts = [];
+  let bodyHTML = src.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, m=>{ scripts.push(m.replace(/^<script[^>]*>|<\/script>$/gi,'')); return ''; });
+  return buildHTML(fname.value||'UI', bodyHTML, scripts.join('\n'));
+}
+
+/* ===== CSS inline holen ===== */
+btnInlineCSS.addEventListener('click', async ()=>{
+  try{
+    const html = normalizeHTML(code.value);
+    const dom = new DOMParser().parseFromString(html,'text/html');
+    const links = [...dom.querySelectorAll('link[rel="stylesheet"][href]')];
+    let inlined = 0, failed = 0;
+    for(const link of links){
+      const href = link.getAttribute('href');
+      try{
+        const res = await fetch(href, {mode:'cors'}); // funktioniert bei CORS/gleicher Origin
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const css = await res.text();
+        const st = dom.createElement('style'); st.textContent = css;
+        link.replaceWith(st); inlined++;
+      }catch(e){ failed++; }
+    }
+    const ser = new XMLSerializer().serializeToString(dom);
+    code.value = ser.includes('<html') ? ser : dom.body.innerHTML.trim();
+    run();
+    alert(`CSS inline: ${inlined} Stylesheets eingebettet${failed?`, ${failed} fehlgeschlagen (CORS/Origin)`:''}.`);
+  }catch(err){
+    alert('CSS inline fehlgeschlagen: '+err.message);
+  }
+});
+
+/* ===== WYSIWYG Overlay mit Container-Guides & CSS-Grid-Snap ===== */
+function wysiOverlayScript(cfgStr){
+  const conf = JSON.stringify(cfgStr||{grid:12,tol:6,neighbors:true,guides:true,cssGrid:true});
+  return `(function(){
+  const CFG = ${conf};
+  let SEL=null, BOX=null, ROOT=null, START=null, MODE=null, GUIDES=[];
+  function ensure(){ if(ROOT) return; ROOT=document.createElement('div'); ROOT.id='wysi-overlay'; Object.assign(ROOT.style,{position:'absolute',inset:'0',pointerEvents:'none',zIndex:9999}); document.addEventListener('DOMContentLoaded', ()=>{ const app=document.querySelector('#app')||document.body; if(getComputedStyle(app).position==='static') app.style.position='relative'; app.appendChild(ROOT); }); }
+  function makeHandle(cursor,x,y,kind){ const h=document.createElement('div'); Object.assign(h.style,{position:'absolute',width:'10px',height:'10px',background:'#66d9ef',borderRadius:'2px',transform:'translate(-50%,-50%)',left:x+'%',top:y+'%',cursor,pointerEvents:'auto'}); h.dataset.kind=kind; h.onmousedown=(e)=>{ e.preventDefault(); startDrag(e,kind); }; return h; }
+  function clearGuides(){ GUIDES.forEach(g=>g.remove()); GUIDES.length=0; }
+  function addGuide(x1,y1,x2,y2){ if(!CFG.guides) return; const g=document.createElement('div'); const left=Math.min(x1,x2), top=Math.min(y1,y2); const w=Math.max(1,Math.abs(x2-x1)), h=Math.max(1,Math.abs(y2-y1)); Object.assign(g.style,{position:'absolute',left:left+'px',top:top+'px',width:w+'px',height:h+'px',background:'rgba(59,130,246,.9)'}); ROOT.appendChild(g); GUIDES.push(g); }
+  function boxRect(el){ const r=el.getBoundingClientRect(), pr=(document.querySelector('#app')||document.body).getBoundingClientRect(); return {L:r.left-pr.left+scrollX,T:r.top-pr.top+scrollY,W:r.width,H:r.height}; }
+  function drawBox(t){ if(BOX) BOX.remove(); if(!t) return; const r=boxRect(t); BOX=document.createElement('div'); Object.assign(BOX.style,{position:'absolute',left:r.L+'px',top:r.T+'px',width:r.W+'px',height:r.H+'px',outline:'2px solid #3b82f6',pointerEvents:'auto'}); 
+    const hs=[['nwse-resize',0,0,'tl'],['nesw-resize',100,0,'tr'],['nesw-resize',0,100,'bl'],['nwse-resize',100,100,'br']].map(([cur,x,y,k])=>makeHandle(cur,x,y,k));
+    hs.forEach(h=>BOX.appendChild(h)); BOX.onmousedown=(ev)=>{ ev.preventDefault(); startDrag(ev,'move'); }; ROOT.appendChild(BOX); }
+  function targets(){ const app=document.querySelector('#app')||document.body; return [...app.querySelectorAll('*')].filter(el=> el!==BOX && !el.closest('#wysi-overlay')); }
+  function edges(r){ return {L:r.L, R:r.L+r.W, CX:r.L+r.W/2, T:r.T, B:r.T+r.H, CY:r.T+r.H/2}; }
+  function snapVal(v,g){ return Math.round(v/g)*g; }
+
+  /* === Container Guides & Grid Columns === */
+  function containerInfo(){
+    const app=document.querySelector('#app')||document.body;
+    const pr=app.getBoundingClientRect();
+    const w=pr.width, h=pr.height;
+    const guides = { // Kanten & Mitte
+      vertical: [0, w/2, w],
+      horizontal: [0, h/2, h]
+    };
+    let columns = [];
+    if(CFG.cssGrid){
+      const cs = getComputedStyle(app);
+      const cols = cs.gridTemplateColumns;
+      const count = parseGridCount(cols);
+      if(count>1){
+        const step = w / count;
+        for(let i=0;i<=count;i++) columns.push(Math.round(i*step));
+      }
+    }
+    return {pr, guides, columns};
+  }
+  function parseGridCount(str){
+    if(!str || str==='none') return 0;
+    // grobe Annäherung: repeat(n, ...) -> n; sonst Anzahl tokens
+    const rep = /repeat\\(\\s*(\\d+)\\s*,/i.exec(str);
+    if(rep) return parseInt(rep[1],10);
+    const parts = str.trim().split(/\\s+/);
+    return parts.length;
+  }
+
+  function neighborSnap(candidate, axis){ // axis 'x' or 'y'
+    const tol=CFG.tol; const app=document.querySelector('#app')||document.body; const pr=app.getBoundingClientRect();
+    const TGT=targets().filter(el=> el!==SEL);
+    let best={d:Infinity, val:candidate, guide:null};
+    TGT.forEach(el=>{
+      const r=boxRect(el), e={L:r.L, R:r.L+r.W, CX:r.L+r.W/2, T:r.T, B:r.T+r.H, CY:r.T+r.H/2};
+      const comps = axis==='x' ? [e.L, e.CX, e.R] : [e.T, e.CY, e.B];
+      comps.forEach(cv=>{
+        const d=Math.abs(cv - candidate);
+        if(d<=tol && d<best.d){ best={d, val:cv, guide: axis==='x' ? [cv,0,cv,pr.height] : [0,cv,pr.width,cv]}; }
+      });
+    });
+    return best;
+  }
+  function containerSnap(candidate, axis){
+    const tol=CFG.tol;
+    const {pr,guides} = containerInfo();
+    const comps = axis==='x' ? guides.vertical : guides.horizontal;
+    let best={d:Infinity, val:candidate, guide:null};
+    comps.forEach(cv=>{
+      const d=Math.abs(cv - candidate);
+      if(d<=tol && d<best.d){
+        best={d, val:cv, guide: axis==='x' ? [cv,0,cv,pr.height] : [0,cv,pr.width,cv]};
+      }
+    });
+    return best;
+  }
+  function gridSnapX(candidate){
+    if(!CFG.cssGrid) return {val:candidate,guide:null};
+    const tol=CFG.tol; const {pr,columns}=containerInfo();
+    if(!columns.length) return {val:candidate,guide:null};
+    let best={d:Infinity, val:candidate, guide:null};
+    columns.forEach(cv=>{
+      const d=Math.abs(cv - candidate);
+      if(d<=tol && d<best.d){ best={d, val:cv, guide:[cv,0,cv,pr.height]}; }
+    });
+    return best;
+  }
+
+  function startDrag(e,kind){ MODE=kind; START={x:e.clientX,y:e.clientY, rect:BOX.getBoundingClientRect()}; window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',stopDrag); }
+  function onMove(e){
+    if(!SEL||!BOX) return; clearGuides();
+    const dx=e.clientX-START.x, dy=e.clientY-START.y;
+    const app=document.querySelector('#app')||document.body; const pr=app.getBoundingClientRect();
+    let L=START.rect.left - pr.left + dx + scrollX, T=START.rect.top - pr.top + dy + scrollY, W=START.rect.width, H=START.rect.height;
+
+    if(MODE==='move'){
+      if(CFG.neighbors){ const sx=neighborSnap(L,'x'); L=sx.val; if(sx.guide) addGuide(...sx.guide); const sy=neighborSnap(T,'y'); T=sy.val; if(sy.guide) addGuide(...sy.guide); }
+      const cx=containerSnap(L,'x'); if(cx.guide){ L=cx.val; addGuide(...cx.guide); }
+      const cy=containerSnap(T,'y'); if(cy.guide){ T=cy.val; addGuide(...cy.guide); }
+      const gx=gridSnapX(L); if(gx.guide){ L=gx.val; addGuide(...gx.guide); }
+      if(CFG.grid){ L=snapVal(L,CFG.grid); T=snapVal(T,CFG.grid); }
+    }else{
+      if(MODE==='br'){ W=Math.max(10,START.rect.width + dx); H=Math.max(10,START.rect.height + dy); }
+      if(MODE==='tr'){ W=Math.max(10,START.rect.width + dx); T=START.rect.top - pr.top + dy + scrollY; H=Math.max(10,START.rect.height - dy); }
+      if(MODE==='bl'){ L=START.rect.left - pr.left + dx + scrollX; W=Math.max(10,START.rect.width - dx); H=Math.max(10,START.rect.height + dy); }
+      if(MODE==='tl'){ L=START.rect.left - pr.left + dx + scrollX; T=START.rect.top - pr.top + dy + scrollY; W=Math.max(10,START.rect.width - dx); H=Math.max(10,START.rect.height - dy); }
+      if(CFG.neighbors){
+        const sx=neighborSnap(L,'x'); L=sx.val; if(sx.guide) addGuide(...sx.guide);
+        const gx=gridSnapX(L); if(gx.guide){ L=gx.val; addGuide(...gx.guide); }
+        const sy=neighborSnap(T,'y'); T=sy.val; if(sy.guide) addGuide(...sy.guide);
+      }
+      const cx=containerSnap(L,'x'); if(cx.guide){ L=cx.val; addGuide(...cx.guide); }
+      const cy=containerSnap(T,'y'); if(cy.guide){ T=cy.val; addGuide(...cy.guide); }
+      if(CFG.grid){ L=snapVal(L,CFG.grid); T=snapVal(T,CFG.grid); W=snapVal(W,CFG.grid); H=snapVal(H,CFG.grid); }
+    }
+    Object.assign(BOX.style,{left:L+'px', top:T+'px', width:W+'px', height:H+'px'});
+  }
+  function stopDrag(){ window.removeEventListener('mousemove',onMove); window.removeEventListener('mouseup',stopDrag);
+    if(!SEL||!BOX) return; const s=SEL.style; if(getComputedStyle(SEL).position==='static'){ s.position='absolute'; }
+    s.left=BOX.style.left; s.top=BOX.style.top; s.width=BOX.style.width; s.height=BOX.style.height;
+  }
+  function pick(e){ if(!window.__WYSI_ENABLED__) return; if(!e.target.closest('#wysi-overlay')){ SEL=e.target; drawBox(SEL); } }
+  window.addEventListener('click', pick, true);
+
+  ensure();
+  window.__enableWysi=function(flag){ window.__WYSI_ENABLED__=!!flag; if(!flag){ if(BOX){BOX.remove(); BOX=null;} clearGuides(); } };
+  window.__updateWysi=function(next){ Object.assign(CFG, next||{}); };
+})();`;
+}
+
+/* ===== Property & Data-Attributes ===== */
+const selInput=document.getElementById('selInput');
+const propText=document.getElementById('propText'); const propId=document.getElementById('propId'); const propClass=document.getElementById('propClass'); const propOnclick=document.getElementById('propOnclick');
+const stW=document.getElementById('stW'), stH=document.getElementById('stH'), stPad=document.getElementById('stPad'), stRad=document.getElementById('stRad'), stBg=document.getElementById('stBg'), stColor=document.getElementById('stColor');
+const styleArea=document.getElementById('styleArea'); const dataList=document.getElementById('dataList');
+
+window.addEventListener('message',(ev)=>{
+  const d=ev.data||{};
+  if(d.type==='previewClick'){ selInput.value = d.selector || ''; }
+  if(d.type==='previewError'){ errorBar.textContent = 'Vorschau-Fehler: ' + d.msg; errorBar.style.display='flex'; }
+});
+document.getElementById('btnPick').onclick=()=> alert('Im Preview klicken → Selector wird übernommen.');
+document.getElementById('btnApplyProps').onclick=()=>{
+  try{
+    const html = normalizeHTML(code.value); const dom = new DOMParser().parseFromString(html, 'text/html');
+    const selector = (selInput.value||'').trim(); if(!selector){ alert('Selector/ID angeben'); return; }
+    const el = dom.querySelector(selector); if(!el){ alert('Element nicht gefunden: '+selector); return; }
+    if(propText.value !== '') el.innerHTML = propText.value;
+    if(propId.value) el.id = propId.value;
+    if(propClass.value) el.setAttribute('class', propClass.value);
+    if(propOnclick.value) el.setAttribute('onclick', propOnclick.value);
+    const styleParts=[]; if(stW.value) styleParts.push(`width:${stW.value}px`); if(stH.value) styleParts.push(`height:${stH.value}px`); if(stPad.value) styleParts.push(`padding:${stPad.value}px`); if(stRad.value) styleParts.push(`border-radius:${stRad.value}px`); if(stBg.value) styleParts.push(`background:${stBg.value}`); if(stColor.value) styleParts.push(`color:${stColor.value}`);
+    const combined = [styleArea.value.trim(), styleParts.join('; ')].filter(Boolean).join('; '); if(combined) el.setAttribute('style', combined);
+    [...dataList.querySelectorAll('.dataRow')].forEach(row=>{ const k=row.querySelector('.k').value.trim().toLowerCase(); const v=row.querySelector('.v').value; if(!k) return; if(v==='') el.removeAttribute('data-'+k); else el.setAttribute('data-'+k, v); });
+    const origWasFull = /<html|<!doctype/i.test(code.value);
+    code.value = origWasFull ? new XMLSerializer().serializeToString(dom) : (dom.querySelector('#app')?.innerHTML.trim() || dom.body.innerHTML.trim());
+    run();
+  }catch(err){ console.error(err); alert('Eigenschaften fehlgeschlagen: '+err.message); }
+};
+document.getElementById('dataAdd').onclick=()=> addDataRow('','');
+function addDataRow(k,v){ const row=document.createElement('div'); row.className='dataRow'; row.innerHTML = `<input class="k" placeholder="key (ohne data-)"><input class="v" placeholder="value"><button title="Entfernen">✕</button>`; row.querySelector('.k').value=k; row.querySelector('.v').value=v; row.querySelector('button').onclick=()=> row.remove(); dataList.appendChild(row); }
+
+/* ===== ZIP (pure JS) ===== */
+function makeZip(files){
+  const encoder=new TextEncoder(); const records=[]; let offset=0; const chunks=[];
+  files.forEach(f=>{ const nameBytes=encoder.encode(f.name); const data=f.content instanceof Uint8Array?f.content:encoder.encode(String(f.content||'')); const crc=crc32(data);
+    const local=new Uint8Array(30+nameBytes.length); write32(local,0,0x04034b50); write16(local,4,20); write16(local,6,0); write16(local,8,0); write16(local,10,0); write16(local,12,0);
+    write32(local,14,crc>>>0); write32(local,18,data.length); write32(local,22,data.length); write16(local,26,nameBytes.length); write16(local,28,0);
+    local.set(nameBytes,30); chunks.push(local,data); records.push({nameBytes,crc,size:data.length,compSize:data.length,offset}); offset+=local.length+data.length; });
+  const central=[]; let centralSize=0;
+  records.forEach(r=>{ const c=new Uint8Array(46+r.nameBytes.length); write32(c,0,0x02014b50); write16(c,4,20); write16(c,6,20); write16(c,8,0); write16(c,10,0); write16(c,12,0); write16(c,14,0);
+    write32(c,16,r.crc>>>0); write32(c,20,r.compSize); write32(c,24,r.size); write16(c,28,r.nameBytes.length); write16(c,30,0); write16(c,32,0); write16(c,34,0); write16(c,36,0); write32(c,38,0); write32(c,42,r.offset);
+    c.set(r.nameBytes,46); central.push(c); centralSize+=c.length; });
+  const end=new Uint8Array(22); write32(end,0,0x06054b50); write16(end,4,0); write16(end,6,0); write16(end,8,records.length); write16(end,10,records.length); write32(end,12,centralSize); write32(end,16,offset); write16(end,20,0);
+  const total=chunks.reduce((n,a)=>n+a.length,0)+centralSize+end.length; const out=new Uint8Array(total); let p=0; chunks.forEach(ch=>{ out.set(ch,p); p+=ch.length; }); central.forEach(ch=>{ out.set(ch,p); p+=ch.length; }); out.set(end,p);
+  return new Blob([out],{type:'application/zip'});
+}
+function write16(a,i,v){ a[i]=v&255; a[i+1]=(v>>>8)&255; } function write32(a,i,v){ a[i]=v&255; a[i+1]=(v>>>8)&255; a[i+2]=(v>>>16)&255; a[i+3]=(v>>>24)&255; }
+const CRC_TABLE=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=~0; for(let i=0;i<u8.length;i++) c=CRC_TABLE[(c^u8[i])&255]^(c>>>8); return (~c)>>>0; }
+
+/* ===== Themes / Init ===== */
+function sampleHTML(){ return `<div class="panel"><h3>Start-Panel</h3><button id="btnStart">Start</button><button id="btnContinue">Continue</button></div>
+<div class="hud"><button id="btnRoad">Straße</button><button id="btnHouse">Haus</button><button id="btnDepot">Depot</button><label><input type="checkbox" id="chkGrid"> Grid</label></div>
+<script>
+document.getElementById('btnStart')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'start'}})));
+document.getElementById('btnContinue')?.addEventListener('click',()=> alert('Continue…'));
+document.getElementById('btnRoad')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{tool:'road'}})));
+document.getElementById('btnHouse')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{tool:'house'}})));
+document.getElementById('btnDepot')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{tool:'depot'}})));
+document.getElementById('chkGrid')?.addEventListener('change',(e)=> console.log('Grid', e.target.checked));
+</script>`; }
+
+renderTokens(); renderTemplates(); renderLibrary();
+document.getElementById('btnLoadSample').onclick=()=>{ fileKind.value='html'; fname.value='ui-start-panel.html'; code.value = sampleHTML(); run(); };
+code.value = sampleHTML(); run();
+
+/* ===== WYSIWYG Parent Controls ===== */
+function setWysi(flag){ try{ const w=frame.contentWindow; if(!w) return; w.__enableWysi && w.__enableWysi(flag); }catch(e){} }
+wysiwyg.addEventListener('change', ()=> setTimeout(()=>setWysi(wysiwyg.checked),150));
+[snapGridSel, snapTolSel, snapNeighbors, showGuides, snapCssGrid, themeSel, autoBoot].forEach(el=> el.addEventListener('change', ()=> run()) );
+</script>
+</body>
+</html>
