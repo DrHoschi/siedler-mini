@@ -1,79 +1,67 @@
-/* Neue Siedler – Start-Panel v17.8.6
-   - kein globales dunkles Theme mehr
-   - zentrierte Karte im Stil des Inspectors
-   - Hintergrundbild separat, wird beim Start ausgeblendet
-*/
+/* v17.8.7 – Start-Panel im „Inspector-Look“, ohne Vollbild-Vorhang */
 
-/* Basis */
-html, body { height:100%; margin:0; }
-#game { display:block; width:100vw; height:100vh; touch-action:none; }
+:root{
+  --ui-bg: #0c120f;            /* Seitenhintergrund */
+  --panel-bg: #ecf1f4;         /* helle Panel-Fläche */
+  --panel-head: #dde6ee;
+  --panel-border: #c9d4df;
+  --shadow: 0 20px 60px rgba(0,0,0,.35);
+  --accent: #8cd3ee;
+  --text: #1f2a33;
+}
 
-/* Start-Overlay nur so groß wie Viewport, NICHT global abdunkeln */
-.ui-start{
-  position:fixed;
-  inset:0;
-  z-index: 2147483600;          /* unter FABs/Inspector, aber über Canvas */
-  display:flex;
-  align-items:center;
-  justify-content:center;
+.ui-start{ position:fixed; inset:0; z-index: 60; pointer-events:none; }
+.ui-start *{ box-sizing:border-box; }
+
+.ui-start-bg{
+  position:absolute; inset:0;
+  /* nur leichte Abdunklung, damit die Map/Vorschau sichtbar bleibt */
+  background: rgba(0,0,0,.20);
+  backdrop-filter: blur(1px);
+  transition: opacity .25s ease, visibility .25s ease;
   pointer-events:auto;
 }
 
-/* eigener Hintergrund (Bild), leicht abgedunkelt */
-.ui-start-bg{
-  position:absolute; inset:0;
-  background: #0c120f url("assets/ui/start-bg.jpeg") center/cover no-repeat;
-  opacity:.85;                   /* dezente Abdunklung */
-  transition: opacity .35s ease;
+.ui-start-panel{
+  position:absolute; left:50%; top:50%;
+  transform: translate(-50%, -50%);
+  width:min(92vw, 520px);
+  background: var(--panel-bg);
+  border:1px solid var(--panel-border);
+  border-radius:16px;
+  box-shadow: var(--shadow);
+  overflow:hidden;
+  pointer-events:auto;
 }
 
-/* Karte im „Inspector“-Stil */
-.ui-start-card{
-  position:relative;
-  width:min(520px, 92vw);
-  padding:24px 22px;
-  border-radius:12px;
-  background:#eaecee;           /* identisch zu Inspector-Panel */
-  border:1px solid #bfc9ca;
-  box-shadow:0 12px 36px rgba(0,0,0,.22);
-  color:#2c3e50;
+.ui-start-panel header{
+  background: var(--panel-head);
+  color: var(--text);
+  padding:16px 20px;
+  font: 600 20px/1.3 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
+  border-bottom:1px solid var(--panel-border);
 }
 
-.ui-start-card h1{
-  margin:0 0 14px 0;
-  font:600 24px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  letter-spacing:.2px;
+.ui-start-panel .actions{ padding:16px; display:grid; gap:12px; }
+.ui-start-panel .actions button{
+  appearance:none; border:1px solid var(--panel-border);
+  border-radius:10px; padding:14px 18px; width:100%;
+  background:#fff; color:var(--text);
+  font: 500 16px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
+  text-align:center; cursor:pointer;
+}
+.ui-start-panel .actions button:is(:hover,:focus){ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(140,211,238,.35); }
+.ui-start-panel .actions button.primary{ background:#e6f6fc; }
+
+.ui-start.hidden .ui-start-bg,
+.ui-start.hidden .ui-start-panel{ opacity:0; visibility:hidden; }
+
+@media (prefers-reduced-motion:no-preference){
+  .ui-start-panel{ transition: transform .22s ease, opacity .22s ease; }
+  .ui-start.hidden .ui-start-panel{ transform: translate(-50%,-46%); }
 }
 
-/* Buttons */
-.ui-start-card .actions{ display:flex; flex-direction:column; gap:12px; }
-.ui-start-card .btn{
-  width:100%;
-  padding:14px 16px;
-  border-radius:8px;
-  border:1px solid #bfc9ca;
-  background:#f2f4f6;
-  color:#2c3e50;
-  font:600 16px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  letter-spacing:.2px;
-  cursor:pointer;
-}
-.ui-start-card .btn:hover{ background:#e9edf1; }
-.ui-start-card .btn.main{
-  background:#c9d6e2; border-color:#afc0ce;
-}
-.ui-start-card .btn.ghost{
-  background:#f7f9fb;
-}
-
-/* Ausblenden beim Start */
-.ui-start.is-hidden{ pointer-events:none; }
-.ui-start.is-hidden .ui-start-card{ display:none; }
-.ui-start.is-hidden .ui-start-bg{ opacity:0; }
-
-/* FABs immer bedienbar (falls sichtbar) */
-.ui-fab{
-  position:fixed;
-  z-index:2147483647 !important; /* über Start-Panel */
-  pointer-events:auto !important;
-}
+/* z-Index-Hierarchie: unter FABs & Inspector */
+.ui-fab{ z-index: 2147483647 !important; }
+.inspector-wrap{ z-index: 300 !important; }
+.ui-start{ z-index: 200; }
