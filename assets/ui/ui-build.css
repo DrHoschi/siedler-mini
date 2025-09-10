@@ -181,5 +181,9 @@
       try{ render(); }catch(e){ err("Render (DOMContentLoaded): "+e.message); }
     });
   }
-
+/* Sichtbare Höhe des Build-Docks begrenzen */
+#build-panel{
+  max-height: 35vh;             /* ~ein bis zwei Zeilen, je nach Gerät */
+  overflow:auto;
+}
 })();
