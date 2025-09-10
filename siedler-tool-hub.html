@@ -3,13 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Siedler · Tool-Hub & Übersicht</title>
+<title>Siedler · Tool-Hub & Übersicht (mit Suche)</title>
 <style>
   :root { --bg:#0f1115; --panel:#151823; --fg:#e7eaf0; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; --ok:#7bd88f; }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
   header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
   h1{font-size:18px;margin:0}
+  #searchWrap{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #q{min-width:260px;background:#0e1322;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  #tags{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{cursor:pointer;font-size:11px;background:#1b2336;color:#c5d3ea;border:1px solid #2a3552;border-radius:999px;padding:4px 8px;user-select:none}
+  .pill.active{background:#2b3a5f;color:#fff;border-color:#3b82f6}
   main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;padding:14px}
   section{background:#121728;border:1px solid var(--border);border-radius:10px;min-height:140px;display:flex;flex-direction:column}
   section h2{margin:0;padding:10px 12px;font-size:14px;border-bottom:1px solid var(--border)}
@@ -17,163 +22,121 @@
   a.item{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:flex-start;padding:8px;border:1px solid #26304a;border-radius:8px;text-decoration:none;color:var(--fg);background:#0e1322}
   a.item:hover{outline:2px solid #3b82f6}
   .item small{color:var(--muted)}
-  .pill{font-size:10px;background:#1b2336;color:#c5d3ea;border:1px solid #2a3552;border-radius:999px;padding:2px 6px}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   footer{padding:12px;border-top:1px solid var(--border);color:var(--muted)}
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px;line-height:1.45;background:#0b0f1c;border-top:1px dashed var(--border);padding:10px;overflow:auto;border-radius:0 0 10px 10px}
-  .warn{color:#ffd166}
+  .hidden{display:none !important}
 </style>
 </head>
 <body>
 <header>
   <h1>🧭 Siedler · Tool-Hub & Übersicht</h1>
-  <div class="row">
-    <a class="pill" href="tools/filelist.html">📄 Filelist Viewer</a>
-    <a class="pill" href="tools/filelist-github.html">↗ GitHub Filelist</a>
-    <a class="pill" href="tools/filelist-audit.mjs">🔍 Audit (Node)</a>
+  <div id="searchWrap">
+    <input id="q" placeholder="Suchen nach Name, Beschreibung, Kategorie…">
+    <div id="tags">
+      <span class="pill" data-tag="dot">DOT</span>
+      <span class="pill" data-tag="playground">Playground</span>
+      <span class="pill" data-tag="codegen">Codegen</span>
+      <span class="pill" data-tag="ui">UI</span>
+      <span class="pill" data-tag="map">Map</span>
+      <span class="pill" data-tag="debug">Debug</span>
+      <span class="pill" data-tag="files">Files</span>
+    </div>
+    <a class="pill" href="ui-editor-preview.html">✨ UI-Editor & Vorschau</a>
   </div>
 </header>
 
-<main>
+<main id="grid">
   <section>
     <h2>Blockschaltbilder & DOT</h2>
     <div class="list">
-      <a class="item" href="tools/dot-editor/dot-editor.html">
-        <span>🧩</span>
-        <div><strong>DOT Editor (leicht)</strong><br><small>Bearbeiten &amp; rendern (Viz.js), mit speicherbarem DOT</small></div>
-      </a>
-      <a class="item" href="tools/dot-editor/dot-editor-pro.html">
-        <span>🧩</span>
-        <div><strong>DOT Editor Pro</strong><br><small>Ortho, Kanten-Labels, Export SVG/PNG</small></div>
-      </a>
-      <a class="item" href="tools/dot-editor/siedler-mini-blockschaltbild.dot">
-        <span>🗺️</span>
-        <div><strong>Blockschaltbild (DOT)</strong><br><small>Grundvariante, direkt laden</small></div>
-      </a>
-      <a class="item" href="tools/dot-editor/siedler-mini-blockschaltbild-ortho.dot">
-        <span>🗺️</span>
-        <div><strong>Blockschaltbild (ortho)</strong><br><small>Kreuzungsarm, für saubere Übersicht</small></div>
-      </a>
-      <a class="item" href="tools/dot-editor/siedler-mini-blockschaltbild.svg">
-        <span>🖼️</span>
-        <div><strong>Blockschaltbild (SVG)</strong><br><small>Skalierbar, gut für Doku</small></div>
-      </a>
+      <a class="item" data-tags="dot" href="tools/dot-editor/dot-editor.html"><span>🧩</span><div><strong>DOT Editor (leicht)</strong><br><small>Bearbeiten &amp; rendern (Viz.js), mit speicherbarem DOT</small></div></a>
+      <a class="item" data-tags="dot" href="tools/dot-editor/dot-editor-pro.html"><span>🧩</span><div><strong>DOT Editor Pro</strong><br><small>Ortho, Kanten-Labels, Export SVG/PNG</small></div></a>
+      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild.dot"><span>🗺️</span><div><strong>Blockschaltbild (DOT)</strong><br><small>Grundvariante, direkt laden</small></div></a>
+      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild-ortho.dot"><span>🗺️</span><div><strong>Blockschaltbild (ortho)</strong><br><small>Kreuzungsarm, für saubere Übersicht</small></div></a>
+      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild.svg"><span>🖼️</span><div><strong>Blockschaltbild (SVG)</strong><br><small>Skalierbar, gut für Doku</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>Node-Playgrounds & Flows</h2>
     <div class="list">
-      <a class="item" href="siedler-node-playground.html">
-        <span>🕸️</span>
-        <div><strong>Node-Playground</strong><br><small>Visuell verdrahten, JSON &amp; DOT Export</small></div>
-      </a>
-      <a class="item" href="siedler-node-playground-trace.html">
-        <span>🎬</span>
-        <div><strong>Node-Trace</strong><br><small>Play/Step/Pause – Flow sichtbar machen</small></div>
-      </a>
-      <a class="item" href="siedler-node-playground-codegen.html">
-        <span>🧪</span>
-        <div><strong>Node-Codegen</strong><br><small>Erzeugt Listener/Emitter-Stubs (ES)</small></div>
-      </a>
-      <a class="item" href="siedler-node-playground-codegen-fix.html">
-        <span>🧪</span>
-        <div><strong>Node-Codegen (No-Import)</strong><br><small>Vorschau ohne Imports (tablet/file://)</small></div>
-      </a>
-      <a class="item" href="siedler-code-block-editor.html">
-        <span>🧱</span>
-        <div><strong>Code-Block-Editor</strong><br><small>Mehrere Dateien, Blöcke + Inline-Code, Live-Vorschau</small></div>
-      </a>
+      <a class="item" data-tags="playground" href="siedler-node-playground.html"><span>🕸️</span><div><strong>Node-Playground</strong><br><small>Visuell verdrahten, JSON &amp; DOT Export</small></div></a>
+      <a class="item" data-tags="playground" href="siedler-node-playground-trace.html"><span>🎬</span><div><strong>Node-Trace</strong><br><small>Play/Step/Pause – Flow sichtbar machen</small></div></a>
+      <a class="item" data-tags="playground codegen" href="siedler-node-playground-codegen.html"><span>🧪</span><div><strong>Node-Codegen</strong><br><small>Erzeugt Listener/Emitter-Stubs (ES)</small></div></a>
+      <a class="item" data-tags="playground codegen" href="siedler-node-playground-codegen-fix.html"><span>🧪</span><div><strong>Node-Codegen (No-Import)</strong><br><small>Vorschau ohne Imports (tablet/file://)</small></div></a>
+      <a class="item" data-tags="playground ui" href="siedler-code-block-editor.html"><span>🧱</span><div><strong>Code-Block-Editor</strong><br><small>Mehrere Dateien, Blöcke + Inline-Code, Live-Vorschau</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>Map/Level & Runtime</h2>
     <div class="list">
-      <a class="item" href="tools/map-editor-pro.html">
-        <span>🗺️</span>
-        <div><strong>Map-Editor Pro</strong><br><small>Fortgeschrittener Karten-Editor</small></div>
-      </a>
-      <a class="item" href="tools/level-editor/index.html">
-        <span>🎛️</span>
-        <div><strong>Level-Editor</strong><br><small>Tiles/Objekte, Interaktion</small></div>
-      </a>
-      <a class="item" href="tools/map-runtime-demo.html">
-        <span>🚀</span>
-        <div><strong>Map-Runtime Demo</strong><br><small>Lädt map-*.json, zeigt Laufzeit</small></div>
-      </a>
+      <a class="item" data-tags="map" href="tools/map-editor-pro.html"><span>🗺️</span><div><strong>Map-Editor Pro</strong><br><small>Fortgeschrittener Karten-Editor</small></div></a>
+      <a class="item" data-tags="map" href="tools/level-editor/index.html"><span>🎛️</span><div><strong>Level-Editor</strong><br><small>Tiles/Objekte, Interaktion</small></div></a>
+      <a class="item" data-tags="map" href="tools/map-runtime-demo.html"><span>🚀</span><div><strong>Map-Runtime Demo</strong><br><small>Lädt map-*.json, zeigt Laufzeit</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>Inspector & Debug</h2>
     <div class="list">
-      <a class="item" href="assets/inspector/inspector.md">
-        <span>📘</span>
-        <div><strong>Inspector Docs</strong><br><small>API & Hooks Überblick</small></div>
-      </a>
-      <a class="item" href="tools/debug-tools.js">
-        <span>🛠️</span>
-        <div><strong>Debug-Tools (Script)</strong><br><small>Kurzbefehle, Hooks, Utilities</small></div>
-      </a>
-      <a class="item" href="assets/inspector/overlay.hooks.js">
-        <span>🧩</span>
-        <div><strong>Inspector Overlay Hooks</strong><br><small>Integration ins Render-Overlay</small></div>
-      </a>
+      <a class="item" data-tags="debug" href="assets/inspector/inspector.md"><span>📘</span><div><strong>Inspector Docs</strong><br><small>API & Hooks Überblick</small></div></a>
+      <a class="item" data-tags="debug" href="tools/debug-tools.js"><span>🛠️</span><div><strong>Debug-Tools (Script)</strong><br><small>Kurzbefehle, Hooks, Utilities</small></div></a>
+      <a class="item" data-tags="debug ui" href="assets/inspector/overlay.hooks.js"><span>🧩</span><div><strong>Inspector Overlay Hooks</strong><br><small>Integration ins Render-Overlay</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>File-Listen & Manifeste</h2>
     <div class="list">
-      <a class="item" href="filelist.txt">
-        <span>📄</span>
-        <div><strong>filelist.txt</strong><br><small>Gesamte Projektdateien (Plain)</small></div>
-      </a>
-      <a class="item" href="filelist.json">
-        <span>📄</span>
-        <div><strong>filelist.json</strong><br><small>Maschinenlesbar</small></div>
-      </a>
-      <a class="item" href="tools/gen-manifest.mjs">
-        <span>🧰</span>
-        <div><strong>Manifest-Generator (Node)</strong><br><small>Manifeste aus Assets erzeugen</small></div>
-      </a>
-      <a class="item" href="tools/filelist.html">
-        <span>🗂️</span>
-        <div><strong>Filelist Viewer</strong><br><small>Interaktive Ansicht & Filter</small></div>
-      </a>
+      <a class="item" data-tags="files" href="filelist.txt"><span>📄</span><div><strong>filelist.txt</strong><br><small>Gesamte Projektdateien (Plain)</small></div></a>
+      <a class="item" data-tags="files" href="filelist.json"><span>📄</span><div><strong>filelist.json</strong><br><small>Maschinenlesbar</small></div></a>
+      <a class="item" data-tags="files" href="tools/gen-manifest.mjs"><span>🧰</span><div><strong>Manifest-Generator (Node)</strong><br><small>Manifeste aus Assets erzeugen</small></div></a>
+      <a class="item" data-tags="files" href="tools/filelist.html"><span>🗂️</span><div><strong>Filelist Viewer</strong><br><small>Interaktive Ansicht & Filter</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>Assets & UI</h2>
     <div class="list">
-      <a class="item" href="assets/ui/ui-start.js">
-        <span>🖥️</span>
-        <div><strong>UI Start</strong><br><small>Start-Panel Logik & Styles</small></div>
-      </a>
-      <a class="item" href="assets/ui/ui-build.js">
-        <span>🏗️</span>
-        <div><strong>UI Build Dock</strong><br><small>Baumenü (HUD)</small></div>
-      </a>
-      <a class="item" href="assets/core/game.bootstrap.js">
-        <span>🎮</span>
-        <div><strong>Game Bootstrap</strong><br><small>Game Start/Init</small></div>
-      </a>
-      <a class="item" href="core/asset.js">
-        <span>📦</span>
-        <div><strong>Asset Loader</strong><br><small>Manifest & Loader</small></div>
-      </a>
+      <a class="item" data-tags="ui" href="assets/ui/ui-start.js"><span>🖥️</span><div><strong>UI Start</strong><br><small>Start-Panel Logik & Styles</small></div></a>
+      <a class="item" data-tags="ui" href="assets/ui/ui-build.js"><span>🏗️</span><div><strong>UI Build Dock</strong><br><small>Baumenü (HUD)</small></div></a>
+      <a class="item" data-tags="ui" href="assets/core/game.bootstrap.js"><span>🎮</span><div><strong>Game Bootstrap</strong><br><small>Game Start/Init</small></div></a>
+      <a class="item" data-tags="ui" href="core/asset.js"><span>📦</span><div><strong>Asset Loader</strong><br><small>Manifest & Loader</small></div></a>
     </div>
   </section>
 </main>
 
 <footer>
   <div>💡 Tipp: Lege diese Datei in das <em>Projekt-Wurzelverzeichnis</em>. Dann funktionieren alle relativen Links offline.</div>
-  <div class="mono" id="quick">Quicklinks (lokal erzeugte Tools):
+  <div class="mono" id="quick">Quicklinks:
     • <a href="siedler-node-playground-codegen-fix.html">Node-Codegen (No-Import)</a>
     • <a href="siedler-code-block-editor.html">Code-Block-Editor</a>
+    • <a href="ui-editor-preview.html">UI-Editor & Vorschau</a>
   </div>
 </footer>
+
+<script>
+const q=document.getElementById('q'), pills=[...document.querySelectorAll('.pill[data-tag]')];
+function applyFilter(){
+  const text=(q.value||'').toLowerCase();
+  const activeTags=pills.filter(p=>p.classList.contains('active')).map(p=>p.dataset.tag);
+  document.querySelectorAll('a.item').forEach(a=>{
+    const hay=(a.textContent||'').toLowerCase();
+    const tags=(a.dataset.tags||'').split(/\\s+/).filter(Boolean);
+    const matchText = !text || hay.includes(text);
+    const matchTags = activeTags.length===0 || activeTags.every(t=>tags.includes(t));
+    a.classList.toggle('hidden', !(matchText && matchTags));
+  });
+  document.querySelectorAll('main section').forEach(sec=>{
+    const any=[...sec.querySelectorAll('a.item')].some(a=>!a.classList.contains('hidden'));
+    sec.classList.toggle('hidden', !any);
+  });
+}
+q.addEventListener('input', applyFilter);
+pills.forEach(p=>p.addEventListener('click', ()=>{ p.classList.toggle('active'); applyFilter(); }));
+applyFilter();
+</script>
 </body>
-</html>p
+</html>
