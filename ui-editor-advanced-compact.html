@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Siedler · UI-Editor Advanced (Compact + Snap-Guides + CSS-Inline + Grid-Snap)</title>
+<title>Siedler · UI-Editor Advanced (Compact + Snap-Guides + CSS-Inline + Grid-Snap + Base/Root/Query)</title>
 <style>
   :root { --bg:#0f1115; --panel:#151823; --fg:#e6eaf0; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; --ok:#7bd88f; --warn:#ffb454; }
   *{box-sizing:border-box}
@@ -13,7 +13,7 @@
   button,input,select,textarea{background:#1a1f2e;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
   button{cursor:pointer}
   .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid #2a3552;border-radius:999px;background:#0e1322}
-  main{display:grid;grid-template-columns:320px 1fr 420px;gap:10px;padding:10px;height:calc(100% - 58px)}
+  main{display:grid;grid-template-columns:360px 1fr 420px;gap:10px;padding:10px;height:calc(100% - 58px)}
   section{background:#121728;border:1px solid var(--border);border-radius:10px;min-height:0;display:flex;flex-direction:column}
   section h2{margin:0;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px}
   details{border-top:1px dashed #2a3146}
@@ -64,6 +64,7 @@
   <!-- LINKS -->
   <section id="left">
     <h2>Vorlagen · Snippets · Assets</h2>
+
     <details open>
       <summary>Komponenten-Vorlagen</summary>
       <div class="pad">
@@ -74,6 +75,7 @@
         </div>
       </div>
     </details>
+
     <details>
       <summary>Bibliothek (eigene · JSON)</summary>
       <div class="pad">
@@ -85,6 +87,7 @@
         <div class="list" id="libList"></div>
       </div>
     </details>
+
     <details>
       <summary>Snippets</summary>
       <div class="pad list">
@@ -95,7 +98,8 @@
         <div class="tool"><span>Script-Hook</span><button data-snippet="&lt;script&gt;document.getElementById('btn1')?.addEventListener('click',()=>alert('hi'));&lt;/script&gt;">Einfügen</button></div>
       </div>
     </details>
-    <details>
+
+    <details open>
       <summary>Assets & GitHub</summary>
       <div class="pad">
         <div class="row">
@@ -109,10 +113,22 @@
           <input id="ghPath"   placeholder="Pfad im Repo" style="flex:1">
           <button id="ghList">GitHub-Liste</button>
         </div>
+
+        <!-- NEU: Base/Root -->
+        <div class="row" style="margin-top:6px">
+          <input id="baseUrl" placeholder="Base-URL (z.B. https://USER.github.io/REPO/)">
+          <button id="setBase">Als &lt;base&gt; setzen</button>
+        </div>
+        <div class="row">
+          <input id="rootPath" placeholder="Root-Pfad (z.B. assets/ oder ui/)">
+          <label class="row" title="Relative href/src mit diesem Pfad präfixen"><input type="checkbox" id="prefixRel" checked>Relative Assets präfixen</label>
+        </div>
+
         <div class="pad"><div class="list" id="assetList"></div></div>
-        <div class="pad" style="padding-top:0"><span class="token">💡 Zieh CSS/JS/HTML/JSON rein → wir betten es ein (CSS als &lt;style&gt;).</span></div>
+        <div class="pad" style="padding-top:0"><span class="token">💡 Zieh CSS/JS/HTML/JSON rein → wird inline eingebettet (CSS als &lt;style&gt;).</span></div>
       </div>
     </details>
+
     <details open>
       <summary>Schnell-Einfügen</summary>
       <div class="pad">
@@ -141,10 +157,12 @@
   <!-- RECHTS -->
   <section id="editorCol">
     <h2>Editor & Eigenschaften</h2>
+
     <details open>
       <summary>Code</summary>
       <div class="pad"><textarea id="code" placeholder="HTML- oder JS-Code…"></textarea></div>
     </details>
+
     <details open>
       <summary>Property-Editor</summary>
       <div class="pad" id="props">
@@ -157,6 +175,7 @@
         </div>
       </div>
     </details>
+
     <details>
       <summary>Style-Editor & Tokens</summary>
       <div class="pad">
@@ -174,6 +193,7 @@
         <textarea id="styleArea" placeholder="Inline CSS, z.B. display:flex; gap:8px;"></textarea>
       </div>
     </details>
+
     <details>
       <summary>Data-Attributes</summary>
       <div class="pad">
@@ -181,6 +201,7 @@
         <div id="dataList"></div>
       </div>
     </details>
+
     <details open>
       <summary>Build & Export</summary>
       <div class="pad">
@@ -193,23 +214,18 @@
         <div id="codeOut"><pre>// „Vorschau“ bauen → hier erscheint die finale HTML-Datei</pre></div>
       </div>
     </details>
+
     <details>
       <summary>Bedienungsanleitung</summary>
       <div class="pad" style="font-size:13px;line-height:1.5">
         <p><strong>Schnellstart:</strong> Code einfügen (oder Dateien droppen) → „Vorschau“.  
-        WYSIWYG aktiv → Element im Preview anklicken → ziehen oder Ecken ziehen. Snap-Grid, Nachbar-Snap, CSS-Grid-Snap oben schalten.  
-        „CSS inline holen“ wandelt `<link>` in `<style>` um (CORS/Origin erforderlich).</p>
-        <ul>
-          <li><strong>Kein CSS sichtbar?</strong> Button „CSS inline holen“ nutzen oder lokal hosten (z. B. <code>npx http-server</code>).</li>
-          <li><strong>WYSIWYG-Guides:</strong> Container-Ränder (L/R/T/B/Mitte), Nachbarn (Kanten & Mitte), optional Grid-Spalten.</li>
-          <li><strong>Export:</strong> Alle Inline-Styles vom WYSIWYG werden übernommen (Kopieren/ZIP).</li>
-        </ul>
+        WYSIWYG aktiv → Element im Preview anklicken → ziehen oder Ecken ziehen. Snap-Grid, Nachbar-Snap, CSS-Grid-Snap schaltbar.  
+        „CSS inline holen“ wandelt `<link>` in `<style>` um (CORS/Origin erforderlich).  
+        **Base-URL** setzt ein `<base>` im Preview; **Root-Pfad** präfixt relative `href/src` automatisch.</p>
       </div>
     </details>
   </section>
 </main>
-
-<div id="errorBar"></div>
 
 <script>
 /* ===== Basis-Refs ===== */
@@ -220,6 +236,8 @@ const wysiwyg=document.getElementById('wysiwyg'), snapGridSel=document.getElemen
 const snapNeighbors=document.getElementById('snapNeighbors'), showGuides=document.getElementById('showGuides'), snapCssGrid=document.getElementById('snapCssGrid');
 const errorBar=document.getElementById('errorBar');
 const btnInlineCSS=document.getElementById('btnInlineCSS');
+const baseUrl=document.getElementById('baseUrl'), setBase=document.getElementById('setBase');
+const rootPath=document.getElementById('rootPath'), prefixRel=document.getElementById('prefixRel');
 
 /* ===== Built-In Vorlagen ===== */
 const BuiltInTemplates = [
@@ -276,7 +294,7 @@ document.getElementById('btnTests')?.addEventListener('click',()=> window.dispat
 ];
 let CustomLibrary=[];
 
-/* ===== Templates & Library Renders (unverändert) ===== */
+/* ===== Templates & Library ===== */
 const tplList=document.getElementById('tplList');
 const libList=document.getElementById('libList');
 const libName=document.getElementById('libName');
@@ -442,6 +460,25 @@ function copyOut(){ const out=document.querySelector('#codeOut pre').textContent
 function downloadOut(){ const out=document.querySelector('#codeOut pre').textContent; const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([out],{type:'text/html'})); a.download=fname.value||'ui-snippet.html'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 function zipOut(){ const htmlStr=document.querySelector('#codeOut pre').textContent || normalizeHTML(code.value); const files=[{name: fname.value || 'ui-snippet.html', content: new TextEncoder().encode(htmlStr)}]; const readme = `UI ZIP Export\n\nDatei: ${fname.value||'ui-snippet.html'}\nAssets (URLs):\n${collectedAssets.map(u=>'- '+u).join('\n')}`; files.push({name:'README.txt', content:new TextEncoder().encode(readme)}); const zipBlob = makeZip(files); const a=document.createElement('a'); a.href=URL.createObjectURL(zipBlob); a.download=(fname.value||'ui-snippet')+'.zip'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 
+/* ---- Base/Root: relative URLs präfixen & <base> setzen ---- */
+setBase.onclick = ()=> run();
+
+function prefixRelativeUrls(doc) {
+  if (!prefixRel.checked) return;
+  const rp = (rootPath.value||'').replace(/^\/+|\/+$/g,'');
+  if (!rp) return;
+  const prefix = '/' + rp + '/';
+  const fix = (attr, sel) => {
+    doc.querySelectorAll(sel).forEach(el=>{
+      const url = el.getAttribute(attr);
+      if (!url || /^(https?:|\/|data:|blob:)/i.test(url)) return; // schon absolut
+      el.setAttribute(attr, (prefix + url).replace(/\/{2,}/g,'/'));
+    });
+  };
+  fix('src',  '[src]');
+  fix('href', '[href]');
+}
+
 function run(){
   errorBar.style.display='none'; errorBar.textContent='';
   let html=''; if(fileKind.value==='html'){ html = normalizeHTML(code.value); } else { const js=code.value; html = buildHTML(fname.value||'UI', '<h3>Container</h3><div id="mount"></div>', `try{ ${js} }catch(e){ console.error(e); }`); }
@@ -456,7 +493,7 @@ button,input,select{background:#111827;color:var(--fg);border:1px solid #2b3245;
 .hud{position:fixed;bottom:12px;left:12px;right:12px;background:#0f1424;border:1px solid #26304a;border-radius:12px;padding:8px}
 .log{white-space:pre-wrap;font-family:ui-monospace;background:#0b0f1c;border:1px solid #26304a;border-radius:8px;padding:6px;margin-top:8px}`; }
 function lightCSS(){ return `:root{--bg:#f7f8fb;--fg:#0b1220;--muted:#5b6170;--accent:#2563eb}
-body{background:var(--bg);color:var(--fg);font-family:system-ui;margin:0;padding:16px}
+body{background:var(--bg);color:#0b1220;font-family:system-ui;margin:0;padding:16px}
 button,input,select{background:#fff;color:#0b1220;border:1px solid #d5d9e4;border-radius:8px;padding:6px 10px}
 .panel{background:#ffffff;border:1px solid #d5d9e4;border-radius:10px;padding:10px;margin:8px 0}
 .hud{position:fixed;bottom:12px;left:12px;right:12px;background:#ffffff;border:1px solid #d5d9e4;border-radius:12px;padding:8px}
@@ -473,9 +510,11 @@ function buildHTML(shell, bodyHTML, jsInline){
     cssGrid: !!snapCssGrid.checked
   };
   const wysi = wysiwyg.checked ? wysiOverlayScript(cfg) : '';
-  return `<!DOCTYPE html>
+  const base = (baseUrl.value||'').trim();
+  let html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${shell}</title>
+${base ? `<base href="${base}">` : ``}
 <style>${css}</style></head>
 <body>
 <div id="app" class="app">${bodyHTML}</div>
@@ -483,10 +522,8 @@ function buildHTML(shell, bodyHTML, jsInline){
 ${jsInline||''}
 ${auto}
 ${wysi}
-// Fehler an Parent melden
 window.addEventListener('error', e=> parent.postMessage({type:'previewError', msg:String(e.message||e.error||e)}, '*'));
 window.addEventListener('unhandledrejection', e=> parent.postMessage({type:'previewError', msg:String(e.reason||e)}, '*'));
-// Klick-Selector an Parent
 window.addEventListener('click', (e)=>{ 
   if(window.parent && window.parent !== window){
     try{
@@ -504,6 +541,15 @@ function computeSelector(el){
 }
 </script>
 </body></html>`;
+
+  // Root-Pfad Präfix anwenden
+  try{
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    prefixRelativeUrls(doc);
+    html = new XMLSerializer().serializeToString(doc);
+  }catch{}
+
+  return html;
 }
 function normalizeHTML(src){
   const hasHTML=/<html|<!doctype/i.test(src);
@@ -523,7 +569,7 @@ btnInlineCSS.addEventListener('click', async ()=>{
     for(const link of links){
       const href = link.getAttribute('href');
       try{
-        const res = await fetch(href, {mode:'cors'}); // funktioniert bei CORS/gleicher Origin
+        const res = await fetch(href, {mode:'cors'});
         if(!res.ok) throw new Error('HTTP '+res.status);
         const css = await res.text();
         const st = dom.createElement('style'); st.textContent = css;
@@ -554,18 +600,13 @@ function wysiOverlayScript(cfgStr){
     const hs=[['nwse-resize',0,0,'tl'],['nesw-resize',100,0,'tr'],['nesw-resize',0,100,'bl'],['nwse-resize',100,100,'br']].map(([cur,x,y,k])=>makeHandle(cur,x,y,k));
     hs.forEach(h=>BOX.appendChild(h)); BOX.onmousedown=(ev)=>{ ev.preventDefault(); startDrag(ev,'move'); }; ROOT.appendChild(BOX); }
   function targets(){ const app=document.querySelector('#app')||document.body; return [...app.querySelectorAll('*')].filter(el=> el!==BOX && !el.closest('#wysi-overlay')); }
-  function edges(r){ return {L:r.L, R:r.L+r.W, CX:r.L+r.W/2, T:r.T, B:r.T+r.H, CY:r.T+r.H/2}; }
   function snapVal(v,g){ return Math.round(v/g)*g; }
 
-  /* === Container Guides & Grid Columns === */
   function containerInfo(){
     const app=document.querySelector('#app')||document.body;
     const pr=app.getBoundingClientRect();
     const w=pr.width, h=pr.height;
-    const guides = { // Kanten & Mitte
-      vertical: [0, w/2, w],
-      horizontal: [0, h/2, h]
-    };
+    const guides = { vertical: [0, w/2, w], horizontal: [0, h/2, h] };
     let columns = [];
     if(CFG.cssGrid){
       const cs = getComputedStyle(app);
@@ -580,20 +621,20 @@ function wysiOverlayScript(cfgStr){
   }
   function parseGridCount(str){
     if(!str || str==='none') return 0;
-    // grobe Annäherung: repeat(n, ...) -> n; sonst Anzahl tokens
     const rep = /repeat\\(\\s*(\\d+)\\s*,/i.exec(str);
     if(rep) return parseInt(rep[1],10);
     const parts = str.trim().split(/\\s+/);
     return parts.length;
   }
 
-  function neighborSnap(candidate, axis){ // axis 'x' or 'y'
+  function neighborSnap(candidate, axis){
     const tol=CFG.tol; const app=document.querySelector('#app')||document.body; const pr=app.getBoundingClientRect();
-    const TGT=targets().filter(el=> el!==SEL);
+    const TGT=[...app.querySelectorAll('*')].filter(el=> el!==BOX && el!==SEL && !el.closest('#wysi-overlay'));
     let best={d:Infinity, val:candidate, guide:null};
     TGT.forEach(el=>{
-      const r=boxRect(el), e={L:r.L, R:r.L+r.W, CX:r.L+r.W/2, T:r.T, B:r.T+r.H, CY:r.T+r.H/2};
-      const comps = axis==='x' ? [e.L, e.CX, e.R] : [e.T, e.CY, e.B];
+      const r=el.getBoundingClientRect(); const prr=(document.querySelector('#app')||document.body).getBoundingClientRect();
+      const L=r.left-prr.left+scrollX, T=r.top-prr.top+scrollY, W=r.width, H=r.height;
+      const comps = axis==='x' ? [L, L+W/2, L+W] : [T, T+H/2, T+H];
       comps.forEach(cv=>{
         const d=Math.abs(cv - candidate);
         if(d<=tol && d<best.d){ best={d, val:cv, guide: axis==='x' ? [cv,0,cv,pr.height] : [0,cv,pr.width,cv]}; }
@@ -634,7 +675,8 @@ function wysiOverlayScript(cfgStr){
     let L=START.rect.left - pr.left + dx + scrollX, T=START.rect.top - pr.top + dy + scrollY, W=START.rect.width, H=START.rect.height;
 
     if(MODE==='move'){
-      if(CFG.neighbors){ const sx=neighborSnap(L,'x'); L=sx.val; if(sx.guide) addGuide(...sx.guide); const sy=neighborSnap(T,'y'); T=sy.val; if(sy.guide) addGuide(...sy.guide); }
+      const sx=neighborSnap(L,'x'); L=sx.val; if(sx.guide) addGuide(...sx.guide);
+      const sy=neighborSnap(T,'y'); T=sy.val; if(sy.guide) addGuide(...sy.guide);
       const cx=containerSnap(L,'x'); if(cx.guide){ L=cx.val; addGuide(...cx.guide); }
       const cy=containerSnap(T,'y'); if(cy.guide){ T=cy.val; addGuide(...cy.guide); }
       const gx=gridSnapX(L); if(gx.guide){ L=gx.val; addGuide(...gx.guide); }
@@ -644,11 +686,9 @@ function wysiOverlayScript(cfgStr){
       if(MODE==='tr'){ W=Math.max(10,START.rect.width + dx); T=START.rect.top - pr.top + dy + scrollY; H=Math.max(10,START.rect.height - dy); }
       if(MODE==='bl'){ L=START.rect.left - pr.left + dx + scrollX; W=Math.max(10,START.rect.width - dx); H=Math.max(10,START.rect.height + dy); }
       if(MODE==='tl'){ L=START.rect.left - pr.left + dx + scrollX; T=START.rect.top - pr.top + dy + scrollY; W=Math.max(10,START.rect.width - dx); H=Math.max(10,START.rect.height - dy); }
-      if(CFG.neighbors){
-        const sx=neighborSnap(L,'x'); L=sx.val; if(sx.guide) addGuide(...sx.guide);
-        const gx=gridSnapX(L); if(gx.guide){ L=gx.val; addGuide(...gx.guide); }
-        const sy=neighborSnap(T,'y'); T=sy.val; if(sy.guide) addGuide(...sy.guide);
-      }
+      const sx=neighborSnap(L,'x'); L=sx.val; if(sx.guide) addGuide(...sx.guide);
+      const gx=gridSnapX(L); if(gx.guide){ L=gx.val; addGuide(...gx.guide); }
+      const sy=neighborSnap(T,'y'); T=sy.val; if(sy.guide) addGuide(...sy.guide);
       const cx=containerSnap(L,'x'); if(cx.guide){ L=cx.val; addGuide(...cx.guide); }
       const cy=containerSnap(T,'y'); if(cy.guide){ T=cy.val; addGuide(...cy.guide); }
       if(CFG.grid){ L=snapVal(L,CFG.grid); T=snapVal(T,CFG.grid); W=snapVal(W,CFG.grid); H=snapVal(H,CFG.grid); }
@@ -659,6 +699,7 @@ function wysiOverlayScript(cfgStr){
     if(!SEL||!BOX) return; const s=SEL.style; if(getComputedStyle(SEL).position==='static'){ s.position='absolute'; }
     s.left=BOX.style.left; s.top=BOX.style.top; s.width=BOX.style.width; s.height=BOX.style.height;
   }
+  function snapVal(v,g){ return Math.round(v/g)*g; }
   function pick(e){ if(!window.__WYSI_ENABLED__) return; if(!e.target.closest('#wysi-overlay')){ SEL=e.target; drawBox(SEL); } }
   window.addEventListener('click', pick, true);
 
@@ -716,29 +757,4 @@ function makeZip(files){
   return new Blob([out],{type:'application/zip'});
 }
 function write16(a,i,v){ a[i]=v&255; a[i+1]=(v>>>8)&255; } function write32(a,i,v){ a[i]=v&255; a[i+1]=(v>>>8)&255; a[i+2]=(v>>>16)&255; a[i+3]=(v>>>24)&255; }
-const CRC_TABLE=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xedb88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
-function crc32(u8){ let c=~0; for(let i=0;i<u8.length;i++) c=CRC_TABLE[(c^u8[i])&255]^(c>>>8); return (~c)>>>0; }
-
-/* ===== Themes / Init ===== */
-function sampleHTML(){ return `<div class="panel"><h3>Start-Panel</h3><button id="btnStart">Start</button><button id="btnContinue">Continue</button></div>
-<div class="hud"><button id="btnRoad">Straße</button><button id="btnHouse">Haus</button><button id="btnDepot">Depot</button><label><input type="checkbox" id="chkGrid"> Grid</label></div>
-<script>
-document.getElementById('btnStart')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:ui-ready',{detail:{from:'start'}})));
-document.getElementById('btnContinue')?.addEventListener('click',()=> alert('Continue…'));
-document.getElementById('btnRoad')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{tool:'road'}})));
-document.getElementById('btnHouse')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{tool:'house'}})));
-document.getElementById('btnDepot')?.addEventListener('click',()=> window.dispatchEvent(new CustomEvent('cb:build-open',{detail:{tool:'depot'}})));
-document.getElementById('chkGrid')?.addEventListener('change',(e)=> console.log('Grid', e.target.checked));
-</script>`; }
-
-renderTokens(); renderTemplates(); renderLibrary();
-document.getElementById('btnLoadSample').onclick=()=>{ fileKind.value='html'; fname.value='ui-start-panel.html'; code.value = sampleHTML(); run(); };
-code.value = sampleHTML(); run();
-
-/* ===== WYSIWYG Parent Controls ===== */
-function setWysi(flag){ try{ const w=frame.contentWindow; if(!w) return; w.__enableWysi && w.__enableWysi(flag); }catch(e){} }
-wysiwyg.addEventListener('change', ()=> setTimeout(()=>setWysi(wysiwyg.checked),150));
-[snapGridSel, snapTolSel, snapNeighbors, showGuides, snapCssGrid, themeSel, autoBoot].forEach(el=> el.addEventListener('change', ()=> run()) );
-</script>
-</body>
-</html>
+const CRC_TABLE=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0
