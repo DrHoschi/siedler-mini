@@ -1,77 +1,71 @@
 /* ============================================================================
- * UI Start Overlay (v17.8.4)
- *  - Initialisiert Start-Button
- *  - Blendt Overlay mit Fade aus und ENTFERNT es aus dem DOM
- *  - Dispatcht 'cb:game-start' nach dem Entfernen
- *  - Kein Layer bleibt darüber liegen -> Canvas und Map sichtbar
+ * UI Start-Layer (v17.8.5)
+ *  - Initialisiert Startscreen
+ *  - feuert 'cb:ui-ready' direkt nach Setup
+ *  - blendet beim Start aus und feuert anschließend 'cb:game-start'
  * ========================================================================== */
-
 (function(){
-  const log = (window.CBLog?.info || console.log).bind(console);
-  const ok  = (window.CBLog?.ok   || console.log).bind(console);
-  const warn= (window.CBLog?.warn || console.warn).bind(console);
+  const log = (window.CBLog?.info || console.log).bind(console, "[ui-start]");
+  const ok  = (window.CBLog?.ok   || console.log).bind(console, "[ui-start]");
+  const warn= (window.CBLog?.warn || console.warn).bind(console, "[ui-start]");
 
-  let startEl, btnEl, removed = false;
+  function qs(sel){ return document.querySelector(sel); }
 
-  function byId(id){ return document.getElementById(id); }
+  function dispatch(name, detail){
+    try { window.dispatchEvent(new CustomEvent(name, { detail })); }
+    catch(e){ console.warn("[ui-start] Event-Dispatch fehlgeschlagen:", name, e); }
+  }
 
-  function removeStartOverlay(){
-    if (!startEl || removed) return;
-    // Fade, dann endgültig entfernen
-    startEl.classList.add('is-fading');
-    setTimeout(() => {
-      startEl.classList.add('is-hidden');
-      try{ startEl.remove(); }catch(_){}
-      removed = true;
-      document.body.classList.add('has-game-started');
-      // Jetzt das Spiel offiziell starten
-      try{
-        window.dispatchEvent(new CustomEvent('cb:game-start'));
-      }catch(err){
-        warn('[ui-start] Konnte cb:game-start nicht dispatchen:', err);
+  function setup(){
+    const panel = qs("#start-panel");
+    const bg    = panel?.querySelector(".ui-start-bg");
+    const btn   = qs("#btnStart");
+
+    if(!panel || !btn){
+      warn("Start-Panel oder Button fehlt – überspringe Start-Layer.");
+      // Falls das Panel fehlt, trotzdem das Ready-Event schicken:
+      dispatch("cb:ui-ready");
+      return;
+    }
+
+    // Ready-Event direkt nach Setup
+    dispatch("cb:ui-ready");
+    ok("geladen (v17.8.5)");
+
+    // Klick-Handler robust (einmalig binden)
+    if(!btn.__bound){
+      btn.addEventListener("click", ()=>{
+        ok("Start klick");
+        // sanft ausblenden
+        panel.classList.add("hidden");
+
+        // nach Ende der Transition Interaktionen deaktivieren & playing-Flag setzen
+        const after = ()=>{
+          panel.removeEventListener("transitionend", after);
+          document.body.classList.add("playing"); // CSS entfernt Panel komplett
+          // Signal an Bootstrap/Spielwelt
+          dispatch("cb:game-start");
+          log("cb:game-start dispatcht");
+        };
+
+        // Fallback, falls „transitionend“ nicht feuert (ältere Browser)
+        setTimeout(after, 400);
+        panel.addEventListener("transitionend", after);
+      }, { passive: true });
+      btn.__bound = true;
+    }
+
+    // Falls jemand den Start früher extern triggern will:
+    window.addEventListener("ui:start", ()=>{
+      if(panel && !panel.classList.contains("hidden")){
+        btn?.click();
       }
-    }, 280);
+    });
   }
 
-  function onStartClick(){
-    ok('[ui-start] Start gedrückt – Overlay wird entfernt');
-    removeStartOverlay();
-  }
-
-  // Externes, einmaliges Wegklicken erlauben (z.B. aus Tests/Inspector)
-  window.HideStartOverlayOnce = function(){
-    onStartClick();
-  };
-
-  // Init, sobald DOM bereit
-  function init(){
-    startEl = byId('start-panel');
-    if (!startEl){
-      warn('[ui-start] #start-panel nicht gefunden (Overlay bereits entfernt?)');
-      document.body.classList.add('has-game-started');
-      return;
-    }
-    btnEl = startEl.querySelector('#btnStart');
-    if (btnEl){
-      btnEl.addEventListener('click', onStartClick, { once:true });
-    }else{
-      warn('[ui-start] #btnStart fehlt – entferne Overlay vorsorglich');
-      removeStartOverlay();
-      return;
-    }
-
-    log('[ui-start] geladen (v17.8.4)');
-
-    // Falls ein Reload stattfand und das Spiel schon initialisiert ist,
-    // Overlay sofort entfernen (Sicherheitsnetz)
-    if (window.__gameAlreadyRunning){
-      removeStartOverlay();
-    }
-  }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', init, { once:true });
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", setup, { once:true });
   }else{
-    init();
+    setup();
   }
 })();
