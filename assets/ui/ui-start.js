@@ -1,65 +1,77 @@
 /* ============================================================================
- * UI Start Panel (Overlay) – v17.8.4
- * - feuert 'cb:ui-ready' beim Laden
- * - feuert 'cb:game-start' beim Start
- * - verhindert Doppel-Start
- * - blendet Overlay weich aus und entfernt es
+ * UI Start Overlay (v17.8.4)
+ *  - Initialisiert Start-Button
+ *  - Blendt Overlay mit Fade aus und ENTFERNT es aus dem DOM
+ *  - Dispatcht 'cb:game-start' nach dem Entfernen
+ *  - Kein Layer bleibt darüber liegen -> Canvas und Map sichtbar
  * ========================================================================== */
+
 (function(){
-  const log = (t,...a)=> (window.CBLog?.info||console.log)(`[ui-start] ${t}`, ...a);
-  const warn= (t,...a)=> (window.CBLog?.warn||console.warn)(`[ui-start] ${t}`, ...a);
-  const ok  = (t,...a)=> (window.CBLog?.ok  ||console.log)(`[ui-start] ${t}`, ...a);
+  const log = (window.CBLog?.info || console.log).bind(console);
+  const ok  = (window.CBLog?.ok   || console.log).bind(console);
+  const warn= (window.CBLog?.warn || console.warn).bind(console);
 
-  const onReady = ()=>{
-    const panel = document.querySelector('.ui-start');
-    const bg    = document.querySelector('.ui-start-bg');
-    const btn   = document.getElementById('btnStart');
+  let startEl, btnEl, removed = false;
 
-    // Signal: UI ist bereit
-    try{ window.dispatchEvent(new CustomEvent('cb:ui-ready')); }catch(_){}
-    log('geladen (v17.8.4)');
+  function byId(id){ return document.getElementById(id); }
 
-    if(!panel || !btn){
-      warn('Startpanel oder Button nicht gefunden – überspringe Overlay.');
-      try{ window.dispatchEvent(new CustomEvent('cb:game-start')); ok('cb:game-start (auto)'); }catch(_){}
+  function removeStartOverlay(){
+    if (!startEl || removed) return;
+    // Fade, dann endgültig entfernen
+    startEl.classList.add('is-fading');
+    setTimeout(() => {
+      startEl.classList.add('is-hidden');
+      try{ startEl.remove(); }catch(_){}
+      removed = true;
+      document.body.classList.add('has-game-started');
+      // Jetzt das Spiel offiziell starten
+      try{
+        window.dispatchEvent(new CustomEvent('cb:game-start'));
+      }catch(err){
+        warn('[ui-start] Konnte cb:game-start nicht dispatchen:', err);
+      }
+    }, 280);
+  }
+
+  function onStartClick(){
+    ok('[ui-start] Start gedrückt – Overlay wird entfernt');
+    removeStartOverlay();
+  }
+
+  // Externes, einmaliges Wegklicken erlauben (z.B. aus Tests/Inspector)
+  window.HideStartOverlayOnce = function(){
+    onStartClick();
+  };
+
+  // Init, sobald DOM bereit
+  function init(){
+    startEl = byId('start-panel');
+    if (!startEl){
+      warn('[ui-start] #start-panel nicht gefunden (Overlay bereits entfernt?)');
+      document.body.classList.add('has-game-started');
+      return;
+    }
+    btnEl = startEl.querySelector('#btnStart');
+    if (btnEl){
+      btnEl.addEventListener('click', onStartClick, { once:true });
+    }else{
+      warn('[ui-start] #btnStart fehlt – entferne Overlay vorsorglich');
+      removeStartOverlay();
       return;
     }
 
-    // Fallback falls Background fehlt (z.B. falscher Pfad)
-    if(bg){
-      const cs = getComputedStyle(bg);
-      const hasImg = (cs.backgroundImage && cs.backgroundImage !== 'none');
-      if(!hasImg){ panel.classList.add('no-bg'); }
+    log('[ui-start] geladen (v17.8.4)');
+
+    // Falls ein Reload stattfand und das Spiel schon initialisiert ist,
+    // Overlay sofort entfernen (Sicherheitsnetz)
+    if (window.__gameAlreadyRunning){
+      removeStartOverlay();
     }
+  }
 
-    let started = false;
-    const startGame = ()=>{
-      if(started) return;
-      started = true;
-      ok('Start klick');
-      // Spielstart-Ereignis (von deiner Engine/Bootstrap abgefangen)
-      try{ window.dispatchEvent(new CustomEvent('cb:game-start')); ok('cb:game-start dispatcht'); }catch(_){}
-
-      // weich ausblenden und entfernen
-      panel.classList.add('is-hidden');
-      setTimeout(()=>{ panel.remove(); }, 320);
-    };
-
-    // Klick + Enter/Space
-    btn.addEventListener('click', startGame, {once:true});
-    btn.addEventListener('keydown', (ev)=>{
-      if(ev.key === 'Enter' || ev.key === ' '){
-        ev.preventDefault(); startGame();
-      }
-    });
-
-    // Sicherheit: spätestens nach 30s automatisch starten (keine Blockade)
-    setTimeout(()=>{ if(!started){ warn('Auto-Start (Timeout)'); startGame(); }}, 30000);
-  };
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', onReady, {once:true});
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, { once:true });
   }else{
-    onReady();
+    init();
   }
 })();
