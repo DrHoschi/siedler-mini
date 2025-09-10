@@ -18,10 +18,9 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <!-- link rel="stylesheet" href="style.css?v=17.8.2" -->
-  <link rel="stylesheet" href="ui-start.css?v=17.8.4">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.8.2">
-
+<link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.6">
+<link rel="stylesheet" href="assets/ui/ui-build.css?v=17.8.5">
+  
   <!-- Inspector Styles (split) -->
   <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.12.3">
 
@@ -49,12 +48,19 @@
 </head>
 <body>
 
-  <!-- Start-Panel -->
-  <div id="start-panel" class="ui-start" aria-label="Startmenü">
-  <div class="ui-start-bg"></div>
-  <div class="ui-start-panel">
+<!-- Start-Panel (zentriert, eigener Hintergrund) -->
+<div id="start-panel" class="ui-start" aria-label="Startmenü">
+  <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
+
+  <div class="ui-start-card" role="dialog" aria-modal="true">
     <h1>Neue Siedler</h1>
-    <button id="btnStart">Spiel starten</button>
+
+    <div class="actions">
+      <button id="btnStartNew" class="btn main">Neues Spiel</button>
+      <button id="btnStartResume" class="btn">Weiterspielen</button>
+      <button id="btnStartReset" class="btn ghost">Reset</button>
+      <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
+    </div>
   </div>
 </div>
 
