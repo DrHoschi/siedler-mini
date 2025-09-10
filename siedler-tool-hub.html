@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Siedler · Tool-Hub & Übersicht (mit Suche)</title>
+<title>Siedler · Tool-Hub & Übersicht (aktualisiert)</title>
 <style>
   :root { --bg:#0f1115; --panel:#151823; --fg:#e7eaf0; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; --ok:#7bd88f; }
   *{box-sizing:border-box}
@@ -26,6 +26,10 @@
   footer{padding:12px;border-top:1px solid var(--border);color:var(--muted)}
   .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px;line-height:1.45;background:#0b0f1c;border-top:1px dashed var(--border);padding:10px;overflow:auto;border-radius:0 0 10px 10px}
   .hidden{display:none !important}
+  details{border-top:1px dashed #2a3146}
+  details>summary{cursor:pointer;list-style:none;padding:10px 12px;font-weight:600}
+  details[open]{background:#0f1420}
+  .pad{padding:8px 12px}
 </style>
 </head>
 <body>
@@ -41,8 +45,10 @@
       <span class="pill" data-tag="map">Map</span>
       <span class="pill" data-tag="debug">Debug</span>
       <span class="pill" data-tag="files">Files</span>
+      <span class="pill" data-tag="library">Library</span>
     </div>
-    <a class="pill" href="ui-editor-preview.html">✨ UI-Editor & Vorschau</a>
+    <a class="pill" href="ui-editor-advanced.html">✨ UI-Editor Advanced</a>
+    <a class="pill" href="asset-library.html">📚 Asset-Library</a>
   </div>
 </header>
 
@@ -50,70 +56,99 @@
   <section>
     <h2>Blockschaltbilder & DOT</h2>
     <div class="list">
-      <a class="item" data-tags="dot" href="tools/dot-editor/dot-editor.html"><span>🧩</span><div><strong>DOT Editor (leicht)</strong><br><small>Bearbeiten &amp; rendern (Viz.js), mit speicherbarem DOT</small></div></a>
+      <a class="item" data-tags="dot" href="tools/dot-editor/dot-editor.html"><span>🧩</span><div><strong>DOT Editor (leicht)</strong><br><small>Bearbeiten &amp; rendern (Viz.js), DOT speichern</small></div></a>
       <a class="item" data-tags="dot" href="tools/dot-editor/dot-editor-pro.html"><span>🧩</span><div><strong>DOT Editor Pro</strong><br><small>Ortho, Kanten-Labels, Export SVG/PNG</small></div></a>
-      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild.dot"><span>🗺️</span><div><strong>Blockschaltbild (DOT)</strong><br><small>Grundvariante, direkt laden</small></div></a>
-      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild-ortho.dot"><span>🗺️</span><div><strong>Blockschaltbild (ortho)</strong><br><small>Kreuzungsarm, für saubere Übersicht</small></div></a>
-      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild.svg"><span>🖼️</span><div><strong>Blockschaltbild (SVG)</strong><br><small>Skalierbar, gut für Doku</small></div></a>
+      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild.dot"><span>🗺️</span><div><strong>Blockschaltbild (DOT)</strong><br><small>Grundvariante</small></div></a>
+      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild-ortho.dot"><span>🗺️</span><div><strong>Blockschaltbild (ortho)</strong><br><small>Kreuzungsarm</small></div></a>
+      <a class="item" data-tags="dot files" href="tools/dot-editor/siedler-mini-blockschaltbild.svg"><span>🖼️</span><div><strong>Blockschaltbild (SVG)</strong><br><small>Doku-tauglich</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>Node-Playgrounds & Flows</h2>
     <div class="list">
-      <a class="item" data-tags="playground" href="siedler-node-playground.html"><span>🕸️</span><div><strong>Node-Playground</strong><br><small>Visuell verdrahten, JSON &amp; DOT Export</small></div></a>
-      <a class="item" data-tags="playground" href="siedler-node-playground-trace.html"><span>🎬</span><div><strong>Node-Trace</strong><br><small>Play/Step/Pause – Flow sichtbar machen</small></div></a>
-      <a class="item" data-tags="playground codegen" href="siedler-node-playground-codegen.html"><span>🧪</span><div><strong>Node-Codegen</strong><br><small>Erzeugt Listener/Emitter-Stubs (ES)</small></div></a>
-      <a class="item" data-tags="playground codegen" href="siedler-node-playground-codegen-fix.html"><span>🧪</span><div><strong>Node-Codegen (No-Import)</strong><br><small>Vorschau ohne Imports (tablet/file://)</small></div></a>
-      <a class="item" data-tags="playground ui" href="siedler-code-block-editor.html"><span>🧱</span><div><strong>Code-Block-Editor</strong><br><small>Mehrere Dateien, Blöcke + Inline-Code, Live-Vorschau</small></div></a>
+      <a class="item" data-tags="playground" href="siedler-node-playground.html"><span>🕸️</span><div><strong>Node-Playground</strong><br><small>Verdrahten, JSON &amp; DOT Export</small></div></a>
+      <a class="item" data-tags="playground" href="siedler-node-playground-trace.html"><span>🎬</span><div><strong>Node-Trace</strong><br><small>Play/Step/Pause – Flow sichtbar</small></div></a>
+      <a class="item" data-tags="playground codegen" href="siedler-node-playground-codegen.html"><span>🧪</span><div><strong>Node-Codegen</strong><br><small>Listener/Emitter-Stubs (ES)</small></div></a>
+      <a class="item" data-tags="playground codegen" href="siedler-node-playground-codegen-fix.html"><span>🧪</span><div><strong>Node-Codegen (No-Import)</strong><br><small>Vorschau ohne Imports</small></div></a>
+      <a class="item" data-tags="playground ui" href="siedler-code-block-editor.html"><span>🧱</span><div><strong>Code-Block-Editor</strong><br><small>Dateien/Blöcke + Inline-Code, Live-Vorschau</small></div></a>
     </div>
   </section>
 
   <section>
-    <h2>Map/Level & Runtime</h2>
+    <h2>UI & Assets</h2>
     <div class="list">
-      <a class="item" data-tags="map" href="tools/map-editor-pro.html"><span>🗺️</span><div><strong>Map-Editor Pro</strong><br><small>Fortgeschrittener Karten-Editor</small></div></a>
-      <a class="item" data-tags="map" href="tools/level-editor/index.html"><span>🎛️</span><div><strong>Level-Editor</strong><br><small>Tiles/Objekte, Interaktion</small></div></a>
-      <a class="item" data-tags="map" href="tools/map-runtime-demo.html"><span>🚀</span><div><strong>Map-Runtime Demo</strong><br><small>Lädt map-*.json, zeigt Laufzeit</small></div></a>
+      <a class="item" data-tags="ui" href="ui-editor-advanced.html">
+        <span>✨</span><div><strong>UI-Editor Advanced</strong><br><small>WYSIWYG Move/Resize, Snap-Grid, Inline-Styles, DnD, Tokens, Komp-Bibliothek</small></div>
+      </a>
+      <a class="item" data-tags="library files" href="asset-library.html">
+        <span>📚</span><div><strong>Asset-Library (GitHub)</strong><br><small>Repo durchsuchen, Snippets kopieren</small></div>
+      </a>
+      <a class="item" data-tags="ui" href="assets/ui/ui-start.js"><span>🖥️</span><div><strong>UI Start</strong><br><small>Start-Panel Logik & Styles</small></div></a>
+      <a class="item" data-tags="ui" href="assets/ui/ui-build.js"><span>🏗️</span><div><strong>UI Build Dock</strong><br><small>Baumenü (HUD)</small></div></a>
+      <a class="item" data-tags="ui" href="assets/core/game.bootstrap.js"><span>🎮</span><div><strong>Game Bootstrap</strong><br><small>Game Start/Init</small></div></a>
+      <a class="item" data-tags="ui files" href="core/asset.js"><span>📦</span><div><strong>Asset Loader</strong><br><small>Manifest & Loader</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>Inspector & Debug</h2>
     <div class="list">
-      <a class="item" data-tags="debug" href="assets/inspector/inspector.md"><span>📘</span><div><strong>Inspector Docs</strong><br><small>API & Hooks Überblick</small></div></a>
-      <a class="item" data-tags="debug" href="tools/debug-tools.js"><span>🛠️</span><div><strong>Debug-Tools (Script)</strong><br><small>Kurzbefehle, Hooks, Utilities</small></div></a>
-      <a class="item" data-tags="debug ui" href="assets/inspector/overlay.hooks.js"><span>🧩</span><div><strong>Inspector Overlay Hooks</strong><br><small>Integration ins Render-Overlay</small></div></a>
+      <a class="item" data-tags="debug" href="assets/inspector/inspector.md"><span>📘</span><div><strong>Inspector Docs</strong><br><small>API & Hooks</small></div></a>
+      <a class="item" data-tags="debug" href="tools/debug-tools.js"><span>🛠️</span><div><strong>Debug-Tools</strong><br><small>Kurzbefehle/Utilities</small></div></a>
+      <a class="item" data-tags="debug ui" href="assets/inspector/overlay.hooks.js"><span>🧩</span><div><strong>Overlay Hooks</strong><br><small>Render-Overlay Integration</small></div></a>
     </div>
   </section>
 
   <section>
     <h2>File-Listen & Manifeste</h2>
     <div class="list">
-      <a class="item" data-tags="files" href="filelist.txt"><span>📄</span><div><strong>filelist.txt</strong><br><small>Gesamte Projektdateien (Plain)</small></div></a>
+      <a class="item" data-tags="files" href="filelist.txt"><span>📄</span><div><strong>filelist.txt</strong><br><small>Alle Projektdateien (Plain)</small></div></a>
       <a class="item" data-tags="files" href="filelist.json"><span>📄</span><div><strong>filelist.json</strong><br><small>Maschinenlesbar</small></div></a>
       <a class="item" data-tags="files" href="tools/gen-manifest.mjs"><span>🧰</span><div><strong>Manifest-Generator (Node)</strong><br><small>Manifeste aus Assets erzeugen</small></div></a>
-      <a class="item" data-tags="files" href="tools/filelist.html"><span>🗂️</span><div><strong>Filelist Viewer</strong><br><small>Interaktive Ansicht & Filter</small></div></a>
+      <a class="item" data-tags="files" href="tools/filelist.html"><span>🗂️</span><div><strong>Filelist Viewer</strong><br><small>Interaktiv & Filter</small></div></a>
     </div>
   </section>
 
   <section>
-    <h2>Assets & UI</h2>
-    <div class="list">
-      <a class="item" data-tags="ui" href="assets/ui/ui-start.js"><span>🖥️</span><div><strong>UI Start</strong><br><small>Start-Panel Logik & Styles</small></div></a>
-      <a class="item" data-tags="ui" href="assets/ui/ui-build.js"><span>🏗️</span><div><strong>UI Build Dock</strong><br><small>Baumenü (HUD)</small></div></a>
-      <a class="item" data-tags="ui" href="assets/core/game.bootstrap.js"><span>🎮</span><div><strong>Game Bootstrap</strong><br><small>Game Start/Init</small></div></a>
-      <a class="item" data-tags="ui" href="core/asset.js"><span>📦</span><div><strong>Asset Loader</strong><br><small>Manifest & Loader</small></div></a>
+    <h2>Bedienungsanleitungen (Kurz)</h2>
+    <div class="pad">
+      <details open>
+        <summary>UI-Editor Advanced</summary>
+        <div class="pad">
+          • Datei laden/Code einfügen → <em>Vorschau aktualisieren</em>.<br>
+          • <strong>WYSIWYG</strong> aktiv → Element im Preview anklicken → Drag zum Verschieben, Ecken zum <em>Resize</em>. <em>Snap-Grid</em> oben anpassbar.<br>
+          • Änderungen werden als <strong>Inline-Styles</strong> gesetzt → beim <em>Code kopieren/Zip</em> enthalten.<br>
+          • <strong>Property-Editor</strong>: Text/ID/Classes/OnClick, Style-Felder + Inline-CSS, Data-Attributes.<br>
+          • <strong>Komponenten-Bibliothek</strong>: „Aus Code übernehmen“ → JSON speichern/laden.<br>
+          • <strong>Assets</strong>: URL/GitHub auswählen → passendes Tag wird eingefügt; Drag&Drop unterstützt.<br>
+        </div>
+      </details>
+      <details>
+        <summary>Asset-Library</summary>
+        <div class="pad">
+          • Owner/Repo/Branch angeben → <em>Laden</em> → Ordner/Dateien browsen.<br>
+          • Zu jeder Datei passendes <em>Snippet</em> (script/link/img/json) + <em>Copy</em>-Button.<br>
+          • Filterfeld oben rechts durchsucht Namen/Pfade.<br>
+        </div>
+      </details>
+      <details>
+        <summary>Node-Playgrounds / DOT</summary>
+        <div class="pad">
+          • Playgrounds: visuell verdrahten, JSON/DOT exportieren; Trace zeigt Flow (Play/Step/Pause).<br>
+          • DOT-Editoren: Blockschaltbilder rendern; Pro-Version hat Ortho/Kanten-Labels/Export.<br>
+        </div>
+      </details>
     </div>
   </section>
 </main>
 
 <footer>
-  <div>💡 Tipp: Lege diese Datei in das <em>Projekt-Wurzelverzeichnis</em>. Dann funktionieren alle relativen Links offline.</div>
+  <div>💡 Tipp: Lege diese Datei in das <em>Projekt-Wurzelverzeichnis</em> – alle Links funktionieren offline.</div>
   <div class="mono" id="quick">Quicklinks:
-    • <a href="siedler-node-playground-codegen-fix.html">Node-Codegen (No-Import)</a>
+    • <a href="ui-editor-advanced.html">UI-Editor Advanced</a>
+    • <a href="asset-library.html">Asset-Library</a>
     • <a href="siedler-code-block-editor.html">Code-Block-Editor</a>
-    • <a href="ui-editor-preview.html">UI-Editor & Vorschau</a>
   </div>
 </footer>
 
@@ -124,14 +159,14 @@ function applyFilter(){
   const activeTags=pills.filter(p=>p.classList.contains('active')).map(p=>p.dataset.tag);
   document.querySelectorAll('a.item').forEach(a=>{
     const hay=(a.textContent||'').toLowerCase();
-    const tags=(a.dataset.tags||'').split(/\\s+/).filter(Boolean);
+    const tags=(a.dataset.tags||'').split(/\s+/).filter(Boolean);
     const matchText = !text || hay.includes(text);
     const matchTags = activeTags.length===0 || activeTags.every(t=>tags.includes(t));
     a.classList.toggle('hidden', !(matchText && matchTags));
   });
   document.querySelectorAll('main section').forEach(sec=>{
     const any=[...sec.querySelectorAll('a.item')].some(a=>!a.classList.contains('hidden'));
-    sec.classList.toggle('hidden', !any);
+    sec.classList.toggle('hidden', !any && sec.querySelector('.list'));
   });
 }
 q.addEventListener('input', applyFilter);
