@@ -1,95 +1,89 @@
 /* ============================================================================
- * UI Start Overlay (v17.8.4)
- * - Vollbild-Overlay mit Titel + Button
- * - Eigenes Hintergrundbild (assets/ui/start-bg.jpeg)
- * - Nach Start wird das Overlay unsichtbar UND aus dem Layout entfernt
+ * UI Start-Layer (v17.8.5)
+ *  - Vollbild-Panel mit Hintergrundbild
+ *  - Klickbarer "Spiel starten"-Button
+ *  - Sauberes Ausblenden + keine blockierenden Pointer-Events
  * ========================================================================== */
 
-/* Basis */
-:root{
-  --ui-dark: #0c120f;
-  --ui-fg:   #e9eef2;
-  --ui-fg-dim:#c9d3db;
-  --ui-glass: rgba(15,18,20,.55);
-  --ui-glass-b: rgba(0,0,0,.25);
-}
-
-/* Vollbild-Overlay */
-.ui-start{
+/* Panel belegt die komplette Bühne und liegt über dem Canvas */
+#start-panel {
   position: fixed;
   inset: 0;
-  z-index: 1000;              /* über Canvas, unter FAB/Inspector */
+  z-index: 1000;                 /* unter deinen FABs (die sind > 2.1e9), aber über Canvas */
   display: grid;
   grid-template-rows: 1fr auto 1fr;
-  align-items: center;
-  justify-items: start;
-  padding: max(env(safe-area-inset-top),24px) 24px max(env(safe-area-inset-bottom),24px);
-  color: var(--ui-fg);
+  grid-template-columns: 1fr;
   pointer-events: auto;
+  opacity: 1;
+  transition: opacity .35s ease;
 }
 
-/* eigener Hintergrund */
-.ui-start-bg{
+/* Hintergrundbild: füllt, leicht abgedunkelt, kein zusätzliches Schwarz-Overlay nötig */
+#start-panel .ui-start-bg{
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.35)),
-    url("assets/ui/start-bg.jpeg") center/cover no-repeat fixed;
-  filter: none;
-  z-index: -1;
+  background-image: url("assets/ui/start-bg.jpeg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: brightness(.58);       /* angenehme Lesbarkeit für Titel/Btn */
+  transition: filter .35s ease, opacity .35s ease;
 }
 
-/* Panel (Titel + Button) */
-.ui-start-panel{
-  display: grid;
-  gap: 18px;
-  padding: 16px 20px;
-  background: var(--ui-glass);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 10px;
-  box-shadow: 0 12px 36px var(--ui-glass-b);
-  backdrop-filter: blur(6px);
+/* Inhalt: Titel + Button links oben (wie auf deinem Screenshot) */
+#start-panel .ui-start-panel{
+  position: relative;
+  z-index: 1;
+  grid-row: 1;                   /* oberes Drittel */
+  align-self: start;
+  padding: 24px 16px;
+  color: #e9eef1;
 }
 
-.ui-start-panel h1{
-  margin: 0;
-  font-size: clamp(24px, 5vw, 42px);
-  line-height: 1.1;
-  letter-spacing: .2px;
-  color: var(--ui-fg);
-  text-shadow: 0 1px 0 rgba(0,0,0,.35);
+#start-panel .ui-start-panel h1{
+  margin: 0 0 12px 0;
+  font-size: clamp(28px, 5vw, 44px);
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: rgba(255,255,255,.9);
+  text-shadow: 0 2px 18px rgba(0,0,0,.45);
 }
 
-.ui-start-panel button{
-  justify-self: start;
-  padding: 10px 14px;
+/* Start-Button – gleiche „Pill“-Optik wie im Projekt */
+#start-panel #btnStart{
+  appearance: none;
+  border: 1px solid rgba(255,255,255,.45);
+  background: rgba(240,245,250,.9);
+  color: #1a2a33;
+  padding: 8px 14px;
+  border-radius: 16px;
   font-size: 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.2);
-  background: rgba(255,255,255,.12);
-  color: var(--ui-fg);
+  font-weight: 600;
+  line-height: 1;
   cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: transform .12s ease, background .2s ease, border-color .2s ease;
 }
-.ui-start-panel button:active{ transform: translateY(1px); }
+#start-panel #btnStart:active { transform: translateY(1px); }
+#start-panel #btnStart:hover  { background: #fff; border-color: rgba(255,255,255,.6); }
 
-/* Fade-Out + Remove */
-.ui-start.is-fading{
-  animation: uiStartFade .28s ease forwards;
+/* Sobald versteckt: Layer ist unsichtbar und klickt nicht mehr mit */
+#start-panel.hidden{
+  opacity: 0;
+  pointer-events: none;
 }
-@keyframes uiStartFade{
-  to{ opacity: 0; }
-}
-
-/* Vollständig versteckt (nachdem JS das Element entfernt hat, ist diese Klasse
-   nur noch ein Fallback; sie schaltet Pointer-Events und Sichtbarkeit aus) */
-.ui-start.is-hidden{
-  opacity: 0 !important;
-  pointer-events: none !important;
-  display: none !important;
+#start-panel.hidden .ui-start-bg{
+  filter: brightness(1);
+  opacity: 0;
 }
 
-/* Wenn das Spiel läuft, darf der Body normal scroll-/interagieren */
-body.has-game-started{ background: var(--ui-dark); }
+/* Sicherheitsnetz: wenn „playing“-State aktiv ist, Panel komplett raus */
+body.playing #start-panel{ display:none; }
 
-/* FABs immer sichtbar */
-.ui-fab{ z-index: 2147483647 !important; }
+/* Canvas soll die volle Bühne nutzen */
+#game{
+  display:block;
+  width:100vw;
+  height:100vh;
+  touch-action:none;
+}
