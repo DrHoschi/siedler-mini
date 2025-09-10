@@ -1,89 +1,91 @@
 /* ============================================================================
- * UI Start-Layer (v17.8.5)
- *  - Vollbild-Panel mit Hintergrundbild
- *  - Klickbarer "Spiel starten"-Button
- *  - Sauberes Ausblenden + keine blockierenden Pointer-Events
+ * UI-Start – v17.8.6
+ * - Vollflächiges Start-Overlay mit Bild
+ * - Sauberes Fade-Out + Entfernen (keine dunkle Maske bleibt liegen)
+ * - Mobile Safe-Area
  * ========================================================================== */
 
-/* Panel belegt die komplette Bühne und liegt über dem Canvas */
-#start-panel {
+/* Hintergrund der Seite nur als Fallback – die Bühne liegt darüber */
+html, body{
+  height:100%;
+  margin:0;
+  background:#0c120f;
+}
+
+/* Overlay-Container */
+.ui-start{
   position: fixed;
   inset: 0;
-  z-index: 1000;                 /* unter deinen FABs (die sind > 2.1e9), aber über Canvas */
+  z-index: 10000;                 /* unterhalb Inspector (der ist extrem hoch), oberhalb Bühne */
   display: grid;
-  grid-template-rows: 1fr auto 1fr;
-  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto 1fr;  /* Mitte freihalten, Panel sitzt im mittleren Bereich */
+  place-items: center;
+  padding:
+    max(env(safe-area-inset-top), 0px)
+    max(env(safe-area-inset-right), 0px)
+    max(env(safe-area-inset-bottom), 0px)
+    max(env(safe-area-inset-left), 0px);
+  /* KEINE dunkle Fläche hier; das Bild selbst bekommt leichte Abdunklung,
+     damit Text lesbar bleibt. So ist die Seite nicht „stockdunkel“. */
   pointer-events: auto;
   opacity: 1;
-  transition: opacity .35s ease;
+  transition: opacity .28s ease;
 }
 
-/* Hintergrundbild: füllt, leicht abgedunkelt, kein zusätzliches Schwarz-Overlay nötig */
-#start-panel .ui-start-bg{
+/* Hintergrundbild des Startlayers */
+.ui-start-bg{
   position: absolute;
   inset: 0;
-  background-image: url("assets/ui/start-bg.jpeg");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  filter: brightness(.58);       /* angenehme Lesbarkeit für Titel/Btn */
-  transition: filter .35s ease, opacity .35s ease;
+  background: url("assets/ui/start-bg.jpeg") center/cover no-repeat;
+  filter: brightness(.85);       /* leicht abdunkeln für Titel/Buttons */
+  z-index: 0;
 }
 
-/* Inhalt: Titel + Button links oben (wie auf deinem Screenshot) */
-#start-panel .ui-start-panel{
+/* Start-Panel (Titel + Button) */
+.ui-start-panel{
   position: relative;
   z-index: 1;
-  grid-row: 1;                   /* oberes Drittel */
-  align-self: start;
-  padding: 24px 16px;
-  color: #e9eef1;
+  align-self: center;
+  text-align: left;
+  width: min(92vw, 720px);
+  padding: 16px 18px;
+  color: #f7f9fb;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
 }
 
-#start-panel .ui-start-panel h1{
+.ui-start-panel h1{
   margin: 0 0 12px 0;
-  font-size: clamp(28px, 5vw, 44px);
-  font-weight: 800;
-  letter-spacing: .3px;
-  color: rgba(255,255,255,.9);
-  text-shadow: 0 2px 18px rgba(0,0,0,.45);
+  font: 700 36px/1.1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  letter-spacing: .2px;
 }
 
-/* Start-Button – gleiche „Pill“-Optik wie im Projekt */
-#start-panel #btnStart{
+/* Start-Button */
+#btnStart{
   appearance: none;
-  border: 1px solid rgba(255,255,255,.45);
-  background: rgba(240,245,250,.9);
-  color: #1a2a33;
-  padding: 8px 14px;
+  border: 0;
   border-radius: 16px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1;
+  padding: 10px 14px;
+  font: 600 16px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: #0b2235;
+  background: #e6f0fa;
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
   cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: transform .12s ease, background .2s ease, border-color .2s ease;
 }
-#start-panel #btnStart:active { transform: translateY(1px); }
-#start-panel #btnStart:hover  { background: #fff; border-color: rgba(255,255,255,.6); }
+#btnStart:active{ transform: translateY(1px); }
+#btnStart:focus{ outline: 2px solid rgba(52,152,219,.55); outline-offset: 2px; }
 
-/* Sobald versteckt: Layer ist unsichtbar und klickt nicht mehr mit */
-#start-panel.hidden{
+/* Fade-Out + deaktivieren */
+.ui-start.is-hiding{
   opacity: 0;
   pointer-events: none;
 }
-#start-panel.hidden .ui-start-bg{
-  filter: brightness(1);
-  opacity: 0;
-}
 
-/* Sicherheitsnetz: wenn „playing“-State aktiv ist, Panel komplett raus */
-body.playing #start-panel{ display:none; }
-
-/* Canvas soll die volle Bühne nutzen */
+/* Bühne (Canvas) sichtbar über dem Body-Hintergrund */
 #game{
   display:block;
   width:100vw;
   height:100vh;
-  touch-action:none;
+  position: relative;
+  z-index: 0;  /* Start-Overlay liegt darüber, wird dann entfernt */
+  touch-action: none;
 }
