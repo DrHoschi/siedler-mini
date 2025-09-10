@@ -1,108 +1,65 @@
 /* ============================================================================
- * UI Start – v17.8.4
- *  - Startpanel initialisieren
- *  - Hintergrundbild laden
- *  - Events: cb:ui-ready, cb:game-start
- *  - Robust gegen Mehrfach-Init
+ * UI Start Panel (Overlay) – v17.8.4
+ * - feuert 'cb:ui-ready' beim Laden
+ * - feuert 'cb:game-start' beim Start
+ * - verhindert Doppel-Start
+ * - blendet Overlay weich aus und entfernt es
  * ========================================================================== */
-
 (function(){
-  const MOD = "[ui-start]";
-  const VER = "v17.8.4";
+  const log = (t,...a)=> (window.CBLog?.info||console.log)(`[ui-start] ${t}`, ...a);
+  const warn= (t,...a)=> (window.CBLog?.warn||console.warn)(`[ui-start] ${t}`, ...a);
+  const ok  = (t,...a)=> (window.CBLog?.ok  ||console.log)(`[ui-start] ${t}`, ...a);
 
-  // Einmalig initialisieren
-  if (window.__uiStartInit) return;
-  window.__uiStartInit = true;
+  const onReady = ()=>{
+    const panel = document.querySelector('.ui-start');
+    const bg    = document.querySelector('.ui-start-bg');
+    const btn   = document.getElementById('btnStart');
 
-  const log = {
-    info: (msg)=> (window.CBLog?.info || console.log)(`${MOD} ${msg}`),
-    ok  : (msg)=> (window.CBLog?.ok   || console.log)(`${MOD} ${msg}`),
-    warn: (msg)=> (window.CBLog?.warn || console.warn)(`${MOD} ${msg}`),
-    err : (msg)=> (window.CBLog?.error|| console.error)(`${MOD} ${msg}`),
-  };
+    // Signal: UI ist bereit
+    try{ window.dispatchEvent(new CustomEvent('cb:ui-ready')); }catch(_){}
+    log('geladen (v17.8.4)');
 
-  // DOM-Hooks
-  const root   = document.getElementById("start-panel");
-  const bg     = root?.querySelector(".ui-start-bg");
-  const panel  = root?.querySelector(".ui-start-panel");
-  const btn    = root?.querySelector("#btnStart");
-
-  // Sanity Checks
-  if(!root || !bg || !panel){
-    log.warn("Start-Panel HTML nicht gefunden – Events werden dennoch dispatcht.");
-    // Dispatch dennoch (z.B. wenn Panel absichtlich entfernt wurde)
-    dispatchReadyThenStart();
-    return;
-  }
-
-  // Hintergrund laden → verhindert „weißes Blitzen“ bei schwächerem Netz
-  primeBackground(bg)
-    .catch(()=>{/* ignoriere Bildfehler */})
-    .finally(()=>{
-      // Jetzt Panel interaktiv machen
-      mountButton();
-      log.info(`geladen (${VER})`);
-    });
-
-  function primeBackground(bgEl){
-    return new Promise((res)=> {
-      // Pfad aus CSS-Var lesen
-      const style = getComputedStyle(document.documentElement);
-      let raw = style.getPropertyValue("--start-bg").trim();
-      // raw z.B.: url("assets/ui/start-bg.jpeg")
-      const m = raw.match(/url\((['"]?)(.+?)\1\)/i);
-      const url = m ? m[2] : null;
-      if(!url){ res(); return; }
-
-      const img = new Image();
-      img.onload  = ()=> res();
-      img.onerror = ()=> res();
-      img.src = url;
-    });
-  }
-
-  function mountButton(){
-    if(!btn){
-      log.warn("Start-Button #btnStart nicht gefunden – starte automatisch.");
-      dispatchReadyThenStart();
-      hidePanel();
+    if(!panel || !btn){
+      warn('Startpanel oder Button nicht gefunden – überspringe Overlay.');
+      try{ window.dispatchEvent(new CustomEvent('cb:game-start')); ok('cb:game-start (auto)'); }catch(_){}
       return;
     }
 
-    let pressed = false;
-    btn.addEventListener("click", () => {
-      if (pressed) return; // Doppelklick-Schutz
-      pressed = true;
-      btn.disabled = true;
-
-      // 1) UI bereit
-      window.dispatchEvent(new CustomEvent("cb:ui-ready"));
-      // 2) Spiel starten
-      window.dispatchEvent(new CustomEvent("cb:game-start"));
-
-      log.ok("cb:ui-ready & cb:game-start dispatcht");
-
-      // Panel ausblenden
-      hidePanel();
-
-      // Sicherheit: nach kurzer Zeit Button wieder freigeben
-      setTimeout(()=> { btn.disabled = false; }, 1200);
-    }, { passive:true });
-  }
-
-  function hidePanel(){
-    try{
-      root.classList.add("is-hidden");
-    }catch(_){}
-  }
-
-  function dispatchReadyThenStart(){
-    try{
-      window.dispatchEvent(new CustomEvent("cb:ui-ready"));
-      window.dispatchEvent(new CustomEvent("cb:game-start"));
-      log.ok("cb:ui-ready & cb:game-start dispatcht (Fallback)");
-    }catch(err){
-      log.err("Events konnten nicht dispatcht werden: " + err?.message);
+    // Fallback falls Background fehlt (z.B. falscher Pfad)
+    if(bg){
+      const cs = getComputedStyle(bg);
+      const hasImg = (cs.backgroundImage && cs.backgroundImage !== 'none');
+      if(!hasImg){ panel.classList.add('no-bg'); }
     }
+
+    let started = false;
+    const startGame = ()=>{
+      if(started) return;
+      started = true;
+      ok('Start klick');
+      // Spielstart-Ereignis (von deiner Engine/Bootstrap abgefangen)
+      try{ window.dispatchEvent(new CustomEvent('cb:game-start')); ok('cb:game-start dispatcht'); }catch(_){}
+
+      // weich ausblenden und entfernen
+      panel.classList.add('is-hidden');
+      setTimeout(()=>{ panel.remove(); }, 320);
+    };
+
+    // Klick + Enter/Space
+    btn.addEventListener('click', startGame, {once:true});
+    btn.addEventListener('keydown', (ev)=>{
+      if(ev.key === 'Enter' || ev.key === ' '){
+        ev.preventDefault(); startGame();
+      }
+    });
+
+    // Sicherheit: spätestens nach 30s automatisch starten (keine Blockade)
+    setTimeout(()=>{ if(!started){ warn('Auto-Start (Timeout)'); startGame(); }}, 30000);
+  };
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', onReady, {once:true});
+  }else{
+    onReady();
   }
 })();
