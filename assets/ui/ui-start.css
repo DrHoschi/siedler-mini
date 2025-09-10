@@ -1,21 +1,108 @@
-/* ui-start.css — v17.8.3 (stabil) */
-.ui-start { position:fixed; inset:0; z-index:20; display:flex; }
+/* ============================================================================
+ * UI Start – v17.8.4
+ *  - Vollbild-Startpanel mit Hintergrundbild
+ *  - iOS/Safari safe (z-index, safe-area, pointer-events)
+ * ========================================================================== */
+
+:root{
+  --start-bg: url("assets/ui/start-bg.jpeg");
+  --start-tint: rgba(0,0,0,.45);
+  --panel-bg: rgba(245,246,247,.92);
+  --panel-border: rgba(0,0,0,.12);
+  --panel-radius: 14px;
+  --shadow: 0 16px 48px rgba(0,0,0,.35);
+  --brand: #223042;
+  --accent: #3b6ea8;
+}
+
+.ui-start{
+  position: fixed;
+  inset: 0;
+  padding:
+    max(env(safe-area-inset-top), 0px)
+    max(env(safe-area-inset-right), 0px)
+    max(env(safe-area-inset-bottom), 0px)
+    max(env(safe-area-inset-left), 0px);
+  z-index: 2147482000;            /* sehr hoch, aber unter FABs (die sind 2147483647) */
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-template-columns: 1fr;
+  place-items: center;
+  pointer-events: auto;
+}
+
 .ui-start-bg{
+  position: absolute;
+  inset: 0;
+  background-image: var(--start-bg);
+  background-size: cover;
+  background-position: center center;
+  filter: none;
+}
+.ui-start-bg::after{
+  content:"";
   position:absolute; inset:0;
-  background: #0b0f0d url("assets/ui/start-bg.jpeg") center/cover no-repeat;
-  filter: brightness(0.9);
+  background: var(--start-tint);
 }
+
+/* Panel */
 .ui-start-panel{
-  position:relative; z-index:1;
-  margin:auto; padding:24px 28px; border-radius:12px;
-  background:rgba(20,24,22,.72);
-  color:#e8f0ec; text-align:center; backdrop-filter: blur(6px);
-  border:1px solid rgba(255,255,255,.08);
+  position: relative;
+  width: min(560px, 92vw);
+  padding: clamp(16px, 3vw, 28px);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--shadow);
+  color: var(--brand);
+  display: grid;
+  gap: 14px;
+  justify-items: start;
 }
-.ui-start-panel h1{ margin:0 0 14px; font:700 22px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-.ui-start-panel button{
-  padding:10px 16px; border-radius:10px; border:none; cursor:pointer;
-  background:#1f8a55; color:white; font-weight:600;
-  box-shadow:0 10px 24px rgba(0,0,0,.25);
+
+.ui-start-panel h1{
+  margin: 0 0 8px 0;
+  font: 700 clamp(22px, 4.2vw, 30px)/1.15 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  letter-spacing: .2px;
 }
-.ui-start.hide{ display:none; }
+
+.ui-start-panel p{
+  margin: 0;
+  opacity: .8;
+}
+
+.ui-start-panel .actions{
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+#btnStart{
+  appearance: none;
+  border: 1px solid #b7c6d6;
+  background: #eaf0f6;
+  color: #1f2c3d;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font: 600 16px/1 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+#btnStart:active{ transform: translateY(1px); }
+#btnStart.primary{
+  background: #dfeaf6;
+  border-color: #a8c2de;
+}
+
+#btnStart[disabled]{
+  opacity: .6; cursor: progress;
+}
+
+/* Versteckt-Status */
+.ui-start.is-hidden{ display: none !important; }
+
+/* Landscape: Panel etwas breiter */
+@media (orientation: landscape){
+  .ui-start-panel{ width: min(720px, 92vw); }
+}
