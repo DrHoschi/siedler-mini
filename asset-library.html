@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Siedler · Asset Library (GitHub Browser)</title>
+<style>
+  :root { --bg:#0f1115; --panel:#151823; --fg:#e7e6f0; --border:#23283b; --muted:#9aa3b2; --accent:#66d9ef; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  header{padding:14px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  main{display:grid;grid-template-columns:340px 1fr;gap:12px;padding:12px;height:calc(100% - 66px)}
+  section{background:#121728;border:1px solid var(--border);border-radius:10px;min-height:0;display:flex;flex-direction:column}
+  section h2{margin:0;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px}
+  .pad{padding:10px 12px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  input,button,select{background:#1a1f2e;color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+  button{cursor:pointer}
+  #list{overflow:auto}
+  .item{border-bottom:1px solid #232a3e;padding:8px 12px;display:grid;gap:4px}
+  .item .meta{color:var(--muted);font-size:12px}
+  pre{margin:0;padding:10px;background:#0e1220;border-radius:8px;overflow:auto}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <strong>Asset Library</strong>
+  <input id="owner" placeholder="owner">
+  <input id="repo" placeholder="repo">
+  <input id="branch" placeholder="branch (z.B. main)">
+  <button id="load">Laden</button>
+  <input id="q" placeholder="Filter (Name/Pfad/Typ)" style="flex:1;min-width:220px">
+</header>
+
+<main>
+  <section>
+    <h2>Ordner</h2>
+    <div class="pad">
+      <div class="row">
+        <input id="path" placeholder="Pfad (leer für root)" style="flex:1">
+        <button id="browse">Durchsuchen</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="up">↑ Eine Ebene</button>
+        <button id="root">⟲ Root</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Assets</h2>
+    <div id="list"></div>
+  </section>
+</main>
+
+<script>
+const owner=document.getElementById('owner');
+const repo=document.getElementById('repo');
+const branch=document.getElementById('branch');
+const path=document.getElementById('path');
+const list=document.getElementById('list');
+const q=document.getElementById('q');
+
+document.getElementById('load').onclick=()=> loadTree(path.value.trim());
+document.getElementById('browse').onclick=()=> loadTree(path.value.trim());
+document.getElementById('up').onclick=()=>{ const p=path.value.trim().replace(/\/+$/,''); const u=p.split('/'); u.pop(); path.value=u.join('/'); loadTree(path.value.trim()); }
+document.getElementById('root').onclick=()=>{ path.value=''; loadTree(''); }
+q.addEventListener('input', filter);
+
+async function loadTree(subpath){
+  const o=owner.value.trim(), r=repo.value.trim(), b=(branch.value.trim()||'main');
+  if(!o||!r) return alert('Owner & Repo angeben');
+  const api=`https://api.github.com/repos/${o}/${r}/contents/${subpath?subpath:''}?ref=${encodeURIComponent(b)}`;
+  list.innerHTML='<div class="pad">Lade…</div>';
+  try{
+    const res=await fetch(api); if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    renderList(Array.isArray(data)?data:[]);
+  }catch(e){
+    list.innerHTML=`<div class="pad">Fehler: ${e.message}</div>`;
+  }
+}
+function renderList(items){
+  list.innerHTML='';
+  items.sort((a,b)=> (a.type===b.type?0:a.type==='dir'?-1:1) || a.name.localeCompare(b.name));
+  for(const it of items){
+    const div=document.createElement('div'); div.className='item';
+    const isFile=it.type==='file';
+    const size = isFile ? ` · ${(it.size||0)} B` : '';
+    const ex = it.name.split('.').pop().toLowerCase();
+    let kind='file';
+    if(['js'].includes(ex)) kind='script';
+    else if(['css'].includes(ex)) kind='style';
+    else if(['png','jpg','jpeg','gif','webp','svg','bmp'].includes(ex)) kind='image';
+    else if(['json'].includes(ex)) kind='json';
+    else if(['html','htm'].includes(ex)) kind='html';
+    div.dataset.kind=kind;
+
+    div.innerHTML = `
+      <div><strong>${it.name}</strong></div>
+      <div class="meta">${it.path} · ${it.type}${size}</div>
+      ${isFile ? `<div class="meta">Snippet:</div><pre>${snippetFor(it)}</pre><div class="row"><button data-copy>Code kopieren</button> <a href="${it.download_url||it.html_url||'#'}" target="_blank">Rohdatei öffnen</a></div>` :
+      `<div class="row"><button data-open>Ordner öffnen</button></div>`}
+    `;
+    if(!isFile){
+      div.querySelector('[data-open]').onclick=()=>{ path.value=it.path; loadTree(it.path); };
+    }else{
+      div.querySelector('[data-copy]').onclick=()=>{ const code=div.querySelector('pre').textContent; navigator.clipboard.writeText(code); };
+    }
+    list.appendChild(div);
+  }
+  filter();
+}
+function snippetFor(it){
+  const u=it.download_url||it.html_url||it.url||'';
+  const ex=it.name.split('.').pop().toLowerCase();
+  if(ex==='js') return `<script src="${u}"></script>`;
+  if(ex==='css') return `<link rel="stylesheet" href="${u}">`;
+  if(['png','jpg','jpeg','gif','webp','svg','bmp'].includes(ex)) return `<img src="${u}" alt="">`;
+  if(ex==='json') return `<script type="application/json" data-src="${u}"></script>`;
+  if(ex==='html'||ex==='htm') return `<!-- HTML-Seite: <iframe src="${u}"></iframe> oder Inhalt kopieren -->`;
+  return `<!-- Datei: ${u} -->`;
+}
+function filter(){
+  const t=(q.value||'').toLowerCase();
+  [...list.children].forEach(div=>{
+    const hay=(div.textContent||'').toLowerCase();
+    div.classList.toggle('hidden', !!t && !hay.includes(t));
+  });
+}
+</script>
+</body>
+</html>
