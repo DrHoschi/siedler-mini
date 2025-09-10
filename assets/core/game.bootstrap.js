@@ -105,4 +105,56 @@
     }, 0);
 
   }catch(_){}
+  // Neue Siedler – Bootstrap Start-Hook (v17.6.2)
+(function(){
+  const info = (window.CBLog?.info || console.log);
+  const ok   = (window.CBLog?.ok   || console.log);
+  const err  = (window.CBLog?.err  || console.error);
+
+  // Hilfsfunktion: Map starten
+  async function startGameFromCanvas(){
+    try{
+      const canvas = document.getElementById('game');
+      if (!canvas) throw new Error("Canvas #game fehlt");
+      const mapUrl = canvas.dataset.map || '';
+      info("[bootstrap] start() → map:", mapUrl || "(leer)");
+
+      // Falls deine Engine so heißt:
+      if (window.CBGame?.start) {
+        await window.CBGame.start(canvas, mapUrl);
+        ok("[bootstrap] ready (v17.6.2)");
+      } else if (window.Game?.start) {
+        await window.Game.start(canvas, mapUrl);
+        ok("[bootstrap] ready (legacy)");
+      } else {
+        err("[bootstrap] Keine start()-Funktion gefunden.");
+      }
+    }catch(e){
+      err("[bootstrap] start() fehlgeschlagen:", e);
+    }
+  }
+
+  // 1) Sofort starten, wenn Legacy-Flow es erwartet
+  if (window.__cb?.autostart) {
+    startGameFromCanvas();
+  }
+
+  // 2) Moderner Flow: auf Start-Event warten
+  window.addEventListener('cb:game-start', () => {
+    info("[bootstrap] cb:game-start empfangen");
+    startGameFromCanvas();
+  });
+
+  // 3) Sichtbares Fehler-Logging beim Map-Load
+  const _fetch = window.fetch;
+  window.fetch = async function(url, opts){
+    const res = await _fetch(url, opts);
+    if (!res.ok) {
+      (window.CBLog?.err||console.error)(
+        "[bootstrap] fetch failed:", url, res.status, res.statusText
+      );
+    }
+    return res;
+  };
+})();
 })();
