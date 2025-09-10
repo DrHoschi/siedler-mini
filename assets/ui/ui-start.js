@@ -1,97 +1,84 @@
-/* v17.8.7 – Start-Panel Logik
-   - zentriertes Panel im Inspector-Stil
-   - kein Vollbild-Overlay; Map bleibt sichtbar
-   - sauberes Entfernen beim Start
-   - cb:game-start wird dispatcht
-   - Safety: style.css & alte Overlays entfernen
-*/
+// ui-start.js  v17.8.8
+// Zentriertes Start-Panel. Entfernt Legacy-Buttons oben links und
+// blockiert NICHT die Map (kein Fullscreen-Overlay).
+
 (function(){
-  const log = (window.CBLog?.ok || console.log);
-  const warn = (window.CBLog?.warn || console.warn);
+  const log = (m,...a)=>(window.CBLog?.info||console.log)(`[ui-start] ${m}`,...a);
 
-  // ---- Safety Sweep -------------------------------------------------------
-  // 1) Uralte style.css (macht alles dunkel) entfernen, falls noch vorhanden.
+  // 1) Sicher: Reste/Legacy-Buttons entfernen (oben links)
   try{
-    document.querySelectorAll('link[rel="stylesheet"]').forEach(link=>{
-      const href = (link.getAttribute('href')||'').toLowerCase();
-      if (/\bstyle\.css\b/.test(href)) {
-        warn('[ui-start] Entferne altes style.css:', href);
-        link.remove();
-      }
-    });
+    const legacySel = [
+      '#btnStart','.ui-start-inline','.ui-start-legacy',
+      '.start-inline','.start-debug'
+    ].join(',');
+    document.querySelectorAll(legacySel).forEach(n=>n.remove());
   }catch(_){}
 
-  // 2) Eventuelle Blocker vom Inspector-Fallback weg.
-  try{
-    document.getElementById('inspector-fallback')?.remove();
-  }catch(_){}
-
-  // ---- DOM für Start-Panel ------------------------------------------------
-  const root = document.createElement('div');
-  root.className = 'ui-start';
-  root.setAttribute('aria-label','Startmenü');
-
-  const bg = document.createElement('div');
-  bg.className = 'ui-start-bg';
-
-  const panel = document.createElement('div');
-  panel.className = 'ui-start-panel';
-
-  panel.innerHTML = `
-    <header>Neue Siedler</header>
-    <div class="actions">
-      <button id="actNew" class="primary">Neues Spiel</button>
-      <button id="actContinue">Weiterspielen</button>
-      <button id="actReset">Reset</button>
-      <button id="actFullscreen">Fullscreen</button>
-    </div>
-  `;
-
-  root.append(bg, panel);
-  document.body.appendChild(root);
-
-  // ---- Helpers ------------------------------------------------------------
-  function closeStart(removeOnly=false){
-    root.classList.add('hidden');
-    // Fokus auf Spielfeld
-    const cvs = document.getElementById('game');
-    if (cvs) { try{ cvs.focus({preventScroll:true}); }catch(_){} }
-
-    // Nach der Transition DOM aufräumen
-    setTimeout(()=>{
-      root.remove();
-      // wirklich alles weg, was blockieren könnte
-      try{ document.getElementById('inspector-fallback')?.remove(); }catch(_){}
-      // Body-Klasse entfernen, falls von früher vorhanden
-      document.body.classList.remove('start-open');
-    }, 250);
-
-    if (!removeOnly){
-      // Das ist Dein Start-Signal für Bootstrap/Spiel
-      window.dispatchEvent(new CustomEvent('cb:game-start'));
-      log('[ui-start] cb:game-start dispatcht');
-    }
+  // 2) Panel schon vorhanden?
+  if (document.querySelector('.ui-start')) {
+    log('bereits initialisiert'); 
+    return;
   }
 
-  // ---- Aktionen -----------------------------------------------------------
-  panel.querySelector('#actNew') .addEventListener('click', ()=>{ log('[ui-start] Start klick (Neues Spiel)'); closeStart(false); });
-  panel.querySelector('#actContinue').addEventListener('click', ()=>{ log('[ui-start] Start klick (Weiterspielen)'); closeStart(false); });
-  panel.querySelector('#actReset').addEventListener('click', ()=>{
-    try{ localStorage.clear(); }catch(_){}
-    log('[ui-start] Reset – Speicher gelöscht');
+  // 3) DOM aufbauen
+  const wrap = document.createElement('div');
+  wrap.className = 'ui-start';
+  wrap.innerHTML = `
+    <div class="ui-start-panel" role="dialog" aria-label="Startmenü">
+      <div class="ui-start-head">Neue Siedler</div>
+      <div class="ui-start-body">
+        <button class="ui-start-btn is-primary" data-act="new">Neues Spiel</button>
+        <button class="ui-start-btn" data-act="resume">Weiterspielen</button>
+        <button class="ui-start-btn" data-act="reset">Reset</button>
+        <button class="ui-start-btn" data-act="fs">Fullscreen</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  // 4) Aktionen
+  const act = (name)=>{
+    switch(name){
+      case 'new':
+        // Start-Panel sofort schließen
+        hide();
+        // Engine starten
+        window.dispatchEvent(new CustomEvent('cb:game-start'));
+        log('Start klick (Neues Spiel)');
+        break;
+      case 'resume':
+        hide();
+        window.dispatchEvent(new CustomEvent('cb:game-resume'));
+        log('Start klick (Weiterspielen)');
+        break;
+      case 'reset':
+        // Welt/State löschen (falls vorhanden)
+        try{ localStorage.clear(); }catch(_){}
+        hide();
+        window.dispatchEvent(new CustomEvent('cb:game-reset'));
+        log('Reset ausgeführt');
+        break;
+      case 'fs':
+        try{
+          const el = document.documentElement;
+          if (!document.fullscreenElement) el.requestFullscreen?.();
+          else document.exitFullscreen?.();
+        }catch(e){ console.warn('[ui-start] Fullscreen failed', e); }
+        break;
+    }
+  };
+
+  wrap.addEventListener('click', (ev)=>{
+    const b = ev.target.closest('[data-act]');
+    if (!b) return;
+    act(b.getAttribute('data-act'));
   });
-  panel.querySelector('#actFullscreen').addEventListener('click', async ()=>{
-    try{
-      if (document.fullscreenElement) { await document.exitFullscreen(); }
-      else { await document.documentElement.requestFullscreen(); }
-    }catch(e){ warn('[ui-start] Fullscreen failed', e); }
-  });
 
-  // Klick neben das Panel schließt nur das Panel (ohne Spielstart)
-  bg.addEventListener('click', ()=> closeStart(true));
+  function hide(){
+    wrap.style.display = 'none';
+    // Kleiner Fokus-Nudge auf Canvas, damit iOS den Scroll nicht festhält
+    try{ document.getElementById('game')?.focus?.(); }catch(_){}
+    (window.CBLog?.ok||console.log)('[ui-start] Start-UI geschlossen (v17.8.8).');
+  }
 
-  // Markierung für FAB-Offsets o.ä.
-  document.body.classList.add('start-open');
-
-  log('[ui-start] geladen (v17.8.7)');
+  (window.CBLog?.ok||console.log)('[ui-start] geladen (v17.8.8)');
 })();
