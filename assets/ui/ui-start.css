@@ -25,18 +25,18 @@ html, body{
     max(env(safe-area-inset-right), 0px)
     max(env(safe-area-inset-bottom), 0px)
     max(env(safe-area-inset-left), 0px);
-  /* KEINE dunkle Fläche hier; das Bild selbst bekommt leichte Abdunklung,
-     damit Text lesbar bleibt. So ist die Seite nicht „stockdunkel“. */
   pointer-events: auto;
   opacity: 1;
   transition: opacity .28s ease;
 }
 
-/* Hintergrundbild des Startlayers */
+/* Hintergrundbild des Startlayers
+   WICHTIG: Pfad ist RELATIV zur CSS-Datei (assets/ui/ui-start.css)
+   -> also ein Verzeichnis hoch zu /assets/ui/start-bg.jpeg */
 .ui-start-bg{
   position: absolute;
   inset: 0;
-  background: url("assets/ui/start-bg.jpeg") center/cover no-repeat;
+  background: url("../ui/start-bg.jpeg") center/cover no-repeat;
   filter: brightness(.85);       /* leicht abdunkeln für Titel/Buttons */
   z-index: 0;
 }
@@ -51,6 +51,7 @@ html, body{
   padding: 16px 18px;
   color: #f7f9fb;
   text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  box-sizing: border-box;
 }
 
 .ui-start-panel h1{
