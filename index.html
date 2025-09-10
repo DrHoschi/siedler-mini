@@ -2,10 +2,16 @@
 <!--
   Neue Siedler – Index
   Version: v17.8.2
-  Reihenfolge: Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split) → BootCompat
+
+  Lade-Reihenfolge (wichtig):
+  Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split) → Boot-Compat
+
   Hinweise:
-    - Inspector ist gesplittet; KEIN altes assets/inspector/inspector.js und KEIN inspector.overview.js einbinden.
-    - Z-Layer der FABs extrem hoch, damit sie immer klickbar bleiben.
+  - Inspector ist gesplittet (core/logs/tests/resources/paths/overlay.hooks) – KEIN altes
+    inspector.js / inspector.overview.js mehr einbinden.
+  - Kein link auf eine alte style.css (hatte die komplette Seite künstlich abgedunkelt).
+  - FAB-Buttons (Bau/Inspector) haben sehr hohen z-index, damit sie immer bedienbar bleiben.
+  - Start-Panel liegt Z-ordnungsmäßig ÜBER dem Canvas, wird nach „Spiel starten“ aus dem DOM entfernt.
 -->
 <html lang="de">
 <head>
@@ -17,24 +23,24 @@
   <meta name="theme-color" content="#0b0f0d">
   <title>Neue Siedler</title>
 
-  
-  <!-- Styles -->
-  
-  <!-- Inspector Styles (split) -->
+  <!-- Styles (nur die aktuellen, keine alte style.css!) -->
+  <!-- Inspector Styles -->
   <link rel="stylesheet" href="assets/inspector/inspector.css?v=18.14.5">
-    <!-- Start Styles -->
+  <!-- Start-Panel Styles -->
   <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.8">
-  <!-- Baumenü Styles -->
+  <!-- Bau-Menü Styles -->
   <link rel="stylesheet" href="assets/ui/ui-build.css?v=17.8.5">
 
   <style>
     /* Baseline + FABs immer bedienbar */
     html, body { height:100%; margin:0; background:#0b0f0d; }
-    #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0;}
+    /* Canvas ist die Bühne; bleibt ganz unten (z-index:0) */
+    #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
 
+    /* Floating Action Buttons (Bau/Inspector) */
     .ui-fab {
       position:fixed;
-      z-index:2147483647 !important; /* max */
+      z-index:2147483647 !important; /* maximal, über Start-Panel & Inspector */
       pointer-events:auto !important;
     }
     #btn-build { left:16px; bottom:16px; }
@@ -45,33 +51,35 @@
       box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px);
       cursor:pointer; pointer-events:auto !important;
     }
+    /* Wenn das Bau-Dock offen ist, beide FABs anheben (Platz lassen) */
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom:240px; }
   </style>
 </head>
 <body>
 
-<!-- Start-Panel (zentriert, eigener Hintergrund) -->
-<div id="start-panel" class="ui-start" aria-label="Startmenü">
-  <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
-
-  <div class="ui-start-card" role="dialog" aria-modal="true">
-    <h1>Neue Siedler</h1>
-
-    <div class="actions">
-      <button id="btnStartNew" class="btn main">Neues Spiel</button>
-      <button id="btnStartResume" class="btn">Weiterspielen</button>
-      <button id="btnStartReset" class="btn ghost">Reset</button>
-      <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
-    </div>
-  </div>
-</div>
-
-  <!-- Bühne -->
+  <!-- Bühne (immer direkt im Body, z-index:0) -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock -->
+  <!-- Build-Dock (wird per JS gefüllt) -->
   <div id="build-panel" aria-label="Bau-Menü"></div>
+
+  <!-- Start-Panel (liegt ÜBER Canvas, unter FABs) -->
+  <!-- UI & Interaktionen kommen aus assets/ui/ui-start.js -->
+  <div id="start-panel" class="ui-start" aria-label="Startmenü">
+    <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
+
+    <div class="ui-start-card" role="dialog" aria-modal="true">
+      <h1>Neue Siedler</h1>
+
+      <div class="actions">
+        <button id="btnStartNew" class="btn main">Neues Spiel</button>
+        <button id="btnStartResume" class="btn">Weiterspielen</button>
+        <button id="btnStartReset" class="btn ghost">Reset</button>
+        <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
+      </div>
+    </div>
+  </div>
 
   <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
@@ -96,16 +104,15 @@
   <script src="assets/core/core.render.js?v=17.8.2"></script>
   <script src="assets/core/game.bootstrap.js?v=17.8.2"></script>
 
-  <!-- Inspector (split) – genau diese fünf -->
-  <!-- Inspector (v18.12.3) -->
+  <!-- Inspector (split) – genau diese Module -->
   <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
   <script defer src="assets/inspector/inspector.logs.js?v=18.14.4"></script>
-  <script defer src="assets/inspector/overlay.hooks.js?v1.4"></script>
+  <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
   <script defer src="assets/inspector/inspector.paths.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
-  
-  <!-- Legacy-Fassade -->
+
+  <!-- Legacy-Fassade (Kompatibilität) -->
   <script defer src="game.js?v=17.8.2"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
@@ -117,13 +124,16 @@
   <!-- Boot-Compat -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
 
-  <!-- Marker / Body-Klassen -->
+  <!-- Marker / Body-Klassen + Telemetrie -->
   <script>
-    (function(){
-      window.__cb = window.__cb || {}; window.__cb.indexVersion = "v17.8.2";
+    (function () {
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = "v17.8.2";
       (window.CBLog?.info || console.log)("[index] UI bereit (v17.8.2)");
-      window.addEventListener('cb:build-open',  ()=>document.body.classList.add('has-build-open'));
-      window.addEventListener('cb:build-close', ()=>document.body.classList.remove('has-build-open'));
+
+      /* FAB-Abstand, wenn das Bau-Dock geöffnet ist */
+      window.addEventListener('cb:build-open',  () => document.body.classList.add('has-build-open'));
+      window.addEventListener('cb:build-close', () => document.body.classList.remove('has-build-open'));
     })();
   </script>
 </body>
