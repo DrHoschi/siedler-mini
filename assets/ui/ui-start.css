@@ -1,67 +1,78 @@
-/* v17.8.7 – Start-Panel im „Inspector-Look“, ohne Vollbild-Vorhang */
+/* ui-start.css  v17.8.8  – zentriertes Start-Panel im Inspector-Look
+   Entfernt alte, in der Seite “eingebackene” Start-Buttons.
+*/
 
 :root{
-  --ui-bg: #0c120f;            /* Seitenhintergrund */
-  --panel-bg: #ecf1f4;         /* helle Panel-Fläche */
-  --panel-head: #dde6ee;
-  --panel-border: #c9d4df;
-  --shadow: 0 20px 60px rgba(0,0,0,.35);
-  --accent: #8cd3ee;
-  --text: #1f2a33;
+  --ui-bg: #0c120f;
+  --panel-bg: #eef3f7;
+  --panel-head: #dfe8f2;
+  --panel-text: #1c2833;
+  --btn-bg: #fff;
+  --btn-hl: #d9e7f5;
+  --shadow: 0 16px 40px rgba(0,0,0,.35);
 }
 
-.ui-start{ position:fixed; inset:0; z-index: 60; pointer-events:none; }
-.ui-start *{ box-sizing:border-box; }
+/* Seite */
+html,body{height:100%;margin:0;background:var(--ui-bg);}
+#game{display:block;width:100vw;height:100vh;}
 
-.ui-start-bg{
-  position:absolute; inset:0;
-  /* nur leichte Abdunklung, damit die Map/Vorschau sichtbar bleibt */
-  background: rgba(0,0,0,.20);
-  backdrop-filter: blur(1px);
-  transition: opacity .25s ease, visibility .25s ease;
+/* ---------- Legacy-Kram sicher ausblenden ---------- */
+#btnStart,
+.ui-start-inline,
+.ui-start-legacy,
+.start-inline,
+.start-debug { display:none !important; }
+
+/* ---------- Start-Panel ---------- */
+.ui-start{
+  position:fixed;
+  inset:auto;           /* NICHT full-screen */
+  left:50%;
+  top:28%;
+  transform:translate(-50%,-0%);
+  z-index: 9999;        /* unter FABs, über Canvas */
   pointer-events:auto;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+  color:var(--panel-text);
 }
 
 .ui-start-panel{
-  position:absolute; left:50%; top:50%;
-  transform: translate(-50%, -50%);
-  width:min(92vw, 520px);
-  background: var(--panel-bg);
-  border:1px solid var(--panel-border);
-  border-radius:16px;
-  box-shadow: var(--shadow);
+  min-width: 520px;
+  max-width: min(92vw, 640px);
+  background:var(--panel-bg);
+  border-radius:14px;
+  box-shadow:var(--shadow);
   overflow:hidden;
-  pointer-events:auto;
+  border:1px solid rgba(0,0,0,.08);
 }
 
-.ui-start-panel header{
-  background: var(--panel-head);
-  color: var(--text);
-  padding:16px 20px;
-  font: 600 20px/1.3 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
-  border-bottom:1px solid var(--panel-border);
+.ui-start-head{
+  background:var(--panel-head);
+  padding:16px 18px;
+  font-weight:700;
+  letter-spacing:.2px;
 }
 
-.ui-start-panel .actions{ padding:16px; display:grid; gap:12px; }
-.ui-start-panel .actions button{
-  appearance:none; border:1px solid var(--panel-border);
-  border-radius:10px; padding:14px 18px; width:100%;
-  background:#fff; color:var(--text);
-  font: 500 16px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
-  text-align:center; cursor:pointer;
+.ui-start-body{ padding:18px; }
+
+.ui-start-btn{
+  width:100%;
+  display:block;
+  text-align:center;
+  padding:14px 16px;
+  margin:0 0 12px 0;
+  background:var(--btn-bg);
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:8px;
+  cursor:pointer;
+  user-select:none;
+  transition:background .15s ease, transform .03s ease;
 }
-.ui-start-panel .actions button:is(:hover,:focus){ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(140,211,238,.35); }
-.ui-start-panel .actions button.primary{ background:#e6f6fc; }
+.ui-start-btn:active{ transform:translateY(1px); }
+.ui-start-btn.is-primary{ background:var(--btn-hl); }
 
-.ui-start.hidden .ui-start-bg,
-.ui-start.hidden .ui-start-panel{ opacity:0; visibility:hidden; }
-
-@media (prefers-reduced-motion:no-preference){
-  .ui-start-panel{ transition: transform .22s ease, opacity .22s ease; }
-  .ui-start.hidden .ui-start-panel{ transform: translate(-50%,-46%); }
+/* Responsiv */
+@media (max-width:520px){
+  .ui-start{ top:22%; }
+  .ui-start-panel{ min-width:calc(100vw - 24px); }
 }
-
-/* z-Index-Hierarchie: unter FABs & Inspector */
-.ui-fab{ z-index: 2147483647 !important; }
-.inspector-wrap{ z-index: 300 !important; }
-.ui-start{ z-index: 200; }
