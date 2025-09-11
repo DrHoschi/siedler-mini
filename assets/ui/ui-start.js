@@ -1,101 +1,129 @@
-/* Neue Siedler – UI Start (v17.8.9)
-   Verantwortlich für das Start-Panel (Titel + Buttons) und das Entfernen des Layers.
-*/
+/* ui-start.js — v17.8.9 (clean, no-legacy) */
 (function () {
-  const log  = (window.CBLog?.info || console.log);
-  const ok   = (window.CBLog?.ok   || console.log);
-  const warn = (window.CBLog?.warn || console.warn);
-  const err  = (window.CBLog?.err  || console.error);
+  "use strict";
 
-  log("[ui-start] geladen (v17.8.9)");
+  const MOD = "[ui-start]";
+  const info = (window.CBLog?.info ?? console.log).bind(console, MOD);
+  const ok   = (window.CBLog?.ok   ?? console.log).bind(console, MOD);
+  const warn = (window.CBLog?.warn ?? console.warn).bind(console, MOD);
+  const err  = (window.CBLog?.err  ?? console.error).bind(console, MOD);
 
-  const root = document.getElementById('start-panel');
-  if (!root) {
-    warn("[ui-start] kein #start-panel gefunden – nichts zu tun.");
-    return;
+  const QS  = (s, r = document) => r.querySelector(s);
+  const QSA = (s, r = document) => r.querySelectorAll(s);
+
+  // ---- Legacy-/Fallback-Kram sicher ausschalten ----------------------------
+  function removeLegacyBars() {
+    // typische IDs/Klassen alter Startleisten rauswerfen
+    const suspects = [
+      "#start-legacy-bar",     // frühere eigene Leiste
+      ".start-legacy",         // generischer Fallback
+      "#debug-start-bar"       // evtl. aus tools/debug-tools.js
+    ];
+    suspects.forEach(sel => QSA(sel).forEach(n => n.remove()));
   }
 
-  // Buttons können via HTML vorhanden sein ODER wir hängen sie, falls nicht da, dynamisch rein.
-  let btnNew  = root.querySelector('#btnStartNew');
-  let btnRes  = root.querySelector('#btnStartResume');
-  let btnRst  = root.querySelector('#btnStartReset');
-  let btnFull = root.querySelector('#btnStartFullscreen');
+  // ---- Start-Panel sicherstellen -------------------------------------------
+  function ensureStartPanel() {
+    let panel = QS("#start-panel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "start-panel";
+      panel.className = "ui-start";
+      panel.innerHTML = `<div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>`;
+      document.body.appendChild(panel);
+      warn("Start-Panel fehlte → neu angelegt.");
+    }
 
-  // Falls die Card auskommentiert wurde, bauen wir sie minimal, damit die Buttons existieren.
-  if (!btnNew || !btnRes || !btnRst || !btnFull) {
-    const card = document.createElement('div');
-    card.className = 'ui-start-card';
-    card.setAttribute('role','dialog');
-    card.setAttribute('aria-modal','true');
-    card.innerHTML = `
-      <h1>Neue Siedler</h1>
-      <div class="actions">
-        <button id="btnStartNew" class="btn main">Neues Spiel</button>
-        <button id="btnStartResume" class="btn">Weiterspielen</button>
-        <button id="btnStartReset" class="btn ghost">Reset</button>
-        <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
-      </div>`;
-    // Card einsetzen, falls noch nicht da
-    const hasCard = root.querySelector('.ui-start-card');
-    if (!hasCard) root.appendChild(card);
-    // Buttons re-grabben
-    btnNew  = root.querySelector('#btnStartNew');
-    btnRes  = root.querySelector('#btnStartResume');
-    btnRst  = root.querySelector('#btnStartReset');
-    btnFull = root.querySelector('#btnStartFullscreen');
+    // Card vorhanden? Wenn nein: generieren.
+    let card = QS(".ui-start-card", panel);
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "ui-start-card";
+      card.setAttribute("role", "dialog");
+      card.setAttribute("aria-modal", "true");
+      card.innerHTML = `
+        <h1>Neue Siedler</h1>
+        <div class="actions">
+          <button id="btnStartNew" class="btn main">Neues Spiel</button>
+          <button id="btnStartResume" class="btn">Weiterspielen</button>
+          <button id="btnStartReset" class="btn ghost">Reset</button>
+          <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
+        </div>
+      `;
+      panel.appendChild(card);
+      ok("Start-Card automatisch erzeugt.");
+    }
+    return panel;
   }
 
-  function hardRemoveStartLayer() {
+  // ---- Aktionen ------------------------------------------------------------
+  function wireActions(panel) {
+    const byId = id => QS("#" + id, panel);
+
+    const btnNew   = byId("btnStartNew");
+    const btnCont  = byId("btnStartResume");
+    const btnReset = byId("btnStartReset");
+    const btnFull  = byId("btnStartFullscreen");
+
+    if (btnNew) btnNew.addEventListener("click", () => {
+      info("Start klick (Neues Spiel)");
+      // hier könntest du Savegames löschen etc.
+      dispatchStart();
+    });
+
+    if (btnCont) btnCont.addEventListener("click", () => {
+      info("Start klick (Weiterspielen)");
+      dispatchStart();
+    });
+
+    if (btnReset) btnReset.addEventListener("click", () => {
+      try {
+        localStorage.clear();
+        ok("Spielstand zurückgesetzt.");
+      } catch(_) {}
+    });
+
+    if (btnFull) btnFull.addEventListener("click", async () => {
+      try {
+        if (document.fullscreenElement) { await document.exitFullscreen(); }
+        else { await document.documentElement.requestFullscreen(); }
+      } catch(e) { warn("Fullscreen nicht möglich:", e?.message || e); }
+    });
+  }
+
+  function dispatchStart() {
+    // Panel entfernen, dann Event feuern
+    const panel = QS("#start-panel");
+    if (panel) {
+      panel.remove();
+      ok("Start-Panel entfernt.");
+    }
     try {
-      // 1) Start-Panel entfernen
-      if (root && root.parentNode) {
-        root.parentNode.removeChild(root);
-        ok("[ui-start] Start-Layer entfernt.");
-      }
-      // 2) Sicherheitskehrer: evtl. stehengebliebene Overlays entfernen
-      const zombie = document.querySelector('#inspector-fallback');
-      if (zombie) {
-        zombie.remove();
-        warn("[ui-start] inspector-fallback (zombie) entsorgt.");
-      }
-      // 3) Fokus auf Canvas, damit Safari korrekt rendert
-      const canvas = document.getElementById('game');
-      canvas?.focus?.();
-    } catch (e) {
-      err("[ui-start] Entfernen Start-Layer fehlgeschlagen:", e);
+      window.dispatchEvent(new CustomEvent("cb:game-start"));
+      info("cb:game-start dispatcht");
+    } catch(e) {
+      err("cb:game-start fehlgeschlagen:", e?.message || e);
     }
   }
 
-  // === Button Aktionen ===
-  btnNew?.addEventListener('click', () => {
-    ok("[ui-start] Start klick (Neues Spiel)");
-    // Event für Engine/Bootstrap
-    window.dispatchEvent(new CustomEvent('cb:game-start', { detail:{ mode:'new' } }));
-    // Layer weg
-    hardRemoveStartLayer();
-  });
+  // ---- Init ---------------------------------------------------------------
+  function init() {
+    info("geladen (v17.8.9)");
 
-  btnRes?.addEventListener('click', () => {
-    ok("[ui-start] Start klick (Weiterspielen)");
-    window.dispatchEvent(new CustomEvent('cb:game-start', { detail:{ mode:'resume' } }));
-    hardRemoveStartLayer();
-  });
+    // 1) Alle möglichen Legacy-/Debug-Startleisten wegräumen
+    removeLegacyBars();
 
-  btnRst?.addEventListener('click', () => {
-    ok("[ui-start] Reset klick");
-    try {
-      localStorage?.clear?.();
-      (window.CBLog?.ok||console.log)("[ui-start] Storage geleert.");
-    } catch(_){}
-  });
+    // 2) Panel/Card sicher stellen
+    const panel = ensureStartPanel();
 
-  btnFull?.addEventListener('click', async () => {
-    ok("[ui-start] Fullscreen klick");
-    try {
-      const el = document.documentElement;
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-    } catch(e){ warn("[ui-start] Fullscreen failed:", e); }
-  });
+    // 3) Buttons verdrahten
+    wireActions(panel);
+  }
 
+  // DOM ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
 })();
