@@ -72,7 +72,76 @@
       layers: map.layers ? map.layers : (map.tiles ? [{name:'ground', data:map.tiles}] : [])
     };
   }
+// --- NEU: einfacher Drawer fürs Tileset -----------------------------
+function _drawMapWithTileset(ctx, cam) {
+  try {
+    if (!S.map || !S.tilesetImg) return;            // nichts zu tun
+    const img  = S.tilesetImg;
+    const tile = S.map.tile|0;
 
+    // Atlas lesen – wenn es kein JSON-Atlas gibt, spalten wir das PNG in gleich große Tiles
+    let cols = Math.floor(img.width / tile);
+
+    // Wir zeichnen nur die erste Layer mit Zahlen (0-basiert/1-basiert egal: beide Varianten tolerieren)
+    const layer = (S.map.layers && S.map.layers[0] && S.map.layers[0].data) ? S.map.layers[0].data : null;
+    if (!layer) return;
+
+    const camX = (cam?.x || 0);
+    const camY = (cam?.y || 0);
+    const zoom = (cam?.zoom || 1);
+
+    // sichtbare Kacheln ermitteln
+    const viewW = (ctx.canvas?.width || 800);
+    const viewH = (ctx.canvas?.height || 600);
+    const tW = S.map.width|0, tH = S.map.height|0;
+
+    const startX = Math.max(0, Math.floor(camX));
+    const startY = Math.max(0, Math.floor(camY));
+    const endX   = Math.min(tW-1, Math.ceil(camX + (viewW / (tile*zoom)))+1);
+    const endY   = Math.min(tH-1, Math.ceil(camY + (viewH / (tile*zoom)))+1);
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+
+    for (let ty = startY; ty <= endY; ty++) {
+      for (let tx = startX; tx <= endX; tx++) {
+        const idx = ty * tW + tx;
+        let id    = layer[idx] | 0;                  // Kachel-ID (0/1-basiert)
+        if (id <= 0) continue;                       // 0/leer = nichts
+        id = id - 1;                                 // falls 1-basiert → 0-basiert
+
+        const sx = (id % cols) * tile;
+        const sy = Math.floor(id / cols) * tile;
+
+        const dx = Math.round((tx - camX) * tile);
+        const dy = Math.round((ty - camY) * tile);
+        const dw = Math.round(tile * zoom);
+        const dh = Math.round(tile * zoom);
+
+        ctx.drawImage(img, sx, sy, tile, tile, dx, dy, dw, dh);
+      }
+    }
+
+    ctx.restore();
+  } catch(e) {
+    ns.warn('[map] draw error: ' + (e && e.message));
+  }
+}
+
+// --- NEU: Camera-Provider für Render (liefert x/y in Tile-Koordinaten) ----
+function _getCamForRender(){
+  return { x: (S.cam.x||0)/ (S.map?.tile||64), y: (S.cam.y||0)/(S.map?.tile||64), zoom: S.cam.zoom||1 };
+}
+
+// --- Im load()-Promise: nach Tileset/Atlas und Kamera-Zentrierung anschließen
+// ... am Ende von load(mapUrl).then(...).then(...).then(function(){ ... }) vor ns.ok('Game gestartet');
+if (window.Render && typeof Render.setMapDrawer === 'function') {
+  try {
+    Render.setCameraProvider(_getCamForRender);
+    Render.setMapDrawer(_drawMapWithTileset);
+    ns.ok('[map] Render verkabelt');
+  } catch(e) { ns.warn('[map] Render-Wiring fehlgeschlagen: ' + (e && e.message)); }
+}
     function ensureTownhall(){
     // prüfe ob vorhanden
     for (var i=0;i<S.entities.length;i++){
