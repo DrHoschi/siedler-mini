@@ -1,56 +1,97 @@
-/* ui-start.css — v17.8.9 */
-:root{
-  --panel-bg:#eef3f6;
-  --panel-fg:#24303a;
-  --panel-head:#dde6ee;
-  --border:rgba(0,0,0,.08);
-}
-.ui-start{
-  position:fixed; inset:0;
-  z-index:1000;           /* über Canvas, unter FABs/Inspector */
-  display:flex; align-items:center; justify-content:center;
-}
-.ui-start-bg{
-  position:absolute; inset:0;
-  background:url("assets/ui/start-bg.jpeg") center/cover no-repeat;
-  filter:brightness(.70) saturate(1.05);
-  transform:scale(1.02);
-}
-.ui-start-card{
-  position:relative;
-  width:min(92vw,720px);
-  background:var(--panel-bg); color:var(--panel-fg);
-  border:1px solid var(--border);
-  border-radius:12px;
-  box-shadow:0 24px 60px rgba(0,0,0,.45);
-  padding:14px 18px 18px;
-}
-.ui-start-card h1{
-  margin:0 0 12px;
-  font:600 18px/1.2 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;
-  color:#1b2a38;
-  background:var(--panel-head);
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:10px 14px;
-}
-.ui-start-card .actions{ display:flex; flex-direction:column; gap:12px; }
+/* ui-start.css — v17.8.10 (klarer Hintergrund, Inspector-Look) */
 
-.ui-start-card .btn{
-  appearance:none; -webkit-appearance:none;
-  border:1px solid var(--border);
-  background:#fff; color:#18222c;
-  border-radius:8px;
-  padding:14px 18px;
-  font:600 16px/1 ui-sans-serif,system-ui;
-  text-align:center; cursor:pointer;
+/* Start-Panel liegt über dem Canvas, ohne Verdunklung */
+.ui-start {
+  position: fixed;
+  inset: 0;
+  z-index: 10;                /* unter FABs (die haben extrem hohen z-index) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;    /* <<< keine Abdunklung mehr */
+  pointer-events: auto;
 }
-.ui-start-card .btn.main{ background:#e7f1fb; }
-.ui-start-card .btn.ghost{ background:#fff; opacity:.95; }
-.ui-start-card .btn:hover{ filter:brightness(1.02); }
-.ui-start-card .btn:active{ transform:translateY(1px); }
 
-@media (max-width:420px){
-  .ui-start-card{ width:92vw; padding:12px; }
-  .ui-start-card .btn{ padding:12px 14px; font-size:15px; }
+/* Vollflächiges Start-Hintergrundbild */
+.ui-start .ui-start-bg {
+  position: absolute;
+  inset: 0;
+  background: url("assets/ui/start-bg.jpeg") center / cover no-repeat;
+  opacity: 1;                 /* <<< nicht abdunkeln */
+  filter: none;               /* <<< keine Filter wie blur/brightness usw. */
+  z-index: 0;
 }
+
+/* Karte (Card) im Inspector-Look */
+.ui-start .ui-start-card {
+  position: relative;
+  z-index: 1;
+  min-width: min(92vw, 640px);
+  box-sizing: border-box;
+
+  background: #e9eff5;                 /* hell wie Inspector-Header */
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(0,0,0,.25);
+  border: 1px solid rgba(0,0,0,.08);
+  overflow: hidden;
+}
+
+/* Titelzeile */
+.ui-start .ui-start-card > h1 {
+  margin: 0;
+  padding: 18px 22px;
+  font: 600 22px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+  color: #1b2a36;
+  background: #dfe8f0;                 /* dezente Kopfzeile */
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+/* Button-Container */
+.ui-start .actions {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  background: #eef3f7;
+}
+
+/* Buttons (Inspector-Style) */
+.ui-start .btn {
+  appearance: none;
+  border: 1px solid rgba(0,0,0,.14);
+  border-radius: 10px;
+  padding: 14px 18px;
+  font: 600 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+  color: #1b2a36;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0,0,0,.05) inset;
+  transition: transform .04s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.ui-start .btn:hover { background:#f8fafc; }
+.ui-start .btn:active { transform: translateY(1px); }
+
+.ui-start .btn.main {
+  background: #e6f1ff;
+  border-color: rgba(27, 127, 255, .35);
+}
+
+.ui-start .btn.ghost {
+  background: #fff;
+  color: #3c4b56;
+  border-style: dashed;
+}
+
+/* Mobile Feinschliff */
+@media (max-width: 420px) {
+  .ui-start .ui-start-card {
+    min-width: 92vw;
+  }
+  .ui-start .btn {
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+}
+
+/* Sicherheit: kein globales body-Dimming über das Startpanel */
+body { background:#0b0f0d; }  /* bleibt als Fallback-Hintergrund */
