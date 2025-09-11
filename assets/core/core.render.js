@@ -1,237 +1,375 @@
-/* assets/core/core.render.js — v17.9.3
-   Sichtbares Terrain nach "Spiel starten".
-   - Stellt window.Render bereit (init, tick)
-   - Hört auf Tileset-Load (map) ODER lädt tileset.terrain.json selbst als Fallback
-   - Zeichnet Terrain-Backdrop + optionales Grid
-   - Nutzt Camera (falls vorhanden)
-*/
+/* eslint-disable no-console */
+/**
+ * Core Renderer (v17.9.4)
+ * - zeichnet Terrain (Tileset) + Entities
+ * - konsumiert Kamera (panning/zoom) und Map
+ * - FIX B: verhindert Browser-Zoom/Scroll, benutzt eigenes Kamera-Zoom
+ *
+ * Erwartete globale Events:
+ *  - 'cb:game-start'  -> init & Render-Loop starten
+ *  - 'cb:render-frame' (optional) -> einzelnes Repaint triggern
+ *
+ * Abhängigkeiten (müssen vorher geladen sein):
+ *  - assets/core/camera.js     (stellt window.Camera bereit)
+ *  - assets/core/core.map.js   (stellt window.MapData bereit)
+ *  - assets/tiles/tileset.terrain.{png,json} im assets/tiles/
+ */
 
 (function () {
-  "use strict";
+  const TAG = '[render]';
+  const STATE = {
+    started: false,
+    raf: 0,
+    // Canvas-Layer
+    terrainCanvas: null,
+    entityCanvas: null,
+    tctx: null,
+    ectx: null,
+    // Tileset
+    tilesImage: null,
+    frames: null, // {key:{x,y,w,h}}
+    tileSize: 64,
+    gridCols: 16,
+    gridRows: 16,
+    // Map
+    mapReady: false,
+    // simple Entity-Store (Platzhalter, bis das Entities-Modul liefert)
+    entities: [],
+  };
 
-  const MOD = "[render]";
-  const info = (window.CBLog?.info ?? console.log).bind(console, MOD);
-  const ok   = (window.CBLog?.ok   ?? console.log).bind(console, MOD);
-  const warn = (window.CBLog?.warn ?? console.warn).bind(console, MOD);
-  const err  = (window.CBLog?.err  ?? console.error).bind(console, MOD);
+  // ---------- Utilities ----------
+  const on = (type, fn, opts) => window.addEventListener(type, fn, opts);
+  const off = (type, fn, opts) => window.removeEventListener(type, fn, opts);
 
-  // ---------------------------------------------------------------------------
-  // Canvas anlegen
-  // ---------------------------------------------------------------------------
-  const CANVAS_ID = "game-canvas";
-  let   canvas    = document.getElementById(CANVAS_ID);
-  if (!canvas) {
-    canvas = document.createElement("canvas");
-    canvas.id = CANVAS_ID;
-    canvas.style.position = "fixed";
-    canvas.style.inset = "0";
-    canvas.style.width = "100vw";
-    canvas.style.height = "100vh";
-    canvas.style.imageRendering = "pixelated";
-    canvas.style.zIndex = "0"; // UI schwebt darüber
-    document.body.appendChild(canvas);
-  }
-  const ctx = canvas.getContext("2d", { alpha: false });
+  function log(...args) { console.log(TAG, ...args); }
 
-  function resize() {
-    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-    canvas.width  = Math.floor(canvas.clientWidth  * dpr);
-    canvas.height = Math.floor(canvas.clientHeight * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // „CSS-Pixel“-Koordinaten
-  }
-  window.addEventListener("resize", resize);
-  resize();
+  function ensureLayers() {
+    if (STATE.terrainCanvas) return;
 
-  // ---------------------------------------------------------------------------
-  // Tileset/Frames
-  // ---------------------------------------------------------------------------
-  const TILESET_JSON_URL = "assets/tiles/tileset.terrain.json";
-  const TILE_IMG_URL     = "assets/tiles/tileset.terrain.png";
+    const root = document.body; // robust; wir legen Fullscreen-Canvas oben drüber
+    const make = (id) => {
+      const c = document.createElement('canvas');
+      c.id = id;
+      c.style.position = 'fixed';
+      c.style.left = '0';
+      c.style.top = '0';
+      c.style.width = '100vw';
+      c.style.height = '100vh';
+      c.style.imageRendering = 'pixelated';
+      c.style.pointerEvents = 'auto';
+      c.style.zIndex = id === 'terrain-layer' ? '0' : '1';
+      // FIX B: eigenes Input-Handling, Browser darf NICHT scrollen/zoomen
+      c.style.touchAction = 'none';
+      root.appendChild(c);
+      return c;
+    };
 
-  let frames = null;        // Map<string, {x,y,w,h}>
-  let tileImg = null;       // HTMLImageElement
-  let tileSize = 64;        // Default, wird aus JSON meta überschrieben
+    STATE.terrainCanvas = make('terrain-layer');
+    STATE.entityCanvas  = make('entity-layer');
+    STATE.tctx = STATE.terrainCanvas.getContext('2d');
+    STATE.ectx = STATE.entityCanvas.getContext('2d');
 
-  function haveFrames() {
-    return frames && tileImg && tileImg.complete;
-  }
-
-  // Versuche Frames aus „map“-Modul abzuholen (falls dieses bereits geladen hat)
-  function adoptFramesFromMap(detail) {
-    try {
-      // Variante A: map feuert CustomEvent mit detail { frames, meta, imageUrl }
-      if (detail?.frames) {
-        frames   = detail.frames;
-        tileSize = detail.meta?.tileSize ?? tileSize;
-        const url = detail.imageUrl || TILE_IMG_URL;
-        if (!tileImg || tileImg.src.endsWith("/placeholder")) {
-          tileImg = new Image();
-          tileImg.src = url;
-          tileImg.onload = () => ok("Tileset-Bild übernommen (map):", url);
-        }
-        ok("Frames vom map-Modul übernommen.");
-        return true;
-      }
-
-      // Variante B: globaler Namespace (selten)
-      if (window.TILESET?.frames) {
-        frames   = window.TILESET.frames;
-        tileSize = window.TILESET.meta?.tileSize ?? tileSize;
-        if (!tileImg) {
-          tileImg = new Image();
-          tileImg.src = window.TILESET.meta?.image || TILE_IMG_URL;
-          tileImg.onload = () => ok("Tileset-Bild übernommen (global).");
-        }
-        ok("Frames aus window.TILESET übernommen.");
-        return true;
-      }
-    } catch (e) {
-      warn("Adoption der Frames fehlgeschlagen:", e);
-    }
-    return false;
-  }
-
-  // Fallback: JSON selbst laden
-  async function loadFramesSelf() {
-    try {
-      const res = await fetch(TILESET_JSON_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const json = await res.json();
-
-      frames   = json.frames || null;
-      tileSize = json.meta?.tileSize ?? tileSize;
-
-      tileImg = new Image();
-      tileImg.src = json.meta?.image || TILE_IMG_URL;
-      await new Promise((done, fail) => {
-        tileImg.onload = done;
-        tileImg.onerror = fail;
+    // Size to device pixels
+    const resize = () => {
+      const DPR = Math.max(1, window.devicePixelRatio || 1);
+      [STATE.terrainCanvas, STATE.entityCanvas].forEach((c) => {
+        c.width  = Math.floor(window.innerWidth  * DPR);
+        c.height = Math.floor(window.innerHeight * DPR);
+        c.getContext('2d').setTransform(DPR, 0, 0, DPR, 0, 0);
       });
+      requestFrame();
+    };
+    on('resize', resize);
+    resize();
 
-      ok("Tileset selbst geladen:", TILESET_JSON_URL);
-    } catch (e) {
-      err("Tileset-Load (Fallback) fehlgeschlagen:", e);
-    }
-  }
-
-  // Auf Events hören, die das map-Modul beim JSON-Load feuert
-  window.addEventListener("cb:tileset-ready", (ev) => {
-    if (adoptFramesFromMap(ev?.detail)) {
-      ok("Frames via cb:tileset-ready erhalten.");
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Camera / Viewport
-  // ---------------------------------------------------------------------------
-  function getCamera() {
-    const Cam = window.Camera;
-    if (!Cam) return { x: 0, y: 0, zoom: 1 };
-    return { x: Cam.x || 0, y: Cam.y || 0, zoom: Cam.zoom || 1 };
-  }
-
-  // ---------------------------------------------------------------------------
-  // Zeichnen
-  // ---------------------------------------------------------------------------
-  const SHOW_GRID = true; // temporär zum Debuggen
-
-  function drawGrid(size = 128) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
-    for (let x = 0; x < canvas.clientWidth; x += size) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.clientHeight); ctx.stroke();
-    }
-    for (let y = 0; y < canvas.clientHeight; y += size) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.clientWidth, y); ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function drawTerrain() {
-    // Wenn Frames da sind, nutze das erste „Gras“-Frame als Tapete
-    if (haveFrames()) {
-      const firstKey = Object.keys(frames)[0];
-      const f = frames[firstKey];
-      if (!f) return;
-
-      const { x:camX, y:camY, zoom } = getCamera();
-
-      const tileW = tileSize * zoom;
-      const tileH = tileSize * zoom;
-
-      // kleine Randsäume, damit beim Panning nichts durchscheint
-      const cols = Math.ceil(canvas.clientWidth  / tileW) + 2;
-      const rows = Math.ceil(canvas.clientHeight / tileH) + 2;
-
-      // Start so ausrichten, dass beim Scrollen ein nahtloses Muster entsteht
-      const offX = -((camX % tileSize) + tileSize) % tileSize;
-      const offY = -((camY % tileSize) + tileSize) % tileSize;
-
-      for (let r = -1; r < rows; r++) {
-        for (let c = -1; c < cols; c++) {
-          const dx = offX + c * tileW;
-          const dy = offY + r * tileH;
-          ctx.drawImage(
-            tileImg,           // Quelle
-            f.x, f.y, f.w, f.h, // Ausschnitt
-            dx, dy, tileW, tileH // Ziel
-          );
-        }
+    // ------- FIX B: Eingaben kapern & Kamera ansteuern -------
+    // Mouse wheel (Desktop)
+    const onWheel = (e) => {
+      // Nur wenn über unseren Layern gescrollt wird:
+      if (e.target !== STATE.terrainCanvas && e.target !== STATE.entityCanvas) return;
+      e.preventDefault(); // verhindert Browser-Zoom/Scroll
+      const delta = Math.sign(e.deltaY);
+      const factor = (delta > 0) ? 0.9 : 1.1;
+      if (window.Camera && typeof Camera.zoomBy === 'function') {
+        Camera.zoomBy(factor, e.clientX, e.clientY);
+        requestFrame();
       }
-    } else {
-      // Noch keine Frames? Sichtbarer Platzhalter statt „schwarz“
-      ctx.fillStyle = "#0d1416";
-      ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-      ctx.fillStyle = "rgba(255,255,255,.08)";
-      ctx.font = "14px system-ui, -apple-system, Segoe UI, Roboto";
-      ctx.fillText("…lade Tileset…", 16, 28);
+    };
+    on('wheel', onWheel, { passive: false });
+
+    // Touch: Panning (1 Finger) / Pinch (2 Finger)
+    let touchPrev = null;
+    let pinchPrevDist = 0;
+
+    const getDistance = (t1, t2) => {
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const onTouchStart = (e) => {
+      if (!e.touches || e.touches.length === 0) return;
+      // Nur wenn auf unseren Layern:
+      if (![STATE.terrainCanvas, STATE.entityCanvas].includes(e.target)) return;
+
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        touchPrev = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length === 2) {
+        pinchPrevDist = getDistance(e.touches[0], e.touches[1]);
+      }
+    };
+
+    const onTouchMove = (e) => {
+      if (![STATE.terrainCanvas, STATE.entityCanvas].includes(e.target)) return;
+      if (!e.touches || e.touches.length === 0) return;
+
+      e.preventDefault(); // FIX B: blockt Browser-Gesten
+      if (e.touches.length === 1 && touchPrev) {
+        const cx = e.touches[0].clientX, cy = e.touches[0].clientY;
+        const dx = cx - touchPrev.x, dy = cy - touchPrev.y;
+        touchPrev = { x: cx, y: cy };
+        if (window.Camera && typeof Camera.panBy === 'function') {
+          Camera.panBy(-dx, -dy); // invertiert = „Karte bewegen“
+          requestFrame();
+        }
+      } else if (e.touches.length === 2) {
+        const dist = getDistance(e.touches[0], e.touches[1]);
+        if (pinchPrevDist > 0) {
+          const factor = dist / pinchPrevDist;
+          if (window.Camera && typeof Camera.zoomBy === 'function') {
+            // Mittelpunkt der Finger als Zoom-Anker
+            const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            Camera.zoomBy(factor, mx, my);
+            requestFrame();
+          }
+        }
+        pinchPrevDist = dist;
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (![STATE.terrainCanvas, STATE.entityCanvas].includes(e.target)) return;
+      e.preventDefault();
+      if (e.touches.length === 0) {
+        touchPrev = null;
+        pinchPrevDist = 0;
+      }
+    };
+
+    on('touchstart', onTouchStart, { passive: false });
+    on('touchmove',  onTouchMove,  { passive: false });
+    on('touchend',   onTouchEnd,   { passive: false });
+    on('touchcancel',onTouchEnd,   { passive: false });
+  }
+
+  // ---------- Tileset laden (Fallback direkt aus JSON) ----------
+  async function loadTilesetFrames() {
+    // 1) Versuche, ob das Map/Assets-System schon Frames liefert
+    if (window.Assets && Assets.frames && Assets.frames['tileset.terrain']) {
+      const meta = Assets.meta?.['tileset.terrain'];
+      STATE.frames   = Assets.frames['tileset.terrain'];
+      STATE.tileSize = meta?.tileSize || STATE.tileSize;
+      STATE.gridCols = meta?.grid?.cols || STATE.gridCols;
+      STATE.gridRows = meta?.grid?.rows || STATE.gridRows;
+      log('Frames aus Assets verwendet.');
+      return;
     }
+
+    // 2) Fallback: JSON direkt nachladen
+    const url = 'assets/tiles/tileset.terrain.json';
+    log('Tileset selbst laden:', url);
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Tileset JSON nicht erreichbar');
+    const data = await res.json();
+    STATE.frames   = data.frames;
+    STATE.tileSize = data.meta?.tileSize || STATE.tileSize;
+    STATE.gridCols = data.meta?.grid?.cols || STATE.gridCols;
+    STATE.gridRows = data.meta?.grid?.rows || STATE.gridRows;
+    log('Frames verfügbar (Fallback).');
+
+    // Lade das PNG (brauchen wir ohnehin)
+    const img = new Image();
+    img.src = data.meta?.image || 'assets/tiles/tileset.terrain.png';
+    await img.decode().catch(() => {}); // iOS-safe
+    STATE.tilesImage = img;
+    log('Tileset Image bereit.');
+  }
+
+  // ---------- Map besorgen ----------
+  async function ensureMap() {
+    // Erwartet window.MapData mit .matrix (int indices) ODER bauen Dummy
+    if (window.MapData && Array.isArray(MapData.matrix)) {
+      STATE.mapReady = true;
+      return;
+    }
+
+    try {
+      const res = await fetch('assets/maps/map-mini.json', { cache: 'no-store' });
+      const m = await res.json();
+      window.MapData = m;
+      STATE.mapReady = true;
+    } catch (e) {
+      // Fallback: kleine grüne Dummy-Matrix
+      const W = 64, H = 48;
+      const mat = Array.from({ length: H }, () => Array.from({ length: W }, () => 0));
+      window.MapData = { width: W, height: H, matrix: mat };
+      STATE.mapReady = true;
+    }
+  }
+
+  // ---------- Entities (Platzhalter-Renderer) ----------
+  function hookEntityPlacement() {
+    // Wir lauschen simplem CustomEvent 'cb:place-entity'
+    // und der UI-Build-Brücke kann dieses Event werfen.
+    on('cb:place-entity', (ev) => {
+      const ent = ev?.detail;
+      if (!ent) return;
+      // erwartete Felder: {type:'hq'|'farm'|..., x, y} in Tile-Koordinaten
+      STATE.entities.push(ent);
+      requestFrame();
+    });
+
+    // Bonus: Wenn deine Build-UI nur Log schreibt (place-hq etc.),
+    // geben wir eine simple API auf window.Render.place() frei,
+    // damit du im devtools schnell testen kannst:
+    window.Render.place = (type, x, y) => {
+      STATE.entities.push({ type, x, y });
+      requestFrame();
+    };
+  }
+
+  // ---------- Zeichnen ----------
+  function drawTerrain() {
+    const { tctx, terrainCanvas: c } = STATE;
+    if (!STATE.frames || !STATE.tilesImage || !STATE.mapReady || !window.MapData) return;
+
+    tctx.clearRect(0, 0, c.width, c.height);
+
+    // Kamera lesen
+    const cam = (window.Camera && typeof Camera.getView === 'function')
+      ? Camera.getView()
+      : { x: 0, y: 0, scale: 1 };
+
+    tctx.save();
+    tctx.translate(-cam.x, -cam.y);
+    tctx.scale(cam.scale, cam.scale);
+
+    const T = STATE.tileSize;
+    const mat = MapData.matrix;
+    const rows = mat.length;
+    const cols = mat[0].length;
+
+    // Sichtfenster berechnen (einfach, robust)
+    const vw = c.width  / cam.scale;
+    const vh = c.height / cam.scale;
+    const colStart = Math.max(0, Math.floor(cam.x / T));
+    const rowStart = Math.max(0, Math.floor(cam.y / T));
+    const colEnd   = Math.min(cols, Math.ceil((cam.x + vw) / T) + 1);
+    const rowEnd   = Math.min(rows, Math.ceil((cam.y + vh) / T) + 1);
+
+    for (let r = rowStart; r < rowEnd; r += 1) {
+      for (let q = colStart; q < colEnd; q += 1) {
+        const idx = mat[r][q] || 0; // 0 == terrain_r0_c0
+        const rr = Math.floor(idx / STATE.gridCols);
+        const cc = idx % STATE.gridCols;
+        const key = `terrain_r${rr}_c${cc}`;
+        const fr = STATE.frames[key];
+        if (!fr) continue;
+        tctx.drawImage(
+          STATE.tilesImage,
+          fr.x, fr.y, fr.w, fr.h,
+          q * T, r * T, T, T
+        );
+      }
+    }
+
+    tctx.restore();
+  }
+
+  function drawEntities() {
+    const { ectx, entityCanvas: c } = STATE;
+    ectx.clearRect(0, 0, c.width, c.height);
+
+    const cam = (window.Camera && typeof Camera.getView === 'function')
+      ? Camera.getView()
+      : { x: 0, y: 0, scale: 1 };
+
+    ectx.save();
+    ectx.translate(-cam.x, -cam.y);
+    ectx.scale(cam.scale, cam.scale);
+
+    const T = STATE.tileSize;
+    // Platzhalter: farbige Blöcke + Label
+    for (const ent of STATE.entities) {
+      const { x, y, type = 'ent' } = ent; // x,y in Tile-Koordinaten
+      const px = x * T;
+      const py = y * T;
+      ectx.fillStyle =
+        type === 'hq' ? '#ffcc00' :
+        type === 'farm' ? '#66cc33' :
+        type === 'lumberjack' ? '#8b5a2b' :
+        type === 'depot' ? '#66a3ff' :
+        '#ff66aa';
+      ectx.fillRect(px + 4, py + 4, T - 8, T - 8);
+      ectx.fillStyle = '#111';
+      ectx.font = '12px system-ui, sans-serif';
+      ectx.fillText(type, px + 6, py + 16);
+    }
+
+    ectx.restore();
   }
 
   function frame() {
-    // Hintergrund löschen
-    ctx.fillStyle = "#0b0f10";
-    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-
-    // Terrain
     drawTerrain();
-
-    // optionales Debug-Grid
-    if (SHOW_GRID) drawGrid(128);
-
-    // Nächstes Frame anfordern
-    window.requestAnimationFrame(frame);
+    drawEntities();
+    STATE.raf = window.requestAnimationFrame(frame);
+  }
+  function requestFrame() {
+    if (!STATE.started) return;
+    if (!STATE.raf) STATE.raf = window.requestAnimationFrame(frame);
   }
 
-  // ---------------------------------------------------------------------------
-  // Render-API für bootstrap (global!)
-  // ---------------------------------------------------------------------------
-  window.Render = {
-    init() {
-      ok("Modul bereit (v17.9.3): wartet auf Frames + startet Loop.");
-      // Versuch 1: Frames vom map-Modul übernehmen (falls schon da)
-      if (!adoptFramesFromMap()) {
-        // Versuch 2: Fallback selbst laden (ohne hart zu blockieren)
-        loadFramesSelf().then(() => {
-          if (haveFrames()) ok("Frames verfügbar (Fallback).");
-          else warn("Noch keine Frames nach Fallback-Load.");
-        });
+  async function init() {
+    if (STATE.started) return;
+    STATE.started = true;
+
+    ensureLayers();
+    try {
+      await Promise.all([
+        loadTilesetFrames(),
+        ensureMap(),
+      ]);
+      hookEntityPlacement();
+
+      // Falls Tileset-Bild noch fehlt (wenn Frames aus Assets kamen):
+      if (!STATE.tilesImage) {
+        const img = new Image();
+        img.src = 'assets/tiles/tileset.terrain.png';
+        await img.decode().catch(() => {});
+        STATE.tilesImage = img;
       }
-      // Animations-Loop starten
-      window.requestAnimationFrame(frame);
-    },
-    tick() {
-      // Wird von bootstrap ggf. zyklisch aufgerufen; unser Loop läuft ohnehin.
-    },
+
+      log('bereit (v17.9.4): Tiles + Map ok, starte Loop.');
+      requestFrame();
+    } catch (e) {
+      console.error(TAG, 'Fehler beim Init:', e);
+    }
+  }
+
+  // Public API
+  window.Render = {
+    request: requestFrame,
+    place: (...args) => window.Render.place && window.Render.place(...args),
   };
 
-  // Beim Spielstart initialisieren
-  window.addEventListener("cb:game-start", () => {
-    ok("cb:game-start erhalten → init()");
-    window.Render.init();
-  });
+  // Event-Wiring
+  on('cb:game-start', init, { once: true });
+  on('cb:render-frame', () => requestFrame());
 
-  // Falls bootstrap früher prüfen sollte: sofort registrieren
-  ok("Modul geladen (v17.9.3) und window.Render registriert; wartet auf cb:game-start.");
-
+  // Dev: wenn schon spät gestartet wurde
+  if (document.readyState !== 'loading') {
+    // nichts – wir warten auf cb:game-start
+  }
 })();
