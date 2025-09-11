@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-09T21:29:18.508Z",
+  "createdAt": "2025-09-11T13:58:46.727Z",
   "root": ".",
-  "count": 280,
+  "count": 285,
   "entries": [
     {
       "type": "dir",
@@ -224,7 +224,7 @@
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
-      "size": 3699
+      "size": 6264
     },
     {
       "type": "file",
@@ -286,7 +286,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.css",
-      "size": 5292
+      "size": 5295
     },
     {
       "type": "file",
@@ -909,22 +909,22 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 6862
+      "size": 7017
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 2635
+      "size": 7174
     },
     {
       "type": "file",
       "path": "assets/ui/ui-start.css",
-      "size": 834
+      "size": 2700
     },
     {
       "type": "file",
       "path": "assets/ui/ui-start.js",
-      "size": 875
+      "size": 3275
     },
     {
       "type": "file",
@@ -1088,15 +1088,6 @@
       "type": "file",
       "path": "css/platform.css",
       "size": 1595
-    },
-    {
-      "type": "dir",
-      "path": "gh-pages/"
-    },
-    {
-      "type": "file",
-      "path": "gh-pages/readme",
-      "size": 7
     },
     {
       "type": "dir",
@@ -1272,6 +1263,11 @@
     },
     {
       "type": "file",
+      "path": "asset-library.html",
+      "size": 5787
+    },
+    {
+      "type": "file",
       "path": "boot.compat.js",
       "size": 2081
     },
@@ -1298,17 +1294,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2665
+      "size": 2775
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 26234
+      "size": 27910
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10131
+      "size": 10851
     },
     {
       "type": "file",
@@ -1323,7 +1319,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5057
+      "size": 6174
     },
     {
       "type": "file",
@@ -1342,6 +1338,16 @@
     },
     {
       "type": "file",
+      "path": "siedler-code-block-editor.html",
+      "size": 19321
+    },
+    {
+      "type": "file",
+      "path": "siedler-node-playground-codegen-fix.html",
+      "size": 24519
+    },
+    {
+      "type": "file",
       "path": "siedler-node-playground-codegen.html",
       "size": 26098
     },
@@ -1357,6 +1363,11 @@
     },
     {
       "type": "file",
+      "path": "siedler-tool-hub.html",
+      "size": 11236
+    },
+    {
+      "type": "file",
       "path": "storage.js",
       "size": 404
     },
@@ -1364,6 +1375,21 @@
       "type": "file",
       "path": "sw.js",
       "size": 1890
+    },
+    {
+      "type": "file",
+      "path": "ui-editor-advanced-compact.html",
+      "size": 45852
+    },
+    {
+      "type": "file",
+      "path": "ui-editor-advanced.html",
+      "size": 43636
+    },
+    {
+      "type": "file",
+      "path": "ui-editor-preview.html",
+      "size": 29869
     },
     {
       "type": "file",

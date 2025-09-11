@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 247
+Gesamt Dateien: 253
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -54,7 +54,7 @@ Gesamt Dateien: 247
  - assets/tex/terrain/Readme
  - assets/readme
  - core/Readme
- - gh-pages/readme
+ - asset-library.html
  - boot.compat.js
  - buildingData.js
  - buildings.lumberjack.js
@@ -69,11 +69,17 @@ Gesamt Dateien: 247
  - manifest.webmanifest
  - package.json
  - README.md
+ - siedler-code-block-editor.html
+ - siedler-node-playground-codegen-fix.html
  - siedler-node-playground-codegen.html
  - siedler-node-playground-trace.html
  - siedler-node-playground.html
+ - siedler-tool-hub.html
  - storage.js
  - sw.js
+ - ui-editor-advanced-compact.html
+ - ui-editor-advanced.html
+ - ui-editor-preview.html
  - unitLogic.js
 
 ## Mögliche Tippfehler/Readme ohne .md
@@ -88,4 +94,3 @@ Gesamt Dateien: 247
  - assets/tex/terrain/Readme
  - assets/readme
  - core/Readme
- - gh-pages/readme
