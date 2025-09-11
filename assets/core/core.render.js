@@ -102,10 +102,6 @@
       if (w && h) ctx.clearRect(0,0,w,h);
     }catch(_){}
   }
-
-  const ctx = canvas.getContext('2d');
-Game.Camera.apply(ctx);
-// … jetzt Tiles/Objekte in Weltkoordinaten zeichnen …
   
   // ---- Ein Frame zeichnen ---------------------------------------------------
   function frame(){
