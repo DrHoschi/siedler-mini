@@ -1,149 +1,132 @@
-/* assets/core/core.map.js — v17.9.1 */
+/* core.map.js — v17.0.1 (Tileset-Loader robust) */
 (function () {
   "use strict";
 
-  const MOD  = "[map]";
-  const ok   = (window.CBLog?.ok   ?? console.log).bind(console, MOD);
-  const info = (window.CBLog?.info ?? console.log).bind(console, MOD);
-  const warn = (window.CBLog?.warn ?? console.warn).bind(console, MOD);
-  const err  = (window.CBLog?.err  ?? console.error).bind(console, MOD);
+  const MOD   = "[map]";
+  const info  = (window.CBLog?.info ?? console.log).bind(console, MOD);
+  const ok    = (window.CBLog?.ok   ?? console.log).bind(console, MOD);
+  const warn  = (window.CBLog?.warn ?? console.warn).bind(console, MOD);
+  const err   = (window.CBLog?.err  ?? console.error).bind(console, MOD);
 
-  // ---- Konstanten -----------------------------------------------------------
-  const TILESET_META_URL = "assets/tiles/tileset.terrain.json"; // <— wichtig: kein "./"
-  const CANVAS_ID        = "game";
+  // Globale Ablage ähnlich deinem assets-Modul
+  window.__ASSETS = window.__ASSETS || {};
 
-  // ---- interner State -------------------------------------------------------
-  const State = {
-    cvs: null,
-    ctx: null,
-    tilesetMeta: null,   // JSON atlas
-    tilesetImg: null,    // Image object
-    map: null,           // geladene Map (map-mini.json)
-    ready: false
-  };
-
-  // ---- Loader ---------------------------------------------------------------
-  async function loadJSON(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
-    return await res.json();
+  // --- Hilfen ---------------------------------------------------------------
+  async function fetchJSON(url) {
+    const resolved = new URL(url, window.location.href).toString();
+    info("lade JSON:", resolved);
+    const res = await fetch(resolved, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} @ ${resolved}`);
+    // nur echtes JSON, keine Kommentare (jsonc) – deine Datei ist gültig
+    return res.json();
   }
-  function loadImage(url) {
+
+  function loadImage(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("image load failed: " + url));
-      img.src = url + (url.includes("?") ? "" : `?v=${Date.now()}`); // cache buster
+      img.onload  = () => resolve(img);
+      img.onerror = () => reject(new Error("Bild nicht erreichbar: " + src));
+      img.src = new URL(src, window.location.href).toString();
     });
   }
 
+  // --- Tileset laden (robust, mit Fallback) --------------------------------
   async function loadTileset() {
-    // Tileset-JSON
-    const meta = await loadJSON(TILESET_META_URL);
-    const imgUrl = meta?.meta?.image;
-    if (!imgUrl) throw new Error("Tileset-JSON ohne meta.image");
+    // 1. Versuch: terrain-Atlas
+    const candidates = [
+      "assets/tiles/tileset.terrain.json",
+      "assets/tiles/tileset.json"
+    ];
 
-    // PNG (Pfad kommt aus der JSON – bei dir: assets/tiles/tileset.terrain.png)
-    const img = await loadImage(imgUrl);
-
-    State.tilesetMeta = meta;
-    State.tilesetImg  = img;
-
-    ok(`Tileset geladen: ${imgUrl}`);
-  }
-
-  async function loadMapFromCanvas() {
-    const cvs = document.getElementById(CANVAS_ID);
-    if (!cvs) throw new Error("Canvas #game fehlt");
-    State.cvs = cvs;
-    State.ctx = cvs.getContext("2d");
-    const url = cvs.getAttribute("data-map") || "assets/maps/map-mini.json";
-    const data = await loadJSON(url);
-    State.map = data;
-    ok(`Map geladen: ${url}`);
-  }
-
-  // ---- Zeichnen -------------------------------------------------------------
-  function drawTerrain(ctx, cam) {
-    // Sicherheitsnetze
-    if (!State.map || !State.tilesetMeta || !State.tilesetImg) return;
-
-    const frames   = State.tilesetMeta.frames || {};
-    const tileSize = State.tilesetMeta.meta?.tileSize || 64;
-    const rows     = State.map.grid?.rows || State.map.rows || 0;
-    const cols     = State.map.grid?.cols || State.map.cols || 0;
-    const tiles    = State.map.tiles || [];
-
-    // Kamera (optional)
-    const camX   = cam?.x || 0;
-    const camY   = cam?.y || 0;
-    const zoom   = cam?.zoom || 1;
-
-    ctx.save();
-    ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
-
-    // Grundfläche leeren
-    ctx.clearRect(camX, camY, State.cvs.width / zoom, State.cvs.height / zoom);
-
-    // Tiles zeichnen
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const id = tiles[r]?.[c]; // z. B. "terrain_r0_c0"
-        const fr = id && frames[id];
-        if (!fr) continue;
-
-        ctx.drawImage(
-          State.tilesetImg,
-          fr.x, fr.y, fr.w, fr.h,
-          c * tileSize, r * tileSize, tileSize, tileSize
-        );
-      }
-    }
-
-    ctx.restore();
-  }
-
-  // ---- Drawer registrieren --------------------------------------------------
-  function registerDrawer() {
-    // Kamera-Quelle
-    const Camera = window.Game?.Camera || window.CBGame?.Camera || null;
-
-    function onFrame() {
+    let atlas = null, chosen = null;
+    for (const url of candidates) {
       try {
-        const cam = Camera?.get?.() || Camera || { x: 0, y: 0, zoom: 1 };
-        drawTerrain(State.ctx, cam);
+        atlas = await fetchJSON(url);
+        chosen = url;
+        break;
       } catch (e) {
-        err("Render-Fehler:", e?.message || e);
+        warn("Tileset-Kandidat verworfen:", url, "→", e.message);
       }
     }
-
-    // über die Overlay-Hooks (unser Render-Ticker)
-    window.addEventListener("cb:render-frame", onFrame);
-    ok("bereit – Drawer registriert");
-  }
-
-  // ---- Boot ----------------------------------------------------------------
-  async function boot() {
-    try {
-      await loadTileset();
-    } catch (e) {
-      err(`Map-Load fehlgeschlagen: Tileset nicht erreichbar: ${TILESET_META_URL}`);
-      return;
+    if (!atlas) {
+      throw new Error("Tileset nicht erreichbar: " + candidates.join(" | "));
     }
 
-    await loadMapFromCanvas();
-    registerDrawer();
-    State.ready = true;
+    // Bildpfad aus 'meta.image' verwenden (deine Datei hat das Feld)
+    const imgPath = atlas?.meta?.image;
+    if (!imgPath) throw new Error("Tileset.meta.image fehlt im JSON");
+
+    const img = await loadImage(imgPath);
+
+    window.__ASSETS.tileset = {
+      json: atlas,
+      image: img,
+      tileSize: atlas?.meta?.tileSize || 64
+    };
+
+    ok("Tileset geladen (%s)", chosen);
   }
 
-  // Start an cb:game-start koppeln
-  window.addEventListener("cb:game-start", () => {
-    if (!State.ready) boot().catch(e => err("Boot-Fehler:", e?.message || e));
-  });
+  // --- Map-API (minimal für dein Setup) ------------------------------------
+  const MapAPI = {
+    async load(data) {
+      // Hier würdest du deine map-mini.json verarbeiten.
+      // Entscheidend ist: Tileset MUSS vorher da sein.
+      if (!window.__ASSETS.tileset) {
+        await loadTileset().catch(e => { throw e; });
+      }
+      window.__CURRENT_MAP__ = data;
+      ok("bereit – Drawer registriert");
+      // Zeichnen beim Render-Frame
+      window.addEventListener("cb:render-frame", drawFrame);
+    }
+  };
 
-  // für Legacy-Flows, falls sofort gerendert werden soll
+  // --- Einfacher Drawer: zeigt ein sichtbares Feld statt Schwarz -----------
+  function drawFrame() {
+    try {
+      const cvs = document.getElementById("game");
+      if (!cvs) return;
+      const ctx = cvs.getContext("2d");
+      if (!ctx) return;
+
+      const ts = window.__ASSETS.tileset;
+      if (!ts?.image) return;
+
+      // Demo: kachelt das erste Frame als sichtbaren Beweis, dass das Tileset da ist
+      const frame = ts.json.frames?.["terrain_r0_c0"];
+      if (!frame) return;
+
+      const TILE = ts.tileSize || 64;
+      const cols = Math.ceil(cvs.width  / TILE);
+      const rows = Math.ceil(cvs.height / TILE);
+
+      // Clear
+      ctx.clearRect(0, 0, cvs.width, cvs.height);
+      // Gitter-Hintergrund leicht
+      ctx.fillStyle = "#0b0f0d";
+      ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          ctx.drawImage(
+            ts.image,
+            frame.x, frame.y, frame.w, frame.h,
+            x * TILE, y * TILE, TILE, TILE
+          );
+        }
+      }
+    } catch (e) {
+      err("drawFrame:", e.message || e);
+    }
+  }
+
+  // --- Public hook ----------------------------------------------------------
   window.Game = window.Game || {};
-  window.Game.Map = window.Game.Map || {};
-  window.Game.Map.load = async (data) => { State.map = data; };
+  window.Game.Map = MapAPI;
 
+  // Beim Start gleich versuchen, das Tileset vorzuwärmen (bessere Logs)
+  window.addEventListener("cb:game-start", () => {
+    loadTileset().catch(e => err("Map-Load fehlgeschlagen:", e.message));
+  });
 })();
