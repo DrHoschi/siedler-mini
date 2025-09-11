@@ -1,139 +1,209 @@
-/* core.render.js – v17.9.1 (Minimal-Renderer, diagnostikfreundlich)
-   Aufgaben:
-   - Canvas auf dpr-Größe bringen
-   - Frame-Loop abonnieren (cb:render-frame)
-   - Terrain aus tileset.terrain zeichnen (falls Map+Tileset vorhanden)
-   - Klare Logs, wenn Daten fehlen
-*/
+/* assets/core/core.render.js — v17.9.2 */
 (function () {
   "use strict";
 
   const MOD = "[render]";
-  const info = (window.CBLog?.info ?? console.log).bind(console, MOD);
+  const log  = (window.CBLog?.info ?? console.log).bind(console, MOD);
   const ok   = (window.CBLog?.ok   ?? console.log).bind(console, MOD);
   const warn = (window.CBLog?.warn ?? console.warn).bind(console, MOD);
   const err  = (window.CBLog?.err  ?? console.error).bind(console, MOD);
 
-  // ————————————————————————————————————————————————————————————————
-  // Canvas + Kontext
+  // --- Canvas holen ----------------------------------------------------------
   const cvs = document.getElementById("game");
-  if (!cvs) { err("Canvas #game nicht gefunden."); return; }
-  const ctx = cvs.getContext("2d", { alpha:false });
-
-  // Sizing auf Device Pixel Ratio
-  function resize() {
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const w = Math.floor(cvs.clientWidth  * dpr);
-    const h = Math.floor(cvs.clientHeight * dpr);
-    if (cvs.width !== w || cvs.height !== h) {
-      cvs.width = w; cvs.height = h;
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // 1 CSS-px == 1 „Logik“-px
-  }
-  resize();
-  window.addEventListener("resize", resize);
-
-  // ————————————————————————————————————————————————————————————————
-  // Zugriff auf Map + Tileset
-  function getMap() {
-    // Erwartet, dass core.map.js die Daten auf Game.Map.current oder Game.Map._data hält.
-    const M = (window.Game?.Map ?? {});
-    return M.current || M._data || window.__CURRENT_MAP__ || null;
+  const ctx = cvs?.getContext?.("2d");
+  if (!cvs || !ctx) {
+    err("Kein Canvas #game gefunden.");
+    return;
   }
 
-  function getTerrainTileset() {
-    // assets/core/build.assets.js registriert „tileset.terrain“ als PNG
-    const A = window.Assets;
-    if (A?.get) {
-      const img = A.get("tileset.terrain"); // HTMLImageElement?
-      if (img instanceof Image || (img && img.naturalWidth)) return img;
+  // --- Kleine Helfer ---------------------------------------------------------
+  const Camera = window.Camera || {
+    worldToScreen(x, y) { return { x, y }; },
+    scale: 1,
+    get offsetX(){ return 0; },
+    get offsetY(){ return 0; },
+  };
+
+  function getTileset() {
+    const AS = window.Assets || {};
+    const key = "tileset.terrain";
+
+    // Mögliche Shapes durchprobieren
+    const reg    = AS.registry?.[key] || AS[key] || {};
+    const frames = AS.frames?.[key]   || reg.frames || AS.sprites?.[key]?.frames || null;
+    let   image  = AS.images?.[key]   || reg.image  || AS.sprites?.[key]?.image || null;
+    const meta   = AS.meta?.[key]     || reg.meta   || AS.sprites?.[key]?.meta  || {};
+
+    if (!image && meta?.image) {
+      // Sicherheitsnetz: eigenes Image bauen, falls das Assets-Modul nur Meta hält
+      image = new Image();
+      image.src = meta.image;
+      image.decode?.().catch(()=>{});
     }
-    return null;
+    return { frames, image, meta };
   }
 
-  // Frames aus JSON (assets/tiles/tileset.terrain.json) zwischenspeichern
-  // core.map.js sollte sie beim Laden irgendwo ablegen; wir bieten Fallback:
-  let terrainFrames = null;
-  function getTerrainFrames() {
-    if (terrainFrames) return terrainFrames;
-    // 1) bevorzugt über Game.Map.tilesetTerrainFrames
-    const M = window.Game?.Map;
-    if (M?.tilesetTerrainFrames) {
-      terrainFrames = M.tilesetTerrainFrames;
-      return terrainFrames;
-    }
-    // 2) Fallback: globaler Cache, den core.map.js beim Laden gesetzt hat
-    if (window.__TERRAIN_FRAMES__) {
-      terrainFrames = window.__TERRAIN_FRAMES__;
-      return terrainFrames;
-    }
-    return null;
+  function pickAnyFrame(frames) {
+    // irgendeinen existierenden Terrain-Key nehmen
+    const keys = frames ? Object.keys(frames) : [];
+    // bevorzugt r0/c0, sonst der erste
+    const pref = "terrain_r0_c0";
+    return frames?.[pref] || (keys.length ? frames[keys[0]] : null);
   }
 
-  // ————————————————————————————————————————————————————————————————
-  // Terrain zeichnen (einfacher Drawer)
-  function drawTerrain() {
-    const map = getMap();
-    const img = getTerrainTileset();
-    const frames = getTerrainFrames();
-
-    if (!map)      { warn("Keine Map-Daten vorhanden → skip."); return; }
-    if (!img)      { warn("Tileset-Bild (tileset.terrain) fehlt → skip."); return; }
-    if (!frames)   { warn("Frames aus tileset.terrain.json fehlen → skip."); return; }
-
-    const tileSize = (map.tileSize || map.meta?.tileSize || 64) | 0;
-    const rows = map.rows ?? map.height ?? map.grid?.rows ?? 0;
-    const cols = map.cols ?? map.width  ?? map.grid?.cols ?? 0;
-
-    if (!rows || !cols) { warn("Map hat 0×0 Dimensionen → nichts zu zeichnen."); return; }
-
-    // Einfaches Terrain-Layer:
-    // Wir erwarten map.tiles als 2D-Array von Frame-Keys (z.B. "terrain_r0_c0").
-    const tiles = map.tiles || map.layer || map.data || null;
-    if (!tiles || !tiles.length) { warn("Map.tiles leer → nichts zu zeichnen."); return; }
-
-    for (let y = 0; y < rows; y++) {
-      const row = tiles[y];
-      if (!row) continue;
-      for (let x = 0; x < cols; x++) {
-        const key = row[x];
-        if (!key) continue;
-        const f = frames[key];
-        if (!f) continue;
-        // FrameInfo: {x,y,w,h}
-        ctx.drawImage(img, f.x, f.y, f.w, f.h, x * tileSize, y * tileSize, tileSize, tileSize);
-      }
-    }
-  }
-
-  // ————————————————————————————————————————————————————————————————
-  // Debug-Hintergrund (damit man sofort etwas sieht)
-  function clearWithGrid() {
-    // dunkles Grün/Schwarz + feines Grid, damit „schwarz ohne Grid“ als Fehler sichtbar ist
-    ctx.fillStyle = "#0b0f0d";
-    ctx.fillRect(0, 0, cvs.width, cvs.height);
-
-    const step = 64;
+  // Grid zeichnen (Debug/Style)
+  function drawGrid(tileSize, color = "rgba(255,255,255,0.06)") {
+    if (!tileSize) return;
     ctx.save();
-    ctx.globalAlpha = 0.1;
-    ctx.beginPath();
-    for (let x = 0; x < cvs.width; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, cvs.height); }
-    for (let y = 0; y < cvs.height; y += step){ ctx.moveTo(0, y); ctx.lineTo(cvs.width, y); }
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.strokeStyle = color;
+    for (let x = 0; x < cvs.width; x += tileSize) {
+      ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, cvs.height); ctx.stroke();
+    }
+    for (let y = 0; y < cvs.height; y += tileSize) {
+      ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(cvs.width, y + 0.5); ctx.stroke();
+    }
     ctx.restore();
   }
 
-  // ————————————————————————————————————————————————————————————————
-  // Frame-Loop
-  function renderFrame() {
-    clearWithGrid();
-    try { drawTerrain(); } catch(e) { err("Fehler beim Terrain-Draw:", e); }
+  // --- State -----------------------------------------------------------------
+  let CURRENT_MAP = window.__CURRENT_MAP__ || null;  // {width,height,tiles?}
+  let TILESET = null;                                 // {frames,image,meta}
+  let TILE_SIZE = 64;
+
+  // --- Map/Assets Handover ---------------------------------------------------
+  function ensureTileset() {
+    if (TILESET?.frames && TILESET?.image) return true;
+    const t = getTileset();
+    if (t.frames && t.image) {
+      TILESET = t;
+      TILE_SIZE = t.meta?.tileSize || 64;
+      ok("Tileset aktiv: %s (tileSize=%s)", "tileset.terrain", TILE_SIZE);
+      return true;
+    }
+    return false;
   }
 
-  // Der Loop wird von core.bootstrap/game.bootstrap.js mit ‚cb:render-frame‘ getriggert.
-  window.addEventListener("cb:render-frame", renderFrame);
+  function handleMapReady(map) {
+    CURRENT_MAP = map || window.__CURRENT_MAP__ || CURRENT_MAP;
+    if (CURRENT_MAP) ok("Map übernommen.");
+  }
 
-  ok("Modul geladen (v17.9.1): wartet auf cb:render-frame, zeichnet Terrain wenn verfügbar.");
+  // Events aus anderen Modulen
+  window.addEventListener("cb:map-ready", (e) => handleMapReady(e?.detail?.map));
+  // Falls Bootstrap die Map nur global ablegt:
+  if (!CURRENT_MAP && window.__CURRENT_MAP__) handleMapReady(window.__CURRENT_MAP__);
+
+  // --- Render-Loop (Event-gesteuert) ----------------------------------------
+  function renderFrame() {
+    // Canvas wischen
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    ctx.fillStyle = "#0d1412";           // dunkler Grund
+    ctx.fillRect(0, 0, cvs.width, cvs.height);
+
+    const hasTS = ensureTileset();
+    if (!hasTS) {
+      warn("Frames noch nicht da → skip.");
+      drawGrid(64);
+      return;
+    }
+
+    const { frames, image } = TILESET;
+    const any = pickAnyFrame(frames);
+    if (!any) {
+      warn("Tileset ohne Frames → skip.");
+      drawGrid(64);
+      return;
+    }
+
+    // Kamera
+    const scale = Camera.scale || 1;
+    const offX  = Camera.offsetX || 0;
+    const offY  = Camera.offsetY || 0;
+
+    // Map vorhanden?
+    const map = CURRENT_MAP;
+    let cols = 0, rows = 0;
+
+    // Versuche Map-Shape zu erkennen
+    // a) Tiled 2D: map.tiles[row][col]
+    // b) Linear: map.tiles[], plus map.width/map.height
+    // c) Kein Map-Content → Fallback-Teppich
+    let drawAsFallback = false;
+
+    if (map?.tiles && Array.isArray(map.tiles[0])) {
+      rows = map.tiles.length;
+      cols = map.tiles[0].length;
+    } else if (map?.tiles && map?.width && map?.height) {
+      cols = map.width; rows = map.height;
+    } else if (map?.width && map?.height) {
+      cols = map.width; rows = map.height;
+      drawAsFallback = true;
+    } else {
+      // keine Map: Bildschirm mit einem Tile kacheln
+      cols = Math.ceil(cvs.width  / (TILE_SIZE * scale)) + 2;
+      rows = Math.ceil(cvs.height / (TILE_SIZE * scale)) + 2;
+      drawAsFallback = true;
+    }
+
+    // Zeichnen
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+
+    const startCol = Math.floor(offX / (TILE_SIZE * scale));
+    const startRow = Math.floor(offY / (TILE_SIZE * scale));
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        // Frame-Key bestimmen: wenn Map keine Codes liefert → irgendein Frame
+        let fr = any;
+
+        if (!drawAsFallback && map?.tiles) {
+          const code = Array.isArray(map.tiles[0])
+            ? map.tiles[r]?.[c]
+            : map.tiles[r * cols + c];
+
+          // einfache Heuristik: wenn der Code ein Key-Name ist, nutze ihn;
+          // wenn es eine Zahl ist, mappe auf r/c im 16x16-Raster:
+          if (typeof code === "string" && frames[code]) {
+            fr = frames[code];
+          } else if (Number.isInteger(code)) {
+            const rr = Math.floor(code / 16);
+            const cc = code % 16;
+            const key = `terrain_r${rr}_c${cc}`;
+            fr = frames[key] || any;
+          }
+        }
+
+        const sx = fr.x, sy = fr.y, sw = fr.w, sh = fr.h;
+
+        const wx = c * TILE_SIZE;
+        const wy = r * TILE_SIZE;
+
+        const sxn = (wx * scale) - offX;
+        const syn = (wy * scale) - offY;
+        const dw  = TILE_SIZE * scale;
+        const dh  = TILE_SIZE * scale;
+
+        ctx.drawImage(image, sx, sy, sw, sh, Math.round(sxn), Math.round(syn), Math.round(dw), Math.round(dh));
+      }
+    }
+
+    ctx.restore();
+
+    // feines Grid oben drüber – hilft beim Kontrollieren
+    drawGrid(Math.round(TILE_SIZE * scale));
+  }
+
+  // Der Renderer arbeitet auf Events
+  function tick() {
+    try { renderFrame(); } catch (e) { err("Render-Fehler:", e); }
+    // Der eigentliche Takt kommt von game.bootstrap → cb:render-frame,
+    // aber falls das mal nicht feuert, animieren wir minimal weiter:
+    // (kleiner Sicherheitsgurt)
+  }
+
+  // Unsere Haupt-Clock: auf jedes Frame-Event rendern
+  window.addEventListener("cb:render-frame", tick);
+
+  ok("Modul geladen (v17.9.2): wartet auf cb:render-frame, zeichnet Terrain wenn verfügbar.");
 })();
