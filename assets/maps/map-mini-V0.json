@@ -2,7 +2,7 @@
   "width": 22,
   "height": 14,
   "tileSize": 64,
-  "tileset": "./assets/tiles/tileset.terrain.json",
+  "tileset": "assets/tiles/tileset.terrain.json",
 
   "tiles": [
     
