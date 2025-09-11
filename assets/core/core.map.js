@@ -1,236 +1,144 @@
 /* ============================================================================
  * Datei: assets/core/core.map.js
- * Projekt: Siedler-Mini
- * Version: v17.0.1
- * Zweck:
- *   - Karte laden (JSON) + Tileset/Atlas + Gebäude-Texturen vorladen
- *   - Kamera-Utilities (getCamera, clamp, tile<->world)
- *   - Map-State in GameCore.state pflegen (S.map, S.atlas, S.tilesetImg)
- *   - Auto-Spawn Townhall + Kamera-Zentrierung
- *   - Renderer-Integration (MapDrawer + CameraProvider), robust gegen Lade-Reihenfolge
- * Events:
- *   - ns.util.emit('cb:game-started', { map: url })
+ * Aufgabe: Map laden + Tileset zeichnen (als Drawer für Render)
+ * Erwartet: <canvas id="game" data-map="assets/maps/map-mini.json">
+ * Öffentliche API (am window.Game Namespace):
+ *   Game.Map.load(json)     // Map-Daten übernehmen
+ *   Game.Map.draw(ctx,cam)  // vom Renderer pro Frame aufgerufen
+ *   Game.Map.getSize()      // {cols, rows}
  * ========================================================================== */
-(function (ns) {
+(function(){
   'use strict';
-  if (!ns || !ns.state) { console.error('[map] GameCore.env fehlt'); return; }
 
-  var S = ns.state;
-  var U = ns.util;
-  var E = null; // Entities-Lazy
+  const MOD = '[map]';
+  const ok  = (m)=> (window.CBLog?.ok   || console.log)(MOD+' '+m);
+  const err = (m)=> (window.CBLog?.err  || console.error)(MOD+' '+m);
+  const warn= (m)=> (window.CBLog?.warn || console.warn)(MOD+' '+m);
 
-  // --------------------------- Loader-Helfer ---------------------------------
-  function loadJSON(url){
-    return fetch(url).then(function(r){
-      if (!r.ok) throw new Error('http ' + r.status + ' ' + url);
-      return r.json();
+  // --- interner State --------------------------------------------------------
+  const S = {
+    tilesetUrl: 'assets/tiles/tileset.terrain.png',
+    tilesetImg: null,
+    tilePx: 64,           // Basistilegröße in px (unskaliert)
+    map: null,            // Map-JSON (siehe assets/maps/map-mini.json)
+    loaded: false
+  };
+
+  // --- Tileset laden ---------------------------------------------------------
+  function loadTileset(url){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      img.onload = ()=>{ S.tilesetImg = img; ok('Tileset geladen'); resolve(); };
+      img.onerror= ()=> reject(new Error('Tileset nicht erreichbar: '+url));
+      img.src = url + (url.includes('?')?'&':'?') + 'v=' + Date.now(); // Cache buster
     });
   }
-  function loadImage(src){
-    return new Promise(function(res, rej){
-      var i = new Image();
-      i.onload = function(){ res(i); };
-      i.onerror = function(){ rej(new Error('img ' + src)); };
-      i.src = src;
-    });
+
+  // --- Map laden (falls Bootstrap JSON liefert) ------------------------------
+  async function loadMap(json){
+    try{
+      S.map = json || S.map;
+      if (!S.map || !Array.isArray(S.map.layers)) throw new Error('ungültige Map');
+
+      // optional: Tileset-Pfad aus Map überschreiben
+      if (S.map.tileset) S.tilesetUrl = S.map.tileset;
+
+      if (!S.tilesetImg) await loadTileset(S.tilesetUrl);
+      S.loaded = true;
+      ok('Map übernommen ('+(S.map.cols||'?')+'×'+(S.map.rows||'?')+')');
+    }catch(e){
+      S.loaded = false;
+      err('Map-Load fehlgeschlagen: '+(e&&e.message||e));
+    }
   }
 
-  // --------------------------- Map/Camera Utils ------------------------------
-  function mapPixelSize(){
-    if (!S.map) return { w:0, h:0 };
-    return { w: S.map.width * S.map.tile, h: S.map.height * S.map.tile };
-  }
-  function clampCam(){
-    if (!S.map) return;
-    var px = mapPixelSize();
-    var z  = S.cam.zoom || 1;
-    var maxX = Math.max(0, px.w - (ns.__viewW__  || window.innerWidth ) / z);
-    var maxY = Math.max(0, px.h - (ns.__viewH__  || window.innerHeight) / z);
-    S.cam.x = U.clamp(S.cam.x, 0, maxX);
-    S.cam.y = U.clamp(S.cam.y, 0, maxY);
-  }
-  function tileToWorld(tx,ty){ var t=S.map?.tile||64; return { x: tx*t, y: ty*t }; }
-  function worldToTile(px,py){ var t=S.map?.tile||64; return { x: (px/t)|0, y: (py/t)|0 }; }
-
-  function getTileSize(){ return S.map ? (S.map.tile|0) : 64; }
-  function getMapSize(){ return S.map ? { w:S.map.width|0, h:S.map.height|0 } : { w:0, h:0 }; }
-  function getCamera(){  return S.cam; }
-
-  function normalizeMap(map){
-    function pickNum(){ for (var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==undefined && v!==null && !isNaN(v)) return Number(v);} }
-    var ms = map.mapSize || map.size || null;
-    var width  = pickNum(map.width,  map.w,  ms && ms.w,  ms && ms.width)  || 16;
-    var height = pickNum(map.height, map.h,  ms && ms.h,  ms && ms.height) || 10;
-    var tile   = pickNum(map.tile,   map.tileSize, map.tile_size, map.tilePX) || 64;
-    return {
-      width: width|0, height: height|0, tile: tile|0,
-      layers: map.layers ? map.layers : (map.tiles ? [{ name:'ground', data: map.tiles }] : [])
-    };
-  }
-
-  // --------------------------- Renderer-Integration --------------------------
-  // 1) Drawer (einfacher Tileset-Renderer)
-  function drawMapWithTileset(ctx, cam) {
-    if (!S.map || !S.tilesetImg) return;
-    var img  = S.tilesetImg;
-    var tile = S.map.tile|0;
-
-    var cols = Math.max(1, (img.width / tile) | 0);
-
-    var layer = (S.map.layers && S.map.layers[0] && S.map.layers[0].data) ? S.map.layers[0].data : null;
-    if (!layer) return;
-
-    var camX = cam && cam.x ? cam.x : 0;     // Tile-Koordinaten
-    var camY = cam && cam.y ? cam.y : 0;
-    var zoom = cam && cam.zoom ? cam.zoom : 1;
-
-    var viewW = (ctx.canvas && ctx.canvas.width)  || 800;
-    var viewH = (ctx.canvas && ctx.canvas.height) || 600;
-
-    var tW = S.map.width|0, tH = S.map.height|0;
-
-    var startX = Math.max(0, Math.floor(camX));
-    var startY = Math.max(0, Math.floor(camY));
-    var endX   = Math.min(tW-1, Math.ceil(camX + (viewW / (tile*zoom))) + 1);
-    var endY   = Math.min(tH-1, Math.ceil(camY + (viewH / (tile*zoom))) + 1);
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-
-    for (var ty = startY; ty <= endY; ty++) {
-      for (var tx = startX; tx <= endX; tx++) {
-        var idx = ty * tW + tx;
-        var id  = (layer[idx] | 0);
-        if (id <= 0) continue;          // 0/leer = nichts
-        id = id - 1;                     // 1-basiert -> 0-basiert
-
-        var sx = (id % cols) * tile;
-        var sy = ((id / cols) | 0) * tile;
-
-        var dx = Math.round((tx - camX) * tile);
-        var dy = Math.round((ty - camY) * tile);
-        var dw = Math.round(tile * zoom);
-        var dh = Math.round(tile * zoom);
-
-        ctx.drawImage(img, sx, sy, tile, tile, dx, dy, dw, dh);
-      }
+  // --- Drawer: zeichnet die gesamte Map -------------------------------------
+  function draw(ctx, cam){
+    // Fallback-Hintergrund, falls irgendwas noch nicht da ist
+    if (!S.loaded || !S.map || !S.tilesetImg){
+      ctx.save();
+      ctx.fillStyle = '#0e1411';
+      ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      ctx.restore();
+      return;
     }
 
+    const tileBase = S.tilePx;              // 64
+    const tilePx   = Math.round(tileBase * (cam.zoom || 1));
+
+    // Sichtbereich in KACHELN bestimmen
+    const colsOnScreen = Math.ceil(ctx.canvas.width  / tilePx) + 2;
+    const rowsOnScreen = Math.ceil(ctx.canvas.height / tilePx) + 2;
+    const startCol = Math.max(0, Math.floor(cam.x));
+    const startRow = Math.max(0, Math.floor(cam.y));
+
+    // Annahme: S.map.layers[0] ist Terrain als int[][]
+    const L = S.map.layers && S.map.layers[0];
+    if (!L || !Array.isArray(L.data)) return;
+
+    // Tileset-Atlas: wir nehmen 8×8 Tiles à 64px (anpassbar)
+    const ts = S.tilesetImg;
+    const atlasCols = Math.floor(ts.width  / tileBase);
+
+    ctx.save();
+    for (let r = 0; r < rowsOnScreen; r++){
+      const mr = startRow + r; if (mr >= L.rows) break;
+      for (let c = 0; c < colsOnScreen; c++){
+        const mc = startCol + c; if (mc >= L.cols) break;
+        const id = L.data[mr][mc] | 0;     // Tile-ID (0-basiert)
+
+        // Quelle im Tileset berechnen
+        const sx = (id % atlasCols) * tileBase;
+        const sy = Math.floor(id / atlasCols) * tileBase;
+
+        // Ziel auf dem Canvas
+        const dx = Math.round((mc - cam.x) * tilePx);
+        const dy = Math.round((mr - cam.y) * tilePx);
+
+        ctx.drawImage(ts, sx, sy, tileBase, tileBase, dx, dy, tilePx, tilePx);
+      }
+    }
     ctx.restore();
   }
 
-  // 2) Camera-Provider (Renderer erwartet Tile-Koordinaten)
-  function cameraForRender(){
-    var t = S.map?.tile || 64;
-    return { x:(S.cam.x||0)/t, y:(S.cam.y||0)/t, zoom:S.cam.zoom||1 };
+  function getSize(){
+    if (!S.map) return { cols:0, rows:0 };
+    const L = S.map.layers && S.map.layers[0];
+    return { cols: L?.cols|0, rows: L?.rows|0 };
   }
 
-  // 3) Wiring – sicher/Idempotent, egal wann Render kommt
-  var _wired = false;
-  function wireRendererIfPossible(){
-    if (_wired) return;
-    if (!window.Render || typeof Render.setMapDrawer!=='function' || typeof Render.setCameraProvider!=='function') {
-      return; // Render noch nicht bereit
+  // --- Wiring zum Renderer ---------------------------------------------------
+  function wireToRenderer(){
+    try{
+      window.Render?.setMapDrawer(draw);
+    }catch(e){ warn('Renderer nicht verfügbar: '+(e&&e.message)); }
+  }
+
+  // --- Boot-Hook: auf cb:game-start Map vom Canvas laden --------------------
+  async function bootHook(){
+    const cvs = document.getElementById('game');
+    const url = cvs?.getAttribute('data-map');
+    if (!url){ warn('kein data-map am Canvas'); return; }
+    try{
+      const res = await fetch(url, { cache:'no-store' });
+      const json = await res.json();
+      await loadMap(json);
+      wireToRenderer();
+      ok('bereit – Drawer registriert');
+      // gleich ein Frame anfordern
+      try{ window.dispatchEvent(new Event('cb:render-frame')); }catch(_){}
+    }catch(e){
+      err('Map laden fehlgeschlagen: '+(e&&e.message||e));
     }
-    try {
-      Render.setCameraProvider(cameraForRender);
-      Render.setMapDrawer(drawMapWithTileset);
-      _wired = true;
-      (ns.ok||console.log)('[map] Render verkabelt');
-    } catch(e){
-      (ns.warn||console.warn)('[map] Render-Wiring fehlgeschlagen:', e && e.message);
-    }
-  }
-  // auf „render-ready“ warten, falls Render später kommt
-  try { window.addEventListener('cb:render-ready', wireRendererIfPossible, { once:false }); } catch(_){}
-
-  // --------------------------- Entities / Kamera -----------------------------
-  function ensureTownhall(){
-    for (var i=0;i<S.entities.length;i++){
-      if (S.entities[i].key==='townhall') return;
-    }
-    var cx = (S.map.width/2)|0, cy = (S.map.height/2)|0;
-    var can = ns.Entities && ns.Entities.canPlace && ns.Entities.canPlace('townhall', cx-1, cy-1);
-    if (can && ns.Entities && ns.Entities.place) ns.Entities.place('townhall', cx-1, cy-1);
-  }
-  function centerCameraOn(tx,ty){
-    var t = getTileSize();
-    var px = { x: tx*t, y: ty*t };
-    var viewW = ns.__viewW__ || Math.max(320, Math.floor(window.innerWidth));
-    var viewH = ns.__viewH__ || Math.max(240, Math.floor(window.innerHeight));
-    S.cam.zoom = 1;
-    S.cam.x = U.clamp(px.x - viewW/2, 0, Math.max(0, mapPixelSize().w - viewW));
-    S.cam.y = U.clamp(px.y - viewH/2, 0, Math.max(0, mapPixelSize().h - viewH));
-  }
-  function preloadBuildingImages(){
-    var B = ns.Entities && ns.Entities.BUILDINGS || {};
-    var jobs = [];
-    Object.keys(B).forEach(function(k){
-      var def = B[k];
-      if (!def || !def.img) return;
-      jobs.push(
-        loadImage(def.img).then(function(img){ def._img = img; })
-          .catch(function(e){ (ns.warn||console.warn)('[map] Texture fehlt:', def.img); })
-      );
-    });
-    return Promise.allSettled(jobs);
   }
 
-  // --------------------------- Map laden -------------------------------------
-  function load(mapUrl){
-    // Entities ggf. nachziehen
-    E = ns.Entities || E;
+  // --- Export ---------------------------------------------------------------
+  window.Game = window.Game || {};
+  Game.Map = { load: loadMap, draw, getSize };
 
-    (ns.ok||console.log)('GameLoader.start', mapUrl);
+  // Map-Drawer sofort registrieren (falls Renderer schon da ist)
+  wireToRenderer();
 
-    return loadJSON(mapUrl)
-      .then(function(map){
-        S.map = normalizeMap(map);
-        (ns.ok||console.log)('Map geladen:', S.map.width+'×'+S.map.height, '· Tile', S.map.tile);
-      })
-      .then(function(){
-        var TILESET_PNG  = './assets/tiles/tileset.terrain.png';
-        var TILESET_JSON = './assets/tiles/tileset.terrain.json';
-        return Promise.all([
-          loadJSON(TILESET_JSON).then(function(at){ S.atlas = at; })
-            .catch(function(e){ S.atlas=null; (ns.warn||console.warn)('[map] Atlas JSON nicht geladen:', e.message); }),
-          loadImage(TILESET_PNG).then(function(img){ S.tilesetImg = img; })
-            .catch(function(e){ S.tilesetImg=null; (ns.warn||console.warn)('[map] Tileset PNG nicht geladen:', e.message); }),
-          preloadBuildingImages()
-        ]);
-      })
-      .then(function(){
-        ensureTownhall();
-        var th = (function(){ for (var i=0;i<S.entities.length;i++){ if (S.entities[i].key==='townhall') return S.entities[i]; } return null; })();
-        var cx = th ? (th.tx + (th.wTiles>>1)) : (S.map.width>>1);
-        var cy = th ? (th.ty + (th.hTiles>>1)) : (S.map.height>>1);
-        centerCameraOn(cx, cy);
-
-        // JETZT den Renderer sicher verkabeln (falls Render inzwischen geladen wurde)
-        wireRendererIfPossible();
-
-        // und falls Render erst danach „ready“ meldet, greift der Listener oben
-        U.emit('cb:game-started', { map: mapUrl });
-        if (window.GameUI && typeof window.GameUI.onGameStarted==='function') window.GameUI.onGameStarted();
-        (ns.ok||console.log)('Game gestartet');
-      })
-      .catch(function(e){
-        (ns.err||console.error)('Start fehlgeschlagen:', e && e.message);
-        throw e;
-      });
-  }
-
-  // --------------------------- Export ----------------------------------------
-  ns.Map = {
-    load: load,
-    getTileSize: getTileSize,
-    getMapSize: getMapSize,
-    getCamera: getCamera,
-    tileToWorld: tileToWorld,
-    worldToTile: worldToTile,
-    clampCam: clampCam
-  };
-
-  (ns.ok||console.log)('[map] Modul geladen (v17.0.1)');
-
-})(window.GameCore = window.GameCore || {});
+  // Auf Start warten
+  window.addEventListener('cb:game-start', bootHook, { once:false });
+})();
