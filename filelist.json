@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-11T13:58:46.727Z",
+  "createdAt": "2025-09-11T16:03:40.547Z",
   "root": ".",
-  "count": 285,
+  "count": 287,
   "entries": [
     {
       "type": "dir",
@@ -173,13 +173,23 @@
     },
     {
       "type": "file",
+      "path": "assets/core/asset.js",
+      "size": 3419
+    },
+    {
+      "type": "file",
       "path": "assets/core/build.assets.js",
-      "size": 2084
+      "size": 1240
     },
     {
       "type": "file",
       "path": "assets/core/build.categories.js",
       "size": 3884
+    },
+    {
+      "type": "file",
+      "path": "assets/core/camera.js",
+      "size": 8269
     },
     {
       "type": "file",
@@ -204,7 +214,7 @@
     {
       "type": "file",
       "path": "assets/core/core.map.js",
-      "size": 6611
+      "size": 9323
     },
     {
       "type": "file",
@@ -219,7 +229,7 @@
     {
       "type": "file",
       "path": "assets/core/core.render.js",
-      "size": 6601
+      "size": 6603
     },
     {
       "type": "file",
@@ -1294,17 +1304,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2775
+      "size": 2950
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 27910
+      "size": 28463
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10851
+      "size": 11082
     },
     {
       "type": "file",
@@ -1319,7 +1329,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6174
+      "size": 6417
     },
     {
       "type": "file",
