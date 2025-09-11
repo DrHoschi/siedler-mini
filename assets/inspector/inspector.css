@@ -68,9 +68,9 @@ body.inspector-open{ overflow:hidden; }
 .log-line{ display:flex; gap:8px; }
 .log-line::before{ width:1.2em; text-align:center; content:""; }
 .log-info.log-line::before { content:"ⓘ"; color:var(--ins-info); }
-.log-ok.log-line::before   { content:"✔"; color:var(--ins-ok); }
-.log-warn.log-line::before { content:"⚠"; color:var(--ins-warn); }
-.log-error.log-line::before{ content:"✖"; color:var(--ins-err); }
+.log-ok.log-line::before   { content:"✅"; color:var(--ins-ok); }
+.log-warn.log-line::before { content:"⚠️"; color:var(--ins-warn); }
+.log-error.log-line::before{ content:"❌"; color:var(--ins-err); }
 
 /* Controls + Buttons */
 .ins-controls{ display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center; }
