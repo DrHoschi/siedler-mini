@@ -67,7 +67,7 @@ body.inspector-open{ overflow:hidden; }
 /* Log lines */
 .log-line{ display:flex; gap:8px; }
 .log-line::before{ width:1.2em; text-align:center; content:""; }
-.log-info.log-line::before { content:"ⓘ"; color:var(--ins-info); }
+.log-info.log-line::before { content:"ℹ"; color:var(--ins-info); }
 .log-ok.log-line::before   { content:"✅"; color:var(--ins-ok); }
 .log-warn.log-line::before { content:"⚠️"; color:var(--ins-warn); }
 .log-error.log-line::before{ content:"❌"; color:var(--ins-err); }
