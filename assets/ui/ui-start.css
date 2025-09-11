@@ -97,3 +97,6 @@
 }
 /* Safety: Canvas ist sichtbar, keine globale Abdunklung */
 #game { position: relative; z-index: 0; background: transparent !important; }
+
+/* Failsafe: Start-BG darf nie den Canvas überdecken, wenn Panel weg ist */
+#start-panel:not(:has(.ui-start-card)) .ui-start-bg { display:none !important; }
