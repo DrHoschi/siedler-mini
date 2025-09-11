@@ -3,7 +3,7 @@
   "width": 16,
   "height": 10,
   "tileSize": 64,
-  "tileset": "./assets/tiles/tileset.terrain.json",
+  "tileset": "assets/tiles/tileset.terrain.json",
   "layers": [
     {
       "name": "ground",
