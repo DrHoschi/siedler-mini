@@ -73,13 +73,7 @@
     };
   }
 
-  // Beispiel nach Map-Load:
-   const wTiles = map.width;      // aus map-mini.json
-   const hTiles = map.height;
-   const tile   = map.tileSize || 32;
-   Game.Camera.setMapSize(wTiles, hTiles, tile);
-  
-  function ensureTownhall(){
+    function ensureTownhall(){
     // prüfe ob vorhanden
     for (var i=0;i<S.entities.length;i++){
       if (S.entities[i].key==='townhall') return;
