@@ -1,115 +1,179 @@
-/* game.bootstrap.js — v17.8.6 (stabil) */
+/* game.bootstrap.js — v17.8.7 (stabil) */
 (function () {
   "use strict";
 
   const MOD = "[bootstrap]";
-  const ok   = (window.CBLog?.ok   ?? console.log).bind(console, MOD);
-  const info = (window.CBLog?.info ?? console.log).bind(console, MOD);
-  const warn = (window.CBLog?.warn ?? console.warn).bind(console, MOD);
-  const err  = (window.CBLog?.err  ?? console.error).bind(console, MOD);
+  const ok   = (window.CBLog?.ok   || console.log).bind(console, MOD);
+  const info = (window.CBLog?.info || console.log).bind(console, MOD);
+  const warn = (window.CBLog?.warn || console.warn).bind(console, MOD);
+  const err  = (window.CBLog?.err  || console.error).bind(console, MOD);
 
-  // ───────────────────────── helpers ─────────────────────────
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const fire = (evt, detail) => { try { window.dispatchEvent(new CustomEvent(evt, { detail })); } catch(_) {} };
+  // ---- State ---------------------------------------------------------------
+  const TILE = 64;                          // Tile-Größe (px)
+  const TILESET_URL = "assets/tiles/tileset.terrain.png";
 
-  function startRenderLoop() {
-    let alive = true;
-    function tick() {
-      if (!alive) return;
-      try { fire("cb:render-frame"); } finally { requestAnimationFrame(tick); }
-    }
-    requestAnimationFrame(tick);
-    return () => { alive = false; };
+  let mapData = null;                       // JSON aus assets/maps/…
+  let tilesetImg = null;                    // Image-Objekt
+  let rafId = 0;
+
+  // Kamera in Tile-Koordinaten
+  const cam = { x: 0, y: 0, zoom: 1 };
+
+  // ---- Utils ---------------------------------------------------------------
+  async function loadJSON(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
   }
-
-  // alles, was die Map verdunkeln/verdecken könnte, entsorgen
-  function nukeOverlays() {
-    ["#inspector-fallback", "#start-panel"].forEach(sel => {
-      const el = $(sel);
-      if (el && el.parentNode) { el.remove(); }
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = (e) => reject(e);
+      img.src = url + "?v=" + Date.now(); // Cache-Bust
     });
   }
 
-  // Tileset-Erreichbarkeit testen (rein informativ)
-  async function pingTileset(url = "assets/tiles/tileset.terrain.png") {
-    try {
-      const img = new Image();
-      const p = new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-      img.decoding = "async";
-      img.referrerPolicy = "no-referrer";
-      img.src = `${url}?t=${Date.now()}`; // Cache brechen
-      await p;
-      info("Tileset erreichbar (%s)", url);
-    } catch (e) {
-      warn("Tileset nicht erreichbar → %s", e?.message || e);
-    }
-  }
+  // ---- Renderer-Verdrahtung ------------------------------------------------
+  function attachRenderer() {
+    if (!window.Render) { warn("Render-Modul nicht vorhanden."); return; }
 
-  // Map gemäß data-map am Canvas holen (für Logging + Fallback-Load)
-  async function ensureMapReachable(canvas) {
-    const url = canvas?.dataset?.map || canvas?.getAttribute("data-map") || "assets/maps/map-mini.json";
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
-      info("Map geprüft/geladen: %s", url);
-      return { url, data };
-    } catch (e) {
-      err("Map konnte nicht geladen werden → %s", (e && e.message) || e);
-      return null;
-    }
-  }
+    // 1) Kamera-Provider
+    Render.setCameraProvider(() => cam);
 
-  // ───────────────────────── boot flow ───────────────────────
-  async function startGame() {
-    const canvas = $("#game");
-    if (!canvas) { err("Canvas #game fehlt"); return; }
+    // 2) Map-Drawer (zeichnet NUR Map-Kacheln; Entities bleiben bei der Engine)
+    Render.setMapDrawer((ctx, camera) => {
+      if (!mapData || !tilesetImg) return;
 
-    // 1) evtl. dunkle Overlays sichern entfernen
-    nukeOverlays();
+      const canvas = ctx.canvas;
+      const pxTile = TILE * camera.zoom;
 
-    // 2) Warm-Up: Tileset kurz pingen (nur Info), Map prüfen/laden
-    pingTileset().catch(() => {}); // nicht blockierend
-    const map = await ensureMapReachable(canvas);
+      // Sichtbereich in Tiles bestimmen
+      const tilesX = Math.ceil(canvas.width  / pxTile) + 2;
+      const tilesY = Math.ceil(canvas.height / pxTile) + 2;
+      const startX = Math.floor(camera.x);
+      const startY = Math.floor(camera.y);
 
-    // 3) Engine starten – beide Welten (neu/legacy) unterstützen
-    try {
-      if (window.CBGame?.start) {
-        await window.CBGame.start(canvas, map?.url ?? "");
-        ok("ready (CBGame.start)");
-      } else if (window.Game?.start) {
-        await window.Game.start(canvas, map?.url ?? "");
-        ok("ready (legacy Game.start)");
-      } else if (window.Game?.Map?.load && map?.data) {
-        await window.Game.Map.load(map.data);
-        ok("Map in Engine geladen (Game.Map.load)");
-      } else {
-        warn("Keine bekannte start()-API gefunden – nur Render-Ticker läuft.");
+      // Annahme: mapData.tiles ist ein 2D-Array [y][x] mit Tile-IDs (>=0)
+      const grid = mapData.tiles || mapData.map || mapData.layer || [];
+      const h = grid.length;
+      const w = h ? grid[0].length : 0;
+      if (!w || !h) return;
+
+      // Tileset als Atlas: 8 Spalten à 64px (anpassen wenn anders)
+      const ATLAS_COLS = Math.floor(tilesetImg.width / TILE) || 1;
+
+      ctx.save();
+      // optional: Bodenfarbe löschen — wird im Render.frame() schon gecleart
+
+      for (let ty = 0; ty < tilesY; ty++) {
+        const my = startY + ty;
+        if (my < 0 || my >= h) continue;
+
+        for (let tx = 0; tx < tilesX; tx++) {
+          const mx = startX + tx;
+          if (mx < 0 || mx >= w) continue;
+
+          const id = grid[my][mx] | 0;          // Tile-ID
+          if (id < 0) continue;
+
+          // Quelle im Atlas
+          const sx = (id % ATLAS_COLS) * TILE;
+          const sy = Math.floor(id / ATLAS_COLS) * TILE;
+
+          // Zielpunkt (in Pixel)
+          const dx = (mx - camera.x) * pxTile;
+          const dy = (my - camera.y) * pxTile;
+
+          ctx.drawImage(tilesetImg, sx, sy, TILE, TILE, dx, dy, pxTile, pxTile);
+        }
       }
-    } catch (e) {
-      err("Engine-Start fehlgeschlagen: %s", e?.message || e);
+      ctx.restore();
+    });
+
+    // 3) Einfache RAF-Loop → feuert Render-Frames
+    if (!rafId) {
+      const tick = () => {
+        try { window.dispatchEvent(new Event("cb:render-frame")); } catch (_) {}
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
     }
-
-    // 4) Render-Ticker in jedem Fall anschieben (core.render.js hört auf cb:render-frame)
-    startRenderLoop();
-
-    // kleiner „Kick“, falls eine Engine-Tick-Funktion existiert
-    try { window.Game?.Engine?.tick?.(); } catch(_) {}
-
-    // Signal für Tools/Inspector
-    fire("cb:map-ready");
   }
 
-  // ───────────────────────── init ────────────────────────────
-  (function init() {
-    ok("Modul geladen (v17.8.6)");
-    // Hauptpfad: UI feuert cb:game-start → dann starten
-    window.addEventListener("cb:game-start", startGame, { once: true });
+  // ---- Eingaben: Pan & Zoom -------------------------------------------------
+  function attachInput() {
+    const cvs = document.getElementById("game");
+    if (!cvs) return;
 
-    // Safety: optionaler Autostart (z. B. für Developer-Previews)
-    if (window.__cb?.autostart === true) startGame();
-  })();
+    // Wheel-Zoom (Desktop/Trackpad)
+    cvs.addEventListener("wheel", (ev) => {
+      ev.preventDefault();
+      const dir = Math.sign(ev.deltaY);
+      const old = cam.zoom;
+      cam.zoom = Math.min(3, Math.max(0.5, +(old * (dir > 0 ? 0.9 : 1.1)).toFixed(3)));
+    }, { passive: false });
+
+    // Drag-Pan (einfach)
+    let dragging = false, sx = 0, sy = 0, startX = 0, startY = 0;
+    cvs.addEventListener("pointerdown", (e) => {
+      dragging = true; sx = e.clientX; sy = e.clientY; startX = cam.x; startY = cam.y; cvs.setPointerCapture(e.pointerId);
+    });
+    cvs.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = (e.clientX - sx) / (TILE * cam.zoom);
+      const dy = (e.clientY - sy) / (TILE * cam.zoom);
+      cam.x = startX - dx;
+      cam.y = startY - dy;
+    });
+    cvs.addEventListener("pointerup",   ()=> dragging = false);
+    cvs.addEventListener("pointercancel",()=> dragging = false);
+  }
+
+  // ---- Map laden & Startfluss ----------------------------------------------
+  async function loadMapFromCanvas() {
+    const cvs = document.getElementById("game");
+    const url = cvs?.getAttribute("data-map") || "assets/maps/map-mini.json";
+    try {
+      mapData = await loadJSON(url);
+      window.__CURRENT_MAP__ = mapData;                 // für Tools/Inspector
+      ok(`Map geprüft/geladen: %s`, url);
+      // Kamera zentrieren (grob)
+      const grid = mapData.tiles || mapData.map || [];
+      const h = grid.length, w = h ? grid[0].length : 0;
+      if (w && h) { cam.x = (w - (cvs.width  / (TILE*cam.zoom))) * 0.5;
+                    cam.y = (h - (cvs.height / (TILE*cam.zoom))) * 0.5; }
+      return true;
+    } catch (e) {
+      err(`Map konnte nicht geladen werden: ${e?.message || e}`);
+      return false;
+    }
+  }
+
+  async function boot() {
+    ok("Modul geladen (v17.8.7)");
+
+    // Renderer initialisiert sich selbst (core.render.js)
+    // Wir warten auf den Start-Impuls der UI:
+    window.addEventListener("cb:game-start", async () => {
+      // Tileset + Map laden
+      try {
+        tilesetImg = await loadImage(TILESET_URL);
+        ok(`Tileset erreichbar (${TILESET_URL})`);
+      } catch (e) {
+        warn(`Tileset nicht erreichbar: ${e?.message || e}`);
+      }
+
+      await loadMapFromCanvas();
+
+      // Renderer andocken + Eingaben anklemmen
+      attachRenderer();
+      attachInput();
+
+      // Für Legacy-Flows (alte Game.start) ein freundlicher Hinweis
+      info("ready (legacy Game.start)");
+    });
+  }
+
+  boot();
 })();
