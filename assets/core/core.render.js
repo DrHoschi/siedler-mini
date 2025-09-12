@@ -41,6 +41,12 @@
     );
   }
 
+  // nach: const canvas = document.getElementById('game');
+  const camera = (window.GameCamera || window.Camera || null);
+  if (camera && !camera.canvas) {
+   camera.bind(canvas); // Eingaben nur auf dem Canvas abfangen
+}
+  
   function resizeCanvas() {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -116,6 +122,33 @@
     return true;
   }
 
+function drawFrame() {
+  if (!ctx) return;
+
+  const cam = window.GameCamera;
+  const scale = cam ? cam.scale : 1;
+  const offX  = cam ? cam.x : 0;
+  const offY  = cam ? cam.y : 0;
+
+  // Canvas aufräumen
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Welt-Transform: erst skalieren, dann verschieben (offX/offY wirken in Weltkoordinaten)
+  ctx.setTransform(scale, 0, 0, scale, -offX*scale, -offY*scale);
+
+  // ==== Terrain zeichnen (dein vorhandener Code) ====
+  // Stelle sicher, dass du KEIN zusätzliches ctx.scale/translate in der Terrain-Funktion machst.
+  drawTerrain(ctx); // nutzt Tiles, ohne eigenen Scale
+
+  // ==== Entities (Gebäude) =====
+  drawEntities?.(ctx); // falls vorhanden
+
+  // UI NICHT skalieren -> danach wieder Reset (wichtig, falls du HUD o.ä. im Canvas zeichnest)
+  ctx.setTransform(1,0,0,1,0,0);
+  requestAnimationFrame(drawFrame);
+}
+  
   // --- Zeichnen -----------------------------------------------------------
   function clear() {
     ctx.setTransform(1,0,0,1,0,0);
