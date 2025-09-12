@@ -1,63 +1,59 @@
-/* assets/core/core.render.js  v17.9.4
+/* assets/core/core.render.js  v17.9.5
  * Robuster Terrain-Renderer
  * - wartet auf cb:game-start
- * - lädt Frames aus tileset.terrain.json
- * - FIX B: Fallback-Pattern aus tileset.terrain.png (erstes Frame)
- * - zeichnet nur die Map-Canvas, UI bleibt unskaliert
+ * - lädt Frames aus tileset.terrain.json (optional)
+ * - FIX B: Fallback-Pattern aus tileset.terrain.png (erstes Tile)
+ * - nutzt Kamera-Werte aus window.GameCamera (ohne UI zu skalieren)
  */
 (() => {
   'use strict';
 
-  const TAG = '[render]';
-  const LOG = (...a) => console.log(TAG, ...a);
+  const TAG  = '[render]';
+  const LOG  = (...a) => console.log(TAG, ...a);
   const WARN = (...a) => console.warn(TAG, ...a);
-  const ERR = (...a) => console.error(TAG, ...a);
+  const ERR  = (...a) => console.error(TAG, ...a);
 
-  // --- State --------------------------------------------------------------
+  // ---- State -------------------------------------------------------------
   let canvas, ctx, dpr = Math.max(1, window.devicePixelRatio || 1);
-  let running = false;
-  let rafId = 0;
+  let running = false, rafId = 0;
 
-  // Terrain
+  // Tileset + Frames
   let frames = null;          // aus tileset.terrain.json
   let tilesetImg = null;      // Image-Objekt aus tileset.terrain.png
   let fallbackPattern = null; // CanvasPattern (FIX B)
-  let tileSize = 64;          // logical tile size (map-space)
+  let tileSize = 64;          // Map-Logik
   let gridCols = 16, gridRows = 16;
 
-  // Kamera (liest nur, steuert nicht die UI)
-  const camera = {
-    x: 0, y: 0, zoom: 1.0
-  };
+  // liest Kamera-Werte pro Frame (keine eigene Instanz anlegen!)
+  function readCam() {
+    const cam = (window.GameCamera || {});
+    return {
+      x:    typeof cam.x    === 'number' ? cam.x    : 0,
+      y:    typeof cam.y    === 'number' ? cam.y    : 0,
+      zoom: typeof cam.zoom === 'number' ? cam.zoom : 1
+    };
+  }
 
-  // Kleine Hilfe: sichere Canvas finden
+  // Canvas ermitteln (nur Map-Canvas!)
   function pickCanvas() {
-    // explizite IDs zuerst, dann „erstes Canvas“
     return (
-      document.getElementById('map') ||
-      document.getElementById('game-canvas') ||
+      document.getElementById('game') ||
+      document.getElementById('map')  ||
       document.querySelector('canvas[data-role="map"]') ||
       document.querySelector('canvas')
     );
   }
 
-  // nach: const canvas = document.getElementById('game');
-  const camera = (window.GameCamera || window.Camera || null);
-  if (camera && !camera.canvas) {
-   camera.bind(canvas); // Eingaben nur auf dem Canvas abfangen
-}
-  
   function resizeCanvas() {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    // Falls die Canvas per CSS auf 100% läuft, nimm das Viewportmaß
-    const cssW = rect.width || window.innerWidth;
+    const cssW = rect.width  || window.innerWidth;
     const cssH = rect.height || window.innerHeight;
     canvas.width  = Math.max(1, Math.round(cssW * dpr));
     canvas.height = Math.max(1, Math.round(cssH * dpr));
   }
 
-  // --- Assets laden -------------------------------------------------------
+  // ---- Assets ------------------------------------------------------------
   async function loadTilesetJson(url) {
     try {
       const res = await fetch(url, { cache: 'no-store' });
@@ -69,9 +65,9 @@
         gridCols = json.meta.grid.cols || gridCols;
         gridRows = json.meta.grid.rows || gridRows;
       }
-      LOG('Frames verfügbar (JSON)', Object.keys(frames || {}).length);
+      LOG('Frames geladen:', frames ? Object.keys(frames).length : 0);
     } catch (e) {
-      WARN('Frames aus JSON nicht lesbar → nutze Fallback. Grund:', e.message);
+      WARN('Frames aus JSON nicht lesbar → Fallback nutzen. Grund:', e.message);
       frames = null;
     }
   }
@@ -79,148 +75,109 @@
   function loadTilesetPng(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = () => resolve(img);
+      img.onload  = () => resolve(img);
       img.onerror = () => reject(new Error('PNG lädt nicht'));
       img.src = url;
     });
   }
 
   async function ensureAssets() {
-    // Pfade wie in deinen Logs
     const jsonUrl = 'assets/tiles/tileset.terrain.json';
     const pngUrl  = 'assets/tiles/tileset.terrain.png';
 
-    // Lade PNG zuerst (brauchen wir für beide Wege)
     try {
       tilesetImg = await loadTilesetPng(pngUrl);
-      LOG('PNG geladen', pngUrl);
+      LOG('PNG geladen:', pngUrl);
     } catch (e) {
-      ERR('PNG konnte nicht geladen werden → keine Darstellung möglich.', e);
+      ERR('PNG konnte nicht geladen werden – ohne PNG kein Rendern.', e);
       return false;
     }
 
-    // Lade Frames (optional)
     await loadTilesetJson(jsonUrl);
 
-    // FIX B: Fallback-Pattern anlegen (erstes Sprite in der PNG)
+    // FIX B: Fallback-Pattern (erstes Tile oben links)
     try {
-      const off = document.createElement('canvas');
-      off.width = off.height = tileSize * dpr;
+      const off  = document.createElement('canvas');
+      off.width  = off.height = tileSize * dpr;
       const octx = off.getContext('2d');
-      // erstes Kachelbild (0,0) annehmen
       octx.drawImage(
         tilesetImg,
-        0, 0, tileSize, tileSize,
-        0, 0, off.width, off.height
+        0, 0, tileSize, tileSize,    // Quelle
+        0, 0, off.width, off.height  // Ziel @ DPR
       );
       fallbackPattern = octx.createPattern(off, 'repeat');
       LOG('Fallback-Pattern bereit.');
     } catch (e) {
-      WARN('Fallback-Pattern fehlgeschlagen:', e);
+      WARN('Fallback-Pattern fehlgeschlagen:', e.message);
       fallbackPattern = null;
     }
+
     return true;
   }
 
-function drawFrame() {
-  if (!ctx) return;
-
-  const cam = window.GameCamera;
-  const scale = cam ? cam.scale : 1;
-  const offX  = cam ? cam.x : 0;
-  const offY  = cam ? cam.y : 0;
-
-  // Canvas aufräumen
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // Welt-Transform: erst skalieren, dann verschieben (offX/offY wirken in Weltkoordinaten)
-  ctx.setTransform(scale, 0, 0, scale, -offX*scale, -offY*scale);
-
-  // ==== Terrain zeichnen (dein vorhandener Code) ====
-  // Stelle sicher, dass du KEIN zusätzliches ctx.scale/translate in der Terrain-Funktion machst.
-  drawTerrain(ctx); // nutzt Tiles, ohne eigenen Scale
-
-  // ==== Entities (Gebäude) =====
-  drawEntities?.(ctx); // falls vorhanden
-
-  // UI NICHT skalieren -> danach wieder Reset (wichtig, falls du HUD o.ä. im Canvas zeichnest)
-  ctx.setTransform(1,0,0,1,0,0);
-  requestAnimationFrame(drawFrame);
-}
-  
-  // --- Zeichnen -----------------------------------------------------------
-  function clear() {
+  // ---- Zeichnen ----------------------------------------------------------
+  function clearCanvas() {
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  function applyCamera() {
-    ctx.setTransform(dpr * camera.zoom, 0, 0, dpr * camera.zoom,
-                     Math.floor(-camera.x * dpr * camera.zoom),
-                     Math.floor(-camera.y * dpr * camera.zoom));
+  function applyWorldTransform(cam) {
+    // Welt-Transform: erst skalieren, dann verschieben (in Weltkoordinaten)
+    const s = dpr * cam.zoom;
+    ctx.setTransform(s, 0, 0, s, Math.floor(-cam.x * s), Math.floor(-cam.y * s));
   }
 
-  function drawTerrainWithFrames() {
-    // sehr einfache Demo-Matrix: fülle Bildfläche mit frame[0,0]
-    // Du kannst hier später deine echte Map-Matrix einhängen.
+  function drawTerrainWithFrames(cam) {
     const key = 'terrain_r0_c0';
     const f = frames && frames[key];
     if (!f) return false;
 
-    const cols = Math.ceil((canvas.width  / dpr) / tileSize / camera.zoom) + 2;
-    const rows = Math.ceil((canvas.height / dpr) / tileSize / camera.zoom) + 2;
+    const cols = Math.ceil((canvas.width  / (dpr * cam.zoom)) / tileSize) + 2;
+    const rows = Math.ceil((canvas.height / (dpr * cam.zoom)) / tileSize) + 2;
 
-    const startX = Math.floor(camera.x / tileSize) * tileSize;
-    const startY = Math.floor(camera.y / tileSize) * tileSize;
+    const startX = Math.floor(cam.x / tileSize) * tileSize;
+    const startY = Math.floor(cam.y / tileSize) * tileSize;
 
     for (let r = -1; r < rows; r++) {
       for (let c = -1; c < cols; c++) {
         const dx = startX + c * tileSize;
         const dy = startY + r * tileSize;
-        ctx.drawImage(
-          tilesetImg,
-          f.x, f.y, f.w, f.h,
-          dx, dy, tileSize, tileSize
-        );
+        ctx.drawImage(tilesetImg, f.x, f.y, f.w, f.h, dx, dy, tileSize, tileSize);
       }
     }
     return true;
   }
 
-  function drawTerrainFallback() {
+  function drawTerrainFallback(cam) {
     if (!fallbackPattern) return false;
-    ctx.save();
-    applyCamera();
     ctx.fillStyle = fallbackPattern;
-    // groß genug füllen
-    const W = Math.ceil((canvas.width  / dpr) / camera.zoom) + tileSize * 2;
-    const H = Math.ceil((canvas.height / dpr) / camera.zoom) + tileSize * 2;
-    ctx.fillRect(camera.x - tileSize, camera.y - tileSize, W, H);
-    ctx.restore();
+    // ausreichend große Fläche um die Kamera herum füllen
+    const W = Math.ceil(canvas.width  / (dpr * cam.zoom)) + tileSize * 2;
+    const H = Math.ceil(canvas.height / (dpr * cam.zoom)) + tileSize * 2;
+    ctx.fillRect(cam.x - tileSize, cam.y - tileSize, W, H);
     return true;
   }
 
-  function renderFrame() {
+  function frame() {
     if (!running) return;
-    clear();
 
-    // Terrain
+    clearCanvas();
+
+    const cam = readCam();             // Kamera lesen
+    applyWorldTransform(cam);          // Welt-Transform setzen
+
     let drawn = false;
-    if (frames) {
-      drawn = drawTerrainWithFrames();
-    }
-    if (!drawn) {
-      drawn = drawTerrainFallback();
-    }
-    if (!drawn) {
-      WARN('Nichts gezeichnet (weder Frames noch Fallback verfügbar).');
-    }
+    if (frames) drawn = drawTerrainWithFrames(cam);
+    if (!drawn) drawn = drawTerrainFallback(cam);
+    if (!drawn) WARN('Nichts gezeichnet (weder Frames noch Fallback).');
 
-    rafId = requestAnimationFrame(renderFrame);
+    // Danach UI NICHT skalieren → Reset zurück auf Screen-Koordinaten
+    ctx.setTransform(1,0,0,1,0,0);
+
+    rafId = requestAnimationFrame(frame);
   }
 
-  // --- Lifecycle ----------------------------------------------------------
+  // ---- Lifecycle ---------------------------------------------------------
   async function init() {
     try {
       canvas = pickCanvas();
@@ -236,7 +193,7 @@ function drawFrame() {
       if (!ok) return;
 
       start();
-      LOG('Modul bereit; Loop läuft.');
+      LOG('Modul bereit: Loop läuft.');
     } catch (e) {
       ERR('Init-Fehler:', e);
     }
@@ -246,7 +203,7 @@ function drawFrame() {
     if (running) return;
     running = true;
     cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(renderFrame);
+    rafId = requestAnimationFrame(frame);
   }
 
   function stop() {
@@ -254,21 +211,16 @@ function drawFrame() {
     cancelAnimationFrame(rafId);
   }
 
-  // Kamera-API – wird von deinem camera.js „gefüttert“
+  // externe, optionale API (z. B. für Tests)
   function setCameraState({ x, y, zoom }) {
-    if (typeof x === 'number')   camera.x = x;
-    if (typeof y === 'number')   camera.y = y;
-    if (typeof zoom === 'number') camera.zoom = Math.max(0.25, Math.min(4, zoom));
+    const cam = (window.GameCamera ||= {});
+    if (typeof x    === 'number') cam.x    = x;
+    if (typeof y    === 'number') cam.y    = y;
+    if (typeof zoom === 'number') cam.zoom = Math.max(0.25, Math.min(4, zoom));
   }
 
-  // Expose (debug)
   window.Render = { init, start, stop, setCameraState };
+  LOG('Modul geladen (v17.9.5), wartet auf cb:game-start.');
 
-  // Events
-  window.addEventListener('cb:game-start', () => {
-    LOG('cb:game-start erhalten → init()');
-    init();
-  });
-
-  LOG('Modul geladen; wartet auf cb:game-start.');
+  window.addEventListener('cb:game-start', init);
 })();
