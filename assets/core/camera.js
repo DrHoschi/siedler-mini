@@ -1,182 +1,183 @@
 /* assets/core/camera.js  v17.9.2
- * Eingabe-Kamera für Map-Canvas (Pan + Zoom, Maus & Touch)
- * - bindet sich automatisch an <canvas id="game">
- * - verhindert Browser-Scroll/Zoom (passive:false)
- * - publiziert State in window.GameCamera
- * - informiert Renderer via Render.setCameraState(...) UND Event cb:camera-change
+ * Kamera-Control für Map-Canvas
+ * - Panning (Drag)
+ * - Zoom um Fokuspunkt (Wheel + Pinch)
+ * - Kapselt Eingaben nur auf dem Map-Canvas
+ * - Meldet Änderungen an Render.setCameraState(...)
  */
 (() => {
   'use strict';
 
   const TAG = '[camera]';
-  const log  = (...a) => console.log(TAG, ...a);
-  const warn = (...a) => console.warn(TAG, ...a);
+  const log = (...a) => (window.CBLog?.info || console.log)(TAG, ...a);
 
   // --- State --------------------------------------------------------------
-  const state = {
-    x: 0,         // Welt-Offset links
-    y: 0,         // Welt-Offset oben
-    scale: 1.0,   // Zoom-Faktor (1 = 100 %)
-    min: 0.5,
-    max: 3.0
+  const camera = {
+    x: 0,          // Welt-Offset (links/rechts)
+    y: 0,          // Welt-Offset (hoch/runter)
+    scale: 1,      // Zoomfaktor (1 = 100%)
+    min: 0.25,
+    max: 4,
+    canvas: null,
+    dragging: false,
+    lastX: 0, lastY: 0,
+    pinch: { active: false, startDist: 0, startScale: 1, cx: 0, cy: 0 }
   };
 
-  let canvas = null;
-  let dragging = false;
-  let last = { x: 0, y: 0 };
+  // Helfer: clamp
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  // Pinch
-  let pinchActive = false;
-  let pinchStartDist = 0;
-  let pinchStartScale = 1;
-
-  // Hilfen ---------------------------------------------------------------
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-  function getCanvas() {
-    return (
-      document.getElementById('game') ||
-      document.getElementById('map')  ||
-      document.querySelector('canvas[data-role="map"]') ||
-      document.querySelector('canvas')
-    );
+  // Renderer informieren (und Event feuern)
+  function flush() {
+    window.Render?.setCameraState?.({ x: camera.x, y: camera.y, zoom: camera.scale });
+    window.dispatchEvent(new CustomEvent('cb:camera-change', { detail: { x: camera.x, y: camera.y, scale: camera.scale }}));
   }
 
-  function publish() {
-    // 1) globaler Zugriff
-    window.GameCamera = Object.assign({}, state, { canvas });
-    // 2) Renderer direkt füttern
-    try { window.Render?.setCameraState?.({ x: state.x, y: state.y, zoom: state.scale }); } catch {}
-    // 3) Event (falls jemand zuhören will)
-    try {
-      window.dispatchEvent(new CustomEvent('cb:camera-change', { detail: { x: state.x, y: state.y, zoom: state.scale }}));
-    } catch {}
+  // Weltkoordinate <-> Screen
+  function screenToWorld(sx, sy) {
+    // Koordinaten relativ zum Canvas
+    const rect = camera.canvas.getBoundingClientRect();
+    const px = sx - rect.left;
+    const py = sy - rect.top;
+    // In Weltkoordinate umrechnen: erst verschiebung rückgängig, dann Skalierung
+    return {
+      x: (px / camera.scale) + camera.x,
+      y: (py / camera.scale) + camera.y,
+    };
   }
 
-  // Umrechnung: Seitendelta -> Weltkoordinate (zoomsensitiv)
-  function wheelZoom(delta, cx, cy) {
-    const old = state.scale;
-    const factor = Math.pow(1.001, -delta); // smoother als 1.1 steps
-    const next = clamp(old * factor, state.min, state.max);
+  // Fokus-Zoom: halte Weltpunkt unter (sx,sy) stabil
+  function zoomAt(factor, sx, sy) {
+    const oldScale = camera.scale;
+    const newScale = clamp(oldScale * factor, camera.min, camera.max);
+    if (newScale === oldScale) return;
 
-    if (next === old) return;
+    // Weltpunkt unter Cursor vor dem Zoom:
+    const w0 = screenToWorld(sx, sy);
 
-    // Zoom auf Punkt (cx,cy) im Canvas: Welt so verschieben, dass der Punkt „klebt“
-    const rect = canvas.getBoundingClientRect();
-    const px = (cx - rect.left);
-    const py = (cy - rect.top);
+    camera.scale = newScale;
 
-    // Weltkoord vorher/nachher
-    const wx0 = state.x + px / old;
-    const wy0 = state.y + py / old;
+    // Nach dem Zoom: gleiche Bildschirmposition muss wieder auf w0 zeigen
+    const rect = camera.canvas.getBoundingClientRect();
+    const px = sx - rect.left;
+    const py = sy - rect.top;
 
-    state.scale = next;
+    // Solve: px = (w0.x - camera.x) * scale  -> camera.x = w0.x - px/scale
+    camera.x = w0.x - (px / camera.scale);
+    camera.y = w0.y - (py / camera.scale);
 
-    const wx1 = state.x + px / next;
-    const wy1 = state.y + py / next;
-
-    state.x += (wx0 - wx1);
-    state.y += (wy0 - wy1);
-
-    publish();
+    flush();
   }
 
-  function startDrag(clientX, clientY) {
-    dragging = true;
-    last.x = clientX;
-    last.y = clientY;
+  // --- Pointer (Panning) --------------------------------------------------
+  function onPointerDown(e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    camera.dragging = true;
+    camera.lastX = e.clientX;
+    camera.lastY = e.clientY;
+    camera.canvas.setPointerCapture?.(e.pointerId);
+  }
+  function onPointerMove(e) {
+    if (!camera.dragging || camera.pinch.active) return;
+    const dx = (e.clientX - camera.lastX) / camera.scale;
+    const dy = (e.clientY - camera.lastY) / camera.scale;
+    camera.lastX = e.clientX;
+    camera.lastY = e.clientY;
+    camera.x -= dx;
+    camera.y -= dy;
+    flush();
+  }
+  function onPointerUp(e) {
+    camera.dragging = false;
+    camera.canvas.releasePointerCapture?.(e.pointerId);
   }
 
-  function moveDrag(clientX, clientY) {
-    if (!dragging) return;
-    const dx = (clientX - last.x) / state.scale;
-    const dy = (clientY - last.y) / state.scale;
-    state.x -= dx;
-    state.y -= dy;
-    last.x = clientX;
-    last.y = clientY;
-    publish();
+  // --- Wheel-Zoom ---------------------------------------------------------
+  function onWheel(e) {
+    // Nur über dem Canvas zoomen
+    if (e.target !== camera.canvas) return;
+    e.preventDefault();
+    const step = -Math.sign(e.deltaY); // up = rein
+    const factor = step > 0 ? 1.1 : 1/1.1;
+    zoomAt(factor, e.clientX, e.clientY);
   }
 
-  function endDrag() { dragging = false; }
-
-  // Pinch (2 Finger)
-  function dist2(a, b) {
+  // --- Touch / Pinch-Zoom -------------------------------------------------
+  function dist(a, b) {
     const dx = a.clientX - b.clientX;
     const dy = a.clientY - b.clientY;
     return Math.hypot(dx, dy);
   }
-
-  // --- Binding ------------------------------------------------------------
-  function bind(targetCanvas) {
-    canvas = targetCanvas || getCanvas();
-    if (!canvas) { warn('Kein Canvas gefunden – keine Kamera gebunden.'); return; }
-
-    // Maus
-    canvas.addEventListener('mousedown', (e) => {
+  function center(a, b) {
+    return { x: (a.clientX + b.clientX)/2, y: (a.clientY + b.clientY)/2 };
+  }
+  function onTouchStart(e) {
+    if (e.touches.length === 2) {
       e.preventDefault();
-      startDrag(e.clientX, e.clientY);
-    }, { passive: false });
-
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
+      camera.pinch.active = true;
+      camera.pinch.startDist = dist(e.touches[0], e.touches[1]);
+      camera.pinch.startScale = camera.scale;
+      const c = center(e.touches[0], e.touches[1]);
+      camera.pinch.cx = c.x;
+      camera.pinch.cy = c.y;
+    }
+  }
+  function onTouchMove(e) {
+    if (camera.pinch.active && e.touches.length === 2) {
       e.preventDefault();
-      moveDrag(e.clientX, e.clientY);
-    }, { passive: false });
+      const d = dist(e.touches[0], e.touches[1]);
+      const factor = d / (camera.pinch.startDist || d);
+      // Zoom um den initialen Pinch-Mittelpunkt
+      const targetScale = clamp(camera.pinch.startScale * factor, camera.min, camera.max);
+      const f = targetScale / camera.scale; // relativer Faktor von aktueller zu Zielskala
+      zoomAt(f, camera.pinch.cx, camera.pinch.cy);
+    }
+  }
+  function onTouchEnd(e) {
+    if (e.touches.length < 2) {
+      camera.pinch.active = false;
+    }
+  }
 
-    window.addEventListener('mouseup', (e) => {
-      if (!dragging) return;
-      e.preventDefault();
-      endDrag();
-    }, { passive: false });
+  // --- API ----------------------------------------------------------------
+  function bind(canvas) {
+    if (!canvas) return log('kein Canvas zum Binden gefunden');
+    camera.canvas = canvas;
+
+    // nur auf dem Canvas Interaktionen erlauben
+    canvas.style.touchAction = 'none';
+
+    // Pointer (Panning)
+    canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup',   onPointerUp,   { passive: true  });
+    window.addEventListener('pointercancel', onPointerUp, { passive: true  });
 
     // Wheel-Zoom
-    canvas.addEventListener('wheel', (e) => {
-      e.preventDefault(); // wichtig gegen Browser-Scroll/Zoom
-      wheelZoom(e.deltaY, e.clientX, e.clientY);
-    }, { passive: false });
+    canvas.addEventListener('wheel', onWheel, { passive: false });
 
-    // Touch / Pointer
-    canvas.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1) {
-        startDrag(e.touches[0].clientX, e.touches[0].clientY);
-      } else if (e.touches.length === 2) {
-        pinchActive = true;
-        pinchStartDist = dist2(e.touches[0], e.touches[1]);
-        pinchStartScale = state.scale;
-      }
-      e.preventDefault();
-    }, { passive: false });
+    // Pinch-Zoom
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+    canvas.addEventListener('touchend',   onTouchEnd,   { passive: true  });
+    canvas.addEventListener('touchcancel',onTouchEnd,   { passive: true  });
 
-    canvas.addEventListener('touchmove', (e) => {
-      if (pinchActive && e.touches.length === 2) {
-        const d = dist2(e.touches[0], e.touches[1]);
-        const factor = d / (pinchStartDist || d);
-        state.scale = clamp(pinchStartScale * factor, state.min, state.max);
-        publish();
-      } else if (e.touches.length === 1) {
-        moveDrag(e.touches[0].clientX, e.touches[0].clientY);
-      }
-      e.preventDefault();
-    }, { passive: false });
-
-    window.addEventListener('touchend', (e) => {
-      if (e.touches.length < 2) pinchActive = false;
-      if (e.touches.length === 0) endDrag();
-    }, { passive: false });
-
-    // Initial publish (Renderer bekommt Startwerte)
-    publish();
     log('bereit');
+    flush(); // initialen Zustand pushen
   }
 
-  // Public API
-  window.GameCamera = Object.assign({}, state, { bind });
-
-  // Auto-bind, sobald DOM steht
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => bind());
-  } else {
-    bind();
+  function set(x, y, scale) {
+    if (typeof x === 'number') camera.x = x;
+    if (typeof y === 'number') camera.y = y;
+    if (typeof scale === 'number') camera.scale = clamp(scale, camera.min, camera.max);
+    flush();
   }
+
+  // Expose
+  window.GameCamera = {
+    ...camera,
+    bind,
+    set,
+    toWorld: screenToWorld
+  };
 })();
