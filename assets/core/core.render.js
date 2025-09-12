@@ -1,191 +1,241 @@
-/*! core.render.js – v17.9.4
- *  Aufgaben:
- *  - Auf cb:game-start warten oder sofort starten, wenn schon gefeuert.
- *  - Tileset-Frames beziehen (vom Asset-Layer ODER via FIX B Fallback).
- *  - Terrain zuverlässig zeichnen (ein Pattern als Tapete), damit die Map sichtbar ist.
- *  - Keine UI-Elemente mitschwenken/-zoomen (Canvas liegt unter den FABs).
+/* assets/core/core.render.js  v17.9.4
+ * Robuster Terrain-Renderer
+ * - wartet auf cb:game-start
+ * - lädt Frames aus tileset.terrain.json
+ * - FIX B: Fallback-Pattern aus tileset.terrain.png (erstes Frame)
+ * - zeichnet nur die Map-Canvas, UI bleibt unskaliert
  */
+(() => {
+  'use strict';
 
-(function () {
-  const LOG = (...a) => console.log("[render]", ...a);
+  const TAG = '[render]';
+  const LOG = (...a) => console.log(TAG, ...a);
+  const WARN = (...a) => console.warn(TAG, ...a);
+  const ERR = (...a) => console.error(TAG, ...a);
 
-  // --- Canvas anlegen (einmalig) -------------------------------------------
-  const ROOT_ID = "game" ; // Falls du einen anderen Root hast, hier anpassen
-  const CANVAS_ID = "map-canvas";
-  let canvas = document.getElementById(CANVAS_ID);
-  if (!canvas) {
-    const root = document.getElementById(ROOT_ID) || document.body;
-    canvas = document.createElement("canvas");
-    canvas.id = CANVAS_ID;
-    Object.assign(canvas.style, {
-      position: "absolute",
-      inset: "0",
-      zIndex: "0",            // < FABs/Overlays
-      touchAction: "none",    // Scroll/Pinch nicht vom Canvas abfangen
-      imageRendering: "auto",
-    });
-    root.prepend(canvas);
-  }
-  const ctx = canvas.getContext("2d");
+  // --- State --------------------------------------------------------------
+  let canvas, ctx, dpr = Math.max(1, window.devicePixelRatio || 1);
+  let running = false;
+  let rafId = 0;
 
-  // Size helper: immer auf Viewport volle Größe
-  function resizeToViewport() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-  }
-  resizeToViewport();
-  window.addEventListener("resize", resizeToViewport);
+  // Terrain
+  let frames = null;          // aus tileset.terrain.json
+  let tilesetImg = null;      // Image-Objekt aus tileset.terrain.png
+  let fallbackPattern = null; // CanvasPattern (FIX B)
+  let tileSize = 64;          // logical tile size (map-space)
+  let gridCols = 16, gridRows = 16;
 
-  // --- State ----------------------------------------------------------------
-  const STATE = {
-    started: false,
-    frames: null,        // { frameName: {x,y,w,h}, ... }
-    img: null,           // Image for tileset.terrain.png
-    tileSize: 64,
-    pattern: null,       // CanvasPattern for background "tapete"
-    raf: 0,
+  // Kamera (liest nur, steuert nicht die UI)
+  const camera = {
+    x: 0, y: 0, zoom: 1.0
   };
 
-  // --- Frames besorgen (vom Asset-Layer oder FIX B) -------------------------
-  const TILESET_JSON_URL = "assets/tiles/tileset.terrain.json";
-  const TILESET_IMG_URL  = "assets/tiles/tileset.terrain.png";
+  // Kleine Hilfe: sichere Canvas finden
+  function pickCanvas() {
+    // explizite IDs zuerst, dann „erstes Canvas“
+    return (
+      document.getElementById('map') ||
+      document.getElementById('game-canvas') ||
+      document.querySelector('canvas[data-role="map"]') ||
+      document.querySelector('canvas')
+    );
+  }
 
-  async function ensureFrames() {
-    if (STATE.frames && STATE.img) return true;
+  function resizeCanvas() {
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    // Falls die Canvas per CSS auf 100% läuft, nimm das Viewportmaß
+    const cssW = rect.width || window.innerWidth;
+    const cssH = rect.height || window.innerHeight;
+    canvas.width  = Math.max(1, Math.round(cssW * dpr));
+    canvas.height = Math.max(1, Math.round(cssH * dpr));
+  }
 
-    // 1) Versuch: vom (neuen) Asset-Layer lesen
+  // --- Assets laden -------------------------------------------------------
+  async function loadTilesetJson(url) {
     try {
-      const A = window.Assets || window.assets;
-      if (A && typeof A.get === "function") {
-        const meta = A.get("tileset.terrain.json") || A.get("tileset.terrain");
-        const png  = A.get("tileset.terrain.png") || A.get("tileset.terrain.image");
-        if (meta && meta.frames && png && png instanceof HTMLImageElement) {
-          STATE.frames = meta.frames;
-          STATE.tileSize = (meta.meta && meta.meta.tileSize) || 64;
-          STATE.img = png;
-          LOG("Frames vom Asset-Layer übernommen.");
-          return true;
-        }
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      frames   = json.frames || null;
+      tileSize = (json.meta && json.meta.tileSize) || 64;
+      if (json.meta && json.meta.grid) {
+        gridCols = json.meta.grid.cols || gridCols;
+        gridRows = json.meta.grid.rows || gridRows;
       }
+      LOG('Frames verfügbar (JSON)', Object.keys(frames || {}).length);
     } catch (e) {
-      // still try fallback
+      WARN('Frames aus JSON nicht lesbar → nutze Fallback. Grund:', e.message);
+      frames = null;
     }
+  }
 
-    // 2) FIX B: selbst laden (JSON + PNG)
+  function loadTilesetPng(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('PNG lädt nicht'));
+      img.src = url;
+    });
+  }
+
+  async function ensureAssets() {
+    // Pfade wie in deinen Logs
+    const jsonUrl = 'assets/tiles/tileset.terrain.json';
+    const pngUrl  = 'assets/tiles/tileset.terrain.png';
+
+    // Lade PNG zuerst (brauchen wir für beide Wege)
     try {
-      LOG("FIX B aktiv – lade Tileset JSON selbst:", TILESET_JSON_URL);
-      const resp = await fetch(TILESET_JSON_URL, { cache: "no-store" });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const json = await resp.json();
-
-      STATE.frames   = json.frames || null;
-      STATE.tileSize = (json.meta && json.meta.tileSize) || 64;
-
-      LOG("FIX B – lade PNG:", TILESET_IMG_URL);
-      STATE.img = await new Promise((resolve, reject) => {
-        const im = new Image();
-        im.onload = () => resolve(im);
-        im.onerror = reject;
-        im.src = TILESET_IMG_URL + `?t=${Date.now()}`; // Cache-Bust
-      });
-
-      LOG("Frames verfügbar (Fallback).");
-      return !!(STATE.frames && STATE.img);
-    } catch (err) {
-      console.error("[render] FIX B fehlgeschlagen:", err);
+      tilesetImg = await loadTilesetPng(pngUrl);
+      LOG('PNG geladen', pngUrl);
+    } catch (e) {
+      ERR('PNG konnte nicht geladen werden → keine Darstellung möglich.', e);
       return false;
     }
+
+    // Lade Frames (optional)
+    await loadTilesetJson(jsonUrl);
+
+    // FIX B: Fallback-Pattern anlegen (erstes Sprite in der PNG)
+    try {
+      const off = document.createElement('canvas');
+      off.width = off.height = tileSize * dpr;
+      const octx = off.getContext('2d');
+      // erstes Kachelbild (0,0) annehmen
+      octx.drawImage(
+        tilesetImg,
+        0, 0, tileSize, tileSize,
+        0, 0, off.width, off.height
+      );
+      fallbackPattern = octx.createPattern(off, 'repeat');
+      LOG('Fallback-Pattern bereit.');
+    } catch (e) {
+      WARN('Fallback-Pattern fehlgeschlagen:', e);
+      fallbackPattern = null;
+    }
+    return true;
   }
 
-  // --- Pattern (Tapete) aus erstem Terrain-Frame bauen ----------------------
-  function buildPattern() {
-    if (!STATE.frames || !STATE.img) return;
-    const first = STATE.frames["terrain_r0_c0"] || Object.values(STATE.frames)[0];
-    if (!first) return;
-
-    const tmp = document.createElement("canvas");
-    tmp.width  = first.w;
-    tmp.height = first.h;
-    const tctx = tmp.getContext("2d");
-    tctx.drawImage(
-      STATE.img,
-      first.x, first.y, first.w, first.h,
-      0, 0, first.w, first.h
-    );
-    STATE.pattern = ctx.createPattern(tmp, "repeat");
-  }
-
-  // --- Zeichnen -------------------------------------------------------------
-  function draw() {
-    resizeToViewport();
+  // --- Zeichnen -----------------------------------------------------------
+  function clear() {
+    ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
 
-    if (STATE.pattern) {
-      ctx.fillStyle = STATE.pattern;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else {
-      // Fallback-Hintergrund (dunkel) – sollte kaum noch sichtbar sein
-      ctx.fillStyle = "#0e1414";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+  function applyCamera() {
+    ctx.setTransform(dpr * camera.zoom, 0, 0, dpr * camera.zoom,
+                     Math.floor(-camera.x * dpr * camera.zoom),
+                     Math.floor(-camera.y * dpr * camera.zoom));
+  }
+
+  function drawTerrainWithFrames() {
+    // sehr einfache Demo-Matrix: fülle Bildfläche mit frame[0,0]
+    // Du kannst hier später deine echte Map-Matrix einhängen.
+    const key = 'terrain_r0_c0';
+    const f = frames && frames[key];
+    if (!f) return false;
+
+    const cols = Math.ceil((canvas.width  / dpr) / tileSize / camera.zoom) + 2;
+    const rows = Math.ceil((canvas.height / dpr) / tileSize / camera.zoom) + 2;
+
+    const startX = Math.floor(camera.x / tileSize) * tileSize;
+    const startY = Math.floor(camera.y / tileSize) * tileSize;
+
+    for (let r = -1; r < rows; r++) {
+      for (let c = -1; c < cols; c++) {
+        const dx = startX + c * tileSize;
+        const dy = startY + r * tileSize;
+        ctx.drawImage(
+          tilesetImg,
+          f.x, f.y, f.w, f.h,
+          dx, dy, tileSize, tileSize
+        );
+      }
+    }
+    return true;
+  }
+
+  function drawTerrainFallback() {
+    if (!fallbackPattern) return false;
+    ctx.save();
+    applyCamera();
+    ctx.fillStyle = fallbackPattern;
+    // groß genug füllen
+    const W = Math.ceil((canvas.width  / dpr) / camera.zoom) + tileSize * 2;
+    const H = Math.ceil((canvas.height / dpr) / camera.zoom) + tileSize * 2;
+    ctx.fillRect(camera.x - tileSize, camera.y - tileSize, W, H);
+    ctx.restore();
+    return true;
+  }
+
+  function renderFrame() {
+    if (!running) return;
+    clear();
+
+    // Terrain
+    let drawn = false;
+    if (frames) {
+      drawn = drawTerrainWithFrames();
+    }
+    if (!drawn) {
+      drawn = drawTerrainFallback();
+    }
+    if (!drawn) {
+      WARN('Nichts gezeichnet (weder Frames noch Fallback verfügbar).');
+    }
+
+    rafId = requestAnimationFrame(renderFrame);
+  }
+
+  // --- Lifecycle ----------------------------------------------------------
+  async function init() {
+    try {
+      canvas = pickCanvas();
+      if (!canvas) {
+        ERR('Keine Canvas im DOM gefunden – Abbruch.');
+        return;
+      }
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      const ok = await ensureAssets();
+      if (!ok) return;
+
+      start();
+      LOG('Modul bereit; Loop läuft.');
+    } catch (e) {
+      ERR('Init-Fehler:', e);
     }
   }
 
-  function loop() {
-    STATE.raf = window.requestAnimationFrame(loop);
-    draw();
+  function start() {
+    if (running) return;
+    running = true;
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(renderFrame);
   }
 
-  // --- Start-Sequenz --------------------------------------------------------
-  async function startRenderer() {
-    if (STATE.started) return;
-    STATE.started = true;
-
-    LOG("init() → starte, warte auf Frames/PNG.");
-    const ok = await ensureFrames();
-    if (!ok) {
-      LOG("Frames noch nicht da → Loop erst nach Erhalt starten.");
-      // kleiner Poll, falls Asset-Layer die Frames später liefert
-      const iv = setInterval(async () => {
-        if (await ensureFrames()) {
-          clearInterval(iv);
-          buildPattern();
-          LOG("Frames verfügbar → starte Loop.");
-          loop();
-        }
-      }, 300);
-      return;
-    }
-
-    buildPattern();
-    LOG("Modul bereit (v17.9.4): starte Loop.");
-    loop();
+  function stop() {
+    running = false;
+    cancelAnimationFrame(rafId);
   }
 
-  // --- Event-Wiring (früh + spät) ------------------------------------------
-  // a) Sofort starten, wenn game bereits lief (z. B. bei Reload)
-  if (window.__cb_game_started__) {
-    LOG("cb:game-start war schon da → init sofort.");
-    startRenderer();
+  // Kamera-API – wird von deinem camera.js „gefüttert“
+  function setCameraState({ x, y, zoom }) {
+    if (typeof x === 'number')   camera.x = x;
+    if (typeof y === 'number')   camera.y = y;
+    if (typeof zoom === 'number') camera.zoom = Math.max(0.25, Math.min(4, zoom));
   }
 
-  // b) Normales Ereignis
-  window.addEventListener("cb:game-start", () => {
-    window.__cb_game_started__ = true;
-    LOG("cb:game-start erhalten → init()");
-    startRenderer();
-  }, { once: true });
+  // Expose (debug)
+  window.Render = { init, start, stop, setCameraState };
 
-  // Falls die Seite den Event auf `document` feuert:
-  document.addEventListener("cb:game-start", () => {
-    window.__cb_game_started__ = true;
-    LOG("cb:game-start(document) → init()");
-    startRenderer();
-  }, { once: true });
+  // Events
+  window.addEventListener('cb:game-start', () => {
+    LOG('cb:game-start erhalten → init()');
+    init();
+  });
 
-  LOG("Modul geladen (v17.9.4) und window.Render registriert; wartet auf cb:game-start.");
-  window.Render = { start: startRenderer, _state: STATE };
+  LOG('Modul geladen; wartet auf cb:game-start.');
 })();
