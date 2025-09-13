@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-13T16:31:51.745Z",
+  "createdAt": "2025-09-13T17:38:21.496Z",
   "root": ".",
   "count": 289,
   "entries": [
@@ -269,7 +269,7 @@
     {
       "type": "file",
       "path": "assets/core/core.entities.js",
-      "size": 3870
+      "size": 9100
     },
     {
       "type": "file",
@@ -309,7 +309,7 @@
     {
       "type": "file",
       "path": "assets/core/game.js",
-      "size": 11542
+      "size": 11336
     },
     {
       "type": "file",
@@ -1314,17 +1314,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2950
+      "size": 2804
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 28648
+      "size": 28723
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 11143
+      "size": 11094
     },
     {
       "type": "file",
