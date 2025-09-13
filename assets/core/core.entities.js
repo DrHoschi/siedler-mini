@@ -100,7 +100,7 @@
     // Militär
     guardtower:  'assets/buildings/wachturm_wood.png',
     // HQ liegt in deinem Repo (noch) NICHT unter assets/buildings → Fallback:
-    hq:          'assets/tex/building/wood/hq_wood.PNG'
+    hq:          'assets/building/hq_wood.png'
   };
 
   // Cache geladener Image-Objekte
