@@ -176,7 +176,16 @@
 
     rafId = requestAnimationFrame(frame);
   }
-
+  
+// ... in deiner Frame-Funktion NACH dem Terrain:
+try {
+  if (typeof window.drawEntities === 'function') {
+    window.drawEntities(ctx);
+  }
+} catch (e) {
+  (window.CBLog?.warn || console.warn)('[render] drawEntities Fehler:', e);
+}
+  
   // ---- Lifecycle ---------------------------------------------------------
   async function init() {
     try {
