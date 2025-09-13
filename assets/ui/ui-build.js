@@ -1,224 +1,128 @@
 /* ============================================================================
- * UI Build Panel – v17.8.6
- * - Rendert Bau-Menü inkl. Kategorien, Buttons & Vorschaubildern
- * - Nutzt Events aus ui-bridge: cb:build-open / cb:build-close
- * - DISPATCH:
- *     1) Legacy:   cb:build-action  mit { action: 'place-...' }
- *     2) Modern:   cb:build:place   mit { kind: '...' }
- * - Schreibt Logs via CBLog.ok/info
- * ========================================================================== */
-
-(function () {
+ * Datei: assets/ui/ui-build.js
+ * Version: v17.9.10
+ * Zweck: Build-Panel-Icons & Aktionen
+ *  - Thumbnails aus Entities-Registry (korrekte Pfade in assets/buildings/)
+ *  - Fallback: heuristische Pfadwahl + Placeholder
+ *  - Dispatch moderner Build-Events
+ * Abhängigkeiten: (optional) window.EntitiesRegistry
+ * ============================================================================ */
+(() => {
   'use strict';
+  const TAG = '[ui-build]';
+  const LOG = (...a)=> (window.CBLog?.info||console.log)(TAG, ...a);
+  const WARN= (...a)=> (window.CBLog?.warn||console.warn)(TAG, ...a);
 
-  // -------- Logging --------------------------------------------------------
-  const LOG = {
-    ok : (msg, ...a) => (window.CBLog?.ok    || console.log   )(`[ui-build] ${msg}`, ...a),
-    info: (msg, ...a) => (window.CBLog?.info  || console.log   )(`[ui-build] ${msg}`, ...a),
-    warn: (msg, ...a) => (window.CBLog?.warn  || console.warn  )(`[ui-build] ${msg}`, ...a),
-    err : (msg, ...a) => (window.CBLog?.error || console.error )(`[ui-build] ${msg}`, ...a),
-  };
+  // --- Helfer ----------------------------------------------------------------
+  function lower(s){ return (s||'').toString().trim().toLowerCase(); }
+  function q(sel,root=document){ return root.querySelector(sel); }
+  function qa(sel,root=document){ return Array.from(root.querySelectorAll(sel)); }
 
-  // -------- Zielcontainer --------------------------------------------------
-  const PANEL = document.getElementById('build-panel');
-  if (!PANEL) {
-    LOG.err('Kein #build-panel gefunden – Abbruch.');
-    return;
-  }
+  // Sprite für ein Gebäude bestimmen (aus Registry, sonst Heuristik)
+  function resolveSprite(kind){
+    const k = lower(kind);
+    const R = window.EntitiesRegistry;
+    let sprite = null;
 
-  // -------- Datenmodell: Kategorien & Einträge -----------------------------
-  // Paths stammen aus deiner Struktur (kannst du jederzeit erweitern).
-  const CATS = [
-    {
-      title: 'Allg. / Verwaltung',
-      items: [
-        { label:'Rathaus',  action:'place-hq',
-          img:'assets/tex/building/wood/hq_wood.PNG', kind:'hq' },
-        { label:'Wohnhaus', action:'place-house',
-          img:'assets/tex/building/wood/Wohnhaus_wood1_ug0.png', kind:'house' },
-        { label:'Depot',    action:'place-depot',
-          img:'assets/tex/building/wood/depot_wood.png', kind:'depot' },
-      ]
-    },
-    {
-      title: 'Produktion / Nahrung',
-      items: [
-        { label:'Fischer',  action:'place-fisher',
-          img:'assets/tex/building/wood/fischer_wood1.PNG', kind:'fisher' },
-        { label:'Farm',     action:'place-farm',
-          img:'assets/tex/building/wood/farm_wood.png', kind:'farm' },
-        { label:'Mühle',    action:'place-windmill',
-          img:'assets/tex/building/wood/windmuehle_wood.PNG', kind:'windmill' },
-      ]
-    },
-    {
-      title: 'Produktion / Rohstoffe',
-      items: [
-        { label:'Holzfäller', action:'place-lumberjack',
-          img:'assets/tex/building/wood/lumberjack_wood.PNG', kind:'lumberjack' },
-        { label:'Steinmetz',  action:'place-stonecutter',
-          img:'assets/tex/building/wood/steinmetz_wood.png', kind:'stonecutter' },
-        { label:'Schmied',    action:'place-smith',
-          img:'assets/tex/building/wood/Schmied_wood0.png', kind:'smith' },
-      ]
-    },
-    {
-      title: 'Wohnen',
-      items: [
-        { label:'Haus', action:'place-house',
-          img:'assets/tex/building/wood/Wohnhaus_wood0_ug0.png', kind:'house' },
-      ]
-    },
-    {
-      title: 'Infrastruktur',
-      items: [
-        { label:'Straße',   action:'place-road',
-          img:'assets/tex/road/topdown_road_straight.png', kind:'road' },
-        { label:'Kurve',    action:'place-road-curve',
-          img:'assets/tex/road/topdown_road_corner.png', kind:'road-curve' },
-        { label:'Kreuzung', action:'place-road-cross',
-          img:'assets/tex/road/topdown_road_cross.png', kind:'road-cross' },
-      ]
-    },
-    {
-      title: 'Deko / Landschaft',
-      items: [
-        { label:'Gras',   action:'paint-grass',
-          img:'assets/tex/terrain/topdown_grass.PNG', kind:'grass' },
-        { label:'Wiese',  action:'paint-meadow',
-          img:'assets/tex/terrain/topdown_meadow.PNG', kind:'meadow' },
-        { label:'Fels',   action:'paint-rock',
-          img:'assets/tex/terrain/topdown_rock.PNG', kind:'rock' },
-        { label:'Sand',   action:'paint-sand',
-          img:'assets/tex/terrain/topdown_shore.PNG', kind:'sand' },
-        { label:'Wasser', action:'paint-water',
-          img:'assets/tex/terrain/sm_topdown_water0_ug0.jpeg', kind:'water' },
-      ]
-    },
-    {
-      title: 'Militär',
-      items: [
-        { label:'Wachturm', action:'place-guardtower',
-          // Achtung: Datei hat ein Leerzeichen vor "_wood"
-          img:'assets/tex/building/wood/wachturm _wood.png', kind:'guardtower' }
-      ]
-    },
-  ];
-
-  // -------- Utilities ------------------------------------------------------
-  const ce = (t, cls, html) => {
-    const el = document.createElement(t);
-    if (cls) el.className = cls;
-    if (html != null) el.innerHTML = html;
-    return el;
-  };
-
-  const fire = (type, detail) => {
-    try {
-      window.dispatchEvent(new CustomEvent(type, { detail }));
-      return true;
-    } catch (e) {
-      LOG.warn('Dispatch "%s" fehlgeschlagen: %o', type, e);
-      return false;
+    if (R && typeof R.get === 'function') {
+      const r = R.get(k);
+      sprite = r?.icon || r?.sprite || null;
     }
-  };
 
-  function makeButton({label, img, action, kind}) {
-    const b = ce('button', 'bm-btn');
-    b.type = 'button';
-    b.setAttribute('aria-label', label);
-    b.dataset.action = action;
-    b.dataset.kind = kind || '';
+    if (!sprite) {
+      // Heuristik: bevorzugt exakt in assets/buildings/
+      // Beispiele aus deiner filelist: rathaus_wood1.png, depot_wood.png, hq_wood.png, wohnhaus_wood0_ug0.png, farm_wood.png, …
+      const guesses = [
+        `assets/buildings/${k}.png`,
+        `assets/buildings/${k}_wood.png`,
+        `assets/buildings/${k}_wood0.png`,
+        `assets/buildings/${k}_wood1.png`,
+        `assets/buildings/${k}_stone.png`,
+        `assets/buildings/${k}_stone1.png`,
+      ];
+      // Spezialfälle (Mapping)
+      const map = {
+        'house': 'assets/buildings/wohnhaus_wood0_ug0.png',
+        'wohnhaus': 'assets/buildings/wohnhaus_wood0_ug0.png',
+        'rathaus': 'assets/buildings/rathaus_wood1.png',
+        'depot': 'assets/buildings/depot_wood.png',
+        'farm': 'assets/buildings/farm_wood.png',
+        'hq': 'assets/buildings/hq_wood.png',
+        'fisher': 'assets/buildings/fischer_wood1.png',
+        'steinmetz': 'assets/buildings/steinmetz_wood.png',
+        'schmied': 'assets/buildings/schmied_wood0.png',
+        'windmuehle': 'assets/buildings/windmuehle_wood.png',
+        'wachturm': 'assets/buildings/wachturm_wood.png',
+        'lumberjack': 'assets/buildings/lumberjack_wood.png',
+        'baecker': 'assets/buildings/baecker_wood.png'
+      };
+      if (map[k]) sprite = map[k];
+      else sprite = guesses[0];
+    }
+    return sprite;
+  }
 
-    const fig = ce('div','bm-thumb');
-    fig.style.backgroundImage = `url("${img}")`;
+  function setThumb(el, kind){
+    const box = el.querySelector('[data-thumb]') || el;
+    const src = resolveSprite(kind);
+    // Wir setzen als CSS-Background, damit Layout stabil bleibt
+    box.style.backgroundImage = `url("${src}")`;
+    box.style.backgroundSize  = 'cover';
+    box.style.backgroundPosition = 'center';
+    box.style.backgroundRepeat = 'no-repeat';
+    box.setAttribute('data-thumb-src', src);
+  }
 
-    const cap = ce('div','bm-cap', label);
-    b.append(fig, cap);
+  // Build-Action dispatchen (modern & legacy)
+  function dispatchPlace(kind){
+    const detail = { kind };
+    window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
+    window.dispatchEvent(new CustomEvent('cb:build-action', { detail: { action: `place-${kind}` }}));
+  }
 
-    // Klick → beide Events feuern
-    b.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation(); // UI-Clicks nicht an Canvas weiterreichen
-
-      // 1) Legacy (Inspector-Logs zeigen diese Aktion oft)
-      const okLegacy = fire('cb:build-action', { action });
-
-      // 2) Modern (Engine/Renderer können direkt auf {kind} reagieren)
-      // Nur für echte "place-..." sinnvoll → anderenfalls optional
-      let okModern = true;
-      if ((kind && action.startsWith('place-')) || action.startsWith('paint-')) {
-        okModern = fire('cb:build:place', { kind: kind || action.replace(/^place-/, '') });
-      }
-
-      LOG.ok('Build-Aktion: %s (legacy:%s / modern:%s)', action, okLegacy?'ok':'fail', okModern?'ok':'skip');
+  // --- Init ------------------------------------------------------------------
+  function wireButtons(){
+    // Erwartete Struktur: Buttons/Items mit data-build-kind, optional data-thumb-Container
+    const items = qa('[data-build-kind]');
+    items.forEach((it)=>{
+      const kind = it.getAttribute('data-build-kind');
+      if (!kind) return;
+      setThumb(it, kind);
+      it.addEventListener('click', (ev)=>{
+        ev.preventDefault();
+        dispatchPlace(kind);
+      }, { passive: true });
     });
-
-    return b;
+    LOG('Build-Buttons verdrahtet:', items.length);
   }
 
-  function render() {
-    PANEL.innerHTML = '';
-    const wrap = ce('div', 'bm-wrap');
-
-    CATS.forEach(cat => {
-      const sec  = ce('section', 'bm-sec');
-      const head = ce('h3', 'bm-title', cat.title);
-      const grid = ce('div', 'bm-grid');
-
-      (cat.items || []).forEach(it => grid.appendChild(makeButton(it)));
-
-      sec.append(head, grid);
-      wrap.appendChild(sec);
+  function ensureThumbHolders(){
+    // Falls dein HTML nur Grauflächen hat, geben wir ihnen data-thumb, damit setThumb trifft.
+    qa('.ui-build .item, .ui-build .build-item, .build-grid .item').forEach(el=>{
+      if (!el.querySelector('[data-thumb]')) {
+        const ph = document.createElement('div');
+        ph.setAttribute('data-thumb','');
+        Object.assign(ph.style, {
+          width:'100%', height:'100%', borderRadius:'8px'
+        });
+        el.prepend(ph);
+      }
     });
-
-    PANEL.appendChild(wrap);
   }
 
-  // -------- Sichtbarkeit (via ui-bridge) -----------------------------------
-  function show(){ PANEL.style.display = 'block'; }
-  function hide(){ PANEL.style.display = 'none'; }
-
-  window.addEventListener('cb:build-open',  show);
-  window.addEventListener('cb:build-close', hide);
-
-  // -------- Inline-Styles (ergänzt deine ui-build.css) ---------------------
-  const STYLE_ID = 'bm-inline-style-1786';
-  if (!document.getElementById(STYLE_ID)) {
-    const st = document.createElement('style');
-    st.id = STYLE_ID;
-    st.textContent = `
-      #build-panel{
-        display:none; position:fixed; left:0; right:0; bottom:0;
-        max-height:55vh; background:rgba(234,236,238,.96); color:#2C3E50;
-        border-top:1px solid #BFC9CA; box-shadow:0 -12px 36px rgba(0,0,0,.18);
-        backdrop-filter: blur(4px); z-index: 2147483645; overflow:auto;
-        -webkit-overflow-scrolling: touch;
-      }
-      .bm-wrap{ padding:14px 16px 18px; }
-      .bm-sec{ margin-bottom:16px; }
-      .bm-title{ margin:0 0 8px; font:600 14px/1.2 system-ui,Segoe UI,Roboto,Arial; opacity:.9;}
-      .bm-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(94px,1fr)); gap:10px; }
-      .bm-btn{
-        display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:flex-start;
-        padding:8px; border:1px solid #BFC9CA; border-radius:8px; background:#F2F4F6; cursor:pointer;
-        user-select:none; -webkit-user-select:none;
-      }
-      .bm-btn:focus{ outline:2px solid rgba(52,152,219,.35); outline-offset:2px; }
-      .bm-thumb{ width:78px; height:60px; background:#D5D8DC center/contain no-repeat; border-radius:6px; }
-      .bm-cap{ font:500 12px/1.15 system-ui,Segoe UI,Roboto,Arial; text-align:center; color:#2C3E50; }
-      @media (orientation:landscape){
-        #build-panel{ max-height:70vh; }
-      }
-    `;
-    document.head.appendChild(st);
+  function onOpenPanel(){
+    ensureThumbHolders();
+    wireButtons();
   }
 
-  // -------- Init -----------------------------------------------------------
-  try {
-    render();
-    LOG.info('geladen (v17.8.6)');
-  } catch (e) {
-    LOG.err('Render-Fehler: %o', e);
+  // Hook an vorhandene UI-Bridge (falls die offen/zu Events schickt)
+  window.addEventListener('ui:build:open', onOpenPanel);
+  // Fallback: sofort nach DOM ready einmal versuchen
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(onOpenPanel, 0);
+  } else {
+    document.addEventListener('DOMContentLoaded', onOpenPanel);
   }
+
+  LOG('geladen (v17.9.10)');
 })();
