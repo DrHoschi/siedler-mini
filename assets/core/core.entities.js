@@ -1,119 +1,266 @@
 /* ============================================================================
- * core.entities.js — Entity-Verwaltung (leichtgewichtig)
- * Version: v17.5.0
+ * Datei: assets/core/core.entities.js
+ * Version: v17.6.0
  * Projekt: Neue Siedler
  *
- * Aufgaben
- *  - Zentrale, minimale Entity-Liste (id, type, x, y)
- *  - Platzierung über cb:place-building (von core.input/ui-build)
- *  - Kollision rudimentär: einfache Tile-Belegung (1x1-Bauten)
- *  - Repaint anstoßen (cb:request-repaint)
+ * Zweck:
+ *  - Entity-/Gebäude-Management (State + Platzierung)
+ *  - Platzhalter-Renderlogik mit Kategorienfarben
+ *  - Optionales Laden & Zeichnen von Sprites (falls vorhanden)
+ *  - Auto-Spawn eines Rathauses (hq) in der Mapmitte beim Start
  *
- * Events (listen)
- *  - cb:place-building {type,x,y}
+ * Abhängigkeiten (optional/freundlich):
+ *  - window.GameCore?.state.map  (tile/cols/rows)
+ *  - window.GameCamera           (x,y,scale) – nur für Komfortfunktionen
+ *  - core.render ruft window.drawEntities(ctx) auf
  *
- * API (global)
- *  - window.CoreEntities.list()              → Array der Entities
- *  - window.CoreEntities.findAt(x,y)         → Entity | null
- *  - window.CoreEntities.create(type,x,y)    → Entity | null
- *  - window.CoreEntities.removeAt(x,y)       → boolean
+ * Events (Eingang):
+ *  - cb:game-start
+ *  - cb:build:place {kind,x?,y?}
+ *  - cb:build-action {action:'place-<kind>'}
  *
- * Notizen
- *  - Rendering übernimmt core.render.js; hier nur Datenhaltung + Events.
- *  - Für größere Gebäude später Footprints/Tür-Offsets ergänzen.
+ * Globale API:
+ *  - window.GameEntities.place(kind, x?, y?)            → platziert auf Grid
+ *  - window.drawEntities(ctx)                           → Renderer-Hook
+ *  - window.Game.state.entities.buildings (Quelle)
  * ========================================================================== */
 (function(){
   'use strict';
 
-  var VER = 'v17.5.0';
-  var MOD = '[entities]';
-
-  // ---- Logging --------------------------------------------------------------
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){ console.warn(m);} }
-  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){ console.error(m);} }
-
-  // ---- Core-State -----------------------------------------------------------
-  var _nextId = 1;
-  var _list = [];              // {id,type,x,y}
-  var _grid = new Map();       // key "x,y" → id
-
-  function key(x,y){ return x+','+y; }
-
-  // ---- API ------------------------------------------------------------------
-  var CoreEntities = (window.CoreEntities = window.CoreEntities || {});
-
-  CoreEntities.list = function(){ return _list.slice(0); };
-
-  CoreEntities.findAt = function(x,y){
-    var id = _grid.get(key(x|0,y|0));
-    if (!id) return null;
-    for (var i=0;i<_list.length;i++){
-      if (_list[i].id === id) return _list[i];
-    }
-    return null;
+  // ---------- Logging ------------------------------------------------------
+  const TAG = '[entities]';
+  const L = {
+    info : (...a)=> (window.CBLog?.info  || console.log)(TAG, ...a),
+    ok   : (...a)=> (window.CBLog?.ok    || console.log)(TAG, ...a),
+    warn : (...a)=> (window.CBLog?.warn  || console.warn)(TAG, ...a),
+    err  : (...a)=> (window.CBLog?.error || console.error)(TAG, ...a),
   };
 
-  CoreEntities.create = function(type, x, y){
-    try{
-      x|=0; y|=0;
-      if (!type){ warn(MOD+' create: kein Typ'); return null; }
-      var k = key(x,y);
-      if (_grid.has(k)){
-        warn(MOD+' create: Feld belegt @'+k);
-        return null;
-      }
-      var e = { id:_nextId++, type:String(type), x:x, y:y };
-      _list.push(e);
-      _grid.set(k, e.id);
-      ok('[ok] Gebäude platziert: '+e.type+' at '+x+' '+y);
-      // Repaint anstoßen
-      try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch(_){}
-      return e;
-    }catch(e){
-      err(MOD+' create Fehler: '+(e&&e.message));
-      return null;
-    }
-  };
+  // Doppel-Init vermeiden
+  if (window.GameEntities?.__v === '17.6.0') {
+    L.warn('bereits initialisiert – skip');
+    return;
+  }
 
-  CoreEntities.removeAt = function(x,y){
-    x|=0; y|=0;
-    var k = key(x,y);
-    var id = _grid.get(k);
-    if (!id) return false;
-    _grid.delete(k);
-    for (var i=0;i<_list.length;i++){
-      if (_list[i].id === id){
-        _list.splice(i,1);
-        ok(MOD+' remove id='+id+' @'+k);
-        try{ window.dispatchEvent(new Event('cb:request-repaint')); }catch(_){}
-        return true;
-      }
-    }
-    return false;
-  };
+  // ---------- State/Backbone ----------------------------------------------
+  const GameCore = (window.GameCore = window.GameCore || {});
+  const GSTATE   = (GameCore.state = GameCore.state || {});
+  const mapState = (GSTATE.map = GSTATE.map || { tile:64, cols:16, rows:10 });
 
-  // ---- Event-Brücken --------------------------------------------------------
-  window.addEventListener('cb:place-building', function(ev){
-    try{
-      var d = ev?.detail||{};
-      var type = d.type||'';
-      var x = d.x|0, y = d.y|0;
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
 
-      // einfache Kollision: 1x1-Platz belegt?
-      if (CoreEntities.findAt(x,y)){
-        warn(MOD+' Platz belegt @'+x+','+y);
-        return;
-      }
-      var e = CoreEntities.create(type,x,y);
-      if (!e) return;
-
-      // Optional: hier Footprint/Tür-Handling / Produktion etc. anhängen.
-
-    }catch(e){
-      err(MOD+' cb:place-building Fehler: '+(e&&e.message));
-    }
+  const EntitiesState = (GSTATE.entities = GSTATE.entities || {
+    buildings: [],
+    _idseq   : 0
   });
 
-  ok(MOD+' Modul geladen ('+VER+')');
+  // Für Inspector/Komfort:
+  const Game = (window.Game = window.Game || {});
+  Game.state = GameCore.state;
+
+  // ---------- Kategorien & Farben -----------------------------------------
+  // Achtung: Diese Farben sind NICHT Rot/Grün (die brauchst du für "platzierbar")
+  // Passe die Zuordnung später gerne in build.categories.js o.ä. zentral an.
+  const CATEGORY_COLORS = {
+    'admin'     : '#4B6CB7', // Verwaltung / Rathaus
+    'housing'   : '#7F8C8D', // Wohnen
+    'food'      : '#B9770E', // Nahrung/Produktion
+    'resource'  : '#27AE60', // Rohstoffe
+    'infra'     : '#8E44AD', // Straßen/Infra
+    'military'  : '#C0392B', // Militär
+    'default'   : '#B3B6B7'  // Fallback
+  };
+
+  // Simple Heuristik: leite Kategorie aus kind ab (bis echte Datenstruktur kommt)
+  function inferCategory(kind='') {
+    const k = String(kind).toLowerCase();
+    if (k.includes('hq') || k.includes('rathaus')) return 'admin';
+    if (k.includes('house') || k.includes('wohn'))  return 'housing';
+    if (k.includes('farm') || k.includes('fisch'))  return 'food';
+    if (k.includes('lumber') || k.includes('wood') || k.includes('stein') || k.includes('stone'))
+      return 'resource';
+    if (k.includes('road') || k.includes('path'))   return 'infra';
+    if (k.includes('wacht') || k.includes('tower') || k.includes('guard')) return 'military';
+    return 'default';
+  }
+
+  function colorForKind(kind) {
+    const cat = inferCategory(kind);
+    return CATEGORY_COLORS[cat] || CATEGORY_COLORS.default;
+  }
+
+  // ---------- Utils --------------------------------------------------------
+  function tileSize(){ return mapState.tile || 64; }
+
+  function snapToGrid(v) {
+    const t = tileSize();
+    return Math.round(v / t) * t;
+  }
+
+  function getCanvas() {
+    return (
+      document.getElementById('game') ||
+      document.getElementById('game-canvas') ||
+      document.querySelector('canvas[data-role="map"]') ||
+      document.querySelector('canvas')
+    );
+  }
+
+  function cameraCenterWorld() {
+    const cam = window.GameCamera || {};
+    const cvs = getCanvas();
+    if (!cvs) return { x: 0, y: 0 };
+    const w = (cvs.width  / DPR) / (cam.scale || 1 || 1);
+    const h = (cvs.height / DPR) / (cam.scale || 1 || 1);
+    const cx = (cam.x || 0) + w/2;
+    const cy = (cam.y || 0) + h/2;
+    return { x: cx, y: cy };
+  }
+
+  function mapCenterWorld() {
+    const t = tileSize();
+    const cols = mapState.cols || 16;
+    const rows = mapState.rows || 10;
+    // Mitte der Map in Weltkoordinaten (linksbündige Tiles → +0.5 für Zentrum)
+    return { x: Math.floor(cols/2) * t, y: Math.floor(rows/2) * t };
+  }
+
+  // ---------- Sprite-Loader (optional) ------------------------------------
+  const SPRITE_BASE = 'assets/buildings';     // erwartet <kind>.png
+  const SPRITES = new Map();                  // kind -> Image | 'error'
+
+  function loadSprite(kind) {
+    if (!kind) return null;
+    if (SPRITES.has(kind)) return SPRITES.get(kind);
+    const img = new Image();
+    img.onload  = () => L.ok('Sprite geladen:', kind);
+    img.onerror = () => { SPRITES.set(kind, 'error'); L.warn('Sprite fehlt:', kind); };
+    img.src = `${SPRITE_BASE}/${kind}.png`;
+    SPRITES.set(kind, img);
+    return img;
+  }
+
+  // ---------- Platzieren ---------------------------------------------------
+  function place(kind, x, y) {
+    if (!kind) return null;
+
+    // Falls Koordinaten fehlen → Kamera-Mitte
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      const c = cameraCenterWorld();
+      x = c.x; y = c.y;
+    }
+
+    const t = tileSize();
+    const b = {
+      id: ++EntitiesState._idseq,
+      kind,
+      x: snapToGrid(x),
+      y: snapToGrid(y),
+      w: t,
+      h: t
+    };
+
+    // Sprite optional anstoßen
+    loadSprite(kind);
+
+    EntitiesState.buildings.push(b);
+    L.info('platziert:', kind, '→', b.x, b.y, '(gesamt:', EntitiesState.buildings.length, ')');
+    return b;
+  }
+
+  // ---------- Auto-Spawn HQ ------------------------------------------------
+  function ensureHQ() {
+    const hasHQ = EntitiesState.buildings.some(b => b.kind === 'hq' || b.kind === 'rathaus');
+    if (hasHQ) return;
+    const c = mapCenterWorld();
+    place('hq', c.x, c.y);
+    L.ok('Auto-Spawn HQ @ Mapmitte:', c.x, c.y);
+  }
+
+  // ---------- Build-Events binden -----------------------------------------
+  function onBuildPlace(ev) {
+    const d = ev?.detail || {};
+    place(d.kind, d.x, d.y);
+  }
+  function onBuildAction(ev) {
+    const d = ev?.detail || {};
+    const act = d.action || '';
+    if (!act.startsWith('place-')) return;
+    const kind = act.slice('place-'.length);
+    place(kind);
+  }
+
+  window.addEventListener('cb:build:place',  onBuildPlace);
+  window.addEventListener('build:action',    onBuildAction);
+  window.addEventListener('cb:build-action', onBuildAction);
+
+  // Beim Spielstart HQ sichern (einmalig, nach Map-Load)
+  let didStartHook = false;
+  window.addEventListener('cb:game-start', () => {
+    if (didStartHook) return;
+    didStartHook = true;
+    // Versuche Map-Meta aus DOM/State nachzureichen (falls noch leer)
+    try {
+      const cvs = getCanvas();
+      const url = cvs?.getAttribute('data-map');
+      if (url && !mapState.url) mapState.url = url;
+    } catch(_) {}
+    // HQ setzen
+    ensureHQ();
+  });
+
+  // ---------- Zeichnen -----------------------------------------------------
+  // Hinweis: Bitte NICHT in jedem Frame loggen (würde spam erzeugen).
+  function drawPlaceholder(ctx, b) {
+    const color = colorForKind(b.kind);
+    ctx.save();
+    // Feste Transparenz, damit Terrain noch leicht sichtbar bleibt
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 2;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+
+    // einfache „Dach-/Schatten“-Andeutung
+    ctx.beginPath();
+    ctx.moveTo(b.x + 6, b.y + b.h - 6);
+    ctx.lineTo(b.x + b.w - 6, b.y + b.h - 6);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#111';
+    ctx.font = '12px system-ui, sans-serif';
+    const label = (b.kind || '???').toUpperCase();
+    ctx.fillText(label, b.x + 6, b.y + Math.max(14, Math.floor(b.h * 0.4)));
+    ctx.restore();
+  }
+
+  function drawEntities(ctx) {
+    const list = EntitiesState.buildings;
+    if (!list || list.length === 0) return;
+
+    for (const b of list) {
+      const spr = SPRITES.get(b.kind);
+      if (spr && spr !== 'error' && spr.complete) {
+        // Sprite vorhanden → benutze es
+        ctx.drawImage(spr, b.x, b.y, b.w, b.h);
+      } else {
+        // Platzhalter
+        drawPlaceholder(ctx, b);
+      }
+    }
+  }
+
+  // Renderer-Hook global machen
+  window.drawEntities = drawEntities;
+
+  // ---------- Öffentliche API ---------------------------------------------
+  window.GameEntities = {
+    __v: '17.6.0',
+    place
+  };
+
+  // ---------- Abschluss-Log -----------------------------------------------
+  L.info('Modul geladen (v17.6.0) – bereit. Platzhalter aktiv, HQ-Autospawn aktiv.');
 })();
