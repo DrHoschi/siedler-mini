@@ -1,282 +1,257 @@
 /* ============================================================================
+ * Neue Siedler – Entities (Diagnose)
  * Datei: assets/core/core.entities.js
- * Version: v17.6.1
- * Projekt: Neue Siedler
+ * Version: v17.6.2-diag
  *
  * Zweck:
- *  - Einheitliche Entities/Building-Schicht (State + Zeichnen)
- *  - Platzhalter-Render (immer sichtbar) + Kategorie-Farben
- *  - Auto-Spawn Rathaus in Kartenmitte bei Spielstart
- *  - Event-Brücke: legacy (build:action) & modern (cb:build:place)
- *  - Stellt window.drawEntities(ctx) bereit (vom Renderer aufgerufen)
- *
- * Abhängigkeiten:
- *  - window.GameCamera (x, y, zoom/scale) – für Kamera-Mitte
- *  - core.render ruft window.drawEntities(ctx) JE FRAME auf (Welt-Transform aktiv!)
- * ============================================================================ */
+ *  - Entities-State + Platzieren
+ *  - Sprite-Lookup via Registry (falls vorhanden)
+ *  - Platzhalter-Render in Kategoriefarben (fallback)
+ *  - Explizite Bindung: window.drawEntities(ctx) → garantiert vorhanden
+ *  - Auto-Spawn "rathaus" in Kartenmitte beim Spielstart
+ *  - Sichtbares Debug (Fadenkreuz + Koordinaten auf erstem Gebäude)
+ * ========================================================================== */
 
-(() => {
+(function(){
   'use strict';
 
-  const TAG = '[entities]';
-  const LOG = {
-    ok  : (...a)=> (window.CBLog?.ok    || console.log)(TAG, ...a),
-    info: (...a)=> (window.CBLog?.info  || console.log)(TAG, ...a),
-    warn: (...a)=> (window.CBLog?.warn  || console.warn)(TAG, ...a),
-    err : (...a)=> (window.CBLog?.error || console.error)(TAG, ...a),
-  };
+  const LOG  = (...a)=> (window.CBLog?.info  || console.log)('[entities]', ...a);
+  const OK   = (...a)=> (window.CBLog?.ok    || console.log)('[entities]', ...a);
+  const WARN = (...a)=> (window.CBLog?.warn  || console.warn)('[entities]', ...a);
+  const ERR  = (...a)=> (window.CBLog?.error || console.error)('[entities]', ...a);
 
-  // Mehrfache Inits vermeiden
-  if (window.Entities?.__ready) {
-    LOG.info('bereits initialisiert – skip.');
-    return;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Registry (Kategorien + Mapping)
-  // ---------------------------------------------------------------------------
-  const REGISTRY = {
-    version: '1.0.0',
-    // Diese Farben kollidieren NICHT mit „platzierbar / nicht platzierbar“.
-    categories: {
-      admin : { name: 'Verwaltung',         fill: '#6C5CE7', stroke: '#3B2DD8' }, // violett
-      food  : { name: 'Nahrung',            fill: '#F39C12', stroke: '#C97E00' }, // orange
-      res   : { name: 'Rohstoffe',          fill: '#00B894', stroke: '#009077' }, // türkis
-      infra : { name: 'Infrastruktur',      fill: '#7F8C8D', stroke: '#566364' }, // grau
-      deco  : { name: 'Deko/Landschaft',    fill: '#2ECC71', stroke: '#1F9E52' }, // grün (UI, nicht „platzierbar“)
-      mili  : { name: 'Militär',            fill: '#E74C3C', stroke: '#B03A2E' }, // rot (UI)
-      house : { name: 'Wohnen',             fill: '#3498DB', stroke: '#2875A5' }, // blau
-      unknown: { name: 'Unbekannt',         fill: '#F1C40F', stroke: '#B7950B' }, // gelb
-    },
-    // Bekannte Buildings → Kategorie + Spritepfad
-    buildings: {
-      rathaus      : { cat:'admin', sprite:'assets/buildings/rathaus_wood1.png' },
-      hq           : { cat:'mili',  sprite:'assets/tex/building/wood/hq_wood.PNG' },
-      house        : { cat:'house', sprite:'assets/buildings/wohnhaus_wood0_ug0.png' },
-      depot        : { cat:'admin', sprite:'assets/buildings/depot_wood.png' },
-      farm         : { cat:'food',  sprite:'assets/buildings/farm_wood.png' },
-      fisher       : { cat:'food',  sprite:'assets/buildings/fischer_wood1.png' },
-      lumberjack   : { cat:'res',   sprite:'assets/buildings/lumberjack_wood.png' },
-      stonecutter  : { cat:'res',   sprite:'assets/buildings/steinmetz_wood.png' },
-      smith        : { cat:'res',   sprite:'assets/buildings/schmied_wood0.png' },
-      windmill     : { cat:'food',  sprite:'assets/buildings/windmuehle_wood.png' },
-      guardtower   : { cat:'mili',  sprite:'assets/buildings/wachturm_wood.png' },
-      // weitere kannst du später hier ergänzen…
-    }
-  };
-
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------------------
   // State
-  // ---------------------------------------------------------------------------
-  const DPR = Math.max(1, window.devicePixelRatio || 1);
-  const Entities = (window.Entities = {
-    __ready: false,
-    list: [],           // {id, kind, x, y, w, h, cat, sprite?, alpha?}
-    idseq: 0,
-    tile: 64,           // Default; kann von außen angepasst werden
-    debug: false,       // true → zeigt Markierungen
-    REGISTRY
+  // ------------------------------------------------------------------------
+  const Entities = (window.Entities = window.Entities || {});
+  const state = (Entities.state = Entities.state || {
+    list: [],          // {id, kind, x, y, w, h, cat?, sprite?}
+    _id: 0,
+    tile: 64
   });
 
+  // Registry (falls vorhanden)
+  const Reg = window.EntitiesRegistry || null;
+
+  // Kategoriefarben (Fallback, falls Registry keine liefert)
+  const CAT_COLORS = {
+    'verwaltung' : '#A77EF1', // lila
+    'nahrung'    : '#F6B74E', // amber
+    'rohstoff'   : '#4EC1B3', // türkis
+    'wohnen'     : '#3FA0F7', // blau
+    'infrastruktur':'#7D8B99',// grau
+    'landschaft' : '#6BBF59', // grün (ok, spätere Platzier-Logik nutzt eigene rot/grün)
+    'militaer'   : '#E96A6A', // rot (nur Kategoriefarbe, Platzierbarkeit separat)
+    'default'    : '#FFCC66'
+  };
+
   // Sprite-Cache
-  const SPRITES = new Map(); // kind → HTMLImageElement | 'error'
+  const SPRITES = new Map(); // kind -> HTMLImageElement | 'error'
 
-  // ---------------------------------------------------------------------------
-  // Utils
-  // ---------------------------------------------------------------------------
-  function snap64(v) { return Math.round(v / Entities.tile) * Entities.tile; }
+  // Hilfen
+  function clampNum(v, d){ return (typeof v === 'number' && isFinite(v)) ? v : d; }
+  function snap(v, tile){ return Math.round(v / tile) * tile; }
 
-  function canvasEl() {
+  function getCanvas() {
     return (
       document.getElementById('game') ||
-      document.getElementById('game-canvas') ||
+      document.getElementById('map')  ||
       document.querySelector('canvas[data-role="map"]') ||
       document.querySelector('canvas')
     );
   }
 
+  function getMapTileSize() {
+    // Versuche aus GameCore.state.map.tile, sonst fallback 64
+    const t = window.GameCore?.state?.map?.tile;
+    return clampNum(t, state.tile);
+  }
+
   function cameraCenterWorld() {
     const cam = window.GameCamera || {};
-    const cvs = canvasEl();
+    const cvs = getCanvas();
     if (!cvs) return { x: 0, y: 0 };
 
-    const scale = cam.zoom ?? cam.scale ?? 1;
-    const w = (cvs.width  / DPR) / scale;
-    const h = (cvs.height / DPR) / scale;
-    const x = (cam.x || 0) + w / 2;
-    const y = (cam.y || 0) + h / 2;
-    return { x, y };
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const scale = clampNum(cam.zoom ?? cam.scale, 1);
+    const w = (cvs.width  / dpr) / scale;
+    const h = (cvs.height / dpr) / scale;
+    return { x: clampNum(cam.x,0) + w/2, y: clampNum(cam.y,0) + h/2 };
   }
 
-  function resolveCat(kind) {
-    const meta = REGISTRY.buildings[kind];
-    return (meta && meta.cat) || 'unknown';
+  // ------------------------------------------------------------------------
+  // Registry-Lookups
+  // ------------------------------------------------------------------------
+  function resolveKindMeta(kind) {
+    // Liefert { kind, cat, sprite, w, h } – so gut wie möglich
+    let meta = { kind, cat: 'default', sprite: null, w: state.tile, h: state.tile };
+
+    if (Reg?.getBuilding) {
+      const r = Reg.getBuilding(kind); // kann null sein
+      if (r) {
+        meta.cat = r.category || meta.cat;
+        meta.sprite = r.sprite || null;
+        meta.w = clampNum(r.size?.w, meta.w);
+        meta.h = clampNum(r.size?.h, meta.h);
+      }
+    }
+
+    if (!meta.sprite && Reg?.getSpritePath) {
+      meta.sprite = Reg.getSpritePath(kind) || null;
+    }
+
+    return meta;
   }
 
-  function resolveSprite(kind) {
-    const meta = REGISTRY.buildings[kind];
-    return meta?.sprite || null;
-  }
-
-  function catColors(kind) {
-    const catKey = resolveCat(kind);
-    return REGISTRY.categories[catKey] || REGISTRY.categories.unknown;
-  }
-
-  function loadSprite(kind) {
-    const path = resolveSprite(kind);
-    if (!path) return 'error';
+  function loadSprite(kind, spritePath) {
+    if (!kind) return null;
     if (SPRITES.has(kind)) return SPRITES.get(kind);
 
+    if (!spritePath) {
+      // kein Pfad → hard fail cache, damit wir nicht spammen
+      SPRITES.set(kind, 'error');
+      return 'error';
+    }
+
     const img = new Image();
-    img.onload  = () => LOG.info('Sprite geladen:', kind, '←', path);
-    img.onerror = () => { SPRITES.set(kind, 'error'); LOG.warn('Sprite fehlt / lädt nicht:', kind, path); };
-    img.src = path;
+    img.onload  = () => OK('Sprite geladen:', kind, '←', spritePath);
+    img.onerror = () => { SPRITES.set(kind, 'error'); WARN('Sprite fehlt:', kind, 'pfad:', spritePath); };
+    img.src = spritePath;
     SPRITES.set(kind, img);
     return img;
   }
 
-  // ---------------------------------------------------------------------------
-  // API
-  // ---------------------------------------------------------------------------
-  function place(kind, x, y, opts={}) {
+  // ------------------------------------------------------------------------
+  // Platzieren
+  // ------------------------------------------------------------------------
+  function place(kind, x, y, opts) {
     if (!kind) return null;
 
+    const tile = getMapTileSize();
+    const meta = resolveKindMeta(kind);
+
+    // Koordinaten: default Kameramitte
     if (typeof x !== 'number' || typeof y !== 'number') {
       const c = cameraCenterWorld();
       x = c.x; y = c.y;
     }
 
-    const t = Entities.tile;
     const b = {
-      id   : ++Entities.idseq,
+      id: ++state._id,
       kind,
-      cat  : resolveCat(kind),
-      x    : snap64(x),
-      y    : snap64(y),
-      w    : t,
-      h    : t,
-      alpha: typeof opts.alpha === 'number' ? opts.alpha : 1
+      cat: meta.cat || 'default',
+      x: snap(x, tile),
+      y: snap(y, tile),
+      w: clampNum(meta.w, tile),
+      h: clampNum(meta.h, tile)
     };
 
-    // Sprite anstoßen
-    loadSprite(kind);
+    // Sprite (optional)
+    if (meta.sprite) loadSprite(kind, meta.sprite);
 
-    Entities.list.push(b);
-    LOG.ok('platziert:', kind, '→', b.x, b.y, '(gesamt:', Entities.list.length, ')');
+    state.list.push(b);
+    OK('platziert:', kind, '→', b.x, b.y, '(gesamt:', state.list.length, ')');
     return b;
   }
 
-  // Legacy-Komfort
-  window.Game = window.Game || {};
-  window.Game.place = place;
+  // Auto-Spawn Rathaus (einmalig) nach Spielstart
+  let _autoRathausDone = false;
+  function autoSpawnRathaus() {
+    if (_autoRathausDone) return;
+    _autoRathausDone = true;
 
-  // ---------------------------------------------------------------------------
-  // Zeichnen (vom Renderer aufgerufen – Welt-Transform ist aktiv!)
-  // ---------------------------------------------------------------------------
-  function drawEntities(ctx) {
-    const list = Entities.list;
+    const tile = getMapTileSize();
+    // Kartenmitte per Kameramitte approximieren (Mapgröße kennen wir nicht sicher)
+    const c = cameraCenterWorld();
+    const b = place('rathaus', c.x, c.y);
+    OK('Rathaus automatisch platziert (Kartenmitte):', b.x, b.y);
+  }
+
+  // ------------------------------------------------------------------------
+  // Render
+  // ------------------------------------------------------------------------
+  function pickPlaceholderColor(cat) {
+    // aus Registry, falls vorhanden
+    if (Reg?.getCategoryColor) {
+      const col = Reg.getCategoryColor(cat);
+      if (col) return col;
+    }
+    return CAT_COLORS[cat] || CAT_COLORS.default;
+  }
+
+  function drawPlaceholder(ctx, b) {
+    const col = pickPlaceholderColor(b.cat);
+    ctx.save();
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.88;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0,0,0,.65)';
+    ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+    ctx.fillStyle = '#111';
+    ctx.globalAlpha = 1;
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText(b.kind, b.x + 6, b.y + Math.max(14, Math.floor(b.h/2)));
+    ctx.restore();
+  }
+
+  function drawDebugMarker(ctx, b) {
+    // kleines Fadenkreuz & Koordinaten (nur auf dem ersten Gebäude im Listendurchlauf)
+    ctx.save();
+    ctx.strokeStyle = 'magenta';
+    ctx.lineWidth = 2;
+    const cx = b.x + Math.floor(b.w/2);
+    const cy = b.y + Math.floor(b.h/2);
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy);
+    ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8);
+    ctx.stroke();
+    ctx.fillStyle = 'magenta';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText(`(${b.x},${b.y})`, b.x + 4, b.y - 6);
+    ctx.restore();
+  }
+
+  function draw(ctx) {
+    const list = state.list;
     if (!list || list.length === 0) return;
 
+    let first = true;
+
     for (const b of list) {
-      const col = catColors(b.kind);
-      const spr = SPRITES.get(b.kind) || loadSprite(b.kind);
-
-      // 1) Platzhalter (immer) – leicht sichtbar, abgerundet
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle   = col.fill;
-      ctx.strokeStyle = col.stroke;
-      ctx.lineWidth   = 2;
-
-      // runde Ecken
-      const r = 8;
-      const x = b.x, y = b.y, w = b.w, h = b.h;
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Label
-      ctx.fillStyle = '#0d1117';
-      ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText(b.kind, x + 6, y + h/2 + 4);
-      ctx.restore();
-
-      // 2) Sprite (falls vorhanden) – leicht über dem Platzhalter
-      if (spr && spr !== 'error' && spr.complete) {
-        ctx.save();
-        ctx.globalAlpha = 0.95;
-        ctx.drawImage(spr, b.x, b.y, b.w, b.h);
-        ctx.restore();
+      const img = SPRITES.get(b.kind);
+      if (img && img !== 'error' && img.complete) {
+        ctx.drawImage(img, b.x, b.y, b.w, b.h);
+      } else {
+        drawPlaceholder(ctx, b);
       }
 
-      // Debug-Overlay (optional)
-      if (Entities.debug) {
-        ctx.save();
-        ctx.strokeStyle = '#ff00ff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
-        ctx.beginPath();
-        ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + b.w, b.y + b.h);
-        ctx.moveTo(b.x + b.w, b.y); ctx.lineTo(b.x, b.y + b.h);
-        ctx.stroke();
-        ctx.restore();
+      if (first) {
+        drawDebugMarker(ctx, b);
+        first = false;
       }
     }
   }
 
-  // Exponieren (Renderer ruft das direkt auf)
-  window.drawEntities = drawEntities;
+  // ------------------------------------------------------------------------
+  // Exports & Bindings
+  // ------------------------------------------------------------------------
+  Entities.place = place;
+  Entities.draw  = draw;
 
-  // ---------------------------------------------------------------------------
-  // Auto-Spawn Rathaus (bei Spielstart) – Mitte des sichtbaren Bereichs
-  // ---------------------------------------------------------------------------
-  function autoCenterRathaus() {
-    // Schon vorhanden? – dann nicht doppeln
-    if (Entities.list.some(e => e.kind === 'rathaus')) return;
-
-    const c = cameraCenterWorld();
-    const b = place('rathaus', c.x, c.y);
-    LOG.info('Rathaus automatisch platziert (Kartenmitte):', b.x, b.y);
+  // **WICHTIG**: Globaler Bindepunkt, den core.render.js aufruft
+  if (typeof window.drawEntities !== 'function') {
+    window.drawEntities = (ctx) => Entities.draw(ctx);
+    OK('drawEntities global gebunden → Renderer kann Entities zeichnen.');
   }
 
-  // ---------------------------------------------------------------------------
-  // Events binden
-  // ---------------------------------------------------------------------------
-  // Moderner Weg
-  window.addEventListener('cb:build:place', (ev) => {
-    const d = ev?.detail || {};
-    if (!d.kind) return;
-    place(d.kind, d.x, d.y);
-  });
-
-  // Legacy/Fallback
-  function onBuildAction(ev) {
-    const d = ev?.detail || {};
-    const act = d.action || '';
-    if (!act || !act.startsWith('place-')) return;
-    const kind = act.slice('place-'.length);
-    place(kind);
-  }
-  window.addEventListener('build:action', onBuildAction);
-  window.addEventListener('cb:build-action', onBuildAction);
-
-  // Spielstart → Rathaus in die Mitte
+  // Auto-Spawn Rathaus beim Spielstart
   window.addEventListener('cb:game-start', () => {
-    // Ein Tick warten, damit Kamera/Canvas Maße stehen
-    setTimeout(autoCenterRathaus, 0);
+    // Tilegröße ggf. aus Map übernehmen
+    const t = window.GameCore?.state?.map?.tile;
+    if (t) state.tile = clampNum(t, state.tile);
+    autoSpawnRathaus();
   });
 
-  Entities.__ready = true;
-  LOG.info('Modul geladen (v17.6.1).');
+  OK('Modul geladen (v17.6.2-diag).');
 })();
