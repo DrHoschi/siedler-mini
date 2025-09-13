@@ -1,227 +1,267 @@
 /* ============================================================================
- * core/game.js — v18.0.0
- * Neue Siedler – GameCore (Engine-Light) + Gebäude-Bridge (integrated)
+ * Neue Siedler – Core Engine
+ * Datei: core/game.js
+ * Version: v18.0.0
  *
- * Ziele:
- *  - Stellt GameCore bereit (State, Entities, Events, API)
- *  - Verarbeitet Bau-Events (modern + legacy)
- *  - Definiert window.drawEntities(ctx) für core.render.js
- *  - Kompatibel zur Legacy-Fassade (root game.js → "Legacy-Patch übersprungen")
- * ========================================================================== */
+ * Zweck
+ *  - Zentrale GameCore-Engine (State + Events + Loop)
+ *  - Integrierte Gebäude-Bridge (Platzierung + Zeichnen)
+ *  - Saubere API für Legacy-Fassade (root/game.js) & Inspector
+ *
+ * Abhängigkeiten (optional, falls vorhanden)
+ *  - assets/core/core.map.js       → GameMap.load(json) / Map-Infos
+ *  - assets/core/camera.js         → window.GameCamera {x,y,scale}
+ *  - assets/core/core.render.js    → ruft window.drawEntities(ctx) auf
+ *  - assets/core/asset.js          → Asset-Layer (bereits bei dir vorhanden)
+ *
+ * Events (Eingang)
+ *  - cb:game-start                 → Engine.start() + Map laden (aus #game[data-map])
+ *  - cb:build:place {kind,x,y}     → Gebäude platzieren
+ *  - cb:build-action {action}      → Fallback ("place-XYZ")
+ *
+ * API (Ausgang / global)
+ *  - window.GameCore.Engine.start(mapUrl?)
+ *  - window.GameCore.Engine.stop()
+ *  - window.GameCore.state         → { map, entities, ui, ... }
+ *  - window.Game.place(kind, x?, y?) → Komfort-Proxy für Legacy/Inspector
+ *  - window.drawEntities(ctx)      → vom Renderer aufgerufen
+ * ============================================================================ */
 
-(() => {
+(function(){
   'use strict';
 
   // ---------- Logging ------------------------------------------------------
-  const L = (t, ...a) => (window.CBLog?.info || console.log)(t, ...a);
-  const O = (t, ...a) => (window.CBLog?.ok   || console.log)(t, ...a);
-  const W = (t, ...a) => (window.CBLog?.warn || console.warn)(t, ...a);
-  const E = (t, ...a) => (window.CBLog?.err  || console.error)(t, ...a);
-  const TAG = '[GameCore]';
-
-  // ---------- Namespace ----------------------------------------------------
-  const GameCore = (window.GameCore = window.GameCore || {});
-  const Game     = (window.Game     = window.Game     || {}); // Legacy-API passthrough
-
-  // ---------- Konstante / Defaults ----------------------------------------
-  const TILE_SIZE = 64; // muss zum Terrain-Tileset passen
-  const DPR = Math.max(1, window.devicePixelRatio || 1);
-
-  // Kinds → Sprites (an deine Dateistruktur angepasst)
-  // Wenn ein Eintrag fehlt, wird ein Platzhalter gezeichnet.
-  const SPRITE_MAP = {
-    hq:           'assets/tex/building/wood/hq_wood.PNG',
-    house:        'assets/tex/building/wood/Wohnhaus_wood1_ug0.png',
-    depot:        'assets/tex/building/wood/depot_wood.png',
-    fisher:       'assets/tex/building/wood/fischer_wood1.PNG',
-    farm:         'assets/tex/building/wood/farm_wood.png',
-    windmill:     'assets/tex/building/wood/windmuehle_wood.PNG',
-    lumberjack:   'assets/tex/building/wood/lumberjack_wood.PNG',
-    stonecutter:  'assets/tex/building/wood/steinmetz_wood.png',
-    smith:        'assets/tex/building/wood/Schmied_wood0.png',
-    guardtower:   'assets/tex/building/wood/wachturm _wood.png', // (Leerzeichen bestätigt)
+  const L = {
+    info : (...a)=> (window.CBLog?.info  || console.log)('[GameCore]', ...a),
+    ok   : (...a)=> (window.CBLog?.ok    || console.log)('[GameCore]', ...a),
+    warn : (...a)=> (window.CBLog?.warn  || console.warn)('[GameCore]', ...a),
+    err  : (...a)=> (window.CBLog?.error || console.error)('[GameCore]', ...a),
   };
 
-  // Aktionen, die KEIN Gebäude erzeugen (Maler/Wege etc.) – werden ignoriert
-  const NON_BUILD_ACTIONS = new Set([
-    'road', 'road-curve', 'road-cross',
-    'grass', 'meadow', 'rock', 'sand', 'water',
-    'paint-grass', 'paint-meadow', 'paint-rock', 'paint-sand', 'paint-water'
-  ]);
+  // Doppel-Init verhindern
+  if (window.GameCore?.Engine) {
+    L.warn('bereits initialisiert – übersprungen.');
+    return;
+  }
 
-  // ---------- State --------------------------------------------------------
-  const STATE = (GameCore.state = GameCore.state || {
+  // ---------- Grundgerüst / State -----------------------------------------
+  const GameCore = (window.GameCore = window.GameCore || {});
+  const state = (GameCore.state = GameCore.state || {
+    version: '18.0.0',
     map: {
-      url:  '',      // aktuelle Map-URL (informativ)
-      tile: TILE_SIZE
+      tile: 64,     // Tile-Größe (logisch)
+      cols: 16,
+      rows: 16,
+      url : null,   // gesetzte Map-URL
+      data: null,   // geladene JSON-Map (falls vorhanden)
     },
     entities: {
-      buildings: []  // [{id, kind, x, y, w, h, sprite?}]
+      buildings: [],  // {id, kind, x, y, w, h}
+      _idseq   : 0,
     },
-    _seq: 0
+    ui: {
+      started: false,
+    }
   });
 
-  // ---------- Sprite-Cache -------------------------------------------------
-  const SPRITES = new Map(); // kind -> HTMLImageElement | 'error'
+  // ---------- Utils --------------------------------------------------------
+  const DPR = Math.max(1, window.devicePixelRatio || 1);
 
-  function getSprite(kind) {
-    // Cache hit
+  function snapToGrid(v) {
+    const t = state.map.tile || 64;
+    return Math.round(v / t) * t;
+  }
+
+  function getCanvas() {
+    return (
+      document.getElementById('game') ||
+      document.getElementById('game-canvas') ||
+      document.querySelector('canvas[data-role="map"]') ||
+      document.querySelector('canvas')
+    );
+  }
+
+  function cameraCenterWorld() {
+    const cam = window.GameCamera;
+    const cvs = getCanvas();
+    if (!cam || !cvs) return { x: 0, y: 0 };
+
+    // Canvas-Pixel → CSS-Px → Weltkoordinate unter Berücksichtigung des Zooms
+    const w = (cvs.width  / DPR) / (cam.scale || 1);
+    const h = (cvs.height / DPR) / (cam.scale || 1);
+    return { x: (cam.x || 0) + w / 2, y: (cam.y || 0) + h / 2 };
+  }
+
+  // ---------- Gebäude-Bridge (integriert) ---------------------------------
+  const SPRITE_BASE = 'assets/buildings';  // erwartet <kind>.png
+  const SPRITES = new Map();               // kind → HTMLImageElement | 'error'
+
+  function loadSprite(kind) {
+    if (!kind) return null;
     if (SPRITES.has(kind)) return SPRITES.get(kind);
 
-    const src = SPRITE_MAP[kind];
-    if (!src) {
-      SPRITES.set(kind, 'error');
-      W(`${TAG} Sprite-Pfad fehlt für kind="${kind}"`);
-      return 'error';
-    }
-
     const img = new Image();
-    img.onload  = () => O(`${TAG} Sprite geladen: ${kind}`);
-    img.onerror = () => {
-      SPRITES.set(kind, 'error');
-      W(`${TAG} Sprite nicht gefunden: ${kind} (${src})`);
-    };
-    img.src = src;
+    img.onload  = () => L.ok('Sprite geladen:', kind);
+    img.onerror = () => { SPRITES.set(kind, 'error'); L.warn('Sprite fehlt:', kind); };
+    img.src = `${SPRITE_BASE}/${kind}.png`;
     SPRITES.set(kind, img);
     return img;
   }
 
-  // ---------- Hilfsfunktionen ---------------------------------------------
-  const snapToGrid = v => Math.round(v / TILE_SIZE) * TILE_SIZE;
-
-  function cameraCenterWorld() {
-    const cam = window.GameCamera;
-    const cvs = document.getElementById('game') || document.querySelector('canvas');
-    if (!cam || !cvs) return { x: 0, y: 0 };
-
-    const scale = cam.scale || 1;
-    const w = (cvs.width  / DPR) / scale;
-    const h = (cvs.height / DPR) / scale;
-
-    return { x: cam.x + w / 2, y: cam.y + h / 2 };
-  }
-
-  // ---------- Gebäude-API --------------------------------------------------
   function placeBuilding(kind, x, y) {
     if (!kind) return null;
 
-    // Actions, die kein Gebäude sind, überspringen
-    if (NON_BUILD_ACTIONS.has(kind)) {
-      L(`${TAG} paint/road-Aktion ignoriert: ${kind}`);
-      return null;
-    }
-
-    // Koordinate aus Kamera-Mitte, falls nicht übergeben
+    // Fallback: zentriert auf aktuelle Kameramitte
     if (typeof x !== 'number' || typeof y !== 'number') {
       const c = cameraCenterWorld();
       x = c.x; y = c.y;
     }
 
+    const t = state.map.tile || 64;
     const b = {
-      id: ++STATE._seq,
+      id: ++state.entities._idseq,
       kind,
-      x: snapToGrid(x),
-      y: snapToGrid(y),
-      w: TILE_SIZE,
-      h: TILE_SIZE
+      x : snapToGrid(x),
+      y : snapToGrid(y),
+      w : t,
+      h : t,
     };
 
-    // Sprite (lazy load)
-    getSprite(kind);
+    // Sprite vorladen (lazy draw würde es sonst auch tun)
+    loadSprite(kind);
 
-    STATE.entities.buildings.push(b);
-    O(`${TAG} platziert: ${kind} → ${b.x} ${b.y} (gesamt: ${STATE.entities.buildings.length})`);
+    state.entities.buildings.push(b);
+    L.info('Gebäude platziert:', kind, '→', b.x, b.y, '(gesamt:', state.entities.buildings.length, ')');
     return b;
   }
 
-  function clearBuildings() {
-    STATE.entities.buildings.length = 0;
-    STATE._seq = 0;
-    L(`${TAG} Gebäude zurückgesetzt.`);
-  }
-
-  // ---------- Event-Wiring (UI-Bau) ---------------------------------------
-  // Moderner Weg (empfohlen):
-  //   window.dispatchEvent(new CustomEvent('cb:build:place', { detail:{ kind, x, y } }))
-  window.addEventListener('cb:build:place', ev => {
-    try {
-      const d = ev?.detail || {};
-      if (!d.kind) return;
-      placeBuilding(d.kind, d.x, d.y);
-    } catch (e) {
-      E(`${TAG} cb:build:place Fehler:`, e);
-    }
-  });
-
-  // Legacy Weg (kompatibel):
-  //   window.dispatchEvent(new CustomEvent('build:action', { detail:{ action:'place-xyz' } }))
-  window.addEventListener('build:action', ev => {
-    try {
-      const act = String(ev?.detail?.action || '');
-      if (!act.startsWith('place-')) return;
-
-      const kind = act.slice('place-'.length);
-      placeBuilding(kind);
-    } catch (e) {
-      E(`${TAG} build:action Fehler:`, e);
-    }
-  });
-
-  // ---------- Render-Hook --------------------------------------------------
-  // Wird von assets/core/core.render.js einmal pro Frame aufgerufen (falls vorhanden)
+  // Dem Renderer eine einheitliche Zeichen-Funktion geben.
+  // Diese wird in assets/core/core.render.js aufgerufen (window.drawEntities(ctx)).
   window.drawEntities = function drawEntities(ctx) {
-    const list = STATE.entities.buildings;
-    if (!list || !list.length) return;
+    const list = state.entities.buildings;
+    if (!list || list.length === 0) return;
 
     for (const b of list) {
-      const spr = SPRITES.get(b.kind) || getSprite(b.kind);
+      const spr = SPRITES.get(b.kind) || loadSprite(b.kind);
 
       if (spr && spr !== 'error' && spr.complete) {
-        // echtes Sprite
+        // Normales Sprite
         ctx.drawImage(spr, b.x, b.y, b.w, b.h);
       } else {
-        // Platzhalter
+        // Platzhalter – gut sichtbar & mit Label
         ctx.save();
-        ctx.fillStyle = 'rgba(255,185,0,0.85)';
+        ctx.fillStyle = 'rgba(255, 185, 0, 0.85)';
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         ctx.lineWidth = 2;
         ctx.fillRect(b.x, b.y, b.w, b.h);
         ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
         ctx.fillStyle = '#111';
-        ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-        ctx.fillText(b.kind, b.x + 6, b.y + b.h / 2 + 4);
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillText(b.kind || '???', b.x + 6, b.y + b.h/2 + 4);
         ctx.restore();
       }
     }
   };
 
-  // ---------- Engine-API ---------------------------------------------------
-  GameCore.Engine = GameCore.Engine || {};
+  // ---------- Map / Start --------------------------------------------------
+  async function loadMapFromCanvasDataAttr() {
+    const cvs = getCanvas();
+    const url = cvs?.getAttribute('data-map') || 'assets/maps/map-mini.json';
+    state.map.url = url;
 
-  GameCore.Engine.start = async function start(mapUrl) {
     try {
-      STATE.map.url = mapUrl || (document.getElementById('game')?.dataset?.map) || '';
-      STATE.map.tile = TILE_SIZE;
-      O(`${TAG} Engine.start → map: ${STATE.map.url || '(unbekannt)'}`);
-      // Map-Loading und Render-Loop werden in deinen bestehenden Modulen erledigt.
-      // Hier nur State vorbereiten.
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      state.map.data = json;
+
+      // Optional: Map-Meta in State übernehmen (tile/cols/rows), wenn vorhanden
+      if (json?.tile) state.map.tile = json.tile;
+      if (json?.cols) state.map.cols = json.cols;
+      if (json?.rows) state.map.rows = json.rows;
+
+      // Falls du ein eigenes Map-Modul nutzt:
+      // window.GameMap?.load?.(json);
+
+      L.ok('Map geladen:', url);
       return true;
     } catch (e) {
-      E(`${TAG} Engine.start Fehler:`, e);
+      L.err('Map-Load fehlgeschlagen:', e?.message || e);
       return false;
     }
-  };
+  }
 
-  GameCore.Engine.reset = function reset() {
-    clearBuildings();
-    O(`${TAG} Engine.reset`);
-  };
+  async function start(mapUrl) {
+    if (state.ui.started) return;
+    state.ui.started = true;
 
-  // ---------- Legacy-Kompatibilität ---------------------------------------
-  // Ein paar Convenience-Weiterleitungen auf window.Game:
-  Game.state  = STATE;
-  Game.place  = (kind, x, y) => placeBuilding(kind, x, y);
-  Game.clear  = () => clearBuildings();
+    // Map laden: Präferenz mapUrl, sonst data-map Attribut
+    if (mapUrl) {
+      state.map.url = mapUrl;
+      try {
+        const res = await fetch(mapUrl, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        state.map.data = json;
+        if (json?.tile) state.map.tile = json.tile;
+        if (json?.cols) state.map.cols = json.cols;
+        if (json?.rows) state.map.rows = json.rows;
+        // window.GameMap?.load?.(json);
+        L.ok('Map geladen (explicit):', mapUrl);
+      } catch (e) {
+        L.err('Map-Load fehlgeschlagen (explicit):', e?.message || e);
+        // als Fallback aus dem Canvas lesen
+        await loadMapFromCanvasDataAttr();
+      }
+    } else {
+      await loadMapFromCanvasDataAttr();
+    }
 
-  O('[GameCore] Modul geladen env:' + (window.__cb?.env || 'n/a'));
+    // Renderer initialisieren lassen (dein Renderer hört auf cb:game-start)
+    // → Der Start-Button sendet das Event bereits. Für Sicherheit kann man es
+    //   erneut feuern, aber doppelte Inits vermeiden wir lieber:
+    L.info('Engine ready. (v' + state.version + ')');
+  }
+
+  function stop() {
+    // Platz für spätere Aufräumarbeiten (Loop, Worker, etc.)
+    state.ui.started = false;
+    L.warn('Engine gestoppt.');
+  }
+
+  // ---------- Events aus dem UI -------------------------------------------
+  // Moderner Weg
+  window.addEventListener('cb:build:place', (ev) => {
+    const d = ev?.detail || {};
+    placeBuilding(d.kind, d.x, d.y);
+  });
+
+  // Legacy Fallback (ui-build sendet "build:action" oder "cb:build-action")
+  function onBuildAction(ev) {
+    const d = ev?.detail || {};
+    const act = d.action || '';
+    if (!act || !act.startsWith('place-')) return;
+    const kind = act.slice('place-'.length);
+    placeBuilding(kind);
+  }
+  window.addEventListener('build:action', onBuildAction);
+  window.addEventListener('cb:build-action', onBuildAction);
+
+  // ---------- Öffentliche API ---------------------------------------------
+  GameCore.Engine = { start, stop };
+  // Für Inspector/Legacy bequem erreichbar:
+  const Game = (window.Game = window.Game || {});
+  Game.place = placeBuilding;     // Inspector & Tests können Game.place('house') aufrufen
+  Game.state = GameCore.state;    // Sichtbarer State (Read-Only verwenden!)
+
+  // ---------- Auto-Start-Hook (falls nötig) --------------------------------
+  // Wenn deine App NICHT über ui-start den Start-knopf nutzt, kannst du hier
+  // optional auf cb:game-start reagieren. Da dein ui-start bereits dispatcht,
+  // lassen wir es kommentiert als Doku stehen:
+  //
+  // window.addEventListener('cb:game-start', () => {
+  //   start(); // Map-URL kommt aus #game[data-map]
+  // });
+
+  L.info('Modul geladen env:' + (window.__ENV_VERSION__ || 'unknown'));
 })();
