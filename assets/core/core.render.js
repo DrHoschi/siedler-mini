@@ -1,9 +1,15 @@
-/* assets/core/core.render.js  v17.9.5
- * Robuster Terrain-Renderer
- * - wartet auf cb:game-start
- * - lädt Frames aus tileset.terrain.json (optional)
- * - FIX B: Fallback-Pattern aus tileset.terrain.png (erstes Tile)
- * - nutzt Kamera-Werte aus window.GameCamera (ohne UI zu skalieren)
+/* ============================================================================
+ * Datei: assets/core/core.render.js
+ * Version: v17.9.6
+ * Projekt: Neue Siedler
+ *
+ * Zweck:
+ *  - Terrain-Renderer für Tileset
+ *  - FIX B: Fallback-Pattern falls Frames fehlen
+ *  - Integration Gebäude/Entities via window.drawEntities(ctx)
+ *
+ * Struktur: Imports → Konstanten → Hilfsfunktionen → Hauptlogik → Exports
+ * ============================================================================
  */
 (() => {
   'use strict';
@@ -17,14 +23,13 @@
   let canvas, ctx, dpr = Math.max(1, window.devicePixelRatio || 1);
   let running = false, rafId = 0;
 
-  // Tileset + Frames
   let frames = null;          // aus tileset.terrain.json
   let tilesetImg = null;      // Image-Objekt aus tileset.terrain.png
-  let fallbackPattern = null; // CanvasPattern (FIX B)
-  let tileSize = 64;          // Map-Logik
+  let fallbackPattern = null; // CanvasPattern (erstes Tile)
+  let tileSize = 64;
   let gridCols = 16, gridRows = 16;
 
-  // liest Kamera-Werte pro Frame (keine eigene Instanz anlegen!)
+  // ---- Kamera ------------------------------------------------------------
   function readCam() {
     const cam = (window.GameCamera || {});
     return {
@@ -34,7 +39,6 @@
     };
   }
 
-  // Canvas ermitteln (nur Map-Canvas!)
   function pickCanvas() {
     return (
       document.getElementById('game') ||
@@ -53,7 +57,7 @@
     canvas.height = Math.max(1, Math.round(cssH * dpr));
   }
 
-  // ---- Assets ------------------------------------------------------------
+  // ---- Assets laden ------------------------------------------------------
   async function loadTilesetJson(url) {
     try {
       const res = await fetch(url, { cache: 'no-store' });
@@ -67,7 +71,7 @@
       }
       LOG('Frames geladen:', frames ? Object.keys(frames).length : 0);
     } catch (e) {
-      WARN('Frames aus JSON nicht lesbar → Fallback nutzen. Grund:', e.message);
+      WARN('Frames aus JSON nicht lesbar → Fallback nutzen.', e.message);
       frames = null;
     }
   }
@@ -95,16 +99,12 @@
 
     await loadTilesetJson(jsonUrl);
 
-    // FIX B: Fallback-Pattern (erstes Tile oben links)
+    // FIX B: Fallback-Pattern
     try {
       const off  = document.createElement('canvas');
       off.width  = off.height = tileSize * dpr;
       const octx = off.getContext('2d');
-      octx.drawImage(
-        tilesetImg,
-        0, 0, tileSize, tileSize,    // Quelle
-        0, 0, off.width, off.height  // Ziel @ DPR
-      );
+      octx.drawImage(tilesetImg, 0, 0, tileSize, tileSize, 0, 0, off.width, off.height);
       fallbackPattern = octx.createPattern(off, 'repeat');
       LOG('Fallback-Pattern bereit.');
     } catch (e) {
@@ -122,7 +122,6 @@
   }
 
   function applyWorldTransform(cam) {
-    // Welt-Transform: erst skalieren, dann verschieben (in Weltkoordinaten)
     const s = dpr * cam.zoom;
     ctx.setTransform(s, 0, 0, s, Math.floor(-cam.x * s), Math.floor(-cam.y * s));
   }
@@ -134,7 +133,6 @@
 
     const cols = Math.ceil((canvas.width  / (dpr * cam.zoom)) / tileSize) + 2;
     const rows = Math.ceil((canvas.height / (dpr * cam.zoom)) / tileSize) + 2;
-
     const startX = Math.floor(cam.x / tileSize) * tileSize;
     const startY = Math.floor(cam.y / tileSize) * tileSize;
 
@@ -151,7 +149,6 @@
   function drawTerrainFallback(cam) {
     if (!fallbackPattern) return false;
     ctx.fillStyle = fallbackPattern;
-    // ausreichend große Fläche um die Kamera herum füllen
     const W = Math.ceil(canvas.width  / (dpr * cam.zoom)) + tileSize * 2;
     const H = Math.ceil(canvas.height / (dpr * cam.zoom)) + tileSize * 2;
     ctx.fillRect(cam.x - tileSize, cam.y - tileSize, W, H);
@@ -162,30 +159,29 @@
     if (!running) return;
 
     clearCanvas();
-
-    const cam = readCam();             // Kamera lesen
-    applyWorldTransform(cam);          // Welt-Transform setzen
+    const cam = readCam();
+    applyWorldTransform(cam);
 
     let drawn = false;
     if (frames) drawn = drawTerrainWithFrames(cam);
     if (!drawn) drawn = drawTerrainFallback(cam);
     if (!drawn) WARN('Nichts gezeichnet (weder Frames noch Fallback).');
 
-    // Danach UI NICHT skalieren → Reset zurück auf Screen-Koordinaten
+    // --- NEU: Gebäude/Entities nach Terrain rendern ----------------------
+    try {
+      if (typeof window.drawEntities === 'function') {
+        window.drawEntities(ctx);
+      }
+    } catch (e) {
+      (window.CBLog?.warn || console.warn)('[render] drawEntities Fehler:', e);
+    }
+
+    // Reset Transform für UI (HUD, Inspector etc.)
     ctx.setTransform(1,0,0,1,0,0);
 
     rafId = requestAnimationFrame(frame);
   }
-  
-// ... in deiner Frame-Funktion NACH dem Terrain:
-try {
-  if (typeof window.drawEntities === 'function') {
-    window.drawEntities(ctx);
-  }
-} catch (e) {
-  (window.CBLog?.warn || console.warn)('[render] drawEntities Fehler:', e);
-}
-  
+
   // ---- Lifecycle ---------------------------------------------------------
   async function init() {
     try {
@@ -220,7 +216,6 @@ try {
     cancelAnimationFrame(rafId);
   }
 
-  // externe, optionale API (z. B. für Tests)
   function setCameraState({ x, y, zoom }) {
     const cam = (window.GameCamera ||= {});
     if (typeof x    === 'number') cam.x    = x;
@@ -229,7 +224,6 @@ try {
   }
 
   window.Render = { init, start, stop, setCameraState };
-  LOG('Modul geladen (v17.9.5), wartet auf cb:game-start.');
-
+  LOG('Modul geladen (v17.9.6), wartet auf cb:game-start.');
   window.addEventListener('cb:game-start', init);
 })();
