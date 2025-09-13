@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 255
+Gesamt Dateien: 257
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -10,16 +10,13 @@ Gesamt Dateien: 255
  - assets/icons/icons_spritesheet_256.PNG
  - assets/items/items_master_sprite.PNG
  - assets/items/items.PNG
- - assets/tex/building/wood/fischer_wood1.PNG
  - assets/tex/building/wood/haeuser_wood1_ug1.PNG
  - assets/tex/building/wood/haeuser_wood1.PNG
  - assets/tex/building/wood/haeuser_wood2.PNG
  - assets/tex/building/wood/hq_wood_ug1.PNG
  - assets/tex/building/wood/hq_wood.PNG
- - assets/tex/building/wood/lumberjack_wood.PNG
  - assets/tex/building/wood/stonebraker_wood.PNG
  - assets/tex/building/wood/wassermuehle_wood.PNG
- - assets/tex/building/wood/windmuehle_wood.PNG
  - assets/tex/path/topdown_path0.PNG
  - assets/tex/path/topdown_path1.PNG
  - assets/tex/path/topdown_path2.PNG
@@ -39,8 +36,8 @@ Gesamt Dateien: 255
  - assets/tex/terrain/topdown_meadow.PNG
  - assets/tex/terrain/topdown_rock.PNG
  - assets/tex/terrain/topdown_shore.PNG
- - assets/tex/placeholder64.PNG
  - assets/Logo.PNG
+ - assets/placeholder64.PNG
 
 ## Dateien ohne Extension
  - assets/buildings/lumberjack/Readme

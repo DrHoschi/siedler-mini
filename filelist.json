@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-11T16:03:40.547Z",
+  "createdAt": "2025-09-13T16:31:51.745Z",
   "root": ".",
-  "count": 287,
+  "count": 289,
   "entries": [
     {
       "type": "dir",
@@ -67,6 +67,76 @@
       "type": "file",
       "path": "assets/buildings/lumberjack/Readme",
       "size": 407
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/baecker_wood.png",
+      "size": 451059
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/depot_wood.png",
+      "size": 305075
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/farm_wood.png",
+      "size": 288712
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/fischer_wood1.png",
+      "size": 1975790
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/lumberjack_wood.png",
+      "size": 290638
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/rathaus_baustelle_wood0.png",
+      "size": 205438
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/rathaus_stone1.png",
+      "size": 181131
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/rathaus_wood1.png",
+      "size": 440150
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/schmied_wood0.png",
+      "size": 297126
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/steinmetz_wood.png",
+      "size": 317995
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/wachturm_wood.png",
+      "size": 236119
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/windmuehle_wood.png",
+      "size": 255831
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/wohnhaus_wood0_ug0.png",
+      "size": 283934
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/wohnhaus_wood1_ug0.png",
+      "size": 286979
     },
     {
       "type": "dir",
@@ -189,7 +259,7 @@
     {
       "type": "file",
       "path": "assets/core/camera.js",
-      "size": 8269
+      "size": 9123
     },
     {
       "type": "file",
@@ -214,7 +284,7 @@
     {
       "type": "file",
       "path": "assets/core/core.map.js",
-      "size": 9323
+      "size": 4274
     },
     {
       "type": "file",
@@ -229,12 +299,17 @@
     {
       "type": "file",
       "path": "assets/core/core.render.js",
-      "size": 6603
+      "size": 8436
     },
     {
       "type": "file",
       "path": "assets/core/game.bootstrap.js",
       "size": 6264
+    },
+    {
+      "type": "file",
+      "path": "assets/core/game.js",
+      "size": 11542
     },
     {
       "type": "file",
@@ -364,7 +439,7 @@
     {
       "type": "file",
       "path": "assets/maps/map-mini-V0.json",
-      "size": 5209
+      "size": 5207
     },
     {
       "type": "file",
@@ -374,7 +449,7 @@
     {
       "type": "file",
       "path": "assets/maps/map-mini.json",
-      "size": 3587
+      "size": 3585
     },
     {
       "type": "file",
@@ -419,26 +494,6 @@
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/baecker_wood.png",
-      "size": 451059
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/depot_wood.png",
-      "size": 305075
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/farm_wood.png",
-      "size": 288712
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/fischer_wood1.PNG",
-      "size": 1975790
-    },
-    {
-      "type": "file",
       "path": "assets/tex/building/wood/haeuser_wood1_ug1.PNG",
       "size": 2143490
     },
@@ -464,23 +519,8 @@
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/lumberjack_wood.PNG",
-      "size": 290638
-    },
-    {
-      "type": "file",
       "path": "assets/tex/building/wood/readme",
       "size": 206
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/Schmied_wood0.png",
-      "size": 297126
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/steinmetz_wood.png",
-      "size": 317995
     },
     {
       "type": "file",
@@ -489,48 +529,13 @@
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/wachturm _wood.png",
-      "size": 236119
-    },
-    {
-      "type": "file",
       "path": "assets/tex/building/wood/wassermuehle_wood.PNG",
       "size": 2750530
     },
     {
       "type": "file",
-      "path": "assets/tex/building/wood/windmuehle_wood.PNG",
-      "size": 255831
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/Wohnhaus_wood0_ug0.png",
-      "size": 283934
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/Wohnhaus_wood1_ug0.png",
-      "size": 286979
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/Baustelle_Rathaus_0.png",
-      "size": 205438
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/Holz_Rathaus_1.png",
-      "size": 440150
-    },
-    {
-      "type": "file",
       "path": "assets/tex/building/readme",
       "size": 423
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/Stein_Rathaus_1.png",
-      "size": 181131
     },
     {
       "type": "dir",
@@ -864,11 +869,6 @@
       "size": 44814
     },
     {
-      "type": "file",
-      "path": "assets/tex/placeholder64.PNG",
-      "size": 1149612
-    },
-    {
       "type": "dir",
       "path": "assets/tiles/"
     },
@@ -890,7 +890,7 @@
     {
       "type": "file",
       "path": "assets/tiles/tileset.terrain.json",
-      "size": 16425
+      "size": 16423
     },
     {
       "type": "file",
@@ -924,7 +924,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 7174
+      "size": 8519
     },
     {
       "type": "file",
@@ -965,6 +965,11 @@
       "type": "file",
       "path": "assets/lumberjack.png",
       "size": 1787853
+    },
+    {
+      "type": "file",
+      "path": "assets/placeholder64.PNG",
+      "size": 1149612
     },
     {
       "type": "file",
@@ -1044,6 +1049,11 @@
       "type": "file",
       "path": "core/carriers.js",
       "size": 7703
+    },
+    {
+      "type": "file",
+      "path": "core/game.js",
+      "size": 9677
     },
     {
       "type": "file",
@@ -1309,12 +1319,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 28463
+      "size": 28648
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 11082
+      "size": 11143
     },
     {
       "type": "file",
@@ -1324,12 +1334,12 @@
     {
       "type": "file",
       "path": "game.js",
-      "size": 1095
+      "size": 925
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 6417
+      "size": 6521
     },
     {
       "type": "file",
