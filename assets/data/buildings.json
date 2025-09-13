@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "categories": [
+    {
+      "id": "verwaltung",
+      "title": "Allg. / Verwaltung",
+      "items": [
+        { "id": "rathaus",  "label": "Rathaus",  "action": "place-rathaus",
+          "sprite": "assets/buildings/rathaus_wood1.png" },
+        { "id": "depot",    "label": "Depot",    "action": "place-depot",
+          "sprite": "assets/buildings/depot_wood.png" }
+      ]
+    },
+    {
+      "id": "nahrung",
+      "title": "Produktion / Nahrung",
+      "items": [
+        { "id": "fisher", "label": "Fischer", "action": "place-fisher",
+          "sprite": "assets/buildings/fischer_wood1.png" },
+        { "id": "farm",   "label": "Farm",    "action": "place-farm",
+          "sprite": "assets/buildings/farm_wood.png" },
+        { "id": "baecker","label": "Bäcker",  "action": "place-baecker",
+          "sprite": "assets/buildings/baecker_wood.png" }
+      ]
+    },
+    {
+      "id": "ressourcen",
+      "title": "Produktion / Rohstoffe",
+      "items": [
+        { "id": "lumberjack",  "label": "Holzfäller", "action": "place-lumberjack",
+          "sprite": "assets/buildings/lumberjack_wood.png" },
+        { "id": "stonecutter", "label": "Steinmetz",  "action": "place-stonecutter",
+          "sprite": "assets/buildings/steinmetz_wood.png" },
+        { "id": "smith",       "label": "Schmied",    "action": "place-smith",
+          "sprite": "assets/buildings/schmied_wood0.png" },
+        { "id": "windmill",    "label": "Mühle",      "action": "place-windmill",
+          "sprite": "assets/buildings/windmuehle_wood.png" }
+      ]
+    },
+    {
+      "id": "wohnen",
+      "title": "Wohnen",
+      "items": [
+        { "id": "house", "label": "Haus", "action": "place-house",
+          "sprite": "assets/buildings/wohnhaus_wood0_ug0.png" }
+      ]
+    },
+    {
+      "id": "militaer",
+      "title": "Militär",
+      "items": [
+        { "id": "guardtower", "label": "Wachturm", "action": "place-guardtower",
+          "sprite": "assets/buildings/wachturm_wood.png" },
+        { "id": "hq", "label": "HQ", "action": "place-hq",
+          "sprite": "assets/building/hq_wood.png" }
+      ]
+    }
+  ]
+}
