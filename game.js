@@ -26,6 +26,20 @@
 
   (window.CBLog?.ok||console.log)('Game gestartet (Facade v17.3.2)');
 })();
+
+// Fallback nur, wenn (noch) keine neue Engine vorhanden ist
+(function(){
+  'use strict';
+  if (window.GameCore?.Engine) {
+    (window.CBLog?.info||console.log)('[game] Legacy-Patch übersprungen (GameCore vorhanden)');
+    return;
+  }
+  if (window.__legacy_build_bridge__) return; // doppelt vermeiden
+  window.__legacy_build_bridge__ = true;
+
+  // ... dein kompletter Patch-Code (Gebäude-Bridge, drawEntities, Events, etc.) ...
+})();
+
 /* -----------------------------------------------------------
  * Neue Siedler – Legacy Build-Integration (Add-On für game.js)
  * Zweck: Gebäude-Sichtbarkeit & einfache Platzierung
