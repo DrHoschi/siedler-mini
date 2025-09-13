@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-13T21:12:08.138Z",
+  "createdAt": "2025-09-13T22:45:53.875Z",
   "root": ".",
-  "count": 277,
+  "count": 280,
   "entries": [
     {
       "type": "dir",
@@ -87,6 +87,11 @@
       "type": "file",
       "path": "assets/buildings/fischer_wood1.png",
       "size": 1975790
+    },
+    {
+      "type": "file",
+      "path": "assets/buildings/hq_wood.png",
+      "size": 942009
     },
     {
       "type": "file",
@@ -269,7 +274,7 @@
     {
       "type": "file",
       "path": "assets/core/core.entities.js",
-      "size": 10223
+      "size": 9372
     },
     {
       "type": "file",
@@ -304,7 +309,7 @@
     {
       "type": "file",
       "path": "assets/core/entities.registry.js",
-      "size": 9526
+      "size": 4383
     },
     {
       "type": "file",
@@ -320,6 +325,15 @@
       "type": "file",
       "path": "assets/core/overlay-hooks.js",
       "size": 3572
+    },
+    {
+      "type": "dir",
+      "path": "assets/data/"
+    },
+    {
+      "type": "file",
+      "path": "assets/data/buildings.json",
+      "size": 2142
     },
     {
       "type": "dir",
@@ -1257,17 +1271,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2804
+      "size": 2277
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 28723
+      "size": 27480
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 11094
+      "size": 10559
     },
     {
       "type": "file",
