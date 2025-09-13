@@ -1,18 +1,23 @@
 /* ============================================================================
  * Neue Siedler – Core Engine (+ integrierte Gebäude-Bridge)
  * Datei: assets/core/game.js
- * Version: v18.0.1
+ * Version: v18.1.0
  *
- * - Zentrale State-Struktur (GameCore.state)
- * - Platzieren von Gebäuden (Events + API)
- * - Zeichnen von Entities via window.drawEntities(ctx)
- * - Robuste Event-Bindings (window + document; modern + legacy)
- * - Platzhalterfarben aus Kategorien (ohne Rot/Grün)
+ * Was macht diese Datei?
+ *  - Hält den zentralen Game-State (map/entities/ui).
+ *  - Bindet Build-Events (modern + legacy) und platziert Gebäude.
+ *  - Stellt window.drawEntities(ctx) bereit (Renderer ruft das auf).
+ *  - Vermeidet Doppel-Init und mischt keine "leeren" Closures ins Rendern.
+ *
+ * Wichtig:
+ *  - Der Renderer (assets/core/core.render.js) ruft NUR window.drawEntities(ctx) auf.
+ *  - drawEntities liest den State IMMER aus window.GameCore.state (sicher!).
+ *  - Platzhalter-Farben kommen aus einer Kategorie-Tabelle (ohne Rot/Grün).
  * ============================================================================ */
-(function () {
+
+(() => {
   'use strict';
 
-  // ---------- Logging ------------------------------------------------------
   const L = {
     info : (...a)=> (window.CBLog?.info  || console.log)('[GameCore]', ...a),
     ok   : (...a)=> (window.CBLog?.ok    || console.log)('[GameCore]', ...a),
@@ -20,87 +25,96 @@
     err  : (...a)=> (window.CBLog?.error || console.error)('[GameCore]', ...a),
   };
 
-  if (window.GameCore?.Engine) {
-    L.info('bereits initialisiert – skip Engine-Init (Bridge ist aktiv).');
-    // Trotzdem sicherstellen, dass drawEntities existiert:
+  // Schon mal geladen?
+  if (window.GameCore?.__engine_ready__) {
+    L.info('bereits initialisiert – skip Engine-Init (Bridge bleibt aktiv).');
+    // Trotzdem sicherstellen, dass drawEntities existiert und sicher auf den globalen State zugreift:
     if (typeof window.drawEntities !== 'function') {
-      window.drawEntities = () => {};
+      window.drawEntities = safeDrawEntitiesFactory();
     }
+    // Falls Events noch nicht gebunden waren:
+    bindBuildEventsOnce();
     return;
   }
 
-  // ---------- State --------------------------------------------------------
+  // ──────────────────────────────────────────────────────────────────────────
+  // Globaler Namespace + State
+  // ──────────────────────────────────────────────────────────────────────────
   const GameCore = (window.GameCore = window.GameCore || {});
   const state = (GameCore.state = GameCore.state || {
-    version: '18.0.1',
-    map: { tile: 64, cols: 16, rows: 16, url: null, data: null },
-    entities: { buildings: [], _idseq: 0 },
-    ui: { started: false }
+    version: '18.1.0',
+    map:   { tile: 64, cols: 16, rows: 16, url: null, data: null },
+    ui:    { started: false },
+    entities: { _idseq: 0, buildings: [] }, // [{id, kind, cat, x,y,w,h}]
   });
 
-  // ---------- Kategorie → Platzhalterfarben --------------------------------
-  // KEIN Rot/Grün (für Platzierbar/Blockiert reserviert)
-  const CAT_COLORS = {
-    verwaltung:  { fill: 'rgba( 52, 152, 219, .80)', stroke: 'rgba( 41, 128, 185, .90)' }, // Blau
-    nahrung:     { fill: 'rgba(155,  89, 182, .80)', stroke: 'rgba(142,  68, 173, .90)' }, // Lila
-    rohstoffe:   { fill: 'rgba(230, 126,  34, .80)', stroke: 'rgba(211,  84,   0, .90)' }, // Orange
-    wohnen:      { fill: 'rgba(241, 196,  15, .80)', stroke: 'rgba(243, 156,  18, .90)' }, // Gelb
-    infrastruktur:{fill: 'rgba(127, 140, 141, .80)', stroke: 'rgba( 44,  62,  80, .90)' }, // Grau
-    deko:        { fill: 'rgba( 46, 204, 113, .80)', stroke: 'rgba( 39, 174,  96, .90)' }, // Smaragd
-    default:     { fill: 'rgba(255, 185,   0, .80)', stroke: 'rgba(  0,   0,   0, .55)' }  // Gold/Schwarz
+  GameCore.__engine_ready__ = true;
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Platzhalter-Farben je Kategorie (KEIN Rot/Grün!)
+  // ──────────────────────────────────────────────────────────────────────────
+  const CATEGORY_COLOR = {
+    administration : '#8e6cff', // Verwaltung
+    housing        : '#5ac8fa', // Wohnen
+    food           : '#ffcc00', // Nahrung (gelb/gold)
+    resources      : '#ff8a00', // Rohstoffe
+    infrastructure : '#a0b3b0', // Straßen etc.
+    military       : '#ff3b30', // Militär (rot — nur Platzhalteranzeige, nicht "platzierbar")
+    decor          : '#b8e986', // Deko/Landschaft (grünstichig, NICHT für Platzier-Status)
+    default        : '#d1d1d6'
   };
 
-  // Zuordnung gebäudekind -> Kategorie
+  // Mapping: kind → Kategorie
   const KIND2CAT = {
     // Verwaltung
-    hq: 'verwaltung', depot: 'verwaltung',
+    hq: 'administration', depot: 'administration',
     // Nahrung
-    farm: 'nahrung', fisher: 'nahrung', windmill: 'nahrung',
+    farm: 'food', fisher: 'food', windmill: 'food',
     // Rohstoffe
-    lumberjack: 'rohstoffe', stonecutter: 'rohstoffe', smith: 'rohstoffe',
+    lumberjack: 'resources', stonecutter: 'resources', smith: 'resources',
     // Wohnen
-    house: 'wohnen',
+    house: 'housing',
     // Infrastruktur
-    road: 'infrastruktur', 'road-curve': 'infrastruktur', 'road-cross': 'infrastruktur',
-    // Deko / Landschaft
-    grass: 'deko', meadow: 'deko', rock: 'deko', sand: 'deko', water: 'deko'
+    road: 'infrastructure', 'road-curve':'infrastructure', 'road-cross':'infrastructure',
+    // Militär
+    guardtower: 'military',
+    // Deko
+    grass:'decor', meadow:'decor', rock:'decor', sand:'decor', water:'decor'
   };
 
-  function colorFor(kind) {
-    const cat = KIND2CAT[kind] || 'default';
-    return CAT_COLORS[cat] || CAT_COLORS.default;
-  }
-
-  // ---------- Utils --------------------------------------------------------
+  // ──────────────────────────────────────────────────────────────────────────
+  // Utils
+  // ──────────────────────────────────────────────────────────────────────────
   const DPR = Math.max(1, window.devicePixelRatio || 1);
 
   function getCanvas() {
     return (
       document.getElementById('game') ||
-      document.getElementById('game-canvas') ||
       document.querySelector('canvas[data-role="map"]') ||
       document.querySelector('canvas')
     );
   }
 
-  function cameraCenterWorld() {
-    const cam = window.GameCamera || {};
-    const cvs = getCanvas();
-    if (!cvs) return { x: 0, y: 0 };
-    const scale = (cam.scale ?? cam.zoom ?? 1) || 1;
-    const w = (cvs.width  / DPR) / scale;
-    const h = (cvs.height / DPR) / scale;
-    return { x: (cam.x || 0) + w / 2, y: (cam.y || 0) + h / 2 };
-  }
-
   function snapToGrid(v) {
-    const t = state.map.tile || 64;
+    const t = GameCore.state?.map?.tile || 64;
     return Math.round(v / t) * t;
   }
 
-  // ---------- Sprites (optional) ------------------------------------------
+  function cameraCenterWorld() {
+    const cam = window.GameCamera;
+    const cvs = getCanvas();
+    if (!cam || !cvs) return { x: 0, y: 0 };
+
+    const w = (cvs.width  / DPR) / (cam.scale || cam.zoom || 1);
+    const h = (cvs.height / DPR) / (cam.scale || cam.zoom || 1);
+    return { x: (cam.x || 0) + w/2, y: (cam.y || 0) + h/2 };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Gebäude-Bridge
+  // ──────────────────────────────────────────────────────────────────────────
+  const SPRITES = new Map(); // kind → HTMLImageElement | 'error'
   const SPRITE_BASE = 'assets/buildings';
-  const SPRITES = new Map(); // kind -> HTMLImageElement | 'error'
 
   function loadSprite(kind) {
     if (!kind) return null;
@@ -113,7 +127,6 @@
     return img;
   }
 
-  // ---------- Platzieren ---------------------------------------------------
   function placeBuilding(kind, x, y) {
     if (!kind) return null;
 
@@ -122,13 +135,16 @@
       x = c.x; y = c.y;
     }
 
-    const t = state.map.tile || 64;
+    const t = GameCore.state?.map?.tile || 64;
+    const cat = KIND2CAT[kind] || 'default';
     const b = {
       id: ++state.entities._idseq,
       kind,
-      x: snapToGrid(x),
-      y: snapToGrid(y),
-      w: t, h: t
+      cat,
+      x : snapToGrid(x),
+      y : snapToGrid(y),
+      w : t,
+      h : t,
     };
 
     loadSprite(kind); // optionales Vorladen
@@ -137,92 +153,114 @@
     return b;
   }
 
-  // ---------- Zeichnen der Entities ---------------------------------------
-  window.drawEntities = function drawEntities(ctx) {
-    const list = state.entities.buildings;
-    if (!list || list.length === 0) return;
+  // ──────────────────────────────────────────────────────────────────────────
+  // Sichere drawEntities-Factory (immer globalen State nutzen!)
+  // ──────────────────────────────────────────────────────────────────────────
+  function safeDrawEntitiesFactory() {
+    return function drawEntities(ctx) {
+      const coreState = window.GameCore?.state;
+      const list = coreState?.entities?.buildings;
+      if (!Array.isArray(list) || list.length === 0) return;
 
-    for (const b of list) {
-      const spr = SPRITES.get(b.kind);
-      if (spr && spr !== 'error' && spr.complete) {
-        ctx.drawImage(spr, b.x, b.y, b.w, b.h);
-        continue;
+      for (const b of list) {
+        const spr = SPRITES.get(b.kind) || loadSprite(b.kind);
+
+        if (spr && spr !== 'error' && spr.complete) {
+          ctx.drawImage(spr, b.x, b.y, b.w, b.h);
+          continue;
+        }
+
+        // Platzhalter mit Kategorie-Farben
+        const fill = CATEGORY_COLOR[b.cat] || CATEGORY_COLOR.default;
+        const stroke = 'rgba(0,0,0,0.7)';
+
+        ctx.save();
+        ctx.fillStyle = fill;
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2;
+
+        // fester Alphawert: gleichmäßige Sichtbarkeit
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.globalAlpha = 1.0;
+
+        // Rahmen + Label
+        ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1);
+        ctx.fillStyle = '#111';
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillText(b.kind, b.x + 6, b.y + b.h/2 + 4);
+        ctx.restore();
       }
-
-      // Platzhalter (farbig je Kategorie)
-      const col = colorFor(b.kind);
-      ctx.save();
-      ctx.fillStyle = col.fill;
-      ctx.strokeStyle = col.stroke;
-      ctx.lineWidth = 2;
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.strokeRect(b.x + .5, b.y + .5, b.w - 1, b.h - 1);
-      // Label
-      ctx.fillStyle = '#111';
-      ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillText(b.kind, b.x + 6, b.y + b.h / 2 + 4);
-      ctx.restore();
-    }
-  };
-
-  // ---------- Event-Bindings (robust) -------------------------------------
-  function extractKind(detail) {
-    // {kind} direkt?
-    if (detail && typeof detail.kind === 'string' && detail.kind) return detail.kind;
-    // {action:'place-XYZ'}?
-    const act = detail && detail.action;
-    if (typeof act === 'string' && act.startsWith('place-')) return act.slice(6);
-    return null;
+    };
   }
 
-  function handleBuildPlace(ev) {
-    const kind = extractKind(ev?.detail || {});
-    if (!kind) { L.warn('cb:build:place ohne kind'); return; }
-    L.ok('Event empfangen: cb:build:place →', kind);
-    placeBuilding(kind);
-  }
+  // drawEntities global setzen (einmalig, sicher)
+  window.drawEntities = safeDrawEntitiesFactory();
 
-  function handleBuildAction(ev) {
-    const kind = extractKind(ev?.detail || {});
-    if (!kind) return;
-    L.ok('Event empfangen: (legacy) build-action →', kind);
-    placeBuilding(kind);
-  }
+  // ──────────────────────────────────────────────────────────────────────────
+  // Events binden (nur 1x)
+  // ──────────────────────────────────────────────────────────────────────────
+  function bindBuildEventsOnce() {
+    if (window.__build_events_bound__) return;
+    window.__build_events_bound__ = true;
 
-  function bindBuildEvents() {
-    // Modern
-    window.addEventListener('cb:build:place', handleBuildPlace);
-    document.addEventListener('cb:build:place', handleBuildPlace);
+    // Moderner Weg: explizite Koordinaten möglich
+    window.addEventListener('cb:build:place', (ev) => {
+      const d = ev?.detail || {};
+      placeBuilding(d.kind, d.x, d.y);
+    });
 
-    // Legacy (zwei Schreibweisen)
-    window.addEventListener('cb:build-action', handleBuildAction);
-    document.addEventListener('cb:build-action', handleBuildAction);
-    window.addEventListener('build:action', handleBuildAction);
-    document.addEventListener('build:action', handleBuildAction);
+    // Legacy-Weg: "place-…"
+    const onBuildAction = (ev) => {
+      const act = ev?.detail?.action || '';
+      if (!act.startsWith('place-')) return;
+      const kind = act.slice('place-'.length);
+      placeBuilding(kind);
+    };
+    window.addEventListener('build:action', onBuildAction);
+    window.addEventListener('cb:build-action', onBuildAction);
 
     L.info('Build-Events gebunden.');
   }
+  bindBuildEventsOnce();
 
-  bindBuildEvents();
-
-  // ---------- API ----------------------------------------------------------
+  // ──────────────────────────────────────────────────────────────────────────
+  // Öffentliche API
+  // ──────────────────────────────────────────────────────────────────────────
   GameCore.Engine = {
-    start: async function start(mapUrl) {
+    start: async (mapUrl) => {
       if (state.ui.started) return;
       state.ui.started = true;
-      if (mapUrl) state.map.url = mapUrl;
+
+      // (Optional) Map laden, falls benötigt – dein ui-start lädt ohnehin.
+      if (mapUrl) {
+        try {
+          const res = await fetch(mapUrl, { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const json = await res.json();
+          state.map.data = json;
+          state.map.url  = mapUrl;
+          if (json?.tile) state.map.tile = json.tile;
+          if (json?.cols) state.map.cols = json.cols;
+          if (json?.rows) state.map.rows = json.rows;
+          L.ok('Map geladen (explicit):', mapUrl);
+        } catch (e) {
+          L.err('Map-Load fehlgeschlagen (explicit):', e?.message || e);
+        }
+      }
+
       L.info('Engine ready. (v' + state.version + ')');
     },
-    stop: function stop(){
+    stop: () => {
       state.ui.started = false;
       L.warn('Engine gestoppt.');
     }
   };
 
-  // Legacy/Inspector Kompatibilität
+  // Komfort-Proxy für Inspector/Legacy:
   const Game = (window.Game = window.Game || {});
   Game.place = placeBuilding;
-  Game.state = state;
+  Game.state = GameCore.state;
 
   L.info('Modul geladen env:' + (window.__ENV_VERSION__ || 'unknown'));
 })();
