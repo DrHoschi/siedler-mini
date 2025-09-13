@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-13T17:38:21.496Z",
+  "createdAt": "2025-09-13T21:12:08.138Z",
   "root": ".",
-  "count": 289,
+  "count": 277,
   "entries": [
     {
       "type": "dir",
@@ -269,7 +269,7 @@
     {
       "type": "file",
       "path": "assets/core/core.entities.js",
-      "size": 9100
+      "size": 10223
     },
     {
       "type": "file",
@@ -300,6 +300,11 @@
       "type": "file",
       "path": "assets/core/core.render.js",
       "size": 8436
+    },
+    {
+      "type": "file",
+      "path": "assets/core/entities.registry.js",
+      "size": 9526
     },
     {
       "type": "file",
@@ -474,68 +479,6 @@
     {
       "type": "dir",
       "path": "assets/tex/"
-    },
-    {
-      "type": "dir",
-      "path": "assets/tex/building/"
-    },
-    {
-      "type": "dir",
-      "path": "assets/tex/building/stone/"
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/stone/readme",
-      "size": 118
-    },
-    {
-      "type": "dir",
-      "path": "assets/tex/building/wood/"
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/haeuser_wood1_ug1.PNG",
-      "size": 2143490
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/haeuser_wood1.PNG",
-      "size": 2417754
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/haeuser_wood2.PNG",
-      "size": 2103550
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/hq_wood_ug1.PNG",
-      "size": 2165472
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/hq_wood.PNG",
-      "size": 2464426
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/readme",
-      "size": 206
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/stonebraker_wood.PNG",
-      "size": 2885259
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/wood/wassermuehle_wood.PNG",
-      "size": 2750530
-    },
-    {
-      "type": "file",
-      "path": "assets/tex/building/readme",
-      "size": 423
     },
     {
       "type": "dir",
@@ -1339,7 +1282,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6521
+      "size": 6588
     },
     {
       "type": "file",
