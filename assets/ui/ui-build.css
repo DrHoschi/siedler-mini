@@ -1,174 +1,97 @@
-/* Neue Siedler – Build UI
-   Layout-Ziele:
-   - Kategorien vertikal untereinander (Dock vertical scroll)
-   - Pro Kategorie exakt 1 horizontale Reihe (Row) mit horizontalem Scroll
-   - Kacheln einheitlich: Thumb oben, Label unten
-   - Mobile-first; responsive Downscale auf sehr kleinen Screens
-   Version: 2025-09-14-b
-*/
-
-/* ====== Dock / Panel ====================================================== */
-
-#build-panel {
-  /* Panel-Container – wird vom JS ein/ausgeblendet */
-  position: fixed;
-  inset: 6vh 4vw auto 4vw;          /* oben Abstand, links/rechts Rand */
-  max-height: 88vh;
-  z-index: 1000;
-  display: none;                     /* JS setzt display:block beim Öffnen */
-}
-
-#build-panel.open { display: block; }
-
-#build-panel .build-dock {
-  background: linear-gradient(180deg, rgba(248,249,250,.96), rgba(248,249,250,.96));
-  border: 1px solid rgba(0,0,0,.06);
-  box-shadow: 0 18px 40px rgba(0,0,0,.25);
-  border-radius: 20px;
-  padding: 20px 18px 16px 18px;
-  overflow: hidden;                  /* eigenes Scrolling nur für Inhalt */
-}
-
-#build-panel .dock-scroll {
-  max-height: calc(88vh - 52px);     /* innerhalb des Panels vertikal scrollen */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Überschrift + Close */
-#build-panel .dock-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 4px 10px 4px;
-}
-#build-panel .dock-title {
-  font: 700 20px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-  color: #1b2330;
-  letter-spacing: .2px;
-}
-#build-panel .dock-close {
-  appearance: none;
-  border: 0;
-  background: rgba(0,0,0,.06);
-  width: 36px; height: 36px; border-radius: 10px;
-  display: grid; place-items: center;
-  cursor: pointer;
-}
-#build-panel .dock-close:active { transform: translateY(1px); }
-
-/* ====== Kategorien (vertikal) ============================================ */
-
-.ui-build, .build-content { /* Fallback Klassennamen */
-  display: grid;
-  gap: 18px;
-}
-
-.build-category {
-  display: grid;
-  gap: 10px;
-}
-
-.build-category .cat-title {
-  font: 700 17px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-  color: #2b3646;
-  padding: 2px 6px;
-}
-
-/* ====== Eine Zeile pro Kategorie (horizontal scroll) ====================== */
-
-.build-row, .cat-row, .build-items, .items-track {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;    /* Kacheln folgen horizontal */
-  gap: 14px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 6px 4px 10px 4px;
-  scrollbar-width: thin;
-}
-.build-row::-webkit-scrollbar { height: 8px; }
-.build-row::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,.15);
-  border-radius: 99px;
-}
-
-/* ====== Kacheln =========================================================== */
+/* =============================================================================
+Datei: assets/ui/ui-build.css
+Projekt: Neue Siedler
+Version: v17.9.12
+Zweck: Style für Bau-Dock – unten andocken, max. 1–2 Zeilen (Scroll), graue Karten.
+============================================================================= */
 
 :root{
-  --tile-w: 168px;   /* Kartenbreite */
-  --tile-h: 172px;   /* Kartenhöhe inkl. Label */
-  --thumb: 128px;    /* Bildfläche */
-  --thumb-r: 14px;   /* Bild-Radius */
-  --shade: 0 8px 18px rgba(0,0,0,.12);
-  --shade-hover: 0 10px 24px rgba(0,0,0,.18);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --ui-bg-dark: #0f1926;
+  --ui-panel:   #e9edf1;   /* hellgrau wie im Soll-Bild */
+  --ui-panel-2: #dfe5ec;
+  --ui-border:  #c7d1dc;
+  --ui-text:    #222;
+  --ui-muted:   #4a5b6d;
+  --build-dock-max-h: 240px;
 }
 
-.build-item, .build-card, .item {
-  width: var(--tile-w);
-  height: var(--tile-h);
-  background: #fff;
-  border: 1px solid rgba(0,0,0,.06);
-  border-radius: 16px;
-  box-shadow: var(--shade);
-  padding: 10px 10px 8px 10px;
-  display: grid;
-  grid-template-rows: var(--thumb) auto;
-  align-items: center;
-  justify-items: center;
-  cursor: pointer;
-  user-select: none;
-  transition: box-shadow .15s ease, transform .06s ease;
+/* Root-Dock (unten andockend) */
+#build-dock.ui-build-dock,
+#build-panel.ui-build-dock{ /* Kompatibilität mit altem ID */
+  position: absolute; left: 0; right: 0; bottom: 0;
+  z-index: 40;
+  display: none; /* standardmäßig zu */
+  background: linear-gradient(180deg, rgba(15,25,38,.92), rgba(15,25,38,.98));
+  border-top: 1px solid #0b1420;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.35);
+  padding-bottom: max(8px, var(--safe-area-bottom));
 }
-.build-item:hover { box-shadow: var(--shade-hover); }
-.build-item:active { transform: translateY(1px); }
+#build-dock.is-open,
+#build-panel.is-open{ display: block; }
 
-.build-item .thumb, .build-thumb {
-  width: var(--thumb);
-  height: var(--thumb);
-  border-radius: var(--thumb-r);
-  background: #eef1f4;
-  display: grid; place-items: center;
-  overflow: hidden;
+/* Header */
+.ui-build-header{
+  display:flex; align-items:center; gap:12px;
+  padding:8px 12px; color:#cfe0f2; font-weight:600;
 }
+.ui-build-title{ font-size:15px; letter-spacing:.3px; }
+.ui-build-spacer{ flex:1; }
+.ui-build-close{
+  appearance:none; border:0; cursor:pointer;
+  background:#263346; color:#cfe0f2; padding:6px 10px; border-radius:8px;
+}
+.ui-build-close:hover{ background:#314259; }
 
-.build-item .thumb img,
-.build-thumb img {
-  max-width: 100%;
-  max-height: 100%;
-  display: block;
-  object-fit: contain;
-  image-rendering: auto;
+/* Body + Scroll-Begrenzung */
+.ui-build-body{
+  padding:8px 12px 12px;
+  max-height: var(--build-dock-max-h); /* JS setzt dynamisch auf 1–2 Zeilen */
+  overflow-y:auto; overflow-x:hidden;
 }
 
-.build-item .label, .build-label {
-  margin-top: 6px;
-  text-align: center;
-  font: 600 14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-  color: #2b3646;
+/* Kategorien */
+.ui-build-category{ margin-bottom:10px; }
+.ui-build-category-title{
+  color:#cfe0f2; font-size:13px; margin:6px 4px 8px;
+  text-shadow:0 1px 0 rgba(0,0,0,.25);
 }
 
-/* Sekundärinfos (z. B. Epoche) optional */
-.build-item .meta {
-  font: 500 12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
-  color: #6b7686;
+/* Grid/Karten */
+.ui-build-category-row{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min-w,140px), var(--card-max-w,180px)));
+  gap:10px 12px;
 }
-
-/* ====== Responsiv (sehr kleine Geräte) =================================== */
-
-@media (max-width: 380px) {
-  :root{
-    --tile-w: 150px;
-    --tile-h: 156px;
-    --thumb: 112px;
-    --thumb-r: 12px;
-  }
+.ui-card{
+  background:var(--ui-panel);
+  border:1px solid var(--ui-border);
+  border-radius:12px;
+  padding:10px 10px 12px;
+  box-shadow: 0 2px 0 rgba(255,255,255,.25) inset, 0 1px 8px rgba(0,0,0,.08);
+  color:var(--ui-text); text-align:center;
 }
+.ui-build-item{
+  width:100%;
+  min-width:var(--card-min-w,140px);
+  max-width:var(--card-max-w,180px);
+  cursor:pointer;
+}
+.ui-build-item:hover{ background:var(--ui-panel-2); transform: translateY(-1px); }
 
-/* ====== Öffnen/Schließen via Body-Klasse (FAB-Abstand) ==================== */
+/* Bild + Label (64px Icons) */
+.ui-build-item-imgwrap{ display:grid; place-items:center; margin-bottom:6px; }
+.ui-build-item-img{
+  width:64px; height:64px; object-fit:contain; image-rendering:auto;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.12));
+}
+.ui-build-item-label{ font-size:14px; line-height:1.2; color:var(--ui-text); }
 
-body.has-build-open #btn-build,
-body.has-build-open #btn-inspector { bottom: 240px; }
+/* Leere-Info */
+.ui-build-empty{ color:#9fb2c8; padding:12px; }
+
+/* Responsiv */
+@media (max-width: 480px){
+  :root{ --card-min-w: 120px; --card-max-w: 160px; }
+  .ui-build-item-img{ width:56px; height:56px; }
+}
