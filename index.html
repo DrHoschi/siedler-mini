@@ -117,27 +117,28 @@
   
   <!-- ===== Inspector (ALT aktiv) ======================================= -->
   <!-- Dein stabiler, kompletter Inspector – NICHT anfassen -->
-  <script defer src="assets/ui/ui-inspector.js?v=18.0.0"></script>
+  <!-- script defer src="assets/ui/ui-inspector.js?v=18.0.0"></script -->
 
   <!-- API-Kompatibilität: mappt alte/neue Events & Methoden (kein UI) -->
   <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
 
   <!-- ===== Inspector (NEU – Split) für später / Registry-Phase ========= -->
-  <!--
-  <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.tests.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.resources.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.paths.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
-  -->
+  
+  <!-- Inspector (split) – genau diese Module, in dieser Reihenfolge -->
+<script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
+<script defer src="assets/inspector/inspector.logs.js?v=18.14.4"></script>
+<script defer src="assets/inspector/inspector.overlay.hooks.js?v=1.4"></script>
+<script defer src="assets/inspector/inspector.paths.js?v=18.14.4"></script>
+<script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
+<script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
+  
 
   <!-- Legacy-Fassade (Kompatibilität) -->
   <script defer src="game.js?v=17.8.2"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI (Reihenfolge: Bridge → Start → Build) -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.9.3"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.9.4"></script>
   <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
   <script defer src="assets/ui/ui-build.js?v=17.9.12"></script>
 
