@@ -1,126 +1,143 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.css
- * Version: v17.9.12
- * Zweck: Build-Menü UI (Einzeilig pro Kategorie, mobil-freundlich)
- * ============================================================================
- */
+ * Version: v17.9.13
+ * Zweck: Build-Menü Styles (Einzeiliges Card-Layout, mobile-first)
+ * ============================================================================ */
 
-:root{
-  --uibg: rgba(18,22,20,0.88);
-  --uicard: #f3f6f4;
-  --uicard-border: #d9dfdb;
-  --uicard-shadow: 0 6px 24px rgba(0,0,0,0.18);
-  --uiheading: #e7ece9;
-  --uilabel: #3c4742;
-  --uimuted: #7a8880;
+:root {
+  --build-panel-w: min(980px, 92vw);
+  --build-panel-pad: 16px;
+  --build-bg: rgba(18, 28, 18, 0.92);
+  --build-bd: rgba(255,255,255,0.06);
+  --card-bg: #ffffff;
+  --card-shadow: 0 4px 14px rgba(0,0,0,.15);
+  --card-radius: 12px;
+  --card-gap: 14px;
+  --card-img-h: 96px;
+  --title-color: #dde6dc;
+  --subtitle-color: #aab6ad;
+  --label-color: #222;
+  --label-size: 16px;
 }
 
-#build-panel{
+#build-panel {
   position: fixed;
-  inset: 6% 4% 10% 4%;
-  background: var(--uibg);
+  inset: 4vh 0 auto 0;
+  margin-inline: auto;
+  width: var(--build-panel-w);
+  background: var(--build-bg);
+  border: 1px solid var(--build-bd);
   border-radius: 18px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-  z-index: 1000;
+  box-shadow: 0 18px 36px rgba(0,0,0,.35);
+  backdrop-filter: blur(6px);
+  color: #fff;
   display: none;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
+  z-index: 6000;
 }
 
-#build-panel[data-open="1"]{ display:block; }
+#build-panel.is-open { display: block; }
 
-#build-panel .bp-inner{
-  padding: 18px 18px 28px 18px;
+.build-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--build-panel-pad) + 6px) var(--build-panel-pad) var(--build-panel-pad);
 }
 
-#build-panel .bp-header{
-  display:flex; align-items:center; justify-content:space-between;
-  margin: 2px 2px 12px 2px;
-}
-
-#build-panel .bp-title{
-  color: var(--uiheading);
+.build-panel__title {
+  margin: 0;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: .2px;
-  font-size: 20px;
+  color: var(--title-color);
+  letter-spacing: .3px;
 }
 
-#build-panel .bp-close{
-  appearance:none; border:0; outline:0;
-  width:44px; height:44px; border-radius:50%;
-  background: rgba(255,255,255,0.1);
-  cursor:pointer;
+.build-panel__close {
+  appearance: none;
+  border: 0;
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  font-size: 18px;
+  cursor: pointer;
 }
-#build-panel .bp-close:after{
-  content:"✕"; color:#fff; font-size:20px; line-height:44px; display:block; text-align:center;
+.build-panel__close:hover { background: rgba(255,255,255,.14); }
+
+.build-panel__body {
+  padding: 0 var(--build-panel-pad) var(--build-panel-pad);
+  max-height: 70vh;
+  overflow: auto;
 }
 
-/* Kategorieblock */
-.bp-cat{
-  margin: 16px 0 22px 0;
+.build-sec { margin-bottom: 18px; }
+
+.build-sec__title {
+  margin: 0 0 10px 2px;
+  font-size: 18px;
+  color: var(--subtitle-color);
+  font-weight: 700;
 }
 
-.bp-cat h3{
-  margin: 0 0 10px 6px;
-  color: var(--uiheading);
-  font-size: 16px; font-weight: 700;
+/* Einzeiliges Karten-Layout (mobile-first) */
+.build-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px,1fr));
+  gap: var(--card-gap);
 }
 
-/* Einzeilig: horizontale Leiste mit Scroll */
-.bp-row{
-  display:flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding: 2px 6px 8px 6px;
-  scrollbar-width: thin;
-}
-.bp-row::-webkit-scrollbar{ height:8px; }
-.bp-row::-webkit-scrollbar-thumb{ background:#2d3531; border-radius:6px; }
-
-/* Karten-Buttons */
-.bp-card{
-  min-width: 156px; max-width: 156px;
-  background: var(--uicard);
-  border:1px solid var(--uicard-border);
-  border-radius: 14px;
-  box-shadow: var(--uicard-shadow);
-  padding: 10px 10px 12px 10px;
-  display:flex; flex-direction:column; align-items:center; gap:8px;
-  cursor:pointer;
+.build-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  background: var(--card-bg);
+  cursor: pointer;
+  padding: 12px;
   transition: transform .06s ease, box-shadow .12s ease;
-  user-select:none;
 }
-.bp-card:active{ transform: translateY(1px) scale(0.995); }
+.build-card:active { transform: translateY(1px) scale(.99); }
+.build-card:hover  { box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 
-.bp-thumb{
-  width: 120px; height: 86px;
-  display:block;
-  background:#eef2ef;
-  border-radius:10px;
-  border:1px solid #e2e8e4;
-  object-fit: contain;
+.build-card__imgwrap {
+  width: 100%;
+  height: var(--card-img-h);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f5f6f4;
+}
+.build-card__img {
+  max-width: 100%;
+  max-height: calc(var(--card-img-h) - 10px);
+  display: block;
   image-rendering: -webkit-optimize-contrast;
 }
 
-.bp-label{
-  color: var(--uilabel);
-  font-size: 15px;
+.build-card__label {
+  width: 100%;
+  text-align: center;
+  font-size: var(--label-size);
   font-weight: 700;
-  text-align:center;
-  line-height: 1.15;
+  color: var(--label-color);
+  line-height: 1.2;
+  letter-spacing: .2px;
 }
 
-/* Fallback/Muted */
-.bp-card[data-disabled="1"]{
-  opacity:.5; pointer-events:none;
-}
-.bp-card .bp-muted{
-  color: var(--uimuted);
-  font-size: 12px;
+/* Lade-/Leerzustände */
+.build-empty {
+  padding: 18px;
+  color: #cfd8d3;
+  font-size: 16px;
 }
 
-/* Kleinere Phones */
-@media (max-width: 380px){
-  .bp-card{ min-width: 142px; max-width: 142px; }
-  .bp-thumb{ width:110px; height:80px; }
+/* Breitere Displays → etwas größere Karten */
+@media (min-width: 720px) {
+  :root { --card-img-h: 110px; }
+  .build-grid { grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); }
 }
