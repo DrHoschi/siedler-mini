@@ -1,67 +1,34 @@
-/* ============================================================================
- * Datei: assets/inspector/inspector.api-compat.js
- * Version: v18.12.4
- * Zweck:
- *  - Kompatibilitäts-API __INSPECTOR_API__ bereitstellen, wenn Core nur core.api hat
- *  - Events cb:inspector-open / -close / -toggle abwickeln
- *  - Kein UI – nur Verdrahtung
- * ============================================================================
- */
+/* =============================================================================
+Datei: assets/inspector/inspector.api-compat.js
+Version: v1.2.0
+Ziel: Nur ergänzen, nie ersetzen.
+     - Stellt Inspector.open/close/toggle bereit, falls Module nur Events nutzen.
+     - Spiegelt Events neu/legacy (cb:inspector:*  ↔  cb:inspector-*, inspector:*)
+============================================================================= */
+
 (function(){
-  "use strict";
-  const MOD = "[inspector.api-compat]";
-  const ok  = (...a)=>(window.CBLog?.ok||console.log)(MOD, ...a);
-  const wrn = (...a)=>(window.CBLog?.warn||console.warn)(MOD, ...a);
+  const logI = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
 
-  // Warten bis Core initialisiert hat
-  function ensure() {
-    const core = window.__INSPECTOR_CORE__;
-    if (!core || !core.api) {
-      wrn("Core-API noch nicht verfügbar – versuche später erneut.");
-      return false;
-    }
+  function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){} }
 
-    // Wenn __INSPECTOR_API__ bereits existiert, nur Events verdrahten und raus
-    if (!window.__INSPECTOR_API__) {
-      // Thin wrapper, der auf core.api.* delegiert
-      window.__INSPECTOR_API__ = {
-        open () { try{ core.api.open(); } catch(e){ wrn("open()", e); } },
-        close() { try{ core.api.close(); } catch(e){ wrn("close()", e); } },
-        toggle(force) {
-          try {
-            if (typeof force === "boolean") {
-              force ? core.api.open() : core.api.close();
-            } else {
-              core.api.isOpen() ? core.api.close() : core.api.open();
-            }
-          } catch(e){ wrn("toggle()", e); }
-        }
-      };
-      ok("Compat-API bereitgestellt.");
-    } else {
-      ok("__INSPECTOR_API__ vorhanden – nur Events verdrahten.");
-    }
+  const CANON = { open:"cb:inspector:open", close:"cb:inspector:close", tab:"cb:inspector:tab:change" };
+  const MIRROR_OUT = {
+    [CANON.open]:  ["cb:inspector-open","inspector:open","inspector-open"],
+    [CANON.close]: ["cb:inspector-close","inspector:close","inspector-close"],
+    [CANON.tab]:   ["cb:inspector-tab-change","inspector:tab:change","inspector-tab-change"]
+  };
 
-    // Einheitliche Events → API
-    window.addEventListener("cb:inspector-open",  ()=>window.__INSPECTOR_API__?.open());
-    window.addEventListener("cb:inspector-close", ()=>window.__INSPECTOR_API__?.close());
-    window.addEventListener("cb:inspector-toggle", (ev)=>{
-      const f = ev?.detail?.force; window.__INSPECTOR_API__?.toggle(f);
-    });
+  // Spiegel: Canon → Legacy
+  [CANON.open, CANON.close, CANON.tab].forEach(src=>{
+    window.addEventListener(src, ev=> (MIRROR_OUT[src]||[]).forEach(m=> emit(m, ev.detail)));
+  });
 
-    // (Optional) Legacy-Event-Namen weiterhin akzeptieren
-    window.addEventListener("cb:inspector-open-legacy",  ()=>window.__INSPECTOR_API__?.open());
-    window.addEventListener("cb:inspector-close-legacy", ()=>window.__INSPECTOR_API__?.close());
+  // API nur ergänzen, falls nicht vorhanden
+  const I = (window.Inspector = window.Inspector || {});
+  if (typeof I.open !== "function")   I.open   = (from)=> emit(CANON.open,  {from:from||"api"});
+  if (typeof I.close !== "function")  I.close  = (why)=>  emit(CANON.close, {reason:why||"api"});
+  if (typeof I.toggle !== "function") I.toggle = (o)=>    emit("cb:inspector:toggle",{from:o||"api"});
+  if (typeof I.setTab !== "function") I.setTab = (t)=>    emit(CANON.tab,   {tab:String(t||"logs")});
 
-    ok("Events verdrahtet.");
-    return true;
-  }
-
-  // Sofort versuchen, danach noch kurz pollen (für “defer”-Load)
-  if (!ensure()) {
-    const t0 = Date.now();
-    const timer = setInterval(()=>{
-      if (ensure() || Date.now() - t0 > 4000) clearInterval(timer);
-    }, 120);
-  }
+  logI("aktiv (v1.2.0)");
 })();
