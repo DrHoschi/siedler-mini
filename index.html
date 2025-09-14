@@ -1,150 +1,92 @@
 <!doctype html>
-<!--
-  Neue Siedler – Index (Compat-Stand)
-  Version: v17.8.2-kompat
-
-  Lade-Reihenfolge (wichtig):
-  Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split + compat) → Boot-Compat
-
-  Hinweise:
-  - KEIN altes ui/ui-inspector.js laden (Inspector ist gesplittet und bleibt unangetastet).
-  - UI-Bridge stellt GameUI bereit (toggleBuild / toggleInspector).
-  - Build-Dock: akzeptiert #build-dock oder (legacy) #build-panel.
--->
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f0d">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Neue Siedler</title>
 
-  <!-- Styles (nur aktuelle; keine alte style.css) -->
-  <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10">
-  <link rel="stylesheet" href="css/base.css?v=20250914">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=20250914">
-  <link rel="stylesheet" href="assets/inspector/inspector.css?v=20250914">
+  <!-- Styles -->
+  <link rel="stylesheet" href="assets/ui/ui-start.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="assets/ui/ui-build.css">
+  <link rel="stylesheet" href="assets/inspector/inspector.css">
 
   <style>
     html, body { height:100%; margin:0; background:#0b0f0d; }
-    #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
+    #game { width:100vw; height:100vh; display:block; }
 
-    /* Floating Action Buttons (Bau/Inspector) */
-    .ui-fab {
-      position:fixed;
-      z-index:2147483647 !important;
-      pointer-events:auto !important;
-    }
-    #btn-build     { left:16px;  bottom:16px; }
+    .ui-fab { position:fixed; z-index:2147483647; }
+    #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
-    .ui-fab button{
+    .ui-fab button {
       width:52px; height:52px; border-radius:50%; border:none;
       background:rgba(30,30,30,.92); color:#fff; font-size:22px;
-      box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px);
-      cursor:pointer; pointer-events:auto !important;
     }
-    /* Platz für das Build-Dock (neu & legacy) */
-    :root { --build-dock-max-h: 224px; }
     body.has-build-open #btn-build,
-    body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px); }
+    body.has-build-open #btn-inspector { bottom:240px; }
   </style>
 </head>
 <body>
 
-  <!-- Bühne -->
-  <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
+  <canvas id="game" data-map="assets/maps/map-mini.json"></canvas>
+  <div id="build-dock" class="ui-build-dock"></div>
 
-  <!-- Build-Dock (neu) → Script findet auch legacy #build-panel automatisch -->
-  <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
-
-  <!-- Start-Panel -->
-  <div id="start-panel" class="ui-start" aria-label="Startmenü">
-    <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
-    <div class="ui-start-card" role="dialog" aria-modal="true">
+  <div id="start-panel" class="ui-start">
+    <div class="ui-start-card">
       <h1>Neue Siedler</h1>
-      <div class="actions">
-        <button id="btnStartNew" class="btn main">Neues Spiel</button>
-        <button id="btnStartResume" class="btn">Weiterspielen</button>
-        <button id="btnStartReset" class="btn ghost">Reset</button>
-        <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
-      </div>
+      <button id="btnStartNew">Neues Spiel</button>
+      <button id="btnStartResume">Weiterspielen</button>
+      <button id="btnStartReset">Reset</button>
+      <button id="btnStartFullscreen">Fullscreen</button>
     </div>
   </div>
 
   <!-- FABs -->
-  <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" aria-label="Bau-Menü"
-            onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
+  <div id="btn-build" class="ui-fab">
+    <button onclick="GameUI.toggleBuild()">🧱</button>
   </div>
-  <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" aria-label="Inspector"
-            onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
+  <div id="btn-inspector" class="ui-fab">
+    <button onclick="GameUI.toggleInspector()">🛠</button>
   </div>
 
-  <!-- Core + Polyfills -->
-  <script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
-  <script src="assets/core/core.env.js?v=17.8.2"></script>
+  <!-- Core -->
+  <script src="assets/core/cblog.polyfill.js"></script>
+  <script src="assets/core/core.env.js"></script>
+  <script src="assets/core/asset.js"></script>
+  <script src="assets/core/build.assets.js"></script>
+  <script src="assets/core/registry.js"></script>
+  <script src="assets/core/entities.registry.js"></script>
+  <script src="assets/core/core.entities.js"></script>
+  <script src="assets/core/core.production.js"></script>
+  <script src="assets/core/core.pfglue.js"></script>
+  <script src="assets/core/camera.js"></script>
+  <script src="assets/core/core.map.js"></script>
+  <script src="assets/core/core.input.js"></script>
+  <script src="assets/core/carriers.js"></script>
+  <script src="assets/core/overlay-hooks.js"></script>
+  <script src="assets/core/core.render.js"></script>
+  <script src="core/game.js"></script>
+  <script src="assets/core/game.bootstrap.js"></script>
+  <script src="assets/core/game.js"></script>
 
-  <!-- Asset-Layer -->
-  <script src="assets/core/asset.js?v=17.8.7"></script>
-  <script src="assets/core/build.assets.js?v=17.8.7"></script>
+  <!-- Inspector (ALT aktiv) -->
+  <script defer src="assets/ui/ui-inspector.js"></script>
 
-  <!-- Rest des Core-Stacks -->
-  <script src="assets/core/registry.js?v=1.2.0"></script>
-  <script src="assets/core/entities.registry.js?v=1.1.1"></script>
-  <script src="assets/core/core.entities.js?v=17.6.2"></script>
-  <script src="assets/core/core.production.js?v=17.8.2"></script>
-  <script src="assets/core/core.pfglue.js?v=17.8.2"></script>
-  <script src="assets/core/camera.js?v=17.9.5"></script>
-  <script src="assets/core/core.map.js?v=17.9.1"></script>
-  <script src="assets/core/core.input.js?v=17.8.2"></script>
-  <script src="assets/core/carriers.js?v=17.8.2"></script>
-  <script src="assets/core/overlay-hooks.js?v=17.8.2"></script>
-  <script src="assets/core/core.render.js?v=17.9.5"></script>
-  <script src="core/game.js?v=18.0.0"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.8.7"></script>
-  <script src="assets/core/game.js?v=17.10.0"></script>
-
-  <!-- Inspector (split) – unverändert lassen -->
-  <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.14.4"></script>
-  <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
-  <script defer src="assets/inspector/inspector.paths.js?v=18.14.4"></script>
-  <script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
-  <script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
-
-  <!-- Legacy-Fassade (Kompatibilität) -->
-  <script defer src="game.js?v=17.8.2"></script>
-  <script defer src="core/pathfinder.js?v=16.5.0"></script>
+  <!-- Inspector (NEU – Split, für später) -->
+  <!--
+  <script defer src="assets/inspector/inspector.core.js"></script>
+  <script defer src="assets/inspector/inspector.logs.js"></script>
+  <script defer src="assets/inspector/inspector.tests.js"></script>
+  <script defer src="assets/inspector/inspector.resources.js"></script>
+  <script defer src="assets/inspector/inspector.paths.js"></script>
+  <script defer src="assets/inspector/overlay.hooks.js"></script>
+  -->
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.9.0"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.9.12"></script>
+  <script defer src="assets/ui/ui-bridge.js"></script>
+  <script defer src="assets/ui/ui-start.js"></script>
+  <script defer src="assets/ui/ui-build.js"></script>
 
-  <!-- Inspector Kompat-Schicht (stellt window.Inspector ggf. bereit) -->
-  <script defer src="assets/inspector/inspector.compat.js?v=1"></script>
-
-  <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=17.8.2"></script>
-
-  <!-- Marker / Body-Klassen + Telemetrie -->
-  <script>
-    (function () {
-      window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v17.8.2";
-      (window.CBLog?.info || console.log)("[index] UI bereit (v17.8.2)");
-
-      // FAB-Abstand, wenn das Bau-Dock geöffnet ist (unterstützt beide Event-Varianten)
-      function setOpen(){ document.body.classList.add('has-build-open'); }
-      function setClose(){ document.body.classList.remove('has-build-open'); }
-      window.addEventListener('cb:build:open',  setOpen);
-      window.addEventListener('cb:build:close', setClose);
-      window.addEventListener('cb:build-open',  setOpen);
-      window.addEventListener('cb:build-close', setClose);
-    })();
-  </script>
+  <script defer src="boot.compat.js"></script>
 </body>
 </html>
