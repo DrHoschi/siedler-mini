@@ -1,238 +1,173 @@
 /* ============================================================================
- * Datei: assets/ui/ui-build.js
+ * Neue Siedler – UI Build Dock
  * Version: v17.9.13
- * Projekt: Neue Siedler
- *
- * Zweck:
- *  - Baut das Baumenü aus window.EntitiesRegistry (Single-Source-of-Truth)
- *  - Robust gegen unterschiedliche Registry-Shapes (Arrays ODER Getter-Methoden)
- *  - Einzeilige Kategorien-Reihen (horizontales Scrollen)
- *  - Klick auf Karte → Build-Aktion (legacy + modern + Event-Fallback)
- *
- * Events:
- *  - cb:build-open / cb:build-close (für FAB-Offsets etc.)
- *  - cb:build:request { detail:{ id } } (Fallback, falls keine Bridge greift)
+ * Abhängigkeit: window.Registry (assets/core/registry.js)
+ * DOM: #build-panel wird gefüllt
+ * Events: cb:build-open / cb:build-close / cb:build:select
  * ============================================================================
  */
-(() => {
-  'use strict';
+(function (global, d){
+  const logI = (global.CBLog?.info  || console.log).bind(console, "[ui-build]");
+  const logW = (global.CBLog?.warn  || console.warn).bind(console, "[ui-build]");
+  const logE = (global.CBLog?.error || console.error).bind(console, "[ui-build]");
 
-  const TAG  = '[ui-build]';
-  const log  = (...a) => (window.CBLog?.info || console.log)(TAG, ...a);
-  const warn = (...a) => (window.CBLog?.warn || console.warn)(TAG, ...a);
-  const err  = (...a) => (window.CBLog?.error || console.error)(TAG, ...a);
+  const $panel = d.getElementById("build-panel");
+  if (!$panel) { logE("Kein #build-panel im DOM gefunden."); return; }
 
-  const $ = (sel, root=document) => root.querySelector(sel);
-  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-
-  const PANEL_ID = 'build-panel';
-
-  // ------------------- Registry Access (robust) -------------------
-  function getRegistry() {
-    const R = window.EntitiesRegistry;
-    if (!R) return null;
-
-    // Kategorien
-    const categories =
-      (typeof R.getCategories === 'function' ? R.getCategories() :
-      Array.isArray(R.categories) ? R.categories : [])
-      // nur sichtbare Kategorien
-      .filter(c => !c?.hidden);
-
-    // Buildings / Items
-    const allItems =
-      (typeof R.getBuildings === 'function' ? R.getBuildings() :
-      Array.isArray(R.buildings) ? R.buildings :
-      Array.isArray(R.items) ? R.items : [])
-      // nur sichtbare/baubare Einträge
-      .filter(b => !b?.hidden && (b?.buildable ?? true));
-
-    // Lookup pro Kategorie
-    const byCategory = (catId) => {
-      if (typeof R.byCategory === 'function') {
-        return (R.byCategory(catId) || []).filter(b => !b?.hidden && (b?.buildable ?? true));
-      }
-      return allItems.filter(b => (b.category === catId || b.cat === catId));
+  // --- Styles (kleines Safety-Net, falls CSS nicht geladen wäre) ------------
+  const ensureInlineStylesOnce = (() => {
+    let done=false; return () => {
+      if (done) return; done=true;
+      $panel.style.position       = "fixed";
+      $panel.style.left           = "0";
+      $panel.style.right          = "0";
+      $panel.style.bottom         = "0";
+      $panel.style.maxHeight      = "42vh";
+      $panel.style.padding        = "16px 16px 20px";
+      $panel.style.background     = "rgba(16,24,20,.92)";
+      $panel.style.backdropFilter = "blur(6px)";
+      $panel.style.borderTopLeftRadius  = "24px";
+      $panel.style.borderTopRightRadius = "24px";
+      $panel.style.boxShadow      = "0 -18px 36px rgba(0,0,0,.35)";
+      $panel.style.overflowY      = "auto";
+      $panel.style.zIndex         = "2147483600";
+      $panel.style.display        = "none";
+      $panel.setAttribute("role","dialog");
+      $panel.setAttribute("aria-label","Bauen");
     };
+  })();
 
-    // Bild-URL ermitteln (icon → sprite → placeholder)
-    const resolveIcon = (b) => {
-      const p = b.icon || b.preview || b.sprite || b.src;
-      if (p) return p;
-      return 'assets/placeholder64.PNG';
-    };
-
-    // Anzeigename
-    const resolveName = (b) => b.title || b.name || b.id || 'Unbenannt';
-
-    // ID
-    const resolveId = (b) => b.id || b.key || b.name;
-
-    return { categories, allItems, byCategory, resolveIcon, resolveName, resolveId, version: R.version || 'unknown' };
+  // --- Render ---------------------------------------------------------------
+  function renderCategory(title){
+    const h = d.createElement("h3");
+    h.textContent = title;
+    h.className = "build-cat";
+    return h;
   }
+  function renderButton(b){
+    const btn = d.createElement("button");
+    btn.className = "build-btn";
+    btn.type = "button";
+    btn.setAttribute("data-id", b.id);
 
-  // ------------------- Build Bridge (robust) -------------------
-  function requestBuild(id) {
-    let ok = false;
+    const img = d.createElement("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = b.name;
+    img.src = b.sprite;
 
-    // Modern / Core
-    try {
-      if (typeof window.Entities?.place === 'function') {
-        window.Entities.place(id);
-        ok = true;
-      }
-    } catch(e){ /* ignore */ }
+    const cap = d.createElement("span");
+    cap.className = "cap";
+    cap.textContent = b.name;
 
-    // Legacy
-    try {
-      if (typeof window.GameCore?.placeBuilding === 'function') {
-        window.GameCore.placeBuilding(id);
-        ok = true;
-      }
-    } catch(e){ /* ignore */ }
+    btn.appendChild(img);
+    btn.appendChild(cap);
 
-    // Universeller Event-Fallback
-    if (!ok) {
-      window.dispatchEvent(new CustomEvent('cb:build:request', { detail: { id } }));
-    }
-  }
-
-  // ------------------- Panel Lifecycle -------------------
-  let panel, isOpen = false;
-
-  function openPanel() {
-    if (!panel) return;
-    panel.classList.add('open');
-    document.body.classList.add('has-build-open');
-    window.dispatchEvent(new Event('cb:build-open'));
-    isOpen = true;
-  }
-  function closePanel() {
-    if (!panel) return;
-    panel.classList.remove('open');
-    document.body.classList.remove('has-build-open');
-    window.dispatchEvent(new Event('cb:build-close'));
-    isOpen = false;
-  }
-  function togglePanel() { isOpen ? closePanel() : openPanel(); }
-
-  // ------------------- DOM Builders -------------------
-  function buildCard(b, helpers) {
-    const id = helpers.resolveId(b);
-    const name = helpers.resolveName(b);
-    const img = helpers.resolveIcon(b);
-
-    const card = document.createElement('button');
-    card.className = 'ui-build-card';
-    card.type = 'button';
-    card.setAttribute('data-id', id);
-    card.innerHTML = `
-      <span class="ui-build-thumb">
-        <img alt="" loading="lazy">
-      </span>
-      <span class="ui-build-title">${name}</span>
-    `;
-    const imgEl = $('img', card);
-    imgEl.src = img;
-    imgEl.onerror = () => { imgEl.src = 'assets/placeholder64.PNG'; };
-
-    card.addEventListener('click', () => {
-      requestBuild(id);
-      // Optional: Panel schließen nach Auswahl
-      // closePanel();
+    btn.addEventListener("click", () => {
+      selectBuilding(b);
     });
 
-    return card;
+    return btn;
+  }
+  function selectBuilding(b){
+    try {
+      global.dispatchEvent(new CustomEvent("cb:build:select", { detail: b }));
+    } catch {}
+    // Legacy-Brücken – rufen wir „best effort“
+    try {
+      // ui-bridge → GameCore?
+      const ok =
+        (global.GameCore?.place && global.GameCore.place(b.id)) ||
+        (global.GameCore?.placeBuilding && global.GameCore.placeBuilding(b.id)) ||
+        (global.GameCore?.build && global.GameCore.build(b.place || b.id));
+      logI(`Build-Aktion: ${b.place || b.id} → ${ok ? "ok" : "noop"}`);
+    } catch(e) {
+      logW("Build-Aktion (Core) nicht verdrahtet:", e?.message || e);
+    }
+    close();
   }
 
-  function buildCategory(cat, items, helpers) {
-    const sec = document.createElement('section');
-    sec.className = 'ui-build-section';
+  function render(){
+    ensureInlineStylesOnce();
 
-    const h = document.createElement('h3');
-    h.className = 'ui-build-section-title';
-    h.textContent = cat.title || cat.name || cat.id || 'Kategorie';
-    sec.appendChild(h);
-
-    const row = document.createElement('div');
-    row.className = 'ui-build-row';
-    items.forEach(b => row.appendChild(buildCard(b, helpers)));
-    sec.appendChild(row);
-
-    return sec;
-  }
-
-  function render() {
-    const R = getRegistry();
-    if (!R) {
-      warn('Registry nicht gefunden → Menü leer.');
-      renderEmpty('Registry nicht verfügbar.');
+    if (!global.Registry || !global.Registry.__ready){
+      logW("Registry nicht bereit – Menü bleibt leer bis cb:registry:ready");
       return;
     }
 
-    const { categories, allItems } = R;
-    if (!categories.length || !allItems.length) {
-      warn('Keine Items in Registry gefunden – Menü leer.', R);
-      renderEmpty('Keine Baueinträge gefunden.');
+    // Daten holen
+    const cats = global.Registry.list("categories");
+    const all  = global.Registry.where("buildings", { enabled:true });
+
+    // Panel leeren
+    $panel.innerHTML = "";
+
+    if (!cats.length || !all.length){
+      const empty = d.createElement("p");
+      empty.textContent = "Keine Baueinträge gefunden.";
+      empty.style.opacity = ".85";
+      empty.style.padding = "12px 8px 4px";
+      $panel.appendChild(empty);
+      logW("Keine Items in Registry gefunden – Menü leer.", { cats: cats.length, items: all.length });
       return;
     }
 
-    panel.innerHTML = `
-      <div class="ui-build-header">
-        <h2>Bauen</h2>
-        <button class="ui-build-close" aria-label="Schließen">×</button>
-      </div>
-      <div class="ui-build-content"></div>
-    `;
-    const content = $('.ui-build-content', panel);
-    $('.ui-build-close', panel).addEventListener('click', closePanel);
+    // Layout-Container
+    const wrap = d.createElement("div");
+    wrap.className = "build-wrap"; // wird von assets/ui/ui-build.css schön gemacht
 
-    categories.forEach(cat => {
-      const items = R.byCategory(cat.id || cat.key || cat.name);
-      if (items && items.length) {
-        content.appendChild(buildCategory(cat, items, R));
-      }
+    // Kategorien → Buttons (einzeiliges Grid, auto-wrap)
+    cats.forEach(cat=>{
+      const group = d.createElement("section");
+      group.className = "build-group";
+
+      group.appendChild(renderCategory(cat.name));
+      const row = d.createElement("div");
+      row.className = "build-row";
+
+      all.filter(b=>b.cat===cat.id).forEach(b=>{
+        row.appendChild(renderButton(b));
+      });
+
+      group.appendChild(row);
+      wrap.appendChild(group);
     });
+
+    $panel.appendChild(wrap);
   }
 
-  function renderEmpty(msg) {
-    panel.innerHTML = `
-      <div class="ui-build-header">
-        <h2>Bauen</h2>
-        <button class="ui-build-close" aria-label="Schließen">×</button>
-      </div>
-      <div class="ui-build-empty">${msg || '—'}</div>
-    `;
-    $('.ui-build-close', panel).addEventListener('click', closePanel);
-  }
-
-  // ------------------- Boot -------------------
-  function wireGlobalAPI() {
-    // Stelle sicher, dass die UI-Bridge den Toggle nutzen kann
-    const GUI = (window.GameUI ||= {});
-    GUI.openBuild   = openPanel;
-    GUI.closeBuild  = closePanel;
-    GUI.toggleBuild = togglePanel;
-  }
-
-  function init() {
-    panel = document.getElementById(PANEL_ID);
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = PANEL_ID;
-      document.body.appendChild(panel);
-    }
-    panel.classList.add('ui-build');
-
-    wireGlobalAPI();
+  // --- Open/Close/Toggle ----------------------------------------------------
+  function open(){
     render();
-
-    log('geladen (v17.9.13).');
+    $panel.style.display = "block";
+    d.body.classList.add("has-build-open");
+    try { global.dispatchEvent(new CustomEvent("cb:build-open")); } catch {}
   }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once:true });
-  } else {
-    init();
+  function close(){
+    $panel.style.display = "none";
+    d.body.classList.remove("has-build-open");
+    try { global.dispatchEvent(new CustomEvent("cb:build-close")); } catch {}
   }
-})();
+  function toggle(){ ($panel.style.display==="block") ? close() : open(); }
+
+  // Expose in GameUI
+  global.GameUI = global.GameUI || {};
+  global.GameUI.openBuild   = open;
+  global.GameUI.closeBuild  = close;
+  global.GameUI.toggleBuild = toggle;
+
+  // Events & Boot
+  global.addEventListener("cb:registry:ready", () => {
+    logI("Registry bereit – UI wird gebootet.");
+    render();
+  });
+  global.addEventListener("cb:registry:update", render);
+
+  // Optional: wenn Startmenü „Neues Spiel“ dispatcht
+  global.addEventListener("cb:game-start", () => {
+    // automatisch rendern, aber geschlossen lassen
+    render();
+  });
+
+  logI("geladen (v17.9.13) – wartet auf Registry.");
+})(window, document);
