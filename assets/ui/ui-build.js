@@ -1,275 +1,267 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.js
- * Version: v17.9.12
+ * Version: v17.9.13
+ * Projekt: Neue Siedler
+ *
  * Zweck:
- *  - Build-Menü rendern (Einzeilig pro Kategorie)
- *  - Robust gegen unterschiedliche Registry-/Event-Bezeichnungen
- *  - Build-Aktionen an Engine weitergeben (mehrere Kompat-Varianten)
- * ============================================================================
- */
+ *  - Build-Menü aus Registry (Single-Source-of-Truth) aufbauen
+ *  - robustes Waiting/Retry bis Registry verfügbar ist
+ *  - Einzeiliges Karten-Layout pro Eintrag (Bild + Label)
+ *  - Kompatibel mit älteren Bridges (Events & Fallbacks)
+ *
+ * Events, die wir verstehen:
+ *  - 'cb:registry-ready'   → Registry ist initialisiert
+ *  - 'cb:game-start'       → Spielstart (zur Sicherheit)
+ *  - 'ui:build:open'       → Menü öffnen (neuer Stil)
+ *  - 'cb:build-open'       → Menü öffnen (älterer Stil)
+ *  - 'cb:build-close'      → Menü schließen
+ * ============================================================================ */
 (() => {
   'use strict';
 
   const TAG  = '[ui-build]';
-  const LOG  = (...a) => (window.CBLog?.log || console.log)(TAG, ...a);
-  const WARN = (...a) => (window.CBLog?.warn || console.warn)(TAG, ...a);
-  const ERR  = (...a) => (window.CBLog?.error || console.error)(TAG, ...a);
+  const LOG  = (...a) => console.log(TAG, ...a);
+  const WARN = (...a) => console.warn(TAG, ...a);
+  const ERR  = (...a) => console.error(TAG, ...a);
 
-  // ---------- Registry lesen (robust) --------------------------------------
-  function readRegistry() {
-    // bevorzugt: EntitiesRegistry.get()
-    const er = window.EntitiesRegistry;
-    if (er && typeof er.get === 'function') {
-      const r = er.get();
-      if (r && (r.categories?.length || r.items?.length)) return r;
-    }
-    // evtl. flach: EntitiesRegistry.data
-    if (er && er.data && (er.data.categories?.length || er.data.items?.length)) {
-      return er.data;
-    }
-    // ältere Setups: window.ENTITIES
-    if (window.ENTITIES && (window.ENTITIES.categories?.length || window.ENTITIES.items?.length)) {
-      return window.ENTITIES;
-    }
-    // sehr alt: window.Entities?.registry
-    if (window.Entities && window.Entities.registry && (window.Entities.registry.categories?.length || window.Entities.registry.items?.length)) {
-      return window.Entities.registry;
-    }
-    return { categories: [], items: [] };
+  // ---------- Helper --------------------------------------------------------
+  function getRegistry() {
+    // Tolerant alle Varianten durchprobieren
+    const r =
+      (window.EntitiesRegistry && typeof window.EntitiesRegistry.getAll === 'function' && window.EntitiesRegistry) ||
+      (window.BuildRegistry    && typeof window.BuildRegistry.getAll    === 'function' && window.BuildRegistry)    ||
+      (window.Registry         && typeof window.Registry.getAll         === 'function' && window.Registry)         ||
+      null;
+    return r;
   }
 
-  function normalizeRegistry(raw) {
-    const catMap = new Map();
-    const categories = (raw.categories || []).map(c => {
-      const id = (c.id || c.key || c.slug || c.name || '').toString();
-      const title = c.title || c.name || id;
-      const order = typeof c.order === 'number' ? c.order : 9999;
-      const res = { id, title, order };
-      catMap.set(id, res);
-      return res;
-    }).sort((a,b) => a.order - b.order || a.title.localeCompare(b.title));
-
-    const items = (raw.items || raw.buildings || raw.entities || []).map(it => {
-      const id = (it.id || it.key || it.slug || it.name || '').toString();
-      const title = it.title || it.name || id;
-      const category = (it.category || it.cat || 'misc').toString();
-      const icon = it.icon || it.thumb || it.sprite || it.image || '';
-      const order = typeof it.order === 'number' ? it.order : 9999;
-      const placeAction = it.placeAction || it.action || `place-${id}`;
-      return { id, title, category, icon, order, placeAction };
-    }).sort((a,b) => a.order - b.order || a.title.localeCompare(b.title));
-
-    // Falls keine Kategorien geliefert wurden → aus Items ableiten
-    if (!categories.length && items.length) {
-      const derived = Array.from(new Set(items.map(i => i.category)));
-      derived.forEach((cid, idx) => {
-        catMap.set(cid, { id: cid, title: titleize(cid), order: idx });
-      });
-      return { categories: Array.from(catMap.values()), items };
-    }
-    return { categories, items };
-  }
-
-  function titleize(s='') {
-    return s.replace(/[-_]/g,' ').replace(/\b\w/g, m => m.toUpperCase());
-  }
-
-  // ---------- DOM bauen -----------------------------------------------------
-  let panel, inner;
+  function byId(id) { return document.getElementById(id); }
 
   function ensurePanel() {
+    let panel = byId('build-panel');
     if (panel) return panel;
 
     panel = document.createElement('div');
     panel.id = 'build-panel';
-    panel.setAttribute('aria-hidden', 'true');
+    panel.className = 'build-panel';
 
-    const wrap = document.createElement('div');
-    wrap.className = 'bp-inner';
+    panel.innerHTML = `
+      <div class="build-panel__head">
+        <h2 class="build-panel__title">Bauen</h2>
+        <button class="build-panel__close" aria-label="Schließen" title="Schließen">✕</button>
+      </div>
+      <div class="build-panel__body" id="build-body">
+        <div class="build-empty" id="build-empty">Lädt&nbsp;…</div>
+      </div>
+    `;
 
-    const header = document.createElement('div');
-    header.className = 'bp-header';
-
-    const h = document.createElement('div');
-    h.className = 'bp-title';
-    h.textContent = 'Bauen';
-
-    const btn = document.createElement('button');
-    btn.className = 'bp-close';
-    btn.addEventListener('click', () => closePanel());
-
-    header.appendChild(h);
-    header.appendChild(btn);
-
-    inner = document.createElement('div');
-    inner.className = 'bp-content';
-
-    wrap.appendChild(header);
-    wrap.appendChild(inner);
-    panel.appendChild(wrap);
     document.body.appendChild(panel);
-
+    panel.querySelector('.build-panel__close').addEventListener('click', close);
     return panel;
   }
 
-  function imgEl(src, alt) {
+  function clearBody() {
+    const body = byId('build-body');
+    if (body) body.innerHTML = '';
+  }
+
+  function createSection(title) {
+    const sec = document.createElement('section');
+    sec.className = 'build-sec';
+
+    const h = document.createElement('h3');
+    h.className = 'build-sec__title';
+    h.textContent = title;
+
+    const grid = document.createElement('div');
+    grid.className = 'build-grid';
+
+    sec.appendChild(h);
+    sec.appendChild(grid);
+    return { sec, grid };
+  }
+
+  function createCard(item) {
+    const card = document.createElement('button');
+    card.className = 'build-card';
+    card.type = 'button';
+    card.dataset.key = item.key;
+
+    // Bild
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'build-card__imgwrap';
     const img = document.createElement('img');
-    img.className = 'bp-thumb';
-    img.alt = alt || '';
+    img.className = 'build-card__img';
     img.loading = 'lazy';
     img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    img.src = src;
-    img.onerror = () => {
-      // Platzhalter, wenn Icon fehlt
-      img.src = 'assets/placeholder64.PNG';
-    };
-    return img;
+    img.alt = item.title || item.key;
+    img.src = item.icon || item.sprite || item.preview || 'assets/placeholder64.png';
+    imgWrap.appendChild(img);
+
+    // Label
+    const label = document.createElement('div');
+    label.className = 'build-card__label';
+    label.textContent = item.title || item.key;
+
+    card.appendChild(imgWrap);
+    card.appendChild(label);
+
+    // Klick → Build-Action auslösen (legacy & modern)
+    card.addEventListener('click', () => {
+      try {
+        const actionKey = item.action || item.key;
+        // Moderner Event-Weg
+        const ev = new CustomEvent('ui:build:select', { detail: { key: actionKey, item }});
+        window.dispatchEvent(ev);
+        // Legacy-Bridge (falls vorhanden)
+        if (window.UIBridge && typeof window.UIBridge.onBuildSelect === 'function') {
+          window.UIBridge.onBuildSelect(actionKey, item);
+        }
+        LOG('Build-Item gewählt:', actionKey);
+        close();
+      } catch (e) {
+        ERR('Build-Select Fehler', e);
+      }
+    });
+
+    return card;
   }
 
-  function buttonCard(item) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'bp-card';
-    btn.setAttribute('data-id', item.id);
+  // ---------- Datenaufbereitung --------------------------------------------
+  function normalizeEntries(raw) {
+    // erwartete Shape aus Registry.getAll():
+    // { categories: [{id, title, order}], items: [{key,title,category,icon/sprite/preview,order}], version }
+    // Toleranzen: category kann id oder name sein; icon/sprite/preview – wir nehmen die 1. gefüllte.
+    const categories = (raw && raw.categories) ? [...raw.categories] : [];
+    const items      = (raw && raw.items)      ? [...raw.items]      : [];
 
-    // Bild: wenn icon leer ist, versuchen wir generischen Pfad
-    let icon = item.icon || '';
-    if (!icon) {
-      // Standard: aus /assets/buildings/<id>*.png erraten
-      icon = `assets/buildings/${item.id}.png`;
+    // Fallback-Sortierungen
+    categories.sort((a,b) => (a.order ?? 999) - (b.order ?? 999));
+    items.sort((a,b) => (a.order ?? 999) - (b.order ?? 999));
+
+    // Map nach Kategorie
+    const byCat = new Map();
+    for (const c of categories) {
+      const id = c.id || c.key || c.name;
+      if (!id) continue;
+      byCat.set(id, { meta: c, items: [] });
+    }
+    for (const it of items) {
+      const catId = it.category || it.cat || it.group || 'misc';
+      if (!byCat.has(catId)) {
+        byCat.set(catId, { meta: { id: catId, title: catId, order: 999 }, items: [] });
+      }
+      byCat.get(catId).items.push(it);
+    }
+    // Items innerhalb der Kategorie sortieren
+    for (const c of byCat.values()) {
+      c.items.sort((a,b) => (a.order ?? 999) - (b.order ?? 999));
     }
 
-    btn.appendChild(imgEl(icon, item.title));
-    const lab = document.createElement('div');
-    lab.className = 'bp-label';
-    lab.textContent = item.title;
-    btn.appendChild(lab);
-
-    btn.addEventListener('click', () => triggerPlace(item));
-    return btn;
+    return byCat;
   }
 
+  // ---------- Rendering -----------------------------------------------------
   function renderMenu() {
-    ensurePanel();
+    const panel = ensurePanel();
+    const body  = byId('build-body');
+    if (!body) return;
 
-    inner.innerHTML = '';
-    const raw = readRegistry();
-    const reg = normalizeRegistry(raw);
+    body.innerHTML = ''; // clear
 
-    if (!reg.items.length) {
-      WARN('Keine Items in Registry gefunden – Menü leer.', raw);
-      // trotzdem UI zeigen, damit man sieht „leer“
-      const empty = document.createElement('div');
-      empty.style.color = '#cbd5cf';
-      empty.style.padding = '12px 8px 20px 8px';
-      empty.textContent = 'Keine Baueinträge gefunden.';
-      inner.appendChild(empty);
-      LOG('geladen (v17.9.12) – Kategorien:', 0, ', Buttons:', 0);
+    const reg = getRegistry();
+    if (!reg) {
+      body.innerHTML = `<div class="build-empty">Keine Baueinträge gefunden.</div>`;
+      WARN('Keine Registry im Window gefunden.');
       return;
     }
 
-    let totalButtons = 0;
-
-    for (const cat of reg.categories) {
-      const block = document.createElement('section');
-      block.className = 'bp-cat';
-
-      const h3 = document.createElement('h3');
-      h3.textContent = cat.title || titleize(cat.id);
-      block.appendChild(h3);
-
-      const row = document.createElement('div');
-      row.className = 'bp-row';
-
-      reg.items.filter(it => (it.category||'') === cat.id)
-        .forEach(it => {
-          row.appendChild(buttonCard(it));
-          totalButtons++;
-        });
-
-      // Kategorie völlig leer? Dann überspringen.
-      if (!row.children.length) continue;
-
-      block.appendChild(row);
-      inner.appendChild(block);
+    let data;
+    try {
+      data = reg.getAll ? reg.getAll() : null;
+    } catch (e) {
+      ERR('Registry.getAll() wirft Fehler:', e);
     }
 
-    LOG('geladen (v17.9.12) – Kategorien:', (inner.querySelectorAll('.bp-cat').length), ', Buttons:', totalButtons);
-  }
+    if (!data || !data.items || data.items.length === 0) {
+      body.innerHTML = `<div class="build-empty">Keine Baueinträge gefunden.</div>`;
+      WARN('Keine Items in Registry gefunden – Menü leer.', data);
+      return;
+    }
 
-  // ---------- Öffnen/Schließen ---------------------------------------------
-  function openPanel() {
-    renderMenu();
-    ensurePanel();
-    panel.dataset.open = '1';
-    panel.setAttribute('aria-hidden','false');
-  }
-  function closePanel() {
-    if (!panel) return;
-    panel.dataset.open = '0';
-    panel.setAttribute('aria-hidden','true');
-  }
+    const byCat = normalizeEntries(data);
+    let catCount = 0, btnCount = 0;
 
-  // ---------- Platzieren (Kompat-Feuerwerk) --------------------------------
-  function triggerPlace(item) {
-    const id = item.id;
-    let ok = false;
+    for (const [catId, pack] of byCat) {
+      if (!pack || !pack.items || pack.items.length === 0) continue;
+      const title = pack.meta?.title || catId;
 
-    // 1) Moderne Bridge?
-    try {
-      if (window.GameCore?.placeBuilding) {
-        window.GameCore.placeBuilding(id);
-        ok = true;
+      const { sec, grid } = createSection(title);
+      for (const it of pack.items) {
+        const card = createCard(it);
+        grid.appendChild(card);
+        btnCount++;
       }
-    } catch (e) {}
+      body.appendChild(sec);
+      catCount++;
+    }
 
-    // 2) Entities-Modul?
-    try {
-      if (!ok && window.Entities?.place) {
-        window.Entities.place(id);
-        ok = true;
+    LOG(`geladen (v17.9.13) – Kategorien: ${catCount} , Buttons: ${btnCount}`);
+  }
+
+  // ---------- Open/Close/Retry ---------------------------------------------
+  let retryTimer = 0;
+  let tries = 0;
+
+  function open() {
+    const panel = ensurePanel();
+    panel.classList.add('is-open');
+    scheduleRender();
+  }
+
+  function close() {
+    const panel = byId('build-panel');
+    if (panel) panel.classList.remove('is-open');
+  }
+
+  function scheduleRender() {
+    clearTimeout(retryTimer);
+    const reg = getRegistry();
+
+    if (reg && reg.getAll) {
+      const data = reg.getAll();
+      if (data && Array.isArray(data.items) && data.items.length > 0) {
+        tries = 0;
+        renderMenu();
+        return;
       }
-    } catch (e) {}
+    }
 
-    // 3) Klassische Custom-Events
-    try {
-      if (!ok) {
-        const ev = new CustomEvent('cb:build-place', { detail:{ id }});
-        window.dispatchEvent(ev);
-        ok = true;
-      }
-    } catch (e) {}
-
-    LOG('Build-Aktion:', id, ok ? 'ok' : 'unsent');
-    // Panel offen lassen, damit man mehrere setzen kann
+    // Retry mit Backoff
+    tries++;
+    const delay = Math.min(2000, 100 + tries * 150);
+    const body = byId('build-body');
+    if (body && !body.querySelector('.build-empty')) {
+      body.innerHTML = `<div class="build-empty">Lädt&nbsp;…</div>`;
+    }
+    retryTimer = setTimeout(scheduleRender, delay);
   }
 
-  // ---------- Event-Brücken binden -----------------------------------------
-  function bindOpenClose() {
-    const OPEN_EVENTS  = ['cb:build-open','ui:build:open','build:open'];
-    const CLOSE_EVENTS = ['cb:build-close','ui:build:close','build:close'];
+  // ---------- Event-Wiring --------------------------------------------------
+  window.addEventListener('cb:registry-ready', scheduleRender);
+  window.addEventListener('cb:game-start', scheduleRender);
 
-    OPEN_EVENTS.forEach(n => window.addEventListener(n, openPanel));
-    CLOSE_EVENTS.forEach(n => window.addEventListener(n, closePanel));
+  // Öffnen/schließen – wir unterstützen beide Welten
+  window.addEventListener('ui:build:open', open);
+  window.addEventListener('cb:build-open', open);
+  window.addEventListener('cb:build-close', close);
 
-    // Falls ui-bridge direkt Methoden erwartet:
-    window.UIBuild = {
-      open: openPanel,
-      close: closePanel
-    };
-  }
+  // Falls eine Bridge uns direkt benutzen möchte:
+  window.UIBuild = Object.assign((window.UIBuild || {}), { open, close, refresh: scheduleRender });
 
-  // ---------- Start ---------------------------------------------------------
-  function init() {
-    bindOpenClose();
-    ensurePanel();
-    LOG('bereit (v17.9.12)');
-  }
+  // Initial-Log
+  LOG('bereit (v17.9.13)');
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once:true });
-  } else {
-    init();
-  }
+  // Optional: sofort rendern, wenn Registry schon da ist (Hot-Reload-Fall)
+  if (getRegistry()) scheduleRender();
 })();
