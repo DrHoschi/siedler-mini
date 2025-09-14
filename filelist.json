@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-14T08:26:01.361Z",
+  "createdAt": "2025-09-14T10:14:36.053Z",
   "root": ".",
   "count": 281,
   "entries": [
@@ -314,7 +314,7 @@
     {
       "type": "file",
       "path": "assets/core/entities.registry.js",
-      "size": 8454
+      "size": 4425
     },
     {
       "type": "file",
@@ -881,12 +881,12 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 7017
+      "size": 11690
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 9272
+      "size": 10034
     },
     {
       "type": "file",
@@ -1281,12 +1281,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 27742
+      "size": 27847
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10647
+      "size": 10690
     },
     {
       "type": "file",
@@ -1301,7 +1301,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6589
+      "size": 6590
     },
     {
       "type": "file",
