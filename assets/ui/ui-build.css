@@ -1,188 +1,126 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.css
  * Version: v17.9.12
- * Projekt: Neue Siedler – Build UI
- *
- * Ziel:
- *  - helles Panel (kein schwarzer Overlay-Block)
- *  - Kategorien-Kopfzeile
- *  - Kachel-Buttons: Bild oben, Label unten (einzeilig), Soft-Shadow
- *  - Responsive Grid (mobile 3 Spalten, Tablet 4, Desktop 6)
- *  - Fix: Z-Index über Canvas, pointer-events korrekt
- * ============================================================================ */
+ * Zweck: Build-Menü UI (Einzeilig pro Kategorie, mobil-freundlich)
+ * ============================================================================
+ */
 
-/* Root tokens */
-:root {
-  --ui-bg: #eef1f4;
-  --ui-panel: #f6f7f8;
-  --ui-card: #ffffff;
-  --ui-border: #d9dee4;
-  --ui-shadow: 0 10px 24px rgba(0,0,0,.12);
-  --ui-shadow-soft: 0 4px 12px rgba(0,0,0,.10);
-  --ui-radius-lg: 18px;
-  --ui-radius-md: 14px;
-  --ui-radius-sm: 10px;
-  --ui-gap-xl: 20px;
-  --ui-gap-lg: 16px;
-  --ui-gap-md: 12px;
-  --ui-gap-sm: 8px;
-  --ui-text: #2a2f36;
-  --ui-muted: #6b7583;
-  --ui-accent: #3a7afe;
+:root{
+  --uibg: rgba(18,22,20,0.88);
+  --uicard: #f3f6f4;
+  --uicard-border: #d9dfdb;
+  --uicard-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  --uiheading: #e7ece9;
+  --uilabel: #3c4742;
+  --uimuted: #7a8880;
 }
 
-/* Container, wird von ui-bridge/ui-build.js toggled */
-#build-panel {
+#build-panel{
   position: fixed;
-  left: 50%;
-  top: 56%;
-  transform: translate(-50%, -50%);
-  width: min(980px, 92vw);
-  max-height: min(78vh, 900px);
-  background: var(--ui-panel);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-lg);
-  box-shadow: var(--ui-shadow);
-  z-index: 2000;           /* über Canvas + FABs */
-  display: none;           /* ui-bridge zeigt/hide */
-  overflow: hidden;        /* runde Ecken */
-}
-
-/* Sichtbar-Flag */
-#build-panel.is-open { display: block; }
-
-/* Innerer Scrollbereich */
-#build-panel .build-scroll {
+  inset: 6% 4% 10% 4%;
+  background: var(--uibg);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  z-index: 1000;
+  display: none;
   overflow: auto;
-  max-height: calc(min(78vh, 900px) - 24px);
-  padding: var(--ui-gap-xl);
-  background:
-    radial-gradient(transparent 0, transparent 22px, rgba(0,0,0,0.03) 22px) 0 0/48px 48px,
-    var(--ui-panel);
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Überschriften (Kategorien) */
-.build-section {
-  margin-bottom: 28px;
+#build-panel[data-open="1"]{ display:block; }
+
+#build-panel .bp-inner{
+  padding: 18px 18px 28px 18px;
 }
 
-.build-section h3 {
-  margin: 0 0 var(--ui-gap-lg);
-  font: 600 20px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  color: var(--ui-text);
+#build-panel .bp-header{
+  display:flex; align-items:center; justify-content:space-between;
+  margin: 2px 2px 12px 2px;
 }
 
-/* Grid für Kacheln */
-.build-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);    /* mobile: 3 */
-  gap: var(--ui-gap-lg);
+#build-panel .bp-title{
+  color: var(--uiheading);
+  font-weight: 700;
+  letter-spacing: .2px;
+  font-size: 20px;
 }
 
-@media (min-width: 720px) {
-  .build-grid { grid-template-columns: repeat(4, 1fr); }
+#build-panel .bp-close{
+  appearance:none; border:0; outline:0;
+  width:44px; height:44px; border-radius:50%;
+  background: rgba(255,255,255,0.1);
+  cursor:pointer;
 }
-@media (min-width: 1080px) {
-  .build-grid { grid-template-columns: repeat(6, 1fr); }
-}
-
-/* Kachel-Button */
-.build-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  text-align: center;
-  padding: var(--ui-gap-md);
-  background: var(--ui-card);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-md);
-  box-shadow: var(--ui-shadow-soft);
-  transition: transform .08s ease, box-shadow .12s ease, border-color .12s ease;
-  cursor: pointer;
-  user-select: none;
+#build-panel .bp-close:after{
+  content:"✕"; color:#fff; font-size:20px; line-height:44px; display:block; text-align:center;
 }
 
-.build-tile:active { transform: translateY(1px) scale(0.99); }
-.build-tile:hover  { box-shadow: 0 10px 20px rgba(0,0,0,.12); border-color: #cfd6dd; }
-
-/* Bildrahmen */
-.build-thumb {
-  width: 100%;
-  aspect-ratio: 1.4 / 1;         /* querformatig wie im Referenzbild */
-  display: grid;
-  place-items: center;
-  background: #f3f6f9;
-  border-radius: var(--ui-radius-sm);
-  overflow: hidden;
-  border: 1px solid #e3e8ee;
+/* Kategorieblock */
+.bp-cat{
+  margin: 16px 0 22px 0;
 }
 
-.build-thumb img {
-  max-width: 92%;
-  max-height: 92%;
+.bp-cat h3{
+  margin: 0 0 10px 6px;
+  color: var(--uiheading);
+  font-size: 16px; font-weight: 700;
+}
+
+/* Einzeilig: horizontale Leiste mit Scroll */
+.bp-row{
+  display:flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 2px 6px 8px 6px;
+  scrollbar-width: thin;
+}
+.bp-row::-webkit-scrollbar{ height:8px; }
+.bp-row::-webkit-scrollbar-thumb{ background:#2d3531; border-radius:6px; }
+
+/* Karten-Buttons */
+.bp-card{
+  min-width: 156px; max-width: 156px;
+  background: var(--uicard);
+  border:1px solid var(--uicard-border);
+  border-radius: 14px;
+  box-shadow: var(--uicard-shadow);
+  padding: 10px 10px 12px 10px;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  cursor:pointer;
+  transition: transform .06s ease, box-shadow .12s ease;
+  user-select:none;
+}
+.bp-card:active{ transform: translateY(1px) scale(0.995); }
+
+.bp-thumb{
+  width: 120px; height: 86px;
+  display:block;
+  background:#eef2ef;
+  border-radius:10px;
+  border:1px solid #e2e8e4;
   object-fit: contain;
-  image-rendering: auto;
-  display: block;
+  image-rendering: -webkit-optimize-contrast;
 }
 
-/* Label (einzeilig) */
-.build-label {
-  margin-top: var(--ui-gap-md);
-  width: 100%;
-  font: 600 16px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  color: var(--ui-text);
-  white-space: nowrap;           /* EINZEILIG */
-  overflow: hidden;
-  text-overflow: ellipsis;
+.bp-label{
+  color: var(--uilabel);
+  font-size: 15px;
+  font-weight: 700;
+  text-align:center;
+  line-height: 1.15;
 }
 
-/* Platzhalter-Kachel (falls Bild fehlt) */
-.build-tile.is-placeholder .build-thumb {
-  background: repeating-linear-gradient(
-    45deg,
-    #f1f3f6,
-    #f1f3f6 8px,
-    #e7edf4 8px,
-    #e7edf4 16px
-  );
+/* Fallback/Muted */
+.bp-card[data-disabled="1"]{
+  opacity:.5; pointer-events:none;
 }
-.build-tile.is-placeholder .build-thumb::after {
-  content: "?";
-  font: 700 28px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  color: var(--ui-muted);
+.bp-card .bp-muted{
+  color: var(--uimuted);
+  font-size: 12px;
 }
 
-/* Top-Right FAB (der rote Backstein), damit er das Panel nicht überlappt */
-.fab, .fab-right {
-  pointer-events: auto;
-  z-index: 2100;
-}
-
-/* Safety: falls ein globales dunkles Overlay existiert, stelle sicher,
-   dass es hinter dem Panel landet */
-.ui-overlay,
-#build-overlay {
-  z-index: 1500;
-}
-
-/* Sanfte Scrollbar (WebKit) */
-#build-panel .build-scroll::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
-}
-#build-panel .build-scroll::-webkit-scrollbar-thumb {
-  background: #cfd6dd;
-  border-radius: 999px;
-}
-#build-panel .build-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* Hard-fix: wenn ältere CSS ein schwarzes Vollflächen-Panel .ui-build
-   setzt, neutralisieren wir es explizit. */
-.ui-build {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: 0 !important;
+/* Kleinere Phones */
+@media (max-width: 380px){
+  .bp-card{ min-width: 142px; max-width: 142px; }
+  .bp-thumb{ width:110px; height:80px; }
 }
