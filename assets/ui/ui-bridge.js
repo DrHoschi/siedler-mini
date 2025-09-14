@@ -1,13 +1,13 @@
 /* =============================================================================
 Datei: assets/ui/ui-bridge.js
-Version: v17.8.6
+Projekt: Neue Siedler
+Version: v17.8.7
 Zweck: Brücke für FABs/Hotkeys.
-Fix: Inspector-Button ruft wahlweise Inspector.toggle(), Inspector.open()/close()
-     oder feuert alle bekannten Events (toggle/open/close, neu & legacy).
-     Build-Dock weiterhin #build-dock/#build-panel kompatibel.
+ - Build-Dock: #build-dock ODER #build-panel; legt notfalls Dock an.
+ - Inspector: ruft UIInspector/Inspector APIs ODER feuert alle bekannten Events.
 ============================================================================= */
 
-const UIBRIDGE_VERSION = "v17.8.6";
+const UIBRIDGE_VERSION = "v17.8.7";
 function LOK(m){(window.CBLog?.ok||console.log)(`[ui-bridge] ${m}`);}
 function LIN(m){(window.CBLog?.info||console.log)(`[ui-bridge] ${m}`);}
 function LER(m){(window.CBLog?.error||console.error)(`[ui-bridge] ${m}`);}
@@ -29,48 +29,29 @@ function findBuildRoot(){
 function isOpen(el){ return !!el?.classList.contains("is-open"); }
 function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(e){} }
 
+/* -------- Globales UI-Objekt -------- */
 window.GameUI = window.GameUI || {};
 
 /* ---------- Build ---------- */
 window.GameUI.toggleBuild = function(){
   const root = findBuildRoot();
   if(!window.UIBuild || typeof window.UIBuild.open !== "function"){
-    LER("UIBuild fehlt/noch nicht geladen.");
+    LER("UIBuild fehlt/noch nicht geladen (assets/ui/ui-build.js).");
     return;
   }
   isOpen(root) ? window.UIBuild.close("toggle") : window.UIBuild.open("toggle");
 };
 
 /* ---------- Inspector ---------- */
-let __inspectorState = { open:false };
-
-function inspectorOpen(){
-  if (window.Inspector?.open)       return window.Inspector.open();
-  ["cb:inspector:open","cb:inspector-open","inspector:open","inspector-open"].forEach(e=>emit(e));
-  __inspectorState.open = true;
-}
-function inspectorClose(){
-  if (window.Inspector?.close)      return window.Inspector.close();
-  ["cb:inspector:close","cb:inspector-close","inspector:close","inspector-close"].forEach(e=>emit(e));
-  __inspectorState.open = false;
-}
-function inspectorToggle(){
-  if (window.Inspector?.toggle)     return window.Inspector.toggle();
-  ["cb:inspector:toggle","cb:inspector-toggle","inspector:toggle","inspector-toggle"].forEach(e=>emit(e));
-  __inspectorState.open = !__inspectorState.open;
-}
-
+/* Einheitlicher Aufruf – probiert mehrere Varianten durch */
 window.GameUI.toggleInspector = function(){
   try{
-    // Versuche echte Toggle-API
-    if (window.Inspector && typeof window.Inspector.toggle === "function") return inspectorToggle();
+    if (window.UIInspector?.toggle) return window.UIInspector.toggle();
+    if (window.Inspector?.toggle)   return window.Inspector.toggle();
 
-    // Wenn es ein Root-Element mit Sichtbarkeitsklasse gibt, nutze hartes Open/Close
-    const root = document.getElementById("inspector-root") || document.querySelector(".inspector-root");
-    if (root && root.classList.contains("is-open")) return inspectorClose();
-
-    // Fallback: Toggle-Events
-    inspectorToggle();
+    // Fallback: Events (neu & legacy)
+    ["cb:inspector:toggle","cb:inspector-toggle","inspector:toggle","inspector-toggle"]
+      .forEach(e=>emit(e));
   }catch(e){
     LER("Inspector-Toggle Fehler: "+(e?.message||e));
   }
@@ -82,6 +63,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   LIN(`bereit (${UIBRIDGE_VERSION})`);
 });
 
+/* Hotkey „B“ → Build-Dock */
 window.addEventListener("keydown", ev=>{
   if(!ev.key) return;
   if(ev.key.toLowerCase()==="b") window.GameUI.toggleBuild();
