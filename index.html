@@ -1,17 +1,17 @@
 <!doctype html>
 <!--
   Neue Siedler – Index
-  Version: v17.8.2
+  Version: v17.8.2 (Fix: Inspector ALT aktiv + NEU auskommentiert, Compat-Bridge)
 
   Lade-Reihenfolge (wichtig):
-  Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split) → Compat/Bridge → Boot-Compat
+  Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (ALT aktiv) → Compat/Bridge → Boot-Compat
 
   Hinweise:
-  - Inspector ist gesplittet (core/logs/tests/resources/paths/overlay.hooks) – KEIN altes
-    inspector.js / inspector.overview.js mehr einbinden.
-  - Kein Link auf eine alte style.css (hatte die komplette Seite künstlich abgedunkelt).
-  - FAB-Buttons (Bau/Inspector) haben sehr hohen z-index, damit sie immer bedienbar bleiben.
-  - Start-Panel liegt Z-ordnungsmäßig ÜBER dem Canvas, wird nach „Spiel starten“ aus dem DOM entfernt.
+  - Inspector: Wir nutzen JETZT den ALT-Inspector (ui/ui-inspector.js). Die neuen Split-Module
+    sind unten sauber auskommentiert und können später bei Bedarf aktiviert werden.
+  - Keine alte style.css einbinden (hatte die Seite abgedunkelt).
+  - FAB-Buttons (Bau/Inspector) haben hohen z-index, damit sie immer bedienbar bleiben.
+  - Start-Panel liegt Z-ordnungsmäßig ÜBER dem Canvas; wird nach „Spiel starten“ aus dem DOM entfernt.
 -->
 <html lang="de">
 <head>
@@ -24,19 +24,15 @@
   <title>Neue Siedler</title>
 
   <!-- Styles (nur die aktuellen, keine alte style.css!) -->
-
   <!-- Start-Panel Styles -->
   <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10">
-
   <!-- BASE UI (Resets, Fonts, Layout) -->
   <link rel="stylesheet" href="css/base.css?v=20250914">
-
   <!-- Build-Menü Styles -->
   <link rel="stylesheet" href="assets/ui/ui-build.css?v=20250914">
-
-  <!-- (optional) Inspector – nur wenn du ihn nutzt -->
+  <!-- (optional) Inspector-Styles (dein Bestand) -->
   <link rel="stylesheet" href="assets/inspector/inspector.css?v=20250914">
- 
+
   <style>
     /* Baseline + FABs immer bedienbar */
     html, body { height:100%; margin:0; background:#0b0f0d; }
@@ -67,18 +63,15 @@
   <!-- Bühne (immer direkt im Body, z-index:0) -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock (unten andockend; per JS gefüllt)  ⬇️  -->
+  <!-- Build-Dock (unten andockend; per JS gefüllt) -->
   <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
   <!-- (Kompatibilität: Das Script akzeptiert alternativ auch ein altes id="build-panel") -->
 
   <!-- Start-Panel (liegt ÜBER Canvas, unter FABs) -->
-  <!-- UI & Interaktionen kommen aus assets/ui/ui-start.js -->
   <div id="start-panel" class="ui-start" aria-label="Startmenü">
     <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
-
     <div class="ui-start-card" role="dialog" aria-modal="true">
       <h1>Neue Siedler</h1>
-
       <div class="actions">
         <button id="btnStartNew" class="btn main">Neues Spiel</button>
         <button id="btnStartResume" class="btn">Weiterspielen</button>
@@ -122,28 +115,29 @@
   <script src="assets/core/game.bootstrap.js?v=17.8.7"></script>
   <script src="assets/core/game.js?v=17.10.0"></script>
   
-  <!-- Inspector (split) – EMPFOHLENE REIHENFOLGE -->
+  <!-- ===== Inspector (ALT aktiv) ======================================= -->
+  <!-- Dein stabiler, kompletter Inspector – NICHT anfassen -->
+  <script defer src="assets/ui/ui-inspector.js?v=18.0.0"></script>
+
+  <!-- API-Kompatibilität: mappt alte/neue Events & Methoden (kein UI) -->
+  <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
+
+  <!-- ===== Inspector (NEU – Split) für später / Registry-Phase ========= -->
+  <!--
   <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
   <script defer src="assets/inspector/inspector.logs.js?v=18.14.5"></script>
   <script defer src="assets/inspector/inspector.tests.js?v=18.14.5"></script>
   <script defer src="assets/inspector/inspector.resources.js?v=18.14.5"></script>
   <script defer src="assets/inspector/inspector.paths.js?v=18.14.5"></script>
   <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
-
-  <!-- (NEU) Kompat-Adapter für den bestehenden Inspector (ALT/NEU-Bridge) -->
-  <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
-  <script defer src="assets/inspector/inspector.compat.js?v=1.2.0"></script>
-  
-  <!-- (OPTIONAL – ZUKUNFT) Moderne UI-Inspector-Schicht nach Lastenheft
-       -> vorerst DEAKTIVIERT lassen, um den alten Inspector nicht zu überschreiben -->
-  <!-- <script defer src="assets/ui/ui-inspector.js?v=18.0.0"></script> -->
+  -->
 
   <!-- Legacy-Fassade (Kompatibilität) -->
   <script defer src="game.js?v=17.8.2"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
   <!-- UI (Reihenfolge: Bridge → Start → Build) -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.9.1"></script>
+  <script defer src="assets/ui/ui-bridge.js?v=17.9.3"></script>
   <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
   <script defer src="assets/ui/ui-build.js?v=17.9.12"></script>
 
