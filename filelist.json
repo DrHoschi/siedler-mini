@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-14T10:14:36.053Z",
+  "createdAt": "2025-09-14T15:40:10.240Z",
   "root": ".",
-  "count": 281,
+  "count": 282,
   "entries": [
     {
       "type": "dir",
@@ -314,7 +314,7 @@
     {
       "type": "file",
       "path": "assets/core/entities.registry.js",
-      "size": 4425
+      "size": 1528
     },
     {
       "type": "file",
@@ -330,6 +330,11 @@
       "type": "file",
       "path": "assets/core/overlay-hooks.js",
       "size": 3572
+    },
+    {
+      "type": "file",
+      "path": "assets/core/registry.js",
+      "size": 5768
     },
     {
       "type": "dir",
@@ -881,12 +886,12 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 11690
+      "size": 4714
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 10034
+      "size": 5800
     },
     {
       "type": "file",
@@ -1240,8 +1245,48 @@
     },
     {
       "type": "file",
+      "path": "tools/siedler-code-block-editor.html",
+      "size": 19321
+    },
+    {
+      "type": "file",
+      "path": "tools/siedler-node-playground-codegen-fix.html",
+      "size": 24519
+    },
+    {
+      "type": "file",
+      "path": "tools/siedler-node-playground-codegen.html",
+      "size": 26098
+    },
+    {
+      "type": "file",
+      "path": "tools/siedler-node-playground-trace.html",
+      "size": 20276
+    },
+    {
+      "type": "file",
+      "path": "tools/siedler-node-playground.html",
+      "size": 17526
+    },
+    {
+      "type": "file",
       "path": "tools/texture-checker.html",
       "size": 6940
+    },
+    {
+      "type": "file",
+      "path": "tools/ui-editor-advanced-compact.html",
+      "size": 45852
+    },
+    {
+      "type": "file",
+      "path": "tools/ui-editor-advanced.html",
+      "size": 43636
+    },
+    {
+      "type": "file",
+      "path": "tools/ui-editor-preview.html",
+      "size": 29869
     },
     {
       "type": "file",
@@ -1281,12 +1326,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 27847
+      "size": 27849
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10690
+      "size": 10692
     },
     {
       "type": "file",
@@ -1301,7 +1346,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6590
+      "size": 6793
     },
     {
       "type": "file",
@@ -1320,31 +1365,6 @@
     },
     {
       "type": "file",
-      "path": "siedler-code-block-editor.html",
-      "size": 19321
-    },
-    {
-      "type": "file",
-      "path": "siedler-node-playground-codegen-fix.html",
-      "size": 24519
-    },
-    {
-      "type": "file",
-      "path": "siedler-node-playground-codegen.html",
-      "size": 26098
-    },
-    {
-      "type": "file",
-      "path": "siedler-node-playground-trace.html",
-      "size": 20276
-    },
-    {
-      "type": "file",
-      "path": "siedler-node-playground.html",
-      "size": 17526
-    },
-    {
-      "type": "file",
       "path": "siedler-tool-hub.html",
       "size": 11236
     },
@@ -1357,21 +1377,6 @@
       "type": "file",
       "path": "sw.js",
       "size": 1890
-    },
-    {
-      "type": "file",
-      "path": "ui-editor-advanced-compact.html",
-      "size": 45852
-    },
-    {
-      "type": "file",
-      "path": "ui-editor-advanced.html",
-      "size": 43636
-    },
-    {
-      "type": "file",
-      "path": "ui-editor-preview.html",
-      "size": 29869
     },
     {
       "type": "file",
