@@ -2,195 +2,204 @@
 ====================================================================================
 Datei: assets/ui/ui-build.js
 Projekt: Neue Siedler
-Version: v17.9.12
-Zweck: Bau-Menü (BuildDock) – unten andocken, max. 1–2 Zeilen sichtbar, Rest scrollt.
-Hinweis: Rein UI. Kommunikation nur über Events cb:build:*.
-Kompatibilität: akzeptiert #build-dock ODER #build-panel; emittiert zusätzlich cb:build-open/close.
+Version: v17.9.13
+Zweck: Bau-Dock – unten andocken, max. 1–2 Zeilen sichtbar, Rest scrollt.
+Fixes:
+- Items-Autoload: __buildItems → BuildAssets → Registry (mehrere Typnamen)
+- Niemals „leer“: kleiner Fallback-Satz + deutliche Logs
+- Events: cb:build:* UND legacy cb:build-* für komplette Kompatibilität
 ==================================================================================== */
 
-/* =================== Konstanten & Meta =================== */
-var UI_BUILD_VERSION = "v17.9.12";
-var ICON_SIZE_PX     = 64;     // Zielgröße der Bau-Icons
-var CARD_MIN_W       = 140;
-var CARD_MAX_W       = 180;
-var MAX_VISIBLE_ROWS = 2;      // hart: 1–2 Zeilen
+var UI_BUILD_VERSION = "v17.9.13";
+var ICON_SIZE_PX     = 64;
+var MAX_VISIBLE_ROWS = 2;
 
-/* ====================== Hilfsfunktionen =================== */
-function _logOK (m){ (window.CBLog?.ok   || console.log)(`[ui-build] ${m}`); }
-function _logIn (m){ (window.CBLog?.info || console.log)(`[ui-build] ${m}`); }
-function _logEr (m){ (window.CBLog?.error|| console.error)(`[ui-build] ${m}`); }
+function LOK(m){(window.CBLog?.ok||console.log)(`[ui-build] ${m}`);}
+function LIN(m){(window.CBLog?.info||console.log)(`[ui-build] ${m}`);}
+function LWR(m){(window.CBLog?.warn||console.warn)(`[ui-build] ${m}`);}
+function LER(m){(window.CBLog?.error||console.error)(`[ui-build] ${m}`);}
 
-function _el(tag, cls, attrs){
-  var n = document.createElement(tag);
-  if (cls) (Array.isArray(cls)? n.classList.add.apply(n.classList, cls): n.classList.add(cls));
-  if (attrs) Object.keys(attrs).forEach(function(k){ n.setAttribute(k, attrs[k]); });
-  return n;
-}
-function _emit(name, detail){
-  try { window.dispatchEvent(new CustomEvent(name, { detail: detail || {} })); } catch(e){}
-}
-function _emitBoth(base, detail){
-  // Standard
-  _emit(`cb:${base}`, detail);
-  // Fallback (Bindestrich-Variante)
-  _emit(`cb:${base.replace(/:/g,"-")}`, detail);
-}
-function _groupByCategory(items){
-  var map = new Map();
-  (items||[]).forEach(function(it){
-    var c = it.category || "Allg. / Verwaltung";
-    if (!map.has(c)) map.set(c, []);
-    map.get(c).push(it);
+function el(tag,cls,attrs){ var n=document.createElement(tag);
+  if(cls)(Array.isArray(cls)?n.classList.add.apply(n.classList,cls):n.classList.add(cls));
+  if(attrs) Object.keys(attrs).forEach(k=>n.setAttribute(k,attrs[k]));
+  return n; }
+function emit(n,d){ try{window.dispatchEvent(new CustomEvent(n,{detail:d||{}}));}catch(e){} }
+function emitBoth(base,detail){ emit(`cb:${base}`,detail); emit(`cb:${base.replace(/:/g,"-")}`,detail); }
+
+function group(items){
+  var m=new Map();
+  (items||[]).forEach(it=>{
+    var c=it.category||"Allg. / Verwaltung";
+    if(!m.has(c)) m.set(c,[]);
+    m.get(c).push(it);
   });
-  return map;
+  return m;
 }
 
-/* =========================== Klasse ====================== */
-function BuildDock(){
-  this.root = null;
-  this.grid = null;
-  this.items = [];
-  this.isOpen = false;
+/* ------------------- Item-Quellen ------------------- */
+function from__buildItems(){
+  return Array.isArray(window.__buildItems) ? window.__buildItems.slice() : null;
 }
-BuildDock.prototype._findRoot = function(){
-  // akzeptiere beide IDs
-  var r = document.getElementById("build-dock") || document.getElementById("build-panel");
-  if (!r){
-    r = _el("div", "ui-build-dock", { id: "build-dock", "aria-label":"Bau-Menü" });
-    document.body.appendChild(r);
-  } else {
-    r.classList.add("ui-build-dock"); // falls alt ohne Klasse
+function fromBuildAssets(){
+  // Versuche mehrere Namenskonventionen
+  var BA = window.BuildAssets || {};
+  if (Array.isArray(BA.items)) return BA.items.slice();
+  if (typeof BA.list === "function"){
+    try{
+      var list = BA.list("build") || BA.list("buildings") || BA.list("building");
+      if(Array.isArray(list)) return list.slice();
+    }catch(_){}
   }
+  return null;
+}
+function fromRegistry(){
+  var R = window.Registry;
+  if(!R) return null;
+  try{
+    var tryTypes = ["buildings","building","b"];
+    for (var i=0;i<tryTypes.length;i++){
+      var t = tryTypes[i];
+      var arr = R.list ? R.list(t) : null;
+      if(Array.isArray(arr) && arr.length){
+        // Normalisiere → {id,name,icon,category}
+        return arr.map(function(x){
+          var meta = x.meta || R.get?.(t, x.id) || {};
+          return {
+            id: x.id || meta.id,
+            name: x.name || meta.name || x.id,
+            icon: x.icon || meta.icon || meta.sprite || meta.image || guessIcon(x.id),
+            category: x.category || meta.category || meta.cat || "Allg. / Verwaltung"
+          };
+        });
+      }
+    }
+  }catch(_){}
+  return null;
+}
+function guessIcon(id){
+  // simple, aber hilfreiche Heuristik (deckt deine UI-Icons ab)
+  return `assets/ui/build/${(id||"").replace(/^b[.\-:]/,"")}.png`;
+}
+function ensureItems(items){
+  if(Array.isArray(items) && items.length) return items;
+  LWR("Keine Items aus Datenquellen erhalten – nutze Fallback.");
+  return [
+    { id:"b.townhall", name:"Rathaus",   icon:guessIcon("rathaus"),  category:"Allg. / Verwaltung" },
+    { id:"b.house",    name:"Wohnhaus",  icon:guessIcon("wohnhaus"), category:"Allg. / Verwaltung" },
+    { id:"b.depot",    name:"Depot",     icon:guessIcon("depot"),    category:"Allg. / Verwaltung" },
+    { id:"b.fisher",   name:"Fischer",   icon:guessIcon("fischer"),  category:"Produktion / Nahrung" }
+  ];
+}
+
+/* ------------------- Klasse ------------------- */
+function BuildDock(){
+  this.root=null; this.grid=null; this.items=[]; this.isOpen=false;
+}
+BuildDock.prototype._findRoot=function(){
+  var r=document.getElementById("build-dock")||document.getElementById("build-panel");
+  if(!r){ r=el("div","ui-build-dock",{id:"build-dock","aria-label":"Bau-Menü"}); document.body.appendChild(r); }
+  else { r.classList.add("ui-build-dock"); }
   return r;
 };
-BuildDock.prototype.init = function(){
-  this.root = this._findRoot();
+BuildDock.prototype.init=function(){
+  this.root=this._findRoot();
+  var header=el("div","ui-build-header");
+  var title=el("div","ui-build-title"); title.textContent="Bauen";
+  var spacer=el("div","ui-build-spacer");
+  var close=el("button",["ui-btn","ui-build-close"],{"aria-label":"Schließen (ESC/Back)"}); close.type="button"; close.textContent="✕";
+  close.addEventListener("click",this.close.bind(this,"button"));
+  header.append(title,spacer,close);
 
-  var header = _el("div", "ui-build-header");
-  var title  = _el("div", "ui-build-title"); title.textContent = "Bauen";
-  var spacer = _el("div", "ui-build-spacer");
-  var close  = _el("button", ["ui-btn","ui-build-close"], { "aria-label":"Schließen (ESC/Back)" });
-  close.type = "button"; close.textContent = "✕";
-  close.addEventListener("click", this.close.bind(this, "button"));
-  header.appendChild(title); header.appendChild(spacer); header.appendChild(close);
-
-  var body = _el("div", "ui-build-body");
-  this.grid = _el("div", "ui-build-grid", { id: "build-grid" });
+  var body=el("div","ui-build-body");
+  this.grid=el("div","ui-build-grid",{id:"build-grid"});
   body.appendChild(this.grid);
 
-  this.root.innerHTML = "";
-  this.root.appendChild(header);
-  this.root.appendChild(body);
+  this.root.innerHTML=""; this.root.append(header,body);
 
-  // ESC/Back
-  window.addEventListener("keydown", (ev)=>{ if(this.isOpen && ev.key==="Escape") this.close("esc"); });
-  window.addEventListener("cb:back", ()=>{ if(this.isOpen) this.close("back"); });
-  window.addEventListener("resize", ()=> this._applyMaxHeight());
+  window.addEventListener("keydown",(ev)=>{ if(this.isOpen && ev.key==="Escape") this.close("esc"); });
+  window.addEventListener("cb:back",()=>{ if(this.isOpen) this.close("back"); });
+  window.addEventListener("resize",()=> this._applyMaxHeight());
 
-  _logOK("Modul geladen ("+UI_BUILD_VERSION+")");
+  LOK("Modul geladen ("+UI_BUILD_VERSION+")");
 };
-BuildDock.prototype.setItems = function(items){
-  this.items = Array.isArray(items)? items : [];
-  this._render();
-};
-BuildDock.prototype.open = function(from){
-  if (!this.root) this.init();
-  this.isOpen = true;
-  this.root.classList.add("is-open");
+BuildDock.prototype.setItems=function(items){ this.items=Array.isArray(items)?items:[]; this._render(); };
+BuildDock.prototype.open=function(from){
+  if(!this.root) this.init();
+  this.isOpen=true; this.root.classList.add("is-open");
   this._applyMaxHeight();
-  _emitBoth("build:open", { from: from || "UI" });
-  _logIn("geöffnet");
+  emitBoth("build:open",{from:from||"UI"});
+  LIN("geöffnet");
 };
-BuildDock.prototype.close = function(reason){
-  if (!this.root) return;
-  this.isOpen = false;
-  this.root.classList.remove("is-open");
-  _emitBoth("build:close",  { reason: reason || "cancel" });
-  _emitBoth("build:cancel", { via: reason || "cancel" });
-  _logIn("geschlossen (reason="+(reason||"cancel")+")");
+BuildDock.prototype.close=function(reason){
+  if(!this.root) return;
+  this.isOpen=false; this.root.classList.remove("is-open");
+  emitBoth("build:close",{reason:reason||"cancel"});
+  emitBoth("build:cancel",{via:reason||"cancel"});
+  LIN("geschlossen (reason="+(reason||"cancel")+")");
 };
-BuildDock.prototype._render = function(){
-  if (!this.grid) return;
-  this.grid.innerHTML = "";
-  var groups = _groupByCategory(this.items);
-  if (groups.size === 0){
-    var empty = _el("div", "ui-build-empty"); empty.textContent = "Keine Gebäude verfügbar.";
-    this.grid.appendChild(empty);
-    return;
+BuildDock.prototype._render=function(){
+  if(!this.grid) return;
+  this.grid.innerHTML="";
+  var groups=group(this.items);
+  if(groups.size===0){
+    var empty=el("div","ui-build-empty"); empty.textContent="Keine Gebäude verfügbar.";
+    this.grid.appendChild(empty); return;
   }
-  groups.forEach((arr, cat)=>{
-    var catEl   = _el("div", "ui-build-category");
-    var catHead = _el("div", "ui-build-category-title"); catHead.textContent = cat;
-    var row     = _el("div", "ui-build-category-row");
-    arr.forEach((it)=> row.appendChild(this._makeCard(it)) );
-    catEl.appendChild(catHead); catEl.appendChild(row);
-    this.grid.appendChild(catEl);
+  groups.forEach((arr,cat)=>{
+    var catEl=el("div","ui-build-category");
+    var catHead=el("div","ui-build-category-title"); catHead.textContent=cat;
+    var row=el("div","ui-build-category-row");
+    arr.forEach((it)=> row.appendChild(this._makeCard(it)));
+    catEl.append(catHead,row); this.grid.appendChild(catEl);
   });
 };
-BuildDock.prototype._makeCard = function(item){
-  var btn = _el("button", ["ui-build-item","ui-card"]);
-  btn.type  = "button";
-  btn.title = item.name || item.id;
-
-  var imgWrap = _el("div", "ui-build-item-imgwrap");
-  var img     = _el("img", "ui-build-item-img", { loading:"lazy", decoding:"async" });
-  img.src = item.icon || item.sprite || item.image || "";
-  img.alt = item.name || item.id || "building";
-
-  var label = _el("div", "ui-build-item-label");
-  label.textContent = item.name || item.id;
-
-  imgWrap.appendChild(img);
-  btn.appendChild(imgWrap);
-  btn.appendChild(label);
-
-  btn.addEventListener("click", function(){
-    _emit("cb:build:select", { buildingId: item.id });
-    _logOK("select "+item.id);
-  });
-
+BuildDock.prototype._makeCard=function(item){
+  var btn=el("button",["ui-build-item","ui-card"]); btn.type="button"; btn.title=item.name||item.id;
+  var imgW=el("div","ui-build-item-imgwrap");
+  var img=el("img","ui-build-item-img",{loading:"lazy",decoding:"async"}); img.src=item.icon||item.sprite||item.image||guessIcon(item.id); img.alt=item.name||item.id||"building";
+  var lbl=el("div","ui-build-item-label"); lbl.textContent=item.name||item.id;
+  imgW.appendChild(img); btn.append(imgW,lbl);
+  btn.addEventListener("click",()=>{ emit("cb:build:select",{buildingId:item.id}); LOK("select "+item.id); });
   return btn;
 };
-BuildDock.prototype._applyMaxHeight = function(){
-  if (!this.root) return;
-  var cs = getComputedStyle(document.documentElement);
-  var safeBottom = Number((cs.getPropertyValue("--safe-area-bottom")||"").replace("px","")) || 0;
-  var cardH   = Math.max(ICON_SIZE_PX + 28, 88); // Bild + Label + Paddings
-  var headerH = 44;
-  var bodyPad = 16;
-  var maxH    = headerH + (cardH * MAX_VISIBLE_ROWS) + bodyPad + safeBottom;
-  this.root.style.setProperty("--build-dock-max-h", maxH + "px");
+BuildDock.prototype._applyMaxHeight=function(){
+  if(!this.root) return;
+  var cs=getComputedStyle(document.documentElement);
+  var safeB=Number((cs.getPropertyValue("--safe-area-bottom")||"").replace("px",""))||0;
+  var cardH=Math.max(ICON_SIZE_PX+28,88), headerH=44, bodyPad=16;
+  var maxH=headerH+(cardH*MAX_VISIBLE_ROWS)+bodyPad+safeB;
+  this.root.style.setProperty("--build-dock-max-h", maxH+"px");
 };
 
-/* =========================== API ========================= */
+/* ------------------- API & Autoload ------------------- */
 (function(){
-  var _UIBUILD = new BuildDock();
+  var _UI=new BuildDock();
 
-  window.UIBuild = {
-    init: function(){ _UIBUILD.init(); },
-    setItems: function(items){ _UIBUILD.setItems(items); },
-    open: function(from){ _UIBUILD.open(from); },
-    close: function(r){ _UIBUILD.close(r); },
+  window.UIBuild={
+    init: function(){ _UI.init(); },
+    setItems: function(items){ _UI.setItems(items); },
+    open: function(from){ _UI.open(from); },
+    close: function(r){ _UI.close(r); },
     version: UI_BUILD_VERSION
   };
 
-  // Auto-Init
   document.addEventListener("DOMContentLoaded", function(){
-    _UIBUILD.init();
+    _UI.init();
 
-    // Items aus Datenquelle übernehmen (wenn vorhanden)
-    if (Array.isArray(window.__buildItems)) {
-      _UIBUILD.setItems(window.__buildItems);
-      _logOK("Items gesetzt (__buildItems: "+window.__buildItems.length+")");
-    } else if (Array.isArray(window.BuildAssets?.items)) {
-      _UIBUILD.setItems(window.BuildAssets.items);
-      _logOK("Items gesetzt (BuildAssets.items: "+window.BuildAssets.items.length+")");
-    }
+    // 1) __buildItems
+    var items = from__buildItems();
+    // 2) BuildAssets
+    if(!items) items = fromBuildAssets();
+    // 3) Registry
+    if(!items) items = fromRegistry();
+
+    items = ensureItems(items);
+    _UI.setItems(items);
+    LOK("Items gesetzt ("+items.length+")");
   });
 
-  // Optionale Hotkeys: B = öffnen, ESC wird in Klasse behandelt
+  // Hotkey „B“
   window.addEventListener("keydown", function(ev){
-    if (ev.key && ev.key.toLowerCase() === "b") window.UIBuild.open("hotkey");
+    if(ev.key && ev.key.toLowerCase()==="b") window.UIBuild.open("hotkey");
   });
-
 })();
