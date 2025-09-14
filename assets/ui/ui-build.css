@@ -1,38 +1,41 @@
 /* =============================================================================
 Datei: assets/ui/ui-build.css
-Version: v17.9.16
+Version: v17.9.17
 Ziel:
-  - Graues Build-Dock (wie Screenshot), Karten in hellen Kacheln
-  - FAB-Buttons (Bauen/Inspector) im selben Grauton wie Inspector-Feld
-  - max. 1–2 Zeilen sichtbar → Rest scrollt
+  - Helles, freundliches Grau (nicht fast schwarz)
+  - Dock bündig am unteren Fensterrand (fixed)
+  - Karten hell, 1–2 Reihen sichtbar → Rest scrollt
+  - FABs behalten ihre Position (separates CSS in index, hier nur Dock/Karten)
 ============================================================================= */
 
 :root{
-  /* Farben */
-  --dock-bg: rgba(28, 36, 44, 0.92);       /* dunkles Grau wie Inspector-Feld */
-  --dock-stroke: rgba(255,255,255,.06);
-  --card-bg: #f3f6f9;                      /* helle Karten */
-  --card-bg-hover: #e9eef4;
-  --card-border: #c8d3df;
+  /* >>> Falls der Ton noch nicht exakt passt: diese 3 Werte anpassen <<< */
+  --dock-bg: #d9dee6;        /* Dock-Hintergrund (helles Grau, wie Foto) */
+  --dock-stroke: #c9d0db;    /* obere Linie */
+  --title: #273447;          /* Überschrift/Text auf Dock */
+
+  /* Karten */
+  --card-bg: #f7f9fc;
+  --card-bg-hover: #eef3f9;
+  --card-border: #cdd7e3;
   --card-text: #1f2a33;
-  --title: #dbe7f7;
 
   /* Layout */
   --dock-pad-x: 14px;
   --dock-pad-y: 12px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --build-dock-max-h: 240px;               /* 1–2 Reihen, Rest scrollt */
+  --build-dock-max-h: 240px; /* 1–2 Reihen sichtbar */
 }
 
-/* ---------- Dock ---------- */
+/* ---------- Dock bündig unten ---------- */
 #build-dock.ui-build-dock,
 #build-panel.ui-build-dock{
-  position:absolute; left:0; right:0; bottom:0; z-index:40;
-  display:none;
+  position: fixed; left:0; right:0; bottom:0;  /* FIXED + bündig unten */
+  z-index: 40;
+  display: none;
   background: var(--dock-bg);
   border-top: 1px solid var(--dock-stroke);
-  box-shadow: 0 -12px 48px rgba(0,0,0,.35);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 -10px 40px rgba(0,0,0,.12);    /* deutlich leichter als vorher */
   padding: var(--dock-pad-y) var(--dock-pad-x)
            calc(max(var(--dock-pad-y), 8px) + var(--safe-bottom))
            var(--dock-pad-x);
@@ -40,8 +43,8 @@ Ziel:
 #build-dock.is-open,
 #build-panel.is-open{ display:block; }
 
-/* ---------- Header ---------- */
-.ui-build-header{ display:none; } /* im Screenshot nicht sichtbar */
+/* ---------- Header optional (im Foto nicht zu sehen) ---------- */
+.ui-build-header{ display:none; }
 .ui-build-title{
   color: var(--title);
   font-weight: 700; font-size: 18px;
@@ -90,29 +93,9 @@ Ziel:
 }
 .ui-build-item-label{ font-size:16px; line-height:1.2; }
 
-.ui-build-empty{ color:#b7c4d3; padding:12px; }
+.ui-build-empty{ color:#5d7288; padding:12px; }
 
-/* ---------- FAB-Buttons: identische graue Optik wie Inspector-Feld ---------- */
-.ui-fab{
-  position: fixed;
-  z-index: 2147483647 !important;
-  transform: none !important;   /* schützt gegen transform auf Eltern */
-  will-change: auto;
-  contain: layout paint style;
-}
-#btn-build     { left:16px; bottom:16px; }
-#btn-inspector { right:16px; bottom:16px; }
-
-.ui-fab button{
-  width:52px; height:52px; border:0; border-radius:50%;
-  background: #2b3542;             /* gleiches Grau wie Inspector-Feld */
-  color:#fff; font-size:22px;
-  box-shadow:0 10px 28px rgba(0,0,0,.35);
-  backdrop-filter: blur(6px);
-  cursor:pointer;
-}
-
-/* ---------- Responsive ---------- */
+/* ---------- Small screens ---------- */
 @media (max-width: 480px){
   .ui-build-category-title{ font-size:17px; }
   .ui-build-item-img{ width:56px; height:56px; }
