@@ -1,232 +1,132 @@
 /* ============================================================================
  * Datei: assets/core/entities.registry.js
- * Version: v1.1.0
+ * Version: v1.2.0
+ * Projekt: Neue Siedler
  *
  * Zweck:
- *  - Zentrale Registry ("Single Source of Truth") für Gebäude/Kategorien
- *  - Nutzt NUR vorhandene Assets (laut aktueller filelist)
- *  - Liefert Engine+UI dieselben Daten (BuildCatalog Export für ui-build)
- *  - Keine Rot/Grün-Farben (für Platzierbarkeit reserviert)
+ *  - Zentrale Registry ("Single Source of Truth") für alle Entities/Gebäude
+ *  - Einheitliche Definition von Kategorien, Farben und Sprite-Pfaden
+ *  - Wird von Engine (core.entities.js) und UI (ui-build.js) genutzt
  *
- * Öffentliche API:
- *   window.EntitiesRegistry.version
- *   window.EntitiesRegistry.categories  : Map<String, Category>
- *   window.EntitiesRegistry.buildings   : Map<String, Building>
- *   window.EntitiesRegistry.get(id)     : Building | null
- *   window.EntitiesRegistry.list()      : Building[]
- *   window.EntitiesRegistry.listByCategory(catId) : Building[]
- *   window.EntitiesRegistry.colorFor(catId)       : string (rgba)
- *   window.EntitiesRegistry.resolveSprite(id)     : string (URL)
- *   window.EntitiesRegistry.resolveMenuThumb(id)  : string (URL)
- *   window.EntitiesRegistry.hasSprite(id)         : boolean
- *
- * Zusätzlich für das Baumenü (ui-build):
- *   window.BuildCatalog = {
- *     version,
- *     categories: [{ id, label, color }],
- *     items:      [{ id, label, category, icon }]
- *   }
- *   → feuert 'cb:entities.registry:ready'
- * ============================================================================ */
-
+ * Struktur:
+ *  1. Konstanten / Hilfsfunktionen
+ *  2. Kategorien
+ *  3. Gebäude-Definitionen
+ *  4. Exports (window.EntitiesRegistry)
+ * ============================================================================
+ */
 (() => {
   'use strict';
 
   const TAG  = '[entities.registry]';
-  const LOG  = (...a) => (window.CBLog?.ok   || console.log)(TAG, ...a);
-  const WARN = (...a) => (window.CBLog?.warn || console.warn)(TAG, ...a);
+  const LOG  = (...a) => console.log(TAG, ...a);
 
-  // ---- Gemeinsame Defaults -----------------------------------------------
-  const PLACEHOLDER_ICON = 'assets/placeholder64.PNG';        // existiert
-  const TILE              = 64;
-
-  // Farben (bewusst KEIN Rot/Grün; die bleiben für Platzierbarkeit)
-  const CATEGORY_COLORS = {
-    admin     : 'rgba( 50,  90, 200, 0.75)', // Blau
-    housing   : 'rgba(120,  70, 200, 0.75)', // Violett
-    food      : 'rgba(220, 170,  30, 0.75)', // Gold
-    resource  : 'rgba( 20, 140, 160, 0.75)', // Türkis
-    military  : 'rgba(180, 100,  40, 0.75)', // Bronze
-    processing: 'rgba(140, 110,  40, 0.75)', // Ocker
-    misc      : 'rgba(110, 110, 110, 0.75)', // Grau
+  // --------------------------------------------------------------------------
+  // 1. Kategorien (Farben = Platzhalterfarben im Build-Modus)
+  // --------------------------------------------------------------------------
+  const categories = {
+    center:   { id: 'center',   name: 'Zentrum',      color: '#FFD700' }, // Gold = zentrale Gebäude (Rathaus)
+    storage:  { id: 'storage',  name: 'Lager',        color: '#8B4513' }, // Braun = Lager/Depot
+    food:     { id: 'food',     name: 'Nahrung',      color: '#FF6347' }, // Rot = Nahrung/Farm/Fischer
+    resource: { id: 'resource', name: 'Ressourcen',   color: '#4682B4' }, // Blau = Holz/Stein/Bergbau
+    military: { id: 'military', name: 'Militär',      color: '#708090' }, // Grau = Wachturm/HQ
+    refine:   { id: 'refine',   name: 'Veredelung',   color: '#32CD32' }  // Grün = Schmied/Windmühle etc.
   };
 
-  // ---- Kategorien ---------------------------------------------------------
-  const CATEGORIES = [
-    { id: 'admin',      label: 'Allg. / Verwaltung', color: CATEGORY_COLORS.admin },
-    { id: 'food',       label: 'Produktion / Nahrung', color: CATEGORY_COLORS.food },
-    { id: 'resource',   label: 'Produktion / Rohstoffe', color: CATEGORY_COLORS.resource },
-    { id: 'processing', label: 'Weiterverarbeitung', color: CATEGORY_COLORS.processing },
-    { id: 'housing',    label: 'Wohnen', color: CATEGORY_COLORS.housing },
-    { id: 'military',   label: 'Militär', color: CATEGORY_COLORS.military },
-    // { id: 'misc',    label: 'Sonstiges', color: CATEGORY_COLORS.misc },
-  ];
-
-  // Hilfsmap für schnellen Zugriff
-  const CAT_MAP = new Map(CATEGORIES.map(c => [c.id, c]));
-
-  // ---- Gebäude (auf Basis DEINER aktuellen Dateien) ----------------------
-  // Alle Pfade sind klein geschrieben & unter assets/buildings/,
-  // außer HQ – das liegt (noch) unter assets/tex/building/wood/hq_wood.PNG.
-  const BUILDINGS_RAW = [
-    // Verwaltung
-    {
+  // --------------------------------------------------------------------------
+  // 2. Gebäude (Sprite-Pfade nach filelist.txt abgeglichen)
+  // --------------------------------------------------------------------------
+  const buildings = {
+    rathaus: {
       id: 'rathaus',
-      label: 'Rathaus',
-      category: 'admin',
-      sprite: 'assets/buildings/rathaus_wood1.png',
-      thumb : 'assets/buildings/rathaus_wood1.png',
-      w: TILE, h: TILE, anchor: 'center'
+      name: 'Rathaus',
+      category: 'center',
+      sprite: 'assets/buildings/rathaus_wood1.png'
     },
-    { id: 'depot', label: 'Depot', category: 'admin',
-      sprite: 'assets/buildings/depot_wood.png',
-      thumb : 'assets/buildings/depot_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    depot: {
+      id: 'depot',
+      name: 'Depot',
+      category: 'storage',
+      sprite: 'assets/buildings/depot_wood.png'
     },
-
-    // Wohnen
-    { id: 'house', label: 'Wohnhaus', category: 'housing',
-      sprite: 'assets/buildings/wohnhaus_wood0_ug0.png',
-      thumb : 'assets/buildings/wohnhaus_wood0_ug0.png',
-      w: TILE, h: TILE, anchor: 'center'
+    farm: {
+      id: 'farm',
+      name: 'Bauernhof',
+      category: 'food',
+      sprite: 'assets/buildings/farm_wood.png'
     },
-
-    // Nahrung
-    { id: 'farm', label: 'Farm', category: 'food',
-      sprite: 'assets/buildings/farm_wood.png',
-      thumb : 'assets/buildings/farm_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    fischer: {
+      id: 'fischer',
+      name: 'Fischerhütte',
+      category: 'food',
+      sprite: 'assets/buildings/fischer_wood1.png'
     },
-    { id: 'fischer', label: 'Fischer', category: 'food',
-      sprite: 'assets/buildings/fischer_wood1.png',
-      thumb : 'assets/buildings/fischer_wood1.png',
-      w: TILE, h: TILE, anchor: 'center'
+    baecker: {
+      id: 'baecker',
+      name: 'Bäckerei',
+      category: 'refine',
+      sprite: 'assets/buildings/baecker_wood.png'
     },
-    { id: 'baecker', label: 'Bäcker', category: 'processing',
-      sprite: 'assets/buildings/baecker_wood.png',
-      thumb : 'assets/buildings/baecker_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    lumberjack: {
+      id: 'lumberjack',
+      name: 'Holzfällerhütte',
+      category: 'resource',
+      sprite: 'assets/buildings/lumberjack_wood.png'
     },
-    { id: 'windmuehle', label: 'Mühle', category: 'processing',
-      sprite: 'assets/buildings/windmuehle_wood.png',
-      thumb : 'assets/buildings/windmuehle_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    steinmetz: {
+      id: 'steinmetz',
+      name: 'Steinmetz',
+      category: 'resource',
+      sprite: 'assets/buildings/steinmetz_wood.png'
     },
-
-    // Rohstoffe
-    { id: 'lumberjack', label: 'Holzfäller', category: 'resource',
-      sprite: 'assets/buildings/lumberjack_wood.png',
-      thumb : 'assets/buildings/lumberjack_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    schmied: {
+      id: 'schmied',
+      name: 'Schmiede',
+      category: 'refine',
+      sprite: 'assets/buildings/schmied_wood0.png'
     },
-    { id: 'steinmetz', label: 'Steinmetz', category: 'resource',
-      sprite: 'assets/buildings/steinmetz_wood.png',
-      thumb : 'assets/buildings/steinmetz_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    windmuehle: {
+      id: 'windmuehle',
+      name: 'Windmühle',
+      category: 'refine',
+      sprite: 'assets/buildings/windmuehle_wood.png'
     },
-    { id: 'schmied', label: 'Schmied', category: 'resource',
-      sprite: 'assets/buildings/schmied_wood0.png',
-      thumb : 'assets/buildings/schmied_wood0.png',
-      w: TILE, h: TILE, anchor: 'center'
+    wohnhaus: {
+      id: 'wohnhaus',
+      name: 'Wohnhaus',
+      category: 'center',
+      sprite: 'assets/buildings/wohnhaus_wood0_ug0.png'
     },
-
-    // Militär
-    { id: 'wachturm', label: 'Wachturm', category: 'military',
-      sprite: 'assets/buildings/wachturm_wood.png',
-      thumb : 'assets/buildings/wachturm_wood.png',
-      w: TILE, h: TILE, anchor: 'center'
+    wachturm: {
+      id: 'wachturm',
+      name: 'Wachturm',
+      category: 'military',
+      sprite: 'assets/buildings/wachturm_wood.png'
     },
-    // HQ liegt (noch) NICHT im buildings-Ordner – Pfad beibehalten:
-    { id: 'hq', label: 'Hauptquartier', category: 'military',
-      sprite: 'assets/tex/building/wood/hq_wood.PNG', // existiert bei dir
-      thumb : 'assets/placeholder64.PNG',             // neutrales Icon
-      w: TILE, h: TILE, anchor: 'center'
-    },
-  ];
-
-  // Aliase (optionale Kurzschreibweisen aus UI/Inspector)
-  const ALIASES = new Map([
-    ['wohnhaus', 'house'],
-    ['fisher',   'fischer'],
-    ['bakery',   'baecker'],
-    ['muehle',   'windmuehle'],
-    ['hq_stone', 'hq'],
-  ]);
-
-  // Vollständige Normalisierung + Maps
-  const BUILDING_MAP = new Map();
-  for (const b of BUILDINGS_RAW) {
-    const norm = { ...b };
-    // Fallbacks
-    if (!norm.thumb)  norm.thumb  = PLACEHOLDER_ICON;
-    if (!norm.sprite) norm.sprite = PLACEHOLDER_ICON;
-    if (!norm.w) norm.w = TILE;
-    if (!norm.h) norm.h = TILE;
-    if (!norm.anchor) norm.anchor = 'center';
-
-    BUILDING_MAP.set(norm.id, norm);
-  }
-
-  // ---- API ----------------------------------------------------------------
-  const API = {
-    version: '1.1.0',
-    categories: CAT_MAP,
-    buildings : BUILDING_MAP,
-
-    get(id) {
-      if (!id) return null;
-      const real = ALIASES.get(id) || id;
-      return BUILDING_MAP.get(real) || null;
-    },
-
-    list() {
-      return Array.from(BUILDING_MAP.values());
-    },
-
-    listByCategory(catId) {
-      const realCat = CAT_MAP.get(catId)?.id || catId;
-      return API.list().filter(b => b.category === realCat);
-    },
-
-    colorFor(catId) {
-      return (CAT_MAP.get(catId)?.color) || CATEGORY_COLORS.misc;
-    },
-
-    resolveSprite(id) {
-      const b = API.get(id);
-      return b?.sprite || PLACEHOLDER_ICON;
-    },
-
-    resolveMenuThumb(id) {
-      const b = API.get(id);
-      return b?.thumb || PLACEHOLDER_ICON;
-    },
-
-    hasSprite(id) {
-      const url = API.resolveSprite(id);
-      return !!url && url !== PLACEHOLDER_ICON;
+    hq: {
+      id: 'hq',
+      name: 'Hauptquartier',
+      category: 'military',
+      sprite: 'assets/buildings/hq_wood.png'
     }
   };
 
-  // ---- Exporte ------------------------------------------------------------
-  window.EntitiesRegistry = API;
-
-  // Export für das Baumenü (ui-build erwartet Kategorien + Items mit icon)
-  window.BuildCatalog = {
-    version: API.version,
-    categories: CATEGORIES.map(c => ({ id: c.id, label: c.label, color: c.color })),
-    items: API.list().map(b => ({
-      id: b.id,
-      label: b.label,
-      category: b.category,
-      icon: API.resolveMenuThumb(b.id)
-    })),
+  // --------------------------------------------------------------------------
+  // 3. Registry Objekt
+  // --------------------------------------------------------------------------
+  const registry = {
+    version: 'v1.2.0',
+    categories,
+    buildings,
+    getCategory: (id) => categories[id] || null,
+    getBuilding: (id) => buildings[id] || null,
+    listCategories: () => Object.values(categories),
+    listBuildings: () => Object.values(buildings)
   };
 
-  // Signal für abhängige Module
-  window.dispatchEvent(new CustomEvent('cb:entities.registry:ready', {
-    detail: { version: API.version, count: API.list().length }
-  }));
-
-  LOG(`bereit v${API.version} (Kategorien: ${CATEGORIES.length} , Gebäude: ${API.list().length} )`);
+  // --------------------------------------------------------------------------
+  // 4. Export
+  // --------------------------------------------------------------------------
+  window.EntitiesRegistry = registry;
+  LOG(`bereit ${registry.version} (Kategorien: ${Object.keys(categories).length} , Gebäude: ${Object.keys(buildings).length} )`);
 })();
