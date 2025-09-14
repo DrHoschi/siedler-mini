@@ -1,287 +1,275 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.js
  * Version: v17.9.12
- * Projekt: Neue Siedler
- *
  * Zweck:
- *  - Liest EntitiesRegistry (Single Source of Truth)
- *  - Baut das Baumenü (UI) dynamisch – auch wenn kein HTML-Gerüst vorhanden ist
- *  - Gruppiert nach Kategorien & färbt Buttons nach Kategorie
- *  - Klick = dispatch moderner Event (cb:build:place) + Legacy-Fallback (cb:build-action)
- *
- * Public API:
- *  - window.UIBuild.open()
- *  - window.UIBuild.close()
- *  - window.UIBuild.render()  // menu neu aufbauen (z. B. nach Registry-Update)
- *
- * Events:
- *  - hört auf 'cb:game-start' → initialisiert sich
+ *  - Build-Menü rendern (Einzeilig pro Kategorie)
+ *  - Robust gegen unterschiedliche Registry-/Event-Bezeichnungen
+ *  - Build-Aktionen an Engine weitergeben (mehrere Kompat-Varianten)
  * ============================================================================
  */
 (() => {
   'use strict';
 
-  const TAG   = '[ui-build]';
-  const LOG   = (...a) => (window.CBLog?.info  || console.log)(TAG, ...a);
-  const WARN  = (...a) => (window.CBLog?.warn  || console.warn)(TAG, ...a);
-  const ERR   = (...a) => (window.CBLog?.error || console.error)(TAG, ...a);
+  const TAG  = '[ui-build]';
+  const LOG  = (...a) => (window.CBLog?.log || console.log)(TAG, ...a);
+  const WARN = (...a) => (window.CBLog?.warn || console.warn)(TAG, ...a);
+  const ERR  = (...a) => (window.CBLog?.error || console.error)(TAG, ...a);
 
-  // Konfig / Selektoren (Panel wird notfalls erzeugt)
-  const SEL = {
-    panelId:  'build-panel',
-    listId:   'build-list',
-    toggleId: 'build-toggle',
-  };
-
-  // kleines CSS-Setup, wenn die Seite nichts mitliefert
-  function injectFallbackCSS() {
-    if (document.getElementById('ui-build-autocss')) return;
-    const css = `
-      #${SEL.panelId} {
-        position: absolute; right: 12px; top: 12px;
-        width: 280px; max-height: 70vh; overflow: auto;
-        background: rgba(20,20,24,.92); backdrop-filter: saturate(150%) blur(2px);
-        border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
-        box-shadow: 0 6px 24px rgba(0,0,0,.35);
-        font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        color: #e7e7ea; z-index: 1000; display: none;
-      }
-      #${SEL.panelId}.open { display: block; }
-      #${SEL.panelId} header {
-        position: sticky; top: 0; background: rgba(20,20,24,.96);
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08);
-      }
-      #${SEL.panelId} header h3 { margin: 0; font-size: 15px; letter-spacing: .2px; }
-      #${SEL.panelId} .cat {
-        padding: 8px 10px 0; margin-top: 6px;
-      }
-      #${SEL.panelId} .cat h4 {
-        margin: 0 0 6px 0; font-size: 12px; font-weight: 700; opacity: .8;
-        text-transform: uppercase; letter-spacing: .5px;
-      }
-      #${SEL.panelId} .grid {
-        display: grid; grid-template-columns: repeat(2, 1fr);
-        gap: 8px; padding: 0 10px 10px;
-      }
-      #${SEL.panelId} button.b {
-        display: flex; align-items: center; gap: 8px;
-        width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,.08);
-        background: rgba(255,255,255,.03); border-radius: 8px;
-        color: inherit; cursor: pointer;
-        transition: transform .06s ease, background .2s ease;
-        text-align: left; min-height: 44px;
-      }
-      #${SEL.panelId} button.b:hover { transform: translateY(-1px); background: rgba(255,255,255,.06); }
-      #${SEL.panelId} button.b:active { transform: translateY(0); }
-      #${SEL.panelId} button.b .thumb {
-        flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px;
-        background: rgba(255,255,255,.06); display: grid; place-items: center;
-        overflow: hidden; border: 1px solid rgba(0,0,0,.25);
-      }
-      #${SEL.panelId} button.b .thumb img {
-        width: 100%; height: 100%; object-fit: cover; display: block;
-      }
-      #${SEL.panelId} button.b .label { font-size: 13px; font-weight: 600; letter-spacing: .2px; }
-      #${SEL.toggleId} {
-        position: absolute; right: 12px; top: 12px; z-index: 1001;
-        width: 40px; height: 40px; border-radius: 10px;
-        background: rgba(20,20,24,.92); color: #e7e7ea; border: 1px solid rgba(255,255,255,.08);
-        display: grid; place-items: center; cursor: pointer;
-      }
-    `;
-    const style = document.createElement('style');
-    style.id = 'ui-build-autocss';
-    style.textContent = css;
-    document.head.appendChild(style);
+  // ---------- Registry lesen (robust) --------------------------------------
+  function readRegistry() {
+    // bevorzugt: EntitiesRegistry.get()
+    const er = window.EntitiesRegistry;
+    if (er && typeof er.get === 'function') {
+      const r = er.get();
+      if (r && (r.categories?.length || r.items?.length)) return r;
+    }
+    // evtl. flach: EntitiesRegistry.data
+    if (er && er.data && (er.data.categories?.length || er.data.items?.length)) {
+      return er.data;
+    }
+    // ältere Setups: window.ENTITIES
+    if (window.ENTITIES && (window.ENTITIES.categories?.length || window.ENTITIES.items?.length)) {
+      return window.ENTITIES;
+    }
+    // sehr alt: window.Entities?.registry
+    if (window.Entities && window.Entities.registry && (window.Entities.registry.categories?.length || window.Entities.registry.items?.length)) {
+      return window.Entities.registry;
+    }
+    return { categories: [], items: [] };
   }
+
+  function normalizeRegistry(raw) {
+    const catMap = new Map();
+    const categories = (raw.categories || []).map(c => {
+      const id = (c.id || c.key || c.slug || c.name || '').toString();
+      const title = c.title || c.name || id;
+      const order = typeof c.order === 'number' ? c.order : 9999;
+      const res = { id, title, order };
+      catMap.set(id, res);
+      return res;
+    }).sort((a,b) => a.order - b.order || a.title.localeCompare(b.title));
+
+    const items = (raw.items || raw.buildings || raw.entities || []).map(it => {
+      const id = (it.id || it.key || it.slug || it.name || '').toString();
+      const title = it.title || it.name || id;
+      const category = (it.category || it.cat || 'misc').toString();
+      const icon = it.icon || it.thumb || it.sprite || it.image || '';
+      const order = typeof it.order === 'number' ? it.order : 9999;
+      const placeAction = it.placeAction || it.action || `place-${id}`;
+      return { id, title, category, icon, order, placeAction };
+    }).sort((a,b) => a.order - b.order || a.title.localeCompare(b.title));
+
+    // Falls keine Kategorien geliefert wurden → aus Items ableiten
+    if (!categories.length && items.length) {
+      const derived = Array.from(new Set(items.map(i => i.category)));
+      derived.forEach((cid, idx) => {
+        catMap.set(cid, { id: cid, title: titleize(cid), order: idx });
+      });
+      return { categories: Array.from(catMap.values()), items };
+    }
+    return { categories, items };
+  }
+
+  function titleize(s='') {
+    return s.replace(/[-_]/g,' ').replace(/\b\w/g, m => m.toUpperCase());
+  }
+
+  // ---------- DOM bauen -----------------------------------------------------
+  let panel, inner;
 
   function ensurePanel() {
-    let panel = document.getElementById(SEL.panelId);
-    if (!panel) {
-      panel = document.createElement('aside');
-      panel.id = SEL.panelId;
-      panel.innerHTML = `
-        <header>
-          <h3>Bauen</h3>
-          <button type="button" data-close="1" aria-label="Schließen">✕</button>
-        </header>
-        <div id="${SEL.listId}" role="list"></div>
-      `;
-      document.body.appendChild(panel);
-    }
-    let toggle = document.getElementById(SEL.toggleId);
-    if (!toggle) {
-      toggle = document.createElement('button');
-      toggle.id = SEL.toggleId;
-      toggle.type = 'button';
-      toggle.title = 'Bauen (Toggle)';
-      toggle.textContent = '🧱';
-      document.body.appendChild(toggle);
-    }
+    if (panel) return panel;
 
-    // Close-Button
-    panel.querySelector('header [data-close]')?.addEventListener('click', () => close());
-    // Toggle
-    toggle.addEventListener('click', () => {
-      panel.classList.toggle('open');
-    });
+    panel = document.createElement('div');
+    panel.id = 'build-panel';
+    panel.setAttribute('aria-hidden', 'true');
 
-    return { panel, list: panel.querySelector('#' + SEL.listId) };
-  }
+    const wrap = document.createElement('div');
+    wrap.className = 'bp-inner';
 
-  function groupByCategory(reg) {
-    const cats = {};
-    for (const c of reg.listCategories()) {
-      cats[c.id] = { meta: c, items: [] };
-    }
-    for (const b of reg.listBuildings()) {
-      const catId = b.category || 'misc';
-      if (!cats[catId]) cats[catId] = { meta: { id: catId, name: catId, color: '#888' }, items: [] };
-      cats[catId].items.push(b);
-    }
-    // sort by category name, then item name
-    const ordered = Object.values(cats).sort((a, b) => (a.meta.name || a.meta.id).localeCompare(b.meta.name || b.meta.id, 'de'));
-    for (const g of ordered) g.items.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, 'de'));
-    return ordered;
-  }
+    const header = document.createElement('div');
+    header.className = 'bp-header';
 
-  function paintBorder(el, color) {
-    // subtile Farbhinweise je Kategorie (nicht für Platzierbarkeit!)
-    el.style.boxShadow = `inset 0 0 0 2px ${color}22, 0 1px 0 rgba(255,255,255,.04)`;
-  }
+    const h = document.createElement('div');
+    h.className = 'bp-title';
+    h.textContent = 'Bauen';
 
-  function makeButton(reg, building) {
-    const cat = reg.getCategory(building.category);
     const btn = document.createElement('button');
-    btn.className = 'b';
-    btn.type = 'button';
-    btn.dataset.kind = building.id;
+    btn.className = 'bp-close';
+    btn.addEventListener('click', () => closePanel());
 
-    // Thumb
-    const thumb = document.createElement('span');
-    thumb.className = 'thumb';
-    if (cat?.color) paintBorder(thumb, cat.color);
+    header.appendChild(h);
+    header.appendChild(btn);
 
-    // Bild (optional, fällt auf Text zurück)
+    inner = document.createElement('div');
+    inner.className = 'bp-content';
+
+    wrap.appendChild(header);
+    wrap.appendChild(inner);
+    panel.appendChild(wrap);
+    document.body.appendChild(panel);
+
+    return panel;
+  }
+
+  function imgEl(src, alt) {
     const img = document.createElement('img');
-    let hasImg = false;
-    if (building.sprite) {
-      hasImg = true;
-      img.src = building.sprite;
-      img.alt = building.name || building.id;
-      img.addEventListener('error', () => {
-        // Bild kaputt → Thumb bleibt als Platzhalter, aber kein kaputtes Icon
-        thumb.innerHTML = '';
-      });
-      thumb.appendChild(img);
-    } else {
-      // kein Sprite → einfach Icon-Glyph
-      thumb.textContent = '▦';
+    img.className = 'bp-thumb';
+    img.alt = alt || '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.src = src;
+    img.onerror = () => {
+      // Platzhalter, wenn Icon fehlt
+      img.src = 'assets/placeholder64.PNG';
+    };
+    return img;
+  }
+
+  function buttonCard(item) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bp-card';
+    btn.setAttribute('data-id', item.id);
+
+    // Bild: wenn icon leer ist, versuchen wir generischen Pfad
+    let icon = item.icon || '';
+    if (!icon) {
+      // Standard: aus /assets/buildings/<id>*.png erraten
+      icon = `assets/buildings/${item.id}.png`;
     }
 
-    const label = document.createElement('span');
-    label.className = 'label';
-    label.textContent = building.name || building.id;
+    btn.appendChild(imgEl(icon, item.title));
+    const lab = document.createElement('div');
+    lab.className = 'bp-label';
+    lab.textContent = item.title;
+    btn.appendChild(lab);
 
-    btn.appendChild(thumb);
-    btn.appendChild(label);
-
-    if (cat?.color) paintBorder(btn, cat.color);
-
-    btn.addEventListener('click', () => {
-      // Moderner Event
-      try {
-        window.dispatchEvent(new CustomEvent('cb:build:place', { detail: { kind: building.id } }));
-      } catch (e) {}
-      // Legacy-Fallback
-      try {
-        window.dispatchEvent(new CustomEvent('cb:build-action', { detail: { action: `place-${building.id}` } }));
-      } catch (e) {}
-    });
-
+    btn.addEventListener('click', () => triggerPlace(item));
     return btn;
   }
 
-  function renderFromRegistry(container, reg) {
-    container.innerHTML = '';
-    const groups = groupByCategory(reg);
+  function renderMenu() {
+    ensurePanel();
 
-    let total = 0;
-    for (const g of groups) {
-      const catWrap = document.createElement('section');
-      catWrap.className = 'cat';
+    inner.innerHTML = '';
+    const raw = readRegistry();
+    const reg = normalizeRegistry(raw);
 
-      const h = document.createElement('h4');
-      h.textContent = g.meta?.name || g.meta?.id || 'Sonstiges';
-      if (g.meta?.color) {
-        h.style.color = g.meta.color;
-      }
-      catWrap.appendChild(h);
-
-      const grid = document.createElement('div');
-      grid.className = 'grid';
-
-      for (const b of g.items) {
-        const btn = makeButton(reg, b);
-        grid.appendChild(btn);
-        total++;
-      }
-
-      catWrap.appendChild(grid);
-      container.appendChild(catWrap);
+    if (!reg.items.length) {
+      WARN('Keine Items in Registry gefunden – Menü leer.', raw);
+      // trotzdem UI zeigen, damit man sieht „leer“
+      const empty = document.createElement('div');
+      empty.style.color = '#cbd5cf';
+      empty.style.padding = '12px 8px 20px 8px';
+      empty.textContent = 'Keine Baueinträge gefunden.';
+      inner.appendChild(empty);
+      LOG('geladen (v17.9.12) – Kategorien:', 0, ', Buttons:', 0);
+      return;
     }
 
-    LOG(`Build-Buttons verdrahtet: ${total}`);
-    return total;
-  }
+    let totalButtons = 0;
 
-  // Robust: Warte bis Registry verfügbar ist
-  async function waitForRegistry(maxMs = 5000) {
-    const start = performance.now();
-    while (!window.EntitiesRegistry) {
-      if (performance.now() - start > maxMs) return null;
-      await new Promise(r => setTimeout(r, 50));
+    for (const cat of reg.categories) {
+      const block = document.createElement('section');
+      block.className = 'bp-cat';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = cat.title || titleize(cat.id);
+      block.appendChild(h3);
+
+      const row = document.createElement('div');
+      row.className = 'bp-row';
+
+      reg.items.filter(it => (it.category||'') === cat.id)
+        .forEach(it => {
+          row.appendChild(buttonCard(it));
+          totalButtons++;
+        });
+
+      // Kategorie völlig leer? Dann überspringen.
+      if (!row.children.length) continue;
+
+      block.appendChild(row);
+      inner.appendChild(block);
     }
-    return window.EntitiesRegistry;
+
+    LOG('geladen (v17.9.12) – Kategorien:', (inner.querySelectorAll('.bp-cat').length), ', Buttons:', totalButtons);
   }
 
-  // Public API
-  function open()  { document.getElementById(SEL.panelId)?.classList.add('open'); }
-  function close() { document.getElementById(SEL.panelId)?.classList.remove('open'); }
-
-  async function render() {
-    const reg = await waitForRegistry();
-    if (!reg) {
-      WARN('Keine EntitiesRegistry gefunden – Menü bleibt leer.');
-      return { ok: false, count: 0 };
-    }
-    const { panel, list } = ensurePanel();
-    const count = renderFromRegistry(list, reg);
-    panel.classList.add('open');
-    return { ok: true, count };
+  // ---------- Öffnen/Schließen ---------------------------------------------
+  function openPanel() {
+    renderMenu();
+    ensurePanel();
+    panel.dataset.open = '1';
+    panel.setAttribute('aria-hidden','false');
+  }
+  function closePanel() {
+    if (!panel) return;
+    panel.dataset.open = '0';
+    panel.setAttribute('aria-hidden','true');
   }
 
-  // Init-Flow
-  async function init() {
+  // ---------- Platzieren (Kompat-Feuerwerk) --------------------------------
+  function triggerPlace(item) {
+    const id = item.id;
+    let ok = false;
+
+    // 1) Moderne Bridge?
     try {
-      injectFallbackCSS();
-      const res = await render();
-      LOG(`geladen (v17.9.12) – Buttons: ${res.count}`);
-    } catch (e) {
-      ERR('Init-Fehler:', e);
-    }
+      if (window.GameCore?.placeBuilding) {
+        window.GameCore.placeBuilding(id);
+        ok = true;
+      }
+    } catch (e) {}
+
+    // 2) Entities-Modul?
+    try {
+      if (!ok && window.Entities?.place) {
+        window.Entities.place(id);
+        ok = true;
+      }
+    } catch (e) {}
+
+    // 3) Klassische Custom-Events
+    try {
+      if (!ok) {
+        const ev = new CustomEvent('cb:build-place', { detail:{ id }});
+        window.dispatchEvent(ev);
+        ok = true;
+      }
+    } catch (e) {}
+
+    LOG('Build-Aktion:', id, ok ? 'ok' : 'unsent');
+    // Panel offen lassen, damit man mehrere setzen kann
   }
 
-  // Auto-Init: beim Game-Start
-  window.addEventListener('cb:game-start', init);
-  // Falls cb:game-start schon durch ist (Reload-Szenario), trotzdem initialisieren:
-  if (document.readyState !== 'loading') {
-    // leicht verzögert, damit EntitiesRegistry Zeit hat zu laden
-    setTimeout(init, 0);
+  // ---------- Event-Brücken binden -----------------------------------------
+  function bindOpenClose() {
+    const OPEN_EVENTS  = ['cb:build-open','ui:build:open','build:open'];
+    const CLOSE_EVENTS = ['cb:build-close','ui:build:close','build:close'];
+
+    OPEN_EVENTS.forEach(n => window.addEventListener(n, openPanel));
+    CLOSE_EVENTS.forEach(n => window.addEventListener(n, closePanel));
+
+    // Falls ui-bridge direkt Methoden erwartet:
+    window.UIBuild = {
+      open: openPanel,
+      close: closePanel
+    };
+  }
+
+  // ---------- Start ---------------------------------------------------------
+  function init() {
+    bindOpenClose();
+    ensurePanel();
+    LOG('bereit (v17.9.12)');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once:true });
   } else {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 0));
+    init();
   }
-
-  window.UIBuild = { open, close, render };
 })();
