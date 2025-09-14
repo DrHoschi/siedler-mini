@@ -1,9 +1,9 @@
 /* =============================================================================
 Datei: assets/ui/ui-bridge.js
-Version: v17.9.7
+Version: v17.9.8
 Ziel:
-  - Inspector-Button: ruft deinen gesplitteten Inspector an (keine neue UI).
-  - Build-Button: toggelt Dock; hält FAB-Offset aktuell.
+  - Inspector-Button: ruft euren gesplitteten Inspector an (keine neue UI).
+  - Build-Button: toggelt Dock + setzt Body-Klasse für FAB-Abstand.
   - Keine DOM-Neubauten außer optionales #build-dock (Fallback).
 ============================================================================= */
 (function(){
@@ -36,17 +36,16 @@ Ziel:
       isOpen(root) ? window.UIBuild.close("toggle") : window.UIBuild.open("toggle");
       return;
     }
-    // Fallback: Sichtbarkeit direkt toggeln, Events spiegeln
+    // Fallback: Sichtbarkeit direkt toggeln + Events spiegeln
     const visible = root.style.display !== "none";
     root.style.display = visible ? "none" : "block";
     root.classList.toggle("is-open", !visible);
     (!visible ? markOpen : markClose)();
     const ev = !visible ? "cb:build:open" : "cb:build:close";
-    window.dispatchEvent(new CustomEvent(ev,{detail:{from:"bridge"}}));
+    window.dispatchEvent(new CustomEvent(ev,{detail:{from:"ui-bridge"}}));
   };
 
   /* ---------- Inspector ---------- */
-  // Root nur abfragen (nichts neu bauen)
   function findInspectorRoot(){
     return (
       document.getElementById("inspector-root") ||
@@ -64,7 +63,7 @@ Ziel:
   ];
 
   window.GameUI.toggleInspector = function(){
-    // 1) Bevorzugt echte API aus deinen Split-Modulen
+    // 1) Bevorzugt echte API (Split-Inspector)
     if (window.Inspector && typeof window.Inspector.toggle === "function"){
       return window.Inspector.toggle();
     }
@@ -74,10 +73,10 @@ Ziel:
       if (vis && typeof window.Inspector.close === "function") return window.Inspector.close("toggle");
       if (!vis && typeof window.Inspector.open  === "function") return window.Inspector.open("toggle");
     }
-    // 2) Wenn API fehlt: Events für beide Welten schicken
+    // 2) Wenn API fehlt: beide Event-Namensräume feuern
     TOGGLE_EVENTS.forEach(e => window.dispatchEvent(new CustomEvent(e,{detail:{from:"ui-bridge"}})));
     logW("Inspector-API nicht gefunden – Toggle-Events gesendet.");
   };
 
-  document.addEventListener("DOMContentLoaded", ()=> logI("bereit (v17.9.7)"));
+  document.addEventListener("DOMContentLoaded", ()=> logI("bereit (v17.9.8)"));
 })();
