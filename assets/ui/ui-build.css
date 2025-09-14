@@ -1,221 +1,117 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.css
- * Version: v17.9.13
- * Projekt: Neue Siedler – Build-UI Styles
- *
- * Ziel:
- *  - Panel über Canvas legen (nicht fullscreen abdunkeln)
- *  - Einzeilige Kategorien mit je 3 Cards pro Zeile (mobil), 4–6 auf größeren Screens
- *  - Helle Karten mit Thumb + Label wie im Referenz-Screenshot
- *  - Scrollbar sanft, nichts transparent/unsichtbar
- *  - Keine Abhängigkeit zu anderen Styles (nur CSS-Variablen optional)
- * ========================================================================== */
+ * Version: v20250914
+ * Zweck: Styling für das Baumenü – einzeilige Kategorien mit Karten
+ * ============================================================================ */
 
-/* Root-Design-Token (können von globalen Themes überschrieben werden) */
-:root {
-  --ui-z: 80;                          /* über Canvas & Buttons */
-  --ui-bg: #eef1f3;                    /* Panel-Hintergrund */
-  --ui-card-bg: #ffffff;
-  --ui-card-bg-hover: #f6f8fa;
-  --ui-border: #d7dde3;
-  --ui-text: #1f2933;
-  --ui-muted: #5c6b7a;
-  --ui-shadow: 0 8px 24px rgba(0,0,0,.18);
+:root{
+  --ui-bg: rgba(18,23,19,.92);
+  --ui-fg: #eef3ef;
+  --ui-muted: #b9c1bb;
+  --ui-card: #f4f6f3;
+  --ui-card-fg: #0e1512;
+  --ui-shadow: 0 16px 50px rgba(0,0,0,.35);
   --ui-radius: 16px;
-  --ui-card-radius: 14px;
-  --ui-gap: 14px;
-  --ui-pad: 16px;
-  --ui-title-size: 20px;
-  --ui-cat-size: 18px;
-  --ui-label-size: 16px;
 }
 
-/* Panel-Container */
-#ui-build-panel {
+#build-panel.ui-build{
   position: fixed;
-  left: 12px;
-  right: 12px;
-  top: 72px;
-  bottom: 112px;                       /* Platz für die runden FABs unten */
-  z-index: var(--ui-z);
-  display: none;                        /* per JS auf block togglen */
-  contain: content;
-}
-
-#ui-build-panel.open { display: block; }
-
-/* Panel-Box */
-#ui-build {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
+  left: 24px;
+  right: 24px;
+  top: 80px;
+  bottom: 24px;
+  display: none;
+  flex-direction: column;
   background: var(--ui-bg);
-  border: 1px solid var(--ui-border);
+  color: var(--ui-fg);
   border-radius: var(--ui-radius);
   box-shadow: var(--ui-shadow);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  backdrop-filter: blur(8px);
+  z-index: 1000; /* liegt über Canvas, unter FABs dank sehr hohem z-index in index.html */
+  padding: 16px 16px 12px;
 }
 
-/* Header */
-#ui-build .ui-build-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: calc(var(--ui-pad) + 2px) calc(var(--ui-pad) + 4px);
-  border-bottom: 1px solid var(--ui-border);
-  background: rgba(255,255,255,.6);
-  backdrop-filter: blur(6px);
+#build-panel.ui-build.open{ display:flex; }
+
+.ui-build-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 6px 4px 10px 4px;
+}
+.ui-build-header h2{
+  margin:0; font-size:22px; letter-spacing:.2px;
+}
+.ui-build-close{
+  appearance:none; border:none; border-radius:12px; width:40px; height:40px;
+  font-size:22px; line-height:40px; background:rgba(255,255,255,.08); color:#fff;
+  cursor:pointer;
 }
 
-#ui-build .ui-build-title {
-  margin: 0;
-  font-size: var(--ui-title-size);
-  line-height: 1.2;
-  color: var(--ui-text);
-  font-weight: 700;
-  letter-spacing: .2px;
+.ui-build-content{
+  overflow:auto;
+  padding: 6px 2px 10px;
+  display:block;
 }
 
-#ui-build .ui-build-close {
-  border: 0;
-  background: #fff;
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-  color: var(--ui-muted);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-#ui-build .ui-build-close:active { transform: translateY(1px); }
-
-/* Scrollbereich */
-#ui-build .ui-build-body {
-  position: relative;
-  flex: 1 1 auto;
-  overflow: auto;
-  padding: var(--ui-pad);
-  scroll-behavior: smooth;
+/* Abschnittstitel */
+.ui-build-section{ margin: 8px 4px 18px; }
+.ui-build-section-title{
+  margin: 8px 2px 10px;
+  font-size:18px;
+  font-weight:700;
+  color: var(--ui-fg);
 }
 
-/* Kategorie-Block (einzeilig) */
-.ui-build-category {
-  margin: 0 0 calc(var(--ui-pad) + 4px);
-  padding: var(--ui-pad);
-  background: #f7f9fb;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
+/* Einzeilige Reihe – horizontal scrollen */
+.ui-build-row{
+  display:flex;
+  gap: 14px;
+  overflow:auto hidden;
+  padding: 6px 2px 2px 2px;
 }
 
-.ui-build-category .cat-title {
-  margin: 0 0 10px;
-  font-weight: 700;
-  font-size: var(--ui-cat-size);
-  color: var(--ui-text);
+/* Karte */
+.ui-build-card{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  min-width: 150px;
+  max-width: 150px;
+  border:none;
+  border-radius: 14px;
+  background: var(--ui-card);
+  color: var(--ui-card-fg);
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+  padding: 10px 10px 12px;
+  cursor:pointer;
 }
+.ui-build-card:active{ transform: translateY(1px); }
 
-/* Grid – mobil 3 Spalten, Tablet 4, Desktop 6 */
-.ui-build-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--ui-gap);
-}
-
-@media (min-width: 560px) {
-  .ui-build-grid { grid-template-columns: repeat(4, 1fr); }
-}
-@media (min-width: 900px) {
-  .ui-build-grid { grid-template-columns: repeat(6, 1fr); }
-}
-
-/* Karte/Eintrag */
-.ui-build-card {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.ui-build-btn {
-  width: 100%;
-  display: grid;
-  grid-template-rows: auto min-content;
-  gap: 8px;
-  align-items: center;
-  justify-items: center;
-  text-align: center;
-  padding: 12px;
-  background: var(--ui-card-bg);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-card-radius);
-  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset;
-  color: var(--ui-text);
-  text-decoration: none;
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition: background .15s ease, transform .06s ease;
-}
-
-.ui-build-btn:hover { background: var(--ui-card-bg-hover); }
-.ui-build-btn:active { transform: translateY(1px); }
-
-/* Vorschaubild */
-.ui-build-thumb {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  display: grid;
-  place-items: center;
-  background: #f5f7f9;
+.ui-build-thumb{
+  width: 120px; height: 90px;
+  display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(180deg, #fff, #f0f3f2);
   border-radius: 10px;
-  border: 1px solid var(--ui-border);
-  overflow: hidden;
+  overflow:hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
+}
+.ui-build-thumb img{
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; image-rendering: auto;
 }
 
-.ui-build-thumb img {
-  display: block;
-  max-width: 88%;
-  max-height: 88%;
-  object-fit: contain;
-  image-rendering: auto;
-}
-
-/* Label/Name */
-.ui-build-label {
-  font-size: var(--ui-label-size);
+.ui-build-title{
+  margin-top: 10px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--ui-text);
-  letter-spacing: .2px;
-  line-height: 1.2;
-}
-
-/* Placeholder (falls Bild fehlt) */
-.ui-build-thumb .ph {
-  width: 60%;
-  height: 60%;
-  border: 3px dashed #c9d3dc;
-  border-radius: 8px;
+  text-align:center;
+  color: #0f1412;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 
 /* Leerer Zustand */
-#ui-build .ui-build-empty {
-  padding: 32px;
+.ui-build-empty{
   color: var(--ui-muted);
+  padding: 20px 8px;
   font-size: 16px;
 }
-
-/* Sanfte Scrollbar (iOS/Android/desktop) */
-#ui-build .ui-build-body::-webkit-scrollbar { width: 10px; height: 10px; }
-#ui-build .ui-build-body::-webkit-scrollbar-thumb {
-  background: #cfd8e3;
-  border-radius: 999px;
-  border: 2px solid #e8edf3;
-}
-#ui-build .ui-build-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-/* Sicherstellen, dass FABs (runde Buttons) über dem Panel bleiben */
-.fab { z-index: calc(var(--ui-z) + 10) !important; }
