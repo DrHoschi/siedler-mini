@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-13T22:45:53.875Z",
+  "createdAt": "2025-09-14T08:26:01.361Z",
   "root": ".",
-  "count": 280,
+  "count": 281,
   "entries": [
     {
       "type": "dir",
@@ -20,6 +20,11 @@
       "type": "file",
       "path": ".github/workflows/ci.yml",
       "size": 2451
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/code-bundle.yml",
+      "size": 4384
     },
     {
       "type": "file",
@@ -274,7 +279,7 @@
     {
       "type": "file",
       "path": "assets/core/core.entities.js",
-      "size": 9372
+      "size": 6796
     },
     {
       "type": "file",
@@ -309,7 +314,7 @@
     {
       "type": "file",
       "path": "assets/core/entities.registry.js",
-      "size": 4383
+      "size": 8454
     },
     {
       "type": "file",
@@ -881,7 +886,7 @@
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 8519
+      "size": 9272
     },
     {
       "type": "file",
@@ -1276,12 +1281,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 27480
+      "size": 27742
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10559
+      "size": 10647
     },
     {
       "type": "file",
@@ -1296,7 +1301,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6588
+      "size": 6589
     },
     {
       "type": "file",
