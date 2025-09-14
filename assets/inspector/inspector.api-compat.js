@@ -1,9 +1,10 @@
 /* =============================================================================
 Datei: assets/inspector/inspector.api-compat.js
-Version: v1.3.1
+Version: v1.3.2
 Ziel: Ergänzt NUR, falls Module keine globale API setzen.
       - Stellt Inspector.open/close/toggle/setTab bereit.
-      - Spiegelt Events neu/legacy (cb:inspector:* ↔ cb:inspector-* / inspector:*)
+      - Spiegelt Events (neu + legacy).
+      - Überschreibt nichts, wenn schon vorhanden.
 ============================================================================= */
 (function(){
   const logI = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
@@ -15,6 +16,7 @@ Ziel: Ergänzt NUR, falls Module keine globale API setzen.
     [CANON.close]: ["cb:inspector-close","inspector:close","inspector-close"],
     [CANON.tab]:   ["cb:inspector-tab-change","inspector:tab:change","inspector-tab-change"]
   };
+
   [CANON.open, CANON.close, CANON.tab].forEach(src=>{
     window.addEventListener(src, ev=> (MIRROR_OUT[src]||[]).forEach(m=> emit(m, ev.detail)));
   });
@@ -25,5 +27,5 @@ Ziel: Ergänzt NUR, falls Module keine globale API setzen.
   if (typeof I.toggle !== "function") I.toggle = (o)=>    emit("cb:inspector:toggle",{from:o||"api"});
   if (typeof I.setTab !== "function") I.setTab = (t)=>    emit(CANON.tab,   {tab:String(t||"logs")});
 
-  logI("aktiv (v1.3.1)");
+  logI("aktiv (v1.3.2)");
 })();
