@@ -1,8 +1,9 @@
 /* =============================================================================
 Datei: assets/ui/ui-build.css
+Projekt: Neue Siedler
 Version: v17.9.14
-Ziel: Aussehen exakt wie im Soll-Bild: hellgraue Karten, KEIN dunkler Dock-Block,
-      max. 1–2 Zeilen sichtbar, Rest scrollt, FABs kollidieren nicht.
+Ziel: Aussehen wie im Soll-Bild: hellgraue Karten, 1–2 Zeilen sichtbar (Rest scrollt),
+      Dock-Hintergrund transparent, FABs kollidieren nicht.
 ============================================================================= */
 
 :root{
@@ -11,18 +12,18 @@ Ziel: Aussehen exakt wie im Soll-Bild: hellgraue Karten, KEIN dunkler Dock-Block
   --ui-panel-2: #dfe5ec;      /* Hover */
   --ui-border:  #c7d1dc;      /* Kartenrand */
   --ui-text:    #222;         /* Label */
-  --build-dock-max-h: 240px;  /* wird von JS dynamisch gesetzt */
+  --build-dock-max-h: 240px;  /* wird von JS (ui-build.js) dynamisch gesetzt */
   --dock-padding-x: 12px;
   --dock-padding-y: 10px;
 }
 
-/* Root-Dock: transparent, nur Innenabstand – Karten selbst sind hell */
+/* Root-Dock: transparent, nur Innenabstand – die Karten sind hell */
 #build-dock.ui-build-dock,
 #build-panel.ui-build-dock{
   position: absolute; left: 0; right: 0; bottom: 0;
   z-index: 40;
   display: none;
-  background: transparent;                 /* ⬅️ kein dunkler Block mehr */
+  background: transparent;                 /* ⬅️ kein dunkler Block */
   padding: var(--dock-padding-y) var(--dock-padding-x)
            calc(max(var(--dock-padding-y), 8px) + var(--safe-area-bottom))
            var(--dock-padding-x);
@@ -30,13 +31,14 @@ Ziel: Aussehen exakt wie im Soll-Bild: hellgraue Karten, KEIN dunkler Dock-Block
 #build-dock.is-open,
 #build-panel.is-open{ display: block; }
 
-/* Header im Zielbild nicht sichtbar → ausblenden (lassen wir aber im DOM für a11y) */
+/* Header im Zielbild nicht sichtbar → ausblenden (Barrierefreiheit bleibt) */
 .ui-build-header{ display:none; }
 
-/* Scrollbarer Bereich (2-Zeilen-Begrenzung + Scroll) */
+/* Scrollbarer Bereich (Begrenzung auf 2 Reihen) */
 .ui-build-body{
   max-height: var(--build-dock-max-h);
-  overflow-y: auto; overflow-x: hidden;
+  overflow-y: auto; 
+  overflow-x: hidden;
 }
 
 /* Kategorien */
@@ -53,7 +55,7 @@ Ziel: Aussehen exakt wie im Soll-Bild: hellgraue Karten, KEIN dunkler Dock-Block
   gap: 12px;
 }
 
-/* Karten im hellen Stil mit runden Ecken wie im Foto */
+/* Karten im hellen Stil mit runden Ecken */
 .ui-card{
   background:var(--ui-panel);
   border:1px solid var(--ui-border);
@@ -67,7 +69,7 @@ Ziel: Aussehen exakt wie im Soll-Bild: hellgraue Karten, KEIN dunkler Dock-Block
 .ui-build-item{ width:100%; cursor:pointer; }
 .ui-build-item:hover{ background:var(--ui-panel-2); transform: translateY(-1px); }
 
-/* Bild + Label (kompakter) */
+/* Bild + Label (kompakt) */
 .ui-build-item-imgwrap{ display:grid; place-items:center; margin-bottom:8px; }
 .ui-build-item-img{
   width:64px; height:64px; object-fit:contain; image-rendering:auto;
