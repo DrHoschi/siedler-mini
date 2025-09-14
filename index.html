@@ -4,12 +4,12 @@
   Version: v17.8.2
 
   Lade-Reihenfolge (wichtig):
-  Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split) → Boot-Compat
+  Polyfill → Core → Overlay/Renderer → Bootstrap → UI → Inspector (split) → Compat/Bridge → Boot-Compat
 
   Hinweise:
   - Inspector ist gesplittet (core/logs/tests/resources/paths/overlay.hooks) – KEIN altes
     inspector.js / inspector.overview.js mehr einbinden.
-  - Kein link auf eine alte style.css (hatte die komplette Seite künstlich abgedunkelt).
+  - Kein Link auf eine alte style.css (hatte die komplette Seite künstlich abgedunkelt).
   - FAB-Buttons (Bau/Inspector) haben sehr hohen z-index, damit sie immer bedienbar bleiben.
   - Start-Panel liegt Z-ordnungsmäßig ÜBER dem Canvas, wird nach „Spiel starten“ aus dem DOM entfernt.
 -->
@@ -59,7 +59,8 @@
     }
     /* Wenn das Bau-Dock offen ist, beide FABs anheben (Platz lassen) */
     body.has-build-open #btn-build,
-body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px); }  </style>
+    body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px); }
+  </style>
 </head>
 <body>
 
@@ -101,7 +102,7 @@ body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px
   <script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
   <script src="assets/core/core.env.js?v=17.8.2"></script>
   
-  <!-- Asset-Layer (NEU) -->
+  <!-- Asset-Layer -->
   <script src="assets/core/asset.js?v=17.8.7"></script>
   <script src="assets/core/build.assets.js?v=17.8.7"></script>
 
@@ -121,25 +122,29 @@ body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px
   <script src="assets/core/game.bootstrap.js?v=17.8.7"></script>
   <script src="assets/core/game.js?v=17.10.0"></script>
   
-  <!-- Inspector (split) – genau diese Module -->
+  <!-- Inspector (split) – EMPFOHLENE REIHENFOLGE -->
   <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.14.4"></script>
+  <script defer src="assets/inspector/inspector.logs.js?v=18.14.5"></script>
+  <script defer src="assets/inspector/inspector.tests.js?v=18.14.5"></script>
+  <script defer src="assets/inspector/inspector.resources.js?v=18.14.5"></script>
+  <script defer src="assets/inspector/inspector.paths.js?v=18.14.5"></script>
   <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
-  <script defer src="assets/inspector/inspector.paths.js?v=18.14.4"></script>
-  <script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
-  <script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
-  <!-- script defer src="ui/ui-inspector.js?v=18.0.0"></script -->
-  <!-- script defer src="assets/ui/ui-inspector.js"></script -->
-  <script defer src="assets/inspector/inspector.compat.js?v=1"></script>
-  
+
+  <!-- (NEU) Kompat-Adapter für den bestehenden Inspector (ALT/NEU-Bridge) -->
+  <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
+
+  <!-- (OPTIONAL – ZUKUNFT) Moderne UI-Inspector-Schicht nach Lastenheft
+       -> vorerst DEAKTIVIERT lassen, um den alten Inspector nicht zu überschreiben -->
+  <!-- <script defer src="assets/ui/ui-inspector.js?v=18.0.0"></script> -->
+
   <!-- Legacy-Fassade (Kompatibilität) -->
   <script defer src="game.js?v=17.8.2"></script>
   <script defer src="core/pathfinder.js?v=16.5.0"></script>
 
-  <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=17.9.0"></script>
+  <!-- UI (Reihenfolge: Bridge → Start → Build) -->
+  <script defer src="assets/ui/ui-bridge.js?v=17.9.1"></script>
   <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.9.12"></script> <!-- ⬅️ neue Version -->
+  <script defer src="assets/ui/ui-build.js?v=17.9.12"></script>
 
   <!-- Boot-Compat -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
@@ -151,15 +156,13 @@ body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px
       window.__cb.indexVersion = "v17.8.2";
       (window.CBLog?.info || console.log)("[index] UI bereit (v17.8.2)");
 
-      /* FAB-Abstand, wenn das Bau-Dock geöffnet ist.
-         Unterstützt beide Event-Varianten (Doppelpunkt + Bindestrich). */
+      /* FAB-Abstand, wenn das Bau-Dock geöffnet ist (neu & legacy Events) */
       function setOpen(){ document.body.classList.add('has-build-open'); }
       function setClose(){ document.body.classList.remove('has-build-open'); }
-
       window.addEventListener('cb:build:open',  setOpen);
       window.addEventListener('cb:build:close', setClose);
-      window.addEventListener('cb:build-open',  setOpen);   // Fallback
-      window.addEventListener('cb:build-close', setClose);  // Fallback
+      window.addEventListener('cb:build-open',  setOpen);
+      window.addEventListener('cb:build-close', setClose);
     })();
   </script>
 </body>
