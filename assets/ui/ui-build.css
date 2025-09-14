@@ -1,195 +1,188 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.css
  * Version: v17.9.12
- * Projekt: Neue Siedler – Build-UI (einzeilig pro Kategorie)
+ * Projekt: Neue Siedler – Build UI
  *
- * Erwartete Struktur (vereinfacht):
- * <aside id="build-panel" class="build-panel">
- *   <section class="build-cat">
- *     <h3 class="build-cat__title">Allg. / Verwaltung</h3>
- *     <div class="build-row">
- *       <button class="build-card" data-key="rathaus">
- *         <div class="build-card__img"><img src="assets/buildings/rathaus_wood1.png" alt=""></div>
- *         <div class="build-card__label">Rathaus</div>
- *       </button>
- *       ...
- *     </div>
- *   </section>
- *   ...
- * </aside>
- * ============================================================================
- */
+ * Ziel:
+ *  - helles Panel (kein schwarzer Overlay-Block)
+ *  - Kategorien-Kopfzeile
+ *  - Kachel-Buttons: Bild oben, Label unten (einzeilig), Soft-Shadow
+ *  - Responsive Grid (mobile 3 Spalten, Tablet 4, Desktop 6)
+ *  - Fix: Z-Index über Canvas, pointer-events korrekt
+ * ============================================================================ */
 
+/* Root tokens */
 :root {
-  --ui-bg: #eef2f4;
-  --ui-panel: rgba(255,255,255,0.92);
-  --ui-panel-blur: 10px;
-  --ui-border: #d8e0e6;
-  --ui-border-soft: #e6edf2;
-  --ui-shadow: 0 10px 30px rgba(0,0,0,.18);
-  --ui-shadow-soft: 0 6px 18px rgba(0,0,0,.12);
-  --ui-radius-lg: 16px;
-  --ui-radius-md: 12px;
+  --ui-bg: #eef1f4;
+  --ui-panel: #f6f7f8;
+  --ui-card: #ffffff;
+  --ui-border: #d9dee4;
+  --ui-shadow: 0 10px 24px rgba(0,0,0,.12);
+  --ui-shadow-soft: 0 4px 12px rgba(0,0,0,.10);
+  --ui-radius-lg: 18px;
+  --ui-radius-md: 14px;
   --ui-radius-sm: 10px;
-  --ui-text: #2b3540;
-  --ui-text-soft: #667788;
-  --ui-tile: #f6f8fa;
-  --ui-tile-hover: #f0f4f7;
-  --ui-tile-active: #eaf1f6;
-  --ui-gap-cat: 20px;
-  --ui-gap-card: 16px;
-  --ui-card-w: 200px;     /* Breite einer Karte (Bild + Label) */
-  --ui-card-h: 120px;     /* Kachelhöhe */
-  --ui-card-img: 96px;    /* Bildbox */
-  --ui-label-size: 15px;
+  --ui-gap-xl: 20px;
+  --ui-gap-lg: 16px;
+  --ui-gap-md: 12px;
+  --ui-gap-sm: 8px;
+  --ui-text: #2a2f36;
+  --ui-muted: #6b7583;
+  --ui-accent: #3a7afe;
 }
 
-/* Panel-Container (liegt auf dem Terrain) */
-.build-panel {
+/* Container, wird von ui-bridge/ui-build.js toggled */
+#build-panel {
   position: fixed;
-  inset: auto 12px 12px 12px;         /* unten, seitlich mit safe area */
-  padding: 18px 14px 14px;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
+  width: min(980px, 92vw);
+  max-height: min(78vh, 900px);
   background: var(--ui-panel);
-  -webkit-backdrop-filter: blur(var(--ui-panel-blur));
-  backdrop-filter: blur(var(--ui-panel-blur));
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   box-shadow: var(--ui-shadow);
-  color: var(--ui-text);
-  z-index: 20;
-  max-height: min(70vh, 620px);
-  overflow: hidden;                    /* wir scrollen nur in den Zeilen */
+  z-index: 2000;           /* über Canvas + FABs */
+  display: none;           /* ui-bridge zeigt/hide */
+  overflow: hidden;        /* runde Ecken */
 }
 
-/* Jede Kategorie = ein Block mit Überschrift + einzeiliger Row */
-.build-cat + .build-cat { margin-top: var(--ui-gap-cat); }
+/* Sichtbar-Flag */
+#build-panel.is-open { display: block; }
 
-.build-cat__title {
-  margin: 0 6px 10px;
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: .2px;
+/* Innerer Scrollbereich */
+#build-panel .build-scroll {
+  overflow: auto;
+  max-height: calc(min(78vh, 900px) - 24px);
+  padding: var(--ui-gap-xl);
+  background:
+    radial-gradient(transparent 0, transparent 22px, rgba(0,0,0,0.03) 22px) 0 0/48px 48px,
+    var(--ui-panel);
+}
+
+/* Überschriften (Kategorien) */
+.build-section {
+  margin-bottom: 28px;
+}
+
+.build-section h3 {
+  margin: 0 0 var(--ui-gap-lg);
+  font: 600 20px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
   color: var(--ui-text);
 }
 
-/* Einzeilige, horizontal scrollende Reihe */
-.build-row {
+/* Grid für Kacheln */
+.build-grid {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: var(--ui-card-w);
-  gap: var(--ui-gap-card);
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 6px 6px 2px;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
+  grid-template-columns: repeat(3, 1fr);    /* mobile: 3 */
+  gap: var(--ui-gap-lg);
 }
 
-/* schöne, dezente Scrollbar */
-.build-row::-webkit-scrollbar { height: 10px; }
-.build-row::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 10px;
+@media (min-width: 720px) {
+  .build-grid { grid-template-columns: repeat(4, 1fr); }
 }
-.build-row::-webkit-scrollbar-thumb {
-  background: #cfd8df;
-  border-radius: 10px;
+@media (min-width: 1080px) {
+  .build-grid { grid-template-columns: repeat(6, 1fr); }
 }
-.build-row:hover::-webkit-scrollbar-thumb { background: #b8c4cd; }
 
-/* Karten / Buttons */
-.build-card {
-  position: relative;
+/* Kachel-Button */
+.build-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: var(--ui-card-w);
-  height: var(--ui-card-h);
-  padding: 10px 10px 12px;
-  background: linear-gradient(180deg, var(--ui-tile), #fff);
-  border: 1px solid var(--ui-border-soft);
+  justify-content: space-between;
+  text-align: center;
+  padding: var(--ui-gap-md);
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-md);
   box-shadow: var(--ui-shadow-soft);
-  scroll-snap-align: start;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+  transition: transform .08s ease, box-shadow .12s ease, border-color .12s ease;
   cursor: pointer;
-  transition: transform .08s ease, box-shadow .12s ease, background-color .12s ease;
+  user-select: none;
 }
 
-.build-card:hover { background: var(--ui-tile-hover); transform: translateY(-1px); }
-.build-card:active { background: var(--ui-tile-active); transform: translateY(0); }
+.build-tile:active { transform: translateY(1px) scale(0.99); }
+.build-tile:hover  { box-shadow: 0 10px 20px rgba(0,0,0,.12); border-color: #cfd6dd; }
 
-/* Bild */
-.build-card__img {
-  width: var(--ui-card-img);
-  height: var(--ui-card-img);
+/* Bildrahmen */
+.build-thumb {
+  width: 100%;
+  aspect-ratio: 1.4 / 1;         /* querformatig wie im Referenzbild */
   display: grid;
   place-items: center;
-  margin-bottom: 8px;
-}
-.build-card__img img {
-  max-width: 100%;
-  max-height: 100%;
-  display: block;
-  image-rendering: auto;
+  background: #f3f6f9;
+  border-radius: var(--ui-radius-sm);
+  overflow: hidden;
+  border: 1px solid #e3e8ee;
 }
 
-/* Label */
-.build-card__label {
-  font-size: var(--ui-label-size);
-  font-weight: 600;
-  line-height: 1.15;
+.build-thumb img {
+  max-width: 92%;
+  max-height: 92%;
+  object-fit: contain;
+  image-rendering: auto;
+  display: block;
+}
+
+/* Label (einzeilig) */
+.build-label {
+  margin-top: var(--ui-gap-md);
+  width: 100%;
+  font: 600 16px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
   color: var(--ui-text);
-  text-align: center;
-  white-space: nowrap;
+  white-space: nowrap;           /* EINZEILIG */
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 100%;
 }
 
-/* Platzhalter, falls Bild fehlt */
-.build-card.is-placeholder .build-card__img {
-  background:
-    repeating-linear-gradient(45deg, #eaeef2 0 6px, #dde5eb 6px 12px);
-  border-radius: 8px;
+/* Platzhalter-Kachel (falls Bild fehlt) */
+.build-tile.is-placeholder .build-thumb {
+  background: repeating-linear-gradient(
+    45deg,
+    #f1f3f6,
+    #f1f3f6 8px,
+    #e7edf4 8px,
+    #e7edf4 16px
+  );
 }
-.build-card.is-placeholder .build-card__label { color: var(--ui-text-soft); }
-
-/* Kompakter auf schmalen Geräten */
-@media (max-width: 420px) {
-  :root {
-    --ui-card-w: 180px;
-    --ui-card-h: 112px;
-    --ui-card-img: 88px;
-  }
-  .build-panel { inset: auto 8px 8px 8px; padding: 14px 10px 10px; }
-  .build-cat__title { font-size: 17px; margin: 0 4px 8px; }
+.build-tile.is-placeholder .build-thumb::after {
+  content: "?";
+  font: 700 28px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  color: var(--ui-muted);
 }
 
-/* Ultra-schmale Geräte */
-@media (max-width: 340px) {
-  :root {
-    --ui-card-w: 160px;
-    --ui-card-h: 104px;
-    --ui-card-img: 80px;
-    --ui-label-size: 14px;
-  }
+/* Top-Right FAB (der rote Backstein), damit er das Panel nicht überlappt */
+.fab, .fab-right {
+  pointer-events: auto;
+  z-index: 2100;
 }
 
-/* Dark Mode (optional) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ui-panel: rgba(22,28,34,0.82);
-    --ui-border: rgba(255,255,255,0.08);
-    --ui-border-soft: rgba(255,255,255,0.08);
-    --ui-text: #e8edf2;
-    --ui-text-soft: #b6c2cf;
-    --ui-tile: #1e2730;
-    --ui-tile-hover: #22303a;
-    --ui-tile-active: #253543;
-  }
-  .build-row::-webkit-scrollbar-thumb { background: #445564; }
-  .build-row:hover::-webkit-scrollbar-thumb { background: #546a7b; }
+/* Safety: falls ein globales dunkles Overlay existiert, stelle sicher,
+   dass es hinter dem Panel landet */
+.ui-overlay,
+#build-overlay {
+  z-index: 1500;
+}
+
+/* Sanfte Scrollbar (WebKit) */
+#build-panel .build-scroll::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+#build-panel .build-scroll::-webkit-scrollbar-thumb {
+  background: #cfd6dd;
+  border-radius: 999px;
+}
+#build-panel .build-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hard-fix: wenn ältere CSS ein schwarzes Vollflächen-Panel .ui-build
+   setzt, neutralisieren wir es explizit. */
+.ui-build {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
 }
