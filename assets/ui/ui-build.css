@@ -1,25 +1,29 @@
 /* =============================================================================
-Datei: assets/ui/ui-build.css
-Version: v17.9.17
-Ziel:
-  - Helles, freundliches Grau (wie Foto)
-  - Dock bündig unten FIXED, Karten hell, 1–2 Reihen sichtbar → Rest scrollt
+   Datei: assets/ui/ui-build.css
+   Version: v18.0.0
+   Ziel:
+     - Helles, freundliches Grau (wie Foto)
+     - Dock bündig unten (fixed), 1–2 Reihen sichtbar → Rest scrollt
+     - Karten hell + dezente Schatten
 ============================================================================= */
 
 :root{
-  --dock-bg: #d9dee6;       /* Dock-Hintergrund hellgrau */
+  /* Dock-Farben (feintunen, falls nötig) */
+  --dock-bg: #d9dee6;       /* helles Grau wie gewünscht */
   --dock-stroke: #c9d0db;   /* obere Linie */
-  --title: #273447;         /* Titel/Text auf Dock */
+  --title: #273447;         /* Überschriften/Text */
 
-  --card-bg: #f7f9fc;       /* Karten hell */
+  /* Karten */
+  --card-bg: #f7f9fc;
   --card-bg-hover: #eef3f9;
   --card-border: #cdd7e3;
   --card-text: #1f2a33;
 
+  /* Layout */
   --dock-pad-x: 14px;
   --dock-pad-y: 12px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --build-dock-max-h: 240px; /* 1–2 Reihen sichtbar */
+  --build-dock-max-h: 240px; /* zeigt 1–2 Reihen; Rest scrollt */
 }
 
 /* Dock bündig unten (fixed) */
@@ -82,5 +86,7 @@ Ziel:
 
 .ui-build-empty{ color:#5d7288; padding:12px; }
 
-/* FAB-Look (gleiches Grau – Buttons selbst kommen aus index.css/inline) */
-/* (falls du beide FABs exakt angleichen willst, kannst du hier überschreiben) */
+@media (max-width: 480px){
+  .ui-build-category-title{ font-size:17px; }
+  .ui-build-item-img{ width:56px; height:56px; }
+}
