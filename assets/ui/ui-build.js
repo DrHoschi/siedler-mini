@@ -1,27 +1,21 @@
 /* =============================================================================
-Datei: assets/ui/ui-build.js
-Version: v18.0.0
-Standard: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
-Ziel:
-  - Rendert das Baumenü (helles Kartenraster im grauen Dock).
-  - API: window.UIBuild.open/close/toggle/render
-  - Events:
-      * beim Öffnen/Schließen: cb:build:open|close + legacy (cb:build-open|close)
-      * beim Klick auf Karte:   cb:build:select + legacy (build:select, cb:build-select)
-  - Datenquellen robust:
-      * Registry (neu):       window.Registry?.getCategories?.() / .buildings?
-      * EntitiesRegistry alt: window.EntitiesRegistry?.buildings
-      * monolithische Fallback-Struktur
-  - Bildquellen robust:
-      * BuildAssets (neu):    window.BuildAssets?.getIcon(key) / .icons?.[key]
-      * building.icon / .sprite / .image  (falls vorhanden)
-      * Fallback: transparentes Platzhalter-Icon
+   Datei: assets/ui/ui-build.js
+   Version: v18.0.0
+   Standard: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+   Ziel:
+     - Rendert das Baumenü (helles Kartenraster im hellgrauen Dock).
+     - API: window.UIBuild.open/close/toggle/render
+     - Events:
+         * cb:build:open|close  UND  legacy cb:build-open|close
+         * cb:build:select  UND  legacy cb:build-select / build:select
+     - Datenquellen robust (Registry/EntitiesRegistry/monolithische Fallbacks)
+     - Icons robust (BuildAssets / building.icon|sprite|image / Fallback)
 ============================================================================= */
 
-/* ------------------------------- Konstanten -------------------------------- */
+/* -------------------------------- Konstanten -------------------------------- */
 const UI_BUILD_VER = "v18.0.0";
-const logB = (m)=> (window.CBLog?.info||console.log)(`[ui-build] ${m}`);
-const logW = (m)=> (window.CBLog?.warn||console.warn)(`[ui-build] ${m}`);
+const L_INFO = (m)=> (window.CBLog?.info||console.log)(`[ui-build] ${m}`);
+const L_WARN = (m)=> (window.CBLog?.warn||console.warn)(`[ui-build] ${m}`);
 
 /* ----------------------------- Hilfsfunktionen ------------------------------ */
 function q(sel,root=document){ return root.querySelector(sel); }
@@ -34,27 +28,53 @@ function emitBoth(base, detail){
   try{
     const legacy = `cb:${base}`.replace("cb:build:","cb:build-");
     window.dispatchEvent(new CustomEvent(legacy,{detail}));
-    // zusätzlich nacktes build:select (mancher Alt-Stand)
     if (base==="build:select") window.dispatchEvent(new CustomEvent("build:select",{detail}));
   }catch(_){}
 }
 
-/* Daten holen – verschiedene Stände tolerant abdecken */
-function getBuildData(){
-  // Neuere Registry-API
-  if (window.Registry){
-    // Variante A: Kategorien liefern Gebäude-Arrays
-    if (typeof window.Registry.getCategories === "function"){
-      const cats = window.Registry.getCategories();
-      if (Array.isArray(cats) && cats.length){
-        return cats.map(c => ({
-          id: c.id || c.key || c.name,
-          name: c.title || c.name || String(c.id||c.key||"Kategorie"),
-          items: (c.items || c.buildings || []).map(normalizeBuilding)
-        }));
+function normalizeBuilding(b){
+  return {
+    key:  b?.key || b?.id || b?.name || b?.type || "unknown",
+    name: b?.title || b?.name || b?.key || "Unbenannt",
+    icon: b?.icon || b?.sprite || b?.image || null,
+    cat:  b?.category || b?.cat || "default",
+    raw:  b || {}
+  };
+}
+
+function resolveIcon(build){
+  try{
+    if (window.BuildAssets){
+      if (typeof window.BuildAssets.getIcon === "function"){
+        const src = window.BuildAssets.getIcon(build.key);
+        if (src) return src;
+      }
+      if (window.BuildAssets.icons && window.BuildAssets.icons[build.key]){
+        return window.BuildAssets.icons[build.key];
       }
     }
-    // Variante B: Registry.buildings + Registry.categories
+  }catch(_){}
+  if (build.icon) return build.icon;
+  if (build.raw?.icon) return build.raw.icon;
+  if (build.raw?.sprite) return build.raw.sprite;
+  if (build.raw?.image) return build.raw.image;
+  return "data:image/gif;base64,R0lGODlhAQABAAAAACw="; // 1x1 transparent
+}
+
+function getBuildData(){
+  // Neuere Registry-API (variante 1: Kategorien liefern Items)
+  if (window.Registry && typeof window.Registry.getCategories === "function"){
+    const cats = window.Registry.getCategories();
+    if (Array.isArray(cats) && cats.length){
+      return cats.map(c => ({
+        id: c.id || c.key || c.name,
+        name: c.title || c.name || String(c.id||c.key||"Kategorie"),
+        items: (c.items || c.buildings || []).map(normalizeBuilding)
+      }));
+    }
+  }
+  // Neuere Registry-API (variante 2: getrennte Felder)
+  if (window.Registry && (Array.isArray(window.Registry.categories) || Array.isArray(window.Registry.buildings))){
     const cats = window.Registry.categories || [];
     const blds = window.Registry.buildings  || [];
     if (cats.length && blds.length){
@@ -71,7 +91,6 @@ function getBuildData(){
       }));
     }
   }
-
   // Ältere EntitiesRegistry
   if (window.EntitiesRegistry && Array.isArray(window.EntitiesRegistry.buildings)){
     const grouped = {};
@@ -80,54 +99,17 @@ function getBuildData(){
       const cat = b.category || b.cat || "default";
       (grouped[cat] ||= []).push(nb);
     });
-    return Object.keys(grouped).map(k => ({
-      id: k, name: String(k), items: grouped[k]
-    }));
+    return Object.keys(grouped).map(k => ({ id:k, name:String(k), items: grouped[k] }));
   }
-
   // Fallback – leer
   return [];
 }
 
-function normalizeBuilding(b){
-  return {
-    key:  b.key || b.id || b.name || b.type || "unknown",
-    name: b.title || b.name || b.key || "Unbenannt",
-    icon: b.icon || b.sprite || b.image || null,
-    cat:  b.category || b.cat || "default",
-    raw:  b
-  };
-}
-
-function resolveIcon(build){
-  // BuildAssets modern
-  try{
-    if (window.BuildAssets){
-      if (typeof window.BuildAssets.getIcon === "function"){
-        const src = window.BuildAssets.getIcon(build.key);
-        if (src) return src;
-      }
-      if (window.BuildAssets.icons && window.BuildAssets.icons[build.key]){
-        return window.BuildAssets.icons[build.key];
-      }
-    }
-  }catch(_){}
-  // building fields
-  if (build.icon) return build.icon;
-  if (build.raw?.icon) return build.raw.icon;
-  if (build.raw?.sprite) return build.raw.sprite;
-  if (build.raw?.image) return build.raw.image;
-
-  // Platzhalter (1x1 transparent)
-  return "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
-}
-
-/* ----------------------------- Klassen/Komponenten -------------------------- */
+/* ---------------------------------- Klassen -------------------------------- */
 class BuildDock {
   constructor(root){
     this.root = root;
     this.root.classList.add("ui-build-dock");
-    this.root.innerHTML = ""; // lassen ui-build.css Layout übernehmen
     this.bodyEl = null;
   }
 
@@ -172,7 +154,6 @@ class BuildDock {
 
         card.appendChild(imgWrap);
         card.appendChild(label);
-
         card.addEventListener("click", ()=> this.select(item));
         row.appendChild(card);
       });
@@ -186,9 +167,8 @@ class BuildDock {
 
   select(item){
     const detail = { key:item.key, name:item.name, raw:item.raw, source:"ui-build" };
-    // neue + legacy Events
-    emitBoth("build:select", detail);         // → cb:build:select + cb:build-select + build:select
-    logB(`select ${item.key}`);
+    emitBoth("build:select", detail); // cb:build:select + cb:build-select + build:select
+    L_INFO(`select ${item.key}`);
   }
 
   open(from){
@@ -198,7 +178,7 @@ class BuildDock {
       this.root.classList.add("is-open");
       document.body.classList.add("has-build-open");
       emitBoth("build:open", { from: from||"api", root:this.root });
-      logB("open");
+      L_INFO("open");
     }
   }
 
@@ -208,7 +188,7 @@ class BuildDock {
       this.root.classList.remove("is-open");
       document.body.classList.remove("has-build-open");
       emitBoth("build:close", { from: from||"api", root:this.root });
-      logB("close");
+      L_INFO("close");
     }
   }
 
@@ -217,19 +197,18 @@ class BuildDock {
   }
 }
 
-/* -------------------------------- Hauptlogik -------------------------------- */
+/* --------------------------------- Hauptlogik ------------------------------- */
 (function initUIBuild(){
-  // Root erkennen (#build-dock bevorzugt, #build-panel legacy mitnehmen)
   let root = document.getElementById("build-dock") || document.getElementById("build-panel");
   if (!root){
     root = document.createElement("div");
     root.id = "build-dock";
     document.body.appendChild(root);
-    logW("BuildDock: #build-dock erzeugt (fehlte im DOM).");
+    L_WARN("BuildDock: #build-dock erzeugt (fehlte im DOM).");
   }
   const dock = new BuildDock(root);
 
-  // Globale API
+  // globale API
   window.UIBuild = {
     open:   (from)=> dock.open(from),
     close:  (from)=> dock.close(from),
@@ -243,9 +222,12 @@ class BuildDock {
     if((ev.key||"").toLowerCase()==="b") window.UIBuild.toggle("hotkey");
   });
 
-  // Wenn irgendwo anders jemand "Dock anzeigen" ruft
+  // Marker für FABs updaten
   window.addEventListener("cb:build:open",  ()=> document.body.classList.add("has-build-open"));
   window.addEventListener("cb:build:close", ()=> document.body.classList.remove("has-build-open"));
 
-  logB(`bereit (${UI_BUILD_VER})`);
+  L_INFO(`bereit (${UI_BUILD_VER})`);
 })();
+
+/* ----------------------------------- Exports -------------------------------- */
+// window.UIBuild (oben)
