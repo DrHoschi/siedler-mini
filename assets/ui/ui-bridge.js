@@ -1,115 +1,93 @@
-/* =============================================================================
-Datei: assets/ui/ui-bridge.js
-Projekt: Neue Siedler
-Version: v17.9.4
-Zweck:
-  - Verbindet FABs/Hotkeys mit BESTEHENDEN Modulen.
-  - Build-Dock: window.UIBuild (#build-dock ODER #build-panel; legt notfalls #build-dock an).
-  - Inspector:  NUR euren vorhandenen Inspector ansprechen:
-      1) wenn vorhanden: window.Inspector.toggle()
-      2) sonst: alle bekannten Toggle-Events feuern (neu/legacy)
-      3) letzte Stufe: vorhandene Inspector-Root nur sichtbar/unsichtbar schalten
-  - Keine neue UI, keine DOM-Struktur ersetzen.
-============================================================================= */
+// === assets/ui/ui-bridge.js ===
+// Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+// (keine Imports hier – Browser-Bundle)
 
-const UIBRIDGE_VERSION = "v17.9.4";
-const logI = (m)=> (window.CBLog?.info || console.log)(`[ui-bridge] ${m}`);
-const logE = (m)=> (window.CBLog?.error|| console.error)(`[ui-bridge] ${m}`);
+// ──────────────────────────────────────────────────────────────────────────────
+// Konstanten
+const LOG = (window.CBLog?.info) ? (...a)=>window.CBLog.info('[ui-bridge]', ...a)
+                                 : (...a)=>console.log('[ui-bridge]', ...a);
 
-/* ---------- Build-Dock ---------- */
-function ensureBuildRoot(){
-  let el = document.getElementById("build-dock") || document.getElementById("build-panel");
-  if(!el){
-    el = document.createElement("div");
-    el.id = "build-dock";
-    el.className = "ui-build-dock";
-    el.setAttribute("aria-label","Bau-Menü");
-    document.body.appendChild(el);
-    logI("BuildDock: #build-dock automatisch erstellt (fehlte).");
-  }else{
-    el.classList.add("ui-build-dock");
-  }
-  return el;
-}
-function isOpen(el){ return !!el?.classList.contains("is-open"); }
-
-/* ---------- Inspector Root – nur abfragen (nichts neu bauen) ---------- */
-function findInspectorRoot(){
-  return (
-    document.getElementById("inspector-root")    ||
-    document.querySelector(".inspector-root")    ||
-    document.getElementById("inspectorOverlay")  ||
-    document.getElementById("inspector")         ||
-    document.querySelector("#overlay-inspector") ||
-    document.querySelector("[data-inspector-root]") ||
-    null
-  );
-}
-
-/* ---------- Events ---------- */
-const TOGGLE_EVENTS = [
-  "cb:inspector:toggle",   // neu (Doppelpunkt)
-  "cb:inspector-toggle",   // legacy (Bindestrich)
-  "inspector:toggle",
-  "inspector-toggle",
-  "cb:insp:toggle",        // Kurzform (Lastenheft-Zukunft)
-  "cb:insp-toggle"
-];
-function emit(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail:detail||{}})); }catch(_){} }
-
-/* ---------- Globales API ---------- */
-window.GameUI = window.GameUI || {};
-
-/* Build */
-window.GameUI.toggleBuild = function(){
-  const root = ensureBuildRoot();
-  if(!window.UIBuild || typeof window.UIBuild.open!=="function"){
-    logE("UIBuild fehlt/noch nicht geladen (assets/ui/ui-build.js).");
+const EV = (name, detail={}) => {
+  // doppelt feuern: neue "cb:build:open" & alte "cb:build-open" Varianten
+  if (/^cb:build:(open|close)$/.test(name)) {
+    const legacy = name.replace('cb:build:', 'cb:build-');
+    window.dispatchEvent(new CustomEvent(name,   { detail }));
+    window.dispatchEvent(new CustomEvent(legacy, { detail }));
     return;
   }
-  isOpen(root) ? window.UIBuild.close("toggle") : window.UIBuild.open("toggle");
+  window.dispatchEvent(new CustomEvent(name, { detail }));
 };
 
-/* Inspector – nur verbinden, nichts umbauen */
-window.GameUI.toggleInspector = function(){
-  // 1) echte API vorhanden?
-  if (window.Inspector && typeof window.Inspector.toggle === "function"){
-    return window.Inspector.toggle();
-  }
-  // 2) open/close vorhanden? dann über Sichtbarkeit entscheiden
-  if (window.Inspector && (typeof window.Inspector.open === "function" || typeof window.Inspector.close === "function")){
-    const r = findInspectorRoot();
-    const visible = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display !== "none"));
-    if (visible && typeof window.Inspector.close === "function") return window.Inspector.close("toggle");
-    if (!visible && typeof window.Inspector.open  === "function") return window.Inspector.open("toggle");
-  }
-  // 3) Events feuern – alle Varianten (neu/legacy/kurz), damit euer vorhandener Listener trifft
-  TOGGLE_EVENTS.forEach(evt => emit(evt, { from:"bridge" }));
+// ──────────────────────────────────────────────────────────────────────────────
+function $(sel){ return document.querySelector(sel); }
+function findBuildRoot(){
+  return $('#build-dock') || $('#build-panel'); // kompatibel alt/neu
+}
 
-  // 4) letzte Stufe: Root sichtbar/unsichtbar schalten (ohne neue UI)
-  const root = findInspectorRoot();
-  if (root){
-    const visible = root.classList.contains("is-open") || (root.style.display && root.style.display !== "none");
-    if (visible){ root.classList.remove("is-open"); root.style.display = "none"; }
-    else        { root.style.display = "block";     root.classList.add("is-open"); }
-    return;
+// ──────────────────────────────────────────────────────────────────────────────
+// Build-Dock State
+let _buildOpen = false;
+function openBuild()  { const root=findBuildRoot(); if(!root) return LOG('Build-Root fehlt'); root.hidden=false; _buildOpen=true; EV('cb:build:open',{root}); }
+function closeBuild() { const root=findBuildRoot(); if(!root) return; root.hidden=true;  _buildOpen=false; EV('cb:build:close',{root}); }
+function toggleBuild(){ _buildOpen ? closeBuild() : openBuild(); }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Inspector-Bridge (nicht anfassen: nutzt vorhandenes System, sonst Fallback)
+let _inspOpen = false;
+
+function tryCallInspector(method){
+  try {
+    if (window.Inspector && typeof window.Inspector[method] === 'function') {
+      window.Inspector[method]();
+      return true;
+    }
+    // mögliche Alternativ-Namen aus älteren Ständen:
+    if (window.InspectorCore && typeof window.InspectorCore[method] === 'function') {
+      window.InspectorCore[method]();
+      return true;
+    }
+    if (window.__inspector && typeof window.__inspector[method] === 'function') {
+      window.__inspector[method]();
+      return true;
+    }
+  } catch (e) {
+    console.warn('[ui-bridge] Inspector call failed:', e);
   }
-  logE("Inspector nicht erreichbar (keine API/Root/Listener). Prüfe Script-Reihenfolge.");
+  return false;
+}
+
+function fireInspector(evt){
+  // Events, die alte & neue Stände verstehen können
+  // neu:
+  window.dispatchEvent(new CustomEvent(`inspector:${evt}`));
+  // legacy:
+  window.dispatchEvent(new CustomEvent(`cb:inspector-${evt}`));
+}
+
+function openInspector(){
+  if (tryCallInspector('open')) { _inspOpen = true; return; }
+  fireInspector('open'); _inspOpen = true;
+}
+function closeInspector(){
+  if (tryCallInspector('close')) { _inspOpen = false; return; }
+  fireInspector('close'); _inspOpen = false;
+}
+function toggleInspector(){
+  if (tryCallInspector('toggle')) { _inspOpen = !_inspOpen; return; }
+  fireInspector('toggle'); _inspOpen = !_inspOpen;
+}
+
+// Rückkanal: falls der Inspector seinen Status selber meldet
+window.addEventListener('inspector:opened', ()=>{ _inspOpen = true;  });
+window.addEventListener('inspector:closed', ()=>{ _inspOpen = false; });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Hauptlogik: GameUI exportieren
+window.GameUI = {
+  // Build
+  openBuild, closeBuild, toggleBuild, isBuildOpen:()=>_buildOpen,
+  // Inspector
+  openInspector, closeInspector, toggleInspector, isInspectorOpen:()=>_inspOpen
 };
 
-/* ---------- Boot + Hotkeys ---------- */
-document.addEventListener("DOMContentLoaded", ()=> logI(`bereit (${UIBRIDGE_VERSION})`));
-window.addEventListener("keydown",(ev)=>{
-  if(!ev.key) return;
-  const k = ev.key.toLowerCase();
-  if(k==="b") window.GameUI.toggleBuild();
-  if(k==="i") window.GameUI.toggleInspector();
-});
-
-/* FAB-Abstand (neu & legacy Build-Events) */
-function markOpen(){ document.body.classList.add("has-build-open"); }
-function markClose(){ document.body.classList.remove("has-build-open"); }
-window.addEventListener("cb:build:open",  markOpen);
-window.addEventListener("cb:build:close", markClose);
-window.addEventListener("cb:build-open",  markOpen);
-window.addEventListener("cb:build-close", markClose);
+LOG('bereit (Bridge installiert)');
