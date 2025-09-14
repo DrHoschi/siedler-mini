@@ -25,11 +25,9 @@
 
   <!-- Styles (nur die aktuellen, keine alte style.css!) -->
 
-  
   <!-- Start-Panel Styles -->
   <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10">
 
-  
   <!-- BASE UI (Resets, Fonts, Layout) -->
   <link rel="stylesheet" href="css/base.css?v=20250914">
 
@@ -69,8 +67,9 @@
   <!-- Bühne (immer direkt im Body, z-index:0) -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock (wird per JS gefüllt) -->
-  <div id="build-panel" aria-label="Bau-Menü"></div>
+  <!-- Build-Dock (unten andockend; per JS gefüllt)  ⬇️  -->
+  <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
+  <!-- (Kompatibilität: Das Script akzeptiert alternativ auch ein altes id="build-panel") -->
 
   <!-- Start-Panel (liegt ÜBER Canvas, unter FABs) -->
   <!-- UI & Interaktionen kommen aus assets/ui/ui-start.js -->
@@ -86,7 +85,7 @@
         <button id="btnStartReset" class="btn ghost">Reset</button>
         <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
       </div>
-  </div>
+    </div>
   </div>
 
   <!-- FABs -->
@@ -138,7 +137,7 @@
   <!-- UI -->
   <script defer src="assets/ui/ui-bridge.js?v=17.8.3"></script>
   <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
-  <script defer src="assets/ui/ui-build.js?v=17.9.11"></script>
+  <script defer src="assets/ui/ui-build.js?v=17.9.12"></script> <!-- ⬅️ neue Version -->
 
   <!-- Boot-Compat -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
@@ -150,9 +149,15 @@
       window.__cb.indexVersion = "v17.8.2";
       (window.CBLog?.info || console.log)("[index] UI bereit (v17.8.2)");
 
-      /* FAB-Abstand, wenn das Bau-Dock geöffnet ist */
-      window.addEventListener('cb:build-open',  () => document.body.classList.add('has-build-open'));
-      window.addEventListener('cb:build-close', () => document.body.classList.remove('has-build-open'));
+      /* FAB-Abstand, wenn das Bau-Dock geöffnet ist.
+         Unterstützt beide Event-Varianten (Doppelpunkt + Bindestrich). */
+      function setOpen(){ document.body.classList.add('has-build-open'); }
+      function setClose(){ document.body.classList.remove('has-build-open'); }
+
+      window.addEventListener('cb:build:open',  setOpen);
+      window.addEventListener('cb:build:close', setClose);
+      window.addEventListener('cb:build-open',  setOpen);   // Fallback
+      window.addEventListener('cb:build-close', setClose);  // Fallback
     })();
   </script>
 </body>
