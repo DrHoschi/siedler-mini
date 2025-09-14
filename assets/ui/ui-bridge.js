@@ -1,66 +1,101 @@
-/* ============================================================================
- * ui-bridge.js – v17.8.3
- *  - FAB-API für Build/Inspector
- *  - Kein persistentes Fallback-Fenster mehr (nur kurze Probe)
- *  - Doppeltoggle-Schutz
- * ========================================================================== */
-(function(){
-  "use strict";
-  const VER = "v17.8.3";
-  const ok   = (t,...a)=>(window.CBLog?.ok||console.log)(`[ui-bridge] ${t}`,...a);
-  const warn = (t,...a)=>(window.CBLog?.warn||console.warn)(`[ui-bridge] ${t}`,...a);
+/* 
+====================================================================================
+Datei: assets/ui/ui-bridge.js
+Projekt: Neue Siedler
+Version: v17.8.4
+Zweck: Brücke zwischen UI-Buttons (FABs) / Hotkeys und den eigentlichen UI-Modulen.
+       — Speziell: Kompatibilität für das Bau-Dock (#build-dock ODER #build-panel).
+       — Stellt GameUI.toggleBuild() / GameUI.toggleInspector() bereit.
+Hinweis: Diese Datei macht KEIN Layout; sie ruft nur die jeweils zuständigen Module auf.
+==================================================================================== */
 
-  // --- Build-Dock ------------------------------------------------------------
-  const Build = (()=>{
-    let open=false;
-    const el = ()=>document.getElementById("build-panel");
-    function ensure(){ const n=el(); if(!n) warn("Build-Panel fehlt (#build-panel)"); return !!n; }
-    function _open(){ if(!ensure()||open) return; open=true; el().classList.add("open"); document.body.classList.add("has-build-open"); window.dispatchEvent(new CustomEvent("cb:build-open")); ok("Build geöffnet (%s).",VER); }
-    function _close(){ if(!ensure()||!open) return; open=false; el().classList.remove("open"); document.body.classList.remove("has-build-open"); window.dispatchEvent(new CustomEvent("cb:build-close")); ok("Build geschlossen."); }
-    function toggle(force){ (force==null ? !open : !!force) ? _open() : _close(); }
-    return {open:_open,close:_close,toggle};
-  })();
+/* =========================================
+   1) Konstanten & Utilities
+   ========================================= */
+const UIBRIDGE_VERSION = "v17.8.4";
 
-  // --- Inspector Bridge ------------------------------------------------------
-  const Inspector = (()=>{
-    let toggling=false; // Doppelklick-Schutz
-    function callCore(method, force){
-      const api = window.__INSPECTOR_CORE__?.api;
-      if (!api || typeof api[method]!=="function") return false;
-      if (toggling) return true;
-      toggling=true;
-      try{ api[method](force); } finally { setTimeout(()=>toggling=false, 60); }
-      return true;
+function logOK (m){ (window.CBLog?.ok   || console.log)(`[ui-bridge] ${m}`); }
+function logIn (m){ (window.CBLog?.info || console.log)(`[ui-bridge] ${m}`); }
+function logEr (m){ (window.CBLog?.error|| console.error)(`[ui-bridge] ${m}`); }
+
+/** sucht ein Element per ID; akzeptiert beide Varianten */
+function findBuildRoot() {
+  let el = document.getElementById("build-dock") || document.getElementById("build-panel");
+  if (!el) {
+    // Fallback: Dock automatisch anlegen (moderne ID)
+    el = document.createElement("div");
+    el.id = "build-dock";
+    el.className = "ui-build-dock";
+    el.setAttribute("aria-label", "Bau-Menü");
+    document.body.appendChild(el);
+    logIn("Fallback: #build-dock automatisch erstellt (fehlte im DOM).");
+  } else {
+    // Sicherstellen, dass die Dock-Klasse vorhanden ist (falls altes Markup)
+    el.classList.add("ui-build-dock");
+  }
+  return el;
+}
+
+/** prüft, ob das Dock sichtbar ist (klassischer is-open Marker) */
+function isBuildOpen(root) {
+  return !!root?.classList.contains("is-open");
+}
+
+/* =========================================
+   2) GameUI Singletons (öffentliche API)
+   ========================================= */
+window.GameUI = window.GameUI || {};
+
+/** Öffnet/Schließt das Bau-Menü. Benötigt UIBuild (ui-build.js) */
+window.GameUI.toggleBuild = function () {
+  const root = findBuildRoot();
+  if (!window.UIBuild || typeof window.UIBuild.open !== "function") {
+    logEr("UIBuild nicht verfügbar – ui-build.js fehlt oder noch nicht geladen.");
+    return;
+  }
+  if (isBuildOpen(root)) {
+    window.UIBuild.close("toggle");
+  } else {
+    // Items werden in ui-build.js beim DOMContentLoaded aus __buildItems / BuildAssets gesetzt.
+    window.UIBuild.open("toggle");
+  }
+};
+
+/** Beispiel: Inspector (nur weiterreichen; dein Inspector-Modul bleibt unverändert) */
+window.GameUI.toggleInspector = function () {
+  try {
+    // Falls du eigene Inspector-APIs hast, rufe sie hier auf (Platzhalter).
+    // Alternativ mit Events arbeiten:
+    window.dispatchEvent(new CustomEvent("cb:inspector:toggle"));
+  } catch (e) {
+    logEr("Inspector-Toggle fehlgeschlagen: " + e?.message);
+  }
+};
+
+/* =========================================
+   3) Boot/Initialisierung
+   ========================================= */
+(function init() {
+  // DOM fertig: Root prüfen (erzeugt ggf. #build-dock) – frühzeitig,
+  // damit die FABs / Event-Listener eine feste Anlaufstelle haben.
+  document.addEventListener("DOMContentLoaded", () => {
+    findBuildRoot();
+    logIn(`bereit (${UIBRIDGE_VERSION})`);
+  });
+
+  // Komfort: Hotkey „b“ öffnet das Bau-Dock (ESC schließt ui-build intern).
+  window.addEventListener("keydown", (ev) => {
+    if (!ev.key) return;
+    if (ev.key.toLowerCase() === "b") {
+      window.GameUI.toggleBuild();
     }
+  });
 
-    // kleine, automatische Probe (nur Badge – KEIN Fenster)
-    setTimeout(()=>{ 
-      if (!window.__INSPECTOR_CORE__) {
-        const probe=document.createElement("div");
-        probe.textContent="Inspector lädt…";
-        probe.id="inspector-probe";
-        probe.style.cssText="position:fixed;right:16px;bottom:64px;font:12px system-ui;opacity:.6;color:#cbd5e1;z-index:2147483646;background:rgba(30,30,35,.72);padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.06)";
-        document.body.appendChild(probe);
-        setTimeout(()=>probe.remove(), 2000);
-      }
-    }, 500);
-
-    return {
-      toggle:(f)=> callCore("toggle", f) || warn("Inspector-Core fehlt"),
-      open:  ()=> callCore("open")  || warn("Inspector-Core fehlt"),
-      close: ()=> callCore("close") || warn("Inspector-Core fehlt"),
-    };
-  })();
-
-  // --- API an Fenster --------------------------------------------------------
-  window.GameUI = window.GameUI || {};
-  window.GameUI.toggleBuild     = Build.toggle;
-  window.GameUI.openBuild       = Build.open;
-  window.GameUI.closeBuild      = Build.close;
-
-  window.GameUI.toggleInspector = Inspector.toggle;
-  window.GameUI.openInspector   = Inspector.open;
-  window.GameUI.closeInspector  = Inspector.close;
-
-  ok("bereit (%s).", VER);
+  // Body-Klasse für FAB-Abstand pflegen (unterstützt beide Event-Varianten)
+  function setOpen(){ document.body.classList.add("has-build-open"); }
+  function setClose(){ document.body.classList.remove("has-build-open"); }
+  window.addEventListener("cb:build:open",  setOpen);
+  window.addEventListener("cb:build:close", setClose);
+  window.addEventListener("cb:build-open",  setOpen);   // Legacy
+  window.addEventListener("cb:build-close", setClose);  // Legacy
 })();
