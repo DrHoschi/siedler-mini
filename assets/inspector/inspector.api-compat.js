@@ -1,12 +1,22 @@
 /* =============================================================================
-Datei: assets/inspector/inspector.api-compat.js
-Version: v1.3.2
-Ziel: Ergänzt eine minimale API, falls eure Module nur über Events arbeiten.
-      Überschreibt NICHTS, wenn bereits eine API existiert.
+   Datei: assets/inspector/inspector.api-compat.js
+   Version: v1.3.2
+   Zweck:
+     - Ergänzt eine minimale Inspector-API, falls eure Module nur Events feuern.
+     - Überschreibt NICHTS, wenn bereits eine API existiert.
 ============================================================================= */
+
+/* ---------------------------------- Imports --------------------------------- */
+// (keine)
+
+/* --------------------------------- Hauptlogik -------------------------------- */
 (function(){
-  const logI = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
-  if (window.Inspector && typeof window.Inspector.toggle === "function"){ logI("API vorhanden – kein Shim nötig"); return; }
+  const log = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
+
+  if (window.Inspector && typeof window.Inspector.toggle === "function"){
+    log("API vorhanden – kein Shim nötig");
+    return;
+  }
 
   function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){ } }
 
@@ -22,5 +32,5 @@ Ziel: Ergänzt eine minimale API, falls eure Module nur über Events arbeiten.
     setTab: (tab)=> emit("cb:inspector:tab:change",{tab:String(tab||"logs")})
   };
 
-  logI("Shim aktiv (v1.3.2)");
+  log("Shim aktiv (v1.3.2)");
 })();
