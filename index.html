@@ -59,8 +59,7 @@
     }
     /* Wenn das Bau-Dock offen ist, beide FABs anheben (Platz lassen) */
     body.has-build-open #btn-build,
-    body.has-build-open #btn-inspector { bottom:240px; }
-  </style>
+body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px); }  </style>
 </head>
 <body>
 
