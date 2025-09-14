@@ -1,143 +1,221 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.css
  * Version: v17.9.13
- * Zweck: Build-Menü Styles (Einzeiliges Card-Layout, mobile-first)
- * ============================================================================ */
+ * Projekt: Neue Siedler – Build-UI Styles
+ *
+ * Ziel:
+ *  - Panel über Canvas legen (nicht fullscreen abdunkeln)
+ *  - Einzeilige Kategorien mit je 3 Cards pro Zeile (mobil), 4–6 auf größeren Screens
+ *  - Helle Karten mit Thumb + Label wie im Referenz-Screenshot
+ *  - Scrollbar sanft, nichts transparent/unsichtbar
+ *  - Keine Abhängigkeit zu anderen Styles (nur CSS-Variablen optional)
+ * ========================================================================== */
 
+/* Root-Design-Token (können von globalen Themes überschrieben werden) */
 :root {
-  --build-panel-w: min(980px, 92vw);
-  --build-panel-pad: 16px;
-  --build-bg: rgba(18, 28, 18, 0.92);
-  --build-bd: rgba(255,255,255,0.06);
-  --card-bg: #ffffff;
-  --card-shadow: 0 4px 14px rgba(0,0,0,.15);
-  --card-radius: 12px;
-  --card-gap: 14px;
-  --card-img-h: 96px;
-  --title-color: #dde6dc;
-  --subtitle-color: #aab6ad;
-  --label-color: #222;
-  --label-size: 16px;
+  --ui-z: 80;                          /* über Canvas & Buttons */
+  --ui-bg: #eef1f3;                    /* Panel-Hintergrund */
+  --ui-card-bg: #ffffff;
+  --ui-card-bg-hover: #f6f8fa;
+  --ui-border: #d7dde3;
+  --ui-text: #1f2933;
+  --ui-muted: #5c6b7a;
+  --ui-shadow: 0 8px 24px rgba(0,0,0,.18);
+  --ui-radius: 16px;
+  --ui-card-radius: 14px;
+  --ui-gap: 14px;
+  --ui-pad: 16px;
+  --ui-title-size: 20px;
+  --ui-cat-size: 18px;
+  --ui-label-size: 16px;
 }
 
-#build-panel {
+/* Panel-Container */
+#ui-build-panel {
   position: fixed;
-  inset: 4vh 0 auto 0;
-  margin-inline: auto;
-  width: var(--build-panel-w);
-  background: var(--build-bg);
-  border: 1px solid var(--build-bd);
-  border-radius: 18px;
-  box-shadow: 0 18px 36px rgba(0,0,0,.35);
-  backdrop-filter: blur(6px);
-  color: #fff;
-  display: none;
-  z-index: 6000;
+  left: 12px;
+  right: 12px;
+  top: 72px;
+  bottom: 112px;                       /* Platz für die runden FABs unten */
+  z-index: var(--ui-z);
+  display: none;                        /* per JS auf block togglen */
+  contain: content;
 }
 
-#build-panel.is-open { display: block; }
+#ui-build-panel.open { display: block; }
 
-.build-panel__head {
+/* Panel-Box */
+#ui-build {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+#ui-build .ui-build-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(var(--build-panel-pad) + 6px) var(--build-panel-pad) var(--build-panel-pad);
+  padding: calc(var(--ui-pad) + 2px) calc(var(--ui-pad) + 4px);
+  border-bottom: 1px solid var(--ui-border);
+  background: rgba(255,255,255,.6);
+  backdrop-filter: blur(6px);
 }
 
-.build-panel__title {
+#ui-build .ui-build-title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--title-color);
-  letter-spacing: .3px;
-}
-
-.build-panel__close {
-  appearance: none;
-  border: 0;
-  background: rgba(255,255,255,.08);
-  color: #fff;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  font-size: 18px;
-  cursor: pointer;
-}
-.build-panel__close:hover { background: rgba(255,255,255,.14); }
-
-.build-panel__body {
-  padding: 0 var(--build-panel-pad) var(--build-panel-pad);
-  max-height: 70vh;
-  overflow: auto;
-}
-
-.build-sec { margin-bottom: 18px; }
-
-.build-sec__title {
-  margin: 0 0 10px 2px;
-  font-size: 18px;
-  color: var(--subtitle-color);
-  font-weight: 700;
-}
-
-/* Einzeiliges Karten-Layout (mobile-first) */
-.build-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px,1fr));
-  gap: var(--card-gap);
-}
-
-.build-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  border: 0;
-  border-radius: var(--card-radius);
-  box-shadow: var(--card-shadow);
-  background: var(--card-bg);
-  cursor: pointer;
-  padding: 12px;
-  transition: transform .06s ease, box-shadow .12s ease;
-}
-.build-card:active { transform: translateY(1px) scale(.99); }
-.build-card:hover  { box-shadow: 0 6px 18px rgba(0,0,0,.18); }
-
-.build-card__imgwrap {
-  width: 100%;
-  height: var(--card-img-h);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 10px;
-  background: #f5f6f4;
-}
-.build-card__img {
-  max-width: 100%;
-  max-height: calc(var(--card-img-h) - 10px);
-  display: block;
-  image-rendering: -webkit-optimize-contrast;
-}
-
-.build-card__label {
-  width: 100%;
-  text-align: center;
-  font-size: var(--label-size);
-  font-weight: 700;
-  color: var(--label-color);
+  font-size: var(--ui-title-size);
   line-height: 1.2;
+  color: var(--ui-text);
+  font-weight: 700;
   letter-spacing: .2px;
 }
 
-/* Lade-/Leerzustände */
-.build-empty {
-  padding: 18px;
-  color: #cfd8d3;
+#ui-build .ui-build-close {
+  border: 0;
+  background: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+  color: var(--ui-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+#ui-build .ui-build-close:active { transform: translateY(1px); }
+
+/* Scrollbereich */
+#ui-build .ui-build-body {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--ui-pad);
+  scroll-behavior: smooth;
+}
+
+/* Kategorie-Block (einzeilig) */
+.ui-build-category {
+  margin: 0 0 calc(var(--ui-pad) + 4px);
+  padding: var(--ui-pad);
+  background: #f7f9fb;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.ui-build-category .cat-title {
+  margin: 0 0 10px;
+  font-weight: 700;
+  font-size: var(--ui-cat-size);
+  color: var(--ui-text);
+}
+
+/* Grid – mobil 3 Spalten, Tablet 4, Desktop 6 */
+.ui-build-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--ui-gap);
+}
+
+@media (min-width: 560px) {
+  .ui-build-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 900px) {
+  .ui-build-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* Karte/Eintrag */
+.ui-build-card {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ui-build-btn {
+  width: 100%;
+  display: grid;
+  grid-template-rows: auto min-content;
+  gap: 8px;
+  align-items: center;
+  justify-items: center;
+  text-align: center;
+  padding: 12px;
+  background: var(--ui-card-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-card-radius);
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset;
+  color: var(--ui-text);
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s ease, transform .06s ease;
+}
+
+.ui-build-btn:hover { background: var(--ui-card-bg-hover); }
+.ui-build-btn:active { transform: translateY(1px); }
+
+/* Vorschaubild */
+.ui-build-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  background: #f5f7f9;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border);
+  overflow: hidden;
+}
+
+.ui-build-thumb img {
+  display: block;
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+/* Label/Name */
+.ui-build-label {
+  font-size: var(--ui-label-size);
+  font-weight: 600;
+  color: var(--ui-text);
+  letter-spacing: .2px;
+  line-height: 1.2;
+}
+
+/* Placeholder (falls Bild fehlt) */
+.ui-build-thumb .ph {
+  width: 60%;
+  height: 60%;
+  border: 3px dashed #c9d3dc;
+  border-radius: 8px;
+}
+
+/* Leerer Zustand */
+#ui-build .ui-build-empty {
+  padding: 32px;
+  color: var(--ui-muted);
   font-size: 16px;
 }
 
-/* Breitere Displays → etwas größere Karten */
-@media (min-width: 720px) {
-  :root { --card-img-h: 110px; }
-  .build-grid { grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); }
+/* Sanfte Scrollbar (iOS/Android/desktop) */
+#ui-build .ui-build-body::-webkit-scrollbar { width: 10px; height: 10px; }
+#ui-build .ui-build-body::-webkit-scrollbar-thumb {
+  background: #cfd8e3;
+  border-radius: 999px;
+  border: 2px solid #e8edf3;
 }
+#ui-build .ui-build-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Sicherstellen, dass FABs (runde Buttons) über dem Panel bleiben */
+.fab { z-index: calc(var(--ui-z) + 10) !important; }
