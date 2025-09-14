@@ -2,40 +2,35 @@
 Datei: assets/ui/ui-build.css
 Version: v17.9.17
 Ziel:
-  - Helles, freundliches Grau (nicht fast schwarz)
-  - Dock bündig am unteren Fensterrand (fixed)
-  - Karten hell, 1–2 Reihen sichtbar → Rest scrollt
-  - FABs behalten ihre Position (separates CSS in index, hier nur Dock/Karten)
+  - Helles, freundliches Grau (wie Foto)
+  - Dock bündig unten FIXED, Karten hell, 1–2 Reihen sichtbar → Rest scrollt
 ============================================================================= */
 
 :root{
-  /* >>> Falls der Ton noch nicht exakt passt: diese 3 Werte anpassen <<< */
-  --dock-bg: #d9dee6;        /* Dock-Hintergrund (helles Grau, wie Foto) */
-  --dock-stroke: #c9d0db;    /* obere Linie */
-  --title: #273447;          /* Überschrift/Text auf Dock */
+  --dock-bg: #d9dee6;       /* Dock-Hintergrund hellgrau */
+  --dock-stroke: #c9d0db;   /* obere Linie */
+  --title: #273447;         /* Titel/Text auf Dock */
 
-  /* Karten */
-  --card-bg: #f7f9fc;
+  --card-bg: #f7f9fc;       /* Karten hell */
   --card-bg-hover: #eef3f9;
   --card-border: #cdd7e3;
   --card-text: #1f2a33;
 
-  /* Layout */
   --dock-pad-x: 14px;
   --dock-pad-y: 12px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --build-dock-max-h: 240px; /* 1–2 Reihen sichtbar */
 }
 
-/* ---------- Dock bündig unten ---------- */
+/* Dock bündig unten (fixed) */
 #build-dock.ui-build-dock,
 #build-panel.ui-build-dock{
-  position: fixed; left:0; right:0; bottom:0;  /* FIXED + bündig unten */
+  position: fixed; left:0; right:0; bottom:0;
   z-index: 40;
   display: none;
   background: var(--dock-bg);
   border-top: 1px solid var(--dock-stroke);
-  box-shadow: 0 -10px 40px rgba(0,0,0,.12);    /* deutlich leichter als vorher */
+  box-shadow: 0 -10px 40px rgba(0,0,0,.12);
   padding: var(--dock-pad-y) var(--dock-pad-x)
            calc(max(var(--dock-pad-y), 8px) + var(--safe-bottom))
            var(--dock-pad-x);
@@ -43,21 +38,13 @@ Ziel:
 #build-dock.is-open,
 #build-panel.is-open{ display:block; }
 
-/* ---------- Header optional (im Foto nicht zu sehen) ---------- */
-.ui-build-header{ display:none; }
-.ui-build-title{
-  color: var(--title);
-  font-weight: 700; font-size: 18px;
-  margin: 6px 4px 10px;
-}
-
-/* ---------- Body / Scrolling ---------- */
+/* Body / Scrollfenster */
 .ui-build-body{
   max-height: var(--build-dock-max-h);
   overflow-y:auto; overflow-x:hidden;
 }
 
-/* ---------- Kategorien ---------- */
+/* Kategorien */
 .ui-build-category{ margin:0 0 12px; }
 .ui-build-category-title{
   color: var(--title);
@@ -65,7 +52,7 @@ Ziel:
   margin: 6px 4px 10px;
 }
 
-/* ---------- Karten-Raster ---------- */
+/* Kartenraster */
 .ui-build-category-row{
   display:grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -95,8 +82,5 @@ Ziel:
 
 .ui-build-empty{ color:#5d7288; padding:12px; }
 
-/* ---------- Small screens ---------- */
-@media (max-width: 480px){
-  .ui-build-category-title{ font-size:17px; }
-  .ui-build-item-img{ width:56px; height:56px; }
-}
+/* FAB-Look (gleiches Grau – Buttons selbst kommen aus index.css/inline) */
+/* (falls du beide FABs exakt angleichen willst, kannst du hier überschreiben) */
