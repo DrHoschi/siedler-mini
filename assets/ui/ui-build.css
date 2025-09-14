@@ -1,189 +1,412 @@
 /* ============================================================================
- * Datei: assets/ui/ui-build.js
- * Projekt: Siedler-Mini
- * Version: v17.8.4
+ * Datei: assets/ui/ui-build.css
+ * Version: v17.9.12
+ * Projekt: Neue Siedler – Build UI
  *
- * Aufgaben
- *  - Bau-Menü im Panel #build-panel rendern
- *  - Kategorien + Einträge aus window.BUILD_CATEGORIES (Fallback vorhanden)
- *  - Auswahl als Event nach außen geben:  cb:build-select { detail:{ type } }
- *  - Komfort: aktuelles Tool hervorheben, "Kein Tool" zum Abwählen
- *  - Bootstrap-Hook: Beim 'cb:game-start' einen Test-Carrier-Durchlauf starten
- *
- * Garantien / Stil
- *  - Keine externen Abhängigkeiten
- *  - Sanfte Logs via CBLog (fällt auf console.* zurück)
- *  - Defensive Fallbacks (UI rendert auch ohne Datenquellen)
- * ========================================================================== */
+ * Ziele:
+ *  - Panel/Overlay immer sichtbar (hoher z-index, feste Position)
+ *  - Tabs + Grid-Buttons mit Labels und Icons
+ *  - Fallback, wenn Icons/Bilder fehlen (neutrale Kachel mit Initialen)
+ *  - Responsives Layout (Desktop + Mobile)
+ *  - Dark/Light-Mode via prefers-color-scheme
+ *  - Datengetriebene Farb-Akzente via [data-cat="..."]
+ * ============================================================================ */
 
-(function () {
-  "use strict";
+/* ------------------------------ Reset/Vars -------------------------------- */
+:root{
+  --ui-font: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+  --ui-radius: 10px;
+  --ui-elev: 0 8px 24px rgba(0,0,0,.25);
+  --ui-gap: 10px;
 
-  var MOD = "[ui-build]";
-  var VER = "v17.8.4";
+  /* Grundfarben */
+  --bg: #101316;
+  --bg-panel: #171B20;
+  --bg-elev: #1E242B;
+  --fg: #E9EEF5;
+  --fg-dim: #B9C3D0;
+  --muted: #6B7685;
+  --accent: #7FDBFF;
 
-  // --- Logger ---------------------------------------------------------------
-  var ok   = function(m){ try{ (window.CBLog?.ok   || console.log   )(MOD+" "+m); }catch(_){ console.log(MOD+" "+m); } };
-  var info = function(m){ try{ (window.CBLog?.info || console.log   )(MOD+" "+m); }catch(_){ console.log(MOD+" "+m); } };
-  var warn = function(m){ try{ (window.CBLog?.warn || console.warn  )(MOD+" "+m); }catch(_){ console.warn(MOD+" "+m); } };
-  var err  = function(m){ try{ (window.CBLog?.err  || console.error )(MOD+" "+m); }catch(_){ console.error(MOD+" "+m); } };
+  /* Category accent defaults (werden durch data-cat überschrieben) */
+  --cat-admin: #9b59b6;
+  --cat-housing: #2ecc71;
+  --cat-food: #f1c40f;
+  --cat-res: #e67e22;
+  --cat-mil: #e74c3c;
+  --cat-prod: #3498db;
+  --cat-misc: #95a5a6;
 
-  // --- DOM Helper -----------------------------------------------------------
-  function byId(id){ return document.getElementById(id); }
-  function el(tag, cls, txt){
-    var n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (txt != null) n.textContent = txt;
-    return n;
-  }
+  --btn-bg: #212832;
+  --btn-bg-hover: #2A3340;
+  --btn-border: #2F3846;
+  --btn-border-hover: #3B4657;
 
-  // --- Datenquellen (defensiv) ----------------------------------------------
-  // Bevorzugt: extern bereitgestellte Kategorien
-  // Format erwartet: [{ id, title, items:[{id,label,todo?}] }]
-  function getCategories(){
-    var cats = window.BUILD_CATEGORIES;
-    if (cats && Array.isArray(cats) && cats.length) return cats;
+  --tab-bg: #1B222B;
+  --tab-active: #2B3441;
+  --tab-border: #2A323E;
 
-    // Fallback – klein, aber sofort nutzbar
-    return [
-      { id:"general", title:"Allgemein", items:[
-        { id:"place-road",        label:"Straße" },
-        { id:"place-remove",      label:"Abreißen" }
-      ]},
-      { id:"production", title:"Produktion", items:[
-        { id:"place-lumberjack",  label:"Holzfäller" },
-        { id:"place-stonecutter", label:"Steinmetz" },
-        { id:"place-fisher",      label:"Fischer", todo:true } // Beispiel: noch WIP
-      ]}
-    ];
-  }
+  --search-bg: #12171D;
+  --search-border: #2B3441;
 
-  // --- State ----------------------------------------------------------------
-  var state = {
-    currentTool: null
-  };
-
-  // --- Auswahl weiterreichen ------------------------------------------------
-  function selectTool(type){
-    state.currentTool = type || null;
-    try {
-      window.dispatchEvent(new CustomEvent("cb:build-select", { detail: { type: state.currentTool } }));
-    } catch(_){}
-    highlightSelection();
-    info("Build-Aktion: " + (state.currentTool || "(kein Tool)"));
-  }
-
-  // --- Rendering -------------------------------------------------------------
-  function render(){
-    var host = byId("build-panel");
-    if (!host){
-      warn("Build-Panel (id=build-panel) fehlt.");
-      return;
-    }
-
-    // Container-Grundlayout (CSS kommt aus assets/ui/ui-build.css)
-    host.innerHTML = "";
-    var wrap  = el("div", "uib-wrap");
-    var head  = el("div", "uib-head");
-    var title = el("div", "uib-title", "Bau-Menü");
-    var btnNone = el("button", "uib-none", "Kein Tool");
-    btnNone.type = "button";
-    btnNone.addEventListener("click", function(){ selectTool(null); });
-
-    head.appendChild(title);
-    head.appendChild(btnNone);
-    wrap.appendChild(head);
-
-    // Kategorien + Items
-    var cats = getCategories();
-    cats.forEach(function(cat){
-      var sec  = el("section", "uib-sec");
-      var h    = el("h3", "uib-sec-title", cat.title || cat.id);
-      var row  = el("div", "uib-row");
-      sec.appendChild(h);
-
-      (cat.items||[]).forEach(function(it){
-        var b = el("button", "uib-item", it.label || it.id);
-        b.type = "button";
-        if (it.todo){
-          b.disabled = true;
-          b.classList.add("is-disabled");
-        } else {
-          b.dataset.tool = it.id;
-          b.addEventListener("click", function(){
-            selectTool(it.id);
-          });
-        }
-        row.appendChild(b);
-      });
-
-      sec.appendChild(row);
-      wrap.appendChild(sec);
-    });
-
-    host.appendChild(wrap);
-    highlightSelection();
-  }
-
-  // Aktive Auswahl visuell anmarkern
-  function highlightSelection(){
-    var host = byId("build-panel");
-    if (!host) return;
-    var btns = host.querySelectorAll(".uib-item");
-    btns.forEach(function(b){
-      var isActive = (b.dataset.tool === state.currentTool);
-      b.classList.toggle("is-active", !!isActive);
-    });
-  }
-
-  // --- Bridge: Build öffnen/schließen ---------------------------------------
-  // Das Öffnen/Schließen übernimmt ui-bridge.js, wir reagieren nur auf Events
-  window.addEventListener("cb:build-open", function(){
-    // Panel ist sichtbar — sicherstellen, dass Rendering steht
-    try{ render(); }catch(e){ err("Render bei open: "+e.message); }
-    ok("Build geöffnet ("+VER+").");
-  });
-
-  window.addEventListener("cb:build-close", function(){
-    ok("Build geschlossen.");
-  });
-
-  // --- Bootstrap-Hook --------------------------------------------------------
-  // Dein Wunsch: Beim Spielstart automatisch Carrier-Demo anstoßen
-  window.addEventListener("cb:game-start", function(){
-    try{
-      window.dispatchEvent(new CustomEvent("tests:carrier-demo"));
-      (window.CBLog?.ok || console.log)("[tests] Carrier-Demo gestartet (Bootstrap)");
-    }catch(_){}
-  });
-
-  // --- UI-Integration --------------------------------------------------------
-  // Falls Du das Panel auch ohne die FABs direkt testen willst:
-  // window.GameUI?.openBuild() kommt aus assets/ui/ui-bridge.js
-  try{
-    window.GameUI = window.GameUI || {};
-    // kleine bequeme API (optional)
-    window.GameUI.setBuildTool = selectTool;
-  }catch(_){}
-
-  // --- Auto-Init -------------------------------------------------------------
-  // Wenn die UI bereit ist, initial ein erstes Rendern (Panel bleibt zu)
-  window.addEventListener("cb:ui-ready", function(){
-    try{ render(); }catch(e){ err("Initiales Rendern: "+e.message); }
-    ok("geladen ("+VER+")");
-  });
-
-  // Fallback, falls cb:ui-ready in sehr früher Phase schon feuert
-  if (document.readyState === "complete" || document.readyState === "interactive") {
-    try{ render(); }catch(e){ err("Render (DOM ready): "+e.message); }
-  } else {
-    document.addEventListener("DOMContentLoaded", function(){
-      try{ render(); }catch(e){ err("Render (DOMContentLoaded): "+e.message); }
-    });
-  }
-/* Sichtbare Höhe des Build-Docks begrenzen */
-#build-panel{
-  max-height: 35vh;             /* ~ein bis zwei Zeilen, je nach Gerät */
-  overflow:auto;
+  --overlay: rgba(0,0,0,.35);
 }
-})();
+
+@media (prefers-color-scheme: light){
+  :root{
+    --bg: #f5f7fb;
+    --bg-panel: #ffffff;
+    --bg-elev: #f8fafc;
+    --fg: #0f141a;
+    --fg-dim: #404b57;
+    --muted: #6c7580;
+    --accent: #007acc;
+
+    --btn-bg: #f2f5f8;
+    --btn-bg-hover: #e9edf2;
+    --btn-border: #dde3ea;
+    --btn-border-hover: #cfd8e2;
+
+    --tab-bg: #f2f5f8;
+    --tab-active: #e9edf2;
+    --tab-border: #dde3ea;
+
+    --search-bg: #ffffff;
+    --search-border: #dde3ea;
+
+    --overlay: rgba(10,20,30,.25);
+  }
+}
+
+/* --------------------------- Overlay & Panel ------------------------------ */
+#build-overlay,
+.build-overlay{
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  z-index: 9998;
+  display: none;
+}
+
+#build-panel,
+.build-panel{
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: var(--bg-panel);
+  color: var(--fg);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-elev);
+  z-index: 9999; /* über Canvas & Inspector */
+  display: none;
+  overflow: hidden;
+  border: 1px solid var(--tab-border);
+}
+
+/* Öffnungszustand (per JS setzen) */
+#build-overlay[data-open="1"],
+.build-overlay[data-open="1"]{ display: block; }
+#build-panel[data-open="1"],
+.build-panel[data-open="1"]{ display: grid; }
+
+/* Panel-Layout */
+#build-panel,
+.build-panel{
+  grid-template-rows: auto auto minmax(0,1fr);
+  gap: 0;
+}
+
+/* ------------------------------- Header ----------------------------------- */
+.build-header{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--ui-gap);
+  padding: 12px 12px 10px 12px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--tab-border);
+}
+
+.build-title{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 14px var(--ui-font);
+  letter-spacing: .2px;
+  color: var(--fg);
+}
+
+.build-title .dot{
+  width: 10px; height: 10px; border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 20%, transparent);
+}
+
+.build-actions{
+  display: flex; align-items: center; gap: 8px;
+}
+.build-actions .btn{
+  appearance: none; border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--fg);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: 600 12px var(--ui-font);
+  letter-spacing: .2px;
+  cursor: pointer;
+}
+.build-actions .btn:hover{ background: var(--btn-bg-hover); border-color: var(--btn-border-hover); }
+.build-actions .btn.secondary{ opacity: .85; }
+
+/* ----------------------------- Tabs / Filter ------------------------------ */
+.build-tabs{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px;
+  background: var(--tab-bg);
+  border-bottom: 1px solid var(--tab-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.build-tab{
+  appearance: none;
+  border: 1px solid var(--tab-border);
+  background: transparent;
+  color: var(--fg);
+  padding: 8px 10px;
+  border-radius: 999px;
+  font: 600 12px var(--ui-font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.build-tab .swatch{
+  width: 10px; height: 10px; border-radius: 2px; background: var(--muted);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.15);
+}
+.build-tab[data-active="1"]{
+  background: var(--tab-active);
+  border-color: var(--btn-border-hover);
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+/* Kategorie-Farben über data-cat am Button */
+.build-tab[data-cat="admin"]    .swatch{ background: var(--cat-admin); }
+.build-tab[data-cat="housing"]  .swatch{ background: var(--cat-housing); }
+.build-tab[data-cat="food"]     .swatch{ background: var(--cat-food); }
+.build-tab[data-cat="resource"] .swatch{ background: var(--cat-res); }
+.build-tab[data-cat="military"] .swatch{ background: var(--cat-mil); }
+.build-tab[data-cat="production"] .swatch{ background: var(--cat-prod); }
+.build-tab[data-cat="misc"]     .swatch{ background: var(--cat-misc); }
+
+/* ------------------------------- Search ----------------------------------- */
+.build-search{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--tab-border);
+}
+.build-search input[type="text"]{
+  appearance: none;
+  border: 1px solid var(--search-border);
+  background: var(--search-bg);
+  color: var(--fg);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font: 500 13px var(--ui-font);
+}
+.build-search .hint{
+  align-self: center;
+  color: var(--fg-dim);
+  font: 500 12px var(--ui-font);
+  opacity: .85;
+}
+
+/* -------------------------------- Grid ------------------------------------ */
+.build-grid{
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 10px;
+  min-height: 160px;
+  max-height: min(60vh, 520px);
+  overflow: auto;
+  background: var(--bg-panel);
+}
+
+.build-empty{
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  color: var(--fg-dim);
+  font: 500 13px var(--ui-font);
+}
+.build-grid[data-empty="1"]{ display: none; }
+.build-grid[data-empty="1"] + .build-empty{ display: flex; }
+
+/* ------------------------------ Buttons ----------------------------------- */
+.build-btn{
+  position: relative;
+  display: grid;
+  grid-template-rows: 74px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--btn-border);
+  border-radius: 12px;
+  background: var(--btn-bg);
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+  transition: transform .08s ease, box-shadow .15s ease, background .15s ease, border-color .15s ease;
+  box-shadow: 0 0 0 0 rgba(0,0,0,0);
+}
+.build-btn:hover{
+  background: var(--btn-bg-hover);
+  border-color: var(--btn-border-hover);
+  box-shadow: 0 4px 12px rgba(0,0,0,.18);
+  transform: translateY(-1px);
+}
+.build-btn:active{ transform: translateY(0); box-shadow: none; }
+
+.build-btn .thumb{
+  position: relative;
+  width: 100%;
+  height: 74px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.05)),
+    repeating-conic-gradient(from 45deg, rgba(255,255,255,.05) 0% 25%, transparent 0% 50%);
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--btn-border) 75%, transparent);
+  display: grid; place-items: center;
+}
+
+/* Icon/IMG – robust gegen fehlende Assets */
+.build-btn .thumb img{
+  width: 100%; height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+  display: block;
+  background: linear-gradient(180deg, rgba(0,0,0,.15), transparent);
+}
+
+/* Fallback, wenn <img> fehlt/fehlschlägt -> .ico mit Kürzel */
+.build-btn .thumb .ico{
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  font: 800 18px var(--ui-font);
+  letter-spacing: .5px;
+  color: var(--fg);
+  text-transform: uppercase;
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklab, var(--fg) 8%, transparent) 0 8px,
+    transparent 8px 16px
+  );
+}
+
+/* Label + Unterzeile */
+.build-btn .label{
+  display: grid;
+  gap: 2px;
+}
+.build-btn .title{
+  font: 700 12px var(--ui-font);
+  line-height: 1.15;
+  letter-spacing: .2px;
+  color: var(--fg);
+}
+.build-btn .sub{
+  font: 500 11px var(--ui-font);
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: .85;
+}
+
+/* Badge (z. B. "Neu", Level etc.) */
+.build-btn .badge{
+  position: absolute;
+  top: 6px; left: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font: 800 10px var(--ui-font);
+  letter-spacing: .3px;
+  color: #111;
+  background: var(--accent);
+}
+
+/* Lock/Disabled */
+.build-btn[aria-disabled="true"],
+.build-btn[disabled]{
+  opacity: .55;
+  cursor: not-allowed;
+  filter: grayscale(.35);
+}
+
+/* Kategorie-Rahmenfarbe über data-cat */
+.build-btn[data-cat="admin"]{    box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-admin) 35%, transparent); }
+.build-btn[data-cat="housing"]{  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-housing) 35%, transparent); }
+.build-btn[data-cat="food"]{     box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-food) 35%, transparent); }
+.build-btn[data-cat="resource"]{ box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-res) 35%, transparent); }
+.build-btn[data-cat="military"]{ box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-mil) 35%, transparent); }
+.build-btn[data-cat="production"]{ box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-prod) 35%, transparent); }
+.build-btn[data-cat="misc"]{     box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--cat-misc) 35%, transparent); }
+
+/* ----------------------------- Utility/Error ------------------------------ */
+.build-error{
+  padding: 10px 12px;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5c5c, #cc3434);
+  font: 700 12px var(--ui-font);
+  border-bottom: 1px solid rgba(0,0,0,.2);
+}
+
+/* ----------------------------- Small Screens ------------------------------ */
+@media (max-width: 720px){
+  #build-panel, .build-panel{
+    left: 8px; right: 8px; bottom: 8px;
+    grid-template-rows: auto auto minmax(0,1fr);
+  }
+  .build-grid{ grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+  .build-actions .btn{ padding: 8px 10px; }
+}
+
+/* ----------------------------- Animations -------------------------------- */
+@media (prefers-reduced-motion: no-preference){
+  #build-panel[data-open="1"]{
+    animation: buildIn .16s ease-out both;
+  }
+  @keyframes buildIn{
+    from{ transform: translateY(8px); opacity: 0; }
+    to{ transform: translateY(0); opacity: 1; }
+  }
+}
+
+/* -------------------------- Absolutely Safe Defaults ---------------------- */
+/* Falls HTML-Struktur minimalistisch ist, sorge dafür, dass basale
+   generische Namen auch greifen. Damit bleibt das Menü sichtbar. */
+#build, .ui-build, .build{
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#build .hidden, .ui-build .hidden{ display: none !important; }
+
+/* Generische Fallback-Selectoren */
+#build .tabs:not(.build-tabs){ display: contents; }
+#build .grid:not(.build-grid){ display: contents; }
+
+/* Ende */
