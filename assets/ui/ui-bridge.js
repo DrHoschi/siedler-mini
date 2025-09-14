@@ -1,14 +1,16 @@
 /* =============================================================================
 Datei: assets/ui/ui-bridge.js
-Version: v17.9.8
+Version: v17.9.9
 Ziel:
-  - Inspector-Button: ruft euren gesplitteten Inspector an (keine neue UI).
-  - Build-Button: toggelt Dock + setzt Body-Klasse für FAB-Abstand.
-  - Keine DOM-Neubauten außer optionales #build-dock (Fallback).
+  - Inspector-Button: spricht ALT & NEU an (UIInspector, Inspector, Events).
+  - Letzte Stufe: vorhandene Inspector-Root nur sichtbar/unsichtbar schalten.
+  - Build-Button: toggelt Dock + Body-Klasse (Offset für FABs).
+  - Keine neue UI, kein DOM-Umbau außer optionales #build-dock (Fallback).
 ============================================================================= */
 (function(){
   const logI = (m)=> (window.CBLog?.info||console.log)(`[ui-bridge] ${m}`);
   const logW = (m)=> (window.CBLog?.warn||console.warn)(`[ui-bridge] ${m}`);
+  const logE = (m)=> (window.CBLog?.error||console.error)(`[ui-bridge] ${m}`);
 
   /* ---------- Build ---------- */
   function ensureBuildRoot(){
@@ -46,37 +48,70 @@ Ziel:
   };
 
   /* ---------- Inspector ---------- */
+  // Sehr breites Selektor-Set, um deinen Bestand sicher zu treffen
   function findInspectorRoot(){
     return (
       document.getElementById("inspector-root") ||
-      document.querySelector(".inspector-root") ||
       document.getElementById("inspectorOverlay") ||
       document.getElementById("inspector") ||
+      document.getElementById("ui-inspector") ||
       document.querySelector("#overlay-inspector") ||
-      document.querySelector("[data-inspector-root]") || null
+      document.querySelector(".inspector-root") ||
+      document.querySelector(".inspector-overlay") ||
+      document.querySelector("[data-inspector-root]") ||
+      document.querySelector('[role="dialog"][data-role="inspector"]') ||
+      null
     );
   }
+
   const TOGGLE_EVENTS = [
-    "cb:inspector:toggle","cb:inspector-toggle",
-    "inspector:toggle","inspector-toggle",
+    // neu
+    "cb:inspector:toggle",
+    // legacy
+    "cb:inspector-toggle","inspector:toggle","inspector-toggle",
+    // kurz (manche Stände)
     "cb:insp:toggle","cb:insp-toggle"
   ];
 
-  window.GameUI.toggleInspector = function(){
-    // 1) Bevorzugt echte API (Split-Inspector)
-    if (window.Inspector && typeof window.Inspector.toggle === "function"){
-      return window.Inspector.toggle();
-    }
-    if (window.Inspector && (typeof window.Inspector.open === "function" || typeof window.Inspector.close === "function")){
+  function tryAPIs(){
+    // 1) ALT: monolithischer Inspector
+    if (window.UIInspector){
+      if (typeof window.UIInspector.toggle === "function"){ window.UIInspector.toggle(); return true; }
       const r = findInspectorRoot();
       const vis = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display!=="none"));
-      if (vis && typeof window.Inspector.close === "function") return window.Inspector.close("toggle");
-      if (!vis && typeof window.Inspector.open  === "function") return window.Inspector.open("toggle");
+      if (vis && typeof window.UIInspector.close === "function"){ window.UIInspector.close("toggle"); return true; }
+      if (!vis && typeof window.UIInspector.open  === "function"){ window.UIInspector.open("toggle");  return true; }
     }
-    // 2) Wenn API fehlt: beide Event-Namensräume feuern
+    // 2) NEU: gesplitteter Inspector
+    if (window.Inspector){
+      if (typeof window.Inspector.toggle === "function"){ window.Inspector.toggle(); return true; }
+      const r = findInspectorRoot();
+      const vis = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display!=="none"));
+      if (vis && typeof window.Inspector.close === "function"){ window.Inspector.close("toggle"); return true; }
+      if (!vis && typeof window.Inspector.open  === "function"){ window.Inspector.open("toggle");  return true; }
+    }
+    return false;
+  }
+
+  function fireEvents(){
     TOGGLE_EVENTS.forEach(e => window.dispatchEvent(new CustomEvent(e,{detail:{from:"ui-bridge"}})));
-    logW("Inspector-API nicht gefunden – Toggle-Events gesendet.");
+  }
+
+  function toggleRootOnly(){
+    const r = findInspectorRoot();
+    if (!r) return false;
+    const vis = r.classList.contains("is-open") || (r.style.display && r.style.display!=="none");
+    if (vis){ r.classList.remove("is-open"); r.style.display = "none"; }
+    else    { r.style.display = "block";     r.classList.add("is-open"); }
+    return true;
+  }
+
+  window.GameUI.toggleInspector = function(){
+    if (tryAPIs()) return;
+    fireEvents();
+    if (toggleRootOnly()) return;
+    logE("Inspector nicht erreichbar (keine API/Listener/Root). Prüfe Script-Reihenfolge & Root-Selektoren.");
   };
 
-  document.addEventListener("DOMContentLoaded", ()=> logI("bereit (v17.9.8)"));
+  document.addEventListener("DOMContentLoaded", ()=> logI("bereit (v17.9.9)"));
 })();
