@@ -1,75 +1,64 @@
 /* =============================================================================
 Datei: assets/ui/ui-build.css
-Projekt: Neue Siedler
-Version: v17.9.14
-Ziel: Aussehen wie im Soll-Bild: hellgraue Karten, 1–2 Zeilen sichtbar (Rest scrollt),
+Version: v17.9.15
+Ziel: Helles Kartenraster, 1–2 Zeilen sichtbar (Rest scrollt),
       Dock-Hintergrund transparent, FABs kollidieren nicht.
 ============================================================================= */
 
 :root{
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --ui-panel:   #e9edf1;      /* Karten-Hintergrund (hellgrau) */
-  --ui-panel-2: #dfe5ec;      /* Hover */
-  --ui-border:  #c7d1dc;      /* Kartenrand */
-  --ui-text:    #222;         /* Label */
-  --build-dock-max-h: 240px;  /* wird von JS (ui-build.js) dynamisch gesetzt */
+  --ui-panel:   #e9edf1;
+  --ui-panel-2: #dfe5ec;
+  --ui-border:  #c7d1dc;
+  --ui-text:    #222;
+  --build-dock-max-h: 240px;   /* wird ggf. von JS dynamisiert */
   --dock-padding-x: 12px;
   --dock-padding-y: 10px;
 }
 
-/* Root-Dock: transparent, nur Innenabstand – die Karten sind hell */
 #build-dock.ui-build-dock,
 #build-panel.ui-build-dock{
-  position: absolute; left: 0; right: 0; bottom: 0;
-  z-index: 40;
-  display: none;
-  background: transparent;                 /* ⬅️ kein dunkler Block */
+  position:absolute; left:0; right:0; bottom:0;
+  z-index:40; display:none;
+  background:transparent; /* kein dunkler Balken */
   padding: var(--dock-padding-y) var(--dock-padding-x)
            calc(max(var(--dock-padding-y), 8px) + var(--safe-area-bottom))
            var(--dock-padding-x);
 }
 #build-dock.is-open,
-#build-panel.is-open{ display: block; }
+#build-panel.is-open{ display:block; }
 
-/* Header im Zielbild nicht sichtbar → ausblenden (Barrierefreiheit bleibt) */
-.ui-build-header{ display:none; }
+.ui-build-header{ display:none; } /* im Zielbild unsichtbar */
 
-/* Scrollbarer Bereich (Begrenzung auf 2 Reihen) */
 .ui-build-body{
   max-height: var(--build-dock-max-h);
-  overflow-y: auto; 
-  overflow-x: hidden;
+  overflow-y:auto; overflow-x:hidden;
 }
 
-/* Kategorien */
-.ui-build-category{ margin: 0 0 12px; }
+.ui-build-category{ margin:0 0 12px; }
 .ui-build-category-title{
-  color:#2c3d53; font-size: 18px; font-weight: 700;
-  margin: 6px 4px 10px;
+  color:#2c3d53; font-size:18px; font-weight:700;
+  margin:6px 4px 10px;
 }
 
-/* Grid der Karten */
 .ui-build-category-row{
-  display: grid;
+  display:grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  gap:12px;
 }
 
-/* Karten im hellen Stil mit runden Ecken */
 .ui-card{
   background:var(--ui-panel);
   border:1px solid var(--ui-border);
   border-radius:14px;
-  padding: 12px;
+  padding:12px;
   box-shadow: 0 1px 0 rgba(255,255,255,.35) inset,
               0 1px 8px rgba(0,0,0,.08);
-  color:var(--ui-text);
-  text-align:center;
+  color:var(--ui-text); text-align:center;
 }
 .ui-build-item{ width:100%; cursor:pointer; }
-.ui-build-item:hover{ background:var(--ui-panel-2); transform: translateY(-1px); }
+.ui-build-item:hover{ background:var(--ui-panel-2); transform:translateY(-1px); }
 
-/* Bild + Label (kompakt) */
 .ui-build-item-imgwrap{ display:grid; place-items:center; margin-bottom:8px; }
 .ui-build-item-img{
   width:64px; height:64px; object-fit:contain; image-rendering:auto;
@@ -77,11 +66,9 @@ Ziel: Aussehen wie im Soll-Bild: hellgraue Karten, 1–2 Zeilen sichtbar (Rest s
 }
 .ui-build-item-label{ font-size:16px; line-height:1.2; }
 
-/* Empty-State */
 .ui-build-empty{ color:#7a8ea7; padding:12px; }
 
-/* Mobile Feintuning */
 @media (max-width: 480px){
-  .ui-build-category-title{ font-size: 17px; }
+  .ui-build-category-title{ font-size:17px; }
   .ui-build-item-img{ width:56px; height:56px; }
 }
