@@ -1,17 +1,17 @@
 <!doctype html>
 <!--
-  Neue Siedler – Index (Stabil-Stand)
-  Ziele:
-    - Inspector (Split) zuverlässig öffnen/schließen (ohne neue UI).
-    - Baumenü im hellen grauen Dock (wie Foto), 1–2 Reihen sichtbar.
-    - FABs bleiben stehen (Zoom) und heben bei offenem Dock an.
-  WICHTIG:
-    - Gesplittete Inspector-Module bleiben aktiv (nicht anfassen).
-    - Danach: inspector.api-compat.js, danach ui-bridge.js, danach ui-build.js.
+  Neue Siedler – Stabil-Stand (Inspector + Build-Dock)
+  Fokus:
+    - Inspector (Split) sauber angebunden, nichts überschrieben.
+    - Build-Dock hellgrau, bündig unten, 1–2 Reihen sichtbar.
+    - FABs fix und zoomfest; heben bei offenem Dock an.
 -->
 <html lang="de">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b0f0d">
   <title>Neue Siedler</title>
@@ -19,10 +19,11 @@
   <!-- Styles -->
   <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10">
   <link rel="stylesheet" href="css/base.css?v=20250914">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=20250914">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=18.0.0">
   <link rel="stylesheet" href="assets/inspector/inspector.css?v=20250914">
 
   <style>
+    /* Bühne */
     html, body { height:100%; margin:0; background:#0b0f0d; transform:none !important; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
 
@@ -31,7 +32,7 @@
       position: fixed;
       z-index: 2147483647 !important;
       pointer-events: auto !important;
-      transform: none !important;
+      transform: none !important; /* schützt gegen Eltern-Transforms */
       contain: layout paint style;
     }
     #btn-build     { left:16px; bottom:16px; }
@@ -54,7 +55,7 @@
   <!-- Bühne -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock (unten; von ui-build.js befüllt) -->
+  <!-- Build-Dock (unten; von ui-build.js gerendert) -->
   <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
 
   <!-- Start-Panel -->
@@ -110,7 +111,7 @@
   <script defer src="assets/inspector/inspector.paths.js?v=18.14.5"></script>
   <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
 
-  <!-- Inspector – sanfter Shim (ergänzt nur, falls Module keine API setzen) -->
+  <!-- Inspector – API-Kompat (ergänzt nur, falls keine API bereitsteht) -->
   <script defer src="assets/inspector/inspector.api-compat.js?v=1.3.2"></script>
 
   <!-- UI -->
@@ -121,15 +122,15 @@
   <!-- Boot-Compat -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
 
-  <!-- Marker / Body-Klassen (Build-Open Offset) -->
+  <!-- Marker / Body-Klassen (FAB-Abstand) -->
   <script>
     (function () {
       function setOpen(){ document.body.classList.add('has-build-open'); }
       function setClose(){ document.body.classList.remove('has-build-open'); }
       window.addEventListener('cb:build:open',  setOpen);
       window.addEventListener('cb:build:close', setClose);
-      window.addEventListener('cb:build-open',  setOpen);
-      window.addEventListener('cb:build-close', setClose);
+      window.addEventListener('cb:build-open',  setOpen);  // legacy
+      window.addEventListener('cb:build-close', setClose); // legacy
     })();
   </script>
 </body>
