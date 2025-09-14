@@ -1,274 +1,287 @@
 /* ============================================================================
  * Datei: assets/ui/ui-build.js
- * Version: v17.9.11
+ * Version: v17.9.12
  * Projekt: Neue Siedler
  *
  * Zweck:
- *  - Baumenü dynamisch aus window.EntitiesRegistry aufbauen
- *  - Null-Downtime: erstellt Container selbst, falls nicht vorhanden
- *  - Verdrahtet Buttons (modern + legacy Events)
- *  - Resilient gegen fehlende Sprites (graue Platzhalter-Kachel)
+ *  - Liest EntitiesRegistry (Single Source of Truth)
+ *  - Baut das Baumenü (UI) dynamisch – auch wenn kein HTML-Gerüst vorhanden ist
+ *  - Gruppiert nach Kategorien & färbt Buttons nach Kategorie
+ *  - Klick = dispatch moderner Event (cb:build:place) + Legacy-Fallback (cb:build-action)
  *
- * Erwartet:
- *  - window.EntitiesRegistry = { version, categories: {...}, buildings: {...} }
- *  - assets/ui/ui-build.css (für Layout; funktioniert aber auch ohne)
- *  - ui-bridge (optional) toggelt Sichtbarkeit via Klasse ".open"
- * ============================================================================ */
+ * Public API:
+ *  - window.UIBuild.open()
+ *  - window.UIBuild.close()
+ *  - window.UIBuild.render()  // menu neu aufbauen (z. B. nach Registry-Update)
+ *
+ * Events:
+ *  - hört auf 'cb:game-start' → initialisiert sich
+ * ============================================================================
+ */
 (() => {
   'use strict';
 
-  const TAG  = '[ui-build]';
-  const LOG  = (...a)=> (window.CBLog?.info || console.log)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn || console.warn)(TAG, ...a);
-  const ERR  = (...a)=> (window.CBLog?.error|| console.error)(TAG, ...a);
+  const TAG   = '[ui-build]';
+  const LOG   = (...a) => (window.CBLog?.info  || console.log)(TAG, ...a);
+  const WARN  = (...a) => (window.CBLog?.warn  || console.warn)(TAG, ...a);
+  const ERR   = (...a) => (window.CBLog?.error || console.error)(TAG, ...a);
 
-  let registry = null;
-  let root = null;         // Panel-Root
-  let wired = false;
+  // Konfig / Selektoren (Panel wird notfalls erzeugt)
+  const SEL = {
+    panelId:  'build-panel',
+    listId:   'build-list',
+    toggleId: 'build-toggle',
+  };
 
-  // ---------- DOM Helpers --------------------------------------------------
-  function ensureRoot() {
-    // Versuche bestehende Container zu finden (kompatibel zu alten Builds)
-    root =
-      document.getElementById('ui-build') ||
-      document.getElementById('build') ||
-      document.querySelector('[data-role="build-panel"]') ||
-      document.querySelector('.ui-build') ||
-      null;
+  // kleines CSS-Setup, wenn die Seite nichts mitliefert
+  function injectFallbackCSS() {
+    if (document.getElementById('ui-build-autocss')) return;
+    const css = `
+      #${SEL.panelId} {
+        position: absolute; right: 12px; top: 12px;
+        width: 280px; max-height: 70vh; overflow: auto;
+        background: rgba(20,20,24,.92); backdrop-filter: saturate(150%) blur(2px);
+        border: 1px solid rgba(255,255,255,.08); border-radius: 10px;
+        box-shadow: 0 6px 24px rgba(0,0,0,.35);
+        font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: #e7e7ea; z-index: 1000; display: none;
+      }
+      #${SEL.panelId}.open { display: block; }
+      #${SEL.panelId} header {
+        position: sticky; top: 0; background: rgba(20,20,24,.96);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+      #${SEL.panelId} header h3 { margin: 0; font-size: 15px; letter-spacing: .2px; }
+      #${SEL.panelId} .cat {
+        padding: 8px 10px 0; margin-top: 6px;
+      }
+      #${SEL.panelId} .cat h4 {
+        margin: 0 0 6px 0; font-size: 12px; font-weight: 700; opacity: .8;
+        text-transform: uppercase; letter-spacing: .5px;
+      }
+      #${SEL.panelId} .grid {
+        display: grid; grid-template-columns: repeat(2, 1fr);
+        gap: 8px; padding: 0 10px 10px;
+      }
+      #${SEL.panelId} button.b {
+        display: flex; align-items: center; gap: 8px;
+        width: 100%; padding: 8px; border: 1px solid rgba(255,255,255,.08);
+        background: rgba(255,255,255,.03); border-radius: 8px;
+        color: inherit; cursor: pointer;
+        transition: transform .06s ease, background .2s ease;
+        text-align: left; min-height: 44px;
+      }
+      #${SEL.panelId} button.b:hover { transform: translateY(-1px); background: rgba(255,255,255,.06); }
+      #${SEL.panelId} button.b:active { transform: translateY(0); }
+      #${SEL.panelId} button.b .thumb {
+        flex: 0 0 32px; width: 32px; height: 32px; border-radius: 6px;
+        background: rgba(255,255,255,.06); display: grid; place-items: center;
+        overflow: hidden; border: 1px solid rgba(0,0,0,.25);
+      }
+      #${SEL.panelId} button.b .thumb img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+      }
+      #${SEL.panelId} button.b .label { font-size: 13px; font-weight: 600; letter-spacing: .2px; }
+      #${SEL.toggleId} {
+        position: absolute; right: 12px; top: 12px; z-index: 1001;
+        width: 40px; height: 40px; border-radius: 10px;
+        background: rgba(20,20,24,.92); color: #e7e7ea; border: 1px solid rgba(255,255,255,.08);
+        display: grid; place-items: center; cursor: pointer;
+      }
+    `;
+    const style = document.createElement('style');
+    style.id = 'ui-build-autocss';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
 
-    if (!root) {
-      // Fallback: eigenen Bottom-Sheet-Container anlegen
-      root = document.createElement('div');
-      root.id = 'ui-build';
-      root.className = 'ui-build'; // Styles kommen aus ui-build.css (falls vorhanden)
-      // Minimal-Flex-Styles, falls CSS fehlt:
-      root.style.position = 'fixed';
-      root.style.left     = '0';
-      root.style.right    = '0';
-      root.style.bottom   = '0';
-      root.style.maxHeight= '45%';
-      root.style.overflow = 'auto';
-      root.style.background = 'rgba(245,245,245,0.96)';
-      root.style.backdropFilter = 'blur(4px)';
-      root.style.borderTopLeftRadius  = '14px';
-      root.style.borderTopRightRadius = '14px';
-      root.style.boxShadow = '0 -8px 24px rgba(0,0,0,0.18)';
-      root.style.padding   = '12px 14px 16px';
-      root.style.zIndex    = '1000';
-      // zunächst geschlossen; ui-bridge setzt/entfernt ".open"
-      root.style.display   = 'none';
-      document.body.appendChild(root);
+  function ensurePanel() {
+    let panel = document.getElementById(SEL.panelId);
+    if (!panel) {
+      panel = document.createElement('aside');
+      panel.id = SEL.panelId;
+      panel.innerHTML = `
+        <header>
+          <h3>Bauen</h3>
+          <button type="button" data-close="1" aria-label="Schließen">✕</button>
+        </header>
+        <div id="${SEL.listId}" role="list"></div>
+      `;
+      document.body.appendChild(panel);
     }
-    return root;
+    let toggle = document.getElementById(SEL.toggleId);
+    if (!toggle) {
+      toggle = document.createElement('button');
+      toggle.id = SEL.toggleId;
+      toggle.type = 'button';
+      toggle.title = 'Bauen (Toggle)';
+      toggle.textContent = '🧱';
+      document.body.appendChild(toggle);
+    }
+
+    // Close-Button
+    panel.querySelector('header [data-close]')?.addEventListener('click', () => close());
+    // Toggle
+    toggle.addEventListener('click', () => {
+      panel.classList.toggle('open');
+    });
+
+    return { panel, list: panel.querySelector('#' + SEL.listId) };
   }
 
-  function sectionEl(title) {
-    const sec = document.createElement('section');
-    sec.className = 'ub-section';
-    const h = document.createElement('h3');
-    h.className = 'ub-title';
-    h.textContent = title;
-    h.style.margin = '10px 6px';
-    h.style.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-    const grid = document.createElement('div');
-    grid.className = 'ub-grid';
-    // minimale Grid-Styles, falls CSS fehlt
-    grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(96px, 1fr))';
-    grid.style.gap = '10px';
-    sec.appendChild(h);
-    sec.appendChild(grid);
-    return { sec, grid };
+  function groupByCategory(reg) {
+    const cats = {};
+    for (const c of reg.listCategories()) {
+      cats[c.id] = { meta: c, items: [] };
+    }
+    for (const b of reg.listBuildings()) {
+      const catId = b.category || 'misc';
+      if (!cats[catId]) cats[catId] = { meta: { id: catId, name: catId, color: '#888' }, items: [] };
+      cats[catId].items.push(b);
+    }
+    // sort by category name, then item name
+    const ordered = Object.values(cats).sort((a, b) => (a.meta.name || a.meta.id).localeCompare(b.meta.name || b.meta.id, 'de'));
+    for (const g of ordered) g.items.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, 'de'));
+    return ordered;
   }
 
-  function makeButton(kind, def) {
+  function paintBorder(el, color) {
+    // subtile Farbhinweise je Kategorie (nicht für Platzierbarkeit!)
+    el.style.boxShadow = `inset 0 0 0 2px ${color}22, 0 1px 0 rgba(255,255,255,.04)`;
+  }
+
+  function makeButton(reg, building) {
+    const cat = reg.getCategory(building.category);
     const btn = document.createElement('button');
+    btn.className = 'b';
     btn.type = 'button';
-    btn.className = 'ub-item';
-    btn.setAttribute('data-kind', kind);
-    btn.style.display = 'flex';
-    btn.style.flexDirection = 'column';
-    btn.style.alignItems = 'center';
-    btn.style.justifyContent = 'center';
-    btn.style.padding = '8px';
-    btn.style.borderRadius = '10px';
-    btn.style.border = '1px solid rgba(0,0,0,0.08)';
-    btn.style.background = 'rgba(255,255,255,0.85)';
-    btn.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
-    btn.style.cursor = 'pointer';
+    btn.dataset.kind = building.id;
 
-    const thumb = document.createElement('div');
-    thumb.className = 'ub-thumb';
-    thumb.style.width = '72px';
-    thumb.style.height = '72px';
-    thumb.style.borderRadius = '8px';
-    thumb.style.background = '#e8eaee';
-    thumb.style.display = 'grid';
-    thumb.style.placeItems = 'center';
-    thumb.style.overflow = 'hidden';
+    // Thumb
+    const thumb = document.createElement('span');
+    thumb.className = 'thumb';
+    if (cat?.color) paintBorder(thumb, cat.color);
 
+    // Bild (optional, fällt auf Text zurück)
     const img = document.createElement('img');
-    img.alt = def.title || kind;
-    img.decoding = 'async';
-    img.loading = 'lazy';
-    img.style.maxWidth = '100%';
-    img.style.maxHeight = '100%';
-
-    // Sprite wählen (wenn nicht vorhanden → Platzhalter)
-    const sprite = def?.sprite || '';
-    if (sprite) {
-      img.src = sprite;
-      img.onerror = () => { img.remove(); thumb.appendChild(placeholder(def)); };
+    let hasImg = false;
+    if (building.sprite) {
+      hasImg = true;
+      img.src = building.sprite;
+      img.alt = building.name || building.id;
+      img.addEventListener('error', () => {
+        // Bild kaputt → Thumb bleibt als Platzhalter, aber kein kaputtes Icon
+        thumb.innerHTML = '';
+      });
       thumb.appendChild(img);
     } else {
-      thumb.appendChild(placeholder(def));
+      // kein Sprite → einfach Icon-Glyph
+      thumb.textContent = '▦';
     }
 
-    const label = document.createElement('div');
-    label.className = 'ub-label';
-    label.textContent = def.title || kind;
-    label.style.marginTop = '6px';
-    label.style.font = '12px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-    label.style.color = '#1a1a1a';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = building.name || building.id;
 
     btn.appendChild(thumb);
     btn.appendChild(label);
+
+    if (cat?.color) paintBorder(btn, cat.color);
+
+    btn.addEventListener('click', () => {
+      // Moderner Event
+      try {
+        window.dispatchEvent(new CustomEvent('cb:build:place', { detail: { kind: building.id } }));
+      } catch (e) {}
+      // Legacy-Fallback
+      try {
+        window.dispatchEvent(new CustomEvent('cb:build-action', { detail: { action: `place-${building.id}` } }));
+      } catch (e) {}
+    });
+
     return btn;
   }
 
-  // farbiger Platzhalter auf Basis der Kategorie-Farbe
-  function placeholder(def) {
-    const ph = document.createElement('div');
-    ph.style.width = '64px';
-    ph.style.height = '64px';
-    ph.style.borderRadius = '6px';
-    ph.style.display = 'grid';
-    ph.style.placeItems = 'center';
-    ph.style.color = '#111';
-    ph.style.font = '500 11px system-ui, sans-serif';
-    ph.textContent = (def?.abbr || (def?.title || '?').slice(0,2)).toUpperCase();
+  function renderFromRegistry(container, reg) {
+    container.innerHTML = '';
+    const groups = groupByCategory(reg);
 
-    const c = def?.color || '#d8d8d8';
-    ph.style.background = c;
-    ph.style.border = '1px solid rgba(0,0,0,0.15)';
-    return ph;
-  }
+    let total = 0;
+    for (const g of groups) {
+      const catWrap = document.createElement('section');
+      catWrap.className = 'cat';
 
-  // ---------- Events -------------------------------------------------------
-  function firePlace(kind) {
-    // modern
-    try {
-      const ev = new CustomEvent('cb:build:place', { detail:{ kind }});
-      window.dispatchEvent(ev);
-    } catch(e){/* ignore */}
-    // legacy
-    try {
-      const ev2 = new CustomEvent('cb:build-action', { detail:{ action: 'place-' + kind }});
-      window.dispatchEvent(ev2);
-    } catch(e){/* ignore */}
-  }
-
-  function wireButtons() {
-    if (!root) return 0;
-    const all = root.querySelectorAll('.ub-item[data-kind]');
-    all.forEach(btn => {
-      if (btn.__wired) return;
-      btn.__wired = true;
-      btn.addEventListener('click', () => {
-        const kind = btn.getAttribute('data-kind');
-        firePlace(kind);
-      });
-    });
-    wired = true;
-    return all.length;
-  }
-
-  // ---------- Build Menu ---------------------------------------------------
-  function buildMenu() {
-    if (!registry) {
-      WARN('keine Registry → Menü leer.');
-      return 0;
-    }
-    ensureRoot();
-    root.innerHTML = '';
-
-    const cats = registry.categories || {};
-    const order = Object.keys(cats)
-      .map(id => ({ id, ...cats[id] }))
-      .sort((a,b) => (a.order||999) - (b.order||999));
-
-    const defs = registry.buildings || {};
-    let btnCount = 0;
-
-    for (const cat of order) {
-      const { sec, grid } = sectionEl(cat.title || cat.id || '–');
-      const kinds = (cat.items && cat.items.length) ? cat.items
-                   : Object.keys(defs).filter(k => defs[k]?.category === cat.id);
-
-      for (const kind of kinds) {
-        const def = defs[kind];
-        if (!def) continue;
-        const btn = makeButton(kind, {
-          title: def.title || kind,
-          abbr : def.abbr || (def.title||kind).slice(0,2),
-          sprite: def.sprite || '',
-          color : def.color  || cat.color || '#e6e9ef'
-        });
-        grid.appendChild(btn);
-        btnCount++;
+      const h = document.createElement('h4');
+      h.textContent = g.meta?.name || g.meta?.id || 'Sonstiges';
+      if (g.meta?.color) {
+        h.style.color = g.meta.color;
       }
-      if (grid.children.length) root.appendChild(sec);
+      catWrap.appendChild(h);
+
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+
+      for (const b of g.items) {
+        const btn = makeButton(reg, b);
+        grid.appendChild(btn);
+        total++;
+      }
+
+      catWrap.appendChild(grid);
+      container.appendChild(catWrap);
     }
 
-    const count = wireButtons();
-    LOG(`Build-Buttons verdrahtet: ${count}`);
-    return btnCount;
+    LOG(`Build-Buttons verdrahtet: ${total}`);
+    return total;
   }
 
-  // ---------- Visibility Hooks (ui-bridge kompatibel) ---------------------
-  function openPanel() {
-    ensureRoot();
-    root.style.display = 'block';
-    root.classList.add('open');
-  }
-  function closePanel() {
-    ensureRoot();
-    root.classList.remove('open');
-    root.style.display = 'none';
-  }
-
-  // ui-bridge kompatible Events
-  window.addEventListener('ui-build:open', openPanel);
-  window.addEventListener('ui-build:close', closePanel);
-  window.addEventListener('cb:ui-build:open', openPanel);
-  window.addEventListener('cb:ui-build:close', closePanel);
-
-  // ---------- Boot ---------------------------------------------------------
-  function init() {
-    registry = window.EntitiesRegistry || null;
-    if (!registry) {
-      WARN('EntitiesRegistry fehlt – versuche später erneut (nach cb:entities-ready).');
-      return;
+  // Robust: Warte bis Registry verfügbar ist
+  async function waitForRegistry(maxMs = 5000) {
+    const start = performance.now();
+    while (!window.EntitiesRegistry) {
+      if (performance.now() - start > maxMs) return null;
+      await new Promise(r => setTimeout(r, 50));
     }
-    ensureRoot();
-    const n = buildMenu();
-    LOG(`geladen (v17.9.11) – Kategorien: ${Object.keys(registry.categories||{}).length}, Buttons: ${n}`);
+    return window.EntitiesRegistry;
   }
 
-  // Falls Registry später kommt:
-  window.addEventListener('cb:entities-ready', init);
+  // Public API
+  function open()  { document.getElementById(SEL.panelId)?.classList.add('open'); }
+  function close() { document.getElementById(SEL.panelId)?.classList.remove('open'); }
 
-  // Beim Spielstart initialisieren & Panel von ui-bridge steuern lassen
-  window.addEventListener('cb:game-start', () => {
-    // Sicherstellen, dass Registry vorhanden ist (falls schon geladen)
-    if (window.EntitiesRegistry && !wired) init();
-  });
+  async function render() {
+    const reg = await waitForRegistry();
+    if (!reg) {
+      WARN('Keine EntitiesRegistry gefunden – Menü bleibt leer.');
+      return { ok: false, count: 0 };
+    }
+    const { panel, list } = ensurePanel();
+    const count = renderFromRegistry(list, reg);
+    panel.classList.add('open');
+    return { ok: true, count };
+  }
 
-  // Sofort versuchen, sobald DOM bereit ist (Editor/Demos)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init, { once:true });
+  // Init-Flow
+  async function init() {
+    try {
+      injectFallbackCSS();
+      const res = await render();
+      LOG(`geladen (v17.9.12) – Buttons: ${res.count}`);
+    } catch (e) {
+      ERR('Init-Fehler:', e);
+    }
+  }
+
+  // Auto-Init: beim Game-Start
+  window.addEventListener('cb:game-start', init);
+  // Falls cb:game-start schon durch ist (Reload-Szenario), trotzdem initialisieren:
+  if (document.readyState !== 'loading') {
+    // leicht verzögert, damit EntitiesRegistry Zeit hat zu laden
+    setTimeout(init, 0);
   } else {
-    init();
+    document.addEventListener('DOMContentLoaded', () => setTimeout(init, 0));
   }
 
+  window.UIBuild = { open, close, render };
 })();
