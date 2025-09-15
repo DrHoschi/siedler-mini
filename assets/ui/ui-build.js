@@ -1,35 +1,76 @@
 /* =============================================================================
    Neue Siedler – UI: Build Dock
-   Version: v18.2.3
-   - Datenquellen:
-       1) OFFIZIELL: Registry.getCategories(), Registry.categories/.buildings,
-          EntitiesRegistry.buildings
-       2) DISCOVERY (rekursiv, Tiefe <= 3):
-          * Arrays von Gebäuden
-          * Objekt-Dictionaries { id: building, ... }
-          * Maps (Map<any, building>)
-          * Pfade unter window.*, window.Registry.*, window.EntitiesRegistry.*
-   - Deutliche Logs: "Daten gefunden (offiziell|auto @Pfad): N"
+   Version: v18.2.4
+   - Erkennt Gebäudedaten auch bei verschachtelten Feldern:
+     name:  name, title, label, i18n.de, i18n["de-DE"], meta.title, display, ...
+     cat:   category, cat, meta.category, group, klass, category.id/key/name, ...
+   - Offiziell -> Discovery (rekursiv, inkl. Objects/Maps)
 ============================================================================= */
 (function(){
-  const VER = "v18.2.3";
+  const VER = "v18.2.4";
   const I = (m)=> (window.CBLog?.info  || console.log)(`[ui-build] ${m}`);
   const W = (m)=> (window.CBLog?.warn  || console.warn)(`[ui-build] ${m}`);
 
-  function el(t,c){ const e=document.createElement(t); if(c) e.className=c; return e; }
+  /* ----------------------------- Utils ------------------------------------- */
+  const get = (obj, path) => {
+    if (!obj || !path) return undefined;
+    const parts = Array.isArray(path) ? path : String(path).split('.');
+    let cur = obj;
+    for (const p of parts){
+      if (cur == null) return undefined;
+      if (p in cur) cur = cur[p];
+      else return undefined;
+    }
+    return cur;
+  };
+
+  const pickFirst = (obj, paths) => {
+    for (const p of paths){
+      let v = Array.isArray(p) ? get(obj, p) : get(obj, p);
+      if (v == null) continue;
+      // Falls Objekt {id|key|name} → extrahieren
+      if (typeof v === "object"){
+        const vk = v.key ?? v.id ?? v.name ?? v.title;
+        if (vk != null) return String(vk);
+      }
+      return typeof v === "string" || typeof v === "number" ? String(v) : v;
+    }
+    return undefined;
+  };
+
+  const NAME_PATHS = [
+    "name","title","label","display","text","caption",
+    ["title","de"],["i18n","de"],["i18n","de-DE"],["meta","title"],
+  ];
+  const CAT_PATHS = [
+    "category","cat","group","klass",["meta","category"],
+    ["category","id"],["category","key"],["category","name"]
+  ];
+  const KEY_PATHS = ["key","id","slug","code","type","name"];
+
   function looksBuilding(o){
-    return o && typeof o==="object" &&
-      (("name" in o)||("title" in o)||("key" in o)) &&
-      (("category" in o)||("cat" in o));
+    if (!o || typeof o!=="object") return false;
+    // Muss Art 'building' o. Kategorie + Name haben
+    const kind = pickFirst(o, ["kind","type","_type"]);
+    const hasKind = (typeof kind === "string" && /build/i.test(kind));
+    const nm  = pickFirst(o, NAME_PATHS) ?? pickFirst(o, KEY_PATHS);
+    const cat = pickFirst(o, CAT_PATHS);
+    return (nm && cat) || hasKind;
   }
-  function norm(b){ return {
-    key:  b?.key||b?.id||b?.name||b?.type||"unknown",
-    name: b?.title||b?.name||b?.label||b?.key||"Unbenannt",
-    icon: b?.icon||b?.sprite||b?.image||null,
-    cat:  b?.category||b?.cat||"default",
-    raw:  b||{}
-  }; }
-  function icon(b){
+
+  function normalize(o){
+    const key = pickFirst(o, KEY_PATHS) || "unknown";
+    const name = pickFirst(o, NAME_PATHS) || String(key);
+    let cat = pickFirst(o, CAT_PATHS) || "default";
+    if (typeof cat === "object") {
+      cat = cat.key ?? cat.id ?? cat.name ?? "default";
+    }
+    const icon = pickFirst(o, [["icon"],["sprite"],["image"],["meta","icon"]]);
+
+    return { key, name, icon, cat, raw:o };
+  }
+
+  function iconSrc(b){
     try{
       if (window.BuildAssets?.getIcon){ const s=window.BuildAssets.getIcon(b.key); if(s) return s; }
       if (window.BuildAssets?.icons?.[b.key]) return window.BuildAssets.icons[b.key];
@@ -39,148 +80,136 @@
   }
 
   /* --------------------------- OFFIZIELL ----------------------------------- */
-  function fromOfficial(){
-    // 1) Registry.getCategories()
+  function official(){
     if (window.Registry?.getCategories){
       try{
         const cats = window.Registry.getCategories();
         if (Array.isArray(cats) && cats.length){
-          return { path:"Registry.getCategories()", cats: cats.map(c=>({
-            id:c.id||c.key||c.name,
-            name:c.title||c.name||String(c.id||c.key||"Kategorie"),
-            items:(c.items||c.buildings||[]).map(norm)
-          }))};
+          return {
+            path: "Registry.getCategories()",
+            cats: cats.map(c=>({
+              id: c.id||c.key||c.name,
+              name: c.title||c.name||String(c.id||c.key||"Kategorie"),
+              items: (c.items||c.buildings||[]).map(normalize)
+            }))
+          };
         }
       }catch(e){ W(`Registry.getCategories() Fehler: ${e?.message||e}`); }
     }
-    // 2) Registry.categories & .buildings
     if (window.Registry && (Array.isArray(window.Registry.categories)||Array.isArray(window.Registry.buildings))){
       const cats = window.Registry.categories||[];
       const blds = window.Registry.buildings ||[];
       if (cats.length && blds.length){
-        const byCat={}; blds.forEach(b=>{ const nb=norm(b); (byCat[nb.cat] ||= []).push(nb); });
-        return { path:"Registry.categories/buildings", cats: cats.map(c=>({
-          id:c.id||c.key||c.name,
-          name:c.title||c.name||String(c.id||c.key||"Kategorie"),
-          items: byCat[(c.id||c.key||c.name)] || []
-        }))};
+        const byCat={}; blds.forEach(b=>{ const nb=normalize(b); (byCat[nb.cat] ||= []).push(nb); });
+        return {
+          path: "Registry.categories/buildings",
+          cats: cats.map(c=>({
+            id: c.id||c.key||c.name,
+            name: c.title||c.name||String(c.id||c.key||"Kategorie"),
+            items: byCat[(c.id||c.key||c.name)] || []
+          }))
+        };
       }
     }
-    // 3) EntitiesRegistry.buildings
     if (window.EntitiesRegistry?.buildings?.length){
-      const g={}; window.EntitiesRegistry.buildings.forEach(b=>{ const nb=norm(b); (g[nb.cat] ||= []).push(nb); });
+      const g={}; window.EntitiesRegistry.buildings.forEach(b=>{ const nb=normalize(b); (g[nb.cat] ||= []).push(nb); });
       return { path:"EntitiesRegistry.buildings", cats: Object.keys(g).map(k=>({ id:k, name:String(k), items:g[k] })) };
     }
     return null;
   }
 
-  /* ------------------------- DISCOVERY (rekursiv) -------------------------- */
-  function toArrayLike(value){
-    if (Array.isArray(value)) return value;
-    if (value instanceof Map)  return Array.from(value.values());
-    if (value && typeof value==="object"){
-      // Objekt-Dictionary → Werte nehmen
-      return Object.values(value);
+  /* --------------------------- DISCOVERY ----------------------------------- */
+  const toArrayLike = (v)=>{
+    if (Array.isArray(v)) return v;
+    if (v instanceof Map)  return Array.from(v.values());
+    if (v && typeof v === "object"){
+      const vals = Object.values(v);
+      // sehr große Plain-Objekte vermeiden
+      if (vals.length && vals.length < 2000) return vals;
     }
     return null;
-  }
+  };
 
-  function discoverFrom(value, label, grouped){
+  function discoverAt(value, label, grouped){
     const arr = toArrayLike(value);
     if (!arr || !arr.length) return 0;
-    let good=0, taken=0;
-    const lim = Math.min(arr.length, 200);
-    for (let i=0;i<Math.min(12, lim); i++) if (looksBuilding(arr[i])) good++;
-    if (good>=3){
-      for (let i=0;i<lim; i++){
-        const b = arr[i];
-        if (looksBuilding(b)){ const nb=norm(b); (grouped[nb.cat] ||= []).push(nb); taken++; }
-      }
-      I(`auto @${label} – Treffer: ${taken}`);
+    // Sample prüfen
+    let ok=0, take=0;
+    for (let i=0;i<Math.min(12,arr.length);i++) if (looksBuilding(arr[i])) ok++;
+    if (ok<3) return 0;
+
+    const lim = Math.min(arr.length, 600);
+    for (let i=0;i<lim;i++){
+      const it = arr[i]; if (!looksBuilding(it)) continue;
+      const nb = normalize(it);
+      (grouped[nb.cat] ||= []).push(nb);
+      take++;
     }
-    return taken;
+    I(`auto @${label} → ${take}`);
+    return take;
   }
 
-  function scanObject(obj, baseLabel, grouped, depth){
+  function scan(obj, base, grouped, depth){
     if (!obj || typeof obj!=="object" || depth<=0) return 0;
-    let found = 0;
+    let hits = 0;
+    hits += discoverAt(obj, base, grouped);
+    if (obj.buildings) hits += discoverAt(obj.buildings, `${base}.buildings`, grouped);
 
-    // Direkter Versuch auf diesem Knoten
-    found += discoverFrom(obj, baseLabel, grouped);
-    // .buildings Feld?
-    if (obj && typeof obj==="object" && obj.buildings){
-      found += discoverFrom(obj.buildings, `${baseLabel}.buildings`, grouped);
-    }
-
-    // Kinder scannen (eine Ebene breit; Schutz gegen riesige Objekte)
-    const keys = Object.keys(obj);
-    for (let i=0;i<keys.length && i<40; i++){
-      const k = keys[i];
+    const keys = Object.keys(obj).slice(0, 60);
+    for (const k of keys){
       try{
-        const v = obj[k];
-        if (v && typeof v==="object"){
-          found += discoverFrom(v, `${baseLabel}.${k}`, grouped);
-          found += scanObject(v, `${baseLabel}.${k}`, grouped, depth-1);
-        }
+        const v = obj[k]; if (!v || typeof v!=="object") continue;
+        hits += discoverAt(v, `${base}.${k}`, grouped);
+        hits += scan(v, `${base}.${k}`, grouped, depth-1);
       }catch(_){}
     }
-    return found;
+    return hits;
   }
 
-  function autoDiscover(){
+  function discover(){
     const grouped = {};
-    let hits = 0;
+    let total = 0;
 
-    // window.* flach
+    // window flach + tief
     for (const k in window){
       try{
-        const v = window[k]; if(!v) continue;
-        hits += discoverFrom(v, `window.${k}`, grouped);
-        if (v && typeof v==="object"){
-          hits += scanObject(v, `window.${k}`, grouped, 2);
-        }
+        const v = window[k]; if (!v) continue;
+        total += discoverAt(v, `window.${k}`, grouped);
+        if (v && typeof v==="object") total += scan(v, `window.${k}`, grouped, 2);
       }catch(_){}
     }
+    if (window.Registry)        total += scan(window.Registry,        "Registry",        grouped, 3);
+    if (window.EntitiesRegistry)total += scan(window.EntitiesRegistry, "EntitiesRegistry", grouped, 3);
 
-    // Registry & EntitiesRegistry vertieft (bis Tiefe 3)
-    if (window.Registry)        hits += scanObject(window.Registry,        "Registry",        grouped, 3);
-    if (window.EntitiesRegistry)hits += scanObject(window.EntitiesRegistry, "EntitiesRegistry", grouped, 3);
-
-    if (!hits) return null;
-
-    return {
-      path: "auto-discovery",
-      cats: Object.keys(grouped).map(k=>({ id:k, name:String(k), items: grouped[k] }))
-    };
+    if (!total) return null;
+    return { path:"auto-discovery", cats: Object.keys(grouped).map(c=>({ id:c, name:String(c), items: grouped[c] })) };
   }
 
-  /* ------------------------------ UI/Dock ---------------------------------- */
+  /* ---------------------------- UI / Dock ---------------------------------- */
   class Dock{
     constructor(root){
       this.root=root; this.root.classList.add("ui-build-dock");
-      this.syncMaxH(); window.addEventListener("resize",()=>this.syncMaxH());
+      this.syncH(); window.addEventListener("resize",()=>this.syncH());
     }
-    syncMaxH(){ const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
+    syncH(){ const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
       document.documentElement.style.setProperty("--build-dock-max-h", `${h}px`); }
-    render(data, label){
+    render(cats,label){
       this.root.innerHTML="";
       const body=el("div","ui-build-body");
-
-      if (!Array.isArray(data) || !data.length){
+      if (!Array.isArray(cats) || !cats.length){
         const empty=el("div","ui-build-empty"); empty.textContent="Keine Gebäude verfügbar";
         body.appendChild(empty); this.root.appendChild(body); return;
       }
+      if (label) I(`render @${label} → ${cats.reduce((s,c)=>s+(c.items||[]).length,0)} Gebäude`);
 
-      if (label) I(`render @${label} → ${data.reduce((s,c)=>s+(c.items||[]).length,0)} Gebäude`);
-
-      data.forEach(cat=>{
+      cats.forEach(cat=>{
         const sec=el("section","ui-build-category");
         if (cat.name){ const t=el("div","ui-build-category-title"); t.textContent=cat.name; sec.appendChild(t); }
         const row=el("div","ui-build-category-row");
         (cat.items||[]).forEach(item=>{
           const card=el("button","ui-card ui-build-item"); card.type="button"; card.setAttribute("data-key",item.key);
           const wrap=el("div","ui-build-item-imgwrap");
-          const img=el("img","ui-build-item-img"); img.alt=item.name||item.key; img.loading="lazy"; img.src=icon(item);
+          const img=el("img","ui-build-item-img"); img.alt=item.name||item.key; img.loading="lazy"; img.src=iconSrc(item);
           wrap.appendChild(img);
           const label=el("div","ui-build-item-label"); label.textContent=item.name||item.key;
           card.appendChild(wrap); card.appendChild(label);
@@ -204,34 +233,29 @@
   (function init(){
     let root = document.getElementById("build-dock") || document.getElementById("build-panel");
     if (!root){ root=document.createElement("div"); root.id="build-dock"; document.body.appendChild(root); W("#build-dock erzeugt."); }
-    const dock=new Dock(root);
+    const dock = new Dock(root);
 
-    // Öffentliche API
     window.UIBuild = {
-      open:(f)=>dock.open(f), close:(f)=>dock.close(f), toggle:(f)=>dock.toggle(f),
-      render:(data,label)=>{
-        if (Array.isArray(data)) return dock.render(data,label||"manual");
-        const off = fromOfficial();
-        if (off){ I(`Daten gefunden (offiziell @${off.path}): ${off.cats.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(off.cats, off.path); }
-        const auto = autoDiscover();
-        if (auto){ I(`Daten gefunden (auto @${auto.path}): ${auto.cats.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(auto.cats, auto.path); }
+      open:()=>dock.open(), close:()=>dock.close(), toggle:()=>dock.toggle(),
+      render:(cats,label)=>{
+        if (Array.isArray(cats)) return dock.render(cats,label||"manual");
+        const off = official();
+        if (off){ I(`Daten gefunden (offiziell @${off.path})`); return dock.render(off.cats, off.path); }
+        const auto = discover();
+        if (auto){ I(`Daten gefunden (auto @${auto.path})`); return dock.render(auto.cats, auto.path); }
         W("Keine Gebäudedaten → leerer Hinweis"); return dock.render([], "none");
       },
       version: VER
     };
 
-    // Erstes Render
     window.UIBuild.render();
-
-    // Re-Render bei typischen Events
     [
       "cb:registry:ready","registry:ready","entities:ready","entities.registry:ready",
       "cb:assets:ready","assets:ready","cb:assets-ready","assets-ready",
       "cb:game-start","game:start","cb:build:refresh","build:refresh"
     ].forEach(ev=> window.addEventListener(ev, ()=>{ I(`Event '${ev}' → re-render`); window.UIBuild.render(); }));
 
-    // Hotkey
-    window.addEventListener("keydown",(ev)=>{ if((ev.key||"").toLowerCase()==="b") window.UIBuild.toggle("hotkey"); });
+    window.addEventListener("keydown",(ev)=>{ if((ev.key||"").toLowerCase()==="b") window.UIBuild.toggle(); });
 
     I(`bereit (${VER})`);
   })();
