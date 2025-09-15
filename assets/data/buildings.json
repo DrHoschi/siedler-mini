@@ -1,5 +1,5 @@
 {
-  // --- Kategorien -----------------------------------------------------------
+
   "categories": [
     { "id": "admin",       "title": "Allg. / Verwaltung",     "order": 10 },
     { "id": "wohnen",      "title": "Wohnen",                  "order": 20 },
