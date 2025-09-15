@@ -1,6 +1,17 @@
 <!doctype html>
-<!-- Neue Siedler – Index (stabiler Stand für Inspector + Build-Menü)
-     WICHTIG: Reihenfolge beachten! Polyfill → Core → Inspector (split) → UI → Bridge → Boot
+<!--
+  Neue Siedler – Index (Vollversion, kommentiert)
+  Ziel: Inspector bleibt unberührt; Build-Menü stabil aus Registry (Fallback möglich)
+
+  Lade-Reihenfolge (wichtig):
+  Polyfill → Core → Registry/Entities → Renderer → Game → Bootstrap
+  → Inspector (split) → UI-Basis (Start) → UI-Build (Renderer) → UI-Build-Bridge (Daten)
+  → UI-Bridge (Buttons/Kompat) → Boot-Compat
+
+  Hinweise:
+  - KEIN altes inspector.js / inspector.overview.js laden.
+  - Start-Panel liegt über Canvas und wird nach Start entfernt.
+  - FAB-Buttons (Bau/Inspector) mit hohem z-index.
 -->
 <html lang="de">
 <head>
@@ -15,31 +26,42 @@
   <!-- Styles -->
   <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10">
   <link rel="stylesheet" href="css/base.css?v=20250914">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=20250914">
+  <link rel="stylesheet" href="assets/ui/ui-build.css?v=20250915">
   <link rel="stylesheet" href="assets/inspector/inspector.css?v=20250914">
 
   <style>
-    html, body { height:100%; margin:0; background:#0b0f0d; }
+    /* Bühne */
+    html, body { height:100%; margin:0; background:#0b0f0d; color:#eaeaea; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
-    .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
+
+    /* FABs */
+    .ui-fab {
+      position:fixed; z-index:2147483647 !important; pointer-events:auto !important;
+    }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
     .ui-fab button{
       width:52px; height:52px; border-radius:50%; border:none;
-      background:rgba(34,36,38,.92); color:#fff; font-size:22px;
+      background:#2a2d31; color:#fff; font-size:22px;
       box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px);
       cursor:pointer; pointer-events:auto !important;
     }
+
+    /* Build-Dock Abstand, wenn offen */
     body.has-build-open #btn-build,
-    body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h, 260px) + 16px); }
+    body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h, 40vh) + 16px); }
+
+    /* Start-Panel (über Canvas, unter FABs) – Basis kommt aus ui-start.css */
   </style>
 </head>
 <body>
+
   <!-- Bühne -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock (unten andockend) -->
+  <!-- Build-Dock (unten andockend; unterstützt id="build-panel" als Legacy) -->
   <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
+  <!-- <div id="build-panel" class="ui-build-dock" aria-label="Bau-Menü (Legacy)"></div> -->
 
   <!-- Start-Panel -->
   <div id="start-panel" class="ui-start" aria-label="Startmenü">
@@ -57,17 +79,22 @@
 
   <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" aria-label="Bau-Menü" onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle nicht verfügbar');}">🧱</button>
+    <button type="button" aria-label="Bau-Menü" onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle nicht verfügbar');}">🛠</button>
+    <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(e){console.warn('[ui] Inspector-Toggle nicht verfügbar',e);}">🛠</button>
   </div>
 
   <!-- Core + Polyfills -->
   <script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
   <script src="assets/core/core.env.js?v=17.8.2"></script>
+
+  <!-- Asset/Build-Layer -->
   <script src="assets/core/asset.js?v=17.8.7"></script>
   <script src="assets/core/build.assets.js?v=17.8.7"></script>
+  <script src="assets/core/build.categories.js?v=17.8.7"></script>
+
+  <!-- Rest Core -->
   <script src="assets/core/registry.js?v=1.2.0"></script>
   <script src="assets/core/entities.registry.js?v=1.1.1"></script>
   <script src="assets/core/core.entities.js?v=17.6.2"></script>
@@ -79,59 +106,44 @@
   <script src="assets/core/carriers.js?v=17.8.2"></script>
   <script src="assets/core/overlay-hooks.js?v=17.8.2"></script>
   <script src="assets/core/core.render.js?v=17.9.5"></script>
+  <script src="core/game.js?v=18.0.0"></script>
   <script src="assets/core/game.bootstrap.js?v=17.8.7"></script>
   <script src="assets/core/game.js?v=17.10.0"></script>
 
-  <!-- Inspector (split) – unverändert lassen -->
+  <!-- Inspector (split) – NICHT anfassen -->
   <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.14.5"></script>
+  <script defer src="assets/inspector/inspector.logs.js?v=18.14.4"></script>
   <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
   <script defer src="assets/inspector/inspector.paths.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
-  <script defer src="assets/inspector/inspector.compat.js?v=1.0.0"></script>
+  <!-- Optionale Helper (kein Muss): -->
+  <!-- <script defer src="assets/inspector/inspector.button-bind.js?v=1.0.0"></script> -->
 
-  <!-- Legacy-Fassade -->
-  <script defer src="game.js?v=17.8.2"></script>
-  <script defer src="core/pathfinder.js?v=16.5.0"></script>
-
-  <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=18.1.0"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
-
-  <!-- Build-Menü + Daten-Bridge (WICHTIG: erst ui-build.js, dann data-bridge.js) -->
-  <script defer src="assets/ui/ui-build.js?v=18.3.2"></script>
-  <script defer src="assets/ui/ui-build.data-bridge.js?v=1.0.3"></script>
+  <!-- UI (WICHTIG: Reihenfolge) -->
+  <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>       <!-- Start-Panel Logik -->
+  <script defer src="assets/ui/ui-build.js?v=18.3.2"></script>       <!-- ✅ MUSS vor data-bridge -->
+  <script defer src="assets/ui/ui-build.data-bridge.js?v=1.0.0"></script><!-- liest Registry/Fallback -->
+  <script defer src="assets/ui/ui-bridge.js?v=18.1.0"></script>      <!-- Buttons, Inspector-Toggle -->
 
   <!-- Boot-Compat -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
 
-  <!-- Marker / Body-Klassen + Telemetrie -->
+  <!-- Marker/Body-Klassen + Telemetrie -->
   <script>
     (function () {
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v17.8.2";
-      (window.CBLog?.info || console.log)("[index] UI bereit");
+      window.__cb.indexVersion = "v18.3.2";
+      (window.CBLog?.info || console.log)("[index] UI bereit (v18.3.2)");
 
+      // FAB-Abstand für offenes Bau-Dock – beide Event-Varianten unterstützen
       function setOpen(){ document.body.classList.add('has-build-open'); }
       function setClose(){ document.body.classList.remove('has-build-open'); }
       window.addEventListener('cb:build:open',  setOpen);
       window.addEventListener('cb:build:close', setClose);
-      window.addEventListener('cb:build-open',  setOpen);
-      window.addEventListener('cb:build-close', setClose);
-
-      // Inspector-Bridge unberührt lassen – nur Toggle binden falls vorhanden
-      window.GameUI = window.GameUI || {};
-      if (!window.GameUI.toggleInspector) {
-        window.GameUI.toggleInspector = (function () {
-          // bevorzugt dom-basierte Inspector API (api-compat bindet diese)
-          const open  = window.Inspector?.open  || window.InspectorDOM?.open;
-          const close = window.Inspector?.close || window.InspectorDOM?.close;
-          const isOpen= ()=> !!document.querySelector('.inspector-overlay.is-open');
-          return function() { try { (isOpen() ? close() : open()); } catch(e) { console.warn('[index] Inspector-Toggle nicht verfügbar'); } };
-        })();
-      }
+      window.addEventListener('cb:build-open',  setOpen);   // Fallback
+      window.addEventListener('cb:build-close', setClose);  // Fallback
     })();
   </script>
 </body>
