@@ -1,137 +1,232 @@
-/* =======================================================================
- * Datei: assets/ui/ui-build.js
- * Version: v18.3.2 (compat, mit setItems)
- * Zweck: Bau-Menü (Dock) – robuste UI + öffentliche API für externe Daten
- * ======================================================================= */
+/* Neue Siedler – UI Build Dock
+   v18.4.0
+   Features:
+   - Sucht #build-dock ODER #build-panel, erstellt notfalls einen Container.
+   - Rendert Kategorien + Grid.
+   - Zeigt leere-Hinweise sichtbar (kein Transparent-Bug).
+   - Re-render bei setItems() IMMER (auch wenn Dock bereits offen).
+   - Events: cb:build:open/close UND cb:build-open/close (Compat).
+   - Body-Class: has-build-open (für FAB-Abstand).
+*/
 (function () {
-  'use strict';
-
-  const MOD = '[ui-build]';
-  const VER = 'v18.3.2';
-  const log  = (m)=> (window.CBLog?.info || console.log)(`${MOD} ${m}`);
-  const ok   = (m)=> (window.CBLog?.ok   || console.log)(`${MOD} ${m}`);
-  const warn = (m)=> (window.CBLog?.warn || console.warn)(`${MOD} ${m}`);
-
-  // --------- DOM basics --------------------------------------------------------
-  function host(){
-    return document.getElementById('build-dock')
-        || document.getElementById('build-panel')
-        || (()=>{
-             const d=document.createElement('div');
-             d.id='build-dock'; document.body.appendChild(d); return d;
-           })();
-  }
-  function fire(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})); }catch(_){} }
-  function isOpen(){ return host().classList.contains('is-open'); }
-  function open(){ host().classList.add('is-open');  document.body.classList.add('has-build-open');  fire('cb:build:open'); }
-  function close(){ host().classList.remove('is-open'); document.body.classList.remove('has-build-open'); fire('cb:build:close'); }
-  function toggle(){ isOpen()?close():open(); }
-
-  // --------- CSS ---------------------------------------------------------------
-  function injectCSS(){
-    if (injectCSS._done) return; injectCSS._done=true;
-    const css = `
-    .ui-build-dock,#build-panel{
-      position:fixed; left:0; right:0; bottom:0; z-index:1000;
-      transform:translateY(110%); opacity:0; transition:transform .24s ease,opacity .24s ease;
-      background:rgba(22,26,30,.92); color:#e9eef4; backdrop-filter:blur(8px);
-      border-top:1px solid rgba(255,255,255,.08); padding:12px;
-      max-height:var(--build-dock-max-h, 320px); overflow:auto;
-    }
-    .ui-build-dock.is-open,#build-panel.is-open{ transform:none; opacity:1; }
-    .ui-build-empty{ padding:12px; margin:6px; border-radius:10px; text-align:center;
-      background:rgba(10,12,14,.66); border:1px dashed rgba(255,255,255,.15); }
-    .ui-build-section{ margin:8px 4px 14px; }
-    .ui-build-section>h3{ margin:0 0 8px; font:600 14px/1.25 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; opacity:.9; }
-    .ui-build-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-    .ui-build-card{ display:grid; grid-template-rows:1fr auto; gap:6px; align-items:center; justify-items:center;
-      padding:8px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
-      background:rgba(10,12,14,.66); color:#e9eef4; cursor:pointer; }
-    .ui-build-card .img{ display:flex; align-items:center; justify-content:center; width:100%; height:76px; }
-    .ui-build-card img{ width:96px; height:72px; object-fit:contain; }
-    .ui-build-card .label{ font-size:13px; line-height:1.25; text-align:center; }
-    @media (min-width: 920px){ .ui-build-grid{ grid-template-columns:repeat(6,minmax(0,1fr)); } }
-    `;
-    const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
-  }
-
-  // --------- Render ------------------------------------------------------------
-  let _items = []; // [{category, items:[{id,label,icon,data}]}]
-
-  function render(){
-    injectCSS();
-    const root = host();
-    root.classList.add('ui-build-dock');
-    root.innerHTML='';
-
-    if (!_items || !_items.some(c=>Array.isArray(c.items)&&c.items.length)){
-      const empty=document.createElement('div'); empty.className='ui-build-empty';
-      empty.textContent='Keine Gebäude verfügbar';
-      root.appendChild(empty);
-      return;
-    }
-
-    for (const cat of _items){
-      const sec=document.createElement('section'); sec.className='ui-build-section';
-      const h=document.createElement('h3'); h.textContent = cat.category || 'Kategorie'; sec.appendChild(h);
-      const grid=document.createElement('div'); grid.className='ui-build-grid';
-
-      for (const it of (cat.items||[])){
-        if (!it?.id) continue;
-        const btn=document.createElement('button'); btn.type='button'; btn.className='ui-build-card';
-        const wrap=document.createElement('div'); wrap.className='img';
-        const img=document.createElement('img'); img.loading='lazy'; img.decoding='async';
-        img.alt=it.label||it.id||''; img.src= it.icon || 'assets/ui/placeholder.build.png';
-        wrap.appendChild(img);
-        const lab=document.createElement('div'); lab.className='label'; lab.textContent= it.label || it.id || '';
-        btn.appendChild(wrap); btn.appendChild(lab);
-        btn.addEventListener('click',()=>select(it));
-        grid.appendChild(btn);
-      }
-
-      sec.appendChild(grid);
-      root.appendChild(sec);
-    }
-  }
-
-  function select(it){
-    const detail={ id: it.id, item: it };
-    try{ window.dispatchEvent(new CustomEvent('cb:build:select',{detail})); }catch(_){}
-    try{ window.dispatchEvent(new CustomEvent('build:select',{detail})); }catch(_){}
-    // Backward-Hooks
-    try{ window.GameTool?.set?.('build', it.id); }catch(_){}
-    try{ window.Game?.setBuildTarget?.(it.id); }catch(_){}
-    ok(`select ${it.id}`);
-  }
-
-  // --------- Öffentliche API ---------------------------------------------------
-  window.UIBuild = {
-    version: VER,
-    isOpen, open, close, toggle, render,
-    /** Erwartet: [{ category:'...', items:[{ id, label, icon, data? }, ...] }, ...] */
-    setItems(list){
-      if (!Array.isArray(list)) { warn('setItems: kein Array'); return; }
-      _items = list.map(cat => ({
-        category: cat.category || cat.title || cat.name || 'Kategorie',
-        items: (cat.items||[]).map(x=>({
-          id: x.id || x.key || x.type || x.name,
-          label: x.label || x.name || x.title || x.id,
-          icon: x.icon || x.image || x.sprite || null,
-          data: x.data || {}
-        }))
-      }));
-      ok(`Items gesetzt (${_items.reduce((s,c)=>s+(c.items?.length||0),0)} Karten / ${_items.length} Kategorien)`);
-      render();
-    }
+  const LG = {
+    i: (m) => (window.CBLog?.info || console.log)(`[ui-build] ${m}`),
+    w: (m) => (window.CBLog?.warn || console.warn)(`[ui-build] ${m}`),
+    e: (m) => (window.CBLog?.error || console.error)(`[ui-build] ${m}`)
   };
 
-  // --------- Layout-Helpers ----------------------------------------------------
-  function syncMaxH(){
-    const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
-    document.documentElement.style.setProperty('--build-dock-max-h', `${h}px`);
-  }
-  syncMaxH(); window.addEventListener('resize', syncMaxH);
-  document.addEventListener('keydown', (ev)=>{ if((ev.key||'').toLowerCase()==='b') toggle(); });
+  // ------ DOM Helpers ------
+  function $(sel, root = document) { return root.querySelector(sel); }
+  function el(tag, cls) { const n = document.createElement(tag); if (cls) n.className = cls; return n; }
+  function dispatch(name, detail) { window.dispatchEvent(new CustomEvent(name, { detail })); }
 
-  ok(`bereit (${VER})`);
+  // ------ State ------
+  const State = {
+    items: [],          // [{category, items:[{id,label,icon,data}]}]
+    catIndex: 0,
+    open: false,
+    mounted: false
+  };
+
+  // ------ Container find/create ------
+  function ensureContainer() {
+    let host = $('#build-dock') || $('#build-panel');
+    if (!host) {
+      host = el('div', 'ui-build-dock');
+      host.id = 'build-dock';
+      document.body.appendChild(host);
+      LG.i('Container neu erstellt (#build-dock).');
+    } else {
+      // Stelle sicher, dass grundlegende Klasse gesetzt ist
+      host.classList.add('ui-build-dock');
+    }
+    host.setAttribute('aria-label', 'Bau-Menü');
+    host.setAttribute('role', 'region');
+    return host;
+  }
+
+  // ------ HTML Pieces ------
+  function renderTabs(cats, activeIdx) {
+    if (!cats?.length) return '';
+    return `
+      <div class="ui-build-tabs" role="tablist" aria-label="Kategorien">
+        ${cats.map((c, i) => `
+          <button class="tab ${i===activeIdx?'active':''}" role="tab"
+                  aria-selected="${i===activeIdx?'true':'false'}"
+                  data-tab="${i}" title="${escapeHtml(c.category)}">
+            ${escapeHtml(c.category)}
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderGrid(items) {
+    if (!items || !items.length) {
+      return `
+        <div class="ui-build-empty">
+          <div class="empty-icon">🧱</div>
+          <div class="empty-text">Keine Gebäude verfügbar</div>
+        </div>
+      `;
+    }
+    return `
+      <div class="ui-build-grid" role="list">
+        ${items.map(it => `
+          <button class="card" role="listitem" data-build="${escapeAttr(it.id)}" title="${escapeAttr(it.label)}">
+            <div class="thumb">
+              <img src="${escapeAttr(it.icon || 'assets/placeholder64.PNG')}" alt="${escapeAttr(it.label)}">
+            </div>
+            <div class="label">${escapeHtml(it.label)}</div>
+          </button>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderChrome() {
+    return `
+      <div class="ui-build-chrome">
+        <div class="drag-handle" aria-hidden="true"></div>
+        <button class="close" title="Schließen" aria-label="Bau-Menü schließen">×</button>
+      </div>
+    `;
+  }
+
+  function tplDock(cats, activeIdx) {
+    const cur = cats?.[activeIdx] || { category: 'Bauen', items: [] };
+    return `
+      ${renderChrome()}
+      ${renderTabs(cats, activeIdx)}
+      <div class="ui-build-body">
+        ${renderGrid(cur.items)}
+      </div>
+    `;
+  }
+
+  // ------ Render ------
+  function render() {
+    const host = ensureContainer();
+    host.innerHTML = tplDock(State.items, State.catIndex);
+    wireInteractions(host);
+  }
+
+  // ------ Interactions ------
+  function wireInteractions(host) {
+    // Tabs
+    host.querySelectorAll('.ui-build-tabs .tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-tab') || 0);
+        if (!Number.isFinite(idx)) return;
+        State.catIndex = idx;
+        render();
+      });
+    });
+
+    // Close
+    const btnClose = host.querySelector('.ui-build-chrome .close');
+    btnClose?.addEventListener('click', close);
+
+    // Cards (nur Click-Feedback; eigentlicher Build-Place folgt später)
+    host.querySelectorAll('.ui-build-grid .card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = card.getAttribute('data-build');
+        (window.CBLog?.info || console.log)(`[ui-build] selected: ${id}`);
+        // TODO: hier kann später Plazier-Flow andocken
+      });
+    });
+  }
+
+  // ------ Open/Close ------
+  function open() {
+    const host = ensureContainer();
+    host.classList.add('open');
+    document.body.classList.add('has-build-open');
+    State.open = true;
+    // Events (neu + legacy)
+    dispatch('cb:build:open', { open: true });
+    dispatch('cb:build-open', { open: true });
+    LG.i('open');
+  }
+
+  function close() {
+    const host = ensureContainer();
+    host.classList.remove('open');
+    document.body.classList.remove('has-build-open');
+    State.open = false;
+    // Events (neu + legacy)
+    dispatch('cb:build:close', { open: false });
+    dispatch('cb:build-close', { open: false });
+    LG.i('close');
+  }
+
+  function toggle() { (State.open ? close : open)(); }
+
+  // ------ API ------
+  const API = {
+    setItems(items) {
+      // Erwarte [{category, items:[...]}] – defensive Normalisierung
+      if (!Array.isArray(items)) items = [];
+      State.items = items.map(cat => ({
+        category: cat?.category || 'Bauen',
+        items: Array.isArray(cat?.items) ? cat.items : []
+      }));
+      // Wenn aktive Kategorie plötzlich leer/außer Reichweite → zurücksetzen
+      if (State.catIndex >= State.items.length) State.catIndex = 0;
+      render();
+
+      // Falls Dock geöffnet ist, bleibt es offen und zeigt sofort neue Items
+      // Falls geschlossen: nichts weiter tun (Button steuert Öffnen)
+      LG.i(`Items gesetzt (${State.items.reduce((s,c)=>s+(c.items?.length||0),0)} Karten / ${State.items.length} Kategorien)`);
+    },
+    open, close, toggle
+  };
+
+  // ------ Bootstrap / Mount ------
+  function mountOnce() {
+    if (State.mounted) return;
+    State.mounted = true;
+
+    // Host vorbereiten und initiales Render (leer)
+    render();
+
+    // FAB-Button optional – falls existiert
+    const btnFab = document.getElementById('btn-build')?.querySelector('button');
+    btnFab?.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggle();
+    });
+
+    // Kompatible externe Steuerung
+    window.GameUI = window.GameUI || {};
+    if (!window.GameUI.toggleBuild) {
+      window.GameUI.toggleBuild = toggle;
+    }
+    if (!window.GameUI.openBuild) {
+      window.GameUI.openBuild = open;
+    }
+    if (!window.GameUI.closeBuild) {
+      window.GameUI.closeBuild = close;
+    }
+
+    LG.i('bereit (v18.4.0)');
+  }
+
+  // Escapes
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  // Expose
+  window.UIBuild = API;
+
+  // Events
+  document.addEventListener('DOMContentLoaded', mountOnce);
+  window.addEventListener('cb:assets-ready', () => { /* optional hooks */ });
+  window.addEventListener('cb:game-start', () => {
+    // bei Spielstart einmal redraw (z. B. nach Bridge-Set)
+    if (State.items?.length) render();
+  });
+
 })();
