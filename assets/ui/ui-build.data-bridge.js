@@ -1,82 +1,98 @@
+<!-- assets/ui/ui-build.data-bridge.js -->
 <script>
-/* ============================================================
- * Neue Siedler – Daten-Adapter für UIBuild
- * Datei: assets/ui/ui-build.data-bridge.js
- * Version: v1.1 (robust)
- * Aufgabe:
- *   - Items aus Registry (wenn vorhanden) beziehen
- *   - sonst Fallback JSON laden (assets/data/buildings.json)
- *   - UIBuild.setItems zuverlässig aufrufen (mit Retry-Logik)
- * ============================================================ */
+/* Neue Siedler – UI-Build Daten-Bridge
+ * Zweck: Gebäude-/Kategorien-Daten an UIBuild liefern (robust, ohne Endlosschleife)
+ * Quellen:
+ *  1) Registry (assets/core/registry.js + assets/core/build.categories.js)
+ *  2) Fallback: assets/data/buildings.json
+ */
 
-(function(){
-  const BRIDGE = "[ui-build.bridge]";
-  const CBLog = window.CBLog ?? console;
+(function () {
+  const LOG = (...a)=> (window.CBLog?.info||console.log)('[ui-build.bridge]', ...a);
 
-  // ---- Kern ----
-  async function collectItems(){
-    // 1) Registry bevorzugt
-    if (window.Registry?.list) {
-      try {
-        const list = window.Registry.list("buildings");
-        if (Array.isArray(list) && list.length){
-          CBLog?.log?.(`${BRIDGE} Items gesetzt (via Registry) (${list.length})`);
-          return normalize(list);
-        }
-      } catch (e) {
-        CBLog?.warn?.(`${BRIDGE} Registry.list('buildings') Fehler`, e);
-      }
-    }
-    // 2) Fallback JSON
+  let delivered = false;
+  let retryCount = 0;
+  const MAX_RETRY = 12;      // ~ einige Sekunden, ohne Spam
+  const RETRY_MS   = 180;    // kleiner Backoff, fühlt sich flott an
+
+  function fromRegistry() {
     try {
-      const res = await fetch("assets/data/buildings.json", {cache:"no-store"});
-      if (res.ok) {
-        const json = await res.json();
-        const items = Array.isArray(json?.items) ? json.items : json;
-        CBLog?.log?.(`${BRIDGE} Fallback JSON erkannt (items:${items?.length ?? 0})`);
-        return normalize(items||[]);
-      } catch(e){}
-    } catch (e) {
-      CBLog?.warn?.(`${BRIDGE} Fallback JSON nicht ladbar`, e);
-    }
-    return [];
+      const cats = (window.Registry?.categories) || (window.BuildCategories?.categories) || [];
+      const items = (window.Registry?.buildings) || [];
+      if (Array.isArray(cats) && cats.length && Array.isArray(items) && items.length) {
+        return { cats, items };
+      }
+    } catch { /* ignore */ }
+    return null;
   }
 
-  function normalize(arr){
-    return (arr||[]).map(it=>{
-      const id = it.id || it.key || it.slug || it.name?.toLowerCase?.().replace(/\s+/g,"") || "";
-      return {
-        id,
-        title: it.title || it.name || id,
-        category: it.category || it.cat || it.group || "misc",
-        icon: it.icon || it.image || it.preview || it.thumb
-      };
+  async function fromFallbackJSON() {
+    try {
+      const res = await fetch('assets/data/buildings.json', { cache:'no-store' });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const json = await res.json();
+      // erwartet: { categories:[...], items:[...] }
+      if (json && Array.isArray(json.categories) && Array.isArray(json.items)) {
+        return { cats: json.categories, items: json.items };
+      }
+    } catch (e) {
+      // still silent; wir versuchen später erneut
+    }
+    return null;
+  }
+
+  function deliver(cats, items) {
+    if (delivered) return true;
+    if (!window.UIBuild || typeof window.UIBuild.setItems !== 'function') {
+      LOG('UIBuild.setItems nicht verfügbar – versuche später erneut');
+      return false;
+    }
+    try {
+      window.UIBuild.setItems(items, cats);
+      LOG(`Items gesetzt (${items.length} / ${cats.length})`);
+      delivered = true;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function tryDeliverOnce() {
+    if (delivered) return;
+
+    // 1) Registry
+    const reg = fromRegistry();
+    if (reg) {
+      LOG(`Items gesetzt (via Registry) (${reg.items.length} / ${reg.cats.length})`);
+      if (deliver(reg.cats, reg.items)) return;
+    }
+
+    // 2) Fallback JSON
+    const fb = await fromFallbackJSON();
+    if (fb) {
+      (window.CBLog?.info||console.log)('[ui-build.bridge]', `Fallback JSON erkannt (cats:${fb.cats.length} / items:${fb.items.length})`);
+      if (deliver(fb.cats, fb.items)) return;
+    }
+  }
+
+  function scheduleRetry() {
+    if (delivered) return;
+    if (retryCount >= MAX_RETRY) return; // kein Spam
+    retryCount++;
+    setTimeout(() => { void tryDeliverOnce().then(() => { if (!delivered) scheduleRetry(); }); }, RETRY_MS);
+  }
+
+  // Events, bei denen Daten bereit sein können:
+  window.addEventListener('cb:assets-ready', () => { void tryDeliverOnce().then(() => { if (!delivered) scheduleRetry(); }); });
+  window.addEventListener('cb:game-start',   () => { void tryDeliverOnce().then(() => { if (!delivered) scheduleRetry(); }); });
+
+  // Fallback: nach DOM ready gleich versuchen
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    void tryDeliverOnce().then(() => { if (!delivered) scheduleRetry(); });
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      void tryDeliverOnce().then(() => { if (!delivered) scheduleRetry(); });
     });
   }
-
-  async function ensureItemsApplied(){
-    const items = await collectItems();
-    if (!items.length){
-      CBLog?.warn?.(`${BRIDGE} Keine Items gefunden – retry …`);
-      // leichter Retry – manchmal kommt Registry minimal später
-      setTimeout(ensureItemsApplied, 250);
-      return;
-    }
-    // UIBuild existiert garantiert (wird in ui-build.js sofort bereitgestellt).
-    if (window.UIBuild?.setItems) {
-      window.UIBuild.setItems(items);
-    } else {
-      // Ultra-früh – parken bis UIBuild init ist
-      window.__UIBUILD_PENDING_ITEMS__ = items;
-      CBLog?.log?.(`${BRIDGE} UIBuild noch nicht init – Items gepuffert`);
-    }
-  }
-
-  // ---- Wiring ----
-  // Sofort starten – aber auch auf Events hören, damit späte Registry greift
-  ensureItemsApplied();
-
-  window.addEventListener("cb:registry:ready", ensureItemsApplied);
-  window.addEventListener("cb:assets-ready", ensureItemsApplied);
 })();
 </script>
