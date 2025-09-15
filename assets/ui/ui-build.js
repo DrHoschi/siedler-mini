@@ -1,28 +1,33 @@
 /* =============================================================================
    Neue Siedler – UI: Build Dock
-   Version: v18.2.1
-   - Robuste Datensuche (offizielle Pfade → Auto-Discovery)
-   - Klare Logs: "bereit", "Daten gefunden: N", "Keine Gebäudedaten"
+   Version: v18.2.2
+   - Sucht Gebäudedaten:
+       1) OFFIZIELL: Registry.getCategories(), Registry.categories/.buildings,
+          EntitiesRegistry.buildings
+       2) AUTO-DISCOVERY: window.*, window.Registry.*, window.EntitiesRegistry.*
+          (flache & verschachtelte Arrays) → gruppiert nach category/cat
+   - Klare Logs: "bereit", "Daten gefunden (offiziell/auto): N"
 ============================================================================= */
 (function(){
-  const VER = "v18.2.1";
+  const VER = "v18.2.2";
   const I = (m)=> (window.CBLog?.info  || console.log)(`[ui-build] ${m}`);
   const W = (m)=> (window.CBLog?.warn  || console.warn)(`[ui-build] ${m}`);
 
   function el(t,c){ const e=document.createElement(t); if(c) e.className=c; return e; }
-  function n(b){ return { key:b?.key||b?.id||b?.name||b?.type||"unknown",
-                          name:b?.title||b?.name||b?.label||b?.key||"Unbenannt",
-                          icon:b?.icon||b?.sprite||b?.image||null,
-                          cat:b?.category||b?.cat||"default", raw:b||{} }; }
+  function norm(b){ return { key:b?.key||b?.id||b?.name||b?.type||"unknown",
+                             name:b?.title||b?.name||b?.label||b?.key||"Unbenannt",
+                             icon:b?.icon||b?.sprite||b?.image||null,
+                             cat:b?.category||b?.cat||"default", raw:b||{} }; }
   function icon(b){
     try{
-      if (window.BuildAssets?.getIcon) { const s=window.BuildAssets.getIcon(b.key); if(s) return s; }
+      if (window.BuildAssets?.getIcon){ const s=window.BuildAssets.getIcon(b.key); if(s) return s; }
       if (window.BuildAssets?.icons?.[b.key]) return window.BuildAssets.icons[b.key];
     }catch(_){}
     return b.icon || b.raw?.icon || b.raw?.sprite || b.raw?.image
          || "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
   }
 
+  /* --------------------------- OFFIZIELL ----------------------------------- */
   function fromOfficial(){
     // 1) Registry.getCategories()
     if (window.Registry?.getCategories){
@@ -31,7 +36,7 @@
         if (Array.isArray(cats) && cats.length){
           return cats.map(c=>({ id:c.id||c.key||c.name,
                                 name:c.title||c.name||String(c.id||c.key||"Kategorie"),
-                                items:(c.items||c.buildings||[]).map(n) }));
+                                items:(c.items||c.buildings||[]).map(norm) }));
         }
       }catch(e){ W(`Registry.getCategories() Fehler: ${e?.message||e}`); }
     }
@@ -40,7 +45,7 @@
       const cats = window.Registry.categories||[];
       const blds = window.Registry.buildings ||[];
       if (cats.length && blds.length){
-        const byCat={}; blds.forEach(b=>{ const nb=n(b); (byCat[nb.cat] ||= []).push(nb); });
+        const byCat={}; blds.forEach(b=>{ const nb=norm(b); (byCat[nb.cat] ||= []).push(nb); });
         return cats.map(c=>({ id:c.id||c.key||c.name,
                               name:c.title||c.name||String(c.id||c.key||"Kategorie"),
                               items: byCat[(c.id||c.key||c.name)] || [] }));
@@ -48,43 +53,77 @@
     }
     // 3) EntitiesRegistry.buildings
     if (window.EntitiesRegistry?.buildings?.length){
-      const g={}; window.EntitiesRegistry.buildings.forEach(b=>{ const nb=n(b); (g[nb.cat] ||= []).push(nb); });
+      const g={}; window.EntitiesRegistry.buildings.forEach(b=>{ const nb=norm(b); (g[nb.cat] ||= []).push(nb); });
       return Object.keys(g).map(k=>({ id:k, name:String(k), items:g[k] }));
     }
     return [];
   }
 
+  /* ------------------------- AUTO-DISCOVERY -------------------------------- */
+  function looksBuilding(o){
+    return o && typeof o==="object" &&
+      (("name" in o)||("title" in o)||("key" in o)) &&
+      (("category" in o)||("cat" in o));
+  }
+  function collectFromArray(arr, label, grouped){
+    let good=0;
+    for (let i=0;i<Math.min(10,arr.length);i++){ if(looksBuilding(arr[i])) good++; }
+    if (good>=3){
+      arr.forEach(b=>{ const nb=norm(b); (grouped[nb.cat] ||= []).push(nb); });
+      I(`auto: ${label} (Array)`);
+    }
+  }
   function autoDiscover(){
-    const g={};
-    const push=(b)=>{ const nb=n(b); (g[nb.cat] ||= []).push(nb); };
-    const looks=(o)=> o && typeof o==="object" && (("name" in o)||("title" in o)||("key" in o)) && (("category" in o)||("cat" in o));
+    const grouped = {};
+
+    // a) window.* (flach)
     for (const k in window){
       try{
         const v = window[k]; if(!v) continue;
-        if (Array.isArray(v) && v.length && v.length<200){
-          let good=0; for (let i=0;i<Math.min(10,v.length);i++){ if(looks(v[i])) good++; }
-          if (good>=3){ v.forEach(push); I(`auto: window.${k} (Array)`); }
-        }
-        if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length){
-          let good=0; for (let i=0;i<Math.min(10,v.buildings.length);i++){ if(looks(v.buildings[i])) good++; }
-          if (good>=3){ v.buildings.forEach(push); I(`auto: window.${k}.buildings`); }
-        }
+        if (Array.isArray(v) && v.length && v.length<300) collectFromArray(v, `window.${k}`, grouped);
+        if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length)
+          collectFromArray(v.buildings, `window.${k}.buildings`, grouped);
       }catch(_){}
     }
-    return Object.keys(g).map(k=>({ id:k, name:String(k), items:g[k] }));
+
+    // b) window.Registry.* (verschachtelt)
+    if (window.Registry && typeof window.Registry==="object"){
+      for (const k in window.Registry){
+        try{
+          const v = window.Registry[k]; if(!v) continue;
+          if (Array.isArray(v) && v.length && v.length<300) collectFromArray(v, `Registry.${k}`, grouped);
+          if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length)
+            collectFromArray(v.buildings, `Registry.${k}.buildings`, grouped);
+        }catch(_){}
+      }
+    }
+
+    // c) window.EntitiesRegistry.* (verschachtelt)
+    if (window.EntitiesRegistry && typeof window.EntitiesRegistry==="object"){
+      for (const k in window.EntitiesRegistry){
+        try{
+          const v = window.EntitiesRegistry[k]; if(!v) continue;
+          if (Array.isArray(v) && v.length && v.length<300) collectFromArray(v, `EntitiesRegistry.${k}`, grouped);
+          if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length)
+            collectFromArray(v.buildings, `EntitiesRegistry.${k}.buildings`, grouped);
+        }catch(_){}
+      }
+    }
+
+    return Object.keys(grouped).map(k=>({ id:k, name:String(k), items: grouped[k] }));
   }
 
-  class Dock {
+  /* ------------------------------ UI/Dock ---------------------------------- */
+  class Dock{
     constructor(root){
       this.root=root; this.root.classList.add("ui-build-dock");
-      this.body=null; this.title=null;
       this.syncMaxH(); window.addEventListener("resize",()=>this.syncMaxH());
     }
     syncMaxH(){ const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
       document.documentElement.style.setProperty("--build-dock-max-h", `${h}px`); }
     render(data){
       this.root.innerHTML="";
-      const body=el("div","ui-build-body"); this.body=body;
+      const body=el("div","ui-build-body");
 
       if (!Array.isArray(data) || !data.length){
         const empty=el("div","ui-build-empty"); empty.textContent="Keine Gebäude verfügbar";
@@ -119,40 +158,35 @@
     toggle(){ (this.root.style.display==="block")?this.close():this.open(); }
   }
 
-  (async function init(){
+  (function init(){
     let root = document.getElementById("build-dock") || document.getElementById("build-panel");
     if (!root){ root=document.createElement("div"); root.id="build-dock"; document.body.appendChild(root); W("#build-dock erzeugt."); }
-
     const dock=new Dock(root);
+
     window.UIBuild = {
       open:(f)=>dock.open(f), close:(f)=>dock.close(f), toggle:(f)=>dock.toggle(f),
-      render:(data)=>dock.render(Array.isArray(data)?data:(fromOfficial().length?fromOfficial():autoDiscover())),
-      version:VER
+      render:(data)=>{
+        if (Array.isArray(data)) return dock.render(data);
+        const off = fromOfficial();
+        if (off.length){ I(`Daten gefunden (offiziell): ${off.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(off); }
+        const auto = autoDiscover();
+        if (auto.length){ I(`Daten gefunden (auto): ${auto.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(auto); }
+        W("Keine Gebäudedaten → leerer Hinweis"); return dock.render([]);
+      },
+      version: VER
     };
 
-    // Daten laden
-    const tryOfficial = fromOfficial();
-    if (tryOfficial.length){
-      const count = tryOfficial.reduce((s,c)=>s+(c.items||[]).length,0);
-      I(`Daten gefunden (offiziell): ${count}`); dock.render(tryOfficial);
-    } else {
-      const auto = autoDiscover();
-      if (auto.length){
-        const count = auto.reduce((s,c)=>s+(c.items||[]).length,0);
-        I(`Daten gefunden (auto): ${count}`); dock.render(auto);
-      } else {
-        W("Keine Gebäudedaten → leerer Hinweis"); dock.render([]);
-      }
-    }
+    // Initiales Render
+    window.UIBuild.render();
 
-    // Re-Render bei Events
+    // Re-Render bei typischen Events
     [
       "cb:registry:ready","registry:ready","entities:ready","entities.registry:ready",
       "cb:assets:ready","assets:ready","cb:assets-ready","assets-ready",
       "cb:game-start","game:start","cb:build:refresh","build:refresh"
     ].forEach(ev=> window.addEventListener(ev, ()=>{ I(`Event '${ev}' → re-render`); window.UIBuild.render(); }));
 
-    // Hotkey
+    // Hotkey: B = Toggle
     window.addEventListener("keydown",(ev)=>{ if((ev.key||"").toLowerCase()==="b") window.UIBuild.toggle("hotkey"); });
 
     I(`bereit (${VER})`);
