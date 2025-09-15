@@ -1,23 +1,34 @@
 /* =============================================================================
    Neue Siedler – UI: Build Dock
-   Version: v18.2.2
-   - Sucht Gebäudedaten:
+   Version: v18.2.3
+   - Datenquellen:
        1) OFFIZIELL: Registry.getCategories(), Registry.categories/.buildings,
           EntitiesRegistry.buildings
-       2) AUTO-DISCOVERY: window.*, window.Registry.*, window.EntitiesRegistry.*
-          (flache & verschachtelte Arrays) → gruppiert nach category/cat
-   - Klare Logs: "bereit", "Daten gefunden (offiziell/auto): N"
+       2) DISCOVERY (rekursiv, Tiefe <= 3):
+          * Arrays von Gebäuden
+          * Objekt-Dictionaries { id: building, ... }
+          * Maps (Map<any, building>)
+          * Pfade unter window.*, window.Registry.*, window.EntitiesRegistry.*
+   - Deutliche Logs: "Daten gefunden (offiziell|auto @Pfad): N"
 ============================================================================= */
 (function(){
-  const VER = "v18.2.2";
+  const VER = "v18.2.3";
   const I = (m)=> (window.CBLog?.info  || console.log)(`[ui-build] ${m}`);
   const W = (m)=> (window.CBLog?.warn  || console.warn)(`[ui-build] ${m}`);
 
   function el(t,c){ const e=document.createElement(t); if(c) e.className=c; return e; }
-  function norm(b){ return { key:b?.key||b?.id||b?.name||b?.type||"unknown",
-                             name:b?.title||b?.name||b?.label||b?.key||"Unbenannt",
-                             icon:b?.icon||b?.sprite||b?.image||null,
-                             cat:b?.category||b?.cat||"default", raw:b||{} }; }
+  function looksBuilding(o){
+    return o && typeof o==="object" &&
+      (("name" in o)||("title" in o)||("key" in o)) &&
+      (("category" in o)||("cat" in o));
+  }
+  function norm(b){ return {
+    key:  b?.key||b?.id||b?.name||b?.type||"unknown",
+    name: b?.title||b?.name||b?.label||b?.key||"Unbenannt",
+    icon: b?.icon||b?.sprite||b?.image||null,
+    cat:  b?.category||b?.cat||"default",
+    raw:  b||{}
+  }; }
   function icon(b){
     try{
       if (window.BuildAssets?.getIcon){ const s=window.BuildAssets.getIcon(b.key); if(s) return s; }
@@ -34,9 +45,11 @@
       try{
         const cats = window.Registry.getCategories();
         if (Array.isArray(cats) && cats.length){
-          return cats.map(c=>({ id:c.id||c.key||c.name,
-                                name:c.title||c.name||String(c.id||c.key||"Kategorie"),
-                                items:(c.items||c.buildings||[]).map(norm) }));
+          return { path:"Registry.getCategories()", cats: cats.map(c=>({
+            id:c.id||c.key||c.name,
+            name:c.title||c.name||String(c.id||c.key||"Kategorie"),
+            items:(c.items||c.buildings||[]).map(norm)
+          }))};
         }
       }catch(e){ W(`Registry.getCategories() Fehler: ${e?.message||e}`); }
     }
@@ -46,71 +59,99 @@
       const blds = window.Registry.buildings ||[];
       if (cats.length && blds.length){
         const byCat={}; blds.forEach(b=>{ const nb=norm(b); (byCat[nb.cat] ||= []).push(nb); });
-        return cats.map(c=>({ id:c.id||c.key||c.name,
-                              name:c.title||c.name||String(c.id||c.key||"Kategorie"),
-                              items: byCat[(c.id||c.key||c.name)] || [] }));
+        return { path:"Registry.categories/buildings", cats: cats.map(c=>({
+          id:c.id||c.key||c.name,
+          name:c.title||c.name||String(c.id||c.key||"Kategorie"),
+          items: byCat[(c.id||c.key||c.name)] || []
+        }))};
       }
     }
     // 3) EntitiesRegistry.buildings
     if (window.EntitiesRegistry?.buildings?.length){
       const g={}; window.EntitiesRegistry.buildings.forEach(b=>{ const nb=norm(b); (g[nb.cat] ||= []).push(nb); });
-      return Object.keys(g).map(k=>({ id:k, name:String(k), items:g[k] }));
+      return { path:"EntitiesRegistry.buildings", cats: Object.keys(g).map(k=>({ id:k, name:String(k), items:g[k] })) };
     }
-    return [];
+    return null;
   }
 
-  /* ------------------------- AUTO-DISCOVERY -------------------------------- */
-  function looksBuilding(o){
-    return o && typeof o==="object" &&
-      (("name" in o)||("title" in o)||("key" in o)) &&
-      (("category" in o)||("cat" in o));
-  }
-  function collectFromArray(arr, label, grouped){
-    let good=0;
-    for (let i=0;i<Math.min(10,arr.length);i++){ if(looksBuilding(arr[i])) good++; }
-    if (good>=3){
-      arr.forEach(b=>{ const nb=norm(b); (grouped[nb.cat] ||= []).push(nb); });
-      I(`auto: ${label} (Array)`);
+  /* ------------------------- DISCOVERY (rekursiv) -------------------------- */
+  function toArrayLike(value){
+    if (Array.isArray(value)) return value;
+    if (value instanceof Map)  return Array.from(value.values());
+    if (value && typeof value==="object"){
+      // Objekt-Dictionary → Werte nehmen
+      return Object.values(value);
     }
+    return null;
   }
+
+  function discoverFrom(value, label, grouped){
+    const arr = toArrayLike(value);
+    if (!arr || !arr.length) return 0;
+    let good=0, taken=0;
+    const lim = Math.min(arr.length, 200);
+    for (let i=0;i<Math.min(12, lim); i++) if (looksBuilding(arr[i])) good++;
+    if (good>=3){
+      for (let i=0;i<lim; i++){
+        const b = arr[i];
+        if (looksBuilding(b)){ const nb=norm(b); (grouped[nb.cat] ||= []).push(nb); taken++; }
+      }
+      I(`auto @${label} – Treffer: ${taken}`);
+    }
+    return taken;
+  }
+
+  function scanObject(obj, baseLabel, grouped, depth){
+    if (!obj || typeof obj!=="object" || depth<=0) return 0;
+    let found = 0;
+
+    // Direkter Versuch auf diesem Knoten
+    found += discoverFrom(obj, baseLabel, grouped);
+    // .buildings Feld?
+    if (obj && typeof obj==="object" && obj.buildings){
+      found += discoverFrom(obj.buildings, `${baseLabel}.buildings`, grouped);
+    }
+
+    // Kinder scannen (eine Ebene breit; Schutz gegen riesige Objekte)
+    const keys = Object.keys(obj);
+    for (let i=0;i<keys.length && i<40; i++){
+      const k = keys[i];
+      try{
+        const v = obj[k];
+        if (v && typeof v==="object"){
+          found += discoverFrom(v, `${baseLabel}.${k}`, grouped);
+          found += scanObject(v, `${baseLabel}.${k}`, grouped, depth-1);
+        }
+      }catch(_){}
+    }
+    return found;
+  }
+
   function autoDiscover(){
     const grouped = {};
+    let hits = 0;
 
-    // a) window.* (flach)
+    // window.* flach
     for (const k in window){
       try{
         const v = window[k]; if(!v) continue;
-        if (Array.isArray(v) && v.length && v.length<300) collectFromArray(v, `window.${k}`, grouped);
-        if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length)
-          collectFromArray(v.buildings, `window.${k}.buildings`, grouped);
+        hits += discoverFrom(v, `window.${k}`, grouped);
+        if (v && typeof v==="object"){
+          hits += scanObject(v, `window.${k}`, grouped, 2);
+        }
       }catch(_){}
     }
 
-    // b) window.Registry.* (verschachtelt)
-    if (window.Registry && typeof window.Registry==="object"){
-      for (const k in window.Registry){
-        try{
-          const v = window.Registry[k]; if(!v) continue;
-          if (Array.isArray(v) && v.length && v.length<300) collectFromArray(v, `Registry.${k}`, grouped);
-          if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length)
-            collectFromArray(v.buildings, `Registry.${k}.buildings`, grouped);
-        }catch(_){}
-      }
-    }
+    // Registry & EntitiesRegistry vertieft (bis Tiefe 3)
+    if (window.Registry)        hits += scanObject(window.Registry,        "Registry",        grouped, 3);
+    if (window.EntitiesRegistry)hits += scanObject(window.EntitiesRegistry, "EntitiesRegistry", grouped, 3);
 
-    // c) window.EntitiesRegistry.* (verschachtelt)
-    if (window.EntitiesRegistry && typeof window.EntitiesRegistry==="object"){
-      for (const k in window.EntitiesRegistry){
-        try{
-          const v = window.EntitiesRegistry[k]; if(!v) continue;
-          if (Array.isArray(v) && v.length && v.length<300) collectFromArray(v, `EntitiesRegistry.${k}`, grouped);
-          if (typeof v==="object" && Array.isArray(v?.buildings) && v.buildings.length)
-            collectFromArray(v.buildings, `EntitiesRegistry.${k}.buildings`, grouped);
-        }catch(_){}
-      }
-    }
+    if (!hits) return null;
 
-    return Object.keys(grouped).map(k=>({ id:k, name:String(k), items: grouped[k] }));
+    return {
+      path: "auto-discovery",
+      cats: Object.keys(grouped).map(k=>({ id:k, name:String(k), items: grouped[k] }))
+    };
   }
 
   /* ------------------------------ UI/Dock ---------------------------------- */
@@ -121,7 +162,7 @@
     }
     syncMaxH(){ const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
       document.documentElement.style.setProperty("--build-dock-max-h", `${h}px`); }
-    render(data){
+    render(data, label){
       this.root.innerHTML="";
       const body=el("div","ui-build-body");
 
@@ -129,6 +170,8 @@
         const empty=el("div","ui-build-empty"); empty.textContent="Keine Gebäude verfügbar";
         body.appendChild(empty); this.root.appendChild(body); return;
       }
+
+      if (label) I(`render @${label} → ${data.reduce((s,c)=>s+(c.items||[]).length,0)} Gebäude`);
 
       data.forEach(cat=>{
         const sec=el("section","ui-build-category");
@@ -163,20 +206,21 @@
     if (!root){ root=document.createElement("div"); root.id="build-dock"; document.body.appendChild(root); W("#build-dock erzeugt."); }
     const dock=new Dock(root);
 
+    // Öffentliche API
     window.UIBuild = {
       open:(f)=>dock.open(f), close:(f)=>dock.close(f), toggle:(f)=>dock.toggle(f),
-      render:(data)=>{
-        if (Array.isArray(data)) return dock.render(data);
+      render:(data,label)=>{
+        if (Array.isArray(data)) return dock.render(data,label||"manual");
         const off = fromOfficial();
-        if (off.length){ I(`Daten gefunden (offiziell): ${off.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(off); }
+        if (off){ I(`Daten gefunden (offiziell @${off.path}): ${off.cats.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(off.cats, off.path); }
         const auto = autoDiscover();
-        if (auto.length){ I(`Daten gefunden (auto): ${auto.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(auto); }
-        W("Keine Gebäudedaten → leerer Hinweis"); return dock.render([]);
+        if (auto){ I(`Daten gefunden (auto @${auto.path}): ${auto.cats.reduce((s,c)=>s+(c.items||[]).length,0)}`); return dock.render(auto.cats, auto.path); }
+        W("Keine Gebäudedaten → leerer Hinweis"); return dock.render([], "none");
       },
       version: VER
     };
 
-    // Initiales Render
+    // Erstes Render
     window.UIBuild.render();
 
     // Re-Render bei typischen Events
@@ -186,7 +230,7 @@
       "cb:game-start","game:start","cb:build:refresh","build:refresh"
     ].forEach(ev=> window.addEventListener(ev, ()=>{ I(`Event '${ev}' → re-render`); window.UIBuild.render(); }));
 
-    // Hotkey: B = Toggle
+    // Hotkey
     window.addEventListener("keydown",(ev)=>{ if((ev.key||"").toLowerCase()==="b") window.UIBuild.toggle("hotkey"); });
 
     I(`bereit (${VER})`);
