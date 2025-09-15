@@ -1,92 +1,41 @@
 /* =============================================================================
-   Datei: assets/ui/ui-build.css
-   Version: v18.0.0
-   Ziel:
-     - Helles, freundliches Grau (wie Foto)
-     - Dock bündig unten (fixed), 1–2 Reihen sichtbar → Rest scrollt
-     - Karten hell + dezente Schatten
+   assets/ui/ui-bridge.js – v18.1.0
+   Zweck:
+     - Reicht FAB-Clicks an bestehende APIs durch.
+     - Überschreibt NICHT die Inspector-Methoden, wenn sie schon da sind.
 ============================================================================= */
 
-:root{
-  /* Dock-Farben (feintunen, falls nötig) */
-  --dock-bg: #d9dee6;       /* helles Grau wie gewünscht */
-  --dock-stroke: #c9d0db;   /* obere Linie */
-  --title: #273447;         /* Überschriften/Text */
+(function(){
+  const logI = (m)=> (window.CBLog?.info || console.log)(`[ui-bridge] ${m}`);
 
-  /* Karten */
-  --card-bg: #f7f9fc;
-  --card-bg-hover: #eef3f9;
-  --card-border: #cdd7e3;
-  --card-text: #1f2a33;
+  window.GameUI = window.GameUI || {};
 
-  /* Layout */
-  --dock-pad-x: 14px;
-  --dock-pad-y: 12px;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --build-dock-max-h: 240px; /* zeigt 1–2 Reihen; Rest scrollt */
-}
+  // Build (falls kein UIBuild vorhanden → einfacher Fallback)
+  window.GameUI.toggleBuild = function(){
+    if (window.UIBuild?.toggle) return window.UIBuild.toggle("button");
+    const root = document.getElementById("build-dock") || document.getElementById("build-panel");
+    if (!root) return;
+    const open = !root.classList.contains("is-open");
+    root.classList.toggle("is-open", open);
+    root.style.display = open ? "block":"none";
+    document.body.classList.toggle("has-build-open", open);
+    logI(`Build ${open?"open":"close"} (fallback)`);
+  };
 
-/* Dock bündig unten (fixed) */
-#build-dock.ui-build-dock,
-#build-panel.ui-build-dock{
-  position: fixed; left:0; right:0; bottom:0;
-  z-index: 40;
-  display: none;
-  background: var(--dock-bg);
-  border-top: 1px solid var(--dock-stroke);
-  box-shadow: 0 -10px 40px rgba(0,0,0,.12);
-  padding: var(--dock-pad-y) var(--dock-pad-x)
-           calc(max(var(--dock-pad-y), 8px) + var(--safe-bottom))
-           var(--dock-pad-x);
-}
-#build-dock.is-open,
-#build-panel.is-open{ display:block; }
+  // Inspector – NICHT überschreiben, wenn Compat/Core schon gesetzt hat
+  if (typeof window.GameUI.toggleInspector !== "function"){
+    window.GameUI.toggleInspector = function(){
+      if (window.UIInspector?.toggle) return window.UIInspector.toggle();
+      if (window.Inspector?.toggle)  return window.Inspector.toggle();
+      // letzter Ausweg: Event feuern – Compat greift das auf DOM-Fallback auf
+      try{ window.dispatchEvent(new CustomEvent("cb:inspector:toggle",{detail:{from:"ui-bridge"}})); }catch(_){}
+      try{ window.dispatchEvent(new CustomEvent("cb:inspector-toggle",{detail:{from:"ui-bridge"}})); }catch(_){}
+      try{ window.dispatchEvent(new CustomEvent("inspector:toggle",{detail:{from:"ui-bridge"}})); }catch(_){}
+    };
+    logI("toggleInspector bereitgestellt (bridge)");
+  } else {
+    logI("toggleInspector vorhanden (compat/core) – Bridge überschreibt NICHT");
+  }
 
-/* Body / Scrollfenster */
-.ui-build-body{
-  max-height: var(--build-dock-max-h);
-  overflow-y:auto; overflow-x:hidden;
-}
-
-/* Kategorien */
-.ui-build-category{ margin:0 0 12px; }
-.ui-build-category-title{
-  color: var(--title);
-  font-weight: 700; font-size: 18px;
-  margin: 6px 4px 10px;
-}
-
-/* Kartenraster */
-.ui-build-category-row{
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap:12px;
-}
-
-.ui-card{
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 14px;
-  padding: 12px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.30) inset,
-              0 2px 10px rgba(0,0,0,.08);
-  color: var(--card-text);
-  text-align: center;
-  transition: transform .08s ease, background-color .08s ease;
-}
-.ui-build-item{ width:100%; cursor:pointer; }
-.ui-build-item:hover{ background: var(--card-bg-hover); transform: translateY(-1px); }
-
-.ui-build-item-imgwrap{ display:grid; place-items:center; margin-bottom:8px; }
-.ui-build-item-img{
-  width:64px; height:64px; object-fit:contain; image-rendering:auto;
-  filter: drop-shadow(0 1px 0 rgba(0,0,0,.12));
-}
-.ui-build-item-label{ font-size:16px; line-height:1.2; }
-
-.ui-build-empty{ color:#5d7288; padding:12px; }
-
-@media (max-width: 480px){
-  .ui-build-category-title{ font-size:17px; }
-  .ui-build-item-img{ width:56px; height:56px; }
-}
+  document.addEventListener("DOMContentLoaded", ()=> logI("bereit (v18.1.0)"));
+})();
