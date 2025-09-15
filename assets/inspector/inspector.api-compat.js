@@ -34,3 +34,24 @@
 
   log("Shim aktiv (v1.3.2)");
 })();
+/* =============================================================================
+   inspector.api-compat.js – ergänzt API nur, wenn keine vorhanden
+============================================================================= */
+(function(){
+  const log = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
+  if (window.Inspector && typeof window.Inspector.toggle === "function"){ log("API vorhanden – kein Shim nötig"); return; }
+
+  function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){ } }
+
+  window.Inspector = {
+    open:   (src)=> emit("cb:inspector:open",  {from:src||"api"}),
+    close:  (src)=> emit("cb:inspector:close", {from:src||"api"}),
+    toggle: (src)=>{
+      ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"]
+        .forEach(e=>emit(e,{from:src||"api"}));
+    },
+    setTab: (tab)=> emit("cb:inspector:tab:change",{tab:String(tab||"logs")})
+  };
+
+  log("Shim aktiv");
+})();
