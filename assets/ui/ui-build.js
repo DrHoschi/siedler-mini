@@ -1,301 +1,187 @@
+<!-- assets/ui/ui-build.js -->
 <script>
-/* ============================================================
- * Neue Siedler – UIBuild (Baumenü)
- * Datei: assets/ui/ui-build.js
- * Version: v18.3.3 (stable)
- * Abhängigkeiten: keine harten (optional: window.Registry)
- * Public API:
- *   - window.UIBuild.ready === true sobald initialisiert
- *   - window.UIBuild.open()
- *   - window.UIBuild.close()
- *   - window.UIBuild.toggle()
- *   - window.UIBuild.setItems(items:Array<BuildItem>)
- *   - window.UIBuild.render()
- * Events, auf die reagiert wird:
- *   - cb:assets-ready, cb:registry:ready, cb:game-start
- * ============================================================ */
+/* Neue Siedler – UI Build-Menü (kompakter, stabiler Stand)
+ * API:
+ *   UIBuild.init()
+ *   UIBuild.setItems(items, categories)
+ *   UIBuild.open() / close() / toggle()
+ * DOM:
+ *   #build-dock (bereits in index.html vorhanden)
+ */
 
 (function () {
-  const LOG_PREFIX = "[ui-build]";
-  const BRIDGE_PREFIX = "[ui-build.bridge]";
-  const CBLog = window.CBLog ?? console;
+  const LOG = (...a)=> (window.CBLog?.info||console.log)('[ui-build]', ...a);
 
-  // --------- Utilities ------------------------------------------------------
-  const $ = (sel, root = document) => root.querySelector(sel);
-  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-  const on = (t, e, f) => t.addEventListener(e, f);
-
-  // naive debounce for re-render spam protection
-  const debounce = (fn, ms = 50) => {
-    let t = 0;
-    return (...args) => {
-      clearTimeout(t);
-      t = setTimeout(() => fn(...args), ms);
-    };
+  const state = {
+    root: null,
+    cats: [],
+    items: [],
+    activeCat: null,
+    isOpen: false
   };
 
-  // Fallback-Mapping für Icons, falls Item.icon fehlt
-  const FALLBACK_ICON_BY_ID = {
-    rathaus: "assets/buildings/rathaus_wood1.png",
-    depot: "assets/buildings/depot_wood.png",
-    hq: "assets/buildings/hq_wood.png",
-    wohnhaus: "assets/buildings/wohnhaus_wood1_ug0.png",
-    fischer: "assets/buildings/fischer_wood1.png",
-    farm: "assets/buildings/farm_wood.png",
-    windmuehle: "assets/buildings/windmuehle_wood.png",
-    baecker: "assets/buildings/baecker_wood.png",
-    holzfaeller: "assets/buildings/lumberjack_wood.png",
-    steinmetz: "assets/buildings/steinmetz_wood.png",
-    schmied: "assets/buildings/schmied_wood0.png",
-    wachturm: "assets/buildings/wachturm_wood.png"
-  };
-  const PLACEHOLDER_ICON = "assets/placeholder64.PNG";
+  function ensureRoot() {
+    if (state.root && document.body.contains(state.root)) return state.root;
+    state.root = document.getElementById('build-dock') || document.getElementById('build-panel');
+    if (!state.root) {
+      state.root = document.createElement('div');
+      state.root.id = 'build-dock';
+      state.root.className = 'ui-build-dock';
+      document.body.appendChild(state.root);
+    }
+    return state.root;
+  }
 
-  // Kategorie-Reihenfolge (falls im Item nichts vorgegeben ist)
-  const CATEGORY_ORDER = [
-    "Allg. / Verwaltung",
-    "Wohnen",
-    "Produktion / Nahrung",
-    "Produktion / Rohstoffe",
-    "misc"
-  ];
+  function renderEmpty(message = 'Keine Gebäudedaten → leerer Hinweis') {
+    const root = ensureRoot();
+    root.innerHTML = `
+      <div class="ui-build">
+        <div class="ui-build-head">
+          <div class="ui-build-tabs"></div>
+        </div>
+        <div class="ui-build-body">
+          <div class="ui-build-empty">${message}</div>
+        </div>
+      </div>`;
+    LOG('Keine Gebäudedaten → leerer Hinweis');
+  }
 
-  // --------- Shell / State --------------------------------------------------
+  function renderTabs() {
+    const tabsEl = state.root.querySelector('.ui-build-tabs');
+    tabsEl.innerHTML = '';
+    state.cats.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'tab' + (cat.id === state.activeCat ? ' active' : '');
+      btn.type = 'button';
+      btn.textContent = cat.title || cat.id;
+      btn.onclick = () => {
+        state.activeCat = cat.id;
+        renderGrid();
+      };
+      tabsEl.appendChild(btn);
+    });
+  }
+
+  function resolveIcon(it) {
+    // bevorzugt explizite iconPath/icon; sonst simple Heuristik
+    if (it.iconPath) return it.iconPath;
+    if (it.icon) return it.icon;
+    // häufige Muster (hq, depot, lumberjack, …)
+    const guess = `assets/buildings/${(it.id||it.name||'').toLowerCase()}.png`;
+    return guess;
+  }
+
+  function renderGrid() {
+    const bodyEl = state.root.querySelector('.ui-build-body');
+    bodyEl.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'ui-build-grid';
+
+    const list = state.activeCat
+      ? state.items.filter(i => (i.category === state.activeCat || i.cat === state.activeCat))
+      : state.items;
+
+    list.forEach(it => {
+      const card = document.createElement('button');
+      card.className = 'ui-build-card';
+      card.type = 'button';
+      card.title = it.title || it.name || it.id;
+
+      const img = document.createElement('img');
+      img.alt = it.title || it.name || it.id || '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.src = resolveIcon(it);
+
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = it.title || it.name || it.id;
+
+      card.appendChild(img);
+      card.appendChild(label);
+      card.onclick = () => {
+        LOG('select', it.id || it.name);
+        // optional: globale Bau-Action auslösen
+        window.dispatchEvent(new CustomEvent('cb:build-select', { detail: it }));
+      };
+
+      wrap.appendChild(card);
+    });
+
+    bodyEl.appendChild(wrap);
+  }
+
+  function fullRender() {
+    const root = ensureRoot();
+    root.innerHTML = `
+      <div class="ui-build">
+        <div class="ui-build-head">
+          <div class="ui-build-tabs"></div>
+        </div>
+        <div class="ui-build-body"></div>
+      </div>`;
+    renderTabs();
+    renderGrid();
+  }
+
   const UIBuild = {
-    ready: false,
-    _container: null,
-    _gridRoot: null,
-    _items: [],
-    _byCat: new Map(),
-
     init() {
-      if (this.ready) return;
-      // Container erstellen (Bottom-Dock)
-      let host = $("#build-dock");
-      if (!host) {
-        host = document.createElement("div");
-        host.id = "build-dock";
-        host.setAttribute("aria-label", "Bau-Menü");
-        Object.assign(host.style, {
-          position: "fixed",
-          left: "0",
-          right: "0",
-          bottom: "0",
-          zIndex: "40",
-          padding: "12px",
-          backdropFilter: "blur(4px)",
-          background: "rgba(18,22,28,0.85)",
-          color: "#cfe7ff",
-          maxHeight: "46vh",
-          overflow: "auto",
-          boxShadow: "0 -8px 24px rgba(0,0,0,.35)",
-          borderTop: "1px solid rgba(255,255,255,.08)",
-          display: "none"
-        });
-        document.body.appendChild(host);
-      }
-      this._container = host;
-
-      // inner
-      host.innerHTML = `
-        <div id="ui-build-header" style="display:flex;gap:8px;align-items:center;margin:0 4px 10px 4px;flex-wrap:wrap;">
-          <button id="ui-build-close" title="Schließen" style="border:none;border-radius:16px;padding:3px 10px;background:#2b3b4a;color:#cfe7ff;cursor:pointer;">×</button>
-          <div id="ui-build-tabs" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
-        </div>
-        <div id="ui-build-grid" style="display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));"></div>
-        <div id="ui-build-empty" style="display:none;padding:16px;border-radius:12px;background:#1e2732;color:#9db4c6;margin:8px;">
-          Keine Einträge in dieser Kategorie
-        </div>
-      `;
-
-      this._gridRoot = $("#ui-build-grid", host);
-
-      on($("#ui-build-close", host), "click", () => this.close());
-      this._wireButtons();
-      this.ready = true;
-      CBLog?.log?.(`${LOG_PREFIX} bereit (v18.3.3)`);
-
-      // Falls das Bridge-Skript schon Items gesammelt hat:
-      if (window.__UIBUILD_PENDING_ITEMS__) {
-        this.setItems(window.__UIBUILD_PENDING_ITEMS__, {silent: true});
-        delete window.__UIBUILD_PENDING_ITEMS__;
-        this.render();
-      }
+      ensureRoot();
+      renderEmpty('Lade Baumenü …');
+      LOG('bereit (v18.3.2)');
     },
-
-    _wireButtons() {
-      // globaler FAB (Ziegel) kann #build-open heißen – falls vorhanden, anbinden
-      const openBtn = document.getElementById("btn-open-build") || document.querySelector('[data-action="open-build"]');
-      if (openBtn) on(openBtn, "click", () => this.toggle());
-    },
-
-    open() {
-      this._container.style.display = "block";
-      this.render(); // idempotent
-      CBLog?.log?.(`${LOG_PREFIX} open`);
-    },
-
-    close() {
-      this._container.style.display = "none";
-      CBLog?.log?.(`${LOG_PREFIX} close`);
-    },
-
-    toggle() {
-      const vis = this._container.style.display !== "none";
-      vis ? this.close() : this.open();
-    },
-
-    setItems(items, opts = {}) {
-      // Vollständig übernehmen – wir erwarten objs: {id, title|name, category, icon}
-      this._items = Array.isArray(items) ? items.slice() : [];
-      // Gruppieren
-      this._byCat = new Map();
-      for (const it of this._items) {
-        const cat = normalizeCategory(it.category);
-        if (!this._byCat.has(cat)) this._byCat.set(cat, []);
-        this._byCat.get(cat).push(it);
-      }
-      if (!opts.silent) CBLog?.log?.(`${LOG_PREFIX} Items gesetzt (${this._items.length} Karten / ${this._byCat.size} Kategorien)`);
-      // Tabs neu bauen + Grid rendern
-      buildTabs.call(this);
-      this.render();
-    },
-
-    render: debounce(function () {
-      if (!this.ready) return;
-      const activeCat = getActiveCat(this._byCat);
-      const list = this._byCat.get(activeCat) || [];
-
-      // Tabs (aktiv markieren)
-      $$("#ui-build-tabs button", this._container).forEach(b=>{
-        b.classList.toggle("active", b.dataset.cat === activeCat);
-        if (b.classList.contains("active")) {
-          b.style.background = "#0b6aa4";
-        } else {
-          b.style.background = "#2b3b4a";
-        }
-      });
-
-      // Grid
-      this._gridRoot.innerHTML = "";
-      if (!list.length) {
-        $("#ui-build-empty", this._container).style.display = "block";
+    setItems(items, categories) {
+      ensureRoot();
+      if (!Array.isArray(items) || !items.length || !Array.isArray(categories) || !categories.length) {
+        renderEmpty();
         return;
       }
-      $("#ui-build-empty", this._container).style.display = "none";
-
-      for (const it of list) {
-        const title = it.title || it.name || it.id || "Item";
-        const icon = pickIcon(it);
-        const card = document.createElement("button");
-        card.type = "button";
-        Object.assign(card.style, {
-          display:"flex",
-          flexDirection:"column",
-          alignItems:"center",
-          gap:"8px",
-          padding:"10px",
-          borderRadius:"14px",
-          background:"#1e2732",
-          border:"1px solid rgba(255,255,255,.07)",
-          cursor:"pointer"
-        });
-        card.innerHTML = `
-          <div style="width:100%;aspect-ratio:1/1;border-radius:10px;background:#11181f;display:flex;align-items:center;justify-content:center;overflow:hidden;">
-            <img alt="" src="${icon}" style="max-width:100%;max-height:100%;display:block" onerror="this.src='${PLACEHOLDER_ICON}'">
-          </div>
-          <div style="font-size:14px;color:#cfe7ff">${escapeHtml(title)}</div>
-        `;
-        // Optional: Event zum Bauen dispatchen
-        card.addEventListener("click", () => {
-          const ev = new CustomEvent("cb:build:select", {detail: {id: it.id, item: it}});
-          window.dispatchEvent(ev);
-          CBLog?.log?.(`${LOG_PREFIX} select ${it.id}`);
-        });
-        this._gridRoot.appendChild(card);
-      }
-    }, 10)
+      state.items = items;
+      state.cats  = categories;
+      if (!state.activeCat && state.cats.length) state.activeCat = state.cats[0].id || state.cats[0].name;
+      fullRender();
+      LOG(`Items gesetzt (${items.length} Karten / ${categories.length} Kategorien)`);
+    },
+    open() {
+      ensureRoot();
+      state.root.classList.add('open');
+      document.body.classList.add('has-build-open');
+      state.isOpen = true;
+      LOG('open');
+      window.dispatchEvent(new Event('cb:build-open'));
+      window.dispatchEvent(new Event('cb:build:open'));
+    },
+    close() {
+      ensureRoot();
+      state.root.classList.remove('open');
+      document.body.classList.remove('has-build-open');
+      state.isOpen = false;
+      LOG('close');
+      window.dispatchEvent(new Event('cb:build-close'));
+      window.dispatchEvent(new Event('cb:build:close'));
+    },
+    toggle() { (state.isOpen ? this.close() : this.open()); }
   };
 
-  function escapeHtml(s=""){return s.replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));}
-  function normalizeCategory(c){
-    if(!c) return "misc";
-    const s = String(c).toLowerCase();
-    if (s.includes("verwaltung")) return "Allg. / Verwaltung";
-    if (s.includes("nahrung") || s.includes("produktion / nahrung")) return "Produktion / Nahrung";
-    if (s.includes("rohstoff") || s.includes("produktion / rohstoffe")) return "Produktion / Rohstoffe";
-    if (s.includes("wohnen")) return "Wohnen";
-    return c;
-  }
-  function pickIcon(it){
-    if (it.icon && typeof it.icon === "string") return it.icon;
-    if (it.image && typeof it.image === "string") return it.image;
-    const id = (it.id || "").toLowerCase();
-    if (FALLBACK_ICON_BY_ID[id]) return FALLBACK_ICON_BY_ID[id];
-    // Versuch, etwas Sinnvolles zu raten
-    if (id) {
-      // häufiges Muster: <id>_wood.png
-      return `assets/buildings/${id}_wood.png`;
-    }
-    return PLACEHOLDER_ICON;
-  }
-  function buildTabs(){
-    const tabsHost = $("#ui-build-tabs", this._container);
-    tabsHost.innerHTML = "";
-    const cats = Array.from(this._byCat.keys());
-    // definierte Reihenfolge bevorzugen
-    const ordered = CATEGORY_ORDER.filter(c=>cats.includes(c))
-      .concat(cats.filter(c=>!CATEGORY_ORDER.includes(c)));
-    ordered.forEach(cat=>{
-      const b = document.createElement("button");
-      b.type = "button";
-      b.dataset.cat = cat;
-      Object.assign(b.style, {
-        border:"none",borderRadius:"14px",padding:"6px 10px",
-        background:"#2b3b4a",color:"#cfe7ff",cursor:"pointer"
-      });
-      b.textContent = cat;
-      b.addEventListener("click", ()=> {
-        localStorage.setItem("ui-build-active-cat", cat);
-        this.render();
-      });
-      tabsHost.appendChild(b);
-    });
-    if (!localStorage.getItem("ui-build-active-cat") && ordered.length){
-      localStorage.setItem("ui-build-active-cat", ordered[0]);
-    }
-  }
-  function getActiveCat(map){
-    const saved = localStorage.getItem("ui-build-active-cat");
-    if (saved && map.has(saved)) return saved;
-    const first = Array.from(map.keys())[0] || "misc";
-    return first;
-  }
-
-  // --------- Bootstrap / Event-Wiring --------------------------------------
-  // Stelle die API **sofort** bereit (verhindert „setItems nicht verfügbar“)
+  // Expose
   window.UIBuild = UIBuild;
 
-  // Init, sobald DOM da ist
-  if (document.readyState === "loading") {
-    on(document, "DOMContentLoaded", ()=> UIBuild.init());
-  } else {
+  // GameUI-Fassade (für FAB)
+  window.GameUI = window.GameUI || {};
+  window.GameUI.toggleBuild = () => UIBuild.toggle();
+
+  // Auto-Init
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
     UIBuild.init();
+  } else {
+    document.addEventListener('DOMContentLoaded', () => UIBuild.init());
   }
 
-  // auf Events hören – idempotent
-  on(window, "cb:assets-ready", ()=> {
-    CBLog?.log?.(`${LOG_PREFIX} Event 'cb:assets-ready' → re-render`);
-    UIBuild.render();
-  });
-  on(window, "cb:registry:ready", ()=> {
-    // Falls das Bridge-Skript später kommt, ist das hier trotzdem safe
-    CBLog?.log?.(`${BRIDGE_PREFIX} cb:registry:ready`);
-    UIBuild.render();
-  });
-  on(window, "cb:game-start", ()=> {
-    CBLog?.log?.(`${LOG_PREFIX} Event 'cb:game-start' → re-render`);
-    UIBuild.render();
+  // Auf Game-Events reagieren: nach Spielstart evtl. Layout refreshen
+  window.addEventListener('cb:game-start', () => {
+    if (state.items.length && state.cats.length) {
+      fullRender();
+    }
   });
 })();
 </script>
