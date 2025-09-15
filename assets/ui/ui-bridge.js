@@ -1,35 +1,17 @@
 /* =============================================================================
-   ui-bridge.js  – Inspector & Build Schaltzentrale
-   - Inspector: ALT (UIInspector) + NEU (Inspector) + Events + Root-Fallback
-   - Build:     UIBuild.open/close/toggle oder Sichtbarkeit + Body-Class
+   Datei: assets/ui/ui-bridge.js
+   Zweck: Stellt die alte Inspector-Verknüpfung wieder her (ALT + NEU + Events).
+   Keine Styles, kein UI-Umbau. Nur Button→Inspector.
+   Standard: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
 ============================================================================= */
 
-/* Imports */
-// none
+/* -------------------------------- Konstanten -------------------------------- */
+const UI_BRIDGE_VER = "v18.0.1-min";
+const L = (m)=> (window.CBLog?.info || console.log)(`[ui-bridge] ${m}`);
 
-/* Konstanten */
-const UI_BRIDGE_VER = "v18.0.1";
-const _logI = (m)=> (window.CBLog?.info||console.log)(`[ui-bridge] ${m}`);
-const _logE = (m)=> (window.CBLog?.error||console.error)(`[ui-bridge] ${m}`);
-const TOGGLE_EVENTS = ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"];
-
-/* Hilfsfunktionen */
-function ensureBuildRoot(){
-  let el = document.getElementById("build-dock") || document.getElementById("build-panel");
-  if (!el){
-    el = document.createElement("div");
-    el.id = "build-dock";
-    el.className = "ui-build-dock";
-    el.setAttribute("aria-label","Bau-Menü");
-    document.body.appendChild(el);
-  } else {
-    el.classList.add("ui-build-dock");
-  }
-  return el;
-}
-function isOpen(el){ return !!el && el.classList.contains("is-open"); }
-
+/* ------------------------------- Hilfsfunktionen ---------------------------- */
 function findInspectorRoot(){
+  // Deckt die üblichen Bezeichnungen aus deinem Projekt ab (alt & neu)
   return (
     document.getElementById("inspector-root") ||
     document.getElementById("inspectorOverlay") ||
@@ -42,71 +24,57 @@ function findInspectorRoot(){
     null
   );
 }
+function fireAllToggleEvents(){
+  // Feuert ALLE bekannten Event-Namen – das war der funktionierende Stand
+  ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"].forEach(name=>{
+    try{ window.dispatchEvent(new CustomEvent(name,{detail:{from:"ui-bridge"}})); }catch(_){}
+  });
+}
 
-/* Hauptlogik */
-(function initBridge(){
+/* --------------------------------- Hauptlogik ------------------------------- */
+(function init(){
   window.GameUI = window.GameUI || {};
 
-  // Build
-  function markOpen(){ document.body.classList.add("has-build-open"); }
-  function markClose(){ document.body.classList.remove("has-build-open"); }
-
-  GameUI.toggleBuild = function(){
-    const root = ensureBuildRoot();
-
-    if (window.UIBuild && typeof window.UIBuild.open === "function"){
-      isOpen(root) ? window.UIBuild.close("toggle") : window.UIBuild.open("toggle");
-      return;
-    }
-
-    // Fallback: Sichtbarkeit + Events
-    const visible = root.style.display !== "none";
-    root.style.display = visible ? "none" : "block";
-    root.classList.toggle("is-open", !visible);
-    (!visible ? markOpen : markClose)();
-
-    const ev = !visible ? "cb:build:open" : "cb:build:close";
-    try{ window.dispatchEvent(new CustomEvent(ev,{detail:{from:"ui-bridge"}})); }catch(_){}
-    try{ window.dispatchEvent(new CustomEvent(ev.replace("cb:build:","cb:build-"),{detail:{from:"ui-bridge"}})); }catch(_){}
+  // Build: NICHTS ändern – nur weiterreichen, falls vorhanden (sonst no-op)
+  window.GameUI.toggleBuild = function(){
+    if (window.UIBuild?.toggle) return window.UIBuild.toggle("button");
+    const root = document.getElementById("build-dock") || document.getElementById("build-panel");
+    if (!root) return;
+    const open = !root.classList.contains("is-open");
+    root.classList.toggle("is-open", open);
+    root.style.display = open ? "block":"none";
+    document.body.classList.toggle("has-build-open", open);
   };
 
-  // Inspector
-  function tryAPIs(){
-    // ALT (monolithisch)
+  // Inspector: exakt wie früher – API (alt/neu) → sonst Events → sonst Root sichtbar
+  window.GameUI.toggleInspector = function(){
+    // 1) ALT (monolithisch)
     if (window.UIInspector){
-      if (typeof window.UIInspector.toggle === "function"){ window.UIInspector.toggle(); return true; }
-      const r = findInspectorRoot();
-      const vis = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display!=="none"));
-      if (vis && typeof window.UIInspector.close === "function"){ window.UIInspector.close("toggle"); return true; }
-      if (!vis && typeof window.UIInspector.open  === "function"){ window.UIInspector.open("toggle");  return true; }
+      if (typeof window.UIInspector.toggle === "function") return window.UIInspector.toggle();
+      const root = findInspectorRoot();
+      const vis  = !!root && (root.classList.contains("is-open") || (root.style.display && root.style.display!=="none"));
+      if (vis && typeof window.UIInspector.close === "function") return window.UIInspector.close("toggle");
+      if (!vis && typeof window.UIInspector.open  === "function") return window.UIInspector.open("toggle");
     }
-    // NEU (gesplittet)
+    // 2) NEU (gesplittet)
     if (window.Inspector){
-      if (typeof window.Inspector.toggle === "function"){ window.Inspector.toggle(); return true; }
-      const r = findInspectorRoot();
-      const vis = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display!=="none"));
-      if (vis && typeof window.Inspector.close === "function"){ window.Inspector.close("toggle"); return true; }
-      if (!vis && typeof window.Inspector.open  === "function"){ window.Inspector.open("toggle");  return true; }
+      if (typeof window.Inspector.toggle === "function") return window.Inspector.toggle();
+      const root = findInspectorRoot();
+      const vis  = !!root && (root.classList.contains("is-open") || (root.style.display && root.style.display!=="none"));
+      if (vis && typeof window.Inspector.close === "function") return window.Inspector.close("toggle");
+      if (!vis && typeof window.Inspector.open  === "function")  return window.Inspector.open("toggle");
     }
-    return false;
-  }
+    // 3) Events wie im alten Stand
+    fireAllToggleEvents();
 
-  GameUI.toggleInspector = function(){
-    if (tryAPIs()) return;
-
-    // Events (alt + legacy + neu)
-    TOGGLE_EVENTS.forEach(e => { try{ window.dispatchEvent(new CustomEvent(e,{detail:{from:"ui-bridge"}})); }catch(_){} });
-
-    // Letzter sanfter Fallback: Root sichtbar/unsichtbar schalten
+    // 4) letzter Fallback: vorhandenen Root sichtbar/unsichtbar schalten (keine neue UI!)
     const r = findInspectorRoot();
     if (r){
       const vis = r.classList.contains("is-open") || (r.style.display && r.style.display!=="none");
       if (vis){ r.classList.remove("is-open"); r.style.display="none"; }
-      else    { r.classList.add("is-open");   r.style.display="block"; }
-      return;
+      else    { r.style.display="block";       r.classList.add("is-open"); }
     }
-    _logE("Inspector nicht erreichbar (keine API/Listener/Root). Reihenfolge/Selektor prüfen.");
   };
 
-  document.addEventListener("DOMContentLoaded", ()=> _logI(`bereit (${UI_BRIDGE_VER})`));
+  document.addEventListener("DOMContentLoaded", ()=> L(`bereit (${UI_BRIDGE_VER})`));
 })();
