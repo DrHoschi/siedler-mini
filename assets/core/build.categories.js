@@ -1,174 +1,165 @@
 /* ============================================================================
- * build.categories.js — Kategorien + Items fürs Tabbed-Dock
- * Version: v1.1.0 (robust, registry-kompatibel, mit Platzhaltern)
+ * build.categories.js — Kategorien + Items fürs Tabbed-Dock (Registry-Ready)
+ * Version: v17.0.0-rc1
  * Projekt: Siedler-Mini
  *
- * Zweck
- *  - Strukturierte Liste der Bau-Einträge (Dock-Reihenfolge, Labels, Icons)
- *  - Kompatibel zu bestehender ui-build.data-bridge.js + ui-build.js
+ * ZWECK
+ *  - Stellt window.BUILD_CATEGORIES bereit (kompatibel zu bestehender ui-build.js)
+ *  - Holt Daten primär aus der Registry (Registry-Patch), sonst statischer Fallback
+ *  - Dispatcht 'cb:build-categories-ready' mit { detail: { categories } }
  *
- * Globale API
+ * API (global)
  *   window.BUILD_CATEGORIES : Array<Category>
- *   Category = { id, title, items: Array<Item> }
- *   Item = { id, label, icon, kind?, disabled?, todo? }
+ *   Category = { id, title, order?, items: Array<Item> }
+ *   Item = { id, label, icon, kind?, order?, todo? }
  *
- * Events (dispatch)
+ * EVENTS (dispatch)
  *   'cb:build-categories-ready' { detail: { categories } }
+ *
+ * HINWEIS
+ *  - KEIN ES-Module (global/IIFE), damit bestehende Einbindung erhalten bleibt.
+ *  - Debug/Inspector bleibt unberührt (nur Logs; keine Features entfernt).
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
   var MOD = '[build.categories]';
 
-  // Logging (failsafe)
-  function log(m){ try{ (window.CBLog?.ok || console.log)(m); } catch(_) { console.log(m); } }
-  function warn(m){ try{ (window.CBLog?.warn || console.warn)(m); } catch(_) { console.warn(m); } }
+  // ---------------------------------------------------------------------------
+  // KONSTANTEN
+  // ---------------------------------------------------------------------------
+  var EVT_READY = 'cb:build-categories-ready';
 
-  // --- Asset-Resolver -------------------------------------------------------
-  // Primär: BUILD_ASSETS.building.<id>
-  // Fallback: statischer Pfad in assets/buildings/<id>_wood*.png
-  // Extra: Terrain/Platzhalter für Deko/Infrastruktur
-  var ASSETS = (window.BUILD_ASSETS || { building:{}, ui:{} });
+  // ---------------------------------------------------------------------------
+  // HILFSFUNKTIONEN
+  // ---------------------------------------------------------------------------
+  function log(){ try { console.log.apply(console, arguments); } catch(_){} }
+  function warn(){ try { console.warn.apply(console, arguments); } catch(_){} }
 
-  // Bekannte Bild-Dateien (Fallback), passend zu deiner Repository-Struktur
-  var FALLBACK_BUILDING = {
-    // Verwaltung
-    hq:            'assets/buildings/hq_wood.png',
-    rathaus:       'assets/buildings/rathaus_wood1.png',
-    depot:         'assets/buildings/depot_wood.png',
-    wohnhaus:      'assets/buildings/wohnhaus_wood1_ug0.png',
-
-    // Nahrung
-    fischer:       'assets/buildings/fischer_wood1.png',
-    farm:          'assets/buildings/farm_wood.png',
-    windmuehle:    'assets/buildings/windmuehle_wood.png',
-    baecker:       'assets/buildings/baecker_wood.png',
-
-    // Rohstoffe / Produktion
-    holzfaeller:   'assets/buildings/lumberjack_wood.png',
-    steinmetz:     'assets/buildings/steinmetz_wood.png',
-    schmied:       'assets/buildings/schmied_wood0.png',
-
-    // Militär (Platzhalter)
-    wachturm:      'assets/buildings/wachturm_wood.png'
-  };
-
-  // Kleine Terrain-Platzhalter (für Deko/Infrastruktur)
-  var FALLBACK_TERRAIN = {
-    grass:  'assets/tex/terrain/sm_topdown_grass0.jpeg',
-    meadow: 'assets/tex/terrain/sm_topdown_meadow0_ug0.jpeg',
-    dirt:   'assets/tex/terrain/sm_topdown_dirt0.jpeg',
-    rock:   'assets/tex/terrain/sm_topdown_rock0_ug0.jpeg',
-    shore:  'assets/tex/terrain/sm_topdown_shore.PNG',
-    water:  'assets/tex/terrain/sm_topdown_water0_ug0.jpeg'
-  };
-
-  // Liefert Icon-URL für ein Gebäude-ID
-  function iconFor(id, fallbackKey){
-    // 1) per BUILD_ASSETS
-    var fromMap = ASSETS.building && (ASSETS.building[id] || ASSETS.building[id.toLowerCase()]);
-    if (fromMap) return fromMap;
-
-    // 2) fixer Fallback je ID
-    if (FALLBACK_BUILDING[id]) return FALLBACK_BUILDING[id];
-
-    // 3) optional Terrain-Placeholder
-    if (fallbackKey && FALLBACK_TERRAIN[fallbackKey]) return FALLBACK_TERRAIN[fallbackKey];
-
-    // 4) ultima ratio: UI-Placeholder (falls vorhanden)
-    return (ASSETS.ui && ASSETS.ui.placeholder64) || 'assets/placeholder64.PNG';
+  function hasRegistry(){
+    // Wir akzeptieren mehrere mögliche Namen aus dem Registry-Patch,
+    // damit diese Datei "vorwärts-kompatibel" bleibt.
+    return !!(window.ASSET_REGISTRY
+           || window.REGISTRY
+           || (window.Core && window.Core.Registry)
+           || window.REGISTRY_BUILDINGS);
   }
 
-  // Hilfsfunktion: baue Item
-  function B(id, label, opts){
-    opts = opts || {};
-    return {
-      id: id,
-      label: label,
-      icon: opts.icon || iconFor(id, opts.fallbackKey),
-      kind: opts.kind,             // 'overlay' | 'decor' | undefined
-      disabled: !!opts.disabled,   // true => ausgegraut
-      todo: !!opts.todo            // true => markiert als TODO
-    };
+  function deriveFromRegistry(){
+    // Erwartete Struktur (tolerant):
+    // - REGISTRY.buildings: { [id]: { id,label,ui:{icon}, kind, meta:{category,order} } }
+    // - oder ASSET_REGISTRY.buildings / REGISTRY_BUILDINGS etc.
+    var reg =
+      (window.Core && window.Core.Registry) ||
+      window.ASSET_REGISTRY ||
+      window.REGISTRY ||
+      { buildings: window.REGISTRY_BUILDINGS };
+
+    var buildings = (reg && reg.buildings) || {};
+    var catMap = Object.create(null);
+
+    Object.keys(buildings).forEach(function(id){
+      var b = buildings[id] || {};
+      var ui = b.ui || {};
+      var meta = b.meta || {};
+      var catId = (meta.category || 'misc').toLowerCase();
+      var item = {
+        id: b.id || id,
+        label: b.label || id,
+        icon: ui.icon || ui.iconPath || ('assets/ui/build/' + id + '.png'),
+        kind: b.kind || 'building',
+        order: typeof meta.order === 'number' ? meta.order : 9999
+      };
+      if(!catMap[catId]){
+        catMap[catId] = {
+          id: catId,
+          title: meta.categoryTitle || (catId.charAt(0).toUpperCase()+catId.slice(1)),
+          order: typeof (reg.categories && reg.categories[catId] && reg.categories[catId].order) === 'number'
+            ? reg.categories[catId].order : 9999,
+          items: []
+        };
+      }
+      catMap[catId].items.push(item);
+    });
+
+    // sortiere Items je Kategorie
+    Object.keys(catMap).forEach(function(k){
+      catMap[k].items.sort(function(a,b){
+        var ao = (typeof a.order==='number') ? a.order : 9999;
+        var bo = (typeof b.order==='number') ? b.order : 9999;
+        if(ao !== bo) return ao - bo;
+        return String(a.label).localeCompare(String(b.label));
+      });
+    });
+
+    // sortiere Kategorien
+    var categories = Object.keys(catMap).map(function(k){ return catMap[k]; });
+    categories.sort(function(a,b){
+      var ao = (typeof a.order==='number') ? a.order : 9999;
+      var bo = (typeof b.order==='number') ? b.order : 9999;
+      if(ao !== bo) return ao - bo;
+      return String(a.title).localeCompare(String(b.title));
+    });
+
+    return categories;
   }
 
-  // --- Kategorien in Dock-Reihenfolge --------------------------------------
-  var CATS = [
-    {
-      id: 'general',
-      title: 'Allg. / Verwaltung',
-      items: [
-        B('rathaus',  'Rathaus'),
-        B('wohnhaus', 'Wohnhaus'),
-        B('depot',    'Depot')
-        // Optional: HQ zeigen?
-        // B('hq',       'Hauptquartier')
-      ]
-    },
-    {
-      id: 'production_food',
-      title: 'Produktion / Nahrung',
-      items: [
-        B('fischer',    'Fischer'),
-        B('farm',       'Farm'),
-        B('windmuehle', 'Mühle'),
-        B('baecker',    'Bäckerei')
-      ]
-    },
-    {
-      id: 'production_raw',
-      title: 'Produktion / Rohstoffe',
-      items: [
-        B('holzfaeller', 'Holzfäller'),
-        B('steinmetz',   'Steinmetz'),
-        B('schmied',     'Schmied')
-      ]
-    },
-    {
-      id: 'housing',
-      title: 'Wohnen',
-      items: [
-        // weitere Stufen vorbereitet (IDs kompatibel zu deiner Struktur)
-        B('wohnhaus', 'Wohnhaus I'),
-        // Falls du später mehrere Varianten mappen willst:
-        // B('wohnhaus2','Wohnhaus II', { icon: 'assets/buildings/wohnhaus_wood0_ug0.png', disabled:true, todo:true })
-      ]
-    },
-    {
-      id: 'infrastructure',
-      title: 'Infrastruktur',
-      items: [
-        // Platzhalter, später durch echte Overlays ersetzen (Straßen/Wege)
-        B('road_stone', 'Straße',       { kind:'overlay', todo:true, icon: FALLBACK_TERRAIN.dirt }),
-        B('path_trail', 'Trampelpfad',  { kind:'overlay', todo:true, icon: FALLBACK_TERRAIN.meadow })
-      ]
-    },
-    {
-      id: 'decor',
-      title: 'Deko / Landschaft',
-      items: [
-        B('tree_pine',  'Baum (Nadel)', { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.meadow }),
-        B('tree_oak',   'Baum (Laub)',  { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.grass }),
-        B('rock_small', 'Felsen',       { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.rock }),
-        B('shore_tile', 'Strand',       { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.shore }),
-        B('water_tile', 'Wasser',       { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.water })
-      ]
-    },
-    {
-      id: 'military',
-      title: 'Militär',
-      items: [
-        B('wachturm', 'Wachturm', { todo:true }) // Platzhalter-Asset vorhanden
-      ]
-    }
-  ];
+  function staticFallback(){
+    // Minimaler, sinnvoller Startbestand (stabil, bis Registry greift)
+    return [
+      {
+        id: 'basis',
+        title: 'Basis',
+        order: 10,
+        items: [
+          { id:'townhall', label:'Rathaus / HQ', icon:'assets/ui/build/hq.png', kind:'building', order:10 },
+          { id:'depot',    label:'Depot',        icon:'assets/ui/build/depot.png', kind:'building', order:20 }
+        ]
+      },
+      {
+        id: 'produktion',
+        title: 'Produktion',
+        order: 20,
+        items: [
+          { id:'lumberjack',  label:'Holzfäller',   icon:'assets/ui/build/lumberjack.png', kind:'building', order:10 },
+          { id:'stonecutter', label:'Steinmetz',    icon:'assets/ui/build/stonecutter.png', kind:'building', order:20 },
+          { id:'farm',        label:'Farm',         icon:'assets/ui/build/farm.png', kind:'building', order:30 },
+          { id:'fisher',      label:'Fischerhütte', icon:'assets/ui/build/fisher.png', kind:'building', order:40 }
+        ]
+      },
+      {
+        id: 'wege',
+        title: 'Wege',
+        order: 30,
+        items: [
+          { id:'path_dirt', label:'Trampelpfad', icon:'assets/ui/build/path.png', kind:'path', order:10 }
+        ]
+      }
+    ];
+  }
 
-  // --- Export + Event -------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // HAUPTLOGIK
+  // ---------------------------------------------------------------------------
   try {
-    window.BUILD_CATEGORIES = CATS;
-    window.dispatchEvent(new CustomEvent('cb:build-categories-ready', { detail:{ categories: CATS } }));
-    log(MOD + ' bereit (v1.1.0) — ' + CATS.length + ' Kategorien');
-  } catch (e) {
-    warn(MOD + ' Export-Problem: ' + (e && e.message));
-    window.BUILD_CATEGORIES = CATS; // Fallback dennoch setzen
+    var categories = hasRegistry() ? deriveFromRegistry() : staticFallback();
+    window.BUILD_CATEGORIES = categories;
+    log(MOD, 'bereit — Kategorien:', categories);
+
+    // Event feuern (UI kann darauf reagieren)
+    var evt = new CustomEvent(EVT_READY, { detail: { categories: categories } });
+    window.dispatchEvent(evt);
+  } catch (err){
+    warn(MOD, 'Fehler beim Erstellen der Kategorien', err);
+    // versuche zumindest den Fallback bereitzustellen
+    try {
+      window.BUILD_CATEGORIES = staticFallback();
+      var evt2 = new CustomEvent(EVT_READY, { detail: { categories: window.BUILD_CATEGORIES } });
+      window.dispatchEvent(evt2);
+    } catch(_){}
   }
+
+  // ---------------------------------------------------------------------------
+  // EXPORTS (global)
+  // ---------------------------------------------------------------------------
+  // (Absichtlich leer — nur window.BUILD_CATEGORIES + Event)
 })();
