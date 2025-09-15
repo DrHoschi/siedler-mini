@@ -1,59 +1,194 @@
 {
-  "version": "1.0.0",
+  // --- Kategorien -----------------------------------------------------------
   "categories": [
+    { "id": "admin",       "title": "Allg. / Verwaltung",     "order": 10 },
+    { "id": "wohnen",      "title": "Wohnen",                  "order": 20 },
+    { "id": "nahrung",     "title": "Produktion / Nahrung",    "order": 30 },
+    { "id": "rohstoffe",   "title": "Produktion / Rohstoffe",  "order": 40 },
+
+    // NEU / bisher leer:
+    { "id": "infra",       "title": "Infrastruktur",           "order": 50 },
+    { "id": "deko",        "title": "Deko / Landschaft",       "order": 60 },
+    { "id": "militaer",    "title": "Militär",                 "order": 70 }
+  ],
+
+  // --- Items ---------------------------------------------------------------
+  // Typen:
+  //  - "type": "building"  → klassisches Gebäude (Sprite aus assets/buildings)
+  //  - "type": "tile"      → Kachel/Platzhalter (Sprite aus assets/tex / assets/tiles)
+  //  - "gridSize": [w,h]   → optionale Logik, UI ignoriert das Feld
+  "items": [
+    // Verwaltung
     {
-      "id": "verwaltung",
-      "title": "Allg. / Verwaltung",
-      "items": [
-        { "id": "rathaus",  "label": "Rathaus",  "action": "place-rathaus",
-          "sprite": "assets/buildings/rathaus_wood1.png" },
-        { "id": "depot",    "label": "Depot",    "action": "place-depot",
-          "sprite": "assets/buildings/depot_wood.png" }
-      ]
+      "id": "rathaus",
+      "title": "Rathaus",
+      "category": "admin",
+      "type": "building",
+      "sprite": "assets/buildings/rathaus_wood1.png",
+      "gridSize": [3,3]
     },
     {
-      "id": "nahrung",
-      "title": "Produktion / Nahrung",
-      "items": [
-        { "id": "fisher", "label": "Fischer", "action": "place-fisher",
-          "sprite": "assets/buildings/fischer_wood1.png" },
-        { "id": "farm",   "label": "Farm",    "action": "place-farm",
-          "sprite": "assets/buildings/farm_wood.png" },
-        { "id": "baecker","label": "Bäcker",  "action": "place-baecker",
-          "sprite": "assets/buildings/baecker_wood.png" }
-      ]
+      "id": "depot",
+      "title": "Depot",
+      "category": "admin",
+      "type": "building",
+      "sprite": "assets/buildings/depot_wood.png",
+      "gridSize": [2,2]
+    },
+
+    // Wohnen
+    {
+      "id": "wohnhaus_0",
+      "title": "Wohnhaus (klein)",
+      "category": "wohnen",
+      "type": "building",
+      "sprite": "assets/buildings/wohnhaus_wood0_ug0.png",
+      "gridSize": [2,2]
     },
     {
-      "id": "ressourcen",
-      "title": "Produktion / Rohstoffe",
-      "items": [
-        { "id": "lumberjack",  "label": "Holzfäller", "action": "place-lumberjack",
-          "sprite": "assets/buildings/lumberjack_wood.png" },
-        { "id": "stonecutter", "label": "Steinmetz",  "action": "place-stonecutter",
-          "sprite": "assets/buildings/steinmetz_wood.png" },
-        { "id": "smith",       "label": "Schmied",    "action": "place-smith",
-          "sprite": "assets/buildings/schmied_wood0.png" },
-        { "id": "windmill",    "label": "Mühle",      "action": "place-windmill",
-          "sprite": "assets/buildings/windmuehle_wood.png" }
-      ]
+      "id": "wohnhaus_1",
+      "title": "Wohnhaus",
+      "category": "wohnen",
+      "type": "building",
+      "sprite": "assets/buildings/wohnhaus_wood1_ug0.png",
+      "gridSize": [2,2]
+    },
+
+    // Nahrung
+    {
+      "id": "fischer",
+      "title": "Fischer",
+      "category": "nahrung",
+      "type": "building",
+      "sprite": "assets/buildings/fischer_wood1.png",
+      "gridSize": [2,2]
     },
     {
-      "id": "wohnen",
-      "title": "Wohnen",
-      "items": [
-        { "id": "house", "label": "Haus", "action": "place-house",
-          "sprite": "assets/buildings/wohnhaus_wood0_ug0.png" }
-      ]
+      "id": "farm",
+      "title": "Farm",
+      "category": "nahrung",
+      "type": "building",
+      "sprite": "assets/buildings/farm_wood.png",
+      "gridSize": [3,2]
     },
     {
-      "id": "militaer",
-      "title": "Militär",
-      "items": [
-        { "id": "guardtower", "label": "Wachturm", "action": "place-guardtower",
-          "sprite": "assets/buildings/wachturm_wood.png" },
-        { "id": "hq", "label": "HQ", "action": "place-hq",
-          "sprite": "assets/building/hq_wood.png" }
-      ]
+      "id": "muehle",
+      "title": "Mühle",
+      "category": "nahrung",
+      "type": "building",
+      "sprite": "assets/buildings/windmuehle_wood.png",
+      "gridSize": [2,2]
+    },
+    {
+      "id": "baecker",
+      "title": "Bäcker",
+      "category": "nahrung",
+      "type": "building",
+      "sprite": "assets/buildings/baecker_wood.png",
+      "gridSize": [2,2]
+    },
+
+    // Rohstoffe
+    {
+      "id": "holzfaeller",
+      "title": "Holzfäller",
+      "category": "rohstoffe",
+      "type": "building",
+      "sprite": "assets/buildings/lumberjack_wood.png",
+      "gridSize": [2,2]
+    },
+    {
+      "id": "steinmetz",
+      "title": "Steinmetz",
+      "category": "rohstoffe",
+      "type": "building",
+      "sprite": "assets/buildings/steinmetz_wood.png",
+      "gridSize": [2,2]
+    },
+    {
+      "id": "schmied",
+      "title": "Schmied",
+      "category": "rohstoffe",
+      "type": "building",
+      "sprite": "assets/buildings/schmied_wood0.png",
+      "gridSize": [2,2]
+    },
+
+    // --- NEU: Infrastruktur -------------------------------------------------
+    {
+      "id": "road_straight",
+      "title": "Straße (gerade)",
+      "category": "infra",
+      "type": "tile",
+      "sprite": "assets/tex/road/topdown_road_straight.png"
+    },
+    {
+      "id": "road_corner",
+      "title": "Straße (Ecke)",
+      "category": "infra",
+      "type": "tile",
+      "sprite": "assets/tex/road/topdown_road_corner.png"
+    },
+    {
+      "id": "road_t",
+      "title": "Straße (T)",
+      "category": "infra",
+      "type": "tile",
+      "sprite": "assets/tex/road/topdown_road_t.png"
+    },
+    {
+      "id": "road_cross",
+      "title": "Straße (Kreuz)",
+      "category": "infra",
+      "type": "tile",
+      "sprite": "assets/tex/road/topdown_road_cross.png"
+    },
+
+    // --- NEU: Deko / Landschaft --------------------------------------------
+    {
+      "id": "terrain_grass",
+      "title": "Wiese",
+      "category": "deko",
+      "type": "tile",
+      "sprite": "assets/tex/terrain/sm_topdown_meadow0_ug0.jpeg"
+    },
+    {
+      "id": "terrain_dirt",
+      "title": "Erde",
+      "category": "deko",
+      "type": "tile",
+      "sprite": "assets/tex/terrain/sm_topdown_dirt0.jpeg"
+    },
+    {
+      "id": "terrain_rock",
+      "title": "Fels",
+      "category": "deko",
+      "type": "tile",
+      "sprite": "assets/tex/terrain/sm_topdown_rock0_ug0.jpeg"
+    },
+    {
+      "id": "terrain_sand",
+      "title": "Sand",
+      "category": "deko",
+      "type": "tile",
+      "sprite": "assets/tex/terrain/sm_topdown_strand_sued_ug0.jpeg"
+    },
+    {
+      "id": "terrain_water",
+      "title": "Wasser",
+      "category": "deko",
+      "type": "tile",
+      "sprite": "assets/tex/terrain/sm_topdown_water0_ug0.jpeg"
+    },
+
+    // --- NEU: Militär -------------------------------------------------------
+    {
+      "id": "wachturm",
+      "title": "Wachturm",
+      "category": "militaer",
+      "type": "building",
+      "sprite": "assets/buildings/wachturm_wood.png",
+      "gridSize": [2,2]
     }
   ]
 }
