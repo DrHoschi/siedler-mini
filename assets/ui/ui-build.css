@@ -1,41 +1,90 @@
-/* =============================================================================
-   assets/ui/ui-bridge.js – v18.1.0
-   Zweck:
-     - Reicht FAB-Clicks an bestehende APIs durch.
-     - Überschreibt NICHT die Inspector-Methoden, wenn sie schon da sind.
-============================================================================= */
+:root{
+  --build-dock-max-h: 220px;
+  --build-bg: #ECEFF3;
+  --build-card: #F7F8FA;
+  --build-card-border: #DDE3EA;
+  --build-card-shadow: 0 4px 14px rgba(0,0,0,.06);
+  --build-title: #2B3A46;
+  --build-label: #2B3A46;
+  --build-muted: #6C7A86;
+  --radius-xl: 16px;
+  --radius-lg: 12px;
+}
 
-(function(){
-  const logI = (m)=> (window.CBLog?.info || console.log)(`[ui-bridge] ${m}`);
+.ui-build-dock{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 9999;
+  display: none;
+  background: var(--build-bg);      /* NICHT transparent */
+  box-shadow: 0 -10px 30px rgba(0,0,0,.18);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  max-height: var(--build-dock-max-h);
+  overflow: hidden;
+}
 
-  window.GameUI = window.GameUI || {};
+.ui-build-body{
+  overflow-y: auto;
+  max-height: calc(var(--build-dock-max-h) - 8px);
+  padding: 12px 12px 14px;
+}
 
-  // Build (falls kein UIBuild vorhanden → einfacher Fallback)
-  window.GameUI.toggleBuild = function(){
-    if (window.UIBuild?.toggle) return window.UIBuild.toggle("button");
-    const root = document.getElementById("build-dock") || document.getElementById("build-panel");
-    if (!root) return;
-    const open = !root.classList.contains("is-open");
-    root.classList.toggle("is-open", open);
-    root.style.display = open ? "block":"none";
-    document.body.classList.toggle("has-build-open", open);
-    logI(`Build ${open?"open":"close"} (fallback)`);
-  };
+.ui-build-category{ margin: 0 0 14px 0; }
+.ui-build-category-title{
+  font: 600 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--build-title);
+  margin: 2px 6px 10px 6px;
+}
+.ui-build-category-row{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 12px;
+  padding: 0 6px;
+}
 
-  // Inspector – NICHT überschreiben, wenn Compat/Core schon gesetzt hat
-  if (typeof window.GameUI.toggleInspector !== "function"){
-    window.GameUI.toggleInspector = function(){
-      if (window.UIInspector?.toggle) return window.UIInspector.toggle();
-      if (window.Inspector?.toggle)  return window.Inspector.toggle();
-      // letzter Ausweg: Event feuern – Compat greift das auf DOM-Fallback auf
-      try{ window.dispatchEvent(new CustomEvent("cb:inspector:toggle",{detail:{from:"ui-bridge"}})); }catch(_){}
-      try{ window.dispatchEvent(new CustomEvent("cb:inspector-toggle",{detail:{from:"ui-bridge"}})); }catch(_){}
-      try{ window.dispatchEvent(new CustomEvent("inspector:toggle",{detail:{from:"ui-bridge"}})); }catch(_){}
-    };
-    logI("toggleInspector bereitgestellt (bridge)");
-  } else {
-    logI("toggleInspector vorhanden (compat/core) – Bridge überschreibt NICHT");
-  }
+.ui-card.ui-build-item{
+  border: 1px solid var(--build-card-border);
+  background: var(--build-card);
+  border-radius: var(--radius-xl);
+  padding: 10px 10px 8px;
+  box-shadow: var(--build-card-shadow);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  min-height: 122px;
+}
 
-  document.addEventListener("DOMContentLoaded", ()=> logI("bereit (v18.1.0)"));
-})();
+.ui-build-item-imgwrap{
+  width: 92px; height: 72px;
+  display: grid; place-items: center;
+  border-radius: var(--radius-lg);
+  background: #EEF2F6;
+}
+.ui-build-item-img{ max-width: 92px; max-height: 70px; width:auto; height:auto; }
+
+.ui-build-item-label{
+  font: 600 15px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--build-label);
+  text-align: center;
+}
+
+.ui-build-empty{
+  color: var(--build-muted);
+  font: 500 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  padding: 18px;
+  text-align: center;
+  background: rgba(255,255,255,.35);
+  border-radius: 12px;
+}
+
+@media (max-width: 360px){
+  .ui-build-category-row{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .ui-build-item-imgwrap{ width: 84px; height: 64px; }
+  .ui-build-item-img{ max-width: 84px; max-height: 62px; }
+  .ui-card.ui-build-item{ min-height: 114px; }
+}
+@media (min-width: 768px){
+  :root{ --build-dock-max-h: 300px; }
+  .ui-build-category-row{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .ui-build-item-imgwrap{ width: 100px; height: 78px; }
+  .ui-build-item-img{ max-width: 100px; max-height: 76px; }
+}
