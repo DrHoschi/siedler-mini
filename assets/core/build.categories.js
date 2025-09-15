@@ -1,122 +1,158 @@
 /* ============================================================================
- * assets/core/build.categories.js
- * Version: v1.1.1 (Siedler-Mini)
+ * assets/core/build.categories.js — Kategorien + Items fürs Tabbed-Dock
+ * Version: v1.1.0 (komplett, robust, kommentiert)
+ * Projekt: Neue Siedler / Siedler-Mini
  *
- * Liefert strukturierte Kategorien + Items fürs Bau-Dock.
- * Kompatibel mit ui-build.js + ui-build.data-bridge.js
- * - Export: window.BUILD_CATEGORIES
- * - Event:  'cb:build-categories-ready' { detail:{ categories } }
+ * Zweck
+ *  - Strukturierte Liste der Bau-Einträge (Dock-Reihenfolge, Labels, Icons)
+ *  - Kompatibel zur bestehenden ui-build.js + ui-build.data-bridge.js
+ *  - Enthält Platzhalter (Infra/Deko/Militär) gemäß Lastenheft
+ *
+ * Globale API
+ *   window.BUILD_CATEGORIES : Array<Category>
+ *   Category = { id, title, items: Array<Item> }
+ *   Item = { id, label, icon, kind? ("overlay"|"decor"), todo? (bool) }
+ *
+ * Events (dispatch)
+ *   'cb:build-categories-ready' { detail: { categories } }
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
-  var MOD = '[build.categories]';
+  var MOD='[build.categories]';
 
-  // --- Logging helper (kein Hard-Fail wenn CBLog fehlt)
-  function info(msg){ try{ (window.CBLog?.info||console.log)(msg);}catch(_){ console.log(msg); } }
+  // ---------- Logging-Helfer ----------
+  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
+  function info(m){ try{ (window.CBLog?.info||console.log)(m);}catch(_){ console.log(m);} }
 
-  // --- Pfad-Helper: nimmt 1:1 die Assets aus deiner Repo-Struktur
-  function B(name){ return 'assets/buildings/' + name; }
-  function T(name){ return 'assets/tex/terrain/' + name; }
-  function R(name){ return 'assets/tex/road/' + name; }
+  // ---------- Asset-Resolver ----------
+  // Verwendet deine echten Dateien (siehe filelist)
+  // Fällt auf Marker/Null zurück, wenn etwas fehlt – dann siehst du die Karte trotzdem.
+  var ASSETS = window.BUILD_ASSETS || {
+    ui: { buildMarker: 'assets/placeholder64.PNG' }, // generischer Fallback
+    building: {
+      // Verwaltung / Wohnen / Produktion (deine Pfade)
+      rathaus:      'assets/buildings/rathaus_wood1.png',
+      wohnhaus1:    'assets/buildings/wohnhaus_wood1_ug0.png',
+      wohnhaus0:    'assets/buildings/wohnhaus_wood0_ug0.png',
+      depot:        'assets/buildings/depot_wood.png',
+      hq:           'assets/buildings/hq_wood.png',
 
-  // --- Kategorien in Dock-Reihenfolge
-  //    Titel = sichtbarer Überschrifts-Text
-  //    id    = stabile technische ID
-  //    items = { id, label, icon, kind? }
+      fischer:      'assets/buildings/fischer_wood1.png',
+      farm:         'assets/buildings/farm_wood.png',
+      windmuehle:   'assets/buildings/windmuehle_wood.png',
+      baeckerei:    'assets/buildings/baecker_wood.png',
+
+      lumberjack:   'assets/buildings/lumberjack_wood.png', // Holzfäller
+      steinmetz:    'assets/buildings/steinmetz_wood.png',
+      schmied:      'assets/buildings/schmied_wood0.png',
+
+      wachturm:     'assets/buildings/wachturm_wood.png'
+    },
+    terrain: {
+      grass:  'assets/tex/terrain/topdown_meadow.PNG',
+      dirt:   'assets/tex/terrain/topdown_dirt.PNG',
+      rock:   'assets/tex/terrain/topdown_rock.PNG',
+      shore:  'assets/tex/terrain/topdown_shore.PNG',
+      water:  'assets/tex/terrain/sm_topdown_water0_ug0.jpeg'
+    },
+    road: {
+      straight: 'assets/tex/road/topdown_road_straight.png',
+      corner:   'assets/tex/road/topdown_road_corner.png',
+      cross:    'assets/tex/road/topdown_road_cross.png',
+      tee:      'assets/tex/road/topdown_road_t.png'
+    },
+    path: {
+      trail: 'assets/tex/path/topdown_path0.PNG'
+    }
+  };
+
+  function A(path, fallback){
+    try{
+      if (path) return path;
+      return fallback || (ASSETS.ui?.buildMarker) || null;
+    }catch(_){
+      return fallback || (ASSETS.ui?.buildMarker) || null;
+    }
+  }
+
+  // ---------- Kategorien (Dock-Reihenfolge) ----------
+  // Entspricht deinem Screenshot / Mockup:
+  // 1) Allg. / Verwaltung  2) Produktion / Nahrung  3) Produktion / Rohstoffe
+  // 4) Wohnen              5) Infrastruktur         6) Deko / Landschaft
+  // 7) Militär
   var CATS = [
-    // 1) Allgemein / Verwaltung
     {
       id: 'general',
       title: 'Allg. / Verwaltung',
       items: [
-        { id:'rathaus',  label:'Rathaus',   icon:B('rathaus_wood1.png') },
-        { id:'wohnhaus', label:'Wohnhaus',  icon:B('wohnhaus_wood1_ug0.png') },
-        { id:'depot',    label:'Depot',     icon:B('depot_wood.png') }
+        { id:'rathaus', label:'Rathaus',   icon: A(ASSETS.building.rathaus) },
+        { id:'wohnhaus',label:'Wohnhaus',  icon: A(ASSETS.building.wohnhaus1 || ASSETS.building.wohnhaus0) },
+        { id:'depot',   label:'Depot',     icon: A(ASSETS.building.depot) }
       ]
     },
-
-    // 2) Produktion / Nahrung
     {
       id: 'production_food',
       title: 'Produktion / Nahrung',
       items: [
-        { id:'fischer',    label:'Fischer',    icon:B('fischer_wood1.png') },
-        { id:'farm',       label:'Farm',       icon:B('farm_wood.png') },
-        { id:'muehle',     label:'Mühle',      icon:B('windmuehle_wood.png') },
-        { id:'baeckerei',  label:'Bäckerei',   icon:B('baecker_wood.png') }
+        { id:'fischer',    label:'Fischer',     icon: A(ASSETS.building.fischer) },
+        { id:'farm',       label:'Farm',        icon: A(ASSETS.building.farm) },
+        { id:'muehle',     label:'Mühle',       icon: A(ASSETS.building.windmuehle) },
+        { id:'baeckerei',  label:'Bäckerei',    icon: A(ASSETS.building.baeckerei) }
       ]
     },
-
-    // 3) Produktion / Rohstoffe
     {
       id: 'production_raw',
       title: 'Produktion / Rohstoffe',
       items: [
-        { id:'holzfaeller', label:'Holzfäller', icon:B('lumberjack_wood.png') },
-        { id:'steinmetz',   label:'Steinmetz',  icon:B('steinmetz_wood.png') },
-        { id:'schmied',     label:'Schmied',    icon:B('schmied_wood0.png') }
+        { id:'lumberjack', label:'Holzfäller',  icon: A(ASSETS.building.lumberjack) },
+        { id:'steinmetz',  label:'Steinmetz',   icon: A(ASSETS.building.steinmetz) },
+        { id:'schmied',    label:'Schmied',     icon: A(ASSETS.building.schmied) }
       ]
     },
-
-    // 4) Wohnen
     {
       id: 'housing',
       title: 'Wohnen',
       items: [
-        { id:'wohnhaus_klein', label:'Wohnhaus (klein)', icon:B('wohnhaus_wood0_ug0.png') },
-        { id:'wohnhaus',       label:'Wohnhaus',         icon:B('wohnhaus_wood1_ug0.png') }
+        { id:'haus_i',     label:'Haus I',      icon: A(ASSETS.building.wohnhaus0) },
+        { id:'haus_ii',    label:'Haus II',     icon: A(ASSETS.building.wohnhaus1) }
       ]
     },
-
-    // 5) Infrastruktur
     {
       id: 'infrastructure',
       title: 'Infrastruktur',
       items: [
-        // Roads als Overlay/Tools – Icons aus /assets/tex/road/
-        { id:'road_straight', label:'Straße (gerade)',    icon:R('topdown_road_straight.png'), kind:'overlay' },
-        { id:'road_corner',   label:'Straße (Kurve)',     icon:R('topdown_road_corner.png'),   kind:'overlay' },
-        { id:'road_t',        label:'Straße (T-Kreuzung)',icon:R('topdown_road_t.png'),        kind:'overlay' },
-        { id:'road_cross',    label:'Straße (Kreuzung)',  icon:R('topdown_road_cross.png'),    kind:'overlay' },
-
-        // Pfad/Platzhalter (kann später zu Tool werden)
-        { id:'weg',           label:'Weg/Trampelpfad',    icon:T('sm_topdown_meadow0_ug0.jpeg'), kind:'overlay' }
+        { id:'road_straight', label:'Straße (gerade)', icon: A(ASSETS.road.straight), kind:'overlay', todo:true },
+        { id:'road_corner',   label:'Straße (Ecke)',   icon: A(ASSETS.road.corner),   kind:'overlay', todo:true },
+        { id:'road_cross',    label:'Kreuzung',        icon: A(ASSETS.road.cross),    kind:'overlay', todo:true },
+        { id:'road_t',        label:'T-Kreuzung',      icon: A(ASSETS.road.tee),      kind:'overlay', todo:true },
+        { id:'path_trail',    label:'Trampelpfad',     icon: A(ASSETS.path.trail),    kind:'overlay', todo:true }
       ]
     },
-
-    // 6) Deko / Landschaft
     {
       id: 'decor',
       title: 'Deko / Landschaft',
       items: [
-        { id:'wiese',    label:'Wiese',     icon:T('topdown_meadow.PNG'),            kind:'terrain' },
-        { id:'erde',     label:'Erde',      icon:T('topdown_dirt.PNG'),              kind:'terrain' },
-        { id:'fels',     label:'Fels',      icon:T('topdown_rock.PNG'),              kind:'terrain' },
-        { id:'strand',   label:'Strand',    icon:T('topdown_shore.PNG'),             kind:'terrain' },
-        { id:'wasser',   label:'Wasser',    icon:T('sm_topdown_water0_ug0.jpeg'),    kind:'terrain' },
-        { id:'nadelwald',label:'Nadelwald', icon:T('sm_topdown_tree_needle0_ug0.PNG'),kind:'terrain' }
+        { id:'tile_grass', label:'Wiese',   icon: A(ASSETS.terrain.grass), kind:'decor', todo:true },
+        { id:'tile_dirt',  label:'Erde',    icon: A(ASSETS.terrain.dirt),  kind:'decor', todo:true },
+        { id:'tile_rock',  label:'Fels',    icon: A(ASSETS.terrain.rock),  kind:'decor', todo:true },
+        { id:'tile_shore', label:'Strand',  icon: A(ASSETS.terrain.shore), kind:'decor', todo:true },
+        { id:'tile_water', label:'Wasser',  icon: A(ASSETS.terrain.water), kind:'decor', todo:true }
       ]
     },
-
-    // 7) Militär
     {
       id: 'military',
       title: 'Militär',
       items: [
-        { id:'wachturm', label:'Wachturm', icon:B('wachturm_wood.png') }
+        { id:'wachturm', label:'Wachturm', icon: A(ASSETS.building.wachturm), todo:true }
       ]
     }
   ];
 
-  // --- global exportieren
+  // ---------- Export + Event ----------
   window.BUILD_CATEGORIES = CATS;
+  try{
+    window.dispatchEvent(new CustomEvent('cb:build-categories-ready', { detail:{ categories: CATS } }));
+  }catch(_){}
 
-  // --- Event senden (damit ui-build.data-bridge sofort Daten hat)
-  try {
-    var ev = new CustomEvent('cb:build-categories-ready', { detail:{ categories: CATS } });
-    window.dispatchEvent(ev);
-  } catch(_) { /* IE11 not needed */ }
-
-  info(MOD + ' bereit (v1.1.1) — ' + CATS.length + ' Kategorien / ' +
-       CATS.reduce((n,c)=>n+(c.items?.length||0),0) + ' Items');
+  ok(MOD+' bereit (v1.1.0) — '+CATS.length+' Kategorien, '+CATS.reduce((n,c)=>n+c.items.length,0)+' Items');
 })();
