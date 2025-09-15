@@ -1,8 +1,8 @@
-/* UIBuild Daten-Bridge v1.4 – Deep Introspect++
+/* UIBuild Daten-Bridge v1.5 – Deep Introspect + JSON-Fallback
    - Erkennt Registry/Entities/Assets in vielen Shapes & Namespaces
    - Löst ID-Listen gegen Buildings sauber auf
-   - Lauscht auf diverse Ready-Events
-   - Einmaliges, präzises Debug-Logging (kein Spam)
+   - Hört auf diverse Ready-Events
+   - Fällt zuverlässig auf assets/data/buildings.json zurück (gruppiert oder flach)
 */
 (function(){
   const LG = {
@@ -40,10 +40,9 @@
   // Safely get nested prop
   const get = (obj, path)=> path.split('.').reduce((o,k)=> (o && o[k] != null ? o[k] : null), obj);
 
-  // ---- Collect possible roots/namespaces once (broad) ----
+  // ------------ BROAD ROOT SCAN ------------
   function collectRoots(){
     const roots = [];
-
     // Klassisch
     roots.push(['Registry', window.Registry || null]);
     roots.push(['registry', window.registry || null]);
@@ -61,20 +60,24 @@
     // Assets-Layer
     roots.push(['BuildAssets', window.BuildAssets || null]);
     roots.push(['assetsBuild', window.assetsBuild || null]);
-    roots.push(['Asset', window.Asset || null]);
+    roots.push(['Asset', window.Asset || null]);   // assets/core/asset.js
     roots.push(['Assets', window.Assets || null]);
 
-    // Sonstige Container (data, catalog, map) könnten auch direkt unter window liegen
+    // Direkte Container (könnten schon gefüllt sein)
     roots.push(['Registry.data', get(window,'Registry.data')]);
     roots.push(['Registry.catalog', get(window,'Registry.catalog')]);
     roots.push(['Registry.map', get(window,'Registry.map')]);
 
+    // Legacy/Monolith mögliche globals
+    roots.push(['BUILDINGS', window.BUILDINGS || null]);
+    roots.push(['__buildItems', window.__buildItems || null]);
+
     return roots.filter(([_,val])=> !!val);
   }
 
-  // ---- Try reader for a single root object ----
+  // ------------ EIN ROOT LESEN ------------
   function readFromRoot(rootName, R){
-    // 1) Kategorien holen
+    // Kategorien finden
     let cats =
       R.getCategories?.() ||
       R.categories || R.kategorien ||
@@ -83,7 +86,7 @@
       R.map?.categories || R.map?.kategorien ||
       null;
 
-    // 2) Buildings-Quelle bestimmen (Array oder Objekt)
+    // Buildings-Quelle (Array oder Objekt)
     const buildingsArr =
       R.getBuildings?.() ||
       (Array.isArray(R.buildings) ? R.buildings : null) ||
@@ -91,6 +94,7 @@
       (Array.isArray(R.catalog?.buildings) ? R.catalog.buildings : null) ||
       (Array.isArray(R.map?.buildings) ? R.map.buildings : null) ||
       (Array.isArray(R.list?.buildings) ? R.list.buildings : null) ||
+      (Array.isArray(R.BUILDINGS) ? R.BUILDINGS : null) ||
       null;
 
     const buildingsObj =
@@ -103,8 +107,7 @@
 
     const BUILD = toMap(buildingsArr || buildingsObj);
 
-    // 3) Falls Root ein Assets-Katalog ist
-    // Asset-API (z. B. Asset.get('build.catalog'))
+    // Asset API: Asset.get('build.catalog') / get('buildings')
     try{
       if (rootName==='Asset' && typeof R.get==='function'){
         const catalog = R.get('build.catalog') || R.get('buildings') || null;
@@ -122,7 +125,7 @@
       }
     }catch(_){}
 
-    // 4) Kategorien verarbeiten (inkl. ID-Auflösung)
+    // Kategorien inkl. ID-Auflösung
     if (Array.isArray(cats) && cats.length){
       const out = [];
       for (const c of cats){
@@ -141,7 +144,7 @@
       }
     }
 
-    // 5) Nur Buildings ohne Kategorien
+    // Nur Buildings ohne Kategorien
     if (buildingsArr && buildingsArr.length){
       const items = buildingsArr.map(normItem).filter(Boolean);
       if (items.length){ LG.i(`Buildings[] @ ${rootName} → ${items.length} Karten`); return pack('Bauen', items); }
@@ -151,7 +154,7 @@
       if (items.length){ LG.i(`Buildings{…} @ ${rootName} → ${items.length} Karten`); return pack('Bauen', items); }
     }
 
-    // 6) Legacy-Varianten am Root
+    // Legacy direkt am Root
     const legacy = R.__buildItems || R.BuildAssets || R.assetsBuild || R.BUILDINGS || null;
     if (legacy){
       if (Array.isArray(legacy) && legacy[0]?.items){
@@ -167,13 +170,13 @@
     return null;
   }
 
-  // ---- Master probe (einmalig) ----
-  let _loggedOnce=false;
+  // ------------ MASTER PROBE ------------
+  let _rootsLogged=false;
   function probe(){
     const roots = collectRoots();
-    if (!_loggedOnce){
-      LG.d(`Roots gefunden: ${roots.map(r=>r[0]).join(', ') || '(keine)'}`);
-      _loggedOnce=true;
+    if (!_rootsLogged){
+      LG.d(`Roots: ${roots.map(r=>r[0]).join(', ') || '(keine)'}`);
+      _rootsLogged=true;
     }
     for (const [name,obj] of roots){
       const res = readFromRoot(name, obj);
@@ -182,7 +185,66 @@
     return null;
   }
 
-  // ---- apply ----
+  // ------------ JSON-FALLBACK (assets/data/buildings.json) ------------
+  async function tryJsonFallback(){
+    try{
+      const res = await fetch('assets/data/buildings.json', { cache:'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      // Mögliche Formen:
+      //  a) { categories:[ {title, items:[id|obj,...]} ], buildings:[...] }
+      //  b) { buildings:[ ... ] }  → eine Kategorie "Bauen"
+      //  c) [ ... ]  (direkt die Buildings-Liste)
+      let cats=null;
+
+      // Map für ID-Auflösung
+      let bList=null, bMap={};
+
+      if (Array.isArray(data)){
+        bList = data;
+      } else if (data && typeof data==='object'){
+        if (Array.isArray(data.categories)) cats = data.categories;
+        if (Array.isArray(data.buildings))  bList = data.buildings;
+        if (!bList && data.buildings && typeof data.buildings==='object') bMap = data.buildings;
+      }
+
+      if (bList) bMap = toMap(bList);
+
+      if (Array.isArray(cats) && cats.length){
+        const out = [];
+        for (const c of cats){
+          const raw = c.items || c.buildings || c.ids || [];
+          const items = [];
+          for (const ref of raw){
+            const obj = (typeof ref==='string' || typeof ref==='number') ? (bMap[ref] || null) : ref;
+            const it = normItem(obj);
+            if (it) items.push(it);
+          }
+          out.push({ category: titleOf(c), items });
+        }
+        if (out.some(x=>x.items.length)){
+          LG.i(`Fallback JSON erkannt (cats:${out.length} / items:${out.reduce((s,c)=>s+c.items.length,0)})`);
+          return out;
+        }
+      }
+
+      // nur flache Liste
+      const src = bList || (Array.isArray(data) ? data : null) || (bMap && Object.values(bMap));
+      if (src){
+        const items = (Array.isArray(src) ? src : Object.values(src)).map(normItem).filter(Boolean);
+        if (items.length){
+          LG.i(`Fallback JSON (flach) → ${items.length} Karten`);
+          return pack('Bauen', items);
+        }
+      }
+    }catch(e){
+      LG.w(`Fallback JSON fehlgeschlagen: ${e?.message||e}`);
+    }
+    return null;
+  }
+
+  // ------------ APPLY ------------
   function apply(items){
     if (!window.UIBuild || typeof window.UIBuild.setItems!=='function'){
       LG.w('UIBuild.setItems nicht verfügbar – versuche später erneut');
@@ -192,23 +254,27 @@
     LG.i(`Items gesetzt (${items.reduce((s,c)=>s+(c.items?.length||0),0)} / ${items.length})`);
   }
 
-  // ---- Orchestrierung (dezent, kein Spam) ----
-  let tries=0, maxTries=60, found=false;
-  function tryOnce(){
+  // ------------ ORCHESTRIERUNG ------------
+  let found=false, tries=0, maxTries=24; // ~6s
+  async function tryOnce(){
     if (found) return;
-    const res = probe();
-    if (res && res.some(c=>c.items.length)){
-      found=true; return apply(res);
+    const a = probe();
+    if (a && a.some(c=>c.items.length)){ found=true; return apply(a); }
+
+    if (tries===8 || tries===16){ // 2.0s, 4.0s: Fallback probieren
+      const j = await tryJsonFallback();
+      if (j && j.some(c=>c.items.length)){ found=true; return apply(j); }
     }
+
     tries++;
     if (tries<maxTries){
       setTimeout(tryOnce, 250);
     }else{
-      LG.w('Keine Items gefunden (Timeout) – prüfe Registry-Namespace/Shape');
+      LG.w('Keine Items gefunden (Timeout) – prüfe Registry/JSON');
     }
   }
 
-  // Trigger: möglichst tolerant
+  // Trigger: tolerant für dein Stack
   document.addEventListener('DOMContentLoaded', tryOnce);
   window.addEventListener('cb:assets-ready', tryOnce);
   window.addEventListener('cb:game-start',  tryOnce);
