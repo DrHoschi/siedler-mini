@@ -1,283 +1,82 @@
-/* UIBuild Daten-Bridge v1.5 – Deep Introspect + JSON-Fallback
-   - Erkennt Registry/Entities/Assets in vielen Shapes & Namespaces
-   - Löst ID-Listen gegen Buildings sauber auf
-   - Hört auf diverse Ready-Events
-   - Fällt zuverlässig auf assets/data/buildings.json zurück (gruppiert oder flach)
-*/
+<script>
+/* ============================================================
+ * Neue Siedler – Daten-Adapter für UIBuild
+ * Datei: assets/ui/ui-build.data-bridge.js
+ * Version: v1.1 (robust)
+ * Aufgabe:
+ *   - Items aus Registry (wenn vorhanden) beziehen
+ *   - sonst Fallback JSON laden (assets/data/buildings.json)
+ *   - UIBuild.setItems zuverlässig aufrufen (mit Retry-Logik)
+ * ============================================================ */
+
 (function(){
-  const LG = {
-    i:(m)=> (window.CBLog?.info||console.log)(`[ui-build.bridge] ${m}`),
-    w:(m)=> (window.CBLog?.warn||console.warn)(`[ui-build.bridge] ${m}`),
-    d:(m)=> (window.CBLog?.debug||console.debug)(`[ui-build.bridge] ${m}`),
-  };
+  const BRIDGE = "[ui-build.bridge]";
+  const CBLog = window.CBLog ?? console;
 
-  // ------------ helpers ------------
-  const titleOf = (c)=> c?.title || c?.name || c?.id || c?.key || 'Kategorie';
-
-  function normItem(b){
-    if (!b) return null;
-    const id = b.id || b.key || b.type || b.name;
-    if (!id) return null;
-    const label = b.name || b.title || id;
-    const icon =
-      b.icon || b.uiIcon || b.sprite || b.image || b.preview ||
-      (id ? `assets/buildings/${id}.png` : null);
-    return { id, label, icon, data: b.data || {} };
-  }
-  const pack = (cat, arr)=> [{ category: cat, items: (arr||[]).map(normItem).filter(Boolean) }];
-
-  // Liste → Map (id->obj)
-  const toMap = (src)=>{
-    if (!src) return {};
-    if (Array.isArray(src)){
-      const m={}; for (const x of src){ const id=x?.id||x?.key||x?.type||x?.name; if(id) m[id]=x; }
-      return m;
-    }
-    if (typeof src==='object') return src;
-    return {};
-  };
-
-  // Safely get nested prop
-  const get = (obj, path)=> path.split('.').reduce((o,k)=> (o && o[k] != null ? o[k] : null), obj);
-
-  // ------------ BROAD ROOT SCAN ------------
-  function collectRoots(){
-    const roots = [];
-    // Klassisch
-    roots.push(['Registry', window.Registry || null]);
-    roots.push(['registry', window.registry || null]);
-    roots.push(['__REGISTRY', window.__REGISTRY || null]);
-
-    // Core/Engine-Namespace
-    roots.push(['Core.registry', get(window,'Core.registry')]);
-    roots.push(['__core.Registry', get(window,'__core.Registry')]);
-    roots.push(['GameCore.registry', get(window,'GameCore.registry')]);
-
-    // Entities
-    roots.push(['EntitiesRegistry', window.EntitiesRegistry || null]);
-    roots.push(["entities.registry", window["entities.registry"] || null]);
-
-    // Assets-Layer
-    roots.push(['BuildAssets', window.BuildAssets || null]);
-    roots.push(['assetsBuild', window.assetsBuild || null]);
-    roots.push(['Asset', window.Asset || null]);   // assets/core/asset.js
-    roots.push(['Assets', window.Assets || null]);
-
-    // Direkte Container (könnten schon gefüllt sein)
-    roots.push(['Registry.data', get(window,'Registry.data')]);
-    roots.push(['Registry.catalog', get(window,'Registry.catalog')]);
-    roots.push(['Registry.map', get(window,'Registry.map')]);
-
-    // Legacy/Monolith mögliche globals
-    roots.push(['BUILDINGS', window.BUILDINGS || null]);
-    roots.push(['__buildItems', window.__buildItems || null]);
-
-    return roots.filter(([_,val])=> !!val);
-  }
-
-  // ------------ EIN ROOT LESEN ------------
-  function readFromRoot(rootName, R){
-    // Kategorien finden
-    let cats =
-      R.getCategories?.() ||
-      R.categories || R.kategorien ||
-      R.data?.categories || R.data?.kategorien ||
-      R.catalog?.categories || R.catalog?.kategorien ||
-      R.map?.categories || R.map?.kategorien ||
-      null;
-
-    // Buildings-Quelle (Array oder Objekt)
-    const buildingsArr =
-      R.getBuildings?.() ||
-      (Array.isArray(R.buildings) ? R.buildings : null) ||
-      (Array.isArray(R.data?.buildings) ? R.data.buildings : null) ||
-      (Array.isArray(R.catalog?.buildings) ? R.catalog.buildings : null) ||
-      (Array.isArray(R.map?.buildings) ? R.map.buildings : null) ||
-      (Array.isArray(R.list?.buildings) ? R.list.buildings : null) ||
-      (Array.isArray(R.BUILDINGS) ? R.BUILDINGS : null) ||
-      null;
-
-    const buildingsObj =
-      (!buildingsArr && R.buildings && typeof R.buildings==='object' && R.buildings) ||
-      (!buildingsArr && R.data?.buildings && typeof R.data.buildings==='object' && R.data.buildings) ||
-      (!buildingsArr && R.catalog?.buildings && typeof R.catalog.buildings==='object' && R.catalog.buildings) ||
-      (!buildingsArr && R.map?.buildings && typeof R.map.buildings==='object' && R.map.buildings) ||
-      (!buildingsArr && R.list?.buildings && typeof R.list.buildings==='object' && R.list.buildings) ||
-      null;
-
-    const BUILD = toMap(buildingsArr || buildingsObj);
-
-    // Asset API: Asset.get('build.catalog') / get('buildings')
-    try{
-      if (rootName==='Asset' && typeof R.get==='function'){
-        const catalog = R.get('build.catalog') || R.get('buildings') || null;
-        const bList   = R.get('buildings.list') || R.get('buildings.all') || null;
-        if (catalog?.categories || catalog?.kategorien){
-          cats = catalog.categories || catalog.kategorien;
+  // ---- Kern ----
+  async function collectItems(){
+    // 1) Registry bevorzugt
+    if (window.Registry?.list) {
+      try {
+        const list = window.Registry.list("buildings");
+        if (Array.isArray(list) && list.length){
+          CBLog?.log?.(`${BRIDGE} Items gesetzt (via Registry) (${list.length})`);
+          return normalize(list);
         }
-        if (bList || catalog?.buildings){
-          const bSrc = bList || catalog.buildings;
-          if (Array.isArray(bSrc) || typeof bSrc==='object'){
-            const M = toMap(bSrc);
-            Object.assign(BUILD, M);
-          }
-        }
-      }
-    }catch(_){}
-
-    // Kategorien inkl. ID-Auflösung
-    if (Array.isArray(cats) && cats.length){
-      const out = [];
-      for (const c of cats){
-        const raw = c.items || c.buildings || c.gebaeude || c.ids || [];
-        const items = [];
-        for (const ref of raw){
-          const obj = (typeof ref==='string' || typeof ref==='number') ? (BUILD[ref] || null) : ref;
-          const it = normItem(obj);
-          if (it) items.push(it);
-        }
-        out.push({ category: titleOf(c), items });
-      }
-      if (out.some(x=>x.items.length)){
-        LG.i(`Registry erkannt @ ${rootName} (cats:${out.length} / items:${out.reduce((s,c)=>s+c.items.length,0)})`);
-        return out;
+      } catch (e) {
+        CBLog?.warn?.(`${BRIDGE} Registry.list('buildings') Fehler`, e);
       }
     }
-
-    // Nur Buildings ohne Kategorien
-    if (buildingsArr && buildingsArr.length){
-      const items = buildingsArr.map(normItem).filter(Boolean);
-      if (items.length){ LG.i(`Buildings[] @ ${rootName} → ${items.length} Karten`); return pack('Bauen', items); }
+    // 2) Fallback JSON
+    try {
+      const res = await fetch("assets/data/buildings.json", {cache:"no-store"});
+      if (res.ok) {
+        const json = await res.json();
+        const items = Array.isArray(json?.items) ? json.items : json;
+        CBLog?.log?.(`${BRIDGE} Fallback JSON erkannt (items:${items?.length ?? 0})`);
+        return normalize(items||[]);
+      } catch(e){}
+    } catch (e) {
+      CBLog?.warn?.(`${BRIDGE} Fallback JSON nicht ladbar`, e);
     }
-    if (buildingsObj && Object.keys(buildingsObj).length){
-      const items = Object.values(buildingsObj).map(normItem).filter(Boolean);
-      if (items.length){ LG.i(`Buildings{…} @ ${rootName} → ${items.length} Karten`); return pack('Bauen', items); }
-    }
-
-    // Legacy direkt am Root
-    const legacy = R.__buildItems || R.BuildAssets || R.assetsBuild || R.BUILDINGS || null;
-    if (legacy){
-      if (Array.isArray(legacy) && legacy[0]?.items){
-        LG.i(`Legacy __buildItems (gruppiert) @ ${rootName}`);
-        return legacy;
-      }
-      if (Array.isArray(legacy)){
-        const items = legacy.map(normItem).filter(Boolean);
-        if (items.length){ LG.i(`Legacy flach @ ${rootName} → ${items.length} Karten`); return pack('Bauen', items); }
-      }
-    }
-
-    return null;
+    return [];
   }
 
-  // ------------ MASTER PROBE ------------
-  let _rootsLogged=false;
-  function probe(){
-    const roots = collectRoots();
-    if (!_rootsLogged){
-      LG.d(`Roots: ${roots.map(r=>r[0]).join(', ') || '(keine)'}`);
-      _rootsLogged=true;
-    }
-    for (const [name,obj] of roots){
-      const res = readFromRoot(name, obj);
-      if (res && res.some(c=>c.items.length)) return res;
-    }
-    return null;
+  function normalize(arr){
+    return (arr||[]).map(it=>{
+      const id = it.id || it.key || it.slug || it.name?.toLowerCase?.().replace(/\s+/g,"") || "";
+      return {
+        id,
+        title: it.title || it.name || id,
+        category: it.category || it.cat || it.group || "misc",
+        icon: it.icon || it.image || it.preview || it.thumb
+      };
+    });
   }
 
-  // ------------ JSON-FALLBACK (assets/data/buildings.json) ------------
-  async function tryJsonFallback(){
-    try{
-      const res = await fetch('assets/data/buildings.json', { cache:'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      // Mögliche Formen:
-      //  a) { categories:[ {title, items:[id|obj,...]} ], buildings:[...] }
-      //  b) { buildings:[ ... ] }  → eine Kategorie "Bauen"
-      //  c) [ ... ]  (direkt die Buildings-Liste)
-      let cats=null;
-
-      // Map für ID-Auflösung
-      let bList=null, bMap={};
-
-      if (Array.isArray(data)){
-        bList = data;
-      } else if (data && typeof data==='object'){
-        if (Array.isArray(data.categories)) cats = data.categories;
-        if (Array.isArray(data.buildings))  bList = data.buildings;
-        if (!bList && data.buildings && typeof data.buildings==='object') bMap = data.buildings;
-      }
-
-      if (bList) bMap = toMap(bList);
-
-      if (Array.isArray(cats) && cats.length){
-        const out = [];
-        for (const c of cats){
-          const raw = c.items || c.buildings || c.ids || [];
-          const items = [];
-          for (const ref of raw){
-            const obj = (typeof ref==='string' || typeof ref==='number') ? (bMap[ref] || null) : ref;
-            const it = normItem(obj);
-            if (it) items.push(it);
-          }
-          out.push({ category: titleOf(c), items });
-        }
-        if (out.some(x=>x.items.length)){
-          LG.i(`Fallback JSON erkannt (cats:${out.length} / items:${out.reduce((s,c)=>s+c.items.length,0)})`);
-          return out;
-        }
-      }
-
-      // nur flache Liste
-      const src = bList || (Array.isArray(data) ? data : null) || (bMap && Object.values(bMap));
-      if (src){
-        const items = (Array.isArray(src) ? src : Object.values(src)).map(normItem).filter(Boolean);
-        if (items.length){
-          LG.i(`Fallback JSON (flach) → ${items.length} Karten`);
-          return pack('Bauen', items);
-        }
-      }
-    }catch(e){
-      LG.w(`Fallback JSON fehlgeschlagen: ${e?.message||e}`);
+  async function ensureItemsApplied(){
+    const items = await collectItems();
+    if (!items.length){
+      CBLog?.warn?.(`${BRIDGE} Keine Items gefunden – retry …`);
+      // leichter Retry – manchmal kommt Registry minimal später
+      setTimeout(ensureItemsApplied, 250);
+      return;
     }
-    return null;
-  }
-
-  // ------------ APPLY ------------
-  function apply(items){
-    if (!window.UIBuild || typeof window.UIBuild.setItems!=='function'){
-      LG.w('UIBuild.setItems nicht verfügbar – versuche später erneut');
-      return setTimeout(()=>apply(items), 120);
-    }
-    window.UIBuild.setItems(items);
-    LG.i(`Items gesetzt (${items.reduce((s,c)=>s+(c.items?.length||0),0)} / ${items.length})`);
-  }
-
-  // ------------ ORCHESTRIERUNG ------------
-  let found=false, tries=0, maxTries=24; // ~6s
-  async function tryOnce(){
-    if (found) return;
-    const a = probe();
-    if (a && a.some(c=>c.items.length)){ found=true; return apply(a); }
-
-    if (tries===8 || tries===16){ // 2.0s, 4.0s: Fallback probieren
-      const j = await tryJsonFallback();
-      if (j && j.some(c=>c.items.length)){ found=true; return apply(j); }
-    }
-
-    tries++;
-    if (tries<maxTries){
-      setTimeout(tryOnce, 250);
-    }else{
-      LG.w('Keine Items gefunden (Timeout) – prüfe Registry/JSON');
+    // UIBuild existiert garantiert (wird in ui-build.js sofort bereitgestellt).
+    if (window.UIBuild?.setItems) {
+      window.UIBuild.setItems(items);
+    } else {
+      // Ultra-früh – parken bis UIBuild init ist
+      window.__UIBUILD_PENDING_ITEMS__ = items;
+      CBLog?.log?.(`${BRIDGE} UIBuild noch nicht init – Items gepuffert`);
     }
   }
 
-  // Trigger: tolerant für dein Stack
-  document.addEventListener('DOMContentLoaded', tryOnce);
-  window.addEventListener('cb:assets-ready', tryOnce);
-  window.addEventListener('cb:game-start',  tryOnce);
-  window.addEventListener('cb:registry-ready', tryOnce);
-  window.addEventListener('cb:core-ready', tryOnce);
+  // ---- Wiring ----
+  // Sofort starten – aber auch auf Events hören, damit späte Registry greift
+  ensureItemsApplied();
+
+  window.addEventListener("cb:registry:ready", ensureItemsApplied);
+  window.addEventListener("cb:assets-ready", ensureItemsApplied);
 })();
+</script>
