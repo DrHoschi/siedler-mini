@@ -55,3 +55,28 @@
 
   log("Shim aktiv");
 })();
+/* =============================================================================
+   Datei: assets/inspector/inspector.api-compat.js
+   Zweck: Ergänzt eine minimal-API, falls eure Module keine globale API binden.
+   Überschreibt NICHTS, wenn bereits window.Inspector.toggle vorhanden ist.
+============================================================================= */
+(function(){
+  const log = (m)=> (window.CBLog?.info || console.log)(`[inspector.compat] ${m}`);
+  if (window.Inspector && typeof window.Inspector.toggle === "function"){ log("API vorhanden – kein Shim nötig"); return; }
+
+  function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){ } }
+
+  window.Inspector = {
+    open:   (src)=> emit("cb:inspector:open",  {from:src||"api"}),
+    close:  (src)=> emit("cb:inspector:close", {from:src||"api"}),
+    toggle: (src)=> {
+      // Feuert ALLE bekannten Toggle-Events (entspricht deinem funktionierenden Stand)
+      emit("inspector:toggle",{from:src||"api"});      // alt
+      emit("cb:inspector-toggle",{from:src||"api"});   // legacy
+      emit("cb:inspector:toggle",{from:src||"api"});   // neu
+    },
+    setTab: (tab)=> emit("cb:inspector:tab:change",{tab:String(tab||"logs")})
+  };
+
+  log("Shim aktiv");
+})();
