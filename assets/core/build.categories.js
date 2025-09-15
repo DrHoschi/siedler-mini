@@ -1,12 +1,12 @@
 /* ============================================================================
  * build.categories.js — Kategorien + Items fürs Tabbed-Dock (Registry-Ready)
- * Version: v17.0.0-rc1
+ * Version: v17.0.1
  * Projekt: Siedler-Mini
  *
  * ZWECK
- *  - Stellt window.BUILD_CATEGORIES bereit (kompatibel zu bestehender ui-build.js)
- *  - Holt Daten primär aus der Registry (Registry-Patch), sonst statischer Fallback
- *  - Dispatcht 'cb:build-categories-ready' mit { detail: { categories } }
+ *  - Stellt window.BUILD_CATEGORIES bereit (kompatibel zu ui-build.js)
+ *  - Leitet primär aus Registry ab; robust mit statischem Fallback
+ *  - Reagiert auf 'registry:ready' / 'assets:ready' und leitet dann erneut ab
  *
  * API (global)
  *   window.BUILD_CATEGORIES : Array<Category>
@@ -14,45 +14,38 @@
  *   Item = { id, label, icon, kind?, order?, todo? }
  *
  * EVENTS (dispatch)
- *   'cb:build-categories-ready' { detail: { categories } }
+ *   'cb:build-categories-ready' { detail: { categories, source } }
  *
- * HINWEIS
- *  - KEIN ES-Module (global/IIFE), damit bestehende Einbindung erhalten bleibt.
- *  - Debug/Inspector bleibt unberührt (nur Logs; keine Features entfernt).
+ * LADEREIHENFOLGE (empfohlen)
+ *   asset.js → ui-build.data-bridge.js → build.categories.js → ui-build.js
  * ========================================================================== */
 (function(){
   'use strict';
   var MOD = '[build.categories]';
-
-  // ---------------------------------------------------------------------------
-  // KONSTANTEN
-  // ---------------------------------------------------------------------------
   var EVT_READY = 'cb:build-categories-ready';
 
-  // ---------------------------------------------------------------------------
-  // HILFSFUNKTIONEN
-  // ---------------------------------------------------------------------------
-  function log(){ try { console.log.apply(console, arguments); } catch(_){} }
-  function warn(){ try { console.warn.apply(console, arguments); } catch(_){} }
+  // ----------------------------- Hilfen --------------------------------------
+  function log(){ try{ console.log.apply(console, arguments); }catch(_){} }
+  function warn(){ try{ console.warn.apply(console, arguments); }catch(_){} }
+
+  function pickRegistry(){
+    return (window.Core && window.Core.Registry)
+        || window.ASSET_REGISTRY
+        || window.REGISTRY
+        || (window.REGISTRY_BUILDINGS ? { buildings: window.REGISTRY_BUILDINGS } : null);
+  }
 
   function hasRegistry(){
-    // Wir akzeptieren mehrere mögliche Namen aus dem Registry-Patch,
-    // damit diese Datei "vorwärts-kompatibel" bleibt.
-    return !!(window.ASSET_REGISTRY
-           || window.REGISTRY
-           || (window.Core && window.Core.Registry)
-           || window.REGISTRY_BUILDINGS);
+    var r = pickRegistry();
+    return !!(r && r.buildings && Object.keys(r.buildings).length);
   }
 
   function deriveFromRegistry(){
-    // Erwartete Struktur (tolerant):
-    // - REGISTRY.buildings: { [id]: { id,label,ui:{icon}, kind, meta:{category,order} } }
-    // - oder ASSET_REGISTRY.buildings / REGISTRY_BUILDINGS etc.
     var reg =
       (window.Core && window.Core.Registry) ||
       window.ASSET_REGISTRY ||
       window.REGISTRY ||
-      { buildings: window.REGISTRY_BUILDINGS };
+      (window.REGISTRY_BUILDINGS ? { buildings: window.REGISTRY_BUILDINGS } : null);
 
     var buildings = (reg && reg.buildings) || {};
     var catMap = Object.create(null);
@@ -81,7 +74,6 @@
       catMap[catId].items.push(item);
     });
 
-    // sortiere Items je Kategorie
     Object.keys(catMap).forEach(function(k){
       catMap[k].items.sort(function(a,b){
         var ao = (typeof a.order==='number') ? a.order : 9999;
@@ -91,7 +83,6 @@
       });
     });
 
-    // sortiere Kategorien
     var categories = Object.keys(catMap).map(function(k){ return catMap[k]; });
     categories.sort(function(a,b){
       var ao = (typeof a.order==='number') ? a.order : 9999;
@@ -99,12 +90,10 @@
       if(ao !== bo) return ao - bo;
       return String(a.title).localeCompare(String(b.title));
     });
-
     return categories;
   }
 
   function staticFallback(){
-    // Minimaler, sinnvoller Startbestand (stabil, bis Registry greift)
     return [
       {
         id: 'basis',
@@ -137,29 +126,40 @@
     ];
   }
 
-  // ---------------------------------------------------------------------------
-  // HAUPTLOGIK
-  // ---------------------------------------------------------------------------
-  try {
-    var categories = hasRegistry() ? deriveFromRegistry() : staticFallback();
+  function setAndDispatch(categories, source){
     window.BUILD_CATEGORIES = categories;
-    log(MOD, 'bereit — Kategorien:', categories);
-
-    // Event feuern (UI kann darauf reagieren)
-    var evt = new CustomEvent(EVT_READY, { detail: { categories: categories } });
+    log(MOD, 'bereit — Kategorien:', categories.length, 'Quelle:', source,
+        'Items gesamt:', categories.reduce((n,c)=>n+(c.items?c.items.length:0),0));
+    var evt = new CustomEvent(EVT_READY, { detail: { categories: categories, source: source } });
     window.dispatchEvent(evt);
-  } catch (err){
-    warn(MOD, 'Fehler beim Erstellen der Kategorien', err);
-    // versuche zumindest den Fallback bereitzustellen
-    try {
-      window.BUILD_CATEGORIES = staticFallback();
-      var evt2 = new CustomEvent(EVT_READY, { detail: { categories: window.BUILD_CATEGORIES } });
-      window.dispatchEvent(evt2);
-    } catch(_){}
   }
 
-  // ---------------------------------------------------------------------------
-  // EXPORTS (global)
-  // ---------------------------------------------------------------------------
-  // (Absichtlich leer — nur window.BUILD_CATEGORIES + Event)
+  // ----------------------------- Boot-Zyklus ---------------------------------
+  function deriveAndPublish(sourceTag){
+    try{
+      var cats = hasRegistry() ? deriveFromRegistry() : staticFallback();
+      if(!cats.length){
+        warn(MOD, 'Leere Kategorien erkannt → Fallback aktiv');
+        cats = staticFallback();
+      }
+      setAndDispatch(cats, sourceTag);
+    } catch(err){
+      warn(MOD, 'Fehler beim Ableiten — Fallback aktiv', err);
+      try { setAndDispatch(staticFallback(), sourceTag||'fallback-error'); } catch(_){}
+    }
+  }
+
+  // Erstes Ableiten (so früh wie möglich)
+  deriveAndPublish('initial');
+
+  // Reagieren auf Registry- oder Asset-Ready → erneut ableiten (stellt sicher, dass
+  // späte Registries oder Lazy-Loads berücksichtigt werden)
+  window.addEventListener('registry:ready', function(){
+    deriveAndPublish('registry:ready');
+  });
+  window.addEventListener('assets:ready', function(){
+    // Falls Icons/Pfade erst nach Assets-Ready stabil sind
+    deriveAndPublish('assets:ready');
+  });
+
 })();
