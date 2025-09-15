@@ -1,12 +1,12 @@
 /* ============================================================================
  * build.categories.js — Kategorien + Items fürs Tabbed-Dock (Registry-Ready)
- * Version: v17.0.1
+ * Version: v17.0.2
  * Projekt: Siedler-Mini
  *
  * ZWECK
  *  - Stellt window.BUILD_CATEGORIES bereit (kompatibel zu ui-build.js)
  *  - Leitet primär aus Registry ab; robust mit statischem Fallback
- *  - Reagiert auf 'registry:ready' / 'assets:ready' und leitet dann erneut ab
+ *  - Reagiert auf 'cb:registry:ready' / 'cb:assets-ready' / 'cb:game-start'
  *
  * API (global)
  *   window.BUILD_CATEGORIES : Array<Category>
@@ -15,16 +15,12 @@
  *
  * EVENTS (dispatch)
  *   'cb:build-categories-ready' { detail: { categories, source } }
- *
- * LADEREIHENFOLGE (empfohlen)
- *   asset.js → ui-build.data-bridge.js → build.categories.js → ui-build.js
  * ========================================================================== */
 (function(){
   'use strict';
   var MOD = '[build.categories]';
   var EVT_READY = 'cb:build-categories-ready';
 
-  // ----------------------------- Hilfen --------------------------------------
   function log(){ try{ console.log.apply(console, arguments); }catch(_){} }
   function warn(){ try{ console.warn.apply(console, arguments); }catch(_){} }
 
@@ -34,19 +30,13 @@
         || window.REGISTRY
         || (window.REGISTRY_BUILDINGS ? { buildings: window.REGISTRY_BUILDINGS } : null);
   }
-
   function hasRegistry(){
     var r = pickRegistry();
     return !!(r && r.buildings && Object.keys(r.buildings).length);
   }
 
   function deriveFromRegistry(){
-    var reg =
-      (window.Core && window.Core.Registry) ||
-      window.ASSET_REGISTRY ||
-      window.REGISTRY ||
-      (window.REGISTRY_BUILDINGS ? { buildings: window.REGISTRY_BUILDINGS } : null);
-
+    var reg = pickRegistry();
     var buildings = (reg && reg.buildings) || {};
     var catMap = Object.create(null);
 
@@ -95,34 +85,19 @@
 
   function staticFallback(){
     return [
-      {
-        id: 'basis',
-        title: 'Basis',
-        order: 10,
-        items: [
-          { id:'townhall', label:'Rathaus / HQ', icon:'assets/ui/build/hq.png', kind:'building', order:10 },
-          { id:'depot',    label:'Depot',        icon:'assets/ui/build/depot.png', kind:'building', order:20 }
-        ]
-      },
-      {
-        id: 'produktion',
-        title: 'Produktion',
-        order: 20,
-        items: [
-          { id:'lumberjack',  label:'Holzfäller',   icon:'assets/ui/build/lumberjack.png', kind:'building', order:10 },
-          { id:'stonecutter', label:'Steinmetz',    icon:'assets/ui/build/stonecutter.png', kind:'building', order:20 },
-          { id:'farm',        label:'Farm',         icon:'assets/ui/build/farm.png', kind:'building', order:30 },
-          { id:'fisher',      label:'Fischerhütte', icon:'assets/ui/build/fisher.png', kind:'building', order:40 }
-        ]
-      },
-      {
-        id: 'wege',
-        title: 'Wege',
-        order: 30,
-        items: [
-          { id:'path_dirt', label:'Trampelpfad', icon:'assets/ui/build/path.png', kind:'path', order:10 }
-        ]
-      }
+      { id:'basis', title:'Basis', order:10, items:[
+        { id:'townhall', label:'Rathaus / HQ', icon:'assets/ui/build/hq.png', kind:'building', order:10 },
+        { id:'depot',    label:'Depot',        icon:'assets/ui/build/depot.png', kind:'building', order:20 }
+      ]},
+      { id:'produktion', title:'Produktion', order:20, items:[
+        { id:'lumberjack',  label:'Holzfäller',   icon:'assets/ui/build/lumberjack.png', kind:'building', order:10 },
+        { id:'stonecutter', label:'Steinmetz',    icon:'assets/ui/build/stonecutter.png', kind:'building', order:20 },
+        { id:'farm',        label:'Farm',         icon:'assets/ui/build/farm.png', kind:'building', order:30 },
+        { id:'fisher',      label:'Fischerhütte', icon:'assets/ui/build/fisher.png', kind:'building', order:40 }
+      ]},
+      { id:'wege', title:'Wege', order:30, items:[
+        { id:'path_dirt', label:'Trampelpfad', icon:'assets/ui/build/path.png', kind:'path', order:10 }
+      ]}
     ];
   }
 
@@ -134,32 +109,22 @@
     window.dispatchEvent(evt);
   }
 
-  // ----------------------------- Boot-Zyklus ---------------------------------
   function deriveAndPublish(sourceTag){
     try{
       var cats = hasRegistry() ? deriveFromRegistry() : staticFallback();
-      if(!cats.length){
-        warn(MOD, 'Leere Kategorien erkannt → Fallback aktiv');
-        cats = staticFallback();
-      }
+      if(!cats.length){ warn(MOD, 'Leere Kategorien → Fallback'); cats = staticFallback(); }
       setAndDispatch(cats, sourceTag);
     } catch(err){
-      warn(MOD, 'Fehler beim Ableiten — Fallback aktiv', err);
+      warn(MOD, 'Ableitfehler → Fallback', err);
       try { setAndDispatch(staticFallback(), sourceTag||'fallback-error'); } catch(_){}
     }
   }
 
-  // Erstes Ableiten (so früh wie möglich)
+  // Erstes Ableiten
   deriveAndPublish('initial');
 
-  // Reagieren auf Registry- oder Asset-Ready → erneut ableiten (stellt sicher, dass
-  // späte Registries oder Lazy-Loads berücksichtigt werden)
-  window.addEventListener('registry:ready', function(){
-    deriveAndPublish('registry:ready');
-  });
-  window.addEventListener('assets:ready', function(){
-    // Falls Icons/Pfade erst nach Assets-Ready stabil sind
-    deriveAndPublish('assets:ready');
-  });
-
+  // Lastenheft-konforme Events
+  window.addEventListener('cb:registry:ready', function(){ deriveAndPublish('cb:registry:ready'); });
+  window.addEventListener('cb:assets-ready',   function(){ deriveAndPublish('cb:assets-ready');   });
+  window.addEventListener('cb:game-start',     function(){ deriveAndPublish('cb:game-start');     });
 })();
