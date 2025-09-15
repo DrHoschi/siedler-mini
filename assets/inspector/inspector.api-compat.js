@@ -1,82 +1,128 @@
-/* =============================================================================
-   Datei: assets/inspector/inspector.api-compat.js
-   Version: v1.3.2
-   Zweck:
-     - Ergänzt eine minimale Inspector-API, falls eure Module nur Events feuern.
-     - Überschreibt NICHTS, wenn bereits eine API existiert.
-============================================================================= */
+/*!
+ * Inspector API-Compat Bridge
+ * Zweck:
+ *  - Stellt sicher, dass window.GameUI.open/toggle/closeInspector immer vorhanden sind.
+ *  - Falls andere Skripte window.GameUI überschreiben, werden die Inspector-Methoden restauriert.
+ *  - Zusätzliche Fallbacks über DOM-Öffnen (id="inspector") + Events.
+ *
+ * Reihenfolge in index.html:
+ *    ... inspector.core.js
+ *    inspector.logs.js / .paths.js / .tests.js / .resources.js
+ *    → inspector.api-compat.js   <-- direkt DANACH laden
+ *
+ * Diese Bridge fasst die bestehenden Inspector-Module NICHT an.
+ */
 
-/* ---------------------------------- Imports --------------------------------- */
-// (keine)
+(function () {
+  'use strict';
+  var MOD = '[inspector.api-compat]';
 
-/* --------------------------------- Hauptlogik -------------------------------- */
-(function(){
-  const log = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
+  // --- kleine Utils ---------------------------------------------------------
+  var on = window.addEventListener.bind(window);
+  var $  = function(sel){ return document.querySelector(sel); };
 
-  if (window.Inspector && typeof window.Inspector.toggle === "function"){
-    log("API vorhanden – kein Shim nötig");
-    return;
+  function dbg(){ try{ (window.CBLog?.info || console.log).apply(console, arguments);}catch(_){} }
+  function warn(){ try{ (window.CBLog?.warn || console.warn).apply(console, arguments);}catch(_){} }
+
+  // Merker für gesicherte Inspector-Funktionen (früh nach core.js holen)
+  var BACKUP = (function snapshot(){
+    // Wenn der Inspector-Core korrekt geladen wurde, hat er diese Hooks gesetzt:
+    //   window.GameUI.toggleInspector / openInspector / closeInspector
+    var ui = (window.GameUI = window.GameUI || {});
+    var saved = {
+      open : typeof ui.openInspector  === 'function' ? ui.openInspector  : null,
+      close: typeof ui.closeInspector === 'function' ? ui.closeInspector : null,
+      tog  : typeof ui.toggleInspector=== 'function' ? ui.toggleInspector: null
+    };
+    // Zusätzlich merken wir uns, ob der Core global exportiert ist (nur Info).
+    saved.hasCore = !!(window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api);
+    return saved;
+  })();
+
+  // --- DOM-Fallback (nur falls nötig) ---------------------------------------
+  // Falls irgendein Skript GameUI überschrieben hat UND der Core noch nicht initialisiert,
+  // ermöglichen wir ein simples Open/Close über das Overlay-Element #inspector.
+  function ensureOverlayEl(){
+    var el = document.getElementById('inspector');
+    return el || null;
   }
 
-  function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){ } }
+  function domOpen(){
+    var el = ensureOverlayEl();
+    if (el) {
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden','false');
+      document.body.classList.add('inspector-open');
+      try{ window.dispatchEvent(new CustomEvent('cb:inspector-open')); }catch(_){}
+      dbg(MOD,'domOpen() – Overlay sichtbar.');
+      return true;
+    }
+    return false;
+  }
 
-  window.Inspector = {
-    open:   (src)=> emit("cb:inspector:open",  {from:src||"api"}),
-    close:  (src)=> emit("cb:inspector:close", {from:src||"api"}),
-    toggle: (src)=>{
-      // alle bekannten Toggle-Namen abfeuern (alt/legacy/neu)
-      emit("inspector:toggle",{from:src||"api"});
-      emit("cb:inspector-toggle",{from:src||"api"});
-      emit("cb:inspector:toggle",{from:src||"api"});
-    },
-    setTab: (tab)=> emit("cb:inspector:tab:change",{tab:String(tab||"logs")})
-  };
+  function domClose(){
+    var el = ensureOverlayEl();
+    if (el) {
+      el.style.display = 'none';
+      el.setAttribute('aria-hidden','true');
+      document.body.classList.remove('inspector-open');
+      try{ window.dispatchEvent(new CustomEvent('cb:inspector-close')); }catch(_){}
+      dbg(MOD,'domClose() – Overlay versteckt.');
+      return true;
+    }
+    return false;
+  }
 
-  log("Shim aktiv (v1.3.2)");
-})();
-/* =============================================================================
-   inspector.api-compat.js – ergänzt API nur, wenn keine vorhanden
-============================================================================= */
-(function(){
-  const log = (m)=> (window.CBLog?.info||console.log)(`[inspector.compat] ${m}`);
-  if (window.Inspector && typeof window.Inspector.toggle === "function"){ log("API vorhanden – kein Shim nötig"); return; }
+  function domToggle(){
+    var el = ensureOverlayEl();
+    if (!el) return false;
+    var willOpen = el.style.display !== 'flex';
+    return willOpen ? domOpen() : domClose();
+  }
 
-  function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){ } }
+  // --- Rebind-Logik ---------------------------------------------------------
+  function bindGameUI(){
+    var ui = (window.GameUI = window.GameUI || {});
 
-  window.Inspector = {
-    open:   (src)=> emit("cb:inspector:open",  {from:src||"api"}),
-    close:  (src)=> emit("cb:inspector:close", {from:src||"api"}),
-    toggle: (src)=>{
-      ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"]
-        .forEach(e=>emit(e,{from:src||"api"}));
-    },
-    setTab: (tab)=> emit("cb:inspector:tab:change",{tab:String(tab||"logs")})
-  };
+    // Prüfen, ob Core-Hooks da sind – wenn ja, verwenden; sonst DOM-Fallback.
+    var open  = BACKUP.open  || domOpen;
+    var close = BACKUP.close || domClose;
+    var tog   = BACKUP.tog   || domToggle;
 
-  log("Shim aktiv");
-})();
-/* =============================================================================
-   Datei: assets/inspector/inspector.api-compat.js
-   Zweck: Ergänzt eine minimal-API, falls eure Module keine globale API binden.
-   Überschreibt NICHTS, wenn bereits window.Inspector.toggle vorhanden ist.
-============================================================================= */
-(function(){
-  const log = (m)=> (window.CBLog?.info || console.log)(`[inspector.compat] ${m}`);
-  if (window.Inspector && typeof window.Inspector.toggle === "function"){ log("API vorhanden – kein Shim nötig"); return; }
+    // Wenn inzwischen von anderen Skripten überschrieben → wiederherstellen.
+    ui.openInspector   = open;
+    ui.closeInspector  = close;
+    ui.toggleInspector = tog;
 
-  function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(_){ } }
+    dbg(MOD, 'gebunden – open:%s close:%s toggle:%s (core:%s)',
+      (open===domOpen?'dom':'core'),
+      (close===domClose?'dom':'core'),
+      (tog===domToggle?'dom':'core'),
+      BACKUP.hasCore ? 'ja' : 'nein'
+    );
+  }
 
-  window.Inspector = {
-    open:   (src)=> emit("cb:inspector:open",  {from:src||"api"}),
-    close:  (src)=> emit("cb:inspector:close", {from:src||"api"}),
-    toggle: (src)=> {
-      // Feuert ALLE bekannten Toggle-Events (entspricht deinem funktionierenden Stand)
-      emit("inspector:toggle",{from:src||"api"});      // alt
-      emit("cb:inspector-toggle",{from:src||"api"});   // legacy
-      emit("cb:inspector:toggle",{from:src||"api"});   // neu
-    },
-    setTab: (tab)=> emit("cb:inspector:tab:change",{tab:String(tab||"logs")})
-  };
+  // Sofort binden (wir hängen direkt NACH den Inspector-Modulen in der Seite)
+  bindGameUI();
 
-  log("Shim aktiv");
+  // Sicherheitsnetz: Falls später nochmal jemand GameUI ersetzt, fixen wir es erneut.
+  on('DOMContentLoaded', bindGameUI);
+  on('cb:ui-ready', bindGameUI);
+
+  // Event-Brücke (optional, falls jemand die alten Trigger nutzt)
+  on('inspector:open',  function(){ try{ window.GameUI.openInspector(); } catch(e){ warn(MOD,'open err',e);} });
+  on('inspector:close', function(){ try{ window.GameUI.closeInspector(); } catch(e){ warn(MOD,'close err',e);} });
+  on('inspector:toggle',function(){ try{ window.GameUI.toggleInspector(); }catch(e){ warn(MOD,'toggle err',e);} });
+
+  // Click-Hook, falls du irgendwo data-action="toggle-inspector" nutzt
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    if (!t) return;
+    if (t.matches && t.matches('[data-action="toggle-inspector"]')) {
+      try{ window.GameUI.toggleInspector(); } catch(e){ warn(MOD,'click toggle err',e); }
+      ev.preventDefault();
+    }
+  }, true);
+
+  dbg(MOD,'bereit.');
 })();
