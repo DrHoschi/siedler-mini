@@ -1,25 +1,21 @@
 /* ============================================================================
  * ui-build.js — Tabbed Bau-Menü (2 Zeilen sichtbar, Rest scrollbar)
- * Version: v17.0.2
- * Projekt: Siedler-Mini
+ * Version: v17.0.3
  * ========================================================================== */
 (function(){
   'use strict';
-  var MOD = '[ui-build]';
-  var Bridge = window.BuildDataBridge;
+  var MOD='[ui-build]';
+  var Bridge=window.BuildDataBridge;
 
-  var EVT_CATS_READY = 'cb:build-categories-ready';
-  var EVT_UI_READY   = 'ui:build:ready';
-  var EVT_SELECT     = 'ui:build:select';
+  var EVT_CATS_READY='cb:build-categories-ready';
+  var EVT_UI_READY='ui:build:ready';
+  var EVT_SELECT='ui:build:select';
 
-  var ROW_HEIGHT_PX  = 64;
-  var ROW_GAP_PX     = 6;
-  var HEADER_H_PX    = 36;
-  var PAD_V_PX       = 8;
+  var ROW_HEIGHT_PX=64, ROW_GAP_PX=6, HEADER_H_PX=36, PAD_V_PX=8;
 
-  function log(){ try{ console.log.apply(console, arguments); }catch(_){} }
-  function qs(sel, root){ return (root||document).querySelector(sel); }
-  function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+  function log(){ try{ console.log.apply(console, arguments);}catch{} }
+  function qs(s,r){ return (r||document).querySelector(s); }
+  function qsa(s,r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); }
 
   function ensureBaseStyles(){
     if(document.getElementById('ui-build-base-styles')) return;
@@ -42,158 +38,98 @@
       '.ui-build__icon{ width:28px; height:28px; object-fit:contain; }' +
       '.ui-build__label{ font-size:12px; line-height:1.1; text-align:center; color:#e9eefb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }' +
       '.ui-build__empty{ color:#9fb0cf; font-size:13px; padding:8px; }';
-    var style = document.createElement('style');
-    style.id = 'ui-build-base-styles';
-    style.type = 'text/css';
-    style.textContent = css;
-    document.head.appendChild(style);
+    var style=document.createElement('style');
+    style.id='ui-build-base-styles';
+    style.textContent=css; document.head.appendChild(style);
   }
 
-  function createEl(tag, cls, text){
-    var el = document.createElement(tag);
-    if(cls) el.className = cls;
-    if(text) el.textContent = text;
-    return el;
-  }
-  function dispatch(name, detail){
-    var evt = new CustomEvent(name, { detail: detail || {} });
-    window.dispatchEvent(evt);
+  function el(tag,cls,txt){ var e=document.createElement(tag); if(cls)e.className=cls; if(txt)e.textContent=txt; return e; }
+  function fire(name,detail){ window.dispatchEvent(new CustomEvent(name,{detail:detail||{}})); }
+
+  function Dock(opts){
+    this.root=opts.root||null;
+    this.categories=opts.categories||[];
+    this.activeCatId=this.categories[0]?this.categories[0].id:null;
+    this.elements={tabs:null,viewport:null,grid:null};
   }
 
-  function BuildDock(opts){
-    this.root = opts.root || null;
-    this.categories = opts.categories || [];
-    this.activeCatId = this.categories[0] ? this.categories[0].id : null;
-    this.elements = { tabs:null, viewport:null, grid:null };
-  }
-
-  BuildDock.prototype.render = function(){
+  Dock.prototype.render=function(){
     ensureBaseStyles();
-
-    // → Wenn #build-panel existiert, dort mounten; sonst body
-    var mount = qs('#build-panel') || document.body;
-    var container = this.root || createEl('div','ui-build');
+    var mount=qs('#build-panel')||document.body;
+    var container=this.root||el('div','ui-build');
     if(!this.root){ mount.appendChild(container); }
 
-    var tabs = createEl('div','ui-build__tabs');
-    var self = this;
+    var tabs=el('div','ui-build__tabs'); var self=this;
     this.categories.forEach(function(cat){
-      var t = createEl('button','ui-build__tab', cat.title || cat.id);
-      t.setAttribute('type','button');
-      t.dataset.id = cat.id;
-      t.setAttribute('aria-selected', (cat.id === self.activeCatId) ? 'true' : 'false');
-      t.addEventListener('click', function(){
-        self.activeCatId = cat.id;
-        qsa('.ui-build__tab', tabs).forEach(function(b){
-          b.setAttribute('aria-selected', b.dataset.id === self.activeCatId ? 'true' : 'false');
-        });
-        self._renderGrid();
+      var t=el('button','ui-build__tab',cat.title||cat.id);
+      t.type='button'; t.dataset.id=cat.id;
+      t.setAttribute('aria-selected',(cat.id===self.activeCatId)?'true':'false');
+      t.addEventListener('click',function(){
+        self.activeCatId=cat.id;
+        qsa('.ui-build__tab',tabs).forEach(function(b){ b.setAttribute('aria-selected', b.dataset.id===self.activeCatId?'true':'false');});
+        self.drawGrid();
       });
       tabs.appendChild(t);
     });
 
-    var body = createEl('div','ui-build__body');
-    var viewport = createEl('div','ui-build__viewport');
-    var grid = createEl('div','ui-build__grid');
+    var body=el('div','ui-build__body');
+    var viewport=el('div','ui-build__viewport');
+    var grid=el('div','ui-build__grid');
+    viewport.appendChild(grid); body.appendChild(viewport);
+    container.innerHTML=''; container.appendChild(tabs); container.appendChild(body);
 
-    viewport.appendChild(grid);
-    body.appendChild(viewport);
-    container.innerHTML = '';
-    container.appendChild(tabs);
-    container.appendChild(body);
-
-    this.elements.tabs = tabs;
-    this.elements.viewport = viewport;
-    this.elements.grid = grid;
-
-    this._renderGrid();
-    return container;
+    this.elements={tabs:tabs,viewport:viewport,grid:grid};
+    this.drawGrid(); return container;
   };
 
-  BuildDock.prototype._getActiveItems = function(){
-    var active = this.categories.find(function(c){ return c.id === this.activeCatId; }, this);
-    return active ? (active.items || []) : [];
+  Dock.prototype.activeItems=function(){
+    var c=this.categories.find(function(x){ return x.id===this.activeCatId; },this);
+    return c?(c.items||[]):[];
   };
 
-  BuildDock.prototype._renderGrid = function(){
-    var grid = this.elements.grid;
-    grid.innerHTML = '';
-    var items = this._getActiveItems();
-    if(!items || !items.length){
-      grid.appendChild(createEl('div','ui-build__empty','Keine Einträge in dieser Kategorie.'));
-      return;
-    }
-    var self = this;
+  Dock.prototype.drawGrid=function(){
+    var grid=this.elements.grid; grid.innerHTML='';
+    var items=this.activeItems();
+    if(!items.length){ grid.appendChild(el('div','ui-build__empty','Keine Einträge in dieser Kategorie.')); return; }
+    var self=this;
     items.forEach(function(item){
-      var btn = createEl('button','ui-build__btn');
-      btn.setAttribute('type','button');
-      btn.title = item.label || item.id;
-
-      var iconSrc = (Bridge && Bridge.getIconFor) ? Bridge.getIconFor(item.id) : (item.icon || '');
-      var img = createEl('img','ui-build__icon');
-      img.alt = item.label || item.id;
-      img.src = iconSrc;
-
-      var lab = createEl('div','ui-build__label', item.label || item.id);
-
-      btn.appendChild(img);
-      btn.appendChild(lab);
-      btn.addEventListener('click', function(){
-        dispatch(EVT_SELECT, { item: item });
-      });
-
+      var btn=el('button','ui-build__btn'); btn.type='button'; btn.title=item.label||item.id;
+      var iconSrc=(Bridge&&Bridge.getIconFor)?Bridge.getIconFor(item.id):(item.icon||'');
+      var img=el('img','ui-build__icon'); img.alt=item.label||item.id; img.src=iconSrc;
+      var lab=el('div','ui-build__label', item.label||item.id);
+      btn.appendChild(img); btn.appendChild(lab);
+      btn.addEventListener('click', function(){ fire(EVT_SELECT,{ item:item }); });
       grid.appendChild(btn);
     });
   };
 
-  // ---------------------------- Lebenszyklus ---------------------------------
-  var _dock = null;
-
-  function init(categories, origin){
+  var _dock=null;
+  function init(categories,origin){
     try{
-      _dock = new BuildDock({ categories: categories });
-      var el = _dock.render();
-      log(MOD, 'ready — Kategorien:', categories.length,
-          'Items gesamt:', categories.reduce((n,c)=>n+(c.items?c.items.length:0),0),
-          'origin:', origin||'unknown');
-      dispatch(EVT_UI_READY, { el: el, categories: categories });
-    } catch(err){
-      console.error(MOD, 'Init-Fehler', err);
-    }
+      _dock=new Dock({ categories:categories });
+      var elc=_dock.render();
+      log(MOD,'ready — Kategorien:',categories.length,'Items:',
+        categories.reduce((n,c)=>n+(c.items?c.items.length:0),0),'origin:',origin||'unknown');
+      fire(EVT_UI_READY,{ el:elc, categories:categories });
+    }catch(e){ console.error(MOD,'Init-Fehler',e); }
   }
-
-  function bootWithExisting(){
-    if(Array.isArray(window.BUILD_CATEGORIES) && window.BUILD_CATEGORIES.length){
-      init(window.BUILD_CATEGORIES, 'boot-existing');
-      return true;
-    }
+  function bootExisting(){
+    if(Array.isArray(window.BUILD_CATEGORIES)&&window.BUILD_CATEGORIES.length){ init(window.BUILD_CATEGORIES,'boot-existing'); return true; }
     return false;
   }
 
-  if(!bootWithExisting()){
+  if(!bootExisting()){
     window.addEventListener(EVT_CATS_READY, function(ev){
-      var cats = (ev && ev.detail && ev.detail.categories) ? ev.detail.categories : [];
-      if(!cats.length) return;
-      init(cats, ev.detail && ev.detail.source || 'event');
+      var cats=(ev&&ev.detail&&ev.detail.categories)?ev.detail.categories:[];
+      if(!cats.length) return; init(cats, ev.detail&&ev.detail.source||'event');
     });
   }
 
-  // Öffentliche API (inkl. Legacy)
-  window.UIBuild = {
-    rerender: function(){
-      if(_dock){
-        document.querySelectorAll('.ui-build').forEach(function(el){ el.remove(); });
-        _dock.render();
-      } else if(Array.isArray(window.BUILD_CATEGORIES)){
-        init(window.BUILD_CATEGORIES, 'manual');
-      }
+  window.UIBuild={
+    rerender:function(){
+      if(_dock){ document.querySelectorAll('.ui-build').forEach(function(n){ n.remove(); }); _dock.render(); }
+      else if(Array.isArray(window.BUILD_CATEGORIES)){ init(window.BUILD_CATEGORIES,'manual'); }
     },
-    // Legacy-Signatur, damit alter Code/Watches nicht crasht (macht ein simples Redraw)
-    setItems: function(cats){
-      if(Array.isArray(cats) && cats.length){
-        window.BUILD_CATEGORIES = cats;
-      }
-      this.rerender();
-    }
+    setItems:function(cats){ if(Array.isArray(cats)&&cats.length){ window.BUILD_CATEGORIES=cats; } this.rerender(); }
   };
 })();
