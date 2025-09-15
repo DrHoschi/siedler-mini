@@ -1,271 +1,112 @@
-/* ==========================================================================
-   Neue Siedler – UI Build (Bau-Menü)
-   Vollversion – mobile first, horizontale Kategorie-Scroller, vertikales Dock
-   Datum: 2025-09-15
-   ========================================================================== */
+/* assets/ui/ui-build.css — v18.3.2-layout-r2 */
 
-/* --------------------------- Design-Variablen ---------------------------- */
-
-:root {
-  /* Dock */
-  --build-dock-bg: #eef0f3;             /* helles Grau wie im Screenshot */
-  --build-dock-fg: #20262d;
-  --build-dock-border: #cfd6dd;
-  --build-dock-shadow: 0 -18px 40px rgba(9, 14, 20, .18);
-  --build-dock-max-h: 44vh;             /* wird über Body-Klasse angehoben */
-
-  /* Abstände */
-  --gap-xl: 20px;
-  --gap-lg: 16px;
-  --gap-md: 12px;
-  --gap-sm: 8px;
-
-  /* Kategorie */
-  --cat-title-fg: #29313a;
-  --cat-title-bg: #eef0f3;
-  --cat-title-pill-bg: #e1e6ec;
-
-  /* Karten */
-  --card-w: 208px;
-  --card-h: 150px;
-  --card-radius: 14px;
-  --card-bg: #ffffff;
-  --card-inner-bg: #eef2f5;             /* helles Inlay (Iconfläche) */
-  --card-fg: #1e242b;
-  --card-shadow: 0 8px 24px rgba(0,0,0,.08);
-  --card-border: 1px solid #e3e7eb;
-
-  /* Label */
-  --label-fg: #2a3139;
-  --label-size: 16px;
-  --label-weight: 600;
-
-  /* Buttons/FABs über Dock freischieben (wird von index.js gesetzt) */
+/* Dock: unten andockend, über dem Canvas */
+.ui-build-dock{
+  position:fixed;
+  left:0; right:0; bottom:0;
+  max-height: var(--build-dock-max-h, 42vh);
+  width:100%;
+  background: rgba(20,23,27,.92);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 -12px 30px rgba(0,0,0,.35);
+  overflow: hidden;            /* vertikal scroll steuern wir im inneren */
+  z-index: 1000;
+  color:#e8ebef;
 }
 
-/* ------------------------------- Dock ----------------------------------- */
-
-/* Andockendes, vertikal scrollbares Panel */
-.ui-build-dock,
-#build-dock,
-#build-panel {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 5000; /* unter FABs (die haben > 2^31) aber über Canvas */
-  max-height: var(--build-dock-max-h);
-  background: var(--build-dock-bg);
-  color: var(--build-dock-fg);
-  box-shadow: var(--build-dock-shadow);
-  border-top: 1px solid var(--build-dock-border);
-  border-radius: 18px 18px 0 0;
-  overflow-y: auto;                      /* vertikal scrollen */
-  -webkit-overflow-scrolling: touch;     /* iOS inertia */
-  padding: calc(var(--gap-xl) + 2px) var(--gap-xl) var(--gap-xl);
+/* Innen-Scroller: das ganze Dock vertikal scrollbar */
+.ui-build-scroll{
+  max-height: inherit;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 12px 18px;
 }
 
-/* eleganter „Grip“-Rand oben */
-.ui-build-dock::before,
-#build-dock::before {
-  content: "";
-  position: absolute;
-  top: 8px; left: 50%;
-  transform: translateX(-50%);
-  width: 52px; height: 5px;
-  border-radius: 999px;
-  background: #d1d7de;
-  opacity: .9;
+/* Abschnitt (Kategorie) */
+.ui-build-section{
+  margin-bottom: 18px;
+}
+.ui-build-section__title{
+  margin: 0 4px 10px;
+  font: 600 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  color:#e8ebef;
 }
 
-/* Scrollbar dezent (WebKit) */
-.ui-build-dock::-webkit-scrollbar { height: 8px; width: 8px; }
-.ui-build-dock::-webkit-scrollbar-thumb {
-  background: #cbd3db; border-radius: 8px;
-}
-.ui-build-dock::-webkit-scrollbar-track { background: transparent; }
-
-/* ----------------------------- Kategorien ------------------------------- */
-
-.ui-build-section {
-  margin-bottom: var(--gap-xl);
-}
-
-.ui-build-section:last-child {
-  margin-bottom: calc(var(--gap-xl) + 8vh); /* am Ende etwas Luft */
-}
-
-/* Titel wie im Screenshot: dunkel, linksbündig */
-.ui-build-section__title,
-.ui-build-title,
-.ui-build h3 {
-  margin: 0 0 var(--gap-lg) 2px;
-  font: 700 20px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-  color: var(--cat-title-fg);
-  letter-spacing: .2px;
-}
-
-/* optionaler „Pill“-Hintergrund, falls genutzt */
-.ui-build-title--pill {
-  display: inline-block;
-  background: var(--cat-title-pill-bg);
-  color: var(--cat-title-fg);
-  padding: 6px 12px;
-  border-radius: 12px;
-}
-
-/* -------------------------- Karten-Scroller ----------------------------- */
-
-/* Der horizontale Scroller der Karten einer Kategorie */
-.ui-build-list {
-  position: relative;
+/* Kartenliste: horizontal scrollend, 2 Reihen (grid + scroll-snap)  */
+.ui-build-list{
   display: grid;
-
-  /* 2 Reihen (default); Columns entstehen automatisch nach Bedarf */
   grid-auto-flow: column;
-  grid-template-rows: repeat(2, var(--card-h));
-  grid-auto-columns: var(--card-w);
-  gap: var(--gap-lg);
-
-  /* Horizontaler Scroll */
+  grid-auto-columns: max-content;
+  gap: 12px 12px;
+  padding: 6px 6px 10px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: var(--gap-md); /* Platz für Scrollbar, falls sichtbar */
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-
-  /* Snap von Karte zu Karte – angenehm beim Wischen */
   scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
 }
 
-.ui-build-list::-webkit-scrollbar { height: 8px; }
-.ui-build-list::-webkit-scrollbar-thumb { background: #cbd3db; border-radius: 8px; }
-.ui-build-list::-webkit-scrollbar-track { background: transparent; }
-
-/* Sehr kleine Displays → 1 Reihe */
-@media (max-width: 420px) {
-  .ui-build-list {
-    grid-template-rows: repeat(1, var(--card-h));
-  }
+/* „2 Reihen“-Trick: wir packen die Karten in ein 2-zeiliges Grid */
+.ui-build-list{
+  grid-template-rows: repeat(2, 128px);     /* zwei Reihen */
 }
 
-/* Tablets/large phones – etwas größere Karten möglich */
-@media (min-width: 480px) and (max-width: 900px) {
-  :root {
-    --card-w: 220px;
-    --card-h: 158px;
-  }
+/* kleine Screens: nur 1 Reihe */
+@media (max-width: 420px){
+  .ui-build-list{ grid-template-rows: 128px; }
 }
 
-/* Wide – bleibt kompakt (Design bleibt mobile-like) */
-
-/* ------------------------------- Karten --------------------------------- */
-
-.build-card {
-  width: var(--card-w);
-  height: var(--card-h);
-  background: var(--card-bg);
-  color: var(--card-fg);
-  border-radius: var(--card-radius);
-  border: var(--card-border);
-  box-shadow: var(--card-shadow);
-  display: grid;
-  grid-template-rows: 1fr auto;     /* Bildbereich + Label */
-  overflow: hidden;
+/* Karte */
+.build-card{
   scroll-snap-align: start;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-  transition: transform .08s ease, box-shadow .18s ease;
-}
-
-.build-card:active {
-  transform: translateY(1px) scale(.99);
-  box-shadow: 0 6px 18px rgba(0,0,0,.10);
-}
-
-.build-card[disabled],
-.build-card.is-disabled {
-  opacity: .55;
-  filter: grayscale(.2);
-}
-
-/* Bildbereich */
-.build-card__img {
-  background: var(--card-inner-bg);
   display: grid;
-  place-items: center;
-  padding: var(--gap-md);
+  grid-template-rows: 1fr auto;
+  width: 168px;                 /* Kachelbreite */
+  height: 128px;
+  background: #111419;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  overflow: hidden;
+  text-align: center;
+  color:#dfe5ec;
+  user-select: none;
 }
+.build-card:active{ transform: translateY(1px); }
 
-/* Bild selbst – auf Container begrenzen */
-.build-card__img img,
-.build-card__img canvas,
-.build-card__img .sprite {
-  max-width: 88%;
-  max-height: 88%;
-  object-fit: contain;
+/* Bildfläche */
+.build-card__img{
+  display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+}
+.build-card__img img{
+  max-width: 92%; max-height: 92%;
   image-rendering: -webkit-optimize-contrast;
 }
 
-/* Label */
-.build-card__label {
-  display: block;
-  text-align: center;
-  padding: var(--gap-sm) var(--gap-md) var(--gap-md);
-  font-weight: var(--label-weight);
-  font-size: var(--label-size);
-  color: var(--label-fg);
+/* Beschriftung */
+.build-card__label{
+  display:block;
+  padding: 6px 8px 8px;
+  font: 600 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  color:#e9edf3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* --------------------------- States / Leere ----------------------------- */
+/* Abstände Dock, wenn über den FABs */
+body.has-build-open .ui-fab { bottom: calc(var(--build-dock-max-h, 42vh) + 16px); }
 
-.ui-build-empty {
-  display: grid;
-  place-items: center;
-  min-height: 72px;
-  color: #6b7785;
-  font: 500 15px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-  background: #e9edf2;
-  border: 1px dashed #cfd6dd;
-  border-radius: 12px;
+/* Scrollbar dezent (WebKit) */
+.ui-build-list::-webkit-scrollbar{ height: 10px; }
+.ui-build-list::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.15); border-radius: 10px;
 }
-
-/* ------------------------------ Utilities ------------------------------- */
-
-/* Abstand zwischen Kategorien optisch glätten */
-.ui-build-section + .ui-build-section {
-  border-top: 1px solid #e3e8ee;
-  padding-top: var(--gap-xl);
+.ui-build-scroll::-webkit-scrollbar{ width: 10px; }
+.ui-build-scroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.15); border-radius: 10px;
 }
-
-/* Ein wenig Innenrand, wenn das Dock sehr klein ist */
-@media (max-height: 520px) {
-  .ui-build-dock,
-  #build-dock { padding-bottom: 72px; }
-}
-
-/* ---------------------------- Dark-Mode passiv --------------------------- */
-/* (Du nutzt helle UI – hier nur minimale Anpassungen, falls System Dark)   */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --build-dock-bg: #e9edf2;   /* bleib hell, damit Kontrast zum Spielfeld stimmt */
-  }
-}
-
-/* -------------------------- Legacy-Kompatibilität ----------------------- */
-
-/* Falls altes Markup mit #build-panel genutzt wird */
-#build-panel .section-title { composes: ui-build-section__title from none; }
-#build-panel .cards { composes: ui-build-list from none; }
-
-/* Optional: wenn Bilder direkt in .build-card liegen (ohne Wrapper) */
-.build-card > img { 
-  display: block; 
-  margin: auto; 
-  max-width: 88%; 
-  max-height: calc(88% - 36px);
-}
-
-/* ------------------------------------------------------------------------ */
