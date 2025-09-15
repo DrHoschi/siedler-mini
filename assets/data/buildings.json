@@ -32,7 +32,7 @@
       "gridSize": [2,2]
     },
 
-    // Wohnen
+  
     {
       "id": "wohnhaus_0",
       "title": "Wohnhaus (klein)",
@@ -50,7 +50,7 @@
       "gridSize": [2,2]
     },
 
-    // Nahrung
+  
     {
       "id": "fischer",
       "title": "Fischer",
@@ -84,7 +84,7 @@
       "gridSize": [2,2]
     },
 
-    // Rohstoffe
+
     {
       "id": "holzfaeller",
       "title": "Holzfäller",
@@ -110,7 +110,6 @@
       "gridSize": [2,2]
     },
 
-    // --- NEU: Infrastruktur -------------------------------------------------
     {
       "id": "road_straight",
       "title": "Straße (gerade)",
@@ -140,7 +139,6 @@
       "sprite": "assets/tex/road/topdown_road_cross.png"
     },
 
-    // --- NEU: Deko / Landschaft --------------------------------------------
     {
       "id": "terrain_grass",
       "title": "Wiese",
@@ -177,8 +175,7 @@
       "sprite": "assets/tex/terrain/sm_topdown_water0_ug0.jpeg"
     },
 
-    // --- NEU: Militär -------------------------------------------------------
-    {
+     {
       "id": "wachturm",
       "title": "Wachturm",
       "category": "militaer",
