@@ -1,6 +1,6 @@
 /* ============================================================================
  * ui-build.js — Tabbed Bau-Menü (2 Zeilen sichtbar, Rest scrollbar)
- * Version: v17.0.1
+ * Version: v17.0.2
  * Projekt: Siedler-Mini
  * ========================================================================== */
 (function(){
@@ -69,8 +69,11 @@
 
   BuildDock.prototype.render = function(){
     ensureBaseStyles();
+
+    // → Wenn #build-panel existiert, dort mounten; sonst body
+    var mount = qs('#build-panel') || document.body;
     var container = this.root || createEl('div','ui-build');
-    if(!this.root){ document.body.appendChild(container); }
+    if(!this.root){ mount.appendChild(container); }
 
     var tabs = createEl('div','ui-build__tabs');
     var self = this;
@@ -167,9 +170,7 @@
     return false;
   }
 
-  // A) sofort booten, wenn vorhanden
   if(!bootWithExisting()){
-    // B) auf Kategorien-Event warten (wiederholbar! → neu rendern bei Updates)
     window.addEventListener(EVT_CATS_READY, function(ev){
       var cats = (ev && ev.detail && ev.detail.categories) ? ev.detail.categories : [];
       if(!cats.length) return;
@@ -177,7 +178,7 @@
     });
   }
 
-  // Optionaler Export (manuelles Redraw verwenden, wenn nötig)
+  // Öffentliche API (inkl. Legacy)
   window.UIBuild = {
     rerender: function(){
       if(_dock){
@@ -186,6 +187,13 @@
       } else if(Array.isArray(window.BUILD_CATEGORIES)){
         init(window.BUILD_CATEGORIES, 'manual');
       }
+    },
+    // Legacy-Signatur, damit alter Code/Watches nicht crasht (macht ein simples Redraw)
+    setItems: function(cats){
+      if(Array.isArray(cats) && cats.length){
+        window.BUILD_CATEGORIES = cats;
+      }
+      this.rerender();
     }
   };
 })();
