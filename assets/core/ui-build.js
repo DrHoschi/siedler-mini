@@ -1,54 +1,23 @@
 /* ============================================================================
  * ui-build.js — Tabbed Bau-Menü (2 Zeilen sichtbar, Rest scrollbar)
- * Version: v17.0.0-rc2
+ * Version: v17.0.1
  * Projekt: Siedler-Mini
- *
- * ZWECK
- *  - Zeigt Kategorien als Tabs und Items als Grid (Icons + Labels)
- *  - Max. 2 Zeilen sichtbar; Überhang scrollbar (horiz./vert. je nach Breite)
- *  - Klick auf Item feuert Event 'ui:build:select' mit { item }
- *  - Feuert 'ui:build:ready' nach Initialisierung
- *
- * VORAUSSETZUNGEN
- *  - build.categories.js (stellt window.BUILD_CATEGORIES + Event bereit)
- *  - ui-build.data-bridge.js (stellt window.BuildDataBridge bereit)
- *  - KEIN ES-Module; alles global/IIFE.
- *
- * EVENTS (dispatch)
- *   'ui:build:ready'  { detail: { el, categories } }
- *   'ui:build:select' { detail: { item } }
- *
- * DESIGN-HINWEIS
- *  - Farbschema & Fonts bleiben wie im Projekt; hier nur minimale Styles,
- *    um "2 Zeilen sichtbar" + Scroll sicherzustellen (nicht invasiv).
- *  - Inspector/Debug bleibt unberührt.
  * ========================================================================== */
 (function(){
   'use strict';
   var MOD = '[ui-build]';
-
-  // ---------------------------------------------------------------------------
-  // IMPORTS (global erwartet)
-  // ---------------------------------------------------------------------------
   var Bridge = window.BuildDataBridge;
 
-  // ---------------------------------------------------------------------------
-  // KONSTANTEN
-  // ---------------------------------------------------------------------------
   var EVT_CATS_READY = 'cb:build-categories-ready';
   var EVT_UI_READY   = 'ui:build:ready';
   var EVT_SELECT     = 'ui:build:select';
 
-  // Maße für 2 Zeilen + Padding; bei Bedarf später aus CSS-Variablen lesen
-  var ROW_HEIGHT_PX  = 64;      // Icon-Button-Zeilenhöhe
+  var ROW_HEIGHT_PX  = 64;
   var ROW_GAP_PX     = 6;
-  var HEADER_H_PX    = 36;      // Tab-Leiste
-  var PAD_V_PX       = 8;       // vert. Padding Container
+  var HEADER_H_PX    = 36;
+  var PAD_V_PX       = 8;
 
-  // ---------------------------------------------------------------------------
-  // HILFSFUNKTIONEN
-  // ---------------------------------------------------------------------------
-  function log(){ try { console.log.apply(console, arguments); } catch(_){} }
+  function log(){ try{ console.log.apply(console, arguments); }catch(_){} }
   function qs(sel, root){ return (root||document).querySelector(sel); }
   function qsa(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
 
@@ -56,30 +25,23 @@
     if(document.getElementById('ui-build-base-styles')) return;
     var css =
       '.ui-build{position:relative;display:flex;flex-direction:column;width:100%;' +
-      '  background:var(--build-bg, rgba(0,0,0,0.25));backdrop-filter:saturate(1) blur(0px);' +
-      '  border-top:1px solid rgba(255,255,255,0.06);}' +
-
+      '  background:var(--build-bg, rgba(0,0,0,0.25));border-top:1px solid rgba(255,255,255,0.06);}' +
       '.ui-build__tabs{display:flex;align-items:center;gap:8px;height:'+HEADER_H_PX+'px;padding:0 8px;' +
       '  background:var(--build-tabs-bg, rgba(0,0,0,0.15));border-bottom:1px solid rgba(255,255,255,0.06);overflow-x:auto;}' +
       '.ui-build__tab{flex:0 0 auto; padding:6px 10px; cursor:pointer; border-radius:6px;' +
       '  color:var(--text-muted,#cfd6e6); background:transparent; border:1px solid transparent; user-select:none; font-size:13px;}' +
       '.ui-build__tab[aria-selected="true"]{ color:#fff; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.15);}' +
-
       '.ui-build__body{ position:relative; padding:'+PAD_V_PX+'px 8px; }' +
-
-      /* 2-Zeilen-Viewport: max-height = 2*Row + Gap + Padding */
       '.ui-build__viewport{ overflow:auto; max-height:'+(PAD_V_PX*2 + ROW_HEIGHT_PX*2 + ROW_GAP_PX)+'px; }' +
-
       '.ui-build__grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr)); gap:6px; }' +
       '.ui-build__btn{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;' +
       '  height:'+ROW_HEIGHT_PX+'px; padding:6px 6px; border-radius:8px; cursor:pointer; user-select:none;' +
       '  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); }' +
       '.ui-build__btn:hover{ background:rgba(255,255,255,0.07); }' +
       '.ui-build__btn:active{ transform:translateY(1px); }' +
-      '.ui-build__icon{ width:28px; height:28px; object-fit:contain; image-rendering:auto; }' +
+      '.ui-build__icon{ width:28px; height:28px; object-fit:contain; }' +
       '.ui-build__label{ font-size:12px; line-height:1.1; text-align:center; color:#e9eefb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }' +
       '.ui-build__empty{ color:#9fb0cf; font-size:13px; padding:8px; }';
-
     var style = document.createElement('style');
     style.id = 'ui-build-base-styles';
     style.type = 'text/css';
@@ -93,15 +55,11 @@
     if(text) el.textContent = text;
     return el;
   }
-
   function dispatch(name, detail){
     var evt = new CustomEvent(name, { detail: detail || {} });
     window.dispatchEvent(evt);
   }
 
-  // ---------------------------------------------------------------------------
-  // KLASSE: BuildDock (einfaches View-Objekt)
-  // ---------------------------------------------------------------------------
   function BuildDock(opts){
     this.root = opts.root || null;
     this.categories = opts.categories || [];
@@ -114,10 +72,9 @@
     var container = this.root || createEl('div','ui-build');
     if(!this.root){ document.body.appendChild(container); }
 
-    // Tabs
     var tabs = createEl('div','ui-build__tabs');
     var self = this;
-    this.categories.forEach(function(cat, idx){
+    this.categories.forEach(function(cat){
       var t = createEl('button','ui-build__tab', cat.title || cat.id);
       t.setAttribute('type','button');
       t.dataset.id = cat.id;
@@ -132,14 +89,13 @@
       tabs.appendChild(t);
     });
 
-    // Body + Grid (scrollbar, max 2 Zeilen sichtbar)
     var body = createEl('div','ui-build__body');
     var viewport = createEl('div','ui-build__viewport');
     var grid = createEl('div','ui-build__grid');
 
     viewport.appendChild(grid);
     body.appendChild(viewport);
-    container.innerHTML = ''; // clean (idempotent render)
+    container.innerHTML = '';
     container.appendChild(tabs);
     container.appendChild(body);
 
@@ -187,15 +143,16 @@
     });
   };
 
-  // ---------------------------------------------------------------------------
-  // HAUPTLOGIK
-  // ---------------------------------------------------------------------------
-  function init(categories){
-    try{
-      var dock = new BuildDock({ categories: categories });
-      var el = dock.render();
-      log(MOD, 'bereit — Items:', categories.reduce((n,c)=>n+(c.items?c.items.length:0),0));
+  // ---------------------------- Lebenszyklus ---------------------------------
+  var _dock = null;
 
+  function init(categories, origin){
+    try{
+      _dock = new BuildDock({ categories: categories });
+      var el = _dock.render();
+      log(MOD, 'ready — Kategorien:', categories.length,
+          'Items gesamt:', categories.reduce((n,c)=>n+(c.items?c.items.length:0),0),
+          'origin:', origin||'unknown');
       dispatch(EVT_UI_READY, { el: el, categories: categories });
     } catch(err){
       console.error(MOD, 'Init-Fehler', err);
@@ -203,25 +160,32 @@
   }
 
   function bootWithExisting(){
-    // Direkter Start, falls build.categories.js bereits Kategorien gesetzt hat
     if(Array.isArray(window.BUILD_CATEGORIES) && window.BUILD_CATEGORIES.length){
-      init(window.BUILD_CATEGORIES);
+      init(window.BUILD_CATEGORIES, 'boot-existing');
       return true;
     }
     return false;
   }
 
-  // Variante A: sofort booten, wenn schon vorhanden
+  // A) sofort booten, wenn vorhanden
   if(!bootWithExisting()){
-    // Variante B: auf Event der Kategorien warten
+    // B) auf Kategorien-Event warten (wiederholbar! → neu rendern bei Updates)
     window.addEventListener(EVT_CATS_READY, function(ev){
       var cats = (ev && ev.detail && ev.detail.categories) ? ev.detail.categories : [];
-      init(cats);
-    }, { once: true });
+      if(!cats.length) return;
+      init(cats, ev.detail && ev.detail.source || 'event');
+    });
   }
 
-  // ---------------------------------------------------------------------------
-  // EXPORTS
-  // ---------------------------------------------------------------------------
-  // (keine — UI initialisiert sich selbst)
+  // Optionaler Export (manuelles Redraw verwenden, wenn nötig)
+  window.UIBuild = {
+    rerender: function(){
+      if(_dock){
+        document.querySelectorAll('.ui-build').forEach(function(el){ el.remove(); });
+        _dock.render();
+      } else if(Array.isArray(window.BUILD_CATEGORIES)){
+        init(window.BUILD_CATEGORIES, 'manual');
+      }
+    }
+  };
 })();
