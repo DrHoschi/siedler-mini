@@ -1,174 +1,221 @@
-/* assets/ui/ui-build.js
- * Aufgabe:
- *  - Render-Logik für das Build-Dock (unten andockend)
- *  - Öffnen/Schließen steuert GameUI (Bridge), hier Fokus aufs Rendering
- *  - Exponiert API: UIBuild.setItems(items, categories)
- *  - Items-Struktur:
- *      items: [{ id, name, cat, icon (Pfad), descr?, cost? }, ...]
- *      categories: [{ id, name, order? }, ...]
- */
+(() => {
+  const TAG = "[ui-build]";
+  const VERSION = "v18.3.2";
 
-(function(){
-  const log = (window.CBLog?.info || console.log).bind(console);
-  const warn = (window.CBLog?.warn || console.warn).bind(console);
-
-  const state = {
-    root: null,             // #build-dock (oder #build-panel)
-    tabsEl: null,           // Kategorien-Tabs
-    listEl: null,           // Karten-Container
-    cats: [],
-    items: [],
-    activeCat: null,
-    version: 'v18.3.2'
+  // Öffentliche API
+  const UIBuild = {
+    version: VERSION,
+    _initialized: false,
+    _isOpen: false,
+    _items: [],
+    _cats: [],
+    init,
+    setItems,
+    open,
+    close,
+    toggle,
+    isOpen: () => UIBuild._isOpen,
   };
 
-  function bySel(sel){ return state.root.querySelector(sel); }
+  // Expose asap
+  window.UIBuild = UIBuild;
 
-  function ensureRoot(){
-    if (state.root && document.body.contains(state.root)) return state.root;
-    state.root = document.getElementById('build-dock') || document.getElementById('build-panel');
-    if (!state.root) {
-      warn('[ui-build] Kein Build-Dock im DOM gefunden.');
-      return null;
-    }
-    // Grundgerüst einmalig einziehen
-    if (!state.root.dataset.uiInit){
-      state.root.innerHTML = `
-        <div class="ui-build-head">
-          <div class="ui-build-tabs" role="tablist" aria-label="Kategorien"></div>
-          <button class="ui-build-close" title="Schließen" aria-label="Schließen">×</button>
-        </div>
-        <div class="ui-build-body">
-          <div class="ui-build-list" aria-label="Gebäude-Liste"></div>
-          <div class="ui-build-empty">Keine Gebäude verfügbar</div>
-        </div>
-      `;
-      state.root.dataset.uiInit = '1';
-      state.tabsEl = bySel('.ui-build-tabs');
-      state.listEl = bySel('.ui-build-list');
+  const PANEL_ID = "build-panel";
 
-      // Close-Button → Bridge
-      const btnClose = bySel('.ui-build-close');
-      btnClose?.addEventListener('click', () => window.GameUI?.closeBuild());
+  // Minimal-Styles zur Sicherheit (deine ui-build.css darf überschreiben)
+  const ensureBaseStyles = () => {
+    if (document.getElementById("ui-build-inline-style")) return;
+    const st = document.createElement("style");
+    st.id = "ui-build-inline-style";
+    st.textContent = `
+#${PANEL_ID}{
+  position:fixed;left:0;right:0;bottom:0;
+  background:#20252bF0; /* leicht transparentes dunkles Grau */
+  border-top:1px solid #2f363f;
+  padding:10px 12px;
+  z-index:9999;
+  transform:translateY(100%);
+  transition:transform .18s ease-out;
+}
+#${PANEL_ID}.open{ transform:translateY(0); }
 
-      // Optik: graues Panel (anpassbar in CSS)
-      state.root.style.setProperty('--ui-build-bg', '#2b2f33');    // dunkles Grau
-      state.root.style.setProperty('--ui-build-fg', '#e8e9ea');    // helle Schrift
-      state.root.style.setProperty('--ui-build-tab', '#3b4046');   // Tab-Farbe
-      state.root.style.setProperty('--ui-build-tab-active', '#52575e');
-      state.root.style.setProperty('--ui-build-card', '#343a40');  // Kartenfläche
-      state.root.style.setProperty('--ui-build-accent', '#8ea0b4'); // Akzent (Rahmen/hover)
+#${PANEL_ID} .ui-build-inner{
+  max-width:1200px;margin:0 auto;
+}
 
-      log('[ui-build] Grundgerüst initialisiert.');
-    } else {
-      state.tabsEl = bySel('.ui-build-tabs');
-      state.listEl = bySel('.ui-build-list');
-    }
-    return state.root;
-  }
+#${PANEL_ID} .cats{
+  display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px 0;
+}
+#${PANEL_ID} .cat-btn{
+  padding:4px 8px;border:1px solid #3a4049;background:#2a2f36;color:#d6d6d6;border-radius:6px;cursor:pointer;font-size:13px;
+}
+#${PANEL_ID} .cat-btn.active{outline:2px solid #8892a6}
 
-  function clear(el){ while (el?.firstChild) el.removeChild(el.firstChild); }
+#${PANEL_ID} .grid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap:10px;
+}
+#${PANEL_ID} .card{
+  background:#242a31;border:1px solid #36404b;border-radius:10px;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;
+}
+#${PANEL_ID} .card .thumb{
+  width:100%;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;
+  background:#1c2026;
+}
+#${PANEL_ID} .card .thumb img{max-width:100%;max-height:100%;display:block}
+#${PANEL_ID} .card .title{padding:6px 8px;font-size:13px;color:#dfe5ee;text-align:center}
+#${PANEL_ID} .empty{padding:12px;color:#b2bac6}
+`;
+    document.head.appendChild(st);
+  };
 
-  // Tabs rendern
-  function renderTabs(){
-    const root = ensureRoot(); if (!root) return;
-    const tabs = state.tabsEl; if (!tabs) return;
-    clear(tabs);
+  function init() {
+    if (UIBuild._initialized) return;
+    ensureBaseStyles();
 
-    const cats = [...state.cats].sort((a,b)=>(a.order||0)-(b.order||0) || a.name.localeCompare(b.name));
-    cats.forEach(cat=>{
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'ui-build-tab' + (state.activeCat===cat.id ? ' active':'');
-      btn.setAttribute('role','tab');
-      btn.textContent = cat.name;
-      btn.addEventListener('click', ()=>{
-        state.activeCat = cat.id;
-        renderTabs();
-        renderCards();
-      });
-      tabs.appendChild(btn);
-    });
-  }
-
-  // Karten rendern
-  function renderCards(){
-    const root = ensureRoot(); if (!root) return;
-    const list = state.listEl; if (!list) return;
-    clear(list);
-
-    const empty = root.querySelector('.ui-build-empty');
-    const curItems = state.activeCat
-      ? state.items.filter(it => it.cat===state.activeCat)
-      : state.items;
-
-    if (!curItems.length){
-      empty?.classList.add('show');
+    const host = document.getElementById(PANEL_ID);
+    if (!host) {
+      console.warn(TAG, "Kein Host-Element #build-panel gefunden – Abbruch.");
       return;
     }
-    empty?.classList.remove('show');
 
-    curItems.forEach(it=>{
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'ui-build-card';
-      card.title = it.name;
+    host.innerHTML = `
+      <div class="ui-build-inner">
+        <div class="cats" id="ui-build-cats"></div>
+        <div class="grid" id="ui-build-grid"></div>
+        <div class="empty" id="ui-build-empty" style="display:none">Keine Gebäudedaten verfügbar.</div>
+      </div>
+    `;
 
-      const img = document.createElement('img');
-      img.className = 'ui-build-icon';
-      img.alt = it.name;
-      img.decoding = 'async';
-      // Icon-Pfad: bevorzugt assets/icons…, sonst building image, sonst placeholder
-      img.src = it.icon || it.image || 'assets/placeholder64.PNG';
+    UIBuild._initialized = true;
+    console.log(TAG, "bereit", `(${VERSION})`);
 
-      const name = document.createElement('div');
-      name.className = 'ui-build-name';
-      name.textContent = it.name;
+    render(); // falls Items schon vorher gesetzt wurden
+  }
 
-      card.appendChild(img);
-      card.appendChild(name);
-      card.addEventListener('click', ()=>{
-        // Auswahl melden (nur log + CustomEvent – Platzierung gehört zum Game/Core)
-        (window.CBLog?.info || console.log)(`[ui-build] select ${it.id}`);
-        document.dispatchEvent(new CustomEvent('cb:build:select', { detail: { id: it.id, item: it }}));
-      });
+  function render(activeCat = null) {
+    if (!UIBuild._initialized) return;
 
-      list.appendChild(card);
+    const catsEl = document.getElementById("ui-build-cats");
+    const gridEl = document.getElementById("ui-build-grid");
+    const emptyEl = document.getElementById("ui-build-empty");
+
+    // Kategorien
+    catsEl.innerHTML = "";
+    const allBtn = mkCatBtn("Alle", null, activeCat === null);
+    catsEl.appendChild(allBtn);
+    UIBuild._cats.forEach(c => {
+      catsEl.appendChild(mkCatBtn(c.title || c.name || c.id, c.id, activeCat === c.id));
     });
+
+    // Items
+    const list = (activeCat === null)
+      ? UIBuild._items
+      : UIBuild._items.filter(x => (x.categoryId || x.category) === activeCat);
+
+    gridEl.innerHTML = "";
+    if (!list || !list.length) {
+      gridEl.style.display = "none";
+      emptyEl.style.display = "";
+    } else {
+      gridEl.style.display = "";
+      emptyEl.style.display = "none";
+      for (const it of list) {
+        gridEl.appendChild(mkCard(it));
+      }
+    }
   }
 
-  // API: Items setzen (von der Data-Bridge aufgerufen)
-  function setItems(items = [], categories = []){
-    ensureRoot();
-    state.items = Array.isArray(items) ? items.slice() : [];
-    state.cats  = Array.isArray(categories) ? categories.slice() : [];
-
-    // Beim ersten Setzen: aktive Kategorie = erste Kategorie (falls vorhanden)
-    if (!state.activeCat && state.cats.length) state.activeCat = state.cats[0].id;
-
-    renderTabs();
-    renderCards();
-
-    log(`[ui-build] Items gesetzt (${state.items.length} Karten / ${state.cats.length} Kategorien)`);
+  function mkCatBtn(label, catId, active) {
+    const b = document.createElement("button");
+    b.className = "cat-btn" + (active ? " active" : "");
+    b.textContent = label;
+    b.addEventListener("click", () => render(catId));
+    return b;
   }
 
-  // Events: Re-Render nach Spielstart/Assets-ready
-  function onGameStart(){ renderTabs(); renderCards(); }
-  function onAssetsReady(){ renderTabs(); renderCards(); }
+  function mkCard(it) {
+    const el = document.createElement("div");
+    el.className = "card";
+    el.title = it.title || it.id || "";
 
-  document.addEventListener('cb:game-start', onGameStart);
-  document.addEventListener('cb:assets-ready', onAssetsReady);
-  // Fallback-Events (Bindestrich-Variante)
-  document.addEventListener('cb:game-start'.replace(':','-'), onGameStart);
-  document.addEventListener('cb:assets-ready'.replace(':','-'), onAssetsReady);
+    const imgSrc =
+      it.icon ||
+      it.img ||
+      it.sprite ||
+      (it.assets && it.assets.icon) ||
+      guessBuildingIcon(it);
 
-  ensureRoot();
+    el.innerHTML = `
+      <div class="thumb">
+        ${imgSrc ? `<img loading="lazy" decoding="async" src="${imgSrc}">` : `<div style="opacity:.7">kein Bild</div>`}
+      </div>
+      <div class="title">${escapeHtml(it.title || it.name || it.id || "—")}</div>
+    `;
 
-  // Export globale API
-  window.UIBuild = Object.assign(window.UIBuild || {}, {
-    setItems,
-    _state: state   // optional: für Debug/Inspector
+    el.addEventListener("click", () => {
+      // Event für deine Klick-Logik (z.B. Platzieren)
+      const ev = new CustomEvent("ui-build:select", { detail: it });
+      window.dispatchEvent(ev);
+      console.log(TAG, "select", it.id || it.title || "?");
+    });
+    return el;
+  }
+
+  function guessBuildingIcon(it) {
+    // sehr konservative Heuristik: wenn id vorhanden, probiere Standardpfad
+    // (dein Repo hält die PNGs unter assets/buildings/*.png)
+    if (it && it.id) {
+      return `assets/buildings/${it.id}_wood1.png`;
+    }
+    return null;
+  }
+
+  function setItems(items = [], cats = []) {
+    UIBuild._items = Array.isArray(items) ? items : [];
+    UIBuild._cats  = Array.isArray(cats) ? cats : [];
+    console.log(TAG, `Items gesetzt (${UIBuild._items.length} Karten / ${UIBuild._cats.length || "?"} Kategorien)`);
+    if (!UIBuild._initialized) init();
+    render(); // default: alle Kategorien
+  }
+
+  function open() {
+    if (!UIBuild._initialized) init();
+    const host = document.getElementById(PANEL_ID);
+    if (!host) return;
+    host.classList.add("open");
+    UIBuild._isOpen = true;
+    console.log(TAG, "open");
+  }
+
+  function close() {
+    const host = document.getElementById(PANEL_ID);
+    if (!host) return;
+    host.classList.remove("open");
+    UIBuild._isOpen = false;
+    console.log(TAG, "close");
+  }
+
+  function toggle() {
+    if (UIBuild._isOpen) close(); else open();
+  }
+
+  // Lebenszyklus-Hooks aus deinem Spiel
+  document.addEventListener("cb:assets-ready", () => {
+    // nichts Spezielles: Daten kommen über die Bridge
+    // wir lassen nur ein sanftes re-render zu
+    if (UIBuild._items?.length) render();
   });
 
-  log(`[ui-build] bereit (${state.version})`);
+  document.addEventListener("cb:game-start", () => {
+    // erneut rendern (falls nötig)
+    if (UIBuild._items?.length) render();
+  });
+
+  // Hilfsfunktionen
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  }
 })();
