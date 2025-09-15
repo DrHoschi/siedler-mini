@@ -1,98 +1,65 @@
-<script>
-// UIBuild–Daten-Bridge  v1.0
-// Zweck: Registry-Daten → UIBuild.setItems(...) füttern.
-// Greift NICHT in Registry/Inspector ein und arbeitet defensiv.
+/* UIBuild Daten-Bridge v1.0 – füttert UIBuild.setItems() aus Registry/Legacy */
+(function(){
+  const log=(m)=> (window.CBLog?.info||console.log)(`[ui-build.bridge] ${m}`);
+  const warn=(m)=> (window.CBLog?.warn||console.warn)(`[ui-build.bridge] ${m}`);
 
-// kleine Logger
-const L = {
-  ok:  (m)=> (window.CBLog?.ok   || console.log)(`[ui-build.bridge] ${m}`),
-  in:  (m)=> (window.CBLog?.info || console.log)(`[ui-build.bridge] ${m}`),
-  warn:(m)=> (window.CBLog?.warn || console.warn)(`[ui-build.bridge] ${m}`)
-};
-
-(function bridge(){
-  // Abbruch, wenn UIBuild gar nicht geladen
-  function hasUIBuild(){ return !!(window.UIBuild && typeof window.UIBuild.setItems === "function"); }
-
-  // Source 1: moderne Registry-API (falls vorhanden)
-  function readFromRegistry(){
-    const R = window.Registry || window.entities?.registry || window.entitiesRegistry;
+  function fromRegistry(){
+    const R = window.Registry || window.registry || window.__REGISTRY;
     if (!R) return null;
 
-    // Mögliche Shapes tolerant behandeln
     const cats = R.getCategories?.() || R.categories || R.kategorien;
-    const byId = (id)=> (R.getBuilding?.(id) || R.buildings?.[id] || (Array.isArray(R.buildings) ? R.buildings.find(b=>b.id===id) : null));
+    const getB = (id)=> (R.getBuilding?.(id) || (Array.isArray(R.buildings)? R.buildings.find(b=>b.id===id) : (R.buildings?.[id]||null)));
 
-    if (!cats || !cats.length) return null;
+    if (!Array.isArray(cats) || !cats.length) return null;
 
-    const items = [];
+    const out = [];
     for (const c of cats){
-      const cName = c.name || c.title || c.id || "Allg.";
+      const cName = c.title || c.name || c.id || 'Kategorie';
       const list  = c.items || c.buildings || c.gebaeude || [];
       const cards = [];
 
       for (const ref of list){
-        const b = (typeof ref === "string" || typeof ref === "number") ? byId(ref) : ref;
+        const b = (typeof ref==='string'||typeof ref==='number') ? getB(ref) : ref;
         if (!b) continue;
-
-        // Felder tolerant lesen
-        const label = b.label || b.name || b.title || b.id || "Gebäude";
-        const icon  = b.icon  || b.uiIcon || b.sprite || (b.id ? `assets/buildings/${b.id}.png` : "");
-        const id    = b.id || label.toLowerCase().replace(/\s+/g,'_');
-
-        cards.push({
-          id, label,
-          icon,
-          // alles, was das Platzieren braucht, unverändert durchreichen
-          data: { buildingId: id, ...(b.data || {}) }
-        });
+        const id    = b.id || b.key || b.type || b.name;
+        const label = b.name || b.title || id;
+        const icon  = b.icon || b.uiIcon || b.sprite || (id?`assets/buildings/${id}.png`:null);
+        cards.push({ id, label, icon, data: b.data||{} });
       }
-
-      items.push({ category: cName, items: cards });
+      out.push({ category: cName, items: cards });
     }
-    return items;
+    return out;
   }
 
-  // Source 2: historisches Assets-Mapping (falls vorhanden)
-  function readFromLegacyAssets(){
-    const A = window.BuildAssets || window.assetsBuild || window.__buildItems;
+  function fromLegacy(){
+    const A = window.__buildItems || window.BuildAssets || window.assetsBuild;
     if (!A) return null;
 
-    // ist es bereits im Ziel-Format?
-    if (Array.isArray(A) && A[0]?.items) return A;
-
-    // oder Liste flach → in eine Kategorie „Allg.“
-    if (Array.isArray(A)) return [{ category:"Allg.", items: A }];
+    if (Array.isArray(A) && A[0]?.items) return A;               // bereits gruppiert
+    if (Array.isArray(A)) return [{ category:'Bauen', items:A }]; // flach
 
     return null;
   }
 
   function apply(items){
-    if (!hasUIBuild()) { L.warn("UIBuild noch nicht verfügbar."); return false; }
-    if (!Array.isArray(items) || !items.length) { L.warn("Keine Items gefunden."); return false; }
-
-    // global auch wieder bereitstellen, damit ältere Stände funktionieren
-    window.__buildItems = items;
-    try { window.UIBuild.setItems(items); L.ok(`Items gesetzt (${items.map(c=>c.items.length).reduce((a,b)=>a+b,0)} Karten / ${items.length} Kategorien)`); }
-    catch(e){ console.error(e); L.warn("Konnte Items nicht setzen."); return false; }
-    return true;
+    if (!window.UIBuild || typeof window.UIBuild.setItems!=='function'){
+      warn('UIBuild.setItems nicht verfügbar – versuche später erneut');
+      setTimeout(()=>apply(items), 200);
+      return;
+    }
+    window.UIBuild.setItems(items);
+    log(`Items gesetzt (${items.reduce((s,c)=>s+(c.items?.length||0),0)} / ${items.length})`);
   }
 
-  // Versuche in dieser Reihenfolge, mehrmals während des Boots
-  function tryFill(){
-    const fromReg = readFromRegistry();
-    if (fromReg && apply(fromReg)) return;
-
-    const fromLegacy = readFromLegacyAssets();
-    if (fromLegacy && apply(fromLegacy)) return;
-
-    // später nochmal probieren (Assets/Registry laden asynchron)
-    setTimeout(tryFill, 200);
+  function tryOnce(){
+    const reg = fromRegistry();
+    if (reg && reg.some(c=>c.items.length)) return apply(reg);
+    const old = fromLegacy();
+    if (old && old.some(c=>c.items.length)) return apply(old);
+    warn('Keine Items gefunden – retry …'); setTimeout(tryOnce, 250);
   }
 
-  // Start-Heuristik: sobald UI + Core laufen
-  document.addEventListener("DOMContentLoaded", tryFill);
-  window.addEventListener("cb:assets-ready", tryFill);
-  window.addEventListener("cb:game-start",  tryFill);
+  document.addEventListener('DOMContentLoaded', tryOnce);
+  window.addEventListener('cb:assets-ready', tryOnce);
+  window.addEventListener('cb:game-start',  tryOnce);
 })();
-</script>
