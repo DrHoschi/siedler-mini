@@ -1,44 +1,36 @@
-/**
- * ui-build.data-bridge.js – v1.0 (stabil)
- * ---------------------------------------
- * Brücke zwischen Registry/JSON und UI-Build.
- */
+(() => {
+  const TAG = "[ui-build.bridge]";
+  const VERSION = "v1.0.0";
 
-import { Registry } from "../core/registry.js";
-import { UIBuild } from "./ui-build.js";
+  // einfacher Fallback-Satz auf Basis deiner Dateien/Liste
+  const DEFAULT_ITEMS = [
+    { id:"rathaus",   title:"Rathaus",    categoryId:"infrastruktur", icon:"assets/buildings/rathaus_wood1.png" },
+    { id:"hq",        title:"HQ",         categoryId:"infrastruktur", icon:"assets/buildings/hq_wood.png" },
+    { id:"depot",     title:"Depot",      categoryId:"infrastruktur", icon:"assets/buildings/depot_wood.png" },
+    { id:"wohnhaus0", title:"Wohnhaus 0", categoryId:"wohnen",        icon:"assets/buildings/wohnhaus_wood0_ug0.png" },
+    { id:"wohnhaus1", title:"Wohnhaus 1", categoryId:"wohnen",        icon:"assets/buildings/wohnhaus_wood1_ug0.png" },
+    { id:"baecker",   title:"Bäcker",     categoryId:"produktion",    icon:"assets/buildings/baecker_wood.png" },
+    { id:"farm",      title:"Farm",       categoryId:"produktion",    icon:"assets/buildings/farm_wood.png" },
+    { id:"fischer",   title:"Fischer",    categoryId:"produktion",    icon:"assets/buildings/fischer_wood1.png" },
+    { id:"lumberjack",title:"Holzfäller", categoryId:"produktion",    icon:"assets/buildings/lumberjack_wood.png" },
+    { id:"schmied0",  title:"Schmied",    categoryId:"produktion",    icon:"assets/buildings/schmied_wood0.png" },
+    { id:"steinmetz", title:"Steinmetz",  categoryId:"produktion",    icon:"assets/buildings/steinmetz_wood.png" },
+    { id:"wachturm",  title:"Wachturm",   categoryId:"miliz",         icon:"assets/buildings/wachturm_wood.png" }
+  ];
 
-export const UIBuildBridge = (function() {
-  let retry = 0;
+  const DEFAULT_CATS = [
+    { id:"infrastruktur", title:"Infrastruktur" },
+    { id:"produktion",    title:"Produktion" },
+    { id:"wohnen",        title:"Wohnen" },
+    { id:"miliz",         title:"Miliz" },
+    { id:"sonstiges",     title:"Sonstiges" }
+  ];
 
-  function tryLoad() {
-    // Datenquelle bevorzugt Registry
-    let items = [];
-    if (Registry && Registry.getBuildings) {
-      items = Registry.getBuildings();
-      if (items && items.length) {
-        UIBuild.setItems(items);
-        return;
-      }
-    }
-
-    // Fallback
-    fetch("assets/data/buildings.json")
-      .then(r => r.json())
-      .then(json => {
-        if (json && json.buildings) {
-          UIBuild.setItems(json.buildings);
-          console.log("[ui-build.bridge] Fallback JSON erkannt");
-        }
-      })
-      .catch(err => console.error("[ui-build.bridge] Fehler:", err));
+  async function getItems() {
+    // Wenn dein Core was bereitstellt, nimmt die Bridge das sowieso zuerst.
+    console.log("[ui-build.bridge] Fallback JSON erkannt", `(cats:${DEFAULT_CATS.length} / items:${DEFAULT_ITEMS.length})`);
+    return { items: DEFAULT_ITEMS, cats: DEFAULT_CATS };
   }
 
-  function init() {
-    console.log("[ui-build.bridge] aktiv");
-    tryLoad();
-  }
-
-  return {
-    init
-  };
+  window.UIBuildData = { getItems, version: VERSION };
 })();
