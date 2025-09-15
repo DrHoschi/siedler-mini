@@ -1,11 +1,4 @@
 <!doctype html>
-<!--
-  Neue Siedler – Stabil-Stand (Inspector + Build-Dock)
-  Fokus:
-    - Inspector (Split) sauber angebunden, nichts überschrieben.
-    - Build-Dock hellgrau, bündig unten, 1–2 Reihen sichtbar.
-    - FABs fix und zoomfest; heben bei offenem Dock an.
--->
 <html lang="de">
 <head>
   <meta charset="utf-8">
@@ -17,34 +10,24 @@
   <title>Neue Siedler</title>
 
   <!-- Styles -->
-  <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10">
-  <link rel="stylesheet" href="css/base.css?v=20250914">
-  <link rel="stylesheet" href="assets/ui/ui-build.css?v=18.0.0">
-  <link rel="stylesheet" href="assets/inspector/inspector.css?v=20250914">
+  <link rel="stylesheet" href="assets/ui/ui-start.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="assets/ui/ui-build.css">
+  <link rel="stylesheet" href="assets/inspector/inspector.css">
 
   <style>
-    /* Bühne */
     html, body { height:100%; margin:0; background:#0b0f0d; transform:none !important; }
     #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
 
-    /* FABs – zoomfest & ganz oben */
-    .ui-fab {
-      position: fixed;
-      z-index: 2147483647 !important;
-      pointer-events: auto !important;
-      transform: none !important; /* schützt gegen Eltern-Transforms */
-      contain: layout paint style;
-    }
-    #btn-build     { left:16px; bottom:16px; }
+    .ui-fab { position:fixed; z-index:2147483647 !important; transform:none !important; }
+    #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
     .ui-fab button{
-      width:52px; height:52px; border-radius:50%; border:none;
+      width:52px; height:52px; border-radius:50%; border:0;
       background:#2b3542; color:#fff; font-size:22px;
       box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px);
       cursor:pointer;
     }
-
-    /* FABs anheben, wenn Dock offen */
     :root { --build-dock-max-h: 240px; }
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h) + 16px); }
@@ -55,7 +38,7 @@
   <!-- Bühne -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock (unten; von ui-build.js gerendert) -->
+  <!-- Build-Dock -->
   <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
 
   <!-- Start-Panel -->
@@ -74,55 +57,53 @@
 
   <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" aria-label="Bau-Menü"
-            onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('[ui] Build-Toggle fehlt');}">🧱</button>
+    <button type="button" aria-label="Bau-Menü" onclick="try{GameUI?.toggleBuild();}catch(_){console.warn('Build-Toggle fehlt');}">🧱</button>
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" aria-label="Inspector"
-            onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('[ui] Inspector-Toggle fehlt');}">🛠</button>
+    <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(_){console.warn('Inspector-Toggle fehlt');}">🛠</button>
   </div>
 
-  <!-- Core + Polyfills -->
-  <script src="assets/core/cblog.polyfill.js?v=1.2.2"></script>
-  <script src="assets/core/core.env.js?v=17.8.2"></script>
-  <script src="assets/core/asset.js?v=17.8.7"></script>
-  <script src="assets/core/build.assets.js?v=17.8.7"></script>
+  <!-- Core -->
+  <script src="assets/core/cblog.polyfill.js"></script>
+  <script src="assets/core/core.env.js"></script>
+  <script src="assets/core/asset.js"></script>
+  <script src="assets/core/build.assets.js"></script>
 
-  <script src="assets/core/registry.js?v=1.2.0"></script>
-  <script src="assets/core/entities.registry.js?v=1.1.1"></script>
-  <script src="assets/core/core.entities.js?v=17.6.2"></script>
-  <script src="assets/core/core.production.js?v=17.8.2"></script>
-  <script src="assets/core/core.pfglue.js?v=17.8.2"></script>
-  <script src="assets/core/camera.js?v=17.9.5"></script>
-  <script src="assets/core/core.map.js?v=17.9.1"></script>
-  <script src="assets/core/core.input.js?v=17.8.2"></script>
-  <script src="assets/core/carriers.js?v=17.8.2"></script>
-  <script src="assets/core/overlay-hooks.js?v=17.8.2"></script>
-  <script src="assets/core/core.render.js?v=17.9.5"></script>
-  <script src="core/game.js?v=18.0.0"></script>
-  <script src="assets/core/game.bootstrap.js?v=17.8.7"></script>
-  <script src="assets/core/game.js?v=17.10.0"></script>
+  <script src="assets/core/registry.js"></script>
+  <script src="assets/core/entities.registry.js"></script>
+  <script src="assets/core/core.entities.js"></script>
+  <script src="assets/core/core.production.js"></script>
+  <script src="assets/core/core.pfglue.js"></script>
+  <script src="assets/core/camera.js"></script>
+  <script src="assets/core/core.map.js"></script>
+  <script src="assets/core/core.input.js"></script>
+  <script src="assets/core/carriers.js"></script>
+  <script src="assets/core/overlay-hooks.js"></script>
+  <script src="assets/core/core.render.js"></script>
+  <script src="core/game.js"></script>
+  <script src="assets/core/game.bootstrap.js"></script>
+  <script src="assets/core/game.js"></script>
 
-  <!-- Inspector (Split – aktiv lassen) -->
-  <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.logs.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.tests.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.resources.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/inspector.paths.js?v=18.14.5"></script>
-  <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
+  <!-- Inspector (Split – so lassen) -->
+  <script defer src="assets/inspector/inspector.core.js"></script>
+  <script defer src="assets/inspector/inspector.logs.js"></script>
+  <script defer src="assets/inspector/inspector.tests.js"></script>
+  <script defer src="assets/inspector/inspector.resources.js"></script>
+  <script defer src="assets/inspector/inspector.paths.js"></script>
+  <script defer src="assets/inspector/overlay.hooks.js"></script>
 
-  <!-- Inspector – API-Kompat (ergänzt nur, falls keine API bereitsteht) -->
-  <script defer src="assets/inspector/inspector.api-compat.js?v=1.3.2"></script>
+  <!-- Inspector-API Fallback (ergänzt nur, falls keine API gesetzt) -->
+  <script defer src="assets/inspector/inspector.api-compat.js"></script>
 
   <!-- UI -->
-  <script defer src="assets/ui/ui-bridge.js?v=18.0.0"></script>
-  <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
-  <script defer src="assets/ui/ui-build.js?v=18.0.0"></script>
+  <script defer src="assets/ui/ui-bridge.js"></script>
+  <script defer src="assets/ui/ui-start.js"></script>
+  <script defer src="assets/ui/ui-build.js"></script>
 
   <!-- Boot-Compat -->
-  <script defer src="boot.compat.js?v=17.8.2"></script>
+  <script defer src="boot.compat.js"></script>
 
-  <!-- Marker / Body-Klassen (FAB-Abstand) -->
+  <!-- Marker / Body-Klassen -->
   <script>
     (function () {
       function setOpen(){ document.body.classList.add('has-build-open'); }
