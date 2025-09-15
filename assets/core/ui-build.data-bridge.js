@@ -1,13 +1,12 @@
 /* ============================================================================
  * ui-build.data-bridge.js — Brücke Registry → UI (Bau-Menü)
- * Version: v17.0.1
+ * Version: v17.0.2
  * Projekt: Siedler-Mini
  * ========================================================================== */
 (function(){
   'use strict';
   var MOD = '[ui-build.data-bridge]';
   var DEFAULT_ICON = 'assets/ui/build/placeholder.png';
-
   function log(){ try{ console.log.apply(console, arguments); }catch(_){} }
 
   function _pickRegistry(){
@@ -25,11 +24,9 @@
     },
 
     getCategories: function(){
-      // Wenn BUILD_CATEGORIES bereits vorhanden (durch build.categories.js), einfach nutzen:
       if(Array.isArray(window.BUILD_CATEGORIES) && window.BUILD_CATEGORIES.length){
         return window.BUILD_CATEGORIES;
       }
-      // Notfalls selbst aus Registry ableiten (Minimal-Variante):
       var reg = _pickRegistry();
       if(reg && reg.buildings){
         var catMap = Object.create(null);
@@ -69,7 +66,6 @@
         });
         return cats;
       }
-      // Letzter Fallback:
       return [];
     },
 
