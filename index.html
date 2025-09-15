@@ -111,6 +111,10 @@
   <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
 
   <!-- UI (WICHTIG: Reihenfolge beibehalten) -->
+  <!-- Bridge + Kategorien + UI (in dieser Reihenfolge) -->
+<script src="assets/core/ui-build.data-bridge.js"></script>
+<script src="assets/core/build.categories.js"></script>
+<script src="assets/core/ui-build.js"></script>
   <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>        <!-- Start-Panel Logik -->
   <script defer src="assets/ui/ui-build.js?v=18.3.2"></script>        <!-- Renderer/DOM fürs Baumenü -->
   <script defer src="assets/ui/ui-build.data-bridge.js"></script> <!-- ← NACH build.categories -->
