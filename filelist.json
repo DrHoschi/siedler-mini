@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-15T12:39:22.486Z",
+  "createdAt": "2025-09-15T15:10:19.837Z",
   "root": ".",
-  "count": 290,
+  "count": 291,
   "entries": [
     {
       "type": "dir",
@@ -905,8 +905,13 @@
     },
     {
       "type": "file",
+      "path": "assets/ui/ui-build.data-bridge.js",
+      "size": 8288
+    },
+    {
+      "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 11188
+      "size": 6640
     },
     {
       "type": "file",
@@ -1365,12 +1370,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 27990
+      "size": 28740
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10771
+      "size": 11037
     },
     {
       "type": "file",
@@ -1385,7 +1390,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5635
+      "size": 5751
     },
     {
       "type": "file",
