@@ -208,7 +208,17 @@ Leitplanken:
       },
       toggleInspector: tryInspectorToggle
     };
-
+window.GameUI = {
+  toggleInspector(){
+    try {
+      if (window.InspectorAPI?.toggle) return void window.InspectorAPI.toggle();
+      if (window.Inspector?.toggle)   return void window.Inspector.toggle();
+      window.dispatchEvent(new CustomEvent('inspector:toggle'));
+      window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
+    } catch(e){ console.warn('[ui] Inspector-Toggle fehlgeschlagen', e); }
+  },
+  toggleBuild(){ /* … wie gehabt … */ }
+};
     // Optional: Hotkeys (B = Build, I = Inspector)
     window.addEventListener('keydown', function(ev){
       if (ev.repeat) return;
