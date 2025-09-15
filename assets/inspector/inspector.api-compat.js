@@ -1,128 +1,112 @@
 /*!
- * Inspector API-Compat Bridge
+ * inspector.api-compat.js  – v1.4.0
  * Zweck:
- *  - Stellt sicher, dass window.GameUI.open/toggle/closeInspector immer vorhanden sind.
- *  - Falls andere Skripte window.GameUI überschreiben, werden die Inspector-Methoden restauriert.
- *  - Zusätzliche Fallbacks über DOM-Öffnen (id="inspector") + Events.
- *
- * Reihenfolge in index.html:
- *    ... inspector.core.js
- *    inspector.logs.js / .paths.js / .tests.js / .resources.js
- *    → inspector.api-compat.js   <-- direkt DANACH laden
- *
- * Diese Bridge fasst die bestehenden Inspector-Module NICHT an.
+ *  - Stellt robust sicher, dass GameUI.open/close/toggleInspector vorhanden sind.
+ *  - Nutzt Core-API wenn vorhanden, sonst DOM-Fallback (#inspector oder Varianten).
+ *  - Verhindert doppelte Initialisierung & doppelte Button-Reaktionen.
+ *  - Stabiler Toggle mit internem Status, damit 1× Klick öffnet, 1× Klick schließt.
+ * Achtung: Inspector-Module selbst bleiben unberührt.
  */
-
-(function () {
+(function(){
   'use strict';
-  var MOD = '[inspector.api-compat]';
 
-  // --- kleine Utils ---------------------------------------------------------
-  var on = window.addEventListener.bind(window);
-  var $  = function(sel){ return document.querySelector(sel); };
+  // ---- Doppel-Load verhindern ------------------------------------------------
+  if (window.__INSPECTOR_COMPAT_ACTIVE__) {
+    (console.warn||console.log)("[inspector.api-compat] bereits aktiv – zweites Laden ignoriert.");
+    return;
+  }
+  window.__INSPECTOR_COMPAT_ACTIVE__ = true;
 
-  function dbg(){ try{ (window.CBLog?.info || console.log).apply(console, arguments);}catch(_){} }
-  function warn(){ try{ (window.CBLog?.warn || console.warn).apply(console, arguments);}catch(_){} }
+  const logI = (m)=> (window.CBLog?.info || console.log)(`[inspector.api-compat] ${m}`);
+  const logW = (m)=> (window.CBLog?.warn || console.warn)(`[inspector.api-compat] ${m}`);
 
-  // Merker für gesicherte Inspector-Funktionen (früh nach core.js holen)
-  var BACKUP = (function snapshot(){
-    // Wenn der Inspector-Core korrekt geladen wurde, hat er diese Hooks gesetzt:
-    //   window.GameUI.toggleInspector / openInspector / closeInspector
-    var ui = (window.GameUI = window.GameUI || {});
-    var saved = {
-      open : typeof ui.openInspector  === 'function' ? ui.openInspector  : null,
-      close: typeof ui.closeInspector === 'function' ? ui.closeInspector : null,
-      tog  : typeof ui.toggleInspector=== 'function' ? ui.toggleInspector: null
-    };
-    // Zusätzlich merken wir uns, ob der Core global exportiert ist (nur Info).
-    saved.hasCore = !!(window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api);
-    return saved;
-  })();
-
-  // --- DOM-Fallback (nur falls nötig) ---------------------------------------
-  // Falls irgendein Skript GameUI überschrieben hat UND der Core noch nicht initialisiert,
-  // ermöglichen wir ein simples Open/Close über das Overlay-Element #inspector.
-  function ensureOverlayEl(){
-    var el = document.getElementById('inspector');
-    return el || null;
+  // ---- Root-Erkennung (mehrere Varianten) -----------------------------------
+  const ROOT_SELECTORS = [
+    "#inspector", "#inspector-root", "#inspectorOverlay", "#ui-inspector",
+    "#overlay-inspector", ".inspector-root", ".inspector-overlay", "[data-inspector-root]"
+  ];
+  function findRoot(){
+    for (const sel of ROOT_SELECTORS){
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
   }
 
+  // ---- Zustand (damit Toggle deterministisch ist) ----------------------------
+  let state = { isOpen: false, lastToggleTs: 0 };
+
+  // ---- DOM-Fallback (setzt display & Klassen konsistent) ---------------------
   function domOpen(){
-    var el = ensureOverlayEl();
-    if (el) {
-      el.style.display = 'flex';
-      el.setAttribute('aria-hidden','false');
-      document.body.classList.add('inspector-open');
-      try{ window.dispatchEvent(new CustomEvent('cb:inspector-open')); }catch(_){}
-      dbg(MOD,'domOpen() – Overlay sichtbar.');
-      return true;
-    }
-    return false;
-  }
-
-  function domClose(){
-    var el = ensureOverlayEl();
-    if (el) {
-      el.style.display = 'none';
-      el.setAttribute('aria-hidden','true');
-      document.body.classList.remove('inspector-open');
-      try{ window.dispatchEvent(new CustomEvent('cb:inspector-close')); }catch(_){}
-      dbg(MOD,'domClose() – Overlay versteckt.');
-      return true;
-    }
-    return false;
-  }
-
-  function domToggle(){
-    var el = ensureOverlayEl();
+    const el = findRoot();
     if (!el) return false;
-    var willOpen = el.style.display !== 'flex';
+    el.style.display = el.style.display || "flex";
+    if (el.style.display === "none") el.style.display = "flex";
+    el.classList.add("is-open");
+    el.setAttribute("aria-hidden","false");
+    document.body.classList.add("inspector-open");
+    try{ window.dispatchEvent(new CustomEvent("cb:inspector-open")); }catch(_){}
+    state.isOpen = true;
+    logI("domOpen() – Overlay sichtbar.");
+    return true;
+  }
+  function domClose(){
+    const el = findRoot();
+    if (!el) return false;
+    el.style.display = "none";
+    el.classList.remove("is-open");
+    el.setAttribute("aria-hidden","true");
+    document.body.classList.remove("inspector-open");
+    try{ window.dispatchEvent(new CustomEvent("cb:inspector-close")); }catch(_){}
+    state.isOpen = false;
+    logI("domClose() – Overlay versteckt.");
+    return true;
+  }
+  function domToggle(){
+    // Klick-Entprellung: 60ms
+    const now = performance.now ? performance.now() : Date.now();
+    if (now - state.lastToggleTs < 60) return state.isOpen;
+    state.lastToggleTs = now;
+
+    // Zustand bevorzugt, sonst am DOM ablesen
+    const el = findRoot();
+    const visible = (el && (el.classList.contains("is-open") || (el.style.display && el.style.display!=="none")));
+    const willOpen = (state.isOpen !== undefined) ? !state.isOpen : !visible;
+
     return willOpen ? domOpen() : domClose();
   }
 
-  // --- Rebind-Logik ---------------------------------------------------------
+  // ---- Core-API-Backup (falls vorhanden) ------------------------------------
+  const ui0 = (window.GameUI = window.GameUI || {});
+  const BACKUP = {
+    open  : typeof ui0.openInspector   === "function" ? ui0.openInspector   : null,
+    close : typeof ui0.closeInspector  === "function" ? ui0.closeInspector  : null,
+    toggle: typeof ui0.toggleInspector === "function" ? ui0.toggleInspector : null,
+    hasCore: !!(window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api)
+  };
+
+  // ---- GameUI (neu binden, aber Core respektieren) --------------------------
   function bindGameUI(){
-    var ui = (window.GameUI = window.GameUI || {});
-
-    // Prüfen, ob Core-Hooks da sind – wenn ja, verwenden; sonst DOM-Fallback.
-    var open  = BACKUP.open  || domOpen;
-    var close = BACKUP.close || domClose;
-    var tog   = BACKUP.tog   || domToggle;
-
-    // Wenn inzwischen von anderen Skripten überschrieben → wiederherstellen.
-    ui.openInspector   = open;
-    ui.closeInspector  = close;
-    ui.toggleInspector = tog;
-
-    dbg(MOD, 'gebunden – open:%s close:%s toggle:%s (core:%s)',
-      (open===domOpen?'dom':'core'),
-      (close===domClose?'dom':'core'),
-      (tog===domToggle?'dom':'core'),
-      BACKUP.hasCore ? 'ja' : 'nein'
+    const ui = (window.GameUI = window.GameUI || {});
+    ui.openInspector   = BACKUP.open   || domOpen;
+    ui.closeInspector  = BACKUP.close  || domClose;
+    ui.toggleInspector = BACKUP.toggle || domToggle;
+    logI(
+      `gebunden – open:%s close:%s toggle:%s (core:%s)`,
+      BACKUP.open?'core':'dom', BACKUP.close?'core':'dom', BACKUP.toggle?'core':'dom',
+      BACKUP.hasCore?'ja':'nein'
     );
   }
-
-  // Sofort binden (wir hängen direkt NACH den Inspector-Modulen in der Seite)
   bindGameUI();
 
-  // Sicherheitsnetz: Falls später nochmal jemand GameUI ersetzt, fixen wir es erneut.
-  on('DOMContentLoaded', bindGameUI);
-  on('cb:ui-ready', bindGameUI);
+  // Wenn später etwas GameUI überschreibt → wiederherstellen
+  window.addEventListener("cb:ui-ready", bindGameUI);
+  window.addEventListener("DOMContentLoaded", bindGameUI);
 
-  // Event-Brücke (optional, falls jemand die alten Trigger nutzt)
-  on('inspector:open',  function(){ try{ window.GameUI.openInspector(); } catch(e){ warn(MOD,'open err',e);} });
-  on('inspector:close', function(){ try{ window.GameUI.closeInspector(); } catch(e){ warn(MOD,'close err',e);} });
-  on('inspector:toggle',function(){ try{ window.GameUI.toggleInspector(); }catch(e){ warn(MOD,'toggle err',e);} });
+  // Alte Eventnamen an GameUI weiterreichen (Kompat)
+  window.addEventListener("inspector:open",  ()=> window.GameUI.openInspector());
+  window.addEventListener("inspector:close", ()=> window.GameUI.closeInspector());
+  window.addEventListener("inspector:toggle",()=> window.GameUI.toggleInspector());
 
-  // Click-Hook, falls du irgendwo data-action="toggle-inspector" nutzt
-  document.addEventListener('click', function(ev){
-    var t = ev.target;
-    if (!t) return;
-    if (t.matches && t.matches('[data-action="toggle-inspector"]')) {
-      try{ window.GameUI.toggleInspector(); } catch(e){ warn(MOD,'click toggle err',e); }
-      ev.preventDefault();
-    }
-  }, true);
-
-  dbg(MOD,'bereit.');
+  logI("bereit.");
 })();
