@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-14T15:40:10.240Z",
+  "createdAt": "2025-09-15T12:39:22.486Z",
   "root": ".",
-  "count": 282,
+  "count": 290,
   "entries": [
     {
       "type": "dir",
@@ -385,12 +385,22 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.api-compat.js",
-      "size": 2567
+      "size": 4565
     },
     {
       "type": "file",
       "path": "assets/inspector/inspector.build.js",
       "size": 1328
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.button-bind.js",
+      "size": 3060
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.compat.js",
+      "size": 758
     },
     {
       "type": "file",
@@ -401,6 +411,11 @@
       "type": "file",
       "path": "assets/inspector/inspector.css",
       "size": 5295
+    },
+    {
+      "type": "file",
+      "path": "assets/inspector/inspector.force-toggle.js",
+      "size": 5162
     },
     {
       "type": "file",
@@ -881,17 +896,22 @@
     {
       "type": "file",
       "path": "assets/ui/ui-bridge.js",
-      "size": 3180
+      "size": 2026
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.css",
-      "size": 4714
+      "size": 2508
     },
     {
       "type": "file",
       "path": "assets/ui/ui-build.js",
-      "size": 5800
+      "size": 11188
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/ui-inspector.js",
+      "size": 6333
     },
     {
       "type": "file",
@@ -1289,6 +1309,25 @@
       "size": 29869
     },
     {
+      "type": "dir",
+      "path": "ui/"
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build-hook.js",
+      "size": 1324
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build.css",
+      "size": 3147
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build.js",
+      "size": 6094
+    },
+    {
       "type": "file",
       "path": "asset-library.html",
       "size": 5787
@@ -1321,17 +1360,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 2277
+      "size": 2001
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 27849
+      "size": 27990
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 10692
+      "size": 10771
     },
     {
       "type": "file",
@@ -1346,7 +1385,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6793
+      "size": 5635
     },
     {
       "type": "file",
