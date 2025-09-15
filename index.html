@@ -102,8 +102,7 @@ Leitplanken:
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
     <button type="button" aria-label="Inspector"
-      onclick="try{GameUI?.toggleInspector();}catch(e){console.warn('[ui] Inspector-Toggle nicht verfügbar',e);}">🛠</button>
-  </div>
+  onclick="(window.GameUI?.toggleInspector?.() ?? window.dispatchEvent(new CustomEvent('inspector:toggle')))">🛠</button>  </div>
 
   <!-- =======================================================================
   (4) CORE & ENGINE – Reihenfolge ist wichtig
