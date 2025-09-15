@@ -164,49 +164,58 @@ Leitplanken:
   <!-- =======================================================================
   (8) PAGE-SCRIPTS: Marker, Body-Klassen, GameUI-Toggles (leichtgewichtig)
   ======================================================================== -->
-  <script>
-    (function () {
-      // Marker/Version im Log
-      window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.4.0";
-      (window.CBLog?.info || console.log)("[index] UI bereit (v18.4.0)");
+<script>
+  (function () {
+    // Marker/Version im Log
+    window.__cb = window.__cb || {};
+    window.__cb.indexVersion = "v18.4.1";
+    (window.CBLog?.info || console.log)("[index] UI bereit (v18.4.1)");
 
-      // Body-Klassen bei Build-Dock open/close
-      function setOpen(){ document.body.classList.add('has-build-open'); }
-      function setClose(){ document.body.classList.remove('has-build-open'); }
-      window.addEventListener('cb:build:open',  setOpen);
-      window.addEventListener('cb:build:close', setClose);
-      // Legacy-Support (falls ältere Events feuern):
-      window.addEventListener('cb:build-open',  setOpen);
-      window.addEventListener('cb:build-close', setClose);
+    // Body-Klassen bei Build-Dock open/close
+    function setOpen(){ document.body.classList.add('has-build-open'); }
+    function setClose(){ document.body.classList.remove('has-build-open'); }
+    window.addEventListener('cb:build:open',  setOpen);
+    window.addEventListener('cb:build:close', setClose);
+    window.addEventListener('cb:build-open',  setOpen);   // Legacy
+    window.addEventListener('cb:build-close', setClose);  // Legacy
 
-      // Sehr kleine UI-Helfer für die FAB-Buttons:
-      window.GameUI = {
-        toggleBuild(){
-          // Falls noch kein Dock gerendert ist, später erneut versuchen
-          var dock = document.querySelector('#build-panel .ui-build');
-          var isOpen = document.body.classList.toggle('has-build-open');
-          // Events für Telemetrie/Kompat
-          window.dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
-          if(!dock && window.UIBuild && typeof window.UIBuild.rerender === 'function'){
-            // Spätes Rendern nach Toggle erzwingen
-            window.UIBuild.rerender();
-          }
-        },
-        toggleInspector(){
-          // Nutzt Inspector API-Compat, falls vorhanden; fallback: Event
-          try {
-            if (window.InspectorAPI && typeof window.InspectorAPI.toggle === 'function') {
-              window.InspectorAPI.toggle();
-            } else {
-              window.dispatchEvent(new CustomEvent('inspector:toggle'));
-            }
-          } catch(e){
-            console.warn('[ui] Inspector-Toggle fehlgeschlagen', e);
-          }
+    // ---- ROBUSTER Inspector-Toggle (bedient alle bekannten Wege) ----
+    function tryInspectorToggle(){
+      try {
+        if (window.InspectorAPI && typeof window.InspectorAPI.toggle === 'function') {
+          return void window.InspectorAPI.toggle();
         }
-      };
-    })();
-  </script>
+        if (window.Inspector && typeof window.Inspector.toggle === 'function') {
+          return void window.Inspector.toggle();
+        }
+        // Event-basierte Varianten (neu/alt)
+        window.dispatchEvent(new CustomEvent('inspector:toggle'));
+        window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
+      } catch(e){
+        console.warn('[ui] Inspector-Toggle fehlgeschlagen', e);
+      }
+    }
+
+    // Sehr kleine UI-Helfer für die FAB-Buttons:
+    window.GameUI = {
+      toggleBuild(){
+        const isOpen = document.body.classList.toggle('has-build-open');
+        window.dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
+        // Falls dock noch nicht gerendert war → nachziehen
+        if (isOpen && window.UIBuild && typeof window.UIBuild.rerender === 'function') {
+          window.UIBuild.rerender();
+        }
+      },
+      toggleInspector: tryInspectorToggle
+    };
+
+    // Optional: Hotkeys (B = Build, I = Inspector)
+    window.addEventListener('keydown', function(ev){
+      if (ev.repeat) return;
+      if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
+      if (ev.key === 'i' || ev.key === 'I') { ev.preventDefault(); window.GameUI.toggleInspector(); }
+    });
+  })();
+</script>
 </body>
 </html>
