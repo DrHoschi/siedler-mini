@@ -1,174 +1,119 @@
 /* ============================================================================
- * build.categories.js — Kategorien + Items fürs Tabbed-Dock
- * Version: v1.1.0 (robust, registry-kompatibel, mit Platzhaltern)
+ * build.categories.js — Kategorien + Items für das Baumenü (Dock)
+ * Version: v1.1.0  (15. Sep 2025)
  * Projekt: Siedler-Mini
  *
  * Zweck
  *  - Strukturierte Liste der Bau-Einträge (Dock-Reihenfolge, Labels, Icons)
- *  - Kompatibel zu bestehender ui-build.data-bridge.js + ui-build.js
+ *  - Kompatibel zu bestehender ui-build.js (kein ES-Module erforderlich)
  *
- * Globale API
+ * API (global)
  *   window.BUILD_CATEGORIES : Array<Category>
  *   Category = { id, title, items: Array<Item> }
- *   Item = { id, label, icon, kind?, disabled?, todo? }
+ *   Item = { id, label, icon, kind?, todo? }
  *
  * Events (dispatch)
  *   'cb:build-categories-ready' { detail: { categories } }
  * ========================================================================== */
-(function () {
+(function(){
   'use strict';
-  var MOD = '[build.categories]';
+  var MOD='[build.categories]';
 
-  // Logging (failsafe)
-  function log(m){ try{ (window.CBLog?.ok || console.log)(m); } catch(_) { console.log(m); } }
-  function warn(m){ try{ (window.CBLog?.warn || console.warn)(m); } catch(_) { console.warn(m); } }
+  function log(msg){ try{ (window.CBLog?.ok||console.log)(msg); }catch(_){ console.log(msg); } }
+  function A(path){ return path || null; }
 
-  // --- Asset-Resolver -------------------------------------------------------
-  // Primär: BUILD_ASSETS.building.<id>
-  // Fallback: statischer Pfad in assets/buildings/<id>_wood*.png
-  // Extra: Terrain/Platzhalter für Deko/Infrastruktur
-  var ASSETS = (window.BUILD_ASSETS || { building:{}, ui:{} });
+  // Pfad-Helfer (nur zur Lesbarkeit)
+  var B = 'assets/buildings/';
+  var R = 'assets/tex/road/';
+  var T = 'assets/tex/terrain/';
 
-  // Bekannte Bild-Dateien (Fallback), passend zu deiner Repository-Struktur
-  var FALLBACK_BUILDING = {
-    // Verwaltung
-    hq:            'assets/buildings/hq_wood.png',
-    rathaus:       'assets/buildings/rathaus_wood1.png',
-    depot:         'assets/buildings/depot_wood.png',
-    wohnhaus:      'assets/buildings/wohnhaus_wood1_ug0.png',
-
-    // Nahrung
-    fischer:       'assets/buildings/fischer_wood1.png',
-    farm:          'assets/buildings/farm_wood.png',
-    windmuehle:    'assets/buildings/windmuehle_wood.png',
-    baecker:       'assets/buildings/baecker_wood.png',
-
-    // Rohstoffe / Produktion
-    holzfaeller:   'assets/buildings/lumberjack_wood.png',
-    steinmetz:     'assets/buildings/steinmetz_wood.png',
-    schmied:       'assets/buildings/schmied_wood0.png',
-
-    // Militär (Platzhalter)
-    wachturm:      'assets/buildings/wachturm_wood.png'
-  };
-
-  // Kleine Terrain-Platzhalter (für Deko/Infrastruktur)
-  var FALLBACK_TERRAIN = {
-    grass:  'assets/tex/terrain/sm_topdown_grass0.jpeg',
-    meadow: 'assets/tex/terrain/sm_topdown_meadow0_ug0.jpeg',
-    dirt:   'assets/tex/terrain/sm_topdown_dirt0.jpeg',
-    rock:   'assets/tex/terrain/sm_topdown_rock0_ug0.jpeg',
-    shore:  'assets/tex/terrain/sm_topdown_shore.PNG',
-    water:  'assets/tex/terrain/sm_topdown_water0_ug0.jpeg'
-  };
-
-  // Liefert Icon-URL für ein Gebäude-ID
-  function iconFor(id, fallbackKey){
-    // 1) per BUILD_ASSETS
-    var fromMap = ASSETS.building && (ASSETS.building[id] || ASSETS.building[id.toLowerCase()]);
-    if (fromMap) return fromMap;
-
-    // 2) fixer Fallback je ID
-    if (FALLBACK_BUILDING[id]) return FALLBACK_BUILDING[id];
-
-    // 3) optional Terrain-Placeholder
-    if (fallbackKey && FALLBACK_TERRAIN[fallbackKey]) return FALLBACK_TERRAIN[fallbackKey];
-
-    // 4) ultima ratio: UI-Placeholder (falls vorhanden)
-    return (ASSETS.ui && ASSETS.ui.placeholder64) || 'assets/placeholder64.PNG';
-  }
-
-  // Hilfsfunktion: baue Item
-  function B(id, label, opts){
-    opts = opts || {};
-    return {
-      id: id,
-      label: label,
-      icon: opts.icon || iconFor(id, opts.fallbackKey),
-      kind: opts.kind,             // 'overlay' | 'decor' | undefined
-      disabled: !!opts.disabled,   // true => ausgegraut
-      todo: !!opts.todo            // true => markiert als TODO
-    };
-  }
-
-  // --- Kategorien in Dock-Reihenfolge --------------------------------------
+  /** Kategorien in gewünschter Dock-Reihenfolge */
   var CATS = [
+    // 1) Allgemein / Verwaltung
     {
       id: 'general',
       title: 'Allg. / Verwaltung',
       items: [
-        B('rathaus',  'Rathaus'),
-        B('wohnhaus', 'Wohnhaus'),
-        B('depot',    'Depot')
-        // Optional: HQ zeigen?
-        // B('hq',       'Hauptquartier')
+        { id:'rathaus',  label:'Rathaus',   icon: A(B+'rathaus_wood1.png') },
+        { id:'wohnhaus', label:'Wohnhaus',  icon: A(B+'wohnhaus_wood1_ug0.png') },
+        { id:'depot',    label:'Depot',     icon: A(B+'depot_wood.png') }
       ]
     },
+
+    // 2) Produktion / Nahrung
     {
       id: 'production_food',
       title: 'Produktion / Nahrung',
       items: [
-        B('fischer',    'Fischer'),
-        B('farm',       'Farm'),
-        B('windmuehle', 'Mühle'),
-        B('baecker',    'Bäckerei')
+        { id:'fischer',  label:'Fischer',   icon: A(B+'fischer_wood1.png') },
+        { id:'farm',     label:'Farm',      icon: A(B+'farm_wood.png') },
+        { id:'muehle',   label:'Mühle',     icon: A(B+'windmuehle_wood.png') },
+        { id:'baecker',  label:'Bäckerei',  icon: A(B+'baecker_wood.png') }
       ]
     },
+
+    // 3) Produktion / Rohstoffe
     {
       id: 'production_raw',
       title: 'Produktion / Rohstoffe',
       items: [
-        B('holzfaeller', 'Holzfäller'),
-        B('steinmetz',   'Steinmetz'),
-        B('schmied',     'Schmied')
+        { id:'holzfaeller', label:'Holzfäller', icon: A(B+'lumberjack_wood.png') },
+        { id:'steinmetz',   label:'Steinmetz',  icon: A(B+'steinmetz_wood.png') },
+        { id:'schmied',     label:'Schmied',    icon: A(B+'schmied_wood0.png') }
       ]
     },
+
+    // 4) Wohnen (zusätzliche Varianten als Reserve)
     {
       id: 'housing',
       title: 'Wohnen',
       items: [
-        // weitere Stufen vorbereitet (IDs kompatibel zu deiner Struktur)
-        B('wohnhaus', 'Wohnhaus I'),
-        // Falls du später mehrere Varianten mappen willst:
-        // B('wohnhaus2','Wohnhaus II', { icon: 'assets/buildings/wohnhaus_wood0_ug0.png', disabled:true, todo:true })
+        { id:'haus_i',   label:'Haus I', icon: A(B+'wohnhaus_wood0_ug0.png') },
+        { id:'haus_ii',  label:'Haus II',icon: A(B+'wohnhaus_wood1_ug0.png') }
       ]
     },
+
+    // 5) Infrastruktur (Overlay / Wege & Straßen)
     {
       id: 'infrastructure',
       title: 'Infrastruktur',
       items: [
-        // Platzhalter, später durch echte Overlays ersetzen (Straßen/Wege)
-        B('road_stone', 'Straße',       { kind:'overlay', todo:true, icon: FALLBACK_TERRAIN.dirt }),
-        B('path_trail', 'Trampelpfad',  { kind:'overlay', todo:true, icon: FALLBACK_TERRAIN.meadow })
+        { id:'road_straight', label:'Straße (gerade)', icon: A(R+'topdown_road_straight.png'), kind:'overlay', todo:true },
+        { id:'road_corner',   label:'Straße (Ecke)',   icon: A(R+'topdown_road_corner.png'),   kind:'overlay', todo:true },
+        { id:'road_cross',    label:'Straße (Kreuz)',  icon: A(R+'topdown_road_cross.png'),    kind:'overlay', todo:true },
+        { id:'road_t',        label:'Straße (T)',      icon: A(R+'topdown_road_t.png'),        kind:'overlay', todo:true }
       ]
     },
+
+    // 6) Deko / Landschaft (Terrain-Platzhalter – ohne Spiel-Logik)
     {
       id: 'decor',
       title: 'Deko / Landschaft',
       items: [
-        B('tree_pine',  'Baum (Nadel)', { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.meadow }),
-        B('tree_oak',   'Baum (Laub)',  { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.grass }),
-        B('rock_small', 'Felsen',       { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.rock }),
-        B('shore_tile', 'Strand',       { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.shore }),
-        B('water_tile', 'Wasser',       { kind:'decor',  todo:true, icon: FALLBACK_TERRAIN.water })
+        { id:'terrain_grass',  label:'Gras',     icon: A(T+'topdown_grass.PNG'),  kind:'decor', todo:true },
+        { id:'terrain_meadow', label:'Wiese',    icon: A(T+'topdown_meadow.PNG'), kind:'decor', todo:true },
+        { id:'terrain_dirt',   label:'Erde',     icon: A(T+'topdown_dirt.PNG'),   kind:'decor', todo:true },
+        { id:'terrain_rock',   label:'Fels',     icon: A(T+'topdown_rock.PNG'),   kind:'decor', todo:true },
+        { id:'terrain_shore',  label:'Küste',    icon: A(T+'topdown_shore.PNG'),  kind:'decor', todo:true }
       ]
     },
+
+    // 7) Militär (Reserve – 1 Platzhalter)
     {
       id: 'military',
       title: 'Militär',
       items: [
-        B('wachturm', 'Wachturm', { todo:true }) // Platzhalter-Asset vorhanden
+        { id:'wachturm', label:'Wachturm', icon: A(B+'wachturm_wood.png'), todo:true }
       ]
     }
   ];
 
-  // --- Export + Event -------------------------------------------------------
-  try {
-    window.BUILD_CATEGORIES = CATS;
+  // Export + Event
+  window.BUILD_CATEGORIES = CATS;
+  try{
     window.dispatchEvent(new CustomEvent('cb:build-categories-ready', { detail:{ categories: CATS } }));
-    log(MOD + ' bereit (v1.1.0) — ' + CATS.length + ' Kategorien');
-  } catch (e) {
-    warn(MOD + ' Export-Problem: ' + (e && e.message));
-    window.BUILD_CATEGORIES = CATS; // Fallback dennoch setzen
-  }
+  }catch(_){/* IE/alt ign. */}
+
+  var count = CATS.reduce((n,c)=>n+(c.items?c.items.length:0),0);
+  log(MOD+' bereit (v1.1.0) — '+CATS.length+' Kategorien / '+count+' Items');
 })();
