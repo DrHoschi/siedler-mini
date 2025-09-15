@@ -1,107 +1,67 @@
 /* ============================================================================
- * Neue Siedler – Core Registry
- * Version: v1.2.0
- * Aufgabe: Zentrale Datenhaltung (Buildings, Kategorien, …)
- * Events:  cb:registry:ready   – wenn Registry initialisiert ist
- *          cb:registry:update  – bei Updates
- * ============================================================================
- */
-(function initRegistry (global) {
-  const logI = (global.CBLog?.info  || console.log).bind(console, "[registry]");
-  const logW = (global.CBLog?.warn  || console.warn).bind(console, "[registry]");
-  const logE = (global.CBLog?.error || console.error).bind(console, "[registry]");
+ * registry.json-adapter.js — lädt data/buildings.json und speist die Registry
+ * Version: v1.0.0
+ *
+ * Ablauf:
+ *  - wartet auf cb:registry:ready (oder nutzt sofort, wenn schon ready)
+ *  - lädt data/buildings.json (no-store)
+ *  - Registry.upsert('buildings', {..., ui:{icon:...}})
+ *  - dispatcht 'cb:assets-ready' (damit build.categories.js neu ableitet)
+ *  - zeigt einen kleinen Toast unten links (iPad-freundlicher "OK"-Hinweis)
+ * ========================================================================== */
+(function(){
+  'use strict';
+  var MOD='[registry.json-adapter]';
 
-  if (global.Registry && global.Registry.__ready) {
-    logW("bereits initialisiert – skip");
-    dispatch("cb:registry:ready", { ready: true });
-    return;
+  function log(){ try{ console.log.apply(console, arguments);}catch{} }
+  function warn(){ try{ console.warn.apply(console, arguments);}catch{} }
+
+  function toast(msg){
+    try{
+      var t=document.createElement('div');
+      t.textContent=msg;
+      t.style.cssText='position:fixed;left:12px;bottom:12px;z-index:2147483647;padding:8px 10px;'
+        +'background:rgba(0,0,0,.7);color:#fff;font:12px/1.2 system-ui;border-radius:6px;'
+        +'box-shadow:0 6px 18px rgba(0,0,0,.35)';
+      document.body.appendChild(t);
+      setTimeout(function(){ t.remove(); }, 1800);
+    }catch(_){}
   }
 
-  // --- Helpers --------------------------------------------------------------
-  function dispatch(type, detail) {
-    try { global.dispatchEvent(new CustomEvent(type, { detail })); } catch { /* noop */ }
-  }
-  function deepFreeze(o){ Object.freeze(o); Object.getOwnPropertyNames(o).forEach(p=>{
-    if (o[p] && typeof o[p]==="object" && !Object.isFrozen(o[p])) deepFreeze(o[p]);
-  }); return o; }
+  async function loadAndApply(){
+    try{
+      const res = await fetch('data/buildings.json', { cache:'no-store' });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      const base = (data.iconsBase || '').replace(/\/?$/, '/');
 
-  // --- Datenmodell ----------------------------------------------------------
-  // Pfade und IDs gemäß deiner aktuellen File-Liste (alles in assets/buildings/, lowercase)
-  const CATEGORIES = [
-    { id:"admin",   name:"Allg. / Verwaltung",   sort:10 },
-    { id:"food",    name:"Produktion / Nahrung", sort:20 },
-    { id:"raw",     name:"Produktion / Rohstoffe", sort:30 },
-    // weitere Kategorien können später ergänzt werden
-  ];
+      var cnt = 0;
+      (data.buildings||[]).forEach(function(b){
+        // ui.icon aus iconsBase + icon-Name auflösen (wenn nicht schon absolut)
+        var icon = b.icon && (b.icon.startsWith('assets/') || b.icon.startsWith('http'))
+          ? b.icon
+          : (base + (b.icon || ''));
 
-  const BUILDINGS = [
-    // Verwaltung
-    { id:"rathaus",   name:"Rathaus",    cat:"admin", sprite:"assets/buildings/rathaus_wood1.png",  enabled:true,  size:[1,1], place:"place-rathaus" },
-    { id:"house",     name:"Wohnhaus",   cat:"admin", sprite:"assets/buildings/wohnhaus_wood0_ug0.png", enabled:true, size:[1,1], place:"place-house" },
-    { id:"depot",     name:"Depot",      cat:"admin", sprite:"assets/buildings/depot_wood.png",   enabled:true,  size:[1,1], place:"place-depot" },
-
-    // Nahrung
-    { id:"fischer",   name:"Fischer",    cat:"food",  sprite:"assets/buildings/fischer_wood1.png", enabled:true,  size:[1,1], place:"place-fisher" },
-    { id:"farm",      name:"Farm",       cat:"food",  sprite:"assets/buildings/farm_wood.png",     enabled:true,  size:[1,1], place:"place-farm" },
-    { id:"muehle",    name:"Mühle",      cat:"food",  sprite:"assets/buildings/windmuehle_wood.png",enabled:true, size:[1,1], place:"place-mill" },
-
-    // Rohstoffe
-    { id:"lumberjack",name:"Holzfäller", cat:"raw",   sprite:"assets/buildings/lumberjack_wood.png", enabled:true, size:[1,1], place:"place-lumberjack" },
-    { id:"steinmetz", name:"Steinmetz",  cat:"raw",   sprite:"assets/buildings/steinmetz_wood.png",  enabled:true, size:[1,1], place:"place-stonecutter" },
-    { id:"schmied",   name:"Schmied",    cat:"raw",   sprite:"assets/buildings/schmied_wood0.png",   enabled:true, size:[1,1], place:"place-smith" },
-
-    // Optional vorhandene Assets – bleiben vorerst deaktiviert (können im Inspector aktiviert werden)
-    { id:"baecker",   name:"Bäcker",     cat:"food",  sprite:"assets/buildings/baecker_wood.png",   enabled:false, size:[1,1], place:"place-bakery" },
-    { id:"wachtturm", name:"Wachturm",   cat:"admin", sprite:"assets/buildings/wachturm_wood.png",  enabled:false, size:[1,1], place:"place-tower" },
-    { id:"hq",        name:"HQ",         cat:"admin", sprite:"assets/tex/building/wood/hq_wood.PNG",enabled:false, size:[2,2], place:"place-hq" }
-  ];
-
-  // --- API ------------------------------------------------------------------
-  const _state = {
-    categories: [...CATEGORIES],
-    buildings:  [...BUILDINGS],
-  };
-
-  const Registry = {
-    version: "1.2.0",
-    __ready: true,
-
-    list(kind){
-      if (kind==="categories") return _state.categories.slice().sort((a,b)=>a.sort-b.sort);
-      if (kind==="buildings")  return _state.buildings.slice();
-      logW("unbekannte list-Art:", kind); return [];
-    },
-    where(kind, pred){
-      const src = kind==="categories" ? _state.categories : kind==="buildings" ? _state.buildings : [];
-      if (!src.length) { logW("where(): unbekannte Art", kind); return []; }
-      return src.filter(entry=>{
-        return Object.keys(pred||{}).every(k => entry[k]===pred[k]);
+        var patch = {
+          id:b.id, name:b.name, cat:b.cat, sprite:b.sprite,
+          enabled:b.enabled, size:b.size, place:b.place,
+          ui:{ icon: icon }
+        };
+        window.Registry?.upsert('buildings', patch);
+        cnt++;
       });
-    },
-    get(kind, id){
-      const src = kind==="categories" ? _state.categories : kind==="buildings" ? _state.buildings : [];
-      return src.find(e=>e.id===id) || null;
-    },
-    upsert(kind, item){
-      const list = kind==="categories" ? _state.categories : kind==="buildings" ? _state.buildings : null;
-      if (!list) { logW("upsert(): unbekannte Art", kind); return; }
-      const i = list.findIndex(e=>e.id===item.id);
-      if (i>=0) list[i] = { ...list[i], ...item };
-      else list.push(item);
-      dispatch("cb:registry:update", { kind, id:item.id });
-    },
 
-    // Legacy-Brücke für altes entities.registry.js:
-    register(type, payload){
-      if (type==="building") return Registry.upsert("buildings", payload);
-      if (type==="category") return Registry.upsert("categories", payload);
-      logW("register(): unbekannter type", type);
-    },
+      // Event für UI-Neuaufbau
+      window.dispatchEvent(new CustomEvent('cb:assets-ready', { detail:{ source:'json-adapter' }}));
 
-    freeze(){ return deepFreeze(_state); } // readonly View
-  };
+      log(MOD,'applied', cnt, 'buildings from data/buildings.json');
+      toast('Daten geladen: '+cnt+' Gebäude');
+    } catch(e){
+      warn(MOD,'failed to load data/buildings.json', e);
+      toast('Daten konnten nicht geladen werden');
+    }
+  }
 
-  Object.defineProperty(global, "Registry", { value: Registry, writable:false, configurable:false });
-  logI(`bereit v${Registry.version} (Kategorien: ${_state.categories.length} , Gebäude: ${_state.buildings.length})`);
-  dispatch("cb:registry:ready", { ready:true, counts:{ categories:_state.categories.length, buildings:_state.buildings.length }});
-})(window);
+  if (window.Registry?.__ready) loadAndApply();
+  else window.addEventListener('cb:registry:ready', loadAndApply, { once:true });
+})();
