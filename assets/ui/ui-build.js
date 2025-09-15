@@ -1,262 +1,304 @@
-/* =============================================================================
-   Neue Siedler – UI: Build Dock
-   Version: v18.2.4
-   - Erkennt Gebäudedaten auch bei verschachtelten Feldern:
-     name:  name, title, label, i18n.de, i18n["de-DE"], meta.title, display, ...
-     cat:   category, cat, meta.category, group, klass, category.id/key/name, ...
-   - Offiziell -> Discovery (rekursiv, inkl. Objects/Maps)
-============================================================================= */
-(function(){
-  const VER = "v18.2.4";
-  const I = (m)=> (window.CBLog?.info  || console.log)(`[ui-build] ${m}`);
-  const W = (m)=> (window.CBLog?.warn  || console.warn)(`[ui-build] ${m}`);
+/* =======================================================================
+ * Datei: assets/ui/ui-build.js
+ * Version: v18.3.0 (compat)
+ * Zweck: Bau-Menü (Dock) – robust gegen verschiedene Registry-/API-Stände
+ * ======================================================================= */
+(function () {
+  'use strict';
 
-  /* ----------------------------- Utils ------------------------------------- */
-  const get = (obj, path) => {
-    if (!obj || !path) return undefined;
-    const parts = Array.isArray(path) ? path : String(path).split('.');
-    let cur = obj;
-    for (const p of parts){
-      if (cur == null) return undefined;
-      if (p in cur) cur = cur[p];
-      else return undefined;
+  const MOD = '[ui-build]';
+  const VER = 'v18.3.0';
+
+  // ---- Logging ----------------------------------------------------------------
+  const log  = (m)=> (window.CBLog?.info || console.log)(`${MOD} ${m}`);
+  const ok   = (m)=> (window.CBLog?.ok   || console.log)(`${MOD} ${m}`);
+  const warn = (m)=> (window.CBLog?.warn || console.warn)(`${MOD} ${m}`);
+  const err  = (m)=> (window.CBLog?.err  || console.error)(`${MOD} ${m}`);
+
+  // ---- DOM helpers -------------------------------------------------------------
+  function rootEl() {
+    // akzeptiert neue (#build-dock) und alte (#build-panel) ID
+    return document.getElementById('build-dock')
+        || document.getElementById('build-panel')
+        || (()=>{
+             const div = document.createElement('div');
+             div.id = 'build-dock';
+             document.body.appendChild(div);
+             return div;
+           })();
+  }
+  function ensureShown(shown){
+    document.body.classList.toggle('has-build-open', !!shown);
+  }
+  function openDock(){ ensureShown(true); rootEl().classList.add('is-open');  dispatch('cb:build:open');  }
+  function closeDock(){ ensureShown(false); rootEl().classList.remove('is-open'); dispatch('cb:build:close'); }
+  function dispatch(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})); }catch(_){} }
+
+  // ---- Icon Pfade --------------------------------------------------------------
+  // Versuch, ein Icon aus verschiedenen Feldern zu ermitteln
+  function resolveIcon(it){
+    // bekannte Felder
+    const cand = [
+      it.icon, it.img, it.image, it.sprite,
+      it.preview, it.thumb, it.iconPath
+    ].filter(Boolean);
+
+    // Heuristik (Lastenheft: assets/buildings/<id>_wood1.png o.ä.)
+    if (cand.length === 0 && it.id){
+      cand.push(`assets/buildings/${it.id}.png`);
+      cand.push(`assets/buildings/${it.id}_wood1.png`);
+      cand.push(`assets/ui/icons/${it.id}.png`);
     }
-    return cur;
-  };
-
-  const pickFirst = (obj, paths) => {
-    for (const p of paths){
-      let v = Array.isArray(p) ? get(obj, p) : get(obj, p);
-      if (v == null) continue;
-      // Falls Objekt {id|key|name} → extrahieren
-      if (typeof v === "object"){
-        const vk = v.key ?? v.id ?? v.name ?? v.title;
-        if (vk != null) return String(vk);
-      }
-      return typeof v === "string" || typeof v === "number" ? String(v) : v;
-    }
-    return undefined;
-  };
-
-  const NAME_PATHS = [
-    "name","title","label","display","text","caption",
-    ["title","de"],["i18n","de"],["i18n","de-DE"],["meta","title"],
-  ];
-  const CAT_PATHS = [
-    "category","cat","group","klass",["meta","category"],
-    ["category","id"],["category","key"],["category","name"]
-  ];
-  const KEY_PATHS = ["key","id","slug","code","type","name"];
-
-  function looksBuilding(o){
-    if (!o || typeof o!=="object") return false;
-    // Muss Art 'building' o. Kategorie + Name haben
-    const kind = pickFirst(o, ["kind","type","_type"]);
-    const hasKind = (typeof kind === "string" && /build/i.test(kind));
-    const nm  = pickFirst(o, NAME_PATHS) ?? pickFirst(o, KEY_PATHS);
-    const cat = pickFirst(o, CAT_PATHS);
-    return (nm && cat) || hasKind;
+    return cand[0] || 'assets/ui/placeholder.build.png';
   }
 
-  function normalize(o){
-    const key = pickFirst(o, KEY_PATHS) || "unknown";
-    const name = pickFirst(o, NAME_PATHS) || String(key);
-    let cat = pickFirst(o, CAT_PATHS) || "default";
-    if (typeof cat === "object") {
-      cat = cat.key ?? cat.id ?? cat.name ?? "default";
-    }
-    const icon = pickFirst(o, [["icon"],["sprite"],["image"],["meta","icon"]]);
-
-    return { key, name, icon, cat, raw:o };
-  }
-
-  function iconSrc(b){
+  // ---- Quelle → Normalform -----------------------------------------------------
+  /**
+   * Normalform:
+   * [
+   *   { title:'Allg. / Verwaltung', items:[{id,name,icon,meta…}, …] },
+   *   …
+   * ]
+   */
+  function normalizeFromRegistryLike(reg){
     try{
-      if (window.BuildAssets?.getIcon){ const s=window.BuildAssets.getIcon(b.key); if(s) return s; }
-      if (window.BuildAssets?.icons?.[b.key]) return window.BuildAssets.icons[b.key];
-    }catch(_){}
-    return b.icon || b.raw?.icon || b.raw?.sprite || b.raw?.image
-         || "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+      // bekannte Formen
+      // A) {categories:[{key,title,items:[{id,name,icon},…]}]}
+      if (Array.isArray(reg?.categories)) {
+        return reg.categories.map(cat=>({
+          title: cat.title || cat.name || cat.key || 'Kategorie',
+          items: (cat.items || cat.buildings || []).map(b => ({
+            id: b.id || b.key || b.type || b.name,
+            name: b.name || b.title || (b.id || '').replace(/_/g,' '),
+            icon: resolveIcon(b),
+            raw:  b
+          }))
+        }));
+      }
+      // B) {buildings:[…]} flach → in eine Kategorie packen
+      if (Array.isArray(reg?.buildings)) {
+        return [{
+          title: 'Bauen',
+          items: reg.buildings.map(b=>({
+            id: b.id || b.key || b.type || b.name,
+            name: b.name || b.title || (b.id || '').replace(/_/g,' '),
+            icon: resolveIcon(b),
+            raw:  b
+          }))
+        }];
+      }
+      // C) Map {groupKey:[…]}
+      if (reg && typeof reg === 'object'){
+        const groups = [];
+        for (const [k, list] of Object.entries(reg)){
+          if (!Array.isArray(list)) continue;
+          groups.push({
+            title: k,
+            items: list.map(b=>({
+              id: b.id || b.key || b.type || b.name,
+              name: b.name || b.title || (b.id || '').replace(/_/g,' '),
+              icon: resolveIcon(b),
+              raw: b
+            }))
+          });
+        }
+        if (groups.length) return groups;
+      }
+    }catch(e){
+      warn('normalizeFromRegistryLike Fehler: '+e.message);
+    }
+    return null;
   }
 
-  /* --------------------------- OFFIZIELL ----------------------------------- */
-  function official(){
-    if (window.Registry?.getCategories){
+  function normalizeFromMonolithLike(){
+    // fallback auf globale Sammlungen, die wir in älteren Ständen hatten
+    const globs = [
+      // very old
+      (window.BUILDINGS && { buildings: window.BUILDINGS }),
+      // monolithische Arrays
+      (window.buildingTypes && { buildings: window.buildingTypes }),
+      // einzelne Module
+      (window.LUMBERJACK_FRAMES && {
+        categories:[{
+          title:'Produktion / Rohstoffe',
+          items: (window.LUMBERJACK_FRAMES||[])
+                  .filter(x=>x.role==='BuildMenu')
+                  .map(x=>({
+                    id: 'holzfaeller',
+                    name:'Holzfäller',
+                    icon: 'assets/buildings/holzfaeller.png'
+                  }))
+        }]
+      })
+    ].filter(Boolean)[0];
+
+    return normalizeFromRegistryLike(globs);
+  }
+
+  function normalizeAllSources(){
+    // neue Registry
+    const r1 = normalizeFromRegistryLike(window.Registry || window.registry || window.__REGISTRY);
+    if (r1 && r1.some(g=>g.items.length)) return r1;
+
+    // Entities-Registry Wrapper
+    const ent = window.EntitiesRegistry || window['entities.registry'];
+    if (ent && typeof ent.getAll === 'function'){
       try{
-        const cats = window.Registry.getCategories();
-        if (Array.isArray(cats) && cats.length){
-          return {
-            path: "Registry.getCategories()",
-            cats: cats.map(c=>({
-              id: c.id||c.key||c.name,
-              name: c.title||c.name||String(c.id||c.key||"Kategorie"),
-              items: (c.items||c.buildings||[]).map(normalize)
-            }))
-          };
-        }
-      }catch(e){ W(`Registry.getCategories() Fehler: ${e?.message||e}`); }
+        const all = ent.getAll(); // erhofft: {categories:[…]} oder {buildings:…}
+        const r2 = normalizeFromRegistryLike(all);
+        if (r2 && r2.some(g=>g.items.length)) return r2;
+      }catch(e){ warn('EntitiesRegistry.getAll() → '+e.message); }
     }
-    if (window.Registry && (Array.isArray(window.Registry.categories)||Array.isArray(window.Registry.buildings))){
-      const cats = window.Registry.categories||[];
-      const blds = window.Registry.buildings ||[];
-      if (cats.length && blds.length){
-        const byCat={}; blds.forEach(b=>{ const nb=normalize(b); (byCat[nb.cat] ||= []).push(nb); });
-        return {
-          path: "Registry.categories/buildings",
-          cats: cats.map(c=>({
-            id: c.id||c.key||c.name,
-            name: c.title||c.name||String(c.id||c.key||"Kategorie"),
-            items: byCat[(c.id||c.key||c.name)] || []
-          }))
-        };
+
+    // monolithische/ältere Stände
+    const r3 = normalizeFromMonolithLike();
+    if (r3 && r3.some(g=>g.items.length)) return r3;
+
+    return [];
+  }
+
+  // ---- Render ------------------------------------------------------------------
+  function iconCell(src, alt){
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = src;
+    img.alt = alt || '';
+    img.width = 96; img.height = 72;
+    img.style.width = '96px'; img.style.height = '72px';
+    img.style.objectFit = 'contain';
+    return img;
+  }
+
+  function buttonFor(item){
+    const btn = document.createElement('button');
+    btn.className = 'ui-build-btn';
+    btn.setAttribute('type','button');
+    btn.setAttribute('data-build-id', item.id);
+
+    const cell = document.createElement('div');
+    cell.className = 'img';
+    cell.appendChild(iconCell(item.icon, item.name));
+
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = item.name || item.id;
+
+    btn.appendChild(cell);
+    btn.appendChild(label);
+
+    btn.onclick = () => {
+      // Event (neutral)
+      dispatch('cb:build:select', { id:item.id, item });
+
+      // kompatibles Tool-Hooking
+      try { window.GameTool?.set?.('build', item.id); } catch(_) {}
+      try { window.Game?.setBuildTarget?.(item.id); } catch(_) {}
+      ok(`select ${item.id}`);
+      // Dock offen lassen, damit man mehrere baut
+    };
+    return btn;
+  }
+
+  function section(title){
+    const s = document.createElement('section');
+    s.className = 'ui-build-section';
+    const h = document.createElement('h3');
+    h.textContent = title || 'Kategorie';
+    s.appendChild(h);
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    s.appendChild(grid);
+    return { section:s, grid };
+  }
+
+  function emptyHint(msg){
+    const div = document.createElement('div');
+    div.className = 'ui-build-empty';
+    div.textContent = msg || 'Keine Gebäude verfügbar';
+    return div;
+  }
+
+  function cssOnce(){
+    if (cssOnce._done) return; cssOnce._done = true;
+    const css = `
+    .ui-build-dock, #build-panel{
+      position:fixed; left:0; right:0; bottom:0; z-index:1000;
+      display:block; transform:translateY(110%); transition:transform .24s ease, opacity .24s ease;
+      background:rgba(20,24,28,.92); backdrop-filter:blur(6px);
+      border-top:1px solid rgba(255,255,255,.08); color:#e9eef4; opacity:0;
+      --build-dock-max-h: 320px; max-height: var(--build-dock-max-h); overflow:auto;
+      padding:12px 12px 18px;
+    }
+    .ui-build-dock.is-open, #build-panel.is-open{ transform:none; opacity:1; }
+    .ui-build-section{ margin:8px 4px 14px; }
+    .ui-build-section>h3{ margin:0 0 8px; font:600 14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; opacity:.85 }
+    .ui-build-section>.grid{
+      display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:10px;
+    }
+    .ui-build-btn{
+      display:grid; grid-template-rows: 1fr auto; gap:6px;
+      align-items:center; justify-items:center;
+      padding:8px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background:rgba(10,12,14,.66); color:#e9eef4; cursor:pointer;
+    }
+    .ui-build-btn .img{ display:flex; align-items:center; justify-content:center; width:100%; height:76px }
+    .ui-build-btn .label{ font-size:13px; line-height:1.25; text-align:center; opacity:.95; }
+    .ui-build-empty{
+      padding:12px; margin:6px; border-radius:10px;
+      background:rgba(10,12,14,.66); border:1px dashed rgba(255,255,255,.15); text-align:center;
+    }
+    @media (min-width: 920px){
+      .ui-build-section>.grid{ grid-template-columns: repeat(6,minmax(0,1fr)); }
+    }`;
+    const style = document.createElement('style');
+    style.setAttribute('data-ui-build','1');
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  // ---- Public API --------------------------------------------------------------
+  const API = {
+    version: VER,
+    _groups: [],
+    isOpen(){ return rootEl().classList.contains('is-open'); },
+    open(){ openDock(); this.render(); },
+    close(){ closeDock(); },
+    toggle(){ this.isOpen() ? this.close() : this.open(); },
+    render(){
+      cssOnce();
+      const host = rootEl();
+      host.innerHTML = '';
+      const groups = (this._groups = normalizeAllSources());
+      if (!groups || !groups.some(g=>g.items.length)){
+        warn('Keine Gebäudedaten → leerer Hinweis');
+        host.appendChild(emptyHint('Keine Gebäude verfügbar'));
+        return;
+      }
+      for (const g of groups){
+        const s = section(g.title);
+        for (const it of g.items){
+          if (!it?.id) continue;
+          s.grid.appendChild(buttonFor(it));
+        }
+        host.appendChild(s.section);
       }
     }
-    if (window.EntitiesRegistry?.buildings?.length){
-      const g={}; window.EntitiesRegistry.buildings.forEach(b=>{ const nb=normalize(b); (g[nb.cat] ||= []).push(nb); });
-      return { path:"EntitiesRegistry.buildings", cats: Object.keys(g).map(k=>({ id:k, name:String(k), items:g[k] })) };
-    }
-    return null;
-  }
-
-  /* --------------------------- DISCOVERY ----------------------------------- */
-  const toArrayLike = (v)=>{
-    if (Array.isArray(v)) return v;
-    if (v instanceof Map)  return Array.from(v.values());
-    if (v && typeof v === "object"){
-      const vals = Object.values(v);
-      // sehr große Plain-Objekte vermeiden
-      if (vals.length && vals.length < 2000) return vals;
-    }
-    return null;
   };
 
-  function discoverAt(value, label, grouped){
-    const arr = toArrayLike(value);
-    if (!arr || !arr.length) return 0;
-    // Sample prüfen
-    let ok=0, take=0;
-    for (let i=0;i<Math.min(12,arr.length);i++) if (looksBuilding(arr[i])) ok++;
-    if (ok<3) return 0;
+  // ---- Event-Wiring ------------------------------------------------------------
+  // Globale Bridge
+  window.GameUI = window.GameUI || {};
+  window.GameUI.openBuild   = ()=> API.open();
+  window.GameUI.closeBuild  = ()=> API.close();
+  window.GameUI.toggleBuild = ()=> API.toggle();
 
-    const lim = Math.min(arr.length, 600);
-    for (let i=0;i<lim;i++){
-      const it = arr[i]; if (!looksBuilding(it)) continue;
-      const nb = normalize(it);
-      (grouped[nb.cat] ||= []).push(nb);
-      take++;
-    }
-    I(`auto @${label} → ${take}`);
-    return take;
-  }
+  // Fallback-Events (beide Schreibweisen)
+  window.addEventListener('cb:assets-ready', ()=> { log(`Event 'cb:assets-ready' → re-render`); API.render(); });
+  window.addEventListener('cb:game-start',   ()=> { log(`Event 'cb:game-start' → re-render`);   API.render(); });
+  window.addEventListener('cb:assets:ready', ()=> { API.render(); });
+  window.addEventListener('cb:game:start',   ()=> { API.render(); });
 
-  function scan(obj, base, grouped, depth){
-    if (!obj || typeof obj!=="object" || depth<=0) return 0;
-    let hits = 0;
-    hits += discoverAt(obj, base, grouped);
-    if (obj.buildings) hits += discoverAt(obj.buildings, `${base}.buildings`, grouped);
-
-    const keys = Object.keys(obj).slice(0, 60);
-    for (const k of keys){
-      try{
-        const v = obj[k]; if (!v || typeof v!=="object") continue;
-        hits += discoverAt(v, `${base}.${k}`, grouped);
-        hits += scan(v, `${base}.${k}`, grouped, depth-1);
-      }catch(_){}
-    }
-    return hits;
-  }
-
-  function discover(){
-    const grouped = {};
-    let total = 0;
-
-    // window flach + tief
-    for (const k in window){
-      try{
-        const v = window[k]; if (!v) continue;
-        total += discoverAt(v, `window.${k}`, grouped);
-        if (v && typeof v==="object") total += scan(v, `window.${k}`, grouped, 2);
-      }catch(_){}
-    }
-    if (window.Registry)        total += scan(window.Registry,        "Registry",        grouped, 3);
-    if (window.EntitiesRegistry)total += scan(window.EntitiesRegistry, "EntitiesRegistry", grouped, 3);
-
-    if (!total) return null;
-    return { path:"auto-discovery", cats: Object.keys(grouped).map(c=>({ id:c, name:String(c), items: grouped[c] })) };
-  }
-
-  /* ---------------------------- UI / Dock ---------------------------------- */
-  class Dock{
-    constructor(root){
-      this.root=root; this.root.classList.add("ui-build-dock");
-      this.syncH(); window.addEventListener("resize",()=>this.syncH());
-    }
-    syncH(){ const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
-      document.documentElement.style.setProperty("--build-dock-max-h", `${h}px`); }
-    render(cats,label){
-      this.root.innerHTML="";
-      const body=el("div","ui-build-body");
-      if (!Array.isArray(cats) || !cats.length){
-        const empty=el("div","ui-build-empty"); empty.textContent="Keine Gebäude verfügbar";
-        body.appendChild(empty); this.root.appendChild(body); return;
-      }
-      if (label) I(`render @${label} → ${cats.reduce((s,c)=>s+(c.items||[]).length,0)} Gebäude`);
-
-      cats.forEach(cat=>{
-        const sec=el("section","ui-build-category");
-        if (cat.name){ const t=el("div","ui-build-category-title"); t.textContent=cat.name; sec.appendChild(t); }
-        const row=el("div","ui-build-category-row");
-        (cat.items||[]).forEach(item=>{
-          const card=el("button","ui-card ui-build-item"); card.type="button"; card.setAttribute("data-key",item.key);
-          const wrap=el("div","ui-build-item-imgwrap");
-          const img=el("img","ui-build-item-img"); img.alt=item.name||item.key; img.loading="lazy"; img.src=iconSrc(item);
-          wrap.appendChild(img);
-          const label=el("div","ui-build-item-label"); label.textContent=item.name||item.key;
-          card.appendChild(wrap); card.appendChild(label);
-          card.addEventListener("click",()=>this.select(item));
-          row.appendChild(card);
-        });
-        sec.appendChild(row); body.appendChild(sec);
-      });
-      this.root.appendChild(body);
-    }
-    select(item){
-      const detail={key:item.key,name:item.name,raw:item.raw,source:"ui-build"};
-      ["cb:build:select","cb:build-select","build:select"].forEach(n=>{ try{ window.dispatchEvent(new CustomEvent(n,{detail})); }catch(_){}} );
-      I(`select ${item.key}`);
-    }
-    open(){ if (this.root.style.display!=="block"){ this.root.style.display="block"; this.root.classList.add("is-open"); document.body.classList.add("has-build-open"); ["cb:build:open","cb:build-open"].forEach(n=>{ try{ window.dispatchEvent(new CustomEvent(n)); }catch(_){}} ); I("open"); } }
-    close(){ if (this.root.style.display!=="none"){ this.root.style.display="none"; this.root.classList.remove("is-open"); document.body.classList.remove("has-build-open"); ["cb:build:close","cb:build-close"].forEach(n=>{ try{ window.dispatchEvent(new CustomEvent(n)); }catch(_){}} ); I("close"); } }
-    toggle(){ (this.root.style.display==="block")?this.close():this.open(); }
-  }
-
-  (function init(){
-    let root = document.getElementById("build-dock") || document.getElementById("build-panel");
-    if (!root){ root=document.createElement("div"); root.id="build-dock"; document.body.appendChild(root); W("#build-dock erzeugt."); }
-    const dock = new Dock(root);
-
-    window.UIBuild = {
-      open:()=>dock.open(), close:()=>dock.close(), toggle:()=>dock.toggle(),
-      render:(cats,label)=>{
-        if (Array.isArray(cats)) return dock.render(cats,label||"manual");
-        const off = official();
-        if (off){ I(`Daten gefunden (offiziell @${off.path})`); return dock.render(off.cats, off.path); }
-        const auto = discover();
-        if (auto){ I(`Daten gefunden (auto @${auto.path})`); return dock.render(auto.cats, auto.path); }
-        W("Keine Gebäudedaten → leerer Hinweis"); return dock.render([], "none");
-      },
-      version: VER
-    };
-
-    window.UIBuild.render();
-    [
-      "cb:registry:ready","registry:ready","entities:ready","entities.registry:ready",
-      "cb:assets:ready","assets:ready","cb:assets-ready","assets-ready",
-      "cb:game-start","game:start","cb:build:refresh","build:refresh"
-    ].forEach(ev=> window.addEventListener(ev, ()=>{ I(`Event '${ev}' → re-render`); window.UIBuild.render(); }));
-
-    window.addEventListener("keydown",(ev)=>{ if((ev.key||"").toLowerCase()==="b") window.UIBuild.toggle(); });
-
-    I(`bereit (${VER})`);
-  })();
+  // kurzer „Hallo“
+  ok(`bereit (${VER})`);
 })();
