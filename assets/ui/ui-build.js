@@ -1,13 +1,13 @@
 /* =======================================================================
  * Datei: assets/ui/ui-build.js
- * Version: v18.3.1 (compat, mit setItems)
- * Zweck: Bau-Menü (Dock) – robust + API für externe Datenzufuhr
+ * Version: v18.3.2 (compat, mit setItems)
+ * Zweck: Bau-Menü (Dock) – robuste UI + öffentliche API für externe Daten
  * ======================================================================= */
 (function () {
   'use strict';
 
   const MOD = '[ui-build]';
-  const VER = 'v18.3.1';
+  const VER = 'v18.3.2';
   const log  = (m)=> (window.CBLog?.info || console.log)(`${MOD} ${m}`);
   const ok   = (m)=> (window.CBLog?.ok   || console.log)(`${MOD} ${m}`);
   const warn = (m)=> (window.CBLog?.warn || console.warn)(`${MOD} ${m}`);
@@ -21,13 +21,13 @@
              d.id='build-dock'; document.body.appendChild(d); return d;
            })();
   }
+  function fire(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})); }catch(_){} }
+  function isOpen(){ return host().classList.contains('is-open'); }
   function open(){ host().classList.add('is-open');  document.body.classList.add('has-build-open');  fire('cb:build:open'); }
   function close(){ host().classList.remove('is-open'); document.body.classList.remove('has-build-open'); fire('cb:build:close'); }
   function toggle(){ isOpen()?close():open(); }
-  function isOpen(){ return host().classList.contains('is-open'); }
-  function fire(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})); }catch(_){} }
 
-  // --------- CSS (eingebettet – neutral, dunkelgrau) --------------------------
+  // --------- CSS ---------------------------------------------------------------
   function injectCSS(){
     if (injectCSS._done) return; injectCSS._done=true;
     const css = `
@@ -77,6 +77,7 @@
       const grid=document.createElement('div'); grid.className='ui-build-grid';
 
       for (const it of (cat.items||[])){
+        if (!it?.id) continue;
         const btn=document.createElement('button'); btn.type='button'; btn.className='ui-build-card';
         const wrap=document.createElement('div'); wrap.className='img';
         const img=document.createElement('img'); img.loading='lazy'; img.decoding='async';
@@ -95,8 +96,9 @@
 
   function select(it){
     const detail={ id: it.id, item: it };
-    fire('cb:build:select', detail);
-    // backwards-kompatibles Hooking (falls vorhanden)
+    try{ window.dispatchEvent(new CustomEvent('cb:build:select',{detail})); }catch(_){}
+    try{ window.dispatchEvent(new CustomEvent('build:select',{detail})); }catch(_){}
+    // Backward-Hooks
     try{ window.GameTool?.set?.('build', it.id); }catch(_){}
     try{ window.Game?.setBuildTarget?.(it.id); }catch(_){}
     ok(`select ${it.id}`);
@@ -105,8 +107,8 @@
   // --------- Öffentliche API ---------------------------------------------------
   window.UIBuild = {
     version: VER,
-    isOpen, open, close, toggle,
-    /** Erwartet Format: [{ category: '...', items:[{ id, label, icon, data? }, ...] }, ...] */
+    isOpen, open, close, toggle, render,
+    /** Erwartet: [{ category:'...', items:[{ id, label, icon, data? }, ...] }, ...] */
     setItems(list){
       if (!Array.isArray(list)) { warn('setItems: kein Array'); return; }
       _items = list.map(cat => ({
@@ -120,19 +122,15 @@
       }));
       ok(`Items gesetzt (${_items.reduce((s,c)=>s+(c.items?.length||0),0)} Karten / ${_items.length} Kategorien)`);
       render();
-    },
-    /** optional: wenn du ohne setItems arbeiten willst, kannst du manuell rendern */
-    render(){ render(); }
+    }
   };
 
-  // --------- Events (nur fürs Layout) -----------------------------------------
+  // --------- Layout-Helpers ----------------------------------------------------
   function syncMaxH(){
     const h=Math.max(200,Math.min(320,Math.round(window.innerHeight*0.40)));
     document.documentElement.style.setProperty('--build-dock-max-h', `${h}px`);
   }
   syncMaxH(); window.addEventListener('resize', syncMaxH);
-
-  // Dock erst sichtbar machen, wenn geöffnet
   document.addEventListener('keydown', (ev)=>{ if((ev.key||'').toLowerCase()==='b') toggle(); });
 
   ok(`bereit (${VER})`);
