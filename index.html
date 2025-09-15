@@ -164,7 +164,7 @@ Leitplanken:
   <!-- =======================================================================
   (8) PAGE-SCRIPTS: Marker, Body-Klassen, GameUI-Toggles (leichtgewichtig)
   ======================================================================== -->
-<script>
+<<script>
   (function () {
     // Marker/Version im Log
     window.__cb = window.__cb || {};
@@ -176,19 +176,15 @@ Leitplanken:
     function setClose(){ document.body.classList.remove('has-build-open'); }
     window.addEventListener('cb:build:open',  setOpen);
     window.addEventListener('cb:build:close', setClose);
-    window.addEventListener('cb:build-open',  setOpen);   // Legacy
-    window.addEventListener('cb:build-close', setClose);  // Legacy
+    // Legacy
+    window.addEventListener('cb:build-open',  setOpen);
+    window.addEventListener('cb:build-close', setClose);
 
-    // ---- ROBUSTER Inspector-Toggle (bedient alle bekannten Wege) ----
+    // --- Robuster Inspector-Toggle (alle Varianten abgedeckt) ---
     function tryInspectorToggle(){
       try {
-        if (window.InspectorAPI && typeof window.InspectorAPI.toggle === 'function') {
-          return void window.InspectorAPI.toggle();
-        }
-        if (window.Inspector && typeof window.Inspector.toggle === 'function') {
-          return void window.Inspector.toggle();
-        }
-        // Event-basierte Varianten (neu/alt)
+        if (window.InspectorAPI?.toggle) return void window.InspectorAPI.toggle();
+        if (window.Inspector?.toggle)   return void window.Inspector.toggle();
         window.dispatchEvent(new CustomEvent('inspector:toggle'));
         window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
       } catch(e){
@@ -196,30 +192,18 @@ Leitplanken:
       }
     }
 
-    // Sehr kleine UI-Helfer für die FAB-Buttons:
+    // Kleine UI-Helfer für die FAB-Buttons
     window.GameUI = {
       toggleBuild(){
         const isOpen = document.body.classList.toggle('has-build-open');
         window.dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
-        // Falls dock noch nicht gerendert war → nachziehen
-        if (isOpen && window.UIBuild && typeof window.UIBuild.rerender === 'function') {
-          window.UIBuild.rerender();
-        }
+        // Falls Dock noch nicht gerendert war → nachziehen
+        if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
       },
       toggleInspector: tryInspectorToggle
     };
-window.GameUI = {
-  toggleInspector(){
-    try {
-      if (window.InspectorAPI?.toggle) return void window.InspectorAPI.toggle();
-      if (window.Inspector?.toggle)   return void window.Inspector.toggle();
-      window.dispatchEvent(new CustomEvent('inspector:toggle'));
-      window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
-    } catch(e){ console.warn('[ui] Inspector-Toggle fehlgeschlagen', e); }
-  },
-  toggleBuild(){ /* … wie gehabt … */ }
-};
-    // Optional: Hotkeys (B = Build, I = Inspector)
+
+    // Hotkeys (B = Build, I = Inspector)
     window.addEventListener('keydown', function(ev){
       if (ev.repeat) return;
       if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
