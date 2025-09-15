@@ -1,232 +1,247 @@
-/* Neue Siedler – UI Build Dock
-   v18.4.0
-   Features:
-   - Sucht #build-dock ODER #build-panel, erstellt notfalls einen Container.
-   - Rendert Kategorien + Grid.
-   - Zeigt leere-Hinweise sichtbar (kein Transparent-Bug).
-   - Re-render bei setItems() IMMER (auch wenn Dock bereits offen).
-   - Events: cb:build:open/close UND cb:build-open/close (Compat).
-   - Body-Class: has-build-open (für FAB-Abstand).
-*/
+/*! Neue Siedler – Build Dock (v18.4.0)
+ *  - Registry-first Datenquelle, Fallback auf Bridge/JSON
+ *  - kompatibel zu #build-dock UND #build-panel
+ *  - Events: cb:build:open / cb:build:close, reagiert auf cb:game-start
+ *  - bewahrt alten API-Surface: window.GameUI.toggleBuild()
+ */
 (function () {
-  const LG = {
-    i: (m) => (window.CBLog?.info || console.log)(`[ui-build] ${m}`),
-    w: (m) => (window.CBLog?.warn || console.warn)(`[ui-build] ${m}`),
-    e: (m) => (window.CBLog?.error || console.error)(`[ui-build] ${m}`)
-  };
+  const log = (m, ...a) => (window.CBLog?.info || console.log).call(console, "[ui-build]", m, ...a);
+  const warn = (m, ...a) => (window.CBLog?.warn || console.warn).call(console, "[ui-build]", m, ...a);
 
-  // ------ DOM Helpers ------
-  function $(sel, root = document) { return root.querySelector(sel); }
-  function el(tag, cls) { const n = document.createElement(tag); if (cls) n.className = cls; return n; }
-  function dispatch(name, detail) { window.dispatchEvent(new CustomEvent(name, { detail })); }
+  // ---------- Root + state ----------
+  const root = ensureRoot();                 // <div id="build-dock" class="ui-build-dock">
+  const wrap = el("div", "ui-build-wrap");   // Innen-Wrapper (scroll-strukturen)
+  root.appendChild(wrap);
 
-  // ------ State ------
-  const State = {
-    items: [],          // [{category, items:[{id,label,icon,data}]}]
-    catIndex: 0,
-    open: false,
-    mounted: false
-  };
+  let IS_OPEN = false;
+  let DATA = null; // { cats: [...], items: [...] }
 
-  // ------ Container find/create ------
-  function ensureContainer() {
-    let host = $('#build-dock') || $('#build-panel');
-    if (!host) {
-      host = el('div', 'ui-build-dock');
-      host.id = 'build-dock';
-      document.body.appendChild(host);
-      LG.i('Container neu erstellt (#build-dock).');
-    } else {
-      // Stelle sicher, dass grundlegende Klasse gesetzt ist
-      host.classList.add('ui-build-dock');
-    }
-    host.setAttribute('aria-label', 'Bau-Menü');
-    host.setAttribute('role', 'region');
-    return host;
-  }
+  // ---------- Public API / Legacy ----------
+  window.GameUI = window.GameUI || {};
+  window.GameUI.toggleBuild = toggle;
+  window.GameUI.openBuild   = openDock;
+  window.GameUI.closeBuild  = closeDock;
 
-  // ------ HTML Pieces ------
-  function renderTabs(cats, activeIdx) {
-    if (!cats?.length) return '';
-    return `
-      <div class="ui-build-tabs" role="tablist" aria-label="Kategorien">
-        ${cats.map((c, i) => `
-          <button class="tab ${i===activeIdx?'active':''}" role="tab"
-                  aria-selected="${i===activeIdx?'true':'false'}"
-                  data-tab="${i}" title="${escapeHtml(c.category)}">
-            ${escapeHtml(c.category)}
-          </button>
-        `).join('')}
-      </div>
-    `;
-  }
-
-  function renderGrid(items) {
-    if (!items || !items.length) {
-      return `
-        <div class="ui-build-empty">
-          <div class="empty-icon">🧱</div>
-          <div class="empty-text">Keine Gebäude verfügbar</div>
-        </div>
-      `;
-    }
-    return `
-      <div class="ui-build-grid" role="list">
-        ${items.map(it => `
-          <button class="card" role="listitem" data-build="${escapeAttr(it.id)}" title="${escapeAttr(it.label)}">
-            <div class="thumb">
-              <img src="${escapeAttr(it.icon || 'assets/placeholder64.PNG')}" alt="${escapeAttr(it.label)}">
-            </div>
-            <div class="label">${escapeHtml(it.label)}</div>
-          </button>
-        `).join('')}
-      </div>
-    `;
-  }
-
-  function renderChrome() {
-    return `
-      <div class="ui-build-chrome">
-        <div class="drag-handle" aria-hidden="true"></div>
-        <button class="close" title="Schließen" aria-label="Bau-Menü schließen">×</button>
-      </div>
-    `;
-  }
-
-  function tplDock(cats, activeIdx) {
-    const cur = cats?.[activeIdx] || { category: 'Bauen', items: [] };
-    return `
-      ${renderChrome()}
-      ${renderTabs(cats, activeIdx)}
-      <div class="ui-build-body">
-        ${renderGrid(cur.items)}
-      </div>
-    `;
-  }
-
-  // ------ Render ------
-  function render() {
-    const host = ensureContainer();
-    host.innerHTML = tplDock(State.items, State.catIndex);
-    wireInteractions(host);
-  }
-
-  // ------ Interactions ------
-  function wireInteractions(host) {
-    // Tabs
-    host.querySelectorAll('.ui-build-tabs .tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = Number(btn.getAttribute('data-tab') || 0);
-        if (!Number.isFinite(idx)) return;
-        State.catIndex = idx;
-        render();
-      });
-    });
-
-    // Close
-    const btnClose = host.querySelector('.ui-build-chrome .close');
-    btnClose?.addEventListener('click', close);
-
-    // Cards (nur Click-Feedback; eigentlicher Build-Place folgt später)
-    host.querySelectorAll('.ui-build-grid .card').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-build');
-        (window.CBLog?.info || console.log)(`[ui-build] selected: ${id}`);
-        // TODO: hier kann später Plazier-Flow andocken
-      });
-    });
-  }
-
-  // ------ Open/Close ------
-  function open() {
-    const host = ensureContainer();
-    host.classList.add('open');
-    document.body.classList.add('has-build-open');
-    State.open = true;
-    // Events (neu + legacy)
-    dispatch('cb:build:open', { open: true });
-    dispatch('cb:build-open', { open: true });
-    LG.i('open');
-  }
-
-  function close() {
-    const host = ensureContainer();
-    host.classList.remove('open');
-    document.body.classList.remove('has-build-open');
-    State.open = false;
-    // Events (neu + legacy)
-    dispatch('cb:build:close', { open: false });
-    dispatch('cb:build-close', { open: false });
-    LG.i('close');
-  }
-
-  function toggle() { (State.open ? close : open)(); }
-
-  // ------ API ------
-  const API = {
-    setItems(items) {
-      // Erwarte [{category, items:[...]}] – defensive Normalisierung
-      if (!Array.isArray(items)) items = [];
-      State.items = items.map(cat => ({
-        category: cat?.category || 'Bauen',
-        items: Array.isArray(cat?.items) ? cat.items : []
-      }));
-      // Wenn aktive Kategorie plötzlich leer/außer Reichweite → zurücksetzen
-      if (State.catIndex >= State.items.length) State.catIndex = 0;
-      render();
-
-      // Falls Dock geöffnet ist, bleibt es offen und zeigt sofort neue Items
-      // Falls geschlossen: nichts weiter tun (Button steuert Öffnen)
-      LG.i(`Items gesetzt (${State.items.reduce((s,c)=>s+(c.items?.length||0),0)} Karten / ${State.items.length} Kategorien)`);
-    },
-    open, close, toggle
-  };
-
-  // ------ Bootstrap / Mount ------
-  function mountOnce() {
-    if (State.mounted) return;
-    State.mounted = true;
-
-    // Host vorbereiten und initiales Render (leer)
+  // ---------- Boot: Daten holen & System-Events ----------
+  hydrate().then(() => {
+    // initial einmal zeichnen (leer → Hinweis oder echte Items)
     render();
-
-    // FAB-Button optional – falls existiert
-    const btnFab = document.getElementById('btn-build')?.querySelector('button');
-    btnFab?.addEventListener('click', (e) => {
-      e.preventDefault();
-      toggle();
-    });
-
-    // Kompatible externe Steuerung
-    window.GameUI = window.GameUI || {};
-    if (!window.GameUI.toggleBuild) {
-      window.GameUI.toggleBuild = toggle;
-    }
-    if (!window.GameUI.openBuild) {
-      window.GameUI.openBuild = open;
-    }
-    if (!window.GameUI.closeBuild) {
-      window.GameUI.closeBuild = close;
-    }
-
-    LG.i('bereit (v18.4.0)');
-  }
-
-  // Escapes
-  function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-  function escapeAttr(s) { return escapeHtml(s); }
-
-  // Expose
-  window.UIBuild = API;
-
-  // Events
-  document.addEventListener('DOMContentLoaded', mountOnce);
-  window.addEventListener('cb:assets-ready', () => { /* optional hooks */ });
-  window.addEventListener('cb:game-start', () => {
-    // bei Spielstart einmal redraw (z. B. nach Bridge-Set)
-    if (State.items?.length) render();
   });
 
+  // Re-render bei Start (damit Kategorien sicher stehen)
+  window.addEventListener("cb:game-start", () => {
+    render();
+  });
+
+  // Safe Marker-Klasse am Body für FAB-Abstand
+  function markOpen(){ document.body.classList.add('has-build-open');  }
+  function markClose(){ document.body.classList.remove('has-build-open'); }
+
+  // ---------- Core ----------
+  async function hydrate(){
+    // 1) Registry bevorzugen
+    const reg = window.Registry;
+    if (reg && typeof reg.list === "function") {
+      const regItems = tryGetRegistryBuildings(reg);
+      if (regItems && regItems.items?.length) {
+        DATA = regItems;
+        log("Items gesetzt (via Registry)", `(${DATA.items.length} / ${DATA.cats.length})`);
+        return;
+      }
+    }
+
+    // 2) Bridge / Fallback
+    const bridge = window.UIBuildBridge;
+    try {
+      if (bridge && typeof bridge.fetch === "function") {
+        const d = await bridge.fetch(); // erwartet {items, cats}
+        if (d?.items?.length) {
+          DATA = normalize(d);
+          log("Fallback JSON erkannt (cats:%s / items:%s)", DATA.cats.length, DATA.items.length);
+          return;
+        }
+      }
+    } catch(e){ warn("Bridge-Fehler:", e); }
+
+    // 3) allerletzter Fallback: Minimal-Hinweis
+    DATA = { cats: [], items: [] };
+    warn("Keine Gebäudedaten → leerer Hinweis");
+  }
+
+  function tryGetRegistryBuildings(reg){
+    try{
+      // Erwarte: reg.list("buildings") → Array von { id, name, category, icon, image }
+      const items = (reg.list && reg.list("buildings")) || [];
+      // Kategorien aus Registry lesen (oder aus Items ableiten)
+      const catsFromReg = (reg.list && reg.list("categories")) || [];
+      const catMap = new Map();
+      (catsFromReg || []).forEach(c=>{
+        catMap.set(c.id || c.key || c, {
+          id: c.id || c.key || c,
+          title: c.title || c.name || String(c),
+          icon: c.icon || null,
+          color: c.color || null
+        });
+      });
+
+      const cats = [];
+      const itemsNorm = [];
+      items.forEach(b=>{
+        const catId = b.category || "misc";
+        if (!catMap.has(catId)){
+          catMap.set(catId, { id: catId, title: catId, icon: null, color: null });
+        }
+        itemsNorm.push({
+          id: b.id,
+          title: b.title || b.name || b.id,
+          cat: catId,
+          img: b.image || b.icon || null
+        });
+      });
+      catMap.forEach(v=>cats.push(v));
+      return { cats, items: itemsNorm };
+    }catch(e){
+      warn("Registry-lesen fehlgeschlagen:", e);
+      return null;
+    }
+  }
+
+  function normalize(d){
+    // Vereinheitliche Struktur {cats:[{id,title,icon,color}], items:[{id,title,cat,img}]}
+    const cats = (d.cats || d.categories || []).map(c=>({
+      id: c.id || c.key || c.cat || "misc",
+      title: c.title || c.name || c.label || "Kategorie",
+      icon: c.icon || null,
+      color: c.color || null
+    }));
+    const items = (d.items || d.buildings || []).map(b=>({
+      id: b.id || b.key,
+      title: b.title || b.name || b.label || b.id,
+      cat: b.cat || b.category || "misc",
+      img: b.img || b.icon || b.image || null
+    }));
+    return { cats, items };
+  }
+
+  function render(){
+    clear(wrap);
+
+    if (!DATA || !DATA.items?.length){
+      wrap.appendChild(emptyBox("Keine Gebäude verfügbar"));
+      return;
+    }
+
+    // Kategorien in stabiler Reihenfolge (bekannte zuerst)
+    const order = ["infra","admin","home","food","prod","trade","mil","misc"];
+    const cats = [...DATA.cats];
+    cats.sort((a,b)=>{
+      const ai = order.indexOf(a.id); const bi = order.indexOf(b.id);
+      const aa = ai<0 ? 999 : ai; const bb = bi<0 ? 999 : bi;
+      if (aa!==bb) return aa-bb;
+      return (a.title||"").localeCompare(b.title||"");
+    });
+
+    cats.forEach(cat=>{
+      const section = el("section","ui-build-cat");
+      const chip = el("div","ui-build-chip");
+      if (cat.icon) {
+        const ic = new Image();
+        ic.src = cat.icon;
+        chip.appendChild(ic);
+      }
+      chip.appendChild(document.createTextNode(cat.title || cat.id));
+      section.appendChild(chip);
+
+      const grid = el("div","ui-build-grid");
+      // nur Items dieser Kategorie
+      DATA.items.filter(i=>i.cat===cat.id).forEach(it=>{
+        grid.appendChild(card(it));
+      });
+
+      if (!grid.children.length){
+        const none = el("div","ui-build-empty");
+        none.textContent = "Keine Einträge in dieser Kategorie";
+        grid.appendChild(none);
+      }
+
+      section.appendChild(grid);
+      wrap.appendChild(section);
+    });
+  }
+
+  function card(it){
+    const card = el("div","ui-build-card");
+    const btn = el("button");
+    const art = el("div","art");
+    const label = el("div","label");
+
+    label.textContent = it.title || it.id;
+
+    const img = new Image();
+    img.loading = "lazy";
+    img.decoding = "async";
+    // Bild: bevorzugt assets/buildings/* – ansonsten icon
+    img.src = bestImageFor(it);
+    art.appendChild(img);
+
+    btn.appendChild(art);
+    btn.appendChild(label);
+    btn.addEventListener("click", ()=> select(it));
+    card.appendChild(btn);
+    return card;
+  }
+
+  function bestImageFor(it){
+    if (it.img) return it.img;
+    // heuristik: assets/buildings/<id>*.png
+    return `assets/buildings/${it.id}_wood.png`;
+  }
+
+  function select(it){
+    // alter Event-Name bleibt (Abwärtskompatibilität)
+    const ev = new CustomEvent("cb:build:select", { detail: { id: it.id }});
+    window.dispatchEvent(ev);
+    log("select", it.id);
+  }
+
+  // ---------- Open/Close/Toggle ----------
+  function toggle(){
+    if (IS_OPEN) return closeDock();
+    return openDock();
+  }
+  function openDock(){
+    if (IS_OPEN) return;
+    IS_OPEN = true;
+    root.classList.add("is-open");
+    markOpen();
+    window.dispatchEvent(new Event("cb:build:open"));
+  }
+  function closeDock(){
+    if (!IS_OPEN) return;
+    IS_OPEN = false;
+    root.classList.remove("is-open");
+    markClose();
+    window.dispatchEvent(new Event("cb:build:close"));
+  }
+
+  // ---------- DOM helpers ----------
+  function ensureRoot(){
+    let r = document.getElementById("build-dock") ||
+            document.getElementById("build-panel"); // legacy id
+    if (!r){
+      r = document.createElement("div");
+      r.id = "build-dock";
+      r.className = "ui-build-dock";
+      document.body.appendChild(r);
+    }else{
+      r.classList.add("ui-build-dock");
+    }
+    return r;
+  }
+  function clear(n){ while(n.firstChild) n.removeChild(n.firstChild); }
+  function el(tag, cls){
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    return n;
+  }
 })();
