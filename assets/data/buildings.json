@@ -6,19 +6,15 @@
     { "id": "nahrung",     "title": "Produktion / Nahrung",    "order": 30 },
     { "id": "rohstoffe",   "title": "Produktion / Rohstoffe",  "order": 40 },
 
-    // NEU / bisher leer:
+
     { "id": "infra",       "title": "Infrastruktur",           "order": 50 },
     { "id": "deko",        "title": "Deko / Landschaft",       "order": 60 },
     { "id": "militaer",    "title": "Militär",                 "order": 70 }
   ],
 
-  // --- Items ---------------------------------------------------------------
-  // Typen:
-  //  - "type": "building"  → klassisches Gebäude (Sprite aus assets/buildings)
-  //  - "type": "tile"      → Kachel/Platzhalter (Sprite aus assets/tex / assets/tiles)
-  //  - "gridSize": [w,h]   → optionale Logik, UI ignoriert das Feld
+
   "items": [
-    // Verwaltung
+
     {
       "id": "rathaus",
       "title": "Rathaus",
