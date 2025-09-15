@@ -1,17 +1,11 @@
 <!doctype html>
 <!--
   Neue Siedler – Index (Vollversion, kommentiert)
-  Ziel: Inspector bleibt unberührt; Build-Menü stabil aus Registry (Fallback möglich)
+  Ziel: Inspector bleibt unberührt; Build-Menü stabil aus Registry/Fallback.
 
   Lade-Reihenfolge (wichtig):
-  Polyfill → Core → Registry/Entities → Renderer → Game → Bootstrap
-  → Inspector (split) → UI-Basis (Start) → UI-Build (Renderer) → UI-Build-Bridge (Daten)
-  → UI-Bridge (Buttons/Kompat) → Boot-Compat
-
-  Hinweise:
-  - KEIN altes inspector.js / inspector.overview.js laden.
-  - Start-Panel liegt über Canvas und wird nach Start entfernt.
-  - FAB-Buttons (Bau/Inspector) mit hohem z-index.
+  Polyfill → Core/Assets → Registry/Entities → Renderer → GameCore → Bootstrap
+  → Inspector (split) → UI-Start → UI-Build → UI-Build-Data-Bridge → UI-Bridge → Boot-Compat
 -->
 <html lang="de">
 <head>
@@ -35,23 +29,19 @@
     #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
 
     /* FABs */
-    .ui-fab {
-      position:fixed; z-index:2147483647 !important; pointer-events:auto !important;
-    }
+    .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
     .ui-fab button{
-      width:52px; height:52px; border-radius:50%; border:none;
+      width:52px; height:52px; border:none; border-radius:50%;
       background:#2a2d31; color:#fff; font-size:22px;
-      box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px);
-      cursor:pointer; pointer-events:auto !important;
+      box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px); cursor:pointer;
+      pointer-events:auto !important;
     }
 
-    /* Build-Dock Abstand, wenn offen */
+    /* Wenn das Build-Dock offen ist, FABs hochsetzen */
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom: calc(var(--build-dock-max-h, 40vh) + 16px); }
-
-    /* Start-Panel (über Canvas, unter FABs) – Basis kommt aus ui-start.css */
   </style>
 </head>
 <body>
@@ -59,9 +49,8 @@
   <!-- Bühne -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
-  <!-- Build-Dock (unten andockend; unterstützt id="build-panel" als Legacy) -->
-  <div id="build-dock" class="ui-build-dock" aria-label="Bau-Menü"></div>
-  <!-- <div id="build-panel" class="ui-build-dock" aria-label="Bau-Menü (Legacy)"></div> -->
+  <!-- Build-Dock: WICHTIG → id="build-panel" (so erwartet es ui-build.js) -->
+  <div id="build-panel" class="ui-build-dock" aria-label="Bau-Menü"></div>
 
   <!-- Start-Panel -->
   <div id="start-panel" class="ui-start" aria-label="Startmenü">
@@ -79,10 +68,12 @@
 
   <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" aria-label="Bau-Menü" onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
+    <button type="button" aria-label="Bau-Menü"
+            onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" aria-label="Inspector" onclick="try{GameUI?.toggleInspector();}catch(e){console.warn('[ui] Inspector-Toggle nicht verfügbar',e);}">🛠</button>
+    <button type="button" aria-label="Inspector"
+            onclick="try{GameUI?.toggleInspector();}catch(e){console.warn('[ui] Inspector-Toggle nicht verfügbar',e);}">🛠</button>
   </div>
 
   <!-- Core + Polyfills -->
@@ -94,7 +85,7 @@
   <script src="assets/core/build.assets.js?v=17.8.7"></script>
   <script src="assets/core/build.categories.js?v=17.8.7"></script>
 
-  <!-- Rest Core -->
+  <!-- Core/Engine -->
   <script src="assets/core/registry.js?v=1.2.0"></script>
   <script src="assets/core/entities.registry.js?v=1.1.1"></script>
   <script src="assets/core/core.entities.js?v=17.6.2"></script>
@@ -103,10 +94,10 @@
   <script src="assets/core/camera.js?v=17.9.5"></script>
   <script src="assets/core/core.map.js?v=17.9.1"></script>
   <script src="assets/core/core.input.js?v=17.8.2"></script>
-  <script src="assets/core/carriers.js?v=17.8.2"></script>
   <script src="assets/core/overlay-hooks.js?v=17.8.2"></script>
   <script src="assets/core/core.render.js?v=17.9.5"></script>
-  <script src="core/game.js?v=18.0.0"></script>
+
+  <!-- Game / Bootstrap (NUR die Assets-Variante, keine doppelte /core/game.js mehr) -->
   <script src="assets/core/game.bootstrap.js?v=17.8.7"></script>
   <script src="assets/core/game.js?v=17.10.0"></script>
 
@@ -118,14 +109,35 @@
   <script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
   <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
-  <!-- Optionale Helper (kein Muss): -->
-  <!-- <script defer src="assets/inspector/inspector.button-bind.js?v=1.0.0"></script> -->
 
-  <!-- UI (WICHTIG: Reihenfolge) -->
-  <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>       <!-- Start-Panel Logik -->
-  <script defer src="assets/ui/ui-build.js?v=18.3.2"></script>       <!-- ✅ MUSS vor data-bridge -->
+  <!-- UI (WICHTIG: Reihenfolge beibehalten) -->
+  <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>        <!-- Start-Panel Logik -->
+  <script defer src="assets/ui/ui-build.js?v=18.3.2"></script>        <!-- Renderer/DOM fürs Baumenü -->
+
+  <!-- Mini-Watcher: feuert ein Ready-Signal, sobald UIBuild global ist
+       → verhindert „UIBuild.setItems nicht verfügbar“-Spam bei Data-Bridge -->
+  <script defer>
+    (function watchUIBuildReady(){
+      function fire() {
+        if (window.__uiBuildReadyFired) return;
+        window.__uiBuildReadyFired = true;
+        document.dispatchEvent(new CustomEvent('cb:ui-build-ready'));
+        (window.CBLog?.info||console.log)('[index] ui-build ready event fired');
+      }
+      const t = setInterval(() => {
+        if (window.UIBuild && typeof window.UIBuild.setItems === 'function') {
+          clearInterval(t); fire();
+        }
+      }, 30);
+      // Fallback nach Parsing
+      document.addEventListener('DOMContentLoaded', () => {
+        if (window.UIBuild && typeof window.UIBuild.setItems === 'function') fire();
+      });
+    })();
+  </script>
+
   <script defer src="assets/ui/ui-build.data-bridge.js?v=1.0.0"></script><!-- liest Registry/Fallback -->
-  <script defer src="assets/ui/ui-bridge.js?v=18.1.0"></script>      <!-- Buttons, Inspector-Toggle -->
+  <script defer src="assets/ui/ui-bridge.js?v=18.1.0"></script>       <!-- Buttons, Inspector-Toggle -->
 
   <!-- Boot-Compat -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
@@ -137,13 +149,13 @@
       window.__cb.indexVersion = "v18.3.2";
       (window.CBLog?.info || console.log)("[index] UI bereit (v18.3.2)");
 
-      // FAB-Abstand für offenes Bau-Dock – beide Event-Varianten unterstützen
+      // FAB-Abstand wenn Baumenü offen
       function setOpen(){ document.body.classList.add('has-build-open'); }
       function setClose(){ document.body.classList.remove('has-build-open'); }
       window.addEventListener('cb:build:open',  setOpen);
       window.addEventListener('cb:build:close', setClose);
-      window.addEventListener('cb:build-open',  setOpen);   // Fallback
-      window.addEventListener('cb:build-close', setClose);  // Fallback
+      window.addEventListener('cb:build-open',  setOpen);   // Legacy
+      window.addEventListener('cb:build-close', setClose);  // Legacy
     })();
   </script>
 </body>
