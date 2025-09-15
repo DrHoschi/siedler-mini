@@ -1,136 +1,130 @@
-/* Neue Siedler – UI Build Dock
-   v18.4.0
-   Ziel: unten angedockt, sichtbares dunkles Grau (nicht transparent),
-   Tabs + Grid, kompakt.  */
+/* Neue Siedler – Build Dock UI
+   Version: v18.4.0  (optische Angleichen ans Referenzbild)
+   -------------------------------------------------------- */
+
+/* ====== Variablen ====== */
 :root{
-  --build-dock-max-h: 220px;        /* für FAB-Abstand */
-  --dock-bg: #1b1f22;               /* dunkles Grau (deutlich heller als schwarz) */
-  --dock-fg: #e8eaed;
-  --dock-muted: #9aa0a6;
-  --dock-border: #2a2f34;
-  --tab-active: #3a4046;
-  --tile-bg: #22272b;
-  --tile-border: #31363b;
+  --build-dock-max-w: 1200px;
+  --build-dock-max-h: 36vh;
+  --build-dock-gap:   16px;
+
+  --panel-bg:   #eef1f4;     /* helles Grau wie im Screenshot */
+  --panel-br:   18px;        /* Rundung oben */
+  --panel-sh:   0 14px 30px rgba(0,0,0,.24);
+
+  --card-bg:    #f8fafc;     /* Kachel-Hintergrund */
+  --card-br:    14px;
+  --card-sh:    0 6px 14px rgba(0,0,0,.08);
+
+  --title-col:  #2a2f36;
+  --muted-col:  #6b7280;
+  --ring-col:   rgba(0,0,0,.08);
 }
 
+/* ====== Dock (unten andockend) ====== */
 .ui-build-dock{
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  max-height: var(--build-dock-max-h);
-  width: 100%;
-  background: var(--dock-bg);
-  color: var(--dock-fg);
-  border-top: 1px solid var(--dock-border);
-  box-shadow: 0 -12px 32px rgba(0,0,0,.45);
-  z-index: 2147483000; /* unterhalb der FABs, aber über Canvas */
-  transform: translateY(100%);
-  transition: transform .22s ease-out;
-  will-change: transform;
-  display: flex;
-  flex-direction: column;
-  pointer-events: auto;
-}
-
-/* sichtbar wenn offen */
-.ui-build-dock.open{
-  transform: translateY(0);
-}
-
-/* Chrome */
-.ui-build-chrome{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px 2px 10px;
-}
-.ui-build-chrome .drag-handle{
-  width: 48px; height: 6px; border-radius: 4px;
-  background: #6b7176;
-  margin: 0 auto;
-  opacity: .8;
-}
-.ui-build-chrome .close{
-  position: absolute;
-  right: 8px; top: 6px;
-  width: 28px; height: 28px;
-  border: 1px solid var(--dock-border);
-  background: #21262b;
-  color: var(--dock-fg);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-/* Tabs */
-.ui-build-tabs{
-  display: flex;
-  gap: 6px;
-  padding: 6px 10px 0 10px;
-  overflow-x: auto;
-}
-.ui-build-tabs .tab{
-  appearance: none; border: 1px solid var(--dock-border);
-  background: #20252a; color: var(--dock-fg);
-  border-radius: 10px; padding: 6px 12px;
-  cursor: pointer; white-space: nowrap;
-  font-size: 13px;
-}
-.ui-build-tabs .tab.active{
-  background: var(--tab-active);
-  border-color: #4b5157;
-}
-
-/* Body */
-.ui-build-body{
-  flex: 1;
-  min-height: 140px;
-  padding: 8px 10px 10px 10px;
-  overflow: auto;
-}
-
-/* Grid */
-.ui-build-grid{
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  gap: 8px;
-}
-.ui-build-grid .card{
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-  gap: 6px;
-  border: 1px solid var(--tile-border);
-  background: var(--tile-bg);
-  border-radius: 10px;
-  padding: 10px;
-  cursor: pointer;
-}
-.ui-build-grid .card .thumb{
-  width: 64px; height: 64px; display: grid; place-items: center;
-}
-.ui-build-grid .card .thumb img{
-  max-width: 100%; max-height: 100%; image-rendering: auto;
-}
-.ui-build-grid .card .label{
-  font-size: 12px; text-align: center; color: var(--dock-fg);
-}
-
-/* Empty */
-.ui-build-empty{
-  height: 120px;
-  border: 1px dashed var(--dock-border);
-  border-radius: 10px;
+  z-index: 1000;
   display: grid;
   place-items: center;
-  color: var(--dock-muted);
-}
-.ui-build-empty .empty-icon{ font-size: 18px; margin-bottom: 6px; text-align:center; }
-.ui-build-empty .empty-text{ font-size: 14px; }
-
-/* Kompatibilität: altes #build-panel */
-#build-panel.ui-build-dock { /* falls alt vorhanden */
-  /* gleiche Regeln wie oben greifen bereits über .ui-build-dock */
+  pointer-events: none;           /* nur Inhalt klickbar */
 }
 
-/* Sicherheit: Body-Offset (wird via JS gesetzt/entfernt) */
+.ui-build-dock > .ui-build-panel{
+  width: min(100vw - 16px, var(--build-dock-max-w));
+  max-height: var(--build-dock-max-h);
+  background: var(--panel-bg);
+  border-radius: var(--panel-br) var(--panel-br) 12px 12px;
+  box-shadow: var(--panel-sh);
+  padding: 18px;
+  overflow: auto;
+  pointer-events: auto;           /* Inhalt klickbar */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Body-Klasse hebt FABs an (Index setzt sie bereits) */
+:root, html, body{ transform: none !important; }
 body.has-build-open #btn-build,
-body.has-build-open #btn-inspector{
-  bottom: calc(var(--build-dock-max-h) + 16px);
+body.has-build-open #btn-inspector{ bottom: calc(var(--build-dock-max-h) + 16px); }
+
+/* ====== Kopfbereich / Kategorie-Titel ====== */
+.ui-build-cat{
+  margin: 6px 0 8px;
+  font: 700 18px/1.25 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  color: var(--title-col);
+  letter-spacing: .2px;
 }
+
+/* ====== Grid ====== */
+.ui-build-grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: var(--build-dock-gap);
+}
+
+@media (min-width: 700px){
+  .ui-build-grid{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+}
+@media (min-width: 980px){
+  .ui-build-grid{ grid-template-columns: repeat(5, minmax(0,1fr)); }
+}
+
+/* ====== Karten (Building-Buttons) ====== */
+.ui-build-card{
+  background: var(--card-bg);
+  border-radius: var(--card-br);
+  box-shadow: var(--card-sh);
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: center;
+  gap: 10px;
+  transition: transform .08s ease, box-shadow .12s ease;
+  border: 1px solid var(--ring-col);
+}
+
+.ui-build-card:active{ transform: translateY(1px) scale(.995); }
+.ui-build-card:hover{ box-shadow: 0 10px 20px rgba(0,0,0,.12); }
+
+.ui-build-card .img{
+  width: 100%; height: 84px;
+  display: grid; place-items: center;
+}
+.ui-build-card .img > img{
+  max-width: 100%;
+  max-height: 84px;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.ui-build-card .label{
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.2;
+  color: var(--title-col);
+  text-align: center;
+}
+
+/* ====== Leerer-State ====== */
+.ui-build-empty{
+  display: grid; place-items: center;
+  height: 64px;
+  color: var(--muted-col);
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+/* ====== Andock-Container, wenn Deine JS ältere IDs benutzt ====== */
+#build-panel{ /* Legacy alias → zeigt identisch an */
+  composes: ui-build-panel from '.ui-build-dock';
+}
+
+/* ====== Kleinigkeiten ====== */
+.ui-build-dock .hr{ height: 1px; background: var(--ring-col); margin: 10px 0 6px; border-radius: 1px; }
+.ui-build-dock .muted{ color: var(--muted-col); font-weight: 500; }
+
+/* Safari iOS Scroll-Bar dezent */
+.ui-build-dock ::-webkit-scrollbar{ height: 8px; width: 8px; }
+.ui-build-dock ::-webkit-scrollbar-thumb{ background: rgba(0,0,0,.18); border-radius: 999px; }
