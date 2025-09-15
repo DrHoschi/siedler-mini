@@ -1,90 +1,136 @@
+/* Neue Siedler – UI Build Dock
+   v18.4.0
+   Ziel: unten angedockt, sichtbares dunkles Grau (nicht transparent),
+   Tabs + Grid, kompakt.  */
 :root{
-  --build-dock-max-h: 220px;
-  --build-bg: #ECEFF3;
-  --build-card: #F7F8FA;
-  --build-card-border: #DDE3EA;
-  --build-card-shadow: 0 4px 14px rgba(0,0,0,.06);
-  --build-title: #2B3A46;
-  --build-label: #2B3A46;
-  --build-muted: #6C7A86;
-  --radius-xl: 16px;
-  --radius-lg: 12px;
+  --build-dock-max-h: 220px;        /* für FAB-Abstand */
+  --dock-bg: #1b1f22;               /* dunkles Grau (deutlich heller als schwarz) */
+  --dock-fg: #e8eaed;
+  --dock-muted: #9aa0a6;
+  --dock-border: #2a2f34;
+  --tab-active: #3a4046;
+  --tile-bg: #22272b;
+  --tile-border: #31363b;
 }
 
 .ui-build-dock{
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  z-index: 9999;
-  display: none;
-  background: var(--build-bg);      /* NICHT transparent */
-  box-shadow: 0 -10px 30px rgba(0,0,0,.18);
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
   max-height: var(--build-dock-max-h);
-  overflow: hidden;
+  width: 100%;
+  background: var(--dock-bg);
+  color: var(--dock-fg);
+  border-top: 1px solid var(--dock-border);
+  box-shadow: 0 -12px 32px rgba(0,0,0,.45);
+  z-index: 2147483000; /* unterhalb der FABs, aber über Canvas */
+  transform: translateY(100%);
+  transition: transform .22s ease-out;
+  will-change: transform;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
 }
 
+/* sichtbar wenn offen */
+.ui-build-dock.open{
+  transform: translateY(0);
+}
+
+/* Chrome */
+.ui-build-chrome{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 2px 10px;
+}
+.ui-build-chrome .drag-handle{
+  width: 48px; height: 6px; border-radius: 4px;
+  background: #6b7176;
+  margin: 0 auto;
+  opacity: .8;
+}
+.ui-build-chrome .close{
+  position: absolute;
+  right: 8px; top: 6px;
+  width: 28px; height: 28px;
+  border: 1px solid var(--dock-border);
+  background: #21262b;
+  color: var(--dock-fg);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Tabs */
+.ui-build-tabs{
+  display: flex;
+  gap: 6px;
+  padding: 6px 10px 0 10px;
+  overflow-x: auto;
+}
+.ui-build-tabs .tab{
+  appearance: none; border: 1px solid var(--dock-border);
+  background: #20252a; color: var(--dock-fg);
+  border-radius: 10px; padding: 6px 12px;
+  cursor: pointer; white-space: nowrap;
+  font-size: 13px;
+}
+.ui-build-tabs .tab.active{
+  background: var(--tab-active);
+  border-color: #4b5157;
+}
+
+/* Body */
 .ui-build-body{
-  overflow-y: auto;
-  max-height: calc(var(--build-dock-max-h) - 8px);
-  padding: 12px 12px 14px;
+  flex: 1;
+  min-height: 140px;
+  padding: 8px 10px 10px 10px;
+  overflow: auto;
 }
 
-.ui-build-category{ margin: 0 0 14px 0; }
-.ui-build-category-title{
-  font: 600 18px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: var(--build-title);
-  margin: 2px 6px 10px 6px;
-}
-.ui-build-category-row{
+/* Grid */
+.ui-build-grid{
   display: grid;
-  grid-template-columns: repeat(3, minmax(0,1fr));
-  gap: 12px;
-  padding: 0 6px;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+.ui-build-grid .card{
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 6px;
+  border: 1px solid var(--tile-border);
+  background: var(--tile-bg);
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+}
+.ui-build-grid .card .thumb{
+  width: 64px; height: 64px; display: grid; place-items: center;
+}
+.ui-build-grid .card .thumb img{
+  max-width: 100%; max-height: 100%; image-rendering: auto;
+}
+.ui-build-grid .card .label{
+  font-size: 12px; text-align: center; color: var(--dock-fg);
 }
 
-.ui-card.ui-build-item{
-  border: 1px solid var(--build-card-border);
-  background: var(--build-card);
-  border-radius: var(--radius-xl);
-  padding: 10px 10px 8px;
-  box-shadow: var(--build-card-shadow);
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  min-height: 122px;
-}
-
-.ui-build-item-imgwrap{
-  width: 92px; height: 72px;
-  display: grid; place-items: center;
-  border-radius: var(--radius-lg);
-  background: #EEF2F6;
-}
-.ui-build-item-img{ max-width: 92px; max-height: 70px; width:auto; height:auto; }
-
-.ui-build-item-label{
-  font: 600 15px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: var(--build-label);
-  text-align: center;
-}
-
+/* Empty */
 .ui-build-empty{
-  color: var(--build-muted);
-  font: 500 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  padding: 18px;
-  text-align: center;
-  background: rgba(255,255,255,.35);
-  border-radius: 12px;
+  height: 120px;
+  border: 1px dashed var(--dock-border);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--dock-muted);
+}
+.ui-build-empty .empty-icon{ font-size: 18px; margin-bottom: 6px; text-align:center; }
+.ui-build-empty .empty-text{ font-size: 14px; }
+
+/* Kompatibilität: altes #build-panel */
+#build-panel.ui-build-dock { /* falls alt vorhanden */
+  /* gleiche Regeln wie oben greifen bereits über .ui-build-dock */
 }
 
-@media (max-width: 360px){
-  .ui-build-category-row{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .ui-build-item-imgwrap{ width: 84px; height: 64px; }
-  .ui-build-item-img{ max-width: 84px; max-height: 62px; }
-  .ui-card.ui-build-item{ min-height: 114px; }
-}
-@media (min-width: 768px){
-  :root{ --build-dock-max-h: 300px; }
-  .ui-build-category-row{ grid-template-columns: repeat(4, minmax(0,1fr)); }
-  .ui-build-item-imgwrap{ width: 100px; height: 78px; }
-  .ui-build-item-img{ max-width: 100px; max-height: 76px; }
+/* Sicherheit: Body-Offset (wird via JS gesetzt/entfernt) */
+body.has-build-open #btn-build,
+body.has-build-open #btn-inspector{
+  bottom: calc(var(--build-dock-max-h) + 16px);
 }
