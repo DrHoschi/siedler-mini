@@ -1,117 +1,106 @@
 /* ============================================================================
- * Datei: core/registry.json-adapter.js
+ * Datei: assets/core/registry.json-adapter.js
  * Projekt: Neue Siedler
- * Version: v1.0.2
- * Zweck:
- *   - Brücke zwischen JSON-Daten (buildings.json, units.json, …) und Registry
- *   - Lädt Datenpakete, validiert rudimentär und registriert Inhalte zentral
- *   - Löst cb:registry:ready aus, sobald Daten eingebunden sind
- * ============================================================================
- */
-
-(function(){
+ * Version: v1.0.4
+ *
+ * Aufgabe
+ *  - buildings.json laden
+ *  - Inhalte in Registry eintragen (Registry.upsert('buildings', …))
+ *  - iconsBase in Registry.meta hinterlegen (für UI-Bridge)
+ *  - NACH dem Eintragen genau 1x cb:registry:ready dispatchen
+ * ========================================================================== */
+(function (global) {
   'use strict';
-
   var MOD = '[registry.json-adapter]';
-  var VERSION = 'v1.0.2';
+  var VER = 'v1.0.4';
+  var logI = (global.CBLog?.info  || console.log).bind(console, MOD);
+  var logW = (global.CBLog?.warn  || console.warn).bind(console, MOD);
+  var logE = (global.CBLog?.error || console.error).bind(console, MOD);
 
-  // ---------------------------------------------------------------------------
-  // Logging beim Laden
-  // ---------------------------------------------------------------------------
-  (window.CBLog?.ok || console.log)(MOD, 'Modul geladen', VERSION);
+  logI('Modul geladen', VER);
 
-  // ---------------------------------------------------------------------------
-  // Hilfsfunktionen
-  // ---------------------------------------------------------------------------
-
-  // JSON laden (Promise-basiert)
-  function loadJSON(url){
-    return fetch(url)
-      .then(r => {
-        if(!r.ok) throw new Error('HTTP '+r.status);
-        return r.json();
-      });
+  // ------------------------------ Helpers -----------------------------------
+  function once(fn){
+    var done = false;
+    return function(){ if (done) return; done = true; try{ fn.apply(this, arguments); }catch(e){ logE(e); } };
   }
-
-  // Kategorie-Metadaten: Default-Werte
-  function categoryMeta(cat){
-    var colors = { admin:'#9b59b6', food:'#27ae60', raw:'#d35400', misc:'#7f8c8d' };
-    return { color: colors[cat] || '#95a5a6', icon: null };
-  }
-
-  // Gebäude registrieren
-  function registerBuildings(arr){
-    if(!Array.isArray(arr)) return;
-    arr.forEach(b => {
-      try {
-        var id = b.id || ('b.'+b.name.toLowerCase());
-        var meta = {
-          id,
-          type:'building',
-          name: b.name,
-          cat: b.cat || 'misc',
-          sprite: b.sprite,
-          icon: b.icon,
-          enabled: !!b.enabled,
-          size: b.size || [1,1],
-          place: b.place || null
-        };
-
-        // Cross-Check: Sprite existiert?
-        if(!meta.sprite){
-          (window.CBLog?.warn || console.warn)(MOD, 'Sprite fehlt bei', id);
-        }
-
-        // Registry schreiben
-        try {
-          window.Registry.register('buildings', id, meta);
-        } catch(e){
-          (window.CBLog?.error || console.error)(MOD, 'Registry.register fail', id, e);
-        }
-      } catch(e){
-        (window.CBLog?.error || console.error)(MOD, 'Fehler beim Parsen eines Gebäudes', e);
-      }
+  function fetchJSON(url){
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('HTTP '+r.status+' @ '+url);
+      return r.json();
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // Hauptlogik
-  // ---------------------------------------------------------------------------
-
-  function applyData(buildings){
-    registerBuildings(buildings);
-
-    var cats = (window.Registry.list?.('categories')||[]).length;
-    var blds = (window.Registry.list?.('buildings')||[]).length;
-
-    (window.CBLog?.ok || console.log)(
-      MOD, 'ready dispatched (cats:', cats, 'blds:', blds, ')'
-    );
-
-    try {
-      window.dispatchEvent(new CustomEvent('cb:registry:ready',{
-        detail:{ ready:true, counts:{categories:cats, buildings:blds}, source:'json-adapter' }
-      }));
-    } catch(_){}
+  function counts(){
+    var R = global.Registry || {};
+    var cats = R.list?.('categories')?.length || 0;
+    var blds = R.list?.('buildings') ?.length || 0;
+    return { categories: cats, buildings: blds };
   }
 
-  // ---------------------------------------------------------------------------
-  // Bootstrap: Warten auf cb:assets-ready oder cb:game-start
-  // ---------------------------------------------------------------------------
+  // --------------------------- Apply JSON -> Registry ------------------------
+  function applyData(data){
+    if (!global.Registry) { logW('Registry fehlt – Abbruch'); return; }
 
+    // iconsBase bereitstellen (UI-Bridge nutzt das)
+    var base = data?.iconsBase || '';
+    global.Registry.meta = global.Registry.meta || {};
+    global.Registry.meta.iconsBase = base;
+    // optionaler globaler Hook (falls andere Module das brauchen)
+    global.__REGISTRY_ICONS_BASE = base;
+
+    var buildings = data?.buildings || [];
+    var applied = 0;
+
+    buildings.forEach(function(b){
+      try{
+        // nichts „umbauen“ – Originalfelder beibehalten (Bridge join’t icon+iconsBase)
+        if (!b.id) { logW('Building ohne id übersprungen:', b?.name || b); return; }
+        // upsert statt register('buildings', …)
+        global.Registry.upsert && global.Registry.upsert('buildings', b);
+        applied++;
+      }catch(e){
+        logE('Fehler beim Eintragen', b?.id || b, e);
+      }
+    });
+
+    logI('applied', applied, 'buildings');
+  }
+
+  // ------------------------------- Ready Event -------------------------------
+  var dispatchReady = once(function(sourceTag){
+    var c = counts();
+    try {
+      global.dispatchEvent(new CustomEvent('cb:registry:ready', {
+        detail: { ready:true, counts:c, source: sourceTag || 'json-adapter' }
+      }));
+    } catch(_){}
+    logI('ready dispatched (cats:', c.categories, 'blds:', c.buildings, ')');
+  });
+
+  // --------------------------------- Start -----------------------------------
+  var started = false;
   function start(){
-    // Gebäude-JSON laden
-    loadJSON('data/buildings.json')
-      .then(data => {
-        applyData(data.buildings||[]);
-        (window.CBLog?.info || console.log)(MOD, 'applied', (data.buildings||[]).length, 'buildings');
+    if (started) return; started = true;
+    // Pfad zu deinem JSON (so wie du es nutzt)
+    var url = 'data/buildings.json';
+
+    fetchJSON(url)
+      .then(function(data){
+        applyData(data);          // 1) erst eintragen
+        dispatchReady('json-adapter'); // 2) dann ready feuern
       })
-      .catch(e => {
-        (window.CBLog?.error || console.error)(MOD, 'Fehler beim Laden von buildings.json', e);
+      .catch(function(err){
+        logE('Fehler beim Laden von', url, err);
       });
   }
 
-  window.addEventListener('cb:assets-ready', start, {once:true});
-  window.addEventListener('cb:game-start', start, {once:true});
+  // Startbedingungen: sobald Assets bereit ODER Game-Start
+  global.addEventListener('cb:assets-ready', start, { once:true });
+  global.addEventListener('cb:game-start',   start, { once:true });
 
-})();
+  // Fallback: wenn DOM schon da und Registry existiert, vorsichtig starten
+  if (document.readyState !== 'loading' && global.Registry) {
+    // kurzer Timeout, damit andere Listener sich registrieren können
+    setTimeout(start, 0);
+  }
+})(window);
