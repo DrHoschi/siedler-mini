@@ -1,15 +1,17 @@
 <!doctype html>
 <!--
 ===============================================================================
-Neue Siedler – INDEX (Projekt-Vorlage, aufgeräumt)
-Version: v18.4.2
+Neue Siedler – INDEX (Projekt-Vorlage, bereinigt)
+Version: v18.5.0
 Stand: 2025-09-16
 
-Leitplanken:
-- Inspector bleibt unberührt (bestehende API-Compat).
-- Bau-Menü über CORE-UI (keine zweite UI-Variante aus /assets/ui mehr).
-- Registry/Assets-Events nach Lastenheft (cb:registry:ready / cb:assets-ready / cb:game-start).
-- 1:1 Copy-&-Paste, gut kommentiert und nummeriert.
+Leitplanken (Lastenheft):
+- Inspector unberührt (bestehende API-Compat).
+- Bau-Menü über CORE-UI (keine /assets/ui/ui-build*.js-Parallele).
+- Registry-Events: cb:registry:ready / cb:registry:update. Adapter sendet
+  nach dem Laden zusätzlich cb:assets-ready. Kein zusätzlicher „Ping“-Kleber.
+- Reihenfolge strikt: Polyfill/Env → Registry(+Adapter) → Entities-Bridge →
+  Engine/Renderer → Game → Inspector → CORE-UI (ui-build.js) → Data-Bridge → Start-UI.
 ===============================================================================
 -->
 <html lang="de">
@@ -26,9 +28,8 @@ Leitplanken:
   <title>Neue Siedler</title>
 
   <!-- =======================================================================
-  (2) STYLES – Projekt-Styles + Inspector + (optionales) UI-Build-Layout
-  Hinweis: Die CORE-UI bringt eigene Minimal-Styles per <style> mit (ui-build.js),
-  hier ergänzen wir nur Rahmen & Dock-Positionierung.
+  (2) STYLES – Projekt-Styles + Inspector
+  CORE-UI bringt Minimal-Styles selbst mit; wir kümmern uns um Bühne & Dock.
   ======================================================================== -->
   <link rel="stylesheet" href="assets/ui/ui-start.css?v=17.8.10"><!-- Start-Panel -->
   <link rel="stylesheet" href="css/base.css?v=20250914">
@@ -50,18 +51,14 @@ Leitplanken:
       pointer-events:auto !important;
     }
 
-    /* ---------- Build-Dock Behaviors ---------- */
-    /* Container, in den die CORE-UI mountet */
+    /* ---------- Build-Dock Mount ---------- */
     #build-panel {
       position:fixed; left:0; right:0; bottom:0;
-      max-height:40vh; /* Sichtfenster für 2 Zeilen + Tabs (Details steuert CORE-UI intern) */
-      background:transparent; z-index:1000; pointer-events:none; /* geschlossen: kein Klickfang */
+      max-height:40vh; background:transparent;
+      z-index:1000; pointer-events:none;   /* geschlossen: kein Klickfang */
     }
-    /* wenn offen → Dock klickbar machen */
-    body.has-build-open #build-panel { pointer-events:auto; }
-    /* geschlossen: Inhalt ausblenden */
     #build-panel .ui-build { display:none; }
-    /* offen: Inhalt sichtbar */
+    body.has-build-open #build-panel { pointer-events:auto; }
     body.has-build-open #build-panel .ui-build { display:flex; }
 
     /* FABs hochsetzen, wenn Bau-Dock offen ist */
@@ -72,16 +69,12 @@ Leitplanken:
 <body>
 
   <!-- =======================================================================
-  (3) BÜHNE: Spielfeld + Bau-Dock + Start-Panel + FABs
+  (3) BÜHNE & UI-Container
   ======================================================================== -->
-
-  <!-- 3.1 Spielfeld (Canvas) -->
   <canvas id="game" data-map="assets/maps/map-mini.json" aria-label="Spielfeld"></canvas>
-
-  <!-- 3.2 Build-Dock Mountpoint: Hier rendert die CORE-UI ihr Tab-Menü hinein -->
   <div id="build-panel" class="ui-build-dock" aria-label="Bau-Menü"></div>
 
-  <!-- 3.3 Start-Panel -->
+  <!-- Start-Panel -->
   <div id="start-panel" class="ui-start" aria-label="Startmenü">
     <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
     <div class="ui-start-card" role="dialog" aria-modal="true">
@@ -95,13 +88,12 @@ Leitplanken:
     </div>
   </div>
 
-  <!-- 3.4 FABs (Bau/Inspector) -->
+  <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
     <button type="button" aria-label="Bau-Menü"
       onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <!-- Lastenheft: direkte API -->
     <button type="button" aria-label="Inspector"
       onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🛠</button>
   </div>
@@ -115,13 +107,10 @@ Leitplanken:
   <script src="assets/core/core.env.js?v=17.8.2"></script>
 
   <!-- 4.2 Registry zuerst! Dann JSON-Adapter, dann Entities-Bridge -->
-  <!-- Registry / Adapter -->
-
-  <script src="assets/core/registry.js?v=1.2.3"></script>             <!-- Cache-Bust gegenüber 1.2.0 -->
+  <script src="assets/core/registry.js?v=1.2.3"></script>
   <script src="assets/core/registry.json-adapter.js?v=1.0.2"></script>
-  <!-- Entities-Bridge -->
   <script src="assets/core/entities.registry.js?v=1.1.2"></script>
-  
+
   <!-- 4.3 Assets/Build Layer -->
   <script src="assets/core/asset.js?v=17.8.7"></script>
   <script src="assets/core/build.assets.js?v=17.8.7"></script>
@@ -153,36 +142,34 @@ Leitplanken:
   <script defer src="assets/inspector/inspector.api-bridge.js?v=1.0.0"></script>
 
   <!-- =======================================================================
-  (6) UI – CORE-Bau-Menü + Start-Panel
-  Wichtig: Nur die CORE-Variante laden, keine /assets/ui/ui-build*.js mehr.
-  Reihenfolge: Bridge → Kategorien → UI → Start
+  (6) UI – CORE-Bau-Menü
+  Reihenfolge: CORE-UI → Data-Bridge → Start-Panel
   ======================================================================== -->
-  <script src="assets/core/ui-build.data-bridge.js?v=17.0.4"></script>
-  <script src="assets/core/build.categories.js?v=17.0.3"></script>
   <script src="assets/core/ui-build.js?v=17.0.3"></script>
+  <script src="assets/core/ui-build.data-bridge.js?v=17.0.4"></script>
   <script defer src="assets/ui/ui-start.js?v=17.8.9"></script>
 
   <!-- =======================================================================
-  (7) BOOT-COMPAT (falls du Kompat-Hooks nutzt)
+  (7) BOOT-COMPAT (falls benötigt)
   ======================================================================== -->
   <script defer src="boot.compat.js?v=17.8.2"></script>
 
   <!-- =======================================================================
-  (8) PAGE-SCRIPTS: Marker, Body-Klassen, GameUI-Toggles (leichtgewichtig)
+  (8) PAGE-SCRIPTS: Marker, Body-Klassen, GameUI-Toggles
   ======================================================================== -->
   <script>
     (function () {
       // Marker/Version
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.4.2";
-      (window.CBLog?.info || console.log)("[index] UI bereit (v18.4.2)");
+      window.__cb.indexVersion = "v18.5.0";
+      (window.CBLog?.info || console.log)("[index] UI bereit (v18.5.0)");
 
       // Body-Klassen bei Build-Dock open/close
       function setOpen(){ document.body.classList.add('has-build-open'); }
       function setClose(){ document.body.classList.remove('has-build-open'); }
       window.addEventListener('cb:build:open',  setOpen);
       window.addEventListener('cb:build:close', setClose);
-      // Legacy
+      // Legacy (weiterhin bedient)
       window.addEventListener('cb:build-open',  setOpen);
       window.addEventListener('cb:build-close', setClose);
 
@@ -193,7 +180,6 @@ Leitplanken:
           window.dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
           if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
         }
-        // KEIN toggleInspector hier – Button nutzt die API direkt
       };
 
       // Hotkeys (B = Build, I = Inspector via API)
@@ -202,72 +188,10 @@ Leitplanken:
         if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
         if (ev.key === 'i' || ev.key === 'I') {
           ev.preventDefault();
-          try { InspectorAPI.toggle(); } catch(e) { /* still */ }
+          try { InspectorAPI.toggle(); } catch(e) { /* ignore */ }
         }
       });
     })();
   </script>
-  <script>
-  (function(){
-    function counts(){
-      var R = window.Registry || {};
-      var cats = R.list?.('categories')?.length || 0;
-      var blds = R.list?.('buildings') ?.length || 0;
-      return {categories:cats, buildings:blds};
-    }
-    function fire(tag){
-      if (!window.Registry) return;
-      if (window.__registryReadyOnce) return;               // schon gesendet
-      window.__registryReadyOnce = true;
-      try { window.Registry.__ready = true; } catch(_){}
-      var c = counts();
-      try {
-        window.dispatchEvent(new CustomEvent('cb:registry:ready', {
-          detail:{ ready:true, counts:c, source:tag||'ready-kicker' }
-        }));
-      } catch(_){}
-    }
-    // Wenn das Spiel startet, spätestens dann einmal ready senden
-    window.addEventListener('cb:game-start', function(){ setTimeout(function(){ fire('ready-kicker'); }, 0); }, {once:true});
-  })();
-</script>
-<script>
-/* ============================================================================
- * registry.ready-ping.js (inline) – garantiert 1x cb:registry:ready
- * ========================================================================== */
-(function(){
-  'use strict';
-  var fired = false;
-
-  function counts(){
-    var R = window.Registry || {};
-    var cats = R.list?.('categories')?.length || 0;
-    var blds = R.list?.('buildings') ?.length || 0;
-    return { categories: cats, buildings: blds };
-  }
-
-  function fire(tag){
-    if (fired) return;
-    if (!window.Registry) return;                // Registry muss existieren
-    fired = true;
-    try { window.Registry.__ready = true; } catch(_){}
-    var c = counts();
-    var detail = { ready:true, counts:c, source:tag||'ready-ping' };
-    try { window.dispatchEvent(new CustomEvent('cb:registry:ready', { detail })); } catch(_){}
-    try { document.dispatchEvent(new CustomEvent('cb:registry:ready', { detail })); } catch(_){}
-  }
-
-  // 1) So früh wie möglich
-  setTimeout(function(){ fire('ready-ping-t0'); }, 0);
-
-  // 2) Spätestens nach Spielstart (falls Listener erst dann aktiv wird)
-  window.addEventListener('cb:game-start', function(){
-    setTimeout(function(){ fire('ready-ping-game'); }, 0);
-  }, { once:true });
-
-  // 3) Kleiner Retry nach kurzer Zeit
-  setTimeout(function(){ if (!fired) fire('ready-ping-t100'); }, 100);
-})();
-</script>
 </body>
 </html>
