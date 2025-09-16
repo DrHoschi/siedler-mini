@@ -1,89 +1,81 @@
-<script>
 /* ============================================================================
- * Neue Siedler – Registry JSON Adapter (v1.0.6)
- * Lädt Gebäude-Definitionen aus assets/data/buildings.json
- * und registriert sie in der Core-Registry.
- * Events:
- *   - cb:registry:update  (pro Gebäude)
- *   - cb:registry:ready   (einmal nach kompletter Anwendung)
+ * Neue Siedler – Registry JSON-Adapter
+ * Version: v1.0.7
+ * Aufgabe: Lädt buildings.json und trägt Einträge sauber in die Registry ein.
+ *
+ * Fest definiert: Quelle = assets/data/buildings.json  (nur dieser Pfad!)
+ * Events:  - cb:registry:ready (wenn Registry noch nicht ready war)
+ *          - cb:registry:update (pro upsert löst Registry selbst aus)
+ *          - cb:assets-ready   (nachdem alle Buildings verarbeitet sind)
  * ========================================================================== */
-(function (global) {
+(function loadRegistryFromJSON(global){
   'use strict';
   const logI = (global.CBLog?.info  || console.log).bind(console, "[registry.json-adapter]");
   const logW = (global.CBLog?.warn  || console.warn).bind(console, "[registry.json-adapter]");
   const logE = (global.CBLog?.error || console.error).bind(console, "[registry.json-adapter]");
 
-  // --- fester, eindeutiger Pfad ------------------------------------------------
+  // --- feste Quelle (kein Fallback-Zoo mehr) --------------------------------
   const JSON_URL = "assets/data/buildings.json";
 
-  // --- kleine Helper -----------------------------------------------------------
-  function dispatch(type, detail) {
-    try { global.dispatchEvent(new CustomEvent(type, { detail })); } catch (_) {}
+  // Hilfen
+  function dispatch(type, detail){ try{ global.dispatchEvent(new CustomEvent(type,{detail})); }catch{} }
+  function onceRegistryReadyPing(){
+    if (!global.Registry) return;
+    if (onceRegistryReadyPing.__done) return;
+    onceRegistryReadyPing.__done = true;
+    try { global.Registry.__ready = true; } catch(_){}
+    const cats = global.Registry.list?.('categories')?.length || 0;
+    const blds = global.Registry.list?.('buildings') ?.length || 0;
+    dispatch("cb:registry:ready", { ready:true, counts:{categories:cats, buildings:blds}, source:"json-adapter" });
   }
 
-  function ensureCategories() {
-    // Minimal-Satz gemäß Lastenheft / CORE-UI
-    const cats = [
-      { id:"admin", name:"Allg. / Verwaltung",   sort:10 },
-      { id:"food",  name:"Produktion / Nahrung", sort:20 },
-      { id:"raw",   name:"Produktion / Rohstoffe", sort:30 },
-    ];
-    cats.forEach(c => global.Registry?.upsert?.("categories", c));
-  }
+  // Fetch + Verarbeiten
+  fetch(JSON_URL, { cache:"no-store" })
+    .then(r => {
+      if (!r.ok) throw new Error("HTTP "+r.status+" für "+JSON_URL);
+      return r.json();
+    })
+    .then(data => {
+      if (!global.Registry) { logW("Registry fehlt – breche ab"); return; }
 
-  async function loadJSON(url) {
-    const res = await fetch(url, { cache:"no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status} für ${url}`);
-    return await res.json();
-  }
+      // iconsBase optional
+      const base = (data && typeof data.iconsBase === "string") ? data.iconsBase.replace(/\/+$/,"") + "/" : "";
+      const list = Array.isArray(data?.buildings) ? data.buildings : [];
+      if (!list.length){ logW("Keine buildings im JSON."); }
 
-  function applyData(data) {
-    if (!data || !Array.isArray(data.buildings)) {
-      logW("Ungültiges JSON-Format – erwartet { buildings: [...] }");
-      return { applied:0 };
-    }
+      // Einträge upserten (KORREKT: type "building", NICHT "buildings")
+      let count = 0;
+      for (const raw of list){
+        const item = { ...raw };
+        // Icon normalisieren (falls nur Dateiname geliefert)
+        if (item.icon && !/^(data:|https?:|assets\/)/.test(item.icon)){
+          item.icon = base + item.icon;
+        }
+        // Minimalfelder absichern
+        item.enabled = (item.enabled !== false);
+        item.size = Array.isArray(item.size) ? item.size : [1,1];
 
-    const base = (data.iconsBase || "").replace(/\/+$/,""); // optional
-    let applied = 0;
-
-    data.buildings.forEach(raw => {
-      // Normalize
-      const b = { ...raw };
-      if (base && b.icon && !/^https?:/i.test(b.icon) && !b.icon.startsWith("assets/")) {
-        b.icon = `${base}/${b.icon}`;
+        // Ab in die Registry
+        try {
+          global.Registry.register("building", item);
+          count++;
+        } catch(e){
+          logE("Fehler beim register(building):", e, item);
+        }
       }
-      if (typeof b.enabled === "undefined") b.enabled = true;
-      if (!b.size) b.size = [1,1];
 
-      // Registrieren (WICHTIG: singular "building")
-      if (global.Registry?.register) {
-        global.Registry.register("building", b);   // <- korrekt (kein plural!)
-        applied++;
-      }
+      logI(`applied ${count} buildings aus ${JSON_URL}`);
+
+      // Ready/Eventing
+      onceRegistryReadyPing();
+      dispatch("cb:assets-ready", { ok:true, buildings:count, src:JSON_URL });
+    })
+    .catch(err => {
+      logE("Konnte JSON nicht laden:", err?.message || err);
+      // Wir feuern trotzdem ein ready, damit UI nicht hängen bleibt.
+      onceRegistryReadyPing();
+      dispatch("cb:assets-ready", { ok:false, buildings:0, src:JSON_URL, error:String(err?.message||err) });
     });
 
-    return { applied };
-  }
-
-  async function boot() {
-    try {
-      ensureCategories(); // Kategorien stehen bereit (deutsch)
-      const json = await loadJSON(JSON_URL);
-      const { applied } = applyData(json);
-
-      // Logging & Events
-      const cats = global.Registry?.list?.("categories")?.length || 0;
-      const blds = global.Registry?.list?.("buildings") ?.length || 0;
-
-      logI(`geladen aus ${JSON_URL} – angewendet: ${applied} | counts ⇒ cats:${cats} blds:${blds}`);
-      dispatch("cb:registry:ready", { ready:true, counts:{ categories:cats, buildings:blds }, source:"json-adapter" });
-    } catch (err) {
-      logE("Laden fehlgeschlagen:", err);
-    }
-  }
-
-  logI("Modul geladen v1.0.6");
-  // Start so früh wie möglich (die Registry ist in index.html bereits vor uns geladen)
-  boot();
+  logI("Modul geladen v1.0.7");
 })(window);
-</script>
