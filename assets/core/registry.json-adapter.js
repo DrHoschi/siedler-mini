@@ -1,104 +1,81 @@
 <script>
-/* ============================================================================
- * Registry JSON Adapter (buildings)
- * v1.0.9 – konsistente Typ-Bezeichnung, robustes Eventing
- * Pfad der Daten: assets/data/buildings.json
- * Erwartetes Registry-Type: 'buildings' (PLURAL)
- * ========================================================================== */
+// ============================================================================
+// registry.json-adapter.js  (v1.0.9)
+// Lädt assets/data/buildings.json und registriert unter "buildings" (Plural).
+// Sendet: cb:registry:ready (1x), cb:registry:update bei jeder Übernahme.
+// ============================================================================
 (function () {
   'use strict';
 
   var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
-  var WARN = (window.CBLog && CBLog.warn) ? CBLog : console;
+  var sentReady = false;
 
-  var TYPE = 'buildings';                 // <-- EINHEITLICH PLURAL
-  var SRC  = 'assets/data/buildings.json';
+  // ---- Pfad(e) für die Daten
+  var CANDIDATES = [
+    'assets/data/buildings.json'  // <- unser kanonischer Pfad
+  ];
 
-  function dispatch(name, detail) {
-    try { window.dispatchEvent(new CustomEvent(name, { detail: detail||{} })); } catch(e){}
+  function dispatch(tag, detail) {
+    try { window.dispatchEvent(new CustomEvent(tag, { detail: detail||{} })); } catch (e) {}
+    try { document.dispatchEvent(new CustomEvent(tag, { detail: detail||{} })); } catch (e) {}
   }
 
-  function ensureRegistry() {
-    if (!window.Registry) {
-      window.Registry = {
-        _store: {},
-        register: function(type, arr){ this._store[type] = (arr||[]).slice(0); return this._store[type]; },
-        list:     function(type){ return (this._store[type]||[]).slice(0); }
-      };
-      WARN.warn('[registry.json-adapter] Registry Shim aktiv – echte registry.js fehlt?');
+  function applyBuildings(payload, sourcePath) {
+    var data = payload || {};
+    var list = Array.isArray(data.buildings) ? data.buildings : [];
+    // Registry vorhanden?
+    if (!window.Registry || typeof window.Registry.register !== 'function') {
+      LOG.warn('[registry.json-adapter] Registry nicht verfügbar – verschiebe Apply.');
+      // Später noch einmal versuchen
+      setTimeout(function(){ applyBuildings(payload, sourcePath); }, 30);
+      return;
+    }
+
+    try {
+      window.Registry.register('buildings', list);
+      LOG.info('[registry.json-adapter] applied %d buildings aus %s', list.length, sourcePath);
+    } catch (e) {
+      LOG.warn('[registry.json-adapter] Konnte buildings nicht registrieren:', e);
+    }
+
+    // Events
+    var counts = {
+      categories: (window.Registry.list && window.Registry.list('categories') || []).length,
+      buildings:  list.length
+    };
+    dispatch('cb:registry:update', { source:'json-adapter', counts: counts });
+
+    if (!sentReady) {
+      sentReady = true;
+      dispatch('cb:registry:ready',  { source:'json-adapter', counts: counts });
+      // Für Assets-abhängige UI die frühzeitig loslegt:
+      dispatch('cb:assets-ready',     { source:'json-adapter' });
     }
   }
 
-  function normalize(raw){
-    // Erwartete Struktur: { iconsBase?:string, buildings: [ { id, name, cat, icon, sprite, enabled, size, place } ] }
-    var base = raw && typeof raw === 'object' ? raw : {};
-    var arr  = Array.isArray(base.buildings) ? base.buildings : [];
-
-    // Fallback: wenn versehentlich "building" (singular) verwendet wurde
-    if ((!arr || !arr.length) && Array.isArray(base.building)) {
-      arr = base.building;
+  function tryLoad(i) {
+    if (i >= CANDIDATES.length) {
+      LOG.warn('[registry.json-adapter] Keine buildings.json gefunden.');
+      return;
     }
-
-    // harte Normalisierung & sanity checks
-    var out = arr.map(function(it){
-      var o = Object.assign({}, it);
-      o.id      = String(o.id || '').trim();
-      o.name    = String(o.name || o.id || '').trim();
-      o.cat     = String(o.cat || 'admin').trim();           // admin|food|raw
-      o.enabled = (o.enabled !== false);
-      o.size    = Array.isArray(o.size) && o.size.length===2 ? o.size.slice(0,2) : [1,1];
-      o.icon    = o.icon || '';
-      o.sprite  = o.sprite || '';
-      o.place   = o.place || '';
-      return o;
-    }).filter(function(o){ return !!o.id; });
-
-    return { iconsBase: base.iconsBase || 'assets/ui/build/', list: out };
+    var url = CANDIDATES[i] + (CANDIDATES[i].includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(Date.now());
+    fetch(url, { cache:'no-store' })
+      .then(function(r){
+        if (!r.ok) throw new Error('HTTP '+r.status);
+        return r.json();
+      })
+      .then(function(json){
+        LOG.info('[registry.json-adapter] geladen: %s', CANDIDATES[i]);
+        applyBuildings(json, CANDIDATES[i]);
+      })
+      .catch(function(err){
+        LOG.warn('[registry.json-adapter] Fehler beim Laden %s → %s', CANDIDATES[i], err && err.message);
+        tryLoad(i+1);
+      });
   }
 
-  function loadJSON(url){
-    return new Promise(function(resolve, reject){
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', url, true);
-        xhr.overrideMimeType && xhr.overrideMimeType('application/json');
-        xhr.onload = function(){
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try { resolve(JSON.parse(xhr.responseText)); }
-            catch(e){ reject(e); }
-          } else {
-            reject(new Error('HTTP '+xhr.status));
-          }
-        };
-        xhr.onerror = function(){ reject(new Error('Network error')); };
-        xhr.send();
-      } catch(e){
-        reject(e);
-      }
-    });
-  }
-
-  (function boot(){
-    LOG.info('[registry.json-adapter] Modul geladen v1.0.9');
-    ensureRegistry();
-
-    loadJSON(SRC).then(function(data){
-      LOG.info('[registry.json-adapter] geladen: '+SRC);
-      var norm = normalize(data);
-      // Registrieren – **PLURAL**
-      var stored = window.Registry.register(TYPE, norm.list);
-      LOG.info('[registry.json-adapter] applied '+stored.length+' buildings aus '+SRC);
-
-      // informiere UI/Bridge
-      dispatch('cb:registry:update', { type: TYPE, count: stored.length });
-      // Erster Load → als ready interpretieren
-      dispatch('cb:registry:ready',  { type: TYPE, count: stored.length });
-      // Kompat: einige Module lauschen auf assets-ready
-      dispatch('cb:assets-ready',    { ok:true, source:'registry.json-adapter' });
-    }).catch(function(err){
-      WARN.warn('[registry.json-adapter] Konnte nicht laden ('+SRC+'): ', err);
-      dispatch('cb:registry:ready', { type: TYPE, count: 0, error: String(err&&err.message||err) });
-    });
-  })();
+  LOG.info('[registry.json-adapter] Modul geladen v1.0.9');
+  // Früh starten – Registry wird beim Apply geprüft
+  tryLoad(0);
 })();
 </script>
