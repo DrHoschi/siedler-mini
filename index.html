@@ -228,5 +228,43 @@ Leitplanken:
     window.addEventListener('cb:game-start', function(){ setTimeout(function(){ fire('ready-kicker'); }, 0); }, {once:true});
   })();
 </script>
+<script>
+/* ============================================================================
+ * registry.ready-ping.js (inline) – garantiert 1x cb:registry:ready
+ * ========================================================================== */
+(function(){
+  'use strict';
+  var fired = false;
+
+  function counts(){
+    var R = window.Registry || {};
+    var cats = R.list?.('categories')?.length || 0;
+    var blds = R.list?.('buildings') ?.length || 0;
+    return { categories: cats, buildings: blds };
+  }
+
+  function fire(tag){
+    if (fired) return;
+    if (!window.Registry) return;                // Registry muss existieren
+    fired = true;
+    try { window.Registry.__ready = true; } catch(_){}
+    var c = counts();
+    var detail = { ready:true, counts:c, source:tag||'ready-ping' };
+    try { window.dispatchEvent(new CustomEvent('cb:registry:ready', { detail })); } catch(_){}
+    try { document.dispatchEvent(new CustomEvent('cb:registry:ready', { detail })); } catch(_){}
+  }
+
+  // 1) So früh wie möglich
+  setTimeout(function(){ fire('ready-ping-t0'); }, 0);
+
+  // 2) Spätestens nach Spielstart (falls Listener erst dann aktiv wird)
+  window.addEventListener('cb:game-start', function(){
+    setTimeout(function(){ fire('ready-ping-game'); }, 0);
+  }, { once:true });
+
+  // 3) Kleiner Retry nach kurzer Zeit
+  setTimeout(function(){ if (!fired) fire('ready-ping-t100'); }, 100);
+})();
+</script>
 </body>
 </html>
