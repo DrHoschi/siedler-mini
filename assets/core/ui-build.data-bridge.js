@@ -1,100 +1,76 @@
+<!-- Datei: assets/core/ui-build.data-bridge.js -->
+<script>
 /* ============================================================================
- * Neue Siedler – UI-BUILD DATA BRIDGE
+ * Neue Siedler – UI-Build Data Bridge (CORE)
  * Version: v17.0.7
- * Aufgabe: Registry → UIBuild (Items) mappen
- * Events:  wartet auf cb:registry:ready, reagiert auf cb:registry:update
- * WICHTIG: UIBuild erwartet das Feld `category` (nicht `cat` / `categoryId`)
- * ============================================================================
- */
-(function initUIBuildBridge (global) {
+ * Zweck: Nimmt Kategorien + Buildings aus der Registry, gruppiert nach cat,
+ *        und gibt sie an die CORE-UI weiter (UIBuild.setItems).
+ * Erwartet:
+ *   - window.BuildCategories.tabs  (aus build.categories.js)
+ *   - window.Registry.list('buildings')
+ * ========================================================================== */
+(function (global) {
   const logI = (global.CBLog?.info  || console.log).bind(console, "[ui-build.data-bridge]");
   const logW = (global.CBLog?.warn  || console.warn).bind(console, "[ui-build.data-bridge]");
   const logE = (global.CBLog?.error || console.error).bind(console, "[ui-build.data-bridge]");
 
-  const UIB = () => global.UIBuild;
-  const REG = () => global.Registry;
+  function groupItems() {
+    const tabs = (global.BuildCategories?.tabs) || [];
+    const catIds = new Set(tabs.map(t => t.id));
+    const itemsByCat = {};
+    tabs.forEach(t => itemsByCat[t.id] = []);
 
-  // Konfig: Icons-Basis – vom Adapter oder Fallback
-  function getIconsBase(){
-    return global.__BUILD_ICONS_BASE
-        || global.__buildIconsBase
-        || "assets/ui/build/";
-  }
+    const buildings = (global.Registry?.list?.('buildings') || [])
+      .filter(b => b && (b.enabled !== false)); // default: enabled, nur false raus
 
-  // Mappt Registry-Buildings -> UIBuild-Items
-  function mapToItems(){
-    if (!REG()) return [];
-    const base = getIconsBase();
-    const list = REG().list?.("buildings") || [];
+    const iconsBase = (global.Registry?.iconsBase) || (global.__buildingsIconsBase) || "assets/ui/build/";
 
-    const items = list
-      .filter(b => b && b.enabled !== false) // disabled fliegt raus
-      .map(b => ({
-        id:       b.id,
-        name:     b.name,
-        icon:     (b.icon ? (base + b.icon) : (base + "default.png")),
-        // *** WICHTIG: genau dieses Feld erwartet die UI ***
-        category: b.cat || b.category || "misc",
-        // alles weitere als Meta mitgeben
-        meta: {
-          sprite: b.sprite || null,
-          size:   Array.isArray(b.size) ? b.size : [1,1],
-          place:  b.place || null,
-        }
-      }));
+    const items = buildings.map(b => ({
+      id: b.id,
+      title: b.name || b.id,
+      icon: b.icon ? (iconsBase.replace(/\/?$/, '/') + b.icon) : null,
+      sprite: b.sprite || null,
+      place: b.place || null,
+      cat: b.cat || "misc"
+    }));
 
-    return items;
-  }
-
-  // Items in die UI pushen
-  function push(){
-    if (!UIB() || typeof UIB().setItems !== "function") {
-      logW("UIBuild.setItems nicht verfügbar – später erneut versuchen.");
-      return;
-    }
-    const items = mapToItems();
-    UIB().setItems(items);
-    logI("Items gesetzt:", items.length);
-  }
-
-  // Ready-Handler (einmalig)
-  function onReady(){
-    try { push(); } catch(e){ logE("push() bei ready", e); }
-  }
-
-  // Update-Handler (bei Registry-Änderungen)
-  function onUpdate(ev){
-    try {
-      const d = ev?.detail || {};
-      if (d.kind === "buildings" || !d.kind) push();
-    } catch(e){ logE("onUpdate()", e); }
-  }
-
-  // Bootstrap
-  function boot(){
-    logI("bereit v17.0.7");
-    // Wenn Registry schon da -> sofort
-    if (REG()?.__ready) onReady();
-    // Events koppeln
-    global.addEventListener("cb:registry:ready", onReady, { once:true });
-    global.addEventListener("cb:registry:update", onUpdate);
-  }
-
-  // Falls UIBuild später kommt → kleiner Watcher
-  (function watchUIBuild(){
-    const t = setInterval(() => {
-      if (UIB() && typeof UIB().setItems === "function") {
-        clearInterval(t);
-        boot();
-      }
-    }, 30);
-    // Fallback beim DOM-Parsing
-    global.addEventListener("DOMContentLoaded", () => {
-      if (UIB() && typeof UIB().setItems === "function") {
-        clearInterval(t);
-        boot();
-      }
+    // Gruppieren
+    items.forEach(it => {
+      const c = catIds.has(it.cat) ? it.cat : (tabs[0]?.id || "misc");
+      itemsByCat[c].push(it);
     });
-  })();
+
+    // Sortierung innerhalb der Kategorie: alphabetisch nach title
+    Object.keys(itemsByCat).forEach(c => {
+      itemsByCat[c].sort((a,b) => a.title.localeCompare(b.title, 'de'));
+    });
+
+    return { tabs, itemsByCat };
+  }
+
+  function pushToUI() {
+    if (!global.UIBuild?.setItems) { logW("UIBuild.setItems fehlt"); return; }
+    const { tabs, itemsByCat } = groupItems();
+    global.UIBuild.setItems({ tabs, itemsByCat });
+    const count = Object.values(itemsByCat).reduce((n, arr) => n + arr.length, 0);
+    logI(`Items gesetzt: ${count}`);
+  }
+
+  function maybeRun() {
+    if (!global.Registry?.__ready) return;       // erst wenn Registry fertig
+    if (!global.BuildCategories?.tabs) return;   // erst wenn Tabs da sind
+    pushToUI();
+  }
+
+  // Reagiere auf beide „ready“-Signale
+  global.addEventListener('cb:registry:ready',  maybeRun);
+  global.addEventListener('cb:build-cats-ready', maybeRun);
+
+  // Falls alles schon da:
+  setTimeout(maybeRun, 0);
+
+  // Bei Updates (z.B. JSON-Adapter nachlädt)
+  global.addEventListener('cb:registry:update', function(){ setTimeout(maybeRun, 0); });
 
 })(window);
+</script>
