@@ -100,10 +100,12 @@ Leitplanken:
     <button type="button" aria-label="Bau-Menü"
       onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
   </div>
-  <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
+  <!-- div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
     <button type="button" aria-label="Inspector"
-  onclick="(window.GameUI?.toggleInspector?.() ?? window.dispatchEvent(new CustomEvent('inspector:toggle')))">🛠</button>  </div>
-
+  onclick="(window.GameUI?.toggleInspector?.() ?? window.dispatchEvent(new CustomEvent('inspector:toggle')))">🛠</button>  </div -->
+<button type="button" aria-label="Inspector"
+  onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🛠</button>
+  
   <!-- =======================================================================
   (4) CORE & ENGINE – Reihenfolge ist wichtig
   ======================================================================== -->
@@ -165,7 +167,7 @@ Leitplanken:
 <!-- =======================================================================
 (8) PAGE-SCRIPTS: Marker, Body-Klassen, GameUI-Toggles (leichtgewichtig)
 ======================================================================= -->
-<script>
+<!-- script>
   (function () {
     // Marker/Version im Log
     window.__cb = window.__cb || {};
@@ -208,6 +210,43 @@ Leitplanken:
       if (ev.repeat) return;
       if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
       if (ev.key === 'i' || ev.key === 'I') { ev.preventDefault(); window.GameUI.toggleInspector(); }
+    });
+  })();
+</script -->
+  <script>
+  (function () {
+    // Marker/Version
+    window.__cb = window.__cb || {};
+    window.__cb.indexVersion = "v18.4.2";
+    (window.CBLog?.info || console.log)("[index] UI bereit (v18.4.2)");
+
+    // Body-Klassen bei Build-Dock open/close
+    function setOpen(){ document.body.classList.add('has-build-open'); }
+    function setClose(){ document.body.classList.remove('has-build-open'); }
+    window.addEventListener('cb:build:open',  setOpen);
+    window.addEventListener('cb:build:close', setClose);
+    // Legacy
+    window.addEventListener('cb:build-open',  setOpen);
+    window.addEventListener('cb:build-close', setClose);
+
+    // Kleine UI-Helfer (nur fürs Bau-Dock)
+    window.GameUI = {
+      toggleBuild(){
+        const isOpen = document.body.classList.toggle('has-build-open');
+        window.dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
+        if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
+      }
+      // KEIN toggleInspector hier – Button nutzt die API direkt
+    };
+
+    // Hotkeys (B = Build, I = Inspector via API)
+    window.addEventListener('keydown', function(ev){
+      if (ev.repeat) return;
+      if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
+      if (ev.key === 'i' || ev.key === 'I') {
+        ev.preventDefault();
+        try { InspectorAPI.toggle(); } catch(e) { /* still */ }
+      }
     });
   })();
 </script>
