@@ -1,118 +1,104 @@
+<script>
 /* ============================================================================
- * registry.json-adapter.js  – v1.0.8
- * Lädt buildings.json, registriert "building" in der Registry
- * und triggert cb:registry:update/ready + cb:assets-ready (Legacy).
- * Pfade (in dieser Reihenfolge): assets/data/, assets/registry/, data/
+ * Registry JSON Adapter (buildings)
+ * v1.0.9 – konsistente Typ-Bezeichnung, robustes Eventing
+ * Pfad der Daten: assets/data/buildings.json
+ * Erwartetes Registry-Type: 'buildings' (PLURAL)
  * ========================================================================== */
 (function () {
   'use strict';
 
-  var VERSION = 'v1.0.8';
+  var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
+  var WARN = (window.CBLog && CBLog.warn) ? CBLog : console;
 
-  var SOURCES = [
-    'assets/data/buildings.json',
-    'assets/registry/buildings.json',
-    'data/buildings.json'
-  ];
+  var TYPE = 'buildings';                 // <-- EINHEITLICH PLURAL
+  var SRC  = 'assets/data/buildings.json';
 
-  function log()  { (window.CBLog?.info  || console.log).apply(console, ['[registry.json-adapter]', ...arguments]); }
-  function warn() { (window.CBLog?.warn  || console.warn).apply(console, ['[registry.json-adapter]', ...arguments]); }
-
-  function counts() {
-    var R = window.Registry || {};
-    return {
-      categories: R.list?.('categories')?.length || 0,
-      buildings:  R.list?.('building')  ?.length || 0
-    };
+  function dispatch(name, detail) {
+    try { window.dispatchEvent(new CustomEvent(name, { detail: detail||{} })); } catch(e){}
   }
 
-  function normalize(raw) {
-    var b = Object.assign({}, raw);
-
-    // evtl. andere Feldnamen tolerieren
-    if (b.category && !b.cat) { b.cat = b.category; }
-    // Icon-Basis optional anwenden, wenn kein absoluter Pfad
-    if (b.icon && !/^(\.|\/|assets|https?:)/.test(b.icon)) {
-      var base = (window.__iconsBase || 'assets/ui/build/');
-      b.icon = base + b.icon;
+  function ensureRegistry() {
+    if (!window.Registry) {
+      window.Registry = {
+        _store: {},
+        register: function(type, arr){ this._store[type] = (arr||[]).slice(0); return this._store[type]; },
+        list:     function(type){ return (this._store[type]||[]).slice(0); }
+      };
+      WARN.warn('[registry.json-adapter] Registry Shim aktiv – echte registry.js fehlt?');
     }
-    // Defaults
-    if (typeof b.enabled === 'undefined') b.enabled = true;
-    if (!b.size) b.size = [1,1];
-
-    return b;
   }
 
-  function registerBuildings(payload) {
-    var list = Array.isArray(payload?.buildings) ? payload.buildings
-             : Array.isArray(payload)            ? payload
-             : [];
+  function normalize(raw){
+    // Erwartete Struktur: { iconsBase?:string, buildings: [ { id, name, cat, icon, sprite, enabled, size, place } ] }
+    var base = raw && typeof raw === 'object' ? raw : {};
+    var arr  = Array.isArray(base.buildings) ? base.buildings : [];
 
-    var ok = 0;
-    for (var i = 0; i < list.length; i++) {
-      var b = normalize(list[i]);
+    // Fallback: wenn versehentlich "building" (singular) verwendet wurde
+    if ((!arr || !arr.length) && Array.isArray(base.building)) {
+      arr = base.building;
+    }
+
+    // harte Normalisierung & sanity checks
+    var out = arr.map(function(it){
+      var o = Object.assign({}, it);
+      o.id      = String(o.id || '').trim();
+      o.name    = String(o.name || o.id || '').trim();
+      o.cat     = String(o.cat || 'admin').trim();           // admin|food|raw
+      o.enabled = (o.enabled !== false);
+      o.size    = Array.isArray(o.size) && o.size.length===2 ? o.size.slice(0,2) : [1,1];
+      o.icon    = o.icon || '';
+      o.sprite  = o.sprite || '';
+      o.place   = o.place || '';
+      return o;
+    }).filter(function(o){ return !!o.id; });
+
+    return { iconsBase: base.iconsBase || 'assets/ui/build/', list: out };
+  }
+
+  function loadJSON(url){
+    return new Promise(function(resolve, reject){
       try {
-        window.Registry?.register?.('building', b);
-        ok++;
-      } catch (e) {
-        warn('Register-Fehler für', b && b.id, e);
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.overrideMimeType && xhr.overrideMimeType('application/json');
+        xhr.onload = function(){
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch(e){ reject(e); }
+          } else {
+            reject(new Error('HTTP '+xhr.status));
+          }
+        };
+        xhr.onerror = function(){ reject(new Error('Network error')); };
+        xhr.send();
+      } catch(e){
+        reject(e);
       }
-    }
-    return ok;
+    });
   }
 
-  function dispatch(sourceTag) {
-    var detail = { ready: true, counts: counts(), source: sourceTag || 'json-adapter' };
-    try { window.dispatchEvent(new CustomEvent('cb:registry:update', { detail })); } catch(_) {}
-    try { window.dispatchEvent(new CustomEvent('cb:registry:ready',  { detail })); } catch(_) {}
-    // Legacy-Bridge (einige UIs hören noch hierauf)
-    try { window.dispatchEvent(new CustomEvent('cb:assets-ready',     { detail })); } catch(_) {}
-    // UI freundlich „anstupsen“
-    try { window.UIBuild?.rerender?.(); } catch(_) {}
-    log('events dispatched', detail.counts);
-  }
+  (function boot(){
+    LOG.info('[registry.json-adapter] Modul geladen v1.0.9');
+    ensureRegistry();
 
-  async function fetchFirst(urls) {
-    for (var i = 0; i < urls.length; i++) {
-      var url = urls[i] + '?v=' + Date.now(); // Cache-Bust (Safari)
-      try {
-        var res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        var json = await res.json();
-        log('geladen:', urls[i]);
-        return { json: json, url: urls[i] };
-      } catch (e) {
-        warn('Konnte nicht laden → nächster Kandidat:', urls[i]);
-      }
-    }
-    throw new Error('Keine buildings.json gefunden.');
-  }
+    loadJSON(SRC).then(function(data){
+      LOG.info('[registry.json-adapter] geladen: '+SRC);
+      var norm = normalize(data);
+      // Registrieren – **PLURAL**
+      var stored = window.Registry.register(TYPE, norm.list);
+      LOG.info('[registry.json-adapter] applied '+stored.length+' buildings aus '+SRC);
 
-  (async function boot() {
-    log('Modul geladen', VERSION);
-
-    // Warten, bis Registry existiert (wenn Skripte knapp nacheinander kommen)
-    var waitCount = 0;
-    while (!window.Registry?.register && waitCount < 50) {
-      await new Promise(function (r) { setTimeout(r, 10); });
-      waitCount++;
-    }
-    if (!window.Registry?.register) {
-      warn('Registry fehlt – Abbruch.');
-      return;
-    }
-
-    var payload = await fetchFirst(SOURCES);
-    // iconsBase global merken (für UI)
-    if (payload.json && payload.json.iconsBase) {
-      window.__iconsBase = payload.json.iconsBase;
-    }
-
-    var applied = registerBuildings(payload.json);
-    log('applied', applied, 'buildings aus', payload.url);
-
-    dispatch(payload.url);
-  })().catch(function (e) {
-    warn('Fehler:', e && e.message || e);
-  });
+      // informiere UI/Bridge
+      dispatch('cb:registry:update', { type: TYPE, count: stored.length });
+      // Erster Load → als ready interpretieren
+      dispatch('cb:registry:ready',  { type: TYPE, count: stored.length });
+      // Kompat: einige Module lauschen auf assets-ready
+      dispatch('cb:assets-ready',    { ok:true, source:'registry.json-adapter' });
+    }).catch(function(err){
+      WARN.warn('[registry.json-adapter] Konnte nicht laden ('+SRC+'): ', err);
+      dispatch('cb:registry:ready', { type: TYPE, count: 0, error: String(err&&err.message||err) });
+    });
+  })();
 })();
+</script>
