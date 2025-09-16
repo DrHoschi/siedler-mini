@@ -1,27 +1,25 @@
-<script>
 /* ============================================================================
- * Neue Siedler – Build Categories (v17.0.6)
- * Reihenfolge & Beschriftungen für das Bau-Menü (CORE-UI)
+ * build.categories.js (Fallback)
+ * Version: v17.0.6
+ * Aufgabe: Stellt Kategorien bereit, falls Registry keine liefert.
  * ========================================================================== */
-(function (global) {
+(function(){
   'use strict';
-  const logI = (global.CBLog?.info || console.log).bind(console, "[build.categories]");
+  if (!window.Registry?.list) return; // Wenn Registry fehlt, nichts tun
 
-  // Reihenfolge / Labels
-  const CATS = [
-    { id:"admin", name:"Allg. / Verwaltung",   sort:10 },
+  var haveCats = (window.Registry.list("categories") || []).length > 0;
+  if (haveCats) return; // es gibt bereits Kategorien
+
+  var fallbackCats = [
+    { id:"admin", name:"Verwaltung", sort:10 },
     { id:"food",  name:"Produktion / Nahrung", sort:20 },
-    { id:"raw",   name:"Produktion / Rohstoffe", sort:30 },
+    { id:"raw",   name:"Produktion / Rohstoffe", sort:30 }
   ];
-
-  // In Registry spiegeln (damit UI-Bridge konsistente Namen / Sort hat)
-  if (global.Registry?.upsert) {
-    CATS.forEach(c => global.Registry.upsert("categories", c));
-  }
-
-  // Für CORE-UI exportieren (falls abgefragt)
-  global.__BUILD_CATEGORIES__ = CATS.slice();
-
-  logI(`bereit – Kategorien: ${CATS.map(c=>c.name).join(", ")}`);
-})(window);
-</script>
+  fallbackCats.forEach(function(c){
+    if (typeof window.Registry.register === "function") {
+      window.Registry.register("category", c);
+    } else if (typeof window.Registry.upsert === "function") {
+      window.Registry.upsert("categories", c);
+    }
+  });
+})();
