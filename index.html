@@ -18,7 +18,7 @@ Leitplanken (Lastenheft):
 <head>
   
 <!-- (einmahlig) Kill SW -->
-<script>
+<!-- script>
 /* Räumt evtl. verwaiste Service-Worker ab (iOS Cache wächst sonst schnell) */
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(function(regs){
@@ -29,7 +29,7 @@ if ('serviceWorker' in navigator) {
     caches.keys().then(function(keys){ return Promise.all(keys.map(function(k){ return caches.delete(k); })); });
   }
 }
-</script>
+</script -->
   
   <!-- =======================================================================
   (1) META & BASIS
