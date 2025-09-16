@@ -1,24 +1,26 @@
 /* ============================================================================
  * registry.json-adapter.js — lädt data/buildings.json und speist die Registry
- * Version: v1.0.1
+ * Version: v1.0.2 (single-source-of-truth für cb:registry:ready, einmalig)
  * ========================================================================== */
 (function(){
   'use strict';
   var MOD='[registry.json-adapter]';
+  var log = function(){ try{ (window.CBLog?.info||console.log)(MOD, ...arguments);}catch{} };
+  var warn= function(){ try{ (window.CBLog?.warn||console.warn)(MOD, ...arguments);}catch{} };
 
-  function log(){ try{ (window.CBLog?.info||console.log)(MOD, ...arguments); }catch{} }
-  function warn(){ try{ (window.CBLog?.warn||console.warn)(MOD, ...arguments); }catch{} }
-
-  function toast(msg){
-    try{
-      var t=document.createElement('div');
-      t.textContent=msg;
-      t.style.cssText='position:fixed;left:12px;bottom:12px;z-index:2147483647;padding:8px 10px;'
-        +'background:rgba(0,0,0,.7);color:#fff;font:12px/1.2 system-ui;border-radius:6px;'
-        +'box-shadow:0 6px 18px rgba(0,0,0,.35)';
-      document.body.appendChild(t);
-      setTimeout(function(){ t.remove(); }, 1600);
-    }catch(_){}
+  // Einmal-Guard für Ready-Signal
+  function fireReadyOnce(source){
+    if (window.__registryReadyOnce) return;
+    window.__registryReadyOnce = true;
+    try { if (window.Registry) window.Registry.__ready = true; } catch(_){}
+    var cats = window.Registry?.list?.('categories')?.length || 0;
+    var blds = window.Registry?.list?.('buildings') ?.length || 0;
+    try {
+      window.dispatchEvent(new CustomEvent('cb:registry:ready', {
+        detail:{ ready:true, counts:{ categories:cats, buildings:blds }, source:source||'json-adapter' }
+      }));
+      log('ready dispatched (cats:',cats,'blds:',blds,')');
+    } catch(_){}
   }
 
   async function loadAndApply(){
@@ -41,30 +43,25 @@
         cnt++;
       });
 
-      // UI neu ableiten lassen
+      // Assets-Folgesignal (für UI-Neuaufbau)
       window.dispatchEvent(new CustomEvent('cb:assets-ready', { detail:{ source:'json-adapter' }}));
 
-      // **NEU**: Registry explizit als ready signalisieren (mit Counts)
-      var cats = window.Registry?.list?.('categories')?.length || 0;
-      var blds = window.Registry?.list?.('buildings')?.length || 0;
-      try { window.Registry.__ready = true; } catch(_){}
-      window.dispatchEvent(new CustomEvent('cb:registry:ready', {
-        detail:{ ready:true, counts:{ categories:cats, buildings:blds }, source:'json-adapter' }
-      }));
+      // Einmalig das Ready-Signal senden (einzige Quelle)
+      fireReadyOnce('json-adapter');
 
-      log('applied', cnt, 'buildings; ready dispatched (cats:',cats,'blds:',blds,')');
-      toast('Daten geladen: '+cnt+' Gebäude');
+      log('applied', cnt, 'buildings');
     } catch(e){
       warn('failed to load data/buildings.json', e);
-      toast('Daten konnten nicht geladen werden');
+      // Falls JSON fehlt: Registry ggf. trotzdem als ready markieren, damit Entities starten kann
+      fireReadyOnce('json-adapter-fallback');
     }
   }
 
-  if (window.Registry?.__ready) { // Registry existiert, ggf. schon ready → trotzdem anwenden
-    loadAndApply();
-  } else {
-    window.addEventListener('cb:registry:ready', loadAndApply, { once:true });
-    // Falls das Event nie kam: nach kurzer Zeit trotzdem laden
-    setTimeout(function(){ if (window.Registry) loadAndApply(); }, 80);
+  function start(){
+    // Wenn Registry existiert → sofort laden; sonst minimal warten.
+    if (window.Registry) loadAndApply();
+    else setTimeout(function(){ if (window.Registry) loadAndApply(); }, 50);
   }
+
+  start();
 })();
