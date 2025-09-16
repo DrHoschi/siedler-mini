@@ -100,11 +100,12 @@ Leitplanken:
     <button type="button" aria-label="Bau-Menü"
       onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
   </div>
-  <!-- div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
+  <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
+    <!-- button type="button" aria-label="Inspector"
+  onclick="(window.GameUI?.toggleInspector?.() ?? window.dispatchEvent(new CustomEvent('inspector:toggle')))">🛠</button --> 
     <button type="button" aria-label="Inspector"
-  onclick="(window.GameUI?.toggleInspector?.() ?? window.dispatchEvent(new CustomEvent('inspector:toggle')))">🛠</button>  </div -->
-<button type="button" aria-label="Inspector"
   onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🛠</button>
+</div>
   
   <!-- =======================================================================
   (4) CORE & ENGINE – Reihenfolge ist wichtig
