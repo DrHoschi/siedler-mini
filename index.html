@@ -116,8 +116,7 @@ Leitplanken:
 
   <!-- 4.2 Registry zuerst! Dann JSON-Adapter, dann Entities-Bridge -->
   <script src="assets/core/registry.js?v=1.2.3"></script>             <!-- Cache-Bust gegenüber 1.2.0 -->
-  <script src="assets/core/registry.json-adapter.js?v=1.0.1"></script>
-  
+  <script src="assets/core/registry.json-adapter.js?v=1.0.2"></script>
   <script src="assets/core/entities.registry.js?v=1.1.1"></script>
   
   <!-- 4.3 Assets/Build Layer -->
@@ -205,5 +204,29 @@ Leitplanken:
       });
     })();
   </script>
+  <script>
+  (function(){
+    function counts(){
+      var R = window.Registry || {};
+      var cats = R.list?.('categories')?.length || 0;
+      var blds = R.list?.('buildings') ?.length || 0;
+      return {categories:cats, buildings:blds};
+    }
+    function fire(tag){
+      if (!window.Registry) return;
+      if (window.__registryReadyOnce) return;               // schon gesendet
+      window.__registryReadyOnce = true;
+      try { window.Registry.__ready = true; } catch(_){}
+      var c = counts();
+      try {
+        window.dispatchEvent(new CustomEvent('cb:registry:ready', {
+          detail:{ ready:true, counts:c, source:tag||'ready-kicker' }
+        }));
+      } catch(_){}
+    }
+    // Wenn das Spiel startet, spätestens dann einmal ready senden
+    window.addEventListener('cb:game-start', function(){ setTimeout(function(){ fire('ready-kicker'); }, 0); }, {once:true});
+  })();
+</script>
 </body>
 </html>
