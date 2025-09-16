@@ -1,14 +1,11 @@
 /* ============================================================================
  * Neue Siedler – CORE UI Data-Bridge
- * Dateiname: assets/core/ui-build.data-bridge.js
- * Version: v17.0.5
- *
- * Aufgabe:
- *  - Registry -> UI-Build Items mappen und an UIBuild liefern
- *  - reagiert auf cb:registry:ready und cb:registry:update
- *  - funktioniert, egal ob die Registry vor oder nach UIBuild kommt
- *
- * WICHTIG: Die CORE-UI erwartet das Feld "category" (nicht "group").
+ * Version: v17.0.6
+ * - Holt Buildings aus Registry
+ * - Mappt Items für CORE-UI
+ * - Reagiert auf cb:registry:ready / cb:registry:update
+ * - Kompat: setzt sowohl "category" (neu) als auch "group" (legacy)
+ * - Unterstützt iconsBase + item.icon
  * ========================================================================== */
 (function (global) {
   'use strict';
@@ -16,23 +13,42 @@
   var logI = (global.CBLog?.info || console.log).bind(console, MOD);
   var logW = (global.CBLog?.warn || console.warn).bind(console, MOD);
 
-  var FALLBACK_ICON = 'assets/ui/build/icon-placeholder.png'; // bis echte PNGs da sind
+  // Fallback-Icon (falls keines auflösbar ist)
+  var FALLBACK_ICON = 'assets/ui/build/icon-placeholder.png';
+
+  function joinPath(base, file) {
+    if (!base) return file || '';
+    if (!file) return base;
+    if (base.endsWith('/')) return base + file;
+    return base + '/' + file;
+  }
+
+  function resolveIcon(b) {
+    // Priorität: b.ui.icon → b.icon (+ iconsBase) → FALLBACK
+    if (b.ui && b.ui.icon) return b.ui.icon;
+    if (b.icon) {
+      var ib = (global.Registry && global.Registry.meta && global.Registry.meta.iconsBase)
+             || (global.__REGISTRY_ICONS_BASE) // optionaler globaler Hook
+             || '';
+      return joinPath(ib, b.icon);
+    }
+    return FALLBACK_ICON;
+  }
 
   function mapToItems() {
     if (!global.Registry) return [];
     var builds = global.Registry.list('buildings') || [];
     return builds
-      .filter(function (b) {
-        // standard: nur anzeigen, wenn nicht explizit disabled
-        return b.enabled !== false;
-      })
+      .filter(function (b) { return b.enabled !== false; })
       .map(function (b) {
-        var icon = (b.ui && b.ui.icon) ? b.ui.icon : FALLBACK_ICON;
+        var iconUrl = resolveIcon(b);
+        var cat = b.cat || b.category || 'admin';
         return {
           id:       b.id,
           title:    b.name || b.id,
-          category: b.cat || 'admin',   // ← CORE-UI erwartet "category"
-          icon:     icon,
+          category: cat,           // neue CORE-UI
+          group:    cat,           // legacy-CORE-UI
+          icon:     iconUrl,
           enabled:  b.enabled !== false
         };
       });
@@ -40,36 +56,25 @@
 
   function pushToUI(attempt) {
     attempt = (attempt|0) + 1;
-    if (!global.UIBuild || typeof global.UIBuild.setItems !== 'function') {
-      // UI noch nicht bereit -> kurz später erneut
-      if (attempt <= 10) return void setTimeout(function(){ pushToUI(attempt); }, 60);
-      logW('UIBuild.setItems nicht verfügbar');
-      return;
+    var U = global.UIBuild;
+    if (!U || typeof U.setItems !== 'function') {
+      if (attempt <= 20) return void setTimeout(function(){ pushToUI(attempt); }, 60);
+      return logW('UIBuild.setItems nicht verfügbar');
     }
     var items = mapToItems();
-    global.UIBuild.setItems(items);
-    if (typeof global.UIBuild.rerender === 'function') {
-      global.UIBuild.rerender();
-    }
+    U.setItems(items);
+    if (typeof U.rerender === 'function') U.rerender();
     logI('Items gesetzt:', items.length);
   }
 
-  // --- Event-Hooks ----------------------------------------------------------
-  // Registry ready -> initial befüllen
-  global.addEventListener('cb:registry:ready', function () { pushToUI(0); });
-  // Bei Upserts nachziehen
-  global.addEventListener('cb:registry:update', function () { pushToUI(0); });
+  // Events aus der Registry
+  global.addEventListener('cb:registry:ready',  function(){ pushToUI(0); });
+  global.addEventListener('cb:registry:update', function(){ pushToUI(0); });
 
-  // Falls Registry schon ready war, beim DOM-Start nachziehen
-  function bootstrap() {
-    if (global.Registry && global.Registry.__ready) pushToUI(0);
-  }
+  // Initial versuchen, wenn DOM steht
+  function bootstrap(){ if (global.Registry?.__ready) pushToUI(0); }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') bootstrap();
+  else document.addEventListener('DOMContentLoaded', bootstrap, { once:true });
 
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    bootstrap();
-  } else {
-    document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
-  }
-
-  logI('bereit v17.0.5');
+  logI('bereit v17.0.6');
 })(window);
