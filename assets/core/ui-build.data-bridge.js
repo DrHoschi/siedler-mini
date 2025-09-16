@@ -1,80 +1,100 @@
 /* ============================================================================
- * Neue Siedler – CORE UI Data-Bridge
- * Version: v17.0.6
- * - Holt Buildings aus Registry
- * - Mappt Items für CORE-UI
- * - Reagiert auf cb:registry:ready / cb:registry:update
- * - Kompat: setzt sowohl "category" (neu) als auch "group" (legacy)
- * - Unterstützt iconsBase + item.icon
- * ========================================================================== */
-(function (global) {
-  'use strict';
-  var MOD = '[ui-build.data-bridge]';
-  var logI = (global.CBLog?.info || console.log).bind(console, MOD);
-  var logW = (global.CBLog?.warn || console.warn).bind(console, MOD);
+ * Neue Siedler – UI-BUILD DATA BRIDGE
+ * Version: v17.0.7
+ * Aufgabe: Registry → UIBuild (Items) mappen
+ * Events:  wartet auf cb:registry:ready, reagiert auf cb:registry:update
+ * WICHTIG: UIBuild erwartet das Feld `category` (nicht `cat` / `categoryId`)
+ * ============================================================================
+ */
+(function initUIBuildBridge (global) {
+  const logI = (global.CBLog?.info  || console.log).bind(console, "[ui-build.data-bridge]");
+  const logW = (global.CBLog?.warn  || console.warn).bind(console, "[ui-build.data-bridge]");
+  const logE = (global.CBLog?.error || console.error).bind(console, "[ui-build.data-bridge]");
 
-  // Fallback-Icon (falls keines auflösbar ist)
-  var FALLBACK_ICON = 'assets/ui/build/icon-placeholder.png';
+  const UIB = () => global.UIBuild;
+  const REG = () => global.Registry;
 
-  function joinPath(base, file) {
-    if (!base) return file || '';
-    if (!file) return base;
-    if (base.endsWith('/')) return base + file;
-    return base + '/' + file;
+  // Konfig: Icons-Basis – vom Adapter oder Fallback
+  function getIconsBase(){
+    return global.__BUILD_ICONS_BASE
+        || global.__buildIconsBase
+        || "assets/ui/build/";
   }
 
-  function resolveIcon(b) {
-    // Priorität: b.ui.icon → b.icon (+ iconsBase) → FALLBACK
-    if (b.ui && b.ui.icon) return b.ui.icon;
-    if (b.icon) {
-      var ib = (global.Registry && global.Registry.meta && global.Registry.meta.iconsBase)
-             || (global.__REGISTRY_ICONS_BASE) // optionaler globaler Hook
-             || '';
-      return joinPath(ib, b.icon);
+  // Mappt Registry-Buildings -> UIBuild-Items
+  function mapToItems(){
+    if (!REG()) return [];
+    const base = getIconsBase();
+    const list = REG().list?.("buildings") || [];
+
+    const items = list
+      .filter(b => b && b.enabled !== false) // disabled fliegt raus
+      .map(b => ({
+        id:       b.id,
+        name:     b.name,
+        icon:     (b.icon ? (base + b.icon) : (base + "default.png")),
+        // *** WICHTIG: genau dieses Feld erwartet die UI ***
+        category: b.cat || b.category || "misc",
+        // alles weitere als Meta mitgeben
+        meta: {
+          sprite: b.sprite || null,
+          size:   Array.isArray(b.size) ? b.size : [1,1],
+          place:  b.place || null,
+        }
+      }));
+
+    return items;
+  }
+
+  // Items in die UI pushen
+  function push(){
+    if (!UIB() || typeof UIB().setItems !== "function") {
+      logW("UIBuild.setItems nicht verfügbar – später erneut versuchen.");
+      return;
     }
-    return FALLBACK_ICON;
+    const items = mapToItems();
+    UIB().setItems(items);
+    logI("Items gesetzt:", items.length);
   }
 
-  function mapToItems() {
-    if (!global.Registry) return [];
-    var builds = global.Registry.list('buildings') || [];
-    return builds
-      .filter(function (b) { return b.enabled !== false; })
-      .map(function (b) {
-        var iconUrl = resolveIcon(b);
-        var cat = b.cat || b.category || 'admin';
-        return {
-          id:       b.id,
-          title:    b.name || b.id,
-          category: cat,           // neue CORE-UI
-          group:    cat,           // legacy-CORE-UI
-          icon:     iconUrl,
-          enabled:  b.enabled !== false
-        };
-      });
+  // Ready-Handler (einmalig)
+  function onReady(){
+    try { push(); } catch(e){ logE("push() bei ready", e); }
   }
 
-  function pushToUI(attempt) {
-    attempt = (attempt|0) + 1;
-    var U = global.UIBuild;
-    if (!U || typeof U.setItems !== 'function') {
-      if (attempt <= 20) return void setTimeout(function(){ pushToUI(attempt); }, 60);
-      return logW('UIBuild.setItems nicht verfügbar');
-    }
-    var items = mapToItems();
-    U.setItems(items);
-    if (typeof U.rerender === 'function') U.rerender();
-    logI('Items gesetzt:', items.length);
+  // Update-Handler (bei Registry-Änderungen)
+  function onUpdate(ev){
+    try {
+      const d = ev?.detail || {};
+      if (d.kind === "buildings" || !d.kind) push();
+    } catch(e){ logE("onUpdate()", e); }
   }
 
-  // Events aus der Registry
-  global.addEventListener('cb:registry:ready',  function(){ pushToUI(0); });
-  global.addEventListener('cb:registry:update', function(){ pushToUI(0); });
+  // Bootstrap
+  function boot(){
+    logI("bereit v17.0.7");
+    // Wenn Registry schon da -> sofort
+    if (REG()?.__ready) onReady();
+    // Events koppeln
+    global.addEventListener("cb:registry:ready", onReady, { once:true });
+    global.addEventListener("cb:registry:update", onUpdate);
+  }
 
-  // Initial versuchen, wenn DOM steht
-  function bootstrap(){ if (global.Registry?.__ready) pushToUI(0); }
-  if (document.readyState === 'complete' || document.readyState === 'interactive') bootstrap();
-  else document.addEventListener('DOMContentLoaded', bootstrap, { once:true });
+  // Falls UIBuild später kommt → kleiner Watcher
+  (function watchUIBuild(){
+    const t = setInterval(() => {
+      if (UIB() && typeof UIB().setItems === "function") {
+        clearInterval(t);
+        boot();
+      }
+    }, 30);
+    // Fallback beim DOM-Parsing
+    global.addEventListener("DOMContentLoaded", () => {
+      if (UIB() && typeof UIB().setItems === "function") {
+        clearInterval(t);
+        boot();
+      }
+    });
+  })();
 
-  logI('bereit v17.0.6');
 })(window);
