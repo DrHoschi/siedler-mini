@@ -16,6 +16,21 @@ Leitplanken (Lastenheft):
 -->
 <html lang="de">
 <head>
+  
+<!-- (einmahlig) Kill SW -->
+<script>
+/* Räumt evtl. verwaiste Service-Worker ab (iOS Cache wächst sonst schnell) */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    regs.forEach(function(r){ r.unregister().catch(function(){}); });
+  }).catch(function(){});
+  // zusätzlich: CacheStorage leeren (harmlos, wirkt nur auf gleiche Origin)
+  if (window.caches && caches.keys) {
+    caches.keys().then(function(keys){ return Promise.all(keys.map(function(k){ return caches.delete(k); })); });
+  }
+}
+</script>
+  
   <!-- =======================================================================
   (1) META & BASIS
   ======================================================================== -->
