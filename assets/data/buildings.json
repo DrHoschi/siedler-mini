@@ -1,5 +1,5 @@
 {
-  "iconsBase": "assets/ui/build/",
+  "iconsBase": "assets/ui/build",
   "buildings": [
     { "id":"rathaus",   "name":"Rathaus",   "cat":"admin",
       "sprite":"assets/buildings/rathaus_wood1.png",
