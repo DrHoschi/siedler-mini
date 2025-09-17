@@ -1,0 +1,15 @@
+
+digraph ZULI_IO {
+  rankdir=LR;
+  node [shape=record, fontname="Arial", fontsize=10, style=filled, fillcolor="#f9f9f9"];
+"index.html" [label="{ { script imports | cb:boot-ready } | index.html\nStartseite / Initialisierung UI\nv1.0.0 | { cb:index-ready | DOM Panels } }"];
+"boot.js" [label="{ { index.html | cb:assets-ready } | boot.js\nStart-Logik / Verbindet Assets & Registry\nv1.0.1 | { cb:boot-ready | Registry.init() } }"];
+"registry.js" [label="{ { buildings.json | units.json } | registry.js\nZentrale Spielobjekte\nv1.0.9 | { cb:registry:ready | Registry.get/list } }"];
+"editor.js" [label="{ { registry.js | cb:index-ready } | editor.js\nEditor-Einstieg\nv1.0.7 | { cb:editor-ready } }"];
+"inspector.api-bridge.js" [label="{ { editor.js } | inspector.api-bridge.js\nInspector-Anbindung\nv1.0.0 | { cb:inspector-ready } }"];
+"index.html" -> "boot.js" [label="cb:boot-ready", fontsize=9];
+"boot.js" -> "registry.js" [label="Registry.init()", fontsize=9];
+"registry.js" -> "editor.js" [label="Registry.get/list", fontsize=9];
+"index.html" -> "editor.js" [label="cb:index-ready", fontsize=9];
+"editor.js" -> "inspector.api-bridge.js" [label="cb:editor-ready", fontsize=9];
+}
