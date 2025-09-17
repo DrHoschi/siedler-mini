@@ -1,0 +1,21 @@
+
+digraph Projektvisualisierung {
+  rankdir=LR;
+  node [shape=record, style=filled, fillcolor="#f9f9f9", fontname="Arial", fontsize=10];
+  edge [fontname="Arial", fontsize=9];
+
+"index.html" [label="{ { <I1> I1=script | <I2> I2=cb:boot-ready } | index.html\nEinstiegspunkt\nbindet Panels + JS/CSS\nv1.0.0 | { <Q1> Q1=cb:index-ready | <Q2> Q2=DOM Panels } }"];
+"boot.js" [label="{ { <I1> I1=index.html | <I2> I2=cb:assets-ready } | boot.js\nGameBoot\nPreload + MapInit\nv1.0.1 | { <Q1> Q1=cb:boot-ready | <Q2> Q2=Registry.init } }"];
+"registry.js" [label="{ { <I1> I1=buildings.json | <I2> I2=units.json } | registry.js\nObjekt-Registry\nGebäude & Einheiten\nv1.0.9 | { <Q1> Q1=cb:registry-ready | <Q2> Q2=Registry.get } }"];
+"editor.js" [label="{ { <I1> I1=registry.js | <I2> I2=cb:index-ready } | editor.js\nEditor-Bindung\nEditor aktivieren\nv1.0.7 | { <Q1> Q1=cb:editor-ready } }"];
+"inspector.api-bridge.js" [label="{ { <I1> I1=cb:editor-ready | <I2> I2=cb:start/done } | inspector.api-bridge.js\nInspector\nÜberwacht Signale\nv1.0.0 | { <Q1> Q1=Log | <Q2> Q2=View } }"];
+"index.html":"Q1" -> "boot.js":"I2" [label="cb:boot-ready", color="black", style="solid"];
+"boot.js":"Q2" -> "registry.js":"I1" [label="Registry.init", color="black", style="solid"];
+"registry.js":"Q2" -> "editor.js":"I1" [label="Registry.get", color="black", style="solid"];
+"index.html":"Q1" -> "editor.js":"I2" [label="cb:index-ready", color="black", style="solid"];
+"editor.js":"Q1" -> "inspector.api-bridge.js":"I1" [label="cb:editor-ready", color="black", style="solid"];
+"index.html":"Q1" -> "inspector.api-bridge.js":"I2" [label="cb:start/done", color="red", style="dashed"];
+"boot.js":"Q1" -> "inspector.api-bridge.js":"I2" [label="cb:start/done", color="red", style="dashed"];
+"registry.js":"Q1" -> "inspector.api-bridge.js":"I2" [label="cb:start/done", color="red", style="dashed"];
+"editor.js":"Q1" -> "inspector.api-bridge.js":"I2" [label="cb:start/done", color="red", style="dashed"];
+}
