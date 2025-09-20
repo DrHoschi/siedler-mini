@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Siedler – Mermaid Diagramm-Editor</title>
+  <link rel="stylesheet" href="./editor.css?v=1.0.0" />
+  <link rel="stylesheet" href="./editor.theme.nodeblock.css?v=1.0.0" />
+  <script defer src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+  <script defer src="https://unpkg.com/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script defer src="./editor.js?v=1.0.0"></script>
+</head>
+<body>
+  <div id="start-panel" class="panel">
+    <div class="panel-card">
+      <h1>Diagramm-Editor</h1>
+      <p>Mermaid (.mmd) laden, bearbeiten, stylen & exportieren.</p>
+      <div class="row">
+        <button id="btn-new" class="primary">Neues Diagramm</button>
+        <label class="btn">
+          <input id="file-open" type="file" accept=".mmd,.md,.txt" hidden />
+          <span>Datei öffnen…</span>
+        </label>
+        <button id="btn-continue">Weitermachen</button>
+      </div>
+      <small>Hinweis: Letzter Stand wird lokal gespeichert (localStorage).</small>
+    </div>
+  </div>
+
+  <header id="topbar">
+    <div class="left">
+      <strong>Neue Siedler · Diagramm-Editor</strong>
+      <span id="status" class="muted">bereit</span>
+    </div>
+    <div class="right">
+      <button id="btn-theme" title="Theme umschalten">🌗</button>
+      <button id="btn-kiosk" title="Nur Viewer anzeigen (Kiosk-Modus)">🖥️</button>
+      <button id="btn-inspector" title="Debug/Logs">🐞</button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <aside id="sidebar">
+      <div class="group">
+        <div class="group-head">Projekt</div>
+        <div class="group-body">
+          <label>Projekt-Name
+            <input id="inp-project-name" type="text" placeholder="z.B. Epoche-1 Schemata" />
+          </label>
+          <button id="btn-save-project" class="primary">Projekt speichern</button>
+          <button id="btn-export-project">Projekt exportieren (.mmd)</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-head">Dateien</div>
+        <div class="group-body">
+          <div class="file-actions">
+            <button id="btn-file-new">Neu</button>
+            <button id="btn-file-import">Import .mmd</button>
+            <button id="btn-file-download">Download .mmd</button>
+          </div>
+          <ul id="file-list" class="file-list"></ul>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-head">Render</div>
+        <div class="group-body">
+          <label>Mermaid Theme
+            <select id="sel-theme">
+              <option value="default">default (hell)</option>
+              <option value="dark" selected>dark</option>
+              <option value="forest">forest</option>
+              <option value="neutral">neutral</option>
+            </select>
+          </label>
+          <label>Max. Breite (px)
+            <input id="inp-maxw" type="number" min="320" value="2048" />
+          </label>
+          <label>Skalierung
+            <input id="inp-scale" type="number" min="0.2" step="0.1" value="1.0" />
+          </label>
+          <button id="btn-render" class="primary">Rendern</button>
+          <div class="export-row">
+            <button id="btn-export-svg">Export SVG</button>
+            <button id="btn-export-png">Export PNG</button>
+          </div>
+        </div>
+      </div>
+      <div class="group">
+        <div class="group-head">Custom CSS</div>
+        <div class="group-body">
+          <textarea id="ta-css" placeholder="/* Eigene Styles für .mermaid SVG: z.B. Knotenfarben, Labels, etc. */"></textarea>
+          <button id="btn-css-apply">CSS anwenden</button>
+        </div>
+      </div>
+      <div class="group dragtip">
+        <strong>Drag & Drop:</strong> Ziehe .mmd in den Editor oder die Vorschau.
+      </div>
+    </aside>
+
+    <section id="editor-col">
+      <div id="tabs">
+        <button class="tab active" data-target="#tab-mmd">.mmd</button>
+        <button class="tab" data-target="#tab-preview">Vorschau</button>
+        <button class="tab" data-target="#tab-split">Split</button>
+      </div>
+
+      <div id="tab-mmd" class="tabpane active" data-kind="code">
+        <textarea id="ta-mmd" spellcheck="false"></textarea>
+      </div>
+
+      <div id="tab-preview" class="tabpane" data-kind="preview">
+        <div id="preview" class="preview" aria-live="polite"></div>
+      </div>
+
+      <div id="tab-split" class="tabpane" data-kind="split">
+        <div class="split">
+          <textarea id="ta-mmd-split" spellcheck="false"></textarea>
+          <div id="preview-split" class="preview"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <style id="custom-css"></style>
+
+  <div id="inspector" class="inspector hidden" role="dialog" aria-modal="true">
+    <div class="insp-head">
+      <strong>Debug & Logs</strong>
+      <button id="btn-insp-close">✕</button>
+    </div>
+    <div class="insp-body">
+      <pre id="log"></pre>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,90 @@
+
+/* ============================================================================
+ * Datei: tools/diagram-editor/editor.theme.nodeblock.css
+ * Projekt: Neue Siedler – Mermaid Diagramm-Editor
+ * Version: v1.0.0 (2025-09-20)
+ * Zweck: Exaktes Node/Block-Farbschema wie die bisherigen PNGs (dunkel)
+ * Wirkt auf Mermaid-Flowcharts (SVG) – keine Änderung an Editor-UI.
+ * ========================================================================== */
+
+:root {
+  /* Farben gemäß unseren DOT/PNG-Styles */
+  --nb-bg:         #0f1320;
+  --nb-node:       #1f2430;
+  --nb-node2:      #2e3a52;  /* Gebäude/Figuren */
+  --nb-node3:      #344462;  /* Ressourcen */
+  --nb-ui:         #233247;  /* Inspector/UI */
+  --nb-border:     #5b647a;
+  --nb-edge:       #9aa6bf;
+  --nb-text:       #eaeef6;
+  --nb-muted:      #d7def0;
+  --nb-cluster:    #394055;
+
+  --nb-radius:     8px;
+  --nb-font:       12.5px/1.45 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  --nb-mono:       12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* Grundhintergrund der Preview-Fläche (optional) */
+#preview, #preview-split { background: var(--nb-bg); }
+
+/* ============================ Mermaid Flowchart ============================ */
+.mermaid svg {
+  font: var(--nb-font);
+  color: var(--nb-text);
+}
+
+/* Knoten (Standard) */
+.mermaid .node rect,
+.mermaid .node polygon {
+  rx: var(--nb-radius);
+  ry: var(--nb-radius);
+  fill: var(--nb-node) !important;
+  stroke: var(--nb-border) !important;
+  stroke-width: 1.2px !important;
+}
+
+/* Knoten-Titel/Text */
+.mermaid .label, .mermaid .node text,
+.mermaid .edgeLabel tspan, .mermaid .label tspan {
+  fill: var(--nb-text) !important;
+}
+
+/* Cluster/Untergraphen */
+.mermaid .cluster rect {
+  rx: 10px; ry: 10px;
+  fill: transparent !important;
+  stroke: var(--nb-cluster) !important;
+  stroke-width: 1.2px !important;
+  stroke-dasharray: 4 4;
+}
+.mermaid .cluster text { fill: var(--nb-muted) !important; font-weight: 600; }
+
+/* Kanten */
+.mermaid .edgePath .path, .mermaid .flowchart-link {
+  stroke: var(--nb-edge) !important;
+  stroke-width: 1.2px !important;
+}
+.mermaid .edgeLabel {
+  background: rgba(0,0,0,0.0) !important;
+  color: var(--nb-muted) !important;
+  font: var(--nb-mono);
+  padding: 0 2px;
+}
+.mermaid .arrowheadPath {
+  fill: var(--nb-edge) !important;
+  stroke: var(--nb-edge) !important;
+}
+
+/* Spezielle Farbklassen (optional in MMD verwendbar) */
+/* usage im MMD: nodeName:::figuren  /  nodeName:::ressource  /  nodeName:::ui */
+.mermaid .node.figuren rect    { fill: var(--nb-node2) !important; }
+.mermaid .node.ressource rect  { fill: var(--nb-node3) !important; }
+.mermaid .node.ui rect         { fill: var(--nb-ui) !important; }
+
+/* Tabellen/Labels etwas kompakter */
+.mermaid .label foreignObject { color: var(--nb-text) !important; }
+.mermaid .label div { color: var(--nb-text) !important; font-size: 12.5px; }
+
+/* Debug: versteckte Hintergründe der Labels neutralisieren */
+.mermaid .edgeLabel rect { fill: transparent !important; stroke: transparent !important; }
