@@ -1,6 +1,54 @@
-/* main/ui/css/ui-build.css v1.0.0 (2025-09-22) */
-#build-dock{position:fixed;left:0;right:0;bottom:0;padding:6px;background:rgba(0,0,0,.55);border-top:1px solid #000;display:none}
-#build-dock .wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;max-height: calc(2 * 48px + 6px);overflow:auto}
-#build-dock .item{display:flex;gap:6px;align-items:center;height:48px;border:1px solid #333;border-radius:8px;padding:6px;background:#1a1a1a}
-#build-dock .item img{width:32px;height:32px;image-rendering: pixelated}
-#build-dock .item .label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ============================================================================
+ * ui/css/ui-build.css — Build-Dock Styles (Vollausbau)
+ * Version: v1.1.0 (2025-09-22)
+ * ============================================================================ */
+
+#build-dock{
+  position:fixed; left:0; right:0; bottom:0;
+  padding:8px; background:rgba(0,0,0,.55);
+  border-top:1px solid #000; display:none;
+}
+
+#build-dock .wrap{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:8px;
+  max-height: calc(2 * 56px + 8px + 2px + 2.5rem); /* 2 Zeilen + Header + Puffer */
+  overflow:auto;
+}
+
+/* Kategorie */
+.build-cat{ border:1px solid #222; border-radius:8px; background:#111a; }
+.build-header{ padding:6px 8px; border-bottom:1px solid #222; }
+.build-title{ margin:0; font-size:0.95rem; opacity:0.9; }
+
+/* Liste der Items (Grid in der Kategorie) */
+.build-list{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));
+  gap:6px; padding:6px;
+}
+
+/* Einzelnes Item */
+.build-item{
+  display:flex; align-items:center; gap:8px;
+  height:48px; padding:6px 8px;
+  border:1px solid #333; border-radius:8px;
+  background:#1a1a1a; color:inherit;
+  cursor:pointer; text-align:left;
+}
+.build-item img{ width:32px; height:32px; image-rendering: pixelated; }
+.build-item .label{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Hover/Fokus/Selected/Disabled */
+.build-item:hover{ border-color:#555; }
+.build-item:focus{ outline:2px solid #888; outline-offset:0; }
+.build-item.is-selected{ border-color:#8ab4f8; box-shadow:0 0 0 2px #8ab4f880 inset; }
+.build-item.is-disabled{ opacity:.5; cursor:not-allowed; }
+.build-item.is-disabled:hover{ border-color:#333; }
+
+/* Kleinere Screens */
+@media (max-width: 800px){
+  #build-dock .wrap{ max-height: calc(2 * 64px + 12px + 2px + 2.5rem); }
+  .build-item{ height:56px; }
+}
