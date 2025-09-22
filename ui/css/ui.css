@@ -1,0 +1,14 @@
+/* main/ui/css/ui.css v1.0.0 (2025-09-22) */
+:root{
+  --ui-bg: #1b1f24;
+  --ui-fg: #e5e7eb;
+  --ui-accent: #8ab4f8;
+  --ui-gap: 8px;
+  --ui-radius: 8px;
+  --ui-panel: #111418cc;
+}
+html,body{margin:0;padding:0;color:var(--ui-fg);background:#000;}
+#start-panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);}
+.ui-panel{background:var(--ui-panel);backdrop-filter: blur(4px); border:1px solid #000;border-radius:var(--ui-radius);padding:12px;}
+button{font:inherit;border:1px solid #333;border-radius:6px;background:#222;color:var(--ui-fg);padding:6px 10px;cursor:pointer}
+button:hover{border-color:#555}

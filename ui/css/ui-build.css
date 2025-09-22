@@ -1,0 +1,6 @@
+/* main/ui/css/ui-build.css v1.0.0 (2025-09-22) */
+#build-dock{position:fixed;left:0;right:0;bottom:0;padding:6px;background:rgba(0,0,0,.55);border-top:1px solid #000;display:none}
+#build-dock .wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;max-height: calc(2 * 48px + 6px);overflow:auto}
+#build-dock .item{display:flex;gap:6px;align-items:center;height:48px;border:1px solid #333;border-radius:8px;padding:6px;background:#1a1a1a}
+#build-dock .item img{width:32px;height:32px;image-rendering: pixelated}
+#build-dock .item .label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
