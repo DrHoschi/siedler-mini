@@ -1,0 +1,62 @@
+%% UI_Structure.mmd — Mermaid-Diagramm (v1.0.0, 2025-09-22)
+flowchart TD
+  subgraph UI[main/ui]
+    A[ui-boot.js\nEntry/Init\ncb:ui:ready]
+    B[ui-start.js\nStartfenster]
+    C[ui-build.js\nBuild-Dock\n2 Zeilen + Scroll]
+    D[ui-build.categories.js\nKatalog/Kategorien\ncb:build-categories-ready]
+    E[ui-hud.js\nRessourcen-Bar]
+    F[ui-dialog.js]
+    G[ui-tooltip.js]
+    H[ui-notify.js]
+    I[ui-inspector-bridge.js\nTab "Editoren"\nInspector-Health]
+    J[ui-events.js\nCustomEvent Helpers]
+    subgraph CSS[/css/]
+      K[ui.css]
+      L[ui-build.css]
+      M[ui-hud.css]
+      N[ui-dialog.css]
+      O[ui-tooltip.css]
+      P[ui-notify.css]
+    end
+  end
+
+  subgraph CORE[Game Core]
+    R[core/asset.js]
+    S[core/registry.js]
+  end
+
+  subgraph INSPECTOR[Inspector]
+    X[Inspector UI]
+  end
+
+  %% Boot-Strang
+  A --> B
+  A --> C
+  A --> E
+  A --> I
+  D --> C
+
+  %% Events
+  J -. provides .- A
+  J -. provides .- B
+  J -. provides .- C
+  J -. provides .- E
+
+  %% CSS Bindungen
+  K --> B
+  L --> C
+  M --> E
+  N --> F
+  O --> G
+  P --> H
+
+  %% Bridges
+  I <---> X
+  C -- req:build:select --> S
+  S -- ev:build:enabled --> C
+  S -- ev:resource:update --> E
+  B -- req:game:new/continue --> S
+
+  %% Assets bleiben singular
+  R -. referenced by .- A
