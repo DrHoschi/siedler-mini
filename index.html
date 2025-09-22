@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neue Siedler – v1.0.0</title>
+  <style>
+    :root { --bg:#1a1f26; --panel:#2a3038; --panel-active:#3a424c; --text:#e9eef3; }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial;}
+    #game{display:block;width:100vw;height:60vh;background:#0f1318;}
+    #start-panel{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid #000;padding:12px;display:flex;gap:8px;flex-wrap:wrap;z-index:10}
+    #start-panel button{background:#39414b;color:var(--text);border:1px solid #000;padding:10px 14px;border-radius:6px;cursor:pointer}
+    #start-panel button:hover{background:#46505b}
+    #btn-inspector,#btn-build{position:fixed;right:12px;width:48px;height:48px;border-radius:12px;border:0;background:var(--panel);color:var(--text)}
+    #btn-inspector{bottom:84px}#btn-build{bottom:24px}
+    #build-dock{position:fixed;left:0;right:0;bottom:64px;max-height:30vh;overflow:auto;background:var(--panel);border-top:1px solid #000;display:none;padding:8px;z-index:9}
+    #inspector{position:fixed;inset:0;background:rgba(0,0,0,.66);display:none;z-index:100}
+    #insp-window{position:absolute;inset:32px;background:var(--panel);border:1px solid #000;border-radius:10px;display:flex;flex-direction:column}
+    #insp-tabs{display:flex;gap:8px;padding:8px;border-bottom:1px solid #000;background:#1f252c}
+    #insp-tabs button{background:#2b323a;color:var(--text);border:1px solid #000;border-radius:8px;padding:8px 10px;cursor:pointer}
+    #insp-tabs button.active{background:var(--panel-active)}
+    #insp-content{flex:1;overflow:auto;padding:12px}
+  </style>
+  <script src="core/asset.js"></script>
+  <script src="core/registry.js"></script>
+  <script src="core/game.js"></script>
+  <script src="core/adfinder.js"></script>
+  <script src="core/carrier.js"></script>
+  <script src="core/path-overlay.js"></script>
+  <script src="core/boot.js"></script>
+  <script src="ui/ui-start.js"></script>
+  <script src="ui/ui-hud.js"></script>
+  <script src="ui/ui-build.js"></script>
+  <script src="ui/ui-dialog.js"></script>
+  <script src="ui/ui-inspector.js"></script>
+</head>
+<body>
+  <div id="start-panel" aria-label="Startpanel">
+    <button id="btn-new">Neues Spiel</button>
+    <button id="btn-continue">Weiterspielen</button>
+    <button id="btn-reset">Reset</button>
+    <button id="btn-fullscreen">Fullscreen</button>
+    <button id="btn-open-insp">Inspector Öffnen</button>
+  </div>
+  <canvas id="game" width="1280" height="720" aria-label="Spielfeld"></canvas>
+  <button id="btn-inspector" title="Inspector">🧩</button>
+  <button id="btn-build" title="Bauen">🏗️</button>
+  <div id="build-dock" aria-label="Bauen-Dock"></div>
+  <div id="inspector" aria-label="Inspector-Overlay" role="dialog" aria-modal="true">
+    <div id="insp-window">
+      <div id="insp-tabs">
+        <button data-tab="Logs" class="active">Logs</button>
+        <button data-tab="Tests">Tests</button>
+        <button data-tab="Ressourcen">Ressourcen</button>
+        <button data-tab="Pfade">Pfade</button>
+        <button data-tab="Editor">Editor</button>
+        <button id="insp-close" style="margin-left:auto">Schließen</button>
+      </div>
+      <div id="insp-content"></div>
+    </div>
+  </div>
+  <script>window.dispatchEvent(new CustomEvent('cb:ui-ready',{ detail: {} }));</script>
+</body>
+</html>
