@@ -1,0 +1,63 @@
+<!-- main/ui/index.html v1.0.0 (2025-09-22) -->
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Neue Siedler – UI</title>
+  <link rel="stylesheet" href="css/ui.css"/>
+  <link rel="stylesheet" href="css/ui-build.css"/>
+  <link rel="stylesheet" href="css/ui-hud.css"/>
+  <link rel="stylesheet" href="css/ui-dialog.css"/>
+  <link rel="stylesheet" href="css/ui-tooltip.css"/>
+  <link rel="stylesheet" href="css/ui-notify.css"/>
+</head>
+<body>
+  <!-- Startpanel -->
+  <div id="start-panel" class="ui-panel">
+    <div>
+      <h1>Neue Siedler</h1>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="btn-new">Neues Spiel</button>
+        <button id="btn-continue">Weiterspielen</button>
+        <button id="btn-reset">Reset</button>
+        <button id="btn-fullscreen">Vollbild</button>
+        <button id="btn-open-insp">Inspector</button>
+        <button data-open-editors>Editoren</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Build Dock -->
+  <div id="build-dock"><div class="wrap" id="build-wrap"></div></div>
+
+  <!-- Inspector Panel Platzhalter -->
+  <div id="inspector" class="ui-panel" style="display:none; position:fixed; top:10%; left:50%; transform:translateX(-50%); width:70%; max-width:900px;">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>Inspector</strong>
+      <button id="insp-close">×</button>
+    </div>
+    <div id="insp-tabs" style="display:flex;gap:6px;margin:8px 0">
+      <button data-tab="Logs">Logs</button>
+      <button data-tab="Tests">Tests</button>
+      <button data-tab="Ressourcen">Ressourcen</button>
+      <button data-tab="Pfade">Pfade</button>
+      <button data-tab="Editor">Editoren</button>
+    </div>
+    <div id="insp-content" class="ui-panel"></div>
+  </div>
+
+  <button id="btn-build" style="position:fixed;right:8px;bottom:8px">Bauen</button>
+
+  <!-- UI Scripts (order matters) -->
+  <script src="ui-events.js"></script>
+  <script src="ui-inspector-bridge.js"></script>
+  <script src="ui-build.categories.js"></script>
+  <script src="ui-start.js"></script>
+  <script src="ui-hud.js"></script>
+  <script src="ui-dialog.js"></script>
+  <script src="ui-build.js"></script>
+  <!-- Optional: ui-inspector.js (falls separat geladen) -->
+  <script src="../ui-inspector.js"></script>
+</body>
+</html>
