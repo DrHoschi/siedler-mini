@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-22T10:17:16.569Z",
+  "createdAt": "2025-09-22T16:44:17.445Z",
   "root": ".",
-  "count": 368,
+  "count": 385,
   "entries": [
     {
       "type": "dir",
@@ -628,6 +628,36 @@
     },
     {
       "type": "file",
+      "path": "assets/icons/cancel.png",
+      "size": 383
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/collision.png",
+      "size": 373
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/confirm.png",
+      "size": 298
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/entrance.png",
+      "size": 201
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/error.png",
+      "size": 383
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_GUIDE.md",
+      "size": 2573
+    },
+    {
+      "type": "file",
       "path": "assets/icons/icons_spritesheet_256.json",
       "size": 2774
     },
@@ -645,6 +675,46 @@
       "type": "file",
       "path": "assets/icons/icons_spritesheet_64.png",
       "size": 263254
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/info.png",
+      "size": 404
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ok.png",
+      "size": 298
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/Planung.md",
+      "size": 5217
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/save.png",
+      "size": 229
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/select.png",
+      "size": 262
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/stats.png",
+      "size": 183
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/Symbol-Icon.md",
+      "size": 2188
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/warn.png",
+      "size": 359
     },
     {
       "type": "dir",
@@ -1697,7 +1767,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 624
+      "size": 1836
     },
     {
       "type": "file",
@@ -1742,7 +1812,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 1416
+      "size": 7333
     },
     {
       "type": "file",
@@ -1777,7 +1847,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 2102
+      "size": 4509
     },
     {
       "type": "file",
@@ -1786,8 +1856,23 @@
     },
     {
       "type": "file",
+      "path": "filelist-audit.txt",
+      "size": 1752
+    },
+    {
+      "type": "file",
+      "path": "filelist.json",
+      "size": 36300
+    },
+    {
+      "type": "file",
+      "path": "filelist.txt",
+      "size": 13917
+    },
+    {
+      "type": "file",
       "path": "index.html",
-      "size": 3547
+      "size": 7285
     },
     {
       "type": "file",
