@@ -1,0 +1,48 @@
+[
+  {
+    "id": "u.citizen",
+    "name": "Dorfbewohner",
+    "epoche": 1,
+    "speed": 1.0,
+    "capacity": 0,
+    "sprite": "assets/characters/citizen.png",
+    "role": "basis"
+  },
+  {
+    "id": "u.carrier",
+    "name": "Träger",
+    "epoche": 1,
+    "speed": 1.1,
+    "capacity": 1,
+    "sprite": "assets/characters/carrier.png",
+    "role": "basis",
+    "aiProfile": "carrier_basic"
+  },
+  {
+    "id": "u.lumberjack",
+    "name": "Holzfäller",
+    "epoche": 1,
+    "speed": 1.0,
+    "capacity": 1,
+    "sprite": "assets/characters/lumberjack.png",
+    "role": "prod"
+  },
+  {
+    "id": "u.fisher",
+    "name": "Fischer",
+    "epoche": 1,
+    "speed": 1.0,
+    "capacity": 1,
+    "sprite": "assets/characters/fisher.png",
+    "role": "prod"
+  },
+  {
+    "id": "u.mason",
+    "name": "Steinmetz",
+    "epoche": 1,
+    "speed": 1.0,
+    "capacity": 1,
+    "sprite": "assets/characters/mason.png",
+    "role": "prod"
+  }
+]

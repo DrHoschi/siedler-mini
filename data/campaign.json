@@ -1,0 +1,29 @@
+{
+  "chapters": [
+    {
+      "chapter": 1,
+      "title": "Die ersten Siedler",
+      "goals": [
+        {
+          "type": "resource",
+          "res": "wood",
+          "amount": 50
+        },
+        {
+          "type": "population",
+          "amount": 10
+        }
+      ],
+      "unlocks": [
+        "b.lumberjack",
+        "b.fisher",
+        "b.quarry"
+      ],
+      "rewards": [
+        "prestige:10"
+      ],
+      "map": "data/maps/map_ch1.json",
+      "seed": 12345
+    }
+  ]
+}

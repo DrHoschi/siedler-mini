@@ -1,0 +1,17 @@
+{
+  "global": {
+    "tickRate": 100,
+    "autosaveInterval": 300
+  },
+  "difficulty": {
+    "easy": {
+      "productionMultiplier": 1.2
+    },
+    "normal": {
+      "productionMultiplier": 1.0
+    },
+    "hard": {
+      "productionMultiplier": 0.8
+    }
+  }
+}
