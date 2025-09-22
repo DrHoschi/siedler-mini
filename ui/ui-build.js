@@ -1,33 +1,60 @@
 /* ============================================================================
  * Datei: ui/ui-build.js
  * Projekt: Neue Siedler
- * Version: v1.0.0
- * Zweck: BuildDock – Auswahl & Platziermodus (Stub).
- * Datum: 2025-09-21
- * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
- * Hinweis: Debug/Inspector NIE entfernen. Ereignisse nutzen (cb:*).
- * ============================================================================ */
+ * Version: v1.1.0 (2025-09-22)
+ * Zweck: BuildDock + Platziermodus (rendert Kategorien aus ui-build.categories.js)
+ * Events:
+ *   emit: cb:build:open|close|select|place|cancel
+ *   listen: cb:build-categories-ready
+ * ============================================================================
+ */
 
-// --- CBLog (Fallback) --------------------------------------------------------
-window.CBLog = window.CBLog || {
-  ok:   (...a)=>console.log('✅', ...a),
-  info: (...a)=>console.log('ℹ️', ...a),
-  warn: (...a)=>console.warn('⚠️', ...a),
-  error:(...a)=>console.error('❌', ...a),
-};
+(function(){
+  'use strict';
+  const MOD='[ui-build]';
+  const VERSION='v1.1.0';
 
-const UIBUILD_VERSION="v1.0.0";
-(function initBuildDock(){
-  CBLog.ok("[ui-build] Modul geladen ("+UIBUILD_VERSION+")");
-  const dock=document.getElementById('build-dock');
-  const btnBuild=document.getElementById('btn-build');
-  btnBuild?.addEventListener('click',()=>{
-    const vis=dock.style.display==='block';
-    dock.style.display=vis?'none':'block';
-    window.dispatchEvent(new CustomEvent(vis?'cb:build:close':'cb:build:open',{ detail:{ from:'HUD' } }));
-    if(!vis) renderCategories();
-  });
-  function renderCategories(){
-    dock.innerHTML="<strong>Bauen:</strong> HQ, Holzfällerhütte, Fischerhütte, Steinbruch (Demo)";
+  const wrap = document.getElementById('build-wrap');
+  const dock = document.getElementById('build-dock');
+
+  // Render-Funktion
+  function render(categories){
+    if(!wrap) return;
+    wrap.innerHTML='';
+    categories.forEach(cat=>{
+      const catDiv=document.createElement('div');
+      catDiv.className='build-cat';
+      const catTitle=document.createElement('h4');
+      catTitle.textContent=cat.title;
+      catDiv.appendChild(catTitle);
+
+      const list=document.createElement('div');
+      list.className='build-list';
+      cat.items.forEach(it=>{
+        const btn=document.createElement('button');
+        btn.className='build-item';
+        btn.innerHTML=`<img src="${it.icon}" alt=""/> ${it.label}`;
+        btn.addEventListener('click', ()=>{
+          window.dispatchEvent(new CustomEvent('cb:build:select',{detail:{buildingId:it.id}}));
+        });
+        list.appendChild(btn);
+      });
+      catDiv.appendChild(list);
+      wrap.appendChild(catDiv);
+    });
   }
+
+  // Event-Listener auf Kategorien
+  window.addEventListener('cb:build-categories-ready', ev=>{
+    render(ev.detail.categories);
+  });
+
+  // API
+  window.UIBuild={
+    open(){ dock.style.display='block'; window.dispatchEvent(new CustomEvent('cb:build:open',{detail:{from:'UI'}})); },
+    close(reason='cancel'){ dock.style.display='none'; window.dispatchEvent(new CustomEvent('cb:build:close',{detail:{reason}})); },
+    VERSION
+  };
+
+  (window.CBLog?.ok||console.log)('🏗️', MOD,'bereit',VERSION);
 })();
