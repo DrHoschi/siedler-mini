@@ -29,6 +29,17 @@
     .ui-start-bg{position:absolute;inset:0;background-image:url("assets/ui/start_bg.jpg");
       background-size:cover;background-position:center;filter:brightness(.9);}
     :root{ --build-dock-max-h: 48vh; }
+
+     /* ---------- FABs ---------- */
+    .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
+    #btn-build { left:16px; bottom:16px; }
+    #btn-inspector { right:16px; bottom:16px; }
+    .ui-fab button{
+      width:52px; height:52px; border:none; border-radius:50%;
+      background:#2a2d31; color:#fff; font-size:22px;
+      box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px); cursor:pointer;
+      pointer-events:auto !important;
+    }      
   </style>
 </head>
 <body>
