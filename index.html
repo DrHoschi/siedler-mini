@@ -62,14 +62,30 @@
   </style>
 </head>
 <body>
-  <!-- Startpanel -->
-  <div id="ui-start" class="ui-start">
-    <div class="ui-start-bg"></div>
-    <div class="ui-start-panel">
-      <h1 class="title">Neue Siedler</h1>
-      <button id="btn-newgame" class="btn primary">Neues Spiel</button>
+<!-- Start-Panel -->
+  <div id="start-panel" class="ui-start" aria-label="Startmenü">
+    <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
+    <div class="ui-start-card" role="dialog" aria-modal="true">
+      <h1>Neue Siedler</h1>
+      <div class="actions">
+        <button id="btnStartNew" class="btn main">Neues Spiel</button>
+        <button id="btnStartResume" class="btn">Weiterspielen</button>
+        <button id="btnStartReset" class="btn ghost">Reset</button>
+        <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
+      </div>
     </div>
   </div>
+
+  <!-- FABs -->
+  <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
+    <button type="button" aria-label="Bau-Menü"
+      onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
+  </div>
+  <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
+    <button type="button" aria-label="Inspector"
+      onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🛠</button>
+  </div>
+
 
   <!-- HUD + Build-Dock -->
   <div id="hud" class="ui-hud" hidden></div>
