@@ -1,7 +1,7 @@
 <!-- ============================================================================
      Datei: index.html (Root)
      Projekt: Neue Siedler
-     Version: v18.0.2 (2025-09-22)
+     Version: v18.0.3 (2025-09-23)
      Zweck:
        - Zentrale Einstiegspunkt: Core + UI + Inspector
        - Respektiert Standards: Startfenster zuerst, Debug-Tools drin lassen, Farbschema
@@ -9,6 +9,13 @@
        HEAD  : Meta + UI-CSS
        BODY  : #app, Canvas, Startpanel, HUD, Build-Dock, Inspector
        SCRIPTS (Order!): Core → UI-Infra → UI-Daten → UI-Panels → Tools → Inline-Wiring
+	   Leitplanken (Lastenheft):
+    </-> Inspector unberührt (bestehende API-Compat).
+    - Bau-Menü über CORE-UI (keine /assets/ui/ui-build*.js-Parallele).
+	- Registry-Events: cb:registry:ready / cb:registry:update. Adapter sendet
+ 	  nach dem Laden zusätzlich cb:assets-ready. Kein zusätzlicher „Ping“-Kleber.
+	- Reihenfolge strikt: Polyfill/Env → Registry(+Adapter) → Entities-Bridge →
+	  Engine/Renderer → Game → Inspector → CORE-UI (ui-build.js) → Data-Bridge → Start-UI.
      ============================================================================ -->
 
 <!doctype html>
@@ -17,13 +24,15 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Neue Siedler – Dev</title>
-
+<!-- =======================================================================
+  (1) META & BASIS
+  ======================================================================== -->
   <!-- UI Styles -->
   <link rel="stylesheet" href="ui/css/ui.css">
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
   <link rel="stylesheet" href="ui/css/ui-tooltip.css">
-  <link rel="stylesheet" href="ui/inspector.css?v=20250914">
+  <link rel="stylesheet" href="ui/css/inspector.css">
   <style>
     /* Start-Hintergrund (falls nicht schon in ui-start.css) */
     .ui-start-bg{position:absolute;inset:0;background-image:url("assets/ui/start_bg.jpg");
