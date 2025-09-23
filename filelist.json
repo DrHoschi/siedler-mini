@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-22T16:44:17.445Z",
+  "createdAt": "2025-09-23T10:18:27.752Z",
   "root": ".",
-  "count": 385,
+  "count": 422,
   "entries": [
     {
       "type": "dir",
@@ -627,6 +627,158 @@
       "size": 8
     },
     {
+      "type": "dir",
+      "path": "assets/icons/buildings/"
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/fisher.png",
+      "size": 99587
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/hq.png",
+      "size": 99205
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/lumberjack.png",
+      "size": 106970
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/quarry.png",
+      "size": 104839
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/buildings/Readme.md",
+      "size": 251
+    },
+    {
+      "type": "dir",
+      "path": "assets/icons/food/"
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/food/Brot.png",
+      "size": 507831
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/food/fish.png",
+      "size": 355425
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/food/Getreide.png",
+      "size": 722526
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/food/Nahrung.png",
+      "size": 559536
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/food/Readme.md",
+      "size": 396
+    },
+    {
+      "type": "dir",
+      "path": "assets/icons/resources/"
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/bread.png",
+      "size": 507831
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/bricks.png",
+      "size": 791749
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/diplomacy.png",
+      "size": 581949
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/fish.png",
+      "size": 355425
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/foods.png",
+      "size": 559536
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/gold.png",
+      "size": 469085
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/grain.png",
+      "size": 722526
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/knowledge.png",
+      "size": 616704
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/money.png",
+      "size": 607372
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/ore.png",
+      "size": 566381
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/paper.png",
+      "size": 755255
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/population.png",
+      "size": 841204
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/prestige.png",
+      "size": 766268
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/Readme.md",
+      "size": 452
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/stone.png",
+      "size": 492786
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/tools.png",
+      "size": 411955
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/weapons.png",
+      "size": 823228
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/wood.png",
+      "size": 599316
+    },
+    {
       "type": "file",
       "path": "assets/icons/cancel.png",
       "size": 383
@@ -653,8 +805,43 @@
     },
     {
       "type": "file",
+      "path": "assets/icons/ICONS_CATEGORIES.md",
+      "size": 5629
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_CHECKLIST.md",
+      "size": 1531
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_CHECKLIST.mmd",
+      "size": 630
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_FOLDER_STRUCTURE.md",
+      "size": 4353
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_FOLDER_STRUCTURE.mmd",
+      "size": 663
+    },
+    {
+      "type": "file",
       "path": "assets/icons/ICONS_GUIDE.md",
       "size": 2573
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_OVERVIEW.mmd",
+      "size": 1527
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/ICONS_README.md",
+      "size": 2196
     },
     {
       "type": "file",
@@ -813,50 +1000,6 @@
       "type": "file",
       "path": "assets/items/items.PNG",
       "size": 1534016
-    },
-    {
-      "type": "dir",
-      "path": "assets/maps/"
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-demo.json",
-      "size": 1689
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-mini-V0.json",
-      "size": 5207
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-mini-V0.jsonc",
-      "size": 5847
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-mini.json",
-      "size": 3585
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-mini.jsonc",
-      "size": 4102
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-pro.json",
-      "size": 2808
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-pro.jsonc",
-      "size": 3529
-    },
-    {
-      "type": "file",
-      "path": "assets/maps/map-test-all.json",
-      "size": 2298
     },
     {
       "type": "dir",
@@ -1233,13 +1376,8 @@
     },
     {
       "type": "file",
-      "path": "assets/ui/start-bg.jpeg",
+      "path": "assets/ui/start-bg.jpg",
       "size": 564395
-    },
-    {
-      "type": "file",
-      "path": "assets/ui/ui-bridge.js",
-      "size": 4100
     },
     {
       "type": "file",
@@ -1248,23 +1386,8 @@
     },
     {
       "type": "file",
-      "path": "assets/ui/ui-build.data-bridge.js",
-      "size": 2789
-    },
-    {
-      "type": "file",
       "path": "assets/ui/ui-build.js",
       "size": 6461
-    },
-    {
-      "type": "file",
-      "path": "assets/ui/ui-inspector.js",
-      "size": 6333
-    },
-    {
-      "type": "file",
-      "path": "assets/ui/ui-start.css",
-      "size": 2700
     },
     {
       "type": "file",
@@ -1387,6 +1510,46 @@
       "type": "file",
       "path": "data/maps/map_ch1.json",
       "size": 10047
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-demo.json",
+      "size": 1689
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-mini-V0.json",
+      "size": 5207
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-mini-V0.jsonc",
+      "size": 5847
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-mini.json",
+      "size": 3585
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-mini.jsonc",
+      "size": 4102
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-pro.json",
+      "size": 2808
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-pro.jsonc",
+      "size": 3529
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-test-all.json",
+      "size": 2298
     },
     {
       "type": "file",
@@ -1786,6 +1949,11 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-start.css",
+      "size": 2709
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-tooltip.css",
       "size": 93
     },
@@ -1806,8 +1974,18 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-bridge.js",
+      "size": 4100
+    },
+    {
+      "type": "file",
       "path": "ui/ui-build.categories.js",
       "size": 1280
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build.data-bridge.js",
+      "size": 2789
     },
     {
       "type": "file",
@@ -1836,8 +2014,13 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-inspector.js",
+      "path": "ui/ui-inspector-Muster.js",
       "size": 3469
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-inspector.js",
+      "size": 6333
     },
     {
       "type": "file",
@@ -1857,22 +2040,22 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1752
+      "size": 1807
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 36300
+      "size": 37883
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 13917
+      "size": 14446
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 7285
+      "size": 8149
     },
     {
       "type": "file",
