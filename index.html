@@ -30,7 +30,11 @@
       background-size:cover;background-position:center;filter:brightness(.9);}
     :root{ --build-dock-max-h: 48vh; }
 
-     /* ---------- FABs ---------- */
+    /* ---------- Bühne/Grundlayout ---------- */
+    html, body { height:100%; margin:0; background:#0b0f0d; color:#eaeaea; }
+    #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
+
+    /* ---------- FABs ---------- */
     .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
     #btn-build { left:16px; bottom:16px; }
     #btn-inspector { right:16px; bottom:16px; }
@@ -39,7 +43,22 @@
       background:#2a2d31; color:#fff; font-size:22px;
       box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px); cursor:pointer;
       pointer-events:auto !important;
-    }      
+    }
+
+    /* ---------- Build-Dock Mount ---------- */
+    #build-panel {
+      position:fixed; left:0; right:0; bottom:0;
+      max-height:40vh; background:transparent;
+      z-index:1000; pointer-events:none;   /* geschlossen: kein Klickfang */
+    }
+    #build-panel .ui-build { display:none; }
+    body.has-build-open #build-panel { pointer-events:auto; }
+    body.has-build-open #build-panel .ui-build { display:flex; }
+
+    /* FABs hochsetzen, wenn Bau-Dock offen ist */
+    body.has-build-open #btn-build,
+    body.has-build-open #btn-inspector { bottom: calc(40vh + 16px); }
+  </style>
   </style>
 </head>
 <body>
