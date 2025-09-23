@@ -1,0 +1,19 @@
+flowchart TB
+  subgraph CORE["Kern-Icons (Pflicht) – assets/icons/core/"]
+    direction TB
+    A1["Status\n✅ ok | ℹ️ info | ⚠️ warn | ❌ error"]
+    A2["Ressourcen\n🪵 wood | 🪨 stone | 🐟 fish | 🌾 grain | 🍞 bread | 🧱 bricks | ⛏️ ore | ⚒ tools | ⚔ weapons | 🪙 gold | 📜 paper | 📖 knowledge | 🏛 prestige | 🤝 diplomacy | 👥 population"]
+    A3["Debug/Pfade\n👣 path | 🔥 heatmap | 🚷 collision | 🚪 entrance | 📈 stats"]
+    A4["Editor/Dialoge\n✏️ brush | 🩹 eraser | 🖱 select | ✋ move | ↩️ undo | ↪️ redo | 💾 save | 📂 load | 📤 export | 📥 import"]
+  end
+
+  subgraph EXT["Optionale Erweiterungen – assets/icons/extended/"]
+    direction TB
+    B1["Pflanzen & Natur\n🌳 tree_broadleaf | 🌲 tree_pine | 🌴 tree_palm | 🌺 hibiscus | 🌹 rose | 🌼 daisy | 🌷 tulip | 🌸 sakura | 🪴 potted | 🌱 seedling | 🍄 mushroom | 🍀 clover"]
+    B2["Nahrung & Getränke\n🥚 egg | 🍳 fried_egg | 🪺 nest_eggs | 🍱 meal_bento | 🥣 meal_soup | 🥘 meal_stew | 🍷 drink_wine | ☕ drink_coffee | 🍺 drink_beer | 🍵 drink_tea"]
+    B3["Tiere (Auszug)\n🐝 bee | 🐟 fish_animal | 🐄 cow | 🐐 goat | 🐎 horse | 🐕 dog | 🐈 cat"]
+    B4["Wetter & Elemente\n☀️ sun | 🌧️ rain | ❄️ snow | 🌪️ tornado | 🌈 rainbow | ⚡ lightning | 🔥 fire | 🌍 earth | 💨 wind"]
+    B5["Kultur & Sonstiges\n🎧 music | 🎨 palette | 🏆 trophy | 🗺️ map | 🏰 castle"]
+  end
+
+  CORE --> EXT

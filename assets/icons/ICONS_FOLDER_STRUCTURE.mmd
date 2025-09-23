@@ -1,0 +1,22 @@
+flowchart TB
+  subgraph icons["assets/icons/"]
+    direction TB
+    ui["ui/\nStatus, Debug, Editor"]:::f
+    resources["resources/\nHUD-Ressourcen"]:::f
+    buildings["buildings/\nBau-Menü"]:::f
+    food["food/\nNahrungsmittel & Getränke"]:::o
+    nature["nature/\nNatur & Deko"]:::o
+    animals["animals/\nTiere"]:::o
+    weather["weather/\nWetter & Elemente"]:::o
+    misc["misc/\nKultur & Sonstiges"]:::o
+  end
+
+  classDef f fill:#2b3340,stroke:#1b2130,color:#fff;
+  classDef o fill:#3a4354,stroke:#1b2130,color:#fff;
+
+  ui --> resources --> buildings
+  resources --> food
+  buildings --> nature
+  nature --> animals
+  animals --> weather
+  weather --> misc
