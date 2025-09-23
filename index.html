@@ -44,9 +44,9 @@
   <link rel="stylesheet" href="ui/css/inspector.css">
   <style>
     /* Start-Hintergrund (falls nicht schon in ui-start.css) */
-    .ui-start-bg{position:absolute;inset:0;background-image:url("assets/ui/start_bg.jpg");
+    /*.ui-start-bg{position:absolute;inset:0;background-image:url("assets/ui/start_bg.jpg");
       background-size:cover;background-position:center;filter:brightness(.9);}
-    :root{ --build-dock-max-h: 48vh; }
+    :root{ --build-dock-max-h: 48vh; }*/
 
     /* ---------- Bühne/Grundlayout ---------- */
     html, body { height:100%; margin:0; background:#0b0f0d; color:#eaeaea; }
@@ -79,6 +79,10 @@
   </style>
 </head>
 <body>
+	
+	<!-- =======================================================================
+  (3) BÜHNE & UI-Container
+  ======================================================================== -->
 <!-- Start-Panel -->
   <div id="start-panel" class="ui-start" aria-label="Startmenü">
     <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
@@ -96,11 +100,11 @@
   <!-- FABs -->
   <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
     <button type="button" aria-label="Bau-Menü"
-      onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🧱</button>
+      onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🏠</button>
   </div>
   <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
     <button type="button" aria-label="Inspector"
-      onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🛠</button>
+      onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🩺</button>
   </div>
 
 
@@ -111,15 +115,33 @@
   <!-- Spielfeld -->
   <canvas id="game" data-map="data/maps/map-mini.json" aria-label="Spielfeld"></canvas>
 
+  <!-- =======================================================================
+  (4) CORE & ENGINE – Reihenfolge ist wichtig
+  ======================================================================== -->
   <!-- Reihenfolge: Core → Tools/Bridge → UI -->
   <script src="core/asset.js"></script>
   <script src="core/registry.js"></script>
   <script src="core/game.js"></script>
   <script src="core/path-overlay.js"></script>
 
+  <!-- =======================================================================
+  (5) INSPECTOR (Split-Load, unverändert)
+  ======================================================================== -->
+  <script defer src="assets/inspector/inspector.core.js?v=18.14.5"></script>
+  <script defer src="assets/inspector/inspector.logs.js?v=18.14.4"></script>
+  <script defer src="assets/inspector/overlay.hooks.js?v=1.4"></script>
+  <script defer src="assets/inspector/inspector.paths.js?v=18.14.4"></script>
+  <script defer src="assets/inspector/inspector.tests.js?v=18.14.4"></script>
+  <script defer src="assets/inspector/inspector.resources.js?v=18.14.4"></script>
+  <script defer src="assets/inspector/inspector.api-compat.js?v=1.0.0"></script>
+  <script defer src="assets/inspector/inspector.api-bridge.js?v=1.0.0"></script>
+  
   <!-- Boot: kümmert sich um Preload & Map-Start -->
   <script src="core/boot.js"></script>
-
+<!-- =======================================================================
+  (6) UI – CORE-Bau-Menü
+  Reihenfolge: CORE-UI → Data-Bridge → Start-Panel
+  ======================================================================== -->
   <!-- UI: Events/Bridge/Build/HUD/Start -->
   <script src="ui/ui-events.js"></script>
   <script src="ui/ui-bridge.js"></script>
@@ -132,5 +154,50 @@
   <!-- Inspector (optional, wenn aktiv) -->
   <script src="ui/ui-inspector-bridge.js"></script>
   <script src="ui/ui-inspector.js"></script>
+  
+  <!-- =======================================================================
+  (7) BOOT-COMPAT (falls benötigt)
+  ======================================================================== -->
+  
+  
+  <!-- =======================================================================
+  (8) PAGE-SCRIPTS: Marker, Body-Klassen, GameUI-Toggles
+  ======================================================================== -->
+    <script>
+    (function () {
+      // Marker/Version
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = "v18.5.0";
+      (window.CBLog?.info || console.log)("[index] UI bereit (v18.5.0)");
+
+      // Body-Klassen bei Build-Dock open/close
+      function setOpen(){ document.body.classList.add('has-build-open'); }
+      function setClose(){ document.body.classList.remove('has-build-open'); }
+      window.addEventListener('cb:build:open',  setOpen);
+      window.addEventListener('cb:build:close', setClose);
+      // Legacy (weiterhin bedient)
+      window.addEventListener('cb:build-open',  setOpen);
+      window.addEventListener('cb:build-close', setClose);
+
+      // Kleine UI-Helfer (nur fürs Bau-Dock)
+      window.GameUI = {
+        toggleBuild(){
+          const isOpen = document.body.classList.toggle('has-build-open');
+          window.dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
+          if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
+        }
+      };
+
+      // Hotkeys (B = Build, I = Inspector via API)
+      window.addEventListener('keydown', function(ev){
+        if (ev.repeat) return;
+        if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
+        if (ev.key === 'i' || ev.key === 'I') {
+          ev.preventDefault();
+          try { InspectorAPI.toggle(); } catch(e) { /* ignore */ }
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
