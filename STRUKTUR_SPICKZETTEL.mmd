@@ -1,0 +1,88 @@
+%% STRUKTUR–SPICKZETTEL (Mermaid-Only)
+%% Version: v1.0 · 2025-09-23
+%% Hinweis: Reiner Mermaid-Inhalt (keine Markdown-Fences).
+
+flowchart LR
+
+  %% === Gruppen / Subgraphs ===================================================
+  subgraph PAGE[Seite / DOM]
+    IDX[index.html]
+    CANVAS{{<canvas id="game"\n data-map="data/maps/map-mini.json">}}
+    STARTPANEL[[UI Startpanel]]
+    HUD[(HUD-Container)]
+    DOCK[(Build-Dock)]
+    INSP[(Inspector-Overlay)]
+  end
+
+  subgraph CORE[Core]
+    BOOT[core/boot.js\nBootstrap & Lifecycle]
+    ASSETS[core/asset.js\nAsset-Preload]
+    REG[core/registry.js\nRegistry (buildings/units/balance/campaign/maps)]
+    GAME[core/game.js\nGame-Loop & Map-Start]
+  end
+
+  subgraph UI[UI-Module]
+    UISTART[ui/ui-start.js\nStartpanel & Buttons]
+    UIHUD[ui/ui-hud.js\nRessourcen/HUD]
+    UIBCAT[ui/ui-build.categories.js\nKategorien & Icons]
+    UIBUILD[ui/ui-build.js\nBuild-Dock / Platzieren]
+    UIINSP[ui/ui-inspector.js\nLogs/Tests/Ressourcen/Pfade/Editor]
+  end
+
+  subgraph DATA[Data & Assets]
+    DAT[data/*.json\n(buildings, units, balance, campaign, maps)]
+    ATS[assets/*\n(icons, tiles, buildings, characters, paths, ui)]
+  end
+
+  %% === Sichtbarkeit beim Reload ==============================================
+  IDX -->|lädt DOM & Skripte| STARTPANEL
+  IDX --> CANVAS
+  IDX --> HUD
+  IDX --> DOCK
+  IDX --> INSP
+
+  %% === UI Ready → Core Start ==================================================
+  UISTART -. emit .->|cb:ui-ready| BOOT
+  STARTPANEL --- UISTART
+
+  %% === Boot-Kette =============================================================
+  BOOT -. listen .->|cb:ui-ready| BOOT
+  BOOT -->|preload()| ASSETS
+  ASSETS -. emit .->|cb:assets-ready| BOOT
+  BOOT -->|initFromData()| REG
+  REG -. emit .->|cb:registry:ready| BOOT
+  BOOT -->|Game.init()| GAME
+  BOOT -->|Game.start(CANVAS.data-map)| GAME
+  GAME -. emit .->|cb:game-start| IDX
+
+  %% === Sichtbar nach Start ====================================================
+  IDX -->|cb:game-start| HUD
+  IDX -->|cb:game-start| DOCK
+
+  %% === Build-Dock Füllung =====================================================
+  UIBCAT -. emit .->|cb:build-categories-ready {categories}| UIBUILD
+  UIBUILD -. listen .->|cb:game-start| UIBUILD
+  UIBUILD -->|render(categories)| DOCK
+
+  %% === Daten-/Asset-Beziehungen ==============================================
+  REG <--> DAT
+  GAME <--> DAT
+  ASSETS <--> ATS
+  UIBCAT <--> ATS
+
+  %% === Interaktionen / Platzieren ============================================
+  UIBUILD -. emit .->|req:build:select {item}| GAME
+  UIBUILD -. emit .->|cb:build:open/close/cancel| UIHUD
+  UIHUD -. emit .->|req:build:cancel (ESC/Back)| UIBUILD
+
+  %% === Inspector Hooks ========================================================
+  UIINSP -. listen .->|cb:* Logs/Tests/Res/Pfade| UIINSP
+  UIINSP -. control .->|cb:path:overlay:on/off,\ncb:path:heatmap:on/off| GAME
+
+  %% === Notizen ================================================================
+  classDef box fill:#1f242b,stroke:#5a6a7a,color:#e8eef5;
+  classDef accent fill:#263140,stroke:#6a86a6,color:#e8eef5;
+  class IDX,CANVAS,STARTPANEL,HUD,DOCK,INSP box;
+  class BOOT,ASSETS,REG,GAME accent;
+  class UISTART,UIHUD,UIBCAT,UIBUILD,UIINSP box;
+  class DAT,ATS box;
