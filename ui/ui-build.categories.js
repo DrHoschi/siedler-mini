@@ -9,16 +9,16 @@
   'use strict';
   const MOD = "[ui-build.categories]";
 
-  // Hinweis: Icons unter assets/icons/build/*.png
+  // Hinweis: Icons unter assets/icons/buildings/*.png
   // Lege dort deine Bilddateien ab (64x64 empfohlen).
   const CATS = [
     { id:'core', title:'Kern', items:[
-      { id:'hq', label:'HQ (Holz)', icon:'assets/icons/build/hq.png', kind:'building' }
+      { id:'hq', label:'HQ (Holz)', icon:'assets/icons/buildings/hq.png', kind:'building' }
     ]},
     { id:'eco', title:'Wirtschaft', items:[
-      { id:'lumberjack', label:'Holzfällerhütte', icon:'assets/icons/build/lumberjack.png', kind:'building' },
-      { id:'fisher',     label:'Fischerhütte',    icon:'assets/icons/build/fisher.png',     kind:'building' },
-      { id:'quarry',     label:'Steinbruch',      icon:'assets/icons/build/quarry.png',     kind:'building' }
+      { id:'lumberjack', label:'Holzfällerhütte', icon:'assets/icons/buildings/lumberjack.png', kind:'building' },
+      { id:'fisher',     label:'Fischerhütte',    icon:'assets/icons/buildings/fisher.png',     kind:'building' },
+      { id:'quarry',     label:'Steinbruch',      icon:'assets/icons/buildings/quarry.png',     kind:'building' }
     ]},
     { id:'admin', title:'Admin/Debug', items:[
       { id:'road',     label:'Weg (Test)',    icon:'assets/icons/build/road.png',   kind:'tool' },
