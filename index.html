@@ -43,6 +43,23 @@
     body.has-build-open #build-panel .ui-build { display:flex; }
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom: calc(40vh + 16px); }
+
+:root {
+  /* zentrale Stellschraube – hier nur den Wert ändern */
+  --build-icon-size: 48px; /* z.B. 40px, 48px, 56px */
+}
+
+#build-dock .build-item img,
+#build-dock img.build-icon {
+  width: var(--build-icon-size);
+  height: var(--build-icon-size);
+  max-width: var(--build-icon-size);
+  max-height: var(--build-icon-size);
+  object-fit: contain;
+  image-rendering: auto;       /* für “weiche” UI-Icons */
+  /* bei Pixel-Art evtl.: image-rendering: pixelated; */
+}
+    
   </style>
 </head>
 <body>
