@@ -8,6 +8,21 @@
        Zweck: Core + Inspector + UI korrekt einbinden (Startfenster zuerst)
        Leitplanken: Core→Boot→Inspector→UI; Registry-Events; keine Parallel-Build-UI
      ========================================================================= -->
+  (function(){
+  const emit = (level, msg) => {
+    window.dispatchEvent(new CustomEvent('cb:log', {
+      detail: { level, msg, t: Date.now() }
+    }));
+    const fn = (level==='error'?'error': level==='warn'?'warn':'log');
+    console[fn](`[${level.toUpperCase()}] ${msg}`);
+  };
+  window.CBLog = {
+    ok:   (m)=>emit('ok', m),
+    info: (m)=>emit('info', m),
+    warn: (m)=>emit('warn', m),
+    error:(m)=>emit('error', m)
+  };
+})();
   <meta charset="utf-8">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
