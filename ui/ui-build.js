@@ -108,3 +108,17 @@
 
   console?.log?.(MOD, "geladen v1.4.0");
 })();
+<script>
+  (function(){
+    const emit = (level, msg) => {
+      window.dispatchEvent(new CustomEvent('cb:log', { detail: { level, msg, t: Date.now() }}));
+      (console[level==='error'?'error': level==='warn'?'warn':'log']||console.log)(msg);
+    };
+    window.CBLog = {
+      ok:   (m)=>emit('ok',   m),
+      info: (m)=>emit('info', m),
+      warn: (m)=>emit('warn', m),
+      error:(m)=>emit('error',m),
+    };
+  })();
+</script>
