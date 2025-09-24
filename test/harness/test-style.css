@@ -1,0 +1,58 @@
+/* ============================================================
+   Datei: test/harness/test-style.css
+   Zweck: Schlankes, dunkles Test-Theme + Mount-Rahmen
+   ============================================================ */
+
+:root {
+  --build-icon-size: 48px; /* Zentrale Stellschraube (für viele Module wiederverwendbar) */
+}
+
+html, body {
+  margin: 0;
+  background: #1f1f1f;
+  color: #eaeaea;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+h1 { font-size: 18px; margin: 0; }
+summary { cursor: pointer; }
+
+.test-mount {
+  min-height: 160px;
+  padding: 16px;
+  border: 1px dashed #555;
+  border-radius: 8px;
+  background: #2a2a2a;
+}
+
+.test-error {
+  border-color: #e74c3c !important;
+  box-shadow: 0 0 0 2px #e74c3c55 inset;
+}
+
+/* Häufige UI-Build-Selektoren – damit man sofort was sieht */
+#build-dock {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.build-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #303030;
+  border: 1px solid #4a4a4a;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.build-item:hover { background: #3a3a3a; }
+
+.build-icon {
+  width: var(--build-icon-size);
+  height: var(--build-icon-size);
+  object-fit: contain;
+  margin-bottom: 6px;
+}
