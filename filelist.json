@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-23T10:18:27.752Z",
+  "createdAt": "2025-09-24T21:19:08.218Z",
   "root": ".",
-  "count": 422,
+  "count": 431,
   "entries": [
     {
       "type": "dir",
@@ -939,11 +939,6 @@
     },
     {
       "type": "file",
-      "path": "assets/inspector/inspector.css",
-      "size": 5295
-    },
-    {
-      "type": "file",
       "path": "assets/inspector/inspector.force-toggle.js",
       "size": 5162
     },
@@ -1391,11 +1386,6 @@
     },
     {
       "type": "file",
-      "path": "assets/ui/ui-start.js",
-      "size": 3275
-    },
-    {
-      "type": "file",
       "path": "assets/depot.png",
       "size": 2326119
     },
@@ -1476,7 +1466,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 1404
+      "size": 1928
     },
     {
       "type": "file",
@@ -1633,6 +1623,38 @@
       "type": "file",
       "path": "qa/Testplan.md",
       "size": 54
+    },
+    {
+      "type": "dir",
+      "path": "test/"
+    },
+    {
+      "type": "dir",
+      "path": "test/harness/"
+    },
+    {
+      "type": "file",
+      "path": "test/harness/test-runner.js",
+      "size": 4878
+    },
+    {
+      "type": "file",
+      "path": "test/harness/test-style.css",
+      "size": 1334
+    },
+    {
+      "type": "dir",
+      "path": "test/samples/"
+    },
+    {
+      "type": "file",
+      "path": "test/samples/ui-build.sample.json",
+      "size": 341
+    },
+    {
+      "type": "file",
+      "path": "test/_template.html",
+      "size": 1163
     },
     {
       "type": "dir",
@@ -1924,13 +1946,18 @@
     },
     {
       "type": "file",
+      "path": "ui/css/inspector.css",
+      "size": 5295
+    },
+    {
+      "type": "file",
       "path": "ui/css/readme",
       "size": 1
     },
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 1836
+      "size": 1901
     },
     {
       "type": "file",
@@ -1980,7 +2007,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.categories.js",
-      "size": 1280
+      "size": 1571
     },
     {
       "type": "file",
@@ -1990,7 +2017,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 7333
+      "size": 3921
     },
     {
       "type": "file",
@@ -2029,8 +2056,13 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-start.js",
+      "path": "ui/ui-start-Muster.js",
       "size": 4509
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-start.js",
+      "size": 3275
     },
     {
       "type": "file",
@@ -2045,17 +2077,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 37883
+      "size": 41689
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 14446
+      "size": 15982
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 8149
+      "size": 6914
     },
     {
       "type": "file",
@@ -2066,6 +2098,16 @@
       "type": "file",
       "path": "README.md",
       "size": 4622
+    },
+    {
+      "type": "file",
+      "path": "STRUKTUR_SPICKZETTEL.md",
+      "size": 7676
+    },
+    {
+      "type": "file",
+      "path": "STRUKTUR_SPICKZETTEL.mmd",
+      "size": 3239
     }
   ]
 }
