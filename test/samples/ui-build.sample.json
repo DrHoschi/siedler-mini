@@ -1,0 +1,6 @@
+[
+  { "id": "b.hq",      "name": "HQ",           "icon": "assets/icons/hq.png" },
+  { "id": "b.lumber",  "name": "Holzfäller",   "icon": "assets/icons/lumberjack.png" },
+  { "id": "b.fisher",  "name": "Fischerhütte", "icon": "assets/icons/fisher.png" },
+  { "id": "b.quarry",  "name": "Steinbruch",   "icon": "assets/icons/quarry.png" }
+]
