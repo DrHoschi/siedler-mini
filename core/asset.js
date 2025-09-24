@@ -8,6 +8,9 @@
  * Hinweis: Debug/Inspector NIE entfernen. Ereignisse nutzen (cb:*).
  * ============================================================================ */
 
+CBLog.ok("[asset] Assets geladen (Version "+GAME_VERSION+")");
+window.dispatchEvent(new CustomEvent("cb:assets-ready"));
+
 // --- CBLog (Fallback) --------------------------------------------------------
 window.CBLog = window.CBLog || {
   ok:   (...a)=>console.log('✅', ...a),
