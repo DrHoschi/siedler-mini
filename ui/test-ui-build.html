@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Test – BuildDock</title>
+  <link rel="stylesheet" href="ui/css/ui-build.css">
+  <style>
+    body { background: #222; color: #eee; font-family: sans-serif; }
+    #test-area { margin: 20px; }
+  </style>
+</head>
+<body>
+  <h1>BuildDock Test</h1>
+  <div id="test-area">
+    <div id="build-dock"></div>
+  </div>
+
+  <script type="module">
+    import { UIBuild } from './ui/ui-build.js';
+
+    // Fake-Daten wie sie später aus registry/buildings.json kommen könnten
+    const fakeBuildings = [
+      { id: "b.hq", name: "HQ", icon: "assets/icons/hq.png" },
+      { id: "b.lumber", name: "Holzfäller", icon: "assets/icons/lumberjack.png" },
+      { id: "b.fisher", name: "Fischerhütte", icon: "assets/icons/fisher.png" }
+    ];
+
+    // Init des UI-Build Moduls – normalerweise per Event cb:build:open
+    const dock = document.getElementById("build-dock");
+    UIBuild.render(dock, fakeBuildings);
+  </script>
+</body>
+</html>
