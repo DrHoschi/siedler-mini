@@ -141,3 +141,8 @@ Tabs:  Logs | Tests | Ressourcen | Pfade (Fallback-UI)
   document.addEventListener("DOMContentLoaded", ()=>{ ensureRoot(); LIN("bereit ("+INSPECTOR_VERSION+")"); });
 
 })();
+// beim Init des Inspector:
+window.addEventListener('cb:log', (ev)=>{
+  const {level, msg, t} = ev.detail;
+  // in deine Logliste pushen + rendern
+});
