@@ -3,7 +3,21 @@
  * Version: v17.9.0 (2025-09-23)
  * Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports
  * ============================================================================ */
-
+(function(){
+  const emit = (level, msg) => {
+    window.dispatchEvent(new CustomEvent('cb:log', {
+      detail: { level, msg, t: Date.now() }
+    }));
+    const fn = (level==='error'?'error': level==='warn'?'warn':'log');
+    console[fn](`[${level.toUpperCase()}] ${msg}`);
+  };
+  window.CBLog = {
+    ok:   (m)=>emit('ok', m),
+    info: (m)=>emit('info', m),
+    warn: (m)=>emit('warn', m),
+    error:(m)=>emit('error', m)
+  };
+})();
 // == Imports (global via <script>, keine ES-Module) ===========================
 // erwartet: core/asset.js, core/registry.js, core/game.js sind bereits geladen
 
