@@ -105,6 +105,3 @@
       showDock(el.dock.hidden);
     }
   });
-
-  console?.log?.(MOD, "geladen v1.4.0");
-})();
