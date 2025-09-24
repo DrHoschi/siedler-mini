@@ -9,6 +9,12 @@ Events: cb:inspector:open|close (+ legacy: cb:inspector-open|close)
 Tabs:  Logs | Tests | Ressourcen | Pfade (Fallback-UI)
 ============================================================================= */
 
+window.addEventListener('cb:log', (ev)=>{
+  const { level, msg, t } = ev.detail;
+  Inspector.logs.push({level, msg, t});
+  Inspector.renderLogs();
+});
+
 (function(){
   const INSPECTOR_VERSION = "v18.0.0";
   function LOK(m){(window.CBLog?.ok||console.log)(`[ui-inspector] ${m}`);}
