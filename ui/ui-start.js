@@ -12,6 +12,9 @@
  *   listen: cb:assets-ready, cb:registry:ready, cb:game-start
  * ============================================================================ */
 
+CBLog.ok("[ui-start] Startpanel aktiv");
+window.dispatchEvent(new CustomEvent("cb:ui-ready"));
+
 (function(){
   'use strict';
   const MOD='[ui-start]';
