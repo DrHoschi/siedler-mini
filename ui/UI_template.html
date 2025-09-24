@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>UI Prüf-Template</title>
+  <!-- Basis-Test-Styling -->
+  <link rel="stylesheet" href="./harness/test-style.css">
+  <!-- Optional: Modul-spezifisches CSS wird dynamisch vom Runner geladen -->
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    /* Sichtbares Test-Areal + Header */
+    #app { padding: 16px; }
+    header { margin: 12px 0 16px; }
+    .meta { font-size: 12px; opacity: .8 }
+    .log { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>UI Prüf-Template</h1>
+      <div class="meta" id="meta"></div>
+    </header>
+
+    <!-- Mount: Hier rendert dein Modul hinein -->
+    <div id="mount" class="test-mount"></div>
+
+    <!-- Debug / Logs -->
+    <details open>
+      <summary>Diagnose</summary>
+      <div id="diag" class="log"></div>
+    </details>
+  </div>
+
+  <!-- Der Runner erledigt das Laden von Modul, CSS & Testdaten -->
+  <script type="module" src="./harness/test-runner.js"></script>
+</body>
+</html>
