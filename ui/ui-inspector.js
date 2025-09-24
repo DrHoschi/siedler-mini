@@ -16,7 +16,11 @@ Tabs:  Logs | Tests | Ressourcen | Pfade (Fallback-UI)
   function LER(m){(window.CBLog?.error||console.error)(`[ui-inspector] ${m}`);}
   function emit(n,d){ try{ window.dispatchEvent(new CustomEvent(n,{detail:d||{}})); }catch(e){} }
   function emitBoth(base,detail){ emit(`cb:inspector:${base}`,detail); emit(`cb:inspector-${base}`,detail); }
-
+// beim Init des Inspector:
+window.addEventListener('cb:log', (ev)=>{
+  const {level, msg, t} = ev.detail;
+  // in deine Logliste pushen + rendern
+});
   /* ---------- DOM Fallback ---------- */
   function ensureRoot(){
     let r = document.getElementById("inspector-root") || document.querySelector(".inspector-root");
@@ -141,8 +145,3 @@ Tabs:  Logs | Tests | Ressourcen | Pfade (Fallback-UI)
   document.addEventListener("DOMContentLoaded", ()=>{ ensureRoot(); LIN("bereit ("+INSPECTOR_VERSION+")"); });
 
 })();
-// beim Init des Inspector:
-window.addEventListener('cb:log', (ev)=>{
-  const {level, msg, t} = ev.detail;
-  // in deine Logliste pushen + rendern
-});
