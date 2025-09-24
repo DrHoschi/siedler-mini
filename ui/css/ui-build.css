@@ -5,6 +5,8 @@
 
 #build-dock{
   position:fixed; left:0; right:0; bottom:0;
+  icon.style.width = "48px";
+icon.style.height = "48px";
   padding:8px; background:rgba(0,0,0,.55);
   border-top:1px solid #000; display:none;
 }
