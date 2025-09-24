@@ -18,6 +18,10 @@
     error:(m)=>emit('error', m)
   };
 })();
+
+CBLog.ok("[boot] Modul geladen vX.Y.Z");
+window.dispatchEvent(new CustomEvent("cb:game-start"));
+
 // == Imports (global via <script>, keine ES-Module) ===========================
 // erwartet: core/asset.js, core/registry.js, core/game.js sind bereits geladen
 
