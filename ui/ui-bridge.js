@@ -1,125 +1,139 @@
-(() => {
-  const TAG = "[ui-bridge]";
-  const VERSION = "v18.1.0";
+/* ============================================================================
+ * Datei: ui/ui-bridge.js
+ * Version: v18.8.0 (2025-09-25)
+ * Zweck: Brücke zwischen UI (Build-Dock/HUD) und Engine/Registry
+ * Leitplanken:
+ *   - KEIN Abbruch, wenn UIBuild noch nicht da → sanft warten (Ready-Events/Retry)
+ *   - Zentrale CBLog-Nutzung (kommt aus index)
+ *   - Verkabelt Build-Dock an DOM + Registry, leitet Events weiter (cb:build:select → Engine)
+ * Struktur:
+ *   (0) Logger-Guard
+ *   (1) Konstanten/State
+ *   (2) Helper (DOM/Retry)
+ *   (3) Kern-Verkabelung (wireOnce)
+ *   (4) Event-Wiring (Ready/Start/Registry)
+ *   (5) Exports
+ * ========================================================================== */
 
-  console.log(TAG, "bereit", `(${VERSION})`);
+/* (0) Logger-Guard ----------------------------------------------------------- */
+if (!window.CBLog || typeof window.CBLog.ok !== "function") {
+  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
+  CBLog.info("[ui-bridge] Hinweis: globaler CBLog nicht gefunden – Fallback aktiv");
+}
 
-  // Buttons (Topbar)
-  const bindButtons = () => {
-    const btnBuild = document.getElementById("btn-build");
-    const btnInspector = document.getElementById("btn-inspector");
+/* (1) Konstanten/State ------------------------------------------------------- */
+const UIBR_MOD = "[ui-bridge]";
+const UIBR_VER = "v18.8.0";
 
-    if (btnBuild) {
-      btnBuild.addEventListener("click", () => {
-        if (!window.UIBuild) {
-          console.warn(TAG, "UIBuild noch nicht bereit.");
-          return;
-        }
-        window.UIBuild.toggle();
-      });
+const UIBR_STATE = {
+  wired: false,
+  attempts: 0,
+  maxAttempts: 40,         // ~4s bei 100ms Intervall
+  retryTimer: null,
+  root: null               // #build-dock
+};
+
+/* (2) Helper (DOM/Retry) ---------------------------------------------------- */
+function $(sel, root=document){ return root.querySelector(sel); }
+
+function clearRetry(){
+  if (UIBR_STATE.retryTimer){
+    clearInterval(UIBR_STATE.retryTimer);
+    UIBR_STATE.retryTimer = null;
+  }
+}
+
+function startRetryLoop(wireFn){
+  clearRetry();
+  UIBR_STATE.attempts = 0;
+  UIBR_STATE.retryTimer = setInterval(()=>{
+    if (UIBR_STATE.wired) return clearRetry();
+    UIBR_STATE.attempts++;
+    if (wireFn()) {
+      clearRetry();
+    } else if (UIBR_STATE.attempts >= UIBR_STATE.maxAttempts) {
+      clearRetry();
+      CBLog.warn(`${UIBR_MOD} UIBuild nach ${UIBR_STATE.maxAttempts} Versuchen nicht verfügbar – bleibe passiv (warte auf Ready-Events)`);
     }
+  }, 100);
+}
 
-    if (btnInspector && window.Inspector && typeof window.Inspector.toggle === "function") {
-      btnInspector.addEventListener("click", () => {
-        try {
-          window.Inspector.toggle(); // deine API-Compat übernimmt DOM open/close
-        } catch (e) {
-          console.warn(TAG, "Inspector toggle fehlgeschlagen", e);
-        }
-      });
-    }
-  };
+/* (3) Kern-Verkabelung (wireOnce) ------------------------------------------- */
+/**
+ * Versucht, genau EINMAL alles zu verdrahten.
+ * @returns {boolean} true = erfolgreich verdrahtet
+ */
+function wireOnce(){
+  if (UIBR_STATE.wired) return true;
 
-  // Items einspeisen → bevorzugt Registry/BuildAssets; alternativ Fallback vom Data-Adapter
-  async function feedItemsOnce() {
-    const give = (items, cats) => {
-      if (!window.UIBuild || typeof window.UIBuild.setItems !== "function") {
-        console.warn("[ui-build.bridge] UIBuild.setItems nicht verfügbar – warte auf Init");
-        return false;
-      }
-      window.UIBuild.setItems(items, cats);
-      console.log("[ui-build.bridge] Items gesetzt", `(${items.length} / ${cats?.length ?? "?"})`);
-      return true;
-    };
-
-    // 1) Versuch: aus globalen BuildAssets/Registry (dein Core)
-    try {
-      const byCore = readFromCore();
-      if (byCore && byCore.items?.length) {
-        if (give(byCore.items, byCore.cats)) return;
-      }
-    } catch (e) {
-      console.warn(TAG, "Core-Daten nicht nutzbar", e);
-    }
-
-    // 2) Fallback: über Data-Bridge (lief bei dir schon)
-    try {
-      if (window.UIBuildData && typeof window.UIBuildData.getItems === "function") {
-        const { items, cats } = await window.UIBuildData.getItems();
-        give(items, cats);
-      } else {
-        console.warn("[ui-build.bridge] Kein Data-Adapter gefunden.");
-      }
-    } catch (e) {
-      console.warn("[ui-build.bridge] Konnte keine Items beziehen", e);
-    }
+  // 3.1 Voraussetzungen prüfen
+  if (!window.UIBuild){
+    CBLog.warn(`${UIBR_MOD} UIBuild noch nicht verfügbar – warte/versuche erneut`);
+    return false;
+  }
+  UIBR_STATE.root = UIBR_STATE.root || $("#build-dock");
+  if (!UIBR_STATE.root){
+    CBLog.error(`${UIBR_MOD} Root #build-dock fehlt`);
+    return false;
   }
 
-  function readFromCore() {
-    // Erwartete Strukturen aus deinem Core:
-    //  - window.BuildAssets?.items  (array)
-    //  - window.BuildCategories?.list (array)
-    const items = (window.BuildAssets && Array.isArray(window.BuildAssets.items))
-      ? window.BuildAssets.items.map(n => normalizeItem(n))
-      : [];
-    const cats  = (window.BuildCategories && Array.isArray(window.BuildCategories.list))
-      ? window.BuildCategories.list.map(c => normalizeCat(c))
-      : [];
-    if (items.length) {
-      console.log("[ui-build.bridge] Items gesetzt (via Registry)", `(${items.length} / ${cats.length || "?"})`);
-    }
-    return { items, cats };
+  // 3.2 Build-Dock initialisieren (idempotent – ui-build.js handelt das ab)
+  try {
+    UIBuild.init(UIBR_STATE.root);
+  } catch(e) {
+    CBLog.warn(`${UIBR_MOD} UIBuild.init hat geworfen: ${e?.message || e}`);
+    // trotzdem weiter verkabeln – UIBuild könnte sich später fangen
   }
 
-  function normalizeItem(n) {
-    // akzeptiere verschiedene Felder; mappe auf {id,title,categoryId,icon}
-    return {
-      id: n.id || n.key || n.name,
-      title: n.title || n.label || n.name || n.id,
-      categoryId: n.categoryId || n.category || n.cat,
-      icon: n.icon || n.img || n.sprite || n.preview || null,
-    };
-  }
+  // 3.3 Events vom Build-Dock → Engine / Inspector
+  // Auswahl eines Bau-Items:
+  window.addEventListener("cb:build:select", (ev)=>{
+    const id = ev?.detail?.id;
+    if (!id) return;
+    // Hier könnte die Engine einen „Place“-Modus starten:
+    // z.B. GameCore?.placeMode?.start(id) – solange nicht vorhanden, loggen wir nur:
+    CBLog.info(`${UIBR_MOD} Auswahl übergeben: building=${id}`);
+  });
 
-  function normalizeCat(c) {
-    return {
-      id: c.id || c.key || c.name,
-      title: c.title || c.label || c.name || c.id
-    };
-  }
+  // Build-Dock offen → ggf. re-rendern (Registry-Änderungen nach Start)
+  window.addEventListener("cb:build:open", ()=>{
+    try { UIBuild.rerender?.(); } catch(_) {}
+  });
 
-  // Warte sauber bis UIBuild wirklich existiert, dann initialisieren + Daten einspeisen
-  const start = () => {
-    let tries = 0;
-    const t = setInterval(() => {
-      tries++;
-      if (window.UIBuild && typeof window.UIBuild.init === "function") {
-        clearInterval(t);
-        window.UIBuild.init();
-        bindButtons();
-        feedItemsOnce();
-        console.log("[index] UIBuild OK –", window.UIBuild.version || "");
-      } else if (tries > 120) {  // ~12s Sicherheit
-        clearInterval(t);
-        console.warn(TAG, "UIBuild nicht erreichbar – Abbruch.");
-      }
-    }, 100);
-  };
+  // Registry ready → Build-Dock neu rendern
+  window.addEventListener("cb:registry:ready", ()=>{
+    try { UIBuild.rerender?.(); } catch(_) {}
+    CBLog.ok(`${UIBR_MOD} Registry-Änderungen an Build-Dock weitergereicht`);
+  });
 
-  // Start sobald DOM da ist
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
-})();
+  // Assets ready (optional) → evtl. Icons neu laden
+  window.addEventListener("cb:assets-ready", ()=>{
+    try { UIBuild.rerender?.(); } catch(_) {}
+  });
+
+  // 3.4 Done
+  UIBR_STATE.wired = true;
+  CBLog.ok(`${UIBR_MOD} Verkabelung aktiv (${UIBR_VER})`);
+  return true;
+}
+
+/* (4) Event-Wiring (Ready/Start/Registry) ----------------------------------- */
+// a) Sofort versuchen, falls Reihenfolge korrekt ist
+if (!wireOnce()){
+  // b) Auf UIBuild-Ready warten
+  window.addEventListener("cb:UIBuild:ready", ()=> wireOnce(), { once:true });
+
+  // c) Nach UI-Ready noch mal probieren (falls ui-build.js erst später init'd)
+  window.addEventListener("cb:ui-ready", ()=> wireOnce(), { once:true });
+
+  // d) Sicherheitsnetz: Retry-Loop (bis zu maxAttempts)
+  startRetryLoop(wireOnce);
+}
+
+// e) Nach Spielstart ggf. HUD/Build refreshen (nur UI-seitig)
+window.addEventListener("cb:game-start", ()=>{
+  try { UIBuild.rerender?.(); } catch(_) {}
+});
+
+/* (5) Exports ---------------------------------------------------------------- */
+// keine externen Methoden – Bridge wirkt ausschließlich über Events/Side-Effects
