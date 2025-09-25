@@ -1,60 +1,99 @@
 /* ============================================================================
- * core/boot.js — GameBoot
- * Version: v17.9.0 (2025-09-23)
- * Struktur: Imports → Konstanten → Helpers → Klassen → Hauptlogik → Exports
- * ============================================================================ */
-(function(){
-  const emit = (level, msg) => {
-    window.dispatchEvent(new CustomEvent('cb:log', {
-      detail: { level, msg, t: Date.now() }
-    }));
-    const fn = (level==='error'?'error': level==='warn'?'warn':'log');
-    console[fn](`[${level.toUpperCase()}] ${msg}`);
-  };
+ * Datei: core/boot.js — GameBoot
+ * Version: v18.8.0 (2025-09-25)
+ * Zweck: Orchestriert den Start – UI→Assets/Registry→Game.start(map)
+ * Leitplanken: Keine doppelten Start-Events; Logging via globalem CBLog
+ * Struktur:
+ *   (0) Logger-Guard
+ *   (1) Imports (über <script>)
+ *   (2) Konstanten
+ *   (3) Helper
+ *   (4) Startsequenz
+ *   (5) Event-Wiring (cb:start:*)
+ *   (6) Exports
+ * ========================================================================== */
+
+/* (0) Logger-Guard ----------------------------------------------------------- */
+if (!window.CBLog || typeof window.CBLog.ok !== "function") {
+  // Minimalfallback – sollte dank index nicht benötigt werden:
   window.CBLog = {
-    ok:   (m)=>emit('ok', m),
-    info: (m)=>emit('info', m),
-    warn: (m)=>emit('warn', m),
-    error:(m)=>emit('error', m)
+    ok:   (m)=>console.log("[OK] "   + m),
+    info: (m)=>console.log("[INFO] " + m),
+    warn: (m)=>console.warn("[WARN] "+ m),
+    error:(m)=>console.error("[ERR] "+ m),
   };
-})();
-
-CBLog.ok("[boot] Modul geladen vX.Y.Z");
-window.dispatchEvent(new CustomEvent("cb:game-start"));
-
-// == Imports (global via <script>, keine ES-Module) ===========================
-// erwartet: core/asset.js, core/registry.js, core/game.js sind bereits geladen
-
-// == Konstanten ===============================================================
-const MOD = "[boot]";
-
-// == Helpers ==================================================================
-function getCanvasMapUrl(){
-  const el = document.querySelector('#game');
-  return el?.dataset?.map || "data/maps/map-mini.json"; // Fallback auf Standard
+  CBLog.info("[boot] Hinweis: globaler CBLog nicht gefunden – Fallback aktiv");
 }
 
-// == Hauptlogik ===============================================================
-window.addEventListener('cb:ui-ready', async ()=>{
-  CBLog?.info?.(`${MOD} UI bereit → lade Assets/Registry`);
-  try{
-    // 1) Assets & Registry initialisieren (vereinfachte Pipeline)
-    await Assets?.init?.();                  // lädt Sprites/Atlanten (noop wenn nicht nötig)
-    await Registry?.initFromData?.();        // lädt data/buildings.json etc.
+/* (1) Imports (global via <script>) ------------------------------------------
+   Erwartet: core/asset.js, core/registry.js, core/game.js bereits geladen.   */
 
-    // 2) Game initialisieren + Map starten
-    Game?.init?.();
-    const mapUrl = getCanvasMapUrl();        // <canvas data-map="...">
-    CBLog?.info?.(`${MOD} starte Map: ${mapUrl}`);
-    await Game?.start?.(mapUrl);
+/* (2) Konstanten ------------------------------------------------------------- */
+const BOOT_MOD  = "[boot]";
+const BOOT_VER  = "v18.8.0";
 
-    // 3) Erfolgssignal → UI kann umschalten
-    window.dispatchEvent(new CustomEvent('cb:game-start', {detail:{mapUrl}}));
-  }catch(err){
-    console.error(MOD, "Fehler beim Start:", err);
-    window.dispatchEvent(new CustomEvent('cb:boot-error', {detail:{err}}));
+/* (3) Helper ----------------------------------------------------------------- */
+/** Liest die Map-URL direkt aus dem Canvas-Dataset. */
+function getCanvasMapUrl() {
+  const el = document.querySelector("#game");
+  return el?.dataset?.map || "data/maps/map-mini.json"; // Fallback
+}
+
+/** Hilfs-Wrapper für optionale Initialisierer mit klarer Log-Ausgabe. */
+async function safeInit(label, fn) {
+  if (typeof fn !== "function") {
+    CBLog.warn(`${BOOT_MOD} ${label} nicht verfügbar – übersprungen`);
+    return false;
   }
+  CBLog.info(`${BOOT_MOD} ${label}…`);
+  await fn();
+  CBLog.ok(`${BOOT_MOD} ${label} abgeschlossen`);
+  return true;
+}
+
+/* (4) Startsequenz ----------------------------------------------------------- */
+async function startSequence(trigger = "cb:start:new") {
+  try {
+    CBLog.info(`${BOOT_MOD} Startsequenz init (via ${trigger})`);
+
+    // 4.1 Assets & Registry vorbereiten
+    const assetsOk   = await safeInit("Assets.init", Assets?.init);
+    const registryOk = await safeInit("Registry.initFromData", Registry?.initFromData);
+
+    // (optional) Boot-eigene Marker-Events (kollisionsfrei zu Modul-Events)
+    if (assetsOk)   window.dispatchEvent(new CustomEvent("cb:boot:assets-ready"));
+    if (registryOk) window.dispatchEvent(new CustomEvent("cb:boot:registry-ready"));
+
+    // 4.2 Game starten (Map aus Canvas)
+    const mapUrl = getCanvasMapUrl();
+    CBLog.info(`${BOOT_MOD} starte Game.start → ${mapUrl}`);
+    await Game?.start?.(mapUrl);  // Game sendet cb:map:* und NACH Erfolg cb:game-start
+
+    CBLog.ok(`${BOOT_MOD} Startsequenz abgeschlossen`);
+  } catch (err) {
+    CBLog.error(`${BOOT_MOD} Fehler in Startsequenz: ${err?.message || err}`);
+    window.dispatchEvent(new CustomEvent("cb:boot-error", { detail: { err } }));
+  }
+}
+
+/* (5) Event-Wiring (cb:start:*) --------------------------------------------- */
+// UI bereit → ab hier auf Start-Buttons hören
+window.addEventListener("cb:ui-ready", () => {
+  CBLog.ok(`${BOOT_MOD} UI bereit – warte auf Start-Events (cb:start:*)`);
 });
 
-// Safety: falls jemand direkt "Neues Spiel" klickt, löst ui-start.js cb:ui-ready aus.
-// Keine Dummy-IDs wie "map_ch1" mehr – wir nutzen konsequent die Canvas-URL.
+// Neues Spiel
+window.addEventListener("cb:start:new",       () => startSequence("cb:start:new"));
+
+// Weiterspielen
+window.addEventListener("cb:start:continue",  () => startSequence("cb:start:continue"));
+
+// Reset (Hinweis – Reload macht index)
+window.addEventListener("cb:start:reset",     () => CBLog.warn(`${BOOT_MOD} Reset angefordert`));
+
+// Fullscreen (nur Info)
+window.addEventListener("cb:start:fullscreen",() => CBLog.info(`${BOOT_MOD} Fullscreen angefordert`));
+
+/* (6) Exports ---------------------------------------------------------------- */
+// keine – Boot ist eventgetrieben
+CBLog.ok(`${BOOT_MOD} Modul geladen (${BOOT_VER})`);
