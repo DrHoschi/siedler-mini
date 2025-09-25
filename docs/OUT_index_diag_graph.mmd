@@ -1,0 +1,76 @@
+%% index.html → Ausgehende Events/Signale (Mermaid-Graph)
+%% Stand: v18.7.0
+
+flowchart TD
+  subgraph Styles [Stylesheets]
+    S1[ui/css/ui.css]
+    S2[ui/css/ui-start.css]
+    S3[ui/css/ui-hud.css]
+    S4[ui/css/ui-tooltip.css]
+    S5[ui/css/inspector.css]
+  end
+
+  subgraph Core [Core & Boot]
+    C1[core/asset.js]
+    C2[core/registry.js]
+    C3[core/game.js]
+    C4[core/path-overlay.js]
+    C5[core/boot.js]
+  end
+
+  subgraph Inspector [Inspector Modules]
+    I1[inspector.core]
+    I2[inspector.logs]
+    I3[overlay.hooks]
+    I4[inspector.paths]
+    I5[inspector.tests]
+    I6[inspector.resources]
+    I7[inspector.api-compat]
+    I8[inspector.api-bridge]
+  end
+
+  subgraph UI [UI Layer]
+    U1[ui-events]
+    U2[ui-bridge]
+    U3[ui-build.categories]
+    U4[ui-build]
+    U5[ui-hud]
+    U6[ui-tooltip]
+    U7[ui-start]
+    U8[ui-inspector-bridge]
+    U9[ui-inspector]
+  end
+
+  subgraph Page [index Inline Scripts]
+    P1[[cb:ui-ready]]
+    P2[[GameUI.toggleBuild()]]
+    P3[[CBLog Shim → cb:log]]
+    P4[[Hotkeys: B/I]]
+  end
+
+  %% Relations (vereinfachte Darstellung)
+  P3 --> I2
+  P1 --> I1
+  U7 -->|Start-Buttons| P1
+  P2 -->|cb:build:open/close| U4
+  C5 -->|cb:game-start| U5
+  C5 -->|cb:game-start| P2
+
+  %% UI Buttons/Hotkeys
+  BTN_B[🏠 FAB Build] --> P2
+  BTN_I[🩺 FAB Inspector] --> I1
+  HK_B[(Hotkey B)] --> P2
+  HK_I[(Hotkey I)] --> I1
+
+  %% Startpanel
+  SP_NEW[Neues Spiel] -->|Game.start?.() + cb:start:new| C3
+  SP_CONT[Weiterspielen] -->|cb:start:continue| C3
+  SP_RST[Reset] -->|cb:start:reset + reload| C3
+  SP_FS[Fullscreen] -->|cb:start:fullscreen + API| I1
+
+  %% Styles are referenced by UI/Inspector
+  S1 -.-> UI
+  S2 -.-> U7
+  S3 -.-> U5
+  S4 -.-> U6
+  S5 -.-> Inspector

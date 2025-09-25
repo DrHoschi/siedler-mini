@@ -1,0 +1,41 @@
+type,order_or_source,path_or_name,intent_or_target,notes
+stylesheet,1,ui/css/ui.css,Basis-UI,Layout/Farben/Buttons/Panels
+stylesheet,2,ui/css/ui-start.css,Startpanel,Hero/Hintergrund
+stylesheet,3,ui/css/ui-hud.css,HUD,Topbar/Indicators
+stylesheet,4,ui/css/ui-tooltip.css,Tooltips,Hover-Hilfen
+stylesheet,5,ui/css/inspector.css,Inspector,Overlay/Tabs/Logs
+script,1,core/asset.js,Assets/Init-Events,Engine nutzt Assets
+script,2,core/registry.js,Registry,IDs/Kategorien für UI/Engine
+script,3,core/game.js,Engine,stellt Game/GameCore bereit
+script,4,core/path-overlay.js,Overlay/Debug,Inspector/Renderer Hooks
+script,5,core/boot.js,Boot,emit cb:game-start
+script,6,assets/inspector/inspector.core.js,Inspector Core,InspectorAPI
+script,7,assets/inspector/inspector.logs.js,Inspector Logs,hört cb:log
+script,8,assets/inspector/overlay.hooks.js,Overlay Hooks,Inspector Overlay
+script,9,assets/inspector/inspector.paths.js,Inspector Paths,Tab
+script,10,assets/inspector/inspector.tests.js,Inspector Tests,Tab
+script,11,assets/inspector/inspector.resources.js,Inspector Resources,Tab
+script,12,assets/inspector/inspector.api-compat.js,Compat,Kompat-Layer
+script,13,assets/inspector/inspector.api-bridge.js,Bridge,Buttons/Bind
+script,14,ui/ui-events.js,UI Events,Delegation
+script,15,ui/ui-bridge.js,UI Bridge,UI↔Engine/Registry
+script,16,ui/ui-build.categories.js,Build Kategorien,Meta fürs Baumenü
+script,17,ui/ui-build.js,UI Build,Render/Logik Baumenü
+script,18,ui/ui-hud.js,HUD,Render/Updates
+script,19,ui/ui-tooltip.js,Tooltip,UI-Hilfen
+script,20,ui/ui-start.js,Startpanel,Interaktion
+script,21,ui/ui-inspector-bridge.js,UI→Inspector,Brücke
+script,22,ui/ui-inspector.js,Inspector UI,Buttons/Shortcuts
+inline,23,PAGE-SCRIPTS,Startpanel/Build/Hotkeys/Logs,cb:ui-ready; Smoke-Log
+event,DOM,cb:ui-ready,Inspector/Tests,UI-Layer bereit
+event,button,cb:start:new,Engine/Game.start,Neues Spiel
+event,button,cb:start:continue,Engine,Weiterspielen
+event,button,cb:start:reset,Engine/Clear+Reload,Reset
+event,button,cb:start:fullscreen,Browser API,Vollbild anfordern
+event,button,cb:build:open,UI-Build,Build-Dock öffnen
+event,button,cb:build:close,UI-Build,Build-Dock schließen
+event,hotkey,B (toggle build),UI-Build,Guard: nur nach game-started
+event,hotkey,I (toggle inspector),Inspector,Overlay togglen
+marker,body,game-started,UI Guards,gesetzt nach cb:game-start
+marker,body,has-build-open,Build-Dock Sichtbarkeit,Klasse toggled
+logger,global,CBLog→cb:log,Inspector Logs,ok/info/warn/error leiten weiter
