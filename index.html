@@ -4,12 +4,12 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v18.7.0 (2025-09-25)
+       Version: v18.8.0 (2025-09-25)
        Zweck: Core + Inspector + UI korrekt einbinden (Startfenster zuerst)
        Leitplanken: Core→Boot→Inspector→UI; Registry-/cb:* Events; Debug/Logs
-          (1) META & TITL
+          (1) META & TITLE
           (2) STYLES: Projekt + Inspector
-          (3) MINI CBLog SHIM (sichert Logs/Events für Inspector)
+          (3) CBLog (zentral, einheitlich, mit Emoji/Icon)
           (4) START-PANEL (immer zuerst sichtbar)
           (5) FABs: Build / Inspector
           (6) UI – CORE-Bau-Menü (sichtbarer Dock, von UI-Build gefüllt)
@@ -60,7 +60,6 @@
       /* zentrale Stellschraube – Icon-Größe im Baumenü */
       --build-icon-size: 48px; /* z.B. 40px, 48px, 56px */
     }
-    /* KORREKTUR: vorher fehlten Semikolons/Properties waren auskommentiert */
     #build-dock .build-item img,
     #build-dock img.build-icon {
       width: var(--build-icon-size);
@@ -68,29 +67,47 @@
       max-width: var(--build-icon-size);
       max-height: var(--build-icon-size);
       object-fit: contain;
-      image-rendering: auto;      /* für “weiche” UI-Icons; bei Pixelart: pixelated */
+      image-rendering: auto;      /* bei Pixelart: pixelated */
       margin-bottom: 4px;
     }
   </style>
 
-  <!-- (3) MINI CBLog SHIM (sichert Logs/Events für Inspector) ================ -->
+  <!-- (3) CBLog (zentral, einheitlich, mit Emoji/Icon) ======================= -->
   <script>
     (function(){
-      if (window.CBLog && typeof CBLog.ok === 'function') return;
-      const emit = (level, msg) => {
+      if (window.CBLog && typeof window.CBLog.ok === "function") return;
+
+      const SUPPORTS_EMOJI = true; // bei Bedarf Feature-Check implementieren
+      const MAP = {
+        ok:    { icon: SUPPORTS_EMOJI ? "✅" : "[OK]",   label: "OK"    },
+        info:  { icon: SUPPORTS_EMOJI ? "ℹ️" : "[i]",    label: "INFO"  },
+        warn:  { icon: SUPPORTS_EMOJI ? "⚠️" : "[!]",    label: "WARN"  },
+        error: { icon: SUPPORTS_EMOJI ? "❌" : "[X]",    label: "ERROR" }
+      };
+
+      function line(level, msg){
+        const m = MAP[level] || MAP.info;
+        return `${m.icon} [${m.label}] ${msg}`;
+      }
+
+      function emit(level, msg){
         try {
-          window.dispatchEvent(new CustomEvent('cb:log', { detail: { level, msg, t: Date.now() }}));
+          window.dispatchEvent(new CustomEvent("cb:log", {
+            detail: { level, msg, icon: (MAP[level] || MAP.info).icon, t: Date.now() }
+          }));
         } catch(e){}
         const fn = (level==='error'?'error': level==='warn'?'warn':'log');
-        console[fn]((level?`[${level}] `:'') + msg);
-      };
+        console[fn](line(level, msg));
+      }
+
       window.CBLog = {
-        ok:   (m)=>emit('ok', m),
-        info: (m)=>emit('info', m),
-        warn: (m)=>emit('warn', m),
-        error:(m)=>emit('error', m)
+        ok:    (m)=>emit('ok',    m),
+        info:  (m)=>emit('info',  m),
+        warn:  (m)=>emit('warn',  m),
+        error: (m)=>emit('error', m)
       };
-      CBLog.info("[cb] CBLog Shim aktiv");
+
+      CBLog.info("[cb] Globaler CBLog aktiv (index)");
     })();
   </script>
 </head>
@@ -159,19 +176,20 @@
   <!-- (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs ============== -->
   <script>
     (function () {
+      /* (11.0) Diagnose/Version --------------------------------------------- */
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.7.0";
+      window.__cb.indexVersion = "v18.8.0";
       (window.CBLog?.info || console.log)(`[index] UI bereit (${window.__cb.indexVersion})`);
-      window.dispatchEvent(new CustomEvent('cb:ui-ready')); // Vorgabe: UI meldet sich.  [oai_citation:0‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
+      window.dispatchEvent(new CustomEvent('cb:ui-ready')); // UI meldet sich
 
-      /* --- Startpanel Buttons -> Game-Start Flow --------------------------- */
+      /* (11.1) Startpanel Buttons -> Game-Start Flow ------------------------ */
       const $ = (id) => document.getElementById(id);
       const startPanel = $('start-panel');
       function hideStart(){ startPanel?.classList.add('hide'); startPanel?.setAttribute('hidden',''); }
       function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
 
       $('btnStartNew')?.addEventListener('click', () => {
-        try { window.Game?.start?.(); } catch(e){ /* Fallback-Events feuern */ }
+        // Wichtig: KEIN direktes Game.start() hier → Boot orchestriert nach cb:start:new
         window.dispatchEvent(new CustomEvent('cb:start:new'));
         hideStart();
       });
@@ -185,20 +203,19 @@
         location.reload();
       });
       $('btnStartFullscreen')?.addEventListener('click', () => {
-        // Fullscreen nur nach User-Gesture (Vorgabe)  [oai_citation:1‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
         const el = document.documentElement;
         const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
         if (fn) try { fn.call(el); } catch(e){}
         window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
       });
 
-      // Wenn das Spiel startet -> HUD zeigen, Build freigeben
+      /* (11.2) Reaktion auf Spielstart → HUD zeigen, Build freigeben -------- */
       window.addEventListener('cb:game-start', () => {
         document.body.classList.add('game-started');
         document.getElementById('hud')?.removeAttribute('hidden');
       });
 
-      /* --- Build-Dock: erst nach Spielstart öffnen ------------------------- */
+      /* (11.3) Build-Dock: erst nach Spielstart öffnen ---------------------- */
       function gameStarted(){
         return document.body.classList.contains('game-started') || !!(window.GameCore?.state?.ui?.started);
       }
@@ -231,7 +248,7 @@
         }
       };
 
-      /* --- Hotkeys: B = Build, I = Inspector -------------------------------- */
+      /* (11.4) Hotkeys: B = Build, I = Inspector ---------------------------- */
       addEventListener('keydown', function(ev){
         if (ev.repeat) return;
         if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
@@ -241,8 +258,8 @@
         }
       });
 
-      /* --- Sichtbares Test-Log, um Inspector-Verkabelung zu prüfen --------- */
-      (window.CBLog?.ok || console.log)("[index] Smoke-Test: Logs an Inspector gesendet");
+      /* (11.5) Sichtbares Smoke-Log → Inspector-Check ----------------------- */
+      (window.CBLog?.ok || console.log)("Index geladen – Logs an Inspector aktiv");
     })();
   </script>
 </body>
