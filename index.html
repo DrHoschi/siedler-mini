@@ -4,21 +4,20 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v18.8.1 (2025-09-26)
+       Version: v18.9.2 (2025-09-26)
        Zweck: Core + Inspector + UI korrekt einbinden (Startfenster zuerst)
        Leitplanken: Core→Boot→Inspector→UI; Registry-/cb:* Events; Debug/Logs
-          (1) META & TITLE
-          (2) STYLES: Projekt + Inspector
-          (3) CBLog (zentral, einheitlich, mit Emoji/Icon)
-          (3.1) Inspector Safe-Shim
-          (4) START-PANEL (immer zuerst sichtbar)
-          (5) FABs: Build / Inspector
-          (6) UI – CORE-Bau-Menü (sichtbarer Dock, von UI-Build gefüllt)
-          (7) CANVAS: Spielfeld (Map-Quelle über data-map)
-          (8) CORE & BOOT
-          (9) INSPECTOR (Split-Load)
-          (10) UI-LAYER
-          (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs
+         (1) META & TITLE
+         (2) STYLES: Projekt + Inspector
+         (3) CBLog (zentral, einheitlich, mit Emoji/Icon)
+         (4) START-PANEL (immer zuerst sichtbar)
+         (5) FABs: Build / Inspector
+         (6) UI – CORE-Bau-Menü (Dock, von UI-Build gefüllt)
+         (7) CANVAS: Spielfeld (Map-Quelle über data-map)
+         (8) CORE & BOOT
+         (9) INSPECTOR (Split-Load, kein Auto-Close)
+         (10) UI-LAYER
+         (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs
      ========================================================================= -->
 
   <!-- (1) META & TITLE ======================================================= -->
@@ -35,7 +34,7 @@
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
   <link rel="stylesheet" href="ui/css/ui-tooltip.css">
-  <link rel="stylesheet" href="ui/css/inspector.css"><!-- Standard-Pfad -->
+  <link rel="stylesheet" href="ui/css/inspector.css">
 
   <style>
     /* (2.1) Global + Layout -------------------------------------------------- */
@@ -53,19 +52,17 @@
       pointer-events:auto !important;
     }
 
-    /* (2.3) Inspector ganz nach oben layern --------------------------------- */
+    /* (2.3) Inspector immer ganz oben --------------------------------------- */
     .inspector-root{
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       z-index: 2147483647 !important; /* über Startpanel & HUD & alles */
       pointer-events: auto;
+      display:none;
     }
     .inspector-root.is-open{ display:block !important; }
+    .ui-start{ position:fixed; inset:0; z-index: 1000; } /* Startpanel darunter */
 
-    /* Sicherheit: Startpanel liegt darunter */
-    .ui-start{ position:fixed; inset:0; z-index: 1000; }
-
-    /* (2.4) Build-Dock Sichtbarkeit/Animation ------------------------------- */
+    /* (2.4) Build-Dock & Icon-Größe ----------------------------------------- */
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom: calc(40vh + 16px); }
 
@@ -80,7 +77,7 @@
       max-width: var(--build-icon-size);
       max-height: var(--build-icon-size);
       object-fit: contain;
-      image-rendering: auto;      /* bei Pixelart: pixelated */
+      image-rendering: auto; /* bei Pixelart ggf.: pixelated */
       margin-bottom: 4px;
     }
   </style>
@@ -90,19 +87,16 @@
     (function(){
       if (window.CBLog && typeof window.CBLog.ok === "function") return;
 
-      const SUPPORTS_EMOJI = true; // bei Bedarf Feature-Check implementieren
       const MAP = {
-        ok:    { icon: SUPPORTS_EMOJI ? "✅" : "[OK]",   label: "OK"    },
-        info:  { icon: SUPPORTS_EMOJI ? "ℹ️" : "[i]",    label: "INFO"  },
-        warn:  { icon: SUPPORTS_EMOJI ? "⚠️" : "[!]",    label: "WARN"  },
-        error: { icon: SUPPORTS_EMOJI ? "❌" : "[X]",    label: "ERROR" }
+        ok:    { icon: "✅", label: "OK"    },
+        info:  { icon: "ℹ️", label: "INFO"  },
+        warn:  { icon: "⚠️", label: "WARN"  },
+        error: { icon: "❌", label: "ERROR" }
       };
-
       function line(level, msg){
         const m = MAP[level] || MAP.info;
         return `${m.icon} [${m.label}] ${msg}`;
       }
-
       function emit(level, msg){
         try {
           window.dispatchEvent(new CustomEvent("cb:log", {
@@ -112,61 +106,44 @@
         const fn = (level==='error'?'error': level==='warn'?'warn':'log');
         console[fn](line(level, msg));
       }
-
       window.CBLog = {
         ok:    (m)=>emit('ok',    m),
         info:  (m)=>emit('info',  m),
         warn:  (m)=>emit('warn',  m),
         error: (m)=>emit('error', m)
       };
-
       CBLog.info("[cb] Globaler CBLog aktiv (index)");
     })();
   </script>
-<script>
-  (function(){
-    /* … dein vorhandener CBLog-Code … */
-    window.CBLog = { /* ok/info/warn/error wie bei dir */ };
 
-    // ➕ Adapter, damit inspector.logs nicht in den Poll-Fallback fällt:
-    window.CBLog.on = function(handler){
-      try {
-        window.addEventListener('cb:log', (ev)=> handler?.(ev.detail));
-      } catch(_) {}
-    };
-
-    CBLog.info("[cb] Globaler CBLog aktiv (index)");
-  })();
-</script>
-  
-  <!-- (3.1) INSPECTOR SAFE-SHIM (korrekt, blockiert echten Core nicht) -->
+  <!-- (3.1) INSPECTOR SAFE-SHIM (blockiert echten Core nicht) ---------------- -->
   <script>
-  (function(){
-    if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
+    (function(){
+      if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
 
-    const FallbackAPI = {
-      open(){  if (window.UIInspector?.open)  return UIInspector.open("fallback");  log("open()");  },
-      close(){ if (window.UIInspector?.close) return UIInspector.close("fallback"); log("close()"); },
-      toggle(){ if (window.UIInspector?.toggle) return UIInspector.toggle();        log("toggle()"); },
-      isOpen(){ try { return !!document.querySelector('.inspector-root.is-open,.inspector--open'); } catch(_) { return false; } },
-      log(m){  (window.CBLog?.info||console.log)("[inspector:fallback] " + (m||"call")); }
-    };
-    function log(msg){ (window.CBLog?.info||console.log)("[inspector:fallback] " + msg); }
-    if (!window.InspectorAPI) window.InspectorAPI = FallbackAPI;
+      const FallbackAPI = {
+        open(){   if (window.UIInspector?.open)   return UIInspector.open("fallback");   log("open()"); },
+        close(){  if (window.UIInspector?.close)  return UIInspector.close("fallback");  log("close()"); },
+        toggle(){ if (window.UIInspector?.toggle) return UIInspector.toggle();            log("toggle()"); },
+        isOpen(){ try { return !!document.querySelector('.inspector-root.is-open,.inspector--open'); } catch(_) { return false; } },
+        log(m){   (window.CBLog?.info||console.log)("[inspector:fallback] " + (m||"call")); }
+      };
+      function log(msg){ (window.CBLog?.info||console.log)("[inspector:fallback] " + msg); }
+      if (!window.InspectorAPI) window.InspectorAPI = FallbackAPI;
 
-    window.addEventListener('cb:inspector:core-ready', ()=>{
-      (window.CBLog?.ok||console.log)("[inspector] Core ready – Fallback wird ersetzt");
-    }, { once:true });
+      window.addEventListener('cb:inspector:core-ready', ()=>{
+        (window.CBLog?.ok||console.log)("[inspector] Core ready – Fallback wird ersetzt");
+      }, { once:true });
 
-    const promote = ()=> {
-      if (window.Inspector && !window.InspectorAPI) {
-        window.InspectorAPI = window.Inspector;
-        (window.CBLog?.ok||console.log)("[inspector] API übernommen aus window.Inspector");
-      }
-    };
-    document.addEventListener("DOMContentLoaded", promote, { once:true });
-    setTimeout(promote, 0);
-  })();
+      const promote = ()=> {
+        if (window.Inspector && !window.InspectorAPI) {
+          window.InspectorAPI = window.Inspector;
+          (window.CBLog?.ok||console.log)("[inspector] API übernommen aus window.Inspector");
+        }
+      };
+      document.addEventListener("DOMContentLoaded", promote, { once:true });
+      setTimeout(promote, 0);
+    })();
   </script>
 </head>
 <body>
@@ -195,7 +172,7 @@
       onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🩺</button>
   </div>
 
-  <!-- (6) UI – CORE-Bau-Menü (sichtbarer Dock, von UI-Build gefüllt) ========= -->
+  <!-- (6) UI – CORE-Bau-Menü (Dock, von UI-Build gefüllt) ==================== -->
   <div id="hud" class="ui-hud" hidden></div>
   <div id="build-dock" class="ui-build" hidden aria-live="polite"></div>
 
@@ -218,13 +195,11 @@
   <script defer src="assets/inspector/inspector.resources.js"></script>
   <script defer src="assets/inspector/inspector.api-compat.js"></script>
   <script defer src="assets/inspector/inspector.api-bridge.js"></script>
-  <!-- optional: Bindings/Ready-Signal (falls vorhanden) -->
-  <script defer src="assets/inspector/inspector.button-bind.js"></script>
 
   <!-- (10) UI-LAYER ========================================================== -->
-  <!-- Wichtig: Build zuerst, dann Bridge -->
   <script src="ui/ui-events.js"></script>
   <script src="ui/ui-build.categories.js"></script>
+  <script src="ui/ui-build.data-bridge.js"></script>
   <script src="ui/ui-build.js"></script>
   <script src="ui/ui-bridge.js"></script>
   <script src="ui/ui-hud.js"></script>
@@ -233,12 +208,12 @@
   <script src="ui/ui-inspector-bridge.js"></script>
   <script src="ui/ui-inspector.js"></script>
 
-  <!-- (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs ============== -->
+  <!-- (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs -------------- -->
   <script>
     (function () {
       /* (11.0) Diagnose/Version --------------------------------------------- */
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.8.1";
+      window.__cb.indexVersion = "v18.9.2";
       (window.CBLog?.info || console.log)(`[index] UI bereit (${window.__cb.indexVersion})`);
       window.dispatchEvent(new CustomEvent('cb:ui-ready')); // UI meldet sich
 
@@ -249,10 +224,12 @@
       function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
 
       $('btnStartNew')?.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('cb:start:new')); hideStart();
+        window.dispatchEvent(new CustomEvent('cb:start:new'));
+        hideStart();
       });
       $('btnStartResume')?.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('cb:start:continue')); hideStart();
+        window.dispatchEvent(new CustomEvent('cb:start:continue'));
+        hideStart();
       });
       $('btnStartReset')?.addEventListener('click', () => {
         try { localStorage.clear(); } catch(e){}
@@ -278,41 +255,36 @@
       }
       function setOpen(){
         if (!gameStarted()){
-          (window.CBLog?.warn || console.warn)("Bau-Menü erst nach Spielstart verfügbar.");
+          (window.CBLog?.warn || console.warn)("Bitte zuerst das Spiel starten (Startpanel) – dann Baumenü öffnen.");
           return;
         }
         document.body.classList.add('has-build-open');
         document.getElementById('build-dock')?.removeAttribute('hidden');
       }
-      function setClose(){
-        document.body.classList.remove('has-build-open');
-      }
+      function setClose(){ document.body.classList.remove('has-build-open'); }
+
       addEventListener('cb:build:open',  setOpen);
       addEventListener('cb:build:close', setClose);
       addEventListener('cb:build-open',  setOpen);   // Legacy
       addEventListener('cb:build-close', setClose);  // Legacy
 
-      window.GameUI = {
-        toggleBuild(){
-          if (!gameStarted()){
-            (window.CBLog?.warn || console.warn)("Bitte zuerst das Spiel starten (Startpanel) – dann Baumenü öffnen.");
-            return;
-          }
-          const isOpen = !document.body.classList.contains('has-build-open');
-          if (isOpen) setOpen(); else setClose();
-          dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
-          if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
+      window.GameUI = window.GameUI || {};
+      window.GameUI.toggleBuild = function(){
+        if (!gameStarted()){
+          (window.CBLog?.warn || console.warn)("Bitte zuerst das Spiel starten (Startpanel) – dann Baumenü öffnen.");
+          return;
         }
+        const isOpen = !document.body.classList.contains('has-build-open');
+        if (isOpen) setOpen(); else setClose();
+        dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
+        if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
       };
 
       /* (11.4) Hotkeys: B = Build, I = Inspector ---------------------------- */
       addEventListener('keydown', function(ev){
         if (ev.repeat) return;
         if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
-        if (ev.key === 'i' || ev.key === 'I') {
-          ev.preventDefault();
-          try { InspectorAPI.toggle(); } catch(e) { /* ignore */ }
-        }
+        if (ev.key === 'i' || ev.key === 'I') { ev.preventDefault(); try { InspectorAPI.toggle(); } catch(e) {} }
       });
 
       /* (11.5) Sichtbares Smoke-Log → Inspector-Check ----------------------- */
