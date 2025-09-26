@@ -110,30 +110,46 @@
       CBLog.info("[cb] Globaler CBLog aktiv (index)");
     })();
   </script>
+
+  <!-- (3.1) INSPECTOR SAFE-SHIM (korrekt, blockiert echten Core nicht) -->
+<script>
+(function(){
+  // Falls der echte Inspector-API schon da ist: nichts tun.
+  if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
+
+  // Fallback-API (wird automatisch ersetzt, sobald echter Core lädt)
+  const FallbackAPI = {
+    open(){  if (window.UIInspector?.open)  return UIInspector.open("fallback");  log("open()");  },
+    close(){ if (window.UIInspector?.close) return UIInspector.close("fallback"); log("close()"); },
+    toggle(){ if (window.UIInspector?.toggle) return UIInspector.toggle();        log("toggle()"); },
+    isOpen(){ try { return !!document.querySelector('.inspector-root.is-open,.inspector--open'); } catch(_) { return false; } },
+    log(m){  (window.CBLog?.info||console.log)("[inspector:fallback] " + (m||"call")); }
+  };
+
+  function log(msg){ (window.CBLog?.info||console.log)("[inspector:fallback] " + msg); }
+
+  // Nur InspectorAPI setzen – NICHT window.Inspector überschreiben!
+  if (!window.InspectorAPI) window.InspectorAPI = FallbackAPI;
+
+  // Wenn der echte Core später kommt, „promoten“:
+  // a) Falls er InspectorAPI setzt, nutzt ab da die echte API.
+  window.addEventListener('cb:inspector:core-ready', ()=>{
+    (window.CBLog?.ok||console.log)("[inspector] Core ready – Fallback wird ersetzt");
+  }, { once:true });
+
+  // b) Wenn ein Build nur window.Inspector benutzt, übernehme dessen API automatisch.
+  //    (ohne ihn zu blockieren)
+  const promote = ()=> {
+    if (window.Inspector && !window.InspectorAPI) {
+      window.InspectorAPI = window.Inspector;
+      (window.CBLog?.ok||console.log)("[inspector] API übernommen aus window.Inspector");
+    }
+  };
+  document.addEventListener("DOMContentLoaded", promote, { once:true });
+  setTimeout(promote, 0);
+})();
+</script>
   
-    <!-- (3.1) INSPECTOR SAFE-SHIM (verhindert ReferenceError 'Inspector') -->
-  <script>
-    (function(){
-      // Falls der echte Inspector schon da ist, nichts tun.
-      if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
-
-      // Minimal-API: wird später vom echten Inspector überschrieben.
-      const FallbackAPI = {
-        toggle(){ (window.CBLog?.info||console.log)("[inspector] API noch nicht bereit – toggle() als Platzhalter"); },
-        isOpen(){ return !!document.querySelector('.inspector--open'); },
-        log(m){  (window.CBLog?.info||console.log)("[inspector] " + m); }
-      };
-
-      // Kompat: altes 'Inspector' -> neue API
-      window.InspectorAPI = window.InspectorAPI || FallbackAPI;
-      window.Inspector    = window.Inspector    || window.InspectorAPI;
-
-      // Wenn der echte Core später kommt, darf er überschreiben:
-      window.addEventListener('cb:inspector:core-ready', ()=>{
-        (window.CBLog?.ok||console.log)("[inspector] Core ready – Safe-Shim wird überschrieben");
-      }, { once:true });
-    })();
-  </script>
 </head>
 <body>
 
