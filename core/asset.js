@@ -33,7 +33,7 @@ const ASSET_VER = "v18.8.0";
 /** Standard-Buckets nach Lastenheft (icons/tiles/buildings/characters/paths/ui) */
 const DEFAULT_BUCKETS = {
   icons:      ["assets/icons/resources/wood.png", "assets/icons/resources/stone.png"],
-  tiles:      ["assets/tiles/terrain.png"],
+  tiles:      ["assets/tiles/tileset.terrain.png"],
   buildings:  [],   // optional – von Registry/Maps referenziert
   characters: [],   // optional
   paths:      [],   // optional
