@@ -1,61 +1,151 @@
-/* main/ui/css/ui-tooltip.css v1.0.0 (2025-09-22) */
-/* Platzhalter – Tooltip-Grundlagen */
-
 /* ============================================================================
- * (10) Tooltip-Preview (großes Icon + Text)
- *  - Stil nur; Verhalten kommt in ui/ui-tooltip.js
+ * Datei: ui/ui-tooltip.js
+ * Version: v18.9.2 (2025-09-26)
+ * Zweck: Hover-Tooltip mit großem Icon + Kurzbeschreibung (Build-Items)
+ * Leitplanken:
+ *   - Keine harten Abhängigkeiten: Registry optional, Fallbacks vorhanden
+ *   - Hört auf mouseenter/leave/move der .build-item Kacheln
+ *   - Inhalte via data-Attribute oder Registry-Fallback
+ * Struktur:
+ *   (0) Logger-Guard
+ *   (1) State/DOM
+ *   (2) Lookup (Registry + Fallback)
+ *   (3) Show/Hide/Move
+ *   (4) Wiring
  * ========================================================================== */
-.ui-tooltip{
-  position: fixed;
-  z-index: 2000;
-  pointer-events: none;
-  transform: translate(-50%, calc(-100% - 14px));
-  opacity: 0;
-  transition: opacity .12s ease, transform .12s ease;
-  max-width: min(360px, 92vw);
+
+/* (0) Logger-Guard ----------------------------------------------------------- */
+if (!window.CBLog || typeof window.CBLog.ok !== "function") {
+  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
 }
-.ui-tooltip.is-visible{
-  opacity: 1;
-  transform: translate(-50%, calc(-100% - 10px));
+const TIP_MOD = "[ui-tooltip]";
+
+/* (1) State/DOM -------------------------------------------------------------- */
+let tipRoot = null;
+function ensureTip(){
+  if (tipRoot) return tipRoot;
+  tipRoot = document.createElement("div");
+  tipRoot.className = "ui-tooltip";
+  tipRoot.innerHTML = `
+    <div class="tip-card">
+      <div class="tip-head">
+        <img class="tip-icon" alt="">
+        <h4 class="tip-title"></h4>
+      </div>
+      <p class="tip-desc"></p>
+    </div>`;
+  document.body.appendChild(tipRoot);
+  return tipRoot;
 }
 
-.ui-tooltip .tip-card{
-  /* gleiches Panel-Motiv wie der Rest */
-  background:
-    url("../assets/ui/panel.png") center / contain no-repeat,
-    linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  box-shadow: 0 18px 48px rgba(0,0,0,.35);
-  color: #e9f1ff;
-  padding: 10px 12px;
-  backdrop-filter: blur(2px);
+/* (2) Lookup (Registry + Fallback) ------------------------------------------ */
+function lookupById(id){
+  // Versuche verschiedene mögliche Registry-Strukturen
+  const R = window.Registry || {};
+  const hit =
+    (R.getBuilding && R.getBuilding(id)) ||
+    (R.buildings && (R.buildings[id] || R.buildings.find?.(b=>b.id===id))) ||
+    (R.data && R.data.buildings && (R.data.buildings[id] || R.data.buildings.find?.(b=>b.id===id))) ||
+    null;
+  return hit || {};
+}
+function getDataFromEl(el){
+  const id    = el?.dataset?.id || el?.getAttribute?.("data-id");
+  const label = el?.dataset?.label || el?.querySelector?.(".label")?.textContent?.trim();
+  const imgEl = el?.querySelector?.("img");
+  const icon  = imgEl?.getAttribute("src") || imgEl?.dataset?.src;
+
+  // Registry-Fallback: Beschreibung/altIcon
+  const reg   = id ? lookupById(id) : {};
+  const title = label || reg.name || id || "Unbenannt";
+  const desc  = reg.desc || reg.description || el?.dataset?.desc || "–";
+  const icon2 = reg.icon || reg.img || reg.sprite || null;
+
+  return {
+    id,
+    title,
+    desc,
+    icon: icon || icon2 || "",
+  };
 }
 
-.ui-tooltip .tip-head{
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 6px;
-}
-.ui-tooltip .tip-head img{
-  width: 64px; height: 64px; object-fit: contain; flex: 0 0 auto;
-}
-.ui-tooltip .tip-title{
-  font: 700 15px/1.25 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  margin: 0; letter-spacing: .2px;
-}
-.ui-tooltip .tip-desc{
-  font: 400 13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: #c8d6eb;
-  margin: 0;
-  white-space: normal;
+/* (3) Show/Hide/Move --------------------------------------------------------- */
+function showAt(x, y, data){
+  const root = ensureTip();
+  const tIcon = root.querySelector(".tip-icon");
+  const tTitle= root.querySelector(".tip-title");
+  const tDesc = root.querySelector(".tip-desc");
+
+  tTitle.textContent = data.title || "";
+  tDesc.textContent  = data.desc || "";
+
+  if (data.icon) {
+    tIcon.src = data.icon;
+    tIcon.removeAttribute("hidden");
+  } else {
+    tIcon.removeAttribute("src");
+    tIcon.setAttribute("hidden", "");
+  }
+
+  // Positionieren – leichte Offsets, Clamping am Rand
+  const pad = 14;
+  const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+  const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+  let px = x, py = y;
+  px = Math.max(pad, Math.min(vw - pad, px));
+  py = Math.max(pad + 60, Math.min(vh - pad, py)); // 60px Mindesthöhe über Cursor
+
+  root.style.left = px + "px";
+  root.style.top  = py + "px";
+  root.classList.add("is-visible");
 }
 
-/* kleiner Pfeil */
-.ui-tooltip:after{
-  content: "";
-  position: absolute;
-  left: 50%; bottom: -6px; transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: rgba(12,16,24,.92);
-  filter: drop-shadow(0 -1px 0 rgba(255,255,255,.08));
+function hide(){
+  if (!tipRoot) return;
+  tipRoot.classList.remove("is-visible");
 }
+
+function onEnter(ev){
+  const item = ev.currentTarget;
+  const data = getDataFromEl(item);
+  // Erste Position (wenn keine Mausbewegung davor)
+  showAt(ev.clientX || 0, ev.clientY || 0, data);
+  // Live bewegen
+  item.addEventListener("mousemove", onMove);
+  item.__tipData = data;
+}
+function onLeave(ev){
+  const item = ev.currentTarget;
+  item.removeEventListener("mousemove", onMove);
+  item.__tipData = null;
+  hide();
+}
+function onMove(ev){
+  const item = ev.currentTarget;
+  const data = item.__tipData || getDataFromEl(item);
+  showAt(ev.clientX || 0, ev.clientY || 0, data);
+}
+
+/* (4) Wiring ----------------------------------------------------------------- */
+function wire(){
+  const root = document.getElementById("build-dock");
+  if (!root) return;
+
+  // Delegation: nur .build-item bestücken (auch wenn später neu gerendert)
+  const items = root.querySelectorAll(".build-item");
+  items.forEach(it=>{
+    if (it.__tipBound) return;
+    it.addEventListener("mouseenter", onEnter);
+    it.addEventListener("mouseleave", onLeave);
+    it.__tipBound = true;
+  });
+  (window.CBLog?.info||console.log)(`${TIP_MOD} gebunden (${items.length} items)`);
+}
+
+// initial + nach Re-Renders (ui-bridge triggert rerender)
+document.addEventListener("DOMContentLoaded", wire);
+window.addEventListener("cb:UIBuild:ready", wire);
+window.addEventListener("cb:registry:ready", wire);
+window.addEventListener("cb:build:open", wire);
+// Safety: bei Fenstergröße ändern ggf. Position anpassen
+window.addEventListener("resize", hide);
