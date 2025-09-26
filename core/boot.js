@@ -78,20 +78,31 @@ async function startSequence(trigger = "cb:start:new") {
 
 /* (5) Event-Wiring (cb:start:*) --------------------------------------------- */
 // UI bereit → ab hier auf Start-Buttons hören
+let __bootStarting = false;
+
 window.addEventListener("cb:ui-ready", () => {
   CBLog.ok(`${BOOT_MOD} UI bereit – warte auf Start-Events (cb:start:*)`);
 });
 
+async function guardedStart(trigger){
+  if (__bootStarting) {
+    CBLog.warn(`${BOOT_MOD} Start ignoriert (${trigger}) – bereits im Gange`);
+    return;
+  }
+  __bootStarting = true;
+  try {
+    await startSequence(trigger);
+  } finally {
+    __bootStarting = false;
+  }
+}
+
 // Neues Spiel
-window.addEventListener("cb:start:new",       () => startSequence("cb:start:new"));
-
+window.addEventListener("cb:start:new",      () => guardedStart("cb:start:new"));
 // Weiterspielen
-window.addEventListener("cb:start:continue",  () => startSequence("cb:start:continue"));
-
-// Reset (Hinweis – Reload macht index)
+window.addEventListener("cb:start:continue", () => guardedStart("cb:start:continue"));
+// Reset/Fullscreen (reine Info)
 window.addEventListener("cb:start:reset",     () => CBLog.warn(`${BOOT_MOD} Reset angefordert`));
-
-// Fullscreen (nur Info)
 window.addEventListener("cb:start:fullscreen",() => CBLog.info(`${BOOT_MOD} Fullscreen angefordert`));
 
 /* (6) Exports ---------------------------------------------------------------- */
