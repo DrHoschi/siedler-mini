@@ -1,0 +1,5 @@
+{
+  "wood":  { "name": "Holz",  "icon": "assets/icons/res_wood.png"  },
+  "stone": { "name": "Stein", "icon": "assets/icons/res_stone.png" },
+  "fish":  { "name": "Fisch", "icon": "assets/icons/res_fish.png"  }
+}
