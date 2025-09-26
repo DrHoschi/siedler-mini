@@ -1,2 +1,118 @@
-/* main/ui/css/ui-hud.css v1.0.0 (2025-09-22) */
-#hud{position:fixed;top:8px;left:8px;padding:8px 10px;background:rgba(0,0,0,.4);border:1px solid #000;border-radius:8px}
+/* ============================================================================
+ * Datei: ui/css/ui-hud.css
+ * Version: v18.9.2 (2025-09-26)
+ * Zweck: HUD-Container oben links – Panel-Optik, kompakt & gut lesbar
+ * Leitplanken:
+ *   - Liegt über Canvas, unter Build-Dock & Inspector
+ *   - Panel-Hintergrund via assets/ui/panel.png + dezente Tönung
+ *   - Respektiert [hidden] (Index blendet bei Spielstart ein)
+ *   - Responsive Tweaks für kleine Viewports
+ * Struktur:
+ *   (1) Design Tokens
+ *   (2) Root #hud
+ *   (3) Inhalt: Reihen, Badges, Stats
+ *   (4) Responsive
+ * ========================================================================== */
+
+/* (1) Design Tokens --------------------------------------------------------- */
+:root{
+  --hud-z: 900; /* < Build-Dock(1000), << Inspector(max) */
+  --hud-pad-y: 8px;
+  --hud-pad-x: 10px;
+  --hud-radius: 12px;
+  --hud-border: rgba(255,255,255,.10);
+  --hud-shadow: 0 16px 44px rgba(0,0,0,.32);
+  --hud-text: #eaf2ff;
+  --hud-text-dim: #c3d2ea;
+  --hud-bg-tint: rgba(12,16,24,.78);
+}
+
+/* (2) Root #hud ------------------------------------------------------------- */
+#hud{
+  position: fixed;
+  top: 8px; left: 8px;
+  z-index: var(--hud-z);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--hud-pad-y) var(--hud-pad-x);
+
+  /* Panel-Hintergrund (Holz/Papier) + Tönung, wie Start/Build */
+  background:
+    linear-gradient(to bottom, var(--hud-bg-tint), rgba(10,14,22,.72)),
+    url("../assets/ui/panel.png") center / cover no-repeat;
+
+  border: 1px solid var(--hud-border);
+  border-radius: var(--hud-radius);
+  box-shadow: var(--hud-shadow);
+  color: var(--hud-text);
+  backdrop-filter: blur(2px);
+  user-select: none;
+}
+
+/* [hidden] wird vom DOM kontrolliert (Index) – keine extra Styles nötig */
+
+/* (3) Inhalt --------------------------------------------------------------- */
+/* Reihen-Layout (falls du mehrere Zeilen stapeln willst) */
+.hud-row{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Trennlinie/Spacer */
+.hud-sep{
+  width: 1px; height: 22px;
+  background: rgba(255,255,255,.14);
+  margin: 0 4px;
+  flex: 0 0 auto;
+}
+
+/* Kleine Pill-Badges (Status, FPS etc.) */
+.hud-badge{
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  font: 600 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color: var(--hud-text);
+  background: rgba(8,12,18,.55);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.hud-badge .ic{ font-size: 14px; opacity: .95; }
+
+/* Stats-Eintrag mit Icon + Wert + Label */
+.hud-stat{
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 8px;
+  background: rgba(8,12,18,.45);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+}
+.hud-stat .ic{
+  width: 18px; height: 18px; object-fit: contain;
+  filter: drop-shadow(0 0 1px rgba(0,0,0,.35));
+}
+.hud-stat .val{
+  font: 700 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color: var(--hud-text);
+}
+.hud-stat .lbl{
+  font: 600 12px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color: var(--hud-text-dim);
+  opacity: .9;
+}
+
+/* (4) Responsive ------------------------------------------------------------ */
+@media (max-width: 720px){
+  #hud{ gap: 6px; padding: 6px 8px; border-radius: 10px; }
+  .hud-badge{ padding: 3px 7px; font-size: 11px; }
+  .hud-stat{ padding: 4px 6px; }
+  .hud-stat .val{ font-size: 12px; }
+  .hud-stat .lbl{ font-size: 11px; }
+}
+
+@media (max-width: 420px){
+  #hud{ top: 6px; left: 6px; }
+  .hud-sep{ height: 18px; }
+}
