@@ -65,11 +65,14 @@ async function startSequence(trigger){
   // 3) Game
   await safeCall(window.Game, "init", "[game] init");
 
-  // 4) Map starten
-  const mapUrl = getCanvasMapUrl();
-  logI(`[game] starte Map: ${mapUrl}`);
-  await safeCall(window.Game, "start", "[game] start (Map)");
-
+// 4) Map starten
+const mapUrl = getCanvasMapUrl();
+logI(`[game] starte Map: ${mapUrl}`);
+if (window.Game?.start) {
+  await window.Game.start(mapUrl);   // <— mapUrl wirklich übergeben!
+} else {
+  logW("[game] start (Map) übersprungen (keine Funktion)");
+}
   // 5) Erfolgssignal
   try {
     window.dispatchEvent(new CustomEvent("cb:game-start", { detail:{ mapUrl, trigger } }));
