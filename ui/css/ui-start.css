@@ -1,4 +1,12 @@
-/* assets/ui/ui-start.css — v17.8.10 (fix: bg-image path) */
+/* ============================================================================
+ * Datei: ui/css/ui-start.css
+ * Version: v18.9.2 (2025-09-26)
+ * Zweck: Startfenster-UI mit Hintergrundbild + Panel-Hintergrund für Card
+ * Leitplanken:
+ *   - Globales Start-BG (#start-bg.jpg) sichtbar bis Spielstart
+ *   - Card nutzt panel.png als Hintergrund (Holz/Papier-Optik)
+ *   - Responsive für kleine Viewports
+ * ========================================================================== */
 
 /* Design-Token im Inspector-Stil */
 :root{
@@ -19,7 +27,7 @@
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  background: transparent;           /* KEIN dunkler Overlay */
+  background: transparent;
 }
 
 /* Vollflächiges Hintergrundbild + leichte Vignette */
@@ -29,17 +37,20 @@
   z-index: 0;
   background:
     radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%, rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
-    /* WICHTIG: Pfad relativ zur CSS-Datei */
-    url('/ui/css/start_bg.jpg') center/cover no-repeat;
+    /* Pfad relativ zur CSS-Datei */
+    url("../assets/ui/start-bg.jpg") center/cover no-repeat;
   pointer-events: none;
 }
 
-/* Karte im Inspector-Look */
+/* Karte im Inspector-/Panel-Look */
 .ui-start .ui-start-card{
   position: relative;
   z-index: 1;
   width: min(640px, 92vw);
-  background: var(--ui-bg);
+  /* Panel-Hintergrund (Holzrahmen + Papieroptik) */
+  background:
+    url("../assets/ui/panel.png") center center / contain no-repeat,
+    linear-gradient(to bottom, rgba(243,247,251,.95), rgba(230,237,245,.95));
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   box-shadow: var(--ui-shadow);
@@ -95,8 +106,6 @@
   .ui-start .ui-start-card{ width: 92vw; }
   .ui-start .btn{ font-size: 16px; padding: 12px 14px; }
 }
+
 /* Safety: Canvas ist sichtbar, keine globale Abdunklung */
 #game { position: relative; z-index: 0; background: transparent !important; }
-
-/* Failsafe: Start-BG darf nie den Canvas überdecken, wenn Panel weg ist */
-/* #start-panel:not(:has(.ui-start-card)) .ui-start-bg { display:none !important; } */
