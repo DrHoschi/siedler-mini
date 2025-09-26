@@ -1,56 +1,176 @@
 /* ============================================================================
- * ui/css/ui-build.css — Build-Dock Styles (Vollausbau)
- * Version: v1.1.0 (2025-09-22)
- * ============================================================================ */
+ * Datei: ui/css/ui-build.css
+ * Version: v18.9.2 (2025-09-26)
+ * Zweck: Build-Dock Styles (mit Panel-Hintergrund)
+ * Leitplanken:
+ *   - Dock liegt am unteren Rand, wird erst nach Spielstart geöffnet
+ *   - Hintergrund nutzt assets/ui/panel.png (Holz/Papier) + dezente Tönung
+ *   - Icon-Größe steuert :root --build-icon-size (Fallback 48px)
+ *   - Responsive Grid für Kategorien & Items
+ * ========================================================================== */
 
+/* (1) Design-Tokens --------------------------------------------------------- */
+:root{
+  --build-icon-size: 48px;               /* Fallback – kann in index überschrieben sein */
+  --build-dock-z: 1000;
+  --build-bg-tint: rgba(12,16,24,.75);   /* leichte Tönung über dem Panel */
+  --build-border: #1d2633;
+  --build-border-strong: #0e1420;
+  --build-shadow: 0 -18px 48px rgba(0,0,0,.35);
+  --build-radius: 14px;
+  --build-gap: 8px;
+  --build-text: #e9f1ff;
+  --build-text-dim: #b9c7dc;
+}
+
+/* (2) Root/Dock ------------------------------------------------------------- */
 #build-dock{
-  position:fixed; left:0; right:0; bottom:0;
- /*  icon.style.width = "48px";
-  icon.style.height = "48px"; */
-  padding:8px; background:rgba(0,0,0,.55);
-  border-top:1px solid #000; display:none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: var(--build-dock-z);
+  display: none;                          /* via body.has-build-open → flex */
+  padding: 10px;
+  /* Panel-Hintergrund (Holz/Papier) mit dezenter Tönung */
+  background:
+    linear-gradient(to top, var(--build-bg-tint), rgba(12,16,24,.55)),
+    url("../assets/ui/panel.png") center bottom / cover no-repeat;
+  border-top: 1px solid var(--build-border-strong);
+  box-shadow: var(--build-shadow);
+  color: var(--build-text);
+  backdrop-filter: blur(2px);
 }
+body.has-build-open #build-dock{ display: flex; }
 
+/* (3) Layout-Wrapper -------------------------------------------------------- */
 #build-dock .wrap{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:8px;
-  max-height: calc(2 * 56px + 8px + 2px + 2.5rem); /* 2 Zeilen + Header + Puffer */
-  overflow:auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--build-gap);
+  width: 100%;
+  max-height: clamp(160px, 40vh, 420px);
+  overflow: auto;
+  padding-bottom: 2px; /* Scrollbar-Puffer */
 }
 
-/* Kategorie */
-.build-cat{ border:1px solid #222; border-radius:8px; background:#111a; }
-.build-header{ padding:6px 8px; border-bottom:1px solid #222; }
-.build-title{ margin:0; font-size:0.95rem; opacity:0.9; }
+/* (3.1) Optionale Kopfzeile im Dock */
+#build-dock .dock-head{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  color: var(--build-text-dim);
+  border: 1px solid var(--build-border);
+  border-radius: 10px;
+  background: rgba(8,12,18,.45);
+}
 
-/* Liste der Items (Grid in der Kategorie) */
+/* (4) Kategorie-Container --------------------------------------------------- */
+.build-cat{
+  border: 1px solid var(--build-border);
+  border-radius: var(--build-radius);
+  background:
+    linear-gradient(to bottom, rgba(18,24,34,.66), rgba(12,16,24,.6));
+  overflow: hidden;
+}
+
+.build-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--build-border);
+  background: rgba(10,14,20,.5);
+}
+
+.build-title{
+  margin: 0;
+  font: 600 0.95rem/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--build-text);
+  letter-spacing: .2px;
+}
+
+/* (5) Grid der Items --------------------------------------------------------- */
 .build-list{
-  display:grid;
-  grid-template-columns:repeat(auto-fill, minmax(120px, 1fr));
-  gap:6px; padding:6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  padding: 8px;
 }
 
-/* Einzelnes Item */
+/* (6) Einzelnes Item -------------------------------------------------------- */
 .build-item{
-  display:flex; align-items:center; gap:8px;
-  height:48px; padding:6px 8px;
-  border:1px solid #333; border-radius:8px;
-  background:#1a1a1a; color:inherit;
-  cursor:pointer; text-align:left;
+  display: flex; align-items: center; gap: 10px;
+  min-height: max(48px, var(--build-icon-size));
+  padding: 8px 10px;
+  border: 1px solid var(--build-border);
+  border-radius: 12px;
+  background: rgba(8,12,18,.55);
+  color: inherit;
+  cursor: pointer; text-align: left;
+  transition: transform .06s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
-.build-item img{ width:32px; height:32px; image-rendering: pixelated; }
-.build-item .label{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.build-item:hover{
+  transform: translateY(-1px);
+  border-color: #2b3a52;
+  background: rgba(10,16,24,.65);
+  box-shadow: 0 10px 26px rgba(0,0,0,.22);
+}
+.build-item:active{ transform: translateY(0); }
 
-/* Hover/Fokus/Selected/Disabled */
-.build-item:hover{ border-color:#555; }
-.build-item:focus{ outline:2px solid #888; outline-offset:0; }
-.build-item.is-selected{ border-color:#8ab4f8; box-shadow:0 0 0 2px #8ab4f880 inset; }
-.build-item.is-disabled{ opacity:.5; cursor:not-allowed; }
-.build-item.is-disabled:hover{ border-color:#333; }
+.build-item img{
+  width: var(--build-icon-size);
+  height: var(--build-icon-size);
+  max-width: var(--build-icon-size);
+  max-height: var(--build-icon-size);
+  object-fit: contain;
+  image-rendering: auto;                  /* bei Pixel-Art ggf.: pixelated */
+  flex: 0 0 auto;
+}
 
-/* Kleinere Screens */
+.build-item .label{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 600 .95rem/1.25 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color: var(--build-text);
+  opacity: .95;
+}
+
+/* (6.1) States */
+.build-item.is-selected{
+  border-color: #8ab4f8;
+  box-shadow: 0 0 0 2px #8ab4f880 inset;
+}
+.build-item.is-disabled{
+  opacity: .55;
+  cursor: not-allowed;
+}
+.build-item.is-disabled:hover{
+  transform: none;
+  border-color: var(--build-border);
+  box-shadow: none;
+}
+
+/* (7) Scrollbars (optional, WebKit) ----------------------------------------- */
+#build-dock .wrap::-webkit-scrollbar{ height: 10px; width: 10px; }
+#build-dock .wrap::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.22);
+  border-radius: 10px;
+  border: 2px solid rgba(0,0,0,.2);
+}
+#build-dock .wrap::-webkit-scrollbar-track{
+  background: rgba(0,0,0,.15);
+}
+
+/* (8) Responsive Tweaks ----------------------------------------------------- */
+@media (max-width: 1024px){
+  .build-list{ grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+}
 @media (max-width: 800px){
-  #build-dock .wrap{ max-height: calc(2 * 64px + 12px + 2px + 2.5rem); }
-  .build-item{ height:56px; }
+  #build-dock .wrap{ max-height: clamp(180px, 44vh, 420px); }
+  .build-list{ grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+@media (max-width: 520px){
+  .build-list{ grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
 }
