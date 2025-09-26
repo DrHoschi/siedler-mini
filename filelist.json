@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-25T16:58:52.439Z",
+  "createdAt": "2025-09-26T13:48:11.318Z",
   "root": ".",
-  "count": 432,
+  "count": 437,
   "entries": [
     {
       "type": "dir",
@@ -179,6 +179,26 @@
       "type": "file",
       "path": "Archiv/ui/ui-buttons.js",
       "size": 661
+    },
+    {
+      "type": "file",
+      "path": "Archiv/ui/ui-inspector-1.js",
+      "size": 3469
+    },
+    {
+      "type": "file",
+      "path": "Archiv/ui/ui-inspector-2.js",
+      "size": 6635
+    },
+    {
+      "type": "file",
+      "path": "Archiv/ui/ui-start-1.js",
+      "size": 3275
+    },
+    {
+      "type": "file",
+      "path": "Archiv/ui/ui-start-2.js",
+      "size": 4605
     },
     {
       "type": "file",
@@ -925,7 +945,7 @@
     {
       "type": "file",
       "path": "assets/inspector/inspector.button-bind.js",
-      "size": 3060
+      "size": 4441
     },
     {
       "type": "file",
@@ -1371,11 +1391,6 @@
     },
     {
       "type": "file",
-      "path": "assets/ui/start-bg.jpg",
-      "size": 564395
-    },
-    {
-      "type": "file",
       "path": "assets/ui/ui-build.css",
       "size": 2982
     },
@@ -1461,12 +1476,12 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 1538
+      "size": 4656
     },
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 2462
+      "size": 4311
     },
     {
       "type": "file",
@@ -1476,7 +1491,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 1447
+      "size": 3487
     },
     {
       "type": "file",
@@ -1486,7 +1501,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 2149
+      "size": 5552
     },
     {
       "type": "dir",
@@ -1599,6 +1614,21 @@
       "type": "file",
       "path": "docs/Lastenheft_NeueSiedler_v1.0.md",
       "size": 62
+    },
+    {
+      "type": "file",
+      "path": "docs/OUT_index_diag_graph.mmd",
+      "size": 1707
+    },
+    {
+      "type": "file",
+      "path": "docs/OUT_index_outgoing_overview.csv",
+      "size": 2510
+    },
+    {
+      "type": "file",
+      "path": "docs/OUT_index_outgoing_overview.md",
+      "size": 5313
     },
     {
       "type": "file",
@@ -1961,6 +1991,11 @@
     },
     {
       "type": "file",
+      "path": "ui/css/start-bg.jpg",
+      "size": 564395
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-build.css",
       "size": 1901
     },
@@ -1982,7 +2017,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 2709
+      "size": 2707
     },
     {
       "type": "file",
@@ -2007,7 +2042,7 @@
     {
       "type": "file",
       "path": "ui/ui-bridge.js",
-      "size": 4100
+      "size": 5140
     },
     {
       "type": "file",
@@ -2022,7 +2057,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 3873
+      "size": 5743
     },
     {
       "type": "file",
@@ -2037,12 +2072,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 1534
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-inspecto_oldr.js",
-      "size": 6635
+      "size": 3723
     },
     {
       "type": "file",
@@ -2052,7 +2082,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 3469
+      "size": 9826
     },
     {
       "type": "file",
@@ -2061,13 +2091,8 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-start_old.js",
-      "size": 3275
-    },
-    {
-      "type": "file",
       "path": "ui/ui-start.js",
-      "size": 4605
+      "size": 5518
     },
     {
       "type": "file",
@@ -2092,7 +2117,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 6960
+      "size": 14241
     },
     {
       "type": "file",
