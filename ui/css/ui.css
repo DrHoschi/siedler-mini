@@ -1,14 +1,132 @@
-/* main/ui/css/ui.css v1.0.0 (2025-09-22) */
+/* ============================================================================
+ * Datei: ui/css/ui.css
+ * Version: v18.9.3 (2025-09-26)
+ * Zweck: Globale UI-Basis (Tokens, Reset, Buttons, Panel-Primitive)
+ * Leitplanken:
+ *   - Keine Vollbild-Hintergründe hier (Start-BG liegt in ui-start.css)
+ *   - Panel-Look per .ui-panel für alle Fenster/Overlays
+ *   - Optionale schmale Außenrahmen-Deko per .ui-frame--global (aus, bis Klasse gesetzt)
+ * Struktur:
+ *   (1) Design Tokens
+ *   (2) Reset & Base
+ *   (3) Panel-Primitive (.ui-panel)
+ *   (4) Buttons (Basis + Varianten)
+ *   (5) Layout/Utilities
+ *   (6) Optional: Globaler Außenrahmen (deaktiviert)
+ * ========================================================================== */
+
+/* (1) Design Tokens --------------------------------------------------------- */
 :root{
-  --ui-bg: #1b1f24;
-  --ui-fg: #e5e7eb;
-  --ui-accent: #8ab4f8;
-  --ui-gap: 8px;
-  --ui-radius: 8px;
-  --ui-panel: #111418cc;
+  /* Farben */
+  --ui-bg:           #0b0f14;
+  --ui-surface:      #11161e;
+  --ui-surface-2:    #141b26;
+  --ui-fg:           #e6eefc;
+  --ui-fg-dim:       #c8d6eb;
+  --ui-accent:       #8ab4f8;
+  --ui-accent-weak:  #4a7bd6;
+
+  /* Rahmen/Schatten */
+  --ui-border:       rgba(255,255,255,.1);
+  --ui-border-strong:#0d121a;
+  --ui-shadow:       0 18px 48px rgba(0,0,0,.32);
+
+  /* Abstände/Radien */
+  --ui-gap:          10px;
+  --ui-radius:       12px;
+
+  /* Panel-Bild (Holz/Papier) */
+  --ui-panel-img:    url("../assets/ui/panel.png");
+
+  /* optionaler globaler Rahmen */
+  --ui-frame-size:   6px;
+  --ui-frame-color:  rgba(255,255,255,.06);
 }
-html,body{margin:0;padding:0;color:var(--ui-fg);background:#000;}
-#start-panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);}
-.ui-panel{background:var(--ui-panel);backdrop-filter: blur(4px); border:1px solid #000;border-radius:var(--ui-radius);padding:12px;}
-button{font:inherit;border:1px solid #333;border-radius:6px;background:#222;color:var(--ui-fg);padding:6px 10px;cursor:pointer}
-button:hover{border-color:#555}
+
+/* (2) Reset & Base ---------------------------------------------------------- */
+html, body{
+  margin:0; padding:0;
+  background:#000; color:var(--ui-fg);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+*, *::before, *::after{ box-sizing: border-box; }
+img{ max-width:100%; display:block; }
+
+/* (3) Panel-Primitive ------------------------------------------------------- */
+/* → Jede Komponente, die wie ein „Fenster“ aussehen soll, bekommt .ui-panel */
+.ui-panel{
+  background:
+    var(--ui-panel-img) center center / contain no-repeat,
+    linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  color: var(--ui-fg);
+  backdrop-filter: blur(2px);
+  padding: 12px;
+}
+
+/* (4) Buttons --------------------------------------------------------------- */
+button, .btn{
+  appearance: none;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #1b2432;
+  color: var(--ui-fg);
+  font: 600 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: transform .06s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+button:hover, .btn:hover{
+  transform: translateY(-1px);
+  border-color: #2b3a52;
+  background: #1f2a3a;
+  box-shadow: 0 10px 26px rgba(0,0,0,.22);
+}
+button:active, .btn:active{ transform: translateY(0); }
+button:disabled, .btn:disabled{ opacity:.6; cursor:not-allowed; }
+
+/* Varianten */
+.btn.main{
+  background: linear-gradient(#2a6de0, #1f58b5);
+  border-color: #2b66cf;
+}
+.btn.ghost{
+  background: transparent;
+  border-style: dashed;
+}
+.btn.warn{
+  background: linear-gradient(#b83c2e, #8e2e23);
+  border-color: #8e2e23;
+}
+
+/* Fokus sichtbar */
+button:focus-visible, .btn:focus-visible{
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+/* (5) Layout/Utilities ------------------------------------------------------ */
+.ui-row{ display:flex; align-items:center; gap: var(--ui-gap); }
+.ui-col{ display:flex; flex-direction:column; gap: var(--ui-gap); }
+.ui-sep{ height:1px; background: var(--ui-border); margin: 6px 0; }
+
+/* (6) Optional: Globaler Außenrahmen ---------------------------------------- */
+/* Standard: AUS. Aktiviert durch Klasse am <body>: body.ui-frame--global */
+body.ui-frame--global::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 700;                 /* unter HUD(900), Build(1000), Inspector(max) */
+  box-shadow:
+    inset 0 0 0 var(--ui-frame-size) var(--ui-frame-color),
+    inset 0 0 24px rgba(0,0,0,.35);
+  border-radius: 2px;
+}
+
+/* (Legacy-Snippets, falls früher gesetzt) */
+#start-panel{ /* nicht mehr benutzt – Start liegt in .ui-start */
+  /* leer lassen, damit es nichts überschreibt */
+}
