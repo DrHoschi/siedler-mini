@@ -123,7 +123,22 @@
       CBLog.info("[cb] Globaler CBLog aktiv (index)");
     })();
   </script>
+<script>
+  (function(){
+    /* … dein vorhandener CBLog-Code … */
+    window.CBLog = { /* ok/info/warn/error wie bei dir */ };
 
+    // ➕ Adapter, damit inspector.logs nicht in den Poll-Fallback fällt:
+    window.CBLog.on = function(handler){
+      try {
+        window.addEventListener('cb:log', (ev)=> handler?.(ev.detail));
+      } catch(_) {}
+    };
+
+    CBLog.info("[cb] Globaler CBLog aktiv (index)");
+  })();
+</script>
+  
   <!-- (3.1) INSPECTOR SAFE-SHIM (korrekt, blockiert echten Core nicht) -->
   <script>
   (function(){
