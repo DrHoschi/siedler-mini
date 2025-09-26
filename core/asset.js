@@ -37,7 +37,7 @@ const DEFAULT_BUCKETS = {
   buildings:  [],   // optional – von Registry/Maps referenziert
   characters: [],   // optional
   paths:      [],   // optional
-  ui:         ["assets/ui/panel.png"]
+  ui:         ["assets/ui/panel.PNG"]
 };
 
 /* (2) Hilfsfunktionen (Loader) ---------------------------------------------- */
