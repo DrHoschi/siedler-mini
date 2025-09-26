@@ -219,31 +219,31 @@
       (window.CBLog?.info || console.log)(`[index] UI bereit (${window.__cb.indexVersion})`);
       window.dispatchEvent(new CustomEvent('cb:ui-ready')); // UI meldet sich
 
-      /* (11.1) Startpanel Buttons -> Game-Start Flow ------------------------ */
-      const $ = (id) => document.getElementById(id);
-      const startPanel = $('start-panel');
-      function hideStart(){ startPanel?.classList.add('hide'); startPanel?.setAttribute('hidden',''); }
-      function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
+/* (11.1) Startpanel Buttons -> Game-Start Flow ------------------------ */
+const $ = (id) => document.getElementById(id);
+const startPanel = $('start-panel');
+function hideStart(){ startPanel?.classList.add('hide'); startPanel?.setAttribute('hidden',''); }
+function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
 
-      $('btnStartNew')?.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('cb:start:new'));
-        hideStart();
-      });
-      $('btnStartResume')?.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('cb:start:continue'));
-        hideStart();
-      });
-      $('btnStartReset')?.addEventListener('click', () => {
-        try { localStorage.clear(); } catch(e){}
-        window.dispatchEvent(new CustomEvent('cb:start:reset'));
-        location.reload();
-      });
-      $('btnStartFullscreen')?.addEventListener('click', () => {
-        const el = document.documentElement;
-        const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-        if (fn) try { fn.call(el); } catch(e){}
-        window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
-      });
+$('btnStartNew')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('cb:start:new'));
+  hideStart();
+});
+$('btnStartResume')?.addEventListener('click', () => {
+  window.dispatchEvent(new CustomEvent('cb:start:continue'));
+  hideStart();
+});
+$('btnStartReset')?.addEventListener('click', () => {
+  try { localStorage.clear(); } catch(e){}
+  window.dispatchEvent(new CustomEvent('cb:start:reset'));
+  location.reload();
+});
+$('btnStartFullscreen')?.addEventListener('click', () => {
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (fn) try { fn.call(el); } catch(e){}
+  window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
+});
 
       /* (11.2) Reaktion auf Spielstart → HUD zeigen, Build freigeben -------- */
       window.addEventListener('cb:game-start', () => {
