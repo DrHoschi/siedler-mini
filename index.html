@@ -4,12 +4,13 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v18.8.0 (2025-09-25)
+       Version: v18.8.1 (2025-09-26)
        Zweck: Core + Inspector + UI korrekt einbinden (Startfenster zuerst)
        Leitplanken: Core→Boot→Inspector→UI; Registry-/cb:* Events; Debug/Logs
           (1) META & TITLE
           (2) STYLES: Projekt + Inspector
           (3) CBLog (zentral, einheitlich, mit Emoji/Icon)
+          (3.1) Inspector Safe-Shim
           (4) START-PANEL (immer zuerst sichtbar)
           (5) FABs: Build / Inspector
           (6) UI – CORE-Bau-Menü (sichtbarer Dock, von UI-Build gefüllt)
@@ -52,19 +53,19 @@
       pointer-events:auto !important;
     }
 
-/* (2.x) Inspector ganz nach oben layern */
-.inspector-root{
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647 !important; /* über Startpanel & HUD & alles */
-  pointer-events: auto;
-}
-.inspector-root.is-open{ display:block !important; }
+    /* (2.3) Inspector ganz nach oben layern --------------------------------- */
+    .inspector-root{
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647 !important; /* über Startpanel & HUD & alles */
+      pointer-events: auto;
+    }
+    .inspector-root.is-open{ display:block !important; }
 
-/* Sicherheit: Startpanel liegt darunter */
-.ui-start{ position:fixed; inset:0; z-index: 1000; }
-    
-    /* (2.3) Build-Dock Sichtbarkeit/Animation -------------------------------- */
+    /* Sicherheit: Startpanel liegt darunter */
+    .ui-start{ position:fixed; inset:0; z-index: 1000; }
+
+    /* (2.4) Build-Dock Sichtbarkeit/Animation ------------------------------- */
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom: calc(40vh + 16px); }
 
@@ -124,44 +125,34 @@
   </script>
 
   <!-- (3.1) INSPECTOR SAFE-SHIM (korrekt, blockiert echten Core nicht) -->
-<script>
-(function(){
-  // Falls der echte Inspector-API schon da ist: nichts tun.
-  if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
+  <script>
+  (function(){
+    if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
 
-  // Fallback-API (wird automatisch ersetzt, sobald echter Core lädt)
-  const FallbackAPI = {
-    open(){  if (window.UIInspector?.open)  return UIInspector.open("fallback");  log("open()");  },
-    close(){ if (window.UIInspector?.close) return UIInspector.close("fallback"); log("close()"); },
-    toggle(){ if (window.UIInspector?.toggle) return UIInspector.toggle();        log("toggle()"); },
-    isOpen(){ try { return !!document.querySelector('.inspector-root.is-open,.inspector--open'); } catch(_) { return false; } },
-    log(m){  (window.CBLog?.info||console.log)("[inspector:fallback] " + (m||"call")); }
-  };
+    const FallbackAPI = {
+      open(){  if (window.UIInspector?.open)  return UIInspector.open("fallback");  log("open()");  },
+      close(){ if (window.UIInspector?.close) return UIInspector.close("fallback"); log("close()"); },
+      toggle(){ if (window.UIInspector?.toggle) return UIInspector.toggle();        log("toggle()"); },
+      isOpen(){ try { return !!document.querySelector('.inspector-root.is-open,.inspector--open'); } catch(_) { return false; } },
+      log(m){  (window.CBLog?.info||console.log)("[inspector:fallback] " + (m||"call")); }
+    };
+    function log(msg){ (window.CBLog?.info||console.log)("[inspector:fallback] " + msg); }
+    if (!window.InspectorAPI) window.InspectorAPI = FallbackAPI;
 
-  function log(msg){ (window.CBLog?.info||console.log)("[inspector:fallback] " + msg); }
+    window.addEventListener('cb:inspector:core-ready', ()=>{
+      (window.CBLog?.ok||console.log)("[inspector] Core ready – Fallback wird ersetzt");
+    }, { once:true });
 
-  // Nur InspectorAPI setzen – NICHT window.Inspector überschreiben!
-  if (!window.InspectorAPI) window.InspectorAPI = FallbackAPI;
-
-  // Wenn der echte Core später kommt, „promoten“:
-  // a) Falls er InspectorAPI setzt, nutzt ab da die echte API.
-  window.addEventListener('cb:inspector:core-ready', ()=>{
-    (window.CBLog?.ok||console.log)("[inspector] Core ready – Fallback wird ersetzt");
-  }, { once:true });
-
-  // b) Wenn ein Build nur window.Inspector benutzt, übernehme dessen API automatisch.
-  //    (ohne ihn zu blockieren)
-  const promote = ()=> {
-    if (window.Inspector && !window.InspectorAPI) {
-      window.InspectorAPI = window.Inspector;
-      (window.CBLog?.ok||console.log)("[inspector] API übernommen aus window.Inspector");
-    }
-  };
-  document.addEventListener("DOMContentLoaded", promote, { once:true });
-  setTimeout(promote, 0);
-})();
-</script>
-  
+    const promote = ()=> {
+      if (window.Inspector && !window.InspectorAPI) {
+        window.InspectorAPI = window.Inspector;
+        (window.CBLog?.ok||console.log)("[inspector] API übernommen aus window.Inspector");
+      }
+    };
+    document.addEventListener("DOMContentLoaded", promote, { once:true });
+    setTimeout(promote, 0);
+  })();
+  </script>
 </head>
 <body>
 
@@ -190,7 +181,6 @@
   </div>
 
   <!-- (6) UI – CORE-Bau-Menü (sichtbarer Dock, von UI-Build gefüllt) ========= -->
-  <!-- Hinweis: Build-Dock bleibt bis zum ersten Öffnen hidden -->
   <div id="hud" class="ui-hud" hidden></div>
   <div id="build-dock" class="ui-build" hidden aria-live="polite"></div>
 
@@ -213,10 +203,11 @@
   <script defer src="assets/inspector/inspector.resources.js"></script>
   <script defer src="assets/inspector/inspector.api-compat.js"></script>
   <script defer src="assets/inspector/inspector.api-bridge.js"></script>
-  <!-- ➕ Neu/prüfen: Bindings/Ready-Signal -->
+  <!-- optional: Bindings/Ready-Signal (falls vorhanden) -->
   <script defer src="assets/inspector/inspector.button-bind.js"></script>
-  
+
   <!-- (10) UI-LAYER ========================================================== -->
+  <!-- Wichtig: Build zuerst, dann Bridge -->
   <script src="ui/ui-events.js"></script>
   <script src="ui/ui-build.categories.js"></script>
   <script src="ui/ui-build.js"></script>
@@ -232,7 +223,7 @@
     (function () {
       /* (11.0) Diagnose/Version --------------------------------------------- */
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.8.0";
+      window.__cb.indexVersion = "v18.8.1";
       (window.CBLog?.info || console.log)(`[index] UI bereit (${window.__cb.indexVersion})`);
       window.dispatchEvent(new CustomEvent('cb:ui-ready')); // UI meldet sich
 
@@ -243,13 +234,10 @@
       function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
 
       $('btnStartNew')?.addEventListener('click', () => {
-        // Wichtig: KEIN direktes Game.start() hier → Boot orchestriert nach cb:start:new
-        window.dispatchEvent(new CustomEvent('cb:start:new'));
-        hideStart();
+        window.dispatchEvent(new CustomEvent('cb:start:new')); hideStart();
       });
       $('btnStartResume')?.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('cb:start:continue'));
-        hideStart();
+        window.dispatchEvent(new CustomEvent('cb:start:continue')); hideStart();
       });
       $('btnStartReset')?.addEventListener('click', () => {
         try { localStorage.clear(); } catch(e){}
