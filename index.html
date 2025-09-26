@@ -110,6 +110,30 @@
       CBLog.info("[cb] Globaler CBLog aktiv (index)");
     })();
   </script>
+  
+    <!-- (3.1) INSPECTOR SAFE-SHIM (verhindert ReferenceError 'Inspector') -->
+  <script>
+    (function(){
+      // Falls der echte Inspector schon da ist, nichts tun.
+      if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
+
+      // Minimal-API: wird später vom echten Inspector überschrieben.
+      const FallbackAPI = {
+        toggle(){ (window.CBLog?.info||console.log)("[inspector] API noch nicht bereit – toggle() als Platzhalter"); },
+        isOpen(){ return !!document.querySelector('.inspector--open'); },
+        log(m){  (window.CBLog?.info||console.log)("[inspector] " + m); }
+      };
+
+      // Kompat: altes 'Inspector' -> neue API
+      window.InspectorAPI = window.InspectorAPI || FallbackAPI;
+      window.Inspector    = window.Inspector    || window.InspectorAPI;
+
+      // Wenn der echte Core später kommt, darf er überschreiben:
+      window.addEventListener('cb:inspector:core-ready', ()=>{
+        (window.CBLog?.ok||console.log)("[inspector] Core ready – Safe-Shim wird überschrieben");
+      }, { once:true });
+    })();
+  </script>
 </head>
 <body>
 
