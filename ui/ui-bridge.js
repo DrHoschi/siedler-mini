@@ -15,6 +15,9 @@
  *   (5) Exports
  * ========================================================================== */
 
+if (!window.InspectorAPI) window.InspectorAPI = { toggle(){ (CBLog?.info||console.log)("[ui-bridge] InspectorAPI Fallback"); } };
+if (!window.Inspector)    window.Inspector    = window.InspectorAPI;
+
 /* (0) Logger-Guard ----------------------------------------------------------- */
 if (!window.CBLog || typeof window.CBLog.ok !== "function") {
   window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
