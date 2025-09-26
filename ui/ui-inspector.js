@@ -1,18 +1,18 @@
 /* ============================================================================
  * Datei: ui/ui-inspector.js
- * Version: v18.9.0 (2025-09-26)
+ * Version: v18.9.1 (2025-09-26)
  * Zweck: Einheitliche Inspector-UI + API-Wrapper (Fallback inkl.)
  * Leitplanken:
  *   - Zentrale CBLog-Nutzung (kommt aus index)
- *   - KEIN ReferenceError mehr: nutzt nur InspectorAPI/Wrapper, nie nacktes "Inspector"
+ *   - KEIN ReferenceError: nutzt InspectorAPI/Wrapper, nie nacktes "Inspector"
  *   - Tabs: Logs | Tests | Ressourcen | Pfade (Fallback-UI); echte Module dürfen übernehmen
- *   - Events (neu + legacy): cb:inspector:open|close|tab:change (sowie cb:inspector-open|close)
+ *   - Events (neu + legacy): cb:inspector:open|close|tab:change (+ cb:inspector-open|close)
  * Struktur:
  *   (0) Logger-Guard
  *   (1) Konstanten/State
- *   (2) DOM-Setup (ensureRoot, basic UI)
+ *   (2) DOM-Setup (ensureRoot, basic UI, Top-Layer)
  *   (3) Tabs/Render (setTab, Logs-Stream)
- *   (4) Öffnen/Schließen/Toggle (API)
+ *   (4) Öffnen/Schließen/Toggle (API) – inkl. bring-to-front
  *   (5) Event-Wiring (cb:log, ESC, Ready-Signale)
  *   (6) Exports (window.UIInspector) + Ready-Event
  * ============================================================================ */
@@ -25,10 +25,10 @@ if (!window.CBLog || typeof window.CBLog.ok !== "function") {
 
 /* (1) Konstanten/State ------------------------------------------------------- */
 const UINS_MOD = "[ui-inspector]";
-const UINS_VER = "v18.9.0";
+const UINS_VER = "v18.9.1";
 
 const UINS_STATE = {
-  root: null,        // Overlay-Root (Fallback-UI), #inspector-root / .inspector-root
+  root: null,        // Overlay-Root (Fallback-UI)
   body: null,        // Body-Container
   tabs: null,        // Tabs-Container
   isOpen: false,
@@ -36,18 +36,28 @@ const UINS_STATE = {
   logs: []           // In-Memory Log-Buffer für Fallback-Logs
 };
 
-/* (2) DOM-Setup (ensureRoot, basic UI) -------------------------------------- */
+/* (2) DOM-Setup (ensureRoot, basic UI, Top-Layer) --------------------------- */
 function ensureRoot(){
-  // vorhandene Container (#inspector oder #inspector-root) bevorzugen
+  // vorhandene Container (#inspector-root | .inspector-root | #inspector) verwenden
   let r = document.getElementById("inspector-root")
        || document.querySelector(".inspector-root")
-       || document.getElementById("inspector"); // falls altes Root existiert
+       || document.getElementById("inspector");
+
+  const applyBaseStyles = (node)=>{
+    node.style.position = "fixed";
+    node.style.inset = "0";
+    node.style.zIndex = "2147483647"; // Top-Layer (über Startpanel/HUD)
+    node.style.background = "rgba(8,12,18,.92)";
+    node.style.color = "#cfe0f2";
+    node.style.display = "none";
+    node.style.pointerEvents = "auto";
+  };
 
   if (!r) {
     r = document.createElement("div");
     r.id = "inspector-root";
     r.className = "inspector-root";
-    r.style.cssText = "position:fixed;inset:0;z-index:60;background:rgba(8,12,18,.92);color:#cfe0f2;display:none;";
+    applyBaseStyles(r);
     r.setAttribute("role","dialog");
     r.setAttribute("aria-modal","true");
 
@@ -95,6 +105,9 @@ function ensureRoot(){
 
     // ESC schließt
     window.addEventListener("keydown", (ev)=>{ if(r.style.display!=="none" && ev.key==="Escape") UIInspector.close("esc"); });
+  } else {
+    // Basisstyles sicherstellen (falls externes CSS fehlt/anders ist)
+    applyBaseStyles(r);
   }
 
   UINS_STATE.root = r;
@@ -105,22 +118,23 @@ function ensureRoot(){
 
 /* (3) Tabs/Render (setTab, Logs-Stream) ------------------------------------- */
 function renderLogs(){
-  // Fallback-Logliste (einfache Tabelle/Pre)
-  if (!UINS_STATE.body) return;
-  if (UINS_STATE.activeTab !== "logs") return;
+  if (!UINS_STATE.body || UINS_STATE.activeTab !== "logs") return;
 
   const rows = UINS_STATE.logs.slice(-500).map(l=>{
     const ts = new Date(l.t||Date.now()).toLocaleTimeString();
-    const icon = l.icon || ""; // icon kommt aus index-CBLog via detail.icon
+    const icon = l.icon || "";
     return `<div class="log-row level-${l.level||'info'}" style="padding:2px 0;">
       <span class="ts" style="opacity:.7;margin-right:.5em;">${ts}</span>
       <span class="ic" style="margin-right:.4em;">${icon}</span>
       <span class="msg">${l.msg||""}</span>
     </div>`;
   }).join("");
+
   UINS_STATE.body.innerHTML = `
     <div class="log-panel">
-      <div class="log-list" style="font-family:ui-monospace,monospace;font-size:12px;line-height:1.35">${rows||"<em>Log-Stream aktiv…</em>"}</div>
+      <div class="log-list" style="font-family:ui-monospace,monospace;font-size:12px;line-height:1.35">
+        ${rows || "<em>Log-Stream aktiv…</em>"}
+      </div>
     </div>
   `;
 }
@@ -147,7 +161,6 @@ function setTab(tab){
     UINS_STATE.body.innerHTML = "<div>Wähle einen Tab.</div>";
   }
 
-  // Events (neu + legacy)
   try {
     window.dispatchEvent(new CustomEvent("cb:inspector:tab:change", { detail:{ tab } }));
     window.dispatchEvent(new CustomEvent("cb:inspector-tab-change",  { detail:{ tab } })); // legacy
@@ -156,13 +169,20 @@ function setTab(tab){
 
 /* (4) Öffnen/Schließen/Toggle (API) ----------------------------------------- */
 function doOpen(origin){
-  // Wenn echter Core existiert, delegieren
+  // Echten Core bevorzugen, falls vorhanden
   if (window.InspectorAPI?.open) { try { window.InspectorAPI.open(); return; } catch(_){} }
 
   const r = ensureRoot();
+
+  // an DOM-Ende ziehen → garantiert vorne
+  try { document.body.appendChild(r); } catch(_) {}
+
   r.style.display = "block";
   r.classList.add("is-open");
+  r.style.zIndex = "2147483647"; // doppelt hält besser
   UINS_STATE.isOpen = true;
+  document.body.classList.add("inspector-open");
+
   setTab(UINS_STATE.activeTab || "logs");
 
   try {
@@ -180,6 +200,7 @@ function doClose(reason){
   r.style.display = "none";
   r.classList.remove("is-open");
   UINS_STATE.isOpen = false;
+  document.body.classList.remove("inspector-open");
 
   try {
     window.dispatchEvent(new CustomEvent("cb:inspector:close", { detail:{ reason:reason||"cancel" } }));
@@ -198,22 +219,17 @@ function doToggle(){
 }
 
 /* (5) Event-Wiring (cb:log, ESC, Ready-Signale) ----------------------------- */
-// Logs einsammeln (für Fallback-Logs-Tab)
 window.addEventListener("cb:log", (ev)=>{
   const { level, msg, t, icon } = ev.detail || {};
   UINS_STATE.logs.push({ level, msg, t, icon });
-  // Nur neu rendern, wenn Tab „logs“ aktiv ist
   if (UINS_STATE.activeTab === "logs" && UINS_STATE.isOpen) renderLogs();
 });
 
-// Optionale Reaktion auf index-Ready (kann genutzt werden, um DOM lazy zu bauen)
 window.addEventListener("cb:ui-ready", ()=>{
-  // Root vorhalten (nichts anzeigen)
   ensureRoot();
   (window.CBLog?.info||console.log)(`${UINS_MOD} bereit (UI-Ready)`);
 });
 
-// Wenn der „echte“ Inspector-Core fertig ist, darf er übernehmen
 window.addEventListener("cb:inspector:core-ready", ()=>{
   (window.CBLog?.ok||console.log)(`${UINS_MOD} echter Core signalisiert readiness`);
 });
@@ -227,7 +243,6 @@ window.UIInspector = {
   version: UINS_VER
 };
 
-// Ready-Event für alle, die darauf warten
 try {
   window.dispatchEvent(new CustomEvent("cb:inspector:UI-ready", { detail:{ ver: UINS_VER }}));
 } catch(_) {}
