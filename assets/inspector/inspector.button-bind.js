@@ -1,75 +1,120 @@
-/*!
- * inspector.button-bind.js
- * Erzwingt ein funktionierendes Toggle für den Inspector-Button – unabhängig davon,
- * ob andere Scripte GameUI überschrieben/verbogen haben.
- * Reihenfolge: NACH deinen Inspector-Modulen, VOR ui-bridge/ui-start/ui-build laden.
- */
-(function () {
-  // Minimaler Logger (unabhängig von CBLog)
-  var log = function(m){ try{ (console.log)("["+ "insp-bind" +"] " + m); }catch(_){ } };
+/* ============================================================================
+ * Datei: assets/inspector/inspector.button-bind.js
+ * Version: v18.9.1 (2025-09-26)
+ * Zweck: Den 🩺-Button robust an den Inspector togglen – unabhängig von Lade-Reihenfolge
+ * Leitplanken:
+ *   - Bevorzugt InspectorAPI.toggle() → Fallback: UIInspector.toggle()
+ *   - Letzter Fallback (nur wenn gar nichts da ist): Root direkt toggeln
+ *   - Idempotent: mehrfaches Laden/Retry ohne Doppelbindung
+ * Struktur:
+ *   (0) Logger-Guard
+ *   (1) Konstanten/State
+ *   (2) Helper (findRoot, callAPI, bindButton, ensureGameUI)
+ *   (3) Boot (DOMContentLoaded + Retries + Core-Ready)
+ *   (4) Exports
+ * ============================================================================ */
 
-  // Alle bekannten Root-Selektoren einmal abdecken (alt/neu)
-  var ROOTS = [
-    "#inspector", "#inspector-root", "#inspectorOverlay", "#ui-inspector",
-    "#overlay-inspector", ".inspector-root", ".inspector-overlay", "[data-inspector-root]"
-  ];
-  function findRoot(){
-    for (var i=0;i<ROOTS.length;i++){
-      var el = document.querySelector(ROOTS[i]);
-      if (el) return el;
-    }
-    return null;
+/* (0) Logger-Guard ----------------------------------------------------------- */
+if (!window.CBLog || typeof window.CBLog.ok !== "function") {
+  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
+}
+const BIND_MOD = "[insp-bind]";
+const logI = (m)=> (window.CBLog?.info||console.log)(`${BIND_MOD} ${m}`);
+const logW = (m)=> (window.CBLog?.warn||console.warn)(`${BIND_MOD} ${m}`);
+
+/* (1) Konstanten/State ------------------------------------------------------- */
+const BIND_VER = "v18.9.1";
+const ROOT_SELECTORS = [
+  "#inspector", "#inspector-root", "#inspectorOverlay", "#ui-inspector",
+  "#overlay-inspector", ".inspector-root", ".inspector-overlay", "[data-inspector-root]"
+];
+let bound = false;
+
+/* (2) Helper ----------------------------------------------------------------- */
+function findRoot(){
+  for (const sel of ROOT_SELECTORS){
+    const el = document.querySelector(sel);
+    if (el) return el;
   }
+  return null;
+}
 
-  // Sanfte API-Helfer (verwenden vorhandene APIs, wenn sie existieren)
-  function callAPI(){
-    if (window.UIInspector && typeof window.UIInspector.toggle === "function"){
-      log("via UIInspector.toggle()");
-      return window.UIInspector.toggle();
-    }
-    if (window.Inspector && typeof window.Inspector.toggle === "function"){
-      log("via Inspector.toggle()");
-      return window.Inspector.toggle();
-    }
-    // Events feuern (alt/legacy/neu)
-    ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"].forEach(function(n){
-      try{ window.dispatchEvent(new CustomEvent(n,{detail:{from:"insp-bind"}})); }catch(_){}
-    });
-    log("Toggle-Events gefeuert");
-    // Letzter Fallback: Root direkt toggeln
-    var r = findRoot();
-    if (!r){ log("Kein Inspector-Root gefunden"); return; }
-    var vis = r.classList.contains("is-open") || (r.style.display && r.style.display!=="none");
-    if (vis){ r.classList.remove("is-open"); r.style.display="none";  log("Root → close (fallback)"); }
-    else    { r.classList.add("is-open");   r.style.display="flex";  log("Root → open (fallback)"); }
+function lastResortToggle(){
+  const r = findRoot();
+  if (!r) { logW("Kein Inspector-Root gefunden (last resort)"); return; }
+  const visible = r.classList.contains("is-open") || (r.style.display && r.style.display !== "none");
+  if (visible) {
+    r.classList.remove("is-open");
+    r.style.display = "none";
+    logI("Root → close (fallback)");
+  } else {
+    // konsistent mit ui/ui-inspector.js → display:block
+    r.classList.add("is-open");
+    r.style.display = "block";
+    // nach vorne holen (falls nötig)
+    try { document.body.appendChild(r); } catch(_) {}
+    r.style.zIndex = "2147483647";
+    logI("Root → open (fallback)");
   }
+}
 
-  // Button-Klick binden – robust gegen spätes DOM
-  function bindButton(){
-    var btn = document.querySelector('#btn-inspector button,[data-action="toggle-inspector"],[aria-label="Inspector"]');
-    if (btn && !btn.__inspBound){
-      btn.addEventListener("click", function(ev){ ev.preventDefault(); try{ callAPI(); }catch(e){ console.error(e); } }, true);
-      btn.__inspBound = true;
-      log("Button-Handler gebunden");
-    }
+function callAPI(){
+  // 1) Bevorzugt: echte API
+  if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function"){
+    window.InspectorAPI.toggle();
+    return;
   }
-
-  // Zusätzlich: GameUI wieder herleiten, falls es zerschossen wurde
-  function ensureGameUI(){
-    window.GameUI = window.GameUI || {};
-    if (typeof window.GameUI.toggleInspector !== "function"){
-      window.GameUI.toggleInspector = callAPI;
-      log("GameUI.toggleInspector gesetzt (bind)");
-    }
+  // 2) Fallback: UIInspector
+  if (window.UIInspector && typeof window.UIInspector.toggle === "function"){
+    window.UIInspector.toggle();
+    return;
   }
-
-  // Start
-  document.addEventListener("DOMContentLoaded", function(){
-    ensureGameUI();
-    bindButton();
+  // 3) Events feuern (legacy/neu) – kann von anderen Listeners aufgefangen werden
+  ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"].forEach((n)=>{
+    try { window.dispatchEvent(new CustomEvent(n, { detail:{ from:"insp-bind" } })); } catch(_) {}
   });
-  // Späte DOM-/Script-Fälle abdecken
-  setTimeout(function(){ ensureGameUI(); bindButton(); }, 0);
-  setTimeout(function(){ ensureGameUI(); bindButton(); }, 300);
-  setTimeout(function(){ ensureGameUI(); bindButton(); }, 1200);
-})();
+  // 4) Letzter Fallback: Root direkt
+  lastResortToggle();
+}
+
+function bindButton(){
+  if (bound) return true;
+  const btn = document.querySelector('#btn-inspector button,[data-action="toggle-inspector"],[aria-label="Inspector"]');
+  if (!btn) return false;
+  btn.addEventListener("click", (ev)=>{ ev.preventDefault(); try{ callAPI(); }catch(e){ console.error(e); } }, true);
+  btn.__inspBound = true;
+  bound = true;
+  logI(`Button-Handler gebunden (${BIND_VER})`);
+  return true;
+}
+
+function ensureGameUI(){
+  // Nicht überschreiben, nur ergänzen
+  window.GameUI = window.GameUI || {};
+  if (typeof window.GameUI.toggleInspector !== "function"){
+    window.GameUI.toggleInspector = callAPI;
+    logI("GameUI.toggleInspector bereit");
+  }
+}
+
+/* (3) Boot ------------------------------------------------------------------- */
+// a) Standard: DOM fertig → binden
+document.addEventListener("DOMContentLoaded", ()=>{
+  ensureGameUI();
+  bindButton();
+});
+
+// b) Retries für späte DOM-/Script-Fälle
+[0, 250, 1000, 2500].forEach((delay)=>{
+  setTimeout(()=>{ ensureGameUI(); bindButton(); }, delay);
+});
+
+// c) Wenn der echte Core sich meldet, nochmal sicher binden
+window.addEventListener("cb:inspector:core-ready", ()=>{
+  ensureGameUI();
+  bindButton();
+  logI("Core-Ready empfangen – Bind validiert");
+});
+
+/* (4) Exports ---------------------------------------------------------------- */
+// keine (reine Side-Effect-Bindings)
