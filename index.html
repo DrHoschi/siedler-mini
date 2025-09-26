@@ -52,6 +52,18 @@
       pointer-events:auto !important;
     }
 
+/* (2.x) Inspector ganz nach oben layern */
+.inspector-root{
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647 !important; /* über Startpanel & HUD & alles */
+  pointer-events: auto;
+}
+.inspector-root.is-open{ display:block !important; }
+
+/* Sicherheit: Startpanel liegt darunter */
+.ui-start{ position:fixed; inset:0; z-index: 1000; }
+    
     /* (2.3) Build-Dock Sichtbarkeit/Animation -------------------------------- */
     body.has-build-open #btn-build,
     body.has-build-open #btn-inspector { bottom: calc(40vh + 16px); }
