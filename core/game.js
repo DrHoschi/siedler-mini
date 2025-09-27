@@ -157,3 +157,4 @@ const Game = {
 
 /* (6) Export ----------------------------------------------------------------- */
 window.Game = Game;
+(CBLog.ok||console.log)(`[game] core/game.js aktiv (${typeof Game?.start})`);
