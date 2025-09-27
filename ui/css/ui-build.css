@@ -1,32 +1,26 @@
 /* ============================================================================
  * Datei: ui/css/ui-build.css
- * Version: v18.9.2 (2025-09-26)
+ * Version: v18.9.3 (2025-09-27)
  * Zweck: Build-Dock Styles (mit Panel-Hintergrund)
  * Leitplanken:
  *   - Dock liegt am unteren Rand, wird erst nach Spielstart geöffnet
  *   - Hintergrund nutzt assets/ui/panel.png (Holz/Papier) + dezente Tönung
  *   - Icon-Größe steuert :root --build-icon-size (Fallback 48px)
  *   - Responsive Grid für Kategorien & Items
-/* (1) Design-Tokens --------------------------------------------------------- */
-/* (2) Root/Dock ------------------------------------------------------------- */
-/* (3) Layout-Wrapper -------------------------------------------------------- */
-/* (3.1) Optionale Kopfzeile im Dock */
-/* (4) Kategorie-Container --------------------------------------------------- */
-/* (5) Grid der Items --------------------------------------------------------- */
-/* (6) Einzelnes Item -------------------------------------------------------- */
-/* (6.1) States */
-/* (7) Scrollbars (optional, WebKit) ----------------------------------------- */
-/* (8) Responsive Tweaks ----------------------------------------------------- */
-/* ============================================================================
+ * ============================================================================
+ * (1) Design-Tokens
+ * (2) Root/Dock
+ * (3) Layout-Wrapper
+ * (3.1) Optionale Kopfzeile im Dock
+ * (4) Kategorie-Container
+ * (5) Grid der Items
+ * (6) Einzelnes Item
+ * (6.1) States
+ * (7) Scrollbars (optional, WebKit)
+ * (8) Responsive Tweaks
  * (9) Kompakt-Modus (manuell + auto für sehr kleine Screens)
- *  - manuell: <div id="build-dock" class="build--compact">
- *  - auto: @media (max-width: 420px)
- * ========================================================================== */
-/* ============================================================================
  * (10) Tooltip-Preview (großes Icon + Text)
- *  - Stil nur; Verhalten kommt in ui/ui-tooltip.js
- * ========================================================================== */
-* ========================================================================== */
+ * ============================================================================ */
 
 /* (1) Design-Tokens --------------------------------------------------------- */
 :root{
@@ -47,18 +41,20 @@
   position: fixed;
   left: 0; right: 0; bottom: 0;
   z-index: var(--build-dock-z);
-  display: none;                          /* via body.has-build-open → flex */
   padding: 10px;
-  /* Panel-Hintergrund (Holz/Papier) mit dezenter Tönung */
+  /* Panel-Hintergrund (Holz/Papier) mit dezenter Tönung)
+     WICHTIG: CSS liegt unter ui/css/ → daher ../../ zum assets-Ordner */
   background:
     linear-gradient(to top, var(--build-bg-tint), rgba(12,16,24,.55)),
-    url("../assets/ui/panel.png") center bottom / cover no-repeat;
+    url("../../assets/ui/panel.png") center bottom / cover no-repeat;
   border-top: 1px solid var(--build-border-strong);
   box-shadow: var(--build-shadow);
   color: var(--build-text);
   backdrop-filter: blur(2px);
+  display: flex; /* Layout */
 }
-body.has-build-open #build-dock{ display: flex; }
+#build-dock[hidden]{ display: none !important; } /* Sichtbarkeit NUR über [hidden] */
+body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Buttons etc. */ }
 
 /* (3) Layout-Wrapper -------------------------------------------------------- */
 #build-dock .wrap{
@@ -91,7 +87,6 @@ body.has-build-open #build-dock{ display: flex; }
     linear-gradient(to bottom, rgba(18,24,34,.66), rgba(12,16,24,.6));
   overflow: hidden;
 }
-
 .build-header{
   display: flex;
   align-items: center;
@@ -101,7 +96,6 @@ body.has-build-open #build-dock{ display: flex; }
   border-bottom: 1px solid var(--build-border);
   background: rgba(10,14,20,.5);
 }
-
 .build-title{
   margin: 0;
   font: 600 0.95rem/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -136,17 +130,15 @@ body.has-build-open #build-dock{ display: flex; }
   box-shadow: 0 10px 26px rgba(0,0,0,.22);
 }
 .build-item:active{ transform: translateY(0); }
-
 .build-item img{
   width: var(--build-icon-size);
   height: var(--build-icon-size);
   max-width: var(--build-icon-size);
   max-height: var(--build-icon-size);
   object-fit: contain;
-  image-rendering: auto;                  /* bei Pixel-Art ggf.: pixelated */
+  image-rendering: auto; /* bei Pixel-Art ggf.: pixelated */
   flex: 0 0 auto;
 }
-
 .build-item .label{
   white-space: nowrap;
   overflow: hidden;
@@ -156,7 +148,7 @@ body.has-build-open #build-dock{ display: flex; }
   opacity: .95;
 }
 
-/* (6.1) States */
+/* (6.1) States -------------------------------------------------------------- */
 .build-item.is-selected{
   border-color: #8ab4f8;
   box-shadow: 0 0 0 2px #8ab4f880 inset;
@@ -194,12 +186,9 @@ body.has-build-open #build-dock{ display: flex; }
   .build-list{ grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
 }
 
-/* ============================================================================
- * (9) Kompakt-Modus (manuell + auto für sehr kleine Screens)
- *  - manuell: <div id="build-dock" class="build--compact">
- *  - auto: @media (max-width: 420px)
- * ========================================================================== */
-
+/* (9) Kompakt-Modus --------------------------------------------------------- */
+/* manuell: <div id="build-dock" class="build--compact"> */
+/* auto: @media (max-width: 420px) */
 #build-dock.build--compact .build-list{
   grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
   gap: 6px;
@@ -213,7 +202,6 @@ body.has-build-open #build-dock{ display: flex; }
   width: 36px; height: 36px;
   max-width: 36px; max-height: 36px;
 }
-
 /* Auto-Kompakt für sehr kleine Viewports */
 @media (max-width: 420px){
   #build-dock .build-list{
@@ -231,10 +219,8 @@ body.has-build-open #build-dock{ display: flex; }
   }
 }
 
-/* ============================================================================
- * (10) Tooltip-Preview (großes Icon + Text)
- *  - Stil nur; Verhalten kommt in ui/ui-tooltip.js
- * ========================================================================== */
+/* (10) Tooltip-Preview (großes Icon + Text) --------------------------------- */
+/* Stil; Verhalten kommt aus ui/ui-tooltip.js */
 .ui-tooltip{
   position: fixed;
   z-index: 2000;
@@ -248,11 +234,10 @@ body.has-build-open #build-dock{ display: flex; }
   opacity: 1;
   transform: translate(-50%, calc(-100% - 10px));
 }
-
 .ui-tooltip .tip-card{
-  /* gleiches Panel-Motiv wie der Rest */
+  /* gleiches Panel-Motiv wie der Rest (Pfad korrigiert) */
   background:
-    url("../assets/ui/panel.png") center / contain no-repeat,
+    url("../../assets/ui/panel.png") center / contain no-repeat,
     linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
@@ -261,7 +246,6 @@ body.has-build-open #build-dock{ display: flex; }
   padding: 10px 12px;
   backdrop-filter: blur(2px);
 }
-
 .ui-tooltip .tip-head{
   display: flex; align-items: center; gap: 10px;
   margin-bottom: 6px;
@@ -279,8 +263,6 @@ body.has-build-open #build-dock{ display: flex; }
   margin: 0;
   white-space: normal;
 }
-
-/* kleiner Pfeil */
 .ui-tooltip:after{
   content: "";
   position: absolute;
