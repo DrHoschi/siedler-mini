@@ -1,70 +1,78 @@
-/* ============================================================================
- * Datei: ui/ui-start.js
- * Version: v18.9.5 (2025-09-27)
- * Zweck: Startpanel-Steuerung + sichere Guards (Overlay-BG, Fade-Out)
- * Struktur:
- *   (0) Logger-Guard (1) Cache/Refs (2) Show/Hide (3) Button-Events (4) Reaktionen
- * ============================================================================ */
+// ============================================================================
+// Datei: ui/ui-start.js
+// Projekt: Neue Siedler
+// Version: v19.3.0 (2025-09-28)
+// Zweck:
+//   • Startfenster-Logik (Startfenster zuerst sichtbar)
+//   • Button-IDs exakt wie in deiner Monolith:
+//       btnStartNew / btnStartResume / btnStartReset / btnStartFullscreen
+//   • Buttons bis cb:boot-ready deaktiviert; Blend-out bei cb:game-start
+// Events (Senden):
+//   • cb:ui-ready (UI ist initialisiert)
+//   • cb:start:new|continue|reset|fullscreen (Benutzereingaben)
+// Leitplanken:
+//   • KEIN globales STATE; nur Events & DOM-Interaktion
+//   • window.dispatchEvent / window.addEventListener konsequent
+// Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+// ============================================================================
 
-/* (0) Logger-Guard ----------------------------------------------------------- */
-if (!window.CBLog || typeof window.CBLog.ok !== "function") {
-  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
-}
+(() => {
+  // --------------------------- Konstanten ---------------------------
+  const $   = (sel) => document.querySelector(sel);
+  const EVT = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-/* (1) Cache/Refs ------------------------------------------------------------- */
-const MOD = "[ui-start]";
-const elPanel = () => document.getElementById("start-panel");
-const elBg    = () => document.getElementById("bg-start");
+  const BTN_IDS = ['btnStartNew', 'btnStartResume', 'btnStartReset', 'btnStartFullscreen'];
 
-/* (2) Show/Hide -------------------------------------------------------------- */
-function showStart(){
-  const p = elPanel(); if (!p) return;
-  p.classList.remove("hide"); p.removeAttribute("hidden"); p.setAttribute("aria-hidden","false");
-}
-function hideStart(){
-  const p = elPanel(); if (!p) return;
-  p.classList.add("hide"); p.setAttribute("hidden",""); p.setAttribute("aria-hidden","true");
-  const bg = elBg(); if (bg){ bg.classList.add("fadeout"); setTimeout(()=> bg.setAttribute("aria-hidden","true"), 600); }
-}
+  // --------------------------- Hilfsfunktionen ----------------------
+  function setButtonsDisabled(disabled) {
+    for (const id of BTN_IDS) {
+      const b = document.getElementById(id);
+      if (b) b.disabled = disabled;
+    }
+  }
 
-/* (3) Button-Events ---------------------------------------------------------- */
-(function wireButtons(){
-  const $ = (id)=>document.getElementById(id);
-  const p = elPanel(); if (!p){ CBLog.warn(`${MOD} Panel fehlt`); return; }
+  function bindClicks() {
+    const btnNew  = $('#btnStartNew');
+    const btnCont = $('#btnStartResume');
+    const btnRes  = $('#btnStartReset');
+    const btnFS   = $('#btnStartFullscreen');
 
-  $("btnStartNew")?.addEventListener("click", ()=>{
-    window.dispatchEvent(new CustomEvent("cb:start:new"));
-    hideStart();
+    btnNew  && btnNew .addEventListener('click', () => EVT('cb:start:new',       { mapId: 'demo.ep1' }));
+    btnCont && btnCont.addEventListener('click', () => EVT('cb:start:continue'));
+    btnRes  && btnRes .addEventListener('click', () => EVT('cb:start:reset'));
+    btnFS   && btnFS  .addEventListener('click', () => EVT('cb:fullscreen'));
+  }
+
+  function hideStartPanel() {
+    const panel = document.getElementById('start-panel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  // --------------------------- Hauptlogik ---------------------------
+  // 1) Buttons initial sperren, bis Boot-ready kommt
+  window.addEventListener('DOMContentLoaded', () => {
+    setButtonsDisabled(true);
+    bindClicks();
+
+    (window.CBLog?.ok || console.log)('[ui-start] bereit (cb:ui-ready)');
+    EVT('cb:ui-ready');
   });
-  $("btnStartResume")?.addEventListener("click", ()=>{
-    window.dispatchEvent(new CustomEvent("cb:start:continue"));
-    hideStart();
-  });
-  $("btnStartReset")?.addEventListener("click", ()=>{
-    try{ localStorage.clear(); }catch(_){}
-    window.dispatchEvent(new CustomEvent("cb:start:reset"));
-  });
-  $("btnStartFullscreen")?.addEventListener("click", ()=>{
-    const el = document.documentElement;
-    const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-    try{ fn && fn.call(el); }catch(_){}
-    window.dispatchEvent(new CustomEvent("cb:start:fullscreen"));
+
+  // 2) Boot meldet „bereit“ → Buttons entsperren
+  window.addEventListener('cb:boot-ready', () => {
+    setButtonsDisabled(false);
+    (window.CBLog?.ok || console.log)('[ui-start] entsperrt (boot-ready)');
   });
 
-  CBLog.ok(`${MOD} bereit`);
+  // 3) Spiel startet → Startpanel ausblenden
+  window.addEventListener('cb:game-start', () => {
+    hideStartPanel();
+    (window.CBLog?.ok || console.log)('[ui-start] Startpanel ausgeblendet (game-start)');
+  });
+
+  // (Optional) Bei Map geladen nochmal loggen (UI-Seite)
+  window.addEventListener('cb:map:loaded', (e) => {
+    const mapId = e?.detail?.mapId ?? '(unbekannt)';
+    (window.CBLog?.ok || console.log)('[ui-start] Map geladen:', mapId);
+  });
 })();
-
-/* (4) Reaktionen ------------------------------------------------------------- */
-// Falls UI früher als index meldet
-addEventListener("cb:ui-ready", ()=> showStart());
-// Bei erfolgreichem Map-Load zusätzlich BG sauber ausfaden (bestätigt)
-addEventListener("cb:map:loaded", ()=> hideStart());
-
-window.addEventListener('DOMContentLoaded', ()=>{
-  const btn = document.getElementById('btnInspector');
-  if (!btn) return;
-  btn.addEventListener('click', ()=>{
-    window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
-    (window.CBLog?.ok||console.log)('[ui] Inspector-Button geklickt');
-  });
-});
