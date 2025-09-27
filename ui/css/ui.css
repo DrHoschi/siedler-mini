@@ -130,3 +130,22 @@ body.ui-frame--global::before{
 #start-panel{ /* nicht mehr benutzt – Start liegt in .ui-start */
   /* leer lassen, damit es nichts überschreibt */
 }
+/* ---------- Startpanel-Safety & BG-Fade (v18.9.5) ---------- */
+#start-panel[hidden],
+#start-panel.hide{
+  display: none !important; /* überschreibt alte Styles – garantiert weg */
+}
+
+/* Vollflächiges Start-BG (liegt UNTER dem Panel, über dem Canvas) */
+#bg-start{
+  position: fixed;
+  inset: 0;
+  z-index: 900;             /* unter dem Panel (1000), über Canvas */
+  pointer-events: none;
+  background:
+    radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%, rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
+    url("assets/ui/start-bg.jpg") center/cover no-repeat;
+  opacity: 1;
+  transition: opacity .5s ease;
+}
+#bg-start.fadeout{ opacity: 0; }
