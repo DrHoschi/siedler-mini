@@ -58,24 +58,7 @@
         <span data-r="gold">🪙 Gold: <b>0</b></span>
       </div>
     </header>
-/* Inspector-Button */
-.btn-inspector {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 50;
-  background: #2e2a26;
-  border: 1px solid #4a3b2a;
-  color: var(--txt);
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-}
-.btn-inspector:hover {
-  background: #3b352f;
-  border-color: var(--acc);
-}
+
     <!-- ===================== STARTFENSTER (zuerst sichtbar) =====================
          • IDs exakt wie in deiner Monolith:
            btnStartNew / btnStartResume / btnStartReset / btnStartFullscreen
@@ -97,7 +80,24 @@
         UI-Events: cb:ui-ready · cb:boot-ready · cb:start:new|continue|reset|fullscreen · cb:game-start · cb:map:loaded
       </small>
     </div>
-
+<!-- /* Inspector-Button */ -->
+.btn-inspector {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 50;
+  background: #2e2a26;
+  border: 1px solid #4a3b2a;
+  color: var(--txt);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn-inspector:hover {
+  background: #3b352f;
+  border-color: var(--acc);
+}
     <!-- ===================== SPIELFELD / CANVAS ===================== -->
     <canvas id="game" width="1280" height="720" aria-label="Spielfeld"></canvas>
 
