@@ -4,7 +4,7 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v18.9.2 (2025-09-26)
+       Version: v18.9.6 (2025-09-27)
        Zweck: Core + Inspector + UI korrekt einbinden (Startfenster zuerst)
        Leitplanken: Core→Boot→Inspector→UI; Registry-/cb:* Events; Debug/Logs
          (1) META & TITLE
@@ -148,8 +148,9 @@
 </head>
 <body>
 
+  <!-- Vollflächiges Start-BG (per ui-start.css gestylt) -->
   <div id="bg-start" aria-hidden="true"></div>
-  
+
   <!-- (4) START-PANEL (immer zuerst sichtbar) ================================ -->
   <div id="start-panel" class="ui-start" aria-label="Startmenü">
     <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
@@ -185,31 +186,30 @@
   <script src="core/asset.js"></script>
   <script src="core/registry.js"></script>
 
+  <!-- Guard: verhindert stilles Überschreiben von window.Game ---------------- -->
   <script>
-(function(){
-  const mark = Symbol("origin");
-  // markiere evtl. vorhandenes Game (sollte leer sein)
-  if (window.Game && !window.Game[mark]) {
-    window.Game[mark] = "vor core/game.js: " + (document.currentScript?.src || "inline");
-  }
-  // nachfolgende Scripts: wenn Game erneut gesetzt wird, loggen
-  const d = Object.getOwnPropertyDescriptor(window, "Game") || {};
-  let _Game = window.Game;
-  Object.defineProperty(window, "Game", {
-    configurable: true,
-    get(){ return _Game; },
-    set(v){
-      const prev = _Game && _Game[mark];
-      _Game = v;
-      try { _Game[mark] = (document.currentScript?.src || "inline"); } catch(_){}
-      if (prev && _Game && _Game[mark] !== prev) {
-        (window.CBLog?.warn||console.warn)(`[guard] window.Game überschrieben: ${prev} -> ${_Game[mark]}`);
+    (function(){
+      const mark = Symbol("origin");
+      if (window.Game && !window.Game[mark]) {
+        window.Game[mark] = "vor core/game.js: " + (document.currentScript?.src || "inline");
       }
-    }
-  });
-})();
-</script>
-  
+      const d = Object.getOwnPropertyDescriptor(window, "Game") || {};
+      let _Game = window.Game;
+      Object.defineProperty(window, "Game", {
+        configurable: true,
+        get(){ return _Game; },
+        set(v){
+          const prev = _Game && _Game[mark];
+          _Game = v;
+          try { _Game[mark] = (document.currentScript?.src || "inline"); } catch(_){}
+          if (prev && _Game && _Game[mark] !== prev) {
+            (window.CBLog?.warn||console.warn)(`[guard] window.Game überschrieben: ${prev} -> ${_Game[mark]}`);
+          }
+        }
+      });
+    })();
+  </script>
+
   <script src="core/game.js"></script>
   <script src="core/path-overlay.js"></script>
   <script src="core/boot.js"></script>
@@ -241,38 +241,52 @@
     (function () {
       /* (11.0) Diagnose/Version --------------------------------------------- */
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.9.2";
+      window.__cb.indexVersion = "v18.9.6";
       (window.CBLog?.info || console.log)(`[index] UI bereit (${window.__cb.indexVersion})`);
       window.dispatchEvent(new CustomEvent('cb:ui-ready')); // UI meldet sich
 
-/* (11.1) Startpanel Buttons -> Game-Start Flow ------------------------ */
-const $ = (id) => document.getElementById(id);
-const startPanel = $('start-panel');
-function hideStart(){ startPanel?.classList.add('hide'); startPanel?.setAttribute('hidden',''); }
-function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
+      /* (11.1) Startpanel Buttons -> Game-Start Flow (mit Debounce) ---------- */
+      const $ = (id) => document.getElementById(id);
+      const startPanel = $('start-panel');
+      let startInFlight = false;
 
-$('btnStartNew')?.addEventListener('click', () => {
-  window.dispatchEvent(new CustomEvent('cb:start:new'));
-  hideStart();
-});
-$('btnStartResume')?.addEventListener('click', () => {
-  window.dispatchEvent(new CustomEvent('cb:start:continue'));
-  hideStart();
-});
-$('btnStartReset')?.addEventListener('click', () => {
-  try { localStorage.clear(); } catch(e){}
-  window.dispatchEvent(new CustomEvent('cb:start:reset'));
-  location.reload();
-});
-$('btnStartFullscreen')?.addEventListener('click', () => {
-  const el = document.documentElement;
-  const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  if (fn) try { fn.call(el); } catch(e){}
-  window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
-});
+      function hideStart(){ startPanel?.classList.add('hide'); startPanel?.setAttribute('hidden',''); }
+      function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
+
+      function armButtons(disabled){
+        ['btnStartNew','btnStartResume','btnStartReset','btnStartFullscreen']
+          .forEach(id => { const b=$(id); if (b) b.disabled = !!disabled; });
+      }
+
+      $('btnStartNew')?.addEventListener('click', () => {
+        if (startInFlight) return;
+        startInFlight = true; armButtons(true);
+        window.dispatchEvent(new CustomEvent('cb:start:new'));
+        hideStart();
+      });
+      $('btnStartResume')?.addEventListener('click', () => {
+        if (startInFlight) return;
+        startInFlight = true; armButtons(true);
+        window.dispatchEvent(new CustomEvent('cb:start:continue'));
+        hideStart();
+      });
+      $('btnStartReset')?.addEventListener('click', () => {
+        try { localStorage.clear(); } catch(e){}
+        window.dispatchEvent(new CustomEvent('cb:start:reset'));
+        location.reload();
+      });
+      $('btnStartFullscreen')?.addEventListener('click', () => {
+        const el = document.documentElement;
+        const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (fn) try { fn.call(el); } catch(e){}
+        window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
+      });
+
+      // Re-Enable Buttons bei Fehler / Neustartmöglichkeit
+      addEventListener('cb:map:error', ()=> { startInFlight = false; armButtons(false); showStart(); });
 
       /* (11.2) Reaktion auf Spielstart → HUD zeigen, Build freigeben -------- */
-      window.addEventListener('cb:game-start', () => {
+      addEventListener('cb:game-start', () => {
         document.body.classList.add('game-started');
         document.getElementById('hud')?.removeAttribute('hidden');
       });
