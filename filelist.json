@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-27T07:49:43.834Z",
+  "createdAt": "2025-09-27T21:18:06.370Z",
   "root": ".",
   "count": 442,
   "entries": [
@@ -1503,7 +1503,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 3944
+      "size": 2651
     },
     {
       "type": "file",
@@ -1513,7 +1513,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 5683
+      "size": 5949
     },
     {
       "type": "file",
@@ -2019,7 +2019,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 9514
+      "size": 8579
     },
     {
       "type": "file",
@@ -2049,7 +2049,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 4330
+      "size": 5016
     },
     {
       "type": "file",
@@ -2114,7 +2114,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 5518
+      "size": 2700
     },
     {
       "type": "file",
@@ -2139,7 +2139,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 15322
+      "size": 15056
     },
     {
       "type": "file",
