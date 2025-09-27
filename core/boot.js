@@ -1,72 +1,81 @@
-/* ============================================================================
- * core/boot.js — Bootstrap
- * Version: v18.9.6 (2025-09-27)
- * Zweck: Assets → Registry → Game.init → Game.start(map) (hart abbrechen bei Fehler)
- * Events: cb:assets-ready, cb:registry:ready (aus registry), cb:game-start (aus game)
- * ============================================================================ */
-if (!window.CBLog || typeof window.CBLog.ok !== "function") {
-  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
-}
+// ============================================================================
+// Datei: core/boot.js
+// Projekt: Neue Siedler
+// Version: v19.3.0 (2025-09-28)
+// Zweck:
+//   • Bootstrapping & Event-Wiring (UI ⇄ Boot ⇄ Core)
+//   • Reihenfolge: DOMReady → Assets.loadAll → Registry.init → Game.init
+//   • Reagiert auf cb:start:new|continue|reset|fullscreen
+// Leitplanken (wichtig):
+//   1) KEIN globales doppeltes „const STATE“ (State ist in core/game.js gekapselt)
+//   2) Events ausschließlich über window.(addEventListener|dispatchEvent) (cb:…)
+//   3) Inspector/Debug bleibt erhalten (CBLog wird NICHT entfernt)
+// Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+// ============================================================================
 
-const BOOT = "[boot]";
-function mapUrl(){ return document.getElementById("game")?.dataset?.map || "data/maps/map-mini.json"; }
+(() => {
+  // --------------------------- Konstanten ---------------------------
+  const on  = (n, cb) => window.addEventListener(n, cb);
+  const EVT = (n, detail) => window.dispatchEvent(new CustomEvent(n, { detail }));
 
-async function run(kind="new"){
-  CBLog.info(`${BOOT} Startsequenz init (via cb:start:${kind})`);
+  let assetsReady   = false;
+  let registryReady = false;
 
-  // 1) Assets
-  CBLog.info(`${BOOT} [assets] Initialisierung…`);
-  if (!window.Assets || typeof Assets.init !== "function"){
-    CBLog.error(`${BOOT} Assets.init fehlt`); return;
-  }
-  await Assets.init();
-  try{ window.dispatchEvent(new CustomEvent("cb:assets-ready")); }catch(_){}
-  CBLog.ok(`[assets] bereit`);
-
-  // 2) Registry
-  CBLog.info(`${BOOT} [registry] laden…`);
-  if (!window.Registry || typeof Registry.initFromData !== "function"){
-    CBLog.error(`${BOOT} Registry.initFromData fehlt`); return;
-  }
-  await Registry.initFromData();
-
-  // 3) Game
-  if (!window.Game || typeof Game.init !== "function"){
-    CBLog.error(`${BOOT} [game] init fehlt (keine Funktion)`); return;
-  }
-  Game.init();
-
-  const url = mapUrl();
-  CBLog.info(`${BOOT} [game] starte Map: ${url}`);
-  if (typeof Game.start !== "function"){
-    CBLog.error(`${BOOT} [game] start fehlt (keine Funktion)`); return;
-  }
-
-  // Watchdog: falls Game.start nie cb:game-start feuert, loggen wir einen Hinweis
-  let started = false;
-  const onStarted = ()=>{ started = true; };
-  addEventListener("cb:game-start", onStarted, { once:true });
-
-  try{
-    await Game.start(url);  // core/game.js feuert selbst cb:game-start
-  }catch(err){
-    CBLog.error(`${BOOT} Game.start Fehler: ${err?.message||err}`); 
-    removeEventListener("cb:game-start", onStarted);
-    return;
-  }
-
-  setTimeout(()=>{
-    if (!started){
-      CBLog.warn(`${BOOT} Hinweis: cb:game-start kam nicht – bitte core/game.js prüfen`);
+  // --------------------------- Hilfsfunktionen ----------------------
+  function maybeReady() {
+    if (assetsReady && registryReady) {
+      (window.CBLog?.ok || console.log)('[boot] ready → UI darf starten');
+      EVT('cb:boot-ready');
     }
-  }, 250);
+  }
 
-  CBLog.ok(`${BOOT} Spielstart abgeschlossen`);
-}
+  // --------------------------- Hauptlogik ---------------------------
+  // 1) DOM bereit → Canvas initialisieren + Ladevorgang starten
+  window.addEventListener('DOMContentLoaded', () => {
+    (window.CBLog?.ok || console.log)('[boot] DOM ready');
 
-// Wiring
-addEventListener("cb:start:new",      ()=> run("new"));
-addEventListener("cb:start:continue", ()=> run("continue"));
-addEventListener("cb:start:reset",    ()=>{ try{localStorage.clear();}catch(_){ } location.reload(); });
+    const canvas = document.getElementById('game');
+    if (!canvas) {
+      (window.CBLog?.err || console.error)('[boot] #game Canvas fehlt!');
+      return;
+    }
 
-CBLog.ok(`${BOOT} UI bereit – warte auf Start-Events (cb:start:*)`);
+    // Core initialisieren
+    // Achtung: Game kapselt den State intern; hier KEIN globales STATE anlegen!
+    try { Game.init(canvas); } catch (e) { (window.CBLog?.err || console.error)('[boot] Game.init Fehler:', e); }
+
+    // Assets + Registry laden
+    try { Assets.loadAll(); }  catch (e) { (window.CBLog?.err || console.error)('[boot] Assets.loadAll Fehler:', e); }
+    try { Registry.init(); }   catch (e) { (window.CBLog?.err || console.error)('[boot] Registry.init Fehler:', e); }
+  });
+
+  // 2) Ready-Events aus Core
+  on('cb:assets-ready',   () => { assetsReady   = true; maybeReady(); });
+  on('cb:registry-ready', () => { registryReady = true; maybeReady(); });
+
+  // 3) UI-Events (Startpanel)
+  on('cb:start:new', (e) => {
+    const mapId = e?.detail?.mapId || 'demo.ep1';
+    (window.CBLog?.ok || console.log)('[boot] Neues Spiel', mapId);
+    try { Game.start(mapId); } catch (err) { (window.CBLog?.err || console.error)('[boot] Game.start Fehler:', err); }
+  });
+
+  on('cb:start:continue', () => {
+    (window.CBLog?.ok || console.log)('[boot] Weiterspielen');
+    try { Game.start('last.save'); } catch (err) { (window.CBLog?.err || console.error)('[boot] Game.start Fehler:', err); }
+  });
+
+  on('cb:start:reset', () => {
+    (window.CBLog?.warn || console.warn)('[boot] Reset → Seite neu laden');
+    location.reload();
+  });
+
+  on('cb:fullscreen', () => {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) { el.requestFullscreen?.(); }
+    else { document.exitFullscreen?.(); }
+  });
+
+  // (Optional) Weitere globale Hooks, z. B. Tastatur-Shortcuts/Inspector:
+  // on('cb:inspector:toggle', () => { /* dein Inspector reagiert selbst */ });
+})();
