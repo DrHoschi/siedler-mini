@@ -36,6 +36,25 @@
   --build-text-dim: #b9c7dc;
 }
 
+/* Inspector-Button */
+.btn-inspector {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 50;
+  background: #2e2a26;
+  border: 1px solid #4a3b2a;
+  color: var(--txt);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.btn-inspector:hover {
+  background: #3b352f;
+  border-color: var(--acc);
+}
+
 /* (2) Root/Dock ------------------------------------------------------------- */
 #build-dock{
   position: fixed;
