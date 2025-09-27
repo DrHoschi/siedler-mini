@@ -1,18 +1,18 @@
 /* ============================================================================
  * Datei: core/game.js
- * Version: v18.9.5 (2025-09-26)
+ * Version: v18.9.6 (2025-09-27)
  * Zweck: Vereinheitlichter Game-Core
- *   - Nutzt vorhandene Engine (GameCore/Engine) ODER Minimal-Engine (Fallback)
- *   - Stellt immer die Legacy-API bereit: Game.init(), Game.start(mapUrl)
+ *   - nutzt vorhandene Engine (GameCore/Engine) ODER Minimal-Engine (Fallback)
+ *   - stellt immer die Legacy-API bereit: Game.init(), Game.start(mapUrl)
  * Ereignisse:
  *   cb:map:loading  {url}
  *   cb:map:loaded   {url}
  *   cb:map:error    {url,err}
  *   cb:game-start   {mapUrl, seed}
  * Leitplanken:
- *   - Keine Hard-Abhängigkeit auf fremde Dateien
- *   - Keine Crashes bei fehlender Map/Assets (klare Logs)
- *   - Idempotente init()
+ *   - keine Hard-Abhängigkeit auf fremde Dateien
+ *   - keine Crashes bei fehlender Map/Assets (klare Logs)
+ *   - idempotente init()
  * Struktur:
  *   (0) Logger-Guard
  *   (1) State
@@ -35,9 +35,9 @@ const logW  = (m)=> (CBLog.warn||console.warn)(`${GM_MOD} ${m}`);
 const logE  = (m)=> (CBLog.error||console.error)(`${GM_MOD} ${m}`);
 
 /* (1) State ------------------------------------------------------------------ */
-const GAME_VERSION = "v18.9.5";
+const GAME_VERSION = "v18.9.6";
 const STATE = {
-  inited: false,
+  inited:  false,
   started: false,
   tick: 0,
   map: { url:null, data:null, loaded:false },
@@ -48,7 +48,7 @@ const STATE = {
 function emit(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})) }catch(_){} }
 async function fetchJSON(url){
   const r = await fetch(url, { cache:"no-store" });
-  if (!r.ok) throw new Error(`${url} → ${r.status}`);
+  if (!r.ok) throw new Error(`${url} → ${r.status} ${r.statusText||""}`.trim());
   return await r.json();
 }
 function emitResChange(res, delta, source="game"){
@@ -78,8 +78,7 @@ const MinimalEngine = {
       STATE.map.loaded = false;
       emit("cb:map:error", { url: mapUrl, err: e });
       logE(`Map-Load fehlgeschlagen: ${e?.message||e}`);
-      // Nicht werfen → UI kann trotzdem weiterlaufen; Logs reichen
-      return;
+      return; // nicht werfen → UI/Boot bleibt lebendig
     }
     STATE.started = true;
     emit("cb:game-start", { mapUrl, seed: Date.now() });
@@ -89,13 +88,8 @@ const MinimalEngine = {
 };
 
 /* (4) Adapter auf vorhandene Engines ---------------------------------------- */
-/**
- * Sucht nach bekannten Kernen und bildet eine einheitliche Schnittstelle:
- * - GameCore.start(mapUrl) oder GameCore.Engine.start(mapUrl)
- * - GameCore.init() / Engine.init()
- */
 function detectExternalEngine(){
-  const GC = window.GameCore;
+  const GC  = window.GameCore;
   const ENG = window.Engine || (GC && GC.Engine);
   const api = { init:null, start:null, label:null };
 
@@ -133,9 +127,19 @@ const Game = {
     if (ext && typeof ext.start === "function"){
       logI(`delegiere Start an ${ext.label}: ${mapUrl}`);
       try{
+        // Safety: falls externe Engine cb:game-start NICHT sendet, übernehmen wir es.
+        let fired = false;
+        const once = ()=>{ fired = true; };
+        addEventListener("cb:game-start", once, { once:true });
+
         await ext.start(mapUrl);
-        // Falls die externe Engine kein Event feuert, übernehmen wir es:
-        emit("cb:game-start", { mapUrl, seed: Date.now() });
+
+        setTimeout(()=>{
+          if (!fired){
+            emit("cb:game-start", { mapUrl, seed: Date.now() });
+            logW(`cb:game-start ergänzt (via ${ext.label})`);
+          }
+        }, 0);
         logOK(`Spielstart abgeschlossen (via ${ext.label})`);
       }catch(e){
         logE(`Start via ${ext.label} fehlgeschlagen: ${e?.message||e}`);
@@ -157,4 +161,5 @@ const Game = {
 
 /* (6) Export ----------------------------------------------------------------- */
 window.Game = Game;
+// Diagnose-Ping: im Inspector sofort sichtbar, ob dieses Script aktiv ist.
 (CBLog.ok||console.log)(`[game] core/game.js aktiv (${typeof Game?.start})`);
