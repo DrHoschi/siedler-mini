@@ -1,19 +1,20 @@
 /* ============================================================================
  * Datei: ui/css/ui.css
- * Version: v18.9.3 (2025-09-26)
+ * Version: v18.9.4 (2025-09-27)
  * Zweck: Globale UI-Basis (Tokens, Reset, Buttons, Panel-Primitive)
  * Leitplanken:
- *   - Keine Vollbild-Hintergründe hier (Start-BG liegt in ui-start.css)
+ *   - Keine Vollbild-Hintergründe hier (Start-BG optional am Ende)
  *   - Panel-Look per .ui-panel für alle Fenster/Overlays
- *   - Optionale schmale Außenrahmen-Deko per .ui-frame--global (aus, bis Klasse gesetzt)
+ *   - Optionaler Außenrahmen über body.ui-frame--global
  * Struktur:
  *   (1) Design Tokens
  *   (2) Reset & Base
  *   (3) Panel-Primitive (.ui-panel)
  *   (4) Buttons (Basis + Varianten)
  *   (5) Layout/Utilities
- *   (6) Optional: Globaler Außenrahmen (deaktiviert)
- * ========================================================================== */
+ *   (6) Optional: Globaler Außenrahmen
+ *   (7) Startpanel-Safety & optionaler Start-BG (korrekter Pfad)
+ * ============================================================================ */
 
 /* (1) Design Tokens --------------------------------------------------------- */
 :root{
@@ -27,33 +28,34 @@
   --ui-accent-weak:  #4a7bd6;
 
   /* Rahmen/Schatten */
-  --ui-border:       rgba(255,255,255,.1);
-  --ui-border-strong:#0d121a;
-  --ui-shadow:       0 18px 48px rgba(0,0,0,.32);
+  --ui-border:        rgba(255,255,255,.10);
+  --ui-border-strong: #0d121a;
+  --ui-shadow:        0 18px 48px rgba(0,0,0,.32);
 
   /* Abstände/Radien */
-  --ui-gap:          10px;
-  --ui-radius:       12px;
+  --ui-gap:    10px;
+  --ui-radius: 12px;
 
-  /* Panel-Bild (Holz/Papier) */
-  --ui-panel-img:    url("../assets/ui/panel.png");
+  /* Panel-Bild (Holz/Papier) – Pfad aus ui/css/… → ../../assets/... */
+  --ui-panel-img: url("../../assets/ui/panel.png");
 
   /* optionaler globaler Rahmen */
-  --ui-frame-size:   6px;
-  --ui-frame-color:  rgba(255,255,255,.06);
+  --ui-frame-size:  6px;
+  --ui-frame-color: rgba(255,255,255,.06);
 }
 
 /* (2) Reset & Base ---------------------------------------------------------- */
 html, body{
   margin:0; padding:0;
   background:#000; color:var(--ui-fg);
-  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 *, *::before, *::after{ box-sizing: border-box; }
 img{ max-width:100%; display:block; }
 
 /* (3) Panel-Primitive ------------------------------------------------------- */
-/* → Jede Komponente, die wie ein „Fenster“ aussehen soll, bekommt .ui-panel */
+/* Jede Komponente, die wie ein „Fenster“ aussehen soll, bekommt .ui-panel */
 .ui-panel{
   background:
     var(--ui-panel-img) center center / contain no-repeat,
@@ -76,7 +78,8 @@ button, .btn{
   font: 600 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   padding: 10px 12px;
   cursor: pointer;
-  transition: transform .06s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  transition: transform .06s ease, background .12s ease,
+              border-color .12s ease, box-shadow .12s ease;
 }
 button:hover, .btn:hover{
   transform: translateY(-1px);
@@ -119,31 +122,30 @@ body.ui-frame--global::before{
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 700;                 /* unter HUD(900), Build(1000), Inspector(max) */
+  z-index: 700; /* unter HUD(~900), Build(~1000), Inspector(max) */
   box-shadow:
     inset 0 0 0 var(--ui-frame-size) var(--ui-frame-color),
     inset 0 0 24px rgba(0,0,0,.35);
   border-radius: 2px;
 }
 
-/* (Legacy-Snippets, falls früher gesetzt) */
-#start-panel{ /* nicht mehr benutzt – Start liegt in .ui-start */
-  /* leer lassen, damit es nichts überschreibt */
-}
-/* ---------- Startpanel-Safety & BG-Fade (v18.9.5) ---------- */
+/* (7) Startpanel-Safety & optionaler Start-BG ------------------------------- */
+/* Hinweis: Der BG-Block kann auch in ui-start.css liegen – hier zur Bequemlichkeit. */
 #start-panel[hidden],
-#start-panel.hide{
-  display: none !important; /* überschreibt alte Styles – garantiert weg */
-}
+#start-panel.hide{ display: none !important; } /* garantiert weg */
 
 /* Vollflächiges Start-BG (liegt UNTER dem Panel, über dem Canvas) */
-
 #bg-start{
-  /* … */
+  position: fixed;
+  inset: 0;
+  z-index: 900;             /* unter Panel (1000), über Canvas */
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .5s ease;
   background:
-    radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%, rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
--   url("assets/ui/start-bg.jpg") center/cover no-repeat;
-+   url("../../assets/ui/start-bg.jpg") center/cover no-repeat;
+    radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%,
+                    rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
+    /* Pfad aus ui/css/… → ../../assets/... */
+    url("../../assets/ui/start-bg.jpg") center/cover no-repeat;
 }
-
 #bg-start.fadeout{ opacity: 0; }
