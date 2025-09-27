@@ -185,52 +185,6 @@
   <script src="core/asset.js"></script>
   <script src="core/registry.js"></script>
   <script src="core/game.js"></script>
-
-  <!-- (8.a) Game-API Guard: stellt sicher, dass Game.init/start existieren -->
-  <!-- script>
-    (function(){
-      var MOD = "[game.guard]";
-      var log = (window.CBLog?.info||console.log);
-
-  // Minimal-Engine, falls core/game.js fehlte/kaputt ist oder später überschrieben wurde
-  var Minimal = {
-    inited:false,
-    init:function(){
-      if (this.inited) return;
-      this.inited = true;
-      (window.CBLog?.ok||console.log)(MOD+" init (MinimalEngine)");
-    },
-    start: async function(mapUrl){
-      try{
-        window.dispatchEvent(new CustomEvent("cb:map:loading", { detail:{ url: mapUrl } }));
-        // Wir versuchen, die Map zumindest zu fetchen – wenn 404, läuft der Flow trotzdem weiter
-        try{
-          const r = await fetch(mapUrl, { cache:"no-store" });
-          if (r.ok){ await r.json(); window.dispatchEvent(new CustomEvent("cb:map:loaded", { detail:{ url: mapUrl } })); }
-          else { window.dispatchEvent(new CustomEvent("cb:map:error", { detail:{ url: mapUrl, err: new Error(r.status) } })); }
-        }catch(e){
-          window.dispatchEvent(new CustomEvent("cb:map:error", { detail:{ url: mapUrl, err: e } }));
-        }
-      }finally{
-        // Immer das Erfolgssignal senden, damit UI/HUD loslaufen kann
-        window.dispatchEvent(new CustomEvent("cb:game-start", { detail:{ mapUrl: mapUrl, seed: Date.now() } }));
-        (window.CBLog?.ok||console.log)(MOD+" Spielstart abgeschlossen (MinimalEngine)");
-      }
-    }
-  };
-
-  // Falls Game fehlt oder die API-Methoden fehlen → auffüllen
-  window.Game = window.Game || {};
-  if (typeof window.Game.init !== "function"){
-    window.Game.init = function(){ Minimal.init(); };
-    log(MOD+" fehlendes Game.init ergänzt");
-  }
-  if (typeof window.Game.start !== "function"){
-    window.Game.start = function(url){ return Minimal.start(url); };
-    log(MOD+" fehlendes Game.start ergänzt");
-      }
-    })();
-</script -->
   <script src="core/path-overlay.js"></script>
   <script src="core/boot.js"></script>
 
