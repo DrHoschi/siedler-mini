@@ -4,334 +4,160 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v18.9.6 (2025-09-27)
-       Zweck: Core + Inspector + UI korrekt einbinden (Startfenster zuerst)
-       Leitplanken: Core→Boot→Inspector→UI; Registry-/cb:* Events; Debug/Logs
-         (1) META & TITLE
-         (2) STYLES: Projekt + Inspector
-         (3) CBLog (zentral, einheitlich, mit Emoji/Icon)
-         (4) START-PANEL (immer zuerst sichtbar)
-         (5) FABs: Build / Inspector
-         (6) UI – CORE-Bau-Menü (Dock, von UI-Build gefüllt)
-         (7) CANVAS: Spielfeld (Map-Quelle über data-map)
-         (8) CORE & BOOT
-         (9) INSPECTOR (Split-Load, kein Auto-Close)
-         (10) UI-LAYER
-         (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs
-     ========================================================================= -->
+       Version: v19.2.0 (2025-09-28)
+       Zweck:
+         • Zentrale Einstiegspunkt-Datei (Monolith-Standard)
+         • Startfenster zuerst sichtbar (UIStruktur + Holz/Papier-Hintergrund)
+         • Script-Reihenfolge: Core → Boot → UI → Tools (Inspector/Debug)
+       Wichtige Leitplanken (aus Lastenheft & Code-Standards):
+         1) KEIN globales doppeltes „const STATE“ (State ist im Modul core/game.js gekapselt)
+         2) UI feuert Events (cb:ui-ready, cb:start:new|continue|reset|fullscreen, …)
+         3) Boot hört auf cb:start:* und startet Game.start(mapId)
+         4) Registry/Assets melden cb:*:ready, Boot signalisiert cb:boot-ready
+         5) Inspector/Debug-Tools bleiben aktiv und werden NICHT entfernt
+       Strukturvorgabe für alle Dateien:
+         Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+       ===================================================================== -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neue Siedler – v19.2.0</title>
 
-  <!-- (1) META & TITLE ======================================================= -->
-  <meta charset="utf-8">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f0d">
-  <title>Neue Siedler</title>
+  <!-- ========================= STYLES =========================
+       Wichtig: Der Holz/Papier-Hintergrund liegt unter /assets/ui/panel.png
+       Der Pfad in der CSS (ui/css/ui-build.css) muss aus ui/css/ zwei Ebenen hoch:
+         url("../../assets/ui/panel.png")
+       ======================================================== -->
+  <link rel="stylesheet" href="ui/css/ui-build.css?v=19.2.0" />
 
-  <!-- (2) STYLES: Projekt + Inspector ======================================= -->
-  <link rel="stylesheet" href="ui/css/ui.css">
-  <link rel="stylesheet" href="ui/css/ui-start.css">
-  <link rel="stylesheet" href="ui/css/ui-hud.css">
-  <link rel="stylesheet" href="ui/css/ui-tooltip.css">
-  <link rel="stylesheet" href="ui/css/inspector.css">
+  <!-- Optional: weitere UI-CSS (falls bei dir getrennt) -->
+  <!-- <link rel="stylesheet" href="ui/css/ui-start.css?v=19.2.0" /> -->
+  <!-- <link rel="stylesheet" href="ui/css/ui-inspector.css?v=19.2.0" /> -->
 
-  <style>
-    /* (2.1) Global + Layout -------------------------------------------------- */
-    html, body { height:100%; margin:0; background:#0b0f0d; color:#eaeaea; }
-    #game { display:block; width:100vw; height:100vh; touch-action:none; position:relative; z-index:0; }
-
-    /* (2.2) Floating Action Buttons (Build/Inspector) ------------------------ */
-    .ui-fab { position:fixed; z-index:2147483647 !important; pointer-events:auto !important; }
-    #btn-build { left:16px; bottom:16px; }
-    #btn-inspector { right:16px; bottom:16px; }
-    .ui-fab button{
-      width:52px; height:52px; border:none; border-radius:50%;
-      background:#2a2d31; color:#fff; font-size:22px;
-      box-shadow:0 10px 28px rgba(0,0,0,.35); backdrop-filter:blur(6px); cursor:pointer;
-      pointer-events:auto !important;
-    }
-
-    /* (2.3) Inspector immer ganz oben --------------------------------------- */
-    .inspector-root{
-      position: fixed; inset: 0;
-      z-index: 2147483647 !important; /* über Startpanel & HUD & alles */
-      pointer-events: auto;
-      display:none;
-    }
-    .inspector-root.is-open{ display:block !important; }
-    .ui-start{ position:fixed; inset:0; z-index: 1000; } /* Startpanel darunter */
-
-    /* (2.4) Build-Dock & Icon-Größe ----------------------------------------- */
-    body.has-build-open #btn-build,
-    body.has-build-open #btn-inspector { bottom: calc(40vh + 16px); }
-
-    :root {
-      /* zentrale Stellschraube – Icon-Größe im Baumenü */
-      --build-icon-size: 48px; /* z.B. 40px, 48px, 56px */
-    }
-    #build-dock .build-item img,
-    #build-dock img.build-icon {
-      width: var(--build-icon-size);
-      height: var(--build-icon-size);
-      max-width: var(--build-icon-size);
-      max-height: var(--build-icon-size);
-      object-fit: contain;
-      image-rendering: auto; /* bei Pixelart ggf.: pixelated */
-      margin-bottom: 4px;
-    }
-  </style>
-
-  <!-- (3) CBLog (zentral, einheitlich, mit Emoji/Icon) ======================= -->
-  <script>
-    (function(){
-      if (window.CBLog && typeof window.CBLog.ok === "function") return;
-
-      const MAP = {
-        ok:    { icon: "✅", label: "OK"    },
-        info:  { icon: "ℹ️", label: "INFO"  },
-        warn:  { icon: "⚠️", label: "WARN"  },
-        error: { icon: "❌", label: "ERROR" }
-      };
-      function line(level, msg){
-        const m = MAP[level] || MAP.info;
-        return `${m.icon} [${m.label}] ${msg}`;
-      }
-      function emit(level, msg){
-        try {
-          window.dispatchEvent(new CustomEvent("cb:log", {
-            detail: { level, msg, icon: (MAP[level] || MAP.info).icon, t: Date.now() }
-          }));
-        } catch(e){}
-        const fn = (level==='error'?'error': level==='warn'?'warn':'log');
-        console[fn](line(level, msg));
-      }
-      window.CBLog = {
-        ok:    (m)=>emit('ok',    m),
-        info:  (m)=>emit('info',  m),
-        warn:  (m)=>emit('warn',  m),
-        error: (m)=>emit('error', m)
-      };
-      CBLog.info("[cb] Globaler CBLog aktiv (index)");
-    })();
-  </script>
-
-  <!-- (3.1) INSPECTOR SAFE-SHIM (blockiert echten Core nicht) ---------------- -->
-  <script>
-    (function(){
-      if (window.InspectorAPI && typeof window.InspectorAPI.toggle === "function") return;
-
-      const FallbackAPI = {
-        open(){   if (window.UIInspector?.open)   return UIInspector.open("fallback");   log("open()"); },
-        close(){  if (window.UIInspector?.close)  return UIInspector.close("fallback");  log("close()"); },
-        toggle(){ if (window.UIInspector?.toggle) return UIInspector.toggle();            log("toggle()"); },
-        isOpen(){ try { return !!document.querySelector('.inspector-root.is-open,.inspector--open'); } catch(_) { return false; } },
-        log(m){   (window.CBLog?.info||console.log)("[inspector:fallback] " + (m||"call")); }
-      };
-      function log(msg){ (window.CBLog?.info||console.log)("[inspector:fallback] " + msg); }
-      if (!window.InspectorAPI) window.InspectorAPI = FallbackAPI;
-
-      window.addEventListener('cb:inspector:core-ready', ()=>{
-        (window.CBLog?.ok||console.log)("[inspector] Core ready – Fallback wird ersetzt");
-      }, { once:true });
-
-      const promote = ()=> {
-        if (window.Inspector && !window.InspectorAPI) {
-          window.InspectorAPI = window.Inspector;
-          (window.CBLog?.ok||console.log)("[inspector] API übernommen aus window.Inspector");
-        }
-      };
-      document.addEventListener("DOMContentLoaded", promote, { once:true });
-      setTimeout(promote, 0);
-    })();
-  </script>
+  <noscript>
+    <style>body{font-family:system-ui; padding:1rem;}</style>
+    <p><strong>Hinweis:</strong> Dieses Spiel benötigt JavaScript.</p>
+  </noscript>
 </head>
+
 <body>
+  <!-- =======================================================================
+       APP-ROOT: Hier liegen Canvas, Startpanel, HUD, Build-Dock, Inspector etc.
+       ======================================================================= -->
+  <div id="app">
 
-  <!-- Vollflächiges Start-BG (per ui-start.css gestylt) -->
-  <div id="bg-start" aria-hidden="true"></div>
-
-  <!-- (4) START-PANEL (immer zuerst sichtbar) ================================ -->
-  <div id="start-panel" class="ui-start" aria-label="Startmenü">
-    <div class="ui-start-bg" role="img" aria-label="Hintergrund"></div>
-    <div class="ui-start-card" role="dialog" aria-modal="true">
-      <h1>Neue Siedler</h1>
-      <div class="actions">
-        <button id="btnStartNew" class="btn main">Neues Spiel</button>
-        <button id="btnStartResume" class="btn">Weiterspielen</button>
-        <button id="btnStartReset" class="btn ghost">Reset</button>
-        <button id="btnStartFullscreen" class="btn ghost">Fullscreen</button>
+    <!-- ===================== HUD (Top-Leiste) =====================
+         • Minimaler Ressourcenbalken; echte Werte setzt ui/ui-hud.js.
+         • Daten-Hooks per data-r="…" (Holz/Stein/Fisch/Population/Gold).
+         ========================================================== -->
+    <header id="hud-top" class="hud hud--top" aria-label="Ressourcen">
+      <div class="hud-row">
+        <span data-r="wood">🌲 Holz: <b>0</b></span>
+        <span data-r="stone">🧱 Stein: <b>0</b></span>
+        <span data-r="fish">🐟 Fisch: <b>0</b></span>
+        <span data-r="pop">👥 Bevölkerung: <b>0/5</b></span>
+        <span data-r="gold">🪙 Gold: <b>0</b></span>
       </div>
+    </header>
+
+    <!-- ===================== STARTFENSTER (zuerst sichtbar) =====================
+         • IDs exakt wie in deiner Monolith:
+           btnStartNew / btnStartResume / btnStartReset / btnStartFullscreen
+         • Entsperrung erst nach cb:boot-ready
+         • Blend-out bei cb:game-start (erledigt in ui/ui-start.js)
+         ====================================================================== -->
+    <div id="start-panel" class="panel panel--start" role="dialog" aria-modal="true" aria-labelledby="title-start">
+      <h1 id="title-start">Neue Siedler</h1>
+      <p>Version v19.2.0 – Startfenster zuerst (gemäß Standard)</p>
+
+      <div class="btn-row">
+        <button id="btnStartNew">Neues Spiel</button>
+        <button id="btnStartResume">Weiterspielen</button>
+        <button id="btnStartFullscreen">Vollbild</button>
+        <button id="btnStartReset">Reset</button>
+      </div>
+
+      <small class="hint">
+        UI-Events: cb:ui-ready · cb:boot-ready · cb:start:new|continue|reset|fullscreen · cb:game-start · cb:map:loaded
+      </small>
     </div>
+
+    <!-- ===================== SPIELFELD / CANVAS ===================== -->
+    <canvas id="game" width="1280" height="720" aria-label="Spielfeld"></canvas>
+
+    <!-- ===================== BUILD-DOCK (Baumenü) =====================
+         • Kategorien & Items werden aus Registry gerendert (ui/ui-build.js)
+         • Kategorien Epoche 1: HQ/Lager, Holzfällerhütte, Fischerhütte, Steinbruch
+         =============================================================== -->
+    <aside id="build-dock" class="panel panel--dock" aria-label="Baumenü">
+      <h2>Baumenü</h2>
+      <ul id="build-cats"></ul>
+      <hr />
+      <ul id="build-items"></ul>
+    </aside>
+
+    <!-- ===================== INSPECTOR-ROOT (optional) =====================
+         • Hier kann deine Inspector-App andocken (Tabs: Logs, Tests, Editor, …)
+         • Nicht entfernen; per Standard dauerhaft verfügbar.
+         ================================================================ -->
+    <div id="inspector-root" hidden></div>
   </div>
 
-  <!-- (5) FABs: Build / Inspector =========================================== -->
-  <div id="btn-build" class="ui-fab" title="Bau-Menü öffnen/schließen">
-    <button type="button" aria-label="Bau-Menü"
-      onclick="try{GameUI?.toggleBuild();}catch(e){console.warn('[ui] Build-Toggle nicht verfügbar',e);}">🏠</button>
-  </div>
-  <div id="btn-inspector" class="ui-fab" title="Inspector öffnen/schließen">
-    <button type="button" aria-label="Inspector"
-      onclick="try{ InspectorAPI.toggle(); }catch(e){ console.warn('[ui] InspectorAPI.toggle() nicht verfügbar', e); }">🩺</button>
-  </div>
+  <!-- ===================================================================
+       SCRIPT-LADE-REIHENFOLGE (wichtig!):
+         1) Core (Assets → Registry → Game)
+         2) Boot  (verdrahtet Start/Ready-Events)
+         3) UI    (Startpanel → HUD → Build)
+         4) Tools (Inspector/Debug – bleibt erhalten)
+       =================================================================== -->
 
-  <!-- (6) UI – CORE-Bau-Menü (Dock, von UI-Build gefüllt) ==================== -->
-  <div id="hud" class="ui-hud" hidden></div>
-  <div id="build-dock" class="ui-build" hidden aria-live="polite"></div>
+  <!-- ===================== 1) CORE ===================== -->
+  <script src="core/asset.js?v=19.2.0"></script>
+  <script src="core/registry.js?v=19.2.0"></script>
+  <script src="core/game.js?v=19.2.0"></script>
 
-  <!-- (7) CANVAS: Spielfeld (Map-Quelle über data-map) ======================= -->
-  <canvas id="game" data-map="data/maps/map-mini.json" aria-label="Spielfeld"></canvas>
+  <!-- ===================== 2) BOOT ===================== -->
+  <script src="boot.js?v=19.2.0"></script>
 
-  <!-- (8) CORE & BOOT ======================================================== -->
-  <script src="core/asset.js"></script>
-  <script src="core/registry.js"></script>
+  <!-- ===================== 3) UI (in dieser Reihenfolge) =====================
+       • ui-start: Startfenster-Events + cb:ui-ready
+       • ui-hud  : Ressourcenbalken steuern
+       • ui-build: Kategorien/Items rendern + cb:build:select bei Auswahl
+       ====================================================================== -->
+  <script src="ui/ui-start.js?v=19.2.0"></script>
+  <script src="ui/ui-hud.js?v=19.2.0"></script>
+  <script src="ui/ui-build.js?v=19.2.0"></script>
 
-  <!-- Guard: verhindert stilles Überschreiben von window.Game ---------------- -->
+  <!-- ===================== 4) TOOLS / INSPECTOR =====================
+       • Deine Inspector/Debug-Objekte bleiben bestehen.
+       • CBLog wird NICHT entfernt; hier fallback-definiert, falls nicht vorhanden.
+       =============================================================== -->
   <script>
-    (function(){
-      const mark = Symbol("origin");
-      if (window.Game && !window.Game[mark]) {
-        window.Game[mark] = "vor core/game.js: " + (document.currentScript?.src || "inline");
-      }
-      const d = Object.getOwnPropertyDescriptor(window, "Game") || {};
-      let _Game = window.Game;
-      Object.defineProperty(window, "Game", {
-        configurable: true,
-        get(){ return _Game; },
-        set(v){
-          const prev = _Game && _Game[mark];
-          _Game = v;
-          try { _Game[mark] = (document.currentScript?.src || "inline"); } catch(_){}
-          if (prev && _Game && _Game[mark] !== prev) {
-            (window.CBLog?.warn||console.warn)(`[guard] window.Game überschrieben: ${prev} -> ${_Game[mark]}`);
-          }
-        }
-      });
-    })();
+    /* ---------------------------------------------------------------
+       DEBUG/INSPECTOR-FALLBACK
+       (Dein echter Inspector kann dieses Objekt überschreiben.)
+       --------------------------------------------------------------- */
+    window.CBLog = window.CBLog || {
+      ok   : (...a)=>console.log('[OK]',   ...a),
+      warn : (...a)=>console.warn('[WARN]',...a),
+      err  : (...a)=>console.error('[ERR]',...a)
+    };
+
+    // Beispiel: Inspector-Bootstrap (kannst du durch deine Datei ersetzen)
+    // window.Inspector = window.Inspector || { mount:(el)=>CBLog.ok('[Inspector] mount', el) };
+    // window.addEventListener('DOMContentLoaded', ()=>{
+    //   const root = document.getElementById('inspector-root');
+    //   if (root && window.Inspector?.mount) { root.hidden = false; window.Inspector.mount(root); }
+    // });
   </script>
 
-  <script src="core/game.js"></script>
-  <script src="core/path-overlay.js"></script>
-  <script src="core/boot.js"></script>
-
-  <!-- (9) INSPECTOR (Split-Load) ============================================ -->
-  <script defer src="assets/inspector/inspector.core.js"></script>
-  <script defer src="assets/inspector/inspector.logs.js"></script>
-  <script defer src="assets/inspector/overlay.hooks.js"></script>
-  <script defer src="assets/inspector/inspector.paths.js"></script>
-  <script defer src="assets/inspector/inspector.tests.js"></script>
-  <script defer src="assets/inspector/inspector.resources.js"></script>
-  <script defer src="assets/inspector/inspector.api-compat.js"></script>
-  <script defer src="assets/inspector/inspector.api-bridge.js"></script>
-
-  <!-- (10) UI-LAYER ========================================================== -->
-  <script src="ui/ui-events.js"></script>
-  <script src="ui/ui-build.categories.js"></script>
-  <script src="ui/ui-build.data-bridge.js"></script>
-  <script src="ui/ui-build.js"></script>
-  <script src="ui/ui-bridge.js"></script>
-  <script src="ui/ui-hud.js"></script>
-  <script src="ui/ui-tooltip.js"></script>
-  <script src="ui/ui-start.js"></script>
-  <script src="ui/ui-inspector-bridge.js"></script>
-  <script src="ui/ui-inspector.js"></script>
-
-  <!-- (11) PAGE-SCRIPTS: Startpanel, Build-Guard, Hotkeys, Logs -------------- -->
+  <!-- ===================== INLINE-WIRING (OPTIONAL) =====================
+       Hier KEINE globale STATE-Deklaration! (wichtig)
+       Dieses Feld nur für kleine Integrations-Hooks nutzen.
+       ================================================================ -->
   <script>
-    (function () {
-      /* (11.0) Diagnose/Version --------------------------------------------- */
-      window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v18.9.6";
-      (window.CBLog?.info || console.log)(`[index] UI bereit (${window.__cb.indexVersion})`);
-      window.dispatchEvent(new CustomEvent('cb:ui-ready')); // UI meldet sich
-
-      /* (11.1) Startpanel Buttons -> Game-Start Flow (mit Debounce) ---------- */
-      const $ = (id) => document.getElementById(id);
-      const startPanel = $('start-panel');
-      let startInFlight = false;
-
-      function hideStart(){ startPanel?.classList.add('hide'); startPanel?.setAttribute('hidden',''); }
-      function showStart(){ startPanel?.classList.remove('hide'); startPanel?.removeAttribute('hidden'); }
-
-      function armButtons(disabled){
-        ['btnStartNew','btnStartResume','btnStartReset','btnStartFullscreen']
-          .forEach(id => { const b=$(id); if (b) b.disabled = !!disabled; });
-      }
-
-      $('btnStartNew')?.addEventListener('click', () => {
-        if (startInFlight) return;
-        startInFlight = true; armButtons(true);
-        window.dispatchEvent(new CustomEvent('cb:start:new'));
-        hideStart();
-      });
-      $('btnStartResume')?.addEventListener('click', () => {
-        if (startInFlight) return;
-        startInFlight = true; armButtons(true);
-        window.dispatchEvent(new CustomEvent('cb:start:continue'));
-        hideStart();
-      });
-      $('btnStartReset')?.addEventListener('click', () => {
-        try { localStorage.clear(); } catch(e){}
-        window.dispatchEvent(new CustomEvent('cb:start:reset'));
-        location.reload();
-      });
-      $('btnStartFullscreen')?.addEventListener('click', () => {
-        const el = document.documentElement;
-        const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-        if (fn) try { fn.call(el); } catch(e){}
-        window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
-      });
-
-      // Re-Enable Buttons bei Fehler / Neustartmöglichkeit
-      addEventListener('cb:map:error', ()=> { startInFlight = false; armButtons(false); showStart(); });
-
-      /* (11.2) Reaktion auf Spielstart → HUD zeigen, Build freigeben -------- */
-      addEventListener('cb:game-start', () => {
-        document.body.classList.add('game-started');
-        document.getElementById('hud')?.removeAttribute('hidden');
-      });
-
-      /* (11.3) Build-Dock: erst nach Spielstart öffnen ---------------------- */
-      function gameStarted(){
-        return document.body.classList.contains('game-started') || !!(window.GameCore?.state?.ui?.started);
-      }
-      function setOpen(){
-        if (!gameStarted()){
-          (window.CBLog?.warn || console.warn)("Bitte zuerst das Spiel starten (Startpanel) – dann Baumenü öffnen.");
-          return;
-        }
-        document.body.classList.add('has-build-open');
-        document.getElementById('build-dock')?.removeAttribute('hidden');
-      }
-      function setClose(){ document.body.classList.remove('has-build-open'); }
-
-      addEventListener('cb:build:open',  setOpen);
-      addEventListener('cb:build:close', setClose);
-      addEventListener('cb:build-open',  setOpen);   // Legacy
-      addEventListener('cb:build-close', setClose);  // Legacy
-
-      window.GameUI = window.GameUI || {};
-      window.GameUI.toggleBuild = function(){
-        if (!gameStarted()){
-          (window.CBLog?.warn || console.warn)("Bitte zuerst das Spiel starten (Startpanel) – dann Baumenü öffnen.");
-          return;
-        }
-        const isOpen = !document.body.classList.contains('has-build-open');
-        if (isOpen) setOpen(); else setClose();
-        dispatchEvent(new CustomEvent(isOpen ? 'cb:build:open' : 'cb:build:close'));
-        if (isOpen && window.UIBuild?.rerender) window.UIBuild.rerender();
-      };
-
-      /* (11.4) Hotkeys: B = Build, I = Inspector ---------------------------- */
-      addEventListener('keydown', function(ev){
-        if (ev.repeat) return;
-        if (ev.key === 'b' || ev.key === 'B') { ev.preventDefault(); window.GameUI.toggleBuild(); }
-        if (ev.key === 'i' || ev.key === 'I') { ev.preventDefault(); try { InspectorAPI.toggle(); } catch(e) {} }
-      });
-
-      /* (11.5) Sichtbares Smoke-Log → Inspector-Check ----------------------- */
-      (window.CBLog?.ok || console.log)("Index geladen – Logs an Inspector aktiv");
-    })();
+    // WHERE TO INSERT (Inline-Hooks):
+    // - Zusätzliche globale Events (z. B. cb:keyboard:toggleInspector)
+    // - Einmalige Projekt-Flags / Feature-Toggles
   </script>
 </body>
 </html>
