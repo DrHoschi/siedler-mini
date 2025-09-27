@@ -59,3 +59,12 @@ function hideStart(){
 addEventListener("cb:ui-ready", ()=> showStart());
 // Bei erfolgreichem Map-Load zusätzlich BG sauber ausfaden (bestätigt)
 addEventListener("cb:map:loaded", ()=> hideStart());
+
+window.addEventListener('DOMContentLoaded', ()=>{
+  const btn = document.getElementById('btnInspector');
+  if (!btn) return;
+  btn.addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
+    (window.CBLog?.ok||console.log)('[ui] Inspector-Button geklickt');
+  });
+});
