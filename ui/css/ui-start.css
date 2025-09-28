@@ -24,9 +24,9 @@
   position: absolute;
   /* top: 16px; */
   center: auto;
-  left: auto;
-  right: auto;
-  bottom: auto;
+  left: 15px;
+  right: 15px;
+  bottom: 50px;
   z-index: 10;
 }
 
