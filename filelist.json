@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-28T10:32:33.848Z",
+  "createdAt": "2025-09-28T13:42:55.718Z",
   "root": ".",
-  "count": 443,
+  "count": 444,
   "entries": [
     {
       "type": "dir",
@@ -15,6 +15,11 @@
       "type": "file",
       "path": ".github/workflows/asset-fix.yml",
       "size": 1883
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/build-split-monolith.yml",
+      "size": 2720
     },
     {
       "type": "file",
@@ -39,7 +44,7 @@
     {
       "type": "file",
       "path": ".github/workflows/monolith.yml",
-      "size": 1388
+      "size": 1909
     },
     {
       "type": "file",
@@ -601,21 +606,6 @@
       "type": "file",
       "path": "assets/core/registry.json-adapter.js",
       "size": 3232
-    },
-    {
-      "type": "file",
-      "path": "assets/core/registry.type-aliases.js",
-      "size": 2615
-    },
-    {
-      "type": "file",
-      "path": "assets/core/ui-build.data-bridge.js",
-      "size": 2519
-    },
-    {
-      "type": "file",
-      "path": "assets/core/ui-build.js",
-      "size": 6707
     },
     {
       "type": "dir",
@@ -1526,6 +1516,21 @@
       "size": 7574
     },
     {
+      "type": "file",
+      "path": "core/registry.type-aliases.js",
+      "size": 2615
+    },
+    {
+      "type": "file",
+      "path": "core/ui-build.data-bridge.js",
+      "size": 2519
+    },
+    {
+      "type": "file",
+      "path": "core/ui-build.js",
+      "size": 6707
+    },
+    {
       "type": "dir",
       "path": "data/"
     },
@@ -2134,12 +2139,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43458
+      "size": 43560
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16583
+      "size": 16623
     },
     {
       "type": "file",
@@ -2154,7 +2159,7 @@
     {
       "type": "file",
       "path": "README.md",
-      "size": 4622
+      "size": 5501
     },
     {
       "type": "file",
