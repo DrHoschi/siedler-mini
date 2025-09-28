@@ -1,165 +1,185 @@
-/* ============================================================================
- * Datei: core/game.js
- * Version: v18.9.6 (2025-09-27)
- * Zweck: Vereinheitlichter Game-Core
- *   - nutzt vorhandene Engine (GameCore/Engine) ODER Minimal-Engine (Fallback)
- *   - stellt immer die Legacy-API bereit: Game.init(), Game.start(mapUrl)
- * Ereignisse:
- *   cb:map:loading  {url}
- *   cb:map:loaded   {url}
- *   cb:map:error    {url,err}
- *   cb:game-start   {mapUrl, seed}
- * Leitplanken:
- *   - keine Hard-Abhängigkeit auf fremde Dateien
- *   - keine Crashes bei fehlender Map/Assets (klare Logs)
- *   - idempotente init()
- * Struktur:
- *   (0) Logger-Guard
- *   (1) State
- *   (2) Utility (emit, fetchJSON)
- *   (3) MinimalEngine (Fallback)
- *   (4) Adapter auf vorhandene Engines (GameCore/Engine)
- *   (5) Öffentliche API (Game)
- *   (6) Export
- * ========================================================================== */
+// ============================================================================
+// Datei : core/game.js
+// Zweck : Gekapselte Spiel-Engine (Raster, Map-Load, Platzierung, Loop)
+// API   : Game.init(canvas), Game.start(mapId), Game.getState()
+// Events: cb:game-start  { mapId }
+//         cb:map:loaded  { mapId, tile, size:{w,h} }
+// Hinweise:
+//   • Keine globale STATE-Variable – interner _state ist gekapselt
+//   • Reagiert auf cb:build:select (aus ui/ui-build.js)
+//   • Platzierung per Linksklick auf den Canvas (Rasterausrichtung)
+// ============================================================================
 
-/* (0) Logger-Guard ----------------------------------------------------------- */
-if (!window.CBLog || typeof window.CBLog.ok !== "function") {
-  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
-  CBLog.info("[game] Hinweis: globaler CBLog nicht gefunden – Fallback aktiv");
-}
-const GM_MOD = "[game]";
-const logOK = (m)=> (CBLog.ok||console.log)(`${GM_MOD} ${m}`);
-const logI  = (m)=> (CBLog.info||console.log)(`${GM_MOD} ${m}`);
-const logW  = (m)=> (CBLog.warn||console.warn)(`${GM_MOD} ${m}`);
-const logE  = (m)=> (CBLog.error||console.error)(`${GM_MOD} ${m}`);
+(() => {
+  // ------------------------ interner Zustand ------------------------
+  const _state = {
+    started: false,
+    mapId: null,
+    canvas: null,
+    ctx: null,
+    w: 0,
+    h: 0,
+    tile: 40,                   // Default, wird ggf. durch Map überschrieben
+    gridW: 32,                  // Default in Tiles
+    gridH: 18,                  // Default in Tiles
+    placements: [],             // { x, y, id }
+    hover: { x: -1, y: -1 },    // Rasterzelle unter Maus
+    selectedBuilding: null,     // aus cb:build:select
+    rafId: 0
+  };
 
-/* (1) State ------------------------------------------------------------------ */
-const GAME_VERSION = "v18.9.6";
-const STATE = {
-  inited:  false,
-  started: false,
-  tick: 0,
-  map: { url:null, data:null, loaded:false },
-  resources: { wood:0, stone:0, fish:0 }
-};
+  // ------------------------ kleine Helpers -------------------------
+  const log  = (...a) => (window.CBLog?.ok   || console.log)('[game]', ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn)('[game]', ...a);
+  const err  = (...a) => (window.CBLog?.err  || console.error)('[game]', ...a);
+  const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-/* (2) Utility ---------------------------------------------------------------- */
-function emit(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})) }catch(_){} }
-async function fetchJSON(url){
-  const r = await fetch(url, { cache:"no-store" });
-  if (!r.ok) throw new Error(`${url} → ${r.status} ${r.statusText||""}`.trim());
-  return await r.json();
-}
-function emitResChange(res, delta, source="game"){
-  STATE.resources[res] = (STATE.resources[res]||0) + delta;
-  emit("cb:res:change", { res, delta, source });
-}
+  function gridSnap(px, size) { return Math.floor(px / size); }
 
-/* (3) MinimalEngine (Fallback) ---------------------------------------------- */
-const MinimalEngine = {
-  init(){
-    if (STATE.inited) return;
-    STATE.inited = true;
-    logOK(`init (MinimalEngine ${GAME_VERSION})`);
-    // TODO: Renderer/Loop vorbereiten (später)
-  },
-  async start(mapUrl){
-    logI(`Start → lade Map ${mapUrl}`);
-    try{
-      emit("cb:map:loading", { url: mapUrl });
-      const json = await fetchJSON(mapUrl);
-      STATE.map.url = mapUrl;
-      STATE.map.data = json;
-      STATE.map.loaded = true;
-      emit("cb:map:loaded", { url: mapUrl });
-      logOK(`Map geladen (${json?.name || "unnamed"})`);
-    }catch(e){
-      STATE.map.loaded = false;
-      emit("cb:map:error", { url: mapUrl, err: e });
-      logE(`Map-Load fehlgeschlagen: ${e?.message||e}`);
-      return; // nicht werfen → UI/Boot bleibt lebendig
-    }
-    STATE.started = true;
-    emit("cb:game-start", { mapUrl, seed: Date.now() });
-    logOK(`Spielstart abgeschlossen (map=${mapUrl})`);
-  },
-  getObstacleAt(){ return false; }
-};
-
-/* (4) Adapter auf vorhandene Engines ---------------------------------------- */
-function detectExternalEngine(){
-  const GC  = window.GameCore;
-  const ENG = window.Engine || (GC && GC.Engine);
-  const api = { init:null, start:null, label:null };
-
-  if (GC && typeof GC.start === "function"){
-    api.init  = GC.init?.bind(GC);
-    api.start = GC.start.bind(GC);
-    api.label = "GameCore";
-    return api;
+  // ------------------------ Rendering --------------------------------
+  function drawBackground(ctx, w, h) {
+    ctx.fillStyle = '#1a1d21';
+    ctx.fillRect(0, 0, w, h);
   }
-  if (ENG && typeof ENG.start === "function"){
-    api.init  = ENG.init?.bind(ENG);
-    api.start = ENG.start.bind(ENG);
-    api.label = (window.Engine? "Engine":"GameCore.Engine");
-    return api;
+
+  function drawGrid(ctx, w, h, size) {
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= w; x += size) { ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); ctx.stroke(); }
+    for (let y = 0; y <= h; y += size) { ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke(); }
   }
-  return null;
-}
 
-/* (5) Öffentliche API (Game) ------------------------------------------------ */
-const Game = {
-  init(){
-    if (STATE.inited) { logW("init ignoriert – bereits initialisiert"); return; }
-
-    const ext = detectExternalEngine();
-    if (ext && typeof ext.init === "function"){
-      try { ext.init(); logOK(`init via ${ext.label}`); }
-      catch(e){ logW(`init via ${ext.label} fehlgeschlagen: ${e?.message||e}. Nutze MinimalEngine.`); MinimalEngine.init(); }
-    } else {
-      MinimalEngine.init();
+  function drawPlacements(ctx, size) {
+    for (const p of _state.placements) {
+      const x = p.x * size, y = p.y * size;
+      ctx.fillStyle = 'rgba(192,161,107,.35)';   // Holz-/Papier-Ton
+      ctx.fillRect(x, y, size, size);
+      ctx.strokeStyle = 'rgba(192,161,107,.9)';
+      ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
     }
-  },
+  }
 
-  async start(mapUrl){
-    const ext = detectExternalEngine();
-    if (ext && typeof ext.start === "function"){
-      logI(`delegiere Start an ${ext.label}: ${mapUrl}`);
-      try{
-        // Safety: falls externe Engine cb:game-start NICHT sendet, übernehmen wir es.
-        let fired = false;
-        const once = ()=>{ fired = true; };
-        addEventListener("cb:game-start", once, { once:true });
+  function drawHover(ctx, size) {
+    if (_state.hover.x < 0 || _state.hover.y < 0) return;
+    const x = _state.hover.x * size, y = _state.hover.y * size;
+    ctx.strokeStyle = 'rgba(77,163,255,.9)'; // Akzent-Farbe
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1.5, y + 1.5, size - 3, size - 3);
+  }
 
-        await ext.start(mapUrl);
+  function frame(ts) {
+    if (!_state.started) return;
+    const ctx = _state.ctx; if (!ctx) return;
+    const { w, h, tile } = _state;
 
-        setTimeout(()=>{
-          if (!fired){
-            emit("cb:game-start", { mapUrl, seed: Date.now() });
-            logW(`cb:game-start ergänzt (via ${ext.label})`);
-          }
-        }, 0);
-        logOK(`Spielstart abgeschlossen (via ${ext.label})`);
-      }catch(e){
-        logE(`Start via ${ext.label} fehlgeschlagen: ${e?.message||e}`);
-        emit("cb:map:error", { url: mapUrl, err: e });
+    drawBackground(ctx, w, h);
+    drawGrid(ctx, w, h, tile);
+    drawPlacements(ctx, tile);
+    drawHover(ctx, tile);
+
+    _state.rafId = requestAnimationFrame(frame);
+  }
+
+  // ------------------------ Map laden --------------------------------
+  async function loadMap(mapId) {
+    // Erwartetes Format (optional, wenn vorhanden):
+    // { "id":"...", "name":"...", "tile": 40, "size": [widthTiles, heightTiles] }
+    try {
+      if (typeof mapId === 'string' && /\.json($|\?)/i.test(mapId)) {
+        const res = await fetch(mapId, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        const tile = Number(json.tile) || _state.tile;
+        const size = Array.isArray(json.size) ? json.size : [_state.gridW, _state.gridH];
+        _state.tile  = tile;
+        _state.gridW = Number(size[0]) || _state.gridW;
+        _state.gridH = Number(size[1]) || _state.gridH;
+
+        log('map geladen aus JSON', { mapId, tile: _state.tile, grid: [_state.gridW, _state.gridH] });
+      } else {
+        log('map: kein JSON-Header → Default', { mapId });
       }
-      return;
+    } catch (e) {
+      warn('map laden fehlgeschlagen – nutze Default', e);
     }
-    // Fallback
-    await MinimalEngine.start(mapUrl);
-  },
 
-  getObstacleAt(tx,ty){ return MinimalEngine.getObstacleAt(tx,ty); },
-  giveTestResources(){
-    emitResChange("wood", 10, "test");
-    emitResChange("stone", 5,  "test");
-    emitResChange("fish",  3,  "test");
+    // Canvas an Gridgröße anpassen (optional – wir skalieren auf Clientgröße)
+    // Wichtig ist nur der "tile"-Wert fürs Raster.
+
+    EVT('cb:map:loaded', { mapId, tile: _state.tile, size: { w: _state.gridW, h: _state.gridH } });
   }
-};
 
-/* (6) Export ----------------------------------------------------------------- */
-window.Game = Game;
-// Diagnose-Ping: im Inspector sofort sichtbar, ob dieses Script aktiv ist.
-(CBLog.ok||console.log)(`[game] core/game.js aktiv (${typeof Game?.start})`);
+  // ------------------------ Event-Handler ----------------------------
+  function onResize() {
+    if (!_state.canvas) return;
+    const c = _state.canvas;
+    // Pixelgröße an Client-Size koppeln (responsive)
+    _state.w = c.width  = c.clientWidth  || c.width;
+    _state.h = c.height = c.clientHeight || c.height;
+  }
+
+  function onMouseMove(ev) {
+    if (!_state.canvas) return;
+    const rect = _state.canvas.getBoundingClientRect();
+    const gx = gridSnap(ev.clientX - rect.left, _state.tile);
+    const gy = gridSnap(ev.clientY - rect.top,  _state.tile);
+    _state.hover.x = gx;
+    _state.hover.y = gy;
+  }
+
+  function onClick(ev) {
+    if (!_state.canvas || !_state.selectedBuilding) return;
+
+    const rect = _state.canvas.getBoundingClientRect();
+    const gx = gridSnap(ev.clientX - rect.left, _state.tile);
+    const gy = gridSnap(ev.clientY - rect.top,  _state.tile);
+
+    // Simple bounds-check (optional)
+    if (gx < 0 || gy < 0) return;
+
+    _state.placements.push({ x: gx, y: gy, id: _state.selectedBuilding });
+    log('placed', { id: _state.selectedBuilding, x: gx, y: gy });
+  }
+
+  // ------------------------ Public API --------------------------------
+  function init(canvas) {
+    if (!canvas) { err('init: Canvas fehlt'); return; }
+    _state.canvas = canvas;
+    _state.ctx = canvas.getContext('2d');
+
+    // Event-Wiring
+    onResize();
+    window.addEventListener('resize', onResize);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('click', onClick);
+
+    // Auswahl aus Baumenü
+    window.addEventListener('cb:build:select', (e) => {
+      _state.selectedBuilding = e?.detail?.id || null;
+      log('select building', _state.selectedBuilding);
+    });
+
+    log('init ✓');
+  }
+
+  async function start(mapId) {
+    _state.mapId = mapId || _state.mapId || 'data/maps/map-mini.json';
+    _state.started = true;
+
+    EVT('cb:game-start', { mapId: _state.mapId });
+    await loadMap(_state.mapId);
+
+    cancelAnimationFrame(_state.rafId);
+    _state.rafId = requestAnimationFrame(frame);
+  }
+
+  function getState() {
+    // nur Lese-Snapshot
+    const { started, mapId, tile, gridW, gridH, placements, selectedBuilding } = _state;
+    return { started, mapId, tile, gridW, gridH, placements: placements.slice(), selectedBuilding };
+  }
+
+  // Export
+  window.Game = { init, start, getState };
+})();
