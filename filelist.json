@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-28T13:42:55.718Z",
+  "createdAt": "2025-09-28T15:25:01.596Z",
   "root": ".",
-  "count": 444,
+  "count": 442,
   "entries": [
     {
       "type": "dir",
@@ -525,113 +525,6 @@
     },
     {
       "type": "dir",
-      "path": "assets/core/"
-    },
-    {
-      "type": "file",
-      "path": "assets/core/asset.js",
-      "size": 3419
-    },
-    {
-      "type": "file",
-      "path": "assets/core/build.assets.js",
-      "size": 1240
-    },
-    {
-      "type": "file",
-      "path": "assets/core/camera.js",
-      "size": 9123
-    },
-    {
-      "type": "file",
-      "path": "assets/core/cblog.polyfill.js",
-      "size": 4281
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.entities.js",
-      "size": 6796
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.env.js",
-      "size": 3010
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.input.js",
-      "size": 5251
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.map.js",
-      "size": 4274
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.pfglue.js",
-      "size": 6362
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.production.js",
-      "size": 3039
-    },
-    {
-      "type": "file",
-      "path": "assets/core/core.render.js",
-      "size": 8436
-    },
-    {
-      "type": "file",
-      "path": "assets/core/entities.registry.js",
-      "size": 2797
-    },
-    {
-      "type": "file",
-      "path": "assets/core/game.bootstrap.js",
-      "size": 6264
-    },
-    {
-      "type": "file",
-      "path": "assets/core/overlay-hooks.js",
-      "size": 3572
-    },
-    {
-      "type": "file",
-      "path": "assets/core/registry.js",
-      "size": 2251
-    },
-    {
-      "type": "file",
-      "path": "assets/core/registry.json-adapter.js",
-      "size": 3232
-    },
-    {
-      "type": "dir",
-      "path": "assets/data/"
-    },
-    {
-      "type": "file",
-      "path": "assets/data/buildings.json",
-      "size": 2451
-    },
-    {
-      "type": "file",
-      "path": "assets/data/buildings.jsonc",
-      "size": 5304
-    },
-    {
-      "type": "dir",
-      "path": "assets/editor/"
-    },
-    {
-      "type": "file",
-      "path": "assets/editor/editor.js",
-      "size": 4187
-    },
-    {
-      "type": "dir",
       "path": "assets/icons/"
     },
     {
@@ -939,75 +832,6 @@
       "type": "file",
       "path": "assets/icons/warn.png",
       "size": 359
-    },
-    {
-      "type": "dir",
-      "path": "assets/inspector/"
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.api-bridge.js",
-      "size": 2981
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.api-compat.js",
-      "size": 4565
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.build.js",
-      "size": 1328
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.button-bind.js",
-      "size": 4441
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.compat.js",
-      "size": 758
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.core.js",
-      "size": 5663
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.force-toggle.js",
-      "size": 5162
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.logs.js",
-      "size": 7943
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.md",
-      "size": 137
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.paths.js",
-      "size": 1913
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.resources.js",
-      "size": 1537
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/inspector.tests.js",
-      "size": 1876
-    },
-    {
-      "type": "file",
-      "path": "assets/inspector/overlay.hooks.js",
-      "size": 4544
     },
     {
       "type": "dir",
@@ -1497,13 +1321,83 @@
     },
     {
       "type": "file",
+      "path": "core/asset1.js",
+      "size": 3419
+    },
+    {
+      "type": "file",
+      "path": "core/build.assets.js",
+      "size": 1240
+    },
+    {
+      "type": "file",
+      "path": "core/camera.js",
+      "size": 9123
+    },
+    {
+      "type": "file",
       "path": "core/carrier.js",
       "size": 931
     },
     {
       "type": "file",
+      "path": "core/cblog.polyfill.js",
+      "size": 4281
+    },
+    {
+      "type": "file",
+      "path": "core/core.entities.js",
+      "size": 6796
+    },
+    {
+      "type": "file",
+      "path": "core/core.env.js",
+      "size": 3010
+    },
+    {
+      "type": "file",
+      "path": "core/core.input.js",
+      "size": 5251
+    },
+    {
+      "type": "file",
+      "path": "core/core.map.js",
+      "size": 4274
+    },
+    {
+      "type": "file",
+      "path": "core/core.pfglue.js",
+      "size": 6362
+    },
+    {
+      "type": "file",
+      "path": "core/core.production.js",
+      "size": 3039
+    },
+    {
+      "type": "file",
+      "path": "core/core.render.js",
+      "size": 8436
+    },
+    {
+      "type": "file",
+      "path": "core/entities.registry.js",
+      "size": 2797
+    },
+    {
+      "type": "file",
+      "path": "core/game.bootstrap.js",
+      "size": 6264
+    },
+    {
+      "type": "file",
       "path": "core/game.js",
       "size": 5949
+    },
+    {
+      "type": "file",
+      "path": "core/overlay-hooks.js",
+      "size": 3572
     },
     {
       "type": "file",
@@ -1517,8 +1411,18 @@
     },
     {
       "type": "file",
+      "path": "core/registry.json-adapter.js",
+      "size": 3232
+    },
+    {
+      "type": "file",
       "path": "core/registry.type-aliases.js",
       "size": 2615
+    },
+    {
+      "type": "file",
+      "path": "core/registry1.js",
+      "size": 2251
     },
     {
       "type": "file",
@@ -1592,6 +1496,16 @@
       "type": "file",
       "path": "data/buildings.json",
       "size": 1389
+    },
+    {
+      "type": "file",
+      "path": "data/buildings1.json",
+      "size": 2451
+    },
+    {
+      "type": "file",
+      "path": "data/buildings1.jsonc",
+      "size": 5304
     },
     {
       "type": "file",
@@ -1788,6 +1702,15 @@
       "type": "file",
       "path": "tools/dot-editor/Viz.render.txt.pdf",
       "size": 542327
+    },
+    {
+      "type": "dir",
+      "path": "tools/editor/"
+    },
+    {
+      "type": "file",
+      "path": "tools/editor/editor.js",
+      "size": 4187
     },
     {
       "type": "dir",
@@ -2057,6 +1980,75 @@
       "size": 5016
     },
     {
+      "type": "dir",
+      "path": "ui/inspector/"
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.api-bridge.js",
+      "size": 2981
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.api-compat.js",
+      "size": 4565
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.build.js",
+      "size": 1328
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.button-bind.js",
+      "size": 4441
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.compat.js",
+      "size": 758
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.core.js",
+      "size": 5663
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.force-toggle.js",
+      "size": 5162
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.logs.js",
+      "size": 7943
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.md",
+      "size": 137
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.paths.js",
+      "size": 1913
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.resources.js",
+      "size": 1537
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.tests.js",
+      "size": 1876
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/overlay.hooks.js",
+      "size": 4544
+    },
+    {
       "type": "file",
       "path": "ui/index.ui.demo.html",
       "size": 2408
@@ -2139,12 +2131,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43560
+      "size": 43653
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16623
+      "size": 16654
     },
     {
       "type": "file",
