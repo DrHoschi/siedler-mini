@@ -1,191 +1,100 @@
-/* ============================================================================
- * Datei: core/registry.js
- * Version: v18.9.4 (2025-09-26)
- * Zweck: Zentrale Sammlung/Lookups (Gebäude, Einheiten, Ressourcen, Meta)
- * Leitplanken:
- *   - Events: cb:registry:ready (genau 1x nach Init)
- *   - Cross-Checks: fehlende Sprites nur WARN (kein Crash)
- *   - Öffentliche API: init/initFromData, register, get, list, has, meta, validate, snapshot
- * Struktur:
- *   (0) Logger-Guard
- *   (1) State & Konstanten
- *   (2) Helper (Fetch/Normalize/Index)
- *   (3) Registry-API
- *   (4) Exports
- * ========================================================================== */
+// ============================================================================
+// Datei : core/registry.js
+// Zweck : Lädt Gameplay-Daten (data/buildings.json) und stellt sie der UI bereit
+// Events: cb:registry-ready (und Kompat: cb:registry:ready)
+// API   : Registry.init(), Registry.get('buildings'|'categories'), Registry.byId(id)
+// Hinweise:
+//   • iconsBase wird mit trailing Slash normalisiert
+//   • Kategorien werden aus buildings abgeleitet, falls im JSON nicht vorhanden
+//   • Keine Abhängigkeit von Assets-Pfaden außer Bildreferenzen aus den JSONs
+// ============================================================================
 
-/* (0) Logger-Guard ----------------------------------------------------------- */
-if (!window.CBLog || typeof window.CBLog.ok !== "function") {
-  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
-  CBLog.info("[registry] Hinweis: globaler CBLog nicht gefunden – Fallback aktiv");
-}
+(() => {
+  const log  = (...a) => (window.CBLog?.ok   || console.log)('[registry]', ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn)('[registry]', ...a);
+  const err  = (...a) => (window.CBLog?.err  || console.error)('[registry]', ...a);
+  const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-/* (1) State & Konstanten ----------------------------------------------------- */
-const REG_MOD = "[registry]";
-const REG_VER = "v18.9.4";
+  const _data = {
+    meta: { iconsBase: 'assets/ui/build/' },
+    buildings: [],
+    categories: []   // { id, label }
+  };
 
-const STATE = {
-  types: Object.create(null),      // building/unit/resource → map[id] = obj
-  meta:  { enums:{}, constraints:{} }
-};
+  // Hilfsfunktionen -----------------------------------------------------------
+  const ensureTrailingSlash = (s) => (!s ? '' : s.endsWith('/') ? s : (s + '/'));
+  const uniqBy = (arr, keyFn) => {
+    const seen = new Set(); const out = [];
+    for (const x of arr) { const k = keyFn(x); if (!seen.has(k)) { seen.add(k); out.push(x); } }
+    return out;
+  };
 
-/* (2) Helper (Fetch/Normalize/Index) ---------------------------------------- */
-async function loadJSON(path, def=null){
-  try{
-    const res = await fetch(path, { cache:"no-store" });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return await res.json();
-  }catch(err){
-    (CBLog.warn||console.warn)(`${REG_MOD} JSON-Load fehlgeschlagen: ${path} → ${err?.message || err}`);
-    return def;
-  }
-}
-
-function indexById(arr, key="id"){
-  const map = Object.create(null);
-  for (const it of (arr||[])) {
-    const k = it?.[key];
-    if (!k){ (CBLog.warn||console.warn)(`${REG_MOD} Eintrag ohne id ignoriert`); continue; }
-    if (map[k]) throw new Error(`Duplicate registry id: ${k}`);
-    map[k] = it;
-  }
-  return map;
-}
-
-function normalizeBuilding(raw){
-  if (!raw) return null;
-  const id   = raw.id || raw.key || raw.slug;
-  if (!id) return null;
-  const name = raw.name || raw.title || id;
-  const cat  = raw.category || raw.cat || "misc";
-  const desc = raw.desc || raw.description || "";
-  const icon = raw.icon || raw.sprite || raw.img || "assets/icons/placeholder.png";
-  if (!raw.icon && !raw.sprite && !raw.img){
-    (CBLog.warn||console.warn)(`${REG_MOD} fehlendes Sprite bei b.${id}: nutze placeholder`);
-  }
-  return { id, name, category:cat, desc, icon };
-}
-
-function normalizeUnit(raw){
-  if (!raw) return null;
-  const id   = raw.id || raw.key || raw.slug;
-  if (!id) return null;
-  const name = raw.name || raw.title || id;
-  const role = raw.role || "basis";
-  const icon = raw.icon || raw.sprite || raw.img || "assets/icons/placeholder.png";
-  return { id, name, role, icon };
-}
-
-function normalizeResourceEntry([id, v]){
-  if (!id || !v) return null;
-  const name = v.name || id;
-  const icon = v.icon || "assets/icons/placeholder.png";
-  return [id, { id, name, icon }];
-}
-
-/* (3) Registry-API ----------------------------------------------------------- */
-const Registry = {
-  /** API: einmalige Initialisierung aus data/*.json (+ optionale Cross-Checks) */
-  async initFromData(opts={}){
-    const spriteExists = opts.spriteExists || window.Assets?.spriteExists;
-
-    (CBLog.info||console.log)(`${REG_MOD} Init beginnt (${REG_VER})`);
-
-    // 3.1 Daten laden (robust)
-    const buildingsJSON = await loadJSON("data/buildings.json", null);
-    const unitsJSON     = await loadJSON("data/units.json", null);
-    const resourcesJSON = await loadJSON("data/resources.json", {}); // darf fehlen
-
-    // 3.2 Normalisieren + Indizieren
-    const buildings = Array.isArray(buildingsJSON) ? buildingsJSON.map(normalizeBuilding).filter(Boolean)
-                    : [
-                        // Minimal-Set, falls keine Datei vorhanden
-                        { id:"lumberjack", name:"Holzfäller", icon:"assets/icons/placeholder.png", category:"wirtschaft" },
-                        { id:"fisher",     name:"Fischer",    icon:"assets/icons/placeholder.png", category:"wirtschaft" },
-                        { id:"quarry",     name:"Steinbruch", icon:"assets/icons/placeholder.png", category:"wirtschaft" }
-                      ].map(normalizeBuilding);
-
-    const units     = Array.isArray(unitsJSON) ? unitsJSON.map(normalizeUnit).filter(Boolean) : [];
-    const resPairs  = Object.entries(resourcesJSON||{}).map(normalizeResourceEntry).filter(Boolean);
-    const resources = Object.fromEntries(resPairs);
-
-    STATE.types.building = indexById(buildings);
-    STATE.types.unit     = indexById(units);
-    STATE.types.resource = indexById(Object.values(resources));
-
-    // 3.3 Meta/Enums/Constraints gemäß Vorgaben (MVP)
-    STATE.meta.enums.buildingCategory = ['infra','prod','home','trade','mil','wirtschaft','misc'];
-    STATE.meta.enums.unitRole         = ['basis','prod','trade','mil','admin','science','industry','culture'];
-    STATE.meta.constraints.epoche     = [1,10];
-
-    // 3.4 Cross-Checks (nur warnen)
-    if (spriteExists){
-      for (const b of Object.values(STATE.types.building)){
-        if (b.icon && (await spriteExists(b.icon)) === false){
-          (CBLog.warn||console.warn)(`${REG_MOD} fehlendes Sprite bei ${b.id}: ${b.icon}`);
-        }
-      }
+  function deriveCategories(fromBuildings, providedCats) {
+    if (Array.isArray(providedCats) && providedCats.length) {
+      // Falls JSON Kategorien mitliefert, benutzen wir sie (id/label erwartet)
+      return providedCats.map(c => ({ id: String(c.id), label: String(c.label ?? c.id) }));
     }
+    // Sonst aus den Buildings ableiten (cat-Feld)
+    const cats = fromBuildings
+      .map(b => b.cat ?? 'misc')
+      .map(id => ({ id: String(id), label: String(id) }));
+    return uniqBy(cats, c => c.id);
+  }
 
-    // 3.5 Event + Log
+  function normalizeBuildings(json, iconsBase) {
+    const base = ensureTrailingSlash(json.iconsBase || iconsBase || _data.meta.iconsBase);
+    _data.meta.iconsBase = base;
+
+    const list = Array.isArray(json.buildings) ? json.buildings : [];
+    const norm = list.map(b => {
+      const id    = String(b.id);
+      const cat   = String(b.cat ?? 'misc');
+      const label = String(b.label ?? id);
+      // icon: entweder b.icon (relativ) oder b.sprite; wir leiten einen sinnvollen Pfad ab
+      const icon  = (b.icon && !/^https?:|^\//i.test(b.icon)) ? (base + b.icon) : (b.icon || b.sprite || '');
+      const cost  = b.cost ? { wood:+(b.cost.wood||0), stone:+(b.cost.stone||0), gold:+(b.cost.gold||0) } : undefined;
+      return { ...b, id, cat, label, icon, cost };
+    });
+    return norm;
+  }
+
+  // Public API ----------------------------------------------------------------
+  async function init() {
     try {
-      window.dispatchEvent(new CustomEvent("cb:registry:ready", {
-        detail: {
-          ok: true,
-          counts: {
-            buildings: Object.keys(STATE.types.building).length,
-            units:     Object.keys(STATE.types.unit).length,
-            resources: Object.keys(STATE.types.resource).length
-          }
-        }
-      }));
-    } catch(_){}
-    (CBLog.ok||console.log)(`${REG_MOD} ready (b:${Object.keys(STATE.types.building).length} u:${Object.keys(STATE.types.unit).length} r:${Object.keys(STATE.types.resource).length})`);
-  },
+      // Hauptquelle: data/buildings.json (gemäß neuer Struktur)
+      const res = await fetch('data/buildings.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`HTTP ${res.status} beim Laden von data/buildings.json`);
+      const json = await res.json();
 
-  /** Alias für Kompat: Registry.init() → initFromData() */
-  async init(opts={}){ return this.initFromData(opts); },
+      // Normalisieren
+      _data.buildings  = normalizeBuildings(json, _data.meta.iconsBase);
+      _data.categories = deriveCategories(_data.buildings, json.categories);
 
-  /** Ein Objekt registrieren (z. B. Mods/Runtime-Erweiterungen) */
-  register(type, id, meta){
-    (STATE.types[type] ??= Object.create(null));
-    if (STATE.types[type][id]) throw new Error(`Duplicate registry id: ${type}:${id}`);
-    STATE.types[type][id] = { id, ...meta };
-    return STATE.types[type][id];
-  },
+      // Bereit
+      log('bereit:', { buildings: _data.buildings.length, categories: _data.categories.length, iconsBase: _data.meta.iconsBase });
+      const detail = { ok: true, data: { buildings: _data.buildings, categories: _data.categories, meta: _data.meta } };
 
-  /** Objekt holen (wirft auf Unknown-ID für sauberes Fehlermanagement) */
-  get(type, id){
-    const entry = STATE.types[type]?.[id];
-    if (!entry) throw new Error(`Not found in registry: ${type}:${id}`);
-    return entry;
-  },
-
-  /** Liste aller Objekte eines Typs; optionaler Filter */
-  list(type, predicate=null){
-    const all = Object.values(STATE.types[type] ?? {});
-    return predicate ? all.filter(predicate) : all;
-  },
-
-  /** Existenzcheck */
-  has(type, id){ return !!STATE.types[type]?.[id]; },
-
-  /** Meta lesen (Enums/Constraints) */
-  meta(type=null){ return type ? STATE.meta[type] : STATE.meta; },
-
-  /** Grundvalidierung: Pflichtfeld id */
-  validate(){
-    for (const [type, map] of Object.entries(STATE.types)){
-      for (const [id, obj] of Object.entries(map)){
-        if (!obj.id) throw new Error(`Registry validate: missing id in ${type}:${id}`);
-      }
+      // Offizielles Event + Kompat-Alias
+      EVT('cb:registry-ready', detail);
+      EVT('cb:registry:ready', detail);
+    } catch (e) {
+      err('Fehler beim Initialisieren:', e);
+      EVT('cb:registry-ready', { ok: false, error: String(e) });
     }
-    return true;
-  },
+  }
 
-  /** Tiefes Readonly-Snapshot für Inspector/Export */
-  snapshot(){ return JSON.parse(JSON.stringify(STATE)); }
-};
+  function get(key) {
+    if (key === 'buildings')  return _data.buildings;
+    if (key === 'categories') return _data.categories;
+    if (key === 'meta')       return _data.meta;
+    return undefined;
+  }
 
-/* (4) Exports ---------------------------------------------------------------- */
-window.Registry = Registry;
+  function byId(id) {
+    const want = String(id);
+    return _data.buildings.find(b => b.id === want);
+  }
+
+  // Export ins Window (keine globale STATE-Variable!)
+  window.Registry = { init, get, byId };
+})();
