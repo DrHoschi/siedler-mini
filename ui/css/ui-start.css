@@ -22,8 +22,9 @@
 
 #start-panel {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  /* top: 16px; */
+  center: auto;
+  left: auto;
   right: auto;
   bottom: auto;
   z-index: 10;
