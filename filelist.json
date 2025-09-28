@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-28T15:45:16.084Z",
+  "createdAt": "2025-09-28T15:50:57.251Z",
   "root": ".",
-  "count": 442,
+  "count": 443,
   "entries": [
     {
       "type": "dir",
@@ -189,6 +189,20 @@
       "type": "file",
       "path": "Archiv/css/platform.css",
       "size": 1595
+    },
+    {
+      "type": "dir",
+      "path": "Archiv/data/"
+    },
+    {
+      "type": "file",
+      "path": "Archiv/data/buildings1.json",
+      "size": 2451
+    },
+    {
+      "type": "file",
+      "path": "Archiv/data/buildings1.jsonc",
+      "size": 5304
     },
     {
       "type": "dir",
@@ -1499,16 +1513,6 @@
     },
     {
       "type": "file",
-      "path": "data/buildings1.json",
-      "size": 2451
-    },
-    {
-      "type": "file",
-      "path": "data/buildings1.jsonc",
-      "size": 5304
-    },
-    {
-      "type": "file",
       "path": "data/campaign.json",
       "size": 492
     },
@@ -2131,12 +2135,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43347
+      "size": 43375
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16448
+      "size": 16476
     },
     {
       "type": "file",
