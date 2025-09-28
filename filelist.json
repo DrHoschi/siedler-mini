@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-28T15:25:01.596Z",
+  "createdAt": "2025-09-28T15:45:16.084Z",
   "root": ".",
   "count": 442,
   "entries": [
@@ -103,6 +103,11 @@
     },
     {
       "type": "file",
+      "path": "Archiv/core/asset1.js",
+      "size": 3419
+    },
+    {
+      "type": "file",
       "path": "Archiv/core/boot.js",
       "size": 1487
     },
@@ -133,8 +138,23 @@
     },
     {
       "type": "file",
+      "path": "Archiv/core/registry1.js",
+      "size": 2251
+    },
+    {
+      "type": "file",
       "path": "Archiv/core/terrain.js",
       "size": 1381
+    },
+    {
+      "type": "file",
+      "path": "Archiv/core/ui-build.data-bridge.js",
+      "size": 2519
+    },
+    {
+      "type": "file",
+      "path": "Archiv/core/ui-build.js",
+      "size": 6707
     },
     {
       "type": "dir",
@@ -1321,11 +1341,6 @@
     },
     {
       "type": "file",
-      "path": "core/asset1.js",
-      "size": 3419
-    },
-    {
-      "type": "file",
       "path": "core/build.assets.js",
       "size": 1240
     },
@@ -1418,21 +1433,6 @@
       "type": "file",
       "path": "core/registry.type-aliases.js",
       "size": 2615
-    },
-    {
-      "type": "file",
-      "path": "core/registry1.js",
-      "size": 2251
-    },
-    {
-      "type": "file",
-      "path": "core/ui-build.data-bridge.js",
-      "size": 2519
-    },
-    {
-      "type": "file",
-      "path": "core/ui-build.js",
-      "size": 6707
     },
     {
       "type": "dir",
@@ -2131,12 +2131,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43653
+      "size": 43347
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16654
+      "size": 16448
     },
     {
       "type": "file",
