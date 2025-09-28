@@ -1,83 +1,66 @@
 // ============================================================================
 // Datei: ui/ui-start.js
-// Projekt: Neue Siedler
-// Version: v19.3.1 (Hotfix iOS Safari "$"-Collision + Fallback-Enabler)
-// Zweck:
-//   • Startfenster-Logik (Startfenster zuerst sichtbar)
-//   • Button-IDs exakt wie in deiner Monolith:
-//       btnStartNew / btnStartResume / btnStartReset / btnStartFullscreen
-//   • Buttons bis cb:boot-ready deaktiviert; Blend-out bei cb:game-start
-//   • Safari-Hotfix: KEIN "$" als Konstante verwenden
-//   • Fallback: Wenn cb:boot-ready NICHT kommt, nach 2000ms Buttons dennoch freigeben
-// Events (send):
-//   • cb:ui-ready, cb:start:new|continue|reset|fullscreen
+// Zweck : Startfenster-Logik + UI-Events
+// Events: sendet  cb:ui-ready, cb:start:new, cb:start:continue, cb:start:reset, cb:fullscreen
+//         reagiert auf cb:game-start (Startpanel ausblenden, HUD/Build zeigen)
+// Hinweise:
+//   • KEIN globales STATE; nur DOM + Events
+//   • Kein "$" Alias verwenden (Safari-Global-Property-Konflikte vermeiden)
 // ============================================================================
 
 (() => {
-  // KEIN "$" benutzen (Safari/Global-Property-Konflikt vermeiden)
   const q   = (sel) => document.querySelector(sel);
+  const on  = (n, cb) => window.addEventListener(n, cb);
   const EVT = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-  const BTN_IDS = ['btnStartNew','btnStartResume','btnStartReset','btnStartFullscreen'];
-  let bootReady = false;
+  function bindButtons() {
+    const btnNew       = q('#btn-new');
+    const btnCont      = q('#btn-continue');
+    const btnFS        = q('#btn-fullscreen');
+    const btnReset     = q('#btn-reset');
+    const btnInspector = q('#btn-inspector');
 
-  function setButtonsDisabled(disabled) {
-    for (const id of BTN_IDS) {
-      const b = document.getElementById(id);
-      if (b) b.disabled = disabled;
-    }
-  }
+    // Neues Spiel: optional andere Map übergeben → boot liest canvas.dataset.map
+    btnNew?.addEventListener('click', () => {
+      const canvas = q('#game');
+      // Wenn du eine andere Map starten willst: canvas.dataset.map = 'data/maps/map-pro.json'
+      EVT('cb:start:new', { mapId: canvas?.dataset.map });
+    });
 
-  function bindClicks() {
-    const btnNew  = q('#btnStartNew');
-    const btnCont = q('#btnStartResume');
-    const btnRes  = q('#btnStartReset');
-    const btnFS   = q('#btnStartFullscreen');
+    btnCont?.addEventListener('click', () => EVT('cb:start:continue'));
+    btnReset?.addEventListener('click', () => EVT('cb:start:reset'));
 
-    btnNew  && btnNew .addEventListener('click', () => EVT('cb:start:new',       { mapId: 'demo.ep1' }));
-    btnCont && btnCont.addEventListener('click', () => EVT('cb:start:continue'));
-    btnRes  && btnRes .addEventListener('click', () => EVT('cb:start:reset'));
-    btnFS   && btnFS  .addEventListener('click', () => EVT('cb:fullscreen'));
+    btnFS?.addEventListener('click', () => EVT('cb:fullscreen'));
+
+    // Inspector-Toggle (UI-seitig Panel zeigen/verstecken, Event für Inspector-Module)
+    btnInspector?.addEventListener('click', () => {
+      const host = q('#inspector');
+      if (host) host.classList.toggle('hidden');
+      EVT('req:inspector:toggle');
+    });
   }
 
   function hideStartPanel() {
-    const panel = document.getElementById('start-panel');
-    if (panel) panel.style.display = 'none';
+    const panel = q('#start-panel');
+    panel && (panel.classList.remove('visible'), panel.classList.add('hidden'));
   }
 
-  // DOM ready
-  window.addEventListener('DOMContentLoaded', () => {
-    setButtonsDisabled(true);
-    bindClicks();
+  function showHudAndBuild() {
+    q('#hud-top')?.classList.remove('hidden');
+    q('#build-dock')?.classList.remove('hidden');
+  }
 
-    (window.CBLog?.ok || console.log)('[ui-start] bereit (cb:ui-ready)');
+  // DOM bereit → Buttons binden + UI ready melden
+  on('DOMContentLoaded', () => {
+    bindButtons();
+    (window.CBLog?.ok || console.log)('[ui-start] ready → cb:ui-ready');
     EVT('cb:ui-ready');
-
-    // Fallback: Wenn cb:boot-ready nicht kommt, nach 2s dennoch freigeben
-    setTimeout(() => {
-      if (!bootReady) {
-        setButtonsDisabled(false);
-        (window.CBLog?.warn || console.warn)('[ui-start] Fallback: Buttons freigegeben (cb:boot-ready fehlte)');
-      }
-    }, 2000);
   });
 
-  // Boot meldet „bereit“ → Buttons entsperren
-  window.addEventListener('cb:boot-ready', () => {
-    bootReady = true;
-    setButtonsDisabled(false);
-    (window.CBLog?.ok || console.log)('[ui-start] entsperrt (boot-ready)');
-  });
-
-  // Spiel startet → Startpanel ausblenden
-  window.addEventListener('cb:game-start', () => {
+  // Wenn das Spiel startet, Startpanel ausblenden & HUD/Build sichtbar
+  on('cb:game-start', () => {
     hideStartPanel();
-    (window.CBLog?.ok || console.log)('[ui-start] Startpanel ausgeblendet (game-start)');
-  });
-
-  // Info-Log wenn Map geladen
-  window.addEventListener('cb:map:loaded', (e) => {
-    const mapId = e?.detail?.mapId ?? '(unbekannt)';
-    (window.CBLog?.ok || console.log)('[ui-start] Map geladen:', mapId);
+    showHudAndBuild();
+    (window.CBLog?.ok || console.log)('[ui-start] game-start → UI sichtbar');
   });
 })();
