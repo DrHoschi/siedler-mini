@@ -56,11 +56,21 @@
 }
 
 /* (2) Root/Dock ------------------------------------------------------------- */
-#build-dock{
+
+
+/* #build-dock{
   position: fixed;
   left: 0; right: 0; bottom: 0;
   z-index: var(--build-dock-z);
-  padding: 10px;
+  padding: 10px; */
+
+#build-dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
   /* Panel-Hintergrund (Holz/Papier) mit dezenter Tönung)
      WICHTIG: CSS liegt unter ui/css/ → daher ../../ zum assets-Ordner */
   background:
