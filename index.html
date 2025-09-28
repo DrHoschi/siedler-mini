@@ -53,8 +53,13 @@
 
   <div id="app">
     <!-- Spielfeld -->
-    <canvas id="game" width="1280" height="720"
-            data-map="data/maps/map-mini.json"></canvas>
+        <canvas 
+          id="game" 
+          width="1280" 
+          height="720" 
+          data-map="data/maps/map-mini.json">
+        </canvas>
+
 
     <!-- Startpanel -->
     <div id="start-panel" class="panel visible">
@@ -67,14 +72,15 @@
     </div>
 
     <!-- HUD -->
-    <div id="hud-top" class="hidden"></div>
+     <div id="hud-top" class="hidden"></div>
 
     <!-- Build-Dock -->
-    <div id="build-dock" class="hidden"></div>
+        <div id="build-dock" class="hidden"></div>
 
     <!-- Inspector -->
     <div id="inspector" class="hidden"></div>
   </div>
+
 
   <!-- =========================================================================
        SCRIPTS: Reihenfolge Core → UI → Tools
@@ -86,33 +92,33 @@
   <script src="core/game.js"></script>
   <script src="core/boot.js"></script>
 
+
   <!-- UI -->
-  <script src="ui/ui-start.js"></script>
+    <script src="ui/ui-start.js"></script>
   <script src="ui/ui-hud.js"></script>
-  <script src="ui/ui-build.categories.js"></script>
   <script src="ui/ui-build.js"></script>
-  <script src="ui/ui-dialog.js"></script>
+
+  <!-- Inspector -->
+  <script>window.ICONS = window.ICONS || {};</script>
   <script src="ui/inspector/inspector.core.js"></script>
 
-  <!-- Tools / Debug -->
+  <!-- Tools -->
+  <!-- <script src="tools/editor/editor.core.js"></script> -->
+  <!-- <script src="tools/editor/editor.js"></script> -->
+
+  
+  <!-- Debug -->
   <script src="tools/debug-tools.js"></script>
-  <script src="tools/editor/editor.js"></script>
 
   <!-- Inline-Wiring -->
   <script>
-    // Inspector öffnen
     document.getElementById('btn-inspector').addEventListener('click', () => {
       document.getElementById('inspector').classList.toggle('hidden');
       window.dispatchEvent(new CustomEvent('req:inspector:toggle'));
     });
-
-    // Vollbild
     document.getElementById('btn-fullscreen').addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
     });
   </script>
 </body>
