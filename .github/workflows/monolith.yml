@@ -1,0 +1,39 @@
+name: Build Monolith
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  monolith:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate Monolith (ohne Archiv)
+        run: |
+          echo "<!-- Monolith Export $(date -u) -->" > MONOLITH.txt
+          echo "" >> MONOLITH.txt
+          
+          # alle relevanten Dateien finden, Archiv ausschließen
+          find . \
+            -type f \
+            \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.json" \) \
+            ! -path "./Archiv/*" \
+            ! -path "./.git/*" \
+          | sort \
+          | while read file; do
+              echo "===================================================================" >> MONOLITH.txt
+              echo "DATEI: $file" >> MONOLITH.txt
+              echo "===================================================================" >> MONOLITH.txt
+              cat "$file" >> MONOLITH.txt
+              echo -e "\n\n" >> MONOLITH.txt
+            done
+
+      - name: Upload Monolith Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monolith-export
+          path: MONOLITH.txt
