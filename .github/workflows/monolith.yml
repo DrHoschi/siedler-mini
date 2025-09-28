@@ -13,28 +13,42 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate Monolith (ohne Archiv, ohne Bilder)
+        shell: bash
         run: |
-          out="MONOLITH.txt"
-          echo "<!-- Monolith Export $(date -u) -->" > $out
-          echo "" >> $out
-          
-          # Alle relevanten Textdateien sammeln (inkl. assets/)
+          set -euo pipefail
+          OUT="MONOLITH.txt"
+          TMP="$(mktemp)"
+
+          {
+            echo "<!-- Monolith Export $(date -u) -->"
+            echo
+          } > "$TMP"
+
+          # Alle relevanten Textdateien sammeln (inkl. assets/),
+          # aber Archiv, .git, .github und die AUSGABEDATEI selbst ausschließen.
           find . -type f \
-            \( -name "*.html" -o -name "*.js" -o -name "*.css" \
+            \( -name "*.html" -o -name "*.js"    -o -name "*.css" \
                -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" \
-               -o -name "*.md" -o -name "*.mmd" -o -name "*.txt" \
+               -o -name "*.md"   -o -name "*.mmd" -o -name "*.txt" \
                -o -name "*.jonson" -o -name "filelist.*" \) \
             ! -path "./Archiv/*" \
             ! -path "./.git/*" \
             ! -path "./.github/*" \
-            | sort \
-            | while read file; do
-                echo "===================================================================" >> $out
-                echo "DATEI: $file" >> $out
-                echo "===================================================================" >> $out
-                cat "$file" >> $out
-                echo -e "\n\n" >> $out
+            ! -path "./$OUT" \
+            | LC_ALL=C sort \
+            | while IFS= read -r file; do
+                {
+                  echo "==================================================================="
+                  echo "DATEI: $file"
+                  echo "==================================================================="
+                  # CRLF säubern, falls vorhanden
+                  sed 's/\r$//' "$file"
+                  echo
+                  echo
+                } >> "$TMP"
               done
+
+          mv "$TMP" "$OUT"
 
       - name: Upload Monolith Artifact
         uses: actions/upload-artifact@v4
