@@ -12,25 +12,29 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Generate Monolith (ohne Archiv)
+      - name: Generate Monolith (ohne Archiv, ohne Bilder)
         run: |
-          echo "<!-- Monolith Export $(date -u) -->" > MONOLITH.txt
-          echo "" >> MONOLITH.txt
+          out="MONOLITH.txt"
+          echo "<!-- Monolith Export $(date -u) -->" > $out
+          echo "" >> $out
           
-          # alle relevanten Dateien finden, Archiv ausschließen
-          find . \
-            -type f \
-            \( -name "*.html" -o -name "*.js" -o -name "*.css" -o -name "*.json" \) \
+          # Alle relevanten Textdateien sammeln
+          find . -type f \
+            \( -name "*.html" -o -name "*.js" -o -name "*.css" \
+               -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" \
+               -o -name "*.md" -o -name "*.mmd" -o -name "*.txt" \
+               -o -name "*.jonson" -o -name "filelist.*" \) \
             ! -path "./Archiv/*" \
             ! -path "./.git/*" \
-          | sort \
-          | while read file; do
-              echo "===================================================================" >> MONOLITH.txt
-              echo "DATEI: $file" >> MONOLITH.txt
-              echo "===================================================================" >> MONOLITH.txt
-              cat "$file" >> MONOLITH.txt
-              echo -e "\n\n" >> MONOLITH.txt
-            done
+            ! -path "./.github/*" \
+            | sort \
+            | while read file; do
+                echo "===================================================================" >> $out
+                echo "DATEI: $file" >> $out
+                echo "===================================================================" >> $out
+                cat "$file" >> $out
+                echo -e "\n\n" >> $out
+              done
 
       - name: Upload Monolith Artifact
         uses: actions/upload-artifact@v4
