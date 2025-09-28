@@ -256,7 +256,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
 .ui-tooltip .tip-card{
   /* gleiches Panel-Motiv wie der Rest (Pfad korrigiert) */
   background:
-    url("../../assets/ui/panel.png") center / contain no-repeat,
+    --paper: url("../../assets/ui/panel.png"); center / contain no-repeat,
     linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
