@@ -21,7 +21,7 @@
 /* Panel liegt über dem Canvas, aber unter den FABs */
 
 #start-panel {
-  position: absolute;
+  position: auto;
   /* top: 16px; */
   center: auto;
   left: 15px;
