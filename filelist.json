@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-27T21:18:06.370Z",
+  "createdAt": "2025-09-28T09:50:26.680Z",
   "root": ".",
   "count": 442,
   "entries": [
@@ -1502,11 +1502,6 @@
     },
     {
       "type": "file",
-      "path": "core/boot.js",
-      "size": 2651
-    },
-    {
-      "type": "file",
       "path": "core/carrier.js",
       "size": 931
     },
@@ -2019,7 +2014,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 8579
+      "size": 8927
     },
     {
       "type": "file",
@@ -2114,12 +2109,17 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 2700
+      "size": 3153
     },
     {
       "type": "file",
       "path": "ui/ui-tooltip.js",
       "size": 1348
+    },
+    {
+      "type": "file",
+      "path": "boot.js",
+      "size": 3192
     },
     {
       "type": "file",
@@ -2139,7 +2139,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 15056
+      "size": 8752
     },
     {
       "type": "file",
