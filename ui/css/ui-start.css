@@ -19,7 +19,18 @@
 }
 
 /* Panel liegt über dem Canvas, aber unter den FABs */
-.ui-start{
+
+#start-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: auto;
+  bottom: auto;
+  z-index: 10;
+}
+
+
+/* .ui-start{
   position: fixed;
   inset: 0;
   z-index: 1000;
@@ -29,7 +40,7 @@
   pointer-events: auto;
   background: transparent;
 }
-
+*/
 /* Vollflächiges Hintergrundbild + leichte Vignette */
 .ui-start .ui-start-bg{
   position: fixed;
