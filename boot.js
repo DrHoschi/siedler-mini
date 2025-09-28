@@ -1,78 +1,138 @@
 // ============================================================================
 // Datei: boot.js
-// Projekt: Neue Siedler
-// Version: v19.3.1 (Kompat-Events + starke Logs)
-// Zweck:
-//   • Bootstrapping & Event-Wiring (UI ⇄ Boot ⇄ Core)
-//   • Reihenfolge: DOMReady → Assets.loadAll → Registry.init → Game.init
-//   • Reagiert auf cb:start:new|continue|reset|fullscreen
-// Zusatz:
-//   • Kompatibilitäts-Listener (cb:assets:ready → cb:assets-ready u. ä.)
+// Zweck : Bootstrap & Orchestrierung der Startsequenz
+// Kette : cb:ui-ready → cb:assets-ready → cb:registry:ready → cb:game-start
+// Hinweise:
+//   • KEINE globale STATE-Variable anlegen – Game kapselt seinen Zustand selbst.
+//   • Unterstützt alte Event-Schreibweisen (mit "-" und mit ":").
+//   • Liest die Map aus <canvas id="game" data-map="...">.
+//   • Schreibt klare Logs (CBLog-Fallback).
 // ============================================================================
 
 (() => {
-  const on  = (n, cb) => window.addEventListener(n, cb);
-  const EVT = (n, detail) => window.dispatchEvent(new CustomEvent(n, { detail }));
+  // ------------------------ kleine Helpers ------------------------
+  const log  = (m, ...a) => (window.CBLog?.ok   || console.log)  (`[boot] ${m}`, ...a);
+  const warn = (m, ...a) => (window.CBLog?.warn || console.warn) (`[boot] ${m}`, ...a);
+  const err  = (m, ...a) => (window.CBLog?.err  || console.error)(`[boot] ${m}`, ...a);
+  const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-  let assetsReady   = false;
+  let uiReady = false;
+  let assetsReady = false;
   let registryReady = false;
 
-  function maybeReady() {
-    if (assetsReady && registryReady) {
-      (window.CBLog?.ok || console.log)('[boot] ready → UI darf starten');
-      EVT('cb:boot-ready');
+  // ------------------------ ready-check ---------------------------
+  function maybeStart() {
+    // Wir starten das Spiel, sobald UI UND Assets UND Registry bereit sind.
+    if (!(uiReady && assetsReady && registryReady)) return;
+
+    const canvas = document.getElementById('game');
+    if (!canvas) { err('Canvas #game fehlt – index.html prüfen.'); return; }
+
+    // Map aus data-Attribut lesen (Fallback auf eine kleine Demo-Map)
+    const mapId = canvas.dataset.map || 'data/maps/map-mini.json';
+
+    try {
+      // Game initialisieren (Canvas wird an die Engine übergeben)
+      Game.init(canvas);
+      // und Spielstart auslösen
+      Game.start(mapId);
+      log('game-start', { mapId });
+      EVT('cb:game-start', { mapId });
+    } catch (e) {
+      err('Game.init/start Fehler:', e);
     }
   }
 
-  // DOM → init
+  // ------------------------ Lifecycle: DOM ready -------------------
   window.addEventListener('DOMContentLoaded', () => {
-    (window.CBLog?.ok || console.log)('[boot] DOM ready');
+    log('DOM ready');
 
-    // Prüfen, ob boot.js wirklich geladen wurde (du siehst diesen Log)
+    // 1) Assets laden
+    try { Assets.loadAll?.(); log('Assets.loadAll() angestoßen'); }
+    catch (e) { err('Assets.loadAll Fehler:', e); }
+
+    // 2) Registry initialisieren (liest z. B. data/buildings.json)
+    try { Registry.init?.(); log('Registry.init() angestoßen'); }
+    catch (e) { err('Registry.init Fehler:', e); }
+
+    // (Game.init() ruft maybeStart() NICHT, das machen wir selbst,
+    //  sobald alle drei Flags gesetzt sind – siehe maybeStart()).
+  });
+
+  // ------------------------ UI ready -------------------------------
+  // offiziell
+  window.addEventListener('cb:ui-ready', () => {
+    uiReady = true;
+    log('ui-ready ✓');
+    maybeStart();
+  });
+  // (Fallback alias – falls dein UI noch „ui:ready“ feuert)
+  window.addEventListener('cb:ui:ready', () => {
+    uiReady = true;
+    log('ui:ready (alias) ✓');
+    maybeStart();
+  });
+
+  // ------------------------ Assets ready ---------------------------
+  // beide Schreibweisen akzeptieren
+  window.addEventListener('cb:assets-ready', () => {
+    assetsReady = true;
+    log('assets-ready ✓');
+    maybeStart();
+  });
+  window.addEventListener('cb:assets:ready', () => {
+    assetsReady = true;
+    log('assets:ready (alias) ✓');
+    maybeStart();
+  });
+
+  // ------------------------ Registry ready -------------------------
+  // beide Schreibweisen akzeptieren
+  window.addEventListener('cb:registry-ready', () => {
+    registryReady = true;
+    log('registry-ready ✓');
+    maybeStart();
+  });
+  window.addEventListener('cb:registry:ready', () => {
+    registryReady = true;
+    log('registry:ready (alias) ✓');
+    maybeStart();
+  });
+
+  // ------------------------ Startpanel-Events ----------------------
+  // Falls dein UI zusätzliche Buttons verwendet:
+  window.addEventListener('cb:start:new', (e) => {
+    // Optional: andere Map per Detail übergeben: { mapId: "data/maps/xyz.json" }
     const canvas = document.getElementById('game');
-    if (!canvas) {
-      (window.CBLog?.err || console.error)('[boot] #game Canvas fehlt! index.html prüfen.');
-      return;
-    }
-
-    try { Game.init(canvas); }
-    catch (e) { (window.CBLog?.err || console.error)('[boot] Game.init Fehler:', e); }
-
-    try { Assets.loadAll(); }
-    catch (e) { (window.CBLog?.err || console.error)('[boot] Assets.loadAll Fehler:', e); }
-
-    try { Registry.init(); }
-    catch (e) { (window.CBLog?.err || console.error)('[boot] Registry.init Fehler:', e); }
+    const given  = e?.detail?.mapId;
+    if (given) canvas && (canvas.dataset.map = given);
+    log('start:new', { map: canvas?.dataset.map });
+    // Falls alle ready-Flags schon true sind, sofort starten/neu laden:
+    maybeStart();
   });
 
-  // Offizielle Events
-  on('cb:assets-ready',   () => { assetsReady = true;  (window.CBLog?.ok||console.log)('[boot] assets-ready');   maybeReady(); });
-  on('cb:registry-ready', () => { registryReady = true;(window.CBLog?.ok||console.log)('[boot] registry-ready'); maybeReady(); });
-
-  // Kompatibilitäts-Events (falls Monolith ältere Namen nutzt)
-  on('cb:assets:ready',   () => { assetsReady = true;  (window.CBLog?.ok||console.log)('[boot] assets:ready (compat)');   maybeReady(); });
-  on('cb:registry:ready', () => { registryReady = true;(window.CBLog?.ok||console.log)('[boot] registry:ready (compat)'); maybeReady(); });
-
-  // UI-Events (Start)
-  on('cb:start:new', (e) => {
-    const mapId = e?.detail?.mapId || 'demo.ep1';
-    (window.CBLog?.ok || console.log)('[boot] Neues Spiel', mapId);
-    try { Game.start(mapId); } catch (err) { (window.CBLog?.err || console.error)('[boot] Game.start Fehler:', err); }
+  window.addEventListener('cb:start:continue', () => {
+    log('start:continue (noch kein Save-Wiring, starte normale Map)');
+    maybeStart();
   });
 
-  on('cb:start:continue', () => {
-    (window.CBLog?.ok || console.log)('[boot] Weiterspielen');
-    try { Game.start('last.save'); } catch (err) { (window.CBLog?.err || console.error)('[boot] Game.start Fehler:', err); }
-  });
-
-  on('cb:start:reset', () => {
-    (window.CBLog?.warn || console.warn)('[boot] Reset → Seite neu laden');
+  window.addEventListener('cb:start:reset', () => {
+    warn('start:reset → Reload');
     location.reload();
   });
 
-  on('cb:fullscreen', () => {
+  window.addEventListener('cb:fullscreen', () => {
     const el = document.documentElement;
-    if (!document.fullscreenElement) el.requestFullscreen?.();
-    else document.exitFullscreen?.();
+    if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.();
   });
+
+  // ------------------------ Sicherheits-Fallbacks ------------------
+  // Falls eins der Ready-Events nie kommt, entsperren wir nach kurzer Zeit
+  // zumindest den Start, damit du testen kannst.
+  setTimeout(() => {
+    if (!uiReady)        { warn('Fallback: ui-ready fehlte – erzwinge uiReady=true'); uiReady = true; }
+    if (!assetsReady)    { warn('Fallback: assets-ready fehlte – erzwinge assetsReady=true'); assetsReady = true; }
+    if (!registryReady)  { warn('Fallback: registry-ready fehlte – erzwinge registryReady=true'); registryReady = true; }
+    maybeStart();
+  }, 2500);
 })();
