@@ -1,250 +1,164 @@
-/* ============================================================================
- * Datei: ui/ui-build.js
- * Version: v18.9.2 (2025-09-26)
- * Zweck: Baumenü (Build-Dock) – Render/Interaktion
- * Leitplanken:
- *   - API: UIBuild.init(root), UIBuild.open(), UIBuild.close(), UIBuild.rerender()
- *   - Events: cb:UIBuild:ready (1x), reagiert auf cb:build:open/close, cb:registry:ready
- *   - Datenquelle: Registry (type="building"); fehlende Registry → leer + Warnung
- *   - Tooltip/Hover: liefert data-* Attribute (id/label/desc) für ui-tooltip.js
- * Struktur:
- *   (0) Logger-Guard
- *   (1) Konstanten/State
- *   (2) Helper (DOM/Normalize/Render)
- *   (3) Render-Pipeline
- *   (4) API (open/close/rerender/init)
- *   (5) Event-Wiring
- *   (6) Exports + Ready-Event
- * ========================================================================== */
+// ============================================================================
+// Datei : ui/ui-build.js
+// Zweck : Baumenü rendern (Kategorien → Items) und Auswahl senden
+// Events: hört   auf cb:registry-ready (und cb:registry:ready alias)
+//         sendet cb:build:select  { id }  beim Klick auf ein Gebäude
+// Hinweise:
+//   • Kein globaler STATE – nur lokaler Status (activeCat, activeItem).
+//   • Robustes Mounting: erzeugt #build-cats / #build-items bei Bedarf.
+//   • Nutzt optional window.BuildBridge.view() (falls vorhanden), sonst direkt Registry.
+// ============================================================================
 
-/* (0) Logger-Guard ----------------------------------------------------------- */
-if (!window.CBLog || typeof window.CBLog.ok !== "function") {
-  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
-  CBLog.info("[ui-build] Hinweis: globaler CBLog nicht gefunden – Fallback aktiv");
-}
+(() => {
+  const log  = (...a) => (window.CBLog?.ok   || console.log)('[ui-build]', ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn)('[ui-build]', ...a);
+  const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-/* (1) Konstanten/State ------------------------------------------------------- */
-const UIB_MOD = "[ui-build]";
-const UIB_VER = "v18.9.2";
-
-const UIB_STATE = {
-  root: null,          // Root-Element (#build-dock)
-  wrap: null,          // #build-dock .wrap (Render-Ziel)
-  isOpen: false,
-  list: [],            // normalisierte Items (aus Registry)
-  selected: null
-};
-
-/* (2) Helper (DOM/Normalize/Render) ----------------------------------------- */
-const $ = (sel, root=document)=> root.querySelector(sel);
-function el(tag, cls, html=""){ const e=document.createElement(tag); if(cls) e.className=cls; if(html) e.innerHTML=html; return e; }
-
-function ensureWrap(root){
-  let w = $(".wrap", root);
-  if (!w){
-    w = el("div","wrap","");
-    root.appendChild(w);
-  }
-  UIB_STATE.wrap = w;
-  return w;
-}
-
-// robustes Icon: bevorzugt icon/sprite im Objekt; sonst Fallback
-function iconUrl(b){
-  return b.icon || b.sprite || b.img || b.image || "assets/icons/placeholder.png";
-}
-
-// Registry-Normalisierung: unterstützt mehrere Layouts
-function normalizeBuilding(raw){
-  if (!raw) return null;
-  const id   = raw.id || raw.key || raw.slug || null;
-  const name = raw.name || raw.title || id || "Unbenannt";
-  const desc = raw.desc || raw.description || raw.info || "";
-  const icon = iconUrl(raw);
-  const cat  = raw.category || raw.cat || "misc";
-  const disabled = !!raw.disabled;
-  return { id, name, desc, icon, category: cat, disabled };
-}
-
-// Registry-Auflösung (verschiedene Formen zulassen)
-function fetchBuildingsFromRegistry(){
-  const R = window.Registry || {};
-  try{
-    if (typeof R.list === "function"){
-      return R.list("building") || [];
+  // ---- DOM helpers ----------------------------------------------------------
+  const q  = (sel) => document.querySelector(sel);
+  function ensureLists() {
+    const dock = q('#build-dock');
+    if (!dock) { warn('Container #build-dock fehlt – index.html prüfen'); return null; }
+    // Falls noch leer: Grundgerüst erzeugen
+    if (!dock.querySelector('#build-cats')) {
+      const h2 = dock.querySelector('h2') || Object.assign(document.createElement('h2'), {textContent:'Baumenü'});
+      const cats = Object.assign(document.createElement('ul'), { id:'build-cats', className:'build-cats' });
+      const sep  = document.createElement('hr');
+      const items= Object.assign(document.createElement('ul'), { id:'build-items', className:'build-items' });
+      dock.append(h2, cats, sep, items);
     }
-    if (typeof R.getAll === "function"){
-      return R.getAll("building") || [];
+    return {
+      cats : dock.querySelector('#build-cats'),
+      items: dock.querySelector('#build-items'),
+    };
+  }
+
+  // ---- Datenquelle (Registry → ViewModel) ----------------------------------
+  function readData() {
+    // Falls eine Bridge vorhanden ist, nutzen wir sie (kann Labels/Kosten aufbereiten)
+    if (window.BuildBridge?.view) return window.BuildBridge.view();
+
+    const cats = (Registry.get('categories') || []).map(c => ({
+      id   : String(c.id),
+      label: String(c.label ?? c.id)
+    }));
+
+    const bld = (Registry.get('buildings') || []).map(b => ({
+      id   : String(b.id),
+      cat  : String(b.cat ?? 'misc'),
+      label: String(b.label ?? b.id),
+      icon : b.icon || '',        // Registry.normalisiert icon bereits (falls gesetzt)
+      cost : b.cost || null       // { wood, stone, gold } optional
+    }));
+
+    return { cats, buildings: bld };
+  }
+
+  // ---- Render-State ---------------------------------------------------------
+  let activeCat  = null;
+  let activeItem = null;
+
+  function renderCats(root, cats) {
+    root.innerHTML = '';
+    cats.forEach((c, idx) => {
+      const li = document.createElement('li');
+      li.className = 'build-cat';
+      li.dataset.cat = c.id;
+      li.textContent = c.label;
+      if (!activeCat && idx === 0) activeCat = c.id;
+      if (c.id === activeCat) li.classList.add('active');
+      li.addEventListener('click', () => {
+        activeCat = c.id;
+        activeItem = null;
+        highlightCats(root);
+        renderItems(q('#build-items'), readData().buildings);
+      });
+      root.appendChild(li);
+    });
+  }
+
+  function highlightCats(root) {
+    root.querySelectorAll('li').forEach(li => {
+      li.classList.toggle('active', li.dataset.cat === activeCat);
+    });
+  }
+
+  function renderItems(root, buildings) {
+    root.innerHTML = '';
+    const list = buildings.filter(b => b.cat === activeCat);
+    list.forEach(b => {
+      const li = document.createElement('li');
+      li.className = 'build-item';
+      li.dataset.id = b.id;
+
+      // Icon (falls vorhanden)
+      if (b.icon) {
+        const img = document.createElement('img');
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.src = b.icon;
+        img.alt = b.label;
+        img.width = 20; img.height = 20;
+        img.style.verticalAlign = 'middle';
+        img.style.marginRight = '6px';
+        li.appendChild(img);
+      }
+
+      // Label + Kosten
+      const text = document.createElement('span');
+      text.textContent = b.label;
+      li.appendChild(text);
+
+      if (b.cost) {
+        const small = document.createElement('small');
+        const w = +b.cost.wood  || 0;
+        const s = +b.cost.stone || 0;
+        const g = +b.cost.gold  || 0;
+        small.textContent = `  [Holz:${w} Stein:${s}${g ? ' Gold:'+g : ''}]`;
+        small.style.opacity = .75;
+        small.style.marginLeft = '6px';
+        li.appendChild(small);
+      }
+
+      if (b.id === activeItem) li.classList.add('active');
+
+      li.addEventListener('click', () => {
+        // Auswahl markieren
+        activeItem = b.id;
+        root.querySelectorAll('li').forEach(x => x.classList.remove('active'));
+        li.classList.add('active');
+
+        // Event nach außen: Game/UI kann darauf reagieren (Platzierung, Ghost, etc.)
+        EVT('cb:build:select', { id: b.id });
+        log('select', b.id);
+      });
+
+      root.appendChild(li);
+    });
+
+    // Keine Items? Kurzer Hinweis.
+    if (!root.children.length) {
+      const em = document.createElement('em');
+      em.textContent = 'Keine Einträge in dieser Kategorie.';
+      em.style.opacity = .7;
+      root.appendChild(em);
     }
-    if (R.data && Array.isArray(R.data.buildings)){
-      return R.data.buildings;
-    }
-    if (Array.isArray(R.buildings)){
-      return R.buildings;
-    }
-  }catch(e){
-    (window.CBLog?.warn||console.warn)(`${UIB_MOD} Registry read error`, e);
-  }
-  return [];
-}
-
-// A11y-Label für Buttons
-function ariaLabel(b){
-  return `Bauen: ${b.name}`;
-}
-
-// Ein einzelnes Item (Button) bauen
-function buildItem(b){
-  const btn = el("button", "build-item");
-  btn.type = "button";
-  btn.setAttribute("role","listitem");
-  btn.dataset.id    = b.id || "";
-  btn.dataset.label = b.name || "";
-  if (b.desc) btn.dataset.desc = b.desc;
-
-  btn.innerHTML = `
-    <img class="build-icon" src="${iconUrl(b)}" alt="${b.name || b.id || "Building"}" loading="lazy">
-    <span class="label">${b.name || b.id}</span>
-  `;
-  btn.setAttribute("aria-label", ariaLabel(b));
-  if (b.disabled){
-    btn.classList.add("is-disabled");
-    btn.setAttribute("disabled","disabled");
   }
 
-  btn.addEventListener("click", ()=>{
-    if (btn.disabled) return;
-    UIB_STATE.selected = b.id;
-    try {
-      window.dispatchEvent(new CustomEvent("cb:build:select", { detail:{ id:b.id }}));
-    } catch(_) {}
-    (window.CBLog?.info||console.log)(`${UIB_MOD} ausgewählt: ${b.id}`);
-    // Optional: Visual Selected
-    $(".build-item.is-selected", UIB_STATE.wrap)?.classList.remove("is-selected");
-    btn.classList.add("is-selected");
-  });
+  // ---- Boot-Wiring ----------------------------------------------------------
+  function mount() {
+    const lists = ensureLists();
+    if (!lists) return;
 
-  return btn;
-}
+    const { cats, buildings } = readData();
+    if (!cats.length) { warn('keine Kategorien'); return; }
 
-// Kategorie mit Header + Grid
-function renderCategory(cat, arr){
-  const section = el("section","build-cat");
-  // Header
-  const head = el("div","build-header","");
-  const title = el("h4","build-title", cat);
-  const count = el("span","build-count", String(arr.length));
-  head.append(title, count);
-  // Liste
-  const list = el("div","build-list","");
-  list.setAttribute("role","list");
-  arr.forEach(b => list.appendChild(buildItem(b)));
-
-  section.append(head, list);
-  return section;
-}
-
-// Leerer Zustand
-function emptyStateMarkup(reason){
-  const box = el("div", "build-empty", `
-    <div class="msg" style="padding:10px 12px;">
-      <div class="title" style="font-weight:700;margin-bottom:4px;">Kein Baumenü verfügbar</div>
-      <div class="reason" style="opacity:.8">${reason}</div>
-    </div>
-  `);
-  return box;
-}
-
-/* (3) Render-Pipeline -------------------------------------------------------- */
-function collectBuildings(){
-  const raws = fetchBuildingsFromRegistry();
-  if (!Array.isArray(raws) || !raws.length){
-    CBLog.warn(`${UIB_MOD} keine buildings in Registry gefunden`);
-    return [];
-  }
-  const norm = raws.map(normalizeBuilding).filter(Boolean);
-  return norm;
-}
-
-function renderList(root){
-  const wrap = ensureWrap(root);
-  wrap.innerHTML = "";
-  UIB_STATE.list = collectBuildings();
-
-  if (!UIB_STATE.list.length) {
-    wrap.appendChild( emptyStateMarkup("Registry nicht geladen oder leer.") );
-    return;
+    renderCats(lists.cats, cats);
+    renderItems(lists.items, buildings);
+    log('gerendert');
   }
 
-  // Gruppieren
-  const groups = new Map(); // cat -> items
-  for (const b of UIB_STATE.list) {
-    const cat = b.category || "misc";
-    if (!groups.has(cat)) groups.set(cat, []);
-    groups.get(cat).push(b);
-  }
-
-  // Alphabetische Reihenfolge der Kategorien
-  const cats = Array.from(groups.keys()).sort((a,b)=> (""+a).localeCompare(""+b));
-
-  for (const cat of cats){
-    const arr = groups.get(cat);
-    wrap.appendChild( renderCategory(cat, arr) );
-  }
-}
-
-/* (4) API (open/close/rerender/init) ---------------------------------------- */
-const UIBuild = {
-  open(){
-    UIB_STATE.isOpen = true;
-    if (UIB_STATE.root) UIB_STATE.root.removeAttribute("hidden");
-    try { window.dispatchEvent(new CustomEvent("cb:build:open")); } catch(_) {}
-  },
-  close(){
-    UIB_STATE.isOpen = false;
-    if (UIB_STATE.root) UIB_STATE.root.setAttribute("hidden","");
-    try { window.dispatchEvent(new CustomEvent("cb:build:close")); } catch(_) {}
-  },
-  rerender(){
-    if (!UIB_STATE.root) return;
-    renderList(UIB_STATE.root);
-  },
-  init(root){
-    if (UIB_STATE.root) return; // idempotent
-    UIB_STATE.root = root || $("#build-dock");
-    if (!UIB_STATE.root) {
-      CBLog.error(`${UIB_MOD} Root #build-dock fehlt`);
-      return;
-    }
-    ensureWrap(UIB_STATE.root);
-    renderList(UIB_STATE.root);
-    CBLog.ok(`${UIB_MOD} init abgeschlossen (${UIB_VER})`);
-  }
-};
-
-/* (5) Event-Wiring ----------------------------------------------------------- */
-// Sichtbarkeit (Index setzt zusätzlich body-Klasse; doppelt schadlos)
-window.addEventListener("cb:build:open",  ()=> { if (UIB_STATE.root) UIB_STATE.root.removeAttribute("hidden"); });
-window.addEventListener("cb:build:close", ()=> { if (UIB_STATE.root) UIB_STATE.root.setAttribute("hidden",""); });
-
-// Init nach UI-Ready (falls noch nicht geschehen)
-window.addEventListener("cb:ui-ready", ()=>{
-  if (!UIB_STATE.root) UIBuild.init();
-});
-
-// Nach Registry-Ready neu rendern (Garant, dass Descriptions/Icons da sind)
-window.addEventListener("cb:registry:ready", ()=>{
-  if (UIB_STATE.root) UIBuild.rerender();
-});
-
-// Optional: Nach Spielstart auch einmal frisch rendern
-window.addEventListener("cb:game-start", ()=>{
-  if (UIB_STATE.root) UIBuild.rerender();
-});
-
-/* (6) Exports + Ready-Event -------------------------------------------------- */
-window.UIBuild = window.UIBuild || UIBuild;
-try {
-  window.dispatchEvent(new CustomEvent("cb:UIBuild:ready"));
-  CBLog.ok(`${UIB_MOD} bereit (Ready-Event gesendet)`);
-} catch(e) { /* ignore */ }
+  // Registry bereit? Dann mounten. (Beide Event-Varianten akzeptieren)
+  window.addEventListener('cb:registry-ready', mount);
+  window.addEventListener('cb:registry:ready', mount);
+})();
