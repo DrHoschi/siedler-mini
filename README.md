@@ -120,3 +120,48 @@ Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 ⸻
 
 👉 Empfehlung: Den Inspector kannst du später nach tools/ verschieben, solange die Einbindung in index.html und Events (cb:insp:*) bestehen bleibt.
+
+Ziel-Struktur (Standard)
+
+So soll es am Ende aussehen (Code/JSON sauber getrennt; Bilder bleiben in assets/):
+/index.html
+/boot.js
+
+/core/                      # Laufzeit-Engine & Systems (nur .js)
+  asset.js
+  registry.js
+  registry.type-aliases.js
+  render.js
+  ui-build.data-bridge.js
+  ui-build.js
+  ... (weitere Core-Module)
+
+/ui/                        # UI-Skripte & CSS
+  ui-start.js
+  ui-hud.js
+  ui-build.js
+  css/
+    ui-build.css
+  inspector/
+    ui-inspector.js
+    ...
+
+/data/                      # Gameplay-Daten (nur .json/.jsonc)
+  buildings.json
+  buildings.jsonc
+  characters/
+    *.json
+  maps/
+    *.json
+  ...
+
+/tools/                     # Editor/Dev-Tools (optional)
+  editor/
+    editor.js
+
+/assets/                    # NUR Medien (Bilder/Audio/Fonts/Icons)
+  buildings/*.png
+  characters/*.png
+  tiles/*.png
+  ui/*.png
+  icons/** (nur .png/.svg …)
