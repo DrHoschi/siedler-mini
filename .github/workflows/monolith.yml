@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Generate Monolith (ohne Archiv, ohne Bilder)
+      - name: Generate Monolith (alles außer Bilder/Icons; Archiv ausgeschlossen)
         shell: bash
         run: |
           set -euo pipefail
@@ -24,25 +24,27 @@ jobs:
             echo
           } > "$TMP"
 
-          # Alle relevanten Textdateien sammeln (inkl. assets/),
-          # aber Archiv, .git, .github und die AUSGABEDATEI selbst ausschließen.
+          # Alle Dateien aufnehmen – außer:
+          #  • Archiv/, .git/, .github/
+          #  • die Ausgabedatei selbst
+          #  • Bilder/Icons (png|jpg|jpeg|gif|webp|avif|svg|ico|icns|bmp|tif|tiff)
           find . -type f \
-            \( -name "*.html" -o -name "*.js"    -o -name "*.css" \
-               -o -name "*.json" -o -name "*.yml" -o -name "*.yaml" \
-               -o -name "*.md"   -o -name "*.mmd" -o -name "*.txt" \
-               -o -name "*.jonson" -o -name "filelist.*" \) \
             ! -path "./Archiv/*" \
             ! -path "./.git/*" \
             ! -path "./.github/*" \
-            ! -path "./$OUT" \
+            ! -path "./${OUT}" \
+            ! -iname "*.png"  ! -iname "*.jpg"  ! -iname "*.jpeg" \
+            ! -iname "*.gif"  ! -iname "*.webp" ! -iname "*.avif" \
+            ! -iname "*.svg"  ! -iname "*.ico"  ! -iname "*.icns" \
+            ! -iname "*.bmp"  ! -iname "*.tif"  ! -iname "*.tiff" \
             | LC_ALL=C sort \
             | while IFS= read -r file; do
                 {
                   echo "==================================================================="
                   echo "DATEI: $file"
                   echo "==================================================================="
-                  # CRLF säubern, falls vorhanden
-                  sed 's/\r$//' "$file"
+                  # Windows-CRLF säubern; Binärdateien (falls vorhanden) werden dennoch 1:1 ausgegeben.
+                  sed 's/\r$//' "$file" || cat "$file"
                   echo
                   echo
                 } >> "$TMP"
