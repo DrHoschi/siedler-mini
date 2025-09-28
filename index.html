@@ -4,177 +4,116 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v19.3.0 (2025-09-28)
+       Version: v1.0.0 (2025-09-28)
        Zweck:
-         • Einstiegspunkt gemäß Monolith/Lastenheft
-         • Startfenster zuerst (Holz/Papier-Look)
-         • Inspector/Debug bleibt erhalten (eigener Button)
-         • Script-Reihenfolge: Core → Boot → UI → Tools
-       Leitplanken (wichtig):
-         1) KEIN globales doppeltes „const STATE“ (State ist in core/game.js gekapselt)
-         2) UI ↔ Boot ↔ Game über Events (window.dispatchEvent / window.addEventListener)
-         3) cb-Events: cb:ui-ready, cb:assets-ready, cb:registry-ready, cb:boot-ready,
-                       cb:start:new|continue|reset|fullscreen, cb:game-start, cb:map:loaded
-         4) Inspector/Debug-Tools NIEMALS entfernen
-       Strukturvorgabe (CODE_STYLE):
-         Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
-       ===================================================================== -->
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Neue Siedler – v19.3.0</title>
+         - Einstiegspunkt für Spiel + UI
+         - Startfenster zuerst sichtbar
+         - Inspector & Debug-Tools integriert
+       Struktur:
+         HEAD  : Meta + CSS
+         BODY  : App-Container mit Panels, HUD, Dock, Inspector
+         SCRIPTS: Core → UI → Tools (Reihenfolge beachten!)
+  ========================================================================= -->
 
-  <!-- ========================= STYLES =========================
-       Hinweis: Der Holz/Papier-Hintergrund liegt unter /assets/ui/panel.png
-       In ui/css/ui-build.css MUSS der Pfad aus ui/css/ zwei Ebenen hoch zeigen:
-         url("../../assets/ui/panel.png")
-       ======================================================== -->
-  <link rel="stylesheet" href="ui/css/ui-build.css?v=19.3.0" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <noscript>
-    <style>body{font-family:system-ui;padding:1rem}</style>
-    <p><strong>Hinweis:</strong> Dieses Spiel benötigt JavaScript.</p>
-  </noscript>
+  <title>Neue Siedler – Epoche 1</title>
+
+  <!-- ==================== CSS ==================== -->
+  <!-- Zentrales UI-CSS -->
+  <link rel="stylesheet" href="ui/css/ui.css">
+  <link rel="stylesheet" href="ui/css/ui-start.css">
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
+  <link rel="stylesheet" href="ui/css/ui-build.css">
+  <link rel="stylesheet" href="ui/css/ui-dialog.css">
+  <link rel="stylesheet" href="ui/css/ui-tooltip.css">
+  <link rel="stylesheet" href="ui/css/inspector.css">
+
+  <!-- Optional: globale Variablen / Darkmode -->
+  <style>
+    :root {
+      --bg: #1e1e1e;
+      --fg: #f0f0f0;
+      --accent: #4da3ff;
+    }
+    body, html {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: sans-serif;
+    }
+  </style>
 </head>
 
 <body>
-  <!-- =======================================================================
-       APP-ROOT
-       - Enthält HUD (Top), Startpanel, Canvas, Build-Dock, Inspector-Container.
-       - Inspector-Button ist global sichtbar (oben rechts), unabhängig vom Panel.
-       ======================================================================= -->
+  <!-- =========================================================================
+       DOM-STRUKTUR: Sichtbare Container
+  ========================================================================= -->
+
   <div id="app">
+    <!-- Spielfeld -->
+    <canvas id="game" width="1280" height="720"
+            data-map="data/maps/map-mini.json"></canvas>
 
-    <!-- ===================== HUD (Top-Leiste) =====================
-         Wird von ui/ui-hud.js aktualisiert. Die <b>-Werte sind Platzhalter.
-         ========================================================== -->
-    <header id="hud-top" class="hud hud--top" aria-label="Ressourcenanzeige">
-      <div class="hud-row">
-        <span data-r="wood">🌲 Holz: <b>0</b></span>
-        <span data-r="stone">🧱 Stein: <b>0</b></span>
-        <span data-r="fish">🐟 Fisch: <b>0</b></span>
-        <span data-r="pop">👥 Bevölkerung: <b>0/5</b></span>
-        <span data-r="gold">🪙 Gold: <b>0</b></span>
-      </div>
-    </header>
-
-    <!-- ===================== INSPECTOR-BUTTON =====================
-         Globaler Toggle; der eigentliche Inspector hört auf cb:inspector:toggle.
-         Position: oben rechts; Styling in ui/css/ui-build.css (.btn-inspector).
-         =========================================================== -->
-    <button id="btnInspector" class="btn-inspector" title="Inspector öffnen">🛠️ Inspector</button>
-
-    <!-- ===================== STARTFENSTER (zuerst sichtbar) =====================
-         IDs exakt wie in deiner Monolith:
-           btnStartNew / btnStartResume / btnStartReset / btnStartFullscreen
-         Buttons sind bis cb:boot-ready deaktiviert (ui/ui-start.js).
-         Blend-out bei cb:game-start (ui/ui-start.js).
-         ====================================================================== -->
-    <div id="start-panel" class="panel panel--start" role="dialog" aria-modal="true" aria-labelledby="title-start">
-      <h1 id="title-start">Neue Siedler</h1>
-      <p>Version v19.3.0 – Startfenster zuerst (gemäß Standard)</p>
-
-      <div class="btn-row">
-        <button id="btnStartNew">Neues Spiel</button>
-        <button id="btnStartResume">Weiterspielen</button>
-        <button id="btnStartFullscreen">Vollbild</button>
-        <button id="btnStartReset">Reset</button>
-      </div>
-
-      <small class="hint">
-        Events: cb:ui-ready · cb:boot-ready · cb:start:new|continue|reset|fullscreen · cb:game-start · cb:map:loaded
-      </small>
+    <!-- Startpanel -->
+    <div id="start-panel" class="panel visible">
+      <h1>Neue Siedler</h1>
+      <button id="btn-new">Neues Spiel</button>
+      <button id="btn-continue">Weiterspielen</button>
+      <button id="btn-fullscreen">Vollbild</button>
+      <button id="btn-reset">Reset</button>
+      <button id="btn-inspector">Inspector</button>
     </div>
 
-    <!-- ===================== SPIELFELD / CANVAS ===================== -->
-    <canvas id="game" width="1280" height="720" aria-label="Spielfeld"></canvas>
+    <!-- HUD -->
+    <div id="hud-top" class="hidden"></div>
 
-    <!-- ===================== BUILD-DOCK (Baumenü) =====================
-         Kategorien & Items werden aus Registry gerendert (ui/ui-build.js).
-         Epoche 1: HQ/Lager, Holzfällerhütte, Fischerhütte, Steinbruch.
-         =============================================================== -->
-    <aside id="build-dock" class="panel panel--dock" aria-label="Baumenü">
-      <h2>Baumenü</h2>
-      <ul id="build-cats"></ul>
-      <hr />
-      <ul id="build-items"></ul>
-    </aside>
+    <!-- Build-Dock -->
+    <div id="build-dock" class="hidden"></div>
 
-    <!-- ===================== INSPECTOR-CONTAINER =====================
-         Dein Inspector kann sich hier montieren; sichtbar per Button/Toggle.
-         (Nicht entfernen – Standard fordert dauerhafte Verfügbarkeit.)
-         =============================================================== -->
-    <div id="inspector-root" hidden></div>
+    <!-- Inspector -->
+    <div id="inspector" class="hidden"></div>
   </div>
 
-  <!-- ===================================================================
-       SCRIPT-LADE-REIHENFOLGE (streng einhalten!)
-         1) Core   (Assets → Registry → Game)
-         2) Boot   (verdrahtet Start/Ready-Events)
-         3) UI     (Startpanel → HUD → Build)
-         4) Tools  (Inspector/Debug – bleibt erhalten)
-       =================================================================== -->
+  <!-- =========================================================================
+       SCRIPTS: Reihenfolge Core → UI → Tools
+  ========================================================================= -->
 
-  <!-- ===================== 1) CORE ===================== -->
-  <script src="core/asset.js?v=19.3.0"></script>
-  <script src="core/registry.js?v=19.3.0"></script>
-  <script src="core/game.js?v=19.3.0"></script>
+  <!-- Core -->
+  <script src="core/asset.js"></script>
+  <script src="core/registry.js"></script>
+  <script src="core/game.js"></script>
+  <script src="core/boot.js"></script>
 
-  <!-- ===================== 2) BOOT ===================== -->
-  <script src="boot.js?v=19.3.0"></script>
+  <!-- UI -->
+  <script src="ui/ui-start.js"></script>
+  <script src="ui/ui-hud.js"></script>
+  <script src="ui/ui-build.categories.js"></script>
+  <script src="ui/ui-build.js"></script>
+  <script src="ui/ui-dialog.js"></script>
+  <script src="ui/inspector/inspector.core.js"></script>
 
-  <!-- ===================== 3) UI (in dieser Reihenfolge) =====================
-       • ui-start: Startfenster-Events + cb:ui-ready (aktiviert Buttons bei cb:boot-ready)
-       • ui-hud  : Ressourcenbalken (setzt Startwerte bei cb:game-start)
-       • ui-build: Kategorien/Items rendern; sendet cb:build:select
-       ====================================================================== -->
-  <script src="ui/ui-start.js?v=19.3.0"></script>
-  <script src="ui/ui-hud.js?v=19.3.0"></script>
-  <script src="ui/ui-build.js?v=19.3.0"></script>
+  <!-- Tools / Debug -->
+  <script src="tools/debug-tools.js"></script>
+  <script src="tools/editor/editor.js"></script>
 
-  <!-- ===================== 4) TOOLS / INSPECTOR =====================
-       Inspector/Debug wird NICHT entfernt. CBLog-Fallback bleibt,
-       falls dein echtes Debug-Objekt noch nicht geladen ist.
-       =============================================================== -->
+  <!-- Inline-Wiring -->
   <script>
-    /* ---------------------------------------------------------------
-       DEBUG/INSPECTOR-FALLBACK
-       (Dein echter Inspector/Logger kann dieses Objekt überschreiben.)
-       --------------------------------------------------------------- */
-    window.CBLog = window.CBLog || {
-      ok   : (...a)=>console.log('[OK]',   ...a),
-      warn : (...a)=>console.warn('[WARN]',...a),
-      err  : (...a)=>console.error('[ERR]',...a)
-    };
-
-    // Inspector-Button → Toggle-Event (Inspector hört darauf)
-    window.addEventListener('DOMContentLoaded', ()=>{
-      const btn = document.getElementById('btnInspector');
-      if (btn) {
-        btn.addEventListener('click', ()=>{
-          window.dispatchEvent(new CustomEvent('cb:inspector:toggle'));
-          (window.CBLog?.ok||console.log)('[ui] Inspector-Button geklickt');
-        });
-      }
+    // Inspector öffnen
+    document.getElementById('btn-inspector').addEventListener('click', () => {
+      document.getElementById('inspector').classList.toggle('hidden');
+      window.dispatchEvent(new CustomEvent('req:inspector:toggle'));
     });
 
-    // Beispiel: Dein Inspector könnte so montieren (nur Schema, auskommentiert):
-    // window.Inspector = window.Inspector || { mount:(el)=>CBLog.ok('[Inspector] mount', el), toggle:()=>{} };
-    // window.addEventListener('cb:inspector:toggle', ()=>{
-    //   const root = document.getElementById('inspector-root');
-    //   if (!root) return;
-    //   root.hidden = !root.hidden;
-    //   if (!root.hidden && window.Inspector?.mount) window.Inspector.mount(root);
-    // });
-  </script>
-
-  <!-- ===================== INLINE-HOOKS (optional) =====================
-       Wichtig: Hier KEINE globale STATE-Deklaration!
-       Platz für kleine Integrations-Hooks/Feature-Flags.
-       =============================================================== -->
-  <script>
-    // WHERE TO INSERT / SCRIPT MODULES (Inline):
-    // - Zusätzliche globale Events (z. B. cb:keyboard:toggleInspector)
-    // - Einmalige Projekt-Flags / Feature-Toggles
+    // Vollbild
+    document.getElementById('btn-fullscreen').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
   </script>
 </body>
 </html>
