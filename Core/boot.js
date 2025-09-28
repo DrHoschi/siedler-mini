@@ -1,5 +1,5 @@
 // ============================================================================
-// Datei: boot.js
+// Datei: core/boot.js
 // Zweck : Bootstrap & Orchestrierung der Startsequenz
 // Kette : cb:ui-ready → cb:assets-ready → cb:registry:ready → cb:game-start
 // Hinweise:
