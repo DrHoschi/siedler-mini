@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-09-28T09:50:26.680Z",
+  "createdAt": "2025-09-28T10:32:33.848Z",
   "root": ".",
-  "count": 442,
+  "count": 443,
   "entries": [
     {
       "type": "dir",
@@ -35,6 +35,11 @@
       "type": "file",
       "path": ".github/workflows/filelist.yml",
       "size": 1534
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/monolith.yml",
+      "size": 1388
     },
     {
       "type": "file",
@@ -2124,17 +2129,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1885
+      "size": 1896
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43464
+      "size": 43458
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16589
+      "size": 16583
     },
     {
       "type": "file",
