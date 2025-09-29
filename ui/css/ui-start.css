@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei    : ui/css/ui-start.css
- * Version  : v19.0.0
+ * Version  : v19.0.1
  * Zweck    : Startfenster-UI mit Hintergrundbild + Card
  * Leitplanken:
  *   - Startpanel immer über Canvas sichtbar, bis das Spiel startet
@@ -18,21 +18,15 @@
   --ui-radius:     16px;
 }
 
-/* --- Startpanel immer sichtbar/oben links über dem Canvas ----------------- */
+/* --- Startpanel Card ------------------------------------------------------ */
 #start-panel{
-  position: fixed;          /* nicht auto; damit sicher über Canvas */
-  top: 16px;
-  left: 16px;
-  right: auto;
-  bottom: auto;
-  z-index: 1000;            /* über #bg-start (900) und HUD/Dock (950) */
+  position: fixed;
+  top: 16px; left: 16px;
+  z-index: 1000;
   pointer-events: auto;
   display: block;
   min-width: 280px;
 }
-
-/* falls du .panel/.ui-panel Klassen nutzt: Basiskasten */
-#start-panel.panel,
 #start-panel.ui-panel{
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
@@ -42,7 +36,6 @@
   color: var(--ui-text);
   backdrop-filter: blur(2px);
 }
-
 #start-panel h1{
   margin: 0 0 12px 0;
   font: 600 22px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -52,14 +45,11 @@
   border: 1px solid var(--ui-border);
   border-radius: 12px;
 }
-
-/* Button-Stack */
 #start-panel .actions{
   display: grid;
   gap: 10px;
   margin-top: 8px;
 }
-
 #start-panel .btn,
 #start-panel button{
   appearance: none;
@@ -69,26 +59,16 @@
   font: 600 18px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   padding: 14px 16px;
   border-radius: 12px;
-  box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 6px 18px rgba(0,0,0,.06);
   cursor: pointer;
-  transition: transform .06s ease, background .12s ease, box-shadow .12s ease;
 }
-#start-panel .btn:hover,
-#start-panel button:hover{ transform: translateY(-1px); }
-#start-panel .btn:active,
-#start-panel button:active{ transform: translateY(0); }
-#start-panel .btn.main{ background:#e9f2ff; border-color:#bcd2f3; }
-#start-panel .btn.ghost{ background:#fff; border-style:dashed; }
-
-/* Sichtbarkeitsklassen (von ui-start.js gesteuert) */
 #start-panel.hidden  { display: none !important; }
 #start-panel.visible { display: block !important; }
 
-/* Vollflächiges Hintergrundbild unter dem Panel (Pfad korrekt relativ) */
+/* --- Hintergrundbild (unter Panel, über Canvas) --------------------------- */
 #bg-start{
   position: fixed;
   inset: 0;
-  z-index: 900;  /* unter Startpanel, über Canvas */
+  z-index: 900;
   pointer-events: none;
   opacity: 1;
   transition: opacity .5s ease;
@@ -99,11 +79,11 @@
 }
 #bg-start.fadeout{ opacity: 0; }
 
-/* HUD & Dock (wenn eingeblendet) in fester Schicht unter dem Panel */
+/* --- HUD & Dock Layer darunter -------------------------------------------- */
 #hud-top    { position: fixed; top: 8px; left: 8px; right: 8px; z-index: 950; }
 #build-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 950; }
 
-/* Responsive Feinheiten */
+/* --- Responsive ----------------------------------------------------------- */
 @media (max-width: 600px){
   #start-panel{ top: 12px; left: 12px; min-width: 240px; }
   #start-panel .btn, #start-panel button{ font-size: 16px; padding: 12px 14px; }
@@ -113,5 +93,5 @@
   #bg-start{ transition: none !important; }
 }
 
-/* Safety: Canvas zeigt immer durch (keine Abdunklung hier) */
+/* --- Canvas Safety -------------------------------------------------------- */
 #game{ background: transparent !important; }
