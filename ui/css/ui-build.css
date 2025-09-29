@@ -1,32 +1,19 @@
 /* ============================================================================
- * Datei: ui/css/ui-build.css
- * Version: v18.9.3 (2025-09-27)
- * Zweck: Build-Dock Styles (mit Panel-Hintergrund)
+ * Datei   : ui/css/ui-build.css
+ * Version : v19.0.0
+ * Zweck   : Build-Dock Styles (unten andocken, responsive)
  * Leitplanken:
- *   - Dock liegt am unteren Rand, wird erst nach Spielstart geöffnet
- *   - Hintergrund nutzt assets/ui/panel.png (Holz/Papier) + dezente Tönung
- *   - Icon-Größe steuert :root --build-icon-size (Fallback 48px)
+ *   - Dock sitzt am unteren Rand (fixed), über Canvas, unter Startpanel/Inspector
+ *   - Panel-Hintergrund (assets/ui/panel.png) + Tönung
+ *   - Icongröße via --build-icon-size steuerbar
  *   - Responsive Grid für Kategorien & Items
- * ============================================================================
- * (1) Design-Tokens
- * (2) Root/Dock
- * (3) Layout-Wrapper
- * (3.1) Optionale Kopfzeile im Dock
- * (4) Kategorie-Container
- * (5) Grid der Items
- * (6) Einzelnes Item
- * (6.1) States
- * (7) Scrollbars (optional, WebKit)
- * (8) Responsive Tweaks
- * (9) Kompakt-Modus (manuell + auto für sehr kleine Screens)
- * (10) Tooltip-Preview (großes Icon + Text)
- * ============================================================================ */
+ * ========================================================================== */
 
 /* (1) Design-Tokens --------------------------------------------------------- */
 :root{
-  --build-icon-size: 48px;               /* Fallback – kann in index überschrieben sein */
-  --build-dock-z: 1000;
-  --build-bg-tint: rgba(12,16,24,.75);   /* leichte Tönung über dem Panel */
+  --build-icon-size: 48px;
+  --build-dock-z: 950;                    /* unter Startpanel (1000), < Inspector */
+  --build-bg-tint: rgba(12,16,24,.75);
   --build-border: #1d2633;
   --build-border-strong: #0e1420;
   --build-shadow: 0 -18px 48px rgba(0,0,0,.35);
@@ -36,43 +23,15 @@
   --build-text-dim: #b9c7dc;
 }
 
-/* Inspector-Button */
-.btn-inspector {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 50;
-  background: #2e2a26;
-  border: 1px solid #4a3b2a;
-  color: var(--txt);
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-}
-.btn-inspector:hover {
-  background: #3b352f;
-  border-color: var(--acc);
-}
-
 /* (2) Root/Dock ------------------------------------------------------------- */
-
-
-/* #build-dock{
+#build-dock{
   position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: var(--build-dock-z);
-  padding: 10px; */
-
-#build-dock {
-  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-}
-
-  /* Panel-Hintergrund (Holz/Papier) mit dezenter Tönung)
-     WICHTIG: CSS liegt unter ui/css/ → daher ../../ zum assets-Ordner */
+  z-index: var(--build-dock-z);
+  padding: 10px;
+  /* Panel-Hintergrund (Pfad: ui/css → ../../assets/…) */
   background:
     linear-gradient(to top, var(--build-bg-tint), rgba(12,16,24,.55)),
     url("../../assets/ui/panel.png") center bottom / cover no-repeat;
@@ -80,10 +39,10 @@
   box-shadow: var(--build-shadow);
   color: var(--build-text);
   backdrop-filter: blur(2px);
-  display: flex; /* Layout */
+  display: flex;
 }
-#build-dock[hidden]{ display: none !important; } /* Sichtbarkeit NUR über [hidden] */
-body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Buttons etc. */ }
+#build-dock.hidden,
+#build-dock[hidden]{ display: none !important; }
 
 /* (3) Layout-Wrapper -------------------------------------------------------- */
 #build-dock .wrap{
@@ -96,7 +55,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   padding-bottom: 2px; /* Scrollbar-Puffer */
 }
 
-/* (3.1) Optionale Kopfzeile im Dock */
+/* (3.1) Optionale Kopfzeile im Dock ---------------------------------------- */
 #build-dock .dock-head{
   display: flex;
   align-items: center;
@@ -113,7 +72,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   border: 1px solid var(--build-border);
   border-radius: var(--build-radius);
   background:
-    linear-gradient(to bottom, rgba(18,24,34,.66), rgba(12,16,24,.6));
+    linear-gradient(to bottom, rgba(18,24,34,.66), rgba(12,16,24,.60));
   overflow: hidden;
 }
 .build-header{
@@ -127,12 +86,12 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
 }
 .build-title{
   margin: 0;
-  font: 600 0.95rem/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font: 600 0.95rem/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   color: var(--build-text);
   letter-spacing: .2px;
 }
 
-/* (5) Grid der Items --------------------------------------------------------- */
+/* (5) Grid der Items -------------------------------------------------------- */
 .build-list{
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -150,7 +109,8 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   background: rgba(8,12,18,.55);
   color: inherit;
   cursor: pointer; text-align: left;
-  transition: transform .06s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  transition: transform .06s ease, background .12s ease,
+              border-color .12s ease, box-shadow .12s ease;
 }
 .build-item:hover{
   transform: translateY(-1px);
@@ -165,7 +125,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   max-width: var(--build-icon-size);
   max-height: var(--build-icon-size);
   object-fit: contain;
-  image-rendering: auto; /* bei Pixel-Art ggf.: pixelated */
+  image-rendering: auto; /* für Pixelart ggf. 'pixelated' */
   flex: 0 0 auto;
 }
 .build-item .label{
@@ -192,7 +152,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   box-shadow: none;
 }
 
-/* (7) Scrollbars (optional, WebKit) ----------------------------------------- */
+/* (7) WebKit-Scrollbars (optional) ----------------------------------------- */
 #build-dock .wrap::-webkit-scrollbar{ height: 10px; width: 10px; }
 #build-dock .wrap::-webkit-scrollbar-thumb{
   background: rgba(255,255,255,.22);
@@ -216,8 +176,6 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
 }
 
 /* (9) Kompakt-Modus --------------------------------------------------------- */
-/* manuell: <div id="build-dock" class="build--compact"> */
-/* auto: @media (max-width: 420px) */
 #build-dock.build--compact .build-list{
   grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
   gap: 6px;
@@ -231,7 +189,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   width: 36px; height: 36px;
   max-width: 36px; max-height: 36px;
 }
-/* Auto-Kompakt für sehr kleine Viewports */
+/* Auto-Kompakt für sehr kleine Screens */
 @media (max-width: 420px){
   #build-dock .build-list{
     grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
@@ -248,8 +206,7 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   }
 }
 
-/* (10) Tooltip-Preview (großes Icon + Text) --------------------------------- */
-/* Stil; Verhalten kommt aus ui/ui-tooltip.js */
+/* (10) Tooltip-Preview ------------------------------------------------------ */
 .ui-tooltip{
   position: fixed;
   z-index: 2000;
@@ -264,9 +221,8 @@ body.has-build-open #build-dock{ /* Klasse bleibt kompatibel, steuert nur Button
   transform: translate(-50%, calc(-100% - 10px));
 }
 .ui-tooltip .tip-card{
-  /* gleiches Panel-Motiv wie der Rest (Pfad korrigiert) */
   background:
-    --paper: url("../../assets/ui/panel.png"); center / contain no-repeat,
+    url("../../assets/ui/panel.png") center / contain no-repeat,
     linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
