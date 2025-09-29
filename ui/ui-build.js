@@ -1,30 +1,33 @@
 // ============================================================================
 // Datei : ui/ui-build.js
-// Zweck : Baumenü rendern (Kategorien → Items) und Auswahl senden
-// Events: hört   auf cb:registry-ready (und cb:registry:ready alias)
+// Zweck : Baumenü rendern (Kategorien → Items) + Auswahl-Feedback
+// Events: hört   auf cb:registry-ready (Alias: cb:registry:ready)
 //         sendet cb:build:select  { id }  beim Klick auf ein Gebäude
 // Hinweise:
 //   • Kein globaler STATE – nur lokaler Status (activeCat, activeItem).
-//   • Robustes Mounting: erzeugt #build-cats / #build-items bei Bedarf.
-//   • Nutzt optional window.BuildBridge.view() (falls vorhanden), sonst direkt Registry.
+//   • Setzt bei Auswahl .is-selected (und .active als Fallback).
+//   • Reagiert auch auf externes cb:build:select → Highlight synchron.
 // ============================================================================
 
 (() => {
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[ui-build]', ...a);
   const warn = (...a) => (window.CBLog?.warn || console.warn)('[ui-build]', ...a);
   const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
+  const q    = (sel) => document.querySelector(sel);
 
-  // ---- DOM helpers ----------------------------------------------------------
-  const q  = (sel) => document.querySelector(sel);
+  // ---- Render-State ---------------------------------------------------------
+  let activeCat  = null;
+  let activeItem = null; // ID des aktuell ausgewählten Buildings
+
+  // ---- DOM scaffold ---------------------------------------------------------
   function ensureLists() {
     const dock = q('#build-dock');
     if (!dock) { warn('Container #build-dock fehlt – index.html prüfen'); return null; }
-    // Falls noch leer: Grundgerüst erzeugen
     if (!dock.querySelector('#build-cats')) {
-      const h2 = dock.querySelector('h2') || Object.assign(document.createElement('h2'), {textContent:'Baumenü'});
-      const cats = Object.assign(document.createElement('ul'), { id:'build-cats', className:'build-cats' });
-      const sep  = document.createElement('hr');
-      const items= Object.assign(document.createElement('ul'), { id:'build-items', className:'build-items' });
+      const h2    = dock.querySelector('h2') || Object.assign(document.createElement('h2'), { textContent:'Baumenü' });
+      const cats  = Object.assign(document.createElement('ul'), { id:'build-cats',  className:'build-cats'  });
+      const sep   = document.createElement('hr');
+      const items = Object.assign(document.createElement('ul'), { id:'build-items', className:'build-items' });
       dock.append(h2, cats, sep, items);
     }
     return {
@@ -35,29 +38,41 @@
 
   // ---- Datenquelle (Registry → ViewModel) ----------------------------------
   function readData() {
-    // Falls eine Bridge vorhanden ist, nutzen wir sie (kann Labels/Kosten aufbereiten)
     if (window.BuildBridge?.view) return window.BuildBridge.view();
 
     const cats = (Registry.get('categories') || []).map(c => ({
-      id   : String(c.id),
-      label: String(c.label ?? c.id)
+      id: String(c.id),
+      label: String(c.label ?? c.id),
     }));
-
-    const bld = (Registry.get('buildings') || []).map(b => ({
+    const buildings = (Registry.get('buildings') || []).map(b => ({
       id   : String(b.id),
       cat  : String(b.cat ?? 'misc'),
       label: String(b.label ?? b.id),
-      icon : b.icon || '',        // Registry.normalisiert icon bereits (falls gesetzt)
-      cost : b.cost || null       // { wood, stone, gold } optional
+      icon : b.icon || '',
+      cost : b.cost || null,
     }));
-
-    return { cats, buildings: bld };
+    return { cats, buildings };
   }
 
-  // ---- Render-State ---------------------------------------------------------
-  let activeCat  = null;
-  let activeItem = null;
+  // ---- Helpers --------------------------------------------------------------
+  function applyCatHighlight(root) {
+    root.querySelectorAll('li').forEach(li => {
+      li.classList.toggle('active', li.dataset.cat === activeCat);
+    });
+  }
 
+  function applyItemHighlight(root) {
+    // entfernt Markierungen an allen Items im aktuellen Grid
+    root.querySelectorAll('li').forEach(li => {
+      li.classList.remove('is-selected', 'active');
+      if (li.dataset.id === activeItem) {
+        li.classList.add('is-selected');
+        li.classList.add('active'); // Fallback-Kompatibilität
+      }
+    });
+  }
+
+  // ---- Render ---------------------------------------------------------------
   function renderCats(root, cats) {
     root.innerHTML = '';
     cats.forEach((c, idx) => {
@@ -66,48 +81,38 @@
       li.dataset.cat = c.id;
       li.textContent = c.label;
       if (!activeCat && idx === 0) activeCat = c.id;
-      if (c.id === activeCat) li.classList.add('active');
+      root.appendChild(li);
       li.addEventListener('click', () => {
         activeCat = c.id;
-        activeItem = null;
-        highlightCats(root);
+        applyCatHighlight(root);
         renderItems(q('#build-items'), readData().buildings);
       });
-      root.appendChild(li);
     });
-  }
-
-  function highlightCats(root) {
-    root.querySelectorAll('li').forEach(li => {
-      li.classList.toggle('active', li.dataset.cat === activeCat);
-    });
+    applyCatHighlight(root);
   }
 
   function renderItems(root, buildings) {
     root.innerHTML = '';
     const list = buildings.filter(b => b.cat === activeCat);
+
     list.forEach(b => {
       const li = document.createElement('li');
       li.className = 'build-item';
       li.dataset.id = b.id;
 
-      // Icon (falls vorhanden)
       if (b.icon) {
         const img = document.createElement('img');
         img.loading = 'lazy';
         img.decoding = 'async';
         img.src = b.icon;
         img.alt = b.label;
-        img.width = 20; img.height = 20;
-        img.style.verticalAlign = 'middle';
-        img.style.marginRight = '6px';
         li.appendChild(img);
       }
 
-      // Label + Kosten
-      const text = document.createElement('span');
-      text.textContent = b.label;
-      li.appendChild(text);
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = b.label;
+      li.appendChild(label);
 
       if (b.cost) {
         const small = document.createElement('small');
@@ -115,20 +120,15 @@
         const s = +b.cost.stone || 0;
         const g = +b.cost.gold  || 0;
         small.textContent = `  [Holz:${w} Stein:${s}${g ? ' Gold:'+g : ''}]`;
-        small.style.opacity = .75;
+        small.style.opacity = '.75';
         small.style.marginLeft = '6px';
         li.appendChild(small);
       }
 
-      if (b.id === activeItem) li.classList.add('active');
-
+      // Klick → Auswahl setzen + Event feuern
       li.addEventListener('click', () => {
-        // Auswahl markieren
         activeItem = b.id;
-        root.querySelectorAll('li').forEach(x => x.classList.remove('active'));
-        li.classList.add('active');
-
-        // Event nach außen: Game/UI kann darauf reagieren (Platzierung, Ghost, etc.)
+        applyItemHighlight(root);
         EVT('cb:build:select', { id: b.id });
         log('select', b.id);
       });
@@ -136,11 +136,13 @@
       root.appendChild(li);
     });
 
-    // Keine Items? Kurzer Hinweis.
+    // Auswahl-Highlight anwenden (falls activeItem in dieser Kategorie liegt)
+    applyItemHighlight(root);
+
     if (!root.children.length) {
       const em = document.createElement('em');
       em.textContent = 'Keine Einträge in dieser Kategorie.';
-      em.style.opacity = .7;
+      em.style.opacity = '.7';
       root.appendChild(em);
     }
   }
@@ -158,7 +160,16 @@
     log('gerendert');
   }
 
-  // Registry bereit? Dann mounten. (Beide Event-Varianten akzeptieren)
+  // Registry bereit? Dann mounten (beide Varianten akzeptieren)
   window.addEventListener('cb:registry-ready', mount);
   window.addEventListener('cb:registry:ready', mount);
+
+  // Externe Auswahl (z. B. Hotkey) → Highlight synchronisieren
+  window.addEventListener('cb:build:select', (e) => {
+    const id = e?.detail?.id;
+    if (!id) return;
+    activeItem = String(id);
+    const listRoot = q('#build-items');
+    if (listRoot) applyItemHighlight(listRoot);
+  });
 })();
