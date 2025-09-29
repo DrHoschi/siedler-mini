@@ -48,16 +48,36 @@ html, body{
 img{ max-width:100%; display:block; }
 
 /* (3) Panel-Primitive ------------------------------------------------------- */
+/* Einheitlicher Holz-/Papierrahmen für alle Fenster via .ui-panel.
+   Tönung über Varianten .ui-panel--light / .ui-panel--dark steuerbar. */
 .ui-panel{
+  /* Standard (dunkel) – kann durch Modifier überschrieben werden */
+  --panel-bg1: rgba(18,24,34,.92);
+  --panel-bg2: rgba(12,16,24,.92);
+
   background:
     var(--ui-panel-img) center center / contain no-repeat,
-    linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
+    linear-gradient(to bottom, var(--panel-bg1), var(--panel-bg2));
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   box-shadow: var(--ui-shadow);
   color: var(--ui-fg);
   backdrop-filter: blur(2px);
   padding: 12px;
+}
+/* Helle Variante – z.B. Startpanel */
+.ui-panel--light{
+  --panel-bg1: rgba(243,247,251,.94);
+  --panel-bg2: rgba(230,237,245,.94);
+  color: #0b1220;
+  border-color: #cbd5e1;
+}
+/* Dunkle Variante – z.B. HUD, Dock, Dialoge */
+.ui-panel--dark{
+  --panel-bg1: rgba(18,24,34,.92);
+  --panel-bg2: rgba(12,16,24,.92);
+  color: var(--ui-fg);
+  border-color: var(--ui-border);
 }
 
 /* (4) Buttons --------------------------------------------------------------- */
