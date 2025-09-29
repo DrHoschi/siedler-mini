@@ -1,5 +1,7 @@
 // ============================================================================
 // Datei : ui/ui-build.js
+// Projekt: Neue Siedler
+// Version: v1.0.1
 // Zweck : Baumenü rendern (Kategorien → Items) + Auswahl-Feedback
 // Events: hört   auf cb:registry-ready (Alias: cb:registry:ready)
 //         sendet cb:build:select  { id }  beim Klick auf ein Gebäude
@@ -8,16 +10,14 @@
 //   • Setzt bei Auswahl .is-selected (und .active als Fallback).
 //   • Reagiert auch auf externes cb:build:select → Highlight synchron.
 // ============================================================================
-
 (() => {
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[ui-build]', ...a);
   const warn = (...a) => (window.CBLog?.warn || console.warn)('[ui-build]', ...a);
   const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   const q    = (sel) => document.querySelector(sel);
 
-  // ---- Render-State ---------------------------------------------------------
   let activeCat  = null;
-  let activeItem = null; // ID des aktuell ausgewählten Buildings
+  let activeItem = null;
 
   // ---- DOM scaffold ---------------------------------------------------------
   function ensureLists() {
@@ -30,29 +30,16 @@
       const items = Object.assign(document.createElement('ul'), { id:'build-items', className:'build-items' });
       dock.append(h2, cats, sep, items);
     }
-    return {
-      cats : dock.querySelector('#build-cats'),
-      items: dock.querySelector('#build-items'),
-    };
+    return { cats: q('#build-cats'), items: q('#build-items') };
   }
 
-const items = (window.Registry?.list)
-  ? Registry.list('building', b => ['infra','prod','home','trade','mil'].includes(b.category))
-  : (window.BuildCategories?.allBuildings ?? []);
-
-renderBuildButtons(items.map(b => ({
-  id: b.id, label: b.name, icon: b.sprite || b.icon
-})));
-  
   // ---- Datenquelle (Registry → ViewModel) ----------------------------------
   function readData() {
     if (window.BuildBridge?.view) return window.BuildBridge.view();
-
-    const cats = (Registry.get('categories') || []).map(c => ({
-      id: String(c.id),
-      label: String(c.label ?? c.id),
+    const cats = (window.Registry?.get?.('categories') || []).map(c => ({
+      id: String(c.id), label: String(c.label ?? c.id),
     }));
-    const buildings = (Registry.get('buildings') || []).map(b => ({
+    const buildings = (window.Registry?.get?.('buildings') || []).map(b => ({
       id   : String(b.id),
       cat  : String(b.cat ?? 'misc'),
       label: String(b.label ?? b.id),
@@ -63,25 +50,18 @@ renderBuildButtons(items.map(b => ({
   }
 
   // ---- Helpers --------------------------------------------------------------
-  function applyCatHighlight(root) {
-    root.querySelectorAll('li').forEach(li => {
-      li.classList.toggle('active', li.dataset.cat === activeCat);
-    });
+  function applyCatHighlight(root){
+    root.querySelectorAll('li').forEach(li => li.classList.toggle('active', li.dataset.cat === activeCat));
   }
-
-  function applyItemHighlight(root) {
-    // entfernt Markierungen an allen Items im aktuellen Grid
+  function applyItemHighlight(root){
     root.querySelectorAll('li').forEach(li => {
-      li.classList.remove('is-selected', 'active');
-      if (li.dataset.id === activeItem) {
-        li.classList.add('is-selected');
-        li.classList.add('active'); // Fallback-Kompatibilität
-      }
+      li.classList.remove('is-selected','active');
+      if (li.dataset.id === activeItem){ li.classList.add('is-selected','active'); }
     });
   }
 
   // ---- Render ---------------------------------------------------------------
-  function renderCats(root, cats) {
+  function renderCats(root, cats){
     root.innerHTML = '';
     cats.forEach((c, idx) => {
       const li = document.createElement('li');
@@ -99,85 +79,26 @@ renderBuildButtons(items.map(b => ({
     applyCatHighlight(root);
   }
 
-  function renderItems(root, buildings) {
+  function renderItems(root, buildings){
     root.innerHTML = '';
     const list = buildings.filter(b => b.cat === activeCat);
-
     list.forEach(b => {
       const li = document.createElement('li');
-      li.className = 'build-item';
-      li.dataset.id = b.id;
+      li.className = 'build-item'; li.dataset.id = b.id;
 
-      if (b.icon) {
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.src = b.icon;
-        img.alt = b.label;
-        li.appendChild(img);
+      if (b.icon){
+        const img = document.createElement('img'); img.loading='lazy'; img.decoding='async';
+        img.src = b.icon; img.alt = b.label; li.appendChild(img);
       }
+      const label = document.createElement('span'); label.className='label'; label.textContent = b.label; li.appendChild(label);
 
-      const label = document.createElement('span');
-      label.className = 'label';
-      label.textContent = b.label;
-      li.appendChild(label);
-
-      if (b.cost) {
+      if (b.cost){
         const small = document.createElement('small');
-        const w = +b.cost.wood  || 0;
-        const s = +b.cost.stone || 0;
-        const g = +b.cost.gold  || 0;
-        small.textContent = `  [Holz:${w} Stein:${s}${g ? ' Gold:'+g : ''}]`;
-        small.style.opacity = '.75';
-        small.style.marginLeft = '6px';
+        const w=+b.cost.wood||0, s=+b.cost.stone||0, g=+b.cost.gold||0;
+        small.textContent = `  [Holz:${w} Stein:${s}${g?' Gold:'+g:''}]`;
+        small.style.opacity='.75'; small.style.marginLeft='6px';
         li.appendChild(small);
       }
 
-      // Klick → Auswahl setzen + Event feuern
       li.addEventListener('click', () => {
-        activeItem = b.id;
-        applyItemHighlight(root);
-        EVT('cb:build:select', { id: b.id });
-        log('select', b.id);
-      });
-
-      root.appendChild(li);
-    });
-
-    // Auswahl-Highlight anwenden (falls activeItem in dieser Kategorie liegt)
-    applyItemHighlight(root);
-
-    if (!root.children.length) {
-      const em = document.createElement('em');
-      em.textContent = 'Keine Einträge in dieser Kategorie.';
-      em.style.opacity = '.7';
-      root.appendChild(em);
-    }
-  }
-
-  // ---- Boot-Wiring ----------------------------------------------------------
-  function mount() {
-    const lists = ensureLists();
-    if (!lists) return;
-
-    const { cats, buildings } = readData();
-    if (!cats.length) { warn('keine Kategorien'); return; }
-
-    renderCats(lists.cats, cats);
-    renderItems(lists.items, buildings);
-    log('gerendert');
-  }
-
-  // Registry bereit? Dann mounten (beide Varianten akzeptieren)
-  window.addEventListener('cb:registry-ready', mount);
-  window.addEventListener('cb:registry:ready', mount);
-
-  // Externe Auswahl (z. B. Hotkey) → Highlight synchronisieren
-  window.addEventListener('cb:build:select', (e) => {
-    const id = e?.detail?.id;
-    if (!id) return;
-    activeItem = String(id);
-    const listRoot = q('#build-items');
-    if (listRoot) applyItemHighlight(listRoot);
-  });
-})();
+        activeItem = b.id
