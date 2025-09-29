@@ -4,7 +4,7 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v1.0.0 (2025-09-28)
+       Version: v1.0.1 (2025-09-28)
        Zweck:
          - Einstiegspunkt für Spiel + UI
          - Startfenster zuerst sichtbar
@@ -21,7 +21,6 @@
   <title>Neue Siedler – Epoche 1</title>
 
   <!-- ==================== CSS ==================== -->
-  <!-- Zentrales UI-CSS -->
   <link rel="stylesheet" href="ui/css/ui.css">
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
@@ -32,17 +31,8 @@
 
   <!-- Optional: globale Variablen / Darkmode -->
   <style>
-    :root {
-      --bg: #1e1e1e;
-      --fg: #f0f0f0;
-      --accent: #4da3ff;
-    }
-    body, html {
-      margin: 0; padding: 0;
-      background: var(--bg);
-      color: var(--fg);
-      font-family: sans-serif;
-    }
+    :root { --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff; }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   </style>
 </head>
 
@@ -50,53 +40,51 @@
   <!-- =========================================================================
        DOM-STRUKTUR: Sichtbare Container
   ========================================================================= -->
-
   <div id="app">
-    <!-- Spielfeld -->
-        <canvas 
-          id="game" 
-          width="1280" 
-          height="720" 
-          data-map="data/maps/map-mini.json">
-        </canvas>
 
-<!--div id="bg-start"></div-->
+    <!-- Spielfeld -->
+    <canvas
+      id="game"
+      width="1280"
+      height="720"
+      data-map="data/maps/map-mini.json"></canvas>
+
+    <!-- Start-Hintergrund (unter Panel, über Canvas) -->
+    <div id="bg-start"></div>
 
     <!-- Startpanel -->
-    <div id="start-panel" class="panel visible">
+    <div id="start-panel" class="ui-panel visible">
       <h1>Neue Siedler</h1>
-      <button id="btn-new">Neues Spiel</button>
-      <button id="btn-continue">Weiterspielen</button>
-      <button id="btn-fullscreen">Vollbild</button>
-      <button id="btn-reset">Reset</button>
-      <button id="btn-inspector">Inspector</button>
+      <div class="actions">
+        <button id="btn-new"       class="btn main">Neues Spiel</button>
+        <button id="btn-continue"  class="btn ghost">Weiterspielen</button>
+        <button id="btn-fullscreen" class="btn">Vollbild</button>
+        <button id="btn-reset"      class="btn">Reset</button>
+        <button id="btn-inspector"  class="btn">Inspector</button>
+      </div>
     </div>
 
-    <div id="bg-start"></div> <!-- Start-BG unter dem Panel -->
     <!-- HUD -->
-     <div id="hud-top" class="hidden"></div>
+    <div id="hud-top" class="hidden"></div>
 
     <!-- Build-Dock -->
-        <div id="build-dock" class="hidden"></div>
+    <div id="build-dock" class="hidden"></div>
 
     <!-- Inspector -->
     <div id="inspector" class="hidden"></div>
   </div>
 
-
   <!-- =========================================================================
        SCRIPTS: Reihenfolge Core → UI → Tools
   ========================================================================= -->
-
   <!-- Core -->
   <script src="core/asset.js"></script>
   <script src="core/registry.js"></script>
   <script src="core/game.js"></script>
   <script src="core/boot.js"></script>
 
-
   <!-- UI -->
-    <script src="ui/ui-start.js"></script>
+  <script src="ui/ui-start.js"></script>
   <script src="ui/ui-hud.js"></script>
   <script src="ui/ui-build.js"></script>
 
@@ -106,9 +94,7 @@
 
   <!-- Tools -->
   <!-- <script src="tools/editor/editor.core.js"></script> -->
-  <!-- <script src="tools/editor/editor.js"></script> -->
 
-  
   <!-- Debug -->
   <script src="tools/debug-tools.js"></script>
 
