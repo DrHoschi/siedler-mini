@@ -104,7 +104,7 @@
   height: calc(var(--hud-tile) * .56);
   object-fit: contain;
   filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
-  margin: 4px 0;                        /* kleiner Puffer oben/unten */
+  margin: 2px 0;                        /* kleiner Puffer oben */
 }
 
 /* --- 3) Wert (unten, zentriert, etwas größer/fetter) --------------------- */
@@ -113,6 +113,7 @@
   font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   text-align: center;
   white-space: nowrap;
+  margin: 2px 0; /* statt 4px */ /* kleiner Puffer unten */
 }
 
 /* --- Interaktionen (optional subtil) ------------------------------------- */
