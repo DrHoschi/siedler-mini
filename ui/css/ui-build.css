@@ -1,45 +1,29 @@
 /* ============================================================================
  * Datei   : ui/css/ui-build.css
- * Version : v19.0.0
- * Zweck   : Build-Dock Styles (unten andocken, responsive)
- * Leitplanken:
- *   - Dock sitzt am unteren Rand (fixed), über Canvas, unter Startpanel/Inspector
- *   - Panel-Hintergrund (assets/ui/panel.png) + Tönung
- *   - Icongröße via --build-icon-size steuerbar
- *   - Responsive Grid für Kategorien & Items
+ * Version : v19.1.0
+ * Zweck   : Build-Dock Layout (unten andocken, responsive)
+ * Hinweis : Panel-Look kommt global über .ui-panel (ui.css)
  * ========================================================================== */
 
 /* (1) Design-Tokens --------------------------------------------------------- */
 :root{
   --build-icon-size: 48px;
-  --build-dock-z: 950;                    /* unter Startpanel (1000), < Inspector */
-  --build-bg-tint: rgba(12,16,24,.75);
+  --build-dock-z: 950;
   --build-border: #1d2633;
-  --build-border-strong: #0e1420;
   --build-shadow: 0 -18px 48px rgba(0,0,0,.35);
   --build-radius: 14px;
   --build-gap: 8px;
-  --build-text: #e9f1ff;
-  --build-text-dim: #b9c7dc;
 }
 
-/* (2) Root/Dock ------------------------------------------------------------- */
+/* (2) Root/Dock – nur Position/Behälter ------------------------------------ */
 #build-dock{
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 0; right: 0; bottom: 0;
   z-index: var(--build-dock-z);
   padding: 10px;
-  /* Panel-Hintergrund (Pfad: ui/css → ../../assets/…) */
-  background:
-    linear-gradient(to top, var(--build-bg-tint), rgba(12,16,24,.55)),
-    url("../../assets/ui/panel.png") center bottom / cover no-repeat;
-  border-top: 1px solid var(--build-border-strong);
-  box-shadow: var(--build-shadow);
-  color: var(--build-text);
-  backdrop-filter: blur(2px);
   display: flex;
+  border-top-left-radius: var(--build-radius);
+  border-top-right-radius: var(--build-radius);
 }
 #build-dock.hidden,
 #build-dock[hidden]{ display: none !important; }
@@ -61,33 +45,24 @@
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
-  color: var(--build-text-dim);
   border: 1px solid var(--build-border);
   border-radius: 10px;
-  background: rgba(8,12,18,.45);
 }
 
 /* (4) Kategorie-Container --------------------------------------------------- */
 .build-cat{
   border: 1px solid var(--build-border);
   border-radius: var(--build-radius);
-  background:
-    linear-gradient(to bottom, rgba(18,24,34,.66), rgba(12,16,24,.60));
   overflow: hidden;
 }
 .build-header{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 8px 10px;
   border-bottom: 1px solid var(--build-border);
-  background: rgba(10,14,20,.5);
 }
 .build-title{
   margin: 0;
   font: 600 0.95rem/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: var(--build-text);
   letter-spacing: .2px;
 }
 
@@ -106,8 +81,6 @@
   padding: 8px 10px;
   border: 1px solid var(--build-border);
   border-radius: 12px;
-  background: rgba(8,12,18,.55);
-  color: inherit;
   cursor: pointer; text-align: left;
   transition: transform .06s ease, background .12s ease,
               border-color .12s ease, box-shadow .12s ease;
@@ -115,7 +88,6 @@
 .build-item:hover{
   transform: translateY(-1px);
   border-color: #2b3a52;
-  background: rgba(10,16,24,.65);
   box-shadow: 0 10px 26px rgba(0,0,0,.22);
 }
 .build-item:active{ transform: translateY(0); }
@@ -129,11 +101,8 @@
   flex: 0 0 auto;
 }
 .build-item .label{
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font: 600 .95rem/1.25 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: var(--build-text);
   opacity: .95;
 }
 
@@ -142,14 +111,9 @@
   border-color: #8ab4f8;
   box-shadow: 0 0 0 2px #8ab4f880 inset;
 }
-.build-item.is-disabled{
-  opacity: .55;
-  cursor: not-allowed;
-}
+.build-item.is-disabled{ opacity: .55; cursor: not-allowed; }
 .build-item.is-disabled:hover{
-  transform: none;
-  border-color: var(--build-border);
-  box-shadow: none;
+  transform: none; border-color: var(--build-border); box-shadow: none;
 }
 
 /* (7) WebKit-Scrollbars (optional) ----------------------------------------- */
@@ -181,78 +145,34 @@
   gap: 6px;
 }
 #build-dock.build--compact .build-item{
-  min-height: 40px;
-  padding: 6px 8px;
-  border-radius: 10px;
+  min-height: 40px; padding: 6px 8px; border-radius: 10px;
 }
 #build-dock.build--compact .build-item img{
-  width: 36px; height: 36px;
-  max-width: 36px; max-height: 36px;
-}
-/* Auto-Kompakt für sehr kleine Screens */
-@media (max-width: 420px){
-  #build-dock .build-list{
-    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-    gap: 6px;
-  }
-  #build-dock .build-item{
-    min-height: 40px;
-    padding: 6px 8px;
-    border-radius: 10px;
-  }
-  #build-dock .build-item img{
-    width: 36px; height: 36px;
-    max-width: 36px; max-height: 36px;
-  }
+  width: 36px; height: 36px; max-width: 36px; max-height: 36px;
 }
 
-/* (10) Tooltip-Preview ------------------------------------------------------ */
+/* (10) Tooltip-Preview (behält Panel-Look lokal) --------------------------- */
 .ui-tooltip{
-  position: fixed;
-  z-index: 2000;
-  pointer-events: none;
+  position: fixed; z-index: 2000; pointer-events: none;
   transform: translate(-50%, calc(-100% - 14px));
-  opacity: 0;
-  transition: opacity .12s ease, transform .12s ease;
+  opacity: 0; transition: opacity .12s ease, transform .12s ease;
   max-width: min(360px, 92vw);
 }
-.ui-tooltip.is-visible{
-  opacity: 1;
-  transform: translate(-50%, calc(-100% - 10px));
-}
+.ui-tooltip.is-visible{ opacity: 1; transform: translate(-50%, calc(-100% - 10px)); }
 .ui-tooltip .tip-card{
   background:
     url("../../assets/ui/panel.png") center / contain no-repeat,
     linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
   border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  box-shadow: 0 18px 48px rgba(0,0,0,.35);
-  color: #e9f1ff;
-  padding: 10px 12px;
-  backdrop-filter: blur(2px);
+  border-radius: 12px; box-shadow: 0 18px 48px rgba(0,0,0,.35);
+  padding: 10px 12px; backdrop-filter: blur(2px);
 }
-.ui-tooltip .tip-head{
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 6px;
-}
-.ui-tooltip .tip-head img{
-  width: 64px; height: 64px; object-fit: contain; flex: 0 0 auto;
-}
-.ui-tooltip .tip-title{
-  font: 700 15px/1.25 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  margin: 0; letter-spacing: .2px;
-}
-.ui-tooltip .tip-desc{
-  font: 400 13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: #c8d6eb;
-  margin: 0;
-  white-space: normal;
-}
+.ui-tooltip .tip-head{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.ui-tooltip .tip-head img{ width:64px; height:64px; object-fit:contain; flex:0 0 auto; }
+.ui-tooltip .tip-title{ font:700 15px/1.25 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; margin:0; letter-spacing:.2px; }
+.ui-tooltip .tip-desc{ font:400 13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; margin:0; white-space:normal; }
 .ui-tooltip:after{
-  content: "";
-  position: absolute;
-  left: 50%; bottom: -6px; transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: rgba(12,16,24,.92);
+  content:""; position:absolute; left:50%; bottom:-6px; transform:translateX(-50%);
+  border:6px solid transparent; border-top-color: rgba(12,16,24,.92);
   filter: drop-shadow(0 -1px 0 rgba(255,255,255,.08));
 }
