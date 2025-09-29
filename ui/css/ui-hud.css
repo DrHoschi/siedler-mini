@@ -19,7 +19,8 @@
   --hud-tile: 92px;         /* Breite/Höhe (Quadrat) */
 
   /* Farben / Rahmen */
-  --hud-border: rgba(255,255,255,.12);
+  --hud-border: transparent;
+    /* rgba(255,255,255,.12); */
   --hud-sep:    rgba(255,255,255,.14);
 
   /* Typo */
@@ -74,7 +75,7 @@
   padding: 8px;
 
   border-radius: var(--hud-radius);
- /* border: 1px solid var(--hud-border); */
+  border: 1px solid var(--hud-border);
 
   /* Panel-Bild flächig + dezenter Dark-Overlay für Lesbarkeit */
   background:
