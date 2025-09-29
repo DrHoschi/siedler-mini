@@ -27,10 +27,10 @@
   function defaultData(){
     const cats=[{id:'infra',label:'Infrastruktur'},{id:'prod',label:'Produktion'}];
     const buildings=[
-      { id:'hq_wood', cat:'infra', label:'HQ (Holz)',    icon:'assets/ui/icons/hq_wood.png', cost:{wood:0,stone:0} },
-      { id:'lumber',  cat:'prod',  label:'Holzfäller',   icon:'assets/ui/icons/lumber.png',  cost:{wood:6,stone:2} },
-      { id:'fisher',  cat:'prod',  label:'Fischerhütte', icon:'assets/ui/icons/fisher.png',  cost:{wood:6,stone:2} },
-      { id:'quarry',  cat:'prod',  label:'Steinbruch',   icon:'assets/ui/icons/quarry.png',  cost:{wood:6,stone:4} },
+      { id:'hq_wood', cat:'infra', label:'HQ (Holz)',    icon:'assets/ui/icons/buildings/hq_wood.png', cost:{wood:0,stone:0} },
+      { id:'lumber',  cat:'prod',  label:'Holzfäller',   icon:'assets/ui/icons/buildings/lumber.png',  cost:{wood:6,stone:2} },
+      { id:'fisher',  cat:'prod',  label:'Fischerhütte', icon:'assets/ui/icons/buildings/fisher.png',  cost:{wood:6,stone:2} },
+      { id:'quarry',  cat:'prod',  label:'Steinbruch',   icon:'assets/ui/icons/buildings/quarry.png',  cost:{wood:6,stone:4} },
     ];
     return { cats, buildings };
   }
