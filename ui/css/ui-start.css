@@ -86,3 +86,7 @@
 
 /* Canvas-Safety */
 #game{ background: transparent !important; }
+
+body.is-playing { background: none !important; }
+#start-panel.hidden { display:none !important; opacity:0; pointer-events:none; }
+#game { position: relative; z-index: 1; } /* Canvas über dem (nun unsichtbaren) BG */
