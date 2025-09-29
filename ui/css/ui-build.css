@@ -201,3 +201,94 @@
   border:6px solid transparent; border-top-color: rgba(12,16,24,.92);
   filter: drop-shadow(0 -1px 0 rgba(255,255,255,.08));
 }
+
+/* === Build-Items im Kachel-Stil (Titel | Icon | Kosten) =================== */
+/* zentrale Größe */
+:root{
+  --build-tile: 148px; /* Kachelbreite/-höhe; nach Geschmack anpassen */
+}
+
+#build-items, .build-items, .build-list{
+  /* falls nötig: vertikale Luft unter der Liste */
+  padding-bottom: 4px;
+}
+
+/* Kachel: Panel-Bild als Hintergrund, 3 Reihen per Grid */
+.build-item{
+  display: grid !important;
+  grid-template-rows: auto 1fr auto;     /* Titel | Icon | Kosten */
+  align-items: center;
+  justify-items: center;
+
+  width: 100%;
+  min-height: var(--build-tile);
+  padding: 10px;
+
+  border: none;                           /* äußerer Rahmen weg */
+  border-radius: 12px;
+  background:
+    url("../../assets/ui/panel.png") center / cover no-repeat,
+    linear-gradient(to bottom, rgba(18,24,34,.55), rgba(12,16,24,.55));
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+
+/* Titel (oben, zentriert) */
+.build-item .title{
+  grid-row: 1;
+  text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 700 14px/1.15 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  letter-spacing: .2px;
+  opacity: .95;
+}
+
+/* Gebäude-Icon (Mitte, groß) */
+.build-item .thumb{
+  grid-row: 2;
+  width: calc(var(--build-tile) * .58);
+  height: calc(var(--build-tile) * .58);
+  object-fit: contain;
+  margin: 6px 0;                          /* Abstand zu Titel/Kosten feinjustieren */
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+}
+
+/* Kostenzeile (unten, kleine Badges) */
+.build-item .cost{
+  grid-row: 3;
+  display: flex; justify-content: center; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+}
+
+.build-item .cost .res{
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.25);
+  font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  white-space: nowrap;
+}
+
+.build-item .cost .res img{
+  width: 16px; height: 16px; object-fit: contain;
+}
+
+/* Hover subtil – keine Layoutsprünge */
+.build-item:hover{
+  transform: translateY(-1px);
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  border-color: #2b3a52;
+}
+
+/* Responsive Feinschliff */
+@media (max-width: 900px){
+  :root{ --build-tile: 136px; }
+  .build-item .title{ font-size: 13px; }
+}
+@media (max-width: 700px){
+  :root{ --build-tile: 124px; }
+}
+@media (max-width: 520px){
+  :root{ --build-tile: 112px; }
+}
