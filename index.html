@@ -4,20 +4,11 @@
   <!-- =========================================================================
        Datei: index.html (Root)
        Projekt: Neue Siedler
-       Version: v1.0.1 (2025-09-28)
-       Zweck:
-         - Einstiegspunkt für Spiel + UI
-         - Startfenster zuerst sichtbar
-         - Inspector & Debug-Tools integriert
-       Struktur:
-         HEAD  : Meta + CSS
-         BODY  : App-Container mit Panels, HUD, Dock, Inspector
-         SCRIPTS: Core → UI → Tools (Reihenfolge beachten!)
+       Version: v1.0.2 (2025-09-28)
+       Zweck: Einstiegspunkt für Spiel + UI (Startfenster zuerst sichtbar)
   ========================================================================= -->
-
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
   <title>Neue Siedler – Epoche 1</title>
 
   <!-- ==================== CSS ==================== -->
@@ -32,7 +23,11 @@
   <!-- Optional: globale Variablen / Darkmode -->
   <style>
     :root { --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff; }
-    html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    html,body {
+      margin:0; padding:0;
+      background:var(--bg); color:var(--fg);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    }
   </style>
 </head>
 
@@ -52,26 +47,26 @@
     <!-- Start-Hintergrund (unter Panel, über Canvas) -->
     <div id="bg-start"></div>
 
-    <!-- Startpanel -->
-    <div id="start-panel" class="ui-panel visible">
+    <!-- Startpanel (Holz/Papier hell) -->
+    <div id="start-panel" class="ui-panel ui-panel--light visible">
       <h1>Neue Siedler</h1>
       <div class="actions">
-        <button id="btn-new"       class="btn main">Neues Spiel</button>
-        <button id="btn-continue"  class="btn ghost">Weiterspielen</button>
+        <button id="btn-new"        class="btn main">Neues Spiel</button>
+        <button id="btn-continue"   class="btn ghost">Weiterspielen</button>
         <button id="btn-fullscreen" class="btn">Vollbild</button>
         <button id="btn-reset"      class="btn">Reset</button>
         <button id="btn-inspector"  class="btn">Inspector</button>
       </div>
     </div>
 
-    <!-- HUD -->
-    <div id="hud-top" class="hidden"></div>
+    <!-- HUD (Holz/Papier dunkel) -->
+    <div id="hud-top" class="ui-panel ui-panel--dark hidden"></div>
 
-    <!-- Build-Dock -->
-    <div id="build-dock" class="hidden"></div>
+    <!-- Build-Dock (Holz/Papier dunkel) -->
+    <div id="build-dock" class="ui-panel ui-panel--dark hidden"></div>
 
-    <!-- Inspector -->
-    <div id="inspector" class="hidden"></div>
+    <!-- Inspector (Holz/Papier dunkel) -->
+    <div id="inspector" class="ui-panel ui-panel--dark hidden"></div>
   </div>
 
   <!-- =========================================================================
@@ -92,13 +87,10 @@
   <script>window.ICONS = window.ICONS || {};</script>
   <script src="ui/inspector/inspector.core.js"></script>
 
-  <!-- Tools -->
-  <!-- <script src="tools/editor/editor.core.js"></script> -->
-
-  <!-- Debug -->
+  <!-- Debug / Tools -->
   <script src="tools/debug-tools.js"></script>
 
-  <!-- Inline-Wiring -->
+  <!-- Inline-Wiring (klein & selbsterklärend) -->
   <script>
     document.getElementById('btn-inspector').addEventListener('click', () => {
       document.getElementById('inspector').classList.toggle('hidden');
