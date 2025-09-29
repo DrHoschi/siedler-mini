@@ -11,10 +11,10 @@
 
   // kleine Icon-Lookup für Kosten-Anzeige
   const RES_ICON = {
-    wood:  'assets/ui/icons/resources/wood.png',
-    stone: 'assets/ui/icons/resources/stone.png',
-    food:  'assets/ui/icons/resources/food.png',
-    gold:  'assets/ui/icons/resources/gold.png'
+    wood:  'assets/icons/resources/wood.png',
+    stone: 'assets/icons/resources/stone.png',
+    food:  'assets/icons/resources/food.png',
+    gold:  'assets/icons/resources/gold.png'
   };
 
   let activeCat=null, activeItem=null;
