@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei   : ui/css/ui-build.css
- * Version : v19.1.1
+ * Version : v19.1.2
  * Zweck   : Build-Dock Layout (unten andocken, responsive)
  * Hinweis : Panel-Look kommt global über .ui-panel (ui.css)
  * ========================================================================== */
@@ -8,7 +8,7 @@
 /* (1) Design-Tokens --------------------------------------------------------- */
 :root{
   --build-icon-size: 48px; /* kleiner & harmonisch */
-  --build-dock-z: 950;
+  --build-dock-z: 1100; /* über Canvas, unter HUD */
   --build-border: #1d2633;
   --build-shadow: 0 -18px 48px rgba(0,0,0,.35);
   --build-radius: 14px;
@@ -21,6 +21,7 @@
   left: 0; right: 0; bottom: 0;
   z-index: var(--build-dock-z);
   padding: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); /* iOS-Safe-Area */
   display: flex;
   border-top-left-radius: var(--build-radius);
   border-top-right-radius: var(--build-radius);
@@ -34,12 +35,10 @@
   grid-template-columns: 1fr;
   gap: var(--build-gap);
   width: 100%;
-  max-height: clamp(220px, 40vh, 380px); /* neu: kompakter */
+  max-height: clamp(220px, 40vh, 380px); /* kompakter */
   overflow: auto;
   padding-bottom: 2px;
 }
-
-
 
 /* (3.1) Optionale Kopfzeile im Dock ---------------------------------------- */
 #build-dock .dock-head{
@@ -49,6 +48,32 @@
   padding: 6px 8px;
   border: 1px solid var(--build-border);
   border-radius: 10px;
+}
+
+/* (3.2) NEU: Kategorien als echte Tabs/Chips -------------------------------- */
+#build-cats{
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0; padding: 6px 8px;
+  border: 1px solid var(--build-border);
+  border-radius: 10px;
+  backdrop-filter: blur(2px);
+}
+#build-cats > li.build-cat{
+  padding: 6px 10px;
+  border: 1px solid var(--build-border);
+  border-radius: 10px;
+  cursor: pointer;
+  opacity: .9;
+  user-select: none;
+  transition: background .12s ease, border-color .12s ease, opacity .12s ease;
+}
+#build-cats > li.build-cat:hover{ opacity: 1; border-color: #2b3a52; }
+#build-cats > li.build-cat.active{
+  border-color: #8ab4f8;
+  box-shadow: 0 0 0 2px #8ab4f860 inset;
+  opacity: 1;
 }
 
 /* (4) Kategorie-Container --------------------------------------------------- */
@@ -125,9 +150,7 @@
   border-radius: 10px;
   border: 2px solid rgba(0,0,0,.2);
 }
-#build-dock .wrap::-webkit-scrollbar-track{
-  background: rgba(0,0,0,.15);
-}
+#build-dock .wrap::-webkit-scrollbar-track{ background: rgba(0,0,0,.15); }
 
 /* (8) Responsive Tweaks ----------------------------------------------------- */
 @media (max-width: 1024px){
@@ -153,7 +176,7 @@
   width: 36px; height: 36px; max-width: 36px; max-height: 36px;
 }
 
-/* (10) Tooltip-Preview (behält Panel-Look lokal) --------------------------- */
+/* (10) Tooltip-Preview ------------------------------------------------------ */
 .ui-tooltip{
   position: fixed; z-index: 2000; pointer-events: none;
   transform: translate(-50%, calc(-100% - 14px));
