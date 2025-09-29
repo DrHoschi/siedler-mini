@@ -7,6 +7,13 @@
   const log = (...a)=>(window.CBLog?.ok||console.log)('[ui-hud]',...a);
   const $ = s => document.querySelector(s);
 
+// HUD-Containerfallbacks öffnen
+const hud = document.getElementById('hud-top') 
+          || document.querySelector('.hud-top') 
+          || document.querySelector('#hud');
+if (hud) { hud.hidden = false; hud.classList.remove('hidden'); }
+
+  
   // tolerant: data-r="wood" > b  ODER  #res-wood
   function setVal(key, val){
     const elData = $(`[data-r="${key}"] > b`) || $(`[data-r="${key}"]`) || $(`#res-${key}`);
