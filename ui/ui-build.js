@@ -27,7 +27,7 @@
   function defaultData(){
     const cats=[{id:'infra',label:'Infrastruktur'},{id:'prod',label:'Produktion'}];
     const buildings=[
-      { id:'hq_wood', cat:'infra', label:'HQ (Holz)',    icon:'assets/icons/buildings/hq_wood.png', cost:{wood:0,stone:0} },
+      { id:'hq_wood', cat:'infra', label:'HQ (Holz)',    icon:'assets/icons/buildings/hq.png', cost:{wood:0,stone:0} },
       { id:'lumber',  cat:'prod',  label:'Holzfäller',   icon:'assets/icons/buildings/lumber.png',  cost:{wood:6,stone:2} },
       { id:'fisher',  cat:'prod',  label:'Fischerhütte', icon:'assets/icons/buildings/fisher.png',  cost:{wood:6,stone:2} },
       { id:'quarry',  cat:'prod',  label:'Steinbruch',   icon:'assets/icons/buildings/quarry.png',  cost:{wood:6,stone:4} },
