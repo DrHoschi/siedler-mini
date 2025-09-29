@@ -24,6 +24,14 @@
     return { cats:q('#build-cats'), items:q('#build-items') };
   }
 
+// kleine Ressourcen-Icons fürs Kosten-Label
+const RES_ICONS = {
+  wood:  'assets/icons/resources/wood.png',
+  stone: 'assets/icons/resources/stone.png',
+  food:  'assets/icons/resources/food.png',
+  gold:  'assets/icons/resources/gold.png'
+};
+  
   function defaultData(){
     const cats=[{id:'infra',label:'Infrastruktur'},{id:'prod',label:'Produktion'}];
     const buildings=[
@@ -62,6 +70,21 @@
     });
   }
 
+function resChip(type, amount){
+  const n = Number(amount||0);
+  if (!n) return null;
+  const span = document.createElement('span');
+  span.className = `res res-${type}`;
+  const img = document.createElement('img');
+  img.src = RES_ICONS[type] || '';
+  img.alt = type;
+  img.loading = 'lazy'; img.decoding = 'async';
+  const num = document.createElement('b');
+  num.textContent = String(n);
+  span.append(img, num);
+  return span;
+}
+  
   function renderCats(root, cats){
     root.innerHTML='';
     cats.forEach((c,idx)=>{
@@ -74,20 +97,57 @@
     applyCatHighlight(root);
   }
 
+  
   function renderItems(root, buildings){
-    root.innerHTML='';
-    const list=buildings.filter(b=>b.cat===activeCat);
-    list.forEach(b=>{
-      const li=document.createElement('li'); li.className='build-item'; li.dataset.id=b.id;
-      if(b.icon){ const img=document.createElement('img'); img.loading='lazy'; img.decoding='async'; img.src=b.icon; img.alt=b.label; li.appendChild(img); }
-      const label=document.createElement('span'); label.className='label'; label.textContent=b.label; li.appendChild(label);
-      if(b.cost){ const s=document.createElement('small'); const w=+b.cost.wood||0, st=+b.cost.stone||0, g=+b.cost.gold||0;
-        s.textContent=`  [Holz:${w} Stein:${st}${g?' Gold:'+g:''}]`; s.style.opacity='.75'; s.style.marginLeft='6px'; li.appendChild(s); }
-      li.addEventListener('click',()=>{ activeItem=b.id; applyItemHighlight(root); EVT('cb:build:select',{id:b.id}); });
-      root.appendChild(li);
+  root.innerHTML = '';
+  const list = buildings.filter(b => b.cat === activeCat);
+  list.forEach(b => {
+    const li = document.createElement('li');
+    li.className = 'build-item';
+    li.dataset.id = b.id;
+
+    // 1) Titel oben
+    const title = document.createElement('div');
+    title.className = 'title';
+    title.textContent = b.label;
+    li.appendChild(title);
+
+    // 2) Gebäude-Icon in der Mitte
+    if (b.icon){
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.loading='lazy'; img.decoding='async';
+      img.src = b.icon; img.alt = b.label;
+      li.appendChild(img);
+    } else {
+      // Fallback-Icon (optional)
+      const ph = document.createElement('div');
+      ph.className = 'thumb';
+      ph.style.opacity = .3;
+      li.appendChild(ph);
+    }
+
+    // 3) Kosten unten als kleine Badges
+    const costRow = document.createElement('div');
+    costRow.className = 'cost';
+    const c = b.cost || {};
+    [ ['wood', c.wood], ['stone', c.stone], ['food', c.food], ['gold', c.gold] ]
+      .map(([t,v]) => resChip(t, v))
+      .filter(Boolean).forEach(el => costRow.appendChild(el));
+    li.appendChild(costRow);
+
+    // Auswahl-Klick -> Event + Highlight
+    li.addEventListener('click', () => {
+      activeItem = b.id;
+      applyItemHighlight(root);
+      EVT('cb:build:select', { id:b.id });
     });
-    applyItemHighlight(root);
-  }
+
+    root.appendChild(li);
+  });
+  applyItemHighlight(root);
+}
+  
 
   function init(){
     if (_initialized) { log('init (skip – already initialized)'); return; } // ← NEU
