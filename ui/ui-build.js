@@ -1,7 +1,7 @@
 // ============================================================================
 // Datei : ui/ui-build.js
 // Projekt: Neue Siedler
-// Version: v1.0.1
+// Version: v1.0.2
 // Zweck : Baumenü rendern (Kategorien → Items) + Auswahl-Feedback
 // Events: hört   auf cb:registry-ready (Alias: cb:registry:ready)
 //         sendet cb:build:select  { id }  beim Klick auf ein Gebäude
@@ -101,4 +101,32 @@
       }
 
       li.addEventListener('click', () => {
-        activeItem = b.id
+        activeItem = b.id;
+        applyItemHighlight(root);
+        EVT('cb:build:select', { id:b.id });
+        log('select', b.id);
+      });
+
+      root.appendChild(li);
+    });
+    applyItemHighlight(root);
+  }
+
+  // ---- Public init ----------------------------------------------------------
+  function init(){
+    const els = ensureLists(); if (!els) return;
+    const data = readData();
+    renderCats(els.cats, data.cats);
+    renderItems(els.items, data.buildings);
+    log('init ✓');
+  }
+
+  window.addEventListener('cb:registry-ready', init);
+  window.addEventListener('cb:registry:ready', init);
+
+  // externes Select synchronisieren
+  window.addEventListener('cb:build:select', (e) => {
+    activeItem = e?.detail?.id || null;
+    applyItemHighlight(q('#build-items'));
+  });
+})();
