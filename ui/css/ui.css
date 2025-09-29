@@ -1,11 +1,7 @@
 /* ============================================================================
- * Datei: ui/css/ui.css
- * Version: v18.9.4 (2025-09-27)
- * Zweck: Globale UI-Basis (Tokens, Reset, Buttons, Panel-Primitive)
- * Leitplanken:
- *   - Keine Vollbild-Hintergründe hier (Start-BG optional am Ende)
- *   - Panel-Look per .ui-panel für alle Fenster/Overlays
- *   - Optionaler Außenrahmen über body.ui-frame--global
+ * Datei   : ui/css/ui.css
+ * Version : v19.0.0
+ * Zweck   : Globale UI-Basis (Tokens, Reset, Buttons, Panel-Primitive)
  * Struktur:
  *   (1) Design Tokens
  *   (2) Reset & Base
@@ -13,12 +9,11 @@
  *   (4) Buttons (Basis + Varianten)
  *   (5) Layout/Utilities
  *   (6) Optional: Globaler Außenrahmen
- *   (7) Startpanel-Safety & optionaler Start-BG (korrekter Pfad)
- * ============================================================================ */
+ *   (7) Canvas & Start-BG (Schichtung + Responsive)
+ * ========================================================================== */
 
 /* (1) Design Tokens --------------------------------------------------------- */
 :root{
-  /* Farben */
   --ui-bg:           #0b0f14;
   --ui-surface:      #11161e;
   --ui-surface-2:    #141b26;
@@ -27,19 +22,16 @@
   --ui-accent:       #8ab4f8;
   --ui-accent-weak:  #4a7bd6;
 
-  /* Rahmen/Schatten */
   --ui-border:        rgba(255,255,255,.10);
   --ui-border-strong: #0d121a;
   --ui-shadow:        0 18px 48px rgba(0,0,0,.32);
 
-  /* Abstände/Radien */
   --ui-gap:    10px;
   --ui-radius: 12px;
 
-  /* Panel-Bild (Holz/Papier) – Pfad aus ui/css/… → ../../assets/... */
+  /* Pfad von ui/css → ../../assets/... */
   --ui-panel-img: url("../../assets/ui/panel.png");
 
-  /* optionaler globaler Rahmen */
   --ui-frame-size:  6px;
   --ui-frame-color: rgba(255,255,255,.06);
 }
@@ -50,12 +42,12 @@ html, body{
   background:#000; color:var(--ui-fg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  height: 100%;                 /* für mobile Viewport-Bugs */
 }
 *, *::before, *::after{ box-sizing: border-box; }
 img{ max-width:100%; display:block; }
 
 /* (3) Panel-Primitive ------------------------------------------------------- */
-/* Jede Komponente, die wie ein „Fenster“ aussehen soll, bekommt .ui-panel */
 .ui-panel{
   background:
     var(--ui-panel-img) center center / contain no-repeat,
@@ -90,21 +82,10 @@ button:hover, .btn:hover{
 button:active, .btn:active{ transform: translateY(0); }
 button:disabled, .btn:disabled{ opacity:.6; cursor:not-allowed; }
 
-/* Varianten */
-.btn.main{
-  background: linear-gradient(#2a6de0, #1f58b5);
-  border-color: #2b66cf;
-}
-.btn.ghost{
-  background: transparent;
-  border-style: dashed;
-}
-.btn.warn{
-  background: linear-gradient(#b83c2e, #8e2e23);
-  border-color: #8e2e23;
-}
+.btn.main{ background: linear-gradient(#2a6de0, #1f58b5); border-color:#2b66cf; }
+.btn.ghost{ background: transparent; border-style: dashed; }
+.btn.warn { background: linear-gradient(#b83c2e, #8e2e23); border-color:#8e2e23; }
 
-/* Fokus sichtbar */
 button:focus-visible, .btn:focus-visible{
   outline: 2px solid var(--ui-accent);
   outline-offset: 2px;
@@ -116,36 +97,47 @@ button:focus-visible, .btn:focus-visible{
 .ui-sep{ height:1px; background: var(--ui-border); margin: 6px 0; }
 
 /* (6) Optional: Globaler Außenrahmen ---------------------------------------- */
-/* Standard: AUS. Aktiviert durch Klasse am <body>: body.ui-frame--global */
 body.ui-frame--global::before{
   content:"";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 700; /* unter HUD(~900), Build(~1000), Inspector(max) */
+  z-index: 700; /* unter HUD(~950), Build(~950), Startpanel(1000) */
   box-shadow:
     inset 0 0 0 var(--ui-frame-size) var(--ui-frame-color),
     inset 0 0 24px rgba(0,0,0,.35);
   border-radius: 2px;
 }
 
-/* (7) Startpanel-Safety & optionaler Start-BG ------------------------------- */
-/* Hinweis: Der BG-Block kann auch in ui-start.css liegen – hier zur Bequemlichkeit. */
-#start-panel[hidden],
-#start-panel.hide{ display: none !important; } /* garantiert weg */
+/* (7) Canvas & Start-BG (Schichtung + Responsive) -------------------------- */
+/* Canvas füllt den Bildschirm automatisch – keine feste Breite/Höhe nötig */
+#game{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  z-index: 0;          /* unter allem */
+  touch-action: manipulation; /* bessere Pointer-Interaktion auf Mobile */
+}
 
-/* Vollflächiges Start-BG (liegt UNTER dem Panel, über dem Canvas) */
+/* Vollflächiger Start-Hintergrund unter Startpanel, über Canvas */
 #bg-start{
   position: fixed;
   inset: 0;
-  z-index: 10;             /* unter Panel (1000), über Canvas */
+  z-index: 900;        /* < Startpanel (1000) */
   pointer-events: none;
   opacity: 1;
   transition: opacity .5s ease;
   background:
     radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%,
                     rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
-    /* Pfad aus ui/css/… → ../../assets/... */
     url("../../assets/ui/start-bg.jpg") center/cover no-repeat;
 }
 #bg-start.fadeout{ opacity: 0; }
+
+/* Bewegungen reduzieren (Barrierefreiheit) */
+@media (prefers-reduced-motion: reduce){
+  *{ transition: none !important; animation: none !important; }
+  #bg-start{ transition: none !important; }
+}
