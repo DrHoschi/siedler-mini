@@ -28,6 +28,10 @@
     rafId: 0
   };
 
+// Beispiel: Anfangsstände – nimm deine echten Werte/Save
+const res = state?.resources || { wood: 0, stone: 0, food: 0, gold: 0, pop: 0 };
+window.dispatchEvent(new CustomEvent('cb:res:change', { detail: res }));
+  
   // ------------------------ kleine Helpers -------------------------
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[game]', ...a);
   const warn = (...a) => (window.CBLog?.warn || console.warn)('[game]', ...a);
