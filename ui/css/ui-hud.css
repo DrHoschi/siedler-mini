@@ -113,7 +113,7 @@
   font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   text-align: center;
   white-space: nowrap;
-  margin: 2px 0; /* statt 4px */ /* kleiner Puffer unten */
+  margin-top: -2px; /* statt 4px */ /* kleiner Puffer unten */
 }
 
 /* --- Interaktionen (optional subtil) ------------------------------------- */
