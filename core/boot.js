@@ -123,3 +123,9 @@
     else log('Autostart AUS – Startpanel bleibt bis Button-Klick sichtbar.');
   });
 })();
+
+window.addEventListener('cb:start:new', async (e) => {
+  const mapId = e?.detail?.mapId || 'map_ch1';
+  await GameBoot.start(mapId); // lädt Assets/Map, ruft intern Game.start
+  window.dispatchEvent(new CustomEvent('cb:game-start', { detail: { mapId, seed: Date.now() }}));
+});
