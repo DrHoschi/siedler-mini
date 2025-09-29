@@ -29,7 +29,6 @@ Gesamt Dateien: 392
  - assets/tex/terrain/topdown_meadow.PNG
  - assets/tex/terrain/topdown_rock.PNG
  - assets/tex/terrain/topdown_shore.PNG
- - assets/ui/panel.PNG
  - assets/Logo.PNG
  - assets/placeholder64.PNG
 
@@ -43,7 +42,6 @@ Gesamt Dateien: 392
  - assets/readme
  - qa/Readme
  - ui/css/readme
- - boot.js
  - filelist-audit.txt
  - filelist.json
  - filelist.txt

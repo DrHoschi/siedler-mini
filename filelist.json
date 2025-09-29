@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-28T15:50:57.251Z",
+  "createdAt": "2025-09-29T15:28:07.489Z",
   "root": ".",
   "count": 443,
   "entries": [
@@ -1266,7 +1266,7 @@
     },
     {
       "type": "file",
-      "path": "assets/ui/panel.PNG",
+      "path": "assets/ui/panel.png",
       "size": 2409858
     },
     {
@@ -1351,7 +1351,12 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 4664
+      "size": 1222
+    },
+    {
+      "type": "file",
+      "path": "core/boot.js",
+      "size": 4382
     },
     {
       "type": "file",
@@ -1421,7 +1426,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 5949
+      "size": 6803
     },
     {
       "type": "file",
@@ -1436,7 +1441,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 7574
+      "size": 4319
     },
     {
       "type": "file",
@@ -1509,7 +1514,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 1389
+      "size": 821
     },
     {
       "type": "file",
@@ -1951,7 +1956,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 8927
+      "size": 6239
     },
     {
       "type": "file",
@@ -1961,7 +1966,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-hud.css",
-      "size": 3562
+      "size": 2129
     },
     {
       "type": "file",
@@ -1971,7 +1976,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 3117
+      "size": 2702
     },
     {
       "type": "file",
@@ -1981,7 +1986,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 5016
+      "size": 5413
     },
     {
       "type": "dir",
@@ -2080,7 +2085,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 8305
+      "size": 6240
     },
     {
       "type": "file",
@@ -2095,7 +2100,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 3723
+      "size": 1414
     },
     {
       "type": "file",
@@ -2115,17 +2120,12 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 3153
+      "size": 2545
     },
     {
       "type": "file",
       "path": "ui/ui-tooltip.js",
       "size": 1348
-    },
-    {
-      "type": "file",
-      "path": "boot.js",
-      "size": 3192
     },
     {
       "type": "file",
@@ -2135,17 +2135,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43375
+      "size": 43452
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16476
+      "size": 16503
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 8752
+      "size": 3849
     },
     {
       "type": "file",
