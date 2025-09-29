@@ -84,3 +84,88 @@ body.is-playing .start-bg,
 body.is-playing #hero,
 body.is-playing .hero,
 body.is-playing #bg { display:none !important; }
+
+/* === HUD: quadratische Ressourcen-Kacheln ================================= */
+
+/* Größe & Abstände zentral steuerbar */
+:root{
+  --hud-tile: 92px;        /* Kachelbreite/ -höhe (Square) */
+  --hud-gap:  10px;        /* Abstand zwischen Kacheln */
+}
+
+#hud-top{
+  gap: var(--hud-gap);
+  justify-content: center;
+}
+
+/* Panel-Hintergrund oben für HUD abschalten (falls ui-panel ein Bild legt) */
+#hud-top.ui-panel{ background: none !important; }
+
+/* Jede Ressource als quadratische Karte mit Icon oben, Text unten */
+.hud-stat{
+  /* bisheriges Flex-Layout ersetzen: */
+  display: grid !important;
+  grid-template-rows: 1fr auto;     /* Icon oben, Text unten */
+  align-items: center;
+  justify-items: center;
+
+  width: var(--hud-tile);
+  aspect-ratio: 1 / 1;              /* Quadrat */
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 12px;
+  background: rgba(10,14,20,.35);   /* dezenter Tile-Hintergrund */
+  box-shadow: 0 8px 26px rgba(0,0,0,.22) inset;
+  backdrop-filter: blur(2px);
+  pointer-events: auto;             /* HUD bleibt klickbar, falls nötig */
+}
+
+/* Icon groß oben, immer zentriert */
+.hud-stat .ic{
+  grid-row: 1;
+  width: calc(var(--hud-tile) * .52);   /* ~50% der Kachel */
+  height: calc(var(--hud-tile) * .52);
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+  margin-bottom: 4px;
+}
+
+/* Unten: "0 Holz" in EINER Zeile (Wert + Label nebeneinander) */
+.hud-stat .val,
+.hud-stat .lbl{
+  grid-row: 2;
+  display: inline;                     /* nebeneinander */
+  line-height: 1.1;
+}
+
+.hud-stat .val{
+  font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  margin-right: 4px;
+}
+.hud-stat .lbl{
+  font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  opacity: .92;
+}
+
+/* Hover/Focus (optional) */
+.hud-stat:hover{
+  border-color: #2b3a52;
+  box-shadow:
+    0 0 0 2px rgba(138,180,248,.25) inset,
+    0 8px 22px rgba(0,0,0,.25) inset;
+  transform: translateY(-1px);
+  transition: all .12s ease;
+}
+
+/* Responsive Tweaks */
+@media (max-width: 900px){
+  :root{ --hud-tile: 84px; --hud-gap: 8px; }
+  .hud-stat .val{ font-weight: 800; font-size: 13px; }
+  .hud-stat .lbl{ font-weight: 700; font-size: 11.5px; }
+}
+@media (max-width: 600px){
+  :root{ --hud-tile: 74px; --hud-gap: 6px; }
+  .hud-stat{ padding: 6px; border-radius: 10px; }
+  .hud-stat .val{ font-size: 12px; }
+  .hud-stat .lbl{ font-size: 11px; }
+}
