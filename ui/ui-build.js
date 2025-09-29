@@ -36,6 +36,14 @@
     };
   }
 
+const items = (window.Registry?.list)
+  ? Registry.list('building', b => ['infra','prod','home','trade','mil'].includes(b.category))
+  : (window.BuildCategories?.allBuildings ?? []);
+
+renderBuildButtons(items.map(b => ({
+  id: b.id, label: b.name, icon: b.sprite || b.icon
+})));
+  
   // ---- Datenquelle (Registry → ViewModel) ----------------------------------
   function readData() {
     if (window.BuildBridge?.view) return window.BuildBridge.view();
