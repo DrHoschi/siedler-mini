@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei   : ui/css/ui-hud.css
- * Version : v19.1.0
+ * Version : v19.1.1
  * Zweck   : HUD-Layout oben; Look kommt über .ui-panel (ui.css)
  * ========================================================================== */
 
@@ -18,22 +18,18 @@
 /* Root: nur Position/Abstände */
 #hud-top{
   position: fixed;
-/*  top: 8px; left: 8px; right: 8px; */
-    top: env(safe-area-inset-top, 0px);
+  top: env(safe-area-inset-top, 0px);
   left: 0; right: 0;
-/*  z-index: var(--hud-z); */
   z-index: 1200;              /* über Canvas & Dock */
-
-/* display: inline-flex; */
-   display: flex;
-   align-items: center;
-/*  gap: 8px; */
-   gap: 14px;
-   justify-content: center;    /* oder: space-between */
-/* padding: var(--hud-pad-y) var(--hud-pad-x); */
-   pointer-events: none;       /* HUD klickt nicht in die Map */
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: center;    /* oder: space-between */
+  pointer-events: none;       /* HUD klickt nicht in die Map */
   user-select: none;
-  border-radius: var(--hud-radius);   /* optional: rundere Ecken beibehalten */
+  border-radius: var(--hud-radius);
+  /* Zusatz: Startzustand sichtbar, falls HTML kein .hidden hat */
+  visibility: visible; opacity: 1;
 }
 #hud-top.hidden,
 #hud-top[hidden]{ display: none !important; }
@@ -76,3 +72,15 @@ body.is-playing #hud-top{ visibility: visible; opacity: 1; }
   #hud-top{ top:6px; left:6px; right:6px; }
   .hud-sep{ height:18px; }
 }
+
+/* Zusatz: Hard-Kill der Startflächen, falls mal etwas „durchrutscht“ */
+body.is-playing #start-panel,
+body.is-playing #panel-start,
+body.is-playing .start-panel,
+body.is-playing #start,
+body.is-playing #start-bg,
+body.is-playing #bg-start,
+body.is-playing .start-bg,
+body.is-playing #hero,
+body.is-playing .hero,
+body.is-playing #bg { display:none !important; }
