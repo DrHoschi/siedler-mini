@@ -168,4 +168,62 @@ body.is-playing #bg { display:none !important; }
   .hud-stat{ padding: 6px; border-radius: 10px; }
   .hud-stat .val{ font-size: 12px; }
   .hud-stat .lbl{ font-size: 11px; }
+  
+}
+/* === HUD: quadratische Ressourcen-Kacheln mit Panel-Bild ================== */
+:root{
+  --hud-tile: 92px;
+  --hud-gap:  10px;
+}
+
+#hud-top{
+  gap: var(--hud-gap);
+  justify-content: center;
+}
+
+/* Jede Ressource als Kachel mit Panel-Bild im Hintergrund */
+.hud-stat{
+  display: grid !important;
+  grid-template-rows: 1fr auto;      /* Icon oben, Text unten */
+  align-items: center;
+  justify-items: center;
+
+  width: var(--hud-tile);
+  aspect-ratio: 1 / 1;
+  padding: 8px;
+
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+
+  /* Panel-Bild vollflächig, plus dunkler Overlay für Kontrast */
+  background:
+    url("../../assets/ui/panel.png") center / cover no-repeat,
+    linear-gradient(to bottom, rgba(18,24,34,.65), rgba(12,16,24,.65));
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  backdrop-filter: blur(2px);
+}
+
+/* Icon groß und zentriert in der oberen Hälfte */
+.hud-stat .ic{
+  grid-row: 1;
+  width: calc(var(--hud-tile) * .5);
+  height: calc(var(--hud-tile) * .5);
+  object-fit: contain;
+  margin: auto 0 4px 0;   /* vertikal mitteln + etwas Abstand nach unten */
+}
+
+/* Text unten: Wert + Label nebeneinander */
+.hud-stat .val,
+.hud-stat .lbl{
+  grid-row: 2;
+  display: inline;
+  line-height: 1.1;
+}
+.hud-stat .val{
+  font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  margin-right: 4px;
+}
+.hud-stat .lbl{
+  font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  opacity: .92;
 }
