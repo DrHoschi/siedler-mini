@@ -16,11 +16,11 @@
 
   // Ressourcen-Definition (kann später aus Registry/data/resources.json kommen)
   const RES_LIST = [
-    { id:'wood',  label:'Holz',   icon:'assets/icons/wood.png'  },
-    { id:'stone', label:'Stein',  icon:'assets/icons/stone.png' },
-    { id:'food',  label:'Nahrung',icon:'assets/icons/food.png'  },
-    { id:'gold',  label:'Gold',   icon:'assets/icons/gold.png'  },
-    { id:'pop',   label:'Bev.',   icon:'assets/icons/pop.png'   }
+    { id:'wood',  label:'Holz',   icon:'assets/icons/resources/wood.png'  },
+    { id:'stone', label:'Stein',  icon:'assets/icons/resources/stone.png' },
+    { id:'food',  label:'Nahrung',icon:'assets/icons/resources/food.png'  },
+    { id:'gold',  label:'Gold',   icon:'assets/icons/resources/gold.png'  },
+    { id:'pop',   label:'Bev.',   icon:'assets/icons/resources/pop.png'   }
   ];
 
   // interner Zustand
