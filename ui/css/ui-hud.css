@@ -1,16 +1,11 @@
 /* ============================================================================
  * Datei   : ui/css/ui-hud.css
- * Version : v19.0.0
- * Zweck   : HUD-Container oben – kompakt, gut lesbar, responsive
- * Leitplanken:
- *   - HUD liegt über Canvas, unter Startpanel/Inspector & Build-Dock
- *   - Background-Panel via assets/ui/panel.png + Tönung
- *   - Respektiert [hidden] (wird per JS ein-/ausgeblendet)
+ * Version : v19.1.0
+ * Zweck   : HUD-Layout oben; Look kommt über .ui-panel (ui.css)
  * ========================================================================== */
 
-/* (1) Design Tokens --------------------------------------------------------- */
 :root{
-  --hud-z: 950; /* < Startpanel(1000) / Inspector(max) */
+  --hud-z: 950;
   --hud-pad-y: 8px;
   --hud-pad-x: 10px;
   --hud-radius: 12px;
@@ -18,10 +13,9 @@
   --hud-shadow: 0 16px 44px rgba(0,0,0,.32);
   --hud-text: #eaf2ff;
   --hud-text-dim: #c3d2ea;
-  --hud-bg-tint: rgba(12,16,24,.78);
 }
 
-/* (2) Root #hud-top --------------------------------------------------------- */
+/* Root: nur Position/Abstände */
 #hud-top{
   position: fixed;
   top: 8px; left: 8px; right: 8px;
@@ -30,75 +24,44 @@
   align-items: center;
   gap: 8px;
   padding: var(--hud-pad-y) var(--hud-pad-x);
-
-  background:
-    linear-gradient(to bottom, var(--hud-bg-tint), rgba(10,14,22,.72)),
-    url("../../assets/ui/panel.png") center / cover no-repeat; /* Pfad korrigiert */
-
-  border: 1px solid var(--hud-border);
-  border-radius: var(--hud-radius);
-  box-shadow: var(--hud-shadow);
-  color: var(--hud-text);
-  backdrop-filter: blur(2px);
   user-select: none;
+  border-radius: var(--hud-radius);   /* optional: rundere Ecken beibehalten */
 }
 #hud-top.hidden,
 #hud-top[hidden]{ display: none !important; }
 
-/* (3) Inhalt --------------------------------------------------------------- */
-.hud-row{
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.hud-sep{
-  width: 1px; height: 22px;
-  background: rgba(255,255,255,.14);
-  margin: 0 4px;
-  flex: 0 0 auto;
-}
+/* Inhalt */
+.hud-row{ display: inline-flex; align-items: center; gap: 10px; }
+.hud-sep{ width:1px; height:22px; background: rgba(255,255,255,.14); margin:0 4px; flex:0 0 auto; }
+
 .hud-badge{
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 8px;
-  font: 600 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: var(--hud-text);
-  background: rgba(8,12,18,.55);
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 8px;
+  font:600 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   border: 1px solid rgba(255,255,255,.10);
-  border-radius: 999px;
-  white-space: nowrap;
+  border-radius:999px;
+  white-space:nowrap;
 }
-.hud-badge .ic{ font-size: 14px; opacity: .95; }
 
 .hud-stat{
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 8px;
-  background: rgba(8,12,18,.45);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 10px;
+  display:inline-flex; align-items:center; gap:8px;
+  padding:4px 8px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;
 }
-.hud-stat .ic{
-  width: 18px; height: 18px; object-fit: contain;
-  filter: drop-shadow(0 0 1px rgba(0,0,0,.35));
-}
-.hud-stat .val{
-  font: 700 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: var(--hud-text);
-}
-.hud-stat .lbl{
-  font: 600 12px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: var(--hud-text-dim);
-  opacity: .9;
-}
+.hud-stat .ic{ width:18px; height:18px; object-fit:contain; filter: drop-shadow(0 0 1px rgba(0,0,0,.35)); }
+.hud-stat .val{ font:700 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+.hud-stat .lbl{ font:600 12px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; opacity:.9; }
 
-/* (4) Responsive ------------------------------------------------------------ */
+/* Responsive */
 @media (max-width: 720px){
-  #hud-top{ gap: 6px; padding: 6px 8px; border-radius: 10px; }
-  .hud-badge{ padding: 3px 7px; font-size: 11px; }
-  .hud-stat{ padding: 4px 6px; }
-  .hud-stat .val{ font-size: 12px; }
-  .hud-stat .lbl{ font-size: 11px; }
+  #hud-top{ gap:6px; padding:6px 8px; border-radius:10px; }
+  .hud-badge{ padding:3px 7px; font-size:11px; }
+  .hud-stat{ padding:4px 6px; }
+  .hud-stat .val{ font-size:12px; }
+  .hud-stat .lbl{ font-size:11px; }
 }
 @media (max-width: 420px){
-  #hud-top{ top: 6px; left: 6px; right: 6px; }
-  .hud-sep{ height: 18px; }
+  #hud-top{ top:6px; left:6px; right:6px; }
+  .hud-sep{ height:18px; }
 }
