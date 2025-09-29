@@ -1,79 +1,144 @@
 /* ============================================================================
  * Datei   : ui/css/ui-hud.css
- * Version : v19.1.1
- * Zweck   : HUD-Layout oben; Look kommt über .ui-panel (ui.css)
+ * Version : v19.2.0
+ * Zweck   : Ressourcen-HUD oben – Kacheln mit Titel (oben), Icon (Mitte), Wert (unten)
+ * Look    : Panel-Bild pro Kachel; safe-area aware; z-index > Canvas/Dock
+ * Hinweis : Der Container #hud-top wird per JS erst ab Spielstart sichtbar gemacht.
  * ========================================================================== */
 
+/* === Design-Tokens ======================================================== */
 :root{
-  --hud-z: 950;
-  --hud-pad-y: 8px;
-  --hud-pad-x: 10px;
-  --hud-radius: 12px;
-  --hud-border: rgba(255,255,255,.10);
-  --hud-shadow: 0 16px 44px rgba(0,0,0,.32);
-  --hud-text: #eaf2ff;
-  --hud-text-dim: #c3d2ea;
+  /* Layering */
+  --hud-z: 1200;
+
+  /* Abstände / Ränder */
+  --hud-gap: 10px;          /* Abstand zwischen Kacheln */
+  --hud-radius: 12px;       /* Rundung der HUD-Kacheln */
+
+  /* Kachel-Größe */
+  --hud-tile: 92px;         /* Breite/Höhe (Quadrat) */
+
+  /* Farben / Rahmen */
+  --hud-border: rgba(255,255,255,.12);
+  --hud-sep:    rgba(255,255,255,.14);
+
+  /* Typo */
+  --hud-text:      #eaf2ff;
+  --hud-text-dim:  #c3d2ea;
 }
 
-/* Root: nur Position/Abstände */
+/* === HUD-Container (Top-Bar) ============================================= */
 #hud-top{
   position: fixed;
   top: env(safe-area-inset-top, 0px);
   left: 0; right: 0;
-  z-index: 1200;              /* über Canvas & Dock */
+  z-index: var(--hud-z);
   display: flex;
   align-items: center;
-  gap: 14px;
-  justify-content: center;    /* oder: space-between */
-  pointer-events: none;       /* HUD klickt nicht in die Map */
+  justify-content: center;
+  gap: var(--hud-gap);
+  pointer-events: none;          /* HUD selbst nicht klick-blockend */
   user-select: none;
-  border-radius: var(--hud-radius);
-  /* Zusatz: Startzustand sichtbar, falls HTML kein .hidden hat */
   visibility: visible; opacity: 1;
+  /* Falls der globale .ui-panel-Hintergrund stören würde: */
 }
+#hud-top.ui-panel{ background: none !important; }
+
 #hud-top.hidden,
 #hud-top[hidden]{ display: none !important; }
 
-#hud-top .res { pointer-events: auto; } /* falls Buttons im HUD existieren */
-body.is-playing #hud-top{ visibility: visible; opacity: 1; }
-
-/* Inhalt */
+/* === (Optional) kleine Separatoren / Badges =============================== */
 .hud-row{ display: inline-flex; align-items: center; gap: 10px; }
-.hud-sep{ width:1px; height:22px; background: rgba(255,255,255,.14); margin:0 4px; flex:0 0 auto; }
+.hud-sep{ width:1px; height:22px; background: var(--hud-sep); margin:0 4px; flex:0 0 auto; }
 
 .hud-badge{
   display:inline-flex; align-items:center; gap:6px;
-  padding:4px 8px;
+  padding:4px 8px; border:1px solid rgba(255,255,255,.10);
+  border-radius:999px; white-space:nowrap;
   font:600 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius:999px;
-  white-space:nowrap;
 }
 
+/* ============================================================================
+ * RESSOURCEN-KACHEL
+ * Layout: 3 Reihen (oben Titel/Label, Mitte Icon, unten Wert)
+ * ========================================================================== */
 .hud-stat{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:4px 8px;
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:10px;
-}
-.hud-stat .ic{ width:18px; height:18px; object-fit:contain; filter: drop-shadow(0 0 1px rgba(0,0,0,.35)); }
-.hud-stat .val{ font:700 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-.hud-stat .lbl{ font:600 12px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; opacity:.9; }
+  /* Grid statt Flex – garantiert perfekte Vertikal-Ausrichtung */
+  display: grid !important;
+  grid-template-rows: auto 1fr auto;   /* Label | Icon | Wert */
+  align-items: center;
+  justify-items: center;
 
-/* Responsive */
-@media (max-width: 720px){
-  #hud-top{ gap:6px; padding:6px 8px; border-radius:10px; }
-  .hud-badge{ padding:3px 7px; font-size:11px; }
-  .hud-stat{ padding:4px 6px; }
-  .hud-stat .val{ font-size:12px; }
-  .hud-stat .lbl{ font-size:11px; }
-}
-@media (max-width: 420px){
-  #hud-top{ top:6px; left:6px; right:6px; }
-  .hud-sep{ height:18px; }
+  width: var(--hud-tile);
+  aspect-ratio: 1 / 1;                 /* Quadrat */
+  padding: 8px;
+
+  border-radius: var(--hud-radius);
+  border: 1px solid var(--hud-border);
+
+  /* Panel-Bild flächig + dezenter Dark-Overlay für Lesbarkeit */
+  background:
+    url("../../assets/ui/panel.png") center / cover no-repeat,
+    linear-gradient(to bottom, rgba(18,24,34,.55), rgba(12,16,24,.55));
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  backdrop-filter: blur(2px);
+
+  color: var(--hud-text);
+  pointer-events: auto;                 /* falls Kachel klickbar werden soll */
 }
 
-/* Zusatz: Hard-Kill der Startflächen, falls mal etwas „durchrutscht“ */
+/* --- 1) Titel/Label (oben, zentriert) ------------------------------------ */
+.hud-stat .lbl{
+  grid-row: 1;
+  font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  letter-spacing: .2px;
+  opacity: .95;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* --- 2) Icon (mittig und groß) ------------------------------------------- */
+.hud-stat .ic{
+  grid-row: 2;
+  width: calc(var(--hud-tile) * .56);
+  height: calc(var(--hud-tile) * .56);
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+  margin: 4px 0;                        /* kleiner Puffer oben/unten */
+}
+
+/* --- 3) Wert (unten, zentriert, etwas größer/fetter) --------------------- */
+.hud-stat .val{
+  grid-row: 3;
+  font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* --- Interaktionen (optional subtil) ------------------------------------- */
+.hud-stat:hover{
+  border-color: #2b3a52;
+  box-shadow:
+    0 0 0 2px rgba(138,180,248,.22) inset,
+    0 2px 8px rgba(0,0,0,.35);
+  transform: translateY(-1px);
+  transition: all .12s ease;
+}
+
+/* === Responsive Tweaks ==================================================== */
+@media (max-width: 900px){
+  :root{ --hud-tile: 84px; --hud-gap: 8px; }
+  .hud-stat .val{ font-size: 13px; }
+  .hud-stat .lbl{ font-size: 11.5px; }
+}
+@media (max-width: 600px){
+  :root{ --hud-tile: 74px; --hud-gap: 6px; }
+  .hud-stat{ padding: 6px; border-radius: 10px; }
+  .hud-stat .val{ font-size: 12px; }
+  .hud-stat .lbl{ font-size: 11px; }
+}
+
+/* === Startpanel definitiv ausblenden, sobald Spiel läuft ================== */
 body.is-playing #start-panel,
 body.is-playing #panel-start,
 body.is-playing .start-panel,
@@ -84,146 +149,3 @@ body.is-playing .start-bg,
 body.is-playing #hero,
 body.is-playing .hero,
 body.is-playing #bg { display:none !important; }
-
-/* === HUD: quadratische Ressourcen-Kacheln ================================= */
-
-/* Größe & Abstände zentral steuerbar */
-:root{
-  --hud-tile: 92px;        /* Kachelbreite/ -höhe (Square) */
-  --hud-gap:  10px;        /* Abstand zwischen Kacheln */
-}
-
-#hud-top{
-  gap: var(--hud-gap);
-  justify-content: center;
-}
-
-/* Panel-Hintergrund oben für HUD abschalten (falls ui-panel ein Bild legt) */
-#hud-top.ui-panel{ background: none !important; }
-
-/* Jede Ressource als quadratische Karte mit Icon oben, Text unten */
-.hud-stat{
-  /* bisheriges Flex-Layout ersetzen: */
-  display: grid !important;
-  grid-template-rows: 1fr auto;     /* Icon oben, Text unten */
-  align-items: center;
-  justify-items: center;
-
-  width: var(--hud-tile);
-  aspect-ratio: 1 / 1;              /* Quadrat */
-  padding: 8px;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 12px;
-  background: rgba(10,14,20,.35);   /* dezenter Tile-Hintergrund */
-  box-shadow: 0 8px 26px rgba(0,0,0,.22) inset;
-  backdrop-filter: blur(2px);
-  pointer-events: auto;             /* HUD bleibt klickbar, falls nötig */
-}
-
-/* Icon groß oben, immer zentriert */
-.hud-stat .ic{
-  grid-row: 1;
-  width: calc(var(--hud-tile) * .52);   /* ~50% der Kachel */
-  height: calc(var(--hud-tile) * .52);
-  object-fit: contain;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
-  margin-bottom: 4px;
-}
-
-/* Unten: "0 Holz" in EINER Zeile (Wert + Label nebeneinander) */
-.hud-stat .val,
-.hud-stat .lbl{
-  grid-row: 2;
-  display: inline;                     /* nebeneinander */
-  line-height: 1.1;
-}
-
-.hud-stat .val{
-  font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  margin-right: 4px;
-}
-.hud-stat .lbl{
-  font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  opacity: .92;
-}
-
-/* Hover/Focus (optional) */
-.hud-stat:hover{
-  border-color: #2b3a52;
-  box-shadow:
-    0 0 0 2px rgba(138,180,248,.25) inset,
-    0 8px 22px rgba(0,0,0,.25) inset;
-  transform: translateY(-1px);
-  transition: all .12s ease;
-}
-
-/* Responsive Tweaks */
-@media (max-width: 900px){
-  :root{ --hud-tile: 84px; --hud-gap: 8px; }
-  .hud-stat .val{ font-weight: 800; font-size: 13px; }
-  .hud-stat .lbl{ font-weight: 700; font-size: 11.5px; }
-}
-@media (max-width: 600px){
-  :root{ --hud-tile: 74px; --hud-gap: 6px; }
-  .hud-stat{ padding: 6px; border-radius: 10px; }
-  .hud-stat .val{ font-size: 12px; }
-  .hud-stat .lbl{ font-size: 11px; }
-  
-}
-/* === HUD: quadratische Ressourcen-Kacheln mit Panel-Bild ================== */
-:root{
-  --hud-tile: 92px;
-  --hud-gap:  10px;
-}
-
-#hud-top{
-  gap: var(--hud-gap);
-  justify-content: center;
-}
-
-/* Jede Ressource als Kachel mit Panel-Bild im Hintergrund */
-.hud-stat{
-  display: grid !important;
-  grid-template-rows: 1fr auto;      /* Icon oben, Text unten */
-  align-items: center;
-  justify-items: center;
-
-  width: var(--hud-tile);
-  aspect-ratio: 1 / 1;
-  padding: 8px;
-
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.12);
-
-  /* Panel-Bild vollflächig, plus dunkler Overlay für Kontrast */
-  background:
-    url("../../assets/ui/panel.png") center / cover no-repeat,
-    linear-gradient(to bottom, rgba(18,24,34,.65), rgba(12,16,24,.65));
-  box-shadow: 0 2px 6px rgba(0,0,0,.35);
-  backdrop-filter: blur(2px);
-}
-
-/* Icon groß und zentriert in der oberen Hälfte */
-.hud-stat .ic{
-  grid-row: 1;
-  width: calc(var(--hud-tile) * .5);
-  height: calc(var(--hud-tile) * .5);
-  object-fit: contain;
-  margin: auto 0 4px 0;   /* vertikal mitteln + etwas Abstand nach unten */
-}
-
-/* Text unten: Wert + Label nebeneinander */
-.hud-stat .val,
-.hud-stat .lbl{
-  grid-row: 2;
-  display: inline;
-  line-height: 1.1;
-}
-.hud-stat .val{
-  font: 800 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  margin-right: 4px;
-}
-.hud-stat .lbl{
-  font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  opacity: .92;
-}
