@@ -40,3 +40,16 @@
   // falls Registry.cost vorhanden ist. Minimalbeispiel:
   // window.addEventListener('cb:build:select', (e) => { /* nur Auswahl */ });
 })();
+
+// a) beim Spielstart einmalig anzeigen (auch wenn noch keine Änderung passiert ist)
+window.addEventListener('cb:game-start', () => {
+  const init = window.Game?.getResources?.() || { wood:0, stone:0, food:0, gold:0, pop:0 };
+  renderHUD(init);
+  (window.CBLog?.ok||console.log)('[ui-hud] init → cb:hud-ready');
+  window.dispatchEvent(new CustomEvent('cb:hud-ready'));
+});
+
+// b) bei jeder Änderung aktualisieren
+window.addEventListener('cb:res:change', (e) => {
+  renderHUD(e.detail);
+});
