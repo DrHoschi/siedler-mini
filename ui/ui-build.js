@@ -1,8 +1,7 @@
 // ============================================================================
 // Datei : ui/ui-build.js
 // Projekt: Neue Siedler
-// ============================================================================
-// Version: v1.0.4
+// Version: v1.0.5
 // ============================================================================
 (() => {
   const log  = (...a)=>(window.CBLog?.ok||console.log)('[ui-build]',...a);
@@ -11,10 +10,11 @@
   const q    = s=>document.querySelector(s);
 
   let activeCat=null, activeItem=null;
+  let _initialized = false;   // ← NEU: verhindert doppeltes Rendern bei mehreren Events
 
   function ensureScaffold(){
     const dock = q('#build-dock'); if(!dock){ warn('Container #build-dock fehlt'); return null; }
-    dock.hidden=false; dock.classList.remove('hidden'); // ← wichtig: sichtbar
+    dock.hidden=false; dock.classList.remove('hidden'); // sichtbar
     if(!dock.querySelector('.wrap')){
       const wrap = document.createElement('div'); wrap.className='wrap'; dock.appendChild(wrap);
     }
@@ -90,10 +90,12 @@
   }
 
   function init(){
+    if (_initialized) { log('init (skip – already initialized)'); return; } // ← NEU
     const els=ensureScaffold(); if(!els) return;
     const data=readData();
     renderCats(els.cats, data.cats);
     renderItems(els.items, data.buildings);
+    _initialized = true; // ← NEU
     log('init ✓');
   }
 
