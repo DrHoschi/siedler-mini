@@ -61,6 +61,11 @@
   on('cb:game-start', () => {
     hideStartPanel();
     showHudAndBuild();
+    // zusätzlich im cb:game-start-Handler:
+document.body.classList.add('is-playing');           // steuert Body-Hintergrund per CSS
+document.body.style.background = 'none';             // Fallback: BG direkt entfernen
+const bgEl = document.querySelector('#start-bg');    // falls ein eigenes Panel-Bild existiert
+if (bgEl) bgEl.style.display = 'none';
     (window.CBLog?.ok || console.log)('[ui-start] game-start → UI sichtbar');
   });
 })();
