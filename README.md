@@ -10,7 +10,6 @@ Neue Siedler ist eine 2D-Top-Down Aufbau- und Wirtschaftssimulation.
 Die Spieler:innen starten mit einer kleinen Siedlergruppe, erschließen Rohstoffe, bauen erste Produktionsketten auf und entwickeln ihre Siedlung über 10 Epochen zu einer Hochkultur.
 
 ...
-
 repo-root/
 │
 ├── index.html              # Einstiegspunkt (Startpanel zuerst sichtbar)
