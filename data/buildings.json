@@ -1,7 +1,8 @@
 {
   "iconsBase": "assets/ui/build/",
   "categories": [
-    { "id": "admin",   "label": "Verwaltung" },
+    { "id": "admin",   "label": "Gebäude"    },
+    { "id": "main",    "label": "Verwaltung" },
     { "id": "resource","label": "Rohstoffe"  },
     { "id": "food",    "label": "Nahrung"    }
   ],
