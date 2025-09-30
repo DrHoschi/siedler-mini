@@ -1,16 +1,16 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.5.0
+// Version : v1.6.0
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events  : cb:map:loaded    { mapId, tile, size:{w,h} }
 //           cb:res:change    { ...resources }
-//           cb:place:preview { id,gx,gy,sx,sy,size,invalid, w,h, door:{dx,dy} }
+//           cb:place:preview { id,gx,gy,sx,sy,size,invalid,w,h,door,entrances,entrancesAbs }
 //           cb:place:confirm { id,gx,gy } (von UI)
 //           cb:place:cancel  { }         (von UI)
 // Notes   : Platzieren mit Preview+Confirm (✅/❌)
-//           Platzierregeln: Bounds, 3×3-Footprint, Abstand 1, Terrainverbote (Wasser)
+//           Platzierregeln: Bounds, Footprint, Abstand 1, Terrainverbote (Wasser), Entrance erreichbar
 //           Icons aus Registry; Kamera-Clamp an Kartenrand
 // ============================================================================
 
@@ -30,11 +30,11 @@
     gridW: 32, gridH: 18,
 
     // Weltobjekte
-    placements: [],                 // { id, x, y, w, h, door:{dx,dy} } – x/y = Tile-Ursprung (oben links)
-    occupied : new Set(),           // "x,y" → schnell prüfen ob belegt
-    hover: { x:-1, y:-1 },          // Tile unter Cursor
-    selectedBuilding: null,         // aktuell gewählter Gebäudetyp
-    preview: null,                  // { id,gx,gy } – wartet auf ✅/❌
+    placements: [],                 // { id, x, y, w, h, door:{dx,dy} }
+    occupied : new Set(),           // "x,y"
+    hover: { x:-1, y:-1 },
+    selectedBuilding: null,
+    preview: null,                  // { id,gx,gy }
 
     // Ressourcen
     resources: { wood:0, stone:0, food:0, gold:0, pop:0 },
@@ -58,7 +58,7 @@
     tapStart: { x:0, y:0 },
 
     // Icons (Registry)
-    iconMap : null,                 // id -> url
+    iconMap : null,
     imgCache: new Map(),            // url -> HTMLImageElement | 'loading' | 'error'
   };
 
@@ -73,38 +73,38 @@
   const EPS   = 1e-6;
   const keyXY = (x,y)=>`${x},${y}`;
 
-// == Building-Definitionen (aus Registry) ===================================
-// Wrapper: akzeptiert Registry-Format (size:[w,h], entrances:[[dx,dy],...])
-function getBuildingDef(id){
-  const raw = window.Registry?.getBuildingDef?.(id) || window.Registry?.byId?.(id) || null;
+  // == Building-Definitionen (aus Registry) =================================
+  // Wrapper: akzeptiert Registry-Format (size:[w,h], entrances:[[dx,dy],...])
+  function getBuildingDef(id){
+    const raw = window.Registry?.getBuildingDef?.(id) || window.Registry?.byId?.(id) || null;
 
-  // Defaults
-  let w = 3, h = 3;
-  let entrances = [[1,3]];             // falls 3x3 → Tür unten mittig (vor dem Gebäude)
-  let door = { dx:1, dy:1 };           // erste Entrance als "Haupttür" für UI
-  const blockedTerrains = ['water'];
+    // Defaults
+    let w = 3, h = 3;
+    let entrances = [[1,3]];             // falls 3x3 → Tür unten mittig (vor dem Gebäude)
+    let door = { dx:1, dy:1 };           // erste Entrance als "Haupttür" für UI
+    const blockedTerrains = ['water'];
 
-  if (raw){
-    if (Array.isArray(raw.size)) { w = +raw.size[0]||3; h = +raw.size[1]||3; }
-    else if (raw.size && typeof raw.size === 'object') {
-      w = +raw.size.w||3; h = +raw.size.h||3;
+    if (raw){
+      if (Array.isArray(raw.size)) { w = +raw.size[0]||3; h = +raw.size[1]||3; }
+      else if (raw.size && typeof raw.size === 'object') {
+        w = +raw.size.w||3; h = +raw.size.h||3;
+      }
+      if (Array.isArray(raw.entrances) && raw.entrances.length){
+        entrances = raw.entrances.map(e => [ (e[0]|0), (e[1]|0) ]);
+      } else {
+        entrances = [[ Math.floor(Math.max(1,w)-1), h ]]; // Fallback
+      }
+      door = { dx: entrances[0][0], dy: entrances[0][1] };
     }
-    if (Array.isArray(raw.entrances) && raw.entrances.length){
-      entrances = raw.entrances.map(e => [ (e[0]|0), (e[1]|0) ]);
-    } else {
-      entrances = [[ Math.floor(Math.max(1,w)-1), h ]]; // Fallback: unten mittig, vor dem Gebäude
-    }
-    door = { dx: entrances[0][0], dy: entrances[0][1] };
+
+    return {
+      id: String(id),
+      size: { w: Math.max(1, w|0), h: Math.max(1, h|0) },
+      entrances,
+      door,
+      blockedTerrains
+    };
   }
-
-  return {
-    id: String(id),
-    size: { w: Math.max(1, w|0), h: Math.max(1, h|0) },
-    entrances,
-    door,
-    blockedTerrains
-  };
-}
 
   // == Platzier-/Bounds-Helper ==============================================
   function inBoundsTile(gx, gy){
@@ -130,70 +130,54 @@ function getBuildingDef(id){
     }
   }
 
-function computeEntrancesAbs(g0, h0, def){
-  const out = [];
-  for (const [dx,dy] of (def.entrances||[])){
-    const ex = g0 + (dx|0);
-    const ey = h0 + (dy|0);
-    const blocked = !inBoundsTile(ex,ey) || isBlockedByTerrain(ex,ey,def);
-    out.push({ ex, ey, blocked });
-  }
-  return out;
-}
-  
-  // Terraincheck via Map, wenn vorhanden
-// helper: Terrain/Belegung für Footprint-Kacheln
-function tileBlocked(gx, gy, def){
-  if (!inBoundsTile(gx,gy)) return true;
-  if (!isFree(gx,gy))       return true;
-  if (isBlockedByTerrain(gx,gy,def)) return true;
-  return false;
-}
+  // Terraincheck via Map
+  function isBlockedByTerrain(gx, gy, def){
+    const m = _state.map;
+    if (!m || !def.blockedTerrains?.length) return false;
 
-// ersetzt deine bisherige canPlaceAtFootprint(...)
-function canPlaceAtFootprint(g0, h0, id){
-  const def = getBuildingDef(id);
-  const { w, h } = def.size;
-
-  // 1) Bounds
-  if (!inBoundsFootprint(g0, h0, w, h)) return false;
-
-  // 2) Footprint: frei + kein verbotenes Terrain (z.B. Wasser)
-  for (let dy=0; dy<h; dy++){
-    for (let dx=0; dx<w; dx++){
-      if (tileBlocked(g0+dx, h0+dy, def)) return false;
+    if (typeof m.isWater === 'function' && def.blockedTerrains.includes('water')){
+      try{ if (m.isWater(gx,gy)) return true; }catch(e){}
     }
+    if (typeof m.terrainAt === 'function'){
+      try{
+        const t = m.terrainAt(gx,gy);
+        if (t && def.blockedTerrains.includes(String(t))) return true;
+      }catch(e){}
+    }
+    return false;
   }
 
-  // 3) Mindestabstand 1
-  if (anyOccupiedWithinMargin(g0, h0, w, h, 1)) return false;
-
-  // 4) Mindestens EINE Entrance erreichbar
-  //    Achtung: dy==h bedeutet Kachel VOR dem Gebäude (unterer Rand) → hier nur Terrain prüfen.
-  let entranceOk = false;
-  for (const [dx,dy] of (def.entrances||[])){
-    const ex = g0 + (dx|0);
-    const ey = h0 + (dy|0);
-    if (!inBoundsTile(ex,ey)) continue;
-    if (!isBlockedByTerrain(ex,ey,def)) { entranceOk = true; break; }
-  }
-  if (!entranceOk) return false;
-
-  return true;
-}
-
-  // Abstandsradius (Chebyshev-Distanz) um den Footprint
+  // Abstandsradius (Chebyshev) um den Footprint
   function anyOccupiedWithinMargin(g0, h0, w, h, margin=1){
     for (let y=h0 - margin; y<=h0 + h - 1 + margin; y++){
       for (let x=g0 - margin; x<=g0 + w - 1 + margin; x++){
-        // Innerer Bereich ist der Platz selbst → der wird in der Prüfung separat behandelt
-        const isInside = (x>=g0 && y>=h0 && x<=g0+w-1 && y<=h0+h-1);
-        if (!isInside){
+        const inside = (x>=g0 && y>=h0 && x<=g0+w-1 && y<=h0+h-1);
+        if (!inside){
           if (inBoundsTile(x,y) && _state.occupied.has(keyXY(x,y))) return true;
         }
       }
     }
     return false;
+  }
+
+  // Footprint-Kachel blockiert?
+  function tileBlocked(gx, gy, def){
+    if (!inBoundsTile(gx,gy)) return true;
+    if (!isFree(gx,gy))       return true;
+    if (isBlockedByTerrain(gx,gy,def)) return true;
+    return false;
+  }
+
+  // Entrances relativ → absolut + Blockade
+  function computeEntrancesAbs(g0, h0, def){
+    const out = [];
+    for (const [dx,dy] of (def.entrances||[])){
+      const ex = g0 + (dx|0);
+      const ey = h0 + (dy|0);
+      const blocked = !inBoundsTile(ex,ey) || isBlockedByTerrain(ex,ey,def);
+      out.push({ ex, ey, blocked });
+    }
+    return out;
   }
 
   // **Zentrale Regelprüfung**
@@ -204,17 +188,19 @@ function canPlaceAtFootprint(g0, h0, id){
     // 1) Bounds
     if (!inBoundsFootprint(g0, h0, w, h)) return false;
 
-    // 2) Kollisionen im Footprint (frei?)
+    // 2) Footprint: frei + kein verbotenes Terrain
     for (let dy=0; dy<h; dy++){
       for (let dx=0; dx<w; dx++){
-        const gx = g0 + dx, gy = h0 + dy;
-        if (!isFree(gx,gy)) return false;
-        if (isBlockedByTerrain(gx,gy,def)) return false;
+        if (tileBlocked(g0+dx, h0+dy, def)) return false;
       }
     }
 
-    // 3) Abstand 1 rundherum
+    // 3) Mindestabstand 1
     if (anyOccupiedWithinMargin(g0, h0, w, h, 1)) return false;
+
+    // 4) Mindestens eine Entrance erreichbar (dy==h → Kachel VOR dem Gebäude)
+    const entrancesAbs = computeEntrancesAbs(g0, h0, def);
+    if (!entrancesAbs.some(e => !e.blocked)) return false;
 
     return true;
   }
@@ -321,20 +307,6 @@ function canPlaceAtFootprint(g0, h0, id){
     ctx.fillRect(sx,sy,w,h);
     ctx.strokeRect(sx+.5, sy+.5, w-1, h-1);
   }
-
-  // Entrance-Kachel(en) markieren
-const entrancesAbs = computeEntrancesAbs(gx, gy, def);
-for (const {ex,ey,blocked} of entrancesAbs){
-  const epos = worldToScreen(ex*_state.tile, ey*_state.tile);
-  const s1 = _state.tile * _state.zoom;
-  const pad = Math.max(2, Math.floor(s1*0.08));
-  ctx.save();
-  ctx.lineWidth   = 2;
-  ctx.strokeStyle = blocked ? 'rgba(255,80,80,.95)' : 'rgba(255,220,80,.95)';
-  ctx.strokeRect(epos.sx+pad+.5, epos.sy+pad+.5, s1-2*pad-1, s1-2*pad-1);
-  ctx.restore();
-}
-  
   function drawIcon(ctx, img, sx, sy, s){
     const pad = Math.max(4, Math.floor(s*0.1));
     ctx.drawImage(img, sx+pad, sy+pad, s-2*pad, s-2*pad);
@@ -374,6 +346,19 @@ for (const {ex,ey,blocked} of entrancesAbs){
     // Footprint (komplett, grün/rot)
     drawRect(ctx, pos.sx, pos.sy, def.size.w*s, def.size.h*s, ok);
 
+    // Entrance-Kachel(en) markieren
+    const entrancesAbs = computeEntrancesAbs(gx, gy, def);
+    for (const {ex,ey,blocked} of entrancesAbs){
+      const epos = worldToScreen(ex*_state.tile, ey*_state.tile);
+      const s1 = _state.tile * _state.zoom;
+      const pad = Math.max(2, Math.floor(s1*0.08));
+      ctx.save();
+      ctx.lineWidth   = 2;
+      ctx.strokeStyle = blocked ? 'rgba(255,80,80,.95)' : 'rgba(255,220,80,.95)';
+      ctx.strokeRect(epos.sx+pad+.5, epos.sy+pad+.5, s1-2*pad-1, s1-2*pad-1);
+      ctx.restore();
+    }
+
     // Icon auf Ursprungskachel
     const img = getIconImage(id);
     if (img){
@@ -384,11 +369,11 @@ for (const {ex,ey,blocked} of entrancesAbs){
     }
 
     EVT('cb:place:preview', {
-  id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
-  w:def.size.w, h:def.size.h, door:{...def.door},
-  entrances: def.entrances.slice(),          // relativ
-  entrancesAbs,                              // absolut + blocked
-});
+      id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
+      w:def.size.w, h:def.size.h, door:{...def.door},
+      entrances: def.entrances.slice(),    // relativ
+      entrancesAbs                         // absolut + blocked
+    });
   }
 
   function drawUnitsWithProjection(ctx, dt){
@@ -398,27 +383,27 @@ for (const {ex,ey,blocked} of entrancesAbs){
 
   // == Map laden =============================================================
   async function loadMap(mapId){
-  try{
-    if (typeof mapId==='string' && /\.json($|\?)/i.test(mapId)){
-      const res = await fetch(mapId,{cache:'no-cache'});
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
+    try{
+      if (typeof mapId==='string' && /\.json($|\?)/i.test(mapId)){
+        const res = await fetch(mapId,{cache:'no-cache'});
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
 
-      _state.tile  = Number(json.tile) || _state.tile;
+        _state.tile  = Number(json.tile) || _state.tile;
 
-      // akzeptiert size:[w,h] ODER rows/cols (kompatibel zu map-runtime.js)
-      const w = Number((Array.isArray(json.size)? json.size[0] : json.cols));
-      const h = Number((Array.isArray(json.size)? json.size[1] : json.rows));
-      _state.gridW = w || _state.gridW;
-      _state.gridH = h || _state.gridH;
+        // akzeptiert size:[w,h] ODER rows/cols (kompatibel zu map-runtime.js)
+        const w = Number((Array.isArray(json.size)? json.size[0] : json.cols));
+        const h = Number((Array.isArray(json.size)? json.size[1] : json.rows));
+        _state.gridW = w || _state.gridW;
+        _state.gridH = h || _state.gridH;
 
-      log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
-    } else {
-      log('map: kein JSON → Default', { mapId });
-    }
-  } catch(e){ warn('map laden fehlgeschlagen', e); }
-  EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
-}
+        log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
+      } else {
+        log('map: kein JSON → Default', { mapId });
+      }
+    } catch(e){ warn('map laden fehlgeschlagen', e); }
+    EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
+  }
 
   // == Inputs (Resize / Pan / Pinch / Zoom / Preview-Tap) ====================
   function onResize(){
@@ -530,9 +515,13 @@ for (const {ex,ey,blocked} of entrancesAbs){
         _state.preview = { id:_state.selectedBuilding, gx, gy };
         const def = getBuildingDef(_state.selectedBuilding);
         const { sx, sy } = worldToScreen(gx*_state.tile, gy*_state.tile);
+
+        const entrancesAbs = computeEntrancesAbs(gx, gy, def);
         EVT('cb:place:preview', {
-          id:_state.preview.id, gx, gy, sx, sy, size: _state.tile * _state.zoom, invalid:false,
-          w:def.size.w, h:def.size.h, door:{...def.door}
+          id:_state.preview.id, gx, gy, sx, sy, size:_state.tile*_state.zoom, invalid:false,
+          w:def.size.w, h:def.size.h, door:{...def.door},
+          entrances: def.entrances.slice(),
+          entrancesAbs
         });
       }
     }
