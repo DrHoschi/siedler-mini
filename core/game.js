@@ -130,6 +130,28 @@
     }
   }
 
+// Auto-Place HQ mittig, falls noch nicht vorhanden
+(function(){
+  const already = _state.placements.some(p => p.id === 'hq');
+  if (already) return;
+  const def = getBuildingDef('hq');
+  const cx = Math.floor((_state.gridW - def.size.w) / 2);
+  const cy = Math.floor((_state.gridH - def.size.h) / 2);
+  // Sicherheitsnetz: falls aus irgendeinem Grund blockiert, suche in 5x5-Spirale
+  let gx = cx, gy = cy, placed = false;
+  const spots = [[0,0],[1,0],[0,1],[-1,0],[0,-1],[2,0],[0,2],[-2,0],[0,-2]];
+  for (const [dx,dy] of spots){
+    const x = cx + dx, y = cy + dy;
+    if (canPlaceAtFootprint(x, y, 'hq')){
+      _state.placements.push({ id:'hq', x, y, w:def.size.w, h:def.size.h, door:{...def.door} });
+      occupyFootprint(x, y, def.size.w, def.size.h);
+      placed = true;
+      break;
+    }
+  }
+  if (!placed) { /* notfalls ignorieren – Map zu klein oder blockiert */ }
+})();
+  
   // Terraincheck via Map
   function isBlockedByTerrain(gx, gy, def){
     const m = _state.map;
