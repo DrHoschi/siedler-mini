@@ -61,7 +61,9 @@ repo-root/
 
     
 🔑 Kernmodule & Schnittstellen
+
 	•	core/boot.js → Initialisierung, Events (cb:assets-ready, cb:game-start)
+	
 	•	core/asset.js → Asset-Verwaltung (Sprites, Sounds, Tiles), immer singular
 	•	core/game.js → Spielloop, World-State, Kollisionslogik
 	•	core/registry.js → Zentrale Sammlung aller IDs (Gebäude, Figuren, Ressourcen) ￼
