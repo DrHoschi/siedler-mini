@@ -231,23 +231,3 @@
   border:6px solid transparent; border-top-color: rgba(12,16,24,.92);
   filter: drop-shadow(0 -1px 0 rgba(255,255,255,.08));
 }
-/* Platzier-UI (✅/❌) – wird von core/game.js positioniert */
-#place-ui{
-  position: fixed;
-  z-index: 2000;
-  transform: translate(-9999px,-9999px);
-  display: none;
-  pointer-events: auto;
-}
-#place-ui .btn{
-  margin-right: 6px;
-  border: 1px solid rgba(255,255,255,.15);
-  border-radius: 8px;
-  background: rgba(12,16,24,.85);
-  padding: 4px 6px;
-  font-size: 16px;
-}
-#place-ui.invalid .btn.ok{ opacity: .4; pointer-events: none; }
-
-/* Canvas: Gesten direkt ans Spiel (kein Browser-Zoom) */
-#game { touch-action: none; }
