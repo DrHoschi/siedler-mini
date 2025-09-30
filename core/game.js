@@ -73,30 +73,38 @@
   const EPS   = 1e-6;
   const keyXY = (x,y)=>`${x},${y}`;
 
-  // == Building-Definitionen (aus Registry) =================================
-  // Erwartete optionale Felder je Building (wenn in Registry gesetzt):
-  //   - size: { w, h }            // Default 3×3
-  //   - door: { dx, dy }          // Default {1,1} (Mitte)
-  //   - blockedTerrains: ["water"] // Terrainverbote
-  function getBuildingDef(id){
-    const out = { id, size:{ w:3, h:3 }, door:{ dx:1, dy:1 }, blockedTerrains: ['water'] };
-    try{
-      let list = window.Registry?.list?.('building') || window.Registry?.get?.('buildings');
-      if (Array.isArray(list)){
-        const b = list.find(x => String(x.id) === String(id));
-        if (b){
-          const w = +((b.size && b.size.w) ?? b.w ?? 3);
-          const h = +((b.size && b.size.h) ?? b.h ?? 3);
-          const dx= +((b.door && b.door.dx) ?? b.doorDx ?? 1);
-          const dy= +((b.door && b.door.dy) ?? b.doorDy ?? 1);
-          out.size = { w: Math.max(1,w|0), h: Math.max(1,h|0) };
-          out.door = { dx: clamp(dx|0,0,out.size.w-1), dy: clamp(dy|0,0,out.size.h-1) };
-          if (Array.isArray(b.blockedTerrains)) out.blockedTerrains = b.blockedTerrains.slice();
-        }
-      }
-    }catch(e){ /* defensiv */ }
-    return out;
+// == Building-Definitionen (aus Registry) ===================================
+// Wrapper: akzeptiert Registry-Format (size:[w,h], entrances:[[dx,dy],...])
+function getBuildingDef(id){
+  const raw = window.Registry?.getBuildingDef?.(id) || window.Registry?.byId?.(id) || null;
+
+  // Defaults
+  let w = 3, h = 3;
+  let entrances = [[1,3]];             // falls 3x3 → Tür unten mittig (vor dem Gebäude)
+  let door = { dx:1, dy:1 };           // erste Entrance als "Haupttür" für UI
+  const blockedTerrains = ['water'];
+
+  if (raw){
+    if (Array.isArray(raw.size)) { w = +raw.size[0]||3; h = +raw.size[1]||3; }
+    else if (raw.size && typeof raw.size === 'object') {
+      w = +raw.size.w||3; h = +raw.size.h||3;
+    }
+    if (Array.isArray(raw.entrances) && raw.entrances.length){
+      entrances = raw.entrances.map(e => [ (e[0]|0), (e[1]|0) ]);
+    } else {
+      entrances = [[ Math.floor(Math.max(1,w)-1), h ]]; // Fallback: unten mittig, vor dem Gebäude
+    }
+    door = { dx: entrances[0][0], dy: entrances[0][1] };
   }
+
+  return {
+    id: String(id),
+    size: { w: Math.max(1, w|0), h: Math.max(1, h|0) },
+    entrances,
+    door,
+    blockedTerrains
+  };
+}
 
   // == Platzier-/Bounds-Helper ==============================================
   function inBoundsTile(gx, gy){
@@ -123,23 +131,45 @@
   }
 
   // Terraincheck via Map, wenn vorhanden
-  function isBlockedByTerrain(gx, gy, def){
-    const m = _state.map;
-    if (!m || !def.blockedTerrains?.length) return false;
+// helper: Terrain/Belegung für Footprint-Kacheln
+function tileBlocked(gx, gy, def){
+  if (!inBoundsTile(gx,gy)) return true;
+  if (!isFree(gx,gy))       return true;
+  if (isBlockedByTerrain(gx,gy,def)) return true;
+  return false;
+}
 
-    // 1) map.isWater(gx,gy)
-    if (typeof m.isWater === 'function' && def.blockedTerrains.includes('water')){
-      try{ if (m.isWater(gx,gy)) return true; }catch(e){}
+// ersetzt deine bisherige canPlaceAtFootprint(...)
+function canPlaceAtFootprint(g0, h0, id){
+  const def = getBuildingDef(id);
+  const { w, h } = def.size;
+
+  // 1) Bounds
+  if (!inBoundsFootprint(g0, h0, w, h)) return false;
+
+  // 2) Footprint: frei + kein verbotenes Terrain (z.B. Wasser)
+  for (let dy=0; dy<h; dy++){
+    for (let dx=0; dx<w; dx++){
+      if (tileBlocked(g0+dx, h0+dy, def)) return false;
     }
-    // 2) map.terrainAt(gx,gy) → 'water' etc.
-    if (typeof m.terrainAt === 'function'){
-      try{
-        const t = m.terrainAt(gx,gy);
-        if (t && def.blockedTerrains.includes(String(t))) return true;
-      }catch(e){}
-    }
-    return false;
   }
+
+  // 3) Mindestabstand 1
+  if (anyOccupiedWithinMargin(g0, h0, w, h, 1)) return false;
+
+  // 4) Mindestens EINE Entrance erreichbar
+  //    Achtung: dy==h bedeutet Kachel VOR dem Gebäude (unterer Rand) → hier nur Terrain prüfen.
+  let entranceOk = false;
+  for (const [dx,dy] of (def.entrances||[])){
+    const ex = g0 + (dx|0);
+    const ey = h0 + (dy|0);
+    if (!inBoundsTile(ex,ey)) continue;
+    if (!isBlockedByTerrain(ex,ey,def)) { entranceOk = true; break; }
+  }
+  if (!entranceOk) return false;
+
+  return true;
+}
 
   // Abstandsradius (Chebyshev-Distanz) um den Footprint
   function anyOccupiedWithinMargin(g0, h0, w, h, margin=1){
@@ -341,22 +371,27 @@
 
   // == Map laden =============================================================
   async function loadMap(mapId){
-    try{
-      if (typeof mapId==='string' && /\.json($|\?)/i.test(mapId)){
-        const res = await fetch(mapId,{cache:'no-cache'});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        _state.tile  = Number(json.tile) || _state.tile;
-        const size   = Array.isArray(json.size) ? json.size : [_state.gridW,_state.gridH];
-        _state.gridW = Number(size[0]) || _state.gridW;
-        _state.gridH = Number(size[1]) || _state.gridH;
-        log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
-      } else {
-        log('map: kein JSON → Default', { mapId });
-      }
-    } catch(e){ warn('map laden fehlgeschlagen', e); }
-    EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
-  }
+  try{
+    if (typeof mapId==='string' && /\.json($|\?)/i.test(mapId)){
+      const res = await fetch(mapId,{cache:'no-cache'});
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      _state.tile  = Number(json.tile) || _state.tile;
+
+      // akzeptiert size:[w,h] ODER rows/cols (kompatibel zu map-runtime.js)
+      const w = Number((Array.isArray(json.size)? json.size[0] : json.cols));
+      const h = Number((Array.isArray(json.size)? json.size[1] : json.rows));
+      _state.gridW = w || _state.gridW;
+      _state.gridH = h || _state.gridH;
+
+      log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
+    } else {
+      log('map: kein JSON → Default', { mapId });
+    }
+  } catch(e){ warn('map laden fehlgeschlagen', e); }
+  EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
+}
 
   // == Inputs (Resize / Pan / Pinch / Zoom / Preview-Tap) ====================
   function onResize(){
