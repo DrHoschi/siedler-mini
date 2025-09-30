@@ -77,6 +77,7 @@ repo-root/
 
 Der Inspector ist ein fester Bestandteil des Projekts (niemals entfernen).
 Funktionen:
+
 	•	Logs → Fehler, Warnung, Info, OK
 	•	Tests → AI-Simulation, Warenfluss, Pfadfindung
 	•	Ressourcen → Werte ändern, auffüllen, resetten
@@ -86,6 +87,7 @@ Funktionen:
 Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 
 🗄️ Datenformate (JSON)
+
 	•	buildings.json → Gebäude mit Kosten, 
 		Inputs/Outputs, Zykluszeit, Epoche ￼
 	•	units.json → Figuren/Rollen mit Speed, 
