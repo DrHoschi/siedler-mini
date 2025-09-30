@@ -130,6 +130,17 @@ function getBuildingDef(id){
     }
   }
 
+function computeEntrancesAbs(g0, h0, def){
+  const out = [];
+  for (const [dx,dy] of (def.entrances||[])){
+    const ex = g0 + (dx|0);
+    const ey = h0 + (dy|0);
+    const blocked = !inBoundsTile(ex,ey) || isBlockedByTerrain(ex,ey,def);
+    out.push({ ex, ey, blocked });
+  }
+  return out;
+}
+  
   // Terraincheck via Map, wenn vorhanden
 // helper: Terrain/Belegung für Footprint-Kacheln
 function tileBlocked(gx, gy, def){
@@ -310,6 +321,20 @@ function canPlaceAtFootprint(g0, h0, id){
     ctx.fillRect(sx,sy,w,h);
     ctx.strokeRect(sx+.5, sy+.5, w-1, h-1);
   }
+
+  // Entrance-Kachel(en) markieren
+const entrancesAbs = computeEntrancesAbs(gx, gy, def);
+for (const {ex,ey,blocked} of entrancesAbs){
+  const epos = worldToScreen(ex*_state.tile, ey*_state.tile);
+  const s1 = _state.tile * _state.zoom;
+  const pad = Math.max(2, Math.floor(s1*0.08));
+  ctx.save();
+  ctx.lineWidth   = 2;
+  ctx.strokeStyle = blocked ? 'rgba(255,80,80,.95)' : 'rgba(255,220,80,.95)';
+  ctx.strokeRect(epos.sx+pad+.5, epos.sy+pad+.5, s1-2*pad-1, s1-2*pad-1);
+  ctx.restore();
+}
+  
   function drawIcon(ctx, img, sx, sy, s){
     const pad = Math.max(4, Math.floor(s*0.1));
     ctx.drawImage(img, sx+pad, sy+pad, s-2*pad, s-2*pad);
@@ -359,9 +384,11 @@ function canPlaceAtFootprint(g0, h0, id){
     }
 
     EVT('cb:place:preview', {
-      id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
-      w:def.size.w, h:def.size.h, door:{...def.door}
-    });
+  id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
+  w:def.size.w, h:def.size.h, door:{...def.door},
+  entrances: def.entrances.slice(),          // relativ
+  entrancesAbs,                              // absolut + blocked
+});
   }
 
   function drawUnitsWithProjection(ctx, dt){
