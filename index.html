@@ -2,31 +2,39 @@
 <html lang="de">
 <head>
   <!-- =========================================================================
-       Datei: index.html (Root)
-       Projekt: Neue Siedler
-       Version: v1.0.2 (2025-09-28)
-       Zweck: Einstiegspunkt für Spiel + UI (Startfenster zuerst sichtbar)
+       (1) VERSIONS-HEADER
+       Datei    : index.html (Root)
+       Projekt  : Neue Siedler
+       Version  : v1.1.0 (2025-10-01)
+       Zweck    : Einstiegspunkt für Spiel + UI (Startfenster zuerst sichtbar)
+       Leitplanken:
+         - Startpanel zuerst
+         - Inspector/Debug nie entfernen
+         - Reihenfolge Core → Registry/Daten → UI → Bridge → Tools
+         - Events/Logs mit cb:* (siehe Lastenheft)
   ========================================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neue Siedler – Epoche 1</title>
 
-  <!-- ==================== CSS ==================== -->
+  <!-- =========================================================================
+       (2) CSS – Basis & UI
+       Hinweis: Reihenfolge beibehalten (Grund-UI → Teil-Panels → Inspector)
+  ========================================================================= -->
   <link rel="stylesheet" href="ui/css/ui.css">
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
   <link rel="stylesheet" href="ui/css/ui-build.css">
-  <link rel="stylesheet" href="ui/css/ui-place.css">          <!-- CSS (nach ui-build.css / ui-hud.css) -->
+  <link rel="stylesheet" href="ui/css/ui-place.css">
   <link rel="stylesheet" href="ui/css/ui-dialog.css">
   <link rel="stylesheet" href="ui/css/ui-tooltip.css">
   <link rel="stylesheet" href="ui/css/inspector.css">
 
-  <!-- Optional: globale Variablen / Darkmode -->
+  <!-- (2.1) Globale Variablen / Darkmode (klein halten) -->
   <style>
     :root { --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff; }
-    html,body {
-      margin:0; padding:0;
-      background:var(--bg); color:var(--fg);
+    html,body{
+      margin:0; padding:0; background:var(--bg); color:var(--fg);
       font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     }
   </style>
@@ -34,22 +42,20 @@
 
 <body>
   <!-- =========================================================================
-       DOM-STRUKTUR: Sichtbare Container
+       (3) DOM-STRUKTUR: sichtbare Container (Reihenfolge aus Vorgaben)
+       Referenz: Lastenheft Kapitel UI-Struktur (Start-Panel, Canvas, FAB-Buttons,
+                 Build-Dock, Inspector).  [oai_citation:3‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
   ========================================================================= -->
-  <div id="app">
+  <div id="app" aria-label="Spiel-Container">
 
-    <!-- Spielfeld -->
-    <canvas
-      id="game"
-      width="1280"
-      height="720"
-      data-map="data/maps/map-mini.json"></canvas>
+    <!-- (3.1) Spielfeld -->
+    <canvas id="game" width="1280" height="720" data-map="data/maps/map-mini.json"></canvas>
 
-    <!-- Start-Hintergrund (unter Panel, über Canvas) -->
-    <div id="bg-start"></div>
+    <!-- (3.2) Start-Hintergrund (unter Panel, über Canvas) -->
+    <div id="bg-start" aria-hidden="true"></div>
 
-    <!-- Startpanel (Holz/Papier hell) -->
-    <div id="start-panel" class="ui-panel ui-panel--light visible">
+    <!-- (3.3) Startpanel -->
+    <div id="start-panel" class="ui-panel ui-panel--light visible" aria-label="Startfenster">
       <h1>Neue Siedler</h1>
       <div class="actions">
         <button id="btn-new"        class="btn main">Neues Spiel</button>
@@ -60,64 +66,172 @@
       </div>
     </div>
 
-    <!-- HUD (Holz/Papier dunkel) -->
-   <!-- <div id="hud-top" class="ui-panel ui-panel--dark hidden"></div> -->
-    <!-- HUD-Container (Look via ui.css + ui/css/ui-hud.css) -->
-   <div id="hud-top" class="ui-panel hidden" aria-label="Ressourcen-HUD"></div>
-  
-    <!-- Build-Dock (Holz/Papier dunkel) -->
-    <div id="build-dock" class="ui-panel ui-panel--dark hidden"></div>
+    <!-- (3.4) HUD -->
+    <div id="hud-top" class="ui-panel hidden" aria-label="Ressourcen-HUD"></div>
 
-    <!-- Inspector (Holz/Papier dunkel) -->
-    <div id="inspector" class="ui-panel ui-panel--dark hidden"></div>
+    <!-- (3.5) Build-Dock (Dock-Hintergrund; Inhalt rendert UIBuild) -->
+    <div id="build-dock" class="ui-panel ui-panel--dark hidden" aria-label="Bau-Dock"></div>
+
+    <!-- (3.6) Inspector -->
+    <div id="inspector" class="ui-panel ui-panel--dark hidden" aria-label="Inspector"></div>
   </div>
 
-<button id="btn-build" class="ui-btn-build" aria-expanded="false">Bauen</button>
-<aside id="build-panel" class="build-panel" hidden></aside>
-  
+  <!-- (3.7) FAB-Build + Mount-Host für Build-Panel (UIBuild.mount) -->
+  <button id="btn-build" class="ui-btn-build" aria-expanded="false">Bauen</button>
+  <aside id="build-panel" class="build-panel" hidden></aside>
+
   <!-- =========================================================================
-       SCRIPTS: Reihenfolge Core → UI → Tools
+       (4) SCRIPTS: Reihenfolge Core → Registry/Daten → UI → Bridge → Tools
+       Begründung & Events: Registry-Ready vor UI-Befüllung (cb:registry:ready). 
+       Siehe Registry-Patch & Lastenheft. 
   ========================================================================= -->
-  <!-- Core -->
-  <script src="core/asset.js"></script>
-  <script src="core/registry.js"></script>
-<script>
-  // Startet das Laden von data/buildings.json
-  window.addEventListener('load', function(){
-    try { window.Registry && window.Registry.init && window.Registry.init(); } catch(e){}
-  });
-</script>
+
+  <!-- (4.1) CORE -->
+  <script src="core/asset.js"></script>      <!-- emit: cb:assets-ready -->
+  <script src="core/registry.js"></script>   <!-- API: Registry.register/get/list ... -->
+  <script src="core/registry.json-adapter.js"></script> <!-- lädt data/*.json, emit: cb:registry:ready --> 
+  <!-- Map/Engine/Boot – Reihenfolge: runtime → game → boot -->
   <script src="core/map-runtime.js"></script>
-  <script src="core/unit-runtime.js"></script>
+  <!-- <script src="core/unit-runtime.js"></script> -->
+  <!-- ^ auskommentiert: Datei scheint (noch) zu fehlen/unsicher → verhindern 404/TODO -->
   <script src="core/game.js"></script>
   <script src="core/boot.js"></script>
 
-  <!-- UI -->
-  <script src="ui/ui-start.js"></script>
-  <script src="ui/ui-hud.js"></script>
-  <script src="ui/ui-build.categories.js"></script>
-  <!-- Button + Dock bleiben wie gehabt -->
-  <script src="ui/ui-build.toggle.js"></script>
-  <script src="ui/ui-build.js"></script>
-  <script src="ui/ui-place.js"></script> <!-- UI-Module (nach ui/ui-build.js) -->
+  <!-- (4.2) DATEN/STATIC (UI-Kategorien) -->
+  <!-- Aktive Kategorien-Quelle (nicht aus Archiv laden!) -->
+  <script src="ui/build.categories.js"></script>
 
-  <!-- Inspector -->
+  <!-- (4.3) UI-Module -->
+  <script src="ui/ui-start.js"></script>   <!-- emits: cb:start:* | cb:ui-ready -->
+  <script src="ui/ui-hud.js"></script>     <!-- emits: cb:hud-ready; listens: cb:res:change -->
+  <script src="ui/ui-build.toggle.js"></script>
+  <script src="ui/ui-build.js"></script>   <!-- UIBuild.* API -->
+  <script src="ui/ui-place.js"></script>   <!-- Platziermodus -->
+  <script src="ui/ui-dialog.js"></script>  <!-- Dialogsystem (Confirm/Info) -->
+  <!-- Inspector (Kern) -->
   <script>window.ICONS = window.ICONS || {};</script>
   <script src="ui/inspector/inspector.core.js"></script>
 
-  <!-- Debug / Tools -->
+  <!-- (4.4) BRIDGE: Registry → UI-Build (NEU, nicht Archiv) -->
+  <script>
+  /* ============================================================================
+     Datei    : core/ui-build.data-bridge.js (inline)
+     Projekt  : Neue Siedler
+     Version  : v1.1.0 (2025-10-01)
+     Zweck    : Brücke zwischen Registry und UIBuild
+     Änderungen:
+       - Typnamen singular: 'building'/'category' (keine 'buildings'/'categories')
+       - Fallback: window.BUILD_CATEGORIES → Registry.list('category')
+       - Mount ins #build-panel, reagiert auf cb:registry:ready/update
+     Quelle: Registry-Patch/Spezifikation.  [oai_citation:4‡CODE_STRUKTUR_VORGABEN_registry_patch.md](file-service://file-M3NYzCqhHpFbgJ6KiVnXbD)
+  ============================================================================ */
+  (function(){
+    'use strict';
+    var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
+    var mounted = false;
+
+    function regList(type){
+      try { return (window.Registry && typeof Registry.list==='function') ? Registry.list(type) : []; }
+      catch(e){ LOG.warn('[ui-bridge] Registry.list(%s) fail:', type, e); return []; }
+    }
+    function ensureMount(){
+      if (mounted) return;
+      if (!window.UIBuild || typeof UIBuild.mount!=='function') return;
+      var host = document.querySelector('#build-panel');
+      if (!host) return;
+      try { UIBuild.mount(host); mounted = true; LOG.info('[ui-bridge] mount ok'); }
+      catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
+    }
+    function getCategories(){
+      if (Array.isArray(window.BUILD_CATEGORIES) && window.BUILD_CATEGORIES.length){
+        return window.BUILD_CATEGORIES;
+      }
+      var cats = regList('category');
+      return Array.isArray(cats) ? cats : [];
+    }
+    function refresh(tag){
+      ensureMount();
+      var cats  = getCategories();
+      var items = regList('building').filter(function(b){ return b && b.enabled !== false; });
+
+      if (window.UIBuild?.setCategories) UIBuild.setCategories(cats);
+      if (window.UIBuild?.setItems)      UIBuild.setItems(items);
+      try{ window.UIBuild?.rerender && UIBuild.rerender(); }catch(e){}
+
+      LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
+    }
+    window.addEventListener('cb:registry:ready',  function(){ refresh('ready');  });
+    window.addEventListener('cb:registry:update', function(){ refresh('update'); });
+    // einmal versuchen, falls Registry früh dran war
+    setTimeout(function(){ refresh('boot'); }, 50);
+  })();
+  </script>
+
+  <!-- (4.5) DEBUG / TOOLS -->
   <script src="tools/debug-tools.js"></script>
 
-  <!-- Inline-Wiring (klein & selbsterklärend) -->
+  <!-- =========================================================================
+       (5) INLINE-WIRING (klein & selbsterklärend)
+       - Startpanel-Buttons → Events (cb:start:*)
+       - Inspector-Toggle
+       - Build-Button-Toggle
+       - UI ready Marker/Log
+       Siehe Lastenheft Event-Matrix.  [oai_citation:5‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
+  ========================================================================= -->
   <script>
-    document.getElementById('btn-inspector').addEventListener('click', () => {
-      document.getElementById('inspector').classList.toggle('hidden');
-      window.dispatchEvent(new CustomEvent('req:inspector:toggle'));
-    });
-    document.getElementById('btn-fullscreen').addEventListener('click', () => {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    });
+    (function(){
+      'use strict';
+      // (5.1) Startpanel → Events
+      var $start = document.getElementById('start-panel');
+      var $insp  = document.getElementById('inspector');
+      var $dock  = document.getElementById('build-dock');
+      var $btnBuild = document.getElementById('btn-build');
+
+      function fire(type, detail){ window.dispatchEvent(new CustomEvent(type, { detail: detail||{} })); }
+
+      document.getElementById('btn-new').addEventListener('click', function(){
+        fire('cb:start:new');            // Boot/Game hört darauf
+        $start.classList.add('hidden');  // Panel schließen
+      });
+      document.getElementById('btn-continue').addEventListener('click', function(){
+        fire('cb:start:continue');
+        $start.classList.add('hidden');
+      });
+      document.getElementById('btn-reset').addEventListener('click', function(){
+        fire('cb:start:reset');
+      });
+
+      document.getElementById('btn-inspector').addEventListener('click', function(){
+        $insp.classList.toggle('hidden');
+        fire('req:inspector:toggle');    // Inspector-Core reagiert
+      });
+
+      document.getElementById('btn-fullscreen').addEventListener('click', function(){
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+        fire('cb:start:fullscreen');
+      });
+
+      // (5.2) Build-Button → Dock öffnen/schließen (UIBuild.open/close optional)
+      $btnBuild.addEventListener('click', function(){
+        var isOpen = !$dock.classList.contains('hidden');
+        if (isOpen){
+          $dock.classList.add('hidden');
+          $btnBuild.setAttribute('aria-expanded', 'false');
+          fire('cb:build:close');
+        } else {
+          $dock.classList.remove('hidden');
+          $btnBuild.setAttribute('aria-expanded', 'true');
+          fire('cb:build:open');
+        }
+      });
+
+      // (5.3) UI ready Log/Event
+      window.__cb = window.__cb || {};
+      window.__cb.indexVersion = "v1.1.0";
+      (window.CBLog?.info || console.log)(`[index] UI bereit (v${window.__cb.indexVersion})`);
+      fire('cb:ui-ready');
+    })();
   </script>
 </body>
 </html>
