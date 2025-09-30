@@ -251,3 +251,16 @@ canvas, #game-canvas, .game-canvas {
   position: fixed; inset: 0;
   z-index: 1;       /* kleiner Wert → liegt hinter Dock/Buttons */
 }
+
+/* Canvas soll IMMER unter dem UI-Overlay und Buttons liegen */
+canvas, #game-canvas, .game-canvas {
+  position: fixed; inset: 0;
+  z-index: 1;       /* kleiner Wert → liegt hinter Dock/Buttons */
+}
+
+/* Falls Debug-/Overlay-Layer über dem Canvas liegen, dürfen die Klicks nicht blockieren */
+.ui-overlay,
+.fullscreen-cover,
+.debug-layer {
+  pointer-events: none;
+}
