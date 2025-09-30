@@ -1,13 +1,13 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.3.2
+// Version : v1.3.3
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events  : cb:map:loaded  { mapId, tile, size:{w,h} }
 //           cb:res:change  { ...resources }
-// Notes   : Pan/Zoom nur auf Canvas; Weltobjekte werden per world→screen gezeichnet
-//           NEU v1.3.2: Map-Bounds für Hover/Platzieren + Kamera-Clamp
+// Notes   : Pan/Zoom nur auf Canvas; Weltobjekte per world→screen projektiert
+//           NEU v1.3.3: robuster Kamera-Clamp (rechts/unten) + Safari Touch-Fixes
 // ============================================================================
 
 (() => {
@@ -27,7 +27,7 @@
 
     // Weltobjekte
     placements: [],                 // { x, y, id }  (Tile-Koords!)
-    hover: { x:-1, y:-1 },          // Tile unter Cursor
+    hover: { x:-1, y:-1 },          // Tile unter Cursor (Tile-Koords)
     selectedBuilding: null,
 
     // Ressourcen
@@ -44,9 +44,12 @@
     panActive: false,
     panStart : { x:0, y:0, camX:0, camY:0 },
 
-    // Pinch
+    // Pinch (Pointer Events)
     pointers: new Map(),            // pointerId -> {x,y}
     pinch   : { active:false, d0:1, zoom0:1, center:{x:0,y:0} },
+
+    // Safari: Doppel-Tap Kill-Switch (Smart-Zoom verhindern)
+    lastTapTs: 0,                   // ms
   };
 
   // == Utils / Events ========================================================
@@ -57,44 +60,48 @@
 
   const clamp = (v,mi,ma)=>Math.min(ma,Math.max(mi,v));
   const snap  = (v,s)=>Math.floor(v/s);
+  const EPS   = 1e-6;
 
   // -- Bounds-Helper ---------------------------------------------------------
-  // Kachelkoordinaten innerhalb der Karte?
   function inBoundsTile(gx, gy){
     return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
   }
 
-  // Kamera innerhalb der Karte halten (sichtbares Fenster wird berücksichtigt)
-function clampCameraToMap(){
-  const worldW = _state.gridW * _state.tile;
-  const worldH = _state.gridH * _state.tile;
-  const viewW  = _state.w / Math.max(1e-6, _state.zoom);
-  const viewH  = _state.h / Math.max(1e-6, _state.zoom);
+  // Kamera innerhalb Karte (rechts/unten robust, inkl. kleinen Rundungsfehlern)
+  function clampCameraToMap(){
+    const worldW = _state.gridW * _state.tile;
+    const worldH = _state.gridH * _state.tile;
 
-  // min = 0 (linke/obere Grenze)
-  // max = Weltbreite - Viewbreite (rechte/untere Grenze)
-  let maxX = worldW - viewW;
-  let maxY = worldH - viewH;
+    const viewW  = _state.w / Math.max(EPS, _state.zoom);
+    const viewH  = _state.h / Math.max(EPS, _state.zoom);
 
-  // Wenn die Welt kleiner ist als die View, in die Mitte einrasten
-  if (maxX < 0){
-    _state.camX = (worldW - viewW) / 2;
-  } else {
-    _state.camX = clamp(_state.camX, 0, maxX);
+    // Maximal zulässige Offsets (rechte/untere Kante = Weltkante)
+    let maxX = worldW - viewW;
+    let maxY = worldH - viewH;
+
+    // Numerische Stabilisierung (verhindert +/− 0 durch Float-Fehler)
+    if (Math.abs(maxX) < EPS) maxX = 0;
+    if (Math.abs(maxY) < EPS) maxY = 0;
+
+    if (maxX < 0){
+      // View größer als Welt → zentrieren
+      _state.camX = (worldW - viewW) * 0.5;
+    } else {
+      _state.camX = clamp(_state.camX, 0, maxX);
+    }
+    if (maxY < 0){
+      _state.camY = (worldH - viewH) * 0.5;
+    } else {
+      _state.camY = clamp(_state.camY, 0, maxY);
+    }
+
+    if (_state.map){
+      _state.map.camX = _state.camX;
+      _state.map.camY = _state.camY;
+    }
   }
-  if (maxY < 0){
-    _state.camY = (worldH - viewH) / 2;
-  } else {
-    _state.camY = clamp(_state.camY, 0, maxY);
-  }
 
-  if (_state.map){
-    _state.map.camX = _state.camX;
-    _state.map.camY = _state.camY;
-  }
-}
-
-  // -- Koord.-Projektion -----------------------------------------------------
+  // -- Koord.-Projektion (DPR-sicher) ---------------------------------------
   function screenToCanvasPx(clientX, clientY){
     const c=_state.canvas, r=c.getBoundingClientRect();
     return {
@@ -117,7 +124,7 @@ function clampCameraToMap(){
     if (typeof mx === 'number') _state.camX = mx;
     if (typeof my === 'number') _state.camY = my;
     if (typeof mz === 'number') _state.zoom = mz;
-    clampCameraToMap(); // Safety, falls Map nicht clamped
+    clampCameraToMap(); // Safety
   }
 
   // == Rendering =============================================================
@@ -184,7 +191,7 @@ function clampCameraToMap(){
     _state.h = (c.height = c.clientHeight || c.height);
     _state.map?.setSize(_state.w,_state.h);
 
-    // Kamera aus Map spiegeln und clampen
+    // Kamera aus Map spiegeln + clampen
     if (_state.map){
       _state.camX = _state.map.camX ?? _state.camX;
       _state.camY = _state.map.camY ?? _state.camY;
@@ -260,8 +267,8 @@ function clampCameraToMap(){
 
     // -- Pan -----------------------------------------------------------------
     if (_state.panActive && !_state.selectedBuilding){
-      const dx = (ev.clientX - _state.panStart.x) / _state.zoom;
-      const dy = (ev.clientY - _state.panStart.y) / _state.zoom;
+      const dx = (ev.clientX - _state.panStart.x) / Math.max(EPS,_state.zoom);
+      const dy = (ev.clientY - _state.panStart.y) / Math.max(EPS,_state.zoom);
       _state.camX = _state.panStart.camX - dx;
       _state.camY = _state.panStart.camY - dy;
       clampCameraToMap();
@@ -299,7 +306,6 @@ function clampCameraToMap(){
 
     // Nur innerhalb der Karte bauen
     if (!inBoundsTile(gx, gy)) {
-      // optional: (window.CBLog?.warn||console.warn)('[game] außerhalb der Map → ignoriert', {gx,gy});
       return;
     }
 
@@ -313,8 +319,17 @@ function clampCameraToMap(){
     _state.canvas = canvas;
     _state.ctx    = canvas.getContext('2d');
 
-    // Mobile: Gesten an uns (Pan/Pinch)
-    _state.canvas.style.touchAction = 'none';
+    // Mobile/Safari: Gesten an uns (Pan/Pinch) + native Zoom/Scroll verhindern
+    _state.canvas.style.touchAction = 'none';       // moderne Browser
+    // iOS Safari: zusätzlich Touch-Fallbacks mit preventDefault
+    _state.canvas.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
+    _state.canvas.addEventListener('touchmove',  (e)=>e.preventDefault(), {passive:false});
+    _state.canvas.addEventListener('touchend',   (e)=>{
+      // Doppel-Tap (Smart-Zoom) killen
+      const now = performance.now();
+      if (now - _state.lastTapTs < 300) e.preventDefault();
+      _state.lastTapTs = now;
+    }, {passive:false});
 
     // Map (Runtime)
     const dbg = document.getElementById('debug-map'); // optional
