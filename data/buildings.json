@@ -26,7 +26,7 @@
       "id": "lumberjack",
       "label": "Holzfällerhütte",
       "cat": "resource",
-      "icon": "lumberjack.png",
+      "icon": "lumber.png",
       "sprite": "assets/icons/buildings/lumber.png",
       "cost": { "wood": 2 },
       "size": [2, 2],
