@@ -1,13 +1,14 @@
 /* ============================================================================
  * Datei   : ui/ui-hud.js
- * Version : v19.2.0
- * Zweck   : HUD oben – Ressourcen + Bevölkerung, pro Badge Mini-Panel
- * Events  : listen -> cb:res:change {wood,stone,gold[,pop]}
- *                     cb:pop:change {pop}
+ * Version : v19.2.1
+ * Zweck   : HUD oben – Ressourcen + Bevölkerung, Mini-Panels mit Icon
+ * Events  : listen -> cb:res:change {wood,stone,gold, pop?}
  * Hinweise:
- *   - Icon-Quelle: window.ICONS.{wood,stone,gold,people} (PNG/SVG)
- *     Fallback auf Emoji, falls nicht gesetzt.
- *   - Build-Button ist separat unten links – kein Toggle im HUD.
+ *   - Icons/Labels werden bevorzugt aus Registry gelesen:
+ *       Registry.get('resource','res.wood'|'res.stone'|'res.gold'|'res.people')?.icon|name
+ *   - Fallback: vorhandene window.ICONS{wood,stone,gold,people} (deine Assets!)
+ *   - Keinerlei Build-Toggle mehr hier (Button ist separat unten links).
+ *   - Hält sich an Lastenheft-Eventkontrakt (nur cb:res:change). 
  * ========================================================================== */
 
 (() => {
@@ -17,49 +18,61 @@
   const root = document.getElementById('hud-top');
   if (!root) return;
 
-  // Helper: Icon als <img> wenn vorhanden, sonst Emoji
-  function icon(name, emoji){
-    const src = window.ICONS?.[name];
-    return src
-      ? `<img class="ic" src="${src}" alt="${name}">`
-      : `<span class="ic" aria-hidden="true">${emoji}</span>`;
+  // ---- Helpers --------------------------------------------------------------
+  const R = () => window.Registry;
+  const rget = (id) => R()?.get?.('resource', id) || null;
+
+  // Name/Label aus Registry oder fallback auf Klartext
+  function resLabel(id, textFallback){
+    return rget(id)?.name || textFallback;
   }
 
-  // Markup: Holz, Stein, Gold, Bevölkerung
+  // Icon-Pfad aus Registry oder fallback auf vorhandene window.ICONS
+  function resIcon(id, iconKey, emojiFallback){
+    const fromReg = rget(id)?.icon;
+    if (fromReg) return `<img class="ic" src="${fromReg}" alt="${iconKey}">`;
+    const fromWin = window.ICONS?.[iconKey];
+    if (fromWin) return `<img class="ic" src="${fromWin}" alt="${iconKey}">`;
+    return `<span class="ic" aria-hidden="true">${emojiFallback}</span>`;
+  }
+
+  // ---- Markup (Mini-Panels pro Ressource) ----------------------------------
   root.innerHTML = `
     <div class="hud-row" role="group" aria-label="Ressourcen">
-      <div class="hud-badge" title="Holz">
-        ${icon('wood','🪵')}
+      <div class="hud-badge" title="${resLabel('res.wood','Holz')}">
+        ${resIcon('res.wood','wood','🪵')}
         <span class="val" id="hud-wood">0</span>
-        <span class="lbl">Holz</span>
+        <span class="lbl">${resLabel('res.wood','Holz')}</span>
       </div>
-      <div class="hud-badge" title="Stein">
-        ${icon('stone','🪨')}
+      <div class="hud-badge" title="${resLabel('res.stone','Stein')}">
+        ${resIcon('res.stone','stone','🪨')}
         <span class="val" id="hud-stone">0</span>
-        <span class="lbl">Stein</span>
+        <span class="lbl">${resLabel('res.stone','Stein')}</span>
       </div>
-      <div class="hud-badge" title="Gold">
-        ${icon('gold','🪙')}
+      <div class="hud-badge" title="${resLabel('res.gold','Gold')}">
+        ${resIcon('res.gold','gold','🪙')}
         <span class="val" id="hud-gold">0</span>
-        <span class="lbl">Gold</span>
+        <span class="lbl">${resLabel('res.gold','Gold')}</span>
       </div>
       <span class="hud-sep" aria-hidden="true"></span>
-      <div class="hud-badge" title="Bevölkerung">
-        ${icon('people','👥')}
+      <div class="hud-badge" title="${resLabel('res.people','Bevölkerung')}">
+        ${resIcon('res.people','people','👥')}
         <span class="val" id="hud-pop">0</span>
-        <span class="lbl">Bevölkerung</span>
+        <span class="lbl">${resLabel('res.people','Bevölkerung')}</span>
       </div>
     </div>
   `;
   root.classList.remove('hidden');
 
-  // Updates bündeln
-  function setVal(id, v){
-    const el = root.querySelector(id);
-    if (el && v != null) el.textContent = v;
-  }
+  // ---- Live-Updates ---------------------------------------------------------
+  const setVal = (sel, v) => {
+    if (v == null) return;
+    const el = root.querySelector(sel);
+    if (el) el.textContent = v;
+  };
 
-  // Ressourcenänderungen (optional inkl. pop)
+  // Einziger Listener laut Vertrag: Ressourcenänderungen vom Game
+  // (Bevölkerung kann hier mitlaufen oder separat cb:pop:change senden)
   window.addEventListener('cb:res:change', (e) => {
     const r = e.detail || {};
     setVal('#hud-wood',  r.wood);
@@ -68,11 +81,11 @@
     if (r.pop != null) setVal('#hud-pop', r.pop);
   });
 
-  // Bevölkerung separat
+  // Optional: separater Bevölkerungs-Event (falls euer Game das trennt)
   window.addEventListener('cb:pop:change', (e) => {
     const v = e.detail?.pop;
     setVal('#hud-pop', v);
   });
 
-  log('HUD bereit (Ressourcen + Bevölkerung, Panel-Badges)');
+  log('HUD bereit (Ressourcen + Bevölkerung, Registry-first, v19.2.1)');
 })();
