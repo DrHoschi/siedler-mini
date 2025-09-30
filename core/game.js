@@ -1,7 +1,7 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.3.0
+// Version : v1.3.1
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events  : cb:map:loaded  { mapId, tile, size:{w,h} }
@@ -73,11 +73,25 @@
     return { sx: (wx - _state.camX)*_state.zoom, sy: (wy - _state.camY)*_state.zoom };
   }
 
+  // -- NEU: Kamera-Status pro Frame aus der Map spiegeln --------------------
+  // Falls SiedlerMap intern (Touch) pan/zoom verändert, gleichen wir ab,
+  // bevor wir Placements/Units projizieren. So bleiben Map & Gebäude synchron.
+  function syncCamFromMap(){
+    const m = _state.map; if (!m) return;
+    const mx = m.camX; const my = m.camY; const mz = m.zoom;
+    if (typeof mx === 'number') _state.camX = mx;
+    if (typeof my === 'number') _state.camY = my;
+    if (typeof mz === 'number') _state.zoom = mz;
+  }
+
   // == Rendering =============================================================
 
   function frame(ts){
     if(!_state.started) return;
     const {ctx,canvas,map}=_state; if(!ctx||!canvas) return;
+
+    // NEU: Kamera aus Map holen (falls Map intern geändert hat)
+    syncCamFromMap();
 
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
