@@ -59,7 +59,6 @@ repo-root/
     ├── Produktionsketten.mmd
     ├── Projektstruktur.mmd
     └── …
-	
 ...
     
 🔑 Kernmodule & Schnittstellen
