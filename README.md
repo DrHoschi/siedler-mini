@@ -119,6 +119,7 @@ Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 ⸻
 
 📘 Begleitdokumente
+
 	•	Lastenheft_NeueSiedler_v1.0.pdf – Vollständige Anforderungen ￼
 	•	Registry_Patch.pdf – Ergänzung zur Registry ￼
 	•	CODE_STYLE.md – Einheitliche Code- und Kommentarregeln ￼
@@ -127,6 +128,7 @@ Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 ⸻
 
 ✅ Abnahmekriterien (v1)
+
 	•	Startpanel zuerst sichtbar
 	•	Engine lädt Assets, Registry prüft IDs
 	•	Inspector vollständig integriert
@@ -143,47 +145,47 @@ Den Inspector kannst du später nach tools/ verschieben, solange die Einbindung 
 
 Ziel-Struktur (Standard)
 
-So soll es am Ende aussehen 
-(Code/JSON sauber getrennt; 
-Bilder bleiben in assets/):
+	So soll es am Ende aussehen 
+	(Code/JSON sauber getrennt; 
+	Bilder bleiben in assets/):
 
 /index.html
 /boot.js
 /core/                      # Laufzeit-Engine & Systems (nur .js)
-	  asset.js
-	  registry.js
-	  registry.type-aliases.js
-	  render.js
-	  ui-build.data-bridge.js
-	  ui-build.js
-	  ... (weitere Core-Module)
+		asset.js
+		registry.js
+		registry.type-aliases.js
+		render.js
+		ui-build.data-bridge.js
+		ui-build.js
+		... (weitere Core-Module)
 
 /ui/                        # UI-Skripte & CSS
-  ui-start.js
-  ui-hud.js
-  ui-build.js
-  css/
-    ui-build.css
-  inspector/
-    ui-inspector.js
-    ...
+	ui-start.js
+	ui-hud.js
+	ui-build.js
+	css/
+		ui-build.css
+		inspector/
+		ui-inspector.js
+		...
 
 /data/                      # Gameplay-Daten (nur .json/.jsonc)
-  buildings.json
-  buildings.jsonc
-  characters/
-    *.json
-  maps/
-    *.json
-  ...
+		buildings.json
+		buildings.jsonc
+		characters/
+		*.json
+		maps/
+		*.json
+		...
 
 /tools/                     # Editor/Dev-Tools (optional)
-  editor/
-    editor.js
+		editor/
+		editor.js
 
 /assets/                    # NUR Medien (Bilder/Audio/Fonts/Icons)
-  buildings/*.png
-  characters/*.png
-  tiles/*.png
-  ui/*.png
-  icons/** (nur .png/.svg …)
+		buildings/*.png
+		characters/*.png
+		tiles/*.png
+		ui/*.png
+		icons/** (nur .png/.svg …)
