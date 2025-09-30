@@ -1,11 +1,14 @@
 /* ============================================================================
- * Datei : ui/ui-build.js
- * Version: v19.0.0
- * Zweck : Build-Dock (öffnen/schließen), Kategorien+Items, Auswahl → cb:build:select
- * Events: listen -> cb:registry-ready, cb:build:open, cb:build:close
- *         emit   -> cb:build:select, cb:build:cancel
- * Notizen: zeigt Kosten immer inkl. 0 (HQ!), .is-selected state; Dock bleibt zu bis geöffnet
- * Lastenheft: cb:build:* Flows.  [oai_citation:2‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
+ * Datei   : ui/ui-build.js
+ * Version : v19.1.0
+ * Zweck   : Build-Dock (öffnen/schließen) + Rendering aus Registry
+ * Events  : listen -> cb:registry-ready, cb:build:open, cb:build:close
+ *           emit   -> cb:build:select { id }, cb:build:cancel
+ * Leitlinien:
+ *   - KEIN Fallback: Es werden ausschließlich die Daten aus Registry gerendert.
+ *   - Kategorien → Gruppen; Items zeigen Kosten inkl. 0 (HQ sichtbar)
+ *   - Selektion bekommt .is-selected; externes cb:build:select synchronisiert
+ *   - Dock öffnet nur auf Event (Button unten links), nicht automatisch
  * ========================================================================== */
 
 (() => {
@@ -17,82 +20,129 @@
   const dock = document.getElementById('build-dock');
   if (!dock) { warn('#build-dock fehlt'); return; }
 
-  // Grundgerüst
-  dock.innerHTML = `<div class="wrap"><div class="build-cat"><div class="build-header">
-    <h3 class="build-title">Bauen</h3>
-    <div class="build-actions"><button id="btn-build-close" class="btn ghost">Schließen</button></div>
-  </div><div id="build-list" class="build-list"></div></div></div>`;
+  // Grundgerüst (Header + Container)
+  dock.innerHTML = `
+    <div class="wrap" role="region" aria-label="Baumenü">
+      <div class="build-head">
+        <div class="build-actions" style="text-align:right">
+          <button id="btn-build-close" class="btn ghost" aria-label="Baumenü schließen">Schließen</button>
+        </div>
+      </div>
+      <div id="build-root"></div>
+    </div>`;
   dock.setAttribute('hidden','');
-
   dock.querySelector('#btn-build-close').addEventListener('click', () => EVT('cb:build:close', { reason:'user' }));
-
-  // Daten lesen
-  function view(){
-    // Registry → Kategorien/Buildings
-    const cats = (window.Registry?.list?.('category') ?? [
-      { id:'infra', label:'Infrastruktur' },
-      { id:'prod',  label:'Produktion'   },
-      { id:'home',  label:'Wohnen'       },
-      { id:'trade', label:'Handel'       },
-      { id:'mil',   label:'Militär'      },
-    ]).map(c => ({ id:String(c.id), label: String(c.label??c.id)}));
-
-    const bld = (window.Registry?.list?.('building') ?? []).map(b => ({
-      id: String(b.id),
-      cat: String(b.cat ?? b.category ?? 'infra'),
-      label: String(b.label ?? b.name ?? b.id),
-      icon: b.icon || `assets/icons/${b.id}.png`,
-      cost: {
-        wood:  b.cost?.wood  ?? 0,
-        stone: b.cost?.stone ?? 0,
-        gold:  b.cost?.gold  ?? 0
-      }
-    }));
-
-    // Fallback: wenn Registry leer ist, einfache Demo-Einträge
-    if (!bld.length){
-      bld.push({ id:'b.hq', cat:'infra', label:'HQ', icon:'assets/icons/b.hq.png', cost:{wood:0,stone:0,gold:0} });
-      bld.push({ id:'b.sawmill', cat:'prod', label:'Sägewerk', icon:'assets/icons/b.sawmill.png', cost:{wood:3,stone:1,gold:0} });
-    }
-    return { cats, buildings: bld };
-  }
 
   let selectedId = null;
 
+  // View aus Registry aufbereiten (ohne Fallback)
+  function fetchView(){
+    const reg = window.Registry;
+    if (!reg?.list){
+      warn('Registry.list nicht verfügbar – keine Daten.');
+      return { cats:[], groups:[] };
+    }
+
+    const cats = reg.list('category').map(c => ({
+      id: String(c.id),
+      label: String(c.label ?? c.id)
+    }));
+
+    const bmap = reg.list('building').map(b => ({
+      id   : String(b.id),
+      cat  : String(b.cat ?? b.category ?? 'misc'),
+      label: String(b.label ?? b.name ?? b.id),
+      icon : b.icon || `assets/icons/${b.id}.png`,
+      cost : {
+        wood : b.cost?.wood  ?? 0,
+        stone: b.cost?.stone ?? 0,
+        gold : b.cost?.gold  ?? 0
+      }
+    }));
+
+    // nach Kategorien gruppieren (nur vorhandene Kategorien zeigen)
+    const groups = cats.map(cat => ({
+      cat,
+      items: bmap.filter(b => b.cat === cat.id)
+    })).filter(g => g.items.length);
+
+    return { cats, groups };
+  }
+
   function render(){
-    const root = dock.querySelector('#build-list');
-    const { buildings } = view();
+    const { groups } = fetchView();
+    const root = dock.querySelector('#build-root');
     root.innerHTML = '';
 
-    buildings.forEach(b => {
-      const li = document.createElement('div');
-      li.className = 'build-item';
-      li.dataset.id = b.id;
-      li.innerHTML = `
-        <img src="${b.icon}" alt="${b.label}">
-        <div class="label">${b.label}</div>
-        <small>[Holz:${b.cost.wood} Stein:${b.cost.stone}${b.cost.gold?` Gold:${b.cost.gold}`:''}]</small>
-      `;
-      if (b.id === selectedId) li.classList.add('is-selected');
+    if (!groups.length){
+      const em = document.createElement('em');
+      em.textContent = 'Keine Baueinträge gefunden. Prüfe data/buildings.json und Registry.';
+      em.style.opacity = '.8';
+      root.appendChild(em);
+      return;
+    }
 
-      li.addEventListener('click', () => {
-        selectedId = b.id;
-        root.querySelectorAll('.build-item').forEach(x=>x.classList.remove('is-selected'));
-        li.classList.add('is-selected');
-        EVT('cb:build:select', { id: b.id });
+    // Gruppe je Kategorie
+    groups.forEach(g => {
+      const catWrap = document.createElement('div');
+      catWrap.className = 'build-cat';
+
+      catWrap.innerHTML = `
+        <div class="build-header">
+          <h3 class="build-title">${g.cat.label}</h3>
+        </div>
+        <div class="build-list"></div>
+      `;
+
+      const list = catWrap.querySelector('.build-list');
+      g.items.forEach(b => {
+        const li = document.createElement('div');
+        li.className = 'build-item';
+        li.dataset.id = b.id;
+        li.innerHTML = `
+          <img src="${b.icon}" alt="${b.label}">
+          <div class="label">${b.label}</div>
+          <small>[Holz:${b.cost.wood} Stein:${b.cost.stone}${b.cost.gold?` Gold:${b.cost.gold}`:''}]</small>
+        `;
+        if (b.id === selectedId) li.classList.add('is-selected');
+
+        li.addEventListener('click', () => {
+          selectedId = b.id;
+          root.querySelectorAll('.build-item').forEach(x=>x.classList.remove('is-selected'));
+          li.classList.add('is-selected');
+          EVT('cb:build:select', { id: b.id });
+        });
+
+        list.appendChild(li);
       });
 
-      root.appendChild(li);
+      root.appendChild(catWrap);
     });
+
+    log('Baumenü gerendert');
   }
 
   function open(){ dock.removeAttribute('hidden'); document.body.classList.add('has-build-open'); }
-  function close(){ dock.setAttribute('hidden',''); document.body.classList.remove('has-build-open'); }
+  function close(){ dock.setAttribute('hidden','');  document.body.classList.remove('has-build-open'); }
 
-  // Events
-  window.addEventListener('cb:build:open',  ()=> open());
-  window.addEventListener('cb:build:close', ()=> close());
+  // Öffnen/Schließen via Events (Button unten links feuert diese)
+  window.addEventListener('cb:build:open',  open);
+  window.addEventListener('cb:build:close', close);
+
+  // Erst rendern, wenn Registry bereit
   window.addEventListener('cb:registry-ready', render);
+  window.addEventListener('cb:registry:ready', render); // Alias-Support
 
-  log('Modul geladen (v19.0.0)');
+  // Auswahl von außen (Hotkey etc.) → Markierung nachziehen
+  window.addEventListener('cb:build:select', (e) => {
+    const id = String(e?.detail?.id || '');
+    if (!id) return;
+    selectedId = id;
+    const root = dock.querySelector('#build-root');
+    root?.querySelectorAll('.build-item').forEach(x=>{
+      x.classList.toggle('is-selected', x.dataset.id === id);
+    });
+  });
+
+  log('ui-build geladen (ohne Fallback, Registry-only)');
 })();
