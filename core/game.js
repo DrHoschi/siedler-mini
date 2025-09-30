@@ -65,21 +65,34 @@
   }
 
   // Kamera innerhalb der Karte halten (sichtbares Fenster wird berücksichtigt)
-  function clampCameraToMap(){
-    const worldW = _state.gridW * _state.tile;
-    const worldH = _state.gridH * _state.tile;
-    const viewW  = _state.w / Math.max(1e-6, _state.zoom);
-    const viewH  = _state.h / Math.max(1e-6, _state.zoom);
+function clampCameraToMap(){
+  const worldW = _state.gridW * _state.tile;
+  const worldH = _state.gridH * _state.tile;
+  const viewW  = _state.w / Math.max(1e-6, _state.zoom);
+  const viewH  = _state.h / Math.max(1e-6, _state.zoom);
 
-    // Wenn View größer als Welt ist → in der Mitte „einrasten“
-    const maxX = Math.max(0, worldW - viewW);
-    const maxY = Math.max(0, worldH - viewH);
+  // min = 0 (linke/obere Grenze)
+  // max = Weltbreite - Viewbreite (rechte/untere Grenze)
+  let maxX = worldW - viewW;
+  let maxY = worldH - viewH;
 
+  // Wenn die Welt kleiner ist als die View, in die Mitte einrasten
+  if (maxX < 0){
+    _state.camX = (worldW - viewW) / 2;
+  } else {
     _state.camX = clamp(_state.camX, 0, maxX);
-    _state.camY = clamp(_state.camY, 0, maxY);
-
-    if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
+  if (maxY < 0){
+    _state.camY = (worldH - viewH) / 2;
+  } else {
+    _state.camY = clamp(_state.camY, 0, maxY);
+  }
+
+  if (_state.map){
+    _state.map.camX = _state.camX;
+    _state.map.camY = _state.camY;
+  }
+}
 
   // -- Koord.-Projektion -----------------------------------------------------
   function screenToCanvasPx(clientX, clientY){
