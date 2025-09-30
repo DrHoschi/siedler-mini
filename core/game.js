@@ -1,160 +1,316 @@
-// ============================================================================
-// Datei : core/game.js
-// Projekt: Neue Siedler
-// Version: v1.1.0
-// Zweck : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
-// API   : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
-// Events: cb:map:loaded  { mapId, tile, size:{w,h} }
-//         cb:res:change  { ...resources }
-// ============================================================================
-(() => {
-  // ------------------------ interner Zustand ------------------------
-  const _state = {
-    started: false,
-    mapId: null,
-    canvas: null,
-    ctx: null,
-    w: 0, h: 0,
-    tile: 64,
-    gridW: 32, gridH: 18,
-    placements: [],                 // { x, y, id }
-    hover: { x:-1, y:-1 },
-    selectedBuilding: null,
-    resources: { wood:0, stone:0, food:0, gold:0, pop:0 },
+/* ============================================================================
+ * Datei   : core/game.js
+ * Version : v19.0.0
+ * Zweck   : Game-Loop, Kamera, Platziermodus (Ghost + ✅/❌), Render
+ * Events  : listen  -> cb:game-start, cb:build:select, cb:build:cancel, cb:build:place
+ *           emit    -> cb:res:change (später), cb:build:place (ok/err)
+ * Hinweis : Welt-Koordinaten + Kamera-Transform; HUD/Build bleiben fix (CSS)
+ * Lastenheft-Flow: BuildDock → Platziermodus → place/cancel.  [oai_citation:0‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
+ * ========================================================================== */
 
-    // NEU
-    map: null,                      // SiedlerMap-Instanz
-    rafId: 0,
-    lastTs: 0
+(() => {
+  const MOD = 'game';
+  const log  = (...a) => (window.CBLog?.ok   || console.log)(`[${MOD}]`, ...a);
+  const warn = (...a) => (window.CBLog?.warn || console.warn)(`[${MOD}]`, ...a);
+  const error= (...a) => (window.CBLog?.error|| console.error)(`[${MOD}]`, ...a);
+  const EVT  = (name, detail={}) => window.dispatchEvent(new CustomEvent(name, { detail }));
+
+  // ---- DOM -----------------------------------------------------------------
+  const canvas = document.getElementById('game');
+  const ctx    = canvas.getContext('2d');
+
+  // ---- Kamera/Viewport -----------------------------------------------------
+  const Camera = {
+    x: 0, y: 0, zoom: 1,
+    minZoom: 0.5, maxZoom: 3,
+    screenToWorld(px, py){
+      const rect = canvas.getBoundingClientRect();
+      const sx = (px - rect.left) * (canvas.width / rect.width);
+      const sy = (py - rect.top)  * (canvas.height / rect.height);
+      return {
+        x: (sx / this.zoom) + this.x,
+        y: (sy / this.zoom) + this.y
+      };
+    },
+    worldToScreen(wx, wy){
+      return {
+        x: (wx - this.x) * this.zoom,
+        y: (wy - this.y) * this.zoom
+      };
+    }
   };
 
-  // ------------------------ Helpers/Events -------------------------
-  const log  = (...a) => (window.CBLog?.ok   || console.log)('[game]', ...a);
-  const warn = (...a) => (window.CBLog?.warn || console.warn)('[game]', ...a);
-  const err  = (...a) => (window.CBLog?.err  || console.error)('[game]', ...a);
-  const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
-  const gridSnap = (px, size) => Math.floor(px / size);
+  // ---- Welt/Map/Buildings --------------------------------------------------
+  const TILE = 32; // einfache Annahme; kann aus Map gelesen werden
+  const world = {
+    map: { w: 64, h: 64, tiles: null },   // Dummy, bis echte Map geladen ist
+    buildings: [] // {id, x, y, w, h, icon}
+  };
 
-  // ------------------------ Rendering --------------------------------
-  function frame(ts){
-    if (!_state.started) return;
-    const { ctx, canvas, map } = _state; if (!ctx || !canvas) return;
-
-    // Zeitdelta (Sek.)
-    const dt = _state.lastTs ? Math.min(0.1, (ts - _state.lastTs) / 1000) : 0;
-    _state.lastTs = ts;
-
-    // Map zeichnen (inkl. Camera/Zoom)
-    map?.draw();
-
-    // Placements (Debug – Rechtecke auf Tile-Gitter)
-    drawPlacements(ctx, _state.tile);
-
-    // Units updaten & zeichnen
-    window.Units?.update?.(dt);
-    window.Units?.draw?.(ctx);
-
-    _state.rafId = requestAnimationFrame(frame);
+  function loadMap(meta){
+    // Hier könntest du echte Tiles laden; wir füllen Platzhalter
+    world.map.w = meta?.w ?? 64;
+    world.map.h = meta?.h ?? 64;
+    world.map.tiles = world.map.tiles || new Uint8Array(world.map.w * world.map.h);
+    // Kamera zur Kartenmitte
+    Camera.x = (world.map.w * TILE)/2 - canvas.width/2;
+    Camera.y = (world.map.h * TILE)/2 - canvas.height/2;
   }
 
-  function drawPlacements(ctx, size){
-    for (const p of _state.placements){
-      const x=p.x*size, y=p.y*size;
-      ctx.fillStyle='rgba(192,161,107,.35)'; ctx.fillRect(x,y,size,size);
-      ctx.strokeStyle='rgba(192,161,107,.9)'; ctx.strokeRect(x+.5,y+.5,size-1,size-1);
+  // ---- Platziermodus -------------------------------------------------------
+  const place = {
+    active: false,
+    buildingId: null,
+    w: 1, h: 1,                     // Größe in Tiles (MVP = 1x1)
+    icon: null,
+    wx: 0, wy: 0,                   // Ghost-Position in Weltkoordinaten (Pixel)
+    valid: true
+  };
+
+  function enterPlaceMode(bid, icon){
+    place.active = true;
+    place.buildingId = bid;
+    place.icon = icon || null;
+    place.valid = true;
+    updatePlaceUi(); // Buttons einblenden/positionieren
+  }
+
+  function leavePlaceMode(reason='cancel'){
+    place.active = false;
+    place.buildingId = null;
+    place.icon = null;
+    hidePlaceUi();
+    EVT('cb:build:close', { reason }); // Info an UI (Dock kann reagieren)
+  }
+
+  function canPlaceAt(tx, ty){
+    // Kollisionstest sehr simpel (keine Fremdgebäude auf gleichem Tile)
+    const inMap = (tx >= 0 && ty >= 0 && tx < world.map.w && ty < world.map.h);
+    if (!inMap) return { ok:false, reason:'außerhalb' };
+    const coll = world.buildings.some(b => b.x === tx && b.y === ty);
+    if (coll) return { ok:false, reason:'blockiert: Gebäude' };
+    return { ok:true };
+  }
+
+  function commitPlacement(){
+    const tx = Math.floor(place.wx / TILE);
+    const ty = Math.floor(place.wy / TILE);
+    const chk = canPlaceAt(tx, ty);
+    if (!chk.ok){
+      warn('Platzierung verhindert:', chk.reason);
+      EVT('cb:build:place', { ok:false, id: place.buildingId, reason: chk.reason });
+      return;
+    }
+    world.buildings.push({ id: place.buildingId, x: tx, y: ty, w: place.w, h: place.h, icon: place.icon });
+    EVT('cb:build:place', { ok:true, id: place.buildingId, x: tx, y: ty });
+    leavePlaceMode('place');
+  }
+
+  // ---- Eingaben: Pan/Zoom/Move --------------------------------------------
+  let isPanning = false;
+  let panStart = { x:0, y:0, cx:0, cy:0 };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (place.active){
+      // Ghost setzen verschieben: Mausbewegung handled pointermove
+      // Kein sofortiges Setzen, dafür ✅/❌ nutzen
+    } else {
+      isPanning = true;
+      panStart.x = e.clientX; panStart.y = e.clientY;
+      panStart.cx = Camera.x; panStart.cy = Camera.y;
+      canvas.setPointerCapture(e.pointerId);
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (place.active){
+      const w = Camera.screenToWorld(e.clientX, e.clientY);
+      // Ghost mittig am Tile ausrichten
+      place.wx = Math.floor(w.x / TILE) * TILE;
+      place.wy = Math.floor(w.y / TILE) * TILE;
+      // Validitätsfarbe
+      const tx = Math.floor(place.wx / TILE);
+      const ty = Math.floor(place.wy / TILE);
+      place.valid = canPlaceAt(tx, ty).ok;
+      updatePlaceUi();
+    } else if (isPanning){
+      const dx = (e.clientX - panStart.x);
+      const dy = (e.clientY - panStart.y);
+      Camera.x = Math.max(0, panStart.cx - dx / Camera.zoom);
+      Camera.y = Math.max(0, panStart.cy - dy / Camera.zoom);
+    }
+  });
+
+  window.addEventListener('pointerup', () => { isPanning = false; });
+
+  // Wheel-Zoom (Canvas-zoom, nicht Seitenzoom)
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const z0 = Camera.zoom;
+    const step = (e.deltaY < 0) ? 1.1 : 0.9;
+    Camera.zoom = Math.min(Camera.maxZoom, Math.max(Camera.minZoom, Camera.zoom * step));
+    // Optional: Zoom-Zentrum beibehalten (hier einfach)
+  }, { passive:false });
+
+  // ESC/Back = Abbruch im Platziermodus
+  window.addEventListener('keydown', (e) => {
+    if (place.active && (e.key === 'Escape' || e.key === 'Backspace')){
+      EVT('cb:build:cancel', { id: place.buildingId });
+      leavePlaceMode('cancel');
+    }
+  });
+
+  // ---- Platzier-UI (✅/❌) --------------------------------------------------
+  const placeUi = (() => {
+    const el = document.createElement('div');
+    el.id = 'place-ui';
+    el.innerHTML = `
+      <button class="btn ok"    aria-label="Platzieren">✅</button>
+      <button class="btn cancel" aria-label="Abbrechen">❌</button>
+    `;
+    document.body.appendChild(el);
+    el.querySelector('.ok').addEventListener('click', commitPlacement);
+    el.querySelector('.cancel').addEventListener('click', () => {
+      EVT('cb:build:cancel', { id: place.buildingId }); leavePlaceMode('cancel');
+    });
+    el.style.display = 'none';
+    return el;
+  })();
+
+  function updatePlaceUi(){
+    if (!place.active) return;
+    // Buttons links-oben an der Ghost-Kachel positionieren
+    const p = Camera.worldToScreen(place.wx, place.wy);
+    placeUi.style.display = 'block';
+    placeUi.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y - 40)}px)`;
+    placeUi.classList.toggle('invalid', !place.valid);
+  }
+  function hidePlaceUi(){ placeUi.style.display = 'none'; }
+
+  // ---- Render --------------------------------------------------------------
+  function render(){
+    // Leinwand bereinigen
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // Kamera-Transform
+    ctx.setTransform(Camera.zoom, 0, 0, Camera.zoom, -Camera.x * Camera.zoom, -Camera.y * Camera.zoom);
+
+    // Map (Dummy-Gitter)
+    ctx.fillStyle = '#0e141d';
+    ctx.fillRect(0,0,world.map.w*TILE, world.map.h*TILE);
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.lineWidth = 1;
+    for(let x=0; x<=world.map.w; x++){
+      ctx.beginPath();
+      ctx.moveTo(x*TILE, 0); ctx.lineTo(x*TILE, world.map.h*TILE); ctx.stroke();
+    }
+    for(let y=0; y<=world.map.h; y++){
+      ctx.beginPath();
+      ctx.moveTo(0, y*TILE); ctx.lineTo(world.map.w*TILE, y*TILE); ctx.stroke();
+    }
+
+    // Gebäude (als Icons oder einfache Kacheln)
+    world.buildings.forEach(b => {
+      const px = b.x * TILE, py = b.y * TILE;
+      if (b.icon){
+        const img = getIcon(b.icon);
+        if (img?.complete) ctx.drawImage(img, px, py, TILE, TILE);
+        else {
+          // Fallback: Kachel
+          ctx.fillStyle = '#3b6f2a';
+          ctx.fillRect(px, py, TILE, TILE);
+        }
+      } else {
+        ctx.fillStyle = '#3b6f2a';
+        ctx.fillRect(px, py, TILE, TILE);
+      }
+    });
+
+    // Ghost
+    if (place.active){
+      const gx = Math.floor(place.wx / TILE) * TILE;
+      const gy = Math.floor(place.wy / TILE) * TILE;
+      // Rot/Grün Overlay
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = place.valid ? '#22c55e' : '#ef4444';
+      ctx.fillRect(gx, gy, place.w*TILE, place.h*TILE);
+      ctx.globalAlpha = 1.0;
+      // Icon-Vorschau
+      if (place.icon){
+        const img = getIcon(place.icon);
+        if (img?.complete) ctx.drawImage(img, gx, gy, TILE, TILE);
+      }
     }
   }
 
-  // ------------------------ Map laden --------------------------------
-  async function loadMap(mapId){
-    try{
-      if (typeof mapId === 'string' && /\.json($|\?)/i.test(mapId)){
-        const res = await fetch(mapId, { cache:'no-cache' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        _state.tile  = Number(json.tile) || _state.tile;
-        const size   = Array.isArray(json.size) ? json.size : [_state.gridW, _state.gridH];
-        _state.gridW = Number(size[0]) || _state.gridW;
-        _state.gridH = Number(size[1]) || _state.gridH;
-        log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
-      } else {
-        log('map: kein JSON-Header → Default', { mapId });
-      }
-    } catch(e){ warn('map laden fehlgeschlagen – nutze Default', e); }
-    EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
+  // Icon-Cache (nutzt die gleichen Icons wie im Baumenü)
+  const _iconCache = {};
+  function getIcon(src){
+    if (!src) return null;
+    if (_iconCache[src]) return _iconCache[src];
+    const img = new Image(); img.src = src; _iconCache[src] = img; return img;
   }
 
-  // ------------------------ Inputs (Canvas) --------------------------
-  function onResize(){
-    const c=_state.canvas; if (!c) return;
-    _state.w = (c.width  = c.clientWidth  || c.width);
-    _state.h = (c.height = c.clientHeight || c.height);
-    _state.map?.setSize(_state.w, _state.h);
-  }
-  function onMouseMove(ev){
-    const r=_state.canvas?.getBoundingClientRect(); if(!r) return;
-    _state.hover.x = gridSnap(ev.clientX - r.left, _state.tile);
-    _state.hover.y = gridSnap(ev.clientY - r.top,  _state.tile);
-  }
-  function onClick(ev){
-    if(!_state.canvas || !_state.selectedBuilding) return;
-    const r=_state.canvas.getBoundingClientRect();
-    const gx = gridSnap(ev.clientX - r.left + _state.map.camX*_state.map.zoom, _state.tile);
-    const gy = gridSnap(ev.clientY - r.top  + _state.map.camY*_state.map.zoom, _state.tile);
-    if (gx<0 || gy<0) return;
-    _state.placements.push({ x:gx, y:gy, id:_state.selectedBuilding });
-    log('placed', { id:_state.selectedBuilding, x:gx, y:gy });
+  function loop(){
+    render();
+    requestAnimationFrame(loop);
   }
 
-  // ------------------------ Public API --------------------------------
-  function init(canvas){
-    if(!canvas){ err('init: Canvas fehlt'); return; }
-    _state.canvas = canvas;
-    _state.ctx    = canvas.getContext('2d');
+  // ---- Events aus UI -------------------------------------------------------
+  // Start (Map laden) – HQ mittig anlegen
+  window.addEventListener('cb:game-start', (e) => {
+    const mapMeta = e.detail?.map || { w:64, h:64 };
+    loadMap(mapMeta);
 
-    // Map-Laufzeit anlegen (globaler SiedlerMap aus map-runtime.js)
-    const dbg = document.getElementById('debug-map'); // optional
-    _state.map = new window.SiedlerMap(canvas, _state.ctx, dbg);
+    // HQ initial in Kartenmitte (z. B. "b.hq")
+    const hqId = 'b.hq';
+    const cx = Math.floor(world.map.w/2), cy = Math.floor(world.map.h/2);
+    // Einmalig anlegen, wenn noch nicht vorhanden
+    if (!world.buildings.some(b => b.id === hqId)){
+      world.buildings.push({ id:hqId, x:cx, y:cy, w:1, h:1, icon:getDefaultIcon(hqId) });
+    }
+    log('game-start auf Map', mapMeta);
+  });
 
-    // Units initialisieren
-    window.Units?.init?.(_state.ctx, _state.tile);
+  // Auswahl aus Baumenü → Platziermodus
+  window.addEventListener('cb:build:select', (e) => {
+    const id = e.detail?.id;
+    // Icon aus Registry (oder Fallback)
+    let icon = null;
+    try {
+      const meta = window.Registry?.get('building', id);
+      icon = meta?.icon || null;
+    } catch {}
+    icon = icon || getDefaultIcon(id);
+    enterPlaceMode(id, icon);
+  });
 
-    onResize();
-    window.addEventListener('resize', onResize);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('click', onClick);
-    window.addEventListener('cb:build:select', (e) => { _state.selectedBuilding = e?.detail?.id || null; log('select building', _state.selectedBuilding); });
-    log('init ✓');
+  // Abbruch von außen
+  window.addEventListener('cb:build:cancel', () => leavePlaceMode('cancel'));
+
+  // Helper: Fallback-Icon aus id ableiten (z. B. assets/icons/b.hq.png)
+  function getDefaultIcon(id){
+    return `assets/icons/${id}.png`;
   }
 
-  async function start(mapId){
-    _state.mapId  = mapId || _state.mapId || 'data/maps/map-mini.json';
-    _state.started = true;
+  // ---- Init ----------------------------------------------------------------
+  function init(){
+    // Canvas auf Gerätepixel-Dichte anpassen
+    function resize(){
+      const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+      canvas.width  = Math.floor(canvas.clientWidth  * dpr);
+      canvas.height = Math.floor(canvas.clientHeight * dpr);
+    }
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
 
-    // Map-Daten in Game-State (für HUD/Grid) und in SiedlerMap laden
-    await loadMap(_state.mapId);
-    await _state.map.loadMap(_state.mapId);
-    _state.map.reload();           // Kamera reset
-    onResize();                    // Größe weitergeben
+    // Touch-Wheel-Seitenzoom vermeiden
+    canvas.style.touchAction = 'none';
 
-    // **Demo-HQ & Träger** (solange kein echtes HQ platziert wurde):
-    const HQ = { x: (_state.gridW*_state.tile)/2, y: (_state.gridH*_state.tile)/2 };
-    const spawn = { x: HQ.x - _state.tile*4, y: HQ.y - _state.tile*2 };
-    window.Units?.spawnCarrier?.(spawn, HQ);
-
-    cancelAnimationFrame(_state.rafId);
-    _state.lastTs = 0;
-    _state.rafId = requestAnimationFrame(frame);
-
-    // HUD initial befüllen – sofort nach Start
-    EVT('cb:res:change', { ..._state.resources });
+    log('Modul geladen (v19.0.0)');
+    requestAnimationFrame(loop);
   }
 
-  function getState(){
-    const { started, mapId, tile, gridW, gridH, placements, selectedBuilding } = _state;
-    return { started, mapId, tile, gridW, gridH, placements: placements.slice(), selectedBuilding };
-  }
-  function getResources(){ return { ..._state.resources }; }
-
-  window.Game = { init, start, getState, getResources };
+  init();
 })();
