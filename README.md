@@ -144,9 +144,7 @@ Den Inspector kannst du später nach tools/ verschieben, solange die Einbindung 
 
 Ziel-Struktur (Standard)
 
-	So soll es am Ende aussehen 
-	(Code/JSON sauber getrennt; 
-	Bilder bleiben in assets/):
+So soll es am Ende aussehen (Code/JSON sauber getrennt; Bilder bleiben in assets/):
 
 	/index.html
 	/boot.js
@@ -158,7 +156,6 @@ Ziel-Struktur (Standard)
 		ui-build.data-bridge.js
 		ui-build.js
 		... (weitere Core-Module)
-
 	/ui/                        # UI-Skripte & CSS
 		ui-start.js
 		ui-hud.js
@@ -168,7 +165,6 @@ Ziel-Struktur (Standard)
 		inspector/
 		ui-inspector.js
 		...
-
 	/data/                      # Gameplay-Daten (nur .json/.jsonc)
 		buildings.json
 		buildings.jsonc
@@ -177,11 +173,9 @@ Ziel-Struktur (Standard)
 		maps/
 		*.json
 		...
-
 	/tools/                     # Editor/Dev-Tools (optional)
 		editor/
 		editor.js
-
 	/assets/                    # NUR Medien (Bilder/Audio/Fonts/Icons)
 		buildings/*.png
 		characters/*.png
