@@ -1,93 +1,111 @@
-<script type="module">
+// ui/ui-build.toggle.js  (ES5/ES2015-kompatibel)
 (function(){
-  const btn  = document.getElementById('btn-build');
-  const dock = document.getElementById('build-dock');
-  const ulCats = document.getElementById('build-cats');
-  const list   = document.getElementById('build-list');
+  var btn  = document.getElementById('btn-build');
+  var dock = document.getElementById('build-dock');
+  var ulCats = document.getElementById('build-cats');
+  var list   = document.getElementById('build-list');
 
-  let hydrated = false;
+  var hydrated = false;
 
   function renderWithExistingModule(){
-    // Versuche bekannte Oberflächen zu benutzen (dein vorhandenes Modul)
-    // Passe diese Aufrufe an, falls deine Datei andere Namen exportiert.
-    if (window.UIBuildCategories?.renderAll) {
-      window.UIBuildCategories.renderAll();
-      return true;
-    }
-    if (window.UIBuild?.init) {
-      window.UIBuild.init(); // z.B. eigener Initializer
-      return true;
-    }
+    try{
+      if (window.UIBuildCategories && typeof window.UIBuildCategories.renderAll === 'function'){
+        window.UIBuildCategories.renderAll();
+        return true;
+      }
+      if (window.UIBuild && typeof window.UIBuild.init === 'function'){
+        window.UIBuild.init();
+        return true;
+      }
+    }catch(e){}
     return false;
   }
 
-  // Minimaler Fallback-Renderer (nur wenn noch nichts gerendert wurde!)
+  // Fallback-Renderer (nur falls kein bestehendes Modul vorhanden)
   function renderFallback(){
-    const cats = window.Registry?.get?.('categories') || [];
-    const buildings = window.Registry?.get?.('buildings') || [];
-    const meta = window.Registry?.get?.('meta') || {};
-    const iconsBase = meta.iconsBase || '';
+    var reg = window.Registry || {};
+    var cats = (reg.get && reg.get('categories')) || [];
+    var buildings = (reg.get && reg.get('buildings')) || [];
+    var meta = (reg.get && reg.get('meta')) || {};
+    var iconsBase = meta.iconsBase || '';
 
-    // Kategorien
-    ulCats.innerHTML = '';
-    cats.forEach(c=>{
-      const li = document.createElement('li');
-      li.className = 'build-cat';
-      li.textContent = c.label || c.id;
-      li.dataset.cat = String(c.id);
-      li.addEventListener('click', ()=>{
-        [...ulCats.children].forEach(x=>x.classList.toggle('active', x===li));
-        renderList(c.id);
-      });
-      ulCats.appendChild(li);
-    });
+    // Kategorien leeren & neu aufbauen
+    if (ulCats) ulCats.innerHTML = '';
 
-    // Erste aktiv setzen
+    for (var i=0; i<cats.length; i++){
+      (function(c){
+        var li = document.createElement('li');
+        li.className = 'build-cat';
+        li.textContent = c.label || c.id;
+        li.setAttribute('data-cat', String(c.id));
+        li.addEventListener('click', function(){
+          var kids = ulCats ? ulCats.children : [];
+          for (var k=0; k<kids.length; k++){
+            kids[k].classList.toggle('active', kids[k] === li);
+          }
+          renderList(c.id);
+        });
+        if (ulCats) ulCats.appendChild(li);
+      })(cats[i]);
+    }
+
     if (cats.length){
-      ulCats.firstElementChild?.classList.add('active');
+      if (ulCats && ulCats.firstElementChild) ulCats.firstElementChild.classList.add('active');
       renderList(cats[0].id);
     }
 
     function renderList(catId){
+      if (!list) return;
       list.innerHTML = '';
-      const rows = buildings.filter(b => String(b.cat) === String(catId));
-      rows.forEach(b=>{
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'build-item';
-        btn.dataset.id = b.id;
+      for (var j=0; j<buildings.length; j++){
+        var b = buildings[j];
+        if (String(b.cat) !== String(catId)) continue;
 
-        const t = document.createElement('div');
-        t.className = 'title'; t.textContent = b.label || b.id;
+        var btnItem = document.createElement('button');
+        btnItem.type = 'button';
+        btnItem.className = 'build-item';
+        btnItem.setAttribute('data-id', b.id);
 
-        const img = document.createElement('img');
+        var t = document.createElement('div');
+        t.className = 'title';
+        t.textContent = b.label || b.id;
+
+        var img = document.createElement('img');
         img.className = 'thumb';
-        img.src = b.icon || (iconsBase ? iconsBase + (b.icon||'') : '');
+        img.src = b.icon || (iconsBase ? iconsBase + (b.icon || '') : '');
         img.alt = b.label || b.id;
 
-        const cost = document.createElement('div');
+        var cost = document.createElement('div');
         cost.className = 'cost';
-        const c = b.cost || {};
-        [['wood','Holz'],['stone','Stein'],['gold','Gold']].forEach(([key,_label])=>{
-          const val = +c[key] || 0;     // zeigt auch 0 an (HQ-Anforderung)
-          const pill = document.createElement('span');
+        var cst = b.cost || {};
+        var keys = ['wood','stone','gold'];
+        for (var ii=0; ii<keys.length; ii++){
+          var key = keys[ii];
+          var val = +cst[key] || 0;            // zeigt auch 0 an (HQ)
+          var pill = document.createElement('span');
           pill.className = 'res';
-          pill.innerHTML = `<img src="assets/ui/res_${key}.png" alt=""> ${val}`;
+          var icon = document.createElement('img');
+          icon.src = 'assets/ui/res_' + key + '.png';
+          icon.alt = '';
+          pill.appendChild(icon);
+          pill.appendChild(document.createTextNode(' ' + val));
           cost.appendChild(pill);
+        }
+
+        btnItem.appendChild(t);
+        btnItem.appendChild(img);
+        btnItem.appendChild(cost);
+
+        btnItem.addEventListener('click', function(ev){
+          var kids = list.children;
+          for (var k=0; k<kids.length; k++) kids[k].classList.remove('is-selected');
+          ev.currentTarget.classList.add('is-selected');
+          var id = ev.currentTarget.getAttribute('data-id');
+          window.dispatchEvent(new CustomEvent('cb:build:select', { detail: { id: id } }));
         });
 
-        btn.appendChild(t);
-        btn.appendChild(img);
-        btn.appendChild(cost);
-
-        btn.addEventListener('click', ()=>{
-          [...list.children].forEach(el=>el.classList.remove('is-selected'));
-          btn.classList.add('is-selected');
-          window.dispatchEvent(new CustomEvent('cb:build:select', { detail: { id: b.id }}));
-        });
-
-        list.appendChild(btn);
-      });
+        list.appendChild(btnItem);
+      }
     }
   }
 
@@ -95,31 +113,35 @@
     if (hydrated) return;
     hydrated = true;
     if (!renderWithExistingModule()){
-      // Nur fallbacken, wenn dein Modul nichts rendert
       renderFallback();
     }
   }
 
-  // Toggle öffnen/schließen
-  btn?.addEventListener('click', ()=>{
-    const open = dock.hasAttribute('hidden');
-    if (open){
-      // Registry ist idR schon geladen; falls nicht, warten wir auf Event
-      if (window.Registry?.get?.('buildings')?.length) hydrate();
-      dock.removeAttribute('hidden');
-      btn.setAttribute('aria-expanded', 'true');
-    } else {
-      dock.setAttribute('hidden','');
-      btn.setAttribute('aria-expanded', 'false');
-    }
-  });
+  if (btn){
+    btn.addEventListener('click', function(){
+      if (!dock) return;
+      var open = dock.hasAttribute('hidden');
+      if (open){
+        // falls Registry schon fertig
+        try{
+          if (window.Registry && window.Registry.get && window.Registry.get('buildings') && window.Registry.get('buildings').length){
+            hydrate();
+          }
+        }catch(e){}
+        dock.removeAttribute('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+      } else {
+        dock.setAttribute('hidden','');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
 
-  // Wenn nach Klick die Registry erst später fertig wird
-  window.addEventListener('cb:registry-ready', (e)=>{
-    if (btn.getAttribute('aria-expanded') === 'true') hydrate();
+  // Wenn die Registry erst nach dem Öffnen fertig wird
+  window.addEventListener('cb:registry-ready', function(){
+    if (btn && btn.getAttribute('aria-expanded') === 'true') hydrate();
   });
-  window.addEventListener('cb:registry:ready', (e)=>{
-    if (btn.getAttribute('aria-expanded') === 'true') hydrate();
+  window.addEventListener('cb:registry:ready', function(){
+    if (btn && btn.getAttribute('aria-expanded') === 'true') hydrate();
   });
 })();
-</script>
