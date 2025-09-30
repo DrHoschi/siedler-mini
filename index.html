@@ -2,16 +2,19 @@
 <html lang="de">
 <head>
   <!-- =========================================================================
-       Datei: index.html (Root)
-       Projekt: Neue Siedler
-       Version: v1.0.2 (2025-09-28)
-       Zweck: Einstiegspunkt für Spiel + UI (Startfenster zuerst sichtbar)
+       Datei   : index.html (Root)
+       Projekt : Neue Siedler
+       Version : v1.0.3 (2025-09-28)
+       Zweck   : Einstiegspunkt – Canvas + UI (Startfenster zuerst sichtbar)
+       Hinweise:
+         - CSS-Reihenfolge: ui.css (Basis) → Feature-CSS
+         - Keine Autostarts: Spielbeginn nur per Button im Startpanel
   ========================================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neue Siedler – Epoche 1</title>
 
-  <!-- ==================== CSS ==================== -->
+  <!-- ===== CSS: Basis + Komponenten ===== -->
   <link rel="stylesheet" href="ui/css/ui.css">
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
@@ -20,7 +23,7 @@
   <link rel="stylesheet" href="ui/css/ui-tooltip.css">
   <link rel="stylesheet" href="ui/css/inspector.css">
 
-  <!-- Optional: globale Variablen / Darkmode -->
+  <!-- (Optional) globale Theme-Variablen -->
   <style>
     :root { --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff; }
     html,body {
@@ -33,22 +36,29 @@
 
 <body>
   <!-- =========================================================================
-       DOM-STRUKTUR: Sichtbare Container
+       APP-CONTAINER
+       Struktur:
+         (A) Canvas (Spielfeld)
+         (B) Start-Hintergrund + Startpanel
+         (C) HUD (Ressourcen)
+         (D) Build-Dock + Build-Button links unten
+         (E) Inspector
   ========================================================================= -->
   <div id="app">
 
-    <!-- Spielfeld -->
+    <!-- (A) Canvas – Spielwelt. Größe wird per CSS/DPR skaliert -->
     <canvas
       id="game"
       width="1280"
       height="720"
-      data-map="data/maps/map-mini.json"></canvas>
+      data-map="data/maps/map-mini.json">
+    </canvas>
 
-    <!-- Start-Hintergrund (unter Panel, über Canvas) -->
+    <!-- (B1) Start-Hintergrund unter dem Panel, über Canvas -->
     <div id="bg-start"></div>
 
-    <!-- Startpanel (Holz/Papier hell) -->
-    <div id="start-panel" class="ui-panel ui-panel--light visible">
+    <!-- (B2) Startpanel – Holz/Papier (helle Variante) -->
+    <div id="start-panel" class="ui-panel ui-panel--light visible" aria-label="Startpanel">
       <h1>Neue Siedler</h1>
       <div class="actions">
         <button id="btn-new"        class="btn main">Neues Spiel</button>
@@ -59,26 +69,25 @@
       </div>
     </div>
 
-    <!-- HUD (Holz/Papier dunkel) -->
-   <!-- <div id="hud-top" class="ui-panel ui-panel--dark hidden"></div> -->
-    <!-- HUD-Container (Look via ui.css + ui/css/ui-hud.css) -->
-   <div id="hud-top" class="ui-panel hidden" aria-label="Ressourcen-HUD"></div>
+    <!-- (C) HUD – Ressourcenanzeige (dunkel) -->
+    <div id="hud-top" class="ui-panel ui-panel--dark hidden" aria-label="Ressourcen-HUD"></div>
 
-    <!-- Build-Button links unten -->
-      <button id="btn-build-toggle" class="btn main"
-        style="position:fixed; left:12px; bottom:12px; z-index:960;">
-        Bauen
-      </button>
-    
-    <!-- Build-Dock (Holz/Papier dunkel) -->
-    <div id="build-dock" class="ui-panel ui-panel--dark hidden"></div>
+    <!-- (D1) Build-Dock – unten andocken (dunkel) -->
+    <div id="build-dock" class="ui-panel ui-panel--dark hidden" aria-label="Baumenü-Dock"></div>
 
-    <!-- Inspector (Holz/Papier dunkel) -->
-    <div id="inspector" class="ui-panel ui-panel--dark hidden"></div>
+    <!-- (D2) Build-Button – links unten; öffnet/schließt das Dock -->
+    <button id="btn-build-toggle" class="btn main"
+            style="position:fixed; left:12px; bottom:12px; z-index:960;"
+            aria-controls="build-dock" aria-expanded="false">
+      Bauen
+    </button>
+
+    <!-- (E) Inspector – rechts (dunkel) -->
+    <div id="inspector" class="ui-panel ui-panel--dark hidden" aria-label="Inspector"></div>
   </div>
 
   <!-- =========================================================================
-       SCRIPTS: Reihenfolge Core → UI → Tools
+       SCRIPTS – Reihenfolge: Core → UI → Tools
   ========================================================================= -->
   <!-- Core -->
   <script src="core/asset.js"></script>
@@ -94,22 +103,56 @@
   <script src="ui/ui-build.js"></script>
 
   <!-- Inspector -->
-  <script>window.ICONS = window.ICONS || {};</script>
+  <script>window.ICONS = window.ICONS || {}; /* optional: ICONS.wood/.stone/.gold */</script>
   <script src="ui/inspector/inspector.core.js"></script>
 
   <!-- Debug / Tools -->
   <script src="tools/debug-tools.js"></script>
 
-  <!-- Inline-Wiring (klein & selbsterklärend) -->
+  <!-- =========================================================================
+       Inline-Wiring – kleine, lokale Verknüpfungen
+         • Inspector-Toggle
+         • Fullscreen
+         • Build-Button → cb:build:open/close
+  ========================================================================= -->
   <script>
+    // Inspector ein/aus
     document.getElementById('btn-inspector').addEventListener('click', () => {
-      document.getElementById('inspector').classList.toggle('hidden');
+      const insp = document.getElementById('inspector');
+      insp.classList.toggle('hidden');
       window.dispatchEvent(new CustomEvent('req:inspector:toggle'));
     });
+
+    // Vollbild umschalten
     document.getElementById('btn-fullscreen').addEventListener('click', () => {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen();
       else document.exitFullscreen();
     });
+
+    // Build-Button unten links → Dock öffnen/schließen
+    (function(){
+      const btn  = document.getElementById('btn-build-toggle');
+      const dock = document.getElementById('build-dock');
+      if (!btn || !dock) return;
+
+      function openDock(){
+        window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' } }));
+        btn.setAttribute('aria-expanded', 'true');
+      }
+      function closeDock(){
+        window.dispatchEvent(new CustomEvent('cb:build:close', { detail:{ from:'button' } }));
+        btn.setAttribute('aria-expanded', 'false');
+      }
+
+      btn.addEventListener('click', () => {
+        const isHidden = dock.hasAttribute('hidden');
+        (isHidden ? openDock : closeDock)();
+      });
+
+      // Wenn woanders geschlossen wird (ESC/Platzieren), ARIA syncen
+      window.addEventListener('cb:build:close', () => btn.setAttribute('aria-expanded','false'));
+      window.addEventListener('cb:build:open',  () => btn.setAttribute('aria-expanded','true'));
+    })();
   </script>
 </body>
 </html>
