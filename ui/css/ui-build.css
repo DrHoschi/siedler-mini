@@ -245,3 +245,9 @@
 #build-dock{
   z-index: 1100;                /* hast du schon als --build-dock-z */
 }
+
+/* Canvas soll IMMER unter dem UI-Overlay und Buttons liegen */
+canvas, #game-canvas, .game-canvas {
+  position: fixed; inset: 0;
+  z-index: 1;       /* kleiner Wert → liegt hinter Dock/Buttons */
+}
