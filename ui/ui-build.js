@@ -126,3 +126,22 @@
   window.addEventListener('cb:registry:ready', init);
   window.addEventListener('cb:game-start', init); // Fallback
 })();
+/* --- Toggle-Button (unten links) --- */
+.ui-btn-build {
+  position: fixed; left: 12px; bottom: 12px;
+  z-index: calc(var(--build-dock-z) + 1); /* über dem Dock */
+  padding: 10px 14px; border-radius: 8px;
+  border: 1px solid #ffffff33;
+  background: #2b3138; color: #e6f0ff; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,.28);
+}
+.ui-btn-build[aria-expanded="true"] {
+  border-color: #8ab4f8; box-shadow: 0 0 0 2px #8ab4f840 inset;
+}
+
+/* --- Dock Grundzustand: per [hidden] ausgeblendet (regel hast du schon) --- */
+/* #build-dock[hidden]{ display:none !important; } */
+
+/* Optional: kleines „öffnen“-Slide-In */
+#build-dock { transition: transform .14s ease, opacity .14s ease; opacity: 1; transform: translateY(0); }
+#build-dock[hidden] { opacity: 0; transform: translateY(8px); }
