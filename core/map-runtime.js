@@ -1,10 +1,11 @@
 // ============================================================================
 // Datei : core/map-runtime.js
 // Projekt: Neue Siedler
-// Version: v1.1.0
+// Version: v1.1.1
 // Zweck : Karte laden, Kamera/Zoom/Drag, Grid zeichnen, Debug-Overlay
-// API   : new SiedlerMap(canvas, ctx, debugElm)
+// Patch : Terrain-Zugriff (isWater/terrainAt)
 // ============================================================================
+
 (function(root, factory){
   root.SiedlerMap = factory();
 })(typeof window !== 'undefined' ? window : this, function(){
@@ -22,6 +23,36 @@
       this.dragging = false; this.lastX = 0; this.lastY = 0;
       this.initEvents();
     }
+
+    // ------------------------------------------------------------------------
+    // Neu: Terrain-Abfragen
+    // Erwartet, dass this.map.tiles[r][c] numerische IDs oder Strings enthält.
+    // Optional: this.map.terrainTypes = { 0:'grass', 1:'water', 2:'stone', ... }
+    // ------------------------------------------------------------------------
+    terrainAt(gx, gy) {
+      if (!this.map || !Array.isArray(this.map.tiles)) return null;
+      if (gy < 0 || gy >= this.rows || gx < 0 || gx >= this.cols) return null;
+
+      const val = this.map.tiles[gy]?.[gx];
+      if (val == null) return null;
+
+      if (this.map.terrainTypes && this.map.terrainTypes[val] !== undefined) {
+        return this.map.terrainTypes[val]; // Typ aus Mapping
+      }
+      // Fallback: numerische Codes interpretieren
+      switch (val) {
+        case 0: return 'grass';
+        case 1: return 'water';
+        case 2: return 'stone';
+        default: return 'unknown';
+      }
+    }
+
+    isWater(gx, gy) {
+      return this.terrainAt(gx, gy) === 'water';
+    }
+
+    // ... (Rest deiner bisherigen map-runtime.js unverändert)
 
     static ensureDebugOverlay(){
       let el = document.getElementById('debug-map');
