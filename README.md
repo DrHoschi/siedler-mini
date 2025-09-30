@@ -148,9 +148,9 @@ Ziel-Struktur (Standard)
 	(Code/JSON sauber getrennt; 
 	Bilder bleiben in assets/):
 
-/index.html
-/boot.js
-/core/                      # Laufzeit-Engine & Systems (nur .js)
+	/index.html
+	/boot.js
+	/core/                      # Laufzeit-Engine & Systems (nur .js)
 		asset.js
 		registry.js
 		registry.type-aliases.js
@@ -159,17 +159,17 @@ Ziel-Struktur (Standard)
 		ui-build.js
 		... (weitere Core-Module)
 
-/ui/                        # UI-Skripte & CSS
-	ui-start.js
-	ui-hud.js
-	ui-build.js
-	css/
+	/ui/                        # UI-Skripte & CSS
+		ui-start.js
+		ui-hud.js
+		ui-build.js
+		css/
 		ui-build.css
 		inspector/
 		ui-inspector.js
 		...
 
-/data/                      # Gameplay-Daten (nur .json/.jsonc)
+	/data/                      # Gameplay-Daten (nur .json/.jsonc)
 		buildings.json
 		buildings.jsonc
 		characters/
@@ -178,11 +178,11 @@ Ziel-Struktur (Standard)
 		*.json
 		...
 
-/tools/                     # Editor/Dev-Tools (optional)
+	/tools/                     # Editor/Dev-Tools (optional)
 		editor/
 		editor.js
 
-/assets/                    # NUR Medien (Bilder/Audio/Fonts/Icons)
+	/assets/                    # NUR Medien (Bilder/Audio/Fonts/Icons)
 		buildings/*.png
 		characters/*.png
 		tiles/*.png
