@@ -1,7 +1,7 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.4.0
+// Version : v1.4.1
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events  : cb:map:loaded   { mapId, tile, size:{w,h} }
@@ -9,7 +9,8 @@
 //           cb:place:preview{ id,gx,gy,sx,sy,size,invalid }
 //           cb:place:confirm{ id,gx,gy } (von UI)
 //           cb:place:cancel { }         (von UI)
-// Notes   : Platzieren mit Preview+Confirm (✅/❌), iOS-sichere Pointer-Logik
+// Notes   : Platzieren mit Preview+Confirm (✅/❌), Exit bei Cancel/Confirm,
+//           Platzierprüfung (Map-Bounds + Kollision), Icons über Registry
 // ============================================================================
 
 (() => {
@@ -29,8 +30,10 @@
 
     // Weltobjekte
     placements: [],                 // { x, y, id }  (Tile-Koords!)
+    occupied : new Set(),           // "x,y" → schnell prüfen ob belegt
     hover: { x:-1, y:-1 },          // Tile unter Cursor
-    selectedBuilding: null,
+    selectedBuilding: null,         // aktuell gewählter Gebäudetyp
+    preview: null,                  // { id,gx,gy } – wartet auf ✅/❌
 
     // Ressourcen
     resources: { wood:0, stone:0, food:0, gold:0, pop:0 },
@@ -53,8 +56,9 @@
     // Tap-Tracking (für Preview)
     tapStart: { x:0, y:0 },
 
-    // Aktive Preview (wartet auf ✅/❌)
-    preview: null,                  // { id,gx,gy }
+    // Icon-Cache
+    iconMap : null,                 // id -> url
+    imgCache: new Map(),            // url -> HTMLImageElement | 'loading' | 'error'
   };
 
   // == Utils / Events ========================================================
@@ -67,11 +71,32 @@
   const snap  = (v,s)=>Math.floor(v/s);
   const EPS   = 1e-6;
 
-  // -- Bounds-Helper ---------------------------------------------------------
+  const keyXY = (x,y)=>`${x},${y}`;
+
+  // -- Platzier-/Bounds-Helper ----------------------------------------------
   function inBoundsTile(gx, gy){
     return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
   }
+  function isFree(gx, gy){
+    return !_state.occupied.has(keyXY(gx,gy));
+  }
+  function canPlaceAt(gx, gy, id){
+    if (!inBoundsTile(gx,gy)) return false;
+    if (!isFree(gx,gy))       return false;
+    // optional Map-spezifische Prüfung
+    try{
+      if (_state.map?.canPlace && !_state.map.canPlace(gx,gy,id)) return false;
+    }catch(e){ /* defensiv: ignoriere Fehler */ }
+    return true;
+  }
 
+  function occupy(gx,gy){ _state.occupied.add(keyXY(gx,gy)); }
+  function rebuildOccupied(){
+    _state.occupied.clear();
+    for (const p of _state.placements) occupy(p.x,p.y);
+  }
+
+  // -- Kamera-Clamp ----------------------------------------------------------
   function clampCameraToMap(){
     const worldW = _state.gridW * _state.tile;
     const worldH = _state.gridH * _state.tile;
@@ -101,13 +126,54 @@
   function worldToScreen(wx, wy){
     return { sx:(wx-_state.camX)*_state.zoom, sy:(wy-_state.camY)*_state.zoom };
   }
-
   function syncCamFromMap(){
     const m=_state.map; if(!m) return;
     if (typeof m.camX==='number') _state.camX=m.camX;
     if (typeof m.camY==='number') _state.camY=m.camY;
     if (typeof m.zoom==='number') _state.zoom=m.zoom;
     clampCameraToMap();
+  }
+
+  // -- Icons (Registry) ------------------------------------------------------
+  function buildIconMap(){
+    if (_state.iconMap) return _state.iconMap;
+    const map = new Map();
+    try{
+      // bevorzugt: Registry.list('building')
+      let list = window.Registry?.list?.('building');
+      if (!Array.isArray(list)){
+        // Fallback: Registry.get('buildings')
+        list = window.Registry?.get?.('buildings');
+      }
+      if (Array.isArray(list)){
+        for (const b of list){
+          const id   = String(b.id);
+          const icon = b.icon || b.iconUrl || null; // laut Monolith: normalisiert
+          if (icon) map.set(id, icon);
+        }
+      }
+    }catch(e){ /* egal */ }
+    _state.iconMap = map;
+    return map;
+  }
+  function getIconUrl(id){
+    const map = buildIconMap();
+    return map.get(id) || null;
+  }
+  function getIconImage(id){
+    const url = getIconUrl(id);
+    if (!url) return null;
+    const c = _state.imgCache.get(url);
+    if (c && c instanceof HTMLImageElement) return c;
+    if (c === 'loading' || c === 'error') return null;
+
+    // Laden starten
+    const img = new Image();
+    _state.imgCache.set(url, 'loading');
+    img.onload = ()=>_state.imgCache.set(url, img);
+    img.onerror= ()=>_state.imgCache.set(url, 'error');
+    img.src = url;
+    return null; // beim nächsten Frame verfügbar
   }
 
   // == Rendering =============================================================
@@ -124,7 +190,7 @@
 
     // Weltobjekte + Ghost
     ctx.save();
-    drawGhost(ctx);        // halbtransparente Vorschau am Hover oder Preview
+    drawGhost(ctx);
     drawPlacements(ctx);
     window.Units && drawUnitsWithProjection(ctx, dt);
     ctx.restore();
@@ -132,45 +198,67 @@
     _state.rafId = requestAnimationFrame(frame);
   }
 
+  function drawRectTile(ctx, sx, sy, s, ok){
+    if (ok){
+      ctx.fillStyle = 'rgba(120,200,120,.28)';
+      ctx.strokeStyle = 'rgba(120,200,120,.85)';
+    }else{
+      ctx.fillStyle = 'rgba(200,80,80,.28)';
+      ctx.strokeStyle = 'rgba(200,80,80,.9)';
+    }
+    ctx.fillRect(sx,sy,s,s);
+    ctx.strokeRect(sx+.5, sy+.5, s-1, s-1);
+  }
+
+  function drawIcon(ctx, img, sx, sy, s){
+    // Icon mittig im Tile, mit kleinem Margin
+    const pad = Math.max(4, Math.floor(s*0.1));
+    const w = s - pad*2;
+    const h = s - pad*2;
+    ctx.drawImage(img, sx+pad, sy+pad, w, h);
+  }
+
   function drawPlacements(ctx){
     const s = _state.tile * _state.zoom;
     for(const p of _state.placements){
       const {sx,sy} = worldToScreen(p.x*_state.tile, p.y*_state.tile);
-      ctx.fillStyle   = 'rgba(192,161,107,.35)';
-      ctx.strokeStyle = 'rgba(192,161,107,.9)';
-      ctx.fillRect(sx, sy, s, s);
-      ctx.strokeRect(sx+.5, sy+.5, s-1, s-1);
+      const img = getIconImage(p.id);
+      if (img) {
+        drawIcon(ctx, img, sx, sy, s);
+      } else {
+        // bis Icon geladen ist: dezente Kachel
+        drawRectTile(ctx, sx, sy, s, true);
+      }
     }
   }
 
   function drawGhost(ctx){
-    const s = _state.tile * _state.zoom;
-    let gx=-1, gy=-1;
+    const s  = _state.tile * _state.zoom;
+    let gx=-1, gy=-1, id=_state.selectedBuilding;
 
-    // Wenn Preview aktiv, diese Priorität (fixiert), sonst Hover (live)
-    if (_state.preview){ gx=_state.preview.gx; gy=_state.preview.gy; }
-    else if (_state.selectedBuilding && inBoundsTile(_state.hover.x,_state.hover.y)){
+    if (_state.preview){ gx=_state.preview.gx; gy=_state.preview.gy; id=_state.preview.id; }
+    else if (id && inBoundsTile(_state.hover.x,_state.hover.y)){
       gx=_state.hover.x; gy=_state.hover.y;
     }
-
-    if (!inBoundsTile(gx,gy)) return;
+    if (!inBoundsTile(gx,gy) || !id) {
+      // UI ggf. verstecken, wenn Preview aktiv aber jetzt ungültig
+      if (_state.preview && !inBoundsTile(gx,gy)) EVT('cb:place:preview', { invalid:true });
+      return;
+    }
 
     const {sx,sy} = worldToScreen(gx*_state.tile, gy*_state.tile);
-    ctx.fillStyle = 'rgba(120,200,120,.28)';  // grünlich = prinzipiell baubar
-    ctx.fillRect(sx, sy, s, s);
-    ctx.strokeStyle = 'rgba(120,200,120,.85)';
-    ctx.strokeRect(sx+.5, sy+.5, s-1, s-1);
+    const ok = canPlaceAt(gx,gy,id);
 
-    // UI-Preview-Event schicken (für Button-Overlay)
-    if (_state.preview){
-      EVT('cb:place:preview', {
-        id: _state.preview.id,
-        gx, gy,
-        sx, sy,
-        size: s,
-        invalid: false
-      });
-    }
+    // Ghost mit Icon (halbtransparent) oder Quadrat
+    const img = getIconImage(id);
+    ctx.save();
+    ctx.globalAlpha = ok ? 0.85 : 0.6;
+    if (img) drawIcon(ctx, img, sx, sy, s);
+    else     drawRectTile(ctx, sx, sy, s, ok);
+    ctx.restore();
+
+    // Buttons nur anzeigen, wenn Platzierung gültig ist
+    EVT('cb:place:preview', { id, gx, gy, sx, sy, size: s, invalid: !ok });
   }
 
   function drawUnitsWithProjection(ctx, dt){
@@ -235,7 +323,6 @@
       _state.tapStart.x = ev.clientX;
       _state.tapStart.y = ev.clientY;
       _state.panActive  = false;
-      // Preview wird erst auf pointerup erzeugt (Tap-Schwelle)
     } else if (!_state.pinch.active){
       _state.panActive = true;
       _state.canvas.setPointerCapture?.(ev.pointerId);
@@ -300,8 +387,8 @@
       const gx   = snap(wpos.wx, _state.tile);
       const gy   = snap(wpos.wy, _state.tile);
 
-      if (!inBoundsTile(gx, gy)){
-        // außerhalb – UI weglassen
+      const ok = canPlaceAt(gx,gy,_state.selectedBuilding);
+      if (!ok){
         _state.preview = null;
         EVT('cb:place:preview', { invalid:true });
       } else {
@@ -377,14 +464,24 @@
     window.addEventListener('cb:place:confirm', (e)=>{
       const d = e.detail || {};
       if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
-        _state.placements.push({ x:d.gx, y:d.gy, id:_state.preview.id });
-        log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy });
+        // Safety: kann sich in der Zwischenzeit was geändert haben?
+        if (canPlaceAt(d.gx, d.gy, _state.preview.id)){
+          _state.placements.push({ x:d.gx, y:d.gy, id:_state.preview.id });
+          occupy(d.gx, d.gy);
+          log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy });
+        } else {
+          warn('confirm: Position inzwischen unplazierbar');
+        }
       }
       _state.preview = null;
-      // Auswahl beibehalten → weiteres Bauen möglich; zum Beenden könnte man hier selectedBuilding=null setzen.
+      _state.selectedBuilding = null;                 // <<< Baumodus verlassen
+      EVT('cb:place:preview', { invalid:true });      // UI schließen
     });
+
     window.addEventListener('cb:place:cancel', ()=>{
       _state.preview = null;
+      _state.selectedBuilding = null;                 // <<< Baumodus verlassen
+      EVT('cb:place:preview', { invalid:true });      // UI schließen
       log('place canceled');
     });
 
@@ -403,6 +500,9 @@
     _state.camY = _state.map.camY ?? _state.camY;
     _state.zoom = _state.map.zoom ?? _state.zoom;
     onResize();
+
+    // falls Placements aus Savegame: Occupied aufbauen
+    rebuildOccupied();
 
     // Demo: HQ-Carrier bis echter Startflow steht
     const HQpx  = { x: (_state.gridW*_state.tile)/2, y: (_state.gridH*_state.tile)/2 };
