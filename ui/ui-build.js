@@ -1,128 +1,98 @@
 /* ============================================================================
- * Datei   : ui/ui-build.js
- * Version : v1.0.5
- * Zweck   : Build-Dock – Kacheln (Titel | Thumb | Kosten) + Auswahl-Events
+ * Datei : ui/ui-build.js
+ * Version: v19.0.0
+ * Zweck : Build-Dock (öffnen/schließen), Kategorien+Items, Auswahl → cb:build:select
+ * Events: listen -> cb:registry-ready, cb:build:open, cb:build:close
+ *         emit   -> cb:build:select, cb:build:cancel
+ * Notizen: zeigt Kosten immer inkl. 0 (HQ!), .is-selected state; Dock bleibt zu bis geöffnet
+ * Lastenheft: cb:build:* Flows.  [oai_citation:2‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
  * ========================================================================== */
+
 (() => {
-  const log  = (...a)=>(window.CBLog?.ok||console.log)('[ui-build]',...a);
-  const warn = (...a)=>(window.CBLog?.warn||console.warn)('[ui-build]',...a);
+  const MOD='ui-build';
+  const log  = (...a)=>(window.CBLog?.ok||console.log)(`[${MOD}]`,...a);
+  const warn = (...a)=>(window.CBLog?.warn||console.warn)(`[${MOD}]`,...a);
   const EVT  = (n,d)=>window.dispatchEvent(new CustomEvent(n,{detail:d}));
-  const q    = s=>document.querySelector(s);
 
-  // kleine Icon-Lookup für Kosten-Anzeige
-  const RES_ICON = {
-    wood:  'assets/icons/resources/wood.png',
-    stone: 'assets/icons/resources/stone.png',
-    food:  'assets/icons/resources/food.png',
-    gold:  'assets/icons/resources/gold.png'
-  };
+  const dock = document.getElementById('build-dock');
+  if (!dock) { warn('#build-dock fehlt'); return; }
 
-  let activeCat=null, activeItem=null;
+  // Grundgerüst
+  dock.innerHTML = `<div class="wrap"><div class="build-cat"><div class="build-header">
+    <h3 class="build-title">Bauen</h3>
+    <div class="build-actions"><button id="btn-build-close" class="btn ghost">Schließen</button></div>
+  </div><div id="build-list" class="build-list"></div></div></div>`;
+  dock.setAttribute('hidden','');
 
-  function ensureScaffold(){
-    const dock = q('#build-dock'); if(!dock){ warn('Container #build-dock fehlt'); return null; }
-    dock.hidden=false; dock.classList.remove('hidden');
-    if(!dock.querySelector('.wrap')){
-      dock.appendChild(Object.assign(document.createElement('div'), { className:'wrap' }));
+  dock.querySelector('#btn-build-close').addEventListener('click', () => EVT('cb:build:close', { reason:'user' }));
+
+  // Daten lesen
+  function view(){
+    // Registry → Kategorien/Buildings
+    const cats = (window.Registry?.list?.('category') ?? [
+      { id:'infra', label:'Infrastruktur' },
+      { id:'prod',  label:'Produktion'   },
+      { id:'home',  label:'Wohnen'       },
+      { id:'trade', label:'Handel'       },
+      { id:'mil',   label:'Militär'      },
+    ]).map(c => ({ id:String(c.id), label: String(c.label??c.id)}));
+
+    const bld = (window.Registry?.list?.('building') ?? []).map(b => ({
+      id: String(b.id),
+      cat: String(b.cat ?? b.category ?? 'infra'),
+      label: String(b.label ?? b.name ?? b.id),
+      icon: b.icon || `assets/icons/${b.id}.png`,
+      cost: {
+        wood:  b.cost?.wood  ?? 0,
+        stone: b.cost?.stone ?? 0,
+        gold:  b.cost?.gold  ?? 0
+      }
+    }));
+
+    // Fallback: wenn Registry leer ist, einfache Demo-Einträge
+    if (!bld.length){
+      bld.push({ id:'b.hq', cat:'infra', label:'HQ', icon:'assets/icons/b.hq.png', cost:{wood:0,stone:0,gold:0} });
+      bld.push({ id:'b.sawmill', cat:'prod', label:'Sägewerk', icon:'assets/icons/b.sawmill.png', cost:{wood:3,stone:1,gold:0} });
     }
-    const wrap=q('#build-dock .wrap');
-    if(!q('#build-cats'))  wrap.appendChild(Object.assign(document.createElement('ul'), { id:'build-cats', className:'build-cats' }));
-    if(!q('#build-items')) wrap.appendChild(Object.assign(document.createElement('ul'), { id:'build-items', className:'build-list' }));
-    return { cats:q('#build-cats'), items:q('#build-items') };
+    return { cats, buildings: bld };
   }
 
-  function defaultData(){
-    const cats=[{id:'infra',label:'Infrastruktur'},{id:'prod',label:'Produktion'}];
-    const buildings=[
-      { id:'hq_wood', cat:'infra', label:'HQ (Holz)',    icon:'assets/icons/buildings/hq.png', cost:{wood:0,stone:0} },
-      { id:'lumber',  cat:'prod',  label:'Holzfäller',   icon:'assets/icons/buildings/lumber.png',  cost:{wood:6,stone:2} },
-      { id:'fisher',  cat:'prod',  label:'Fischerhütte', icon:'assets/icons/buildings/fisher.png',  cost:{wood:6,stone:2} },
-      { id:'quarry',  cat:'prod',  label:'Steinbruch',   icon:'assets/icons/buildings/quarry.png',  cost:{wood:6,stone:4} },
-    ];
-    return { cats, buildings };
-  }
+  let selectedId = null;
 
-  function readData(){
-    if (window.BuildBridge?.view) return window.BuildBridge.view();
-    const cats=(window.Registry?.list?.('category')||window.Registry?.get?.('categories')||[])
-      .map(c=>({id:String(c.id),label:String(c.label??c.id)}));
-    const buildings=(window.Registry?.list?.('building')||window.Registry?.get?.('buildings')||[])
-      .map(b=>({ id:String(b.id), cat:String(b.cat??b.category??'misc'),
-                 label:String(b.label??b.name??b.id),
-                 icon:(b.icon||b.sprite||''), cost:(b.cost||null) }));
-    if (cats.length && buildings.length) return {cats,buildings};
-    return defaultData();
-  }
+  function render(){
+    const root = dock.querySelector('#build-list');
+    const { buildings } = view();
+    root.innerHTML = '';
 
-  function applyCatHighlight(root){
-    root.querySelectorAll('li').forEach(li=>li.classList.toggle('active', li.dataset.cat===activeCat));
-  }
-  function applyItemHighlight(root){
-    root.querySelectorAll('li').forEach(li=>{
-      li.classList.toggle('is-selected', li.dataset.id===activeItem);
-      li.classList.toggle('active',      li.dataset.id===activeItem);
-    });
-  }
+    buildings.forEach(b => {
+      const li = document.createElement('div');
+      li.className = 'build-item';
+      li.dataset.id = b.id;
+      li.innerHTML = `
+        <img src="${b.icon}" alt="${b.label}">
+        <div class="label">${b.label}</div>
+        <small>[Holz:${b.cost.wood} Stein:${b.cost.stone}${b.cost.gold?` Gold:${b.cost.gold}`:''}]</small>
+      `;
+      if (b.id === selectedId) li.classList.add('is-selected');
 
-  function renderCats(root, cats){
-    root.innerHTML='';
-    cats.forEach((c,idx)=>{
-      const li=document.createElement('li');
-      li.className='build-cat'; li.dataset.cat=c.id; li.textContent=c.label;
-      if(!activeCat && idx===0) activeCat=c.id;
-      li.addEventListener('click',()=>{ activeCat=c.id; applyCatHighlight(root); renderItems(q('#build-items'), readData().buildings); });
-      root.appendChild(li);
-    });
-    applyCatHighlight(root);
-  }
-
-  function resBadge(key, amount){
-    if (!amount) return null;
-    const span=document.createElement('span'); span.className='res';
-    const img=document.createElement('img'); img.src=RES_ICON[key]||''; img.alt=key;
-    const txt=document.createElement('b'); txt.textContent=String(amount);
-    span.append(img, txt);
-    return span;
-  }
-
-  function renderItems(root, buildings){
-    root.innerHTML='';
-    const list=buildings.filter(b=>b.cat===activeCat);
-    list.forEach(b=>{
-      const li=document.createElement('li'); li.className='build-item'; li.dataset.id=b.id;
-
-      // Titel
-      const title=document.createElement('div'); title.className='title'; title.textContent=b.label;
-
-      // Icon (Thumb)
-      const thumb=document.createElement('img'); thumb.className='thumb'; thumb.loading='lazy'; thumb.decoding='async';
-      if (b.icon) { thumb.src=b.icon; thumb.alt=b.label; }
-
-      // Kosten
-      const cost=document.createElement('div'); cost.className='cost';
-      const costObj = b.cost||{};
-      ['wood','stone','food','gold'].forEach(k=>{
-        const node = resBadge(k, costObj[k]);
-        if (node) cost.appendChild(node);
+      li.addEventListener('click', () => {
+        selectedId = b.id;
+        root.querySelectorAll('.build-item').forEach(x=>x.classList.remove('is-selected'));
+        li.classList.add('is-selected');
+        EVT('cb:build:select', { id: b.id });
       });
 
-      li.append(title, thumb, cost);
-      li.addEventListener('click',()=>{ activeItem=b.id; applyItemHighlight(root); EVT('cb:build:select',{id:b.id}); });
       root.appendChild(li);
     });
-    applyItemHighlight(root);
   }
 
-  function init(){
-    const els=ensureScaffold(); if(!els) return;
-    const data=readData();
-    renderCats(els.cats, data.cats);
-    renderItems(els.items, data.buildings);
-    log('init ✓');
-  }
+  function open(){ dock.removeAttribute('hidden'); document.body.classList.add('has-build-open'); }
+  function close(){ dock.setAttribute('hidden',''); document.body.classList.remove('has-build-open'); }
 
-  // Lebenszyklus-Hooks (konform Lastenheft)
-  window.addEventListener('cb:registry-ready', init);
-  window.addEventListener('cb:registry:ready', init);
-  window.addEventListener('cb:game-start', init); // Fallback
+  // Events
+  window.addEventListener('cb:build:open',  ()=> open());
+  window.addEventListener('cb:build:close', ()=> close());
+  window.addEventListener('cb:registry-ready', render);
+
+  log('Modul geladen (v19.0.0)');
 })();
