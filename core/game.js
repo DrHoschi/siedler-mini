@@ -1,11 +1,11 @@
 // ============================================================================
 // Datei : core/game.js
 // Projekt: Neue Siedler
-// Version: v1.0.1
-// Zweck : Gekapselte Spiel-Engine (Raster, Map-Load, Platzierung, Loop)
+// Version: v1.1.0
+// Zweck : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API   : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events: cb:map:loaded  { mapId, tile, size:{w,h} }
-//         cb:res:change  { wood, stone, fish, gold, pop }
+//         cb:res:change  { ...resources }
 // ============================================================================
 (() => {
   // ------------------------ interner Zustand ------------------------
@@ -15,15 +15,20 @@
     canvas: null,
     ctx: null,
     w: 0, h: 0,
-    tile: 40, gridW: 32, gridH: 18,
+    tile: 64,
+    gridW: 32, gridH: 18,
     placements: [],                 // { x, y, id }
     hover: { x:-1, y:-1 },
-    selectedBuilding: null,         // aus cb:build:select
-    resources: { wood:0, stone:0, fish:0, gold:0, pop:0 },
-    rafId: 0
+    selectedBuilding: null,
+    resources: { wood:0, stone:0, food:0, gold:0, pop:0 },
+
+    // NEU
+    map: null,                      // SiedlerMap-Instanz
+    rafId: 0,
+    lastTs: 0
   };
 
-  // ------------------------ kleine Helpers -------------------------
+  // ------------------------ Helpers/Events -------------------------
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[game]', ...a);
   const warn = (...a) => (window.CBLog?.warn || console.warn)('[game]', ...a);
   const err  = (...a) => (window.CBLog?.err  || console.error)('[game]', ...a);
@@ -31,30 +36,33 @@
   const gridSnap = (px, size) => Math.floor(px / size);
 
   // ------------------------ Rendering --------------------------------
-  function drawBackground(ctx, w, h) { ctx.fillStyle = '#1a1d21'; ctx.fillRect(0, 0, w, h); }
-  function drawGrid(ctx, w, h, size) {
-    ctx.strokeStyle = 'rgba(255,255,255,.06)'; ctx.lineWidth = 1;
-    for (let x=0; x<=w; x+=size){ ctx.beginPath(); ctx.moveTo(x+.5,0); ctx.lineTo(x+.5,h); ctx.stroke(); }
-    for (let y=0; y<=h; y+=size){ ctx.beginPath(); ctx.moveTo(0,y+.5); ctx.lineTo(w,y+.5); ctx.stroke(); }
+  function frame(ts){
+    if (!_state.started) return;
+    const { ctx, canvas, map } = _state; if (!ctx || !canvas) return;
+
+    // Zeitdelta (Sek.)
+    const dt = _state.lastTs ? Math.min(0.1, (ts - _state.lastTs) / 1000) : 0;
+    _state.lastTs = ts;
+
+    // Map zeichnen (inkl. Camera/Zoom)
+    map?.draw();
+
+    // Placements (Debug – Rechtecke auf Tile-Gitter)
+    drawPlacements(ctx, _state.tile);
+
+    // Units updaten & zeichnen
+    window.Units?.update?.(dt);
+    window.Units?.draw?.(ctx);
+
+    _state.rafId = requestAnimationFrame(frame);
   }
+
   function drawPlacements(ctx, size){
     for (const p of _state.placements){
       const x=p.x*size, y=p.y*size;
       ctx.fillStyle='rgba(192,161,107,.35)'; ctx.fillRect(x,y,size,size);
       ctx.strokeStyle='rgba(192,161,107,.9)'; ctx.strokeRect(x+.5,y+.5,size-1,size-1);
     }
-  }
-  function drawHover(ctx, size){
-    if (_state.hover.x<0 || _state.hover.y<0) return;
-    const x=_state.hover.x*size, y=_state.hover.y*size;
-    ctx.strokeStyle='rgba(77,163,255,.9)'; ctx.lineWidth=2; ctx.strokeRect(x+1.5,y+1.5,size-3,size-3);
-  }
-
-  function frame(){
-    if (!_state.started) return;
-    const { ctx, w, h, tile } = _state; if (!ctx) return;
-    drawBackground(ctx, w, h); drawGrid(ctx, w, h, tile); drawPlacements(ctx, tile); drawHover(ctx, tile);
-    _state.rafId = requestAnimationFrame(frame);
   }
 
   // ------------------------ Map laden --------------------------------
@@ -76,11 +84,12 @@
     EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
   }
 
-  // ------------------------ Events/Inputs ----------------------------
+  // ------------------------ Inputs (Canvas) --------------------------
   function onResize(){
     const c=_state.canvas; if (!c) return;
     _state.w = (c.width  = c.clientWidth  || c.width);
     _state.h = (c.height = c.clientHeight || c.height);
+    _state.map?.setSize(_state.w, _state.h);
   }
   function onMouseMove(ev){
     const r=_state.canvas?.getBoundingClientRect(); if(!r) return;
@@ -90,12 +99,11 @@
   function onClick(ev){
     if(!_state.canvas || !_state.selectedBuilding) return;
     const r=_state.canvas.getBoundingClientRect();
-    const gx = gridSnap(ev.clientX - r.left, _state.tile);
-    const gy = gridSnap(ev.clientY - r.top,  _state.tile);
+    const gx = gridSnap(ev.clientX - r.left + _state.map.camX*_state.map.zoom, _state.tile);
+    const gy = gridSnap(ev.clientY - r.top  + _state.map.camY*_state.map.zoom, _state.tile);
     if (gx<0 || gy<0) return;
     _state.placements.push({ x:gx, y:gy, id:_state.selectedBuilding });
     log('placed', { id:_state.selectedBuilding, x:gx, y:gy });
-    // (Platzierungs-Event/Ökonomie kommt später – HUD-Init ist separat)
   }
 
   // ------------------------ Public API --------------------------------
@@ -103,6 +111,14 @@
     if(!canvas){ err('init: Canvas fehlt'); return; }
     _state.canvas = canvas;
     _state.ctx    = canvas.getContext('2d');
+
+    // Map-Laufzeit anlegen (globaler SiedlerMap aus map-runtime.js)
+    const dbg = document.getElementById('debug-map'); // optional
+    _state.map = new window.SiedlerMap(canvas, _state.ctx, dbg);
+
+    // Units initialisieren
+    window.Units?.init?.(_state.ctx, _state.tile);
+
     onResize();
     window.addEventListener('resize', onResize);
     canvas.addEventListener('mousemove', onMouseMove);
@@ -114,10 +130,23 @@
   async function start(mapId){
     _state.mapId  = mapId || _state.mapId || 'data/maps/map-mini.json';
     _state.started = true;
+
+    // Map-Daten in Game-State (für HUD/Grid) und in SiedlerMap laden
     await loadMap(_state.mapId);
+    await _state.map.loadMap(_state.mapId);
+    _state.map.reload();           // Kamera reset
+    onResize();                    // Größe weitergeben
+
+    // **Demo-HQ & Träger** (solange kein echtes HQ platziert wurde):
+    const HQ = { x: (_state.gridW*_state.tile)/2, y: (_state.gridH*_state.tile)/2 };
+    const spawn = { x: HQ.x - _state.tile*4, y: HQ.y - _state.tile*2 };
+    window.Units?.spawnCarrier?.(spawn, HQ);
+
     cancelAnimationFrame(_state.rafId);
+    _state.lastTs = 0;
     _state.rafId = requestAnimationFrame(frame);
-    // HUD initial befüllen – SOFORT nach Start (siehe Lastenheft: HUD reagiert auf cb:res:change)
+
+    // HUD initial befüllen – sofort nach Start
     EVT('cb:res:change', { ..._state.resources });
   }
 
