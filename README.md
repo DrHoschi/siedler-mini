@@ -100,6 +100,7 @@ Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 	•	save.json → Savegames, versionssicher ￼
 
  🏗️ Entwicklungsstandards
+ 
 	•	Einheitliche Dateistruktur: 
 		Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports ￼
 	•	Jedes Modul loggt beim Laden seine Version:
@@ -109,6 +110,7 @@ Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 	•	Inspector & Debug-Tools sind Pflichtbestandteile.
 
 📜 Setup & Start
+
 	1.	Repo clonen oder ZIP entpacken
 	2.	Lokalen Server starten (z. B. npx http-server)
 	3.	Im Browser http://localhost:8080 öffnen
@@ -136,6 +138,7 @@ Design: Tabs oben, aktiver Tab hellgrau, Overlay im Vollbild ￼.
 ⸻
 
 👉 Empfehlung: 
+
 Den Inspector kannst du später nach tools/ verschieben, solange die Einbindung in index.html und Events (cb:insp:*) bestehen bleibt.
 
 Ziel-Struktur (Standard)
