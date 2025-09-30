@@ -1,16 +1,17 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.4.1
+// Version : v1.5.0
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
-// Events  : cb:map:loaded   { mapId, tile, size:{w,h} }
-//           cb:res:change   { ...resources }
-//           cb:place:preview{ id,gx,gy,sx,sy,size,invalid }
-//           cb:place:confirm{ id,gx,gy } (von UI)
-//           cb:place:cancel { }         (von UI)
-// Notes   : Platzieren mit Preview+Confirm (✅/❌), Exit bei Cancel/Confirm,
-//           Platzierprüfung (Map-Bounds + Kollision), Icons über Registry
+// Events  : cb:map:loaded    { mapId, tile, size:{w,h} }
+//           cb:res:change    { ...resources }
+//           cb:place:preview { id,gx,gy,sx,sy,size,invalid, w,h, door:{dx,dy} }
+//           cb:place:confirm { id,gx,gy } (von UI)
+//           cb:place:cancel  { }         (von UI)
+// Notes   : Platzieren mit Preview+Confirm (✅/❌)
+//           Platzierregeln: Bounds, 3×3-Footprint, Abstand 1, Terrainverbote (Wasser)
+//           Icons aus Registry; Kamera-Clamp an Kartenrand
 // ============================================================================
 
 (() => {
@@ -29,7 +30,7 @@
     gridW: 32, gridH: 18,
 
     // Weltobjekte
-    placements: [],                 // { x, y, id }  (Tile-Koords!)
+    placements: [],                 // { id, x, y, w, h, door:{dx,dy} } – x/y = Tile-Ursprung (oben links)
     occupied : new Set(),           // "x,y" → schnell prüfen ob belegt
     hover: { x:-1, y:-1 },          // Tile unter Cursor
     selectedBuilding: null,         // aktuell gewählter Gebäudetyp
@@ -56,7 +57,7 @@
     // Tap-Tracking (für Preview)
     tapStart: { x:0, y:0 },
 
-    // Icon-Cache
+    // Icons (Registry)
     iconMap : null,                 // id -> url
     imgCache: new Map(),            // url -> HTMLImageElement | 'loading' | 'error'
   };
@@ -70,33 +71,114 @@
   const clamp = (v,mi,ma)=>Math.min(ma,Math.max(mi,v));
   const snap  = (v,s)=>Math.floor(v/s);
   const EPS   = 1e-6;
-
   const keyXY = (x,y)=>`${x},${y}`;
 
-  // -- Platzier-/Bounds-Helper ----------------------------------------------
+  // == Building-Definitionen (aus Registry) =================================
+  // Erwartete optionale Felder je Building (wenn in Registry gesetzt):
+  //   - size: { w, h }            // Default 3×3
+  //   - door: { dx, dy }          // Default {1,1} (Mitte)
+  //   - blockedTerrains: ["water"] // Terrainverbote
+  function getBuildingDef(id){
+    const out = { id, size:{ w:3, h:3 }, door:{ dx:1, dy:1 }, blockedTerrains: ['water'] };
+    try{
+      let list = window.Registry?.list?.('building') || window.Registry?.get?.('buildings');
+      if (Array.isArray(list)){
+        const b = list.find(x => String(x.id) === String(id));
+        if (b){
+          const w = +((b.size && b.size.w) ?? b.w ?? 3);
+          const h = +((b.size && b.size.h) ?? b.h ?? 3);
+          const dx= +((b.door && b.door.dx) ?? b.doorDx ?? 1);
+          const dy= +((b.door && b.door.dy) ?? b.doorDy ?? 1);
+          out.size = { w: Math.max(1,w|0), h: Math.max(1,h|0) };
+          out.door = { dx: clamp(dx|0,0,out.size.w-1), dy: clamp(dy|0,0,out.size.h-1) };
+          if (Array.isArray(b.blockedTerrains)) out.blockedTerrains = b.blockedTerrains.slice();
+        }
+      }
+    }catch(e){ /* defensiv */ }
+    return out;
+  }
+
+  // == Platzier-/Bounds-Helper ==============================================
   function inBoundsTile(gx, gy){
     return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
   }
-  function isFree(gx, gy){
-    return !_state.occupied.has(keyXY(gx,gy));
+  function inBoundsFootprint(gx, gy, w, h){
+    return inBoundsTile(gx, gy) && inBoundsTile(gx + w - 1, gy + h - 1);
   }
-  function canPlaceAt(gx, gy, id){
-    if (!inBoundsTile(gx,gy)) return false;
-    if (!isFree(gx,gy))       return false;
-    // optional Map-spezifische Prüfung
-    try{
-      if (_state.map?.canPlace && !_state.map.canPlace(gx,gy,id)) return false;
-    }catch(e){ /* defensiv: ignoriere Fehler */ }
+  function isFree(gx, gy){ return !_state.occupied.has(keyXY(gx,gy)); }
+
+  // Belegt ALLE Tiles des Footprints
+  function occupyFootprint(g0, h0, w, h){
+    for (let dy=0; dy<h; dy++){
+      for (let dx=0; dx<w; dx++){
+        _state.occupied.add(keyXY(g0+dx, h0+dy));
+      }
+    }
+  }
+  function rebuildOccupied(){
+    _state.occupied.clear();
+    for (const p of _state.placements){
+      occupyFootprint(p.x, p.y, p.w, p.h);
+    }
+  }
+
+  // Terraincheck via Map, wenn vorhanden
+  function isBlockedByTerrain(gx, gy, def){
+    const m = _state.map;
+    if (!m || !def.blockedTerrains?.length) return false;
+
+    // 1) map.isWater(gx,gy)
+    if (typeof m.isWater === 'function' && def.blockedTerrains.includes('water')){
+      try{ if (m.isWater(gx,gy)) return true; }catch(e){}
+    }
+    // 2) map.terrainAt(gx,gy) → 'water' etc.
+    if (typeof m.terrainAt === 'function'){
+      try{
+        const t = m.terrainAt(gx,gy);
+        if (t && def.blockedTerrains.includes(String(t))) return true;
+      }catch(e){}
+    }
+    return false;
+  }
+
+  // Abstandsradius (Chebyshev-Distanz) um den Footprint
+  function anyOccupiedWithinMargin(g0, h0, w, h, margin=1){
+    for (let y=h0 - margin; y<=h0 + h - 1 + margin; y++){
+      for (let x=g0 - margin; x<=g0 + w - 1 + margin; x++){
+        // Innerer Bereich ist der Platz selbst → der wird in der Prüfung separat behandelt
+        const isInside = (x>=g0 && y>=h0 && x<=g0+w-1 && y<=h0+h-1);
+        if (!isInside){
+          if (inBoundsTile(x,y) && _state.occupied.has(keyXY(x,y))) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // **Zentrale Regelprüfung**
+  function canPlaceAtFootprint(g0, h0, id){
+    const def = getBuildingDef(id);
+    const { w, h } = def.size;
+
+    // 1) Bounds
+    if (!inBoundsFootprint(g0, h0, w, h)) return false;
+
+    // 2) Kollisionen im Footprint (frei?)
+    for (let dy=0; dy<h; dy++){
+      for (let dx=0; dx<w; dx++){
+        const gx = g0 + dx, gy = h0 + dy;
+        if (!isFree(gx,gy)) return false;
+        if (isBlockedByTerrain(gx,gy,def)) return false;
+      }
+    }
+
+    // 3) Abstand 1 rundherum
+    if (anyOccupiedWithinMargin(g0, h0, w, h, 1)) return false;
+
     return true;
   }
 
-  function occupy(gx,gy){ _state.occupied.add(keyXY(gx,gy)); }
-  function rebuildOccupied(){
-    _state.occupied.clear();
-    for (const p of _state.placements) occupy(p.x,p.y);
-  }
-
-  // -- Kamera-Clamp ----------------------------------------------------------
+  // == Kamera-Clamp ==========================================================
   function clampCameraToMap(){
     const worldW = _state.gridW * _state.tile;
     const worldH = _state.gridH * _state.tile;
@@ -114,7 +196,7 @@
     if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
 
-  // -- Projektion ------------------------------------------------------------
+  // == Projektion ============================================================
   function screenToCanvasPx(clientX, clientY){
     const c=_state.canvas, r=c.getBoundingClientRect();
     return { sx:(clientX-r.left)*(c.width/r.width), sy:(clientY-r.top)*(c.height/r.height) };
@@ -134,25 +216,20 @@
     clampCameraToMap();
   }
 
-  // -- Icons (Registry) ------------------------------------------------------
+  // == Icons (Registry) ======================================================
   function buildIconMap(){
     if (_state.iconMap) return _state.iconMap;
     const map = new Map();
     try{
-      // bevorzugt: Registry.list('building')
-      let list = window.Registry?.list?.('building');
-      if (!Array.isArray(list)){
-        // Fallback: Registry.get('buildings')
-        list = window.Registry?.get?.('buildings');
-      }
+      let list = window.Registry?.list?.('building') || window.Registry?.get?.('buildings');
       if (Array.isArray(list)){
         for (const b of list){
           const id   = String(b.id);
-          const icon = b.icon || b.iconUrl || null; // laut Monolith: normalisiert
+          const icon = b.icon || b.iconUrl || null;
           if (icon) map.set(id, icon);
         }
       }
-    }catch(e){ /* egal */ }
+    }catch(e){}
     _state.iconMap = map;
     return map;
   }
@@ -166,14 +243,12 @@
     const c = _state.imgCache.get(url);
     if (c && c instanceof HTMLImageElement) return c;
     if (c === 'loading' || c === 'error') return null;
-
-    // Laden starten
     const img = new Image();
     _state.imgCache.set(url, 'loading');
     img.onload = ()=>_state.imgCache.set(url, img);
     img.onerror= ()=>_state.imgCache.set(url, 'error');
     img.src = url;
-    return null; // beim nächsten Frame verfügbar
+    return null;
   }
 
   // == Rendering =============================================================
@@ -185,10 +260,10 @@
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
 
-    // Map
+    // A) Map
     map?.draw();
 
-    // Weltobjekte + Ghost
+    // B) Weltobjekte + Ghost
     ctx.save();
     drawGhost(ctx);
     drawPlacements(ctx);
@@ -198,67 +273,65 @@
     _state.rafId = requestAnimationFrame(frame);
   }
 
-  function drawRectTile(ctx, sx, sy, s, ok){
-    if (ok){
-      ctx.fillStyle = 'rgba(120,200,120,.28)';
-      ctx.strokeStyle = 'rgba(120,200,120,.85)';
-    }else{
-      ctx.fillStyle = 'rgba(200,80,80,.28)';
-      ctx.strokeStyle = 'rgba(200,80,80,.9)';
-    }
-    ctx.fillRect(sx,sy,s,s);
-    ctx.strokeRect(sx+.5, sy+.5, s-1, s-1);
+  // -- Render-Helfer ---------------------------------------------------------
+  function drawRect(ctx, sx, sy, w, h, ok){
+    ctx.fillStyle   = ok ? 'rgba(120,200,120,.22)' : 'rgba(200,80,80,.22)';
+    ctx.strokeStyle = ok ? 'rgba(120,200,120,.85)' : 'rgba(200,80,80,.9)';
+    ctx.fillRect(sx,sy,w,h);
+    ctx.strokeRect(sx+.5, sy+.5, w-1, h-1);
   }
-
   function drawIcon(ctx, img, sx, sy, s){
-    // Icon mittig im Tile, mit kleinem Margin
     const pad = Math.max(4, Math.floor(s*0.1));
-    const w = s - pad*2;
-    const h = s - pad*2;
-    ctx.drawImage(img, sx+pad, sy+pad, w, h);
+    ctx.drawImage(img, sx+pad, sy+pad, s-2*pad, s-2*pad);
   }
 
   function drawPlacements(ctx){
-    const s = _state.tile * _state.zoom;
     for(const p of _state.placements){
+      const s = _state.tile * _state.zoom;
       const {sx,sy} = worldToScreen(p.x*_state.tile, p.y*_state.tile);
+
+      // Footprint-Rahmen (dezent)
+      drawRect(ctx, sx, sy, p.w*s, p.h*s, true);
+
+      // Icon mittig auf Ursprungskachel
       const img = getIconImage(p.id);
-      if (img) {
+      if (img){
         drawIcon(ctx, img, sx, sy, s);
-      } else {
-        // bis Icon geladen ist: dezente Kachel
-        drawRectTile(ctx, sx, sy, s, true);
       }
     }
   }
 
   function drawGhost(ctx){
-    const s  = _state.tile * _state.zoom;
     let gx=-1, gy=-1, id=_state.selectedBuilding;
-
     if (_state.preview){ gx=_state.preview.gx; gy=_state.preview.gy; id=_state.preview.id; }
-    else if (id && inBoundsTile(_state.hover.x,_state.hover.y)){
-      gx=_state.hover.x; gy=_state.hover.y;
-    }
-    if (!inBoundsTile(gx,gy) || !id) {
-      // UI ggf. verstecken, wenn Preview aktiv aber jetzt ungültig
+    else if (id && inBoundsTile(_state.hover.x,_state.hover.y)){ gx=_state.hover.x; gy=_state.hover.y; }
+
+    if (!inBoundsTile(gx,gy) || !id){
       if (_state.preview && !inBoundsTile(gx,gy)) EVT('cb:place:preview', { invalid:true });
       return;
     }
 
-    const {sx,sy} = worldToScreen(gx*_state.tile, gy*_state.tile);
-    const ok = canPlaceAt(gx,gy,id);
+    const def = getBuildingDef(id);
+    const s   = _state.tile * _state.zoom;
+    const pos = worldToScreen(gx*_state.tile, gy*_state.tile);
+    const ok  = canPlaceAtFootprint(gx, gy, id);
 
-    // Ghost mit Icon (halbtransparent) oder Quadrat
+    // Footprint (komplett, grün/rot)
+    drawRect(ctx, pos.sx, pos.sy, def.size.w*s, def.size.h*s, ok);
+
+    // Icon auf Ursprungskachel
     const img = getIconImage(id);
-    ctx.save();
-    ctx.globalAlpha = ok ? 0.85 : 0.6;
-    if (img) drawIcon(ctx, img, sx, sy, s);
-    else     drawRectTile(ctx, sx, sy, s, ok);
-    ctx.restore();
+    if (img){
+      ctx.save();
+      ctx.globalAlpha = ok ? 0.9 : 0.7;
+      drawIcon(ctx, img, pos.sx, pos.sy, s);
+      ctx.restore();
+    }
 
-    // Buttons nur anzeigen, wenn Platzierung gültig ist
-    EVT('cb:place:preview', { id, gx, gy, sx, sy, size: s, invalid: !ok });
+    EVT('cb:place:preview', {
+      id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
+      w:def.size.w, h:def.size.h, door:{...def.door}
+    });
   }
 
   function drawUnitsWithProjection(ctx, dt){
@@ -387,15 +460,17 @@
       const gx   = snap(wpos.wx, _state.tile);
       const gy   = snap(wpos.wy, _state.tile);
 
-      const ok = canPlaceAt(gx,gy,_state.selectedBuilding);
+      const ok = canPlaceAtFootprint(gx,gy,_state.selectedBuilding);
       if (!ok){
         _state.preview = null;
         EVT('cb:place:preview', { invalid:true });
       } else {
         _state.preview = { id:_state.selectedBuilding, gx, gy };
+        const def = getBuildingDef(_state.selectedBuilding);
         const { sx, sy } = worldToScreen(gx*_state.tile, gy*_state.tile);
         EVT('cb:place:preview', {
-          id:_state.preview.id, gx, gy, sx, sy, size: _state.tile * _state.zoom, invalid:false
+          id:_state.preview.id, gx, gy, sx, sy, size: _state.tile * _state.zoom, invalid:false,
+          w:def.size.w, h:def.size.h, door:{...def.door}
         });
       }
     }
@@ -455,36 +530,34 @@
     // Auswahl aus Baumenü
     window.addEventListener('cb:build:select', (e)=>{
       _state.selectedBuilding = e?.detail?.id || null;
-      _state.preview = null;                           // alte Preview verwerfen
-      EVT('cb:place:preview', { invalid:true });      // UI verstecken
+      _state.preview = null;
+      EVT('cb:place:preview', { invalid:true });
       log('select building', _state.selectedBuilding);
     });
 
-    // Confirm/Cancel von der UI
-window.addEventListener('cb:place:confirm', (e)=>{
-  const d = e.detail || {};
-  if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
-    // Safety: kann sich in der Zwischenzeit was geändert haben?
-    if (canPlaceAt(d.gx, d.gy, _state.preview.id)){
-      _state.placements.push({ x:d.gx, y:d.gy, id:_state.preview.id });
-      occupy(d.gx, d.gy);
-      log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy });
-    } else {
-      warn('confirm: Position inzwischen unplazierbar');
-    }
-  }
-  // === Serienbau: im Build-Mode bleiben ===
-  _state.preview = null;                 // nur die aktuelle Vorschau beenden
-  // _state.selectedBuilding = null;     // <-- DIESEN RESET WEG LASSEN!
-  EVT('cb:place:preview', { invalid:true }); // Buttons einklappen, bis nächste Stelle gewählt wird
-});
+    // Confirm/Cancel von der UI (Serienbau aktiv)
+    window.addEventListener('cb:place:confirm', (e)=>{
+      const d = e.detail || {};
+      if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
+        const def = getBuildingDef(_state.preview.id);
+        if (canPlaceAtFootprint(d.gx, d.gy, _state.preview.id)){
+          _state.placements.push({ id:_state.preview.id, x:d.gx, y:d.gy, w:def.size.w, h:def.size.h, door:{...def.door} });
+          occupyFootprint(d.gx, d.gy, def.size.w, def.size.h);
+          log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy, w:def.size.w, h:def.size.h });
+        } else {
+          warn('confirm: Position inzwischen unplazierbar');
+        }
+      }
+      _state.preview = null;                       // Serienbau: Building bleibt selektiert
+      EVT('cb:place:preview', { invalid:true });   // Buttons einklappen bis nächster Tap
+    });
 
-window.addEventListener('cb:place:cancel', ()=>{
-  _state.preview = null;
-  _state.selectedBuilding = null;        // <<< Nur hier Baumodus verlassen
-  EVT('cb:place:preview', { invalid:true });
-  log('place canceled');
-});
+    window.addEventListener('cb:place:cancel', ()=>{
+      _state.preview = null;
+      _state.selectedBuilding = null;              // Baumodus verlassen
+      EVT('cb:place:preview', { invalid:true });
+      log('place canceled');
+    });
 
     log('init ✓');
   }
