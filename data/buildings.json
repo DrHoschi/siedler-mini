@@ -1,10 +1,15 @@
 {
   "iconsBase": "assets/ui/build/",
   "categories": [
-    { "id": "admin",   "label": "Gebäude"    },
-    { "id": "main",    "label": "Verwaltung" },
-    { "id": "resource","label": "Rohstoffe"  },
-    { "id": "food",    "label": "Nahrung"    }
+    { "id": "all",      "label": "Alles"      },
+    { "id": "admin",    "label": "Verwaltung" },
+    { "id": "resource", "label": "Rohstoffe"  },
+    { "id": "food",     "label": "Nahrung"    },
+    { "id": "housing",  "label": "Hütten"     },
+    { "id": "logistics","label": "Straßen/Lager"    },
+    { "id": "military", "label": "Verteidigung"    },
+    { "id": "decor",    "label": "Decoration"    },
+    { "id": "roads",    "label": "Wege/Pfade"    }
   ],
   "buildings": [
     {
