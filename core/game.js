@@ -1,14 +1,15 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.3.4
+// Version : v1.4.0
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
-// Events  : cb:map:loaded  { mapId, tile, size:{w,h} }
-//           cb:res:change  { ...resources }
-// Notes   : Pan/Zoom nur auf Canvas; Weltobjekte per world→screen projektiert
-//           v1.3.3: robuster Kamera-Clamp + Safari Touch-Fixes
-//           v1.3.4: Platzieren via pointerup (Tap) statt click → iOS-sicher
+// Events  : cb:map:loaded   { mapId, tile, size:{w,h} }
+//           cb:res:change   { ...resources }
+//           cb:place:preview{ id,gx,gy,sx,sy,size,invalid }
+//           cb:place:confirm{ id,gx,gy } (von UI)
+//           cb:place:cancel { }         (von UI)
+// Notes   : Platzieren mit Preview+Confirm (✅/❌), iOS-sichere Pointer-Logik
 // ============================================================================
 
 (() => {
@@ -28,15 +29,15 @@
 
     // Weltobjekte
     placements: [],                 // { x, y, id }  (Tile-Koords!)
-    hover: { x:-1, y:-1 },          // Tile unter Cursor (Tile-Koords)
+    hover: { x:-1, y:-1 },          // Tile unter Cursor
     selectedBuilding: null,
 
     // Ressourcen
     resources: { wood:0, stone:0, food:0, gold:0, pop:0 },
 
     // Map / Kamera / Loop
-    map  : null,                    // SiedlerMap-Instanz
-    camX : 0,                       // Welt-Offset in Pixel
+    map  : null,
+    camX : 0,
     camY : 0,
     zoom : 1,
     rafId: 0, lastTs: 0,
@@ -45,15 +46,15 @@
     panActive: false,
     panStart : { x:0, y:0, camX:0, camY:0 },
 
-    // Pinch (Pointer Events)
+    // Pinch
     pointers: new Map(),            // pointerId -> {x,y}
     pinch   : { active:false, d0:1, zoom0:1, center:{x:0,y:0} },
 
-    // Tap-Tracking für Platzierung
-    tapStart: { x:0, y:0 },         // Screen-Koords bei pointerdown (für Tap-Schwelle)
+    // Tap-Tracking (für Preview)
+    tapStart: { x:0, y:0 },
 
-    // Safari: Doppel-Tap Kill-Switch (Smart-Zoom verhindern)
-    lastTapTs: 0,                   // ms
+    // Aktive Preview (wartet auf ✅/❌)
+    preview: null,                  // { id,gx,gy }
   };
 
   // == Utils / Events ========================================================
@@ -71,61 +72,42 @@
     return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
   }
 
-  // Kamera innerhalb Karte (rechts/unten robust, inkl. Float-Fehler)
   function clampCameraToMap(){
     const worldW = _state.gridW * _state.tile;
     const worldH = _state.gridH * _state.tile;
-
     const viewW  = _state.w / Math.max(EPS, _state.zoom);
     const viewH  = _state.h / Math.max(EPS, _state.zoom);
 
     let maxX = worldW - viewW;
     let maxY = worldH - viewH;
-
     if (Math.abs(maxX) < EPS) maxX = 0;
     if (Math.abs(maxY) < EPS) maxY = 0;
 
-    if (maxX < 0){
-      _state.camX = (worldW - viewW) * 0.5;  // Welt kleiner als View → zentrieren
-    } else {
-      _state.camX = clamp(_state.camX, 0, maxX);
-    }
-    if (maxY < 0){
-      _state.camY = (worldH - viewH) * 0.5;
-    } else {
-      _state.camY = clamp(_state.camY, 0, maxY);
-    }
+    if (maxX < 0){ _state.camX = (worldW - viewW)*.5; } else { _state.camX = clamp(_state.camX, 0, maxX); }
+    if (maxY < 0){ _state.camY = (worldH - viewH)*.5; } else { _state.camY = clamp(_state.camY, 0, maxY); }
 
-    if (_state.map){
-      _state.map.camX = _state.camX;
-      _state.map.camY = _state.camY;
-    }
+    if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
 
-  // -- Koord.-Projektion (DPR-sicher) ---------------------------------------
+  // -- Projektion ------------------------------------------------------------
   function screenToCanvasPx(clientX, clientY){
     const c=_state.canvas, r=c.getBoundingClientRect();
-    return {
-      sx: (clientX - r.left) * (c.width  / r.width),
-      sy: (clientY - r.top ) * (c.height / r.height),
-    };
+    return { sx:(clientX-r.left)*(c.width/r.width), sy:(clientY-r.top)*(c.height/r.height) };
   }
   function screenToWorld(clientX, clientY){
     const {sx,sy}=screenToCanvasPx(clientX,clientY);
     return { wx: sx/_state.zoom + _state.camX, wy: sy/_state.zoom + _state.camY };
   }
   function worldToScreen(wx, wy){
-    return { sx: (wx - _state.camX)*_state.zoom, sy: (wy - _state.camY)*_state.zoom };
+    return { sx:(wx-_state.camX)*_state.zoom, sy:(wy-_state.camY)*_state.zoom };
   }
 
-  // -- Kamera mit Map synchronisieren ---------------------------------------
   function syncCamFromMap(){
-    const m = _state.map; if (!m) return;
-    const mx = m.camX; const my = m.camY; const mz = m.zoom;
-    if (typeof mx === 'number') _state.camX = mx;
-    if (typeof my === 'number') _state.camY = my;
-    if (typeof mz === 'number') _state.zoom = mz;
-    clampCameraToMap(); // Safety
+    const m=_state.map; if(!m) return;
+    if (typeof m.camX==='number') _state.camX=m.camX;
+    if (typeof m.camY==='number') _state.camY=m.camY;
+    if (typeof m.zoom==='number') _state.zoom=m.zoom;
+    clampCameraToMap();
   }
 
   // == Rendering =============================================================
@@ -133,17 +115,16 @@
     if(!_state.started) return;
     const {ctx,canvas,map}=_state; if(!ctx||!canvas) return;
 
-    // Map → Kamera abgleichen (falls Map intern Pan/Zoom ändert)
     syncCamFromMap();
-
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
 
-    // A) Map (eigenes Rendering)
+    // Map
     map?.draw();
 
-    // B) Weltobjekte (projektiert)
+    // Weltobjekte + Ghost
     ctx.save();
+    drawGhost(ctx);        // halbtransparente Vorschau am Hover oder Preview
     drawPlacements(ctx);
     window.Units && drawUnitsWithProjection(ctx, dt);
     ctx.restore();
@@ -152,7 +133,7 @@
   }
 
   function drawPlacements(ctx){
-    const s = _state.tile * _state.zoom;  // sichtbare Kachelgröße
+    const s = _state.tile * _state.zoom;
     for(const p of _state.placements){
       const {sx,sy} = worldToScreen(p.x*_state.tile, p.y*_state.tile);
       ctx.fillStyle   = 'rgba(192,161,107,.35)';
@@ -161,9 +142,40 @@
       ctx.strokeRect(sx+.5, sy+.5, s-1, s-1);
     }
   }
+
+  function drawGhost(ctx){
+    const s = _state.tile * _state.zoom;
+    let gx=-1, gy=-1;
+
+    // Wenn Preview aktiv, diese Priorität (fixiert), sonst Hover (live)
+    if (_state.preview){ gx=_state.preview.gx; gy=_state.preview.gy; }
+    else if (_state.selectedBuilding && inBoundsTile(_state.hover.x,_state.hover.y)){
+      gx=_state.hover.x; gy=_state.hover.y;
+    }
+
+    if (!inBoundsTile(gx,gy)) return;
+
+    const {sx,sy} = worldToScreen(gx*_state.tile, gy*_state.tile);
+    ctx.fillStyle = 'rgba(120,200,120,.28)';  // grünlich = prinzipiell baubar
+    ctx.fillRect(sx, sy, s, s);
+    ctx.strokeStyle = 'rgba(120,200,120,.85)';
+    ctx.strokeRect(sx+.5, sy+.5, s-1, s-1);
+
+    // UI-Preview-Event schicken (für Button-Overlay)
+    if (_state.preview){
+      EVT('cb:place:preview', {
+        id: _state.preview.id,
+        gx, gy,
+        sx, sy,
+        size: s,
+        invalid: false
+      });
+    }
+  }
+
   function drawUnitsWithProjection(ctx, dt){
     window.Units?.update?.(dt, { zoom:_state.zoom, camX:_state.camX, camY:_state.camY });
-    window.Units?.drawProjected?.(ctx, (wx,wy)=>worldToScreen(wx,wy)); // optional API
+    window.Units?.drawProjected?.(ctx, (wx,wy)=>worldToScreen(wx,wy));
   }
 
   // == Map laden =============================================================
@@ -185,14 +197,13 @@
     EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
   }
 
-  // == Inputs (Resize / Pan / Pinch / Zoom / Platzieren) =====================
+  // == Inputs (Resize / Pan / Pinch / Zoom / Preview-Tap) ====================
   function onResize(){
     const c=_state.canvas; if(!c) return;
     _state.w = (c.width  = c.clientWidth  || c.width);
     _state.h = (c.height = c.clientHeight || c.height);
     _state.map?.setSize(_state.w,_state.h);
 
-    // Kamera aus Map spiegeln + clampen
     if (_state.map){
       _state.camX = _state.map.camX ?? _state.camX;
       _state.camY = _state.map.camY ?? _state.camY;
@@ -201,7 +212,6 @@
     }
   }
 
-  // -- Pointer-Bookkeeping (Pan/Pinch) --------------------------------------
   function rememberPointer(ev){ _state.pointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY}); }
   function forgetPointer(ev){ _state.pointers.delete(ev.pointerId); if(_state.pointers.size<2) _state.pinch.active=false; }
 
@@ -219,17 +229,14 @@
   function onPointerDown(ev){
     rememberPointer(ev);
 
-    // 2 Finger → Pinch-Setup
     if (_state.pointers.size===2 && tryStartPinch()) return;
 
-    // 1 Finger:
     if (_state.selectedBuilding){
-      // Platziermodus → Tap-Start merken (wir pannen hier NICHT)
       _state.tapStart.x = ev.clientX;
       _state.tapStart.y = ev.clientY;
       _state.panActive  = false;
+      // Preview wird erst auf pointerup erzeugt (Tap-Schwelle)
     } else if (!_state.pinch.active){
-      // Kein Platziermodus → Pan starten
       _state.panActive = true;
       _state.canvas.setPointerCapture?.(ev.pointerId);
       _state.panStart = { x:ev.clientX, y:ev.clientY, camX:_state.camX, camY:_state.camY };
@@ -239,23 +246,22 @@
   function onPointerMove(ev){
     rememberPointer(ev);
 
-    // -- Hover (Tile unter Cursor) – nur innerhalb der Map zeigen ------------
+    // Hover (nur innerhalb der Map)
     {
       const wpos = screenToWorld(ev.clientX, ev.clientY);
       const gx = snap(wpos.wx, _state.tile);
       const gy = snap(wpos.wy, _state.tile);
-      if (inBoundsTile(gx, gy)) { _state.hover.x = gx; _state.hover.y = gy; }
-      else                      { _state.hover.x = -1; _state.hover.y = -1; }
+      if (inBoundsTile(gx, gy)) { _state.hover.x=gx; _state.hover.y=gy; }
+      else                      { _state.hover.x=-1; _state.hover.y=-1; }
     }
 
-    // -- Pinch-Zoom ----------------------------------------------------------
+    // Pinch
     if (_state.pinch.active && _state.pointers.size===2){
       const [a,b] = [..._state.pointers.values()];
       const dist  = Math.hypot(a.x-b.x, a.y-b.y);
       const factor= dist / Math.max(1,_state.pinch.d0);
       const newZ  = clamp(_state.pinch.zoom0 * factor, _state.map?.minZoom ?? 0.5, _state.map?.maxZoom ?? 3);
 
-      // Zoom um Zentrum stabilisieren
       const before = screenToWorld(_state.pinch.center.x, _state.pinch.center.y);
       _state.zoom  = newZ;
       const cs     = screenToCanvasPx(_state.pinch.center.x, _state.pinch.center.y);
@@ -267,7 +273,7 @@
       return;
     }
 
-    // -- Pan -----------------------------------------------------------------
+    // Pan
     if (_state.panActive && !_state.selectedBuilding){
       const dx = (ev.clientX - _state.panStart.x) / Math.max(EPS,_state.zoom);
       const dy = (ev.clientY - _state.panStart.y) / Math.max(EPS,_state.zoom);
@@ -279,21 +285,31 @@
   }
 
   function onPointerUp(ev){
-    // Tap → Gebäude platzieren (nur wenn: Platziermodus aktiv, kein Pinch, kaum Bewegung)
     const wasPlacing = !!_state.selectedBuilding;
     const wasPinch   = _state.pinch.active;
 
-    forgetPointer(ev);                // pointer bookkeeping
-    const moved = Math.hypot(ev.clientX - _state.tapStart.x, ev.clientY - _state.tapStart.y);
-    const isTap = moved < 8;          // ~8px Schwelle reicht für Finger
+    forgetPointer(ev);
 
+    // Tap-Schwelle
+    const moved = Math.hypot(ev.clientX - _state.tapStart.x, ev.clientY - _state.tapStart.y);
+    const isTap = moved < 8;
+
+    // Preview erzeugen (fixieren), nicht sofort bauen
     if (wasPlacing && !wasPinch && isTap){
       const wpos = screenToWorld(ev.clientX, ev.clientY);
       const gx   = snap(wpos.wx, _state.tile);
       const gy   = snap(wpos.wy, _state.tile);
-      if (inBoundsTile(gx, gy)){
-        _state.placements.push({ x:gx, y:gy, id:_state.selectedBuilding });
-        log('placed', { id:_state.selectedBuilding, x:gx, y:gy });
+
+      if (!inBoundsTile(gx, gy)){
+        // außerhalb – UI weglassen
+        _state.preview = null;
+        EVT('cb:place:preview', { invalid:true });
+      } else {
+        _state.preview = { id:_state.selectedBuilding, gx, gy };
+        const { sx, sy } = worldToScreen(gx*_state.tile, gy*_state.tile);
+        EVT('cb:place:preview', {
+          id:_state.preview.id, gx, gy, sx, sy, size: _state.tile * _state.zoom, invalid:false
+        });
       }
     }
 
@@ -301,7 +317,6 @@
   }
 
   function onWheel(ev){
-    // Desktop-Scroll-Zoom
     ev.preventDefault();
     const old = _state.zoom;
     const fac = ev.deltaY<0 ? 1.1 : 0.9;
@@ -323,23 +338,17 @@
     _state.canvas = canvas;
     _state.ctx    = canvas.getContext('2d');
 
-    // Mobile/Safari: Gesten an uns + native Zoom/Scroll verhindern
-    _state.canvas.style.touchAction = 'none';       // moderne Browser
-    // iOS Safari: zusätzlich Touch-Fallbacks mit preventDefault
+    // Mobile/Safari: Gesten an uns
+    _state.canvas.style.touchAction = 'none';
     _state.canvas.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
     _state.canvas.addEventListener('touchmove',  (e)=>e.preventDefault(), {passive:false});
-    _state.canvas.addEventListener('touchend',   (e)=>{
-      // Doppel-Tap (Smart-Zoom) killen
-      const now = performance.now();
-      if (now - _state.lastTapTs < 300) e.preventDefault();
-      _state.lastTapTs = now;
-    }, {passive:false});
+    _state.canvas.addEventListener('touchend',   (e)=>e.preventDefault(), {passive:false});
 
     // Map (Runtime)
     const dbg = document.getElementById('debug-map'); // optional
     _state.map = new window.SiedlerMap(canvas, _state.ctx, dbg);
 
-    // Kamera-Startwerte
+    // Kamera-Start
     _state.camX = _state.map.camX ?? 0;
     _state.camY = _state.map.camY ?? 0;
     _state.zoom = _state.map.zoom ?? 1;
@@ -356,12 +365,27 @@
     window.addEventListener('pointerup',   onPointerUp);
     canvas.addEventListener('wheel', onWheel, { passive:false });
 
-    // WICHTIG: click-Handler entfällt (iOS Safari unterdrückt click nach preventDefault)
-    // canvas.addEventListener('click', onClick);
-
+    // Auswahl aus Baumenü
     window.addEventListener('cb:build:select', (e)=>{
       _state.selectedBuilding = e?.detail?.id || null;
+      _state.preview = null;                           // alte Preview verwerfen
+      EVT('cb:place:preview', { invalid:true });      // UI verstecken
       log('select building', _state.selectedBuilding);
+    });
+
+    // Confirm/Cancel von der UI
+    window.addEventListener('cb:place:confirm', (e)=>{
+      const d = e.detail || {};
+      if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
+        _state.placements.push({ x:d.gx, y:d.gy, id:_state.preview.id });
+        log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy });
+      }
+      _state.preview = null;
+      // Auswahl beibehalten → weiteres Bauen möglich; zum Beenden könnte man hier selectedBuilding=null setzen.
+    });
+    window.addEventListener('cb:place:cancel', ()=>{
+      _state.preview = null;
+      log('place canceled');
     });
 
     log('init ✓');
@@ -375,11 +399,10 @@
     await _state.map.loadMap(_state.mapId);
     _state.map.reload?.();
 
-    // Kamera nach reload() spiegeln + clampen
     _state.camX = _state.map.camX ?? _state.camX;
     _state.camY = _state.map.camY ?? _state.camY;
     _state.zoom = _state.map.zoom ?? _state.zoom;
-    onResize(); // setzt Size & clamped Cam
+    onResize();
 
     // Demo: HQ-Carrier bis echter Startflow steht
     const HQpx  = { x: (_state.gridW*_state.tile)/2, y: (_state.gridH*_state.tile)/2 };
