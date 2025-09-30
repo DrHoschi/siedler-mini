@@ -1,163 +1,128 @@
-// ============================================================================
-// Datei : ui/ui-build.js
-// Zweck : Baumenü rendern (Kategorien → Items) und Auswahl senden
-// Events: hört   auf cb:registry-ready (und cb:registry:ready alias),
-//                 cb:build:open, cb:build:close   (NEU: nur Sichtbarkeit)
-//         sendet cb:build:select  { id }  beim Klick auf ein Gebäude
-// Hinweise:
-//   • Kein globaler STATE – nur lokaler Status (activeCat, activeItem).
-//   • Robustes Mounting: erzeugt #build-cats / #build-items bei Bedarf.
-//   • Nutzt Registry.get('categories'|'buildings') – KEIN Fallback, nur echte Daten.
-//   • Panels/Look: CSS (.ui-panel + var(--ui-panel-img))
-// ============================================================================
+/* ============================================================================
+ * Datei   : ui/ui-build.js
+ * Version : v1.0.5
+ * Zweck   : Build-Dock – Kacheln (Titel | Thumb | Kosten) + Auswahl-Events
+ * ========================================================================== */
 (() => {
-  const log  = (...a) => (window.CBLog?.ok   || console.log)('[ui-build]', ...a);
-  const warn = (...a) => (window.CBLog?.warn || console.warn)('[ui-build]', ...a);
-  const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
+  const log  = (...a)=>(window.CBLog?.ok||console.log)('[ui-build]',...a);
+  const warn = (...a)=>(window.CBLog?.warn||console.warn)('[ui-build]',...a);
+  const EVT  = (n,d)=>window.dispatchEvent(new CustomEvent(n,{detail:d}));
+  const q    = s=>document.querySelector(s);
 
-  // ---- DOM helpers ----------------------------------------------------------
-  const q  = (sel) => document.querySelector(sel);
-  function ensureLists() {
-    const dock = q('#build-dock');
-    if (!dock) { warn('Container #build-dock fehlt – index.html prüfen'); return null; }
-    // Falls noch leer: Grundgerüst erzeugen (Monolith-Struktur)
-    if (!dock.querySelector('#build-cats')) {
-      const h2 = dock.querySelector('h2') || Object.assign(document.createElement('h2'), {textContent:'Baumenü'});
-      const cats = Object.assign(document.createElement('ul'), { id:'build-cats', className:'build-cats' });
-      const sep  = document.createElement('hr');
-      const items= Object.assign(document.createElement('ul'), { id:'build-items', className:'build-items' });
-      dock.append(h2, cats, sep, items);
+  // kleine Icon-Lookup für Kosten-Anzeige
+  const RES_ICON = {
+    wood:  'assets/icons/resources/wood.png',
+    stone: 'assets/icons/resources/stone.png',
+    food:  'assets/icons/resources/food.png',
+    gold:  'assets/icons/resources/gold.png'
+  };
+
+  let activeCat=null, activeItem=null;
+
+  function ensureScaffold(){
+    const dock = q('#build-dock'); if(!dock){ warn('Container #build-dock fehlt'); return null; }
+    dock.hidden=false; dock.classList.remove('hidden');
+    if(!dock.querySelector('.wrap')){
+      dock.appendChild(Object.assign(document.createElement('div'), { className:'wrap' }));
     }
-    return {
-      dock,
-      cats : dock.querySelector('#build-cats'),
-      items: dock.querySelector('#build-items'),
-    };
+    const wrap=q('#build-dock .wrap');
+    if(!q('#build-cats'))  wrap.appendChild(Object.assign(document.createElement('ul'), { id:'build-cats', className:'build-cats' }));
+    if(!q('#build-items')) wrap.appendChild(Object.assign(document.createElement('ul'), { id:'build-items', className:'build-list' }));
+    return { cats:q('#build-cats'), items:q('#build-items') };
   }
 
-  // ---- Datenquelle (Registry → ViewModel) ----------------------------------
-  function readData() {
-    const cats = (Registry.get('categories') || []).map(c => ({
-      id   : String(c.id),
-      label: String(c.label ?? c.id)
-    }));
-
-    const bld = (Registry.get('buildings') || []).map(b => ({
-      id   : String(b.id),
-      cat  : String(b.cat ?? 'misc'),
-      label: String(b.label ?? b.id),
-      icon : b.icon || '',        // Registry.normalisiert icon bereits (falls gesetzt)
-      cost : b.cost || null       // { wood, stone, gold } optional
-    }));
-
-    return { cats, buildings: bld };
+  function defaultData(){
+    const cats=[{id:'infra',label:'Infrastruktur'},{id:'prod',label:'Produktion'}];
+    const buildings=[
+      { id:'hq_wood', cat:'infra', label:'HQ (Holz)',    icon:'assets/icons/buildings/hq.png', cost:{wood:0,stone:0} },
+      { id:'lumber',  cat:'prod',  label:'Holzfäller',   icon:'assets/icons/buildings/lumber.png',  cost:{wood:6,stone:2} },
+      { id:'fisher',  cat:'prod',  label:'Fischerhütte', icon:'assets/icons/buildings/fisher.png',  cost:{wood:6,stone:2} },
+      { id:'quarry',  cat:'prod',  label:'Steinbruch',   icon:'assets/icons/buildings/quarry.png',  cost:{wood:6,stone:4} },
+    ];
+    return { cats, buildings };
   }
 
-  // ---- Render-State ---------------------------------------------------------
-  let activeCat  = null;
-  let activeItem = null;
+  function readData(){
+    if (window.BuildBridge?.view) return window.BuildBridge.view();
+    const cats=(window.Registry?.list?.('category')||window.Registry?.get?.('categories')||[])
+      .map(c=>({id:String(c.id),label:String(c.label??c.id)}));
+    const buildings=(window.Registry?.list?.('building')||window.Registry?.get?.('buildings')||[])
+      .map(b=>({ id:String(b.id), cat:String(b.cat??b.category??'misc'),
+                 label:String(b.label??b.name??b.id),
+                 icon:(b.icon||b.sprite||''), cost:(b.cost||null) }));
+    if (cats.length && buildings.length) return {cats,buildings};
+    return defaultData();
+  }
 
-  function renderCats(root, cats) {
-    root.innerHTML = '';
-    cats.forEach((c, idx) => {
-      const li = document.createElement('li');
-      li.className = 'build-cat';
-      li.dataset.cat = c.id;
-      li.textContent = c.label;
-      if (!activeCat && idx === 0) activeCat = c.id;
-      if (c.id === activeCat) li.classList.add('active');
-      li.addEventListener('click', () => {
-        activeCat = c.id;
-        activeItem = null;
-        highlightCats(root);
-        renderItems(q('#build-items'), readData().buildings);
-      });
+  function applyCatHighlight(root){
+    root.querySelectorAll('li').forEach(li=>li.classList.toggle('active', li.dataset.cat===activeCat));
+  }
+  function applyItemHighlight(root){
+    root.querySelectorAll('li').forEach(li=>{
+      li.classList.toggle('is-selected', li.dataset.id===activeItem);
+      li.classList.toggle('active',      li.dataset.id===activeItem);
+    });
+  }
+
+  function renderCats(root, cats){
+    root.innerHTML='';
+    cats.forEach((c,idx)=>{
+      const li=document.createElement('li');
+      li.className='build-cat'; li.dataset.cat=c.id; li.textContent=c.label;
+      if(!activeCat && idx===0) activeCat=c.id;
+      li.addEventListener('click',()=>{ activeCat=c.id; applyCatHighlight(root); renderItems(q('#build-items'), readData().buildings); });
       root.appendChild(li);
     });
+    applyCatHighlight(root);
   }
 
-  function highlightCats(root) {
-    root.querySelectorAll('li').forEach(li => {
-      li.classList.toggle('active', li.dataset.cat === activeCat);
-    });
+  function resBadge(key, amount){
+    if (!amount) return null;
+    const span=document.createElement('span'); span.className='res';
+    const img=document.createElement('img'); img.src=RES_ICON[key]||''; img.alt=key;
+    const txt=document.createElement('b'); txt.textContent=String(amount);
+    span.append(img, txt);
+    return span;
   }
 
-  function renderItems(root, buildings) {
-    root.innerHTML = '';
-    const list = buildings.filter(b => b.cat === activeCat);
-    list.forEach(b => {
-      const li = document.createElement('li');
-      li.className = 'build-item';
-      li.dataset.id = b.id;
+  function renderItems(root, buildings){
+    root.innerHTML='';
+    const list=buildings.filter(b=>b.cat===activeCat);
+    list.forEach(b=>{
+      const li=document.createElement('li'); li.className='build-item'; li.dataset.id=b.id;
 
-      // Icon (aus Registry.icon – bereits relativ zum iconsBase normalisiert)
-      if (b.icon) {
-        const img = document.createElement('img');
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.src = b.icon;
-        img.alt = b.label;
-        img.width = 20; img.height = 20;
-        img.style.verticalAlign = 'middle';
-        img.style.marginRight = '6px';
-        li.appendChild(img);
-      }
+      // Titel
+      const title=document.createElement('div'); title.className='title'; title.textContent=b.label;
 
-      // Label + Kosten (auch 0 sichtbar, z. B. HQ)
-      const text = document.createElement('span');
-      text.textContent = b.label;
-      li.appendChild(text);
+      // Icon (Thumb)
+      const thumb=document.createElement('img'); thumb.className='thumb'; thumb.loading='lazy'; thumb.decoding='async';
+      if (b.icon) { thumb.src=b.icon; thumb.alt=b.label; }
 
-      if (b.cost) {
-        const small = document.createElement('small');
-        const w = +b.cost.wood  || 0;
-        const s = +b.cost.stone || 0;
-        const g = +b.cost.gold  || 0;
-        small.textContent = `  [Holz:${w} Stein:${s}${g ? ' Gold:'+g : ''}]`;
-        small.style.opacity = .75;
-        small.style.marginLeft = '6px';
-        li.appendChild(small);
-      }
-
-      if (b.id === activeItem) li.classList.add('active');
-
-      li.addEventListener('click', () => {
-        activeItem = b.id;
-        root.querySelectorAll('li').forEach(x => x.classList.remove('active'));
-        li.classList.add('active');
-        EVT('cb:build:select', { id: b.id }); // Game reagiert
+      // Kosten
+      const cost=document.createElement('div'); cost.className='cost';
+      const costObj = b.cost||{};
+      ['wood','stone','food','gold'].forEach(k=>{
+        const node = resBadge(k, costObj[k]);
+        if (node) cost.appendChild(node);
       });
 
+      li.append(title, thumb, cost);
+      li.addEventListener('click',()=>{ activeItem=b.id; applyItemHighlight(root); EVT('cb:build:select',{id:b.id}); });
       root.appendChild(li);
     });
-
-    // Keine Items? Kurzer Hinweis.
-    if (!root.children.length) {
-      const em = document.createElement('em');
-      em.textContent = 'Keine Einträge in dieser Kategorie.';
-      em.style.opacity = .7;
-      root.appendChild(em);
-    }
+    applyItemHighlight(root);
   }
 
-  // ---- Boot-Wiring ----------------------------------------------------------
-  function mount() {
-    const lists = ensureLists();
-    if (!lists) return;
-
-    const { cats, buildings } = readData();
-    if (!cats.length) { warn('keine Kategorien'); return; }
-
-    renderCats(lists.cats, cats);
-    renderItems(lists.items, buildings);
-    log('Baumenü gerendert');
+  function init(){
+    const els=ensureScaffold(); if(!els) return;
+    const data=readData();
+    renderCats(els.cats, data.cats);
+    renderItems(els.items, data.buildings);
+    log('init ✓');
   }
 
-  // Registry bereit? Dann mounten. (Beide Event-Varianten akzeptieren)
-  window.addEventListener('cb:registry-ready', mount);
-  window.addEventListener('cb:registry:ready', mount);
-
-  // Sichtbarkeit NUR per Events steuern (Button unten links feuert die)
-  window.addEventListener('cb:build:open',  () => ensureLists()?.dock?.classList.remove('hidden'));
-  window.addEventListener('cb:build:close', () => ensureLists()?.dock?.classList.add('hidden'));
+  // Lebenszyklus-Hooks (konform Lastenheft)
+  window.addEventListener('cb:registry-ready', init);
+  window.addEventListener('cb:registry:ready', init);
+  window.addEventListener('cb:game-start', init); // Fallback
 })();
