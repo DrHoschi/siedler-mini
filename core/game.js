@@ -461,29 +461,30 @@
     });
 
     // Confirm/Cancel von der UI
-    window.addEventListener('cb:place:confirm', (e)=>{
-      const d = e.detail || {};
-      if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
-        // Safety: kann sich in der Zwischenzeit was geändert haben?
-        if (canPlaceAt(d.gx, d.gy, _state.preview.id)){
-          _state.placements.push({ x:d.gx, y:d.gy, id:_state.preview.id });
-          occupy(d.gx, d.gy);
-          log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy });
-        } else {
-          warn('confirm: Position inzwischen unplazierbar');
-        }
-      }
-      _state.preview = null;
-      _state.selectedBuilding = null;                 // <<< Baumodus verlassen
-      EVT('cb:place:preview', { invalid:true });      // UI schließen
-    });
+window.addEventListener('cb:place:confirm', (e)=>{
+  const d = e.detail || {};
+  if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
+    // Safety: kann sich in der Zwischenzeit was geändert haben?
+    if (canPlaceAt(d.gx, d.gy, _state.preview.id)){
+      _state.placements.push({ x:d.gx, y:d.gy, id:_state.preview.id });
+      occupy(d.gx, d.gy);
+      log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy });
+    } else {
+      warn('confirm: Position inzwischen unplazierbar');
+    }
+  }
+  // === Serienbau: im Build-Mode bleiben ===
+  _state.preview = null;                 // nur die aktuelle Vorschau beenden
+  // _state.selectedBuilding = null;     // <-- DIESEN RESET WEG LASSEN!
+  EVT('cb:place:preview', { invalid:true }); // Buttons einklappen, bis nächste Stelle gewählt wird
+});
 
-    window.addEventListener('cb:place:cancel', ()=>{
-      _state.preview = null;
-      _state.selectedBuilding = null;                 // <<< Baumodus verlassen
-      EVT('cb:place:preview', { invalid:true });      // UI schließen
-      log('place canceled');
-    });
+window.addEventListener('cb:place:cancel', ()=>{
+  _state.preview = null;
+  _state.selectedBuilding = null;        // <<< Nur hier Baumodus verlassen
+  EVT('cb:place:preview', { invalid:true });
+  log('place canceled');
+});
 
     log('init ✓');
   }
