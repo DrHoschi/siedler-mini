@@ -231,3 +231,17 @@
   border:6px solid transparent; border-top-color: rgba(12,16,24,.92);
   filter: drop-shadow(0 -1px 0 rgba(255,255,255,.08));
 }
+
+/* Button sicher klickbar & im Safe-Area */
+.ui-btn-build{
+  position: fixed;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 20000;               /* deutlich über Canvas & Dock */
+  pointer-events: auto;
+}
+
+/* Dock darf unter dem Button liegen, aber über dem Canvas */
+#build-dock{
+  z-index: 1100;                /* hast du schon als --build-dock-z */
+}
