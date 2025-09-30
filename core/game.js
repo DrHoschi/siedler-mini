@@ -1,13 +1,14 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.3.3
+// Version : v1.3.4
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events  : cb:map:loaded  { mapId, tile, size:{w,h} }
 //           cb:res:change  { ...resources }
 // Notes   : Pan/Zoom nur auf Canvas; Weltobjekte per world→screen projektiert
-//           NEU v1.3.3: robuster Kamera-Clamp (rechts/unten) + Safari Touch-Fixes
+//           v1.3.3: robuster Kamera-Clamp + Safari Touch-Fixes
+//           v1.3.4: Platzieren via pointerup (Tap) statt click → iOS-sicher
 // ============================================================================
 
 (() => {
@@ -48,6 +49,9 @@
     pointers: new Map(),            // pointerId -> {x,y}
     pinch   : { active:false, d0:1, zoom0:1, center:{x:0,y:0} },
 
+    // Tap-Tracking für Platzierung
+    tapStart: { x:0, y:0 },         // Screen-Koords bei pointerdown (für Tap-Schwelle)
+
     // Safari: Doppel-Tap Kill-Switch (Smart-Zoom verhindern)
     lastTapTs: 0,                   // ms
   };
@@ -67,7 +71,7 @@
     return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
   }
 
-  // Kamera innerhalb Karte (rechts/unten robust, inkl. kleinen Rundungsfehlern)
+  // Kamera innerhalb Karte (rechts/unten robust, inkl. Float-Fehler)
   function clampCameraToMap(){
     const worldW = _state.gridW * _state.tile;
     const worldH = _state.gridH * _state.tile;
@@ -75,17 +79,14 @@
     const viewW  = _state.w / Math.max(EPS, _state.zoom);
     const viewH  = _state.h / Math.max(EPS, _state.zoom);
 
-    // Maximal zulässige Offsets (rechte/untere Kante = Weltkante)
     let maxX = worldW - viewW;
     let maxY = worldH - viewH;
 
-    // Numerische Stabilisierung (verhindert +/− 0 durch Float-Fehler)
     if (Math.abs(maxX) < EPS) maxX = 0;
     if (Math.abs(maxY) < EPS) maxY = 0;
 
     if (maxX < 0){
-      // View größer als Welt → zentrieren
-      _state.camX = (worldW - viewW) * 0.5;
+      _state.camX = (worldW - viewW) * 0.5;  // Welt kleiner als View → zentrieren
     } else {
       _state.camX = clamp(_state.camX, 0, maxX);
     }
@@ -221,8 +222,14 @@
     // 2 Finger → Pinch-Setup
     if (_state.pointers.size===2 && tryStartPinch()) return;
 
-    // 1 Finger → Pan nur, wenn kein Platziermodus aktiv
-    if (!_state.selectedBuilding && !_state.pinch.active){
+    // 1 Finger:
+    if (_state.selectedBuilding){
+      // Platziermodus → Tap-Start merken (wir pannen hier NICHT)
+      _state.tapStart.x = ev.clientX;
+      _state.tapStart.y = ev.clientY;
+      _state.panActive  = false;
+    } else if (!_state.pinch.active){
+      // Kein Platziermodus → Pan starten
       _state.panActive = true;
       _state.canvas.setPointerCapture?.(ev.pointerId);
       _state.panStart = { x:ev.clientX, y:ev.clientY, camX:_state.camX, camY:_state.camY };
@@ -237,13 +244,8 @@
       const wpos = screenToWorld(ev.clientX, ev.clientY);
       const gx = snap(wpos.wx, _state.tile);
       const gy = snap(wpos.wy, _state.tile);
-      if (inBoundsTile(gx, gy)) {
-        _state.hover.x = gx;
-        _state.hover.y = gy;
-      } else {
-        _state.hover.x = -1;
-        _state.hover.y = -1;
-      }
+      if (inBoundsTile(gx, gy)) { _state.hover.x = gx; _state.hover.y = gy; }
+      else                      { _state.hover.x = -1; _state.hover.y = -1; }
     }
 
     // -- Pinch-Zoom ----------------------------------------------------------
@@ -277,7 +279,24 @@
   }
 
   function onPointerUp(ev){
-    forgetPointer(ev);
+    // Tap → Gebäude platzieren (nur wenn: Platziermodus aktiv, kein Pinch, kaum Bewegung)
+    const wasPlacing = !!_state.selectedBuilding;
+    const wasPinch   = _state.pinch.active;
+
+    forgetPointer(ev);                // pointer bookkeeping
+    const moved = Math.hypot(ev.clientX - _state.tapStart.x, ev.clientY - _state.tapStart.y);
+    const isTap = moved < 8;          // ~8px Schwelle reicht für Finger
+
+    if (wasPlacing && !wasPinch && isTap){
+      const wpos = screenToWorld(ev.clientX, ev.clientY);
+      const gx   = snap(wpos.wx, _state.tile);
+      const gy   = snap(wpos.wy, _state.tile);
+      if (inBoundsTile(gx, gy)){
+        _state.placements.push({ x:gx, y:gy, id:_state.selectedBuilding });
+        log('placed', { id:_state.selectedBuilding, x:gx, y:gy });
+      }
+    }
+
     _state.panActive = false;
   }
 
@@ -298,28 +317,13 @@
     if (_state.map){ _state.map.zoom=_state.zoom; _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
 
-  function onClick(ev){
-    if(!_state.selectedBuilding) return;
-    const wpos = screenToWorld(ev.clientX, ev.clientY);
-    const gx   = snap(wpos.wx, _state.tile);
-    const gy   = snap(wpos.wy, _state.tile);
-
-    // Nur innerhalb der Karte bauen
-    if (!inBoundsTile(gx, gy)) {
-      return;
-    }
-
-    _state.placements.push({ x:gx, y:gy, id:_state.selectedBuilding });
-    log('placed', { id:_state.selectedBuilding, x:gx, y:gy });
-  }
-
   // == Public API ============================================================
   function init(canvas){
     if(!canvas){ err('init: Canvas fehlt'); return; }
     _state.canvas = canvas;
     _state.ctx    = canvas.getContext('2d');
 
-    // Mobile/Safari: Gesten an uns (Pan/Pinch) + native Zoom/Scroll verhindern
+    // Mobile/Safari: Gesten an uns + native Zoom/Scroll verhindern
     _state.canvas.style.touchAction = 'none';       // moderne Browser
     // iOS Safari: zusätzlich Touch-Fallbacks mit preventDefault
     _state.canvas.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
@@ -351,7 +355,9 @@
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup',   onPointerUp);
     canvas.addEventListener('wheel', onWheel, { passive:false });
-    canvas.addEventListener('click', onClick);
+
+    // WICHTIG: click-Handler entfällt (iOS Safari unterdrückt click nach preventDefault)
+    // canvas.addEventListener('click', onClick);
 
     window.addEventListener('cb:build:select', (e)=>{
       _state.selectedBuilding = e?.detail?.id || null;
