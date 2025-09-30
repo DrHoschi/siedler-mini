@@ -1,12 +1,13 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v1.3.1
+// Version : v1.3.2
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 // API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
 // Events  : cb:map:loaded  { mapId, tile, size:{w,h} }
 //           cb:res:change  { ...resources }
 // Notes   : Pan/Zoom nur auf Canvas; Weltobjekte werden per world→screen gezeichnet
+//           NEU v1.3.2: Map-Bounds für Hover/Platzieren + Kamera-Clamp
 // ============================================================================
 
 (() => {
@@ -57,7 +58,30 @@
   const clamp = (v,mi,ma)=>Math.min(ma,Math.max(mi,v));
   const snap  = (v,s)=>Math.floor(v/s);
 
-  // Canvas- zu Weltkoordinaten (DPR-sicher)
+  // -- Bounds-Helper ---------------------------------------------------------
+  // Kachelkoordinaten innerhalb der Karte?
+  function inBoundsTile(gx, gy){
+    return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
+  }
+
+  // Kamera innerhalb der Karte halten (sichtbares Fenster wird berücksichtigt)
+  function clampCameraToMap(){
+    const worldW = _state.gridW * _state.tile;
+    const worldH = _state.gridH * _state.tile;
+    const viewW  = _state.w / Math.max(1e-6, _state.zoom);
+    const viewH  = _state.h / Math.max(1e-6, _state.zoom);
+
+    // Wenn View größer als Welt ist → in der Mitte „einrasten“
+    const maxX = Math.max(0, worldW - viewW);
+    const maxY = Math.max(0, worldH - viewH);
+
+    _state.camX = clamp(_state.camX, 0, maxX);
+    _state.camY = clamp(_state.camY, 0, maxY);
+
+    if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
+  }
+
+  // -- Koord.-Projektion -----------------------------------------------------
   function screenToCanvasPx(clientX, clientY){
     const c=_state.canvas, r=c.getBoundingClientRect();
     return {
@@ -73,33 +97,31 @@
     return { sx: (wx - _state.camX)*_state.zoom, sy: (wy - _state.camY)*_state.zoom };
   }
 
-  // -- NEU: Kamera-Status pro Frame aus der Map spiegeln --------------------
-  // Falls SiedlerMap intern (Touch) pan/zoom verändert, gleichen wir ab,
-  // bevor wir Placements/Units projizieren. So bleiben Map & Gebäude synchron.
+  // -- Kamera mit Map synchronisieren ---------------------------------------
   function syncCamFromMap(){
     const m = _state.map; if (!m) return;
     const mx = m.camX; const my = m.camY; const mz = m.zoom;
     if (typeof mx === 'number') _state.camX = mx;
     if (typeof my === 'number') _state.camY = my;
     if (typeof mz === 'number') _state.zoom = mz;
+    clampCameraToMap(); // Safety, falls Map nicht clamped
   }
 
   // == Rendering =============================================================
-
   function frame(ts){
     if(!_state.started) return;
     const {ctx,canvas,map}=_state; if(!ctx||!canvas) return;
 
-    // NEU: Kamera aus Map holen (falls Map intern geändert hat)
+    // Map → Kamera abgleichen (falls Map intern Pan/Zoom ändert)
     syncCamFromMap();
 
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
 
-    // A) Map (darf eigenes Transform/Offscreen haben)
+    // A) Map (eigenes Rendering)
     map?.draw();
 
-    // B) Weltobjekte ohne globale Transform, aber mit world→screen Projektion
+    // B) Weltobjekte (projektiert)
     ctx.save();
     drawPlacements(ctx);
     window.Units && drawUnitsWithProjection(ctx, dt);
@@ -119,8 +141,6 @@
     }
   }
   function drawUnitsWithProjection(ctx, dt){
-    // Falls deine Units intern Weltkoords führen, kannst du hier ähnlich wie oben
-    // projizieren. Wenn sie bereits im Map-Renderer hängen, reicht ein Update:
     window.Units?.update?.(dt, { zoom:_state.zoom, camX:_state.camX, camY:_state.camY });
     window.Units?.drawProjected?.(ctx, (wx,wy)=>worldToScreen(wx,wy)); // optional API
   }
@@ -144,23 +164,23 @@
     EVT('cb:map:loaded', { mapId, tile:_state.tile, size:{ w:_state.gridW, h:_state.gridH } });
   }
 
-  // == Inputs (Resize / Pan / Zoom / Platzieren) =============================
-
+  // == Inputs (Resize / Pan / Pinch / Zoom / Platzieren) =====================
   function onResize(){
     const c=_state.canvas; if(!c) return;
     _state.w = (c.width  = c.clientWidth  || c.width);
     _state.h = (c.height = c.clientHeight || c.height);
     _state.map?.setSize(_state.w,_state.h);
 
-    // Kamera aus Map spiegeln (falls sie dort geführt wird)
+    // Kamera aus Map spiegeln und clampen
     if (_state.map){
       _state.camX = _state.map.camX ?? _state.camX;
       _state.camY = _state.map.camY ?? _state.camY;
       _state.zoom = _state.map.zoom ?? _state.zoom;
+      clampCameraToMap();
     }
   }
 
-  // --- Pointer bookkeeping (für Pan & Pinch) ---
+  // -- Pointer-Bookkeeping (Pan/Pinch) --------------------------------------
   function rememberPointer(ev){ _state.pointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY}); }
   function forgetPointer(ev){ _state.pointers.delete(ev.pointerId); if(_state.pointers.size<2) _state.pinch.active=false; }
 
@@ -192,35 +212,46 @@
   function onPointerMove(ev){
     rememberPointer(ev);
 
-    // Hover (Tile unter Cursor)
-    const wpos = screenToWorld(ev.clientX, ev.clientY);
-    _state.hover.x = snap(wpos.wx, _state.tile);
-    _state.hover.y = snap(wpos.wy, _state.tile);
+    // -- Hover (Tile unter Cursor) – nur innerhalb der Map zeigen ------------
+    {
+      const wpos = screenToWorld(ev.clientX, ev.clientY);
+      const gx = snap(wpos.wx, _state.tile);
+      const gy = snap(wpos.wy, _state.tile);
+      if (inBoundsTile(gx, gy)) {
+        _state.hover.x = gx;
+        _state.hover.y = gy;
+      } else {
+        _state.hover.x = -1;
+        _state.hover.y = -1;
+      }
+    }
 
-    // Pinch-Scaling
+    // -- Pinch-Zoom ----------------------------------------------------------
     if (_state.pinch.active && _state.pointers.size===2){
       const [a,b] = [..._state.pointers.values()];
       const dist  = Math.hypot(a.x-b.x, a.y-b.y);
       const factor= dist / Math.max(1,_state.pinch.d0);
       const newZ  = clamp(_state.pinch.zoom0 * factor, _state.map?.minZoom ?? 0.5, _state.map?.maxZoom ?? 3);
 
-      // Zentrum festhalten
+      // Zoom um Zentrum stabilisieren
       const before = screenToWorld(_state.pinch.center.x, _state.pinch.center.y);
       _state.zoom  = newZ;
       const cs     = screenToCanvasPx(_state.pinch.center.x, _state.pinch.center.y);
       _state.camX  = before.wx - (cs.sx / _state.zoom);
       _state.camY  = before.wy - (cs.sy / _state.zoom);
 
+      clampCameraToMap();
       if (_state.map){ _state.map.zoom=_state.zoom; _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
       return;
     }
 
-    // Pan
+    // -- Pan -----------------------------------------------------------------
     if (_state.panActive && !_state.selectedBuilding){
       const dx = (ev.clientX - _state.panStart.x) / _state.zoom;
       const dy = (ev.clientY - _state.panStart.y) / _state.zoom;
       _state.camX = _state.panStart.camX - dx;
       _state.camY = _state.panStart.camY - dy;
+      clampCameraToMap();
       if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
     }
   }
@@ -243,6 +274,7 @@
     const cs     = screenToCanvasPx(ev.clientX, ev.clientY);
     _state.camX  = before.wx - (cs.sx / _state.zoom);
     _state.camY  = before.wy - (cs.sy / _state.zoom);
+    clampCameraToMap();
     if (_state.map){ _state.map.zoom=_state.zoom; _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
 
@@ -251,19 +283,24 @@
     const wpos = screenToWorld(ev.clientX, ev.clientY);
     const gx   = snap(wpos.wx, _state.tile);
     const gy   = snap(wpos.wy, _state.tile);
-    if (gx<0 || gy<0) return;
+
+    // Nur innerhalb der Karte bauen
+    if (!inBoundsTile(gx, gy)) {
+      // optional: (window.CBLog?.warn||console.warn)('[game] außerhalb der Map → ignoriert', {gx,gy});
+      return;
+    }
+
     _state.placements.push({ x:gx, y:gy, id:_state.selectedBuilding });
     log('placed', { id:_state.selectedBuilding, x:gx, y:gy });
   }
 
   // == Public API ============================================================
-
   function init(canvas){
     if(!canvas){ err('init: Canvas fehlt'); return; }
     _state.canvas = canvas;
     _state.ctx    = canvas.getContext('2d');
 
-    // Wichtig für Mobile: Browsergesten aus → wir handeln Pan/Pinch selbst
+    // Mobile: Gesten an uns (Pan/Pinch)
     _state.canvas.style.touchAction = 'none';
 
     // Map (Runtime)
@@ -304,12 +341,11 @@
     await _state.map.loadMap(_state.mapId);
     _state.map.reload?.();
 
-    // Kamera nach reload() spiegeln
+    // Kamera nach reload() spiegeln + clampen
     _state.camX = _state.map.camX ?? _state.camX;
     _state.camY = _state.map.camY ?? _state.camY;
     _state.zoom = _state.map.zoom ?? _state.zoom;
-
-    onResize();
+    onResize(); // setzt Size & clamped Cam
 
     // Demo: HQ-Carrier bis echter Startflow steht
     const HQpx  = { x: (_state.gridW*_state.tile)/2, y: (_state.gridH*_state.tile)/2 };
