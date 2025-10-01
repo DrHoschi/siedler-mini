@@ -72,3 +72,83 @@
 
 /* Panel ausblenden bei Spielstart */
 body.is-playing #start-panel { display: none !important; }
+
+/* ============================================================================
+   Startpanel – Bild-Frame vollflächig + Überschrift sichtbar (v1.0.7)
+   Annahme: quadratisches PNG mit Holzrahmen (inkl. „Papier“ innen)
+   Pfad-Beispiel: assets/ui/panel/start_panel.png
+============================================================================ */
+
+#start-panel{
+  --start-size: clamp(240px, 72vw, 420px);
+  --panel-img: url("assets/ui/panel/start_panel.png"); /* <-- DEIN PFAD */
+  position: fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+  width: var(--start-size); height: var(--start-size);
+  aspect-ratio: 1 / 1;
+  z-index: 999;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  overflow: hidden;
+
+  /* Bild-Frame bis zum Rand */
+  background-image: var(--panel-img);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;      /* vollflächig (keine Crops, kein Weißrand) */
+
+  /* alle alten ui-panel-Styles neutralisieren */
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Inhalt über das Panelbild legen */
+#start-panel > * { position: relative; z-index: 1; }
+
+/* Titel wieder sichtbar + platzieren */
+#start-panel h1{
+  margin: 0;
+  position: absolute; left: 50%; top: 10%;
+  transform: translateX(-50%);
+  width: 80%;
+  text-align: center;
+  font-size: clamp(18px, 4.4vw, 26px);
+  font-weight: 700;
+  color: #1f140a; /* dunkler auf hellem Papier */
+  /* Lesbarkeit auf variierendem Hintergrund */
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.65),
+    0 2px 8px rgba(0,0,0,.25);
+}
+
+/* Buttons kompakt im Innenbereich (keine Scrolls) */
+#start-panel .actions{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  width: 78%;                      /* etwas schmaler, damit Holzrand sichtbar bleibt */
+  margin-top: 34%;                  /* unter den Titel rutschen (abhängig vom Frame) */
+  margin-bottom: 6%;
+}
+
+#start-panel .actions .btn{
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  font-size: clamp(13px, 2.8vw, 15px);
+  border-radius: 10px;
+  border: 0;
+  color: #eef5ff;
+  background: linear-gradient(#2e3a48, #11161d);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 2px 6px rgba(0,0,0,.25);
+}
+#start-panel .actions .btn.main{
+  background: linear-gradient(#2f6ef0, #1f47aa);
+}
+
+/* Bei Spielstart wie gehabt ausblenden */
+body.is-playing #start-panel { display: none !important; }
+
+/* Sicherheit: alte :before/:after-Styles entfernen, falls noch vorhanden */
+#start-panel::before, #start-panel::after { content: none !important; }
