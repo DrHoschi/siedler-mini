@@ -57,3 +57,23 @@
   border-color: #82302a;
   background: linear-gradient(#b83c2e, #8e2e23);
 }
+/* Container für die Aktions-Buttons im Platziermodus */
+.place-actions{
+  position: fixed;
+  inset: auto 12px calc(12px + env(safe-area-inset-bottom)) 12px; /* unten + SA */
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none; /* nur Buttons klicken */
+  z-index: 1100;
+}
+
+/* Einzelne Buttons */
+.place-actions .btn-accept,
+.place-actions .btn-cancel{
+  pointer-events: auto;
+  width: 48px; height: 48px; border-radius: 12px;
+  display:grid; place-items:center;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.place-actions .btn-accept{ background: #19b34a; }
+.place-actions .btn-cancel{ background: #d63b3b; }
