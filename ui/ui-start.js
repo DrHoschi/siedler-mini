@@ -58,3 +58,30 @@
   // Spielstart-Signal → UI umschalten
   window.addEventListener('cb:game-start', hideStartSurfaces);
 })();
+<script>
+(function(){
+  // 1) Laufzeit-Setzung der CSS-Variable (Cache-Bust)
+  var panelPath = "assets/ui/panel/start_panel.png?v=102"; // <— Pfad + Version
+  document.documentElement.style.setProperty('--panel-img', 'url("'+panelPath+'")');
+
+  // 2) Optionaler <img>-Fallback (falls CSS-Background nicht zieht)
+  var sp = document.getElementById('start-panel');
+  if (sp){
+    // <img> Knoten einfügen, falls noch nicht vorhanden
+    if (!sp.querySelector('.panel-img')){
+      var im = document.createElement('img');
+      im.className = 'panel-img';
+      im.alt = 'Start Panel';
+      im.src = panelPath;
+      im.onload  = function(){ /* alles gut: Bild da, wir lassen CSS-Background arbeiten */
+        // Nichts nötig. Wer mag, im.style.display='none';
+      };
+      im.onerror = function(){ 
+        // CSS-Background hat evtl. nicht gegriffen → <img> sichtbar machen
+        im.style.display = 'block';
+      };
+      sp.appendChild(im);
+    }
+  }
+})();
+</script>
