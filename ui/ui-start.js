@@ -1,9 +1,8 @@
 // ============================================================================
 // Datei : ui/ui-start.js
-// Version: v1.0.5 (2025-10-01)
+// Version: v1.0.6 (clean)
 // Zweck : Startpanel steuern + bei Spielstart BG/Panel ausblenden,
 //         Canvas/HUD/Build sichtbar schalten
-//         + Panelbild-Pfad zur Laufzeit setzen (Cache-Bust) und <img>-Fallback
 // Events: cb:ui-ready, cb:start:new/continue, cb:game-start
 // ============================================================================
 (() => {
@@ -58,39 +57,4 @@
 
   // (4) Spielstart-Signal → UI umschalten
   window.addEventListener('cb:game-start', hideStartSurfaces);
-
-  // (5) Panelbild zur Laufzeit setzen + <img>-Fallback
-  //     → vermeidet iOS-Caching & CSS-Spezifitäts-Überlagerungen
-  function applyPanelImage(){
-    const versionedPath = "../../assets/ui/panel.png?v=102"; // <— DEIN PFAD ggf. anpassen
-    // CSS-Variable setzen (für background in ui-start.css)
-    document.documentElement.style.setProperty('--panel-img', `url("${versionedPath}")`);
-
-    // Optionaler <img>-Fallback, falls CSS-Background nicht greift
-    const sp = document.getElementById('start-panel');
-    if (!sp) return;
-    let im = sp.querySelector('.panel-img');
-    if (!im){
-      im = document.createElement('img');
-      im.className = 'panel-img';
-      im.alt = 'Start Panel';
-      im.decoding = 'async';
-      im.loading = 'eager';
-      sp.appendChild(im);
-    }
-    im.src = versionedPath;
-    im.style.display = 'none'; // standardmäßig unsichtbar, CSS-Background reicht
-
-    im.onerror = function(){
-      // Wenn das Bild via CSS nicht sichtbar ist (oder gesperrt), nehmen wir <img>
-      im.style.display = 'block';
-    };
-  }
-
-  // nach DOM bereit einmal anwenden
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', applyPanelImage, { once:true });
-  } else {
-    applyPanelImage();
-  }
 })();
