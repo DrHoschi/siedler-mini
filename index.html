@@ -114,12 +114,13 @@
   var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
   var mounted = false;
 
-  function regList(type){
-    try {
-      if (window.Registry && typeof window.Registry.list === 'function') {
-        return window.Registry.list(type) || [];
+  function regGet(key){
+    try{
+      if (window.Registry && typeof window.Registry.get === 'function'){
+        var v = window.Registry.get(key);
+        return Array.isArray(v) ? v : (v || []);
       }
-    } catch(e){ LOG.warn('[ui-bridge] Registry.list(%s) fail:', type, e); }
+    }catch(e){ LOG.warn('[ui-bridge] Registry.get(%s) fail:', key, e); }
     return [];
   }
 
@@ -134,8 +135,9 @@
 
   function refresh(tag){
     ensureMount();
-    var cats  = regList('category');
-    var items = regList('building').filter(function(b){ return b && b.enabled !== false; });
+
+    var cats  = regGet('categories');     // <-- aus Registry.get
+    var items = regGet('buildings').filter(function(b){ return b && b.enabled !== false; });
 
     if (window.UIBuild && typeof window.UIBuild.setCategories === 'function') {
       window.UIBuild.setCategories(cats);
@@ -152,12 +154,12 @@
     LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag || 'refresh');
   }
 
-  // Listen auf BEIDE Schreibweisen + Updates
+  // Beide Varianten zuhören (deine Registry feuert BEIDE ✅)
   window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
   window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
   window.addEventListener('cb:registry:update', function(){ refresh('update');      });
 
-  // Sicherheits-Refreshes (falls Ready-Event vor Bridge kam)
+  // Sicherheits-Refreshes (falls Bridge später lädt)
   setTimeout(function(){ refresh('boot'); }, 50);
   setTimeout(function(){ refresh('late'); }, 300);
 })();
