@@ -1,92 +1,84 @@
 /* ============================================================================
- * Datei    : ui/css/ui-start.css
- * Version  : v19.1.0
- * Zweck    : Startfenster-Layout + Start-Hintergrundbild
- * Hinweis  : Panel-Look kommt global über .ui-panel (ui.css)
- * ========================================================================== */
+   Datei : ui/css/ui-start.css (Ergänzung)
+   Version: v1.0.4 (2025-10-01)
+   Zweck  : Startpanel mittig & QUADRATISCH anzeigen (responsive)
+   Hinweise:
+     - Rein CSS-basiert (kein JS nötig)
+     - aspect-ratio mit Fallback für ältere Browser
+============================================================================ */
 
-/* Helles Start-Thema (nur Tokens für Inhalt wie <h1>, Buttons) */
-:root{
-  --ui-bg:       #f3f7fb;
-  --ui-bg-muted: #e6edf5;
-  --ui-border:   #cbd5e1;
-  --ui-text:     #0b1220;
-  --ui-shadow:   0 18px 48px rgba(0,0,0,.28);
-  --ui-radius:   16px;
-}
-
-/* --- Startpanel (nur Position/Abstände; Look via .ui-panel) --------------- */
-#start-panel{
-  position: fixed;
-  top: 16px; left: 16px;
-  z-index: 1000;
-  pointer-events: auto;
-  display: block;
-  min-width: 280px;
-  padding: 16px;                   /* ergänzt die Polsterung des Panels */
-}
-#start-panel.hidden  { display: none !important; }
-#start-panel.visible { display: block !important; }
-
-/* Inhaltstypografie im Panel */
-#start-panel h1{
-  margin: 0 0 12px 0;
-  font: 600 22px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #1b2430;
-  padding: 10px 12px;
-  background: var(--ui-bg-muted);
-  border: 1px solid var(--ui-border);
-  border-radius: 12px;
-}
-#start-panel .actions{
+/* 1) Grund-Layout zentrieren */
+#start-panel {
+  position: fixed;            /* bleibt mittig, auch wenn die Seite scrollt */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;                /* über Canvas, unter Modals */
   display: grid;
+  place-items: center;        /* Inhalt zentrieren */
+  padding: 0;                 /* wir arbeiten über Innenlayout */
+  border-radius: 14px;        /* dein UI-Style */
+}
+
+/* 2) Quadratische Größe über CSS-Variable + aspect-ratio */
+#start-panel {
+  /* Basisgröße: skaliert mit Viewport, aber begrenzt */
+  --start-size: clamp(260px, 48vw, 520px);
+  width: var(--start-size);
+  height: var(--start-size);
+  aspect-ratio: 1 / 1;                /* Quadrat */
+}
+
+/* 3) Fallback für Browser ohne aspect-ratio (ältere iOS/WebViews) */
+@supports not (aspect-ratio: 1 / 1) {
+  #start-panel {
+    height: auto;                      /* wird über ::before erzeugt */
+  }
+  #start-panel::before {
+    content: "";
+    display: block;
+    padding-top: 100%;                 /* Quadrat erzwingen */
+  }
+  #start-panel > * {
+    position: absolute;                /* Inhalt über das künstliche Quadrat legen */
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+  }
+}
+
+/* 4) Innenlayout – Titel + Buttons schön verteilen */
+#start-panel h1 {
+  margin: 12px 0 8px 0;
+  text-align: center;
+  font-size: clamp(20px, 3.2vw, 28px);
+}
+
+#start-panel .actions {
+  /* In einem Quadrat sehen gridded Buttons harmonischer aus */
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
-  margin-top: 8px;
-}
-#start-panel .btn,
-#start-panel button{
-  appearance: none;
-  border: 1px solid var(--ui-border);
-  background: #fff;
-  color: var(--ui-text);
-  font: 600 18px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  padding: 14px 16px;
-  border-radius: 12px;
-  cursor: pointer;
+  width: min(80%, 360px);
+  margin: 8px auto 0;
 }
 
-/* --- Start-Hintergrund (unter Panel, über Canvas) ------------------------- */
-#bg-start{
-  position: fixed;
-  inset: 0;
-  z-index: 900;
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity .5s ease;
-  background:
-    radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%,
-                    rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
-    url("../../assets/ui/start-bg.jpg") center/cover no-repeat;
-}
-#bg-start.fadeout{ opacity: 0; }
-
-/* HUD & Dock Schichten (liegen unter dem Startpanel) */
-#hud-top    { position: fixed; top: 8px; left: 8px; right: 8px; z-index: 950; }
-#build-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 950; }
-
-/* Responsive */
-@media (max-width: 600px){
-  #start-panel{ top: 12px; left: 12px; min-width: 240px; }
-  #start-panel .btn, #start-panel button{ font-size: 16px; padding: 12px 14px; }
-}
-@media (prefers-reduced-motion: reduce){
-  *{ transition: none !important; animation: none !important; }
-  #bg-start{ transition: none !important; }
+#start-panel .actions .btn {
+  width: 100%;
+  min-height: 40px;
+  font-size: clamp(14px, 2.6vw, 16px);
 }
 
-/* Canvas-Safety */
-#game{ background: transparent !important; }
+/* 5) Mobile Feinschliff: Mini-Displays dürfen kleiner skalieren */
+@media (max-width: 380px), (max-height: 600px) {
+  #start-panel { --start-size: clamp(220px, 60vw, 420px); }
+  #start-panel .actions { gap: 8px; width: min(86%, 320px); }
+}
 
-body.is-playing { background: none !important; }
-#start-panel.hidden { display:none !important; opacity:0; pointer-events:none; }
-#game { position: relative; z-index: 1; } /* Canvas über dem (nun unsichtbaren) BG */
+/* 6) Wenn gespielt wird, ist das Panel weg (JS setzt .is-playing) */
+body.is-playing #start-panel { display: none !important; }
+
+/* Optional: weiches Ein-/Ausblenden */
+#start-panel { opacity: 1; transition: opacity 150ms ease; }
+#start-panel.hidden { opacity: 0; pointer-events: none; }
