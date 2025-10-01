@@ -99,3 +99,9 @@ body.is-playing #start-panel{ display: none !important; }
   display:none; position:absolute; inset:0; width:100%; height:100%;
   object-fit: fill; border-radius:16px; z-index:0; pointer-events:none;
 }
+/* ---- STARTPANEL: FRAME-BILD (muss die letzte Regel sein) ---- */
+#start-panel{
+  /* Pfad ggf. anpassen */
+  --panel-img: url("assets/ui/panel/start_panel.png?v=102");
+  background: var(--panel-img) no-repeat center / 100% 100% !important;
+}
