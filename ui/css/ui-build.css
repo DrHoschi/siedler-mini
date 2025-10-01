@@ -259,3 +259,28 @@ canvas, #game-canvas, .game-canvas{
 .debug-layer{
   pointer-events: none;
 }
+
+/* Sichtbarer Platz für das Build-Panel */
+#build-dock{
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 56px; z-index: 960;
+}
+#build-panel{
+  position: fixed; left: 0; right: 0; bottom: 56px;
+  max-height: 42vh; overflow: auto;
+  z-index: 961;
+}
+
+/* Grundlayout */
+#build-panel .ui-build-wrap{ display: grid; gap: 10px; padding: 12px; }
+#build-cats{ display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
+#build-cats .build-cat{ padding: 8px 10px; border-radius: 8px; background: #2b3138; color: #e6f0ff; cursor: pointer; }
+#build-cats .build-cat.active{ outline: 2px solid #8ab4f8; }
+
+#build-items{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px;
+              margin: 0; padding: 0; list-style: none; }
+#build-items .build-item{ display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: #1f242a; color: #e6f0ff; }
+#build-items .build-item.is-selected{ outline: 2px solid #8ab4f8; }
+#build-items .build-item .title{ font-weight: 700; }
+#build-items .build-item .cost{ display: flex; gap: 10px; align-items: center; }
+#build-items .build-item .cost .res{ display: inline-flex; gap: 6px; align-items: center; }
