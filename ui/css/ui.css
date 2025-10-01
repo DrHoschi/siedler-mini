@@ -58,7 +58,7 @@ img{ max-width:100%; display:block; }
   background:
     var(--ui-panel-img) center center / contain no-repeat,
     linear-gradient(to bottom, var(--panel-bg1), var(--panel-bg2));
-  border: 1px solid var(--ui-border);
+  border: 0px solid var(--ui-border); /* border testweise auf 0px gesetzt •/
   border-radius: var(--ui-radius);
   box-shadow: var(--ui-shadow);
   color: var(--ui-fg);
