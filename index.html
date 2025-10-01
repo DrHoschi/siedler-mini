@@ -109,44 +109,59 @@
 
   <!-- (4.4) BRIDGE: Registry → UIBuild (inline, minimal & robust) -->
   <script>
-  (function(){
-    'use strict';
-    var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
-    var mounted = false;
+(function(){
+  'use strict';
+  var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
+  var mounted = false;
 
-    function regList(type){
-      try {
-        return (window.Registry && typeof Registry.list==='function') ? Registry.list(type) : [];
-      } catch(e){ LOG.warn('[ui-bridge] Registry.list(%s) fail:', type, e); return []; }
+  function regList(type){
+    try {
+      if (window.Registry && typeof window.Registry.list === 'function') {
+        return window.Registry.list(type) || [];
+      }
+    } catch(e){ LOG.warn('[ui-bridge] Registry.list(%s) fail:', type, e); }
+    return [];
+  }
+
+  function ensureMount(){
+    if (mounted) return;
+    if (!window.UIBuild || typeof window.UIBuild.mount !== 'function') return;
+    var host = document.getElementById('build-panel');
+    if (!host) return;
+    try { window.UIBuild.mount(host); mounted = true; LOG.info('[ui-bridge] mount ok'); }
+    catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
+  }
+
+  function refresh(tag){
+    ensureMount();
+    var cats  = regList('category');
+    var items = regList('building').filter(function(b){ return b && b.enabled !== false; });
+
+    if (window.UIBuild && typeof window.UIBuild.setCategories === 'function') {
+      window.UIBuild.setCategories(cats);
     }
-    function ensureMount(){
-      if (mounted) return;
-      if (!window.UIBuild || typeof UIBuild.mount!=='function') return;
-      var host = document.getElementById('build-panel');
-      if (!host) return;
-      try { UIBuild.mount(host); mounted = true; LOG.info('[ui-bridge] mount ok'); }
-      catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
+    if (window.UIBuild && typeof window.UIBuild.setItems === 'function') {
+      window.UIBuild.setItems(items);
     }
-    function refresh(tag){
-      ensureMount();
-      var cats  = regList('category');
-      var items = regList('building').filter(function(b){ return b && b.enabled !== false; });
+    try {
+      if (window.UIBuild && typeof window.UIBuild.rerender === 'function') {
+        window.UIBuild.rerender();
+      }
+    } catch(e){}
 
-      if (window.UIBuild?.setCategories) UIBuild.setCategories(cats);
-      if (window.UIBuild?.setItems)      UIBuild.setItems(items);
-      try{ window.UIBuild?.rerender && UIBuild.rerender(); }catch(e){}
+    LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag || 'refresh');
+  }
 
-      LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
-    }
+  // Listen auf BEIDE Schreibweisen + Updates
+  window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
+  window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
+  window.addEventListener('cb:registry:update', function(){ refresh('update');      });
 
-    // Registry liefert Daten → UI auffüllen
-    window.addEventListener('cb:registry:ready',  function(){ refresh('ready');  });
-    window.addEventListener('cb:registry:update', function(){ refresh('update'); });
-
-    // Sicherheits-Refresh nach Boot
-    setTimeout(function(){ refresh('boot'); }, 50);
-  })();
-  </script>
+  // Sicherheits-Refreshes (falls Ready-Event vor Bridge kam)
+  setTimeout(function(){ refresh('boot'); }, 50);
+  setTimeout(function(){ refresh('late'); }, 300);
+})();
+</script>
 
   <!-- (4.5) DEBUG / TOOLS -->
   <script src="tools/debug-tools.js"></script>
