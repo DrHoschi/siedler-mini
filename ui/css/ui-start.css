@@ -13,7 +13,7 @@
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  z-index: 30;                /* über Canvas, unter Modals */
+  z-index: 999;                /* über Canvas, unter Modals */
   display: grid;
   place-items: center;        /* Inhalt zentrieren */
   padding: 0;                 /* wir arbeiten über Innenlayout */
