@@ -132,8 +132,8 @@ body.is-playing #start-panel { display: none !important; }
 /* === Stellschrauben ======================================================= */
 :root{
   /* frei justierbar */
-  --title-top:   12%;   /* Überschrift tiefer/höher (größer = weiter unten) */
-  --actions-top: 30%;   /* Buttons tiefer/höher (kleiner = weiter oben) */
+  --title-top:   13%;   /* Überschrift tiefer/höher (größer = weiter unten) */
+  --actions-top: 25%;   /* Buttons tiefer/höher (kleiner = weiter oben) */
   --panel-radius: 16px; /* Rundung, falls du die ändern willst */
 }
 
@@ -161,7 +161,7 @@ body.is-playing #start-panel { display: none !important; }
   left: 50%;
   top: var(--actions-top) !important;
   transform: translateX(-50%);
-  width: 78%;
+  width: 70%;
   /* eigenes Innen-Grid behalten */
   display: grid;
   grid-template-columns: 1fr;
