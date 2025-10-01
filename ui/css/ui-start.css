@@ -1,84 +1,121 @@
 /* ============================================================================
-   Datei : ui/css/ui-start.css (Ergänzung)
-   Version: v1.0.4 (2025-10-01)
-   Zweck  : Startpanel mittig & QUADRATISCH anzeigen (responsive)
-   Hinweise:
-     - Rein CSS-basiert (kein JS nötig)
-     - aspect-ratio mit Fallback für ältere Browser
+   Datei : ui/css/ui-start.css  (Startpanel – Final v1.0.5)
+   Zweck : Quadratisch + mittig, Inhalt passt ins Quadrat, ohne weißen Rand,
+           Holzrahmen + Papierlook rein per CSS (ohne Assets).
+   Hinweis: JS unverändert lassen (ui-start.js).
 ============================================================================ */
 
-/* 1) Grund-Layout zentrieren */
-#start-panel {
-  position: fixed;            /* bleibt mittig, auch wenn die Seite scrollt */
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 999;                /* über Canvas, unter Modals */
-  display: grid;
-  place-items: center;        /* Inhalt zentrieren */
-  padding: 0;                 /* wir arbeiten über Innenlayout */
-  border-radius: 14px;        /* dein UI-Style */
-}
-
-/* 2) Quadratische Größe über CSS-Variable + aspect-ratio */
-#start-panel {
-  /* Basisgröße: skaliert mit Viewport, aber begrenzt */
+/* (1) Quadrat + zentriert */
+#start-panel{
+  position: fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+  /* Grundgröße: skaliert mit Viewport */
   --start-size: clamp(260px, 48vw, 520px);
   width: var(--start-size);
   height: var(--start-size);
-  aspect-ratio: 1 / 1;                /* Quadrat */
+  aspect-ratio: 1 / 1;                  /* Quadrat */
+  display: grid; place-items: center;
+  isolation: isolate;                    /* für saubere Pseudo-Layer */
+  z-index: 999;
+
+  /* WICHTIG: alten weißen Kasten aus ui-panel übersteuern */
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 16px;
+  overflow: hidden;                      /* Inhalt bleibt im Quadrat */
 }
 
-/* 3) Fallback für Browser ohne aspect-ratio (ältere iOS/WebViews) */
-@supports not (aspect-ratio: 1 / 1) {
-  #start-panel {
-    height: auto;                      /* wird über ::before erzeugt */
+/* (1b) Fallback ohne aspect-ratio */
+@supports not (aspect-ratio: 1 / 1){
+  #start-panel{ height: auto; }
+  #start-panel::before{
+    content:""; display:block; padding-top:100%;
   }
-  #start-panel::before {
-    content: "";
-    display: block;
-    padding-top: 100%;                 /* Quadrat erzwingen */
-  }
-  #start-panel > * {
-    position: absolute;                /* Inhalt über das künstliche Quadrat legen */
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 16px;
-  }
+  #start-panel > *{ position:absolute; inset:0; }
 }
 
-/* 4) Innenlayout – Titel + Buttons schön verteilen */
-#start-panel h1 {
-  margin: 12px 0 8px 0;
+/* (2) Holzrahmen (außen) + Papier (innen) – rein per CSS */
+#start-panel::before{
+  /* Holzrahmen */
+  content:"";
+  position:absolute; inset:0;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 10px #5b3a1e,        /* Holzrahmen-Breite */
+    0 0 0 12px rgba(0,0,0,.35); /* dunkle Kante außen */
+  pointer-events:none;
+}
+#start-panel::after{
+  /* Papierfläche innen */
+  content:"";
+  position:absolute;
+  inset: 12px;                  /* Abstand = Holzrahmenbreite */
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 100% at 10% 0%, rgba(255,255,255,.35), transparent 60%),
+    radial-gradient(120% 100% at 90% 100%, rgba(0,0,0,.08), transparent 60%),
+    linear-gradient(180deg, #e7d1a8 0%, #d9bf90 100%); /* Papierfarben */
+  box-shadow:
+    inset 0 6px 14px rgba(0,0,0,.18),
+    inset 0 -4px 8px rgba(0,0,0,.12);
+  pointer-events:none;
+}
+
+/* (3) Innenlayout – alles bleibt IM Quadrat */
+#start-panel .actions,
+#start-panel h1{
+  position: relative;            /* über Papier-Layer */
+  z-index: 1;
+}
+
+/* Überschrift */
+#start-panel h1{
+  margin: 14px 0 8px;
   text-align: center;
   font-size: clamp(20px, 3.2vw, 28px);
+  color: #2a1a0b;                /* etwas dunkler auf „Papier“ */
+  text-shadow: 0 1px 0 rgba(255,255,255,.3);
 }
 
-#start-panel .actions {
-  /* In einem Quadrat sehen gridded Buttons harmonischer aus */
+/* Button-Stack – passt in die innere Fläche */
+#start-panel .actions{
   display: grid;
   grid-template-columns: 1fr;
   gap: 10px;
-  width: min(80%, 360px);
+  width: min(84%, 360px);
   margin: 8px auto 0;
+  max-height: calc(100% - 72px); /* Platz für Titel */
+  overflow: auto;                 /* scrollt sauber, falls sehr viele Buttons */
+  padding-bottom: 6px;
 }
 
-#start-panel .actions .btn {
+/* Buttons: volle Breite, schöne Kacheln */
+#start-panel .actions .btn{
   width: 100%;
-  min-height: 40px;
+  min-height: 42px;
+  border-radius: 10px;
+  border: none;
   font-size: clamp(14px, 2.6vw, 16px);
+  background: linear-gradient(#1f2a38, #111924);
+  color: #e9f1ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.15),
+    0 2px 6px rgba(0,0,0,.25);
+}
+#start-panel .actions .btn.main{
+  background: linear-gradient(#2e6be9, #1f45a6);
+}
+#start-panel .actions .btn.ghost{
+  background: linear-gradient(#3a3f46, #272b31);
+  color: #fff;
 }
 
-/* 5) Mobile Feinschliff: Mini-Displays dürfen kleiner skalieren */
-@media (max-width: 380px), (max-height: 600px) {
-  #start-panel { --start-size: clamp(220px, 60vw, 420px); }
-  #start-panel .actions { gap: 8px; width: min(86%, 320px); }
-}
+/* (4) Wegblenden erst NACH Spielstart */
+body.is-playing #start-panel{ display: none !important; }
 
-/* 6) Wenn gespielt wird, ist das Panel weg (JS setzt .is-playing) */
-body.is-playing #start-panel { display: none !important; }
+/* (5) weiches Fade */
+#start-panel{ opacity: 1; transition: opacity 150ms ease; }
+#start-panel.hidden{ opacity: 0; pointer-events: none; }
 
-/* Optional: weiches Ein-/Ausblenden */
-#start-panel { opacity: 1; transition: opacity 150ms ease; }
-#start-panel.hidden { opacity: 0; pointer-events: none; }
+/* (6) Sicherheit: kein fremder weißer Rand mehr von .ui-panel */
+#start-panel.ui-panel{ background: transparent !important; border: none !important; }
