@@ -115,11 +115,12 @@
   <script src="ui/inspector/inspector.core.js"></script>
 
   <!-- (4.4) BRIDGE: Registry → UIBuild (inline, minimal & robust) -->
-  <script>
+<script>
 (function(){
   'use strict';
   var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
   var mounted = false;
+  var playing = false; // Gate
 
   function regGet(key){
     try{
@@ -132,34 +133,47 @@
   }
 
   function ensureMount(){
-    if (mounted) return;
+    if (mounted || !playing) return;                      // ⬅️ Gate: erst wenn gespielt wird
     if (!window.UIBuild || typeof window.UIBuild.mount !== 'function') return;
     var host = document.getElementById('build-panel');
     if (!host) return;
-    try { window.UIBuild.mount(host); mounted = true; LOG.info('[ui-bridge] mount ok'); }
-    catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
+    try { 
+      window.UIBuild.mount(host); 
+      mounted = true; 
+      LOG.info('[ui-bridge] mount ok'); 
+    } catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
   }
 
   function refresh(tag){
     ensureMount();
+    if (!mounted) { LOG.info('[ui-bridge] skip refresh (%s) – not mounted yet', tag); return; }
 
-    var cats  = regGet('categories');     // <-- aus Registry.get
-    var items = regGet('buildings').filter(function(b){ return b && b.enabled !== false; });
+    // Daten + Icon-Basis holen
+    var cats  = regGet('categories');
+    var items = regGet('buildings').filter(b => b && b.enabled !== false);
+    var base  = (window.Registry && Registry.get && (Registry.get('iconsBase') || Registry.get('config')?.iconsBase)) || 'assets/ui/build/';
 
-    if (window.UIBuild && typeof window.UIBuild.setCategories === 'function') {
-      window.UIBuild.setCategories(cats);
-    }
-    if (window.UIBuild && typeof window.UIBuild.setItems === 'function') {
-      window.UIBuild.setItems(items);
-    }
-    try {
-      if (window.UIBuild && typeof window.UIBuild.rerender === 'function') {
-        window.UIBuild.rerender();
-      }
-    } catch(e){}
+    // in UIBuild schieben
+    window.UIBuild?.setIconsBase?.(base);
+    window.UIBuild?.setCategories?.(cats);
+    window.UIBuild?.setItems?.(items);
+    try{ window.UIBuild?.rerender?.(); }catch(e){}
 
-    LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag || 'refresh');
+    LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
   }
+
+  // Spielstatus: erst bei Spielstart mounten
+  window.addEventListener('cb:game-start', function(){ playing = true; refresh('game-start'); });
+
+  // Registry-Events
+  window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
+  window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
+  window.addEventListener('cb:registry:update', function(){ refresh('update');      });
+
+  // Sicherheits-Refresh (falls Start schon passiert ist, z.B. nach Reload)
+  setTimeout(function(){ if (document.body.classList.contains('is-playing')) { playing = true; refresh('late'); } }, 150);
+})();
+</script>
 
   // Beide Varianten zuhören (deine Registry feuert BEIDE ✅)
   window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
