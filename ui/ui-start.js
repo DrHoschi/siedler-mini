@@ -58,3 +58,18 @@
   // Spielstart-Signal → UI umschalten
   window.addEventListener('cb:game-start', hideStartSurfaces);
 })();
+
+/* Startpanel zentrieren */
+#start-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30; /* über Canvas, unter evtl. Modals */
+}
+
+/* Option: auf kleineren Geräten max Breite begrenzen */
+#start-panel.ui-panel {
+  max-width: 420px;
+  width: calc(100vw - 32px);
+}
