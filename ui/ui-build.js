@@ -1,44 +1,54 @@
 /* ============================================================================
  * Datei   : ui/ui-build.js
- * Version : v2.1.0 (2025-10-01)
+ * Version : v2.1.1 (2025-10-01)
  * Zweck   : Build-Dock UI + API (window.UIBuild)
- * API     :
- *   UIBuild.mount(host?)                  -> Mount in <aside id="build-panel">
- *   UIBuild.setCategories(cats[])         -> [{id,label}]
- *   UIBuild.setItems(items[])             -> [{id,cat,label,icon,cost,enabled}]
- *   UIBuild.setIconsBase(base | base[])   -> "assets/ui/build/" ODER ["a/","b/"]
- *   UIBuild.rerender()                    -> UI neu zeichnen
- *   UIBuild.open() / UIBuild.close()      -> Dock sichtbar/unsichtbar
+ *
+ * Öffentliche API (window.UIBuild):
+ *   - mount(host?)                 // in <aside id="build-panel"> montieren
+ *   - setCategories(cats[])        // [{id,label}]
+ *   - setItems(items[])            // [{id,cat,label,icon,cost,enabled}]
+ *   - setIconsBase(base | base[])  // "assets/ui/build/" ODER ["a/","b/"]
+ *   - rerender()                   // UI neu zeichnen
+ *   - open() / close()             // Dock sichtbar/unsichtbar
+ *
+ * Daten-Modelle:
+ *   categories[] = { id, label }
+ *   items[]      = { id, cat, label, icon, cost, enabled }
  *
  * Hinweise:
- * - Icons: relative Namen (z.B. "holzfaeller") werden mit setIconsBase() kombiniert.
- *          Absolut-URLs oder data:-URIs werden unverändert benutzt.
- * - Dieses Modul mountet NICHT automatisch beim Laden, sondern nur auf
- *   UIBuild.mount() und öffnet standardmäßig erst auf cb:game-start.
+ *   - Icons: relative Namen (z.B. "hq" oder "hq.png") werden mit iconsBase
+ *     kombiniert. Absolut-URLs (http(s)://), Root-Pfade (/…), oder data:-URIs
+ *     werden unverändert benutzt.
+ *   - Dieses Modul öffnet das Dock standardmäßig erst bei cb:game-start.
  * ========================================================================== */
+
 (function(){
   'use strict';
 
-  // -- Logging ---------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // Logging
+  // --------------------------------------------------------------------------
   const LOG = (window.CBLog && CBLog.info) ? CBLog : console;
 
-  // -- Interner Zustand ------------------------------------------------------
-  let host = null;                  // Mount-Host (z.B. <aside id="build-panel">)
-  let cats = [];                    // Kategorien [{id,label}]
-  let items = [];                   // Items      [{id,cat,label,icon,cost,enabled}]
-  let activeCat  = null;            // aktuelle Kategorie-ID
-  let activeItem = null;            // aktuell markiertes Item (ID)
+  // --------------------------------------------------------------------------
+  // Interner Zustand
+  // --------------------------------------------------------------------------
+  let host = null;            // Mount-Host (z.B. <aside id="build-panel">)
+  let cats = [];              // Kategorien [{id,label}]
+  let items = [];             // Items      [{id,cat,label,icon,cost,enabled}]
+  let activeCat  = null;      // aktuelle Kategorie-ID
+  let activeItem = null;      // aktuell markiertes Item (ID)
 
-  // Icon-Basis: erlaubt 1 oder mehrere Pfade; wird über setIconsBase() gepflegt
+  // Icons-Basis (ein oder mehrere Pfade; final immer mit Slash)
   let iconBases = ['assets/icons/buildings/'];
 
   // Shorthands
-  const $ = (s, r=document)=>r.querySelector(s);
+  const $  = (s, r=document)=>r.querySelector(s);
   const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
 
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   // 1) Grundgerüst (Markup) sicherstellen
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   function ensureScaffold(){
     if (!host) return null;
 
@@ -60,7 +70,7 @@
       host.appendChild(wrap);
     }
 
-    // Dock (Hintergrund) sichtbar schalten
+    // Dock-Hintergrund sichtbar schalten
     const dock = document.getElementById('build-dock');
     if (dock){ dock.hidden = false; dock.classList.remove('hidden'); }
 
@@ -71,9 +81,9 @@
     return { cats: $('#build-cats', host), items: $('#build-items', host) };
   }
 
-  // ==========================================================================
-  // 2) Fallback-Daten direkt aus Registry (falls Bridge noch nicht lieferte)
-  // ==========================================================================
+  // --------------------------------------------------------------------------
+  // 2) Fallback-Daten aus der Registry (wenn Bridge noch nichts gesetzt hat)
+  // --------------------------------------------------------------------------
   function fallbackFromRegistry(){
     const rc = (window.Registry?.get?.('categories') || []).map(c => ({
       id: String(c.id),
@@ -92,9 +102,9 @@
     return { rc, ri };
   }
 
-  // ==========================================================================
-  // 3) Icons: Basen setzen & Pfade auflösen
-  // ==========================================================================
+  // --------------------------------------------------------------------------
+  // 3) Icons: Basen setzen & Pfad-Resolver
+  // --------------------------------------------------------------------------
   function normalizeBases(next){
     if (!next) return iconBases;
     const arr = Array.isArray(next) ? next : [next];
@@ -107,24 +117,35 @@
     return /^(https?:)?\/\//i.test(str) || /^data:/i.test(str) || str.startsWith('/');
   }
 
-  // Liefert den finalen Icon-URL-String (ohne Existenz-Check)
+  /** iconsBase ggf. aus Registry ziehen (z.B. aus data/buildings.json) */
+  function adoptIconsBaseFromRegistry(){
+    try{
+      const base = window.Registry?.get?.('iconsBase');
+      if (base){
+        iconBases = normalizeBases(base);
+        LOG.info('[ui-build] iconsBase von Registry →', iconBases.join(', '));
+      }
+    } catch(e){ /* noop */ }
+  }
+
+  /** Liefert finalen Icon-Pfad-String (ohne Netz-Existenz-Check) */
   function iconSrcFor(item){
     const raw = item?.icon || item?.iconId || item?.iconPath || '';
-    if (!raw) return '';                       // kein Icon hinterlegt
-    if (isAbsoluteUrl(raw)) return raw;        // bereits absolut/ data:
+    if (!raw) return '';                  // kein Icon hinterlegt
+    if (isAbsoluteUrl(raw)) return raw;   // bereits absolut/ data:/ Rootpfad
 
-    // Dateiendung ergänzen, wenn nötig
+    // Dateiendung ergänzen, wenn fehlt
     let name = String(raw);
     if (!/\.(png|webp|jpg|jpeg|svg)$/i.test(name)) name += '.png';
 
-    // Mehrere Basen erlauben – wir nutzen die erste
+    // Mehrere Basen möglich – wir nehmen die erste
     const base = iconBases[0] || '';
     return base + name;
   }
 
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   // 4) Render-Helfer
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   function applyCatHighlight(catRoot){
     $$('.build-cat', catRoot).forEach(li =>
       li.classList.toggle('active', li.dataset.cat === activeCat)
@@ -150,9 +171,9 @@
     return span;
   }
 
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   // 5) Render: Kategorien & Items
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   function renderCats(catRoot){
     catRoot.innerHTML = '';
 
@@ -162,6 +183,7 @@
       li.dataset.cat = c.id;
       li.textContent = c.label;
 
+      // erste Kategorie aktiv, falls noch keine gesetzt
       if (!activeCat && idx === 0) activeCat = c.id;
 
       li.addEventListener('click', () => {
@@ -195,7 +217,7 @@
       icon.alt = b.label || b.id;
       icon.decoding = 'async';
       icon.loading  = 'lazy';
-      icon.src = iconSrcFor(b); // <-- hier wird aus iconBases + item.icon gebaut
+      icon.src = iconSrcFor(b);  // ← Resolver kombiniert iconsBase + Name
 
       // Titel
       const title = document.createElement('div');
@@ -225,19 +247,22 @@
     applyItemHighlight(itemRoot);
   }
 
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   // 6) Vollständiger Re-Render
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   function rerender(){
     const els = ensureScaffold();
     if (!els) return;
 
-    // Fallback-Daten, wenn noch nichts angekommen ist
+    // Fallback-Daten, wenn noch nichts gesetzt wurde
     if (!cats.length || !items.length){
       const { rc, ri } = fallbackFromRegistry();
       if (!cats.length)  cats  = rc;
       if (!items.length) items = ri;
     }
+
+    // Icons-Basis aus Registry adaptieren (falls vorhanden)
+    adoptIconsBaseFromRegistry();
 
     if (!cats.length){
       LOG.info('[ui-build] keine Kategorien – nix zu rendern');
@@ -257,29 +282,29 @@
     LOG.info('[ui-build] rerender ✓ (%d cats / %d items)', cats.length, items.length);
   }
 
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   // 7) Öffentliche API
-  // ==========================================================================
+  // --------------------------------------------------------------------------
   window.UIBuild = {
-    // Host mounten (optional el übergeben)
+    /** Host montieren (optional el übergeben) */
     mount(el){
       host = el || document.getElementById('build-panel');
       LOG.info('[ui-build] mount ok');
-      // Beim Mount noch nicht zwingend öffnen – nur strukturieren
       ensureScaffold();
     },
 
+    /** Kategorien setzen */
     setCategories(nextCats){
       cats = (Array.isArray(nextCats) ? nextCats : []).map(c => ({
         id: String(c.id),
         label: String(c.label ?? c.id)
       }));
-      // activeCat korrigieren
       if (!cats.find(c => c.id === activeCat)){
         activeCat = cats[0]?.id || null;
       }
     },
 
+    /** Items setzen */
     setItems(nextItems){
       items = (Array.isArray(nextItems) ? nextItems : []).map(b => ({
         id: String(b.id),
@@ -291,13 +316,14 @@
       }));
     },
 
-    // Akzeptiert String ODER Array von Strings
+    /** Icons-Basis manuell setzen (String oder Array) */
     setIconsBase(next){
       iconBases = normalizeBases(next);
     },
 
     rerender,
 
+    /** Dock öffnen + rendern */
     open(){
       const dock = document.getElementById('build-dock');
       if (dock){ dock.hidden = false; dock.classList.remove('hidden'); }
@@ -305,6 +331,7 @@
       rerender();
     },
 
+    /** Dock schließen */
     close(){
       const dock = document.getElementById('build-dock');
       if (dock){ dock.hidden = true; dock.classList.add('hidden'); }
@@ -312,15 +339,15 @@
     }
   };
 
-  // ==========================================================================
-  // 8) Lifecycle-Hooks (sichtbar erst im Spiel)
-  //    -> Öffnen erst bei Spielstart. Registry-Events triggern nur Re-Render.
-  // ==========================================================================
+  // --------------------------------------------------------------------------
+  // 8) Lifecycle-Hooks
+  //    - Registry fertig → nur (re)rendern, iconsBase ggf. übernehmen
+  //    - Spielstart      → ggf. mounten + öffnen
+  // --------------------------------------------------------------------------
   window.addEventListener('cb:registry-ready',  () => { UIBuild.rerender(); });
   window.addEventListener('cb:registry:ready',  () => { UIBuild.rerender(); });
 
   window.addEventListener('cb:game-start', () => {
-    // beim ersten Start automatisch mounten, falls noch nicht passiert
     if (!host) UIBuild.mount(document.getElementById('build-panel'));
     UIBuild.open();
   });
