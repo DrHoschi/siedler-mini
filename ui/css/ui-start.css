@@ -1,141 +1,101 @@
 /* ============================================================================
    Datei    : ui/css/ui-start.css
    Projekt  : Neue Siedler
-   Version  : v1.1.0 (2025-10-01)
-   Zweck    : Startpanel quadratisch & mittig, vollflächiger Panel-Frame (PNG),
-              Titel sichtbar, Buttons kompakt (ohne Scroll), kein weißer Rand.
-   Hinweise : - Panelbild füllt das Quadrat bis zum Rand (100%/100%)
-              - Falls Bild fehlt, gibt es einen dezenten Farb-Gradient als Fallback
-              - Verstecken erfolgt erst nach Spielstart (body.is-playing)
+   Version  : v1.1.1 (2025-10-01)
+   Zweck    : Startpanel quadratisch + mittig, Frame-PNG vollflächig, Titel/Buttons.
+   WICHTIG  : Bildpfad in --panel-img setzen ODER per JS/Inline-Style überschreiben.
 ============================================================================ */
 
-/* === (0) Variablen / Fallbacks =========================================== */
+/* (0) Variablen – Pfad anpassen! */
 :root{
-  /* Pfad zum Panel-Frame-PNG (quadratisch mit Holzrahmen) → ANPASSEN! */
-  --panel-img: url("assets/ui/panel/start_panel.png");
-
-  /* Basisgröße des Quadrats: skaliert mit Viewport, begrenzt */
+  --panel-img: url("assets/ui/panel/start_panel.png"); /* <— DEIN PFAD */
   --start-size: clamp(240px, 72vw, 420px);
-
-  /* Fallback-Farben falls Bild nicht lädt */
-  --paper-top:  #e7d1a8;
-  --paper-bot:  #d9bf90;
 }
 
-/* === (1) Reset: alte ui-panel-Defaults neutralisieren ==================== */
+/* (1) ui-panel-Defaults neutralisieren */
 #start-panel.ui-panel{
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
 }
 
-/* === (2) Geometrie & Positionierung ====================================== */
+/* (2) Geometrie & Position */
 #start-panel{
   position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: var(--start-size);
-  height: var(--start-size);
-  aspect-ratio: 1 / 1;                 /* Quadrat */
+  left: 50%; top: 50%;
+  transform: translate(-50%,-50%);
+  width: var(--start-size); height: var(--start-size);
+  aspect-ratio: 1 / 1;
   z-index: 999;
-
-  display: grid;                        /* zentriert Kinder */
-  place-items: center;
+  display: grid; place-items: center;
   border-radius: 16px;
-  overflow: hidden;                     /* alles bleibt im Quadrat */
-  isolation: isolate;                   /* saubere Layer */
+  overflow: hidden;
+  isolation: isolate;
+
+  /* FRAME-BILD (entscheidend: !important + shorthand) */
+  background: var(--panel-img) no-repeat center / 100% 100% !important;
 }
 
 /* iOS/Legacy-Fallback ohne aspect-ratio */
 @supports not (aspect-ratio: 1 / 1){
   #start-panel{ height: auto; }
-  #start-panel::before{
-    content:""; display:block; padding-top:100%;  /* Quadrat erzwingen */
-  }
+  #start-panel::before{ content:""; display:block; padding-top:100%; }
   #start-panel > *{ position:absolute; inset:0; }
 }
 
-/* === (3) Hintergrund: Panelbild vollflächig + Fallback ==================== */
-#start-panel{
-  background-image: var(--panel-img);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 100% 100%;          /* bis zum Rand (kein Crop, kein Weißrand) */
-  background-color: transparent;       /* falls Bild transparenten Rand hat */
-
-  /* Fallback-Farbfläche unter dem Bild (wird nur sichtbar, wenn Bild fehlt) */
-  /* Tipp: auskommentieren, wenn du 100% mit Bild arbeitest */
-  /* background-image: linear-gradient(180deg, var(--paper-top), var(--paper-bot)), var(--panel-img); */
-}
-
-/* Inhaltsebene über dem Hintergrundbild */
+/* (3) Inhaltsebene */
 #start-panel > *{ position: relative; z-index: 1; }
 
-/* === (4) Titel (Spielname) =============================================== */
+/* Titel */
 #start-panel h1{
   margin: 0;
-  position: absolute;
-  left: 50%;
-  top: 9%;                              /* ggf. 8–12% feinjustieren */
+  position: absolute; left: 50%; top: 9%;
   transform: translateX(-50%);
   width: 80%;
   text-align: center;
-
   font-size: clamp(18px, 4.4vw, 26px);
   font-weight: 700;
-  color: #1f140a;                       /* dunkel auf hellem Papier */
-  text-shadow:
-    0 1px 0 rgba(255,255,255,.65),
-    0 2px 8px rgba(0,0,0,.25);
+  color: #1f140a;
+  text-shadow: 0 1px 0 rgba(255,255,255,.65), 0 2px 8px rgba(0,0,0,.25);
 }
 
-/* === (5) Button-Stack (kompakt, ohne Scrollen) =========================== */
+/* Buttons */
 #start-panel .actions{
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;                             /* enger für mobile */
-  width: 78%;                           /* Holzrand bleibt sichtbar */
-  margin-top: 34%;                      /* unter den Titel schieben → ggf. 30–40% */
+  display: grid; grid-template-columns: 1fr;
+  gap: 8px;
+  width: 78%;
+  margin-top: 34%;
   margin-bottom: 6%;
-  overflow: hidden;                     /* keine Scrollbar im Startpanel */
-  z-index: 1;
+  overflow: hidden;
 }
 
 #start-panel .actions .btn{
   width: 100%;
   min-height: 36px;
   padding: 6px 8px;
-  border: 0;
-  border-radius: 10px;
+  border: 0; border-radius: 10px;
   font-size: clamp(13px, 2.8vw, 15px);
   color: #eef5ff;
   background: linear-gradient(#2e3a48, #11161d);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.15),
-    0 2px 6px rgba(0,0,0,.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 2px 6px rgba(0,0,0,.25);
 }
+#start-panel .actions .btn.main{ background: linear-gradient(#2f6ef0, #1f47aa); }
 
-#start-panel .actions .btn.main{
-  background: linear-gradient(#2f6ef0, #1f47aa);
-  color: #ffffff;
-}
-
-#start-panel .actions .btn.ghost{
-  background: linear-gradient(#3a3f46, #272b31);
-  color: #ffffff;
-}
-
-/* === (6) Kleine Geräte (Feintuning) ====================================== */
+/* Kleine Geräte Feintuning */
 @media (max-width: 380px), (max-height: 640px){
   :root{ --start-size: clamp(220px, 80vw, 360px); }
   #start-panel h1{ top: 8%; }
   #start-panel .actions{ gap: 6px; width: 82%; margin-top: 33%; }
 }
 
-/* === (7) Nach Spielstart ausblenden ====================================== */
+/* Panel weg, wenn Spiel läuft */
 body.is-playing #start-panel{ display: none !important; }
 
-/* === (8) Safety: alte pseudo-Layer aus früheren Versionen abschalten ===== */
-#start-panel::before,
-#start-panel::after{ content: none !important; }
+/* Safety: alle alten Pseudo-Layer abschalten */
+#start-panel::before, #start-panel::after{ content: none !important; }
+
+/* (Optional) Bild-Fallback über <img> (wird per JS sichtbar gemacht, falls benötigt) */
+#start-panel .panel-img{
+  display:none; position:absolute; inset:0; width:100%; height:100%;
+  object-fit: fill; border-radius:16px; z-index:0; pointer-events:none;
+}
