@@ -188,7 +188,7 @@
 })();
 
 // ganz oben bei den Variablen:
-var __iconsBase = 'assets/ui/build/';
+var __iconsBase = 'assets/icon/buildings/';
 
 // öffentlicher Setter (Bridge ruft das auf)
 UIBuild.setIconsBase = function(base){
