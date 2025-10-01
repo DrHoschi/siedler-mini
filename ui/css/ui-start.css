@@ -55,7 +55,7 @@
   margin: 0;
   position: absolute;
   left: 50%;
-  top: 10%;                           /* bei Bedarf 8–12% feinjustieren */
+  top: 15%;                           /* bei Bedarf 8–12% feinjustieren */
   transform: translateX(-50%);
   width: 80%;
   text-align: center;
@@ -70,7 +70,7 @@
   grid-template-columns: 1fr;
   gap: 8px;                          /* kompakter für mobile */
   width: 78%;                        /* Holzrand sichtbar lassen */
-  margin-top: 30%;                   /* unter den Titel schieben */
+  margin-top: 25%;                   /* unter den Titel schieben */
   margin-bottom: 6%;
   z-index: 1;                        /* über dem Panelbild */
   overflow: hidden;                  /* keine Scrollbar im Startpanel */
