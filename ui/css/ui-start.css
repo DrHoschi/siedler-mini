@@ -133,7 +133,7 @@ body.is-playing #start-panel { display: none !important; }
 :root{
   /* frei justierbar */
   --title-top:   13%;   /* Überschrift tiefer/höher (größer = weiter unten) */
-  --actions-top: 23%;   /* Buttons tiefer/höher (kleiner = weiter oben) */
+  --actions-top: 22%;   /* Buttons tiefer/höher (kleiner = weiter oben) */
   --panel-radius: 16px; /* Rundung, falls du die ändern willst */
 }
 
@@ -165,7 +165,7 @@ body.is-playing #start-panel { display: none !important; }
   /* eigenes Innen-Grid behalten */
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 6px;
   /* alte Abstände raus, sonst stören sie */
   margin: 0 !important;
   padding: 0;
