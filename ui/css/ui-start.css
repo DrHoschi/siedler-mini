@@ -19,7 +19,7 @@
   --start-size: clamp(240px, 72vw, 420px);
 
   /* Panel-Frame-Bild (RELATIVER Pfad aus /ui/css/ !) */
-  --panel-img: url("../../assets/ui/panel/start_panel.png");
+  --panel-img: url("../../assets/ui/panel.png");
 }
 
 /* === (1) Startpanel: Geometrie & Hintergrundbild ========================= */
