@@ -80,3 +80,52 @@
 
   log('geladen');
 })();
+
+(function(){
+  'use strict';
+
+  const TILE = (window.Game && Game.tile) || 64;  // Kachelgröße
+
+  let current = null;   // { id, size:[w,h], ... }
+  let ghostEl = document.getElementById('place-ghost'); // dein Overlay/Preview
+
+  // Fallback: Ghost-Element erzeugen, wenn es fehlt
+  if (!ghostEl){
+    ghostEl = document.createElement('div');
+    ghostEl.id = 'place-ghost';
+    ghostEl.style.position = 'absolute';
+    ghostEl.style.pointerEvents = 'none';
+    ghostEl.style.background = 'rgba(0, 200, 0, .25)';
+    ghostEl.style.outline = '2px solid rgba(0,255,0,.6)';
+    document.body.appendChild(ghostEl);
+  }
+
+  function normalizeSize(s){
+    if (!Array.isArray(s) || s.length < 2) return [3,3];  // <- Default 3x3
+    return [ Math.max(1, +s[0]||3), Math.max(1, +s[1]||3) ];
+  }
+
+  function updateGhostSize(){
+    if (!current) return;
+    const [w,h] = normalizeSize(current.size);
+    ghostEl.style.width  = (w * TILE) + 'px';
+    ghostEl.style.height = (h * TILE) + 'px';
+  }
+
+  // Auswahl aus dem Baumenü
+  window.addEventListener('cb:build:select', (ev) => {
+    const id = ev.detail?.id;
+    const list = (window.Registry && Registry.get) ? Registry.get('buildings') : [];
+    current = (list || []).find(b => b && String(b.id) === String(id)) || { id, size:[3,3] };
+    updateGhostSize();
+    // ggf. Platziermodus aktivieren …
+  });
+
+  // Bei Maus/Touch-Bewegung Ghost versetzen (hier nur Raster-Snapping Idee)
+  function moveGhostTo(gridX, gridY){
+    ghostEl.style.left = (gridX * TILE) + 'px';
+    ghostEl.style.top  = (gridY * TILE) + 'px';
+  }
+
+  // TODO: deine bestehenden Pointer-/Touch-Handler rufen moveGhostTo(...)
+})();
