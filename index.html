@@ -90,7 +90,14 @@
   <!-- (4.1) CORE + REGISTRY -->
   <script src="core/asset.js"></script>      <!-- emit: cb:assets-ready -->
   <script src="core/registry.js"></script>   <!-- enthält Fetch von data/buildings.json + emit: cb:registry:ready -->
-
+<script>
+  // Registry-Daten laden (data/buildings.json) → feuert cb:registry-ready/:
+  window.addEventListener('load', function () {
+    try { window.Registry && Registry.init && Registry.init(); }
+    catch (e) { console.warn('[index] Registry.init() fehlgeschlagen', e); }
+  });
+</script>
+  
   <!-- (4.2) MAP/ENGINE/BOOT -->
   <script src="core/map-runtime.js"></script>
   <!-- <script src="core/unit-runtime.js"></script> --><!-- optional, sobald vorhanden -->
