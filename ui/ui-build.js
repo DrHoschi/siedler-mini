@@ -30,7 +30,7 @@
   let activeItem = null;            // aktuell markiertes Item (ID)
 
   // Icon-Basis: erlaubt 1 oder mehrere Pfade; wird über setIconsBase() gepflegt
-  let iconBases = ['assets/ui/build/'];
+  let iconBases = ['assets/icons/buildings/'];
 
   // Shorthands
   const $ = (s, r=document)=>r.querySelector(s);
