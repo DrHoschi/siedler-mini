@@ -1,56 +1,26 @@
-<!-- ui/ui-build.js -->
-<script>
 /* ============================================================================
  * Datei   : ui/ui-build.js
- * Version : v2.0.0 (2025-10-01)
- * Zweck   : Build-Dock
- * API     : window.UIBuild
- *           - mount(hostEl)
- *           - setCategories(cats)
- *           - setItems(items)
- *           - rerender()
- *           - open()/close()  (optional)
- *
- * Datenformat:
- *   categories: [{ id: "infra", label: "Infrastruktur" }, ...]
- *   items:      [{ id:"lumber", cat:"prod", label:"Holzfäller",
- *                  icon:"assets/...", cost:{wood:6,stone:2,food:0,gold:0},
- *                  enabled:true }, ...]
- *
- * Verhalten:
- *   - Wenn die Bridge Daten liefert → benutzen.
- *   - Wenn keine Bridge-Daten da → Fallback: Registry lesen.
- *   - Mount-Ziel: <aside id="build-panel"> (dein Host) – NICHT #build-dock.
- *     #build-dock bleibt als dunkler Hintergrund bestehen.
+ * Version : v2.0.1 (2025-10-01)
+ * Zweck   : Build-Dock UI + API (window.UIBuild)
+ * API     : mount(host), setCategories(cats), setItems(items), rerender(),
+ *           open(), close()
+ * Daten   : categories[] = {id,label}, items[] = {id,cat,label,icon,cost,enabled}
  * ========================================================================== */
 (function(){
   'use strict';
 
-  // --- kleines Log-Utility ---------------------------------------------------
   const LOG = (window.CBLog && CBLog.info) ? CBLog : console;
 
-  // --- State -----------------------------------------------------------------
-  let host = null;                 // Mount-Host (z. B. #build-panel)
-  let cats = [];                   // Kategorien (sichtbar)
-  let items = [];                  // Items (sichtbar)
-  let activeCat = null;            // akt. Kategorie-ID
-  let activeItem = null;           // akt. Item-ID
+  let host = null;          // Mount-Host (#build-panel)
+  let cats = [];            // Kategorien
+  let items = [];           // Items
+  let activeCat = null;     // aktive Kategorie
+  let activeItem = null;    // aktives Item
 
-  // Resource-Icons für Kosten-Badges
-  const RES_ICON = {
-    wood:  'assets/icons/resources/wood.png',
-    stone: 'assets/icons/resources/stone.png',
-    food:  'assets/icons/resources/food.png',
-    gold:  'assets/icons/resources/gold.png'
-  };
-
-  // --- DOM-Helfer ------------------------------------------------------------
-  const $ = (sel, root=document) => root.querySelector(sel);
+  const $ = (s, r=document)=>r.querySelector(s);
 
   function ensureScaffold(){
     if (!host) return null;
-
-    // Container-Struktur (einmalig)
     if (!host.querySelector('.ui-build-wrap')){
       host.innerHTML = '';
       const wrap  = document.createElement('div'); wrap.className = 'ui-build-wrap';
@@ -59,24 +29,17 @@
       wrap.append(catsU, listU);
       host.appendChild(wrap);
     }
-    // Sichtbar machen
-    host.hidden = false;
-    host.classList.remove('hidden');
-
-    // Dock-Hintergrund ebenfalls sichtbar (bleibt deine dunkle Leiste)
+    host.hidden = false; host.classList.remove('hidden');
     const dock = document.getElementById('build-dock');
     if (dock){ dock.hidden = false; dock.classList.remove('hidden'); }
-
     return { cats: $('#build-cats', host), items: $('#build-items', host) };
   }
 
-  // --- Datenquellen ----------------------------------------------------------
   function fallbackFromRegistry(){
-    // versucht, aus Registry zu lesen (wenn Bridge nix geliefert hat)
-    const regCats  = (window.Registry?.get?.('categories') || []).map(c => ({
+    const rc = (window.Registry?.get?.('categories') || []).map(c => ({
       id: String(c.id), label: String(c.label ?? c.id)
     }));
-    const regItems = (window.Registry?.get?.('buildings')  || []).map(b => ({
+    const ri = (window.Registry?.get?.('buildings') || []).map(b => ({
       id: String(b.id),
       cat: String(b.cat ?? b.category ?? 'misc'),
       label: String(b.label ?? b.name ?? b.id),
@@ -84,10 +47,9 @@
       cost: (b.cost || null),
       enabled: (b.enabled !== false)
     }));
-    return { regCats, regItems };
+    return { rc, ri };
   }
 
-  // --- Rendering -------------------------------------------------------------
   function applyCatHighlight(catRoot){
     catRoot.querySelectorAll('li').forEach(li =>
       li.classList.toggle('active', li.dataset.cat === activeCat)
@@ -122,15 +84,14 @@
   function resBadge(key, amount){
     if (!amount) return null;
     const span = document.createElement('span'); span.className = 'res';
-    const img  = document.createElement('img');  img.src = RES_ICON[key] || ''; img.alt = key;
-    const txt  = document.createElement('b');    txt.textContent = String(amount);
-    span.append(img, txt);
+    span.setAttribute('data-res', key);
+    const b = document.createElement('b'); b.textContent = String(amount);
+    span.appendChild(b);
     return span;
   }
 
   function renderItems(itemRoot){
     itemRoot.innerHTML = '';
-
     const visible = items
       .filter(b => b && b.enabled !== false)
       .filter(b => String(b.cat) === String(activeCat));
@@ -144,12 +105,6 @@
       title.className = 'title';
       title.textContent = b.label;
 
-      const thumb = document.createElement('img');
-      thumb.className = 'thumb';
-      thumb.loading = 'lazy';
-      thumb.decoding = 'async';
-      if (b.icon) { thumb.src = b.icon; thumb.alt = b.label; }
-
       const cost = document.createElement('div');
       cost.className = 'cost';
       const c = b.cost || {};
@@ -158,7 +113,7 @@
         if (node) cost.appendChild(node);
       });
 
-      li.append(title, thumb, cost);
+      li.append(title, cost);
       li.addEventListener('click', () => {
         activeItem = b.id;
         applyItemHighlight(itemRoot);
@@ -174,18 +129,15 @@
   function rerender(){
     const els = ensureScaffold(); if (!els) return;
 
-    // wenn noch keine Daten gesetzt → Registry-Fallback probieren
     if (!cats.length || !items.length){
-      const { regCats, regItems } = fallbackFromRegistry();
-      if (!cats.length)  cats  = regCats;
-      if (!items.length) items = regItems;
+      const { rc, ri } = fallbackFromRegistry();
+      if (!cats.length)  cats  = rc;
+      if (!items.length) items = ri;
     }
 
-    // wenn weiterhin leer → keine Anzeige (aber kein Fehler)
     if (!cats.length){
-      LOG.info('[ui-build] keine Kategorien – nichts zu rendern');
-      els.cats.innerHTML  = '';
-      els.items.innerHTML = '';
+      LOG.info('[ui-build] keine Kategorien – nix zu rendern');
+      els.cats.innerHTML = ''; els.items.innerHTML = '';
       return;
     }
 
@@ -194,17 +146,12 @@
     LOG.info('[ui-build] rerender ✓ (%d cats / %d items)', cats.length, items.length);
   }
 
-  // --- Öffentliche API -------------------------------------------------------
   window.UIBuild = {
-    mount(el){
-      host = el || document.getElementById('build-panel');
-      rerender();
-    },
+    mount(el){ host = el || document.getElementById('build-panel'); LOG.info('[ui-build] mount ok'); rerender(); },
     setCategories(nextCats){
       cats = (Array.isArray(nextCats) ? nextCats : []).map(c => ({
         id: String(c.id), label: String(c.label ?? c.id)
       }));
-      // activeCat bei Bedarf „heilen“
       if (!cats.find(c => c.id === activeCat)){ activeCat = cats[0]?.id || null; }
     },
     setItems(nextItems){
@@ -231,32 +178,11 @@
     }
   };
 
-  // --- Lebenszyklus-Hooks ----------------------------------------------------
-  // Falls die Bridge schon Daten gesendet hat, rendert mount/rerender.
-  // Andernfalls hören wir auf Registry/Start und ziehen uns Daten selbst.
+  // Lifecycle-Hooks
   window.addEventListener('cb:registry-ready',  () => { UIBuild.open();  UIBuild.rerender(); });
   window.addEventListener('cb:registry:ready',  () => { UIBuild.open();  UIBuild.rerender(); });
   window.addEventListener('cb:game-start',      () => { UIBuild.open();  UIBuild.rerender(); });
 
-  // Sicherheits-Init (falls alles sehr früh kam)
+  // Falls Bridge später kommt: minimal mounten
   setTimeout(() => { if (!host) UIBuild.mount(document.getElementById('build-panel')); }, 0);
 })();
-</script>
-
-<style>
-/* Mini-Styles (falls ui-build.css noch leer ist) – bewusst kompakt */
-#build-panel .ui-build-wrap{ display:grid; gap:10px; padding:12px; }
-#build-cats{ display:flex; gap:8px; margin:0; padding:0; list-style:none; }
-#build-cats .build-cat{ padding:8px 10px; border-radius:8px; background:#2b3138; color:#e6f0ff; cursor:pointer; }
-#build-cats .build-cat.active{ outline:2px solid #8ab4f8; }
-
-#build-items{ display:grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap:10px;
-              margin:0; padding:0; list-style:none; }
-#build-items .build-item{ display:grid; gap:6px; padding:10px; border-radius:10px; background:#1f242a; color:#e6f0ff; }
-#build-items .build-item.is-selected{ outline:2px solid #8ab4f8; }
-#build-items .build-item .title{ font-weight:700; }
-#build-items .build-item .thumb{ width:100%; height:84px; object-fit:contain; }
-#build-items .build-item .cost{ display:flex; gap:10px; align-items:center; }
-#build-items .build-item .cost .res{ display:inline-flex; gap:6px; align-items:center; }
-#build-items .build-item .cost img{ width:16px; height:16px; }
-</style>
