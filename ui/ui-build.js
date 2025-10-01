@@ -186,3 +186,24 @@
   // Falls Bridge später kommt: minimal mounten
   setTimeout(() => { if (!host) UIBuild.mount(document.getElementById('build-panel')); }, 0);
 })();
+
+// ganz oben bei den Variablen:
+var __iconsBase = 'assets/ui/build/';
+
+// öffentlicher Setter (Bridge ruft das auf)
+UIBuild.setIconsBase = function(base){
+  if (typeof base === 'string' && base) __iconsBase = base.replace(/\/+$/,'') + '/';
+};
+
+// kleine Helper-Funktion, bevor du die Items renderst:
+function iconSrcFor(item){
+  // akzeptiert item.icon, item.iconId, item.iconPath
+  if (item.icon && /^https?:|^data:|^\/|\.png$|\.webp$/.test(item.icon)) return item.icon;
+  var name = item.icon || item.iconId || item.iconPath || '';
+  if (name && !/\.(png|webp|jpg|jpeg|svg)$/.test(name)) name += '.png';
+  return __iconsBase + name;
+}
+
+// beim Rendern der Item-Karten/Buttons: statt festem Pfad -> iconSrcFor(item)
+var src = iconSrcFor(item);
+// <img src=" + src + " ...>  bzw. style background-image:url(src)
