@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei   : ui/ui-build.js
- * Version : v2.0.1 (2025-10-01)
+ * Version : v2.0.2 (2025-10-01)
  * Zweck   : Build-Dock UI + API (window.UIBuild)
  * API     : mount(host), setCategories(cats), setItems(items), rerender(),
  *           open(), close()
