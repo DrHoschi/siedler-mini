@@ -62,7 +62,7 @@
   // (5) Panelbild zur Laufzeit setzen + <img>-Fallback
   //     → vermeidet iOS-Caching & CSS-Spezifitäts-Überlagerungen
   function applyPanelImage(){
-    const versionedPath = "assets/ui/panel.png?v=102"; // <— DEIN PFAD ggf. anpassen
+    const versionedPath = "../../assets/ui/panel.png?v=102"; // <— DEIN PFAD ggf. anpassen
     // CSS-Variable setzen (für background in ui-start.css)
     document.documentElement.style.setProperty('--panel-img', `url("${versionedPath}")`);
 
