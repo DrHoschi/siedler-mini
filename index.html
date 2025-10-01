@@ -173,7 +173,12 @@
   // Sicherheits-Refresh (falls Start schon passiert ist, z.B. nach Reload)
   setTimeout(function(){ if (document.body.classList.contains('is-playing')) { playing = true; refresh('late'); } }, 150);
 })();
-</script>
+// ... in refresh(tag)
+if (window.UIBuild?.setIconsBase) {
+  // kommt aus data/buildings.json -> "iconsBase"
+  const base = (Registry.get && Registry.get('iconsBase')) || 'assets/icons/buildings/';
+  UIBuild.setIconsBase(base);
+}
 
   // Beide Varianten zuhören (deine Registry feuert BEIDE ✅)
   window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
