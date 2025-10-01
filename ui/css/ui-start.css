@@ -71,7 +71,7 @@
   gap: 8px;                          /* kompakter für mobile */
   width: 78%;                        /* Holzrand sichtbar lassen */
   margin-top: 25%;                   /* unter den Titel schieben */
-  margin-bottom: 6%;
+  margin-bottom: 8%;
   z-index: 1;                        /* über dem Panelbild */
   overflow: hidden;                  /* keine Scrollbar im Startpanel */
 }
