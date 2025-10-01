@@ -100,7 +100,17 @@
   <!-- (4.2) DATEN/STATIC (UI-Kategorien) -->
   <!-- Aktive Kategorien-Quelle (nicht aus Archiv laden!) -->
   <script src="ui/build.categories.js"></script>
-
+<!-- Mini-Netz-Check: zeigt 404/Fehler frühzeitig -->
+<script>
+  (async () => {
+    try {
+      const ok = !!window.BUILD_CATEGORIES && Array.isArray(window.BUILD_CATEGORIES);
+      console.log('[cats] inline check:', ok ? 'OK' : 'FEHLT',
+        ok ? ('#'+window.BUILD_CATEGORIES.length) : '');
+    } catch(e){ console.warn('[cats] error', e); }
+  })();
+</script>
+  
   <!-- (4.3) UI-Module -->
   <script src="ui/ui-start.js"></script>   <!-- emits: cb:start:* | cb:ui-ready -->
   <script src="ui/ui-hud.js"></script>     <!-- emits: cb:hud-ready; listens: cb:res:change -->
