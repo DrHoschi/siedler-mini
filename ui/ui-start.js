@@ -1,27 +1,29 @@
 // ============================================================================
 // Datei : ui/ui-start.js
-// Version: v1.0.3
+// Version: v1.0.5 (2025-10-01)
 // Zweck : Startpanel steuern + bei Spielstart BG/Panel ausblenden,
 //         Canvas/HUD/Build sichtbar schalten
+//         + Panelbild-Pfad zur Laufzeit setzen (Cache-Bust) und <img>-Fallback
+// Events: cb:ui-ready, cb:start:new/continue, cb:game-start
 // ============================================================================
 (() => {
-  const log  = (...a) => (window.CBLog?.ok   || console.log)('[ui-start]', ...a);
+  const log  = (...a) => (window.CBLog?.ok || console.log)('[ui-start]', ...a);
   const EVT  = (name, detail)=>window.dispatchEvent(new CustomEvent(name,{detail}));
   const $    = (s, r=document)=>r.querySelector(s);
 
-  // Start ist ready → UI meldet sich
+  // (1) UI meldet sich bereit
   requestAnimationFrame(()=>{ log('ready → cb:ui-ready'); EVT('cb:ui-ready'); });
 
-  // Buttons robust finden
-  const btnNew = $('[data-action="start"], #btn-start, button.start, button[data-start="new"]')
-    || [...document.querySelectorAll('button,a')].find(el => /Neues Spiel/i.test(el.textContent||''));
+  // (2) Buttons robust finden
+  const btnNew  = $('[data-action="start"], #btn-new, #btn-start, button.start, button[data-start="new"]')
+               || [...document.querySelectorAll('button,a')].find(el => /Neues Spiel/i.test(el.textContent||''));
   const btnCont = $('[data-action="continue"], #btn-continue')
-    || [...document.querySelectorAll('button,a')].find(el => /Weiter/i.test(el.textContent||''));
+               || [...document.querySelectorAll('button,a')].find(el => /Weiter/i.test(el.textContent||''));
 
-  if (btnNew)  btnNew.addEventListener('click',  e => { e.preventDefault(); EVT('cb:start:new'); log('click start:new'); });
+  if (btnNew)  btnNew.addEventListener('click',  e => { e.preventDefault(); EVT('cb:start:new');      log('click start:new'); });
   if (btnCont) btnCont.addEventListener('click', e => { e.preventDefault(); EVT('cb:start:continue'); log('click start:continue'); });
 
-  // Helper: mehrere mögliche IDs/Klassen hart „wegschalten“
+  // (3) Startoberflächen schließen + Spiel-UI zeigen
   function hideStartSurfaces(){
     document.body.classList.add('is-playing');
 
@@ -45,43 +47,50 @@
       canvas.style.zIndex = 1;
     }
 
-    // HUD & Build sicher sichtbar schalten
-    const hud = document.getElementById('hud-top');
-    if (hud){ hud.hidden = false; hud.classList.remove('hidden'); }
-
+    // HUD & Build sichtbar schalten
+    const hud  = document.getElementById('hud-top');
     const dock = document.getElementById('build-dock');
+    if (hud){  hud.hidden  = false; hud.classList.remove('hidden'); }
     if (dock){ dock.hidden = false; dock.classList.remove('hidden'); }
 
     log('game-start → BG/Panel ausgeblendet, HUD/Build sichtbar');
   }
 
-  // Spielstart-Signal → UI umschalten
+  // (4) Spielstart-Signal → UI umschalten
   window.addEventListener('cb:game-start', hideStartSurfaces);
-})();
-<script>
-(function(){
-  // 1) Laufzeit-Setzung der CSS-Variable (Cache-Bust)
-  var panelPath = "assets/ui/panel/start_panel.png?v=102"; // <— Pfad + Version
-  document.documentElement.style.setProperty('--panel-img', 'url("'+panelPath+'")');
 
-  // 2) Optionaler <img>-Fallback (falls CSS-Background nicht zieht)
-  var sp = document.getElementById('start-panel');
-  if (sp){
-    // <img> Knoten einfügen, falls noch nicht vorhanden
-    if (!sp.querySelector('.panel-img')){
-      var im = document.createElement('img');
+  // (5) Panelbild zur Laufzeit setzen + <img>-Fallback
+  //     → vermeidet iOS-Caching & CSS-Spezifitäts-Überlagerungen
+  function applyPanelImage(){
+    const versionedPath = "assets/ui/panel/start_panel.png?v=102"; // <— DEIN PFAD ggf. anpassen
+    // CSS-Variable setzen (für background in ui-start.css)
+    document.documentElement.style.setProperty('--panel-img', `url("${versionedPath}")`);
+
+    // Optionaler <img>-Fallback, falls CSS-Background nicht greift
+    const sp = document.getElementById('start-panel');
+    if (!sp) return;
+    let im = sp.querySelector('.panel-img');
+    if (!im){
+      im = document.createElement('img');
       im.className = 'panel-img';
       im.alt = 'Start Panel';
-      im.src = panelPath;
-      im.onload  = function(){ /* alles gut: Bild da, wir lassen CSS-Background arbeiten */
-        // Nichts nötig. Wer mag, im.style.display='none';
-      };
-      im.onerror = function(){ 
-        // CSS-Background hat evtl. nicht gegriffen → <img> sichtbar machen
-        im.style.display = 'block';
-      };
+      im.decoding = 'async';
+      im.loading = 'eager';
       sp.appendChild(im);
     }
+    im.src = versionedPath;
+    im.style.display = 'none'; // standardmäßig unsichtbar, CSS-Background reicht
+
+    im.onerror = function(){
+      // Wenn das Bild via CSS nicht sichtbar ist (oder gesperrt), nehmen wir <img>
+      im.style.display = 'block';
+    };
+  }
+
+  // nach DOM bereit einmal anwenden
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', applyPanelImage, { once:true });
+  } else {
+    applyPanelImage();
   }
 })();
-</script>
