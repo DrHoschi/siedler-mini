@@ -77,3 +77,7 @@
 }
 .place-actions .btn-accept{ background: #19b34a; }
 .place-actions .btn-cancel{ background: #d63b3b; }
+
+.place-btn.place-confirm { background:#19b34a; color:#fff; border:0; }
+.place-btn.place-cancel  { background:#d63b3b; color:#fff; border:0; }
+.place-btn { font-size:22px; line-height:1; }
