@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-09-30T22:02:16.832Z",
+  "createdAt": "2025-10-01T14:19:26.815Z",
   "root": ".",
   "count": 449,
   "entries": [
@@ -1460,6 +1460,11 @@
     },
     {
       "type": "file",
+      "path": "core/ui-build.data-bridge.js",
+      "size": 2433
+    },
+    {
+      "type": "file",
       "path": "core/unit-runtime.js",
       "size": 2466
     },
@@ -1986,7 +1991,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 2920
+      "size": 5775
     },
     {
       "type": "file",
@@ -1996,7 +2001,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 5413
+      "size": 5454
     },
     {
       "type": "dir",
@@ -2095,12 +2100,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.categories.js",
-      "size": 1777
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-build.data-bridge.js",
-      "size": 2789
+      "size": 1398
     },
     {
       "type": "file",
@@ -2150,7 +2150,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 2558
+      "size": 2647
     },
     {
       "type": "file",
@@ -2165,17 +2165,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43536
+      "size": 43998
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16525
+      "size": 16677
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 4783
+      "size": 11191
     },
     {
       "type": "file",
