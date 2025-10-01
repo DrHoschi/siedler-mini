@@ -128,3 +128,46 @@
 #game{ background: transparent !important; position: relative; z-index: 1; }
 body.is-playing { background: none !important; }
 body.is-playing #start-panel { display: none !important; }
+
+/* === Stellschrauben ======================================================= */
+:root{
+  /* frei justierbar */
+  --title-top:   12%;   /* Überschrift tiefer/höher (größer = weiter unten) */
+  --actions-top: 30%;   /* Buttons tiefer/höher (kleiner = weiter oben) */
+  --panel-radius: 16px; /* Rundung, falls du die ändern willst */
+}
+
+/* Panel: lieber block statt grid – absolute Kindelemente haben freie Bahn */
+#start-panel{
+  display: block;
+  border-radius: var(--panel-radius);
+  overflow: hidden;
+}
+
+/* Überschrift absolut platzieren (Wert greift sicher) */
+#start-panel h1{
+  position: absolute !important;
+  left: 50%;
+  top: var(--title-top) !important;
+  transform: translateX(-50%);
+  width: 80%;
+  margin: 0;
+  text-align: center;
+}
+
+/* Buttons absolut platzieren (statt Grid-Centering) */
+#start-panel .actions{
+  position: absolute !important;
+  left: 50%;
+  top: var(--actions-top) !important;
+  transform: translateX(-50%);
+  width: 78%;
+  /* eigenes Innen-Grid behalten */
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  /* alte Abstände raus, sonst stören sie */
+  margin: 0 !important;
+  padding: 0;
+  overflow: visible;
+}
