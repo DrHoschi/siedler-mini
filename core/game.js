@@ -1,17 +1,10 @@
 // ============================================================================
 // Datei   : core/game.js
-// Projekt : Neue Siedler
-// Version : v1.6.0
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
-// API     : Game.init(canvas), Game.start(mapId), Game.getState(), Game.getResources()
-// Events  : cb:map:loaded    { mapId, tile, size:{w,h} }
-//           cb:res:change    { ...resources }
-//           cb:place:preview { id,gx,gy,sx,sy,size,invalid,w,h,door,entrances,entrancesAbs }
-//           cb:place:confirm { id,gx,gy } (von UI)
-//           cb:place:cancel  { }         (von UI)
-// Notes   : Platzieren mit Preview+Confirm (✅/❌)
-//           Platzierregeln: Bounds, Footprint, Abstand 1, Terrainverbote (Wasser), Entrance erreichbar
-//           Icons aus Registry; Kamera-Clamp an Kartenrand
+// Wichtige Änderungen in diesem Build:
+//   - iconsBase aus Registry wird in Engine aufgelöst (Icon + Sprite)
+//   - Ghost-Overlay nur 1× (Engine zeichnet KEIN kleines Icon zusätzlich)
+//   - Platzierte Gebäude werden mit Sprite in voller Footprint-Größe gerendert
 // ============================================================================
 
 (() => {
@@ -51,15 +44,16 @@
     panStart : { x:0, y:0, camX:0, camY:0 },
 
     // Pinch
-    pointers: new Map(),            // pointerId -> {x,y}
+    pointers: new Map(),
     pinch   : { active:false, d0:1, zoom0:1, center:{x:0,y:0} },
 
-    // Tap-Tracking (für Preview)
+    // Tap
     tapStart: { x:0, y:0 },
 
-    // Icons (Registry)
-    iconMap : null,
-    imgCache: new Map(),            // url -> HTMLImageElement | 'loading' | 'error'
+    // Asset-Auflösung & Cache
+    iconMap : null,         // id -> iconUrl (aus Registry)
+    spriteMap: null,        // id -> spriteUrl (aus Registry)
+    imgCache: new Map(),    // url -> HTMLImageElement | 'loading' | 'error'
   };
 
   // == Utils / Events ========================================================
@@ -73,90 +67,91 @@
   const EPS   = 1e-6;
   const keyXY = (x,y)=>`${x},${y}`;
 
-  // == Building-Definitionen (aus Registry) =================================
-  // Wrapper: akzeptiert Registry-Format (size:[w,h], entrances:[[dx,dy],...])
-  function getBuildingDef(id){
-    const raw = window.Registry?.getBuildingDef?.(id) || window.Registry?.byId?.(id) || null;
+  // == Registry-Resolver =====================================================
+  function iconsBase(){
+    try { return (window.Registry?.get?.('iconsBase')) || 'assets/icons/buildings/'; }
+    catch(e){ return 'assets/icons/buildings/'; }
+  }
+  function isAbs(u){ return /^(https?:)?\/\//i.test(u) || u?.startsWith('/') || u?.startsWith('data:'); }
+  function withExt(n){ return /\.(png|webp|jpg|jpeg|svg)$/i.test(n) ? n : (n + '.png'); }
+  function joinBase(name){
+    if (!name) return '';
+    if (isAbs(name)) return name;
+    return (iconsBase().replace(/\/+$/,'') + '/' + withExt(String(name)));
+  }
+  function buildMapsFromRegistry(){
+    if (_state.iconMap && _state.spriteMap) return;
+    const icons = new Map();
+    const sprites = new Map();
+    try {
+      const list = window.Registry?.get?.('buildings') || [];
+      for (const b of (list||[])){
+        const id = String(b.id);
+        // erlaubt: icon/iconUrl; sprite/spriteUrl – alles wird über iconsBase relativ aufgelöst
+        const iconUrl   = b.iconUrl   || joinBase(b.icon || b.iconId || b.iconPath);
+        const spriteUrl = b.spriteUrl || joinBase(b.sprite || b.spriteId || b.spritePath || b.icon);
+        if (iconUrl)   icons.set(id, iconUrl);
+        if (spriteUrl) sprites.set(id, spriteUrl);
+      }
+    } catch(e){ /* ignore */ }
+    _state.iconMap   = icons;
+    _state.spriteMap = sprites;
+  }
+  function getIconUrl(id){ buildMapsFromRegistry(); return _state.iconMap.get(String(id)) || null; }
+  function getSpriteUrl(id){ buildMapsFromRegistry(); return _state.spriteMap.get(String(id)) || null; }
 
-    // Defaults
-    let w = 3, h = 3;
-    let entrances = [[1,3]];             // falls 3x3 → Tür unten mittig (vor dem Gebäude)
-    let door = { dx:1, dy:1 };           // erste Entrance als "Haupttür" für UI
+  function getImage(url){
+    if (!url) return null;
+    const c = _state.imgCache.get(url);
+    if (c && c instanceof HTMLImageElement) return c;
+    if (c === 'loading' || c === 'error')   return null;
+    const img = new Image();
+    _state.imgCache.set(url, 'loading');
+    img.onload  = ()=>_state.imgCache.set(url, img);
+    img.onerror = ()=>_state.imgCache.set(url, 'error');
+    img.src     = url;
+    return null;
+  }
+
+  // == Building-Definitionen (size/entrances) ================================
+  function getBuildingDef(id){
+    const raw = window.Registry?.byId?.(id) || (window.Registry?.get?.('buildings')||[]).find(b=>String(b.id)===String(id)) || null;
+
+    let w=3, h=3;
+    let entrances = [[1,3]];                 // 3x3 → Tür vor dem Gebäude, unten mittig
+    let door = { dx:1, dy:1 };
     const blockedTerrains = ['water'];
 
     if (raw){
       if (Array.isArray(raw.size)) { w = +raw.size[0]||3; h = +raw.size[1]||3; }
-      else if (raw.size && typeof raw.size === 'object') {
-        w = +raw.size.w||3; h = +raw.size.h||3;
-      }
+      else if (raw.size && typeof raw.size === 'object') { w = +raw.size.w||3; h = +raw.size.h||3; }
+
       if (Array.isArray(raw.entrances) && raw.entrances.length){
         entrances = raw.entrances.map(e => [ (e[0]|0), (e[1]|0) ]);
       } else {
-        entrances = [[ Math.floor(Math.max(1,w)-1), h ]]; // Fallback
+        entrances = [[ Math.floor((w-1)/2), h ]];       // Fallback: mittig vor dem Haus
       }
       door = { dx: entrances[0][0], dy: entrances[0][1] };
     }
 
-    return {
-      id: String(id),
-      size: { w: Math.max(1, w|0), h: Math.max(1, h|0) },
-      entrances,
-      door,
-      blockedTerrains
-    };
+    return { id:String(id), size:{w,h}, entrances, door, blockedTerrains };
   }
 
   // == Platzier-/Bounds-Helper ==============================================
-  function inBoundsTile(gx, gy){
-    return gx >= 0 && gy >= 0 && gx < _state.gridW && gy < _state.gridH;
-  }
-  function inBoundsFootprint(gx, gy, w, h){
-    return inBoundsTile(gx, gy) && inBoundsTile(gx + w - 1, gy + h - 1);
-  }
+  function inBoundsTile(gx, gy){ return gx>=0 && gy>=0 && gx<_state.gridW && gy<_state.gridH; }
+  function inBoundsFootprint(gx, gy, w, h){ return inBoundsTile(gx,gy) && inBoundsTile(gx+w-1, gy+h-1); }
   function isFree(gx, gy){ return !_state.occupied.has(keyXY(gx,gy)); }
-
-  // Belegt ALLE Tiles des Footprints
   function occupyFootprint(g0, h0, w, h){
-    for (let dy=0; dy<h; dy++){
-      for (let dx=0; dx<w; dx++){
-        _state.occupied.add(keyXY(g0+dx, h0+dy));
-      }
-    }
+    for (let dy=0; dy<h; dy++) for (let dx=0; dx<w; dx++) _state.occupied.add(keyXY(g0+dx, h0+dy));
   }
   function rebuildOccupied(){
     _state.occupied.clear();
-    for (const p of _state.placements){
-      occupyFootprint(p.x, p.y, p.w, p.h);
-    }
+    for (const p of _state.placements){ occupyFootprint(p.x, p.y, p.w, p.h); }
   }
 
-// Auto-Place HQ mittig, falls noch nicht vorhanden
-(function(){
-  const already = _state.placements.some(p => p.id === 'hq');
-  if (already) return;
-  const def = getBuildingDef('hq');
-  const cx = Math.floor((_state.gridW - def.size.w) / 2);
-  const cy = Math.floor((_state.gridH - def.size.h) / 2);
-  // Sicherheitsnetz: falls aus irgendeinem Grund blockiert, suche in 5x5-Spirale
-  let gx = cx, gy = cy, placed = false;
-  const spots = [[0,0],[1,0],[0,1],[-1,0],[0,-1],[2,0],[0,2],[-2,0],[0,-2]];
-  for (const [dx,dy] of spots){
-    const x = cx + dx, y = cy + dy;
-    if (canPlaceAtFootprint(x, y, 'hq')){
-      _state.placements.push({ id:'hq', x, y, w:def.size.w, h:def.size.h, door:{...def.door} });
-      occupyFootprint(x, y, def.size.w, def.size.h);
-      placed = true;
-      break;
-    }
-  }
-  if (!placed) { /* notfalls ignorieren – Map zu klein oder blockiert */ }
-})();
-  
-  // Terraincheck via Map
   function isBlockedByTerrain(gx, gy, def){
     const m = _state.map;
     if (!m || !def.blockedTerrains?.length) return false;
-
     if (typeof m.isWater === 'function' && def.blockedTerrains.includes('water')){
       try{ if (m.isWater(gx,gy)) return true; }catch(e){}
     }
@@ -168,137 +163,48 @@
     }
     return false;
   }
-
-  // Abstandsradius (Chebyshev) um den Footprint
-  function anyOccupiedWithinMargin(g0, h0, w, h, margin=1){
-    for (let y=h0 - margin; y<=h0 + h - 1 + margin; y++){
-      for (let x=g0 - margin; x<=g0 + w - 1 + margin; x++){
+  function anyOccupiedWithinMargin(g0, h0, w, h, m=1){
+    for (let y=h0-m; y<=h0+h-1+m; y++){
+      for (let x=g0-m; x<=g0+w-1+m; x++){
         const inside = (x>=g0 && y>=h0 && x<=g0+w-1 && y<=h0+h-1);
-        if (!inside){
-          if (inBoundsTile(x,y) && _state.occupied.has(keyXY(x,y))) return true;
-        }
+        if (!inside && inBoundsTile(x,y) && _state.occupied.has(keyXY(x,y))) return true;
       }
     }
     return false;
   }
-
-  // Footprint-Kachel blockiert?
-  function tileBlocked(gx, gy, def){
-    if (!inBoundsTile(gx,gy)) return true;
-    if (!isFree(gx,gy))       return true;
-    if (isBlockedByTerrain(gx,gy,def)) return true;
-    return false;
-  }
-
-  // Entrances relativ → absolut + Blockade
+  function tileBlocked(gx, gy, def){ return !inBoundsTile(gx,gy) || !isFree(gx,gy) || isBlockedByTerrain(gx,gy,def); }
   function computeEntrancesAbs(g0, h0, def){
-    const out = [];
-    for (const [dx,dy] of (def.entrances||[])){
-      const ex = g0 + (dx|0);
-      const ey = h0 + (dy|0);
+    const out=[]; for (const [dx,dy] of (def.entrances||[])){
+      const ex=g0+(dx|0), ey=h0+(dy|0);
       const blocked = !inBoundsTile(ex,ey) || isBlockedByTerrain(ex,ey,def);
-      out.push({ ex, ey, blocked });
-    }
-    return out;
+      out.push({ex,ey,blocked});
+    } return out;
   }
-
-  // **Zentrale Regelprüfung**
   function canPlaceAtFootprint(g0, h0, id){
     const def = getBuildingDef(id);
-    const { w, h } = def.size;
-
-    // 1) Bounds
-    if (!inBoundsFootprint(g0, h0, w, h)) return false;
-
-    // 2) Footprint: frei + kein verbotenes Terrain
-    for (let dy=0; dy<h; dy++){
-      for (let dx=0; dx<w; dx++){
-        if (tileBlocked(g0+dx, h0+dy, def)) return false;
-      }
-    }
-
-    // 3) Mindestabstand 1
-    if (anyOccupiedWithinMargin(g0, h0, w, h, 1)) return false;
-
-    // 4) Mindestens eine Entrance erreichbar (dy==h → Kachel VOR dem Gebäude)
-    const entrancesAbs = computeEntrancesAbs(g0, h0, def);
+    const { w,h } = def.size;
+    if (!inBoundsFootprint(g0,h0,w,h)) return false;
+    for (let dy=0; dy<h; dy++) for (let dx=0; dx<w; dx++) if (tileBlocked(g0+dx, h0+dy, def)) return false;
+    if (anyOccupiedWithinMargin(g0,h0,w,h,1)) return false;
+    const entrancesAbs = computeEntrancesAbs(g0,h0,def);
     if (!entrancesAbs.some(e => !e.blocked)) return false;
-
     return true;
   }
 
-  // == Kamera-Clamp ==========================================================
+  // == Kamera/Projektion =====================================================
   function clampCameraToMap(){
-    const worldW = _state.gridW * _state.tile;
-    const worldH = _state.gridH * _state.tile;
-    const viewW  = _state.w / Math.max(EPS, _state.zoom);
-    const viewH  = _state.h / Math.max(EPS, _state.zoom);
-
-    let maxX = worldW - viewW;
-    let maxY = worldH - viewH;
-    if (Math.abs(maxX) < EPS) maxX = 0;
-    if (Math.abs(maxY) < EPS) maxY = 0;
-
-    if (maxX < 0){ _state.camX = (worldW - viewW)*.5; } else { _state.camX = clamp(_state.camX, 0, maxX); }
-    if (maxY < 0){ _state.camY = (worldH - viewH)*.5; } else { _state.camY = clamp(_state.camY, 0, maxY); }
-
+    const worldW=_state.gridW*_state.tile, worldH=_state.gridH*_state.tile;
+    const viewW=_state.w/Math.max(EPS,_state.zoom), viewH=_state.h/Math.max(EPS,_state.zoom);
+    let maxX=worldW-viewW, maxY=worldH-viewH;
+    if (Math.abs(maxX)<EPS) maxX=0; if (Math.abs(maxY)<EPS) maxY=0;
+    _state.camX = (maxX<0) ? (worldW-viewW)*.5 : clamp(_state.camX,0,maxX);
+    _state.camY = (maxY<0) ? (worldH-viewH)*.5 : clamp(_state.camY,0,maxY);
     if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
-
-  // == Projektion ============================================================
-  function screenToCanvasPx(clientX, clientY){
-    const c=_state.canvas, r=c.getBoundingClientRect();
-    return { sx:(clientX-r.left)*(c.width/r.width), sy:(clientY-r.top)*(c.height/r.height) };
-  }
-  function screenToWorld(clientX, clientY){
-    const {sx,sy}=screenToCanvasPx(clientX,clientY);
-    return { wx: sx/_state.zoom + _state.camX, wy: sy/_state.zoom + _state.camY };
-  }
-  function worldToScreen(wx, wy){
-    return { sx:(wx-_state.camX)*_state.zoom, sy:(wy-_state.camY)*_state.zoom };
-  }
-  function syncCamFromMap(){
-    const m=_state.map; if(!m) return;
-    if (typeof m.camX==='number') _state.camX=m.camX;
-    if (typeof m.camY==='number') _state.camY=m.camY;
-    if (typeof m.zoom==='number') _state.zoom=m.zoom;
-    clampCameraToMap();
-  }
-
-  // == Icons (Registry) ======================================================
-  function buildIconMap(){
-    if (_state.iconMap) return _state.iconMap;
-    const map = new Map();
-    try{
-      let list = window.Registry?.list?.('building') || window.Registry?.get?.('buildings');
-      if (Array.isArray(list)){
-        for (const b of list){
-          const id   = String(b.id);
-          const icon = b.icon || b.iconUrl || null;
-          if (icon) map.set(id, icon);
-        }
-      }
-    }catch(e){}
-    _state.iconMap = map;
-    return map;
-  }
-  function getIconUrl(id){
-    const map = buildIconMap();
-    return map.get(id) || null;
-  }
-  function getIconImage(id){
-    const url = getIconUrl(id);
-    if (!url) return null;
-    const c = _state.imgCache.get(url);
-    if (c && c instanceof HTMLImageElement) return c;
-    if (c === 'loading' || c === 'error') return null;
-    const img = new Image();
-    _state.imgCache.set(url, 'loading');
-    img.onload = ()=>_state.imgCache.set(url, img);
-    img.onerror= ()=>_state.imgCache.set(url, 'error');
-    img.src = url;
-    return null;
-  }
+  function screenToCanvasPx(cx,cy){ const c=_state.canvas, r=c.getBoundingClientRect(); return { sx:(cx-r.left)*(c.width/r.width), sy:(cy-r.top)*(c.height/r.height) }; }
+  function screenToWorld(cx,cy){ const {sx,sy}=screenToCanvasPx(cx,cy); return { wx:sx/_state.zoom+_state.camX, wy:sy/_state.zoom+_state.camY }; }
+  function worldToScreen(wx,wy){ return { sx:(wx-_state.camX)*_state.zoom, sy:(wy-_state.camY)*_state.zoom }; }
+  function syncCamFromMap(){ const m=_state.map; if(!m) return; if(typeof m.camX==='number') _state.camX=m.camX; if(typeof m.camY==='number') _state.camY=m.camY; if(typeof m.zoom==='number') _state.zoom=m.zoom; clampCameraToMap(); }
 
   // == Rendering =============================================================
   function frame(ts){
@@ -309,10 +215,8 @@
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
 
-    // A) Map
     map?.draw();
 
-    // B) Weltobjekte + Ghost
     ctx.save();
     drawGhost(ctx);
     drawPlacements(ctx);
@@ -322,16 +226,27 @@
     _state.rafId = requestAnimationFrame(frame);
   }
 
-  // -- Render-Helfer ---------------------------------------------------------
   function drawRect(ctx, sx, sy, w, h, ok){
     ctx.fillStyle   = ok ? 'rgba(120,200,120,.22)' : 'rgba(200,80,80,.22)';
     ctx.strokeStyle = ok ? 'rgba(120,200,120,.85)' : 'rgba(200,80,80,.9)';
     ctx.fillRect(sx,sy,w,h);
     ctx.strokeRect(sx+.5, sy+.5, w-1, h-1);
   }
-  function drawIcon(ctx, img, sx, sy, s){
-    const pad = Math.max(4, Math.floor(s*0.1));
-    ctx.drawImage(img, sx+pad, sy+pad, s-2*pad, s-2*pad);
+
+  // **NEU**: platziertes Gebäude mit Sprite in voller Größe
+  function drawPlacementSprite(ctx, id, sx, sy, wTiles, hTiles){
+    const sprite = getImage(getSpriteUrl(id));
+    const s = _state.tile * _state.zoom;
+    if (sprite){
+      ctx.save();
+      // auf Footprint-Größe ziehen
+      ctx.drawImage(sprite, sx, sy, wTiles*s, hTiles*s);
+      ctx.restore();
+    } else {
+      // Fallback: Icon auf Ursprungs-Kachel
+      const icon = getImage(getIconUrl(id));
+      if (icon) ctx.drawImage(icon, sx+4, sy+4, s-8, s-8);
+    }
   }
 
   function drawPlacements(ctx){
@@ -339,17 +254,15 @@
       const s = _state.tile * _state.zoom;
       const {sx,sy} = worldToScreen(p.x*_state.tile, p.y*_state.tile);
 
-      // Footprint-Rahmen (dezent)
+      // Footprint-Rahmen dezent (optional)
       drawRect(ctx, sx, sy, p.w*s, p.h*s, true);
 
-      // Icon mittig auf Ursprungskachel
-      const img = getIconImage(p.id);
-      if (img){
-        drawIcon(ctx, img, sx, sy, s);
-      }
+      // Vollbild-Sprite
+      drawPlacementSprite(ctx, p.id, sx, sy, p.w, p.h);
     }
   }
 
+  // **WICHTIG**: Ghost – KEIN zusätzliches Engine-Icon mehr (nur Rect + UI-Overlay zeigt das große Bild)
   function drawGhost(ctx){
     let gx=-1, gy=-1, id=_state.selectedBuilding;
     if (_state.preview){ gx=_state.preview.gx; gy=_state.preview.gy; id=_state.preview.id; }
@@ -365,10 +278,10 @@
     const pos = worldToScreen(gx*_state.tile, gy*_state.tile);
     const ok  = canPlaceAtFootprint(gx, gy, id);
 
-    // Footprint (komplett, grün/rot)
+    // Footprint (grün/rot)
     drawRect(ctx, pos.sx, pos.sy, def.size.w*s, def.size.h*s, ok);
 
-    // Entrance-Kachel(en) markieren
+    // Entrance-Kacheln markieren
     const entrancesAbs = computeEntrancesAbs(gx, gy, def);
     for (const {ex,ey,blocked} of entrancesAbs){
       const epos = worldToScreen(ex*_state.tile, ey*_state.tile);
@@ -381,20 +294,13 @@
       ctx.restore();
     }
 
-    // Icon auf Ursprungskachel
-    const img = getIconImage(id);
-    if (img){
-      ctx.save();
-      ctx.globalAlpha = ok ? 0.9 : 0.7;
-      drawIcon(ctx, img, pos.sx, pos.sy, s);
-      ctx.restore();
-    }
+    // KEIN Icon hier – das große Ghost-Bild kommt von ui-place.js (Overlay)
 
     EVT('cb:place:preview', {
       id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
       w:def.size.w, h:def.size.h, door:{...def.door},
-      entrances: def.entrances.slice(),    // relativ
-      entrancesAbs                         // absolut + blocked
+      entrances: def.entrances.slice(),
+      entrancesAbs
     });
   }
 
@@ -412,8 +318,6 @@
         const json = await res.json();
 
         _state.tile  = Number(json.tile) || _state.tile;
-
-        // akzeptiert size:[w,h] ODER rows/cols (kompatibel zu map-runtime.js)
         const w = Number((Array.isArray(json.size)? json.size[0] : json.cols));
         const h = Number((Array.isArray(json.size)? json.size[1] : json.rows));
         _state.gridW = w || _state.gridW;
@@ -441,24 +345,20 @@
       clampCameraToMap();
     }
   }
-
   function rememberPointer(ev){ _state.pointers.set(ev.pointerId, {x:ev.clientX, y:ev.clientY}); }
   function forgetPointer(ev){ _state.pointers.delete(ev.pointerId); if(_state.pointers.size<2) _state.pinch.active=false; }
-
   function tryStartPinch(){
     if (_state.pointers.size!==2) return false;
-    const [a,b] = [..._state.pointers.values()];
+    const [a,b]=[..._state.pointers.values()];
     const dx=a.x-b.x, dy=a.y-b.y;
-    _state.pinch.active = true;
-    _state.pinch.d0     = Math.hypot(dx,dy);
-    _state.pinch.zoom0  = _state.zoom;
-    _state.pinch.center = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+    _state.pinch.active=true;
+    _state.pinch.d0=Math.hypot(dx,dy);
+    _state.pinch.zoom0=_state.zoom;
+    _state.pinch.center={x:(a.x+b.x)/2, y:(a.y+b.y)/2};
     return true;
   }
-
   function onPointerDown(ev){
     rememberPointer(ev);
-
     if (_state.pointers.size===2 && tryStartPinch()) return;
 
     if (_state.selectedBuilding){
@@ -471,11 +371,10 @@
       _state.panStart = { x:ev.clientX, y:ev.clientY, camX:_state.camX, camY:_state.camY };
     }
   }
-
   function onPointerMove(ev){
     rememberPointer(ev);
 
-    // Hover (nur innerhalb der Map)
+    // Hover
     {
       const wpos = screenToWorld(ev.clientX, ev.clientY);
       const gx = snap(wpos.wx, _state.tile);
@@ -486,7 +385,7 @@
 
     // Pinch
     if (_state.pinch.active && _state.pointers.size===2){
-      const [a,b] = [..._state.pointers.values()];
+      const [a,b]=[..._state.pointers.values()];
       const dist  = Math.hypot(a.x-b.x, a.y-b.y);
       const factor= dist / Math.max(1,_state.pinch.d0);
       const newZ  = clamp(_state.pinch.zoom0 * factor, _state.map?.minZoom ?? 0.5, _state.map?.maxZoom ?? 3);
@@ -512,18 +411,15 @@
       if (_state.map){ _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
     }
   }
-
   function onPointerUp(ev){
     const wasPlacing = !!_state.selectedBuilding;
     const wasPinch   = _state.pinch.active;
 
     forgetPointer(ev);
 
-    // Tap-Schwelle
     const moved = Math.hypot(ev.clientX - _state.tapStart.x, ev.clientY - _state.tapStart.y);
     const isTap = moved < 8;
 
-    // Preview erzeugen (fixieren), nicht sofort bauen
     if (wasPlacing && !wasPinch && isTap){
       const wpos = screenToWorld(ev.clientX, ev.clientY);
       const gx   = snap(wpos.wx, _state.tile);
@@ -537,25 +433,20 @@
         _state.preview = { id:_state.selectedBuilding, gx, gy };
         const def = getBuildingDef(_state.selectedBuilding);
         const { sx, sy } = worldToScreen(gx*_state.tile, gy*_state.tile);
-
         const entrancesAbs = computeEntrancesAbs(gx, gy, def);
         EVT('cb:place:preview', {
           id:_state.preview.id, gx, gy, sx, sy, size:_state.tile*_state.zoom, invalid:false,
-          w:def.size.w, h:def.size.h, door:{...def.door},
-          entrances: def.entrances.slice(),
-          entrancesAbs
+          w:def.size.w, h:def.size.h, door:{...def.door}, entrances:def.entrances.slice(), entrancesAbs
         });
       }
     }
 
     _state.panActive = false;
   }
-
   function onWheel(ev){
     ev.preventDefault();
-    const old = _state.zoom;
-    const fac = ev.deltaY<0 ? 1.1 : 0.9;
-    const nz  = clamp(old*fac, _state.map?.minZoom ?? 0.5, _state.map?.maxZoom ?? 3);
+    const old=_state.zoom, fac=ev.deltaY<0 ? 1.1 : 0.9;
+    const nz = clamp(old*fac, _state.map?.minZoom ?? 0.5, _state.map?.maxZoom ?? 3);
     if (nz===old) return;
 
     const before = screenToWorld(ev.clientX, ev.clientY);
@@ -573,28 +464,21 @@
     _state.canvas = canvas;
     _state.ctx    = canvas.getContext('2d');
 
-    // Mobile/Safari: Gesten an uns
+    // Safari/iOS Gesten
     _state.canvas.style.touchAction = 'none';
     _state.canvas.addEventListener('touchstart', (e)=>e.preventDefault(), {passive:false});
     _state.canvas.addEventListener('touchmove',  (e)=>e.preventDefault(), {passive:false});
     _state.canvas.addEventListener('touchend',   (e)=>e.preventDefault(), {passive:false});
 
-    // Map (Runtime)
+    // Map
     const dbg = document.getElementById('debug-map'); // optional
     _state.map = new window.SiedlerMap(canvas, _state.ctx, dbg);
 
-    // Kamera-Start
-    _state.camX = _state.map.camX ?? 0;
-    _state.camY = _state.map.camY ?? 0;
-    _state.zoom = _state.map.zoom ?? 1;
+    _state.camX = _state.map.camX ?? 0; _state.camY = _state.map.camY ?? 0; _state.zoom = _state.map.zoom ?? 1;
 
-    // Units
     window.Units?.init?.(_state.ctx, _state.tile);
 
-    // Events
-    onResize();
-    window.addEventListener('resize', onResize);
-
+    onResize(); window.addEventListener('resize', onResize);
     canvas.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup',   onPointerUp);
@@ -608,7 +492,7 @@
       log('select building', _state.selectedBuilding);
     });
 
-    // Confirm/Cancel von der UI (Serienbau aktiv)
+    // Confirm/Cancel
     window.addEventListener('cb:place:confirm', (e)=>{
       const d = e.detail || {};
       if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
@@ -621,13 +505,13 @@
           warn('confirm: Position inzwischen unplazierbar');
         }
       }
-      _state.preview = null;                       // Serienbau: Building bleibt selektiert
-      EVT('cb:place:preview', { invalid:true });   // Buttons einklappen bis nächster Tap
+      _state.preview = null;
+      EVT('cb:place:preview', { invalid:true });
     });
 
     window.addEventListener('cb:place:cancel', ()=>{
       _state.preview = null;
-      _state.selectedBuilding = null;              // Baumodus verlassen
+      _state.selectedBuilding = null;
       EVT('cb:place:preview', { invalid:true });
       log('place canceled');
     });
@@ -648,13 +532,7 @@
     _state.zoom = _state.map.zoom ?? _state.zoom;
     onResize();
 
-    // falls Placements aus Savegame: Occupied aufbauen
     rebuildOccupied();
-
-    // Demo: HQ-Carrier bis echter Startflow steht
-    const HQpx  = { x: (_state.gridW*_state.tile)/2, y: (_state.gridH*_state.tile)/2 };
-    const spawn = { x: HQpx.x - _state.tile*4, y: HQpx.y - _state.tile*2 };
-    window.Units?.spawnCarrier?.(spawn, HQpx);
 
     cancelAnimationFrame(_state.rafId);
     _state.lastTs = 0;
