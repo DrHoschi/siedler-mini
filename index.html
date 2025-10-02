@@ -5,12 +5,12 @@
        (1) HEADER
        Datei    : index.html (Root)
        Projekt  : Neue Siedler
-       Version  : v1.2.0 (2025-10-01)
+       Version  : v1.2.1 (2025-10-02)
        Zweck    : Einstiegspunkt für Spiel + UI (Startfenster zuerst sichtbar)
        Leitplanken:
          - Reihenfolge: Core → Registry → Map/Engine/Boot → UI → Bridge → Tools
          - Startpanel zuerst sichtbar, HUD/Build/Inspector vorbereitet
-         - Keine zweite Categories-Quelle (nur Registry)
+         - Eine Datenquelle (Registry lädt data/buildings.json)
   ========================================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -89,15 +89,15 @@
 
   <!-- (4.1) CORE + REGISTRY -->
   <script src="core/asset.js"></script>      <!-- emit: cb:assets-ready -->
-  <script src="core/registry.js"></script>   <!-- enthält Fetch von data/buildings.json + emit: cb:registry:ready -->
-<script>
-  // Registry-Daten laden (data/buildings.json) → feuert cb:registry-ready/:
-  window.addEventListener('load', function () {
-    try { window.Registry && Registry.init && Registry.init(); }
-    catch (e) { console.warn('[index] Registry.init() fehlgeschlagen', e); }
-  });
-</script>
-  
+  <script src="core/registry.js"></script>   <!-- lädt data/buildings.json + emit: cb:registry:ready -->
+  <script>
+    // Registry-Daten laden (data/buildings.json)
+    window.addEventListener('load', function () {
+      try { window.Registry?.init?.(); }
+      catch (e) { console.warn('[index] Registry.init() fehlgeschlagen', e); }
+    });
+  </script>
+
   <!-- (4.2) MAP/ENGINE/BOOT -->
   <script src="core/map-runtime.js"></script>
   <!-- <script src="core/unit-runtime.js"></script> --><!-- optional, sobald vorhanden -->
@@ -109,108 +109,80 @@
   <script src="ui/ui-hud.js"></script>       <!-- emits: cb:hud-ready; listens: cb:res:change -->
   <script src="ui/ui-build.toggle.js"></script>
   <script src="ui/ui-build.js"></script>     <!-- UIBuild.* API -->
-  <script src="ui/ui-place.js"></script>     <!-- Platziermodus -->
+  <script src="ui/ui-place.js"></script>     <!-- Platziermodus (Ghost/Buttons) -->
   <script src="ui/ui-dialog.js"></script>    <!-- Dialogsystem -->
   <script>window.ICONS = window.ICONS || {};</script>
   <script src="ui/inspector/inspector.core.js"></script>
 
-  <!-- (4.4) BRIDGE: Registry → UIBuild (inline, minimal & robust) -->
-<script>
-(function(){
-  'use strict';
-  var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
-  var mounted = false;
-  var playing = false; // Gate
+  <!-- (4.4) BRIDGE: Registry → UIBuild (inline & robust) -->
+  <script>
+  (function(){
+    'use strict';
+    var LOG      = (window.CBLog && CBLog.info) ? CBLog : console;
+    var mounted  = false;   // UIBuild.mount passiert erst, wenn gespielt wird
+    var playing  = false;   // Gate: erst nach cb:game-start
 
-  function regGet(key){
-    try{
-      if (window.Registry && typeof window.Registry.get === 'function'){
-        var v = window.Registry.get(key);
-        return Array.isArray(v) ? v : (v || []);
+    function regGet(key){
+      try{
+        if (window.Registry && typeof window.Registry.get === 'function'){
+          var v = window.Registry.get(key);
+          return Array.isArray(v) ? v : (v || []);
+        }
+      }catch(e){ LOG.warn('[ui-bridge] Registry.get(%s) fail:', key, e); }
+      return [];
+    }
+
+    function ensureMount(){
+      if (mounted || !playing) return;
+      if (!window.UIBuild || typeof window.UIBuild.mount !== 'function') return;
+      var host = document.getElementById('build-panel');
+      if (!host) return;
+      try {
+        window.UIBuild.mount(host);
+        mounted = true;
+        LOG.info('[ui-bridge] mount ok');
+      } catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
+    }
+
+    function refresh(tag){
+      ensureMount();
+      if (!mounted){ LOG.info('[ui-bridge] skip refresh (%s) – not mounted yet', tag); return; }
+
+      // 1) Daten + Icon-Basis aus Registry holen
+      var cats  = regGet('categories');
+      var items = regGet('buildings').filter(function(b){ return b && b.enabled !== false; });
+      var base  = (window.Registry && Registry.get && (Registry.get('iconsBase') || Registry.get('config')?.iconsBase))
+                  || 'assets/icons/buildings/';
+
+      // 2) an UIBuild durchreichen
+      window.UIBuild?.setIconsBase?.(base);   // << wichtig für Icon-Pfade
+      window.UIBuild?.setCategories?.(cats);
+      window.UIBuild?.setItems?.(items);
+      try{ window.UIBuild?.rerender?.(); }catch(e){}
+
+      LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
+    }
+
+    // Spielstatus: erst bei Spielstart mounten + initial refresh
+    window.addEventListener('cb:game-start', function(){
+      playing = true;
+      refresh('game-start');
+    });
+
+    // Registry-Events → (re)render, sobald Daten da sind
+    window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
+    window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
+    window.addEventListener('cb:registry:update', function(){ refresh('update');      });
+
+    // Sicherheits-Refresh (z.B. Reload während Spiel)
+    setTimeout(function(){
+      if (document.body.classList.contains('is-playing')) {
+        playing = true;
+        refresh('late');
       }
-    }catch(e){ LOG.warn('[ui-bridge] Registry.get(%s) fail:', key, e); }
-    return [];
-  }
-
-function refresh(tag){
-  ensureMount();
-
-  // 1) iconsBase aus Registry an UIBuild geben (WICHTIG)
-  var base = (window.Registry && Registry.get) ? Registry.get('iconsBase') : null;
-  if (base && window.UIBuild?.setIconsBase) {
-    UIBuild.setIconsBase(base);     // z.B. "assets/icons/buildings/"
-  }
-
-  // 2) Daten
-  var cats  = regGet('categories');
-  var items = regGet('buildings').filter(function(b){ return b && b.enabled !== false; });
-
-  // 3) an UIBuild durchreichen
-  if (window.UIBuild?.setCategories) UIBuild.setCategories(cats);
-  if (window.UIBuild?.setItems)      UIBuild.setItems(items);
-  try{ window.UIBuild?.rerender && UIBuild.rerender(); }catch(e){}
-
-  LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
-}
-  
-  function ensureMount(){
-    if (mounted || !playing) return;                      // ⬅️ Gate: erst wenn gespielt wird
-    if (!window.UIBuild || typeof window.UIBuild.mount !== 'function') return;
-    var host = document.getElementById('build-panel');
-    if (!host) return;
-    try { 
-      window.UIBuild.mount(host); 
-      mounted = true; 
-      LOG.info('[ui-bridge] mount ok'); 
-    } catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
-  }
-
-  function refresh(tag){
-    ensureMount();
-    if (!mounted) { LOG.info('[ui-bridge] skip refresh (%s) – not mounted yet', tag); return; }
-
-    // Daten + Icon-Basis holen
-    var cats  = regGet('categories');
-    var items = regGet('buildings').filter(b => b && b.enabled !== false);
-    var base  = (window.Registry && Registry.get && (Registry.get('iconsBase') || Registry.get('config')?.iconsBase)) || 'assets/ui/build/';
-
-    // in UIBuild schieben
-    window.UIBuild?.setIconsBase?.(base);
-    window.UIBuild?.setCategories?.(cats);
-    window.UIBuild?.setItems?.(items);
-    try{ window.UIBuild?.rerender?.(); }catch(e){}
-
-    LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
-  }
-
-  // Spielstatus: erst bei Spielstart mounten
-  window.addEventListener('cb:game-start', function(){ playing = true; refresh('game-start'); });
-
-  // Registry-Events
-  window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
-  window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
-  window.addEventListener('cb:registry:update', function(){ refresh('update');      });
-
-  // Sicherheits-Refresh (falls Start schon passiert ist, z.B. nach Reload)
-  setTimeout(function(){ if (document.body.classList.contains('is-playing')) { playing = true; refresh('late'); } }, 150);
-})();
-// ... in refresh(tag)
-if (window.UIBuild?.setIconsBase) {
-  // kommt aus data/buildings.json -> "iconsBase"
-  const base = (Registry.get && Registry.get('iconsBase')) || 'assets/icons/buildings/';
-  UIBuild.setIconsBase(base);
-}
-
-  // Beide Varianten zuhören (deine Registry feuert BEIDE ✅)
-  window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
-  window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
-  window.addEventListener('cb:registry:update', function(){ refresh('update');      });
-
-  // Sicherheits-Refreshes (falls Bridge später lädt)
-  setTimeout(function(){ refresh('boot'); }, 50);
-  setTimeout(function(){ refresh('late'); }, 300);
-})();
-</script>
+    }, 150);
+  })();
+  </script>
 
   <!-- (4.5) DEBUG / TOOLS -->
   <script src="tools/debug-tools.js"></script>
@@ -225,28 +197,23 @@ if (window.UIBuild?.setIconsBase) {
   <script>
     (function(){
       'use strict';
-      var $start = document.getElementById('start-panel');
-      var $insp  = document.getElementById('inspector');
-      var $dock  = document.getElementById('build-dock');
+      var $start    = document.getElementById('start-panel');
+      var $insp     = document.getElementById('inspector');
+      var $dock     = document.getElementById('build-dock');
       var $btnBuild = document.getElementById('btn-build');
 
       function fire(type, detail){ window.dispatchEvent(new CustomEvent(type, { detail: detail||{} })); }
 
       // Startpanel → Events
       document.getElementById('btn-new')?.addEventListener('click', function(){
-        fire('cb:start:new');
-        $start.classList.add('hidden');
+        fire('cb:start:new'); $start.classList.add('hidden');
       });
       document.getElementById('btn-continue')?.addEventListener('click', function(){
-        fire('cb:start:continue');
-        $start.classList.add('hidden');
+        fire('cb:start:continue'); $start.classList.add('hidden');
       });
-      document.getElementById('btn-reset')?.addEventListener('click', function(){
-        fire('cb:start:reset');
-      });
+      document.getElementById('btn-reset')?.addEventListener('click', function(){ fire('cb:start:reset'); });
       document.getElementById('btn-inspector')?.addEventListener('click', function(){
-        $insp.classList.toggle('hidden');
-        fire('req:inspector:toggle');
+        $insp.classList.toggle('hidden'); fire('req:inspector:toggle');
       });
       document.getElementById('btn-fullscreen')?.addEventListener('click', function(){
         if (!document.fullscreenElement) document.documentElement.requestFullscreen();
@@ -254,23 +221,19 @@ if (window.UIBuild?.setIconsBase) {
         fire('cb:start:fullscreen');
       });
 
-      // Build-Button → Dock zeigen/verstecken
+      // Build-Button → Dock show/hide
       $btnBuild?.addEventListener('click', function(){
         var isOpen = !$dock.classList.contains('hidden');
         if (isOpen){
-          $dock.classList.add('hidden');
-          $btnBuild.setAttribute('aria-expanded', 'false');
-          fire('cb:build:close');
+          $dock.classList.add('hidden');  $btnBuild.setAttribute('aria-expanded', 'false'); fire('cb:build:close');
         } else {
-          $dock.classList.remove('hidden');
-          $btnBuild.setAttribute('aria-expanded', 'true');
-          fire('cb:build:open');
+          $dock.classList.remove('hidden');$btnBuild.setAttribute('aria-expanded', 'true');  fire('cb:build:open');
         }
       });
 
       // UI ready
       window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v1.2.0";
+      window.__cb.indexVersion = "v1.2.1";
       (window.CBLog?.info || console.log)(`[index] UI bereit (v${window.__cb.indexVersion})`);
       fire('cb:ui-ready');
     })();
