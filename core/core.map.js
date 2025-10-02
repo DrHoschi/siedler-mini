@@ -1,8 +1,11 @@
 /* ============================================================================
  * Datei   : core/core.map.js
  * Projekt : Neue Siedler – Engine
- * Version : v18.1.1 (2025-10-02)
- * Zweck   : SiedlerMap – Map-Loader & Tile-Renderer (fix: kein DPR-Mismatch)
+ * Version : v18.2.0 (2025-10-02)
+ * Zweck   : SiedlerMap – Map-Loader & Tile-Renderer
+ *           - Kein DPR-Mismatch (Canvas läuft in CSS-Pixeln)
+ *           - Robuste Frame-Normalisierung (TexturePacker u. flach)
+ *           - Ground-Layer-Fallbacks (name:'ground'|'base'|id:'ground')
  * ============================================================================ */
 (() => {
   'use strict';
@@ -47,8 +50,9 @@
       this.viewH = canvas?.height || 0;
 
       // Tileset & Map
-      this.tileset = null;
-      this.map     = null;
+      this.tileset = null;   // { image, frames:{key:{x,y,w,h}}, tileSize }
+      this.map     = null;   // { width,height,tileSize,layers:[...] }
+      this._ground = null;
 
       LOG('SiedlerMap bereit.');
     }
@@ -74,14 +78,15 @@
         layers: Array.isArray(data.layers) ? data.layers.slice() : []
       };
 
-      // Ground-Layer suchen (robuster)
+      // Ground-Layer robust finden
       this._ground = (this.map.layers || []).find(l =>
-        l && l.type === 'tiles' && (l.name === 'ground' || l.id === 'ground' || l.name === 'base')
+        l && l.type === 'tiles' && (l.name === 'ground' || l.name === 'base' || l.id === 'ground')
       );
       if (!this._ground){
         WARN('Kein Ground-Layer gefunden – es wird nichts gezeichnet.');
       }
 
+      // Map-Tilegröße ggf. ins Tileset spiegeln (einheitliches Raster)
       if (this.map.tileSize && this.tileset) {
         this.tileset.tileSize = this.map.tileSize;
       }
@@ -89,7 +94,7 @@
       OK(`Map geladen: ${this.map.width}×${this.map.height} (tile=${this.map.tileSize})`);
     }
 
-    reload(){}
+    reload(){ /* Platzhalter */ }
 
     draw(){
       if (!this.ctx || !this.canvas) return;
@@ -119,7 +124,8 @@
         const row = rows[r]; if (!row) continue;
         for (let c = x0; c < x1; c++){
           const key = row[c]; if (!key) continue;
-          const f   = frames[key]; if (!f) continue;
+          const f   = frames[key];
+          if (!f) continue; // unbekannter Frame-Key
           ctx.drawImage(img, f.x, f.y, f.w, f.h, c*T, r*T, T, T);
         }
       }
@@ -146,20 +152,41 @@
 
       const imagePath = atlas?.meta?.image;
       if (!imagePath) throw new Error('Tileset.meta.image fehlt.');
-
       const img = await loadImage(imagePath);
+
+      // --- Frames normalisieren --------------------------------------------
+      // Unterstützt:
+      //  - frames[key] = { x,y,w,h, ... }
+      //  - frames[key] = { frame:{ x,y,w,h }, ... }  (TexturePacker)
+      const normalized = {};
+      const frames = atlas.frames || {};
+      for (const [key, val] of Object.entries(frames)){
+        let x,y,w,h;
+        if (val && typeof val === 'object'){
+          if (val.x!=null) { x=val.x; y=val.y; w=val.w; h=val.h; }
+          else if (val.frame && typeof val.frame==='object'){
+            ({x,y,w,h} = val.frame);
+          }
+        }
+        if ([x,y,w,h].every(n => Number.isFinite(n))) {
+          normalized[key] = { x: x|0, y: y|0, w: w|0, h: h|0 };
+        } else {
+          WARN('Frame ignoriert (kein x/y/w/h):', key);
+        }
+      }
+
       const tileSize = atlas?.meta?.tileSize || atlas?.meta?.tile || 64;
 
       this.tileset = {
         image  : img,
-        frames : atlas.frames || {},
+        frames : normalized,
         tileSize
       };
 
-      OK('Tileset geladen:', chosen, `(Frames: ${Object.keys(this.tileset.frames).length})`);
+      OK('Tileset geladen:', chosen, `(Frames normalisiert: ${Object.keys(this.tileset.frames).length})`);
     }
 
-    // Platzhalter für spätere Terrain-Abfragen
+    // Platzhalter für Terrain-Abfragen
     isWater(){ return false; }
     terrainAt(){ return null; }
   }
