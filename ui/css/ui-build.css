@@ -20,6 +20,14 @@
 }
 
 /* (2) Dock-Container -------------------------------------------------------- */
+
+/* Build-Dock & Panel nur zeigen, wenn gespielt wird */
+body:not(.is-playing) #build-dock,
+body:not(.is-playing) #build-panel {
+  display: none !important;
+}
+
+
 #build-dock{
   position: fixed; left: 0; right: 0; bottom: 0;
   z-index: var(--build-dock-z);
