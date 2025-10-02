@@ -1,115 +1,89 @@
 /* ============================================================================
  * Datei   : ui/css/ui-build.css
- * Version : v19.4.1
- * Zweck   : Build-Dock (unten) – Kategorien + quadratische Karten (Titel | Thumb | Kosten)
- * Hinweis : Panel-Look über panel.png; HUD liegt über dem Dock (z-Index)
+ * Version : v19.5.0 (2025-10-02)
+ * Zweck   : Build-Dock (unten) – Kategorien + Karten (Titel | Icon | Kosten)
+ * Hinweis : Selektoren passen zu UIBuild (ul#build-cats.build-cats, ul#build-items.build-list)
  * ========================================================================== */
 
-/* (1) Design-Tokens (global) ----------------------------------------------- */
+/* (1) Design-Tokens --------------------------------------------------------- */
 :root{
   --build-icon-size: 48px;
-  --build-dock-z: 1100;                 /* unter HUD, über Canvas */
+  --build-dock-z: 1100;                   /* unter HUD, über Canvas */
   --build-border: #1d2633;
   --build-shadow: 0 -18px 48px rgba(0,0,0,.35);
   --build-radius: 14px;
-  --build-gap: 8px;
+  --build-gap: 10px;
 
-  /* Karten-Maße */
-  --build-tile: 148px;                  /* Kachelbreite UND -höhe (Quadrat) */
-  --build-grid-gap: 10px;               /* Abstand zwischen Karten */
+  /* Kartenmaße */
+  --build-tile: 148px;                    /* Kachelbreite UND -höhe */
+  --build-grid-gap: 10px;                 /* Abstand zwischen Karten */
 }
 
-/* (2) Dock-Container (Position/Lager) -------------------------------------- */
+/* (2) Dock-Container -------------------------------------------------------- */
 #build-dock{
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
+  position: fixed; left: 0; right: 0; bottom: 0;
   z-index: var(--build-dock-z);
   padding: 10px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); /* iOS Safe Area */
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   display: flex;
+  gap: var(--build-gap);
   border-top-left-radius: var(--build-radius);
   border-top-right-radius: var(--build-radius);
-
-  /* kleines Slide-In (optional) */
+  background: rgba(22,26,34,.75);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--build-shadow);
   transition: transform .14s ease, opacity .14s ease;
   opacity: 1; transform: translateY(0);
 }
 #build-dock.hidden,
 #build-dock[hidden]{ display: none !important; opacity: 0; transform: translateY(8px); }
 
-/* (3) Dock-Wrap (Scrollbereich) -------------------------------------------- */
-#build-dock .wrap{
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--build-gap);
-  width: 100%;
-  max-height: clamp(220px, 40vh, 380px);
-  overflow: auto;
-  padding-bottom: 2px;
+/* (3) Scrollbereich --------------------------------------------------------- */
+#build-panel{
+  position: fixed; left: 0; right: 0; bottom: 56px;   /* Platz oberhalb Dock */
+  max-height: 42vh; overflow: auto;
+  z-index: calc(var(--build-dock-z) + 1);
 }
+#build-panel .ui-build-wrap{ display: grid; gap: 12px; padding: 12px; }
 
-/* (4) Dock-Kopfzeile -------------------------------------------------------- */
-#build-dock .dock-head{
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 8px;
-  border: 1px solid var(--build-border);
-  border-radius: 10px;
-}
-
-/* (5) Kategorien als Tabs/Chips -------------------------------------------- */
-#build-cats{
-  display: flex; gap: 8px;
+/* (4) Kategorien (Tabs/Chips) ---------------------------------------------- */
+#build-cats.build-cats{
+  display: flex; gap: 8px; align-items: center;
   list-style: none; margin: 0; padding: 6px 8px;
   border: 1px solid var(--build-border);
   border-radius: 10px;
-  backdrop-filter: blur(2px);
+  background: #1f242a;
 }
-#build-cats > li.build-cat{
+#build-cats.build-cats > li.build-cat{
   padding: 6px 10px;
   border: 1px solid var(--build-border);
   border-radius: 10px;
+  background: #2b3138; color: #e6f0ff;
   cursor: pointer; user-select: none; opacity: .9;
   transition: background .12s ease, border-color .12s ease, opacity .12s ease;
 }
-#build-cats > li.build-cat:hover{ opacity: 1; border-color: #2b3a52; }
-#build-cats > li.build-cat.active{
+#build-cats.build-cats > li.build-cat:hover{ opacity: 1; border-color: #2b3a52; }
+#build-cats.build-cats > li.build-cat.active{
   border-color: #8ab4f8;
   box-shadow: 0 0 0 2px #8ab4f860 inset;
   opacity: 1;
 }
 
-/* (6) (Legacy) Kategorie-Container ----------------------------------------- */
-.build-cat{
-  border: 1px solid var(--build-border);
-  border-radius: var(--build-radius);
-  overflow: hidden;
-}
-.build-header{
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; padding: 8px 10px;
-  border-bottom: 1px solid var(--build-border);
-}
-.build-title{
-  margin: 0;
-  font: 600 0.95rem/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  letter-spacing: .2px;
-}
-
-/* (7) GRID für Kartenliste -------------------------------------------------- */
-.build-list{
+/* (5) GRID für Kartenliste -------------------------------------------------- */
+#build-items.build-list{
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--build-tile), var(--build-tile)));
-  justify-content: start;               /* Restplatz rechts stehen lassen */
+  justify-content: start;
   gap: var(--build-grid-gap);
-  padding: 8px;
+  margin: 0; padding: 8px;
+  list-style: none;
 }
 
-/* (8) Kachel – Titel | Thumb | Kosten -------------------------------------- */
-.build-item{
-  display: grid !important;
+/* (6) Kachel – Titel | Icon | Kosten -------------------------------------- */
+#build-items .build-item{
+  display: grid;
   grid-template-rows: auto 1fr auto;    /* 1) Titel | 2) Icon | 3) Kosten */
-  align-items: center;
-  justify-items: center;
+  align-items: center; justify-items: center;
 
   width: var(--build-tile);
   aspect-ratio: 1 / 1;
@@ -121,22 +95,22 @@
     url("../../assets/ui/panel.png") center / cover no-repeat,
     linear-gradient(to bottom, rgba(18,24,34,.55), rgba(12,16,24,.55));
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  color: #eaf0ff;
   cursor: pointer;
 
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
-.build-item:hover{
+#build-items .build-item:hover{
   transform: translateY(-1px);
   box-shadow: 0 8px 22px rgba(0,0,0,.28);
-  border-color: #2b3a52;
 }
-.build-item.is-selected{
-  outline: 2px solid #8ab4f880;         /* Auswahl sichtbar, ohne Layoutsprung */
+#build-items .build-item.is-selected{
+  outline: 2px solid #8ab4f880;
   outline-offset: -2px;
 }
 
-/* (9) Kachel-Inhalte -------------------------------------------------------- */
-.build-item .title{
+/* (7) Kachel-Inhalte -------------------------------------------------------- */
+#build-items .build-item .title{
   grid-row: 1;
   margin: 2px 6px 0 6px;
   text-align: center;
@@ -144,21 +118,21 @@
   font: 700 14px/1.15 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   letter-spacing: .2px; opacity: .95;
 }
-.build-item .thumb{
+#build-items .build-item .icon{
   grid-row: 2;
-  width: calc(var(--build-tile) * .56);
-  height: calc(var(--build-tile) * .56);
+  width: var(--build-icon-size);
+  height: var(--build-icon-size);
   object-fit: contain;
   margin: 4px 0;
-  filter: drop-shadow(0 1px 1px rgba(0,0,0,.35));
+  filter: none; background: none;
 }
-.build-item .cost{
+#build-items .build-item .cost{
   grid-row: 3;
   display: flex; justify-content: center; align-items: center;
   gap: 8px; flex-wrap: wrap;
   margin-bottom: 2px;
 }
-.build-item .cost .res{
+#build-items .build-item .cost .res{
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 6px;
   border-radius: 999px;
@@ -167,71 +141,44 @@
   font: 700 12px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   white-space: nowrap;
 }
-.build-item .cost .res img{
+#build-items .build-item .cost .res img{
   width: 16px; height: 16px; object-fit: contain;
 }
 
-/* (10) Scrollbar-Kosmetik (optional) --------------------------------------- */
-#build-dock .wrap::-webkit-scrollbar{ height: 10px; width: 10px; }
-#build-dock .wrap::-webkit-scrollbar-thumb{
+/* (8) Scrollbar-Kosmetik (optional) ---------------------------------------- */
+#build-panel::-webkit-scrollbar{ height: 10px; width: 10px; }
+#build-panel::-webkit-scrollbar-thumb{
   background: rgba(255,255,255,.22);
   border-radius: 10px;
   border: 2px solid rgba(0,0,0,.2);
 }
-#build-dock .wrap::-webkit-scrollbar-track{ background: rgba(0,0,0,.15); }
+#build-panel::-webkit-scrollbar-track{ background: rgba(0,0,0,.15); }
 
-/* (11) Responsive Tweaks ---------------------------------------------------- */
+/* (9) Responsive Tweaks ----------------------------------------------------- */
 @media (max-width: 1024px){
   :root{ --build-tile: 136px; }
 }
 @media (max-width: 800px){
-  #build-dock .wrap{ max-height: clamp(180px, 44vh, 420px); }
+  #build-panel{ max-height: clamp(180px, 44vh, 420px); }
   :root{ --build-tile: 124px; }
 }
 @media (max-width: 520px){
   :root{ --build-tile: 112px; }
 }
 
-/* (12) Kompakt-Modus (optional) -------------------------------------------- */
-#build-dock.build--compact .build-list{ gap: 6px; }
-#build-dock.build--compact .build-item{
+/* (10) Kompakt-Modus (optional) -------------------------------------------- */
+#build-dock.build--compact #build-items.build-list{ gap: 6px; }
+#build-dock.build--compact #build-items .build-item{
   width: 108px; aspect-ratio: 1 / 1; padding: 6px; border-radius: 10px;
 }
-#build-dock.build--compact .thumb{ width: 60px; height: 60px; }
+#build-dock.build--compact #build-items .icon{ width: 40px; height: 40px; }
 
-/* (13) Tooltip-Preview (unverändert) --------------------------------------- */
-.ui-tooltip{
-  position: fixed; z-index: 2000; pointer-events: none;
-  transform: translate(-50%, calc(-100% - 14px));
-  opacity: 0; transition: opacity .12s ease, transform .12s ease;
-  max-width: min(360px, 92vw);
-}
-.ui-tooltip.is-visible{ opacity: 1; transform: translate(-50%, calc(-100% - 10px)); }
-.ui-tooltip .tip-card{
-  background:
-    url("../../assets/ui/panel.png") center / contain no-repeat,
-    linear-gradient(to bottom, rgba(18,24,34,.92), rgba(12,16,24,.92));
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px; box-shadow: 0 18px 48px rgba(0,0,0,.35);
-  padding: 10px 12px; backdrop-filter: blur(2px);
-}
-.ui-tooltip .tip-head{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
-.ui-tooltip .tip-head img{ width:64px; height:64px; object-fit:contain; flex:0 0 auto; }
-.ui-tooltip .tip-title{ font:700 15px/1.25 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; margin:0; letter-spacing:.2px; }
-.ui-tooltip .tip-desc{ font:400 13px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; margin:0; white-space:normal; }
-.ui-tooltip:after{
-  content:""; position:absolute; left:50%; bottom:-6px; transform:translateX(-50%);
-  border:6px solid transparent; border-top-color: rgba(12,16,24,.92);
-  filter: drop-shadow(0 -1px 0 rgba(255,255,255,.08));
-}
-
-/* (14) Build-Button / Stacking-Fixes --------------------------------------- */
-/* Button sicher klickbar & Safe-Area */
+/* (11) Build-FAB ------------------------------------------------------------ */
 .ui-btn-build{
   position: fixed;
   left: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: 20000;               /* deutlich über Canvas & Dock */
+  z-index: 20000;                   /* deutlich über Canvas & Dock */
   pointer-events: auto;
 
   padding: 10px 14px; border-radius: 8px;
@@ -240,77 +187,11 @@
   box-shadow: 0 6px 18px rgba(0,0,0,.28);
 }
 .ui-btn-build:hover{ filter: brightness(1.06); }
-.ui-btn-build:focus-visible{
-  outline: 2px solid #8ab4f8; outline-offset: 2px;
-}
+.ui-btn-build:focus-visible{ outline: 2px solid #8ab4f8; outline-offset: 2px; }
 .ui-btn-build[aria-expanded="true"]{
   border-color: #8ab4f8; box-shadow: 0 0 0 2px #8ab4f840 inset;
 }
 
-/* Canvas immer hinter UI */
-canvas, #game-canvas, .game-canvas{
-  position: fixed; inset: 0;
-  z-index: 1;                     /* kleiner Wert → hinter Dock/Buttons */
-}
-
-/* Overlays blockieren keine Klicks auf UI-Controls */
-.ui-overlay,
-.fullscreen-cover,
-.debug-layer{
-  pointer-events: none;
-}
-
-/* Sichtbarer Platz für das Build-Panel */
-#build-dock{
-  position: fixed; left: 0; right: 0; bottom: 0;
-  height: 56px; z-index: 960;
-}
-#build-panel{
-  position: fixed; left: 0; right: 0; bottom: 56px;
-  max-height: 42vh; overflow: auto;
-  z-index: 961;
-}
-
-/* Grundlayout */
-#build-panel .ui-build-wrap{ display: grid; gap: 10px; padding: 12px; }
-#build-cats{ display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
-#build-cats .build-cat{ padding: 8px 10px; border-radius: 8px; background: #2b3138; color: #e6f0ff; cursor: pointer; }
-#build-cats .build-cat.active{ outline: 2px solid #8ab4f8; }
-
-#build-items{ display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px;
-              margin: 0; padding: 0; list-style: none; }
-#build-items .build-item{ display: grid; gap: 6px; padding: 10px; border-radius: 10px; background: #1f242a; color: #e6f0ff; }
-#build-items .build-item.is-selected{ outline: 2px solid #8ab4f8; }
-#build-items .build-item .title{ font-weight: 700; }
-#build-items .build-item .cost{ display: flex; gap: 10px; align-items: center; }
-#build-items .build-item .cost .res{ display: inline-flex; gap: 6px; align-items: center; }
-
-/* Kartenlayout */
-#build-panel .build-list { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
-#build-panel .build-item  { padding: 10px; border-radius: 12px; background: #262b33; color:#eaf0ff; }
-
-/* Icon sichtbar + Größe */
-#build-panel .build-item .icon{
-  display:block;
-  width: 48px; height: 48px;
-  object-fit: contain;
-  margin-bottom: 6px;
-  filter: none;            /* falls von ui.css geerbt */
-  background: none;        /* keine Masken/Gradients drüber */
-}
-
-/* Icon in der Itemkarte */
-.build-list .build-item .icon{
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  object-fit: contain;
-  image-rendering: auto;
-  margin-right: 8px;
-}
-.build-list .build-item{
-  display: grid;
-  grid-template-columns: 48px 1fr auto; /* icon | title | cost */
-  align-items: center;
-  gap: 8px;
-}
+/* (12) Stacking/Klick-Fixes ------------------------------------------------- */
+canvas, #game-canvas, .game-canvas{ position: fixed; inset: 0; z-index: 1; }
+.ui-overlay, .fullscreen-cover, .debug-layer{ pointer-events: none; }
