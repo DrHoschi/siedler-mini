@@ -75,8 +75,8 @@
 
 /* ❌ ABBRECHEN – OBEN RECHTS */
 .place-cancel{
-  right: -12px;
-  top:   -12px;
+  right: 12px;
+  top:   12px;
   background: linear-gradient(#b83c2e, #8e2e23);
   border-color: #8e2e23;
 }
