@@ -132,6 +132,27 @@
     return [];
   }
 
+function refresh(tag){
+  ensureMount();
+
+  // 1) iconsBase aus Registry an UIBuild geben (WICHTIG)
+  var base = (window.Registry && Registry.get) ? Registry.get('iconsBase') : null;
+  if (base && window.UIBuild?.setIconsBase) {
+    UIBuild.setIconsBase(base);     // z.B. "assets/icons/buildings/"
+  }
+
+  // 2) Daten
+  var cats  = regGet('categories');
+  var items = regGet('buildings').filter(function(b){ return b && b.enabled !== false; });
+
+  // 3) an UIBuild durchreichen
+  if (window.UIBuild?.setCategories) UIBuild.setCategories(cats);
+  if (window.UIBuild?.setItems)      UIBuild.setItems(items);
+  try{ window.UIBuild?.rerender && UIBuild.rerender(); }catch(e){}
+
+  LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
+}
+  
   function ensureMount(){
     if (mounted || !playing) return;                      // ⬅️ Gate: erst wenn gespielt wird
     if (!window.UIBuild || typeof window.UIBuild.mount !== 'function') return;
