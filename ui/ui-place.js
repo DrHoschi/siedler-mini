@@ -12,6 +12,34 @@
  * - Position kann als Pixel (sx,sy) oder Grid (gx,gy*TILE) geliefert werden.
  * - Dieses Modul ist VISUELL. Das Game bleibt die Quelle der Wahrheit.
  * ========================================================================== */
+
+// ---- Pfad-Helfer (übernimmt dein iconsBase aus registry) -------------------
+function normBase(s){ return (s||'').replace(/\/+$/,'') + '/'; }
+function isAbs(u){ return /^(https?:)?\/\//i.test(u) || u.startsWith('/') || u.startsWith('data:'); }
+function withExt(name){ return /\.(png|webp|jpg|jpeg|svg)$/i.test(name) ? name : (name + '.png'); }
+
+// Basis aus Registry (iconsBase) oder Fallback
+function getIconsBase(){
+  try { return normBase((window.Registry?.get?.('iconsBase')) || 'assets/icons/buildings/'); }
+  catch(e){ return 'assets/icons/buildings/'; }
+}
+
+// Menü-Icon (klein)
+function iconSrcFor(item){
+  const raw = item?.icon || item?.iconId || item?.iconPath || '';
+  if (!raw) return '';
+  if (isAbs(raw)) return raw;
+  return getIconsBase() + withExt(String(raw));
+}
+
+// In-World-Sprite (Ghost / Platzieren)
+function spriteSrcFor(item){
+  const raw = item?.sprite || item?.spriteId || item?.spritePath || item?.icon || '';
+  if (!raw) return '';
+  if (isAbs(raw)) return raw;
+  return getIconsBase() + withExt(String(raw));
+}
+
 (function(){
   'use strict';
 
@@ -156,3 +184,26 @@
 
   log('geladen');
 })();
+
+window.addEventListener('cb:build:select', (ev) => {
+  const id = ev.detail?.id;
+  const list = (window.Registry && Registry.get) ? Registry.get('buildings') : [];
+  // Default auf 3x3, falls nichts gefunden
+  current = (list || []).find(b => b && String(b.id) === String(id)) || { id, size:[3,3] };
+
+  // >> NEU: Ghost-Optik setzen
+  const [w,h] = Array.isArray(current.size) ? current.size : [3,3];
+  ghostEl.style.width  = (w * TILE) + 'px';
+  ghostEl.style.height = (h * TILE) + 'px';
+  ghostEl.style.backgroundImage  = `url("${spriteSrcFor(current)}")`;
+  ghostEl.style.backgroundRepeat = 'no-repeat';
+  ghostEl.style.backgroundPosition = 'center center';
+  // exakt auf Boxgröße ziehen:
+  ghostEl.style.backgroundSize = `${w*TILE}px ${h*TILE}px`;
+
+  // (optional) farbliche Fläche leicht abdunkeln:
+  // ghostEl.style.backgroundColor = 'rgba(0, 200, 0, .18)';
+
+  // (optional) Outline beibehalten:
+  // ghostEl.style.outline = '2px solid rgba(0,255,0,.6)';
+});
