@@ -6,6 +6,13 @@
 // Patch : Terrain-Zugriff (isWater/terrainAt)
 // ============================================================================
 
+// ... innerhalb von SiedlerMap
+this.tilesetSrc = 'assets/tiles/tileset.terrain.png';   // <- exakt dieser Pfad
+this.tileset = new Image();
+this.tileset.onload  = () => { this._tilesetReady = true; };
+this.tileset.onerror = () => { this._tilesetReady = false; };
+this.tileset.src = this.tilesetSrc;
+
 (function(root, factory){
   root.SiedlerMap = factory();
 })(typeof window !== 'undefined' ? window : this, function(){
