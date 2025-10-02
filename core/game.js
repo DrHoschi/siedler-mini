@@ -1,10 +1,17 @@
 // ============================================================================
 // Datei   : core/game.js
+// Projekt : Neue Siedler
+// Version : v18.1.1 (2025-10-02)
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
-// Wichtige Änderungen in diesem Build:
-//   - iconsBase aus Registry wird in Engine aufgelöst (Icon + Sprite)
-//   - Ghost-Overlay nur 1× (Engine zeichnet KEIN kleines Icon zusätzlich)
-//   - Platzierte Gebäude werden mit Sprite in voller Footprint-Größe gerendert
+//
+// Wichtige Punkte in dieser Version:
+//  - Nutzt SiedlerMap (core/core.map.js) für Terrain-Tiles
+//  - FIX: Nach map.draw() wird die Canvas-Transform explizit auf Screen-Space
+//          zurückgesetzt, damit Ghost/Placements/HUD korrekt erscheinen
+//  - FIX: Robuste Map-Initialisierung + Guards, damit Start nie „ins Leere“ läuft
+//  - Icons/Sprites kommen aus Registry (iconsBase → id → URL)
+//  - Gebäude-Ghost zeigt nur Rahmen/Entrances (großes Ghost-Bild macht ui-place.js)
+//  - Platzierte Gebäude werden als Vollbild-Sprite in Footprint-Größe gezeichnet
 // ============================================================================
 
 (() => {
@@ -18,7 +25,7 @@
     ctx    : null,
     w:0, h:0,
 
-    // Grid/Tiles
+    // Grid/Tiles (werden nach Map-Laden aktualisiert)
     tile : 64,
     gridW: 32, gridH: 18,
 
@@ -215,8 +222,15 @@
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
 
+    // --- Welt (Tiles) -------------------------------------------------------
     map?.draw();
 
+    // --- FIX: Canvas-Transform auf Screen-Space zurücksetzen ---------------
+    // SiedlerMap.setTransform() setzt Weltkoordinaten. Für Ghost/HUD brauchen
+    // wir Bildschirmkoordinaten:
+    ctx.setTransform(1,0,0,1,0,0);
+
+    // --- UI/Overlays --------------------------------------------------------
     ctx.save();
     drawGhost(ctx);
     drawPlacements(ctx);
@@ -233,17 +247,13 @@
     ctx.strokeRect(sx+.5, sy+.5, w-1, h-1);
   }
 
-  // **NEU**: platziertes Gebäude mit Sprite in voller Größe
+  // Vollbild-Sprite für platzierte Gebäude
   function drawPlacementSprite(ctx, id, sx, sy, wTiles, hTiles){
     const sprite = getImage(getSpriteUrl(id));
     const s = _state.tile * _state.zoom;
     if (sprite){
-      ctx.save();
-      // auf Footprint-Größe ziehen
       ctx.drawImage(sprite, sx, sy, wTiles*s, hTiles*s);
-      ctx.restore();
     } else {
-      // Fallback: Icon auf Ursprungs-Kachel
       const icon = getImage(getIconUrl(id));
       if (icon) ctx.drawImage(icon, sx+4, sy+4, s-8, s-8);
     }
@@ -253,16 +263,12 @@
     for(const p of _state.placements){
       const s = _state.tile * _state.zoom;
       const {sx,sy} = worldToScreen(p.x*_state.tile, p.y*_state.tile);
-
-      // Footprint-Rahmen dezent (optional)
       drawRect(ctx, sx, sy, p.w*s, p.h*s, true);
-
-      // Vollbild-Sprite
       drawPlacementSprite(ctx, p.id, sx, sy, p.w, p.h);
     }
   }
 
-  // **WICHTIG**: Ghost – KEIN zusätzliches Engine-Icon mehr (nur Rect + UI-Overlay zeigt das große Bild)
+  // Ghost – KEIN zusätzliches Engine-Icon (Bild kommt aus ui-place.js)
   function drawGhost(ctx){
     let gx=-1, gy=-1, id=_state.selectedBuilding;
     if (_state.preview){ gx=_state.preview.gx; gy=_state.preview.gy; id=_state.preview.id; }
@@ -294,8 +300,6 @@
       ctx.restore();
     }
 
-    // KEIN Icon hier – das große Ghost-Bild kommt von ui-place.js (Overlay)
-
     EVT('cb:place:preview', {
       id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
       w:def.size.w, h:def.size.h, door:{...def.door},
@@ -317,13 +321,19 @@
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
 
+        // Grid/Tiles übernehmen (Renderer hat eigene tileSize intern)
         _state.tile  = Number(json.tile) || _state.tile;
-        const w = Number((Array.isArray(json.size)? json.size[0] : json.cols));
-        const h = Number((Array.isArray(json.size)? json.size[1] : json.rows));
+        const w = Number((Array.isArray(json.size)? json.size[0] : (json.cols ?? json.width)));
+        const h = Number((Array.isArray(json.size)? json.size[1] : (json.rows ?? json.height)));
         _state.gridW = w || _state.gridW;
         _state.gridH = h || _state.gridH;
 
         log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
+
+        // --- An SiedlerMap übergeben (damit Tiles wirklich gezeichnet werden)
+        if (_state.map?.loadMap) {
+          await _state.map.loadMap(mapId);
+        }
       } else {
         log('map: kein JSON → Default', { mapId });
       }
@@ -336,7 +346,7 @@
     const c=_state.canvas; if(!c) return;
     _state.w = (c.width  = c.clientWidth  || c.width);
     _state.h = (c.height = c.clientHeight || c.height);
-    _state.map?.setSize(_state.w,_state.h);
+    _state.map?.setSize?.(_state.w,_state.h);
 
     if (_state.map){
       _state.camX = _state.map.camX ?? _state.camX;
@@ -470,11 +480,16 @@
     _state.canvas.addEventListener('touchmove',  (e)=>e.preventDefault(), {passive:false});
     _state.canvas.addEventListener('touchend',   (e)=>e.preventDefault(), {passive:false});
 
-    // Map
-    const dbg = document.getElementById('debug-map'); // optional
-    _state.map = new window.SiedlerMap(canvas, _state.ctx, dbg);
-
-    _state.camX = _state.map.camX ?? 0; _state.camY = _state.map.camY ?? 0; _state.zoom = _state.map.zoom ?? 1;
+    // Map-Renderer (SiedlerMap)
+    if (typeof window.SiedlerMap !== 'function'){
+      err('SiedlerMap fehlt – core/core.map.js nicht geladen?');
+    } else {
+      const dbg = document.getElementById('debug-map'); // optional
+      _state.map = new window.SiedlerMap(canvas, _state.ctx, dbg);
+      _state.camX = _state.map.camX ?? 0;
+      _state.camY = _state.map.camY ?? 0;
+      _state.zoom = _state.map.zoom ?? 1;
+    }
 
     window.Units?.init?.(_state.ctx, _state.tile);
 
@@ -523,13 +538,12 @@
     _state.mapId  = mapId || _state.mapId || 'data/maps/map-mini.json';
     _state.started = true;
 
-    await loadMap(_state.mapId);
-    await _state.map.loadMap(_state.mapId);
-    _state.map.reload?.();
+    await loadMap(_state.mapId);            // lädt JSON + übergibt an SiedlerMap
+    _state.map?.reload?.();
 
-    _state.camX = _state.map.camX ?? _state.camX;
-    _state.camY = _state.map.camY ?? _state.camY;
-    _state.zoom = _state.map.zoom ?? _state.zoom;
+    _state.camX = _state.map?.camX ?? _state.camX;
+    _state.camY = _state.map?.camY ?? _state.camY;
+    _state.zoom = _state.map?.zoom ?? _state.zoom;
     onResize();
 
     rebuildOccupied();
