@@ -1,0 +1,91 @@
+name: Export File List
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * 1" # montags 03:00 UTC (optional)
+
+permissions:
+  contents: write  # für optionalen Commit
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate file lists (exclude .github/ and Archiv/)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TS="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          # Gemeinsamer find-Filter (ohne .github/, Archiv/, archiv/, archive/)
+          FIND_EXCLUDES=(
+            "! -path './.git/*'"
+            "! -ipath './.github/*'"
+            "! -ipath './Archiv/*'"
+            "! -ipath './archiv/*'"
+            "! -ipath './archive/*'"
+          )
+
+          # --- filelist.txt (nur Pfade) ---
+          {
+            echo "# File List"
+            echo "_generated: ${TS} (UTC)_"
+            echo
+            find . -type f "${FIND_EXCLUDES[@]}" \
+              | sed 's|^\./||' \
+              | sort
+          } > filelist.txt
+
+          # --- filelist_detailed.tsv (Größe, SHA256, Pfad) ---
+          echo -e "size_bytes\tsha256\tpath" > filelist_detailed.tsv
+          # null-separiert, damit Sonderzeichen sicher sind
+          while IFS= read -r -d '' f; do
+            # Größe (fallback für BSD/macOS stat)
+            if stat --version >/dev/null 2>&1; then
+              size=$(stat -c%s "$f")
+            else
+              size=$(wc -c < "$f")
+            fi
+            sha=$(sha256sum "$f" | cut -d' ' -f1)
+            p="${f#./}"
+            printf "%s\t%s\t%s\n" "$size" "$sha" "$p" >> filelist_detailed.tsv
+          done < <(find . -type f "${FIND_EXCLUDES[@]}" -print0)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: filelist-${{ github.sha }}
+          path: |
+            filelist.txt
+            filelist_detailed.tsv
+          if-no-files-found: error
+          retention-days: 30
+
+      # Optional: Commit ins Repo (nur auf main/master)
+      - name: Commit file lists to repo (optional)
+        if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Als Markdown ablegen, TSV bleibt TSV
+          cp filelist.txt FILELIST.md
+          git add FILELIST.md filelist_detailed.tsv || true
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: update file lists (exclude .github/ & Archiv/) [skip ci]"
+            git push
+          fi
