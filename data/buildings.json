@@ -29,7 +29,7 @@
       "icon": "lumber.png",
       "sprite": "lumber.png",
       "cost": { "wood": 2 },
-      "size": [2, 2],
+      "size": [3, 3],
       "entrances": [[1, 2]]        
     },
     {
@@ -39,7 +39,7 @@
       "icon": "quarry.png",
       "sprite": "quarry.png",
       "cost": { "wood": 1, "stone": 1 },
-      "size": [3, 2],
+      "size": [3, 3],
       "entrances": [[0, 2]]       
     },
     {
@@ -49,7 +49,7 @@
       "icon": "fisher.png",
       "sprite": "fisher.png",
       "cost": { "wood": 2 },
-      "size": [2, 2],
+      "size": [3, 3],
       "entrances": [[0, 2]]      
     }
   ]
