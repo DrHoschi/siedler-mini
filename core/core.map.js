@@ -1,11 +1,15 @@
 /* ============================================================================
  * Datei   : core/core.map.js
  * Projekt : Neue Siedler – Engine
- * Version : v18.2.1 (Diagnose)
+ * Version : v18.3.0 (Diagnose + Ground-Fill)
  * Zweck   : SiedlerMap – Map-Loader & Tile-Renderer
- *           - Kein DPR-Mismatch (Canvas läuft in CSS-Pixeln)
- *           - Robuste Frame-Find-Funktion (_frameFor)
- *           - Diagnose: count hits/misses, einmaliges Log
+ *
+ * Features:
+ *  - Kein DPR-Mismatch (Canvas läuft in CSS-Pixeln)
+ *  - Robuste Frame-Find-Funktion (_frameFor)
+ *  - Diagnose: count hits/misses, einmaliges Log
+ *  - NEU: Ground-Layer kann via { "fill": "<frameKey>" } vollflächig
+ *         automatisch gefüllt werden (breite×höhe) – ideal für größere Maps
  * ============================================================================ */
 (() => {
   'use strict';
@@ -16,6 +20,7 @@
   const WARN = (...a) => (window.CBLog?.warn  || console.warn)(TAG, ...a);
   const ERR  = (...a) => (window.CBLog?.error || console.error)(TAG, ...a);
 
+  // --- Fetch/Load -----------------------------------------------------------
   async function fetchJSON(url){
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
@@ -30,22 +35,41 @@
     });
   }
 
-  // kleine Normalizer, falls Keys minimale Abweichungen haben
+  // --- kleine Normalizer, falls Keys minimale Abweichungen haben ------------
   const basename = p => String(p||'').replace(/\\/g,'/').split('/').pop();
   const stripExt = n => String(n||'').replace(/\.(png|webp|jpg|jpeg|gif)$/i,'');
   const canon    = n => stripExt(basename(n)).replace(/[\s-]+/g,'_');
 
+  // --- Helfer: Layer ggf. vollflächig füllen --------------------------------
+  // Füllt einen Tiles-Layer mit einem FrameKey, wenn kein data-Raster vorhanden ist.
+  // layer.fill hat Vorrang; ansonsten wird "terrain_r4_c0" verwendet.
+  function ensureFilledGrid(layer, w, h){
+    if (!layer || layer.type !== 'tiles') return;
+
+    // Bereits ein valides Raster vorhanden? → nichts tun
+    if (Array.isArray(layer.data) && layer.data.length) return;
+
+    const key = String(layer.fill || 'terrain_r4_c0');
+    layer.data = Array.from({ length: h }, () =>
+      Array.from({ length: w }, () => key)
+    );
+  }
+
+  // --- Klasse ---------------------------------------------------------------
   class SiedlerMap {
     constructor(canvas, ctx){
       this.canvas = canvas;
       this.ctx    = ctx;
 
+      // Kamera / Zoom
       this.camX = 0; this.camY = 0; this.zoom = 1;
       this.minZoom = 0.5; this.maxZoom = 3;
 
+      // Viewport in CSS-Pixeln
       this.viewW = canvas?.width  || 0;
       this.viewH = canvas?.height || 0;
 
+      // Tileset & Map
       this.tileset = null;   // { image, frames:{key:{x,y,w,h}}, tileSize }
       this.map     = null;   // { width,height,tileSize,layers:[...] }
       this._ground = null;
@@ -56,12 +80,16 @@
       LOG('SiedlerMap bereit.');
     }
 
+    // Viewport-Größe von außen setzen (Canvas-Resize)
     setSize(w, h){ this.viewW = w|0; this.viewH = h|0; }
 
+    // Map + Tileset laden; Ground-Layer robust finden; ggf. automatisch füllen
     async loadMap(url){
       if (!this.tileset) await this._ensureTileset();
 
       const data = await fetchJSON(url);
+
+      // Breite/Höhe/Tilegröße tolerant aus JSON lesen
       const w = Number(Array.isArray(data.size) ? data.size[0] : (data.cols ?? data.width));
       const h = Number(Array.isArray(data.size) ? data.size[1] : (data.rows ?? data.height));
       const t = Number(data.tile || data.tileSize || this.tileset.tileSize || 64);
@@ -73,18 +101,24 @@
         layers: Array.isArray(data.layers) ? data.layers.slice() : []
       };
 
+      // Ground-Layer robust ermitteln
       this._ground = (this.map.layers || []).find(l =>
         l && l.type === 'tiles' && (l.name === 'ground' || l.name === 'base' || l.id === 'ground')
       );
       if (!this._ground){
         WARN('Kein Ground-Layer gefunden – es wird nichts gezeichnet.');
+      } else {
+        // NEU: falls im JSON ein "fill"-Key angegeben (oder gar kein data vorhanden) → flächig füllen
+        ensureFilledGrid(this._ground, this.map.width, this.map.height);
       }
 
+      // Map-Tilegröße ggf. ins Tileset spiegeln (einheitliches Raster)
       if (this.map.tileSize && this.tileset) this.tileset.tileSize = this.map.tileSize;
 
       OK(`Map geladen: ${this.map.width}×${this.map.height} (tile=${this.map.tileSize})`);
     }
 
+    // Hook für spätere Erweiterungen
     reload(){}
 
     // Robuste Framesuche mit kleinen Alias-Versuchen
@@ -98,6 +132,7 @@
       return frames[k1] || frames[k2] || frames[k3] || frames[k4] || null;
     }
 
+    // Zeichnen des sichtbaren Bereichs inkl. Diagnose
     draw(){
       if (!this.ctx || !this.canvas) return;
       if (!this.tileset || !this.map || !this._ground) return;
@@ -142,6 +177,7 @@
       window.__mapDrawDiag = { hits, misses };
     }
 
+    // Tileset-Atlas laden & Frames normalisieren
     async _ensureTileset(){
       const candidates = [
         'assets/tiles/tileset.terrain.json',
@@ -181,6 +217,7 @@
       OK('Tileset geladen:', chosen, `(Frames: ${Object.keys(this.tileset.frames).length})`);
     }
 
+    // Platzhalter für Terrain-Abfragen
     isWater(){ return false; }
     terrainAt(){ return null; }
   }
