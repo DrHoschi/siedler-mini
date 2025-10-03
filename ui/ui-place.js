@@ -57,8 +57,8 @@
     root.appendChild(img);
 
     // ✓-Button (links-oben, OK innerhalb)
-         // okBtn = document.createElement('button');
-    okBtn.innerHTML = '<img class="btn-ico" src="assets/icons/ok.png" alt="OK">';
+    okBtn = document.createElement('button');
+    // okBtn.innerHTML = '<img class="btn-ico" src="assets/icons/ok.png" alt="OK">';
     okBtn.className = 'place-btn ok';
     okBtn.textContent = '✓';
     styleBtn(okBtn, '#2cc36b');
@@ -72,8 +72,8 @@
     root.appendChild(okBtn);
 
     // ✕-Button (rechts-oben, ABBRECHEN innerhalb)
-       // cancelBtn = document.createElement('button');
-    cancelBtn.innerHTML = '<img class="btn-ico" src="assets/icons/cancel.png" alt="X">';
+    cancelBtn = document.createElement('button');
+    // cancelBtn.innerHTML = '<img class="btn-ico" src="assets/icons/cancel.png" alt="X">';
     cancelBtn.className = 'place-btn cancel';
     cancelBtn.textContent = '✕';
     styleBtn(cancelBtn, '#e5564c');
