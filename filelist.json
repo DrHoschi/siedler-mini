@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-03T18:36:05.203Z",
+  "createdAt": "2025-10-03T21:20:13.603Z",
   "root": ".",
   "count": 450,
   "entries": [
@@ -1436,7 +1436,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 26870
+      "size": 24520
     },
     {
       "type": "file",
@@ -1991,7 +1991,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 978
+      "size": 2664
     },
     {
       "type": "file",
@@ -2150,7 +2150,7 @@
     {
       "type": "file",
       "path": "ui/ui-place.js",
-      "size": 7054
+      "size": 5427
     },
     {
       "type": "file",
@@ -2170,12 +2170,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 44001
+      "size": 44115
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16680
+      "size": 16732
     },
     {
       "type": "file",
