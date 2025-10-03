@@ -1,17 +1,14 @@
 // ============================================================================
 // Datei   : core/game.js
 // Projekt : Neue Siedler
-// Version : v18.1.1 (2025-10-02)
+// Version : v18.3.0 (Build-Mode & Overlay-Fixes)
 // Zweck   : Spiel-Engine – Map laden/zeichnen, Placements, Units, Loop
 //
-// Wichtige Punkte in dieser Version:
-//  - Nutzt SiedlerMap (core/core.map.js) für Terrain-Tiles
-//  - FIX: Nach map.draw() wird die Canvas-Transform explizit auf Screen-Space
-//          zurückgesetzt, damit Ghost/Placements/HUD korrekt erscheinen
-//  - FIX: Robuste Map-Initialisierung + Guards, damit Start nie „ins Leere“ läuft
-//  - Icons/Sprites kommen aus Registry (iconsBase → id → URL)
-//  - Gebäude-Ghost zeigt nur Rahmen/Entrances (großes Ghost-Bild macht ui-place.js)
-//  - Platzierte Gebäude werden als Vollbild-Sprite in Footprint-Größe gezeichnet
+// Änderungen ggü. v18.1/18.2
+//  - NEU: exitBuildMode() beendet den Baumodus zuverlässig (confirm/cancel)
+//  - NEU: cb:place:preview trägt cssScale/cam/canvas mit → exakte UI-Positionierung
+//  - FIX: Nach map.draw() wird auf Screen-Space zurückgestellt (Transform=Identity)
+//  - Bestehendes Verhalten (Sprites/Placements/Pinch/Zoom) bleibt unverändert
 // ============================================================================
 
 (() => {
@@ -74,6 +71,17 @@
   const EPS   = 1e-6;
   const keyXY = (x,y)=>`${x},${y}`;
 
+  // Helper: CSS<->Canvas Skalierung (wichtig für iOS/Safari)
+  function getCssScale(){
+    const c = _state.canvas; if (!c) return { x:1, y:1, cr:null };
+    const cr = c.getBoundingClientRect();
+    return {
+      x: c.width  / Math.max(1, cr.width),
+      y: c.height / Math.max(1, cr.height),
+      cr
+    };
+  }
+
   // == Registry-Resolver =====================================================
   function iconsBase(){
     try { return (window.Registry?.get?.('iconsBase')) || 'assets/icons/buildings/'; }
@@ -94,7 +102,6 @@
       const list = window.Registry?.get?.('buildings') || [];
       for (const b of (list||[])){
         const id = String(b.id);
-        // erlaubt: icon/iconUrl; sprite/spriteUrl – alles wird über iconsBase relativ aufgelöst
         const iconUrl   = b.iconUrl   || joinBase(b.icon || b.iconId || b.iconPath);
         const spriteUrl = b.spriteUrl || joinBase(b.sprite || b.spriteId || b.spritePath || b.icon);
         if (iconUrl)   icons.set(id, iconUrl);
@@ -225,9 +232,7 @@
     // --- Welt (Tiles) -------------------------------------------------------
     map?.draw();
 
-    // --- FIX: Canvas-Transform auf Screen-Space zurücksetzen ---------------
-    // SiedlerMap.setTransform() setzt Weltkoordinaten. Für Ghost/HUD brauchen
-    // wir Bildschirmkoordinaten:
+    // --- WICHTIG: Canvas-Transform auf Screen-Space zurücksetzen -----------
     ctx.setTransform(1,0,0,1,0,0);
 
     // --- UI/Overlays --------------------------------------------------------
@@ -268,6 +273,28 @@
     }
   }
 
+  // == Build-Mode Helpers ====================================================
+  function exitBuildMode(reason = 'done'){
+    _state.preview = null;
+    _state.selectedBuilding = null;
+    _state.panActive = false; // sicher ist sicher
+    EVT('cb:place:preview', { invalid:true });
+    EVT('cb:build:mode', { active:false, reason });
+    log('build mode off ←', reason);
+  }
+
+  function emitPreviewEvent(payload){
+    // fügt cssScale/cam/canvas hinzu, damit das UI präzise positioniert
+    const { x:cssX, y:cssY } = getCssScale();
+    const ev = {
+      ...payload,
+      cam   : { x:_state.camX, y:_state.camY, z:_state.zoom },
+      cssScale: { x:cssX, y:cssY },
+      canvas: { w:_state.canvas?.width||0, h:_state.canvas?.height||0 }
+    };
+    EVT('cb:place:preview', ev);
+  }
+
   // Ghost – KEIN zusätzliches Engine-Icon (Bild kommt aus ui-place.js)
   function drawGhost(ctx){
     let gx=-1, gy=-1, id=_state.selectedBuilding;
@@ -275,7 +302,7 @@
     else if (id && inBoundsTile(_state.hover.x,_state.hover.y)){ gx=_state.hover.x; gy=_state.hover.y; }
 
     if (!inBoundsTile(gx,gy) || !id){
-      if (_state.preview && !inBoundsTile(gx,gy)) EVT('cb:place:preview', { invalid:true });
+      if (_state.preview && !inBoundsTile(gx,gy)) emitPreviewEvent({ invalid:true });
       return;
     }
 
@@ -300,7 +327,7 @@
       ctx.restore();
     }
 
-    EVT('cb:place:preview', {
+    emitPreviewEvent({
       id, gx, gy, sx:pos.sx, sy:pos.sy, size:s, invalid:!ok,
       w:def.size.w, h:def.size.h, door:{...def.door},
       entrances: def.entrances.slice(),
@@ -330,7 +357,7 @@
 
         log('map geladen', { mapId, tile:_state.tile, grid:[_state.gridW,_state.gridH] });
 
-        // --- An SiedlerMap übergeben (damit Tiles wirklich gezeichnet werden)
+        // An SiedlerMap übergeben (damit Tiles wirklich gezeichnet werden)
         if (_state.map?.loadMap) {
           await _state.map.loadMap(mapId);
         }
@@ -438,13 +465,13 @@
       const ok = canPlaceAtFootprint(gx,gy,_state.selectedBuilding);
       if (!ok){
         _state.preview = null;
-        EVT('cb:place:preview', { invalid:true });
+        emitPreviewEvent({ invalid:true });
       } else {
         _state.preview = { id:_state.selectedBuilding, gx, gy };
         const def = getBuildingDef(_state.selectedBuilding);
         const { sx, sy } = worldToScreen(gx*_state.tile, gy*_state.tile);
         const entrancesAbs = computeEntrancesAbs(gx, gy, def);
-        EVT('cb:place:preview', {
+        emitPreviewEvent({
           id:_state.preview.id, gx, gy, sx, sy, size:_state.tile*_state.zoom, invalid:false,
           w:def.size.w, h:def.size.h, door:{...def.door}, entrances:def.entrances.slice(), entrancesAbs
         });
@@ -503,7 +530,7 @@
     window.addEventListener('cb:build:select', (e)=>{
       _state.selectedBuilding = e?.detail?.id || null;
       _state.preview = null;
-      EVT('cb:place:preview', { invalid:true });
+      emitPreviewEvent({ invalid:true });
       log('select building', _state.selectedBuilding);
     });
 
@@ -516,18 +543,23 @@
           _state.placements.push({ id:_state.preview.id, x:d.gx, y:d.gy, w:def.size.w, h:def.size.h, door:{...def.door} });
           occupyFootprint(d.gx, d.gy, def.size.w, def.size.h);
           log('placed ✓', { id:_state.preview.id, x:d.gx, y:d.gy, w:def.size.w, h:def.size.h });
+
+          // 👉 Baumodus sauber verlassen, damit Pan/Zoom wieder frei ist
+          exitBuildMode('confirm');
+
+          // optionales Signal ans UI
+          EVT('cb:build:placed', { id:def.id, x:d.gx, y:d.gy, w:def.size.w, h:def.size.h });
+          return;
         } else {
           warn('confirm: Position inzwischen unplazierbar');
         }
       }
-      _state.preview = null;
-      EVT('cb:place:preview', { invalid:true });
+      // Fallback: Preview schließen und Modus verlassen
+      exitBuildMode('confirm-invalid');
     });
 
     window.addEventListener('cb:place:cancel', ()=>{
-      _state.preview = null;
-      _state.selectedBuilding = null;
-      EVT('cb:place:preview', { invalid:true });
+      exitBuildMode('cancel');
       log('place canceled');
     });
 
@@ -561,5 +593,5 @@
   }
   function getResources(){ return { ..._state.resources }; }
 
-  window.Game = { init, start, getState, getResources };
+  window.Game = { init, start, getState, getResources, map: _state.map };
 })();
