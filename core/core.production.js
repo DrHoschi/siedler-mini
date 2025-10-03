@@ -1,8 +1,8 @@
 /* ============================================================================
  * Datei   : core/core.production.js
  * Projekt : Neue Siedler (Epoche 1)
- * Version : v1.1.0 (2025-10-04)
- * Zweck   : Einfacher Produktions-Tick für Holzfäller, Fischer, Steinbruch
+ * Version : v1.2.0 (2025-10-04)
+ * Zweck   : Produktions-Tick liest Ressource & Zyklus aus Registry-Outputs
  * Events  : cb:res:change (bei Lageränderung am Gebäude)
  * ============================================================================
  */
@@ -15,28 +15,24 @@
   let timer = null, world = null;
 
   // ---------------------------- Helpers --------------------------------------
-  // Versucht, aus einer Instanz den Archetyp zu lesen (tolerant ggü. Feldnamen)
   function typeOf(b){
+    // tolerant: akzeptiere diverse Felder; fällt zurück auf b.id
     return b?.type || b?.kind || b?.key || b?.archetype || b?.baseId || b?.code || b?.cfgId || b?.id || '';
   }
-  function is(b, id){ const t=String(typeOf(b)); return t===id || t.endsWith(id) || t.includes(id); }
   function ensureStock(obj){ obj.stock = obj.stock || Object.create(null); return obj.stock; }
 
-  // Produktions-Parameter je Gebäudetyp (MVP-Zeiten/Cap)
-  const PROD = {
-    'b.lumberjack': { res:'res.wood',  every:5, cap:10, keep:0 },  // alle 5s ein Holz
-    'b.fisher'    : { res:'res.fish',  every:6, cap:10, keep:0 },  // alle 6s ein Fisch
-    'b.stonecutter':{ res:'res.stone', every:7, cap:10, keep:0 }   // alle 7s ein Stein
-  };
+  // Default-Zyklen, falls im Registry-Def kein "cycle" gesetzt ist
+  // (rein als Fallback; du kannst alles in data/buildings.json steuern)
+  const DEFAULT_CYCLE = 6;
 
-  function getProdMeta(b){
-    // aus Registry überschreiben, falls dort cycle/outputs definiert sind
-    const id = Object.keys(PROD).find(k => is(b, k)) || null;
-    const base = id ? { ...PROD[id] } : null;
-    const def  = (id && window.Registry?.getBuildingDef?.(id)) || null;
-    if (def?.cycle && base) base.every = Math.max(1, def.cycle|0);
-    // (optional: def.outputs → res-Typ ableiten)
-    return base;
+  function readProdMeta(b){
+    const id     = String(typeOf(b));
+    const def    = (window.Registry?.getBuildingDef?.(id)) || null;
+    const out0   = def?.outputs && def.outputs[0] ? def.outputs[0] : null;
+    const resId  = out0?.id || null;
+    const amount = Number.isFinite(+out0?.amount) ? (+out0.amount) : 1;
+    const every  = Number.isFinite(+def?.cycle) ? Math.max(1, def.cycle|0) : DEFAULT_CYCLE;
+    return (resId ? { res:resId, amount, every, cap:10 } : null);
   }
 
   // ---------------------------- Tick -----------------------------------------
@@ -45,7 +41,7 @@
     const list = Array.isArray(world.buildings) ? world.buildings : [];
 
     for (const b of list){
-      const meta = getProdMeta(b); if (!meta) continue;
+      const meta = readProdMeta(b); if (!meta) continue;
 
       b.__t = (b.__t||0) + 1;
       if (b.__t % meta.every !== 0) continue;
@@ -54,8 +50,8 @@
       const cur   = stock[meta.res] | 0;
       if (cur >= (meta.cap|0)) continue;
 
-      stock[meta.res] = cur + 1;
-      window.dispatchEvent(new CustomEvent('cb:res:change', { detail:{ src: b.id || typeOf(b), res: meta.res, delta:+1 } }));
+      stock[meta.res] = cur + meta.amount;
+      window.dispatchEvent(new CustomEvent('cb:res:change', { detail:{ src: typeOf(b), res: meta.res, delta:+meta.amount } }));
     }
   }
 
