@@ -56,8 +56,9 @@
     });
     root.appendChild(img);
 
-    // ✓-Button (links-oben, innerhalb)
-    okBtn = document.createElement('button');
+    // ✓-Button (links-oben, OK innerhalb)
+         // okBtn = document.createElement('button');
+    okBtn.innerHTML = '<img class="btn-ico" src="assets/icons/ok.svg" alt="OK">';
     okBtn.className = 'place-btn ok';
     okBtn.textContent = '✓';
     styleBtn(okBtn, '#2cc36b');
@@ -70,8 +71,9 @@
     });
     root.appendChild(okBtn);
 
-    // ✕-Button (rechts-oben, innerhalb)
-    cancelBtn = document.createElement('button');
+    // ✕-Button (rechts-oben, ABBRECHEN innerhalb)
+       // cancelBtn = document.createElement('button');
+    cancelBtn.innerHTML = '<img class="btn-ico" src="assets/icons/cancel.svg" alt="X">';
     cancelBtn.className = 'place-btn cancel';
     cancelBtn.textContent = '✕';
     styleBtn(cancelBtn, '#e5564c');
