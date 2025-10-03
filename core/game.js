@@ -125,15 +125,29 @@
       out.push({ex,ey,blocked});
     } return out;
   }
-  function canPlaceAtFootprint(g0,h0,id){
-    const def=getBuildingDef(id); const {w,h}=def.size;
-    if (!inBoundsFootprint(g0,h0,w,h)) return false;
-    for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) if (tileBlocked(g0+dx,g0?gy:gy,def), false){} // dummy to keep format
-    for(let dy=0;dy<h;dy++) for(let dx=0;dx<w;dx++) if (tileBlocked(g0+dx, h0+dy, def)) return false;
-    if (anyOccupiedWithinMargin(g0,h0,w,h,1)) return false;
-    const entrancesAbs=computeEntrancesAbs(g0,h0,def);
-    return entrancesAbs.some(e=>!e.blocked);
+  function canPlaceAtFootprint(g0, h0, id){
+  const def = getBuildingDef(id);
+  const { w, h } = def.size;
+
+  // 1) Bounds
+  if (!inBoundsFootprint(g0, h0, w, h)) return false;
+
+  // 2) Kacheln frei / Terrain erlaubt
+  for (let dy = 0; dy < h; dy++){
+    for (let dx = 0; dx < w; dx++){
+      if (tileBlocked(g0 + dx, h0 + dy, def)) return false;
+    }
   }
+
+  // 3) Sicherheitsabstand zum Rand anderer Gebäude
+  if (anyOccupiedWithinMargin(g0, h0, w, h, 1)) return false;
+
+  // 4) Mind. ein Eingang muss platzierbar sein
+  const entrancesAbs = computeEntrancesAbs(g0, h0, def);
+  if (!entrancesAbs.some(e => !e.blocked)) return false;
+
+  return true;
+}
 
   // == Kamera / Projektion ===================================================
   function clampCameraToMap(){
