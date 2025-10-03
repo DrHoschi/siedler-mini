@@ -5,16 +5,8 @@
   "tileSize": 64,
   "tileset": "assets/tiles/tileset.terrain.json",
   "layers": [
-    {
-      "name": "ground",
-      "type": "tiles",
-      "fill": "terrain_r4_c0"   // <- gleichmäßiger Wiesen-Frame
-    },
-    {
-      "name": "roads",
-      "type": "tiles",
-      "data": []
-    }
+    { "name": "ground", "type": "tiles", "fill": "terrain_r4_c0" },
+    { "name": "roads",  "type": "tiles", "data": [] }
   ],
   "objects": []
 }
