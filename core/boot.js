@@ -79,4 +79,16 @@
     // Optional zum Testen: Pfad-Overlay einschalten
     // window.PathOverlay?.toggle?.(true);
   });
+
+  // Beim Spielstart: Systeme (Production/Carriers/Overlay/HUD) verkabeln
+window.addEventListener('cb:game-start', (ev) => {
+  const world = ev.detail?.world || window.Game?.world || { buildings:[], units:[] };
+  try { window.Production?.start?.(world); } catch(e){ console.warn('Production start fail', e); }
+  try { window.Carriers?.start?.(world); }   catch(e){ console.warn('Carriers start fail', e); }
+  try { window.UnitOverlay?.start?.(); }     catch(e){ console.warn('UnitOverlay start fail', e); }
+  try { window.UIHud?.init?.(); }            catch(e){ console.warn('HUD init fail', e); }
+  // optional Debug:
+  // window.PathOverlay?.toggle?.(true);
+});
+  
 })();
