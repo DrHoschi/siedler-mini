@@ -1,20 +1,24 @@
 /* ============================================================================
  * Datei   : ui/ui-place.js
- * Version : v1.3.0 (2025-10-01)
- * Zweck   : Platzieren-UI (Ghost mit ✅/❌ an der Box)
+ * Version : v1.4.0 (2025-10-02)
+ * Zweck   : Platzieren-UI (Ghost + ✅/❌), DPI-/iOS-sicher
  *
  * Hört  :
- *   - cb:build:select  { id }                         (aus Baumenü)
- *   - cb:place:preview { id,gx,gy,sx,sy,size,invalid} (Live-Vorschau vom Game)
+ *   - cb:build:select  { id }
+ *   - cb:place:preview {
+ *       id,gx,gy, sx,sy, size, invalid,
+ *       w,h, door, entrances, entrancesAbs,
+ *       cam:{x,y,z}, cssScale:{x,y}, canvas:{w,h}
+ *     }
  * Sendet:
  *   - cb:place:confirm { id,gx,gy }
  *   - cb:place:cancel  {}
  *
- * Hinweise
- *   - Größe kommt aus detail.size ([w,h]) oder Default 3×3.
- *   - Position: bevorzugt Pixel (sx,sy), sonst Raster (gx,gy) * TILE.
- *   - Buttons werden per CSS positioniert: ✅ links oben, ❌ rechts oben.
- *   - Dieses Modul ist rein visuell. Die Engine bleibt Quelle der Wahrheit.
+ * WICHTIG:
+ *   - Wir rechnen ALLES, was vom Game in Canvas-Pixeln kommt, nach CSS-Pixel
+ *     um: cssPX = canvasPX / cssScale.{x|y}. So sitzen Ghost & Buttons exakt.
+ *   - Bestätigen/Cancellen nutzt IMMER gx,gy aus der Preview → keine
+ *     Rechenabweichungen mehr.
  * ========================================================================== */
 
 /* --------------------------- Pfad-Helfer (Icons) -------------------------- */
@@ -42,17 +46,16 @@ function spriteSrcFor(item){
 
   const MOD  = 'ui-place';
   const log  = (...a)=>(window.CBLog?.ok||console.log)(`[${MOD}]`, ...a);
-  const TILE = (window.Game && Game.tile) || 64;   // Kachelgröße (Fallback 64)
 
   // Zustand
   let root    = null;     // <div id="place-ui">
   let ghost   = null;     // <div class="place-box" id="place-ghost">
   let btnOk   = null;     // ✅
   let btnNo   = null;     // ❌
-  let current = null;     // aktuell aus Baumenü gewählt {id, size:[w,h], sprite?, icon?}
-  let lastPre = null;     // letztes Preview-Event (für gx,gy)
+  let current = null;     // gewählt aus Baumenü {id, size:[w,h], sprite?, icon?}
+  let lastPre = null;     // letztes Preview-Event
 
-  // Utils
+  // DOM-Helper
   const $  = (s, r=document)=>r.querySelector(s);
   const px = n => Math.round(n) + 'px';
   function normalizeSize(s){ return (Array.isArray(s) && s.length>=2)
@@ -63,14 +66,15 @@ function spriteSrcFor(item){
   function ensureDOM(){
     if (!root){
       root = $('#place-ui') || document.createElement('div');
-      root.id = 'place-ui';                 // CSS kümmert sich um Layering/pointer-events
+      root.id = 'place-ui';                         // CSS: fixed/absolute layer, pointer-events:none
       if (!root.parentNode) document.body.appendChild(root);
+      // Root selbst lässt Pointer durch, Buttons haben pointer-events:auto
+      Object.assign(root.style, { position:'fixed', left:0, top:0, inset:'0 0 0 0', pointerEvents:'none' });
     }
     if (!ghost){
       ghost = document.createElement('div');
       ghost.id = 'place-ghost';
-      ghost.className = 'place-box';        // nutzt deine ui-place.css
-      // minimale Basestyles, Rest via CSS
+      ghost.className = 'place-box';                // nutzt deine ui-place.css
       Object.assign(ghost.style, {
         position: 'absolute',
         pointerEvents: 'none',
@@ -82,15 +86,16 @@ function spriteSrcFor(item){
       btnOk.className = 'place-btn place-confirm';
       btnOk.textContent = '✅';
       btnOk.title = 'Bauen (Bestätigen)';
+      // Buttons selbst müssen klickbar sein:
+      btnOk.style.pointerEvents = 'auto';
       btnOk.addEventListener('click', (e)=>{
         e.stopPropagation(); e.preventDefault();
-        const id = (lastPre?.id) || (current?.id);
-        // Rasterkoordinaten aus Preview ableiten (Pixel→Grid, falls nötig)
-        const gx = (typeof lastPre?.gx === 'number') ? lastPre.gx
-                 : (typeof lastPre?.sx === 'number') ? Math.round(lastPre.sx / TILE) : 0;
-        const gy = (typeof lastPre?.gy === 'number') ? lastPre.gy
-                 : (typeof lastPre?.sy === 'number') ? Math.round(lastPre.sy / TILE) : 0;
-        window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail:{ id, gx, gy }}));
+        if (!lastPre) return;
+        const id = lastPre.id ?? current?.id;
+        // ❗ Immer gx,gy aus Preview verwenden – engine ist Quelle der Wahrheit
+        window.dispatchEvent(new CustomEvent('cb:place:confirm', {
+          detail:{ id, gx:lastPre.gx, gy:lastPre.gy }
+        }));
         hide();
       });
 
@@ -98,6 +103,7 @@ function spriteSrcFor(item){
       btnNo.className = 'place-btn place-cancel';
       btnNo.textContent = '❌';
       btnNo.title = 'Abbrechen';
+      btnNo.style.pointerEvents = 'auto';
       btnNo.addEventListener('click', (e)=>{
         e.stopPropagation(); e.preventDefault();
         window.dispatchEvent(new CustomEvent('cb:place:cancel'));
@@ -116,27 +122,49 @@ function spriteSrcFor(item){
   }
 
   /* ----------------------------- Rendering -------------------------------- */
-  function applySize(size){
+  /**
+   * Größe des Ghosts anwenden.
+   * d.size ist die Kachelgröße in CANVAS-Pixeln (tile*zoom).
+   * Wir rechnen auf CSS-Pixel um (→ / cssScale).
+   */
+  function applySizeFromPreview(d){
     ensureDOM();
-    const [w,h] = normalizeSize(size || current?.size);
-    ghost.style.setProperty('--s', px(TILE));       // falls CSS var nutzt
-    ghost.style.width  = px(w * TILE);
-    ghost.style.height = px(h * TILE);
+    const [wTiles,hTiles] = normalizeSize(d.size ? [d.w||current?.size?.[0], d.h||current?.size?.[1]] : current?.size);
 
-    // Sprite auf Boxgröße skalieren
+    // Kachelgröße (Canvas-Px) → CSS-Px
+    const tileCanvas = Number(d.size) || 64; // fallback
+    const cssX = d.cssScale?.x || 1;
+    const cssY = d.cssScale?.y || 1;
+    const tileCssW = tileCanvas / cssX;
+    const tileCssH = tileCanvas / cssY;
+
+    ghost.style.setProperty('--tile-w', px(tileCssW));
+    ghost.style.setProperty('--tile-h', px(tileCssH));
+    ghost.style.width  = px(wTiles * tileCssW);
+    ghost.style.height = px(hTiles * tileCssH);
+
+    // Sprite auf Boxgröße skalieren (optional)
     const src = spriteSrcFor(current || {});
     if (src){
       ghost.style.backgroundImage    = `url("${src}")`;
       ghost.style.backgroundRepeat   = 'no-repeat';
       ghost.style.backgroundPosition = 'center center';
-      ghost.style.backgroundSize     = `${w*TILE}px ${h*TILE}px`;
+      ghost.style.backgroundSize     = `${wTiles*tileCssW}px ${hTiles*tileCssH}px`;
+    } else {
+      ghost.style.backgroundImage = '';
     }
   }
 
-  function applyPosFromPreview(pre){
+  /**
+   * Position aus Preview anwenden.
+   * sx/sy kommen in CANVAS-Pixeln → auf CSS-Pixel umrechnen.
+   */
+  function applyPosFromPreview(d){
     ensureDOM();
-    const left = (typeof pre.sx === 'number') ? pre.sx : (pre.gx||0) * TILE;
-    const top  = (typeof pre.sy === 'number') ? pre.sy : (pre.gy||0) * TILE;
+    const cssX = d.cssScale?.x || 1;
+    const cssY = d.cssScale?.y || 1;
+    const left = (typeof d.sx === 'number') ? (d.sx / cssX) : (d.gx||0) * ((d.size||64)/cssX);
+    const top  = (typeof d.sy === 'number') ? (d.sy / cssY) : (d.gy||0) * ((d.size||64)/cssY);
     ghost.style.left = px(left);
     ghost.style.top  = px(top);
   }
@@ -147,17 +175,23 @@ function spriteSrcFor(item){
     const id   = ev.detail?.id;
     const list = (window.Registry && Registry.get) ? Registry.get('buildings') : [];
     current    = (list || []).find(b => b && String(b.id) === String(id)) || { id, size:[3,3] };
-    if (ghost) applySize(current.size); // falls Ghost bereits sichtbar → sofort anpassen
+    // Falls der Ghost schon sichtbar ist, beim nächsten Preview wird Größe/Pos aktualisiert.
   });
 
-  // 2) Live-Preview der Engine – Ghost zeigen/positionieren
+  // 2) Live-Preview der Engine – Ghost zeigen/positionieren (DPI-sicher)
   window.addEventListener('cb:place:preview', (e)=>{
     const d = e.detail || {};
     lastPre = d;
     if (d.invalid) { hide(); return; }     // ungültig → UI weg
 
     ensureDOM();
-    applySize(d.size);
+    // Größe & Position ausschließlich anhand der Preview-Daten bestimmen
+    // (inkl. cssScale → CSS-Pixel)
+    const sizeHint = current?.size || [3,3];
+    // Fülle w/h falls nicht gesetzt (z. B. beim ersten Event)
+    d.w = d.w || sizeHint[0]; d.h = d.h || sizeHint[1];
+
+    applySizeFromPreview(d);
     applyPosFromPreview(d);
   });
 
