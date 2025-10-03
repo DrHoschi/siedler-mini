@@ -2,18 +2,26 @@
  * Datei   : ui/css/ui-place.css
  * Zweck   : Schwebende Platzier-UI (Ghost + Confirm/Cancel-Buttons)
  * Layer   : über Canvas/HUD, unter Inspector
- * Hinweis : Die Logik feuert Events; dieses CSS ist rein visuell.
+ * Hinweis : Logik/Events kommen aus ui-place.js – dieses CSS ist rein visuell.
  * ========================================================================== */
 
 /* ---- Layer-Konstanten ---------------------------------------------------- */
 :root{
   /* Orientierung: HUD/Dock ~950, Startpanel 1000, Inspector darüber */
   --place-z: 980;
-  /* Standard-Kachelgröße als Fallback (kann vom JS überschrieben werden) */
+
+  /* Fallback-Kachelgröße, falls das JS nichts setzt */
   --tile: 64px;
+
+  /* Innenabstand der Buttons zur Ghost-Box (in der Ecke, nicht außerhalb) */
+  --btn-inset: 8px;
+
+  /* Button-Größe (kann über Media Query vergrößert werden) */
+  --btn-size: 32px;
+  --btn-radius: 10px;
 }
 
-/* ---- Root-Overlay (nimmt die Klicks NICHT selbst an) --------------------- */
+/* ---- Root-Overlay (nimmt die Klicks NICHT an) ---------------------------- */
 #place-ui{
   position: fixed;
   inset: 0;
@@ -24,25 +32,25 @@
 /* ---- Ghost-Box (liegt exakt über dem Gebäude-Ghost) ---------------------- */
 .place-box{
   position: absolute;
-  /* Die Größe kann das JS bewusst per --s (Pixelbreite) setzen.
-     Wenn nicht gesetzt: 1 Tile als Fallback. */
+  /* Größe wird vom JS gesetzt; Fallback = 1 Kachel */
   width:  var(--s, var(--tile));
   height: var(--s, var(--tile));
-  transform: translate(0, 0);        /* keine Offsets */
-  pointer-events: none;              /* Buttons erben später wieder auto */
-  /* optionaler Rahmen/Unterlegung, falls gewünscht:
-     outline: 2px solid rgba(0,255,0,.55);
-     background: rgba(0,200,0,.18);
-  */
+  transform: translate(0, 0);
+  pointer-events: none;              /* Buttons erben später 'auto' */
+  box-sizing: border-box;
+
+  /* Optionaler visueller Rahmen/Unterlegung: */
+  /* outline: 2px solid rgba(120,200,120,.85);
+     background: rgba(120,200,120,.18); */
 }
 
-/* ---- Buttons (klickbar, an der Box „angeschraubt“) ----------------------- */
+/* ---- Buttons (klickbar, an der Box „angeschraubt“, INNEN in der Ecke) ---- */
 .place-btn{
   position: absolute;
   pointer-events: auto;              /* darf geklickt werden */
-  width:  32px;
-  height: 32px;
-  border-radius: 10px;
+  width:  var(--btn-size);
+  height: var(--btn-size);
+  border-radius: var(--btn-radius);
   border: 1px solid rgba(255,255,255,.18);
   box-shadow: 0 8px 20px rgba(0,0,0,.26);
   display: inline-flex;
@@ -65,25 +73,25 @@
 .place-btn:hover   { transform: translateY(-1px); }
 .place-btn:active  { transform: translateY( 0 ); }
 
-/* ✅ BESTÄTIGEN – OBEN LINKS (dein Wunsch) */
+/* ✅ BESTÄTIGEN – OBEN LINKS (INNEN) */
 .place-confirm{
-  left: -12px;
-  top:  -12px;
+  left: var(--btn-inset);
+  top:  var(--btn-inset);
   background: linear-gradient(#2a8e55, #1f6d3a);
   border-color: #1f6d3a;
 }
 
-/* ❌ ABBRECHEN – OBEN RECHTS */
+/* ❌ ABBRECHEN – OBEN RECHTS (INNEN) */
 .place-cancel{
-  right: 12px;
-  top:   12px;
+  right: var(--btn-inset);
+  top:   var(--btn-inset);
   background: linear-gradient(#b83c2e, #8e2e23);
   border-color: #8e2e23;
 }
 
 /* ---- Alternative, große Aktionsbuttons (Bottom-Bar, optional) ------------ */
-/* Kannst du verwenden, wenn du zusätzlich großflächige Buttons unten willst.
-   HTML-Container `.place-actions` bleibt ansonsten unsichtbar/unbenutzt.    */
+/* Verwenden, wenn du zusätzlich großflächige Buttons unten willst.
+   Ansonsten bleibt .place-actions unbenutzt (kein DOM nötig).               */
 .place-actions{
   position: fixed;
   left:  12px;
@@ -109,19 +117,18 @@
 .place-actions .btn-accept{ background:#19b34a; }
 .place-actions .btn-cancel{ background:#d63b3b; }
 
-/* ---- High-Contrast-Varianten der kleinen Buttons (falls du lieber Uni-Farben willst) */
+/* ---- Einfache Uni-Farben (falls du Gradients nicht magst) ---------------- */
 .place-btn.place-confirm{ background:#19b34a; border-color:#158d3a; }
 .place-btn.place-cancel { background:#d63b3b; border-color:#b1322f; }
 
 /* ---- Mobile/Tap-Größe (bessere Trefffläche auf kleinen Screens) ---------- */
 @media (max-width: 480px){
-  .place-btn{
-    width:  36px;
-    height: 36px;
-    font-size: 20px;
+  :root{
+    --btn-size: 36px;
+    --btn-radius: 12px;
+    --btn-inset: 8px; /* bleibt innen */
   }
-  .place-confirm{ left:  -14px; top: -14px; }
-  .place-cancel { right: -14px; top: -14px; }
+  .place-btn{ font-size: 20px; }
 }
 
 /* ---- Bewegungsreduktion respektieren ------------------------------------- */
