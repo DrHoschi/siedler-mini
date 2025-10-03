@@ -564,24 +564,33 @@
   }
 
   async function start(mapId){
-    _state.mapId=mapId||_state.mapId||'data/maps/map-mini.json';
-    _state.started=true;
+  _state.mapId  = mapId || _state.mapId || 'data/maps/map-mini.json';
+  _state.started = true;
 
-    await loadMap(_state.mapId);
-    _state.map?.reload?.();
+  await loadMap(_state.mapId);
+  _state.map?.reload?.();
 
-    // Größe & Kamera aktualisieren und ZENTRIEREN
+  // 1) Größe aktualisieren
+  onResize();
+
+  // 2) Zentrieren JETZT (falls schon genügend Maße da sind)
+  centerCameraOnMap();
+
+  rebuildOccupied();
+
+  cancelAnimationFrame(_state.rafId);
+  _state.lastTs = 0;
+  _state.rafId  = requestAnimationFrame(frame);
+
+  EVT('cb:res:change', { ..._state.resources });
+
+  // 3) Und sicherheitshalber NOCHMAL im nächsten Tick zentrieren,
+  //    wenn CSS/Canvas/Viewport garantiert final sind.
+  requestAnimationFrame(() => {
     onResize();
     centerCameraOnMap();
-
-    rebuildOccupied();
-
-    cancelAnimationFrame(_state.rafId);
-    _state.lastTs=0;
-    _state.rafId=requestAnimationFrame(frame);
-
-    EVT('cb:res:change',{..._state.resources});
-  }
+  });
+}
 
   const getState=()=>{ const { started,mapId,tile,gridW,gridH,placements,selectedBuilding }=_state; return { started,mapId,tile,gridW,gridH,placements:placements.slice(),selectedBuilding }; };
   const getResources=()=>({ ..._state.resources });
