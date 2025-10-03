@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-01T14:19:26.815Z",
+  "createdAt": "2025-10-03T18:36:05.203Z",
   "root": ".",
-  "count": 449,
+  "count": 450,
   "entries": [
     {
       "type": "dir",
@@ -35,6 +35,11 @@
       "type": "file",
       "path": ".github/workflows/danger.yml",
       "size": 311
+    },
+    {
+      "type": "file",
+      "path": ".github/workflows/export-filelist.yml",
+      "size": 1076
     },
     {
       "type": "file",
@@ -135,6 +140,11 @@
       "type": "file",
       "path": "Archiv/core/path-overlay.js",
       "size": 2761
+    },
+    {
+      "type": "file",
+      "path": "Archiv/core/registry.json-adapter.js",
+      "size": 3232
     },
     {
       "type": "file",
@@ -1396,7 +1406,7 @@
     {
       "type": "file",
       "path": "core/core.map.js",
-      "size": 4274
+      "size": 8652
     },
     {
       "type": "file",
@@ -1411,7 +1421,7 @@
     {
       "type": "file",
       "path": "core/core.render.js",
-      "size": 8436
+      "size": 1559
     },
     {
       "type": "file",
@@ -1426,12 +1436,12 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 24067
+      "size": 26870
     },
     {
       "type": "file",
       "path": "core/map-runtime.js",
-      "size": 5864
+      "size": 9997
     },
     {
       "type": "file",
@@ -1447,11 +1457,6 @@
       "type": "file",
       "path": "core/registry.js",
       "size": 6846
-    },
-    {
-      "type": "file",
-      "path": "core/registry.json-adapter.js",
-      "size": 3232
     },
     {
       "type": "file",
@@ -1499,7 +1504,7 @@
     {
       "type": "file",
       "path": "data/maps/map-mini.json",
-      "size": 3585
+      "size": 283
     },
     {
       "type": "file",
@@ -1529,7 +1534,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 1620
+      "size": 1535
     },
     {
       "type": "file",
@@ -1966,7 +1971,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 8929
+      "size": 7114
     },
     {
       "type": "file",
@@ -1986,7 +1991,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 1583
+      "size": 978
     },
     {
       "type": "file",
@@ -2105,7 +2110,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 6338
+      "size": 12202
     },
     {
       "type": "file",
@@ -2145,7 +2150,7 @@
     {
       "type": "file",
       "path": "ui/ui-place.js",
-      "size": 2634
+      "size": 7054
     },
     {
       "type": "file",
@@ -2165,17 +2170,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43998
+      "size": 44001
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16677
+      "size": 16680
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 11191
+      "size": 9877
     },
     {
       "type": "file",
