@@ -662,4 +662,14 @@
   });
 
   window.Game = { init, start, getState, getResources };
+
+  // UI-Hook: Sprite-URL (oder Icon-Fallback) abrufen
+window.Game.__spriteUrlById = (id) => {
+  try {
+    return (typeof getSpriteUrl === 'function' && getSpriteUrl(id)) ||
+           (typeof getIconUrl   === 'function' && getIconUrl(id))   ||
+           null;
+  } catch { return null; }
+};
+  
 })();
