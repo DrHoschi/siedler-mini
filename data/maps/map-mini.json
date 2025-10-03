@@ -1,41 +1,19 @@
 {
-  "version": "16.0.3",
-  "width": 16,
-  "height": 10,
+  "version": "16.0.4",
+  "width": 76,
+  "height": 64,
   "tileSize": 64,
   "tileset": "assets/tiles/tileset.terrain.json",
   "layers": [
     {
       "name": "ground",
       "type": "tiles",
-      "data": [
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"],
-        ["terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0","terrain_r0_c0"]
-      ]
+      "fill": "terrain_r4_c0"   // <- gleichmäßiger Wiesen-Frame
     },
     {
       "name": "roads",
       "type": "tiles",
-      "data": [
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""]
-      ]
+      "data": []
     }
   ],
   "objects": []
