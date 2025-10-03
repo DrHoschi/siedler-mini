@@ -1,86 +1,71 @@
 /* ============================================================================
- * Datei: core.production.js
- * Projekt: Siedler-Mini
- * Version: v17.0.0
- * Zweck:
- *   - Produktions-Tick (Gebäude produzieren Rohstoffe)
- *   - Überschuss versenden → Carrier spawnen
- *   - Zielwahl: nächste Drop-Struktur (Depot/HQ/Townhall) über Tür-Kachel
- *   - Carrier-Glue: trySpawnCarrier()
+ * Datei   : core/core.production.js
+ * Projekt : Neue Siedler (Epoche 1)
+ * Version : v1.1.0 (2025-10-04)
+ * Zweck   : Einfacher Produktions-Tick für Holzfäller, Fischer, Steinbruch
+ * Events  : cb:res:change (bei Lageränderung am Gebäude)
  * ============================================================================
  */
-(function(ns){
+(function(root,factory){ root.Production = factory(); })(this, function(){
   'use strict';
-  if (!ns || !ns.state) { console.error('[production] GameCore.env fehlt'); return; }
 
-  var S = ns.state;
-  var U = ns.util;
-  var E = ns.Entities;
+  // ---------------------------- Konstanten -----------------------------------
+  const LOG = (window.CBLog?.ok || console.log).bind(console, '[production]');
+  const TICK_MS = 1000; // 1 s
+  let timer = null, world = null;
 
-  // --------------------------- Tür-basierte Zielwahl -------------------------
-  function findNearestDropDoor(sx,sy){
-    var best=null, bestD=1e9;
-    for (var i=0;i<S.entities.length;i++){
-      var e=S.entities[i];
-      if (e.key!=='depot' && e.key!=='hq' && e.key!=='townhall') continue;
-      var door=E.pickEntryDoor(e);
-      if (!door) continue;
-      if (E.getObstacleAt(door.x,door.y)) continue;
-      var d=Math.abs(door.x-sx)+Math.abs(door.y-sy);
-      if (d<bestD){ bestD=d; best={x:door.x,y:door.y}; }
-    }
-    return best;
+  // ---------------------------- Helpers --------------------------------------
+  // Versucht, aus einer Instanz den Archetyp zu lesen (tolerant ggü. Feldnamen)
+  function typeOf(b){
+    return b?.type || b?.kind || b?.key || b?.archetype || b?.baseId || b?.code || b?.cfgId || b?.id || '';
+  }
+  function is(b, id){ const t=String(typeOf(b)); return t===id || t.endsWith(id) || t.includes(id); }
+  function ensureStock(obj){ obj.stock = obj.stock || Object.create(null); return obj.stock; }
+
+  // Produktions-Parameter je Gebäudetyp (MVP-Zeiten/Cap)
+  const PROD = {
+    'b.lumberjack': { res:'res.wood',  every:5, cap:10, keep:0 },  // alle 5s ein Holz
+    'b.fisher'    : { res:'res.fish',  every:6, cap:10, keep:0 },  // alle 6s ein Fisch
+    'b.stonecutter':{ res:'res.stone', every:7, cap:10, keep:0 }   // alle 7s ein Stein
+  };
+
+  function getProdMeta(b){
+    // aus Registry überschreiben, falls dort cycle/outputs definiert sind
+    const id = Object.keys(PROD).find(k => is(b, k)) || null;
+    const base = id ? { ...PROD[id] } : null;
+    const def  = (id && window.Registry?.getBuildingDef?.(id)) || null;
+    if (def?.cycle && base) base.every = Math.max(1, def.cycle|0);
+    // (optional: def.outputs → res-Typ ableiten)
+    return base;
   }
 
-  // --------------------------- Carrier-Glue ----------------------------------
-  function trySpawnCarrier(from,to){
-    try{
-      if (window.PathFinder && PathFinder.setRoadMask) PathFinder.setRoadMask(S.roads);
-      if (window.PathFinder && PathFinder.setObstacleProvider) PathFinder.setObstacleProvider(E.getObstacleAt);
-      if (window.Carriers && Carriers.spawn){
-        return Carriers.spawn({ from:from, to:to });
-      }
-    }catch(_){}
-    return null;
-  }
+  // ---------------------------- Tick -----------------------------------------
+  function tick(){
+    if (!world) return;
+    const list = Array.isArray(world.buildings) ? world.buildings : [];
 
-  // --------------------------- Produktions-Tick ------------------------------
-  function tick(dt){
-    for (var i=0;i<S.entities.length;i++){
-      var e=S.entities[i];
-      if (!e.prod) continue;
+    for (const b of list){
+      const meta = getProdMeta(b); if (!meta) continue;
 
-      // Produktion
-      e.tickAcc=(e.tickAcc||0)+dt*e.prod.rate;
-      if (e.tickAcc>=1){
-        var add=Math.floor(e.tickAcc); e.tickAcc-=add;
-        var t=e.prod.type, cur=(e.stock[t]|0), cap=e.prod.cap|0;
-        if (cur<cap){ e.stock[t]=Math.min(cap,cur+add); }
-      }
+      b.__t = (b.__t||0) + 1;
+      if (b.__t % meta.every !== 0) continue;
 
-      // Überschuss versenden
-      var type=e.prod.type, keep=e.prod.keep|0, have=(e.stock[type]|0);
-      if (have>keep){
-        var src=E.pickExitDoor(e)||{x:e.tx+(e.wTiles>>1), y:e.ty+(e.hTiles>>1)};
-        var dst=findNearestDropDoor(src.x,src.y);
-        if (dst){
-          e._sendAcc=(e._sendAcc||0)+dt;
-          if (e._sendAcc>1.0){
-            e._sendAcc=0;
-            var c=trySpawnCarrier(src,dst);
-            if (c){
-              e.stock[type]=Math.max(keep, e.stock[type]-1);
-              ns.ok('[auto] Carrier gestartet von',src.x,src.y,'→',dst.x,dst.y);
-            }
-          }
-        }
-      }
+      const stock = ensureStock(b);
+      const cur   = stock[meta.res] | 0;
+      if (cur >= (meta.cap|0)) continue;
+
+      stock[meta.res] = cur + 1;
+      window.dispatchEvent(new CustomEvent('cb:res:change', { detail:{ src: b.id || typeOf(b), res: meta.res, delta:+1 } }));
     }
   }
 
-  // --------------------------- Export ----------------------------------------
-  ns.Production = { tick:tick, findNearestDropDoor:findNearestDropDoor };
+  // ---------------------------- API ------------------------------------------
+  function start(worldRef){
+    world = worldRef || { buildings:[], units:[] };
+    stop(); timer = setInterval(tick, TICK_MS);
+    LOG('gestartet (Gebäude:%d)', world.buildings?.length|0);
+  }
+  function stop(){ if (timer) clearInterval(timer), timer=null; }
 
-  ns.ok('[production] Modul geladen (v17.0.0)');
-
-})(window.GameCore = window.GameCore || {});
+  return { start, stop };
+});
