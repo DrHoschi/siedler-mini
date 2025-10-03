@@ -1,39 +1,89 @@
-/* Root-Overlay liegt deckungsgleich über dem Canvas.
-   Du kannst statt body auch einen Canvas-Container benutzen; wichtig ist,
-   dass left/top/width/height in JS strikt gesetzt werden. */
+/* ============================================================================
+ * Datei   : ui/css/ui-place.css
+ * Zweck   : Overlay fürs Platzieren (Sprite + ✓/✕-Buttons)
+ * Stand   : v3.3.0 – robust: hoher z-index, saubere Pointer-Events,
+ *           scharfe Pixel, ohne DOM-Messungen
+ * Hinweis : Das Overlay wird absolut positioniert. Sorge dafür, dass der
+ *           übergeordnete Container des Canvas notfalls 'position: relative'
+ *           hat, ODER hänge das Overlay direkt an <body> (dann passt es auch).
+ * ============================================================================ */
+
+/* Root-Overlay liegt deckungsgleich über dem Canvas */
 .place-overlay {
-  position: absolute;
-  z-index: 40;            /* über Canvas, unter HUD, falls nötig anpassen */
-  pointer-events: none;   /* Klicks gehen standardmäßig durch */
+  position: absolute;       /* passt zu der JS-Positionierung (left/top/width/height) */
+  left: 0;
+  top:  0;
+  z-index: 2000;            /* sicher über dem Canvas/HUD; bei Bedarf anpassen */
+  pointer-events: none;     /* standard: durchklickbar – Buttons aktivieren wir separat */
+  contain: layout paint;    /* bessere Performance beim Repositionieren */
+  will-change: left, top, width, height;
 }
 
-/* Bild der großen Vorschau (Sprite) */
+/* Großes Vorschau-Bild (Sprite/Icon) im Overlay */
 .place-sprite {
   position: absolute;
   left: 0; top: 0;
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Scharfe Pixel für Pixel-Art: */
   image-rendering: pixelated;
-  pointer-events: none;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  pointer-events: none;     /* Bild selbst bleibt durchklickbar */
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 /* Buttons sitzen innerhalb der Fläche; pointer-events aktiv */
 .place-btn {
   position: absolute;
-  pointer-events: auto;
-  width: 32px; height: 32px;
+  pointer-events: auto;     /* Buttons müssen klickbar sein */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   border: none;
+
   font-weight: 700;
-  line-height: 32px;
-  text-align: center;
+  font-size: 18px;
+  line-height: 1;
+
+  color: #fff;
+  cursor: pointer;
   box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  transition: transform 80ms ease, filter 80ms ease;
 }
 
-.place-btn.ok {
-  background: #2cc36b;
-  color: #fff;
+.place-btn:active {
+  transform: translateY(1px);
+  filter: brightness(.95);
 }
+
+/* ✓ (links-oben) – Grundfarbe & leichte Verlaufoptik */
+.place-btn.ok {
+  background: linear-gradient(#2fc977, #1fa864);
+}
+
+/* ✕ (rechts-oben) */
 .place-btn.cancel {
-  background: #e5564c;
-  color: #fff;
+  background: linear-gradient(#e55f57, #c94c45);
+}
+
+/* Touch-Geräte: Buttons etwas größer für bessere Trefferfläche */
+@media (pointer: coarse) {
+  .place-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    border-radius: 10px;
+  }
+}
+
+/* Optional: High-Contrast / Reduced Motion Feinschliff */
+@media (prefers-reduced-motion: reduce) {
+  .place-btn { transition: none; }
 }
