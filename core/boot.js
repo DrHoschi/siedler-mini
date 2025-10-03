@@ -1,12 +1,8 @@
 // ============================================================================
 // Datei : core/boot.js
 // Projekt: Neue Siedler
-// Version: v1.0.1
-// Zweck : Orchestrierung: UI → Assets → Registry → (Start-Event) → Game
-// Events: wartet auf cb:ui-ready, cb:assets-ready, cb:registry-ready
-//         startet Game NUR bei cb:start:new | cb:start:continue
-// Hinweise:
-//   • Kein Autostart per Default (optional via ?autostart=1 oder localStorage('dev.autostart')==='1')
+// Version: v1.1.0 (2025-10-04)
+// Zweck : Orchestrierung UI→Assets→Registry→Game + Systeme (Production/Carrier)
 // ============================================================================
 (() => {
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[boot]', ...a);
@@ -14,7 +10,7 @@
   const err  = (...a) => (window.CBLog?.err  || console.error)('[boot]', ...a);
   const EVT  = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
 
-  const ready = { ui:false, assets:false, registry:true /* optional vorerst */, gameInit:false };
+  const ready = { ui:false, assets:false, registry:false, gameInit:false };
   let startRequested = null; // 'new' | 'continue' | null
 
   const qs = new URLSearchParams(location.search);
@@ -42,29 +38,45 @@
     if (!allReady() || !requested()) return;
     const mapId = canvas()?.dataset?.map || 'data/maps/map-mini.json';
     log('game-start →', { mapId, via: startRequested });
-    // Boot emittiert game-start (UI reagiert darauf: HUD/Dock zeigen, BG ausblenden)
     EVT('cb:game-start', { mapId });
-    // Engine starten (Game emittiert NICHT noch einmal cb:game-start)
+
+    // Engine starten
     window.Game?.start?.(mapId);
   }
 
-  // --- Wiring ---
+  // UI ready → Assets laden
   window.addEventListener('cb:ui-ready', () => {
     ready.ui = true; log('ui-ready ✓');
     maybeInitGame();
-    // Assets laden (Stub meldet sofort „ready“ im nächsten Tick)
     window.Assets?.loadAll?.();
     if (devAutostart) startRequested = 'new';
     tryStart();
   });
 
-  window.addEventListener('cb:assets-ready', () => { ready.assets = true; log('assets-ready ✓'); tryStart(); });
-  window.addEventListener('cb:assets:ready', () => { ready.assets = true; log('assets-ready (alias) ✓'); tryStart(); });
+  // Assets ready → Registry init
+  window.addEventListener('cb:assets-ready', async () => {
+    ready.assets = true; log('assets-ready ✓');
+    // Registry starten (lädt buildings.json, emittiert cb:registry:ready)
+    try {
+      await window.Registry?.init?.();
+    } catch(e){ warn('Registry init Fehler:', e); }
+    tryStart();
+  });
+  window.addEventListener('cb:assets:ready', ()=>window.dispatchEvent(new Event('cb:assets-ready')));
 
-  // Registry (falls/ sobald eingebaut)
-  window.addEventListener('cb:registry-ready', () => { ready.registry = true; log('registry-ready ✓'); tryStart(); });
+  // Registry ready
+  window.addEventListener('cb:registry:ready', () => { ready.registry = true; log('registry-ready ✓'); tryStart(); });
 
   // Start-Buttons
   window.addEventListener('cb:start:new',      () => { startRequested = 'new';      log('start:new');      tryStart(); });
   window.addEventListener('cb:start:continue', () => { startRequested = 'continue'; log('start:continue'); tryStart(); });
+
+  // Beim Spielstart: Systeme (Production/Carriers/Overlay) verkabeln
+  window.addEventListener('cb:game-start', (ev) => {
+    const world = ev.detail?.world || window.Game?.world || { buildings:[], units:[] };
+    try { window.Production?.start?.(world); } catch(e){ warn('Production start fail', e); }
+    try { window.Carriers?.start?.(world); }   catch(e){ warn('Carriers start fail', e); }
+    // Optional zum Testen: Pfad-Overlay einschalten
+    // window.PathOverlay?.toggle?.(true);
+  });
 })();
