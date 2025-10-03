@@ -1,359 +1,149 @@
 /* ============================================================================
  * Datei   : ui/ui-build.js
- * Version : v2.1.1 (2025-10-01)
- * Zweck   : Build-Dock UI + API (window.UIBuild)
- *
- * Öffentliche API (window.UIBuild):
- *   - mount(host?)                 // in <aside id="build-panel"> montieren
- *   - setCategories(cats[])        // [{id,label}]
- *   - setItems(items[])            // [{id,cat,label,icon,cost,enabled}]
- *   - setIconsBase(base | base[])  // "assets/ui/build/" ODER ["a/","b/"]
- *   - rerender()                   // UI neu zeichnen
- *   - open() / close()             // Dock sichtbar/unsichtbar
- *
- * Daten-Modelle:
- *   categories[] = { id, label }
- *   items[]      = { id, cat, label, icon, cost, enabled }
- *
- * Hinweise:
- *   - Icons: relative Namen (z.B. "hq" oder "hq.png") werden mit iconsBase
- *     kombiniert. Absolut-URLs (http(s)://), Root-Pfade (/…), oder data:-URIs
- *     werden unverändert benutzt.
- *   - Dieses Modul öffnet das Dock standardmäßig erst bei cb:game-start.
- * ========================================================================== */
-
+ * Projekt : Neue Siedler
+ * Version : v2.2.0 (2025-10-04)
+ * Zweck   : Build-Dock (Bilder/Labels/Kosten) + Events (cb:build:select)
+ * API     : window.UIBuild.mount(el?), .setCategories(), .setItems(), .open()
+ * ============================================================================
+ */
 (function(){
   'use strict';
 
-  // --------------------------------------------------------------------------
-  // Logging
-  // --------------------------------------------------------------------------
-  const LOG = (window.CBLog && CBLog.info) ? CBLog : console;
+  // ---------------------------- Konstanten/Logging ---------------------------
+  const LOG = (window.CBLog?.info || console.log).bind(console, '[ui-build]');
 
-  // --------------------------------------------------------------------------
-  // Interner Zustand
-  // --------------------------------------------------------------------------
-  let host = null;            // Mount-Host (z.B. <aside id="build-panel">)
-  let cats = [];              // Kategorien [{id,label}]
-  let items = [];             // Items      [{id,cat,label,icon,cost,enabled}]
-  let activeCat  = null;      // aktuelle Kategorie-ID
-  let activeItem = null;      // aktuell markiertes Item (ID)
+  // ---------------------------- Interner Zustand -----------------------------
+  let host = null;                 // Mount-Host (z.B. <aside id="build-panel">)
+  let cats = [];                   // [{id,label}]
+  let items = [];                  // [{id,cat,label,icon,cost,enabled}]
+  let activeCat = null;
+  let activeItem = null;
+  let iconBase = 'assets/ui/build/';
 
-  // Icons-Basis (ein oder mehrere Pfade; final immer mit Slash)
-  let iconBases = ['assets/icons/buildings/'];
+  // ---------------------------- Helpers -------------------------------------
+  const $  = (s,r=document)=>r.querySelector(s);
+  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
 
-  // Shorthands
-  const $  = (s, r=document)=>r.querySelector(s);
-  const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-
-  // --------------------------------------------------------------------------
-  // 1) Grundgerüst (Markup) sicherstellen
-  // --------------------------------------------------------------------------
   function ensureScaffold(){
     if (!host) return null;
-
     if (!host.querySelector('.ui-build-wrap')){
-      host.innerHTML = '';
-
-      const wrap  = document.createElement('div');
-      wrap.className = 'ui-build-wrap';
-
-      const catsU = document.createElement('ul');
-      catsU.id = 'build-cats';
-      catsU.className = 'build-cats';
-
-      const listU = document.createElement('ul');
-      listU.id = 'build-items';
-      listU.className = 'build-list';
-
-      wrap.append(catsU, listU);
-      host.appendChild(wrap);
+      host.innerHTML = `
+        <div class="ui-build-wrap">
+          <ul id="build-cats" class="build-cats"></ul>
+          <ul id="build-items" class="build-list"></ul>
+        </div>
+      `;
+      const dock = document.getElementById('build-dock');
+      if (dock){ dock.hidden=false; dock.classList.remove('hidden'); }
+      host.hidden=false; host.classList.remove('hidden');
     }
-
-    // Dock-Hintergrund sichtbar schalten
-    const dock = document.getElementById('build-dock');
-    if (dock){ dock.hidden = false; dock.classList.remove('hidden'); }
-
-    // Panel selbst sichtbar
-    host.hidden = false;
-    host.classList.remove('hidden');
-
-    return { cats: $('#build-cats', host), items: $('#build-items', host) };
+    return { cats: $('#build-cats',host), items: $('#build-items',host) };
   }
 
-  // --------------------------------------------------------------------------
-  // 2) Fallback-Daten aus der Registry (wenn Bridge noch nichts gesetzt hat)
-  // --------------------------------------------------------------------------
-  function fallbackFromRegistry(){
-    const rc = (window.Registry?.get?.('categories') || []).map(c => ({
-      id: String(c.id),
-      label: String(c.label ?? c.id)
-    }));
-
-    const ri = (window.Registry?.get?.('buildings') || []).map(b => ({
-      id: String(b.id),
-      cat: String(b.cat ?? b.category ?? 'misc'),
-      label: String(b.label ?? b.name ?? b.id),
-      icon: (b.icon || b.sprite || ''),   // relativer Name oder kompletter Pfad
-      cost: (b.cost || null),
-      enabled: (b.enabled !== false)
-    }));
-
-    return { rc, ri };
+  function adoptFromRegistry(){
+    // Kategorien
+    if (!cats.length) {
+      cats = (window.Registry?.get?.('categories') || []).map(c => ({ id:String(c.id), label:String(c.label ?? c.id) }));
+    }
+    // Items (Buildings)
+    if (!items.length) {
+      items = (window.Registry?.get?.('buildings') || []).map(b => ({
+        id:String(b.id),
+        cat:String(b.cat || 'misc'),
+        label:String(b.label || b.id),
+        icon:(b.icon || b.sprite || ''),
+        cost:(b.cost || null),
+        enabled:(b.enabled !== false)
+      }));
+    }
+    // iconsBase
+    iconBase = window.Registry?.get?.('iconsBase') || window.Registry?.get?.('meta')?.iconsBase || iconBase;
+    if (iconBase && !iconBase.endsWith('/')) iconBase += '/';
   }
 
-  // --------------------------------------------------------------------------
-  // 3) Icons: Basen setzen & Pfad-Resolver
-  // --------------------------------------------------------------------------
-  function normalizeBases(next){
-    if (!next) return iconBases;
-    const arr = Array.isArray(next) ? next : [next];
-    return arr
-      .filter(v => typeof v === 'string' && v.trim().length)
-      .map(v => v.replace(/\/+$/,'') + '/');
-  }
-
-  function isAbsoluteUrl(str){
-    return /^(https?:)?\/\//i.test(str) || /^data:/i.test(str) || str.startsWith('/');
-  }
-
-  /** iconsBase ggf. aus Registry ziehen (z.B. aus data/buildings.json) */
-  function adoptIconsBaseFromRegistry(){
-    try{
-      const base = window.Registry?.get?.('iconsBase');
-      if (base){
-        iconBases = normalizeBases(base);
-        LOG.info('[ui-build] iconsBase von Registry →', iconBases.join(', '));
-      }
-    } catch(e){ /* noop */ }
-  }
-
-  /** Liefert finalen Icon-Pfad-String (ohne Netz-Existenz-Check) */
-  function iconSrcFor(item){
-    const raw = item?.icon || item?.iconId || item?.iconPath || '';
-    if (!raw) return '';                  // kein Icon hinterlegt
-    if (isAbsoluteUrl(raw)) return raw;   // bereits absolut/ data:/ Rootpfad
-
-    // Dateiendung ergänzen, wenn fehlt
-    let name = String(raw);
+  function isAbs(u){ return /^(https?:)?\/\//i.test(u) || /^data:/i.test(u) || u.startsWith('/'); }
+  function iconSrc(b){
+    if (!b || !b.icon) return '';
+    if (isAbs(b.icon)) return b.icon;
+    let name = String(b.icon);
     if (!/\.(png|webp|jpg|jpeg|svg)$/i.test(name)) name += '.png';
-
-    // Mehrere Basen möglich – wir nehmen die erste
-    const base = iconBases[0] || '';
-    return base + name;
+    return iconBase + name;
   }
 
-  // --------------------------------------------------------------------------
-  // 4) Render-Helfer
-  // --------------------------------------------------------------------------
-  function applyCatHighlight(catRoot){
-    $$('.build-cat', catRoot).forEach(li =>
-      li.classList.toggle('active', li.dataset.cat === activeCat)
-    );
+  function badge(key, val){
+    if (!val) return null;
+    const s=document.createElement('span'); s.className='res'; s.dataset.res=key;
+    const b=document.createElement('b'); b.textContent=String(val); s.appendChild(b);
+    return s;
   }
 
-  function applyItemHighlight(itemRoot){
-    $$('.build-item', itemRoot).forEach(li => {
-      const on = li.dataset.id === activeItem;
-      li.classList.toggle('active', on);
-      li.classList.toggle('is-selected', on);
+  function applyCatActive(root){
+    $$('.build-cat',root).forEach(li=>li.classList.toggle('active', li.dataset.cat===activeCat));
+  }
+  function applyItemActive(root){
+    $$('.build-item',root).forEach(li=>li.classList.toggle('active', li.dataset.id===activeItem));
+  }
+
+  // ---------------------------- Render --------------------------------------
+  function renderCats(root){
+    root.innerHTML = '';
+    cats.forEach((c,idx)=>{
+      const li=document.createElement('li');
+      li.className='build-cat'; li.dataset.cat=c.id; li.textContent=c.label;
+      if (!activeCat && idx===0) activeCat=c.id;
+      li.addEventListener('click',()=>{ activeCat=c.id; applyCatActive(root); renderItems($('#build-items',host)); });
+      root.appendChild(li);
     });
+    applyCatActive(root);
   }
 
-  function resBadge(key, amount){
-    if (!amount) return null;
-    const span = document.createElement('span');
-    span.className = 'res';
-    span.setAttribute('data-res', key);
-    const b = document.createElement('b');
-    b.textContent = String(amount);
-    span.appendChild(b);
-    return span;
-  }
+  function renderItems(root){
+    root.innerHTML = '';
+    const vis = items.filter(b => b.enabled !== false && String(b.cat)===String(activeCat));
+    vis.forEach(b=>{
+      const li=document.createElement('li'); li.className='build-item'; li.dataset.id=b.id;
 
-  // --------------------------------------------------------------------------
-  // 5) Render: Kategorien & Items
-  // --------------------------------------------------------------------------
-  function renderCats(catRoot){
-    catRoot.innerHTML = '';
+      const img=document.createElement('img'); img.className='icon'; img.alt=b.label||b.id; img.decoding='async'; img.loading='lazy'; img.src=iconSrc(b);
+      const title=document.createElement('div'); title.className='title'; title.textContent=b.label;
+      const cost=document.createElement('div'); cost.className='cost';
+      const c=b.cost||{}; ['wood','stone','food','gold'].forEach(k=>{ const x=badge(k,c[k]); if (x) cost.appendChild(x); });
 
-    cats.forEach((c, idx) => {
-      const li = document.createElement('li');
-      li.className = 'build-cat';
-      li.dataset.cat = c.id;
-      li.textContent = c.label;
-
-      // erste Kategorie aktiv, falls noch keine gesetzt
-      if (!activeCat && idx === 0) activeCat = c.id;
-
-      li.addEventListener('click', () => {
-        activeCat = c.id;
-        applyCatHighlight(catRoot);
-        renderItems($('#build-items', host));
+      li.append(img,title,cost);
+      li.addEventListener('click', ()=>{
+        activeItem=b.id; applyItemActive(root);
+        window.dispatchEvent(new CustomEvent('cb:build:select', { detail:{ id:b.id, meta:b }}));
       });
-
-      catRoot.appendChild(li);
+      root.appendChild(li);
     });
-
-    applyCatHighlight(catRoot);
+    applyItemActive(root);
   }
 
-  function renderItems(itemRoot){
-    itemRoot.innerHTML = '';
-
-    // Sichtbare Items: enabled + Kategorie-Filter
-    const visible = items
-      .filter(b => b && b.enabled !== false)
-      .filter(b => String(b.cat) === String(activeCat));
-
-    visible.forEach(b => {
-      const li = document.createElement('li');
-      li.className = 'build-item';
-      li.dataset.id = b.id;
-
-      // Icon
-      const icon = document.createElement('img');
-      icon.className = 'icon';
-      icon.alt = b.label || b.id;
-      icon.decoding = 'async';
-      icon.loading  = 'lazy';
-      icon.src = iconSrcFor(b);  // ← Resolver kombiniert iconsBase + Name
-
-      // Titel
-      const title = document.createElement('div');
-      title.className = 'title';
-      title.textContent = b.label;
-
-      // Kosten
-      const cost = document.createElement('div');
-      cost.className = 'cost';
-      const c = b.cost || {};
-      ['wood','stone','food','gold'].forEach(k => {
-        const node = resBadge(k, c[k]);
-        if (node) cost.appendChild(node);
-      });
-
-      li.append(icon, title, cost);
-
-      li.addEventListener('click', () => {
-        activeItem = b.id;
-        applyItemHighlight(itemRoot);
-        window.dispatchEvent(new CustomEvent('cb:build:select', { detail: { id: b.id }}));
-      });
-
-      itemRoot.appendChild(li);
-    });
-
-    applyItemHighlight(itemRoot);
-  }
-
-  // --------------------------------------------------------------------------
-  // 6) Vollständiger Re-Render
-  // --------------------------------------------------------------------------
   function rerender(){
-    const els = ensureScaffold();
-    if (!els) return;
-
-    // Fallback-Daten, wenn noch nichts gesetzt wurde
-    if (!cats.length || !items.length){
-      const { rc, ri } = fallbackFromRegistry();
-      if (!cats.length)  cats  = rc;
-      if (!items.length) items = ri;
-    }
-
-    // Icons-Basis aus Registry adaptieren (falls vorhanden)
-    adoptIconsBaseFromRegistry();
-
-    if (!cats.length){
-      LOG.info('[ui-build] keine Kategorien – nix zu rendern');
-      els.cats.innerHTML = '';
-      els.items.innerHTML = '';
-      return;
-    }
-
-    // aktive Kategorie sicherstellen
-    if (!cats.find(c => c.id === activeCat)){
-      activeCat = cats[0]?.id || null;
-    }
-
+    const els=ensureScaffold(); if (!els) return;
+    adoptFromRegistry();
+    if (!cats.length){ els.cats.innerHTML=''; els.items.innerHTML=''; return; }
+    if (!cats.find(c=>c.id===activeCat)) activeCat = cats[0]?.id || null;
     renderCats(els.cats);
     renderItems(els.items);
-
-    LOG.info('[ui-build] rerender ✓ (%d cats / %d items)', cats.length, items.length);
+    LOG('render ✓', { cats:cats.length, items:items.length, iconBase });
   }
 
-  // --------------------------------------------------------------------------
-  // 7) Öffentliche API
-  // --------------------------------------------------------------------------
+  // ---------------------------- API -----------------------------------------
   window.UIBuild = {
-    /** Host montieren (optional el übergeben) */
-    mount(el){
-      host = el || document.getElementById('build-panel');
-      LOG.info('[ui-build] mount ok');
-      ensureScaffold();
-    },
-
-    /** Kategorien setzen */
-    setCategories(nextCats){
-      cats = (Array.isArray(nextCats) ? nextCats : []).map(c => ({
-        id: String(c.id),
-        label: String(c.label ?? c.id)
-      }));
-      if (!cats.find(c => c.id === activeCat)){
-        activeCat = cats[0]?.id || null;
-      }
-    },
-
-    /** Items setzen */
-    setItems(nextItems){
-      items = (Array.isArray(nextItems) ? nextItems : []).map(b => ({
-        id: String(b.id),
-        cat: String(b.cat ?? b.category ?? 'misc'),
-        label: String(b.label ?? b.name ?? b.id),
-        icon: (b.icon || b.sprite || ''),   // nur Name oder kompletter Pfad
-        cost: (b.cost || null),
-        enabled: (b.enabled !== false)
-      }));
-    },
-
-    /** Icons-Basis manuell setzen (String oder Array) */
-    setIconsBase(next){
-      iconBases = normalizeBases(next);
-    },
-
-    rerender,
-
-    /** Dock öffnen + rendern */
-    open(){
-      const dock = document.getElementById('build-dock');
-      if (dock){ dock.hidden = false; dock.classList.remove('hidden'); }
-      if (host){ host.hidden = false; host.classList.remove('hidden'); }
-      rerender();
-    },
-
-    /** Dock schließen */
-    close(){
-      const dock = document.getElementById('build-dock');
-      if (dock){ dock.hidden = true; dock.classList.add('hidden'); }
-      if (host){ host.hidden = true; host.classList.add('hidden'); }
-    }
+    mount(el){ host = el || document.getElementById('build-panel'); ensureScaffold(); },
+    setCategories(next){ cats = (Array.isArray(next)?next:[]).map(c=>({id:String(c.id),label:String(c.label??c.id)})); },
+    setItems(next){ items = (Array.isArray(next)?next:[]).map(b=>({ id:String(b.id), cat:String(b.cat||'misc'), label:String(b.label||b.id), icon:(b.icon||b.sprite||''), cost:(b.cost||null), enabled:(b.enabled!==false) })); },
+    setIconsBase(base){ iconBase = String(base||iconBase); if (iconBase && !iconBase.endsWith('/')) iconBase+='/'; },
+    open(){ const dock=document.getElementById('build-dock'); if(dock){dock.hidden=false;dock.classList.remove('hidden');} if(host){host.hidden=false;host.classList.remove('hidden');} rerender(); },
+    close(){ const dock=document.getElementById('build-dock'); if(dock){dock.hidden=true;dock.classList.add('hidden');} if(host){host.hidden=true;host.classList.add('hidden');} },
+    rerender
   };
 
-  // --------------------------------------------------------------------------
-  // 8) Lifecycle-Hooks
-  //    - Registry fertig → nur (re)rendern, iconsBase ggf. übernehmen
-  //    - Spielstart      → ggf. mounten + öffnen
-  // --------------------------------------------------------------------------
-  window.addEventListener('cb:registry-ready',  () => { UIBuild.rerender(); });
-  window.addEventListener('cb:registry:ready',  () => { UIBuild.rerender(); });
+  // ---------------------------- Lifecycle -----------------------------------
+  window.addEventListener('cb:registry:ready', ()=>UIBuild.rerender());
+  window.addEventListener('cb:registry-ready', ()=>UIBuild.rerender());
+  window.addEventListener('cb:game-start', ()=>{ if(!host) UIBuild.mount(document.getElementById('build-panel')); UIBuild.open(); });
 
-  window.addEventListener('cb:game-start', () => {
-    if (!host) UIBuild.mount(document.getElementById('build-panel'));
-    UIBuild.open();
-  });
-
-  // Safety: falls die Bridge später kommt, Mount minimal vorbereiten
-  setTimeout(() => {
-    if (!host) UIBuild.mount(document.getElementById('build-panel'));
-  }, 0);
+  // Safety (erstes Mount bei Idle)
+  setTimeout(()=>{ if(!host) UIBuild.mount(document.getElementById('build-panel')); },0);
 })();
