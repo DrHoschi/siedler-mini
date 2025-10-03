@@ -52,7 +52,12 @@
       width="1280"
       height="720"
       data-map="data/maps/map-mini.json"></canvas>
+<!-- Pfadlinien-Overlay (Trampelpfade) -->
+<canvas id="overlay-paths" width="1280" height="720" aria-label="Path Overlay"></canvas>
 
+<!-- Einheiten-Overlay (Träger-Punkte + Ressource-Icon) -->
+<canvas id="overlay-units" width="1280" height="720" aria-label="Units Overlay"></canvas>
+    
     <!-- (3.2) Start-Hintergrund (unter Panel, über Canvas) -->
     <div id="bg-start" aria-hidden="true"></div>
 
@@ -90,19 +95,25 @@
   <!-- (4.1) CORE + REGISTRY -->
   <script src="core/asset.js"></script>      <!-- emit: cb:assets-ready -->
   <script src="core/registry.js"></script>   <!-- lädt data/buildings.json + emit: cb:registry:ready -->
-  <script>
-    // Registry-Daten laden (data/buildings.json)
+  <!-- <script>
+    // Registry-Daten laden (data/buildings.json) <!-- KEINE Inline-Init hier nötig; boot.js triggert Registry.init nach cb:assets-ready -->
     window.addEventListener('load', function () {
       try { window.Registry?.init?.(); }
       catch (e) { console.warn('[index] Registry.init() fehlgeschlagen', e); }
     });
-  </script>
+  </script> -->
 
   <!-- (4.2) MAP/ENGINE/BOOT -->
   <script src="core/map-runtime.js"></script>
   <script src="core/core.map.js"></script>
   <!-- <script src="core/unit-runtime.js"></script> --><!-- optional, sobald vorhanden -->
   <script src="core/game.js"></script>
+  
+  <!-- ✨ NEU: Produktions-/Transport-/Overlay-Module (vor boot.js laden!) -->
+<script src="core/core.production.js"></script>
+<script src="core/carrier.js"></script>
+<script src="core/path-overlay.js"></script>
+<script src="core/unit-overlay.js"></script>
   <script src="core/boot.js"></script>
 
   <!-- (4.3) UI-Module -->
