@@ -1,137 +1,39 @@
-/* ============================================================================
- * Datei   : ui/css/ui-place.css
- * Zweck   : Schwebende Platzier-UI (Ghost + Confirm/Cancel-Buttons)
- * Layer   : über Canvas/HUD, unter Inspector
- * Hinweis : Logik/Events kommen aus ui-place.js – dieses CSS ist rein visuell.
- * ========================================================================== */
-
-/* ---- Layer-Konstanten ---------------------------------------------------- */
-:root{
-  /* Orientierung: HUD/Dock ~950, Startpanel 1000, Inspector darüber */
-  --place-z: 980;
-
-  /* Fallback-Kachelgröße, falls das JS nichts setzt */
-  --tile: 64px;
-
-  /* Innenabstand der Buttons zur Ghost-Box (in der Ecke, nicht außerhalb) */
-  --btn-inset: 8px;
-
-  /* Button-Größe (kann über Media Query vergrößert werden) */
-  --btn-size: 32px;
-  --btn-radius: 10px;
-}
-
-/* ---- Root-Overlay (nimmt die Klicks NICHT an) ---------------------------- */
-#place-ui{
-  position: fixed;
-  inset: 0;
-  pointer-events: none;              /* nur die Buttons sind klickbar */
-  z-index: var(--place-z);
-}
-
-/* ---- Ghost-Box (liegt exakt über dem Gebäude-Ghost) ---------------------- */
-.place-box{
+/* Root-Overlay liegt deckungsgleich über dem Canvas.
+   Du kannst statt body auch einen Canvas-Container benutzen; wichtig ist,
+   dass left/top/width/height in JS strikt gesetzt werden. */
+.place-overlay {
   position: absolute;
-  /* Größe wird vom JS gesetzt; Fallback = 1 Kachel */
-  width:  var(--s, var(--tile));
-  height: var(--s, var(--tile));
-  transform: translate(0, 0);
-  pointer-events: none;              /* Buttons erben später 'auto' */
-  box-sizing: border-box;
-
-  /* Optionaler visueller Rahmen/Unterlegung: */
-  /* outline: 2px solid rgba(120,200,120,.85);
-     background: rgba(120,200,120,.18); */
+  z-index: 40;            /* über Canvas, unter HUD, falls nötig anpassen */
+  pointer-events: none;   /* Klicks gehen standardmäßig durch */
 }
 
-/* ---- Buttons (klickbar, an der Box „angeschraubt“, INNEN in der Ecke) ---- */
-.place-btn{
+/* Bild der großen Vorschau (Sprite) */
+.place-sprite {
   position: absolute;
-  pointer-events: auto;              /* darf geklickt werden */
-  width:  var(--btn-size);
-  height: var(--btn-size);
-  border-radius: var(--btn-radius);
-  border: 1px solid rgba(255,255,255,.18);
-  box-shadow: 0 8px 20px rgba(0,0,0,.26);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font: 700 18px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  color: #fff;
-  cursor: pointer;
-  user-select: none;
-  transition: transform .12s ease, filter .12s ease;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
 }
 
-/* Fokus sichtbar für Tastatur/Screenreader-Nutzer */
-.place-btn:focus-visible{
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
-/* leichte Interaktion */
-.place-btn:hover   { transform: translateY(-1px); }
-.place-btn:active  { transform: translateY( 0 ); }
-
-/* ✅ BESTÄTIGEN – OBEN LINKS (INNEN) */
-.place-confirm{
-  left: var(--btn-inset);
-  top:  var(--btn-inset);
-  background: linear-gradient(#2a8e55, #1f6d3a);
-  border-color: #1f6d3a;
-}
-
-/* ❌ ABBRECHEN – OBEN RECHTS (INNEN) */
-.place-cancel{
-  right: var(--btn-inset);
-  top:   var(--btn-inset);
-  background: linear-gradient(#b83c2e, #8e2e23);
-  border-color: #8e2e23;
-}
-
-/* ---- Alternative, große Aktionsbuttons (Bottom-Bar, optional) ------------ */
-/* Verwenden, wenn du zusätzlich großflächige Buttons unten willst.
-   Ansonsten bleibt .place-actions unbenutzt (kein DOM nötig).               */
-.place-actions{
-  position: fixed;
-  left:  12px;
-  right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  pointer-events: none;              /* nur Kinder klickbar */
-  z-index: calc(var(--place-z) + 10);
-}
-.place-actions .btn-accept,
-.place-actions .btn-cancel{
+/* Buttons sitzen innerhalb der Fläche; pointer-events aktiv */
+.place-btn {
+  position: absolute;
   pointer-events: auto;
-  width: 52px; height: 52px;
-  border-radius: 14px;
-  display: grid; place-items: center;
-  box-shadow: 0 6px 18px rgba(0,0,0,.35);
-  font-size: 24px;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  line-height: 32px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+
+.place-btn.ok {
+  background: #2cc36b;
   color: #fff;
-  border: 0;
 }
-.place-actions .btn-accept{ background:#19b34a; }
-.place-actions .btn-cancel{ background:#d63b3b; }
-
-/* ---- Einfache Uni-Farben (falls du Gradients nicht magst) ---------------- */
-.place-btn.place-confirm{ background:#19b34a; border-color:#158d3a; }
-.place-btn.place-cancel { background:#d63b3b; border-color:#b1322f; }
-
-/* ---- Mobile/Tap-Größe (bessere Trefffläche auf kleinen Screens) ---------- */
-@media (max-width: 480px){
-  :root{
-    --btn-size: 36px;
-    --btn-radius: 12px;
-    --btn-inset: 8px; /* bleibt innen */
-  }
-  .place-btn{ font-size: 20px; }
-}
-
-/* ---- Bewegungsreduktion respektieren ------------------------------------- */
-@media (prefers-reduced-motion: reduce){
-  .place-btn{ transition: none; }
+.place-btn.cancel {
+  background: #e5564c;
+  color: #fff;
 }
