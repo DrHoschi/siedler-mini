@@ -1,144 +1,200 @@
 /* ============================================================================
  * Datei   : ui/ui-place.js
- * Zweck   : UI-Overlay für Platzieren (großes Vorschaubild + ✓ / ✗ Buttons)
- * Version : v3.2.0
- * Kernpunkte:
- *   - Positionsdaten (sx,sy,size) kommen in CANVAS-Pixeln → in CSS-Pixel umrechnen
- *   - Overlay ist absolut über dem Canvas positioniert; keine zusätzlichen Transforms
- *   - Buttons sitzen innerhalb der grünen Fläche: ✓ links-oben, ✗ rechts-oben
+ * Projekt : Neue Siedler – UI
+ * Version : v3.3.0 (Canvas-Offsets, präzise Button-Position, Sprite-Resolver)
+ *
+ * Zweck   : UI-Overlay für das Platzieren von Gebäuden
+ * Highlights:
+ *   - Engine liefert sx/sy/size in CANVAS-Pixeln → hier korrekt in CSS-Pixel
+ *     umgerechnet und zusätzlich um Canvas-Position + Scroll-Offsets ergänzt.
+ *   - Overlay wird exakt über das Footprint-Rechteck gelegt.
+ *   - ✓ (links-oben) und ✕ (rechts-oben) liegen IM grünen Ghost-Rahmen.
+ *   - Sprite-URL kommt aus der Engine (fallback: Registry).
+ *   - Overlay verschwindet zuverlässig bei cancel/confirm.
  * ============================================================================ */
 
 (() => {
   'use strict';
 
-  const TAG  = '[ui-place]';
-  const LOG  = (...a) => (window.CBLog?.info || console.log)(TAG, ...a);
+  const TAG = '[ui-place]';
+  const LOG = (...a) => (window.CBLog?.info || console.log)(TAG, ...a);
 
-  // Root-Overlay über dem Canvas
+  // DOM-Knoten des Overlays
   let root, img, okBtn, cancelBtn;
 
-  // Letzte Preview-Daten (für Reposition bei Resize)
+  // Referenz auf das Canvas (für Offsets)
+  let cvs = null;
+
+  // letzte gültige Preview-Daten (für Re-Layout bei Resize)
   let last = null;
 
+  // -- DOM sicherstellen -----------------------------------------------------
   function ensureDOM() {
     if (root) return;
 
-    // Root: sitzt direkt über dem Canvas (siehe CSS)
+    // Canvas (wird für getBoundingClientRect benötigt)
+    cvs = document.getElementById('game');
+
+    // Root-Container des Overlays
     root = document.createElement('div');
     root.className = 'place-overlay';
-    root.style.display = 'none';
+    root.style.display = 'none';          // erst sichtbar, wenn Daten ankommen
+    root.style.position = 'absolute';     // wir hängen an <body>
+    root.style.zIndex = '40';
+    root.style.pointerEvents = 'none';    // Klicks gehen standardmäßig „durch“
 
     // Großes Vorschaubild (Sprite)
     img = document.createElement('img');
     img.className = 'place-sprite';
     img.alt = '';
+    Object.assign(img.style, {
+      position: 'absolute',
+      left: '0', top: '0',
+      width: '100%', height: '100%',
+      imageRendering: 'pixelated',
+      pointerEvents: 'none',
+    });
     root.appendChild(img);
 
-    // Buttons
+    // ✓-Button (links-oben, innerhalb)
     okBtn = document.createElement('button');
     okBtn.className = 'place-btn ok';
     okBtn.textContent = '✓';
+    styleBtn(okBtn, '#2cc36b');
     okBtn.addEventListener('click', () => {
       if (!last || last.invalid) return;
-      // Falls UI keine gx/gy mitsendet, nimmt Engine _state.preview
-      window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail: { gx: last.gx, gy: last.gy } }));
+      // gx/gy kommen aus der Engine-Preview – wir geben sie zurück
+      window.dispatchEvent(new CustomEvent('cb:place:confirm', {
+        detail: { gx: last.gx, gy: last.gy }
+      }));
     });
     root.appendChild(okBtn);
 
+    // ✕-Button (rechts-oben, innerhalb)
     cancelBtn = document.createElement('button');
     cancelBtn.className = 'place-btn cancel';
     cancelBtn.textContent = '✕';
+    styleBtn(cancelBtn, '#e5564c');
     cancelBtn.addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('cb:place:cancel'));
       hide();
     });
     root.appendChild(cancelBtn);
 
-    // Root ins DOM – direkt neben dem Canvas:
-    // Wir hängen es an den gleichen Container wie das Canvas (body geht auch),
-    // CSS kümmert sich darum, dass es deckungsgleich über #game liegt.
+    // Overlay an <body> hängen – wir rechnen Canvas-Offsets manuell hinein
     (document.body || document.documentElement).appendChild(root);
 
-    // Resize → Position/Größe neu berechnen
+    // Bei Resize neu positionieren, wenn Preview aktiv ist
     window.addEventListener('resize', () => { if (last) apply(last); });
+
+    LOG('ready');
   }
 
+  function styleBtn(btn, bg) {
+    Object.assign(btn.style, {
+      position: 'absolute',
+      width: '32px',
+      height: '32px',
+      borderRadius: '8px',
+      border: 'none',
+      fontWeight: '700',
+      lineHeight: '32px',
+      textAlign: 'center',
+      boxShadow: '0 2px 6px rgba(0,0,0,.35)',
+      color: '#fff',
+      background: bg,
+      pointerEvents: 'auto', // Buttons sollen klickbar sein
+      userSelect: 'none',
+    });
+  }
+
+  // -- Sichtbarkeit ----------------------------------------------------------
   function hide() {
     if (root) root.style.display = 'none';
     last = null;
   }
 
-  // w,h sind in Tiles; size ist eine Kachelkante in CANVAS-Pixeln.
-  // sx,sy kommen in CANVAS-Pixeln (Top-Left der grünen Fläche)
+  // -- Hauptlogik: Daten anwenden -------------------------------------------
+  // p: { id, gx, gy, sx, sy, size, w, h, cssScale, invalid, ... }
+  //   - sx/sy/size sind CANVAS-Pixel (Engine-Koordinaten!)
   function apply(p) {
     ensureDOM();
     last = p;
 
-    // Ungültig → Overlay aus
     if (!p || p.invalid) { hide(); return; }
 
-    // Schutz
+    // Schutzwerte
     const cssScale = p.cssScale || { x: 1, y: 1 };
-    const k       = p.size || 64;     // Kachelkante (Canvas-Pixel)
-    const wTiles  = p.w || 1;
-    const hTiles  = p.h || 1;
+    const k        = p.size || 64;       // Kachelkante (CANVAS-Pixel)
+    const wTiles   = p.w || 1;
+    const hTiles   = p.h || 1;
 
-    // CANVAS → CSS umrechnen
-    const leftCSS = (p.sx || 0) / cssScale.x;
-    const topCSS  = (p.sy || 0) / cssScale.y;
+    // Canvas-Box + Dokument-Scroll (damit das Overlay absolut am Body ausgerichtet werden kann)
+    const r = cvs?.getBoundingClientRect?.() || { left: 0, top: 0 };
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop  || 0;
+
+    // CANVAS → CSS umrechnen + Canvas-Offsets + Scroll addieren
+    const leftCSS   = (p.sx || 0) / cssScale.x + r.left + scrollX;
+    const topCSS    = (p.sy || 0) / cssScale.y + r.top  + scrollY;
     const widthCSS  = (k * wTiles) / cssScale.x;
     const heightCSS = (k * hTiles) / cssScale.y;
 
-    // Root sichtbar
+    // Root exakt auf Footprint legen
     root.style.display = 'block';
+    root.style.left    = `${leftCSS}px`;
+    root.style.top     = `${topCSS}px`;
+    root.style.width   = `${widthCSS}px`;
+    root.style.height  = `${heightCSS}px`;
 
-    // Root exakt auf das Footprint-Rechteck legen
-    root.style.left = `${leftCSS}px`;
-    root.style.top  = `${topCSS}px`;
-    root.style.width  = `${widthCSS}px`;
-    root.style.height = `${heightCSS}px`;
-
-    // Sprite-Bildquelle aus Registry/Engine: wir nutzen die gleiche URL-Logik
-    // Die Engine rendert die platzierten Sprites; für die Vorschau nehmen wir
-    // denselben Sprite-URL wie die Engine (Icon als Fallback).
-    const spriteURL = (window.Game?.__spriteUrlById && window.Game.__spriteUrlById(p.id))
-                   || (window.Registry?.byId?.(p.id)?.spriteUrl)
-                   || (window.Registry?.byId?.(p.id)?.sprite)
-                   || (window.Registry?.byId?.(p.id)?.iconUrl)
-                   || (window.Registry?.byId?.(p.id)?.icon)
-                   || '';
+    // Sprite-Quelle: bevorzugt Engine-Resolver, ansonsten Registry
+    const resolve = window.Game?.__spriteUrlById;
+    const spriteURL =
+      (typeof resolve === 'function' && resolve(p.id)) ||
+      window.Registry?.byId?.(p.id)?.spriteUrl ||
+      window.Registry?.byId?.(p.id)?.sprite    ||
+      window.Registry?.byId?.(p.id)?.iconUrl   ||
+      window.Registry?.byId?.(p.id)?.icon      ||
+      '';
 
     if (spriteURL) {
       img.src = spriteURL;
       img.style.display = 'block';
+      // in der Praxis reicht width/height:100% – wir setzen explizit mit
+      // berechneten CSS-Pixeln, um jede Layout-Kaskade zu vermeiden
       img.style.width  = `${widthCSS}px`;
       img.style.height = `${heightCSS}px`;
     } else {
       img.style.display = 'none';
     }
 
-    // Buttons (jeweils INNEN an die Ecken)
-    const pad = Math.max(6, Math.round(Math.min(widthCSS, heightCSS) * 0.06));
-    positionButton(okBtn,     pad,          pad);                      // links oben (✓)
-    positionButton(cancelBtn, widthCSS-pad, pad, true /*anchorRight*/);// rechts oben (✕)
+    // Buttons innen an die oberen Ecken setzen (nur left/top verwenden!)
+    const btnW = okBtn.offsetWidth || 32;
+    const pad  = Math.max(6, Math.round(Math.min(widthCSS, heightCSS) * 0.06));
+
+    // ✓ links-oben
+    placeBtn(okBtn, pad, pad);
+
+    // ✕ rechts-oben (mit fixer Breite rechnen)
+    placeBtn(cancelBtn, Math.max(0, widthCSS - pad - btnW), pad);
   }
 
-  function positionButton(btn, x, y, anchorRight=false) {
-    btn.style.left = anchorRight ? '' : `${x}px`;
-    btn.style.right = anchorRight ? `${Math.max(0, x)}px` : '';
-    btn.style.top  = `${y}px`;
+  function placeBtn(btn, leftPx, topPx) {
+    btn.style.left = `${leftPx}px`;
+    btn.style.top  = `${topPx}px`;
+    // Sicherheitsreset, falls frühere Styles vorhanden waren:
+    btn.style.right = '';
+    btn.style.bottom = '';
   }
 
-  // Events von der Engine (siehe Game.emitPreviewEvent)
+  // -- Engine-Events ---------------------------------------------------------
   window.addEventListener('cb:place:preview', (e) => {
     const d = e.detail || {};
     if (!d || d.invalid) { hide(); return; }
     apply(d);
   });
 
-  // Nach Confirm/Cancel muss Overlay verschwinden (falls Engine schneller ist)
+  // Nach Confirm/Cancel Overlay weg
   window.addEventListener('cb:place:confirm', hide);
   window.addEventListener('cb:place:cancel',  hide);
-
-  LOG('ready');
 })();
