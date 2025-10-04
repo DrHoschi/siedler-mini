@@ -558,4 +558,12 @@
   const getResources=()=>({ ..._state.resources });
 
   window.Game={ init, start, getState, getResources, __spriteUrlById };
+ 
+  // Map-Getter für Module wie UnitOverlay (lesen Game.map.camX/Y/zoom)
+try {
+  Object.defineProperty(window.Game, 'map', {
+    configurable: true, enumerable: false,
+    get(){ return _state.map; }
+  });
+} catch {}
 })();
