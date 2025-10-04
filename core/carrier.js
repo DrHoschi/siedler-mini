@@ -100,6 +100,11 @@ function __entrancePx(b){
     }
   }
 
+  // Nach Lieferung am HQ-Eingang parken (direkt dort warten)
+const E = __entrancePx(j.toRef);
+c.x = E.x + (Math.random()*8-4); // ein klein wenig „streuen“, damit es nicht exakt übereinanderliegt
+c.y = E.y + (Math.random()*6-3);
+  
   // ---------- API ----------
   function start(worldRef){
     world = worldRef || { buildings:[], units:[] };
