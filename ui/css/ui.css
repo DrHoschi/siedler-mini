@@ -161,3 +161,6 @@ body.ui-frame--global::before{
   *{ transition: none !important; animation: none !important; }
   #bg-start{ transition: none !important; }
 }
+#app{ position:relative; }
+#game{ display:block; }
+#overlay-units{ position:absolute; left:0; top:0; z-index:50; pointer-events:none; }
