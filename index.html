@@ -50,13 +50,16 @@
   ========================================================================= -->
   <div id="app" aria-label="Spiel-Container">
 
-    <!-- (3.1) Spielfeld -->
-    <canvas
-      id="game"
-      width="1280"
-      height="720"
-      data-map="data/maps/map-mini.json"></canvas>
+ <!-- (3.1) Spielfeld -->
+<canvas
+  id="game"
+  width="1280"
+  height="720"
+  data-map="data/maps/map-mini.json"></canvas>
 
+<!-- (3.1b) Units-Overlay: exakt über dem Game-Canvas -->
+<canvas id="overlay-units" aria-hidden="true"></canvas>
+    
     <!-- (3.1.1) Pfadlinien-Overlay (Trampelpfade) -->
     <canvas id="overlay-paths" width="1280" height="720" aria-label="Path Overlay"></canvas>
 
