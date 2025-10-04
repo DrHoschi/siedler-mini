@@ -25,6 +25,25 @@
     (typeof localStorage !== 'undefined' && localStorage.getItem('dev.autostart') === '1')
   );
 
+  // --- Helpers: Tilegröße + HQ-Eingang in Pixel --------------------------------
+function __tileSize(){ const ts = window.Game?.map?.tile; return (Number.isFinite(ts)&&ts>0)?(ts|0):64; }
+
+/** Liefert den ersten Eingang eines Gebäudes als Welt-Pixel (Fallback: Zentrum) */
+function __entrancePx(b){
+  const ts = __tileSize();
+  const def = window.Registry?.getBuildingDef?.(String(b.id||b.type||b.kind||''));
+  const rel = (def?.entrances && def.entrances[0]) || null; // z.B. [1,2]
+  if (rel){
+    const tx = (b.x|0) + (rel[0]|0);
+    const ty = (b.y|0) + (rel[1]|0);
+    return { x: (tx + 0.5)*ts, y: (ty + 0.5)*ts }; // Kachelmitte
+  }
+  // Fallback: Gebäudemitte
+  const cx = ((b.x||0) + (b.w||1)/2)*ts;
+  const cy = ((b.y||0) + (b.h||1)/2)*ts;
+  return { x: cx, y: cy };
+}
+
   function canvas(){ return document.getElementById('game'); }
 
   function maybeInitGame(){
