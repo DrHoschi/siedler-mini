@@ -164,3 +164,13 @@ body.ui-frame--global::before{
 #app{ position:relative; }
 #game{ display:block; }
 #overlay-units{ position:absolute; left:0; top:0; z-index:50; pointer-events:none; }
+
+/* iOS Safari: weniger „Springen“ beim Zoomen/Scrollen */
+html, body { height: 100%; overscroll-behavior: none; }
+#app { position: relative; }
+#game, #overlay-units {
+  display: block;
+  -webkit-touch-callout: none;
+  touch-action: none;         /* Pointer sauber, kein Browser-Zoom-Gestenmix */
+  image-rendering: pixelated;
+}
