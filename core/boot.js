@@ -115,4 +115,35 @@
     window.Carriers?.spawn?.({ id:`u.carrier#${(Math.random()*1e6|0)}`, role:'carrier', x: E.x - 10, y: E.y });
     window.Carriers?.spawn?.({ id:`u.carrier#${(Math.random()*1e6|0)}`, role:'carrier', x: E.x + 10, y: E.y });
   });
+
+  // Zusätzlich: HQ-Spawn auf cb:place:confirm:tile (falls Engine cb:build:place nicht feuert)
+(() => {
+  let _lastHQKey = null; // z.B. "tx,ty" für De-Dupe in kurzer Zeit
+  window.addEventListener('cb:place:confirm:tile', (ev) => {
+    const d = ev?.detail || {};
+    const id = String(d.id||'').toLowerCase();
+    if (id !== 'hq') return;
+
+    // De-Dupe: gleicher Spot innerhalb kurzer Zeit?
+    const key = `${d.tx|0},${d.ty|0}`;
+    if (_lastHQKey === key) return;
+    _lastHQKey = key;
+    setTimeout(()=>{ _lastHQKey = null; }, 500);
+
+    // Minimalobjekt für __entrancePx() (Tiles!)
+    const def = window.Registry?.getBuildingDef?.('hq') || { size:[3,3], entrances:[[1,2]] };
+    const b   = { id:'hq', x:d.tx|0, y:d.ty|0, w:(def.size?.[0]||3), h:(def.size?.[1]||3) };
+
+    const E = (function __entrancePx(bld){
+      const ts  = (window.Game?.map?.tile|0) || 64;
+      const rel = (def?.entrances && def.entrances[0]) || [ (bld.w>>1), (bld.h-1) ];
+      const tx  = (bld.x|0) + (rel[0]|0);
+      const ty  = (bld.y|0) + (rel[1]|0);
+      return { x: (tx + 0.5)*ts, y: (ty + 0.5)*ts };
+    })(b);
+
+    window.Carriers?.spawn?.({ id:`u.carrier#${(Math.random()*1e6|0)}`, role:'carrier', x: E.x - 10, y: E.y });
+    window.Carriers?.spawn?.({ id:`u.carrier#${(Math.random()*1e6|0)}`, role:'carrier', x: E.x + 10, y: E.y });
+    (window.CBLog?.ok||console.log)('[boot] carriers spawned (confirm:tile @ entrance)', { tx:d.tx, ty:d.ty });
+  });
 })();
