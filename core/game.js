@@ -1,58 +1,27 @@
 /* ============================================================================
  * Datei   : core/game.js
  * Projekt : Neue Siedler
- * Version : v18.6.0 (Build-Fix: exakte Preview-Übernahme, zentrierter Ghost)
+ * Version : v18.7.0 (Tiles im Preview + stabiles Place)
  *
- * Highlights
- *  - Ghost sitzt zentriert unter dem Finger (Math.round, footprint-aware)
- *  - Beim Loslassen wird NICHT neu gerechnet → gebaut wird exakt dort,
- *    wo der letzte Preview (grüner Rahmen) stand. Kein 1-Tile-Versatz mehr.
- *  - Pinch/Pan robust (Pointer-/Pinch-Reset), iOS-Page-Gesten blockiert
- *  - Platziertes Gebäude wird als Sprite (oder Icon-Fallback) gezeichnet
- *  - Hilfs-Export: Game.__spriteUrlById(id) für das UI-Overlay
+ * Änderung ggü. v18.6.0:
+ *  - cb:place:preview enthält jetzt zusätzlich tx/ty (== gx/gy)
+ *  - auch beim "Fallback-Preview" und beim Confirm-Preview
  * ============================================================================ */
 
 (() => {
   // == State =================================================================
   const _state = {
-    // Laufzeit
     started:false, mapId:null,
-
-    // Canvas
     canvas:null, ctx:null, w:0, h:0,
-
-    // Grid/Tiles
     tile:64, gridW:32, gridH:18,
-
-    // Weltobjekte
-    placements:[],                 // { id, x, y, w, h, door:{dx,dy} }
-    occupied:new Set(),            // "x,y"
-    hover:{x:-1,y:-1},
-    selectedBuilding:null,
-    preview:null,                  // { id,gx,gy }
-    showEntrances:false,           // Debug-Overlay (Ein-/Ausblendbar)
-
-    // Ressourcen
+    placements:[], occupied:new Set(), hover:{x:-1,y:-1},
+    selectedBuilding:null, preview:null, showEntrances:false,
     resources:{ wood:0, stone:0, food:0, gold:0, pop:0 },
-
-    // Map / Kamera / Loop
-    map:null, camX:0, camY:0, zoom:1,
-    rafId:0, lastTs:0,
-
-    // Eingaben
-    panActive:false,
-    panStart:{x:0,y:0,camX:0,camY:0},
-
-    // Multi-Touch / Pinch
-    pointers:new Map(),                                   // id -> {x,y}
-    pinch:{ active:false, d0:1, zoom0:1, center:{x:0,y:0} },
-
-    // Tap
+    map:null, camX:0, camY:0, zoom:1, rafId:0, lastTs:0,
+    panActive:false, panStart:{x:0,y:0,camX:0,camY:0},
+    pointers:new Map(), pinch:{ active:false, d0:1, zoom0:1, center:{x:0,y:0} },
     tapStart:{x:0,y:0},
-
-    // Assets-Auflösung & Cache
-    iconMap:null, spriteMap:null,
-    imgCache:new Map(),            // url -> HTMLImageElement | 'loading' | 'error'
+    iconMap:null, spriteMap:null, imgCache:new Map(),
   };
 
   // == Utils / Events ========================================================
@@ -137,7 +106,6 @@
     return { id:String(id), size:{w,h}, entrances, door, blockedTerrains };
   }
 
-  // Occupancy/Bounds
   const inBoundsTile=(gx,gy)=>gx>=0&&gy>=0&&gx<_state.gridW&&gy<_state.gridH;
   const inBoundsFootprint=(gx,gy,w,h)=>inBoundsTile(gx,gy)&&inBoundsTile(gx+w-1,gy+h-1);
   const isFree=(gx,gy)=>!_state.occupied.has(keyXY(gx,gy));
@@ -199,7 +167,7 @@
     return true;
   }
 
-  // == Kamera / Projektion ===================================================
+  // == Kamera / Projektion & Rendering ======================================
   function clampCameraToMap(){
     const WW=_state.gridW*_state.tile, HH=_state.gridH*_state.tile;
     const VW=_state.w/Math.max(EPS,_state.zoom), VH=_state.h/Math.max(EPS,_state.zoom);
@@ -226,7 +194,6 @@
   const screenToWorld=(cx,cy)=>{ const {sx,sy}=screenToCanvasPx(cx,cy); return { wx:sx/_state.zoom+_state.camX, wy:sy/_state.zoom+_state.camY }; };
   const worldToScreen=(wx,wy)=>({ sx:(wx-_state.camX)*_state.zoom, sy:(wy-_state.camY)*_state.zoom });
 
-  // == Rendering =============================================================
   function frame(ts){
     if(!_state.started) return;
     const {ctx,canvas,map}=_state; if(!ctx||!canvas) return;
@@ -234,14 +201,13 @@
     const dt=_state.lastTs?Math.min(0.1,(ts-_state.lastTs)/1000):0;
     _state.lastTs=ts;
 
-    map?.draw();                     // Map zeichnet sich selbst (mit setTransform)
+    map?.draw();
 
-    // HUD-Layer: zurück auf 1:1
     ctx.setTransform(1,0,0,1,0,0);
     ctx.save();
     drawGhost(ctx);
     drawPlacements(ctx);
-    window.Units && drawUnitsWithProjection(ctx, dt);
+    window.Units && drawUnitsWithProjection?.(ctx, dt);
     ctx.restore();
 
     _state.rafId=requestAnimationFrame(frame);
@@ -260,7 +226,6 @@
     if (sprite){
       ctx.drawImage(sprite, sx, sy, wTiles*s, hTiles*s);
     } else {
-      // Fallback (kleines Icon in der ersten Kachel) – damit man „immer etwas“ sieht
       const icon=getImage(getIconUrl(id));
       if(icon) ctx.drawImage(icon, sx+4, sy+4, s-8, s-8);
     }
@@ -270,8 +235,6 @@
     for (const p of _state.placements){
       const s=_state.tile*_state.zoom;
       const {sx,sy}=worldToScreen(p.x*_state.tile, p.y*_state.tile);
-
-      // KEIN grüner Rahmen für platzierte Gebäude (nur fürs Debugn optional)
       drawPlacementSprite(ctx, p.id, sx, sy, p.w, p.h);
 
       if (_state.showEntrances){
@@ -288,11 +251,12 @@
     }
   }
 
-  // == Build-Mode / Preview ==================================================
   function emitPreviewEvent(payload){
     const cssScale=getCssScale();
     EVT('cb:place:preview', {
       ...payload,
+      // WICHTIG: Tiles zusätzlich liefern (tx/ty = gx/gy)
+      tx: payload.gx, ty: payload.gy,
       cam:{x:_state.camX,y:_state.camY,z:_state.zoom},
       cssScale,
       canvas:{w:_state.canvas?.width||0,h:_state.canvas?.height||0}
@@ -314,10 +278,8 @@
     const pos=worldToScreen(gx*_state.tile, gy*_state.tile);
     const ok=canPlaceAtFootprint(gx,gy,id);
 
-    // Footprint
     drawRect(ctx,pos.sx,pos.sy,def.size.w*s,def.size.h*s,ok);
 
-    // Entrances
     const entrancesAbs=computeEntrancesAbs(gx,gy,def);
     for (const {ex,ey,blocked} of entrancesAbs){
       const epos=worldToScreen(ex*_state.tile,ey*_state.tile);
@@ -334,7 +296,7 @@
     });
   }
 
-  // == Map laden =============================================================
+  // == Map laden / Input / Build-Flow (unverändert bis auf Preview-Fix) ======
   async function loadMap(mapId){
     try{
       if (typeof mapId==='string' && /\.json($|\?)/i.test(mapId)){
@@ -357,14 +319,7 @@
     EVT('cb:map:loaded',{mapId,tile:_state.tile,size:{w:_state.gridW,h:_state.gridH}});
   }
 
-  // == Eingaben / Gesten =====================================================
-
-  // zentrale Aufräumer – verhindert „stale“ Zustände
-  function clearPointers(/* reason */){
-    _state.pointers.clear();
-    _state.pinch.active=false;
-    _state.panActive=false;
-  }
+  function clearPointers(){ _state.pointers.clear(); _state.pinch.active=false; _state.panActive=false; }
 
   function onResize(){
     const c=_state.canvas; if(!c) return;
@@ -388,12 +343,10 @@
     return true;
   }
 
-  // Ghost zentriert unter dem Finger (stabiler als floor)
   function _centeredGridUnderFinger(clientX, clientY, id){
     const def = getBuildingDef(id);
     const wTiles = def.size.w, hTiles = def.size.h;
     const wpos = screenToWorld(clientX, clientY);
-
     const gx = Math.round(wpos.wx / _state.tile - wTiles / 2);
     const gy = Math.round(wpos.wy / _state.tile - hTiles / 2);
     return { gx, gy, def };
@@ -401,17 +354,14 @@
 
   function onPointerDown(ev){
     rememberPointer(ev);
-
-    // 2. Finger → Pinch
     if (_state.pointers.size===2 && tryStartPinch()) return;
 
     if (_state.selectedBuilding){
       _state.tapStart.x=ev.clientX; _state.tapStart.y=ev.clientY;
-      _state.panActive=false;           // im Buildmode kein Pan starten
+      _state.panActive=false;
       return;
     }
 
-    // Kein Buildmode → Pan
     if (!_state.pinch.active){
       _state.panActive=true;
       _state.canvas.setPointerCapture?.(ev.pointerId);
@@ -421,11 +371,8 @@
 
   function onPointerMove(ev){
     rememberPointer(ev);
-
-    // Safety: im Buildmode bei <=1 Finger niemals Pinch aktiv lassen
     if (_state.selectedBuilding && _state.pointers.size<=1) _state.pinch.active=false;
 
-    // Hover / Ghost
     if (_state.selectedBuilding){
       const r=_centeredGridUnderFinger(ev.clientX,ev.clientY,_state.selectedBuilding);
       if (inBoundsTile(r.gx,r.gy)) { _state.hover.x=r.gx; _state.hover.y=r.gy; }
@@ -436,7 +383,6 @@
       if (inBoundsTile(gx,gy)) { _state.hover.x=gx; _state.hover.y=gy; } else { _state.hover.x=-1; _state.hover.y=-1; }
     }
 
-    // Pinch (2 Finger)
     if (_state.pinch.active && _state.pointers.size===2){
       const [a,b]=[..._state.pointers.values()];
       const dist=Math.hypot(a.x-b.x,a.y-b.y);
@@ -453,7 +399,6 @@
       return;
     }
 
-    // Pan (nur außerhalb Buildmode, 1 Finger)
     if (_state.panActive && !_state.selectedBuilding){
       const dx=(ev.clientX-_state.panStart.x)/Math.max(EPS,_state.zoom);
       const dy=(ev.clientY-_state.panStart.y)/Math.max(EPS,_state.zoom);
@@ -473,7 +418,6 @@
     const isTap=moved<8;
 
     if (wasPlacing && !wasPinch && isTap){
-      // >>> EXAKT da bauen, wo die letzte Preview steht – keine Neuberechnung
       const prev=_state.preview;
       if (prev){
         const def=getBuildingDef(prev.id);
@@ -483,14 +427,13 @@
           const pos=worldToScreen(prev.gx*_state.tile, prev.gy*_state.tile);
           const entrancesAbs=computeEntrancesAbs(prev.gx,prev.gy,def);
           emitPreviewEvent({
-            id:prev.id, gx:prev.gx, gy:prev.gy,
+            id:prev.id, gx:prev.gx, gy:prev.gy, tx:prev.gx, ty:prev.gy,
             sx:pos.sx, sy:pos.sy, size:_state.tile*_state.zoom, invalid:false,
             w:def.size.w, h:def.size.h, door:{...def.door},
             entrances:def.entrances.slice(), entrancesAbs
           });
         }
       } else {
-        // Fallback (äußerst selten)
         const {gx,gy,def}=_centeredGridUnderFinger(ev.clientX,ev.clientY,_state.selectedBuilding);
         const ok=canPlaceAtFootprint(gx,gy,_state.selectedBuilding);
         if (!ok){ _state.preview=null; emitPreviewEvent({ invalid:true }); }
@@ -499,8 +442,10 @@
           const pos=worldToScreen(gx*_state.tile, gy*_state.tile);
           const entrancesAbs=computeEntrancesAbs(gx,gy,def);
           emitPreviewEvent({
-            id:_state.preview.id, gx, gy, sx:pos.sx, sy:pos.sy, size:_state.tile*_state.zoom, invalid:false,
-            w:def.size.w, h:def.size.h, door:{...def.door}, entrances:def.entrances.slice(), entrancesAbs
+            id:_state.preview.id, gx, gy, tx:gx, ty:gy,
+            sx:pos.sx, sy:pos.sy, size:_state.tile*_state.zoom, invalid:false,
+            w:def.size.w, h:def.size.h, door:{...def.door},
+            entrances:def.entrances.slice(), entrancesAbs
           });
         }
       }
@@ -509,9 +454,8 @@
     if (_state.pointers.size===0){ _state.pinch.active=false; _state.panActive=false; }
   }
 
-  // Wheel nur auf echten Mäusen
   function onWheel(ev){
-    if ('ontouchstart' in window) return; // Touchgeräte ignorieren Wheel
+    if ('ontouchstart' in window) return;
     ev.preventDefault();
     const old=_state.zoom, fac=ev.deltaY<0?1.1:0.9;
     const nz=clamp(old*fac, _state.map?.minZoom ?? 0.5, _state.map?.maxZoom ?? 3);
@@ -522,32 +466,27 @@
     _state.camX=before.wx-(cs.sx/_state.zoom);
     _state.camY=before.wy-(cs.sy/_state.zoom);
     clampCameraToMap();
-    if (_state.map){ _state.map.zoom=_state.zoom; _state.map.camX=_state.camX; _state.map.camY=_state.camY; }
   }
 
-  // == Build-Mode Helpers ====================================================
   function exitBuildMode(reason='done'){
     _state.preview=null;
     _state.selectedBuilding=null;
-    clearPointers('exitBuildMode');
+    clearPointers();
     EVT('cb:place:preview',{invalid:true});
     EVT('cb:build:mode',{active:false,reason});
     log('build mode off ←', reason);
   }
 
-  // == Public API ============================================================
   function init(canvas){
     if(!canvas){ err('init: Canvas fehlt'); return; }
     _state.canvas=canvas;
     _state.ctx   =canvas.getContext('2d');
 
-    // iOS/Safari – Page-Gesten strikt unterbinden
     _state.canvas.style.touchAction='none';
     _state.canvas.addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
     _state.canvas.addEventListener('touchmove', e=>e.preventDefault(),{passive:false});
     _state.canvas.addEventListener('touchend',  e=>e.preventDefault(),{passive:false});
 
-    // Map-Renderer
     if (typeof window.SiedlerMap!=='function'){
       err('SiedlerMap fehlt – core/core.map.js nicht geladen?');
     } else {
@@ -558,7 +497,6 @@
 
     window.Units?.init?.(_state.ctx,_state.tile);
 
-    // Events
     onResize(); window.addEventListener('resize',onResize);
     canvas.addEventListener('pointerdown',onPointerDown);
     window.addEventListener('pointermove',onPointerMove);
@@ -566,16 +504,14 @@
     window.addEventListener('pointercancel', onPointerUp);
     canvas.addEventListener('wheel',onWheel,{passive:false});
 
-    // Auswahl aus Baumenü
     window.addEventListener('cb:build:select',(e)=>{
       _state.selectedBuilding=e?.detail?.id||null;
       _state.preview=null;
-      clearPointers('select');
+      clearPointers();
       emitPreviewEvent({invalid:true});
       log('select building',_state.selectedBuilding);
     });
 
-    // Confirm/Cancel
     window.addEventListener('cb:place:confirm',(e)=>{
       const d=e.detail||{};
       if (_state.preview && d && d.gx===_state.preview.gx && d.gy===_state.preview.gy){
@@ -593,7 +529,6 @@
     });
     window.addEventListener('cb:place:cancel',()=>exitBuildMode('cancel'));
 
-    // Debug/Inspector-Hook: Entrances ein/aus
     window.addEventListener('cb:dbg:entrances:show',(e)=>{ _state.showEntrances=!!e.detail?.show; });
 
     log('init ✓');
@@ -615,13 +550,10 @@
 
     EVT('cb:res:change',{..._state.resources});
 
-    // Sicherheit: nach Layout final nochmal zentrieren
     requestAnimationFrame(()=>{ onResize(); centerCameraOnMap(); });
   }
 
-  // Exporte / Debug
   function __spriteUrlById(id){ return getSpriteUrl(id); }
-
   const getState=()=>{ const { started,mapId,tile,gridW,gridH,placements,selectedBuilding }=_state; return { started,mapId,tile,gridW,gridH,placements:placements.slice(),selectedBuilding }; };
   const getResources=()=>({ ..._state.resources });
 
