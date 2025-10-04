@@ -127,37 +127,40 @@
   window.addEventListener('cb:place:confirm', hide);
   window.addEventListener('cb:place:cancel',  hide);
 
-  /* ============================================================================
-   * Glue: Ghost → Place (nur einmal binden, keine Doppel-Platzierung)
-   *  - Kein world.insert mehr; die Engine reagiert auf cb:place:confirm.
-   *  - Kein HQ-Spawn hier (macht boot.js am Eingang).
-   * ========================================================================== */
-  (function(){
-    'use strict';
-    if (window.__uiPlaceGlueMounted) return;
-    window.__uiPlaceGlueMounted = true;
+/* ============================================================================
+ * Glue: Ghost → Place (nur einmal binden, keine Doppel-Platzierung)
+ *  - Merkt tx,ty aus dem Preview (Engine-Quelle).
+ *  - Beim OK feuert es cb:place:confirm:tile mit GENAU diesen tx,ty.
+ * ========================================================================== */
+(function(){
+  'use strict';
+  if (window.__uiPlaceGlueMounted) return;
+  window.__uiPlaceGlueMounted = true;
 
-    const LOGG = (window.CBLog?.ok || console.log).bind(console,'[ui-place-glue]');
-    const tileSize = ()=> (window.Game?.map?.tile|0) || 64;
-    const snapTile = (px)=> Math.max(0, Math.round(px / tileSize()));
+  const LOG = (window.CBLog?.ok || console.log).bind(console,'[ui-place-glue]');
 
-    // Auswahl (nur für Diagnosen)
-    let currentId = null;
-    window.addEventListener('cb:build:select', (ev)=>{ currentId = ev?.detail?.id || null; });
+  // letzter Preview-Stand (von der Engine)
+  let last = { id:null, tx:null, ty:null, w:1, h:1, valid:false };
 
-    // Confirm normalisiert → Engine soll platzieren
-    window.addEventListener('cb:place:confirm', (ev)=>{
-      // wenn schon TILES mitgeliefert werden → nichts tun
-      if (typeof ev?.detail?.tx === 'number' && typeof ev?.detail?.ty === 'number') return;
+  // Preview → Merken, NICHT umrechnen!
+  window.addEventListener('cb:place:preview', (ev)=>{
+    const d = ev?.detail||{};
+    last.id = d.id || last.id;
+    last.tx = (typeof d.tx === 'number') ? d.tx : last.tx;
+    last.ty = (typeof d.ty === 'number') ? d.ty : last.ty;
+    last.w  = d.w|0 || last.w;
+    last.h  = d.h|0 || last.h;
+    last.valid = !d.invalid;
+  });
 
-      // Optional: Pixel→Tiles normalisieren und als Zusatz-Event feuern
-      // (nur wenn Engine das erwartet; ansonsten reicht das Original)
-      if (typeof ev?.detail?.gx === 'number' && typeof ev?.detail?.gy === 'number'){
-        const tx = snapTile(ev.detail.gx), ty = snapTile(ev.detail.gy);
-        window.dispatchEvent(new CustomEvent('cb:place:confirm:tile', { detail:{ id: currentId, tx, ty }}));
-        LOGG('confirm (tile) →', { id: currentId, tx, ty });
-      }
-    });
-  })();
-
+  // OK vom Overlay → wenn wir echte Tiles haben, direkt weitergeben
+  window.addEventListener('cb:place:confirm', ()=>{
+    if (!last.valid || typeof last.tx !== 'number' || typeof last.ty !== 'number'){
+      LOG('confirm: missing tiles/invalid → skip', last);
+      return;
+    }
+    const payload = { id:last.id, tx:last.tx, ty:last.ty };
+    window.dispatchEvent(new CustomEvent('cb:place:confirm:tile', { detail: payload }));
+    LOG('confirm (tile) →', payload);
+  });
 })();
