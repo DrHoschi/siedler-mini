@@ -1,15 +1,15 @@
 {
   "iconsBase": "assets/icons/buildings/",
   "categories": [
-    { "id": "all",        "label": "Alles"          },
-    { "id": "admin",      "label": "Verwaltung"     },
-    { "id": "resource",   "label": "Rohstoffe"      },
-    { "id": "food",       "label": "Nahrung"        },
-    { "id": "housing",    "label": "Hütten"         },
-    { "id": "logistics",  "label": "Straßen/Lager"  },
-    { "id": "military",   "label": "Verteidigung"   },
-    { "id": "decor",      "label": "Decoration"     },
-    { "id": "roads",      "label": "Wege/Pfade"     }
+    { "id": "all", "label": "Alles" },
+    { "id": "admin", "label": "Verwaltung" },
+    { "id": "resource", "label": "Rohstoffe" },
+    { "id": "food", "label": "Nahrung" },
+    { "id": "housing", "label": "Hütten" },
+    { "id": "logistics", "label": "Straßen/Lager" },
+    { "id": "military", "label": "Verteidigung" },
+    { "id": "decor", "label": "Decoration" },
+    { "id": "roads", "label": "Wege/Pfade" }
   ],
   "buildings": [
     {
@@ -20,10 +20,7 @@
       "sprite": "hq.png",
       "cost": { "wood": 4, "stone": 2 },
       "size": [3, 3],
-      "entrances": [[1, 2]],
-      "enabled": true,
-      "cycle": 0,
-      "outputs": []
+      "entrances": [[1, 2]]
     },
     {
       "id": "lumberjack",
@@ -34,11 +31,8 @@
       "cost": { "wood": 2 },
       "size": [3, 3],
       "entrances": [[1, 2]],
-      "enabled": true,
-      "cycle": 5,
-      "outputs": [
-        { "id": "res.wood", "amount": 1 }
-      ]
+      "outputs": [ { "id": "res.wood", "amount": 1 } ],
+      "cycle": 6
     },
     {
       "id": "quarry",
@@ -49,11 +43,8 @@
       "cost": { "wood": 1, "stone": 1 },
       "size": [3, 3],
       "entrances": [[0, 2]],
-      "enabled": true,
-      "cycle": 7,
-      "outputs": [
-        { "id": "res.stone", "amount": 1 }
-      ]
+      "outputs": [ { "id": "res.stone", "amount": 1 } ],
+      "cycle": 8
     },
     {
       "id": "fisher",
@@ -64,11 +55,8 @@
       "cost": { "wood": 2 },
       "size": [3, 3],
       "entrances": [[0, 2]],
-      "enabled": true,
-      "cycle": 6,
-      "outputs": [
-        { "id": "res.fish", "amount": 1 }
-      ]
+      "outputs": [ { "id": "res.fish", "amount": 1 } ],
+      "cycle": 7
     }
   ]
 }
