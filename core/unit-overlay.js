@@ -1,104 +1,122 @@
 /* ============================================================================
  * Datei   : core/unit-overlay.js
- * Projekt : Neue Siedler
- * Version : v1.2.1 (2025-10-04)
- * Zweck   : Zeichnet Träger (Punkte) + Ressource-Icon über dem Game-Canvas
- * Hinweis : Erwartet ein <canvas id="overlay-units"> direkt über #game.
- * ============================================================================ */
+ * Zweck   : Zeichnet Träger (Punkte) + Ressource-Icon auf Overlay-Canvas
+ * ============================================================================
+ */
 (function(root,factory){ root.UnitOverlay = factory(); })(this, function(){
   'use strict';
 
   const CANVAS_ID   = 'overlay-units';
-  const BASE_RADIUS = 8;
-  const ICON_SIZE   = 18;
+  const BASE_RADIUS = 8;    // Basis-Radius in CSS px
+  const ICON_SIZE   = 18;   // Basis-Kantenlänge in CSS px
 
   const RES_ICON = {
     'res.wood' : 'assets/icons/resources/wood.png',
     'res.stone': 'assets/icons/resources/stone.png',
     'res.fish' : 'assets/icons/resources/fish.png'
   };
-
-  // --- Helpers ----------------------------------------------------------------
-  const cacheImg = Object.create(null);
-  function loadIcon(path){
-    if (!path) return null;
-    if (cacheImg[path]) return cacheImg[path];
-    const img = new Image(); img.src = path; cacheImg[path] = img; return img;
+  const imgCache = Object.create(null);
+  function getIcon(path){ if (!path) return null;
+    if (imgCache[path]) return imgCache[path];
+    const i = new Image(); i.src = path; imgCache[path] = i; return i;
   }
   function resIcon(resId){
-    const override = (window.UIResIcons||{})[resId];
-    return loadIcon(override || RES_ICON[resId] || '');
+    const ovr = (window.UIResIcons||{})[resId];
+    return getIcon(ovr || RES_ICON[resId] || '');
   }
 
-  function cvs(){ return document.getElementById(CANVAS_ID); }
-  function ctx(){ const c=cvs(); return c ? c.getContext('2d') : null; }
+  let $c=null, ctx=null, raf=0;
 
-  /** Canvas exakt auf #game „klemmen“ (DPR-korrigiert) */
+  function ensureCanvas(){
+    $c = document.getElementById(CANVAS_ID);
+    if (!$c){
+      $c = document.createElement('canvas');
+      $c.id = CANVAS_ID;
+      // wichtig für iOS-Touch
+      $c.style.touchAction = 'none';
+      $c.style.pointerEvents = 'none';
+      const app = document.getElementById('app') || document.body;
+      app.appendChild($c);
+    }
+    if (!ctx) ctx = $c.getContext('2d');
+  }
+
   function fitToGame(){
-    const cu = cvs(), g = document.getElementById('game');
-    if (!cu || !g) return;
+    ensureCanvas();
+    const g = document.getElementById('game');
+    if (!g || !ctx) return;
 
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    // Position exakt auf den Game-Canvas legen
+    const r = g.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio||1);
 
-    // CSS-Größe an Game-Canvas koppeln (wir zeichnen in CSS-Pixeln)
-    cu.style.position = 'absolute';
-    cu.style.left     = '0';
-    cu.style.top      = '0';
-    cu.style.zIndex   = '50';
-    cu.style.pointerEvents = 'none';
+    // CSS-Positionierung (über absolut, an #app relativ)
+    const appRect = (document.getElementById('app')||document.body).getBoundingClientRect();
+    const left = r.left - appRect.left;
+    const top  = r.top  - appRect.top;
 
-    cu.style.width  = g.width  + 'px';
-    cu.style.height = g.height + 'px';
-    cu.width  = Math.round(g.width  * dpr);
-    cu.height = Math.round(g.height * dpr);
+    $c.style.position = 'absolute';
+    $c.style.left = left + 'px';
+    $c.style.top  = top  + 'px';
+    $c.style.width  = g.width + 'px';
+    $c.style.height = g.height + 'px';
+    $c.style.zIndex = 50;
+    $c.width  = Math.round(g.width  * dpr);
+    $c.height = Math.round(g.height * dpr);
 
-    const x = ctx();
-    if (x) x.setTransform(dpr,0,0,dpr,0,0);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
   }
 
-  // --- Render -----------------------------------------------------------------
   function draw(){
-    const c = cvs(), x = ctx(); if (!c||!x) return;
-    x.clearRect(0,0,c.width,c.height);
+    if (!ctx || !$c) return;
 
-    // Kamera-/View-Offset des Renderers (Fallback 0/0)
-    const view = (window.Game?.map?.view) || (window.Game?.cam) || { x:0, y:0 };
+    ctx.clearRect(0,0,$c.width,$c.height);
 
-    const list = (window.Carriers?.list?.() || []);
-    for (const u of list){
-      const sx = (u.x||0) - (view.x||0);
-      const sy = (u.y||0) - (view.y||0);
+    // Kamera/Zoom vom Game lesen
+    const map  = (window.Game?.map) || {};
+    const camX = Number(map.camX)||0, camY = Number(map.camY)||0;
+    const zoom = Math.max(0.5, Math.min(3, Number(map.zoom)||1));
 
-      // Punkt: dunkle Outline + helle Füllung
-      x.beginPath(); x.arc(sx, sy, BASE_RADIUS + 1.5, 0, Math.PI*2); x.fillStyle='rgba(0,0,0,.65)'; x.fill();
-      x.beginPath(); x.arc(sx, sy, BASE_RADIUS, 0, Math.PI*2);       x.fillStyle='rgba(255,255,255,.95)'; x.fill();
+    const R  = BASE_RADIUS * zoom;
+    const IS = ICON_SIZE   * zoom;
 
-      // Icon (wenn Ressource getragen wird)
+    const units = (window.Carriers?.list?.()||[]);
+    for (const u of units){
+      const sx = (u.x||0) - camX;
+      const sy = (u.y||0) - camY;
+
+      // Outline
+      ctx.beginPath(); ctx.arc(sx, sy, R+1.5, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fill();
+
+      // Punkt
+      ctx.beginPath(); ctx.arc(sx, sy, R, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fill();
+
+      // Ressource-Icon
       const resId = u.carry?.id;
       if (resId){
         const img = resIcon(resId);
         if (img && img.complete){
-          x.drawImage(img, sx + BASE_RADIUS + 2, sy - ICON_SIZE - 2, ICON_SIZE, ICON_SIZE);
+          ctx.drawImage(img, sx + R + 2, sy - IS - 2, IS, IS);
         }
       }
     }
-    requestAnimationFrame(draw);
+
+    raf = requestAnimationFrame(draw);
   }
 
-  // --- API --------------------------------------------------------------------
-  const api = {
-    start(){
-      // Canvas anlegen, falls nicht vorhanden
-      if (!document.getElementById(CANVAS_ID)){
-        const cv = document.createElement('canvas');
-        cv.id = CANVAS_ID;
-        // direkt neben #game in denselben Container
-        (document.getElementById('game')?.parentElement || document.body).appendChild(cv);
-      }
-      fitToGame();
-      requestAnimationFrame(draw);
-      window.addEventListener('resize', fitToGame);
-    }
-  };
-  return api;
+  // API
+  function start(){
+    fitToGame();
+    if (!raf) raf = requestAnimationFrame(draw);
+
+    // Reaktionen auf Resize/Scroll/Zoom
+    window.addEventListener('resize', fitToGame);
+    window.addEventListener('scroll', fitToGame, { passive:true });
+    window.addEventListener('cb:map:zoom', fitToGame);
+    window.addEventListener('cb:map:scroll', fitToGame);
+  }
+
+  return { start, fit:fitToGame };
 });
