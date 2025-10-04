@@ -57,6 +57,37 @@
     if (x) x.setTransform(dpr,0,0,dpr,0,0); // Zeichnen wieder in CSS-Pixeln
   }
 
+  function draw(){
+  const c = cvs(), x = ctx(); if (!c||!x) return;
+  x.clearRect(0,0,c.width,c.height);
+
+  // NEU: Kamera/View-Offset aus der Map holen (Fallback 0/0)
+  const view = (window.Game?.map?.view) || (window.Game?.cam) || {x:0, y:0};
+
+  const list = (window.Carriers?.list?.() || []);
+  for (const u of list){
+    // Welt → Bildschirm: Kamera abziehen
+    const sx = (u.x||0) - (view.x||0);
+    const sy = (u.y||0) - (view.y||0);
+
+    // Punkt mit Outline
+    x.beginPath(); x.arc(sx, sy, BASE_RADIUS + 1.5, 0, Math.PI*2);
+    x.fillStyle = 'rgba(0,0,0,.65)'; x.fill();
+    x.beginPath(); x.arc(sx, sy, BASE_RADIUS, 0, Math.PI*2);
+    x.fillStyle = 'rgba(255,255,255,.95)'; x.fill();
+
+    // Ressource-Icon, falls trägt
+    const resId = u.carry?.id;
+    if (resId){
+      const img = resIcon(resId);
+      if (img && img.complete){
+        x.drawImage(img, sx + BASE_RADIUS + 2, sy - ICON_SIZE - 2, ICON_SIZE, ICON_SIZE);
+      }
+    }
+  }
+  requestAnimationFrame(draw);
+}
+  
   // --------------------------------- Render ----------------------------------
   function draw(){
     const c = cvs(), x = ctx(); if (!c||!x) return;
