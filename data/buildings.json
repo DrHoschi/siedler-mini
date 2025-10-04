@@ -1,5 +1,6 @@
 {
-  "iconsBase": "assets/icons/buildings/",
+  "spritesBase": "assets/sprites/buildings/",
+  "iconsBase":   "assets/icons/buildings/",
   "categories": [
     { "id": "all", "label": "Alles" },
     { "id": "admin", "label": "Verwaltung" },
