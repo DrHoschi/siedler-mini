@@ -1,183 +1,80 @@
 /* ============================================================================
  * Datei   : ui/ui-place.js
- * Zweck   : UI-Overlay für Platzieren (Vorschau + ✓/✕ Buttons)
- * Version : v3.5.0 (Tiles-Fallback; Single-bind; robuste Buttons)
- * Events  : hört auf 'cb:place:preview' / 'cb:place:confirm' / 'cb:place:cancel'
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v1.4.0 (2025-10-05)
+ * Zweck   : Platzier-UI (Ghost, Confirm, Cancel)
+ * Events  :
+ *   IN : cb:place:preview { id,gx,gy,tx,ty,invalid,... }
+ *   IN : cb:build:mode    { active:boolean }
+ *   OUT: cb:place:confirm { id,gx,gy }    (nur 1x pro Ghost)
+ *   OUT: cb:place:cancel
+ *
+ * Änderungen v1.4.0:
+ *   - Confirm-Lock (de-dupe) gegen sporadische „nichts passiert“
+ *   - Auto-Release des Locks (Fail-Safe)
+ *   - Log-Ausgaben für Mobile-WebInspector
  * ============================================================================ */
-(() => {
+(function(){
   'use strict';
+  const LOG  = (window.CBLog?.ok  || console.log).bind(console, '[ui-place]');
+  const WARN = (window.CBLog?.warn|| console.warn).bind(console, '[ui-place]');
 
-  const TAG  = '[ui-place]';
-  const LOG  = (...a) => (window.CBLog?.info || console.log)(TAG, ...a);
+  // --- interner State --------------------------------------------------------
+  let ghost = null; // { id,gx,gy,invalid, ... }
+  let lock  = false;
+  let lockTimer = 0;
 
-  let root, spriteImg, okBtn, cancelBtn;
-  let last = null;
-
-  function ensureDOM() {
-    if (root) return;
-
-    root = document.createElement('div');
-    root.className = 'place-overlay';
-    root.style.display = 'none';
-    root.style.position = 'absolute';
-    root.style.left = '0';
-    root.style.top  = '0';
-    root.style.zIndex = '2000';
-    root.style.pointerEvents = 'none';
-
-    spriteImg = document.createElement('img');
-    spriteImg.className = 'place-sprite';
-    spriteImg.alt = '';
-    spriteImg.style.position = 'absolute';
-    spriteImg.style.left = '0';
-    spriteImg.style.top  = '0';
-    spriteImg.style.width = '100%';
-    spriteImg.style.height= '100%';
-    spriteImg.style.imageRendering = 'pixelated';
-    spriteImg.style.pointerEvents = 'none';
-    root.appendChild(spriteImg);
-
-    okBtn = document.createElement('button');
-    okBtn.className = 'place-btn ok';
-    okBtn.type = 'button';
-    okBtn.textContent = '✓';
-    baseBtnStyles(okBtn);
-    okBtn.style.left = '8px';
-    okBtn.style.top  = '8px';
-    okBtn.addEventListener('click', () => {
-      if (!last || last.invalid) return;
-      window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail: { gx: last.gx, gy: last.gy } }));
-    });
-    root.appendChild(okBtn);
-
-    cancelBtn = document.createElement('button');
-    cancelBtn.className = 'place-btn cancel';
-    cancelBtn.type = 'button';
-    cancelBtn.textContent = '✕';
-    baseBtnStyles(cancelBtn);
-    cancelBtn.style.right = '8px';
-    cancelBtn.style.top   = '8px';
-    cancelBtn.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('cb:place:cancel'));
-      hide();
-    });
-    root.appendChild(cancelBtn);
-
-    (document.getElementById('game')?.parentElement || document.body).appendChild(root);
-    window.addEventListener('resize', () => { if (last) apply(last); });
-
-    LOG('ready');
-  }
-
-  function baseBtnStyles(btn){
-    btn.style.position = 'absolute';
-    btn.style.minWidth = '32px';
-    btn.style.height   = '32px';
-    btn.style.border   = '0';
-    btn.style.borderRadius = '8px';
-    btn.style.fontWeight = '700';
-    btn.style.fontSize   = '18px';
-    btn.style.lineHeight = '32px';
-    btn.style.cursor     = 'pointer';
-    btn.style.pointerEvents = 'auto';
-    btn.style.boxShadow  = '0 2px 6px rgba(0,0,0,.25)';
-    btn.style.color      = '#fff';
-    btn.style.background = btn.classList.contains('ok')
-      ? 'linear-gradient(#1fb070,#15915a)'
-      : 'linear-gradient(#d85d5d,#b44a4a)';
-  }
-
-  function hide(){ if (root) root.style.display = 'none'; last = null; }
-
-  // Vorschau exakt legen (p.sx/sy,size sind CANVAS-Pixel)
-  function apply(p) {
-    ensureDOM();
-    if (!p || p.invalid) { hide(); return; }
-    last = p;
-
-    const cssScale = p.cssScale || { x: 1, y: 1 };
-    const k       = p.size || 64;
-    const wTiles  = p.w || 1;
-    const hTiles  = p.h || 1;
-
-    const leftCSS   = (p.sx || 0) / cssScale.x;
-    const topCSS    = (p.sy || 0) / cssScale.y;
-    const widthCSS  = (k * wTiles) / cssScale.x;
-    const heightCSS = (k * hTiles) / cssScale.y;
-
-    root.style.display = 'block';
-    root.style.left    = `${leftCSS}px`;
-    root.style.top     = `${topCSS}px`;
-    root.style.width   = `${widthCSS}px`;
-    root.style.height  = `${heightCSS}px`;
-
-    // Sprite-Quelle ermitteln
-    let spriteURL = null;
-    try { spriteURL = window.Game?.__spriteUrlById?.(p.id) || null; } catch {}
-    if (!spriteURL){
-      const b = window.Registry?.byId?.(p.id);
-      spriteURL = b?.spriteUrl || b?.sprite || b?.iconUrl || b?.icon || null;
+  function setLock(v){
+    lock = !!v;
+    clearTimeout(lockTimer);
+    if (lock) {
+      // Fail-Safe: wenn Spiel nicht reagiert (z.B. Event verloren), Lock lösen
+      lockTimer = setTimeout(()=>{ lock=false; LOG('confirm-lock auto-release'); }, 800);
     }
-    if (spriteURL){ spriteImg.src = spriteURL; spriteImg.style.display = 'block'; }
-    else { spriteImg.style.display = 'none'; }
   }
 
-  // Event-Wireup
-  window.addEventListener('cb:place:preview', (e) => {
-    const d=e?.detail||{};
-    if (!d || d.invalid){ hide(); return; }
-    // Merken, damit OK korrekt feuert
-    last = {
-      ...d,
-      // Fallback: wenn tx/ty fehlen, gx/gy als Tiles nutzen
-      tx: (typeof d.tx === 'number' ? d.tx : d.gx),
-      ty: (typeof d.ty === 'number' ? d.ty : d.gy),
-    };
-    apply(last);
+  function confirmOnce(){
+    if (!ghost || ghost.invalid) { WARN('confirm: ghost invalid/leer'); return; }
+    if (lock) { WARN('confirm: locked – de-dupe'); return; }
+    setLock(true);
+
+    const payload = { id: ghost.id, gx: ghost.tx ?? ghost.gx, gy: ghost.ty ?? ghost.gy };
+    LOG('confirm (tile) →', payload);
+    window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail: payload }));
+  }
+
+  function cancel(){
+    if (!ghost) return;
+    LOG('cancel');
+    window.dispatchEvent(new Event('cb:place:cancel'));
+    ghost = null; setLock(false);
+  }
+
+  // --- Buttons / Eingabe (hier simpel gehalten) -----------------------------
+  // Tipp: Wenn du Bestätigungs-Buttons im Ghost zeichnest -> hier binden.
+  window.addEventListener('keydown', (e)=>{
+    if (!ghost) return;
+    if (e.key==='Enter') confirmOnce();
+    else if (e.key==='Escape') cancel();
   });
-  window.addEventListener('cb:place:confirm', hide);
-  window.addEventListener('cb:place:cancel',  hide);
 
-  /* ==========================================================================
-   * Glue: Ghost → Place (nur einmal binden, keine Doppel-Platzierung)
-   *  - Merkt tx,ty ODER fallback gx,gy aus Preview.
-   *  - Beim OK feuert es cb:place:confirm:tile mit GENAU diesen tx,ty.
-   * ======================================================================== */
-  (function(){
-    'use strict';
-    if (window.__uiPlaceGlueMounted) return;
-    window.__uiPlaceGlueMounted = true;
+  // --- Ghost-Vorschau vom Game ----------------------------------------------
+  window.addEventListener('cb:place:preview', (e)=>{
+    ghost = e?.detail || null;
+    if (ghost?.invalid) { /* sichtbare UI ggf. disable */ }
+  });
 
-    const GLOG = (window.CBLog?.ok || console.log).bind(console,'[ui-place-glue]');
-    let L = { id:null, tx:null, ty:null, w:1, h:1, valid:false };
+  // --- Public Hooks (falls UI-Toggle Panels hat) -----------------------------
+  window.addEventListener('cb:build:mode', (e)=>{
+    const active = !!e?.detail?.active;
+    if (!active) { ghost=null; setLock(false); }
+  });
 
-    // Preview → Merken, NICHT neu rechnen
-    window.addEventListener('cb:place:preview', (ev)=>{
-      const d = ev?.detail||{};
-      L.id = d.id || L.id;
-      // NEU: Fallback auf gx/gy, falls tx/ty fehlen
-      L.tx = (typeof d.tx === 'number') ? d.tx : (typeof d.gx === 'number' ? d.gx : L.tx);
-      L.ty = (typeof d.ty === 'number') ? d.ty : (typeof d.gy === 'number' ? d.gy : L.ty);
-      L.w  = d.w|0 || L.w;
-      L.h  = d.h|0 || L.h;
-      L.valid = !d.invalid;
-    });
+  // Exponiere (optional) kleine API für Buttons im DOM
+  window.UIPlace = {
+    confirm: confirmOnce,
+    cancel : cancel
+  };
 
-    // OK vom Overlay → als Tiles weiterreichen (für boot.js Carrier-Spawn)
-    window.addEventListener('cb:place:confirm', ()=>{
-      if (!L.valid || typeof L.tx !== 'number' || typeof L.ty !== 'number'){
-        GLOG('confirm: missing tiles/invalid → skip', L);
-        return;
-      }
-      const payload = { id:L.id, tx:L.tx, ty:L.ty };
-      window.dispatchEvent(new CustomEvent('cb:place:confirm:tile', { detail: payload }));
-      GLOG('confirm (tile) →', payload);
-    });
-
-    // Buildmode aus → sichern, aber als invalid betrachten
-    window.addEventListener('cb:build:mode', ()=>{ L.valid=false; });
-
-    GLOG('mounted');
-  })();
-
+  LOG('ready');
 })();
