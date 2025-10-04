@@ -221,10 +221,21 @@
         $insp.classList.toggle('hidden'); fire('req:inspector:toggle');
       });
       document.getElementById('btn-fullscreen')?.addEventListener('click', function(){
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
-        fire('cb:start:fullscreen');
-      });
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      req?.call(el);
+    } else {
+      exit?.call(document);
+    }
+  } catch(e){
+    (window.CBLog?.warn||console.warn)('[index] fullscreen failed', e);
+  }
+  window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
+});
 
       // Build-Button → Dock show/hide
       $btnBuild?.addEventListener('click', function(){
