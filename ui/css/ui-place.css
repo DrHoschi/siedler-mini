@@ -87,3 +87,22 @@
 @media (prefers-reduced-motion: reduce) {
   .place-btn { transition: none; }
 }
+
+/* ===== Place-Ghost-Overlay ganz nach oben ===== */
+.ui-place-ghost,
+.ui-place-ghost * {
+  pointer-events: auto;          /* Buttons klickbar */
+}
+
+.ui-place-ghost {
+  position: absolute;
+  z-index: 300;                  /* über HUD/Build-Dock/Overlay */
+  inset: 0;
+}
+
+/* Sicherheitsnetz: die Bestätigungs-Controls (falls separate Klasse) */
+.ui-place-controls {
+  position: absolute;
+  z-index: 301;
+  pointer-events: auto;
+}
