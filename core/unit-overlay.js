@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/unit-overlay.js
  * Projekt : Neue Siedler
- * Version : v1.1.0 (2025-10-04)
+ * Version : v1.2.0 (2025-10-04)
  * Zweck   : Zeichnet Träger (Punkte) + Ressource-Icon auf separatem Canvas
  * Hinweis : Erwartet ein <canvas id="overlay-units"> über dem Game-Canvas
  * ============================================================================ */
@@ -9,9 +9,9 @@
   'use strict';
 
   // --------------------------------- Konstanten ------------------------------
-  const CANVAS_ID  = 'overlay-units';
-  const BASE_RADIUS = 8;   // Basispunktgröße (px) – wird mit DPR skaliert
-  const ICON_SIZE   = 18;  // Icon-Kantenlänge (px) – wird mit DPR skaliert
+  const CANVAS_ID   = 'overlay-units';
+  const BASE_RADIUS = 8;   // Basispunktgröße in CSS-Pixeln (DPR-korrigiert)
+  const ICON_SIZE   = 18;  // Icon-Kantenlänge in CSS-Pixeln
 
   // Ressource-Icons (Default; via window.UIResIcons überschreibbar)
   const RES_ICON = {
@@ -39,81 +39,46 @@
     const cu = cvs(), g = document.getElementById('game');
     if (!cu || !g) return;
 
-    // DPI aware canvas sizing
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     cu.style.width  = g.width  + 'px';
     cu.style.height = g.height + 'px';
     cu.width  = Math.round(g.width  * dpr);
     cu.height = Math.round(g.height * dpr);
 
-    // Position & stacking
     cu.style.position='absolute';
     cu.style.left = g.style.left || '0px';
     cu.style.top  = g.style.top  || '0px';
-    cu.style.zIndex = 50; // über Path-Overlay
+    cu.style.zIndex = 50;
     cu.style.pointerEvents = 'none';
 
     const x = ctx();
-    if (x) x.setTransform(dpr,0,0,dpr,0,0); // Zeichnen wieder in CSS-Pixeln
+    if (x) x.setTransform(dpr,0,0,dpr,0,0); // zeichnen in CSS-Pixeln
   }
 
-  function draw(){
-  const c = cvs(), x = ctx(); if (!c||!x) return;
-  x.clearRect(0,0,c.width,c.height);
-
-  // NEU: Kamera/View-Offset aus der Map holen (Fallback 0/0)
-  const view = (window.Game?.map?.view) || (window.Game?.cam) || {x:0, y:0};
-
-  const list = (window.Carriers?.list?.() || []);
-  for (const u of list){
-    // Welt → Bildschirm: Kamera abziehen
-    const sx = (u.x||0) - (view.x||0);
-    const sy = (u.y||0) - (view.y||0);
-
-    // Punkt mit Outline
-    x.beginPath(); x.arc(sx, sy, BASE_RADIUS + 1.5, 0, Math.PI*2);
-    x.fillStyle = 'rgba(0,0,0,.65)'; x.fill();
-    x.beginPath(); x.arc(sx, sy, BASE_RADIUS, 0, Math.PI*2);
-    x.fillStyle = 'rgba(255,255,255,.95)'; x.fill();
-
-    // Ressource-Icon, falls trägt
-    const resId = u.carry?.id;
-    if (resId){
-      const img = resIcon(resId);
-      if (img && img.complete){
-        x.drawImage(img, sx + BASE_RADIUS + 2, sy - ICON_SIZE - 2, ICON_SIZE, ICON_SIZE);
-      }
-    }
-  }
-  requestAnimationFrame(draw);
-}
-  
   // --------------------------------- Render ----------------------------------
   function draw(){
     const c = cvs(), x = ctx(); if (!c||!x) return;
-    x.clearRect(0,0,c.width, c.height);
+    x.clearRect(0,0,c.width,c.height);
+
+    // Kamera-/View-Offset des Renderers (Fallback 0/0)
+    const view = (window.Game?.map?.view) || (window.Game?.cam) || { x:0, y:0 };
 
     const list = (window.Carriers?.list?.() || []);
     for (const u of list){
-      const ux = +u.x||0, uy = +u.y||0;
+      // Welt → Bildschirm: Kamera abziehen
+      const sx = (u.x||0) - (view.x||0);
+      const sy = (u.y||0) - (view.y||0);
 
-      // Punkt: Outline + Füllung für Sichtbarkeit
-      x.beginPath();
-      x.arc(ux, uy, BASE_RADIUS + 1.5, 0, Math.PI*2);
-      x.fillStyle = 'rgba(0,0,0,.65)';
-      x.fill();
-
-      x.beginPath();
-      x.arc(ux, uy, BASE_RADIUS, 0, Math.PI*2);
-      x.fillStyle = 'rgba(255,255,255,.95)';
-      x.fill();
+      // Punkt: dunkle Outline + helle Füllung (mobile gut sichtbar)
+      x.beginPath(); x.arc(sx, sy, BASE_RADIUS + 1.5, 0, Math.PI*2); x.fillStyle = 'rgba(0,0,0,.65)'; x.fill();
+      x.beginPath(); x.arc(sx, sy, BASE_RADIUS, 0, Math.PI*2);       x.fillStyle = 'rgba(255,255,255,.95)'; x.fill();
 
       // Icon (wenn Ressource getragen wird)
       const resId = u.carry?.id;
       if (resId){
         const img = resIcon(resId);
         if (img && img.complete){
-          x.drawImage(img, ux + BASE_RADIUS + 2, uy - ICON_SIZE - 2, ICON_SIZE, ICON_SIZE);
+          x.drawImage(img, sx + BASE_RADIUS + 2, sy - ICON_SIZE - 2, ICON_SIZE, ICON_SIZE);
         }
       }
     }
@@ -128,6 +93,5 @@
       window.addEventListener('resize', fitToGame);
     }
   };
-
   return api;
 });
