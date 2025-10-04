@@ -153,4 +153,114 @@
   });
   window.addEventListener('cb:place:confirm', hide);
   window.addEventListener('cb:place:cancel',  hide);
+
+  /* ============================================================================
+ * Glue: Ghost → Place (mit Registry-Daten, Grid-Snap, Welt-Insert)
+ * Behält deinen Haken/Abbrechen-Flow bei. Kostenabzug: TODO-Hook markiert.
+ * ============================================================================
+ */
+(function(){
+  'use strict';
+
+  const LOG = (window.CBLog?.ok || console.log).bind(console, '[ui-place-glue]');
+
+  // --- Helpers ----------------------------------------------------------------
+  const tileSize = ()=> (window.Game?.map?.tile|0) || 64;
+  const snapTile = (px)=> Math.max(0, Math.round(px / tileSize()));
+  function defOf(id){
+    // 1) Registry bevorzugt (liefert size, label, outputs etc.)
+    if (window.Registry?.getBuildingDef){
+      const d = Registry.getBuildingDef(id);
+      if (d) return d;
+    }
+    // 2) Fallback minimal
+    return { id, label:id, size:[3,3], icon:'', sprite:'', cost:{}, cat:'misc' };
+  }
+  // legt die finale Instanz (Tiles) in die Welt
+  function placeToWorld(def, tx, ty){
+    const w = window.Game?.world || (window.Game.world = {buildings:[], units:[]});
+    const inst = {
+      id: def.id, type: def.id,
+      // Tiles (nicht Pixel)
+      x: tx|0, y: ty|0, w: (def.size?.[0]||1)|0, h: (def.size?.[1]||1)|0,
+      // optionale Infos
+      label: def.label || def.id,
+      sprite: def.sprite || '',
+      icon: def.icon || '',
+      stock: {}
+    };
+    w.buildings.push(inst);
+    LOG('placed ✓', inst);
+
+    // Systeme (Produktion/Träger) hängen bereits am Game-Start; nichts extra.
+    // Aber: Wenn das HQ platziert wurde → sofort Träger spawnen (Quality-of-life)
+    if (String(def.id).toLowerCase()==='hq'){
+      const Cx = (tx + inst.w/2) * tileSize();
+      const Cy = (ty + inst.h/2) * tileSize();
+      window.Carriers?.spawn?.({ role:'carrier', x: Cx - 24, y: Cy - 10 });
+      window.Carriers?.spawn?.({ role:'carrier', x: Cx + 24, y: Cy - 10 });
+    }
+
+    // HUD initial refresh (falls nötig)
+    window.dispatchEvent(new CustomEvent('cb:res:change', { detail:{ src:def.id, res:'__noop__', delta:0 }}));
+  }
+
+  // --- Event-Wiring -----------------------------------------------------------
+  // 1) Karte angeklickt → dein Ghost übernimmt bereits Anzeige.
+  //    Wir merken uns nur die aktuelle Auswahl (id + def) für den Confirm.
+  let current = null;
+
+  window.addEventListener('cb:build:select', (ev) => {
+    const id = ev?.detail?.id; if (!id) return;
+    current = { id, def: defOf(id) };
+    // dein existierender Ghost-Code bleibt aktiv (wir ändern hier nichts)
+  });
+
+  // 2) Confirm vom Ghost → Koords aus deinem Ghost lesen, in TILES konvertieren,
+  //    Welt-Objekt erzeugen und Event cb:build:place emittieren (für Logger/UI).
+  window.addEventListener('cb:place:confirm', (ev) => {
+    if (!current) return;
+
+    // Quelle der Pixelkoords: dein Ghost legt id="ghost" oder ähnliches an.
+    // Falls du schon Pixel-Koords im Event lieferst (ev.detail.x/y px), nimm die direkt.
+    let gx = ev?.detail?.x, gy = ev?.detail?.y;
+    if (typeof gx !== 'number' || typeof gy !== 'number'){
+      const ghost = document.getElementById('ghost');
+      if (ghost){
+        // aus CSS position extrahieren
+        const r = ghost.getBoundingClientRect();
+        // Canvas-Offset berücksichtigen
+        const game = document.getElementById('game').getBoundingClientRect();
+        gx = r.left - game.left + (ghost.dataset?.ox? +ghost.dataset.ox : 0);
+        gy = r.top  - game.top  + (ghost.dataset?.oy? +ghost.dataset.oy : 0);
+      } else {
+        // Notfalls aus Mouse-Event (falls du eins durchreichst)
+        gx = +ev?.detail?.px || 0;
+        gy = +ev?.detail?.py || 0;
+      }
+    }
+
+    // TILES (hartes Snap)
+    const tx = snapTile(gx), ty = snapTile(gy);
+
+    // Kostenabzug: hier lässt sich später der Wallet/Stock prüfen.
+    // --- TODO: checkCost(current.def.cost) && deductCost(...)
+    // if (!canAfford(current.def.cost)) { showToast('Zu wenig Rohstoffe'); return; }
+
+    // Welt-Objekt erzeugen
+    placeToWorld(current.def, tx, ty);
+
+    // offizielle Build-Event-Bridge
+    window.dispatchEvent(new CustomEvent('cb:build:place', {
+      detail:{ id: current.id, x: tx, y: ty, w: current.def.size?.[0]||1, h: current.def.size?.[1]||1, def: current.def }
+    }));
+
+    // Auswahl leeren; dein Ghost schließt sich ohnehin nach Confirm
+    current = null;
+  });
+
+  // 3) Abbrechen vom Ghost → nur Auswahl leeren (dein UI macht das Sichtbare)
+  window.addEventListener('cb:build:cancel', () => { current=null; });
+
+})();
 })();
