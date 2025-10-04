@@ -1,108 +1,77 @@
 // ============================================================================
 // Datei : core/boot.js (SAFE-HOTFIX)
 // Projekt: Neue Siedler
-// Version: v1.2.1 (2025-10-04)
-// Zweck : Stabiler Startfluss ohne eigenes cb:game-start; Carriers/HUD/Overlay
-//         hängen sich NACH dem echten game-start dran. Spawn erst dann.
+// Version: v1.2.2 (2025-10-04)
+// Zweck : Stabiler Startfluss (wie vorher). Startet das Spiel direkt auf
+//         cb:start:new/continue. Systeme (Production/Carriers/HUD/UnitOverlay)
+//         hängen sich NACH dem echten cb:game-start dran.
 // ============================================================================
 (() => {
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[boot]', ...a);
   const warn = (...a) => (window.CBLog?.warn || console.warn)('[boot]', ...a);
   const err  = (...a) => (window.CBLog?.err  || console.error)('[boot]', ...a);
 
-  const ready = { ui:false, assets:false, registry:false, gameInit:false };
-  let startRequested = null; // 'new' | 'continue' | null
-
-  const qs = new URLSearchParams(location.search);
-  const devAutostart = (
-    (qs.get('autostart') === '1') ||
-    (typeof localStorage !== 'undefined' && localStorage.getItem('dev.autostart') === '1')
-  );
+  let gameInited = false;
 
   function canvas(){ return document.getElementById('game'); }
-
-  function maybeInitGame(){
-    if (ready.gameInit) return;
-    const c = canvas();
-    if (!c) { err('Canvas #game fehlt'); return; }
-    if (!c.getContext) { err('Canvas Context fehlt'); return; }
-    try { window.Game?.init?.(c); } catch(e){ err('Game.init fehlgeschlagen', e); return; }
-    ready.gameInit = true; log('game init ✓');
-  }
-
-  function allReady(){ return ready.ui && ready.assets && ready.registry && ready.gameInit; }
-  function requested(){ return !!startRequested; }
-
-  function tryStart(){
-    if (!allReady() || !requested()) return;
-    const mapId = canvas()?.dataset?.map || 'data/maps/map-mini.json';
-    log('start → Game.start(%s)', mapId);
-    // WICHTIG: Kein eigenes cb:game-start hier! Game.start soll es auslösen.
-    try { window.Game?.start?.(mapId); } catch(e){ err('Game.start fehlgeschlagen', e); }
-  }
-
-  // --------------------------- Helpers: Tile→Pixel ---------------------------
   function tileSize(){
     const ts = window.Game && window.Game.map && window.Game.map.tile;
-    return (Number.isFinite(ts) && ts>0) ? (ts|0) : 64;
+    return (Number.isFinite(ts) && ts>0) ? ts|0 : 64;
   }
   function centerPx(b){
     const ts = tileSize();
-    const cx = ((b.x||0) + (b.w||1)/2) * ts;
-    const cy = ((b.y||0) + (b.h||1)/2) * ts;
-    return { x: cx, y: cy };
+    return {
+      x: ((b.x||0) + (b.w||1)/2) * ts,
+      y: ((b.y||0) + (b.h||1)/2) * ts
+    };
+  }
+  function initGameOnce(){
+    if (gameInited) return true;
+    const c = canvas();
+    if (!c || !c.getContext){ err('Canvas #game fehlt/ohne Context'); return false; }
+    try { window.Game?.init?.(c); } catch(e){ err('Game.init fehlgeschlagen', e); return false; }
+    gameInited = true;
+    log('game init ✓');
+    return true;
+  }
+  function startNow(via){
+    if (!initGameOnce()) return;
+    const mapId = canvas()?.dataset?.map || 'data/maps/map-mini.json';
+    log('start → Game.start(%s) via:%s', mapId, via||'btn');
+    try { window.Game?.start?.(mapId); } catch(e){ err('Game.start fehlgeschlagen', e); }
   }
 
   // ------------------------------- Lifecycle --------------------------------
-  // UI ready → Assets laden
+  // UI bereit → Assets laden (Registry wird von index.html separat angestoßen)
   window.addEventListener('cb:ui-ready', () => {
-    ready.ui = true; log('ui-ready ✓');
-    maybeInitGame();
+    log('ui-ready ✓');
     try { window.Assets?.loadAll?.(); } catch(e){ warn('Assets.loadAll fail', e); }
-    if (devAutostart) startRequested = 'new';
-    tryStart();
   });
 
-  // Assets ready → Registry init
-  window.addEventListener('cb:assets-ready', async () => {
-    ready.assets = true; log('assets-ready ✓');
-    try { await window.Registry?.init?.(); } catch(e){ warn('Registry init Fehler:', e); }
-    tryStart();
-  });
-  // Alias (falls andere Module cb:assets:ready feuern)
-  window.addEventListener('cb:assets:ready', ()=>window.dispatchEvent(new Event('cb:assets-ready')));
+  // Assets-Ready: beide Schreibweisen unterstützen
+  window.addEventListener('cb:assets-ready', () => log('assets-ready ✓'));
+  window.addEventListener('cb:assets:ready', () => log('assets-ready ✓ (alias)'));
 
-  // Registry ready
-  window.addEventListener('cb:registry:ready', () => { ready.registry = true; log('registry-ready ✓'); tryStart(); });
+  // Registry-Ready: **Bindestrich UND Doppelpunkt** bedienen
+  function onRegistryReady(){ log('registry-ready ✓'); }
+  window.addEventListener('cb:registry-ready', onRegistryReady);
+  window.addEventListener('cb:registry:ready', onRegistryReady);
 
-  // Start-Buttons
-  window.addEventListener('cb:start:new',      () => { startRequested = 'new';      log('start:new');      tryStart(); });
-  window.addEventListener('cb:start:continue', () => { startRequested = 'continue'; log('start:continue'); tryStart(); });
+  // Start-Buttons → wie in deinem Original: sofort starten (ohne Gate-Flags)
+  window.addEventListener('cb:start:new',      () => startNow('new'));
+  window.addEventListener('cb:start:continue', () => startNow('continue'));
 
   // --------------------------- NACH echtem Game-Start ------------------------
-  // Hier hängen wir unsere Systeme dran – NUR nachdem Game.start sein Event feuert.
+  // Hier Systeme anschließen; Game/Engine feuert cb:game-start
   window.addEventListener('cb:game-start', (ev) => {
     const world = (ev && ev.detail && ev.detail.world) || window.Game?.world || (window.Game.world = { buildings:[], units:[] });
-
     try { window.Production?.start?.(world); } catch(e){ warn('Production start fail', e); }
     try { window.Carriers?.start?.(world); }   catch(e){ warn('Carriers start fail', e); }
     try { window.UnitOverlay?.start?.(); }     catch(e){ warn('UnitOverlay start fail', e); }
     try { window.UIHud?.init?.(); }            catch(e){ warn('HUD init fail', e); }
-
-    // Auto-Spawn erst jetzt (wenn HQ existiert & noch keine Carrier)
-    setTimeout(() => {
-      const hasCarrier = Array.isArray(world.units) && world.units.some(u => (u.role==='carrier'));
-      const hq = (world.buildings||[]).find(b => String(b.id||b.type||'').toLowerCase() === 'hq');
-      if (!hasCarrier && hq) {
-        const C = centerPx(hq);
-        window.Carriers?.spawn?.({ id:'u.carrier#1', role:'carrier', x: C.x - 24, y: C.y - 10 });
-        window.Carriers?.spawn?.({ id:'u.carrier#2', role:'carrier', x: C.x + 24, y: C.y - 10 });
-        (window.CBLog?.ok||console.log)('[boot] carriers spawned near HQ');
-      }
-    }, 0);
   });
 
-  // Wenn ein HQ platziert wird → sofort zwei Träger daneben spawnen
+  // HQ platziert → zwei Träger daneben spawnen (Qualitäts-Boost für Epoche 1)
   window.addEventListener('cb:build:place', (ev) => {
     const b = ev && ev.detail; if (!b) return;
     const id = String(b.id||b.type||'').toLowerCase();
