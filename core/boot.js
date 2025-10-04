@@ -164,5 +164,15 @@ setTimeout(() => {
     (window.CBLog?.ok||console.log)('[boot] carriers spawned at HQ entrance');
   }
 }, 0);
+
+  // HQ platziert → Träger direkt am Eingang parken
+window.addEventListener('cb:build:place', (ev) => {
+  const b = ev?.detail; if (!b) return;
+  const id = String(b.id||b.type||'').toLowerCase();
+  if (id !== 'hq') return;
+  const E = __entrancePx(b);
+  window.Carriers?.spawn?.({ id:`u.carrier#${(Math.random()*1e6|0)}`, role:'carrier', x: E.x - 10, y: E.y });
+  window.Carriers?.spawn?.({ id:`u.carrier#${(Math.random()*1e6|0)}`, role:'carrier', x: E.x + 10, y: E.y });
+});
   
 })();
