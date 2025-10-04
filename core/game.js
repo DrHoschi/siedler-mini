@@ -41,18 +41,14 @@
     return { x:c.width/Math.max(1,r.width), y:c.height/Math.max(1,r.height) };
   }
 
-// == Registry / Asset-Resolver ============================================
+// == Registry / Asset-Resolver  (ICONS-ONLY) =================================
 function iconsBase(){
   try { return (window.Registry?.get?.('iconsBase')) || 'assets/icons/buildings/'; }
   catch { return 'assets/icons/buildings/'; }
 }
-function spritesBase(){
-  try { return (window.Registry?.get?.('spritesBase')) || iconsBase(); }
-  catch { return iconsBase(); }
-}
-const isAbs = u => /^(https?:)?\/\//i.test(u) || u?.startsWith('/') || u?.startsWith('data:');
-const hasSlash = u => /[\\/]/.test(u);
-const withExt  = n => /\.(png|webp|jpg|jpeg|svg)$/i.test(n) ? n : (n + '.png');
+
+const isAbs   = u => /^(https?:)?\/\//i.test(u) || u?.startsWith('/') || u?.startsWith('data:');
+const withExt = n => /\.(png|webp|jpg|jpeg|svg)$/i.test(n) ? n : (n + '.png');
 
 function join(base, name){
   if (!name) return '';
@@ -61,6 +57,52 @@ function join(base, name){
   return b + '/' + withExt(String(name));
 }
 
+let _iconMap = null;
+let _assetsBuilt = false;
+
+function buildMapsFromRegistry(){
+  if (_assetsBuilt && _iconMap) return;
+  const icons = new Map();
+  const ibase = iconsBase();
+
+  try{
+    const list = window.Registry?.get?.('buildings') || [];
+    for (const b of list){
+      const id = String(b.id);
+      // Quelle: iconUrl | iconPath | iconId | icon
+      const rawIcon =
+        b.iconUrl ?? b.iconPath ?? b.iconId ?? b.icon ?? null;
+      const iconUrl = rawIcon ? join(ibase, rawIcon) : '';
+      if (iconUrl) icons.set(id, iconUrl);
+    }
+  } catch(e){
+    (window.CBLog?.warn||console.warn)('[game] registry parse fail', e);
+  }
+
+  _iconMap = icons;
+  _assetsBuilt = true;
+}
+
+const getIconUrl   = id => { buildMapsFromRegistry(); return _iconMap.get(String(id)) || null; };
+
+// NOTE: Sprites deaktiviert – Rückgabe immer null.
+const getSpriteUrl = _id => null;
+
+function getImage(url){
+  if(!url) return null;
+  const c=_state.imgCache.get(url);
+  if (c instanceof Image) return c;
+  if (c==='loading'||c==='error') return null;
+  const img=new Image();
+  _state.imgCache.set(url,'loading');
+  img.onload =()=>_state.imgCache.set(url,img);
+  img.onerror=()=>{
+    _state.imgCache.set(url,'error');
+    (window.CBLog?.warn||console.warn)('[game] image err/404:', url);
+  };
+  img.src=url;
+  return null;
+}
 /** Normiert eine URL/ID mit einem Basis-Pfad:
  *  - absolute URLs → unverändert
  *  - enthält kein "/" → an Base anhängen + .png
