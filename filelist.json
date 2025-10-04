@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-03T21:20:13.603Z",
+  "createdAt": "2025-10-04T21:31:40.927Z",
   "root": ".",
-  "count": 450,
+  "count": 387,
   "entries": [
     {
       "type": "dir",
@@ -55,311 +55,6 @@
       "type": "file",
       "path": ".github/workflows/preview.yml",
       "size": 544
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/"
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/assets/"
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/assets/core/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/assets/core/game.js",
-      "size": 11336
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/assets/ui/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/assets/ui/ui-build.css",
-      "size": 2982
-    },
-    {
-      "type": "file",
-      "path": "Archiv/assets/ui/ui-build.js",
-      "size": 6461
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/core/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/actor.js",
-      "size": 3718
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/asset.items.js",
-      "size": 4315
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/asset.js",
-      "size": 14409
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/asset1.js",
-      "size": 3419
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/boot.js",
-      "size": 1487
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/camera.js",
-      "size": 1408
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/carriers.js",
-      "size": 7703
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/game.js",
-      "size": 9677
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/path-index.js",
-      "size": 3341
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/path-overlay.js",
-      "size": 2761
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/registry.json-adapter.js",
-      "size": 3232
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/registry1.js",
-      "size": 2251
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/terrain.js",
-      "size": 1381
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/ui-build.data-bridge.js",
-      "size": 2519
-    },
-    {
-      "type": "file",
-      "path": "Archiv/core/ui-build.js",
-      "size": 6707
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/css/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/css/android.css",
-      "size": 40
-    },
-    {
-      "type": "file",
-      "path": "Archiv/css/base.css",
-      "size": 2287
-    },
-    {
-      "type": "file",
-      "path": "Archiv/css/desktop.css",
-      "size": 146
-    },
-    {
-      "type": "file",
-      "path": "Archiv/css/ios.css",
-      "size": 808
-    },
-    {
-      "type": "file",
-      "path": "Archiv/css/mobile.css",
-      "size": 1433
-    },
-    {
-      "type": "file",
-      "path": "Archiv/css/platform.css",
-      "size": 1595
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/data/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/data/buildings1.json",
-      "size": 2451
-    },
-    {
-      "type": "file",
-      "path": "Archiv/data/buildings1.jsonc",
-      "size": 5304
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/maps/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/maps/start-map.json",
-      "size": 5742
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/src/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/src/assets.buildings.js",
-      "size": 2501
-    },
-    {
-      "type": "dir",
-      "path": "Archiv/ui/"
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/build.categories.js",
-      "size": 836
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-build-hook.js",
-      "size": 1324
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-build.css",
-      "size": 3147
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-build.js",
-      "size": 875
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-buttons.js",
-      "size": 661
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-inspector-1.js",
-      "size": 3469
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-inspector-2.js",
-      "size": 6635
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-start-1.js",
-      "size": 3275
-    },
-    {
-      "type": "file",
-      "path": "Archiv/ui/ui-start-2.js",
-      "size": 4605
-    },
-    {
-      "type": "file",
-      "path": "Archiv/buildingData.js",
-      "size": 953
-    },
-    {
-      "type": "file",
-      "path": "Archiv/buildings.lumberjack.js",
-      "size": 1040
-    },
-    {
-      "type": "file",
-      "path": "Archiv/dangerfile.js",
-      "size": 870
-    },
-    {
-      "type": "file",
-      "path": "Archiv/filelist-audit.txt",
-      "size": 2001
-    },
-    {
-      "type": "file",
-      "path": "Archiv/filelist.json",
-      "size": 29474
-    },
-    {
-      "type": "file",
-      "path": "Archiv/filelist.txt",
-      "size": 11336
-    },
-    {
-      "type": "file",
-      "path": "Archiv/fullscreen.js",
-      "size": 1284
-    },
-    {
-      "type": "file",
-      "path": "Archiv/game.js",
-      "size": 925
-    },
-    {
-      "type": "file",
-      "path": "Archiv/index.html",
-      "size": 10090
-    },
-    {
-      "type": "file",
-      "path": "Archiv/inspector.spec.ts:",
-      "size": 810
-    },
-    {
-      "type": "file",
-      "path": "Archiv/manifest.webmanifest",
-      "size": 392
-    },
-    {
-      "type": "file",
-      "path": "Archiv/package.json",
-      "size": 208
-    },
-    {
-      "type": "file",
-      "path": "Archiv/README00.md",
-      "size": 342
-    },
-    {
-      "type": "file",
-      "path": "Archiv/storage.js",
-      "size": 404
-    },
-    {
-      "type": "file",
-      "path": "Archiv/sw.js",
-      "size": 1890
-    },
-    {
-      "type": "file",
-      "path": "Archiv/unitLogic.js",
-      "size": 2099
     },
     {
       "type": "dir",
@@ -1366,7 +1061,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 3190
+      "size": 6261
     },
     {
       "type": "file",
@@ -1381,7 +1076,7 @@
     {
       "type": "file",
       "path": "core/carrier.js",
-      "size": 931
+      "size": 6350
     },
     {
       "type": "file",
@@ -1416,7 +1111,7 @@
     {
       "type": "file",
       "path": "core/core.production.js",
-      "size": 3039
+      "size": 3047
     },
     {
       "type": "file",
@@ -1436,7 +1131,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 24520
+      "size": 22352
     },
     {
       "type": "file",
@@ -1451,12 +1146,12 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 1021
+      "size": 2054
     },
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 6846
+      "size": 5644
     },
     {
       "type": "file",
@@ -1470,8 +1165,8 @@
     },
     {
       "type": "file",
-      "path": "core/unit-runtime.js",
-      "size": 2466
+      "path": "core/unit-overlay.js",
+      "size": 3797
     },
     {
       "type": "dir",
@@ -1534,7 +1229,7 @@
     {
       "type": "file",
       "path": "data/buildings.json",
-      "size": 1535
+      "size": 1648
     },
     {
       "type": "file",
@@ -2006,7 +1701,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 5454
+      "size": 5923
     },
     {
       "type": "dir",
@@ -2110,7 +1805,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 12202
+      "size": 6843
     },
     {
       "type": "file",
@@ -2130,7 +1825,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 4587
+      "size": 8239
     },
     {
       "type": "file",
@@ -2150,7 +1845,7 @@
     {
       "type": "file",
       "path": "ui/ui-place.js",
-      "size": 5427
+      "size": 6520
     },
     {
       "type": "file",
@@ -2170,17 +1865,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 44115
+      "size": 44116
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16732
+      "size": 16733
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 9877
+      "size": 11086
     },
     {
       "type": "file",
