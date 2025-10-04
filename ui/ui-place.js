@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : ui/ui-place.js
  * Zweck   : UI-Overlay für Platzieren (Vorschau + ✓/✕ Buttons)
- * Version : v3.4.0 (Single-bind, kein Doppel-Place)
+ * Version : v3.5.0 (Tiles-Fallback; Single-bind; robuste Buttons)
  * Events  : hört auf 'cb:place:preview' / 'cb:place:confirm' / 'cb:place:cancel'
  * ============================================================================ */
 (() => {
@@ -45,7 +45,7 @@
     okBtn.style.left = '8px';
     okBtn.style.top  = '8px';
     okBtn.addEventListener('click', () => {
-      if (!last || last.invalid) return; // keine invaliden Confirms
+      if (!last || last.invalid) return;
       window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail: { gx: last.gx, gy: last.gy } }));
     });
     root.appendChild(okBtn);
@@ -123,44 +123,61 @@
   }
 
   // Event-Wireup
-  window.addEventListener('cb:place:preview', (e) => { const d=e?.detail||{}; if (!d||d.invalid){ hide(); return; } apply(d); });
+  window.addEventListener('cb:place:preview', (e) => {
+    const d=e?.detail||{};
+    if (!d || d.invalid){ hide(); return; }
+    // Merken, damit OK korrekt feuert
+    last = {
+      ...d,
+      // Fallback: wenn tx/ty fehlen, gx/gy als Tiles nutzen
+      tx: (typeof d.tx === 'number' ? d.tx : d.gx),
+      ty: (typeof d.ty === 'number' ? d.ty : d.gy),
+    };
+    apply(last);
+  });
   window.addEventListener('cb:place:confirm', hide);
   window.addEventListener('cb:place:cancel',  hide);
 
-/* ============================================================================
- * Glue: Ghost → Place (nur einmal binden, keine Doppel-Platzierung)
- *  - Merkt tx,ty aus dem Preview (Engine-Quelle).
- *  - Beim OK feuert es cb:place:confirm:tile mit GENAU diesen tx,ty.
- * ========================================================================== */
-(function(){
-  'use strict';
-  if (window.__uiPlaceGlueMounted) return;
-  window.__uiPlaceGlueMounted = true;
+  /* ==========================================================================
+   * Glue: Ghost → Place (nur einmal binden, keine Doppel-Platzierung)
+   *  - Merkt tx,ty ODER fallback gx,gy aus Preview.
+   *  - Beim OK feuert es cb:place:confirm:tile mit GENAU diesen tx,ty.
+   * ======================================================================== */
+  (function(){
+    'use strict';
+    if (window.__uiPlaceGlueMounted) return;
+    window.__uiPlaceGlueMounted = true;
 
-  const LOG = (window.CBLog?.ok || console.log).bind(console,'[ui-place-glue]');
+    const GLOG = (window.CBLog?.ok || console.log).bind(console,'[ui-place-glue]');
+    let L = { id:null, tx:null, ty:null, w:1, h:1, valid:false };
 
-  // letzter Preview-Stand (von der Engine)
-  let last = { id:null, tx:null, ty:null, w:1, h:1, valid:false };
+    // Preview → Merken, NICHT neu rechnen
+    window.addEventListener('cb:place:preview', (ev)=>{
+      const d = ev?.detail||{};
+      L.id = d.id || L.id;
+      // NEU: Fallback auf gx/gy, falls tx/ty fehlen
+      L.tx = (typeof d.tx === 'number') ? d.tx : (typeof d.gx === 'number' ? d.gx : L.tx);
+      L.ty = (typeof d.ty === 'number') ? d.ty : (typeof d.gy === 'number' ? d.gy : L.ty);
+      L.w  = d.w|0 || L.w;
+      L.h  = d.h|0 || L.h;
+      L.valid = !d.invalid;
+    });
 
-  // Preview → Merken, NICHT umrechnen!
-  window.addEventListener('cb:place:preview', (ev)=>{
-    const d = ev?.detail||{};
-    last.id = d.id || last.id;
-    last.tx = (typeof d.tx === 'number') ? d.tx : last.tx;
-    last.ty = (typeof d.ty === 'number') ? d.ty : last.ty;
-    last.w  = d.w|0 || last.w;
-    last.h  = d.h|0 || last.h;
-    last.valid = !d.invalid;
-  });
+    // OK vom Overlay → als Tiles weiterreichen (für boot.js Carrier-Spawn)
+    window.addEventListener('cb:place:confirm', ()=>{
+      if (!L.valid || typeof L.tx !== 'number' || typeof L.ty !== 'number'){
+        GLOG('confirm: missing tiles/invalid → skip', L);
+        return;
+      }
+      const payload = { id:L.id, tx:L.tx, ty:L.ty };
+      window.dispatchEvent(new CustomEvent('cb:place:confirm:tile', { detail: payload }));
+      GLOG('confirm (tile) →', payload);
+    });
 
-  // OK vom Overlay → wenn wir echte Tiles haben, direkt weitergeben
-  window.addEventListener('cb:place:confirm', ()=>{
-    if (!last.valid || typeof last.tx !== 'number' || typeof last.ty !== 'number'){
-      LOG('confirm: missing tiles/invalid → skip', last);
-      return;
-    }
-    const payload = { id:last.id, tx:last.tx, ty:last.ty };
-    window.dispatchEvent(new CustomEvent('cb:place:confirm:tile', { detail: payload }));
-    LOG('confirm (tile) →', payload);
-  });
+    // Buildmode aus → sichern, aber als invalid betrachten
+    window.addEventListener('cb:build:mode', ()=>{ L.valid=false; });
+
+    GLOG('mounted');
+  })();
+
 })();
