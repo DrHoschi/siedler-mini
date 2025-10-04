@@ -4,6 +4,7 @@
  * Version : v2.2.0 (2025-10-04)
  * Zweck   : Build-Dock (Bilder/Labels/Kosten) + Events (cb:build:select)
  * API     : window.UIBuild.mount(el?), .setCategories(), .setItems(), .open()
+ // --- TODO: checkCost(current.def.cost) && deductCost(...)
  * ============================================================================
  */
 (function(){
