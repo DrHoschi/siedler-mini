@@ -12,6 +12,8 @@
 
   const LOG = (window.CBLog?.ok || console.log).bind(console, '[carriers]');
 
+  const to = __entrancePx(hq);
+  
   let world=null, carriers=[], assignTimer=null, stepTimer=null;
 
   function __tileSize(){ const ts=window.Game?.map?.tile; return (Number.isFinite(ts)&&ts>0)?(ts|0):64; }
