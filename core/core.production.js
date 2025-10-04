@@ -1,13 +1,12 @@
 /* ============================================================================
  * Datei   : core/core.production.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v1.0.0 (2025-10-04)
+ * Version : v1.1.0 (2025-10-04)
  * Zweck   : Einfacher Produktions-Tick basierend auf Registry-Definitionen
  *           (outputs[0].id, cycle). Erhöht Gebäudestock und feuert Events.
  * API     : window.Production.start(world), window.Production.stop()
  * Events  : cb:res:change  { detail:{ src:<buildingId>, res:'res.*', delta:+N } }
- * ============================================================================
- */
+ * ============================================================================ */
 (function(root,factory){ root.Production = factory(); })(this, function(){
   'use strict';
 
@@ -18,7 +17,7 @@
   function typeOf(b){ return b?.type || b?.kind || b?.id || ''; }
   function ensureStock(b){ b.stock = b.stock || Object.create(null); return b.stock; }
 
-  const DEFAULT_CYCLE = 6;   // Fallback, falls im Def kein cycle angegeben
+  const DEFAULT_CYCLE = 6;   // Fallback
 
   function metaFor(b){
     const id = String(typeOf(b));
@@ -46,9 +45,27 @@
     }
   }
 
+  // Beim Platzieren neuer Gebäude: einmal „Vorladen“, falls produktiv
+  window.addEventListener('cb:build:place', (ev)=>{
+    const d = ev?.detail; if (!d) return;
+    const def = window.Registry?.getBuildingDef?.(d.id||d.type) || null;
+    const out = def?.outputs?.[0] || null;
+    if (!out?.id) return;
+    // die echte Instanz in der world suchen (gleiches Tile-Rechteck)
+    const w = world || window.Game?.world;
+    const inst = (w?.buildings||[]).find(b => (b.x|0)=== (d.x|0) && (b.y|0)===(d.y|0) && String(typeOf(b))===String(d.id));
+    if (!inst) return;
+    const st = ensureStock(inst);
+    st[out.id] = (st[out.id]|0) + (Number.isFinite(+out.amount)?(+out.amount):1);
+    window.dispatchEvent(new CustomEvent('cb:res:change', { detail:{ src:typeOf(inst), res:out.id, delta:+(out.amount||1) }}));
+  });
+
   function start(worldRef){
     world = worldRef || { buildings:[], units:[] };
-    stop(); timer = setInterval(tick, TICK_MS);
+    stop();
+    // SOFORT einmal ticken, dann Intervall starten
+    tick();
+    timer = setInterval(tick, TICK_MS);
     LOG('gestartet (Gebäude:%d)', world.buildings?.length|0);
   }
   function stop(){ if (timer) clearInterval(timer), timer=null; }
