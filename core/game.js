@@ -41,44 +41,91 @@
     return { x:c.width/Math.max(1,r.width), y:c.height/Math.max(1,r.height) };
   }
 
-  // == Registry / Asset-Resolver ============================================
-  function iconsBase(){
-    try { return (window.Registry?.get?.('iconsBase')) || 'assets/icons/buildings/'; }
-    catch { return 'assets/icons/buildings/'; }
-  }
-  const isAbs=u=>/^(https?:)?\/\//i.test(u)||u?.startsWith('/')||u?.startsWith('data:');
-  const withExt=n=>/\.(png|webp|jpg|jpeg|svg)$/i.test(n)?n:(n+'.png');
-  const joinBase=name=>!name?'':(isAbs(name)?name:(iconsBase().replace(/\/+$/,'')+'/'+withExt(String(name))));
+// == Registry / Asset-Resolver ============================================
+function iconsBase(){
+  try { return (window.Registry?.get?.('iconsBase')) || 'assets/icons/buildings/'; }
+  catch { return 'assets/icons/buildings/'; }
+}
+function spritesBase(){
+  try { return (window.Registry?.get?.('spritesBase')) || iconsBase(); }
+  catch { return iconsBase(); }
+}
+const isAbs = u => /^(https?:)?\/\//i.test(u) || u?.startsWith('/') || u?.startsWith('data:');
+const hasSlash = u => /[\\/]/.test(u);
+const withExt  = n => /\.(png|webp|jpg|jpeg|svg)$/i.test(n) ? n : (n + '.png');
 
-  function buildMapsFromRegistry(){
-    if (_state.iconMap && _state.spriteMap) return;
-    const icons=new Map(), sprites=new Map();
-    try{
-      for (const b of (window.Registry?.get?.('buildings')||[])){
-        const id=String(b.id);
-        const iconUrl   = b.iconUrl   || joinBase(b.icon   || b.iconId   || b.iconPath);
-        const spriteUrl = b.spriteUrl || joinBase(b.sprite || b.spriteId || b.spritePath || b.icon);
-        if (iconUrl)   icons.set(id,iconUrl);
-        if (spriteUrl) sprites.set(id,spriteUrl);
-      }
-    }catch{/* noop */}
-    _state.iconMap=icons; _state.spriteMap=sprites;
-  }
-  const getIconUrl   = id=>{ buildMapsFromRegistry(); return _state.iconMap.get(String(id))   || null; };
-  const getSpriteUrl = id=>{ buildMapsFromRegistry(); return _state.spriteMap.get(String(id)) || null; };
+function join(base, name){
+  if (!name) return '';
+  if (isAbs(name)) return name;
+  const b = String(base||'').replace(/\/+$/,'');
+  return b + '/' + withExt(String(name));
+}
 
-  function getImage(url){
-    if(!url) return null;
-    const c=_state.imgCache.get(url);
-    if (c instanceof Image) return c;
-    if (c==='loading'||c==='error') return null;
-    const img=new Image();
-    _state.imgCache.set(url,'loading');
-    img.onload =()=>_state.imgCache.set(url,img);
-    img.onerror=()=>_state.imgCache.set(url,'error');
-    img.src=url;
-    return null;
-  }
+/** Normiert eine URL/ID mit einem Basis-Pfad:
+ *  - absolute URLs → unverändert
+ *  - enthält kein "/" → an Base anhängen + .png
+ *  - enthält "/" → relativ belassen (so wie geliefert)
+ */
+function normalizeUrl(name, base){
+  if (!name) return '';
+  if (isAbs(name)) return name;
+  if (!hasSlash(name)) return join(base, name);
+  return withExt(String(name));
+}
+
+let _assetsBuilt = false;
+let _iconMap  = null;
+let _spriteMap= null;
+
+function buildMapsFromRegistry(){
+  if (_assetsBuilt && _iconMap && _spriteMap) return;
+  const icons   = new Map();
+  const sprites = new Map();
+  const ibase   = iconsBase();
+  const sbase   = spritesBase();
+
+  try{
+    const list = window.Registry?.get?.('buildings') || [];
+    for (const b of list){
+      const id = String(b.id);
+
+      // Icon
+      const iconRaw =
+        b.iconUrl ?? b.iconPath ?? b.iconId ?? b.icon ?? null;
+      const iconUrl = normalizeUrl(iconRaw, ibase);
+      if (iconUrl) icons.set(id, iconUrl);
+
+      // Sprite
+      const spriteRaw =
+        b.spriteUrl ?? b.spritePath ?? b.spriteId ?? b.sprite ?? iconRaw ?? null;
+      const spriteUrl = normalizeUrl(spriteRaw, sbase);
+      if (spriteUrl) sprites.set(id, spriteUrl);
+    }
+  } catch(e){ (window.CBLog?.warn||console.warn)('[game] registry parse fail', e); }
+
+  _iconMap   = icons;
+  _spriteMap = sprites;
+  _assetsBuilt = true;
+}
+
+const getIconUrl   = id => { buildMapsFromRegistry(); return _iconMap.get(String(id))    || null; };
+const getSpriteUrl = id => { buildMapsFromRegistry(); return _spriteMap.get(String(id))  || null; };
+
+function getImage(url){
+  if(!url) return null;
+  const c=_state.imgCache.get(url);
+  if (c instanceof Image) return c;
+  if (c==='loading'||c==='error') return null;
+  const img=new Image();
+  _state.imgCache.set(url,'loading');
+  img.onload =()=>_state.imgCache.set(url,img);
+  img.onerror=()=>{
+    _state.imgCache.set(url,'error');
+    (window.CBLog?.warn||console.warn)('[game] image 404/err →', url);
+  };
+  img.src=url;
+  return null;
+}
 
   // == Buildings / Platzierlogik ============================================
   function getBuildingDef(id){
