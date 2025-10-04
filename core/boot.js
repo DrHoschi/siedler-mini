@@ -152,4 +152,17 @@ function __entrancePx(b){
     } catch(e){ warn('Carrier spawn fail', e); }
   });
 
+// --- Auto-Spawn: wenn HQ existiert, aber noch keine Träger da sind
+setTimeout(() => {
+  const world = window.Game?.world || { buildings:[], units:[] };
+  const hasCarrier = Array.isArray(world.units) && world.units.some(u => u && u.role === 'carrier');
+  const hq = (world.buildings||[]).find(b => String(b.id||b.type||'').toLowerCase() === 'hq');
+  if (!hasCarrier && hq) {
+    const E = __entrancePx(hq);
+    window.Carriers?.spawn?.({ id:'u.carrier#1', role:'carrier', x: E.x - 10, y: E.y });
+    window.Carriers?.spawn?.({ id:'u.carrier#2', role:'carrier', x: E.x + 10, y: E.y });
+    (window.CBLog?.ok||console.log)('[boot] carriers spawned at HQ entrance');
+  }
+}, 0);
+  
 })();
