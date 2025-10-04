@@ -14,6 +14,15 @@
 
   let world=null, carriers=[], assignTimer=null, stepTimer=null;
 
+  function __tileSize(){ const ts=window.Game?.map?.tile; return (Number.isFinite(ts)&&ts>0)?(ts|0):64; }
+function __entrancePx(b){
+  const ts=__tileSize();
+  const def = window.Registry?.getBuildingDef?.(String(b.id||b.type||b.kind||''));
+  const rel = (def?.entrances && def.entrances[0]) || null;
+  if (rel){ return { x: ((b.x|0)+(rel[0]|0)+0.5)*ts, y: ((b.y|0)+(rel[1]|0)+0.5)*ts }; }
+  return { x: ((b.x||0)+(b.w||1)/2)*ts, y: ((b.y||0)+(b.h||1)/2)*ts };
+}
+  
   // ---------- Helpers ----------
   function typeOf(e){ return e?.type||e?.kind||e?.id||''; }
   function isHQ(e){ const t=String(typeOf(e)).toLowerCase(); return t==='hq'||t.endsWith('.hq')||t==='rathaus'; }
