@@ -1,150 +1,185 @@
 /* ============================================================================
- * Datei   : ui/ui-build.js
- * Projekt : Neue Siedler
- * Version : v2.2.0 (2025-10-04)
- * Zweck   : Build-Dock (Bilder/Labels/Kosten) + Events (cb:build:select)
- * API     : window.UIBuild.mount(el?), .setCategories(), .setItems(), .open()
- // --- TODO: checkCost(current.def.cost) && deductCost(...)
+ * Datei    : ui/ui-build.js
+ * Projekt  : Neue Siedler
+ * Version  : v19.0.0 (2025-10-05)
+ * Zweck    : Baumenü rendern (Epoche 1), Kosten-Icons, Platziermodus (Ghost)
+ * Events   :
+ *   IN  : cb:registry:ready
+ *         cb:place:done                (nach erfolgreichem Bauen)
+ *   OUT : req:place:start {buildingId}
+ *         req:place:confirm {tx,ty}
+ *         req:place:cancel
+ * UI    : Icons: assets/icons/buildings/<id>.png
+ *         Kosten: assets/icons/resources/<res>.png
  * ============================================================================
  */
+
 (function(){
-  'use strict';
+  const $dock = document.getElementById('build-dock');
+  const $ghostRoot = ensureGhostRoot(); // ein Overlay
 
-  // ---------------------------- Konstanten/Logging ---------------------------
-  const LOG = (window.CBLog?.info || console.log).bind(console, '[ui-build]');
-
-  // ---------------------------- Interner Zustand -----------------------------
-  let host = null;                 // Mount-Host (z.B. <aside id="build-panel">)
-  let cats = [];                   // [{id,label}]
-  let items = [];                  // [{id,cat,label,icon,cost,enabled}]
-  let activeCat = null;
-  let activeItem = null;
-  let iconBase = 'assets/ui/build/';
-
-  // ---------------------------- Helpers -------------------------------------
-  const $  = (s,r=document)=>r.querySelector(s);
-  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
-
-  function ensureScaffold(){
-    if (!host) return null;
-    if (!host.querySelector('.ui-build-wrap')){
-      host.innerHTML = `
-        <div class="ui-build-wrap">
-          <ul id="build-cats" class="build-cats"></ul>
-          <ul id="build-items" class="build-list"></ul>
-        </div>
-      `;
-      const dock = document.getElementById('build-dock');
-      if (dock){ dock.hidden=false; dock.classList.remove('hidden'); }
-      host.hidden=false; host.classList.remove('hidden');
+  function ensureGhostRoot(){
+    let r = document.querySelector('.place-overlay');
+    if(!r){
+      r = document.createElement('div');
+      r.className = 'place-overlay';
+      document.body.appendChild(r);
     }
-    return { cats: $('#build-cats',host), items: $('#build-items',host) };
+    r.innerHTML = ''; // clean
+    return r;
   }
 
-  function adoptFromRegistry(){
-    // Kategorien
-    if (!cats.length) {
-      cats = (window.Registry?.get?.('categories') || []).map(c => ({ id:String(c.id), label:String(c.label ?? c.id) }));
-    }
-    // Items (Buildings)
-    if (!items.length) {
-      items = (window.Registry?.get?.('buildings') || []).map(b => ({
-        id:String(b.id),
-        cat:String(b.cat || 'misc'),
-        label:String(b.label || b.id),
-        icon:(b.icon || b.sprite || ''),
-        cost:(b.cost || null),
-        enabled:(b.enabled !== false)
-      }));
-    }
-    // iconsBase
-    iconBase = window.Registry?.get?.('iconsBase') || window.Registry?.get?.('meta')?.iconsBase || iconBase;
-    if (iconBase && !iconBase.endsWith('/')) iconBase += '/';
-  }
+  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, {detail})); }
 
-  function isAbs(u){ return /^(https?:)?\/\//i.test(u) || /^data:/i.test(u) || u.startsWith('/'); }
-  function iconSrc(b){
-    if (!b || !b.icon) return '';
-    if (isAbs(b.icon)) return b.icon;
-    let name = String(b.icon);
-    if (!/\.(png|webp|jpg|jpeg|svg)$/i.test(name)) name += '.png';
-    return iconBase + name;
-  }
+  // --------------------------- Baumenü rendern -------------------------------
+  function renderDock(){
+    const list = Registry.list('buildings', { epoche:1 });
+    if(!$dock) return;
+    $dock.innerHTML = '';
 
-  function badge(key, val){
-    if (!val) return null;
-    const s=document.createElement('span'); s.className='res'; s.dataset.res=key;
-    const b=document.createElement('b'); b.textContent=String(val); s.appendChild(b);
-    return s;
-  }
+    const grid = document.createElement('div');
+    grid.className = 'build-grid';
 
-  function applyCatActive(root){
-    $$('.build-cat',root).forEach(li=>li.classList.toggle('active', li.dataset.cat===activeCat));
-  }
-  function applyItemActive(root){
-    $$('.build-item',root).forEach(li=>li.classList.toggle('active', li.dataset.id===activeItem));
-  }
+    list.forEach(b=>{
+      const card = document.createElement('button');
+      card.className = 'build-card';
+      card.title = b.name || b.id;
 
-  // ---------------------------- Render --------------------------------------
-  function renderCats(root){
-    root.innerHTML = '';
-    cats.forEach((c,idx)=>{
-      const li=document.createElement('li');
-      li.className='build-cat'; li.dataset.cat=c.id; li.textContent=c.label;
-      if (!activeCat && idx===0) activeCat=c.id;
-      li.addEventListener('click',()=>{ activeCat=c.id; applyCatActive(root); renderItems($('#build-items',host)); });
-      root.appendChild(li);
-    });
-    applyCatActive(root);
-  }
+      const img = document.createElement('img');
+      img.className = 'build-icon';
+      img.src = `assets/icons/buildings/${b.id}.png`;
+      img.alt = b.name || b.id;
 
-  function renderItems(root){
-    root.innerHTML = '';
-    const vis = items.filter(b => b.enabled !== false && String(b.cat)===String(activeCat));
-    vis.forEach(b=>{
-      const li=document.createElement('li'); li.className='build-item'; li.dataset.id=b.id;
+      const label = document.createElement('div');
+      label.className = 'build-label';
+      label.textContent = b.name || b.id;
 
-      const img=document.createElement('img'); img.className='icon'; img.alt=b.label||b.id; img.decoding='async'; img.loading='lazy'; img.src=iconSrc(b);
-      const title=document.createElement('div'); title.className='title'; title.textContent=b.label;
-      const cost=document.createElement('div'); cost.className='cost';
-      const c=b.cost||{}; ['wood','stone','food','gold'].forEach(k=>{ const x=badge(k,c[k]); if (x) cost.appendChild(x); });
+      const cost = document.createElement('div');
+      cost.className = 'build-cost';
+      (b.cost || []).forEach(c=>{
+        const row = document.createElement('span');
+        row.className = 'cost-row';
+        const i = document.createElement('img');
+        i.className = 'cost-icon';
+        i.src = `assets/icons/resources/${c.id}.png`;
+        i.alt = c.id;
 
-      li.append(img,title,cost);
-      li.addEventListener('click', ()=>{
-        activeItem=b.id; applyItemActive(root);
-        window.dispatchEvent(new CustomEvent('cb:build:select', { detail:{ id:b.id, meta:b }}));
+        const t = document.createElement('span');
+        t.textContent = `×${c.qty}`;
+        row.appendChild(i); row.appendChild(t);
+        cost.appendChild(row);
       });
-      root.appendChild(li);
+
+      card.appendChild(img);
+      card.appendChild(label);
+      card.appendChild(cost);
+      card.addEventListener('click', ()=>{
+        startPlacing(b);
+      });
+
+      grid.appendChild(card);
     });
-    applyItemActive(root);
+
+    $dock.appendChild(grid);
   }
 
-  function rerender(){
-    const els=ensureScaffold(); if (!els) return;
-    adoptFromRegistry();
-    if (!cats.length){ els.cats.innerHTML=''; els.items.innerHTML=''; return; }
-    if (!cats.find(c=>c.id===activeCat)) activeCat = cats[0]?.id || null;
-    renderCats(els.cats);
-    renderItems(els.items);
-    LOG('render ✓', { cats:cats.length, items:items.length, iconBase });
+  // --------------------------- Platziermodus --------------------------------
+  let placing = null; // { building, size, okBtn, cancelBtn, ghostElm }
+
+  function startPlacing(building){
+    placing = { building, size: building.size || {w:1, h:1} };
+    $ghostRoot.innerHTML = '';
+
+    const ghost = document.createElement('div');
+    ghost.className = 'place-sprite';
+    $ghostRoot.appendChild(ghost);
+
+    const ok = document.createElement('button');
+    ok.className = 'place-btn ok';
+    ok.textContent = '✔';
+    ghost.appendChild(ok);
+
+    const cancel = document.createElement('button');
+    cancel.className = 'place-btn cancel';
+    cancel.textContent = '✖';
+    ghost.appendChild(cancel);
+
+    // Maus/Touch folgen
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('click', onMouseClick);
+    window.addEventListener('keydown', onKeyDown);
+    ok.addEventListener('click', onOk);
+    cancel.addEventListener('click', cancelPlacing);
+
+    // Ghost-Bild als großes Vorschau-Sprite (optional: echtes Gebäude-Sprite)
+    ghost.style.backgroundImage = `url(assets/icons/buildings/${building.id}.png)`;
+    ghost.style.backgroundSize = 'cover';
+
+    emit('req:place:start', { buildingId: building.id });
   }
 
-  // ---------------------------- API -----------------------------------------
-  window.UIBuild = {
-    mount(el){ host = el || document.getElementById('build-panel'); ensureScaffold(); },
-    setCategories(next){ cats = (Array.isArray(next)?next:[]).map(c=>({id:String(c.id),label:String(c.label??c.id)})); },
-    setItems(next){ items = (Array.isArray(next)?next:[]).map(b=>({ id:String(b.id), cat:String(b.cat||'misc'), label:String(b.label||b.id), icon:(b.icon||b.sprite||''), cost:(b.cost||null), enabled:(b.enabled!==false) })); },
-    setIconsBase(base){ iconBase = String(base||iconBase); if (iconBase && !iconBase.endsWith('/')) iconBase+='/'; },
-    open(){ const dock=document.getElementById('build-dock'); if(dock){dock.hidden=false;dock.classList.remove('hidden');} if(host){host.hidden=false;host.classList.remove('hidden');} rerender(); },
-    close(){ const dock=document.getElementById('build-dock'); if(dock){dock.hidden=true;dock.classList.add('hidden');} if(host){host.hidden=true;host.classList.add('hidden');} },
-    rerender
-  };
+  function cancelPlacing(){
+    cleanupPlacing();
+    emit('req:place:cancel');
+  }
 
-  // ---------------------------- Lifecycle -----------------------------------
-  window.addEventListener('cb:registry:ready', ()=>UIBuild.rerender());
-  window.addEventListener('cb:registry-ready', ()=>UIBuild.rerender());
-  window.addEventListener('cb:game-start', ()=>{ if(!host) UIBuild.mount(document.getElementById('build-panel')); UIBuild.open(); });
+  function onKeyDown(e){
+    if(e.key === 'Escape' || e.key === 'Backspace'){
+      cancelPlacing();
+    }
+  }
 
-  // Safety (erstes Mount bei Idle)
-  setTimeout(()=>{ if(!host) UIBuild.mount(document.getElementById('build-panel')); },0);
+  // Map-API: wir gehen von einer globalen Tilesize & World→Screen umrechnung aus
+  const TILE = window.Game && Game.tileSize ? Game.tileSize : 32;
+
+  function onMouseMove(e){
+    if(!placing) return;
+    const tx = Math.floor(e.clientX / TILE);
+    const ty = Math.floor(e.clientY / TILE);
+
+    const w = placing.size.w;
+    const h = placing.size.h;
+
+    const px = tx * TILE;
+    const py = ty * TILE;
+
+    const ghost = $ghostRoot.querySelector('.place-sprite');
+    ghost.style.left = px + 'px';
+    ghost.style.top  = py + 'px';
+    ghost.style.width  = (w*TILE) + 'px';
+    ghost.style.height = (h*TILE) + 'px';
+  }
+
+  function onMouseClick(e){
+    // Blockiere globale Klicks – wir bestätigen nur über den ✔ Button
+    // (Serienbau: OK legt, bleibt im Modus)
+  }
+
+  function onOk(e){
+    e.stopPropagation();
+    if(!placing) return;
+    const rect = $ghostRoot.querySelector('.place-sprite').getBoundingClientRect();
+    const tx = Math.round(rect.left / TILE);
+    const ty = Math.round(rect.top  / TILE);
+
+    emit('req:place:confirm', { tx, ty });
+    // Serienbau: NICHT canceln. Ghost bleibt, Spieler kann OK erneut drücken.
+  }
+
+  function cleanupPlacing(){
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('click', onMouseClick);
+    window.removeEventListener('keydown', onKeyDown);
+    $ghostRoot.innerHTML = '';
+    placing = null;
+  }
+
+  // Nach erfolgreichem Setzen von außen informiert werden:
+  window.addEventListener('cb:place:done', (ev)=>{
+    const {exit=false} = ev.detail||{};
+    if(exit){ cleanupPlacing(); } // expliziter Abbruch über Abbrechen-Button
+  });
+
+  // Startsignal
+  window.addEventListener('cb:registry:ready', renderDock);
 })();
