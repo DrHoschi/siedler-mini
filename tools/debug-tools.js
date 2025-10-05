@@ -1,51 +1,75 @@
 /* ============================================================================
- * Datei   : tools/debug_tools.js
- * Projekt : Neue Siedler
- * Version : v0.6.0 (2025-10-05)
- * Zweck   : Leichte Debug-Tools (Eruda) mit Guard & Toggle-Button.
- * ============================================================================ */
+ * Datei   : tools/debug-tools.js
+ * Projekt : Neue Siedler – Debug/Inspector
+ * Version : v2.0.0 (2025-10-05)
+ * Zweck   : Eruda sicher laden, init + robustes show/hide/toggle
+ * Events  : keine
+ * ============================================================================
+ */
+(function () {
+  const TAG = '[dbg]';
+  const log  = (...a)=>console.log(TAG, ...a);
+  const warn = (...a)=>console.warn(TAG, ...a);
+  const err  = (...a)=>console.error(TAG, ...a);
 
-(() => {
-  const log = (...a)=>(window.CBLog?.ok||console.log)('[dbg]',...a);
-  const warn= (...a)=>(window.CBLog?.warn||console.warn)('[dbg]',...a);
+  // Button optional: <button id="btn-debug">Konsole</button>
+  const BTN_ID = 'btn-debug';
 
-  // Toggle-Button (unten rechts)
-  function ensureBadge(){
-    if (document.getElementById('dbg-badge')) return;
-    const b=document.createElement('button');
-    b.id='dbg-badge';
-    Object.assign(b.style,{
-      position:'fixed', right:'10px', bottom:'10px', zIndex:'2147483647',
-      border:'1px solid #2d415d', borderRadius:'12px', padding:'6px 8px',
-      background:'#0f1521', color:'#e6eefc', fontSize:'12px', opacity:'0.85'
-    });
-    b.textContent='Konsole';
-    b.addEventListener('click',()=>{
-      try { window.eruda?.show?.(); } catch{}
-    });
-    document.body.appendChild(b);
+  // 1) Loader – falls eruda fehlt, dynamisch nachladen
+  function ensureEruda(cb){
+    if (window.eruda && typeof window.eruda.init === 'function') { cb?.(); return; }
+    const s = document.createElement('script');
+    // Bewährt: jsDelivr. Falls die Domain geblockt ist, bleibt alles einfach aus.
+    s.src = 'https://cdn.jsdelivr.net/npm/eruda@3.0.1/eruda.min.js';
+    s.async = true;
+    s.onload = ()=>{ log('eruda ready'); cb?.(); };
+    s.onerror= ()=>{ warn('eruda load failed'); };
+    document.head.appendChild(s);
   }
 
-  async function loadEruda(){
-    if (window.eruda?.init) { log('eruda ready'); ensureBadge(); return true; }
+  let _inited=false, _visible=false;
+
+  function initEruda(){
     try{
-      await new Promise((res,rej)=>{
-        const s=document.createElement('script');
-        s.src='https://cdn.jsdelivr.net/npm/eruda@3/eruda.min.js';
-        s.onload=res; s.onerror=rej;
-        document.head.appendChild(s);
-      });
-      if (!window.eruda?.init) throw new Error('no eruda.init');
-      try{ window.eruda.init(); window.eruda.show(); }catch(e){ warn('eruda init fail', e); }
-      ensureBadge();
-      return true;
-    }catch(e){ warn('eruda load fail', e); return false; }
+      if (!window.eruda || _inited) return;
+      // Wichtig: .init() existiert; .toggle() gibt es NICHT – deshalb eigenes Toggle.
+      window.eruda.init();
+      // Startzustand: nicht sichtbar (nur auf Button/Shortcut)
+      window.eruda.hide?.();
+      _inited = true;
+      _visible = false;
+      log('eruda init ✓');
+    }catch(e){
+      warn('eruda init fail', e);
+    }
   }
 
-  // Autoload nach DOM ready
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', loadEruda);
-  } else {
-    loadEruda();
+  function show(){ try{ window.eruda?.show?.(); _visible = true; }catch{} }
+  function hide(){ try{ window.eruda?.hide?.(); _visible = false; }catch{} }
+  function toggle(){ (_visible? hide : show)(); }
+
+  // Exponieren (für Konsole/Buttons)
+  window.DBG = { show, hide, toggle };
+
+  // Optionaler UI-Button
+  function wireButton(){
+    const btn = document.getElementById(BTN_ID);
+    if (!btn) return;
+    btn.addEventListener('click', ()=>toggle());
   }
+
+  // Boot
+  log('bootstrap');
+  ensureEruda(()=>{ initEruda(); wireButton(); });
+
+  // Optional: lang-press Ecke rechts-unten → toggle
+  document.addEventListener('pointerdown', (ev)=>{
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const nearCorner = ev.clientX > vw-64 && ev.clientY > vh-64;
+    if (!nearCorner) return;
+    let active=true; const t0=Date.now();
+    const up = ()=>{ active=false; window.removeEventListener('pointerup', up,{capture:true}); };
+    window.addEventListener('pointerup', up, {capture:true, once:true});
+    setTimeout(()=>{ if(active) toggle(); }, 600); // 600ms press
+  });
 })();
