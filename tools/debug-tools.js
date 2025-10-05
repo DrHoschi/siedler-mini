@@ -1,75 +1,51 @@
 /* ============================================================================
- * Datei : tools/debug_tools.js
- * Zweck : Inspector (eruda) + sichtbarer Toggle-Button + Hotkeys
+ * Datei   : tools/debug_tools.js
+ * Projekt : Neue Siedler
+ * Version : v0.6.0 (2025-10-05)
+ * Zweck   : Leichte Debug-Tools (Eruda) mit Guard & Toggle-Button.
  * ============================================================================ */
+
 (() => {
-  const LOG = (window.CBLog?.ok || console.log).bind(console, '[dbg]');
-  let ready = false;
+  const log = (...a)=>(window.CBLog?.ok||console.log)('[dbg]',...a);
+  const warn= (...a)=>(window.CBLog?.warn||console.warn)('[dbg]',...a);
 
-  function ensureEruda(cb){
-    if (window.eruda && window.eruda._isInit){ cb?.(); return; }
-
-    function initNow(){
-      try{
-        if (!window.eruda) return;
-        if (!window.eruda._isInit) window.eruda.init();
-        window.eruda.show();
-        ready = true;
-        LOG('eruda ready');
-        cb?.();
-      }catch(e){ console.warn('[dbg] eruda init fail', e); }
-    }
-
-    if (!window.eruda){
-      const s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/eruda@3/eruda.min.js';
-      s.async=true;
-      s.onload=initNow;
-      s.onerror=()=>console.warn('[dbg] eruda cdn load fail');
-      document.head.appendChild(s);
-    } else initNow();
-  }
-
-  // Sichtbarer Button rechts unten
-  function mountButton(){
-    if (document.getElementById('dbg-toggle-btn')) return;
+  // Toggle-Button (unten rechts)
+  function ensureBadge(){
+    if (document.getElementById('dbg-badge')) return;
     const b=document.createElement('button');
-    b.id='dbg-toggle-btn';
-    b.textContent='Inspector';
+    b.id='dbg-badge';
     Object.assign(b.style,{
-      position:'fixed', right:'10px', bottom:'64px',
-      zIndex: 99999,
-      padding:'8px 10px', borderRadius:'10px',
-      background:'rgba(20,22,30,.9)', color:'#e9eef7',
-      border:'1px solid #3b4b74', font:'600 12px system-ui',
-      boxShadow:'0 2px 10px rgba(0,0,0,.35)', cursor:'pointer'
+      position:'fixed', right:'10px', bottom:'10px', zIndex:'2147483647',
+      border:'1px solid #2d415d', borderRadius:'12px', padding:'6px 8px',
+      background:'#0f1521', color:'#e6eefc', fontSize:'12px', opacity:'0.85'
     });
-    b.onclick = ()=> ensureEruda(()=>window.eruda.toggle());
+    b.textContent='Konsole';
+    b.addEventListener('click',()=>{
+      try { window.eruda?.show?.(); } catch{}
+    });
     document.body.appendChild(b);
   }
 
-  // Hotkeys: "i"
-  window.addEventListener('keydown',(e)=>{
-    if ((e.key||'').toLowerCase()==='i'){
-      ensureEruda(()=>window.eruda.toggle());
-    }
-  });
+  async function loadEruda(){
+    if (window.eruda?.init) { log('eruda ready'); ensureBadge(); return true; }
+    try{
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/eruda@3/eruda.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      if (!window.eruda?.init) throw new Error('no eruda.init');
+      try{ window.eruda.init(); window.eruda.show(); }catch(e){ warn('eruda init fail', e); }
+      ensureBadge();
+      return true;
+    }catch(e){ warn('eruda load fail', e); return false; }
+  }
 
-  // Long-press links unten (mobil)
-  let timer=0;
-  window.addEventListener('touchstart', (ev)=>{
-    const t=ev.touches?.[0]; if(!t) return;
-    const w=innerWidth, h=innerHeight;
-    if (t.clientX < w*0.35 && t.clientY > h*0.65){
-      timer=setTimeout(()=>ensureEruda(()=>window.eruda.toggle()), 1200);
-    }
-  }, {passive:true});
-  window.addEventListener('touchend', ()=>clearTimeout(timer), {passive:true});
-
-  // Globale Helfer-Funktion (falls ein UI-Button existiert, der das aufruft)
-  window.__dbgToggle = ()=> ensureEruda(()=>window.eruda.toggle());
-
-  // Direkt montieren
-  mountButton();
-  LOG('tools ready');
+  // Autoload nach DOM ready
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', loadEruda);
+  } else {
+    loadEruda();
+  }
 })();
