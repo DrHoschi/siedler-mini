@@ -1,48 +1,39 @@
 [
   {
-    "id": "u.citizen",
-    "name": "Dorfbewohner",
-    "epoche": 1,
-    "speed": 1.0,
-    "capacity": 0,
-    "sprite": "assets/characters/citizen.png",
-    "role": "basis"
-  },
-  {
     "id": "u.carrier",
     "name": "Träger",
     "epoche": 1,
-    "speed": 1.1,
+    "speed": 2.0,
     "capacity": 1,
-    "sprite": "assets/characters/carrier.png",
-    "role": "basis",
-    "aiProfile": "carrier_basic"
+    "sprite": "assets/characters/porter_walk_empty.png",
+    "sprite_carry": "assets/characters/porter_walk_carry.png",
+    "aiProfile": "carrier.basic"
   },
   {
     "id": "u.lumberjack",
     "name": "Holzfäller",
     "epoche": 1,
-    "speed": 1.0,
+    "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/lumberjack.png",
-    "role": "prod"
+    "sprite": "assets/characters/woodcutter.png",
+    "aiProfile": "worker.lumberjack"
   },
   {
     "id": "u.fisher",
     "name": "Fischer",
     "epoche": 1,
-    "speed": 1.0,
+    "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/fisher.png",
-    "role": "prod"
+    "sprite": "assets/characters/fisherman.png",
+    "aiProfile": "worker.fisher"
   },
   {
-    "id": "u.mason",
+    "id": "u.stonecutter",
     "name": "Steinmetz",
     "epoche": 1,
-    "speed": 1.0,
+    "speed": 1.6,
     "capacity": 1,
-    "sprite": "assets/characters/mason.png",
-    "role": "prod"
+    "sprite": "assets/characters/stonecutter.png",
+    "aiProfile": "worker.stonecutter"
   }
 ]
