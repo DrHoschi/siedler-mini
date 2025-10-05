@@ -1,105 +1,119 @@
 /* ============================================================================
  * Datei    : core/boot.js
  * Projekt  : Neue Siedler
- * Version  : v19.0.1 (2025-10-05)
- * Zweck    : Zuverlässige Boot-Kette + laute Fehler/Logs für iOS/Safari
- * Events   :
- *   OUT : cb:assets-ready, cb:registry:ready (aus registry.js), cb:game-start
+ * Version  : v19.0.2 (2025-10-05)
+ * Zweck    : Robuster Start (iOS/WebKit-freundlich) + klare UI-Sichtbarkeit
+ * Events   : cb:assets-ready (hier), cb:registry:ready (aus Registry), cb:game-start (aus Game)
  * ============================================================================
  */
 
 (function(){
-  // ---------- Minimal-Logger (konsole + sichtbares Toast) ----------
-  function log(...a){ try{ console.log('[BOOT]', ...a); }catch(_){} showToast(a.join(' ')); }
-  function err(...a){ try{ console.error('[BOOT]', ...a); }catch(_){} showToast('❌ '+a.join(' ')); }
-  function showToast(msg){
-    let x = document.getElementById('boot-toast');
-    if(!x){
-      x = document.createElement('div');
-      x.id = 'boot-toast';
-      x.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.6);color:#fff;font:12px/1.3 system-ui;max-width:70vw;';
-      document.body.appendChild(x);
+  // ---------- Mini-Toast (sichtbare Hinweise, auch mobil) ----------
+  function toast(msg, isErr){
+    let box = document.getElementById('boot-toast');
+    if(!box){
+      box = document.createElement('div');
+      box.id = 'boot-toast';
+      box.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:9999;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.65);color:#fff;font:12px/1.4 system-ui,Segoe UI,Roboto,sans-serif;max-width:75vw;';
+      document.body.appendChild(box);
     }
-    x.textContent = String(msg);
-    clearTimeout(showToast._t);
-    showToast._t = setTimeout(()=>{ x.textContent=''; }, 4000);
+    box.textContent = (isErr ? '❌ ' : 'ℹ️ ') + String(msg);
+    clearTimeout(toast._t); toast._t = setTimeout(()=>{ box.textContent=''; }, 3500);
   }
+  function log(...a){ try{ console.log('[BOOT]', ...a); }catch(_){} toast(a.join(' '), false); }
+  function err(...a){ try{ console.error('[BOOT]', ...a); }catch(_){} toast(a.join(' '), true); }
 
-  // ---------- JSON Loader (mit deutlicher Fehlerausgabe) ----------
+  // ---------- JSON-Loader (mit Cache-Buster & Fehlerausgabe) ----------
   async function loadJSON(path){
-    const bust = (path.includes('?') ? '&' : '?') + 'v=' + Date.now(); // Cachebuster
-    const url = path + bust;
+    const url = path + (path.includes('?')?'&':'?') + 'v=' + Date.now();
     log('lade', path);
-    let res;
-    try{
-      res = await fetch(url, { cache:'no-store' });
-    }catch(e){
-      err('Netzwerkfehler bei', path, e && e.message || e);
-      throw e;
-    }
-    if(!res.ok){
-      const t = await res.text().catch(()=> '');
-      err('HTTP '+res.status+' für', path, 'Payload:', t.slice(0,140));
-      throw new Error('HTTP '+res.status+' @ '+path);
-    }
-    try{
-      return await res.json();
-    }catch(e){
-      err('JSON-Parsefehler in', path, e && e.message || e);
-      throw e;
+    const res = await fetch(url, { cache:'no-store' }).catch(e=>{ err('Netzwerkfehler:', e?.message||e); throw e; });
+    if(!res || !res.ok){ const t = res ? await res.text().catch(()=> '') : ''; err('HTTP/Fetch-Fehler @', path, t.slice(0,120)); throw new Error('Fetch '+path); }
+    try{ return await res.json(); } catch(e){ err('JSON-Fehler @', path, e?.message||e); throw e; }
+  }
+
+  // ---------- UI-Helfer ----------
+  function showHudAndDock(){
+    const $hud  = document.getElementById('hud-top');
+    const $dock = document.getElementById('build-dock');
+    $hud  && $hud.classList.remove('hidden');
+    $dock && $dock.classList.remove('hidden');
+  }
+  function hideStartHard(){
+    const $start = document.getElementById('start-panel');
+    if(!$start) return;
+    // Klasse + Fallback inline (falls CSS .hidden irgendwo fehlt/übersteuert)
+    $start.classList.add('hidden');
+    $start.style.display   = 'none';
+    $start.style.visibility= 'hidden';
+  }
+  function autoOpenBuildDock(){
+    const $btn = document.getElementById('btn-build');
+    if($btn && $btn.getAttribute('aria-expanded')!=='true'){
+      $btn.click(); // triggert unser Inline-Wiring und öffnet das Dock
     }
   }
 
-  // ---------- Haupt-Boot-Sequenz ----------
+  // ---------- Hauptstart ----------
   async function boot(){
-    // UI sichtbar machen (Startpanel zu, HUD/Dock an)
-    const $start = document.getElementById('start-panel');
-    const $hud   = document.getElementById('hud-top');
-    const $dock  = document.getElementById('build-dock');
-    $start && $start.classList.add('hidden');
-    $hud   && $hud.classList.remove('hidden');
-    $dock  && $dock.classList.remove('hidden');
+    // 0) UI sichtbar schalten
+    hideStartHard();
+    showHudAndDock();
 
     try{
-      // 1) (optional) Assets-Phase signalisieren
-      window.dispatchEvent(new CustomEvent('cb:assets-ready'));
-      log('cb:assets-ready');
+      // 1) Assets-Phase (Marker)
+      window.dispatchEvent(new CustomEvent('cb:assets-ready')); log('cb:assets-ready');
 
-      // 2) Registry laden
-      await Registry.init(loadJSON); // emit cb:registry:ready kommt aus registry.js
+      // 2) Registry laden → cb:registry:ready kommt aus registry.js
+      await Registry.init(loadJSON);
       log('Registry initialisiert');
 
-      // 3) Game starten
+      // 3) Nach Registry: Baumenü sicher befüllt? Wenn leer → Hinweis
+      setTimeout(()=>{
+        try{
+          const list = (typeof Registry.list==='function') ? Registry.list('buildings', {epoche:1}) : [];
+          if(!list || !list.length){
+            err('Hinweis: Keine Gebäude für Epoche 1 gefunden – prüfe data/buildings.json & Icons.');
+          } else {
+            log('Gebäude gefunden:', list.length);
+          }
+        }catch(e){}
+      }, 0);
+
+      // 4) Game starten (loop ohne Renderer ist OK; Place/Build funktioniert)
       Game.start();
       log('Game.start() ok → cb:game-start sollte folgen');
+
+      // 5) Komfort: Baumenü automatisch öffnen (du siehst sofort die Kacheln)
+      autoOpenBuildDock();
+
     }catch(e){
-      err('BOOT abgebrochen:', e && e.message || e);
-      alert('Start fehlgeschlagen:\n'+(e && e.message || e));
+      err('Start fehlgeschlagen:', e?.message||e);
+      alert('Start fehlgeschlagen:\n'+(e?.message||e));
     }
   }
 
-  // ---------- Start-Knöpfe zuverlässig verdrahten ----------
-  function wireStartButtons(){
-    const $btnNew   = document.getElementById('btn-new');
-    const $btnStart = document.getElementById('btn-start');   // versteckter Fallback
+  // ---------- Startknöpfe (zuverlässig) ----------
+  function wireStart(){
     const kick = ()=> boot();
-
-    if($btnNew){ $btnNew.onclick = kick; }
-    if($btnStart){ $btnStart.onclick = kick; }
-
-    // Sicherheitsnetz: falls jemand das Startpanel bereits versteckt hat
-    // oder der Klick nicht ankam, erlaube Start auch per Tastatur:
+    const $btnNew   = document.getElementById('btn-new');
+    const $btnStart = document.getElementById('btn-start'); // Fallback
+    if($btnNew)   $btnNew.onclick = kick;
+    if($btnStart) $btnStart.onclick = kick;
+    // Enter/Space im Startpanel:
     window.addEventListener('keydown', (e)=>{
       if(e.key==='Enter' || e.key===' '){
         const p = document.getElementById('start-panel');
-        const visible = p && !p.classList.contains('hidden');
-        if(visible){ boot(); }
+        if(p && !p.classList.contains('hidden')) boot();
       }
     });
-
     log('Start verdrahtet');
   }
 
-  // ---------- Autokonfiguration ----------
-  window.addEventListener('load', wireStartButtons);
+  // ---------- Event-Feedback ----------
+  window.addEventListener('cb:registry:ready', ()=> log('cb:registry:ready'));
+  window.addEventListener('cb:game-start',     ()=> log('cb:game-start'));
+
+  // ---------- Init ----------
+  window.addEventListener('load', wireStart);
 })();
