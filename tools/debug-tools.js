@@ -72,4 +72,37 @@
     window.addEventListener('pointerup', up, {capture:true, once:true});
     setTimeout(()=>{ if(active) toggle(); }, 600); // 600ms press
   });
+
+  // ============================================================================
+// Datei: tools/debug-tools.js
+// Zweck: Mobile Debug-Konsole (Eruda) sicher initialisieren
+// ============================================================================
+(() => {
+  if (window.__ERUDA_INIT__) return;  // <-- schützt vor Mehrfachstart!
+  window.__ERUDA_INIT__ = true;
+
+  try {
+    if (!window.eruda) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+      script.onload = () => {
+        try {
+          eruda.init();
+          console.log('[dbg] eruda ready');
+        } catch (e) {
+          console.warn('[dbg] eruda init fail', e);
+        }
+      };
+      document.body.appendChild(script);
+    } else if (!eruda._isInit) {
+      eruda.init();
+      console.log('[dbg] eruda ready (2)');
+    } else {
+      console.log('[dbg] eruda already active');
+    }
+  } catch (err) {
+    console.error('[dbg] eruda fatal error', err);
+  }
+})();
+  
 })();
