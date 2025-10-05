@@ -1,22 +1,20 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v19.0.0 (2025-10-05)
+ * Version  : v19.0.2 (2025-10-05)
  * Zweck    : Baumenü rendern (Epoche 1), Kosten-Icons, Platziermodus (Ghost)
+ * Hinweise :
+ *   - Zeigt klar an, wie viele Gebäude gefunden wurden.
+ *   - Falls 0 gefunden: sichtbarer Hinweis im Dock (nicht nur Toast).
+ *   - Nutzt Registry.iconsBase() als Prefix für die Gebäude-Icons, wenn gesetzt.
  * Events   :
- *   IN  : cb:registry:ready
- *         cb:place:done                (nach erfolgreichem Bauen)
- *   OUT : req:place:start {buildingId}
- *         req:place:confirm {tx,ty}
- *         req:place:cancel
- * UI    : Icons: assets/icons/buildings/<id>.png
- *         Kosten: assets/icons/resources/<res>.png
+ *   IN  : cb:registry:ready, cb:place:done
+ *   OUT : req:place:start {buildingId}, req:place:confirm {tx,ty}, req:place:cancel
  * ============================================================================
  */
-
 (function(){
   const $dock = document.getElementById('build-dock');
-  const $ghostRoot = ensureGhostRoot(); // ein Overlay
+  const $ghostRoot = ensureGhostRoot();
 
   function ensureGhostRoot(){
     let r = document.querySelector('.place-overlay');
@@ -25,20 +23,41 @@
       r.className = 'place-overlay';
       document.body.appendChild(r);
     }
-    r.innerHTML = ''; // clean
+    r.innerHTML = '';
     return r;
   }
 
   function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, {detail})); }
 
-  // --------------------------- Baumenü rendern -------------------------------
+  // ---------- Render ----------
   function renderDock(){
-    const list = Registry.list('buildings', { epoche:1 });
     if(!$dock) return;
+
+    const list = Registry.list('buildings', { epoche:1 });
+    const iconsBase = (typeof Registry.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
     $dock.innerHTML = '';
+
+    const head = document.createElement('div');
+    head.className = 'build-head';
+    head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+    head.innerHTML = `<strong>Baumenü (Epoche 1)</strong><span id="build-count" style="opacity:.85"></span>`;
+    $dock.appendChild(head);
 
     const grid = document.createElement('div');
     grid.className = 'build-grid';
+    $dock.appendChild(grid);
+
+    const $count = head.querySelector('#build-count');
+    $count.textContent = `${list.length} Gebäude`;
+
+    if(!list.length){
+      const empty = document.createElement('div');
+      empty.className = 'build-empty';
+      empty.style.cssText = 'padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.35);';
+      empty.innerHTML = `Keine Gebäude für Epoche 1 gefunden.<br>Prüfe <code>data/buildings.json</code> → <code>buildings[]</code> &amp; Icon-Dateien.`;
+      $dock.appendChild(empty);
+      return;
+    }
 
     list.forEach(b=>{
       const card = document.createElement('button');
@@ -47,7 +66,8 @@
 
       const img = document.createElement('img');
       img.className = 'build-icon';
-      img.src = `assets/icons/buildings/${b.id}.png`;
+      // bevorzugt iconsBase + id.png
+      img.src = `${iconsBase.replace(/\/?$/,'/')}${b.id}.png`;
       img.alt = b.name || b.id;
 
       const label = document.createElement('div');
@@ -63,28 +83,21 @@
         i.className = 'cost-icon';
         i.src = `assets/icons/resources/${c.id}.png`;
         i.alt = c.id;
-
         const t = document.createElement('span');
         t.textContent = `×${c.qty}`;
         row.appendChild(i); row.appendChild(t);
         cost.appendChild(row);
       });
 
-      card.appendChild(img);
-      card.appendChild(label);
-      card.appendChild(cost);
-      card.addEventListener('click', ()=>{
-        startPlacing(b);
-      });
-
+      card.appendChild(img); card.appendChild(label); card.appendChild(cost);
+      card.addEventListener('click', ()=> startPlacing(b));
       grid.appendChild(card);
     });
-
-    $dock.appendChild(grid);
   }
 
-  // --------------------------- Platziermodus --------------------------------
-  let placing = null; // { building, size, okBtn, cancelBtn, ghostElm }
+  // ---------- Platzieren ----------
+  let placing = null;
+  const TILE = window.Game && Game.tileSize ? Game.tileSize : 32;
 
   function startPlacing(building){
     placing = { building, size: building.size || {w:1, h:1} };
@@ -104,55 +117,33 @@
     cancel.textContent = '✖';
     ghost.appendChild(cancel);
 
-    // Maus/Touch folgen
+    // Ghost-Bild (Icon als Platzhalter)
+    const iconsBase = (typeof Registry.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
+    ghost.style.backgroundImage = `url(${iconsBase.replace(/\/?$/,'/')}${building.id}.png)`;
+    ghost.style.backgroundSize  = 'cover';
+
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('click', onMouseClick);
     window.addEventListener('keydown', onKeyDown);
     ok.addEventListener('click', onOk);
     cancel.addEventListener('click', cancelPlacing);
 
-    // Ghost-Bild als großes Vorschau-Sprite (optional: echtes Gebäude-Sprite)
-    ghost.style.backgroundImage = `url(assets/icons/buildings/${building.id}.png)`;
-    ghost.style.backgroundSize = 'cover';
-
     emit('req:place:start', { buildingId: building.id });
   }
 
-  function cancelPlacing(){
-    cleanupPlacing();
-    emit('req:place:cancel');
-  }
-
-  function onKeyDown(e){
-    if(e.key === 'Escape' || e.key === 'Backspace'){
-      cancelPlacing();
-    }
-  }
-
-  // Map-API: wir gehen von einer globalen Tilesize & World→Screen umrechnung aus
-  const TILE = window.Game && Game.tileSize ? Game.tileSize : 32;
+  function onKeyDown(e){ if(e.key==='Escape'||e.key==='Backspace') cancelPlacing(); }
+  function onMouseClick(e){ /* Absichtlich leer – bestätigen nur per ✔ */ }
 
   function onMouseMove(e){
     if(!placing) return;
     const tx = Math.floor(e.clientX / TILE);
     const ty = Math.floor(e.clientY / TILE);
-
-    const w = placing.size.w;
-    const h = placing.size.h;
-
-    const px = tx * TILE;
-    const py = ty * TILE;
-
+    const {w,h} = placing.size;
     const ghost = $ghostRoot.querySelector('.place-sprite');
-    ghost.style.left = px + 'px';
-    ghost.style.top  = py + 'px';
-    ghost.style.width  = (w*TILE) + 'px';
-    ghost.style.height = (h*TILE) + 'px';
-  }
-
-  function onMouseClick(e){
-    // Blockiere globale Klicks – wir bestätigen nur über den ✔ Button
-    // (Serienbau: OK legt, bleibt im Modus)
+    ghost.style.left = (tx*TILE)+'px';
+    ghost.style.top  = (ty*TILE)+'px';
+    ghost.style.width  = (w*TILE)+'px';
+    ghost.style.height = (h*TILE)+'px';
   }
 
   function onOk(e){
@@ -161,23 +152,22 @@
     const rect = $ghostRoot.querySelector('.place-sprite').getBoundingClientRect();
     const tx = Math.round(rect.left / TILE);
     const ty = Math.round(rect.top  / TILE);
-
     emit('req:place:confirm', { tx, ty });
-    // Serienbau: NICHT canceln. Ghost bleibt, Spieler kann OK erneut drücken.
+    // Serienbau: NICHT canceln
   }
 
-  function cleanupPlacing(){
+  function cancelPlacing(){
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('click', onMouseClick);
     window.removeEventListener('keydown', onKeyDown);
     $ghostRoot.innerHTML = '';
     placing = null;
+    emit('req:place:cancel');
   }
 
-  // Nach erfolgreichem Setzen von außen informiert werden:
   window.addEventListener('cb:place:done', (ev)=>{
     const {exit=false} = ev.detail||{};
-    if(exit){ cleanupPlacing(); } // expliziter Abbruch über Abbrechen-Button
+    if(exit) cancelPlacing();
   });
 
   // Startsignal
