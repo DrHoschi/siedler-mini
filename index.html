@@ -2,19 +2,24 @@
 <html lang="de">
 <head>
   <!-- =========================================================================
-       Datei    : index.html (Root)
-       Projekt  : Neue Siedler
-       Version  : v19.0.0 (2025-10-05)
-       Zweck    : Einstiegspunkt – Startpanel → Boot → HUD/Build
+       [00] META & HEADER
+       Datei     : index.html (Root)
+       Projekt   : Neue Siedler
+       Version   : v19.0.1 (2025-10-05)
+       Zweck     : Einheitlicher Einstieg → Startpanel → Boot-Kette → HUD/Build
        Leitplanken:
-         - Reihenfolge: Core/Registry → Engine → UI → Boot
-         - Startfenster zuerst, HUD/Build funktionsfähig
+         • Reihenfolge: Core/Registry → Engine → UI → Boot → Inline-Wiring
+         • Startfenster zuerst sichtbar; Boot übernimmt Hides/Shows & Logs
+         • Keine doppelten Overlays im DOM (Ghost-Overlay erzeugt UI-Code)
   ========================================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neue Siedler – Epoche 1</title>
 
-  <!-- Styles -->
+  <!-- =========================================================================
+       [01] STYLES (globale UI + Panels + Platzieren + Inspector)
+       Anmerkung: Farben/Look bleiben gemäß Projektvorgaben erhalten.
+  ========================================================================= -->
   <link rel="stylesheet" href="ui/css/ui.css">
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
@@ -24,11 +29,16 @@
   <link rel="stylesheet" href="ui/css/ui-tooltip.css">
   <link rel="stylesheet" href="ui/css/inspector.css">
 
+  <!-- Inline-Minor-Styles (nur kleine Helfer; große Styles bleiben in CSS) -->
   <style>
     :root { --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff; }
-    html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg);
-      font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-    #overlay-paths, #overlay-units { position:absolute; left:0; top:0; z-index:40; pointer-events:none; }
+    html,body{
+      margin:0; padding:0; background:var(--bg); color:var(--fg);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    }
+    #overlay-paths, #overlay-units {
+      position:absolute; left:0; top:0; z-index:40; pointer-events:none;
+    }
     .hud-bar { display:flex; gap:18px; align-items:center; }
     .hud-item img { width:18px; height:18px; vertical-align:-3px; margin-right:6px; }
     .build-panel { position:fixed; left:16px; bottom:16px; z-index:45; }
@@ -36,18 +46,23 @@
 </head>
 
 <body>
+  <!-- =========================================================================
+       [02] APP-ROOT & CANVAS
+       • Haupt-Canvas (#game)
+       • Overlay-Canvas (Pfad/Units) – optional für Debug/Inspector
+  ========================================================================= -->
   <div id="app" aria-label="Spiel-Container">
-    <!-- Spielfeld -->
     <canvas id="game" width="1280" height="720" data-map="data/maps/map-mini.json"></canvas>
 
-    <!-- Overlays -->
+    <!-- Overlays (werden vom Code beschrieben/gelöscht) -->
     <canvas id="overlay-paths" width="1280" height="720" aria-label="Path Overlay"></canvas>
     <canvas id="overlay-units" width="1280" height="720" aria-label="Units Overlay"></canvas>
 
-    <!-- Start-Hintergrund -->
+    <!-- =========================================================================
+         [03] START-HINTERGRUND & PANEL
+    ========================================================================= -->
     <div id="bg-start" aria-hidden="true"></div>
 
-    <!-- Startpanel -->
     <div id="start-panel" class="ui-panel ui-panel--light visible" aria-label="Startfenster">
       <h1>Neue Siedler</h1>
       <div class="actions">
@@ -57,11 +72,14 @@
         <button id="btn-reset"      class="btn">Reset</button>
         <button id="btn-inspector"  class="btn">Inspector</button>
       </div>
-      <!-- Kompatibilität: Boot.js lauscht ggf. auf #btn-start -->
+      <!-- Kompatibilität: manche ältere Boots hörten auf #btn-start -->
       <button id="btn-start" style="display:none" aria-hidden="true" tabindex="-1">Start hidden</button>
     </div>
 
-    <!-- HUD (Ressourcenanzeige) -->
+    <!-- =========================================================================
+         [04] HUD (Ressourcenanzeige)
+         • IDs sind wichtig für ui/ui-hud.js (hud-wood/fish/stone)
+    ========================================================================= -->
     <div id="hud-top" class="ui-panel ui-panel--dark hidden" aria-label="Ressourcen-HUD">
       <div class="hud-bar">
         <span class="hud-item">
@@ -76,29 +94,76 @@
       </div>
     </div>
 
-    <!-- Build-Dock (Grid rendert ui/ui-build.js) -->
+    <!-- =========================================================================
+         [05] BUILD-DOCK (unten links) – Grid wird von ui/ui-build.js gerendert
+    ========================================================================= -->
     <div id="build-dock" class="ui-panel ui-panel--dark hidden" aria-label="Bau-Dock"></div>
     <button id="btn-build" class="ui-btn-build" aria-expanded="false" title="Bauen">Bauen</button>
     <aside id="build-panel" class="build-panel"></aside>
 
-    <!-- Inspector -->
+    <!-- =========================================================================
+         [06] INSPECTOR-ROOT (später Tabs & Tools)
+    ========================================================================= -->
     <div id="inspector" class="ui-panel ui-panel--dark hidden" aria-label="Inspector"></div>
   </div>
 
-  <!-- SCRIPTS – Minimalkette, nur vorhandene Module -->
-  <script src="core/registry.js"></script>
-  <script src="core/game.js"></script>
-  <script src="core/carrier.js"></script>
+  <!-- =========================================================================
+       [07] SCRIPTS – CORE/ENGINE (verbindlich)
+       Reihenfolge ist kritisch: Registry → Game → Carrier
+  ========================================================================= -->
+  <script src="core/registry.js"></script><!-- [07.01] Registry – Zentrale Daten (buildings/units/balance), Events: cb:registry:ready, Snapshot-API -->
+  <script src="core/game.js"></script><!-- [07.02] Game-Engine – Welt/Grid, Platzieren, Produktionsticker, HQ/Jobs/HUD Hooks -->
+  <script src="core/carrier.js"></script><!-- [07.03] Carrier-Laufzeit – Jobs ziehen, Ressource tragen (mit Icon), Lieferlogik zur HQ-Tür -->
 
-  <script src="ui/ui-build.js"></script>
-  <script src="ui/ui-hud.js"></script>
-  <script src="core/boot.js"></script>
+  <!-- =========================================================================
+       [08] SCRIPTS – UI (verbindlich)
+  ========================================================================= -->
+  <script src="ui/ui-build.js"></script><!-- [08.01] Build-Dock – Kategorien/Kacheln, Kosten-Icons, Platzier-Ghost (✔/✖), Serienbau -->
+  <script src="ui/ui-hud.js"></script><!-- [08.02] HUD – reagiert auf cb:res:change, aktualisiert Holz/Fisch/Stein -->
 
-  <!-- Inline-Wiring (Startpanel + Dock) -->
+  <!-- =========================================================================
+       [09] SCRIPTS – BOOT (verbindlich)
+       • robuster Start (sichtbare Toast-Logs, JSON-Fehler deutlich)
+  ========================================================================= -->
+  <script src="core/boot.js"></script><!-- [09.01] Boot – verdrahtet Startbuttons, lädt Registry(JSON), startet Game, blendet HUD/Build ein -->
+
+  <!-- =========================================================================
+       [10] SCRIPTS – OPTIONAL / NOCH NICHT VERKNÜPFT (auskommentiert)
+       • Bereits vorbereitet, aber (noch) nicht aktiv. Zum Aktivieren: auskommentieren.
+  ========================================================================= -->
+
+  <!-- CORE/ENGINE+DEBUG ------------------------------------------------------ -->
+  <!-- <script src="core/asset.js"></script> -->         <!-- [10.01] Asset-Loader (Sprites/Atlanten); falls wir Preloading separat brauchen -->
+  <!-- <script src="core/adfinder.js"></script> -->      <!-- [10.02] A* Pfadfinder + Heatmap; ersetzt die simple Schritt-Logik in Carrier -->
+  <!-- <script src="core/path-overlay.js"></script> -->  <!-- [10.03] Pfad-/Heatmap-Overlay (Inspector-Toggle) -->
+  <!-- <script src="core/map-runtime.js"></script> -->   <!-- [10.04] Kamera/Zoom/Pan + Grid-Rendering/Debug (falls eigener Renderer genutzt wird) -->
+  <!-- <script src="core/unit-overlay.js"></script> -->  <!-- [10.05] Einheiten-Overlay (Debug, Bounding, Ziele) -->
+
+  <!-- CORE↔UI BRIDGES -------------------------------------------------------- -->
+  <!-- <script src="core/ui-build.data-bridge.js"></script> --> <!-- [10.06] Registry→UI-Build Datenbrücke (Filter/Epoche/Kategorien) -->
+  <!-- <script src="ui/ui-bridge.js"></script> -->                <!-- [10.07] UI-Event-Bridge (Start/HUD/Build↔Core, zentrale Dispatches) -->
+  <!-- <script src="ui/ui-build.toggle.js"></script> -->          <!-- [10.08] Zusätzliche Build-UI-Schalter/Shortcuts -->
+
+  <!-- INSPECTOR -------------------------------------------------------------- -->
+  <!-- <script src="ui/ui-inspector.js"></script> -->             <!-- [10.09] Inspector Main (Tabs-Container, Ping, Editor-Open Hook) -->
+  <!-- <script src="ui/inspector/panel.logs.js"></script> -->     <!-- [10.10] Inspector: Logs/Events -->
+  <!-- <script src="ui/inspector/panel.paths.js"></script> -->    <!-- [10.11] Inspector: Pfade/Heatmap -->
+  <!-- <script src="ui/inspector/panel.resources.js"></script> --><!-- [10.12] Inspector: Ressourcen/Bestände -->
+  <!-- <script src="ui/inspector/panel.editors.js"></script> -->  <!-- [10.13] Inspector: Editoren (Baumenu-Regeln, Door/Entrance, etc.) -->
+  <!-- <script src="ui/inspector/panel.tests.js"></script> -->    <!-- [10.14] Inspector: Mini-Tests/Checks -->
+  <!-- <script src="ui/inspector/panel.overlay.js"></script> -->  <!-- [10.15] Inspector: Overlay-Schalter -->
+
+  <!-- OPTIONAL DEBUG-KONSOLE (mobil sichtbar) ------------------------------- -->
+  <!-- <script src="ui/ui-debug-console.js"></script> -->         <!-- [10.16] Kleine integrierte Debug-Konsole (Button „DBG“ unten rechts) -->
+
+  <!-- =========================================================================
+       [11] INLINE-WIRING (leichtgewichtig)
+       • Lässt Boot die Hauptarbeit machen (kein doppeltes Hiding).
+       • Schaltet Inspector-Panel & Build-Dock; feuert UI-Events.
+  ========================================================================= -->
   <script>
     (function(){
       'use strict';
-      const $start    = document.getElementById('start-panel');
       const $insp     = document.getElementById('inspector');
       const $dock     = document.getElementById('build-dock');
       const $btnBuild = document.getElementById('btn-build');
@@ -107,39 +172,51 @@
 
       function fire(type, detail){ window.dispatchEvent(new CustomEvent(type, { detail: detail||{} })); }
 
-      // Neues Spiel → Boot-Kette anstoßen (Kompatibilität: boot.js könnte #btn-start brauchen)
+      // [11.01] Neues Spiel → nur Events feuern; Boot übernimmt Hides/Shows/Start
       $btnNew?.addEventListener('click', function(){
-        $start.classList.add('hidden');
-        $btnStart?.click();                 // falls boot.js darauf hört
-        fire('cb:start:new');               // Event-basiert für spätere Hooks
+        $btnStart?.click();       // Fallback für Alt-Boots
+        fire('cb:start:new');
       });
 
-      // Inspector & Fullscreen
+      // [11.02] Inspector Toggle (sichtbar/versteckt) + Event
       document.getElementById('btn-inspector')?.addEventListener('click', function(){
-        $insp.classList.toggle('hidden'); fire('req:inspector:toggle');
+        $insp?.classList.toggle('hidden');
+        fire('req:inspector:toggle');
       });
+
+      // [11.03] Vollbild an/aus (best effort, iOS/WebKit tolerant)
       document.getElementById('btn-fullscreen')?.addEventListener('click', function(){
         const el = document.documentElement;
         const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
         const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
-        try { (!document.fullscreenElement && !document.webkitFullscreenElement) ? req?.call(el) : exit?.call(document); }
-        catch(e){ (console.warn)('[index] fullscreen failed', e); }
+        try { (!document.fullscreenElement && !document.webkitFullscreenElement) ? req?.call(el) : exit?.call(el); }
+        catch(e){ try{ console.warn('[index] fullscreen failed', e); }catch(_){} }
         fire('cb:start:fullscreen');
       });
 
-      // Build-Dock Toggle
+      // [11.04] Build-Dock Toggle
       $btnBuild?.addEventListener('click', function(){
-        const isOpen = !$dock.classList.contains('hidden');
+        const isOpen = !$dock?.classList.contains('hidden');
         if (isOpen){
-          $dock.classList.add('hidden');  $btnBuild.setAttribute('aria-expanded', 'false'); fire('cb:build:close');
+          $dock?.classList.add('hidden');
+          $btnBuild.setAttribute('aria-expanded', 'false');
+          fire('cb:build:close');
         } else {
-          $dock.classList.remove('hidden');$btnBuild.setAttribute('aria-expanded', 'true');  fire('cb:build:open');
+          $dock?.classList.remove('hidden');
+          $btnBuild.setAttribute('aria-expanded', 'true');
+          fire('cb:build:open');
         }
       });
 
-      // UI ready
+      // [11.05] UI ready
       fire('cb:ui-ready');
     })();
   </script>
+
+  <!-- =========================================================================
+       [12] HINWEIS
+       • Das Platzier-Ghost-Overlay (.place-overlay) wird NICHT im HTML angelegt.
+         Es wird von ui/ui-build.js dynamisch erzeugt (genau EIN Overlay).
+  ========================================================================= -->
 </body>
 </html>
