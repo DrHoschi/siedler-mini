@@ -38,6 +38,8 @@
       });
     });
 
+    document.getElementById('start-background').style.display = 'none';
+
     // Canvas nach vorn & sichtbar
     const canvas = document.getElementById('game');
     if (canvas){
