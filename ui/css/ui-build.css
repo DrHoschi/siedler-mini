@@ -30,7 +30,7 @@ body:not(.is-playing) #build-panel {
 
 #build-dock{
   position: fixed; left: 0; right: 0; bottom: 0;
-  z-index: var(--build-dock-z);
+  z-index: 46 !important;;
   padding: 10px;
   padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   display: flex;
@@ -182,18 +182,19 @@ body:not(.is-playing) #build-panel {
 #build-dock.build--compact #build-items .icon{ width: 40px; height: 40px; }
 
 /* (11) Build-FAB ------------------------------------------------------------ */
-.ui-btn-build{
+.ui-btn-build { z-index: 47 !important; position: fixed; left: 12px; bottom: 12px; }
+/*.ui-btn-build{
   position: fixed;
   left: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: 20000;                   /* deutlich über Canvas & Dock */
-  pointer-events: auto;
+  z-index: 20000;         */          /* deutlich über Canvas & Dock */
+ /* pointer-events: auto;
 
   padding: 10px 14px; border-radius: 8px;
   border: 1px solid #ffffff33;
   background: #2b3138; color: #e6f0ff; cursor: pointer;
   box-shadow: 0 6px 18px rgba(0,0,0,.28);
-}
+} */
 .ui-btn-build:hover{ filter: brightness(1.06); }
 .ui-btn-build:focus-visible{ outline: 2px solid #8ab4f8; outline-offset: 2px; }
 .ui-btn-build[aria-expanded="true"]{
