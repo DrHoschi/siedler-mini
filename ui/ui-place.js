@@ -1,96 +1,94 @@
 /* ============================================================================
  * Datei   : ui/ui-place.js
- * Projekt : Neue Siedler
- * Version : v1.5.0 (2025-10-05)
- * Zweck   : Overlay mit ✓/✕ zum Bestätigen/Abbrechen der aktuellen Platzierung.
- * UI-Logik:
- *  - Mount bei erstem Gebrauch; bleibt bestehen (display none ↔ block).
- *  - Reagiert auf cb:place:preview und zeigt/positioniert die Buttons.
- *  - Sendet cb:place:confirm (gx,gy) / cb:place:cancel.
+ * Projekt : Neue Siedler – Build/Ghost Confirm
+ * Version : v2.2.0 (2025-10-05)
+ * Zweck   : Zeigt Ghost-Overlay inkl. OK/X; dispatcht cb:place:confirm/-cancel
+ * Events  : hört auf cb:place:preview ({id,gx,gy,tx,ty,sx,sy,size,invalid})
+ *           sendet cb:place:confirm({gx,gy}) / cb:place:cancel()
+ * Hinweis : rein visuell; Kollision/Validierung macht Game.js
  * ============================================================================ */
+(function () {
+  const TAG = '[ui-place]';
+  const log  = (...a)=>console.log(TAG, ...a);
+  const warn = (...a)=>console.warn(TAG, ...a);
 
-(() => {
-  const log = (...a)=>(window.CBLog?.ok||console.log)('[ui-place]',...a);
+  // Root-Container einmalig anlegen
+  const host = document.createElement('div');
+  host.id = 'ui-place-host';
+  host.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(host);
 
-  let host=null, okBtn=null, cancelBtn=null;
-  let last={ gx:-1, gy:-1, invalid:true, sx:0, sy:0, size:64 };
+  host.innerHTML = `
+    <div class="place-ghost" id="place-ghost" hidden>
+      <div class="place-ghost-box" id="place-box"></div>
+      <div class="place-ctrl" id="place-ctrl" hidden>
+        <button id="btn-place-ok" class="place-btn place-ok" aria-label="Platzieren">✓</button>
+        <button id="btn-place-cancel" class="place-btn place-cancel" aria-label="Abbrechen">✕</button>
+      </div>
+    </div>
+  `;
 
-  function ensureMount(){
-    if (host) return;
-    host = document.createElement('div');
-    host.id = 'ui-place-glue';
-    host.style.position='absolute';
-    host.style.left='0'; host.style.top='0';
-    host.style.zIndex='100';
-    host.style.pointerEvents='none';
-    host.style.display='none';
+  const ghost = document.getElementById('place-ghost');
+  const box   = document.getElementById('place-box');
+  const ctrl  = document.getElementById('place-ctrl');
+  const btnOk = document.getElementById('btn-place-ok');
+  const btnX  = document.getElementById('btn-place-cancel');
 
-    const wrap = document.createElement('div');
-    wrap.style.position='absolute';
-    wrap.style.pointerEvents='auto';
-    wrap.style.display='flex';
-    wrap.style.gap='8px';
-    wrap.style.transform='translate(-50%, -100%)';
+  let last = null; // merkt sich letzte gültige Vorschau
 
-    okBtn = document.createElement('button');
-    okBtn.className='ui-btn ok';
-    okBtn.textContent='✓';
-    okBtn.style.minWidth='40px'; okBtn.style.minHeight='40px';
+  // Buttons -> Events
+  btnOk.addEventListener('click', ()=>{
+    if (!last) return;
+    window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail:{ gx:last.gx, gy:last.gy } }));
+  });
+  btnX.addEventListener('click', ()=>{
+    window.dispatchEvent(new Event('cb:place:cancel'));
+    hide();
+  });
 
-    cancelBtn = document.createElement('button');
-    cancelBtn.className='ui-btn cancel';
-    cancelBtn.textContent='✕';
-    cancelBtn.style.minWidth='40px'; cancelBtn.style.minHeight='40px';
-
-    wrap.appendChild(okBtn);
-    wrap.appendChild(cancelBtn);
-    host.appendChild(wrap);
-
-    const app = document.getElementById('app') || document.body;
-    app.appendChild(host);
-
-    okBtn.addEventListener('click', (e)=>{
-      e.stopPropagation(); e.preventDefault();
-      if (last.invalid) return;
-      window.dispatchEvent(new CustomEvent('cb:place:confirm',{ detail:{ gx:last.gx, gy:last.gy } }));
-    });
-    cancelBtn.addEventListener('click', (e)=>{
-      e.stopPropagation(); e.preventDefault();
-      window.dispatchEvent(new CustomEvent('cb:place:cancel'));
-    });
-
-    log('mount ok');
+  function hide(){
+    ghost.hidden = true;
+    ctrl.hidden  = true;
+    last = null;
   }
 
-  function updatePos(){
-    if (!host) return;
-    // Buttons zentriert oberhalb der Ghost-Kachel
-    const x = last.sx + last.size*0.5;
-    const y = last.sy;
-    host.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  function showAt(pre){
+    // pre: {sx,sy,size,w,h,invalid}
+    const pad = Math.max(4, Math.floor(pre.size*0.06));
+    const pxW = pre.w * pre.size;
+    const pxH = pre.h * pre.size;
+
+    ghost.hidden = false;
+    ghost.style.transform = `translate(${Math.round(pre.sx)}px, ${Math.round(pre.sy)}px)`;
+    box.style.width  = `${Math.round(pxW)}px`;
+    box.style.height = `${Math.round(pxH)}px`;
+    box.classList.toggle('is-invalid', !!pre.invalid);
+
+    // OK/X nur bei gültiger Position, leicht nach oben links vom Ghost
+    if (!pre.invalid){
+      ctrl.hidden = false;
+      ctrl.style.transform = `translate(${pad}px, ${-Math.round(pre.size*0.7)}px)`;
+    } else {
+      ctrl.hidden = true;
+    }
   }
 
+  // Preview aus dem Game empfangen
   window.addEventListener('cb:place:preview', (ev)=>{
-    ensureMount();
-    const d = ev.detail || {};
-    // invalid → Buttons verstecken
-    if (d.invalid){
-      host.style.display='none';
-      last.invalid=true;
+    const d = ev?.detail||{};
+    if (!d || d.invalid){
+      hide();
       return;
     }
-    last = {
-      gx: d.gx|0, gy:d.gy|0, invalid:false,
-      sx: +d.sx||0, sy:+d.sy||0, size:+d.size||64
-    };
-    updatePos();
-    host.style.display='block';
+    last = d; // für Confirm
+    showAt(d);
   });
 
-  // Beim Start Bauen-Select → Buttons erstmal ausblenden
-  window.addEventListener('cb:build:select', ()=>{
-    ensureMount();
-    host.style.display='none';
+  // Wenn Build-Mode beendet -> verstecken
+  window.addEventListener('cb:build:mode', (ev)=>{
+    if (!ev?.detail) return;
+    if (!ev.detail.active) hide();
   });
 
+  log('bereit');
 })();
