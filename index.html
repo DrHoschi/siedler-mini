@@ -2,23 +2,19 @@
 <html lang="de">
 <head>
   <!-- =========================================================================
-       (1) HEADER
        Datei    : index.html (Root)
        Projekt  : Neue Siedler
-       Version  : v1.3.0 (2025-10-04)
-       Zweck    : Einstiegspunkt für Spiel + UI (Startfenster zuerst sichtbar)
+       Version  : v19.0.0 (2025-10-05)
+       Zweck    : Einstiegspunkt – Startpanel → Boot → HUD/Build
        Leitplanken:
-         - Reihenfolge: Core → Registry → Map/Engine/Boot → UI → Bridge → Tools
-         - Startpanel zuerst sichtbar, HUD/Build/Inspector vorbereitet
-         - Eine Datenquelle (Registry lädt data/buildings.json)
+         - Reihenfolge: Core/Registry → Engine → UI → Boot
+         - Startfenster zuerst, HUD/Build funktionsfähig
   ========================================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neue Siedler – Epoche 1</title>
 
-  <!-- =========================================================================
-       (2) CSS: Grund-UI → Teil-Panels → Inspector (Reihenfolge beibehalten)
-  ========================================================================= -->
+  <!-- Styles -->
   <link rel="stylesheet" href="ui/css/ui.css">
   <link rel="stylesheet" href="ui/css/ui-start.css">
   <link rel="stylesheet" href="ui/css/ui-hud.css">
@@ -28,48 +24,30 @@
   <link rel="stylesheet" href="ui/css/ui-tooltip.css">
   <link rel="stylesheet" href="ui/css/inspector.css">
 
-  <!-- (2.1) Mini-Base (nur Thema, kein Layout) -->
   <style>
     :root { --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff; }
-    html,body{
-      margin:0; padding:0;
-      background:var(--bg); color:var(--fg);
-      font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    }
-    /* Canvas-Overlays liegen über dem Spiel, unter HUD/Dialogs */
-    #overlay-paths, #overlay-units {
-      position:absolute; left:0; top:0; z-index:40; pointer-events:none;
-    }
+    html,body{ margin:0; padding:0; background:var(--bg); color:var(--fg);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    #overlay-paths, #overlay-units { position:absolute; left:0; top:0; z-index:40; pointer-events:none; }
+    .hud-bar { display:flex; gap:18px; align-items:center; }
+    .hud-item img { width:18px; height:18px; vertical-align:-3px; margin-right:6px; }
+    .build-panel { position:fixed; left:16px; bottom:16px; z-index:45; }
   </style>
 </head>
 
 <body>
-  <!-- =========================================================================
-       (3) DOM-STRUKTUR (Vorgabe)
-       Startpanel, Canvas, Overlays, BG, HUD, Build-Dock, Inspector
-  ========================================================================= -->
   <div id="app" aria-label="Spiel-Container">
+    <!-- Spielfeld -->
+    <canvas id="game" width="1280" height="720" data-map="data/maps/map-mini.json"></canvas>
 
- <!-- (3.1) Spielfeld -->
-<canvas
-  id="game"
-  width="1280"
-  height="720"
-  data-map="data/maps/map-mini.json"></canvas>
-
-<!-- (3.1b) Units-Overlay: exakt über dem Game-Canvas -->
-<canvas id="overlay-units" aria-hidden="true"></canvas>
-    
-    <!-- (3.1.1) Pfadlinien-Overlay (Trampelpfade) -->
+    <!-- Overlays -->
     <canvas id="overlay-paths" width="1280" height="720" aria-label="Path Overlay"></canvas>
-
-    <!-- (3.1.2) Einheiten-Overlay (Träger-Punkte + Ressource-Icon) -->
     <canvas id="overlay-units" width="1280" height="720" aria-label="Units Overlay"></canvas>
 
-    <!-- (3.2) Start-Hintergrund (unter Panel, über Canvas) -->
+    <!-- Start-Hintergrund -->
     <div id="bg-start" aria-hidden="true"></div>
 
-    <!-- (3.3) Startpanel -->
+    <!-- Startpanel -->
     <div id="start-panel" class="ui-panel ui-panel--light visible" aria-label="Startfenster">
       <h1>Neue Siedler</h1>
       <div class="actions">
@@ -79,172 +57,79 @@
         <button id="btn-reset"      class="btn">Reset</button>
         <button id="btn-inspector"  class="btn">Inspector</button>
       </div>
+      <!-- Kompatibilität: Boot.js lauscht ggf. auf #btn-start -->
+      <button id="btn-start" style="display:none" aria-hidden="true" tabindex="-1">Start hidden</button>
     </div>
 
-    <!-- (3.4) HUD (wird von ui/ui-hud.js befüllt/angezeigt) -->
-    <div id="hud-top" class="ui-panel hidden" aria-label="Ressourcen-HUD"></div>
+    <!-- HUD (Ressourcenanzeige) -->
+    <div id="hud-top" class="ui-panel ui-panel--dark hidden" aria-label="Ressourcen-HUD">
+      <div class="hud-bar">
+        <span class="hud-item">
+          <img src="assets/icons/resources/wood.png" alt=""> Holz: <b id="hud-wood">0</b>
+        </span>
+        <span class="hud-item">
+          <img src="assets/icons/resources/fish.png" alt=""> Fisch: <b id="hud-fish">0</b>
+        </span>
+        <span class="hud-item">
+          <img src="assets/icons/resources/stone.png" alt=""> Stein: <b id="hud-stone">0</b>
+        </span>
+      </div>
+    </div>
 
-    <!-- (3.5) Build-Dock (Hintergrund; Inhalt rendert UIBuild) -->
+    <!-- Build-Dock (Grid rendert ui/ui-build.js) -->
     <div id="build-dock" class="ui-panel ui-panel--dark hidden" aria-label="Bau-Dock"></div>
+    <button id="btn-build" class="ui-btn-build" aria-expanded="false" title="Bauen">Bauen</button>
+    <aside id="build-panel" class="build-panel"></aside>
 
-    <!-- (3.6) Inspector -->
+    <!-- Inspector -->
     <div id="inspector" class="ui-panel ui-panel--dark hidden" aria-label="Inspector"></div>
   </div>
 
-  <!-- (3.7) FAB-Build + Mount-Host für Build-Panel -->
-  <button id="btn-build" class="ui-btn-build" aria-expanded="false">Bauen</button>
-  <aside id="build-panel" class="build-panel" hidden></aside> 
-
-  <!-- =========================================================================
-       (4) SCRIPTS
-       Reihenfolge: Core → Registry → Map/Engine/Boot → UI → Bridge → Tools
-  ========================================================================= -->
-
-  <!-- (4.1) CORE + REGISTRY -->
-  <script src="core/asset.js"></script>      <!-- emit: cb:assets-ready -->
-  <script src="core/registry.js"></script>   <!-- lädt data/buildings.json + emit: cb:registry:ready -->
-  <!-- Hinweis: Keine Inline-Init mehr nötig; boot.js stößt Registry.init nach cb:assets-ready an. -->
-
-  <!-- (4.2) MAP/ENGINE/BOOT -->
-  <script src="core/map-runtime.js"></script>
-  <script src="core/core.map.js"></script>
-  <!-- <script src="core/unit-runtime.js"></script> --><!-- optional, sobald vorhanden -->
+  <!-- SCRIPTS – Minimalkette, nur vorhandene Module -->
+  <script src="core/registry.js"></script>
   <script src="core/game.js"></script>
-
-  <!-- ✨ NEU: Produktions-/Transport-/Overlay-Module (vor boot.js laden!) -->
-  <script src="core/core.production.js"></script>
   <script src="core/carrier.js"></script>
-  <script src="core/path-overlay.js"></script>
-  <script src="core/unit-overlay.js"></script>
 
+  <script src="ui/ui-build.js"></script>
+  <script src="ui/ui-hud.js"></script>
   <script src="core/boot.js"></script>
 
-  <!-- (4.3) UI-Module -->
-  <script src="ui/ui-start.js"></script>     <!-- emits: cb:start:* | cb:ui-ready -->
-  <script src="ui/ui-hud.js"></script>       <!-- emits: cb:hud-ready; listens: cb:res:change -->
-  <script src="ui/build-menu.js"></script>   <!-- (Legacy/optional) -->
-  <!-- script src="ui/ui-build.toggle.js"></script --><!-- (Legacy/optional) -->
-  <script src="ui/ui-build.js"></script>     <!-- UIBuild.* API -->
-  <script src="ui/ui-place.js"></script>     <!-- Platziermodus (Ghost/Buttons) -->
-  <script src="ui/ui-dialog.js"></script>    <!-- Dialogsystem -->
-  <script>window.ICONS = window.ICONS || {};</script>
-  <script src="ui/inspector/inspector.core.js"></script>
-
-  <!-- (4.4) BRIDGE: Registry → UIBuild (gate: erst beim Spiel) -->
-  <script>
-  (function(){
-    'use strict';
-    var LOG = (window.CBLog && CBLog.info) ? CBLog : console;
-    var mounted = false;
-    var playing = false;
-
-    function regGet(key){
-      try{
-        if (window.Registry && typeof Registry.get === 'function'){
-          var v = Registry.get(key);
-          return Array.isArray(v) ? v : (v || []);
-        }
-      }catch(e){ LOG.warn('[ui-bridge] Registry.get(%s) fail:', key, e); }
-      return [];
-    }
-
-    function ensureMount(){
-      if (mounted || !playing) return;
-      if (!window.UIBuild || typeof UIBuild.mount !== 'function') return;
-      var host = document.getElementById('build-panel');
-      if (!host) return;
-      try { UIBuild.mount(host); mounted = true; LOG.info('[ui-bridge] mount ok'); }
-      catch(e){ LOG.warn('[ui-bridge] mount failed', e); }
-    }
-
-    function refresh(tag){
-      ensureMount();
-      if (!mounted){ LOG.info('[ui-bridge] skip refresh (%s) – not mounted yet', tag); return; }
-
-      // 1) iconsBase aus Registry (Fallback korrekt!)
-      var base = (window.Registry && Registry.get) ? (Registry.get('iconsBase') || 'assets/icons/buildings/') : 'assets/icons/buildings/';
-      window.UIBuild?.setIconsBase?.(base);
-
-      // 2) Daten laden & filtern
-      var cats  = regGet('categories');
-      var items = regGet('buildings').filter(function(b){ return b && b.enabled !== false; });
-
-      // 3) an UIBuild reichen
-      window.UIBuild?.setCategories?.(cats);
-      window.UIBuild?.setItems?.(items);
-      try{ window.UIBuild?.rerender?.(); }catch(e){}
-
-      LOG.info('[ui-bridge] set %d cats / %d items (%s)', cats.length, items.length, tag||'refresh');
-    }
-
-    // Mount/Refresh erst wenn das Spiel startet
-    window.addEventListener('cb:game-start', function(){ playing = true; refresh('game-start'); });
-
-    // Registry-Events (werden erst sinnvoll nach game-start)
-    window.addEventListener('cb:registry:ready',  function(){ refresh('ready:colon'); });
-    window.addEventListener('cb:registry-ready',  function(){ refresh('ready:dash');  });
-    window.addEventListener('cb:registry:update', function(){ refresh('update');      });
-
-    // Falls nach Reload schon im Spiel
-    setTimeout(function(){
-      if (document.body.classList.contains('is-playing')) { playing = true; refresh('late'); }
-    }, 150);
-  })();
-  </script>
-
-  <!-- (4.5) DEBUG / TOOLS -->
-
-  <script src="tools/debug-tools.js"></script>
-  <!--script src="tools/debug-collector.js"></script -->
-  
-  <!-- =========================================================================
-       (5) INLINE-WIRING (klein, selbsterklärend)
-       - Startpanel-Buttons → Events (cb:start:*)
-       - Inspector-Toggle
-       - Build-Button-Toggle
-       - UI ready Marker/Log
-  ========================================================================= -->
+  <!-- Inline-Wiring (Startpanel + Dock) -->
   <script>
     (function(){
       'use strict';
-      var $start    = document.getElementById('start-panel');
-      var $insp     = document.getElementById('inspector');
-      var $dock     = document.getElementById('build-dock');
-      var $btnBuild = document.getElementById('btn-build');
+      const $start    = document.getElementById('start-panel');
+      const $insp     = document.getElementById('inspector');
+      const $dock     = document.getElementById('build-dock');
+      const $btnBuild = document.getElementById('btn-build');
+      const $btnNew   = document.getElementById('btn-new');
+      const $btnStart = document.getElementById('btn-start');
 
       function fire(type, detail){ window.dispatchEvent(new CustomEvent(type, { detail: detail||{} })); }
 
-      // Startpanel → Events
-      document.getElementById('btn-new')?.addEventListener('click', function(){
-        fire('cb:start:new'); $start.classList.add('hidden');
+      // Neues Spiel → Boot-Kette anstoßen (Kompatibilität: boot.js könnte #btn-start brauchen)
+      $btnNew?.addEventListener('click', function(){
+        $start.classList.add('hidden');
+        $btnStart?.click();                 // falls boot.js darauf hört
+        fire('cb:start:new');               // Event-basiert für spätere Hooks
       });
-      document.getElementById('btn-continue')?.addEventListener('click', function(){
-        fire('cb:start:continue'); $start.classList.add('hidden');
-      });
-      document.getElementById('btn-reset')?.addEventListener('click', function(){ fire('cb:start:reset'); });
+
+      // Inspector & Fullscreen
       document.getElementById('btn-inspector')?.addEventListener('click', function(){
         $insp.classList.toggle('hidden'); fire('req:inspector:toggle');
       });
       document.getElementById('btn-fullscreen')?.addEventListener('click', function(){
-  const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
-  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+        try { (!document.fullscreenElement && !document.webkitFullscreenElement) ? req?.call(el) : exit?.call(document); }
+        catch(e){ (console.warn)('[index] fullscreen failed', e); }
+        fire('cb:start:fullscreen');
+      });
 
-  try {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      req?.call(el);
-    } else {
-      exit?.call(document);
-    }
-  } catch(e){
-    (window.CBLog?.warn||console.warn)('[index] fullscreen failed', e);
-  }
-  window.dispatchEvent(new CustomEvent('cb:start:fullscreen'));
-});
-
-      // Build-Button → Dock show/hide
+      // Build-Dock Toggle
       $btnBuild?.addEventListener('click', function(){
-        var isOpen = !$dock.classList.contains('hidden');
+        const isOpen = !$dock.classList.contains('hidden');
         if (isOpen){
           $dock.classList.add('hidden');  $btnBuild.setAttribute('aria-expanded', 'false'); fire('cb:build:close');
         } else {
@@ -253,9 +138,6 @@
       });
 
       // UI ready
-      window.__cb = window.__cb || {};
-      window.__cb.indexVersion = "v1.3.0";
-      (window.CBLog?.info || console.log)(`[index] UI bereit (v${window.__cb.indexVersion})`);
       fire('cb:ui-ready');
     })();
   </script>
