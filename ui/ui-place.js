@@ -1,80 +1,72 @@
 /* ============================================================================
  * Datei   : ui/ui-place.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v1.4.0 (2025-10-05)
- * Zweck   : Platzier-UI (Ghost, Confirm, Cancel)
- * Events  :
- *   IN : cb:place:preview { id,gx,gy,tx,ty,invalid,... }
- *   IN : cb:build:mode    { active:boolean }
- *   OUT: cb:place:confirm { id,gx,gy }    (nur 1x pro Ghost)
- *   OUT: cb:place:cancel
- *
- * Änderungen v1.4.0:
- *   - Confirm-Lock (de-dupe) gegen sporadische „nichts passiert“
- *   - Auto-Release des Locks (Fail-Safe)
- *   - Log-Ausgaben für Mobile-WebInspector
+ * Projekt : Neue Siedler (Place-Ghost UI)
+ * Version : v1.4.0 (robustes Mounting, hoher z-index, Einmal-Confirm)
+ * Events  : cb:place:preview  -> Position/Validität des Ghosts
+ *           cb:place:confirm  -> bestätigt mit { id, gx, gy }
+ *           cb:place:cancel   -> Abbruch
  * ============================================================================ */
-(function(){
-  'use strict';
-  const LOG  = (window.CBLog?.ok  || console.log).bind(console, '[ui-place]');
-  const WARN = (window.CBLog?.warn|| console.warn).bind(console, '[ui-place]');
+(() => {
+  const LOG = (window.CBLog?.ok || console.log).bind(console,'[ui-place]');
+  const WARN= (window.CBLog?.warn|| console.warn).bind(console,'[ui-place]');
+  let $host=null, $ok=null, $cancel=null, last={ id:null, gx:-1, gy:-1, invalid:true }, armed=false;
 
-  // --- interner State --------------------------------------------------------
-  let ghost = null; // { id,gx,gy,invalid, ... }
-  let lock  = false;
-  let lockTimer = 0;
+  function ensureHost(){
+    if ($host) return;
+    $host = document.createElement('div');
+    $host.id = 'ui-place-glue';
+    $host.setAttribute('aria-hidden','true');
+    $host.innerHTML = `
+      <button class="ok"    aria-label="Platzieren">✔</button>
+      <button class="cancel"aria-label="Abbrechen">✖</button>
+    `;
+    Object.assign($host.style, {
+      position:'absolute', left:'0px', top:'0px', zIndex: 9999,
+      transform:'translate3d(0,0,0)', pointerEvents:'none'
+    });
+    document.body.appendChild($host);
+    $ok     = $host.querySelector('.ok');
+    $cancel = $host.querySelector('.cancel');
+    styleButtons();
+    $ok.addEventListener('click', onConfirm);
+    $cancel.addEventListener('click', onCancel);
+    LOG('mount ok');
+  }
 
-  function setLock(v){
-    lock = !!v;
-    clearTimeout(lockTimer);
-    if (lock) {
-      // Fail-Safe: wenn Spiel nicht reagiert (z.B. Event verloren), Lock lösen
-      lockTimer = setTimeout(()=>{ lock=false; LOG('confirm-lock auto-release'); }, 800);
+  function styleButtons(){
+    const base = {
+      position:'absolute', width:'44px', height:'44px', borderRadius:'10px',
+      border:'1px solid rgba(0,0,0,.35)', boxShadow:'0 2px 8px rgba(0,0,0,.35)',
+      pointerEvents:'auto', fontSize:'22px', lineHeight:'44px', cursor:'pointer',
+      userSelect:'none'
+    };
+    Object.assign($ok.style,     base, { left:'8px',  top:'8px',  background:'rgba(40,140,80,.92)', color:'#fff' });
+    Object.assign($cancel.style, base, { right:'8px', top:'8px',  background:'rgba(200,60,60,.92)', color:'#fff' });
+  }
+
+  function showAt(sx,sy,size, invalid){
+    if (!$host) return;
+    const pad=Math.max(8, Math.floor(size*0.15));
+    $host.style.left = `${Math.round(sx - pad)}px`;
+    $host.style.top  = `${Math.round(sy - pad)}px`;
+    $host.style.width  = `${Math.round(size + pad*2)}px`;
+    $host.style.height = `${Math.round(size + pad*2)}px`;
+    $host.style.display = invalid ? 'none' : 'block';
+  }
+
+  function onPreview(ev){
+    ensureHost();
+    const d = ev?.detail||{};
+    last = { id:d.id, gx:d.gx|0, gy:d.gy|0, invalid:!!d.invalid };
+    // d.sx/sy/size kommen aus Game (Pixel im Canvas->Screen Raum)
+    if (Number.isFinite(d.sx) && Number.isFinite(d.sy) && Number.isFinite(d.size)){
+      showAt(d.sx, d.sy, d.size, !!d.invalid);
     }
+    armed = !d.invalid;
   }
 
-  function confirmOnce(){
-    if (!ghost || ghost.invalid) { WARN('confirm: ghost invalid/leer'); return; }
-    if (lock) { WARN('confirm: locked – de-dupe'); return; }
-    setLock(true);
-
-    const payload = { id: ghost.id, gx: ghost.tx ?? ghost.gx, gy: ghost.ty ?? ghost.gy };
-    LOG('confirm (tile) →', payload);
-    window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail: payload }));
-  }
-
-  function cancel(){
-    if (!ghost) return;
-    LOG('cancel');
-    window.dispatchEvent(new Event('cb:place:cancel'));
-    ghost = null; setLock(false);
-  }
-
-  // --- Buttons / Eingabe (hier simpel gehalten) -----------------------------
-  // Tipp: Wenn du Bestätigungs-Buttons im Ghost zeichnest -> hier binden.
-  window.addEventListener('keydown', (e)=>{
-    if (!ghost) return;
-    if (e.key==='Enter') confirmOnce();
-    else if (e.key==='Escape') cancel();
-  });
-
-  // --- Ghost-Vorschau vom Game ----------------------------------------------
-  window.addEventListener('cb:place:preview', (e)=>{
-    ghost = e?.detail || null;
-    if (ghost?.invalid) { /* sichtbare UI ggf. disable */ }
-  });
-
-  // --- Public Hooks (falls UI-Toggle Panels hat) -----------------------------
-  window.addEventListener('cb:build:mode', (e)=>{
-    const active = !!e?.detail?.active;
-    if (!active) { ghost=null; setLock(false); }
-  });
-
-  // Exponiere (optional) kleine API für Buttons im DOM
-  window.UIPlace = {
-    confirm: confirmOnce,
-    cancel : cancel
-  };
-
-  LOG('ready');
-})();
+  function onConfirm(){
+    if (!armed || last.invalid || last.id==null) return;
+    armed = false; // Einmal-Confirm
+    window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail:{ id:last.id, gx:last.gx, gy:last.gy }}));
+    $host.style.display='none';
