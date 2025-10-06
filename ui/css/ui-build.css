@@ -7,7 +7,7 @@
 
 /* (1) Design-Tokens --------------------------------------------------------- */
 :root{
-  --build-icon-size: 36px;
+  --build-icon-size: 48px;
   --build-dock-z: 1100;                   /* unter HUD, über Canvas */
   --build-border: #1d2633;
   --build-shadow: 0 -18px 48px rgba(0,0,0,.35);
