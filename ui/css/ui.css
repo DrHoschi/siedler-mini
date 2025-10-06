@@ -191,9 +191,9 @@ html, body { height: 100%; overscroll-behavior: none; }
 
 /* --- Icon-Größen global anpassen ------------------------------------------ */
 :root {
-  --icon-size-hud: 14px;
+  --icon-size-hud: 10px;
   --icon-size-build: 48px;
-  --icon-size-cost: 12px;
+  --icon-size-cost: 8px;
 }
 
 .hud-item img {
