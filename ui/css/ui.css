@@ -188,3 +188,28 @@ html, body { height: 100%; overscroll-behavior: none; }
  * ============================================================================
  */
 .hidden { display: none !important; visibility: hidden !important; }
+
+/* --- Icon-Größen global anpassen ------------------------------------------ */
+:root {
+  --icon-size-hud: 14px;
+  --icon-size-build: 48px;
+  --icon-size-cost: 12px;
+}
+
+.hud-item img {
+  width: var(--icon-size-hud);
+  height: var(--icon-size-hud);
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.build-icon {
+  width: var(--icon-size-build);
+  height: var(--icon-size-build);
+}
+
+.cost-icon {
+  width: var(--icon-size-cost);
+  height: var(--icon-size-cost);
+  margin-right: 4px;
+}
