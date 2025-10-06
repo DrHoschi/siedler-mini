@@ -171,3 +171,18 @@ body.is-playing #start-panel { display: none !important; }
   padding: 0;
   overflow: visible;
 }
+
+/* === Start-BG beim Spielen vollständig entfernen ========================= */
+body.is-playing { background: none !important; }                /* Body-BG off */
+body.is-playing #bg-start,
+body.is-playing #start-bg {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Karte/HUD/Dock zuverlässig nach vorn */
+#game    { position: relative; z-index: 10; }
+#hud-top { position: fixed;    z-index: 48; }
+#build-dock { position: fixed; z-index: 46; }
+#btn-build  { position: fixed; z-index: 47; }
