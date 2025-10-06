@@ -1,0 +1,74 @@
+{
+  "width": 64,
+  "height": 48,
+  "tileSize": 64,
+  "tileset": {
+    "image": "assets/tiles/tileset.terrain.png",
+    "atlas": "assets/tiles/tileset.terrain.json",
+    "alias": {
+      "grass":  "terrain_r4_c0",
+      "water":  "terrain_r2_c1",
+      "road":   "terrain_r8_c0",
+      "stone":  "terrain_r6_c2",
+      "sand":   "terrain_r0_c1",
+      "forest": "terrain_r5_c0"
+    }
+  },
+  "layers": [
+    {
+      "name": "ground",
+      "type": "tiles",
+      "fill": "grass"
+    },
+    {
+      "name": "water",
+      "type": "tiles",
+      "runs": [
+        { "x": 30, "y": 0,  "w": 3,  "h": 48, "token": "water" },
+        { "x": 22, "y": 28, "w": 10, "h": 6,  "token": "water" }
+      ]
+    },
+    {
+      "name": "stonefield",
+      "type": "tiles",
+      "runs": [
+        { "x": 50, "y": 6, "w": 10, "h": 8, "token": "stone" }
+      ]
+    },
+    {
+      "name": "sandbox",
+      "type": "tiles",
+      "runs": [
+        { "x": 4, "y": 4,  "w": 6, "h": 4, "token": "sand" }
+      ]
+    },
+    {
+      "name": "forest_hint",
+      "type": "tiles",
+      "runs": [
+        { "x": 8, "y": 16, "w": 10, "h": 8, "token": "forest" }
+      ]
+    },
+    {
+      "name": "roads",
+      "type": "tiles",
+      "runs": [
+        { "x": 6,  "y": 40, "w": 52, "h": 2, "token": "road" },
+        { "x": 6,  "y": 34, "w": 2,  "h": 8, "token": "road" },
+        { "x": 20, "y": 34, "w": 2,  "h": 8, "token": "road" },
+        { "x": 34, "y": 34, "w": 2,  "h": 8, "token": "road" },
+        { "x": 48, "y": 34, "w": 2,  "h": 8, "token": "road" },
+        { "x": 12, "y": 36, "w": 8,  "h": 4, "token": "road" },
+        { "x": 26, "y": 36, "w": 8,  "h": 4, "token": "road" },
+        { "x": 40, "y": 36, "w": 8,  "h": 4, "token": "road" }
+      ]
+    },
+    {
+      "name": "hq_plaza",
+      "type": "tiles",
+      "runs": [
+        { "x": 10, "y": 8, "w": 8, "h": 6, "token": "sand" }
+      ]
+    }
+  ]
+}
