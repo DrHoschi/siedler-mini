@@ -16,7 +16,7 @@
   --hud-radius: 12px;       /* Rundung der HUD-Kacheln */
 
   /* Kachel-Größe */
-  --hud-tile: 92px;         /* Breite/Höhe (Quadrat) */
+  --hud-tile: 32px;         /* Breite/Höhe (Quadrat) */
 
   /* Farben / Rahmen */
   --hud-border: transparent;
