@@ -204,3 +204,127 @@ body:not(.is-playing) #build-panel {
 /* (12) Stacking/Klick-Fixes ------------------------------------------------- */
 canvas, #game-canvas, .game-canvas{ position: fixed; inset: 0; z-index: 1; }
 .ui-overlay, .fullscreen-cover, .debug-layer{ pointer-events: none; }
+
+/* ============================================================================
+ * Datei   : ui/css/ui-build.css (Patch – Responsive Karten)
+ * Version : v2.0.0 (2025-10-06)
+ * Zweck   : Baumenü-Karten responsiv in %/vw, Panelrahmen wie HUD,
+ *           Name oben, großes Gebäude-Icon mittig, Kosten unten – alles skalierbar.
+ * Steuerung: Variablen unten anpassen; wirken global auf das Build-Dock.
+ * ============================================================================
+ */
+
+/* ---- Steuerungs-Variablen ------------------------------------------------- */
+:root{
+  /* Karten-Basisbreite: passt sich Viewport an, aber bleibt zwischen 120–220px */
+  --build-card-w: clamp(120px, 18vw, 220px);
+
+  /* Innenabstände / Radius */
+  --build-card-pad: 10px;
+  --build-card-radius: 12px;
+
+  /* Panel-Hintergrund (gleich wie HUD, falls du den Pfad nutzt) */
+  --build-panel-img: url("../../assets/ui/panel.png");
+
+  /* Größen in RELATION zur Kartenbreite (skalieren automatisch) */
+  --build-icon-scale: 0.52;    /* Gebäude-Icon: 52% von Kartenbreite */
+  --build-cost-scale: 0.18;    /* Ressourcen-Icon: 18% von Kartenbreite */
+  --build-name-size:  clamp(11px, 1.6vw, 14px);
+  --build-cost-gap:   clamp(4px, 0.8vw, 8px);
+  --build-cost-font:  clamp(11px, 1.4vw, 13px);
+
+  /* Kontrast/Farben */
+  --build-name-color: #e9eef7;
+  --build-panel-border: rgba(255,255,255,.12);
+  --build-panel-shadow: 0 3px 10px rgba(0,0,0,.35);
+}
+
+/* ---- Grid für Karten ------------------------------------------------------ */
+#build-dock .build-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--build-card-w), 1fr));
+  gap: 12px;
+}
+
+/* ---- Karte / Panel -------------------------------------------------------- */
+#build-dock .build-card{
+  display: grid;
+  grid-template-rows: auto 1fr auto;     /* Name / Icon / Kosten */
+  align-items: center;
+  justify-items: center;
+
+  width: 100%;
+  min-width: var(--build-card-w);
+  padding: var(--build-card-pad);
+  border-radius: var(--build-card-radius);
+  border: 1px solid var(--build-panel-border);
+
+  background:
+    var(--build-panel-img) center / cover no-repeat,
+    linear-gradient(to bottom, rgba(16,22,32,.55), rgba(10,14,22,.55));
+  box-shadow: var(--build-panel-shadow);
+
+  color: var(--build-name-color);
+  text-align: center;
+  cursor: pointer;
+  transition: transform .08s ease-out, box-shadow .12s ease-out;
+}
+
+#build-dock .build-card:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0,0,0,.42);
+}
+
+/* ---- Name (oben) ---------------------------------------------------------- */
+#build-dock .build-card .build-label{
+  font-weight: 700;
+  font-size: var(--build-name-size);
+  line-height: 1.2;
+  margin-bottom: 6px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+
+/* ---- Gebäude-Icon (mittig, skalierend) ----------------------------------- */
+#build-dock .build-card .build-icon{
+  width: calc(var(--build-card-w) * var(--build-icon-scale));
+  height: calc(var(--build-card-w) * var(--build-icon-scale));
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+  margin: 2px 0 8px 0;
+}
+
+/* ---- Kosten-Bereich (unten) ---------------------------------------------- */
+#build-dock .build-card .build-cost{
+  display: flex;
+  gap: var(--build-cost-gap);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#build-dock .build-card .build-cost .cost-row{
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--build-cost-gap) * 0.5);
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0,0,0,.25);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+
+#build-dock .build-card .build-cost .cost-icon{
+  width:  calc(var(--build-card-w) * var(--build-cost-scale));
+  height: calc(var(--build-card-w) * var(--build-cost-scale));
+  image-rendering: pixelated;
+}
+
+#build-dock .build-card .build-cost span:last-child{
+  font-weight: 700;
+  font-size: var(--build-cost-font);
+  min-width: 1.5em;
+  text-align: left;
+}
+
+/* ---- Dock-Layering (sicher vorn) ----------------------------------------- */
+#build-dock{ z-index:46; }
+#btn-build{ z-index:47; }
