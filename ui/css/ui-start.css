@@ -186,3 +186,17 @@ body.is-playing #start-bg {
 #hud-top { position: fixed;    z-index: 48; }
 #build-dock { position: fixed; z-index: 46; }
 #btn-build  { position: fixed; z-index: 47; }
+
+/* Start-BG beim Spielen vollständig entfernen */
+body.is-playing { background: none !important; }
+body.is-playing #bg-start,
+body.is-playing #start-bg {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+/* Sicherstellen, dass Spielfläche & HUD vorn liegen */
+#game { position: relative; z-index: 10; }
+#hud-top { position: fixed; z-index: 48; }
+#build-dock { position: fixed; z-index: 46; }
+#btn-build { position: fixed; z-index: 47; }
