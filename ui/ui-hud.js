@@ -110,20 +110,26 @@
       el.dataset.res = r.id;
       el.title = r.name;
 
-      const $title  = document.createElement('span');
-      $title.className = 'res-title';
-      $title.textContent = r.name;
+// Titel (oben links)
+const $title = document.createElement('span');
+$title.className = 'res-title';
+$title.textContent = r.name || r.id;
+el.setAttribute('data-name', $title.textContent); // Fallback, falls CSS ::before genutzt
+el.appendChild($title);
 
-      const $icon   = document.createElement('img');
-      $icon.className = 'res-icon';
-      $icon.src  = r.icon || iconFor(r.id);
-      $icon.alt  = r.name;
+// Icon (mittig)
+const $icon = document.createElement('img');
+$icon.className = 'res-icon';
+$icon.src = r.icon || `assets/icons/resources/${r.id}.png`;
+$icon.alt = $title.textContent;
+el.appendChild($icon);
 
-      const $amt    = document.createElement('span');
-      $amt.className = 'res-amount';
-      $amt.id = `hud-${r.id}`;
-      $amt.textContent = nf(amounts.get(r.id) || 0);
-
+// Menge (unten rechts)
+const $amt = document.createElement('span');
+$amt.className = 'res-amount';
+$amt.id = `hud-${r.id}`;
+$amt.textContent = (amounts.has(r.id) ? new Intl.NumberFormat('de-DE').format(amounts.get(r.id)) : '0');
+el.appendChild($amt);
       el.appendChild($title);
       el.appendChild($icon);
       el.appendChild($amt);
