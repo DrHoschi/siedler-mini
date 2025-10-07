@@ -1,90 +1,111 @@
 /* ============================================================================
  * Datei    : ui/ui-hud.js
  * Projekt  : Neue Siedler
- * Version  : v22.0.0 (2025-10-07)
- * Zweck    : Dynamisches Ressourcen-HUD (1-zeilig, bei kleinen Screens 2-zeilig)
+ * Version  : v23.0.0 (2025-10-07)
+ * Modul    : Ressourcen-HUD (oben andockend, 1-zeilig; bei kleinen Screens 2-zeilig)
  *
- * Events (listen):
- *   - cb:registry:ready           → Katalog aus Registry ziehen (Ressourcen)
- *   - cb:res:change {res, delta|amount}   → Menge aktualisieren (Game/Core)   [Lastenheft 3.3]
- *   - cb:res:reset  {scope,res?}          → Reset einzelner/aller Ressourcen   [Lastenheft 3.3]
- *   - cb:res:snapshot {amounts:{id:number}} → Voll-Snapshot (optional)
+ * Events (listen)
+ *   - cb:registry:ready
+ *   - cb:ui-ready
+ *   - cb:res:change   {res|id, delta? , amount?}  // +/− oder absolute Menge
+ *   - cb:res:reset    {scope:'all'|'one', res?}
+ *   - cb:res:snapshot {amounts:{<resId>:number}}
  *
- * Events (emit):
- *   - cb:hud-ready                 → HUD bereit
- *   - req:res:snapshot             → Snapshot anfordern (optional)
- *   - req:res:focus   {resId, active} → Nutzer fokussiert Ressource (Producer/Consumer markieren)
- *   - cb:hud:res:focus {resId, active} → UI-seitige Bestätigung
+ * Events (emit)
+ *   - cb:hud-ready                { ok:true }
+ *   - req:res:snapshot            {}         // Core kann daraufhin cb:res:snapshot senden
+ *   - req:res:focus               { resId, active } // Klick auf Ressourcenkachel (für Producer/Consumer-Highlight)
+ *   - cb:hud:res:focus            { resId, active } // UI-Bestätigung
  *
- * Abhängigkeiten:
- *   - core/registry.js (optional, auto-Fallback)  [Registry Patch]
- *   - assets/icons/resources/<id>.png (Symbole)
+ * Abhängigkeiten
+ *   - (optional) core/registry.js → Registry.list('resources' | 'resource' | 'goods' | 'materials')
+ *   - Icons unter assets/icons/resources/<id>.png
+ *   - Styling in ui/css/ui-hud.css (Panelrahmen je Kachel via --hud-panel-img)
  *
- * Hinweise:
- *   - Items sind QUADRATISCH (Panel-Background), Titel oben links, Icon mittig,
- *     Menge unten rechts. Responsive über CSS-Variablen (ui/css/ui-hud.css).
+ * Changelog
+ *   v23.0.0
+ *     - robuste Registry-Erkennung + Gebäude-Filter
+ *     - klare DOM-Struktur: Titel oben links, Icon mittig, Menge unten rechts
+ *     - Deduplizierte Appends, sauberes Event-Wiring, Snapshot-Support
  * ========================================================================== */
 
 (function(){
   'use strict';
 
   // -------------------------------------------------------------------------
-  // [00] DOM / Logging / Utils
+  // [00] DOM/Logging/Utils
   // -------------------------------------------------------------------------
   const $root = document.getElementById('hud-top');
-  if (!$root) { (console.error)('[hud] #hud-top fehlt'); return; }
+  if (!$root){ (console.error)('[hud] #hud-top fehlt'); return; }
 
-  const logOK  = (...a)=> (window.CBLog?.ok   || console.log )('[hud]', ...a);
-  const logInf = (...a)=> (window.CBLog?.info || console.info)('[hud]', ...a);
-  const logWrn = (...a)=> (window.CBLog?.warn || console.warn)('[hud]', ...a);
+  const log = {
+    ok  : (...a)=>(window.CBLog?.ok   || console.log )('[hud]', ...a),
+    inf : (...a)=>(window.CBLog?.info || console.info)('[hud]', ...a),
+    wrn : (...a)=>(window.CBLog?.warn || console.warn)('[hud]', ...a),
+    err : (...a)=>(window.CBLog?.err  || console.error)('[hud]', ...a),
+  };
 
-  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
-  function nf(n){ try{ return new Intl.NumberFormat('de-DE').format(n|0); } catch(_){ return String(n|0); } }
+  const emit = (name, detail={}) =>
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+
+  const nf = (n)=>{
+    try { return new Intl.NumberFormat('de-DE').format(n|0); }
+    catch(_) { return String(n|0); }
+  };
 
   // -------------------------------------------------------------------------
   // [01] Katalog (Registry → Ressourcenliste) + Fallback
   // -------------------------------------------------------------------------
-  const SHOW_ALL_RESOURCES = true;                // alle bekannten Ressourcen zeigen
+  const SHOW_ALL_RESOURCES = true;                // alles zeigen, auch spätere Epochen
   const currentEpoche = (window.Game?.epoche) || 1;
 
+  // Minimaler Fallback, falls Registry leer/nicht vorhanden
   const FALLBACK_RES = [
-    // Epoche 1 (sichtbar)
     { id:'wood',        name:'Holz',        epoche:1 },
     { id:'stone',       name:'Stein',       epoche:1 },
     { id:'fish',        name:'Fisch',       epoche:1 },
     { id:'gold',        name:'Gold',        epoche:1 },
     { id:'population',  name:'Bevölkerung', epoche:1 },
-    // Spätere, werden ggf. jetzt schon angezeigt (SHOW_ALL_RESOURCES)
-    { id:'planks',      name:'Bretter',     epoche:2 },
-    { id:'bricks',      name:'Ziegel',      epoche:2 },
-    { id:'grain',       name:'Getreide',    epoche:2 },
-    { id:'flour',       name:'Mehl',        epoche:2 },
     { id:'bread',       name:'Brot',        epoche:2 },
-    { id:'iron',        name:'Eisen',       epoche:3 },
-    { id:'ironbar',     name:'Eisenbarren', epoche:3 },
     { id:'tools',       name:'Werkzeuge',   epoche:3 },
-    { id:'paper',       name:'Papier',      epoche:6 },
-    { id:'knowledge',   name:'Wissen',      epoche:6 },
-    { id:'taxes',       name:'Steuern',     epoche:7 },
-    { id:'prestige',    name:'Prestige',    epoche:10 },
-    { id:'diplomacy',   name:'Diplomatie',  epoche:10 },
   ];
 
-  function iconFor(id){ return `assets/icons/resources/${id}.png`; }
+  const iconFor = (id) => `assets/icons/resources/${id}.png`;
+
+  // Heuristik: Alles was wie Gebäude aussieht (cost/size/category/type==='building') rausfiltern
+  const looksLikeBuilding = (o) =>
+    !!(o && (o.cost || o.size || o.category || o.type === 'building'));
 
   function getResourceCatalog(){
+    let reg = [];
     if (typeof window.Registry?.list === 'function'){
-      const reg = (Registry.list('resources') || []).map(r=>({
-        id: r.id,
-        name: r.name || r.id,
-        icon: r.icon || iconFor(r.id),
-        epoche: r.epoche || 1,
-        order: r.order ?? 999
-      }));
-      if (!reg.length) return FALLBACK_RES.map(r=>({ ...r, icon: iconFor(r.id), order: 999 }));
-      return reg.sort((a,b)=>(a.order||999)-(b.order||999));
+      reg = Registry.list('resources')
+         || Registry.list('resource')
+         || Registry.list('goods')
+         || Registry.list('materials')
+         || [];
     }
-    return FALLBACK_RES.map(r=>({ ...r, icon: iconFor(r.id), order: 999 }));
+
+    // Positivfilter (falls vorhanden) bevorzugen …
+    let items = (reg || []).filter(o => o && (o.type === 'resource' || o.kind === 'resource'));
+    // … sonst Heuristik gegen Gebäude anwenden
+    if (!items.length) items = (reg || []).filter(o => !looksLikeBuilding(o));
+
+    // Fallback, wenn immer noch leer
+    if (!items.length) items = FALLBACK_RES;
+
+    // Normalisieren + sortieren
+    const normalized = items.map(r => ({
+      id    : r.id,
+      name  : r.name || r.id,
+      icon  : r.icon || iconFor(r.id),
+      epoche: r.epoche || 1,
+      order : r.order ?? 999
+    }));
+
+    return normalized
+      .filter(r => SHOW_ALL_RESOURCES || r.epoche <= currentEpoche)
+      .sort((a,b)=>(a.order||999)-(b.order||999));
   }
 
   // -------------------------------------------------------------------------
@@ -95,51 +116,50 @@
   const cards   = new Map();   // id -> { el, $amt }
 
   function buildHUD(){
-    const catalog = getResourceCatalog().filter(r => SHOW_ALL_RESOURCES || (r.epoche <= currentEpoche));
-    $root.innerHTML = '';
+    const catalog = getResourceCatalog();
 
-    // Container
+    // Root leeren & Grid anlegen
+    $root.innerHTML = '';
     $grid = document.createElement('div');
     $grid.className = 'hud-grid';
     $root.appendChild($grid);
 
-    // Kacheln
+    // Kacheln erzeugen
     catalog.forEach(r=>{
-      const el   = document.createElement('button');
-      el.className = 'res-card';
+      const el = document.createElement('button');
+      el.className   = 'res-card';
       el.dataset.res = r.id;
-      el.title = r.name;
+      el.title       = r.name;
 
-// Titel (oben links)
-const $title = document.createElement('span');
-$title.className = 'res-title';
-$title.textContent = r.name || r.id;
-el.setAttribute('data-name', $title.textContent); // Fallback, falls CSS ::before genutzt
-el.appendChild($title);
+      // Titel (oben links)
+      const $title = document.createElement('span');
+      $title.className = 'res-title';
+      $title.textContent = r.name || r.id;
+      el.setAttribute('data-name', $title.textContent);
+      el.appendChild($title);
 
-// Icon (mittig)
-const $icon = document.createElement('img');
-$icon.className = 'res-icon';
-$icon.src = r.icon || `assets/icons/resources/${r.id}.png`;
-$icon.alt = $title.textContent;
-el.appendChild($icon);
+      // Icon (mittig)
+      const $icon = document.createElement('img');
+      $icon.className = 'res-icon';
+      $icon.src = r.icon || iconFor(r.id);
+      $icon.alt = $title.textContent;
+      el.appendChild($icon);
 
-// Menge (unten rechts)
-const $amt = document.createElement('span');
-$amt.className = 'res-amount';
-$amt.id = `hud-${r.id}`;
-$amt.textContent = (amounts.has(r.id) ? new Intl.NumberFormat('de-DE').format(amounts.get(r.id)) : '0');
-el.appendChild($amt);
-
-      
+      // Menge (unten rechts)
+      const $amt = document.createElement('span');
+      $amt.className = 'res-amount';
+      $amt.id = `hud-${r.id}`;
+      $amt.textContent = nf(amounts.get(r.id) || 0);
+      el.appendChild($amt);
 
       // Klick → Fokus togglen (Producer/Consumer später markieren)
       el.addEventListener('click', ()=>{
         const active = !el.classList.contains('is-focused');
-        document.querySelectorAll('.res-card.is-focused').forEach(x=>x.classList.remove('is-focused'));
+        document.querySelectorAll('.res-card.is-focused')
+          .forEach(x => x.classList.remove('is-focused'));
         if (active) el.classList.add('is-focused');
-        emit('req:res:focus', { resId:r.id, active });
-        emit('cb:hud:res:focus', { resId:r.id, active });
+        emit('req:res:focus',   { resId:r.id, active });
+        emit('cb:hud:res:focus',{ resId:r.id, active });
       });
 
       $grid.appendChild(el);
@@ -147,11 +167,11 @@ el.appendChild($amt);
       if (!amounts.has(r.id)) amounts.set(r.id, 0);
     });
 
-    // sichtbar machen
+    // Sichtbar schalten
     $root.classList.remove('hidden');
     $root.hidden = false;
 
-    logOK('HUD gebaut:', cards.size, 'Ressourcen');
+    log.ok('HUD gebaut:', cards.size, 'Ressourcen');
   }
 
   function setAmount(id, value){
@@ -160,10 +180,12 @@ el.appendChild($amt);
     const c = cards.get(id);
     if (c) c.$amt.textContent = nf(v);
   }
+
   function addAmount(id, delta){
     const v = Math.max(0, (amounts.get(id) || 0) + (delta|0));
     setAmount(id, v);
   }
+
   function resetAmounts(scope, resId){
     if (scope === 'all' || !resId){
       amounts.forEach((_, id)=> setAmount(id, 0));
@@ -175,33 +197,34 @@ el.appendChild($amt);
   // -------------------------------------------------------------------------
   // [03] Event-Wiring
   // -------------------------------------------------------------------------
-  window.addEventListener('cb:registry:ready', buildHUD); // Registry fertig → HUD bauen  [Registry Patch]
-  window.addEventListener('cb:ui-ready',        ()=> { if (!cards.size) buildHUD(); });
+  window.addEventListener('cb:registry:ready', buildHUD);
+  window.addEventListener('cb:ui-ready', () => { if (!cards.size) buildHUD(); });
 
-  // Ressourcen-Änderungen vom Core (Game/Carrier/Produktion)  [Lastenheft 3.3]
+  // Änderungen durch Game/Core/Carrier/Produktionen
   window.addEventListener('cb:res:change', (ev)=>{
-    const d = ev?.detail||{};
+    const d  = ev?.detail || {};
     const id = d.res || d.id;
     if (!id) return;
     if (typeof d.amount === 'number') setAmount(id, d.amount);
-    else if (typeof d.delta === 'number') addAmount(id, d.delta);
+    else if (typeof d.delta  === 'number') addAmount(id, d.delta);
   });
 
   window.addEventListener('cb:res:reset', (ev)=>{
-    const d = ev?.detail||{};
-    resetAmounts(d.scope||'all', d.res);
+    const d = ev?.detail || {};
+    resetAmounts(d.scope || 'all', d.res);
   });
 
-  // optionaler Voll-Snapshot
   window.addEventListener('cb:res:snapshot', (ev)=>{
-    const a = ev?.detail?.amounts || {};
-    Object.keys(a).forEach(id=> setAmount(id, a[id]|0));
+    const map = ev?.detail?.amounts || {};
+    Object.keys(map).forEach(id => setAmount(id, map[id]|0));
   });
 
-  // Initial: HUD melden & Snapshot anfordern
+  // -------------------------------------------------------------------------
+  // [04] Init
+  // -------------------------------------------------------------------------
   (function init(){
-    logInf('Modul geladen (v22.0.0)');
+    log.inf('HUD Modul geladen (v23.0.0)');
     emit('cb:hud-ready', { ok:true });
-    emit('req:res:snapshot'); // Core kann cb:res:snapshot liefern
+    emit('req:res:snapshot'); // Core/Speicher kann mit cb:res:snapshot antworten
   })();
 })();
