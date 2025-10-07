@@ -20,7 +20,7 @@
 :root{
   /* Grundlayout */
   --hud-item-size : clamp(92px, 9vw, 128px);
-  --hud-gap       : clamp(6px, 1.4vw, 12px);
+  --hud-gap       : clamp(6px, 0vw, 12px);
   --hud-z         : 42;
 
   /* Panel-Bild (Pfad relativ zu /ui/css/) */
