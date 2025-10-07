@@ -1,186 +1,142 @@
 /* ============================================================================
-   Datei    : ui/ui-hud.css
-   Version  : v2.2.0 (2025-10-07)
-   Modul    : HUD (Ressourcenleiste oben)
-   Zweck    : 1) Einzeilige (bei Bedarf zweizeilige) Leiste von links bis rechts
-              2) Jede Ressource in einem quadratischen Panel-Rahmen (panel.png)
-              3) Name oben links, Icon mittig, Menge unten rechts
-   Events   : (keine – rein CSS)
-   Notizen  : - Pfad zum Rahmenbild steuerbar über --hud-panel-img (s. ui.css)
-              - Greift robust für alte und neue Markup-Varianten:
-                .hud-item, .hud-cell; Name via .name/.label ODER data-name
-                Menge via <b> oder .amount
-   ========================================================================== */
+ * Datei    : ui/css/ui-hud.css
+ * Projekt  : Neue Siedler
+ * Version  : v23.0.0 (2025-10-07)
+ * Modul    : Ressourcen-HUD (oben andockend)
+ * Zweck    : 1) Einzeilige Leiste (kleine Screens wrap → 2 Zeilen)
+ *            2) Pro Ressource ein quadratisches Holzpanel (panel.png)
+ *            3) Name oben links, Icon mittig, Menge unten rechts
+ *
+ * Steuerung (Variablen)
+ *   --hud-item-size   : Basisgröße je Kachel (quadratisch)
+ *   --hud-gap         : Abstand der Kacheln
+ *   --hud-z           : Z-Layer über Canvas
+ *   --hud-panel-img   : Panel-Hintergrund (Holzrahmen)
+ *   --hud-title-size  : Textgröße des Namens
+ *   --hud-amt-size    : Textgröße der Menge
+ *   --hud-icon-scale  : Anteil der Kachelbreite für das Icon
+ * ========================================================================== */
 
-/* ---------- Layout-Container (fixiert oben, volle Breite) ---------------- */
-#hud-top {
-  position: fixed;
-  z-index: 100;
-  top: 0; left: 0; right: 0;
-  padding: clamp(4px, 1vw, 8px);
-  backdrop-filter: blur(4px);
-  pointer-events: none;                /* HUD klickt nicht in die Karte rein   */
+:root{
+  /* Grundlayout */
+  --hud-item-size : clamp(92px, 9vw, 128px);
+  --hud-gap       : clamp(6px, 1.4vw, 12px);
+  --hud-z         : 42;
+
+  /* Panel-Bild (Pfad relativ zu /ui/css/) */
+  --hud-panel-img : url("../../assets/ui/panel.png");
+
+  /* Typographie & Icon */
+  --hud-title-size: clamp(11px, 1.6vw, 14px);
+  --hud-amt-size  : clamp(12px, 2.0vw, 18px);
+  --hud-icon-scale: 0.56; /* 56% der Kachelbreite */
 }
 
-#hud-top .hud-bar {
+/* ---------- Container oben andocken, transparent ------------------------- */
+#hud-top{
+  position: fixed; left: 0; right: 0; top: 0;
+  z-index: var(--hud-z);
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) clamp(8px, 2vw, 14px) 8px;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none; /* nur die Kacheln selbst interaktiv */
+}
+
+/* ---------- Responsive Grid ---------------------------------------------- */
+#hud-top .hud-grid{
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(72px, 1fr); /* Responsiv: jede Zelle mind. 72px     */
-  gap: clamp(6px, 1.2vw, 12px);
+  grid-auto-columns: minmax(var(--hud-item-size), 1fr);
+  gap: var(--hud-gap);
   align-items: center;
   justify-items: center;
-  width: 100%;
+  pointer-events: auto;
 }
 
-/* Kleine Displays → 2 Zeilen */
-@media (max-width: 520px) {
-  #hud-top .hud-bar {
+/* Kleine Screens → automatisch in zwei Zeilen umbrechen */
+@media (max-width: 640px){
+  #hud-top .hud-grid{
     grid-auto-flow: row;
-    grid-template-columns: repeat(5, 1fr);  /* 5 Spalten, wächst in die 2. Zeile */
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
   }
 }
 
-/* ---------- Zelle (Ressource) -------------------------------------------- */
-.hud-item, .hud-cell {
+/* ---------- Ressourcenkachel (Panel, quadratisch) ------------------------ */
+.res-card, .hud-item, .hud-cell{
   position: relative;
-  pointer-events: auto;               /* einzelnes Feld darf klickbar sein     */
   width: 100%;
-  aspect-ratio: 1 / 1;                /* quadratisch                           */
-
-  /* Rahmenbild (über Variable konfigurierbar) */
-  --_panel: var(--hud-panel-img, url("assets/ui/panel.png"));
-  background-image: var(--_panel);
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
-
-  /* Innenabstände, damit Text/Icons im Rahmen bleiben */
+  aspect-ratio: 1 / 1;                    /* quadratisch */
+  background: var(--hud-panel-img) center / 100% 100% no-repeat !important;
+  border: none !important;
+  border-radius: 0 !important;            /* kein Rund – Holzrahmen bleibt sauber */
+  box-shadow: none !important;
   padding: clamp(6px, 1.2vw, 10px);
-  box-sizing: border-box;
-
-  /* Typo-Basis */
-  font-weight: 600;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
   overflow: hidden;
+  cursor: pointer;
 }
 
-/* Hover/Focus (nur optisch dezent) */
-.hud-item:focus-visible, .hud-cell:focus-visible,
-.hud-item:hover, .hud-cell:hover {
-  outline: none;
+/* Fokus/hover dezent (Holzrahmen bleibt) */
+.res-card:is(:hover, :focus-visible),
+.hud-item:is(:hover, :focus-visible),
+.hud-cell:is(:hover, :focus-visible){
   filter: brightness(1.05);
+  outline: none;
 }
 
-/* ---------- Name oben links ---------------------------------------------- */
-.hud-item .name, .hud-cell .name,
-.hud-item .label, .hud-cell .label {
+/* ---------- Titel oben links -------------------------------------------- */
+.res-card .res-title,
+.hud-item .name,
+.hud-cell .name{
   position: absolute;
-  top: 6px; left: 8px;
-  font-size: clamp(11px, 1.6vw, 14px);
-  line-height: 1;
+  left: 8px; top: 6px; right: 8px;
+  font: 700 var(--hud-title-size) / 1 var(--ui-font, system-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Fallback: wenn kein explizites Name-Element, dann data-name verwenden */
-.hud-item[data-name]::before, .hud-cell[data-name]::before {
+/* Fallback: falls nur data-name gesetzt ist */
+.res-card[data-name]::before,
+.hud-item[data-name]::before,
+.hud-cell[data-name]::before{
   content: attr(data-name);
   position: absolute;
-  top: 6px; left: 8px;
-  font-size: clamp(11px, 1.6vw, 14px);
-  line-height: 1;
+  left: 8px; top: 6px; right: 8px;
+  font: 700 var(--hud-title-size) / 1 var(--ui-font, system-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- Icon mittig --------------------------------------------------- */
-.hud-item img, .hud-cell img,
-.hud-item .icon, .hud-cell .icon {
+.res-card .res-icon,
+.hud-item img,
+.hud-cell img{
   position: absolute;
-  inset: 0;
-  margin: auto;
-  width: clamp(28px, 5.2vw, 44px);       /* ← Icon-Größe hier feinjustieren   */
+  left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: calc(100% * var(--hud-icon-scale));
   height: auto;
-  transform: translateY(2px);            /* optische Mitte leicht tiefer      */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
 }
 
 /* ---------- Menge unten rechts ------------------------------------------- */
-.hud-item b, .hud-cell b,
-.hud-item .amount, .hud-cell .amount {
-  position: absolute;
-  right: 10px; bottom: 6px;
-  font-size: clamp(12px, 2vw, 18px);
-  font-weight: 700;
+.res-card .res-amount,
+.hud-item b,
+.hud-cell .amount{
+  position: absolute; right: 10px; bottom: 6px;
+  font: 800 var(--hud-amt-size) / 1 var(--ui-font, system-ui);
   text-shadow:
     0 1px 0 rgba(0,0,0,.35),
     0 0 4px rgba(0,0,0,.35);
 }
 
-/* ---------- Technik: Legacy-Text "Holz: 0" neutralisieren ----------------- */
-/* Falls altes Markup "Holz: <b>0</b>" enthalten ist, den Doppeltext vermeiden */
-.hud-item { white-space: nowrap; }
-.hud-item b { display: inline-block; }
-
-/* ---------- Dock-Kollision vermeiden -------------------------------------- */
-#build-dock { margin-top: clamp(76px, 12vw, 120px); } /* Platz unter dem HUD */
-
-/* == HUD — hard overrides: echtes Holzpanel pro Feld, kein Leisten-Hintergrund == */
-
-/* 1) Container: kein Hintergrund, kein Blur */
-#hud-top{
-  background: transparent !important;
-  backdrop-filter: none !important;
-}
-
-/* 2) Kachel: ZWINGE Panelgrafik + keine runden Ecken/Kein zusätzlicher Rand */
-.res-card,
-.hud-item,
-.hud-cell{
-  --hud-panel-img: url("assets/ui/panel.png"); /* Pfad bei dir ggf. anpassen */
-  background: var(--hud-panel-img) center/100% 100% no-repeat !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1/1;
-  padding: clamp(6px, 1.2vw, 10px);
-  color:#fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.35);
-  overflow: hidden;
-}
-
-/* 3) Titel oben links – deckend und immer sichtbar */
-.res-card .res-title,
-.hud-item .name,
-.hud-cell .name,
-.hud-item[data-name]::before,
-.hud-cell[data-name]::before{
-  position: absolute; left: 8px; top: 6px;
-  font-weight: 700;
-  font-size: clamp(11px, 1.6vw, 14px);
-  line-height: 1;
-  color:#fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.55);
-}
-
-/* 4) Icon mittig, klar skaliert */
-.res-card .res-icon,
-.hud-item img,
-.hud-cell img{
-  position: absolute; inset: 0; margin: auto;
-  width: clamp(34px, 5.6vw, 60px); height: auto;
-  image-rendering: pixelated;
-}
-
-/* 5) Menge unten rechts */
-.res-card .res-amount,
-.hud-item b,
-.hud-cell .amount{
-  position: absolute; right: 10px; bottom: 6px;
-  font: 800 clamp(12px, 2vw, 18px)/1 system-ui;
-  color:#fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.55);
-}
-
-/* 6) Grid bleibt responsiv; KEINE dunkle Fläche hinter den Kacheln */
+/* ---------- Technik/Legacy-Absicherungen --------------------------------- */
+/* Keine extra Hintergründe/Sheets im Grid */
 #hud-top .hud-grid{ background: transparent !important; }
 
+/* Wenn alte HUD-Knoten noch "Holz: 0" als flachen Text haben,
+   bleibt die Menge trotzdem sauber unten rechts dargestellt. */
+.hud-item{ white-space: nowrap; }
