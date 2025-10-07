@@ -3,7 +3,7 @@
   "stone":       { "name": "Stein",       "icon": "assets/icons/resources/stone.png",       "epoche": 1, "order": 20 },
   "fish":        { "name": "Fisch",       "icon": "assets/icons/resources/fish.png",        "epoche": 1, "order": 30 },
   "gold":        { "name": "Gold",        "icon": "assets/icons/resources/gold.png",        "epoche": 1, "order": 40 },
-  "population":  { "name": "Bevölkerung", "icon": "assets/icons/resources/population.png",  "epoche": 1, "order": 50 },
+  "population":  { "name": "Bevölkerung", "icon": "assets/icons/resources/pop.png",         "epoche": 1, "order": 50 },
 
   "planks":      { "name": "Bretter",     "icon": "assets/icons/resources/planks.png",      "epoche": 2, "order": 110 },
   "bricks":      { "name": "Ziegel",      "icon": "assets/icons/resources/bricks.png",      "epoche": 2, "order": 120 },
