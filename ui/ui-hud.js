@@ -130,9 +130,8 @@ $amt.className = 'res-amount';
 $amt.id = `hud-${r.id}`;
 $amt.textContent = (amounts.has(r.id) ? new Intl.NumberFormat('de-DE').format(amounts.get(r.id)) : '0');
 el.appendChild($amt);
-      el.appendChild($title);
-      el.appendChild($icon);
-      el.appendChild($amt);
+
+      
 
       // Klick → Fokus togglen (Producer/Consumer später markieren)
       el.addEventListener('click', ()=>{
