@@ -110,3 +110,11 @@
   window.addEventListener('cb:game-start',     ()=> log('cb:game-start'));
   window.addEventListener('load', wireStart);
 })();
+// Debug: Zeige, welche Map gerade geladen wird
+(function(){
+  const cv = document.getElementById('game');
+  const url = cv?.getAttribute('data-map');
+  (window.CBLog?.ok || console.log)('[boot] map-canvas data-map =', url);
+  window.addEventListener('cb:map:loaded',  e => (window.CBLog?.ok   || console.log)('[map] loaded', e.detail));
+  window.addEventListener('cb:map:fallback',e => (window.CBLog?.warn || console.warn)('[map] fallback', e.detail));
+})();
