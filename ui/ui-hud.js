@@ -67,7 +67,7 @@
     { id:'food',        name:'Nahrung',     epoche:1 },
     { id:'gold',        name:'Gold',        epoche:1 },
     { id:'pop',         name:'Bevölkerung', epoche:1 },
-/*  { id:'bread',       name:'Brot',        epoche:2 }, */
+    { id:'bread',       name:'Brot',        epoche:2 }, 
     { id:'tools',       name:'Werkzeuge',   epoche:3 },
   ];
 
