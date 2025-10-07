@@ -213,3 +213,28 @@ html, body { height: 100%; overscroll-behavior: none; }
   height: var(--icon-size-cost);
   margin-right: 4px;
 }
+/* ============================================================================
+ * [Global Tokens]
+ * ========================================================================== */
+:root{
+  /* HUD/Build teilen sich das Panel-Image – hier zentral definieren */
+  --ui-panel-img: url("../assets/ui/panel.png");
+  /* Standard-Schrift */
+  --ui-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ============================================================================
+ * [Canvas Layering]
+ * ========================================================================== */
+#game{
+  position: fixed; left:0; top:0;
+  width: 100vw; height: 100vh;
+  display:block;
+  z-index: 1;             /* unter HUD/Build/UI */
+  background: #1b2026;   /* Fallback-Dunkel, falls Map noch lädt */
+}
+/* UI-Layer (HUD/Build/Inspector/Overlay) liegen darüber */
+#hud-top, #build-dock, #inspector, .place-overlay{ position: fixed; z-index: 40; }
+
+/* Wenn Baumenü offen – ggf. Body-State nutzbar */
+body.is-build-open #build-dock{ display:block; }
