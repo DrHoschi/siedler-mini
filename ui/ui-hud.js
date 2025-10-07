@@ -64,9 +64,10 @@
     { id:'wood',        name:'Holz',        epoche:1 },
     { id:'stone',       name:'Stein',       epoche:1 },
     { id:'fish',        name:'Fisch',       epoche:1 },
+    { id:'food',        name:'Nahrung',     epoche:1 },
     { id:'gold',        name:'Gold',        epoche:1 },
-    { id:'population',  name:'Bevölkerung', epoche:1 },
-    { id:'bread',       name:'Brot',        epoche:2 },
+    { id:'pop',         name:'Bevölkerung', epoche:1 },
+/*  { id:'bread',       name:'Brot',        epoche:2 }, */
     { id:'tools',       name:'Werkzeuge',   epoche:3 },
   ];
 
