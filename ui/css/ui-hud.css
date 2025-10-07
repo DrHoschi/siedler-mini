@@ -20,7 +20,7 @@
 :root{
   /* Grundlayout */
   --hud-item-size : clamp(92px, 9vw, 128px);
-  --hud-gap       : clamp(6px, 1.4vw, 12px);
+  --hud-gap       : clamp(3px, 0.4vw, 9px);
   --hud-z         : 42;
 
   /* Panel-Bild (Pfad relativ zu /ui/css/) */
@@ -29,7 +29,7 @@
   /* Typographie & Icon */
   --hud-title-size: clamp(11px, 1.6vw, 14px);
   --hud-amt-size  : clamp(12px, 2.0vw, 18px);
-  --hud-icon-scale: 0.56; /* 56% der Kachelbreite */
+  --hud-icon-scale: 0.6; /* 56% der Kachelbreite */
 }
 
 /* ---------- Container oben andocken, transparent ------------------------- */
