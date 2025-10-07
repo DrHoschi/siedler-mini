@@ -122,7 +122,6 @@
 /* ---------- Dock-Kollision vermeiden -------------------------------------- */
 #build-dock { margin-top: clamp(76px, 12vw, 120px); } /* Platz unter dem HUD */
 
-
 /* == HUD — hard overrides: echtes Holzpanel pro Feld, kein Leisten-Hintergrund == */
 
 /* 1) Container: kein Hintergrund, kein Blur */
@@ -184,3 +183,4 @@
 
 /* 6) Grid bleibt responsiv; KEINE dunkle Fläche hinter den Kacheln */
 #hud-top .hud-grid{ background: transparent !important; }
+
