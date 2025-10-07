@@ -18,7 +18,7 @@
   --build-card-w: clamp(140px, 28vw, 220px);
   --build-card-ratio: 3/4;
   --build-panel-img: url("../../assets/ui/panel.png"); /* HUD-Panel gerne identisch */
-  --build-icon-scale: 0.84;  /* 84% der Kartenbreite */
+  --build-icon-scale: 0.24;  /* 24% der Kartenbreite */
   --build-cost-font: clamp(11px, 1.4vw, 13px);
   --build-z-dock: 46;
 
