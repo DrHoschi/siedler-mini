@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : ui/css/ui-build.css
  * Projekt  : Neue Siedler
- * Version  : v24.1.0 (2025-10-08)
+ * Version  : v24.2.0 (2025-10-08)
  * Zweck    : Baumenü-Styles – Kategorien, Karten (Holz-Panel), Kostenreihe,
  *            einheitliche Kartengröße
  * Leitplanken:
@@ -90,7 +90,6 @@
   border-radius: 12px; overflow: hidden;
   color: #fff; text-align: center; cursor: pointer;
 
-  /* Holzrahmen + leichter Verlauf darüber, damit Text lesbar bleibt */
   background:
     var(--build-panel-img) center / cover no-repeat,
     linear-gradient(to bottom, rgba(16,22,32,.38), rgba(10,14,22,.50));
@@ -107,7 +106,7 @@
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 
-/* Gebäude-Illustration mittig, prozentuale Breite */
+/* Gebäude-Illustration mittig */
 .build-card .card-illu{
   width: calc(100% * var(--build-icon-scale));
   height: auto;
@@ -116,7 +115,7 @@
   image-rendering: pixelated; pointer-events:none;
 }
 
-/* Kostenreihe unten rechts (Icons + Zahl) */
+/* Kostenreihe unten rechts */
 .build-card .card-costs{
   position: absolute; left:8px; right:8px; bottom:8px;
   display:flex; gap:10px; justify-content:flex-end; align-items:center;
