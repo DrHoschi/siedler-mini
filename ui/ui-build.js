@@ -1,14 +1,12 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v24.0.0 (2025-10-08)
- * Zweck    : Baumenü (Kategorien + Karten). Startet Platziermodus, verwaltet
- *            NICHT den Ghost. (Ghost/OK/X ist in ui/ui-place.js)
+ * Version  : v24.1.0 (2025-10-08)
+ * Zweck    : Baumenü (Kategorien + Karten). Startet Platziermodus.
  *
  * Events (listen)
- *   - cb:registry:ready        → Baumenü aufbauen
- *   - cb:build:open/close      → Dock zeigen/verbergen
- *   - cb:place:done {exit?}    → optional: externes Beenden triggert Dock-UI
+ *   - cb:registry:ready         → Baumenü aufbauen
+ *   - cb:build:open/close       → Dock zeigen/verbergen
  *
  * Events (emit)
  *   - req:build:open / req:build:close
@@ -19,9 +17,9 @@
  *   - core/registry.js  → Registry.list('buildings', {epoche})
  *   - data/buildings.json (iconsBase optional)
  *   - assets/icons/buildings/… (Gebäude-Icons)
- *   - assets/icons/build/…     (Kategorien-Icons)
+ *   - assets/icons/build/…     (Kategorien-Icons)  ← dein Pfad
  *   - assets/icons/resources/… (Kosten-Icons)
- *   - ui/css/ui-build.css      (Optik/Variablen)
+ *   - ui/css/ui-build.css
  * ========================================================================== */
 (function(){
   'use strict';
@@ -31,11 +29,7 @@
   // -------------------------------------------------------------------------
   const $dock = document.getElementById('build-dock');
   const $btn  = document.getElementById('btn-build');
-
-  if (!$dock){
-    (console.warn)('[build] #build-dock fehlt – bitte in index.html prüfen');
-    return;
-  }
+  if (!$dock){ (console.warn)('[build] #build-dock fehlt'); return; }
 
   function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
   const log = (...a)=> (window.CBLog?.ok || console.log)('[build]', ...a);
@@ -59,7 +53,6 @@
     document.body.classList.remove('is-build-open');
     emit('cb:build:close');
   }
-
   $btn?.addEventListener('click', ()=>{
     const isOpen = !$dock.classList.contains('hidden');
     if (isOpen) closeDock(); else openDock();
@@ -68,11 +61,11 @@
   // -------------------------------------------------------------------------
   // [02] Render: Kopf, Kategorien, Grid
   // -------------------------------------------------------------------------
-  let _cards = []; // Referenzen auf Karten (für Filter)
+  let _cards = []; // Karten-Refs für Filter
 
   function renderDock(){
     const list = (typeof Registry?.list === 'function')
-      ? Registry.list('buildings', { epoche: 1 })  // Epoche-Filter (E1)
+      ? Registry.list('buildings', { epoche: 1 })  // Epoche 1 erstmal
       : [];
 
     $dock.innerHTML = '';
@@ -90,11 +83,11 @@
     $dock.appendChild(head);
     head.querySelector('.build-close')?.addEventListener('click', closeDock);
 
-    // Kategorien sammeln
+    // Kategorien (aus Buildings ableiten; optional Registry.categories())
     const cats = collectCategories(list);
     renderCategoryBar($dock, cats, (catId)=> filterByCategory(catId));
 
-    // Grid rendern
+    // Grid
     const grid = document.createElement('div');
     grid.className = 'build-grid';
     $dock.appendChild(grid);
@@ -121,7 +114,11 @@
       // Kostenreihe
       const costs = document.createElement('div');
       costs.className = 'card-costs';
-      (b.cost || []).forEach(c=>{
+      const costArr = Array.isArray(b.cost)
+        ? b.cost
+        : (b.cost && typeof b.cost==='object'
+            ? Object.keys(b.cost).map(id=>({ id, qty:b.cost[id] })) : []);
+      costArr.forEach(c=>{
         const row = document.createElement('span');
         row.className = 'cost';
         row.innerHTML = `
@@ -131,10 +128,9 @@
         costs.appendChild(row);
       });
 
-      // Klick → Platziermodus starten (ui-place.js übernimmt)
+      // Klick → Platziermodus starten
       card.addEventListener('click', ()=>{
         emit('req:place:start', { buildingId: b.id });
-        // Baumenü offen lassen (Serienbau). Nutzer kann es manuell schließen.
       });
 
       card.appendChild(title);
@@ -151,10 +147,8 @@
   }
 
   function collectCategories(buildings){
-    // Versucht Kategorien aus buildings.json; fällt auf heuristische Labels zurück
     const map = new Map();
-    map.set('all', { id:'all', name:'Alles',   icon:`${iconsBaseCategories}all.png`, count:0 });
-
+    map.set('all', { id:'all', name:'Alles', icon:`${iconsBaseCategories}all.png`, count:0 });
     buildings.forEach(b=>{
       const id = b.category || 'misc';
       if (!map.has(id)){
@@ -168,7 +162,6 @@
       map.get(id).count++;
       map.get('all').count++;
     });
-
     return [...map.values()];
   }
 
@@ -226,17 +219,6 @@
   // [03] Wiring
   // -------------------------------------------------------------------------
   window.addEventListener('cb:registry:ready', renderDock);
-  window.addEventListener('cb:place:done', (ev)=>{
-    // Wenn extern entschieden wird, den Baumodus zu verlassen:
-    if (ev?.detail?.exit) {
-      // hier könntest du optional das Dock schließen
-      // closeDock();
-    }
-  });
-
-  // Öffnen/Schließen über externe Events
   window.addEventListener('req:build:open', openDock);
   window.addEventListener('req:build:close', closeDock);
-
-  // Dock NICHT automatisch öffnen (dein Button steuert das)
 })();
