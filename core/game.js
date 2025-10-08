@@ -1,17 +1,21 @@
 /* ============================================================================
  * Datei    : core/game.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v19.0.0 (2025-10-05)
- * Zweck    : Welt/Grid, Platzieren, Produktionsticker, Jobs, HUD-Res
+ * Version  : v19.1.0 (2025-10-08)
+ * Zweck    : Welt/Grid, Platzieren (mit Preview), Produktionsticker, Jobs, HUD-Res
+ *
  * Events   :
- *   IN  : req:place:start {buildingId}
- *         req:place:confirm {tx,ty}
- *         req:place:cancel
- *   OUT : cb:place:done {id, tx, ty}
- *         cb:res:change {res, value, total}
- *         cb:game-start
- * ============================================================================
- */
+ *   IN  :
+ *     - req:place:start   {buildingId}
+ *     - req:place:cursor  {tx,ty,w,h,id}     (vom UI für Vorschau angefordert)
+ *     - req:place:confirm {tx,ty}            (Bestätigen)
+ *     - req:place:cancel
+ *   OUT :
+ *     - cb:place:preview {tx,ty,valid}       (für Ghost grün/rot)
+ *     - cb:place:done    {id, tx, ty, exit}  (Serienbau steuern)
+ *     - cb:res:change    {res, delta, total} (HUD-Update)
+ *     - cb:game-start
+ * ============================================================================ */
 
 (function(root, factory){
   root.Game = factory();
@@ -60,21 +64,41 @@
     return { x: b.tx, y: b.ty + (b.size?.h||1) }; // simple default
   }
 
+  // --------------------------- Platzier-Preview ------------------------------
+  window.addEventListener('req:place:cursor', (ev)=>{
+    const { tx, ty, w=1, h=1, id } = ev.detail||{};
+    // Def prüfen (falls w/h nicht geliefert wurden)
+    let W=w, H=h;
+    const def = (id && typeof Registry?.get==='function') ? Registry.get('buildings', id) : null;
+    if (def){
+      W = def?.size?.w || def?.size?.[0] || W;
+      H = def?.size?.h || def?.size?.[1] || H;
+    }
+    const ok = rectFree(tx,ty,W,H);
+    emit('cb:place:preview', { tx, ty, valid: ok.ok });
+  });
+
   // --------------------------- Platzier-Flow ---------------------------------
+  let lastRequestedBuildingId = null;
+
+  window.addEventListener('req:place:start', (ev)=>{
+    lastRequestedBuildingId = ev.detail.buildingId;
+  });
+
   window.addEventListener('req:place:confirm', (ev)=>{
-    const { tx, ty } = ev.detail;
-    const buildingId = lastRequestedBuildingId; // vom start-Event gemerkt
+    const { tx, ty } = ev.detail||{};
+    const buildingId = lastRequestedBuildingId;
     if(!buildingId) return;
 
     const def = Registry.get('buildings', buildingId);
     if(!def) return;
 
-    const w = def.size?.w || 1;
-    const h = def.size?.h || 1;
+    const w = def.size?.w || def.size?.[0] || 1;
+    const h = def.size?.h || def.size?.[1] || 1;
 
     const ok = rectFree(tx,ty,w,h);
     if(!ok.ok){
-      // Optional: cb:place:error mit ok.reason
+      emit('cb:place:preview', { tx, ty, valid:false }); // UI rot lassen
       return;
     }
 
@@ -90,8 +114,9 @@
     };
     state.buildings.push(inst);
 
-    // HQ-Spezial: sofort Trägerpunkte + Träger spawnen
-    if(buildingId === 'b.hq'){
+    // HQ-Spezial: tolerant erkennen (b.hq ODER hq ODER role=hq)
+    const isHQ = def.role === 'hq' || buildingId === 'b.hq' || buildingId === 'hq';
+    if(isHQ){
       state.hq = inst;
       const door = getEntrance(inst);
       // Zwei Idle-Träger an der Tür
@@ -99,13 +124,9 @@
       spawnCarrier(door.x, door.y);
     }
 
-    emit('cb:place:done', { id:buildingId, tx, ty, exit:false });
+    emit('cb:place:done', { id:buildingId, tx, ty, exit:false }); // Serienbau aktiv lassen
   });
 
-  let lastRequestedBuildingId = null;
-  window.addEventListener('req:place:start', (ev)=>{
-    lastRequestedBuildingId = ev.detail.buildingId;
-  });
   window.addEventListener('req:place:cancel', ()=>{
     lastRequestedBuildingId = null;
     emit('cb:place:done', { exit:true });
@@ -164,8 +185,10 @@
 
   // --------------------------- Ressourcen/HUD --------------------------------
   function addResource(res, qty){
-    state.resources[res] = (state.resources[res]||0) + qty;
-    emit('cb:res:change', { res, value: qty, total: state.resources[res] });
+    const prev = state.resources[res] || 0;
+    const next = prev + qty;
+    state.resources[res] = next;
+    emit('cb:res:change', { res, delta: qty, total: next });
   }
 
   // --------------------------- Start/Loop ------------------------------------
@@ -187,12 +210,11 @@
   return {
     tileSize,
     start,
-    // Path/Jobs API von Carrier nutzt diese:
+    // Carrier API:
     popJob(){
       return state.jobQueue.shift() || null;
     },
     takeFromBuilding(tx,ty,res){
-      // finde Gebäude an (tx,ty) (Eingangsnähe reicht)
       const b = state.buildings.find(bb => Math.abs(getEntrance(bb).x - tx)<=1 && Math.abs(getEntrance(bb).y - ty)<=1);
       if(!b) return 0;
       const have = b.buffer[res]||0;
