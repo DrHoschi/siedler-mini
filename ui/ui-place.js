@@ -1,26 +1,23 @@
 /* ============================================================================
  * Datei    : ui/ui-place.js
  * Projekt  : Neue Siedler
- * Version  : v24.1.0 (2025-10-08)
+ * Version  : v24.2.0 (2025-10-08)
  * Zweck    : Platziermodus-UI (Ghost, ✅/✖️, Grün/Rot-Tint). Zentriert
  *            sichtbar starten; Maus/Touch; Canvas-Offsets; Zoom-responsiv.
  *
  * Events (listen)
  *   - req:place:start   { buildingId }
  *   - cb:zoom:change    { scale }             → Größe/Position anpassen
- *   - cb:place:preview  { gx,gy,w,h,valid }   → Validität vom Core
+ *   - cb:place:preview  { tx,ty,w,h,valid }   → Validität vom Core
  *
  * Events (emit)
- *   - req:place:cursor  { gx, gy, w, h, id }  → Core kann Validität prüfen
- *   - req:place:confirm { buildingId, gx, gy }
+ *   - req:place:cursor  { tx, ty, w, h, id }  → Core kann Validität prüfen
+ *   - req:place:confirm { tx, ty }            → angepasst an core/game.js
  *   - req:place:cancel
  * ========================================================================== */
 (function(){
   'use strict';
 
-  // -------------------------------------------------------------------------
-  // [00] DOM & Utils
-  // -------------------------------------------------------------------------
   const overlay = document.createElement('div');
   overlay.className = 'place-overlay';
   document.body.appendChild(overlay);
@@ -52,30 +49,27 @@
   function baseTileSize(){ return window.Game?.tileSize || 32; }
   function tileSize(){ return baseTileSize() * getZoom(); }
 
-  // Maus/Touch → Kachelkoordinaten relativ zum Canvas
-  function screenToGrid(clientX, clientY){
+  // Screen → Tile relativ ZUM CANVAS (nicht zum Fenster)
+  function screenToTile(clientX, clientY){
     const rect = $canvas?.getBoundingClientRect();
-    if (!rect) return { gx:0, gy:0 };
+    if (!rect) return { tx:0, ty:0, sx:0, sy:0 };
     const tpx = tileSize();
-    const x = Math.max(0, clientX - rect.left);
-    const y = Math.max(0, clientY - rect.top);
-    return { gx: Math.floor(x / tpx), gy: Math.floor(y / tpx) };
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const tx = Math.max(0, Math.floor(x / tpx));
+    const ty = Math.max(0, Math.floor(y / tpx));
+    return { tx, ty, sx: rect.left + tx*tpx, sy: rect.top + ty*tpx };
   }
 
-  // -------------------------------------------------------------------------
-  // [01] State
-  // -------------------------------------------------------------------------
+  // ---------------------------- State ---------------------------------------
   let active = null; // { id, w, h, file }
-  let last   = { gx:0, gy:0, valid:true };
+  let last   = { tx:0, ty:0, valid:true };
 
-  // -------------------------------------------------------------------------
-  // [02] Start / Stop
-  // -------------------------------------------------------------------------
+  // ---------------------------- Start / Stop --------------------------------
   window.addEventListener('req:place:start', (ev)=>{
     const id = ev?.detail?.buildingId;
     if (!id) return;
 
-    // Gebäudedaten
     const b = (typeof Registry?.get === 'function') ? Registry.get('buildings', id) : null;
     if (!b){ log('building not found', id); return; }
 
@@ -84,15 +78,11 @@
     const file = (b.icon && typeof b.icon==='string') ? b.icon : `${b.id}.png`;
 
     active = { id, w, h, file };
-    last   = { gx:0, gy:0, valid:true };
+    last   = { tx:0, ty:0, valid:true };
 
-    // Sprite-Optik
     resizeSprite();
-
-    // zentriert sichtbar starten (falls noch keine Bewegung)
     centerGhostOnScreen();
 
-    // Sichtbar & Listener
     $ghost.hidden = false;
     window.addEventListener('mousemove', onMouseMove, { passive:true });
     window.addEventListener('touchmove', onTouchMove, { passive:true });
@@ -111,9 +101,7 @@
     active = null;
   }
 
-  // -------------------------------------------------------------------------
-  // [03] Darstellung / Position / Buttons
-  // -------------------------------------------------------------------------
+  // ---------------------------- Darstellung ---------------------------------
   function resizeSprite(){
     if (!active) return;
     const tpx = tileSize();
@@ -127,24 +115,18 @@
   function centerGhostOnScreen(){
     if (!active) return;
     const tpx = tileSize();
-    const cx = window.innerWidth  / 2;
-    const cy = window.innerHeight / 2;
+    const rect = $canvas?.getBoundingClientRect();
+    const cx = (rect ? rect.left + rect.width/2 : window.innerWidth/2);
+    const cy = (rect ? rect.top  + rect.height/2: window.innerHeight/2);
 
-    // auf Tile-Snap zur Mitte (ungefähr)
-    const sx = Math.max(0, Math.floor((cx - (active.w*tpx)/2) / tpx) * tpx);
-    const sy = Math.max(0, Math.floor((cy - (active.h*tpx)/2) / tpx) * tpx);
+    // snap auf Kachel
+    const tx = Math.max(0, Math.floor((cx - (rect?.left||0)) / tpx) - Math.floor(active.w/2));
+    const ty = Math.max(0, Math.floor((cy - (rect?.top ||0)) / tpx) - Math.floor(active.h/2));
+    const sx = (rect ? rect.left : 0) + tx*tpx;
+    const sy = (rect ? rect.top  : 0) + ty*tpx;
 
     $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
-
-    // last.gx/gy auf Basis der Canvas-Position bestimmen
-    const rect = $canvas?.getBoundingClientRect();
-    if (rect){
-      last.gx = Math.floor((sx - rect.left) / tpx);
-      last.gy = Math.floor((sy - rect.top)  / tpx);
-    } else {
-      last.gx = 0; last.gy = 0;
-    }
-
+    last.tx = tx; last.ty = ty;
     setTint(true);
   }
 
@@ -159,39 +141,30 @@
 
   function onMouseMove(e){
     if (!active) return;
-    const { gx, gy } = screenToGrid(e.clientX, e.clientY);
-    moveToGrid(gx, gy);
+    const { tx, ty, sx, sy } = screenToTile(e.clientX, e.clientY);
+    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
+    positionButtons();
+    last = { tx, ty, valid:true };
+    setTint(true);
+    emit('req:place:cursor', { tx, ty, w: active.w, h: active.h, id: active.id });
   }
 
   function onTouchMove(e){
     if (!active) return;
-    const t = e.touches && e.touches[0];
-    if (!t) return;
-    const { gx, gy } = screenToGrid(t.clientX, t.clientY);
-    moveToGrid(gx, gy);
-  }
-
-  function moveToGrid(gx, gy){
-    const tpx = tileSize();
-    const rect = $canvas?.getBoundingClientRect();
-    const sx = (rect ? rect.left : 0) + gx * tpx;
-    const sy = (rect ? rect.top  : 0) + gy * tpx;
-
+    const t = e.touches && e.touches[0]; if (!t) return;
+    const { tx, ty, sx, sy } = screenToTile(t.clientX, t.clientY);
     $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
     positionButtons();
-
-    last = { gx, gy, valid:true };
+    last = { tx, ty, valid:true };
     setTint(true);
-
-    emit('req:place:cursor', { gx, gy, w: active.w, h: active.h, id: active.id });
+    emit('req:place:cursor', { tx, ty, w: active.w, h: active.h, id: active.id });
   }
 
   function onZoomChanged(){ resizeSprite(); }
 
   function onKeyDown(e){
     if (e.key === 'Escape' || e.key === 'Backspace'){
-      emit('req:place:cancel');
-      stop();
+      emit('req:place:cancel'); stop();
     }
     if (e.key === 'Enter'){
       confirmPlace();
@@ -205,18 +178,15 @@
 
   function confirmPlace(){
     if (!active) return;
-    // Serienbau: Modus bleibt aktiv
-    emit('req:place:confirm', { buildingId: active.id, gx: last.gx, gy: last.gy });
+    emit('req:place:confirm', { tx: last.tx, ty: last.ty }); // <— an game.js angepasst
   }
 
-  // -------------------------------------------------------------------------
-  // [04] Validitäts-Vorschau (rot/grün)
-  // -------------------------------------------------------------------------
+  // Vorschau (rot/grün) vom Core
   window.addEventListener('cb:place:preview', (ev)=>{
     const d = ev?.detail||{};
     if (!active) return;
-    if (typeof d.gx === 'number' && typeof d.gy === 'number'){
-      last.gx = d.gx; last.gy = d.gy;
+    if (typeof d.tx === 'number' && typeof d.ty === 'number'){
+      last.tx = d.tx; last.ty = d.ty;
     }
     setTint(d.valid !== false);
   });
