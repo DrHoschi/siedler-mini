@@ -12,7 +12,7 @@
 
 :root{
   /* Kartengröße (Breite) + Seitenverhältnis */
-  --build-card-w: clamp(160px, 22vw, 220px);
+  --build-card-w: clamp(160px, 15vw, 220px);
   --build-card-ratio: 3/4;
 
   /* Optik */
