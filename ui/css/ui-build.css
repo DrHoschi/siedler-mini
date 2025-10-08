@@ -1,27 +1,21 @@
 /* ============================================================================
  * Datei    : ui/css/ui-build.css
  * Projekt  : Neue Siedler
- * Version  : v21.0.0 (2025-10-07)
- * Zweck    : Baumenü-Styles – Kategorien, Karten (Panel), Ghost & Buttons
- *
- * Steuerung über Variablen:
- *  - --build-card-w         Breite je Karte (responsive clamp)
- *  - --build-card-ratio     Seitenverhältnis (z.B. 3/4)
- *  - --build-panel-img      Panel-Hintergrund (gleich wie HUD-Panel)
- *  - --build-icon-scale     Anteil der Illu in % der Kartenbreite
- *  - --build-cost-font      Fontgröße der Kosten
- *  - --build-z-dock         Layering des Docks über Canvas
- *  - --place-ok / --place-cancel  Farben für ✔/✖
+ * Version  : v24.0.0 (2025-10-08)
+ * Zweck    : Baumenü-Styles – Kategorien, Karten (Panel), Kosten, Dock-Rahmen
  * ========================================================================== */
 
 :root{
   --build-card-w: clamp(140px, 28vw, 220px);
   --build-card-ratio: 3/4;
-  --build-panel-img: url("../../assets/ui/panel.png"); /* HUD-Panel gerne identisch */
-  --build-icon-scale: 0.34;  /* 34% der Kartenbreite */
+  --build-panel-img: url("../../assets/ui/panel.png");
+  --build-icon-scale: 0.42;              /* 42% Kartenbreite */
   --build-cost-font: clamp(11px, 1.4vw, 13px);
   --build-z-dock: 46;
 
+  --chip-h: 36px;
+
+  /* Farben für Platzier-Buttons – ui-place.css nutzt eigene, hier nur Dock */
   --place-ok:    #25b05c;
   --place-b-ok:  #117a3b;
   --place-cancel:#e55353;
@@ -47,9 +41,14 @@
   display:flex; align-items:center; justify-content:space-between;
   margin: 2px 4px 8px 4px; color:#e8eef8; font:600 14px/1.1 system-ui;
 }
-.build-count{ opacity:.85; }
+.build-head-right{ display:flex; gap:10px; align-items:center; }
+.build-close{
+  appearance:none; border:0; cursor:pointer;
+  width: 28px; height: 28px; border-radius: 6px;
+  background:#2b2f3a; color:#fff; font:800 14px/1 system-ui;
+}
 
-/* --- Kategorien (Chips) --------------------------------------------------- */
+/* --- Kategorien (Chips mit Icon) ----------------------------------------- */
 .build-cats{
   display:flex; gap:8px; padding:8px 10px; margin:6px 4px 10px 4px;
   position: sticky; top: 0;
@@ -58,14 +57,18 @@
   z-index: 5;
 }
 .build-cats .chip{
-  appearance:none; border:0; padding:8px 12px; border-radius:14px;
-  font:600 14px/1.1 system-ui; letter-spacing:.2px;
+  appearance:none; border:0; padding:0 10px; border-radius: calc(var(--chip-h)/2);
+  height: var(--chip-h);
+  display:inline-flex; align-items:center; gap:8px;
+  font:600 14px/1 system-ui; letter-spacing:.2px;
   background:#2b2f3a; color:#cdd3df;
 }
 .build-cats .chip--active{
   outline:2px solid #4da3ff;
   background:#384155; color:#fff;
 }
+.chip-icon{ width: 18px; height: 18px; image-rendering: crisp-edges; }
+.chip-count{ opacity:.8; }
 
 /* --- Grid & Karten -------------------------------------------------------- */
 .build-grid{
@@ -121,29 +124,3 @@
 .build-card .cost b{
   font:700 var(--build-cost-font)/1 system-ui;
 }
-
-/* --- Platzieren (Ghost) --------------------------------------------------- */
-.place-overlay{
-  position: fixed; inset: 0; z-index: 50; pointer-events: none;
-}
-.place-overlay .place-sprite{
-  position: absolute; left:0; top:0;
-  border: 2px solid rgba(77,163,255,.6);
-  outline: 5000px solid rgba(12,16,24,.35); /* dunkelt Drumherum leicht ab */
-  box-shadow: 0 0 0 1px rgba(0,0,0,.35) inset, 0 4px 12px rgba(0,0,0,.35);
-  background-position: center; background-repeat: no-repeat;
-  pointer-events:none; /* Buttons haben wieder pointer-events */
-}
-.place-overlay .place-btn{
-  position: absolute; bottom: 8px; width: 44px; height:44px; border-radius:50%;
-  display:grid; place-items:center; font:800 20px/1 system-ui;
-  color:#fff; border:2px solid rgba(0,0,0,.3); box-shadow:0 2px 6px rgba(0,0,0,.35);
-  pointer-events:auto; cursor:pointer;
-}
-.place-overlay .place-btn.ok{
-  left: 8px; background: var(--place-ok);  border-color: var(--place-b-ok);
-}
-.place-overlay .place-btn.cancel{
-  right: 8px; background: var(--place-cancel); border-color: var(--place-b-c);
-}
-.place-overlay .place-btn:active{ transform: translateY(1px); }
