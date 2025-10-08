@@ -1,33 +1,30 @@
 /* ============================================================================
  * Datei    : ui/css/ui-build.css
  * Projekt  : Neue Siedler
- * Version  : v24.2.0 (2025-10-08)
- * Zweck    : Baumenü-Styles – Kategorien, Karten (Holz-Panel), Kostenreihe,
- *            einheitliche Kartengröße
- * Leitplanken:
- *   - Holzrahmen je Karte via --build-panel-img (Standard assets/ui/panel.png)
- *   - Karten IMMER gleich groß (ratio 3/4), Icon skaliert prozentual
- *   - Kategorien oben als "Chips"
+ * Version  : v24.3.0 (2025-10-08)
+ * Zweck    : Baumenü – Kategorien, Karten (Holzrahmen), Kostenreihe
+ * Änderungen:
+ *   - Panel-Hintergrund zusätzlich explizit in .build-card gesetzt (Pfad-Fallback)
+ *   - Illustrations-Sizing robust (object-fit, max-width/-height)
+ *   - Content-Box mit festen Innenabständen (Platz für Titel/Kosten)
  * ========================================================================== */
 
 :root{
-  /* Kartengröße (Breite) + Seitenverhältnis */
-  --build-card-w: clamp(160px, 15vw, 220px);
+  --build-card-w: clamp(160px, 22vw, 220px);
   --build-card-ratio: 3/4;
 
-  /* Optik */
+  /* Du kannst weiterhin übersteuern – wird aber nicht mehr benötigt für den Rahmen */
   --build-panel-img: url("../../assets/ui/panel.png");
-  --build-icon-scale: 0.44;                 /* 44% der Kartenbreite */
+
+  --build-icon-scale: 0.9;       /* skaliert die maximal erlaubte Fläche (0..1) */
   --build-cost-font: clamp(11px, 1.4vw, 13px);
+  --build-title-font: clamp(12px, 1.8vw, 14px);
 
-  /* Kategorien-Leiste */
   --chip-h: 36px;
-
-  /* Z-Layer */
   --build-z-dock: 46;
 }
 
-/* --- Dock Container ------------------------------------------------------- */
+/* --- Dock --------------------------------------------------------------- */
 #build-dock{
   position: fixed;
   left: 10px; right: 10px; bottom: 10px;
@@ -53,7 +50,7 @@
   background:#2b2f3a; color:#fff; font:800 14px/1 system-ui;
 }
 
-/* --- Kategorien (Chips mit Icon) ----------------------------------------- */
+/* --- Kategorien ---------------------------------------------------------- */
 .build-cats{
   display:flex; gap:8px; padding:8px 10px; margin:6px 4px 10px 4px;
   position: sticky; top: 0;
@@ -68,21 +65,18 @@
   font:600 14px/1 system-ui; letter-spacing:.2px;
   background:#2b2f3a; color:#cdd3df; cursor:pointer;
 }
-.build-cats .chip--active{
-  outline:2px solid #4da3ff;
-  background:#384155; color:#fff;
-}
+.build-cats .chip--active{ outline:2px solid #4da3ff; background:#384155; color:#fff; }
 .chip-icon{ width: 18px; height: 18px; image-rendering: crisp-edges; }
 .chip-count{ opacity:.8; }
 
-/* --- Grid & Karten -------------------------------------------------------- */
+/* --- Grid & Karten ------------------------------------------------------- */
 .build-grid{
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--build-card-w), 1fr));
   gap: 10px;
 }
 
-/* Karte mit garantiertem Holzrahmen */
+/* Karte mit explizitem Holzrahmen-Fallback */
 .build-card{
   position: relative;
   width: 100%;
@@ -90,7 +84,9 @@
   border-radius: 12px; overflow: hidden;
   color: #fff; text-align: center; cursor: pointer;
 
+  /* WICHTIG: 1) expliziter Pfad-Fallback, 2) variable zum Übersteuern, 3) Overlay */
   background:
+    url("../../assets/ui/panel.png") center / cover no-repeat,
     var(--build-panel-img) center / cover no-repeat,
     linear-gradient(to bottom, rgba(16,22,32,.38), rgba(10,14,22,.50));
   border: 1px solid rgba(255,255,255,.12);
@@ -102,17 +98,27 @@
 /* Titel oben */
 .build-card .card-title{
   position: absolute; left:10px; right:10px; top:8px;
-  font:700 clamp(12px, 1.8vw, 14px)/1.1 system-ui;
+  font:700 var(--build-title-font)/1.15 system-ui;
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
 }
 
-/* Gebäude-Illustration mittig */
+/* Content-Box reserviert Innenraum für Bild + Kosten (kein Zuschnitt mehr) */
+.build-card .card-body{
+  position:absolute; left:10px; right:10px;
+  top: calc(8px + 1.2em + 6px);          /* unter dem Titel */
+  bottom: 28px;                          /* über der Kostenreihe */
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* Gebäude-Illustration robust skalieren */
 .build-card .card-illu{
-  width: calc(100% * var(--build-icon-scale));
-  height: auto;
-  display: block;
-  margin: 12% auto 0 auto;
+  display:block;
+  max-width: calc(100% * var(--build-icon-scale));
+  max-height: calc(100% * var(--build-icon-scale));
+  width: auto; height: auto;
+  object-fit: contain;                    /* Wichtig */
   image-rendering: pixelated; pointer-events:none;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
 }
 
 /* Kostenreihe unten rechts */
@@ -129,6 +135,4 @@
 .build-card .cost img{
   width: 1.05rem; height: 1.05rem; image-rendering: pixelated;
 }
-.build-card .cost b{
-  font:700 var(--build-cost-font)/1 system-ui;
-}
+.build-card .cost b{ font:700 var(--build-cost-font)/1 system-ui; }
