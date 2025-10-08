@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v24.1.0 (2025-10-08)
+ * Version  : v24.2.0 (2025-10-08)
  * Zweck    : Baumenü (Kategorien + Karten). Startet Platziermodus.
  *
  * Events (listen)
@@ -17,16 +17,13 @@
  *   - core/registry.js  → Registry.list('buildings', {epoche})
  *   - data/buildings.json (iconsBase optional)
  *   - assets/icons/buildings/… (Gebäude-Icons)
- *   - assets/icons/build/…     (Kategorien-Icons)  ← dein Pfad
+ *   - assets/icons/build/…     (Kategorien-Icons)
  *   - assets/icons/resources/… (Kosten-Icons)
  *   - ui/css/ui-build.css
  * ========================================================================== */
 (function(){
   'use strict';
 
-  // -------------------------------------------------------------------------
-  // [00] DOM-Refs, Utils
-  // -------------------------------------------------------------------------
   const $dock = document.getElementById('build-dock');
   const $btn  = document.getElementById('btn-build');
   if (!$dock){ (console.warn)('[build] #build-dock fehlt'); return; }
@@ -40,9 +37,6 @@
   }
   const iconsBaseCategories = 'assets/icons/build/';
 
-  // -------------------------------------------------------------------------
-  // [01] Öffnen/Schließen des Docks
-  // -------------------------------------------------------------------------
   function openDock(){
     $dock.classList.remove('hidden');
     document.body.classList.add('is-build-open');
@@ -58,19 +52,16 @@
     if (isOpen) closeDock(); else openDock();
   });
 
-  // -------------------------------------------------------------------------
-  // [02] Render: Kopf, Kategorien, Grid
-  // -------------------------------------------------------------------------
-  let _cards = []; // Karten-Refs für Filter
+  let _cards = [];
 
   function renderDock(){
     const list = (typeof Registry?.list === 'function')
-      ? Registry.list('buildings', { epoche: 1 })  // Epoche 1 erstmal
+      ? Registry.list('buildings', { epoche: 1 })
       : [];
 
     $dock.innerHTML = '';
 
-    // Kopf mit Schließen-Button
+    // Kopf + Schließen
     const head = document.createElement('div');
     head.className = 'build-head';
     head.innerHTML = `
@@ -83,7 +74,7 @@
     $dock.appendChild(head);
     head.querySelector('.build-close')?.addEventListener('click', closeDock);
 
-    // Kategorien (aus Buildings ableiten; optional Registry.categories())
+    // Kategorien
     const cats = collectCategories(list);
     renderCategoryBar($dock, cats, (catId)=> filterByCategory(catId));
 
@@ -99,25 +90,24 @@
       card.dataset.cat = (b.category || 'misc');
       card.title = b.name || b.id;
 
-      // Titel
       const title = document.createElement('div');
       title.className = 'card-title';
       title.textContent = b.name || b.id;
 
-      // Illustration
       const illu = document.createElement('img');
       illu.className = 'card-illu';
       const fileName = (b.icon && typeof b.icon === 'string') ? b.icon : `${b.id}.png`;
       illu.src = iconsBaseBuildings() + fileName;
       illu.alt = title.textContent;
 
-      // Kostenreihe
       const costs = document.createElement('div');
       costs.className = 'card-costs';
+
       const costArr = Array.isArray(b.cost)
         ? b.cost
         : (b.cost && typeof b.cost==='object'
             ? Object.keys(b.cost).map(id=>({ id, qty:b.cost[id] })) : []);
+
       costArr.forEach(c=>{
         const row = document.createElement('span');
         row.className = 'cost';
@@ -128,7 +118,6 @@
         costs.appendChild(row);
       });
 
-      // Klick → Platziermodus starten
       card.addEventListener('click', ()=>{
         emit('req:place:start', { buildingId: b.id });
       });
@@ -141,7 +130,6 @@
       return card;
     });
 
-    // Startfilter: "all"
     filterByCategory('all');
     log('render ok →', _cards.length, 'Gebäude');
   }
@@ -215,9 +203,6 @@
     });
   }
 
-  // -------------------------------------------------------------------------
-  // [03] Wiring
-  // -------------------------------------------------------------------------
   window.addEventListener('cb:registry:ready', renderDock);
   window.addEventListener('req:build:open', openDock);
   window.addEventListener('req:build:close', closeDock);
