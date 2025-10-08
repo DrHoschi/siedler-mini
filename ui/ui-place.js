@@ -1,94 +1,199 @@
 /* ============================================================================
- * Datei   : ui/ui-place.js
- * Projekt : Neue Siedler – Build/Ghost Confirm
- * Version : v2.2.0 (2025-10-05)
- * Zweck   : Zeigt Ghost-Overlay inkl. OK/X; dispatcht cb:place:confirm/-cancel
- * Events  : hört auf cb:place:preview ({id,gx,gy,tx,ty,sx,sy,size,invalid})
- *           sendet cb:place:confirm({gx,gy}) / cb:place:cancel()
- * Hinweis : rein visuell; Kollision/Validierung macht Game.js
- * ============================================================================ */
-(function () {
-  const TAG = '[ui-place]';
-  const log  = (...a)=>console.log(TAG, ...a);
-  const warn = (...a)=>console.warn(TAG, ...a);
+ * Datei    : ui/ui-place.js
+ * Projekt  : Neue Siedler
+ * Version  : v24.0.0 (2025-10-08)
+ * Zweck    : Platziermodus-UI (Ghost, ✅/✖️, Grün/Rot-Tint). Berechnet Maus-
+ *            position in Tile-Koordinaten, skaliert mit Zoom. Bestätigung
+ *            lässt Serienbau aktiv; Abbrechen beendet Modus.
+ *
+ * Events (listen)
+ *   - req:place:start  { buildingId }
+ *   - cb:zoom:change   { scale }             → Größe/Position anpassen
+ *   - cb:place:preview { gx,gy,w,h,valid }   → (optional) Validität aus Game
+ *
+ * Events (emit)
+ *   - req:place:cursor { gx, gy }            → Game kann Validität prüfen
+ *   - req:place:confirm{ buildingId, gx, gy }
+ *   - req:place:cancel
+ *
+ * Hinweise
+ *   - Wenn Game KEINE Vorschau liefert, wird alles als gültig (grün) angezeigt.
+ *   - Gebäude-Icon wird aus Registry (iconsBase/buildings) geladen.
+ * ========================================================================== */
+(function(){
+  'use strict';
 
-  // Root-Container einmalig anlegen
+  // -------------------------------------------------------------------------
+  // [00] DOM & Utils
+  // -------------------------------------------------------------------------
   const host = document.createElement('div');
-  host.id = 'ui-place-host';
-  host.setAttribute('aria-hidden', 'true');
+  host.className = 'place-overlay';
   document.body.appendChild(host);
 
   host.innerHTML = `
     <div class="place-ghost" id="place-ghost" hidden>
-      <div class="place-ghost-box" id="place-box"></div>
-      <div class="place-ctrl" id="place-ctrl" hidden>
-        <button id="btn-place-ok" class="place-btn place-ok" aria-label="Platzieren">✓</button>
-        <button id="btn-place-cancel" class="place-btn place-cancel" aria-label="Abbrechen">✕</button>
-      </div>
+      <div class="ghost-sprite"><div class="ghost-tint"></div></div>
+      <button class="place-btn ok" title="Bestätigen" aria-label="Bestätigen">✓</button>
+      <button class="place-btn cancel" title="Abbrechen" aria-label="Abbrechen">✕</button>
     </div>
   `;
 
-  const ghost = document.getElementById('place-ghost');
-  const box   = document.getElementById('place-box');
-  const ctrl  = document.getElementById('place-ctrl');
-  const btnOk = document.getElementById('btn-place-ok');
-  const btnX  = document.getElementById('btn-place-cancel');
+  const $ghost  = host.querySelector('#place-ghost');
+  const $sprite = host.querySelector('.ghost-sprite');
+  const $tint   = host.querySelector('.ghost-tint');
+  const $ok     = host.querySelector('.place-btn.ok');
+  const $cancel = host.querySelector('.place-btn.cancel');
 
-  let last = null; // merkt sich letzte gültige Vorschau
+  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
+  const log = (...a)=> (window.CBLog?.ok || console.log)('[place]', ...a);
 
-  // Buttons -> Events
-  btnOk.addEventListener('click', ()=>{
-    if (!last) return;
-    window.dispatchEvent(new CustomEvent('cb:place:confirm', { detail:{ gx:last.gx, gy:last.gy } }));
+  function iconsBaseBuildings(){
+    const base = (typeof Registry?.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
+    return base.replace(/\/?$/,'/');
+  }
+  function getZoom(){ return (window.Zoom && typeof Zoom.scale === 'number') ? Zoom.scale : 1; }
+  function tileSize(){ return (window.Game?.tileSize || 32) * getZoom(); }
+
+  // -------------------------------------------------------------------------
+  // [01] interner State
+  // -------------------------------------------------------------------------
+  let active = null;  // { id, w, h, file }
+  let last   = { gx:0, gy:0, valid:true };
+
+  // -------------------------------------------------------------------------
+  // [02] Starten / Beenden
+  // -------------------------------------------------------------------------
+  window.addEventListener('req:place:start', (ev)=>{
+    const id = ev?.detail?.buildingId;
+    if (!id) return;
+
+    // Gebäudedaten holen
+    const b = (typeof Registry?.get === 'function') ? Registry.get('buildings', id) : null;
+    if (!b){ log('building not found', id); return; }
+
+    const w = b?.size?.w || 1;
+    const h = b?.size?.h || 1;
+    const file = (b.icon && typeof b.icon==='string') ? b.icon : `${b.id}.png`;
+
+    active = { id, w, h, file };
+    last   = { gx:0, gy:0, valid:true };
+
+    // Sprite-Optik
+    const tpx = tileSize();
+    $sprite.style.width  = (w * tpx) + 'px';
+    $sprite.style.height = (h * tpx) + 'px';
+    $sprite.style.backgroundImage = `url(${iconsBaseBuildings()}${file})`;
+    $sprite.style.backgroundSize  = 'cover';
+
+    // Buttons positionieren (unten links/rechts am Ghost)
+    positionButtons();
+
+    // Sichtbar & Listener
+    $ghost.hidden = false;
+    window.addEventListener('mousemove', onMouseMove, { passive:true });
+    window.addEventListener('keydown',   onKeyDown);
+    window.addEventListener('cb:zoom:change', onZoomChanged);
+
+    log('start', active);
   });
-  btnX.addEventListener('click', ()=>{
-    window.dispatchEvent(new Event('cb:place:cancel'));
-    hide();
-  });
 
-  function hide(){
-    ghost.hidden = true;
-    ctrl.hidden  = true;
-    last = null;
+  function stop(){
+    $ghost.hidden = true;
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('keydown',   onKeyDown);
+    window.removeEventListener('cb:zoom:change', onZoomChanged);
+    active = null;
   }
 
-  function showAt(pre){
-    // pre: {sx,sy,size,w,h,invalid}
-    const pad = Math.max(4, Math.floor(pre.size*0.06));
-    const pxW = pre.w * pre.size;
-    const pxH = pre.h * pre.size;
+  // -------------------------------------------------------------------------
+  // [03] Maus / Zoom / Buttons
+  // -------------------------------------------------------------------------
+  function onMouseMove(e){
+    if (!active) return;
+    const tpx = tileSize();
 
-    ghost.hidden = false;
-    ghost.style.transform = `translate(${Math.round(pre.sx)}px, ${Math.round(pre.sy)}px)`;
-    box.style.width  = `${Math.round(pxW)}px`;
-    box.style.height = `${Math.round(pxH)}px`;
-    box.classList.toggle('is-invalid', !!pre.invalid);
+    const gx = Math.max(0, Math.floor(e.clientX / tpx));
+    const gy = Math.max(0, Math.floor(e.clientY / tpx));
 
-    // OK/X nur bei gültiger Position, leicht nach oben links vom Ghost
-    if (!pre.invalid){
-      ctrl.hidden = false;
-      ctrl.style.transform = `translate(${pad}px, ${-Math.round(pre.size*0.7)}px)`;
-    } else {
-      ctrl.hidden = true;
+    // Screen-Position (linke obere Ecke der Kachel)
+    const sx = gx * tpx;
+    const sy = gy * tpx;
+
+    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
+    positionButtons();
+
+    // Validität standardmäßig „true“, bis Game anderes meldet
+    last = { gx, gy, valid: true };
+    setTint(true);
+
+    // Game um Validität bitten (falls verfügbar)
+    emit('req:place:cursor', { gx, gy, w: active.w, h: active.h, id: active.id });
+  }
+
+  function onZoomChanged(){
+    if (!active) return;
+    const tpx = tileSize();
+
+    // aktuelle linke/obere Screen-Pos aus transform extrahieren (vereinfachend neu rechnen)
+    const sx = last.gx * tpx;
+    const sy = last.gy * tpx;
+
+    $sprite.style.width  = (active.w * tpx) + 'px';
+    $sprite.style.height = (active.h * tpx) + 'px';
+    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
+    positionButtons();
+  }
+
+  function onKeyDown(e){
+    if (e.key === 'Escape' || e.key === 'Backspace'){
+      emit('req:place:cancel');
+      stop();
+    }
+    if (e.key === 'Enter'){
+      confirmPlace();
     }
   }
 
-  // Preview aus dem Game empfangen
+  function positionButtons(){
+    // Buttons relativ zum Ghost platzieren (unten links/rechts)
+    const tpx = tileSize();
+    const pad = Math.round(Math.max(6, tpx * 0.08));
+    $ok.style.left     = pad + 'px';
+    $ok.style.bottom   = pad + 'px';
+    $cancel.style.right= pad + 'px';
+    $cancel.style.bottom= pad + 'px';
+  }
+
+  $ok.addEventListener('click', confirmPlace);
+  $cancel.addEventListener('click', ()=>{
+    emit('req:place:cancel');
+    stop();
+  });
+
+  function confirmPlace(){
+    if (!active) return;
+    // Serienbau: Modus bleibt aktiv!
+    emit('req:place:confirm', { buildingId: active.id, gx: last.gx, gy: last.gy });
+  }
+
+  // -------------------------------------------------------------------------
+  // [04] Vorschau/Validität (optional aus Game)
+  // -------------------------------------------------------------------------
   window.addEventListener('cb:place:preview', (ev)=>{
+    // Game kann hier valid:false melden → roter Tint
     const d = ev?.detail||{};
-    if (!d || d.invalid){
-      hide();
-      return;
+    if (!active) return;
+    if (typeof d.gx === 'number' && typeof d.gy === 'number'){
+      last.gx = d.gx; last.gy = d.gy;
     }
-    last = d; // für Confirm
-    showAt(d);
+    const ok = (d.valid !== false);
+    setTint(ok);
   });
 
-  // Wenn Build-Mode beendet -> verstecken
-  window.addEventListener('cb:build:mode', (ev)=>{
-    if (!ev?.detail) return;
-    if (!ev.detail.active) hide();
-  });
+  function setTint(valid){
+    // nur Farbüberlagerung – das Gebäude-Sprite bleibt 1:1
+    $tint.classList.toggle('is-invalid', !valid);
+    $tint.classList.toggle('is-valid', !!valid);
+  }
 
-  log('bereit');
 })();
