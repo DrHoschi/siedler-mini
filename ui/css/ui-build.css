@@ -50,7 +50,7 @@
 #build-dock{
   position: fixed;
   left: 10px; right: 10px; bottom: 10px;
-  max-height: 52vh;
+  max-height: 32vh;
   padding: 10px 12px;
   overflow: auto;
   background: rgba(20,22,26,.90);              /* dunkler halbtransparenter Hintergrund */
