@@ -1,254 +1,263 @@
 /* ============================================================================
- * (1) Datei    : ui/ui-build.js
- *     Projekt  : Neue Siedler
- *     Version  : v24.3.2 (2025-10-08)
- *     Zweck    : Baumenü (Kategorien + Karten mit Holzrahmen + Kosten)
+ * Datei     : ui/ui-build.js
+ * Projekt   : Neue Siedler
+ * Version   : v24.4.0 (2025-10-08)
+ * Modul     : Baumenü – Kategorien, Karten, Öffnen/Schließen
  * ----------------------------------------------------------------------------
- * (2) Events (listen)
- *     • cb:registry:ready
- *     • req:build:open / req:build:close
- * (3) Events (emit)
- *     • cb:build:open / cb:build:close
- *     • req:build:category { id }
- *     • req:place:start   { buildingId }
- * (4) Abhängigkeiten
- *     • core/registry.js, data/buildings.json (optional iconsBase)
- *     • assets/icons/buildings/*  (Gebäude)
- *     • assets/icons/build/*      (Kategorien)
- *     • assets/icons/resources/*  (Kosten)
- *     • ui/css/ui-build.css v24.3.2
- * (5) Changelog v24.3.2
- *     • NEU: <img class="card-panel" src="assets/ui/panel.png"> je Karte
- *       (sichtbarer Holzrahmen in allen Browsern)
- * ========================================================================== */
+ * Was macht's?
+ *  - Lädt Gebäudekatalog (Registry → 'buildings' ODER data/buildings.json Fallback)
+ *  - Rendert Kategorien (mit Icons unter assets/icons/build/<cat>.png)
+ *  - Rendert Kartenraster (Titel, Holzrahmen, Illustration, Kosten)
+ *  - Öffnen/Schließen per #btn-build  (wird bei Bedarf erzeugt)
+ *  - Events:
+ *      emit: 'req:place:start' { building }   → Platziermodus starten
+ * ========================================================================= */
+
 (function(){
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // (6) DOM & Utils
-  // ---------------------------------------------------------------------------
-  const $dock = document.getElementById('build-dock');
-  const $btn  = document.getElementById('btn-build');
-  if (!$dock){ (console.warn)('[build] #build-dock fehlt'); return; }
+  /* ------------------------------------------------------------------------ */
+  /* 0) Utils / DOM                                                           */
+  /* ------------------------------------------------------------------------ */
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const log = (...a)=>(window.CBLog?.ok||console.log)('[build]',...a);
 
-  const log  = (...a)=> (window.CBLog?.ok || console.log)('[build]', ...a);
-  const warn = (...a)=> (window.CBLog?.warn || console.warn)('[build]', ...a);
-
-  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
-
-  function iconsBaseBuildings(){
-    const base = (typeof Registry?.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
-    return base.replace(/\/?$/,'/'); // trailing slash
+  // Dock-Root (erzeugen, falls nicht vorhanden)
+  let $dock = $('#build-dock');
+  if (!$dock){
+    $dock = document.createElement('div');
+    $dock.id = 'build-dock';
+    $dock.className = 'hidden';
+    document.body.appendChild($dock);
   }
-  const iconsBaseCategories = 'assets/icons/build/';
-  const panelSrc = 'assets/ui/panel.png';
 
-  // ---------------------------------------------------------------------------
-  // (7) Dock öffnen/schließen
-  // ---------------------------------------------------------------------------
-  function openDock(){
-    $dock.classList.remove('hidden');
-    document.body.classList.add('is-build-open');
-    emit('cb:build:open');
+  // Öffner-Button (nutze vorhandenen #btn-build, sonst erzeugen)
+  let $btn = $('#btn-build');
+  if (!$btn){
+    $btn = document.createElement('button');
+    $btn.id = 'btn-build';
+    $btn.type = 'button';
+    $btn.setAttribute('aria-expanded','false');
+    $btn.textContent = 'Bauen';
+    document.body.appendChild($btn);
   }
-  function closeDock(){
-    $dock.classList.add('hidden');
-    document.body.classList.remove('is-build-open');
-    emit('cb:build:close');
+
+  // Kategorien-Icons: erwartet assets/icons/build/<catId>.png
+  const catIcon = (id)=> `assets/icons/build/${id}.png`;
+
+  // Panel-Bild wird via CSS (var(--panel-url)) gerendert.
+  // Illustration pro Karte kommt vom Gebäude (b.<image>)
+
+  /* ------------------------------------------------------------------------ */
+  /* 1) Datenquelle – Registry oder Fallback JSON                             */
+  /* ------------------------------------------------------------------------ */
+  async function loadBuildings(){
+    // Registry-Pfad
+    if (window.Registry?.list){
+      const list = Registry.list('buildings') || [];
+      if (list.length) return list;
+    }
+    // Fallback JSON
+    try{
+      const res = await fetch('data/buildings.json', { cache:'no-store' });
+      if (!res.ok) throw new Error(res.statusText);
+      return await res.json();
+    }catch(e){
+      console.warn('[build] Fallback data/buildings.json fehlgeschlagen:', e);
+      return [];
+    }
   }
-  $btn?.addEventListener('click', ()=>{
-    const isOpen = !$dock.classList.contains('hidden');
-    if (isOpen) closeDock(); else openDock();
-  });
 
-  // Karten-Referenzen (für Filtern)
-  let _cards = [];
+  /* ------------------------------------------------------------------------ */
+  /* 2) State                                                                 */
+  /* ------------------------------------------------------------------------ */
+  let BUILDINGS = [];
+  let FILTER = 'all'; // aktive Kategorie
 
-  // ---------------------------------------------------------------------------
-  // (8) Render Dock
-  // ---------------------------------------------------------------------------
-  function renderDock(){
-    const list = (typeof Registry?.list === 'function')
-      ? Registry.list('buildings', { epoche: 1 })
-      : [];
-
-    $dock.innerHTML = '';
-
-    // Kopf
-    const head = document.createElement('div');
-    head.className = 'build-head';
-    head.innerHTML = `
-      <strong>Baumenü – Epoche 1</strong>
-      <div class="build-head-right">
-        <span class="build-count">${list.length} Gebäude</span>
-        <button class="build-close" title="Schließen" aria-label="Schließen">✕</button>
+  /* ------------------------------------------------------------------------ */
+  /* 3) Render: Dock Grundstruktur                                            */
+  /* ------------------------------------------------------------------------ */
+  function renderDockSkeleton(){
+    $dock.innerHTML = `
+      <div class="build-head">
+        <div class="build-head-left">
+          <strong>Baumenü – Epoche 1</strong>
+        </div>
+        <div class="build-head-right">
+          <span id="build-count"></span>
+          <button class="build-close" type="button" aria-label="Schließen">×</button>
+        </div>
       </div>
+
+      <div class="build-cats" id="build-cats"></div>
+
+      <div class="build-grid" id="build-grid"></div>
     `;
-    $dock.appendChild(head);
-    head.querySelector('.build-close')?.addEventListener('click', closeDock);
 
-    // Kategorien
-    const cats = collectCategories(list);
-    renderCategoryBar($dock, cats, (catId)=> filterByCategory(catId));
+    // Schließen
+    $('.build-close', $dock)?.addEventListener('click', closeDock);
+  }
 
-    // Grid
-    const grid = document.createElement('div');
-    grid.className = 'build-grid';
-    $dock.appendChild(grid);
+  /* ------------------------------------------------------------------------ */
+  /* 4) Kategorien berechnen + rendern                                        */
+  /* ------------------------------------------------------------------------ */
+  function collectCategories(items){
+    const map = new Map(); // id -> { id, name, count }
+    // Immer „all“
+    map.set('all', { id:'all', name:'Alles', count: items.length });
+    for (const b of items){
+      const cats = Array.isArray(b.categories) ? b.categories : (b.category ? [b.category] : []);
+      for (const c of cats){
+        const id = String(c).trim() || 'misc';
+        if (!map.has(id)) map.set(id, { id, name: id, count: 0 });
+        map.get(id).count++;
+      }
+    }
+    return Array.from(map.values());
+  }
 
-    // Karten
-    _cards = list.map(b=>{
-      const card  = document.createElement('button');
+  function renderCategories(items){
+    const cats = collectCategories(items);
+    const $wrap = $('#build-cats', $dock);
+    $wrap.innerHTML = '';
+
+    cats.forEach(cat=>{
+      const btn = document.createElement('button');
+      btn.className = 'chip' + (cat.id === FILTER ? ' chip--active' : '');
+      btn.dataset.cat = cat.id;
+
+      // Icon + Label + Count
+      const icon = document.createElement('img');
+      icon.className = 'chip-icon';
+      icon.alt = cat.name;
+      icon.src = cat.id === 'all' ? catIcon('all') : catIcon(cat.id);
+
+      const label = document.createElement('span');
+      label.textContent = cat.name;
+
+      const cnt = document.createElement('span');
+      cnt.className = 'chip-count';
+      cnt.textContent = String(cat.count);
+
+      btn.appendChild(icon);
+      btn.appendChild(label);
+      btn.appendChild(cnt);
+
+      btn.addEventListener('click', ()=>{
+        FILTER = cat.id;
+        $$('.chip', $wrap).forEach(x=>x.classList.toggle('chip--active', x===btn));
+        renderGrid(); // neu filtern
+      });
+
+      $wrap.appendChild(btn);
+    });
+
+    // Kopf-Count
+    $('#build-count', $dock).textContent = `${items.length} Gebäude`;
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* 5) Grid/Karten rendern                                                   */
+  /* ------------------------------------------------------------------------ */
+  function filtered(){
+    if (FILTER === 'all') return BUILDINGS;
+    return BUILDINGS.filter(b=>{
+      const cats = Array.isArray(b.categories) ? b.categories : (b.category ? [b.category] : []);
+      return cats.map(String).map(s=>s.trim()).includes(FILTER);
+    });
+  }
+
+  function renderGrid(){
+    const items = filtered();
+    const $grid = $('#build-grid', $dock);
+    $grid.innerHTML = '';
+
+    items.forEach(b=>{
+      const card = document.createElement('button');
+      card.type = 'button';
       card.className = 'build-card';
-      card.dataset.cat = (b.category || 'misc');
       card.title = b.name || b.id;
 
-      // (8.1) Panel-IMG – unterste Ebene (sichtbarer Holzrahmen)
-      const panel = document.createElement('img');
+      // Panel (Holzrahmen per CSS, aber wir fügen <div.card-panel> hinzu
+      const panel = document.createElement('div');
       panel.className = 'card-panel';
-      panel.src = panelSrc;
-      panel.alt = '';
-      panel.decoding = 'async';
-      card.appendChild(panel);
 
-      // (8.2) Titel
+      // Titel
       const title = document.createElement('div');
       title.className = 'card-title';
       title.textContent = b.name || b.id;
 
-      // (8.3) Body + Illustration
+      // Body mit Illustration
       const body = document.createElement('div');
       body.className = 'card-body';
-
       const illu = document.createElement('img');
       illu.className = 'card-illu';
-      const fileName = (b.icon && typeof b.icon === 'string') ? b.icon : `${b.id}.png`;
-      illu.src = iconsBaseBuildings() + fileName;
-      illu.alt = title.textContent;
-      illu.decoding = 'async';
+      illu.alt = b.name || b.id;
+      illu.src = b.image || `assets/icons/buildings/b.${b.id}.png`; // dein bisheriges Pattern
       body.appendChild(illu);
 
-      // (8.4) Kosten
+      // Kostenleiste
       const costs = document.createElement('div');
       costs.className = 'card-costs';
-
-      const costArr = Array.isArray(b.cost)
-        ? b.cost
-        : (b.cost && typeof b.cost==='object'
-            ? Object.keys(b.cost).map(id=>({ id, qty:b.cost[id] })) : []);
-
-      costArr.forEach(c=>{
-        const row = document.createElement('span');
-        row.className = 'cost';
-        row.innerHTML = `
-          <img src="assets/icons/resources/${c.id}.png" alt="${c.id}">
-          <b>×${c.qty}</b>
-        `;
-        costs.appendChild(row);
+      const ks = Array.isArray(b.cost) ? b.cost : [];
+      ks.forEach(k=>{
+        const badge = document.createElement('span');
+        badge.className = 'cost';
+        const icon = document.createElement('img');
+        icon.src = `assets/icons/resources/${k.id}.png`;
+        icon.alt = k.id;
+        const amount = document.createElement('b');
+        amount.textContent = 'x'+(k.amount||k.qty||1);
+        badge.appendChild(icon);
+        badge.appendChild(amount);
+        costs.appendChild(badge);
       });
 
-      // (8.5) Click → Platziermodus
+      card.append(panel, title, body, costs);
+
+      // Klick → Platziermodus starten
       card.addEventListener('click', ()=>{
-        emit('req:place:start', { buildingId: b.id });
+        window.dispatchEvent(new CustomEvent('req:place:start', { detail:{ building: b }}));
+        closeDock();
       });
 
-      // (8.6) Zusammenbauen (Reihenfolge wichtig wegen Layering)
-      card.appendChild(title);
-      card.appendChild(body);
-      card.appendChild(costs);
-      grid.appendChild(card);
-
-      return card;
-    });
-
-    filterByCategory('all');
-    log('render ok →', _cards.length, 'Gebäude');
-  }
-
-  // ---------------------------------------------------------------------------
-  // (9) Kategorien ermitteln & rendern
-  // ---------------------------------------------------------------------------
-  function collectCategories(buildings){
-    const map = new Map();
-    map.set('all', { id:'all', name:'Alles', icon:`${iconsBaseCategories}all.png`, count:0 });
-    buildings.forEach(b=>{
-      const id = b.category || 'misc';
-      if (!map.has(id)){
-        map.set(id, {
-          id,
-          name: labelForCategory(id),
-          icon: `${iconsBaseCategories}${id}.png`,
-          count: 0
-        });
-      }
-      map.get(id).count++;
-      map.get('all').count++;
-    });
-    return [...map.values()];
-  }
-
-  function labelForCategory(id){
-    switch(id){
-      case 'admin':     return 'Verwaltung';
-      case 'resource':  return 'Rohstoffe';
-      case 'food':      return 'Nahrung';
-      case 'housing':   return 'Wohnen';
-      case 'logistics': return 'Logistik';
-      case 'military':  return 'Verteidigung';
-      case 'decor':     return 'Deko';
-      case 'roads':     return 'Wege';
-      default:          return id;
-    }
-  }
-
-  function renderCategoryBar(dock, cats, onChange){
-    let bar = dock.querySelector('.build-cats');
-    if(!bar){
-      bar = document.createElement('div');
-      bar.className = 'build-cats';
-      dock.appendChild(bar);
-    }
-    bar.innerHTML = '';
-
-    let active = 'all';
-    cats.forEach(cat=>{
-      const btn = document.createElement('button');
-      btn.className = 'chip' + (cat.id===active ? ' chip--active' : '');
-      btn.dataset.cat = cat.id;
-      btn.innerHTML = `
-        <img class="chip-icon" src="${cat.icon}" alt="">
-        <span class="chip-label">${cat.name}</span>
-        <span class="chip-count">${cat.count}</span>
-      `;
-
-      // Icon-Fallback (keine blauen "?")
-      const img = btn.querySelector('.chip-icon');
-      img.addEventListener('error', ()=>{ img.style.display='none'; });
-
-      btn.addEventListener('click', ()=>{
-        active = cat.id;
-        bar.querySelectorAll('.chip').forEach(c=>c.classList.toggle('chip--active', c===btn));
-        onChange(active);
-        emit('req:build:category', { id: active });
-      });
-      bar.appendChild(btn);
+      $grid.appendChild(card);
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // (10) Filtern
-  // ---------------------------------------------------------------------------
-  function filterByCategory(catId){
-    _cards.forEach(card=>{
-      const match = (catId==='all') || (card.dataset.cat === catId);
-      card.style.display = match ? '' : 'none';
-    });
+  /* ------------------------------------------------------------------------ */
+  /* 6) Öffnen/Schließen                                                      */
+  /* ------------------------------------------------------------------------ */
+  function openDock(){
+    $dock.classList.remove('hidden');
+    $btn.setAttribute('aria-expanded','true');
+  }
+  function closeDock(){
+    $dock.classList.add('hidden');
+    $btn.setAttribute('aria-expanded','false');
+  }
+  $btn.addEventListener('click', ()=>{
+    const isOpen = !$dock.classList.contains('hidden');
+    if (isOpen) closeDock(); else openDock();
+  });
+
+  /* ------------------------------------------------------------------------ */
+  /* 7) Init                                                                  */
+  /* ------------------------------------------------------------------------ */
+  async function init(){
+    renderDockSkeleton();
+    BUILDINGS = await loadBuildings();
+    renderCategories(BUILDINGS);
+    renderGrid();
+    log('bereit: buildings=', BUILDINGS.length);
   }
 
-  // ---------------------------------------------------------------------------
-  // (11) Events
-  // ---------------------------------------------------------------------------
-  window.addEventListener('cb:registry:ready', renderDock);
-  window.addEventListener('req:build:open', openDock);
-  window.addEventListener('req:build:close', closeDock);
+  // Starte, wenn UI ready – oder sofort
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, { once:true });
+  }else{
+    init();
+  }
+
 })();
