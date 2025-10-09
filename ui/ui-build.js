@@ -1,29 +1,39 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v24.2.0 (2025-10-08)
- * Zweck    : Baumenü (Kategorien + Karten). Startet Platziermodus.
+ * Version  : v24.3.0 (2025-10-08)
+ * Zweck    : Baumenü (Kategorien + Karten mit Holzrahmen + Kosten).
+ *            Startet den Platziermodus für das ausgewählte Gebäude.
  *
  * Events (listen)
- *   - cb:registry:ready         → Baumenü aufbauen
- *   - cb:build:open/close       → Dock zeigen/verbergen
+ *   - cb:registry:ready               → Baumenü aufbauen, sobald Registry fertig
+ *   - req:build:open / req:build:close→ Dock zeigen/verbergen
  *
  * Events (emit)
- *   - req:build:open / req:build:close
- *   - req:build:category { id }
- *   - req:place:start   { buildingId }
+ *   - cb:build:open / cb:build:close  → UI-State für andere Module (optional)
+ *   - req:build:category { id }       → Nutzer hat Kategorie gewählt
+ *   - req:place:start   { buildingId }→ Platziermodus für Gebäude starten
  *
- * Abhängigkeiten
- *   - core/registry.js  → Registry.list('buildings', {epoche})
- *   - data/buildings.json (iconsBase optional)
+ * Assets/Abhängigkeiten
+ *   - core/registry.js  → Registry.list('buildings', {epoche}) / get('buildings', id)
+ *   - data/buildings.json (optional: iconsBase)
  *   - assets/icons/buildings/… (Gebäude-Icons)
  *   - assets/icons/build/…     (Kategorien-Icons)
  *   - assets/icons/resources/… (Kosten-Icons)
- *   - ui/css/ui-build.css
+ *   - ui/css/ui-build.css      (v24.3.0 oder neuer)
+ *
+ * Changelog v24.3.0
+ *   - Content-Box innerhalb der Karte (.card-body) → stabile Illustration
+ *   - object-fit / max-width / max-height für Bild → keine Über-/Unterläufe mehr
+ *   - Kategorien-Icon-Fallback (onerror → ausblenden) → keine blauen "?"
+ *   - Panel-Hintergrund wird vom CSS doppelt abgesichert (hart + variable)
  * ========================================================================== */
 (function(){
   'use strict';
 
+  // ---------------------------------------------------------------------------
+  // DOM-Grundlagen
+  // ---------------------------------------------------------------------------
   const $dock = document.getElementById('build-dock');
   const $btn  = document.getElementById('btn-build');
   if (!$dock){ (console.warn)('[build] #build-dock fehlt'); return; }
@@ -31,12 +41,16 @@
   function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
   const log = (...a)=> (window.CBLog?.ok || console.log)('[build]', ...a);
 
+  // Pfad-Basis für Gebäude-Icons (Registry kann einen Basis-Pfad vorgeben)
   function iconsBaseBuildings(){
     const base = (typeof Registry?.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
-    return base.replace(/\/?$/,'/');
+    return base.replace(/\/?$/,'/'); // trailing slash
   }
   const iconsBaseCategories = 'assets/icons/build/';
 
+  // ---------------------------------------------------------------------------
+  // Öffnen / Schließen des Docks
+  // ---------------------------------------------------------------------------
   function openDock(){
     $dock.classList.remove('hidden');
     document.body.classList.add('is-build-open');
@@ -52,8 +66,12 @@
     if (isOpen) closeDock(); else openDock();
   });
 
+  // Karten-Referenzen (für Filtern)
   let _cards = [];
 
+  // ---------------------------------------------------------------------------
+  // Render: Dock (Kopf → Kategorien → Grid mit Karten)
+  // ---------------------------------------------------------------------------
   function renderDock(){
     const list = (typeof Registry?.list === 'function')
       ? Registry.list('buildings', { epoche: 1 })
@@ -61,7 +79,7 @@
 
     $dock.innerHTML = '';
 
-    // Kopf + Schließen
+    // Kopf
     const head = document.createElement('div');
     head.className = 'build-head';
     head.innerHTML = `
@@ -74,7 +92,7 @@
     $dock.appendChild(head);
     head.querySelector('.build-close')?.addEventListener('click', closeDock);
 
-    // Kategorien
+    // Kategorien-Leiste
     const cats = collectCategories(list);
     renderCategoryBar($dock, cats, (catId)=> filterByCategory(catId));
 
@@ -83,16 +101,21 @@
     grid.className = 'build-grid';
     $dock.appendChild(grid);
 
-    // Karten
+    // Karten aufbauen
     _cards = list.map(b=>{
       const card  = document.createElement('button');
       card.className = 'build-card';
       card.dataset.cat = (b.category || 'misc');
       card.title = b.name || b.id;
 
+      // Titel
       const title = document.createElement('div');
       title.className = 'card-title';
       title.textContent = b.name || b.id;
+
+      // Inhalt (Illustration) → Content-Box verhindert Überschneidungen
+      const body = document.createElement('div');
+      body.className = 'card-body';
 
       const illu = document.createElement('img');
       illu.className = 'card-illu';
@@ -100,6 +123,7 @@
       illu.src = iconsBaseBuildings() + fileName;
       illu.alt = title.textContent;
 
+      // Kosten
       const costs = document.createElement('div');
       costs.className = 'card-costs';
 
@@ -118,22 +142,30 @@
         costs.appendChild(row);
       });
 
+      // Click → Platziermodus
       card.addEventListener('click', ()=>{
         emit('req:place:start', { buildingId: b.id });
       });
 
+      // Zusammensetzen
+      body.appendChild(illu);
       card.appendChild(title);
-      card.appendChild(illu);
+      card.appendChild(body);
       card.appendChild(costs);
       grid.appendChild(card);
 
       return card;
     });
 
+    // Standard: alle sichtbar
     filterByCategory('all');
+
     log('render ok →', _cards.length, 'Gebäude');
   }
 
+  // ---------------------------------------------------------------------------
+  // Kategorien ermitteln
+  // ---------------------------------------------------------------------------
   function collectCategories(buildings){
     const map = new Map();
     map.set('all', { id:'all', name:'Alles', icon:`${iconsBaseCategories}all.png`, count:0 });
@@ -167,6 +199,9 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Kategorien-Leiste rendern (mit Icon-Fallback)
+  // ---------------------------------------------------------------------------
   function renderCategoryBar(dock, cats, onChange){
     let bar = dock.querySelector('.build-cats');
     if(!bar){
@@ -186,6 +221,11 @@
         <span class="chip-label">${cat.name}</span>
         <span class="chip-count">${cat.count}</span>
       `;
+
+      // Icon-Fallback → falls Datei fehlt, Grafik ausblenden (keine "?"-Kästchen)
+      const img = btn.querySelector('.chip-icon');
+      img.addEventListener('error', ()=>{ img.style.display='none'; });
+
       btn.addEventListener('click', ()=>{
         active = cat.id;
         bar.querySelectorAll('.chip').forEach(c=>c.classList.toggle('chip--active', c===btn));
@@ -196,6 +236,9 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Filtern nach Kategorie
+  // ---------------------------------------------------------------------------
   function filterByCategory(catId){
     _cards.forEach(card=>{
       const match = (catId==='all') || (card.dataset.cat === catId);
@@ -203,6 +246,9 @@
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Event-Wiring
+  // ---------------------------------------------------------------------------
   window.addEventListener('cb:registry:ready', renderDock);
   window.addEventListener('req:build:open', openDock);
   window.addEventListener('req:build:close', closeDock);
