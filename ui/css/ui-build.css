@@ -1,67 +1,97 @@
 /* ============================================================================
  * Datei     : ui/css/ui-build.css
  * Projekt   : Neue Siedler
- * Version   : v24.3.2 (2025-10-08)
+ * Version   : v24.4.0 (2025-10-08)
  * Modul     : Baumenü (Kategorien + Karten mit Holzrahmen + Kostenanzeige)
  * ----------------------------------------------------------------------------
- * Zweck:
- *   1. Anzeige aller verfügbaren Gebäude (Epoche, Kategorie)
- *   2. Jede Karte mit Holzrahmen-Panel im Hintergrund (panel.png)
- *   3. Titel, Illustration und Kosten in klarer Layout-Struktur
- *   4. Responsives Raster (3–2–1 Spalten je nach Bildschirmgröße)
- * ----------------------------------------------------------------------------
- * Struktur (DOM):
- *   #build-dock
- *     ├── .build-head (Titelzeile)
- *     ├── .build-cats (Kategorienleiste)
- *     └── .build-grid
- *           ├── .build-card
- *           │     ├── <img.card-panel>  (Holzrahmen)
- *           │     ├── .card-title       (Gebäudename)
- *           │     ├── .card-body        (Illustration)
- *           │     └── .card-costs       (Kosten unten rechts)
+ * Highlights dieses Patches:
+ *  - Dock-Höhe im Hochformat auf 30vh limitiert (Map bleibt sichtbar)
+ *  - Mehrspaltiges Auto-Grid (auto-fit): 4/3/2/1 Spalten dynamisch
+ *  - Kategorie-Icons reaktiviert (assets/icons/build/*)
+ *  - Exakte Feinjustage der Kartenelemente via CSS-Variablen
+ *  - „Bauen“-Button ist standardmäßig links unten (falls nicht im HTML vorhanden)
  * ========================================================================= */
 
 /* ============================================================================
- * (1) Globale Variablen
+ * (1) Globale Variablen – hier stellst du ALLE Größen/Abstände ein
  * ========================================================================= */
 :root{
-  /* Kartenmaße */
-  --build-card-minw : 180px;     /* Mindestbreite einer Karte */
-  --build-card-pad  : 10px;      /* Innenabstand */
+  /* --- Dock (Baumenü) --- */
+  --dock-side-pad   : 12px;     /* Innenabstand Dock */
+  --dock-radius     : 12px;
+  --dock-z          : 46;       /* über Canvas */
+  --dock-bg         : rgba(20,22,26,.92);
 
-  /* Typografie */
-  --build-title-font: clamp(12px, 1.8vw, 14px);
-  --build-cost-font : clamp(11px, 1.4vw, 13px);
+  /* Höhe: Hochformat 30vh, Landschaft 36vh (unten bei Media-Queries) */
+  --dock-max-h      : 30vh;
 
-  /* Bildskalierung */
-  --build-illu-scale: 0.94;      /* Verhältnis Bildgröße zu Kartenfläche */
+  /* --- Grid / Karten --- */
+  --grid-gap        : 10px;          /* Abstand zwischen Karten */
+  --card-min-w      : 160px;         /* Mindestbreite je Karte im auto-fit */
+  --card-pad        : 10px;          /* Innenabstand je Karte */
+  --card-radius     : 12px;
+  --card-shadow     : 0 3px 10px rgba(0,0,0,.35);
+  --card-hover      : 0 6px 16px rgba(0,0,0,.42);
 
-  /* Kategorie-Chips */
-  --chip-h: 36px;                /* Höhe der Kategoriebuttons */
+  /* --- Panel (Holzrahmen) Hintergrund --- */
+  --panel-url       : url("../../assets/ui/panel.png"); /* Holzrahmen */
+  --panel-vignette  : radial-gradient(140% 100% at 50% 20%,
+                       rgba(0,0,0,.00) 55%, rgba(0,0,0,.20) 100%);
 
-  /* Z-Index */
-  --build-z-dock: 46;            /* Ebene über Canvas */
+  /* --- Typo & Größen innerhalb der Karte --- */
+  --title-font      : clamp(12px, 1.8vw, 14px);
+  --title-top       : 4px;       /* feine Positionierung */
+  --title-shadow    : 0 1px 2px rgba(0,0,0,.6);
+
+  --illu-scale      : 0.85;      /* 0.85 = 85% vom verfügbaren Bereich */
+  --illu-shift-y    : 0%;        /* vertikaler Offset der Illustration (-5%..+5%) */
+  --illu-shadow     : drop-shadow(0 2px 2px rgba(0,0,0,.35));
+
+  --cost-font       : clamp(11px, 1.5vw, 13px);
+  --cost-gap        : 10px;      /* Abstand zwischen Cost-Badges */
+  --cost-badge-pad  : 2px 6px;
+  --cost-badge-bg   : rgba(0,0,0,.22);
+  --cost-badge-line : rgba(255,255,255,.06);
+
+  /* --- Kategorien (Chips) --- */
+  --chip-h          : 36px;
+  --chip-bg         : #2b2f3a;
+  --chip-active     : #384155;
+  --chip-outline    : #4da3ff;
+
+  /* --- Öffnen-Button --- */
+  --btn-build-size  : 44px;
+  --btn-build-bg    : rgba(20,22,26,.92);
+  --btn-build-col   : #fff;
+  --btn-build-z     : 47;
 }
 
 /* ============================================================================
- * (2) Dock-Grundlayout
+ * (2) Dock (Baumenü) – Grounding
  * ========================================================================= */
 #build-dock{
   position: fixed;
   left: 10px; right: 10px; bottom: 10px;
-  max-height: 32vh;
-  padding: 10px 12px;
-  overflow: auto;
-  background: rgba(20,22,26,.90);              /* dunkler halbtransparenter Hintergrund */
-  backdrop-filter: saturate(1.1) blur(6px);    /* Glas-Effekt */
+  padding: var(--dock-side-pad);
+  background: var(--dock-bg);
+  backdrop-filter: saturate(1.1) blur(6px);
   border: 1px solid rgba(255,255,255,.08);
-  border-radius: 12px;
-  z-index: var(--build-z-dock);
+  border-radius: var(--dock-radius);
+  box-shadow: 0 6px 22px rgba(0,0,0,.35);
+  z-index: var(--dock-z);
+
+  /* Höhe/Scroll */
+  max-height: var(--dock-max-h);
+  overflow: auto;
 }
 #build-dock.hidden{ display:none; }
 
-/* Kopfbereich mit Titel und Schließen-Button */
+/* Landschaft etwas höher */
+@media (orientation: landscape){
+  :root{ --dock-max-h: 36vh; }
+}
+
+/* Head: Titel links, stats + close rechts */
 .build-head{
   display:flex; align-items:center; justify-content:space-between;
   margin: 2px 4px 8px 4px;
@@ -76,24 +106,23 @@
   background:#2b2f3a;
   color:#fff;
   font:800 14px/1 system-ui;
+  display:inline-flex; align-items:center; justify-content:center;
 }
 
 /* ============================================================================
- * (3) Kategorienleiste (Chips)
+ * (3) Kategorien (Chips mit Icons)
  * ========================================================================= */
 .build-cats{
-  display:flex;
+  display:flex; flex-wrap:wrap;
   gap:8px;
   padding:8px 10px;
   margin:6px 4px 10px 4px;
   position: sticky;
-  top: 0;
-  background: rgba(20,22,26,.95);
+  top: 0;                      /* bleibt im Dock oben kleben */
+  background: var(--dock-bg);
   border-radius: 10px;
   z-index: 5;
 }
-
-/* Kategorie-Button */
 .build-cats .chip{
   appearance:none;
   border:0;
@@ -105,162 +134,149 @@
   gap:8px;
   font:600 14px/1 system-ui;
   letter-spacing:.2px;
-  background:#2b2f3a;
+  background: var(--chip-bg);
   color:#cdd3df;
   cursor:pointer;
 }
-
-/* Aktiver Button */
 .build-cats .chip--active{
-  outline:2px solid #4da3ff;
-  background:#384155;
+  outline:2px solid var(--chip-outline);
+  background: var(--chip-active);
   color:#fff;
 }
-
-/* Kategorie-Icon + Zähler */
-.chip-icon{ width: 18px; height: 18px; image-rendering: crisp-edges; }
+.chip-icon{
+  width: 18px; height: 18px;
+  image-rendering: crisp-edges;
+}
 .chip-count{ opacity:.8; }
 
 /* ============================================================================
- * (4) Kartenraster
+ * (4) Grid – Mehrspaltig per auto-fit
+ *      -> so viele Spalten wie reinpassen (minbreite = --card-min-w)
  * ========================================================================= */
 .build-grid{
   display: grid;
-  grid-template-columns: repeat(3, minmax(var(--build-card-minw), 1fr)); /* 3 Spalten Standard */
-  gap: 10px;
-}
-
-/* Responsive Anpassungen */
-@media (max-width: 980px){
-  .build-grid{
-    grid-template-columns: repeat(2, minmax(var(--build-card-minw), 1fr)); /* 2 Spalten */
-  }
-}
-@media (max-width: 560px){
-  .build-grid{
-    grid-template-columns: repeat(1, minmax(var(--build-card-minw), 1fr)); /* 1 Spalte */
-  }
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-min-w), 1fr));
+  gap: var(--grid-gap);
 }
 
 /* ============================================================================
- * (5) Kartenaufbau
+ * (5) Karten – Holzrahmen + Struktur (Titel / Body / Kosten)
  * ========================================================================= */
 .build-card{
   position: relative;
-  width: 30%;
-  aspect-ratio: 1 / 1;                            /* quadratisch */
+  width: 100%;
+  aspect-ratio: 1 / 1;                 /* quadratisch */
   display: grid;
-  grid-template-rows: min-content 1fr min-content; /* Titel / Body / Kosten */
+  grid-template-rows: min-content 1fr min-content;  /* Titel / Body / Kosten */
   gap: 8px;
-  padding: var(--build-card-pad);
-  border-radius: 12px;
+  padding: var(--card-pad);
+  border-radius: var(--card-radius);
   overflow: hidden;
   color: #fff;
   text-align: center;
   cursor: pointer;
 
   border: 1px solid rgba(255,255,255,.12);
-  box-shadow: 0 3px 10px rgba(0,0,0,.35);
+  box-shadow: var(--card-shadow);
   transition: transform .08s ease-out, box-shadow .12s ease-out;
 }
 .build-card:hover{
   transform: translateY(-1px);
-  box-shadow:0 6px 16px rgba(0,0,0,.42);
+  box-shadow: var(--card-hover);
 }
 
-/* ============================================================================
- * (6) Holzrahmen-Hintergrund (Panel)
- * ========================================================================= */
+/* Panel-Hintergrund (Holzrahmen) */
 .build-card .card-panel{
-  position:absolute;
-  inset:0;
+  position:absolute; inset:0;
   width:100%; height:100%;
   object-fit: cover;
-  z-index: 0;               /* ganz unten */
+  z-index: 0;
   pointer-events: none;
   image-rendering: auto;
+  background-image: var(--panel-url);
+  background-size: cover;
+  background-position: center;
 }
 
-/* Sanftes Vignetten-Overlay (über Panel, unter Text) */
+/* Vignette / Leuchte */
 .build-card::after{
   content:"";
-  position:absolute;
-  inset:0;
-  background:
-    radial-gradient(140% 100% at 50% 20%, rgba(0,0,0,.00) 55%, rgba(0,0,0,.18) 100%);
+  position:absolute; inset:0;
+  background: var(--panel-vignette);
   pointer-events:none;
   z-index: 1;
 }
 
-/* ============================================================================
- * (7) Titel
- * ========================================================================= */
+/* Titel (oben) – feine Positionierbarkeit */
 .build-card .card-title{
   position: relative;
   z-index: 2;
-  font:700 var(--build-title-font)/1.15 system-ui;
-  text-shadow: 0 1px 2px rgba(0,0,0,.6);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font:700 var(--title-font)/1.15 system-ui;
+  text-shadow: var(--title-shadow);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: var(--title-top);
 }
 
-/* ============================================================================
- * (8) Body / Gebäudeillustration
- * ========================================================================= */
+/* Body mit Illustration – über Variablen justierbar */
 .build-card .card-body{
   position: relative;
   z-index: 2;
   min-height: 0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display:flex; align-items:center; justify-content:center;
 }
 .build-card .card-illu{
   display:block;
-  max-width : calc(100% * var(--build-illu-scale));
-  max-height: calc(100% * var(--build-illu-scale));
-  width:auto;
-  height:auto;
+  max-width : calc(100% * var(--illu-scale));
+  max-height: calc(100% * var(--illu-scale));
+  transform: translateY(var(--illu-shift-y));
+  width:auto; height:auto;
   object-fit: contain;
   image-rendering: pixelated;
   pointer-events:none;
-  filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
+  filter: var(--illu-shadow);
 }
 
-/* ============================================================================
- * (9) Kostenreihe
- * ========================================================================= */
+/* Kosten (unten rechts) – Abstand/Typo per Variablen */
 .build-card .card-costs{
-  position: relative;
-  z-index: 2;
-  display:flex;
-  gap:10px;
-  justify-content:flex-end;
-  align-items:center;
+  position: relative; z-index: 2;
+  display:flex; gap: var(--cost-gap);
+  justify-content:flex-end; align-items:center;
 }
 .build-card .cost{
-  display:inline-flex;
-  gap:6px;
-  align-items:center;
-  padding:2px 6px;
+  display:inline-flex; gap:6px; align-items:center;
+  padding: var(--cost-badge-pad);
   border-radius:8px;
-  background: rgba(0,0,0,.22);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+  background: var(--cost-badge-bg);
+  box-shadow: inset 0 0 0 1px var(--cost-badge-line);
 }
 .build-card .cost img{
-  width: 1.05rem;
-  height: 1.05rem;
-  image-rendering: pixelated;
+  width: 1.05rem; height: 1.05rem; image-rendering: pixelated;
 }
-.build-card .cost b{
-  font:700 var(--build-cost-font)/1 system-ui;
+.build-card .cost b{ font:700 var(--cost-font)/1 system-ui; }
+
+/* Tastaturfokus */
+.build-card:focus-visible{
+  outline:2px solid var(--chip-outline);
+  outline-offset: -2px;
 }
 
 /* ============================================================================
- * (10) Tastaturfokus
+ * (6) „Bauen“-Button (Öffner) – falls im HTML nicht vorhanden, erzeugt JS ihn.
  * ========================================================================= */
-.build-card:focus-visible{
-  outline:2px solid #4da3ff;
-  outline-offset: -2px;
+#btn-build{
+  position: fixed;
+  left: 10px; bottom: 10px;
+  width: var(--btn-build-size); height: var(--btn-build-size);
+  border-radius: 10px;
+  background: var(--btn-build-bg);
+  color: var(--btn-build-col);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  z-index: var(--btn-build-z);
+  display: inline-flex; align-items:center; justify-content:center;
+  font: 700 13px/1 system-ui;
+  cursor: pointer;
+}
+#btn-build[aria-expanded="true"]{
+  outline: 2px solid var(--chip-outline);
 }
