@@ -1,26 +1,39 @@
 /* ============================================================================
  * Datei    : ui/css/ui-build.css
  * Projekt  : Neue Siedler
- * Version  : v24.3.0 (2025-10-08)
- * Zweck    : Baumenü – Kategorien, Karten (Holzrahmen), Kostenreihe
- * Änderungen:
- *   - Panel-Hintergrund zusätzlich explizit in .build-card gesetzt (Pfad-Fallback)
- *   - Illustrations-Sizing robust (object-fit, max-width/-height)
- *   - Content-Box mit festen Innenabständen (Platz für Titel/Kosten)
+ * Version  : v24.3.1 (2025-10-08)
+ * Zweck    : Baumenü – Kategorien, Karten (mit Holzrahmen), Kostenreihe
+ *
+ * Warum 24.3.1?
+ * - Panel-Hintergrund (Holzrahmen) wird nun *immer* sichtbar:
+ *   1) fester Fallback-Pfad + variable Ebene
+ *   2) kein deckendes Overlay mehr über dem Panel
+ *   3) optionales Vignette-Overlay via ::after (transparent)
+ * - Karten-Layout auf CSS-Grid umgestellt → Illustration steht stabil mittig,
+ *   unabhängig von Sprite-Größen (object-fit: contain).
+ * - Kleinere Typo-/Abstands-Tweaks.
  * ========================================================================== */
 
 :root{
+  /* Karten-Größe */
   --build-card-w: clamp(160px, 22vw, 220px);
-  --build-card-ratio: 3/4;
+  --build-card-ratio: 3/4;        /* Breite:Höhe */
 
-  /* Du kannst weiterhin übersteuern – wird aber nicht mehr benötigt für den Rahmen */
+  /* Panel-Bild (Holzrahmen) – du kannst dies bei Bedarf übersteuern */
   --build-panel-img: url("../../assets/ui/panel.png");
 
-  --build-icon-scale: 0.9;       /* skaliert die maximal erlaubte Fläche (0..1) */
-  --build-cost-font: clamp(11px, 1.4vw, 13px);
+  /* Typografie */
   --build-title-font: clamp(12px, 1.8vw, 14px);
+  --build-cost-font : clamp(11px, 1.4vw, 13px);
 
+  /* Innenabstände & Icon-Skalierung */
+  --build-card-pad : 10px;
+  --build-illu-scale: 0.94;       /* 0..1 (passt die max. Bildfläche an) */
+
+  /* Kategorie-Chips */
   --chip-h: 36px;
+
+  /* Layer */
   --build-z-dock: 46;
 }
 
@@ -31,7 +44,7 @@
   max-height: 52vh;
   padding: 10px 12px;
   overflow: auto;
-  background: rgba(20,22,26,.90);
+  background: rgba(20,22,26,.90);         /* halbtransparent, *nicht* deckend */
   backdrop-filter: saturate(1.1) blur(6px);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
@@ -76,63 +89,80 @@
   gap: 10px;
 }
 
-/* Karte mit explizitem Holzrahmen-Fallback */
+/* Karte mit *immer* sichtbarem Holzrahmen */
 .build-card{
   position: relative;
   width: 100%;
   aspect-ratio: var(--build-card-ratio);
+  display: grid;
+  grid-template-rows: min-content 1fr min-content;   /* Titel / Body / Kosten */
+  gap: 8px;
+  padding: var(--build-card-pad);
   border-radius: 12px; overflow: hidden;
   color: #fff; text-align: center; cursor: pointer;
 
-  /* WICHTIG: 1) expliziter Pfad-Fallback, 2) variable zum Übersteuern, 3) Overlay */
+  /* 1) fester Fallback  2) variable Ebene (falls du die Quelle ändern willst) */
   background:
     url("../../assets/ui/panel.png") center / cover no-repeat,
-    var(--build-panel-img) center / cover no-repeat,
-    linear-gradient(to bottom, rgba(16,22,32,.38), rgba(10,14,22,.50));
+    var(--build-panel-img) center / cover no-repeat;
+  background-blend-mode: normal, normal;
+
   border: 1px solid rgba(255,255,255,.12);
   box-shadow: 0 3px 10px rgba(0,0,0,.35);
   transition: transform .08s ease-out, box-shadow .12s ease-out;
 }
+.build-card::after{
+  /* leichtes Vignette, *transparent* – verdeckt das Panel nicht */
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(140% 100% at 50% 20%, rgba(0,0,0,.00) 55%, rgba(0,0,0,.18) 100%);
+  pointer-events:none;
+}
 .build-card:hover{ transform: translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.42); }
 
-/* Titel oben */
+/* Titel (oben) */
 .build-card .card-title{
-  position: absolute; left:10px; right:10px; top:8px;
+  position: static;
   font:700 var(--build-title-font)/1.15 system-ui;
   text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Content-Box reserviert Innenraum für Bild + Kosten (kein Zuschnitt mehr) */
+/* Inhalt (mittig, flex) */
 .build-card .card-body{
-  position:absolute; left:10px; right:10px;
-  top: calc(8px + 1.2em + 6px);          /* unter dem Titel */
-  bottom: 28px;                          /* über der Kostenreihe */
+  position: static;
+  min-height: 0;                           /* wichtig für Grid/Flex shrink */
   display:flex; align-items:center; justify-content:center;
 }
 
-/* Gebäude-Illustration robust skalieren */
+/* Illustration robust skalieren */
 .build-card .card-illu{
   display:block;
-  max-width: calc(100% * var(--build-icon-scale));
-  max-height: calc(100% * var(--build-icon-scale));
-  width: auto; height: auto;
-  object-fit: contain;                    /* Wichtig */
-  image-rendering: pixelated; pointer-events:none;
+  max-width : calc(100% * var(--build-illu-scale));
+  max-height: calc(100% * var(--build-illu-scale));
+  width:auto; height:auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events:none;
   filter: drop-shadow(0 2px 2px rgba(0,0,0,.35));
 }
 
-/* Kostenreihe unten rechts */
+/* Kostenreihe (unten) */
 .build-card .card-costs{
-  position: absolute; left:8px; right:8px; bottom:8px;
+  position: static;
   display:flex; gap:10px; justify-content:flex-end; align-items:center;
 }
 .build-card .cost{
   display:inline-flex; gap:6px; align-items:center;
   padding:2px 6px; border-radius:8px;
-  background: rgba(0,0,0,.25);
+  background: rgba(0,0,0,.22);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
 }
 .build-card .cost img{
   width: 1.05rem; height: 1.05rem; image-rendering: pixelated;
 }
 .build-card .cost b{ font:700 var(--build-cost-font)/1 system-ui; }
+
+/* Accessibility touch target (kleiner optischer Hover) */
+.build-card:focus-visible{ outline:2px solid #4da3ff; outline-offset: -2px; }
