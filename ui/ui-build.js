@@ -12,6 +12,30 @@
  *  - Events:
  *      emit: 'req:place:start' { building }   → Platziermodus starten
  * ========================================================================= */
+// -- Sichere Logger ----------------------------------------------------------
+const __safeLog = {
+  ok   : (tag, ...m) => {
+    try {
+      if (typeof window?.CBLog?.ok === 'function') { window.CBLog.ok([tag, ...m]); }
+      else { console.log(tag, ...m); }
+    } catch { try { console.log(tag, ...m); } catch (_){} }
+  },
+  info : (tag, ...m) => {
+    try {
+      if (typeof window?.CBLog?.info === 'function') { window.CBLog.info([tag, ...m]); }
+      else { console.info(tag, ...m); }
+    } catch { try { console.info(tag, ...m); } catch (_){} }
+  },
+  warn : (tag, ...m) => {
+    try {
+      if (typeof window?.CBLog?.warn === 'function') { window.CBLog.warn([tag, ...m]); }
+      else { console.warn(tag, ...m); }
+    } catch { try { console.warn(tag, ...m); } catch (_){} }
+  }
+};
+const LOG = (...m)=>__safeLog.ok('[build]', ...m);
+const INF = (...m)=>__safeLog.info('[build]', ...m);
+const WRN = (...m)=>__safeLog.warn('[build]', ...m);
 
 (function(){
   'use strict';
