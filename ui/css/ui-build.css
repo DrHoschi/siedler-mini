@@ -147,7 +147,7 @@
  * ========================================================================= */
 .build-card{
   position: relative;
-  width: 100%;
+  width: 50%;
   aspect-ratio: 1 / 1;                            /* quadratisch */
   display: grid;
   grid-template-rows: min-content 1fr min-content; /* Titel / Body / Kosten */
