@@ -44,7 +44,7 @@
   max-height: 52vh;
   padding: 10px 12px;
   overflow: auto;
-  background: rgba(20,22,26,.90);         /* halbtransparent, *nicht* deckend */
+  /* background: rgba(20,22,26,.90); */        /* halbtransparent, *nicht* deckend */
   backdrop-filter: saturate(1.1) blur(6px);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 12px;
