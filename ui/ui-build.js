@@ -1,55 +1,50 @@
 /* ============================================================================
- * Datei    : ui/ui-build.js
- * Projekt  : Neue Siedler
- * Version  : v24.3.0 (2025-10-08)
- * Zweck    : Baumenü (Kategorien + Karten mit Holzrahmen + Kosten).
- *            Startet den Platziermodus für das ausgewählte Gebäude.
- *
- * Events (listen)
- *   - cb:registry:ready               → Baumenü aufbauen, sobald Registry fertig
- *   - req:build:open / req:build:close→ Dock zeigen/verbergen
- *
- * Events (emit)
- *   - cb:build:open / cb:build:close  → UI-State für andere Module (optional)
- *   - req:build:category { id }       → Nutzer hat Kategorie gewählt
- *   - req:place:start   { buildingId }→ Platziermodus für Gebäude starten
- *
- * Assets/Abhängigkeiten
- *   - core/registry.js  → Registry.list('buildings', {epoche}) / get('buildings', id)
- *   - data/buildings.json (optional: iconsBase)
- *   - assets/icons/buildings/… (Gebäude-Icons)
- *   - assets/icons/build/…     (Kategorien-Icons)
- *   - assets/icons/resources/… (Kosten-Icons)
- *   - ui/css/ui-build.css      (v24.3.0 oder neuer)
- *
- * Changelog v24.3.0
- *   - Content-Box innerhalb der Karte (.card-body) → stabile Illustration
- *   - object-fit / max-width / max-height für Bild → keine Über-/Unterläufe mehr
- *   - Kategorien-Icon-Fallback (onerror → ausblenden) → keine blauen "?"
- *   - Panel-Hintergrund wird vom CSS doppelt abgesichert (hart + variable)
+ * (1) Datei    : ui/ui-build.js
+ *     Projekt  : Neue Siedler
+ *     Version  : v24.3.2 (2025-10-08)
+ *     Zweck    : Baumenü (Kategorien + Karten mit Holzrahmen + Kosten)
+ * ----------------------------------------------------------------------------
+ * (2) Events (listen)
+ *     • cb:registry:ready
+ *     • req:build:open / req:build:close
+ * (3) Events (emit)
+ *     • cb:build:open / cb:build:close
+ *     • req:build:category { id }
+ *     • req:place:start   { buildingId }
+ * (4) Abhängigkeiten
+ *     • core/registry.js, data/buildings.json (optional iconsBase)
+ *     • assets/icons/buildings/*  (Gebäude)
+ *     • assets/icons/build/*      (Kategorien)
+ *     • assets/icons/resources/*  (Kosten)
+ *     • ui/css/ui-build.css v24.3.2
+ * (5) Changelog v24.3.2
+ *     • NEU: <img class="card-panel" src="assets/ui/panel.png"> je Karte
+ *       (sichtbarer Holzrahmen in allen Browsern)
  * ========================================================================== */
 (function(){
   'use strict';
 
   // ---------------------------------------------------------------------------
-  // DOM-Grundlagen
+  // (6) DOM & Utils
   // ---------------------------------------------------------------------------
   const $dock = document.getElementById('build-dock');
   const $btn  = document.getElementById('btn-build');
   if (!$dock){ (console.warn)('[build] #build-dock fehlt'); return; }
 
-  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
-  const log = (...a)=> (window.CBLog?.ok || console.log)('[build]', ...a);
+  const log  = (...a)=> (window.CBLog?.ok || console.log)('[build]', ...a);
+  const warn = (...a)=> (window.CBLog?.warn || console.warn)('[build]', ...a);
 
-  // Pfad-Basis für Gebäude-Icons (Registry kann einen Basis-Pfad vorgeben)
+  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
+
   function iconsBaseBuildings(){
     const base = (typeof Registry?.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
     return base.replace(/\/?$/,'/'); // trailing slash
   }
   const iconsBaseCategories = 'assets/icons/build/';
+  const panelSrc = 'assets/ui/panel.png';
 
   // ---------------------------------------------------------------------------
-  // Öffnen / Schließen des Docks
+  // (7) Dock öffnen/schließen
   // ---------------------------------------------------------------------------
   function openDock(){
     $dock.classList.remove('hidden');
@@ -70,7 +65,7 @@
   let _cards = [];
 
   // ---------------------------------------------------------------------------
-  // Render: Dock (Kopf → Kategorien → Grid mit Karten)
+  // (8) Render Dock
   // ---------------------------------------------------------------------------
   function renderDock(){
     const list = (typeof Registry?.list === 'function')
@@ -92,7 +87,7 @@
     $dock.appendChild(head);
     head.querySelector('.build-close')?.addEventListener('click', closeDock);
 
-    // Kategorien-Leiste
+    // Kategorien
     const cats = collectCategories(list);
     renderCategoryBar($dock, cats, (catId)=> filterByCategory(catId));
 
@@ -101,19 +96,27 @@
     grid.className = 'build-grid';
     $dock.appendChild(grid);
 
-    // Karten aufbauen
+    // Karten
     _cards = list.map(b=>{
       const card  = document.createElement('button');
       card.className = 'build-card';
       card.dataset.cat = (b.category || 'misc');
       card.title = b.name || b.id;
 
-      // Titel
+      // (8.1) Panel-IMG – unterste Ebene (sichtbarer Holzrahmen)
+      const panel = document.createElement('img');
+      panel.className = 'card-panel';
+      panel.src = panelSrc;
+      panel.alt = '';
+      panel.decoding = 'async';
+      card.appendChild(panel);
+
+      // (8.2) Titel
       const title = document.createElement('div');
       title.className = 'card-title';
       title.textContent = b.name || b.id;
 
-      // Inhalt (Illustration) → Content-Box verhindert Überschneidungen
+      // (8.3) Body + Illustration
       const body = document.createElement('div');
       body.className = 'card-body';
 
@@ -122,8 +125,10 @@
       const fileName = (b.icon && typeof b.icon === 'string') ? b.icon : `${b.id}.png`;
       illu.src = iconsBaseBuildings() + fileName;
       illu.alt = title.textContent;
+      illu.decoding = 'async';
+      body.appendChild(illu);
 
-      // Kosten
+      // (8.4) Kosten
       const costs = document.createElement('div');
       costs.className = 'card-costs';
 
@@ -142,13 +147,12 @@
         costs.appendChild(row);
       });
 
-      // Click → Platziermodus
+      // (8.5) Click → Platziermodus
       card.addEventListener('click', ()=>{
         emit('req:place:start', { buildingId: b.id });
       });
 
-      // Zusammensetzen
-      body.appendChild(illu);
+      // (8.6) Zusammenbauen (Reihenfolge wichtig wegen Layering)
       card.appendChild(title);
       card.appendChild(body);
       card.appendChild(costs);
@@ -157,14 +161,12 @@
       return card;
     });
 
-    // Standard: alle sichtbar
     filterByCategory('all');
-
     log('render ok →', _cards.length, 'Gebäude');
   }
 
   // ---------------------------------------------------------------------------
-  // Kategorien ermitteln
+  // (9) Kategorien ermitteln & rendern
   // ---------------------------------------------------------------------------
   function collectCategories(buildings){
     const map = new Map();
@@ -199,9 +201,6 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Kategorien-Leiste rendern (mit Icon-Fallback)
-  // ---------------------------------------------------------------------------
   function renderCategoryBar(dock, cats, onChange){
     let bar = dock.querySelector('.build-cats');
     if(!bar){
@@ -222,7 +221,7 @@
         <span class="chip-count">${cat.count}</span>
       `;
 
-      // Icon-Fallback → falls Datei fehlt, Grafik ausblenden (keine "?"-Kästchen)
+      // Icon-Fallback (keine blauen "?")
       const img = btn.querySelector('.chip-icon');
       img.addEventListener('error', ()=>{ img.style.display='none'; });
 
@@ -237,7 +236,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Filtern nach Kategorie
+  // (10) Filtern
   // ---------------------------------------------------------------------------
   function filterByCategory(catId){
     _cards.forEach(card=>{
@@ -247,7 +246,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Event-Wiring
+  // (11) Events
   // ---------------------------------------------------------------------------
   window.addEventListener('cb:registry:ready', renderDock);
   window.addEventListener('req:build:open', openDock);
