@@ -1,0 +1,245 @@
+/* ============================================================================
+ * Datei    : ui/css/layout.css
+ * Version  : v1.0.0 (2025-10-10)
+ * Zweck    : Stabiles, dreh-/zoomfestes Grundlayout für HUD, Canvas, Baumenü
+ * Autor    : Projekt "Neue Siedler"
+ *
+ * Idee
+ *  - CSS-Grid-Container #app-layout organisiert drei Bereiche:
+ *      PORTRAIT:   HUD (oben) – PLAY (Mitte) – BUILD (unten)
+ *      LANDSCAPE:  HUD (links) – PLAY (Mitte) – BUILD (rechts)
+ *  - Größen werden über Variablen mit clamp(...) gesteuert.
+ *  - Der Baubereich (PLAY) beherbergt #game (Canvas) und bleibt quadratisch.
+ *    Die exakte Kantenlänge setzt core/layout.js per Resize.
+ *  - Baumenü-Karten: 1 Zeile, horizontaler Scroll mit Snap, quadratische Kacheln.
+ * ========================================================================== */
+
+/* -------------------------------
+ * 0) Globale Variablen
+ * ------------------------------- */
+:root{
+  /* HUD-Höhe (Portrait) / HUD-Breite (Landscape) */
+  --hud-block: clamp(70px, 10vh, 120px);
+
+  /* BUILD-Höhe (Portrait) / BUILD-Breite (Landscape)
+     -> 30vh war dein Wunsch; wir begrenzen sinnvoll nach oben/unten. */
+  --build-block: clamp(120px, 30vh, 220px);
+
+  /* Kartenbreite im Baumenü (quadratisch) + Abstände */
+  --build-card-w: clamp(160px, 28vw, 220px);
+  --build-card-gap: clamp(8px, 1.6vw, 14px);
+
+  /* HUD-Tile-Größe (quadratisch) + Lücken */
+  --hud-tile: clamp(72px, 10vw, 110px);
+  --hud-gap: clamp(6px, 1.2vw, 12px);
+
+  /* Z-Layer (HUD & BUILD über Canvas) */
+  --hud-z: 48;
+  --build-z: 46;
+
+  /* Panel-Holzrahmen für Kacheln (sowohl HUD als auch Build-Karten) */
+  --panel-img: url("../../assets/ui/panel.png");
+}
+
+/* Störendes Browserverhalten minimieren (Zoom, Doppeltap) */
+html, body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+/* -------------------------------
+ * 1) App-Layout-Grid
+ *    Erwartet:   #app-layout enthält #hud-top, #play-area, #build-panel
+ * ------------------------------- */
+#app-layout{
+  position: fixed;
+  inset: 0; /* full-viewport */
+  display: grid;
+  background: #0e131a; /* sicherer Backdrop, wenn Canvas noch lädt */
+}
+
+/* Portrait: HUD oben, Build unten */
+@media (orientation: portrait){
+  #app-layout{
+    grid-template-rows: var(--hud-block) 1fr var(--build-block);
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hud"
+      "play"
+      "build";
+  }
+}
+
+/* Landscape: HUD links, Build rechts */
+@media (orientation: landscape){
+  #app-layout{
+    grid-template-rows: 1fr;
+    grid-template-columns: var(--hud-block) 1fr var(--build-block);
+    grid-template-areas:
+      "hud play build";
+  }
+}
+
+/* Bereiche verankern */
+#hud-top   { grid-area: hud;   z-index: var(--hud-z);   }
+#play-area { grid-area: play;  position: relative; }
+#build-panel { grid-area: build; z-index: var(--build-z); }
+
+/* -------------------------------
+ * 2) HUD-Leiste (oben/links)
+ * ------------------------------- */
+#hud-top{
+  display: flex;
+  gap: var(--hud-gap);
+  padding: calc(var(--hud-gap) * 0.8);
+  align-items: center;
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: linear-gradient(180deg, #0f1622, #0f1622);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.06);
+}
+
+/* HUD-Tiles quadratisch mit Holzrahmen */
+#hud-top .res-card{
+  position: relative;
+  flex: 0 0 var(--hud-tile);
+  width: var(--hud-tile);
+  aspect-ratio: 1 / 1;
+  background: var(--panel-img) center/cover no-repeat, #0f1622;
+  border-radius: 10px;
+  border: 1px solid #364050;
+  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 10px 20px rgba(0,0,0,.35);
+}
+
+/* HUD: Titel & Icon & Menge */
+#hud-top .res-title{
+  position: absolute; top: 6px; left: 6px; right: 6px;
+  text-align: center; font-weight: 700; font-size: clamp(11px, 1.8vw, 14px);
+  color: #eef3fb; text-shadow: 0 1px 1px rgba(0,0,0,.6);
+  pointer-events: none;
+}
+#hud-top .res-icon{
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: 56%; height: 56%; object-fit: contain; image-rendering: pixelated;
+}
+#hud-top .res-amount{
+  position: absolute; right: 6px; bottom: 4px; font-weight: 700;
+  font-size: clamp(11px, 1.8vw, 14px); color: #eef3fb; text-shadow: 0 1px 1px rgba(0,0,0,.6);
+}
+
+/* -------------------------------
+ * 3) Play-Area & Canvas
+ *    – Canvas wird von core/layout.js exakt zentriert/quadratisch gesetzt.
+ * ------------------------------- */
+#play-area{
+  background: #0b1017;
+  display: grid;
+  place-items: center; /* grob zentrieren – Feinstgröße via JS */
+  overflow: hidden;
+}
+
+/* Das Canvas selbst (oder dein #game-Container) */
+#game{
+  display: block;
+  /* Breite/Höhe erhalten wir per JS dynamisch – wir sorgen nur für glatte Kanten: */
+  image-rendering: pixelated;
+}
+
+/* -------------------------------
+ * 4) Baumenü (unten/rechts) – EINZEILIG, horizontal scrollen
+ * ------------------------------- */
+#build-panel{
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 10px;
+  background: #111826ea;
+  backdrop-filter: blur(4px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* Kategorien (Chips) */
+#build-panel .build-cats{
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px;
+}
+#build-panel .build-cats .chip{
+  flex: 0 0 auto;
+  padding: 6px 12px; border-radius: 999px;
+  background: #0f1622; border:1px solid #2f3a4b; color:#e6edf6;
+  font-weight: 600; font-size: 14px;
+}
+#build-panel .build-cats .chip.is-active{
+  outline: 2px solid #5aa1ff; outline-offset: -2px;
+}
+
+/* Karten-Zeile – horizontales Scrolling mit Snap */
+#build-panel .build-row{
+  display: flex; flex-wrap: nowrap; gap: var(--build-card-gap);
+  overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  padding-bottom: 2px;
+}
+#build-panel .build-row::-webkit-scrollbar{ height: 8px; }
+#build-panel .build-row::-webkit-scrollbar-thumb{ background:#2b3442; border-radius:8px; }
+
+/* Einzelkarte – quadratisch + Holzrahmen */
+#build-panel .build-card{
+  position: relative;
+  flex: 0 0 var(--build-card-w);
+  width: var(--build-card-w); aspect-ratio: 1 / 1;
+  scroll-snap-align: start;
+
+  background: var(--panel-img) center/cover no-repeat, #0f1622;
+  border-radius: 12px; border:1px solid #364050;
+  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 10px 20px rgba(0,0,0,.35);
+}
+
+/* Titel */
+#build-panel .build-card .title{
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  text-align: center; font-weight: 700; color:#eef3fb;
+  text-shadow: 0 1px 1px rgba(0,0,0,.6);
+  font-size: clamp(14px, 2.2vw, 16px);
+  pointer-events: none;
+}
+
+/* Icon */
+#build-panel .build-card .icon{
+  position: absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width: 58%; height: 58%; object-fit: contain; image-rendering: pixelated;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.45));
+}
+
+/* Kosten (Chips) unten rechts) */
+#build-panel .build-card .costs{
+  position: absolute; right: 8px; bottom: 8px;
+  display: flex; gap: 8px; align-items: center;
+}
+#build-panel .build-card .costs .cost{
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px; border-radius: 999px;
+  background: #0e141f; border: 1px solid #323c4c; color:#dfe7f1;
+  font-size: 13px; line-height: 1;
+}
+#build-panel .build-card .costs .cost img{ width:16px; height:16px; object-fit:contain; }
+
+/* Close-Button oben rechts im Panel (wenn vorhanden) */
+#build-panel .build-close{
+  position: absolute; right: 10px; top: 10px; z-index: 1;
+  width: 28px; height: 28px; border-radius: 999px;
+  background:#0f1622; border:1px solid #2f3a4b; color:#e6edf6;
+  display:grid; place-items:center; font-weight:700;
+}
+
+/* -------------------------------
+ * 5) „Sicherheitsgurt“: Wenn alte dekorative Hintergründe existieren – ausblenden
+ * ------------------------------- */
+#build-panel .bg,
+#build-panel .wood,
+#build-panel .decor,
+#build-panel .frame,
+#build-panel .panel-bg,
+#build-panel .center-bg {
+  display: none !important;
+}
