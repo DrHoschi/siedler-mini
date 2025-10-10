@@ -1,449 +1,50 @@
 /* ============================================================================
+ * [00] META
  * Datei    : ui/css/ui-build.css
- * Projekt  : Neue Siedler
- * Version  : v24.3.3 (2025-10-07)
- * Modul    : Baumenü (einzeilig, horizontal scrollend, Holzrahmen-Kacheln)
- *
- * Zielbild:
- *   ┌ Baumenü – Epoche N [X] ┐
- *   [Kategorien ... ]        │  ← sticky Kopf
- *   ─────────────────────────┘
- *   [ ▢ Rathaus   ][ ▢ ... ][ ▢ ... ] → 1 Zeile, horizontal scrollen, snap
- *
- * Steuerung (Variablen @ :root anpassen):
- *   --build-z               Z-Index des Panels
- *   --build-max-h           maximale Panelhöhe (Anteil der Viewhöhe)
- *   --build-bg              Panel-Hintergrundfarbe
- *   --build-panel-pad       Innenabstand im Panel
- *
- *   --build-card-w          Kachel-Breite  (Quadrat)
- *   --build-card-gap        Abstand zwischen Kacheln
- *   --build-card-radius     Kachel-Radius
- *   --build-card-panel-img  Holzrahmen-Bild (Pfad relativ zu /ui/css)
- *   --build-card-shadow     Umriss/Schatten
- *
- *   --build-title-size      Schriftgröße Titel
- *   --build-title-pad       Abstand Titel zum Kachelrand
- *   --build-icon-scale      Anteil der Kachelbreite fürs Icon (0..1)
- *   --build-cost-size       Schriftgröße der Kosten
- *   --build-cost-gap        Abstand der Kosten zur Kanten/untereinander
- *
- * Responsive:
- *   – Mobil: 1 Zeile (Standard)
- *   – Tablet/Desktop: weiter 1 Zeile (wie gefordert). Bei Bedarf auf 2 Zeilen
- *     umstellbar, indem man --build-rows auf 2 setzt (siehe Kommentar unten).
- * ========================================================================== */
-
-:root {
-  /* [1] Panel-Grundwerte */
-  --build-z:               46;
-  --build-max-h:           30vh;        /* max. 30% der Höhe – wie von dir gewünscht */
-  --build-bg:              #151a22e6;   /* dunkles, leicht transparentes Panel */
-  --build-panel-pad:       12px;
-
-  /* [2] Kachel-Geometrie */
-  --build-card-w:          220px;       /* sichtbare Breite + Höhe (Quadrat) */
-  --build-card-gap:        14px;        /* Zwischenraum zwischen Kacheln */
-  --build-card-radius:     12px;
-  --build-card-panel-img:  url("../../assets/ui/panel.png"); /* Holzrahmen */
-  --build-card-shadow:     0 1px 0 rgba(255,255,255,.05) inset,
-                           0 10px 25px rgba(0,0,0,.35);
-
-  /* [3] Typo & Inhalte */
-  --build-title-size:      16px;
-  --build-title-pad:       10px;
-  --build-icon-scale:      0.56;        /* 56% der Kachelbreite */
-  --build-cost-size:       14px;
-  --build-cost-gap:        8px;
-
-  /* [4] Kategorie-Buttons */
-  --build-tabs-gap:        10px;
-  --build-tabs-pad-x:      14px;
-  --build-tabs-pad-y:      8px;
-  --build-tabs-radius:     14px;
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Zweck    : Baumenü/Dock (Tabs, Scroller, Karten) + Kosten‑Icons
+ * Struktur :
+ *   [10] Dock‑Layout
+ *   [20] Tabs
+ *   [30] Grid/Karten
+ *   [40] Kostenleiste
+ *   [50] Responsiv
+ * Hinweise :
+ *   – Nur Build‑spezifische Styles hier (kein HUD/Inspector).
+ *   – „Holzrahmen“: per background‑image austauschbar.
+ * ============================================================================
+ */
+.build-dock{
+  position:fixed; left:16px; bottom:16px; width:var(--dock-w);
+  display:flex; flex-direction:column; gap:var(--gap);
+  z-index:var(--z-build, 55);
 }
+/* [20] Tabs */
+.build-tabs{ display:flex; gap:8px; overflow:auto; padding-bottom:4px; scrollbar-width:thin; }
+.build-tabs .tab{ white-space:nowrap; }
+.build-tabs .tab.is-active{ outline:2px solid var(--accent); border-radius:8px; }
 
-/* ============================================================================
- * [A] Panel-Rahmen (unten angedockt)
- * ========================================================================== */
-#build-panel {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--build-z);
-  background: var(--build-bg);
-  backdrop-filter: blur(4px);
-  max-height: var(--build-max-h);
-  padding: var(--build-panel-pad);
-  box-sizing: border-box;
+/* [30] Grid + Karten */
+.build-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; }
+.build-card{
+  background:var(--panel); border-radius:12px; box-shadow:var(--shadow);
+  padding:10px; position:relative;
+  /* Optional: Holzrahmen */
+  /* background-image:url("../../assets/ui/build/frame_wood.png"); background-size:cover; */
+}
+.build-card__img{ aspect-ratio:1/1; width:100%; object-fit:cover; image-rendering:pixelated; border-radius:8px; }
+.build-card__title{ font-weight:700; margin-top:8px; text-shadow:0 1px 0 #0009; }
 
-  /* Innenlayout: Kopf (sticky) + Scroll-Zeile */
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 10px;
+/* [40] Kostenleiste */
+.costs{ position:absolute; right:8px; bottom:8px; display:flex; gap:6px; }
+.cost{
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 6px; border-radius:999px; background:#0006; color:#fff; font-weight:700;
+}
+.cost img{ width:18px; height:18px; image-rendering:pixelated; }
 
-  /* weiche Ein-/Ausblendung (optional) */
-  transform: translateY(0);
-  transition: transform .2s ease, opacity .2s ease;
-}
-#build-panel.hidden { transform: translateY(8px); opacity: .0; pointer-events: none; }
-
-/* ============================================================================
- * [B] Kopfzeile (Titel + Schließen + Kategorien)
- * ========================================================================== */
-.build-head {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
-}
-.build-title {
-  color: #e9eef5;
-  font-weight: 600;
-  letter-spacing: .2px;
-}
-.build-close {
-  appearance: none;
-  border: none;
-  border-radius: 999px;
-  width: 32px; height: 32px;
-  line-height: 32px;
-  text-align: center;
-  background: #222a35;
-  color: #cfd8e3;
-  cursor: pointer;
-}
-.build-close:hover { background:#2b3442; }
-
-/* Tabs (Kategorien) */
-.build-tabs {
-  display: flex;
-  gap: var(--build-tabs-gap);
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-.build-tabs::-webkit-scrollbar { display: none; }
-
-.build-tab {
-  appearance: none;
-  border: 1px solid #3a4454;
-  background:#1d2430;
-  color:#cfd8e3;
-  padding: var(--build-tabs-pad-y) var(--build-tabs-pad-x);
-  border-radius: var(--build-tabs-radius);
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.build-tab.is-active {
-  outline: 2px solid #5aa0ff;
-  background:#202a3a;
-}
-
-/* ============================================================================
- * [C] Kachel-Leiste (1 Zeile, horizontal scrollend, scroll-snap)
- * ========================================================================== */
-.build-row {
-  /* Eine (!) Reihe, horizontaler Fluss */
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--build-card-gap);
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding-bottom: 2px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-}
-.build-row::-webkit-scrollbar { height: 8px; }
-.build-row::-webkit-scrollbar-thumb {
-  background: #2b3442; border-radius: 8px;
-}
-.build-row::-webkit-scrollbar-track { background: transparent; }
-
-/* ============================================================================
- * [D] Kachel (Holzrahmen-Panel, quadratisch, snap-align)
- * ========================================================================== */
-.build-card {
-  position: relative;
-  flex: 0 0 var(--build-card-w);  /* starre Breite → eine Reihe */
-  width:  var(--build-card-w);
-  aspect-ratio: 1/1;              /* Quadrat */
-  border-radius: var(--build-card-radius);
-  overflow: hidden;
-  scroll-snap-align: start;
-  box-shadow: var(--build-card-shadow);
-  isolation: isolate;             /* für Pseudo-Elemente sicher */
-
-  /* Holzrahmen als Hintergrund */
-  background:
-    var(--build-card-panel-img) center/cover no-repeat,
-    #0f1622;
-  border: 1px solid #3a4454;
-}
-
-/* Hover/Focus für Spielgefühl */
-.build-card:hover   { outline: 2px solid rgba(90,160,255,.35); }
-.build-card:focus-within { outline: 2px solid rgba(90,160,255,.6); }
-
-/* Titel (oben) */
-.build-card__title {
-  position: absolute;
-  top: var(--build-title-pad);
-  left: var(--build-title-pad);
-  right: var(--build-title-pad);
-  text-align: center;
-  color:#e9eef5;
-  font-weight: 700;
-  font-size: var(--build-title-size);
-  text-shadow: 0 1px 1px rgba(0,0,0,.6);
-  pointer-events: none;
-}
-
-/* Icon (zentriert) */
-.build-card__icon {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%,-50%);
-  width: calc(var(--build-card-w) * var(--build-icon-scale));
-  height: calc(var(--build-card-w) * var(--build-icon-scale));
-  object-fit: contain;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 6px 14px rgba(0,0,0,.45));
-}
-
-/* Kosten (unten rechts, kleine Chips) */
-.build-card__costs {
-  position: absolute;
-  right: var(--build-cost-gap);
-  bottom: var(--build-cost-gap);
-  display: flex;
-  gap: var(--build-cost-gap);
-  align-items: center;
-}
-.cost-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #0e141f;
-  border: 1px solid #323c4c;
-  color: #dfe7f1;
-  font-size: var(--build-cost-size);
-  line-height: 1;
-}
-.cost-chip img {
-  width: 16px; height: 16px; object-fit: contain; image-rendering: pixelated;
-}
-
-/* Platzhalter-/Debug-Icon im Zentrum (falls kein Gebäudeicon vorhanden) */
-.build-card__placeholder {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%,-50%);
-  width: 42px; height: 42px;
-  border-radius: 8px;
-  border: 2px solid rgba(90,160,255,.7);
-  opacity: .4;
-  display: grid; place-items: center;
-  color: rgba(90,160,255,.9);
-  font-weight: 800;
-}
-
-/* ============================================================================
- * [E] Bauen/Schließen-Buttons (Floating auf Panel)
- * ========================================================================== */
-.build-actions {
-  position: absolute;
-  left: var(--build-panel-pad);
-  bottom: calc(var(--build-panel-pad) + 2px);
-  display: flex; gap: 8px;
-}
-.build-btn {
-  appearance:none; border:none; cursor:pointer;
-  padding:10px 14px; border-radius:12px;
-  background:#1d2430; color:#e9eef5; font-weight:700;
-  border:1px solid #384255;
-}
-.build-btn:hover { background:#242d3c; }
-
-/* ============================================================================
- * [F] Medien – (optional) Tablet/Desktop leicht größere Karten
- * ========================================================================== */
-@media (min-width: 768px) {
-  :root {
-    --build-card-w: 240px;
-    --build-title-size: 17px;
-  }
-}
-@media (min-width: 1200px) {
-  :root {
-    --build-card-w: 260px;
-    --build-title-size: 18px;
-  }
-}
-
-/* ============================================================================
- * Hinweise/Optionen:
- * 1) Wenn du später 2 ZEILEN willst, die einzeilige Leiste in eine
- *    "Grid mit Auto-Flow Columns" umbauen:
- *
- *    .build-row {
- *      display: grid;
- *      grid-auto-flow: column;
- *      grid-auto-columns: var(--build-card-w);
- *      grid-auto-rows: var(--build-card-w);   <-- zweite Zeile via height/rows
- *      grid-template-rows: repeat(2, var(--build-card-w));
- *      overflow-x: auto; overflow-y: hidden;
- *    }
- *
- *    Für jetzt bleibt's bei 1 Reihe (Wunsch).
- *
- * 2) Holzrahmen:
- *    – Stelle sicher, dass assets/ui/panel.png existiert. Alternativ ein
- *      anderes Panel in --build-card-panel-img referenzieren.
- *
- * 3) Feintuning:
- *    – Titelabstand, Icongröße, Kosten-Chips → passe die Variablen oben an.
- * ========================================================================== */
-
-/* =========================
- * Baumenü – Einzeilige Leiste erzwingen (Hotfix)
- * ========================= */
-
-/* 0) Panel: keine großen Deko-Hintergründe mehr */
-#build-panel .panel-bg,
-#build-panel .build-bg,
-#build-panel .bg,
-#build-panel .decor,
-#build-panel .wood,
-#build-panel .frame,
-#build-panel .center-bg {
-  display: none !important;
-}
-
-/* 1) Karten-Container: EIN (!) Reihe, horizontal scrollen + Snap
-      – wir treffen sowohl .build-row (neu) als auch .build-grid/.cards (älteres Markup),
-        damit’s auf deinem Stand sofort greift. */
-#build-panel .build-row,
-#build-panel .build-grid,
-#build-panel .cards {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  gap: var(--build-card-gap, 14px) !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  padding: 2px 2px 4px 2px !important;
-  scroll-snap-type: x proximity !important;
-  align-items: stretch !important;
-}
-#build-panel .build-row::-webkit-scrollbar,
-#build-panel .build-grid::-webkit-scrollbar,
-#build-panel .cards::-webkit-scrollbar { height: 8px; }
-#build-panel .build-row::-webkit-scrollbar-thumb,
-#build-panel .build-grid::-webkit-scrollbar-thumb,
-#build-panel .cards::-webkit-scrollbar-thumb { background:#2b3442; border-radius:8px; }
-#build-panel .build-row::-webkit-scrollbar-track,
-#build-panel .build-grid::-webkit-scrollbar-track,
-#build-panel .cards::-webkit-scrollbar-track { background:transparent; }
-
-/* 2) Karte strikt quadratisch + Snap am Anfang
-      – auch hier mehrere Selektoren, damit es unabhängig von der genauen Klasse greift. */
-#build-panel .build-card,
-#build-panel .card,
-#build-panel .b-card {
-  position: relative !important;
-  flex: 0 0 var(--build-card-w, 220px) !important;
-  width:  var(--build-card-w, 220px) !important;
-  aspect-ratio: 1 / 1 !important;
-  scroll-snap-align: start !important;
-
-  border-radius: var(--build-card-radius, 12px) !important;
-  overflow: hidden !important;
-  border: 1px solid #3a4454 !important;
-  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 10px 25px rgba(0,0,0,.35) !important;
-
-  /* Holzrahmen direkt auf der Karte */
-  background:
-    var(--build-card-panel-img, url("../../assets/ui/panel.png")) center/cover no-repeat,
-    #0f1622 !important;
-}
-
-/* 3) Titel oben mittig */
-#build-panel .build-card__title,
-#build-panel .card-title {
-  position: absolute !important;
-  top: var(--build-title-pad, 10px) !important;
-  left: var(--build-title-pad, 10px) !important;
-  right: var(--build-title-pad, 10px) !important;
-  text-align: center !important;
-  color:#e9eef5 !important;
-  font-weight: 700 !important;
-  font-size: var(--build-title-size, 16px) !important;
-  text-shadow: 0 1px 1px rgba(0,0,0,.6) !important;
-  pointer-events: none !important;
-}
-
-/* 4) Icon zentriert und begrenzt */
-#build-panel .build-card__icon,
-#build-panel .card-icon,
-#build-panel .card img.icon {
-  position: absolute !important;
-  left: 50% !important; top: 50% !important;
-  transform: translate(-50%,-50%) !important;
-  width:  calc(var(--build-card-w, 220px) * var(--build-icon-scale, .56)) !important;
-  height: calc(var(--build-card-w, 220px) * var(--build-icon-scale, .56)) !important;
-  object-fit: contain !important;
-  image-rendering: pixelated !important;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  filter: drop-shadow(0 6px 14px rgba(0,0,0,.45)) !important;
-}
-
-/* 5) Kosten unten rechts (kleine Chips) */
-#build-panel .build-card__costs,
-#build-panel .card-costs {
-  position: absolute !important;
-  right: var(--build-cost-gap, 8px) !important;
-  bottom: var(--build-cost-gap, 8px) !important;
-  display: flex !important;
-  gap: var(--build-cost-gap, 8px) !important;
-  align-items: center !important;
-}
-#build-panel .build-card__costs .cost-chip,
-#build-panel .card-costs .cost {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-  padding: 4px 8px !important;
-  border-radius: 999px !important;
-  background: #0e141f !important;
-  border: 1px solid #323c4c !important;
-  color: #dfe7f1 !important;
-  font-size: var(--build-cost-size, 14px) !important;
-  line-height: 1 !important;
-}
-#build-panel .build-card__costs img,
-#build-panel .card-costs img {
-  width: 16px !important; height: 16px !important; object-fit: contain !important; image-rendering: pixelated !important;
-}
-
-/* 6) Panel-Layout: unten andocken, max Höhe halten (dein Wunsch: 30%) */
-#build-panel {
-  position: fixed !important;
-  left: 0; right: 0; bottom: 0;
-  z-index: var(--build-z, 46) !important;
-  background: #151a22e6 !important;
-  backdrop-filter: blur(4px) !important;
-  max-height: var(--build-max-h, 30vh) !important;
-  padding: var(--build-panel-pad, 12px) !important;
-  box-sizing: border-box !important;
-  display: grid !important;
-  grid-template-rows: auto 1fr !important;
-  gap: 10px !important;
-}
+/* [50] Responsiv */
+@media (max-width:1200px){ .build-grid{ grid-template-columns:repeat(2,1fr); } }
+@media (max-width:900px){  .build-grid{ grid-template-columns:1fr; } }
+@media (max-width:768px){  .build-dock{ width:min(92vw, var(--dock-w)); left:4vw; bottom:12px; } }
