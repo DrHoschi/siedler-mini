@@ -311,3 +311,139 @@
  * 3) Feintuning:
  *    – Titelabstand, Icongröße, Kosten-Chips → passe die Variablen oben an.
  * ========================================================================== */
+
+/* =========================
+ * Baumenü – Einzeilige Leiste erzwingen (Hotfix)
+ * ========================= */
+
+/* 0) Panel: keine großen Deko-Hintergründe mehr */
+#build-panel .panel-bg,
+#build-panel .build-bg,
+#build-panel .bg,
+#build-panel .decor,
+#build-panel .wood,
+#build-panel .frame,
+#build-panel .center-bg {
+  display: none !important;
+}
+
+/* 1) Karten-Container: EIN (!) Reihe, horizontal scrollen + Snap
+      – wir treffen sowohl .build-row (neu) als auch .build-grid/.cards (älteres Markup),
+        damit’s auf deinem Stand sofort greift. */
+#build-panel .build-row,
+#build-panel .build-grid,
+#build-panel .cards {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: var(--build-card-gap, 14px) !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding: 2px 2px 4px 2px !important;
+  scroll-snap-type: x proximity !important;
+  align-items: stretch !important;
+}
+#build-panel .build-row::-webkit-scrollbar,
+#build-panel .build-grid::-webkit-scrollbar,
+#build-panel .cards::-webkit-scrollbar { height: 8px; }
+#build-panel .build-row::-webkit-scrollbar-thumb,
+#build-panel .build-grid::-webkit-scrollbar-thumb,
+#build-panel .cards::-webkit-scrollbar-thumb { background:#2b3442; border-radius:8px; }
+#build-panel .build-row::-webkit-scrollbar-track,
+#build-panel .build-grid::-webkit-scrollbar-track,
+#build-panel .cards::-webkit-scrollbar-track { background:transparent; }
+
+/* 2) Karte strikt quadratisch + Snap am Anfang
+      – auch hier mehrere Selektoren, damit es unabhängig von der genauen Klasse greift. */
+#build-panel .build-card,
+#build-panel .card,
+#build-panel .b-card {
+  position: relative !important;
+  flex: 0 0 var(--build-card-w, 220px) !important;
+  width:  var(--build-card-w, 220px) !important;
+  aspect-ratio: 1 / 1 !important;
+  scroll-snap-align: start !important;
+
+  border-radius: var(--build-card-radius, 12px) !important;
+  overflow: hidden !important;
+  border: 1px solid #3a4454 !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 10px 25px rgba(0,0,0,.35) !important;
+
+  /* Holzrahmen direkt auf der Karte */
+  background:
+    var(--build-card-panel-img, url("../../assets/ui/panel.png")) center/cover no-repeat,
+    #0f1622 !important;
+}
+
+/* 3) Titel oben mittig */
+#build-panel .build-card__title,
+#build-panel .card-title {
+  position: absolute !important;
+  top: var(--build-title-pad, 10px) !important;
+  left: var(--build-title-pad, 10px) !important;
+  right: var(--build-title-pad, 10px) !important;
+  text-align: center !important;
+  color:#e9eef5 !important;
+  font-weight: 700 !important;
+  font-size: var(--build-title-size, 16px) !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,.6) !important;
+  pointer-events: none !important;
+}
+
+/* 4) Icon zentriert und begrenzt */
+#build-panel .build-card__icon,
+#build-panel .card-icon,
+#build-panel .card img.icon {
+  position: absolute !important;
+  left: 50% !important; top: 50% !important;
+  transform: translate(-50%,-50%) !important;
+  width:  calc(var(--build-card-w, 220px) * var(--build-icon-scale, .56)) !important;
+  height: calc(var(--build-card-w, 220px) * var(--build-icon-scale, .56)) !important;
+  object-fit: contain !important;
+  image-rendering: pixelated !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.45)) !important;
+}
+
+/* 5) Kosten unten rechts (kleine Chips) */
+#build-panel .build-card__costs,
+#build-panel .card-costs {
+  position: absolute !important;
+  right: var(--build-cost-gap, 8px) !important;
+  bottom: var(--build-cost-gap, 8px) !important;
+  display: flex !important;
+  gap: var(--build-cost-gap, 8px) !important;
+  align-items: center !important;
+}
+#build-panel .build-card__costs .cost-chip,
+#build-panel .card-costs .cost {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  background: #0e141f !important;
+  border: 1px solid #323c4c !important;
+  color: #dfe7f1 !important;
+  font-size: var(--build-cost-size, 14px) !important;
+  line-height: 1 !important;
+}
+#build-panel .build-card__costs img,
+#build-panel .card-costs img {
+  width: 16px !important; height: 16px !important; object-fit: contain !important; image-rendering: pixelated !important;
+}
+
+/* 6) Panel-Layout: unten andocken, max Höhe halten (dein Wunsch: 30%) */
+#build-panel {
+  position: fixed !important;
+  left: 0; right: 0; bottom: 0;
+  z-index: var(--build-z, 46) !important;
+  background: #151a22e6 !important;
+  backdrop-filter: blur(4px) !important;
+  max-height: var(--build-max-h, 30vh) !important;
+  padding: var(--build-panel-pad, 12px) !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-rows: auto 1fr !important;
+  gap: 10px !important;
+}
