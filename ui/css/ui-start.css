@@ -1,202 +1,31 @@
 /* ============================================================================
+ * [00] META
  * Datei    : ui/css/ui-start.css
- * Version  : v1.2.1 (2025-10-01)
- * Zweck    : Startfenster-Layout (quadratisch & zentriert) + Panel-Bild
- * Hinweis  : Panel-Hintergrund wird EXPLIZIT am #start-panel gesetzt
- *            (unabhängig von .ui-panel aus ui.css), damit ihn nichts überschreibt.
- * ========================================================================== */
-
-/* === (0) Tokens / Basiswerte ============================================= */
-:root{
-  --ui-bg:       #f3f7fb;
-  --ui-bg-muted: #e6edf5;
-  --ui-border:   #cbd5e1;
-  --ui-text:     #0b1220;
-  --ui-shadow:   0 18px 48px rgba(0,0,0,.28);
-  --ui-radius:   16px;
-
-  /* responsive Grundgröße für das Quadrat */
-  --start-size: clamp(240px, 72vw, 420px);
-
-  /* Panel-Frame-Bild (RELATIV zu /ui/css/) */
-  --panel-img: url("../../assets/ui/panel.png");
-}
-
-/* === (1) Startpanel: Geometrie & Panelbild =============================== */
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Zweck    : Startfenster (muss zuerst sichtbar sein)
+ * Struktur :
+ *   [10] Layout/Backdrop
+ *   [20] Karte/Content
+ *   [30] Aktionen
+ *   [40] Portrait‑Optimierung
+ * ============================================================================
+ */
 #start-panel{
-  /* Zentriert & quadratisch */
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: var(--start-size);
-  height: var(--start-size);
-  aspect-ratio: 1 / 1;
-
-  /* Layer & Layout */
-  z-index: 1000;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  overflow: hidden;      /* Inhalt bleibt im Rahmen */
-  pointer-events: auto;
-  box-shadow: var(--ui-shadow);
-
-  /* Panel-Bild vollflächig (Rahmen sichtbar, kein Weißrand) */
-  background: var(--panel-img) no-repeat center / 100% 100% !important;
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(180deg, #0008, #000d);
 }
-
-/* Sichtbarkeitsschalter kompatibel zu alter Logik */
-#start-panel.hidden  { display: none !important; }
-#start-panel.visible { display: grid !important; }
-
-/* === (2) Titel + Buttons im Panel ======================================= */
-#start-panel h1{
-  margin: 0;
-  position: absolute;
-  left: 50%;
-  top: 15%;                           /* bei Bedarf 8–12% feinjustieren */
-  transform: translateX(-50%);
-  width: 80%;
-  text-align: center;
-
-  font: 700 clamp(18px, 4.4vw, 26px)/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #1f140a;
-  text-shadow: 0 1px 0 rgba(255,255,255,.65), 0 2px 8px rgba(0,0,0,.25);
+.start-card{
+  width:min(520px, 92vw);
+  background:var(--panel); border-radius:16px; box-shadow:var(--shadow);
+  padding:var(--pad);
 }
+.start-card h1{ margin:0 0 8px; font-size:1.4rem; }
+.start-card p{ margin:0 0 12px; opacity:.9; }
 
-#start-panel .actions{
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;                          /* kompakter für mobile */
-  width: 78%;                        /* Holzrand sichtbar lassen */
-  margin-top: 25%;                   /* unter den Titel schieben */
-  margin-bottom: 8%;
-  z-index: 1;                        /* über dem Panelbild */
-  overflow: hidden;                  /* keine Scrollbar im Startpanel */
-}
+/* [30] Aktionen */
+.start-actions{ display:flex; flex-wrap:wrap; gap:var(--gap); justify-content:center; }
 
-#start-panel .btn,
-#start-panel button{
-  appearance: none;
-  border: 0;
-  background: linear-gradient(#2e3a48, #11161d);
-  color: #eef5ff;
-  font: 600 clamp(13px, 2.8vw, 15px)/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  padding: 6px 8px;
-  min-height: 36px;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.15),
-    0 2px 6px rgba(0,0,0,.25);
-}
-#start-panel .btn.main{  background: linear-gradient(#2f6ef0, #1f47aa); color:#fff; }
-#start-panel .btn.ghost{ background: linear-gradient(#3a3f46, #272b31); color:#fff; }
-
-/* === (3) Start-Hintergrund (unter Panel, über Canvas) ==================== */
-#bg-start{
-  position: fixed;
-  inset: 0;
-  z-index: 900;                      /* unter dem Startpanel */
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity .5s ease;
-  background:
-    radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%,
-                    rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
-    url("../../assets/ui/start-bg.jpg") center/cover no-repeat;
-}
-#bg-start.fadeout{ opacity: 0; }
-
-/* === (4) HUD & Dock (liegen unter dem Startpanel) ======================== */
-#hud-top    { position: fixed; top: 8px; left: 8px; right: 8px; z-index: 950; }
-#build-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 950; }
-
-/* === (5) Responsive Feinschliff ========================================== */
-@media (max-width: 600px){
-  :root{ --start-size: clamp(220px, 80vw, 360px); }
-  #start-panel h1{ top: 8%; }
-  #start-panel .actions{ gap: 6px; width: 82%; margin-top: 33%; }
-}
-@media (prefers-reduced-motion: reduce){
-  *{ transition: none !important; animation: none !important; }
-  #bg-start{ transition: none !important; }
-}
-
-/* === (6) Canvas-Safety + Spielstart-Status =============================== */
-#game{ background: transparent !important; position: relative; z-index: 1; }
-body.is-playing { background: none !important; }
-body.is-playing #start-panel { display: none !important; }
-
-/* === Stellschrauben ======================================================= */
-:root{
-  /* frei justierbar */
-  --title-top:   13%;   /* Überschrift tiefer/höher (größer = weiter unten) */
-  --actions-top: 22%;   /* Buttons tiefer/höher (kleiner = weiter oben) */
-  --panel-radius: 16px; /* Rundung, falls du die ändern willst */
-}
-
-/* Panel: lieber block statt grid – absolute Kindelemente haben freie Bahn */
-#start-panel{
-  display: block;
-  border-radius: var(--panel-radius);
-  overflow: hidden;
-}
-
-/* Überschrift absolut platzieren (Wert greift sicher) */
-#start-panel h1{
-  position: absolute !important;
-  left: 50%;
-  top: var(--title-top) !important;
-  transform: translateX(-50%);
-  width: 80%;
-  margin: 0;
-  text-align: center;
-}
-
-/* Buttons absolut platzieren (statt Grid-Centering) */
-#start-panel .actions{
-  position: absolute !important;
-  left: 50%;
-  top: var(--actions-top) !important;
-  transform: translateX(-50%);
-  width: 60%;
-  /* eigenes Innen-Grid behalten */
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  /* alte Abstände raus, sonst stören sie */
-  margin: 0 !important;
-  padding: 0;
-  overflow: visible;
-}
-
-/* === Start-BG beim Spielen vollständig entfernen ========================= */
-body.is-playing { background: none !important; }                /* Body-BG off */
-body.is-playing #bg-start,
-body.is-playing #start-bg {
-  display: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-}
-
-/* Karte/HUD/Dock zuverlässig nach vorn */
-#game    { position: relative; z-index: 10; }
-#hud-top { position: fixed;    z-index: 48; }
-#build-dock { position: fixed; z-index: 46; }
-#btn-build  { position: fixed; z-index: 47; }
-
-/* Start-BG beim Spielen vollständig entfernen */
-body.is-playing { background: none !important; }
-body.is-playing #bg-start,
-body.is-playing #start-bg {
-  display: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-}
-/* Sicherstellen, dass Spielfläche & HUD vorn liegen */
-#game { position: relative; z-index: 10; }
-#hud-top { position: fixed; z-index: 48; }
-#build-dock { position: fixed; z-index: 46; }
-#btn-build { position: fixed; z-index: 47; }
+/* [40] Portrait‑Optimierung */
+@media (orientation:portrait){ .start-card{ width:92vw; } }
