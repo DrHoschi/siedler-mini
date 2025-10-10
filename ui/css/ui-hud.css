@@ -10,24 +10,56 @@
  *   [30] Responsive
  * ============================================================================
  */
+
+/* [10] HUD-Leiste (kompakt, nicht volle Breite) */
 .hud{
-  position:fixed; top:calc(8px + var(--safe-top)); left:50%; transform:translateX(-50%);
+  position:fixed;
+  top:calc(8px + var(--safe-top));
+  left:50%;
+  transform:translateX(-50%);
+
+  /* Wichtig: kompakt bleiben */
+  display:inline-flex;              /* statt flex */
+  width:max-content;                /* nur so breit wie nötig */
+  max-width:96vw;                   /* Sicherheitslimit auf kleinen Screens */
+  white-space:nowrap;               /* kein unnötiger Zeilenumbruch */
+
+  gap:18px; align-items:center;
   height:var(--hud-h);
-  display:flex; gap:18px; align-items:center;
-  background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
-  padding:8px 14px; border-radius:14px;
+  background:rgba(0,0,0,.35);
+  backdrop-filter:blur(4px);
+  padding:8px 14px;
+  border-radius:14px;
   z-index:var(--z-hud, 50);
+  box-sizing:border-box;
 }
-.hud-item{ display:flex; align-items:center; gap:8px; min-height:40px; }
-.hud-item img{ width:36px; height:36px; vertical-align:-3px; image-rendering:pixelated; }
+
+/* [20] HUD-Items */
+.hud-item{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:40px;       /* Touch-Target */
+}
+.hud-item img{
+  width:36px; height:36px;
+  vertical-align:-3px;
+  image-rendering:pixelated;
+}
 .hud-item .label{ font-weight:700; }
 .hud-item .value{ opacity:.9; }
 
 /* [30] Responsive */
-@media (max-width:1024px){
+@media (max-width: 900px){
   .hud{ gap:14px; }
 }
-@media (max-width:768px){
-  .hud{ gap:12px; padding:6px 10px; }
+@media (max-width: 768px){
+  .hud{
+    gap:10px;
+    padding:6px 10px;
+    white-space:normal;   /* auf sehr kleinen Screens darf umbrechen */
+    flex-wrap:wrap;       /* Zeilenumbruch zulassen */
+    justify-content:center;
+  }
   .hud-item img{ width:28px; height:28px; }
 }
