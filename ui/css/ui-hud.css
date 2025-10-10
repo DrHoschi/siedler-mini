@@ -63,3 +63,41 @@
   }
   .hud-item img{ width:28px; height:28px; }
 }
+
+/* ==== HUD Hotfix: kompakt, nicht volle Breite, kleine Icons ==== */
+.hud{
+  position: fixed;
+  top: calc(8px + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  /* kompakt halten */
+  height: 48px;                /* <= wenn du 15% Bildschirmhöhe meintest: NICHT nötig! */
+  padding: 6px 10px;
+  border-radius: 12px;
+  max-width: 92vw;
+  white-space: nowrap;
+}
+
+.hud .hud-item{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  line-height:1;
+}
+
+/* harte Vorgabe für Bilder im HUD (überschreibt evtl. globale img-Regeln) */
+.hud img{
+  width: 24px !important;
+  height: 24px !important;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+/* kleine Screens dürfen umbrechen */
+@media (max-width: 768px){
+  .hud{ flex-wrap: wrap; justify-content:center; white-space:normal; }
+}
