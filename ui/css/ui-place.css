@@ -1,50 +1,20 @@
 /* ============================================================================
+ * [00] META
  * Datei    : ui/css/ui-place.css
- * Projekt  : Neue Siedler
- * Version  : v24.0.0 (2025-10-08)
- * Zweck    : Platzier-Ghost + OK/Abbrechen + Grün/Rot-Tint
- * ========================================================================== */
-
-.place-overlay{
-  position: fixed; inset: 0;
-  z-index: 50;
-  pointer-events: none;            /* Overlay selbst nicht klickbar */
-}
-
-.place-ghost{
-  position: absolute; left:0; top:0;
-  pointer-events: none;
-}
-
-.ghost-sprite{
-  position: absolute; left:0; top:0;
-  background-position: center; background-repeat: no-repeat; background-size: cover;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 4px 10px rgba(0,0,0,.35));
-}
-
-/* Farb-Tint über dem Gebäude (nur Overlay) */
-.ghost-tint{
-  position:absolute; inset:0;
-  mix-blend-mode: multiply;
-  opacity: .25;
-  background: transparent;
-}
-.ghost-tint.is-valid{  background: #38d35b; }
-.ghost-tint.is-invalid{background: #ff4d4d; }
-
-/* Buttons (klickbar) */
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Zweck    : Platzier‑Overlay (Ghost‑Sprite, ✅/❌ Buttons, Raster)
+ * Struktur :
+ *   [10] Overlay‑Root
+ *   [20] Ghost‑Bild
+ *   [30] Buttons (OK/Abbrechen)
+ * ============================================================================
+ */
+.place-overlay{ position:absolute; z-index:40; pointer-events:none; }
+.place-sprite{ position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; pointer-events:none; }
 .place-btn{
-  position: absolute; width: 44px; height:44px; border-radius:50%;
-  display:grid; place-items:center; font:800 20px/1 system-ui;
-  color:#fff; border:2px solid rgba(0,0,0,.3); box-shadow:0 2px 6px rgba(0,0,0,.35);
-  pointer-events:auto; cursor:pointer;
-  background: rgba(0,0,0,.4);
+  position:absolute; pointer-events:auto; width:32px; height:32px; border-radius:8px; border:0;
+  font-weight:700; line-height:32px; text-align:center; box-shadow:var(--shadow); color:#111;
 }
-.place-btn.ok{
-  background:#25b05c; border-color:#117a3b;
-}
-.place-btn.cancel{
-  background:#e55353; border-color:#a12828;
-}
-.place-btn:active{ transform: translateY(1px); }
+.place-btn.ok{  background:var(--ok);   right:8px; top:8px; }
+.place-btn.no{  background:var(--error); left:8px; top:8px; color:#fff; }
