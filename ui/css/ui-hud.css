@@ -11,93 +11,72 @@
  * ============================================================================
  */
 
-/* [10] HUD-Leiste (kompakt, nicht volle Breite) */
-.hud{
-  position:fixed;
-  top:calc(8px + var(--safe-top));
-  left:50%;
-  transform:translateX(-50%);
+/* ============================================================================
+ * HUD v19.3 – Holzrahmen-Stil, horizontal scrollbar, quadratische Felder
+ * ========================================================================== */
 
-  /* Wichtig: kompakt bleiben */
-  display:inline-flex;              /* statt flex */
-  width:max-content;                /* nur so breit wie nötig */
-  max-width:96vw;                   /* Sicherheitslimit auf kleinen Screens */
-  white-space:nowrap;               /* kein unnötiger Zeilenumbruch */
-
-  gap:18px; align-items:center;
-  height:var(--hud-h);
-  background:rgba(0,0,0,.35);
-  backdrop-filter:blur(4px);
-  padding:8px 14px;
-  border-radius:14px;
-  z-index:var(--z-hud, 50);
-  box-sizing:border-box;
-}
-
-/* [20] HUD-Items */
-.hud-item{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  min-height:40px;       /* Touch-Target */
-}
-.hud-item img{
-  width:36px; height:36px;
-  vertical-align:-3px;
-  image-rendering:pixelated;
-}
-.hud-item .label{ font-weight:700; }
-.hud-item .value{ opacity:.9; }
-
-/* [30] Responsive */
-@media (max-width: 900px){
-  .hud{ gap:14px; }
-}
-@media (max-width: 768px){
-  .hud{
-    gap:10px;
-    padding:6px 10px;
-    white-space:normal;   /* auf sehr kleinen Screens darf umbrechen */
-    flex-wrap:wrap;       /* Zeilenumbruch zulassen */
-    justify-content:center;
-  }
-  .hud-item img{ width:28px; height:28px; }
-}
-
-/* ==== HUD Hotfix: kompakt, nicht volle Breite, kleine Icons ==== */
+/* [10] HUD-Leiste */
 .hud{
   position: fixed;
   top: calc(8px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
-  display: inline-flex;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 
-  /* kompakt halten */
-  height: 48px;                /* <= wenn du 15% Bildschirmhöhe meintest: NICHT nötig! */
+  height: 60px;
   padding: 6px 10px;
-  border-radius: 12px;
-  max-width: 92vw;
-  white-space: nowrap;
+  background: none;            /* kein eigener Hintergrund */
+  overflow-x: auto;            /* seitliches Scrollen erlaubt */
+  overflow-y: hidden;
+  scrollbar-width: thin;       /* Firefox */
+  -webkit-overflow-scrolling: touch; /* iOS smooth scroll */
+  z-index: var(--z-hud, 50);
 }
 
-.hud .hud-item{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  line-height:1;
+/* [20] Einzelnes HUD-Feld (Holzrahmen-Stil) */
+.hud-item{
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  width: 110px;
+  height: 48px;
+  box-sizing: border-box;
+  font-weight: 700;
+  color: #f5e2c2;             /* warme Holzschrift */
+  background-color: #7b4a1d;  /* Holzgrundton */
+  border: 4px solid #4b2b0c;  /* dunkler Holzrand */
+  box-shadow: inset 0 0 4px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
+  border-radius: 4px;         /* kaum rund – fast quadratisch */
 }
 
-/* harte Vorgabe für Bilder im HUD (überschreibt evtl. globale img-Regeln) */
-.hud img{
-  width: 24px !important;
-  height: 24px !important;
-  object-fit: contain;
+/* Holztextur optional (wenn vorhanden) */
+.hud-item::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("../../assets/ui/build/frame_wood_64.png");
+  background-size: cover;
+  opacity: 0.25;              /* leicht, nur Struktur */
+  pointer-events: none;
+}
+
+/* [30] Symbole */
+.hud-item img{
+  width: 24px;
+  height: 24px;
   image-rendering: pixelated;
+  flex-shrink: 0;
 }
 
-/* kleine Screens dürfen umbrechen */
-@media (max-width: 768px){
-  .hud{ flex-wrap: wrap; justify-content:center; white-space:normal; }
+/* [40] Responsive */
+@media (max-width: 900px){
+  .hud-item{ width: 90px; height: 44px; font-size: 0.85rem; }
+  .hud-item img{ width: 20px; height: 20px; }
 }
