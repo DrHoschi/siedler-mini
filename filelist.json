@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-06T21:47:30.073Z",
+  "createdAt": "2025-10-10T14:04:47.761Z",
   "root": ".",
-  "count": 395,
+  "count": 398,
   "entries": [
     {
       "type": "dir",
@@ -1081,7 +1081,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 4252
+      "size": 6637
     },
     {
       "type": "file",
@@ -1151,12 +1151,17 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 6391
+      "size": 7295
+    },
+    {
+      "type": "file",
+      "path": "core/layout.js",
+      "size": 2622
     },
     {
       "type": "file",
       "path": "core/map-runtime.js",
-      "size": 12222
+      "size": 13998
     },
     {
       "type": "file",
@@ -1171,7 +1176,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 3806
+      "size": 8879
     },
     {
       "type": "file",
@@ -1269,7 +1274,12 @@
     {
       "type": "file",
       "path": "data/resources.json",
-      "size": 213
+      "size": 604
+    },
+    {
+      "type": "file",
+      "path": "data/ressourcens.md",
+      "size": 1576
     },
     {
       "type": "file",
@@ -1695,13 +1705,18 @@
     },
     {
       "type": "file",
+      "path": "ui/css/layout.css",
+      "size": 6271
+    },
+    {
+      "type": "file",
       "path": "ui/css/readme",
       "size": 1
     },
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 11294
+      "size": 14794
     },
     {
       "type": "file",
@@ -1711,7 +1726,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-hud.css",
-      "size": 5096
+      "size": 4692
     },
     {
       "type": "file",
@@ -1721,7 +1736,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 1120
+      "size": 1508
     },
     {
       "type": "file",
@@ -1736,7 +1751,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 7108
+      "size": 8158
     },
     {
       "type": "dir",
@@ -1840,7 +1855,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 10370
+      "size": 17809
     },
     {
       "type": "file",
@@ -1865,7 +1880,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 913
+      "size": 8455
     },
     {
       "type": "file",
@@ -1885,7 +1900,7 @@
     {
       "type": "file",
       "path": "ui/ui-place.js",
-      "size": 3183
+      "size": 7250
     },
     {
       "type": "file",
@@ -1915,7 +1930,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 12824
+      "size": 13080
     },
     {
       "type": "file",
