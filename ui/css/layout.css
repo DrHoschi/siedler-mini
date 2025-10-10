@@ -1,193 +1,168 @@
 /* ============================================================================
- * Datei   : ui/css/layout.css
- * Projekt : Neue Siedler
- * Version : v25.0.0 (2025-10-10)
- * Zweck   : Globale Layout-Steuerung für HUD (oben/links), Spielfeld (Mitte, 1:1),
- *           Baumenü (unten/rechts) – stabil bei Drehung (Portrait/Landscape).
+ * Datei    : ui/css/ui-layout.css
+ * Projekt  : Neue Siedler
+ * Version  : v24.4.0 (2025-10-10)
+ * Zweck    : Zentrales Docking/Layout für HUD (oben/links), Stage (quadratisch),
+ *            Build-Dock (unten/rechts) – Portrait & Landscape.
  *
- * WICHTIG:
- *  - Diese Datei regelt NUR das Rahmengerüst/Positionierung.
- *  - ui-hud.css & ui-build.css gestalten die Inhalte innerhalb ihrer Bereiche.
- *  - Alte "position: fixed" / Z-Index-Layouts in ui-hud.css/ui-build.css entfernen!
- *
- * ERWARTETE DOM-IDs:
- *   #app               → Gesamter App-Container (existiert bei dir bereits)
- *   #hud-top           → HUD (Ressourcenleiste)
- *   #game-wrap         → Wrapper um das Spiel-Center (neu empfehlen)
- *   #game              → Canvas (bestehend)
- *   #build-panel       → Baumenü (bestehend)
+ * Abhängigkeiten: index.html mit #app, #hud-top, #build-dock, #build-panel,
+ *                 Canvas (#game, #overlay-paths, #overlay-units), #bg-start, #start-panel.
+ * Konvention   : Modul-CSS (ui-hud.css, ui-build.css, ui-place.css) stylen nur das Innere,
+ *                NICHT Position/Größe der Bereiche. Layout lebt hier.
+ * Events/Flows : Startpanel zuerst sichtbar (cb:ui-ready), dann cb:game-start etc.  [oai_citation:2‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
  * ========================================================================== */
 
-/* -------------------------------------------------------------------------- */
-/* [0] Root + Variablen                                                       */
-/* -------------------------------------------------------------------------- */
-
+/* 0) Grund-Variablen – hier stellst du die „Slots“ ein
+   -------------------------------------------------- */
 :root{
-  /* Abstände & Kanten */
-  --gap           : clamp(6px, 1.4vw, 14px);    /* Innenabstand zwischen Regionen */
-  --radius        : 12px;
+  /* Safe-Areas (iOS/Android) – werden automatisch gefüllt, hier als Fallback */
+  --safe-top   : env(safe-area-inset-top, 0px);
+  --safe-right : env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left  : env(safe-area-inset-left, 0px);
 
-  /* Portrait: Größenanteile */
-  --hud-h         : clamp(78px, 12.5dvh, 120px); /* HUD-Höhe im Hochformat */
-  --build-h       : clamp(26dvh, 36dvh, 42dvh);  /* Baumenü-Höhe im Hochformat */
+  /* Höhen/Breiten der Dock-Bereiche im Portrait */
+  --hud-h      : clamp(72px, 14vh, 120px);   /* Ressourcenleiste oben */
+  --dock-h     : clamp(180px, 32vh, 420px);  /* Baumenü unten */
 
-  /* Landscape: Breitenanteile */
-  --hud-w         : clamp(120px, 22dvw, 28dvw);  /* HUD-Breite im Querformat (links) */
-  --build-w       : clamp(28dvw, 34dvw, 40dvw);  /* Baumenü-Breite im Querformat (rechts) */
+  /* Breiten der Dock-Bereiche im Landscape */
+  --hud-w      : clamp(108px, 18vw, 240px);  /* Ressourcenleiste links */
+  --dock-w     : clamp(260px, 34vw, 480px);  /* Baumenü rechts */
 
-  /* Game-Bereich: maximaler Außenabstand */
-  --game-pad      : clamp(6px, 1.5vw, 18px);
+  /* Max-Stage-Größe (Sicherheitskappung), z. B. damit Stage nie riesig wird */
+  --stage-max  : 110vmin;
 
-  /* Z-Layer (nur falls nötig) */
-  --z-hud         : 20;
-  --z-game        : 10;
-  --z-build       : 20;
-
-  /* Hintergrundfarben (Fallbacks – deine Theme/Vars dürfen überschreiben) */
-  --surface       : #0f1a22;     /* dunkle Fläche hinter Paneelen */
-  --surface-2     : #131e27;
+  /* Z-Layer (Stage unten, HUD/Dock darüber) */
+  --z-stage    : 10;
+  --z-hud      : 20;
+  --z-dock     : 20;
+  --z-panel    : 30; /* Startpanel etc. */
 }
 
-/* Vollflächig arbeiten, ohne mobiles Safari-„Sprünge“ */
-html, body{
-  height: 100%;
+/* 1) #app als responsive Grid-Container
+   ------------------------------------ */
+#app{
+  position: relative;
+  min-height: 100dvh;
+  min-width : 100%;
   margin: 0;
   padding: 0;
-}
-body{
-  background: var(--surface);
-  color: #e8edf2;
-  -webkit-text-size-adjust: 100%;
-}
 
-/* #app ist die „Rahmenleinwand“ für unser Grid */
-#app{
-  min-height: 100dvh;      /* dynamische Viewport-Höhe (fix für iOS Safari UI) */
   display: grid;
-  gap: var(--gap);
-
-  /* PORTRAIT: 3 Reihen (HUD / GAME / BUILD) */
   grid-template-areas:
     "hud"
-    "game"
-    "build";
-  grid-template-rows:
-    var(--hud-h)
-    1fr
-    var(--build-h);
-  grid-template-columns: 1fr;
+    "stage"
+    "dock";
+  grid-template-rows : calc(var(--hud-h) + var(--safe-top)) 1fr calc(var(--dock-h) + var(--safe-bottom));
+  grid-template-columns: 100%;
 
-  padding: var(--gap);
-  box-sizing: border-box;
-  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  /* kleine optische Basis */
+  background: none;
 }
 
-/* LANDSCAPE: 3 Spalten (HUD / GAME / BUILD) */
+/* Landscape-Umschaltung: links HUD, Mitte Stage (quadratisch), rechts Dock */
 @media (orientation: landscape){
   #app{
     grid-template-areas:
-      "hud game build";
-    grid-template-columns:
-      var(--hud-w) 1fr var(--build-w);
-    grid-template-rows:
-      1fr;
+      "hud stage dock";
+    grid-template-columns: calc(var(--hud-w) + var(--safe-left)) 1fr calc(var(--dock-w) + var(--safe-right));
+    grid-template-rows: 100%;
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* [1] Bereich: HUD                                                           */
-/* -------------------------------------------------------------------------- */
-
+/* 2) HUD-Bereich (nur Docking, Optik bleibt in ui-hud.css)
+   ------------------------------------------------------- */
 #hud-top{
   grid-area: hud;
-  border-radius: var(--radius);
-  overflow: hidden;        /* Kanten sauber */
   z-index: var(--z-hud);
-  /* KEINE fixed-Positionierung hier! (liegt im Grid) */
-  display: block;
+  /* Innenabstände an Safe-Areas ausrichten */
+  padding-top   : calc(var(--safe-top));
+  padding-left  : calc(var(--safe-left));
+  padding-right : calc(var(--safe-right));
+  padding-bottom: 6px;
+  /* Der Inhalt (Kacheln) kommt aus ui-hud.css */
 }
 
-/* Optional: HUD-Hintergrundfläche (wenn du einen brauchst) */
-#hud-top .hud-grid{
-  background: none;        /* Gestaltung in ui-hud.css */
+/* 3) Build-Dock (unten/rechts) – der Container, den ui-build.js bestückt
+   ---------------------------------------------------------------------- */
+#build-dock, #build-panel{
+  grid-area: dock;
+  z-index: var(--z-dock);
+  padding-left  : calc(var(--safe-left));
+  padding-right : calc(var(--safe-right));
+  padding-bottom: calc(var(--safe-bottom));
+  /* Optik (Rahmen, Grid, Karten) macht ui-build.css – hier nur der Slot */
 }
 
-/* -------------------------------------------------------------------------- */
-/* [2] Bereich: GAME (quadratisch, mittig)                                    */
-/* -------------------------------------------------------------------------- */
-
-/* Wrapper (neu empfohlen): bitte einmal um <canvas id="game"> legen:
-   <div id="game-wrap"><canvas id="game"></canvas></div>
-   Falls du das nicht möchtest, kannst du die Styles direkt auf #game legen und
-   die inneren max-Breiten/Höhen berücksichtigen. */
-#game-wrap{
-  grid-area: game;
-  display: grid;
-  place-items: center;     /* zentriert das Canvas */
-  padding: var(--game-pad);
-  background: transparent;
-  overflow: hidden;
-  position: relative;
-  z-index: var(--z-game);
+/* 4) Stage – alle Canvas & Start-Hintergrund/Panel teilen sich dieselbe Area
+   ------------------------------------------------------------------------- */
+#game,
+#overlay-paths,
+#overlay-units,
+#bg-start,
+#start-panel{
+  grid-area: stage;
+  z-index: var(--z-stage);
 }
 
-/* Quadratisches Spiel-Fenster mit aspect-ratio – skaliert maximal */
-#game{
-  width: 100%;
+/* 4.1) Quadratische Einpassung: wir „zentrieren“ den Stage-Inhalt */
+#game,
+#overlay-paths,
+#overlay-units{
+  justify-self: center;
+  align-self  : center;
+
+  /* Wichtig: Quadrat erzwingen, aber Canvas-Bitmapgröße bleibt über JS konfigurierbar.
+     Wir skalieren nur die Darstellung im Layout. */
+  width : min(100%, var(--stage-max));
   height: auto;
-  aspect-ratio: 1 / 1;      /* Garantiert Quadrat */
-  max-width: 100%;
-  max-height: 100%;
-  display: block;
-  image-rendering: pixelated; /* schöneres Retro-Feeling beim Zoom */
+  aspect-ratio: 1 / 1;      /* hält das sichtbare Canvas immer quadratisch */
+  image-rendering: pixelated;
 }
 
-/* Damit der Gamebereich niemals kleiner als ein sinnvoller Block wird */
+/* Overlays exakt auf Canvas legen */
+#overlay-paths,
+#overlay-units{
+  position: relative;
+  inset: 0;
+}
+
+/* Start-Hintergrund darf die Stage füllen, ohne Safe-Area zu verletzen */
+#bg-start{
+  justify-self: center;
+  align-self: center;
+  width : min(100%, var(--stage-max));
+  aspect-ratio: 1/1;
+  background-size: cover;
+  background-position: center;
+}
+
+/* Start-Panel liegt über allem zentriert in der Stage */
+#start-panel{
+  z-index: var(--z-panel);
+  justify-self: center;
+  align-self  : center;
+  max-width: min(92%, 640px);
+}
+
+/* 5) Kleine Helfer gegen „Wachsen/Shrinken“ durch Browser-Zoom
+   ------------------------------------------------------------ */
+/* Verhindert, dass Elternboxen durch den Canvas größer werden */
+#app > canvas,
+#app > div{
+  max-width: 100%;
+}
+
+/* 6) Touch-Friendly: Tabs/Notch – etwas Luft bei sehr kleinen Screens */
 @media (max-width: 360px){
-  #game{
-    min-width: 240px;
+  :root{
+    --hud-h : clamp(64px, 13vh, 96px);
+    --dock-h: clamp(160px, 36vh, 400px);
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* [3] Bereich: BUILD (Baumenü)                                               */
-/* -------------------------------------------------------------------------- */
-
-#build-panel{
-  grid-area: build;
-  border-radius: var(--radius);
-  overflow: hidden;
-  z-index: var(--z-build);
-
-  /* Der Inhalt darf scrollen, nicht das Gesamtlayout */
-  display: grid;
-  grid-template-rows: auto 1fr;  /* (Header / Scrollbereich) */
-  min-height: 0;                 /* wichtig für korrektes Scrollen im Grid */
-}
-
-/* Der Scrollbereich innerhalb des Panels (Klassen ggf. anpassen) */
-#build-panel .build-scroll,
-#build-panel .build-grid,
-#build-panel .build-content{
-  min-height: 0;
-  overflow: auto;
-}
-
-/* -------------------------------------------------------------------------- */
-/* [4] Hilfen / Utilities                                                     */
-/* -------------------------------------------------------------------------- */
-
-/* Verhindert, dass untergeordnete Elemente das Layout sprengen */
-.h-fit{
-  min-height: 0; /* nützlich für verschachtelte Grids/Flex-Container */
-}
-.w-fit{
-  min-width : 0;
-}
-
-/* Optional: dünner „Schatten“ um die Randmodule */
-.panel{
-  background: rgba(0,0,0,.25);
-  border-radius: var(--radius);
-  backdrop-filter: blur(2px);
-}
+/* 7) Debug (optional ein/auskommentieren)
+#app{ outline: 1px dashed rgba(255,255,255,.15); }
+#hud-top{ outline: 1px solid rgba(0,255,255,.15); }
+#build-dock{ outline: 1px solid rgba(255,255,0,.15); }
+*/
