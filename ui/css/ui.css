@@ -1,240 +1,69 @@
 /* ============================================================================
- * Datei   : ui/css/ui.css
- * Version : v19.0.0
- * Zweck   : Globale UI-Basis (Tokens, Reset, Buttons, Panel-Primitive)
- * Struktur:
- *   (1) Design Tokens
- *   (2) Reset & Base
- *   (3) Panel-Primitive (.ui-panel)
- *   (4) Buttons (Basis + Varianten)
- *   (5) Layout/Utilities
- *   (6) Optional: Globaler Außenrahmen
- *   (7) Canvas & Start-BG (Schichtung + Responsive)
- * ========================================================================== */
-
-/* (1) Design Tokens --------------------------------------------------------- */
-:root{
-  --ui-bg:           #0b0f14;
-  --ui-surface:      #11161e;
-  --ui-surface-2:    #141b26;
-  --ui-fg:           #e6eefc;
-  --ui-fg-dim:       #c8d6eb;
-  --ui-accent:       #8ab4f8;
-  --ui-accent-weak:  #4a7bd6;
-
-  --ui-border:        rgba(255,255,255,.10);
-  --ui-border-strong: #0d121a;
-  --ui-shadow:        0 18px 48px rgba(0,0,0,.32);
-
-  --ui-gap:    10px;
-  --ui-radius: 12px;
-
-  /* Pfad von ui/css → ../../assets/... */
-  --ui-panel-img: url("../../assets/ui/panel.png");
-
-  --ui-frame-size:  6px;
-  --ui-frame-color: rgba(255,255,255,.06);
-}
-
-/* (2) Reset & Base ---------------------------------------------------------- */
-html, body{
-  margin:0; padding:0;
-  background:#000; color:var(--ui-fg);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-  height: 100%;                 /* für mobile Viewport-Bugs */
-}
-*, *::before, *::after{ box-sizing: border-box; }
-img{ max-width:100%; display:block; }
-
-/* (3) Panel-Primitive ------------------------------------------------------- */
-/* Einheitlicher Holz-/Papierrahmen für alle Fenster via .ui-panel.
-   Tönung über Varianten .ui-panel--light / .ui-panel--dark steuerbar. */
-.ui-panel{
-  /* Standard (dunkel) – kann durch Modifier überschrieben werden */
-  --panel-bg1: rgba(18,24,34,.92);
-  --panel-bg2: rgba(12,16,24,.92);
-
-  background:
-    var(--ui-panel-img) center center / contain no-repeat,
-    linear-gradient(to bottom, var(--panel-bg1), var(--panel-bg2));
-  border: 0px solid var(--ui-border); /* border testweise auf 0px gesetzt •/
-  border-radius: var(--ui-radius);
-  box-shadow: var(--ui-shadow);
-  color: var(--ui-fg);
-  backdrop-filter: blur(2px);
-  padding: 12px;
-}
-/* Helle Variante – z.B. Startpanel */
-.ui-panel--light{
-  --panel-bg1: rgba(243,247,251,.94);
-  --panel-bg2: rgba(230,237,245,.94);
-  color: #0b1220;
-  border-color: #cbd5e1;
-}
-/* Dunkle Variante – z.B. HUD, Dock, Dialoge */
-.ui-panel--dark{
-  --panel-bg1: rgba(18,24,34,.92);
-  --panel-bg2: rgba(12,16,24,.92);
-  color: var(--ui-fg);
-  border-color: var(--ui-border);
-}
-
-/* (4) Buttons --------------------------------------------------------------- */
-button, .btn{
-  appearance: none;
-  border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  background: #1b2432;
-  color: var(--ui-fg);
-  font: 600 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: transform .06s ease, background .12s ease,
-              border-color .12s ease, box-shadow .12s ease;
-}
-button:hover, .btn:hover{
-  transform: translateY(-1px);
-  border-color: #2b3a52;
-  background: #1f2a3a;
-  box-shadow: 0 10px 26px rgba(0,0,0,.22);
-}
-button:active, .btn:active{ transform: translateY(0); }
-button:disabled, .btn:disabled{ opacity:.6; cursor:not-allowed; }
-
-.btn.main{ background: linear-gradient(#2a6de0, #1f58b5); border-color:#2b66cf; }
-.btn.ghost{ background: transparent; border-style: dashed; }
-.btn.warn { background: linear-gradient(#b83c2e, #8e2e23); border-color:#8e2e23; }
-
-button:focus-visible, .btn:focus-visible{
-  outline: 2px solid var(--ui-accent);
-  outline-offset: 2px;
-}
-
-/* (5) Layout/Utilities ------------------------------------------------------ */
-.ui-row{ display:flex; align-items:center; gap: var(--ui-gap); }
-.ui-col{ display:flex; flex-direction:column; gap: var(--ui-gap); }
-.ui-sep{ height:1px; background: var(--ui-border); margin: 6px 0; }
-
-/* (6) Optional: Globaler Außenrahmen ---------------------------------------- */
-body.ui-frame--global::before{
-  content:"";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 700; /* unter HUD(~950), Build(~950), Startpanel(1000) */
-  box-shadow:
-    inset 0 0 0 var(--ui-frame-size) var(--ui-frame-color),
-    inset 0 0 24px rgba(0,0,0,.35);
-  border-radius: 2px;
-}
-
-/* (7) Canvas & Start-BG (Schichtung + Responsive) -------------------------- */
-/* Canvas füllt den Bildschirm automatisch – keine feste Breite/Höhe nötig */
-#game{
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  display: block;
-  z-index: 0;          /* unter allem */
-  touch-action: manipulation; /* bessere Pointer-Interaktion auf Mobile */
-}
-
-/* Vollflächiger Start-Hintergrund unter Startpanel, über Canvas */
-#bg-start{
-  position: fixed;
-  inset: 0;
-  z-index: 900;        /* < Startpanel (1000) */
-  pointer-events: none;
-  opacity: 1;
-  transition: opacity .5s ease;
-  background:
-    radial-gradient(120% 120% at 50% 10%, rgba(0,0,0,.05) 0%,
-                    rgba(0,0,0,.22) 70%, rgba(0,0,0,.34) 100%),
-    url("../../assets/ui/start-bg.jpg") center/cover no-repeat;
-}
-#bg-start.fadeout{ opacity: 0; }
-
-/* Bewegungen reduzieren (Barrierefreiheit) */
-@media (prefers-reduced-motion: reduce){
-  *{ transition: none !important; animation: none !important; }
-  #bg-start{ transition: none !important; }
-}
-#app{ position:relative; }
-#game{ display:block; }
-#overlay-units{ position:absolute; left:0; top:0; z-index:50; pointer-events:none; }
-
-/* iOS Safari: weniger „Springen“ beim Zoomen/Scrollen */
-html, body { height: 100%; overscroll-behavior: none; }
-#app { position: relative; }
-#game, #overlay-units {
-  display: block;
-  -webkit-touch-callout: none;
-  touch-action: none;         /* Pointer sauber, kein Browser-Zoom-Gestenmix */
-  image-rendering: pixelated;
-}
-
-/* Overlay exakt stapeln */
-#app { position: relative; }
-#game { position: relative; z-index: 10; display:block; }
-#overlay-units { position:absolute; left:0; top:0; z-index:50; pointer-events:none; }
-
-/* ============================================================================
- * UI-Utility: Sichere Ausblendung
- * ----------------------------------------------------------------------------
- * Falls .hidden in älteren Styles nicht definiert oder übersteuert wird,
- * erzwingen wir hier das zuverlässige Verstecken (auch auf iOS/WebKit).
+ * [00] META
+ * Datei    : ui/css/ui.css
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Zweck    : Globaler UI‑Baukasten – Panels, Buttons, Badges, Cards, States
+ * Achtung  : Komponentenneutrale Styles; Spezifisches in jeweilige Modul‑CSS.
+ * Struktur :
+ *   [10] Typografie & Links
+ *   [20] Panel‑Grundstil
+ *   [30] Buttons (Basis + Varianten)
+ *   [40] Badges/Chips
+ *   [50] Karten/Container
+ *   [60] Zustände (is‑active/is‑disabled/...)
+ *   [70] Responsiv/Touch
  * ============================================================================
  */
-.hidden { display: none !important; visibility: hidden !important; }
 
-/* --- Icon-Größen global anpassen ------------------------------------------ */
-:root {
-  --icon-size-hud: 10px;
-  --icon-size-build: 48px;
-  --icon-size-cost: 8px;
+/* [10] Typografie & Links */
+a{ color:var(--accent); text-decoration:none; }
+a:hover{ text-decoration:underline; }
+
+/* [20] Panel‑Grundstil */
+.ui-panel{
+  background:var(--panel);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:var(--pad);
 }
 
-.hud-item img {
-  width: var(--icon-size-hud);
-  height: var(--icon-size-hud);
-  vertical-align: -2px;
-  margin-right: 4px;
+/* [30] Buttons */
+.btn{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:10px 14px; border:0; border-radius:10px;
+  background:var(--panel-strong); color:var(--fg);
+  font-weight:600; cursor:pointer; user-select:none;
+  transition:transform .04s ease, filter .12s ease;
+}
+.btn:hover{ filter:brightness(1.05); }
+.btn:active{ transform:translateY(1px); }
+.btn:focus{ outline:2px solid var(--accent); outline-offset:2px; }
+
+/* Varianten */
+.btn.main{ background:var(--accent); color:#081018; }
+.btn.ghost{ background:transparent; border:2px solid var(--accent); }
+.btn.warn{ background:var(--warn); color:#111; }
+.btn.danger{ background:var(--error); color:#fff; }
+
+/* [40] Badges / Chips */
+.badge{
+  display:inline-block; padding:2px 8px; border-radius:999px;
+  background:#0006; color:#fff; font-weight:600; font-size:.85rem;
 }
 
-.build-icon {
-  width: var(--icon-size-build);
-  height: var(--icon-size-build);
+/* [50] Karten/Container */
+.card{
+  background:var(--panel); border-radius:12px; box-shadow:var(--shadow);
+  padding:12px; position:relative;
 }
+.card__title{ font-weight:700; margin-bottom:6px; }
+.card__footer{ margin-top:10px; display:flex; justify-content:flex-end; gap:8px; }
 
-.cost-icon {
-  width: var(--icon-size-cost);
-  height: var(--icon-size-cost);
-  margin-right: 4px;
-}
-/* ============================================================================
- * [Global Tokens]
- * ========================================================================== */
-:root{
-  /* HUD/Build teilen sich das Panel-Image – hier zentral definieren */
-  --ui-panel-img: url("../assets/ui/panel.png");
-  /* Standard-Schrift */
-  --ui-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
+/* [60] Zustände */
+.is-active{ outline:2px solid var(--accent); }
+.is-disabled, .btn[disabled]{ opacity:.6; cursor:not-allowed; pointer-events:none; }
 
-/* ============================================================================
- * [Canvas Layering]
- * ========================================================================== */
-#game{
-  position: fixed; left:0; top:0;
-  width: 100vw; height: 100vh;
-  display:block;
-  z-index: 1;             /* unter HUD/Build/UI */
-  background: #1b2026;   /* Fallback-Dunkel, falls Map noch lädt */
-}
-/* UI-Layer (HUD/Build/Inspector/Overlay) liegen darüber */
-#hud-top, #build-dock, #inspector, .place-overlay{ position: fixed; z-index: 40; }
-
-/* Wenn Baumenü offen – ggf. Body-State nutzbar */
-body.is-build-open #build-dock{ display:block; }
+/* [70] Responsiv/Touch */
+@media (max-width:768px){ .btn{ padding:12px 16px; } }
+@media (pointer:coarse){ .btn{ min-height:40px; } } /* ≥40px Touch‑Target */
