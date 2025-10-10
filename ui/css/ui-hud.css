@@ -1,142 +1,33 @@
 /* ============================================================================
+ * [00] META
  * Datei    : ui/css/ui-hud.css
- * Projekt  : Neue Siedler
- * Version  : v23.0.0 (2025-10-07)
- * Modul    : Ressourcen-HUD (oben andockend)
- * Zweck    : 1) Einzeilige Leiste (kleine Screens wrap → 2 Zeilen)
- *            2) Pro Ressource ein quadratisches Holzpanel (panel.png)
- *            3) Name oben links, Icon mittig, Menge unten rechts
- *
- * Steuerung (Variablen)
- *   --hud-item-size   : Basisgröße je Kachel (quadratisch)
- *   --hud-gap         : Abstand der Kacheln
- *   --hud-z           : Z-Layer über Canvas
- *   --hud-panel-img   : Panel-Hintergrund (Holzrahmen)
- *   --hud-title-size  : Textgröße des Namens
- *   --hud-amt-size    : Textgröße der Menge
- *   --hud-icon-scale  : Anteil der Kachelbreite für das Icon
- * ========================================================================== */
-
-:root{
-  /* Grundlayout */
-  --hud-item-size : clamp(92px, 9vw, 128px);
-  --hud-gap       : clamp(3px, 0.4vw, 9px);
-  --hud-z         : 42;
-
-  /* Panel-Bild (Pfad relativ zu /ui/css/) */
-  --hud-panel-img : url("../../assets/ui/panel.png");
-
-  /* Typographie & Icon */
-  --hud-title-size: clamp(11px, 1.6vw, 14px);
-  --hud-amt-size  : clamp(12px, 2.0vw, 18px);
-  --hud-icon-scale: 0.6; /* 56% der Kachelbreite */
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Zweck    : Ressourcen‑HUD (oben mittig), Safe‑Areas, Touch‑Targets
+ * Struktur :
+ *   [10] HUD‑Leiste
+ *   [20] HUD‑Items
+ *   [30] Responsive
+ * ============================================================================
+ */
+.hud{
+  position:fixed; top:calc(8px + var(--safe-top)); left:50%; transform:translateX(-50%);
+  height:var(--hud-h);
+  display:flex; gap:18px; align-items:center;
+  background:rgba(0,0,0,.35); backdrop-filter:blur(4px);
+  padding:8px 14px; border-radius:14px;
+  z-index:var(--z-hud, 50);
 }
+.hud-item{ display:flex; align-items:center; gap:8px; min-height:40px; }
+.hud-item img{ width:36px; height:36px; vertical-align:-3px; image-rendering:pixelated; }
+.hud-item .label{ font-weight:700; }
+.hud-item .value{ opacity:.9; }
 
-/* ---------- Container oben andocken, transparent ------------------------- */
-#hud-top{
-  position: fixed; left: 0; right: 0; top: 0;
-  z-index: var(--hud-z);
-  padding: calc(env(safe-area-inset-top, 0px) + 6px) clamp(8px, 2vw, 14px) 8px;
-  background: transparent !important;
-  backdrop-filter: none !important;
-  pointer-events: none; /* nur die Kacheln selbst interaktiv */
+/* [30] Responsive */
+@media (max-width:1024px){
+  .hud{ gap:14px; }
 }
-
-/* ---------- Responsive Grid ---------------------------------------------- */
-#hud-top .hud-grid{
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(var(--hud-item-size), 1fr);
-  gap: var(--hud-gap);
-  align-items: center;
-  justify-items: center;
-  pointer-events: auto;
+@media (max-width:768px){
+  .hud{ gap:12px; padding:6px 10px; }
+  .hud-item img{ width:28px; height:28px; }
 }
-
-/* Kleine Screens → automatisch in zwei Zeilen umbrechen */
-@media (max-width: 640px){
-  #hud-top .hud-grid{
-    grid-auto-flow: row;
-    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-  }
-}
-
-/* ---------- Ressourcenkachel (Panel, quadratisch) ------------------------ */
-.res-card, .hud-item, .hud-cell{
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;                    /* quadratisch */
-  background: var(--hud-panel-img) center / 100% 100% no-repeat !important;
-  border: none !important;
-  border-radius: 0 !important;            /* kein Rund – Holzrahmen bleibt sauber */
-  box-shadow: none !important;
-  padding: clamp(6px, 1.2vw, 10px);
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.5);
-  overflow: hidden;
-  cursor: pointer;
-}
-
-/* Fokus/hover dezent (Holzrahmen bleibt) */
-.res-card:is(:hover, :focus-visible),
-.hud-item:is(:hover, :focus-visible),
-.hud-cell:is(:hover, :focus-visible){
-  filter: brightness(1.05);
-  outline: none;
-}
-
-/* ---------- Titel oben links -------------------------------------------- */
-.res-card .res-title,
-.hud-item .name,
-.hud-cell .name{
-  position: absolute;
-  left: 8px; top: 6px; right: 8px;
-  font: 700 var(--hud-title-size) / 1 var(--ui-font, system-ui);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Fallback: falls nur data-name gesetzt ist */
-.res-card[data-name]::before,
-.hud-item[data-name]::before,
-.hud-cell[data-name]::before{
-  content: attr(data-name);
-  position: absolute;
-  left: 8px; top: 6px; right: 8px;
-  font: 700 var(--hud-title-size) / 1 var(--ui-font, system-ui);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ---------- Icon mittig --------------------------------------------------- */
-.res-card .res-icon,
-.hud-item img,
-.hud-cell img{
-  position: absolute;
-  left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: calc(100% * var(--hud-icon-scale));
-  height: auto;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-}
-
-/* ---------- Menge unten rechts ------------------------------------------- */
-.res-card .res-amount,
-.hud-item b,
-.hud-cell .amount{
-  position: absolute; right: 10px; bottom: 6px;
-  font: 800 var(--hud-amt-size) / 1 var(--ui-font, system-ui);
-  text-shadow:
-    0 1px 0 rgba(0,0,0,.35),
-    0 0 4px rgba(0,0,0,.35);
-}
-
-/* ---------- Technik/Legacy-Absicherungen --------------------------------- */
-/* Keine extra Hintergründe/Sheets im Grid */
-#hud-top .hud-grid{ background: transparent !important; }
-
-/* Wenn alte HUD-Knoten noch "Holz: 0" als flachen Text haben,
-   bleibt die Menge trotzdem sauber unten rechts dargestellt. */
-.hud-item{ white-space: nowrap; }
