@@ -61,7 +61,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("../../assets/ui/build/frame_wood_64.png");
+  background-image: url("../../assets/ui/panel.png");
   background-size: cover;
   opacity: 0.25;              /* leicht, nur Struktur */
   pointer-events: none;
