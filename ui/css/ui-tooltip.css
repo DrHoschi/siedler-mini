@@ -1,151 +1,20 @@
 /* ============================================================================
- * Datei: ui/ui-tooltip.js
- * Version: v18.9.2 (2025-09-26)
- * Zweck: Hover-Tooltip mit großem Icon + Kurzbeschreibung (Build-Items)
- * Leitplanken:
- *   - Keine harten Abhängigkeiten: Registry optional, Fallbacks vorhanden
- *   - Hört auf mouseenter/leave/move der .build-item Kacheln
- *   - Inhalte via data-Attribute oder Registry-Fallback
- * Struktur:
- *   (0) Logger-Guard
- *   (1) State/DOM
- *   (2) Lookup (Registry + Fallback)
- *   (3) Show/Hide/Move
- *   (4) Wiring
- * ========================================================================== */
-
-/* (0) Logger-Guard ----------------------------------------------------------- */
-if (!window.CBLog || typeof window.CBLog.ok !== "function") {
-  window.CBLog = { ok:console.log, info:console.log, warn:console.warn, error:console.error };
+ * [00] META
+ * Datei    : ui/css/ui-tooltip.css
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Zweck    : Tooltips / Helper‑Hints (Hover/Long‑Press)
+ * Struktur :
+ *   [10] Bubble
+ *   [20] Pfeil
+ * ============================================================================
+ */
+.tooltip{
+  position:absolute; padding:6px 10px; background:#000c; color:#fff;
+  border-radius:8px; font-size:.9rem; pointer-events:none; max-width:280px;
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
 }
-const TIP_MOD = "[ui-tooltip]";
-
-/* (1) State/DOM -------------------------------------------------------------- */
-let tipRoot = null;
-function ensureTip(){
-  if (tipRoot) return tipRoot;
-  tipRoot = document.createElement("div");
-  tipRoot.className = "ui-tooltip";
-  tipRoot.innerHTML = `
-    <div class="tip-card">
-      <div class="tip-head">
-        <img class="tip-icon" alt="">
-        <h4 class="tip-title"></h4>
-      </div>
-      <p class="tip-desc"></p>
-    </div>`;
-  document.body.appendChild(tipRoot);
-  return tipRoot;
+.tooltip:after{
+  content:""; position:absolute; width:8px; height:8px; background:#000c; transform:rotate(45deg);
+  bottom:-4px; left:12px;
 }
-
-/* (2) Lookup (Registry + Fallback) ------------------------------------------ */
-function lookupById(id){
-  // Versuche verschiedene mögliche Registry-Strukturen
-  const R = window.Registry || {};
-  const hit =
-    (R.getBuilding && R.getBuilding(id)) ||
-    (R.buildings && (R.buildings[id] || R.buildings.find?.(b=>b.id===id))) ||
-    (R.data && R.data.buildings && (R.data.buildings[id] || R.data.buildings.find?.(b=>b.id===id))) ||
-    null;
-  return hit || {};
-}
-function getDataFromEl(el){
-  const id    = el?.dataset?.id || el?.getAttribute?.("data-id");
-  const label = el?.dataset?.label || el?.querySelector?.(".label")?.textContent?.trim();
-  const imgEl = el?.querySelector?.("img");
-  const icon  = imgEl?.getAttribute("src") || imgEl?.dataset?.src;
-
-  // Registry-Fallback: Beschreibung/altIcon
-  const reg   = id ? lookupById(id) : {};
-  const title = label || reg.name || id || "Unbenannt";
-  const desc  = reg.desc || reg.description || el?.dataset?.desc || "–";
-  const icon2 = reg.icon || reg.img || reg.sprite || null;
-
-  return {
-    id,
-    title,
-    desc,
-    icon: icon || icon2 || "",
-  };
-}
-
-/* (3) Show/Hide/Move --------------------------------------------------------- */
-function showAt(x, y, data){
-  const root = ensureTip();
-  const tIcon = root.querySelector(".tip-icon");
-  const tTitle= root.querySelector(".tip-title");
-  const tDesc = root.querySelector(".tip-desc");
-
-  tTitle.textContent = data.title || "";
-  tDesc.textContent  = data.desc || "";
-
-  if (data.icon) {
-    tIcon.src = data.icon;
-    tIcon.removeAttribute("hidden");
-  } else {
-    tIcon.removeAttribute("src");
-    tIcon.setAttribute("hidden", "");
-  }
-
-  // Positionieren – leichte Offsets, Clamping am Rand
-  const pad = 14;
-  const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-  const vh = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
-  let px = x, py = y;
-  px = Math.max(pad, Math.min(vw - pad, px));
-  py = Math.max(pad + 60, Math.min(vh - pad, py)); // 60px Mindesthöhe über Cursor
-
-  root.style.left = px + "px";
-  root.style.top  = py + "px";
-  root.classList.add("is-visible");
-}
-
-function hide(){
-  if (!tipRoot) return;
-  tipRoot.classList.remove("is-visible");
-}
-
-function onEnter(ev){
-  const item = ev.currentTarget;
-  const data = getDataFromEl(item);
-  // Erste Position (wenn keine Mausbewegung davor)
-  showAt(ev.clientX || 0, ev.clientY || 0, data);
-  // Live bewegen
-  item.addEventListener("mousemove", onMove);
-  item.__tipData = data;
-}
-function onLeave(ev){
-  const item = ev.currentTarget;
-  item.removeEventListener("mousemove", onMove);
-  item.__tipData = null;
-  hide();
-}
-function onMove(ev){
-  const item = ev.currentTarget;
-  const data = item.__tipData || getDataFromEl(item);
-  showAt(ev.clientX || 0, ev.clientY || 0, data);
-}
-
-/* (4) Wiring ----------------------------------------------------------------- */
-function wire(){
-  const root = document.getElementById("build-dock");
-  if (!root) return;
-
-  // Delegation: nur .build-item bestücken (auch wenn später neu gerendert)
-  const items = root.querySelectorAll(".build-item");
-  items.forEach(it=>{
-    if (it.__tipBound) return;
-    it.addEventListener("mouseenter", onEnter);
-    it.addEventListener("mouseleave", onLeave);
-    it.__tipBound = true;
-  });
-  (window.CBLog?.info||console.log)(`${TIP_MOD} gebunden (${items.length} items)`);
-}
-
-// initial + nach Re-Renders (ui-bridge triggert rerender)
-document.addEventListener("DOMContentLoaded", wire);
-window.addEventListener("cb:UIBuild:ready", wire);
-window.addEventListener("cb:registry:ready", wire);
-window.addEventListener("cb:build:open", wire);
-// Safety: bei Fenstergröße ändern ggf. Position anpassen
-window.addEventListener("resize", hide);
