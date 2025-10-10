@@ -122,6 +122,36 @@
   <script src="tools/debug-tools.js"></script>   <!-- Console/Overlay/Checks -->
   <script src="tools/graphviz-playground.js"></script> <!-- (Optional) Projektvisualisierung -->
 
+<script>
+(function(){
+  const dpr = window.devicePixelRatio || 1;
+
+  function resizeCanvasByCssAndDpr(canvas){
+    // Sichtbare Größe: per CSS (100vw/100vh) – wir lesen sie aus:
+    const rect = canvas.getBoundingClientRect();
+    // Interner Buffer: an DPR anpassen (scharf)
+    const w = Math.max(1, Math.round(rect.width  * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width !== w)   canvas.width  = w;
+    if (canvas.height !== h)  canvas.height = h;
+  }
+
+  function resizeAll(){
+    const canvases = [
+      document.getElementById('game'),
+      document.getElementById('overlay-paths'),
+      document.getElementById('overlay-units'),
+    ].filter(Boolean);
+    canvases.forEach(resizeCanvasByCssAndDpr);
+  }
+
+  // Initial + bei Resize/Orientation
+  window.addEventListener('resize', resizeAll);
+  window.addEventListener('orientationchange', resizeAll);
+  document.addEventListener('DOMContentLoaded', resizeAll);
+})();
+</script>
+  
   <!-- [26] INLINE-WIRING – schlank halten: nur Start der Boot-Kette -->
   <script>
   /* ======================================================================
