@@ -32,8 +32,8 @@
 
   /* HUD/Build‑Dock – Standardbreiten/-höhen */
   --hud-h:64px;
-  --dock-w:42px;         /* Desktop/Large */
-  --dock-w-sm:32px;      /* Tablet/Small */
+  --dock-w:420px;         /* Desktop/Large */
+  --dock-w-sm:320px;      /* Tablet/Small */
 
   /* Safe‑Area (Mobile, iOS, Notches) */
   --safe-top:env(safe-area-inset-top);
