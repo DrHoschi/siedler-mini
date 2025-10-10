@@ -1,168 +1,91 @@
 /* ============================================================================
- * Datei    : ui/css/ui-layout.css
- * Projekt  : Neue Siedler
- * Version  : v24.4.0 (2025-10-10)
- * Zweck    : Zentrales Docking/Layout für HUD (oben/links), Stage (quadratisch),
- *            Build-Dock (unten/rechts) – Portrait & Landscape.
- *
- * Abhängigkeiten: index.html mit #app, #hud-top, #build-dock, #build-panel,
- *                 Canvas (#game, #overlay-paths, #overlay-units), #bg-start, #start-panel.
- * Konvention   : Modul-CSS (ui-hud.css, ui-build.css, ui-place.css) stylen nur das Innere,
- *                NICHT Position/Größe der Bereiche. Layout lebt hier.
- * Events/Flows : Startpanel zuerst sichtbar (cb:ui-ready), dann cb:game-start etc.  [oai_citation:2‡Lastenheft_NeueSiedler_Vollversion v1.0.pdf](file-service://file-3LhVFNfaWzhV5CMo8PkBF7)
- * ========================================================================== */
+ * [00] META
+ * Datei    : ui/css/layout.css
+ * Projekt  : Neue Siedler (Siedler‑Mini)
+ * Version  : v19.2.0 (2025-10-10)
+ * Autor    : GPT-5 Thinking
+ * Zweck    : Globales Fundament – Root-Variablen, Grundlayout, Safe‑Areas, Grids, Layering
+ * Leitplanken:
+ *   – Nur Basislayout; KEINE Komponenten-Styles hier!
+ *   – Startfenster erscheint zuerst (geregelt in ui-start.css).
+ *   – Touch‑Targets ≥ 40 px und Safe‑Areas beachten.
+ * Struktur (nummeriert):
+ *   [10] Root‑Variablen
+ *   [20] Grundlayout (html/body/#app/canvas)
+ *   [30] Layering (Z‑Index‑Leitplanken)
+ *   [40] Breakpoints (Responsiv)
+ *   [50] Orientation‑Regeln (Portrait/Landscape + Safe‑Areas)
+ *   [90] Utilities (klein & generisch)
+ * ============================================================================
+ */
 
-/* 0) Grund-Variablen – hier stellst du die „Slots“ ein
-   -------------------------------------------------- */
+/* [10] Root‑Variablen (global konsistent) */
 :root{
-  /* Safe-Areas (iOS/Android) – werden automatisch gefüllt, hier als Fallback */
-  --safe-top   : env(safe-area-inset-top, 0px);
-  --safe-right : env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left  : env(safe-area-inset-left, 0px);
+  /* Farb-Schema (beibehalten laut Projektvorgaben) */
+  --bg:#1e1e1e; --fg:#f0f0f0; --accent:#4da3ff;
+  --panel:#2a2a2a; --panel-weak:#242424; --panel-strong:#333;
+  --ok:#34c759; --info:#4da3ff; --warn:#f2b84b; --error:#ff3b30;
 
-  /* Höhen/Breiten der Dock-Bereiche im Portrait */
-  --hud-h      : clamp(72px, 14vh, 120px);   /* Ressourcenleiste oben */
-  --dock-h     : clamp(180px, 32vh, 420px);  /* Baumenü unten */
+  /* Maße / Radien / Abstände */
+  --radius:12px; --radius-sm:8px; --gap:12px; --pad:16px;
+  --shadow:0 6px 18px rgba(0,0,0,.35);
 
-  /* Breiten der Dock-Bereiche im Landscape */
-  --hud-w      : clamp(108px, 18vw, 240px);  /* Ressourcenleiste links */
-  --dock-w     : clamp(260px, 34vw, 480px);  /* Baumenü rechts */
+  /* HUD/Build‑Dock – Standardbreiten/-höhen */
+  --hud-h:64px;
+  --dock-w:420px;         /* Desktop/Large */
+  --dock-w-sm:320px;      /* Tablet/Small */
 
-  /* Max-Stage-Größe (Sicherheitskappung), z. B. damit Stage nie riesig wird */
-  --stage-max  : 110vmin;
-
-  /* Z-Layer (Stage unten, HUD/Dock darüber) */
-  --z-stage    : 10;
-  --z-hud      : 20;
-  --z-dock     : 20;
-  --z-panel    : 30; /* Startpanel etc. */
+  /* Safe‑Area (Mobile, iOS, Notches) */
+  --safe-top:env(safe-area-inset-top);
+  --safe-right:env(safe-area-inset-right);
+  --safe-bottom:env(safe-area-inset-bottom);
+  --safe-left:env(safe-area-inset-left);
 }
 
-/* 1) #app als responsive Grid-Container
-   ------------------------------------ */
-#app{
-  position: relative;
-  min-height: 100dvh;
-  min-width : 100%;
-  margin: 0;
-  padding: 0;
+/* [20] Grundlayout: Seite & Canvas */
+html,body{
+  margin:0; padding:0; background:var(--bg); color:var(--fg);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Noto Sans",sans-serif;
+  height:100%;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+#app{ position:relative; isolation:isolate; width:100vw; height:100vh; }
+canvas#game{ display:block; width:100vw; height:100vh; }
 
-  display: grid;
-  grid-template-areas:
-    "hud"
-    "stage"
-    "dock";
-  grid-template-rows : calc(var(--hud-h) + var(--safe-top)) 1fr calc(var(--dock-h) + var(--safe-bottom));
-  grid-template-columns: 100%;
+/* [30] Layering: feste, verständliche Ebenen */
+.layer-map      { z-index:10; }
+.layer-overlays { z-index:40; pointer-events:none; }
+.layer-hud      { z-index:50; }
+.layer-build    { z-index:55; }
+.layer-dialog   { z-index:70; }
+.layer-insp     { z-index:80; } /* Inspector stets über UI */
 
-  /* kleine optische Basis */
-  background: none;
+/* [40] Breakpoints – responsiv skaliert */
+@media (max-width: 1200px){
+  :root{ --dock-w:380px; }
+}
+@media (max-width: 1024px){
+  :root{ --dock-w:var(--dock-w-sm); }
+}
+@media (max-width: 768px){
+  :root{ --pad:12px; --gap:10px; }
 }
 
-/* Landscape-Umschaltung: links HUD, Mitte Stage (quadratisch), rechts Dock */
-@media (orientation: landscape){
-  #app{
-    grid-template-areas:
-      "hud stage dock";
-    grid-template-columns: calc(var(--hud-w) + var(--safe-left)) 1fr calc(var(--dock-w) + var(--safe-right));
-    grid-template-rows: 100%;
-  }
+/* XXL / Widescreen Optional */
+@media (min-width: 1600px){
+  :root{ --dock-w:480px; }
 }
 
-/* 2) HUD-Bereich (nur Docking, Optik bleibt in ui-hud.css)
-   ------------------------------------------------------- */
-#hud-top{
-  grid-area: hud;
-  z-index: var(--z-hud);
-  /* Innenabstände an Safe-Areas ausrichten */
-  padding-top   : calc(var(--safe-top));
-  padding-left  : calc(var(--safe-left));
-  padding-right : calc(var(--safe-right));
-  padding-bottom: 6px;
-  /* Der Inhalt (Kacheln) kommt aus ui-hud.css */
+/* [50] Orientation & Safe‑Areas */
+@media (orientation:portrait){
+  body{ padding-top:var(--safe-top); padding-bottom:var(--safe-bottom); }
+}
+@media (orientation:landscape){
+  body{ padding-left:var(--safe-left); padding-right:var(--safe-right); }
 }
 
-/* 3) Build-Dock (unten/rechts) – der Container, den ui-build.js bestückt
-   ---------------------------------------------------------------------- */
-#build-dock, #build-panel{
-  grid-area: dock;
-  z-index: var(--z-dock);
-  padding-left  : calc(var(--safe-left));
-  padding-right : calc(var(--safe-right));
-  padding-bottom: calc(var(--safe-bottom));
-  /* Optik (Rahmen, Grid, Karten) macht ui-build.css – hier nur der Slot */
-}
-
-/* 4) Stage – alle Canvas & Start-Hintergrund/Panel teilen sich dieselbe Area
-   ------------------------------------------------------------------------- */
-#game,
-#overlay-paths,
-#overlay-units,
-#bg-start,
-#start-panel{
-  grid-area: stage;
-  z-index: var(--z-stage);
-}
-
-/* 4.1) Quadratische Einpassung: wir „zentrieren“ den Stage-Inhalt */
-#game,
-#overlay-paths,
-#overlay-units{
-  justify-self: center;
-  align-self  : center;
-
-  /* Wichtig: Quadrat erzwingen, aber Canvas-Bitmapgröße bleibt über JS konfigurierbar.
-     Wir skalieren nur die Darstellung im Layout. */
-  width : min(100%, var(--stage-max));
-  height: auto;
-  aspect-ratio: 1 / 1;      /* hält das sichtbare Canvas immer quadratisch */
-  image-rendering: pixelated;
-}
-
-/* Overlays exakt auf Canvas legen */
-#overlay-paths,
-#overlay-units{
-  position: relative;
-  inset: 0;
-}
-
-/* Start-Hintergrund darf die Stage füllen, ohne Safe-Area zu verletzen */
-#bg-start{
-  justify-self: center;
-  align-self: center;
-  width : min(100%, var(--stage-max));
-  aspect-ratio: 1/1;
-  background-size: cover;
-  background-position: center;
-}
-
-/* Start-Panel liegt über allem zentriert in der Stage */
-#start-panel{
-  z-index: var(--z-panel);
-  justify-self: center;
-  align-self  : center;
-  max-width: min(92%, 640px);
-}
-
-/* 5) Kleine Helfer gegen „Wachsen/Shrinken“ durch Browser-Zoom
-   ------------------------------------------------------------ */
-/* Verhindert, dass Elternboxen durch den Canvas größer werden */
-#app > canvas,
-#app > div{
-  max-width: 100%;
-}
-
-/* 6) Touch-Friendly: Tabs/Notch – etwas Luft bei sehr kleinen Screens */
-@media (max-width: 360px){
-  :root{
-    --hud-h : clamp(64px, 13vh, 96px);
-    --dock-h: clamp(160px, 36vh, 400px);
-  }
-}
-
-/* 7) Debug (optional ein/auskommentieren)
-#app{ outline: 1px dashed rgba(255,255,255,.15); }
-#hud-top{ outline: 1px solid rgba(0,255,255,.15); }
-#build-dock{ outline: 1px solid rgba(255,255,0,.15); }
-*/
+/* [90] Utilities (bewusst knapp) */
+.u-hidden{ display:none !important; }
+.u-scroll-y{ overflow-y:auto; }
+.u-abs-fill{ position:absolute; inset:0; }
