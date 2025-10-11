@@ -132,7 +132,7 @@
 .hud-item::before{
   content: "";
   position: absolute; inset: 0;
-  background: url("../../assets/ui/build/frame_wood_64.png") center/cover no-repeat;
+  background: url("../../assets/ui/panel.png") center/cover no-repeat;
   opacity: .22; pointer-events: none;
 }
 */
