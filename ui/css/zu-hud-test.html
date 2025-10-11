@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Neue Siedler – HUD-Test</title>
+  
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
+
+  <style>
+    /* Nur für die Demo-Seite, damit man was im Hintergrund sieht */
+    body {
+      background-color: #2a3a2a; /* Dunkles Grün */
+      min-height: 200vh; /* Ermöglicht Scrollen zum Testen von position:fixed */
+      font-family: sans-serif;
+      color: white;
+      text-align: center;
+      padding-top: 150px;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="hud-top" class="hud">
+  
+    <div class="hud-item">
+      <div class="hud-item-content">
+        <span class="hud-item-name">Holz</span>
+        <img class="hud-item-icon" src="assets/icons/resources/wood.png" alt="">
+        <span class="hud-item-amount" id="hud-wood">1250</span>
+      </div>
+    </div>
+
+    <div class="hud-item">
+      <div class="hud-item-content">
+        <span class="hud-item-name">Stein</span>
+        <img class="hud-item-icon" src="assets/icons/resources/stone.png" alt="">
+        <span class="hud-item-amount" id="hud-stone">840</span>
+      </div>
+    </div>
+
+    <div class="hud-item">
+      <div class="hud-item-content">
+        <span class="hud-item-name">Fisch</span>
+        <img class="hud-item-icon" src="assets/icons/resources/fish.png" alt="">
+        <span class="hud-item-amount" id="hud-fish">350</span>
+      </div>
+    </div>
+
+    <div class="hud-item">
+      <div class="hud-item-content">
+        <span class="hud-item-name">Gold</span>
+        <img class="hud-item-icon" src="assets/icons/resources/gold.png" alt="">
+        <span class="hud-item-amount" id="hud-gold">150</span>
+      </div>
+    </div>
+    
+    <div class="hud-item">
+      <div class="hud-item-content">
+        <span class="hud-item-name">Werkzeug</span>
+        <img class="hud-item-icon" src="assets/icons/resources/tools.png" alt="">
+        <span class="hud-item-amount" id="hud-tools">42</span>
+      </div>
+    </div>
+
+  </div>
+  
+  <h1>HUD-Testseite</h1>
+  <p>Drehe dein Smartphone ins Querformat, um die Seitenleiste zu sehen.</p>
+
+</body>
+</html>
