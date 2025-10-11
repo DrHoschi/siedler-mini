@@ -2,14 +2,8 @@
  * [00] META
  * Datei    : ui/css/ui-hud.css
  * Projekt  : Neue Siedler (Siedler‑Mini)
- * Version  : v20.0.0 (2025-10-11)
- * Zweck    : Responsives Ressourcen-HUD mit Landscape-Modus (vertikal).
- * Struktur :
- * [01] CSS-Variablen (Globale Einstellungen)
- * [10] HUD-Leiste (Hochformat / Standard)
- * [20] HUD-Item (Quadratisches Feld)
- * [30] Item-Inhalt (Name, Icon, Menge)
- * [40] Landscape-Modus (Für gedrehte Smartphones)
+ * Version  : v20.1.0 (2025-10-11)
+ * Zweck    : Responsives Ressourcen-HUD mit robuster Bildgrößen-Kontrolle.
  * ============================================================================ */
 
 /* [01] CSS-Variablen (Globale Einstellungen)
@@ -17,13 +11,17 @@
 :root {
   /* HIER DEINE PFADE UND EINSTELLUNGEN ANPASSEN */
   --hud-frame-image: url('../../assets/ui/holzrahmen.png'); /* ◀️ DEIN BILD HIER */
-  --hud-item-size: 80px;      /* Kantenlänge der quadratischen Felder */
-  --hud-gap: 8px;             /* Abstand zwischen den Feldern */
-  --hud-padding: 10px;        /* Innenabstand der Leiste */
-  --hud-font-family: 'Arial', sans-serif; /* Schriftart */
-  --hud-font-color: #f5e2c2; /* Warme, helle Schriftfarbe */
+  --hud-item-size: 80px;
+  --hud-gap: 8px;
+  --hud-padding: 10px;
+  --hud-font-family: 'Arial', sans-serif;
+  --hud-font-color: #f5e2c2;
   --hud-font-size-name: 0.75rem;
   --hud-font-size-amount: 0.9rem;
+
+  /* --- NEU: Eigene Variable für die Icon-Größe --- */
+  /* Ändere diesen Wert, um die Icons größer oder kleiner zu machen. */
+  --hud-icon-size: 45%; /* Größe des Icons relativ zur Feldgröße (var(--hud-item-size)) */
 }
 
 
@@ -31,52 +29,41 @@
  * ========================================================================== */
 .hud {
   position: fixed;
-  top: 10px; /* Sicherer Abstand von oben */
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
-
   display: flex;
-  flex-wrap: nowrap; /* Kein Umbruch, erzwingt horizontales Scrollen */
+  flex-wrap: nowrap;
   gap: var(--hud-gap);
   align-items: center;
-
   width: 95%;
-  max-width: 600px; /* Verhindert, dass die Leiste auf Tablets zu breit wird */
+  max-width: 600px;
   height: calc(var(--hud-item-size) + (var(--hud-padding) * 2));
   padding: var(--hud-padding);
   box-sizing: border-box;
-
-  /* Wichtig für sauberes Scrollen auf Touch-Geräten */
   overflow-x: auto;
   overflow-y: hidden;
-  -webkit-overflow-scrolling: touch; /* Flüssiges Scrollen auf iOS */
-
-  /* Scrollbar für eine saubere Optik ausblenden */
-  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
 .hud::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Edge */
+  display: none;
 }
 
 
 /* [20] HUD-Item (Quadratisches Feld)
  * ========================================================================== */
 .hud-item {
-  /* Sorgt dafür, dass die Felder nicht schrumpfen oder wachsen */
   flex: 0 0 var(--hud-item-size);
   width: var(--hud-item-size);
   height: var(--hud-item-size);
-  position: relative; /* Wichtig für die Positionierung des Inhalts */
-
-  /* Hier wird dein Holzrahmen-Bild als Hintergrund gesetzt */
+  position: relative;
   background-image: var(--hud-frame-image);
-  background-size: cover; /* Füllt das Feld komplett aus */
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  
-  /* Hilfreich, um den Inhalt nicht direkt am Rand kleben zu haben */
   padding: 5px;
   box-sizing: border-box;
 }
@@ -85,12 +72,11 @@
 /* [30] Item-Inhalt (Name, Icon, Menge)
  * ========================================================================== */
 .hud-item-content {
-  /* CSS Grid ist perfekt für diese Anordnung */
   display: grid;
   width: 100%;
   height: 100%;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto 1fr; /* Obere Zeile für Name, Rest für Icon/Menge */
+  grid-template-rows: auto 1fr;
   grid-template-areas:
     "name name"
     "icon amount";
@@ -104,25 +90,31 @@
   text-align: center;
   font-size: var(--hud-font-size-name);
   font-weight: 600;
-  white-space: nowrap; /* Verhindert Umbruch bei langen Namen */
+  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis; /* Schneidet zu lange Namen mit "..." ab */
+  text-overflow: ellipsis;
 }
 
 .hud-item-icon {
   grid-area: icon;
-  /* Platziert das Icon unten in seiner Grid-Zelle */
   align-self: end;
-  justify-self: center; /* Zentriert es horizontal */
-  width: 50%; /* Icon-Größe relativ zur Feldgröße */
-  height: auto;
-  margin-bottom: 5px; /* Etwas Abstand nach unten */
-  image-rendering: pixelated; /* Für Pixel-Art-Icons */
+  justify-self: center;
+  margin-bottom: 5px;
+  image-rendering: pixelated;
+  
+  /* --- NEU: Bessere Kontrolle über die Icon-Größe --- */
+  width: var(--hud-icon-size);
+  height: var(--hud-icon-size); /* Sorgt für einen quadratischen Platz für das Icon */
+  max-width: 100%; /* Zusätzliche Sicherheit, falls var() zu groß ist */
+
+  /* WICHTIG: Verhindert, dass große Bilder das Layout verzerren.
+     'contain' skaliert das Bild so, dass es komplett in den Bereich passt,
+     ohne es zu beschneiden oder zu strecken. Das Seitenverhältnis bleibt erhalten. */
+  object-fit: contain; 
 }
 
 .hud-item-amount {
   grid-area: amount;
-  /* Platziert die Menge unten rechts in ihrer Grid-Zelle */
   align-self: end;
   justify-self: end;
   font-size: var(--hud-font-size-amount);
@@ -133,27 +125,19 @@
 /* [40] Landscape-Modus (Für gedrehte Smartphones)
  * ========================================================================== */
 @media (orientation: landscape) and (max-height: 500px) {
-  /* Wir zielen auf Handy-ähnliche Geräte, nicht auf breite Desktop-Monitore */
-
-  /* Die HUD-Leiste wird zur vertikalen Seitenleiste */
   .hud {
     top: 0;
     left: 0;
-    transform: none; /* Zentrierung aufheben */
-
+    transform: none;
     width: calc(var(--hud-item-size) + (var(--hud-padding) * 2));
-    height: 100vh; /* Volle Bildschirmhöhe */
-    
-    flex-direction: column; /* Items untereinander anordnen */
-    overflow-y: auto;       /* Vertikales Scrollen erlauben */
+    height: 100vh;
+    flex-direction: column;
+    overflow-y: auto;
     overflow-x: hidden;
   }
 
-  /* Der Inhalt der Items wird gedreht, damit er lesbar bleibt */
   .hud-item-content {
     transform: rotate(90deg);
-    /* Die Grid-Dimensionen müssen eventuell angepasst werden,
-       da Höhe und Breite nach der Drehung vertauscht sind.
-       In diesem Fall passt es aber meistens gut. */
   }
 }
+
