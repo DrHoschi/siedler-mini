@@ -1,21 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges">
   <!-- 
-    SVG-Nachbau des Holz-Icons von DrHoschi/siedler-mini.
-    Behält den exakten Pixel-Art-Stil bei.
-    shape-rendering="crispEdges" verhindert das Weichzeichnen der Kanten.
+    High-fidelity vector recreation of the original wood.png pixel art.
+    Each color group represents a layer in the original image.
+    Using 'shape-rendering: crispEdges' ensures a sharp, pixel-perfect look.
   -->
-  
-  <!-- Schatten & dunkle Holzteile -->
-  <path fill="#785c42" d="M2 12h12v1H2z M3 9h10v1H3z M4 6h8v1H4z"/>
-  
-  <!-- Mittlere Holzfarbe -->
-  <path fill="#a0522d" d="M2 11h12v1H2z M3 8h10v1H3z M4 5h8v1H4z"/>
-  
-  <!-- Helle Holzteile (Lichtreflexe) -->
-  <path fill="#d2b48c" d="M2 10h12v1H2z M3 7h10v1H3z M4 4h8v1H4z"/>
-  
-  <!-- Baumrinde an den Seiten (dunkelster Ton) -->
-  <path fill="#4b3a2e" d="M2 10H1v2h1z M14 10v2h1v-2z M3 7H2v2h1z M13 7v2h1V7z M4 4H3v2h1z M12 4v2h1V4z"/>
+  <g fill="#634024"> <!-- Darkest Brown (Outlines / Deep Shadow) -->
+    <path d="M5 9V10h-1v1h-1v2h1v1h1v1h14v-1h1v-1h1v-2h-1v-1h-1V9H5zM2 11H3V13H2zM21 11H22V13H21zM6 15H20V16H6z"/>
+  </g>
+  <g fill="#8D6C42"> <!-- Medium Brown (Main log color) -->
+    <path d="M5 9h14v1H5zM4 10h16v1H4zM4 13h16v1H4zM5 14h14v1H5z"/>
+  </g>
+  <g fill="#D5A96A"> <!-- Light Brown (Highlight) -->
+    <path d="M4 11h16v1H4z"/>
+  </g>
+  <g fill="#F7E3B4"> <!-- Cream (Top Highlight) -->
+    <path d="M4 12h16v1H4z"/>
+  </g>
 </svg>
 
 
