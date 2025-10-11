@@ -1,0 +1,63 @@
+<svg width="100" height="100" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    ================================================================================
+    Dynamischer 9-Slice SVG-Rahmen mit Papiermaserung und Eisennägeln
+    Version: 2.0
+    Zweck: Ein flexibler Hintergrund für UI-Elemente, der sich ohne Verzerrung an
+           unterschiedliche Größen anpasst.
+    ================================================================================
+  -->
+  <defs>
+    <!-- Filter für die "alte Papier" Textur -->
+    <filter id="paperTexture">
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" seed="5"/>
+      <feColorMatrix type="saturate" values="0.2"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.4"/>
+      </feComponentTransfer>
+    </filter>
+
+    <!-- Farbverläufe für den 3D-Effekt des Holzrahmens -->
+    <linearGradient id="woodShadow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5C3D23"/>
+      <stop offset="100%" stop-color="#846244"/>
+    </linearGradient>
+    <linearGradient id="woodHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A58264"/>
+      <stop offset="100%" stop-color="#6F513A"/>
+    </linearGradient>
+
+    <!-- 
+      --- NEU: Farbverlauf für die Eisennägel ---
+      Ein radialer Verlauf simuliert einen Lichtpunkt in der Mitte des Nagelkopfes.
+    -->
+    <radialGradient id="ironNailGradient">
+      <stop offset="0%" stop-color="#d3d3d3"/>   <!-- Lichtreflex (Hellgrau) -->
+      <stop offset="50%" stop-color="#808080"/>  <!-- Grundfarbe (Grau) -->
+      <stop offset="100%" stop-color="#404040"/> <!-- Schatten (Dunkelgrau) -->
+    </radialGradient>
+  </defs>
+
+  <!-- HINTERGRUND & PAPIER -->
+  <rect width="100" height="100" fill="#846244"/>
+  <rect x="12" y="12" width="76" height="76" fill="#EAE0C8"/>
+  <rect x="12" y="12" width="76" height="76" fill="#6D5843" filter="url(#paperTexture)"/>
+
+  <!-- HOLZRAHMEN (3D-Effekt) -->
+  <polygon points="0,0 100,0 88,12 12,12" fill="url(#woodShadow)"/>
+  <polygon points="0,0 0,100 12,88 12,12" fill="url(#woodShadow)"/>
+  <polygon points="100,100 0,100 12,88 88,88" fill="url(#woodHighlight)"/>
+  <polygon points="100,100 100,0 88,12 88,88" fill="url(#woodHighlight)"/>
+  
+  <!-- 
+    --- NEU: NÄGEL (EISENOPTIK) ---
+    Vier Kreise, die mit dem Eisen-Farbverlauf gefüllt sind.
+    Sie sind an den Ecken positioniert und skalieren mit dem Rahmen mit.
+  -->
+  <circle cx="6" cy="6" r="4" fill="url(#ironNailGradient)" />      <!-- Oben Links -->
+  <circle cx="94" cy="6" r="4" fill="url(#ironNailGradient)" />     <!-- Oben Rechts -->
+  <circle cx="6" cy="94" r="4" fill="url(#ironNailGradient)" />     <!-- Unten Links -->
+  <circle cx="94" cy="94" r="4" fill="url(#ironNailGradient)" />    <!-- Unten Rechts -->
+</svg>
+
+
