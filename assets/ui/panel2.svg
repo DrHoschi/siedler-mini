@@ -28,7 +28,7 @@
     </linearGradient>
 
     <!-- 
-      --- NEU: Farbverlauf für die Eisennägel ---
+      - NEU: Farbverlauf für die Eisennägel ---
       Ein radialer Verlauf simuliert einen Lichtpunkt in der Mitte des Nagelkopfes.
     -->
     <radialGradient id="ironNailGradient">
