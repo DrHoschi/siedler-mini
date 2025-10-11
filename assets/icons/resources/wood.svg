@@ -1,21 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <!-- 
-    High-fidelity vector recreation of the original wood.png pixel art.
-    Each color group represents a layer in the original image.
-    Using 'shape-rendering: crispEdges' ensures a sharp, pixel-perfect look.
+    Stylized Wood Icon
+    Version: 2.0
+    A clean, modern vector icon that captures the essence of "wood"
+    for a game UI.
   -->
-  <g fill="#634024"> <!-- Darkest Brown (Outlines / Deep Shadow) -->
-    <path d="M5 9V10h-1v1h-1v2h1v1h1v1h14v-1h1v-1h1v-2h-1v-1h-1V9H5zM2 11H3V13H2zM21 11H22V13H21zM6 15H20V16H6z"/>
-  </g>
-  <g fill="#8D6C42"> <!-- Medium Brown (Main log color) -->
-    <path d="M5 9h14v1H5zM4 10h16v1H4zM4 13h16v1H4zM5 14h14v1H5z"/>
-  </g>
-  <g fill="#D5A96A"> <!-- Light Brown (Highlight) -->
-    <path d="M4 11h16v1H4z"/>
-  </g>
-  <g fill="#F7E3B4"> <!-- Cream (Top Highlight) -->
-    <path d="M4 12h16v1H4z"/>
-  </g>
-</svg>
+  <defs>
+    <linearGradient id="logGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#A07A57"/>
+      <stop offset="100%" stop-color="#8D6C42"/>
+    </linearGradient>
+  </defs>
 
+  <!-- Hinterster Holzstamm (dunkler) -->
+  <path d="M5,22 C5,20.895 5.895,20 7,20 L25,20 C26.105,20 27,20.895 27,22 L27,26 C27,27.105 26.105,28 25,28 L7,28 C5.895,28 5,27.105 5,26 Z" fill="#6E553C"/>
+  <path d="M9,23 L23,23" stroke="#503E2C" stroke-width="1.5" stroke-linecap="round"/>
+  
+  <!-- Mittlerer Holzstamm -->
+  <path d="M4,15 C4,13.895 4.895,13 6,13 L26,13 C27.105,13 28,13.895 28,15 L28,19 C28,20.105 27.105,21 26,21 L6,21 C4.895,21 4,20.105 4,19 Z" fill="#8D6C42"/>
+  <path d="M8,16 L24,16" stroke="#6E553C" stroke-width="1.5" stroke-linecap="round"/>
+  
+  <!-- Vorderster Holzstamm (heller, mit Farbverlauf) -->
+  <path d="M6,8 C6,6.895 6.895,6 8,6 L24,6 C25.105,6 26,6.895 26,8 L26,12 C26,13.105 25.105,14 24,14 L8,14 C6.895,14 6,13.105 6,12 Z" fill="url(#logGradient)"/>
+  <path d="M10,9 L22,9" stroke="#6E553C" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M7,8 L25,8" stroke="#D5B08C" stroke-width="1" stroke-linecap="round" stroke-opacity="0.8"/>
+</svg>
 
