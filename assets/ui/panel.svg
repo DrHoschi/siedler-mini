@@ -1,16 +1,57 @@
-<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-  <!-- Hintergrundfarbe -->
-  <rect width="80" height="80" fill="#8C5A2E"/>
+<svg width="100" height="100" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    ================================================================================
+    Dynamischer 9-Slice SVG-Rahmen mit Papiermaserung
+    Version: 1.0
+    Zweck: Ein flexibler Hintergrund für UI-Elemente, der sich ohne Verzerrung an
+           unterschiedliche Größen anpasst.
+    
+    WICHTIG: Das Attribut 'preserveAspectRatio="none"' ermöglicht das dynamische
+             Strecken der Grafik.
+    ================================================================================
+  -->
+  <defs>
+    <!-- 
+      Ein SVG-Filter, der eine prozedurale Textur für das "alte Papier" erzeugt.
+      Er ist sehr leicht und performant.
+    -->
+    <filter id="paperTexture">
+      <!-- Erzeugt ein perlin-noise-ähnliches Muster -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="4" seed="5"/>
+      <!-- Reduziert die Farbsättigung für einen vergilbten Look -->
+      <feColorMatrix type="saturate" values="0.2"/>
+      <!-- Fügt eine leichte Transparenz hinzu, um die Textur subtiler zu machen -->
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.4"/>
+      </feComponentTransfer>
+    </filter>
 
-  <!-- Innere Schatten für Tiefe -->
-  <polygon points="0,0 80,0 76,4 4,4" fill="#6B4624"/>
-  <polygon points="0,0 0,80 4,76 4,4" fill="#6B4624"/>
+    <!-- Farbverläufe für den 3D-Effekt des Holzrahmens -->
+    <linearGradient id="woodShadow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5C3D23"/>
+      <stop offset="100%" stop-color="#846244"/>
+    </linearGradient>
+    <linearGradient id="woodHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A58264"/>
+      <stop offset="100%" stop-color="#6F513A"/>
+    </linearGradient>
+  </defs>
 
-  <!-- Äußere Highlights für 3D-Effekt -->
-  <polygon points="80,80 0,80 4,76 76,76" fill="#A96E3A"/>
-  <polygon points="80,80 80,0 76,4 76,76" fill="#A96E3A"/>
+  <!-- HINTERGRUND & PAPIER -->
+  <!-- 1. Grundfläche des Holzes (liegt ganz hinten) -->
+  <rect width="100" height="100" fill="#846244"/>
+  
+  <!-- 2. Papierfläche in der Mitte (Grundfarbe) -->
+  <rect x="12" y="12" width="76" height="76" fill="#EAE0C8"/>
+  
+  <!-- 3. Die Papiermaserung wird über die Grundfarbe gelegt -->
+  <rect x="12" y="12" width="76" height="76" fill="#6D5843" filter="url(#paperTexture)"/>
 
-  <!-- Leichte Maserung (sehr stilisiert) -->
-  <path d="M10 0 V 80 M25 0 V 80 M40 0 V 80 M55 0 V 80 M70 0 V 80" stroke="#6B4624" stroke-width="1" opacity="0.5"/>
+  <!-- HOLZRAHMEN (3D-Effekt) -->
+  <!-- 4. Abgeschrägte Kanten, die den 3D-Effekt erzeugen -->
+  <polygon points="0,0 100,0 88,12 12,12" fill="url(#woodShadow)"/>    <!-- Oben (Schatten) -->
+  <polygon points="0,0 0,100 12,88 12,12" fill="url(#woodShadow)"/>    <!-- Links (Schatten) -->
+  <polygon points="100,100 0,100 12,88 88,88" fill="url(#woodHighlight)"/> <!-- Unten (Licht) -->
+  <polygon points="100,100 100,0 88,12 88,88" fill="url(#woodHighlight)"/> <!-- Rechts (Licht) -->
 </svg>
 
