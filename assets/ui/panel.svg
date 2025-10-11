@@ -1,0 +1,16 @@
+<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- Hintergrundfarbe -->
+  <rect width="80" height="80" fill="#8C5A2E"/>
+
+  <!-- Innere Schatten für Tiefe -->
+  <polygon points="0,0 80,0 76,4 4,4" fill="#6B4624"/>
+  <polygon points="0,0 0,80 4,76 4,4" fill="#6B4624"/>
+
+  <!-- Äußere Highlights für 3D-Effekt -->
+  <polygon points="80,80 0,80 4,76 76,76" fill="#A96E3A"/>
+  <polygon points="80,80 80,0 76,4 76,76" fill="#A96E3A"/>
+
+  <!-- Leichte Maserung (sehr stilisiert) -->
+  <path d="M10 0 V 80 M25 0 V 80 M40 0 V 80 M55 0 V 80 M70 0 V 80" stroke="#6B4624" stroke-width="1" opacity="0.5"/>
+</svg>
+
