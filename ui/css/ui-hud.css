@@ -2,164 +2,158 @@
  * [00] META
  * Datei    : ui/css/ui-hud.css
  * Projekt  : Neue Siedler (Siedler‑Mini)
- * Version  : v19.2.0 (2025-10-10)
- * Zweck    : Ressourcen‑HUD (oben mittig), Safe‑Areas, Touch‑Targets
+ * Version  : v20.0.0 (2025-10-11)
+ * Zweck    : Responsives Ressourcen-HUD mit Landscape-Modus (vertikal).
  * Struktur :
- *   [10] HUD‑Leiste
- *   [20] HUD‑Items
- *   [30] Responsive
- * ============================================================================
- */
+ * [01] CSS-Variablen (Globale Einstellungen)
+ * [10] HUD-Leiste (Hochformat / Standard)
+ * [20] HUD-Item (Quadratisches Feld)
+ * [30] Item-Inhalt (Name, Icon, Menge)
+ * [40] Landscape-Modus (Für gedrehte Smartphones)
+ * ============================================================================ */
 
-/* ============================================================================
- * HUD v19.3 – Holzrahmen-Stil, horizontal scrollbar, quadratische Felder
+/* [01] CSS-Variablen (Globale Einstellungen)
  * ========================================================================== */
+:root {
+  /* HIER DEINE PFADE UND EINSTELLUNGEN ANPASSEN */
+  --hud-frame-image: url('../../assets/ui/holzrahmen.png'); /* ◀️ DEIN BILD HIER */
+  --hud-item-size: 80px;      /* Kantenlänge der quadratischen Felder */
+  --hud-gap: 8px;             /* Abstand zwischen den Feldern */
+  --hud-padding: 10px;        /* Innenabstand der Leiste */
+  --hud-font-family: 'Arial', sans-serif; /* Schriftart */
+  --hud-font-color: #f5e2c2; /* Warme, helle Schriftfarbe */
+  --hud-font-size-name: 0.75rem;
+  --hud-font-size-amount: 0.9rem;
+}
 
-/* [10] HUD-Leiste */
-.hud{
+
+/* [10] HUD-Leiste (Hochformat / Standard)
+ * ========================================================================== */
+.hud {
   position: fixed;
-  top: calc(8px + var(--safe-top));
+  top: 10px; /* Sicherer Abstand von oben */
   left: 50%;
   transform: translateX(-50%);
+  z-index: 100;
+
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-
-  height: 60px;
-  padding: 6px 10px;
-  background: none;            /* kein eigener Hintergrund */
-  overflow-x: auto;            /* seitliches Scrollen erlaubt */
-  overflow-y: hidden;
-  scrollbar-width: thin;       /* Firefox */
-  -webkit-overflow-scrolling: touch; /* iOS smooth scroll */
-  z-index: var(--z-hud, 50);
-}
-
-/* [20] Einzelnes HUD-Feld (Holzrahmen-Stil) */
-.hud-item{
-  position: relative;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-
-  width: 110px;
-  height: 48px;
-  box-sizing: border-box;
-  font-weight: 700;
-  color: #f5e2c2;             /* warme Holzschrift */
-  background-color: #7b4a1d;  /* Holzgrundton */
-  border: 4px solid #4b2b0c;  /* dunkler Holzrand */
-  box-shadow: inset 0 0 4px rgba(0,0,0,.4), 0 2px 4px rgba(0,0,0,.3);
-  border-radius: 4px;         /* kaum rund – fast quadratisch */
-}
-
-/* Holztextur optional (wenn vorhanden) */
-.hud-item::before{
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("../../assets/ui/panel.png");
-  background-size: cover;
-  opacity: 0.25;              /* leicht, nur Struktur */
-  pointer-events: none;
-}
-
-/* [30] Symbole */
-.hud-item img{
-  width: 24px;
-  height: 24px;
-  image-rendering: pixelated;
-  flex-shrink: 0;
-}
-
-/* [40] Responsive */
-@media (max-width: 900px){
-  .hud-item{ width: 90px; height: 44px; font-size: 0.85rem; }
-  .hud-item img{ width: 20px; height: 20px; }
-}
-
-/* ==== HUD Icon-Fix (harte Kappung, unabhängig von globalen img-Regeln) ==== */
-.hud{
-  /* lokale HUD-Variablen -> hier bequem die Größe drehen */
-  --hud-icon: 20px;      /* Icon-Kantenlänge */
-  --hud-item-h: 36px;    /* Feldhöhe */
-  --hud-gap: 8px;        /* Abstand zwischen Feldern */
-
-  position: fixed;
-  top: calc(8px + var(--safe-top));
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
+  flex-wrap: nowrap; /* Kein Umbruch, erzwingt horizontales Scrollen */
   gap: var(--hud-gap);
   align-items: center;
-  flex-wrap: nowrap;
 
-  height: max(var(--hud-item-h), calc(var(--hud-icon) + 12px));
-  padding: 4px 8px;
-  background: none;
+  width: 95%;
+  max-width: 600px; /* Verhindert, dass die Leiste auf Tablets zu breit wird */
+  height: calc(var(--hud-item-size) + (var(--hud-padding) * 2));
+  padding: var(--hud-padding);
+  box-sizing: border-box;
+
+  /* Wichtig für sauberes Scrollen auf Touch-Geräten */
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-  z-index: var(--z-hud, 50);
+  -webkit-overflow-scrolling: touch; /* Flüssiges Scrollen auf iOS */
+
+  /* Scrollbar für eine saubere Optik ausblenden */
+  scrollbar-width: none; /* Firefox */
 }
 
-/* Rechteckige Holztafel (ohne runde Ecken) */
-.hud-item{
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+.hud::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
 
-  height: var(--hud-item-h);
-  min-width: 84px;            /* damit Text nicht bricht */
-  padding: 4px 8px;
+
+/* [20] HUD-Item (Quadratisches Feld)
+ * ========================================================================== */
+.hud-item {
+  /* Sorgt dafür, dass die Felder nicht schrumpfen oder wachsen */
+  flex: 0 0 var(--hud-item-size);
+  width: var(--hud-item-size);
+  height: var(--hud-item-size);
+  position: relative; /* Wichtig für die Positionierung des Inhalts */
+
+  /* Hier wird dein Holzrahmen-Bild als Hintergrund gesetzt */
+  background-image: var(--hud-frame-image);
+  background-size: cover; /* Füllt das Feld komplett aus */
+  background-position: center;
+  background-repeat: no-repeat;
+  
+  /* Hilfreich, um den Inhalt nicht direkt am Rand kleben zu haben */
+  padding: 5px;
   box-sizing: border-box;
+}
+
+
+/* [30] Item-Inhalt (Name, Icon, Menge)
+ * ========================================================================== */
+.hud-item-content {
+  /* CSS Grid ist perfekt für diese Anordnung */
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr; /* Obere Zeile für Name, Rest für Icon/Menge */
+  grid-template-areas:
+    "name name"
+    "icon amount";
+  color: var(--hud-font-color);
+  font-family: var(--hud-font-family);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.hud-item-name {
+  grid-area: name;
+  text-align: center;
+  font-size: var(--hud-font-size-name);
+  font-weight: 600;
+  white-space: nowrap; /* Verhindert Umbruch bei langen Namen */
+  overflow: hidden;
+  text-overflow: ellipsis; /* Schneidet zu lange Namen mit "..." ab */
+}
+
+.hud-item-icon {
+  grid-area: icon;
+  /* Platziert das Icon unten in seiner Grid-Zelle */
+  align-self: end;
+  justify-self: center; /* Zentriert es horizontal */
+  width: 50%; /* Icon-Größe relativ zur Feldgröße */
+  height: auto;
+  margin-bottom: 5px; /* Etwas Abstand nach unten */
+  image-rendering: pixelated; /* Für Pixel-Art-Icons */
+}
+
+.hud-item-amount {
+  grid-area: amount;
+  /* Platziert die Menge unten rechts in ihrer Grid-Zelle */
+  align-self: end;
+  justify-self: end;
+  font-size: var(--hud-font-size-amount);
   font-weight: 700;
-  background-color: #7b4a1d;  /* Holzgrundton */
-  border: 3px solid #4b2b0c;  /* dunkler Holzrand */
-  box-shadow: inset 0 0 3px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.25);
-  border-radius: 2px;         /* quasi eckig */
 }
 
-/* Holztextur (optional – auskommentieren, wenn noch keine Datei) */
-/*
-.hud-item::before{
-  content: "";
-  position: absolute; inset: 0;
-  background: url("../../assets/ui/panel.png") center/cover no-repeat;
-  opacity: .22; pointer-events: none;
-}
-*/
 
-/* *** Harter Icon-Override – killt globale img{width:100%} *** */
-.hud img{
-  width: var(--hud-icon) !important;
-  height: var(--hud-icon) !important;
-  max-width: none !important;
-  max-height: none !important;
-  flex: 0 0 auto;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
+/* [40] Landscape-Modus (Für gedrehte Smartphones)
+ * ========================================================================== */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Wir zielen auf Handy-ähnliche Geräte, nicht auf breite Desktop-Monitore */
 
-/* Text-Enge etwas reduzieren */
-.hud .label{ font-weight: 700; }
-.hud .value{ opacity: .9; }
+  /* Die HUD-Leiste wird zur vertikalen Seitenleiste */
+  .hud {
+    top: 0;
+    left: 0;
+    transform: none; /* Zentrierung aufheben */
 
-/* Mobile enger/kleiner */
-@media (max-width: 820px){
-  .hud{ --hud-icon: 18px; --hud-item-h: 32px; --hud-gap: 6px; }
-  .hud-item{ min-width: 78px; padding: 3px 6px; }
-}
+    width: calc(var(--hud-item-size) + (var(--hud-padding) * 2));
+    height: 100vh; /* Volle Bildschirmhöhe */
+    
+    flex-direction: column; /* Items untereinander anordnen */
+    overflow-y: auto;       /* Vertikales Scrollen erlauben */
+    overflow-x: hidden;
+  }
 
-/* Sehr schmal: Icons winzig, Feld noch schmaler */
-@media (max-width: 420px){
-  .hud{ --hud-icon: 16px; --hud-item-h: 30px; }
-  .hud-item{ min-width: 70px; }
+  /* Der Inhalt der Items wird gedreht, damit er lesbar bleibt */
+  .hud-item-content {
+    transform: rotate(90deg);
+    /* Die Grid-Dimensionen müssen eventuell angepasst werden,
+       da Höhe und Breite nach der Drehung vertauscht sind.
+       In diesem Fall passt es aber meistens gut. */
+  }
 }
