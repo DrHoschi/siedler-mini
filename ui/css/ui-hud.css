@@ -1,143 +1,30 @@
-/* ============================================================================
- * [00] META
- * Datei    : ui/css/ui-hud.css
- * Projekt  : Neue Siedler (Siedler‑Mini)
- * Version  : v20.1.0 (2025-10-11)
- * Zweck    : Responsives Ressourcen-HUD mit robuster Bildgrößen-Kontrolle.
- * ============================================================================ */
-
-/* [01] CSS-Variablen (Globale Einstellungen)
- * ========================================================================== */
-:root {
-  /* HIER DEINE PFADE UND EINSTELLUNGEN ANPASSEN */
-  --hud-frame-image: url('../../assets/ui/holzrahmen.png'); /* ◀️ DEIN BILD HIER */
-  --hud-item-size: 80px;
-  --hud-gap: 8px;
-  --hud-padding: 10px;
-  --hud-font-family: 'Arial', sans-serif;
-  --hud-font-color: #f5e2c2;
-  --hud-font-size-name: 0.75rem;
-  --hud-font-size-amount: 0.9rem;
-
-  /* --- NEU: Eigene Variable für die Icon-Größe --- */
-  /* Ändere diesen Wert, um die Icons größer oder kleiner zu machen. */
-  --hud-icon-size: 45%; /* Größe des Icons relativ zur Feldgröße (var(--hud-item-size)) */
-}
-
-
-/* [10] HUD-Leiste (Hochformat / Standard)
- * ========================================================================== */
-.hud {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--hud-gap);
-  align-items: center;
-  width: 95%;
-  max-width: 600px;
-  height: calc(var(--hud-item-size) + (var(--hud-padding) * 2));
-  padding: var(--hud-padding);
-  box-sizing: border-box;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.hud::-webkit-scrollbar {
-  display: none;
-}
-
-
-/* [20] HUD-Item (Quadratisches Feld)
- * ========================================================================== */
+/* Für deine quadratischen HUD-Items */
 .hud-item {
-  flex: 0 0 var(--hud-item-size);
-  width: var(--hud-item-size);
-  height: var(--hud-item-size);
-  position: relative;
-  background-image: var(--hud-frame-image);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  padding: 5px;
-  box-sizing: border-box;
+  width: 80px;
+  height: 80px;
+  background-image: url('../../assets/ui/rahmen-papier.svg');
+  border: none; /* Kein extra CSS-Rahmen mehr nötig */
+  padding: 12px; /* Wichtig, damit der Inhalt nicht über den SVG-Rahmen hinausragt */
+}
+
+/* Für eine breite Info-Leiste */
+.info-panel {
+  width: 400px;
+  height: 100px;
+  background-image: url('../../assets/ui/rahmen-papier.svg');
+  border: none;
+  padding: 15px;
+}
+
+/* Für ein hohes Charakter-Portrait */
+.character-portrait {
+  width: 150px;
+  height: 220px;
+  background-image: url('../../assets/ui/rahmen-papier.svg');
+  border: none;
+  padding: 20px;
 }
 
 
-/* [30] Item-Inhalt (Name, Icon, Menge)
- * ========================================================================== */
-.hud-item-content {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    "name name"
-    "icon amount";
-  color: var(--hud-font-color);
-  font-family: var(--hud-font-family);
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
-}
 
-.hud-item-name {
-  grid-area: name;
-  text-align: center;
-  font-size: var(--hud-font-size-name);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hud-item-icon {
-  grid-area: icon;
-  align-self: end;
-  justify-self: center;
-  margin-bottom: 5px;
-  image-rendering: pixelated;
-  
-  /* --- NEU: Bessere Kontrolle über die Icon-Größe --- */
-  width: var(--hud-icon-size);
-  height: var(--hud-icon-size); /* Sorgt für einen quadratischen Platz für das Icon */
-  max-width: 100%; /* Zusätzliche Sicherheit, falls var() zu groß ist */
-
-  /* WICHTIG: Verhindert, dass große Bilder das Layout verzerren.
-     'contain' skaliert das Bild so, dass es komplett in den Bereich passt,
-     ohne es zu beschneiden oder zu strecken. Das Seitenverhältnis bleibt erhalten. */
-  object-fit: contain; 
-}
-
-.hud-item-amount {
-  grid-area: amount;
-  align-self: end;
-  justify-self: end;
-  font-size: var(--hud-font-size-amount);
-  font-weight: 700;
-}
-
-
-/* [40] Landscape-Modus (Für gedrehte Smartphones)
- * ========================================================================== */
-@media (orientation: landscape) and (max-height: 500px) {
-  .hud {
-    top: 0;
-    left: 0;
-    transform: none;
-    width: calc(var(--hud-item-size) + (var(--hud-padding) * 2));
-    height: 100vh;
-    flex-direction: column;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  .hud-item-content {
-    transform: rotate(90deg);
-  }
-}
-
+Du hast jetzt ein extrem mächtiges und performantes Werkzeug. Diese eine SVG-Datei ersetzt viele verschiedene Hintergrundbilder, lädt sofort und sieht auf jedem Bildschirm perfekt aus.
