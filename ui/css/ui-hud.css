@@ -14,8 +14,8 @@
   --cell-size: 72px;          /* => Leistenhöhe (Portrait) UND Leistenbreite (Landscape) */
 
   /* Inhalt */
-  --icon-scale: 0.72;         /* Anteil der InnenBREITE (0..1) → Safari-fest */
-  --land-rotation: -90deg;    /* bei Bedarf 90deg/-90deg tauschen */
+  --icon-scale: 2.72;         /* Anteil der InnenBREITE (0..1) → Safari-fest */
+  --land-rotation: 0deg;    /* bei Bedarf 90deg/-90deg tauschen */
 }
 
 /* Root der HUD-Leiste */
