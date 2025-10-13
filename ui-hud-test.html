@@ -1,72 +1,30 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Neue Siedler – HUD-Test</title>
-  
-  <link rel="stylesheet" href="ui-hud.css">
-
-  <style>
-    /* Nur für die Demo-Seite, damit man was im Hintergrund sieht */
-    body {
-      background-color: #2a3a2a; /* Dunkles Grün */
-      min-height: 200vh; /* Ermöglicht Scrollen zum Testen von position:fixed */
-      font-family: sans-serif;
-      color: white;
-      text-align: center;
-      padding-top: 150px;
-    }
-  </style>
-</head>
+<!-- ============================================================================
+     Datei: index.html (HUD-Einbindung)
+     Projekt: Neue Siedler
+     Version: v1.0.0 (2025-10-13)
+     Zweck : HUD-Leiste oben/seitlich andocken, 9-Slice-Rahmen für Ressourcenzellen
+     Struktur: (#app) → #hud-bar (fixed) → .hud-strip → .hud-cell* + Pfeile
+============================================================================ -->
 <body>
+  <div id="app">
+    <!-- HUD-Leiste -->
+    <div id="hud-bar" class="hud--portrait">
+      <button class="hud-nav hud-nav--left" aria-label="links">&#9664;</button>
 
-  <div id="hud-top" class="hud">
-  
-    <div class="hud-item">
-      <div class="hud-item-content">
-        <span class="hud-item-name">Holz</span>
-        <img class="hud-item-icon" src="assets/icons/resources/wood.png" alt="">
-        <span class="hud-item-amount" id="hud-wood">1250</span>
+      <div class="hud-strip" id="hud-strip" tabindex="0">
+        <!-- Zellen werden von ui/ui-hud.js gerendert -->
       </div>
+
+      <button class="hud-nav hud-nav--right" aria-label="rechts">&#9654;</button>
     </div>
 
-    <div class="hud-item">
-      <div class="hud-item-content">
-        <span class="hud-item-name">Stein</span>
-        <img class="hud-item-icon" src="assets/icons/resources/stone.png" alt="">
-        <span class="hud-item-amount" id="hud-stone">840</span>
-      </div>
-    </div>
-
-    <div class="hud-item">
-      <div class="hud-item-content">
-        <span class="hud-item-name">Fisch</span>
-        <img class="hud-item-icon" src="assets/icons/resources/fish.png" alt="">
-        <span class="hud-item-amount" id="hud-fish">350</span>
-      </div>
-    </div>
-
-    <div class="hud-item">
-      <div class="hud-item-content">
-        <span class="hud-item-name">Gold</span>
-        <img class="hud-item-icon" src="assets/icons/resources/gold.png" alt="">
-        <span class="hud-item-amount" id="hud-gold">150</span>
-      </div>
-    </div>
-    
-    <div class="hud-item">
-      <div class="hud-item-content">
-        <span class="hud-item-name">Werkzeug</span>
-        <img class="hud-item-icon" src="assets/icons/resources/tools.png" alt="">
-        <span class="hud-item-amount" id="hud-tools">42</span>
-      </div>
-    </div>
-
+    <!-- Dein übriger Game-Content (Canvas etc.) -->
+    <canvas id="game"></canvas>
   </div>
-  
-  <h1>HUD-Testseite</h1>
-  <p>Drehe dein Smartphone ins Querformat, um die Seitenleiste zu sehen.</p>
 
+  <!-- Styles (bitte in ui/css/ui-hud.css ablegen) -->
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
+
+  <!-- HUD Logik -->
+  <script type="module" src="ui/ui-hud.js"></script>
 </body>
-</html>
