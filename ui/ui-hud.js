@@ -156,7 +156,7 @@ const HUD = (() => {
     $("#t-ls").addEventListener("input",  e=> setVar("--cell-size-land", e.target.value+"px"));
     $("#t-side").addEventListener("change", e=> { state.forceSide = e.target.value || null; setDocking(); });
 
-    // Toggle per Taste "H" ein/aus
+     // Toggle per Taste "H" ein/aus
     window.addEventListener("keydown", (ev)=>{
       if (ev.key.toLowerCase() === "h"){
         box.style.display = box.style.display === "none" ? "grid" : "none";
