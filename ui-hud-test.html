@@ -1,240 +1,40 @@
 <!doctype html>
 <html lang="de">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>HUD-Frame Test</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HUD-Test</title>
+
+<!-- Nur das HUD-CSS -->
+<link rel="stylesheet" href="ui/css/ui-hud.css">
 <style>
-  /* =================== CONFIG =================== */
-  :root{
-    /* 👉 HIER deinen Rahmen (mit Nägeln) setzen */
-    --hud-frame-src: url("assets/ui/frame_wood_parchment_v2_2.svg");
-    --hud-border-slice: 12;
-
-    /* Größen feinjustieren */
-    --hud-height: 64px;        /* Portrait-Höhe der Leiste */
-    --hud-side-width: 76px;    /* Landscape-Breite links/rechts */
-    --hud-gap: 8px;
-    --hud-padding: 8px;
-
-    --hud-cell-w: 160px;       /* Mindestbreite einer Zelle (Portrait) */
-    --hud-cell-h: 56px;        /* Innenhöhe der Zelle */
-    --hud-content-rotate: 0deg;/* wird per JS gesetzt */
+  body {
+    margin: 0;
+    background: #3f2a1f;
+    font-family: system-ui, sans-serif;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-
-  body{
-    margin:0; background:#3f2a1f; height:100dvh; overflow:hidden;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  }
-
-  /* Dummy Spielfläche, damit man die HUD-Überlagerung sieht */
-  #stage{ position:absolute; inset:0; background:#6b4a33; }
-
-  /* ===== HUD-Bar (root) ===== */
-  #hud-bar{
-    position:fixed; z-index:1000; pointer-events:none;
-  }
-  /* Portrait oben */
-  #hud-bar.hud--portrait{
-    left:0; right:0; top:env(safe-area-inset-top, 0);
-    height: calc(var(--hud-height) + var(--hud-padding)*2);
-    display:grid; grid-template-columns:auto 1fr auto; align-items:center;
-  }
-  /* Landscape links */
-  #hud-bar.hud--land-left{
-    top:0; bottom:0; left:env(safe-area-inset-left, 0);
-    width: calc(var(--hud-side-width) + var(--hud-padding)*2);
-    display:grid; grid-template-rows:auto 1fr auto; justify-items:center;
-  }
-  /* Landscape rechts */
-  #hud-bar.hud--land-right{
-    top:0; bottom:0; right:env(safe-area-inset-right, 0);
-    width: calc(var(--hud-side-width) + var(--hud-padding)*2);
-    display:grid; grid-template-rows:auto 1fr auto; justify-items:center;
-  }
-
-  /* Scrollbarer Streifen */
-  .hud-strip{
-    pointer-events:auto; overflow:auto; -webkit-overflow-scrolling:touch;
-    display:flex; gap:var(--hud-gap); padding:var(--hud-padding); align-items:center;
-    scrollbar-width:thin; scroll-snap-type:x mandatory;
-  }
-  /* Portrait: horizontal */
-  #hud-bar.hud--portrait .hud-strip{ flex-direction:row; height:100%; }
-  /* Landscape: vertikal */
-  #hud-bar.hud--land-left .hud-strip,
-  #hud-bar.hud--land-right .hud-strip{
-    flex-direction:column; width:100%; height:100%;
-    overflow-x:hidden; overflow-y:auto; scroll-snap-type:y mandatory;
-  }
-
-  /* Pfeile */
-  .hud-nav{
-    pointer-events:auto; border:none; width:36px; height:36px; border-radius:8px;
-    background:rgba(0,0,0,.35); color:#fff; font-weight:700; display:grid; place-items:center;
-    margin:6px; user-select:none;
-  }
-
-  /* ===== Zellen (9-Slice Rahmen) ===== */
-  .hud-cell{
-    position:relative; flex:0 0 auto; min-width:var(--hud-cell-w); height:var(--hud-cell-h);
-    padding:8px 12px; display:grid; align-items:center;
-    grid-auto-flow:column; grid-template-columns:28px auto auto; gap:10px;
-
-    border: var(--hud-border-slice) solid transparent;
-    -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
-    border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
-
-    scroll-snap-align:start;
-    backdrop-filter: saturate(110%);
-  }
-
-  /* Landscape: Leiste senkrecht, Zelle bleibt “hochkant”, Inhalte drehen wir */
-  #hud-bar.hud--land-left .hud-cell,
-  #hud-bar.hud--land-right .hud-cell{
-    min-width:auto; width:calc(var(--hud-side-width));
-    height:var(--hud-cell-w); /* Hochkantfläche, Inhalt wird gedreht */
-    grid-template-columns:unset; grid-auto-flow:row; /* egal – Inhalt übernimmt */
-    justify-items:center;
-  }
-
-  /* NUR Inhalte drehen – per CSS-Variable aus JS gesetzt */
-  .hud-cell__content{
-    display:grid; grid-auto-flow:column; grid-template-columns:28px auto auto; gap:10px;
-    align-items:center; transform: rotate(var(--hud-content-rotate));
-    transform-origin:center;
-  }
-
-  .hud-icon{ width:24px; height:24px; object-fit:contain; }
-  .hud-name{ font-weight:700; color:#3b2a18; text-shadow:0 1px 0 #f1e4c8; }
-  .hud-amt { font-variant-numeric: tabular-nums; color:#2a2218; }
-
-  @media (max-width:420px){
-    :root{ --hud-cell-w:130px; --hud-cell-h:50px; }
-    .hud-icon{ width:20px; height:20px; }
+  canvas {
+    display: none; /* es gibt hier kein Spiel – nur HUD */
   }
 </style>
 </head>
+
 <body>
+  <!-- Nur das HUD-Element -->
+  <div id="app">
+    <div id="hud-bar" class="hud--portrait">
+      <button class="hud-nav hud-nav--left" aria-label="links">◀</button>
+      <div class="hud-strip" id="hud-strip"></div>
+      <button class="hud-nav hud-nav--right" aria-label="rechts">▶</button>
+    </div>
+  </div>
 
-<div id="stage"></div>
-
-<!-- HUD -->
-<div id="hud-bar" class="hud--portrait">
-  <button class="hud-nav hud-nav--left" aria-label="links">◀</button>
-  <div class="hud-strip" id="hud-strip"></div>
-  <button class="hud-nav hud-nav--right" aria-label="rechts">▶</button>
-</div>
-
-<script>
-/* ============================================================================
-   Testdaten + Logik
-============================================================================ */
-const RES = [
-  { id:"wood",  name:"Holz",  amount:120, icon:dataIcon("#7a4") },
-  { id:"stone", name:"Stein", amount:85,  icon:dataIcon("#888") },
-  { id:"fish",  name:"Fisch", amount:42,  icon:dataIcon("#39f") },
-  { id:"food",  name:"Nahrung", amount:63, icon:dataIcon("#d93") },
-  { id:"gold",  name:"Gold",  amount:7,   icon:dataIcon("#db4") },
-  { id:"pop",   name:"Bev.",  amount:24,  icon:dataIcon("#fff") },
-  { id:"iron",  name:"Eisen", amount:11,  icon:dataIcon("#96a") },
-  { id:"cloth", name:"Tuch",  amount:19,  icon:dataIcon("#9cf") }
-];
-
-function dataIcon(fill="#999"){
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'>
-    <rect x='2' y='2' width='20' height='20' rx='4' fill='${fill}' stroke='#000' stroke-opacity='.25'/>
-  </svg>`;
-  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
-}
-
-function el(sel, root=document){ return root.querySelector(sel); }
-
-function renderHUD(){
-  const strip = el("#hud-strip");
-  strip.innerHTML = "";
-  RES.forEach(r=>{
-    const cell = document.createElement("div");
-    cell.className = "hud-cell";
-    const inner = document.createElement("div");
-    inner.className = "hud-cell__content";
-    inner.innerHTML = `
-      <img class="hud-icon" src="${r.icon}" alt="${r.name}">
-      <div class="hud-name">${r.name}</div>
-      <div class="hud-amt">${r.amount}</div>
-    `;
-    cell.appendChild(inner);
-    strip.appendChild(cell);
-  });
-}
-
-function recalcDock(){
-  const bar  = el("#hud-bar");
-  const root = document.documentElement;
-
-  const angle = (screen.orientation && Number.isFinite(screen.orientation.angle))
-    ? screen.orientation.angle
-    : (typeof window.orientation === "number" ? (window.orientation % 360 + 360) % 360 : (innerWidth > innerHeight ? 90 : 0));
-
-  // Portrait/ Landscape erkennen
-  const isLandscape = innerWidth > innerHeight;
-
-  // Reset Klassen
-  bar.classList.remove("hud--portrait","hud--land-left","hud--land-right");
-
-  let rot = "0deg";
-  if (!isLandscape){
-    // Portrait: oben andocken; ggf. 180° beachten
-    bar.classList.add("hud--portrait");
-    // Wenn Browser 180° liefert (Kopfstand), Inhalte 180° korrigieren:
-    if (angle === 180) rot = "180deg"; else rot = "0deg";
-  } else {
-    // Landscape: Seite je nach Winkel, Inhalte so drehen, dass Text NICHT kopfsteht
-    if (angle === 90) {
-      bar.classList.add("hud--land-right");
-      rot = "90deg";           // rechts gehaltenes Telefon
-    } else if (angle === 270) { // oder -90
-      bar.classList.add("hud--land-left");
-      rot = "-90deg";          // links gehaltenes Telefon
-    } else {
-      // Fallback (z. B. Desktop ohne Orientation API)
-      bar.classList.add("hud--land-right");
-      rot = "90deg";
-    }
-  }
-  root.style.setProperty("--hud-content-rotate", rot);
-}
-
-// Pfeile scrollen
-function bindNav(){
-  const strip = el("#hud-strip");
-  el(".hud-nav--left").addEventListener("click", ()=>{
-    if (strip.scrollLeft !== undefined) strip.scrollLeft -= 200;
-    else strip.scrollTop -= 200;
-  });
-  el(".hud-nav--right").addEventListener("click", ()=>{
-    if (strip.scrollLeft !== undefined) strip.scrollLeft += 200;
-    else strip.scrollTop += 200;
-  });
-  // Wheel → horizontales Scrollen im Portrait angenehmer
-  strip.addEventListener("wheel",(e)=>{
-    if (strip.scrollLeft !== undefined && Math.abs(e.deltaX) < Math.abs(e.deltaY)){
-      strip.scrollLeft += e.deltaY;
-      e.preventDefault();
-    }
-  }, {passive:false});
-}
-
-renderHUD();
-bindNav();
-recalcDock();
-
-addEventListener("resize", recalcDock, {passive:true});
-if (screen.orientation && screen.orientation.addEventListener){
-  screen.orientation.addEventListener("change", recalcDock);
-}
-// iOS Safari Fallback
-addEventListener("orientationchange", recalcDock, {passive:true});
-</script>
+  <!-- HUD-Logik -->
+  <script type="module" src="ui/ui-hud.js"></script>
 </body>
 </html>
