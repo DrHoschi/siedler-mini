@@ -15,7 +15,7 @@
   --hud-width-landscape: 84px;   /* Breite der Leiste (links) → Zellkante im Landscape */
 
   /* Inhalt */
-  --icon-scale: 0.92;            /* Anteil der Innenfläche (0..1) */
+  --icon-scale: 1.92;            /* Anteil der Innenfläche (0..1) */
   --land-rotation: 0deg;       /* bei Bedarf 90deg/-90deg tauschen */
 }
 
