@@ -3,38 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>HUD-Test</title>
-
-<!-- Nur das HUD-CSS -->
+<title>HUD Test</title>
 <link rel="stylesheet" href="ui/css/ui-hud.css">
 <style>
-  body {
-    margin: 0;
-    background: #3f2a1f;
-    font-family: system-ui, sans-serif;
-    height: 100dvh;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  canvas {
-    display: none; /* es gibt hier kein Spiel – nur HUD */
-  }
+  html,body{ height:100%; margin:0; background:#222; }
+  /* nur um die Leiste zu sehen, ohne Spiel */
 </style>
 </head>
-
 <body>
-  <!-- Nur das HUD-Element -->
-  <div id="app">
-    <div id="hud-bar" class="hud--portrait">
-      <button class="hud-nav hud-nav--left" aria-label="links">◀</button>
-      <div class="hud-strip" id="hud-strip"></div>
-      <button class="hud-nav hud-nav--right" aria-label="rechts">▶</button>
-    </div>
+  <div id="hud-bar" class="hud--portrait">
+    <div class="hud-strip" id="hud-strip"></div>
   </div>
 
-  <!-- HUD-Logik -->
   <script type="module" src="ui/ui-hud.js"></script>
 </body>
 </html>
