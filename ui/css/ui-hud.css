@@ -1,55 +1,55 @@
 /* ============================================================================
    Datei : ui/css/ui-hud.css
    Projekt: Neue Siedler
-   Version: v1.3.0
+   Version: v1.3.1
    Zweck  : Einzeilige HUD-Leiste, Portrait oben / Landscape immer links,
             Panel-SVG als 9-Slice pro Zelle, quadratische Zellen
    Hinweise:
-     - Stelle den Pfad zu DEINEM Panel (mit Nägeln) unten bei :root ein.
+     - Pfad zu DEINEM Panel ist unten gesetzt (raw.githubusercontent.com).
      - 9-Slice: --hud-border-slice muss zum Slice im SVG passen (z. B. 12).
-     - Rotation der Inhalte in Landscape via --land-rotation quick-changebar.
+     - Rotation der Inhalte in Landscape via --land-rotation anpassbar.
 ============================================================================ */
 
 :root{
-  /* === Pfad & 9-Slice des Panel-Rahmens (DEIN SVG) ======================= */
-  --hud-frame-src: url("assets/ui/panel.svg"); /* <— HIER dein Panel */
+  /* === Panel & 9-Slice ==================================================== */
+  --hud-frame-src: url("https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg");
   --hud-border-slice: 12;
 
   /* === Abstände =========================================================== */
   --hud-gap: 8px;
   --hud-padding: 8px;
 
-  /* === Größen Portrait (oben) ============================================ */
-  --hud-height-portrait: 72px;   /* Leistenhöhe oben */
-  --cell-size-portrait: 64px;    /* Zelle ist Quadrat */
+  /* === Portrait (oben) ==================================================== */
+  --hud-height-portrait: 72px;   /* Leistenhöhe */
+  --cell-size-portrait: 64px;    /* quadratische Zelle */
 
-  /* === Größen Landscape (links) =========================================== */
+  /* === Landscape (immer links) =========================================== */
   --hud-width-landscape: 84px;   /* Breite der Seitenleiste */
-  --cell-size-land: 72px;        /* Zelle ist Quadrat */
+  --cell-size-land: 72px;        /* quadratische Zelle */
 
-  /* === Inhalt ============================================================= */
+  /* === Inhalte ============================================================ */
   --icon-size: 28px;
 
-  /* Inhalte-Drehung in Landscape; falls je Gerät anders: hier +90/-90 ändern */
-  --land-rotation: +90deg; /* (-90deg war bei dir richtig lesbar) */
+  /* Lesbarkeit in Landscape: bei Bedarf 90deg ↔ -90deg tauschen */
+  --land-rotation: -90deg; /* dein iPhone-Test war mit -90deg korrekt */
 }
 
-/* Root der HUD-Leiste: fixed + Safe-Area beachten */
+/* Root: fixed + Safe-Area */
 #hud-bar{
   position: fixed;
   z-index: 1000;
   pointer-events: none; /* nur Kinder interaktiv */
 }
 
-/* Portrait: oben angedockt */
+/* Portrait: oben */
 #hud-bar.hud--portrait{
   left: 0; right: 0; top: env(safe-area-inset-top, 0);
   height: calc(var(--hud-height-portrait) + var(--hud-padding)*2);
   display: grid;
-  grid-template-columns: 1fr; /* keine Buttons */
+  grid-template-columns: 1fr;
 }
 
-/* Landscape: IMMER links angedockt (egal wie gedreht) */
+/* Landscape: immer links */
 #hud-bar.hud--land-left{
   top: 0; bottom: 0; left: env(safe-area-inset-left, 0);
   width: calc(var(--hud-width-landscape) + var(--hud-padding)*2);
@@ -61,44 +61,33 @@
 .hud-strip{
   pointer-events: auto;
   -webkit-overflow-scrolling: touch;
-  display: flex;
-  gap: var(--hud-gap);
-  padding: var(--hud-padding);
-  align-items: center;
-  scrollbar-width: thin;
-  overflow: auto;
+  display: flex; gap: var(--hud-gap); padding: var(--hud-padding);
+  align-items: center; scrollbar-width: thin; overflow: auto;
   scroll-snap-type: x mandatory; /* Portrait default */
 }
 
-/* Portrait: horizontales Scrolling */
+/* Portrait: horizontal scrollen */
 #hud-bar.hud--portrait .hud-strip{
-  flex-direction: row;
-  height: 100%;
+  flex-direction: row; height: 100%;
   overflow-x: auto; overflow-y: hidden;
 }
 
-/* Landscape (links): vertikales Scrolling */
+/* Landscape: vertikal scrollen */
 #hud-bar.hud--land-left .hud-strip{
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
+  flex-direction: column; width: 100%; height: 100%;
   overflow-x: hidden; overflow-y: auto;
   scroll-snap-type: y mandatory;
 }
 
-/* === Zellen (pro Zelle Panel als 9-Slice) ================================= */
+/* === Zellen (Panel pro Zelle via 9-Slice) ================================= */
 .hud-cell{
-  position: relative;
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  background: transparent;
+  position: relative; flex: 0 0 auto; box-sizing: border-box; background: transparent;
   scroll-snap-align: start;
 
-  /* robustes border-image: explizit definieren (iOS Safari) */
+  /* -> robustes border-image; explizit für iOS Safari */
   border-style: solid;
   border-color: transparent;
   border-width: var(--hud-border-slice);
-  /* Standard + WebKit */
   border-image-source: var(--hud-frame-src);
   border-image-slice: var(--hud-border-slice) fill;
   border-image-width: var(--hud-border-slice);
@@ -117,46 +106,40 @@
   height: var(--cell-size-land);
 }
 
-/* Inhalts-Layer – 3x3-Raster: name ↖  icon ⊙  amt ↘ */
+/* Inhalt: 3x3-Raster – Name ↖ | Icon ⊙ | Menge ↘ */
 .hud-cell__content{
-  position: absolute;
-  inset: calc(var(--hud-border-slice) - 2px);
+  position: absolute; inset: calc(var(--hud-border-slice) - 2px);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   grid-template-rows: 1fr auto 1fr;
-  align-items: center;
-  justify-items: center;
+  align-items: center; justify-items: center;
   transform-origin: center;
 }
 
-/* Portrait: Inhalte normal */
+/* Portrait: normal */
 #hud-bar.hud--portrait .hud-cell__content{ transform: rotate(0deg); }
 
-/* Landscape: Inhalte lesbar machen (Drehung justierbar über --land-rotation) */
+/* Landscape: Inhalte lesbar drehen (nur hier zentral anpassen) */
 #hud-bar.hud--land-left .hud-cell__content{ transform: rotate(var(--land-rotation)); }
 
 /* Slots */
 .hud-name{
-  grid-column: 1; grid-row: 1;
-  justify-self: start; align-self: start;
-  font-weight: 700; font-size: 12px;
-  color: #d5c19a; text-shadow: 0 1px 0 #3a2a1b;
+  grid-column: 1; grid-row: 1; justify-self: start; align-self: start;
+  font-weight: 700; font-size: 12px; color: #d5c19a; text-shadow: 0 1px 0 #3a2a1b;
   padding: 2px 4px;
 }
 .hud-icon{
   grid-column: 2; grid-row: 2;
-  width: var(--icon-size); height: var(--icon-size);
-  object-fit: contain;
+  width: var(--icon-size); height: var(--icon-size); object-fit: contain;
 }
 .hud-amt{
-  grid-column: 3; grid-row: 3;
-  justify-self: end; align-self: end;
+  grid-column: 3; grid-row: 3; justify-self: end; align-self: end;
   font-variant-numeric: tabular-nums; font-size: 12px;
   color: #f2e6c9; text-shadow: 0 1px 0 #3a2a1b;
   padding: 2px 4px;
 }
 
-/* Kleinere Geräte – Beispiel */
+/* Kleine Geräte – Beispiel */
 @media (max-width: 420px){
   :root{
     --cell-size-portrait: 56px;
@@ -166,7 +149,7 @@
   .hud-name, .hud-amt{ font-size: 11px; }
 }
 
-/* === Optionaler Inspector (Toggle mit Taste "H") ========================== */
+/* === Optionaler Inspector (Taste "H") ===================================== */
 #hud-tuner{
   position: fixed; z-index: 2000;
   left: 50%; transform: translateX(-50%);
