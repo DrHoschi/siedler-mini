@@ -7,14 +7,14 @@
 
 :root{
   /* Panel (dein SVG) + 9-Slice */
-  --hud-frame-src: url("https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg");
+  --hud-frame-src: url("../../assets/ui/panel.svg");
   --hud-border-slice: 12;
 
   /* Eine gemeinsame Zellkante für beide Orientierungen */
   --cell-size: 72px;          /* => Leistenhöhe (Portrait) UND Leistenbreite (Landscape) */
 
   /* Inhalt */
-  --icon-scale: 2.72;         /* Anteil der InnenBREITE (0..1) → Safari-fest */
+  --icon-scale: 3.5;         /* Anteil der InnenBREITE (0..1) → Safari-fest */
   --land-rotation: 0deg;    /* bei Bedarf 90deg/-90deg tauschen */
 }
 
