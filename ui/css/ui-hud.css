@@ -162,3 +162,78 @@
 #hud-tuner input[type="range"]{ width: 120px; }
 #hud-tuner label{ opacity: .9; white-space: nowrap; }
 #hud-tuner kbd{ padding: 2px 5px; border:1px solid #666; border-radius:4px; background:#222; }
+
+/* ========================================================================
+   Feinkorrektur: Layer- und Layout-Optimierung innerhalb der HUD-Zelle
+   Ziel:
+     1. Panel (border-image) im Hintergrund
+     2. Ressource-Icon mittig und etwas größer
+     3. Name oben links
+     4. Menge unten rechts
+   ======================================================================== */
+
+/* HUD-Zelle – sicherstellen, dass Border (Panel) hinter allem bleibt */
+.hud-cell {
+  position: relative;
+  overflow: hidden;        /* nichts über die Kanten hinaus */
+  z-index: 0;              /* Hintergrundebene */
+}
+
+/* Inhaltsschicht */
+.hud-cell__content {
+  position: absolute;
+  inset: 0;                /* vollflächig im Panel */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  transform-origin: center;
+  z-index: 1;              /* über Panel */
+}
+
+/* Name: leicht nach innen, damit nicht zu dicht am Rand */
+.hud-name {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  align-self: start;
+  font-weight: 700;
+  font-size: 13px;
+  color: #5a3b1a;
+  text-shadow: 0 1px 1px #f4e9d1;
+  padding: 4px 6px;
+  z-index: 2;
+}
+
+/* Icon: zentriert + etwas größer für bessere Lesbarkeit */
+.hud-icon {
+  grid-column: 2;
+  grid-row: 2;
+  width: 72%;               /* statt fixer Pixel */
+  max-width: 48px;          /* Begrenzung */
+  height: auto;
+  object-fit: contain;
+  z-index: 2;
+}
+
+/* Menge: unten rechts */
+.hud-amt {
+  grid-column: 3;
+  grid-row: 3;
+  justify-self: end;
+  align-self: end;
+  font-weight: 600;
+  font-size: 13px;
+  color: #3c2a16;
+  text-shadow: 0 1px 1px #f4e9d1;
+  padding: 4px 6px;
+  z-index: 2;
+}
+
+/* Wenn du willst, dass der Text sich besser abhebt auf helleren Panels */
+@media (prefers-color-scheme: dark) {
+  .hud-name, .hud-amt {
+    color: #2a1a09;
+  }
+}
