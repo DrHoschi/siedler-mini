@@ -15,3 +15,24 @@
    │  ├─ diplomacy.png
    │  └─ population.png
    │
+
+assets/
+└── icons/
+
+       ├── wood_full.ico
+       ├── stone_full.ico
+       ├── gold_full.ico
+       ├── coins_full.ico
+    ├── bricks_full.ico
+    ├── bread_full.ico
+    ├── grain_full.ico
+    ├── fish_full.ico
+    ├── population_full.ico
+    ├── ore_full.ico
+    ├── food_full.ico
+    ├── prestige_full.ico
+    ├── weapons_full.ico
+    ├── diplomacy_full.ico
+    ├── knowledge_full.ico
+    ├── paper_full.ico
+    └── tools_full.ico
