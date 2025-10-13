@@ -1,48 +1,47 @@
 /* ============================================================================
    Datei : ui/css/ui-hud.css
-   Version: v1.4.0
-   Zweck  : Quadratische, bündige Zellen (keine Abstände), Panel.svg pro Zelle
-            Portrait = oben; Landscape = links; Inhalte immer lesbar
+   Version: v1.5.0
+   Zweck  : Eine Leistenhöhe/-breite => quadratische Zellen; Panel.svg pro Zelle;
+            Portrait = oben, Landscape = links; Icons stabil (Safari-Fix).
 ============================================================================ */
 
 :root{
   /* Panel (dein SVG) + 9-Slice */
-  --hud-frame-src: url("../../assets/ui/panel.svg");
+  --hud-frame-src: url("https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg");
   --hud-border-slice: 12;
 
-  /* Leistenmaße (nur diese zwei Werte steuern die Kachelgröße!) */
-  --hud-height-portrait: 72px;   /* Höhe der Leiste (oben)  → Zellkante im Portrait */
-  --hud-width-landscape: 84px;   /* Breite der Leiste (links) → Zellkante im Landscape */
+  /* Eine gemeinsame Zellkante für beide Orientierungen */
+  --cell-size: 72px;          /* => Leistenhöhe (Portrait) UND Leistenbreite (Landscape) */
 
   /* Inhalt */
-  --icon-scale: 1.92;            /* Anteil der Innenfläche (0..1) */
-  --land-rotation: 0deg;       /* bei Bedarf 90deg/-90deg tauschen */
+  --icon-scale: 0.72;         /* Anteil der InnenBREITE (0..1) → Safari-fest */
+  --land-rotation: -90deg;    /* bei Bedarf 90deg/-90deg tauschen */
 }
 
-/* Root: fixed, keine äußeren Abstände */
+/* Root der HUD-Leiste */
 #hud-bar{
   position: fixed;
   z-index: 1000;
   pointer-events: none;
 }
 
-/* Portrait: oben angedockt */
+/* Portrait: oben, Höhe = Zellkante */
 #hud-bar.hud--portrait{
   left: 0; right: 0; top: env(safe-area-inset-top, 0);
-  height: var(--hud-height-portrait);
+  height: var(--cell-size);
   display: grid;
   grid-template-columns: 1fr;
 }
 
-/* Landscape: immer links */
+/* Landscape: links, Breite = Zellkante */
 #hud-bar.hud--land-left{
   top: 0; bottom: 0; left: env(safe-area-inset-left, 0);
-  width: var(--hud-width-landscape);
+  width: var(--cell-size);
   display: grid;
   grid-template-rows: 1fr;
 }
 
-/* Scroll-Container: bündig (kein gap/padding) */
+/* Scroll-Container: bündig (keine Abstände) */
 .hud-strip{
   pointer-events: auto;
   -webkit-overflow-scrolling: touch;
@@ -70,23 +69,20 @@
 
 /* =================== Zellen =================== */
 
-/* Quadrat: Kantenlänge an Leistenmaß koppeln */
+/* Quadratgröße = Zellkante, in beiden Modi */
 #hud-bar.hud--portrait .hud-cell,
-#hud-bar.hud--portrait .hud-cell::before{
-  width: var(--hud-height-portrait);
-  height: var(--hud-height-portrait);
-}
 #hud-bar.hud--land-left .hud-cell,
+#hud-bar.hud--portrait .hud-cell::before,
 #hud-bar.hud--land-left .hud-cell::before{
-  width: var(--hud-width-landscape);
-  height: var(--hud-width-landscape);
+  width: var(--cell-size);
+  height: var(--cell-size);
 }
 
 .hud-cell{
   position: relative;
-  flex: 0 0 auto;            /* keine Streckung */
+  flex: 0 0 auto;
   box-sizing: border-box;
-  margin: 0;                 /* wirklich bündig */
+  margin: 0;
   scroll-snap-align: start;
   background: transparent;
 
@@ -101,14 +97,13 @@
   border-image-repeat: stretch;
   -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
 
-  z-index: 0;                /* Panel unten */
-  overflow: hidden;          /* nix ragt raus */
+  z-index: 0;
+  overflow: hidden;
 }
 
-/* Inhaltsschicht füllt das (vom Rand befreite) Innenfeld */
+/* Innenbereich = “Frame-Innenmaß” */
 .hud-cell__content{
   position: absolute;
-  /* innen bündig: direkt auf die Innenfläche, nicht minus/plus rechnen */
   inset: var(--hud-border-slice);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -131,13 +126,14 @@
   padding: 2px 4px;
 }
 
-/* Icon ⊙ – prozentual skaliert, damit es bei jeder Zellgröße sichtbar bleibt */
+/* Icon ⊙ – Safari-Fix: nur Breite prozentual, Höhe auto */
 .hud-icon{
   grid-column: 2; grid-row: 2;
   width: calc(100% * var(--icon-scale));
-  height: calc(100% * var(--icon-scale));
-  max-width: none; max-height: none;
+  height: auto;                 /* ← wichtig: kein %-height mehr */
+  max-width: none;
   object-fit: contain;
+  display: block;               /* vermeidet baseline-Verschiebung */
 }
 
 /* Menge ↘ */
@@ -149,16 +145,7 @@
   padding: 2px 4px;
 }
 
-/* Optional: kleine Geräte */
-@media (max-width: 420px){
-  :root{
-    --hud-height-portrait: 64px;
-    --hud-width-landscape: 72px;
-    --icon-scale: 0.70;
-  }
-}
-
-/* Optionaler Inspector (Taste "H") — kann bleiben/entfernt werden */
+/* Optionaler Inspector (Taste "H") – kann bleiben/entfernt werden */
 #hud-tuner{
   position: fixed; z-index: 2000;
   left: 50%; transform: translateX(-50%);
