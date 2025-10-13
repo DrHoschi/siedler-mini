@@ -152,7 +152,7 @@ const HUD = (() => {
 window.addEventListener("DOMContentLoaded", ()=>{
   HUD.init({
     // Wenn du den Pfad lieber hier setzt statt in CSS:
-    // frameSrc: "https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg",
+    frameSrc: "assets/ui/panel.svg",
     tuner: true
   });
   setTimeout(()=>HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
