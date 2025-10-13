@@ -147,7 +147,7 @@
 /* In Landscape drehen wir die Inhalte zurück in die Bildschirm-Leserichtung */
 #hud-bar.hud--land-left  .hud-cell__content,
 #hud-bar.hud--land-right .hud-cell__content {
-  transform: rotate(90deg);
+  transform: rotate(-90deg);
 }
 
 /* Icon + Werte */
