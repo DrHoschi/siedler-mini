@@ -1,15 +1,15 @@
 // ============================================================================
 // Datei : ui/ui-hud.js
 // Projekt: Neue Siedler
-// Version: v1.3.0
+// Version: v1.3.1
 // Zweck  : HUD rendern, Portrait = oben / Landscape = immer links,
-//          Inhalte lesbar halten, Panel-SVG pro Zelle als 9-Slice,
-//          optionaler Inspector-Tuner (Taste "H").
+//          Inhalte lesbar halten (CSS-Variable), Panel.svg pro Zelle,
+//          optionaler Inspector (Taste "H").
 // API    : HUD.init({ resources?, frameSrc?, tuner?: boolean })
 //          HUD.setAmounts({holz:123, ...})
 // ============================================================================
-/*
-(function(){
+
+/* (function(){
   'use strict';
 
   // -------------------------------------------------------------------------
@@ -24,7 +24,7 @@
     wrn : (...a)=>(window.CBLog?.warn || console.warn)('[hud]', ...a),
     err : (...a)=>(window.CBLog?.err  || console.error)('[hud]', ...a),
   };
-*/
+*/ 
 
 const HUD = (() => {
   const state = { resources: [], byId: {}, frameSrc: null };
@@ -32,7 +32,7 @@ const HUD = (() => {
   const $  = (sel, root=document)=>root.querySelector(sel);
   const on = (el, ev, fn, opt)=>el && el.addEventListener(ev, fn, opt);
 
-  // Portrait = oben, Landscape = IMMER links (kein rechts/links Umschalten mehr)
+  // Portrait = oben, Landscape = immer links (keine Seiten-Umschaltung)
   function setDocking(){
     const bar = $("#hud-bar");
     const isPortrait = window.matchMedia("(orientation: portrait)").matches;
@@ -81,14 +81,12 @@ const HUD = (() => {
     render(state.resources);
     setDocking();
 
-    // Reagiere auf Drehen/Resize – immer nur Klasse ändern
+    // Reagiere auf Drehen/Resize – nur Docking-Klasse umschalten
     on(window, "resize", setDocking);
-    if (screen.orientation?.addEventListener){
-      on(screen.orientation, "change", setDocking);
-    }
+    if (screen.orientation?.addEventListener) on(screen.orientation, "change", setDocking);
     on(window, "orientationchange", setDocking); // iOS-Fallback
 
-    // Optionaler Inspector
+    // Optionaler Inspector (Taste H)
     if (cfg.tuner) mountTuner();
 
     console.log("[HUD] ready – resources:", state.resources.length);
@@ -113,7 +111,7 @@ const HUD = (() => {
     ];
   }
 
-  /* ---------- Inspector-Tuner (Taste "H") ------------------------------- */
+  /* ---------- Inspector (Taste "H") -------------------------------------- */
   function mountTuner(){
     if ($("#hud-tuner")) return;
     const box = document.createElement("div");
@@ -123,13 +121,13 @@ const HUD = (() => {
       <label>Portrait Zelle: <input id="t-ps"  type="range" min="40" max="120" value="64"></label>
       <label>Landscape Breite: <input id="t-lw" type="range" min="56" max="160" value="84"></label>
       <label>Landscape Zelle: <input id="t-ls" type="range" min="56" max="160" value="72"></label>
-      <label>Rotation L: 
+      <label>Rotation L:
         <select id="t-rot">
           <option value="-90deg">-90° (Standard)</option>
           <option value="90deg">+90°</option>
         </select>
       </label>
-      <span>Toggle mit <kbd>H</kbd></span>
+      <span>Toggle <kbd>H</kbd></span>
     `;
     document.body.appendChild(box);
 
@@ -153,10 +151,10 @@ const HUD = (() => {
 // Auto-Init (für Testseite)
 window.addEventListener("DOMContentLoaded", ()=>{
   HUD.init({
-    //frameSrc: "assets/ui/panel.svg", // <— falls du den Pfad hier setzen willst
-    tuner: true                          // Inspector (Taste H)
+    // Wenn du den Pfad lieber hier setzt statt in CSS:
+    // frameSrc: "https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg",
+    tuner: true
   });
-  // Beispiel: nachträgliches Update
   setTimeout(()=>HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
 });
 
