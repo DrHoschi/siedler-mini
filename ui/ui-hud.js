@@ -186,7 +186,7 @@ const HUD = (() => {
   // Demo-Daten falls nichts übergeben wird
   function demoResources() {
     return [
-      { id:"wood",  name:"Holz",  amount:120, icon:"assets/icons/wood.png"  },
+      { id:"wood",  name:"Holz",  amount:120, icon:"assets/icons/ressorces/wood.png"  },
       { id:"stone", name:"Stein", amount:85,  icon:"assets/icons/stone.png" },
       { id:"fish",  name:"Fisch", amount:42,  icon:"assets/icons/fish.png"  },
       { id:"food",  name:"Nahrung", amount:63, icon:"assets/icons/food.png" },
