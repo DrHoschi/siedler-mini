@@ -186,12 +186,12 @@ const HUD = (() => {
   // Demo-Daten falls nichts übergeben wird
   function demoResources() {
     return [
-      { id:"wood",  name:"Holz",  amount:120, icon:"assets/icons/ressorces/wood.png"  },
-      { id:"stone", name:"Stein", amount:85,  icon:"assets/icons/stone.png" },
-      { id:"fish",  name:"Fisch", amount:42,  icon:"assets/icons/fish.png"  },
-      { id:"food",  name:"Nahrung", amount:63, icon:"assets/icons/food.png" },
-      { id:"gold",  name:"Gold",  amount:7,   icon:"assets/icons/gold.png"  },
-      { id:"pop",   name:"Bev.",  amount:24,  icon:"assets/icons/pop.png"   }
+      { id:"wood",  name:"Holz",  amount:120, icon:"assets/icons/resources/wood.png"  },
+      { id:"stone", name:"Stein", amount:85,  icon:"assets/icons/resources/stone.png" },
+      { id:"fish",  name:"Fisch", amount:42,  icon:"assets/icons/resources/fish.png"  },
+      { id:"food",  name:"Nahrung", amount:63, icon:"assets/icons/resources/food.png" },
+      { id:"gold",  name:"Gold",  amount:7,   icon:"assets/icons/resources/gold.png"  },
+      { id:"pop",   name:"Bev.",  amount:24,  icon:"assets/icons/resources/pop.png"   }
     ];
   }
 
@@ -201,7 +201,7 @@ const HUD = (() => {
 // Auto-Init, falls direkt eingebunden
 window.addEventListener("DOMContentLoaded", () => {
   HUD.init({
-    // frameSrc: "assets/ui/frame_wood_parchment_v2_2.svg"  // <- optional überschreiben
+    // frameSrc: "assets/ui/panel.svg"  // <- optional überschreiben
   });
   // Beispiel-Update
   setTimeout(() => HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
