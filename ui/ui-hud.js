@@ -8,6 +8,7 @@
 // API    : HUD.init({ resources?, frameSrc?, tuner?: boolean })
 //          HUD.setAmounts({holz:123, ...})
 // ============================================================================
+/*
 (function(){
   'use strict';
 
@@ -23,7 +24,7 @@
     wrn : (...a)=>(window.CBLog?.warn || console.warn)('[hud]', ...a),
     err : (...a)=>(window.CBLog?.err  || console.error)('[hud]', ...a),
   };
-
+*/
 
 const HUD = (() => {
   const state = { resources: [], byId: {}, frameSrc: null };
