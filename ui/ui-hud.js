@@ -387,12 +387,12 @@
    * ---------------------------------------------------------------------- */
   function demoResources() {
     return [
-      { id:'wood',  name:'Holz',   amount:120, icon:'assets/icons/resources/wood.png'  },
-      { id:'stone', name:'Stein',  amount:85,  icon:'assets/icons/resources/stone.png' },
-      { id:'fish',  name:'Fisch',  amount:42,  icon:'assets/icons/resources/fish.png'  },
-      { id:'food',  name:'Nahrung',amount:63,  icon:'assets/icons/resources/food.png'  },
-      { id:'gold',  name:'Gold',   amount:7,   icon:'assets/icons/resources/gold.png'  },
-      { id:'pop',   name:'Bev.',   amount:24,  icon:'assets/icons/resources/pop.png'   }
+      { id:'wood',  name:'Holz',   amount:120, icon:'assets/icons/resources/wood_full.ico'  },
+      { id:'stone', name:'Stein',  amount:85,  icon:'assets/icons/resources/stone_full.ico' },
+      { id:'fish',  name:'Fisch',  amount:42,  icon:'assets/icons/resources/fish_full.ico'  },
+      { id:'food',  name:'Nahrung',amount:63,  icon:'assets/icons/resources/food_full.ico'  },
+      { id:'gold',  name:'Gold',   amount:7,   icon:'assets/icons/resources/gold_full.ico'  },
+      { id:'pop',   name:'Bev.',   amount:24,  icon:'assets/icons/resources/population_full.ico'   }
     ];
   }
 
