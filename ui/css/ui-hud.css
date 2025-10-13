@@ -1,93 +1,81 @@
 /* ============================================================================
    Datei : ui/css/ui-hud.css
    Projekt: Neue Siedler
-   Version: v1.6.0 (2025-10-13)
-   Zweck  : Ressourcen-HUD-Leiste (oben/links andockend)
-             - Einheitliche quadratische Zellen (Portrait & Landscape)
-             - Panel-SVG pro Zelle (9-Slice)
-             - Icons zentriert, Texte in Ecken
-             - Safari-kompatibel (keine %-Heights)
-   Autor  : Mann / ChatGPT-5
+   Version: v1.7.0 (2025-10-14)
+   Zweck  : Ressourcen-HUD-Leiste (oben/links andockend), ICO/PNG-sicher
+            – Quadratische Zellen (Portrait & Landscape)
+            – Panel.svg via Border-Image (9-Slice)
+            – Icons zentriert, scharf & sauber zugeschnitten (iOS/Safari-freundlich)
 ============================================================================ */
 
 /* ============================================================================
    [1] GRUNDVARIABLEN
-   ---------------------------------------------------------------------------
-   Hier werden alle zentralen Steuergrößen definiert:
-     – Zellgröße (einheitlich für Portrait & Landscape)
-     – SVG-Panel (Border-Image)
-     – Icon-Größe (relativ zur Zellfläche)
 ============================================================================ */
 :root{
-  /* Pfad zu deinem Panel-SVG (9-Slice mit Nägeln) */
+  /* Panel (9-Slice) */
   --hud-frame-src: url("../../assets/ui/panel.svg");
-
-  /* Dicke des Randbereichs (Slice-Wert aus SVG) */
   --hud-border-slice: 12;
 
-  /* Gemeinsame Zellgröße in px (gilt für beide Orientierungen) */
+  /* Einheitliche Zellkante */
   --cell-size: 72px;
 
-  /* Lesbarkeit im Landscape (−90° oder +90°) */
+  /* Landscape-Drehung (−90° oder +90°; 0deg = keine Drehung) */
   --land-rotation: 0deg;
 
-  /* Anteil der Innenfläche für Icon-Größe (0.0–1.0) */
-  --icon-scale: 0.02;
+  /* Anteil der Innenfläche für das Icon (0.0–1.0) – realer Standard */
+  --icon-scale: 0.72;
 }
 
 /* ============================================================================
-   [2] GRUNDLAYOUT DER HUD-LEISTE
-   ---------------------------------------------------------------------------
-   Die Leiste ist fixed positioniert und bleibt immer sichtbar.
+   [2] LEISTE (Root)
 ============================================================================ */
 #hud-bar{
   position: fixed;
   z-index: 1000;
-  pointer-events: none;  /* Inhalte bleiben interaktiv, Bar selbst nicht */
+  pointer-events: none; /* Scroll/Klicks nur auf dem inneren Strip */
 }
 
-/* --- Portrait: Oben andocken --------------------------------------------- */
+/* Portrait: oben */
 #hud-bar.hud--portrait{
   left: 0; right: 0; top: env(safe-area-inset-top, 0);
-  height: var(--cell-size);                /* Leistenhöhe = Zellgröße */
+  height: var(--cell-size);
   display: grid;
   grid-template-columns: 1fr;
 }
 
-/* --- Landscape: Immer links andocken ------------------------------------- */
+/* Landscape: links */
 #hud-bar.hud--land-left{
   top: 0; bottom: 0; left: env(safe-area-inset-left, 0);
-  width: var(--cell-size);                 /* Leistenbreite = Zellgröße */
+  width: var(--cell-size);
   display: grid;
   grid-template-rows: 1fr;
 }
 
 /* ============================================================================
    [3] SCROLL-CONTAINER
-   ---------------------------------------------------------------------------
-   Enthält alle HUD-Zellen (horizontal bzw. vertikal scrollend)
+   WICHTIG: Im DOM heißt er #hud-strip (ID) – deshalb hier #hud-strip!
 ============================================================================ */
-.hud-strip{
+#hud-strip{
   pointer-events: auto;
   display: flex;
   align-items: stretch;
-  gap: 0;                   /* bündig */
+  gap: 0;
   padding: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scroll-snap-type: x mandatory; /* Portrait default */
+  scroll-snap-type: x mandatory; /* Portrait-Default */
 }
 
-/* --- Portrait: Horizontal scrollen --------------------------------------- */
-#hud-bar.hud--portrait .hud-strip{
+/* Portrait = horizontal */
+#hud-bar.hud--portrait #hud-strip{
   flex-direction: row;
   height: 100%;
   overflow-x: auto; overflow-y: hidden;
 }
 
-/* --- Landscape: Vertikal scrollen ---------------------------------------- */
-#hud-bar.hud--land-left .hud-strip{
+/* Landscape = vertikal */
+#hud-bar.hud--land-left #hud-strip{
   flex-direction: column;
   width: 100%; height: 100%;
   overflow-x: hidden; overflow-y: auto;
@@ -95,23 +83,21 @@
 }
 
 /* ============================================================================
-   [4] HUD-ZELLEN (Rahmen + Hintergrund)
-   ---------------------------------------------------------------------------
-   Jede Zelle ist quadratisch und nutzt das Panel-SVG als 9-Slice-Border.
+   [4] ZELLEN (Rahmen + Hintergrund via 9-Slice)
 ============================================================================ */
 .hud-cell{
   position: relative;
-  flex: 0 0 auto;             /* keine Flex-Streckung */
+  flex: 0 0 auto;
   width: var(--cell-size);
   height: var(--cell-size);
   margin: 0;
   box-sizing: border-box;
   background: transparent;
   scroll-snap-align: start;
-  overflow: hidden;           /* nichts über den Rand hinaus */
+  overflow: hidden;         /* nix steht raus */
   z-index: 0;
 
-  /* Panel als 9-Slice-Rahmen */
+  /* 9-Slice-Rahmen */
   border-style: solid;
   border-color: transparent;
   border-width: var(--hud-border-slice);
@@ -123,42 +109,46 @@
 }
 
 /* ============================================================================
-   [5] INHALT DER ZELLEN (Text + Icon)
-   ---------------------------------------------------------------------------
-   Inhalte liegen über dem Panel, zentriert & unabhängig vom Grid.
+   [5] INHALT (gedreht im Landscape)
 ============================================================================ */
 .hud-cell__content{
   position: absolute;
-  inset: var(--hud-border-slice);  /* exakt im Innenrahmen */
+  inset: var(--hud-border-slice); /* exakt Innenfläche */
   transform-origin: center;
-  z-index: 1;                      /* über Panel */
+  z-index: 1;
 }
 
-/* --- Orientierung beachten ----------------------------------------------- */
-#hud-bar.hud--portrait   .hud-cell__content { transform: rotate(0deg); }
-#hud-bar.hud--land-left  .hud-cell__content { transform: rotate(var(--land-rotation)); }
+#hud-bar.hud--portrait  .hud-cell__content { transform: rotate(0deg); }
+#hud-bar.hud--land-left .hud-cell__content { transform: rotate(var(--land-rotation)); }
 
 /* ============================================================================
-   [6] EINHEITLICHE ICON-GRÖSSE & ZENTRIERUNG
-   ---------------------------------------------------------------------------
-   Icon wird absolut in der Mitte platziert und immer gleich groß skaliert.
+   [6] ICON – zentriert, quadratisch, scharf
+   - width & height identisch (keine %-Heights → Safari-fest)
+   - object-fit: contain (kein Beschneiden)
+   - aspect-ratio 1/1 (Layout-stabil, iOS liebt das)
+   - image-rendering optimiert (Retina/Pixel-Grafik)
 ============================================================================ */
 .hud-icon{
   position: absolute;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  width: calc((var(--cell-size) - 2 * var(--hud-border-slice)) * var(--icon-scale));
-  height: auto;                /* Safari-kompatibel */
+  /* verfügbare Innenkante = Zelle minus Rahmen; darauf Scale anwenden */
+  width:  calc((var(--cell-size) - 2 * var(--hud-border-slice)) * var(--icon-scale));
+  height: calc((var(--cell-size) - 2 * var(--hud-border-slice)) * var(--icon-scale));
+  aspect-ratio: 1 / 1;
   object-fit: contain;
   display: block;
   z-index: 2;
   pointer-events: none;
+
+  /* Schärfe-Hinweise – Browser nehmen, was sie können */
+  image-rendering: crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: pixelated; /* falls Pixel-Art – sonst ignoriert */
 }
 
 /* ============================================================================
    [7] TEXTE (Name ↖, Menge ↘)
-   ---------------------------------------------------------------------------
-   Absolute Positionierung an den Ecken, keine Layout-Verschiebungen.
 ============================================================================ */
 .hud-name{
   position: absolute;
@@ -183,22 +173,18 @@
 }
 
 /* ============================================================================
-   [8] RESPONSIVE FEINANPASSUNG (OPTIONAL)
-   ---------------------------------------------------------------------------
-   Kleinere Screens → Zellen leicht kleiner, Icon-Skalierung etwas reduziert.
+   [8] RESPONSIVE FINETUNING
+   – kleinere Zellen & leicht kleinere Icons auf schmalen Geräten
 ============================================================================ */
 @media (max-width: 420px){
   :root{
     --cell-size: 64px;
-    --icon-scale: 0.70;
+    --icon-scale: 0.66;
   }
 }
 
 /* ============================================================================
-   [9] INSPECTOR-TUNER (Entwicklertool)
-   ---------------------------------------------------------------------------
-   Optionales kleines Overlay zur Laufzeitsteuerung der HUD-Parameter
-   (wird mit Taste "H" ein-/ausgeblendet)
+   [9] INSPECTOR-TUNER (Taste "H")
 ============================================================================ */
 #hud-tuner{
   position: fixed;
@@ -215,14 +201,8 @@
   gap: 8px;
   align-items: center;
 }
-
-#hud-tuner input[type="range"]{
-  width: 120px;
-}
-#hud-tuner label{
-  opacity: .9;
-  white-space: nowrap;
-}
+#hud-tuner input[type="range"]{ width: 120px; }
+#hud-tuner label{ opacity: .9; white-space: nowrap; }
 #hud-tuner kbd{
   padding: 2px 5px;
   border: 1px solid #666;
