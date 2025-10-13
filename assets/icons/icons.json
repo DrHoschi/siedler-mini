@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "updated": "2025-10-14",
+  "baseDir": "assets/icons",
+  "categories": {
+    "resources": [
+      "wood", "stone", "gold", "coins", "bricks", "bread", "grain", "fish",
+      "population", "ore", "food", "prestige", "weapons", "diplomacy", "knowledge", "paper", "tools"
+    ],
+    "transport": [],
+    "ui": []
+  },
+  "map": {
+    "wood":       { "de": "Holz",        "default": "assets/icons/resources/wood_full.ico",       "transport": null, "aliases": ["holz"] },
+    "stone":      { "de": "Stein",       "default": "assets/icons/resources/stone_full.ico",      "transport": null, "aliases": ["stein"] },
+    "gold":       { "de": "Gold",        "default": "assets/icons/resources/gold_full.ico",       "transport": null, "aliases": [] },
+    "coins":      { "de": "Geld",        "default": "assets/icons/resources/coins_full.ico",      "transport": null, "aliases": ["geld","münzen","munzen"] },
+    "bricks":     { "de": "Ziegel",      "default": "assets/icons/resources/bricks_full.ico",     "transport": null, "aliases": ["ziegel"] },
+    "bread":      { "de": "Brot",        "default": "assets/icons/resources/bread_full.ico",      "transport": null, "aliases": ["brot"] },
+    "grain":      { "de": "Getreide",    "default": "assets/icons/resources/grain_full.ico",      "transport": null, "aliases": ["getreide","weizen"] },
+    "fish":       { "de": "Fisch",       "default": "assets/icons/resources/fish_full.ico",       "transport": null, "aliases": ["fisch"] },
+    "population": { "de": "Bevölkerung", "default": "assets/icons/resources/population_full.ico", "transport": null, "aliases": ["bürger","bevoelkerung","bevölkerung"] },
+    "ore":        { "de": "Erz",         "default": "assets/icons/resources/ore_full.ico",        "transport": null, "aliases": ["erz","edelsteine","gems"] },
+    "food":       { "de": "Nahrung",     "default": "assets/icons/resources/food_full.ico",       "transport": null, "aliases": ["nahrung"] },
+    "prestige":   { "de": "Prestige",    "default": "assets/icons/resources/prestige_full.ico",   "transport": null, "aliases": ["monumente"] },
+    "weapons":    { "de": "Waffen",      "default": "assets/icons/resources/weapons_full.ico",    "transport": null, "aliases": ["waffen"] },
+    "diplomacy":  { "de": "Diplomatie",  "default": "assets/icons/resources/diplomacy_full.ico",  "transport": null, "aliases": ["lizenz","lizensen","lizenzen"] },
+    "knowledge":  { "de": "Wissen",      "default": "assets/icons/resources/knowledge_full.ico",  "transport": null, "aliases": ["bücher","buecher"] },
+    "paper":      { "de": "Papierrolle", "default": "assets/icons/resources/paper_full.ico",      "transport": null, "aliases": ["papier","rolle","papierrolle"] },
+    "tools":      { "de": "Werkzeug",    "default": "assets/icons/resources/tools_full.ico",      "transport": null, "aliases": ["werkzeug"] }
+  }
+}
