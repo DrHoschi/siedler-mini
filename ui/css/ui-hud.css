@@ -1,26 +1,162 @@
-/* Für deine quadratischen HUD-Items */
-.hud-item {
-  width: 80px;
-  height: 80px;
-  background-image: url('../../assets/ui/rahmen-papier.svg');
-  border: none; /* Kein extra CSS-Rahmen mehr nötig */
-  padding: 12px; /* Wichtig, damit der Inhalt nicht über den SVG-Rahmen hinausragt */
+/* ============================================================================
+   Datei : ui/css/ui-hud.css
+   Projekt: Neue Siedler
+   Version: v1.0.0 (2025-10-13)
+   Zweck  : Einzeilige HUD-Leiste mit 9-Slice Rahmen-Zellen, orientierungsabhängig
+   Hinweise:
+     - 9-Slice Schnitte: 12px (entspricht deinem SVG)
+     - Pfad zum Rahmen per --hud-frame-src konfigurierbar (mit Nägeln)
+     - Höhe/Größe per Variablen anpassbar
+============================================================================ */
+
+:root {
+  /* Grundparameter – hier frei anpassen */
+  --hud-frame-src: url("assets/ui/frame_wood_parchment_v2_2.svg");  /* <- DEIN PFAD */
+  --hud-height: 64px;                 /* Höhe der Leiste im Portrait */
+  --hud-side-width: 72px;             /* Breite der vertikalen Leiste im Landscape */
+  --hud-gap: 8px;                     /* Abstand zwischen Zellen */
+  --hud-padding: 8px;                 /* Innenabstand der strip-Container */
+  --hud-cell-size: 160px;             /* Mindestbreite einer Zelle */
+  --hud-cell-height: 56px;            /* Höhe der Zelle (innen) */
+  --hud-border-slice: 12;             /* 9-Slice Wert (siehe SVG) */
 }
 
-/* Für eine breite Info-Leiste */
-.info-panel {
-  width: 400px;
-  height: 100px;
-  background-image: url('../../assets/ui/rahmen-papier.svg');
-  border: none;
-  padding: 15px;
+/* Root der HUD-Leiste: fixed + safe-area beachten */
+#hud-bar {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;               /* Buttons/Strip schalten es wieder ein */
 }
 
-/* Für ein hohes Charakter-Portrait */
-.character-portrait {
-  width: 150px;
-  height: 220px;
-  background-image: url('../../assets/ui/rahmen-papier.svg');
+/* Portrait: oben angedockt */
+#hud-bar.hud--portrait {
+  left: 0; right: 0; top: env(safe-area-inset-top, 0);
+  height: calc(var(--hud-height) + var(--hud-padding)*2);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* Landscape: links oder rechts angedockt (Klasse wird via JS gesetzt) */
+#hud-bar.hud--land-left {
+  top: 0; bottom: 0; left: env(safe-area-inset-left, 0);
+  width: calc(var(--hud-side-width) + var(--hud-padding)*2);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+}
+#hud-bar.hud--land-right {
+  top: 0; bottom: 0; right: env(safe-area-inset-right, 0);
+  width: calc(var(--hud-side-width) + var(--hud-padding)*2);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  justify-items: center;
+}
+
+/* Scroll-Strip (Container) */
+.hud-strip {
+  pointer-events: auto;
+  overflow: auto;
+  scrollbar-width: thin;
+  scroll-snap-type: x mandatory;
+  display: flex;
+  gap: var(--hud-gap);
+  padding: var(--hud-padding);
+  align-items: center;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Portrait: horizontaler Strip */
+#hud-bar.hud--portrait .hud-strip {
+  flex-direction: row;
+  height: 100%;
+}
+
+/* Landscape: vertikaler Strip – BAR selbst bleibt senkrecht; Inhalte drehen! */
+#hud-bar.hud--land-left .hud-strip,
+#hud-bar.hud--land-right .hud-strip {
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+}
+
+/* Pfeilbuttons */
+.hud-nav {
+  pointer-events: auto;
   border: none;
-  padding: 20px;
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-weight: 700;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  margin: 6px;
+  user-select: none;
+}
+#hud-bar.hud--portrait .hud-nav--left  { justify-self: start; }
+#hud-bar.hud--portrait .hud-nav--right { justify-self: end;  }
+#hud-bar.hud--land-left .hud-nav,
+#hud-bar.hud--land-right .hud-nav { width: 40px; height: 40px; }
+
+/* === HUD-ZELLE =========================================================== */
+/* 9-Slice Rahmen (dein Holzrahmen mit Nägeln) */
+.hud-cell {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: var(--hud-cell-size);
+  height: var(--hud-cell-height);
+  padding: 8px 12px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: 28px auto auto;
+  align-items: center;
+  gap: 10px;
+
+  background: none;
+  border: var(--hud-border-slice) solid transparent; /* Platz für border-image */
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+  border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+
+  scroll-snap-align: start;
+  image-rendering: auto;
+}
+
+/* Vertikale Leiste: Zelle wird quer gedreht? Nein – NUR Inhalt dreht. */
+#hud-bar.hud--land-left .hud-cell,
+#hud-bar.hud--land-right .hud-cell {
+  min-width: auto;
+  width: calc(var(--hud-side-width));
+  height: var(--hud-cell-size);
+  writing-mode: vertical-rl;   /* Layout bleibt vertikal für sauberes Snapping */
+}
+
+/* Zell-Inhalte (drehen mit dem Gerät, damit sie immer horizontal lesbar sind) */
+.hud-cell__content {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: 28px auto auto;
+  align-items: center;
+  gap: 10px;
+  transform-origin: center;
+}
+
+/* In Landscape drehen wir die Inhalte zurück in die Bildschirm-Leserichtung */
+#hud-bar.hud--land-left  .hud-cell__content,
+#hud-bar.hud--land-right .hud-cell__content {
+  transform: rotate(90deg);
+}
+
+/* Icon + Werte */
+.hud-icon { width: 24px; height: 24px; object-fit: contain; }
+.hud-name { font-weight: 700; color: #3b2a18; text-shadow: 0 1px 0 #f1e4c8; }
+.hud-amt  { font-variant-numeric: tabular-nums; color: #2a2218; }
+
+/* Kleinere Größen – Beispiel (optional) */
+@media (max-width: 420px) {
+  :root { --hud-cell-size: 120px; --hud-cell-height: 48px; }
+  .hud-icon { width: 20px; height: 20px; }
 }
