@@ -7,7 +7,7 @@
 
 :root{
   /* Panel (dein SVG) + 9-Slice */
-  --hud-frame-src: url("https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg");
+  --hud-frame-src: url("../../assets/ui/panel.svg");
   --hud-border-slice: 12;
 
   /* Leistenmaße (nur diese zwei Werte steuern die Kachelgröße!) */
@@ -16,7 +16,7 @@
 
   /* Inhalt */
   --icon-scale: 0.72;            /* Anteil der Innenfläche (0..1) */
-  --land-rotation: -90deg;       /* bei Bedarf 90deg/-90deg tauschen */
+  --land-rotation: 0deg;       /* bei Bedarf 90deg/-90deg tauschen */
 }
 
 /* Root: fixed, keine äußeren Abstände */
