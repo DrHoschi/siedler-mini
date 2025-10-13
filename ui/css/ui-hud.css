@@ -11,7 +11,7 @@
 
 :root {
   /* Grundparameter – hier frei anpassen */
-  --hud-frame-src: url("assets/ui/frame_wood_parchment_v2_2.svg");  /* <- DEIN PFAD */
+  --hud-frame-src: url("assets/ui/panel.svg");  /* <- DEIN PFAD */
   --hud-height: 64px;                 /* Höhe der Leiste im Portrait */
   --hud-side-width: 72px;             /* Breite der vertikalen Leiste im Landscape */
   --hud-gap: 8px;                     /* Abstand zwischen Zellen */
