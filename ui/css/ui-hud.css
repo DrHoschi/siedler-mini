@@ -31,7 +31,7 @@
   --icon-size: 28px;
 
   /* Lesbarkeit in Landscape: bei Bedarf 90deg ↔ -90deg tauschen */
-  --land-rotation: -90deg; /* dein iPhone-Test war mit -90deg korrekt */
+  --land-rotation: +90deg; /* dein iPhone-Test war mit -90deg korrekt */
 }
 
 /* Root: fixed + Safe-Area */
