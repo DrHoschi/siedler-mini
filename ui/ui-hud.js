@@ -170,7 +170,7 @@ const HUD = (() => {
 // Auto-Init (falls als Standalone in Testseite)
 window.addEventListener("DOMContentLoaded", ()=>{
   HUD.init({
-    // frameSrc: "assets/ui/panel.svg",
+    frameSrc: "assets/ui/panel.svg",
     tuner: true  // Inspector-Tuner aktiv (toggle per Taste "H")
   });
   setTimeout(()=>HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
