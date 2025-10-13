@@ -152,7 +152,7 @@ const HUD = (() => {
 // Auto-Init (für Testseite)
 window.addEventListener("DOMContentLoaded", ()=>{
   HUD.init({
-    frameSrc: "assets/ui/panel.svg", // <— falls du den Pfad hier setzen willst
+    //frameSrc: "assets/ui/panel.svg", // <— falls du den Pfad hier setzen willst
     tuner: true                          // Inspector (Taste H)
   });
   // Beispiel: nachträgliches Update
