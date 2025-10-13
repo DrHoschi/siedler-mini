@@ -20,7 +20,7 @@
 ============================================================================ */
 :root{
   /* Pfad zu deinem Panel-SVG (9-Slice mit Nägeln) */
-  --hud-frame-src: url("https://raw.githubusercontent.com/DrHoschi/siedler-mini/refs/heads/main/assets/ui/panel.svg");
+  --hud-frame-src: url("../../assets/ui/panel.svg");
 
   /* Dicke des Randbereichs (Slice-Wert aus SVG) */
   --hud-border-slice: 12;
@@ -29,10 +29,10 @@
   --cell-size: 72px;
 
   /* Lesbarkeit im Landscape (−90° oder +90°) */
-  --land-rotation: -90deg;
+  --land-rotation: 0deg;
 
   /* Anteil der Innenfläche für Icon-Größe (0.0–1.0) */
-  --icon-scale: 0.72;
+  --icon-scale: 2.72;
 }
 
 /* ============================================================================
