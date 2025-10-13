@@ -32,7 +32,7 @@
   --land-rotation: 0deg;
 
   /* Anteil der Innenfläche für Icon-Größe (0.0–1.0) */
-  --icon-scale: 2.72;
+  --icon-scale: 0.72;
 }
 
 /* ============================================================================
