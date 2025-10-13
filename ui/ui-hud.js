@@ -1,12 +1,11 @@
 // ============================================================================
 // Datei : ui/ui-hud.js
 // Projekt: Neue Siedler
-// Version: v1.1.0 (2025-10-13)
-// Zweck  : HUD-Leiste rendern, Orientation-Docking (oben/links/rechts),
-//          "nur Zellinhalte drehen" wird via CSS-Klassen gelöst.
-// API    : HUD.init({ resources, frameSrc? })
+// Version: v1.2.0 (2025-10-13)
+// Zweck  : HUD rendern, Docking & korrekte Rotation L/R, Panel-SVG pro Zelle,
+//          optionaler Inspector-Tuner für Live-Feintuning.
+// API    : HUD.init({ resources, frameSrc?, tuner?: true|false })
 //          HUD.setAmounts({holz:123, ...})
-// Hinweis: Logs-Block aus deinem Projekt bleibt erhalten (nicht gelöscht)
 // ============================================================================
 
 /* (function(){
@@ -27,91 +26,99 @@
 */ 
 
 const HUD = (() => {
-  const state = { resources: [], byId: {}, frameSrc: null };
+  const state = { resources: [], byId:{}, frameSrc:null, forceSide:null };
 
-  function $(sel, root=document){ return root.querySelector(sel); }
-  function on(el, ev, fn, opt){ el && el.addEventListener(ev, fn, opt); }
+  const $ = (sel, root=document)=>root.querySelector(sel);
+  const on = (el, ev, fn, opt)=> el && el.addEventListener(ev, fn, opt);
 
-  function setDockingByOrientation() {
+  function effectiveOrientation(){
+    // robust: falls Orientation API fehlt → aus Seitenverhältnis ableiten
+    const isLandscape = window.innerWidth > window.innerHeight;
+    const angle = (screen.orientation && Number.isFinite(screen.orientation.angle))
+      ? screen.orientation.angle
+      : (typeof window.orientation === "number" ? ((window.orientation%360)+360)%360 : (isLandscape ? 90 : 0));
+    return { isLandscape, angle };
+  }
+
+  function setDocking(){
     const bar = $("#hud-bar");
-    const type = (screen.orientation && screen.orientation.type) ||
-      (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
+    const { isLandscape, angle } = effectiveOrientation();
 
     bar.classList.remove("hud--portrait","hud--land-left","hud--land-right");
 
-    if (String(type).startsWith("portrait")) {
+    if (!isLandscape){
       bar.classList.add("hud--portrait");
-    } else {
-      const angle = (screen.orientation && screen.orientation.angle);
-      // rechts halten → 90deg; links halten → 270deg / -90deg
-      if (angle === 90) {
-        bar.classList.add("hud--land-right");
-      } else if (angle === 270 || angle === -90) {
-        bar.classList.add("hud--land-left");
-      } else {
-        // Fallback: rechts andocken
-        bar.classList.add("hud--land-right");
-      }
+      return;
     }
+
+    // Manuelle Übersteuerung (Inspector)
+    if (state.forceSide === "left"){ bar.classList.add("hud--land-left"); return; }
+    if (state.forceSide === "right"){ bar.classList.add("hud--land-right"); return; }
+
+    // automatisch: 90° → rechts, 270°/-90° → links, sonst rechts als Fallback
+    if (angle === 90){ bar.classList.add("hud--land-right"); }
+    else if (angle === 270){ bar.classList.add("hud--land-left"); }
+    else { bar.classList.add("hud--land-right"); }
   }
 
-  function render(resources) {
+  function render(resources){
     const strip = $("#hud-strip");
     strip.innerHTML = "";
-    resources.forEach(res => {
-      const cell = document.createElement("div");
+
+    resources.forEach(res=>{
+      const cell  = document.createElement("div");
       cell.className = "hud-cell";
 
       const inner = document.createElement("div");
       inner.className = "hud-cell__content";
       inner.innerHTML = `
-        <img class="hud-icon" src="${res.icon}" alt="${res.name}">
         <div class="hud-name">${res.name}</div>
-        <div class="hud-amt" id="amt-${res.id}">${formatAmt(res.amount)}</div>
+        <img class="hud-icon" src="${res.icon}" alt="${res.name}">
+        <div class="hud-amt" id="amt-${res.id}">${fmt(res.amount)}</div>
       `;
+
       cell.appendChild(inner);
       strip.appendChild(cell);
       state.byId[res.id] = res;
     });
   }
 
-  function formatAmt(v) {
+  function fmt(v){
     if (typeof v !== "number") return v ?? "0";
     if (v >= 1_000_000) return (v/1_000_000).toFixed(1).replace(".", ",")+" M";
     if (v >= 10_000)    return Math.round(v/1000)+" K";
     return String(v);
   }
 
-  function init(cfg = {}) {
-    state.resources = cfg.resources || demoResources();
+  function init(cfg={}){
+    state.resources = cfg.resources || demo();
     state.frameSrc  = cfg.frameSrc || null;
 
-    if (state.frameSrc) {
+    if (state.frameSrc){
       document.documentElement.style.setProperty("--hud-frame-src", `url("${state.frameSrc}")`);
     }
 
     render(state.resources);
-    setDockingByOrientation();
+    setDocking();
 
-    on(window, "resize", setDockingByOrientation);
-    if (screen.orientation && screen.orientation.addEventListener) {
-      on(screen.orientation, "change", setDockingByOrientation);
-    }
-    // iOS Fallback
-    on(window, "orientationchange", setDockingByOrientation);
+    on(window, "resize", setDocking);
+    if (screen.orientation?.addEventListener){ on(screen.orientation, "change", setDocking); }
+    on(window, "orientationchange", setDocking); // iOS
 
-    console.log("[HUD] ready with", state.resources.length, "resources.");
+    // Optionaler Inspector-Tuner
+    if (cfg.tuner) mountTuner();
+    console.log("[HUD] ready", state.resources.length);
   }
 
-  function setAmounts(map) {
-    Object.entries(map).forEach(([id, val]) => {
+  function setAmounts(map){
+    for (const [id,val] of Object.entries(map)){
       const el = document.getElementById(`amt-${id}`);
-      if (el) el.textContent = formatAmt(val);
+      if (el) el.textContent = fmt(val);
       if (state.byId[id]) state.byId[id].amount = val;
-    });
+    }
   }
 
-  function demoResources() {
+  function demo(){
     return [
       { id:"wood",  name:"Holz",  amount:120, icon:"assets/icons/resources/wood.png"  },
       { id:"stone", name:"Stein", amount:85,  icon:"assets/icons/resources/stone.png" },
@@ -122,16 +129,51 @@ const HUD = (() => {
     ];
   }
 
+  /* ---------- kleiner Inspector-Tuner (optional) ---------- */
+  function mountTuner(){
+    if ($("#hud-tuner")) return;
+    const box = document.createElement("div");
+    box.id = "hud-tuner";
+    box.innerHTML = `
+      <label>Portrait Höhe: <input id="t-php" type="range" min="40" max="120" value="72"></label>
+      <label>Portrait Zelle: <input id="t-ps"  type="range" min="40" max="120" value="64"></label>
+      <label>Landscape Breite: <input id="t-lw" type="range" min="48" max="160" value="80"></label>
+      <label>Landscape Zelle: <input id="t-ls" type="range" min="56" max="160" value="72"></label>
+      <label>Dock: 
+        <select id="t-side">
+          <option value="">auto</option>
+          <option value="left">links</option>
+          <option value="right">rechts</option>
+        </select>
+      </label>
+    `;
+    document.body.appendChild(box);
+
+    const setVar = (n,v)=> document.documentElement.style.setProperty(n, v);
+    $("#t-php").addEventListener("input", e=> setVar("--hud-height-portrait", e.target.value+"px"));
+    $("#t-ps").addEventListener("input",  e=> setVar("--cell-size-portrait", e.target.value+"px"));
+    $("#t-lw").addEventListener("input",  e=> setVar("--hud-width-landscape", e.target.value+"px"));
+    $("#t-ls").addEventListener("input",  e=> setVar("--cell-size-land", e.target.value+"px"));
+    $("#t-side").addEventListener("change", e=> { state.forceSide = e.target.value || null; setDocking(); });
+
+    // Toggle per Taste "H" ein/aus
+    window.addEventListener("keydown", (ev)=>{
+      if (ev.key.toLowerCase() === "h"){
+        box.style.display = box.style.display === "none" ? "grid" : "none";
+      }
+    });
+  }
+
   return { init, setAmounts };
 })();
 
-// Auto-Init (nur wenn als Standalone geladen)
-window.addEventListener("DOMContentLoaded", () => {
+// Auto-Init (falls als Standalone in Testseite)
+window.addEventListener("DOMContentLoaded", ()=>{
   HUD.init({
-    // frameSrc: "assets/ui/panel.svg"  // <- optional überschreiben
+    // frameSrc: "assets/ui/panel.svg",
+    tuner: true  // Inspector-Tuner aktiv (toggle per Taste "H")
   });
-  // Beispiel-Update
-  setTimeout(() => HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
+  setTimeout(()=>HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
 });
 
 export default HUD;
