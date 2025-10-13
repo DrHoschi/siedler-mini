@@ -29,7 +29,7 @@
  *     - Deduplizierte Appends, sauberes Event-Wiring, Snapshot-Support
  * ========================================================================== */
 
-(function(){
+/* (function(){
   'use strict';
 
   // -------------------------------------------------------------------------
@@ -44,7 +44,7 @@
     wrn : (...a)=>(window.CBLog?.warn || console.warn)('[hud]', ...a),
     err : (...a)=>(window.CBLog?.err  || console.error)('[hud]', ...a),
   };
-
+*/ 
   // ============================================================================
 // Datei : ui/ui-hud.js
 // Projekt: Neue Siedler
