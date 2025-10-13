@@ -45,187 +45,166 @@
     err : (...a)=>(window.CBLog?.err  || console.error)('[hud]', ...a),
   };
 
-  const emit = (name, detail={}) =>
-    window.dispatchEvent(new CustomEvent(name, { detail }));
+  // ============================================================================
+// Datei : ui/ui-hud.js
+// Projekt: Neue Siedler
+// Version: v1.0.0 (2025-10-13)
+// Zweck  : HUD-Leiste rendern, Daten binden, Orientation-Docking (oben/links/rechts),
+//          Scroll-Buttons, und "nur Zellinhalte drehen" implementieren.
+// API    : HUD.init({ resources, onSelect?, frameSrc? })
+//          HUD.setAmounts({holz:123, ...})
+// Leitplanken: Startfenster zuerst, Debug-Logs lassen wir drin
+// ============================================================================
 
-  const nf = (n)=>{
-    try { return new Intl.NumberFormat('de-DE').format(n|0); }
-    catch(_) { return String(n|0); }
+const HUD = (() => {
+
+  // ------------------------------
+  // Konfiguration & State
+  // ------------------------------
+  const state = {
+    resources: [],
+    byId: {},
+    frameSrc: null
   };
 
-  // -------------------------------------------------------------------------
-  // [01] Katalog (Registry → Ressourcenliste) + Fallback
-  // -------------------------------------------------------------------------
-  const SHOW_ALL_RESOURCES = true;                // alles zeigen, auch spätere Epochen
-  const currentEpoche = (window.Game?.epoche) || 1;
+  // ------------------------------
+  // Helpers
+  // ------------------------------
+  function $(sel, root=document){ return root.querySelector(sel); }
+  function on(el, ev, fn, opt){ el && el.addEventListener(ev, fn, opt); }
 
-  // Minimaler Fallback, falls Registry leer/nicht vorhanden
-  const FALLBACK_RES = [
-    { id:'wood',        name:'Holz',        epoche:1 },
-    { id:'stone',       name:'Stein',       epoche:1 },
-    { id:'fish',        name:'Fisch',       epoche:1 },
-    { id:'food',        name:'Nahrung',     epoche:1 },
-    { id:'gold',        name:'Gold',        epoche:1 },
-    { id:'pop',         name:'Bevölkerung', epoche:1 },
-    { id:'bread',       name:'Brot',        epoche:2 }, 
-    { id:'tools',       name:'Werkzeuge',   epoche:3 },
-  ];
+  function setDockingByOrientation() {
+    const bar = $("#hud-bar");
+    const type = (screen.orientation && screen.orientation.type) || (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
 
-  const iconFor = (id) => `assets/icons/resources/${id}.png`;
+    bar.classList.remove("hud--portrait","hud--land-left","hud--land-right");
 
-  // Heuristik: Alles was wie Gebäude aussieht (cost/size/category/type==='building') rausfiltern
-  const looksLikeBuilding = (o) =>
-    !!(o && (o.cost || o.size || o.category || o.type === 'building'));
-
-  function getResourceCatalog(){
-    let reg = [];
-    if (typeof window.Registry?.list === 'function'){
-      reg = Registry.list('resources')
-         || Registry.list('resource')
-         || Registry.list('goods')
-         || Registry.list('materials')
-         || [];
+    if (String(type).startsWith("portrait")) {
+      bar.classList.add("hud--portrait");
+    } else {
+      // Landscape: abhängig vom Winkel links/rechts andocken
+      // 90deg  → rechts; -90deg oder 270deg → links
+      const angle = (screen.orientation && screen.orientation.angle) || (window.orientation || 0);
+      if (angle === 90) {
+        bar.classList.add("hud--land-right");
+      } else if (angle === -90 || angle === 270) {
+        bar.classList.add("hud--land-left");
+      } else {
+        // Fallback: rechts
+        bar.classList.add("hud--land-right");
+      }
     }
-
-    // Positivfilter (falls vorhanden) bevorzugen …
-    let items = (reg || []).filter(o => o && (o.type === 'resource' || o.kind === 'resource'));
-    // … sonst Heuristik gegen Gebäude anwenden
-    if (!items.length) items = (reg || []).filter(o => !looksLikeBuilding(o));
-
-    // Fallback, wenn immer noch leer
-    if (!items.length) items = FALLBACK_RES;
-
-    // Normalisieren + sortieren
-    const normalized = items.map(r => ({
-      id    : r.id,
-      name  : r.name || r.id,
-      icon  : r.icon || iconFor(r.id),
-      epoche: r.epoche || 1,
-      order : r.order ?? 999
-    }));
-
-    return normalized
-      .filter(r => SHOW_ALL_RESOURCES || r.epoche <= currentEpoche)
-      .sort((a,b)=>(a.order||999)-(b.order||999));
   }
 
-  // -------------------------------------------------------------------------
-  // [02] View: Aufbau & Aktualisierung
-  // -------------------------------------------------------------------------
-  let $grid = null;
-  const amounts = new Map();   // id -> number
-  const cards   = new Map();   // id -> { el, $amt }
+  function render(resources) {
+    const strip = $("#hud-strip");
+    strip.innerHTML = "";
 
-  function buildHUD(){
-    const catalog = getResourceCatalog();
+    resources.forEach(res => {
+      const cell = document.createElement("div");
+      cell.className = "hud-cell";
 
-    // Root leeren & Grid anlegen
-    $root.innerHTML = '';
-    $grid = document.createElement('div');
-    $grid.className = 'hud-grid';
-    $root.appendChild($grid);
+      const inner = document.createElement("div");
+      inner.className = "hud-cell__content";
+      inner.innerHTML = `
+        <img class="hud-icon" src="${res.icon}" alt="${res.name}">
+        <div class="hud-name">${res.name}</div>
+        <div class="hud-amt" id="amt-${res.id}">${formatAmt(res.amount)}</div>
+      `;
 
-    // Kacheln erzeugen
-    catalog.forEach(r=>{
-      const el = document.createElement('button');
-      el.className   = 'res-card';
-      el.dataset.res = r.id;
-      el.title       = r.name;
+      cell.appendChild(inner);
+      strip.appendChild(cell);
 
-      // Titel (oben links)
-      const $title = document.createElement('span');
-      $title.className = 'res-title';
-      $title.textContent = r.name || r.id;
-      el.setAttribute('data-name', $title.textContent);
-      el.appendChild($title);
+      state.byId[res.id] = res;
+    });
+  }
 
-      // Icon (mittig)
-      const $icon = document.createElement('img');
-      $icon.className = 'res-icon';
-      $icon.src = r.icon || iconFor(r.id);
-      $icon.alt = $title.textContent;
-      el.appendChild($icon);
+  function formatAmt(v) {
+    if (typeof v !== "number") return v ?? "0";
+    // große Zahlen kompakt
+    if (v >= 1_000_000) return (v/1_000_000).toFixed(1).replace(".", ",")+" M";
+    if (v >= 10_000)    return Math.round(v/1000)+" K";
+    return String(v);
+  }
 
-      // Menge (unten rechts)
-      const $amt = document.createElement('span');
-      $amt.className = 'res-amount';
-      $amt.id = `hud-${r.id}`;
-      $amt.textContent = nf(amounts.get(r.id) || 0);
-      el.appendChild($amt);
+  function bindNav() {
+    const strip = $("#hud-strip");
+    const left  = $(".hud-nav--left");
+    const right = $(".hud-nav--right");
 
-      // Klick → Fokus togglen (Producer/Consumer später markieren)
-      el.addEventListener('click', ()=>{
-        const active = !el.classList.contains('is-focused');
-        document.querySelectorAll('.res-card.is-focused')
-          .forEach(x => x.classList.remove('is-focused'));
-        if (active) el.classList.add('is-focused');
-        emit('req:res:focus',   { resId:r.id, active });
-        emit('cb:hud:res:focus',{ resId:r.id, active });
-      });
-
-      $grid.appendChild(el);
-      cards.set(r.id, { el, $amt });
-      if (!amounts.has(r.id)) amounts.set(r.id, 0);
+    on(left,  "click", () => {
+      if (strip.scrollLeft !== undefined) strip.scrollLeft -= 200;
+      else strip.scrollTop -= 200;
+    });
+    on(right, "click", () => {
+      if (strip.scrollLeft !== undefined) strip.scrollLeft += 200;
+      else strip.scrollTop += 200;
     });
 
-    // Sichtbar schalten
-    $root.classList.remove('hidden');
-    $root.hidden = false;
-
-    log.ok('HUD gebaut:', cards.size, 'Ressourcen');
+    // Mauswheel -> horizontal scrollen im Portrait
+    on(strip, "wheel", (e) => {
+      if (strip.scrollLeft !== undefined && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
+        strip.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    }, { passive:false });
   }
 
-  function setAmount(id, value){
-    const v = Math.max(0, value|0);
-    amounts.set(id, v);
-    const c = cards.get(id);
-    if (c) c.$amt.textContent = nf(v);
-  }
+  // ------------------------------
+  // Public API
+  // ------------------------------
+  function init(cfg = {}) {
+    state.resources = cfg.resources || demoResources();
+    state.frameSrc  = cfg.frameSrc || null;
 
-  function addAmount(id, delta){
-    const v = Math.max(0, (amounts.get(id) || 0) + (delta|0));
-    setAmount(id, v);
-  }
-
-  function resetAmounts(scope, resId){
-    if (scope === 'all' || !resId){
-      amounts.forEach((_, id)=> setAmount(id, 0));
-    } else {
-      setAmount(resId, 0);
+    // optional: Pfad zum 9-Slice Rahmen dynamisch setzen
+    if (state.frameSrc) {
+      document.documentElement.style.setProperty("--hud-frame-src", `url("${state.frameSrc}")`);
     }
+
+    render(state.resources);
+    bindNav();
+    setDockingByOrientation();
+
+    // Orientation + Resize beobachten
+    on(window, "resize", setDockingByOrientation);
+    if (screen.orientation && screen.orientation.addEventListener) {
+      on(screen.orientation, "change", setDockingByOrientation);
+    }
+
+    console.log("[HUD] ready with", state.resources.length, "resources.");
   }
 
-  // -------------------------------------------------------------------------
-  // [03] Event-Wiring
-  // -------------------------------------------------------------------------
-  window.addEventListener('cb:registry:ready', buildHUD);
-  window.addEventListener('cb:ui-ready', () => { if (!cards.size) buildHUD(); });
+  function setAmounts(map) {
+    Object.entries(map).forEach(([id, val]) => {
+      const el = document.getElementById(`amt-${id}`);
+      if (el) el.textContent = formatAmt(val);
+      if (state.byId[id]) state.byId[id].amount = val;
+    });
+  }
 
-  // Änderungen durch Game/Core/Carrier/Produktionen
-  window.addEventListener('cb:res:change', (ev)=>{
-    const d  = ev?.detail || {};
-    const id = d.res || d.id;
-    if (!id) return;
-    if (typeof d.amount === 'number') setAmount(id, d.amount);
-    else if (typeof d.delta  === 'number') addAmount(id, d.delta);
-  });
+  // Demo-Daten falls nichts übergeben wird
+  function demoResources() {
+    return [
+      { id:"wood",  name:"Holz",  amount:120, icon:"assets/icons/wood.png"  },
+      { id:"stone", name:"Stein", amount:85,  icon:"assets/icons/stone.png" },
+      { id:"fish",  name:"Fisch", amount:42,  icon:"assets/icons/fish.png"  },
+      { id:"food",  name:"Nahrung", amount:63, icon:"assets/icons/food.png" },
+      { id:"gold",  name:"Gold",  amount:7,   icon:"assets/icons/gold.png"  },
+      { id:"pop",   name:"Bev.",  amount:24,  icon:"assets/icons/pop.png"   }
+    ];
+  }
 
-  window.addEventListener('cb:res:reset', (ev)=>{
-    const d = ev?.detail || {};
-    resetAmounts(d.scope || 'all', d.res);
-  });
-
-  window.addEventListener('cb:res:snapshot', (ev)=>{
-    const map = ev?.detail?.amounts || {};
-    Object.keys(map).forEach(id => setAmount(id, map[id]|0));
-  });
-
-  // -------------------------------------------------------------------------
-  // [04] Init
-  // -------------------------------------------------------------------------
-  (function init(){
-    log.inf('HUD Modul geladen (v23.0.0)');
-    emit('cb:hud-ready', { ok:true });
-    emit('req:res:snapshot'); // Core/Speicher kann mit cb:res:snapshot antworten
-  })();
+  return { init, setAmounts };
 })();
+
+// Auto-Init, falls direkt eingebunden
+window.addEventListener("DOMContentLoaded", () => {
+  HUD.init({
+    // frameSrc: "assets/ui/frame_wood_parchment_v2_2.svg"  // <- optional überschreiben
+  });
+  // Beispiel-Update
+  setTimeout(() => HUD.setAmounts({ wood: 135, stone: 93 }), 1500);
+});
+
+export default HUD;
