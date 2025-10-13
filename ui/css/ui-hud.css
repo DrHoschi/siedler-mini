@@ -12,7 +12,7 @@
 
 :root{
   /* === Panel & 9-Slice ==================================================== */
-  --hud-frame-src: url("assets/ui/panel.svg");
+  --hud-frame-src: url("./assets/ui/panel.svg");
   --hud-border-slice: 12;
 
   /* === Abstände =========================================================== */
