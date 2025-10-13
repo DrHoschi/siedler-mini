@@ -1,79 +1,88 @@
 /* ============================================================================
    Datei : ui/css/ui-hud.css
    Projekt: Neue Siedler
-   Version: v1.0.0 (2025-10-13)
+   Version: v1.1.0 (2025-10-13)
    Zweck  : Einzeilige HUD-Leiste mit 9-Slice Rahmen-Zellen, orientierungsabhängig
    Hinweise:
      - 9-Slice Schnitte: 12px (entspricht deinem SVG)
-     - Pfad zum Rahmen per --hud-frame-src konfigurierbar (mit Nägeln)
-     - Höhe/Größe per Variablen anpassbar
+     - Pfad zum Rahmen per --hud-frame-src (Panel-SVG mit Nägeln)
+     - Größen PORTRAIT/LANDSCAPE separat einstellbar
 ============================================================================ */
 
 :root {
-  /* Grundparameter – hier frei anpassen */
-  --hud-frame-src: url("assets/ui/panel.svg");  /* <- DEIN PFAD */
-  --hud-height: 64px;                 /* Höhe der Leiste im Portrait */
-  --hud-side-width: 72px;             /* Breite der vertikalen Leiste im Landscape */
-  --hud-gap: 8px;                     /* Abstand zwischen Zellen */
-  --hud-padding: 8px;                 /* Innenabstand der strip-Container */
-  --hud-cell-size: 160px;             /* Mindestbreite einer Zelle */
-  --hud-cell-height: 56px;            /* Höhe der Zelle (innen) */
-  --hud-border-slice: 12;             /* 9-Slice Wert (siehe SVG) */
+  /* Panel-Rahmen (dein SVG, mit Nägeln) */
+  --hud-frame-src: url("assets/ui/panel.svg"); /* <- DEIN PFAD */
+  --hud-border-slice: 12;                      /* 9-Slice-Wert */
+
+  /* Abstände */
+  --hud-gap: 8px;
+  --hud-padding: 8px;
+
+  /* == PORTRAIT ============================================================ */
+  --hud-height-portrait: 64px;    /* Leistenhöhe im Portrait */
+  --cell-w-portrait: 160px;       /* Mindestbreite je Zelle (Portrait) */
+  --cell-h-portrait: 56px;        /* Innenhöhe Zelle (Portrait) */
+
+  /* == LANDSCAPE =========================================================== */
+  --hud-width-landscape: 72px;    /* Seitenleistenbreite (links/rechts) */
+  --cell-w-land: 64px;            /* Zellbreite (quer) = Spaltenbreite */
+  --cell-h-land: 160px;           /* Zellhöhe (hochkantfläche für drehenden Inhalt) */
 }
 
 /* Root der HUD-Leiste: fixed + safe-area beachten */
 #hud-bar {
   position: fixed;
   z-index: 1000;
-  pointer-events: none;               /* Buttons/Strip schalten es wieder ein */
+  pointer-events: none; /* nur Kinder interaktiv */
 }
 
 /* Portrait: oben angedockt */
 #hud-bar.hud--portrait {
   left: 0; right: 0; top: env(safe-area-inset-top, 0);
-  height: calc(var(--hud-height) + var(--hud-padding)*2);
+  height: calc(var(--hud-height-portrait) + var(--hud-padding)*2);
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr; /* keine Buttons */
   align-items: center;
-  pointer-events: none;
 }
 
-/* Landscape: links oder rechts angedockt (Klasse wird via JS gesetzt) */
+/* Landscape: links/rechts angedockt (JS setzt Klasse) */
 #hud-bar.hud--land-left {
   top: 0; bottom: 0; left: env(safe-area-inset-left, 0);
-  width: calc(var(--hud-side-width) + var(--hud-padding)*2);
+  width: calc(var(--hud-width-landscape) + var(--hud-padding)*2);
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  justify-items: center;
+  grid-template-rows: 1fr;
+  justify-items: stretch;
 }
 #hud-bar.hud--land-right {
   top: 0; bottom: 0; right: env(safe-area-inset-right, 0);
-  width: calc(var(--hud-side-width) + var(--hud-padding)*2);
+  width: calc(var(--hud-width-landscape) + var(--hud-padding)*2);
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  justify-items: center;
+  grid-template-rows: 1fr;
+  justify-items: stretch;
 }
 
 /* Scroll-Strip (Container) */
 .hud-strip {
   pointer-events: auto;
   overflow: auto;
-  scrollbar-width: thin;
-  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   gap: var(--hud-gap);
   padding: var(--hud-padding);
   align-items: center;
-  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scroll-snap-type: x mandatory; /* Portrait default */
 }
 
 /* Portrait: horizontaler Strip */
 #hud-bar.hud--portrait .hud-strip {
   flex-direction: row;
   height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-/* Landscape: vertikaler Strip – BAR selbst bleibt senkrecht; Inhalte drehen! */
+/* Landscape: vertikaler Strip */
 #hud-bar.hud--land-left .hud-strip,
 #hud-bar.hud--land-right .hud-strip {
   flex-direction: column;
@@ -84,57 +93,40 @@
   scroll-snap-type: y mandatory;
 }
 
-/* Pfeilbuttons */
-.hud-nav {
-  pointer-events: auto;
-  border: none;
-  background: rgba(0,0,0,0.35);
-  color: #fff;
-  font-weight: 700;
-  width: 36px; height: 36px;
-  border-radius: 8px;
-  display: grid; place-items: center;
-  margin: 6px;
-  user-select: none;
-}
-#hud-bar.hud--portrait .hud-nav--left  { justify-self: start; }
-#hud-bar.hud--portrait .hud-nav--right { justify-self: end;  }
-#hud-bar.hud--land-left .hud-nav,
-#hud-bar.hud--land-right .hud-nav { width: 40px; height: 40px; }
-
-/* === HUD-ZELLE =========================================================== */
-/* 9-Slice Rahmen (dein Holzrahmen mit Nägeln) */
+/* === HUD-ZELLE (nur die Zelle bekommt den Panel-Rahmen) =================== */
 .hud-cell {
   position: relative;
   flex: 0 0 auto;
-  min-width: var(--hud-cell-size);
-  height: var(--hud-cell-height);
+  background: none;
+  border: var(--hud-border-slice) solid transparent; /* Platz für border-image */
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+  border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+  scroll-snap-align: start;
+}
+
+/* Portrait-Zellmaße + Inhalt */
+#hud-bar.hud--portrait .hud-cell {
+  min-width: var(--cell-w-portrait);
+  height: var(--cell-h-portrait);
   padding: 8px 12px;
   display: grid;
   grid-auto-flow: column;
   grid-template-columns: 28px auto auto;
   align-items: center;
   gap: 10px;
-
-  background: none;
-  border: var(--hud-border-slice) solid transparent; /* Platz für border-image */
-  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
-  border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
-
-  scroll-snap-align: start;
-  image-rendering: auto;
 }
 
-/* Vertikale Leiste: Zelle wird quer gedreht? Nein – NUR Inhalt dreht. */
+/* Landscape-Zellmaße (Leiste schmal, Zellen hochkant; Inhalt dreht sich) */
 #hud-bar.hud--land-left .hud-cell,
 #hud-bar.hud--land-right .hud-cell {
-  min-width: auto;
-  width: calc(var(--hud-side-width));
-  height: var(--hud-cell-size);
-  writing-mode: vertical-rl;   /* Layout bleibt vertikal für sauberes Snapping */
+  width: var(--cell-w-land);
+  height: var(--cell-h-land);
+  padding: 8px 6px;
+  display: grid;
+  place-items: center;
 }
 
-/* Zell-Inhalte (drehen mit dem Gerät, damit sie immer horizontal lesbar sind) */
+/* Zell-Inhalte: eigene Schicht, damit wir NUR den Inhalt drehen können */
 .hud-cell__content {
   display: grid;
   grid-auto-flow: column;
@@ -144,7 +136,10 @@
   transform-origin: center;
 }
 
-/* In Landscape drehen wir die Inhalte zurück in die Bildschirm-Leserichtung */
+/* Portrait: keine Rotation */
+#hud-bar.hud--portrait .hud-cell__content { transform: rotate(0deg); }
+
+/* Landscape: Inhalte konsistent aufrecht halten → -90deg (dein Test-Ergebnis) */
 #hud-bar.hud--land-left  .hud-cell__content,
 #hud-bar.hud--land-right .hud-cell__content {
   transform: rotate(-90deg);
@@ -155,8 +150,12 @@
 .hud-name { font-weight: 700; color: #3b2a18; text-shadow: 0 1px 0 #f1e4c8; }
 .hud-amt  { font-variant-numeric: tabular-nums; color: #2a2218; }
 
-/* Kleinere Größen – Beispiel (optional) */
+/* Kleinere Screens – optionales Beispiel */
 @media (max-width: 420px) {
-  :root { --hud-cell-size: 120px; --hud-cell-height: 48px; }
+  :root {
+    --cell-w-portrait: 130px;
+    --cell-h-portrait: 50px;
+    --cell-h-land: 140px;
+  }
   .hud-icon { width: 20px; height: 20px; }
 }
