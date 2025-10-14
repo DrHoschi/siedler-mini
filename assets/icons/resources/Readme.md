@@ -89,3 +89,22 @@ core/
     ├─ 48px/ …
     ├─ 64px/ …
     └─ 128px/ …
+
+    icons 64x64px
+       wood.ico
+       stone.ico
+       gold.ico
+       coins.ico
+       bricks.ico
+       bread.ico
+       grain.ico
+       fish.ico
+       population.ico
+       ore.ico
+       food.ico
+       prestige.ico
+       weapons.ico
+       diplomacy.ico
+       knowledge.ico
+       paper.ico
+       tools.ico
