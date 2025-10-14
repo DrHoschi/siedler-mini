@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 357
+Gesamt Dateien: 386
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -50,6 +50,7 @@ Gesamt Dateien: 357
  - README.md
  - STRUKTUR_SPICKZETTEL.md
  - STRUKTUR_SPICKZETTEL.mmd
+ - ui-hud-test.html
 
 ## Mögliche Tippfehler/Readme ohne .md
  - assets/buildings/lumberjack/Readme

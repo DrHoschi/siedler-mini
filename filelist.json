@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-10T14:04:47.761Z",
+  "createdAt": "2025-10-14T20:49:28.682Z",
   "root": ".",
-  "count": 398,
+  "count": 427,
   "entries": [
     {
       "type": "dir",
@@ -379,43 +379,103 @@
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/bread.png",
-      "size": 507831
+      "path": "assets/icons/resources/bread.ico",
+      "size": 5760
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/bricks.ico",
+      "size": 5804
     },
     {
       "type": "file",
       "path": "assets/icons/resources/bricks.png",
-      "size": 791749
+      "size": 5749
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/coins.ico",
+      "size": 4358
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/coins.png",
+      "size": 4307
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/diplomacy.ico",
+      "size": 4908
     },
     {
       "type": "file",
       "path": "assets/icons/resources/diplomacy.png",
-      "size": 581949
+      "size": 4851
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/fish_full.ico",
+      "size": 45141
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/fish.ico",
+      "size": 2837
     },
     {
       "type": "file",
       "path": "assets/icons/resources/fish.png",
-      "size": 355425
+      "size": 2764
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/food_full.ico",
+      "size": 70470
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/food.ico",
+      "size": 4639
     },
     {
       "type": "file",
       "path": "assets/icons/resources/food.png",
-      "size": 559536
+      "size": 4560
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/gold_full.ico",
+      "size": 62997
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/gold.ico",
+      "size": 4304
     },
     {
       "type": "file",
       "path": "assets/icons/resources/gold.png",
-      "size": 469085
+      "size": 4221
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/grain.ico",
+      "size": 5148
     },
     {
       "type": "file",
       "path": "assets/icons/resources/grain.png",
-      "size": 722526
+      "size": 5041
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/knowledge.ico",
+      "size": 5389
     },
     {
       "type": "file",
       "path": "assets/icons/resources/knowledge.png",
-      "size": 616704
+      "size": 5306
     },
     {
       "type": "file",
@@ -424,13 +484,23 @@
     },
     {
       "type": "file",
+      "path": "assets/icons/resources/ore.ico",
+      "size": 5180
+    },
+    {
+      "type": "file",
       "path": "assets/icons/resources/ore.png",
-      "size": 566381
+      "size": 5083
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/paper.ico",
+      "size": 5683
     },
     {
       "type": "file",
       "path": "assets/icons/resources/paper.png",
-      "size": 755255
+      "size": 5594
     },
     {
       "type": "file",
@@ -439,33 +509,78 @@
     },
     {
       "type": "file",
+      "path": "assets/icons/resources/population_full.ico",
+      "size": 101147
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/population.ico",
+      "size": 6108
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/population.png",
+      "size": 6031
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/prestige.ico",
+      "size": 5654
+    },
+    {
+      "type": "file",
       "path": "assets/icons/resources/prestige.png",
-      "size": 766268
+      "size": 5602
     },
     {
       "type": "file",
       "path": "assets/icons/resources/Readme.md",
-      "size": 452
+      "size": 2571
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/stone.png",
-      "size": 492786
+      "path": "assets/icons/resources/stone_full.ico",
+      "size": 42024
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/stone.ico",
+      "size": 4557
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/tools_full.ico",
+      "size": 53449
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/tools.ico",
+      "size": 3723
     },
     {
       "type": "file",
       "path": "assets/icons/resources/tools.png",
-      "size": 411955
+      "size": 3650
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/weapons.ico",
+      "size": 6325
     },
     {
       "type": "file",
       "path": "assets/icons/resources/weapons.png",
-      "size": 823228
+      "size": 6254
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/wood.png",
-      "size": 599316
+      "path": "assets/icons/resources/wood_full.ico",
+      "size": 25637
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/resources/wood.ico",
+      "size": 6462
     },
     {
       "type": "file",
@@ -551,6 +666,11 @@
       "type": "file",
       "path": "assets/icons/icons_spritesheet_64.png",
       "size": 263254
+    },
+    {
+      "type": "file",
+      "path": "assets/icons/icons.json",
+      "size": 2824
     },
     {
       "type": "file",
@@ -996,6 +1116,21 @@
     },
     {
       "type": "file",
+      "path": "assets/ui/panel.svg",
+      "size": 6317
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/panel01.svg",
+      "size": 2643
+    },
+    {
+      "type": "file",
+      "path": "assets/ui/panel02.svg",
+      "size": 2877
+    },
+    {
+      "type": "file",
       "path": "assets/ui/start-bg.jpg",
       "size": 564395
     },
@@ -1152,6 +1287,11 @@
       "type": "file",
       "path": "core/game.js",
       "size": 7295
+    },
+    {
+      "type": "file",
+      "path": "core/icons-map.js",
+      "size": 5553
     },
     {
       "type": "file",
@@ -1701,12 +1841,12 @@
     {
       "type": "file",
       "path": "ui/css/inspector.css",
-      "size": 5295
+      "size": 1170
     },
     {
       "type": "file",
       "path": "ui/css/layout.css",
-      "size": 6271
+      "size": 3150
     },
     {
       "type": "file",
@@ -1716,17 +1856,17 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 14794
+      "size": 2149
     },
     {
       "type": "file",
       "path": "ui/css/ui-dialog.css",
-      "size": 105
+      "size": 938
     },
     {
       "type": "file",
       "path": "ui/css/ui-hud.css",
-      "size": 4692
+      "size": 6637
     },
     {
       "type": "file",
@@ -1736,22 +1876,22 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 1508
+      "size": 988
     },
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 6789
+      "size": 1054
     },
     {
       "type": "file",
       "path": "ui/css/ui-tooltip.css",
-      "size": 5200
+      "size": 741
     },
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 8158
+      "size": 2393
     },
     {
       "type": "dir",
@@ -1880,7 +2020,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 8455
+      "size": 15727
     },
     {
       "type": "file",
@@ -1920,17 +2060,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 39244
+      "size": 39511
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15151
+      "size": 15232
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 13080
+      "size": 9710
     },
     {
       "type": "file",
@@ -1951,6 +2091,11 @@
       "type": "file",
       "path": "STRUKTUR_SPICKZETTEL.mmd",
       "size": 3239
+    },
+    {
+      "type": "file",
+      "path": "ui-hud-test.html",
+      "size": 591
     }
   ]
 }
