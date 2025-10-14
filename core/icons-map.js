@@ -33,24 +33,24 @@ const DIR = {
    - "aliases": akzeptierte Alternativ-Schlüssel (de/en)
    ========================================================== */
 const ICONS = {
-  wood:       { de: 'Holz',        aliases: ['holz'],        default: `${DIR.resources}/wood_full.ico`,       transport: null },
-  stone:      { de: 'Stein',       aliases: ['stein'],       default: `${DIR.resources}/stone_full.ico`,      transport: null },
-  gold:       { de: 'Gold',        aliases: [],              default: `${DIR.resources}/gold_full.ico`,       transport: null },
-  coins:      { de: 'Geld',        aliases: ['geld','münzen','munzen'], default: `${DIR.resources}/coins_full.ico`, transport: null },
-  bricks:     { de: 'Ziegel',      aliases: ['ziegel'],      default: `${DIR.resources}/bricks_full.ico`,     transport: null },
-  bread:      { de: 'Brot',        aliases: ['brot'],        default: `${DIR.resources}/bread_full.ico`,      transport: null },
-  grain:      { de: 'Getreide',    aliases: ['getreide','weizen'], default: `${DIR.resources}/grain_full.ico`, transport: null },
-  fish:       { de: 'Fisch',       aliases: ['fisch'],       default: `${DIR.resources}/fish_full.ico`,       transport: null },
+  wood:       { de: 'Holz',        aliases: ['holz'],        default: `${DIR.resources}/wood.ico`,       transport: null },
+  stone:      { de: 'Stein',       aliases: ['stein'],       default: `${DIR.resources}/stone.ico`,      transport: null },
+  gold:       { de: 'Gold',        aliases: [],              default: `${DIR.resources}/gold.ico`,       transport: null },
+  coins:      { de: 'Geld',        aliases: ['geld','münzen','munzen'], default: `${DIR.resources}/coin.ico`, transport: null },
+  bricks:     { de: 'Ziegel',      aliases: ['ziegel'],      default: `${DIR.resources}/bricks.ico`,     transport: null },
+  bread:      { de: 'Brot',        aliases: ['brot'],        default: `${DIR.resources}/bread.ico`,      transport: null },
+  grain:      { de: 'Getreide',    aliases: ['getreide','weizen'], default: `${DIR.resources}/grain.ico`, transport: null },
+  fish:       { de: 'Fisch',       aliases: ['fisch'],       default: `${DIR.resources}/fish.ico`,       transport: null },
 
-  population: { de: 'Bevölkerung', aliases: ['bürger','bevoelkerung','bevölkerung','population'], default: `${DIR.resources}/population_full.ico`, transport: null },
-  ore:        { de: 'Erz',         aliases: ['erz','edelsteine','gems'], default: `${DIR.resources}/ore_full.ico`, transport: null },
-  food:       { de: 'Nahrung',     aliases: ['nahrung'],     default: `${DIR.resources}/food_full.ico`,       transport: null },
-  prestige:   { de: 'Prestige',    aliases: ['monumente'],   default: `${DIR.resources}/prestige_full.ico`,   transport: null },
-  weapons:    { de: 'Waffen',      aliases: ['waffen'],      default: `${DIR.resources}/weapons_full.ico`,    transport: null },
-  diplomacy:  { de: 'Diplomatie',  aliases: ['lizenz','lizensen','lizenzen','diplomacy'], default: `${DIR.resources}/diplomacy_full.ico`, transport: null },
-  knowledge:  { de: 'Wissen',      aliases: ['wissen','bücher','buecher'], default: `${DIR.resources}/knowledge_full.ico`, transport: null },
-  paper:      { de: 'Papierrolle', aliases: ['papier','rolle','papierrolle'], default: `${DIR.resources}/paper_full.ico`, transport: null },
-  tools:      { de: 'Werkzeug',    aliases: ['werkzeug','tools'], default: `${DIR.resources}/tools_full.ico`,  transport: null }
+  population: { de: 'Bevölkerung', aliases: ['bürger','bevoelkerung','bevölkerung','population'], default: `${DIR.resources}/population.ico`, transport: null },
+  ore:        { de: 'Erz',         aliases: ['erz','edelsteine','gems'], default: `${DIR.resources}/ore.ico`, transport: null },
+  food:       { de: 'Nahrung',     aliases: ['nahrung'],     default: `${DIR.resources}/food.ico`,       transport: null },
+  prestige:   { de: 'Prestige',    aliases: ['monumente'],   default: `${DIR.resources}/prestige.ico`,   transport: null },
+  weapons:    { de: 'Waffen',      aliases: ['waffen'],      default: `${DIR.resources}/weapons.ico`,    transport: null },
+  diplomacy:  { de: 'Diplomatie',  aliases: ['lizenz','lizensen','lizenzen','diplomacy'], default: `${DIR.resources}/diplomacy.ico`, transport: null },
+  knowledge:  { de: 'Wissen',      aliases: ['wissen','bücher','buecher'], default: `${DIR.resources}/knowledge.ico`, transport: null },
+  paper:      { de: 'Papierrolle', aliases: ['papier','rolle','papierrolle'], default: `${DIR.resources}/paper.ico`, transport: null },
+  tools:      { de: 'Werkzeug',    aliases: ['werkzeug','tools'], default: `${DIR.resources}/tools.ico`,  transport: null }
 };
 
 /* ==========================================================
