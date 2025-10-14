@@ -98,7 +98,7 @@
   /* Vollflächig über die Pergamentmitte, aber Abstand zum Rahmen */
   position: absolute;
   inset: 0;
-  padding: 18px;                       /* Abstand vom Holzrahmen */
+  padding: 3px;                       /* Abstand vom Holzrahmen */
   display: grid;
   place-items: center;                 /* → EXAKT zentriert */
   pointer-events: none;
