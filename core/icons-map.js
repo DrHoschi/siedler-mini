@@ -18,7 +18,7 @@
 /* ============================
    KONSTANTEN: Basisverzeichnisse
    ============================ */
-const BASE = 'assets/icons';
+const BASE = 'assets/icons/resources';
 const DIR = {
   resources: `${BASE}/resources`,
   transport: `${BASE}/transport`,  // optionale spätere Varianten
