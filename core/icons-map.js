@@ -33,7 +33,7 @@ const DIR = {
    - "aliases": akzeptierte Alternativ-Schlüssel (de/en)
    ========================================================== */
 const ICONS = {
-  wood:       { de: 'Holz',        aliases: ['holz'],        default: `${DIR.resources}/wood.ico`,       transport: null },
+  wood:       { de: 'Holz',        aliases: ['holz'],        default: `${DIR.resources}/wood.png`,       transport: null },
   stone:      { de: 'Stein',       aliases: ['stein'],       default: `${DIR.resources}/stone.ico`,      transport: null },
   gold:       { de: 'Gold',        aliases: [],              default: `${DIR.resources}/gold.ico`,       transport: null },
   coins:      { de: 'Geld',        aliases: ['geld','münzen','munzen'], default: `${DIR.resources}/coin.ico`, transport: null },
