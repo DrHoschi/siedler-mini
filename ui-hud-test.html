@@ -1,21 +1,8 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>HUD Test</title>
-  <link rel="stylesheet" href="ui/css/ui-hud.css">
-  <style>
-    html, body { height: 100%; margin: 0; background: #1f1c1f; }
-  </style>
-</head>
-<body>
-
-  <!-- HUD-Leiste -->
-  <div id="hud-bar" class="hud--portrait">
-    <div class="hud-strip" id="hud-strip"></div>
-  </div>
-  <script type="module" src="core/icons-map.js"></script>
-  <script type="module" src="ui/ui-hud.js"></script>
+<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="ui/css/ui-hud.css">
+<script src="ui/ui-hud.js"></script>
+<body style="background:#1a1a1e;">
+<script>
+  HUD.init(); // benutzt Default-Icons
+</script>
 </body>
-</html>
