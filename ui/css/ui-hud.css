@@ -1,211 +1,122 @@
-/* ============================================================================
-   Datei : ui/css/ui-hud.css
-   Projekt: Neue Siedler
-   Version: v1.7.0 (2025-10-14)
-   Zweck  : Ressourcen-HUD-Leiste (oben/links andockend), ICO/PNG-sicher
-            – Quadratische Zellen (Portrait & Landscape)
-            – Panel.svg via Border-Image (9-Slice)
-            – Icons zentriert, scharf & sauber zugeschnitten (iOS/Safari-freundlich)
-============================================================================ */
+/* =============================================================================
+ * Datei   : ui/css/ui-hud.css
+ * Projekt : Neue Siedler
+ * Version : v1.8.1 (2025-10-14)
+ * Zweck   : Ressourcen-HUD (oben links) – quadratische Zellen, Icons 100% mittig
+ * Leitplanken:
+ *   - Keine Subpixel-Drifts auf iOS/Safari
+ *   - PNGs mit ungleichen Offsets trotzdem zentriert (object-fit + Grid-Center)
+ *   - 9-Slice-Holzrahmen via border-image
+ *   - Z-Index über Canvas, unter Inspector
+ * Struktur:
+ *   .hud             -> Container-Bar
+ *   .hud__cell       -> eine Ressourcenzelle (Quadrat)
+ *   .hud__title      -> Beschriftung (oben links)
+ *   .hud__icon-wrap  -> Quadratischer Icon-Wrapper (zentriert)
+ *   .hud__icon       -> <img> selbst (pixel-scharf)
+ * ============================================================================= */
 
-/* ============================================================================
-   [1] GRUNDVARIABLEN
-============================================================================ */
+/* =========================
+   [1] Variablen (einheitlich)
+   ========================= */
 :root{
-  /* Panel (9-Slice) */
+  /* Rahmen (9-Slice) */
   --hud-frame-src: url("../../assets/ui/panel.svg");
-  --hud-border-slice: 12;
+  --hud-border-slice: 12;            /* abhängig von deiner panel.svg */
 
-  /* Einheitliche Zellkante */
-  --cell-size: 72px;
+  /* Zellkante (Portrait/Landscape identisch) */
+  --hud-cell-size: 88px;             /* ⇦ ein Wert für alles */
+  --hud-gap: 8px;
 
-  /* Landscape-Drehung (−90° oder +90°; 0deg = keine Drehung) */
-  --land-rotation: 0deg;
+  /* Icon-Größe als Anteil am Quadrat */
+  --hud-icon-size: 64%;              /* 50–72% passen erfahrungsgemäß gut */
 
-  /* Anteil der Innenfläche für das Icon (0.0–1.0) – realer Standard */
-  --icon-scale: 0.72;
+  /* Schrift */
+  --hud-font: "Times New Roman", Georgia, serif;
+  --hud-title-color: #5a3b24;
+  --hud-title-shadow: 0 1px 0 rgba(255,255,255,.35);
 }
 
-/* ============================================================================
-   [2] LEISTE (Root)
-============================================================================ */
-#hud-bar{
+/* =========================
+   [2] Container-Bar
+   ========================= */
+.hud{
   position: fixed;
-  z-index: 1000;
-  pointer-events: none; /* Scroll/Klicks nur auf dem inneren Strip */
-}
-
-/* Portrait: oben */
-#hud-bar.hud--portrait{
-  left: 0; right: 0; top: env(safe-area-inset-top, 0);
-  height: var(--cell-size);
+  top: 6px; left: 6px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--hud-cell-size);
+  gap: var(--hud-gap);
+  z-index: 50;                        /* Canvas < 40, Place-Overlay 40, HUD 50, Inspector > 60 */
+  pointer-events: none;               /* HUD klickt nicht rein (nur Anzeige) */
 }
 
-/* Landscape: links */
-#hud-bar.hud--land-left{
-  top: 0; bottom: 0; left: env(safe-area-inset-left, 0);
-  width: var(--cell-size);
-  display: grid;
-  grid-template-rows: 1fr;
-}
-
-/* ============================================================================
-   [3] SCROLL-CONTAINER
-   WICHTIG: Im DOM heißt er #hud-strip (ID) – deshalb hier #hud-strip!
-============================================================================ */
-#hud-strip{
-  pointer-events: auto;
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scroll-snap-type: x mandatory; /* Portrait-Default */
-}
-
-/* Portrait = horizontal */
-#hud-bar.hud--portrait #hud-strip{
-  flex-direction: row;
-  height: 100%;
-  overflow-x: auto; overflow-y: hidden;
-}
-
-/* Landscape = vertikal */
-#hud-bar.hud--land-left #hud-strip{
-  flex-direction: column;
-  width: 100%; height: 100%;
-  overflow-x: hidden; overflow-y: auto;
-  scroll-snap-type: y mandatory;
-}
-
-/* ============================================================================
-   [4] ZELLEN (Rahmen + Hintergrund via 9-Slice)
-============================================================================ */
-.hud-cell{
-  position: relative;
-  flex: 0 0 auto;
-  width: var(--cell-size);
-  height: var(--cell-size);
-  margin: 0;
-  box-sizing: border-box;
-  background: transparent;
-  scroll-snap-align: start;
-  overflow: hidden;         /* nix steht raus */
-  z-index: 0;
-
-  /* 9-Slice-Rahmen */
-  border-style: solid;
-  border-color: transparent;
-  border-width: var(--hud-border-slice);
-  border-image-source: var(--hud-frame-src);
-  border-image-slice: var(--hud-border-slice) fill;
-  border-image-width: var(--hud-border-slice);
-  border-image-repeat: stretch;
-  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
-}
-
-/* ============================================================================
-   [5] INHALT (gedreht im Landscape)
-============================================================================ */
-.hud-cell__content{
-  position: absolute;
-  inset: var(--hud-border-slice); /* exakt Innenfläche */
-  transform-origin: center;
-  z-index: 1;
-}
-
-#hud-bar.hud--portrait  .hud-cell__content { transform: rotate(0deg); }
-#hud-bar.hud--land-left .hud-cell__content { transform: rotate(var(--land-rotation)); }
-
-/* ============================================================================
-   [6] ICON – zentriert, quadratisch, scharf
-   - width & height identisch (keine %-Heights → Safari-fest)
-   - object-fit: contain (kein Beschneiden)
-   - aspect-ratio 1/1 (Layout-stabil, iOS liebt das)
-   - image-rendering optimiert (Retina/Pixel-Grafik)
-============================================================================ */
-.hud-icon{
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  /* verfügbare Innenkante = Zelle minus Rahmen; darauf Scale anwenden */
-  width:  calc((var(--cell-size) - 2 * var(--hud-border-slice)) * var(--icon-scale));
-  height: calc((var(--cell-size) - 2 * var(--hud-border-slice)) * var(--icon-scale));
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
-  display: block;
-  z-index: 2;
-  pointer-events: none;
-
-  /* Schärfe-Hinweise – Browser nehmen, was sie können */
-  image-rendering: crisp-edges;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: pixelated; /* falls Pixel-Art – sonst ignoriert */
-}
-
-/* ============================================================================
-   [7] TEXTE (Name ↖, Menge ↘)
-============================================================================ */
-.hud-name{
-  position: absolute;
-  left: 6px; top: 4px;
-  font-weight: 700;
-  font-size: 13px;
-  color: #5a3b1a;
-  text-shadow: 0 1px 1px #f4e9d1;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.hud-amt{
-  position: absolute;
-  right: 6px; bottom: 4px;
-  font-weight: 600;
-  font-size: 13px;
-  color: #3c2a16;
-  text-shadow: 0 1px 1px #f4e9d1;
-  z-index: 3;
-  pointer-events: none;
-}
-
-/* ============================================================================
-   [8] RESPONSIVE FINETUNING
-   – kleinere Zellen & leicht kleinere Icons auf schmalen Geräten
-============================================================================ */
-@media (max-width: 420px){
-  :root{
-    --cell-size: 64px;
-    --icon-scale: 0.66;
+/* Optional: in sehr schmalen Portrait-Views automatisch vertikal stapeln */
+@media (max-width: 500px) and (orientation: portrait){
+  .hud{
+    grid-auto-flow: row;
+    grid-auto-rows: var(--hud-cell-size);
   }
 }
 
-/* ============================================================================
-   [9] INSPECTOR-TUNER (Taste "H")
-============================================================================ */
-#hud-tuner{
-  position: fixed;
-  z-index: 2000;
-  left: 50%;
-  transform: translateX(-50%);
-  top: calc(env(safe-area-inset-top,0) + 8px);
-  background: rgba(0,0,0,.65);
-  color: #fff;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font: 12px/1.3 system-ui, sans-serif;
-  display: none;
-  gap: 8px;
-  align-items: center;
+/* =========================
+   [3] Zelle mit 9-Slice-Rahmen
+   ========================= */
+.hud__cell{
+  width: var(--hud-cell-size);
+  height: var(--hud-cell-size);
+  box-sizing: border-box;
+  border: 14px solid transparent;     /* muss >= slice sein */
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+          border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+
+  background: #e9e0d3;                /* Pergament-Füllung (unter deinem SVG) */
+  filter: saturate(0.95);
+  position: relative;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
-#hud-tuner input[type="range"]{ width: 120px; }
-#hud-tuner label{ opacity: .9; white-space: nowrap; }
-#hud-tuner kbd{
-  padding: 2px 5px;
-  border: 1px solid #666;
-  border-radius: 4px;
-  background: #222;
+
+/* =========================
+   [4] Titel (oben links)
+   ========================= */
+.hud__title{
+  position: absolute;
+  top: 6px; left: 8px;
+  margin: 0;
+  font: 700 18px/1 var(--hud-font);
+  color: var(--hud-title-color);
+  text-shadow: var(--hud-title-shadow);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* =========================
+   [5] Icon-Wrapper + Icon
+   ========================= */
+.hud__icon-wrap{
+  /* Vollflächig über die Pergamentmitte, aber Abstand zum Rahmen */
+  position: absolute;
+  inset: 0;
+  padding: 18px;                       /* Abstand vom Holzrahmen */
+  display: grid;
+  place-items: center;                 /* → EXAKT zentriert */
+  pointer-events: none;
+}
+
+.hud__icon{
+  width: var(--hud-icon-size);
+  height: var(--hud-icon-size);
+  display: block;                      /* baseline-Drift verhindern */
+  object-fit: contain;                 /* PNG mit Rand bleibt mittig */
+  image-rendering: pixelated;          /* Retro-schärfe */
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* =========================
+   [6] Safe-Guard gegen Gerätezooms
+   ========================= */
+@supports (-webkit-touch-callout: none){
+  .hud__icon{ image-rendering: -webkit-optimize-contrast; }
 }
