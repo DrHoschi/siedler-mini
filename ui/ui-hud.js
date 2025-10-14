@@ -110,7 +110,7 @@
     } catch(e){ /* ignoriere */ }
 
     // 4) Fallback-Heuristik (ICO-Standardpfad in /resources/)
-    return `assets/icons/resources/${res.id}.ico`;
+    return `assets/icons/resources/${res.id}.png`;
   }
 
   // ----------------------------------------------------------------------------
