@@ -82,7 +82,7 @@
   // 1) explizit übergebenes res.icon (beliebiges Format, z. B. .ico/.png/.svg)
   // 2) resolveIcon() aus core/icons-map.js (wenn vorhanden)
   // 3) ICONS[res.id].default aus core/icons-map.js (wenn vorhanden)
-  // 4) Standardpfad "assets/icons/resources/<id>_full.ico"
+  // 4) Standardpfad "assets/icons/resources/<id>.ico"
   function pickIcon(res){
     if (!res) return null;
 
@@ -110,7 +110,7 @@
     } catch(e){ /* ignoriere */ }
 
     // 4) Fallback-Heuristik (ICO-Standardpfad in /resources/)
-    return `assets/icons/resources/${res.id}_full.ico`;
+    return `assets/icons/resources/${res.id}.ico`;
   }
 
   // ----------------------------------------------------------------------------
