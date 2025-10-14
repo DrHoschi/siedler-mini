@@ -1,6 +1,6 @@
 
    
-    ├─ resources/         # HUD-Ressourcen (Pflicht)
+    ├─ resources/      # HUD-Ressourcen (Pflicht)
     │  ├─ wood.png
     │  ├─ stone.png
     │  ├─ fish.png
@@ -63,3 +63,29 @@
     ui/             ← (optional)
 core/
   icons-map.js
+
+
+    icons_png_pack/
+    ├─ 16px/
+    │  ├─ wood.png
+    │  ├─ stone.png
+    │  ├─ gold.png
+    │  ├─ coins.png
+    │  ├─ bricks.png
+    │  ├─ bread.png
+    │  ├─ grain.png
+    │  ├─ fish.png
+    │  ├─ population.png
+    │  ├─ ore.png
+    │  ├─ food.png
+    │  ├─ prestige.png
+    │  ├─ weapons.png
+    │  ├─ diplomacy.png
+    │  ├─ knowledge.png
+    │  ├─ paper.png
+    │  └─ tools.png
+    ├─ 24px/ … (gleiches Set)
+    ├─ 36px/ …
+    ├─ 48px/ …
+    ├─ 64px/ …
+    └─ 128px/ …
