@@ -11,7 +11,7 @@
     "ui": []
   },
   "map": {
-    "wood":       { "de": "Holz",        "default": "assets/icons/resources/wood.ico",       "transport": null, "aliases": ["holz"] },
+    "wood":       { "de": "Holz",        "default": "assets/icons/resources/wood.png",       "transport": null, "aliases": ["holz"] },
     "stone":      { "de": "Stein",       "default": "assets/icons/resources/stone.ico",      "transport": null, "aliases": ["stein"] },
     "gold":       { "de": "Gold",        "default": "assets/icons/resources/gold.ico",       "transport": null, "aliases": [] },
     "coins":      { "de": "Geld",        "default": "assets/icons/resources/coins.ico",      "transport": null, "aliases": ["geld","münzen","munzen"] },
