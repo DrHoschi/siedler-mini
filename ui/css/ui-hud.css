@@ -23,7 +23,7 @@
   --land-rotation: 0deg;
 
   /* Anteil der Innenfläche für das Icon (0.0–1.0) – realer Standard */
-  --icon-scale: 0.2;
+  --icon-scale: 0.72;
 }
 
 /* ============================================================================
