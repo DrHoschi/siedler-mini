@@ -1,0 +1,148 @@
+digraph SiedlerNeueMonolith {
+  rankdir=LR;
+  graph [fontname="Inter", fontsize=11, labelloc=t, label="Neue Siedler – Projektübersicht (Monolith Basis)"];
+  node  [shape=box, style="rounded,filled", fillcolor="#f7f7fb", color="#999", fontname="Inter", fontsize=10];
+  edge  [color="#666", arrowsize=0.8, fontname="Inter", fontsize=9];
+
+  // ===== CLUSTERS =====
+  subgraph cluster_entry {
+    label="Entry / HTML";
+    color="#bbb";
+    "index.html";
+  }
+
+  subgraph cluster_core {
+    label="core/";
+    color="#bbb";
+    "core/boot.js";
+    "core/game.bootstrap.js";
+    "core/game.js";
+    "core/asset.js";
+    "core/registry.js";
+    "core/entities.registry.js";
+    "core/core.entities.js";
+    "core/core.production.js";
+    "core/core.map.js";
+    "core/map-runtime.js";
+    "core/camera.js";
+    "core/zoom.js";
+    "core/core.render.js";
+    "core/core.input.js";
+    "core/core.pfglue.js";
+    "core/layout.js";
+    "core/icons-map.js";
+    "core/ui-build.data-bridge.js";
+    "core/unit-overlay.js";
+    "core/path-overlay.js";
+    "core/overlay-hooks.js";
+    "core/carrier.js";
+    "core/adfinder.js";
+    "core/core.env.js";
+    "core/build.assets.js";
+    "core/cblog.polyfill.js";
+  }
+
+  subgraph cluster_data {
+    label="data/";
+    color="#bbb";
+    "data/buildings.json";
+    "data/units.json";
+    "data/resources.json";
+    "data/balance.json";
+    "data/campaign.json";
+    "data/map-test.json";
+    "data/maps/map-mini.json";
+    "data/maps/map-mini-V0.json";
+    "data/maps/map-pro.json";
+    "data/maps/map_ch1.json";
+  }
+
+  subgraph cluster_assets {
+    label="assets/";
+    color="#bbb";
+    "assets/sprites.json";
+  }
+
+  subgraph cluster_test {
+    label="test/";
+    color="#bbb";
+    "test/harness/test-runner.js";
+    "test/samples/ui-build.sample.json";
+  }
+
+  subgraph cluster_docs {
+    label="docs/";
+    color="#bbb";
+    "docs/CODE_STYLE.md";
+    "docs/INSPECTOR_GUIDE.md";
+    "docs/Lastenheft_NeueSiedler_v1.0.md";
+    "docs/Lastenheft_NeueSiedler_Registry_Patch.md";
+    "docs/TODO_main-ui.md";
+    "docs/OUT_index_outgoing_overview.md";
+  }
+
+  subgraph cluster_tools {
+    label="tools/";
+    color="#bbb";
+    "tools/Projektvisualisierung_MONOLITH_GESAMT.dot";
+  }
+
+  // ===== CORE LOAD FLOW =====
+  "index.html" -> "core/cblog.polyfill.js" [label="log shim"];
+  "index.html" -> "core/boot.js" [label="script order 1"];
+  "core/boot.js" -> "core/game.bootstrap.js" [label="init"];
+  "core/game.bootstrap.js" -> "core/game.js" [label="start()"];
+
+  // ===== ASSETS & REGISTRY =====
+  "core/boot.js" -> "core/asset.js" [label="preload"];
+  "core/asset.js" -> "assets/sprites.json" [label="atlas"];
+  "core/game.bootstrap.js" -> "core/registry.js" [label="setup registry"];
+  "core/registry.js" -> "data/buildings.json" [label="load"];
+  "core/registry.js" -> "data/units.json" [label="load"];
+  "core/registry.js" -> "data/resources.json" [label="load"];
+  "core/registry.js" -> "data/balance.json" [label="load"];
+  "core/registry.js" -> "data/campaign.json" [label="load"];
+  "core/registry.js" -> "core/entities.registry.js" [label="expose"];
+
+  // ===== MAP / RENDER PIPELINE =====
+  "core/game.js" -> "core/core.env.js" [label="env"];
+  "core/game.js" -> "core/layout.js" [label="layout"];
+  "core/game.js" -> "core/core.input.js" [label="input"];
+  "core/game.js" -> "core/core.map.js" [label="map api"];
+  "core/core.map.js" -> "core/map-runtime.js" [label="runtime"];
+  "core/map-runtime.js" -> "core/camera.js" [label="camera"];
+  "core/map-runtime.js" -> "core/zoom.js" [label="zoom"];
+  "core/map-runtime.js" -> "data/map-test.json" [label="load map"];
+  "core/map-runtime.js" -> "data/maps/map-mini.json" [label="(alt)"];
+  "core/game.js" -> "core/core.render.js" [label="render loop"];
+  "core/core.render.js" -> "core/unit-overlay.js" [label="units"];
+  "core/core.render.js" -> "core/path-overlay.js" [label="paths"];
+  "core/core.render.js" -> "core/overlay-hooks.js" [label="ui hooks"];
+
+  // ===== ECONOMY / TRANSPORT =====
+  "core/game.js" -> "core/core.production.js" [label="economy"];
+  "core/core.production.js" -> "core/carrier.js" [label="transport"];
+  "core/core.production.js" -> "core/core.entities.js" [label="workers"];
+
+  // ===== UI BUILD BRIDGE / ICONS =====
+  "core/game.js" -> "core/ui-build.data-bridge.js" [label="build dock data"];
+  "core/ui-build.data-bridge.js" -> "core/icons-map.js" [label="icons"];
+
+  // ===== PATHFINDING GLUE =====
+  "core/game.js" -> "core/core.pfglue.js" [label="pf glue"];
+  "core/core.pfglue.js" -> "core/path-overlay.js" [label="debug"];
+
+  // ===== TEST/CI =====
+  "test/harness/test-runner.js" -> "core/game.js" [label="smoke"];
+  "test/harness/test-runner.js" -> "core/registry.js" [label="schema"];
+
+  // ===== EVENTS (dashed) =====
+  edge [style=dashed, color="#999", fontcolor="#999"];
+  "index.html" -> "core/boot.js" [label="emit: cb:ui-ready"];
+  "core/asset.js" -> "core/game.bootstrap.js" [label="emit: cb:assets-ready"];
+  "core/registry.js" -> "core/game.bootstrap.js" [label="emit: cb:registry:ready"];
+  "core/game.bootstrap.js" -> "core/game.js" [label="emit: cb:game-start"];
+  "core/core.production.js" -> "core/game.js" [label="emit: cb:res:change/reset/snapshot"];
+  "core/path-overlay.js" -> "core/overlay-hooks.js" [label="emit: cb:paths:update"];
+  "core/ui-build.data-bridge.js" -> "core/overlay-hooks.js" [label="emit: cb:build:open/close"];
+}
