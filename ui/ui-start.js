@@ -1,68 +1,59 @@
-// ============================================================================
-// Datei   : ui/ui-start.js
-// Version : v1.0.7
-// Zweck   : Startpanel/BG ausblenden, Canvas/HUD/Build sichtbar (idempotent)
-// Events  : cb:ui-ready (out), cb:start:new (in), cb:game-start (in)
-// ============================================================================
-(() => {
-  const log = (...a) => (window.CBLog?.ok || console.log)('[ui-start]', ...a);
-  const EVT = (name, detail) => window.dispatchEvent(new CustomEvent(name,{detail}));
-  const $   = (s, r=document) => r.querySelector(s);
+/* ============================================================================
+ * Datei   : ui/ui-start.js
+ * Projekt : Neue Siedler
+ * Version : v25.10.16
+ * Zweck   : Startfenster (separates UI-Modul) + Hintergrundbild + Fade-Out
+ * Events  : emit cb:ui-ready, emit req:game:start
+ * ============================================================================
+ */
+(function(){
+  const LOG = (m)=> (window.CBLog?.ok || console.log)(`[ui-start] ${m}`);
+  const root = document.getElementById("ui-root");
 
-  let _started = false;
+  // ---- Hintergrundbild (bleibt hinter Canvas bis zum Fade) ------------------
+  const bg = document.createElement("div");
+  bg.id = "start-bg";
+  // ❗ Stelle sicher, dass das Bild existiert; sonst einfach die Zeile anpassen:
+  bg.style.backgroundImage = 'url("../../assets/ui/start_bg.jpg")';
+  document.body.appendChild(bg);
 
-  // [1] UI ready → einmalig melden
-  requestAnimationFrame(()=>{ log('ready → cb:ui-ready'); EVT('cb:ui-ready'); });
+  // ---- Startpanel -----------------------------------------------------------
+  const panel = document.createElement("div");
+  panel.id = "start-panel";
+  panel.className = "wood-frame";
+  panel.innerHTML = `
+    <div class="box">
+      <h1>Neue Siedler</h1>
+      <div class="actions">
+        <button id="btn-start">Spiel starten</button>
+        <button id="btn-continue" title="Fortsetzen (sofern Save vorhanden)">Weiterspielen</button>
+      </div>
+    </div>
+  `;
+  root.appendChild(panel);
 
-  // [2] Buttons tolerant finden
-  const btnNew  = $('[data-action="start"], #btn-new, #btn-start, button.start, button[data-start="new"]')
-               || [...document.querySelectorAll('button,a')].find(el => /Neues Spiel/i.test(el.textContent||''));
-  const btnCont = $('[data-action="continue"], #btn-continue')
-               || [...document.querySelectorAll('button,a')].find(el => /Weiter/i.test(el.textContent||''));
+  // UI-Bereitschaft melden (Inspector etc. können reagieren)
+  LOG("Startfenster erstellt → cb:ui-ready");
+  window.dispatchEvent(new CustomEvent("cb:ui-ready"));
 
-  if (btnNew)  btnNew.addEventListener('click',  e => { e.preventDefault(); EVT('cb:start:new');      log('click start:new'); });
-  if (btnCont) btnCont.addEventListener('click', e => { e.preventDefault(); EVT('cb:start:continue'); log('click start:continue'); });
+  // Klick: Start
+  panel.querySelector("#btn-start").addEventListener("click", ()=>{
+    LOG("Start → req:game:start");
+    window.dispatchEvent(new CustomEvent("req:game:start"));
 
-  // [3] Hauptschalter: Start-BG/Panel weg, Spiel-UI an (idempotent)
-  function hideStartSurfaces(){
-    if (_started) return;
-    _started = true;
+    // Panel sofort weg, Hintergrund weich ausblenden
+    panel.remove();
+    bg.classList.add("is-hidden");
+    // Option: Hintergrund nach Fade komplett entfernen
+    setTimeout(()=> bg.remove(), 600);
+  });
 
-    // 3.1 Spielzustand-Klasse → CSS killt BG zuverlässig
-    document.body.classList.add('is-playing');
-
-    // 3.2 Alle typischen Start-Container hart ausblenden
-    [
-      '#start-panel','#panel-start','.start-panel','#start',
-      '#start-bg','#bg-start','.start-bg','#hero','.hero','#bg',
-      '#start-background','.start-background'
-    ].forEach(sel => {
-      document.querySelectorAll(sel).forEach(el => {
-        el.style.display='none'; el.style.opacity='0'; el.style.visibility='hidden';
-        el.setAttribute('hidden','hidden'); el.classList.add('hidden');
-      });
-    });
-
-    // 3.3 Fallback: Body/HTML Background-Images entfernen (falls per CSS gesetzt)
-    document.body.style.backgroundImage  = 'none';
-    document.documentElement.style.backgroundImage = 'none';
-    document.body.style.background       = 'none';
-    document.documentElement.style.background = 'none';
-
-    // 3.4 Canvas/HUD/Build sichtbar & vorn
-    const cvs = document.getElementById('game');
-    if (cvs){ cvs.style.visibility='visible'; cvs.style.opacity='1'; cvs.style.zIndex='10'; cvs.style.pointerEvents='auto'; }
-    const hud  = document.getElementById('hud-top');
-    const dock = document.getElementById('build-dock');
-    if (hud){  hud.hidden=false;  hud.classList.remove('hidden'); hud.style.zIndex='48'; }
-    if (dock){ dock.hidden=false; dock.classList.remove('hidden'); dock.style.zIndex='46'; }
-    const btnBuild = document.getElementById('btn-build');
-    if (btnBuild) btnBuild.style.zIndex = '47';
-
-    log('game-start → BG/Panel ausgeblendet, Canvas/HUD/Build sichtbar');
-  }
-
-  // [4] Events, die den Schalter auslösen
-  window.addEventListener('cb:start:new',  hideStartSurfaces);  // sofort bei Klick
-  window.addEventListener('cb:game-start', hideStartSurfaces);  // spätestens beim Engine-Start
+  // Optional: Continue (nur ein Stub-Event, echte Save-Logik später)
+  panel.querySelector("#btn-continue").addEventListener("click", ()=>{
+    LOG("Weiterspielen → req:game:continue");
+    window.dispatchEvent(new CustomEvent("req:game:continue"));
+    panel.remove();
+    bg.classList.add("is-hidden");
+    setTimeout(()=> bg.remove(), 600);
+  });
 })();
