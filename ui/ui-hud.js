@@ -21,7 +21,7 @@
 })(typeof window!=="undefined"?window:this,function(){
 
   const DEFAULT_RESOURCES = [
-    {id:"holz",   label:"Holz",   icon:"../../assets/ui/icons/wood.png"},
+    {id:"holz",   label:"Holz",   icon:"../../assets/icons/ressources/wood.png"},
     {id:"stein",  label:"Stein",  icon:"assets/ui/icons/stone.png"},
     {id:"fisch",  label:"Fisch",  icon:"assets/ui/icons/fish.png"},
     {id:"nahrung",label:"Nahrung",icon:"assets/ui/icons/food.png"},
