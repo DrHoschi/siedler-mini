@@ -1,69 +1,61 @@
 /* ============================================================================
- * [00] META
- * Datei    : ui/css/ui.css
- * Projekt  : Neue Siedler (Siedler‑Mini)
- * Version  : v19.2.0 (2025-10-10)
- * Zweck    : Globaler UI‑Baukasten – Panels, Buttons, Badges, Cards, States
- * Achtung  : Komponentenneutrale Styles; Spezifisches in jeweilige Modul‑CSS.
- * Struktur :
- *   [10] Typografie & Links
- *   [20] Panel‑Grundstil
- *   [30] Buttons (Basis + Varianten)
- *   [40] Badges/Chips
- *   [50] Karten/Container
- *   [60] Zustände (is‑active/is‑disabled/...)
- *   [70] Responsiv/Touch
- * ============================================================================
- */
+   Datei   : ui/css/ui.css
+   Projekt : Neue Siedler
+   Version : v25.10.16
+   Zweck   : Haupt-Styles (Grundlayout, Variablen, Holzrahmen, Fade)
+   ========================================================================= */
 
-/* [10] Typografie & Links */
-a{ color:var(--accent); text-decoration:none; }
-a:hover{ text-decoration:underline; }
-
-/* [20] Panel‑Grundstil */
-.ui-panel{
-  background:var(--panel);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  padding:var(--pad);
+:root{
+  /* Panel (9-Slice) – kannst du bei Bedarf zentral tauschen */
+  --frame-src: url("../../assets/ui/panel.svg");
+  --frame-slice: 12;
+  --bg-dark: #222;
+  --txt: #eee;
+  --accent: #996633;
+  --z-start-bg: 1;
+  --z-canvas: 2;
+  --z-ui: 3;
+  --z-inspector: 50;
+  --fade-dur: 500ms;
 }
 
-/* [30] Buttons */
-.btn{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:10px 14px; border:0; border-radius:10px;
-  background:var(--panel-strong); color:var(--fg);
-  font-weight:600; cursor:pointer; user-select:none;
-  transition:transform .04s ease, filter .12s ease;
-}
-.btn:hover{ filter:brightness(1.05); }
-.btn:active{ transform:translateY(1px); }
-.btn:focus{ outline:2px solid var(--accent); outline-offset:2px; }
-
-/* Varianten */
-.btn.main{ background:var(--accent); color:#081018; }
-.btn.ghost{ background:transparent; border:2px solid var(--accent); }
-.btn.warn{ background:var(--warn); color:#111; }
-.btn.danger{ background:var(--error); color:#fff; }
-
-/* [40] Badges / Chips */
-.badge{
-  display:inline-block; padding:2px 8px; border-radius:999px;
-  background:#0006; color:#fff; font-weight:600; font-size:.85rem;
+html, body{
+  margin:0; padding:0; width:100%; height:100%;
+  background: var(--bg-dark); color: var(--txt);
+  overflow: hidden; font-family: Inter, system-ui, Arial, sans-serif;
 }
 
-/* [50] Karten/Container */
-.card{
-  background:var(--panel); border-radius:12px; box-shadow:var(--shadow);
-  padding:12px; position:relative;
+/* Canvas liegt hinter der UI, aber vor dem Start-Background */
+#game-canvas{
+  position: absolute; inset: 0;
+  z-index: var(--z-canvas);
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
 }
-.card__title{ font-weight:700; margin-bottom:6px; }
-.card__footer{ margin-top:10px; display:flex; justify-content:flex-end; gap:8px; }
 
-/* [60] Zustände */
-.is-active{ outline:2px solid var(--accent); }
-.is-disabled, .btn[disabled]{ opacity:.6; cursor:not-allowed; pointer-events:none; }
+/* Root für UI-Module (Startpanel, Inspector, HUD, …) */
+#ui-root{
+  position: absolute; inset: 0;
+  z-index: var(--z-ui);
+  pointer-events: none; /* Module schalten selektiv an */
+}
 
-/* [70] Responsiv/Touch */
-@media (max-width:768px){ .btn{ padding:12px 16px; } }
-@media (pointer:coarse){ .btn{ min-height:40px; } } /* ≥40px Touch‑Target */
+/* Holzrahmen (quadratisch) – 9-Slice via border-image */
+.wood-frame{
+  border: 12px solid transparent;
+  border-image-source: var(--frame-src);
+  border-image-slice: var(--frame-slice) fill;
+  border-image-width: 12px;
+  border-image-repeat: stretch;
+  background: rgba(0,0,0,0.25);
+  border-radius: 2px;
+}
+
+/* Start-Hintergrund (separat, damit weich ausgeblendet) */
+#start-bg{
+  position:absolute; inset:0; z-index: var(--z-start-bg);
+  background: #111 center/cover no-repeat;
+  opacity: 1; transition: opacity var(--fade-dur) ease;
+  pointer-events:none;
+}
+#start-bg.is-hidden{ opacity: 0; }
