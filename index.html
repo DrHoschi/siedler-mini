@@ -1,210 +1,36 @@
-<!doctype html>
+<!-- ============================================================================
+     Datei   : index.html
+     Projekt : Neue Siedler
+     Version : v25.10.16
+     Zweck   : Minimaler Einstieg – lädt NUR Basis, Core & UI-Module
+============================================================================ -->
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <!-- =========================================================================
-       Datei     : index.html (Root)
-       Projekt   : Neue Siedler (Siedler-Mini)
-       Version   : v19.3.0 (2025-10-15)
-       Zweck     : Zentrale Startseite (Core + UI + Inspector)
-       Status    : Überarbeitet – HUD v1.8.1 integriert
-       Leitplanken:
-         • Startfenster zuerst sichtbar
-         • HUD dynamisch über ui-hud.js
-         • Debug-/Inspector-Tools beibehalten
-         • Einheitliche CSS-Struktur (layout > ui > module)
-  ========================================================================= -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Neue Siedler</title>
 
-  <!-- [01] META -->
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Neue Siedler – Epoche 1</title>
-  <meta name="description" content="Neue Siedler – Prototyp Epoche 1 mit HUD, Baumenü und Inspector.">
+  <!-- Haupt-CSS (Grundformen, Holzrahmen, Fade, Variablen) -->
+  <link rel="stylesheet" href="ui/css/ui.css" />
+  <!-- Startpanel-Spezifik -->
+  <link rel="stylesheet" href="ui/css/ui-start.css" />
+  <!-- Inspector-Styles -->
+  <link rel="stylesheet" href="ui/css/ui-inspector.css" />
 
-  <!-- [02] CSS – globale Struktur -->
-  <link rel="stylesheet" href="ui/css/layout.css">
-  <link rel="stylesheet" href="ui/css/ui.css">
-  <link rel="stylesheet" href="ui/css/ui-start.css">
-  <link rel="stylesheet" href="ui/css/ui-hud.css">     <!-- neue Ressourcen-HUD -->
-  <link rel="stylesheet" href="ui/css/ui-build.css">
-  <link rel="stylesheet" href="ui/css/ui-place.css">
-  <link rel="stylesheet" href="ui/css/ui-dialog.css">
-  <link rel="stylesheet" href="ui/css/ui-tooltip.css">
-  <link rel="stylesheet" href="ui/css/inspector.css">
-
-  <!-- [03] OPTIONAL: Favicon -->
-  <!-- <link rel="icon" href="assets/icons/app/favicon.png"> -->
+  <!-- Core (nur nötigste Reihenfolge) -->
+  <script src="core/cblog.polyfill.js"></script>
+  <script src="core/boot.js"></script>
+  <script src="core/game.bootstrap.js"></script>
+  <script src="core/game.js"></script>
 </head>
 <body>
-  <!-- =========================================================================
-       [10] APP-SHELL
-       Struktur: #app enthält Canvas (Map) + Overlays + Panels
-  ========================================================================= -->
-  <div id="app">
+  <!-- Spielfeld & UI-Root – UI-Module hängen sich hier ein -->
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
 
-    <!-- [11] CANVAS: Spielwelt -->
-    <canvas id="game" class="layer-map" width="1280" height="720" aria-label="Spielkarte"></canvas>
-
-    <!-- [12] OVERLAYS: Pfade/Einheiten -->
-    <canvas id="overlay-paths" class="layer-overlays" width="1280" height="720" aria-label="Path Overlay"></canvas>
-    <canvas id="overlay-units" class="layer-overlays" width="1280" height="720" aria-label="Units Overlay"></canvas>
-
-    <!-- [13] STARTFENSTER (zuerst sichtbar) -->
-    <div id="start-panel" class="ui-panel ui-panel--light visible" aria-label="Startfenster">
-      <h1>Neue Siedler</h1>
-      <p>Epoche 1 – Baumenü, HUD, Platzieren &amp; Inspector.</p>
-      <div class="start-actions">
-        <button id="btn-new"        class="btn main">Neues Spiel</button>
-        <button id="btn-continue"   class="btn ghost">Weiterspielen</button>
-        <button id="btn-fullscreen" class="btn">Vollbild</button>
-        <button id="btn-reset"      class="btn">Reset</button>
-        <button id="btn-inspector"  class="btn">Inspector</button>
-      </div>
-      <button id="btn-start" hidden aria-hidden="true" tabindex="-1">Start hidden</button>
-    </div>
-
-    <!-- [14] HUD (NEU dynamisch via ui-hud.js)
-         Alte statische Variante bleibt zu Referenzzwecken auskommentiert -->
-    <!--
-    <div id="hud-top" class="hud ui-panel ui-panel--dark hidden" aria-label="Ressourcen-HUD">
-      <span class="hud-item"><img src="assets/icons/resources/wood.png" alt=""> Holz: <b>0</b></span>
-      <span class="hud-item"><img src="assets/icons/resources/fish.png" alt=""> Fisch: <b>0</b></span>
-      <span class="hud-item"><img src="assets/icons/resources/stone.png" alt=""> Stein: <b>0</b></span>
-    </div>
-    -->
-
-    <!-- [15] BAUMENÜ / DOCK -->
-    <div id="build-dock" class="ui-panel ui-panel--dark hidden" aria-label="Bau-Dock"></div>
-    <button id="btn-build" class="ui-btn-build" aria-expanded="false" title="Bauen">Bauen</button>
-
-    <!-- [16] INSPECTOR -->
-    <div id="inspector-root" class="insp u-hidden" aria-label="Inspector" hidden></div>
-
-    <!-- [17] DIALOG / TOOLTIP ROOTS -->
-    <div id="dialog-root" class="layer-dialog" aria-live="polite"></div>
-    <div id="tooltip-root" class="layer-overlays"></div>
-
-    <!-- [18] NOSCRIPT -->
-    <noscript>Bitte JavaScript aktivieren, um das Spiel zu starten.</noscript>
-  </div>
-
-  <!-- =========================================================================
-       [20] SCRIPT-KETTE
-       Core → UI-Infra → UI-Daten → UI-Panels → Tools → Inline-Wiring
-  ========================================================================= -->
-
-  <!-- [21] CORE -->
-  <script src="core/asset.js"></script>
-  <script src="core/registry.js"></script>
-  <script src="core/boot.js"></script>
-  <script src="core/game.js"></script>
-
-  <!-- [22] UI-INFRA -->
-  <script src="ui/ui-core.js"></script>
-  <script src="ui/ui-utils.js"></script>
-
-  <!-- [23] UI-DATEN -->
-  <script src="ui/ui-build.categories.js"></script>
-
-  <!-- [24] UI-PANELS & MODULE -->
+  <!-- UI-Module -->
   <script src="ui/ui-start.js"></script>
-  <script src="ui/ui-hud.js"></script>      <!-- neue dynamische HUD -->
-  <script src="ui/ui-build.js"></script>
-  <script src="ui/ui-place.js"></script>
-  <script src="ui/ui-dialog.js"></script>
-  <script src="ui/ui-tooltip.js"></script>
   <script src="ui/ui-inspector.js"></script>
-
-  <!-- [25] TOOLS / DEBUG -->
-  <script src="tools/debug-tools.js"></script>
-  <script src="tools/graphviz-playground.js"></script>
-
-  <!-- [26] INLINE-SCRIPTS -->
-  <script>
-  /* ======================================================================
-   * Canvas-Resize (HiDPI-Support)
-   * ====================================================================== */
-  (function(){
-    const dpr = window.devicePixelRatio || 1;
-    function resizeCanvasByCssAndDpr(canvas){
-      const rect = canvas.getBoundingClientRect();
-      const w = Math.max(1, Math.round(rect.width  * dpr));
-      const h = Math.max(1, Math.round(rect.height * dpr));
-      if (canvas.width !== w)   canvas.width  = w;
-      if (canvas.height !== h)  canvas.height = h;
-    }
-    function resizeAll(){
-      ['game','overlay-paths','overlay-units']
-        .map(id=>document.getElementById(id))
-        .filter(Boolean)
-        .forEach(resizeCanvasByCssAndDpr);
-    }
-    window.addEventListener('resize', resizeAll);
-    window.addEventListener('orientationchange', resizeAll);
-    document.addEventListener('DOMContentLoaded', resizeAll);
-  })();
-  </script>
-
-  <script>
-  /* ======================================================================
-   * Inline-Wiring:
-   *  – Startfenster sichtbar
-   *  – Nach Klick „Neues Spiel“ → HUD aufbauen, BuildDock zeigen
-   *  – Inspector & Build-Button togglen
-   * ====================================================================== */
-  (function(){
-    const $ = (sel,root=document)=>root.querySelector(sel);
-    const on = (t,ev,fn)=>t&&t.addEventListener(ev,fn);
-
-    const startPanel = $('#start-panel');
-    const buildDock  = $('#build-dock');
-    const btnBuild   = $('#btn-build');
-    const btnInsp    = $('#btn-inspector');
-    const inspRoot   = $('#inspector-root');
-
-    // --- NEUE HUD Initialisierung ---
-    document.addEventListener('DOMContentLoaded', ()=>{
-      console.log('[HUD] v1.8.1 active');
-      HUD.init({
-        iconBase: '../../assets/icons/resources/',
-        iconMap: {
-          holz:    'wood.png',       // bitte sicherstellen, dass Datei existiert!
-          stein:   'ore.png',
-          fisch:   'fish.png',
-          nahrung: 'food.png',
-          gold:    'gold.png',
-          bev:     'diplomacy.png'
-        }
-      });
-    });
-
-    // --- Boot-Events (Registry/Assets) ---
-    document.addEventListener('cb:registry:ready', ()=>{ /* optional hook */ });
-    document.addEventListener('cb:assets-ready', ()=>{ /* optional hook */ });
-
-    // --- „Neues Spiel“ ---
-    on($('#btn-new'), 'click', ()=>{
-      startPanel.classList.add('u-hidden');
-      // HUD ist dynamisch → wird per JS eingeblendet, kein hidden-Toggle nötig
-      buildDock.classList.remove('hidden');
-      document.dispatchEvent(new CustomEvent('req:game:start'));
-    });
-
-    // --- Inspector-Toggle ---
-    on(btnInsp, 'click', ()=>{
-      const isHidden = inspRoot.hasAttribute('hidden');
-      inspRoot.toggleAttribute('hidden', !isHidden);
-      inspRoot.classList.toggle('u-hidden', !isHidden);
-      document.dispatchEvent(new CustomEvent('req:inspector:toggle', { detail: !isHidden }));
-    });
-
-    // --- Build-Button-Toggle ---
-    on(btnBuild, 'click', ()=>{
-      const isHidden = buildDock.classList.contains('hidden');
-      buildDock.classList.toggle('hidden', !isHidden);
-      btnBuild.setAttribute('aria-expanded', String(isHidden));
-      document.dispatchEvent(new CustomEvent('req:build:toggle', { detail: isHidden }));
-    });
-  })();
-  </script>
 </body>
 </html>
