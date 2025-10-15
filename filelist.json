@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-14T20:49:28.682Z",
+  "createdAt": "2025-10-15T21:06:16.466Z",
   "root": ".",
-  "count": 427,
+  "count": 404,
   "entries": [
     {
       "type": "dir",
@@ -379,158 +379,68 @@
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/bread.ico",
-      "size": 5760
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/bricks.ico",
-      "size": 5804
+      "path": "assets/icons/resources/bread.png",
+      "size": 5689
     },
     {
       "type": "file",
       "path": "assets/icons/resources/bricks.png",
-      "size": 5749
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/coins.ico",
-      "size": 4358
+      "size": 7607
     },
     {
       "type": "file",
       "path": "assets/icons/resources/coins.png",
-      "size": 4307
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/diplomacy.ico",
-      "size": 4908
+      "size": 6274
     },
     {
       "type": "file",
       "path": "assets/icons/resources/diplomacy.png",
-      "size": 4851
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/fish_full.ico",
-      "size": 45141
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/fish.ico",
-      "size": 2837
+      "size": 6807
     },
     {
       "type": "file",
       "path": "assets/icons/resources/fish.png",
-      "size": 2764
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/food_full.ico",
-      "size": 70470
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/food.ico",
-      "size": 4639
+      "size": 3987
     },
     {
       "type": "file",
       "path": "assets/icons/resources/food.png",
-      "size": 4560
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/gold_full.ico",
-      "size": 62997
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/gold.ico",
-      "size": 4304
+      "size": 6487
     },
     {
       "type": "file",
       "path": "assets/icons/resources/gold.png",
-      "size": 4221
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/grain.ico",
-      "size": 5148
+      "size": 4974
     },
     {
       "type": "file",
       "path": "assets/icons/resources/grain.png",
-      "size": 5041
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/knowledge.ico",
-      "size": 5389
+      "size": 5771
     },
     {
       "type": "file",
       "path": "assets/icons/resources/knowledge.png",
-      "size": 5306
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/money.png",
-      "size": 607372
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/ore.ico",
-      "size": 5180
+      "size": 6183
     },
     {
       "type": "file",
       "path": "assets/icons/resources/ore.png",
-      "size": 5083
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/paper.ico",
-      "size": 5683
+      "size": 5240
     },
     {
       "type": "file",
       "path": "assets/icons/resources/paper.png",
-      "size": 5594
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/pop.png",
-      "size": 841204
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/population_full.ico",
-      "size": 101147
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/population.ico",
-      "size": 6108
+      "size": 6989
     },
     {
       "type": "file",
       "path": "assets/icons/resources/population.png",
-      "size": 6031
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/prestige.ico",
-      "size": 5654
+      "size": 7444
     },
     {
       "type": "file",
       "path": "assets/icons/resources/prestige.png",
-      "size": 5602
+      "size": 7652
     },
     {
       "type": "file",
@@ -539,48 +449,23 @@
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/stone_full.ico",
-      "size": 42024
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/stone.ico",
-      "size": 4557
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/tools_full.ico",
-      "size": 53449
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/tools.ico",
-      "size": 3723
+      "path": "assets/icons/resources/stone.png",
+      "size": 4513
     },
     {
       "type": "file",
       "path": "assets/icons/resources/tools.png",
-      "size": 3650
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/weapons.ico",
-      "size": 6325
+      "size": 5271
     },
     {
       "type": "file",
       "path": "assets/icons/resources/weapons.png",
-      "size": 6254
+      "size": 7802
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/wood_full.ico",
-      "size": 25637
-    },
-    {
-      "type": "file",
-      "path": "assets/icons/resources/wood.ico",
-      "size": 6462
+      "path": "assets/icons/resources/wood.png",
+      "size": 6355
     },
     {
       "type": "file",
@@ -1866,7 +1751,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-hud.css",
-      "size": 6637
+      "size": 3984
     },
     {
       "type": "file",
@@ -2020,7 +1905,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 15727
+      "size": 3836
     },
     {
       "type": "file",
@@ -2055,22 +1940,22 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1862
+      "size": 1882
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 39511
+      "size": 42482
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15232
+      "size": 16405
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 9710
+      "size": 8741
     },
     {
       "type": "file",
@@ -2095,7 +1980,7 @@
     {
       "type": "file",
       "path": "ui-hud-test.html",
-      "size": 591
+      "size": 827
     }
   ]
 }
