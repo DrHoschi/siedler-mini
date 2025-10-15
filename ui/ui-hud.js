@@ -68,7 +68,7 @@
     const resources = (opts.registry && Array.isArray(opts.registry.resources))
       ? opts.registry.resources.map(r=>({
           id: r.id, label: r.label || r.id,
-          icon: (r.icon || (r.id && `assets/ui/icons/${r.id}.png`))
+          icon: (r.icon || (r.id && `../../assets/icons/resources/${r.id}.png`))
         }))
       : DEFAULT_RESOURCES;
 
