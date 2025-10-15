@@ -22,11 +22,11 @@
 
   const DEFAULT_RESOURCES = [
     {id:"holz",   label:"Holz",   icon:"../../assets/icons/ressources/wood.png"},
-    {id:"stein",  label:"Stein",  icon:"assets/ui/icons/stone.png"},
-    {id:"fisch",  label:"Fisch",  icon:"assets/ui/icons/fish.png"},
-    {id:"nahrung",label:"Nahrung",icon:"assets/ui/icons/food.png"},
-    {id:"gold",   label:"Gold",   icon:"assets/ui/icons/gold.png"},
-    {id:"bev",    label:"Bev.",   icon:"assets/ui/icons/citizen.png"},
+    {id:"stein",  label:"Stein",  icon:"../../assets/icons/ressources/stone.png"},
+    {id:"fisch",  label:"Fisch",  icon:"../../assets/icons/ressources/fish.png"},
+    {id:"nahrung",label:"Nahrung",icon:"../../assets/icons/ressources/food.png"},
+    {id:"gold",   label:"Gold",   icon:"../../assets/icons/ressources/gold.png"},
+    {id:"bev",    label:"Bev.",   icon:"../../assets/icons/ressources/citizen.png"},
   ];
 
   const q = (sel,ctx=document)=>ctx.querySelector(sel);
