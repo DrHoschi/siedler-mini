@@ -1,8 +1,27 @@
 <!doctype html><meta charset="utf-8">
+<!-- CSS -->
 <link rel="stylesheet" href="ui/css/ui-hud.css">
+
+<!-- JS -->
 <script src="ui/ui-hud.js"></script>
-<body style="background:#1a1a1e;">
 <script>
-  HUD.init(); // benutzt Default-Icons
+  window.addEventListener('DOMContentLoaded', () => {
+    // neue HUD starten (siehe Icon-Mapping unten)
+    HUD.init({
+      // (optional) eigener Event-Bus hier durchreichen
+      iconBase: 'assets/icons/resources/',    // neuer Ordner!
+      iconMap: {
+        // Mapping deiner Dateinamen -> unsere Ressource-IDs
+        holz:    'wood.png',   // <— LEGT DIESE DATEI AN (siehe Punkt 2)
+        stein:   'ore.png',
+        fisch:   'fish.png',
+        nahrung: 'food.png',   // alternativ: 'bread.png' oder 'grain.png'
+        gold:    'gold.png',
+        bev:     'diplomacy.png' // oder 'knowledge.png' – Platzhalter
+      }
+    });
+  });
 </script>
 </body>
+
+
