@@ -246,3 +246,27 @@ window.UIInspector = {
 try {
   window.dispatchEvent(new CustomEvent("cb:inspector:UI-ready", { detail:{ ver: UINS_VER }}));
 } catch(_) {}
+
+
+// Adapter: erlaubt Registrierung über Events wie beschrieben
+if (window.GameEvents && typeof GameEvents.on === 'function') {
+  GameEvents.on('req:inspector:addTab', (payload) => {
+    // Erwartet: { id, title, mount(el) }
+    if (window.Inspector && typeof Inspector.addTab === 'function') {
+      Inspector.addTab(payload);
+    } else {
+      // sehr einfacher Fallback: sofort mounten in ein Standard-Panel
+      const host = document.getElementById('inspector-root') || (()=>{
+        const d = document.createElement('div');
+        d.id = 'inspector-root';
+        d.style.cssText = 'position:fixed;right:0;top:0;bottom:0;width:420px;background:#14181e;color:#eee;z-index:99999;overflow:auto;border-left:1px solid #333;';
+        document.body.appendChild(d);
+        return d;
+      })();
+      const wrap = document.createElement('div');
+      wrap.className = 'inspector-tab';
+      host.appendChild(wrap);
+      payload.mount?.(wrap);
+    }
+  });
+}
