@@ -52,3 +52,12 @@
   LOG(`BootManager initialisiert (${BOOT_VERSION})`);
   return BootManager;
 });
+
+// Globale Fehler in den Inspector-Log leiten – ohne störende Alerts
+window.addEventListener("error", (e)=>{
+  (window.CBLog?.err || console.error)(`Uncaught Error: ${e.message} @ ${e.filename}:${e.lineno}`);
+});
+window.addEventListener("unhandledrejection", (e)=>{
+  const msg = e?.reason?.message || String(e.reason || e);
+  (window.CBLog?.err || console.error)(`Unhandled Promise Rejection: ${msg}`);
+});
