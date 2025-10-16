@@ -1,8 +1,8 @@
 /* ============================================================================
    Datei   : ui/css/ui-start.css
    Projekt : Neue Siedler
-   Version : v25.10.16-1
-   Zweck   : Startpanel (zentriertes Quadrat im Holzrahmen)
+   Version : v25.10.16-2
+   Zweck   : Startpanel (zentriertes Quadrat im Holzrahmen, 2x2 Buttons)
    ========================================================================= */
 
 #start-panel{
@@ -12,19 +12,35 @@
 }
 
 #start-panel .box{
-  width:min(520px, 92vw); height:auto;
-  padding:18px 20px;
+  /* Quadratisch, reagiert auf Viewport; min für kleine Phones */
+  width: min(540px, 92vw);
+  aspect-ratio: 1 / 1;
+  padding: 16px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
 }
 
 #start-panel h1{
-  margin:0 0 14px 0; color:#fff; font-size:26px; text-shadow:0 0 8px #000;
+  margin: 4px 0 12px 0; color:#fff; font-size:26px; text-shadow:0 0 8px #000;
+  text-align:center;
 }
 
+/* 2x2 Button-Gitter */
 #start-panel .actions{
-  display:flex; gap:12px; justify-content:center; margin-top:10px; flex-wrap:wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
 }
+
 #start-panel button{
-  padding:10px 16px; font-weight:700; border:none; border-radius:6px;
-  background:#754c24; color:#fff; cursor:pointer;
+  padding: 10px 12px; font-weight:700;
+  border:none; border-radius:6px; background:#754c24; color:#fff; cursor:pointer;
 }
 #start-panel button:hover{ background:#996633; }
+
+/* Fußzeile für kleine Hinweise, optional */
+#start-panel .foot{ margin-top:10px; font-size:12px; color:#ddd; text-align:center; }
