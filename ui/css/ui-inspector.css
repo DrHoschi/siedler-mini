@@ -1,68 +1,95 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
-   Version : v25.10.16-3
-   Zweck   : Inspector-Overlay (zentriert, viewport-sicher)
+   Version : v25.10.16-4
+   Zweck   : Inspector-Overlay (Viewport-sicher, sticky Tabs, kompaktes Layout)
 ============================================================================ */
 
-/* Inspector Toggle (sichtbar + klickbar, Safe-Area) */
-#inspector-toggle{
-  position: fixed;
-  right: calc(12px + env(safe-area-inset-right, 0px));
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: var(--z-inspector);
-  pointer-events: auto;                 /* <— wichtig: klickbar trotz #ui-root */
-  padding: 10px 14px;
-  border: none; border-radius: 8px;
-  background: #333; color: #fff; font-weight: 700;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-  cursor: pointer;
-}
-#inspector-toggle:active { transform: translateY(1px); }
-
 #inspector{
-  position:fixed; inset:0; z-index:var(--z-inspector);
-  display:none; pointer-events:auto;
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-inspector);
+  display: none;                  /* open = grid (s.u.) */
+  pointer-events: auto;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(3px);
+  padding:
+    calc(8px + env(safe-area-inset-top, 0px))
+    calc(8px + env(safe-area-inset-right, 0px))
+    calc(8px + env(safe-area-inset-bottom, 0px))
+    calc(8px + env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+
+  /* zentrieren ohne translate-Bug: */
+  display: grid;
+  place-items: center;
 }
 
-/* Fenster mittig, nie größer als Viewport */
+/* Fenster: niemals größer als der Viewport */
 #inspector .window{
-  position:fixed;
-  top:50%; left:50%;
-  transform: translate(-50%, -50%);
-  width: min(900px, 96vw);
-  max-height: min(90dvh, 900px);
-  display:flex; flex-direction:column; overflow:hidden;
-  background:#2b2b2b; color:#eee; border-radius:10px;
-  box-shadow:0 8px 30px rgba(0,0,0,.5);
+  width: clamp(280px, 92vw, 860px);
+  max-height: min(90dvh, 860px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #2b2b2b; color: #eee;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5);
 }
 
-/* Inhalte scrollen, Rahmen bleiben stehen */
-#inspector .content{
-  flex:1; overflow:auto; padding:12px; background:#2b2b2b;
-}
-
+/* Tabs: sticky, damit das X IMMER sichtbar bleibt */
 #inspector .tabs{
-  display:flex; align-items:center; gap:0;
-  background:#1e1e1e; border-bottom:1px solid #444;
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 0;
+  background: #1e1e1e;
+  border-bottom: 1px solid #444;
 }
-#inspector .tab{ padding:10px 14px; cursor:pointer; color:#bbb; user-select:none; }
-#inspector .tab.active{ background:#2b2b2b; color:#fff; font-weight:700; }
-
-#inspector .statusbar{
-  padding:8px 12px; background:#1e1e1e; border-top:1px solid #444; color:#aaa;
+#inspector .tab{
+  padding: 8px 12px;
+  cursor: pointer; user-select: none;
+  color: #bbb; font-weight: 600;
+}
+#inspector .tab.active{
+  background: #2b2b2b; color: #fff;
 }
 
-/* Close-Button */
+/* X-Schließen rechts in der Tabzeile */
 #inspector .ins-close{
-  margin-left:auto; margin-right:8px;
-  padding:4px 10px; border:none; border-radius:6px;
-  background:#444; color:#fff; cursor:pointer; font-size:18px; line-height:1;
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 4px 10px;
+  border: none; border-radius: 6px;
+  background: #444; color: #fff; cursor: pointer;
+  font-size: 18px; line-height: 1;
 }
-#inspector .ins-close:hover{ background:#666; }
+#inspector .ins-close:hover{ background: #666; }
 
-/* Mobil: etwas schmaler, aber weiterhin zentriert */
+/* Inhalt scrollt eigenständig */
+#inspector .content{
+  flex: 1; overflow: auto; padding: 10px 12px;
+  background: #2b2b2b;
+}
+
+/* Statuszeile bleibt unten stehen */
+#inspector .statusbar{
+  padding: 6px 10px;
+  background: #1e1e1e; border-top: 1px solid #444; color: #aaa;
+  font-size: 12px;
+}
+
+/* Kompaktere Logliste – wie vorher */
+.ins-list{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.ins-list .row{
+  display: flex; gap: 6px; align-items: baseline;
+  padding: 4px 0; border-bottom: 1px dashed #444;
+}
+.ins-badge{ padding: 1px 6px; border-radius: 6px; background: #444; color: #fff; }
+.badge-err{ background:#b33; } .badge-warn{ background:#b76f00; }
+.badge-ok{  background:#2b8a3e;} .badge-info{  background:#2f6fb6; }
+
+/* Mobil noch sicherer: Fensterhöhe enger, trotzdem zentriert */
 @media (max-width: 420px){
   #inspector .window{ width: 96vw; max-height: 92dvh; }
 }
