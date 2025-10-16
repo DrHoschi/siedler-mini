@@ -1,55 +1,53 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
-   Projekt : Neue Siedler
-   Version : v25.10.16
-   Zweck   : Inspector-Overlay (Logs, Tests, Ressourcen, Pfade, Editor)
-   ========================================================================= */
-
-#inspector-toggle{
-  position: absolute; right: 12px; bottom: 12px; z-index: var(--z-inspector);
-  pointer-events:auto;
-  padding:10px 14px; border:none; border-radius:8px;
-  background:#333; color:#fff; font-weight:700; cursor:pointer;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-}
+   Version : v25.10.16-3
+   Zweck   : Inspector-Overlay (zentriert, viewport-sicher)
+============================================================================ */
 
 #inspector{
-  position: absolute; inset: 0; z-index: var(--z-inspector);
-  display: none; pointer-events:auto;
+  position:fixed; inset:0; z-index:var(--z-inspector);
+  display:none; pointer-events:auto;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(3px);
 }
 
+/* Fenster mittig, nie größer als Viewport */
 #inspector .window{
-  position:absolute; inset: 5% 4%;
-  background:#2b2b2b; color:#eee; border-radius:10px;
+  position:fixed;
+  top:50%; left:50%;
+  transform: translate(-50%, -50%);
+  width: min(900px, 96vw);
+  max-height: min(90dvh, 900px);
   display:flex; flex-direction:column; overflow:hidden;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  background:#2b2b2b; color:#eee; border-radius:10px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+}
+
+/* Inhalte scrollen, Rahmen bleiben stehen */
+#inspector .content{
+  flex:1; overflow:auto; padding:12px; background:#2b2b2b;
 }
 
 #inspector .tabs{
-  display:flex; gap:0;
+  display:flex; align-items:center; gap:0;
   background:#1e1e1e; border-bottom:1px solid #444;
 }
-#inspector .tab{
-  padding:10px 14px; cursor:pointer; user-select:none;
-  color:#bbb;
-}
-#inspector .tab.active{
-  background:#2b2b2b; color:#fff; font-weight:700;
-}
-
-#inspector .content{
-  flex:1; overflow:auto; padding:12px;
-  background:#2b2b2b;
-}
+#inspector .tab{ padding:10px 14px; cursor:pointer; color:#bbb; user-select:none; }
+#inspector .tab.active{ background:#2b2b2b; color:#fff; font-weight:700; }
 
 #inspector .statusbar{
   padding:8px 12px; background:#1e1e1e; border-top:1px solid #444; color:#aaa;
 }
 
-/* einfache Liste */
-.ins-list{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
-.ins-list .row{ display:flex; gap:6px; padding:4px 0; border-bottom:1px dashed #444; }
-.ins-badge{ padding:1px 6px; border-radius:6px; background:#444; color:#fff; }
-.badge-err{ background:#b33; } .badge-warn{ background:#b76f00; } .badge-ok{ background:#2b8a3e; } .badge-info{ background:#2f6fb6; }
+/* Close-Button */
+#inspector .ins-close{
+  margin-left:auto; margin-right:8px;
+  padding:4px 10px; border:none; border-radius:6px;
+  background:#444; color:#fff; cursor:pointer; font-size:18px; line-height:1;
+}
+#inspector .ins-close:hover{ background:#666; }
+
+/* Mobil: etwas schmaler, aber weiterhin zentriert */
+@media (max-width: 420px){
+  #inspector .window{ width: 96vw; max-height: 92dvh; }
+}
