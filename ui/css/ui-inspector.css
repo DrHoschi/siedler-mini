@@ -1,68 +1,79 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
-   Version : v25.10.16-6
-   Zweck   : Inspector-Overlay (Viewport-sicher, sticky Tabs, kompakt)
+   Version : v25.10.16-8
+   Zweck   : Inspector-Overlay – FULLSCREEN (Portrait & Landscape sicher)
+             - Fenster füllt den Viewport (mit kleinem Rand)
+             - Tabs sticky, X immer sichtbar
+             - Content scrollt, Statusbar fix unten
 ============================================================================ */
+
+:root{
+  /* Außenrand, darfst du anpassen (8–16px) */
+  --ins-gap: 8px;
+}
 
 #inspector{
   position: fixed;
   inset: 0;
   z-index: var(--z-inspector);
-  display: none;                  /* JS setzt auf 'grid' beim Öffnen */
+  display: none;                 /* JS schaltet auf 'block' */
   pointer-events: auto;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(3px);
+  /* Kein Grid/Centering mehr – wir füllen den Screen mit .window */
+  box-sizing: border-box;
+
+  /* Safe-Area-Padding, damit nichts unter Notch/Bar verschwindet */
   padding:
-    calc(8px + env(safe-area-inset-top, 0px))
-    calc(8px + env(safe-area-inset-right, 0px))
-    calc(8px + env(safe-area-inset-bottom, 0px))
-    calc(8px + env(safe-area-inset-left, 0px));
-  box-sizing: border-box;
-
-  /* echtes Zentrieren, robust bei iOS-Chrome: */
-  display: grid;
-  place-items: center;
+    calc(var(--ins-gap) + env(safe-area-inset-top, 0px))
+    calc(var(--ins-gap) + env(safe-area-inset-right, 0px))
+    calc(var(--ins-gap) + env(safe-area-inset-bottom, 0px))
+    calc(var(--ins-gap) + env(safe-area-inset-left, 0px));
 }
 
+/* Das Fenster füllt den sichtbaren Bereich (svw/svh), abzüglich Padding oben */
 #inspector .window{
-  /* Nie größer als der sichtbare Viewport mit Safe-Area-Abzug */
-  width: min(840px, 94svw);
-  max-width: 94svw;
-  max-height: calc(92svh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #2b2b2b; color: #eee;
-  border-radius: 10px;
-  box-shadow: 0 8px 30px rgba(0,0,0,.5);
-  box-sizing: border-box;
+  position: fixed;
+  left:  calc(var(--ins-gap) + env(safe-area-inset-left, 0px));
+  right: calc(var(--ins-gap) + env(safe-area-inset-right, 0px));
+  top:   calc(var(--ins-gap) + env(safe-area-inset-top, 0px));
+  bottom:calc(var(--ins-gap) + env(safe-area-inset-bottom, 0px));
+  /* Ergebnis: quasi fullscreen mit kleinem Rand */
+  background:#2b2b2b; color:#eee;
+  border-radius:10px;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+  display:flex; flex-direction:column;
+  overflow:hidden;               /* Inhalt scrollt in .content */
+  box-sizing:border-box;
 }
 
-/* Sticky Tabs oben, X immer sichtbar */
+/* Tabs sticky – X immer sichtbar */
 #inspector .tabs{
   position: sticky; top: 0; z-index: 2;
-  display: flex; align-items: center;
-  background: #1e1e1e; border-bottom: 1px solid #444;
+  display:flex; align-items:center; gap:0;
+  background:#1e1e1e; border-bottom:1px solid #444;
 }
 #inspector .tab{
-  padding: 8px 12px; cursor: pointer; user-select: none;
-  color: #bbb; font-weight: 600;
+  padding: 8px 12px; cursor:pointer; user-select:none;
+  color:#bbb; font-weight:600;
 }
-#inspector .tab.active{ background: #2b2b2b; color:#fff; }
+#inspector .tab.active{ background:#2b2b2b; color:#fff; }
 
 #inspector .ins-close{
-  margin-left: auto; margin-right: 8px;
-  padding: 4px 10px; border: none; border-radius: 6px;
+  margin-left:auto; margin-right:8px;
+  padding:4px 10px; border:none; border-radius:6px;
   background:#444; color:#fff; cursor:pointer; font-size:18px; line-height:1;
 }
 #inspector .ins-close:hover{ background:#666; }
 
-/* Content scrollt eigenständig, Status bleibt unten */
+/* Inhalt scrollt eigenständig */
 #inspector .content{
-  flex: 1; overflow: auto; padding: 10px 12px; background:#2b2b2b;
+  flex:1; overflow:auto; padding:10px 12px; background:#2b2b2b;
 }
+
+/* Statusleiste unten fix */
 #inspector .statusbar{
-  padding: 6px 10px; background:#1e1e1e; border-top:1px solid #444; color:#aaa; font-size:12px;
+  padding:6px 10px; background:#1e1e1e; border-top:1px solid #444; color:#aaa; font-size:12px;
 }
 
 /* Kompakte Logliste */
@@ -71,11 +82,11 @@
 .ins-badge{ padding:1px 6px; border-radius:6px; background:#444; color:#fff; }
 .badge-err{ background:#b33; } .badge-warn{ background:#b76f00; } .badge-ok{ background:#2b8a3e; } .badge-info{ background:#2f6fb6; }
 
-/* Toggle sicher innerhalb Safe-Area (falls nicht schon in ui.css) */
+/* Der Toggle-Button ist in JS mit Inline-Styles robust gesetzt – hier nur fallback: */
 #inspector-toggle{
   position: fixed;
   right: calc(12px + env(safe-area-inset-right, 0px));
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-inspector);
-  pointer-events: auto;
+  pointer-events:auto;
 }
