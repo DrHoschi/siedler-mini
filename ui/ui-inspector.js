@@ -128,7 +128,7 @@
   function openIns(){
     if(isOpen) return;
     isOpen = true;
-    wrap.style.display = "grid";            // CSS grid: place-items:center
+    wrap.style.display = "block";            // CSS grid: place-items:center
     contentEl().scrollTop = 0;
     window.dispatchEvent(new CustomEvent("cb:inspector:open"));
     log("geöffnet");
