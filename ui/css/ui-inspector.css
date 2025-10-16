@@ -4,6 +4,21 @@
    Zweck   : Inspector-Overlay (zentriert, viewport-sicher)
 ============================================================================ */
 
+/* Inspector Toggle (sichtbar + klickbar, Safe-Area) */
+#inspector-toggle{
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-inspector);
+  pointer-events: auto;                 /* <— wichtig: klickbar trotz #ui-root */
+  padding: 10px 14px;
+  border: none; border-radius: 8px;
+  background: #333; color: #fff; font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  cursor: pointer;
+}
+#inspector-toggle:active { transform: translateY(1px); }
+
 #inspector{
   position:fixed; inset:0; z-index:var(--z-inspector);
   display:none; pointer-events:auto;
