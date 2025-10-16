@@ -9,7 +9,7 @@
 
 :root{
   /* Außenrand, darfst du anpassen (8–16px) */
-  --ins-gap: 8px;
+  --ins-gap: 0px;
 }
 
 #inspector{
