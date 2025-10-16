@@ -1,8 +1,8 @@
 <!-- ============================================================================
      Datei   : index.html
      Projekt : Neue Siedler
-     Version : v25.10.16
-     Zweck   : Minimaler Einstieg – lädt NUR Basis, Core & UI-Module
+     Version : v25.10.16-1
+     Zweck   : Minimaler Einstieg – lädt NUR Basis & Core-Pflichtmodule + UI-Module
 ============================================================================ -->
 <!DOCTYPE html>
 <html lang="de">
@@ -11,21 +11,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>Neue Siedler</title>
 
-  <!-- Haupt-CSS (Grundformen, Holzrahmen, Fade, Variablen) -->
+  <!-- Haupt-/Grundstyles -->
   <link rel="stylesheet" href="ui/css/ui.css" />
-  <!-- Startpanel-Spezifik -->
   <link rel="stylesheet" href="ui/css/ui-start.css" />
-  <!-- Inspector-Styles -->
   <link rel="stylesheet" href="ui/css/ui-inspector.css" />
 
-  <!-- Core (nur nötigste Reihenfolge) -->
+  <!-- Core (Pflichtreihenfolge): Polyfill → Assets → Registry → Boot → Bootstrap → Game -->
   <script src="core/cblog.polyfill.js"></script>
+  <script src="core/asset.js"></script>
+  <script src="core/registry.js"></script>
   <script src="core/boot.js"></script>
   <script src="core/game.bootstrap.js"></script>
   <script src="core/game.js"></script>
 </head>
 <body>
-  <!-- Spielfeld & UI-Root – UI-Module hängen sich hier ein -->
   <canvas id="game-canvas"></canvas>
   <div id="ui-root"></div>
 
