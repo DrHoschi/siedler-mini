@@ -109,11 +109,24 @@
 .badge-ok{ background:#2b8a3e; }
 .badge-info{ background:#2f6fb6; }
 
-/* === Toggle-Button Fallback ============================================ */
-#inspector-toggle{
-  position:fixed;
-  right:calc(12px + env(safe-area-inset-right,0px));
-  bottom:calc(12px + env(safe-area-inset-bottom,0px));
-  z-index:var(--z-inspector);
-  pointer-events:auto;
+/* ============================================================================
+   [Fix] Inspector-Toggle immer sichtbar (unten rechts)
+   ========================================================================= */
+#inspector-toggle {
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 2147483647;          /* ganz oben */
+  pointer-events: auto;
+  display: block !important;    /* egal was vorher – immer zeigen */
+  opacity: 1 !important;
+  background: #333;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  cursor: pointer;
 }
+#inspector-toggle:active { transform: translateY(1px); }
