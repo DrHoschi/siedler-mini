@@ -1,14 +1,14 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
-   Version : v25.10.16-4
-   Zweck   : Inspector-Overlay (Viewport-sicher, sticky Tabs, kompaktes Layout)
+   Version : v25.10.16-6
+   Zweck   : Inspector-Overlay (Viewport-sicher, sticky Tabs, kompakt)
 ============================================================================ */
 
 #inspector{
   position: fixed;
   inset: 0;
   z-index: var(--z-inspector);
-  display: none;                  /* open = grid (s.u.) */
+  display: none;                  /* JS setzt auf 'grid' beim Öffnen */
   pointer-events: auto;
   background: rgba(0,0,0,0.55);
   backdrop-filter: blur(3px);
@@ -19,77 +19,63 @@
     calc(8px + env(safe-area-inset-left, 0px));
   box-sizing: border-box;
 
-  /* zentrieren ohne translate-Bug: */
+  /* echtes Zentrieren, robust bei iOS-Chrome: */
   display: grid;
   place-items: center;
 }
 
-/* Fenster: niemals größer als der Viewport */
 #inspector .window{
-  width: clamp(280px, 92vw, 860px);
-  max-height: min(90dvh, 860px);
+  /* Nie größer als der sichtbare Viewport mit Safe-Area-Abzug */
+  width: min(840px, 94svw);
+  max-width: 94svw;
+  max-height: calc(92svh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: #2b2b2b; color: #eee;
   border-radius: 10px;
   box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  box-sizing: border-box;
 }
 
-/* Tabs: sticky, damit das X IMMER sichtbar bleibt */
+/* Sticky Tabs oben, X immer sichtbar */
 #inspector .tabs{
-  position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 0;
-  background: #1e1e1e;
-  border-bottom: 1px solid #444;
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center;
+  background: #1e1e1e; border-bottom: 1px solid #444;
 }
 #inspector .tab{
-  padding: 8px 12px;
-  cursor: pointer; user-select: none;
+  padding: 8px 12px; cursor: pointer; user-select: none;
   color: #bbb; font-weight: 600;
 }
-#inspector .tab.active{
-  background: #2b2b2b; color: #fff;
-}
+#inspector .tab.active{ background: #2b2b2b; color:#fff; }
 
-/* X-Schließen rechts in der Tabzeile */
 #inspector .ins-close{
-  margin-left: auto;
-  margin-right: 8px;
-  padding: 4px 10px;
-  border: none; border-radius: 6px;
-  background: #444; color: #fff; cursor: pointer;
-  font-size: 18px; line-height: 1;
+  margin-left: auto; margin-right: 8px;
+  padding: 4px 10px; border: none; border-radius: 6px;
+  background:#444; color:#fff; cursor:pointer; font-size:18px; line-height:1;
 }
-#inspector .ins-close:hover{ background: #666; }
+#inspector .ins-close:hover{ background:#666; }
 
-/* Inhalt scrollt eigenständig */
+/* Content scrollt eigenständig, Status bleibt unten */
 #inspector .content{
-  flex: 1; overflow: auto; padding: 10px 12px;
-  background: #2b2b2b;
+  flex: 1; overflow: auto; padding: 10px 12px; background:#2b2b2b;
 }
-
-/* Statuszeile bleibt unten stehen */
 #inspector .statusbar{
-  padding: 6px 10px;
-  background: #1e1e1e; border-top: 1px solid #444; color: #aaa;
-  font-size: 12px;
+  padding: 6px 10px; background:#1e1e1e; border-top:1px solid #444; color:#aaa; font-size:12px;
 }
 
-/* Kompaktere Logliste – wie vorher */
-.ins-list{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-}
-.ins-list .row{
-  display: flex; gap: 6px; align-items: baseline;
-  padding: 4px 0; border-bottom: 1px dashed #444;
-}
-.ins-badge{ padding: 1px 6px; border-radius: 6px; background: #444; color: #fff; }
-.badge-err{ background:#b33; } .badge-warn{ background:#b76f00; }
-.badge-ok{  background:#2b8a3e;} .badge-info{  background:#2f6fb6; }
+/* Kompakte Logliste */
+.ins-list{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+.ins-list .row{ display:flex; gap:6px; align-items:baseline; padding:4px 0; border-bottom:1px dashed #444; }
+.ins-badge{ padding:1px 6px; border-radius:6px; background:#444; color:#fff; }
+.badge-err{ background:#b33; } .badge-warn{ background:#b76f00; } .badge-ok{ background:#2b8a3e; } .badge-info{ background:#2f6fb6; }
 
-/* Mobil noch sicherer: Fensterhöhe enger, trotzdem zentriert */
-@media (max-width: 420px){
-  #inspector .window{ width: 96vw; max-height: 92dvh; }
+/* Toggle sicher innerhalb Safe-Area (falls nicht schon in ui.css) */
+#inspector-toggle{
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-inspector);
+  pointer-events: auto;
 }
