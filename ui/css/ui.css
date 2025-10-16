@@ -1,21 +1,16 @@
 /* ============================================================================
    Datei   : ui/css/ui.css
    Projekt : Neue Siedler
-   Version : v25.10.16
-   Zweck   : Haupt-Styles (Grundlayout, Variablen, Holzrahmen, Fade)
+   Version : v25.10.16-1
+   Zweck   : Haupt-Styles (Grundlayout, Holzrahmen, globales Start-Hintergrundbild)
    ========================================================================= */
 
 :root{
-  /* Panel (9-Slice) – kannst du bei Bedarf zentral tauschen */
   --frame-src: url("../../assets/ui/panel.svg");
   --frame-slice: 12;
   --bg-dark: #222;
   --txt: #eee;
-  --accent: #996633;
-  --z-start-bg: 1;
-  --z-canvas: 2;
-  --z-ui: 3;
-  --z-inspector: 50;
+  --z-bg: 1; --z-canvas: 2; --z-ui: 3; --z-inspector: 50;
   --fade-dur: 500ms;
 }
 
@@ -25,37 +20,28 @@ html, body{
   overflow: hidden; font-family: Inter, system-ui, Arial, sans-serif;
 }
 
-/* Canvas liegt hinter der UI, aber vor dem Start-Background */
-#game-canvas{
-  position: absolute; inset: 0;
-  z-index: var(--z-canvas);
-  width: 100%; height: 100%;
-  image-rendering: pixelated;
+/* globales Startbild – liegt HINTER Canvas, blendet bei .is-started aus */
+body::before{
+  content:""; position: fixed; inset:0; z-index: var(--z-bg);
+  background: #111 url("../../assets/UI/Start-bg.PNG") center/cover no-repeat;
+  opacity: 1; transition: opacity var(--fade-dur) ease;
+  pointer-events:none;
 }
+body.is-started::before{ opacity:0; }
 
-/* Root für UI-Module (Startpanel, Inspector, HUD, …) */
-#ui-root{
-  position: absolute; inset: 0;
-  z-index: var(--z-ui);
-  pointer-events: none; /* Module schalten selektiv an */
-}
+/* Canvas */
+#game-canvas{ position:absolute; inset:0; z-index: var(--z-canvas); width:100%; height:100%; image-rendering:pixelated; }
 
-/* Holzrahmen (quadratisch) – 9-Slice via border-image */
+/* UI-Root */
+#ui-root{ position:absolute; inset:0; z-index: var(--z-ui); pointer-events:none; }
+
+/* Holzrahmen (9-slice) */
 .wood-frame{
   border: 12px solid transparent;
   border-image-source: var(--frame-src);
   border-image-slice: var(--frame-slice) fill;
   border-image-width: 12px;
   border-image-repeat: stretch;
-  background: rgba(0,0,0,0.25);
-  border-radius: 2px;
+  background: rgba(0,0,0,0.28);
+  border-radius: 3px;
 }
-
-/* Start-Hintergrund (separat, damit weich ausgeblendet) */
-#start-bg{
-  position:absolute; inset:0; z-index: var(--z-start-bg);
-  background: #111 center/cover no-repeat;
-  opacity: 1; transition: opacity var(--fade-dur) ease;
-  pointer-events:none;
-}
-#start-bg.is-hidden{ opacity: 0; }
