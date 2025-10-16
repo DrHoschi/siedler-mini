@@ -13,7 +13,7 @@
   // --- 1) Start-Hintergrund robust bestimmen --------------------------------
   // Wir testen mehrere Pfade/Schreibweisen und setzen die CSS-Var --start-bg-url
   const candidatePaths = [
-    "../../assets/UI/Start-bg.PNG",
+    "../../assets/ui/start-bg.jpg",
     "../../assets/UI/Start-bg.png",
     "../../assets/ui/Start-bg.PNG",
     "../../assets/ui/Start-bg.png",
