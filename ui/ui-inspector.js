@@ -119,20 +119,24 @@
   }
 
   // --------- Öffnen/Schließen ------------------------------
-  function open(){
-    STATE.open = true;
-    document.getElementById('inspector-overlay').classList.add('open');
-    const btn = document.getElementById('btn-inspector');
-    if (btn) btn.hidden = true; // Button ausblenden, solange offen
-    EB.emit('cb:insp:open', { tab: STATE.activeTab });
-  }
-  function close(){
-    STATE.open = false;
-    document.getElementById('inspector-overlay').classList.remove('open');
-    const btn = document.getElementById('btn-inspector');
-    if (btn) btn.hidden = false; // wieder einblenden
-    EB.emit('cb:insp:close', {});
-  }
+  function openIns(){
+  if (isOpen) return;
+  isOpen = true;
+  wrap.style.display = "block";           // Overlay sichtbar
+  wrap.classList.add("open");             // falls du .open in CSS nutzt
+  window.dispatchEvent(new CustomEvent("cb:inspector:open"));
+  (window.CBLog?.ok || console.log)("[inspector] geöffnet");
+  safeRender(getActiveTab());
+}
+
+function closeIns(){
+  if (!isOpen) return;
+  isOpen = false;
+  wrap.style.display = "none";
+  wrap.classList.remove("open");
+  window.dispatchEvent(new CustomEvent("cb:inspector:close"));
+  (window.CBLog?.ok || console.log)("[inspector] geschlossen");
+}
 
   // Optional: Tastenkürzel (Ctrl/Cmd + I)
   window.addEventListener('keydown', (e)=>{
