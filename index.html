@@ -33,5 +33,83 @@
   <script src="ui/ui-inspector.js"></script>
      <!-- Füge DIESE Zeile direkt vor </body> in deine index.html ein: -->
 <script src="ui/inspector.standalone.js"></script>
+
+<!-- ===== Inspector Failsafe Toggle (immer sichtbar) ===== -->
+<script>
+(function(){
+  var ID = "__inspToggle";
+  var btn = document.getElementById(ID);
+  if (btn) btn.remove();
+  btn = document.createElement("button");
+  btn.id = ID;
+  btn.textContent = "Inspector";
+  btn.style.cssText = [
+    "position:fixed",
+    "right:12px",
+    "bottom:12px",
+    "z-index:2147483647",
+    "display:block !important",
+    "pointer-events:auto !important",
+    "padding:10px 14px",
+    "border:none",
+    "border-radius:8px",
+    "background:#333",
+    "color:#fff",
+    "font-weight:700",
+    "box-shadow:0 4px 10px rgba(0,0,0,.35)",
+    "cursor:pointer"
+  ].join(";");
+
+  btn.onclick = function(){
+    // 1) Offizielle API?
+    if (typeof window.__openInspector === "function") { window.__openInspector(); return; }
+    if (typeof window.__toggleInspector === "function") { window.__toggleInspector(); return; }
+
+    // 2) Event-Route (wenn dein Inspector darauf hört)
+    window.dispatchEvent(new CustomEvent("req:inspector:toggle"));
+
+    // 3) Als allerletzte Rückfallebene: simple Overlay zeigen,
+    //    damit du sofort erkennst, dass der Button funktioniert.
+    if (!document.getElementById("__inspOverlay")) {
+      var o = document.createElement("div");
+      o.id = "__inspOverlay";
+      o.style.cssText = "position:fixed;inset:0;z-index:2147483646;background:rgba(0,0,0,.6)";
+      o.title = "Klick zum Schließen";
+      o.onclick = function(){ this.remove(); };
+      document.body.appendChild(o);
+    }
+  };
+
+  document.body.appendChild(btn);
+
+  // Wenn irgendwas den Button aus dem DOM kickt: sofort zurückhängen.
+  new MutationObserver(function(){
+    if (!document.body.contains(btn)) document.body.appendChild(btn);
+  }).observe(document.body, { childList:true });
+
+  // Sichtbarkeit absichern bei Rotation/Chrome-Sprung
+  function keepVisible(){
+    try{
+      var r = btn.getBoundingClientRect();
+      var vw = innerWidth || 0, vh = innerHeight || 0;
+      if (r.right<0 || r.bottom<0 || r.left>vw || r.top>vh) {
+        btn.style.right = "12px";
+        btn.style.bottom = "12px";
+      }
+      if (getComputedStyle(btn).display === "none") {
+        btn.style.setProperty("display","block","important");
+      }
+      if (getComputedStyle(btn).zIndex !== "2147483647") {
+        btn.style.zIndex = "2147483647";
+      }
+    }catch(e){}
+  }
+  ["load","resize","orientationchange","visibilitychange"].forEach(function(ev){
+    addEventListener(ev, keepVisible, {passive:true});
+  });
+  setTimeout(keepVisible, 0);
+})();
+</script>
+<!-- ===== /Inspector Failsafe Toggle ===== -->
 </body>
 </html>
