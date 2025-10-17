@@ -30,7 +30,8 @@
   function install(){
     // Button sicherstellen
     const btn = ensureButton();
-    btn.addEventListener('click', () => open());
+    btn.addEventListener('click',()=>isOpen?closeIns():openIns());
+    // btn.addEventListener('click', () => open());
     // Overlay-Struktur aufbauen
     buildOverlay();
     // Logs abhören
