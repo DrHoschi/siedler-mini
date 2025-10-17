@@ -107,25 +107,86 @@
   });
   setTimeout(ensureButton, 0);
 
-  // ---------- Mini-Log (optional) ----------
-  const status = ()=> document.getElementById('inspector-status');
-  let logCount = 0;
-  function addLog(text, lvl='OK'){
-    const box = document.getElementById('inspector-content');
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px dashed #444';
-    const badge = document.createElement('span');
-    badge.textContent = lvl;
-    badge.style.cssText = 'padding:1px 6px;border-radius:6px;background:#2b8a3e;color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px';
-    const t = document.createElement('span');
-    t.textContent = new Date().toLocaleTimeString();
-    t.style.cssText = 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;opacity:.8';
-    const m = document.createElement('span');
-    m.textContent = text;
-    m.style.cssText = 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px';
-    row.append(badge,t,m);
-    box.appendChild(row);
-    logCount++; status().textContent = 'Logs gesamt: ' + logCount;
-  }
-  addLog('Inspector bereit – Button garantiert sichtbar.', 'OK');
-})();
+  // ---------- Live-Log-Plumbing (CBLog + console + cb:/req: Events) ----------
+const content = document.getElementById('inspector-content');
+const status  = document.getElementById('inspector-status');
+let __logCount = 0;
+
+function __badgeColor(lvl){
+  if(lvl==='ERR') return '#b33';
+  if(lvl==='WARN')return '#b76f00';
+  if(lvl==='EVT') return '#2f6fb6';
+  if(lvl==='INFO')return '#2f6fb6';
+  return '#2b8a3e'; // OK
+}
+function __addLog(lvl, text){
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px dashed #444';
+
+  const badge = document.createElement('span');
+  badge.textContent = lvl;
+  badge.style.cssText = `padding:1px 6px;border-radius:6px;background:${__badgeColor(lvl)};color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px`;
+
+  const t = document.createElement('span');
+  t.textContent = new Date().toLocaleTimeString();
+  t.style.cssText = 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;opacity:.8';
+
+  const m = document.createElement('span');
+  m.textContent = String(text);
+  m.style.cssText = 'font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px';
+
+  row.append(badge,t,m);
+  content.appendChild(row);
+  __logCount++;
+  status.textContent = 'Logs gesamt: ' + __logCount;
+}
+
+// 1) CBLog-Bridge
+if(!window.CBLog){
+  window.CBLog = {
+    ok  : (m)=> __addLog('OK',   m),
+    info: (m)=> __addLog('INFO', m),
+    warn: (m)=> __addLog('WARN', m),
+    err : (m)=> __addLog('ERR',  m),
+  };
+}else{
+  ['ok','info','warn','err'].forEach(k=>{
+    const prev = window.CBLog[k].bind(window.CBLog);
+    window.CBLog[k] = (m)=>{ __addLog(k==='err'?'ERR':k.toUpperCase(), m); prev(m); };
+  });
+}
+
+// 2) console-Spiegelung (nicht-invasiv; Original bleibt erhalten)
+['log','info','warn','error'].forEach(k=>{
+  const prev = console[k].bind(console);
+  console[k] = function(...args){
+    try{
+      const msg = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+      __addLog(k==='error'?'ERR':k==='warn'?'WARN':k==='info'?'INFO':'OK', msg);
+    }catch(_){} // logging darf nie crashen
+    return prev(...args);
+  };
+});
+
+// 3) Event-Scanner für cb:* / req:*
+const __dispatch = window.dispatchEvent.bind(window);
+window.dispatchEvent = function(ev){
+  try{
+    if(ev?.type && (ev.type.startsWith('cb:') || ev.type.startsWith('req:'))){
+      __addLog('EVT', ev.type);
+    }
+  }catch(_){}
+  return __dispatch(ev);
+};
+
+// 4) Globale Fehler abgreifen (kein Browser-Alert mehr)
+window.addEventListener('error', (e)=>{
+  __addLog('ERR', `Uncaught: ${e.message} @ ${e.filename}:${e.lineno}`);
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  const msg = e?.reason?.message || String(e.reason || e);
+  __addLog('ERR', `Promise: ${msg}`);
+});
+
+// Boot-Meldung
+__addLog('OK','Inspector bereit – Live-Logs aktiv.');
