@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 363
+Gesamt Dateien: 368
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG
@@ -40,6 +40,7 @@ Gesamt Dateien: 363
  - assets/tex/road/readme
  - assets/tex/terrain/Readme
  - assets/readme
+ - docs/digraph-Struktur
  - qa/Readme
  - ui/css/readme
  - filelist-audit.txt

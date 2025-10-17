@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-15T21:06:16.466Z",
+  "createdAt": "2025-10-17T08:23:13.336Z",
   "root": ".",
-  "count": 404,
+  "count": 409,
   "entries": [
     {
       "type": "dir",
@@ -1101,7 +1101,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 6637
+      "size": 2556
     },
     {
       "type": "file",
@@ -1166,7 +1166,7 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 6264
+      "size": 2148
     },
     {
       "type": "file",
@@ -1329,6 +1329,16 @@
       "type": "file",
       "path": "docs/CODE_STYLE.md",
       "size": 307
+    },
+    {
+      "type": "file",
+      "path": "docs/digraph-Struktur",
+      "size": 5382
+    },
+    {
+      "type": "file",
+      "path": "docs/event-protocol.md",
+      "size": 5605
     },
     {
       "type": "file",
@@ -1627,6 +1637,11 @@
     },
     {
       "type": "file",
+      "path": "tools/gen-event-doc.js",
+      "size": 10237
+    },
+    {
+      "type": "file",
       "path": "tools/gen-manifest.mjs",
       "size": 7491
     },
@@ -1725,11 +1740,6 @@
     },
     {
       "type": "file",
-      "path": "ui/css/inspector.css",
-      "size": 1170
-    },
-    {
-      "type": "file",
       "path": "ui/css/layout.css",
       "size": 3150
     },
@@ -1755,6 +1765,11 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-inspector.css",
+      "size": 3823
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-notify.css",
       "size": 92
     },
@@ -1766,7 +1781,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 1054
+      "size": 1195
     },
     {
       "type": "file",
@@ -1776,7 +1791,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 2393
+      "size": 1842
     },
     {
       "type": "dir",
@@ -1864,6 +1879,16 @@
     },
     {
       "type": "file",
+      "path": "ui/inspector.events.js",
+      "size": 17216
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector.standalone.js",
+      "size": 7805
+    },
+    {
+      "type": "file",
       "path": "ui/README.md",
       "size": 6929
     },
@@ -1915,7 +1940,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 9826
+      "size": 11386
     },
     {
       "type": "file",
@@ -1930,7 +1955,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 3406
+      "size": 2450
     },
     {
       "type": "file",
@@ -1945,17 +1970,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42482
+      "size": 40029
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16405
+      "size": 15378
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 8741
+      "size": 4020
     },
     {
       "type": "file",
