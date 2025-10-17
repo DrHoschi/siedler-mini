@@ -1,132 +1,145 @@
-/* ============================================================================
-   Datei   : ui/css/ui-inspector.css
-   Version : v25.10.16-9
-   Zweck   : Inspector-Overlay (fullscreen, sticky Tabs, X sichtbar, wischbar)
-============================================================================ */
+/* ============================================
+   Datei: ui/ui-inspector.css
+   Projekt: Neue Siedler
+   Version: v1.0.5
+   Zweck: Inspector-Overlay + Button (responsive)
+   ============================================ */
 
-:root{
-  --ins-gap: 0px; /* randlos */
+:root {
+  --insp-bg: rgba(18, 18, 20, 0.96);
+  --insp-header: #1f1f23;
+  --insp-tab-active: #e5e5e5;
+  --insp-tab-inactive: #9a9aa0;
+  --insp-border: #2a2a2e;
+  --insp-z: 10050; /* über Startpanel/HUD */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
-/* Gesamter Overlay-Hintergrund */
-#inspector{
+/* Floating Action Button (unten rechts) */
+.cb-fab {
+  position: fixed;
+  right: calc(16px + var(--safe-right));
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: calc(var(--insp-z) - 1);
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  border: 1px solid #0009;
+  background: #2c2c30;
+  color: #fff;
+  font-size: 22px;
+  line-height: 56px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+.cb-fab:active { transform: scale(0.98); }
+.cb-fab[hidden] { display: none !important; }
+
+/* Vollbild-Overlay */
+#inspector-overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-inspector);
-  display: none;
-  pointer-events: auto;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(3px);
+  width: 100vw; height: 100vh;
+  z-index: var(--insp-z);
+  background: var(--insp-bg);
+  display: none; /* via .open sichtbar */
+  color: #eaeaea;
+}
+#inspector-overlay.open { display: block; }
+
+/* Frame */
+.insp-frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right))
+           calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));
   box-sizing: border-box;
-  padding:
-    env(safe-area-inset-top, 0px)
-    env(safe-area-inset-right, 0px)
-    env(safe-area-inset-bottom, 0px)
-    env(safe-area-inset-left, 0px);
 }
 
-/* Fenster füllt gesamten Viewport */
-#inspector .window{
-  position: fixed;
-  inset:
-    env(safe-area-inset-top, 0px)
-    env(safe-area-inset-right, 0px)
-    env(safe-area-inset-bottom, 0px)
-    env(safe-area-inset-left, 0px);
-  background:#2b2b2b; color:#eee;
-  border-radius:10px;
-  box-shadow:0 8px 30px rgba(0,0,0,.5);
-  display:flex; flex-direction:column;
-  overflow:hidden;
-  box-sizing:border-box;
+/* Header mit Tabs und Schließen */
+.insp-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  background: var(--insp-header);
+  border-bottom: 1px solid var(--insp-border);
+  padding: 8px;
+  border-radius: 6px 6px 0 0;
 }
 
-/* === Tabs-Zeile ========================================================== */
-#inspector .tabs-row{
-  position: relative;
-  background:#1e1e1e; border-bottom:1px solid #444;
+/* Tabs: wischbar */
+.insp-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding: 4px;
+}
+.insp-tab {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #2b2b30;
+  color: var(--insp-tab-inactive);
+  border: 1px solid var(--insp-border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.insp-tab.active {
+  background: #e9e9ec;
+  color: #101013;
 }
 
-/* Horizontal wischbar */
-#inspector .tabsbar{
-  display:flex; gap:0;
-  overflow-x:auto; overflow-y:hidden;
-  -webkit-overflow-scrolling:touch;
-  scroll-behavior:smooth;
-  padding:6px 40px 6px 6px; /* rechts Platz für X */
-  scrollbar-width:none;
-  touch-action:pan-x;
-}
-#inspector .tabsbar::-webkit-scrollbar{ display:none; }
-
-#inspector .tab{
-  padding:8px 12px;
-  cursor:pointer;
-  user-select:none;
-  color:#bbb; font-weight:600;
-  white-space:nowrap;
-  flex:0 0 auto;
-}
-#inspector .tab.active{ background:#2b2b2b; color:#fff; }
-
-/* === Schließen-Button (X) =============================================== */
-#inspector .ins-close{
-  position:absolute;
-  top:6px;
-  right:calc(6px + env(safe-area-inset-right,0px));
-  z-index:3;
-  padding:4px 10px;
-  border:none; border-radius:6px;
-  background:#444; color:#fff;
-  cursor:pointer; font-size:18px; line-height:1;
-}
-#inspector .ins-close:hover{ background:#666; }
-
-/* === Inhalt / Statusbar ================================================ */
-#inspector .content{
-  flex:1; overflow:auto;
-  padding:10px 12px;
-  background:#2b2b2b;
-}
-#inspector .statusbar{
-  padding:6px 10px;
-  background:#1e1e1e; border-top:1px solid #444;
-  color:#aaa; font-size:12px;
-}
-
-/* === Logliste ========================================================== */
-.ins-list{
-  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size:12px;
-}
-.ins-list .row{
-  display:flex; gap:6px; align-items:baseline;
-  padding:4px 0; border-bottom:1px dashed #444;
-}
-.ins-badge{ padding:1px 6px; border-radius:6px; background:#444; color:#fff; }
-.badge-err{ background:#b33; }
-.badge-warn{ background:#b76f00; }
-.badge-ok{ background:#2b8a3e; }
-.badge-info{ background:#2f6fb6; }
-
-/* ============================================================================
-   [Fix] Inspector-Toggle immer sichtbar (unten rechts)
-   ========================================================================= */
-#inspector-toggle {
-  position: fixed;
-  right: calc(12px + env(safe-area-inset-right, 0px));
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: 2147483647;          /* ganz oben */
-  pointer-events: auto;
-  display: block !important;    /* egal was vorher – immer zeigen */
-  opacity: 1 !important;
-  background: #333;
+/* Close Button: IMMER sichtbar (Safe-Area) */
+.insp-close {
+  position: sticky; /* bleibt im Sichtbereich */
+  right: 0;
+  margin-left: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #3a3a40;
   color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-weight: 700;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  border: 1px solid var(--insp-border);
+  cursor: pointer;
+  top: 0; /* sticky-Offset */
+}
+
+/* Content */
+.insp-content {
+  min-height: 0;
+  overflow: auto;
+  background: #131316;
+  border: 1px solid var(--insp-border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 8px;
+}
+
+/* Logs */
+.insp-logs { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.insp-logline { display: flex; gap: 8px; padding: 4px 2px; align-items: baseline; }
+.insp-logline .sym { width: 16px; text-align: center; }
+.insp-logline.ok .sym { color: #3bd16f; }
+.insp-logline.info .sym { color: #60a5fa; }
+.insp-logline.warn .sym { color: #fbbf24; }
+.insp-logline.error .sym { color: #f87171; }
+
+.insp-filters { display: flex; gap: 10px; padding: 4px 0 8px; }
+.insp-actions { display: flex; gap: 8px; padding: 6px 0; }
+
+button.insp-btn {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--insp-border);
+  background: #2e2e33;
+  color: #eee;
   cursor: pointer;
 }
-#inspector-toggle:active { transform: translateY(1px); }
+button.insp-btn:active { transform: translateY(1px); }
