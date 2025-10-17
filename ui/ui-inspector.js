@@ -25,6 +25,59 @@
     logStore.push({t: ts(), lvl:"err", msg:"Inspector-Render: " + msg});
   };
 
+// === ROBUSTER TOGGLE-BUTTON (immer da, immer sichtbar) =======================
+// Versuche bestehenden Button zu finden – oder neu anlegen:
+let btn = document.getElementById("inspector-toggle");
+if (!btn) {
+  btn = document.createElement("button");
+  btn.id = "inspector-toggle";
+  btn.textContent = "Inspector";
+  document.body.appendChild(btn);
+}
+
+// Sichtbar machen – auch wenn irgendwo CSS dagegenhält:
+btn.style.setProperty("position", "fixed", "important");
+btn.style.setProperty("right", "calc(12px + env(safe-area-inset-right, 0px))", "important");
+btn.style.setProperty("bottom", "calc(12px + env(safe-area-inset-bottom, 0px))", "important");
+btn.style.setProperty("z-index", "2147483647", "important");
+btn.style.setProperty("display", "block", "important");
+btn.style.setProperty("pointer-events", "auto", "important");
+btn.style.setProperty("padding", "10px 14px");
+btn.style.setProperty("border", "none");
+btn.style.setProperty("border-radius", "8px");
+btn.style.setProperty("background", "#333");
+btn.style.setProperty("color", "#fff");
+btn.style.setProperty("font-weight", "700");
+btn.style.setProperty("box-shadow", "0 4px 10px rgba(0,0,0,.35)");
+btn.style.setProperty("cursor", "pointer");
+
+// Mini-Wächter gegen Fremd-CSS / iOS-Chrome-Shift:
+function __ensureToggleVisible(){
+  try{
+    const r = btn.getBoundingClientRect();
+    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    const vh = window.innerHeight|| document.documentElement.clientHeight|| 0;
+    let touched = false;
+    if (r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh) {
+      btn.style.setProperty("right", "12px", "important");
+      btn.style.setProperty("bottom", "12px", "important");
+      touched = true;
+    }
+    if (getComputedStyle(btn).display === "none") {
+      btn.style.setProperty("display", "block", "important");
+      touched = true;
+    }
+    if (touched) (window.CBLog?.info || console.info)("[inspector] Toggle neu positioniert");
+  }catch(_){}
+}
+["load","resize","orientationchange","visibilitychange"].forEach(ev=>{
+  window.addEventListener(ev, __ensureToggleVisible, { passive: true });
+});
+setTimeout(__ensureToggleVisible, 0);
+
+// Diagnose ins Log (hilft, falls JS überhaupt nicht läuft)
+(window.CBLog?.ok || console.log)("[inspector] Toggle initialisiert (robust)");
+  
   // === Toggle-Button (immer sichtbar, robust) ===========================
   const btn = document.createElement("button");
   btn.id = "inspector-toggle";
