@@ -145,6 +145,15 @@ setTimeout(__ensureToggleVisible, 0);
     log("geöffnet");
     safeRender(getActiveTab());
   }
+
+  // öffentliche API für Failsafe-Button
+window.__openInspector   = openIns;
+window.__closeInspector  = closeIns;
+window.__toggleInspector = ()=> (isOpen ? closeIns() : openIns());
+
+// Event-Hook (Route 2)
+addEventListener("req:inspector:toggle", ()=> window.__toggleInspector());
+  
   function closeIns(){
     if(!isOpen)return;
     isOpen=false;
