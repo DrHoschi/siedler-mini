@@ -1,259 +1,318 @@
-/* ============================================================================
- * Datei    : ui/ui-inspector.js
- * Version  : v25.10.16-9
- * Zweck    : Inspector-Overlay (fullscreen, scrollbare Tabs, X sichtbar)
- * ========================================================================= */
+/* 
+========================================
+  Datei: ui/ui-inspector.js
+  Projekt: Neue Siedler
+  Version: v1.1.2
+  Zweck: Vollbild-Inspector (Logs/Tests/Ressourcen/Pfade/Editor)
+  Events: cb:insp:open|close|tab:change|export:logs|export:json
+========================================
+*/
+
 (function(){
-  const VER  = "v25.10.16-9";
-  const TAG  = "[inspector]";
-  const ts   = ()=> new Date().toLocaleTimeString();
-  const log  = (m)=> (window.CBLog?.ok   || console.log)(`${TAG} ${m}`);
-  const warn = (m)=> (window.CBLog?.warn || console.warn)(`${TAG} ${m}`);
-  const err  = (m)=> (window.CBLog?.err  || console.error)(`${TAG} ${m}`);
+  const MOD = 'ui-inspector';
 
-  let isOpen = false;
-  const logStore   = [];
-  const eventStore = [];
+  // -------- Globals (aus Projektstandard) -----------------
+  const EB = window.EventBus || {
+    emit: (n,p)=>window.dispatchEvent(new CustomEvent(n,{detail:p})),
+    on: (n,fn)=>window.addEventListener(n, (e)=>fn(e.detail)),
+    off: (n,fn)=>window.removeEventListener(n,fn)
+  };
+  const Log = window.CBLog || console;
 
-  const safeText = (s)=> String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
-  const statusEl = ()=> document.getElementById("inspector-status");
-  const contentEl= ()=> document.getElementById("inspector-content");
-  const safeRender = (tab)=>{ try{ render(tab); }catch(e){ showError(e); } };
-  const showError = (e)=>{
-    const msg = (e && (e.stack || e.message || String(e))) || "Unbekannter Fehler";
-    statusEl()?.textContent = "Fehler: " + msg;
-    logStore.push({t: ts(), lvl:"err", msg:"Inspector-Render: " + msg});
+  const STATE = {
+    open: false,
+    activeTab: 'logs',
+    filters: { ok:true, info:true, warn:true, error:true },
+    logs: []
   };
 
-// === ROBUSTER TOGGLE-BUTTON (immer da, immer sichtbar) =======================
-// Versuche bestehenden Button zu finden – oder neu anlegen:
-let btn = document.getElementById("inspector-toggle");
-if (!btn) {
-  btn = document.createElement("button");
-  btn.id = "inspector-toggle";
-  btn.textContent = "Inspector";
-  document.body.appendChild(btn);
-}
-
-// Sichtbar machen – auch wenn irgendwo CSS dagegenhält:
-btn.style.setProperty("position", "fixed", "important");
-btn.style.setProperty("right", "calc(12px + env(safe-area-inset-right, 0px))", "important");
-btn.style.setProperty("bottom", "calc(12px + env(safe-area-inset-bottom, 0px))", "important");
-btn.style.setProperty("z-index", "2147483647", "important");
-btn.style.setProperty("display", "block", "important");
-btn.style.setProperty("pointer-events", "auto", "important");
-btn.style.setProperty("padding", "10px 14px");
-btn.style.setProperty("border", "none");
-btn.style.setProperty("border-radius", "8px");
-btn.style.setProperty("background", "#333");
-btn.style.setProperty("color", "#fff");
-btn.style.setProperty("font-weight", "700");
-btn.style.setProperty("box-shadow", "0 4px 10px rgba(0,0,0,.35)");
-btn.style.setProperty("cursor", "pointer");
-
-// Mini-Wächter gegen Fremd-CSS / iOS-Chrome-Shift:
-function __ensureToggleVisible(){
-  try{
-    const r = btn.getBoundingClientRect();
-    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
-    const vh = window.innerHeight|| document.documentElement.clientHeight|| 0;
-    let touched = false;
-    if (r.right < 0 || r.bottom < 0 || r.left > vw || r.top > vh) {
-      btn.style.setProperty("right", "12px", "important");
-      btn.style.setProperty("bottom", "12px", "important");
-      touched = true;
-    }
-    if (getComputedStyle(btn).display === "none") {
-      btn.style.setProperty("display", "block", "important");
-      touched = true;
-    }
-    if (touched) (window.CBLog?.info || console.info)("[inspector] Toggle neu positioniert");
-  }catch(_){}
-}
-["load","resize","orientationchange","visibilitychange"].forEach(ev=>{
-  window.addEventListener(ev, __ensureToggleVisible, { passive: true });
-});
-setTimeout(__ensureToggleVisible, 0);
-
-// Diagnose ins Log (hilft, falls JS überhaupt nicht läuft)
-(window.CBLog?.ok || console.log)("[inspector] Toggle initialisiert (robust)");
-  
-  // === Toggle-Button (immer sichtbar, robust) ===========================
-  const btn = document.createElement("button");
-  btn.id = "inspector-toggle";
-  btn.textContent = "Inspector";
-  Object.assign(btn.style,{
-    position:"fixed",
-    right:"calc(12px + env(safe-area-inset-right,0px))",
-    bottom:"calc(12px + env(safe-area-inset-bottom,0px))",
-    zIndex:"2147483647",
-    pointerEvents:"auto",
-    padding:"10px 14px",
-    border:"none", borderRadius:"8px",
-    background:"#333", color:"#fff", fontWeight:"700",
-    boxShadow:"0 4px 10px rgba(0,0,0,0.35)", cursor:"pointer"
-  });
-  document.body.appendChild(btn);
-
-  // === Sichtbarkeits-Wächter ===========================================
-  function ensureToggleVisible(){
-    try{
-      const r=btn.getBoundingClientRect(),vw=window.innerWidth,vh=window.innerHeight;
-      if(r.right<0||r.bottom<0||r.left>vw||r.top>vh){btn.style.right="12px";btn.style.bottom="12px";}
-      const cs=window.getComputedStyle(btn);
-      if(cs.display==="none")btn.style.setProperty("display","block","important");
-      if(cs.zIndex!=="2147483647")btn.style.zIndex="2147483647";
-    }catch(_){}
+  // --------- Install (einmalig von außen aufrufen) --------
+  function install(){
+    // Button sicherstellen
+    const btn = ensureButton();
+    btn.addEventListener('click', () => open());
+    // Overlay-Struktur aufbauen
+    buildOverlay();
+    // Logs abhören
+    hookLogs();
+    // Resize sicher handhaben (Close-X bleibt sichtbar)
+    window.addEventListener('resize', ensureCloseInView);
+    EB.emit('cb:insp:ready', { ok:true });
+    (window.CBLog?.ok || console.log)(`[${MOD}] Modul geladen (v${version()})`);
   }
-  ["load","resize","orientationchange","visibilitychange"].forEach(e=>window.addEventListener(e,ensureToggleVisible));
-  setTimeout(ensureToggleVisible,0);
 
-  // === Overlay + Fenster ===============================================
-  const wrap=document.createElement("div");
-  wrap.id="inspector";
-  wrap.style.pointerEvents="auto";
-  wrap.style.display="none";
+  function version(){ return '1.1.2'; }
 
-  wrap.innerHTML=`
-    <div class="window wood-frame">
-      <div class="tabs-row">
-        <div class="tabsbar">
-          <div class="tab active" data-tab="logs">Logs</div>
-          <div class="tab" data-tab="tests">Tests</div>
-          <div class="tab" data-tab="res">Ressourcen</div>
-          <div class="tab" data-tab="paths">Pfade</div>
-          <div class="tab" data-tab="editor">Editor</div>
+  // --------- DOM: Button ----------------------------------
+  function ensureButton(){
+    let btn = document.getElementById('btn-inspector');
+    if (!btn){
+      btn = document.createElement('button');
+      btn.id = 'btn-inspector';
+      btn.className = 'cb-fab cb-fab-inspector';
+      btn.setAttribute('aria-label','Inspector öffnen');
+      btn.title = 'Inspector';
+      btn.textContent = '🛠️';
+      document.body.appendChild(btn);
+    }
+    btn.hidden = false; // NICHT verschwinden lassen
+    return btn;
+  }
+
+  // --------- DOM: Overlay ---------------------------------
+  function buildOverlay(){
+    const root = document.getElementById('inspector-overlay') || (()=> {
+      const d = document.createElement('div');
+      d.id = 'inspector-overlay';
+      document.body.appendChild(d);
+      return d;
+    })();
+
+    root.innerHTML = '';
+    root.appendChild(html(`
+      <div class="insp-frame" role="dialog" aria-modal="true" aria-label="Inspector">
+        <div class="insp-header">
+          <div class="insp-tabs" id="insp-tabs" tabindex="0">
+            ${tabBtn('logs','Logs')}
+            ${tabBtn('tests','Tests')}
+            ${tabBtn('res','Ressourcen')}
+            ${tabBtn('paths','Pfade')}
+            ${tabBtn('editor','Editor')}
+          </div>
+          <button class="insp-close" id="insp-close" aria-label="Inspector schließen">✕</button>
         </div>
-        <button class="ins-close" title="Schließen" aria-label="Schließen">×</button>
+
+        <div class="insp-content" id="insp-content">
+          <!-- Tab-Inhalt wird gerendert -->
+        </div>
       </div>
-      <div class="content" id="inspector-content"></div>
-      <div class="statusbar" id="inspector-status">Bereit</div>
-    </div>`;
-  document.body.appendChild(wrap);
+    `));
 
-  function getActiveTab(){
-    const t=wrap.querySelector(".tab.active");
-    return t?t.dataset.tab:"logs";
-  }
-
-  // === Öffnen/Schließen ===============================================
-  function openIns(){
-    if(isOpen)return;
-    isOpen=true;
-    wrap.style.display="block";
-    window.dispatchEvent(new CustomEvent("cb:inspector:open"));
-    log("geöffnet");
-    safeRender(getActiveTab());
-  }
-
-  // öffentliche API für Failsafe-Button
-window.__openInspector   = openIns;
-window.__closeInspector  = closeIns;
-window.__toggleInspector = ()=> (isOpen ? closeIns() : openIns());
-
-// Event-Hook (Route 2)
-addEventListener("req:inspector:toggle", ()=> window.__toggleInspector());
-  
-  function closeIns(){
-    if(!isOpen)return;
-    isOpen=false;
-    wrap.style.display="none";
-    window.dispatchEvent(new CustomEvent("cb:inspector:close"));
-    log("geschlossen");
-  }
-  btn.addEventListener("click",()=>isOpen?closeIns():openIns());
-  wrap.querySelector(".ins-close").addEventListener("click",closeIns);
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&isOpen)closeIns();});
-  wrap.addEventListener("click",e=>{if(e.target===wrap&&isOpen)closeIns();});
-  ["resize","orientationchange","visibilitychange"].forEach(ev=>window.addEventListener(ev,()=>{if(isOpen)safeRender(getActiveTab());}));
-
-  // === Tabs (wischbar) =================================================
-  wrap.querySelectorAll(".tabsbar .tab").forEach(tab=>{
-    tab.addEventListener("click",()=>{
-      wrap.querySelectorAll(".tabsbar .tab").forEach(t=>t.classList.remove("active"));
-      tab.classList.add("active");
-      safeRender(tab.dataset.tab);
-      tab.scrollIntoView({behavior:"smooth",inline:"center",block:"nearest"});
+    // Handlers
+    root.querySelector('#insp-close').addEventListener('click', () => close());
+    root.addEventListener('click', (e)=>{
+      // Klick neben Frame schließt (optional aus)
+      // if (e.target === root) close();
     });
+
+    // Tabwechsel via Click + horizontal scroll w/ touch
+    root.querySelector('#insp-tabs').addEventListener('click', (e)=>{
+      const t = e.target.closest('.insp-tab');
+      if (t) switchTab(t.dataset.tab);
+    });
+
+    switchTab(STATE.activeTab);
+    ensureCloseInView();
+  }
+
+  function tabBtn(id,label){
+    const active = (STATE.activeTab === id) ? ' active' : '';
+    return `<div class="insp-tab${active}" data-tab="${id}" role="tab">${label}</div>`;
+  }
+
+  function ensureCloseInView(){
+    // dank CSS position: sticky + Safe-Areas ist es eigentlich safe,
+    // hier sorgen wir nur dafür, dass der Header nicht wegscrollt
+    const cont = document.getElementById('insp-content');
+    if (cont) cont.style.scrollMarginTop = '16px';
+  }
+
+  // --------- Öffnen/Schließen ------------------------------
+  function open(){
+    STATE.open = true;
+    document.getElementById('inspector-overlay').classList.add('open');
+    const btn = document.getElementById('btn-inspector');
+    if (btn) btn.hidden = true; // Button ausblenden, solange offen
+    EB.emit('cb:insp:open', { tab: STATE.activeTab });
+  }
+  function close(){
+    STATE.open = false;
+    document.getElementById('inspector-overlay').classList.remove('open');
+    const btn = document.getElementById('btn-inspector');
+    if (btn) btn.hidden = false; // wieder einblenden
+    EB.emit('cb:insp:close', {});
+  }
+
+  // Optional: Tastenkürzel (Ctrl/Cmd + I)
+  window.addEventListener('keydown', (e)=>{
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i'){
+      e.preventDefault();
+      STATE.open ? close() : open();
+    }
   });
 
-  // === Logging-Bridge ==================================================
-  if(!window.CBLog){
-    window.CBLog={
-      ok:(m)=>{logStore.push({t:ts(),lvl:"ok",msg:String(m)});console.log(m);},
-      info:(m)=>{logStore.push({t:ts(),lvl:"info",msg:String(m)});console.info(m);},
-      warn:(m)=>{logStore.push({t:ts(),lvl:"warn",msg:String(m)});console.warn(m);},
-      err:(m)=>{logStore.push({t:ts(),lvl:"err",msg:String(m)});console.error(m);}
-    };
-  }else{
-    ["ok","info","warn","err"].forEach(k=>{
-      const prev=window.CBLog[k].bind(window.CBLog);
-      window.CBLog[k]=(m)=>{logStore.push({t:ts(),lvl:(k==="err"?"err":k),msg:String(m)});prev(m);};
-    });
+  // --------- Tabs rendern ---------------------------------
+  function switchTab(id){
+    STATE.activeTab = id;
+    // Header aktiv markieren
+    const tabs = document.querySelectorAll('#insp-tabs .insp-tab');
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+    // Inhalt rendern
+    const host = document.getElementById('insp-content');
+    if (!host) return;
+    if (id === 'logs') renderLogsTab(host);
+    else if (id === 'tests') renderTestsTab(host);
+    else if (id === 'res') renderResTab(host);
+    else if (id === 'paths') renderPathsTab(host);
+    else if (id === 'editor') renderEditorTab(host);
+    EB.emit('cb:insp:tab:change', { tab:id });
   }
 
-  // === Event-Scanner ===================================================
-  const _dispatch=window.dispatchEvent.bind(window);
-  window.dispatchEvent=function(ev){
-    try{
-      if(ev?.type&&(ev.type.startsWith("cb:")||ev.type.startsWith("req:"))){
-        eventStore.push({t:ts(),type:ev.type});
-        if(isOpen&&getActiveTab()==="logs")renderLogs();
-        statusEl().textContent=`Events: ${eventStore.length} — Logs gesamt: ${logStore.length}`;
+  // --------- Logs: Hook + Render ---------------------------
+  function hookLogs(){
+    // Wenn CBLog einen Sink unterstützt, nutzen.
+    // Fallback: leichte Monkey-Patches, die zusätzlich Events emittieren.
+    try {
+      const sink = (type, msg) => {
+        const entry = normalizeLog(type, msg);
+        STATE.logs.push(entry);
+        if (STATE.activeTab === 'logs') appendLogLine(entry);
+      };
+      if (window.CBLog){
+        // sanfter Wrap
+        ['ok','info','warn','error'].forEach(type=>{
+          const orig = window.CBLog[type]?.bind(window.CBLog) || console[type]?.bind(console);
+          window.CBLog[type] = (...args) => {
+            sink(type, args);
+            return orig?.(...args);
+          };
+        });
+      } else {
+        ['log','info','warn','error'].forEach(type=>{
+          const orig = console[type].bind(console);
+          console[type] = (...args)=>{ sink(mapConsoleType(type), args); orig(...args); };
+        });
       }
-    }catch(e){showError(e);}
-    return _dispatch(ev);
-  };
+    } catch(e){
+      console.warn('[ui-inspector] Log-Hook fehlgeschlagen:', e);
+    }
+  }
 
-  // === Render-Funktionen ==============================================
-  function render(tab){
-    if(tab==="logs")return renderLogs();
-    if(tab==="tests")return renderTests();
-    if(tab==="res")return renderRes();
-    if(tab==="paths")return renderPaths();
-    if(tab==="editor")return renderEditor();
-    contentEl().textContent="Unbekannter Tab: "+tab;
-    statusEl().textContent="Tab-Status: "+tab;
+  function mapConsoleType(t){ return t==='log'?'info':(t||'info'); }
+
+  function normalizeLog(type, args){
+    const text = args.map(a => typeof a==='string' ? a : JSON.stringify(a)).join(' ');
+    const sym = type==='ok'?'✅':type==='warn'?'⚠':type==='error'?'❌':'ℹ';
+    const cls = type==='ok'?'ok':type;
+    return { t: Date.now(), type:cls, sym, text };
   }
-  function renderLogs(){
-    const rows=logStore.slice(-400).map(r=>{
-      const badge=r.lvl==="err"?"badge-err":r.lvl==="warn"?"badge-warn":r.lvl==="ok"?"badge-ok":"badge-info";
-      return `<div class="row"><span class="ins-badge ${badge}">${safeText(r.lvl.toUpperCase())}</span><span>${safeText(r.t)}</span><span>${safeText(r.msg)}</span></div>`;
-    }).join("");
-    contentEl().innerHTML=`<div class="ins-list">${rows||"Bereit"}</div>`;
-    statusEl().textContent=`Logs gesamt: ${logStore.length}`;
+
+  function renderLogsTab(host){
+    host.innerHTML = `
+      <div class="insp-logs">
+        <div class="insp-filters">
+          ${filterBox('ok','Erfolg')}
+          ${filterBox('info','Info')}
+          ${filterBox('warn','Warnung')}
+          ${filterBox('error','Fehler')}
+        </div>
+        <div class="insp-actions">
+          <button class="insp-btn" id="logs-copy">Kopieren</button>
+          <button class="insp-btn" id="logs-export">Export JSON</button>
+          <span id="logs-count" style="margin-left:auto;opacity:.75"></span>
+        </div>
+        <div id="logs-list"></div>
+      </div>
+    `;
+    host.querySelector('#logs-copy').addEventListener('click', copyLogs);
+    host.querySelector('#logs-export').addEventListener('click', exportLogs);
+    host.querySelectorAll('.insp-filters input[type=checkbox]').forEach(cb=>{
+      cb.checked = !!STATE.filters[cb.value];
+      cb.addEventListener('change', ()=>{
+        STATE.filters[cb.value] = cb.checked;
+        redrawLogs();
+      });
+    });
+    redrawLogs();
   }
-  function renderTests(){
-    contentEl().innerHTML=`<div class="ins-list">
-      <div class="row"><span class="ins-badge badge-info">ℹ</span><span>Tests folgen – Hook bereit.</span></div>
-      <div class="row"><button id="btn-run-tests">Alle Tests starten</button></div></div>`;
-    statusEl().textContent=`Tests: Placeholder`;
-    document.getElementById("btn-run-tests")?.addEventListener("click",()=>{
-      log("Tests gestartet (Stub)");
-      logStore.push({t:ts(),lvl:"ok",msg:"Tests gestartet (Stub)"});renderLogs();
+
+  function filterBox(key,label){
+    return `<label><input type="checkbox" value="${key}" checked> ${label}</label>`;
+  }
+
+  function redrawLogs(){
+    const list = document.getElementById('logs-list');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const entry of STATE.logs){
+      if (!STATE.filters[entry.type]) continue;
+      appendLogLine(entry);
+    }
+    updateCount();
+  }
+
+  function appendLogLine(entry){
+    const list = document.getElementById('logs-list');
+    if (!list) return;
+    if (!STATE.filters[entry.type]) return;
+    const el = document.createElement('div');
+    el.className = `insp-logline ${entry.type}`;
+    const time = new Date(entry.t).toLocaleTimeString();
+    el.innerHTML = `<span class="sym">${entry.sym}</span>
+                    <span class="ts" style="opacity:.7">${time}</span>
+                    <span class="msg">${escapeHtml(entry.text)}</span>`;
+    list.appendChild(el);
+    updateCount();
+  }
+
+  function updateCount(){
+    const c = document.getElementById('logs-count');
+    if (c) c.textContent = `Logs gesamt: ${STATE.logs.length}`;
+  }
+
+  function copyLogs(){
+    const txt = STATE.logs.map(e => `[${e.type}] ${e.text}`).join('\n');
+    navigator.clipboard?.writeText(txt);
+    EB.emit('cb:insp:export:logs', { format:'text', count: STATE.logs.length });
+  }
+
+  function exportLogs(){
+    const blob = new Blob([JSON.stringify(STATE.logs, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'logs.json'; a.click();
+    URL.revokeObjectURL(url);
+    EB.emit('cb:insp:export:json', { kind:'logs', count: STATE.logs.length });
+  }
+
+  // --------- Placeholder-Renderer für andere Tabs ----------
+  function renderTestsTab(host){
+    host.innerHTML = `
+      <div style="padding:8px">
+        <div class="insp-actions">
+          <button class="insp-btn" id="t-run-all">Alle Tests starten</button>
+          <button class="insp-btn" id="t-reset">Tests zurücksetzen</button>
+        </div>
+        <div id="t-out"></div>
+      </div>`;
+    host.querySelector('#t-run-all').addEventListener('click',()=>{
+      EB.emit('cb:test:run:all', {});
+      Log.info('[tests] gestartet');
+    });
+    host.querySelector('#t-reset').addEventListener('click',()=>{
+      EB.emit('cb:test:reset', {});
+      Log.info('[tests] reset');
     });
   }
-  function renderRes(){
-    contentEl().innerHTML=`<div class="ins-list">
-      <div class="row"><span class="ins-badge badge-info">ℹ</span>
-      <span>Ressourcen-Ansicht bindet sich an cb:res:* an.</span></div></div>`;
-    const cnt=eventStore.filter(e=>e.type.startsWith("cb:res")).length;
-    statusEl().textContent=`Ressourcen: Live-Events ${cnt}`;
+
+  function renderResTab(host){
+    host.innerHTML = `<div style="padding:8px;opacity:.8">Ressourcen-Tab (MVP)</div>`;
   }
-  function renderPaths(){
-    contentEl().innerHTML=`<div class="ins-list">
-      <div class="row"><span class="ins-badge badge-info">ℹ</span>
-      <span>Pfade/Overlay-Hooks werden von core/path-overlay.js geliefert.</span></div></div>`;
-    const cnt=eventStore.filter(e=>e.type.startsWith("cb:path")).length;
-    statusEl().textContent=`Pfade: Events ${cnt}`;
+  function renderPathsTab(host){
+    host.innerHTML = `<div style="padding:8px;opacity:.8">Pfade-Tab (MVP)</div>`;
   }
-  function renderEditor(){
-    contentEl().innerHTML=`<div class="ins-list">
-      <div class="row"><span class="ins-badge badge-info">ℹ</span>
-      <span>Editor-Tab reserviert (Map/Level-Editor UI später hier).</span></div></div>`;
-    statusEl().textContent=`Editor: vorbereitet`;
+  function renderEditorTab(host){
+    host.innerHTML = `<div style="padding:8px;opacity:.8">Editor-Tab (MVP)</div>`;
   }
 
-  // === Init-Log ========================================================
-  log(`initialisiert – Toggle rechts unten. Close per X / ESC / Klick außerhalb. (${VER})`);
+  // --------- Utils ----------------------------------------
+  function html(str){ const t = document.createElement('template'); t.innerHTML = str.trim(); return t.content; }
+  function escapeHtml(s){ return s.replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+  // --------- API exportieren -------------------------------
+  window.UIInspector = {
+    install,
+    open, close,
+    switchTab
+  };
 })();
