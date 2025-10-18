@@ -79,6 +79,35 @@
   <!-- Startpanel (Hintergrundbild: assets/ui/start-bg.jpg; blendet beim Start weich aus) -->
   <script src="ui/ui-start.js"></script>
 
+<!-- =========================================================================
+     INSPECTOR-MODULE
+     Pfad: ui/inspector/
+     Lädt alle Funktionsblöcke des Inspector-Systems (Logs, Tests, Ressourcen, Pfade, Editor)
+     ========================================================================= -->
+
+<!-- Core & Grundlogik -->
+<script src="ui/inspector/inspector.core.js"></script>
+<script src="ui/inspector/inspector.hooks.js"></script>
+
+<!-- APIs & Kompatibilität -->
+<script src="ui/inspector/inspector.api-bridge.js"></script>
+<script src="ui/inspector/inspector.api-compat.js"></script>
+<script src="ui/inspector/inspector.compat.js"></script>
+
+<!-- UI-Bindings & Build -->
+<script src="ui/inspector/inspector.build.js"></script>
+<script src="ui/inspector/inspector.button-bind.js"></script>
+<script src="ui/inspector/inspector.force-toggle.js"></script>
+
+<!-- Feature-Module -->
+<script src="ui/inspector/inspector.logs.js"></script>
+<script src="ui/inspector/inspector.tests.js"></script>
+<script src="ui/inspector/inspector.resources.js"></script>
+<script src="ui/inspector/inspector.paths.js"></script>
+
+<!-- Overlay / Layout-Hooks -->
+<script src="ui/inspector/overlay.hooks.js"></script>
+     
   <!-- Inspector (Vollbild, Tabs wischbar, X sticky; Logs/Events-Bridge) -->
   <script src="ui/ui-inspector.js"></script>
   <script>
