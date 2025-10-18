@@ -1,133 +1,118 @@
-<!-- ============================================================================
-     Datei    : index.html
-     Projekt  : Neue Siedler
-     Version  : v25.10.17 (FINAL)
-     Zweck    : Endgültiger Einstiegspunkt – minimal, robust, ein Weg zum Inspector
-                - Lädt NUR die benötigten Core-Module
-                - Startpanel & Hintergrundbild separat als UI-Modul
-                - Inspector: fester Button (ein Weg), Vollbild-Overlay
-     Hinweis  : Reihenfolge ist wichtig! (Core → UI)
-============================================================================ -->
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover"
-  />
+  <!-- =========================================================
+       META / BASICS
+       ========================================================= -->
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1f1f23">
   <title>Neue Siedler</title>
+  <meta name="description" content="Neue Siedler – Prototyp / Tech-Demo">
 
-  <!-- ================== Styles ================== -->
-  <!-- Grund-/Haupt-Styles (inkl. Startbild-Fade, Holzrahmen) -->
-  <link rel="stylesheet" href="ui/css/ui.css" />
-  <!-- Startpanel-spezifisch (Panel, 4 Buttons untereinander, klein) -->
-  <link rel="stylesheet" href="ui/css/ui-start.css" />
-  <!-- Inspector (Vollbild, Tabs wischbar, X immer sichtbar) -->
-  <link rel="stylesheet" href="ui/ui-inspector.css" />
+  <!-- (optional) ganz grob gegen aggressives Caching – echte Kontrolle kommt
+       über ?v=… an den <script>- und <link>-URLs -->
+  <meta http-equiv="cache-control" content="max-age=0, no-cache, no-store, must-revalidate">
+  <meta http-equiv="pragma" content="no-cache">
+  <meta http-equiv="expires" content="0">
 
-  <!-- Mini-Fallback, falls die Inspector-CSS mal nicht greift -->
-  <style>
-    #btn-inspector {
-      position: fixed;
-      right: calc(12px + env(safe-area-inset-right, 0px));
-      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-      z-index: 2147483647;
-      display: inline-block;
-      width: 56px; height: 56px; border-radius: 50%;
-      border: 1px solid #0009; background: #2c2c30; color: #fff;
-      font-size: 22px; line-height: 56px; text-align: center;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.4); cursor: pointer;
-    }
-  </style>
+  <!-- =========================================================
+       STYLES (Global, UI, Inspector)
+       Reihenfolge: global -> UI -> Inspector (UI-last wins)
+       ========================================================= -->
+  <!-- Dein globales UI-CSS (falls vorhanden) -->
+  <link rel="stylesheet" href="ui/ui.css?v=25.10.17">
 
-  <!-- ================== Core (Pflicht-Reihenfolge) ================== -->
-  <script src="core/cblog.polyfill.js"></script>
-     <script src="core/eventbus.js"></script>
-  <script src="core/asset.js"></script>
-  <script src="core/registry.js"></script>
-  <script src="core/boot.js"></script>
-  <script src="core/game.bootstrap.js"></script>
-  <script src="core/game.js"></script>
+  <!-- Startpanel/Startscreen CSS (falls separat) -->
+  <link rel="stylesheet" href="ui/ui-start.css?v=25.10.17">
 
-  <!-- Globale Fehler leiten wir in CBLog, damit sie im Inspector landen -->
-  <script>
-    window.addEventListener("error", (e)=>{
-      (window.CBLog?.err || console.error)(
-        `[global] Uncaught Error: ${e.message} @ ${e.filename}:${e.lineno}`
-      );
-    });
-    window.addEventListener("unhandledrejection", (e)=>{
-      const msg = e?.reason?.message || String(e.reason || e);
-      (window.CBLog?.err || console.error)(`[global] Unhandled Promise Rejection: ${msg}`);
-    });
-  </script>
+  <!-- Inspector (monolith, unter /ui) -->
+  <link rel="stylesheet" href="ui/inspector.css?v=25.10.17">
+
+  <!-- Favicons (optional) -->
+  <link rel="icon" type="image/png" href="assets/icons/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 </head>
-
 <body>
-  <!-- ================== Spielfeld & UI-Wurzel ================== -->
-  <canvas id="game-canvas"></canvas>
-  <div id="ui-root"></div>
+  <!-- =========================================================
+       APP ROOT / BACKDROP
+       - Halte die Markup-Basis extrem schlank. UI/Startpanel/Inspector
+         hängen sich selbst per JS ein.
+       ========================================================= -->
+  <div id="app-root"></div>
 
-  <!-- ================== Inspector: EIN fester Weg ================== -->
-  <!-- 1) Fester Button (einziger Weg, Inspector zu öffnen) -->
-  <button id="btn-inspector" aria-label="Inspector öffnen" title="Inspector" class="cb-fab cb-fab-inspector">🛠️</button>
-  <!-- 2) Overlay-Host (wird von ui-inspector.js gefüllt) -->
-  <div id="inspector-overlay" aria-hidden="true"></div>
+  <!-- Optionaler statischer Backdrop (Start-Bild); kann auch durch CSS kommen -->
+  <!-- <div id="start-backdrop" aria-hidden="true"></div> -->
 
-  <!-- ================== UI-Module ================== -->
-  <!-- Startpanel (Hintergrundbild: assets/ui/start-bg.jpg; blendet beim Start weich aus) -->
-  <script src="ui/ui-start.js"></script>
+  <!-- =========================================================
+       SCRIPTS – LADEREIHENFOLGE
+       ========================================================= -->
 
-<!-- =========================================================================
-     INSPECTOR-MODULE
-     Pfad: ui/inspector/
-     Lädt alle Funktionsblöcke des Inspector-Systems (Logs, Tests, Ressourcen, Pfade, Editor)
-     ========================================================================= -->
+  <!-- 1) Logging/Polyfills (falls du ein CBLog-Polyfill nutzt) -->
+  <script src="core/cblog.polyfill.js?v=25.10.17"></script>
 
-<!-- Core & Grundlogik -->
-<script src="ui/inspector/inspector.core.js"></script>
-<script src="ui/inspector/inspector.hooks.js"></script>
+  <!-- 2) Kleiner EventBus (optional, aber praktisch; falls nicht vorhanden, Zeile weglassen) -->
+  <script src="core/eventbus.js?v=25.10.17"></script>
 
-<!-- APIs & Kompatibilität -->
-<script src="ui/inspector/inspector.api-bridge.js"></script>
-<script src="ui/inspector/inspector.api-compat.js"></script>
-<script src="ui/inspector/inspector.compat.js"></script>
+  <!-- 3) Loader, die READY-Events feuern (Namen bei dir evtl. anders) -->
+  <!-- WICHTIG: Diese beiden müssen VOR dem Boot kommen und am Ende
+       window.dispatchEvent(new CustomEvent('cb:assets:ready'));
+       window.dispatchEvent(new CustomEvent('cb:registry:ready'));
+       feuern. -->
+  <script src="core/asset.js?v=25.10.17"></script>
+  <script src="core/registry.js?v=25.10.17"></script>
+  <!-- Wenn deine Dateien anders heißen: Pfade/Filenamen hier anpassen. -->
 
-<!-- UI-Bindings & Build -->
-<script src="ui/inspector/inspector.build.js"></script>
-<script src="ui/inspector/inspector.button-bind.js"></script>
-<script src="ui/inspector/inspector.force-toggle.js"></script>
+  <!-- 4) UI – Startpanel etc. -->
+  <script src="ui/ui-start.js?v=25.10.17"></script>
 
-<!-- Feature-Module -->
-<script src="ui/inspector/inspector.logs.js"></script>
-<script src="ui/inspector/inspector.tests.js"></script>
-<script src="ui/inspector/inspector.resources.js"></script>
-<script src="ui/inspector/inspector.paths.js"></script>
+  <!-- 5) INSPECTOR (monolith, unter /ui)
+         ACHTUNG: Nur diese eine Datei laden!
+         KEINE alten modularen Dateien wie:
+           ui/inspector/inspector.core.js
+           ui/inspector/inspector.hooks.js
+           ui/inspector/inspector.logs.js
+           ui/inspector/overlay.hooks.js
+           ui/inspector/inspector.force-toggle.js
+         usw. -->
+  <script src="ui/inspector.js?v=25.10.17"></script>
+  <!-- Falls deine Datei ui/ui-inspector.js heißt, ersetze die Zeile darüber durch:
+       <script src="ui/ui-inspector.js?v=25.10.17"></script> -->
 
-<!-- Overlay / Layout-Hooks -->
-<script src="ui/inspector/overlay.hooks.js"></script>
-     
-  <!-- Inspector (Vollbild, Tabs wischbar, X sticky; Logs/Events-Bridge) -->
-  <script src="ui/ui-inspector.js"></script>
+  <!-- 6) BOOT + SPIEL -->
+  <script src="core/boot.js?v=25.10.17"></script>
+  <script src="core/game.bootstrap.js?v=25.10.17"></script>
+  <script src="core/game.js?v=25.10.17"></script>
+
+  <!-- =========================================================
+       SICHERUNGS-HOOKS / DIAGNOSTIK (optional)
+       - Öffnet nicht automatisch den Inspector, sorgt aber
+         für klare Logs beim Laden.
+       ========================================================= -->
   <script>
-    // EIN Weg aktivieren: Button öffnet Inspector, fertig.
-    window.addEventListener('DOMContentLoaded', () => {
-      // Installiert den Inspector, bindet den vorhandenen Button (#btn-inspector) ein
-      if (window.UIInspector && typeof window.UIInspector.install === 'function') {
-        window.UIInspector.install();
-      } else {
-        // Falls Datei nicht geladen: sichtbarer Hinweis ins Log
-        (window.CBLog?.warn || console.warn)("[index] ui/ui-inspector.js nicht gefunden oder fehlerhaft – bitte Pfad prüfen.");
+    // Kurzer Diagnose-Hinweis beim Laden (hilft im Inspector zu sehen, ob Index neu ist)
+    (window.CBLog?.info || console.info)('[index] geladen (v25.10.17)');
+
+    // Sicherstellen, dass der Inspector NICHT automatisch offen ist,
+    // falls ein alter Build irgendwo die Klasse gesetzt hat:
+    (function hardCloseInspectorOnLoad(){
+      var host = document.getElementById('inspector-overlay');
+      if (host) {
+        host.classList.remove('open');
+        host.style.display = 'none';
       }
-    });
+    })();
   </script>
 
-  <!-- ================== Optional: NoScript-Hinweis ================== -->
-  <noscript>
-    <div style="position:fixed;inset:0;background:#111;color:#fff;display:grid;place-items:center;font:16px/1.4 system-ui">
-      JavaScript ist deaktiviert. Bitte aktivieren, um <b>Neue Siedler</b> zu starten.
-    </div>
-  </noscript>
+  <!-- =========================================================
+       HINWEISE:
+       - Cache: Die ?v=25.10.17 Querys dienen als einfacher Bust. Bei jedem
+         „harten“ Update einfach die Version anheben.
+       - Reihenfolge: asset/registry -> UI/Inspector -> boot -> game
+       - Inspector: Es darf wirklich nur die monolithische Datei geladen sein.
+         Wenn er sofort geöffnet ist oder der Button nicht reagiert, lädt
+         irgendwo noch eine alte inspector.*.js – dann raus damit.
+       ========================================================= -->
 </body>
 </html>
