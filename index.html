@@ -1,58 +1,73 @@
 <!doctype html>
 <html lang="de">
 <head>
+  <!-- =========================================================
+       META / BASIS
+       ========================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
   <title>Neue Siedler</title>
 
-  <!-- Cache-Busting: Nummer bei Updates erhöhen -->
-  <link rel="stylesheet" href="ui/ui.css?v=25.10.18">
-  <link rel="stylesheet" href="ui/ui-start.css?v=25.10.18">
-
-  <!-- Inspector (MONOLITH unter /ui, NICHT die modulare Variante laden!) -->
-  <link rel="stylesheet" href="ui/inspector.css?v=25.10.18">
+  <!-- =========================================================
+       STYLES (Global → Start → Inspector)
+       - ?v=… als einfaches Cache-Busting: Zahl erhöhen bei Updates
+       ========================================================= -->
+  <link rel="stylesheet" href="ui/ui.css?v=25.10.19">
+  <link rel="stylesheet" href="ui/ui-start.css?v=25.10.19">
+  <link rel="stylesheet" href="ui/inspector.css?v=25.10.19"><!-- monolith -->
 </head>
+
 <body>
-  <!-- ========= WICHTIG: Diese beiden Container erwartet dein Code ========= -->
+  <!-- =========================================================
+       WICHTIG: Diese Container erwartet dein Code
+       ========================================================= -->
   <canvas id="game-canvas"></canvas>
   <div id="ui-root"></div>
-  <!-- (Dein ui-start.js legt das Startpanel & das Start-Hintergrundbild an.
-       Falls du statisch schon ein BG willst, kannst du zusätzlich
-       <div id="start-bg"></div> hier einfügen – normalerweise nicht nötig.) -->
 
-  <!-- ======================== SCRIPTS: Reihenfolge ======================== -->
-  <!-- 1) Logging/Polyfills (falls vorhanden; sonst Zeile weglassen) -->
-  <script src="core/cblog.polyfill.js?v=25.10.18"></script>
+  <!-- =========================================================
+       SCRIPTS – LADEREIHENFOLGE (kritisch!)
+       ========================================================= -->
 
-  <!-- 2) Optionaler Mini-EventBus (falls vorhanden; sonst Zeile weglassen) -->
-  <script src="core/eventbus.js?v=25.10.18"></script>
+  <!-- 1) Logging/Polyfills (falls vorhanden) -->
+  <script src="core/cblog.polyfill.js?v=25.10.19"></script>
 
-  <!-- 3) Loader: müssen später cb:assets:ready / cb:registry:ready dispatchen -->
-  <script src="core/asset.js?v=25.10.18"></script>
-  <script src="core/registry.js?v=25.10.18"></script>
+  <!-- 2) Optionaler Mini-EventBus (falls vorhanden) -->
+  <script src="core/eventbus.js?v=25.10.19"></script>
 
-  <!-- 4) UI: Startscreen/Panel (erzeugt dein Startpanel + BG) -->
-  <script src="ui/ui-start.js?v=25.10.18"></script>
+  <!-- 3) INSPECTOR MONOLITH – SEHR FRÜH laden!
+         - Hookt Logs sofort (Early Hook + Buffer)
+         - Overlay bleibt standardmäßig geschlossen
+         - Overlay optional automatisch öffnen via:
+           a) URL:  ?insp=open
+           b) Code: <script>window.InspectorConfig={autoOpen:true}</script>
+  -->
+  <!-- Optional: Auto-Open global (entfernen, wenn nicht gewünscht) -->
+  <!-- <script>window.InspectorConfig = { autoOpen:true };</script> -->
+  <script src="ui/inspector.js?v=25.10.19"></script>
 
-  <!-- 5) Inspector (MONOLITH unter /ui) -->
-  <script src="ui/inspector.js?v=25.10.18"></script>
-  <!-- ACHTUNG: Keine weiteren ui/inspector/*.js laden! Sonst öffnet er
-       wieder automatisch oder blockiert den Button. -->
+  <!-- 4) Loader, die später READY-Events feuern (müssen dispatchen):
+         window.dispatchEvent(new CustomEvent('cb:assets:ready'));
+         window.dispatchEvent(new CustomEvent('cb:registry:ready')); -->
+  <script src="core/asset.js?v=25.10.19"></script>
+  <script src="core/registry.js?v=25.10.19"></script>
+
+  <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG) -->
+  <script src="ui/ui-start.js?v=25.10.19"></script>
 
   <!-- 6) Boot + Spiel -->
-  <script src="core/boot.js?v=25.10.18"></script>
-  <script src="core/game.bootstrap.js?v=25.10.18"></script>
-  <script src="core/game.js?v=25.10.18"></script>
+  <script src="core/boot.js?v=25.10.19"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19"></script>
+  <script src="core/game.js?v=25.10.19"></script>
 
-  <!-- =============== Mini-Diagnose (ohne Auto-Open) ================= -->
+  <!-- 7) Mini-Diagnose (öffnet NICHT den Inspector) -->
   <script>
-    (window.CBLog?.info||console.info)('[index] geladen v25.10.18');
-    // Sicherstellen, dass kein altes CSS/Script den Inspector offen lässt:
+    (window.CBLog?.info||console.info)('[index] geladen v25.10.19');
+    // Harte Absicherung: niemals "offen" starten, selbst wenn eine Altlast die Klasse gesetzt hat.
     (function(){
       var host = document.getElementById('inspector-overlay');
-      if (host){ host.classList.remove('open'); host.style.display='none'; }
-    })();
+      if (host) { host.classList.remove('open'); host.style.display='none'; }
+    }());
   </script>
 </body>
 </html>
