@@ -1,29 +1,55 @@
 /* ============================================
-   Datei: ui/ui-inspector.css
-   Projekt: Neue Siedler
-   Version: v1.0.5
-   Zweck: Inspector-Overlay + Button (responsive)
+   Datei   : ui/ui-inspector.css
+   Projekt : Neue Siedler
+   Version : v1.1.4 (final)
+   Zweck   : Inspector-Overlay + FAB-Button (responsive, mobile-first)
+   Hinweise:
+   - Overlay wird per JS Klasse ".open" und/oder inline display gesteuert.
+   - Alle Safe-Areas (Notch/Gestenleiste) werden berücksichtigt.
    ============================================ */
 
+/* ---------- Design-Tokens (Farben, Layer, Spacing) ---------- */
 :root {
-  --insp-bg: rgba(18, 18, 20, 0.96);
-  --insp-header: #1f1f23;
-  --insp-tab-active: #e5e5e5;
+  --insp-bg: rgba(18, 18, 20, 0.96); /* Overlay-Hintergrund */
+  --insp-panel: #131316;             /* Content-Fläche */
+  --insp-header: #1f1f23;            /* Kopfbereich (Tabs + Close) */
+
+  --insp-fg: #e9e9ee;                /* Standard-Schrift */
+  --insp-muted: #b9bac1;             /* gedämpfte Schrift */
+  --insp-border: #2a2a2e;            /* Rahmenfarbe */
+
+  --insp-tab-active: #e9e9ec;
   --insp-tab-inactive: #9a9aa0;
-  --insp-border: #2a2a2e;
-  --insp-z: 10050; /* über Startpanel/HUD */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
+
+  --ok:   #3bd16f;
+  --info: #60a5fa;
+  --warn: #fbbf24;
+  --err:  #f87171;
+
+  --radius: 12px;
+  --radius-sm: 10px;
+  --gap: 8px;
+
+  /* z-index bewusst sehr hoch, damit wir überall drüber liegen */
+  --insp-z: 2147483000;
+
+  /* Safe-Areas */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
 }
 
-/* Floating Action Button (unten rechts) */
-.cb-fab {
+/* =========================================================================
+   FAB – Inspector-Button unten rechts (einziger Weg, den Inspector zu öffnen)
+   ========================================================================= */
+.cb-fab,
+.cb-fab.cb-fab-inspector,
+#btn-inspector {
   position: fixed;
   right: calc(16px + var(--safe-right));
   bottom: calc(16px + var(--safe-bottom));
-  z-index: calc(var(--insp-z) - 1);
+  z-index: calc(var(--insp-z) + 1); /* über Overlay, damit immer antippbar */
   width: 56px; height: 56px;
   border-radius: 50%;
   border: 1px solid #0009;
@@ -34,45 +60,64 @@
   text-align: center;
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  pointer-events: auto !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .cb-fab:active { transform: scale(0.98); }
 .cb-fab[hidden] { display: none !important; }
 
-/* Vollbild-Overlay */
+/* =========================================================================
+   Vollbild-Overlay (Host) – wird per JS sichtbar/unsichtbar geschaltet
+   ========================================================================= */
 #inspector-overlay {
   position: fixed;
   inset: 0;
-  width: 100vw; height: 100vh;
+  width: 100vw;
+  height: 100vh;
   z-index: var(--insp-z);
   background: var(--insp-bg);
-  display: none; /* via .open sichtbar */
-  color: #eaeaea;
+  color: var(--insp-fg);
+  display: none;             /* sichtbar per .open (s.u.) */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 #inspector-overlay.open { display: block; }
 
-/* Frame */
+/* -------------------------------------------------------------------------
+   Frame (Fenster) – füllt andockend den Viewport, respektiert Safe-Areas
+   ------------------------------------------------------------------------- */
 .insp-frame {
   position: absolute;
   inset: 0;
   display: grid;
   grid-template-rows: auto 1fr;
-  padding: calc(8px + var(--safe-top)) calc(8px + var(--safe-right))
-           calc(8px + var(--safe-bottom)) calc(8px + var(--safe-left));
+  padding:
+    calc(8px + var(--safe-top))
+    calc(8px + var(--safe-right))
+    calc(8px + var(--safe-bottom))
+    calc(8px + var(--safe-left));
+  gap: 0;
   box-sizing: border-box;
 }
 
-/* Header mit Tabs und Schließen */
+/* -------------------------------------------------------------------------
+   Header (Tabs + Close)
+   - Tabs sind horizontal scrollbar (Wischgeste)
+   - Close-Button bleibt dank sticky immer im Sichtbereich
+   ------------------------------------------------------------------------- */
 .insp-header {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   background: var(--insp-header);
-  border-bottom: 1px solid var(--insp-border);
-  padding: 8px;
-  border-radius: 6px 6px 0 0;
+  border: 1px solid var(--insp-border);
+  border-bottom: none;
+  padding: var(--gap);
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
-/* Tabs: wischbar */
+/* Tabs – wischbar, scrollbar angenehm, keine Pfeilbuttons nötig */
 .insp-tabs {
   display: flex;
   gap: 8px;
@@ -80,7 +125,12 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   padding: 4px;
+  overscroll-behavior-x: contain;
 }
+.insp-tabs::-webkit-scrollbar { height: 6px; }
+.insp-tabs::-webkit-scrollbar-thumb { background: #3a3a40; border-radius: 999px; }
+.insp-tabs::-webkit-scrollbar-track { background: transparent; }
+
 .insp-tab {
   flex: 0 0 auto;
   padding: 8px 12px;
@@ -91,55 +141,135 @@
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  font-weight: 600;
+  transition: background .12s ease, color .12s ease;
 }
+.insp-tab:hover { color: #fff; }
 .insp-tab.active {
-  background: #e9e9ec;
+  background: var(--insp-tab-active);
   color: #101013;
 }
 
-/* Close Button: IMMER sichtbar (Safe-Area) */
+/* Close-Button – sticky, berücksichtigt Safe-Area-Top */
 .insp-close {
-  position: sticky; /* bleibt im Sichtbereich */
+  position: sticky;
+  top: calc(0px + var(--safe-top));  /* bleibt unter Notch sichtbar */
   right: 0;
   margin-left: 8px;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: #3a3a40;
   color: #fff;
   border: 1px solid var(--insp-border);
   cursor: pointer;
-  top: 0; /* sticky-Offset */
+  line-height: 1;
 }
+.insp-close:active { transform: translateY(1px); }
 
-/* Content */
+/* -------------------------------------------------------------------------
+   Content-Bereich (Logs etc.)
+   ------------------------------------------------------------------------- */
 .insp-content {
-  min-height: 0;
+  min-height: 0;               /* damit grid-Höhe korrekt scrollt */
   overflow: auto;
-  background: #131316;
+  background: var(--insp-panel);
   border: 1px solid var(--insp-border);
   border-top: none;
-  border-radius: 0 0 6px 6px;
-  padding: 8px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: var(--gap);
 }
 
-/* Logs */
-.insp-logs { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.insp-logline { display: flex; gap: 8px; padding: 4px 2px; align-items: baseline; }
-.insp-logline .sym { width: 16px; text-align: center; }
-.insp-logline.ok .sym { color: #3bd16f; }
-.insp-logline.info .sym { color: #60a5fa; }
-.insp-logline.warn .sym { color: #fbbf24; }
-.insp-logline.error .sym { color: #f87171; }
+/* =========================================================================
+   LOGS
+   ========================================================================= */
+.insp-logs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
 
-.insp-filters { display: flex; gap: 10px; padding: 4px 0 8px; }
-.insp-actions { display: flex; gap: 8px; padding: 6px 0; }
+/* Filterzeile + Aktionszeile (Copy/Export) */
+.insp-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 4px 0 8px;
+  color: var(--insp-muted);
+}
+.insp-filters input[type="checkbox"] {
+  vertical-align: middle;
+  transform: translateY(-1px);
+}
+.insp-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0 10px;
+}
 
+/* Buttons: „Kopieren“ / „Export JSON“ */
 button.insp-btn {
-  padding: 6px 10px;
-  border-radius: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
   border: 1px solid var(--insp-border);
   background: #2e2e33;
   color: #eee;
   cursor: pointer;
+  font-size: 13px;
+  -webkit-tap-highlight-color: transparent;
 }
+button.insp-btn:hover { background: #34343a; }
 button.insp-btn:active { transform: translateY(1px); }
+button.insp-btn:disabled {
+  opacity: .55; cursor: not-allowed;
+}
+
+/* Log-Zeilen */
+#logs-list { padding-bottom: 4px; }
+.insp-logline {
+  display: flex;
+  gap: 8px;
+  padding: 4px 2px;
+  align-items: baseline;
+  border-bottom: 1px dashed var(--insp-border);
+}
+.insp-logline:last-child { border-bottom: none; }
+
+.insp-logline .sym { width: 16px; text-align: center; }
+.insp-logline.ok   .sym { color: var(--ok); }
+.insp-logline.info .sym { color: var(--info); }
+.insp-logline.warn .sym { color: var(--warn); }
+.insp-logline.error .sym{ color: var(--err); }
+
+/* Zeitstempel und Text leicht separieren */
+.insp-logline .ts  { color: var(--insp-muted); }
+.insp-logline .msg { color: var(--insp-fg); word-break: break-word; }
+
+/* =========================================================================
+   Feinheiten & Barrierefreiheit
+   ========================================================================= */
+#inspector-overlay a, #inspector-overlay button {
+  outline: none;
+}
+#inspector-overlay a:focus-visible,
+#inspector-overlay button:focus-visible,
+#inspector-overlay .insp-tab:focus-visible {
+  outline: 2px solid #7aa2ff;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* iOS „Rubberbanding“ im Overlay vermeiden, dafür sanftes Scrollen */
+#inspector-overlay { overscroll-behavior: contain; }
+.insp-content      { -webkit-overflow-scrolling: touch; }
+
+/* Leichte Fade-In Animation, falls Nutzer nicht reduziert – optional */
+@media (prefers-reduced-motion: no-preference) {
+  #inspector-overlay.open {
+    animation: ins-fade .12s ease-out both;
+  }
+  @keyframes ins-fade {
+    from { opacity:.92; }
+    to   { opacity:1; }
+  }
+}
