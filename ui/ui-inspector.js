@@ -1,14 +1,18 @@
 /* ============================================================================
- * Datei   : ui/inspector.js
+ * Datei   : ui/inspector.js            (auch als ui/ui-inspector.js ok)
  * Projekt : Neue Siedler
- * Version : v1.0.9-monolith (Restore)
+ * Version : v1.0.10-monolith (final)
  * Zweck   : Vollbild-Inspector (Logs | Tests | Ressourcen | Pfade | Editor)
- * Hinweise: - Öffnet NICHT automatisch, nur per Button (unten rechts) oder Ctrl/Cmd+I
- *           - Export/Kopieren integriert
- *           - Keine externen Teil-Module nötig
+ * Fixes   : - kein Auto-Open mehr (Overlay wird beim Build hart geschlossen)
+ *           - Button bleibt sichtbar (Öffnen UND Schließen per Button)
+ *           - iOS/HTTPS-Fallbacks für Kopieren & Export JSON
+ *           - Schutz gegen doppelte Inits / alte Module
  * ============================================================================ */
 
 (function(){
+  if (window.__InspectorInstalled) return;
+  window.__InspectorInstalled = true;
+
   const MOD = 'inspector';
   const EB  = window.EventBus || {
     emit:(n,p)=>window.dispatchEvent(new CustomEvent(n,{detail:p}))
@@ -40,8 +44,8 @@
       b.textContent = '🛠️';
       document.body.appendChild(b);
     }
-    b.hidden = false;
-    b.addEventListener('click', toggle);
+    b.hidden = false;              // Button bleibt sichtbar (auch wenn offen)
+    b.onclick = toggle;            // Öffnen UND Schließen
     return b;
   }
 
@@ -52,6 +56,10 @@
       $root.id = 'inspector-overlay';
       document.body.appendChild($root);
     }
+    // Hard-Close: falls alte Module die Klasse gesetzt hatten
+    $root.classList.remove('open');
+    $root.style.display = 'none';
+
     $root.innerHTML = `
       <div class="insp-frame" role="dialog" aria-modal="true" aria-label="Inspector">
         <div class="insp-header">
@@ -70,10 +78,12 @@
     $content = $root.querySelector('#insp-content');
     $tabs    = $root.querySelector('#insp-tabs');
 
+    // Schließen (X)
     $root.querySelector('#insp-close').addEventListener('click', close);
-    // optional: Klick außerhalb schließt — bei Bedarf einkommentieren
+    // Optional: Klick außerhalb schließt
     // $root.addEventListener('click', (e)=>{ if (e.target === $root) close(); });
 
+    // Tabs
     $tabs.addEventListener('click', (e)=>{
       const t = e.target.closest('.insp-tab');
       if (t) switchTab(t.dataset.tab);
@@ -86,29 +96,6 @@
     return `<div class="insp-tab" data-tab="${id}" role="tab">${label}</div>`;
   }
 
-  // -------------------------------------------------------------
-  // Öffnen/Schließen/Toggle
-  // -------------------------------------------------------------
-  function toggle(){ STATE.open ? close() : open(); }
-
-  function open(){
-    if (STATE.open) return;
-    STATE.open = true;
-    $root.classList.add('open');
-    if ($btn) $btn.hidden = true;
-    EB.emit('cb:insp:open',{tab:STATE.active});
-    // Sicherheit: aktiven Tab neu zeichnen
-    switchTab(STATE.active);
-  }
-
-  function close(){
-    if (!STATE.open) return;
-    STATE.open = false;
-    $root.classList.remove('open');
-    if ($btn) $btn.hidden = false;
-    EB.emit('cb:insp:close',{});
-  }
-
   // Tastatur: Ctrl/Cmd + I
   window.addEventListener('keydown', (e)=>{
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i'){
@@ -118,13 +105,34 @@
   });
 
   // -------------------------------------------------------------
+  // Öffnen/Schließen/Toggle
+  // -------------------------------------------------------------
+  function toggle(){ STATE.open ? close() : open(); }
+
+  function open(){
+    if (STATE.open) return;
+    STATE.open = true;
+    // Sichtbar schalten – robust gegen altes CSS
+    $root.classList.add('open');
+    $root.style.display = 'block';
+    EB.emit('cb:insp:open',{tab:STATE.active});
+    switchTab(STATE.active); // Tab-Inhalt garantiert
+  }
+
+  function close(){
+    if (!STATE.open) return;
+    STATE.open = false;
+    $root.classList.remove('open');
+    $root.style.display = 'none';
+    EB.emit('cb:insp:close',{});
+  }
+
+  // -------------------------------------------------------------
   // Tabs
   // -------------------------------------------------------------
   function switchTab(id){
     STATE.active = id;
-    // Tab-Köpfe aktualisieren
     $tabs.querySelectorAll('.insp-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===id));
-    // Inhalt rendern
     $content.innerHTML = '';
     if (id === 'logs') renderLogs();
     else if (id === 'tests')   $content.innerHTML = `<div class="insp-placeholder">Tests-Tab</div>`;
@@ -140,10 +148,10 @@
   function hookLogs(){
     const sink = (type, args)=>{
       const text = args.map(a => typeof a==='string' ? a : safeJson(a)).join(' ');
-      // normalisieren (console.log => info)
       const t = (type==='log'?'info':type);
-      STATE.logs.push({ tms: Date.now(), type:t, text });
-      if (STATE.active==='logs') appendLine({ tms: Date.now(), type:t, text });
+      const entry = { tms: Date.now(), type:t, text };
+      STATE.logs.push(entry);
+      if (STATE.active==='logs') appendLine(entry);
     };
 
     // sanfter Wrap – spiegelt nur
@@ -182,6 +190,7 @@
 
     $content.querySelector('#logs-copy').addEventListener('click', copyLogs);
     $content.querySelector('#logs-export').addEventListener('click', exportLogs);
+
     $content.querySelectorAll('.insp-filters input[type=checkbox]').forEach(cb=>{
       cb.checked = !!STATE.filters[cb.value];
       cb.addEventListener('change', ()=>{
@@ -226,18 +235,48 @@
     if (c) c.textContent = `Logs gesamt: ${STATE.logs.length}`;
   }
 
+  // --- iOS/HTTPS Fallbacks -----------------------------------
   function copyLogs(){
     const txt = STATE.logs.map(e => `[${e.type}] ${e.text}`).join('\n');
-    navigator.clipboard?.writeText(txt);
+
+    // 1) Bevorzugt: Clipboard API (HTTPS + User Gesture)
+    if (navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(txt).catch(()=> fallbackCopy(txt));
+    } else {
+      fallbackCopy(txt);
+    }
     EB.emit('cb:insp:export:logs', { format:'text', count:STATE.logs.length });
   }
 
+  function fallbackCopy(text){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    try{ document.execCommand('copy'); }catch(_){}
+    ta.remove();
+  }
+
   function exportLogs(){
-    const blob = new Blob([JSON.stringify(STATE.logs, null, 2)], { type:'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'logs.json';
-    a.click();
+    const json = JSON.stringify(STATE.logs, null, 2);
+    const blob = new Blob([json], { type:'application/json' });
+
+    // iOS Safari mag manchmal Blob-Downloads nicht → Data-URL-Fallback
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'logs.json';
+      a.click();
+      setTimeout(()=> URL.revokeObjectURL(url), 2000);
+    }catch(_){
+      const a = document.createElement('a');
+      a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+      a.download = 'logs.json';
+      a.click();
+    }
+
     EB.emit('cb:insp:export:json', { kind:'logs', count:STATE.logs.length });
   }
 
@@ -251,7 +290,7 @@
     $btn = ensureButton();
     buildOverlay();
     hookLogs();
-    logOK('bereit (v1.0.9-monolith)');
+    logOK('bereit (v1.0.10-monolith)');
   }
 
   if (document.readyState==='complete' || document.readyState==='interactive'){
