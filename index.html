@@ -1,118 +1,58 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- =========================================================
-       META / BASICS
-       ========================================================= -->
   <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
   <title>Neue Siedler</title>
-  <meta name="description" content="Neue Siedler – Prototyp / Tech-Demo">
 
-  <!-- (optional) ganz grob gegen aggressives Caching – echte Kontrolle kommt
-       über ?v=… an den <script>- und <link>-URLs -->
-  <meta http-equiv="cache-control" content="max-age=0, no-cache, no-store, must-revalidate">
-  <meta http-equiv="pragma" content="no-cache">
-  <meta http-equiv="expires" content="0">
+  <!-- Cache-Busting: Nummer bei Updates erhöhen -->
+  <link rel="stylesheet" href="ui/ui.css?v=25.10.18">
+  <link rel="stylesheet" href="ui/ui-start.css?v=25.10.18">
 
-  <!-- =========================================================
-       STYLES (Global, UI, Inspector)
-       Reihenfolge: global -> UI -> Inspector (UI-last wins)
-       ========================================================= -->
-  <!-- Dein globales UI-CSS (falls vorhanden) -->
-  <link rel="stylesheet" href="ui/ui.css?v=25.10.17">
-
-  <!-- Startpanel/Startscreen CSS (falls separat) -->
-  <link rel="stylesheet" href="ui/ui-start.css?v=25.10.17">
-
-  <!-- Inspector (monolith, unter /ui) -->
-  <link rel="stylesheet" href="ui/inspector.css?v=25.10.17">
-
-  <!-- Favicons (optional) -->
-  <link rel="icon" type="image/png" href="assets/icons/favicon.png">
-  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <!-- Inspector (MONOLITH unter /ui, NICHT die modulare Variante laden!) -->
+  <link rel="stylesheet" href="ui/inspector.css?v=25.10.18">
 </head>
 <body>
-  <!-- =========================================================
-       APP ROOT / BACKDROP
-       - Halte die Markup-Basis extrem schlank. UI/Startpanel/Inspector
-         hängen sich selbst per JS ein.
-       ========================================================= -->
-  <div id="app-root"></div>
+  <!-- ========= WICHTIG: Diese beiden Container erwartet dein Code ========= -->
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+  <!-- (Dein ui-start.js legt das Startpanel & das Start-Hintergrundbild an.
+       Falls du statisch schon ein BG willst, kannst du zusätzlich
+       <div id="start-bg"></div> hier einfügen – normalerweise nicht nötig.) -->
 
-  <!-- Optionaler statischer Backdrop (Start-Bild); kann auch durch CSS kommen -->
-  <!-- <div id="start-backdrop" aria-hidden="true"></div> -->
+  <!-- ======================== SCRIPTS: Reihenfolge ======================== -->
+  <!-- 1) Logging/Polyfills (falls vorhanden; sonst Zeile weglassen) -->
+  <script src="core/cblog.polyfill.js?v=25.10.18"></script>
 
-  <!-- =========================================================
-       SCRIPTS – LADEREIHENFOLGE
-       ========================================================= -->
+  <!-- 2) Optionaler Mini-EventBus (falls vorhanden; sonst Zeile weglassen) -->
+  <script src="core/eventbus.js?v=25.10.18"></script>
 
-  <!-- 1) Logging/Polyfills (falls du ein CBLog-Polyfill nutzt) -->
-  <script src="core/cblog.polyfill.js?v=25.10.17"></script>
+  <!-- 3) Loader: müssen später cb:assets:ready / cb:registry:ready dispatchen -->
+  <script src="core/asset.js?v=25.10.18"></script>
+  <script src="core/registry.js?v=25.10.18"></script>
 
-  <!-- 2) Kleiner EventBus (optional, aber praktisch; falls nicht vorhanden, Zeile weglassen) -->
-  <script src="core/eventbus.js?v=25.10.17"></script>
+  <!-- 4) UI: Startscreen/Panel (erzeugt dein Startpanel + BG) -->
+  <script src="ui/ui-start.js?v=25.10.18"></script>
 
-  <!-- 3) Loader, die READY-Events feuern (Namen bei dir evtl. anders) -->
-  <!-- WICHTIG: Diese beiden müssen VOR dem Boot kommen und am Ende
-       window.dispatchEvent(new CustomEvent('cb:assets:ready'));
-       window.dispatchEvent(new CustomEvent('cb:registry:ready'));
-       feuern. -->
-  <script src="core/asset.js?v=25.10.17"></script>
-  <script src="core/registry.js?v=25.10.17"></script>
-  <!-- Wenn deine Dateien anders heißen: Pfade/Filenamen hier anpassen. -->
+  <!-- 5) Inspector (MONOLITH unter /ui) -->
+  <script src="ui/inspector.js?v=25.10.18"></script>
+  <!-- ACHTUNG: Keine weiteren ui/inspector/*.js laden! Sonst öffnet er
+       wieder automatisch oder blockiert den Button. -->
 
-  <!-- 4) UI – Startpanel etc. -->
-  <script src="ui/ui-start.js?v=25.10.17"></script>
+  <!-- 6) Boot + Spiel -->
+  <script src="core/boot.js?v=25.10.18"></script>
+  <script src="core/game.bootstrap.js?v=25.10.18"></script>
+  <script src="core/game.js?v=25.10.18"></script>
 
-  <!-- 5) INSPECTOR (monolith, unter /ui)
-         ACHTUNG: Nur diese eine Datei laden!
-         KEINE alten modularen Dateien wie:
-           ui/inspector/inspector.core.js
-           ui/inspector/inspector.hooks.js
-           ui/inspector/inspector.logs.js
-           ui/inspector/overlay.hooks.js
-           ui/inspector/inspector.force-toggle.js
-         usw. -->
-  <script src="ui/inspector.js?v=25.10.17"></script>
-  <!-- Falls deine Datei ui/ui-inspector.js heißt, ersetze die Zeile darüber durch:
-       <script src="ui/ui-inspector.js?v=25.10.17"></script> -->
-
-  <!-- 6) BOOT + SPIEL -->
-  <script src="core/boot.js?v=25.10.17"></script>
-  <script src="core/game.bootstrap.js?v=25.10.17"></script>
-  <script src="core/game.js?v=25.10.17"></script>
-
-  <!-- =========================================================
-       SICHERUNGS-HOOKS / DIAGNOSTIK (optional)
-       - Öffnet nicht automatisch den Inspector, sorgt aber
-         für klare Logs beim Laden.
-       ========================================================= -->
+  <!-- =============== Mini-Diagnose (ohne Auto-Open) ================= -->
   <script>
-    // Kurzer Diagnose-Hinweis beim Laden (hilft im Inspector zu sehen, ob Index neu ist)
-    (window.CBLog?.info || console.info)('[index] geladen (v25.10.17)');
-
-    // Sicherstellen, dass der Inspector NICHT automatisch offen ist,
-    // falls ein alter Build irgendwo die Klasse gesetzt hat:
-    (function hardCloseInspectorOnLoad(){
+    (window.CBLog?.info||console.info)('[index] geladen v25.10.18');
+    // Sicherstellen, dass kein altes CSS/Script den Inspector offen lässt:
+    (function(){
       var host = document.getElementById('inspector-overlay');
-      if (host) {
-        host.classList.remove('open');
-        host.style.display = 'none';
-      }
+      if (host){ host.classList.remove('open'); host.style.display='none'; }
     })();
   </script>
-
-  <!-- =========================================================
-       HINWEISE:
-       - Cache: Die ?v=25.10.17 Querys dienen als einfacher Bust. Bei jedem
-         „harten“ Update einfach die Version anheben.
-       - Reihenfolge: asset/registry -> UI/Inspector -> boot -> game
-       - Inspector: Es darf wirklich nur die monolithische Datei geladen sein.
-         Wenn er sofort geöffnet ist oder der Button nicht reagiert, lädt
-         irgendwo noch eine alte inspector.*.js – dann raus damit.
-       ========================================================= -->
 </body>
 </html>
