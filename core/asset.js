@@ -1,8 +1,13 @@
 // ============================================================================
 // Datei : core/asset.js
+// Projekt : Neue Siedler
+// Version : v25.10.19-final
 // Zweck : Leichtgewichtiger Asset-Lader (Stub) + Ready-Events
-// Events: cb:assets-ready  (+ Alias cb:assets:ready)
-// Hinweis: Wenn du später wirklich was vorladen willst, häng' es in loadAll() rein.
+//
+// Events (beide Varianten, für maximale Kompatibilität):
+//   cb:assets-ready   (Bindestrich)
+//   cb:assets:ready   (Doppelpunkt)
+// Hinweis: Wenn du später wirklich was vorladen willst, hänge es in loadAll().
 // ============================================================================
 (() => {
   const log  = (...a) => (window.CBLog?.ok   || console.log)('[assets]', ...a);
@@ -12,11 +17,11 @@
   async function loadAll() {
     try {
       // TODO: Hier echte Preloads anhängen (Spritesheets, Atlanten, Audio, …)
-      // Für jetzt: sofort "ready" melden (nächstes Tick, damit Reihenfolge stabil bleibt)
+      // Für jetzt: im nächsten Tick „ready“ melden → Reihenfolge bleibt stabil.
       setTimeout(() => {
         const detail = { ok: true };
-        EVT('cb:assets-ready', detail);
-        EVT('cb:assets:ready', detail); // Alias
+        EVT('cb:assets-ready', detail);  // Bindestrich
+        EVT('cb:assets:ready', detail);  // Doppelpunkt (Alias)
         log('assets-ready ✓');
       }, 0);
     } catch (e) {
@@ -25,5 +30,6 @@
     }
   }
 
+  // Exporte
   window.Assets = { loadAll };
 })();
