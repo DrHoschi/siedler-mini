@@ -30,7 +30,8 @@
     }
   }
 // Sofort-Start des Asset-Loaders, damit cb:assets-ready/cb:assets:ready feuern
-Assets.loadAll();
+- Assets.loadAll();
++ loadAll();
   
   // Exporte
   window.Assets = { loadAll };
