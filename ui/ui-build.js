@@ -29,7 +29,27 @@
  *   - Wenn dein Layout-Glue (#game-stage-Grid) #build-dock bereits liefert,
  *     greift der Failsafe NICHT ein – DOM bleibt unberührt.
  * ========================================================================== */
+// Am Anfang von ui/ui-build.js:
+(function(){
+  const MOD = 'build';
+  const log = (m)=> (window.CBLog?.info||console.info)(`[${MOD}] ${m}`);
+  const err = (m)=> (window.CBLog?.error||console.error)(`[${MOD}] ${m}`);
 
+  // Failsafe: falls #build-dock nicht existiert → anlegen
+  function ensureDock(){
+    let el = document.getElementById('build-dock');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'build-dock';
+      el.hidden = true; // UI steuert Sichtbarkeit selbst
+      document.body.appendChild(el);
+      log('Failsafe: #build-dock erzeugt');
+    }
+    return el;
+  }
+  const $dock = ensureDock();
+
+  
 (function FailsafeEnsureDock(){
   const MOD = 'build';
   const ok  = (m)=> (window.CBLog?.ok||console.log)(`[${MOD}] ${m}`);
