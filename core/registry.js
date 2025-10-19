@@ -208,8 +208,8 @@
   });
 
 // Sofort-Init, lädt JSONs & feuert cb:registry:ready (mit Counts)
-- Registry.init();
-+ REG.init();
+// Sofort-Init …
+REG.init();            // <— NICHT mehr Registry.init()
+return REG;
   
-  return REG;
 });
