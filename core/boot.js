@@ -155,3 +155,9 @@ window.addEventListener('unhandledrejection', (e)=>{
   const msg = e?.reason?.message || String(e.reason || e);
   (window.CBLog?.err || console.error)(`Unhandled Promise Rejection: ${msg}`);
 });
+
+// Failsafe: sobald Spiel wirklich startet, erzwinge Layout an
+window.addEventListener('cb:game:start', () => {
+  document.body.classList.add('is-playing');
+  (window.CBLog?.info||console.info)('[layout] failsafe enable (via boot)');
+}, { once:true });
