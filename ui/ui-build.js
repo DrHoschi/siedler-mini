@@ -1,92 +1,79 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v24.4.0 (2025-10-07)
- * Modul    : Baumenü (Dock unten) + Kategorien + Kartenraster
+ * Version  : v25.10.19
+ * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
  *
  * Kurzbeschreibung
- *   - Öffnet ein Dock am unteren Bildschirmrand (Button #btn-build).
- *   - Lädt Gebäudedaten (Registry → Fallback data/buildings.json).
- *   - Zeigt Kategorien (mit Anzahl) und darunter Karten (gleiches Grid).
- *   - Jede Karte: Panel-Hintergrund (per CSS), Name, Vorschau-Bild (optional),
- *                 Kosten (Icon + Menge) unten rechts.
- *   - Klick auf Karte: „req:place:begin“ mit selektiertem Building wird gefeuert.
+ *   - Dock-UI zum Auswählen von Gebäuden.
+ *   - Datenquelle: Registry (bevorzugt) → Fallback data/buildings.json.
+ *   - Kategorienleiste mit Zählern, darunter Kartengrid mit Kosten.
+ *   - Click auf Karte -> req:place:begin { building }.
  *
- * Events (listen)
- *   - cb:registry:ready         → Daten aus Registry ziehen
- *   - cb:assets-ready           → Fallback-Lader darf starten
- *   - cb:ui-ready               → UI ankabeln (Button, Dock)
+ * Lauscht auf
+ *   - cb:ui-ready        : UI ankabeln (Buttons, Dock-Verhalten)
+ *   - cb:assets-ready    : erlaubt Fallback-Laden
+ *   - cb:registry:ready  : lädt Gebäudedaten aus Registry
  *
- * Events (emit)
+ * Sendet
  *   - cb:build:open / cb:build:close
  *   - req:place:begin { building }
  *
- * Abhängigkeiten (Assets / Pfade)
- *   - Gebäudeicons (optional):  assets/icons/buildings/<id>.png
- *   - Ressourcenicons:          assets/icons/resources/<id>.png
- *   - Fallback JSON:            data/buildings.json
+ * DOM-Verträge
+ *   - #build-dock  : Dock-Container (vom Layout-Glue; Failsafe legt ihn ggf. an)
+ *   - #btn-build   : optionaler Toggle-Button (z.B. in HUD)
  *
- * DOM-Kontrakt (IDs/Klassen)
- *   - #build-dock   : Dock-Container (wird befüllt)
- *   - #btn-build    : Toggle-Button unten links (Öffnen/Schließen)
- *   - CSS-Klassen   : .build-dock, .build-dock__head, .build-dock__body,
- *                     .build-cats, .build-cat, .is-active,
- *                     .build-grid, .build-card, .build-card__title,
- *                     .build-card__img, .build-costs, .build-cost
- *
- * Changelog v24.4.0
- *   [01] Robuste Logger-Wrapper (kein args.map Crash).
- *   [02] Vollständiger Fallback-Lader, defensive Normalisierung von Gebäuden.
- *   [03] Kategorien-Bar mit Zählern; Auswahlfilterung stabilisiert.
- *   [04] Kartenraster an CSS-Grid (mehrere Spalten, responsive).
- *   [05] Saubere Toggle-Logik; Close-Button im Dock-Kopf.
- *   [06] Komplette Kommentierung & Fehlerhinweise im UI (leere States).
+ * Hinweise
+ *   - Der Failsafe erzeugt nur dann einen eigenen, fixierten Dock-Container,
+ *     wenn #build-dock beim Laden NOCH nicht existiert (z.B. ohne Layout-Glue).
+ *   - Wenn dein Layout-Glue (#game-stage-Grid) #build-dock bereits liefert,
+ *     greift der Failsafe NICHT ein – DOM bleibt unberührt.
  * ========================================================================== */
-(function(){
+
+(function FailsafeEnsureDock(){
   const MOD = 'build';
-  const err = (m)=> (window.CBLog?.error||console.error)(`[${MOD}] ${m}`);
   const ok  = (m)=> (window.CBLog?.ok||console.log)(`[${MOD}] ${m}`);
 
-  // Wenn #build-dock fehlt, Container selbst anlegen (Failsafe)
-  function ensureDock(){
-    let el = document.getElementById('build-dock');
-    if (!el){
-      el = document.createElement('div');
-      el.id = 'build-dock';
-      el.style.cssText = `
-        position: fixed;
-        right: 0;
-        top: calc(56px + env(safe-area-inset-top,0px));
-        bottom: 0;
-        width: min(340px,48vw);
-        background: rgba(20,22,26,.92);
-        border-left: 1px solid rgba(255,255,255,.08);
-        color:#eaeaea;
-        z-index:10010;
-        display:none;
-        padding:10px;
-      `;
-      document.body.appendChild(el);
-      ok('Failsafe: #build-dock erzeugt.');
-    }
-    return el;
+  // Wenn #build-dock fehlt, Container selbst anlegen (nur dann stylen!)
+  let el = document.getElementById('build-dock');
+  if (!el){
+    el = document.createElement('div');
+    el.id = 'build-dock';
+    // Failsafe-Styles (nur für den Notfall). Im Grid-Fall liefert CSS/Layout das Aussehen.
+    el.style.cssText = `
+      position: fixed;
+      right: 0;
+      top: calc(56px + env(safe-area-inset-top,0px));
+      bottom: 0;
+      width: min(340px,48vw);
+      background: rgba(20,22,26,.92);
+      border-left: 1px solid rgba(255,255,255,.08);
+      color:#eaeaea;
+      z-index:10010;
+      display:none;
+      padding:10px;
+      overflow:auto;
+    `;
+    document.body.appendChild(el);
+    ok('Failsafe: #build-dock erzeugt.');
   }
-
-  ensureDock();  // <-- Früh ausführen, bevor init()
-  // … danach dein bisheriger Code …
 })();
 
 (() => {
   'use strict';
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [00] Sichere Logger (verhindert "args.map is not a function")
+  // [00] Sichere Logger
   // ────────────────────────────────────────────────────────────────────────────
   const __safeLog = (fn, tag, ...m) => {
     try {
-      const CB = window.CBLog && typeof window.CBLog[fn] === 'function';
-      if (CB) window.CBLog[fn]([tag, ...m]);
-      else (console[fn] || console.log)(tag, ...m);
+      if (window.CBLog && typeof window.CBLog[fn] === 'function') {
+        // CBLog kann formatierte Strings oder Arrays erwarten – beides tolerieren.
+        try { window.CBLog[fn](tag, ...m); }
+        catch { window.CBLog[fn]([tag, ...m]); }
+      } else {
+        (console[fn] || console.log)(tag, ...m);
+      }
     } catch {
       try { (console[fn] || console.log)(tag, ...m); } catch(_) {}
     }
@@ -97,57 +84,52 @@
   const ERR = (...m)=>__safeLog('error','[build]', ...m);
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [01] DOM-Hooks
+  // [01] DOM-Hooks (nach Failsafe existiert #build-dock sicher)
   // ────────────────────────────────────────────────────────────────────────────
-  const $dock     = document.getElementById('build-dock'); // Dock-Container
-  const $btnBuild = document.getElementById('btn-build');  // Toggle-Button
+  const $dock     = document.getElementById('build-dock');
+  const $btnBuild = document.getElementById('btn-build'); // optional (z.B. aus HUD)
 
-  if (!$dock)  { ERR('DOM: #build-dock fehlt');  return; }
-  if (!$btnBuild){ WRN('DOM: #btn-build fehlt – Dock nur per API steuerbar'); }
+  if (!$dock) { ERR('DOM: #build-dock fehlt'); return; }
+  if (!$btnBuild) { WRN('DOM: #btn-build fehlt – Dock nur per API steuerbar'); }
 
   // ────────────────────────────────────────────────────────────────────────────
   // [02] State
   // ────────────────────────────────────────────────────────────────────────────
-  let BUILDINGS = [];           // normalisierte Gebäudeliste
-  let CATEGORIES = [];          // {id, name, count}
-  let ACTIVE_CAT = 'all';       // aktuell gefilterte Kategorie
-  let IS_OPEN = false;
+  let BUILDINGS   = [];     // normalisierte Gebäudeliste
+  let CATEGORIES  = [];     // [{id, name, count}, ...]
+  let ACTIVE_CAT  = 'all';
+  let IS_OPEN     = false;
+  let INIT_DONE   = false;  // verhindert Doppeleinstieg (assets-ready + registry-ready)
 
   // ────────────────────────────────────────────────────────────────────────────
   // [03] Utilities
   // ────────────────────────────────────────────────────────────────────────────
-  const iconRes  = id => `assets/icons/resources/${id}.png`;
-  const iconBld  = id => `assets/icons/buildings/${id}.png`;
+  const iconRes = id => `assets/icons/resources/${id}.png`;
+  const iconBld = id => `assets/icons/buildings/${id}.png`;
 
   const emit = (name, detail={}) =>
     window.dispatchEvent(new CustomEvent(name, { detail }));
 
-  function byCat(list, cat){
-    if (cat === 'all') return list;
-    return list.filter(b => (b.categories || []).includes(cat));
-  }
+  const byCat = (list, cat) => (cat === 'all') ? list : list.filter(b => (b.categories||[]).includes(cat));
 
-  // Eine sehr defensive Normalisierung – toleriert alte/teils fehlende Felder.
+  // Toleranter Normalizer (alte/teilweise Felder werden abgefedert)
   function normalizeBuilding(raw){
     const id    = String(raw.id || '').trim();
     const name  = String(raw.name || id || 'Unbenannt');
-    // Kategorien: string | string[] → string[]
+
     let cats = [];
     if (Array.isArray(raw.categories)) cats = raw.categories.map(String);
-    else if (raw.category) cats = [String(raw.category)];
-    else cats = ['misc'];
+    else if (raw.category)            cats = [String(raw.category)];
+    else                              cats = ['misc'];
 
-    // Bild (optional) – nutze Standardpfad wenn nicht gesetzt.
     const image = raw.image || iconBld(id);
 
-    // Kosten in Form [{id, amount}] normalisieren:
     let cost = [];
     if (Array.isArray(raw.cost)) {
       cost = raw.cost.map(c => ({ id: String(c.id), amount: Number(c.amount||0) }))
                      .filter(c => c.id && c.amount > 0);
     } else if (raw.cost && typeof raw.cost === 'object') {
-      // auch {wood:2, stone:1} erlauben:
-      cost = Object.keys(raw.cost).map(k => ({ id:String(k), amount: Number(raw.cost[k]||0) }))
+      cost = Object.keys(raw.cost).map(k => ({ id:String(k), amount:Number(raw.cost[k]||0) }))
                                   .filter(c => c.amount > 0);
     }
 
@@ -158,7 +140,7 @@
   // [04] Daten laden: Registry → Fallback JSON
   // ────────────────────────────────────────────────────────────────────────────
   async function loadBuildings(){
-    // 4.1 Registry
+    // 4.1 Registry (bevorzugt)
     try {
       if (window.Registry && typeof Registry.list === 'function') {
         const fromReg = Registry.list('buildings') || [];
@@ -184,51 +166,42 @@
     }
   }
 
-  // Kategorien auf Basis der geladenen Daten aufbauen
+  // Kategorienliste aus Gebäuden aggregieren
   function buildCategories(){
     const map = new Map();
-    BUILDINGS.forEach(b => (b.categories||[]).forEach(c => {
-      map.set(c, (map.get(c)||0)+1);
-    }));
+    BUILDINGS.forEach(b => (b.categories||[]).forEach(c => map.set(c, (map.get(c)||0)+1)));
     CATEGORIES = Array.from(map.entries())
       .map(([id, count]) => ({ id, name: id, count }))
       .sort((a,b)=> a.id.localeCompare(b.id));
-
-    // „Alles“ virtuell vorn anstellen
-    const total = BUILDINGS.length;
-    CATEGORIES.unshift({ id:'all', name:'Alles', count: total });
+    CATEGORIES.unshift({ id:'all', name:'Alles', count: BUILDINGS.length });
     if (!CATEGORIES.some(c => c.id === ACTIVE_CAT)) ACTIVE_CAT = 'all';
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [05] Render – statischer Rahmen des Docks
+  // [05] Render – Dock-Grundgerüst
   // ────────────────────────────────────────────────────────────────────────────
   function renderDockSkeleton(){
     $dock.innerHTML = `
       <div class="build-dock__head">
         <div class="build-dock__title">
-          <span>Baumenü – Epoche 1</span>
+          <span>Baumenü</span>
           <span class="build-dock__count" id="build-count">0 Gebäude</span>
         </div>
         <button class="build-dock__close" id="build-close" aria-label="Schließen">×</button>
       </div>
-
       <div class="build-dock__body">
-        <div class="build-cats" id="build-cats"></div>
-        <div class="build-grid" id="build-grid"></div>
+        <div class="build-cats"  id="build-cats"></div>
+        <div class="build-grid"  id="build-grid"></div>
         <div class="build-empty hidden" id="build-empty">
-          Keine Gebäude gefunden. Prüfe <code>data/buildings.json</code> oder die Registry-Kategorien.
+          Keine Gebäude gefunden. Prüfe <code>data/buildings.json</code> oder Registry-Kategorien.
         </div>
       </div>
     `;
-
-    // Close-Button
-    const $close = $dock.querySelector('#build-close');
-    $close?.addEventListener('click', closeDock);
+    $dock.querySelector('#build-close')?.addEventListener('click', closeDock);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [06] Render – Kategorienleiste
+  // [06] Render – Kategorien
   // ────────────────────────────────────────────────────────────────────────────
   function renderCategories(){
     const $cats  = $dock.querySelector('#build-cats');
@@ -241,19 +214,15 @@
       btn.className = 'build-cat' + (cat.id === ACTIVE_CAT ? ' is-active' : '');
       btn.setAttribute('data-cat', cat.id);
       btn.innerHTML = `<span class="build-cat__name">${cat.name}</span><span class="build-cat__cnt">${cat.count}</span>`;
-      btn.addEventListener('click', () => {
-        ACTIVE_CAT = cat.id;
-        renderCategories();  // active marker neu setzen
-        renderGrid();        // grid filtern
-      });
+      btn.addEventListener('click', () => { ACTIVE_CAT = cat.id; renderCategories(); renderGrid(); });
       $cats.appendChild(btn);
     });
 
-    $count.textContent = `${BUILDINGS.length} Gebäude`;
+    if ($count) $count.textContent = `${BUILDINGS.length} Gebäude`;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [07] Render – Grid (Karten)
+  // [07] Render – Grid
   // ────────────────────────────────────────────────────────────────────────────
   function renderGrid(){
     const $grid  = $dock.querySelector('#build-grid');
@@ -262,12 +231,13 @@
 
     const list = byCat(BUILDINGS, ACTIVE_CAT);
     $grid.innerHTML = '';
-
     if (!list.length){
       $empty?.classList.remove('hidden');
+      $empty && ($empty.style.display = 'block');
       return;
     }
     $empty?.classList.add('hidden');
+    $empty && ($empty.style.display = '');
 
     list.forEach(b=>{
       const $card = document.createElement('button');
@@ -275,21 +245,16 @@
       $card.setAttribute('data-bid', b.id);
       $card.setAttribute('aria-label', `Gebäude ${b.name}`);
 
-      // Titel
       const $title = document.createElement('div');
       $title.className = 'build-card__title';
       $title.textContent = b.name;
-      $card.appendChild($title);
 
-      // Bild
       const $img = document.createElement('img');
       $img.className = 'build-card__img';
-      $img.loading = 'lazy';
-      $img.alt = b.name;
-      $img.src = b.image || iconBld(b.id);  // Panel liegt in CSS, das hier ist die Vorschau
-      $card.appendChild($img);
+      $img.loading   = 'lazy';
+      $img.alt       = b.name;
+      $img.src       = b.image || iconBld(b.id);
 
-      // Kosten
       const $costs = document.createElement('div');
       $costs.className = 'build-costs';
       (b.cost || []).forEach(c=>{
@@ -301,9 +266,10 @@
         `;
         $costs.appendChild($c);
       });
-      $card.appendChild($costs);
 
-      // Klick → Platzieren anfordern
+      $card.appendChild($title);
+      $card.appendChild($img);
+      $card.appendChild($costs);
       $card.addEventListener('click', () => {
         INF('select', b.id);
         emit('req:place:begin', { building: b });
@@ -314,12 +280,13 @@
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [08] Öffnen / Schließen
+  // [08] Öffnen / Schließen / Toggle
   // ────────────────────────────────────────────────────────────────────────────
   function openDock(){
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.classList.remove('hidden');
+    $dock.style.display = '';                // falls keine .hidden-Klasse existiert
     $btnBuild?.setAttribute('aria-expanded', 'true');
     emit('cb:build:open');
   }
@@ -327,15 +294,23 @@
     if (!IS_OPEN) return;
     IS_OPEN = false;
     $dock.classList.add('hidden');
+    $dock.style.display = 'none';
     $btnBuild?.setAttribute('aria-expanded', 'false');
     emit('cb:build:close');
   }
   function toggleDock(){ IS_OPEN ? closeDock() : openDock(); }
 
+  // ESC schließt das Dock
+  window.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape') closeDock();
+  });
+
   // ────────────────────────────────────────────────────────────────────────────
-  // [09] Bootsequence (UI ankabeln, Daten laden, rendern)
+  // [09] Initialisieren (einmalig)
   // ────────────────────────────────────────────────────────────────────────────
   async function initAndRender(){
+    if (INIT_DONE) return;     // Debounce (z.B. assets-ready + registry-ready)
+    INIT_DONE = true;
     try {
       renderDockSkeleton();
       await loadBuildings();
@@ -345,46 +320,50 @@
       INF('bereit', { buildings: BUILDINGS.length, categories: CATEGORIES.length });
     } catch(e){
       ERR('initAndRender Fehler:', e);
-      // UI-Fehlerhinweis
       const $empty = $dock.querySelector('#build-empty');
       if ($empty){
         $empty.innerHTML = `Fehler beim Laden des Baumenüs. Details in der Konsole.`;
         $empty.classList.remove('hidden');
+        $empty.style.display = 'block';
       }
     }
   }
 
-  // UI ankabeln
+  // UI ankabeln (Button, Startzustand)
   function wireUI(){
     if ($btnBuild){
       $btnBuild.addEventListener('click', toggleDock);
-      // Beim Start zu – öffnet nur auf Button. (Zum Testen: openDock();)
       $btnBuild.setAttribute('aria-expanded', 'false');
     }
-    // Dock initial verstecken (CSS sollte .hidden definieren)
+    // initial verstecken
     $dock.classList.add('hidden');
+    $dock.style.display = 'none';
   }
 
   // ────────────────────────────────────────────────────────────────────────────
   // [10] Event-Wiring
   // ────────────────────────────────────────────────────────────────────────────
-  window.addEventListener('cb:ui-ready',        wireUI);
-  window.addEventListener('cb:assets-ready',    initAndRender);
-  window.addEventListener('cb:registry:ready',  initAndRender);
+  window.addEventListener('cb:ui-ready',        wireUI,       { once:true });
+  window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
+  window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
 
-  // Fallback: wenn niemand Events feuert (z. B. Standalone-Test)
-  document.readyState !== 'loading'
-    ? (wireUI(), initAndRender())
-    : document.addEventListener('DOMContentLoaded', () => { wireUI(); initAndRender(); });
+  // Fallback: Standalone-Test ohne Events
+  if (document.readyState !== 'loading') {
+    wireUI();
+    // initAndRender wird hier bewusst NICHT automatisch aufgerufen,
+    // weil im „echten“ Spiel die Ready-Events die Reihenfolge bestimmen.
+  } else {
+    document.addEventListener('DOMContentLoaded', wireUI, { once:true });
+  }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // [11] Export für Debug/Manuelle Steuerung
+  // [11] Export – manuelle Steuerung/Debug
   // ────────────────────────────────────────────────────────────────────────────
   window.BuildUI = {
-    open : openDock,
-    close: closeDock,
+    open  : openDock,
+    close : closeDock,
     toggle: toggleDock,
     filter: (catId) => { ACTIVE_CAT = catId || 'all'; renderCategories(); renderGrid(); },
-    data: () => ({ buildings: BUILDINGS.slice(), categories: CATEGORIES.slice(), active: ACTIVE_CAT })
+    data  : () => ({ buildings: BUILDINGS.slice(), categories: CATEGORIES.slice(), active: ACTIVE_CAT })
   };
 })();
