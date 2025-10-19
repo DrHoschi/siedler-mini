@@ -1,92 +1,97 @@
 /* ============================================================================
    Datei   : ui/css/ui-layout.css
    Projekt : Neue Siedler
-   Zweck   : Layout-Glue (HUD + quadratische Map) — NUR aktiv nach Spielstart
-   Aktiv   : body.has-layout
-   ----------------------------------------------------------------------------
-   Wichtig:
-   - Bis zum Spielstart bleibt dein Start-Hintergrund aktiv (ui/ui.css).
-   - Erst nach cb:game-start setzt ui-layout.js body.has-layout -> Layout greift.
+   Version : v25.10.19-final2
+   Zweck   : Spiel-Layout (HUD + quadratische Map + BuildDock) – NUR im Spiel aktiv
+   Aktiv   : body.is-playing
+   Hinweise:
+   - Bis zum Spielstart bleibt der Start-Hintergrund aktiv (ui/ui-start.css).
+   - Erst nach cb:game-start setzt ui-layout.js body.is-playing → Layout greift.
+   - Safe-Areas (Notch/Gestenleisten) werden berücksichtigt.
    ============================================================================ */
 
-/* ui/ui-layout.css – greift NUR im Spiel */
-body.is-playing #game-canvas { display:block; /* sizing etc. */ }
-body.is-playing #hud-root    { display:block; }
-body.is-playing #build-dock  { display:block; }
-/* …deine bestehenden Layout-Regeln, aber alle unter body.is-playing … */
+:root{
+  --hud-h: 56px;                 /* HUD-Höhe (Basis); kann per Media-Query skaliert werden */
+  --dock-w: min(360px, 48vw);    /* BuildDock-Breite rechts */
+  --gap: 8px;
 
-/* 0) Niemals globale Resets, die den Start-Hintergrund killen! 
-      Alles unter .has-layout kapseln. */
-
-/* 1) Grundraster NUR wenn Layout aktiv ist */
-body.has-layout {
-  /* Start-Hintergrund abschalten, Game-Bühne übernimmt */
-  background: #000 !important;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
-/* 2) Game-Canvas zentriert, quadratisch (so groß wie möglich) */
-body.has-layout #game-canvas {
-  display: block;
-  position: fixed;
-  /* wir lassen oben etwas Luft (Statusleiste / Safe-Area) */
-  top: max(8px, env(safe-area-inset-top, 0px));
-  left: 50%;
-  transform: translateX(-50%);
+/* Basis: bis zum Spielstart greift HIER nichts */
+body:not(.is-playing) #game-canvas,
+body:not(.is-playing) #hud-root,
+body:not(.is-playing) #build-dock { display: none !important; }
 
-  /* Quadrat: max. Kante basierend auf Viewport-Höhe (Platz für HUD) */
-  /* HUD-Höhe (unten) reservieren via CSS-Var (Fallback 120px) */
-  --hud-h: 120px;
-
-  /* verfügbare Höhe abzüglich HUD -> Quadratkante */
-  --sq: min( calc(100vh - var(--hud-h) - max(8px, env(safe-area-inset-top, 0px))),
-             100vw );
-
-  width: var(--sq);
-  height: var(--sq);
-
-  /* glatte Kanten, kein Scrollen */
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  background: #000;
-  z-index: 1;
-}
-
-/* 3) HUD-Leiste unten (Platz reserviert durch --hud-h) */
-body.has-layout .hud {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: var(--hud-h);
-  padding: 6px max(8px, env(safe-area-inset-right, 0px))
-           calc(6px + env(safe-area-inset-bottom, 0px))
-           max(8px, env(safe-area-inset-left, 0px));
-  background: rgba(20,22,26,.92);
-  border-top: 1px solid rgba(255,255,255,.08);
+/* ===================== SPIEL-STATE ======================= */
+body.is-playing {
+  background: #0e1014; /* neutraler Game-Hintergrund */
   color: #eaeaea;
-  z-index: 2;
+}
+
+/* Canvas: quadratisch im verbleibenden Bereich links (HUD unten, Dock rechts) */
+body.is-playing #game-canvas{
+  position: fixed;
+  left: calc(var(--safe-left) + var(--gap));
+  top:  calc(var(--safe-top) + var(--gap));
+  bottom: calc(var(--safe-bottom) + var(--hud-h) + var(--gap));
+  right: calc(var(--safe-right) + var(--dock-w) + var(--gap));
+  background: #1a1d22;
+  display: block;
+  /* Quadratischer Viewport: kürzere Kante bestimmt die Größe */
+  /* Der eigentliche Square wird im JS über clientWidth/Height gemappt */
+  border: 1px solid #0008;
+  box-shadow: 0 6px 18px rgba(0,0,0,.45) inset;
+}
+
+/* HUD-Leiste unten, volle Breite (abzgl. Dock rechts) */
+body.is-playing #hud-root{
+  position: fixed;
+  left:  calc(var(--safe-left) + var(--gap));
+  right: calc(var(--safe-right) + var(--dock-w) + var(--gap));
+  bottom: calc(var(--safe-bottom) + var(--gap));
+  height: var(--hud-h);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(16,18,22,.94);
+  border: 1px solid #0008;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  overflow: hidden;
 }
 
-/* 4) Build-Dock (rechte Seitenleiste) – optional, wenn vorhanden */
-body.has-layout #build-dock {
+/* BuildDock rechts (Panel) */
+body.is-playing #build-dock{
   position: fixed;
-  right: 0;
-  top: max(8px, env(safe-area-inset-top, 0px));
-  bottom: calc(var(--hud-h) + 8px);
-  width: min(360px, 48vw);
-  background: rgba(20,22,26,.92);
-  border-left: 1px solid rgba(255,255,255,.08);
+  top:    calc(var(--safe-top) + var(--gap));
+  right:  calc(var(--safe-right) + var(--gap));
+  bottom: calc(var(--safe-bottom) + var(--gap));
+  width:  var(--dock-w);
+  background: rgba(20,22,26,.94);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
   color: #eaeaea;
-  z-index: 3;
   overflow: auto;
-  display: none; /* per JS show/hide */
+  display: none; /* per JS (ui-build.js) show/hide */
 }
+body.is-playing #build-dock[hidden] { display: none !important; }
 
-/* .hidden-Hilfsklasse für Panels */
-.hidden { display: none !important; }
+/* Button, mit dem das Dock geöffnet wird (wird von ui-build.js sichtbar gemacht) */
+#btn-build[hidden]{ display:none !important; }
 
-/* 5) Keine harten Styles für #ui-root/body hier – Startscreen muss
-      weiterhin die :root --start-bg-url nutzen können. */
+/* Hilfsklasse für Module */
+.hidden{ display: none !important; }
+
+/* ----------------- Responsive Feinheiten ----------------- */
+@media (min-width: 1200px){
+  :root{ --hud-h: 64px; }
+}
+@media (max-width: 720px){
+  :root{ --hud-h: 52px; --dock-w: min(320px, 52vw); }
+}
