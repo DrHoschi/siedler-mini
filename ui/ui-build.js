@@ -1,147 +1,75 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.10.19
+ * Version  : v25.10.19-final3
  * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
  *
- * Kurzbeschreibung
- *   - Dock-UI zum Auswählen von Gebäuden.
- *   - Datenquelle: Registry (bevorzugt) → Fallback data/buildings.json.
- *   - Kategorienleiste mit Zählern, darunter Kartengrid mit Kosten.
- *   - Click auf Karte -> req:place:begin { building }.
- *
- * Lauscht auf
- *   - cb:ui-ready        : UI ankabeln (Buttons, Dock-Verhalten)
- *   - cb:assets-ready    : erlaubt Fallback-Laden
- *   - cb:registry:ready  : lädt Gebäudedaten aus Registry
- *
- * Sendet
- *   - cb:build:open / cb:build:close
- *   - req:place:begin { building }
- *
- * DOM-Verträge
- *   - #build-dock  : Dock-Container (vom Layout-Glue; Failsafe legt ihn ggf. an)
- *   - #btn-build   : optionaler Toggle-Button (z.B. in HUD)
- *
- * Hinweise
- *   - Der Failsafe erzeugt nur dann einen eigenen, fixierten Dock-Container,
- *     wenn #build-dock beim Laden NOCH nicht existiert (z.B. ohne Layout-Glue).
- *   - Wenn dein Layout-Glue (#game-stage-Grid) #build-dock bereits liefert,
- *     greift der Failsafe NICHT ein – DOM bleibt unberührt.
+ * Lauscht  : cb:ui-ready, cb:assets-ready, cb:registry:ready
+ * Sendet   : cb:build:open / cb:build:close, req:place:begin { building }
+ * DOM      : #build-dock (Container), #btn-build (Toggle), Icons unter assets/icons
+ * Hinweise : - Failsafe legt #build-dock nur an, wenn er fehlt.
+ *            - Doppel-Initialisierung verhindert (INIT_DONE).
+ *            - Schließende Klammern + IIFEs sind sauber abgeschlossen :)
  * ========================================================================== */
-// Am Anfang von ui/ui-build.js:
-(function(){
-  const MOD = 'build';
-  const log = (m)=> (window.CBLog?.info||console.info)(`[${MOD}] ${m}`);
-  const err = (m)=> (window.CBLog?.error||console.error)(`[${MOD}] ${m}`);
 
-  // Failsafe: falls #build-dock nicht existiert → anlegen
-  function ensureDock(){
-    let el = document.getElementById('build-dock');
-    if (!el){
-      el = document.createElement('div');
-      el.id = 'build-dock';
-      el.hidden = true; // UI steuert Sichtbarkeit selbst
-      document.body.appendChild(el);
-      log('Failsafe: #build-dock erzeugt');
-    }
-    return el;
-  }
-  const $dock = ensureDock();
-
-  
+/* --- Failsafe: #build-dock sicherstellen (greift nur, wenn nicht vorhanden) --- */
 (function FailsafeEnsureDock(){
   const MOD = 'build';
   const ok  = (m)=> (window.CBLog?.ok||console.log)(`[${MOD}] ${m}`);
-
-  // Wenn #build-dock fehlt, Container selbst anlegen (nur dann stylen!)
   let el = document.getElementById('build-dock');
   if (!el){
     el = document.createElement('div');
     el.id = 'build-dock';
-    // Failsafe-Styles (nur für den Notfall). Im Grid-Fall liefert CSS/Layout das Aussehen.
-    el.style.cssText = `
-      position: fixed;
-      right: 0;
-      top: calc(56px + env(safe-area-inset-top,0px));
-      bottom: 0;
-      width: min(340px,48vw);
-      background: rgba(20,22,26,.92);
-      border-left: 1px solid rgba(255,255,255,.08);
-      color:#eaeaea;
-      z-index:10010;
-      display:none;
-      padding:10px;
-      overflow:auto;
-    `;
+    el.hidden = true;            // Sichtbarkeit steuert das UI-Modul
+    el.style.overflow = 'auto';  // minimale Sicherheit
     document.body.appendChild(el);
     ok('Failsafe: #build-dock erzeugt.');
   }
 })();
 
-(() => {
+/* --- Hauptmodul ------------------------------------------------------------- */
+(function(){
   'use strict';
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [00] Sichere Logger
-  // ────────────────────────────────────────────────────────────────────────────
+  // [00] Logger (robust; crasht nicht bei exotischem CBLog)
   const __safeLog = (fn, tag, ...m) => {
     try {
       if (window.CBLog && typeof window.CBLog[fn] === 'function') {
-        // CBLog kann formatierte Strings oder Arrays erwarten – beides tolerieren.
-        try { window.CBLog[fn](tag, ...m); }
-        catch { window.CBLog[fn]([tag, ...m]); }
-      } else {
-        (console[fn] || console.log)(tag, ...m);
-      }
-    } catch {
-      try { (console[fn] || console.log)(tag, ...m); } catch(_) {}
-    }
+        try { window.CBLog[fn](tag, ...m); } catch { window.CBLog[fn]([tag, ...m]); }
+      } else { (console[fn] || console.log)(tag, ...m); }
+    } catch { try { (console[fn] || console.log)(tag, ...m); } catch(_){} }
   };
   const LOG = (...m)=>__safeLog('log',  '[build]', ...m);
   const INF = (...m)=>__safeLog('info', '[build]', ...m);
   const WRN = (...m)=>__safeLog('warn', '[build]', ...m);
   const ERR = (...m)=>__safeLog('error','[build]', ...m);
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [01] DOM-Hooks (nach Failsafe existiert #build-dock sicher)
-  // ────────────────────────────────────────────────────────────────────────────
-  const $dock     = document.getElementById('build-dock');
-  const $btnBuild = document.getElementById('btn-build'); // optional (z.B. aus HUD)
+  // [01] DOM-Hooks
+  const $dock     = document.getElementById('build-dock');  // nach Failsafe vorhanden
+  const $btnBuild = document.getElementById('btn-build');   // optional (HUD)
+  if (!$dock){ ERR('DOM: #build-dock fehlt'); return; }
+  if (!$btnBuild){ WRN('DOM: #btn-build fehlt – Dock nur per API steuerbar'); }
 
-  if (!$dock) { ERR('DOM: #build-dock fehlt'); return; }
-  if (!$btnBuild) { WRN('DOM: #btn-build fehlt – Dock nur per API steuerbar'); }
-
-  // ────────────────────────────────────────────────────────────────────────────
   // [02] State
-  // ────────────────────────────────────────────────────────────────────────────
-  let BUILDINGS   = [];     // normalisierte Gebäudeliste
-  let CATEGORIES  = [];     // [{id, name, count}, ...]
+  let BUILDINGS   = [];
+  let CATEGORIES  = [];
   let ACTIVE_CAT  = 'all';
   let IS_OPEN     = false;
-  let INIT_DONE   = false;  // verhindert Doppeleinstieg (assets-ready + registry-ready)
+  let INIT_DONE   = false;   // Debounce initAndRender
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [03] Utilities
-  // ────────────────────────────────────────────────────────────────────────────
+  // [03] Utils
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => `assets/icons/buildings/${id}.png`;
-
-  const emit = (name, detail={}) =>
-    window.dispatchEvent(new CustomEvent(name, { detail }));
-
+  const emit = (name, detail={}) => window.dispatchEvent(new CustomEvent(name, { detail }));
   const byCat = (list, cat) => (cat === 'all') ? list : list.filter(b => (b.categories||[]).includes(cat));
 
-  // Toleranter Normalizer (alte/teilweise Felder werden abgefedert)
   function normalizeBuilding(raw){
     const id    = String(raw.id || '').trim();
     const name  = String(raw.name || id || 'Unbenannt');
-
-    let cats = [];
+    let cats    = [];
     if (Array.isArray(raw.categories)) cats = raw.categories.map(String);
     else if (raw.category)            cats = [String(raw.category)];
     else                              cats = ['misc'];
-
     const image = raw.image || iconBld(id);
 
     let cost = [];
@@ -152,15 +80,11 @@
       cost = Object.keys(raw.cost).map(k => ({ id:String(k), amount:Number(raw.cost[k]||0) }))
                                   .filter(c => c.amount > 0);
     }
-
     return { id, name, categories: cats, image, cost };
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [04] Daten laden: Registry → Fallback JSON
-  // ────────────────────────────────────────────────────────────────────────────
+  // [04] Daten: Registry → Fallback
   async function loadBuildings(){
-    // 4.1 Registry (bevorzugt)
     try {
       if (window.Registry && typeof Registry.list === 'function') {
         const fromReg = Registry.list('buildings') || [];
@@ -171,8 +95,6 @@
         }
       }
     } catch(e) { WRN('Registry.list("buildings") Fehler:', e); }
-
-    // 4.2 Fallback JSON
     try {
       const res  = await fetch('data/buildings.json', { cache:'no-store' });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -186,7 +108,6 @@
     }
   }
 
-  // Kategorienliste aus Gebäuden aggregieren
   function buildCategories(){
     const map = new Map();
     BUILDINGS.forEach(b => (b.categories||[]).forEach(c => map.set(c, (map.get(c)||0)+1)));
@@ -197,9 +118,7 @@
     if (!CATEGORIES.some(c => c.id === ACTIVE_CAT)) ACTIVE_CAT = 'all';
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [05] Render – Dock-Grundgerüst
-  // ────────────────────────────────────────────────────────────────────────────
+  // [05] Render – Grundgerüst
   function renderDockSkeleton(){
     $dock.innerHTML = `
       <div class="build-dock__head">
@@ -220,9 +139,7 @@
     $dock.querySelector('#build-close')?.addEventListener('click', closeDock);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
   // [06] Render – Kategorien
-  // ────────────────────────────────────────────────────────────────────────────
   function renderCategories(){
     const $cats  = $dock.querySelector('#build-cats');
     const $count = $dock.querySelector('#build-count');
@@ -237,13 +154,10 @@
       btn.addEventListener('click', () => { ACTIVE_CAT = cat.id; renderCategories(); renderGrid(); });
       $cats.appendChild(btn);
     });
-
     if ($count) $count.textContent = `${BUILDINGS.length} Gebäude`;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
   // [07] Render – Grid
-  // ────────────────────────────────────────────────────────────────────────────
   function renderGrid(){
     const $grid  = $dock.querySelector('#build-grid');
     const $empty = $dock.querySelector('#build-empty');
@@ -299,14 +213,12 @@
     });
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [08] Öffnen / Schließen / Toggle
-  // ────────────────────────────────────────────────────────────────────────────
+  // [08] Öffnen/Schließen/Toggle
   function openDock(){
     if (IS_OPEN) return;
     IS_OPEN = true;
+    $dock.hidden = false;
     $dock.classList.remove('hidden');
-    $dock.style.display = '';                // falls keine .hidden-Klasse existiert
     $btnBuild?.setAttribute('aria-expanded', 'true');
     emit('cb:build:open');
   }
@@ -314,22 +226,17 @@
     if (!IS_OPEN) return;
     IS_OPEN = false;
     $dock.classList.add('hidden');
-    $dock.style.display = 'none';
     $btnBuild?.setAttribute('aria-expanded', 'false');
     emit('cb:build:close');
   }
   function toggleDock(){ IS_OPEN ? closeDock() : openDock(); }
 
-  // ESC schließt das Dock
-  window.addEventListener('keydown', (e)=>{
-    if (e.key === 'Escape') closeDock();
-  });
+  // ESC schließt
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeDock(); }, { passive:true });
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [09] Initialisieren (einmalig)
-  // ────────────────────────────────────────────────────────────────────────────
+  // [09] Init (einmalig)
   async function initAndRender(){
-    if (INIT_DONE) return;     // Debounce (z.B. assets-ready + registry-ready)
+    if (INIT_DONE) return;           // Debounce
     INIT_DONE = true;
     try {
       renderDockSkeleton();
@@ -342,48 +249,27 @@
       ERR('initAndRender Fehler:', e);
       const $empty = $dock.querySelector('#build-empty');
       if ($empty){
-        $empty.innerHTML = `Fehler beim Laden des Baumenüs. Details in der Konsole.`;
+        $empty.textContent = 'Fehler beim Laden des Baumenüs. Details in der Konsole.';
         $empty.classList.remove('hidden');
-        $empty.style.display = 'block';
       }
     }
   }
 
-  // UI ankabeln (Button, Startzustand)
+  // [10] UI Wiring
   function wireUI(){
     if ($btnBuild){
+      $btnBuild.hidden = false;
+      $btnBuild.setAttribute('aria-expanded','false');
       $btnBuild.addEventListener('click', toggleDock);
-      $btnBuild.setAttribute('aria-expanded', 'false');
     }
-    // initial verstecken
-    $dock.classList.add('hidden');
-    $dock.style.display = 'none';
+    $dock.classList.add('hidden');   // Start: geschlossen
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // [10] Event-Wiring
-  // ────────────────────────────────────────────────────────────────────────────
-  window.addEventListener('cb:ui-ready',        wireUI,       { once:true });
+  // [11] Events (einmalig)
+  window.addEventListener('cb:ui-ready',        wireUI,        { once:true });
   window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
   window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
 
-  // Fallback: Standalone-Test ohne Events
-  if (document.readyState !== 'loading') {
-    wireUI();
-    // initAndRender wird hier bewusst NICHT automatisch aufgerufen,
-    // weil im „echten“ Spiel die Ready-Events die Reihenfolge bestimmen.
-  } else {
-    document.addEventListener('DOMContentLoaded', wireUI, { once:true });
-  }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // [11] Export – manuelle Steuerung/Debug
-  // ────────────────────────────────────────────────────────────────────────────
-  window.BuildUI = {
-    open  : openDock,
-    close : closeDock,
-    toggle: toggleDock,
-    filter: (catId) => { ACTIVE_CAT = catId || 'all'; renderCategories(); renderGrid(); },
-    data  : () => ({ buildings: BUILDINGS.slice(), categories: CATEGORIES.slice(), active: ACTIVE_CAT })
-  };
+  // Standalone-Fallback (kein Auto-Init hier, damit Reihenfolge im Spiel stimmt)
+  LOG('geladen v25.10.19-final3');
 })();
