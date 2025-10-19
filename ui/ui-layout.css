@@ -1,0 +1,71 @@
+/* ============================================
+   Datei: ui/ui-layout.css
+   Zweck: Minimal-Layout für HUD + quadratische Map
+   Hinweis: Additiv – überschreibt keine vorhandenen Module
+============================================ */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  --hud-h: 64px;              /* Platz für HUD-Leiste (anpassbar) */
+  --dock-w: 320px;            /* Platz rechts fürs Build-Dock */
+}
+
+/* Wurzel-Wrapper (sofern noch nicht vorhanden) */
+body.is-started {
+  /* im Spiel: dunkler Hintergrund hinter Canvas */
+  background: #101014;
+}
+
+/* Spielfläche: links Quadrat (Map), rechts Dock */
+#game-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr var(--dock-w);
+  grid-template-rows: var(--hud-h) 1fr;
+  column-gap: 0;
+  row-gap: 0;
+  padding:
+    calc(8px + var(--safe-top))
+    calc(8px + var(--safe-right))
+    calc(8px + var(--safe-bottom))
+    calc(8px + var(--safe-left));
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* HUD-Zeile oben über die volle Breite */
+#hud-bar {
+  grid-column: 1 / span 2;
+  grid-row: 1 / 2;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+}
+
+/* Linke Spielfläche: enthält das quadratische Canvas */
+#map-wrap {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+/* Rechter Bereich fürs Build-Dock (dein ui-build) */
+#build-dock {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  overflow: auto;
+}
+
+/* Quadratische Map: Canvas passt sich an kürzere Kante an */
+#game-canvas {
+  width: min(100%, calc(100vh - var(--hud-h) - var(--safe-top) - var(--safe-bottom)));
+  aspect-ratio: 1 / 1;          /* => Höhe = Breite */
+  display: block;
+  background: #000;             /* Fallback */
+}
