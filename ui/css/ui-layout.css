@@ -1,71 +1,86 @@
-/* ============================================
-   Datei: ui/css/ui-layout.css
-   Zweck: Minimal-Layout für HUD + quadratische Map
-   Hinweis: Additiv – überschreibt keine vorhandenen Module
-============================================ */
+/* ============================================================================
+   Datei   : ui/css/ui-layout.css
+   Projekt : Neue Siedler
+   Zweck   : Layout-Glue (HUD + quadratische Map) — NUR aktiv nach Spielstart
+   Aktiv   : body.has-layout
+   ----------------------------------------------------------------------------
+   Wichtig:
+   - Bis zum Spielstart bleibt dein Start-Hintergrund aktiv (ui/ui.css).
+   - Erst nach cb:game-start setzt ui-layout.js body.has-layout -> Layout greift.
+   ============================================================================ */
 
-:root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
+/* 0) Niemals globale Resets, die den Start-Hintergrund killen! 
+      Alles unter .has-layout kapseln. */
 
-  --hud-h: 64px;              /* Platz für HUD-Leiste (anpassbar) */
-  --dock-w: 320px;            /* Platz rechts fürs Build-Dock */
+/* 1) Grundraster NUR wenn Layout aktiv ist */
+body.has-layout {
+  /* Start-Hintergrund abschalten, Game-Bühne übernimmt */
+  background: #000 !important;
 }
 
-/* Wurzel-Wrapper (sofern noch nicht vorhanden) */
-body.is-started {
-  /* im Spiel: dunkler Hintergrund hinter Canvas */
-  background: #101014;
+/* 2) Game-Canvas zentriert, quadratisch (so groß wie möglich) */
+body.has-layout #game-canvas {
+  display: block;
+  position: fixed;
+  /* wir lassen oben etwas Luft (Statusleiste / Safe-Area) */
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+
+  /* Quadrat: max. Kante basierend auf Viewport-Höhe (Platz für HUD) */
+  /* HUD-Höhe (unten) reservieren via CSS-Var (Fallback 120px) */
+  --hud-h: 120px;
+
+  /* verfügbare Höhe abzüglich HUD -> Quadratkante */
+  --sq: min( calc(100vh - var(--hud-h) - max(8px, env(safe-area-inset-top, 0px))),
+             100vw );
+
+  width: var(--sq);
+  height: var(--sq);
+
+  /* glatte Kanten, kein Scrollen */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+  z-index: 1;
 }
 
-/* Spielfläche: links Quadrat (Map), rechts Dock */
-#game-stage {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr var(--dock-w);
-  grid-template-rows: var(--hud-h) 1fr;
-  column-gap: 0;
-  row-gap: 0;
-  padding:
-    calc(8px + var(--safe-top))
-    calc(8px + var(--safe-right))
-    calc(8px + var(--safe-bottom))
-    calc(8px + var(--safe-left));
-  min-height: 100vh;
-  box-sizing: border-box;
-}
-
-/* HUD-Zeile oben über die volle Breite */
-#hud-bar {
-  grid-column: 1 / span 2;
-  grid-row: 1 / 2;
+/* 3) HUD-Leiste unten (Platz reserviert durch --hud-h) */
+body.has-layout .hud {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--hud-h);
+  padding: 6px max(8px, env(safe-area-inset-right, 0px))
+           calc(6px + env(safe-area-inset-bottom, 0px))
+           max(8px, env(safe-area-inset-left, 0px));
+  background: rgba(20,22,26,.92);
+  border-top: 1px solid rgba(255,255,255,.08);
+  color: #eaeaea;
+  z-index: 2;
   display: flex;
   align-items: center;
-  padding: 8px 10px;
+  gap: 8px;
 }
 
-/* Linke Spielfläche: enthält das quadratische Canvas */
-#map-wrap {
-  grid-column: 1 / 2;
-  grid-row: 2 / 3;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-}
-
-/* Rechter Bereich fürs Build-Dock (dein ui-build) */
-#build-dock {
-  grid-column: 2 / 3;
-  grid-row: 2 / 3;
+/* 4) Build-Dock (rechte Seitenleiste) – optional, wenn vorhanden */
+body.has-layout #build-dock {
+  position: fixed;
+  right: 0;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  bottom: calc(var(--hud-h) + 8px);
+  width: min(360px, 48vw);
+  background: rgba(20,22,26,.92);
+  border-left: 1px solid rgba(255,255,255,.08);
+  color: #eaeaea;
+  z-index: 3;
   overflow: auto;
+  display: none; /* per JS show/hide */
 }
 
-/* Quadratische Map: Canvas passt sich an kürzere Kante an */
-#game-canvas {
-  width: min(100%, calc(100vh - var(--hud-h) - var(--safe-top) - var(--safe-bottom)));
-  aspect-ratio: 1 / 1;          /* => Höhe = Breite */
-  display: block;
-  background: #000;             /* Fallback */
-}
+/* .hidden-Hilfsklasse für Panels */
+.hidden { display: none !important; }
+
+/* 5) Keine harten Styles für #ui-root/body hier – Startscreen muss
+      weiterhin die :root --start-bg-url nutzen können. */
