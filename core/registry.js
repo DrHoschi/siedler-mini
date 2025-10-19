@@ -207,5 +207,8 @@
     emit('cb:registry:snapshot', { snapshot: REG.snapshot() });
   });
 
+// Sofort-Init, lädt JSONs & feuert cb:registry:ready (mit Counts)
+Registry.init();
+  
   return REG;
 });
