@@ -13,6 +13,10 @@
        STYLES (Global → Start → Inspector)
        - ?v=… als einfaches Cache-Busting: Zahl erhöhen bei Updates
        ========================================================= -->
+  <style>
+  /* robust: unabhängig davon, wo die CSS-Datei liegt */
+  :root { --start-bg: url('assets/ui/start-bg.jpg'); }
+</style>
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19">
   <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19">
   <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.19"><!-- monolith -->
