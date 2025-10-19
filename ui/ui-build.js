@@ -42,6 +42,39 @@
  *   [05] Saubere Toggle-Logik; Close-Button im Dock-Kopf.
  *   [06] Komplette Kommentierung & Fehlerhinweise im UI (leere States).
  * ========================================================================== */
+(function(){
+  const MOD = 'build';
+  const err = (m)=> (window.CBLog?.error||console.error)(`[${MOD}] ${m}`);
+  const ok  = (m)=> (window.CBLog?.ok||console.log)(`[${MOD}] ${m}`);
+
+  // Wenn #build-dock fehlt, Container selbst anlegen (Failsafe)
+  function ensureDock(){
+    let el = document.getElementById('build-dock');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'build-dock';
+      el.style.cssText = `
+        position: fixed;
+        right: 0;
+        top: calc(56px + env(safe-area-inset-top,0px));
+        bottom: 0;
+        width: min(340px,48vw);
+        background: rgba(20,22,26,.92);
+        border-left: 1px solid rgba(255,255,255,.08);
+        color:#eaeaea;
+        z-index:10010;
+        display:none;
+        padding:10px;
+      `;
+      document.body.appendChild(el);
+      ok('Failsafe: #build-dock erzeugt.');
+    }
+    return el;
+  }
+
+  ensureDock();  // <-- Früh ausführen, bevor init()
+  // … danach dein bisheriger Code …
+})();
 
 (() => {
   'use strict';
