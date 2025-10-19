@@ -1,77 +1,88 @@
 /* ============================================================================
  * Datei   : core/boot.js
  * Projekt : Neue Siedler
- * Version : v25.10.17-2 (final)
+ * Version : v25.10.19-final
  * Zweck   : Boot-Sequenz – Initialisierung & Startsteuerung
- *          - Wartet auf: UI + Assets + Registry (alle ready)
- *          - Reagiert auf: req:game:start
- *          - Bestätigt Boot: cb:boot:ready
- *          - Startet Spiel: cb:game:start + UI/Map/HUD/Buildmenu-Requests
+ *
+ *  - Wartet auf: UI + Assets + Registry (alle ready)
+ *  - Reagiert auf: req:game:start
+ *  - Bestätigt Boot: cb:boot:ready
+ *  - Startet Spiel:  cb:game:start  (+ UI/Map/HUD/Buildmenu-Requests)
+ *
+ * Kompatibilität:
+ *  - ui-start feuert bei dir: cb:ui-ready (Bindestrich!)
+ *  - Dieser Boot lauscht auf beide Varianten (Bindestrich UND Doppelpunkt):
+ *      cb:ui-ready        / cb:ui:ready
+ *      cb:assets-ready    / cb:assets:ready
+ *      cb:registry-ready  / cb:registry:ready
  * ============================================================================ */
 (function(root, factory){
   root.SiedlerBoot = factory();
 })(typeof window !== "undefined" ? window : this, function(){
 
-  const BOOT_VERSION = "v25.10.17-2";
+  const BOOT_VERSION = "v25.10.19-final";
 
-  // Log-Kürzel
+  // Kurze Logger-Delegates (gehen in CBLog oder die Konsole)
   const ok   = (m)=> (window.CBLog?.ok   || console.log   )(`[boot] ${m}`);
   const info = (m)=> (window.CBLog?.info || console.info  )(`[boot] ${m}`);
   const warn = (m)=> (window.CBLog?.warn || console.warn  )(`[boot] ${m}`);
   const err  = (m)=> (window.CBLog?.err  || console.error )(`[boot] ${m}`);
 
-  // Erwartete Events (alle mit Doppelpunkt!)
+  // Erwartete Event-Namen (samt Alias)
   const EV = {
-    UI_READY       : 'cb:ui:ready',
-    ASSETS_READY   : 'cb:assets:ready',
-    REGISTRY_READY : 'cb:registry:ready',
-    REQ_GAME_START : 'req:game:start',
-    BOOT_READY     : 'cb:boot:ready',
-    GAME_START     : 'cb:game:start'
+    UI_READY_A       : 'cb:ui-ready',        // Bindestrich  (bei dir im ui-start)
+    UI_READY_B       : 'cb:ui:ready',        // Doppelpunkt (Fallback)
+    ASSETS_READY_A   : 'cb:assets-ready',
+    ASSETS_READY_B   : 'cb:assets:ready',
+    REGISTRY_READY_A : 'cb:registry-ready',
+    REGISTRY_READY_B : 'cb:registry:ready',
+
+    REQ_GAME_START   : 'req:game:start',
+    BOOT_READY       : 'cb:boot:ready',
+    GAME_START       : 'cb:game:start'
   };
 
   class BootManager {
     constructor(){
+      // interner Status
       this.uiReady = false;
       this.assetsReady = false;
       this.registryReady = false;
       this.bootReadyEmitted = false;
       this.startRequested = false;
 
-      // Hooks: Ready-Quellen
-      window.addEventListener(EV.UI_READY,       ()=> this.onUIReady());
-      window.addEventListener(EV.ASSETS_READY,   ()=> this.onAssetsReady());
-      window.addEventListener(EV.REGISTRY_READY, ()=> this.onRegistryReady());
+      // Ready-Quellen (beide Varianten „A“ & „B“)
+      window.addEventListener(EV.UI_READY_A,       ()=> this.onUIReady());
+      window.addEventListener(EV.UI_READY_B,       ()=> this.onUIReady());
+      window.addEventListener(EV.ASSETS_READY_A,   ()=> this.onAssetsReady());
+      window.addEventListener(EV.ASSETS_READY_B,   ()=> this.onAssetsReady());
+      window.addEventListener(EV.REGISTRY_READY_A, ()=> this.onRegistryReady());
+      window.addEventListener(EV.REGISTRY_READY_B, ()=> this.onRegistryReady());
 
-      // Hook: Start-Anforderung (vom Startpanel)
-      window.addEventListener(EV.REQ_GAME_START, ()=> this.onStartRequested());
+      // Start-Anforderung (vom Startpanel / Button)
+      window.addEventListener(EV.REQ_GAME_START,   ()=> this.onStartRequested());
 
       info(`BootManager initialisiert (${BOOT_VERSION})`);
-      this._fallbackUiReady(); // falls UI-Ready nicht explizit gefeuert wird
+      this._fallbackUiReady(); // falls ui-start kein explizites UI-Event feuert
+      ok('BootManager aktiv');
     }
 
-    /* ---------- Fallback: UI-Ready, falls kein explizites Event kommt ---------- */
+    /* ---------- Fallback: UI-Ready (DOM) ---------- */
     _fallbackUiReady(){
-      // Wenn dein ui-start.js EV.UI_READY korrekt feuert, greift dieser Fallback nicht.
+      const mark = ()=> {
+        if (!this.uiReady) {
+          window.dispatchEvent(new CustomEvent(EV.UI_READY_A));
+          info('UI ready (DOMContentLoaded Fallback)');
+        }
+      };
       if (document.readyState === 'complete' || document.readyState === 'interactive'){
-        // minimaler Delay, um Module zu initialisieren
-        setTimeout(()=> {
-          if (!this.uiReady) {
-            window.dispatchEvent(new CustomEvent(EV.UI_READY));
-            info('UI ready (Fallback DOM)');
-          }
-        }, 0);
+        setTimeout(mark, 0);
       } else {
-        window.addEventListener('DOMContentLoaded', ()=>{
-          if (!this.uiReady) {
-            window.dispatchEvent(new CustomEvent(EV.UI_READY));
-            info('UI ready (DOMContentLoaded Fallback)');
-          }
-        }, { once:true });
+        window.addEventListener('DOMContentLoaded', mark, { once:true });
       }
     }
 
-    /* -------------------- Ready-Quellen -------------------- */
+    /* ---------- Ready-Quellen ---------- */
     onUIReady(){
       if (this.uiReady) return;
       this.uiReady = true;
@@ -91,25 +102,24 @@
       this.tryBootReady();
     }
 
-    /* -------------------- Boot-Freigabe -------------------- */
+    /* ---------- Boot-Freigabe ---------- */
     tryBootReady(){
       if (this.bootReadyEmitted) return;
       if (this.uiReady && this.assetsReady && this.registryReady){
         this.bootReadyEmitted = true;
-        ok('Boot abgeschlossen → ' + EV.BOOT_READY);
+        ok(`Boot abgeschlossen → ${EV.BOOT_READY}`);
         window.dispatchEvent(new CustomEvent(EV.BOOT_READY));
 
-        // Falls der Spieler vorher schon "Spiel starten" gedrückt hat,
-        // holen wir den Start jetzt nach:
+        // „Spiel starten“ wurde schon gedrückt? → jetzt nachholen
         if (this.startRequested) this._startGame();
       }
     }
 
-    /* -------------------- Start-Flow -------------------- */
+    /* ---------- Start-Flow ---------- */
     onStartRequested(){
       this.startRequested = true;
-      // Noch nicht bereit? -> höflich warten, nicht "abbrechen"
       if (!this.bootReadyEmitted){
+        // Nicht hart abbrechen – wir warten höflich weiter.
         warn('Start zurückgestellt – warte auf Ready (UI/Assets/Registry).');
         return;
       }
@@ -117,31 +127,31 @@
     }
 
     _startGame(){
-      ok('Spielstart → ' + EV.GAME_START);
+      ok(`Spielstart → ${EV.GAME_START}`);
 
-      // UI: Startpanel ausblenden (dein ui-start.js reagiert hierdrauf)
+      // UI: Startpanel ausblenden (ui-start reagiert darauf)
       window.dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
 
-      // Spieloberfläche – Map/HUD/Baumenü
+      // Spieloberfläche / Feature-Requests
       window.dispatchEvent(new CustomEvent('req:map:init'));
       window.dispatchEvent(new CustomEvent('req:hud:show'));
       window.dispatchEvent(new CustomEvent('req:buildmenu:show'));
 
-      // Game-Start-Bestätigung (falls andere Module zuhören)
+      // Bestätigung für Listener
       window.dispatchEvent(new CustomEvent(EV.GAME_START));
     }
   }
 
+  // Singleton-Instanz
   window.__boot = new BootManager();
-  ok('BootManager aktiv');
   return BootManager;
 });
 
-/* ---------- Globale Fehler in Inspector loggen – ohne störende Alerts ---------- */
-window.addEventListener("error", (e)=>{
+/* ---------- Fehler global in den Inspector loggen (ohne Alert-Blocker) ---------- */
+window.addEventListener('error', (e)=>{
   (window.CBLog?.err || console.error)(`Uncaught Error: ${e.message} @ ${e.filename}:${e.lineno}`);
 });
-window.addEventListener("unhandledrejection", (e)=>{
+window.addEventListener('unhandledrejection', (e)=>{
   const msg = e?.reason?.message || String(e.reason || e);
   (window.CBLog?.err || console.error)(`Unhandled Promise Rejection: ${msg}`);
 });
