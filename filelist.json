@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-19T10:37:14.364Z",
+  "createdAt": "2025-10-19T14:43:16.001Z",
   "root": ".",
-  "count": 410,
+  "count": 412,
   "entries": [
     {
       "type": "dir",
@@ -1786,7 +1786,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 1195
+      "size": 1378
     },
     {
       "type": "file",
@@ -1949,6 +1949,16 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-layout.css",
+      "size": 1903
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-layout.js",
+      "size": 2606
+    },
+    {
+      "type": "file",
       "path": "ui/ui-notify.js",
       "size": 1434
     },
@@ -1975,17 +1985,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 40508
+      "size": 40596
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15547
+      "size": 15573
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 4344
+      "size": 4970
     },
     {
       "type": "file",
