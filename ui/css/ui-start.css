@@ -3,6 +3,13 @@
    Version : v25.10.16-3
    Zweck   : Startpanel (kleines Quadrat + 4 Buttons untereinander)
 ============================================================================ */
+/* Beispiel-Regel in ui-start.css */
+#start-bg {
+  position: fixed;
+  inset: 0;
+  background: center/cover no-repeat var(--start-bg, #222);
+  z-index: 1; /* unter dem Startpanel */
+}
 
 #start-panel{
   position:fixed; inset:0;
