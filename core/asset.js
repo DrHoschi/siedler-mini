@@ -29,7 +29,9 @@
       EVT('cb:assets-ready', { ok:false, error:String(e) });
     }
   }
-
+// Sofort-Start des Asset-Loaders, damit cb:assets-ready/cb:assets:ready feuern
+Assets.loadAll();
+  
   // Exporte
   window.Assets = { loadAll };
 })();
