@@ -98,3 +98,12 @@
 
   return { init: HUD_init };
 });
+window.addEventListener('cb:game-start', () => {
+  // UIHUD.init() oder deine bestehende Start-Routine
+  window.UIHUD?.init?.(); // sicherer Aufruf
+});
+
+window.addEventListener('cb:res:change', (e) => {
+  // UIHUD.update(e.detail) o.ä. – deine bestehende Update-Funktion
+  window.UIHUD?.update?.(e.detail);
+});
