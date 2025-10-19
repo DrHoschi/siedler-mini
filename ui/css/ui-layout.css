@@ -9,6 +9,12 @@
    - Erst nach cb:game-start setzt ui-layout.js body.has-layout -> Layout greift.
    ============================================================================ */
 
+/* ui/ui-layout.css – greift NUR im Spiel */
+body.is-playing #game-canvas { display:block; /* sizing etc. */ }
+body.is-playing #hud-root    { display:block; }
+body.is-playing #build-dock  { display:block; }
+/* …deine bestehenden Layout-Regeln, aber alle unter body.is-playing … */
+
 /* 0) Niemals globale Resets, die den Start-Hintergrund killen! 
       Alles unter .has-layout kapseln. */
 
