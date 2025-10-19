@@ -1,109 +1,118 @@
 /* =============================================================================
  * Datei   : ui/ui-hud.js
  * Projekt : Neue Siedler
- * Version : v1.8.1 (2025-10-14)
+ * Version : v25.10.19-final2
  * Zweck   : Ressourcen-HUD initialisieren & aktualisieren
- * API     : HUD.init({ bus, container, registry, fetchSnapshot })
+ * Events  : listen  -> cb:game-start, cb:registry:ready, cb:res:change
+ *           emit    -> cb:hud-ready
  * Hinweise:
- *   - bus: dein Event-Bus (emit/on). Fallback: window.dispatchEvent / CustomEvent
- *   - container: optional; sonst erstellt HUD selbst <div class="hud">
- *   - registry: optional; wenn vorhanden: Reihenfolge & Labels von Ressourcen
- *   - fetchSnapshot(): async/Sync Funktion → {holz:0, stein:0, ...}
- * Events:
- *   - hört auf  'cb:registry:ready'  -> baut HUD
- *   - hört auf  'cb:res:change'      -> aktualisiert Menge/Highlight (Platzhalter)
- *   - emittiert 'cb:hud-ready'
- * Debug:
- *   - window.HUD = HUD  (für Inspector)
- * ============================================================================= */
-(function(root,factory){
-  root.HUD = factory();
-})(typeof window!=="undefined"?window:this,function(){
+ *   - Greift, falls vorhanden, auf window.Registry zu (labels, icons, order).
+ *   - Ohne Registry verwendet es sinnvolle Default-Ressourcen.
+ *   - Zeichnet nur DOM; Styling kommt aus den CSS-Dateien (ui/ui.css, ui-layout.css, ...).
+ * ============================================================================ */
+(function (root, factory) {
+  root.UIHUD = factory();
+})(typeof window !== 'undefined' ? window : this, function () {
 
-  const DEFAULT_RESOURCES = [
-    {id:"holz",   label:"Holz",   icon:"assets/icons/resources/wood.png"},
-    {id:"stein",  label:"Stein",  icon:"assets/icons/resources/stone.png"},
-    {id:"fisch",  label:"Fisch",  icon:"assets/icons/resources/fish.png"},
-    {id:"nahrung",label:"Nahrung",icon:"assets/icons/resources/food.png"},
-    {id:"gold",   label:"Gold",   icon:"assets/icons/resources/gold.png"},
-    {id:"bev",    label:"Bev.",   icon:"assets/icons/resources/citizen.png"},
-  ];
+  const TAG = '[hud]';
+  const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
+  const warn= (m)=> (window.CBLog?.warn||console.warn)(`${TAG} ${m}`);
 
-  const q = (sel,ctx=document)=>ctx.querySelector(sel);
-  const el = (tag,cls)=>{ const n=document.createElement(tag); if(cls) n.className=cls; return n; };
+  // --------------------------- Utils ---------------------------
+  const $  = (sel, ctx=document)=> ctx.querySelector(sel);
+  const el = (tag, cls)=>{ const n=document.createElement(tag); if(cls) n.className=cls; return n; };
 
-  function ensureBus(bus){
-    if(bus) return bus;
-    // Sehr kleiner Fallback-Bus auf DOM-Basis
-    return {
-      on(type,fn){ window.addEventListener(type,(e)=>fn(e.detail||e)); },
-      emit(type,detail){ window.dispatchEvent(new CustomEvent(type,{detail})); }
-    };
+  function defaultResources(){
+    // Fallback-Reihenfolge Epoche 1 (erweiterbar) – Labels deutsch
+    return [
+      { id:'wood',  label:'Holz',  icon:'assets/icons/resources/wood.png',  value:0 },
+      { id:'stone', label:'Stein', icon:'assets/icons/resources/stone.png', value:0 },
+      { id:'food',  label:'Nahrung', icon:'assets/icons/resources/food.png', value:0 },
+      { id:'gold',  label:'Gold',  icon:'assets/icons/resources/gold.png',  value:0 }
+    ];
   }
 
-  function buildCells(container, resList){
-    container.innerHTML = "";
-    resList.forEach(r=>{
-      const cell  = el("div","hud__cell");
-      const title = el("p","hud__title"); title.textContent = r.label;
-      const wrap  = el("div","hud__icon-wrap");
-      const icon  = el("img","hud__icon"); icon.alt = r.label; icon.src = r.icon;
+  function fromRegistry(){
+    try{
+      if (!window.Registry || typeof Registry.list !== 'function') return null;
+      const resMeta = Registry.list('resources') || [];
+      if (!Array.isArray(resMeta) || !resMeta.length) return null;
+      return resMeta.map(r => ({
+        id: String(r.id || '').trim(),
+        label: String(r.label || r.id || '').trim(),
+        icon: r.icon || `assets/icons/resources/${r.id}.png`,
+        value: 0
+      }));
+    } catch(e){
+      warn('Registry.list("resources") fehlgeschlagen – nutze Defaults.');
+      return null;
+    }
+  }
+
+  // Zeichnet Zellen neu
+  function render(host, model){
+    host.innerHTML = '';
+    model.forEach(r=>{
+      const cell  = el('div','hud__cell'); cell.dataset.res = r.id;
+      const wrap  = el('div','hud__icon-wrap');
+      const icon  = el('img','hud__icon'); icon.alt = r.label; icon.src = r.icon;
+      const name  = el('div','hud__title'); name.textContent = r.label;
+      const val   = el('div','hud__value'); val.textContent = String(r.value ?? 0);
 
       wrap.appendChild(icon);
-      cell.appendChild(title);
-      cell.appendChild(wrap);
-      container.appendChild(cell);
+      cell.append(name, wrap, val);
+      host.appendChild(cell);
     });
   }
 
-  function HUD_init(opts={}){
-    const bus   = ensureBus(opts.bus);
-    const host  = opts.container || (function(){
-      let n = q(".hud");
-      if(!n){ n = el("div","hud"); document.body.appendChild(n); }
-      return n;
-    })();
+  // Aktualisiert eine Ressource – minimal robust
+  function patch(host, resId, deltaOrAbs){
+    const cell = host.querySelector(`.hud__cell[data-res="${resId}"]`);
+    if (!cell) return;
 
-    // Ressourcenliste: Registry bevorzugt
-    const resources = (opts.registry && Array.isArray(opts.registry.resources))
-      ? opts.registry.resources.map(r=>({
-          id: r.id, label: r.label || r.id,
-          icon: (r.icon || (r.id && `../../assets/icons/resources/${r.id}.png`))
-        }))
-      : DEFAULT_RESOURCES;
+    const valEl = cell.querySelector('.hud__value');
+    const oldV  = Number(valEl?.textContent || 0);
+    const newV  = (typeof deltaOrAbs === 'object' && typeof deltaOrAbs.value === 'number')
+      ? deltaOrAbs.value
+      : (typeof deltaOrAbs === 'number' ? (oldV + deltaOrAbs) : oldV);
 
-    buildCells(host, resources);
+    if (valEl) valEl.textContent = String(newV);
 
-    // Optional: Startwerte besorgen (Snapshot)
-    if (typeof opts.fetchSnapshot === "function"){
-      try{
-        const snap = opts.fetchSnapshot() || {};
-        // Hier könntest du Mengen-Overlays/Badges setzen (später)
-        // aktuell bewusst weggelassen: reine Icon-/Layout-Validierung
-      }catch(e){ console.warn("[HUD] snapshot failed:", e); }
+    // kleines Highlight
+    cell.classList.add('is-updated');
+    setTimeout(()=> cell.classList.remove('is-updated'), 300);
+  }
+
+  // --------------------------- API ---------------------------
+  function init() {
+    let host = $('#hud-root');
+    if (!host){
+      host = el('div'); host.id = 'hud-root';
+      document.body.appendChild(host);
     }
 
-    // Hooks
-    bus.on("cb:registry:ready", ()=>{ /* wenn Registry später lädt -> neu aufbauen */
-      buildCells(host, resources);
-    });
-    bus.on("cb:res:change", (payload)=>{
-      // Platzhalter für zukünftige Mengen-/Highlight-Updates
-      // console.debug("[HUD] res change", payload);
+    // Reihenfolge über Registry (falls vorhanden), sonst Defaults
+    const model = fromRegistry() || defaultResources();
+    render(host, model);
+
+    // Erstellt/zeigt den Build-Button, wenn noch hidden
+    const btnBuild = $('#btn-build');
+    if (btnBuild) btnBuild.hidden = false;
+
+    // Events: Ressourcenänderungen anwenden
+    window.addEventListener('cb:res:change', (e)=>{
+      const d = e?.detail || e;
+      // d kann {res, delta} oder {res, value} sein
+      if (d && d.res){ patch(host, d.res, ('value' in d) ? {value:d.value} : (d.delta||0)); }
     });
 
-    bus.emit("cb:hud-ready", { ok:true });
-    return { bus, host, resources };
+    (window.CBLog?.ok||console.log)('[hud] bereit');
+    window.dispatchEvent(new CustomEvent('cb:hud-ready', { detail:{ ok:true } }));
   }
 
-  return { init: HUD_init };
-});
-window.addEventListener('cb:game-start', () => {
-  // UIHUD.init() oder deine bestehende Start-Routine
-  window.UIHUD?.init?.(); // sicherer Aufruf
+  return { init };
 });
 
-window.addEventListener('cb:res:change', (e) => {
-  // UIHUD.update(e.detail) o.ä. – deine bestehende Update-Funktion
-  window.UIHUD?.update?.(e.detail);
-});
+// Lifecycle-Hooks: HUD zum Spielstart aufbauen, bei Registry-Ready ebenfalls (idempotent)
+window.addEventListener('cb:game-start',   ()=> window.UIHUD?.init?.(), { passive:true });
+window.addEventListener('cb:registry:ready',()=> window.UIHUD?.init?.(), { passive:true });
