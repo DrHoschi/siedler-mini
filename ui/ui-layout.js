@@ -7,7 +7,7 @@
  *           cb:game-start / cb:game:start-> Layout AN
  *           cb:game:reset                -> Layout AUS
  * ========================================================================== */
-(function () {
+/* (function () {
   const TAG = '[layout]';
   const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
 
@@ -30,4 +30,36 @@
 
   // Debug-Export
   window.LayoutGlue = { enable: enableLayout, disable: disableLayout };
+})(); */
+
+/* ============================================================================
+ * Datei   : ui/ui-layout.js
+ * Zweck   : Schaltet Spiel-Layout NACH Spielstart aktiv (Start-BG bis dahin).
+ * Events  : cb:ui-ready / cb:ui:ready    -> Layout AUS
+ *           cb:game-start / cb:game:start-> Layout AN
+ *           cb:game:reset                -> Layout AUS
+ * ========================================================================== */
+(function () {
+  const TAG = '[layout]';
+  const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
+
+  function enable()  { document.body.classList.add('is-playing');  log('aktiv (body.is-playing)'); }
+  function disable() { document.body.classList.remove('is-playing'); log('inaktiv (Startscreen sichtbar)'); }
+
+  // Startzustand (Startscreen sichtbar)
+  disable();
+
+  // Ready -> AUS (beide Aliasse)
+  addEventListener('cb:ui-ready', disable,  { passive:true });
+  addEventListener('cb:ui:ready', disable,  { passive:true });
+
+  // Game start -> AN (beide Aliasse)
+  addEventListener('cb:game-start', enable, { passive:true });
+  addEventListener('cb:game:start', enable, { passive:true });
+
+  // Reset -> AUS
+  addEventListener('cb:game:reset', disable,{ passive:true });
+
+  // Debug/Manuell
+  window.LayoutGlue = { enable, disable };
 })();
