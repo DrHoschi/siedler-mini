@@ -16,6 +16,8 @@
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19">
   <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19">
   <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.19"><!-- monolith -->
+  <!-- Der kleine Layout-Glue (Platz für HUD + quadratische Map) -->
+  <link  href="ui/ui-layout.css?v=25.10.19" rel="stylesheet">
 </head>
 
 <body>
@@ -84,12 +86,21 @@
 
   <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG) -->
   <script src="ui/ui-start.js?v=25.10.19"></script>
+<script src="ui/ui-hud.js?v=25.10.19"></script>
+<script src="ui/ui-build.js?v=25.10.19"></script>
 
+<!-- 5) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) -->
+<script src="core/path-overlay.js?v=25.10.19"></script>
+
+  
   <!-- 6) Boot + Spiel -->
   <script src="core/boot.js?v=25.10.19"></script>
   <script src="core/game.bootstrap.js?v=25.10.19"></script>
   <script src="core/game.js?v=25.10.19"></script>
 
+<!-- 7) Layout-Glue (winzige Helfer für Canvas-Größe & Event-Bridges) -->
+<script src="ui/ui-layout.js?v=25.10.19"></script>
+  
   <!-- 7) Mini-Diagnose (öffnet NICHT den Inspector) -->
   <script>
     (window.CBLog?.info||console.info)('[index] geladen v25.10.19');
