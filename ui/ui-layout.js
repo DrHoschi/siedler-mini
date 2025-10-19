@@ -7,6 +7,26 @@
  *           cb:boot-ready  -> (bleibt AUS; Startscreen sichtbar)
  * ============================================================================
 */
+
+<script>
+/* ui/ui-layout.js – aktiviert Layout erst nach Spielstart */
+(function () {
+  const body = document.body;
+  // Startzustand: Startbild sichtbar, kein Spiel-Layout
+  body.classList.remove('is-playing');
+
+  // Sobald das Spiel wirklich startet → Spiel-Layout aktivieren
+  window.addEventListener('cb:game-start', () => {
+    body.classList.add('is-playing');      // Canvas/HUD/Dock Layout an
+  });
+
+  // Optional: Beim Zurück ins Startpanel wieder deaktivieren
+  window.addEventListener('cb:ui-ready', () => {
+    body.classList.remove('is-playing');
+  });
+}());
+</script>
+
 (function(){
   const tag = '[layout]';
   const log = (m)=> (window.CBLog?.info || console.info)(`${tag} ${m}`);
@@ -24,6 +44,8 @@
     }
   }
 
+
+  
   // 1) Nach Spielstart aktivieren
   window.addEventListener('cb:game-start', enableLayout);
 
