@@ -1,64 +1,33 @@
 /* ============================================================================
  * Datei   : ui/ui-layout.js
  * Projekt : Neue Siedler
- * Zweck   : Schaltet das Layout erst NACH Spielstart scharf.
- * Events  : cb:game-start  -> body.has-layout an
- *           cb:game:reset  -> body.has-layout aus (optional)
- *           cb:boot-ready  -> (bleibt AUS; Startscreen sichtbar)
- * ============================================================================
-*/
-
-<script>
-/* ui/ui-layout.js – aktiviert Layout erst nach Spielstart */
+ * Version : v25.10.19-final2
+ * Zweck   : Schaltet Spiel-Layout NACH Spielstart aktiv (Start-BG bleibt bis dahin).
+ * Events  : cb:ui-ready     -> Layout AUS  (Startscreen sichtbar)
+ *           cb:game-start   -> Layout AN   (HUD/Map/Dock sichtbar)
+ *           cb:game:reset   -> Layout AUS  (optional)
+ * ========================================================================== */
 (function () {
-  const body = document.body;
-  // Startzustand: Startbild sichtbar, kein Spiel-Layout
-  body.classList.remove('is-playing');
+  const TAG = '[layout]';
+  const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
 
-  // Sobald das Spiel wirklich startet → Spiel-Layout aktivieren
-  window.addEventListener('cb:game-start', () => {
-    body.classList.add('is-playing');      // Canvas/HUD/Dock Layout an
-  });
-
-  // Optional: Beim Zurück ins Startpanel wieder deaktivieren
-  window.addEventListener('cb:ui-ready', () => {
-    body.classList.remove('is-playing');
-  });
-}());
-</script>
-
-(function(){
-  const tag = '[layout]';
-  const log = (m)=> (window.CBLog?.info || console.info)(`${tag} ${m}`);
-
-  function enableLayout(){
-    if (!document.body.classList.contains('has-layout')) {
-      document.body.classList.add('has-layout');
-      log('aktiviert');
-    }
+  function enableLayout() {
+    document.body.classList.add('is-playing');
+    log('aktiv (body.is-playing)');
   }
-  function disableLayout(){
-    if (document.body.classList.contains('has-layout')) {
-      document.body.classList.remove('has-layout');
-      log('deaktiviert');
-    }
+  function disableLayout() {
+    document.body.classList.remove('is-playing');
+    log('inaktiv (Startscreen sichtbar)');
   }
 
+  // Startzustand: Layout AUS
+  disableLayout();
 
-  
-  // 1) Nach Spielstart aktivieren
-  window.addEventListener('cb:game-start', enableLayout);
+  // Umschalten gemäß Lifecycle-Events
+  window.addEventListener('cb:ui-ready',    disableLayout, { passive:true });
+  window.addEventListener('cb:game-start',  enableLayout,  { passive:true });
+  window.addEventListener('cb:game:reset',  disableLayout, { passive:true });
 
-  // 2) Optional zurücksetzen (wenn du einen Reset-Flow hast)
-  window.addEventListener('cb:game:reset', disableLayout);
-
-  // 3) Falls die Seite bereits im gestarteten Zustand wäre (Reload),
-  //    könntest du hier heuristisch prüfen; Standard: aus lassen.
-  document.addEventListener('DOMContentLoaded', ()=> {
-    // bewusst AUS lassen -> Start-Hintergrund bleibt sichtbar bis Start
-    log('bereit (wartet auf cb:game-start)');
-  });
-
-  // Export (Debug)
+  // Debug-Export
   window.LayoutGlue = { enable: enableLayout, disable: disableLayout };
 })();
