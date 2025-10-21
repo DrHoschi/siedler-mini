@@ -1,49 +1,38 @@
 /* ============================================================================
- * Datei   : ui/inspector.tab.events.js
+ * Datei   : ui/inspector/inspector.tab.events.js
  * Projekt : Neue Siedler
- * Version : v1.0.0 (2025-10-21)
- * Zweck   : Inspector-Tab "Events" – lädt docs/EVENTS.md und zeigt es an
- * Abhäng. : ui/ui-inspector.js (liefert window.Inspector API)
+ * Version : v1.0.1 (2025-10-21)
+ * Zweck   : Inspector-Tab "Events" – robustes Warten auf Inspector-API
  * ========================================================================== */
-
 (function(){
   const TAB_ID   = "inspector-tab-events";
   const TAB_NAME = "Events";
+  let   triedLog = false;
 
-  // Minimaler Markdown→HTML Converter (nur das Nötigste)
+  // --- Mini Markdown -> HTML (wie zuvor) -----------------------------------
+  function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
   function mdToHtml(md){
     if(!md) return "<em>Keine Daten</em>";
-    // Headline # -> <h1>, ## -> <h2>, ...
     md = md.replace(/^###### (.*)$/gm, "<h6>$1</h6>")
            .replace(/^##### (.*)$/gm, "<h5>$1</h5>")
            .replace(/^#### (.*)$/gm, "<h4>$1</h4>")
            .replace(/^### (.*)$/gm, "<h3>$1</h3>")
            .replace(/^## (.*)$/gm, "<h2>$1</h2>")
-           .replace(/^# (.*)$/gm, "<h1>$1</h1>");
-    // Code-Fences
-    md = md.replace(/```([\s\S]*?)```/g, (m,code)=>`<pre><code>${escapeHtml(code)}</code></pre>`);
-    // Inline-Code
-    md = md.replace(/`([^`]+)`/g, "<code>$1</code>");
-    // Tabellen (einfach rendern, Zeilenumbrüche <br> innerhalb der Zellen bleiben erhalten)
-    // | a | b | -> <table>...
-    if(md.includes("\n|")) {
+           .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+           .replace(/```([\s\S]*?)```/g, (m,code)=>`<pre><code>${escapeHtml(code)}</code></pre>`)
+           .replace(/`([^`]+)`/g, "<code>$1</code>");
+    if(md.includes("\n|")){
       md = md.replace(/(?:^|\n)(\|.+\|)(?:\n\|[-:\s]+\|)+((?:\n\|.*\|)+)/g, (m, header, rows)=>{
         const ths = header.split("|").slice(1,-1).map(s=>s.trim()).map(h=>`<th>${h}</th>`).join("");
         const trs = rows.trim().split("\n").map(line=>{
           const tds = line.split("|").slice(1,-1).map(s=>s.trim()).map(v=>`<td>${v}</td>`).join("");
           return `<tr>${tds}</tr>`;
         }).join("");
-        return `\n<table class="inspector-table">${`<thead><tr>${ths}</tr></thead><tbody>${trs}</tbody>`}</table>\n`;
+        return `\n<table class="inspector-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>\n`;
       });
     }
-    // Absätze / Zeilenumbrüche
     md = md.replace(/\n{2,}/g, "</p><p>");
-    md = `<p>${md}</p>`;
-    return md;
-  }
-
-  function escapeHtml(s){
-    return s.replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+    return `<p>${md}</p>`;
   }
 
   async function loadEventsMd(){
@@ -54,17 +43,21 @@
       return mdToHtml(md);
     }catch(err){
       return `<div class="warn">Konnte <code>docs/EVENTS.md</code> nicht laden (${escapeHtml(String(err))}).<br>
-      Starte vorher <code>npm run events</code>.</div>`;
+        Erzeuge die Datei mit <code>npm run events</code>.</div>`;
     }
   }
 
-  // Tab beim Inspector registrieren
-  function register(){
-    if(!window.Inspector || !window.Inspector.registerTab){
-      console.warn("[inspector-events] Inspector API nicht gefunden – lade später erneut.");
-      return setTimeout(register, 500);
-    }
-    window.Inspector.registerTab({
+  function getAPI(){
+    return (window.Inspector && typeof window.Inspector.registerTab === "function")
+        || (window.__INSPECTOR__ && typeof window.__INSPECTOR__.registerTab === "function")
+        || (window.inspector && typeof window.inspector.registerTab === "function");
+  }
+
+  function registerNow(){
+    const api = window.Inspector || window.__INSPECTOR__ || window.inspector;
+    if(!api || !api.registerTab) return false;
+
+    api.registerTab({
       id: TAB_ID,
       title: TAB_NAME,
       icon: "📡",
@@ -79,19 +72,50 @@
             </div>
             <div class="md">${html}</div>
           </div>`;
-        const btn = el.querySelector("#btn-reload-events");
-        btn?.addEventListener("click", async ()=>{
-          btn.disabled = true;
-          btn.textContent = "Lade …";
+        el.querySelector("#btn-reload-events")?.addEventListener("click", async (ev)=>{
+          const btn = ev.currentTarget;
+          btn.disabled = true; btn.textContent = "Lade …";
           const fresh = await loadEventsMd();
           el.querySelector(".md").innerHTML = fresh;
-          btn.textContent = "Neu laden";
-          btn.disabled = false;
+          btn.textContent = "Neu laden"; btn.disabled = false;
         });
       }
     });
     console.log("[inspector-events] Tab registriert");
+    return true;
   }
 
-  register();
+  // --- Robust warten: Event-Hooks + Polling --------------------------------
+  function waitAndRegister(timeoutMs = 10000){
+    const start = Date.now();
+    const tick  = () => {
+      if(getAPI()){
+        registerNow();
+        return;
+      }
+      if(!triedLog){
+        triedLog = true;
+        console.warn("[inspector-events] Inspector API nicht gefunden – warte …");
+      }
+      if(Date.now() - start < timeoutMs){
+        setTimeout(tick, 300);
+      }else{
+        console.warn("[inspector-events] Timeout: keine Inspector-API gefunden.");
+      }
+    };
+    tick();
+  }
+
+  // Falls der Inspector ein eigenes Ready-Event feuert, hier abhören:
+  // (wir decken mehrere mögliche Namen ab)
+  ["inspector:ready","cb:inspector:ready","INSPECTOR_READY"].forEach(evt=>{
+    window.addEventListener(evt, ()=> registerNow() || waitAndRegister(5000), { once:true });
+  });
+
+  // Fallback: nach DOMContentLoaded mit dem Warten beginnen
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", ()=> waitAndRegister());
+  }else{
+    waitAndRegister();
+  }
 })();
