@@ -1,5 +1,5 @@
 /*!
- * inspector.api-compat.js  – v1.4.0
+ * ui/inspector/inspector.api-compat.js  – v1.4.0
  * Zweck:
  *  - Stellt robust sicher, dass GameUI.open/close/toggleInspector vorhanden sind.
  *  - Nutzt Core-API wenn vorhanden, sonst DOM-Fallback (#inspector oder Varianten).
