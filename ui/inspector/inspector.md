@@ -4,6 +4,7 @@
   * Projekt : Neue Siedler
   * Codes + Inspektor-Vorgaben + Lastenheft
 
+      -----------------------------------------------------------------------
       | Ebene | Datei | Zweck / Funktion | Schnittstellen / Events | Status |
       -----------------------------------------------------------------------
 Core-API-Anbindung
