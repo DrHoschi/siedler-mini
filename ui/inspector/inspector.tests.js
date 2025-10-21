@@ -7,9 +7,34 @@
 (function(){
   'use strict';
   const MOD='[inspector.tests]'; const VER='v18.15.0';
-  const core = window.__INSPECTOR_CORE__?.api;
-  if(!core){ console.warn(MOD,'core fehlt'); return; }
+  // Robust auf deinen alten Inspector gemappt:
+const core = (function(){
+  // 1) Falls es eine zentrale API gibt – nutze sie
+  if (window.__INSPECTOR_CORE__?.api) return window.__INSPECTOR_CORE__.api;
 
+  // 2) Sonst direkt auf deinen Inspector adaptieren
+  const ins = window.Inspector || window.__INSPECTOR__ || window.inspector || {};
+  const api = {};
+
+  api.registerTab = (def)=>{
+    if (typeof ins.registerTab === 'function') return ins.registerTab(def);
+    if (typeof ins.addTab === 'function')      return ins.addTab(def);
+    // Fallback: sofort in bekannten Slot rendern
+    const host = api.getSlot('tests-view');
+    if (host && typeof def.onShow === 'function') def.onShow(host);
+  };
+
+  api.getSlot = (name)=>{
+    return document.querySelector(`#inspector [data-slot="${name}"]`)
+        || document.querySelector(`[data-inspector-slot="${name}"]`)
+        || document.getElementById(`ins-${name}`)
+        || document.getElementById(name);
+  };
+
+  api.mount = (id,onShow)=> api.registerTab({ id, title:id, onShow });
+
+  return api;
+})();
   // ------- kleine UI-Helfer -------
   function btn(lbl, fn){ const b=document.createElement('button'); b.className='ins-btn'; b.textContent=lbl; b.addEventListener('click', fn); return b; }
   function h3(txt){ const n=document.createElement('h3'); n.textContent=txt; return n; }
