@@ -1,5 +1,6 @@
 /* ============================================================================
- * Inspector Ressourcen – v18.14.4
+ * Inspector Ressourcen
+ * ui/inspector/inspector.resources.js – v18.14.4
  *  - Einfache Buttons zum Füllen/Leeren sogenannter Ressourcen (Demo)
  *  - Nutzt, wenn vorhanden, Game.Resources API; ansonsten nur Log
  * ========================================================================== */
