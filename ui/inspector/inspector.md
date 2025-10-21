@@ -2,6 +2,61 @@
   🧩 Inspector – Gesamtstruktur & Dateirollen
   
   * Projekt : Neue Siedler
+  * Codes + Inspektor-Vorgaben + Lastenheft
+
+      |Ebene|Datei|Zweck / Funktion|Schnittstellen / Events|Status|
+    
+Core-API-Anbindung
+ui/inspector/inspector.api-bridge.js
+Stellt eine einheitliche Bridge bereit → definiert window.InspectorAPI.{open,close,toggle}; erkennt ältere window.Inspector.*- oder event-basierte Varianten.
+Lauscht auf `cb:insp:open
+closeund feuert ggf.cb:insp:toggle`. Keine UI.
+Basis-Overlay / Fenster
+ui/ui-inspector.js
+Hauptmodul des Inspector-Fensters (Overlay). Steuert Tabs (Logs, Tests, Ressourcen, Pfade, Editor). Öffnen/Schließen über Button unten rechts.
+`cb:insp:open
+close
+Hooks (Live-Datenanzeigen)
+ui/inspector/inspector-hooks.js
+Kleine Overlays (z. B. Tür-/Entrance-Vorschau). Reagieren direkt auf cb:place:preview und zeigen Text / Debug-Infos.
+Listener auf cb:place:preview
+✅ aktiv (siehe dein Monolith)
+Tabs – Logs
+ui/inspector/inspector.tab.logs.js (oder innerhalb ui-inspector.js integriert)
+Zeigt Logmeldungen (✅ ⚠ ❌ ℹ) mit Filter & Export.
+cb:insp:export:logs
+integriert
+Tabs – Tests
+ui/inspector/inspector.tests.js
+Test-Suite (Engine-Ping, Carrier, Pfad, Tür usw.) + neu: Event-Scan-Sektion.
+kann beliebige Tests über GameTests.* anstoßen und CBLog nutzen
+✅ du hast aktuellste Version (v18.15.0)
+Tabs – Ressourcen
+ui/inspector/inspector.tab.resources.js
+Zeigt aktuelle Ressourcen, ermöglicht + / – / Reset.
+arbeitet mit `cb:res:snapshot
+change`
+Tabs – Pfade
+ui/inspector/inspector.tab.paths.js
+Steuert Pfad-Overlay & Heatmap.
+sendet `cb:path:overlay:on
+off, cb:path:heatmap:on
+Tabs – Editor
+ui/inspector/inspector.tab.editor.js
+Zugriff auf Map/Level-Editor; Laden/Speichern/Export.
+cb:editor:*
+später aktiv
+Event-Scan API (neu)
+ui/inspector/events.scan.js
+Zentrale Hilfsbibliothek für alle Tabs, die Skripte im Browser nach cb:/req:/emit: durchsuchen.
+keine externen Events; liefert Promise + MD-Ergebnis (EventScan.run()).
+✅ eingebunden
+Tabs – Events (optional)
+ui/inspector/inspector.tab.events.js
+Anzeige-Tab, nutzt EventScan nur für Lesen/Export; kann optional bleiben.
+intern – keine neuen Events
+optional / reduzierbar
+
   
     assets/inspector/
       inspector.css
