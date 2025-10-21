@@ -59,9 +59,9 @@
      ========================================================================= -->
 
 <!-- Core & Grundlogik -->
-<!-- <script src="ui/inspector/inspector.core.js"></script>
+<script src="ui/inspector/inspector.core.js"></script>
 <script src="ui/inspector/inspector.hooks.js"></script>
--->
+  
 <!-- APIs & Kompatibilität -->
 <!-- <script src="ui/inspector/inspector.api-bridge.js"></script>
 <script src="ui/inspector/inspector.api-compat.js"></script>
@@ -74,7 +74,8 @@
 -->
 <!-- Feature-Module -->
 <!-- <script src="ui/inspector/inspector.logs.js"></script>
-<script src="ui/inspector/inspector.tests.js"></script>
+
+  
 <script src="ui/inspector/inspector.resources.js"></script>
 <script src="ui/inspector/inspector.paths.js"></script>
 -->
@@ -87,6 +88,9 @@
 <!-- Inspector Core -->
 <script defer src="ui/ui-inspector.js"></script>
 
+  <!-- NEU: Core-Shim (stellt API/Bridge bereit, falls Inspector selbst nichts exportiert) -->
+<script defer src="ui/inspector/inspector.api-core-shim.js"></script>
+  
 <!-- NEU: Event-Scan-Logik (ohne UI) -->
 <script defer src="ui/inspector/events.scan.js"></script>
 
