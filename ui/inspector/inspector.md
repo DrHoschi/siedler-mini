@@ -5,8 +5,8 @@
   * Codes + Inspektor-Vorgaben + Lastenheft
 
   -----------------------------------------------------------------------
-   Ebene | Datei | Zweck / Funktion | Schnittstellen / Events | Status 
-  ----------------------------------------------------------------------
+  | Ebene | Datei | Zweck / Funktion | Schnittstellen / Events | Status 
+  |:----------------------------------------------------------------------
   | Core-API-Anbindung | ui/inspector/inspector.api-bridge.js | Stellt eine einheitliche Bridge bereit → definiert window.InspectorAPI.{open,close,toggle}; erkennt ältere window.Inspector.*- oder event-basierte Varianten | Lauscht auf `cb:insp:open | closeund feuert ggf.cb:insp:toggle`. Keine UI. |
   -----------------------------------------------------------------------
   -----------------------------------------------------------------------   
