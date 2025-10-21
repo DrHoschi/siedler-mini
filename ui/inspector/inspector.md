@@ -1,3 +1,6 @@
+
+  🧩 Inspector – Gesamtstruktur & Dateirollen
+  
   * Projekt : Neue Siedler
   
     assets/inspector/
