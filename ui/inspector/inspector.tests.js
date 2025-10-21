@@ -1,5 +1,6 @@
 /* ============================================================================
  * Inspector Tests – v18.14.4
+ *  ui/inspector/inspector.tests.js
  *  - Kleine, nützliche Testhelfer mit Logs
  *  - Placeholder rufen, falls vorhanden, Game/Test-APIs auf (best effort)
  * ========================================================================== */
