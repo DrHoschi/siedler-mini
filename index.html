@@ -83,8 +83,22 @@
   -->
   <!-- Optional: Auto-Open global (entfernen, wenn nicht gewünscht) -->
   <!-- <script>window.InspectorConfig = { autoOpen:true };</script> -->
-  <script defer src="ui/ui-inspector.js"></script>
+      
+<!-- Inspector Core -->
+<script defer src="ui/ui-inspector.js"></script>
+
+<!-- NEU: Event-Scan-Logik (ohne UI) -->
+<script defer src="ui/inspector/events.scan.js"></script>
+
+<!-- Tests-Tab (nutzt EventScan) -->
+<script defer src="ui/inspector/inspector.tests.js"></script>
+
+<!-- (Optional) Events-Tab, falls du ihn zusätzlich behalten willst -->
 <script defer src="ui/inspector/inspector.tab.events.js"></script>
+
+
+
+
   
   <!-- 4) Loader, die später READY-Events feuern (müssen dispatchen):
          window.dispatchEvent(new CustomEvent('cb:assets:ready'));
