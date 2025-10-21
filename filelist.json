@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-21T14:09:10.965Z",
+  "createdAt": "2025-10-21T16:19:21.386Z",
   "root": ".",
-  "count": 412,
+  "count": 416,
   "entries": [
     {
       "type": "dir",
@@ -1347,6 +1347,11 @@
     },
     {
       "type": "file",
+      "path": "docs/EVENTS_browser_scan.md",
+      "size": 3578
+    },
+    {
+      "type": "file",
       "path": "docs/index.ui.demo.html",
       "size": 2408
     },
@@ -1643,7 +1648,7 @@
     {
       "type": "file",
       "path": "tools/gen-event-doc.js",
-      "size": 10237
+      "size": 1686
     },
     {
       "type": "file",
@@ -1722,6 +1727,11 @@
     },
     {
       "type": "file",
+      "path": "tools/verify-structure.js",
+      "size": 2588
+    },
+    {
+      "type": "file",
       "path": "tools/ZULI_IO_Projektstruktur.dot",
       "size": 1181
     },
@@ -1771,7 +1781,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 4132
+      "size": 4592
     },
     {
       "type": "file",
@@ -1866,6 +1876,11 @@
       "type": "file",
       "path": "ui/inspector/inspector.resources.js",
       "size": 1537
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.tab.events.js",
+      "size": 7070
     },
     {
       "type": "file",
@@ -1975,17 +1990,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1907
+      "size": 1926
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 40771
+      "size": 40769
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15624
+      "size": 15622
     },
     {
       "type": "file",
@@ -1995,7 +2010,12 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 5213
+      "size": 5277
+    },
+    {
+      "type": "file",
+      "path": "package.json",
+      "size": 180
     },
     {
       "type": "file",
