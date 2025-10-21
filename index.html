@@ -84,6 +84,8 @@
   <!-- Optional: Auto-Open global (entfernen, wenn nicht gewünscht) -->
   <!-- <script>window.InspectorConfig = { autoOpen:true };</script> -->
   <script src="ui/ui-inspector.js?v=25.10.19"></script>
+  <!-- in index.html, NACH ui/ui-inspector.js: -->
+<script src="ui/inspector/inspector.tab.events.js"></script>
 
   <!-- 4) Loader, die später READY-Events feuern (müssen dispatchen):
          window.dispatchEvent(new CustomEvent('cb:assets:ready'));
