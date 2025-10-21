@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-19T14:43:16.001Z",
+  "createdAt": "2025-10-21T14:09:10.965Z",
   "root": ".",
   "count": 412,
   "entries": [
@@ -1101,7 +1101,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 5798
+      "size": 6052
     },
     {
       "type": "file",
@@ -1775,6 +1775,11 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-layout.css",
+      "size": 3397
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-notify.css",
       "size": 92
     },
@@ -1879,11 +1884,6 @@
     },
     {
       "type": "file",
-      "path": "ui/index.ui.demo.html",
-      "size": 2408
-    },
-    {
-      "type": "file",
       "path": "ui/inspector.events.js",
       "size": 17216
     },
@@ -1910,7 +1910,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 17809
+      "size": 10414
     },
     {
       "type": "file",
@@ -1935,7 +1935,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 3836
+      "size": 4697
     },
     {
       "type": "file",
@@ -1949,13 +1949,8 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-layout.css",
-      "size": 1903
-    },
-    {
-      "type": "file",
       "path": "ui/ui-layout.js",
-      "size": 2606
+      "size": 2808
     },
     {
       "type": "file",
@@ -1985,17 +1980,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 40596
+      "size": 40771
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15573
+      "size": 15624
+    },
+    {
+      "type": "file",
+      "path": "index.demo.html",
+      "size": 4368
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 4970
+      "size": 5213
     },
     {
       "type": "file",
