@@ -56,6 +56,25 @@ Anzeige-Tab, nutzt EventScan nur für Lesen/Export; kann optional bleiben.
 intern – keine neuen Events
 optional / reduzierbar
 
+graph TD
+  A[index.html] --> B[ui/ui-inspector.js]
+  B --> C[inspector.api-bridge.js]
+  B --> D[inspector.tests.js]
+  B --> E[inspector.tab.logs.js]
+  B --> F[inspector.tab.resources.js]
+  B --> G[inspector.tab.paths.js]
+  B --> H[inspector.tab.editor.js]
+  D --> I[events.scan.js]
+  D -->|cb:insp:export:logs/json| B
+  B -->|cb:path:overlay:on/off| core_path_overlay
+  B -->|cb:editor:*| core_editor
+  core_path_overlay --> B
+  core_registry --> B
+  subgraph LiveHooks
+    K[inspector-hooks.js]
+  end
+  core_build -->|cb:place:preview| K
+
   
     assets/inspector/
       inspector.css
