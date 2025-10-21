@@ -169,3 +169,12 @@
 .insp-placeholder{
   opacity:.85; padding:8px; font-size:14px;
 }
+
+/* Tab: Events */
+.inspector-table { border-collapse: collapse; width: 100%; }
+.inspector-table th, .inspector-table td { border: 1px solid #555; padding: 6px; vertical-align: top; }
+.inspector-table thead th { background: #2a2a2a; }
+.pad { padding: 8px 10px; }
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.hint { opacity: 0.8; font-size: 0.9em; }
+.warn { color: #ffb; background:#552; padding:8px; border:1px solid #aa8; }
