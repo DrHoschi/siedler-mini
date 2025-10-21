@@ -291,4 +291,7 @@
   } else {
     addEventListener('DOMContentLoaded', init, { once:true });
   }
+  // Am Ende der Inspector-Initialisierung:
+window.dispatchEvent(new Event('inspector:ready'));
+  
 })();
