@@ -1,6 +1,7 @@
 /* ============================================================================
  * Neue Siedler – Inspector API Bridge
  * Version: v1.0.0
+ * ui/inspector/inspector.api-bridge.js
  * Zweck: Stellt die Lastenheft-API (InspectorAPI.open/close/toggle) bereit,
  *        falls der geladene Inspector sie (noch) nicht exportiert.
  *        → Keine Änderungen an Inspector-Modulen nötig.
