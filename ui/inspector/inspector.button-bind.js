@@ -1,5 +1,5 @@
 /* ============================================================================
- * Datei: assets/inspector/inspector.button-bind.js
+ * Datei: ui/inspector/inspector.button-bind.js
  * Version: v18.9.1 (2025-09-26)
  * Zweck: Den 🩺-Button robust an den Inspector togglen – unabhängig von Lade-Reihenfolge
  * Leitplanken:
