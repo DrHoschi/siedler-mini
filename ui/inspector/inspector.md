@@ -10,8 +10,7 @@
   |:------|:------|:----------------|:---------------------|:--------------|
   | Core-API-Anbindung | ui/inspector/inspector.api-bridge.js | Stellt eine einheitliche Bridge bereit → definiert window.InspectorAPI.{open,close,toggle}; erkennt ältere window.Inspector.*- oder event-basierte Varianten | Lauscht auf `cb:insp:open | closeund feuert ggf.cb:insp:toggle`. Keine UI. |
   | Basis-Overlay / Fenster | ui/ui-inspector.js | Hauptmodul des Inspector-Fensters (Overlay). Steuert Tabs (Logs, Tests, Ressourcen, Pfade, Editor). Öffnen/Schließen über Button unten rechts. | `cb:insp:open | close |
-  | Hooks (Live-Datenanzeigen) | ui/inspector/inspector-hooks.js | Kleine Overlays (z. B. Tür-/Entrance-Vorschau). Reagieren direkt auf cb:place:preview und zeigen Text / Debug-Infos. | Listener auf cb:place:preview | 
-✅ aktiv (siehe dein Monolith) |
+  | Hooks (Live-Datenanzeigen) | ui/inspector/inspector-hooks.js | Kleine Overlays (z. B. Tür-/Entrance-Vorschau). Reagieren direkt auf cb:place:preview und zeigen Text / Debug-Infos. | Listener auf cb:place:preview | ✅ aktiv (siehe dein Monolith) |
   | Tabs – Logs | ui/inspector/inspector.tab.logs.js (oder innerhalb ui-inspector.js integriert) | Zeigt Logmeldungen (✅ ⚠ ❌ ℹ) mit Filter & Export. | cb:insp:export:logs | integriert |
   | Tabs – Tests | ui/inspector/inspector.tests.js | Test-Suite (Engine-Ping, Carrier, Pfad, Tür usw.) + neu: Event-Scan-Sektion. | kann beliebige Tests über GameTests.* anstoßen und CBLog nutzen | ✅ du hast aktuellste Version (v18.15.0) |
   | Tabs – Ressourcen | ui/inspector/inspector.tab.resources.js | Zeigt aktuelle Ressourcen, ermöglicht + / – / Reset. | arbeitet mit `cb:res:snapshot | change` | 
