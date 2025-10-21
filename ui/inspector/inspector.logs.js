@@ -1,5 +1,5 @@
 /* ============================================================================
- * inspector.logs.js – v18.14.5
+ * ui/inspector/inspector.logs.js – v18.14.5
  *  - Logs-Tab (Filter, Suche, Kopieren/Export)
  *  - Sofortige Füllung beim Öffnen + Live-Stream (CBLog.on / Poll-Fallback)
  *  - Strict Slot-Rendering (nie an <body> anhängen)
