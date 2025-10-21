@@ -1,5 +1,5 @@
 /* ============================================================================
- * inspector.core.js – v18.14.5
+ * ui/inspector/inspector.core.js – v18.14.5
  *  - Erzeugt das Overlay (#inspector) + Tabs + Slots
  *  - API: __INSPECTOR_CORE__.api.{open,close,toggle,mount,getSlot,version}
  *  - Events: cb:inspector-open / cb:inspector-close
