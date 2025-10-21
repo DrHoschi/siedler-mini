@@ -1,0 +1,9 @@
+{
+  "name": "neue-siedler",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node tools/verify-structure.js",
+    "events": "node tools/gen-event-doc.js"
+  }
+}
