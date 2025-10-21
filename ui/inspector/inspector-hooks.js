@@ -1,3 +1,6 @@
+/* ui/inspector/inspector-hooks.js
+
+*/
 (function(){
   const el = document.getElementById('insp-entrances') || (()=>{
     const box = document.createElement('pre');
