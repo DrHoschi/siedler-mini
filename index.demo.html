@@ -45,14 +45,15 @@
   <!-- 3) INSPECTOR – sehr früh laden: hookt console/CBLog direkt nach Start
          Overlay bleibt standardmäßig geschlossen.
          <!-- Monolith-Inspector: Core + Modules -->
+<!-- Dein modularer Inspector -->
 <script defer src="ui/inspector/inspector.core.js"></script>
 
-<!-- APIs & Kompatibilität -->
+<!-- APIs & Kompat -->
 <script defer src="ui/inspector/inspector.api-bridge.js"></script>
 <script defer src="ui/inspector/inspector.api-compat.js"></script>
 <script defer src="ui/inspector/inspector.compat.js"></script>
 
-<!-- UI-Bindings & Build -->
+<!-- UI-Bindings -->
 <script defer src="ui/inspector/inspector.build.js"></script>
 <script defer src="ui/inspector/inspector.button-bind.js"></script>
 <script defer src="ui/inspector/inspector.force-toggle.js"></script>
@@ -61,16 +62,15 @@
 <script defer src="ui/inspector/inspector.logs.js"></script>
 <script defer src="ui/inspector/inspector.resources.js"></script>
 <script defer src="ui/inspector/inspector.paths.js"></script>
-
-<!-- Overlay / Layout-Hooks -->
 <script defer src="ui/inspector/overlay.hooks.js"></script>
 
-<!-- Tools, die eine Inspector-API erwarten -->
-<script defer src="ui/inspector/inspector.api-core-shim.js"></script>
+<!-- Tools IM Inspector -->
 <script defer src="ui/inspector/events.scan.js"></script>
 <script defer src="ui/inspector/inspector.tests.js"></script>
-<!-- optional -->
-<script defer src="ui/inspector/inspector.tab.events.js"></script>  <script>
+
+<!-- Optional: nur Anzeige, wenn du willst -->
+<!-- <script defer src="ui/inspector/inspector.tab.events.js"></script> -->
+  
     // Optionales Auto-Open: aus (Start-BG sichtbar halten)
     // window.InspectorConfig = { autoOpen: true };
   </script>
