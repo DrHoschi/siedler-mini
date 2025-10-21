@@ -1,5 +1,6 @@
 /* ============================================================================
- * Inspector Pfade – v18.14.4
+ * Inspector Pfade
+ * ui/inspector/inspector.paths.js – v18.14.4
  *  - Overlay/Heatmap Demo (best effort Hooks auf overlay-hooks / Game)
  * ========================================================================== */
 (function(){
