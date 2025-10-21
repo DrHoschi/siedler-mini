@@ -142,6 +142,8 @@
     getSlot
   };
 
+  window.dispatchEvent(new Event('inspector:ready'));
+  
   // export
   window.__INSPECTOR_CORE__ = { api };
 
