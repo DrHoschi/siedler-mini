@@ -21,22 +21,17 @@
 }
 
 /* FAB – Button unten rechts */
-.cb-fab.cb-fab-inspector,
-#btn-inspector{
+/* Inspector-FAB sichtbar, ganz vorn, sicher am Rand (auch iOS Safe-Area) */
+#btn-inspector {
   position: fixed;
-  right: calc(16px + var(--safe-right));
-  bottom: calc(16px + var(--safe-bottom));
-  z-index: calc(var(--z) + 1);
-  width: 56px; height: 56px;
-  border-radius: 50%;
-  background: #2c2c30;
-  color: #fff;
-  font-size: 22px;
-  line-height: 56px;
-  text-align: center;
-  cursor: pointer;
-  border: 1px solid #0009;
-  box-shadow: 0 6px 18px rgba(0,0,0,.4);
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 100000;            /* über Startpanel, HUD, Dock, Canvas */
+  width: 46px; height: 46px;
+  border: 0; border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  font-weight: 700;
+  pointer-events: auto;
 }
 .cb-fab[hidden]{ display: none !important; }
 .cb-fab:active{ transform: scale(.98); }
