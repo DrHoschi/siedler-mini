@@ -1,5 +1,5 @@
 /* =============================================================================
-   Datei: assets/inspector/inspector.force-toggle.js
+   Datei: ui/inspector/inspector.force-toggle.js
    Zweck: Erzwingt funktionierendes Inspector-Toggle – ALT (UIInspector),
           NEU (Inspector), Events, Root-Fallback. Bringt eigene Logs mit.
    Hinweis: Überschreibt KEIN UI. Setzt nur GameUI.toggleInspector sicher.
