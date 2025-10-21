@@ -4,7 +4,7 @@
   * Projekt : Neue Siedler
   * Codes + Inspektor-Vorgaben + Lastenheft
 
-      |Ebene|Datei|Zweck / Funktion|Schnittstellen / Events|Status|
+      | Ebene | Datei | Zweck / Funktion | Schnittstellen / Events | Status |
     
 Core-API-Anbindung
 ui/inspector/inspector.api-bridge.js
