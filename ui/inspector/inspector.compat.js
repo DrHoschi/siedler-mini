@@ -1,5 +1,5 @@
 /* =============================================================================
-   Datei: assets/inspector/inspector.compat.js
+   Datei: ui/inspector/inspector.compat.js
    Zweck: Falls Inspector keine API global anbietet, ergänze sie
 ============================================================================= */
 
