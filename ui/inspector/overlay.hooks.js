@@ -1,5 +1,5 @@
 /* ============================================================================
- * Datei: assets/inspector/overlay.hooks.js
+ * Datei: ui/inspector/overlay.hooks.js
  * Zweck: Nur ein leichter „Sicherheitsgurt“, der bei Bedarf ein kleines
  *        Fallback-Modal zeigt – und es automatisch wieder entfernt, sobald
  *        der echte Inspector läuft.
