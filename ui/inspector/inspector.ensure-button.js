@@ -1,85 +1,91 @@
 /* ============================================================================
- * Datei   : ui/inspector/inspector.ensure-button.js
- * Zweck   : Stellt sicher, dass #btn-inspector existiert & funktioniert
- * Hinweis : Läuft nach den Inspector-Skripten; minimal-invasiv.
+ * ui/inspector/inspector.ensure-button.js
+ * Macht #btn-inspector sichtbar & funktionsfähig (Click + Taste I)
+ * – robust gegen fehlende API / verschiedene Overlay-IDs
  * ========================================================================== */
 (function(){
   'use strict';
-  const LOG = (window.CBLog?.info||console.info);
-  const WARN= (window.CBLog?.warn||console.warn);
+  const LOG  = (window.CBLog?.info  || console.info).bind(console);
+  const WARN = (window.CBLog?.warn  || console.warn).bind(console);
+  const ERR  = (window.CBLog?.error || console.error).bind(console);
 
-  function getBtn(){
-    return document.getElementById('btn-inspector')
-        || document.querySelector('[data-role="btn-inspector"]');
+  /** mögliche Overlay-Hosts (dein Inspector hat je nach Build andere IDs) */
+  const HOST_IDS = ['inspector-overlay','inspector','ui-inspector','inspector-root'];
+
+  function q(sel){ return document.querySelector(sel); }
+  function host(){
+    for(const id of HOST_IDS){ const el = document.getElementById(id); if(el) return el; }
+    // Fallback: irgend ein div mit data-role/inspector
+    return q('[data-role="inspector"], [data-inspector]');
   }
 
   function ensureBtn(){
-    let btn = getBtn();
+    let btn = document.getElementById('btn-inspector') || q('[data-role="btn-inspector"]');
     if(!btn){
-      // Notfall: Button erstellen (nur wenn keiner vorhanden ist)
       btn = document.createElement('button');
       btn.id = 'btn-inspector';
       btn.setAttribute('aria-label','Inspector');
       btn.title = 'Inspector (I)';
+      btn.textContent = '🔧';
       document.body.appendChild(btn);
-      LOG('[ensure-insp] Button erzeugt (#btn-inspector)');
+      LOG('[insp] Button erzeugt (#btn-inspector)');
     }
-    // Sichtbar machen
     btn.removeAttribute('hidden');
-    btn.style.display = ''; // falls CSS inline mal 'none' gesetzt hatte
-    // Minimal-Styles, falls im CSS nichts gesetzt ist (kannst du wieder entfernen)
-    if(!btn.style.position){
-      btn.style.position = 'fixed';
-      btn.style.right = '14px';
-      btn.style.bottom = '14px';
-      btn.style.zIndex = 99999;
-      btn.style.width = '44px';
-      btn.style.height = '44px';
-      btn.style.borderRadius = '8px';
-      btn.style.border = '0';
-      btn.style.boxShadow = '0 2px 8px rgba(0,0,0,.35)';
-      btn.style.fontWeight = '700';
-      btn.textContent = 'ⓘ';
-    }
+    // falls ein anderer Layer davor liegt → z-index korrigieren
+    btn.style.zIndex = Math.max(100000, parseInt(getComputedStyle(btn).zIndex||'0',10) || 0);
     return btn;
   }
 
+  function api(){
+    // deine möglichen APIs
+    const ins = window.Inspector || window.__INSPECTOR__ || window.inspector || {};
+    return {
+      open : typeof ins.open  === 'function' ? ins.open  .bind(ins) : null,
+      close: typeof ins.close === 'function' ? ins.close .bind(ins) : null,
+      toggle: typeof ins.toggle=== 'function' ? ins.toggle.bind(ins) : null
+    };
+  }
+
   function toggleInspector(){
-    // 1) Bevorzugt: vorhandene API
-    const insp = window.Inspector || window.__INSPECTOR__ || window.inspector;
-    if(insp?.toggle){ insp.toggle(); return; }
-    if(insp?.open && insp?.close){
-      const host = document.getElementById('inspector-overlay') || document.getElementById('inspector');
-      const isOpen = host && (host.classList?.contains('open') || host.style.display === 'block');
-      isOpen ? insp.close() : insp.open();
-      return;
-    }
-    // 2) Event-Bridge (deine Inspector-Module horchen oft darauf)
-    window.dispatchEvent(new CustomEvent('cb:insp:toggle'));
-    // 3) Ultima Ratio: Overlay-Klasse toggeln
-    const host = document.getElementById('inspector-overlay') || document.getElementById('inspector');
-    if(host){
-      const vis = host.classList.contains('open');
-      host.classList.toggle('open', !vis);
-      host.style.display = vis ? 'none' : 'block';
-      LOG('[ensure-insp] Toggle per Overlay-Fallback');
-    }else{
-      WARN('[ensure-insp] Kein Inspector-Overlay gefunden. Prüfe DOM-IDs/CSS.');
+    try{
+      const a = api();
+      if(a.toggle){ a.toggle(); return; }
+      if(a.open && a.close){
+        const h = host();
+        const open = h && (h.classList.contains('open') || h.style.display === 'block' || h.hidden === false);
+        open ? a.close() : a.open();
+        return;
+      }
+      // Event-Bridge, falls dein Core darauf hört
+      window.dispatchEvent(new CustomEvent('cb:insp:toggle'));
+
+      // HARTE Absicherung: direkt den Host toggeln
+      const h = host();
+      if(h){
+        const vis = h.classList.contains('open') || h.style.display === 'block';
+        h.classList.toggle('open', !vis);
+        h.style.display = vis ? 'none' : 'block';
+        h.hidden = false;
+        LOG('[insp] Toggle per Overlay-Fallback');
+      }else{
+        WARN('[insp] Kein Inspector-Host gefunden. IDs geprüft:', HOST_IDS.join(', '));
+      }
+    }catch(e){
+      ERR('[insp] Toggle-Fehler:', e);
     }
   }
 
   function bind(btn){
-    // Doppelte Handler vermeiden
-    btn.replaceWith(btn.cloneNode(true));
-    btn = getBtn();
-    btn.addEventListener('click', toggleInspector);
-    // Tastenkürzel: I
+    // Neu binden (alte Listener verwerfen)
+    const clone = btn.cloneNode(true);
+    btn.replaceWith(clone);
+    clone.addEventListener('click', toggleInspector, { passive:true });
     window.addEventListener('keydown', (e)=>{
-      if (e.key?.toLowerCase() === 'i' && !e.altKey && !e.ctrlKey && !e.metaKey){
+      if(e.key && e.key.toLowerCase()==='i' && !e.altKey && !e.ctrlKey && !e.metaKey){
         toggleInspector();
       }
     });
-    LOG('[ensure-insp] Button gebunden (Click + Taste I)');
+    LOG('[insp] Button gebunden (Click + I)');
   }
 
   function start(){
@@ -89,7 +95,7 @@
 
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', start);
-  } else {
+  }else{
     start();
   }
 })();
