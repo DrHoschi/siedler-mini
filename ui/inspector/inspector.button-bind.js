@@ -6,7 +6,7 @@
   function bind(){
     let btn = document.getElementById('btn-inspector');
     if(!btn){
-      btn = document.createElement('button'); btn.id='btn-inspector'; btn.title='Inspector (I)'; btn.textContent='🛠️';
+      btn = document.createElement('button'); btn.id='btn-inspector'; btn.title='Inspector (I)'; btn.textContent='⚙️';
       document.body.appendChild(btn);
     }
     btn.addEventListener('click', ()=> window.Inspector?.toggle());
