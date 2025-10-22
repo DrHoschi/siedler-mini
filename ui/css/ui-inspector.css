@@ -1,9 +1,9 @@
 /* ============================================================================
- * Datei   : ui/inspector.css
+ * Datei   : ui/css/ui-inspector.css
  * Projekt : Neue Siedler
- * Version : v1.0.9-monolith (Restore)
+ * Version : v1.0.10 (Restore-clean)
  * Zweck   : Inspector-Overlay – Vollbild, Tabs, Logs, Buttons
- * ============================================================================ */
+ * ========================================================================== */
 
 :root{
   --insp-bg: rgba(18,18,20,.96);
@@ -13,20 +13,19 @@
   --insp-inactive: #9a9aa0;
   --insp-fg: #eaeaea;
   --insp-muted: #b9bac1;
-  --z: 2147483000;
+  --insp-z: 2147483000;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
 }
 
-/* FAB – Button unten rechts */
-/* Inspector-FAB sichtbar, ganz vorn, sicher am Rand (auch iOS Safe-Area) */
-#btn-inspector {
+/* === FAB (unten rechts) =============================================== */
+#btn-inspector{
   position: fixed;
   right: calc(14px + env(safe-area-inset-right));
   bottom: calc(14px + env(safe-area-inset-bottom));
-  z-index: 100000;            /* über Startpanel, HUD, Dock, Canvas */
+  z-index: calc(var(--insp-z) - 1); /* immer unter dem Overlay selbst */
   width: 46px; height: 46px;
   border: 0; border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0,0,0,.35);
@@ -36,18 +35,39 @@
 .cb-fab[hidden]{ display: none !important; }
 .cb-fab:active{ transform: scale(.98); }
 
-/* Overlay-Host */
-#inspector-overlay{
-  position: fixed;
-  inset: 0;
-  z-index: var(--z);
+/* === Overlay-Host (vereinheitlicht für beide möglichen IDs) ============ */
+/* Dein DOM hat #inspector; falls alte Builds #inspector-overlay nutzen, wirkt es auch. */
+:where(#inspector, #inspector-overlay){
+  position: fixed !important;
+  inset: 0 !important;            /* top/right/bottom/left: 0 */
+  width: 100vw !important;
+  height: 100vh !important;
   background: var(--insp-bg);
   color: var(--insp-fg);
-  display: none;
-}
-#inspector-overlay.open{ display: block; }
+  z-index: var(--insp-z) !important;
 
-/* Frame füllt den Viewport, respektiert Safe-Areas */
+  /* initial: zu */
+  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* offen */
+:where(#inspector, #inspector-overlay).open,
+body.inspector-open :where(#inspector, #inspector-overlay){
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Debug-Rahmen (optional; zum Prüfen sichtbar lassen oder löschen) */
+:where(#inspector, #inspector-overlay)[data-insp-debug="on"]{
+  outline: 3px solid #ff0 !important;
+}
+
+/* === Frame (Header + Content) ========================================= */
 .insp-frame{
   position: absolute;
   inset: 0;
@@ -72,7 +92,6 @@
   padding: 8px;
   border-radius: 12px 12px 0 0;
 }
-
 .insp-tabs{
   display: flex;
   gap: 8px;
@@ -97,7 +116,7 @@
   color: #101013;
 }
 
-/* Close-X bleibt sichtbar */
+/* Close-Button */
 .insp-close{
   position: sticky;
   top: calc(0px + var(--safe-top));
@@ -161,45 +180,13 @@
 .insp-logline.error .sym{ color:#f87171; }
 
 /* Placeholder-Tabs */
-.insp-placeholder{
-  opacity:.85; padding:8px; font-size:14px;
-}
+.insp-placeholder{ opacity:.85; padding:8px; font-size:14px; }
 
-/* Tab: Events */
-.inspector-table { border-collapse: collapse; width: 100%; }
-.inspector-table th, .inspector-table td { border: 1px solid #555; padding: 6px; vertical-align: top; }
-.inspector-table thead th { background: #2a2a2a; }
-.pad { padding: 8px 10px; }
-.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.hint { opacity: 0.8; font-size: 0.9em; }
-.warn { color: #ffb; background:#552; padding:8px; border:1px solid #aa8; }
-
-#inspector { display:none; opacity:0; visibility:hidden; pointer-events:none; z-index:100001; }
-#inspector.open, body.inspector-open #inspector {
-  display:block !important; opacity:1 !important; visibility:visible !important; pointer-events:auto !important;
-}
-/* ======== Inspector: sichtbar erzwingen (Debug-Patch) ======== */
-#inspector {
-  position: fixed !important;
-  inset: 0 !important;            /* top:0; right:0; bottom:0; left:0 */
-  width: 100vw !important;
-  height: 100vh !important;
-  display: none;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  /* ganz nach vorn – höher als Startpanel/HUD/Toast */
-  z-index: 2147483000 !important;
-}
-
-/* Offen-Zustand */
-#inspector.open,
-body.inspector-open #inspector {
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-}
-
-/* Temporärer Rahmen, damit du ihn sicher siehst (später entfernen) */
-#inspector[data-insp-debug="on"] { outline: 3px solid #ff0 !important; }ü
+/* Tab: Events (Markdown-Tabelle) */
+.inspector-table{ border-collapse: collapse; width: 100%; }
+.inspector-table th, .inspector-table td{ border: 1px solid #555; padding: 6px; vertical-align: top; }
+.inspector-table thead th{ background: #2a2a2a; }
+.pad{ padding: 8px 10px; }
+.toolbar{ display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.hint{ opacity:.8; font-size:.9em; }
+.warn{ color:#ffb; background:#552; padding:8px; border:1px solid #aa8; }
