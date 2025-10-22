@@ -18,13 +18,18 @@
  *   angezeigt (z. B. „ui“). Bei bekannten Tabs bleibt er verborgen.
  * - Code & Kommentare vollständig strukturiert.
  * ========================================================================== */
+/* ============================================================================
+ * Datei   : ui/inspector/inspector.core.js
+ * Version : v18.16.3 (final fix)
+ * Zweck   : Inspector-Overlay (Host, Tabs, Views, API)
+ * Fix     : Eigener "generic-view" für dynamische Tabs (z. B. "ui").
+ *           Der Container (data-slot="view") bleibt IMMER sichtbar.
+ * ========================================================================== */
 (function(){
   'use strict';
   const MOD='[inspector.core]';
 
-  // --------------------------------------------------------------------------
-  // [1] Host erzeugen (nur einmal)
-  // --------------------------------------------------------------------------
+  // Host erzeugen
   function ensureHost(){
     let el = document.getElementById('inspector');
     if (el) return el;
@@ -35,119 +40,108 @@
 
     el.innerHTML = `
       <div class="insp-frame" role="dialog" aria-label="Inspector" aria-modal="true">
-        <!-- Kopfzeile mit Tabs und Schließen-Button -->
         <div class="insp-header">
           <div class="insp-tabs" data-slot="tabs" role="tablist"></div>
           <button class="insp-close" type="button" aria-label="Schließen">Schließen</button>
         </div>
 
-        <!-- Content-Bereich: bekannte Views + generischer "view"-Slot -->
+        <!-- Content-Container: enthält alle bekannten Views + einen generischen View -->
         <div class="insp-content" data-slot="view">
           <div data-slot="logs-view"></div>
           <div data-slot="build-view" hidden></div>
           <div data-slot="paths-view" hidden></div>
           <div data-slot="res-view" hidden></div>
           <div data-slot="tests-view" hidden></div>
+          <!-- NEU: eigener Slot nur für dynamische Tabs -->
+          <div data-slot="generic-view" hidden></div>
         </div>
       </div>`;
     document.body.appendChild(el);
 
-    // Schließen-Button → Overlay schließen
     el.querySelector('.insp-close').addEventListener('click', ()=> API.close());
-
     return el;
   }
 
   const host = ensureHost();
 
-  // --------------------------------------------------------------------------
-  // [2] Slot-Referenzen & bekannte Views
-  // --------------------------------------------------------------------------
+  // Slots
+  const container = host.querySelector('[data-slot="view"]'); // IMMER sichtbar
   const slots = {
-    tabs : host.querySelector('[data-slot="tabs"]'),
-    view : host.querySelector('[data-slot="view"]'),     // generischer Slot (für neue Tabs)
-    logs : host.querySelector('[data-slot="logs-view"]'),
-    build: host.querySelector('[data-slot="build-view"]'),
-    paths: host.querySelector('[data-slot="paths-view"]'),
-    res  : host.querySelector('[data-slot="res-view"]'),
-    tests: host.querySelector('[data-slot="tests-view"]')
+    tabs    : host.querySelector('[data-slot="tabs"]'),
+    container,
+    logs    : host.querySelector('[data-slot="logs-view"]'),
+    build   : host.querySelector('[data-slot="build-view"]'),
+    paths   : host.querySelector('[data-slot="paths-view"]'),
+    res     : host.querySelector('[data-slot="res-view"]'),
+    tests   : host.querySelector('[data-slot="tests-view"]'),
+    generic : host.querySelector('[data-slot="generic-view"]')
   };
 
+  // Sicherstellen, dass generic existiert (falls alt. HTML ohne generic)
+  if (!slots.generic) {
+    const gen = document.createElement('div');
+    gen.setAttribute('data-slot','generic-view');
+    gen.hidden = true;
+    slots.container.appendChild(gen);
+    slots.generic = gen;
+  }
+
+  // Bekannte Views
   const views = {
     logs : slots.logs,
     build: slots.build,
     paths: slots.paths,
     res  : slots.res,
     tests: slots.tests
-    // Dynamische Tabs (z. B. „ui“) benutzen slots.view.
+    // dynamische Tabs benutzen slots.generic
   };
 
-  // --------------------------------------------------------------------------
-  // [3] Tab-ID-Normalisierung (Synonyme)
-  // --------------------------------------------------------------------------
+  // Tab-ID normalisieren
   function normalizeId(id){
     if (!id) return 'logs';
     const s = String(id).toLowerCase().trim();
-
     if (['ress.','ress','resources','resource'].includes(s)) return 'res';
     if (['pfade','pfad','path','paths'].includes(s))         return 'paths';
-    if (['event','events'].includes(s))                     return 'tests';
-    return s;
+    if (['event','events'].includes(s))                      return 'tests';
+    return s; // z. B. "ui"
   }
 
-  // --------------------------------------------------------------------------
-  // [4] Tab-Buttons verwalten
-  // --------------------------------------------------------------------------
-  const tabButtons = {}; // key = normalisierte ID
-
+  // Tab-Buttons
+  const tabButtons = {};
   function addTabButton(id, label){
     const norm = normalizeId(id);
-    if (tabButtons[norm]) {
-      if (label) tabButtons[norm].textContent = label;
-      return;
-    }
+    if (tabButtons[norm]) { if (label) tabButtons[norm].textContent = label; return; }
     const b = document.createElement('button');
-    b.className = 'insp-tab';
-    b.type = 'button';
-    b.textContent = label || norm;
-    b.dataset.tab = norm;
-    b.setAttribute('role','tab');
+    b.className = 'insp-tab'; b.type='button';
+    b.textContent = label || norm; b.dataset.tab = norm; b.setAttribute('role','tab');
     b.addEventListener('click', ()=> setActiveTab(norm));
-    slots.tabs.appendChild(b);
-    tabButtons[norm] = b;
+    slots.tabs.appendChild(b); tabButtons[norm]=b;
   }
 
-  // --------------------------------------------------------------------------
-  // [5] Aktiven Tab setzen
-  // --------------------------------------------------------------------------
+  // Aktiven Tab setzen (Container bleibt sichtbar!)
   function setActiveTab(id){
     const norm = normalizeId(id);
     const isKnown = Object.prototype.hasOwnProperty.call(views, norm);
 
-    // 1) bekannte Views ein-/ausblenden
+    // bekannte Views ein-/ausblenden
     Object.entries(views).forEach(([key, el])=>{
       if (el) el.hidden = (key !== norm);
     });
 
-    // 2) generischen Slot nur zeigen, wenn kein bekannter Tab aktiv ist
-    if (slots.view) slots.view.hidden = isKnown;
+    // generischen View zeigen, wenn KEIN bekannter Tab aktiv ist (z. B. "ui")
+    if (slots.generic) slots.generic.hidden = isKnown;
 
-    // 3) Tab-Buttons visuell markieren
+    // Buttons markieren
     Object.entries(tabButtons).forEach(([key,b])=>{
       b.classList.toggle('active', key === norm);
     });
 
-    // 4) Event cb:insp:tab:change (für Module mit Auto-Refresh)
-    window.dispatchEvent(
-      new CustomEvent('cb:insp:tab:change', { detail:{ tab:norm } })
-    );
+    // Wechsel melden
+    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab:norm } }));
   }
 
-  // --------------------------------------------------------------------------
-  // [6] Öffentliche API
-  // --------------------------------------------------------------------------
+  // API
   const API = {
-    /** Öffnet den Inspector (optional direkt mit Tab) */
     open(tab){
       host.classList.add('open');
       Object.assign(host.style, {
@@ -157,8 +151,6 @@
       document.body.classList.add('inspector-open');
       setActiveTab(tab || 'logs');
     },
-
-    /** Schließt den Inspector */
     close(){
       host.classList.remove('open');
       Object.assign(host.style, {
@@ -167,53 +159,41 @@
       host.setAttribute('aria-hidden','true');
       document.body.classList.remove('inspector-open');
     },
-
-    /** Toggle (öffnet/schließt, optional Tab angeben) */
     toggle(tab){
-      (getComputedStyle(host).display === 'none') ? API.open(tab) : API.close();
+      (getComputedStyle(host).display==='none') ? API.open(tab) : API.close();
     },
-
-    /** Registriert oder aktualisiert einen Tab */
     registerTab({ id, title, onShow }){
       const norm = normalizeId(id);
       addTabButton(norm, title || id);
 
-      // Ziel-Slot: bekannter oder generischer Slot
-      const slot = views[norm] || slots.view;
+      // Ziel-Slot: bekannter Slot ODER der neue generic-view
+      const slot = views[norm] || slots.generic;
 
       if (slot && typeof onShow === 'function'){
         slot.innerHTML = '';
         onShow(slot);
       }
     },
-
-    /** Kurzform */
     mount(id,onShow){ API.registerTab({ id, title:id, onShow }); },
-
-    /** Zugriff auf bekannten Slot */
-    getSlot(name){ return slots[name] || document.querySelector(`[data-slot="${name}"]`); }
+    getSlot(name){
+      return (name==='view') ? slots.container : (slots[name] || document.querySelector(`[data-slot="${name}"]`));
+    }
   };
 
-  // --------------------------------------------------------------------------
-  // [7] API global registrieren
-  // --------------------------------------------------------------------------
+  // global
   window.Inspector = Object.assign(window.Inspector||{}, API);
   window.__INSPECTOR_CORE__ = { api: API };
 
-  // --------------------------------------------------------------------------
-  // [8] Standard-Tabs im Header
-  // --------------------------------------------------------------------------
+  // Standard-Buttons
   addTabButton('logs','logs');
   addTabButton('build','build');
   addTabButton('paths','paths');
   addTabButton('res','resources');
   addTabButton('tests','tests');
-  addTabButton('ui','ui'); // eigener Debug-Tab
+  addTabButton('ui','ui'); // dynamischer Tab → generic-view
 
-  // --------------------------------------------------------------------------
-  // [9] Startzustand + Ready-Event
-  // --------------------------------------------------------------------------
+  // Start + Ready
   setActiveTab('logs');
-  (window.CBLog?.info||console.info)(MOD,'bereit v%s','18.16.2');
+  (window.CBLog?.info||console.info)(MOD,'bereit v%s','18.16.3');
   setTimeout(()=> window.dispatchEvent(new Event('inspector:ready')),0);
 })();
