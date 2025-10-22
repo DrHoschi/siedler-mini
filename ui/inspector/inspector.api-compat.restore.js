@@ -17,17 +17,31 @@
 
   // 2) Sichtbarkeit setzen (hard fallback, falls Core es nicht tut)
   function setOpen(on){
-    const el = host(); if(!el) return false;
-    el.removeAttribute('hidden');
-    el.classList.toggle('open', !!on);
-    el.style.display = on ? 'block' : 'none';
-    el.style.visibility = on ? 'visible' : 'hidden';
-    el.style.opacity = on ? '1' : '0';
-    el.style.pointerEvents = on ? 'auto' : 'none';
-    document.body.classList.toggle('inspector-open', !!on);
-    el.setAttribute('aria-hidden', on ? 'false' : 'true');
-    return true;
+  const el = document.getElementById('inspector');
+  if(!el) return false;
+
+  // Elternkette hoch: alles sichtbar schalten (falls ein Parent display:none war)
+  let p = el.parentElement;
+  while(p){
+    if(getComputedStyle(p).display === 'none'){ p.style.display = 'block'; }
+    if(getComputedStyle(p).visibility === 'hidden'){ p.style.visibility = 'visible'; }
+    p = p.parentElement;
   }
+
+  // eigene Sichtbarkeit erzwingen
+  el.removeAttribute('hidden');
+  el.classList.toggle('open', !!on);
+  el.style.display       = on ? 'block'  : 'none';
+  el.style.visibility    = on ? 'visible': 'hidden';
+  el.style.opacity       = on ? '1'      : '0';
+  el.style.pointerEvents = on ? 'auto'   : 'none';
+  document.body.classList.toggle('inspector-open', !!on);
+
+  // Debug-Kennzeichen (gelber Outline-Rahmen)
+  el.setAttribute('data-insp-debug', on ? 'on' : 'off');
+
+  return true;
+}
 
   // 3) API nur ergänzen, wenn sie fehlt
   const insp = (window.Inspector ||= {});
