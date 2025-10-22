@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-21T17:51:48.588Z",
+  "createdAt": "2025-10-22T13:52:50.458Z",
   "root": ".",
-  "count": 417,
+  "count": 423,
   "entries": [
     {
       "type": "dir",
@@ -1597,6 +1597,11 @@
     },
     {
       "type": "file",
+      "path": "tools/ai-profiler.js",
+      "size": 191
+    },
+    {
+      "type": "file",
       "path": "tools/asset-library.html",
       "size": 5787
     },
@@ -1781,7 +1786,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 4592
+      "size": 2463
     },
     {
       "type": "file",
@@ -1820,7 +1825,7 @@
     {
       "type": "file",
       "path": "ui/inspector/events.scan.js",
-      "size": 2657
+      "size": 1547
     },
     {
       "type": "file",
@@ -1839,13 +1844,23 @@
     },
     {
       "type": "file",
+      "path": "ui/inspector/inspector.api-compat.restore.js",
+      "size": 3289
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.api-core-shim.js",
+      "size": 2770
+    },
+    {
+      "type": "file",
       "path": "ui/inspector/inspector.build.js",
       "size": 1363
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 4437
+      "size": 794
     },
     {
       "type": "file",
@@ -1855,7 +1870,22 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.core.js",
-      "size": 5676
+      "size": 4318
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.ensure-button.js",
+      "size": 3638
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.ensure-host.js",
+      "size": 3634
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.fix-runtime.js",
+      "size": 5178
     },
     {
       "type": "file",
@@ -1870,7 +1900,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.md",
-      "size": 1636
+      "size": 4682
     },
     {
       "type": "file",
@@ -1890,7 +1920,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.tests.js",
-      "size": 4334
+      "size": 2599
     },
     {
       "type": "file",
@@ -1965,7 +1995,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 11111
+      "size": 11210
     },
     {
       "type": "file",
@@ -2000,22 +2030,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 41155
+      "size": 41255
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15760
+      "size": 15798
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 4368
+      "size": 5859
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 5584
+      "size": 5709
     },
     {
       "type": "file",
