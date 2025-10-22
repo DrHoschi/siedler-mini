@@ -1,21 +1,26 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.ui.js
  * Projekt : Neue Siedler
- * Version : v18.16.0
+ * Version : v18.16.3 (final, UI-Diagnose-Tools)
  * Zweck   : Inspector-Tab "ui" zum Untersuchen von Layern/Z-Order/Pointer Events
  *
  * Features:
  *  - Live-Infos zu relevanten Layern (display/visibility/opacity/pointerEvents/zIndex/BBox)
- *  - Highlight/Outline pro Layer toggeln
+ *  - Highlight/Outline pro Layer toggeln (Mark/Unmark)
  *  - Hit-Test (elementsFromPoint): zeigt Stack + zIndex + display/visibility
- *  - Crosshair-Modus: Antippen irgendwo → Stack + Styles
- *  - Quick Actions: inspector open/close, pointer-events on/off, z-boost
+ *  - Crosshair-Modus: Zielkreuz → Klick zeigt Stack am Punkt
+ *  - Quick Actions: Peek (halten), PE off (2s), Reset aller Tweaks
+ *  - Pro-Layer „z+“ (temporärer z-index Boost), pointer-events Toggles
+ *
+ * Hinweise:
+ *  - Rendert in den dynamischen Tab "ui" (Core: generic-view Slot).
+ *  - Keine Inspector open/close Buttons mehr – Close oben rechts im Header.
  * ========================================================================== */
 (function(){
   'use strict';
-  const MOD='[inspector.ui]'; const VER='v18.16.0';
+  const MOD='[inspector.ui]'; const VER='v18.16.3';
 
-  // ---- Core-Bridge robust beziehen ----
+  // ---- Core-Bridge (robust) -------------------------------------------------
   const core = (function(){
     if (window.__INSPECTOR_CORE__?.api) return window.__INSPECTOR_CORE__.api;
     const ins = window.Inspector || window.__INSPECTOR__ || {};
@@ -28,24 +33,22 @@
             || document.getElementById(name);
       },
       mount(id,onShow){ return this.registerTab({ id, title:id, onShow }); },
-      open(tab){ (window.Inspector?.open||function(){}) (tab); },
-      close(){ (window.Inspector?.close||function(){}) (); },
     };
   })();
 
-  // ---- beobachtete Layer (ID/CSS-Selector + Label) -------------------------
+  // ---- Beobachtete Layer (Selector + Label) ---------------------------------
   const LAYERS = [
-    { sel:'#game-canvas',     label:'Canvas' },
-    { sel:'#ui-root',         label:'UI Root' },
-    { sel:'#hud-root',        label:'HUD' },
-    { sel:'#build-dock',      label:'BuildDock' },
-    { sel:'#btn-build',       label:'Build Button' },
-    { sel:'#inspector',       label:'Inspector (Split-Core)' },
+    { sel:'#game-canvas',       label:'Canvas' },
+    { sel:'#ui-root',           label:'UI Root' },
+    { sel:'#hud-root',          label:'HUD' },
+    { sel:'#build-dock',        label:'BuildDock' },
+    { sel:'#btn-build',         label:'Build Button' },
+    { sel:'#inspector',         label:'Inspector (Split-Core)' },
     { sel:'#inspector-overlay', label:'Inspector (Overlay-Fallback)' },
-    // du kannst beliebig ergänzen …
+    // ggf. ergänzen …
   ];
 
-  // ---- Utils ---------------------------------------------------------------
+  // ---- Utils ----------------------------------------------------------------
   const $ = (s,sc=document)=> sc.querySelector(s);
   function css(el){ try{ return getComputedStyle(el); }catch(_){ return {}; } }
   function z(el,cs){ const v=(cs||css(el)).zIndex; return (v==null||v==='auto')?'auto':String(v); }
@@ -54,9 +57,33 @@
     const b = el.getBoundingClientRect();
     return `x:${Math.round(b.x)}, y:${Math.round(b.y)}, w:${Math.round(b.width)}, h:${Math.round(b.height)}`;
   }
-  function styleNum(v){ const n = parseFloat(v); return isNaN(n)?0:n; }
 
-  // Highlight-Manager
+  // ---------- Style-Save/Restore: sicher temporär ändern ---------------------
+  const __SAVE = new WeakMap();
+  function saveStyle(el, prop){
+    if (!el) return;
+    const bag = __SAVE.get(el) || {};
+    if (!(prop in bag)) bag[prop] = el.style[prop] || '';
+    __SAVE.set(el, bag);
+  }
+  function restoreStyle(el, prop){
+    if (!el) return;
+    const bag = __SAVE.get(el) || {};
+    if (prop in bag){ el.style[prop] = bag[prop]; delete bag[prop]; }
+    __SAVE.set(el, bag);
+  }
+  function saveThen(el, prop, value){
+    saveStyle(el, prop);
+    el.style[prop] = value;
+  }
+  function restoreAll(){
+    for (const [el, bag] of __SAVE){
+      Object.keys(bag).forEach(prop => { el.style[prop] = bag[prop]; });
+      __SAVE.delete(el);
+    }
+  }
+
+  // ---------- Highlight-Manager ----------------------------------------------
   const HL = new Map();
   function toggleHighlight(el, on){
     if(!el) return;
@@ -79,6 +106,7 @@
     }
   }
 
+  // ---------- Tabellen-Helfer -------------------------------------------------
   function row(values){
     const tr=document.createElement('tr');
     values.forEach(v=>{
@@ -88,8 +116,6 @@
     });
     return tr;
   }
-
-  // Mini button
   function btn(txt,fn,title){
     const b=document.createElement('button');
     b.className='insp-btn'; b.textContent=txt;
@@ -98,7 +124,7 @@
     return b;
   }
 
-  // ---- Hit-Test/Stack ------------------------------------------------------
+  // ---- Hit-Test/Stack -------------------------------------------------------
   function stackAt(x,y){
     const list = (document.elementsFromPoint?.(x,y) || []);
     return list.map(el=>{
@@ -112,25 +138,45 @@
     });
   }
 
-  // ---- UI-Tab --------------------------------------------------------------
+  // ---- UI-Tab ---------------------------------------------------------------
   core.mount('ui', (host)=>{
-    host.innerHTML = ''; // clean
+    host.innerHTML = '';
     const wrap = document.createElement('div'); wrap.className='pad';
 
     // Header
     const h = document.createElement('h3'); h.textContent='UI / Layer';
     wrap.appendChild(h);
 
-    // Quick actions
+    // --- Toolbar: Diagnose-Tools (kein open/close mehr) ----------------------
     const bar = document.createElement('div'); bar.className='toolbar';
-    const bOpen  = btn('Inspector open', ()=> core.open('ui'));
-    const bClose = btn('Inspector close',()=> core.close());
-    const bPeOff = btn('PE off', ()=>{
+
+    // (A) Peek (halten): solange gedrückt → pointer-events:none auf body
+    const bPeek = btn('Peek (halten)', ()=>{}, 'Solange gedrückt: pointer-events:none auf Body');
+    bPeek.addEventListener('mousedown', ()=>{
+      saveStyle(document.body, 'pointerEvents');
       document.body.style.pointerEvents='none';
-      setTimeout(()=>{ document.body.style.pointerEvents=''; }, 2000);
+    });
+    ['mouseup','mouseleave'].forEach(evt =>
+      bPeek.addEventListener(evt, ()=> restoreStyle(document.body,'pointerEvents'))
+    );
+
+    // (B) PE off (2s): kurz „durchklicken“ zulassen
+    const bPeOff = btn('PE off (2s)', ()=>{
+      saveStyle(document.body, 'pointerEvents');
+      document.body.style.pointerEvents='none';
+      setTimeout(()=> restoreStyle(document.body, 'pointerEvents'), 2000);
     }, 'pointer-events temporär ausschalten (2s)');
-    const bCross = btn('Crosshair', ()=> enableCrosshair());
-    bar.append(bOpen,bClose, bPeOff, bCross);
+
+    // (C) Crosshair: Zielkreuz → Klick zeigt Stack
+    const bCross = btn('Crosshair', ()=> enableCrosshair(), 'Zielkreuz; Klick zeigt elementsFromPoint-Stack');
+
+    // (D) Reset: alle Tweaks zurücknehmen (z+, Highlights, PE-Patches, Crosshair)
+    const bReset = btn('Reset tweaks', ()=> resetTweaks(), 'Alle Highlights, z-Boosts und pointer-events-Restores rückgängig');
+
+    const hintFront = document.createElement('span'); hintFront.className='hint';
+    hintFront.textContent = 'Tipp: "z+" pro Zeile bringt Layer nach vorn.';
+
+    bar.append(bPeek, bPeOff, bCross, bReset, hintFront);
     wrap.appendChild(bar);
 
     // Layer-Tabelle
@@ -152,24 +198,26 @@
 
     // Hint
     const hint = document.createElement('div'); hint.className='hint';
-    hint.textContent = 'Tipp: Bei „Crosshair“ antippen/anklicken → vollständiger Stack (elementsFromPoint) unten.';
+    hint.textContent = 'Bei „Crosshair“ klicken → vollständiger Stack (elementsFromPoint) unten.';
     wrap.appendChild(hint);
     wrap.appendChild(table);
 
     // Stack-Ausgabe
     const h2 = document.createElement('h3'); h2.textContent='Hit-Test / Stack';
-    const stackBox = document.createElement('div'); stackBox.style.cssText='margin-top:8px; border:1px solid #444; border-radius:8px; padding:8px; max-height:32vh; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px;';
+    const stackBox = document.createElement('div');
+    stackBox.style.cssText='margin-top:8px; border:1px solid #444; border-radius:8px; padding:8px; max-height:32vh; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px;';
     wrap.appendChild(h2); wrap.appendChild(stackBox);
 
     host.appendChild(wrap);
 
-    // Render-Funktion
+    // ---------------- Render-Funktion (1/s) ----------------------------------
     function render(){
       tbody.innerHTML='';
       LAYERS.forEach(def=>{
         const el = $(def.sel, document);
         const c  = el ? css(el) : {};
-        const bActions = document.createElement('div'); bActions.style.display='flex'; bActions.style.gap='6px'; bActions.style.flexWrap='wrap';
+        const bActions = document.createElement('div');
+        bActions.style.display='flex'; bActions.style.gap='6px'; bActions.style.flexWrap='wrap';
 
         // highlight toggle
         const on = HL.has(el);
@@ -177,24 +225,23 @@
           const now = HL.has(el); toggleHighlight(el, !now); render();
         }, 'Outline/Highlight toggeln');
 
-        // z-boost temporär
-        const bZ = btn('z+','', 'z-index temporär erhöhen (bis zum nächsten Render)');
+        // z-boost temporär (per Save/Restore rücksetzbar)
+        const bZ = btn('z+', '', 'z-index temporär erhöhen (bis Reset)');
         bZ.addEventListener('click', ()=>{
           if(!el) return;
-          const old = el.getAttribute('data-insp-old-z') ?? '';
-          if(!old){ el.setAttribute('data-insp-old-z', (el.style.zIndex||'')); }
-          el.style.zIndex = String( 2147483000 );
+          saveThen(el, 'zIndex', String(2147483000));
           render();
         });
 
         // pointer-events toggle
         const bPE = btn((c.pointerEvents==='none')?'PE on':'PE off', ()=>{
           if(!el) return;
-          el.style.pointerEvents = (c.pointerEvents==='none') ? '' : 'none';
+          if (c.pointerEvents==='none') restoreStyle(el,'pointerEvents');
+          else saveThen(el,'pointerEvents','none');
           render();
         }, 'pointer-events toggeln');
 
-        // show in Stack sofort (center top-left)
+        // show Stack @ center
         const bHit = btn('Stack @ center', ()=>{
           const b = el?.getBoundingClientRect?.(); if(!b) return;
           const x = Math.max(0, b.left + Math.min(5, b.width/2));
@@ -217,7 +264,7 @@
       });
     }
 
-    // Crosshair
+    // ---------------- Crosshair-Modus ----------------------------------------
     let crosshairActive=false, crossDiv=null, crossH=null, crossV=null;
     function enableCrosshair(){
       if(crosshairActive) { disableCrosshair(); return; }
@@ -234,7 +281,6 @@
       crossV.style.width='1px';  crossV.style.top='0';  crossV.style.bottom='0';
       crossDiv.append(crossH,crossV); document.body.appendChild(crossDiv);
 
-      // capture click
       const onMove = (ev)=>{
         const x = ev.clientX, y = ev.clientY;
         crossH.style.top = y+'px'; crossV.style.left = x+'px';
@@ -262,12 +308,24 @@
       stackBox.innerHTML=''; stackBox.appendChild(pre);
     }
 
-    // Auto-Refresh (klein, per Tab-Wechsel triggert core ohnehin cb:insp:tab:change)
+    // ---------------- Lifecycle / Cleanup ------------------------------------
     render();
     host._insp_ui_timer && clearInterval(host._insp_ui_timer);
     host._insp_ui_timer = setInterval(render, 1000);
 
-    // Aufräumen wenn Tab gewechselt → Timer stoppen
+    function resetTweaks(){
+      // Highlights entfernen
+      Array.from(HL.keys()).forEach(el=> toggleHighlight(el, false));
+      // Styles restoren (PE, zIndex, …)
+      restoreAll();
+      // Crosshair & Stack-Ausgabe zurücksetzen
+      disableCrosshair();
+      stackBox.innerHTML='';
+      // Neu rendern
+      render();
+    }
+
+    // Timer stoppen wenn Tab verlassen wird
     const stop = ()=>{ try{ clearInterval(host._insp_ui_timer); }catch(_){ } };
     window.addEventListener('cb:insp:tab:change', (e)=>{
       if(e?.detail?.tab !== 'ui') stop();
