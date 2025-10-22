@@ -1,32 +1,29 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.core.js
- * Version : v18.16.1
+ * Version : v18.16.2 (final)
  * Zweck   : Kern des Inspector-Overlays (Host, Tabs, View-Slots, API)
  *
  * WICHTIG
- * - Dieses Modul muss VOR allen anderen Inspector-Modulen geladen werden,
- *   damit Tabs und Slots existieren, wenn sich weitere Module registrieren.
+ * - Dieses Modul MUSS VOR allen anderen Inspector-Modulen geladen werden.
+ *   Nur so existieren die Slots, wenn weitere Module ihre Tabs registrieren.
  *
  * Features
- * - Erzeugt Host-Overlay (#inspector) inkl. Header, Tabs, Content-Bereich
- * - Verwaltet Tabs (Buttons + aktives View), inkl. Synonym-Mapping
- * - Stellt eine öffentliche API bereit (open/close/toggle/registerTab/…)
- * - Sendet cb:insp:tab:change-Event bei Tabwechsel (für Auto-Refreshs)
+ * - Erzeugt das Overlay (#inspector) mit Header, Tabs und Content-Bereich
+ * - Verwaltet Tabs (Buttons + aktives View) mit Synonym-Mapping
+ * - Stellt API bereit (open/close/toggle/registerTab/mount/getSlot)
+ * - Sendet cb:insp:tab:change bei Tabwechsel (für Auto-Refreshs)
  *
- * Anpassungen ggü. Baseline:
- * - Normierung von Tab-IDs (z.B. "resources" -> "res", "pfade" -> "paths")
- * - Standard-Buttons inkl. "UI"-Tab (damit dein inspector.ui.js sofort andockt)
- * - Fallback-Rendering: unbekannte Tabs nutzen den generischen "view"-Slot
+ * Änderungen ggü. deiner v18.16.1
+ * - Bugfix: Der generische Slot (slots.view) wird NUR bei dynamischen Tabs
+ *   angezeigt (z. B. „ui“). Bei bekannten Tabs bleibt er verborgen.
+ * - Code & Kommentare vollständig strukturiert.
  * ========================================================================== */
 (function(){
   'use strict';
   const MOD='[inspector.core]';
 
   // --------------------------------------------------------------------------
-  // Host erzeugen (nur einmal). Der Host enthält:
-  // - Header mit Tab-Buttons und Close-Button
-  // - Content-Bereich mit vordefinierten Slots (logs/build/paths/res/tests)
-  //   + einen generischen "view"-Slot für dynamische/zusätzliche Tabs (z.B. "ui")
+  // [1] Host erzeugen (nur einmal)
   // --------------------------------------------------------------------------
   function ensureHost(){
     let el = document.getElementById('inspector');
@@ -38,6 +35,7 @@
 
     el.innerHTML = `
       <div class="insp-frame" role="dialog" aria-label="Inspector" aria-modal="true">
+        <!-- Kopfzeile mit Tabs und Schließen-Button -->
         <div class="insp-header">
           <div class="insp-tabs" data-slot="tabs" role="tablist"></div>
           <button class="insp-close" type="button" aria-label="Schließen">Schließen</button>
@@ -52,10 +50,9 @@
           <div data-slot="tests-view" hidden></div>
         </div>
       </div>`;
-
     document.body.appendChild(el);
 
-    // Close-Button -> Inspector schließen
+    // Schließen-Button → Overlay schließen
     el.querySelector('.insp-close').addEventListener('click', ()=> API.close());
 
     return el;
@@ -63,10 +60,12 @@
 
   const host = ensureHost();
 
-  // Referenzen auf Slots/Views
+  // --------------------------------------------------------------------------
+  // [2] Slot-Referenzen & bekannte Views
+  // --------------------------------------------------------------------------
   const slots = {
     tabs : host.querySelector('[data-slot="tabs"]'),
-    view : host.querySelector('[data-slot="view"]'),         // generischer Slot
+    view : host.querySelector('[data-slot="view"]'),     // generischer Slot (für neue Tabs)
     logs : host.querySelector('[data-slot="logs-view"]'),
     build: host.querySelector('[data-slot="build-view"]'),
     paths: host.querySelector('[data-slot="paths-view"]'),
@@ -74,47 +73,36 @@
     tests: host.querySelector('[data-slot="tests-view"]')
   };
 
-  // Bekannte, benannte Views (werden beim Tabwechsel gezielt hidden/shown)
   const views = {
     logs : slots.logs,
     build: slots.build,
     paths: slots.paths,
     res  : slots.res,
     tests: slots.tests
-    // Hinweis: Für zusätzliche Tabs (z.B. "ui") gibt es KEINEN eigenen Slot.
-    // Sie rendern in den generischen Slot "slots.view" und werden über
-    // das Hiding der bekannten Views sichtbar gemacht.
+    // Dynamische Tabs (z. B. „ui“) benutzen slots.view.
   };
 
   // --------------------------------------------------------------------------
-  // Tab-ID normalisieren (Synonyme tolerieren, alles lowercase)
+  // [3] Tab-ID-Normalisierung (Synonyme)
   // --------------------------------------------------------------------------
   function normalizeId(id){
     if (!id) return 'logs';
     const s = String(id).toLowerCase().trim();
 
-    // Ressourcen (Synonyme)
-    if (s === 'ress.' || s === 'ress' || s === 'resources' || s === 'resource') return 'res';
-
-    // Paths/Pfade (Synonyme)
-    if (s === 'pfade' || s === 'pfad' || s === 'path' || s === 'paths') return 'paths';
-
-    // Events-Tab (früher teils "events" genannt, steckt heute in "tests")
-    if (s === 'event' || s === 'events') return 'tests';
-
-    // Standard: unbekanntes Label unverändert zurück (z.B. "ui")
+    if (['ress.','ress','resources','resource'].includes(s)) return 'res';
+    if (['pfade','pfad','path','paths'].includes(s))         return 'paths';
+    if (['event','events'].includes(s))                     return 'tests';
     return s;
   }
 
   // --------------------------------------------------------------------------
-  // Tab-Button-Verwaltung
+  // [4] Tab-Buttons verwalten
   // --------------------------------------------------------------------------
-  const tabButtons = {}; // key = normierte ID
+  const tabButtons = {}; // key = normalisierte ID
 
   function addTabButton(id, label){
     const norm = normalizeId(id);
     if (tabButtons[norm]) {
-      // Button existiert – ggf. Titel aktualisieren und zurück
       if (label) tabButtons[norm].textContent = label;
       return;
     }
@@ -130,109 +118,102 @@
   }
 
   // --------------------------------------------------------------------------
-  // Aktiven Tab setzen:
-  // - Versteckt bekannte Views (logs/build/paths/res/tests), so dass
-  //   der generische Slot sichtbar bleibt, falls ein dynamischer Tab gewählt ist.
-  // - Markiert den zugehörigen Tab-Button als .active
-  // - Meldet Tabwechsel (cb:insp:tab:change)
+  // [5] Aktiven Tab setzen
   // --------------------------------------------------------------------------
   function setActiveTab(id){
     const norm = normalizeId(id);
+    const isKnown = Object.prototype.hasOwnProperty.call(views, norm);
 
-    // bekannte Views (sichtbar/nicht sichtbar)
+    // 1) bekannte Views ein-/ausblenden
     Object.entries(views).forEach(([key, el])=>{
       if (el) el.hidden = (key !== norm);
     });
 
-    // Buttons visuell markieren
-    Object.entries(tabButtons).forEach(([key, b])=>{
+    // 2) generischen Slot nur zeigen, wenn kein bekannter Tab aktiv ist
+    if (slots.view) slots.view.hidden = isKnown;
+
+    // 3) Tab-Buttons visuell markieren
+    Object.entries(tabButtons).forEach(([key,b])=>{
       b.classList.toggle('active', key === norm);
     });
 
-    // Tabwechsel melden (für Module, die beim Wechsel neu rendern wollen)
-    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab: norm } }));
+    // 4) Event cb:insp:tab:change (für Module mit Auto-Refresh)
+    window.dispatchEvent(
+      new CustomEvent('cb:insp:tab:change', { detail:{ tab:norm } })
+    );
   }
 
   // --------------------------------------------------------------------------
-  // Öffentliche API
-  // - open(tab)   : Overlay öffnen und optional Tab aktivieren
-  // - close()     : Overlay schließen
-  // - toggle(tab) : je nach Zustand öffnen/schließen, optional Tab
-  // - registerTab({id,title,onShow})
-  //                Registriert (oder aktualisiert) einen Tab-Button und
-  //                rendert den Inhalt in den vorgesehenen Slot:
-  //                -> Bei bekannten IDs: eigener Slot (views[ID])
-  //                -> Bei neuen IDs: generischer "slots.view"
-  // - mount(id,onShow) : Kurzform für registerTab
-  // - getSlot(name)    : Zugriff auf bekannte Slots (z.B. "logs")
+  // [6] Öffentliche API
   // --------------------------------------------------------------------------
   const API = {
+    /** Öffnet den Inspector (optional direkt mit Tab) */
     open(tab){
       host.classList.add('open');
-      host.style.display = 'block';
-      host.style.visibility = 'visible';
-      host.style.opacity = '1';
-      host.style.pointerEvents = 'auto';
+      Object.assign(host.style, {
+        display:'block', visibility:'visible', opacity:'1', pointerEvents:'auto'
+      });
       host.setAttribute('aria-hidden','false');
       document.body.classList.add('inspector-open');
       setActiveTab(tab || 'logs');
     },
 
+    /** Schließt den Inspector */
     close(){
       host.classList.remove('open');
-      host.style.display = 'none';
-      host.style.visibility = 'hidden';
-      host.style.opacity = '0';
-      host.style.pointerEvents = 'none';
+      Object.assign(host.style, {
+        display:'none', visibility:'hidden', opacity:'0', pointerEvents:'none'
+      });
       host.setAttribute('aria-hidden','true');
       document.body.classList.remove('inspector-open');
     },
 
+    /** Toggle (öffnet/schließt, optional Tab angeben) */
     toggle(tab){
       (getComputedStyle(host).display === 'none') ? API.open(tab) : API.close();
     },
 
+    /** Registriert oder aktualisiert einen Tab */
     registerTab({ id, title, onShow }){
       const norm = normalizeId(id);
       addTabButton(norm, title || id);
 
-      // Ziel-Slot bestimmen: bekannter Slot ODER generischer Slot
+      // Ziel-Slot: bekannter oder generischer Slot
       const slot = views[norm] || slots.view;
 
-      // initial rendern (onShow ist für diesen Tab zuständig)
-      if (slot && typeof onShow === 'function') {
+      if (slot && typeof onShow === 'function'){
         slot.innerHTML = '';
         onShow(slot);
       }
     },
 
-    mount(id, onShow){
-      API.registerTab({ id, title:id, onShow });
-    },
+    /** Kurzform */
+    mount(id,onShow){ API.registerTab({ id, title:id, onShow }); },
 
-    getSlot(name){
-      return slots[name] || document.querySelector(`[data-slot="${name}"]`);
-    }
+    /** Zugriff auf bekannten Slot */
+    getSlot(name){ return slots[name] || document.querySelector(`[data-slot="${name}"]`); }
   };
 
-  // API global bereitstellen (alte und neue Namen)
-  window.Inspector = Object.assign(window.Inspector || {}, API);
+  // --------------------------------------------------------------------------
+  // [7] API global registrieren
+  // --------------------------------------------------------------------------
+  window.Inspector = Object.assign(window.Inspector||{}, API);
   window.__INSPECTOR_CORE__ = { api: API };
 
   // --------------------------------------------------------------------------
-  // Standard-Tab-Buttons (Reihenfolge im Header)
+  // [8] Standard-Tabs im Header
   // --------------------------------------------------------------------------
-  addTabButton('logs',  'logs');
-  addTabButton('build', 'build');
-  addTabButton('paths', 'paths');
-  addTabButton('res',   'resources');
-  addTabButton('tests', 'tests');
-  addTabButton('ui',    'ui');   // NEU: für deinen UI-Debug-Tab (inspector.ui.js)
+  addTabButton('logs','logs');
+  addTabButton('build','build');
+  addTabButton('paths','paths');
+  addTabButton('res','resources');
+  addTabButton('tests','tests');
+  addTabButton('ui','ui'); // eigener Debug-Tab
 
-  // Startzustand → Logs sichtbar
+  // --------------------------------------------------------------------------
+  // [9] Startzustand + Ready-Event
+  // --------------------------------------------------------------------------
   setActiveTab('logs');
-
-  // "bereit"-Log + asynchrones Ready-Event (für Module, die auf den Core warten)
-  (window.CBLog?.info || console.info)(MOD, 'bereit v%s', '18.16.1');
-  setTimeout(()=> window.dispatchEvent(new Event('inspector:ready')), 0);
+  (window.CBLog?.info||console.info)(MOD,'bereit v%s','18.16.2');
+  setTimeout(()=> window.dispatchEvent(new Event('inspector:ready')),0);
 })();
