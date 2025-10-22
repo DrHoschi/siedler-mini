@@ -1,19 +1,23 @@
 /* ============================================================================
  * Datei    : core/game.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v19.1.0 (2025-10-08)
+ * Version  : v19.1.0+res-bridge (2025-10-22)
  * Zweck    : Welt/Grid, Platzieren (mit Preview), Produktionsticker, Jobs, HUD-Res
  *
  * Events   :
  *   IN  :
  *     - req:place:start   {buildingId}
- *     - req:place:cursor  {tx,ty,w,h,id}     (vom UI für Vorschau angefordert)
- *     - req:place:confirm {tx,ty}            (Bestätigen)
+ *     - req:place:cursor  {tx,ty,w,h,id}
+ *     - req:place:confirm {tx,ty}
  *     - req:place:cancel
+ *     - req:res:snapshot                     (NEU)
  *   OUT :
- *     - cb:place:preview {tx,ty,valid}       (für Ghost grün/rot)
- *     - cb:place:done    {id, tx, ty, exit}  (Serienbau steuern)
- *     - cb:res:change    {res, delta, total} (HUD-Update)
+ *     - cb:place:preview {tx,ty,valid}
+ *     - cb:place:done    {id, tx, ty, exit}
+ *     - cb:res:change    {res, delta, total}            (bestehend: HUD)
+ *     - cb:res:change    {id, old, value, reason?}      (NEU: Inspector-kompatibel)
+ *     - cb:res:reset                                   (optional Reset)
+ *     - cb:res:snapshot { resources:{...} }            (NEU)
  *     - cb:game-start
  * ============================================================================ */
 
@@ -25,12 +29,16 @@
   const tileSize = 32;
   const worldW = 128, worldH = 128;
 
+  // Gemeinsamer Ressourcen-Speicher:
+  // Wenn Registry bereits Werte hat, nutze die Referenz – sonst lege lokalen an.
+  const sharedRes = (window.Registry?.resources) || (window.RegistryValues) || { wood:0, fish:0, stone:0 };
+
   const state = {
     grid: createGrid(worldW, worldH),
     buildings: [],
     units: [],
-    resources: { wood:0, fish:0, stone:0 },
-    hq: null,              // Referenz auf HQ-Building
+    resources: sharedRes,  // <— gemeinsame Quelle mit Registry/Inspector
+    hq: null,
     jobQueue: []           // {type:'deliver', res, from:{x,y}, to:{x,y}}
   };
 
@@ -56,18 +64,16 @@
     }
   }
   function getEntrance(b){
-    // Nutze optional b.entrances[0], sonst linke untere Ecke
     if(b.entrances && b.entrances.length){
       const e = b.entrances[0]; // {dx,dy}
       return { x: b.tx + e.dx, y: b.ty + e.dy };
     }
-    return { x: b.tx, y: b.ty + (b.size?.h||1) }; // simple default
+    return { x: b.tx, y: b.ty + (b.size?.h||1) };
   }
 
   // --------------------------- Platzier-Preview ------------------------------
   window.addEventListener('req:place:cursor', (ev)=>{
     const { tx, ty, w=1, h=1, id } = ev.detail||{};
-    // Def prüfen (falls w/h nicht geliefert wurden)
     let W=w, H=h;
     const def = (id && typeof Registry?.get==='function') ? Registry.get('buildings', id) : null;
     if (def){
@@ -98,8 +104,17 @@
 
     const ok = rectFree(tx,ty,w,h);
     if(!ok.ok){
-      emit('cb:place:preview', { tx, ty, valid:false }); // UI rot lassen
+      emit('cb:place:preview', { tx, ty, valid:false });
       return;
+    }
+
+    // --- NEU: Baukosten abziehen (falls vorhanden) -------------------------
+    const cost = def.cost || def.price || def.requirements?.cost || def.resources || null;
+    if (cost && typeof cost==='object'){
+      for (const [rid, amt] of Object.entries(cost)){
+        if (!amt) continue;
+        resAdd(rid, -Number(amt||0), `build:${buildingId}`);
+      }
     }
 
     // Setzen
@@ -114,17 +129,15 @@
     };
     state.buildings.push(inst);
 
-    // HQ-Spezial: tolerant erkennen (b.hq ODER hq ODER role=hq)
     const isHQ = def.role === 'hq' || buildingId === 'b.hq' || buildingId === 'hq';
     if(isHQ){
       state.hq = inst;
       const door = getEntrance(inst);
-      // Zwei Idle-Träger an der Tür
       spawnCarrier(door.x, door.y);
       spawnCarrier(door.x, door.y);
     }
 
-    emit('cb:place:done', { id:buildingId, tx, ty, exit:false }); // Serienbau aktiv lassen
+    emit('cb:place:done', { id:buildingId, tx, ty, exit:false });
   });
 
   window.addEventListener('req:place:cancel', ()=>{
@@ -134,7 +147,6 @@
 
   // --------------------------- Produktion / Jobs -----------------------------
   function gameTick(dt){
-    // sehr einfache Produktion: alle Gebäude mit produces[] arbeiten
     for(const b of state.buildings){
       const def = Registry.get('buildings', b.id);
       if(!def || !def.produces) continue;
@@ -143,12 +155,9 @@
       const cycle = def.cycle || 3000; // ms
       if(b.tick >= cycle){
         b.tick = 0;
-
-        // Ressourcen erzeugen
         def.produces.forEach(p=>{
           b.buffer[p.id] = (b.buffer[p.id]||0) + (p.qty||1);
 
-          // Sofort Liefer-Job stellen (von Gebäudetür → HQ-Tür)
           if(state.hq){
             const from = getEntrance(b);
             const to   = getEntrance(state.hq);
@@ -183,12 +192,38 @@
     return u;
   }
 
-  // --------------------------- Ressourcen/HUD --------------------------------
+  // --------------------------- Ressourcen / Bridges --------------------------
+  function emitResChangeBoth(resId, oldVal, newVal, reason){
+    // 1) Bestehendes HUD-Event (dein Format) – NICHT anfassen
+    emit('cb:res:change', { res: resId, delta: newVal - oldVal, total: newVal });
+
+    // 2) Inspector-kompatibles Format (id/old/value)
+    emit('cb:res:change', { id: resId, old: oldVal, value: newVal, reason });
+  }
+
+  function resSet(id, value, reason='set'){
+    const old = Number(state.resources[id] || 0);
+    const v = Number(value||0);
+    state.resources[id] = v;
+    emitResChangeBoth(id, old, v, reason);
+    return v;
+  }
+
+  function resAdd(id, delta, reason='add'){
+    const old = Number(state.resources[id] || 0);
+    const v = old + Number(delta||0);
+    state.resources[id] = v;
+    emitResChangeBoth(id, old, v, reason);
+    return v;
+  }
+
+  function emitResSnapshot(){
+    emit('cb:res:snapshot', { resources: state.resources });
+  }
+
+  // Bestehender HUD-Helfer bleibt funktionsfähig, ruft jetzt resAdd:
   function addResource(res, qty){
-    const prev = state.resources[res] || 0;
-    const next = prev + qty;
-    state.resources[res] = next;
-    emit('cb:res:change', { res, delta: qty, total: next });
+    resAdd(res, qty, 'deliver'); // ersetzt deine alte direkte Emission
   }
 
   // --------------------------- Start/Loop ------------------------------------
@@ -203,8 +238,21 @@
   function start(){
     _running = true;
     emit('cb:game-start', {});
+
+    // NEU: direkt zum Start den Ressourcen-Snapshot für Inspector schicken
+    emitResSnapshot();
+
     requestAnimationFrame(loop);
   }
+
+  // --------------------------- Requests/Resets -------------------------------
+  window.addEventListener('req:res:snapshot', emitResSnapshot);
+
+  window.addEventListener('req:game:reset', ()=>{
+    Object.keys(state.resources).forEach(k => state.resources[k] = 0);
+    emit('cb:res:reset');
+    emitResSnapshot();
+  });
 
   // --------------------------- Export-API ------------------------------------
   return {
@@ -227,6 +275,11 @@
     isBlocked(tx,ty){
       if(tx<0||ty<0||tx>=worldW||ty>=worldH) return true;
       return state.grid[ty][tx]!==0;
-    }
+    },
+
+    // NEU: explizite API (kannst du auch im Inspector/Tests verwenden)
+    resSet,
+    resAdd,
+    resSnapshot: emitResSnapshot
   };
 });
