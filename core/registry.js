@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/registry.js
  * Projekt  : Neue Siedler (Epoche 1 – Basis)
- * Version  : v25.10.19-final
+ * Version  : v25.10.19-final +res-values
  * Zweck    : Zentrale Registry (Buildings / Units / Resources / Balance)
  *
  *  (1) Lädt JSON-Daten (buildings, units, balance, resources)
@@ -10,6 +10,8 @@
  *  (4) Events:
  *      - cb:registry:ready { ok, counts:{buildings, units, resources} }
  *      - req:registry:snapshot  -> cb:registry:snapshot { snapshot }
+ *      - req:res:snapshot       -> cb:res:snapshot { resources }    (NEU)
+ *  (5) NEU: Registry.resources (Live-Werte) und Spiegel unter data.resources
  * ========================================================================== */
 (function(root, factory){
   root.Registry = factory();
@@ -34,7 +36,6 @@
 
   // -------------------------------------------------------------------------
   // Normalisierung buildings.json
-  //  - Unterstützt Array oder Wrapper-Objekt { buildings, categories?, iconsBase? }
   // -------------------------------------------------------------------------
   function normalizeBuildings(payload){
     if (Array.isArray(payload)) {
@@ -50,10 +51,7 @@
   }
 
   // -------------------------------------------------------------------------
-  // Normalisierung resources.json
-  //  - Unterstützt Map-Objekt { wood:{...}, stone:{...} } oder Array [...]
-  //  - Bringt Legacy-Iconpfade „assets/icons/res_wood.png“ auf
-  //    „assets/icons/resources/wood.png“
+  // Normalisierung resources.json  → Definitionsliste (keine Mengen!)
   // -------------------------------------------------------------------------
   function normalizeResources(payload){
     const out = [];
@@ -66,7 +64,6 @@
     };
 
     if (payload && !Array.isArray(payload) && typeof payload === 'object') {
-      // Map-Objekt
       for (const id of Object.keys(payload)) {
         const r = payload[id] || {};
         out.push({
@@ -79,7 +76,6 @@
         });
       }
     } else if (Array.isArray(payload)) {
-      // Array
       payload.forEach((r, i) => {
         if (!r) return;
         const id = r.id || String(r.name || `res_${i}`).toLowerCase();
@@ -107,7 +103,7 @@
         buildings : [],
         units     : [],
         balance   : {},
-        resources : [],
+        resources : [],     // Definitionsliste (IDs, Icons …)
       };
       this._meta = {
         categories: [],
@@ -117,7 +113,6 @@
     }
 
     async init(loadJSON){
-      // Loader (fetch-basiert) – mit kleinem Cache-Bust
       const _load = typeof loadJSON === 'function'
         ? loadJSON
         : async function(url){
@@ -144,7 +139,7 @@
       this._data.units   = Array.isArray(unitsRaw) ? unitsRaw : [];
       this._data.balance = (balanceRaw && typeof balanceRaw==='object') ? balanceRaw : {};
 
-      // Resources
+      // Resources (Definitionsliste)
       this._data.resources = normalizeResources(resRaw || {});
 
       this._ready = true;
@@ -207,9 +202,37 @@
     emit('cb:registry:snapshot', { snapshot: REG.snapshot() });
   });
 
-// Sofort-Init, lädt JSONs & feuert cb:registry:ready (mit Counts)
-// Sofort-Init …
-REG.init();            // <— NICHT mehr Registry.init()
-return REG;
-  
+  // -------------------------------------------------------------
+  // NEU: Live-Resource-Werte (für Inspector & Game)
+  //  - nach registry:ready einmalig initialisieren
+  //  - unter Registry.resources und Registry.data.resources verfügbar
+  //  - Snapshot-Request/Response für Inspector
+  // -------------------------------------------------------------
+  (function setupResourceValues(){
+    const RES_VALUES = (window.RegistryValues = window.RegistryValues || {}); // globaler, langlebiger Speicher
+
+    window.addEventListener('cb:registry:ready', ()=>{
+      try{
+        const ids = REG.list('resources').map(r=>r.id);
+        // sanft initialisieren (nur fehlende Ressourcen auf 0 setzen)
+        ids.forEach(id => { if (RES_VALUES[id] == null) RES_VALUES[id] = 0; });
+
+        // unter Registry spiegeln (so sucht der Inspector zuerst)
+        const R = (window.Registry = window.Registry || {});
+        R.resources = RES_VALUES;
+        R.data = R.data || {};
+        R.data.resources = RES_VALUES;
+      }catch(_){}
+    });
+
+    // Inspector-Snapshot anfragen/liefern
+    window.addEventListener('req:res:snapshot', ()=>{
+      emit('cb:res:snapshot', { resources: RES_VALUES });
+    });
+  })();
+
+  // Sofort-Init (lädt JSONs & feuert cb:registry:ready)
+  REG.init(); // <— identisch zu deiner Version
+
+  return REG;
 });
