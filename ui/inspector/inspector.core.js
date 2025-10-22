@@ -1,4 +1,4 @@
-// ui/inspector/inspector.core.js – v18.14.5 (Baseline)
+// ui/inspector/inspector.core.js – v18.14.6 (Baseline+Fix: Tab-Mapping & Views)
 (function(){
   'use strict';
   const MOD='[inspector.core]';
@@ -27,38 +27,60 @@
     return el;
   }
 
+  // ==== DOM/Slots =================================================================
   const host = ensureHost();
   const slots = {
-    tabs: host.querySelector('[data-slot="tabs"]'),
-    view: host.querySelector('[data-slot="view"]'),
-    logs: host.querySelector('[data-slot="logs-view"]'),
+    tabs : host.querySelector('[data-slot="tabs"]'),
+    view : host.querySelector('[data-slot="view"]'),
+    logs : host.querySelector('[data-slot="logs-view"]'),
     build: host.querySelector('[data-slot="build-view"]'),
     paths: host.querySelector('[data-slot="paths-view"]'),
-    res: host.querySelector('[data-slot="res-view"]'),
+    res  : host.querySelector('[data-slot="res-view"]'),
     tests: host.querySelector('[data-slot="tests-view"]')
   };
+  // Nur die umschaltbaren View-Sektionen:
+  const views = { logs: slots.logs, build: slots.build, paths: slots.paths, res: slots.res, tests: slots.tests };
 
-  // Tab-Header Helper
+  // ==== ID-Normalisierung (alias -> kanonisch) ====================================
+  function normalizeId(id){
+    if (!id) return 'logs';
+    const s = String(id).toLowerCase().trim();
+    if (s === 'ress.' || s === 'ress' || s === 'resources' || s === 'resource') return 'res';
+    if (s === 'pfade' || s === 'path' || s === 'pfad' || s === 'paths') return 'paths';
+    if (s === 'event' || s === 'events') return 'tests'; // Events-Ansicht im Tests-Tab
+    return s;
+  }
+
+  // ==== Tabs (Header) =============================================================
   const tabButtons = {};
   function addTabButton(id, label){
-    if (tabButtons[id]) return;
+    const norm = normalizeId(id);
+    if (tabButtons[norm]) { if (label) tabButtons[norm].textContent = label; return; }
     const b = document.createElement('button');
-    b.className='insp-tab'; b.textContent=label; b.dataset.tab=id;
-    b.addEventListener('click', ()=> setActiveTab(id));
+    b.className = 'insp-tab';
+    b.textContent = label || norm;
+    b.dataset.tab = norm;
+    b.addEventListener('click', ()=> setActiveTab(norm));
     slots.tabs.appendChild(b);
-    tabButtons[id]=b;
-  }
-  function setActiveTab(id){
-    Object.entries(slots).forEach(([k,el])=>{
-      if(!/-view$/.test(k)) return;
-      const tab = k.replace('-view','');
-      if (el) el.hidden = (tab !== id);
-    });
-    Object.entries(tabButtons).forEach(([k,b])=> b.classList.toggle('active', k===id));
-    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab:id } }));
+    tabButtons[norm] = b;
   }
 
-  // öffentliche API (kompatibel zum alten Split)
+  function setActiveTab(id){
+    const norm = normalizeId(id);
+    // Sichtbarkeit der Views
+    Object.entries(views).forEach(([k,el])=>{
+      if (!el) return;
+      el.hidden = (k !== norm);
+    });
+    // Header-Status
+    Object.entries(tabButtons).forEach(([k,b])=>{
+      b.classList.toggle('active', k === norm);
+    });
+    // Broadcast (für Module, die dynamisch rendern)
+    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab: norm } }));
+  }
+
+  // ==== öffentliche API (kompatibel zum alten Split) ==============================
   const API = {
     open(tab){
       host.classList.add('open');
@@ -66,7 +88,7 @@
       host.style.opacity='1'; host.style.pointerEvents='auto';
       host.setAttribute('aria-hidden','false');
       document.body.classList.add('inspector-open');
-      if (tab) setActiveTab(tab);
+      setActiveTab(tab || 'logs');
     },
     close(){
       host.classList.remove('open');
@@ -77,16 +99,17 @@
     },
     toggle(tab){ (getComputedStyle(host).display==='none') ? API.open(tab) : API.close(); },
 
-    // Tab-Registration
-    registerTab({id,title,onShow}){
-      addTabButton(id, title||id);
-      // initiales Rendern in den Slot
-      const slot = slots[id] || slots.view;
-      if (slot && typeof onShow==='function'){
-        // leeren & rendern
-        slot.innerHTML=''; onShow(slot);
+    // Tab-Registration (Module binden sich hier ein)
+    registerTab({id, title, onShow}){
+      const norm = normalizeId(id);
+      addTabButton(norm, title || id);
+      const slot = views[norm] || slots.view;  // bevorzugt spezifischen Slot
+      if (slot && typeof onShow === 'function'){
+        slot.innerHTML = '';
+        onShow(slot);
       }
     },
+
     // Kompakte Helfer (wie früher)
     mount(id,onShow){ API.registerTab({ id, title:id, onShow }); },
     getSlot(name){ return slots[name] || document.querySelector(`[data-slot="${name}"]`); }
@@ -96,16 +119,16 @@
   window.Inspector = Object.assign(window.Inspector||{}, API);
   window.__INSPECTOR_CORE__ = { api: API };
 
-  // Standard-Tabs (Header) – kannst du anpassen/erweitern
+  // ==== Standard-Tabs eintragen ===================================================
   addTabButton('logs','Logs');
   addTabButton('build','Build');
   addTabButton('paths','Pfade');
   addTabButton('res','Ress.');
   addTabButton('tests','Tests');
 
-  // Startzustand → Logs sichtbar
+  // Startzustand → nur Logs sichtbar
   setActiveTab('logs');
 
-  (window.CBLog?.info||console.info)(MOD,'bereit v%s','18.14.5');
+  (window.CBLog?.info||console.info)(MOD,'bereit v%s','18.14.6');
   setTimeout(()=> window.dispatchEvent(new Event('inspector:ready')),0);
 })();
