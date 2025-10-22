@@ -1,297 +1,172 @@
 /* ============================================================================
- * Datei   : ui/inspector.js
+ * Datei   : ui/ui-inspector.js
  * Projekt : Neue Siedler
- * Version : v1.0.11-monolith (final)
- * Zweck   : Vollbild-Inspector (Logs | Tests | Ressourcen | Pfade | Editor)
- * Highlights:
- *   - EARLY LOG HOOK: spiegelt Logs ab 0ms in einen Buffer (kein Verlust)
- *   - Overlay standardmäßig geschlossen; optionales Auto-Open
- *   - Button toggelt (öffnen/schließen), iOS/HTTPS-Fallbacks für Copy/Export
- *   - Schutz gegen doppelte Inits
+ * Version : v18.14.7 (Restore Bridge)
+ * Zweck   : Zentrales Bindeglied für den Inspector (Open/Close/Exports/Bridges)
+ *           - Keine UI, kein DOM-Bau: nutzt nur window.Inspector (Core)
+ *           - Reicht Events weiter und bietet Komfort-API (UIInspector.*)
+ * Events  : cb:insp:open|close|tab:change|export:logs|export:json
+ *           cb:path:overlay:on|off, cb:path:heatmap:on|off
  * ============================================================================ */
 
 (function(){
-  if (window.__InspectorInstalled) return;
-  window.__InspectorInstalled = true;
+  'use strict';
+  const MOD = '[ui-inspector]';
+  const LOGI = (window.CBLog?.info || console.info).bind(console, MOD);
+  const LOGO = (window.CBLog?.ok   || console.log ).bind(console, MOD);
+  const LOGW = (window.CBLog?.warn || console.warn).bind(console, MOD);
+  const LOGE = (window.CBLog?.error|| console.error).bind(console, MOD);
 
-  const MOD = 'inspector';
-  const EB  = window.EventBus || {
-    emit:(n,p)=>window.dispatchEvent(new CustomEvent(n,{detail:p}))
+  // --- Guards -----------------------------------------------------------------
+  function hasInspector(){
+    if (!window.Inspector) { LOGW('kein Inspector-Core gefunden'); return false; }
+    return true;
+  }
+  function isOpen(){
+    return document.body.classList.contains('inspector-open')
+        || (document.getElementById('inspector')?.classList.contains('open'));
+  }
+
+  // --- Convenience: Clipboard & Download -------------------------------------
+  async function copyText(txt){
+    try{
+      if (navigator.clipboard && location.protocol === 'https:'){
+        await navigator.clipboard.writeText(txt);
+      }else{
+        const ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position='fixed'; ta.style.top='-2000px';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      return true;
+    }catch(e){ LOGW('Clipboard fehlgeschlagen:', e?.message||e); return false; }
+  }
+
+  function download(name, blob){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // --- Öffnen/Schließen (Wrapper) --------------------------------------------
+  const API = {
+    open(tab){
+      if (!hasInspector()) return;
+      window.Inspector.open?.(tab);
+      window.dispatchEvent(new Event('cb:inspector:open'));
+    },
+    close(){
+      if (!hasInspector()) return;
+      window.Inspector.close?.();
+      window.dispatchEvent(new Event('cb:inspector:close'));
+    },
+    toggle(tab){
+      if (!hasInspector()) return;
+      window.Inspector.toggle?.(tab);
+      window.dispatchEvent(new Event(isOpen() ? 'cb:inspector:open' : 'cb:inspector:close'));
+    },
+
+    // --- Exporte gemäß Spezifikation -----------------------------------------
+    /** Exportiert sichtbare Logzeilen als reinen Text (Zwischenablage) */
+    async exportLogsToClipboard(){
+      const root = document.querySelector('#inspector [data-slot="logs-view"]');
+      if (!root){ LOGW('Logs-Slot fehlt'); return false; }
+      const lines = Array.from(root.querySelectorAll('.insp-logline'))
+        .filter(el => el.offsetParent !== null) // nur sichtbare (Filter beachten)
+        .map(el => el.innerText.replace(/\s+/g,' ').trim());
+      const ok = await copyText(lines.join('\n'));
+      window.dispatchEvent(new CustomEvent('cb:insp:export:logs', { detail:{ format:'text', count: lines.length }}));
+      if (ok) LOGO(`Logs kopiert (${lines.length})`);
+      return ok;
+    },
+
+    /** Exportiert Logs als JSON-Datei */
+    exportLogsJSON(){
+      const root = document.querySelector('#inspector [data-slot="logs-view"]');
+      if (!root){ LOGW('Logs-Slot fehlt'); return; }
+      const rows = Array.from(root.querySelectorAll('.insp-logline')).map(el=>{
+        const lvl = ['ok','info','warn','error'].find(c => el.classList.contains(c)) || 'info';
+        const ts  = (el.querySelector('.ts')?.textContent||'').replace(/\[|\]/g,'');
+        const msg = el.querySelector('.txt')?.textContent || el.textContent || '';
+        return { ts, lvl, msg: msg.trim() };
+      });
+      const blob = new Blob([JSON.stringify({ ts:new Date().toISOString(), count:rows.length, items:rows }, null, 2)], {type:'application/json'});
+      const fname = `logs_${new Date().toISOString().replace(/[:\.]/g,'-')}.json`;
+      download(fname, blob);
+      window.dispatchEvent(new CustomEvent('cb:insp:export:logs', { detail:{ format:'json', count: rows.length }}));
+      LOGO(`Logs exportiert (${rows.length}) → ${fname}`);
+    },
+
+    /** Allgemeiner JSON-Export (z. B. Ressourcen-/Pfad-Dumps) */
+    exportJSON(obj, filename='export.json'){
+      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+      download(filename, blob);
+      window.dispatchEvent(new CustomEvent('cb:insp:export:json', { detail:{ file: filename, bytes: blob.size }}));
+      LOGO(`JSON exportiert → ${filename}`);
+    },
+
+    // --- Bridges: PathOverlay (Inspector steuert Overlay-Module) --------------
+    pathOverlay(on=true){
+      window.dispatchEvent(new CustomEvent(on ? 'cb:path:overlay:on' : 'cb:path:overlay:off'));
+      LOGI(`PathOverlay ${on?'on':'off'}`);
+    },
+    heatmap(on=true){
+      window.dispatchEvent(new CustomEvent(on ? 'cb:path:heatmap:on' : 'cb:path:heatmap:off'));
+      LOGI(`Heatmap ${on?'on':'off'}`);
+    }
   };
-  const logOK   = (m)=> (window.CBLog?.ok   || console.log)(`[${MOD}] ${m}`);
-  const esc = (s)=> String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const QS = new URLSearchParams(location.search);
-  const CFG = Object.assign({ autoOpen: QS.get('insp') === 'open' }, (window.InspectorConfig || {}));
 
-  // --- EARLY LOG HOOK (vor DOM) ------------------------------------------------
-  if (!window.__InspectorHooked) {
-    window.__InspectorHooked = true;
-    const sinkEarly = (type, args)=>{
-      try{
-        const t = (type==='log' ? 'info' : type);
-        const text = (args||[]).map(a => typeof a==='string' ? a : safeJson(a)).join(' ');
-        (window.__InspectorBuffer = window.__InspectorBuffer || []).push({ tms:Date.now(), type:t, text });
-      }catch(_){}
-    };
-    ['log','info','warn','error'].forEach(k=>{
-      const orig = console[k]?.bind(console) || function(){};
-      console[k] = (...a)=>{ sinkEarly(k,a); return orig(...a); };
-    });
-    addEventListener('error', (e)=>{ sinkEarly('error', [`Uncaught: ${e.message} @ ${e.filename}:${e.lineno}`]); });
-    addEventListener('unhandledrejection', (e)=>{
-      const msg = e?.reason?.message || String(e.reason || e);
-      sinkEarly('error', [`Promise: ${msg}`]);
-    });
-  }
+  // global bereitstellen (wie früher dokumentiert)
+  window.UIInspector = API; // Komfort-API (öffentliche Brücke)
+  // optionaler Alias für alte Aufrufe:
+  window.UIInspector?.open && (window.UIInspector.open.defaultTab = 'logs');
 
-  // --- State & DOM-Refs --------------------------------------------------------
-  const STATE = { open:false, active:'logs', logs:[], filters:{ ok:1, info:1, warn:1, error:1 } };
-  let $root, $content, $tabs, $btn;
-
-  // --- Setup -------------------------------------------------------------------
-  function ensureButton(){
-    let b = document.getElementById('btn-inspector');
-    if (!b){
-      b = document.createElement('button');
-      b.id = 'btn-inspector';
-      b.className = 'cb-fab cb-fab-inspector';
-      b.title = 'Inspector';
-      b.setAttribute('aria-label','Inspector öffnen');
-      b.textContent = '🛠️';
-      document.body.appendChild(b);
-    }
-    b.hidden = false;         // Button soll nie "verschwinden"
-    b.onclick = toggle;       // Toggle (öffnen/schließen)
-    return b;
-  }
-
-  function buildOverlay(){
-    $root = document.getElementById('inspector-overlay');
-    if (!$root){
-      $root = document.createElement('div');
-      $root.id = 'inspector-overlay';
-      document.body.appendChild($root);
-    }
-    // Nie automatisch offen starten:
-    $root.classList.remove('open');
-    $root.style.display = 'none';
-
-    $root.innerHTML = `
-      <div class="insp-frame" role="dialog" aria-modal="true" aria-label="Inspector">
-        <div class="insp-header">
-          <div class="insp-tabs" id="insp-tabs" role="tablist" tabindex="0">
-            ${tab('logs','Logs')}
-            ${tab('tests','Tests')}
-            ${tab('res','Ressourcen')}
-            ${tab('paths','Pfade')}
-            ${tab('editor','Editor')}
-          </div>
-          <button class="insp-close" id="insp-close" aria-label="Inspector schließen">✕</button>
-        </div>
-        <div class="insp-content" id="insp-content"></div>
-      </div>`;
-    $content = $root.querySelector('#insp-content');
-    $tabs    = $root.querySelector('#insp-tabs');
-
-    // Close (X)
-    $root.querySelector('#insp-close').addEventListener('click', close);
-    // Tabs
-    $tabs.addEventListener('click', (e)=>{
-      const t = e.target.closest('.insp-tab');
-      if (t) switchTab(t.dataset.tab);
-    });
-
-    switchTab(STATE.active);
-  }
-
-  function tab(id,label){ return `<div class="insp-tab" data-tab="${id}" role="tab">${label}</div>`; }
-
-  // Tastatur: Ctrl/Cmd + I → Toggle
-  addEventListener('keydown', (e)=>{
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i'){
-      e.preventDefault(); toggle();
-    }
+  // --- Tab-Change weiterreichen (Spezifikation) -------------------------------
+  window.addEventListener('cb:insp:tab:change', (e)=>{
+    // Hier keine Logik außer Weiterreichen; Module lauschen bereits darauf
+    // (Logs/Tests/Resources/Paths). Event existiert laut Vorgaben.
+    // Referenz: ui/ui-inspector.js Spezifikation (Events). 
+    // (Dokumentiert im Lastenheft & Inspector-Vorlage)
+    // no-op außer Info-Log:
+    LOGI(`Tab gewechselt → ${e.detail?.tab||'unknown'}`);
   });
 
-  // --- Toggle / Open / Close ---------------------------------------------------
-  function toggle(){ STATE.open ? close() : open(); }
-  function open(){
-    if (STATE.open) return;
-    STATE.open = true;
-    $root.classList.add('open');
-    $root.style.display = 'block';
-    // Sicht aktualisieren
-    switchTab(STATE.active);
-    EB.emit('cb:insp:open',{tab:STATE.active});
-  }
-  function close(){
-    if (!STATE.open) return;
-    STATE.open = false;
-    $root.classList.remove('open');
-    $root.style.display = 'none';
-    EB.emit('cb:insp:close',{});
-  }
-
-  // --- Tabs --------------------------------------------------------------------
-  function switchTab(id){
-    STATE.active = id;
-    $tabs.querySelectorAll('.insp-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===id));
-    $content.innerHTML = '';
-    if      (id==='logs')   renderLogs();
-    else if (id==='tests')  $content.innerHTML = `<div class="insp-placeholder">Tests-Tab</div>`;
-    else if (id==='res')    $content.innerHTML = `<div class="insp-placeholder">Ressourcen-Tab</div>`;
-    else if (id==='paths')  $content.innerHTML = `<div class="insp-placeholder">Pfade-Tab</div>`;
-    else if (id==='editor') $content.innerHTML = `<div class="insp-placeholder">Editor-Tab</div>`;
-    EB.emit('cb:insp:tab:change', { tab:id });
-  }
-
-  // --- Logs (Hook + Render) ----------------------------------------------------
-  function hookLogs(){
-    const sink = (type, args)=>{
-      const text = (args||[]).map(a => typeof a==='string' ? a : safeJson(a)).join(' ');
-      const t = (type==='log' ? 'info' : type);
-      const entry = { tms: Date.now(), type:t, text };
-      STATE.logs.push(entry);
-      if (STATE.active==='logs') appendLine(entry);
-    };
-
-    // sanfter Wrap – spiegelt nur
-    ['log','info','warn','error'].forEach(k=>{
-      const orig = console[k].bind(console);
-      console[k] = (...a)=>{ sink(k, a); return orig(...a); };
-    });
-
-    // globale Fehler
-    addEventListener('error', (e)=>{
-      sink('error', [`Uncaught: ${e.message} @ ${e.filename}:${e.lineno}`]);
-    });
-    addEventListener('unhandledrejection', (e)=>{
-      const msg = e?.reason?.message || String(e.reason || e);
-      sink('error', [`Promise: ${msg}`]);
-    });
-  }
-
-  function renderLogs(){
-    $content.innerHTML = `
-      <div class="insp-logs">
-        <div class="insp-filters">
-          ${filter('ok','Erfolg')}
-          ${filter('info','Info')}
-          ${filter('warn','Warnung')}
-          ${filter('error','Fehler')}
-        </div>
-        <div class="insp-actions">
-          <button class="insp-btn" id="logs-copy">Kopieren</button>
-          <button class="insp-btn" id="logs-export">Export JSON</button>
-          <span id="logs-count" style="margin-left:auto;opacity:.75"></span>
-        </div>
-        <div id="logs-list"></div>
-      </div>`;
-    $content.querySelector('#logs-copy').addEventListener('click', copyLogs);
-    $content.querySelector('#logs-export').addEventListener('click', exportLogs);
-    $content.querySelectorAll('.insp-filters input[type=checkbox]').forEach(cb=>{
-      cb.checked = !!STATE.filters[cb.value];
-      cb.addEventListener('change', ()=>{
-        STATE.filters[cb.value] = cb.checked ? 1 : 0;
-        redrawLogs();
-      });
-    });
-    redrawLogs();
-  }
-
-  function filter(k,label){ return `<label><input type="checkbox" value="${k}" checked> ${label}</label>`; }
-
-  function redrawLogs(){
-    const list = document.getElementById('logs-list');
-    list.innerHTML = '';
-    for (const e of STATE.logs){
-      if (!STATE.filters[e.type]) continue;
-      appendLine(e);
+  // --- FAB/Hotkey-Bind (ohne Duplikate) --------------------------------------
+  function bindToggles(){
+    const btn = document.getElementById('btn-inspector');
+    if (btn && !btn.__inspBound){
+      btn.__inspBound = true;
+      btn.addEventListener('click', ()=> API.toggle());
     }
-    updateCount();
+    // Tastatur: Taste I
+    window.addEventListener('keydown', (ev)=>{
+      if (ev.defaultPrevented) return;
+      if (!ev.ctrlKey && !ev.metaKey && !ev.altKey && String(ev.key||'').toLowerCase()==='i'){
+        API.toggle();
+      }
+    }, { passive:true });
   }
 
-  function appendLine(e){
-    const list = document.getElementById('logs-list');
-    if (!list || !STATE.filters[e.type]) return;
-    const el = document.createElement('div');
-    el.className = `insp-logline ${e.type}`;
-    const ts = new Date(e.tms).toLocaleTimeString();
-    el.innerHTML = `
-      <span class="sym">${symbol(e.type)}</span>
-      <span class="ts">${ts}</span>
-      <span class="msg">${esc(e.text)}</span>`;
-    list.appendChild(el);
-    updateCount();
+  // --- Lifecycle-Logs & Ready -------------------------------------------------
+  function readyLog(){
+    LOGO('bereit (Bridge v18.14.7)');
+    window.dispatchEvent(new Event('cb:inspector:ready'));
   }
 
-  function updateCount(){
-    const c = document.getElementById('logs-count');
-    if (c) c.textContent = `Logs gesamt: ${STATE.logs.length}`;
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>{
+      bindToggles();
+      readyLog();
+    });
+  }else{
+    bindToggles();
+    readyLog();
   }
 
-  // --- Kopieren/Export (mit Fallbacks) ----------------------------------------
-  function copyLogs(){
-    const txt = STATE.logs.map(e => `[${e.type}] ${e.text}`).join('\n');
-    if (navigator.clipboard && window.isSecureContext){
-      navigator.clipboard.writeText(txt).catch(()=> fallbackCopy(txt));
-    } else {
-      fallbackCopy(txt);
-    }
-    EB.emit('cb:insp:export:logs', { format:'text', count:STATE.logs.length });
-  }
-  function fallbackCopy(text){
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position='fixed'; ta.style.top='-1000px';
-    document.body.appendChild(ta);
-    ta.select();
-    try{ document.execCommand('copy'); }catch(_){}
-    ta.remove();
-  }
-  function exportLogs(){
-    const json = JSON.stringify(STATE.logs, null, 2);
-    const blob = new Blob([json], { type:'application/json' });
-    try{
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'logs.json'; a.click();
-      setTimeout(()=> URL.revokeObjectURL(url), 2000);
-    }catch(_){
-      const a = document.createElement('a');
-      a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
-      a.download = 'logs.json'; a.click();
-    }
-    EB.emit('cb:insp:export:json', { kind:'logs', count:STATE.logs.length });
-  }
+  // Beim Spielstart nochmal kurz melden (nur Info)
+  window.addEventListener('cb:game:start', ()=> LOGI('cb:game:start empfangen'));
 
-  function symbol(t){ return t==='warn'?'⚠' : t==='error'?'❌' : t==='ok'?'✅' : 'ℹ'; }
-  function safeJson(v){ try { return JSON.stringify(v); } catch(_){ return String(v); } }
-
-  // --- Init on DOM ready -------------------------------------------------------
-  function init(){
-    $btn = ensureButton();
-    buildOverlay();
-    hookLogs();
-
-    // Puffer-Logs aus dem Early Hook übernehmen
-    if (window.__InspectorBuffer?.length){
-      for (const e of window.__InspectorBuffer) STATE.logs.push(e);
-      window.__InspectorBuffer.length = 0;
-      if (STATE.active==='logs') switchTab('logs'); // UI neu ziehen
-    }
-
-    // Optional: Auto-Open
-    if (CFG.autoOpen) open();
-
-    logOK('bereit (v1.0.11-monolith)');
-  }
-
-  if (document.readyState==='complete' || document.readyState==='interactive'){
-    setTimeout(init, 0);
-  } else {
-    addEventListener('DOMContentLoaded', init, { once:true });
-  }
-  // Am Ende der Inspector-Initialisierung:
-window.dispatchEvent(new Event('inspector:ready'));
-  
 })();
