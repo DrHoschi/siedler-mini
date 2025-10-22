@@ -5,6 +5,21 @@
  * Zweck   : Verbindet Boot-Sequenz mit dem Spiel (Canvas/HUD vorbereiten)
  * ============================================================================
  */
+<script>
+  // einmalig beim Boot, noch bevor das Spiel startet
+  window.addEventListener('cb:registry:ready', () => {
+    // sanft setzen: nur wenn nicht schon vorhanden
+    const R = (window.Registry && Registry.resources) || (window.RegistryValues || {});
+    if (R.wood  == null) R.wood  = 10;
+    if (R.stone == null) R.stone = 10;
+    if (R.fish  == null) R.fish  = 3;
+    if (R.gold  == null) R.gold  = 0;
+
+    // Inspector updaten
+    window.dispatchEvent(new Event('req:res:snapshot'));
+  });
+</script>
+  
 (function(root, factory){
   root.SiedlerGameBootstrap = factory();
 })(typeof window !== "undefined" ? window : this, function(){
