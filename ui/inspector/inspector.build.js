@@ -21,37 +21,40 @@
  *           cb:registry:snapshot    – wenn Snapshot erstellt (Auto-Refresh)
  *           req:buildmenu:show      – Build-Menü öffnen (falls vorhanden)
  * ========================================================================== */
+
+/* ============================================================================
+ * Datei   : ui/inspector/inspector.build.js
+ * Projekt : Neue Siedler – Inspector (Build-Tab)
+ * Version : v18.15.1 (final restore+finder)
+ *
+ * Zweck   : Entwicklertab für Gebäude-/Registry-Daten.
+ *           - Registry/ UI-Build/ buildings.json robust auslesen
+ *           - Tabelle: ID, Titel, Kategorie, Größe, Kosten
+ *           - Filter, Suche, Sortieren
+ *           - Aktionen: Refresh, Kategorien-Check, Export JSON, Build-Menü
+ *           - Reagiert auf cb:registry:ready / cb:registry:snapshot
+ * ========================================================================== */
 (function(){
   'use strict';
-  const MOD = '[inspector.build]';
+  const MOD='[inspector.build]';
   const logI = (window.CBLog?.info || console.info).bind(console, MOD);
   const logO = (window.CBLog?.ok   || console.log ).bind(console, MOD);
   const logW = (window.CBLog?.warn || console.warn).bind(console, MOD);
   const logE = (window.CBLog?.error|| console.error).bind(console, MOD);
 
-  /* ----------------------------- Hilfsfunktionen ----------------------------- */
-  const $  = (sel, root=document) => root.querySelector(sel);
-  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const $  = (s, r=document)=>r.querySelector(s);
+  const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
+  const toKey = x => String(x??'').trim();
 
-  function asArray(x){ return Array.isArray(x) ? x : (x ? [x] : []); }
-  function toKey(x){ return String(x||'').trim(); }
-
-  // Schönformatierung von Kosten-Objekten: { wood:2, stone:1 } -> "wood:2, stone:1"
   function fmtCost(cost){
-    if (!cost || typeof cost !== 'object') return '';
-    const pairs = [];
-    for (const [k,v] of Object.entries(cost)){
-      if (v==null || v===0) continue;
-      pairs.push(`${k}:${v}`);
-    }
-    return pairs.join(', ');
+    if (!cost || typeof cost!=='object') return '';
+    const out=[]; for(const [k,v] of Object.entries(cost)){ if(v) out.push(`${k}:${v}`); }
+    return out.join(', ');
   }
-
-  // Größe erkennen: unterstützt size:{w,h} | w/h | footprint:{w,h} | size:"3x2"
   function extractSize(e){
     if (!e) return '';
     const s = e.size || e.footprint || null;
-    if (s && typeof s === 'object'){
+    if (s && typeof s==='object'){
       const w = s.w ?? s.width  ?? e.w ?? e.width;
       const h = s.h ?? s.height ?? e.h ?? e.height;
       if (w && h) return `${w}×${h}`;
@@ -65,42 +68,23 @@
     return '';
   }
 
-  // Kanonische Projektstruktur tolerant auslesen
+  /* ---------- NEU: breite Suche nach Buildings in Registry / UIBuild ---------- */
   function getRegistryRaw(){
+    // Klassische Registry-Objekte
     const R = window.Registry || window.BuildRegistry || window.registry || {};
-    return (
-      R.buildings ||
-      R.data?.buildings ||
-      (typeof R.get === 'function' && R.get('buildings')) ||
-      R // worst case – später heuristisch durchsucht
-    );
+    if (R.buildings) return R.buildings;
+    if (R.data?.buildings) return R.data.buildings;
+    if (typeof R.get==='function'){ try{ const g=R.get('buildings'); if(g) return g; }catch(_){} }
+
+    // UIBuild-Varianten (bei deinen Demos häufig)
+    const U = window.UIBuild || window.BuildUI || {};
+    if (U.registry) return U.registry;              // Map oder Array
+    if (U.data?.buildings) return U.data.buildings; // Array oder Map
+    if (U.buildings) return U.buildings;
+
+    return null;
   }
 
-  // Registry in flache, gut nutzbare Listeneinträge mappen
-  function harvestRegistry(){
-    const raw = getRegistryRaw();
-
-    // Struktur-Varianten:
-    // 1) Array von Einträgen
-    if (Array.isArray(raw)){
-      return raw.map(nor);
-    }
-
-    // 2) Map/Object mit Keys
-    if (raw && typeof raw === 'object'){
-      // Wenn "buildings" als Objekt unterhalb liegt
-      const sub = raw.buildings || raw.items || raw.list || raw.data || raw;
-      if (Array.isArray(sub)) return sub.map(nor);
-      if (sub && typeof sub === 'object'){
-        return Object.entries(sub).map(([k,v])=> nor(v, k));
-      }
-    }
-
-    // 3) Nichts bekannt
-    return [];
-  }
-
-  // Normalisierung eines Eintrags in unser Anzeigeformat
   function nor(entry, fallbackKey){
     entry = entry || {};
     const id   = toKey(entry.id || entry.key || fallbackKey || entry.name || entry.title);
@@ -109,53 +93,51 @@
     const cost = entry.cost || entry.price || entry.requirements?.cost || entry.resources || null;
     const size = extractSize(entry);
     const icon = entry.icon || entry.sprite || entry.img || '';
-    return {
-      id, name, category: cat, size, cost, icon,
-      _src: entry // für Export/Details
-    };
+    return { id, name, category:cat, size, cost, icon, _src: entry };
   }
 
-  // Fallback: buildings.json laden (nur Anzeige, nicht in Registry schreiben)
+  function harvestRegistry(){
+    const raw = getRegistryRaw();
+    if (!raw) return [];
+
+    if (Array.isArray(raw)) return raw.map(nor);
+
+    if (typeof raw==='object'){
+      const sub = raw.buildings || raw.items || raw.list || raw.data || null;
+      if (Array.isArray(sub)) return sub.map(nor);
+      if (sub && typeof sub==='object') return Object.entries(sub).map(([k,v])=>nor(v,k));
+      return Object.entries(raw).map(([k,v])=>nor(v,k));
+    }
+    return [];
+  }
+
   async function fetchBuildingsJSON(){
-    const CANDIDATES = [
-      'data/buildings.json',                // Standard
-      './data/buildings.json',
-      '../data/buildings.json'
-    ];
-    for (const url of CANDIDATES){
+    const CAND = ['data/buildings.json','./data/buildings.json','../data/buildings.json'];
+    for (const url of CAND){
       try{
-        const res = await fetch(url, { cache:'no-cache' });
-        if (res.ok){
-          const json = await res.json();
-          // kann array oder object sein
-          if (Array.isArray(json)) return json.map(nor);
-          if (json && typeof json === 'object'){
-            const sub = json.buildings || json.items || json.list || json.data || json;
-            if (Array.isArray(sub)) return sub.map(nor);
-            if (sub && typeof sub === 'object') return Object.entries(sub).map(([k,v])=> nor(v,k));
-          }
+        const res = await fetch(url, {cache:'no-cache'});
+        if (!res.ok) continue;
+        const json = await res.json();
+        if (Array.isArray(json)) return json.map(nor);
+        if (json && typeof json==='object'){
+          const sub = json.buildings || json.items || json.list || json.data || json;
+          if (Array.isArray(sub)) return sub.map(nor);
+          if (sub && typeof sub==='object') return Object.entries(sub).map(([k,v])=>nor(v,k));
         }
       }catch(_){}
     }
     return [];
   }
 
-  // Kategorien aus List ableiten
   function deriveCategories(list){
-    return Array.from(new Set(list.map(x => x.category).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+    return Array.from(new Set(list.map(x=>x.category).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
   }
-
-  // Kategorien aus UI-Build (falls vorhanden)
   function getUIBuildCategories(){
-    // mögliche Objekte
     const u = window.UIBuild || window.BuildUI || {};
-    // z. B. { categories:['housing','production',...]} | { menu:{categories:[...]}}
     const direct = u.categories || u.category || u.menu?.categories || null;
     if (Array.isArray(direct)) return direct.map(toKey).filter(Boolean);
     return null;
   }
-
-  // Validierung
   function validate(list){
     const warnings = [];
     const seen = new Set();
@@ -163,44 +145,33 @@
     const uicats = getUIBuildCategories();
 
     for (const it of list){
-      if (!it.id) warnings.push({ type:'error',  msg:`Eintrag ohne ID`, it });
-      if (!it.name) warnings.push({ type:'warn', msg:`${it.id}: Name fehlt`, it });
-      if (!it.category) warnings.push({ type:'warn', msg:`${it.id}: Kategorie fehlt`, it });
-      if (!it.size) warnings.push({ type:'info', msg:`${it.id}: Größe unbekannt`, it });
-      if (!it.cost || !Object.keys(it.cost).length) warnings.push({ type:'info', msg:`${it.id}: Kosten leer`, it });
-
-      const key = it.id.toLowerCase();
-      if (seen.has(key)) warnings.push({ type:'warn', msg:`Duplikat-ID: ${it.id}`, it });
+      if (!it.id) warnings.push({type:'error', msg:`Eintrag ohne ID`, it});
+      if (!it.name) warnings.push({type:'warn',  msg:`${it.id}: Name fehlt`, it});
+      if (!it.category) warnings.push({type:'warn', msg:`${it.id}: Kategorie fehlt`, it});
+      if (!it.size) warnings.push({type:'info',  msg:`${it.id}: Größe unbekannt`, it});
+      if (!it.cost || !Object.keys(it.cost).length) warnings.push({type:'info', msg:`${it.id}: Kosten leer`, it});
+      const key = (it.id||'').toLowerCase();
+      if (seen.has(key)) warnings.push({type:'warn', msg:`Duplikat-ID: ${it.id}`});
       seen.add(key);
     }
-
-    // Kategorien gegen UI-Build vergleichen
     if (uicats){
       const unknown = cats.filter(c => !uicats.includes(c));
-      for (const c of unknown){
-        warnings.push({ type:'warn', msg:`Kategorie unbekannt im UI-Build: ${c}` });
-      }
+      for (const c of unknown) warnings.push({type:'warn', msg:`Kategorie unbekannt im UI-Build: ${c}`});
     }else{
-      warnings.push({ type:'info', msg:`UI-Build-Kategorien nicht gefunden (optional)` });
+      warnings.push({type:'info', msg:`UI-Build-Kategorien nicht gefunden (optional)`});
     }
-
     return { warnings, cats, uicats };
   }
 
-  // CSV/JSON Export-Helfer
   function download(name, blob){
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(a.href);
   }
 
-  /* ------------------------------- UI Rendering ------------------------------ */
+  /* --------------------------------- UI ------------------------------------- */
   window.Inspector?.mount?.('build', (host)=>{
-    // Grundgerüst
     host.innerHTML = `
       <div class="pad">
         <div class="toolbar" style="flex-wrap:wrap;gap:8px">
@@ -214,6 +185,14 @@
         </div>
 
         <div id="build-info" class="hint" style="margin-bottom:6px"></div>
+
+        <div id="empty-box" class="warn" style="display:none;margin-bottom:8px">
+          <strong>Keine Einträge gefunden.</strong>
+          <div style="opacity:.9;margin-top:4px">
+            Registry/ UI-Build sind leer <em>und</em> es konnte kein <code>data/buildings.json</code> geladen werden
+            (oder es ist leer). Prüfe Pfad & Lade-Reihenfolge. Danach „Refresh“ klicken.
+          </div>
+        </div>
 
         <div style="overflow:auto; max-height:55vh; border:1px solid #444; border-radius:6px">
           <table class="inspector-table" id="tbl-build">
@@ -235,8 +214,9 @@
     `;
 
     const ui = {
-      hint: $('#b-hint', host),
-      info: $('#build-info', host),
+      hint:  $('#b-hint', host),
+      info:  $('#build-info', host),
+      empty: $('#empty-box', host),
       tbody: $('#tbl-build tbody', host),
       catSel: $('#f-cat', host),
       q: $('#f-q', host),
@@ -244,29 +224,37 @@
       head: $('#tbl-build thead', host)
     };
 
-    // Zustand
-    let rows = [];            // normale Liste (aus Registry/JSON)
+    let rows = [];
     let filterCat = '';
     let filterQ = '';
     let sortKey = 'id';
-    let sortDir = 1;          // 1 = asc, -1 = desc
-    let source = 'registry';  // 'registry' | 'fallback'
+    let sortDir = 1;
+    let source = '…';
 
-    // Datenbeschaffung (Registry bevorzugt, sonst JSON)
     async function loadData(){
+      // 1) Registry/UI-Build
       const list = harvestRegistry();
       if (list.length){
-        source = 'registry';
+        source = 'registry/ui-build';
         return list;
       }
+      // 2) Fallback: JSON
       const fb = await fetchBuildingsJSON();
-      source = 'fallback';
+      source = 'buildings.json';
       return fb;
     }
 
-    // Tabelle rendern
+    function renderInfo(){
+      ui.info.textContent = `Quelle: ${source} (Einträge: ${rows.length})`;
+      ui.empty.style.display = rows.length ? 'none' : 'block';
+    }
+    function renderCatFilter(){
+      const cats = Array.from(new Set(rows.map(r=>r.category).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+      ui.catSel.innerHTML = ['<option value="">(alle Kategorien)</option>']
+        .concat(cats.map(c=>`<option value="${c}">${c}</option>`))
+        .join('');
+    }
     function renderTable(){
-      // Filter
       let data = rows.filter(r=>{
         if (filterCat && r.category !== filterCat) return false;
         if (filterQ){
@@ -276,22 +264,17 @@
         }
         return true;
       });
-
-      // Sort
       data.sort((a,b)=>{
-        const A = (a[sortKey] ?? '').toString().toLowerCase();
-        const B = (b[sortKey] ?? '').toString().toLowerCase();
-        return A < B ? -1*sortDir : A > B ? 1*sortDir : 0;
+        const A=(a[sortKey]??'').toString().toLowerCase();
+        const B=(b[sortKey]??'').toString().toLowerCase();
+        return A<B?-1*sortDir : A>B? 1*sortDir : 0;
       });
-
-      // Body
       ui.tbody.innerHTML = data.map(r=>{
         const cost = fmtCost(r.cost);
         const warn = [];
         if (!r.category) warn.push('⚠ Kat.');
         if (!r.size) warn.push('ℹ Größe');
         if (!cost) warn.push('ℹ Kosten');
-
         return `
           <tr>
             <td><code>${r.id||''}</code></td>
@@ -302,31 +285,14 @@
           </tr>`;
       }).join('');
     }
-
-    // Kategorie-Filter füllen
-    function renderCatFilter(){
-      const cats = deriveCategories(rows);
-      const opts = ['<option value="">(alle Kategorien)</option>']
-        .concat(cats.map(c=>`<option value="${c}">${c}</option>`));
-      ui.catSel.innerHTML = opts.join('');
-    }
-
-    // Infozeile aktualisieren
-    function renderInfo(){
-      ui.info.textContent = source === 'registry'
-        ? `Quelle: Registry (Einträge: ${rows.length})`
-        : `Quelle: data/buildings.json (Einträge: ${rows.length})`;
-    }
-
-    // Validierung anzeigen
     function renderValidation(){
-      const { warnings, cats, uicats } = validate(rows);
+      const {warnings, cats, uicats} = validate(rows);
       if (!warnings.length){
         ui.valBox.innerHTML = `✅ Keine Probleme gefunden. Kategorien: ${cats.join(', ')}`;
         return;
       }
       const lines = warnings.map(w=>{
-        const sym = w.type==='error' ? '❌' : w.type==='warn' ? '⚠️' : 'ℹ';
+        const sym = w.type==='error'?'❌' : w.type==='warn'?'⚠️' : 'ℹ';
         return `${sym} ${w.msg}`;
       });
       const catInfo = `Kategorien (Registry): ${cats.join(', ')}`
@@ -339,87 +305,53 @@
         </div>`;
     }
 
-    // Toolbar-Aktionen
     async function doRefresh(){
-      ui.hint.textContent = 'lädt…';
+      ui.hint.textContent='lädt…';
       try{
         rows = await loadData();
+        logI('Quelle:', source, 'Einträge:', rows.length);
         renderInfo();
         renderCatFilter();
         renderTable();
-        ui.hint.textContent = 'aktualisiert';
       }catch(e){
-        ui.hint.textContent = 'Fehler beim Laden';
-        logE(e);
+        logE(e); ui.hint.textContent='Fehler beim Laden';
       }finally{
         setTimeout(()=> ui.hint.textContent='', 1200);
       }
     }
-
     function doExport(){
-      const payload = {
-        ts: new Date().toISOString(),
-        source,
-        count: rows.length,
-        items: rows.map(r => ({
-          id: r.id, name: r.name, category: r.category, size: r.size, cost: r.cost
-        }))
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
-      const name = `build_registry_${new Date().toISOString().replace(/[:\.]/g,'-')}.json`;
-      download(name, blob);
-      ui.hint.textContent = `exportiert (${rows.length})`;
-      setTimeout(()=> ui.hint.textContent='', 1500);
-    }
-
-    function doValidate(){
-      renderValidation();
-      ui.hint.textContent = 'Validierung ausgeführt';
+      const payload = { ts:new Date().toISOString(), source, count:rows.length,
+        items: rows.map(r=>({id:r.id,name:r.name,category:r.category,size:r.size,cost:r.cost})) };
+      const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+      download(`build_registry_${new Date().toISOString().replace(/[:\.]/g,'-')}.json`, blob);
+      ui.hint.textContent=`exportiert (${rows.length})`;
       setTimeout(()=> ui.hint.textContent='', 1200);
     }
+    function doValidate(){ renderValidation(); ui.hint.textContent='Validierung ausgeführt'; setTimeout(()=> ui.hint.textContent='', 1200); }
+    function openBuildMenu(){ window.dispatchEvent(new Event('req:buildmenu:show')); ui.hint.textContent='Build-Menü angefordert'; setTimeout(()=> ui.hint.textContent='',1200); }
 
-    function openBuildMenu(){
-      // So war deine Bridge im UI-Build benannt; wenn vorhanden, reagiert die UI
-      window.dispatchEvent(new Event('req:buildmenu:show'));
-      ui.hint.textContent = 'Build-Menü angefordert';
-      setTimeout(()=> ui.hint.textContent='', 1200);
-    }
-
-    // Sort-Handler
-    ui.head.addEventListener('click', (ev)=>{
-      const th = ev.target.closest('th'); if (!th) return;
-      const k = th.dataset.k; if (!k) return;
-      if (sortKey === k) sortDir *= -1; else { sortKey = k; sortDir = 1; }
+    ui.head.addEventListener('click', e=>{
+      const th=e.target.closest('th'); if(!th) return;
+      const k=th.dataset.k; if(!k) return;
+      if (sortKey===k) sortDir*=-1; else { sortKey=k; sortDir=1; }
       renderTable();
     });
+    ui.catSel.addEventListener('change', ()=>{ filterCat=ui.catSel.value; renderTable(); });
+    ui.q.addEventListener('input', ()=>{ filterQ=ui.q.value.trim(); renderTable(); });
 
-    // Filter/ Suche
-    ui.catSel.addEventListener('change', ()=>{
-      filterCat = ui.catSel.value;
-      renderTable();
-    });
-    ui.q.addEventListener('input', ()=>{
-      filterQ = ui.q.value.trim();
-      renderTable();
-    });
-
-    // Buttons
     $('#b-refresh', host).addEventListener('click', doRefresh);
     $('#b-export', host).addEventListener('click', doExport);
     $('#b-validate', host).addEventListener('click', doValidate);
     $('#b-buildmenu', host).addEventListener('click', openBuildMenu);
 
-    // Auto-Refresh, wenn Registry bereit/snapshot
     window.addEventListener('cb:registry:ready', doRefresh);
     window.addEventListener('cb:registry:snapshot', doRefresh);
+    window.addEventListener('cb:insp:tab:change', e=>{ if (e.detail?.tab==='build') doRefresh(); });
 
-    // Optional: Snapshot anfordern (falls unterstützt)
-    // $('#b-snapshot', host) -> könntest du ergänzen:
-    // window.dispatchEvent(new Event('req:registry:snapshot'));
+    // Debug-Hook
+    (window.__inspBuild = window.__inspBuild || {}).refresh = doRefresh;
 
-    // Initial
     doRefresh();
-    logO('bereit v18.15.0');
+    logO('bereit v18.15.1');
   });
-
 })();
