@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-22T13:52:50.458Z",
+  "createdAt": "2025-10-22T19:59:39.209Z",
   "root": ".",
   "count": 423,
   "entries": [
@@ -434,7 +434,7 @@
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/population.png",
+      "path": "assets/icons/resources/pop.png",
       "size": 7444
     },
     {
@@ -1786,7 +1786,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 2463
+      "size": 5985
     },
     {
       "type": "file",
@@ -1855,12 +1855,12 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.build.js",
-      "size": 1363
+      "size": 14930
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 794
+      "size": 793
     },
     {
       "type": "file",
@@ -1895,7 +1895,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.logs.js",
-      "size": 7956
+      "size": 14221
     },
     {
       "type": "file",
@@ -1905,12 +1905,12 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.paths.js",
-      "size": 1948
+      "size": 10882
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.resources.js",
-      "size": 1576
+      "size": 15252
     },
     {
       "type": "file",
@@ -1995,7 +1995,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 11210
+      "size": 7273
     },
     {
       "type": "file",
@@ -2030,17 +2030,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 41255
+      "size": 41901
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 15798
+      "size": 16072
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 5859
+      "size": 6035
     },
     {
       "type": "file",
