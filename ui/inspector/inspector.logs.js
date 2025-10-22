@@ -1,166 +1,162 @@
 /* ============================================================================
- * ui/inspector/inspector.logs.js – v18.14.5
- *  - Logs-Tab (Filter, Suche, Kopieren/Export)
- *  - Sofortige Füllung beim Öffnen + Live-Stream (CBLog.on / Poll-Fallback)
- *  - Strict Slot-Rendering (nie an <body> anhängen)
+ * Datei   : ui/inspector/inspector.logs.js
+ * Zweck   : Logs-Tab mit Filtern + Kopieren + JSON-Export
+ * Version : v18.14.7-restore
+ * Abh.    : Inspector (Core), optional CBLog.buffer
  * ========================================================================== */
 (function(){
-  "use strict";
-  const MOD="[inspector.logs]"; const VER="v18.14.5";
-  const core = window.__INSPECTOR_CORE__?.api; if(!core){ console.warn(MOD,"core fehlt"); return; }
-
-  // ---- State ---------------------------------------------------------------
-  const LVL_CLASS = { info:"log-info log-line", ok:"log-ok log-line", warn:"log-warn log-line", err:"log-error log-line", error:"log-error log-line" };
-  let raw=[]; let poll=null;
-  const state={ info:true, ok:true, warn:true, err:true, q:"", counts:{info:0,ok:0,warn:0,err:0} };
-
-  // ---- Helpers -------------------------------------------------------------
-  const toText = (line)=>{
-    if (line==null) return "";
-    if (typeof line==="object"){
-      const t=line.t||line.ts||line.time||""; const scope=line.src||line.source||line.scope||"";
-      const msg=line.msg ?? line.message ?? line.text ?? JSON.stringify(line);
-      return t ? `[${t}] ${scope?scope+" ":""}${msg}` : `${scope?scope+" ":""}${msg}`;
-    }
-    return String(line);
-  };
-  const levelOf = (line)=>{
-    if (typeof line==="object") return String(line.lvl||line.level||"info").toLowerCase();
-    const s=String(line);
-    if (/\berr(or)?\b/i.test(s)) return "err";
-    if (/\bwarn(ing)?\b/i.test(s)) return "warn";
-    if (/\bok\b/i.test(s)) return "ok";
-    return "info";
+  'use strict';
+  const MOD='[inspector.logs]';
+  const L = {
+    info : (window.CBLog?.info || console.info).bind(console, MOD),
+    ok   : (window.CBLog?.ok   || console.log ).bind(console, MOD),
+    warn : (window.CBLog?.warn || console.warn).bind(console, MOD),
+    err  : (window.CBLog?.error|| console.error).bind(console, MOD)
   };
 
-  // ---- UI Elements ---------------------------------------------------------
-  let elView, elBad = {info:null,ok:null,warn:null,err:null}, elSearch;
+  // Symbol pro Level
+  const SYM = { error:'❌', warn:'⚠️', info:'ℹ', ok:'✅' };
+  const KNOWN = ['error','warn','info','ok'];
 
-  function buildControls(){
-    const host = core.getSlot("logs-controls"); if (!host) return;
-    host.innerHTML="";
-    const row=document.createElement("div"); row.className="ins-controls";
-
-    const mkToggle=(label,key)=>{
-      const b=document.createElement("button"); b.type="button"; b.className="ins-toggle"; b.innerHTML=`<span class="tbox">${label}</span>`;
-      if (state[key]) b.classList.add("active");
-      b.addEventListener("click", ()=>{ state[key]=!state[key]; b.classList.toggle("active",state[key]); renderList(); });
-      return b;
-    };
-    const mkBadge=()=>{ const s=document.createElement("span"); s.className="ins-badge"; s.textContent="0"; return s; };
-
-    const tInfo=mkToggle("INFO","info");  elBad.info=mkBadge(); tInfo.appendChild(elBad.info);
-    const tOk  =mkToggle("OK","ok");      elBad.ok  =mkBadge(); tOk.appendChild(elBad.ok);
-    const tWar =mkToggle("WARN","warn");  elBad.warn=mkBadge(); tWar.appendChild(elBad.warn);
-    const tErr =mkToggle("ERR","err");    elBad.err =mkBadge(); tErr.appendChild(elBad.err);
-
-    elSearch=document.createElement("input"); elSearch.type="search"; elSearch.className="ins-search"; elSearch.placeholder="Suche…";
-    elSearch.addEventListener("input", ()=>{ state.q=(elSearch.value||"").toLowerCase().trim(); renderList(); });
-
-    const btnCopy=document.createElement("button"); btnCopy.className="ins-btn"; btnCopy.textContent="Kopieren";
-    btnCopy.addEventListener("click", async()=>{
-      try{ await navigator.clipboard.writeText(raw.map(toText).join("\n")); btnCopy.classList.add("ins-flash"); setTimeout(()=>btnCopy.classList.remove("ins-flash"),500); }
-      catch(_){ alert("Clipboard nicht verfügbar"); }
-    });
-
-    const btnExport=document.createElement("button"); btnExport.className="ins-btn"; btnExport.textContent="Export";
-    btnExport.addEventListener("click", ()=>{
-      const blob=new Blob([raw.map(toText).join("\n")],{type:"text/plain"}); const url=URL.createObjectURL(blob);
-      const a=document.createElement("a"); a.href=url; a.download="logs.txt"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    });
-
-    row.append(tInfo,tOk,tWar,tErr,elSearch,btnCopy,btnExport);
-    host.appendChild(row);
+  // Quelle: CBLog.buffer (falls vorhanden), sonst leer
+  function readBuffer(){
+    const buf = Array.isArray(window.CBLog?.buffer) ? window.CBLog.buffer : [];
+    // Normieren
+    return buf.map(x => ({
+      ts  : x.ts || x.time || Date.now(),
+      lvl : String(x.lvl || x.level || 'info').toLowerCase(),
+      msg : (x.msg || x.message || '').toString()
+    }));
   }
 
-  function mountView(){
-    const host = core.getSlot("logs-view"); if (!host) return;
-    host.innerHTML=""; elView=document.createElement("div"); elView.className="slot-logs-view"; host.appendChild(elView);
-  }
-
-  // ---- Rendering -----------------------------------------------------------
-  function renderList(){
-    if (!elView) return;
-    // Zähler reset
-    state.counts.info=state.counts.ok=state.counts.warn=state.counts.err=0;
-    const q=state.q;
-
-    const frag=document.createDocumentFragment();
-    for (let i=0;i<raw.length;i++){
-      const obj = raw[i];
-      const txt = toText(obj);
-      const lvl = levelOf(obj);
-      // counters
-      if (lvl in state.counts) state.counts[lvl]++;
-      // filters
-      if ((lvl==="info" && !state.info) || (lvl==="ok"&&!state.ok) || (lvl==="warn"&&!state.warn) || (lvl==="err"&&!state.err)) continue;
-      if (q && !txt.toLowerCase().includes(q)) continue;
-
-      const div=document.createElement("div");
-      div.className = LVL_CLASS[lvl] || LVL_CLASS.info;
-      div.textContent = txt;
-      frag.appendChild(div);
-    }
-    elView.innerHTML=""; elView.appendChild(frag);
-    // badges
-    if (elBad.info) elBad.info.textContent=String(state.counts.info);
-    if (elBad.ok)   elBad.ok.textContent  =String(state.counts.ok);
-    if (elBad.warn) elBad.warn.textContent=String(state.counts.warn);
-    if (elBad.err)  elBad.err.textContent =String(state.counts.err);
-    // autoscroll an Ende
-    elView.scrollTop=elView.scrollHeight;
-  }
-
-  function pushLine(entry){
-    raw.push(entry);
-    // inkrementelles Zeichnen (respektiert Filter)
-    if (!elView) return;
-    const txt=toText(entry); const lvl=levelOf(entry);
-    const passLvl = (lvl!=="info"||state.info)&&(lvl!=="ok"||state.ok)&&(lvl!=="warn"||state.warn)&&(lvl!=="err"||state.err);
-    const passTxt = !state.q || txt.toLowerCase().includes(state.q);
-    if (passLvl && passTxt){
-      const div=document.createElement("div"); div.className=LVL_CLASS[lvl]||LVL_CLASS.info; div.textContent=txt; elView.appendChild(div);
-      elView.scrollTop=elView.scrollHeight;
-    }
-    // badges hochzählen
-    if (lvl in state.counts){ state.counts[lvl]++; const m=elBad[lvl]; if (m) m.textContent=String(state.counts[lvl]); }
-  }
-
-  // ---- Log-Stream ----------------------------------------------------------
-  function readBuffer(){ try{ const b=window.CBLog?.getBuffer?.(); return Array.isArray(b)? b.slice() : []; } catch(_){ return []; } }
-  function startStream(){
-    raw = readBuffer();
-    if (typeof window.CBLog?.on==="function"){
-      try{ window.CBLog.on("append", pushLine); (window.CBLog?.ok||console.log)(MOD,"Stream ok"); return; } catch(_){}
-    }
-    // Poll-Fallback
-    let lastLen=raw.length;
-    poll = setInterval(()=>{
-      const buf=readBuffer();
-      if (buf.length!==lastLen){
-        const diff=buf.slice(lastLen); lastLen=buf.length; diff.forEach(pushLine);
+  // Text-Clipboard
+  async function copyText(txt){
+    try{
+      if (navigator.clipboard && location.protocol === 'https:'){
+        await navigator.clipboard.writeText(txt);
+      }else{
+        const ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position='fixed'; ta.style.top='-2000px';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
       }
-    },800);
-    (window.CBLog?.warn||console.warn)(`${MOD} nutze Poll-Fallback (kein CBLog.on)`);
+      return true;
+    }catch(e){ return false; }
   }
-  function stopStream(){ if (poll){ clearInterval(poll); poll=null; } if (typeof window.CBLog?.off==="function"){ try{ window.CBLog.off("append", pushLine); }catch(_){}} }
 
-  // beim Öffnen Historie nachschieben (Safety-Hook)
-  window.addEventListener("cb:inspector-open", ()=>{
-    if (!raw.length) raw = readBuffer();
-    renderList();
-    try{ window.CBLog?.LogStream?.start?.(); }catch(_){}
-  });
-  window.addEventListener("cb:inspector-close", ()=>{ try{ window.CBLog?.LogStream?.stop?.(); }catch(_){} });
+  // UI aufbauen
+  (window.Inspector||{}).mount?.('logs', (host)=>{
+    host.innerHTML = `
+      <div class="insp-logs">
+        <div class="insp-actions">
+          <button class="insp-btn" id="log-copy">Kopieren</button>
+          <button class="insp-btn" id="log-export">Export JSON</button>
+          <button class="insp-btn" id="log-refresh" title="Neu laden">Refresh</button>
+          <span id="log-hint" style="margin-left:6px;opacity:.8;font-size:.9em"></span>
+        </div>
 
-  // ---- Mount ---------------------------------------------------------------
-  core.mount("logs", ()=>{
-    buildControls();
-    mountView();
-    raw = readBuffer();
-    renderList();
-    startStream();
-    (window.CBLog?.ok||console.log)(`${MOD} bereit ${VER}`);
-    return ()=> stopStream();
+        <div class="insp-filters">
+          <label><input type="checkbox" data-f="info"  checked> Info</label>
+          <label><input type="checkbox" data-f="warn"  checked> Warnung</label>
+          <label><input type="checkbox" data-f="error" checked> Fehler</label>
+          <label><input type="checkbox" data-f="ok"    checked> Erfolg</label>
+          <span id="log-count" style="margin-left:auto;opacity:.8">Logs gesamt: 0</span>
+        </div>
+
+        <div id="logs-list"></div>
+      </div>
+    `;
+
+    const list  = host.querySelector('#logs-list');
+    const hint  = host.querySelector('#log-hint');
+    const count = host.querySelector('#log-count');
+
+    // Render-Funktion
+    function render(){
+      const data = readBuffer();
+      if (!data.length){
+        list.innerHTML = `<div class="insp-placeholder">Keine CBLog-Einträge gefunden. (buffer leer)</div>`;
+        count.textContent = `Logs gesamt: 0`;
+        return;
+      }
+      // HTML (sicher einsetzen, msg später als textContent)
+      list.innerHTML = data.map(d=>{
+        const lvl = KNOWN.includes(d.lvl) ? d.lvl : 'info';
+        const icon = SYM[lvl] || SYM.info;
+        const ts = new Date(d.ts).toLocaleTimeString();
+        return `
+          <div class="insp-logline ${lvl}">
+            <span class="sym">${icon}</span>
+            <span class="ts">[${ts}]</span>
+            <span class="txt"></span>
+          </div>`;
+      }).join('');
+      // Text setzten (ohne HTML)
+      Array.from(list.querySelectorAll('.insp-logline .txt')).forEach((n,i)=>{
+        n.textContent = data[i].msg;
+      });
+      count.textContent = `Logs gesamt: ${data.length}`;
+      applyFilters(); // aktive Filter respektieren
+    }
+
+    // Filter anwenden
+    function applyFilters(){
+      const on = {};
+      host.querySelectorAll('.insp-filters input[type="checkbox"]').forEach(chk=>{
+        on[chk.dataset.f] = chk.checked;
+      });
+      Array.from(list.children).forEach(row=>{
+        const lvl = KNOWN.find(k => row.classList.contains(k)) || 'info';
+        row.style.display = on[lvl] ? '' : 'none';
+      });
+    }
+
+    // --- Events/Buttons ---
+    host.querySelectorAll('.insp-filters input[type="checkbox"]').forEach(chk=>{
+      chk.addEventListener('change', applyFilters);
+    });
+
+    host.querySelector('#log-refresh').addEventListener('click', ()=>{
+      render();
+      hint.textContent = 'aktualisiert';
+      setTimeout(()=> hint.textContent = '', 1200);
+    });
+
+    host.querySelector('#log-copy').addEventListener('click', async ()=>{
+      // nur sichtbare Zeilen kopieren (Filter!)
+      const lines = Array.from(list.querySelectorAll('.insp-logline'))
+        .filter(el => el.style.display !== 'none')
+        .map(el => el.innerText.replace(/\s+/g,' ').trim());
+      const ok = await copyText(lines.join('\n'));
+      hint.textContent = ok ? `kopiert (${lines.length})` : 'Kopieren fehlgeschlagen';
+      window.dispatchEvent(new CustomEvent('cb:insp:export:logs', { detail:{ format:'text', count: lines.length }}));
+      setTimeout(()=> hint.textContent = '', 1500);
+    });
+
+    host.querySelector('#log-export').addEventListener('click', ()=>{
+      const rows = Array.from(list.querySelectorAll('.insp-logline')).map(el=>{
+        const lvl = KNOWN.find(k => el.classList.contains(k)) || 'info';
+        const ts  = (el.querySelector('.ts')?.textContent||'').replace(/\[|\]/g,'');
+        const msg = el.querySelector('.txt')?.textContent || '';
+        return { ts, lvl, msg: msg.trim() };
+      });
+      const blob = new Blob([JSON.stringify({ ts:new Date().toISOString(), count:rows.length, items:rows }, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `logs_${new Date().toISOString().replace(/[:\.]/g,'-')}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+      hint.textContent = `exportiert (${rows.length})`;
+      window.dispatchEvent(new CustomEvent('cb:insp:export:logs', { detail:{ format:'json', count: rows.length }}));
+      setTimeout(()=> hint.textContent = '', 1500);
+    });
+
+    // Auto-Render: beim Öffnen des Logs-Tabs
+    window.addEventListener('cb:insp:tab:change', (e)=>{
+      if ((e.detail?.tab||'') === 'logs') render();
+    });
+
+    // Initial
+    render();
+    L.ok('bereit v18.14.7-restore');
   });
+
 })();
