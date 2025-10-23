@@ -1,61 +1,127 @@
 /* ============================================================================
-   Datei   : ui/css/ui.css
-   Version : v25.10.16-3
-   Zweck   : Haupt-Styles (Start-Hintergrund, Holzrahmen, Safe-Area)
-============================================================================ */
+ * Datei   : ui/css/ui.css
+ * Projekt : Neue Siedler
+ * Version : v25.10.23-fix1
+ * Zweck   : Globale Styles, Z-Index-Leiter, Basis-Positionierungen (Canvas/UI)
+ * Struktur: (Pseudo)Imports → Konstanten → Hilfs-Blöcke → "Klassen" → Hauptlogik → Exports
+ * Hinweis : Diese Datei setzt nur die Bühne. Layout-/HUD-/Build-spezifische Styles
+ *           bleiben in ihren jeweiligen Dateien (ui-layout.css, ui-hud.css, ui-build.css).
+ * ========================================================================== */
 
+/* ============================================================================
+ * [Imports] (hier nur exemplarisch – echte @import vermeiden, besser <link> in index.html)
+ * ========================================================================== */
+/* (leer) */
+
+/* ============================================================================
+ * [Konstanten] CSS-Variablen (Z-Leiter, Farben, 9-Slice, Transitions)
+ * ========================================================================== */
 :root{
+  /* 9-Slice Rahmen (wird z. B. in HUD/Build genutzt) */
   --frame-src: url("../../assets/ui/panel.svg");
   --frame-slice: 12;
+
+  /* Farben/Basics */
   --bg-dark: #222;
   --txt: #eee;
-  --z-bg: 1; --z-canvas: 2; --z-ui: 3; --z-inspector: 50;
+
+  /* Z-Index-Leiter (einheitlich im Projekt nutzen!) */
+  --z-bg: 1;           /* Hintergrund / Startbild */
+  --z-canvas: 2;       /* Spiel-Canvas */
+  --z-ui: 3;           /* ui-root (Basispanels, default) */
+  --z-place: 40;       /* Platzierungs-Overlay (durchklickbar) */
+  --z-hud: 50;         /* HUD */
+  --z-build: 60;       /* Build-Dock/-Menü */
+  --z-layout: 70;      /* Layout-Cover (muss unter HUD/Build liegen!) */
+  --z-inspector: 900;  /* Inspector-Overlay, wenn offen */
+
+  /* Transitions */
   --fade-dur: 500ms;
-
-  /* Dein fixes Startbild (klein/hochkant-freundlich) */
-  --start-bg-url: url("../../assets/ui/start-bg.jpg");
 }
 
-html, body{
-  margin:0; padding:0; width:100%; height:100%;
-  background: var(--bg-dark); color: var(--txt);
-  overflow:hidden; font-family: Inter, system-ui, Arial, sans-serif;
-}
+/* ============================================================================
+ * [Hilfsfunktionen] (CSS-Hilfsklassen, Mixins etc.) – optional
+ * ========================================================================== */
+.u-hidden { display:none !important; visibility:hidden !important; }
+.u-clickthrough { pointer-events:none !important; }
+.u-clickable { pointer-events:auto !important; }
 
-/* globales Startbild hinter Canvas; blendet mit .is-started aus */
-body::before{
-  content:""; position:fixed; inset:0; z-index:var(--z-bg);
-  background: #111 var(--start-bg-url) center/cover no-repeat;
-  opacity:1; transition: opacity var(--fade-dur) ease;
-  pointer-events:none;
-}
-body.is-started::before{ opacity:0; }
+/* ============================================================================
+ * [Klassen/Blöcke] – Grund-Layering & Positionierungen
+ * ========================================================================== */
 
-/* Canvas + UI-Root */
+/* Body-State-Klassen (werden von ui-layout.js / boot.js gesetzt) */
+body.is-start   { /* Startscreen aktiv */ }
+body.is-playing { /* Spiel aktiv (HUD/Map/Build sichtbar) */ }
+
+/* Bühne: Canvas & UI-Root deckungsgleich */
 #game-canvas{
-  position:absolute; inset:0; z-index:var(--z-canvas);
-  width:100%; height:100%; image-rendering:pixelated;
+  position:absolute;
+  inset:0;
+  z-index:var(--z-canvas);
+  display:block;
 }
+
 #ui-root{
-  position:absolute; inset:0; z-index:var(--z-ui);
+  position:absolute;
+  inset:0;
+  z-index:var(--z-ui);
+  /* WICHTIG: Panels unter ui-root definieren selbst, ob klickbar.
+     Der Root selbst bleibt neutral. */
+}
+
+/* Platzierungs-Overlay (Preview etc.) – durchklickbar außer Buttons */
+.place-overlay{
+  position:absolute;
+  inset:0;
+  z-index:var(--z-place);
+  pointer-events:none;
+}
+.place-overlay .place-btn{
+  pointer-events:auto;
+}
+
+/* Layout-Cover (schwarze Fläche) – optionaler Container:
+   - Wird von ui-layout.js/Body-Klassen geschaltet
+   - LIEGT BEWUSST UNTER HUD/BUILD (siehe --z-layout) */
+#layout-cover{
+  position:fixed;
+  inset:0;
+  background:#000;
+  opacity:.90;
+  z-index:var(--z-layout);
+  display:none;
+  visibility:hidden;
   pointer-events:none;
 }
 
-/* Holzrahmen (9-slice) */
-.wood-frame{
-  border:12px solid transparent;
-  border-image-source:var(--frame-src);
-  border-image-slice:var(--frame-slice) fill;
-  border-image-width:12px;
-  border-image-repeat:stretch;
-  background:rgba(0,0,0,.28);
-  border-radius:3px;
+/* Sichtbarkeit Layout-Cover über Bodystates:
+   Start: sichtbar; Spiel: unsichtbar */
+body.is-start #layout-cover{
+  display:block; visibility:visible; pointer-events:auto;
+}
+body.is-playing #layout-cover{
+  display:none !important; visibility:hidden !important; pointer-events:none !important;
 }
 
-/* Inspector-Toggle sicher innerhalb Safe-Area platzieren */
-#inspector-toggle{
-  position:fixed;
-  right: calc(12px + env(safe-area-inset-right, 0px));
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: var(--z-inspector);
+/* HUD- und Build-Container (damit sie sicher über dem Cover liegen) */
+#hud-root{
+  position:absolute;
+  z-index:var(--z-hud);
+  pointer-events:auto;
 }
+#build-dock{
+  position:absolute;
+  z-index:var(--z-build);
+  pointer-events:auto;
+}
+
+/* ============================================================================
+ * [Hauptlogik] (nicht zutreffend in CSS) 
+ * ========================================================================== */
+/* (leer) */
+
+/* ============================================================================
+ * [Exports] (CSS exportiert implizit – hier keine Aktion notwendig)
+ * ========================================================================== */
+/* (Ende ui.css) */
