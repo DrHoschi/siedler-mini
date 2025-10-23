@@ -15,6 +15,12 @@
  *   – „Holzrahmen“: per background‑image austauschbar.
  * ============================================================================
  */
+
+#btn-build{
+  position:fixed; top:8px; right:64px; z-index:70;
+  width:36px; height:36px; border-radius:8px;
+}
+
 .build-dock{
   position:fixed; left:16px; bottom:16px; width:var(--dock-w);
   display:flex; flex-direction:column; gap:var(--gap);
