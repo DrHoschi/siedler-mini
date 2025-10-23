@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/boot.js
  * Projekt : Neue Siedler
- * Version : v25.10.19-final
+ * Version : v25.10.20
  * Zweck   : Boot-Sequenz – Initialisierung & Startsteuerung
  *
  *  - Wartet auf: UI + Assets + Registry (alle ready)
