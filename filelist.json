@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-22T19:59:39.209Z",
+  "createdAt": "2025-10-23T07:41:55.389Z",
   "root": ".",
-  "count": 423,
+  "count": 424,
   "entries": [
     {
       "type": "dir",
@@ -1171,12 +1171,12 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 2148
+      "size": 2662
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 7295
+      "size": 9030
     },
     {
       "type": "file",
@@ -1206,7 +1206,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 7855
+      "size": 8924
     },
     {
       "type": "file",
@@ -1870,7 +1870,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.core.js",
-      "size": 4318
+      "size": 7250
     },
     {
       "type": "file",
@@ -1921,6 +1921,11 @@
       "type": "file",
       "path": "ui/inspector/inspector.tests.js",
       "size": 2599
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.ui.js",
+      "size": 21573
     },
     {
       "type": "file",
@@ -2030,17 +2035,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 41901
+      "size": 41897
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16072
+      "size": 16068
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 6035
+      "size": 6104
     },
     {
       "type": "file",
