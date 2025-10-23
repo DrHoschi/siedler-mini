@@ -1,121 +1,61 @@
 /* ============================================================================
- * Datei   : ui/css/ui.css
- * Projekt : Neue Siedler
- * Version : v25.10.23-fix2 (ohne Layout-Cover)
- * Zweck   : Globale Basis-Styles + Z-Index-Leiter + Grund-Positionierungen
- * Hinweis : KEIN dunkler Overlay/Cover. Start-/Spielzustände werden nur über
- *           Body-Klassen gesteuert; Sichtbarkeit übernehmen die jeweiligen
- *           Module (Startpanel, HUD, Build, Inspector).
- * Struktur: (Pseudo)Imports → Konstanten → Hilfs-Blöcke → Klassen → Exports
- * ========================================================================== */
+   Datei   : ui/css/ui.css
+   Version : v25.10.16-3
+   Zweck   : Haupt-Styles (Start-Hintergrund, Holzrahmen, Safe-Area)
+============================================================================ */
 
-/* ============================================================================
- * [Imports] – (leer) – Styles werden in index.html verlinkt
- * ========================================================================== */
-
-/* ============================================================================
- * [Konstanten] – Z-Leiter & Basics
- * ========================================================================== */
 :root{
   --frame-src: url("../../assets/ui/panel.svg");
   --frame-slice: 12;
+  --bg-dark: #222;
+  --txt: #eee;
+  --z-bg: 1; --z-canvas: 2; --z-ui: 3; --z-inspector: 50;
+  --fade-dur: 500ms;
 
-  --z-bg: 1;          /* Hintergrund */
-  --z-canvas: 2;      /* Spiel-Canvas */
-  --z-ui: 3;          /* ui-root (Basisschicht) */
-  --z-place: 40;      /* Platzierungsvorschau (durchklickbar außer Buttons) */
-  --z-hud: 50;        /* HUD oben/links */
-  --z-build: 60;      /* Baumenü / Dock */
-  --z-inspector: 900; /* Inspector-Overlay, wenn offen */
+  /* Dein fixes Startbild (klein/hochkant-freundlich) */
+  --start-bg-url: url("../../assets/ui/start-bg.jpg");
 }
 
-/* ============================================================================
- * [Hilfs-Blöcke]
- * ========================================================================== */
-.u-hidden{ display:none !important; visibility:hidden !important; }
-.u-clickthrough{ pointer-events:none !important; }
-.u-clickable{ pointer-events:auto !important; }
-
-/* ============================================================================
- * [Klassen/Grund-Layering]
- * ========================================================================== */
-
-/* Deckt die gesamte Spielfläche (Canvas) ab */
-#game-canvas{
-  position:absolute;
-  inset:0;
-  z-index:var(--z-canvas);
-  display:block;
+html, body{
+  margin:0; padding:0; width:100%; height:100%;
+  background: var(--bg-dark); color: var(--txt);
+  overflow:hidden; font-family: Inter, system-ui, Arial, sans-serif;
 }
 
-/* UI-Root liegt über dem Canvas; Unterelemente entscheiden selbst über Pointer-Events */
-#ui-root{
-  position:absolute;
-  inset:0;
-  z-index:var(--z-ui);
-  /* keine pointer-events: none hier – damit Panels standardmäßig klickbar sind */
-}
-
-/* Platzierungs-Overlay: durchklickbar, Buttons innerhalb aktiv */
-.place-overlay{
-  position:absolute;
-  inset:0;
-  z-index:var(--z-place);
+/* globales Startbild hinter Canvas; blendet mit .is-started aus */
+body::before{
+  content:""; position:fixed; inset:0; z-index:var(--z-bg);
+  background: #111 var(--start-bg-url) center/cover no-repeat;
+  opacity:1; transition: opacity var(--fade-dur) ease;
   pointer-events:none;
 }
-.place-overlay .place-btn{ pointer-events:auto; }
+body.is-started::before{ opacity:0; }
 
-/* HUD & Build (liegen über ui-root, ohne Cover) */
-#hud-root{
-  position:absolute;
-  z-index:var(--z-hud);
-  pointer-events:auto;
+/* Canvas + UI-Root */
+#game-canvas{
+  position:absolute; inset:0; z-index:var(--z-canvas);
+  width:100%; height:100%; image-rendering:pixelated;
 }
-#build-dock{
-  position:absolute;
-  z-index:var(--z-build);
-  pointer-events:auto;
+#ui-root{
+  position:absolute; inset:0; z-index:var(--z-ui);
+  pointer-events:none;
 }
 
-/* Inspector-Button/Overlay werden in ihren Dateien gestylt; hier keine Änderungen */
-
-/* ============================================================================
- * [Exports] – CSS exportiert implizit
- * ========================================================================== */
-
-/* === Start-Hintergrund (unter Canvas/UI, mobil-sicher) === */
-:root{
-  /* Pfad bitte anpassen, falls du PNG nutzt */
-  --start-bg-url: url("../../assets/ui/start-bg.jpg");
-  --start-bg-color: #f3efe9; /* Fallback, wenn Bild fehlt */
+/* Holzrahmen (9-slice) */
+.wood-frame{
+  border:12px solid transparent;
+  border-image-source:var(--frame-src);
+  border-image-slice:var(--frame-slice) fill;
+  border-image-width:12px;
+  border-image-repeat:stretch;
+  background:rgba(0,0,0,.28);
+  border-radius:3px;
 }
 
-#start-bg{
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-bg);         /* unter Canvas/UI */
-  background:
-    var(--start-bg-color)
-    center/cover no-repeat;
-  background-image: var(--start-bg-url);
-  pointer-events: none;
-  opacity: 1;                   /* keine Transparenz */
-  display: none;                /* nur im Startzustand sichtbar */
-  visibility: hidden;
-}
-
-/* Nur im Startzustand anzeigen */
-body.is-start #start-bg{
-  display: block !important;
-  visibility: visible !important;
-}
-
-/* Optional: iOS Safe-Area (falls du oben ein Logo platzierst) */
-#start-bg .safe{
-  position: absolute;
-  inset:
-    env(safe-area-inset-top)
-    env(safe-area-inset-right)
-    env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+/* Inspector-Toggle sicher innerhalb Safe-Area platzieren */
+#inspector-toggle{
+  position:fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-inspector);
 }
