@@ -32,8 +32,10 @@ const EV = {
   BOOT_READY_B     : 'cb:boot:ready',
   GAME_START_A     : 'cb:game-start',
   GAME_START_B     : 'cb:game:start',
-  GAME_RESET       : 'cb:game:reset',
-  REQ_GAME_START   : 'req:game:start',
+  GAME_RESET_A     : 'cb:game-reset',
+  GAME_RESET_B     : 'cb:game:reset',
+  REQ_GAME_START_A : 'req:game-start',
+  REQ_GAME_START_B : 'req:game:start',
 };
 
 /* ============================================================================
