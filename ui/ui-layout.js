@@ -1,92 +1,67 @@
 /* ============================================================================
  * Datei   : ui/ui-layout.js
  * Projekt : Neue Siedler
- * Version : v25.10.23-fix1
- * Zweck   : Start-/Spiel-Layout sicher schalten:
- *           - Start:  body.is-start (Cover sichtbar, Spiel-UI noch „leise“)
- *           - Spiel:  body.is-playing (HUD/Map/Build sichtbar)
- *           - Explizite Show-Requests für HUD & Build auf cb:game:start
+ * Version : v25.10.23-fix2 (ohne Cover)
+ * Zweck   : Zustände "Start" ↔ "Spiel" schalten, ohne zusätzliche Layer.
+ *           – Start: body.is-start (Startpanel zeigt sich wie gehabt)
+ *           – Spiel: body.is-playing (Canvas + HUD + Build sichtbar)
+ *           – KEIN layout-cover, KEIN Overlay!
  * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
  * ========================================================================== */
 
 /* ============================================================================
- * [Imports] (keine externen Module hier, nur Browser-APIs)
+ * [Imports]
  * ========================================================================== */
 // (leer)
 
 /* ============================================================================
  * [Konstanten]
  * ========================================================================== */
-const TAG_LAYOUT = '[layout]';
-const LOGi = (m)=> (window.CBLog?.info || console.info)(`${TAG_LAYOUT} ${m}`);
+const TAG = '[layout]';
+const logI = (m)=> (window.CBLog?.info || console.info)(`${TAG} ${m}`);
 
 /* ============================================================================
  * [Hilfsfunktionen]
  * ========================================================================== */
-function $(sel, root=document){ return root.querySelector(sel); }
-function ensureCover(){
-  // Falls #layout-cover in index.html fehlt → anlegen
-  let c = $('#layout-cover');
-  if (!c){
-    c = document.createElement('div');
-    c.id = 'layout-cover';
-    document.body.appendChild(c);
-  }
-  return c;
+function enableStart(){
+  document.body.classList.add('is-start');
+  document.body.classList.remove('is-playing');
+  logI('inaktiv (Startscreen sichtbar)');
 }
 function enablePlaying(){
   document.body.classList.remove('is-start');
   document.body.classList.add('is-playing');
-  LOGi('aktiv (body.is-playing)');
-}
-function disablePlaying(){
-  document.body.classList.remove('is-playing');
-  document.body.classList.add('is-start');
-  LOGi('inaktiv (Startscreen sichtbar)');
+  logI('aktiv (body.is-playing)');
 }
 
 /* ============================================================================
- * [Klassen]
+ * [Klassen] – nicht benötigt
  * ========================================================================== */
-// (hier nicht notwendig – reines Modulverhalten)
 
 /* ============================================================================
- * [Hauptlogik] – Event-Wiring (Aliasse berücksichtigt)
+ * [Hauptlogik] – Event-Wiring (inkl. Aliasse aus deinem Monolith)
  * ========================================================================== */
-(function initLayoutGlue(){
-  // Startzustand: Startscreen aktiv
-  ensureCover();
-  disablePlaying();
+(function initLayout(){
+  // Initial: wir gehen konservativ auf Start
+  enableStart();
 
-  // UI-ready → sicherheitshalber Startzustand (beide Aliasse)
-  addEventListener('cb:ui-ready', disablePlaying, { passive:true });
-  addEventListener('cb:ui:ready', disablePlaying, { passive:true });
+  // UI-ready (beide Aliasse) → Startzustand bleibt, bis explizit gestartet wird
+  addEventListener('cb:ui-ready', enableStart, { passive:true });
+  addEventListener('cb:ui:ready', enableStart, { passive:true });
 
-  // Game start → Spiel aktiv (beide Aliasse)
+  // Game start (beide Aliasse) → Spielzustand aktivieren
+  const onGameStart = ()=> enablePlaying();
   addEventListener('cb:game-start', onGameStart, { passive:true });
   addEventListener('cb:game:start', onGameStart, { passive:true });
 
-  // Game reset → zurück zum Startscreen
-  addEventListener('cb:game:reset', disablePlaying, { passive:true });
+  // Reset zurück auf Start
+  addEventListener('cb:game:reset', enableStart, { passive:true });
 
-  // Fail-Safe Log (wie in deinen Logs)
-  LOGi('failsafe enable (via boot)');
+  // Log-Kompat mit deinem bisherigen Logtext
+  logI('failsafe enable (via boot)');
 })();
-
-/** Auf Spielstart: State setzen + HUD/Build anfordern */
-function onGameStart(){
-  enablePlaying();
-
-  // Falls am Cover Styles „kleben“
-  const c = $('#layout-cover');
-  if (c){ c.style.display=''; c.style.visibility=''; c.style.opacity=''; }
-
-  // Explizit HUD + Build zeigen (deine Events/Flows)
-  dispatchEvent(new CustomEvent('req:hud:show'));
-  dispatchEvent(new CustomEvent('req:buildmenu:show'));
-}
 
 /* ============================================================================
  * [Exports]
  * ========================================================================== */
-window.LayoutGlue = { enablePlaying, disablePlaying };
+export const Layout = { enableStart, enablePlaying };
