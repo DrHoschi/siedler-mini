@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-23T07:41:55.389Z",
+  "createdAt": "2025-10-23T21:16:14.281Z",
   "root": ".",
   "count": 424,
   "entries": [
@@ -1101,7 +1101,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 6052
+      "size": 7122
     },
     {
       "type": "file",
@@ -1348,7 +1348,7 @@
     {
       "type": "file",
       "path": "docs/EVENTS_browser_scan.md",
-      "size": 3578
+      "size": 8938
     },
     {
       "type": "file",
@@ -1771,7 +1771,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 2149
+      "size": 3486
     },
     {
       "type": "file",
@@ -1791,7 +1791,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layout.css",
-      "size": 3397
+      "size": 3687
     },
     {
       "type": "file",
@@ -1816,7 +1816,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 1842
+      "size": 2093
     },
     {
       "type": "dir",
@@ -1925,7 +1925,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.ui.js",
-      "size": 21573
+      "size": 27259
     },
     {
       "type": "file",
@@ -1965,7 +1965,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 10414
+      "size": 7507
     },
     {
       "type": "file",
@@ -2035,22 +2035,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 41897
+      "size": 41998
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16068
+      "size": 16107
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 6104
+      "size": 6313
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 5709
+      "size": 5663
     },
     {
       "type": "file",
