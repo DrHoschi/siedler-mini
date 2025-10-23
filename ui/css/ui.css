@@ -37,7 +37,9 @@ body.is-playing::before{ opacity:0; }
   position:absolute; inset:0; z-index:var(--z-canvas);
   width:100%; height:100%; image-rendering:pixelated;
 }
-#hud-root   { position:absolute; z-index:50; pointer-events:auto; }
+
+#ui-root{ position:absolute; inset:0; z-index:var(--z-ui);pointer-events:none;}
+/* #hud-root   { position:absolute; z-index:50; pointer-events:auto; } */
 #build-dock { position:absolute; z-index:60; pointer-events:auto; }
 #game-canvas{ position:absolute; inset:0;  z-index:2;  display:block; }
 
