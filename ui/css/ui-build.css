@@ -15,6 +15,21 @@
  *   – „Holzrahmen“: per background‑image austauschbar.
  * ============================================================================
  */
+/* === Holzrahmen-Panel (universell) === */
+:root{
+  --frame-src: url("../../assets/ui/panel.svg"); /* Pfad ggf. anpassen */
+  --frame-slice: 12;       /* je nach SVG 8–16 */
+}
+
+.u-frame{
+  border-style: solid;
+  border-width: 12px;                /* Ohne Breite kein border-image! */
+  border-image-source: var(--frame-src);
+  border-image-slice: var(--frame-slice);
+  border-image-repeat: stretch;
+  background: rgba(40,35,30,.9);
+  border-radius: 6px;                /* klappt mit border-image okay */
+}
 
 #btn-build{
   position:fixed; top:8px; right:64px; z-index:70;
@@ -49,6 +64,27 @@
   padding:2px 6px; border-radius:999px; background:#0006; color:#fff; font-weight:700;
 }
 .cost img{ width:18px; height:18px; image-rendering:pixelated; }
+
+/* Build-Dock: Kartenraster minimal hübsch */
+#build-dock .build-grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+#build-dock .build-card{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  color: #eee;
+  padding: 8px;
+}
+#build-dock .build-card__title{ font-weight:600; font-size: 14px; }
+#build-dock .build-card__img{ width: 100%; height: auto; display:block; image-rendering: pixelated; }
+#build-dock .build-costs{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+#build-dock .build-cost{ display:inline-flex; gap:4px; align-items:center; }
+#build-dock .build-cost__icon{ width:16px; height:16px; display:block; }
 
 /* [50] Responsiv */
 @media (max-width:1200px){ .build-grid{ grid-template-columns:repeat(2,1fr); } }
