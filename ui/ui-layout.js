@@ -34,6 +34,17 @@ function enablePlaying(){
   logI('aktiv (body.is-playing)');
 }
 
+function ensureStartBG(){
+  if (document.getElementById('start-bg')) return;
+  const bg = document.createElement('div');
+  bg.id = 'start-bg';
+  // optionaler Safe-Area-Container
+  const safe = document.createElement('div');
+  safe.className = 'safe';
+  bg.appendChild(safe);
+  document.body.appendChild(bg);
+}
+
 /* ============================================================================
  * [Klassen] – nicht benötigt
  * ========================================================================== */
@@ -41,6 +52,10 @@ function enablePlaying(){
 /* ============================================================================
  * [Hauptlogik] – Event-Wiring (inkl. Aliasse aus deinem Monolith)
  * ========================================================================== */
+/* In deinem IIFE/Init ganz am Anfang aufrufen */
+(function initLayout(){
+  ensureStartBG();
+
 (function initLayout(){
   // Initial: wir gehen konservativ auf Start
   enableStart();
