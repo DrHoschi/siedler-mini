@@ -132,7 +132,7 @@
       // window.dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
 
   ok('Spielstart → cb:game:start');
-      
+     window.dispatchEvent(new CustomEvent(EV.GAME_START)); // 'cb:game:start'
   // window.dispatchEvent(new CustomEvent(EV.GAME_START_B));
   // window.dispatchEvent(new CustomEvent(EV.GAME_START_A));
 
