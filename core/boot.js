@@ -145,9 +145,9 @@
 
       
       // Spieloberfläche / Feature-Requests
-      window.dispatchEvent(new CustomEvent('req:map:init'));
-      window.dispatchEvent(new CustomEvent('req:hud:show'));
-      window.dispatchEvent(new CustomEvent('req:buildmenu:show'));
+      // window.dispatchEvent(new CustomEvent('req:map:init'));
+      // window.dispatchEvent(new CustomEvent('req:hud:show'));
+      // window.dispatchEvent(new CustomEvent('req:buildmenu:show'));
 
       // Bestätigung für Listener
       window.dispatchEvent(new CustomEvent(EV.GAME_START));
