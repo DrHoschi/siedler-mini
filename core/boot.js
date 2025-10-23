@@ -1,144 +1,163 @@
 /* ============================================================================
  * Datei   : core/boot.js
  * Projekt : Neue Siedler
- * Version : v25.10.23-fix2 (basierend auf v25.10.19-final)
- * Zweck   : Boot-Manager (UI/Assets/Registry orchestrieren) → Spielstart
- *           – KEIN zusätzliches Cover, nur Body-Klassen
- *           – Explizit HUD + Build anzeigen lassen nach Start
- * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
- * ========================================================================== */
+ * Version : v25.10.19-final
+ * Zweck   : Boot-Sequenz – Initialisierung & Startsteuerung
+ *
+ *  - Wartet auf: UI + Assets + Registry (alle ready)
+ *  - Reagiert auf: req:game:start
+ *  - Bestätigt Boot: cb:boot:ready
+ *  - Startet Spiel:  cb:game:start  (+ UI/Map/HUD/Buildmenu-Requests)
+ *
+ * Kompatibilität:
+ *  - ui-start feuert bei dir: cb:ui-ready (Bindestrich!)
+ *  - Dieser Boot lauscht auf beide Varianten (Bindestrich UND Doppelpunkt):
+ *      cb:ui-ready        / cb:ui:ready
+ *      cb:assets-ready    / cb:assets:ready
+ *      cb:registry-ready  / cb:registry:ready
+ * ============================================================================ */
+(function(root, factory){
+  root.SiedlerBoot = factory();
+})(typeof window !== "undefined" ? window : this, function(){
 
-/* ============================================================================
- * [Imports]
- * ========================================================================== */
-// (leer)
+  const BOOT_VERSION = "v25.10.19-final";
 
-/* ============================================================================
- * [Konstanten]
- * ========================================================================== */
-const BOOT_VER = 'v25.10.23-fix2';
-const ok   = (m)=> (window.CBLog?.ok   || console.log   )(`[boot] ${m}`);
-const info = (m)=> (window.CBLog?.info || console.info  )(`[boot] ${m}`);
-const warn = (m)=> (window.CBLog?.warn || console.warn  )(`[boot] ${m}`);
+  // Kurze Logger-Delegates (gehen in CBLog oder die Konsole)
+  const ok   = (m)=> (window.CBLog?.ok   || console.log   )(`[boot] ${m}`);
+  const info = (m)=> (window.CBLog?.info || console.info  )(`[boot] ${m}`);
+  const warn = (m)=> (window.CBLog?.warn || console.warn  )(`[boot] ${m}`);
+  const err  = (m)=> (window.CBLog?.err  || console.error )(`[boot] ${m}`);
 
-const EV = {
-  UI_READY_A       : 'cb:ui-ready',
-  UI_READY_B       : 'cb:ui:ready',
-  ASSETS_READY_A   : 'cb:assets-ready',
-  ASSETS_READY_B   : 'cb:assets:ready',
-  REGISTRY_READY_A : 'cb:registry-ready',
-  REGISTRY_READY_B : 'cb:registry:ready',
-  BOOT_READY_A     : 'cb:boot-ready',
-  BOOT_READY_B     : 'cb:boot:ready',
-  GAME_START_A     : 'cb:game-start',
-  GAME_START_B     : 'cb:game:start',
-  GAME_RESET_A     : 'cb:game-reset',
-  GAME_RESET_B     : 'cb:game:reset',
-  REQ_GAME_START_A : 'req:game-start',
-  REQ_GAME_START_B : 'req:game:start',
-};
+  // Erwartete Event-Namen (samt Alias)
+  const EV = {
+    UI_READY_A       : 'cb:ui-ready',        // Bindestrich  (bei dir im ui-start)
+    UI_READY_B       : 'cb:ui:ready',        // Doppelpunkt (Fallback)
+    ASSETS_READY_A   : 'cb:assets-ready',
+    ASSETS_READY_B   : 'cb:assets:ready',
+    REGISTRY_READY_A : 'cb:registry-ready',
+    REGISTRY_READY_B : 'cb:registry:ready',
 
-/* ============================================================================
- * [Hilfsfunktionen]
- * ========================================================================== */
-function setStartState(){
-  document.body.classList.add('is-start');
-  document.body.classList.remove('is-playing','inspector-open','is-paused');
-}
-function setPlayingState(){
-  document.body.classList.remove('is-start');
-  document.body.classList.add('is-playing');
-}
+    REQ_GAME_START   : 'req:game:start',
+    BOOT_READY       : 'cb:boot:ready',
+    GAME_START       : 'cb:game:start'
+  };
 
-/* ============================================================================
- * [Klassen]
- * ========================================================================== */
-class BootManager{
-  constructor(){
-    this.uiReady = false;
-    this.assetsReady = false;
-    this.registryReady = false;
-    this.startRequested = false;
+  class BootManager {
+    constructor(){
+      // interner Status
+      this.uiReady = false;
+      this.assetsReady = false;
+      this.registryReady = false;
+      this.bootReadyEmitted = false;
+      this.startRequested = false;
 
-    // Event-Wiring (Aliasse)
-    addEventListener(EV.UI_READY_A,       ()=> this.onUIReady());
-    addEventListener(EV.UI_READY_B,       ()=> this.onUIReady());
-    addEventListener(EV.ASSETS_READY_A,   ()=> this.onAssetsReady());
-    addEventListener(EV.ASSETS_READY_B,   ()=> this.onAssetsReady());
-    addEventListener(EV.REGISTRY_READY_A, ()=> this.onRegistryReady());
-    addEventListener(EV.REGISTRY_READY_B, ()=> this.onRegistryReady());
-    addEventListener(EV.REQ_GAME_START,   ()=> this.onStartRequested());
+      // Ready-Quellen (beide Varianten „A“ & „B“)
+      window.addEventListener(EV.UI_READY_A,       ()=> this.onUIReady());
+      window.addEventListener(EV.UI_READY_B,       ()=> this.onUIReady());
+      window.addEventListener(EV.ASSETS_READY_A,   ()=> this.onAssetsReady());
+      window.addEventListener(EV.ASSETS_READY_B,   ()=> this.onAssetsReady());
+      window.addEventListener(EV.REGISTRY_READY_A, ()=> this.onRegistryReady());
+      window.addEventListener(EV.REGISTRY_READY_B, ()=> this.onRegistryReady());
 
-    info(`BootManager initialisiert (${BOOT_VER})`);
-    this._fallbackUiReady();
-    ok('BootManager aktiv');
-  }
+      // Start-Anforderung (vom Startpanel / Button)
+      window.addEventListener(EV.REQ_GAME_START,   ()=> this.onStartRequested());
 
-  _fallbackUiReady(){
-    if (document.readyState === 'complete' || document.readyState === 'interactive'){
-      queueMicrotask(()=> this.onUIReady());
-    } else {
-      addEventListener('DOMContentLoaded', ()=> this.onUIReady(), { once:true });
+      info(`BootManager initialisiert (${BOOT_VERSION})`);
+      this._fallbackUiReady(); // falls ui-start kein explizites UI-Event feuert
+      ok('BootManager aktiv');
+    }
+
+    /* ---------- Fallback: UI-Ready (DOM) ---------- */
+    _fallbackUiReady(){
+      const mark = ()=> {
+        if (!this.uiReady) {
+          window.dispatchEvent(new CustomEvent(EV.UI_READY_A));
+          info('UI ready (DOMContentLoaded Fallback)');
+        }
+      };
+      if (document.readyState === 'complete' || document.readyState === 'interactive'){
+        setTimeout(mark, 0);
+      } else {
+        window.addEventListener('DOMContentLoaded', mark, { once:true });
+      }
+    }
+
+    /* ---------- Ready-Quellen ---------- */
+    onUIReady(){
+      if (this.uiReady) return;
+      this.uiReady = true;
+      ok('UI bereit – warte auf Assets & Registry …');
+      this.tryBootReady();
+    }
+    onAssetsReady(){
+      if (this.assetsReady) return;
+      this.assetsReady = true;
+      ok('Assets bereit ✅');
+      this.tryBootReady();
+    }
+    onRegistryReady(){
+      if (this.registryReady) return;
+      this.registryReady = true;
+      ok('Registry bereit ✅');
+      this.tryBootReady();
+    }
+
+    /* ---------- Boot-Freigabe ---------- */
+    tryBootReady(){
+      if (this.bootReadyEmitted) return;
+      if (this.uiReady && this.assetsReady && this.registryReady){
+        this.bootReadyEmitted = true;
+        ok(`Boot abgeschlossen → ${EV.BOOT_READY}`);
+        window.dispatchEvent(new CustomEvent(EV.BOOT_READY));
+
+        // „Spiel starten“ wurde schon gedrückt? → jetzt nachholen
+        if (this.startRequested) this._startGame();
+      }
+    }
+
+    /* ---------- Start-Flow ---------- */
+    onStartRequested(){
+      this.startRequested = true;
+      if (!this.bootReadyEmitted){
+        // Nicht hart abbrechen – wir warten höflich weiter.
+        warn('Start zurückgestellt – warte auf Ready (UI/Assets/Registry).');
+        return;
+      }
+      this._startGame();
+    }
+
+    _startGame(){
+      ok(`Spielstart → ${EV.GAME_START}`);
+
+      // UI: Startpanel ausblenden (ui-start reagiert darauf)
+      window.dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
+
+      // Spieloberfläche / Feature-Requests
+      window.dispatchEvent(new CustomEvent('req:map:init'));
+      window.dispatchEvent(new CustomEvent('req:hud:show'));
+      window.dispatchEvent(new CustomEvent('req:buildmenu:show'));
+
+      // Bestätigung für Listener
+      window.dispatchEvent(new CustomEvent(EV.GAME_START));
     }
   }
 
-  onUIReady(){
-    if (this.uiReady) return;
-    this.uiReady = true;
-    info('UI bereit – warte auf Assets & Registry …');
-    setStartState();
-    // Info-Event (Alias B), wie in deinen Logs
-    dispatchEvent(new CustomEvent(EV.BOOT_READY_B));
-  }
-  onAssetsReady(){
-    if (this.assetsReady) return;
-    this.assetsReady = true;
-    ok('Assets bereit ✓');
-    this._maybeStart();
-  }
-  onRegistryReady(){
-    if (this.registryReady) return;
-    this.registryReady = true;
-    ok('Registry bereit ✅');
-    this._maybeStart();
-  }
-  onStartRequested(){
-    this.startRequested = true;
-    this._maybeStart();
-  }
+  // Singleton-Instanz
+  window.__boot = new BootManager();
+  return BootManager;
+});
 
-  _maybeStart(){
-    if (!this.uiReady || !this.assetsReady || !this.registryReady) return;
-    if (!this.startRequested) return;
+/* ---------- Fehler global in den Inspector loggen (ohne Alert-Blocker) ---------- */
+window.addEventListener('error', (e)=>{
+  (window.CBLog?.err || console.error)(`Uncaught Error: ${e.message} @ ${e.filename}:${e.lineno}`);
+});
+window.addEventListener('unhandledrejection', (e)=>{
+  const msg = e?.reason?.message || String(e.reason || e);
+  (window.CBLog?.err || console.error)(`Unhandled Promise Rejection: ${msg}`);
+});
 
-    ok('Boot abgeschlossen → cb:boot:ready');
-    dispatchEvent(new CustomEvent(EV.BOOT_READY_B));
-
-    ok('Spielstart → cb:game:start');
-    dispatchEvent(new CustomEvent(EV.GAME_START_B));
-    dispatchEvent(new CustomEvent(EV.GAME_START_A));
-
-    setPlayingState();
-
-    // Sichtbarkeits-Trigger: HUD & Baumenü (deine bestehenden Listener nutzen das)
-    dispatchEvent(new CustomEvent('req:hud:show'));
-    dispatchEvent(new CustomEvent('req:buildmenu:show'));
-  }
-}
-
-/* ============================================================================
- * [Hauptlogik]
- * ========================================================================== */
-(function initBoot(){
-  window.SiedlerBoot = new BootManager();
-
-  // Saubermachen bei Boot: Altklassen entfernen
-  addEventListener(EV.BOOT_READY_B, ()=>{
-    document.body.classList.remove('inspector-open','is-paused');
-  }, { once:true });
-})();
-
-/* ============================================================================
- * [Exports]
- * ========================================================================== */
-export {};
+// Failsafe: sobald Spiel wirklich startet, erzwinge Layout an
+window.addEventListener('cb:game:start', () => {
+  document.body.classList.add('is-playing');
+  (window.CBLog?.info||console.info)('[layout] failsafe enable (via boot)');
+}, { once:true });
