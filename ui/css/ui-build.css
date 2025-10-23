@@ -37,7 +37,7 @@
   background:var(--panel); border-radius:12px; box-shadow:var(--shadow);
   padding:10px; position:relative;
   /* Optional: Holzrahmen */
-  /* background-image:url("../../assets/ui/build/frame_wood.png"); background-size:cover; */
+  background-image:url("../../assets/ui/panel.svg"); background-size:cover;
 }
 .build-card__img{ aspect-ratio:1/1; width:100%; object-fit:cover; image-rendering:pixelated; border-radius:8px; }
 .build-card__title{ font-weight:700; margin-top:8px; text-shadow:0 1px 0 #0009; }
