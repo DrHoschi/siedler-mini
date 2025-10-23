@@ -1,82 +1,65 @@
 /* ============================================================================
  * Datei   : ui/ui-layout.js
  * Projekt : Neue Siedler
- * Version : v25.10.23-fix2 (ohne Cover)
- * Zweck   : Zustände "Start" ↔ "Spiel" schalten, ohne zusätzliche Layer.
- *           – Start: body.is-start (Startpanel zeigt sich wie gehabt)
- *           – Spiel: body.is-playing (Canvas + HUD + Build sichtbar)
- *           – KEIN layout-cover, KEIN Overlay!
- * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+ * Version : v25.10.19-final3
+ * Zweck   : Schaltet Spiel-Layout NACH Spielstart aktiv (Start-BG bleibt bis dahin).
+ * Events  : cb:ui-ready / cb:ui:ready    -> Layout AUS
+ *           cb:game-start / cb:game:start-> Layout AN
+ *           cb:game:reset                -> Layout AUS
  * ========================================================================== */
+/* (function () {
+  const TAG = '[layout]';
+  const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
+
+  function enableLayout()  { document.body.classList.add('is-playing');  log('aktiv (body.is-playing)'); }
+  function disableLayout() { document.body.classList.remove('is-playing'); log('inaktiv (Startscreen sichtbar)'); }
+
+  // Startzustand: Layout AUS (Start-BG sichtbar)
+  disableLayout();
+
+  // --- Ready (beide Aliasse) -> AUS ---
+  window.addEventListener('cb:ui-ready', disableLayout, { passive:true });
+  window.addEventListener('cb:ui:ready', disableLayout, { passive:true });
+
+  // --- Game start (beide Aliasse) -> AN ---
+  window.addEventListener('cb:game-start',  enableLayout, { passive:true });
+  window.addEventListener('cb:game:start',  enableLayout, { passive:true });
+
+  // --- Reset optional -> AUS ---
+  window.addEventListener('cb:game:reset', disableLayout, { passive:true });
+
+  // Debug-Export
+  window.LayoutGlue = { enable: enableLayout, disable: disableLayout };
+})(); */
 
 /* ============================================================================
- * [Imports]
+ * Datei   : ui/ui-layout.js
+ * Zweck   : Schaltet Spiel-Layout NACH Spielstart aktiv (Start-BG bis dahin).
+ * Events  : cb:ui-ready / cb:ui:ready    -> Layout AUS
+ *           cb:game-start / cb:game:start-> Layout AN
+ *           cb:game:reset                -> Layout AUS
  * ========================================================================== */
-// (leer)
+(function () {
+  const TAG = '[layout]';
+  const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
 
-/* ============================================================================
- * [Konstanten]
- * ========================================================================== */
-const TAG = '[layout]';
-const logI = (m)=> (window.CBLog?.info || console.info)(`${TAG} ${m}`);
+  function enable()  { document.body.classList.add('is-playing');  log('aktiv (body.is-playing)'); }
+  function disable() { document.body.classList.remove('is-playing'); log('inaktiv (Startscreen sichtbar)'); }
 
-/* ============================================================================
- * [Hilfsfunktionen]
- * ========================================================================== */
-function enableStart(){
-  document.body.classList.add('is-start');
-  document.body.classList.remove('is-playing');
-  logI('inaktiv (Startscreen sichtbar)');
-}
-function enablePlaying(){
-  document.body.classList.remove('is-start');
-  document.body.classList.add('is-playing');
-  logI('aktiv (body.is-playing)');
-}
+  // Startzustand (Startscreen sichtbar)
+  disable();
 
-function ensureStartBG(){
-  if (document.getElementById('start-bg')) return;
-  const bg = document.createElement('div');
-  bg.id = 'start-bg';
-  // optionaler Safe-Area-Container
-  const safe = document.createElement('div');
-  safe.className = 'safe';
-  bg.appendChild(safe);
-  document.body.appendChild(bg);
-}
+  // Ready -> AUS (beide Aliasse)
+  addEventListener('cb:ui-ready', disable,  { passive:true });
+  addEventListener('cb:ui:ready', disable,  { passive:true });
 
-/* ============================================================================
- * [Klassen] – nicht benötigt
- * ========================================================================== */
+  // Game start -> AN (beide Aliasse)
+  addEventListener('cb:game-start', enable, { passive:true });
+  addEventListener('cb:game:start', enable, { passive:true });
 
-/* ============================================================================
- * [Hauptlogik] – Event-Wiring (inkl. Aliasse aus deinem Monolith)
- * ========================================================================== */
-/* In deinem IIFE/Init ganz am Anfang aufrufen */
-(function initLayout(){
-  ensureStartBG();
+  // Reset -> AUS
+  addEventListener('cb:game:reset', disable,{ passive:true });
 
-(function initLayout(){
-  // Initial: wir gehen konservativ auf Start
-  enableStart();
-
-  // UI-ready (beide Aliasse) → Startzustand bleibt, bis explizit gestartet wird
-  addEventListener('cb:ui-ready', enableStart, { passive:true });
-  addEventListener('cb:ui:ready', enableStart, { passive:true });
-
-  // Game start (beide Aliasse) → Spielzustand aktivieren
-  const onGameStart = ()=> enablePlaying();
-  addEventListener('cb:game-start', onGameStart, { passive:true });
-  addEventListener('cb:game:start', onGameStart, { passive:true });
-
-  // Reset zurück auf Start
-  addEventListener('cb:game:reset', enableStart, { passive:true });
-
-  // Log-Kompat mit deinem bisherigen Logtext
-  logI('failsafe enable (via boot)');
+  // Debug/Manuell
+  window.LayoutGlue = { enable, disable };
 })();
-
-/* ============================================================================
- * [Exports]
- * ========================================================================== */
-export const Layout = { enableStart, enablePlaying };
