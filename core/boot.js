@@ -127,11 +127,23 @@
     }
 
     _startGame(){
-      ok(`Spielstart → ${EV.GAME_START}`);
-
+      // ok(`Spielstart → ${EV.GAME_START}`);
       // UI: Startpanel ausblenden (ui-start reagiert darauf)
-      window.dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
+      // window.dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
 
+  ok('Spielstart → cb:game:start');
+  dispatchEvent(new CustomEvent(EV.GAME_START_B));
+  dispatchEvent(new CustomEvent(EV.GAME_START_A));
+
+  setPlayingState();
+
++ // Startpanel zu, Map bauen, HUD/Build zeigen (minimal & sicher):
++ dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
++ dispatchEvent(new CustomEvent('req:map:init'));
++ dispatchEvent(new CustomEvent('req:hud:show'));
++ dispatchEvent(new CustomEvent('req:buildmenu:show'));
+
+      
       // Spieloberfläche / Feature-Requests
       window.dispatchEvent(new CustomEvent('req:map:init'));
       window.dispatchEvent(new CustomEvent('req:hud:show'));
