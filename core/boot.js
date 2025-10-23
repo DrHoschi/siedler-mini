@@ -1,24 +1,25 @@
 /* ============================================================================
  * Datei   : core/boot.js
  * Projekt : Neue Siedler
- * Version : v25.10.23-fix1  (basierend auf v25.10.19-final)
- * Zweck   : Boot-Manager – orchestriert UI/Assets/Registry → Start → Spielstart
+ * Version : v25.10.23-fix2 (basierend auf v25.10.19-final)
+ * Zweck   : Boot-Manager (UI/Assets/Registry orchestrieren) → Spielstart
+ *           – KEIN zusätzliches Cover, nur Body-Klassen
+ *           – Explizit HUD + Build anzeigen lassen nach Start
  * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
  * ========================================================================== */
 
 /* ============================================================================
  * [Imports]
  * ========================================================================== */
-// (leer) – Boot arbeitet nur mit Browser-Events
+// (leer)
 
 /* ============================================================================
  * [Konstanten]
  * ========================================================================== */
-const BOOT_VERSION = 'v25.10.23-fix1';
+const BOOT_VER = 'v25.10.23-fix2';
 const ok   = (m)=> (window.CBLog?.ok   || console.log   )(`[boot] ${m}`);
 const info = (m)=> (window.CBLog?.info || console.info  )(`[boot] ${m}`);
 const warn = (m)=> (window.CBLog?.warn || console.warn  )(`[boot] ${m}`);
-const err  = (m)=> (window.CBLog?.err  || console.error )(`[boot] ${m}`);
 
 const EV = {
   UI_READY_A       : 'cb:ui-ready',
@@ -41,15 +42,10 @@ const EV = {
 function setStartState(){
   document.body.classList.add('is-start');
   document.body.classList.remove('is-playing','inspector-open','is-paused');
-  const cover = document.getElementById('layout-cover');
-  if (cover){ cover.classList.remove('open'); cover.style.display=''; cover.style.opacity=''; cover.style.visibility=''; }
 }
-
 function setPlayingState(){
   document.body.classList.remove('is-start');
   document.body.classList.add('is-playing');
-  const cover = document.getElementById('layout-cover');
-  if (cover){ cover.classList.remove('open'); cover.style.display=''; cover.style.opacity=''; cover.style.visibility=''; }
 }
 
 /* ============================================================================
@@ -62,24 +58,21 @@ class BootManager{
     this.registryReady = false;
     this.startRequested = false;
 
-    // Quellen (Aliasse berücksichtigen)
+    // Event-Wiring (Aliasse)
     addEventListener(EV.UI_READY_A,       ()=> this.onUIReady());
     addEventListener(EV.UI_READY_B,       ()=> this.onUIReady());
     addEventListener(EV.ASSETS_READY_A,   ()=> this.onAssetsReady());
     addEventListener(EV.ASSETS_READY_B,   ()=> this.onAssetsReady());
     addEventListener(EV.REGISTRY_READY_A, ()=> this.onRegistryReady());
     addEventListener(EV.REGISTRY_READY_B, ()=> this.onRegistryReady());
-
-    // Startanforderung (vom Startpanel/Button)
     addEventListener(EV.REQ_GAME_START,   ()=> this.onStartRequested());
 
-    info(`BootManager initialisiert (${BOOT_VERSION})`);
-    this._fallbackUiReady(); // falls ui-start kein UI-Event feuert
+    info(`BootManager initialisiert (${BOOT_VER})`);
+    this._fallbackUiReady();
     ok('BootManager aktiv');
   }
 
   _fallbackUiReady(){
-    // kleiner Fallback – UI gilt nach DOMContentLoaded als "ready"
     if (document.readyState === 'complete' || document.readyState === 'interactive'){
       queueMicrotask(()=> this.onUIReady());
     } else {
@@ -91,26 +84,22 @@ class BootManager{
     if (this.uiReady) return;
     this.uiReady = true;
     info('UI bereit – warte auf Assets & Registry …');
-    // Startzustand hart setzen
     setStartState();
-    // Boot-Ready signalisieren (Alias B)
+    // Info-Event (Alias B), wie in deinen Logs
     dispatchEvent(new CustomEvent(EV.BOOT_READY_B));
   }
-
   onAssetsReady(){
     if (this.assetsReady) return;
     this.assetsReady = true;
     ok('Assets bereit ✓');
     this._maybeStart();
   }
-
   onRegistryReady(){
     if (this.registryReady) return;
     this.registryReady = true;
     ok('Registry bereit ✅');
     this._maybeStart();
   }
-
   onStartRequested(){
     this.startRequested = true;
     this._maybeStart();
@@ -123,15 +112,13 @@ class BootManager{
     ok('Boot abgeschlossen → cb:boot:ready');
     dispatchEvent(new CustomEvent(EV.BOOT_READY_B));
 
-    // Spielstart signalisieren (beide Aliasse für maximale Kompatibilität)
     ok('Spielstart → cb:game:start');
     dispatchEvent(new CustomEvent(EV.GAME_START_B));
     dispatchEvent(new CustomEvent(EV.GAME_START_A));
 
-    // Sichtbarkeit sicher schalten
     setPlayingState();
 
-    // Explizit HUD & Build anfragen (damit HUD/Build sichtbar sind)
+    // Sichtbarkeits-Trigger: HUD & Baumenü (deine bestehenden Listener nutzen das)
     dispatchEvent(new CustomEvent('req:hud:show'));
     dispatchEvent(new CustomEvent('req:buildmenu:show'));
   }
@@ -141,12 +128,10 @@ class BootManager{
  * [Hauptlogik]
  * ========================================================================== */
 (function initBoot(){
-  // Direkt starten
   window.SiedlerBoot = new BootManager();
 
-  // Fail-safe: Einmalig zu Boot-Ready den Startzustand räumen
+  // Saubermachen bei Boot: Altklassen entfernen
   addEventListener(EV.BOOT_READY_B, ()=>{
-    // ggf. Altklassen entfernen
     document.body.classList.remove('inspector-open','is-paused');
   }, { once:true });
 })();
@@ -154,4 +139,4 @@ class BootManager{
 /* ============================================================================
  * [Exports]
  * ========================================================================== */
-export {}; // Modulabschluss (ESM-safe, falls via <script type="module"> geladen)
+export {};
