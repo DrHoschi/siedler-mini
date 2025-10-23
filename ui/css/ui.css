@@ -82,3 +82,40 @@
 /* ============================================================================
  * [Exports] – CSS exportiert implizit
  * ========================================================================== */
+
+/* === Start-Hintergrund (unter Canvas/UI, mobil-sicher) === */
+:root{
+  /* Pfad bitte anpassen, falls du PNG nutzt */
+  --start-bg-url: url("../../assets/ui/start-bg.jpg");
+  --start-bg-color: #f3efe9; /* Fallback, wenn Bild fehlt */
+}
+
+#start-bg{
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-bg);         /* unter Canvas/UI */
+  background:
+    var(--start-bg-color)
+    center/cover no-repeat;
+  background-image: var(--start-bg-url);
+  pointer-events: none;
+  opacity: 1;                   /* keine Transparenz */
+  display: none;                /* nur im Startzustand sichtbar */
+  visibility: hidden;
+}
+
+/* Nur im Startzustand anzeigen */
+body.is-start #start-bg{
+  display: block !important;
+  visibility: visible !important;
+}
+
+/* Optional: iOS Safe-Area (falls du oben ein Logo platzierst) */
+#start-bg .safe{
+  position: absolute;
+  inset:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
