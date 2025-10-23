@@ -1,55 +1,24 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.ui.js
  * Projekt : Neue Siedler
- * Version : v18.16.3 (final, UI-Diagnose-Tools)
- * Zweck   : Inspector-Tab "ui" zum Untersuchen von Layern/Z-Order/Pointer Events
+ * Version : v18.17.0 (UI-Tab + Floating Tools + DOM-Layer-Scanner)
+ * Zweck   : UI-/Layer-Diagnose:
+ *           1) UI-Tab mit Layer-Tabelle (deine Hauptcontainer)
+ *           2) Floating-Tools (Toastleiste), auch bei geschlossenem Inspector
+ *           3) DOM-Layer-Scanner: listet "Overlay"-Kandidaten (position fixed/
+ *              absolute/sticky, relevante Größe/Z-Index) + direkte Toggles:
+ *              - Hide (display:none), Invis (visibility:hidden), PE off (pointer-events:none)
+ *              - Highlight, Solo (alle anderen verstecken), Focus (scrollIntoView)
  *
- * Features:
- *  - Live-Infos zu relevanten Layern (display/visibility/opacity/pointerEvents/zIndex/BBox)
- *  - Highlight/Outline pro Layer toggeln (Mark/Unmark)
- *  - Hit-Test (elementsFromPoint): zeigt Stack + zIndex + display/visibility
- *  - Crosshair-Modus: Zielkreuz → Klick zeigt Stack am Punkt
- *  - Quick Actions: Peek (halten), PE off (2s), Reset aller Tweaks
- *  - Pro-Layer „z+“ (temporärer z-index Boost), pointer-events Toggles
- *
- * Hinweise:
- *  - Rendert in den dynamischen Tab "ui" (Core: generic-view Slot).
- *  - Keine Inspector open/close Buttons mehr – Close oben rechts im Header.
- * ========================================================================== */
-/* ============================================================================
- * Datei   : ui/inspector/inspector.ui.js
- * Projekt : Neue Siedler
- * Version : v18.16.4 (UI-Tab + Floating Tools / Toastleiste)
- * Zweck   : Layer-/Hit-Diagnose + frei verschiebbare Tool-Leiste, die
- *           auch bei geschlossenem Inspector sichtbar bleibt.
- *
- * Inhalte
- *  - UI-Tab: Layer-Tabelle (z/visibility/pointer-events/BBox), Mark/Unmark,
- *            z+, PE-Toggle, Stack @ center, Crosshair, Peek/PE off, Reset.
- *  - Floating Tools (Toastleiste):
- *      * Show/Hide aus dem UI-Tab
- *      * Buttons: Crosshair, Stack@Cursor, PE off (2s), Reset, Minimize
- *      * Verschiebbar (Drag am Header), Position in localStorage gemerkt
- *      * Bleibt sichtbar, wenn der Inspector geschlossen wird
- *
- * Abhängigkeiten
- *  - inspector.core.js v18.16.3+ (mit generic-view)
- * ========================================================================== */
-/* ============================================================================
- * Datei   : ui/inspector/inspector.ui.js
- * Projekt : Neue Siedler
- * Version : v18.16.5 (final, Floating Tools + Event/State-Bridge)
- * Zweck   : UI-/Layer-Diagnose + verschiebbare Floating-Tool-Leiste
- *
- * Kernideen:
- *  - Floating-Tools funktionieren unabhängig vom Inspector (außerhalb des Hosts).
- *  - Ergebnisse (Stack/Logs) werden in window.UIProbeState persistiert
- *    und via CustomEvents (ui-probe:*) publiziert.
- *  - Der UI-Tab rendert bei Mount die letzten Ergebnisse und subscribed live.
+ * Architektur:
+ *  - Rendert in den dynamischen Tab "ui" (Core >= v18.16.3 mit generic-view)
+ *  - Floating-Tools liegen außerhalb des Inspector-DOM und feuern ui-probe:*
+ *  - Ergebnisse werden in window.UIProbeState persistiert
+ *    (lastStackText + history), der UI-Tab subscribed live.
  * ========================================================================== */
 (function(){
   'use strict';
-  const MOD='[inspector.ui]'; const VER='v18.16.5';
+  const MOD='[inspector.ui]'; const VER='v18.17.0';
 
   // ---------- Core-Bridge -----------------------------------------------------
   const core = (function(){
@@ -67,28 +36,23 @@
     };
   })();
 
-  // ---------- Globaler State & kleine Event-Helfer ---------------------------
-  // Wird einmalig angelegt. Inspector & Floating-Tools teilen sich diesen State.
+  // ---------- Globaler State & Event-Bridge ----------------------------------
   const ProbeState = (window.UIProbeState = window.UIProbeState || {
-    lastStackText: '',            // bereits formattierter Textblock
-    history: [],                  // Array von { ts, x, y, items: [...], text }
+    lastStackText: '',
+    history: [],   // { ts, x, y, items, text }
     max: 50
   });
-
   function emit(name, detail){ window.dispatchEvent(new CustomEvent(name, { detail })); }
   function rememberStack(x,y, items, text){
     const ts = Date.now();
-    const entry = { ts, x, y, items, text };
-    ProbeState.history.unshift(entry);
+    ProbeState.history.unshift({ ts, x, y, items, text });
     if (ProbeState.history.length > ProbeState.max) ProbeState.history.pop();
     ProbeState.lastStackText = text;
     emit('ui-probe:stack', { ts, x, y, count: items.length, text });
   }
-  function rememberReset(){
-    emit('ui-probe:reset', {});
-  }
+  function rememberReset(){ emit('ui-probe:reset', {}); }
 
-  // ---------- Beobachtete Layer ----------------------------------------------
+  // ---------- Beobachtete Haupt-Layer (statische Tabelle oben) ---------------
   const LAYERS = [
     { sel:'#game-canvas',       label:'Canvas' },
     { sel:'#ui-root',           label:'UI Root' },
@@ -99,7 +63,7 @@
     { sel:'#inspector-overlay', label:'Inspector (Overlay-Fallback)' },
   ];
 
-  // ---------- Utils ----------------------------------------------------------
+  // ---------- Utilities -------------------------------------------------------
   const $ = (s,sc=document)=> sc.querySelector(s);
   function css(el){ try{ return getComputedStyle(el); }catch(_){ return {}; } }
   function z(el,cs){ const v=(cs||css(el)).zIndex; return (v==null||v==='auto')?'auto':String(v); }
@@ -109,7 +73,7 @@
     return `x:${Math.round(b.x)}, y:${Math.round(b.y)}, w:${Math.round(b.width)}, h:${Math.round(b.height)}`;
   }
 
-  // Style save/restore
+  // ---------- Style Save/Restore (sichere Tweaks) ----------------------------
   const __SAVE = new WeakMap();
   function saveStyle(el, prop){
     if (!el) return;
@@ -131,7 +95,7 @@
     }
   }
 
-  // Highlight
+  // ---------- Highlight-Manager ----------------------------------------------
   const HL = new Map();
   function toggleHighlight(el, on){
     if(!el) return;
@@ -150,7 +114,7 @@
     }
   }
 
-  // Table helpers
+  // ---------- Tabellen-/Button-Helfer ----------------------------------------
   function row(values){
     const tr=document.createElement('tr');
     values.forEach(v=>{
@@ -168,25 +132,37 @@
     return b;
   }
 
-  // Hit-Test
+  // ---------- Hit-Test --------------------------------------------------------
   function stackAt(x,y){
     const list = (document.elementsFromPoint?.(x,y) || []);
     return list.map(el=>{
       const c = css(el);
       return {
         el,
-        tag: el.tagName.toLowerCase() + (el.id?('#'+el.id):'') + (el.className?('.'+String(el.className).replace(/\s+/g,'.')):''),
+        tag: el.tagName.toLowerCase()
+             + (el.id?('#'+el.id):'')
+             + (el.className?('.'+String(el.className).replace(/\s+/g,'.')):''),
         z: z(el,c),
         disp: c.display, vis: c.visibility, op: c.opacity, pe: c.pointerEvents
       };
     });
+  }
+  function formatStackText(x,y, items){
+    const lines = items.map(it=> `${it.tag}\n  z:${it.z} disp:${it.disp} vis:${it.vis} op:${it.op} pe:${it.pe}`);
+    return `@(${x},${y}) elementsFromPoint: ${items.length}\n\n` + lines.join('\n\n');
+  }
+  function consoleStack(x,y, items){
+    console.group(`[UI Tools] Stack @ (${x},${y}) – ${items.length} Elemente`);
+    items.forEach((it,i)=>{
+      console.log(`#${i+1} ${it.tag}`, { z:it.z, display:it.disp, visibility:it.vis, opacity:it.op, pointer:it.pe });
+    });
+    console.groupEnd();
   }
 
   // ========================================================================== 
   // Floating Tools (Toastleiste) – außerhalb des Inspectors, mit Events
   // ==========================================================================
   let Probe = null;
-
   function ensureProbe(){
     if (Probe) return Probe;
 
@@ -195,7 +171,7 @@
     root.setAttribute('role','dialog');
     root.style.cssText = `
       position:fixed; top:16px; left:16px;
-      z-index:2147482999;           /* unter Inspector */
+      z-index:2147482999;           /* knapp unter #inspector */
       background:#1f1f23; color:#fff; border:1px solid #2a2a2e;
       border-radius:10px; min-width:220px; font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;
       box-shadow:0 6px 24px rgba(0,0,0,.35); user-select:none;
@@ -226,7 +202,7 @@
       const items = stackAt(x,y);
       const text  = formatStackText(x,y, items);
       consoleStack(x,y, items);
-      rememberStack(x,y, items, text);    // <-- persist + event
+      rememberStack(x,y, items, text);
       flash(root);
     });
     const bPE2s  = mkBtn('PE off 2s', 'pointer-events:none auf Body (2s)', ()=>{
@@ -237,7 +213,7 @@
     });
     const bReset = mkBtn('Reset', 'Alle Tweaks zurücksetzen', ()=>{
       resetTweaks();
-      rememberReset();                     // <-- event
+      rememberReset();
       flash(root);
     });
     box.append(bCross, bStack, bPE2s, bReset);
@@ -276,7 +252,6 @@
 
     return Probe;
   }
-
   function mkBtn(txt, title, fn){
     const b = document.createElement('button');
     b.textContent = txt; b.title = title||'';
@@ -285,7 +260,6 @@
     b.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' ') { e.preventDefault(); fn(); } });
     return b;
   }
-
   function dragEnable(panel, handle){
     let sx=0, sy=0, ox=0, oy=0, dragging=false;
     const onDown = (ev)=>{
@@ -312,26 +286,12 @@
     };
     handle.addEventListener('mousedown', onDown);
   }
-
-  // Format/Console
-  function formatStackText(x,y, items){
-    const lines = items.map(it=> `${it.tag}\n  z:${it.z} disp:${it.disp} vis:${it.vis} op:${it.op} pe:${it.pe}`);
-    return `@(${x},${y}) elementsFromPoint: ${items.length}\n\n` + lines.join('\n\n');
-  }
-  function consoleStack(x,y, items){
-    console.group(`[UI Tools] Stack @ (${x},${y}) – ${items.length} Elemente`);
-    items.forEach((it,i)=>{
-      console.log(`#${i+1} ${it.tag}`, { z:it.z, display:it.disp, visibility:it.vis, opacity:it.op, pointer:it.pe });
-    });
-    console.groupEnd();
-  }
   function flash(el){ saveThen(el,'boxShadow','0 0 0 2px rgba(255,255,255,.35) inset'); setTimeout(()=> restoreStyle(el,'boxShadow'), 200); }
-
   function showProbe(){ ensureProbe().show(); }
   function hideProbe(){ if(!Probe) return; Probe.hide(); }
 
   // ========================================================================== 
-  // UI-Tab (generic-view) – subscribed auf ui-probe:* Events
+  // UI-Tab (generic-view)
   // ==========================================================================
   core.mount('ui', (host)=>{
     host.innerHTML = '';
@@ -367,7 +327,7 @@
     bar.append(bProbe, bPeek, bPeOff, bCross, bReset, hintFront);
     wrap.appendChild(bar);
 
-    // Layer-Tabelle
+    // ====================== (1) Statische Layer-Tabelle ======================
     const table = document.createElement('table'); table.className='inspector-table';
     const thead = document.createElement('thead');
     thead.innerHTML = `<tr>
@@ -377,13 +337,39 @@
     table.appendChild(thead);
     const tbody = document.createElement('tbody');
     table.appendChild(tbody);
-
-    const hint = document.createElement('div'); hint.className='hint';
-    hint.textContent = 'Bei „Crosshair“ klicken → vollständiger Stack unten.';
-    wrap.appendChild(hint);
     wrap.appendChild(table);
 
-    // Stack-Ausgabe (spiegelt UIProbeState.lastStackText)
+    // ====================== (2) DOM-Layer-Scanner ============================
+    const hScan = document.createElement('h3'); hScan.textContent='DOM Layer Scanner';
+    const hintScan = document.createElement('div'); hintScan.className='hint';
+    hintScan.textContent = 'Listet Kandidaten (position fixed/absolute/sticky, relevante Größe). Filter/Actions pro Knoten.';
+
+    // Controls
+    const ctrl = document.createElement('div'); ctrl.className='toolbar';
+    ctrl.style.marginTop='6px';
+    ctrl.innerHTML = `
+      <label class="hint">Min z: <input id="ui-minz" type="number" value="1" style="width:70px"></label>
+      <label class="hint"><input id="ui-includesmall" type="checkbox"> kleine Elemente einbeziehen</label>
+      <label class="hint"><input id="ui-onlyvisible" type="checkbox" checked> nur sichtbare</label>
+      <button class="insp-btn" id="ui-scan">Scan</button>
+      <button class="insp-btn" id="ui-showall">Show All</button>
+    `;
+
+    const scanTable = document.createElement('table'); scanTable.className='inspector-table';
+    const scanHead = document.createElement('thead');
+    scanHead.innerHTML = `<tr>
+      <th>#</th><th>Node</th><th>z</th><th>size</th><th>disp</th><th>vis</th><th>pe</th><th>Action</th>
+    </tr>`;
+    scanTable.appendChild(scanHead);
+    const scanBody = document.createElement('tbody');
+    scanTable.appendChild(scanBody);
+
+    wrap.appendChild(hScan);
+    wrap.appendChild(hintScan);
+    wrap.appendChild(ctrl);
+    wrap.appendChild(scanTable);
+
+    // ====================== (3) Hit-Test / Stack-Ausgabe =====================
     const h2 = document.createElement('h3'); h2.textContent='Hit-Test / Stack';
     const stackBox = document.createElement('div');
     stackBox.style.cssText='margin-top:8px; border:1px solid #444; border-radius:8px; padding:8px; max-height:32vh; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px;';
@@ -391,15 +377,11 @@
 
     host.appendChild(wrap);
 
-    // Initial: letzten Stack zeigen (falls vorhanden)
-    if (ProbeState.lastStackText){
-      stackBox.textContent = ProbeState.lastStackText;
-    } else {
-      stackBox.textContent = '—';
-    }
+    // Initial letzten Stack zeigen
+    stackBox.textContent = ProbeState.lastStackText || '—';
 
-    // Render-Funktion Tabelle
-    function render(){
+    // -------- Render statische Tabelle --------------------------------------
+    function renderStatic(){
       tbody.innerHTML='';
       LAYERS.forEach(def=>{
         const el = $(def.sel, document);
@@ -407,15 +389,15 @@
         const bActions = document.createElement('div'); bActions.style.cssText='display:flex; gap:6px; flex-wrap:wrap';
 
         const on = HL.has(el);
-        const bHl = btn(on?'Unmark':'Mark', ()=>{ const now=HL.has(el); toggleHighlight(el,!now); render(); }, 'Outline/Highlight toggeln');
+        const bHl = btn(on?'Unmark':'Mark', ()=>{ const now=HL.has(el); toggleHighlight(el,!now); renderStatic(); }, 'Outline/Highlight toggeln');
 
         const bZ = btn('z+', '', 'z-index temporär erhöhen (bis Reset)');
-        bZ.addEventListener('click', ()=>{ if(!el) return; saveThen(el,'zIndex', String(2147483000)); render(); });
+        bZ.addEventListener('click', ()=>{ if(!el) return; saveThen(el,'zIndex', String(2147483000)); renderStatic(); });
 
         const bPE = btn((c.pointerEvents==='none')?'PE on':'PE off', ()=>{
           if(!el) return;
           if (c.pointerEvents==='none') restoreStyle(el,'pointerEvents'); else saveThen(el,'pointerEvents','none');
-          render();
+          renderStatic();
         }, 'pointer-events toggeln');
 
         const bHit = btn('Stack @ center', ()=>{
@@ -425,8 +407,8 @@
           const items = stackAt(x,y);
           const text  = formatStackText(x,y, items);
           consoleStack(x,y, items);
-          rememberStack(x,y, items, text);        // persist + event
-          stackBox.textContent = text;            // direkt anzeigen falls Tab offen ist
+          rememberStack(x,y, items, text);
+          stackBox.textContent = text;
         });
 
         bActions.append(bHl,bZ,bPE,bHit);
@@ -444,7 +426,155 @@
       });
     }
 
-    // Crosshair (nutzt rememberStack)
+    // -------- DOM-Layer-Scanner ---------------------------------------------
+    const EXCLUDE = new Set(['SCRIPT','STYLE','LINK']);
+    const EXCLUDE_IDS = new Set(['inspector','inspector-overlay','ui-probe']); // nicht scannen
+
+    function candidateElements(minZ, includeSmall, onlyVisible){
+      const out = [];
+      const all = document.body.querySelectorAll('*');
+      all.forEach(el=>{
+        if (!el || !el.tagName) return;
+        if (EXCLUDE.has(el.tagName)) return;
+        if (EXCLUDE_IDS.has(el.id)) return;
+        // Inspector-eigene Crosshair-Overlays erkennen:
+        if (el.parentElement && el.parentElement.id === 'ui-probe') return;
+
+        const s = css(el);
+        const posOk = ['fixed','absolute','sticky'].includes(s.position);
+        if (!posOk) return;
+
+        // Sichtbarkeit
+        if (onlyVisible){
+          if (s.display==='none' || s.visibility==='hidden' || parseFloat(s.opacity)===0) return;
+        }
+
+        const r = el.getBoundingClientRect?.();
+        if (!r) return;
+
+        // Größe
+        const tooSmall = (r.width<10 || r.height<10);
+        if (!includeSmall && tooSmall) return;
+
+        // z-Index
+        const zi = parseInt(s.zIndex,10);
+        const zVal = isNaN(zi) ? 0 : zi;
+        if (zVal < minZ) return;
+
+        out.push({ el, s, r, z:zVal });
+      });
+
+      // Sort: höchste z nach oben, dann Fläche
+      out.sort((a,b)=> (b.z - a.z) || ((b.r.width*b.r.height) - (a.r.width*a.r.height)));
+      return out;
+    }
+
+    function mkNodeLabel(el){
+      const id = el.id ? ('#'+el.id) : '';
+      const cls = el.className ? ('.'+String(el.className).trim().replace(/\s+/g,'.')) : '';
+      return el.tagName.toLowerCase()+id+cls;
+    }
+
+    // Solo-Cache (welche Elemente wurden „versteckt“, um einen solo zu zeigen)
+    let SOLO_HIDDEN = [];
+    function solo(el, list){
+      // alles andere verstecken (display:none)
+      showAll(); // erst zurücksetzen
+      SOLO_HIDDEN = [];
+      list.forEach(item=>{
+        if (item.el !== el){
+          saveStyle(item.el,'display');
+          item.el.style.display='none';
+          SOLO_HIDDEN.push(item.el);
+        }
+      });
+    }
+    function showAll(){
+      // Solo-Hidden wiederherstellen
+      SOLO_HIDDEN.forEach(node=> restoreStyle(node,'display'));
+      SOLO_HIDDEN = [];
+      // und ggf. alle zuvor per Toggle versteckten Eigenschaften rückgängig machen?
+      // (bewusst nicht, das macht "Reset tweaks")
+    }
+
+    function renderScan(){
+      const minZ = parseInt($('#ui-minz', ctrl).value,10) || 0;
+      const includeSmall = $('#ui-includesmall', ctrl).checked;
+      const onlyVisible  = $('#ui-onlyvisible',  ctrl).checked;
+
+      const list = candidateElements(minZ, includeSmall, onlyVisible);
+      scanBody.innerHTML='';
+
+      list.forEach((it, idx)=>{
+        const el = it.el, s = it.s, r = it.r;
+
+        // Aktionen
+        const A = document.createElement('div'); A.style.cssText='display:flex; gap:6px; flex-wrap:wrap';
+
+        // Hide/Show (display)
+        const bHide = btn((s.display==='none')?'Show':'Hide', ()=>{
+          if (s.display==='none') restoreStyle(el,'display');
+          else saveThen(el,'display','none');
+          renderScan();
+        }, 'display toggeln');
+
+        // Invis/Vis (visibility)
+        const bVis = btn((s.visibility==='hidden')?'Vis':'Invis', ()=>{
+          if (s.visibility==='hidden') restoreStyle(el,'visibility');
+          else saveThen(el,'visibility','hidden');
+          renderScan();
+        }, 'visibility toggeln');
+
+        // PE toggle
+        const bPE  = btn((s.pointerEvents==='none')?'PE on':'PE off', ()=>{
+          if (s.pointerEvents==='none') restoreStyle(el,'pointerEvents');
+          else saveThen(el,'pointerEvents','none');
+          renderScan();
+        }, 'pointer-events toggeln');
+
+        // Highlight
+        const on = HL.has(el);
+        const bHl = btn(on?'Unmark':'Mark', ()=>{
+          const now = HL.has(el); toggleHighlight(el,!now);
+        }, 'Highlight toggeln');
+
+        // Focus (scroll + kurzes Blinken)
+        const bFocus = btn('Focus', ()=>{
+          try{ el.scrollIntoView({behavior:'smooth', block:'center'}); }catch(_){}
+          saveThen(el,'outline','2px solid #0ff');
+          setTimeout(()=> restoreStyle(el,'outline'), 600);
+        }, 'scrollIntoView + Blink');
+
+        // Solo
+        const bSolo = btn('Solo', ()=>{
+          solo(el, list);
+          renderScan();
+        }, 'Alles andere verstecken (display:none), bis Show All');
+
+        A.append(bHide,bVis,bPE,bHl,bFocus,bSolo);
+
+        const node = mkNodeLabel(el);
+        const size = `${Math.round(r.width)}×${Math.round(r.height)}`;
+        const zval = (it.z || 'auto');
+
+        scanBody.appendChild( row([
+          String(idx+1),
+          node,
+          String(zval),
+          size,
+          s.display,
+          s.visibility,
+          s.pointerEvents,
+          A
+        ]) );
+      });
+    }
+
+    // Controls verdrahten
+    $('#ui-scan', ctrl).addEventListener('click', renderScan);
+    $('#ui-showall', ctrl).addEventListener('click', ()=>{ showAll(); renderScan(); });
+
+    // -------- Crosshair (teilt Logik mit Floating-Tools) ---------------------
     let crosshairActive=false, crossDiv=null, crossH=null, crossV=null;
     function enableCrosshair(){
       if(crosshairActive) { disableCrosshair(); return; }
@@ -465,8 +595,8 @@
         const items = stackAt(x,y);
         const text  = formatStackText(x,y, items);
         consoleStack(x,y, items);
-        rememberStack(x,y, items, text);     // persist + event
-        stackBox.textContent = text;          // falls Tab offen
+        rememberStack(x,y, items, text);
+        stackBox.textContent = text;
         disableCrosshair();
       };
       crossDiv.addEventListener('mousemove', onMove, { passive:true });
@@ -474,27 +604,46 @@
     }
     function disableCrosshair(){ crosshairActive=false; if(crossDiv){ crossDiv.remove(); crossDiv=null; } }
 
+    // -------- Reset (alles sauber zurück) ------------------------------------
     function resetTweaks(){
+      // Highlights
       Array.from(HL.keys()).forEach(el=> toggleHighlight(el, false));
+      // Styles
       restoreAll();
+      // Crosshair
       disableCrosshair();
+      // Solo-Listen zurücksetzen
+      showAll();
+      // Ausgaben zurücksetzen
       stackBox.textContent = '—';
+      // Tabellen neu
+      renderStatic();
+      renderScan();
     }
 
-    // Subscribe: Wenn Floating-Tools Events feuern, UI hier aktualisieren
+    // -------- Subscriptions für Floating-Events -------------------------------
     const onStack = (e)=>{ if (e?.detail?.text) stackBox.textContent = e.detail.text; };
     const onReset = ()=>{ stackBox.textContent = '—'; };
     window.addEventListener('ui-probe:stack', onStack);
     window.addEventListener('ui-probe:reset', onReset);
 
-    // Lifecycle
-    render();
-    host._insp_ui_timer && clearInterval(host._insp_ui_timer);
-    host._insp_ui_timer = setInterval(render, 1000);
+    // -------- Lifecycle -------------------------------------------------------
+    renderStatic();
+    renderScan();
 
-    const stop = ()=>{ try{ clearInterval(host._insp_ui_timer); }catch(_){ } 
+    // leichte Auto-Refreshes
+    host._insp_ui_timer && clearInterval(host._insp_ui_timer);
+    host._insp_ui_timer = setInterval(()=>{ renderStatic(); /* scan manuell */ }, 1000);
+
+    // MutationObserver: wenn DOM stark wechselt → Scan erneut anbieten
+    const mo = new MutationObserver(()=>{/* nicht automatisch scannen -> Button */});
+    try{ mo.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class']}); }catch(_){}
+
+    const stop = ()=>{
+      try{ clearInterval(host._insp_ui_timer); }catch(_){}
       window.removeEventListener('ui-probe:stack', onStack);
       window.removeEventListener('ui-probe:reset', onReset);
+      try{ mo.disconnect(); }catch(_){}
     };
     window.addEventListener('cb:insp:tab:change', (e)=>{ if(e?.detail?.tab !== 'ui') stop(); });
 
