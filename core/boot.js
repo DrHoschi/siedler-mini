@@ -137,11 +137,11 @@
 
   setPlayingState();
 
-+ // Startpanel zu, Map bauen, HUD/Build zeigen (minimal & sicher):
-+ dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
-+ dispatchEvent(new CustomEvent('req:map:init'));
-+ dispatchEvent(new CustomEvent('req:hud:show'));
-+ dispatchEvent(new CustomEvent('req:buildmenu:show'));
+      // Startpanel zu, Map bauen, HUD/Build zeigen (minimal & sicher):
+      dispatchEvent(new CustomEvent('req:ui:startpanel:hide'));
+      dispatchEvent(new CustomEvent('req:map:init'));
+      dispatchEvent(new CustomEvent('req:hud:show'));
+      dispatchEvent(new CustomEvent('req:buildmenu:show'));
 
       
       // Spieloberfläche / Feature-Requests
