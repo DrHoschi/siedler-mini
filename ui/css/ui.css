@@ -29,7 +29,8 @@ body::before{
   opacity:1; transition: opacity var(--fade-dur) ease;
   pointer-events:none;
 }
-body.is-started::before{ opacity:0; }
+/*body.is-started::before{ opacity:0; }*/
+body.is-playing::before{ opacity:0; }
 
 /* Canvas + UI-Root */
 #game-canvas{
