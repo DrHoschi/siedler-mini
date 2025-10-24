@@ -20,6 +20,8 @@
   <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- greift erst mit .is-playing -->
   <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1"> <!--Baumenü(Build-Dock)–Kategorien+Kartenraster-->
   <link rel="stylesheet" href="ui/css/ui-hud.css"> 
+  <link rel="stylesheet" href="ui/css/ui-place.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-tooltip.css">
 </head>
 
 <body>
@@ -100,29 +102,40 @@
          'cb:assets-ready'  (core/asset.js)
          'cb:registry:ready' (core/registry.js)
          Siehe Registry-Patch im Lastenheft. -->
+  
+  <!-- Core Engine -->
   <script src="core/asset.js?v=25.10.19-final2"></script>
   <script src="core/registry.js?v=25.10.19-final2"></script>
   <script src="core/map-runtime.js"></script>
   <script src="core/carrier.js"></script>
   <script src="core/game.js?v=25.10.19-final2"></script>
   <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
-   
-  <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
-  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
 
-  <!-- 6) UI: HUD & BuildDock (bestehende Module; hören auf Events)
+<!-- Eingabe + Platzier-Overlay -->
+<script src="core/input.js?v=25.10.19-final2"></script>
+<script src="core/input.bridge.js?v=25.10.19-final2"></script>
+<script src="ui/ui-place.js?v=25.10.19-final2"></script>
+
+  
+<!-- UI + HUD + Build -->
+<!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
+<!-- 6) UI: HUD & BuildDock (bestehende Module; hören auf Events)
          - HUD zeigt Ressourcen nach Spielstart (cb:game-start / cb:res:change)
          - BuildDock nutzt #btn-build & #build-dock -->
+  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
   <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
   <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
   <script src="ui/ui-build.js?v=25.10.19-final2"></script>
+
+<!-- Map & Layout -->
+  <script src="ui/ui-map.js"></script>
+  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
+ 
 
 
   <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) -->
   <script src="core/path-overlay.js?v=25.10.19-final2"></script>
 
-  <script src="ui/ui-map.js"></script>
-  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
 
   
   <!-- 8) Boot + Spiel -->
