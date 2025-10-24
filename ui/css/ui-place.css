@@ -18,3 +18,61 @@
 }
 .place-btn.ok{  background:var(--ok);   right:8px; top:8px; }
 .place-btn.no{  background:var(--error); left:8px; top:8px; color:#fff; }
+
+/* ui/css/ui-place.css — v25.10.24-align */
+:root{
+  --tile: 32px;
+  --ok: #1d6e2f;
+  --error: #b11c2a;
+  --shadow: 0 10px 24px rgba(0,0,0,.35);
+}
+
+/* Overlay muss den ganzen Viewport abdecken */
+.place-overlay{
+  position: fixed;         /* <— vorher absolute */
+  inset: 0;                /* <— volle Fläche */
+  z-index: 40;
+  pointer-events: none;    /* Buttons schalten wir einzeln frei */
+}
+
+/* Dein JS erzeugt .ghost-sprite/.ghost-tint */
+.ghost-sprite{
+  position: absolute;
+  width: var(--w, var(--tile));
+  height: var(--h, var(--tile));
+  image-rendering: pixelated;
+  background-size: cover;
+  will-change: transform;
+  pointer-events: none;
+}
+.ghost-tint{
+  position:absolute; inset:0;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset;
+  outline: 2px solid transparent;
+}
+.ghost-tint.is-valid{
+  background: rgba(0,190,60,.12);
+  outline-color: rgba(0,190,60,.9);
+}
+.ghost-tint.is-invalid{
+  background: rgba(255,0,0,.15);
+  outline-color: rgba(255,0,0,.85);
+}
+
+/* Ghost-Container (dein #place-ghost) darf pointer-events ebenfalls nicht fressen */
+#place-ghost{ pointer-events:none; }
+
+/* Buttons */
+.place-btn{
+  position: absolute;
+  pointer-events: auto;
+  width: 36px; height: 36px;
+  border-radius: 8px; border: 1px solid #0008;
+  font-weight: 700; line-height: 34px; text-align: center;
+  color: #eee; background: rgba(18,20,24,.95);
+  box-shadow: var(--shadow);
+}
+/* Wir positionieren sie dynamisch im JS – hier KEINE left/right/top */
+.place-btn.ok{ background: var(--ok); border-color:#154e22; }
+.place-btn.cancel{ background: var(--error); border-color:#5f0e17; }
