@@ -22,7 +22,7 @@
 }
 
 /* === Z-Stack Fix (Canvas unter UI) === */
-#game  { position:absolute; inset:0; z-index:1; background:#000; }
+#game         { position:absolute; inset:0; z-index:1; pointer-events: auto;background:#000; }
 #ui-root      { position:absolute; inset:0; z-index:2; pointer-events:none; }
 #hud-root     { position:absolute; inset:0; z-index:3; pointer-events:auto; }
 #build-dock   { position:absolute; bottom:0; z-index:4; pointer-events:auto; }
