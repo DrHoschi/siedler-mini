@@ -103,7 +103,10 @@
   <script src="core/asset.js?v=25.10.19-final2"></script>
   <script src="core/registry.js?v=25.10.19-final2"></script>
   <script src="core/map-runtime.js"></script>
-  
+  <script src="core/carrier.js"></script>
+  <script src="core/game.js?v=25.10.19-final2"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
+   
   <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
   <script src="ui/ui-start.js?v=25.10.19-final2"></script>
 
@@ -111,24 +114,24 @@
          - HUD zeigt Ressourcen nach Spielstart (cb:game-start / cb:res:change)
          - BuildDock nutzt #btn-build & #build-dock -->
   <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
-  
+  <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
+
 
   <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) -->
   <script src="core/path-overlay.js?v=25.10.19-final2"></script>
 
-  <!-- 8) Boot + Spiel -->
-  <script src="core/boot.js?v=25.10.19-final2"></script>
-    <script src="core/game.js?v=25.10.19-final2"></script>
-  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
-
-  <script src="core/carrier.js"></script>
   <script src="ui/ui-map.js"></script>
-  <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
-  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
-  
-  <!-- 9) Layout-Glue ganz zum Schluss: schaltet NACH Spielstart auf Spiel-Layout -->
   <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
 
+  
+  <!-- 8) Boot + Spiel -->
+  <script src="core/boot.js?v=25.10.19-final2"></script>
+    
+  
+    
+  <!-- 9) Layout-Glue ganz zum Schluss: schaltet NACH Spielstart auf Spiel-Layout -->
+  
   <!-- 10) Mini-Diagnose (öffnet NICHT den Inspector) -->
   <script>
     (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
