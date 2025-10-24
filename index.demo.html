@@ -113,7 +113,19 @@
 
 <!-- Eingabe + Platzier-Overlay -->
 <script src="core/core.input.js?"></script>
-
+<script>
+if (!window.__INPUT_BRIDGE__) {
+  window.__INPUT_BRIDGE__ = 1;
+  addEventListener('cb:hover-tile', (ev)=>{
+    const {tx,ty}=ev.detail||{}; if(tx==null||ty==null) return;
+    dispatchEvent(new CustomEvent('req:place:cursor',{detail:{tx,ty}}));
+  });
+  addEventListener('cb:place-building', (ev)=>{
+    const {x,y}=ev.detail||{}; if(x==null||y==null) return;
+    dispatchEvent(new CustomEvent('req:place:confirm',{detail:{tx:x,ty:y}}));
+  });
+}
+</script>
 <script src="ui/ui-place.js?v=25.10.19-final2"></script>
 
   
