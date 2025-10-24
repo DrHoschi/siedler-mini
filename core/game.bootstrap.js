@@ -1,68 +1,114 @@
 /* ============================================================================
  * Datei   : core/game.bootstrap.js
  * Projekt : Neue Siedler
- * Version : v25.10.16-1
- * Zweck   : Verbindet Boot-Sequenz mit dem Spiel (Canvas/HUD vorbereiten)
- * ============================================================================
- */
-<script>
-  // einmalig beim Boot, noch bevor das Spiel startet
-  window.addEventListener('cb:registry:ready', () => {
-    // sanft setzen: nur wenn nicht schon vorhanden
-    const R = (window.Registry && Registry.resources) || (window.RegistryValues || {});
-    if (R.wood  == null) R.wood  = 10;
-    if (R.stone == null) R.stone = 10;
-    if (R.fish  == null) R.fish  = 3;
-    if (R.gold  == null) R.gold  = 0;
+ * Version : v25.10.24-mapctrl
+ * Zweck   : Boot ↔ Spiel verbinden, Canvas vorbereiten, Platzier-Controller
+ * ========================================================================== */
 
-    // Inspector updaten
-    window.dispatchEvent(new Event('req:res:snapshot'));
-  });
-</script>
-  
 (function(root, factory){
   root.SiedlerGameBootstrap = factory();
 })(typeof window !== "undefined" ? window : this, function(){
 
-  const VER = "v25.10.16-1";
+  const VER = "v25.10.24-mapctrl";
   const LOG = (m)=> (window.CBLog?.ok || console.log)(`[bootstrap] ${m}`);
 
   class GameBootstrap {
     constructor(){
-      this.canvas = document.getElementById("game-canvas");
-      this.ctx    = this.canvas.getContext("2d");
-      this.hudRoot= document.getElementById("ui-root");
+      // IDs an dein aktuelles Markup angepasst
+      this.canvas  = document.getElementById("game");
+      this.ctx     = this.canvas?.getContext("2d");
+      this.hudRoot = document.getElementById("hud-root");
 
-      window.addEventListener("cb:boot-ready", ()=> this.onBootReady());
-      window.addEventListener("cb:game-start", ()=> this.onGameStart());
+      // Guards
+      if (!this.canvas || !this.ctx) {
+        console.error("[bootstrap] Canvas #game fehlt!");
+        return;
+      }
+
+      // Boot & Start
+      addEventListener("cb:boot:ready",  () => this.onBootReady(),  { once:true });
+      addEventListener("cb:game:start",  () => this.onGameStart(),  { once:true });
+
+      // Ressourcen-Snapshot initial, sobald Registry fertig
+      addEventListener("cb:registry:ready", () => {
+        try { dispatchEvent(new Event("req:res:snapshot")); } catch(e){}
+      }, { once:true });
+
+      // Resize
+      addEventListener("resize", () => this.resizeCanvas());
+
+      // --- Platzier-Controller (UI → Game events) -------------------------
+      this._placingId = null;
+
+      // Merke aktuell gewünschtes Gebäude
+      addEventListener('req:place:start', (ev)=>{
+        this._placingId = ev?.detail?.buildingId || null;
+      });
+
+      // Beende Plazieren (egal ob bestätigt oder abgebrochen)
+      addEventListener('cb:place:done', ()=>{
+        this._placingId = null;
+      });
+
+      // Pointer → Tile umrechnen
+      const toTile = (clientX, clientY) => {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        const ts = (window.Game?.tileSize)||32;
+        return { tx: Math.floor(x/ts), ty: Math.floor(y/ts) };
+      };
+
+      // Maus/Touch bewegt → Vorschau
+      const onMove = (x, y) => {
+        if (!this._placingId) return;
+        const {tx,ty} = toTile(x,y);
+        dispatchEvent(new CustomEvent('req:place:cursor', { detail:{ tx, ty, id: this._placingId }}));
+      };
+
+      // Klick/Touch → bestätigen
+      const onClick = (x, y) => {
+        if (!this._placingId) return;
+        const {tx,ty} = toTile(x,y);
+        dispatchEvent(new CustomEvent('req:place:confirm', { detail:{ tx, ty }}));
+      };
+
+      // Pointer-Handler
+      this.canvas.addEventListener('mousemove', (e)=> onMove(e.clientX, e.clientY), { passive:true });
+      this.canvas.addEventListener('click',     (e)=> onClick(e.clientX, e.clientY));
+      this.canvas.addEventListener('touchmove', (e)=> { const t=e.touches[0]; if(t) onMove(t.clientX,t.clientY); }, { passive:true });
+      this.canvas.addEventListener('touchend',  (e)=> { const t=e.changedTouches[0]; if(t) onClick(t.clientX,t.clientY); });
 
       LOG(`initialisiert (${VER})`);
     }
 
     onBootReady(){
-      LOG("Boot ready – Canvas baseline zeichnen");
+      LOG("Boot ready – Canvas baseline");
       this.resizeCanvas();
-      window.addEventListener("resize", ()=> this.resizeCanvas());
       this.drawSplash();
     }
 
     onGameStart(){
-      LOG("Starte Spiel – HUD freigeben, Szene initialisieren");
-      document.body.classList.add("is-started"); // Startbild weich ausblenden (CSS)
+      LOG("Starte Spiel – Szene initialisieren");
       this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-      this.ctx.fillStyle="#2e5939"; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-      this.ctx.fillStyle="#fff"; this.ctx.font="20px Inter"; this.ctx.fillText("Spiel läuft – (HUD folgt)", 32, 56);
-      window.dispatchEvent(new CustomEvent("cb:game:initialized"));
+      // einfache neutrale Fläche; deine Map-Engine kann hier später rein
+      this.ctx.fillStyle="#1a1d22";
+      this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+      dispatchEvent(new CustomEvent("cb:game:initialized"));
+      // Game-Loop starten (sicher)
+      try { Game.start(); } catch(e){ console.error('[bootstrap] Game.start()', e); }
     }
 
     resizeCanvas(){
-      this.canvas.width  = window.innerWidth;
-      this.canvas.height = window.innerHeight;
+      this.canvas.width  = Math.floor(window.innerWidth);
+      this.canvas.height = Math.floor(window.innerHeight);
     }
+
     drawSplash(){
       this.ctx.fillStyle = "rgba(0,0,0,0.15)";
       this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-      this.ctx.fillStyle="#fff"; this.ctx.font="18px Inter"; 
+      this.ctx.fillStyle = "#fff";
+      this.ctx.font = "18px Inter, system-ui, sans-serif";
       this.ctx.fillText("Warte auf Start …", 24, 40);
     }
   }
@@ -70,14 +116,3 @@
   window.__gameBootstrap = new GameBootstrap();
   return GameBootstrap;
 });
-/* core/game.bootstrap.js */
-(function(){
-  // Sobald das Boot den Spielstart signalisiert → Game-Loop los
-  addEventListener('cb:game:start', ()=>{ try{ Game.start(); }catch(e){ console.error('[game.bootstrap]', e); } }, { once:true });
-
-  // Dein Boot feuert zusätzlich 'req:map:init' – wir lassen map.js darauf reagieren.
-  addEventListener('cb:boot:ready', ()=> {
-    // Optional sofort initialisieren, falls gewünscht:
-    dispatchEvent(new CustomEvent('req:map:init'));
-  }, { once:true });
-})();
