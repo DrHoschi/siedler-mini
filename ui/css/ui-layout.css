@@ -22,14 +22,14 @@
 }
 
 /* === Z-Stack Fix (Canvas unter UI) === */
-#game-canvas  { position:absolute; inset:0; z-index:1; background:#000; }
+#game  { position:absolute; inset:0; z-index:1; background:#000; }
 #ui-root      { position:absolute; inset:0; z-index:2; pointer-events:none; }
 #hud-root     { position:absolute; inset:0; z-index:3; pointer-events:auto; }
 #build-dock   { position:absolute; bottom:0; z-index:4; pointer-events:auto; }
 #btn-inspector{ position:fixed;   z-index:2147483000; }
 
 /* Basis: bis zum Spielstart greift HIER nichts */
-body:not(.is-playing) #game-canvas,
+body:not(.is-playing) #game,
 body:not(.is-playing) #hud-root,
 body:not(.is-playing) #build-dock { display: none !important; }
 
