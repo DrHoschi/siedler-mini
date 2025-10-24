@@ -54,7 +54,7 @@
 
   // ---------- Beobachtete Haupt-Layer (statische Tabelle oben) ---------------
   const LAYERS = [
-    { sel:'#game-canvas',       label:'Canvas' },
+    { sel:'#game',       label:'Canvas' },
     { sel:'#ui-root',           label:'UI Root' },
     { sel:'#hud-root',          label:'HUD' },
     { sel:'#build-dock',        label:'BuildDock' },
