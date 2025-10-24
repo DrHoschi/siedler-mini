@@ -5,12 +5,16 @@
  * Ereign. : lauscht auf cb:game:start, req:map:init, cb:place:preview
  *           sendet  req:place:cursor, req:place:confirm
  * Canvas  : <canvas id="game">
+ * patch   : bridge for #game vs #game-canvas + data-map vs data-map-url
  * ============================================================================ */
 (function(){
   'use strict';
 
-  const $cv = document.getElementById('game');     // <canvas id="game">
+  const log = (...a)=> (window.CBLog?.info||console.info)('[map]', ...a);
+  const $c = document.getElementById('game') || document.getElementById('game-canvas');     // <canvas id="game">   // 1) Canvas finden (neu zuerst, dann alt)
   if (!$cv) { console.warn('[map] canvas#game fehlt'); return; }
+  if(!$c){ log('kein Canvas gefunden (#game oder #game-canvas)'); return; }
+
   const ctx = $cv.getContext('2d');
 
   // Viewport: quadratisch in den verfügbaren Bereich einpassen
