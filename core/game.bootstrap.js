@@ -70,3 +70,14 @@
   window.__gameBootstrap = new GameBootstrap();
   return GameBootstrap;
 });
+/* core/game.bootstrap.js */
+(function(){
+  // Sobald das Boot den Spielstart signalisiert → Game-Loop los
+  addEventListener('cb:game:start', ()=>{ try{ Game.start(); }catch(e){ console.error('[game.bootstrap]', e); } }, { once:true });
+
+  // Dein Boot feuert zusätzlich 'req:map:init' – wir lassen map.js darauf reagieren.
+  addEventListener('cb:boot:ready', ()=> {
+    // Optional sofort initialisieren, falls gewünscht:
+    dispatchEvent(new CustomEvent('req:map:init'));
+  }, { once:true });
+})();
