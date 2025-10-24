@@ -146,10 +146,10 @@
             </div>`).join('')}
         </div>`;
       card.onclick=()=>{
-  // Alt für Tools/Inspector weiter senden
-  emit('req:place:begin', { building: b });
-  // Neu: Game-kompatibel
-  emit('req:place:start', { buildingId: b.id });
+        INF('select', b.id);
+         emit('req:place:begin', { building: b });        // Alt für Tools/Inspector weiter senden
+         emit('req:place:start', { buildingId: b.id });   // Neu: Game-kompatibel
+         emit('cb:set-build-tool', { type: b.id });       // Alt-Event für core.input.js (nur ergänzen)
 };
       $grid.appendChild(card);
     });
