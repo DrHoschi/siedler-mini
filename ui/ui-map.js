@@ -15,6 +15,9 @@
   if (!$cv) { console.warn('[map] canvas#game fehlt'); return; }
   if(!$c){ log('kein Canvas gefunden (#game oder #game-canvas)'); return; }
 
+  // 2) Map-URL aus data-Attribut (neu: data-map, alt: data-map-url)
+  const mapUrl = $c.dataset.map || $c.dataset.mapUrl || 'data/maps/map-mini.json';
+
   const ctx = $cv.getContext('2d');
 
   // Viewport: quadratisch in den verfügbaren Bereich einpassen
