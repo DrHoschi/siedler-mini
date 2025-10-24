@@ -40,7 +40,7 @@ body.is-playing {
 }
 
 /* Canvas: quadratisch im verbleibenden Bereich links (HUD unten, Dock rechts) */
-body.is-playing #game-canvas{
+body.is-playing #game{
   position: fixed;
   left: calc(var(--safe-left) + var(--gap));
   top:  calc(var(--safe-top) + var(--gap));
