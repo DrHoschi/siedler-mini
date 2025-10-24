@@ -33,7 +33,7 @@ body::before{
 body.is-playing::before{ opacity:0; }
 
 /* Canvas + UI-Root */
-#game-canvas{
+#game{
   position:absolute; inset:0; z-index:var(--z-canvas);
   width:100%; height:100%; image-rendering:pixelated;
 }
@@ -41,7 +41,7 @@ body.is-playing::before{ opacity:0; }
 #ui-root{ position:absolute; inset:0; z-index:var(--z-ui);pointer-events:none;}
 /* #hud-root   { position:absolute; z-index:50; pointer-events:auto; } */
 #build-dock { position:absolute; z-index:60; pointer-events:auto; }
-#game-canvas{ position:absolute; inset:0;  z-index:2;  display:block; }
+#game{ position:absolute; inset:0;  z-index:2;  display:block; }
 
 /* Holzrahmen (9-slice) */
 .wood-frame{
