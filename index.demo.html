@@ -113,7 +113,7 @@
   <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
 
 <!-- Eingabe + Platzier-Overlay -->
-<!-- <script src="core/core.input.js?"></script> -->
+<!-- <script src="core/core.input.js?"></script> 
 <script>
 if (!window.__INPUT_BRIDGE__) {
   window.__INPUT_BRIDGE__ = 1;
@@ -126,9 +126,9 @@ if (!window.__INPUT_BRIDGE__) {
     dispatchEvent(new CustomEvent('req:place:confirm',{detail:{tx:x,ty:y}}));
   });
 }
-</script>
+</script> -->
 
-
+<script src="core/input.bridge.js?v=25.10.26-sync1"></script>
   
 <!-- UI + HUD + Build -->
 <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
