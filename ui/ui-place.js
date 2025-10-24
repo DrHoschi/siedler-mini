@@ -2,7 +2,7 @@
  * Datei    : ui/ui-place.js
  * Projekt  : Neue Siedler
  * Version  : v24.2.0 (2025-10-08)
- * Zweck    : Platziermodus-UI (Ghost, ✅/✖️, Grün/Rot-Tint). Zentriert
+ * Zweck    : Platziermodus-UI (Ghost, ✅/❌, Grün/Rot-Tint). Zentriert
  *            sichtbar starten; Maus/Touch; Canvas-Offsets; Zoom-responsiv.
  *
  * Events (listen)
