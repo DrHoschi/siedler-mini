@@ -220,4 +220,7 @@
     $tint.classList.toggle('is-invalid', !valid);
     $tint.classList.toggle('is-valid', !!valid);
   }
+  // am Ende von confirm/cancel in ui/ui-place.js
+// am Ende von confirm/cancel in ui/ui-place.js
+window.dispatchEvent(new CustomEvent('cb:set-build-tool', { detail:{ type:null }}));
 })();
