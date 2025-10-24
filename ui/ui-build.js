@@ -183,6 +183,14 @@
   addEventListener('cb:build:close',     closeDock);
   window.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeDock();});
 
+  // Bridge: begin → start (Game erwartet buildingId)
+addEventListener('req:place:begin', (ev)=>{
+  const b = ev.detail?.building;
+  if (b && b.id) {
+    dispatchEvent(new CustomEvent('req:place:start', { detail:{ buildingId: b.id } }));
+  }
+});
+  
   // [11] Button
   if($btnBuild){
     $btnBuild.onclick=()=>IS_OPEN?closeDock():openDock();
