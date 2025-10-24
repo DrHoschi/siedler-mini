@@ -145,7 +145,12 @@
               <span>x${c.amount}</span>
             </div>`).join('')}
         </div>`;
-      card.onclick=()=>emit('req:place:begin',{building:b});
+      card.onclick=()=>{
+  // Alt für Tools/Inspector weiter senden
+  emit('req:place:begin', { building: b });
+  // Neu: Game-kompatibel
+  emit('req:place:start', { buildingId: b.id });
+};
       $grid.appendChild(card);
     });
   }
