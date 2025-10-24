@@ -30,6 +30,31 @@
     </div>
   `;
 
+    function resizeSprite(){
+    if (!active) return;
+    const tpx = tileSize();
+    $sprite.style.setProperty('--w', (active.w * tpx) + 'px');
+    $sprite.style.setProperty('--h', (active.h * tpx) + 'px');
+    $sprite.style.backgroundImage = `url(${iconsBaseBuildings()}${active.file})`;
+    // Position der Buttons an die Ecke unten links/rechts der Ghost-Kachel
+    positionButtons();
+  }
+
+  function positionButtons(){
+    const tpx = tileSize();
+    const pad = Math.round(Math.max(6, tpx * 0.08));
+    // Unten links / unten rechts relativ zur Ghost-Position
+    $ok.style.left = pad + 'px';
+    $ok.style.bottom = pad + 'px';
+    $cancel.style.right = pad + 'px';
+    $cancel.style.bottom = pad + 'px';
+  }
+
+  // Nach erfolgreicher Platzierung vom Game schließen
+  window.addEventListener('cb:place:done', ()=>{
+    stop();
+  });
+
   const $ghost  = overlay.querySelector('#place-ghost');
   const $sprite = overlay.querySelector('.ghost-sprite');
   const $tint   = overlay.querySelector('.ghost-tint');
