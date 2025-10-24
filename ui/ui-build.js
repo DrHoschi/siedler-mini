@@ -16,6 +16,8 @@
  * Hinweise : - Failsafe legt #build-dock nur an, wenn er fehlt.
  *            - Doppel-Initialisierung verhindert (INIT_DONE).
  *            - Spielstart öffnet Menü automatisch, außer HUD versteckt es.
+ * [compat] Alt-Input (core/core.input.js) erwartet cb:set-build-tool – bleibt bis Migration fertig
+ * [compat-bridge] cb:* -> req:*  (Monolith-Übergang; entfernen sobald ui-map das garantiert übernimmt)
  * ============================================================================
  */
 
