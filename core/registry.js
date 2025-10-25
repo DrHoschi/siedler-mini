@@ -210,7 +210,7 @@ function getResourceValuesFull(REG) {
         emit('cb:registry:snapshot', {
           buildings : this._data.buildings,
           categories: this._meta.categories,
-          resources : window.RegistryValues || {} // Werte-Map (aktuelle Mengen)
+          resources : getResourceValuesFull(REG) // Werte-Map (aktuelle Mengen)
         });
 
         this._onReady.splice(0).forEach(fn => { try{ fn(); }catch(_){ } });
@@ -319,7 +319,7 @@ function getResourceValuesFull(REG) {
 
       // Snapshot-Requests beantworten
       window.addEventListener('req:res:snapshot', ()=>{
-        emit('cb:res:snapshot', { resources: RES_VALUES });
+        emit('cb:res:snapshot', { resources: getResourceValuesFull(REG) });
       });
     }
 
