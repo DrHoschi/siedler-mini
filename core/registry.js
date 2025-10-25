@@ -1,25 +1,52 @@
 /* ============================================================================
  * Datei    : core/registry.js
  * Projekt  : Neue Siedler (Epoche 1 – Basis)
- * Version  : v25.10.19-final +res-values
+ * Version  : v25.10.25-final
  * Zweck    : Zentrale Registry (Buildings / Units / Resources / Balance)
  *
- *  (1) Lädt JSON-Daten (buildings, units, balance, resources)
- *  (2) Normalisiert verschiedene Formate (Array, Wrapper, Map-Objekte)
- *  (3) API: list(), get(), balance(), categories(), iconsBase(), snapshot()
- *  (4) Events:
- *      - cb:registry:ready { ok, counts:{buildings, units, resources} }
- *      - req:registry:snapshot  -> cb:registry:snapshot { snapshot }
- *      - req:res:snapshot       -> cb:res:snapshot { resources }    (NEU)
- *  (5) NEU: Registry.resources (Live-Werte) und Spiegel unter data.resources
- * ========================================================================== */
+ * Lädt & normalisiert:
+ *  - data/buildings.json   → { buildings[], categories[], iconsBase }
+ *  - data/units.json       → units[]
+ *  - data/balance.json     → balance{}
+ *  - data/resources.json   → Definitionsliste der Ressourcen (IDs, Icons, Epoche)
+ *
+ * Öffentliche API (global: window.Registry):
+ *  - isReady()                    → boolean
+ *  - onReady(cb)                  → führt cb nach cb:registry:ready aus (sofort, falls schon bereit)
+ *  - list(kind, {epoche?,category?})
+ *  - get(kind, id)
+ *  - where(kind, predFn)          → Array-Filter-Helfer (für Bridge/Inspector)
+ *  - upsert(kind, item)           → einfügen/aktualisieren (id Pflicht)
+ *  - balance() / categories() / iconsBase()
+ *  - snapshot()                   → tiefe Kopie der Daten + Meta
+ *
+ * Events:
+ *  - cb:registry:ready   { ok:true, counts:{buildings,units,resources} }
+ *  - cb:registry:error   { ok:false, message }
+ *  - req:registry:snapshot   → cb:registry:snapshot { snapshot }
+ *  - req:res:snapshot        → cb:res:snapshot      { resources }  (Live-Werte)
+ *
+ * Live-Ressourcen:
+ *  - window.RegistryValues (globaler langlebiger Speicher, z. B. { wood:0, stone:0, ... })
+ *  - Spiegel unter Registry.resources und Registry.data.resources
+ *
+ * Design-Notizen:
+ *  - Defensive Fetches (cache:no-store, Bust-Query)
+ *  - Ready-Marker: Registry.__ready = true (für EntitiesRegistry-Bridge)
+ *  - Doppelte Ready-Events (window & document), damit Altcode sicher reagiert
+ * ============================================================================ */
 (function(root, factory){
   root.Registry = factory();
 })(typeof window !== 'undefined' ? window : this, function(){
 
   // -------------------------------------------------------------------------
-  // Konstanten & Utils
+  // [Konstanten & Utils]
   // -------------------------------------------------------------------------
+  const MOD = '[registry]';
+  const LOG  = (...a)=> (window.CBLog?.ok   || console.log ).apply(console, [MOD, ...a]);
+  const WARN = (...a)=> (window.CBLog?.warn || console.warn).apply(console, [MOD, ...a]);
+  const ERR  = (...a)=> (window.CBLog?.err  || console.error).apply(console, [MOD, ...a]);
+
   const JSON_PATHS = {
     buildings : 'data/buildings.json',
     units     : 'data/units.json',
@@ -28,14 +55,22 @@
   };
 
   function emit(name, detail={}) {
-    try { window.dispatchEvent(new CustomEvent(name, { detail })); }
-    catch(e){ (console.warn||(()=>{}))('[registry] emit failed', name, e); }
+    try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch(_){}
+    // einige Alt-Listener hängen am document:
+    try { document.dispatchEvent(new CustomEvent(name, { detail })); } catch(_){}
   }
 
   const byId = (list, id) => Array.isArray(list) ? (list.find(e => e && e.id === id) || null) : null;
 
+  async function defaultLoader(url){
+    const bust = (url.includes('?')?'&':'?') + 'v=' + Date.now();
+    const res = await fetch(url + bust, { cache:'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
+    return res.json();
+  }
+
   // -------------------------------------------------------------------------
-  // Normalisierung buildings.json
+  // [Normalisierung: Buildings]
   // -------------------------------------------------------------------------
   function normalizeBuildings(payload){
     if (Array.isArray(payload)) {
@@ -51,16 +86,13 @@
   }
 
   // -------------------------------------------------------------------------
-  // Normalisierung resources.json  → Definitionsliste (keine Mengen!)
+  // [Normalisierung: Resources (Definitionsliste, keine Mengen)]
   // -------------------------------------------------------------------------
   function normalizeResources(payload){
     const out = [];
-    const legacyToModernIcon = (id, icon) => {
-      if (typeof icon === 'string' && /\/res_/.test(icon)) {
-        return `assets/icons/resources/${id}.png`;
-      }
-      if (!icon) return `assets/icons/resources/${id}.png`;
-      return icon;
+    const iconFor = (id, icon) => {
+      if (typeof icon === 'string' && icon) return icon;
+      return `assets/icons/resources/${id}.png`;
     };
 
     if (payload && !Array.isArray(payload) && typeof payload === 'object') {
@@ -69,7 +101,7 @@
         out.push({
           id,
           name  : r.name  || id,
-          icon  : legacyToModernIcon(id, r.icon),
+          icon  : iconFor(id, r.icon),
           epoche: Number(r.epoche || 1),
           order : Number(r.order ?? 999),
           type  : 'resource',
@@ -82,7 +114,7 @@
         out.push({
           id,
           name  : r.name  || id,
-          icon  : legacyToModernIcon(id, r.icon),
+          icon  : iconFor(id, r.icon),
           epoche: Number(r.epoche || 1),
           order : Number(r.order ?? (1000 + i)),
           type  : 'resource',
@@ -95,7 +127,7 @@
   }
 
   // -------------------------------------------------------------------------
-  // Registry
+  // [Registry-Klasse]
   // -------------------------------------------------------------------------
   class RegistryClass {
     constructor(){
@@ -103,56 +135,83 @@
         buildings : [],
         units     : [],
         balance   : {},
-        resources : [],     // Definitionsliste (IDs, Icons …)
+        resources : [],     // Definitionsliste
       };
       this._meta = {
         categories: [],
         iconsBase : '',
       };
       this._ready = false;
+      this.__ready = false;  // öffentlicher Marker für Bridges
+      this._initting = false;
+      this._onReady = [];
     }
 
     async init(loadJSON){
-      const _load = typeof loadJSON === 'function'
-        ? loadJSON
-        : async function(url){
-            const bust = (url.includes('?')?'&':'?') + 'v=' + Date.now();
-            const res = await fetch(url + bust, { cache:'no-store' });
-            if (!res.ok) throw new Error('[registry] fetch failed ' + res.status + ' @ ' + url);
-            return await res.json();
-          };
+      if (this._ready || this._initting) return;
+      this._initting = true;
+      const _load = typeof loadJSON === 'function' ? loadJSON : defaultLoader;
 
-      const [bRaw, unitsRaw, balanceRaw, resRaw] = await Promise.all([
-        _load(JSON_PATHS.buildings).catch(()=>null),
-        _load(JSON_PATHS.units).catch(()=>[]),
-        _load(JSON_PATHS.balance).catch(()=>({})),
-        _load(JSON_PATHS.resources).catch(()=>null),
-      ]);
+      try{
+        const [bRaw, unitsRaw, balanceRaw, resRaw] = await Promise.all([
+          _load(JSON_PATHS.buildings).catch(()=>null),
+          _load(JSON_PATHS.units).catch(()=>[]),
+          _load(JSON_PATHS.balance).catch(()=>({})),
+          _load(JSON_PATHS.resources).catch(()=>null),
+        ]);
 
-      // Buildings
-      const B = normalizeBuildings(bRaw || []);
-      this._data.buildings = (B.buildings || []).map(e => ({ ...e, epoche: Number(e?.epoche || 1) }));
-      this._meta.categories = Array.isArray(B.categories) ? B.categories.slice() : [];
-      this._meta.iconsBase  = typeof B.iconsBase === 'string' ? B.iconsBase : '';
+        // Buildings
+        const B = normalizeBuildings(bRaw || []);
+        this._data.buildings  = (B.buildings || []).map(e => ({ ...e, epoche: Number(e?.epoche || 1) }));
+        this._meta.categories = Array.isArray(B.categories) ? B.categories.slice() : [];
+        this._meta.iconsBase  = typeof B.iconsBase === 'string' ? B.iconsBase : '';
 
-      // Units / Balance
-      this._data.units   = Array.isArray(unitsRaw) ? unitsRaw : [];
-      this._data.balance = (balanceRaw && typeof balanceRaw==='object') ? balanceRaw : {};
+        // Units / Balance
+        this._data.units   = Array.isArray(unitsRaw) ? unitsRaw.slice() : [];
+        this._data.balance = (balanceRaw && typeof balanceRaw==='object') ? { ...balanceRaw } : {};
 
-      // Resources (Definitionsliste)
-      this._data.resources = normalizeResources(resRaw || {});
+        // Resources (Definitionsliste)
+        this._data.resources = normalizeResources(resRaw || {});
 
-      this._ready = true;
-      emit('cb:registry:ready', { ok:true, counts:{
-        buildings : this._data.buildings.length,
-        units     : this._data.units.length,
-        resources : this._data.resources.length,
-      }});
+        // Ready markieren
+        this._ready = true;
+        this.__ready = true;         // <- wichtig für EntitiesRegistry-Bridge
+        window.Registry = window.Registry || {};
+        window.Registry.__ready = true;
+
+        // Live-Res-Werte initialisieren/spiegeln
+        this._setupResourceValuesOnce();
+
+        // Ready-Events (window & document) + onReady-Queue leeren
+        const counts = {
+          buildings : this._data.buildings.length,
+          units     : this._data.units.length,
+          resources : this._data.resources.length,
+        };
+        emit('cb:registry:ready', { ok:true, counts });
+        this._onReady.splice(0).forEach(fn => { try{ fn(); }catch(_){ } });
+
+        LOG('bereit', counts);
+      } catch(e){
+        this._ready = false;
+        this.__ready = false;
+        emit('cb:registry:error', { ok:false, message: e?.message || String(e) });
+        ERR('Fehler beim Laden:', e?.message || e);
+      } finally {
+        this._initting = false;
+      }
     }
 
+    // ---- API ----------------------------------------------------------------
     isReady(){ return !!this._ready; }
 
-    // --- API ---------------------------------------------------------------
+    /** onReady(cb): führt cb sofort aus, wenn schon bereit – sonst später. */
+    onReady(cb){
+      if (typeof cb !== 'function') return;
+      if (this._ready) { try{ cb(); }catch(_){ } }
+      else this._onReady.push(cb);
+    }
+
     list(kind, { epoche=null, category=null } = {}){
       let src;
       switch (kind) {
@@ -182,6 +241,28 @@
       return byId(src, id);
     }
 
+    /** where(kind, predFn): kleines Helferlein für Filter aus Altcode/Inspector */
+    where(kind, predFn){
+      if (typeof predFn !== 'function') return this.list(kind);
+      return this.list(kind).filter(predFn);
+    }
+
+    /** upsert(kind, item): einfügen oder aktualisieren (id Pflicht) */
+    upsert(kind, item){
+      if (!item || !item.id) return false;
+      let arr;
+      switch (kind) {
+        case 'units'     : arr = this._data.units; break;
+        case 'resources' : arr = this._data.resources; break;
+        case 'buildings' :
+        default          : arr = this._data.buildings; break;
+      }
+      const idx = Array.isArray(arr) ? arr.findIndex(e => e && e.id === item.id) : -1;
+      if (idx >= 0) arr[idx] = { ...arr[idx], ...item };
+      else { (arr ||= []); arr.push({ ...item }); }
+      return true;
+    }
+
     balance(){    return this._data.balance; }
     categories(){ return this._meta.categories.slice(); }
     iconsBase(){  return this._meta.iconsBase || ''; }
@@ -192,47 +273,44 @@
         meta: JSON.parse(JSON.stringify(this._meta)),
       };
     }
-  }
 
-  // Singleton
-  const REG = new RegistryClass();
+    // ---- Live-Res-Speicher einmalig einrichten ------------------------------
+    _setupResourceValuesOnce(){
+      if (this.__resSetupDone) return;
+      this.__resSetupDone = true;
 
-  // Snapshot-Request → Response
-  window.addEventListener('req:registry:snapshot', ()=>{
-    emit('cb:registry:snapshot', { snapshot: REG.snapshot() });
-  });
-
-  // -------------------------------------------------------------
-  // NEU: Live-Resource-Werte (für Inspector & Game)
-  //  - nach registry:ready einmalig initialisieren
-  //  - unter Registry.resources und Registry.data.resources verfügbar
-  //  - Snapshot-Request/Response für Inspector
-  // -------------------------------------------------------------
-  (function setupResourceValues(){
-    const RES_VALUES = (window.RegistryValues = window.RegistryValues || {}); // globaler, langlebiger Speicher
-
-    window.addEventListener('cb:registry:ready', ()=>{
+      const RES_VALUES = (window.RegistryValues = window.RegistryValues || {}); // langlebig, global
       try{
-        const ids = REG.list('resources').map(r=>r.id);
-        // sanft initialisieren (nur fehlende Ressourcen auf 0 setzen)
+        const ids = this.list('resources').map(r => r.id);
         ids.forEach(id => { if (RES_VALUES[id] == null) RES_VALUES[id] = 0; });
+      }catch(_){}
 
-        // unter Registry spiegeln (so sucht der Inspector zuerst)
+      // Spiegel unter Registry.* (Inspektor schaut hier zuerst hin)
+      try{
         const R = (window.Registry = window.Registry || {});
         R.resources = RES_VALUES;
         R.data = R.data || {};
         R.data.resources = RES_VALUES;
       }catch(_){}
-    });
 
-    // Inspector-Snapshot anfragen/liefern
-    window.addEventListener('req:res:snapshot', ()=>{
-      emit('cb:res:snapshot', { resources: RES_VALUES });
-    });
-  })();
+      // Snapshot-Requests beantworten
+      window.addEventListener('req:res:snapshot', ()=>{
+        emit('cb:res:snapshot', { resources: RES_VALUES });
+      });
+    }
+  }
 
-  // Sofort-Init (lädt JSONs & feuert cb:registry:ready)
-  REG.init(); // <— identisch zu deiner Version
+  // -------------------------------------------------------------------------
+  // [Singleton + Requests]
+  // -------------------------------------------------------------------------
+  const REG = new RegistryClass();
+
+  window.addEventListener('req:registry:snapshot', ()=>{
+    emit('cb:registry:snapshot', { snapshot: REG.snapshot() });
+  });
+
+  // Sofort-Init (lädt JSONs & feuert cb:registry:ready / cb:registry:error)
+  REG.init();
 
   return REG;
 });
