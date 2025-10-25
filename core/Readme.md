@@ -48,6 +48,10 @@ Damit ist sie für Debug-/QA-Tests nötig, bis der echte Pfadfinder eingebaut is
 | Modul | Beziehung | Zweck |
 |------|-----------|-------|
 | core/game.js | ruft später AdFinder.findPath() auf | berechnet reale Bewegungsrouten |
+| core/path-overlay.js |
+nutzt Pfad-Daten zur Visualisierung | Heatmap / Pfad-Overlay |
+| ui/ui-inspector.js | sendet cb:path:test:start / empfängt cb:path:test:done | QA-Tab „Pfade“ |
+| core/carrier.js | indirekt, für Transport-KI | Routenberechnung für Träger |
 
 
 
