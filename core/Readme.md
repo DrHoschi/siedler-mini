@@ -47,5 +47,7 @@ Damit ist sie für Debug-/QA-Tests nötig, bis der echte Pfadfinder eingebaut is
 
 | Modul | Beziehung | Zweck |
 |------|-----------|-------|
-| core/game.js |
+| core/game.js | ruft später AdFinder.findPath() auf | berechnet reale Bewegungsrouten |
+
+
 
