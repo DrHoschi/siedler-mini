@@ -46,5 +46,6 @@ Damit ist sie für Debug-/QA-Tests nötig, bis der echte Pfadfinder eingebaut is
 🔗 Verbindung zu anderen Modulen
 
 | Modul | Beziehung | Zweck |
+|------|-----------|-------|
 | core/game.js |
 
