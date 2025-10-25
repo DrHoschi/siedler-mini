@@ -1,63 +1,111 @@
 /* ============================================================================
- * Datei: assets/core/core.entities.js
- * Version: v17.6.3
- * Zweck:
- *  - Zentrale Entity-Verwaltung (nur Gebäude)
- *  - Platzhalter-Rendering mit Kategoriefarben
- *  - Robustes drawEntities (mit Debug-Overlay)
- *  - HQ-Spritepfad korrigiert (assets/buildings/hq_wood.png)
- * Abhängigkeiten: window.EntitiesRegistry (optional), window.GameCamera (optional)
+ * Datei   : core/entities.js
+ * Projekt : Neue Siedler
+ * Version : v25.10.25-final
+ * Zweck   : Zentrale Entity-Verwaltung (Gebäude) + Rendering-Hook
+ *
+ * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
+ *
+ * Events  :
+ *   – listen: cb:build:place {kind,x?,y?}, cb:build-action {action:"place-<id>"},
+ *             cb:game-start (Auto-HQ)
+ *   – emit  : cb:entities:changed { type:"add|remove|clear", count, last? }
+ *
+ * Abhängigkeiten (optional):
+ *   – Registry (core/registry.js): Farben/Sprites/Kategorien (fallbacks vorhanden)
+ *   – GameCamera: zur Berechnung von Bildschirmmitte bei fehlenden Koordinaten
+ *   – CBLog: einheitliche Logs
+ *
+ * Hinweise:
+ *   – Renderer ruft window.drawEntities(ctx) im Welt-Transform auf (nicht resetten).
+ *   – Registry-Integration gemäß Lastenheft/Standards (IDs b.*, Kategorien, Sprite-Paths).
  * ============================================================================ */
+
 (() => {
   'use strict';
 
+  /* ==========================================================================
+   * [Imports / Logger]
+   * ========================================================================== */
   const TAG  = '[entities]';
-  const LOG  = (...a)=> (window.CBLog?.info||console.log)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn||console.warn)(TAG, ...a);
+  const LOG  = (...a)=> (window.CBLog?.info  ?? console.log )(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn  ?? console.warn)(TAG, ...a);
+  const ERR  = (...a)=> (window.CBLog?.error ?? console.error)(TAG, ...a);
 
-  // --- State -----------------------------------------------------------------
-  const S = (window.__EntitiesState__ ||= {
-    tile: 64,
-    list: [],         // {id, kind, x,y,w,h, cat}
-    idseq: 0,
-    sprites: new Map() // kind -> Image | 'error'
-  });
+  /* ==========================================================================
+   * [Konstanten & Meta]
+   * ========================================================================== */
+  const VERSION = 'v25.10.25-final';
+  const DEFAULT_TILE = 64;
 
-  // --- Kategorie-Farben (Platzhalter) ---------------------------------------
-  const CAT_COL = {
-    admin:   '#0172e6', // Verwaltung
-    storage: '#8b5cf6', // Lager/Depot
-    food:    '#eab308', // Nahrung
-    resource:'#22c55e', // Rohstoffe
-    defense: '#ef4444', // Militär
-    housing: '#14b8a6', // Wohnen
-    default: '#f59e0b'  // Fallback
+  // Platzhalter-Kategoriefarben (werden von Registry überschrieben, falls vorhanden)
+  const CAT_COL_FALLBACK = {
+    admin:   '#0172e6',
+    storage: '#8b5cf6',
+    food:    '#eab308',
+    resource:'#22c55e',
+    defense: '#ef4444',
+    housing: '#14b8a6',
+    default: '#f59e0b'
   };
 
-  // Registry-Lookup (optional)
-  function reg(kind){ return window.EntitiesRegistry?.get?.(kind) || null; }
-  function catOf(kind){ return reg(kind)?.cat || 'default'; }
+  // interner State (einmal pro Seite)
+  const S = (window.__EntitiesState__ ||= {
+    tile: DEFAULT_TILE,
+    idseq: 0,
+    list: /** @type {Array<{id:number, kind:string, x:number,y:number,w:number,h:number,cat:string}>} */([]),
+    sprites: new Map() // key: kind → HTMLImageElement | 'error'
+  });
 
-  // Sprite ermitteln (Registry → Map → Heuristik)
-  function spritePath(kind) {
+  // Event-Helfer
+  const EVT = (name, detail)=> window.dispatchEvent(new CustomEvent(name, { detail }));
+
+  /* ==========================================================================
+   * [Registry-Helfer]
+   * ========================================================================== */
+  function regGet(type, id){
+    try { return window.Registry?.get?.(type, id) ?? null; }
+    catch { return null; }
+  }
+  function regList(type, pred=null){
+    try { return window.Registry?.list?.(type, pred) ?? []; }
+    catch { return []; }
+  }
+  function regColorForCategory(cat){
+    // Versuch: Registry.meta('enums') o. Ressourcenfarben
+    try{
+      const r = regGet('resource','res.'+cat);
+      if (r?.color) return r.color;
+    }catch{}
+    return CAT_COL_FALLBACK[cat] || CAT_COL_FALLBACK.default;
+  }
+
+  /* ==========================================================================
+   * [Sprite-Pfadermittlung]
+   * ========================================================================== */
+  function spritePath(kind){
     const k = (kind||'').toLowerCase();
-    const fromReg = reg(k)?.sprite || reg(k)?.icon || null;
-    if (fromReg) return fromReg;
-    // Heuristik (aus deiner filelist – alles lowercase in assets/buildings/)
+
+    // 1) Über Registry (bevorzugt)
+    const bMeta = regGet('building', 'b.'+k) || regGet('building', k);
+    if (bMeta?.sprite) return bMeta.sprite;
+    if (bMeta?.icon)   return bMeta.icon;
+
+    // 2) Fallback-Heuristik (Legacy-Dateinamen)
     const map = {
-      rathaus: 'assets/buildings/rathaus_wood1.png',
-      house: 'assets/buildings/wohnhaus_wood0_ug0.png',
-      wohnhaus: 'assets/buildings/wohnhaus_wood0_ug0.png',
-      depot: 'assets/buildings/depot_wood.png',
-      farm: 'assets/buildings/farm_wood.png',
-      hq: 'assets/buildings/hq_wood.png',
-      fisher: 'assets/buildings/fischer_wood1.png',
-      steinmetz:'assets/buildings/steinmetz_wood.png',
-      schmied: 'assets/buildings/schmied_wood0.png',
-      windmuehle:'assets/buildings/windmuehle_wood.png',
-      wachturm:'assets/buildings/wachturm_wood.png',
-      lumberjack:'assets/buildings/lumberjack_wood.png',
-      baecker:'assets/buildings/baecker_wood.png'
+      rathaus:    'assets/buildings/hq_wood.png',
+      hq:         'assets/buildings/hq_wood.png',
+      wohnhaus:   'assets/buildings/wohnhaus_wood0_ug0.png',
+      house:      'assets/buildings/wohnhaus_wood0_ug0.png',
+      depot:      'assets/buildings/depot_wood.png',
+      farm:       'assets/buildings/farm_wood.png',
+      fisher:     'assets/buildings/fischer_wood1.png',
+      steinmetz:  'assets/buildings/steinmetz_wood.png',
+      schmied:    'assets/buildings/schmied_wood0.png',
+      windmuehle: 'assets/buildings/windmuehle_wood.png',
+      wachturm:   'assets/buildings/wachturm_wood.png',
+      lumberjack: 'assets/buildings/lumberjack_wood.png',
+      baecker:    'assets/buildings/baecker_wood.png'
     };
     return map[k] || `assets/buildings/${k}.png`;
   }
@@ -73,58 +121,80 @@
     return img;
   }
 
-  // --- API: platzieren ------------------------------------------------------
-  function snap(v,t=S.tile){ return Math.round(v/t)*t; }
+  /* ==========================================================================
+   * [Hilfsfunktionen]
+   * ========================================================================== */
+  const TileSize = ()=> (window.Game?.tileSize || S.tile || DEFAULT_TILE);
 
+  function snap(v,t=TileSize()){ return Math.round(v/t)*t; }
+
+  function catOf(kind){
+    // Aus Registry (Gebäude hat category), sonst 'default'
+    const k = (kind||'').toLowerCase();
+    const b = regGet('building','b.'+k) || regGet('building', k);
+    return (b?.category)||'default';
+  }
+
+  function ensureXY(kind, x, y){
+    if (typeof x === 'number' && typeof y === 'number') return { x, y };
+    // Fallback: Kameramitte (gem. Vorgaben darf Renderer laufen; Kamera verfügbar) 
+    const cam = window.GameCamera||{};
+    const cvs = document.getElementById('game') || document.querySelector('canvas');
+    const dpr = Math.max(1, window.devicePixelRatio||1);
+    if (cvs) {
+      const zoom = cam.zoom||1;
+      const w = (cvs.width/dpr)/zoom;
+      const h = (cvs.height/dpr)/zoom;
+      return { x:(cam.x||0)+w/2, y:(cam.y||0)+h/2 };
+    }
+    return { x:0, y:0 };
+  }
+
+  /* ==========================================================================
+   * [API: Platzieren/Entfernen]
+   * ========================================================================== */
   function place(kind, x, y){
     const k = (kind||'').toLowerCase();
-    if (!k) return null;
+    if (!k){ WARN('place(): kind fehlt'); return null; }
 
-    // Kameramitte fallback
-    if (typeof x!=='number' || typeof y!=='number'){
-      const cam = window.GameCamera||{};
-      const cvs = document.getElementById('game') || document.querySelector('canvas');
-      const dpr = Math.max(1, window.devicePixelRatio||1);
-      if (cvs) {
-        const zoom = cam.zoom||1;
-        const w = (cvs.width/dpr)/zoom;
-        const h = (cvs.height/dpr)/zoom;
-        x = (cam.x||0) + w/2;
-        y = (cam.y||0) + h/2;
-      } else { x = 0; y = 0; }
-    }
+    const p = ensureXY(k, x, y);
+    const t = TileSize();
 
     const b = {
       id: ++S.idseq,
       kind: k,
-      x: snap(x), y: snap(y),
-      w: S.tile, h: S.tile,
+      x: snap(p.x, t), y: snap(p.y, t),
+      w: t, h: t,
       cat: catOf(k)
     };
     loadSprite(k);
     S.list.push(b);
-    LOG('platziert:', k, '→', b.x, b.y, '(gesamt:', S.list.length, ')');
+
+    LOG('platziert:', k, '→', b.x, b.y, '(anzahl:', S.list.length, ')');
+    EVT('cb:entities:changed', { type:'add', count:S.list.length, last:{ id:b.id, kind:b.kind } });
     return b;
   }
 
-  // Rathaus automatisch in Kartenmitte beim Spielstart
-  function placeTownHallOnce(){
-    if (S.__autoRathausPlaced) return;
-    S.__autoRathausPlaced = true;
-
-    const cvs = document.getElementById('game') || document.querySelector('canvas');
-    if (!cvs) return;
-    const dpr = Math.max(1, window.devicePixelRatio||1);
-    const zoom = (window.GameCamera?.zoom)||1;
-    const cx = ((cvs.width/dpr)/zoom)/2 + (window.GameCamera?.x||0);
-    const cy = ((cvs.height/dpr)/zoom)/2 + (window.GameCamera?.y||0);
-    const b = place('rathaus', cx, cy);
-    LOG('Rathaus automatisch platziert (Kartenmitte):', b.x, b.y);
+  function removeById(id){
+    const i = S.list.findIndex(e=>e.id===id);
+    if (i>=0){
+      const [removed] = S.list.splice(i,1);
+      EVT('cb:entities:changed', { type:'remove', count:S.list.length, last:{ id:removed.id, kind:removed.kind } });
+      return removed;
+    }
+    return null;
   }
 
-  // --- Rendering ------------------------------------------------------------
+  function clear(){
+    S.list.length = 0;
+    EVT('cb:entities:changed', { type:'clear', count:0 });
+  }
+
+  /* ==========================================================================
+   * [Rendering]
+   * ========================================================================== */
   function drawPlaceholder(ctx, b){
-    const col = CAT_COL[b.cat] || CAT_COL.default;
+    const col = regColorForCategory(b.cat);
     ctx.save();
     ctx.globalAlpha = 1;
     ctx.fillStyle = col;
@@ -141,7 +211,7 @@
 
   function drawDebugCross(ctx, b){
     ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(b.x, b.y); ctx.lineTo(b.x+b.w, b.y+b.h);
@@ -150,28 +220,25 @@
     ctx.restore();
   }
 
-  // Die vom Renderer aufgerufene Zeichenfunktion
+  /** Vom Renderer aufrufen – Welttransform ist bereits gesetzt. */
   function drawEntities(ctx){
     if (!ctx || !S.list.length) return;
-    // Wichtig: Renderer hat bereits Welt-Transform gesetzt → nicht resetten!
     for (const b of S.list){
       const spr = S.sprites.get(b.kind) || loadSprite(b.kind);
       if (spr && spr !== 'error' && spr.complete) {
-        try {
-          ctx.drawImage(spr, b.x, b.y, b.w, b.h);
-        } catch(e){
-          WARN('drawImage Fehler für', b.kind, e?.message||e);
-          drawPlaceholder(ctx,b);
-        }
+        try { ctx.drawImage(spr, b.x, b.y, b.w, b.h); }
+        catch(e){ WARN('drawImage Fehler:', b.kind, e?.message||e); drawPlaceholder(ctx,b); }
       } else {
         drawPlaceholder(ctx,b);
       }
-      // minimale Debug-Hilfe
-      drawDebugCross(ctx,b);
+      drawDebugCross(ctx,b); // minimale Orientierungshilfe
     }
   }
 
-  // --- Events ---------------------------------------------------------------
+  /* ==========================================================================
+   * [Hauptlogik – Events]
+   * ========================================================================== */
+  // Build-Flow: Platzierung aus Dock/Platziermodus (Lastenheft Kap. 4.3/Flows)
   window.addEventListener('cb:build:place', (ev)=>{
     const d = ev?.detail||{};
     place(d.kind, d.x, d.y);
@@ -181,13 +248,25 @@
     if (a.startsWith('place-')) place(a.slice(6));
   });
 
-  // Auto-Rathaus beim Start
-  window.addEventListener('cb:game-start', placeTownHallOnce);
+  // Auto-HQ beim Start (MVP)
+  window.addEventListener('cb:game-start', ()=>{
+    if (S.list.some(e=>e.kind==='rathaus' || e.kind==='hq')) return;
+    const t = ensureXY('rathaus'); // Kameramitte
+    const b = place('rathaus', t.x, t.y);
+    LOG('Auto-HQ platziert:', b?.x, b?.y);
+  });
 
-  // --- Exports --------------------------------------------------------------
+  /* ==========================================================================
+   * [Exports – Public API]
+   * ========================================================================== */
+  window.Entities = {
+    place, removeById, clear,
+    state: S,
+    version: VERSION
+  };
+
+  // Backwards-compatibler Draw-Hook (Renderer ruft window.drawEntities(ctx))
   window.drawEntities = drawEntities;
-  window.Entities = { place, state: S };
 
-  LOG('drawEntities global gebunden → Renderer kann Entities zeichnen.');
-  LOG('Modul geladen (v17.6.3).');
+  LOG('Modul geladen ('+VERSION+') – drawEntities global verfügbar.');
 })();
