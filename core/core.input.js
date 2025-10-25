@@ -1,148 +1,213 @@
 /* ============================================================================
- * core.input.js — Eingabe & Build-Interaktion
- * Version: v17.5.0
- * Projekt: Neue Siedler
+ * Datei   : core/input.js
+ * Projekt : Neue Siedler
+ * Version : v25.10.25-final
  *
- * Aufgaben
- *  - Pointer/Touch auf dem Canvas (#game) in Tile-Koordinaten übersetzen
- *  - Build-Tool setzen/platzieren (Events mit Engine-agnostischer Fassade)
- *  - Hover-Tile publizieren (cb:hover-tile)
- *  - ESC/Right-Click → Tool zurücksetzen
- *  - Kamera-Offsets berücksichtigen (optional via cb:camera-changed)
+ * Zweck   : Eingabe & Build-Interaktion
+ *           – Pointer/Touch vom Canvas → Tile-Koordinaten
+ *           – Build-Tool wählen / platzieren
+ *           – Hover-Tile publizieren
+ *           – ESC / Rechtsklick: Tool zurücksetzen
  *
- * Events (listen)
- *  - cb:set-build-tool        {type|null}
- *  - cb:camera-changed        {x,y,zoom}  (Tiles)
+ * Struktur: Imports → Konstanten → Hilfsfunktionen → Klassen → Hauptlogik → Exports
  *
- * Events (dispatch)
- *  - cb:hover-tile            {tx,ty,screenX,screenY}
- *  - cb:place-building        {type,x,y}
- *  - cb:request-repaint
+ * Events  :
+ *   listen :
+ *     • cb:set-build-tool { kind?:string, type?:string|null }   // beide Felder akzeptiert
+ *     • cb:camera-change  { x:number, y:number, zoom:number }   // aus core/camera.js
+ *   dispatch:
+ *     • cb:hover-tile     { tx, ty, screenX, screenY }          // Hover-Info (Tiles)
+ *     • cb:build:place    { kind, x:number, y:number }          // Tiles → Entities.place
+ *     • cb:set-build-tool { kind:null }                         // bei Reset
  *
- * Abhängigkeiten
- *  - window.Game (getTileSize)
- *  - CBLog (Polyfill reicht)
- * ========================================================================== */
-(function(){
+ * Abhängigkeiten (optional):
+ *   – window.GameCamera   (x,y,zoom in Weltpixeln)
+ *   – window.Game.tileSize (oder 64px Fallback)
+ *   – CBLog (ok/info/warn/error) – Polyfill ausreichend
+ * Hinweise:
+ *   – Einheitennorm: Kamera ist in **Weltpixeln**, Tiles sind **tileSize-Raster**.
+ *     worldX = cam.x + screenX / cam.zoom;   tx = floor(worldX / tileSize)
+ * ============================================================================ */
+(() => {
   'use strict';
 
-  var VER = 'v17.5.0';
-  var MOD = '[input]';
+  /* ==========================================================================
+   * [Imports / Logger]
+   * ========================================================================== */
+  const TAG  = '[input]';
+  const OK   = (...a)=> (window.CBLog?.ok    ?? console.log   )(TAG, ...a);
+  const INFO = (...a)=> (window.CBLog?.info  ?? console.info  )(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn  ?? console.warn  )(TAG, ...a);
+  const ERR  = (...a)=> (window.CBLog?.error ?? console.error )(TAG, ...a);
 
-  // ---- Logging --------------------------------------------------------------
-  function ok(m){ try{ (window.CBLog?.ok||console.log)(m);}catch(_){ console.log(m);} }
-  function warn(m){ try{ (window.CBLog?.warn||console.warn)(m);}catch(_){ console.warn(m);} }
-  function err(m){ try{ (window.CBLog?.err||console.error)(m);}catch(_){ console.error(m);} }
+  /* ==========================================================================
+   * [Konstanten & State]
+   * ========================================================================== */
+  const VERSION = 'v25.10.25-final';
 
-  // ---- State ----------------------------------------------------------------
-  var stage = null;            // Canvas #game
-  var tileSize = 64;           // px
-  var cam = { x:0, y:0, zoom:1 }; // Karten-Kamera in Tiles (fallback)
-  var buildTool = null;        // aktuelles Bau-Werkzeug (string)
+  let canvas   = null;                 // <canvas id="game">
+  let tileSize = 64;                   // px pro Tile
+  // Kamera-Werte in Weltpixeln (kompatibel zu core/camera.js)
+  const cam = { x:0, y:0, zoom:1 };
 
-  // ---- Helpers --------------------------------------------------------------
-  function updTileSize(){
-    try{ tileSize = (window.Game?.getTileSize?.()|0) || 64; }catch(_){}
-    if (tileSize<=0) tileSize = 64;
+  // aktuelles Bauwerkzeug (ID / Registry-Key). null = keins.
+  let buildTool = null;
+
+  /* ==========================================================================
+   * [Hilfsfunktionen]
+   * ========================================================================== */
+
+  function getTileSize(){
+    try {
+      // bevorzugt: Game.tileSize; fallback: Entities.state.tile; sonst 64
+      return Number(window.Game?.tileSize) || Number(window.Entities?.state?.tile) || 64;
+    } catch { return 64; }
   }
+
+  function updateTileSize(){ tileSize = getTileSize(); }
+
+  /** DOMRect des Canvas (sicher) */
+  function rectOf(el){
+    try { return el.getBoundingClientRect(); }
+    catch { return { left:0, top:0, width:el?.width||0, height:el?.height||0 }; }
+  }
+
+  /** Bildschirm → Tile-Koordinaten (benutzt Weltpixel-Kamera + Zoom) */
   function screenToTile(clientX, clientY){
-    var rect = stage.getBoundingClientRect ? stage.getBoundingClientRect() : {left:0, top:0, width:stage.width, height:stage.height};
-    var sx = (clientX - rect.left);
-    var sy = (clientY - rect.top);
-    // Zoom/Kamera in Tile-Einheiten berücksichtigen
-    var tx = Math.floor((sx / (tileSize*cam.zoom)) + cam.x);
-    var ty = Math.floor((sy / (tileSize*cam.zoom)) + cam.y);
-    if (tx<0) tx=0; if (ty<0) ty=0;
-    return { tx:tx, ty:ty, sx:sx, sy:sy };
+    const r = rectOf(canvas);
+    const sx = (clientX - r.left);      // Canvas-ScreenX (CSS-Pixel)
+    const sy = (clientY - r.top);       // Canvas-ScreenY (CSS-Pixel)
+
+    // Weltpixel-Koordinaten unter dem Cursor:
+    const worldX = cam.x + (sx / cam.zoom);
+    const worldY = cam.y + (sy / cam.zoom);
+
+    // Tile-Koordinaten:
+    let tx = Math.floor(worldX / tileSize);
+    let ty = Math.floor(worldY / tileSize);
+    if (tx < 0) tx = 0;
+    if (ty < 0) ty = 0;
+
+    return { tx, ty, sx, sy };
   }
 
-  // ---- Event-Wiring ---------------------------------------------------------
+  /** Tool-Reset (einheitlich) */
+  function resetTool(){
+    buildTool = null;
+    try {
+      if (canvas) canvas.style.cursor = 'default';
+      // nach außen kommunizieren (für UI/Inspector):
+      window.dispatchEvent(new CustomEvent('cb:set-build-tool', { detail:{ kind:null } }));
+      // optional: alte Game-API unterstützen
+      window.Game?.resetBuildTool?.();
+    } catch {}
+  }
+
+  /** Platzieren eines Gebäudes auf Tile-Koords */
+  function placeAt(tx, ty){
+    if (!buildTool) return;
+    const detail = { kind: buildTool, x: tx, y: ty };
+    try {
+      window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
+      OK('Gebäude platziert:', buildTool, '→', tx, ty);
+    } catch(e){
+      WARN('Platzierung fehlgeschlagen:', e?.message || e);
+    }
+  }
+
+  /* ==========================================================================
+   * [Listener – Pointer/Maus/Touch]
+   * ========================================================================== */
   function bindPointer(){
-    if (!stage) return;
+    if (!canvas) return;
 
-    // Hover → cb:hover-tile
-    stage.addEventListener('pointermove', function(ev){
-      try{
-        var p = screenToTile(ev.clientX, ev.clientY);
-        window.dispatchEvent(new CustomEvent('cb:hover-tile', { detail:{
-          tx:p.tx, ty:p.ty, screenX:p.sx, screenY:p.sy
-        }}));
-      }catch(_){}
-    }, {passive:true});
+    // Hover meldet immer – hilfreich für Previews/Inspector
+    canvas.addEventListener('pointermove', (ev)=>{
+      const p = screenToTile(ev.clientX, ev.clientY);
+      try {
+        window.dispatchEvent(new CustomEvent('cb:hover-tile', {
+          detail: { tx: p.tx, ty: p.ty, screenX: p.sx, screenY: p.sy }
+        }));
+      } catch {}
+    }, { passive:true });
 
-    // Platzierung mit Linksklick/Touch
-    stage.addEventListener('pointerdown', function(ev){
-      // Nur Linksklick (0) oder Touch (button==0/undefined)
+    // Platzieren: Linksklick / Touch
+    canvas.addEventListener('pointerdown', (ev)=>{
+      // Nur LMB (0) oder Touch (button==0/undefined)
       if (ev.button != null && ev.button !== 0) return;
       if (!buildTool) return;
-      try{
-        var p = screenToTile(ev.clientX, ev.clientY);
-        window.dispatchEvent(new CustomEvent('cb:place-building', { detail:{
-          type: buildTool, x:p.tx, y:p.ty
-        }}));
-        ok('[ok] Gebäude platziert: '+buildTool+' at '+p.tx+' '+p.ty);
-        // Tool zurücksetzen (klassisches Verhalten)
-        window.Game?.resetBuildTool?.();
-      }catch(e){
-        warn(MOD+' Platzierung fehlgeschlagen: '+(e&&e.message));
-      }
-    }, {passive:true});
+      const p = screenToTile(ev.clientX, ev.clientY);
+      // Verhindere Textauswahl / Scroll-Jank auf Touch
+      try { ev.preventDefault?.(); } catch {}
+      placeAt(p.tx, p.ty);
+      // Standard: Tool nach Einmalplatzierung zurücksetzen (MVP)
+      resetTool();
+    }, { passive:false });
 
-    // Rechtsklick → Tool resetten (verhindert Kontextmenü)
-    stage.addEventListener('contextmenu', function(ev){
+    // Rechtsklick → Tool resetten (und Kontextmenü unterdrücken)
+    canvas.addEventListener('contextmenu', (ev)=>{
       if (buildTool){
         ev.preventDefault();
-        window.Game?.resetBuildTool?.();
-      }
-    });
-
-    // ESC → Tool resetten
-    window.addEventListener('keydown', function(ev){
-      if (ev.key === 'Escape' && buildTool){
-        try{ window.Game?.resetBuildTool?.(); }catch(_){}
+        resetTool();
       }
     });
   }
 
+  /* ==========================================================================
+   * [Listener – Global (Events)]
+   * ========================================================================== */
   function bindGlobal(){
-    // Build-Tool Änderungen
-    window.addEventListener('cb:set-build-tool', function(ev){
-      var t = ev?.detail?.type || null;
-      buildTool = t;
-      // Cursor optional leicht ändern (nur Stage)
-      try{
-        stage.style.cursor = buildTool ? 'crosshair' : 'default';
-      }catch(_){}
+    // Build-Tool setzen (akzeptiert 'kind' oder legacy 'type')
+    window.addEventListener('cb:set-build-tool', (ev)=>{
+      const d = ev?.detail || {};
+      const next = (d.kind ?? d.type ?? null) || null;
+      buildTool = next;
+      try { if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default'; } catch {}
+      INFO('Build-Tool:', buildTool ?? '(none)');
     });
 
-    // Kamera-Änderungen (Tiles)
-    window.addEventListener('cb:camera-changed', function(ev){
-      try{
-        var d = ev?.detail||{};
-        cam.x = (typeof d.x==='number')? d.x : cam.x;
-        cam.y = (typeof d.y==='number')? d.y : cam.y;
-        cam.zoom = (typeof d.zoom==='number')? d.zoom : cam.zoom;
-      }catch(_){}
+    // Kamera-Updates aus core/camera.js (einheitlicher Eventname: cb:camera-change)
+    window.addEventListener('cb:camera-change', (ev)=>{
+      const d = ev?.detail || {};
+      if (typeof d.x === 'number')   cam.x = d.x;
+      if (typeof d.y === 'number')   cam.y = d.y;
+      if (typeof d.zoom === 'number')cam.zoom = d.zoom;
     });
   }
 
-  // ---- Init -----------------------------------------------------------------
+  /* ==========================================================================
+   * [Init]
+   * ========================================================================== */
   function init(){
     try{
-      stage = document.getElementById('game');
-      if (!stage){ warn(MOD+' Canvas #game nicht gefunden'); return; }
-      updTileSize();
+      canvas = document.getElementById('game')
+            || document.querySelector('canvas[data-role="map"]')
+            || document.querySelector('canvas');
+      if (!canvas){ WARN('Canvas #game nicht gefunden'); return; }
+
+      // Startwerte aus GameCamera lesen (falls vorhanden)
+      try{
+        if (window.GameCamera){
+          cam.x    = Number(window.GameCamera.x   ?? cam.x);
+          cam.y    = Number(window.GameCamera.y   ?? cam.y);
+          cam.zoom = Number(window.GameCamera.zoom?? cam.zoom);
+        }
+      } catch {}
+
+      updateTileSize();
       bindGlobal();
       bindPointer();
-      ok(MOD+' Modul gebunden ('+VER+')');
-    }catch(e){
-      err(MOD+' Init-Fehler: '+(e&&e.message));
+
+      OK(`${TAG} gebunden (${VERSION})`);
+    } catch(e){
+      ERR('Init-Fehler:', e?.message || e);
     }
   }
 
   if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', init, {once:true});
+    document.addEventListener('DOMContentLoaded', init, { once:true });
   } else {
     init();
   }
+
 })();
