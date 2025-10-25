@@ -1,56 +1,57 @@
+<script>
 /* ============================================================================
  * Datei   : ui/inspector/inspector.build.js
  * Projekt : Neue Siedler – Inspector (Build-Tab)
- * Version : v18.15.0 (final restore)
+ * Version : v25.10.25-clean
+ * Autor   : refactor auf Registry+Events (kein window.UIBuild mehr)
+ * ----------------------------------------------------------------------------
+ * ZWECK
+ *  - Entwicklertab für Gebäude-/Registry-Daten
+ *  - Liest Daten ROBUST aus window.Registry (und Fallback: data/buildings.json)
+ *  - Stellt Tabelle, Suche, Kategorie-Filter, Sortierung und Validierung bereit
+ *  - Öffnet auf Wunsch das Build-Menü per Event (req:buildmenu:show)
  *
- * Zweck   : Entwicklertab für Gebäude-/Registry-Daten.
- *           - Liest die Registry (mehrere mögliche Quellen; robust)
- *           - Optionaler Fallback: lädt data/buildings.json (nur Ansicht)
- *           - Zeigt Tabelle: ID, Titel, Kategorie, Größe, Kosten
- *           - Filter (Kategorie), Suche, Sortieren per Klick auf Spalten
- *           - Validierung: fehlende Felder, unbekannte Kategorien, Duplikate
- *           - Aktionen: Refresh, Kategorien-Check, Export JSON, Build-Menü öffnen
- *           - Reagiert auf cb:registry:ready / cb:registry:snapshot (Auto-Refresh)
+ * LAUSCHT
+ *  - cb:registry:ready        → automatische Aktualisierung
+ *  - cb:registry:snapshot     → automatische Aktualisierung
+ *  - cb:insp:tab:change       → Tabwechsel (nur bei aktiver Anzeige refreshen)
  *
- * Abh.    : Inspector-Core (window.Inspector), optional:
- *           window.Registry / window.BuildRegistry / window.registry
- *           ui/ui-build.js Event-Bridges (req:buildmenu:show)
+ * SENDET
+ *  - req:buildmenu:show       → UI soll Baumenü anzeigen
  *
- * Events  : req:registry:snapshot   – Registry-Dumps (falls implementiert)
- *           cb:registry:ready       – wenn Registry bereit (Auto-Refresh)
- *           cb:registry:snapshot    – wenn Snapshot erstellt (Auto-Refresh)
- *           req:buildmenu:show      – Build-Menü öffnen (falls vorhanden)
+ * HINWEIS
+ *  - Alt-API (window.UIBuild.*, #build-panel) wurde vollständig entfernt.
+ *  - Kategorien/Buildings kommen aus Registry; notfalls JSON-Fallback.
  * ========================================================================== */
 
-/* ============================================================================
- * Datei   : ui/inspector/inspector.build.js
- * Projekt : Neue Siedler – Inspector (Build-Tab)
- * Version : v18.15.1 (final restore+finder)
- *
- * Zweck   : Entwicklertab für Gebäude-/Registry-Daten.
- *           - Registry/ UI-Build/ buildings.json robust auslesen
- *           - Tabelle: ID, Titel, Kategorie, Größe, Kosten
- *           - Filter, Suche, Sortieren
- *           - Aktionen: Refresh, Kategorien-Check, Export JSON, Build-Menü
- *           - Reagiert auf cb:registry:ready / cb:registry:snapshot
- * ========================================================================== */
-(function(){
+/* =============================== [IMPORTS] ================================= */
+/* (keine externen Imports – arbeitet mit globalen Objekten/Events) */
+
+/* ============================== [KONSTANTEN] =============================== */
+(function () {
   'use strict';
-  const MOD='[inspector.build]';
-  const logI = (window.CBLog?.info || console.info).bind(console, MOD);
-  const logO = (window.CBLog?.ok   || console.log ).bind(console, MOD);
-  const logW = (window.CBLog?.warn || console.warn).bind(console, MOD);
-  const logE = (window.CBLog?.error|| console.error).bind(console, MOD);
+  const TAG='[inspector.build]';
+  const LOG = (window.CBLog?.info  || console.info ).bind(console, TAG);
+  const OK  = (window.CBLog?.ok    || console.log  ).bind(console, TAG);
+  const WRN = (window.CBLog?.warn  || console.warn ).bind(console, TAG);
+  const ERR = (window.CBLog?.error || console.error).bind(console, TAG);
 
   const $  = (s, r=document)=>r.querySelector(s);
   const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
-  const toKey = x => String(x??'').trim();
 
+  /* =========================== [HILFSFUNKTIONEN] =========================== */
+
+  // String-Helper (sichere Schlüssel)
+  const toKey = v => String(v ?? '').trim();
+
+  // Kosten-Objekt in kurze Textform (holz:2, stein:1 …)
   function fmtCost(cost){
     if (!cost || typeof cost!=='object') return '';
-    const out=[]; for(const [k,v] of Object.entries(cost)){ if(v) out.push(`${k}:${v}`); }
+    const out=[]; for (const [k,v] of Object.entries(cost)){ if (v) out.push(`${k}:${v}`); }
     return out.join(', ');
   }
+
+  // Größe aus diversen Feldern ableiten (size:{w,h} | w/h | "WxH")
   function extractSize(e){
     if (!e) return '';
     const s = e.size || e.footprint || null;
@@ -68,24 +69,8 @@
     return '';
   }
 
-  /* ---------- NEU: breite Suche nach Buildings in Registry / UIBuild ---------- */
-  function getRegistryRaw(){
-    // Klassische Registry-Objekte
-    const R = window.Registry || window.BuildRegistry || window.registry || {};
-    if (R.buildings) return R.buildings;
-    if (R.data?.buildings) return R.data.buildings;
-    if (typeof R.get==='function'){ try{ const g=R.get('buildings'); if(g) return g; }catch(_){} }
-
-    // UIBuild-Varianten (bei deinen Demos häufig)
-    const U = window.UIBuild || window.BuildUI || {};
-    if (U.registry) return U.registry;              // Map oder Array
-    if (U.data?.buildings) return U.data.buildings; // Array oder Map
-    if (U.buildings) return U.buildings;
-
-    return null;
-  }
-
-  function nor(entry, fallbackKey){
+  // Normalisierung eines beliebigen Registry/JSON-Eintrags auf ein Anzeige-Objekt
+  function normalize(entry, fallbackKey){
     entry = entry || {};
     const id   = toKey(entry.id || entry.key || fallbackKey || entry.name || entry.title);
     const name = toKey(entry.title || entry.name || id);
@@ -93,56 +78,56 @@
     const cost = entry.cost || entry.price || entry.requirements?.cost || entry.resources || null;
     const size = extractSize(entry);
     const icon = entry.icon || entry.sprite || entry.img || '';
-    return { id, name, category:cat, size, cost, icon, _src: entry };
+    return { id, name, category:cat, size, cost, icon, _raw: entry };
   }
 
-  function harvestRegistry(){
-    const raw = getRegistryRaw();
-    if (!raw) return [];
-
-    if (Array.isArray(raw)) return raw.map(nor);
-
-    if (typeof raw==='object'){
-      const sub = raw.buildings || raw.items || raw.list || raw.data || null;
-      if (Array.isArray(sub)) return sub.map(nor);
-      if (sub && typeof sub==='object') return Object.entries(sub).map(([k,v])=>nor(v,k));
-      return Object.entries(raw).map(([k,v])=>nor(v,k));
+  // Registry → Buildings robust ermitteln (unterstützt frühere/versch. Strukturen)
+  function harvestFromRegistry(){
+    const R = window.Registry || window.BuildRegistry || window.registry || {};
+    // direkte, häufigste Varianten
+    if (Array.isArray(R.buildings)) return R.buildings.map(normalize);
+    if (R.data?.buildings){
+      const b = R.data.buildings;
+      if (Array.isArray(b)) return b.map(normalize);
+      if (typeof b==='object') return Object.entries(b).map(([k,v])=>normalize(v,k));
+    }
+    // generischer Fallback: wenn ein Objekt mit ähnlichen Feldern vorliegt
+    if (typeof R==='object'){
+      const sub = R.buildings || R.items || R.list || R.data || null;
+      if (Array.isArray(sub)) return sub.map(normalize);
+      if (sub && typeof sub==='object') return Object.entries(sub).map(([k,v])=>normalize(v,k));
     }
     return [];
   }
 
+  // Fallback: data/buildings.json (nur Ansicht, kein Muss)
   async function fetchBuildingsJSON(){
     const CAND = ['data/buildings.json','./data/buildings.json','../data/buildings.json'];
     for (const url of CAND){
       try{
-        const res = await fetch(url, {cache:'no-cache'});
+        const res = await fetch(url, { cache:'no-cache' });
         if (!res.ok) continue;
         const json = await res.json();
-        if (Array.isArray(json)) return json.map(nor);
+        if (Array.isArray(json)) return json.map(normalize);
         if (json && typeof json==='object'){
           const sub = json.buildings || json.items || json.list || json.data || json;
-          if (Array.isArray(sub)) return sub.map(nor);
-          if (sub && typeof sub==='object') return Object.entries(sub).map(([k,v])=>nor(v,k));
+          if (Array.isArray(sub)) return sub.map(normalize);
+          if (sub && typeof sub==='object') return Object.entries(sub).map(([k,v])=>normalize(v,k));
         }
       }catch(_){}
     }
     return [];
   }
 
+  // Kategorien aus Liste ableiten
   function deriveCategories(list){
     return Array.from(new Set(list.map(x=>x.category).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
   }
-  function getUIBuildCategories(){
-    const u = window.UIBuild || window.BuildUI || {};
-    const direct = u.categories || u.category || u.menu?.categories || null;
-    if (Array.isArray(direct)) return direct.map(toKey).filter(Boolean);
-    return null;
-  }
+
+  // Validierung (Duplikate, fehlende Angaben)
   function validate(list){
     const warnings = [];
     const seen = new Set();
-    const cats = deriveCategories(list);
-    const uicats = getUIBuildCategories();
 
     for (const it of list){
       if (!it.id) warnings.push({type:'error', msg:`Eintrag ohne ID`, it});
@@ -154,15 +139,11 @@
       if (seen.has(key)) warnings.push({type:'warn', msg:`Duplikat-ID: ${it.id}`});
       seen.add(key);
     }
-    if (uicats){
-      const unknown = cats.filter(c => !uicats.includes(c));
-      for (const c of unknown) warnings.push({type:'warn', msg:`Kategorie unbekannt im UI-Build: ${c}`});
-    }else{
-      warnings.push({type:'info', msg:`UI-Build-Kategorien nicht gefunden (optional)`});
-    }
-    return { warnings, cats, uicats };
+
+    return { warnings, cats: deriveCategories(list) };
   }
 
+  // Download-Helfer
   function download(name, blob){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob); a.download=name;
@@ -170,8 +151,12 @@
     URL.revokeObjectURL(a.href);
   }
 
-  /* --------------------------------- UI ------------------------------------- */
+  /* ================================ [KLASSE] ================================ */
+  // (Keine Klasse nötig – einfache Modulstruktur)
+
+  /* ============================== [HAUPTLOGIK] ============================== */
   window.Inspector?.mount?.('build', (host)=>{
+    // --- Grundgerüst ---------------------------------------------------------
     host.innerHTML = `
       <div class="pad">
         <div class="toolbar" style="flex-wrap:wrap;gap:8px">
@@ -189,8 +174,8 @@
         <div id="empty-box" class="warn" style="display:none;margin-bottom:8px">
           <strong>Keine Einträge gefunden.</strong>
           <div style="opacity:.9;margin-top:4px">
-            Registry/ UI-Build sind leer <em>und</em> es konnte kein <code>data/buildings.json</code> geladen werden
-            (oder es ist leer). Prüfe Pfad & Lade-Reihenfolge. Danach „Refresh“ klicken.
+            Registry ist leer <em>und</em> es konnte kein <code>data/buildings.json</code> geladen werden.
+            Prüfe Pfad & Lade-Reihenfolge. Danach „Refresh“ klicken.
           </div>
         </div>
 
@@ -213,6 +198,7 @@
       </div>
     `;
 
+    // --- UI-Refs -------------------------------------------------------------
     const ui = {
       hint:  $('#b-hint', host),
       info:  $('#build-info', host),
@@ -224,6 +210,7 @@
       head: $('#tbl-build thead', host)
     };
 
+    // --- Zustand -------------------------------------------------------------
     let rows = [];
     let filterCat = '';
     let filterQ = '';
@@ -231,19 +218,7 @@
     let sortDir = 1;
     let source = '…';
 
-    async function loadData(){
-      // 1) Registry/UI-Build
-      const list = harvestRegistry();
-      if (list.length){
-        source = 'registry/ui-build';
-        return list;
-      }
-      // 2) Fallback: JSON
-      const fb = await fetchBuildingsJSON();
-      source = 'buildings.json';
-      return fb;
-    }
-
+    // --- Render-Funktionen ---------------------------------------------------
     function renderInfo(){
       ui.info.textContent = `Quelle: ${source} (Einträge: ${rows.length})`;
       ui.empty.style.display = rows.length ? 'none' : 'block';
@@ -286,7 +261,7 @@
       }).join('');
     }
     function renderValidation(){
-      const {warnings, cats, uicats} = validate(rows);
+      const {warnings, cats} = validate(rows);
       if (!warnings.length){
         ui.valBox.innerHTML = `✅ Keine Probleme gefunden. Kategorien: ${cats.join(', ')}`;
         return;
@@ -295,26 +270,34 @@
         const sym = w.type==='error'?'❌' : w.type==='warn'?'⚠️' : 'ℹ';
         return `${sym} ${w.msg}`;
       });
-      const catInfo = `Kategorien (Registry): ${cats.join(', ')}`
-        + (uicats ? ` – UI-Build: ${uicats.join(', ')}` : '');
       ui.valBox.innerHTML = `
         <div class="warn" style="margin-top:6px">
           <div><strong>Validierung:</strong></div>
           <div>${lines.join('<br>')}</div>
-          <div style="margin-top:6px;opacity:.85">${catInfo}</div>
+          <div style="margin-top:6px;opacity:.85">Kategorien (Registry): ${cats.join(', ')}</div>
         </div>`;
     }
 
+    // --- Daten laden ---------------------------------------------------------
+    async function loadData(){
+      const list = harvestFromRegistry();
+      if (list.length){ source='registry'; return list; }
+      const fb = await fetchBuildingsJSON();
+      source = 'buildings.json';
+      return fb;
+    }
+
+    // --- Aktionen ------------------------------------------------------------
     async function doRefresh(){
       ui.hint.textContent='lädt…';
       try{
         rows = await loadData();
-        logI('Quelle:', source, 'Einträge:', rows.length);
+        LOG('Quelle:', source, 'Einträge:', rows.length);
         renderInfo();
         renderCatFilter();
         renderTable();
       }catch(e){
-        logE(e); ui.hint.textContent='Fehler beim Laden';
+        ERR(e); ui.hint.textContent='Fehler beim Laden';
       }finally{
         setTimeout(()=> ui.hint.textContent='', 1200);
       }
@@ -328,8 +311,9 @@
       setTimeout(()=> ui.hint.textContent='', 1200);
     }
     function doValidate(){ renderValidation(); ui.hint.textContent='Validierung ausgeführt'; setTimeout(()=> ui.hint.textContent='', 1200); }
-    function openBuildMenu(){ window.dispatchEvent(new Event('req:buildmenu:show')); ui.hint.textContent='Build-Menü angefordert'; setTimeout(()=> ui.hint.textContent='',1200); }
+    function openBuildMenu(){ dispatchEvent(new Event('req:buildmenu:show')); ui.hint.textContent='Build-Menü angefordert'; setTimeout(()=> ui.hint.textContent='',1200); }
 
+    // --- UI-Events -----------------------------------------------------------
     ui.head.addEventListener('click', e=>{
       const th=e.target.closest('th'); if(!th) return;
       const k=th.dataset.k; if(!k) return;
@@ -344,14 +328,18 @@
     $('#b-validate', host).addEventListener('click', doValidate);
     $('#b-buildmenu', host).addEventListener('click', openBuildMenu);
 
-    window.addEventListener('cb:registry:ready', doRefresh);
-    window.addEventListener('cb:registry:snapshot', doRefresh);
-    window.addEventListener('cb:insp:tab:change', e=>{ if (e.detail?.tab==='build') doRefresh(); });
+    // --- System-Events -------------------------------------------------------
+    addEventListener('cb:registry:ready', doRefresh);
+    addEventListener('cb:registry:snapshot', doRefresh);
+    addEventListener('cb:insp:tab:change', e=>{ if (e.detail?.tab==='build') doRefresh(); });
 
-    // Debug-Hook
+    // --- Debug/Dev-Hook ------------------------------------------------------
     (window.__inspBuild = window.__inspBuild || {}).refresh = doRefresh;
 
+    // --- Start ---------------------------------------------------------------
     doRefresh();
-    logO('bereit v18.15.1');
+    OK('bereit v25.10.25-clean');
   });
+
 })();
+</script>
