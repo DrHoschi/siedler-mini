@@ -1,6 +1,6 @@
 /* ============================================================================
  * Neue Siedler – Entities.Registry-Bridge
- * Dateiname: assets/core/entities.registry.js
+ * Dateiname: core/entities.registry.js
  * Version: v1.1.2
  *
  * Aufgabe:
