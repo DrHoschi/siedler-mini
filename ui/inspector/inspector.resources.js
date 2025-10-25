@@ -1,4 +1,3 @@
-<script>
 /* ============================================================================
  * Datei   : ui/inspector/inspector.resources.js
  * Projekt : Neue Siedler – Inspector (Resources-Tab)
@@ -375,4 +374,3 @@
   });
 
 })();
-</script>
