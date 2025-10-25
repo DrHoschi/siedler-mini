@@ -60,8 +60,15 @@
 <script src="core/core.render.js"></script>
 <script src="core/camera.js"></script>
 <script src="core/zoom.js"></script>
- 
+ <!-- <script src="core/core.input.js?"></script>  -->
+<script src="core/core.entities.js"></script>
+<script src="core/core.pfglue.js"></script>
+<script src="core/carrier.js"></script>
 
+  <!-- [4] Overlays (einheitliche Initialisierung nur aus boot.js!) -->
+  <script src="core/overlay-hooks.js"></script>
+  <script src="core/path-overlay.js"></script>
+  <script src="core/unit-overlay.js"></script>
   
   <!-- 3) INSPECTOR – sehr früh laden: hookt console/CBLog direkt nach Start
          Overlay bleibt standardmäßig geschlossen.
@@ -117,27 +124,14 @@
          'cb:registry:ready' (core/registry.js)
          Siehe Registry-Patch im Lastenheft. -->
   
-  <!-- Core Engine -->
-    <script src="core/map-runtime.js"></script>
-    <script src="core/carrier.js"></script>
+  <!-- Core Engine 
+    <script src="core/map-runtime.js"></script> -->
+
 <!-- <script src="core/core.production.js"></script> -->
     <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
 
 <!-- Eingabe + Platzier-Overlay -->
-<!-- <script src="core/core.input.js?"></script> 
-<script>
-if (!window.__INPUT_BRIDGE__) {
-  window.__INPUT_BRIDGE__ = 1;
-  addEventListener('cb:hover-tile', (ev)=>{
-    const {tx,ty}=ev.detail||{}; if(tx==null||ty==null) return;
-    dispatchEvent(new CustomEvent('req:place:cursor',{detail:{tx,ty}}));
-  });
-  addEventListener('cb:place-building', (ev)=>{
-    const {x,y}=ev.detail||{}; if(x==null||y==null) return;
-    dispatchEvent(new CustomEvent('req:place:confirm',{detail:{tx:x,ty:y}}));
-  });
-}
-</script> -->
+
 
 <script src="core/input.bridge.js?v=25.10.26-sync1"></script>
   
@@ -157,8 +151,8 @@ if (!window.__INPUT_BRIDGE__) {
  
 
 
-  <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) -->
-  <script src="core/path-overlay.js?v=25.10.19-final2"></script>
+  <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) 
+  <script src="core/path-overlay.js?v=25.10.19-final2"></script> -->
 
 
   
