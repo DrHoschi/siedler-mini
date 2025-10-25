@@ -128,7 +128,17 @@
     out.sort((a,b) => (a.order||999) - (b.order||999));
     return out;
   }
-
+  
+// Liefert die Werte-Map mit ALLEN Resource-IDs (Definitionsliste ∪ bisherige Werte)
+function getResourceValuesFull(REG) {
+  const V = (window.RegistryValues = window.RegistryValues || {});
+  try {
+    const defs = (REG?.list('resources') || []).map(r => r.id);
+    for (const id of defs) if (V[id] == null) V[id] = 0;  // fehlende auf 0 setzen
+  } catch(_) {}
+  return V;
+}
+  
   // -------------------------------------------------------------------------
   // [Registry-Klasse]
   // -------------------------------------------------------------------------
