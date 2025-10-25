@@ -44,12 +44,21 @@
        SCRIPTS – LADEREIHENFOLGE (kritisch!)
        ========================================================= -->
 
-  <!-- 1) Logging/Polyfills (falls vorhanden) -->
-  <script src="core/cblog.polyfill.js?v=25.10.19-final2"></script>
+  <!-- 1) Basissystem -->
+  <script src="core/cblog.polyfill.js"></script>
+  <script src="core/eventbus.js"></script>
+  <script src="core/core.env.js"></script>
+  
+  <!-- [2] Assets/Boot/Registry -->
+  <script src="core/asset.js"></script>
+  <script src="core/boot.js"></script>
+  <script src="core/registry.js"></script> <!-- Registry: Single Source of Truth (IDs, Farben, Icons) -->
 
-  <!-- 2) Optionaler Mini-EventBus (falls vorhanden) -->
-  <script src="core/eventbus.js?v=25.10.19-final2"></script>
+  <!-- [3] Engine -->
+<script src="core/game.js?v=25.10.19-final2"></script>
 
+
+  
   <!-- 3) INSPECTOR – sehr früh laden: hookt console/CBLog direkt nach Start
          Overlay bleibt standardmäßig geschlossen.
          <!-- Monolith-Inspector: Core + Modules -->
@@ -105,13 +114,10 @@
          Siehe Registry-Patch im Lastenheft. -->
   
   <!-- Core Engine -->
-  <script src="core/asset.js?v=25.10.19-final2"></script>
-  <script src="core/registry.js?v=25.10.19-final2"></script>
-  <script src="core/map-runtime.js"></script>
+    <script src="core/map-runtime.js"></script>
     <script src="core/carrier.js"></script>
 <!-- <script src="core/core.production.js"></script> -->
-  <script src="core/game.js?v=25.10.19-final2"></script>
-  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
+    <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
 
 <!-- Eingabe + Platzier-Overlay -->
 <!-- <script src="core/core.input.js?"></script> 
@@ -153,9 +159,7 @@ if (!window.__INPUT_BRIDGE__) {
 
   
   <!-- 8) Boot + Spiel -->
-  <script src="ui/ui-place.js?v=24.2.0"></script>
-  <script src="core/boot.js?v=25.10.19-final2"></script>
-    
+  <script src="ui/ui-place.js?v=24.2.0"></script>   
   
     
   <!-- 9) Layout-Glue ganz zum Schluss: schaltet NACH Spielstart auf Spiel-Layout -->
