@@ -1,170 +1,246 @@
 /* ============================================================================
- * Datei: core.pfglue.js
- * Projekt: Siedler-Mini
- * Version: v17.0.0
- * Zweck:
- *   - PathFinder-Integration (lazy init + Polling)
- *   - Road-/Obstacle-Provider an PF durchreichen
- *   - Debug-Overlay: separates Canvas (#pf-overlay) + eigener RAF-Loop
- *   - Event-Hooks:
- *       • cb:toggle-path-overlay  → window.DEBUG_PATH_OVERLAY (true/false)
- *       • cb:pf-heat-reset        → PathFinder.resetHeat() (wenn vorhanden)
- *       • cb:request-repaint      → Overlay neu zeichnen (soft)
- *   - Startet automatisch, sobald Engine/Spiel meldet, dass es läuft
- *     (cb:engine-ready / cb:game-started)
- * Hinweise:
- *   - Kein Invasiver Eingriff in dein monolithisches game.js nötig.
- *   - Overlay zeichnet NUR, wenn window.DEBUG_PATH_OVERLAY === true.
+ * Datei   : core/pfglue.js
+ * Projekt : Neue Siedler
+ * Version : v25.10.25-final
+ *
+ * Zweck   : Pathfinding-"Glue" + Overlay
+ *           – Zeichnet Pfad/Heatmap über dem Spiel-Canvas (#game), wenn aktiviert
+ *           – Koppelt sich an GameCamera (x,y,zoom in Weltpixeln)
+ *           – Arbeitet mit AdFinder (optional) – ohne harte Abhängigkeit
+ *
+ * Events (listen):
+ *   • cb:toggle-path-overlay { enabled:boolean }    // Overlay an/aus
+ *   • cb:pf-heat-reset       {}                     // AdFinder.resetHeat?()
+ *   • cb:camera-change       { x,y,zoom }           // aus core/camera.js
+ *   • cb:path:show           { path:[{x,y},...] }   // Pfad-Vorschau setzen
+ *
+ * Public (global):
+ *   window.PathOverlay = {
+ *     setPath(pathArray),   // manuell Pfad setzen
+ *     clear(),              // Pfad löschen
+ *     enable(bool),         // Overlay an/aus
+ *     redraw()              // sofort zeichnen
+ *   }
  * ============================================================================ */
-(function(ns){
+(() => {
   'use strict';
-  if (!ns || !ns.state) { console.error('[pfglue] GameCore.env fehlt'); return; }
 
-  var S = ns.state;
-  var U = ns.util;
+  const TAG  = '[pfglue]';
+  const LOG  = (...a)=> (window.CBLog?.info  ?? console.log )(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn  ?? console.warn)(TAG, ...a);
 
-  var PF_READY = false;
-  var initTimer = 0;
+  const VERSION = 'v25.10.25-final';
 
-  // -------------- PF-Init (lazy, robust) -------------------------------------
-  function tryPFInit(){
-    if (PF_READY) return;
-    try{
-      if (!window.PathFinder || typeof PathFinder.init!=='function') return;
+  // ---------- State ----------------------------------------------------------
+  let enabled  = false;
+  let canvas   = null;     // #game
+  let overlay  = null;     // <canvas id="pf-overlay">
+  let octx     = null;     // 2D-Context
+  let cam      = { x:0, y:0, zoom:1 };     // Weltpixel
+  let tileSize = 64;
 
-      // Mapgröße verfügbar?
-      var w = S.map && S.map.width|0, h = S.map && S.map.height|0;
-      if (!w || !h) return;
+  // Pfad-Vorschau (Liste von Welt-Tile-Koordinaten → wir zeichnen in Pixeln)
+  // Erwartet: [{x, y}, ...]  (Tile-Koords)
+  let previewPath = null;
 
-      // PF initialisieren
-      PathFinder.init(function(){ return { w:w, h:h }; });
+  // ---------- Helpers --------------------------------------------------------
+  const TileSize = ()=> (window.Game?.tileSize || window.Entities?.state?.tile || tileSize || 64);
 
-      // Provider setzen
-      if (typeof PathFinder.setObstacleProvider==='function' && ns.Entities?.getObstacleAt){
-        PathFinder.setObstacleProvider(ns.Entities.getObstacleAt);
-      }
-      if (typeof PathFinder.setRoadMask==='function' && S.roads){
-        PathFinder.setRoadMask(S.roads);
-      }
+  function getStage(){
+    return document.getElementById('game')
+        || document.querySelector('canvas[data-role="map"]')
+        || document.querySelector('canvas');
+  }
 
-      PF_READY = true;
-      ns.ok('[PF] init OK '+w+'x'+h+' (v17.0.0)');
-    }catch(e){
-      ns.warn('[PF] init Fehler: '+(e && e.message));
+  function ensureOverlay(){
+    if (overlay && octx) return true;
+    const base = getStage();
+    if (!base) return false;
+
+    overlay = document.getElementById('pf-overlay');
+    if (!overlay){
+      overlay = document.createElement('canvas');
+      overlay.id = 'pf-overlay';
+      overlay.style.position = 'absolute';
+      overlay.style.pointerEvents = 'none';
+      overlay.style.left = '0px';
+      overlay.style.top  = '0px';
+      overlay.style.zIndex = '50'; // über Map/unter HUD anpassen falls nötig
+      (base.parentElement || document.body).appendChild(overlay);
     }
+    octx = overlay.getContext('2d');
+    syncOverlayRect();
+    return true;
   }
 
-  function startPFInitPolling(){
-    if (initTimer) return;
-    initTimer = setInterval(function(){
-      if (PF_READY){ clearInterval(initTimer); initTimer=0; return; }
-      tryPFInit();
-    }, 200);
-  }
-
-  // -------------- Overlay-Canvas (#pf-overlay) --------------------------------
-  var overlayCanvas = null, overlayCtx = null, rafId = 0;
-
-  function ensureOverlayCanvas(){
-    if (overlayCanvas && overlayCtx) return;
-
-    var base = document.getElementById('game') || document.getElementById('stage') || document.querySelector('canvas');
-    if (!base) return;
-
-    overlayCanvas = document.getElementById('pf-overlay');
-    if (!overlayCanvas){
-      overlayCanvas = document.createElement('canvas');
-      overlayCanvas.id = 'pf-overlay';
-      overlayCanvas.style.position = 'absolute';
-      overlayCanvas.style.pointerEvents = 'none';
-      overlayCanvas.style.left = '0px';
-      overlayCanvas.style.top  = '0px';
-      overlayCanvas.style.zIndex = '10';
-      // Canvas im selben Container wie base platzieren (falls vorhanden)
-      (base.parentElement || document.body).appendChild(overlayCanvas);
-    }
-    overlayCtx = overlayCanvas.getContext('2d');
-    syncOverlaySize();
-    window.addEventListener('resize', syncOverlaySize);
-    window.addEventListener('orientationchange', syncOverlaySize);
-  }
-
-  function syncOverlaySize(){
-    var base = document.getElementById('game') || document.getElementById('stage') || document.querySelector('canvas');
-    if (!base || !overlayCanvas) return;
-    var rect = base.getBoundingClientRect();
-    overlayCanvas.width  = Math.max(1, Math.floor(rect.width));
-    overlayCanvas.height = Math.max(1, Math.floor(rect.height));
-    overlayCanvas.style.left = Math.floor(rect.left + window.scrollX) + 'px';
-    overlayCanvas.style.top  = Math.floor(rect.top  + window.scrollY) + 'px';
-    overlayCanvas.style.width  = overlayCanvas.width + 'px';
-    overlayCanvas.style.height = overlayCanvas.height + 'px';
+  function syncOverlayRect(){
+    const base = getStage(); if (!base || !overlay) return;
+    const r = base.getBoundingClientRect();
+    overlay.width  = Math.max(1, Math.floor(r.width));
+    overlay.height = Math.max(1, Math.floor(r.height));
+    overlay.style.left   = Math.floor(r.left + window.scrollX) + 'px';
+    overlay.style.top    = Math.floor(r.top  + window.scrollY) + 'px';
+    overlay.style.width  = overlay.width  + 'px';
+    overlay.style.height = overlay.height + 'px';
   }
 
   function clearOverlay(){
-    if (!overlayCtx || !overlayCanvas) return;
-    overlayCtx.clearRect(0,0, overlayCanvas.width, overlayCanvas.height);
+    if (octx && overlay) octx.clearRect(0,0, overlay.width, overlay.height);
   }
 
-  function overlayLoop(){
-    rafId = window.requestAnimationFrame(overlayLoop);
-    if (!window.DEBUG_PATH_OVERLAY){ clearOverlay(); return; }
-    ensureOverlayCanvas(); if (!overlayCtx) return;
-    syncOverlaySize();
+  /** Weltpixel → Overlayscreen (CSS) unter aktueller Kamera/Zoom */
+  function worldToScreen(wx, wy){
+    // Kamera setzt links/oben; Zoom skaliert
+    const sx = (wx - cam.x) * cam.zoom;
+    const sy = (wy - cam.y) * cam.zoom;
+    return { x: sx, y: sy };
+  }
 
-    // Zeichnen: PathFinder liefert Heatmap/Pfade
-    try{
-      if (PF_READY && window.PathFinder && typeof PathFinder.drawOverlay==='function'){
-        // Kamera in Tile-Koords + Zoom weiterreichen
-        var cam = S.cam || {x:0,y:0,zoom:1};
-        var safeCam = { x:(cam.x / (S.map?.tile||64)), y:(cam.y / (S.map?.tile||64)), zoom:cam.zoom||1 };
-        PathFinder.drawOverlay(overlayCtx, safeCam);
+  function drawCircle(x,y,r){
+    octx.beginPath();
+    octx.arc(x, y, r, 0, Math.PI*2);
+    octx.stroke();
+  }
+
+  // ---------- Drawing ---------------------------------------------------------
+  function drawHeatmapIfAvailable(){
+    // Erwartete optionale API:
+    //  – AdFinder.getHeat() → { width, height, data: Float32Array|number[] } mit „Intensität je Tile“
+    // Zeichnen: kleine Quadrate je Tile mit Alpha/Intensität.
+    if (!window.AdFinder?.getHeat) return;
+
+    let heat;
+    try { heat = window.AdFinder.getHeat(); } catch { return; }
+    if (!heat || !heat.data || !heat.width || !heat.height) return;
+
+    const T = TileSize();
+    const w = heat.width, h = heat.height;
+    const data = heat.data;
+
+    // Style
+    octx.save();
+    octx.globalAlpha = 0.25;
+    for (let ty=0, i=0; ty<h; ty++){
+      for (let tx=0; tx<w; tx++, i++){
+        const v = Number(data[i] ?? 0); // 0..1 oder beliebig
+        if (!v) continue;
+        // Farbskala: rot (hoch) → gelb → transparent
+        octx.fillStyle = `rgba(${Math.min(255, Math.floor(255*v))}, ${Math.min(255, Math.floor(200*(1-v)))}, 0, 0.6)`;
+        const wx = tx*T, wy = ty*T;
+        const p  = worldToScreen(wx, wy);
+        const s  = T * cam.zoom;
+        // Sichtbarkeit grob clippen
+        if (p.x+s<0 || p.y+s<0 || p.x>overlay.width || p.y>overlay.height) continue;
+        octx.fillRect(p.x, p.y, s, s);
       }
-    }catch(_){}
+    }
+    octx.restore();
   }
 
-  function startOverlayLoop(){
-    if (!('requestAnimationFrame' in window)) return;
-    if (rafId) cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(overlayLoop);
+  function drawPreviewPath(){
+    if (!previewPath || !previewPath.length) return;
+
+    const T = TileSize();
+
+    octx.save();
+    octx.lineWidth = Math.max(1, 2 * cam.zoom);
+    octx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
+    octx.fillStyle   = 'rgba(0, 200, 255, 0.35)';
+
+    // Pfad als Linienzug
+    octx.beginPath();
+    for (let i=0; i<previewPath.length; i++){
+      const pt = previewPath[i];
+      const wx = (pt.x|0) * T + T/2;
+      const wy = (pt.y|0) * T + T/2;
+      const s  = worldToScreen(wx, wy);
+      if (i===0) octx.moveTo(s.x, s.y);
+      else       octx.lineTo(s.x, s.y);
+    }
+    octx.stroke();
+
+    // Punkte markieren
+    for (let i=0; i<previewPath.length; i++){
+      const pt = previewPath[i];
+      const wx = (pt.x|0) * T + T/2;
+      const wy = (pt.y|0) * T + T/2;
+      const s  = worldToScreen(wx, wy);
+      drawCircle(s.x, s.y, Math.max(2, 3*cam.zoom));
+    }
+
+    octx.restore();
   }
 
-  // -------------- Events / Hooks ---------------------------------------------
-  // Overlay-Schalter (vom Inspector-Tab)
-  U.on('cb:toggle-path-overlay', function(e){
-    var enabled = !!(e && e.detail && e.detail.enabled);
-    window.DEBUG_PATH_OVERLAY = enabled;
-    ns.ok('[pfglue] overlay='+(enabled?'AN':'AUS'));
+  function redraw(){
+    if (!enabled) { clearOverlay(); return; }
+    if (!ensureOverlay()) return;
+    syncOverlayRect();
+    clearOverlay();
+    drawHeatmapIfAvailable();
+    drawPreviewPath();
+  }
+
+  // ---------- Wiring ----------------------------------------------------------
+  function enableOverlay(v){
+    enabled = !!v;
+    redraw();
+  }
+
+  window.addEventListener('cb:toggle-path-overlay', (e)=>{
+    const on = !!(e?.detail?.enabled);
+    enableOverlay(on);
+    LOG('overlay=', on?'AN':'AUS');
   });
 
-  // Heatmap Reset (optional)
-  U.on('cb:pf-heat-reset', function(){
+  window.addEventListener('cb:pf-heat-reset', ()=>{
     try{
-      if (window.PathFinder && typeof PathFinder.resetHeat==='function'){
-        PathFinder.resetHeat();
-        ns.ok('[PF] Heatmap reset');
-      } else {
-        ns.warn('[PF] resetHeat() nicht verfügbar.');
-      }
-    }catch(_){}
+      window.AdFinder?.resetHeat?.();
+      LOG('Heatmap reset.');
+    }catch(e){ WARN('resetHeat nicht verfügbar:', e?.message||e); }
   });
 
-  // Soft repaint request
-  U.on('cb:request-repaint', function(){ /* Overlay-Loop tickt ohnehin */ });
+  // Kamera koppeln
+  window.addEventListener('cb:camera-change', (e)=>{
+    const d = e?.detail || {};
+    if (typeof d.x   === 'number') cam.x   = d.x;
+    if (typeof d.y   === 'number') cam.y   = d.y;
+    if (typeof d.zoom=== 'number') cam.zoom= d.zoom;
+    redraw();
+  });
 
-  // Wenn Engine/Spiel startet → PF-Init & Overlay loslegen
-  U.on('cb:engine-ready', function(){ startPFInitPolling(); startOverlayLoop(); });
-  U.on('cb:game-started', function(){ tryPFInit(); startPFInitPolling(); startOverlayLoop(); });
+  // Pfad-Vorschau setzen/löschen
+  window.addEventListener('cb:path:show', (e)=>{
+    const p = e?.detail?.path;
+    previewPath = (Array.isArray(p) && p.length) ? p : null;
+    redraw();
+  });
 
-  // Fallback: nach kurzer Zeit immerhin probieren
-  setTimeout(function(){ tryPFInit(); startPFInitPolling(); }, 1500);
+  // Größenänderungen mitnehmen
+  ['resize','orientationchange'].forEach(ev=>{
+    window.addEventListener(ev, ()=>{ syncOverlayRect(); redraw(); });
+  });
 
-  // -------------- Export ------------------------------------------------------
-  ns.PF = {
-    init: tryPFInit,
-    startOverlayLoop: startOverlayLoop
+  // Auto-Setup
+  function init(){
+    canvas = getStage();
+    tileSize = TileSize();
+    if (!canvas){ WARN('Kein Canvas (#game) gefunden – pfglue bleibt passiv.'); return; }
+    ensureOverlay();
+    redraw();
+    LOG('Modul geladen', VERSION);
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, { once:true });
+  } else {
+    init();
+  }
+
+  // ---------- Exports ---------------------------------------------------------
+  window.PathOverlay = {
+    setPath(path){ previewPath = (Array.isArray(path)&&path.length)? path : null; redraw(); },
+    clear(){ previewPath = null; redraw(); },
+    enable: enableOverlay,
+    redraw
   };
-
-  ns.ok('[pfglue] Modul geladen (v17.0.0)');
-
-})(window.GameCore = window.GameCore || {});
+})();
