@@ -27,7 +27,7 @@
       hud:   $('#hud-top'),
       play:  $('#play-area'),
       game:  $('#game'),
-      build: $('#build-panel'),
+      build: $('#build-dock'),
     },
     isPortrait: () => window.matchMedia?.('(orientation: portrait)')?.matches ?? (window.innerHeight >= window.innerWidth),
   };
@@ -119,7 +119,7 @@
       layout.el.hud   = $('#hud-top');
       layout.el.play  = $('#play-area');
       layout.el.game  = $('#game');
-      layout.el.build = $('#build-panel');
+      layout.el.build = $('#build-dock');
     }
     applyPlaySquare();
     initObservers();
