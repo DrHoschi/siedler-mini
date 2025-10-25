@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/registry.js
  * Projekt  : Neue Siedler (Epoche 1 – Basis)
- * Version  : v25.10.25-final
+ * Version  : v25.10.25-final+publish
  * Zweck    : Zentrale Registry (Buildings / Units / Resources / Balance)
  *
  * Lädt & normalisiert:
@@ -10,30 +10,33 @@
  *  - data/balance.json     → balance{}
  *  - data/resources.json   → Definitionsliste der Ressourcen (IDs, Icons, Epoche)
  *
- * Öffentliche API (global: window.Registry):
+ * Öffentliche API (global: window.Registry / REG):
  *  - isReady()                    → boolean
- *  - onReady(cb)                  → führt cb nach cb:registry:ready aus (sofort, falls schon bereit)
+ *  - onReady(cb)                  → cb nach cb:registry:ready (sofort, falls bereit)
  *  - list(kind, {epoche?,category?})
  *  - get(kind, id)
- *  - where(kind, predFn)          → Array-Filter-Helfer (für Bridge/Inspector)
- *  - upsert(kind, item)           → einfügen/aktualisieren (id Pflicht)
+ *  - where(kind, predFn)
+ *  - upsert(kind, item)
  *  - balance() / categories() / iconsBase()
  *  - snapshot()                   → tiefe Kopie der Daten + Meta
  *
  * Events:
- *  - cb:registry:ready   { ok:true, counts:{buildings,units,resources} }
- *  - cb:registry:error   { ok:false, message }
- *  - req:registry:snapshot   → cb:registry:snapshot { snapshot }
- *  - req:res:snapshot        → cb:res:snapshot      { resources }  (Live-Werte)
+ *  - cb:registry:ready      { ok:true, counts:{buildings,units,resources} }
+ *  - cb:registry:snapshot   { buildings[], categories[], resources[]? (Werte s.u.) }
+ *  - cb:registry:error      { ok:false, message }
+ *  - req:registry:snapshot  → cb:registry:snapshot { snapshot }
+ *  - req:res:snapshot       → cb:res:snapshot { resources } (Live-Werte)
  *
  * Live-Ressourcen:
  *  - window.RegistryValues (globaler langlebiger Speicher, z. B. { wood:0, stone:0, ... })
- *  - Spiegel unter Registry.resources und Registry.data.resources
+ *  - Spiegel unter Registry.data.resources (Werte-Map, kein Definitions-Array)
  *
- * Design-Notizen:
+ * Design:
  *  - Defensive Fetches (cache:no-store, Bust-Query)
- *  - Ready-Marker: Registry.__ready = true (für EntitiesRegistry-Bridge)
+ *  - Ready-Marker: Registry.__ready = true
  *  - Doppelte Ready-Events (window & document), damit Altcode sicher reagiert
+ *  - NEU: Öffentliche Spiegel unter Registry.data.{buildings,categories,resources}
+ *         → Inspector erkennt „Quelle: registry“ zuverlässig
  * ============================================================================ */
 (function(root, factory){
   root.Registry = factory();
@@ -182,6 +185,9 @@
         // Live-Res-Werte initialisieren/spiegeln
         this._setupResourceValuesOnce();
 
+        // >>> NEU: Öffentliche Spiegel publizieren (Inspector liest hieraus)
+        this._publishPublicData();
+
         // Ready-Events (window & document) + onReady-Queue leeren
         const counts = {
           buildings : this._data.buildings.length,
@@ -189,6 +195,14 @@
           resources : this._data.resources.length,
         };
         emit('cb:registry:ready', { ok:true, counts });
+
+        // >>> NEU: Sofort ein Snapshot-Event mit Kern-Arrays senden
+        emit('cb:registry:snapshot', {
+          buildings : this._data.buildings,
+          categories: this._meta.categories,
+          resources : window.RegistryValues || {} // Werte-Map (aktuelle Mengen)
+        });
+
         this._onReady.splice(0).forEach(fn => { try{ fn(); }catch(_){ } });
 
         LOG('bereit', counts);
@@ -285,11 +299,11 @@
         ids.forEach(id => { if (RES_VALUES[id] == null) RES_VALUES[id] = 0; });
       }catch(_){}
 
-      // Spiegel unter Registry.* (Inspektor schaut hier zuerst hin)
+      // Spiegel unter Registry.* (Inspector schaut hier zuerst hin)
       try{
         const R = (window.Registry = window.Registry || {});
-        R.resources = RES_VALUES;
         R.data = R.data || {};
+        // Werte-Map (Mengen) – NICHT die Definitionsliste
         R.data.resources = RES_VALUES;
       }catch(_){}
 
@@ -297,6 +311,20 @@
       window.addEventListener('req:res:snapshot', ()=>{
         emit('cb:res:snapshot', { resources: RES_VALUES });
       });
+    }
+
+    // ---- NEU: Öffentliche Spiegel bereitstellen (für Inspector/Tools) -------
+    _publishPublicData(){
+      try{
+        const R = (window.Registry = window.Registry || {});
+        R.data = R.data || {};
+        // !!! WICHTIG: Nur unter data/ spiegeln, um Methoden-Namen nicht zu überschreiben
+        R.data.buildings   = this._data.buildings;     // Referenz, stets aktuell
+        R.data.categories  = this._meta.categories;    // Referenz
+        // R.data.resources → wird in _setupResourceValuesOnce() gesetzt (Werte-Map)
+      }catch(e){
+        WARN('publish public data failed:', e?.message || e);
+      }
     }
   }
 
