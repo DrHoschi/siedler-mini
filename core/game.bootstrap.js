@@ -1,118 +1,162 @@
 /* ============================================================================
  * Datei   : core/game.bootstrap.js
  * Projekt : Neue Siedler
- * Version : v25.10.24-mapctrl
- * Zweck   : Boot ↔ Spiel verbinden, Canvas vorbereiten, Platzier-Controller
- * ========================================================================== */
+ * Version : v25.10.25-final
+ * Zweck   : Boot ↔ Spiel verbinden, Canvas vorbereiten, Map/Render sanft starten
+ *
+ * Struktur: Imports → Konstanten → Hilfsfunktionen → Klasse → Hauptlogik → Exports
+ *
+ * Events (listen):
+ *   • cb:boot:ready         – Boot-Phase abgeschlossen (UI/DOM steht)
+ *   • cb:assets-ready       – Assets geladen (Stub/real, detail.ok:boolean)
+ *   • cb:registry:ready     – Registry bereit
+ *   • cb:game-start         – expliziter Startschuss (optional)
+ *
+ * Events (emit):
+ *   • cb:game:initialized   – Szene initialisiert (Canvas ok, Map/Render bereit)
+ *   • cb:request-repaint    – nach Resize/Init einen Frame zeichnen
+ *
+ * Hinweise:
+ *   – Kein Platzier-Controller hier! → Das macht core/input.js.
+ *   – Kein eigener Render-Loop; Render-Shim zeichnet nur auf Nachfrage.
+ * ============================================================================ */
+(() => {
+  'use strict';
 
-(function(root, factory){
-  root.SiedlerGameBootstrap = factory();
-})(typeof window !== "undefined" ? window : this, function(){
+  const TAG  = '[bootstrap]';
+  const LOG  = (...a)=> (window.CBLog?.ok    ?? console.log )(TAG, ...a);
+  const INFO = (...a)=> (window.CBLog?.info  ?? console.info)(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn  ?? console.warn)(TAG, ...a);
 
-  const VER = "v25.10.24-mapctrl";
-  const LOG = (m)=> (window.CBLog?.ok || console.log)(`[bootstrap] ${m}`);
+  const VERSION = 'v25.10.25-final';
 
+  // ---------------------------------------------------------------------------
+  // Hilfsfunktionen
+  // ---------------------------------------------------------------------------
+  function EVT(name, detail){ try{ window.dispatchEvent(new CustomEvent(name,{detail})); }catch{} }
+
+  function getCanvas(){
+    return document.getElementById('game')
+        || document.querySelector('canvas[data-role="map"]')
+        || document.querySelector('canvas');
+  }
+
+  function sizeCanvasToWindow(canvas){
+    if (!canvas) return;
+    // Canvas in CSS-Pixeln, Map-Renderer kümmert sich um Transform/Zoom
+    canvas.width  = Math.max(1, Math.floor(window.innerWidth));
+    canvas.height = Math.max(1, Math.floor(window.innerHeight));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bootstrap-Klasse
+  // ---------------------------------------------------------------------------
   class GameBootstrap {
     constructor(){
-      // IDs an dein aktuelles Markup angepasst
-      this.canvas  = document.getElementById("game");
-      this.ctx     = this.canvas?.getContext("2d");
-      this.hudRoot = document.getElementById("hud-root");
+      this.canvas = getCanvas();
+      this.ctx    = this.canvas?.getContext('2d') || null;
 
-      // Guards
-      if (!this.canvas || !this.ctx) {
-        console.error("[bootstrap] Canvas #game fehlt!");
-        return;
+      if (!this.canvas || !this.ctx){
+        WARN('Canvas #game nicht gefunden – Bootstrap bleibt passiv.');
+      } else {
+        sizeCanvasToWindow(this.canvas);
+        this.drawSplash('Warte auf Start …');
+        // Resize mitnehmen
+        this._ro = new ResizeObserver(()=> {
+          sizeCanvasToWindow(this.canvas);
+          EVT('cb:request-repaint');
+        });
+        try { this._ro.observe(document.documentElement); } catch {}
+        window.addEventListener('resize', ()=>{ sizeCanvasToWindow(this.canvas); EVT('cb:request-repaint'); });
+        window.addEventListener('orientationchange', ()=>{ sizeCanvasToWindow(this.canvas); EVT('cb:request-repaint'); });
       }
 
-      // Boot & Start
-      addEventListener("cb:boot:ready",  () => this.onBootReady(),  { once:true });
-      addEventListener("cb:game:start",  () => this.onGameStart(),  { once:true });
+      // Warten auf Boot/Assets/Registry; Start flexibel
+      this._assetsReady   = false;
+      this._registryReady = false;
 
-      // Ressourcen-Snapshot initial, sobald Registry fertig
-      addEventListener("cb:registry:ready", () => {
-        try { dispatchEvent(new Event("req:res:snapshot")); } catch(e){}
+      window.addEventListener('cb:assets-ready', (e)=>{
+        this._assetsReady = !!(e?.detail?.ok ?? true);
+        INFO('assets-ready', this._assetsReady ? '✓' : '(!)');
+        this.maybeStart();
+      });
+
+      window.addEventListener('cb:registry:ready', ()=>{
+        this._registryReady = true;
+        INFO('registry-ready ✓');
+        this.maybeStart();
+      });
+
+      window.addEventListener('cb:boot:ready', ()=>{
+        INFO('boot-ready ✓');
+        this.maybeStart();
       }, { once:true });
 
-      // Resize
-      addEventListener("resize", () => this.resizeCanvas());
+      // Expliziter Startschuss (optional extern getriggert)
+      window.addEventListener('cb:game-start', ()=>{
+        INFO('game-start ✓');
+        this.startScene();
+      }, { once:true });
 
-      // --- Platzier-Controller (UI → Game events) -------------------------
-      this._placingId = null;
-
-      // Merke aktuell gewünschtes Gebäude
-      addEventListener('req:place:start', (ev)=>{
-        this._placingId = ev?.detail?.buildingId || null;
-      });
-
-      // Beende Plazieren (egal ob bestätigt oder abgebrochen)
-      addEventListener('cb:place:done', ()=>{
-        this._placingId = null;
-      });
-
-      // Pointer → Tile umrechnen
-      const toTile = (clientX, clientY) => {
-        const rect = this.canvas.getBoundingClientRect();
-        const x = clientX - rect.left;
-        const y = clientY - rect.top;
-        const ts = (window.Game?.tileSize)||32;
-        return { tx: Math.floor(x/ts), ty: Math.floor(y/ts) };
-      };
-
-      // Maus/Touch bewegt → Vorschau
-      const onMove = (x, y) => {
-        if (!this._placingId) return;
-        const {tx,ty} = toTile(x,y);
-        dispatchEvent(new CustomEvent('req:place:cursor', { detail:{ tx, ty, id: this._placingId }}));
-      };
-
-      // Klick/Touch → bestätigen
-      const onClick = (x, y) => {
-        if (!this._placingId) return;
-        const {tx,ty} = toTile(x,y);
-        dispatchEvent(new CustomEvent('req:place:confirm', { detail:{ tx, ty }}));
-      };
-
-      // Pointer-Handler
-      this.canvas.addEventListener('mousemove', (e)=> onMove(e.clientX, e.clientY), { passive:true });
-      this.canvas.addEventListener('click',     (e)=> onClick(e.clientX, e.clientY));
-      this.canvas.addEventListener('touchmove', (e)=> { const t=e.touches[0]; if(t) onMove(t.clientX,t.clientY); }, { passive:true });
-      this.canvas.addEventListener('touchend',  (e)=> { const t=e.changedTouches[0]; if(t) onClick(t.clientX,t.clientY); });
-
-      LOG(`initialisiert (${VER})`);
+      LOG(`geladen (${VERSION})`);
     }
 
-    onBootReady(){
-      LOG("Boot ready – Canvas baseline");
-      this.resizeCanvas();
-      this.drawSplash();
+    drawSplash(text){
+      if (!this.ctx) return;
+      const { width:w, height:h } = this.canvas;
+      this.ctx.clearRect(0,0,w,h);
+      this.ctx.fillStyle = '#1a1d22';
+      this.ctx.fillRect(0,0,w,h);
+      this.ctx.fillStyle = '#fff';
+      this.ctx.font = '18px Inter, system-ui, sans-serif';
+      this.ctx.fillText(text || 'Lade …', 24, 40);
     }
 
-    onGameStart(){
-      LOG("Starte Spiel – Szene initialisieren");
-      this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-      // einfache neutrale Fläche; deine Map-Engine kann hier später rein
-      this.ctx.fillStyle="#1a1d22";
-      this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-      dispatchEvent(new CustomEvent("cb:game:initialized"));
-      // Game-Loop starten (sicher)
-      try { Game.start(); } catch(e){ console.error('[bootstrap] Game.start()', e); }
+    maybeStart(){
+      // Strategie: Starten, sobald Canvas existiert **und**
+      // (Assets & Registry bereit) ODER (es kommt ein explizites cb:game-start).
+      if (!this.canvas) return;
+      if (this._assetsReady && this._registryReady){
+        this.startScene();
+      }
     }
 
-    resizeCanvas(){
-      this.canvas.width  = Math.floor(window.innerWidth);
-      this.canvas.height = Math.floor(window.innerHeight);
-    }
+    startScene(){
+      if (this._started) return;
+      this._started = true;
 
-    drawSplash(){
-      this.ctx.fillStyle = "rgba(0,0,0,0.15)";
-      this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-      this.ctx.fillStyle = "#fff";
-      this.ctx.font = "18px Inter, system-ui, sans-serif";
-      this.ctx.fillText("Warte auf Start …", 24, 40);
+      // 1) Init Map/Render sanft
+      try { window.MapRuntime?.init?.(this.canvas); } catch(e){ WARN('MapRuntime.init:', e?.message||e); }
+      try { window.Render?.init?.(); } catch(e){ WARN('Render.init:', e?.message||e); }
+
+      // 2) Erstes Clear
+      try {
+        this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+      } catch {}
+
+      // 3) Szene signalieren
+      EVT('cb:game:initialized');
+
+      // 4) Falls es eine Game.start() gibt, aufrufen (optional)
+      try { window.Game?.start?.(); } catch(e){ WARN('Game.start:', e?.message||e); }
+
+      // 5) Einen Frame anfordern
+      EVT('cb:request-repaint');
+
+      LOG('Szene gestartet.');
     }
   }
 
-  window.__gameBootstrap = new GameBootstrap();
-  return GameBootstrap;
-});
+  // ---------------------------------------------------------------------------
+  // Auto-Init
+  // ---------------------------------------------------------------------------
+  function init(){
+    window.__gameBootstrap = new GameBootstrap();
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, { once:true });
+  } else {
+    init();
+  }
+})();
