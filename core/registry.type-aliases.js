@@ -1,76 +1,123 @@
-<!-- assets/core/registry.type-aliases.js -->
-<script>
 /* ============================================================================
- * Registry Type Aliases – v1.0.0
- * Fix für "building" vs. "buildings" / "category" vs. "categories"
- * Greift zentral auf window.Registry ein, ohne bestehende API zu brechen.
- * ========================================================================== */
-(function(){
+ * Datei    : core/registry.type-aliases.js
+ * Version  : v25.10.25-final
+ * Zweck    : Type-Aliases & Abwärtskompatibilität für window.Registry
+ *            (building↔buildings, category↔categories, sanfte Shims)
+ *
+ * Lädt NACH: core/registry.js
+ * ============================================================================ */
+(() => {
   'use strict';
+
+  const TAG  = '[registry.alias]';
+  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+
   if (!window.Registry) {
-    console.warn('[registry.type-aliases] window.Registry fehlt – lade zuerst assets/core/registry.js');
+    WARN('window.Registry fehlt – lade zuerst core/registry.js');
     return;
   }
 
+  // Mappt Singular/Plural zu den kanonischen Typen
   const mapType = (t)=>{
-    const x = (t||'').toString().toLowerCase().trim();
-    if (x === 'building')   return 'buildings';
-    if (x === 'buildings')  return 'buildings';
-    if (x === 'category')   return 'categories';
-    if (x === 'categories') return 'categories';
+    const x = String(t||'').toLowerCase().trim();
+    if (x === 'building'   || x === 'buildings')  return 'buildings';
+    if (x === 'category'   || x === 'categories') return 'categories';
+    if (x === 'unit'       || x === 'units')      return 'units';
+    if (x === 'resource'   || x === 'resources')  return 'resources';
     return x;
   };
 
   // Originale sichern
-  const _register = window.Registry.register?.bind(window.Registry);
-  const _list     = window.Registry.list?.bind(window.Registry);
-  const _get      = window.Registry.get?.bind(window.Registry);
-  const _set      = window.Registry.set?.bind(window.Registry);
+  const R = window.Registry;
+  const orig = {
+    list     : R.list?.bind(R),
+    get      : R.get?.bind(R),
+    where    : R.where?.bind(R),
+    upsert   : R.upsert?.bind(R),
+    categories: R.categories?.bind(R),
+  };
 
-  // Safe-Guards: falls Registry minimalistisch ist
-  if (!_register || !_list) {
-    console.warn('[registry.type-aliases] Registry API unvollständig. Erwartet: register(), list(), (optional get/set).');
-  }
-
-  // Wrapper
-  if (_register) {
-    window.Registry.register = function(type, payload){
+  // ---- list(type, opts?) ----------------------------------------------------
+  // Besonderheit: categories werden aus Registry.categories() bedient.
+  if (orig.list) {
+    R.list = function(type, opts){
       const t = mapType(type);
-      try { return _register(t, payload); }
-      finally {
-        const log = (window.CBLog?.ok || console.log);
-        log(`[registry.alias] register(${type}→${t}) ok: ${(Array.isArray(payload)?payload.length:0)} items`);
+      if (t === 'categories') {
+        // gibt ein Array von Kategorien zurück (Strings oder Objekte, je nach Registry)
+        return orig.categories ? orig.categories() : [];
       }
+      return orig.list(t, opts);
     };
+  } else {
+    WARN('Registry.list fehlt – Alias kann nicht aktiv werden.');
   }
 
-  if (_list) {
-    window.Registry.list = function(type){
+  // ---- get(type, id) --------------------------------------------------------
+  if (orig.get) {
+    R.get = function(type, id){
       const t = mapType(type);
-      const res = _list(t);
-      const n = Array.isArray(res) ? res.length : (res? 1 : 0);
-      (window.CBLog?.info || console.log)(`[registry.alias] list(${type}→${t}) → ${n}`);
-      return res;
+      if (t === 'categories') return null; // kein einzelnes Category-Objekt
+      return orig.get(t, id);
     };
   }
 
-  if (_get) {
-    window.Registry.get = function(type, id){
-      return _get(mapType(type), id);
+  // ---- where(type, predFn) --------------------------------------------------
+  if (orig.where && orig.list) {
+    R.where = function(type, predFn){
+      const t = mapType(type);
+      if (t === 'categories') {
+        const cats = orig.categories ? orig.categories() : [];
+        return typeof predFn === 'function' ? cats.filter(predFn) : cats.slice();
+      }
+      return orig.where(t, predFn);
     };
   }
 
-  if (_set) {
-    window.Registry.set = function(type, data){
-      return _set(mapType(type), data);
+  // ---- register(type, payload)  (sehr alter Altcode) ------------------------
+  // Shim: akzeptiert Arrays/Maps und leitet auf upsert weiter.
+  if (!R.register) {
+    R.register = function(type, payload){
+      const t = mapType(type);
+      if (!orig.upsert) { WARN('register: upsert nicht verfügbar'); return false; }
+
+      // 1) Direkt-Array: [{id,...}, ...]
+      if (Array.isArray(payload)) {
+        payload.forEach(item => { if (item && item.id) orig.upsert(t, item); });
+        return true;
+      }
+
+      // 2) Map-Objekt: { id1:{...}, id2:{...} }
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        // Sonderfall „Wrapper“ wie { buildings:[...], categories:[...] }
+        if (t === 'buildings' && Array.isArray(payload.buildings)) {
+          payload.buildings.forEach(item => { if (item && item.id) orig.upsert('buildings', item); });
+          return true;
+        }
+        if (t === 'units' && Array.isArray(payload.units)) {
+          payload.units.forEach(item => { if (item && item.id) orig.upsert('units', item); });
+          return true;
+        }
+        if (t === 'resources' && Array.isArray(payload.resources)) {
+          payload.resources.forEach(item => { if (item && item.id) orig.upsert('resources', item); });
+          return true;
+        }
+        // generisch: key->item
+        for (const [id, item] of Object.entries(payload)) {
+          if (item && (item.id || id)) orig.upsert(t, { id: (item.id||id), ...item });
+        }
+        return true;
+      }
+
+      WARN('register: unbekanntes Payload-Format');
+      return false;
     };
   }
 
-  // Optional: einmal konsolidierte Zählung loggen
+  // Sanfter Hinweis im Log (einmalig)
   try {
-    const cats = window.Registry.list('categories')?.length || 0;
-    const blds = window.Registry.list('buildings') ?.length || 0;
-    (window.CBLog?.info || console.log)(`[registry.alias] konsolidiert → Kategorien: ${cats}, Gebäude: ${blds}`);
-  } catch(e){ /* ignore */ }
+    const cats = R.list('categories')?.length || 0;
+    const blds = R.list('buildings') ?.length || 0;
+    LOG(`aktiv – Kategorien:${cats} Gebäude:${blds}`);
+  } catch(_) {}
 })();
-</script>
