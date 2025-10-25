@@ -1,4 +1,3 @@
-
 /* ============================================================================
  * Datei   : ui/inspector/inspector.build.js
  * Projekt : Neue Siedler – Inspector (Build-Tab)
