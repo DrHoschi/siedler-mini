@@ -14,6 +14,26 @@
  *           1x1-Preview-Kachel. Das echte Kachel-Rendering macht (wie gehabt)
  *           core/map-runtime.js, das hier nur angestoßen wird.
  * ============================================================================ */
+<script>
+  (function(){
+    const stage = document.getElementById('game');
+    const tile = Game?.tileSize || 32;
+
+    function screenToTile(ev){
+      const r = stage.getBoundingClientRect();
+      const x = Math.floor((ev.clientX - r.left) / tile);
+      const y = Math.floor((ev.clientY - r.top)  / tile);
+      return {tx:x, ty:y};
+    }
+
+    // Nur wenn kein core.input.js aktiv ist:
+    stage.addEventListener('pointerdown', (ev)=>{
+      if (ev.button != null && ev.button !== 0) return;
+      const {tx,ty} = screenToTile(ev);
+      window.dispatchEvent(new CustomEvent('req:place:confirm', { detail:{ tx, ty } }));
+    }, {passive:true});
+  })();
+</script>
 (function(){
   'use strict';
 
