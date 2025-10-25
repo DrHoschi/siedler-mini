@@ -3,7 +3,6 @@
 <head>
   <!-- =========================================================
        META / BASIS
-       datei: tools/index.demo.html
        ========================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -12,180 +11,113 @@
 
   <!-- =========================================================
        STYLES (Global → Start → Inspector → Layout)
-       - ?v=… als einfaches Cache-Busting: Zahl erhöhen bei Updates
-       - WICHTIG: ui-layout.css greift NUR mit body.is-playing (Start-BG bleibt sichtbar)
+       ?v=… = simples Cache-Busting
        ========================================================= -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.19">
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- greift erst mit .is-playing -->
-  <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1"> <!--Baumenü(Build-Dock)–Kategorien+Kartenraster-->
-  <link rel="stylesheet" href="ui/css/ui-hud.css"> 
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1">
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
   <link rel="stylesheet" href="ui/css/ui-place.css?v=19.2.0">
-<!--  <link rel="stylesheet" href="ui/css/ui-tooltip.css"> -->
 </head>
 
 <body>
   <!-- =========================================================
-       WICHTIG: Diese Container erwartet dein Code (Lastenheft 3.1 / 4.2–4.3)
+       SPIELSTAGE + UI-ROOTS (Lastenheft 3.1 / 4.2–4.3)
        ========================================================= -->
   <canvas id="game" data-map="data/maps/map-mini.json" aria-label="Karte"></canvas>
   <div id="ui-root" aria-live="polite"></div>
 
-  <!-- HUD + BuildDock Platzhalter -->
-<div id="hud-root" aria-live="polite"></div>
-<div id="build-dock" hidden></div>
-<button id="btn-build" title="Bauen">🧱</button>
+  <div id="hud-root" aria-live="polite"></div>
+  <div id="build-dock" hidden></div>
+  <button id="btn-build" title="Bauen">🧱</button>
+  <!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)"></button> -->
 
-<!-- Inspector-FAB (Pflicht laut Vorgaben) -->
-<!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)" hidden></button> -->
- <!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)"></button> -->
   <!-- =========================================================
        SCRIPTS – LADEREIHENFOLGE (kritisch!)
        ========================================================= -->
 
-  <!-- 1) Basissystem -->
+  <!-- 1) Polyfills / Event-System / Env -->
   <script src="core/cblog.polyfill.js"></script>
   <script src="core/eventbus.js"></script>
   <script src="core/core.env.js"></script>
-  
-  <!-- [2] Assets/Boot/Registry -->
+
+  <!-- 2) Assets & Registry & UI-Bridge -->
   <script src="core/asset.js"></script>
   <script src="core/boot.js"></script>
-  <script src="core/registry.js"></script> <!-- Registry: Single Source of Truth (IDs, Farben, Icons) -->
+
+  <script src="core/registry.js"></script>
   <script src="core/registry.type-aliases.js"></script>
+  <script src="core/entities.registry.js"></script>
+  <script src="core/icons-map.js"></script>
   <script src="core/ui-build.data-bridge.js"></script>
-  
-  <!-- [3] Engine -->
-<script src="core/game.js"></script>
-<script src="core/core.map.js"></script>
-<script src="core/core.render.js"></script>
-<script src="core/camera.js"></script>
-<script src="core/zoom.js"></script>
-<script src="core/core.input.js"></script>
-<script src="core/core.entities.js"></script>
-<script src="core/core.pfglue.js"></script>
-<script src="core/carrier.js"></script>
-<script src="core/production.js"></script>
-<script src="core/render.shim.js"></script>
-<script src="core/entities.registry.js"></script>
-<script src="core/icons-map.js"></script>
-<script src="core/map-runtime.bridge.js"></script>
 
-  
-  <!-- [4] Overlays (einheitliche Initialisierung nur aus boot.js!) -->
+  <!-- 3) Kamera & Zoom -->
+  <script src="core/camera.js"></script>
+  <script src="core/zoom.js"></script>
+
+  <!-- 4) Map-Renderer + Bridge -->
+  <script src="core/core.map.js"></script>
+  <script src="core/map-runtime.bridge.js"></script>
+
+  <!-- 5) Overlays (zeichnen über OverlayHooks im Render-Frame) -->
   <script src="core/overlay-hooks.js"></script>
-  <script src="core/path-traces.overlay.js"></script>
   <script src="core/unit-overlay.js"></script>
+  <script src="core/path-traces.overlay.js"></script>
 
-  <!--core/adfinder.js = Pathfinding-Modul (A* + Heatmap).
-                         Aktuell nur Teststub, aber Pflichtbestandteil der Engine und Inspector-Integration.
-                         ➤ Nicht löschen. -->
+  <!-- 6) Pfadfinder (Stub) vor PF-Glue laden (lazy init) -->
   <script src="core/adfinder.js"></script>
-  
-  <!-- 3) INSPECTOR – sehr früh laden: hookt console/CBLog direkt nach Start
-         Overlay bleibt standardmäßig geschlossen.
-         <!-- Monolith-Inspector: Core + Modules -->
-<!-- Dein modularer Inspector -->
-<script defer src="ui/inspector/inspector.core.js?v=18.16.3"></script>
-<script defer src="ui/ui-inspector.js?v=18.14.7"></script>
-  
-<script defer src="ui/inspector/inspector.button-bind.js"></script>
-  
-  
-<!-- APIs & Kompat -->
-<!--script defer src="ui/inspector/inspector.api-compat.restore.js"></script
-<script defer src="ui/inspector/inspector.api-bridge.js"></script>
-<script defer src="ui/inspector/inspector.api-compat.js"></script>
 
-  <script defer src="ui/inspector/inspector.force-toggle.js"></script>
-<script defer src="ui/inspector/inspector.compat.js"></script> -->
+  <!-- 7) Engine/Gameplay -->
+  <script src="core/core.entities.js"></script>
+  <script src="core/core.production.js"></script>   <!-- FIX: richtiger Pfad -->
+  <script src="core/carrier.js"></script>
+  <script src="core/core.pfglue.js"></script>
 
-<!-- UI-Bindings -->
+  <script src="core/core.input.js"></script>
+  <script src="core/input.bridge.js?v=25.10.26-sync1"></script>
 
+  <!-- Render-Shim: keine eigene Loop, nur Back-Compat -->
+  <script src="core/render.shim.js"></script>
 
+  <script src="core/game.js"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
 
+  <!-- 8) Inspector (nicht-blockierend) -->
+  <script defer src="ui/inspector/inspector.core.js?v=18.16.3"></script>
+  <script defer src="ui/ui-inspector.js?v=18.14.7"></script>
+  <script defer src="ui/inspector/inspector.button-bind.js"></script>
 
-<!-- Taps  Feature-Module -->
-<script defer src="ui/inspector/inspector.ui.js?v=18.17.0"></script>
-<script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
-<script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
-<script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
-<script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
-<script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
+  <!-- Tabs/Tools im Inspector -->
+  <script defer src="ui/inspector/inspector.ui.js?v=18.17.0"></script>
+  <script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
+  <script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
+  <script defer src="ui/inspector/events.scan.js"></script>
 
-<!-- Overlay-Bindings (falls genutzt) -->
-<script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
-
-<!-- Tools IM Inspector -->
-<script defer src="ui/inspector/events.scan.js"></script>
-
-<!-- Optional: nur Anzeige, wenn du willst -->
-<!--script defer src="ui/inspector/inspector.tab.events.js"></script-->
-
-  <!-- Fallback: sorgt dafür, dass der Button da ist & funktioniert -->
-  <!--script defer src="ui/inspector/inspector.ensure-button.js"></script>
-  <script defer src="ui/inspector/inspector.ensure-host.js"></script>
-  <script defer src="ui/inspector/inspector.fix-runtime.js"></script-->
-  <!-- script>
-    // Optionales Auto-Open: aus (Start-BG sichtbar halten)
-    // window.InspectorConfig = { autoOpen: true };
-</script -->
-
-  <!-- 4) Loader, die READY-Events feuern (müssen dispatchen):
-         'cb:assets-ready'  (core/asset.js)
-         'cb:registry:ready' (core/registry.js)
-         Siehe Registry-Patch im Lastenheft. -->
-  
-  <!-- Core Engine 
-    <script src="core/map-runtime.js"></script> -->
-
-<!-- <script src="core/core.production.js"></script> -->
-    <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
-
-<!-- Eingabe + Platzier-Overlay -->
-
-
-<script src="core/input.bridge.js?v=25.10.26-sync1"></script>
-  
-<!-- UI + HUD + Build -->
-<!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
-<!-- 6) UI: HUD & BuildDock (bestehende Module; hören auf Events)
-         - HUD zeigt Ressourcen nach Spielstart (cb:game-start / cb:res:change)
-         - BuildDock nutzt #btn-build & #build-dock -->
+  <!-- 9) UI (Startscreen/HUD/Build/Map/Layout/Place) -->
   <script src="ui/ui-start.js?v=25.10.19-final2"></script>
   <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
   <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
   <script src="ui/ui-build.js?v=25.10.19-final2"></script>
-
-<!-- Map & Layout -->
   <script src="ui/ui-map.js"></script>
   <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
- 
+  <script src="ui/ui-place.js?v=24.2.0"></script>
 
-
-  <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) 
-  <script src="core/path-overlay.js?v=25.10.19-final2"></script> -->
-
-
-  
-  <!-- 8) Boot + Spiel -->
-  <script src="ui/ui-place.js?v=24.2.0"></script>   
-  
-    
-  <!-- 9) Layout-Glue ganz zum Schluss: schaltet NACH Spielstart auf Spiel-Layout -->
-  
-  <!-- 10) Mini-Diagnose (öffnet NICHT den Inspector) -->
+  <!-- 10) Diagnose & Startzustand-Absicherung -->
   <script>
     (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
 
-    // Harte Absicherung: niemals "offen" starten, selbst wenn eine Altlast die Klasse gesetzt hat.
+    // Inspector nie "offen" starten; Start-BG sichtbar lassen bis Spielstart
     (function(){
       var host = document.getElementById('inspector-overlay');
       if (host) { host.classList.remove('open'); host.style.display='none'; }
-      // Layout initial NICHT aktiv → Start-BG sichtbar
       document.body.classList.remove('is-playing');
     }());
   </script>
 </body>
-</html>
+</html>p
