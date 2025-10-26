@@ -190,13 +190,15 @@ body.inspector-open #inspector-overlay{
 
 /* ---------- Sichtbarkeit der einzelnen Views ---------- */
 /* Alle Views standardmäßig ausblenden … */
-.insp-content > .insp-view{
+.insp-content > .insp-view,
+.insp-content > .insp-frame{
   display: none !important;      /* Basis: unsichtbar */
   position: relative;            /* eigener Stacking-Context */
 }
 
 /* … aktive View immer sichtbar erzwingen. */
-.insp-content > .insp-view.is-active{
+.insp-content > .insp-view.is-active,
+.insp-content > .insp-frame.is-active{
   display: block !important;
 }
 
