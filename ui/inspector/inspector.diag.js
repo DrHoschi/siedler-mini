@@ -1,45 +1,48 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.diag.js
  * Projekt : Neue Siedler – Inspector (Diag-Tab)
- * Version : v25.10.27-diag1
- * Zweck   : Diagnose-Tab mit Start-/Boot-Infos, Registry-/Assets-/Map-Snapshot
- *           sowie Live-Res-Übersicht und Schnellaktionen.
+ * Version : v25.10.27-diag2
+ * Autor   : Mann & GPT-5
+ *
+ * Zweck   : Ein separater Inspector-Tab "diag", der
+ *           - Boot-/Start-Snapshot anzeigt (Registry/Assets/Map/Meta),
+ *           - Live-Ressourcen (über cb:res:snapshot),
+ *           - einen Live-Tick-Monitor (FPS & Δt) rendert,
+ *           - Schnellaktionen anbietet (req:res:snapshot / req:registry:snapshot),
+ *           - und sich automatisch aktualisiert, solange der Tab aktiv ist.
  *
  * Abhängigkeiten:
- *   - inspector.core.js (>= v18.16.3) – liefert generic-view Slot & API
- *   - core/diag.boot.js (optional)     – sendet cb:diag:boot-snapshot
- *   - core/registry.js                 – snapshot(), data-Spiegel
+ *   - inspector.core.js / inspector.ui.js (Tab-API: Inspector.registerTab/mount)
+ *   - core/diag.boot.js (optional, sendet cb:diag:boot-snapshot)
+ *   - core/registry.js  (snapshot(), data-Spiegel)
+ *   - core/game.js      (sendet cb:game:tick mit { now,t,dt,fps })
  *
  * Lauscht :
  *   - cb:diag:boot-snapshot { counts, assets, map, meta }
  *   - cb:registry:ready
  *   - cb:res:snapshot       { resources }
- *   - cb:insp:tab:change    (zum Aufräumen)
+ *   - cb:game:tick          { now, t, dt, fps }
+ *   - cb:insp:tab:change
  *
  * Sendet :
  *   - req:res:snapshot
  *   - req:registry:snapshot
- *   - cb:insp:console (nur wenn Fehler in diesem Modul auftreten)
  *
- * Einbindung:
+ * Einbindung (index.html) – nach den anderen Inspector-Dateien:
  *   <script src="ui/inspector/inspector.diag.js"></script>
- *
- * UI:
- *   [ Snapshot-Werte ] [ Buttons: Refresh/Req Snapshot ]
- *   ├─ Registry (counts + meta)
- *   ├─ Assets   (json/img)
- *   ├─ Map      (size, tile)
- *   └─ Ressourcen (Tabelle live, aus cb:res:snapshot)
  * ========================================================================== */
 (function(){
   'use strict';
-  const MOD='[inspector.diag]'; const VER='v25.10.27-diag1';
+
+  /* ============================= [LOGGING] ============================= */
+  const MOD='[inspector.diag]'; const VER='v25.10.27-diag2';
   const LOG = (window.CBLog?.info || console.info).bind(console, MOD);
   const OK  = (window.CBLog?.ok   || console.log ).bind(console, MOD);
   const WRN = (window.CBLog?.warn || console.warn).bind(console, MOD);
   const ERR = (window.CBLog?.err  || console.error).bind(console, MOD);
 
-  // ---- Core-Bridge (funktioniert mit split core oder klassischem Inspector) ----
+  /* =========================== [CORE-BRIDGE] =========================== */
+  // Kompatible, minimale Brücke zur Tab-API (unabhängig vom genauen Core-Stand)
   const core = (function(){
     if (window.__INSPECTOR_CORE__?.api) return window.__INSPECTOR_CORE__.api;
     const ins = window.Inspector || window.__INSPECTOR__ || {};
@@ -54,21 +57,41 @@
     };
   })();
 
-  // ---- DOM-Helfer ------------------------------------------------------------
+  /* ============================== [DOM] =============================== */
   const $ = (s,sc=document)=> sc.querySelector(s);
   function el(tag, cls, html){
     const n=document.createElement(tag); if(cls) n.className=cls; if(html!=null) n.innerHTML=html; return n;
   }
 
-  // ---- State -----------------------------------------------------------------
+  /* ============================= [STATE] ============================== */
   const state = {
-    lastBoot : null,     // { counts, assets, map, meta }
-    resMap   : {},       // { id: value }
+    lastBoot : null,               // { counts, assets, map, meta }
+    resMap   : {},                 // Ressourcenwerte
     mounted  : false,
-    timer    : 0
+    timer    : 0,
+
+    // Live-Tick-Monitor
+    tick: {
+      fps: 0,
+      dt : 0,
+      // Ring-Puffer für Graphen
+      histFPS:  new Array(120).fill(0),  // ~2s bei 60fps
+      histDT :  new Array(120).fill(0),
+      ptr: 0,
+      canvas: null,
+      ctx: null,
+      // Statistiken
+      minFPS: 999, maxFPS: 0,
+      minDT :  99, maxDT : 0
+    }
   };
 
-  // ---- Kleine Renderer -------------------------------------------------------
+  /* =========================== [RENDER HELFER] =========================== */
+  function safe(v){
+    if (v==null) return '—';
+    if (typeof v==='object') return Array.isArray(v) ? `[${v.length}]` : JSON.stringify(v);
+    return String(v);
+  }
   function kvTable(obj, order){
     const tbl = el('table','inspector-table');
     const head = el('thead',null,'<tr><th>Key</th><th>Value</th></tr>');
@@ -80,11 +103,6 @@
     });
     tbl.append(head, body);
     return tbl;
-  }
-  function safe(v){
-    if (v==null) return '—';
-    if (typeof v==='object') return Array.isArray(v) ? `[${v.length}]` : JSON.stringify(v);
-    return String(v);
   }
   function resTable(map){
     const tbl = el('table','inspector-table');
@@ -101,23 +119,98 @@
     return tbl;
   }
 
-  // ---- View-Bau --------------------------------------------------------------
+  /* =========================== [TICK MONITOR] ============================ */
+  // Zeichnet simple Linien für FPS (oben) und Δt (unten) in ein Canvas.
+  function drawTickCanvas(){
+    const C = state.tick.canvas, ctx = state.tick.ctx;
+    if (!C || !ctx) return;
+    const W=C.width, H=C.height;
+    ctx.clearRect(0,0,W,H);
+
+    // Achsen/Skalen
+    ctx.globalAlpha=0.25;
+    ctx.fillStyle='#999';
+    // Mittellinie
+    ctx.fillRect(0, H*0.5|0, W, 1);
+    // 60fps Linie (oben)
+    const y60 = H - (60/120)*H; // skaliere fps auf 0..120
+    ctx.fillRect(0, y60|0, W, 1);
+
+    ctx.globalAlpha=1;
+
+    // FPS Kurve
+    ctx.beginPath();
+    for (let i=0;i<state.tick.histFPS.length;i++){
+      const idx=(state.tick.ptr+i)%state.tick.histFPS.length;
+      const v=state.tick.histFPS[idx]; // fps
+      const x = i/(state.tick.histFPS.length-1)*W;
+      const y = H - Math.min(120, v)/120*H;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle='#3bd16f';
+    ctx.lineWidth=1;
+    ctx.stroke();
+
+    // DT Kurve (ms) – skaliert auf 0..100ms
+    ctx.beginPath();
+    for (let i=0;i<state.tick.histDT.length;i++){
+      const idx=(state.tick.ptr+i)%state.tick.histDT.length;
+      const v=state.tick.histDT[idx]; // ms
+      const x = i/(state.tick.histDT.length-1)*W;
+      const y = H - Math.min(100, v)/100*H;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle='#f6b73c';
+    ctx.lineWidth=1;
+    ctx.stroke();
+  }
+
+  function pushTickSample(fps, dtMs){
+    const t = state.tick;
+    t.histFPS[t.ptr] = fps;
+    t.histDT [t.ptr] = dtMs;
+    t.ptr = (t.ptr + 1) % t.histFPS.length;
+
+    // Stats
+    t.fps = fps|0;
+    t.dt  = dtMs;
+    t.minFPS = Math.min(t.minFPS, fps);
+    t.maxFPS = Math.max(t.maxFPS, fps);
+    t.minDT  = Math.min(t.minDT,  dtMs);
+    t.maxDT  = Math.max(t.maxDT,  dtMs);
+
+    drawTickCanvas();
+  }
+
+  /* ============================ [VIEW-BAU] ============================= */
   function buildView(host){
     host.innerHTML = '';
     const wrap = el('div','pad');
 
-    // Kopfzeile + Toolbar
-    const h = el('h3',null,'Diag / Boot-Snapshot');
+    // Kopf & Toolbar
+    const h = el('h3',null,'Diagnose');
     const bar = el('div','toolbar');
     const bReqRes  = el('button','insp-btn','res: snapshot');
     const bReqReg  = el('button','insp-btn','registry: snapshot');
     const bRefresh = el('button','insp-btn','Refresh');
-
     bReqRes.addEventListener('click', ()=> dispatchEvent(new Event('req:res:snapshot')));
     bReqReg.addEventListener('click', ()=> dispatchEvent(new Event('req:registry:snapshot')));
     bRefresh.addEventListener('click', ()=> renderAll(host));
-
     bar.append(bReqRes, bReqReg, bRefresh);
+
+    // Live-Tick-Monitor (Box oben rechts)
+    const mon = el('div','diag-monitor');
+    mon.innerHTML = `
+      <div class="diag-mon__row">
+        <div class="diag-mon__metric"><label>FPS</label><span id="diag-fps">—</span></div>
+        <div class="diag-mon__metric"><label>Δt</label><span id="diag-dt">—</span></div>
+      </div>
+      <canvas id="diag-canvas" width="280" height="70" style="display:block; margin-top:6px; border:1px solid #444; border-radius:4px"></canvas>
+      <div class="diag-mon__row diag-mon__stats">
+        <div><small>min / max FPS:</small> <span id="diag-fps-min">—</span> / <span id="diag-fps-max">—</span></div>
+        <div><small>min / max Δt:</small> <span id="diag-dt-min">—</span> / <span id="diag-dt-max">—</span> ms</div>
+      </div>
+    `;
 
     // Sektionen
     const boxRegistry = el('div'); // Registry counts + meta
@@ -126,6 +219,8 @@
     const boxRes      = el('div'); // Ressourcen live
 
     wrap.append(h, bar,
+      // Monitor prominent platzieren
+      mon,
       el('h4',null,'Registry'),
       boxRegistry,
       el('h4',null,'Assets'),
@@ -135,8 +230,14 @@
       el('h4',null,'Ressourcen (live)'),
       boxRes
     );
-
     host.appendChild(wrap);
+
+    // Canvas-Refs speichern
+    state.tick.canvas = $('#diag-canvas', wrap);
+    state.tick.ctx    = state.tick.canvas?.getContext('2d') || null;
+
+    // CSS-Minimum (nur wenn nicht vorhanden) – unaufdringlich
+    injectDiagStyles();
 
     // Render-Funktionen binden
     host._renderDiag = function(){
@@ -152,7 +253,6 @@
         };
         boxRegistry.innerHTML='';
         boxRegistry.appendChild( kvTable(counts, ['buildings','units','resources']) );
-        // ein paar Meta-Felder, falls vorhanden
         if (meta && Object.keys(meta).length){
           const t = kvTable(meta, ['categories','iconsBase']);
           t.querySelector('thead tr th:last-child').textContent='Meta';
@@ -172,6 +272,10 @@
         // Ressourcen
         boxRes.innerHTML='';
         boxRes.appendChild( resTable(state.resMap) );
+
+        // Monitor-Zahlen aktualisieren
+        updateMonitorNumbers();
+        drawTickCanvas();
       }catch(e){
         ERR('renderDiag', e?.message || e);
         dispatchEvent(new CustomEvent('cb:insp:console',{detail:{type:'error',msg:String(e)}}));
@@ -182,10 +286,43 @@
     host._renderDiag();
   }
 
+  function injectDiagStyles(){
+    if (document.getElementById('diag-monitor-style')) return;
+    const css = `
+      .diag-monitor{ margin-bottom:12px; padding:8px; border:1px solid #444; border-radius:6px; }
+      .diag-mon__row{ display:flex; gap:16px; align-items:center; justify-content:flex-start; }
+      .diag-mon__metric{ display:flex; gap:6px; align-items:baseline; }
+      .diag-mon__metric label{ font-size:12px; opacity:.8; }
+      .diag-mon__metric span{ font-variant-numeric: tabular-nums; font-weight:600; }
+      .diag-mon__stats{ gap:24px; margin-top:6px; opacity:.85; }
+    `;
+    const tag = document.createElement('style');
+    tag.id='diag-monitor-style'; tag.textContent=css;
+    document.head.appendChild(tag);
+  }
+
+  function updateMonitorNumbers(){
+    const fpsEl = document.getElementById('diag-fps');
+    const dtEl  = document.getElementById('diag-dt');
+    const minF  = document.getElementById('diag-fps-min');
+    const maxF  = document.getElementById('diag-fps-max');
+    const minD  = document.getElementById('diag-dt-min');
+    const maxD  = document.getElementById('diag-dt-max');
+    if (!fpsEl) return;
+
+    fpsEl.textContent = String(state.tick.fps);
+    dtEl .textContent = (state.tick.dt).toFixed(2);
+
+    if (minF) minF.textContent = (state.tick.minFPS|0);
+    if (maxF) maxF.textContent = (state.tick.maxFPS|0);
+    if (minD) minD.textContent = state.tick.minDT.toFixed(2);
+    if (maxD) maxD.textContent = state.tick.maxDT.toFixed(2);
+  }
+
+  /* =========================== [RENDER FLOW] =========================== */
   function renderAll(host){
-    // hole, was wir lokal wissen
     try{
-      // wenn noch kein Boot-Snapshot da ist, ggf. lokal erzeugen
+      // Falls kein Boot-Snapshot existiert, lokal erzeugen
       if (!state.lastBoot && window.Registry?.snapshot){
         const snap = window.Registry.snapshot();
         state.lastBoot = {
@@ -205,19 +342,6 @@
     host._renderDiag?.();
   }
 
-  // ---- Subscriptions ---------------------------------------------------------
-  function onBootSnapshot(e){
-    // e.detail: { counts, assets, map, meta }
-    state.lastBoot = e?.detail || null;
-    // Live neu zeichnen – nur wenn der Tab sichtbar ist
-    renderIfActive('diag');
-  }
-  function onResSnapshot(e){
-    const map = e?.detail?.resources || e?.detail || {};
-    state.resMap = Object.assign({}, map);
-    renderIfActive('diag');
-  }
-
   function renderIfActive(tabId){
     const active = document.querySelector('#inspector .insp-tab.active')?.dataset?.tab;
     if (active === tabId){
@@ -226,29 +350,50 @@
     }
   }
 
-  // ---- Mount im Inspector ----------------------------------------------------
+  /* ========================== [EVENT HANDLERS] ========================== */
+  function onBootSnapshot(e){
+    state.lastBoot = e?.detail || null;
+    renderIfActive('diag');
+  }
+  function onResSnapshot(e){
+    const map = e?.detail?.resources || e?.detail || {};
+    state.resMap = Object.assign({}, map);
+    renderIfActive('diag');
+  }
+  function onGameTick(e){
+    const d = e?.detail || {};
+    if (!d) return;
+    const fps = Number(d.fps||0);
+    const dtMs = Number(d.dt||0) * 1000; // dt ist in Sekunden → ms
+    pushTickSample(fps, dtMs);
+    // Nur Zahlen im Monitor updaten, wenn Tab sichtbar – Canvas wird sowieso gezeichnet
+    const active = document.querySelector('#inspector .insp-tab.active')?.dataset?.tab;
+    if (active === 'diag') updateMonitorNumbers();
+  }
+
+  /* ============================== [MOUNT] ============================== */
   core.mount('diag', (host)=>{
-    // sicherstellen, dass wir im generic-view landen (core >= 18.16.3)
+    // Sicher auf den generic-slot gehen (Core >= 18.16.3), sonst host nehmen
     if (host && !host.closest || !host.closest('.insp-content')) {
-      // Fallback: forcieren
       host = core.getSlot('generic') || host;
     }
     buildView(host);
     renderAll(host);
 
-    // leichte Auto-Refreshes (Counts können sich durch Upserts ändern)
+    // Auto-Refresh solange der Tab aktiv ist (Counts/Meta können sich ändern)
     clearInterval(state.timer);
     state.timer = setInterval(()=> renderAll(host), 1500);
 
     OK('bereit', VER);
   });
 
-  // ---- Global Event-Hooks ----------------------------------------------------
+  /* ============================ [SUBSCRIPTIONS] ============================ */
   window.addEventListener('cb:diag:boot-snapshot', onBootSnapshot);
   window.addEventListener('cb:res:snapshot',       onResSnapshot);
+  window.addEventListener('cb:game:tick',          onGameTick);
 
   window.addEventListener('cb:registry:ready', ()=> {
-    // nach registry-ready sofort Werte ziehen
+    // Direkt nach registry-ready: lokalen Boot-Snapshot bauen (falls keiner kam)
     try{
       const snap = window.Registry?.snapshot?.();
       if (snap){
@@ -266,14 +411,22 @@
         };
       }
     }catch(_){}
-    // gleich auch Ressourcen anfragen
+    // Ressourcenstand erfragen
     dispatchEvent(new Event('req:res:snapshot'));
   });
 
-  // Aufräumen, wenn Tab gewechselt wird → Timer stoppen
+  // Tab-Wechsel → Timer pausieren
   window.addEventListener('cb:insp:tab:change', (e)=>{
     if (e?.detail?.tab !== 'diag') {
       clearInterval(state.timer); state.timer = 0;
+    } else {
+      // erneut starten, wenn "diag" wieder aktiv wird
+      clearInterval(state.timer);
+      state.timer = setInterval(()=>{
+        const host = core.getSlot('generic') || core.getSlot('view');
+        if (host) renderAll(host);
+      }, 1500);
     }
   });
+
 })();
