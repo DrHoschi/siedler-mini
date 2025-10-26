@@ -28,7 +28,14 @@
 (function(){
   'use strict';
   const MOD='[inspector.core]';
-
+// ---- Doppel-Init Guard (Inspector Core) -----------------------------
+if (window.__INSPECTOR_CORE_INIT__) {
+  (window.CBLog?.info || console.info)('[inspector.core] duplicate load – skipped');
+  // nichts weiter ausführen
+  return;
+}
+window.__INSPECTOR_CORE_INIT__ = true;
+  
   // Host erzeugen
   function ensureHost(){
     let el = document.getElementById('inspector');
