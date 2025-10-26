@@ -1,13 +1,21 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.ui.js
  * Projekt : Neue Siedler – Inspector
- * Version : v25.10.27-ui2
- * Zweck   : Registriert den "ui"-Tab (Bedienoberfläche / Info)
+ * Version : v25.10.28-final
+ * Zweck   : Registriert den Tab "UI" im Inspector
+ *           (Bedienoberfläche, kleine Steuer-Events)
  *
- * WICHTIG:
- *  - De-Dup-Guard: Falls der Tab bereits existiert, wird NICHT erneut registriert.
- *  - Nutzt die Core-API (core.mount) und rendert in den "generic"-Slot.
- *  - Keine Abhängigkeit zu eruda / externer Dev-UI.
+ * Enthält :
+ *   • Buttons für Baumenü (öffnen/schließen/togglen)
+ *   • HUD-Snapshot-Trigger
+ *   • "X"-Schließen-Button oben rechts
+ *
+ * Layout :
+ *   ┌───────────────────────────────┐
+ *   │ UI-Header  [× schließen]     │
+ *   ├───────────────────────────────┤
+ *   │ Buttons / Infos              │
+ *   └───────────────────────────────┘
  * ========================================================================== */
 (function () {
   'use strict';
@@ -16,32 +24,40 @@
   const LOG = (window.CBLog?.info || console.info).bind(console, MOD);
   const WRN = (window.CBLog?.warn || console.warn).bind(console, MOD);
 
-  // ---------- Core-Bridge (kompatibel mit verschiedenen Core-Ständen) ----------
+  // ---------------------------------------------------------------------------
+  // [1] Core-Bridge (kompatibel mit allen Varianten)
+  // ---------------------------------------------------------------------------
   const core = (function () {
     if (window.__INSPECTOR_CORE__?.api) return window.__INSPECTOR_CORE__.api;
     const ins = window.Inspector || window.__INSPECTOR__ || {};
     return {
       mount(id, onShow) {
-        const fn = ins.registerTab || ins.addTab || function () { };
+        const fn = ins.registerTab || ins.addTab || function () {};
         return fn({ id, title: id, onShow });
       },
       getSlot(name) {
-        return document.querySelector(`#inspector [data-slot="${name}"]`)
-          || document.querySelector(`[data-inspector-slot="${name}"]`)
-          || document.getElementById(`ins-${name}`)
-          || document.getElementById(name);
-      }
+        return (
+          document.querySelector(`#inspector [data-slot="${name}"]`) ||
+          document.querySelector(`[data-inspector-slot="${name}"]`) ||
+          document.getElementById(`ins-${name}`) ||
+          document.getElementById(name)
+        );
+      },
     };
   })();
 
-  // ---------- De-Dup: Tab "ui" nur 1× registrieren ----------------------------
+  // ---------------------------------------------------------------------------
+  // [2] De-Dup-Guard – Tab "ui" nur 1× registrieren
+  // ---------------------------------------------------------------------------
   const already = document.querySelector('.insp-tab[data-tab="ui"]');
   if (already) {
     LOG('Tab "ui" already exists – skipped (de-dup OK)');
     return;
   }
 
-  // ---------- kleine DOM-Helper ------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // [3] kleine DOM-Helper
+  // ---------------------------------------------------------------------------
   const el = (tag, cls, html) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -49,53 +65,84 @@
     return n;
   };
 
-  // ---------- View-Bau ---------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // [4] View-Renderer – wird beim Öffnen ausgeführt
+  // ---------------------------------------------------------------------------
   function buildView(host) {
+    // Host bereinigen
     host.innerHTML = '';
+
+    // === Rahmen-Struktur =====================================================
+    const frame = el('div', 'insp-frame');
+
+    // Header mit Titel + X-Button
+    const header = el('div', 'insp-header');
+    header.append(
+      el('h3', null, 'UI-Steuerung'),
+      (function () {
+        const x = el('button', 'insp-close', '×');
+        x.title = 'Inspector schließen';
+        x.addEventListener('click', () => window.Inspector?.close());
+        return x;
+      })()
+    );
+
+    // Content-Bereich
+    const content = el('div', 'insp-content');
     const wrap = el('div', 'pad');
 
     wrap.append(
-      el('h3', null, 'UI / Oberfläche'),
-      el('p', 'muted', 'Dieser Tab sammelt kleine Komfort-Funktionen rund um die Spieloberfläche.'),
-      el('div', 'ui-section', `
-        <div class="row" style="display:flex; gap:8px; flex-wrap:wrap">
+      el('p', 'muted', 'Steuer- und Komfort-Funktionen der Benutzeroberfläche:'),
+      el(
+        'div',
+        'ui-section',
+        `
+        <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="insp-btn" id="ui-show-build">Baumenü öffnen</button>
           <button class="insp-btn" id="ui-hide-build">Baumenü schließen</button>
           <button class="insp-btn" id="ui-toggle-build">Baumenü toggeln</button>
-          <button class="insp-btn" id="ui-hud-snapshot">HUD Snapshot anfordern</button>
+          <button class="insp-btn" id="ui-hud-snapshot">HUD Snapshot</button>
         </div>
-      `),
-      el('p', 'muted', `
-        <small>Hinweis: Diese Buttons senden nur Events (req:build:open/close/toggle, req:res:snapshot)
-        und ändern nichts an der Core-Logik.</small>
-      `)
+      `
+      ),
+      el(
+        'p',
+        'muted',
+        `<small>Diese Buttons senden nur Events 
+         (<code>req:build:open/close/toggle</code>,
+         <code>req:res:snapshot</code>) 
+         und ändern keine Core-Logik.</small>`
+      )
     );
 
-    host.appendChild(wrap);
+    content.appendChild(wrap);
+    frame.append(header, content);
+    host.appendChild(frame);
 
-    // Event-Wiring
-    wrap.querySelector('#ui-show-build')?.addEventListener('click', () => {
-      dispatchEvent(new Event('req:build:open'));
-    });
-    wrap.querySelector('#ui-hide-build')?.addEventListener('click', () => {
-      dispatchEvent(new Event('req:build:close'));
-    });
-    wrap.querySelector('#ui-toggle-build')?.addEventListener('click', () => {
-      dispatchEvent(new Event('req:build:toggle'));
-    });
-    wrap.querySelector('#ui-hud-snapshot')?.addEventListener('click', () => {
-      dispatchEvent(new Event('req:res:snapshot'));
-    });
+    // === Event-Wiring ========================================================
+    wrap.querySelector('#ui-show-build')?.addEventListener('click', () =>
+      dispatchEvent(new Event('req:build:open'))
+    );
+    wrap.querySelector('#ui-hide-build')?.addEventListener('click', () =>
+      dispatchEvent(new Event('req:build:close'))
+    );
+    wrap.querySelector('#ui-toggle-build')?.addEventListener('click', () =>
+      dispatchEvent(new Event('req:build:toggle'))
+    );
+    wrap.querySelector('#ui-hud-snapshot')?.addEventListener('click', () =>
+      dispatchEvent(new Event('req:res:snapshot'))
+    );
   }
 
-  // ---------- Mount im Inspector ----------------------------------------------
+  // ---------------------------------------------------------------------------
+  // [5] Registrierung im Inspector
+  // ---------------------------------------------------------------------------
   core.mount('ui', (host) => {
-    // sicherheitshalber in den "generic"-Slot zeichnen
+    // Fallback: in den generischen Slot zeichnen, falls kein Host vorhanden
     if (!host || !host.closest || !host.closest('.insp-content')) {
       host = core.getSlot('generic') || host;
     }
     buildView(host);
     LOG('bereit');
   });
-
 })();
