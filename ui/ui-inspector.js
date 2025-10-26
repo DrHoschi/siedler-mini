@@ -54,8 +54,10 @@
   }
 
   /** Sorgt dafür, dass genau EINE View sichtbar ist (CSS erwartet .is-active). */
-  function ensureActiveView(preferredId = 'insp-logs'){
-    const views = qa(SEL.views);
+function ensureActiveView(preferredId = 'insp-logs'){
+  // Sucht nicht nur .insp-view, sondern auch .insp-frame (ältere Versionen)
+  let views = qa(SEL.views);
+  if (!views.length) views = qa('#inspector .insp-frame, #inspector .insp-view');
     if (!views.length) return;
 
     // Gibt es schon eine aktive?
