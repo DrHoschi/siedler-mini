@@ -248,3 +248,12 @@ body.is-inspector .eruda-entry-btn{
   pointer-events: none !important;
   opacity: .35 !important; /* optisch gedimmt, damit klar ist: „inaktiv“ */
 }
+
+/* === Click-Tracer UI-Highlight === */
+#btn-click-tracer {
+  background: #444;
+  color: #fff;
+}
+#btn-click-tracer.active {
+  background: #2b66ff;
+}
