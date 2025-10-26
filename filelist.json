@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-25T07:11:28.332Z",
+  "createdAt": "2025-10-26T08:23:34.678Z",
   "root": ".",
-  "count": 426,
+  "count": 430,
   "entries": [
     {
       "type": "dir",
@@ -434,7 +434,7 @@
     },
     {
       "type": "file",
-      "path": "assets/icons/resources/pop.png",
+      "path": "assets/icons/resources/population.png",
       "size": 7444
     },
     {
@@ -1096,7 +1096,7 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 1561
+      "size": 9046
     },
     {
       "type": "file",
@@ -1105,63 +1105,58 @@
     },
     {
       "type": "file",
-      "path": "core/build.assets.js",
-      "size": 1240
-    },
-    {
-      "type": "file",
       "path": "core/camera.js",
-      "size": 9123
+      "size": 14547
     },
     {
       "type": "file",
       "path": "core/carrier.js",
-      "size": 2645
+      "size": 6842
     },
     {
       "type": "file",
       "path": "core/cblog.polyfill.js",
-      "size": 4281
+      "size": 5673
     },
     {
       "type": "file",
       "path": "core/core.entities.js",
-      "size": 6796
+      "size": 9991
     },
     {
       "type": "file",
       "path": "core/core.env.js",
-      "size": 3010
+      "size": 5188
     },
     {
       "type": "file",
       "path": "core/core.input.js",
-      "size": 5251
+      "size": 8014
     },
     {
       "type": "file",
       "path": "core/core.map.js",
-      "size": 8652
+      "size": 11596
     },
     {
       "type": "file",
       "path": "core/core.pfglue.js",
-      "size": 6362
+      "size": 8119
     },
     {
       "type": "file",
       "path": "core/core.production.js",
-      "size": 1903
+      "size": 7385
     },
     {
       "type": "file",
-      "path": "core/core.render.js",
-      "size": 1559
+      "path": "core/diag.boot.js",
+      "size": 2732
     },
     {
       "type": "file",
       "path": "core/entities.registry.js",
-      "size": 2797
+      "size": 2790
     },
     {
       "type": "file",
@@ -1171,67 +1166,82 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 4378
+      "size": 5836
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 9030
+      "size": 6179
     },
     {
       "type": "file",
       "path": "core/icons-map.js",
-      "size": 5553
+      "size": 5133
     },
     {
       "type": "file",
       "path": "core/input.bridge.js",
-      "size": 5070
+      "size": 4601
     },
     {
       "type": "file",
       "path": "core/layout.js",
-      "size": 2622
+      "size": 4389
     },
     {
       "type": "file",
-      "path": "core/map-runtime.js",
-      "size": 13998
+      "path": "core/map-runtime.bridge.js",
+      "size": 1285
     },
     {
       "type": "file",
       "path": "core/overlay-hooks.js",
-      "size": 3572
+      "size": 4520
     },
     {
       "type": "file",
-      "path": "core/path-overlay.js",
-      "size": 2054
+      "path": "core/path-traces.overlay.js",
+      "size": 2720
+    },
+    {
+      "type": "file",
+      "path": "core/production.res-validate.js",
+      "size": 5396
+    },
+    {
+      "type": "file",
+      "path": "core/Readme_core_final.md",
+      "size": 7110
     },
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 8924
+      "size": 13528
     },
     {
       "type": "file",
       "path": "core/registry.type-aliases.js",
-      "size": 2615
+      "size": 4505
+    },
+    {
+      "type": "file",
+      "path": "core/render.shim.js",
+      "size": 3108
     },
     {
       "type": "file",
       "path": "core/ui-build.data-bridge.js",
-      "size": 2433
+      "size": 3842
     },
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 3072
+      "size": 5080
     },
     {
       "type": "file",
       "path": "core/zoom.js",
-      "size": 658
+      "size": 2557
     },
     {
       "type": "dir",
@@ -1761,6 +1771,15 @@
     },
     {
       "type": "dir",
+      "path": "ui/compat/"
+    },
+    {
+      "type": "file",
+      "path": "ui/compat/build-bridge-shim.js",
+      "size": 1187
+    },
+    {
+      "type": "dir",
       "path": "ui/css/"
     },
     {
@@ -1860,7 +1879,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.build.js",
-      "size": 14930
+      "size": 14545
     },
     {
       "type": "file",
@@ -1915,7 +1934,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.resources.js",
-      "size": 15252
+      "size": 13994
     },
     {
       "type": "file",
@@ -2045,22 +2064,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42081
+      "size": 42174
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16128
+      "size": 16159
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 7430
+      "size": 5763
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 5691
+      "size": 14030
     },
     {
       "type": "file",
