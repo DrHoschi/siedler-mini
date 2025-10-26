@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-26T08:23:34.678Z",
+  "createdAt": "2025-10-26T10:08:52.219Z",
   "root": ".",
-  "count": 430,
+  "count": 433,
   "entries": [
     {
       "type": "dir",
@@ -1171,7 +1171,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 6179
+      "size": 10258
     },
     {
       "type": "file",
@@ -1197,6 +1197,11 @@
       "type": "file",
       "path": "core/overlay-hooks.js",
       "size": 4520
+    },
+    {
+      "type": "file",
+      "path": "core/overlay.fps.js",
+      "size": 3348
     },
     {
       "type": "file",
@@ -1227,6 +1232,11 @@
       "type": "file",
       "path": "core/render.shim.js",
       "size": 3108
+    },
+    {
+      "type": "file",
+      "path": "core/savegame.js",
+      "size": 11567
     },
     {
       "type": "file",
@@ -1898,6 +1908,11 @@
     },
     {
       "type": "file",
+      "path": "ui/inspector/inspector.diag.js",
+      "size": 16242
+    },
+    {
+      "type": "file",
       "path": "ui/inspector/inspector.ensure-button.js",
       "size": 3638
     },
@@ -1989,7 +2004,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 8250
+      "size": 12841
     },
     {
       "type": "file",
@@ -2014,7 +2029,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 4697
+      "size": 8077
     },
     {
       "type": "file",
@@ -2064,17 +2079,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42174
+      "size": 42559
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16159
+      "size": 16308
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 5763
+      "size": 5980
     },
     {
       "type": "file",
