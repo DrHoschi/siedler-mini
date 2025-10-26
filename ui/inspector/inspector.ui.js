@@ -20,6 +20,16 @@
   'use strict';
   const MOD='[inspector.ui]'; const VER='v18.17.0';
 
+  // ---- De-Dupe: Tab existiert schon? Dann NICHT noch einmal bauen.
+const id = cfg?.id && String(cfg.id);
+if (id) {
+  const already = document.querySelector(`.insp-tab[data-tab="${id}"]`);
+  if (already) {
+    (window.CBLog?.info || console.info)(`[inspector.ui] tab "${id}" already exists – skipped`);
+    return; // oder: nur Handler/Content aktualisieren, wenn du willst
+  }
+}
+  
   // ---------- Core-Bridge -----------------------------------------------------
   const core = (function(){
     if (window.__INSPECTOR_CORE__?.api) return window.__INSPECTOR_CORE__.api;
