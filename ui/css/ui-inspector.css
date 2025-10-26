@@ -114,6 +114,9 @@ body.is-inspector #inspector-overlay{
   border-bottom: none;
   padding: 8px;
   border-radius: var(--radius) var(--radius) 0 0;
+  position: sticky;                 /* NEU: bleibt oben sichtbar */
+  top: var(--safe-top);             /* NEU: iOS Notch beachten */
+  z-index: calc(var(--z) + 1);      /* NEU: über Content */
 }
 
 /* Tabs-Leiste */
@@ -123,8 +126,9 @@ body.is-inspector #inspector-overlay{
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  padding: 4px;
+  padding: 4px 2px;                 /* minimaler Innenabstand */
 }
+
 .insp-tab{
   flex: 0 0 auto;
   padding: 8px 12px;
