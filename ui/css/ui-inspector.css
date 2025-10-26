@@ -257,3 +257,43 @@ body.is-inspector .eruda-entry-btn{
 #btn-click-tracer.active {
   background: #2b66ff;
 }
+
+/* === Click-Hardening für Tab-Leiste und Header ========================== */
+/* Header und Tabs müssen IMMER über dem Content liegen */
+.insp-header{
+  position: sticky;              /* bleibt oben */
+  top: var(--safe-top, 0px);
+  z-index: 1000 !important;      /* über Content */
+}
+
+.insp-tabs{
+  position: relative;
+  z-index: 1001 !important;      /* über Header-Rahmen */
+  pointer-events: auto !important;
+}
+
+/* Content darf NICHT in den Header hineinragen */
+.insp-content{
+  position: relative;
+  z-index: 0;
+}
+
+/* Sicherheits-Puffer: verhindert, dass ein absolut positioniertes Child
+   direkt bis unter die Tabs „hoch rutscht“ und Klicks abfängt */
+.insp-content::before{
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  top: -16px; height: 16px;
+  pointer-events: none;
+}
+
+/* Close-Button darf keine eigene Sticky/Overlay-Hit-Area erzeugen */
+.insp-close{
+  position: static !important;
+  z-index: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Views explizit in den normalen Stacking-Context */
+.insp-view{ position: relative; }
