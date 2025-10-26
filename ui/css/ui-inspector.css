@@ -3,16 +3,15 @@
  * Projekt : Neue Siedler – Inspector
  * Version : v25.10.30-final-sync
  * Zweck   : Vollbild-Overlay + Tabs (Logs / Build / Paths / Resources / Tests)
- * 
+ *
  * Highlights:
- *   • Unterstützt body.is-inspector (neue Variante) und body.inspector-open (alt)
- *   • Header mit Tabs bleibt oben sichtbar (sticky)
- *   • Tabs horizontal scrollbar (mobilfreundlich)
- *   • Eruda-Overlay wird beim Inspector automatisch deaktiviert (pointer-events:none)
- *   • Inspector liegt immer über allen Overlays (z.B. Eruda)
- *   • Zahnrad-Button bleibt sichtbar & klickbar
+ *   • Unterstützt body.is-inspector (neu) und body.inspector-open (alt)
+ *   • Header mit Tabs bleibt oben sichtbar (sticky, aber ohne Click-Overlap)
+ *   • Tabs mobil scrollbar; Safe-Areas (Notch) berücksichtigt
+ *   • Inspector liegt über allen Overlays; Eruda wird bei geöffnetem Inspector
+ *     für Pointer-Events stillgelegt
+ *   • Zahnrad-FAB bleibt immer bedienbar
  * ============================================================================ */
-
 
 /* ---------- Theme / Variablen ---------- */
 :root{
@@ -32,13 +31,12 @@
   --radius: 12px;
   --z: 2147483000; /* Basis-Z für Overlay */
 
-  /* Safe-Areas für iPhone etc. */
+  /* Safe-Areas (iOS Notch etc.) */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
 }
-
 
 /* ---------- Floating Action Button (Zahnrad) ---------- */
 #btn-inspector{
@@ -50,7 +48,7 @@
   border: 0; border-radius: 10px;
   background: #2b2b30; color:#fff;
   box-shadow: 0 3px 10px rgba(0,0,0,.35);
-  font-size: 24px;          /* Symbol etwas größer */
+  font-size: 24px;       /* Symbol gut sichtbar, aber nicht übergroß */
   font-weight: 700;
   line-height: 46px;
   text-align: center;
@@ -60,8 +58,7 @@
 #btn-inspector:active{ transform: scale(.98); }
 .cb-fab[hidden]{ display:none !important; }
 
-
-/* ---------- Host / Overlay Basiszustand ---------- */
+/* ---------- Host / Overlay (Default: AUS) ---------- */
 #inspector,
 #inspector-overlay{
   position: fixed;
@@ -88,17 +85,18 @@ body.is-inspector #inspector-overlay{
   pointer-events: auto !important;
 }
 
-/* Debug-Rand (optional per JS aktivierbar) */
+/* Optionaler Debug-Rand */
 #inspector[data-insp-debug="on"],
-#inspector-overlay[data-insp-debug="on"]{ outline: 3px solid #ff0 !important; }
-
+#inspector-overlay[data-insp-debug="on"]{
+  outline: 3px solid #ff0 !important;
+}
 
 /* ---------- Grundlayout ---------- */
 .insp-frame{
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr; /* Header + Content */
   padding:
     calc(8px + var(--safe-top))
     calc(8px + var(--safe-right))
@@ -106,7 +104,6 @@ body.is-inspector #inspector-overlay{
     calc(8px + var(--safe-left));
   box-sizing: border-box;
 }
-
 
 /* ---------- Header (Tabs + Close) ---------- */
 .insp-header{
@@ -119,14 +116,14 @@ body.is-inspector #inspector-overlay{
   padding: 8px;
   border-radius: var(--radius) var(--radius) 0 0;
 
-  /* Immer sichtbar */
+  /* Bleibt sichtbar, aber überlappt die Tabs nicht */
   position: sticky;
   top: var(--safe-top);
   z-index: calc(var(--z) + 1);
   pointer-events: auto;
 }
 
-/* Tabs horizontal scrollbar */
+/* Tabs-Leiste (horizontal scrollbar) */
 .insp-tabs{
   display: flex;
   gap: 8px;
@@ -156,9 +153,9 @@ body.is-inspector #inspector-overlay{
   color: #0d0d10;
 }
 
-/* Close-Button im Header – keine Sticky-Überlappung! */
+/* Close-Button: NICHT sticky (sonst Hit-Area über Tabs in Safari/iOS) */
 .insp-close{
-  position: static;         /* <– vorher sticky: kann in Safari/iOS übergreifen */
+  position: static;      /* fix für Click-Overlap */
   margin-left: 8px;
   padding: 8px 12px;
   border-radius: 10px;
@@ -166,10 +163,9 @@ body.is-inspector #inspector-overlay{
   color: #fff;
   border: 1px solid var(--insp-border);
   cursor: pointer;
-  z-index: 1;               /* unterhalb der Tabs-Klickebene */
+  z-index: 1;            /* unterhalb der Tabs-Klickebene */
   pointer-events: auto;
 }
-
 
 /* ---------- Content ---------- */
 .insp-content{
@@ -183,62 +179,60 @@ body.is-inspector #inspector-overlay{
   z-index: 1;
 }
 
-/* Standard View → unsichtbar, aktive sichtbar */
-.insp-view{ display:none; }
-.insp-view.is-active{ display:block; }
+/* Views → nur aktive sichtbar */
+.insp-view{ display: none; }
+.insp-view.is-active{ display: block; }
 
-
-/* ---------- Toolbar, Buttons, Tabellen ---------- */
+/* ---------- Bausteine ---------- */
 .toolbar{
-  display:flex; gap:8px; align-items:center;
-  flex-wrap:wrap; margin-bottom:8px;
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;
 }
 .insp-btn{
-  padding:6px 12px;
-  border-radius:999px;
-  border:1px solid var(--insp-border);
-  background:#2e2e33; color:#eee;
-  cursor:pointer; line-height:1.2;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--insp-border);
+  background: #2e2e33; color: #eee;
+  cursor: pointer; line-height: 1.2;
 }
 .insp-btn:hover{ background:#34343a; }
-.insp-btn:active{ transform:translateY(1px); }
+.insp-btn:active{ transform: translateY(1px); }
 .insp-btn[disabled]{ opacity:.55; cursor:not-allowed; }
 
-.inspector-table{ border-collapse:collapse; width:100%; }
+.inspector-table{ border-collapse: collapse; width: 100%; }
 .inspector-table th,
 .inspector-table td{
-  border:1px solid #555;
-  padding:6px 8px;
-  vertical-align:top;
+  border: 1px solid #555;
+  padding: 6px 8px;
+  vertical-align: top;
 }
-.inspector-table thead th{ background:#2a2a2a; }
-
+.inspector-table thead th{ background: #2a2a2a; }
 
 /* ---------- LOGS ---------- */
 .insp-logs{
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
 }
-.insp-logline{ display:flex; gap:8px; align-items:baseline; padding:4px 2px;
-  border-bottom:1px dashed var(--insp-border);}
-.insp-logline:last-child{ border-bottom:none;}
-.insp-logline .sym{width:16px;text-align:center;}
-.insp-logline.ok .sym{color:var(--insp-ok);}
-.insp-logline.info .sym{color:var(--insp-info);}
-.insp-logline.warn .sym{color:var(--insp-warn);}
-.insp-logline.error .sym{color:var(--insp-error);}
-
+.insp-logline{
+  display:flex; gap: 8px; align-items: baseline;
+  padding: 4px 2px;
+  border-bottom: 1px dashed var(--insp-border);
+}
+.insp-logline:last-child{ border-bottom: none; }
+.insp-logline .sym{ width:16px; text-align:center; }
+.insp-logline.ok    .sym{ color: var(--insp-ok); }
+.insp-logline.info  .sym{ color: var(--insp-info); }
+.insp-logline.warn  .sym{ color: var(--insp-warn); }
+.insp-logline.error .sym{ color: var(--insp-error); }
 
 /* ---------- Mobile ---------- */
-@media (max-width:640px){
-  .insp-tabs{gap:6px;}
-  .insp-tab{padding:7px 10px;}
-  .insp-btn{padding:6px 10px;}
-  .inspector-table th, .inspector-table td{padding:5px 6px;}
+@media (max-width: 640px){
+  .insp-tabs{ gap:6px; }
+  .insp-tab{ padding:7px 10px; }
+  .insp-btn{ padding:6px 10px; }
+  .inspector-table th, .inspector-table td{ padding:5px 6px; }
 }
 
-
-/* ---------- Zahnrad-Button bleibt klickbar ---------- */
+/* ---------- FAB bleibt klickbar über dem Overlay ---------- */
 body.is-inspector #btn-inspector{
   position: fixed;
   z-index: 2147483647 !important; /* über Inspector */
@@ -247,11 +241,10 @@ body.is-inspector #btn-inspector{
   pointer-events: auto !important;
 }
 
-
-/* ---------- Eruda-Fix: Eruda deaktivieren, solange Inspector aktiv ---------- */
+/* ---------- Eruda-Fix: Eruda blockt keine Klicks, solange Inspector offen ---------- */
 body.is-inspector .eruda,
 body.is-inspector .eruda-container,
 body.is-inspector .eruda-entry-btn{
   pointer-events: none !important;
-  opacity: .35 !important;
+  opacity: .35 !important; /* optisch gedimmt, damit klar ist: „inaktiv“ */
 }
