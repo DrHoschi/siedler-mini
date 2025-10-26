@@ -1,19 +1,18 @@
 /* ============================================================================
- * Datei   : ui/css/ui-inspector.css
- * Projekt : Neue Siedler – Inspector
- * Version : v25.10.30-final-sync
- * Zweck   : Vollbild-Overlay + Tabs (Logs / Build / Paths / Resources / Tests)
- *
- * Highlights:
- *   • Unterstützt body.is-inspector (neu) und body.inspector-open (alt)
- *   • Header mit Tabs bleibt oben sichtbar (sticky, aber ohne Click-Overlap)
- *   • Tabs mobil scrollbar; Safe-Areas (Notch) berücksichtigt
- *   • Inspector liegt über allen Overlays; Eruda wird bei geöffnetem Inspector
- *     für Pointer-Events stillgelegt
- *   • Zahnrad-FAB bleibt immer bedienbar
- * ============================================================================ */
+   Datei   : ui/css/ui-inspector.css
+   Projekt : Neue Siedler – Inspector (Overlay + Tabs)
+   Version : v25.10.29-final
+   Zweck   : Vollbild-Overlay mit Tab-Leiste (logs/build/paths/resources/tests/ui/diag)
+   Wichtige Punkte:
+     • Host ist #inspector ODER #inspector-overlay.
+     • Sichtbarkeit: body.is-inspector ODER .open am Host (alte Klasse 'inspector-open'
+       wird weiterhin unterstützt).
+     • „Click-Hardening“: Header/Tab-Leiste liegen immer über dem Content, damit
+       keinerlei Content-Overlay (absolute/ sticky Elemente) Tab-Klicks abfängt.
+     • Aktive View wird mit .is-active IMMER sichtbar erzwungen (display:block !important).
+============================================================================ */
 
-/* ---------- Theme / Variablen ---------- */
+/* ---------- Design-Variablen ---------- */
 :root{
   --insp-bg: rgba(18,18,20,.96);
   --insp-panel: #131316;
@@ -29,41 +28,37 @@
   --insp-error: #f87171;
 
   --radius: 12px;
-  --z: 2147483000; /* Basis-Z für Overlay */
+  --z: 2147483000;
 
-  /* Safe-Areas (iOS Notch etc.) */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
 }
 
-/* ---------- Floating Action Button (Zahnrad) ---------- */
+/* ---------- FAB (Zahnrad zum Öffnen/Schließen) ---------- */
 #btn-inspector{
   position: fixed;
   right: calc(14px + var(--safe-right));
   bottom: calc(14px + var(--safe-bottom));
-  z-index: var(--z);
+  z-index: calc(var(--z) + 2000);
   width: 46px; height: 46px;
   border: 0; border-radius: 10px;
   background: #2b2b30; color:#fff;
   box-shadow: 0 3px 10px rgba(0,0,0,.35);
-  font-size: 24px;       /* Symbol gut sichtbar, aber nicht übergroß */
-  font-weight: 700;
-  line-height: 46px;
+  font: 700 18px/46px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   text-align: center;
   cursor: pointer;
-  user-select: none;
 }
 #btn-inspector:active{ transform: scale(.98); }
-.cb-fab[hidden]{ display:none !important; }
+#btn-inspector[hidden]{ display:none !important; }
 
-/* ---------- Host / Overlay (Default: AUS) ---------- */
-#inspector,
-#inspector-overlay{
+/* ---------- Host / Overlay (Default AUS, per Flag AN) ---------- */
+#inspector-overlay,
+#inspector{
   position: fixed;
   inset: 0;
-  display: none;
+  display: none;                 /* AUS per default */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -72,31 +67,30 @@
   z-index: var(--z);
 }
 
-/* Sichtbarkeitsregeln (alt + neu) */
 #inspector.open,
 #inspector-overlay.open,
-body.inspector-open #inspector,
-body.inspector-open #inspector-overlay,
 body.is-inspector #inspector,
-body.is-inspector #inspector-overlay{
+body.is-inspector #inspector-overlay,
+body.inspector-open #inspector,
+body.inspector-open #inspector-overlay{
   display: block !important;
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
 }
 
-/* Optionaler Debug-Rand */
+/* Debug: Rahmen optional aktivierbar */
 #inspector[data-insp-debug="on"],
 #inspector-overlay[data-insp-debug="on"]{
   outline: 3px solid #ff0 !important;
 }
 
-/* ---------- Grundlayout ---------- */
+/* ---------- Grundlayout des Overlays ---------- */
 .insp-frame{
   position: absolute;
   inset: 0;
   display: grid;
-  grid-template-rows: auto 1fr; /* Header + Content */
+  grid-template-rows: auto 1fr; /* Header (auto) + Content (flex) */
   padding:
     calc(8px + var(--safe-top))
     calc(8px + var(--safe-right))
@@ -105,25 +99,25 @@ body.is-inspector #inspector-overlay{
   box-sizing: border-box;
 }
 
-/* ---------- Header (Tabs + Close) ---------- */
+/* ---------- Header (Titelzeile + Tab-Leiste + Close) ---------- */
+/* WICHTIG: sticky + hoher z-index = über dem Content (Click-Hardening) */
 .insp-header{
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto; /* Tabs | Close */
   align-items: center;
+  gap: 8px;
   background: var(--insp-header);
   border: 1px solid var(--insp-border);
   border-bottom: none;
   padding: 8px;
   border-radius: var(--radius) var(--radius) 0 0;
 
-  /* Bleibt sichtbar, aber überlappt die Tabs nicht */
   position: sticky;
   top: var(--safe-top);
-  z-index: calc(var(--z) + 1);
-  pointer-events: auto;
+  z-index: calc(var(--z) + 100);  /* über Content */
 }
 
-/* Tabs-Leiste (horizontal scrollbar) */
+/* Tab-Leiste */
 .insp-tabs{
   display: flex;
   gap: 8px;
@@ -131,9 +125,12 @@ body.is-inspector #inspector-overlay{
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   padding: 4px 2px;
+
+  position: relative;
+  z-index: calc(var(--z) + 101);  /* über Header-Rahmen */
+  pointer-events: auto !important;
 }
 
-/* Einzelner Tab */
 .insp-tab{
   flex: 0 0 auto;
   padding: 8px 12px;
@@ -145,30 +142,33 @@ body.is-inspector #inspector-overlay{
   white-space: nowrap;
   font-weight: 600;
   user-select: none;
-  transition: background .15s, color .15s;
+  transition: background-color .15s ease;
 }
-.insp-tab.is-active,
+.insp-tab:hover{ background:#34343a; color:#fff; }
 .insp-tab.active{
   background: var(--insp-tab-active);
   color: #0d0d10;
 }
 
-/* Close-Button: NICHT sticky (sonst Hit-Area über Tabs in Safari/iOS) */
+/* Close-Button im Header – keine eigene Sticky-Zone erzeugen */
 .insp-close{
-  position: static;      /* fix für Click-Overlap */
-  margin-left: 8px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #3a3a40;
-  color: #fff;
+  appearance: none;
   border: 1px solid var(--insp-border);
+  background: #3a3a40; color:#fff;
+  border-radius: 10px;
+  padding: 8px 12px;
   cursor: pointer;
-  z-index: 1;            /* unterhalb der Tabs-Klickebene */
-  pointer-events: auto;
+
+  position: static !important;      /* KEIN sticky! */
+  z-index: 1 !important;
+  pointer-events: auto !important;
 }
 
-/* ---------- Content ---------- */
+/* ---------- Contentbereich ---------- */
+/* WICHTIG: z-index unter Header/Tabs, keine Klicks „wegfangen“ */
 .insp-content{
+  position: relative;
+  z-index: 0;
   min-height: 0;
   overflow: auto;
   background: var(--insp-panel);
@@ -176,14 +176,37 @@ body.is-inspector #inspector-overlay{
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
   padding: 8px;
-  z-index: 1;
 }
 
-/* Views → nur aktive sichtbar */
-.insp-view{ display: none; }
-.insp-view.is-active{ display: block; }
+/* Sicherheits-Puffer: verhindert, dass absolute/sticky Kindelemente
+   in den Header hineinragen und dessen Klicks abfangen */
+.insp-content::before{
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  top: -16px; height: 16px;
+  pointer-events: none;
+}
 
-/* ---------- Bausteine ---------- */
+/* ---------- Sichtbarkeit der einzelnen Views ---------- */
+/* Alle Views standardmäßig ausblenden … */
+.insp-content > .insp-view{
+  display: none !important;      /* Basis: unsichtbar */
+  position: relative;            /* eigener Stacking-Context */
+}
+
+/* … aktive View immer sichtbar erzwingen. */
+.insp-content > .insp-view.is-active{
+  display: block !important;
+}
+
+/* ---------- Wiederverwendbare UI-Bausteine ---------- */
+.pad{ padding: 8px 10px; }
+.hint{ opacity: .8; font-size: .9em; }
+.warn{
+  color:#ffb; background:#552;
+  padding:8px; border:1px solid #aa8; border-radius:8px;
+}
 .toolbar{
   display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;
 }
@@ -191,13 +214,16 @@ body.is-inspector #inspector-overlay{
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--insp-border);
-  background: #2e2e33; color: #eee;
-  cursor: pointer; line-height: 1.2;
+  background: #2e2e33;
+  color: #eee;
+  cursor: pointer;
+  line-height: 1.2;
 }
 .insp-btn:hover{ background:#34343a; }
 .insp-btn:active{ transform: translateY(1px); }
 .insp-btn[disabled]{ opacity:.55; cursor:not-allowed; }
 
+/* Tabellen (Events/Build/Resources/Paths …) */
 .inspector-table{ border-collapse: collapse; width: 100%; }
 .inspector-table th,
 .inspector-table td{
@@ -207,11 +233,18 @@ body.is-inspector #inspector-overlay{
 }
 .inspector-table thead th{ background: #2a2a2a; }
 
-/* ---------- LOGS ---------- */
+/* ---------- LOGS-spezifisch ---------- */
 .insp-logs{
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
 }
+.insp-filters{
+  display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+  color: var(--insp-muted);
+  padding: 4px 0 8px;
+}
+.insp-actions{ display:flex; gap:8px; align-items:center; padding:6px 0 10px; }
+#logs-list{ padding-bottom:4px; }
 .insp-logline{
   display:flex; gap: 8px; align-items: baseline;
   padding: 4px 2px;
@@ -219,10 +252,11 @@ body.is-inspector #inspector-overlay{
 }
 .insp-logline:last-child{ border-bottom: none; }
 .insp-logline .sym{ width:16px; text-align:center; }
+.insp-logline .ts{ color: var(--insp-muted); }
 .insp-logline.ok    .sym{ color: var(--insp-ok); }
-.insp-logline.info  .sym{ color: var(--insp-info); }
-.insp-logline.warn  .sym{ color: var(--insp-warn); }
-.insp-logline.error .sym{ color: var(--insp-error); }
+.insp-line.info     .sym{ color: var(--insp-info); }
+.insp-line.warn     .sym{ color: var(--insp-warn); }
+.insp-line.error    .sym{ color: var(--insp-error); }
 
 /* ---------- Mobile ---------- */
 @media (max-width: 640px){
@@ -232,68 +266,11 @@ body.is-inspector #inspector-overlay{
   .inspector-table th, .inspector-table td{ padding:5px 6px; }
 }
 
-/* ---------- FAB bleibt klickbar über dem Overlay ---------- */
-body.is-inspector #btn-inspector{
+/* ---------- FAB bleibt klickbar, auch wenn Overlay offen ---------- */
+body.is-inspector #btn-inspector {
   position: fixed;
-  z-index: 2147483647 !important; /* über Inspector */
+  z-index: 2147483647 !important; /* ganz oben */
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
 }
-
-/* ---------- Eruda-Fix: Eruda blockt keine Klicks, solange Inspector offen ---------- */
-body.is-inspector .eruda,
-body.is-inspector .eruda-container,
-body.is-inspector .eruda-entry-btn{
-  pointer-events: none !important;
-  opacity: .35 !important; /* optisch gedimmt, damit klar ist: „inaktiv“ */
-}
-
-/* === Click-Tracer UI-Highlight === */
-#btn-click-tracer {
-  background: #444;
-  color: #fff;
-}
-#btn-click-tracer.active {
-  background: #2b66ff;
-}
-
-/* === Click-Hardening für Tab-Leiste und Header ========================== */
-/* Header und Tabs müssen IMMER über dem Content liegen */
-.insp-header{
-  position: sticky;              /* bleibt oben */
-  top: var(--safe-top, 0px);
-  z-index: 1000 !important;      /* über Content */
-}
-
-.insp-tabs{
-  position: relative;
-  z-index: 1001 !important;      /* über Header-Rahmen */
-  pointer-events: auto !important;
-}
-
-/* Content darf NICHT in den Header hineinragen */
-.insp-content{
-  position: relative;
-  z-index: 0;
-}
-
-/* Sicherheits-Puffer: verhindert, dass ein absolut positioniertes Child
-   direkt bis unter die Tabs „hoch rutscht“ und Klicks abfängt */
-.insp-content::before{
-  content: "";
-  position: absolute;
-  left: 0; right: 0;
-  top: -16px; height: 16px;
-  pointer-events: none;
-}
-
-/* Close-Button darf keine eigene Sticky/Overlay-Hit-Area erzeugen */
-.insp-close{
-  position: static !important;
-  z-index: 1 !important;
-  pointer-events: auto !important;
-}
-
-/* Views explizit in den normalen Stacking-Context */
-.insp-view{ position: relative; }
