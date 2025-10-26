@@ -1,44 +1,45 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.build.js
  * Projekt : Neue Siedler – Inspector (Build-Tab)
- * Version : v25.10.25-clean
- * Autor   : refactor auf Registry+Events (kein window.UIBuild mehr)
- * ----------------------------------------------------------------------------
- * ZWECK
- *  - Entwicklertab für Gebäude-/Registry-Daten
- *  - Liest Daten ROBUST aus window.Registry (und Fallback: data/buildings.json)
- *  - Stellt Tabelle, Suche, Kategorie-Filter, Sortierung und Validierung bereit
- *  - Öffnet auf Wunsch das Build-Menü per Event (req:buildmenu:show)
+ * Version : v25.10.28-final
+ * Zweck   : Entwicklertab für Gebäude-/Registry-Daten
  *
- * LAUSCHT
- *  - cb:registry:ready        → automatische Aktualisierung
- *  - cb:registry:snapshot     → automatische Aktualisierung
- *  - cb:insp:tab:change       → Tabwechsel (nur bei aktiver Anzeige refreshen)
+ * Features:
+ *   • Daten robust aus window.Registry (Fallback: data/buildings.json)
+ *   • Suche / Kategorie-Filter / Sortierung
+ *   • Validierung (fehlende Felder, Duplikate)
+ *   • Export (sichtbarer Zustand in JSON)
+ *   • Build-Menü per Event anfordern
+ *   • Header mit „×“-Button (Inspector schließen)
  *
- * SENDET
- *  - req:buildmenu:show       → UI soll Baumenü anzeigen
+ * Lebenszyklus:
+ *   • registriert sich über kompatibles core.mount('build', render)
+ *   • reagiert auf cb:registry:ready / cb:registry:snapshot / Tabwechsel
  *
- * HINWEIS
- *  - Alt-API (window.UIBuild.*, #build-panel) wurde vollständig entfernt.
- *  - Kategorien/Buildings kommen aus Registry; notfalls JSON-Fallback.
+ * Hinweise:
+ *   • Keine Alt-API (kein window.UIBuild, kein #build-panel)
+ *   • Zeichnet ausschließlich in den vom Core gelieferten host
  * ========================================================================== */
-
-/* =============================== [IMPORTS] ================================= */
-/* (keine externen Imports – arbeitet mit globalen Objekten/Events) */
-
-/* ============================== [KONSTANTEN] =============================== */
 (function () {
   'use strict';
+
   const TAG='[inspector.build]';
   const LOG = (window.CBLog?.info  || console.info ).bind(console, TAG);
   const OK  = (window.CBLog?.ok    || console.log  ).bind(console, TAG);
   const WRN = (window.CBLog?.warn  || console.warn ).bind(console, TAG);
   const ERR = (window.CBLog?.error || console.error).bind(console, TAG);
 
+  // --- Core-Bridge (kompatibel zu allen Varianten) ---------------------------
+  const mount = (window.__INSPECTOR_CORE__?.api?.mount
+              || window.Inspector?.mount
+              || window.UIInspector?.mount);
+  if (!mount) { WRN('Kein Inspector-Core gefunden – Tab wird nicht registriert'); return; }
+
+  // --- kleine DOM-Helper -----------------------------------------------------
   const $  = (s, r=document)=>r.querySelector(s);
   const $$ = (s, r=document)=>Array.from(r.querySelectorAll(s));
 
-  /* =========================== [HILFSFUNKTIONEN] =========================== */
+  // =========================== [HILFSFUNKTIONEN] =============================
 
   // String-Helper (sichere Schlüssel)
   const toKey = v => String(v ?? '').trim();
@@ -68,7 +69,7 @@
     return '';
   }
 
-  // Normalisierung eines beliebigen Registry/JSON-Eintrags auf ein Anzeige-Objekt
+  // Anzeige-Objekt aus beliebigem Registry/JSON-Eintrag erzeugen
   function normalize(entry, fallbackKey){
     entry = entry || {};
     const id   = toKey(entry.id || entry.key || fallbackKey || entry.name || entry.title);
@@ -80,17 +81,15 @@
     return { id, name, category:cat, size, cost, icon, _raw: entry };
   }
 
-  // Registry → Buildings robust ermitteln (unterstützt frühere/versch. Strukturen)
+  // Buildings robust aus Registry ermitteln (verschiedene Strukturen)
   function harvestFromRegistry(){
     const R = window.Registry || window.BuildRegistry || window.registry || {};
-    // direkte, häufigste Varianten
     if (Array.isArray(R.buildings)) return R.buildings.map(normalize);
     if (R.data?.buildings){
       const b = R.data.buildings;
       if (Array.isArray(b)) return b.map(normalize);
       if (typeof b==='object') return Object.entries(b).map(([k,v])=>normalize(v,k));
     }
-    // generischer Fallback: wenn ein Objekt mit ähnlichen Feldern vorliegt
     if (typeof R==='object'){
       const sub = R.buildings || R.items || R.list || R.data || null;
       if (Array.isArray(sub)) return sub.map(normalize);
@@ -99,7 +98,7 @@
     return [];
   }
 
-  // Fallback: data/buildings.json (nur Ansicht, kein Muss)
+  // Fallback: data/buildings.json (readonly-Ansicht)
   async function fetchBuildingsJSON(){
     const CAND = ['data/buildings.json','./data/buildings.json','../data/buildings.json'];
     for (const url of CAND){
@@ -118,16 +117,10 @@
     return [];
   }
 
-  // Kategorien aus Liste ableiten
-  function deriveCategories(list){
-    return Array.from(new Set(list.map(x=>x.category).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
-  }
-
-  // Validierung (Duplikate, fehlende Angaben)
+  // Validierung (Duplikate, fehlende Angaben) – liefert Meldungen + Kategorien
   function validate(list){
     const warnings = [];
     const seen = new Set();
-
     for (const it of list){
       if (!it.id) warnings.push({type:'error', msg:`Eintrag ohne ID`, it});
       if (!it.name) warnings.push({type:'warn',  msg:`${it.id}: Name fehlt`, it});
@@ -138,11 +131,13 @@
       if (seen.has(key)) warnings.push({type:'warn', msg:`Duplikat-ID: ${it.id}`});
       seen.add(key);
     }
-
-    return { warnings, cats: deriveCategories(list) };
+    // Kategorienliste (nur Info)
+    const cats = Array.from(new Set(list.map(x=>x.category).filter(Boolean)))
+      .sort((a,b)=>a.localeCompare(b));
+    return { warnings, cats };
   }
 
-  // Download-Helfer
+  // Download-Helfer (Blob → Datei)
   function download(name, blob){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob); a.download=name;
@@ -150,52 +145,62 @@
     URL.revokeObjectURL(a.href);
   }
 
-  /* ================================ [KLASSE] ================================ */
-  // (Keine Klasse nötig – einfache Modulstruktur)
-
-  /* ============================== [HAUPTLOGIK] ============================== */
-  window.Inspector?.mount?.('build', (host)=>{
-    // --- Grundgerüst ---------------------------------------------------------
+  // ============================== [RENDERER] =================================
+  function renderBuildTab(host){
+    // --- Grundgerüst: Frame / Header (mit X) / Content ----------------------
     host.innerHTML = `
-      <div class="pad">
-        <div class="toolbar" style="flex-wrap:wrap;gap:8px">
-          <button class="insp-btn" id="b-refresh">Refresh</button>
-          <button class="insp-btn" id="b-export">Export JSON</button>
-          <button class="insp-btn" id="b-validate">Check Kategorien</button>
-          <button class="insp-btn" id="b-buildmenu">Build-Menü öffnen</button>
-          <select id="f-cat" class="insp-btn" style="min-width:160px"></select>
-          <input id="f-q" class="insp-btn" placeholder="Suche (ID/Titel/Kat.)" style="flex:1;min-width:180px">
-          <span id="b-hint" class="hint"></span>
+      <div class="insp-frame">
+        <div class="insp-header">
+          <h3>Build / Gebäude</h3>
+          <button class="insp-close" title="Inspector schließen">×</button>
         </div>
 
-        <div id="build-info" class="hint" style="margin-bottom:6px"></div>
+        <div class="insp-content">
+          <div class="pad">
+            <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+              <button class="insp-btn" id="b-refresh">Refresh</button>
+              <button class="insp-btn" id="b-export">Export JSON</button>
+              <button class="insp-btn" id="b-validate">Check Kategorien</button>
+              <button class="insp-btn" id="b-buildmenu">Build-Menü öffnen</button>
 
-        <div id="empty-box" class="warn" style="display:none;margin-bottom:8px">
-          <strong>Keine Einträge gefunden.</strong>
-          <div style="opacity:.9;margin-top:4px">
-            Registry ist leer <em>und</em> es konnte kein <code>data/buildings.json</code> geladen werden.
-            Prüfe Pfad & Lade-Reihenfolge. Danach „Refresh“ klicken.
+              <select id="f-cat" class="insp-btn" style="min-width:160px"></select>
+              <input id="f-q" class="insp-btn" placeholder="Suche (ID/Titel/Kat.)" style="flex:1;min-width:180px">
+              <span id="b-hint" class="hint"></span>
+            </div>
+
+            <div id="build-info" class="hint" style="margin-bottom:6px"></div>
+
+            <div id="empty-box" class="warn" style="display:none;margin-bottom:8px">
+              <strong>Keine Einträge gefunden.</strong>
+              <div style="opacity:.9;margin-top:4px">
+                Registry ist leer <em>und</em> es konnte kein <code>data/buildings.json</code> geladen werden.
+                Prüfe Pfad & Lade-Reihenfolge. Danach „Refresh“ klicken.
+              </div>
+            </div>
+
+            <div style="overflow:auto; max-height:55vh; border:1px solid #444; border-radius:6px">
+              <table class="inspector-table" id="tbl-build">
+                <thead>
+                  <tr>
+                    <th data-k="id">ID</th>
+                    <th data-k="name">Titel</th>
+                    <th data-k="category">Kategorie</th>
+                    <th data-k="size">Größe</th>
+                    <th data-k="cost">Kosten</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div id="val-box" class="hint" style="margin-top:8px"></div>
           </div>
         </div>
-
-        <div style="overflow:auto; max-height:55vh; border:1px solid #444; border-radius:6px">
-          <table class="inspector-table" id="tbl-build">
-            <thead>
-              <tr>
-                <th data-k="id">ID</th>
-                <th data-k="name">Titel</th>
-                <th data-k="category">Kategorie</th>
-                <th data-k="size">Größe</th>
-                <th data-k="cost">Kosten</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <div id="val-box" class="hint" style="margin-top:8px"></div>
       </div>
     `;
+
+    // --- Close-Button im Header ---------------------------------------------
+    $('.insp-close', host)?.addEventListener('click', ()=> window.Inspector?.close());
 
     // --- UI-Refs -------------------------------------------------------------
     const ui = {
@@ -214,7 +219,7 @@
     let filterCat = '';
     let filterQ = '';
     let sortKey = 'id';
-    let sortDir = 1;
+    let sortDir = 1;    // 1: asc, -1: desc
     let source = '…';
 
     // --- Render-Funktionen ---------------------------------------------------
@@ -222,12 +227,20 @@
       ui.info.textContent = `Quelle: ${source} (Einträge: ${rows.length})`;
       ui.empty.style.display = rows.length ? 'none' : 'block';
     }
+
     function renderCatFilter(){
-      const cats = Array.from(new Set(rows.map(r=>r.category).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+      const cats = Array.from(new Set(rows.map(r=>r.category).filter(Boolean)))
+        .sort((a,b)=>a.localeCompare(b));
       ui.catSel.innerHTML = ['<option value="">(alle Kategorien)</option>']
         .concat(cats.map(c=>`<option value="${c}">${c}</option>`))
         .join('');
+      // Filter beibehalten, wenn möglich
+      if (filterCat) {
+        const opt = ui.catSel.querySelector(`option[value="${filterCat}"]`);
+        if (opt) ui.catSel.value = filterCat; else filterCat='';
+      }
     }
+
     function renderTable(){
       let data = rows.filter(r=>{
         if (filterCat && r.category !== filterCat) return false;
@@ -259,6 +272,7 @@
           </tr>`;
       }).join('');
     }
+
     function renderValidation(){
       const {warnings, cats} = validate(rows);
       if (!warnings.length){
@@ -301,16 +315,31 @@
         setTimeout(()=> ui.hint.textContent='', 1200);
       }
     }
+
     function doExport(){
-      const payload = { ts:new Date().toISOString(), source, count:rows.length,
-        items: rows.map(r=>({id:r.id,name:r.name,category:r.category,size:r.size,cost:r.cost})) };
+      const payload = {
+        ts: new Date().toISOString(),
+        source, count: rows.length,
+        items: rows.map(r=>({id:r.id,name:r.name,category:r.category,size:r.size,cost:r.cost}))
+      };
       const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
       download(`build_registry_${new Date().toISOString().replace(/[:\.]/g,'-')}.json`, blob);
       ui.hint.textContent=`exportiert (${rows.length})`;
       setTimeout(()=> ui.hint.textContent='', 1200);
     }
-    function doValidate(){ renderValidation(); ui.hint.textContent='Validierung ausgeführt'; setTimeout(()=> ui.hint.textContent='', 1200); }
-    function openBuildMenu(){ dispatchEvent(new Event('req:buildmenu:show')); ui.hint.textContent='Build-Menü angefordert'; setTimeout(()=> ui.hint.textContent='',1200); }
+
+    function doValidate(){
+      renderValidation();
+      ui.hint.textContent='Validierung ausgeführt';
+      setTimeout(()=> ui.hint.textContent='', 1200);
+    }
+
+    function openBuildMenu(){
+      // dein Event-Name aus der bisherigen Datei
+      dispatchEvent(new Event('req:buildmenu:show'));
+      ui.hint.textContent='Build-Menü angefordert';
+      setTimeout(()=> ui.hint.textContent='',1200);
+    }
 
     // --- UI-Events -----------------------------------------------------------
     ui.head.addEventListener('click', e=>{
@@ -327,18 +356,21 @@
     $('#b-validate', host).addEventListener('click', doValidate);
     $('#b-buildmenu', host).addEventListener('click', openBuildMenu);
 
-    // --- System-Events -------------------------------------------------------
+    // --- System-Events (auto-refresh) ---------------------------------------
     addEventListener('cb:registry:ready', doRefresh);
     addEventListener('cb:registry:snapshot', doRefresh);
-    addEventListener('cb:insp:tab:change', e=>{ if (e.detail?.tab==='build') doRefresh(); });
+    addEventListener('cb:insp:tab:change', e=>{
+      if ((e.detail?.tab||'') === 'build') doRefresh();
+    });
 
     // --- Debug/Dev-Hook ------------------------------------------------------
     (window.__inspBuild = window.__inspBuild || {}).refresh = doRefresh;
 
-    // --- Start ---------------------------------------------------------------
+    // --- Initial-Load --------------------------------------------------------
     doRefresh();
-    OK('bereit v25.10.25-clean');
-  });
+    OK('bereit v25.10.28-final');
+  }
 
+  // ============================ [REGISTRIERUNG] ==============================
+  mount('build', renderBuildTab);
 })();
-
