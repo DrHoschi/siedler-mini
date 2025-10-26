@@ -81,13 +81,13 @@
       btn.title = 'Inspector (I)';
       btn.type = 'button';
       btn.textContent = '⚙️';
-      btn.style.fontSize = '24px';
+      btn.style.fontSize = '25px';
       btn.style.lineHeight = '1';
       
       // minimale, robuste Positionierung – falls kein CSS greift
       btn.style.position = 'fixed';
       btn.style.right = '12px';
-      btn.style.top = '12px';
+      btn.style.bottom = '12px';
       btn.style.zIndex = 60;
       btn.style.padding = '6px 8px';
       btn.style.borderRadius = '6px';
