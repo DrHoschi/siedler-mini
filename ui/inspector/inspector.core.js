@@ -1,206 +1,182 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.core.js
- * Version : v18.16.2 (final)
- * Zweck   : Kern des Inspector-Overlays (Host, Tabs, View-Slots, API)
- *
- * WICHTIG
- * - Dieses Modul MUSS VOR allen anderen Inspector-Modulen geladen werden.
- *   Nur so existieren die Slots, wenn weitere Module ihre Tabs registrieren.
- *
- * Features
- * - Erzeugt das Overlay (#inspector) mit Header, Tabs und Content-Bereich
- * - Verwaltet Tabs (Buttons + aktives View) mit Synonym-Mapping
- * - Stellt API bereit (open/close/toggle/registerTab/mount/getSlot)
- * - Sendet cb:insp:tab:change bei Tabwechsel (für Auto-Refreshs)
- *
- * Änderungen ggü. deiner v18.16.1
- * - Bugfix: Der generische Slot (slots.view) wird NUR bei dynamischen Tabs
- *   angezeigt (z. B. „ui“). Bei bekannten Tabs bleibt er verborgen.
- * - Code & Kommentare vollständig strukturiert.
+ * Projekt : Neue Siedler – Inspector
+ * Version : v25.10.27-core+icons
+ * Zweck   : Inspector-Kern (Tabs, Slots, Mount-API) + Tab-Icon-Unterstützung
  * ========================================================================== */
-/* ============================================================================
- * Datei   : ui/inspector/inspector.core.js
- * Version : v18.16.3 (final fix)
- * Zweck   : Inspector-Overlay (Host, Tabs, Views, API)
- * Fix     : Eigener "generic-view" für dynamische Tabs (z. B. "ui").
- *           Der Container (data-slot="view") bleibt IMMER sichtbar.
- * ========================================================================== */
-(function(){
-  'use strict';
-  const MOD='[inspector.core]';
-// ---- Doppel-Init Guard (Inspector Core) -----------------------------
+
+/* ---- Doppel-Init Guard (verhindert zweiten Start des Cores) --------------- */
 if (window.__INSPECTOR_CORE_INIT__) {
   (window.CBLog?.info || console.info)('[inspector.core] duplicate load – skipped');
   // nichts weiter ausführen
-  return;
-}
-window.__INSPECTOR_CORE_INIT__ = true;
-  
-  // Host erzeugen
-  function ensureHost(){
-    let el = document.getElementById('inspector');
-    if (el) return el;
+} else {
+  window.__INSPECTOR_CORE_INIT__ = true;
 
-    el = document.createElement('div');
-    el.id = 'inspector';
-    el.setAttribute('aria-hidden','true');
+  (function () {
+    'use strict';
 
-    el.innerHTML = `
-      <div class="insp-frame" role="dialog" aria-label="Inspector" aria-modal="true">
-        <div class="insp-header">
-          <div class="insp-tabs" data-slot="tabs" role="tablist"></div>
-          <button class="insp-close" type="button" aria-label="Schließen">Schließen</button>
-        </div>
+    const MOD = '[inspector.core]';
+    const LOG = (window.CBLog?.info || console.info).bind(console, MOD);
+    const WRN = (window.CBLog?.warn || console.warn).bind(console, MOD);
 
-        <!-- Content-Container: enthält alle bekannten Views + einen generischen View -->
-        <div class="insp-content" data-slot="view">
-          <div data-slot="logs-view"></div>
-          <div data-slot="build-view" hidden></div>
-          <div data-slot="paths-view" hidden></div>
-          <div data-slot="res-view" hidden></div>
-          <div data-slot="tests-view" hidden></div>
-          <!-- NEU: eigener Slot nur für dynamische Tabs -->
-          <div data-slot="generic-view" hidden></div>
-        </div>
-      </div>`;
-    document.body.appendChild(el);
+    // ------------------------------------------------------------------------
+    //  SLOTS (dein bestehendes System – Erklärung für spätere Arbeiten)
+    //    data-slot="tabs"          → Tab-Button-Leiste
+    //    data-slot="view"          → Container für Inhalte (Panel)
+    //    data-slot="build-view"    → fester Slot für build
+    //    data-slot="paths-view"    → fester Slot für paths
+    //    data-slot="res-view"      → fester Slot für resources
+    //    data-slot="tests-view"    → fester Slot für tests/events
+    //    data-slot="logs-view"     → fester Slot für logs
+    //    data-slot="generic-view"  → universeller Slot für dynamische Tabs (ui, diag, …)
+    // ------------------------------------------------------------------------
 
-    el.querySelector('.insp-close').addEventListener('click', ()=> API.close());
-    return el;
-  }
+    // DOM-Helfer
+    const $ = (s, sc = document) => sc.querySelector(s);
+    const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
 
-  const host = ensureHost();
+    // Grundgerüst finden/erzeugen
+    const root = document.getElementById('inspector') || (function () {
+      const n = el('div', 'inspector'); n.id = 'inspector'; document.body.appendChild(n); return n;
+    })();
+    const slots = {
+      tabs: $('[data-slot="tabs"]', root) || (function () {
+        const n = el('div', 'insp-tabs'); n.setAttribute('data-slot', 'tabs'); root.appendChild(n); return n;
+      })(),
+      view: $('[data-slot="view"]', root) || (function () {
+        const n = el('div', 'insp-content'); n.setAttribute('data-slot', 'view'); root.appendChild(n); return n;
+      })()
+    };
 
-  // Slots
-  const container = host.querySelector('[data-slot="view"]'); // IMMER sichtbar
-  const slots = {
-    tabs    : host.querySelector('[data-slot="tabs"]'),
-    container,
-    logs    : host.querySelector('[data-slot="logs-view"]'),
-    build   : host.querySelector('[data-slot="build-view"]'),
-    paths   : host.querySelector('[data-slot="paths-view"]'),
-    res     : host.querySelector('[data-slot="res-view"]'),
-    tests   : host.querySelector('[data-slot="tests-view"]'),
-    generic : host.querySelector('[data-slot="generic-view"]')
-  };
-
-  // Sicherstellen, dass generic existiert (falls alt. HTML ohne generic)
-  if (!slots.generic) {
-    const gen = document.createElement('div');
-    gen.setAttribute('data-slot','generic-view');
-    gen.hidden = true;
-    slots.container.appendChild(gen);
-    slots.generic = gen;
-  }
-
-  // Bekannte Views
-  const views = {
-    logs : slots.logs,
-    build: slots.build,
-    paths: slots.paths,
-    res  : slots.res,
-    tests: slots.tests
-    // dynamische Tabs benutzen slots.generic
-  };
-
-  // Tab-ID normalisieren
-  function normalizeId(id){
-    if (!id) return 'logs';
-    const s = String(id).toLowerCase().trim();
-    if (['ress.','ress','resources','resource'].includes(s)) return 'res';
-    if (['pfade','pfad','path','paths'].includes(s))         return 'paths';
-    if (['event','events'].includes(s))                      return 'tests';
-    return s; // z. B. "ui"
-  }
-
-  // Tab-Buttons
-  const tabButtons = {};
-  function addTabButton(id, label){
-    const norm = normalizeId(id);
-    if (tabButtons[norm]) { if (label) tabButtons[norm].textContent = label; return; }
-    const b = document.createElement('button');
-    b.className = 'insp-tab'; b.type='button';
-    b.textContent = label || norm; b.dataset.tab = norm; b.setAttribute('role','tab');
-    b.addEventListener('click', ()=> setActiveTab(norm));
-    slots.tabs.appendChild(b); tabButtons[norm]=b;
-  }
-
-  // Aktiven Tab setzen (Container bleibt sichtbar!)
-  function setActiveTab(id){
-    const norm = normalizeId(id);
-    const isKnown = Object.prototype.hasOwnProperty.call(views, norm);
-
-    // bekannte Views ein-/ausblenden
-    Object.entries(views).forEach(([key, el])=>{
-      if (el) el.hidden = (key !== norm);
-    });
-
-    // generischen View zeigen, wenn KEIN bekannter Tab aktiv ist (z. B. "ui")
-    if (slots.generic) slots.generic.hidden = isKnown;
-
-    // Buttons markieren
-    Object.entries(tabButtons).forEach(([key,b])=>{
-      b.classList.toggle('active', key === norm);
-    });
-
-    // Wechsel melden
-    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab:norm } }));
-  }
-
-  // API
-  const API = {
-    open(tab){
-      host.classList.add('open');
-      Object.assign(host.style, {
-        display:'block', visibility:'visible', opacity:'1', pointerEvents:'auto'
-      });
-      host.setAttribute('aria-hidden','false');
-      document.body.classList.add('inspector-open');
-      setActiveTab(tab || 'logs');
-    },
-    close(){
-      host.classList.remove('open');
-      Object.assign(host.style, {
-        display:'none', visibility:'hidden', opacity:'0', pointerEvents:'none'
-      });
-      host.setAttribute('aria-hidden','true');
-      document.body.classList.remove('inspector-open');
-    },
-    toggle(tab){
-      (getComputedStyle(host).display==='none') ? API.open(tab) : API.close();
-    },
-    registerTab({ id, title, onShow }){
-      const norm = normalizeId(id);
-      addTabButton(norm, title || id);
-
-      // Ziel-Slot: bekannter Slot ODER der neue generic-view
-      const slot = views[norm] || slots.generic;
-
-      if (slot && typeof onShow === 'function'){
-        slot.innerHTML = '';
-        onShow(slot);
+    // Feste Views sicherstellen (falls Core sie erwartet)
+    const ensureFixedView = (slotName) => {
+      let n = $(`[data-slot="${slotName}"]`, root);
+      if (!n) {
+        n = el('div', 'insp-view'); n.setAttribute('data-slot', slotName); n.hidden = true;
+        slots.view.appendChild(n);
       }
-    },
-    mount(id,onShow){ API.registerTab({ id, title:id, onShow }); },
-    getSlot(name){
-      return (name==='view') ? slots.container : (slots[name] || document.querySelector(`[data-slot="${name}"]`));
+      return n;
+    };
+    const fixedViews = {
+      build:   ensureFixedView('build-view'),
+      paths:   ensureFixedView('paths-view'),
+      res:     ensureFixedView('res-view'),
+      tests:   ensureFixedView('tests-view'),
+      logs:    ensureFixedView('logs-view'),
+      generic: ensureFixedView('generic-view') // universeller Slot
+    };
+
+    // Aktiver Tab-Status
+    const tabButtons = {};   // id → button
+    let activeTab = null;
+
+    // ------------------------------------------------------------------------
+    //  ➤ NEU: Icon-Mapping (kannst du später anpassen)
+    //     - Keys: Tab-IDs (so wie in data-tab)
+    //     - Values: HTML (Emoji, SVG oder <img>)
+    // ------------------------------------------------------------------------
+    const TAB_ICONS = {
+      build:     '🏗️',
+      paths:     '🗺️',
+      resources: '📦',
+      tests:     '🧪',
+      logs:      '📜',
+      ui:        '🧰',
+      diag:      '⚙️'
+    };
+
+    function decorateTabButton(btn, id) {
+      if (!btn || btn.querySelector('.icon')) return; // schon dekoriert
+      const icon = TAB_ICONS[id];
+      if (!icon) return; // kein Icon hinterlegt → nichts tun
+      const span = el('span', 'icon', icon);
+      // Icon voranstellen und etwas Abstand
+      btn.prepend(span);
+      btn.style.gap = '6px';
+      btn.style.alignItems = 'center';
     }
-  };
 
-  // global
-  window.Inspector = Object.assign(window.Inspector||{}, API);
-  window.__INSPECTOR_CORE__ = { api: API };
+    // ------------------------------------------------------------------------
+    //  Tab-Button erstellen / aktivieren
+    // ------------------------------------------------------------------------
+    function addTabButton(id, label) {
+      const norm = String(id);
+      if (tabButtons[norm]) return tabButtons[norm];
 
-  // Standard-Buttons
-  addTabButton('logs','logs');
-  addTabButton('build','build');
-  addTabButton('paths','paths');
-  addTabButton('res','resources');
-  addTabButton('tests','tests');
-  addTabButton('ui','ui'); // dynamischer Tab → generic-view
+      const b = el('button', 'insp-tab', label || norm);
+      b.setAttribute('data-tab', norm);
+      b.addEventListener('click', () => activateTab(norm));
+      slots.tabs.appendChild(b);
 
-  // Start + Ready
-  setActiveTab('logs');
-  (window.CBLog?.info||console.info)(MOD,'bereit v%s','18.16.3');
-  setTimeout(()=> window.dispatchEvent(new Event('inspector:ready')),0);
-})();
+      // ➤ NEU: Icon für diesen Button einsetzen (falls definiert)
+      decorateTabButton(b, norm);
+
+      tabButtons[norm] = b;
+      return b;
+    }
+
+    function showOnly(viewEl) {
+      // alle Views verstecken, gewünschten zeigen
+      for (const k of Object.keys(fixedViews)) fixedViews[k].hidden = true;
+      if (viewEl) viewEl.hidden = false;
+    }
+
+    function activateTab(id) {
+      // Button-Styles
+      Object.values(tabButtons).forEach(btn => btn.classList.remove('active'));
+      tabButtons[id]?.classList.add('active');
+
+      // Inhalt umschalten
+      switch (id) {
+        case 'build':   showOnly(fixedViews.build);   break;
+        case 'paths':   showOnly(fixedViews.paths);   break;
+        case 'resources': showOnly(fixedViews.res);   break;
+        case 'tests':   showOnly(fixedViews.tests);   break;
+        case 'logs':    showOnly(fixedViews.logs);    break;
+        default:        showOnly(fixedViews.generic); break; // dynamische Tabs wie "ui", "diag"
+      }
+      activeTab = id;
+
+      // Tab-Change Event (für Module, die Refresh wollen)
+      try { window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail: { tab: id } })); } catch { }
+    }
+
+    // ------------------------------------------------------------------------
+    //  API: Registrierung externer Tabs (z. B. ui, diag)
+    // ------------------------------------------------------------------------
+    function registerTab({ id, title = id, onShow } = {}) {
+      if (!id) return;
+      const btn = addTabButton(id, title);
+      // ersten externen Tab automatisch aktivieren (nur wenn noch keiner aktiv)
+      if (!activeTab) activateTab(id);
+
+      // onShow sobald aktiv
+      btn.addEventListener('click', () => {
+        const host = fixedViews.generic; // dynamische landen im generic
+        try { onShow && onShow(host); } catch (e) { WRN('onShow error', e?.message || e); }
+      }, { once: true });
+
+      return { id, button: btn };
+    }
+
+    // Alte API aliasen
+    const api = { registerTab, addTab: registerTab, mount: registerTab };
+    window.__INSPECTOR_CORE__ = { api };
+
+    // ------------------------------------------------------------------------
+    //  ➤ NEU: Fallback – existierende Buttons einmalig dekorieren (Icons)
+    //     Falls Buttons schon vor Core-Erweiterung existieren, erhalten sie nun Icons.
+    // ------------------------------------------------------------------------
+    function decorateExistingTabButtonsOnce() {
+      const buttons = root.querySelectorAll('.insp-tab[data-tab]');
+      buttons.forEach(btn => {
+        const id = btn.getAttribute('data-tab');
+        decorateTabButton(btn, id);
+      });
+    }
+    // 1× beim ersten Ready ausführen
+    setTimeout(decorateExistingTabButtonsOnce, 0);
+
+    LOG('bereit (Core + Icons)');
+  })();
+}
