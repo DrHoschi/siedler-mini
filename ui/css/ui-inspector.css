@@ -156,11 +156,9 @@ body.is-inspector #inspector-overlay{
   color: #0d0d10;
 }
 
-/* Close-Button im Header */
+/* Close-Button im Header – keine Sticky-Überlappung! */
 .insp-close{
-  position: sticky;
-  top: calc(0px + var(--safe-top));
-  right: 0;
+  position: static;         /* <– vorher sticky: kann in Safari/iOS übergreifen */
   margin-left: 8px;
   padding: 8px 12px;
   border-radius: 10px;
@@ -168,6 +166,8 @@ body.is-inspector #inspector-overlay{
   color: #fff;
   border: 1px solid var(--insp-border);
   cursor: pointer;
+  z-index: 1;               /* unterhalb der Tabs-Klickebene */
+  pointer-events: auto;
 }
 
 
