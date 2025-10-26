@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-26T10:08:52.219Z",
+  "createdAt": "2025-10-26T13:29:08.929Z",
   "root": ".",
   "count": 433,
   "entries": [
@@ -1101,7 +1101,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 7122
+      "size": 6234
     },
     {
       "type": "file",
@@ -1191,7 +1191,7 @@
     {
       "type": "file",
       "path": "core/map-runtime.bridge.js",
-      "size": 1285
+      "size": 4665
     },
     {
       "type": "file",
@@ -1201,7 +1201,7 @@
     {
       "type": "file",
       "path": "core/overlay.fps.js",
-      "size": 3348
+      "size": 3351
     },
     {
       "type": "file",
@@ -1894,7 +1894,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 793
+      "size": 4294
     },
     {
       "type": "file",
@@ -1904,12 +1904,12 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.core.js",
-      "size": 7250
+      "size": 8494
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.diag.js",
-      "size": 16242
+      "size": 16620
     },
     {
       "type": "file",
@@ -1964,7 +1964,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.ui.js",
-      "size": 27252
+      "size": 3913
     },
     {
       "type": "file",
@@ -2079,12 +2079,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42559
+      "size": 42844
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16308
+      "size": 16407
     },
     {
       "type": "file",
