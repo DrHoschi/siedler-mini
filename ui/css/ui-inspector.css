@@ -240,3 +240,12 @@ body.is-inspector #inspector-overlay{
   .insp-btn{ padding:6px 10px; }
   .inspector-table th, .inspector-table td{ padding:5px 6px; }
 }
+
+/* Inspector-Button bleibt immer klickbar (über dem Overlay) */
+body.is-inspector #btn-inspector {
+  position: fixed;
+  z-index: 2147483647 !important; /* über Inspector */
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
