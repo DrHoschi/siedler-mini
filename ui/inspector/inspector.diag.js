@@ -41,6 +41,16 @@
   const WRN = (window.CBLog?.warn || console.warn).bind(console, MOD);
   const ERR = (window.CBLog?.err  || console.error).bind(console, MOD);
 
+  // ---- Diag Doppel-Mount Guard ---------------------------------------
+if (window.__INSPECTOR_DIAG_MOUNTED__) {
+  (window.CBLog?.info || console.info)('[inspector.diag] duplicate load – skipped');
+  // sofort aussteigen
+  // (nichts weiter in dieser Datei ausführen)
+  // eslint-disable-next-line no-useless-return
+  return;
+}
+window.__INSPECTOR_DIAG_MOUNTED__ = true;
+  
   /* =========================== [CORE-BRIDGE] =========================== */
   // Kompatible, minimale Brücke zur Tab-API (unabhängig vom genauen Core-Stand)
   const core = (function(){
