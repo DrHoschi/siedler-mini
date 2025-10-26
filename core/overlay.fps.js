@@ -37,7 +37,7 @@
   function injectCSS(){
     if (document.getElementById('fps-overlay-style')) return;
     const css = `
-      #fps-overlay{position:fixed;right:10px;top:10px;z-index:9999;
+      #fps-overlay{position:fixed;lefth:10px;down:10px;z-index:9999;
         background:rgba(0,0,0,.55);backdrop-filter:saturate(120%) blur(2px);
         color:#e8e8f0;border:1px solid #41414a;border-radius:6px;padding:6px 8px;
         font:12px/1.2 system-ui,Segoe UI,Roboto,Ubuntu,sans-serif; user-select:none}
