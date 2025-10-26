@@ -1,13 +1,19 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
    Projekt : Neue Siedler – Inspector
-   Version : v18.15.2 (restore classic look)
+   Version : v25.10.28 (compat + visibility fix)
    Zweck   : Vollbild-Overlay + Tabs (Logs/Build/Paths/Resources/Tests)
-   Hinweis : Host kann #inspector ODER #inspector-overlay heißen.
-             Sichtbarkeits-Toggle über .open ODER body.inspector-open.
+   Hinweise:
+     • Host kann #inspector ODER #inspector-overlay heißen.
+     • Sichtbarkeit:
+         - klassisch:     body.inspector-open    (deine alte Variante)
+         - neu/aktueller: body.is-inspector      (wird vom Core gesetzt)
+       → Beide werden hier unterstützt.
+     • Der Host ist standardmäßig AUS (display:none), und wird nur bei Flag
+       sichtbar gemacht. So bleibt alles inert, wenn der Inspector nicht offen ist.
 ============================================================================ */
 
-/* ---------- Theme / Vars ---------- */
+/* ---------- Theme / CSS-Variablen ---------- */
 :root{
   --insp-bg: rgba(18,18,20,.96);
   --insp-panel: #131316;
@@ -31,8 +37,8 @@
   --safe-left: env(safe-area-inset-left, 0px);
 }
 
-/* ---------- FAB (kleines Zahnrad) ---------- */
-#btn-inspector {
+/* ---------- FAB (Zahnrad-Button) ---------- */
+#btn-inspector{
   position: fixed;
   right: calc(14px + var(--safe-right));
   bottom: calc(14px + var(--safe-bottom));
@@ -47,12 +53,15 @@
 #btn-inspector:active{ transform: scale(.98); }
 .cb-fab[hidden]{ display:none !important; }
 
-/* ---------- Host / Overlay ---------- */
+/* ---------- Host / Overlay (Default = AUS) ----------
+   Wichtig: Der Host ist standardmäßig unsichtbar. Sichtbar
+   wird er erst durch .open am Host ODER durch eine Body-Flag.
+------------------------------------------------------- */
 #inspector-overlay,
 #inspector{
   position: fixed;
   inset: 0;
-  display: none;
+  display: none;            /* AUS */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -61,11 +70,16 @@
   z-index: var(--z);
 }
 
-/* sichtbar: entweder .open am Host ODER .inspector-open am <body> */
+/* Sichtbar schalten:
+   • alte Variante:  body.inspector-open
+   • neue Variante:  body.is-inspector   (vom Core gesetzt)
+   • zusätzlich:     .open direkt am Host (manuelles Öffnen) */
 #inspector.open,
 #inspector-overlay.open,
 body.inspector-open #inspector,
-body.inspector-open #inspector-overlay{
+body.inspector-open #inspector-overlay,
+body.is-inspector #inspector,
+body.is-inspector #inspector-overlay{
   display: block !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -152,6 +166,11 @@ body.inspector-open #inspector-overlay{
   border-radius: 0 0 var(--radius) var(--radius);
   padding: 8px;
 }
+
+/* ---------- Views: sichtbar/nicht sichtbar ----------
+   Standardmäßig ausblenden, aktive View einblenden. */
+.insp-view{ display: none; }
+.insp-view.is-active{ display: block; }
 
 /* ---------- Reusable UI-Bausteine ---------- */
 .pad{ padding: 8px 10px; }
