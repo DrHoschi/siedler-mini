@@ -270,3 +270,71 @@
   window.addEventListener('inspector:ready', bootGuard, { passive:true });
 
 })();
+
+/* +++ Patch-Zusatz: Slot-Autofixer v25.10.30-slot1 +++
+   Zweck: Stellt sicher, dass pro Tab ein erwarteter Render-Slot existiert.
+   Viele Module rendern in data-slot="*-view". Fehlt der, bleibt der Tab leer.
+   -> Wir legen den Slot notfalls automatisch an (nicht-invasiv).
+-----------------------------------------------------*/
+(function(){
+  'use strict';
+
+  // 1) Mapping: Tab-Key -> data-slot Name
+  const TAB_SLOTS = {
+    logs:      'logs-view',
+    build:     'build-view',
+    paths:     'paths-view',
+    resources: 'resources-view',
+    tests:     'tests-view',
+    ui:        'ui-view',
+    diag:      'diag-view'
+  };
+
+  // 2) Hilfen: View für Tab-Key finden
+  function findViewFor(key){
+    return (
+      document.getElementById(`insp-${key}`) ||
+      document.querySelector(`#inspector .insp-content > .insp-view[data-tab="${key}"]`) ||
+      document.querySelector(`#inspector .insp-content > .insp-frame[data-tab="${key}"]`)
+    );
+  }
+
+  // 3) Slot in einem View sicherstellen (falls fehlt)
+  function ensureSlot(viewEl, slotName){
+    if (!viewEl || !slotName) return null;
+    let slot = viewEl.querySelector(`[data-slot="${slotName}"]`);
+    if (!slot){
+      slot = document.createElement('div');
+      slot.setAttribute('data-slot', slotName);
+      slot.className = 'insp-slot pad';            // unaufdringliches Padding
+      // Optional sichtbare Leermeldung – NUR solange das Modul nichts gemalt hat:
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = `(${slotName} – wartet auf Modul-Render)`;
+      slot.appendChild(hint);
+
+      viewEl.appendChild(slot);
+    }
+    return slot;
+  }
+
+  // 4) Alle bekannten Tabs durchgehen und Slot garantieren
+  function ensureDefaultSlots(){
+    Object.entries(TAB_SLOTS).forEach(([key, slotName])=>{
+      const view = findViewFor(key);
+      if (view) ensureSlot(view, slotName);
+    });
+  }
+
+  // 5) In die existierenden Lebenspunkte einklinken
+  //    – beim Öffnen, beim Ready und beim Tab-Wechsel.
+  window.addEventListener('inspector:ready', ensureDefaultSlots, { passive:true });
+  window.addEventListener('cb:insp:open',    ensureDefaultSlots, { passive:true });
+  window.addEventListener('cb:insp:tab:change', ensureDefaultSlots, { passive:true });
+
+  // 6) Sofort einmal versuchen (falls bereits offen)
+  (document.readyState === 'loading')
+    ? document.addEventListener('DOMContentLoaded', ensureDefaultSlots, { once:true })
+    : ensureDefaultSlots();
+
+})();
