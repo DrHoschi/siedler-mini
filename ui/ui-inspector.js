@@ -1,18 +1,26 @@
 /* ============================================================================
  * Datei   : ui/ui-inspector.js
  * Projekt : Neue Siedler – Inspector
- * Version : v25.10.30-final
- * Zweck   : Inspector-Bridge (Open/Close/Exports/Bridges) + Fallbacks:
- *           - Sichtbarkeit: body.is-inspector + Host.open
- *           - Active-View-Fallback: .insp-view/.insp-frame
- *           - ARIA-Sync (Tabs ↔ Views)
- *           - "Zuletzt aktiver Tab" merken (localStorage)
+ * Version : v25.10.30-final (+patches: final+1 / slot1 / legacy-targets / close-guard)
+ * Zweck   : Inspector-Bridge (Open/Close/Exports/Bridges) + Fallbacks
+ *           – Sichtbarkeit: body.is-inspector + Host.open
+ *           – Active-View-Fallback: .insp-view/.insp-frame
+ *           – ARIA-Sync (Tabs ↔ Views)
+ *           – "Zuletzt aktiver Tab" merken (localStorage)
+ *           – Slots & Legacy-IDs automatisch bereitstellen
+ *           – Header-„X“ schließt immer zuverlässig (Close-Guard)
  *
- * Hinweise:
- *   • Nichts gelöscht – Altpfade bleiben (window.Inspector.*). Neue Logik nur ergänzt.
- *   • Hotkey/Btn-Bind ist HIER deaktiviert, weil du inspector.button-bind.js nutzt.
- *   • UI-Tab "leer": CSS deckt .insp-frame ab; hier zusätzlich ensureActiveView().
- *   • Events: cb:inspector:open / cb:insp:open / inspector:ready (Kompat-Modus)
+ * Kopf-Kommentar / Mini-Doku:
+ *   Lauscht  : cb:insp:open, cb:inspector:open, req:insp:open, cb:insp:tab:change
+ *   Sendet   : inspector:ready, cb:inspector:open/close, req:insp:*:refresh
+ *   Export   : window.UIInspector.{open,close,toggle,exportLogsJSON}
+ *
+ * Änderungslog (kurz):
+ *   v25.10.30-final  : Grund-Bridge + Memory + Fallbacks
+ *   v25.10.30-final+1: Tab-Delegation + Erstöffnungs-Guard
+ *   v25.10.30-slot1  : Default-Slots pro Tab automatisch anlegen
+ *   v25.10.30-legacy : Legacy-Container pro Tab bereitstellen + Refresh-Pings
+ *   v25.10.30-close  : Header-„X“ schließt robust (kein Verschwinden des Zahnrads)
  * ============================================================================ */
 
 (function(){
@@ -79,7 +87,7 @@
   }
 
   function ensureActiveView(preferredKey){
-    // preferredKey: 'insp-logs' ODER 'logs' (data-tab)
+    // preferredKey: 'logs' (data-tab) ODER 'insp-logs' (ID)
     let views = qa(SEL.views);
     if (!views.length) views = qa('#inspector .insp-frame, #inspector .insp-view');
     if (!views.length) return;
@@ -133,12 +141,17 @@
       setBodyFlag(true);
       setHostOpen(true);
       ensureIdsAndLinkTabs();
-      ensureActiveView(tabKey ? (tabKey.startsWith('insp-') ? tabKey : tabKey) : undefined);
+      ensureActiveView(tabKey);   // vereinfacht: data-tab ODER ID
       syncAriaFromActive();
-      // 3.3 Events (Kompat-Modus)
+      // 3.3 Events (Kompat-Modus) + Refresh-Pings
       window.dispatchEvent(new CustomEvent('cb:inspector:open'));
       window.dispatchEvent(new CustomEvent('cb:insp:open'));
       window.dispatchEvent(new CustomEvent('inspector:ready')); // wichtig: einige Tabs hören hierauf
+      try{ window.dispatchEvent(new CustomEvent('req:insp:refresh')); }catch{}
+      try{
+        const k = (tabKey || localStorage.getItem('insp:lastTab') || 'logs');
+        window.dispatchEvent(new CustomEvent(`req:insp:${k}:refresh`));
+      }catch{}
     },
     close(){
       window.Inspector?.close?.();
@@ -153,21 +166,26 @@
       setBodyFlag(nowOpen);
       if (nowOpen){
         ensureIdsAndLinkTabs();
-        ensureActiveView(tabKey ? (tabKey.startsWith('insp-') ? tabKey : tabKey) : undefined);
+        ensureActiveView(tabKey); // vereinfacht
         syncAriaFromActive();
         window.dispatchEvent(new CustomEvent('inspector:ready'));
+        try{ window.dispatchEvent(new CustomEvent('req:insp:refresh')); }catch{}
+        try{
+          const k = (tabKey || localStorage.getItem('insp:lastTab') || 'logs');
+          window.dispatchEvent(new CustomEvent(`req:insp:${k}:refresh`));
+        }catch{}
       }else{
         window.dispatchEvent(new CustomEvent('cb:inspector:close'));
       }
     },
 
-    // Exporte (unverändert – Beispiel)
+    // Exporte (Beispiel)
     exportLogsJSON(){
-      const root = document.querySelector('#inspector [data-slot="logs-view"]');
+      const root = document.querySelector('#inspector [data-slot="logs-view"]') || document.getElementById('logs-list')?.parentElement;
       if (!root){ LOGW('Logs-Slot fehlt'); return; }
       const rows = Array.from(root.querySelectorAll('.insp-logline')).map(el=>{
         const lvl = ['ok','info','warn','error'].find(c => el.classList.contains(c)) || 'info';
-        const ts  = (el.querySelector('.ts')?.textContent||'').replace(/\[|\]/g,'');
+        const ts  = (el.querySelector('.ts')?.textContent||'').replace(/\[|\]/g,'') || '';
         const msg = el.querySelector('.txt')?.textContent || el.textContent || '';
         return { ts, lvl, msg: msg.trim() };
       });
@@ -187,7 +205,7 @@
   /* ---------------------------------------------
    * [4] Tab-Wechsel & Memory
    * ------------------------------------------- */
-  // 4.1 Merken des zuletzt aktiven Tabs
+  // 4.1 Merken des zuletzt aktiven Tabs + Aktivierung
   window.addEventListener('cb:insp:tab:change', (e)=>{
     const tabKey = e.detail?.tab;
     if (tabKey) {
@@ -204,6 +222,10 @@
     if (target) views.forEach(v => v.classList.toggle('is-active', v === target));
     else ensureActiveView();
     syncAriaFromActive();
+
+    // Refresh-Pings für das aktive Tab
+    try{ window.dispatchEvent(new CustomEvent('req:insp:refresh')); }catch{}
+    try{ if (tabKey) window.dispatchEvent(new CustomEvent(`req:insp:${tabKey}:refresh`)); }catch{}
   });
 
   // 4.2 Falls andere Open-Events genutzt werden → ebenfalls aktivieren
@@ -236,7 +258,7 @@
   // erst nach Bestätigung starten. (Nur Hinweis; KEINE Änderung hier.)
 })();
 
-/* +++ Patch-Zusatz: v25.10.30-final+1 (nur Ergänzungen) +++ */
+/* +++ Patch-Zusatz: v25.10.30-final+1 (Delegation + Erstöffnungs-Guard) +++ */
 (function(){
   'use strict';
 
@@ -245,9 +267,7 @@
     const el = e.target.closest?.('#inspector .insp-tabs [role="tab"], #inspector .insp-tabs .insp-tab');
     if (!el) return;
     const key =
-      el.getAttribute('data-tab') ||
-      (el.getAttribute('aria-controls') || '').replace(/^insp-/, '') ||
-      '';
+      (el.getAttribute('data-tab') || (el.getAttribute('aria-controls') || '').replace(/^insp-/, '') || '').trim();
     if (!key) return;
     window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail: { tab:key }}));
   });
@@ -256,14 +276,13 @@
   const bootGuard = () => {
     const host = document.getElementById('inspector') || document.getElementById('inspector-overlay');
     if (!host) return;
-    const isOpen = document.body.classList.contains('is-inspector') || host.classList.contains('open');
-    if (!isOpen) return;
+    const open = document.body.classList.contains('is-inspector') || host.classList.contains('open');
+    if (!open) return;
     const active = document.querySelector('#inspector .insp-content > .insp-frame.is-active, #inspector .insp-content > .insp-view.is-active');
     if (!active && window.UIInspector?.open){
       window.UIInspector.open('logs');
     }
   };
-  // einmal nach DOMReady + nach ready-Event prüfen
   (document.readyState === 'loading')
     ? document.addEventListener('DOMContentLoaded', bootGuard, { once:true })
     : bootGuard();
@@ -271,11 +290,7 @@
 
 })();
 
-/* +++ Patch-Zusatz: Slot-Autofixer v25.10.30-slot1 +++
-   Zweck: Stellt sicher, dass pro Tab ein erwarteter Render-Slot existiert.
-   Viele Module rendern in data-slot="*-view". Fehlt der, bleibt der Tab leer.
-   -> Wir legen den Slot notfalls automatisch an (nicht-invasiv).
------------------------------------------------------*/
+/* +++ Patch-Zusatz: Slot-Autofixer v25.10.30-slot1 +++ */
 (function(){
   'use strict';
 
@@ -306,13 +321,11 @@
     if (!slot){
       slot = document.createElement('div');
       slot.setAttribute('data-slot', slotName);
-      slot.className = 'insp-slot pad';            // unaufdringliches Padding
-      // Optional sichtbare Leermeldung – NUR solange das Modul nichts gemalt hat:
+      slot.className = 'insp-slot pad';
       const hint = document.createElement('div');
       hint.className = 'hint';
       hint.textContent = `(${slotName} – wartet auf Modul-Render)`;
       slot.appendChild(hint);
-
       viewEl.appendChild(slot);
     }
     return slot;
@@ -326,39 +339,31 @@
     });
   }
 
-  // 5) In die existierenden Lebenspunkte einklinken
-  //    – beim Öffnen, beim Ready und beim Tab-Wechsel.
+  // 5) In Lebenspunkte einklinken
   window.addEventListener('inspector:ready', ensureDefaultSlots, { passive:true });
   window.addEventListener('cb:insp:open',    ensureDefaultSlots, { passive:true });
   window.addEventListener('cb:insp:tab:change', ensureDefaultSlots, { passive:true });
 
-  // 6) Sofort einmal versuchen (falls bereits offen)
   (document.readyState === 'loading')
     ? document.addEventListener('DOMContentLoaded', ensureDefaultSlots, { once:true })
     : ensureDefaultSlots();
 
 })();
-/* +++ Patch-Zusatz: v25.10.30-legacy-targets +++
-   Zweck: In jedem Tab die erwarteten Legacy-Ziele (IDs) anlegen,
-   damit die bestehenden Module wieder rendern können.
-   Zusätzlich Refresh-Pings beim Öffnen/Tabwechsel.
-------------------------------------------------*/
+
+/* +++ Patch-Zusatz: v25.10.30-legacy-targets +++ */
 (function(){
   'use strict';
 
-  // Welche Container brauchen die Tabs?
-  // (Liste aus deinem alten Stand: r-table, logs-list, build-grid/-cats/-info/-msg/-count, pf-events/-table/-overlay, ui-info, t-table)
   const LEGACY = {
-    logs:      ['logs-list'],
-    build:     ['build-info','build-grid','build-cats','build-msg','build-count'],
-    paths:     ['pf-events','pf-table','pf-overlay'],
-    resources: ['r-table'],
-    tests:     ['t-table'],
-    ui:        ['ui-info'],
-    diag:      [] // aktuell nichts Spezielles
+    logs:      ['logs-list', 'log-table', 'log-container'],
+    build:     ['build-info','build-grid','build-cats','build-msg','build-count','build-table'],
+    paths:     ['pf-events','pf-table','pf-overlay','pf-info'],
+    resources: ['r-table','res-table','resource-grid'],
+    tests:     ['t-table','test-container','test-grid'],
+    ui:        ['ui-info','ui-table','ui-log'],
+    diag:      ['diag-table','diag-grid']
   };
 
-  // View für Tab-Key finden (data-tab oder insp-<key>)
   function findViewFor(key){
     return (
       document.getElementById(`insp-${key}`) ||
@@ -367,13 +372,12 @@
     );
   }
 
-  // Sicherstellen, dass elementare Slots + Legacy-IDs existieren
   function ensureTargetsFor(key){
     const view = findViewFor(key);
     if (!view) return;
 
-    // 1) data-slot (fallback) – falls noch keiner existiert
-    const slotName = `${key}-view`;
+    // 1) data-slot (fallback)
+    const slotName = `${key}-view`; 
     if (!view.querySelector(`[data-slot="${slotName}"]`)){
       const slot = document.createElement('div');
       slot.setAttribute('data-slot', slotName);
@@ -385,25 +389,22 @@
       view.appendChild(slot);
     }
 
-    // 2) Legacy-IDs – Module können direkt hier hinein rendern
+    // 2) Legacy-IDs
     (LEGACY[key] || []).forEach(id=>{
       if (!view.querySelector('#'+id)){
         const c = document.createElement('div');
         c.id = id;
-        c.className = 'pad'; // unaufdringliches Padding
+        c.className = 'pad';
         view.appendChild(c);
       }
     });
   }
 
-  // Für alle bekannten Tabs
   function ensureAllTargets(){
     Object.keys(LEGACY).forEach(ensureTargetsFor);
   }
 
-  // Beim Öffnen / Ready / Tabwechsel: Ziele garantieren + Refresh pingen
   function pingRefresh(activeKey){
-    // Generischer Ping (falls Module darauf hören)
     ['req:insp:refresh',
      'req:insp:logs:refresh',
      'req:insp:build:refresh',
@@ -412,21 +413,44 @@
      'req:insp:tests:refresh',
      'req:insp:ui:refresh'
     ].forEach(name => { try{ window.dispatchEvent(new CustomEvent(name)); }catch{} });
-
-    // Optional: gezielt nur aktives Tab pingen
     if (activeKey){
       try{ window.dispatchEvent(new CustomEvent(`req:insp:${activeKey}:refresh`)); }catch{}
     }
   }
 
-  // Hooks einhängen
   window.addEventListener('inspector:ready',  ()=>{ ensureAllTargets(); pingRefresh(); }, { passive:true });
   window.addEventListener('cb:insp:open',      ()=>{ ensureAllTargets(); pingRefresh(); }, { passive:true });
   window.addEventListener('cb:insp:tab:change',(e)=>{ const k=e.detail?.tab; ensureTargetsFor(k||'logs'); pingRefresh(k||'logs'); }, { passive:true });
 
-  // Falls schon offen, sofort einmal versuchen
   (document.readyState === 'loading')
     ? document.addEventListener('DOMContentLoaded', ()=>{ ensureAllTargets(); pingRefresh(); }, { once:true })
     : (ensureAllTargets(), pingRefresh());
+
+})();
+
+/* +++ Patch: v25.10.30-close-guard (Header-X) +++ */
+(function(){
+  'use strict';
+
+  function hardClose(){
+    if (window.UIInspector?.close) window.UIInspector.close();
+    const host = document.getElementById('inspector') || document.getElementById('inspector-overlay');
+    if (host) host.classList.remove('open');
+    document.body.classList.remove('is-inspector','inspector-open');
+    const btn = document.getElementById('btn-inspector');
+    if (btn) btn.hidden = false;
+    try{ window.dispatchEvent(new CustomEvent('cb:inspector:close')); }catch{}
+  }
+
+  document.addEventListener('click', (e)=>{
+    const closeBtn = e.target.closest?.('#inspector .insp-close');
+    if (!closeBtn) return;
+    e.preventDefault();
+    hardClose();
+  }, { passive:false });
+
+  ['cb:inspector:close','req:insp:close'].forEach(evt=>{
+    window.addEventListener(evt, ()=> hardClose(), { passive:true });
+  });
 
 })();
