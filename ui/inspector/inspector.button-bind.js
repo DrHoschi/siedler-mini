@@ -1,14 +1,22 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.button-bind.js
- * Version : v25.10.27-bind2
+ * Version : v25.10.30-bind3   // [NEU] Version angehoben
  * Zweck   : Inspector-Button & Hotkey (I) – kompatibel mit altem und neuem Core
  *
- *  - Falls eine offizielle API existiert, wird sie genutzt:
- *      • window.__INSPECTOR_CORE__.api.toggle?.()
- *      • window.Inspector?.toggle?.()
- *  - Fallback: Root-Element (#inspector) sichtbar/unsichtbar schalten
- *  - Sendet Events: cb:insp:open / cb:insp:close
- *  - Einmaliger Bind-Guard gegen doppelte Handler
+ *  Aufruf-Priorität (robust, rückbaubar):
+ *    0) [NEU] window.UIInspector?.toggle?.()  ← aktuelle API
+ *    1)       window.__INSPECTOR_CORE__?.api.toggle?.()  ← neuerer Core
+ *    2)       window.Inspector?.toggle?.()  ← alte API
+ *    3)       DOM-Fallback: Host sichtbar/unsichtbar schalten
+ *
+ *  Events:
+ *    - (wie bisher) cb:insp:open / cb:insp:close
+ *    - [NEU]       cb:inspector:open / cb:inspector:close  (Kompat.)
+ *
+ *  Hinweise:
+ *    - Nichts entfernt; Alt-Pfade bleiben erhalten.
+ *    - Fallback setzt jetzt zusätzlich Host-Klasse ".open" und Body-Flag "is-inspector",
+ *      damit dein aktuelles CSS den Overlay zuverlässig sichtbar macht.
  * ========================================================================== */
 (function () {
   'use strict';
@@ -22,29 +30,61 @@
 
   // ----- Hilfen --------------------------------------------------------------
   function getRoot() {
-    return document.getElementById('inspector');
+    // [NEU] sowohl #inspector als auch #inspector-overlay unterstützen
+    return (
+      document.getElementById('inspector') ||
+      document.getElementById('inspector-overlay') ||
+      null
+    );
   }
-  function emit(name, detail) {
-    try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+
+  function emitBoth(isOpen) {
+    const evA = isOpen ? 'cb:insp:open'      : 'cb:insp:close';
+    const evB = isOpen ? 'cb:inspector:open' : 'cb:inspector:close'; // [NEU]
+    try { window.dispatchEvent(new CustomEvent(evA)); } catch {}
+    try { window.dispatchEvent(new CustomEvent(evB)); } catch {}
+  }
+
+  function forceVisibleHost(show) {
+    // [NEU] Body-Flag + Host.open entsprechen deinem CSS
+    document.body.classList.toggle('is-inspector', !!show);
+    document.body.classList.toggle('inspector-open', !!show); // alte Variante bleibt kompatibel
+    const host = getRoot();
+    if (host) {
+      host.classList.toggle('open', !!show);
+      if (show) {
+        // Inline-Blocker entfernen, falls früher gesetzt
+        host.removeAttribute('hidden');
+        host.style.removeProperty('display');
+        host.style.removeProperty('visibility');
+        host.style.removeProperty('opacity');
+      }
+    }
   }
 
   // Kern: Toggle mit API-Präferenz, sonst DOM-Fallback
   function toggleInspector(force) {
-    // 1) Bevorzugt: neue Core-API
+    // 0) [NEU] Bevorzugt: neue UI-Bridge-API
+    if (window.UIInspector && typeof window.UIInspector.toggle === 'function') {
+      window.UIInspector.toggle(force);         // [NEU]
+      return;
+    }
+
+    // 1) neuer Core
     const api = window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api;
     if (api && typeof api.toggle === 'function') {
       api.toggle(force);
       return;
     }
 
-    // 2) Alt-API: window.Inspector.toggle
+    // 2) alte API
     if (window.Inspector && typeof window.Inspector.toggle === 'function') {
       window.Inspector.toggle(force);
       return;
     }
 
-    // 3) Fallback: Sichtbarkeit des Root-Containers umschalten
-    const root = getRoot() || (function () {
+    // 3) DOM-Fallback (Host sichtbar/unsichtbar)
+    const host = getRoot() || (function () {
       // falls Core den Container noch nicht erzeugt hat: minimaler Root
       const n = document.createElement('div');
       n.id = 'inspector';
@@ -62,20 +102,25 @@
       return n;
     })();
 
-    const isHidden = root.hidden || root.style.display === 'none';
-    const show = (typeof force === 'boolean') ? force : isHidden;
+    // ALT-Verhalten: display/hidden (lassen wir drin)
+    const isHidden = host.hidden || host.style.display === 'none';
+    const show = (typeof force === 'boolean') ? !!force : isHidden;
 
-    root.hidden = !show;
-    root.style.display = show ? '' : 'none';
-    document.body.classList.toggle('is-inspector', show);
+    host.hidden = !show;
+    host.style.display = show ? '' : 'none';
 
-    emit(show ? 'cb:insp:open' : 'cb:insp:close');
+    // [NEU] Zusätzlich Body-Flag & .open-Klasse für dein aktuelles CSS
+    forceVisibleHost(show);
+
+    // Events (alt + neu)
+    emitBoth(show);
   }
 
   // ----- Button anlegen/binden ----------------------------------------------
   function bind() {
     let btn = document.getElementById('btn-inspector');
     if (!btn) {
+      // Falls kein Button im DOM vorhanden ist → minimalen FAB erzeugen
       btn = document.createElement('button');
       btn.id = 'btn-inspector';
       btn.title = 'Inspector (I)';
@@ -83,7 +128,7 @@
       btn.textContent = '⚙️';
       btn.style.fontSize = '25px';
       btn.style.lineHeight = '1';
-      
+
       // minimale, robuste Positionierung – falls kein CSS greift
       btn.style.position = 'fixed';
       btn.style.right = '12px';
@@ -114,7 +159,7 @@
     ? document.addEventListener('DOMContentLoaded', bind, { once: true })
     : bind();
 
-  // Optional: externe Events zum Steuern
+  // Optional: externe Events zum Steuern (bleiben erhalten)
   window.addEventListener('req:insp:toggle', () => toggleInspector());
   window.addEventListener('req:insp:open',   () => toggleInspector(true));
   window.addEventListener('req:insp:close',  () => toggleInspector(false));
