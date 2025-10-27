@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <!-- =========================================================
+       META / BASIS
+       ========================================================= -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1f1f23">
+  <title>Neue Siedler</title>
+
+  <!-- =========================================================
+       STYLES
+       Reihenfolge:
+       1 = Basis-Layout
+       2 = Startpanel / Game-UI
+       3 = Inspector (Debug)
+       ========================================================= -->
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.30">
+  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.30">
+  <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.10.30">
+  <link rel="stylesheet" href="ui/css/ui-build.css?v=25.10.30">
+
+  <!-- === INSPECTOR (Debug / Diagnose-Overlay) ============================== -->
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.30">
+</head>
+
+<body>
+  <!-- =========================================================
+       HAUPT-CONTAINER
+       ========================================================= -->
+  <canvas id="game" tabindex="1"></canvas>
+
+  <!-- Start-Panel / Menü -->
+  <div id="ui-start"></div>
+
+  <!-- Inspector-Button (kann von JS auch dynamisch erzeugt werden) -->
+  <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)">⚙️</button>
+
+  <!-- =========================================================
+       SCRIPT-REIHENFOLGE (nach Code-Struktur-Vorgaben)
+       1 = Core-Module
+       2 = UI-Layer / Inspector / Debug
+       3 = Game-Logic
+       ========================================================= -->
+
+  <!-- CORE -->
+  <script src="core/boot.js?v=25.10.30" defer></script>
+  <script src="core/asset.js?v=25.10.30" defer></script>
+  <script src="core/game.js?v=25.10.30" defer></script>
+
+  <!-- UI / START / HUD -->
+  <script src="ui/ui-start.js?v=25.10.30" defer></script>
+  <script src="ui/ui-hud.js?v=25.10.30" defer></script>
+  <script src="ui/ui-build.js?v=25.10.30" defer></script>
+
+  <!-- === INSPECTOR (Debug-Tools) =========================================== -->
+  <!-- 1. Bridge / Core-Logik -->
+  <script src="ui/ui-inspector.js?v=25.10.30" defer></script>
+  <!-- 2. Button-Bind + Hotkey -->
+  <script src="ui/inspector/inspector.button-bind.js?v=25.10.30" defer></script>
+
+  <!-- === SPIELSTART / MANIFEST ============================================ -->
+  <script src="manifest_start.json?v=25.10.30" type="application/json" defer></script>
+</body>
+</html>
