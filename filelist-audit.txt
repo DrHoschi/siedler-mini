@@ -46,7 +46,6 @@ Gesamt Dateien: 391
  - filelist-audit.txt
  - filelist.json
  - filelist.txt
- - index.demo.html
  - index.html
  - package.json
  - Projekt_Masterliste.md

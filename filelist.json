@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-26T13:29:08.929Z",
+  "createdAt": "2025-10-27T09:29:15.175Z",
   "root": ".",
   "count": 433,
   "entries": [
@@ -1377,6 +1377,11 @@
     },
     {
       "type": "file",
+      "path": "docs/index.demo.html",
+      "size": 5980
+    },
+    {
+      "type": "file",
       "path": "docs/index.ui.demo.html",
       "size": 2408
     },
@@ -1820,12 +1825,12 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 5985
+      "size": 8122
     },
     {
       "type": "file",
       "path": "ui/css/ui-layout.css",
-      "size": 3694
+      "size": 3687
     },
     {
       "type": "file",
@@ -1863,6 +1868,11 @@
     },
     {
       "type": "file",
+      "path": "ui/inspector/inspector_tab_architecture.md",
+      "size": 4621
+    },
+    {
+      "type": "file",
       "path": "ui/inspector/inspector-hooks.js",
       "size": 1221
     },
@@ -1889,7 +1899,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.build.js",
-      "size": 14545
+      "size": 15261
     },
     {
       "type": "file",
@@ -1904,12 +1914,12 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.core.js",
-      "size": 8494
+      "size": 7916
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.diag.js",
-      "size": 16620
+      "size": 12485
     },
     {
       "type": "file",
@@ -1934,22 +1944,17 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.logs.js",
-      "size": 14221
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.md",
-      "size": 4682
+      "size": 8945
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.paths.js",
-      "size": 10882
+      "size": 12063
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.resources.js",
-      "size": 13994
+      "size": 11871
     },
     {
       "type": "file",
@@ -1959,12 +1964,12 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.tests.js",
-      "size": 2599
+      "size": 15458
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.ui.js",
-      "size": 3913
+      "size": 9845
     },
     {
       "type": "file",
@@ -2039,7 +2044,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 7273
+      "size": 10092
     },
     {
       "type": "file",
@@ -2088,13 +2093,8 @@
     },
     {
       "type": "file",
-      "path": "index.demo.html",
-      "size": 5980
-    },
-    {
-      "type": "file",
       "path": "index.html",
-      "size": 14030
+      "size": 6535
     },
     {
       "type": "file",
