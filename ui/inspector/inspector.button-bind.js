@@ -3,8 +3,14 @@
  * Version : v25.10.30-bind3
  * Zweck   : Inspector-Button & Hotkey (I) – bevorzugt UIInspector, kompatibel
  *           mit __INSPECTOR_CORE__.api.* und window.Inspector.* (Altpfade).
- * Anmerkung: Nichts entfernt – nur Guards/Events ergänzt.
- * ========================================================================== */
+ *
+ * Hinweise / Mini-Doku:
+ *   – Erzeugt bei Bedarf automatisch einen FAB (⚙️), falls nicht vorhanden.
+ *   – Bevorzugt window.UIInspector.toggle() → garantiert Events & Active-View.
+ *   – Fallbacks feuern cb:insp:open / cb:inspector:close + inspector:ready.
+ *   – Einmal-Guard gegen doppelte Bindung.
+ *   – Kein Löschen alter Pfade – nur ergänzt/gehärtet.
+ * ============================================================================ */
 (function () {
   'use strict';
 
@@ -25,7 +31,7 @@
   function toggleInspector(force){
     const want = (typeof force === 'boolean') ? force : !isOpen();
 
-    // (1) Bevorzugt: neue Bridge -> garantiert Open-Events & Active-View
+    // (1) Bevorzugt: neue Bridge
     if (window.UIInspector && typeof window.UIInspector.toggle === 'function'){
       window.UIInspector.toggle(want ? undefined : undefined); // Tab-Key optional
       return;
@@ -35,7 +41,6 @@
     const api = window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api;
     if (api && typeof api.toggle === 'function'){
       api.toggle(want);
-      // Events nachreichen, damit Tabs rendern
       emit(want ? 'cb:insp:open' : 'cb:inspector:close');
       if (want) emit('inspector:ready');
       return;
@@ -76,7 +81,7 @@
       btn.type = 'button';
       btn.textContent = '⚙️';
       Object.assign(btn.style, {
-        position:'fixed', right:'12px', bottom:'24px', zIndex:60, padding:'6px 8px',
+        position:'fixed', right:'12px', bottom:'12px', zIndex:'60', padding:'6px 8px',
         borderRadius:'6px', border:'1px solid #444', background:'rgba(0,0,0,.55)', color:'#e8e8f0',
         fontSize:'25px', lineHeight:'1'
       });
@@ -84,12 +89,11 @@
     }
 
     btn.addEventListener('click', () => {
-      // Einmal-Guard: Wenn nach 30ms noch nicht offen, erzwinge UIInspector.open()
       const before = isOpen();
       toggleInspector();
       setTimeout(()=>{
         if (!isOpen() && before === isOpen() && window.UIInspector?.open){
-          window.UIInspector.open(); // garantiert Events + Active-View
+          window.UIInspector.open(); // garantiert Events + Active-View beim Erstklick
         }
       }, 30);
     });
