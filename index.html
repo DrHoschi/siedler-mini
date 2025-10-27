@@ -1,316 +1,146 @@
 <!-- ============================================================================
      Datei   : index.html
      Projekt : Neue Siedler (Minimal-Build, kanonischer Entry)
-     Version : v25.10.25-min
+     Version : v25.10.25
      Zweck   : Minimale Startseite mit Start-Panel, Canvas (#game), Debug/Inspector-Hooks.
                Vereint Sinn aus index.html + index.demo.html, ohne Demo-Overhead.
      Autor   : Konsolidiert nach CODE_STYLE.md (Imports → Konstanten → Helpers → Klassen → Main)
 ============================================================================ -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <!-- ========================================================================
-       [HEAD] Meta & Basis-Styles
-       - Mobile-freundlich, Vollbild-Canvas, sicheres Z-Index-Layering
-  ======================================================================== -->
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="color-scheme" content="light dark" />
-  <title>Neue Siedler – Minimal</title>
+  <!-- =========================================================
+       META / BASIS
+       ========================================================= -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1f1f23">
+  <title>Neue Siedler</title>
 
-  <style>
-    /* =========================================================================
-       [STYLE] Minimal-Layering & Reset
-       - #app ist Container (Flex, 100vh)
-       - #game (Canvas) liegt unten, Overlays (Startpanel/Inspector) darüber
-       - Keine externen CSS-Abhängigkeiten im Minimal-Setup
-    ========================================================================= */
-    html, body { height: 100%; margin: 0; padding: 0; }
-    body { background: #1b1b1b; color: #eaeaea; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; display: flex; }
-
-    /* Canvas (#game) – bleibt dein kanonisches Ziel */
-    #game {
-      display: block;
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      background: #0a0a0a;
-      image-rendering: pixelated;    /* wichtig für Retro/Sprites */
-      touch-action: none;            /* verhindert Scroll/Zoom-Gesten */
-    }
-
-    /* Startpanel (oben) – zuerst sichtbar, blockiert Interaktionen bis Start */
-    #start-panel {
-      position: absolute;
-      inset: 0;
-      z-index: 100;                  /* über Canvas, unter Inspector (falls geöffnet) */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0,0,0,0.66);
-      backdrop-filter: blur(2px);
-    }
-    .start-card {
-      width: min(92vw, 520px);
-      border: 2px solid #6e4a28;           /* Holzrahmen-Anmutung (placeholder) */
-      background: #2a211a;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-      padding: 18px 18px 10px;
-      border-radius: 10px;
-    }
-    .start-card h1 { margin: 0 0 8px; font-size: 22px; color: #f0d9b5; }
-    .start-card p  { margin: 0 0 14px; color: #d7c6a5; font-size: 14px; line-height: 1.4; }
-    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn {
-      appearance: none; border: none; cursor: pointer;
-      padding: 10px 14px; border-radius: 6px; font-weight: 700;
-      background: #8b5a2b; color: #fff;
-    }
-    .btn.secondary { background: #39424e; }
-    .btn:active { transform: translateY(1px); }
-
-    /* Floating Buttons (unten rechts): Inspector & Fullscreen – Debug bleibt! */
-    .fab {
-      position: absolute; right: 12px; bottom: 12px; z-index: 120;
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    .fab button {
-      width: 44px; height: 44px; border-radius: 10px; border: none; cursor: pointer;
-      background: #2e3440; color: #eaeaea; font-weight: 800; font-size: 14px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-    }
-
-    /* Inspector-Mini (minimaler Platzhalter – echte Tabs später in ui/ui-inspector.js) */
-    #inspector {
-      position: absolute; inset: 5% 5% auto 5%; height: 40%;
-      z-index: 200; background: #111; border: 1px solid #444; border-radius: 8px;
-      display: none; flex-direction: column;
-    }
-    #inspector header {
-      padding: 8px 10px; background: #2b2b2b; color: #ddd; font-weight: 700;
-      display: flex; align-items: center; justify-content: space-between;
-      border-bottom: 1px solid #444;
-    }
-    #inspector pre {
-      margin: 0; padding: 10px; overflow: auto; color: #cbd5e1; flex: 1;
-    }
-
-    /* Noscript-Hinweis */
-    .noscript {
-      position: absolute; inset: 0; display: grid; place-items: center; z-index: 9999;
-      background: #000; color: #fff; font-size: 16px; text-align: center; padding: 20px;
-    }
-  </style>
+  <!-- =========================================================
+       STYLES (Global → Start → Inspector → Layout)
+       ?v=… = simples Cache-Busting
+       ========================================================= -->
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.30">
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1">
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
+  <link rel="stylesheet" href="ui/css/ui-place.css?v=19.2.0">
 </head>
 
-<body data-build="v25.10.25-min" data-env="dev" data-entry="index">
-  <!-- ========================================================================
-       [ROOT] App-Container & Canvas
-       - #game ist dein kanonisches Canvas (du wolltest explizit "#game" beibehalten)
-  ======================================================================== -->
-  <div id="app" aria-label="Spielcontainer">
-    <canvas id="game" aria-label="Game Canvas (#game)"></canvas>
+<body>
+  <!-- =========================================================
+       SPIELSTAGE + UI-ROOTS (Lastenheft 3.1 / 4.2–4.3)
+       ========================================================= -->
+  <canvas id="game" data-map="data/maps/map-mini.json" aria-label="Karte"></canvas>
+  <div id="ui-root" aria-live="polite"></div>
 
-    <!-- ======================================================================
-         [UI] Startpanel – zuerst sichtbar
-         Events:
-         - Klick auf "Starten" → dispatch 'req:ui:start'
-         - Danach: Panel verstecken, 'cb:ui-ready' & 'cb:game:start' werden vom Boot ausgelöst
-    ======================================================================= -->
-    <section id="start-panel" aria-label="Startpanel">
-      <div class="start-card" role="dialog" aria-modal="true">
-        <h1>Neue Siedler (Minimal)</h1>
-        <p>
-          Minimalstart mit Canvas, Registry-Boot und Debug-Buttons.
-          Später ersetzen wir dieses Inline-UI durch <code>ui/ui-start.js</code>.
-        </p>
-        <div class="btn-row">
-          <button id="btn-start" class="btn">Spiel starten</button>
-          <button id="btn-continue" class="btn secondary">Weiterspielen (später)</button>
-          <button id="btn-reset" class="btn secondary">Reset (später)</button>
-        </div>
-      </div>
-    </section>
+  <div id="hud-root" aria-live="polite"></div>
+  
+  <!-- Build-Dock + Toggle-Button -->
+<div id="build-dock" aria-label="Baumenü" hidden></div>
+<button id="btn-build" aria-label="Bauen" style="position:fixed;right:12px;bottom:12px;z-index:60;">🏗️</button> 
+  <!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)"></button> -->
 
-    <!-- ======================================================================
-         [UI] Debug/Inspector Floating Buttons – bleiben persistent im Projekt
-    ======================================================================= -->
-    <div class="fab" aria-label="Schnellzugriff Debug/Inspector">
-      <button id="btn-inspector" title="Inspector an/aus">🛠️</button>
-      <button id="btn-fullscreen" title="Vollbild">⛶</button>
-    </div>
+  <!-- =========================================================
+       SCRIPTS – LADEREIHENFOLGE (kritisch!)
+       ========================================================= -->
 
-    <!-- ======================================================================
-         [UI] Minimaler Inspector-Platzhalter (Logs)
-         - Echte Tabs (Logs/Tests/Ressourcen/Pfade/Editor) folgen in ui/ui-inspector.js
-    ======================================================================= -->
-    <aside id="inspector" aria-label="Inspector (Minimal)">
-      <header>
-        <span>Inspector – Logs</span>
-        <button id="btn-inspector-close" class="btn secondary" style="padding:6px 10px">Schließen</button>
-      </header>
-      <pre id="inspector-log" aria-live="polite">[info] Inspector bereit (minimal)</pre>
-    </aside>
-
-    <noscript>
-      <div class="noscript">
-        <p><strong>JavaScript ist deaktiviert.</strong><br>
-        Bitte aktiviere JavaScript, um das Spiel zu starten.</p>
-      </div>
-    </noscript>
-  </div>
-
-  <!-- ========================================================================
-       [SCRIPTS] Reihenfolge gemäß Standard
-       1) Basissystem (Logs, Events, Env)
-       2) Assets/Boot/Registry
-       3) Engine (Game, Map, Render, Camera, Input, Entities, PF, Carrier)
-       4) Overlays
-       5) Minimal-UI (inline) – ersetzt später ui/ui-*.js
-       WICHTIG:
-       - keine Demo-/Docs-Skripte hier einbinden
-       - keine *.jsonc laden (nur .json im Build)
-  ======================================================================== -->
-
-  <!-- [1] Basissystem -->
+  <!-- 1) Polyfills / Event-System / Env -->
   <script src="core/cblog.polyfill.js"></script>
   <script src="core/eventbus.js"></script>
   <script src="core/core.env.js"></script>
 
-  <!-- [2] Assets/Boot/Registry -->
+  <!-- 2) Assets & Registry & UI-Bridge -->
   <script src="core/asset.js"></script>
   <script src="core/boot.js"></script>
-  <script src="core/registry.js"></script> <!-- Registry: Single Source of Truth (IDs, Farben, Icons) -->
 
-  <!-- [3] Engine -->
-  <script src="core/game.js"></script>
-  <script src="core/core.map.js"></script>
-  <script src="core/core.render.js"></script>
+  <script src="core/registry.js"></script>
+  <script src="core/registry.type-aliases.js"></script>
+  <script src="core/production.res-validate.js"></script> <!-- <- NEU -->
+  <script src="core/entities.registry.js"></script>
+  <script src="core/icons-map.js"></script>
+  <!-- <script src="core/ui-build.data-bridge.js"></script> -->
+
+  <!-- *** HIER NEU: Boot-/Diag-/Preload-Helfer *** -->
+  <script src="core/diag.boot.js"></script>
+
+  <!-- 3) Kamera & Zoom -->
   <script src="core/camera.js"></script>
   <script src="core/zoom.js"></script>
-  <script src="core/core.input.js"></script>
-  <script src="core/core.entities.js"></script>
-  <script src="core/core.pfglue.js"></script>
-  <script src="core/carrier.js"></script>
 
-  <!-- [4] Overlays (einheitliche Initialisierung nur aus boot.js!) -->
+  <!-- 4) Map-Renderer + Bridge -->
+  <script src="core/core.map.js"></script>
+  <script src="core/map-runtime.bridge.js"></script>
+
+  <!-- 5) Overlays (zeichnen über OverlayHooks im Render-Frame) -->
   <script src="core/overlay-hooks.js"></script>
-  <script src="core/path-overlay.js"></script>
   <script src="core/unit-overlay.js"></script>
+  <script src="core/path-traces.overlay.js"></script>
 
-  <!-- ========================================================================
-       [5] Minimal-UI Inline (Startpanel, Inspector, Fullscreen)
-       - Ersetzt später: ui/ui-start.js, ui/ui-inspector.js
-       - Hält sich strikt an Event-Flow (req:/cb:)
-  ======================================================================== -->
+  <!-- 6) Pfadfinder (Stub) vor PF-Glue laden (lazy init) -->
+  <script src="core/adfinder.js"></script>
+
+  <!-- 7) Engine/Gameplay -->
+  <script src="core/core.entities.js"></script>
+  <script src="core/core.production.js"></script>   <!-- FIX: richtiger Pfad -->
+  <script src="core/carrier.js"></script>
+  <script src="core/core.pfglue.js"></script>
+
+  <script src="core/core.input.js"></script>
+  <script src="core/input.bridge.js?v=25.10.26-sync1"></script>
+
+  <!-- Render-Shim: keine eigene Loop, nur Back-Compat -->
+  <script src="core/render.shim.js"></script>
+
+  <script src="core/game.js"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
+  <script defer src="core/overlay.fps.js"></script>
+  <!-- NEU: Save/Load -->
+  <script defer src="core/savegame.js"></script>
+
+  <!-- 8) Inspector (nicht-blockierend) -->
+  <script defer src="ui/inspector/inspector.core.js?v=18.16.3"></script>
+  <script defer src="ui/ui-inspector.js?v=18.14.7"></script>
+  <script defer src="ui/inspector/inspector.button-bind.js"></script>
+
+  <!-- Tabs/Tools im Inspector -->
+  <script defer src="ui/inspector/inspector.ui.js?v=18.17.0"></script>
+  <script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
+  <script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
+  <script defer src="ui/inspector/events.scan.js"></script>
+  <!-- NEU: Diag-Tab -->
+  <script defer src="ui/inspector/inspector.diag.js"></script>
+  
+  <!-- 9) UI (Startscreen/HUD/Build/Map/Layout/Place) -->
+  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-map.js"></script>
+  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-place.js?v=24.2.0"></script>
+
+  <!-- (Optional) Legacy-Bridges/Shims zuletzt -->
+  <!-- <script src="ui/compat/build-bridge-shim.js"></script> alt dürfte nicht mehr gebraucht werden -->
+  
+  <!-- 10) Diagnose & Startzustand-Absicherung -->
   <script>
-  /* ==========================================================================
-     [UI-MIN] Konstanten & kleine Helpers
-  ========================================================================== */
-  const $ = (sel, root=document) => root.querySelector(sel);
-  const logOK = (msg) => (window.CBLog?.ok || console.log)(msg);
-  const emit  = (name, detail={}) => window.dispatchEvent(new CustomEvent(name, { detail }));
+    (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
 
-  /* ==========================================================================
-     [UI-MIN] Startpanel-Logik
-     - Klick "Starten" → req:ui:start
-     - Boot/Engine reagieren, feuern cb:ui-ready / cb:game-start / cb:assets-ready / cb:registry:ready etc.
-  ========================================================================== */
-  (function initStartPanel(){
-    const startPanel = $('#start-panel');
-    const btnStart   = $('#btn-start');
-    const btnCont    = $('#btn-continue');
-    const btnReset   = $('#btn-reset');
-
-    btnStart?.addEventListener('click', () => {
-      logOK('[ui] Start angefordert → req:ui:start');
-      emit('req:ui:start');
-      // Panel nicht sofort verstecken – warte auf Bestätigung vom Boot/Game:
-      // Wenn Boot bereit, UI schließen:
-      window.addEventListener('cb:game-start', () => {
-        startPanel.style.display = 'none';
-      }, { once: true });
-    });
-
-    btnCont?.addEventListener('click', () => {
-      (window.CBLog?.info || console.info)('[ui] Continue (später implementiert)');
-      // später: emit('req:ui:continue')
-    });
-    btnReset?.addEventListener('click', () => {
-      (window.CBLog?.warn || console.warn)('[ui] Reset (später implementiert)');
-      // später: emit('req:ui:reset-confirm')
-    });
-
-    // Signalisieren, dass das Start-UI bereit ist
-    emit('cb:ui-ready', { from: 'index', version: document.body.dataset.build });
-  })();
-
-  /* ==========================================================================
-     [UI-MIN] Inspector-Toggle (Platzhalter)
-     - Button unten rechts öffnet/ schließt Minimal-Inspector
-     - Später ersetzt durch ui/ui-inspector.js mit Tabs (Logs/Tests/Ressourcen/Pfade/Editor)
-  ========================================================================== */
-  (function initInspector(){
-    const pane  = $('#inspector');
-    const logp  = $('#inspector-log');
-    const open  = $('#btn-inspector');
-    const close = $('#btn-inspector-close');
-
-    function toggle(show){
-      pane.style.display = show ? 'flex' : 'none';
-      if (show) {
-        logp.textContent += '\n[info] ' + new Date().toISOString() + ' – Inspector geöffnet';
-      }
-    }
-    open?.addEventListener('click', () => toggle(pane.style.display === 'none' || pane.style.display === ''));
-    close?.addEventListener('click', () => toggle(false));
-
-    // Beispiel: höre auf ein paar Kern-Events und schreibe sie ins Log
-    const echo = (name) => window.addEventListener(name, (e) => {
-      logp.textContent += `\n[event] ${name} ${(e.detail)? JSON.stringify(e.detail): ''}`;
-      logp.scrollTop = logp.scrollHeight;
-    });
-    ['cb:assets-ready','cb:registry:ready','cb:game-start','cb:res:change'].forEach(echo);
-
-    logOK('[inspector] minimal bereit');
-  })();
-
-  /* ==========================================================================
-     [UI-MIN] Fullscreen-Button (optional)
-  ========================================================================== */
-  (function initFullscreen(){
-    const btn = $('#btn-fullscreen');
-    btn?.addEventListener('click', async () => {
-      try {
-        if (!document.fullscreenElement) {
-          await document.documentElement.requestFullscreen();
-        } else {
-          await document.exitFullscreen();
-        }
-      } catch (err) {
-        (window.CBLog?.error || console.error)('Fullscreen-Fehler:', err);
-      }
-    });
-  })();
-
-  /* ==========================================================================
-     [UI-MIN] Boot-Kickoff (Fallback)
-     - Falls dein boot.js das Game nicht automatisch startet, stoßen wir es hier explizit an.
-     - Wichtig: Das eigentliche Starten / Laden soll in boot.js geregelt sein.
-  ========================================================================== */
-  (function kickoff(){
-    if (typeof window.GameBoot?.start === 'function') {
-      logOK('[index] Starte GameBoot.start()');
-      window.GameBoot.start({ canvasId: 'game' });
-      // Boot selbst soll cb:game-start emittieren, sobald alles verdrahtet ist.
-    } else {
-      // Minimaler Fallback: signalisieren, dass wir bereit sind; Game kann später anhängen
-      (window.CBLog?.warn || console.warn)('[index] GameBoot.start() nicht gefunden – Boot startet extern');
-      emit('req:boot:start', { canvasId: 'game' });
-    }
-  })();
+    // Inspector nie "offen" starten; Start-BG sichtbar lassen bis Spielstart
+    (function(){
+      var host = document.getElementById('inspector-overlay');
+      if (host) { host.classList.remove('open'); host.style.display='none'; }
+      document.body.classList.remove('is-playing');
+    }());
   </script>
 </body>
 </html>
