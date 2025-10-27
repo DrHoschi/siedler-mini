@@ -276,3 +276,6 @@ body.is-inspector #btn-inspector {
   visibility: visible !important;
   pointer-events: auto !important;
 }
+
+/* Slots allgemein (unaufdringlich) */
+.insp-slot > .hint{ opacity:.6; font-style:italic; }
