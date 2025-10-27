@@ -11,6 +11,10 @@
          keinerlei Content-Overlay (absolute/sticky Elemente) Tab-Klicks abfängt.
      [4] Aktive View wird mit .is-active IMMER sichtbar erzwungen (display:block !important).
      [5] Kompatibilität: .insp-view UND .insp-frame werden identisch behandelt.
+     [6] FAB (Zahnrad) bleibt immer klickbar, auch wenn Overlay offen ist.
+     [7] Änderungen v25.10.30:
+         – .insp-frame.is-active aufgenommen (sichtbar schalten)
+         – Struktur/Kommentare vereinheitlicht
 ============================================================================ */
 
 /* ---------- [A] Design-Variablen ---------- */
@@ -268,7 +272,10 @@ body.inspector-open #inspector-overlay{
   .inspector-table th, .inspector-table td{ padding:5px 6px; }
 }
 
-/* ---------- [K] FAB bleibt klickbar, auch wenn Overlay offen ---------- */
+/* ---------- [K] Slots dezent darstellen ---------- */
+.insp-slot > .hint{ opacity:.6; font-style:italic; }
+
+/* ---------- [L] FAB bleibt klickbar, auch wenn Overlay offen ---------- */
 body.is-inspector #btn-inspector {
   position: fixed;
   z-index: 2147483647 !important; /* ganz oben */
@@ -276,6 +283,3 @@ body.is-inspector #btn-inspector {
   visibility: visible !important;
   pointer-events: auto !important;
 }
-
-/* Slots allgemein (unaufdringlich) */
-.insp-slot > .hint{ opacity:.6; font-style:italic; }
