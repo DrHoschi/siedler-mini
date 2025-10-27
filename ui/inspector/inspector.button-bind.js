@@ -61,13 +61,57 @@
     return h;
   }
 
-  // Kern: Toggle mit API-Priorität, sonst DOM-Fallback
-  function toggleInspector(force) {
-    // 1) Neue Bridge-API
-    if (window.UIInspector && typeof window.UIInspector.toggle === 'function') {
-      window.UIInspector.toggle(force);
-      return;
-    }
+  // Kern: Toggle mit API-Priorität, aber NUR wenn ein Host existiert.
+// Fehlt der Host, erzwingen wir den DOM-Fallback (Host erzeugen + öffnen).
+function toggleInspector(force) {
+  // Helper um Host zu prüfen
+  var host = document.getElementById('inspector') || document.getElementById('inspector-overlay');
+
+  // 1) Neue Bridge-API – nur benutzen, wenn Host existiert
+  if (window.UIInspector && typeof window.UIInspector.toggle === 'function' && host) {
+    window.UIInspector.toggle(force);
+    return;
+  }
+
+  // 2) Neuer Core – ebenfalls nur mit Host sinnvoll
+  var api = window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api;
+  if (api && typeof api.toggle === 'function' && host) {
+    api.toggle(force);
+    return;
+  }
+
+  // 3) Alte API – auch hier: nur sinnvoll mit Host
+  if (window.Inspector && typeof window.Inspector.toggle === 'function' && host) {
+    window.Inspector.toggle(force);
+    return;
+  }
+
+  // 4) DOM-Fallback: Wenn wir hier sind, fehlt der Host ODER es gibt gar keine API.
+  //    -> Host sicherstellen + Body/Host-Flags setzen (sichtbar).
+  host = (function ensureHost(){
+    var h = document.getElementById('inspector') || document.getElementById('inspector-overlay');
+    if (h) return h;
+    h = document.createElement('div');
+    h.id = 'inspector';
+    h.className = 'inspector';
+    h.setAttribute('role','dialog');
+    h.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);color:#fff;z-index:2147483000;';
+    h.textContent = 'Inspector';
+    document.body.appendChild(h);
+    return h;
+  })();
+
+  var isOpen = host.classList.contains('open') && !host.hidden && host.style.display !== 'none';
+  var show   = (typeof force === 'boolean') ? !!force : !isOpen;
+
+  host.hidden = !show;
+  host.style.display = show ? '' : 'none';
+  host.classList.toggle('open', show);
+  document.body.classList.toggle('is-inspector', show);
+  document.body.classList.toggle('inspector-open', show); // Legacy
+
+  (window.CBLog?.info||console.info)('[insp-bind] DOM toggle →', show ? 'open' : 'close');
+}
     // 2) Neuer Core
     const api = window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api;
     if (api && typeof api.toggle === 'function') {
