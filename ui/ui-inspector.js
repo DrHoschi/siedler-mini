@@ -235,3 +235,38 @@
   // Sollte wieder ins Startpanel (ui-start.js) verlagert werden, damit HUD/Assets
   // erst nach Bestätigung starten. (Nur Hinweis; KEINE Änderung hier.)
 })();
+
+/* +++ Patch-Zusatz: v25.10.30-final+1 (nur Ergänzungen) +++ */
+(function(){
+  'use strict';
+
+  // [B1] Delegation: Tab-Klick → cb:insp:tab:change (falls Core es nicht feuert)
+  document.addEventListener('click', (e)=>{
+    const el = e.target.closest?.('#inspector .insp-tabs [role="tab"], #inspector .insp-tabs .insp-tab');
+    if (!el) return;
+    const key =
+      el.getAttribute('data-tab') ||
+      (el.getAttribute('aria-controls') || '').replace(/^insp-/, '') ||
+      '';
+    if (!key) return;
+    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail: { tab:key }}));
+  });
+
+  // [B2] Erstöffnungs-Guard: wenn offen & keine aktive View → logs
+  const bootGuard = () => {
+    const host = document.getElementById('inspector') || document.getElementById('inspector-overlay');
+    if (!host) return;
+    const isOpen = document.body.classList.contains('is-inspector') || host.classList.contains('open');
+    if (!isOpen) return;
+    const active = document.querySelector('#inspector .insp-content > .insp-frame.is-active, #inspector .insp-content > .insp-view.is-active');
+    if (!active && window.UIInspector?.open){
+      window.UIInspector.open('logs');
+    }
+  };
+  // einmal nach DOMReady + nach ready-Event prüfen
+  (document.readyState === 'loading')
+    ? document.addEventListener('DOMContentLoaded', bootGuard, { once:true })
+    : bootGuard();
+  window.addEventListener('inspector:ready', bootGuard, { passive:true });
+
+})();
