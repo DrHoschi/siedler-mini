@@ -89,7 +89,7 @@
     if (cs.position === 'static' || cs.right === 'auto' || cs.bottom === 'auto') {
       btn.style.position = 'fixed';
       btn.style.right = '12px';
-      btn.style.bottom = '12px';
+      btn.style.bottom = '24px';
       btn.style.zIndex = '2147483647';
       btn.style.padding = '6px 8px';
       btn.style.borderRadius = '10px';
