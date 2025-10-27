@@ -3,6 +3,7 @@
 <head>
   <!-- =========================================================
        META / BASIS
+       (unverändert)
        ========================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -10,57 +11,130 @@
   <title>Neue Siedler</title>
 
   <!-- =========================================================
-       STYLES
-       Reihenfolge:
-       1 = Basis-Layout
-       2 = Startpanel / Game-UI
-       3 = Inspector (Debug)
+       STYLES (aus deiner monolithischen index.html)
+       Reihenfolge beibehalten. Einzige Änderung:
+       - ui-inspector.css → Query-String auf v25.10.29-final angehoben,
+         damit deine tatsächlich gelieferte CSS geladen wird.
        ========================================================= -->
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.30">
-  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.30">
-  <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.10.30">
-  <link rel="stylesheet" href="ui/css/ui-build.css?v=25.10.30">
-
-  <!-- === INSPECTOR (Debug / Diagnose-Overlay) ============================== -->
-  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.30">
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.29-final"><!-- war: ?v=25.10.19 -->
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1">
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
+  <link rel="stylesheet" href="ui/css/ui-place.css?v=19.2.0">
 </head>
 
 <body>
   <!-- =========================================================
-       HAUPT-CONTAINER
+       SPIELSTAGE + UI-ROOTS (unverändert aus deiner Datei)
        ========================================================= -->
-  <canvas id="game" tabindex="1"></canvas>
+  <canvas id="game" data-map="data/maps/map-mini.json" aria-label="Karte"></canvas>
+  <div id="ui-root" aria-live="polite"></div>
+  <div id="hud-root" aria-live="polite"></div>
 
-  <!-- Start-Panel / Menü -->
-  <div id="ui-start"></div>
+  <!-- Build-Dock + Toggle-Button (unverändert) -->
+  <div id="build-dock" aria-label="Baumenü" hidden></div>
+  <button id="btn-build" aria-label="Bauen" style="position:fixed;right:12px;bottom:12px;z-index:60;">🏗️</button>
 
-  <!-- Inspector-Button (kann von JS auch dynamisch erzeugt werden) -->
+  <!-- Inspector-Button: war auskommentiert → wieder aktivieren,
+       damit der Button-Binder zuverlässig am vorhandenen DOM-Element hängt. -->
   <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)">⚙️</button>
+  <!-- Hinweis: Falls du den Button lieber dynamisch erzeugen willst,
+       kannst du ihn wieder auskommentieren; dein binder erzeugt ihn dann.
+       Für Debug jetzt sichtbar lassen. -->
 
   <!-- =========================================================
-       SCRIPT-REIHENFOLGE (nach Code-Struktur-Vorgaben)
-       1 = Core-Module
-       2 = UI-Layer / Inspector / Debug
-       3 = Game-Logic
+       SCRIPTS – LADEREIHENFOLGE (kritisch!)
+       Basis: 1) Core/Polyfills  2) Assets/Boot/Registry  3) Engine/UI
+              4) Inspector-Core + Bridge + Bind  5) Inspector-Tabs
+       Alles exakt wie in deiner monolithischen index.html,
+       nur kommentiert. Inspector-Skripte (8) sind in deiner Datei
+       bereits mit defer versehen → das bleibt so.
        ========================================================= -->
 
-  <!-- CORE -->
-  <script src="core/boot.js?v=25.10.30" defer></script>
-  <script src="core/asset.js?v=25.10.30" defer></script>
-  <script src="core/game.js?v=25.10.30" defer></script>
+  <!-- 1) Polyfills / Event-System / Env -->
+  <script src="core/cblog.polyfill.js"></script>
+  <script src="core/eventbus.js"></script>
+  <script src="core/core.env.js"></script>
 
-  <!-- UI / START / HUD -->
-  <script src="ui/ui-start.js?v=25.10.30" defer></script>
-  <script src="ui/ui-hud.js?v=25.10.30" defer></script>
-  <script src="ui/ui-build.js?v=25.10.30" defer></script>
+  <!-- 2) Assets & Registry & UI-Bridge -->
+  <script src="core/asset.js"></script>
+  <script src="core/boot.js"></script>
+  <script src="core/registry.js"></script>
+  <script src="core/registry.type-aliases.js"></script>
+  <script src="core/production.res-validate.js"></script> <!-- <- NEU (laut deiner Datei) -->
+  <script src="core/entities.registry.js"></script>
+  <script src="core/icons-map.js"></script>
+  <!-- <script src="core/ui-build.data-bridge.js"></script> -->
 
-  <!-- === INSPECTOR (Debug-Tools) =========================================== -->
-  <!-- 1. Bridge / Core-Logik -->
-  <script src="ui/ui-inspector.js?v=25.10.30" defer></script>
-  <!-- 2. Button-Bind + Hotkey -->
-  <script src="ui/inspector/inspector.button-bind.js?v=25.10.30" defer></script>
+  <!-- 2b) Boot-/Diag-/Preload-Helfer -->
+  <script src="core/diag.boot.js"></script>
 
-  <!-- === SPIELSTART / MANIFEST ============================================ -->
-  <script src="manifest_start.json?v=25.10.30" type="application/json" defer></script>
+  <!-- 3) Kamera & Zoom -->
+  <script src="core/camera.js"></script>
+  <script src="core/zoom.js"></script>
+
+  <!-- 4) Map-Renderer + Bridge -->
+  <script src="core/core.map.js"></script>
+  <script src="core/map-runtime.bridge.js"></script>
+
+  <!-- 5) Overlays -->
+  <script src="core/overlay-hooks.js"></script>
+  <script src="core/unit-overlay.js"></script>
+  <script src="core/path-traces.overlay.js"></script>
+
+  <!-- 6) Pfadfinder (Stub) vor PF-Glue -->
+  <script src="core/adfinder.js"></script>
+
+  <!-- 7) Engine/Gameplay -->
+  <script src="core/core.entities.js"></script>
+  <script src="core/core.production.js"></script>   <!-- FIX bereits in deiner Datei -->
+  <script src="core/carrier.js"></script>
+  <script src="core/core.pfglue.js"></script>
+  <script src="core/core.input.js"></script>
+  <script src="core/input.bridge.js?v=25.10.26-sync1"></script>
+  <script src="core/render.shim.js"></script>
+  <script src="core/game.js"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
+  <script defer src="core/overlay.fps.js"></script>
+  <script defer src="core/savegame.js"></script>
+
+  <!-- 8) Inspector (nicht-blockierend, wie bei dir) -->
+  <script defer src="ui/inspector/inspector.core.js?v=18.16.3"></script>
+  <script defer src="ui/ui-inspector.js?v=18.14.7"></script>
+  <script defer src="ui/inspector/inspector.button-bind.js"></script>
+
+  <!-- 8b) Inspector-Tabs/Tools (dein Stand) -->
+  <script defer src="ui/inspector/inspector.ui.js?v=18.17.0"></script>
+  <script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
+  <script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
+  <script defer src="ui/inspector/events.scan.js"></script>
+  <script defer src="ui/inspector/inspector.diag.js"></script>
+
+  <!-- 9) UI (Startscreen/HUD/Build/Map/Layout/Place) -->
+  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-map.js"></script>
+  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-place.js?v=24.2.0"></script>
+
+  <!-- 10) Diagnose & Startzustand-Absicherung (unverändert) -->
+  <script>
+    (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
+
+    // Inspector nie "offen" starten; Start-BG sichtbar lassen bis Spielstart
+    (function(){
+      var host = document.getElementById('inspector-overlay');
+      if (host) { host.classList.remove('open'); host.style.display='none'; }
+      document.body.classList.remove('is-playing');
+    }());
+  </script>
 </body>
 </html>
