@@ -338,3 +338,95 @@
     : ensureDefaultSlots();
 
 })();
+/* +++ Patch-Zusatz: v25.10.30-legacy-targets +++
+   Zweck: In jedem Tab die erwarteten Legacy-Ziele (IDs) anlegen,
+   damit die bestehenden Module wieder rendern können.
+   Zusätzlich Refresh-Pings beim Öffnen/Tabwechsel.
+------------------------------------------------*/
+(function(){
+  'use strict';
+
+  // Welche Container brauchen die Tabs?
+  // (Liste aus deinem alten Stand: r-table, logs-list, build-grid/-cats/-info/-msg/-count, pf-events/-table/-overlay, ui-info, t-table)
+  const LEGACY = {
+    logs:      ['logs-list'],
+    build:     ['build-info','build-grid','build-cats','build-msg','build-count'],
+    paths:     ['pf-events','pf-table','pf-overlay'],
+    resources: ['r-table'],
+    tests:     ['t-table'],
+    ui:        ['ui-info'],
+    diag:      [] // aktuell nichts Spezielles
+  };
+
+  // View für Tab-Key finden (data-tab oder insp-<key>)
+  function findViewFor(key){
+    return (
+      document.getElementById(`insp-${key}`) ||
+      document.querySelector(`#inspector .insp-content > .insp-view[data-tab="${key}"]`) ||
+      document.querySelector(`#inspector .insp-content > .insp-frame[data-tab="${key}"]`)
+    );
+  }
+
+  // Sicherstellen, dass elementare Slots + Legacy-IDs existieren
+  function ensureTargetsFor(key){
+    const view = findViewFor(key);
+    if (!view) return;
+
+    // 1) data-slot (fallback) – falls noch keiner existiert
+    const slotName = `${key}-view`;
+    if (!view.querySelector(`[data-slot="${slotName}"]`)){
+      const slot = document.createElement('div');
+      slot.setAttribute('data-slot', slotName);
+      slot.className = 'insp-slot pad';
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = `(${slotName} – wartet auf Modul-Render)`;
+      slot.appendChild(hint);
+      view.appendChild(slot);
+    }
+
+    // 2) Legacy-IDs – Module können direkt hier hinein rendern
+    (LEGACY[key] || []).forEach(id=>{
+      if (!view.querySelector('#'+id)){
+        const c = document.createElement('div');
+        c.id = id;
+        c.className = 'pad'; // unaufdringliches Padding
+        view.appendChild(c);
+      }
+    });
+  }
+
+  // Für alle bekannten Tabs
+  function ensureAllTargets(){
+    Object.keys(LEGACY).forEach(ensureTargetsFor);
+  }
+
+  // Beim Öffnen / Ready / Tabwechsel: Ziele garantieren + Refresh pingen
+  function pingRefresh(activeKey){
+    // Generischer Ping (falls Module darauf hören)
+    ['req:insp:refresh',
+     'req:insp:logs:refresh',
+     'req:insp:build:refresh',
+     'req:insp:paths:refresh',
+     'req:insp:resources:refresh',
+     'req:insp:tests:refresh',
+     'req:insp:ui:refresh'
+    ].forEach(name => { try{ window.dispatchEvent(new CustomEvent(name)); }catch{} });
+
+    // Optional: gezielt nur aktives Tab pingen
+    if (activeKey){
+      try{ window.dispatchEvent(new CustomEvent(`req:insp:${activeKey}:refresh`)); }catch{}
+    }
+  }
+
+  // Hooks einhängen
+  window.addEventListener('inspector:ready',  ()=>{ ensureAllTargets(); pingRefresh(); }, { passive:true });
+  window.addEventListener('cb:insp:open',      ()=>{ ensureAllTargets(); pingRefresh(); }, { passive:true });
+  window.addEventListener('cb:insp:tab:change',(e)=>{ const k=e.detail?.tab; ensureTargetsFor(k||'logs'); pingRefresh(k||'logs'); }, { passive:true });
+
+  // Falls schon offen, sofort einmal versuchen
+  (document.readyState === 'loading')
+    ? document.addEventListener('DOMContentLoaded', ()=>{ ensureAllTargets(); pingRefresh(); }, { once:true })
+    : (ensureAllTargets(), pingRefresh());
+
+})();
