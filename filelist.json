@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-10-27T09:29:15.175Z",
+  "createdAt": "2025-10-27T10:47:43.484Z",
   "root": ".",
   "count": 433,
   "entries": [
@@ -1825,7 +1825,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 8122
+      "size": 964
     },
     {
       "type": "file",
@@ -1904,7 +1904,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 4294
+      "size": 5974
     },
     {
       "type": "file",
@@ -2044,7 +2044,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 10092
+      "size": 7220
     },
     {
       "type": "file",
@@ -2079,22 +2079,22 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1942
+      "size": 1923
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42844
+      "size": 42866
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16407
+      "size": 16429
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 6535
+      "size": 6566
     },
     {
       "type": "file",
