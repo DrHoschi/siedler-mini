@@ -1,78 +1,82 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.button-bind.js
- * Version : v25.10.30-bind3
- * Zweck   : Inspector-Button & Hotkey (I) – bevorzugt UIInspector, kompatibel
- *           mit __INSPECTOR_CORE__.api.* und window.Inspector.* (Altpfade).
+ * Version : v25.10.30-bind4 (bootstrap + loop-safe)
+ * Zweck   : Inspector-Button & Hotkey (I) – robust + loop-sicher
  *
- * Hinweise / Mini-Doku:
- *   – Erzeugt bei Bedarf automatisch einen FAB (⚙️), falls nicht vorhanden.
- *   – Bevorzugt window.UIInspector.toggle() → garantiert Events & Active-View.
- *   – Fallbacks feuern cb:insp:open / cb:inspector:close + inspector:ready.
- *   – Einmal-Guard gegen doppelte Bindung.
- *   – Kein Löschen alter Pfade – nur ergänzt/gehärtet.
- * ============================================================================ */
+ *  Fixes:
+ *   • Bootstrap-Guard: 1. Klick wartet auf cb:inspector:ready, falls #inspector
+ *     noch nicht existiert (öffnet dann automatisch).
+ *   • Loop-Schutz: Wenn window.UIInspector existiert, NUR dessen toggle().
+ *   • Sauberer Click: preventDefault + stopPropagation.
+ *
+ *  Events:
+ *   – req:insp:toggle / req:insp:open / req:insp:close werden auf UIInspector
+ *     gemappt (wenn vorhanden), sonst Fallback.
+ * ========================================================================== */
 (function () {
   'use strict';
 
+  // ----- Doppel-Bind Guard ---------------------------------------------------
   if (window.__INSPECTOR_BIND_ATTACHED__) return;
   window.__INSPECTOR_BIND_ATTACHED__ = true;
 
   const MOD = '[insp-bind]';
   const LOG = (window.CBLog?.info || console.info).bind(console, MOD);
 
-  function getRoot(){ return document.getElementById('inspector') || document.getElementById('inspector-overlay'); }
-  function isOpen(){
-    const r = getRoot();
-    return document.body.classList.contains('is-inspector') || (r && r.classList.contains('open'));
-  }
-  function emit(name, detail){ try{ window.dispatchEvent(new CustomEvent(name, { detail })); }catch{} }
+  // ----- Helpers -------------------------------------------------------------
+  const hasUI = () => !!(window.UIInspector && typeof window.UIInspector.toggle === 'function');
+  const host  = () => document.getElementById('inspector') || document.getElementById('inspector-overlay');
 
-  // ---- zentrale Toggle-Logik ------------------------------------------------
-  function toggleInspector(force){
-    const want = (typeof force === 'boolean') ? force : !isOpen();
-
-    // (1) Bevorzugt: neue Bridge
-    if (window.UIInspector && typeof window.UIInspector.toggle === 'function'){
-      window.UIInspector.toggle(want ? undefined : undefined); // Tab-Key optional
-      return;
+  function openSafe() {
+    if (hasUI()) { window.UIInspector.open?.(); return; }
+    // Fallback: kleiner DOM-Root zur Not
+    let r = host();
+    if (!r) {
+      r = document.createElement('div');
+      r.id = 'inspector';
+      r.style.position = 'fixed';
+      r.style.inset = '0';
+      r.style.background = 'rgba(0,0,0,.6)';
+      r.style.zIndex = '50';
+      document.body.appendChild(r);
     }
-
-    // (2) Core-API (neuere Altvariante)
-    const api = window.__INSPECTOR_CORE__ && window.__INSPECTOR_CORE__.api;
-    if (api && typeof api.toggle === 'function'){
-      api.toggle(want);
-      emit(want ? 'cb:insp:open' : 'cb:inspector:close');
-      if (want) emit('inspector:ready');
-      return;
-    }
-
-    // (3) Ganz alte API
-    if (window.Inspector && typeof window.Inspector.toggle === 'function'){
-      window.Inspector.toggle(want);
-      emit(want ? 'cb:insp:open' : 'cb:inspector:close');
-      if (want) emit('inspector:ready');
-      return;
-    }
-
-    // (4) DOM-Fallback (Notmodus)
-    const root = getRoot() || (function () {
-      const n = document.createElement('div');
-      n.id = 'inspector';
-      n.className = 'inspector';
-      Object.assign(n.style, { position:'fixed', inset:'0', background:'rgba(0,0,0,.6)', zIndex:50, color:'#fff' });
-      n.textContent = 'Inspector';
-      document.body.appendChild(n);
-      return n;
-    })();
-
-    root.classList.toggle('open', want);
-    document.body.classList.toggle('is-inspector', want);
-    root.style.display = want ? '' : 'none';
-    emit(want ? 'cb:insp:open' : 'cb:inspector:close');
-    if (want) emit('inspector:ready');
+    document.body.classList.add('is-inspector');
+    r.classList.add('open');
+    window.dispatchEvent(new CustomEvent('cb:insp:open'));
   }
 
-  function bind(){
+  function closeSafe() {
+    if (hasUI()) { window.UIInspector.close?.(); return; }
+    const r = host();
+    document.body.classList.remove('is-inspector');
+    r?.classList.remove('open');
+    window.dispatchEvent(new CustomEvent('cb:insp:close'));
+  }
+
+  function toggleSafe() {
+    if (hasUI()) { window.UIInspector.toggle(); return; }
+    const r = host();
+    const nowOpen = !(document.body.classList.contains('is-inspector') || r?.classList.contains('open'));
+    nowOpen ? openSafe() : closeSafe();
+  }
+
+  // 1) Bootstrap-Guard: erster Klick, bevor #inspector existiert
+  function toggleBootstrapAware() {
+    if (host()) { toggleSafe(); return; }
+    // Noch kein Host → auf Ready warten und dann EINMAL öffnen
+    LOG('warte auf cb:inspector:ready …');
+    const once = () => {
+      window.removeEventListener('cb:inspector:ready', once);
+      // kleiner Tick, damit Tabs gerendert sind
+      setTimeout(() => toggleSafe(), 0);
+    };
+    window.addEventListener('cb:inspector:ready', once, { once: true });
+    // Falls der Core schon fertig war, das Event manuell anschubsen:
+    setTimeout(() => window.dispatchEvent(new Event('cb:inspector:ready')), 0);
+  }
+
+  // ----- Button anlegen/binden ----------------------------------------------
+  function bind() {
     let btn = document.getElementById('btn-inspector');
     if (!btn) {
       btn = document.createElement('button');
@@ -80,41 +84,58 @@
       btn.title = 'Inspector (I)';
       btn.type = 'button';
       btn.textContent = '⚙️';
-      Object.assign(btn.style, {
-        position:'fixed', right:'12px', bottom:'12px', zIndex:'60', padding:'6px 8px',
-        borderRadius:'6px', border:'1px solid #444', background:'rgba(0,0,0,.55)', color:'#e8e8f0',
-        fontSize:'25px', lineHeight:'1'
-      });
+
+      // minimale, robuste Positionierung – falls kein CSS greift
+      btn.style.position = 'fixed';
+      btn.style.right = '12px';
+      btn.style.bottom = '12px';
+      btn.style.zIndex = '60';
+      btn.style.padding = '6px 8px';
+      btn.style.borderRadius = '6px';
+      btn.style.border = '1px solid #444';
+      btn.style.background = 'rgba(0,0,0,.55)';
+      btn.style.color = '#e8e8f0';
       document.body.appendChild(btn);
     }
 
-    btn.addEventListener('click', () => {
-      const before = isOpen();
-      toggleInspector();
-      setTimeout(()=>{
-        if (!isOpen() && before === isOpen() && window.UIInspector?.open){
-          window.UIInspector.open(); // garantiert Events + Active-View beim Erstklick
-        }
-      }, 30);
-    });
+    // Click: sauber & loop-sicher
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleBootstrapAware();
+    }, { passive: false });
 
-    // Hotkey: I
+    // Hotkey: I (ohne Alt/Ctrl/Meta)
     window.addEventListener('keydown', (e) => {
       if (!e || e.repeat) return;
-      if ((e.key||'').toLowerCase()==='i' && !e.altKey && !e.ctrlKey && !e.metaKey){
-        toggleInspector();
+      if ((e.key || '').toLowerCase() === 'i' && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        toggleBootstrapAware();
       }
-    });
+    }, { passive: false });
 
-    LOG('Button/Hotkey gebunden (v25.10.30-bind3)');
+    LOG('Button- und Hotkey-Handler gebunden');
   }
 
   (document.readyState === 'loading')
     ? document.addEventListener('DOMContentLoaded', bind, { once: true })
     : bind();
 
-  // Externe Events
-  window.addEventListener('req:insp:toggle', () => toggleInspector());
-  window.addEventListener('req:insp:open',   () => toggleInspector(true));
-  window.addEventListener('req:insp:close',  () => toggleInspector(false));
+  // ----- Externe Requests → auf UIInspector mappen ---------------------------
+  window.addEventListener('req:insp:toggle', () => toggleBootstrapAware(), { passive: true });
+  window.addEventListener('req:insp:open',   () => hasUI() ? window.UIInspector.open()  : openSafe(),  { passive: true });
+  window.addEventListener('req:insp:close',  () => hasUI() ? window.UIInspector.close() : closeSafe(), { passive: true });
+
+  // Optional: Sichtbarkeit des Buttons auch bei offenem Overlay sicherstellen
+  try {
+    const css = `
+      body.is-inspector #btn-inspector{
+        position: fixed;
+        z-index: 2147483647 !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+      }`;
+    const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+  } catch {}
 })();
