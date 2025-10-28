@@ -15,6 +15,8 @@
  *  - inspector.core.js (Tab-API; kompatible mount-Bridge integriert)
  *  - window.Registry?.snapshot?.(), window.Assets?.stats?.(),
  *    window.MapRuntime?.info?.(), Event-Bridge (req:*/cb:*)
+ * Änderungen:
+ * .is-active entfernt
  * ========================================================================== */
 (function(){
   'use strict';
@@ -245,7 +247,7 @@
 
   /* ------------------------------- Events -------------------------------- */
   function renderIfActive(tabId){
-    const active = document.querySelector('#inspector .insp-tab.is-active, #inspector .insp-tab.active')?.dataset?.tab;
+    const active = document.querySelector('#inspector .insp-tab.active')?.dataset?.tab;
     if (active === tabId){
       const host = document.querySelector('.insp-view[data-tab="diag"]') || core.getSlot('generic');
       if (host) renderAll(host);
@@ -256,7 +258,7 @@
   window.addEventListener('cb:res:snapshot',       e=>{ state.resMap = Object.assign({}, e?.detail?.resources || e?.detail || {}); renderIfActive('diag'); });
   window.addEventListener('cb:game:tick',          e=>{
     const d=e?.detail||{}; pushTick(Number(d.fps||0), Number(d.dt||0)*1000);
-    const active = document.querySelector('#inspector .insp-tab.is-active, #inspector .insp-tab.active')?.dataset?.tab;
+    const active = document.querySelector('#inspector .insp-tab.active')?.dataset?.tab;
     if (active==='diag') updateNumbers();
   });
 
