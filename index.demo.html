@@ -24,7 +24,78 @@
   <link rel="stylesheet" href="ui/css/ui-hud.css">
   <link rel="stylesheet" href="ui/css/ui-place.css?v=19.2.0">
 </head>
+<!-- =====================================================================
+     Inspector Host Guard (Demo/Fail-Safe)
+     Version : v25.10.31-guard1
+     Zweck   : Erstellt #inspector bei Bedarf + verdrahtet open/close/toggle
+               (funktioniert parallel zu core/ui/bind – greift nur, wenn nötig)
+===================================================================== -->
+<style>
+  /* Sichtbarkeit-Fallback, falls ui-inspector.css gerade nicht greift */
+  #inspector { display:none; position:fixed; inset:0; z-index:9999;
+               background: rgba(18,18,20,.96); }
+  body.is-inspector #inspector { display:block; }
+</style>
+<script>
+(function(){
+  const HOST_A = 'inspector';
+  const HOST_B = 'inspector-overlay';
 
+  function ensureHost(){
+    let host = document.getElementById(HOST_A) || document.getElementById(HOST_B);
+    if(!host){
+      host = document.createElement('div');
+      host.id = HOST_A;            // Standard-ID
+      host.setAttribute('role','dialog');
+      host.style.display = 'none'; // Sichtbar per Body-Klasse
+      host.style.position = 'fixed';
+      host.style.inset = '0';
+      host.style.zIndex = '9999';
+      // Root für UI-Inhalt (Tabs etc.)
+      const root = document.createElement('div');
+      root.setAttribute('data-insp-root','');
+      host.appendChild(root);
+      document.body.appendChild(host);
+      console.info('[insp-guard] host created #' + host.id);
+      // Signal an evtl. wartende UI-Module
+      dispatchEvent(new CustomEvent('cb:insp:host-ready',{detail:{el:host}}));
+    }
+    return host;
+  }
+
+  function openInsp(){
+    const host = ensureHost();
+    document.body.classList.add('is-inspector');
+    host.style.display = 'block';
+    console.info('[insp-guard] geöffnet ✓');
+  }
+  function closeInsp(){
+    const host = ensureHost();
+    document.body.classList.remove('is-inspector');
+    host.style.display = 'none';
+    console.info('[insp-guard] geschlossen ✓');
+  }
+
+  addEventListener('req:insp:open',   openInsp);
+  addEventListener('req:insp:close',  closeInsp);
+  addEventListener('req:insp:toggle', () => {
+    const host = ensureHost();
+    const isOpen = getComputedStyle(host).display !== 'none';
+    (isOpen ? closeInsp : openInsp)();
+  });
+
+  // Diagnose-Helfer
+  window.__forceInspectorDiag = () => ({
+    bodyClasses: [...document.body.classList],
+    host: document.getElementById(HOST_A) || document.getElementById(HOST_B),
+    hostPresent: !!(document.getElementById(HOST_A) || document.getElementById(HOST_B))
+  });
+
+  // Bessere Fehlerlogs (statt "Script error. 0")
+  window.addEventListener('error',   e => console.log('[diag:error]', e.message, e.filename, e.lineno, e.colno));
+  window.addEventListener('unhandledrejection', e => console.log('[diag:promise]', e.reason));
+})();
+</script>
 <body>
   <!-- =========================================================
        SPIELSTAGE + UI-ROOTS (unverändert aus deiner Datei)
