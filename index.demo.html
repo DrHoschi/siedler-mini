@@ -96,6 +96,71 @@
   window.addEventListener('unhandledrejection', e => console.log('[diag:promise]', e.reason));
 })();
 </script>
+  <script>
+/* ============================================================================
+ * Datei   : ui/inspector/inspector.miniview.js  (Inline-Demo)
+ * Zweck   : Wenn der Inspector geöffnet wird und noch kein UI montiert ist,
+ *           setzen wir ein einfaches UI-Skelett ein (Header + Body).
+ *           → Arbeitet MIT deinem Host-Guard & mit ui-inspector.js zusammen.
+ *           → Greift nur, wenn noch nichts im Root liegt.
+ * Version : v25.10.31-mini1
+============================================================================ */
+(function(){
+  const SEL = '#inspector, #inspector-overlay';
+  function getHost(){ return document.querySelector(SEL); }
+  function getRoot(host){
+    return host.querySelector('[data-insp-root]') || host; // Fallback: host selbst
+  }
+  function mountOnce(){
+    const host = getHost();
+    if(!host) return;
+    const root = getRoot(host);
+    // Schon etwas drin? Dann nichts tun.
+    if(root.querySelector('[data-insp-mounted]')) return;
+
+    // --- Minimal-UI einsetzen ---
+    const wrap = document.createElement('div');
+    wrap.setAttribute('data-insp-mounted','');
+    wrap.innerHTML = `
+      <div class="insp-header">
+        Inspector <button class="insp-close" title="Schließen">×</button>
+      </div>
+      <div class="insp-body">
+        <p><strong>Status:</strong> UI-Mock aktiv (Mini-Renderer).</p>
+        <p>Hotkeys: <code>I</code> toggelt – Buttons/Events funktionieren.</p>
+        <div style="margin-top:10px; padding:10px; background:#0f0f12; border:1px solid #2a2a2e; border-radius:8px">
+          <div>Build-Menü: <span id="mini-bm">unbekannt</span></div>
+          <div>FPS-Overlay: <span id="mini-fps">unbekannt</span></div>
+        </div>
+      </div>
+    `;
+    root.appendChild(wrap);
+
+    // Close-Button verdrahten
+    wrap.querySelector('.insp-close')?.addEventListener('click', () => {
+      dispatchEvent(new CustomEvent('req:insp:close'));
+    });
+
+    // Kleine Live-Probe (falls globale Flags vorhanden sind)
+    try {
+      const bm = document.getElementById('mini-bm');
+      const fps = document.getElementById('mini-fps');
+      // Beispiel: lies irgendwas aus deinem globalen State, wenn vorhanden:
+      bm && (bm.textContent = window?.UI_BUILD?.ready ? 'bereit' : 'n/a');
+      fps && (fps.textContent = document.body.classList.contains('show-fps') ? 'an' : 'aus');
+    } catch(e){ console.info('[miniview] probe skipped', e); }
+
+    console.info('[miniview] UI montiert');
+  }
+
+  // Wenn Host bereits existiert und offen → sofort montieren
+  mountOnce();
+
+  // Bei Host-Ready-Event (vom Guard) oder beim Öffnen erneut prüfen
+  addEventListener('cb:insp:host-ready', mountOnce);
+  addEventListener('req:insp:open',      () => setTimeout(mountOnce, 0));
+})();
+</script>
 <body>
   <!-- =========================================================
        SPIELSTAGE + UI-ROOTS (unverändert aus deiner Datei)
