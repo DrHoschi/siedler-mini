@@ -1,198 +1,61 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <!-- =========================================================================
+  <!-- =========================================================
        DATEI  : index.demo.html
-       PROJEKT: Neue Siedler (Demo-Startseite)
-       VERSION: v25.10.28-final (Inspector wieder aktiv, saubere Reihenfolge)
-       ZWECK  : Minimales, aber vollständiges Demo-Setup mit funktionierendem
-                Inspector (open/close), HUD & Startpanel-Grundgerüst.
-       HINWEIS: Diese Demo lädt NUR das Nötige für UI/Inspector-Tests.
-                Spielsysteme (Map/Build usw.) sind „anschaltbar“, aber optional.
-       ========================================================================= -->
-
-  <!-- ===== Basis-Meta ===== -->
+       VERSION: v25.10.28-clean
+       ZIEL   : Demo-Seite mit funktionierendem Inspector
+       HINWEIS: Keine Inline-Skripte! Nur externe Dateien.
+  ========================================================== -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
   <title>Neue Siedler — Demo</title>
 
-  <!-- ===== (Optional) App-/Icon-Metadaten =====
-       Falls ein Web-App-Manifest genutzt wird, hier wieder aktivieren.
-       In der DEMO nicht zwingend nötig; verhindert aber Icon-Warnungen.
-  -->
-  <!-- <link rel="manifest" href="manifest.json?v=25.10.28"> -->
-
-  <!-- =========================================================================
-       STYLES (Lade-Reihenfolge)
-       1) Basis/Layout (UI-Rahmen, Grids, Reset)
-       2) HUD (ressourcenleiste)
-       3) Build-UI (falls aktiv)
-       4) Inspector (Overlay mit Tabs) → WICHTIG für Sichtbarkeit
-       HINWEIS: Cache-Busting via ?v=…
-       ========================================================================= -->
-  <!-- 1) Basis/Layout -->
-  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.28"><!-- WHERE TO INSERT: Globale Styles -->
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.28"><!-- Panels/Grids/Startpanel -->
-
-  <!-- 2) HUD (oben/links) -->
+  <!-- Styles -->
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.28">
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.28">
   <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.10.28">
-
-  <!-- 3) Build-UI (nur wenn du die Build-Leiste in der Demo brauchst) -->
-  <!-- <link rel="stylesheet" href="ui/css/ui-build.css?v=25.10.28"> -->
-
-  <!-- 4) Inspector-Overlay (MUSS geladen sein, damit .is-inspector/.inspector-open wirkt) -->
-  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.28">
-
-  <!-- (Optional) Fonts/Icons – nur falls in deinem Projekt vorhanden -->
-  <!-- <link rel="preload" href="assets/fonts/YourFont.woff2" as="font" type="font/woff2" crossorigin> -->
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.28"><!-- Inspector-Overlay -->
 </head>
-
 <body class="theme-default">
-  <!-- =========================================================================
-       [A] STARTPANEL / LANDING
-       - In der Demo standardmäßig sichtbar; Spiel-Viewport ist inaktiv.
-       - Der Inspector sollte sich TROTZ Startpanel öffnen/schließen lassen.
-       ========================================================================= -->
-  <section id="start" data-ui="startpanel" aria-label="Startpanel">
-    <header class="start-header">
-      <h1>Neue Siedler — Demo</h1>
-      <p class="muted">Startpanel aktiv. Inspector testbar über das Zahnrad.</p>
-    </header>
 
+  <!-- Startpanel -->
+  <section id="start" data-ui="startpanel">
+    <h1>Neue Siedler — Demo</h1>
+    <p class="muted">Zahnrad öffnet/schließt den Inspector.</p>
     <div class="start-actions">
-      <!-- WHERE TO INSERT: weitere Demo-Buttons -->
       <button id="btn-start-game" type="button" data-action="start-game">Spiel starten (Demo)</button>
       <button id="btn-open-inspector" type="button" aria-label="Inspector" data-action="toggle-inspector">⚙️ Inspector</button>
     </div>
   </section>
 
-  <!-- =========================================================================
-       [B] SPIEL-VIEWPORT
-       - Für echte Map/Render-Tests die Canvas freischalten.
-       - In der reinen Demo NICHT zwingend erforderlich, darf leer bleiben.
-       ========================================================================= -->
+  <!-- Spiel-Root (Demo kann leer bleiben) -->
   <main id="game-root" hidden>
     <canvas id="game" width="1024" height="768"></canvas>
   </main>
 
-  <!-- =========================================================================
-       [C] HUD TOP-LEISTE
-       - Wird per JS bestückt, sobald HUD initialisiert ist.
-       - In der Demo optional – bleibt leer, falls HUD-Skripte aus sind.
-       ========================================================================= -->
-  <aside id="hud-top" aria-label="Ressourcen-HUD"></aside>
-
-  <!-- =========================================================================
-       [D] INSPECTOR HOST
-       - Der Host wird bei Bedarf auch AUTOMATISCH erzeugt (ui/ui-inspector.js).
-       - Für Diagnose hier explizit drin → garantiert Root vorhanden.
-       - CSS zeigt/verbirgt via Body-Flags: .is-inspector / .inspector-open
-       ========================================================================= -->
+  <!-- Inspector-Host (zur Sicherheit vorhanden; könnte auch dynamisch erstellt werden) -->
   <div id="inspector" hidden></div>
 
-  <!-- =========================================================================
-       SCRIPTS (Reihenfolge ist wichtig!)
-       Leitlinie:
-       1) Polyfills/Logger
-       2) Boot / Core-Basis
-       3) Registry / Assets / Data
-       4) UI (Start/HUD/Map/Build …)
-       5) Inspector (Wrapper + Tabs + Fallback)
-       6) Button-Bindings / Demo-Glue
-       ========================================================================= -->
+  <!-- Scripts: nur EXTERNE Dateien, richtige Reihenfolge -->
+  <script src="boot.js?v=25.10.28"></script>
+  <script src="core/asset.js?v=25.10.28"></script>
+  <script src="core/registry.js?v=25.10.28"></script>
 
-  <!-- 1) Polyfills/Logger (optional, aber nützlich in der Demo) -->
-  <!-- <script src="tools/polyfills.js?v=25.10.28"></script> -->
-  <!-- <script src="tools/cblog.js?v=25.10.28"></script> -->
-
-  <!-- 2) Boot / Core-Basis -->
-  <script src="boot.js?v=25.10.28"></script>             <!-- BootManager, DOMContentLoaded-Hooks -->
-
-  <!-- 3) Registry / Assets / Data -->
-  <script src="core/asset.js?v=25.10.28"></script>       <!-- Asset-Lader (beibehalten: core/asset.js Sing.) -->
-  <script src="core/registry.js?v=25.10.28"></script>    <!-- Registry: Buildings, Res, Config -->
-
-  <!-- 4) UI-Schicht (bei Bedarf: kommentiere aus/ein) -->
-  <script src="ui/ui-start.js?v=25.10.28"></script>      <!-- Startpanel-Logik (show/hide) -->
-  <script src="ui/ui-hud.js?v=25.10.28"></script>        <!-- HUD-Top-Leiste (cb:registry:ready …) -->
-  <!-- <script src="ui/ui-map.js?v=25.10.28"></script> --> <!-- Map/Placing, falls Demo die Canvas nutzt -->
-  <!-- <script src="ui/ui-build.js?v=25.10.28"></script> --> <!-- Build-Menü (nur wenn gebraucht) -->
+  <script src="ui/ui-start.js?v=25.10.28"></script>
+  <script src="ui/ui-hud.js?v=25.10.28"></script>
+  <!-- <script src="ui/ui-map.js?v=25.10.28"></script> -->
+  <!-- <script src="ui/ui-build.js?v=25.10.28"></script> -->
   <!-- <script src="ui/ui-build.categories.js?v=25.10.28"></script> -->
 
-  <!-- 5) INSPECTOR (MUSS an, damit Zahnrad funktioniert)
-         Reihenfolge:
-         a) Wrapper/Core (stellt UIInspector.* und Body-Flags)
-         b) Tabs (registrieren sich beim Wrapper)
-         c) Fallback-Force-Toggle (für Buttons/Ereignisse, robust) -->
-  <script src="ui/ui-inspector.js?v=25.10.28"></script>                <!-- Core/Wrapper -->
-  <script src="ui/inspector/inspector.logs.js?v=25.10.28"></script>    <!-- Tab: Logs/Event-Stream -->
-  <script src="ui/inspector/inspector.ui.js?v=25.10.28"></script>      <!-- Tab: UI/Layers/Overlay-Diag -->
-  <script src="tools/inspector.force-toggle.js?v=25.10.28"></script>   <!-- Ultimativer Fallback-Toggle -->
+  <!-- Inspector: Core/Wrapper → Tabs → Fallback -->
+  <script src="ui/ui-inspector.js?v=25.10.28"></script>
+  <script src="ui/inspector/inspector.logs.js?v=25.10.28"></script>
+  <script src="ui/inspector/inspector.ui.js?v=25.10.28"></script>
+  <script src="tools/inspector.force-toggle.js?v=25.10.28"></script>
 
-  <!-- 6) BUTTON-BINDINGS / DEMO-GLUE
-         Bindet das Zahnrad & Start-Button.
-         Wichtig: Nutzt NUR öffentliche Aliasse → stabil gegen Umbauten. -->
-  <script>
-  /* ===========================================================================
-   * Datei  : demo/button.bind.js (inline für die Demo)
-   * Zweck  : Verdrahtung der Demo-Buttons ohne Abhängigkeit zu Game-Code.
-   * Events : req:insp:toggle (alias: req:inspector:toggle)
-   * Style  : Deutsche Kommentare, klar, robust, minimal.
-   * ======================================================================= */
-
-  // ---------- Hilfen ----------
-  const $ = (sel, root=document)=> root.querySelector(sel);
-  function emit(name){ dispatchEvent(new CustomEvent(name)); }
-
-  // ---------- Startpanel-Aktionen ----------
-  (function setupStartpanel(){
-    const btnStart = $('#btn-start-game');
-    const btnInsp  = $('#btn-open-inspector');
-
-    // In der Demo schalten wir nur das Startpanel weg und zeigen den Game-Root
-    btnStart?.addEventListener('click', ()=>{
-      $('#start')?.setAttribute('hidden','');
-      $('#game-root')?.removeAttribute('hidden');
-      // (Optional) Boot-Log:
-      window.UIInspector?.log?.({type:'info', message:'Demo: Spielbereich sichtbar'});
-    });
-
-    // Zahnrad toggelt den Inspector über den robusten Alias
-    btnInsp?.addEventListener('click', ()=>{
-      // Bevorzugt moderne API:
-      if (window.UIInspector?.toggle) { window.UIInspector.toggle(); return; }
-      // Aliasse als Fallback (werden in ui-inspector.js registriert)
-      emit('req:insp:toggle');      // kurz
-      emit('req:inspector:toggle'); // lang
-    });
-  })();
-
-  // ---------- Sicherheitsnetz: ESC zum Schließen ----------
-  addEventListener('keydown', (ev)=>{
-    if (ev.key === 'Escape'){
-      if (document.body.classList.contains('is-inspector') ||
-          document.body.classList.contains('inspector-open')){
-        window.UIInspector?.close?.();
-        emit('req:insp:close'); emit('req:inspector:close');
-      }
-    }
-  });
-
-  // ---------- Sichtprüfung beim Laden ----------
-  document.addEventListener('DOMContentLoaded', ()=>{
-    // Garantiert, dass #inspector existiert (ui-inspector erstellt ihn sonst selbst)
-    if (!document.querySelector('#inspector')){
-      const host = document.createElement('div'); host.id = 'inspector'; host.hidden = true;
-      document.body.appendChild(host);
-    }
-    // Kurzer Log-Hinweis:
-    window.UIInspector?.log?.({type:'info', message:'Demo geladen (Inspector verfügbar)'});
-  });
-  </script>
-
-  <!-- =========================================================================
-       ENDE
-       ========================================================================= -->
+  <!-- Demo-Button-Bindings (extern, kein Inline-JS) -->
+  <script src="demo/button.bind.js?v=25.10.28"></script>
 </body>
 </html>
