@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-28T10:30:53.712Z",
+  "createdAt": "2025-10-28T19:02:29.805Z",
   "root": ".",
-  "count": 434,
+  "count": 436,
   "entries": [
     {
       "type": "dir",
@@ -1343,6 +1343,15 @@
     },
     {
       "type": "dir",
+      "path": "demo/"
+    },
+    {
+      "type": "file",
+      "path": "demo/button.bind.js",
+      "size": 1661
+    },
+    {
+      "type": "dir",
       "path": "docs/"
     },
     {
@@ -1820,7 +1829,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 4452
+      "size": 5985
     },
     {
       "type": "file",
@@ -1884,7 +1893,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.api-compat.restore.js",
-      "size": 3289
+      "size": 2865
     },
     {
       "type": "file",
@@ -1899,7 +1908,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 1906
+      "size": 793
     },
     {
       "type": "file",
@@ -1909,7 +1918,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.core.js",
-      "size": 2528
+      "size": 7250
     },
     {
       "type": "file",
@@ -1939,12 +1948,12 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.force-toggle.js",
-      "size": 5158
+      "size": 4997
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.logs.js",
-      "size": 8945
+      "size": 14221
     },
     {
       "type": "file",
@@ -1954,7 +1963,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.resources.js",
-      "size": 11871
+      "size": 15252
     },
     {
       "type": "file",
@@ -1969,7 +1978,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.ui.js",
-      "size": 9845
+      "size": 21573
     },
     {
       "type": "file",
@@ -2009,7 +2018,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 12841
+      "size": 10414
     },
     {
       "type": "file",
@@ -2034,7 +2043,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 8077
+      "size": 4697
     },
     {
       "type": "file",
@@ -2044,7 +2053,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 3841
+      "size": 7273
     },
     {
       "type": "file",
@@ -2079,27 +2088,27 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1923
+      "size": 1942
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42864
+      "size": 42976
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16427
+      "size": 16477
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 6666
+      "size": 6104
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 6566
+      "size": 5709
     },
     {
       "type": "file",
