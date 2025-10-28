@@ -189,6 +189,58 @@
   setTimeout(mountReal, 200);
 })();
 </script>
+  <script>
+/* ============================================================================
+ * Datei   : ui/inspector/inspector.bridge.mount.js (inline)
+ * Zweck   : Echte Inspector-UI in allen Generationen mounten (v18.x / v25.x)
+ * Wirkung : Ruft .mount(host) ODER .init() auf, je nachdem was vorhanden ist;
+ *           entfernt dabei den Mini-Mock, sobald echte UI montiert ist.
+ * Version : v25.10.31-bridge1
+============================================================================ */
+(function(){
+  const SEL = '#inspector, #inspector-overlay';
+  function getHost(){ return document.querySelector(SEL); }
+  function killMini(){ document.querySelector('#inspector [data-insp-mounted]')?.remove(); }
+
+  function tryMount(){
+    const host = getHost();
+    if(!host) return;
+
+    // Kandidaten: alt (Inspector), neu (InspectorUI)
+    const CANDIDATES = [
+      {obj: window.InspectorUI, fn: 'mount'},
+      {obj: window.Inspector,   fn: 'mount'},
+      {obj: window.InspectorUI, fn: 'init'},
+      {obj: window.Inspector,   fn: 'init'},
+    ].filter(x => x.obj && typeof x.obj[x.fn] === 'function');
+
+    if (CANDIDATES.length){
+      const {obj, fn} = CANDIDATES[0];
+      try{
+        // Wenn die Funktion Parameter akzeptiert, host übergeben
+        (obj[fn].length >= 1) ? obj[fn].call(obj, host) : obj[fn].call(obj);
+        killMini();
+        console.info('[insp-bridge] real UI mounted via', fn);
+      }catch(e){
+        console.warn('[insp-bridge] mount failed', e);
+      }
+    } else {
+      // Legacy-Event-Fallbacks (ältere Builds lauschen darauf)
+      dispatchEvent(new CustomEvent('req:insp:ui:mount',   {detail:{host}}));
+      dispatchEvent(new CustomEvent('req:inspector:mount', {detail:{host}}));
+      setTimeout(killMini, 50);
+      console.info('[insp-bridge] fired legacy mount events');
+    }
+  }
+
+  // Mount-Versuche auslösen, wenn Host bereit/ geöffnet ist
+  addEventListener('cb:insp:host-ready', () => setTimeout(tryMount, 0));
+  addEventListener('req:insp:open',      () => setTimeout(tryMount, 0));
+
+  // Falls alles schon da ist:
+  setTimeout(tryMount, 100);
+})();
+</script>
 <body>
   <!-- =========================================================
        SPIELSTAGE + UI-ROOTS (unverändert aus deiner Datei)
