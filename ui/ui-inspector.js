@@ -1,17 +1,14 @@
 /* ============================================================================
  * Datei   : ui/ui-inspector.js
  * Projekt : Neue Siedler – Inspector
- * Version : v25.10.31-bridge-passive
- * Zweck   : Tabs/ARIA/Active-View – ABER KEINE Sichtbarkeitssteuerung!
- *
- * Lauscht : cb:insp:open, cb:inspector:open (Kompat), cb:insp:tab:change
- * Sendet  : (nichts bzgl. Open/Close)
+ * Version : v25.10.31-bridge-passive+api
+ * Zweck   : Tabs/ARIA nur UI-seitig. Sichtbarkeit NICHT hier.
+ *           Stellt kompatible window.UIInspector-API bereit.
  * ============================================================================ */
 (function(){
   'use strict';
-
   const MOD = '[ui-inspector]';
-  const LOGI = (window.CBLog?.info||console.log).bind(console, MOD);
+  const log = (t)=> (window.CBLog?.info||console.log)(MOD, t);
 
   const SEL = {
     tabs : '#inspector .insp-tabs [role="tab"], #inspector .insp-tabs .insp-tab',
@@ -20,6 +17,7 @@
   const $  = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
 
+  // ---- UI: Tabs/ARIA -------------------------------------------------------
   function ensureIdsAndLinkTabs(){
     const views = $$(SEL.views);
     const tabs  = $$(SEL.tabs);
@@ -31,17 +29,14 @@
       }
     });
   }
-
   function activateByKey(key){
-    const views = $$(SEL.views);
-    if (!views.length) return;
+    const views = $$(SEL.views); if (!views.length) return;
     let target = null;
     if (key){
       target = $('#insp-'+key) || $(`#inspector .insp-view[data-tab="${key}"], #inspector .insp-frame[data-tab="${key}"]`);
     }
     if (!target) target = views[0];
     views.forEach(v => v.classList.toggle('is-active', v === target));
-    // ARIA selected sync
     const tabs = $$(SEL.tabs);
     const activeKey = target.getAttribute('data-tab') || target.id;
     tabs.forEach(t=>{
@@ -49,8 +44,6 @@
       t.setAttribute('aria-selected', String(!!tkey && (tkey === activeKey || ('#'+activeKey)===tkey)));
     });
   }
-
-  // Tab-Klick → cb:insp:tab:change (nur UI)
   document.addEventListener('click', (e)=>{
     const el = e.target.closest?.(SEL.tabs);
     if (!el) return;
@@ -59,20 +52,33 @@
     window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab:key }}));
   }, { passive:true });
 
-  // Reagiere auf Open → nur Tabs/ARIA vorbereiten
   function onOpened(){
     ensureIdsAndLinkTabs();
-    activateByKey('logs'); // Default
-    LOGI('bereit (Bridge-passive)');
+    // Standardmäßig Logs aktivieren, wenn nichts anderes gesetzt ist
+    const anyActive = $(`#inspector .insp-content .is-active`);
+    activateByKey(anyActive ? null : 'logs');
+    log('geöffnet (UI vorbereitet)');
   }
-  window.addEventListener('cb:insp:open',       onOpened, { passive:true });
-  window.addEventListener('cb:inspector:open',  onOpened, { passive:true });
+  window.addEventListener('cb:insp:open',      onOpened, { passive:true });
+  window.addEventListener('cb:inspector:open', onOpened, { passive:true });
 
-  // Tab-Wechsel
   window.addEventListener('cb:insp:tab:change', (e)=>{
-    const key = e.detail?.tab;
-    ensureIdsAndLinkTabs();
-    activateByKey(key);
+    ensureIdsAndLinkTabs(); activateByKey(e.detail?.tab);
   }, { passive:true });
+
+  // ---- Kompatible API (wie früher) ----------------------------------------
+  // Nur Requests senden; Core schaltet sichtbar.
+  const API = {
+    open(tab){ window.dispatchEvent(new CustomEvent('req:insp:open'));  if (tab){ window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab } })); } },
+    close(){  window.dispatchEvent(new CustomEvent('req:insp:close')); },
+    toggle(){ window.dispatchEvent(new CustomEvent('req:insp:toggle')); },
+    isOpen(){ return document.body.classList.contains('is-inspector') || document.body.classList.contains('inspector-open'); }
+  };
+  window.UIInspector = API;
+
+  // Ready-Log (Kompat zu deiner früheren Prüfung)
+  (document.readyState === 'loading')
+    ? document.addEventListener('DOMContentLoaded', ()=> (window.CBLog?.ok||console.log)('[ui-inspector] bereit'), { once:true })
+    : (window.CBLog?.ok||console.log)('[ui-inspector] bereit');
 
 })();
