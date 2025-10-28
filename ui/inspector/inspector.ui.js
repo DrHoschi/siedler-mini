@@ -243,6 +243,47 @@
     box.append(bCross, bStack, bPE2s, bReset);
     root.appendChild(box);
 
+    // >>> In inspector.ui.js innerhalb deiner init(root, api) Funktion ergänzen:
+
+// --- Theme-Umschalter einfügen ---------------------------------------------
+const box = document.createElement('section');
+box.dataset.tab = 'UI'; // erscheint im UI-Tab
+box.innerHTML = `
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <label style="font-weight:600">Theme:</label>
+    <select id="insp-theme">
+      <option value="dark">dark</option>
+      <option value="light">light</option>
+      <option value="wood">wood</option>
+    </select>
+    <button id="insp-theme-apply" class="insp-tab">Übernehmen</button>
+    <span id="insp-theme-hint" style="opacity:.7;font-size:.9em"></span>
+  </div>
+`;
+box.style.margin = '6px 0 10px';
+root.appendChild(box);
+
+// --- Setzen/Laden -----------------------------------------------------------
+function setTheme(name){
+  document.documentElement.setAttribute('data-theme', name);
+  try{ localStorage.setItem('insp-theme', name); }catch(e){}
+  hint.textContent = `aktiv: ${name}`;
+}
+const select = box.querySelector('#insp-theme');
+const apply  = box.querySelector('#insp-theme-apply');
+const hint   = box.querySelector('#insp-theme-hint');
+
+// Letzte Auswahl laden
+const saved = (localStorage.getItem('insp-theme') || 'dark');
+select.value = saved;
+setTheme(saved);
+
+// Klick-Apply
+apply.addEventListener('click', () => setTheme(select.value));
+
+// Optional: sofort reagieren bei Auswahl (ohne Button)
+// select.addEventListener('change', () => setTheme(select.value));
+    
     // Footer
     const foot = document.createElement('div');
     foot.style.cssText = `display:flex; gap:6px; padding:6px 8px; justify-content:flex-end; border-top:1px solid #2a2a2e;`;
