@@ -221,3 +221,43 @@ body.inspector-open #inspector-overlay{
   .insp-btn{ padding:6px 10px; }
   .inspector-table th, .inspector-table td{ padding:5px 6px; }
 }
+
+/* === TAB-LEISTE: immer sichtbar, unabhängig vom aktiven Inhalt === */
+.insp-tabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 8px;
+  background: var(--insp-header);
+  border-bottom: 1px solid var(--insp-border);
+  position: sticky; top: 0; z-index: 1; /* bleibt sichtbar beim Scrollen */
+}
+
+/* === Tab-Buttons === */
+.insp-tab {
+  background: var(--insp-tab);
+  color: var(--insp-text);
+  border: 1px solid var(--insp-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.insp-tab.active {
+  background: var(--insp-panel);
+  border-color: #5a66ff;
+  outline: 2px solid #5a66ff;
+}
+
+/* === Inhalte: nur .active sichtbar, Rest verborgen === */
+.insp-content > section { display: none; }
+.insp-content > section.active { display: block; }
+
+/* === Fallback-Vereinheitlichung von Aliassen (sanft) === */
+.insp-tab.is-active { /* falls noch vorhanden */
+  outline: 2px solid #5a66ff;
+  border-color: #5a66ff;
+}
+.insp-content > section.is-active { display: block; }  /* falls Altbestand */
+.insp-content > section.hidden   { display: none !important; }
