@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-27T10:47:43.484Z",
+  "createdAt": "2025-10-28T10:30:53.712Z",
   "root": ".",
-  "count": 433,
+  "count": 434,
   "entries": [
     {
       "type": "dir",
@@ -1377,11 +1377,6 @@
     },
     {
       "type": "file",
-      "path": "docs/index.demo.html",
-      "size": 5980
-    },
-    {
-      "type": "file",
       "path": "docs/index.ui.demo.html",
       "size": 2408
     },
@@ -1825,7 +1820,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 964
+      "size": 4452
     },
     {
       "type": "file",
@@ -1904,7 +1899,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 5974
+      "size": 1906
     },
     {
       "type": "file",
@@ -1914,7 +1909,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.core.js",
-      "size": 7916
+      "size": 2528
     },
     {
       "type": "file",
@@ -1935,6 +1930,11 @@
       "type": "file",
       "path": "ui/inspector/inspector.fix-runtime.js",
       "size": 5178
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.force-close.hotfix.js",
+      "size": 3949
     },
     {
       "type": "file",
@@ -2044,7 +2044,7 @@
     {
       "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 7220
+      "size": 3841
     },
     {
       "type": "file",
@@ -2084,12 +2084,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42866
+      "size": 42864
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16429
+      "size": 16427
+    },
+    {
+      "type": "file",
+      "path": "index.demo.html",
+      "size": 6666
     },
     {
       "type": "file",
