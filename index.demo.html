@@ -3,357 +3,105 @@
 <head>
   <!-- =========================================================
        META / BASIS
-       (unverändert)
+       Datei   : index.demo.html
+       Projekt : Neue Siedler – Demo / Inspector-Test
+       Version : v25.10.31-final-compat
+       Zweck   : Aktuelle Boot-/UI-Struktur (v25.x) +
+                 kompatibler Inspector (v18.16-Reihe)
        ========================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
-  <title>Neue Siedler</title>
+  <title>Neue Siedler – Demo</title>
 
   <!-- =========================================================
-       STYLES (aus deiner monolithischen index.html)
-       Reihenfolge beibehalten. Einzige Änderung:
-       - ui-inspector.css → Query-String auf v25.10.29-final angehoben,
-         damit deine tatsächlich gelieferte CSS geladen wird.
+       STYLES (Global → UI → Inspector)
        ========================================================= -->
-  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.30-final">
-  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.30-final">
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1">
-  <link rel="stylesheet" href="ui/css/ui-hud.css">
-  <link rel="stylesheet" href="ui/css/ui-place.css?v=19.2.0">
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.31">
+  <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.10.31">
+  <link rel="stylesheet" href="ui/css/ui-build.css?v=25.10.31">
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.31">
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=18.16.5"><!-- kompatible Inspector-CSS -->
+
+  <!-- =========================================================
+       CORE-MODULE (aktueller Monolith v25.x)
+       ========================================================= -->
+  <script defer src="core/boot.js?v=25.10.31"></script>
+  <script defer src="core/asset.js?v=25.10.31"></script>
+  <script defer src="core/registry.js?v=25.10.31"></script>
+  <script defer src="core/game.js?v=25.10.31"></script>
+
+  <!-- =========================================================
+       UI-MODULE (aktuelle HUD-/Build-UI)
+       ========================================================= -->
+  <script defer src="ui/ui-hud.js?v=25.10.31"></script>
+  <script defer src="ui/ui-build.js?v=25.10.31"></script>
+  <script defer src="ui/ui-start.js?v=25.10.31"></script>
 </head>
-<!-- =====================================================================
-     Inspector Host Guard (Demo/Fail-Safe)
-     Version : v25.10.31-guard1
-     Zweck   : Erstellt #inspector bei Bedarf + verdrahtet open/close/toggle
-               (funktioniert parallel zu core/ui/bind – greift nur, wenn nötig)
-===================================================================== -->
-<style>
-  /* Sichtbarkeit-Fallback, falls ui-inspector.css gerade nicht greift */
-  #inspector { display:none; position:fixed; inset:0; z-index:9999;
-               background: rgba(18,18,20,.96); }
-  body.is-inspector #inspector { display:block; }
-</style>
-<script>
-(function(){
-  const HOST_A = 'inspector';
-  const HOST_B = 'inspector-overlay';
 
-  function ensureHost(){
-    let host = document.getElementById(HOST_A) || document.getElementById(HOST_B);
-    if(!host){
-      host = document.createElement('div');
-      host.id = HOST_A;            // Standard-ID
-      host.setAttribute('role','dialog');
-      host.style.display = 'none'; // Sichtbar per Body-Klasse
-      host.style.position = 'fixed';
-      host.style.inset = '0';
-      host.style.zIndex = '9999';
-      // Root für UI-Inhalt (Tabs etc.)
-      const root = document.createElement('div');
-      root.setAttribute('data-insp-root','');
-      host.appendChild(root);
-      document.body.appendChild(host);
-      console.info('[insp-guard] host created #' + host.id);
-      // Signal an evtl. wartende UI-Module
-      dispatchEvent(new CustomEvent('cb:insp:host-ready',{detail:{el:host}}));
-    }
-    return host;
-  }
-
-  function openInsp(){
-    const host = ensureHost();
-    document.body.classList.add('is-inspector');
-    host.style.display = 'block';
-    console.info('[insp-guard] geöffnet ✓');
-  }
-  function closeInsp(){
-    const host = ensureHost();
-    document.body.classList.remove('is-inspector');
-    host.style.display = 'none';
-    console.info('[insp-guard] geschlossen ✓');
-  }
-
-  addEventListener('req:insp:open',   openInsp);
-  addEventListener('req:insp:close',  closeInsp);
-  addEventListener('req:insp:toggle', () => {
-    const host = ensureHost();
-    const isOpen = getComputedStyle(host).display !== 'none';
-    (isOpen ? closeInsp : openInsp)();
-  });
-
-  // Diagnose-Helfer
-  window.__forceInspectorDiag = () => ({
-    bodyClasses: [...document.body.classList],
-    host: document.getElementById(HOST_A) || document.getElementById(HOST_B),
-    hostPresent: !!(document.getElementById(HOST_A) || document.getElementById(HOST_B))
-  });
-
-  // Bessere Fehlerlogs (statt "Script error. 0")
-  window.addEventListener('error',   e => console.log('[diag:error]', e.message, e.filename, e.lineno, e.colno));
-  window.addEventListener('unhandledrejection', e => console.log('[diag:promise]', e.reason));
-})();
-</script>
-  <script>
-/* ============================================================================
- * Datei   : ui/inspector/inspector.miniview.js  (Inline-Demo)
- * Zweck   : Wenn der Inspector geöffnet wird und noch kein UI montiert ist,
- *           setzen wir ein einfaches UI-Skelett ein (Header + Body).
- *           → Arbeitet MIT deinem Host-Guard & mit ui-inspector.js zusammen.
- *           → Greift nur, wenn noch nichts im Root liegt.
- * Version : v25.10.31-mini1
-============================================================================ */
-(function(){
-  const SEL = '#inspector, #inspector-overlay';
-  function getHost(){ return document.querySelector(SEL); }
-  function getRoot(host){
-    return host.querySelector('[data-insp-root]') || host; // Fallback: host selbst
-  }
-  function mountOnce(){
-    const host = getHost();
-    if(!host) return;
-    const root = getRoot(host);
-    // Schon etwas drin? Dann nichts tun.
-    if(root.querySelector('[data-insp-mounted]')) return;
-
-    // --- Minimal-UI einsetzen ---
-    const wrap = document.createElement('div');
-    wrap.setAttribute('data-insp-mounted','');
-    wrap.innerHTML = `
-      <div class="insp-header">
-        Inspector <button class="insp-close" title="Schließen">×</button>
-      </div>
-      <div class="insp-body">
-        <p><strong>Status:</strong> UI-Mock aktiv (Mini-Renderer).</p>
-        <p>Hotkeys: <code>I</code> toggelt – Buttons/Events funktionieren.</p>
-        <div style="margin-top:10px; padding:10px; background:#0f0f12; border:1px solid #2a2a2e; border-radius:8px">
-          <div>Build-Menü: <span id="mini-bm">unbekannt</span></div>
-          <div>FPS-Overlay: <span id="mini-fps">unbekannt</span></div>
-        </div>
-      </div>
-    `;
-    root.appendChild(wrap);
-
-    // Close-Button verdrahten
-    wrap.querySelector('.insp-close')?.addEventListener('click', () => {
-      dispatchEvent(new CustomEvent('req:insp:close'));
-    });
-
-    // Kleine Live-Probe (falls globale Flags vorhanden sind)
-    try {
-      const bm = document.getElementById('mini-bm');
-      const fps = document.getElementById('mini-fps');
-      // Beispiel: lies irgendwas aus deinem globalen State, wenn vorhanden:
-      bm && (bm.textContent = window?.UI_BUILD?.ready ? 'bereit' : 'n/a');
-      fps && (fps.textContent = document.body.classList.contains('show-fps') ? 'an' : 'aus');
-    } catch(e){ console.info('[miniview] probe skipped', e); }
-
-    console.info('[miniview] UI montiert');
-  }
-
-  // Wenn Host bereits existiert und offen → sofort montieren
-  mountOnce();
-
-  // Bei Host-Ready-Event (vom Guard) oder beim Öffnen erneut prüfen
-  addEventListener('cb:insp:host-ready', mountOnce);
-  addEventListener('req:insp:open',      () => setTimeout(mountOnce, 0));
-})();
-</script>
-  <script>
-/* ============================================================================
- * Datei   : ui/inspector/inspector.autoload.js
- * Zweck   : Echte Inspector-Tabs nachladen, sobald Host + Core bereit sind
- * Version : v25.10.31-auto1
-============================================================================ */
-(function(){
-  const ready = () =>
-    document.querySelector('#inspector [data-insp-root]') !== null &&
-    typeof window.InspectorUI === 'object';
-
-  function mountReal(){
-    if(!ready()) return;
-    try{
-      window.InspectorUI.mount?.();
-      console.info('[insp-auto] echte Inspector-UI montiert');
-    }catch(e){
-      console.warn('[insp-auto] UI mount fehlgeschlagen', e);
-    }
-  }
-
-  addEventListener('cb:insp:host-ready', () => setTimeout(mountReal, 50));
-  addEventListener('req:insp:open',      () => setTimeout(mountReal, 50));
-
-  // Falls Core schon fertig ist:
-  setTimeout(mountReal, 200);
-})();
-</script>
-  <script>
-/* ============================================================================
- * Datei   : ui/inspector/inspector.bridge.mount.js (inline)
- * Zweck   : Echte Inspector-UI in allen Generationen mounten (v18.x / v25.x)
- * Wirkung : Ruft .mount(host) ODER .init() auf, je nachdem was vorhanden ist;
- *           entfernt dabei den Mini-Mock, sobald echte UI montiert ist.
- * Version : v25.10.31-bridge1
-============================================================================ */
-(function(){
-  const SEL = '#inspector, #inspector-overlay';
-  function getHost(){ return document.querySelector(SEL); }
-  function killMini(){ document.querySelector('#inspector [data-insp-mounted]')?.remove(); }
-
-  function tryMount(){
-    const host = getHost();
-    if(!host) return;
-
-    // Kandidaten: alt (Inspector), neu (InspectorUI)
-    const CANDIDATES = [
-      {obj: window.InspectorUI, fn: 'mount'},
-      {obj: window.Inspector,   fn: 'mount'},
-      {obj: window.InspectorUI, fn: 'init'},
-      {obj: window.Inspector,   fn: 'init'},
-    ].filter(x => x.obj && typeof x.obj[x.fn] === 'function');
-
-    if (CANDIDATES.length){
-      const {obj, fn} = CANDIDATES[0];
-      try{
-        // Wenn die Funktion Parameter akzeptiert, host übergeben
-        (obj[fn].length >= 1) ? obj[fn].call(obj, host) : obj[fn].call(obj);
-        killMini();
-        console.info('[insp-bridge] real UI mounted via', fn);
-      }catch(e){
-        console.warn('[insp-bridge] mount failed', e);
-      }
-    } else {
-      // Legacy-Event-Fallbacks (ältere Builds lauschen darauf)
-      dispatchEvent(new CustomEvent('req:insp:ui:mount',   {detail:{host}}));
-      dispatchEvent(new CustomEvent('req:inspector:mount', {detail:{host}}));
-      setTimeout(killMini, 50);
-      console.info('[insp-bridge] fired legacy mount events');
-    }
-  }
-
-  // Mount-Versuche auslösen, wenn Host bereit/ geöffnet ist
-  addEventListener('cb:insp:host-ready', () => setTimeout(tryMount, 0));
-  addEventListener('req:insp:open',      () => setTimeout(tryMount, 0));
-
-  // Falls alles schon da ist:
-  setTimeout(tryMount, 100);
-})();
-</script>
 <body>
   <!-- =========================================================
-       SPIELSTAGE + UI-ROOTS (unverändert aus deiner Datei)
+       GRUNDSTRUKTUR / HOSTS
        ========================================================= -->
-  <canvas id="game" data-map="data/maps/map-mini.json" aria-label="Karte"></canvas>
-  <div id="ui-root" aria-live="polite"></div>
-  <div id="hud-root" aria-live="polite"></div>
+  <div id="game-root"></div>
 
-  <!-- Build-Dock + Toggle-Button (unverändert) -->
-  <div id="build-dock" aria-label="Baumenü" hidden></div>
-  <button id="btn-build" aria-label="Bauen" style="position:fixed;right:12px;bottom:12px;z-index:60;">🏗️</button>
+  <!-- Inspector-Button -->
+  <button id="btn-inspector" aria-label="Inspector"
+          title="Inspector öffnen/schließen">⚙️ Inspector</button>
 
-  <!-- Inspector-Button: war auskommentiert → wieder aktivieren,
-       damit der Button-Binder zuverlässig am vorhandenen DOM-Element hängt. -->
-  <!-- Mindestens eins davon muss existieren -->
-  <button id="btn-inspector" aria-label="Inspector" title="Inspector öffnen/schließen">⚙️<br>Inspector</button>
-  <!-- Hinweis: Falls du den Button lieber dynamisch erzeugen willst,
-       kannst du ihn wieder auskommentieren; dein binder erzeugt ihn dann.
-       Für Debug jetzt sichtbar lassen. -->
+  <!-- Fallback-Host (wird vom Core oder Guard ersetzt) -->
+  <div id="inspector" style="display:none"></div>
 
   <!-- =========================================================
-       SCRIPTS – LADEREIHENFOLGE (kritisch!)
-       Basis: 1) Core/Polyfills  2) Assets/Boot/Registry  3) Engine/UI
-              4) Inspector-Core + Bridge + Bind  5) Inspector-Tabs
-       Alles exakt wie in deiner monolithischen index.html,
-       nur kommentiert. Inspector-Skripte (8) sind in deiner Datei
-       bereits mit defer versehen → das bleibt so.
+       INSPECTOR-MODULE (stabile v18.16.x-Kombination)
+       ========================================================= -->
+  <script defer src="ui/inspector/inspector.core.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.ui.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.logs.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.paths.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.resources.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.tests.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.build.js?v=18.16.5"></script>
+  <script defer src="ui/inspector/inspector.button-bind.js?v=18.16.5"></script>
+
+  <!-- =========================================================
+       SICHERUNGEN / KOMPATIBILITÄT
        ========================================================= -->
 
-  <!-- 1) Polyfills / Event-System / Env -->
-  <script src="core/cblog.polyfill.js"></script>
-  <script src="core/eventbus.js"></script>
-  <script src="core/core.env.js"></script>
-
-  <!-- 2) Assets & Registry & UI-Bridge -->
-  <script src="core/asset.js"></script>
-  
-  <script src="core/registry.js"></script>
-  <script src="core/registry.type-aliases.js"></script>
-  <script src="core/production.res-validate.js"></script> <!-- <- NEU (laut deiner Datei) -->
-  <script src="core/entities.registry.js"></script>
-  <script src="core/icons-map.js"></script>
-  <!-- <script src="core/ui-build.data-bridge.js"></script> -->
-
-  <!-- 2b) Boot-/Diag-/Preload-Helfer -->
-  <script src="core/diag.boot.js"></script>
-
-  <!-- 3) Kamera & Zoom -->
-  <script src="core/camera.js"></script>
-  <script src="core/zoom.js"></script>
-
-  <!-- 4) Map-Renderer + Bridge -->
-  <script src="core/core.map.js"></script>
-  <script src="core/map-runtime.bridge.js"></script>
-
-  <!-- 5) Overlays -->
-  <script src="core/overlay-hooks.js"></script>
-  <script src="core/unit-overlay.js"></script>
-  <script src="core/path-traces.overlay.js"></script>
-
-  <!-- 6) Pfadfinder (Stub) vor PF-Glue -->
-  <script src="core/adfinder.js"></script>
-
-  <!-- 7) Engine/Gameplay -->
-  <script src="core/core.entities.js"></script>
-  <script src="core/core.production.js"></script>   <!-- FIX bereits in deiner Datei -->
-  <script src="core/carrier.js"></script>
-  <script src="core/core.pfglue.js"></script>
-  <script src="core/core.input.js"></script>
-  <script src="core/input.bridge.js?v=25.10.26-sync1"></script>
-  <script src="core/render.shim.js"></script>
-  <script src="core/game.js"></script>
-  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
-  <script defer src="core/overlay.fps.js"></script>
-  <script defer src="core/savegame.js"></script>
-
-  <!-- 8) Inspector (nicht-blockierend, wie bei dir) -->
-  <script defer src="ui/inspector/inspector.core.js?v=25.10.30-final"></script>
-  <script defer src="ui/ui-inspector.js?v=25.10.30"></script>
-  <script defer src="ui/inspector/inspector.button-bind.js?v=25.10.30-bind3"></script>
-
-  <!-- 8b) Inspector-Tabs/Tools (dein Stand) -->
-  <script defer src="ui/inspector/inspector.ui.js?v=18.17.0"></script>
-  <script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
-  <script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
-  <script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
-  <script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
-  <script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
-  <script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
-  <script defer src="ui/inspector/events.scan.js"></script>
-  <script defer src="ui/inspector/inspector.diag.js"></script>
-  <!--<script src="ui/inspector/inspector.force-close.hotfix.js?v=25.10.31-hotfix2"></script> -->
-
-  <!-- 9) UI (Startscreen/HUD/Build/Map/Layout/Place) -->
-  <script src="boot.js?v=25.10.30"></script>
-  <script src="ui/ui-start.js?v=25.10.30"></script>
-  <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
-  <script src="ui/ui-build.categories.js?v=25.10.19-final2"></script>
-  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
-  <!-- <script src="ui/ui-map.js"></script> -->
-  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
-  <script src="ui/ui-place.js?v=24.2.0"></script>
-
-  <!-- 10) Diagnose & Startzustand-Absicherung (unverändert) -->
+  <!-- Host-Guard: erzeugt #inspector, falls fehlend -->
   <script>
-    (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
+  (function(){
+    const id="inspector";
+    if(!document.getElementById(id)){
+      const d=document.createElement("div");
+      d.id=id; d.style.display="none"; document.body.appendChild(d);
+      console.info("[insp-guard] Host auto-created");
+    }
+  })();
+  </script>
 
-    // Inspector nie "offen" starten; Start-BG sichtbar lassen bis Spielstart
-    (function(){
-      var host = document.getElementById('inspector-overlay');
-      if (host) { host.classList.remove('open'); host.style.display='none'; }
-      document.body.classList.remove('is-playing');
-    }());
+  <!-- Kompatibilitäts-Bridge: für neue/alte APIs -->
+  <script>
+  (function(){
+    function safe(fn){try{fn();}catch(e){console.warn(e);}}
+    window.addEventListener("req:insp:open",()=>{
+      document.body.classList.add("is-inspector");
+      safe(()=>window.Inspector?.init?.());
+      safe(()=>window.InspectorUI?.mount?.());
+      console.info("[insp-bridge] Inspector geöffnet");
+    });
+    window.addEventListener("req:insp:close",()=>{
+      document.body.classList.remove("is-inspector");
+      console.info("[insp-bridge] Inspector geschlossen");
+    });
+  })();
+  </script>
+
+  <!-- =========================================================
+       DIAGNOSE / LOG (optional)
+       ========================================================= -->
+  <script>
+  console.info("[index.demo] geladen v25.10.31-final-compat");
   </script>
 </body>
 </html>
