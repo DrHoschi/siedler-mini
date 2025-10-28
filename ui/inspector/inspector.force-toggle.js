@@ -1,44 +1,112 @@
 /* ============================================================================
- * Datei   : tools/inspector.force-toggle.js
- * Version : v25.10.28-clean
- * Zweck   : Robustes Toggle – funktioniert auch, wenn nur Aliasse feuern.
- *           Reihenfolge: UIInspector.toggle() → Events → Root-Fallback
- * ========================================================================= */
+ * Datei   : ui/inspector/inspector.force-toggle.js
+ * Version : v25.10.28-restore
+ * Zweck   : Erzwingt funktionierendes Toggle – ALT (UIInspector), NEU (Inspector),
+ *           Events, Root-Fallback. Bindet GameUI.toggleInspector robust.
+ * Quelle  : Dein Monolith-Stand, selektoren/Events 1:1 übernommen.
+ * ========================================================================== */
 (function(){
-  function rootFallbackToggle(){
-    // Minimaler Fallback direkt auf dem Host + Body-Flags
-    const host = document.querySelector('#inspector') || (()=>{
-      const h=document.createElement('div'); h.id='inspector'; h.hidden=true; document.body.appendChild(h); return h;
-    })();
-    const open = !(document.body.classList.contains('is-inspector') || document.body.classList.contains('inspector-open'));
-    if (open){ document.body.classList.add('is-inspector','inspector-open'); }
-    else     { document.body.classList.remove('is-inspector','inspector-open'); }
-    return open;
+  const I = (m)=> console.log("[insp-force]", m);
+  const W = (m)=> console.warn("[insp-force]", m);
+  const E = (m)=> console.error("[insp-force]", m);
+
+  // alte/legacy/neu Event-Aliasse
+  const TOGGLE_EVENTS = ["inspector:toggle","cb:inspector-toggle","cb:inspector:toggle"];
+
+  // deine Root-Selektoren (alle Varianten)
+  const ROOT_SELECTORS = [
+    "#inspector-root", "#inspectorOverlay", "#inspector", "#ui-inspector",
+    "#overlay-inspector", ".inspector-root", ".inspector-overlay", "[data-inspector-root]"
+  ];
+
+  function findRoot(){
+    for (const sel of ROOT_SELECTORS){
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
   }
 
-  function toggle(){
-    if (window.UIInspector?.toggle){ window.UIInspector.toggle(); return; }
-    // Wenn der Core noch nicht da ist, versuche Events (werden vom Core gehört)
-    dispatchEvent(new CustomEvent('req:insp:toggle'));
-    dispatchEvent(new CustomEvent('req:inspector:toggle'));
-    // und als allerletztes: Root-Fallback
-    rootFallbackToggle();
+  function fireAllToggleEvents(from){
+    for (const ev of TOGGLE_EVENTS){
+      try{ window.dispatchEvent(new CustomEvent(ev,{detail:{from}})); }catch(_) {}
+    }
+    I(`Toggle-Events gefeuert (${TOGGLE_EVENTS.join(", ")})`);
   }
 
-  // Aliasse als Eingänge akzeptieren (falls Buttons nur Events schicken)
-  ['req:insp:toggle','req:inspector:toggle'].forEach(n=>{
-    addEventListener(n, ()=> {
-      if (!window.UIInspector?.toggle) rootFallbackToggle();
-    });
-  });
+  function rootToggleFallback(){
+    const r = findRoot();
+    if (!r){ E("Kein Inspector-Root im DOM – Fallback kann nicht greifen."); return false; }
+    const visible = r.classList.contains("is-open") || (r.style.display && r.style.display!=="none");
+    if (visible){ r.classList.remove("is-open"); r.style.display = "none";  I("Root → close (Fallback)"); }
+    else        { r.classList.add("is-open");   r.style.display = "block"; I("Root → open (Fallback)"); }
+    return true;
+  }
 
-  // Diagnose-Hilfe (Konsole)
+  function toggleInspector(){
+    // 1) ALT: monolithische API
+    if (window.UIInspector){
+      try{
+        if (typeof window.UIInspector.toggle === "function"){ I("via UIInspector.toggle()"); return window.UIInspector.toggle(); }
+        const r = findRoot();
+        const vis = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display!=="none"));
+        if (vis && typeof window.UIInspector.close === "function"){ I("via UIInspector.close()"); return window.UIInspector.close("toggle"); }
+        if (!vis && typeof window.UIInspector.open  === "function"){ I("via UIInspector.open()");  return window.UIInspector.open("toggle");  }
+        W("UIInspector vorhanden, aber keine nutzbare toggle/open/close – versuche Events …");
+      }catch(err){ W("UIInspector-Call Fehler: "+(err?.message||err)); }
+    }
+
+    // 2) NEU: gesplittete API
+    if (window.Inspector){
+      try{
+        if (typeof window.Inspector.toggle === "function"){ I("via Inspector.toggle()"); return window.Inspector.toggle(); }
+        const r = findRoot();
+        const vis = !!r && (r.classList.contains("is-open") || (r.style.display && r.style.display!=="none"));
+        if (vis && typeof window.Inspector.close === "function"){ I("via Inspector.close()"); return window.Inspector.close("toggle"); }
+        if (!vis && typeof window.Inspector.open  === "function"){ I("via Inspector.open()");  return window.Inspector.open("toggle");  }
+        W("Inspector vorhanden, aber keine nutzbare toggle/open/close – versuche Events …");
+      }catch(err){ W("Inspector-Call Fehler: "+(err?.message||err)); }
+    }
+
+    // 3) Events (alias-kompatibel)
+    fireAllToggleEvents("force");
+
+    // 4) letzter Fallback
+    if (rootToggleFallback()) return;
+
+    // 5) Diagnose
+    E("Inspector nicht erreichbar – prüfe Script-Reihenfolge oder Root-Selektor.");
+  }
+
+  // GameUI anbinden (damit dein bestehender Button/Hotkey funktioniert)
+  window.GameUI = window.GameUI || {};
+  window.GameUI.toggleInspector = toggleInspector;
+
+  // vorhandenen Button anhängen (keinen neuen erzeugen)
+  function attachButtonClick(){
+    const btn = document.querySelector('#btn-inspector button,[aria-label="Inspector"],[title="Inspector öffnen/schließen"]');
+    if (btn && !btn.__inspBound){
+      btn.addEventListener("click", (ev)=>{ ev.preventDefault(); try{ toggleInspector(); }catch(err){ E(err); } });
+      btn.__inspBound = true;
+      I("Button-Handler gebunden.");
+    }
+  }
+  document.addEventListener("DOMContentLoaded", attachButtonClick);
+  setTimeout(attachButtonClick, 0);
+  setTimeout(attachButtonClick, 300);
+  setTimeout(attachButtonClick, 1000);
+
+  // kleine Diagnose
   window.__forceInspectorDiag = function(){
+    const r = findRoot();
     return {
+      ver: "inspector.force-toggle.js",
       has_UIInspector: !!window.UIInspector,
-      has_Inspector:   !!window.Inspector,
-      root_found:      !!document.querySelector('#inspector'),
-      body_flags:      [...document.body.classList].filter(c=>/insp/.test(c))
+      has_Inspector: !!window.Inspector,
+      root_found: !!r,
+      root_selector: r ? (r.id?("#"+r.id):(r.className?("."+String(r.className).split(" ").join(".")):"[custom]")) : null
     };
   };
+
+  I("aktiv – Force-Toggle bereit.");
 })();
