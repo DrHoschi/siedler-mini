@@ -5,9 +5,9 @@
        META / BASIS
        Datei   : index.demo.html
        Projekt : Neue Siedler – Demo / Inspector-Test
-       Version : v25.10.31-final-compat
-       Zweck   : Aktuelle Boot-/UI-Struktur (v25.x) +
-                 kompatibler Inspector (v18.16-Reihe)
+       Version : v25.10.31-final-compat2
+       Zweck   : Aktuelle Core/UI (v25.x) + stabile Inspector-Tabs (v18.16)
+                 Mit Click-Puffer, garantiertem Host und deterministischem Mount.
        ========================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -15,45 +15,50 @@
   <title>Neue Siedler – Demo</title>
 
   <!-- =========================================================
-       STYLES (Global → UI → Inspector)
+       STYLES (Global → HUD/Build → Inspector)
        ========================================================= -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.31">
   <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.10.31">
   <link rel="stylesheet" href="ui/css/ui-build.css?v=25.10.31">
   <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.31">
-  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=18.16.5"><!-- kompatible Inspector-CSS -->
 
-  <!-- =========================================================
-       CORE-MODULE (aktueller Monolith v25.x)
-       ========================================================= -->
-  <script defer src="core/boot.js?v=25.10.31"></script>
-  <script defer src="core/asset.js?v=25.10.31"></script>
-  <script defer src="core/registry.js?v=25.10.31"></script>
-  <script defer src="core/game.js?v=25.10.31"></script>
-
-  <!-- =========================================================
-       UI-MODULE (aktuelle HUD-/Build-UI)
-       ========================================================= -->
-  <script defer src="ui/ui-hud.js?v=25.10.31"></script>
-  <script defer src="ui/ui-build.js?v=25.10.31"></script>
-  <script defer src="ui/ui-start.js?v=25.10.31"></script>
+  <!-- Bewährte Inspector-CSS (v18.16.x) – Tabs sichtbar/gestylt -->
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=18.16.5">
 </head>
 
 <body>
   <!-- =========================================================
-       GRUNDSTRUKTUR / HOSTS
+       GRUNDSTRUKTUR / HOSTS / BUTTONS
        ========================================================= -->
+
+  <!-- Spiel-Root (Startpanel/Canvas/HUD erscheinen durch die UI-Module) -->
   <div id="game-root"></div>
 
-  <!-- Inspector-Button -->
-  <button id="btn-inspector" aria-label="Inspector"
-          title="Inspector öffnen/schließen">⚙️ Inspector</button>
+  <!-- Inspector-Button (unten rechts o. ä., Styling kommt aus deinen CSS) -->
+  <button id="btn-inspector" aria-label="Inspector" title="Inspector öffnen/schließen">⚙️ Inspector</button>
 
-  <!-- Fallback-Host (wird vom Core oder Guard ersetzt) -->
+  <!-- Host für Inspector-Overlay (falls Core ihn nicht injiziert) -->
   <div id="inspector" style="display:none"></div>
 
   <!-- =========================================================
-       INSPECTOR-MODULE (stabile v18.16.x-Kombination)
+       CORE-MODULE (aktuelle Monolith v25.x)
+       Reihenfolge: Assets/Registry → Boot/Game → UI, siehe Spickzettel
+       ========================================================= -->
+  <script defer src="core/asset.js?v=25.10.31"></script>
+  <script defer src="core/registry.js?v=25.10.31"></script>
+  <script defer src="core/boot.js?v=25.10.31"></script>
+  <script defer src="core/game.js?v=25.10.31"></script>
+
+  <!-- =========================================================
+       UI-MODULE (HUD, Build, Start) – hören auf Ready-Events
+       ========================================================= -->
+  <script defer src="ui/ui-start.js?v=25.10.31"></script>
+  <script defer src="ui/ui-hud.js?v=25.10.31"></script>
+  <script defer src="ui/ui-build.js?v=25.10.31"></script>
+
+  <!-- =========================================================
+       INSPECTOR-MODULE (stabile v18.16.x – Tabs/Logs/Paths/…)
+       Reihenfolge bewusst als Block, wie in deinem funktionierenden Stand.
        ========================================================= -->
   <script defer src="ui/inspector/inspector.core.js?v=18.16.5"></script>
   <script defer src="ui/inspector/inspector.ui.js?v=18.16.5"></script>
@@ -68,40 +73,97 @@
        SICHERUNGEN / KOMPATIBILITÄT
        ========================================================= -->
 
-  <!-- Host-Guard: erzeugt #inspector, falls fehlend -->
+  <!-- [A] Früher Click-Puffer: Klicks/Zahnräder werden gebuffert, bis alles ready. -->
   <script>
   (function(){
-    const id="inspector";
-    if(!document.getElementById(id)){
-      const d=document.createElement("div");
-      d.id=id; d.style.display="none"; document.body.appendChild(d);
-      console.info("[insp-guard] Host auto-created");
+    const MOD='[index.demo/click-buffer]';
+    const btn = document.getElementById('btn-inspector');
+    window.__inspClickBuffer__ = { pending:0, ready:false };
+
+    function wantToggle(){ 
+      // Wenn noch nicht ready: nur zählen (keine No-Op-Klicks mehr)
+      if(!window.__inspClickBuffer__.ready){
+        window.__inspClickBuffer__.pending++;
+        console.info(MOD,'pende=', window.__inspClickBuffer__.pending);
+        return;
+      }
+      // Ready → echtes Toggle-Event
+      dispatchEvent(new CustomEvent('req:insp:toggle'));
+    }
+    btn?.addEventListener('click', wantToggle, {passive:true});
+
+    // Hotkey I ebenfalls puffern
+    addEventListener('keydown', (e)=>{
+      if((e.key||'').toLowerCase()==='i'){
+        wantToggle();
+        e.preventDefault();
+      }
+    }, {passive:false});
+  })();
+  </script>
+
+  <!-- [B] Host-Guard: garantiert #inspector vorhanden (einmalig) -->
+  <script>
+  (function(){
+    if(!document.getElementById('inspector')){
+      const d=document.createElement('div');
+      d.id='inspector'; d.style.display='none'; document.body.appendChild(d);
+      console.info('[insp-guard] Host auto-created');
     }
   })();
   </script>
 
-  <!-- Kompatibilitäts-Bridge: für neue/alte APIs -->
+  <!-- [C] Deterministischer Mount + „Ready“-Freigabe für den Click-Puffer -->
   <script>
   (function(){
-    function safe(fn){try{fn();}catch(e){console.warn(e);}}
-    window.addEventListener("req:insp:open",()=>{
-      document.body.classList.add("is-inspector");
-      safe(()=>window.Inspector?.init?.());
-      safe(()=>window.InspectorUI?.mount?.());
-      console.info("[insp-bridge] Inspector geöffnet");
+    const MOD='[index.demo/insp-mount]';
+    // Helper: prüfe, ob v18.16-UI vorhanden ist
+    function hasLegacyUI(){
+      return !!(window.Inspector || window.__INSPECTOR__ || window.__INSPECTOR_CORE__);
+    }
+    // Body-Flag für Sichtbarkeit (Kompatibel zu deiner CSS-Logik)
+    function openFlag(on){ document.body.classList.toggle('is-inspector', !!on); } // v18.16 nutzt diese Klasse.  [oai_citation:2‡CODES_MONOLITH_start.txt](file-service://file-AXPetqYG6sBnccZAuAaVH7)
+    // Safe-Mount: ruft die gängigen Initializer in alter + neuer API
+    function safeMount(){
+      try { window.InspectorUI?.mount?.(document.getElementById('inspector')); } catch(e){}
+      try { window.Inspector?.mount?.(document.getElementById('inspector')); }    catch(e){}
+      try { window.InspectorUI?.init?.(); } catch(e){}
+      try { window.Inspector?.init?.(); }    catch(e){}
+      console.info(MOD,'mount attempts fired');
+    }
+    // Toggle-Events → Body-Flag setzen
+    addEventListener('req:insp:open',  ()=> openFlag(true));
+    addEventListener('req:insp:close', ()=> openFlag(false));
+    addEventListener('req:insp:toggle',()=>{
+      openFlag(!document.body.classList.contains('is-inspector'));
     });
-    window.addEventListener("req:insp:close",()=>{
-      document.body.classList.remove("is-inspector");
-      console.info("[insp-bridge] Inspector geschlossen");
+
+    // Wenn alle Inspector-Skripte geladen sind → mounten & Click-Puffer leeren
+    window.addEventListener('load', ()=>{
+      // Kurzer Delay, bis defer-Skripte durch sind
+      setTimeout(()=>{
+        if(!hasLegacyUI()){
+          console.warn(MOD,'Inspector-UI nicht gefunden – prüfen: Pfade/404?');
+        }
+        safeMount();
+        // Freigabe
+        window.__inspClickBuffer__.ready = true;
+        // Offene Wünsche abarbeiten (z. B. 2 frühe Klicks = togglen)
+        for(let i=0;i<window.__inspClickBuffer__.pending;i++){
+          dispatchEvent(new CustomEvent('req:insp:toggle'));
+        }
+        window.__inspClickBuffer__.pending = 0;
+        console.info(MOD,'ready ✓, pending flushed');
+      }, 60);
     });
   })();
   </script>
 
   <!-- =========================================================
-       DIAGNOSE / LOG (optional)
+       DIAGNOSE / SMOKE
        ========================================================= -->
   <script>
-  console.info("[index.demo] geladen v25.10.31-final-compat");
+    (window.CBLog?.info||console.info)('[index.demo] geladen v25.10.31-final-compat2');
   </script>
 </body>
 </html>
