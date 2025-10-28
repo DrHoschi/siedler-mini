@@ -165,5 +165,127 @@
   <script>
     (window.CBLog?.info||console.info)('[index.demo] geladen v25.10.31-final-compat2');
   </script>
+  <style>
+  /* Emergency-Inspector – minimal sichtbar, wenn body.is-inspector gesetzt ist */
+  #inspector{position:fixed; inset:0; display:none; z-index:99999; background:rgba(14,16,20,.92); color:#eaeaea; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
+  body.is-inspector #inspector{display:block}
+  #insp-head{display:flex; align-items:center; gap:8px; padding:10px 12px; background:#1f1f23; border-bottom:1px solid #2a2a2e;}
+  #insp-tabs{display:flex; gap:6px; padding:8px 12px; border-bottom:1px solid #2a2a2e;}
+  #insp-tabs button{border:1px solid #2a2a2e; background:#2b2b30; padding:6px 10px; border-radius:8px}
+  #insp-tabs button.is-active{background:#3a3a40}
+  #insp-body{padding:12px; overflow:auto; height:calc(100% - 92px)}
+  .panel{background:#0f0f12; border:1px solid #2a2a2e; border-radius:8px; padding:10px}
+  pre.log{white-space:pre-wrap; font-family:ui-monospace,Menlo,Consolas,monospace; background:#08080a; border:1px solid #2a2a2e; border-radius:8px; padding:8px; margin:0}
+  #insp-close{margin-left:auto; border:0; background:#2b2b30; color:#fff; border-radius:8px; padding:6px 10px}
+</style>
+<script>
+(function(){
+  const MOD='[insp-emergency]';
+
+  // 1) Host sicherstellen
+  let host = document.getElementById('inspector');
+  if(!host){ host=document.createElement('div'); host.id='inspector'; document.body.appendChild(host); }
+
+  // 2) Nur montieren, wenn KEIN echtes Inspector-UI vorhanden ist (keine Tabs)
+  if(host.querySelector('.insp-tabs') || document.querySelector('#inspector .insp-tabs')) return;
+
+  // 3) Mini-UI-Markup
+  host.innerHTML = `
+    <div id="insp-head">
+      <strong>Inspector</strong>
+      <small style="opacity:.7">Emergency-UI aktiv</small>
+      <button id="insp-close" title="Schließen">×</button>
+    </div>
+    <div id="insp-tabs" class="insp-tabs">
+      <button data-tab="logs" class="is-active">Logs</button>
+      <button data-tab="state">State</button>
+      <button data-tab="tests">Tests</button>
+    </div>
+    <div id="insp-body">
+      <div data-view="logs" class="panel">
+        <pre id="insp-log" class="log">[logs] warten …</pre>
+      </div>
+      <div data-view="state" class="panel" style="display:none">
+        <div id="insp-state">lade …</div>
+      </div>
+      <div data-view="tests" class="panel" style="display:none">
+        <button id="insp-ping">Event-Ping</button>
+        <span id="insp-ping-status" style="margin-left:8px;opacity:.8"></span>
+      </div>
+    </div>
+  `;
+
+  // 4) Tabs schalten
+  const tabs = host.querySelectorAll('#insp-tabs button');
+  const views= host.querySelectorAll('[data-view]');
+  function show(tab){
+    tabs.forEach(b=>b.classList.toggle('is-active', b.dataset.tab===tab));
+    views.forEach(v=>v.style.display = (v.getAttribute('data-view')===tab ? '' : 'none'));
+  }
+  tabs.forEach(b=>b.addEventListener('click', ()=>show(b.dataset.tab), {passive:true}));
+
+  // 5) Close
+  host.querySelector('#insp-close').addEventListener('click', ()=>dispatchEvent(new CustomEvent('req:insp:close')));
+
+  // 6) Sichtbarkeit steuern (kompatibler Flag, wie in deinen alten Ständen genutzt)
+  addEventListener('req:insp:open',  ()=>document.body.classList.add('is-inspector'));
+  addEventListener('req:insp:close', ()=>document.body.classList.remove('is-inspector'));
+  addEventListener('req:insp:toggle',()=>{
+    document.body.classList.toggle('is-inspector');
+  });
+
+  // 7) Logs live anzeigen (CBLog abgreifen + vorhandenes Log-Bufffer nutzen)
+  const logEl = host.querySelector('#insp-log');
+  // Shim: CBLog → schreibt zusätzlich ins Emergency-Panel
+  const _CB = window.CBLog || {};
+  function appendLog(level, args){
+    const ts = new Date().toISOString().substring(11,19);
+    const msg = Array.from(args).map(a=> (typeof a==='object'? JSON.stringify(a): String(a))).join(' ');
+    logEl.textContent += `\n[${ts}] ${level.toUpperCase()} ${msg}`;
+  }
+  window.CBLog = {
+    ok   : (...a)=>{ (_CB.ok||console.log)('✅',...a);   appendLog('ok',a); },
+    info : (...a)=>{ (_CB.info||console.info)('ℹ️',...a); appendLog('info',a); },
+    warn : (...a)=>{ (_CB.warn||console.warn)('⚠️',...a); appendLog('warn',a); },
+    error: (...a)=>{ (_CB.error||console.error)('❌',...a); appendLog('error',a); },
+  };
+  // Initiale Zeile
+  CBLog.info(MOD,'bereit – Tabs: Logs/State/Tests');
+
+  // 8) State-Ansicht: paar nützliche Daten aus Registry/Build/HUD, falls vorhanden
+  function renderState(){
+    const sEl = host.querySelector('#insp-state');
+    try{
+      const info = {
+        registryReady: !!window.dispatchEvent, // Platzhalter
+        bodyFlags: [...document.body.classList],
+        hasHUD: !!document.querySelector('[data-hud-root],[data-ui-hud]'),
+        hasBuild: !!document.querySelector('#build-dock,[data-build-dock]'),
+      };
+      sEl.textContent = JSON.stringify(info,null,2);
+    }catch(e){ sEl.textContent = 'State-Read fehlgeschlagen: '+e.message; }
+  }
+  renderState();
+  addEventListener('cb:registry:ready', renderState);
+  addEventListener('cb:ui-ready',        renderState);
+
+  // 9) Tests: Ping-Event
+  host.querySelector('#insp-ping').addEventListener('click', ()=>{
+    const lab = host.querySelector('#insp-ping-status');
+    lab.textContent = '…';
+    setTimeout(()=>{
+      dispatchEvent(new CustomEvent('cb:tests:pulse',{detail:{ts:Date.now()}}));
+      lab.textContent = 'gesendet';
+      setTimeout(()=>lab.textContent='',1000);
+    },0);
+  });
+
+  // 10) Globaler Fehlerlogger → echte Dateinamen statt „Script error. 0“
+  addEventListener('error',  e=>CBLog.error('[global-error]', e.message, e.filename||'', e.lineno||0, e.colno||0));
+  addEventListener('unhandledrejection', e=>CBLog.error('[promise]', e.reason));
+
+  console.info(MOD,'montiert');
+})();
+</script>
 </body>
 </html>
