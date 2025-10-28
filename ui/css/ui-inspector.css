@@ -1,181 +1,107 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
    Projekt : Neue Siedler – Inspector
-   Version : v25.10.30-final-hotfix
-   Zweck   : Vollbild-Overlay + Tabs (Logs/Build/Paths/Resources/Tests)
+   Version : v25.10.28-final
+   Zweck   : Vollbild-Overlay + Tabs (Logs/UI/Layers) – robust, demo-tauglich
    Hinweise:
-     • Unterstützt body.is-inspector und body.inspector-open
-     • Sichtbarkeit über Host (#inspector oder #inspector-overlay)
-     • Layout-Fix: insp-frame Grid + min-height gegen Kollaps
+     • Host kann #inspector heißen; Sichtbarkeit über Body-Flags:
+         - body.is-inspector   (neuer Core)
+         - body.inspector-open (kompatibel zu älteren Ständen)
+     • Host ist standardmäßig AUS (hidden/display:none); sichtbar nur bei Flag.
 ============================================================================ */
 
-/* ---------- Theme / CSS-Variablen ---------- */
+/* ---------- Theme / Variablen ---------- */
 :root{
   --insp-bg: rgba(18,18,20,.96);
   --insp-panel: #131316;
   --insp-header: #1f1f23;
   --insp-border: #2a2a2e;
   --insp-tab: #2b2b30;
-  --insp-tab-active: #3e3e44;
-  --insp-text: #eee;
-  --insp-accent: #cd9c48;
+  --insp-text: #e3e3e8;
+  --insp-dim: #a9a9b3;
 }
 
-/* ---------- Grundlayout ---------- */
-#inspector, #inspector-overlay{
+/* ---------- Host ---------- */
+#inspector{
   position: fixed;
   inset: 0;
+  display: none;                /* Grundzustand: unsichtbar */
+  z-index: 999999;              /* über alles */
   background: var(--insp-bg);
   color: var(--insp-text);
-  font-family: Inter, system-ui, Arial, sans-serif;
-  font-size: 14px;
-  z-index: 9999;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-/* Sichtbarkeit – wird vom Body-Flag gesteuert */
+/* Sichtbarkeit via Body-Flags */
 body.is-inspector #inspector,
-body.inspector-open #inspector,
-body.is-inspector #inspector-overlay,
-body.inspector-open #inspector-overlay{
-  display: flex;
-}
-
-/* ---------- Tabs ---------- */
-.insp-tabs{
-  display: flex;
-  flex-wrap: wrap;
-  background: var(--insp-header);
-  border-bottom: 1px solid var(--insp-border);
-  padding: 4px;
-}
-.insp-tab{
-  background: var(--insp-tab);
-  border: 1px solid var(--insp-border);
-  border-radius: 4px;
-  color: var(--insp-text);
-  padding: 4px 10px;
-  margin: 2px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  user-select: none;
-  transition: background .15s;
-}
-.insp-tab:hover{ background: #34343a; }
-.insp-tab.is-active{
-  background: var(--insp-tab-active);
-  border-color: var(--insp-accent);
-}
-
-/* ---------- View-Container ---------- */
-.insp-content{
-  flex: 1;
-  overflow: hidden;
-  display: block;
-  background: var(--insp-panel);
-  padding: 8px;
-}
-
-/* Jede View separat */
-.insp-content > .insp-view,
-.insp-content > .insp-frame{
-  display: none;
-  border: 1px solid var(--insp-border);
-  background: var(--insp-panel);
-  padding: 6px;
-  border-radius: 6px;
-  box-sizing: border-box;
-  height: auto;
-  color: var(--insp-text);
-}
-.insp-content > .insp-view.is-active,
-.insp-content > .insp-frame.is-active{
+body.inspector-open #inspector{
   display: block;
 }
 
-/* ---------- Frame + Header + Content ---------- */
-.insp-frame{
+/* ---------- Panel/Layout ---------- */
+#inspector .insp-shell{
+  position: absolute;
+  inset: 24px;
+  border: 1px solid var(--insp-border);
+  border-radius: 8px;
+  background: var(--insp-panel);
   display: grid;
-  grid-template-rows: auto 1fr;
-  height: 100%;
+  grid-template-rows: 48px 36px 1fr;
+  overflow: hidden;
 }
 
-/* Header-Leiste mit Titel + Schließen-Button */
-.insp-frame > .insp-header{
+/* Header (Titel + Close) */
+#inspector .insp-header{
+  display: flex; align-items: center; justify-content: space-between;
   background: var(--insp-header);
-  color: var(--insp-text);
-  padding: 4px 8px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   border-bottom: 1px solid var(--insp-border);
+  padding: 0 12px;
 }
-.insp-frame > .insp-header h3{
-  margin: 0;
-  font-size: 14px;
+#inspector .insp-title{
+  font-weight: 600; letter-spacing: .2px;
 }
-.insp-frame > .insp-header .insp-close{
-  background: none;
-  border: none;
-  color: var(--insp-text);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 6px;
+#inspector .insp-close{
+  appearance: none; border: 0; background: #2a2a2e; color: var(--insp-text);
+  padding: 6px 10px; border-radius: 6px; cursor: pointer;
 }
-.insp-frame > .insp-header .insp-close:hover{
-  color: var(--insp-accent);
+#inspector .insp-close:hover{ filter: brightness(1.15); }
+
+/* Tabs Leiste */
+#inspector .insp-tabs{
+  display: flex; gap: 6px; align-items: center;
+  border-bottom: 1px solid var(--insp-border);
+  padding: 4px 6px; background: #18181b;
+}
+#inspector .insp-tab{
+  appearance: none; border: 1px solid var(--insp-border);
+  background: var(--insp-tab); color: var(--insp-text);
+  padding: 6px 10px; border-radius: 6px; cursor: pointer;
+}
+#inspector .insp-tab[aria-selected="true"]{
+  outline: 2px solid #5a66ff; border-color: #5a66ff;
 }
 
-/* Inhalt innerhalb eines Frames */
-.insp-frame > .insp-content{
-  overflow: auto;
-  padding: 8px;
+/* Content */
+#inspector .insp-content{
+  overflow: auto; padding: 8px 10px;
+}
+#inspector .insp-panel-block{
+  display: none;
+}
+#inspector .insp-panel-block.active{
+  display: block;
 }
 
-/* ---------- Slot / Pad ---------- */
-.insp-slot.pad, .pad{
-  padding: 6px;
-}
-.insp-slot .hint{
-  font-size: 12px;
-  opacity: .7;
-}
+/* Utility */
+#inspector .muted{ color: var(--insp-dim); }
+#inspector .k{ color:#a6e3a1; }   /* key */
+#inspector .v{ color:#89b4fa; }   /* value */
 
-/* ---------- Layout-Fix / Height-Hotfix ---------- */
-#inspector .insp-content > .insp-view{ 
-  min-height: 180px; 
-}
-#inspector .insp-view .insp-frame{ 
-  display: grid; 
-  grid-template-rows: auto 1fr; 
-  height: 100%; 
-}
-#inspector .insp-view .insp-frame > .insp-content{ 
-  min-height: 160px; 
-  overflow: auto; 
-}
+/* Tabellen/Listen */
+#inspector table{ width:100%; border-collapse: collapse; }
+#inspector th, #inspector td{ border-bottom:1px solid var(--insp-border); padding:6px 8px; }
+#inspector th{ text-align:left; color:#cfd1ff; font-weight:600; }
 
-/* ---------- Responsive ---------- */
-@media(max-width:600px){
-  .insp-tab{ font-size: 12px; padding: 3px 8px; }
-  .insp-frame > .insp-header h3{ font-size: 13px; }
-}
-
-/* ui/css/ui-inspector.css (oder deine globale ui.css) */
-#btn-inspector{
-  position: fixed;
-  right: calc(14px + env(safe-area-inset-right));
-  bottom: calc(14px + env(safe-area-inset-bottom));
-  z-index: 2147483647;
-  width: 46px; height: 46px; line-height: 46px;
-  font-size: 24px; padding: 0;
-  border: 0; border-radius: 10px;
-  background: rgba(0,0,0,.55); color: #e8e8f0;
-  cursor: pointer; user-select: none;
-}
-body.is-inspector #btn-inspector{ z-index: 2147483647 !important; }
+/* Scrollbars minimal nett */
+#inspector .insp-content::-webkit-scrollbar{ height:10px;width:10px; }
+#inspector .insp-content::-webkit-scrollbar-thumb{ background:#3a3a41;border-radius:6px; }
