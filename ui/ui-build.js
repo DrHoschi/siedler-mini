@@ -1,31 +1,16 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.10.27-build2
- * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster + Kosten-Preflight
- * ============================================================================
- * Lauscht  :
- *   cb:ui-ready, cb:assets-ready, cb:registry:ready, cb:game:start
- *   req:buildmenu:show              (Legacy-Open)
- *   req:build:open / req:build:close / req:build:toggle
- *   cb:build:open / cb:build:close  (für Fremdsteuerung idempotent)
+ * Version  : v25.10.19-final3
+ * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
  *
- *   [Legacy-Bridge]
- *   req:place:begin  → wir leiten auf req:place:start {buildingId} um
- *
- * Sendet   :
- *   cb:build:open / cb:build:close
- *   req:build:start { id, cost }                       // moderne Engine-API (Platzierungsmodus)
- *   req:place:start { buildingId }                     // Legacy für Engine/Map
- *   cb:set-build-tool { type }                         // Legacy für core.input.js
- *   cb:build:denied { id, reason:'insufficient_resources', need:{}, have:{} }
- *
- * DOM      : #build-dock (Container), #btn-build (Toggle)
- * Hinweise : - Registry-First, Fallback: data/buildings.json
- *            - Kostenprüfung gegen RegistryValues / Registry.data.resources (Map)
- *            - Doppel-Init verhindert (INIT_DONE)
- *            - UI-Hinweis bei fehlenden Ressourcen
- * ============================================================================ */
+ * Lauscht  : cb:ui-ready, cb:assets-ready, cb:registry:ready
+ * Sendet   : cb:build:open / cb:build:close, req:place:begin { building }
+ * DOM      : #build-dock (Container), #btn-build (Toggle), Icons unter assets/icons
+ * Hinweise : - Failsafe legt #build-dock nur an, wenn er fehlt.
+ *            - Doppel-Initialisierung verhindert (INIT_DONE).
+ *            - Schließende Klammern + IIFEs sind sauber abgeschlossen :)
+ * ========================================================================== */
 
 /* --- Failsafe: #build-dock sicherstellen (greift nur, wenn nicht vorhanden) --- */
 (function FailsafeEnsureDock(){
@@ -35,10 +20,8 @@
   if (!el){
     el = document.createElement('div');
     el.id = 'build-dock';
-    el.className = 'hidden';
-    el.style.overflow = 'auto';
-    el.style.pointerEvents = 'auto';
-    el.style.zIndex = 60;
+    el.hidden = true;            // Sichtbarkeit steuert das UI-Modul
+    el.style.overflow = 'auto';  // minimale Sicherheit
     document.body.appendChild(el);
     ok('Failsafe: #build-dock erzeugt.');
   }
@@ -48,261 +31,245 @@
 (function(){
   'use strict';
 
-  /* =============================== [LOGGING] =============================== */
-  const __safeLog = (fn, tag, ...m)=>{ try{ (window.CBLog?.[fn]||console[fn]||console.log)(tag, ...m); }catch{} };
+  // [00] Logger (robust; crasht nicht bei exotischem CBLog)
+  const __safeLog = (fn, tag, ...m) => {
+    try {
+      if (window.CBLog && typeof window.CBLog[fn] === 'function') {
+        try { window.CBLog[fn](tag, ...m); } catch { window.CBLog[fn]([tag, ...m]); }
+      } else { (console[fn] || console.log)(tag, ...m); }
+    } catch { try { (console[fn] || console.log)(tag, ...m); } catch(_){} }
+  };
   const LOG = (...m)=>__safeLog('log',  '[build]', ...m);
   const INF = (...m)=>__safeLog('info', '[build]', ...m);
   const WRN = (...m)=>__safeLog('warn', '[build]', ...m);
   const ERR = (...m)=>__safeLog('error','[build]', ...m);
 
-  /* ================================ [DOM] ================================= */
-  const $dock     = document.getElementById('build-dock');
-  const $btnBuild = document.getElementById('btn-build');
+  // [01] DOM-Hooks
+  const $dock     = document.getElementById('build-dock');  // nach Failsafe vorhanden
+  const $btnBuild = document.getElementById('btn-build');   // optional (HUD)
   if (!$dock){ ERR('DOM: #build-dock fehlt'); return; }
+  if (!$btnBuild){ WRN('DOM: #btn-build fehlt – Dock nur per API steuerbar'); }
 
-  /* ================================= [STATE] =============================== */
-  let BUILDINGS=[], CATEGORIES=[], ACTIVE_CAT='all', IS_OPEN=false, INIT_DONE=false;
+  // [02] State
+  let BUILDINGS   = [];
+  let CATEGORIES  = [];
+  let ACTIVE_CAT  = 'all';
+  let IS_OPEN     = false;
+  let INIT_DONE   = false;   // Debounce initAndRender
 
-  /* ================================ [UTIL] ================================= */
-  const iconRes=id=>`assets/icons/resources/${id}.png`;
-  const iconBld=id=>`assets/icons/buildings/${id}.png`;
-  const emit=(n,d={})=>window.dispatchEvent(new CustomEvent(n,{detail:d}));
-  const byCat=(arr,cat)=>cat==='all'?arr:arr.filter(b=>(b.categories||[]).includes(cat));
-  const toInt = v => Number(v||0);
+  // [03] Utils
+  const iconRes = id => `assets/icons/resources/${id}.png`;
+  const iconBld = id => `assets/icons/buildings/${id}.png`;
+  const emit = (name, detail={}) => window.dispatchEvent(new CustomEvent(name, { detail }));
+  const byCat = (list, cat) => (cat === 'all') ? list : list.filter(b => (b.categories||[]).includes(cat));
 
-  /** Ressourcen-Map bereitstellen (RegistryValues oder Registry.data.resources) */
-  function getResourceMap(){
-    const R = window.Registry || {};
-    const V = window.RegistryValues || R.resources || R.data?.resources || {};
-    return V && typeof V==='object' ? V : {};
-  }
-
-  /** Prüft, ob Kosten bezahlt werden können, liefert { ok, need, have } */
-  function canAfford(costArr){
-    const have = getResourceMap();
-    const need = {};
-    let ok = true;
-    for (const c of (costArr||[])){
-      const id = String(c.id);
-      const amt = toInt(c.amount);
-      if (!id || amt<=0) continue;
-      need[id] = (need[id]||0) + amt;
-      if (toInt(have[id]) < amt) ok=false;
-    }
-    return { ok, need, have };
-  }
-
-  /** Kosten in Array-Form normalisieren */
-  function normalizeCost(raw){
-    if (!raw) return [];
-    if (Array.isArray(raw)) return raw
-      .map(c=>({id:String(c.id), amount:toInt(c.amount)}))
-      .filter(c=>c.id && c.amount>0);
-    if (typeof raw==='object') return Object.keys(raw)
-      .map(k=>({id:k, amount:toInt(raw[k])}))
-      .filter(c=>c.amount>0);
-    return [];
-  }
-
-  /** Building-Eintrag normalisieren → {id,name,categories[],image,cost[]} */
   function normalizeBuilding(raw){
-    const id=String(raw.id||'').trim();
-    const name=raw.name||raw.title||id||'Unbenannt';
-    const cats=Array.isArray(raw.categories)?raw.categories
-                : (raw.category?[raw.category]: (raw.cat?[raw.cat]:['misc']));
-    const image=raw.image||raw.icon||iconBld(id);
-    const cost = normalizeCost(raw.cost || raw.price || raw.requirements?.cost || raw.resources);
-    return {id,name,categories:cats,image,cost};
-  }
+    const id    = String(raw.id || '').trim();
+    const name  = String(raw.name || id || 'Unbenannt');
+    let cats    = [];
+    if (Array.isArray(raw.categories)) cats = raw.categories.map(String);
+    else if (raw.category)            cats = [String(raw.category)];
+    else                              cats = ['misc'];
+    const image = raw.image || iconBld(id);
 
-  /* ============================== [DATENQUELLE] ============================ */
-  async function loadFromRegistry(){
-    try{
-      const R = window.Registry || {};
-      let list = null;
-      if (typeof R.list === 'function') list = R.list('buildings');
-      else if (Array.isArray(R.data?.buildings)) list = R.data.buildings;
-      if (!Array.isArray(list) || !list.length) return false;
-      BUILDINGS = list.map(normalizeBuilding);
-      const cats = (R.categories?.() || R.data?.categories || []).slice();
-      buildCategoriesFrom(cats.length ? cats : null);
-      INF('Datenquelle: registry', BUILDINGS.length);
-      return true;
-    }catch(e){ WRN('Registry-Quelle nicht nutzbar', e?.message||e); return false; }
-  }
-
-  async function loadFromJSON(){
-    try{
-      const res=await fetch('data/buildings.json',{cache:'no-store'});
-      const json=await res.json();
-      const arr=Array.isArray(json)?json:(json?.buildings||[]);
-      BUILDINGS=arr.map(normalizeBuilding);
-      buildCategoriesFrom(json?.categories || null);
-      INF('Datenquelle: data/buildings.json', BUILDINGS.length);
-    }catch(e){ERR('Buildings laden fehlgeschlagen',e);BUILDINGS=[]; buildCategoriesFrom(null);}
-  }
-
-  function buildCategoriesFrom(prefList){
-    const map=new Map();
-    BUILDINGS.forEach(b=>(b.categories||[]).forEach(c=>map.set(c,(map.get(c)||0)+1)));
-    CATEGORIES=Array.from(map.entries()).map(([id,count])=>({id,name:id,count}))
-      .sort((a,b)=>a.id.localeCompare(b.id));
-    if (Array.isArray(prefList) && prefList.length){
-      // Sortierung an Registry-Meta anlehnen (falls vorhanden)
-      CATEGORIES.sort((a,b)=> (prefList.indexOf(a.id) - prefList.indexOf(b.id)));
+    let cost = [];
+    if (Array.isArray(raw.cost)) {
+      cost = raw.cost.map(c => ({ id: String(c.id), amount: Number(c.amount||0) }))
+                     .filter(c => c.id && c.amount > 0);
+    } else if (raw.cost && typeof raw.cost === 'object') {
+      cost = Object.keys(raw.cost).map(k => ({ id:String(k), amount:Number(raw.cost[k]||0) }))
+                                  .filter(c => c.amount > 0);
     }
-    CATEGORIES.unshift({id:'all',name:'Alles',count:BUILDINGS.length});
-    if(!CATEGORIES.some(c=>c.id===ACTIVE_CAT))ACTIVE_CAT='all';
+    return { id, name, categories: cats, image, cost };
   }
 
-  /* =========================== [RENDER-STRUKTUR] =========================== */
+  // [04] Daten: Registry → Fallback
+  async function loadBuildings(){
+    try {
+      if (window.Registry && typeof Registry.list === 'function') {
+        const fromReg = Registry.list('buildings') || [];
+        if (fromReg.length){
+          BUILDINGS = fromReg.map(normalizeBuilding);
+          INF('Datenquelle: Registry', BUILDINGS.length);
+          return;
+        }
+      }
+    } catch(e) { WRN('Registry.list("buildings") Fehler:', e); }
+    try {
+      const res  = await fetch('data/buildings.json', { cache:'no-store' });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const json = await res.json();
+      const arr  = Array.isArray(json) ? json : (json?.buildings || []);
+      BUILDINGS  = arr.map(normalizeBuilding);
+      INF('Datenquelle: data/buildings.json', BUILDINGS.length);
+    } catch(e) {
+      ERR('Fallback-Laden fehlgeschlagen:', e);
+      BUILDINGS = [];
+    }
+  }
+
+  function buildCategories(){
+    const map = new Map();
+    BUILDINGS.forEach(b => (b.categories||[]).forEach(c => map.set(c, (map.get(c)||0)+1)));
+    CATEGORIES = Array.from(map.entries())
+      .map(([id, count]) => ({ id, name: id, count }))
+      .sort((a,b)=> a.id.localeCompare(b.id));
+    CATEGORIES.unshift({ id:'all', name:'Alles', count: BUILDINGS.length });
+    if (!CATEGORIES.some(c => c.id === ACTIVE_CAT)) ACTIVE_CAT = 'all';
+  }
+
+  // [05] Render – Grundgerüst
   function renderDockSkeleton(){
-    $dock.innerHTML=`
+    $dock.innerHTML = `
       <div class="build-dock__head">
         <div class="build-dock__title">
           <span>Baumenü</span>
-          <span id="build-count" class="build-dock__count"></span>
+          <span class="build-dock__count" id="build-count">0 Gebäude</span>
         </div>
-        <button id="build-close" class="build-dock__close" aria-label="Schließen">×</button>
+        <button class="build-dock__close" id="build-close" aria-label="Schließen">×</button>
       </div>
       <div class="build-dock__body">
-        <div id="build-msg" class="build-msg hidden"></div>
-        <div id="build-cats" class="build-cats"></div>
-        <div id="build-grid" class="build-grid"></div>
-        <div id="build-empty" class="build-empty hidden">Keine Gebäude gefunden.</div>
-      </div>`;
-    $dock.querySelector('#build-close')?.addEventListener('click',closeDock);
+        <div class="build-cats"  id="build-cats"></div>
+        <div class="build-grid"  id="build-grid"></div>
+        <div class="build-empty hidden" id="build-empty">
+          Keine Gebäude gefunden. Prüfe <code>data/buildings.json</code> oder Registry-Kategorien.
+        </div>
+      </div>
+    `;
+    $dock.querySelector('#build-close')?.addEventListener('click', closeDock);
   }
 
-  /* ================================ [CATS] ================================= */
+  // [06] Render – Kategorien
   function renderCategories(){
-    const $cats=$dock.querySelector('#build-cats'),$cnt=$dock.querySelector('#build-count');
-    $cats.innerHTML='';
-    CATEGORIES.forEach(cat=>{
-      const b=document.createElement('button');
-      b.className='build-cat'+(cat.id===ACTIVE_CAT?' is-active':'');
-      b.innerHTML=`<span>${cat.name}</span><small>${cat.count}</small>`;
-      b.onclick=()=>{ACTIVE_CAT=cat.id;renderCategories();renderGrid();};
-      $cats.appendChild(b);
+    const $cats  = $dock.querySelector('#build-cats');
+    const $count = $dock.querySelector('#build-count');
+    if (!$cats) return;
+
+    $cats.innerHTML = '';
+    CATEGORIES.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'build-cat' + (cat.id === ACTIVE_CAT ? ' is-active' : '');
+      btn.setAttribute('data-cat', cat.id);
+      btn.innerHTML = `<span class="build-cat__name">${cat.name}</span><span class="build-cat__cnt">${cat.count}</span>`;
+      btn.addEventListener('click', () => { ACTIVE_CAT = cat.id; renderCategories(); renderGrid(); });
+      $cats.appendChild(btn);
     });
-    if($cnt)$cnt.textContent=`${BUILDINGS.length} Gebäude`;
+    if ($count) $count.textContent = `${BUILDINGS.length} Gebäude`;
   }
 
-  /* ================================ [GRID] ================================= */
+  // [07] Render – Grid
   function renderGrid(){
-    const $grid=$dock.querySelector('#build-grid'),$empty=$dock.querySelector('#build-empty');
-    const list=byCat(BUILDINGS,ACTIVE_CAT);
-    $grid.innerHTML='';
-    if(!list.length){$empty?.classList.remove('hidden');return;}
-    $empty?.classList.add('hidden');
+    const $grid  = $dock.querySelector('#build-grid');
+    const $empty = $dock.querySelector('#build-empty');
+    if (!$grid) return;
 
-    list.forEach(b=>{
-      const card=document.createElement('button');
-      card.className='build-card';
-      card.innerHTML=`
-        <div class="build-card__title">${b.name}</div>
-        <img class="build-card__img" src="${b.image}" alt="${b.name}">
-        <div class="build-costs">
-          ${(b.cost||[]).map(c=>`
-            <div class="build-cost" title="${c.id} × ${c.amount}">
-              <img src="${iconRes(c.id)}" alt="${c.id}" class="build-cost__icon">
-              <span>x${c.amount}</span>
-            </div>`).join('')}
-        </div>`;
-      card.onclick=()=>onSelectBuilding(b);
-      $grid.appendChild(card);
-    });
-  }
-
-  /* ============================ [INTERAKTION] ============================== */
-  function showMsg(text, kind='warn'){
-    const box=$dock.querySelector('#build-msg'); if(!box) return;
-    box.textContent=text||''; box.className=''; box.classList.add('build-msg', `is-${kind}`);
-    if (!text){ box.classList.add('hidden'); return; }
-    box.classList.remove('hidden');
-    // Auto-hide nach 2.5s
-    clearTimeout(showMsg._t);
-    showMsg._t = setTimeout(()=> box.classList.add('hidden'), 2500);
-  }
-
-  function onSelectBuilding(b){
-    // 1) Kosten prüfen
-    const { ok, need, have } = canAfford(b.cost);
-    if (!ok){
-      emit('cb:build:denied', { id:b.id, reason:'insufficient_resources', need, have });
-      showMsg('Nicht genug Ressourcen!', 'warn');
+    const list = byCat(BUILDINGS, ACTIVE_CAT);
+    $grid.innerHTML = '';
+    if (!list.length){
+      $empty?.classList.remove('hidden');
+      $empty && ($empty.style.display = 'block');
       return;
     }
+    $empty?.classList.add('hidden');
+    $empty && ($empty.style.display = '');
 
-    // 2) Events an Engine schicken (neu & legacy)
-    emit('req:build:start', { id:b.id, cost:b.cost });              // neue API: Engine startet Platzierungsmodus
-    emit('req:place:start', { buildingId: b.id });                  // legacy für Map/Engine
-    emit('cb:set-build-tool', { type: b.id });                      // legacy für core.input.js
+    list.forEach(b=>{
+      const $card = document.createElement('button');
+      $card.className = 'build-card';
+      $card.setAttribute('data-bid', b.id);
+      $card.setAttribute('aria-label', `Gebäude ${b.name}`);
 
-    INF('select', b.id);
-    // (Optional: Dock schließen, wenn du das willst – hier offen lassen)
-    // closeDock();
+      const $title = document.createElement('div');
+      $title.className = 'build-card__title';
+      $title.textContent = b.name;
+
+      const $img = document.createElement('img');
+      $img.className = 'build-card__img';
+      $img.loading   = 'lazy';
+      $img.alt       = b.name;
+      $img.src       = b.image || iconBld(b.id);
+
+      const $costs = document.createElement('div');
+      $costs.className = 'build-costs';
+      (b.cost || []).forEach(c=>{
+        const $c = document.createElement('div');
+        $c.className = 'build-cost';
+        $c.innerHTML = `
+          <img class="build-cost__icon" src="${iconRes(c.id)}" alt="${c.id}">
+          <span class="build-cost__amt">x${c.amount}</span>
+        `;
+        $costs.appendChild($c);
+      });
+
+      $card.appendChild($title);
+      $card.appendChild($img);
+      $card.appendChild($costs);
+      $card.addEventListener('click', () => {
+        INF('select', b.id);
+        emit('req:place:begin', { building: b });
+      });
+
+      $grid.appendChild($card);
+    });
   }
 
-  /* ============================ [OPEN/CLOSE] =============================== */
+  // [08] Öffnen/Schließen/Toggle
   function openDock(){
-    if(IS_OPEN) return; IS_OPEN=true;
-    $dock.hidden=false; $dock.classList.remove('hidden');
-    emit('cb:build:open'); INF('geöffnet');
-    showMsg('', 'info');
+    if (IS_OPEN) return;
+    IS_OPEN = true;
+    $dock.hidden = false;
+    $dock.classList.remove('hidden');
+    $btnBuild?.setAttribute('aria-expanded', 'true');
+    emit('cb:build:open');
   }
   function closeDock(){
-    if(!IS_OPEN) return; IS_OPEN=false;
-    $dock.classList.add('hidden'); $dock.hidden=true;
-    emit('cb:build:close'); INF('geschlossen');
+    if (!IS_OPEN) return;
+    IS_OPEN = false;
+    $dock.classList.add('hidden');
+    $btnBuild?.setAttribute('aria-expanded', 'false');
+    emit('cb:build:close');
   }
   function toggleDock(){ IS_OPEN ? closeDock() : openDock(); }
 
-  /* ================================ [INIT] ================================= */
-  async function initAndRender(){
-    if(INIT_DONE) return; INIT_DONE=true;
-    renderDockSkeleton();
-
-    const okReg = await loadFromRegistry();
-    if (!okReg) await loadFromJSON();
-
-    renderCategories();
-    renderGrid();
-    INF('bereit',{buildings:BUILDINGS.length,categories:CATEGORIES.length});
-  }
-
-  /* =============================== [EVENTS] ================================ */
-  addEventListener('cb:ui-ready',        ()=>LOG('UI bereit'));
-  addEventListener('cb:assets-ready',    initAndRender,{once:true});
-  addEventListener('cb:registry:ready',  initAndRender,{once:true});
-
-  // Auto-Open bei Spielstart (kannst du rausnehmen, falls nicht gewünscht)
-  addEventListener('cb:game:start',      openDock);
-
-  // Kompatible Open/Close-Events
-  addEventListener('req:buildmenu:show', openDock);   // legacy
-  addEventListener('cb:build:open',      openDock);
-  addEventListener('cb:build:close',     closeDock);
-
-  // Moderne Requests
-  addEventListener('req:build:open',     openDock);
-  addEventListener('req:build:close',    closeDock);
-  addEventListener('req:build:toggle',   toggleDock);
-
   // ESC schließt
-  window.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeDock(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeDock(); }, { passive:true });
 
-  // Legacy Bridge: begin → start (Game erwartet buildingId)
-  addEventListener('req:place:begin', (ev)=>{
-    const b = ev.detail?.building;
-    if (b && b.id) dispatchEvent(new CustomEvent('req:place:start', { detail:{ buildingId: b.id } }));
-  });
-
-  // Toggle-Button
-  if($btnBuild){
-    $btnBuild.onclick=()=>toggleDock();
-    $btnBuild.hidden=false;
+  // [09] Init (einmalig)
+  async function initAndRender(){
+    if (INIT_DONE) return;           // Debounce
+    INIT_DONE = true;
+    try {
+      renderDockSkeleton();
+      await loadBuildings();
+      buildCategories();
+      renderCategories();
+      renderGrid();
+      INF('bereit', { buildings: BUILDINGS.length, categories: CATEGORIES.length });
+    } catch(e){
+      ERR('initAndRender Fehler:', e);
+      const $empty = $dock.querySelector('#build-empty');
+      if ($empty){
+        $empty.textContent = 'Fehler beim Laden des Baumenüs. Details in der Konsole.';
+        $empty.classList.remove('hidden');
+      }
+    }
   }
 
-  LOG('geladen v25.10.27-build2');
+  // [10] UI Wiring
+  function wireUI(){
+    if ($btnBuild){
+      $btnBuild.hidden = false;
+      $btnBuild.setAttribute('aria-expanded','false');
+      $btnBuild.addEventListener('click', toggleDock);
+    }
+    $dock.classList.add('hidden');   // Start: geschlossen
+  }
+
+  // [11] Events (einmalig)
+  window.addEventListener('cb:ui-ready',        wireUI,        { once:true });
+  window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
+  window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
+
+  // Standalone-Fallback (kein Auto-Init hier, damit Reihenfolge im Spiel stimmt)
+  LOG('geladen v25.10.19-final3');
 })();
