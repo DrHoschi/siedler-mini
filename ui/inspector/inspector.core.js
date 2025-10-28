@@ -1,38 +1,31 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.core.js
  * Projekt : Neue Siedler – Inspector
- * Version : v25.10.31-coreSM
- * Zweck   : Zentrale Zustandsmaschine für OPEN/CLOSE (einziger Autor!)
+ * Version : v25.10.31-coreSM2
+ * Zweck   : Zentrale OPEN/CLOSE-Logik (einzige Autorität)
  *
  * Lauscht : req:insp:open, req:insp:close, req:insp:toggle
- * Sendet  : cb:insp:open, cb:insp:close (und Kompat: cb:inspector:open/close)
- * DOM     : setzt/entfernt NUR hier body.is-inspector / .inspector-open + host .open
- *
- * Wichtig : Andere Module (Bridge/Buttons) dürfen NICHT selbst Klassen setzen,
- *           sondern nur Requests schicken. So vermeiden wir Re-Open/Freeze.
+ * Sendet  : cb:insp:open/close + Kompat cb:inspector:open/close
+ * DOM     : setzt/entfernt body.is-inspector / .inspector-open und #inspector.open
  * ============================================================================ */
 (function(){
   'use strict';
 
   const MOD = '[insp-core]';
-  const LOGI = (window.CBLog?.info||console.log).bind(console, MOD);
-  const LOGW = (window.CBLog?.warn||console.warn).bind(console, MOD);
+  const log = (t,...a)=> (window.CBLog?.info||console.log).call(console, MOD, t, ...a);
 
   const $ = (s)=>document.querySelector(s);
   const host = ()=> $('#inspector') || $('#inspector-overlay');
 
-  let isOpen = false; // einzige Wahrheitsquelle
+  let openState = false; // Single Source of Truth
 
   function applyDOM(){
     const h = host();
-    // Body-Flags
-    document.body.classList.toggle('is-inspector', isOpen);
-    document.body.classList.toggle('inspector-open', isOpen);
-    // Host-Klasse
+    document.body.classList.toggle('is-inspector', openState);
+    document.body.classList.toggle('inspector-open', openState);
     if (h){
-      h.classList.toggle('open', isOpen);
-      if (!isOpen){
-        // evtl. erzwungene Styles vom Overlay o. ä. sicher entfernen
+      h.classList.toggle('open', openState);
+      if (!openState){
         h.removeAttribute('hidden');
         h.style.removeProperty('display');
         h.style.removeProperty('visibility');
@@ -42,50 +35,31 @@
     }
   }
 
-  function emit(name){
-    window.dispatchEvent(new CustomEvent(name));
-  }
-  function emitCompatOpened(){
-    emit('cb:insp:open');
-    emit('cb:inspector:open'); // für overlay.hooks v1.4
-  }
-  function emitCompatClosed(){
-    emit('cb:insp:close');
-    emit('cb:inspector:close'); // für overlay.hooks v1.4
-  }
+  function emit(name){ window.dispatchEvent(new CustomEvent(name)); }
+  function emitOpen(){  emit('cb:insp:open');  emit('cb:inspector:open'); }
+  function emitClose(){ emit('cb:insp:close'); emit('cb:inspector:close'); }
 
   function doOpen(){
-    if (isOpen) return;
-    isOpen = true;
-    applyDOM();
-    emitCompatOpened();
-    LOGI('geöffnet ✓');
+    if (openState) return;
+    openState = true;  applyDOM(); emitOpen();  log('geöffnet ✓');
   }
   function doClose(){
-    if (!isOpen) return;
-    isOpen = false;
-    applyDOM();
-    emitCompatClosed();
-    LOGI('geschlossen ✓');
+    if (!openState) return;
+    openState = false; applyDOM(); emitClose(); log('geschlossen ✓');
   }
-  function doToggle(){ isOpen ? doClose() : doOpen(); }
+  function doToggle(){ openState ? doClose() : doOpen(); }
 
-  // ---- Eventanbindung (einziger Autor der Sichtbarkeit) ----
+  // Requests (einziger Ort der reagiert)
   window.addEventListener('req:insp:open',   doOpen,   { passive:true });
   window.addEventListener('req:insp:close',  doClose,  { passive:true });
   window.addEventListener('req:insp:toggle', doToggle, { passive:true });
 
-  // Beim Start: sauberen Zustand herstellen (falls alte Klassen rumlagen)
+  // Start: Alt-Flags bereinigen (sonst falscher Anfangszustand)
   (function boot(){
-    const bHas = document.body.classList.contains('is-inspector') ||
-                 document.body.classList.contains('inspector-open') ||
-                 host()?.classList.contains('open');
-    if (bHas){
-      // Normalisieren: wir übernehmen und schließen initial
-      isOpen = false;
-      applyDOM();
-      LOGW('Startzustand bereinigt (alte Flags entfernt).');
-    }
-    LOGI('bereit v25.10.31-coreSM');
+    const stray = document.body.classList.contains('is-inspector') ||
+                  document.body.classList.contains('inspector-open') ||
+                  host()?.classList.contains('open');
+    if (stray){ openState = false; applyDOM(); }
+    log('bereit v25.10.31-coreSM2');
   })();
 })();
