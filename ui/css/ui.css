@@ -269,3 +269,64 @@ body.is-inspector #game-canvas {
   pointer-events: none;
 }
 /* Ende der Datei – ui.css (global) */
+
+/* ========================================================================
+   [X] Inspector Toggle Button (global, eigenständiger Layer)
+   ===================================================================== */
+:root{
+  /* eigener Layer für FAB, unter Inspector, über HUD */
+  --z-fab: 1200;
+}
+
+#inspector-toggle{
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: var(--z-fab);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 1px 0 rgba(0,0,0,.2);
+}
+
+#inspector-toggle:hover { filter: brightness(1.05); }
+#inspector-toggle:active { transform: translateY(1px); }
+
+/* Wenn der Inspector offen ist, darf der Button TROTZDEM klickbar bleiben */
+body.inspector-open #inspector-toggle { pointer-events: auto; }
+
+/* Optional: Label-Variante */
+#inspector-toggle .lbl{
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+/* ===============================================================
+   [X.1] Pointer-Events: NICHT den Toggle mit blockieren!
+   (Dein existierender Block blockt Start/HUD/Build/Game.
+    Wir ergänzen eine explizite Ausnahme.)
+   ============================================================ */
+body.inspector-open #start,
+body.inspector-open .ui-start,
+body.inspector-open #hud-top,
+body.inspector-open .hud,
+body.inspector-open #build-dock,
+body.inspector-open #game,
+body.inspector-open #game-canvas {
+  pointer-events: none;
+}
+
+/* explizite Ausnahme für den Toggle */
+body.inspector-open #inspector-toggle {
+  pointer-events: auto;
+}
