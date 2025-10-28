@@ -1,59 +1,223 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
-   Version : v25.10.28-clean
-   Zweck   : Vollbild-Inspector (Overlay) + Tabs
-   Flags   : body.is-inspector  /  body.inspector-open
+   Projekt : Neue Siedler – Inspector
+   Version : v18.15.2 (restore classic look)
+   Zweck   : Vollbild-Overlay + Tabs (Logs/Build/Paths/Resources/Tests)
+   Hinweis : Host kann #inspector ODER #inspector-overlay heißen.
+             Sichtbarkeits-Toggle über .open ODER body.inspector-open.
 ============================================================================ */
+
+/* ---------- Theme / Vars ---------- */
 :root{
   --insp-bg: rgba(18,18,20,.96);
   --insp-panel: #131316;
   --insp-header: #1f1f23;
   --insp-border: #2a2a2e;
   --insp-tab: #2b2b30;
-  --insp-text: #e3e3e8;
-  --insp-dim: #a9a9b3;
+  --insp-tab-active: #e5e5e5;
+  --insp-fg: #eaeaea;
+  --insp-muted: #b9bac1;
+  --insp-ok: #3bd16f;
+  --insp-info: #60a5fa;
+  --insp-warn: #fbbf24;
+  --insp-error: #f87171;
+
+  --radius: 12px;
+  --z: 2147483000;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
+
+/* ---------- FAB (kleines Zahnrad) ---------- */
+#btn-inspector {
+  position: fixed;
+  right: calc(14px + var(--safe-right));
+  bottom: calc(14px + var(--safe-bottom));
+  z-index: var(--z);
+  width: 46px; height: 46px;
+  border: 0; border-radius: 10px;
+  background: #2b2b30; color:#fff;
+  box-shadow: 0 3px 10px rgba(0,0,0,.35);
+  font-weight: 700;
+  cursor: pointer;
+}
+#btn-inspector:active{ transform: scale(.98); }
+.cb-fab[hidden]{ display:none !important; }
+
+/* ---------- Host / Overlay ---------- */
+#inspector-overlay,
 #inspector{
-  position: fixed; inset: 0; display: none;
-  z-index: 999999; background: var(--insp-bg); color: var(--insp-text);
-  font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  position: fixed;
+  inset: 0;
+  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  background: var(--insp-bg);
+  color: var(--insp-fg);
+  z-index: var(--z);
 }
-body.is-inspector #inspector,
-body.inspector-open #inspector{ display:block; }
-#inspector .insp-shell{
-  position:absolute; inset:24px; border:1px solid var(--insp-border);
-  border-radius:8px; background:var(--insp-panel);
-  display:grid; grid-template-rows:48px 36px 1fr; overflow:hidden;
+
+/* sichtbar: entweder .open am Host ODER .inspector-open am <body> */
+#inspector.open,
+#inspector-overlay.open,
+body.inspector-open #inspector,
+body.inspector-open #inspector-overlay{
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
-#inspector .insp-header{
-  display:flex; align-items:center; justify-content:space-between;
-  background:var(--insp-header); border-bottom:1px solid var(--insp-border);
-  padding:0 12px;
+
+/* optionaler Debug-Rand – per JS: el.setAttribute('data-insp-debug','on') */
+#inspector[data-insp-debug="on"],
+#inspector-overlay[data-insp-debug="on"]{ outline: 3px solid #ff0 !important; }
+
+/* ---------- Frame / Layout ---------- */
+.insp-frame{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding:
+    calc(8px + var(--safe-top))
+    calc(8px + var(--safe-right))
+    calc(8px + var(--safe-bottom))
+    calc(8px + var(--safe-left));
+  box-sizing: border-box;
 }
-#inspector .insp-title{ font-weight:600; letter-spacing:.2px; }
-#inspector .insp-close{
-  appearance:none; border:0; background:#2a2a2e; color:var(--insp-text);
-  padding:6px 10px; border-radius:6px; cursor:pointer;
+
+/* Header mit Tabs + Close */
+.insp-header{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  background: var(--insp-header);
+  border: 1px solid var(--insp-border);
+  border-bottom: none;
+  padding: 8px;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
-#inspector .insp-close:hover{ filter:brightness(1.15); }
-#inspector .insp-tabs{
-  display:flex; gap:6px; align-items:center;
-  border-bottom:1px solid var(--insp-border); padding:4px 6px; background:#18181b;
+
+/* Tabs-Leiste */
+.insp-tabs{
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding: 4px;
 }
-#inspector .insp-tab{
-  appearance:none; border:1px solid var(--insp-border);
-  background:var(--insp-tab); color:var(--insp-text);
-  padding:6px 10px; border-radius:6px; cursor:pointer;
+.insp-tab{
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--insp-tab);
+  color: var(--insp-muted);
+  border: 1px solid var(--insp-border);
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 600;
+  user-select: none;
 }
-#inspector .insp-tab[aria-selected="true"]{
-  outline:2px solid #5a66ff; border-color:#5a66ff;
+.insp-tab.active{
+  background: var(--insp-tab-active);
+  color: #0d0d10;
 }
-#inspector .insp-content{ overflow:auto; padding:8px 10px; }
-#inspector .insp-panel-block{ display:none; }
-#inspector .insp-panel-block.active{ display:block; }
-#inspector .muted{ color:var(--insp-dim); }
-#inspector table{ width:100%; border-collapse:collapse; }
-#inspector th, #inspector td{ border-bottom:1px solid var(--insp-border); padding:6px 8px; }
-#inspector th{ text-align:left; color:#cfd1ff; font-weight:600; }
-#inspector .insp-content::-webkit-scrollbar{ height:10px;width:10px; }
-#inspector .insp-content::-webkit-scrollbar-thumb{ background:#3a3a41;border-radius:6px; }
+
+/* Schließen-X im Header */
+.insp-close{
+  position: sticky;
+  top: calc(0px + var(--safe-top));
+  right: 0;
+  margin-left: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #3a3a40;
+  color: #fff;
+  border: 1px solid var(--insp-border);
+  cursor: pointer;
+}
+
+/* Content-Pane */
+.insp-content{
+  min-height: 0;
+  overflow: auto;
+  background: var(--insp-panel);
+  border: 1px solid var(--insp-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 8px;
+}
+
+/* ---------- Reusable UI-Bausteine ---------- */
+.pad{ padding: 8px 10px; }
+.hint{ opacity: .8; font-size: .9em; }
+.warn{
+  color:#ffb; background:#552;
+  padding:8px; border:1px solid #aa8; border-radius:8px;
+}
+.toolbar{
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;
+}
+.insp-btn{
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--insp-border);
+  background: #2e2e33;
+  color: #eee;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.insp-btn:hover{ background:#34343a; }
+.insp-btn:active{ transform: translateY(1px); }
+.insp-btn[disabled]{ opacity:.55; cursor:not-allowed; }
+
+/* Tabellen (Events/Build/Resources/Paths …) */
+.inspector-table{ border-collapse: collapse; width: 100%; }
+.inspector-table th,
+.inspector-table td{
+  border: 1px solid #555;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.inspector-table thead th{ background: #2a2a2a; }
+
+/* ---------- LOGS-spezifisch (klassische Optik) ---------- */
+.insp-logs{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.insp-filters{
+  display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+  color: var(--insp-muted);
+  padding: 4px 0 8px;
+}
+.insp-actions{ display:flex; gap:8px; align-items:center; padding:6px 0 10px; }
+
+#logs-list{ padding-bottom:4px; }
+.insp-logline{
+  display:flex; gap: 8px; align-items: baseline;
+  padding: 4px 2px;
+  border-bottom: 1px dashed var(--insp-border);
+}
+.insp-logline:last-child{ border-bottom: none; }
+.insp-logline .sym{ width:16px; text-align:center; }
+.insp-logline .ts{ color: var(--insp-muted); }
+
+/* Farbsymbole – wie früher */
+.insp-logline.ok    .sym{ color: var(--insp-ok); }
+.insp-logline.info  .sym{ color: var(--insp-info); }
+.insp-logline.warn  .sym{ color: var(--insp-warn); }
+.insp-logline.error .sym{ color: var(--insp-error); }
+
+/* ---------- Mobil/kleinere Screens ---------- */
+@media (max-width: 640px){
+  .insp-tabs{ gap:6px; }
+  .insp-tab{ padding:7px 10px; }
+  .insp-btn{ padding:6px 10px; }
+  .inspector-table th, .inspector-table td{ padding:5px 6px; }
+}
