@@ -8,27 +8,148 @@
 ============================================================================ */
 
 /* ---------- Theme / Vars ---------- */
+/* ============================================================================
+   THEME BASIS + THEMES (DARK / LIGHT / WOOD) – Inspector
+   Datei : ui/css/ui-inspector.css
+   Zweck : Zentrale Farben + optionaler Holzrahmen (9-Slice) via data-theme
+   Nutzung: <html data-theme="dark|light|wood"> oder per JS setAttribute(...)
+   ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+   [A] BASIS – Default-Werte (greifen, falls kein data-theme gesetzt ist)
+   Alle --insp-* Variablen werden vom Inspector verwendet.
+   --------------------------------------------------------------------------- */
 :root{
-  --insp-bg: rgba(18,18,20,.96);
-  --insp-panel: #131316;
-  --insp-header: #1f1f23;
-  --insp-border: #2a2a2e;
-  --insp-tab: #2b2b30;
-  --insp-tab-active: #e5e5e5;
-  --insp-fg: #eaeaea;
-  --insp-muted: #b9bac1;
-  --insp-ok: #3bd16f;
-  --insp-info: #60a5fa;
-  --insp-warn: #fbbf24;
-  --insp-error: #f87171;
+  /* ===== Grundfarben =======================================================
+     - --insp-bg:    Vollbild-Hintergrund des Overlays (meist leicht transparent)
+     - --insp-panel: Innenflächen (Panels/Content)
+     - --insp-header:Kopfbereich/Tab-Leiste
+     - --insp-border:Linien/Ränder
+     - --insp-tab:   Inaktive Tabbuttons
+     - --insp-text:  Standard-Textfarbe
+     - --insp-dim:   Gedämpfter/sekundärer Text
+  ========================================================================= */
+  --insp-bg:        rgba(18,18,20,.96);
+  --insp-panel:     #131316;
+  --insp-header:    #1f1f23;
+  --insp-border:    #2a2a2e;
+  --insp-tab:       #2b2b30;
+  --insp-text:      #e3e3e8;
+  --insp-dim:       #a9a9b3;
 
-  --radius: 12px;
-  --z: 2147483000;
+  /* ===== Akzent- & Statusfarben ========================================== */
+  --insp-accent:    #5a66ff;  /* Fokusrahmen/aktive Tabs */
+  --insp-ok:        #4cc38a;  /* Erfolg/OK */
+  --insp-warn:      #f5a524;  /* Warnung */
+  --insp-error:     #e5484d;  /* Fehler */
+  --insp-info:      #4ea7ff;  /* Info */
 
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
+  /* ===== Holzrahmen-Parameter (Theme "wood") ==============================
+     9-Slice-Rahmen: Ecken bleiben unverzerrt, Kanten werden gestreckt
+     - --insp-frame-src:  Bildquelle (SVG/PNG) für den Rahmen
+     - --insp-frame-slice:Breite der „unskalierbaren“ Ecken/Kanten (px)
+     - --insp-frame-width:Dicke des sichtbaren Rahmens (px)
+     - --insp-frame-outset:Rahmen nach außen (px)
+     - --insp-frame-enable:0=aus, 1=an (wird vom Theme gesetzt)
+  ========================================================================= */
+  --insp-frame-src: url("../../assets/ui/panel.svg"); /* ← FIX: Anführungszeichen */
+  --insp-frame-slice: 12;
+  --insp-frame-width: 12;
+  --insp-frame-outset: 0;
+  --insp-frame-enable: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   [B] THEME: DARK – dein etablierter Standard (dunkel)
+   --------------------------------------------------------------------------- */
+:root[data-theme="dark"]{
+  --insp-bg:        rgba(18,18,20,.96);
+  --insp-panel:     #131316;
+  --insp-header:    #1f1f23;
+  --insp-border:    #2a2a2e;
+  --insp-tab:       #2b2b30;
+  --insp-text:      #e3e3e8;
+  --insp-dim:       #a9a9b3;
+
+  --insp-accent:    #5a66ff;
+  --insp-ok:        #4cc38a;
+  --insp-warn:      #f5a524;
+  --insp-error:     #e5484d;
+  --insp-info:      #4ea7ff;
+
+  --insp-frame-enable: 0; /* kein Holzrahmen im Dark-Theme */
+}
+
+/* ---------------------------------------------------------------------------
+   [C] THEME: LIGHT – helle/„graue“ Variante mit hoher Lesbarkeit
+   --------------------------------------------------------------------------- */
+:root[data-theme="light"]{
+  --insp-bg:        rgba(245,245,248,.96);
+  --insp-panel:     #f4f5f7;
+  --insp-header:    #e9eaf0;
+  --insp-border:    #cfd3dc;
+  --insp-tab:       #e3e6ed;
+  --insp-text:      #15171a;
+  --insp-dim:       #5a5f6a;
+
+  --insp-accent:    #4b63ff;
+  --insp-ok:        #2ba675;
+  --insp-warn:      #d49000;
+  --insp-error:     #c92a32;
+  --insp-info:      #1f78ff;
+
+  --insp-frame-enable: 0; /* kein Holzrahmen im Light-Theme */
+}
+
+/* ---------------------------------------------------------------------------
+   [D] THEME: WOOD – Holzrahmen + wärmere Töne passend zum Holz
+   --------------------------------------------------------------------------- */
+:root[data-theme="wood"]{
+  --insp-bg:        rgba(22,18,14,.95);
+  --insp-panel:     #1c1713;
+  --insp-header:    #281f19;
+  --insp-border:    #3a2b22;
+  --insp-tab:       #2b221c;
+  --insp-text:      #f2eee8;
+  --insp-dim:       #bfb7ad;
+
+  --insp-accent:    #d7a85a;
+  --insp-ok:        #62b585;
+  --insp-warn:      #e2a53a;
+  --insp-error:     #d4655f;
+  --insp-info:      #b0c7ff;
+
+  --insp-frame-enable: 1;                 /* Holz aktiv */
+  --insp-frame-src: url("../../assets/ui/panel.svg"); /* deine 9-Slice Grafik */
+  --insp-frame-slice: 12;                 /* ggf. 10–16 feinjustieren */
+  --insp-frame-width: 12;
+  --insp-frame-outset: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   [E] HOLZRAHMEN – nur anwenden, wenn Theme „wood“ aktiv ist
+   Ziel: #inspector & zentrale Blöcke mit border-image umrahmen
+   --------------------------------------------------------------------------- */
+:root[data-theme="wood"] #inspector,
+:root[data-theme="wood"] #inspector .insp-shell,
+:root[data-theme="wood"] #inspector .insp-header,
+:root[data-theme="wood"] #inspector .insp-tabs,
+:root[data-theme="wood"] #inspector .insp-content,
+:root[data-theme="wood"] #inspector .insp-content > section,
+:root[data-theme="wood"] #inspector .insp-tab {
+  border: var(--insp-frame-width) solid transparent;
+  border-image-source: var(--insp-frame-src);
+  border-image-slice:  var(--insp-frame-slice);
+  border-image-width:  var(--insp-frame-width);
+  border-image-outset: var(--insp-frame-outset);
+  border-image-repeat: stretch; /* ggf. round|repeat testen */
+  /* outline bewusst aus – Akzent macht die active-Markierung */
+}
+
+/* Aktivierter Tab im Holz-Theme: goldener Fokus-Akzent */
+:root[data-theme="wood"] #inspector .insp-tab.active{
+  border-color: transparent;              /* border-image bleibt sichtbar */
+  outline: 2px solid var(--insp-accent);  /* gut lesbarer Fokus */
 }
 
 /* ---------- FAB (kleines Zahnrad) ---------- */
