@@ -1,13 +1,11 @@
 /* ============================================================================
  * Datei   : ui/inspector/inspector.button-bind.js
  * Projekt : Neue Siedler – Inspector
- * Version : v25.10.31-bind5
- * Zweck   : Stabiler Zahnrad-Button-Binder (iOS-fest + „Self-Open“-Fallback)
- *           – Touch→Click Shim (iOS Safari)
- *           – Click-Durchreichung (stopPropagation / preventDefault)
- *           – Z-Index/PointerEvents-Hardening
- *           – Öffnen via UIInspector.open + Events
- *           – Notfall: Erzwingt Sichtbarkeit + aktive „logs“-View
+ * Version : v25.10.31-bind6
+ * Zweck   : Zahnrad-Button (Toggle) + robustes Öffnen/Schließen (iOS-fest)
+ *           – Touch→Click Shim (iOS)
+ *           – Toggle: open ODER close
+ *           – Close räumt Body/Host-Flags immer auf
  * ============================================================================ */
 
 (() => {
@@ -19,10 +17,15 @@
   const BTN_ID = 'btn-inspector';
   const SAFETY_STYLE_ID = 'insp-safety';
   let wired = false;
+  let closeGuard = 0;     // zählt "wir schließen gerade"
+  let fallbackTimer = 0;  // geplanter Self-Open Fallback
 
   const $  = (s)=>document.querySelector(s);
+  const $$ = (s)=>Array.from(document.querySelectorAll(s));
 
-  /** Button immer nach vorn, feste Größe/Position */
+  const host = ()=> document.getElementById('inspector') || document.getElementById('inspector-overlay');
+  const isOpen = ()=> document.body.classList.contains('is-inspector') || host()?.classList.contains('open');
+
   function bringToFront(el){
     if (!el) return;
     Object.assign(el.style, {
@@ -37,74 +40,94 @@
     });
   }
 
-  /** Einfaches Safety-CSS: aktive View anzeigen, Host sichtbar */
   function ensureSafetyCSS(){
     if (document.getElementById(SAFETY_STYLE_ID)) return;
-    const css = `
-      /* safety open + view visibility */
+    const s = document.createElement('style');
+    s.id = SAFETY_STYLE_ID;
+    s.textContent = `
       body.is-inspector #inspector, body.is-inspector #inspector-overlay{display:block!important;opacity:1!important;visibility:visible!important;pointer-events:auto!important}
       #inspector.open, #inspector-overlay.open{display:block!important;opacity:1!important;visibility:visible!important;pointer-events:auto!important}
       #inspector .insp-content > .insp-view, #inspector .insp-content > .insp-frame{display:none!important}
       #inspector .insp-content > .insp-view.is-active, #inspector .insp-content > .insp-frame.is-active{display:block!important}
-    `.trim();
-    const s = document.createElement('style');
-    s.id = SAFETY_STYLE_ID;
-    s.textContent = css;
+    `;
     document.head.appendChild(s);
   }
 
-  /** Notfall-Öffner: setzt Flags + aktiviert „logs“ wenn vorhanden */
-  function enforceOpen(attempt=1){
-    ensureSafetyCSS();
-
-    // Flags setzen
-    document.body.classList.add('is-inspector','inspector-open');
-    const host = document.getElementById('inspector') || document.getElementById('inspector-overlay');
-    if (host) host.classList.add('open');
-
-    // „logs“ View suchen/aktivieren
-    const logsView =
+  function activateLogs(){
+    const logs =
       $('#insp-logs') ||
       $('#inspector .insp-view[data-tab="logs"]') ||
       $('#inspector .insp-frame[data-tab="logs"]');
-
-    if (logsView){
-      // vorhandene Views deaktivieren, logs aktivieren
-      document.querySelectorAll('#inspector .insp-content > .insp-view, #inspector .insp-content > .insp-frame')
-        .forEach(v => v.classList.remove('is-active'));
-      logsView.classList.add('is-active');
-      log('Self-Open OK (logs aktiv).');
-      return;
-    }
-
-    // noch kein View im DOM? kurz wiederholen (Bridge rendert gerade)
-    if (attempt < 10){
-      setTimeout(()=> enforceOpen(attempt+1), 120);
-    }else{
-      warn('Self-Open: keine „logs“-View gefunden (nach 10 Versuchen).');
+    if (logs){
+      $$('#inspector .insp-content > .insp-view, #inspector .insp-content > .insp-frame')
+        .forEach(v=> v.classList.remove('is-active'));
+      logs.classList.add('is-active');
     }
   }
 
-  /** Normaler Öffner: API + Events + Fallback */
+  function enforceOpen(){
+    if (closeGuard) return; // gerade am Schließen → nicht wieder aufmachen
+    ensureSafetyCSS();
+    document.body.classList.add('is-inspector','inspector-open');
+    host()?.classList.add('open');
+    activateLogs();
+  }
+
+  function cancelFallback(){
+    if (fallbackTimer){
+      clearTimeout(fallbackTimer);
+      fallbackTimer = 0;
+    }
+  }
+
   function openInspectorRobust(tab='logs'){
-    // 1) Bevorzugt Bridge-API
+    cancelFallback();
     try{
       if (window.UIInspector?.open) window.UIInspector.open(tab);
       else if (window.Inspector?.open) window.Inspector.open(tab);
-    }catch(_){/* egal */ }
-
-    // 2) Events feuern (für ältere Hörer)
+    }catch(_){}
     try{
       window.dispatchEvent(new CustomEvent('req:insp:open'));
       window.dispatchEvent(new CustomEvent('cb:insp:open'));
-      window.dispatchEvent(new CustomEvent('inspector:ready')); // manche Tabs lauschen darauf
-    }catch(_){/* egal */ }
-
-    // 3) Fallback erzwingen (kurz verzögert, damit Bridge Zeit hat)
-    requestAnimationFrame(()=> setTimeout(()=> enforceOpen(1), 60));
+      window.dispatchEvent(new CustomEvent('inspector:ready'));
+    }catch(_){}
+    // kurzer Fallback, falls Bridge zu spät rendert
+    fallbackTimer = setTimeout(()=> { fallbackTimer = 0; enforceOpen(); }, 80);
   }
 
-  /** optional: was liegt über dem Button? */
+  function clearFlags(){
+    document.body.classList.remove('is-inspector','inspector-open');
+    const h = host(); if (h) h.classList.remove('open');
+  }
+
+  function closeInspectorRobust(){
+    closeGuard++; // signalisiert: wir wollen wirklich schließen
+    cancelFallback();
+
+    // 1) API
+    try{
+      if (window.UIInspector?.close) window.UIInspector.close();
+      else if (window.Inspector?.close) window.Inspector.close();
+    }catch(_){}
+
+    // 2) Events
+    try{
+      window.dispatchEvent(new CustomEvent('req:insp:close'));
+      window.dispatchEvent(new CustomEvent('cb:insp:close'));
+      window.dispatchEvent(new CustomEvent('cb:inspector:close'));
+    }catch(_){}
+
+    // 3) Flags im DOM wirklich entfernen
+    clearFlags();
+
+    // 4) kleine Entprellung
+    setTimeout(()=> { closeGuard = Math.max(0, closeGuard-1); }, 120);
+  }
+
+  function toggleInspector(){
+    isOpen() ? closeInspectorRobust() : openInspectorRobust('logs');
+  }
+
   function topElementOver(el){
     if (!el) return null;
     const r = el.getBoundingClientRect();
@@ -119,7 +142,7 @@
       btn = document.createElement('button');
       btn.id = BTN_ID;
       btn.setAttribute('aria-label','Inspector');
-      btn.textContent = '⚙️'; // (Skin kommt aus CSS, hier egal)
+      btn.textContent = '⚙️';
       document.body.appendChild(btn);
     }
     bringToFront(btn);
@@ -128,41 +151,52 @@
 
   function wire(){
     if (wired) return;
-    const btn = ensureDomButton();
+    // Zahnrad
+    const old = ensureDomButton();
+    old.replaceWith(old.cloneNode(true));
+    const btn = document.getElementById(BTN_ID);
+    bringToFront(btn);
 
-    // sauberes Rebinden: Clone ersetzt alte Listener
-    btn.replaceWith(btn.cloneNode(true));
-    const b = document.getElementById(BTN_ID);
-    bringToFront(b);
-
-    // iOS Touch→Click Shim (der erste Tap wird so nicht „geschluckt“)
-    b.addEventListener('touchend', (ev)=>{
+    // Touch→Click Shim (iOS)
+    btn.addEventListener('touchend', (ev)=>{
       ev.preventDefault();
       ev.stopPropagation();
-
-      // Wenn Overlay drüber liegt: kurz pointer-events kappen
-      const top = topElementOver(b);
+      const top = topElementOver(btn);
       if (top){ top.style.pointerEvents = 'none'; setTimeout(()=> top.style.pointerEvents = '', 200); }
-
-      // synthetischer Click
-      b.dispatchEvent(new MouseEvent('click', { bubbles:true, cancelable:true }));
+      btn.dispatchEvent(new MouseEvent('click', { bubbles:true, cancelable:true }));
     }, { passive:false });
 
-    // Click → robust öffnen
-    b.addEventListener('click', (ev)=>{
+    // Toggle per Click
+    btn.addEventListener('click', (ev)=>{
       ev.preventDefault();
       ev.stopPropagation();
-      openInspectorRobust('logs');
+      toggleInspector();
     }, { passive:false });
 
-    // Falls der Inspector später „bereit“ meldet → Button ganz oben halten
-    window.addEventListener('inspector:ready', ()=> bringToFront(b), { passive:true });
+    // Delegation: X-Button im Frame schließt
+    document.addEventListener('click', (ev)=>{
+      const x = ev.target.closest?.('#inspector .insp-close, #inspector-overlay .insp-close');
+      if (!x) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeInspectorRobust();
+    }, { passive:false });
+
+    // ESC → Close
+    window.addEventListener('keydown', (ev)=>{
+      if (ev.key === 'Escape' && isOpen()){
+        ev.preventDefault();
+        closeInspectorRobust();
+      }
+    }, { passive:false });
+
+    // Wenn Inspector „ready“ meldet → Button oben halten
+    window.addEventListener('inspector:ready', ()=> bringToFront(btn), { passive:true });
 
     wired = true;
-    log('Button/Hotkey-Handler gebunden (v25.10.31-bind5)');
+    log('Button/Hotkey-Handler gebunden (v25.10.31-bind6, Toggle aktiv)');
   }
 
-  // DOM ready → binden
   (document.readyState === 'loading')
     ? document.addEventListener('DOMContentLoaded', wire, { once:true })
     : wire();
