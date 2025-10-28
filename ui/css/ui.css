@@ -1,63 +1,271 @@
 /* ============================================================================
    Datei   : ui/css/ui.css
-   Version : v25.10.16-3
-   Zweck   : Haupt-Styles (Start-Hintergrund, Holzrahmen, Safe-Area)
+   Projekt : Neue Siedler – Globales UI
+   Version : v25.10.28 (Themes global + Aufräum-Release)
+   Zweck   : Zentrales, GLOBAL wirkendes Stylesheet für die gesamte App
+             – Theme-Verwaltung (dark / light / wood) über :root[data-theme]
+             – Saubere Basis (Reset light), Typografie & Layout-Primitives
+             – Z‑Index-Layering (Spiel, HUD, Start, Dialoge, Overlays)
+             – Utility-Klassen (sichtbar/unsichtbar, State-Farben, Layout-Helfer)
+             – OHNE komponentenspezifische Styles (Hud/Build/Inspector separat)
+   Hinweise:
+     • Komponentenspezifische CSS gehören in eigene Dateien:
+         – HUD:            ui/css/ui-hud.css
+         – Build-Menü:     ui/css/ui-build.css
+         – Inspector:      ui/css/ui-inspector.css
+     • Dieses ui.css definiert NUR globale Regeln & Variablen.
+     • Themes werden global am <html> via data-theme="dark|light|wood" gesetzt.
+       (document.documentElement.setAttribute('data-theme','dark'))
 ============================================================================ */
 
+/* ============================================================================
+   [0] LIGHT RESET – unaufdringlicher Grundputz (keine harten Opinionated-Resets)
+============================================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+               Noto Sans, Helvetica Neue, Arial, 'Apple Color Emoji',
+               'Segoe UI Emoji';
+  line-height: 1.4;
+}
+
+/* Links & Fokus (zugänglich, aber dezent) */
+a { color: var(--ui-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+
+/* Bilder & Canvas verhalten */
+img, canvas, svg, video { max-width: 100%; height: auto; display: block; }
+
+/* ============================================================================
+   [1] THEME-VARIABLEN (GLOBAL)
+   – Dark/Light/Wood definieren Farbsystem, Abstände & Layer-Map
+   – Weitere Komponenten nutzen diese Variablen via var(--…)
+============================================================================ */
+
+/* [1A] Default-Fallback (falls kein data-theme gesetzt ist) */
 :root{
-  --frame-src: url("../../assets/ui/panel.svg");
-  --frame-slice: 12;
-  --bg-dark: #222;
-  --txt: #eee;
-  --z-bg: 1; --z-canvas: 2; --z-ui: 3; --z-inspector: 50;
-  --fade-dur: 500ms;
+  /* Grundfarben Oberfläche */
+  --ui-bg:          #0f1012;      /* Seitenhintergrund */
+  --ui-surface:     #15171b;      /* Flächen/Panels    */
+  --ui-surface-2:   #1c1f25;      /* abgesetzte Bereiche */
+  --ui-border:      #2a2e36;      /* Rahmen/Linien     */
+  --ui-text:        #e6e7eb;      /* Primärtext        */
+  --ui-text-dim:    #a9aeb8;      /* sekundärer Text   */
 
-  /* Dein fixes Startbild (klein/hochkant-freundlich) */
-  --start-bg-url: url("../../assets/ui/start-bg.jpg");
+  /* Interaktion/Akzent */
+  --ui-accent:      #5a66ff;      /* Hauptakzent       */
+  --ui-link:        #8aa2ff;      /* Links             */
+  --ui-focus:       #5a66ff;      /* Fokus-Ring        */
+
+  /* Statusfarben (konsistent mit Inspector) */
+  --ui-ok:          #4cc38a;
+  --ui-warn:        #f5a524;
+  --ui-error:       #e5484d;
+  --ui-info:        #4ea7ff;
+
+  /* Spacing & Radius */
+  --ui-gap-1:       4px;
+  --ui-gap-2:       8px;
+  --ui-gap-3:       12px;
+  --ui-gap-4:       16px;
+  --ui-radius:      8px;
+
+  /* Z‑Index Layer Map (nur Konstanten – Nutzung projektweit einheitlich) */
+  --z-game:         100;          /* Spielfläche (Canvas) */
+  --z-ground-ui:    200;          /* UI direkt über Spiel (Start, einfache Overlays) */
+  --z-hud:          300;          /* HUD-Leisten */
+  --z-dialog:       900;          /* Dialoge/Modals */
+  --z-overlay:      1000;         /* schwere Overlays (z. B. Debug-Dims) */
+  --z-inspector:    2147483000;   /* Inspector absolute Spitze */
 }
 
-html, body{
-  margin:0; padding:0; width:100%; height:100%;
-  background: var(--bg-dark); color: var(--txt);
-  overflow:hidden; font-family: Inter, system-ui, Arial, sans-serif;
+/* [1B] THEME: DARK – etablierter Standard */
+:root[data-theme="dark"]{
+  --ui-bg:        #0f1012;
+  --ui-surface:   #15171b;
+  --ui-surface-2: #1c1f25;
+  --ui-border:    #2a2e36;
+  --ui-text:      #e6e7eb;
+  --ui-text-dim:  #a9aeb8;
+
+  --ui-accent:    #5a66ff;
+  --ui-link:      #8aa2ff;
+  --ui-focus:     #5a66ff;
+
+  --ui-ok:        #4cc38a;
+  --ui-warn:      #f5a524;
+  --ui-error:     #e5484d;
+  --ui-info:      #4ea7ff;
 }
 
-/* globales Startbild hinter Canvas; blendet mit .is-started aus */
-body::before{
-  content:""; position:fixed; inset:0; z-index:var(--z-bg);
-  background: #111 var(--start-bg-url) center/cover no-repeat;
-  opacity:1; transition: opacity var(--fade-dur) ease;
-  pointer-events:none;
-}
-/*body.is-started::before{ opacity:0; }*/
-body.is-playing::before{ opacity:0; }
+/* [1C] THEME: LIGHT – helle/„graue“ App */
+:root[data-theme="light"]{
+  --ui-bg:        #f4f5f7;
+  --ui-surface:   #ffffff;
+  --ui-surface-2: #eef0f4;
+  --ui-border:    #cfd3dc;
+  --ui-text:      #15171a;
+  --ui-text-dim:  #5a5f6a;
 
-/* Canvas + UI-Root */
-#game{
-  position:absolute; inset:0; z-index:var(--z-canvas);
-  width:100%; height:100%; image-rendering:pixelated;
-}
+  --ui-accent:    #4b63ff;
+  --ui-link:      #3356ff;
+  --ui-focus:     #4b63ff;
 
-#ui-root{ position:absolute; inset:0; z-index:var(--z-ui);pointer-events:none;}
-/* #hud-root   { position:absolute; z-index:50; pointer-events:auto; } */
-#build-dock { position:absolute; z-index:60; pointer-events:auto; }
-#game{ position:absolute; inset:0;  z-index:2;  display:block; }
-
-/* Holzrahmen (9-slice) */
-.wood-frame{
-  border:12px solid transparent;
-  border-image-source:var(--frame-src);
-  border-image-slice:var(--frame-slice) fill;
-  border-image-width:12px;
-  border-image-repeat:stretch;
-  background:rgba(0,0,0,.28);
-  border-radius:3px;
+  --ui-ok:        #2ba675;
+  --ui-warn:      #d49000;
+  --ui-error:     #c92a32;
+  --ui-info:      #1f78ff;
 }
 
-/* Inspector-Toggle sicher innerhalb Safe-Area platzieren */
-#inspector-toggle{
-  position:fixed;
-  right: calc(12px + env(safe-area-inset-right, 0px));
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  z-index: var(--z-inspector);
+/* [1D] THEME: WOOD – warme Töne + Holzoptik (Rahmen setzt jede Komponente selbst) */
+:root[data-theme="wood"]{
+  --ui-bg:        #1b1612;
+  --ui-surface:   #231c17;
+  --ui-surface-2: #2b231d;
+  --ui-border:    #3a2b22;
+  --ui-text:      #f2eee8;
+  --ui-text-dim:  #cfc7bd;
+
+  --ui-accent:    #d7a85a;
+  --ui-link:      #efc16a;
+  --ui-focus:     #d7a85a;
+
+  --ui-ok:        #62b585;
+  --ui-warn:      #e2a53a;
+  --ui-error:     #d4655f;
+  --ui-info:      #b0c7ff;
 }
+
+/* ============================================================================
+   [2] GRUNDLAYOUT: Seite, App-Container & Ebenen
+============================================================================ */
+body {
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+#app {
+  min-height: 100%;
+  background: var(--ui-bg);
+  display: grid;
+  grid-template-rows: 1fr; /* Spiel + UI legt selbst eigene Grids fest */
+}
+
+/* Spielfläche (Canvas) + Standard-Ebenen */
+#game, #game-canvas { z-index: var(--z-game); }
+#start, .ui-start   { z-index: var(--z-ground-ui); }
+#hud-top, .hud      { z-index: var(--z-hud); }
+.dialog, .modal     { z-index: var(--z-dialog); }
+.overlay            { z-index: var(--z-overlay); }
+
+/* ============================================================================
+   [3] TYPOGRAFIE & TEXT
+============================================================================ */
+h1, h2, h3 { margin: 0 0 var(--ui-gap-3); line-height: 1.2; }
+p         { margin: 0 0 var(--ui-gap-3); color: var(--ui-text); }
+small     { color: var(--ui-text-dim); }
+.muted    { color: var(--ui-text-dim); }
+
+/* ============================================================================
+   [4] FLÄCHEN & RAHMEN (neutrale Panels – Komponenten stylen selbst weiter)
+============================================================================ */
+.panel {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: var(--ui-gap-3);
+}
+.panel.alt { background: var(--ui-surface-2); }
+
+/* ============================================================================
+   [5] BUTTONS – neutrale Basis (Komponenten können verfeinern)
+============================================================================ */
+.btn {
+  appearance: none;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-2);
+  color: var(--ui-text);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: translateY(1px); }
+.btn.primary {
+  border-color: var(--ui-accent);
+  outline: 2px solid transparent;
+}
+.btn.primary:focus-visible { outline-color: var(--ui-focus); }
+.btn.ok    { color: var(--ui-ok); }
+.btn.warn  { color: var(--ui-warn); }
+.btn.error { color: var(--ui-error); }
+
+/* ============================================================================
+   [6] UTILITIES – States, Sichtbarkeit, Layout-Helfer (klein & nützlich)
+============================================================================ */
+/* Sichtbarkeit */
+.hidden { display: none !important; }
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Statusfarben (für Text/Badges, NICHT für Buttons zwingend) */
+.ok   { color: var(--ui-ok); }
+.warn { color: var(--ui-warn); }
+.error{ color: var(--ui-error); }
+.info { color: var(--ui-info); }
+
+/* Layout-Helfer */
+.row    { display: flex; gap: var(--ui-gap-2); align-items: center; }
+.col    { display: flex; gap: var(--ui-gap-2); flex-direction: column; }
+.grid   { display: grid; gap: var(--ui-gap-2); }
+.spacer { flex: 1 1 auto; } /* füllt freien Platz in Flex-Zeilen */
+.pad-1  { padding: var(--ui-gap-1); }
+.pad-2  { padding: var(--ui-gap-2); }
+.pad-3  { padding: var(--ui-gap-3); }
+.pad-4  { padding: var(--ui-gap-4); }
+
+/* ============================================================================
+   [7] INTERAKTION MIT INSPECTOR (globaler Konsens, keine Style-Duplikate)
+   – Inspector selbst stylt sich in ui-inspector.css
+   – Hier nur: wenn Inspector offen, dürfen Basis-Overlays nicht darüberliegen
+============================================================================ */
+body.inspector-open #start,
+body.inspector-open .ui-start,
+body.inspector-open #hud-top,
+body.inspector-open .hud,
+body.inspector-open #build-dock,
+body.inspector-open #game,
+body.inspector-open #game-canvas {
+  pointer-events: none;              /* Klicks blocken */
+}
+
+/* ============================================================================
+   [8] TRANSITIONS (dezent)
+============================================================================ */
+.fade-in   { animation: fade-in .12s ease-out both; }
+.fade-out  { animation: fade-out .12s ease-in  both; }
+@keyframes fade-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes fade-out { from { opacity: 1 } to { opacity: 0 } }
+
+/* ============================================================================
+   [9] KOMPATIBILITÄT & LEGACY-AUFRÄUMEN
+   – Ersetze harte Farben in Altdateien durch var(--ui-…)
+   – Vereinheitliche Body-Flags (inspector-open statt is-inspector)
+============================================================================ */
+/* Alt-Flags sanft auffangen (falls historisch vorhanden) */
+body.is-inspector #start,
+body.is-inspector .ui-start,
+body.is-inspector #hud-top,
+body.is-inspector .hud,
+body.is-inspector #build-dock,
+body.is-inspector #game,
+body.is-inspector #game-canvas {
+  pointer-events: none;
+}
+/* Ende der Datei – ui.css (global) */
