@@ -1,20 +1,23 @@
-// ui/inspector/inspector.button-bind.js – v18.9.1
-(function(){
-  'use strict';
-  const LOG=(window.CBLog?.info||console.info).bind(console,'[insp-bind]');
+// Datei   : inspector.button-bind.js
+// Pfad    : ui/inspector/inspector.button-bind.js
+// Version : v1.0.0
 
-  function bind(){
-    let btn = document.getElementById('btn-inspector');
-    if(!btn){
-      btn = document.createElement('button'); btn.id='btn-inspector'; btn.title='Inspector (I)'; btn.textContent='⚙️';
-      document.body.appendChild(btn);
-    }
-    btn.addEventListener('click', ()=> window.Inspector?.toggle());
-    window.addEventListener('keydown', e=>{
-      if(e.key?.toLowerCase()==='i' && !e.altKey && !e.ctrlKey && !e.metaKey) window.Inspector?.toggle();
-    });
-    LOG('Button-Handler gebunden (v18.9.1)');
-  }
+  (() => {
+    const btn = document.getElementById('inspector-toggle');
+    if(!btn) return;
 
-  (document.readyState==='loading')?document.addEventListener('DOMContentLoaded',bind):bind();
-})();
+    const open = () => document.body.classList.add('inspector-open');
+    const close = () => document.body.classList.remove('inspector-open');
+    const toggle = () => document.body.classList.toggle('inspector-open');
+
+    // Klick: Open/Close
+    btn.addEventListener('click', toggle);
+
+    // Optional (falls du schon Events nutzt):
+    window.addEventListener('req:inspector:open', open);
+    window.addEventListener('req:inspector:close', close);
+    window.addEventListener('req:inspector:toggle', toggle);
+
+    // Sichtbarkeits-Check (Debug kurz aktiv lassen, dann entfernen)
+    console.log('[inspector-toggle] ready, z:', getComputedStyle(btn).zIndex);
+  })();
