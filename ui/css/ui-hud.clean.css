@@ -1,0 +1,79 @@
+/* ============================================================================
+   Datei   : ui/css/ui-hud.css
+   Projekt : Neue Siedler – HUD (Ressourcenleiste oben)
+   Version : v25.10.28-g (Global-Themes, Clean)
+   Zweck   : HUD-spezifische Styles (keine globalen Variablen-Definitionen)
+             – Top-HUD-Panel
+             – Ressourcenzellen (quadratisch, zentrierte Icons/Labels)
+             – Holzrahmen automatisch im Theme 'wood'
+============================================================================ */
+
+/* [0] Container & Panel */
+#hud-top{
+  position: fixed; left: 12px; right: 12px; top: 12px;
+  z-index: var(--z-hud);
+  display: flex; gap: 8px; align-items: center; justify-content: flex-start;
+  padding: 6px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  color: var(--ui-text);
+  pointer-events: auto;
+}
+
+/* [1] Ressourcen-Gitter */
+.hud-grid{
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min-content;
+  gap: 8px;
+}
+:root{ --hud-cell: 72px; } /* lokale Standardkante – bei Bedarf anpassen */
+
+.hud-cell{
+  width: var(--hud-cell);
+  height: var(--hud-cell);
+  display: grid;
+  grid-template-rows: 18px 1fr 18px; /* Name / Icon / Menge */
+  place-items: center;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 0; /* ausdrücklich eckig */
+  overflow: hidden;
+}
+.hud-name{
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ui-text);
+  align-self: start;
+}
+.hud-icon{
+  width: calc(var(--hud-cell) - 18px);
+  height: calc(var(--hud-cell) - 18px);
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+.hud-qty{
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ui-text);
+  align-self: end;
+}
+
+/* Statusfarben für Mengen */
+.hud-qty.ok   { color: var(--ui-ok); }
+.hud-qty.warn { color: var(--ui-warn); }
+.hud-qty.err  { color: var(--ui-error); }
+
+/* [2] Holzrahmen nur im Theme 'wood' */
+:root[data-theme="wood"] #hud-top,
+:root[data-theme="wood"] #hud-top .hud-cell{
+  border: 12px solid transparent;
+  border-image-source: url("../../assets/ui/panel.svg");
+  border-image-slice: 12;
+  border-image-width: 12;
+  border-image-repeat: stretch;
+}
+
+/* [3] Utilities */
+.hidden{ display:none !important; }

@@ -1,0 +1,121 @@
+/* ============================================================================
+   Datei   : ui/css/ui-inspector.css
+   Projekt : Neue Siedler – Inspector
+   Version : v25.10.28-g (Global-Themes, Clean)
+   Zweck   : Inspector-spezifische Styles (ohne globale Variablen-Definitionen)
+             – Overlay + Z-Index
+             – Shell-Layout (Header/Tabs/Content)
+             – Tab-Umschaltung (.active/.hidden)
+             – Optionale Holzrahmen im Theme 'wood'
+   Hinweis : Globale Farben/Z-Layer kommen aus ui/css/ui.css (:root[data-theme])
+============================================================================ */
+
+/* [0] Overlay & Z-Index (Inspector liegt immer ganz oben) */
+#inspector{
+  position: fixed;
+  inset: 0;
+  display: none;                             /* Sichtbarkeit via Body-Flag */
+  z-index: var(--z-inspector);
+  background: var(--insp-bg, rgba(18,18,20,.96)); /* Fallback für Altstände */
+}
+body.inspector-open #inspector{ display:block; }
+body.is-inspector #inspector{ display:block; } /* Legacy-Fallback, wird entfernt */
+
+/* Wenn Inspector offen: darunterliegende Ebenen nicht anklickbar */
+body.inspector-open #start,
+body.inspector-open .ui-start,
+body.inspector-open #hud-top,
+body.inspector-open .hud,
+body.inspector-open #build-dock,
+body.inspector-open #game,
+body.inspector-open #game-canvas {
+  pointer-events: none;
+}
+body.inspector-open #inspector{ pointer-events: auto; }
+
+/* [1] Shell/Grundlayout */
+.insp-shell{
+  position: absolute;
+  inset: 24px;
+  display: grid;
+  grid-template-rows: 48px 36px 1fr; /* header / tabs / content */
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  color: var(--ui-text);
+  overflow: hidden;
+}
+.insp-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+/* [2] Tab-Leiste & Tabs */
+.insp-tabs{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 8px;
+  background: var(--ui-surface-2);
+  border-bottom: 1px solid var(--ui-border);
+  position: sticky; top: 0; z-index: 1;
+}
+.insp-tab{
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.insp-tab.active{
+  background: var(--ui-surface);
+  border-color: var(--ui-accent);
+  outline: 2px solid var(--ui-accent);
+}
+
+/* [3] Inhalt / Umschaltung */
+.insp-content{
+  padding: 8px 10px;
+  overflow: auto; /* Inhalt scrollt, Tabs/Header bleiben */
+}
+.insp-content > section{ display: none; }
+.insp-content > section.active{ display: block; }
+.hidden{ display:none !important; } /* Utility */
+
+/* [4] Statusfarben (nutzen globale Variablen) */
+.ok   { color: var(--ui-ok); }
+.warn { color: var(--ui-warn); }
+.error{ color: var(--ui-error); }
+.info { color: var(--ui-info); }
+.muted{ color: var(--ui-text-dim); }
+
+/* [5] Holzrahmen nur im globalen Theme 'wood' */
+:root[data-theme="wood"] #inspector .insp-shell,
+:root[data-theme="wood"] #inspector .insp-header,
+:root[data-theme="wood"] #inspector .insp-tabs,
+:root[data-theme="wood"] #inspector .insp-content,
+:root[data-theme="wood"] #inspector .insp-content > section,
+:root[data-theme="wood"] #inspector .insp-tab{
+  border: 12px solid transparent;
+  border-image-source: url("../../assets/ui/panel.svg");
+  border-image-slice: 12;
+  border-image-width: 12;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+}
+:root[data-theme="wood"] #inspector .insp-tab.active{
+  border-color: transparent;
+  outline: 2px solid var(--ui-accent);
+}
+
+/* [6] Kompatibilität (sanft, wird später entfernt) */
+.insp-tab.is-active{ outline: 2px solid var(--ui-accent); border-color: var(--ui-accent); }
+.insp-content > section.is-active{ display:block; }
+.is-hidden, .hidden-soft{ display:none !important; }
