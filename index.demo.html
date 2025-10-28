@@ -161,6 +161,34 @@
   addEventListener('req:insp:open',      () => setTimeout(mountOnce, 0));
 })();
 </script>
+  <script>
+/* ============================================================================
+ * Datei   : ui/inspector/inspector.autoload.js
+ * Zweck   : Echte Inspector-Tabs nachladen, sobald Host + Core bereit sind
+ * Version : v25.10.31-auto1
+============================================================================ */
+(function(){
+  const ready = () =>
+    document.querySelector('#inspector [data-insp-root]') !== null &&
+    typeof window.InspectorUI === 'object';
+
+  function mountReal(){
+    if(!ready()) return;
+    try{
+      window.InspectorUI.mount?.();
+      console.info('[insp-auto] echte Inspector-UI montiert');
+    }catch(e){
+      console.warn('[insp-auto] UI mount fehlgeschlagen', e);
+    }
+  }
+
+  addEventListener('cb:insp:host-ready', () => setTimeout(mountReal, 50));
+  addEventListener('req:insp:open',      () => setTimeout(mountReal, 50));
+
+  // Falls Core schon fertig ist:
+  setTimeout(mountReal, 200);
+})();
+</script>
 <body>
   <!-- =========================================================
        SPIELSTAGE + UI-ROOTS (unverändert aus deiner Datei)
