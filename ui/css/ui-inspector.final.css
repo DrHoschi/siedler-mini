@@ -1,0 +1,237 @@
+/* ============================================================================
+   Datei : ui/css/ui-inspector.css
+   Projekt: Neue Siedler – Inspector
+   Version: v25.10.28 (Themes + Z-Index-Fix + Vereinheitlichung)
+   Zweck  : Vollständiges Inspector-Stylesheet (kopierfertig)
+            – 3 Themes (dark/light/wood) via :root[data-theme]
+            – Einheitliche Tab-Logik (.active/.hidden)
+            – Overlay immer ganz oben (Z-Index-Fix)
+            – Optionale Holzrahmen via border-image (9-Slice)
+            – Utility-Klassen (ok/warn/error/info/hidden)
+   Hinweise:
+     • Sichtbarkeit: body.inspector-open schaltet den Inspector ein/aus.
+     • Bitte eine Body-Flag verwenden (hier: inspector-open). is-inspector entfällt.
+     • Harte Farben wurden durch var(--insp-*) ersetzt.
+============================================================================ */
+
+/* ============================================================================
+   [0] OVERLAY & Z-INDEX – Inspector immer zuoberst
+============================================================================ */
+#inspector{
+  position: fixed;
+  inset: 0;
+  display: none;                    /* sichtbar via body.inspector-open */
+  z-index: 2147483000;              /* sehr hoch, über allen UI-Schichten */
+  background: var(--insp-bg);
+}
+body.inspector-open #inspector{ display:block; }
+
+/* Wenn der Inspector offen ist: darunterliegende UIs entschärfen */
+body.inspector-open #start,
+body.inspector-open .ui-start,
+body.inspector-open #hud-top,
+body.inspector-open .hud,
+body.inspector-open .woodbar,
+body.inspector-open #build-dock,
+body.inspector-open #game,
+body.inspector-open #game-canvas{
+  z-index: 10 !important;           /* klar unterhalb des Inspectors */
+  pointer-events: none;             /* blockt Interaktion mit dem Spiel */
+}
+body.inspector-open #inspector{
+  pointer-events: auto;
+}
+
+/* ============================================================================
+   [1] THEME BASIS + THEMES (DARK / LIGHT / WOOD)
+   – zentrale Farben, Statusfarben, Holzrahmen-Parameter
+============================================================================ */
+
+/* [1A] BASIS – Default (greift, wenn kein data-theme gesetzt ist) */
+:root{
+  /* Grundfarben */
+  --insp-bg:        rgba(18,18,20,.96); /* Vollbild-Hintergrund des Overlays */
+  --insp-panel:     #131316;            /* Innenflächen (Panels, Content)    */
+  --insp-header:    #1f1f23;            /* Kopfzeile / Tab-Leiste            */
+  --insp-border:    #2a2a2e;            /* Ränder/Linien                     */
+  --insp-tab:       #2b2b30;            /* Inaktive Tab-Buttons              */
+  --insp-text:      #e3e3e8;            /* Standard-Textfarbe                */
+  --insp-dim:       #a9a9b3;            /* Abgedunkelter Text/Hinweise       */
+
+  /* Akzente & Status */
+  --insp-accent:    #5a66ff;            /* Fokus-/Active-Rand (Tabs/Buttons) */
+  --insp-ok:        #4cc38a;            /* OK/Success                        */
+  --insp-warn:      #f5a524;            /* Warnungen                         */
+  --insp-error:     #e5484d;            /* Fehler                            */
+  --insp-info:      #4ea7ff;            /* Info                              */
+
+  /* Holzrahmen (9-Slice) – nur im Theme "wood" aktiv */
+  --insp-frame-src: url("../../assets/ui/panel.svg"); /* 9-slice Rahmen-Grafik */
+  --insp-frame-slice: 12;              /* Pixel-Rand, der nicht skaliert wird */
+  --insp-frame-width: 12;              /* sichtbare Rahmenbreite in px        */
+  --insp-frame-outset: 0;              /* Rahmen nach außen                   */
+  --insp-frame-enable: 0;              /* 0=aus, 1=an (wird vom Theme gesetzt)*/
+}
+
+/* [1B] THEME: DARK – etablierter Standard (dunkel) */
+:root[data-theme="dark"]{
+  --insp-bg:        rgba(18,18,20,.96);
+  --insp-panel:     #131316;
+  --insp-header:    #1f1f23;
+  --insp-border:    #2a2a2e;
+  --insp-tab:       #2b2b30;
+  --insp-text:      #e3e3e8;
+  --insp-dim:       #a9a9b3;
+
+  --insp-accent:    #5a66ff;
+  --insp-ok:        #4cc38a;
+  --insp-warn:      #f5a524;
+  --insp-error:     #e5484d;
+  --insp-info:      #4ea7ff;
+
+  --insp-frame-enable: 0;
+}
+
+/* [1C] THEME: LIGHT – helle/„graue“ Variante */
+:root[data-theme="light"]{
+  --insp-bg:        rgba(245,245,248,.96);
+  --insp-panel:     #f4f5f7;
+  --insp-header:    #e9eaf0;
+  --insp-border:    #cfd3dc;
+  --insp-tab:       #e3e6ed;
+  --insp-text:      #15171a;
+  --insp-dim:       #5a5f6a;
+
+  --insp-accent:    #4b63ff;
+  --insp-ok:        #2ba675;
+  --insp-warn:      #d49000;
+  --insp-error:     #c92a32;
+  --insp-info:      #1f78ff;
+
+  --insp-frame-enable: 0;
+}
+
+/* [1D] THEME: WOOD – Holzrahmen + warme Töne */
+:root[data-theme="wood"]{
+  --insp-bg:        rgba(22,18,14,.95);
+  --insp-panel:     #1c1713;
+  --insp-header:    #281f19;
+  --insp-border:    #3a2b22;
+  --insp-tab:       #2b221c;
+  --insp-text:      #f2eee8;
+  --insp-dim:       #bfb7ad;
+
+  --insp-accent:    #d7a85a;
+  --insp-ok:        #62b585;
+  --insp-warn:      #e2a53a;
+  --insp-error:     #d4655f;
+  --insp-info:      #b0c7ff;
+
+  --insp-frame-enable: 1;
+  --insp-frame-src: url("../../assets/ui/panel.svg"); /* ggf. Pfad anpassen */
+  --insp-frame-slice: 12;
+  --insp-frame-width: 12;
+  --insp-frame-outset: 0;
+}
+
+/* ============================================================================
+   [2] SHELL/GRUNDLAYOUT – Rahmen, Grid, Scroll
+============================================================================ */
+.insp-shell{
+  position: absolute;
+  inset: 24px;
+  display: grid;
+  grid-template-rows: 48px 36px 1fr; /* header / tabs / content */
+  background: var(--insp-panel);
+  border: 1px solid var(--insp-border);
+  border-radius: 8px;
+  color: var(--insp-text);
+  overflow: hidden; /* saubere Kanten */
+}
+.insp-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--insp-header);
+  border-bottom: 1px solid var(--insp-border);
+}
+
+/* ============================================================================
+   [3] TAB-LEISTE & TABS – immer sichtbar, klare Aktiv-Markierung
+============================================================================ */
+.insp-tabs{
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 8px;
+  background: var(--insp-header);
+  border-bottom: 1px solid var(--insp-border);
+  position: sticky; top: 0; z-index: 1; /* beim Scrollen sichtbar bleiben */
+}
+.insp-tab{
+  background: var(--insp-tab);
+  color: var(--insp-text);
+  border: 1px solid var(--insp-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.insp-tab.active{
+  background: var(--insp-panel);
+  border-color: var(--insp-accent);
+  outline: 2px solid var(--insp-accent);
+}
+
+/* ============================================================================
+   [4] INHALT – Umschaltung über .active / .hidden
+============================================================================ */
+.insp-content{
+  padding: 8px 10px;
+  overflow: auto; /* Content scrollt, Tabs/Header bleiben */
+}
+.insp-content > section{ display: none; }
+.insp-content > section.active{ display: block; }
+.hidden{ display:none !important; } /* Utility für hartes Ausblenden */
+
+/* ============================================================================
+   [5] STATUS-UTILITIES – farbliche Hinweise konsistent über Variablen
+============================================================================ */
+.ok   { color: var(--insp-ok); }
+.warn { color: var(--insp-warn); }
+.error{ color: var(--insp-error); }
+.info { color: var(--insp-info); }
+.muted{ color: var(--insp-dim);   }
+
+/* ============================================================================
+   [6] HOLZRAHMEN (Theme wood) – border-image nur, wenn aktiviert
+============================================================================ */
+:root[data-theme="wood"] #inspector,
+:root[data-theme="wood"] #inspector .insp-shell,
+:root[data-theme="wood"] #inspector .insp-header,
+:root[data-theme="wood"] #inspector .insp-tabs,
+:root[data-theme="wood"] #inspector .insp-content,
+:root[data-theme="wood"] #inspector .insp-content > section,
+:root[data-theme="wood"] #inspector .insp-tab{
+  border: var(--insp-frame-width) solid transparent;
+  border-image-source: var(--insp-frame-src);
+  border-image-slice:  var(--insp-frame-slice);
+  border-image-width:  var(--insp-frame-width);
+  border-image-outset: var(--insp-frame-outset);
+  border-image-repeat: stretch; /* bei Bedarf: round/repeat testen */
+}
+:root[data-theme="wood"] #inspector .insp-tab.active{
+  border-color: transparent;             /* border-image bleibt sichtbar */
+  outline: 2px solid var(--insp-accent); /* goldener Fokusrahmen */
+}
+
+/* ============================================================================
+   [7] KOMPATIBILITÄT – alte Aliasse sanft auffangen (optional)
+   Ziel: Projekt nicht sofort brechen – migriere Schritt für Schritt.
+============================================================================ */
+.insp-tab.is-active{ outline: 2px solid var(--insp-accent); border-color: var(--insp-accent); }
+.insp-content > section.is-active{ display:block; }
+.is-hidden, .hidden-soft{ display:none !important; }
+/* body.is-inspector wird nicht mehr genutzt; bitte auf inspector-open umstellen */
