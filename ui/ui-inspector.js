@@ -1,122 +1,172 @@
 /* ============================================================================
  * Datei   : ui/ui-inspector.js
- * Version : v25.10.28-clean
- * Zweck   : Öffentliche API (UIInspector.*), Body-Flags, Tab-Registry, Events
- * Flags   : body.is-inspector (neu) + body.inspector-open (kompatibel)
- * ========================================================================= */
+ * Projekt : Neue Siedler
+ * Version : v18.14.7 (Restore Bridge)
+ * Zweck   : Zentrales Bindeglied für den Inspector (Open/Close/Exports/Bridges)
+ *           - Keine UI, kein DOM-Bau: nutzt nur window.Inspector (Core)
+ *           - Reicht Events weiter und bietet Komfort-API (UIInspector.*)
+ * Events  : cb:insp:open|close|tab:change|export:logs|export:json
+ *           cb:path:overlay:on|off, cb:path:heatmap:on|off
+ * ============================================================================ */
 
-const INSPECTOR_ID   = 'inspector';
-const BODY_FLAG_NEW  = 'is-inspector';
-const BODY_FLAG_OLD  = 'inspector-open';
-const EVT_ALIAS_REQ  = [
-  'req:insp:open','req:insp:close','req:insp:toggle',
-  'req:inspector:open','req:inspector:close','req:inspector:toggle'
-];
-const EVT_CB_OPEN  = ['cb:insp:open','cb:inspector:open'];
-const EVT_CB_CLOSE = ['cb:insp:close','cb:inspector:close'];
+(function(){
+  'use strict';
+  const MOD = '[ui-inspector]';
+  const LOGI = (window.CBLog?.info || console.info).bind(console, MOD);
+  const LOGO = (window.CBLog?.ok   || console.log ).bind(console, MOD);
+  const LOGW = (window.CBLog?.warn || console.warn).bind(console, MOD);
+  const LOGE = (window.CBLog?.error|| console.error).bind(console, MOD);
 
-const $ = (sel, root=document)=> root.querySelector(sel);
-function ensureHost(){
-  let host = $('#'+INSPECTOR_ID);
-  if (!host){
-    host = document.createElement('div');
-    host.id = INSPECTOR_ID; host.hidden = true;
-    document.body.appendChild(host);
+  // --- Guards -----------------------------------------------------------------
+  function hasInspector(){
+    if (!window.Inspector) { LOGW('kein Inspector-Core gefunden'); return false; }
+    return true;
   }
-  if (!host.firstElementChild){
-    host.innerHTML = `
-      <div class="insp-shell" role="dialog" aria-label="Inspector" aria-modal="true">
-        <div class="insp-header">
-          <div class="insp-title">Inspector</div>
-          <button class="insp-close" type="button" data-action="close">Schließen</button>
-        </div>
-        <div class="insp-tabs" role="tablist"></div>
-        <div class="insp-content"></div>
-      </div>`;
-    host.querySelector('.insp-close')?.addEventListener('click', ()=>UIInspector.close());
+  function isOpen(){
+    return document.body.classList.contains('inspector-open')
+        || (document.getElementById('inspector')?.classList.contains('open'));
   }
-  return host;
-}
-function setBodyFlag(on){
-  const b = document.body.classList;
-  if (on){ b.add(BODY_FLAG_NEW); b.add(BODY_FLAG_OLD); }
-  else   { b.remove(BODY_FLAG_NEW); b.remove(BODY_FLAG_OLD); }
-}
-function emit(names){ names.forEach(n=>dispatchEvent(new CustomEvent(n))); }
 
-class TabRegistry{
-  constructor(){ this._tabs = new Map(); this._active = null; }
-  register(name, init){ this._tabs.set(name, {init, panelEl:null, buttonEl:null});
-    if (UIInspector._initialized) UIInspector._mountTab(name);
+  // --- Convenience: Clipboard & Download -------------------------------------
+  async function copyText(txt){
+    try{
+      if (navigator.clipboard && location.protocol === 'https:'){
+        await navigator.clipboard.writeText(txt);
+      }else{
+        const ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position='fixed'; ta.style.top='-2000px';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      return true;
+    }catch(e){ LOGW('Clipboard fehlgeschlagen:', e?.message||e); return false; }
   }
-  names(){ return [...this._tabs.keys()]; }
-}
 
-const UIInspector = {
-  _initialized:false, _tabs:new TabRegistry(), _logs:[],
+  function download(name, blob){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
 
-  registerTab(name, initFn){ this._tabs.register(name, initFn); },
-  log(entry){
-    const time = new Date().toLocaleTimeString();
-    this._logs.push({time, ...entry});
-    const panel = $('#'+INSPECTOR_ID+' .insp-panel-block[data-tab="Logs"]');
-    panel?.dispatchEvent(new CustomEvent('insp:logs:add', {detail: entry}));
-  },
-  _mountTab(name){
-    const host = ensureHost();
-    const tabsEl = host.querySelector('.insp-tabs');
-    const contEl = host.querySelector('.insp-content');
+  // --- Öffnen/Schließen (Wrapper) --------------------------------------------
+  const API = {
+    open(tab){
+      if (!hasInspector()) return;
+      window.Inspector.open?.(tab);
+      window.dispatchEvent(new Event('cb:inspector:open'));
+    },
+    close(){
+      if (!hasInspector()) return;
+      window.Inspector.close?.();
+      window.dispatchEvent(new Event('cb:inspector:close'));
+    },
+    toggle(tab){
+      if (!hasInspector()) return;
+      window.Inspector.toggle?.(tab);
+      window.dispatchEvent(new Event(isOpen() ? 'cb:inspector:open' : 'cb:inspector:close'));
+    },
 
-    const panel = document.createElement('section');
-    panel.className = 'insp-panel-block'; panel.dataset.tab = name;
+    // --- Exporte gemäß Spezifikation -----------------------------------------
+    /** Exportiert sichtbare Logzeilen als reinen Text (Zwischenablage) */
+    async exportLogsToClipboard(){
+      const root = document.querySelector('#inspector [data-slot="logs-view"]');
+      if (!root){ LOGW('Logs-Slot fehlt'); return false; }
+      const lines = Array.from(root.querySelectorAll('.insp-logline'))
+        .filter(el => el.offsetParent !== null) // nur sichtbare (Filter beachten)
+        .map(el => el.innerText.replace(/\s+/g,' ').trim());
+      const ok = await copyText(lines.join('\n'));
+      window.dispatchEvent(new CustomEvent('cb:insp:export:logs', { detail:{ format:'text', count: lines.length }}));
+      if (ok) LOGO(`Logs kopiert (${lines.length})`);
+      return ok;
+    },
 
-    const btn = document.createElement('button');
-    btn.className = 'insp-tab'; btn.setAttribute('role','tab'); btn.textContent = name;
-    btn.addEventListener('click', ()=> this.activate(name));
-
-    const rec = this._tabs._tabs.get(name);
-    rec.panelEl = panel; rec.buttonEl = btn;
-    tabsEl.appendChild(btn); contEl.appendChild(panel);
-
-    try{ rec.init(panel, this); }catch(e){ console.error('[inspector] init tab', name, e); }
-    if (!this._tabs._active) this.activate(name);
-  },
-  _ensureInitialized(){
-    if (this._initialized) return;
-    ensureHost();
-    for (const n of this._tabs.names()) this._mountTab(n);
-    EVT_ALIAS_REQ.forEach(alias=>{
-      addEventListener(alias, ()=>{
-        if (alias.endsWith('open'))   this.open();
-        if (alias.endsWith('close'))  this.close();
-        if (alias.endsWith('toggle')) this.toggle();
+    /** Exportiert Logs als JSON-Datei */
+    exportLogsJSON(){
+      const root = document.querySelector('#inspector [data-slot="logs-view"]');
+      if (!root){ LOGW('Logs-Slot fehlt'); return; }
+      const rows = Array.from(root.querySelectorAll('.insp-logline')).map(el=>{
+        const lvl = ['ok','info','warn','error'].find(c => el.classList.contains(c)) || 'info';
+        const ts  = (el.querySelector('.ts')?.textContent||'').replace(/\[|\]/g,'');
+        const msg = el.querySelector('.txt')?.textContent || el.textContent || '';
+        return { ts, lvl, msg: msg.trim() };
       });
-    });
-    this._initialized = true;
-  },
-  open(){ this._ensureInitialized(); setBodyFlag(true);  emit(EVT_CB_OPEN); },
-  close(){                          setBodyFlag(false); emit(EVT_CB_CLOSE); },
-  toggle(){
-    const isOpen = document.body.classList.contains(BODY_FLAG_NEW) ||
-                   document.body.classList.contains(BODY_FLAG_OLD);
-    isOpen ? this.close() : this.open();
-  },
-  activate(name){
-    const host = ensureHost();
-    host.querySelectorAll('.insp-panel-block').forEach(el=>{
-      el.classList.toggle('active', el.dataset.tab===name);
-    });
-    host.querySelectorAll('.insp-tab').forEach(btn=>{
-      btn.setAttribute('aria-selected', btn.textContent===name ? 'true' : 'false');
-    });
-    this._tabs._active = name;
-  }
-};
+      const blob = new Blob([JSON.stringify({ ts:new Date().toISOString(), count:rows.length, items:rows }, null, 2)], {type:'application/json'});
+      const fname = `logs_${new Date().toISOString().replace(/[:\.]/g,'-')}.json`;
+      download(fname, blob);
+      window.dispatchEvent(new CustomEvent('cb:insp:export:logs', { detail:{ format:'json', count: rows.length }}));
+      LOGO(`Logs exportiert (${rows.length}) → ${fname}`);
+    },
 
-window.UIInspector = UIInspector;
-// Moderner Alias, falls irgendwo erwartet:
-window.Inspector = window.Inspector || {
-  open:  ()=>UIInspector.open(),
-  close: ()=>UIInspector.close(),
-  toggle:()=>UIInspector.toggle()
-};
+    /** Allgemeiner JSON-Export (z. B. Ressourcen-/Pfad-Dumps) */
+    exportJSON(obj, filename='export.json'){
+      const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+      download(filename, blob);
+      window.dispatchEvent(new CustomEvent('cb:insp:export:json', { detail:{ file: filename, bytes: blob.size }}));
+      LOGO(`JSON exportiert → ${filename}`);
+    },
+
+    // --- Bridges: PathOverlay (Inspector steuert Overlay-Module) --------------
+    pathOverlay(on=true){
+      window.dispatchEvent(new CustomEvent(on ? 'cb:path:overlay:on' : 'cb:path:overlay:off'));
+      LOGI(`PathOverlay ${on?'on':'off'}`);
+    },
+    heatmap(on=true){
+      window.dispatchEvent(new CustomEvent(on ? 'cb:path:heatmap:on' : 'cb:path:heatmap:off'));
+      LOGI(`Heatmap ${on?'on':'off'}`);
+    }
+  };
+
+  // global bereitstellen (wie früher dokumentiert)
+  window.UIInspector = API; // Komfort-API (öffentliche Brücke)
+  // optionaler Alias für alte Aufrufe:
+  window.UIInspector?.open && (window.UIInspector.open.defaultTab = 'logs');
+
+  // --- Tab-Change weiterreichen (Spezifikation) -------------------------------
+  window.addEventListener('cb:insp:tab:change', (e)=>{
+    // Hier keine Logik außer Weiterreichen; Module lauschen bereits darauf
+    // (Logs/Tests/Resources/Paths). Event existiert laut Vorgaben.
+    // Referenz: ui/ui-inspector.js Spezifikation (Events). 
+    // (Dokumentiert im Lastenheft & Inspector-Vorlage)
+    // no-op außer Info-Log:
+    LOGI(`Tab gewechselt → ${e.detail?.tab||'unknown'}`);
+  });
+
+  // --- FAB/Hotkey-Bind (ohne Duplikate) --------------------------------------
+  function bindToggles(){
+    const btn = document.getElementById('btn-inspector');
+    if (btn && !btn.__inspBound){
+      btn.__inspBound = true;
+      btn.addEventListener('click', ()=> API.toggle());
+    }
+    // Tastatur: Taste I
+    window.addEventListener('keydown', (ev)=>{
+      if (ev.defaultPrevented) return;
+      if (!ev.ctrlKey && !ev.metaKey && !ev.altKey && String(ev.key||'').toLowerCase()==='i'){
+        API.toggle();
+      }
+    }, { passive:true });
+  }
+
+  // --- Lifecycle-Logs & Ready -------------------------------------------------
+  function readyLog(){
+    LOGO('bereit (Bridge v18.14.7)');
+    window.dispatchEvent(new Event('cb:inspector:ready'));
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>{
+      bindToggles();
+      readyLog();
+    });
+  }else{
+    bindToggles();
+    readyLog();
+  }
+
+  // Beim Spielstart nochmal kurz melden (nur Info)
+  window.addEventListener('cb:game:start', ()=> LOGI('cb:game:start empfangen'));
+
+})();
