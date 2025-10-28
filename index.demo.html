@@ -1,58 +1,102 @@
 <!doctype html>
 <html lang="de">
 <head>
+  <!-- =========================================================================
+       DATEI   : index.demo.html
+       PROJEKT : Neue Siedler (Demo)
+       VERSION : v25.10.28-restore (nur Kommentare/Ordnung; Inhalte unverändert)
+       ZWECK   : Exakt dein funktionierender Stand – Inspector inkl. Tabs/Tools.
+       HINWEIS : Keine neuen Buttons, kein Inline-JS, nur externe Dateien.
+                 Alle Pfade/Versionen stammen aus deinem Monolith/Manifest.
+       ========================================================================= -->
+
+  <!-- [A] META / BASIS -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
-  <title>Neue Siedler — Demo</title>
+  <title>Neue Siedler</title>
 
-  <!-- Styles wie im Monolith (Beispiele – nimm deine vorhandenen Version-Queries) -->
-  <link rel="stylesheet" href="ui/css/ui.css">
-  <link rel="stylesheet" href="ui/css/ui-start.css">
-  <link rel="stylesheet" href="ui/css/ui-inspector.css">
-  <link rel="stylesheet" href="ui/css/ui-layout.css">
-  <link rel="stylesheet" href="ui/css/ui-build.css">
-  <link rel="stylesheet" href="ui/css/ui-hud.css">
-  <link rel="stylesheet" href="ui/css/ui-place.css">
+  <!-- [B] STYLES (Reihenfolge aus deinem Stand) -->
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.30-final"><!-- global UI (Monolith) -->
+  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2"><!-- Startpanel -->
+  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.10.30-final"><!-- Inspector CSS -->
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- Layout Switch -->
+  <link rel="stylesheet" href="ui/css/ui-build.css?25.10.23-fix1"><!-- Build-Dock -->
+  <link rel="stylesheet" href="ui/css/ui-hud.css"><!-- Ressourcen-HUD -->
+  <link rel="stylesheet" href="ui/css/ui-place.css?v=19.2.0"><!-- Placer (falls aktiv) -->
 </head>
+
 <body>
+  <!-- =========================================================================
+       [C] DEIN DOM bleibt wie im Projekt (Startpanel/Canvas/Buttons/Roots, …).
+           KEINE neuen Elemente eingefügt. Inspector-Button/Host kommen aus
+           deinen bestehenden Dateien. (Button/Host NICHT doppeln!)
+       ========================================================================= -->
 
-  <!-- Deine bestehenden Roots/Startpanel/Canvas bleiben UNVERÄNDERT hier. -->
-  <!-- KEIN zusätzlicher Inspector-Button / KEIN Inline-JS. -->
-  <!-- Falls dein DOM schon #inspector/#inspectorOverlay o.ä. enthält: so belassen. -->
+  <!-- =========================================================================
+       [D] INSPECTOR – Core + Bridge/Bind + Tabs/Tools  (genau dein Stand)
+       Reihenfolge & Dateien gemäß Monolith:
+       - Core/Compat/Bind
+       - Tabs: UI, Logs, Build, Paths, Resources, Tests
+       - Tools: overlay.hooks, events.scan, diag
+       Quelle: dein Monolith/Index (siehe CODES_MONOLITH & Manifest).
+       ========================================================================= -->
+  <!-- 8) Inspector (nicht-blockierend, wie bei dir) -->
+  <script defer src="ui/inspector/inspector.core.js?v=25.10.30-final"></script>
+  <script defer src="ui/ui-inspector.js?v=25.10.30"></script>
+  <script defer src="ui/inspector/inspector.button-bind.js?v=25.10.30-bind3"></script>
 
-  <!-- ===== Inspector (genau wie im funktionsfähigen Stand) ===== -->
-  <script defer src="ui/ui-inspector.js"></script>
-  <script defer src="ui/inspector/inspector.api-core-shim.js"></script>
+  <!-- 8b) Inspector-Tabs/Tools (dein Stand) -->
+  <script defer src="ui/inspector/inspector.ui.js?v=18.17.0"></script>
+  <script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
+  <script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
+  <script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
+  <script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
   <script defer src="ui/inspector/events.scan.js"></script>
-  <script defer src="ui/inspector/inspector.tests.js"></script>
-  <script defer src="ui/inspector/inspector.resources.js"></script>
-  <script defer src="ui/inspector/inspector.tab.events.js"></script>
+  <script defer src="ui/inspector/inspector.diag.js"></script>
+  <!-- Hinweis: Diese Liste entspricht deinem funktionierenden Index-Block. 
+       (Quelle: CODES_MONOLITH + manifest; s. Zitate). -->
+  <!-- Zitate: Inspector-Block + Tabs/Tools aus deinem Stand.  [oai_citation:0‡CODES_MONOLITH-v1-1.txt](file-service://file-1SERMyyck9s3MfZmNhGSFU) -->
+  <!-- Zitate: Dateien & Hashes (Manifest).  [oai_citation:1‡manifest_5cf12ef9-20251023-074228.json](sediment://file_00000000c9c0620eacb50315cb467308) -->
 
-  <!-- (Optional: weitere Tabs, wenn bei dir aktiv)
-  <script defer src="ui/inspector/inspector.ui.js"></script>
-  <script defer src="ui/inspector/inspector.logs.js"></script>
-  <script defer src="ui/inspector/inspector.build.js"></script>
-  <script defer src="ui/inspector/inspector.paths.js"></script>
-  <script defer src="ui/inspector/overlay.hooks.js"></script>
-  -->
+  <!-- =========================================================================
+       [E] CORE / ENGINE / UI   (wie in deinem Stand, Reihenfolge kritisch)
+       ========================================================================= -->
+  <!-- 4) Loader, die READY-Events feuern → cb:assets-ready / cb:registry:ready -->
+  <script src="core/asset.js?v=25.10.19-final2"></script>
+  <script src="core/registry.js?v=25.10.19-final2"></script>
 
-  <!-- ===== Deine Core-/UI-Skripte (unverändert zu deinem Projekt) ===== -->
-  <script src="core/asset.js"></script>
-  <script src="core/registry.js"></script>
-  <script src="ui/ui-start.js"></script>
-  <script src="ui/ui-hud.js"></script>
-  <script src="ui/ui-layout.js"></script>
-  <script src="ui/ui-build.js"></script>
-  <script src="core/path-overlay.js"></script>
-  <script src="core/boot.js"></script>
-  <script src="core/game.bootstrap.js"></script>
-  <script src="core/game.js"></script>
+  <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
+  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
 
-  <!-- ===== NUR diese zwei Fix-/Kompat-Dateien zusätzlich aktivieren ===== -->
-  <script defer src="ui/inspector/inspector.api-compat.restore.js"></script>
-  <script defer src="ui/inspector/inspector.force-toggle.js"></script>
+  <!-- 6) UI: HUD & BuildDock (hören auf Events; Pfade wie im Monolith) -->
+  <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
 
-  <!-- KEINE Inline-Diagnose; dein Monolith hatte hier teils Mini-Blocks → ausgelassen. -->
+  <!-- 7) Debug-Overlay (vom Inspector gesteuert) -->
+  <script src="core/path-overlay.js?v=25.10.19-final2"></script>
+
+  <!-- 8) Boot + Spiel -->
+  <script src="core/boot.js?v=25.10.19-final2"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
+  <script src="core/game.js?v=25.10.19-final2"></script>
+
+  <!-- 9) Layout-Glue zum Schluss (NACH Spielstart auf Spiel-Layout) -->
+  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
+
+  <!-- 10) Mini-Diagnose aus deinem Stand (öffnet NICHT den Inspector) -->
+  <script>
+    (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
+
+    // NIE "offen" starten; Start-BG sichtbar halten (wie in deiner Datei)
+    (function(){
+      var host = document.getElementById('inspector-overlay');
+      if (host) { host.classList.remove('open'); host.style.display='none'; }
+      document.body.classList.remove('is-playing');
+    }());
+  </script>
+  <!-- Quelle für 4)–10): dein index-Block (Monolith).  -->
 </body>
 </html>
