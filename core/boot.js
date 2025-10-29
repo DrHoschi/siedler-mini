@@ -177,3 +177,8 @@ addEventListener('cb:game:start', () => {
   document.body.classList.add('is-playing');
   (window.CBLog?.info||console.info)('[layout] failsafe enable (via boot)');
 }, { once:true });
+
+// Beim Spielstart kurz Info an Inspector schicken
+window.dispatchEvent(new CustomEvent("cb:registry:ready"));
+window.dispatchEvent(new CustomEvent("cb:build:ready"));
+window.dispatchEvent(new CustomEvent("cb:res:change", { detail:{ list:{ Holz:0, Stein:0 } } }));
