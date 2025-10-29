@@ -1,0 +1,249 @@
+<!doctype html>
+ <!-- data-theme="dark oder light / wood -->
+<html lang="de" data-theme="wood>
+<head>
+  <!-- =========================================================
+       META / BASIS
+       ========================================================= -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1f1f23">
+  <title>Neue Siedler</title>
+
+  
+  <!-- =========================================================
+       STYLES (Global → Start → Inspector → Layout)
+       - ?v=… als einfaches Cache-Busting: Zahl erhöhen bei Updates
+       - WICHTIG: ui-layout.css greift NUR mit body.is-playing (Start-BG bleibt sichtbar)
+       =========================================================  -->
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
+  <link rel="stylesheet" href="ui/css/ui-inspector.css">
+  <link rel="stylesheet" href="ui/css/ui-build.clean.css">   
+  <link rel="stylesheet" href="ui/css/ui-hud.clean.css">
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- greift erst mit .is-playing -->
+</head>
+
+<body>
+  <!-- =========================================================
+       WICHTIG: Diese Container erwartet dein Code (Lastenheft 3.1 / 4.2–4.3)
+       ========================================================= -->
+  <canvas id="game-canvas" aria-label="Spielfeld"></canvas>
+  <div id="ui-root" aria-live="polite"></div>
+
+  <!-- HUD + BuildDock Platzhalter -->
+<div id="hud-root" aria-live="polite"></div>
+<div id="build-dock" hidden></div>
+<button id="btn-build" aria-label="Bau-Menü" hidden></button>
+
+<!-- Inspector-FAB (Pflicht laut Vorgaben) -->
+<!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)" hidden></button> -->
+<!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)">Inspektor</button> -->
+
+ <!-- ... dein Content ... -->
+
+<!-- <button id="inspector-toggle" type="button" aria-label="Inspector öffnen">
+  🛠️
+  <!-- Optional: <span class="lbl">Inspector</span> 
+</button> -->
+
+ <div id="inspector" aria-hidden="true">
+  <div class="insp-shell">…</div>
+</div>
+
+<button id="btn-inspector" aria-label="Inspector öffnen/schließen">🛠️</button>
+ <!-- =========================================================
+       SCRIPTS – LADEREIHENFOLGE (kritisch!)
+       ========================================================= -->
+
+  <!-- 1) Logging/Polyfills (falls vorhanden) -->
+  <script src="core/cblog.polyfill.js?v=25.10.19-final2"></script>
+
+  <!-- 2) Optionaler Mini-EventBus (falls vorhanden) -->
+  <script src="core/eventbus.js?v=25.10.19-final2"></script>
+
+  <!-- 3) INSPECTOR – sehr früh laden: hookt console/CBLog direkt nach Start
+         Overlay bleibt standardmäßig geschlossen.
+         <!-- Monolith-Inspector: Core + Modules -->
+<!-- Inspector v1-->
+<script defer src="ui/inspector/inspector.core.final.js"></script>
+<script src="inspector/ui-inspector-v1.js"></script>
+<script defer src="inspector/ui-inspector.content-v1.js"></script>
+<script src="ui/ui-inspector.js"></script>
+
+ <script defer src="ui/inspector/inspector.button-bind.js"></script>
+ <!-- Inspector Core -->
+
+<!-- Inspector Content (Inline-Bootstrap, Safari-sicher) -->
+<script>
+(function inspContentBootstrap(){
+  try{
+    var host = document.querySelector('#inspector, #inspector-overlay');
+    if(!host){ console.warn('[insp-content] Kein Host (#inspector/#inspector-overlay) gefunden.'); return; }
+    if(host.querySelector('.insp-shell')){ console.log('[insp-content] Shell existiert bereits.'); return; }
+
+    host.innerHTML =
+      '<div class="insp-shell" role="dialog" aria-label="Inspector">'
+    + '  <div class="insp-header">'
+    + '    <div class="insp-tabs" role="tablist" aria-label="Inspector Tabs">'
+    + '      <button class="insp-tab active" data-insp-tab="logs" role="tab" aria-selected="true">Logs</button>'
+    + '      <button class="insp-tab" data-insp-tab="build" role="tab" aria-selected="false">Build</button>'
+    + '      <button class="insp-tab" data-insp-tab="resources" role="tab" aria-selected="false">Ressourcen</button>'
+    + '      <button class="insp-tab" data-insp-tab="paths" role="tab" aria-selected="false">Pfade</button>'
+    + '      <button class="insp-tab" data-insp-tab="tests" role="tab" aria-selected="false">Tests</button>'
+    + '    </div>'
+    + '  </div>'
+    + '  <div class="insp-content">'
+    + '    <section data-panel="logs">'
+    + '      <div class="toolbar"><strong>Konsole</strong> <button id="insp-clear-log">Leeren</button> <span class="hint muted">console.log/warn/error + cb:*</span></div>'
+    + '      <table class="inspector-table" id="insp-log-table"><thead><tr><th style="width:110px">Zeit</th><th style="width:70px">Typ</th><th>Nachricht</th></tr></thead><tbody></tbody></table>'
+    + '    </section>'
+    + '    <section data-panel="build" hidden><div class="pad muted">Build: wartet auf Events …</div></section>'
+    + '    <section data-panel="resources" hidden><table class="inspector-table" id="insp-res-table"><thead><tr><th>Ressource</th><th>Menge</th></tr></thead><tbody></tbody></table></section>'
+    + '    <section data-panel="paths" hidden><div class="pad muted">Pfade: Platzhalter</div></section>'
+    + '    <section data-panel="tests" hidden>'
+    + '      <div class="toolbar"><strong>Tests</strong> <button id="insp-test-open">Open</button> <button id="insp-test-close">Close</button> <button id="insp-test-toggle">Toggle</button></div>'
+    + '      <div class="pad" id="insp-test-info">Bereit.</div>'
+    + '    </section>'
+    + '  </div>'
+    + '</div>';
+
+    // Tabs & Log-Hooks:
+    var $ = function(s, r){ return (r||document).querySelector(s); };
+    var $$ = function(s, r){ return Array.prototype.slice.call((r||document).querySelectorAll(s)); };
+    var logTBody = $('#insp-log-table tbody', host);
+    function time(){ var d=new Date(),p=n=>(''+n).padStart(2,'0'); return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())+'.'+(''+d.getMilliseconds()).padStart(3,'0'); }
+    function pushLog(type, msg){
+      if(!logTBody) return;
+      var tr=document.createElement('tr');
+      tr.innerHTML = '<td>'+time()+'</td><td class="'+type+'">'+type+'</td><td>'+msg+'</td>';
+      logTBody.appendChild(tr);
+      var sc = logTBody.parentElement && logTBody.parentElement.parentElement;
+      sc && sc.scrollTo && sc.scrollTo(0, sc.scrollHeight);
+    }
+
+    (function hookConsole(){
+      var c=window.console, orig={log:c.log&&c.log.bind(c), warn:c.warn&&c.warn.bind(c), error:c.error&&c.error.bind(c)};
+      c.log=function(){ try{ pushLog('info', Array.prototype.map.call(arguments,String).join(' ')); }catch(e){}; orig.log&&orig.log.apply(c, arguments); };
+      c.warn=function(){ try{ pushLog('warn', Array.prototype.map.call(arguments,String).join(' ')); }catch(e){}; orig.warn&&orig.warn.apply(c, arguments); };
+      c.error=function(){ try{ pushLog('error',Array.prototype.map.call(arguments,String).join(' ')); }catch(e){}; orig.error&&orig.error.apply(c, arguments); };
+    })();
+
+    host.addEventListener('click', function(ev){
+      var btn = ev.target && ev.target.closest && ev.target.closest('.insp-tab'); if(!btn) return;
+      var tab = btn.getAttribute('data-insp-tab');
+      $$('.insp-tab', host).forEach(function(b){
+        var active = (b===btn); b.classList.toggle('active', active); b.setAttribute('aria-selected', active?'true':'false');
+      });
+      $$('.insp-content > section', host).forEach(function(sec){
+        sec.toggleAttribute('hidden', sec.getAttribute('data-panel') !== tab);
+      });
+      window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab: tab }}));
+      pushLog('info', 'Tab → '+tab);
+    }, { passive:true });
+
+    $('#insp-clear-log', host) && $('#insp-clear-log', host).addEventListener('click', function(){ if(logTBody) logTBody.innerHTML=''; });
+    $('#insp-test-open', host)   && $('#insp-test-open', host).addEventListener('click', function(){ window.UIInspector && window.UIInspector.open(); });
+    $('#insp-test-close', host)  && $('#insp-test-close', host).addEventListener('click', function(){ window.UIInspector && window.UIInspector.close(); });
+    $('#insp-test-toggle', host) && $('#insp-test-toggle', host).addEventListener('click', function(){ window.UIInspector && window.UIInspector.toggle(); });
+
+    // Ressourcen-Updates (falls gesendet)
+    window.addEventListener('cb:res:change', function(e){
+      try{
+        var list = (e && e.detail && (e.detail.list||e.detail)) || {};
+        var tb = $('#insp-res-table tbody', host); if(!tb) return;
+        tb.innerHTML = '';
+        Object.keys(list).forEach(function(k){
+          var tr=document.createElement('tr'); tr.innerHTML='<td>'+k+'</td><td>'+list[k]+'</td>'; tb.appendChild(tr);
+        });
+      }catch(_){}
+    });
+
+    console.log('[insp-content] UI injiziert ✔');
+  }catch(err){
+    console.error('[insp-content] Bootstrap-Fehler:', err && err.message || err);
+  }
+})();
+</script>
+  
+<!-- APIs & Kompat -->
+<!--script defer src="ui/inspector/inspector.api-compat.restore.js"></script
+<script defer src="ui/inspector/inspector.api-bridge.js"></script>
+<script defer src="ui/inspector/inspector.api-compat.js"></script>
+
+  <script defer src="ui/inspector/inspector.force-toggle.js"></script>
+<script defer src="ui/inspector/inspector.compat.js"></script> -->
+
+<!-- UI-Bindings -->
+
+
+
+
+<!-- Taps  Feature-Module -->
+<script defer src="ui/inspector/inspector.ui.js?v=18.16.3"></script>
+<script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
+<script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
+<script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
+<script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
+<script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
+
+<!-- Overlay-Bindings (falls genutzt) -->
+<script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
+
+<!-- Tools IM Inspector -->
+<script defer src="ui/inspector/events.scan.js"></script>
+
+<!-- Optional: nur Anzeige, wenn du willst -->
+<!--script defer src="ui/inspector/inspector.tab.events.js"></script-->
+
+  <!-- Fallback: sorgt dafür, dass der Button da ist & funktioniert -->
+  <!--script defer src="ui/inspector/inspector.ensure-button.js"></script>
+  <script defer src="ui/inspector/inspector.ensure-host.js"></script>
+  <script defer src="ui/inspector/inspector.fix-runtime.js"></script-->
+  <!-- script>
+    // Optionales Auto-Open: aus (Start-BG sichtbar halten)
+    // window.InspectorConfig = { autoOpen: true };
+</script -->
+
+  <!-- 4) Loader, die READY-Events feuern (müssen dispatchen):
+         'cb:assets-ready'  (core/asset.js)
+         'cb:registry:ready' (core/registry.js)
+         Siehe Registry-Patch im Lastenheft. -->
+  <script src="core/asset.js?v=25.10.19-final2"></script>
+  <script src="core/registry.js?v=25.10.19-final2"></script>
+
+  <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
+  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
+
+  <!-- 6) UI: HUD & BuildDock (bestehende Module; hören auf Events)
+         - HUD zeigt Ressourcen nach Spielstart (cb:game-start / cb:res:change)
+         - BuildDock nutzt #btn-build & #build-dock -->
+  <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
+  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
+
+  <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) -->
+  <script src="core/path-overlay.js?v=25.10.19-final2"></script>
+
+  <!-- 8) Boot + Spiel -->
+  <script src="core/boot.js?v=25.10.19-final2"></script>
+  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
+  <script src="core/game.js?v=25.10.19-final2"></script>
+
+  <!-- 9) Layout-Glue ganz zum Schluss: schaltet NACH Spielstart auf Spiel-Layout -->
+  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
+
+  <!-- 10) Mini-Diagnose (öffnet NICHT den Inspector) -->
+  <script>
+    (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
+
+    // Harte Absicherung: niemals "offen" starten, selbst wenn eine Altlast die Klasse gesetzt hat.
+    (function(){
+      var host = document.getElementById('inspector-overlay');
+      if (host) { host.classList.remove('open'); host.style.display='none'; }
+      // Layout initial NICHT aktiv → Start-BG sichtbar
+      document.body.classList.remove('is-playing');
+    }());
+  </script>
+ 
+</body>
+</html>
