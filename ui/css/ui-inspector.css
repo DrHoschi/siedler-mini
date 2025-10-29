@@ -189,3 +189,17 @@ body.inspector-open #btn-inspector { /* bleibt sichtbar */ }
 ============================================================================ */
 .inert, [inert] { pointer-events: none !important; }
 #inspector[hidden], #inspector-overlay[hidden] { display:none !important; }
+
+/* Inspector erzwingt seine Sichtbarkeitslogik selbst */
+#inspector .insp-content section,
+#inspector-overlay .insp-content section { display:block; }
+
+#inspector .insp-content section[hidden],
+#inspector-overlay .insp-content section[hidden] { display:none !important; }
+
+/* Safety: Text wirklich sichtbar, Hintergrund nicht transparent */
+#inspector, #inspector-overlay { color:#e6e6e6; }
+#inspector .insp-content, #inspector-overlay .insp-content { background:#131316; }
+
+/* Safety: Overlay-Layout */
+#inspector, #inspector-overlay { position:fixed; inset:0; }
