@@ -1,384 +1,200 @@
 /* ============================================================================
    Datei   : ui/css/ui-inspector.css
    Projekt : Neue Siedler – Inspector
-   Version : v18.15.2 (restore classic look)
-   Zweck   : Vollbild-Overlay + Tabs (Logs/Build/Paths/Resources/Tests)
-   Hinweis : Host kann #inspector ODER #inspector-overlay heißen.
-             Sichtbarkeits-Toggle über .open ODER body.inspector-open.
+   Version : v25.10.30-final
+   Zweck   : Inspector-Overlay (Layout, Tabs, Content, Rahmen)
+              – nutzt globale Variablen aus ui.css (:root[data-theme])
+              – keine :root-Definitionen mehr lokal
+              – Holzrahmen automatisch aktiv im Theme "wood"
 ============================================================================ */
 
-/* ---------- Theme / Vars ---------- */
 /* ============================================================================
-   THEME BASIS + THEMES (DARK / LIGHT / WOOD) – Inspector
-   Datei : ui/css/ui-inspector.css
-   Zweck : Zentrale Farben + optionaler Holzrahmen (9-Slice) via data-theme
-   Nutzung: <html data-theme="dark|light|wood"> oder per JS setAttribute(...)
-   ========================================================================= */
-
-/* ---------------------------------------------------------------------------
-   [A] BASIS – Default-Werte (greifen, falls kein data-theme gesetzt ist)
-   Alle --insp-* Variablen werden vom Inspector verwendet.
-   --------------------------------------------------------------------------- */
-:root{
-  /* ===== Grundfarben =======================================================
-     - --insp-bg:    Vollbild-Hintergrund des Overlays (meist leicht transparent)
-     - --insp-panel: Innenflächen (Panels/Content)
-     - --insp-header:Kopfbereich/Tab-Leiste
-     - --insp-border:Linien/Ränder
-     - --insp-tab:   Inaktive Tabbuttons
-     - --insp-text:  Standard-Textfarbe
-     - --insp-dim:   Gedämpfter/sekundärer Text
-  ========================================================================= */
-  --insp-bg:        rgba(18,18,20,.96);
-  --insp-panel:     #131316;
-  --insp-header:    #1f1f23;
-  --insp-border:    #2a2a2e;
-  --insp-tab:       #2b2b30;
-  --insp-text:      #e3e3e8;
-  --insp-dim:       #a9a9b3;
-
-  /* ===== Akzent- & Statusfarben ========================================== */
-  --insp-accent:    #5a66ff;  /* Fokusrahmen/aktive Tabs */
-  --insp-ok:        #4cc38a;  /* Erfolg/OK */
-  --insp-warn:      #f5a524;  /* Warnung */
-  --insp-error:     #e5484d;  /* Fehler */
-  --insp-info:      #4ea7ff;  /* Info */
-
-  /* ===== Holzrahmen-Parameter (Theme "wood") ==============================
-     9-Slice-Rahmen: Ecken bleiben unverzerrt, Kanten werden gestreckt
-     - --insp-frame-src:  Bildquelle (SVG/PNG) für den Rahmen
-     - --insp-frame-slice:Breite der „unskalierbaren“ Ecken/Kanten (px)
-     - --insp-frame-width:Dicke des sichtbaren Rahmens (px)
-     - --insp-frame-outset:Rahmen nach außen (px)
-     - --insp-frame-enable:0=aus, 1=an (wird vom Theme gesetzt)
-  ========================================================================= */
-  --insp-frame-src: url("../../assets/ui/panel.svg"); /* ← FIX: Anführungszeichen */
-  --insp-frame-slice: 12;
-  --insp-frame-width: 12;
-  --insp-frame-outset: 0;
-  --insp-frame-enable: 0;
-}
-
-/* ---------------------------------------------------------------------------
-   [B] THEME: DARK – dein etablierter Standard (dunkel)
-   --------------------------------------------------------------------------- */
-:root[data-theme="dark"]{
-  --insp-bg:        rgba(18,18,20,.96);
-  --insp-panel:     #131316;
-  --insp-header:    #1f1f23;
-  --insp-border:    #2a2a2e;
-  --insp-tab:       #2b2b30;
-  --insp-text:      #e3e3e8;
-  --insp-dim:       #a9a9b3;
-
-  --insp-accent:    #5a66ff;
-  --insp-ok:        #4cc38a;
-  --insp-warn:      #f5a524;
-  --insp-error:     #e5484d;
-  --insp-info:      #4ea7ff;
-
-  --insp-frame-enable: 0; /* kein Holzrahmen im Dark-Theme */
-}
-
-/* ---------------------------------------------------------------------------
-   [C] THEME: LIGHT – helle/„graue“ Variante mit hoher Lesbarkeit
-   --------------------------------------------------------------------------- */
-:root[data-theme="light"]{
-  --insp-bg:        rgba(245,245,248,.96);
-  --insp-panel:     #f4f5f7;
-  --insp-header:    #e9eaf0;
-  --insp-border:    #cfd3dc;
-  --insp-tab:       #e3e6ed;
-  --insp-text:      #15171a;
-  --insp-dim:       #5a5f6a;
-
-  --insp-accent:    #4b63ff;
-  --insp-ok:        #2ba675;
-  --insp-warn:      #d49000;
-  --insp-error:     #c92a32;
-  --insp-info:      #1f78ff;
-
-  --insp-frame-enable: 0; /* kein Holzrahmen im Light-Theme */
-}
-
-/* ---------------------------------------------------------------------------
-   [D] THEME: WOOD – Holzrahmen + wärmere Töne passend zum Holz
-   --------------------------------------------------------------------------- */
-:root[data-theme="wood"]{
-  --insp-bg:        rgba(22,18,14,.95);
-  --insp-panel:     #1c1713;
-  --insp-header:    #281f19;
-  --insp-border:    #3a2b22;
-  --insp-tab:       #2b221c;
-  --insp-text:      #f2eee8;
-  --insp-dim:       #bfb7ad;
-
-  --insp-accent:    #d7a85a;
-  --insp-ok:        #62b585;
-  --insp-warn:      #e2a53a;
-  --insp-error:     #d4655f;
-  --insp-info:      #b0c7ff;
-
-  --insp-frame-enable: 1;                 /* Holz aktiv */
-  --insp-frame-src: url("../../assets/ui/panel.svg"); /* deine 9-Slice Grafik */
-  --insp-frame-slice: 12;                 /* ggf. 10–16 feinjustieren */
-  --insp-frame-width: 12;
-  --insp-frame-outset: 0;
-}
-
-/* ---------------------------------------------------------------------------
-   [E] HOLZRAHMEN – nur anwenden, wenn Theme „wood“ aktiv ist
-   Ziel: #inspector & zentrale Blöcke mit border-image umrahmen
-   --------------------------------------------------------------------------- */
-:root[data-theme="wood"] #inspector,
-:root[data-theme="wood"] #inspector .insp-shell,
-:root[data-theme="wood"] #inspector .insp-header,
-:root[data-theme="wood"] #inspector .insp-tabs,
-:root[data-theme="wood"] #inspector .insp-content,
-:root[data-theme="wood"] #inspector .insp-content > section,
-:root[data-theme="wood"] #inspector .insp-tab {
-  border: var(--insp-frame-width) solid transparent;
-  border-image-source: var(--insp-frame-src);
-  border-image-slice:  var(--insp-frame-slice);
-  border-image-width:  var(--insp-frame-width);
-  border-image-outset: var(--insp-frame-outset);
-  border-image-repeat: stretch; /* ggf. round|repeat testen */
-  /* outline bewusst aus – Akzent macht die active-Markierung */
-}
-
-/* Aktivierter Tab im Holz-Theme: goldener Fokus-Akzent */
-:root[data-theme="wood"] #inspector .insp-tab.active{
-  border-color: transparent;              /* border-image bleibt sichtbar */
-  outline: 2px solid var(--insp-accent);  /* gut lesbarer Fokus */
-}
-
-/* ---------- FAB (kleines Zahnrad) ---------- */
-#btn-inspector {
-  position: fixed;
-  right: calc(14px + var(--safe-right));
-  bottom: calc(14px + var(--safe-bottom));
-  z-index: var(--z);
-  width: 46px; height: 46px;
-  border: 0; border-radius: 10px;
-  background: #2b2b30; color:#fff;
-  box-shadow: 0 3px 10px rgba(0,0,0,.35);
-  font-weight: 700;
-  cursor: pointer;
-}
-#btn-inspector:active{ transform: scale(.98); }
-.cb-fab[hidden]{ display:none !important; }
-
-/* ---------- Host / Overlay ---------- */
-#inspector-overlay,
-#inspector{
+   [1] HOST & OVERLAY-GRUNDRAHMEN
+   Der Inspector liegt immer über allen anderen Ebenen (oberhalb HUD/Build/Game)
+============================================================================ */
+#inspector {
   position: fixed;
   inset: 0;
   display: none;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  background: var(--insp-bg);
-  color: var(--insp-fg);
-  z-index: var(--z);
+  z-index: var(--z-inspector);
+  background: var(--ui-bg, rgba(18,18,20,.96));
+  color: var(--ui-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-/* sichtbar: entweder .open am Host ODER .inspector-open am <body> */
-#inspector.open,
-#inspector-overlay.open,
-body.inspector-open #inspector,
-body.inspector-open #inspector-overlay{
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-}
+/* Sichtbarkeit über Body-Flag */
+body.inspector-open #inspector { display: block; }
+body.is-inspector #inspector   { display: block; } /* Legacy-Fallback */
 
-/* optionaler Debug-Rand – per JS: el.setAttribute('data-insp-debug','on') */
-#inspector[data-insp-debug="on"],
-#inspector-overlay[data-insp-debug="on"]{ outline: 3px solid #ff0 !important; }
-
-/* ---------- Frame / Layout ---------- */
-.insp-frame{
+/* ============================================================================
+   [2] SHELL / FRAME
+============================================================================ */
+.insp-shell {
   position: absolute;
-  inset: 0;
+  inset: 32px;
   display: grid;
   grid-template-rows: auto 1fr;
-  padding:
-    calc(8px + var(--safe-top))
-    calc(8px + var(--safe-right))
-    calc(8px + var(--safe-bottom))
-    calc(8px + var(--safe-left));
-  box-sizing: border-box;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  overflow: hidden;
 }
 
-/* Header mit Tabs + Close */
-.insp-header{
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  background: var(--insp-header);
-  border: 1px solid var(--insp-border);
-  border-bottom: none;
-  padding: 8px;
-  border-radius: var(--radius) var(--radius) 0 0;
-}
-
-/* Tabs-Leiste */
-.insp-tabs{
+/* ============================================================================
+   [3] HEADER + TABS
+============================================================================ */
+.insp-header {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  padding: 4px;
-}
-.insp-tab{
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: var(--insp-tab);
-  color: var(--insp-muted);
-  border: 1px solid var(--insp-border);
-  cursor: pointer;
-  white-space: nowrap;
-  font-weight: 600;
-  user-select: none;
-}
-.insp-tab.active{
-  background: var(--insp-tab-active);
-  color: #0d0d10;
-}
-
-/* Schließen-X im Header */
-.insp-close{
-  position: sticky;
-  top: calc(0px + var(--safe-top));
-  right: 0;
-  margin-left: 8px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: #3a3a40;
-  color: #fff;
-  border: 1px solid var(--insp-border);
-  cursor: pointer;
-}
-
-/* Content-Pane */
-.insp-content{
-  min-height: 0;
-  overflow: auto;
-  background: var(--insp-panel);
-  border: 1px solid var(--insp-border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
+  align-items: center;
+  justify-content: space-between;
+  background: var(--ui-surface-2);
+  border-bottom: 1px solid var(--ui-border);
   padding: 8px;
 }
 
-/* ---------- Reusable UI-Bausteine ---------- */
-.pad{ padding: 8px 10px; }
-.hint{ opacity: .8; font-size: .9em; }
-.warn{
-  color:#ffb; background:#552;
-  padding:8px; border:1px solid #aa8; border-radius:8px;
-}
-.toolbar{
-  display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;
-}
-.insp-btn{
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--insp-border);
-  background: #2e2e33;
-  color: #eee;
-  cursor: pointer;
-  line-height: 1.2;
-}
-.insp-btn:hover{ background:#34343a; }
-.insp-btn:active{ transform: translateY(1px); }
-.insp-btn[disabled]{ opacity:.55; cursor:not-allowed; }
-
-/* Tabellen (Events/Build/Resources/Paths …) */
-.inspector-table{ border-collapse: collapse; width: 100%; }
-.inspector-table th,
-.inspector-table td{
-  border: 1px solid #555;
-  padding: 6px 8px;
-  vertical-align: top;
-}
-.inspector-table thead th{ background: #2a2a2a; }
-
-/* ---------- LOGS-spezifisch (klassische Optik) ---------- */
-.insp-logs{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-}
-.insp-filters{
-  display:flex; gap:12px; flex-wrap:wrap; align-items:center;
-  color: var(--insp-muted);
-  padding: 4px 0 8px;
-}
-.insp-actions{ display:flex; gap:8px; align-items:center; padding:6px 0 10px; }
-
-#logs-list{ padding-bottom:4px; }
-.insp-logline{
-  display:flex; gap: 8px; align-items: baseline;
-  padding: 4px 2px;
-  border-bottom: 1px dashed var(--insp-border);
-}
-.insp-logline:last-child{ border-bottom: none; }
-.insp-logline .sym{ width:16px; text-align:center; }
-.insp-logline .ts{ color: var(--insp-muted); }
-
-/* Farbsymbole – wie früher */
-.insp-logline.ok    .sym{ color: var(--insp-ok); }
-.insp-logline.info  .sym{ color: var(--insp-info); }
-.insp-logline.warn  .sym{ color: var(--insp-warn); }
-.insp-logline.error .sym{ color: var(--insp-error); }
-
-/* ---------- Mobil/kleinere Screens ---------- */
-@media (max-width: 640px){
-  .insp-tabs{ gap:6px; }
-  .insp-tab{ padding:7px 10px; }
-  .insp-btn{ padding:6px 10px; }
-  .inspector-table th, .inspector-table td{ padding:5px 6px; }
-}
-
-/* === TAB-LEISTE: immer sichtbar, unabhängig vom aktiven Inhalt === */
 .insp-tabs {
   display: flex;
-  gap: 8px;
-  align-items: center;
-  min-height: 36px;
-  padding: 6px 8px;
-  background: var(--insp-header);
-  border-bottom: 1px solid var(--insp-border);
-  position: sticky; top: 0; z-index: 1; /* bleibt sichtbar beim Scrollen */
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-/* === Tab-Buttons === */
 .insp-tab {
-  background: var(--insp-tab);
-  color: var(--insp-text);
-  border: 1px solid var(--insp-border);
+  appearance: none;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 4px 10px;
+  font-size: 13px;
   cursor: pointer;
   user-select: none;
+  transition: all .15s ease;
+}
+.insp-tab:hover {
+  filter: brightness(1.08);
 }
 .insp-tab.active {
-  background: var(--insp-panel);
-  border-color: #5a66ff;
-  outline: 2px solid #5a66ff;
+  border-color: var(--ui-accent);
+  outline: 2px solid var(--ui-accent);
 }
 
-/* === Inhalte: nur .active sichtbar, Rest verborgen === */
-.insp-content > section { display: none; }
-.insp-content > section.active { display: block; }
-
-/* === Fallback-Vereinheitlichung von Aliassen (sanft) === */
-.insp-tab.is-active { /* falls noch vorhanden */
-  outline: 2px solid #5a66ff;
-  border-color: #5a66ff;
+/* Schließen-Button */
+.insp-close {
+  border: none;
+  background: transparent;
+  color: var(--ui-text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 8px;
 }
-.insp-content > section.is-active { display: block; }  /* falls Altbestand */
-.insp-content > section.hidden   { display: none !important; }
+.insp-close:hover { color: var(--ui-accent); }
+
+/* ============================================================================
+   [4] CONTENT-BEREICH + VIEWS
+============================================================================ */
+.insp-content {
+  display: grid;
+  grid-template-rows: 1fr;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  overflow: auto;
+  padding: 8px 10px;
+}
+.insp-content > * {
+  display: block;
+}
+.insp-content > [hidden] {
+  display: none !important;
+}
+
+/* ============================================================================
+   [5] TAB-INHALTE (Grundaufbau)
+============================================================================ */
+.insp-content h3 {
+  font-size: 14px;
+  margin: 8px 0;
+}
+.insp-content p,
+.insp-content small {
+  font-size: 13px;
+  color: var(--ui-text-dim);
+}
+
+/* Tabellen (UI-, Build-, Resource-Tabs etc.) */
+.inspector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.inspector-table th,
+.inspector-table td {
+  border: 1px solid var(--ui-border);
+  padding: 4px 6px;
+  text-align: left;
+}
+.inspector-table thead th {
+  background: var(--ui-surface-2);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* ============================================================================
+   [6] UTILITY-FARBEN + STATES
+============================================================================ */
+.ok    { color: var(--ui-ok); }
+.warn  { color: var(--ui-warn); }
+.error { color: var(--ui-error); }
+.info  { color: var(--ui-info); }
+.muted { color: var(--ui-text-dim); }
+
+.hidden { display: none !important; }
+.pad { padding: 4px 6px; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0 10px; }
+.hint { opacity: .7; font-size: .9em; margin-left: auto; }
+
+/* ============================================================================
+   [7] HOLZRAHMEN – nur im Theme "wood"
+============================================================================ */
+:root[data-theme="wood"] #inspector .insp-shell,
+:root[data-theme="wood"] #inspector .insp-header,
+:root[data-theme="wood"] #inspector .insp-tabs,
+:root[data-theme="wood"] #inspector .insp-content {
+  border: 12px solid transparent;
+  border-image-source: url("../../assets/ui/panel.svg");
+  border-image-slice: 12;
+  border-image-width: 12;
+  border-image-repeat: stretch;
+}
+:root[data-theme="wood"] #inspector .insp-tab.active {
+  border-color: transparent;
+  outline: 2px solid var(--ui-accent);
+}
+
+/* ============================================================================
+   [8] LAYER-REGELN (Inspector bleibt oben)
+============================================================================ */
+#inspector {
+  pointer-events: auto;
+}
+body.inspector-open #hud-top,
+body.inspector-open #build-dock,
+body.inspector-open #game,
+body.inspector-open #game-canvas {
+  pointer-events: none;
+}
+body.inspector-open #inspector,
+body.inspector-open #inspector-toggle {
+  pointer-events: auto;
+}
+
+/* ============================================================================
+   [9] KOMPATIBILITÄT & LEGACY
+============================================================================ */
+.insp-tab.is-active { outline: 2px solid var(--ui-accent); border-color: var(--ui-accent); }
+.is-hidden, .hidden-soft { display:none !important; }
+
+/* Ende der Datei – ui-inspector.css */
