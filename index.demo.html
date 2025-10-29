@@ -150,5 +150,115 @@
       document.body.classList.remove('is-playing');
     }());
   </script>
+ <script>
+(function inspEmergencyBootstrap(){
+  // 1) Host finden
+  const host = document.querySelector('#inspector') || document.querySelector('#inspector-overlay');
+  if(!host){ console.error('[insp-bootstrap] Kein #inspector / #inspector-overlay gefunden.'); return; }
+
+  // 2) Schon Inhalt? Dann nichts tun
+  if(host.querySelector('.insp-shell')){ console.log('[insp-bootstrap] Inspector hat bereits Inhalt.'); return; }
+
+  // 3) Minimal-Markup injizieren (Tabs + Panels)
+  host.innerHTML = `
+    <div class="insp-shell" role="dialog" aria-label="Inspector">
+      <div class="insp-header">
+        <div class="insp-tabs" role="tablist" aria-label="Inspector Tabs">
+          <button class="insp-tab active" data-insp-tab="logs" role="tab" aria-selected="true">Logs</button>
+          <button class="insp-tab" data-insp-tab="build" role="tab" aria-selected="false">Build</button>
+          <button class="insp-tab" data-insp-tab="resources" role="tab" aria-selected="false">Ressourcen</button>
+          <button class="insp-tab" data-insp-tab="paths" role="tab" aria-selected="false">Pfade</button>
+          <button class="insp-tab" data-insp-tab="tests" role="tab" aria-selected="false">Tests</button>
+        </div>
+      </div>
+      <div class="insp-content">
+        <section data-panel="logs">
+          <div class="toolbar">
+            <strong>Konsole</strong>
+            <button type="button" id="insp-clear-log">Leeren</button>
+            <span class="hint muted">Erfasst console.log/warn/error + einige cb:* Events</span>
+          </div>
+          <table class="inspector-table" id="insp-log-table">
+            <thead><tr><th style="width:110px">Zeit</th><th style="width:70px">Typ</th><th>Nachricht</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+        <section data-panel="build" hidden><div class="pad muted">Build-Daten warten auf Events …</div></section>
+        <section data-panel="resources" hidden>
+          <table class="inspector-table" id="insp-res-table">
+            <thead><tr><th>Ressource</th><th>Menge</th></tr></thead><tbody></tbody>
+          </table>
+        </section>
+        <section data-panel="paths" hidden><div class="pad muted">Pfade: Platzhalter</div></section>
+        <section data-panel="tests" hidden>
+          <div class="toolbar">
+            <strong>Tests</strong>
+            <button type="button" id="insp-test-open">Open</button>
+            <button type="button" id="insp-test-close">Close</button>
+            <button type="button" id="insp-test-toggle">Toggle</button>
+            <span class="hint muted">Schnelltest</span>
+          </div>
+          <div class="pad" id="insp-test-info">Bereit.</div>
+        </section>
+      </div>
+    </div>
+  `;
+
+  // 4) Tab-Logik + Konsole-Hook + Mini-Events
+  function $(s, r=document){ return r.querySelector(s); }
+  function $all(s, r=document){ return Array.from(r.querySelectorAll(s)); }
+  function formatTime(d=new Date()){ const p=n=>String(n).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,'0')}`; }
+  const logTBody = $('#insp-log-table tbody', host);
+  function pushLog(type,msg){
+    if(!logTBody) return;
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td>${formatTime()}</td><td class="${type}">${type}</td><td>${msg}</td>`;
+    logTBody.appendChild(tr);
+    logTBody.parentElement?.parentElement?.scrollTo?.(0, logTBody.parentElement.parentElement.scrollHeight);
+  }
+  // Konsole hooken (sanft)
+  (function hookConsole(){
+    const c=window.console, orig={log:c.log?.bind(c), warn:c.warn?.bind(c), error:c.error?.bind(c)};
+    c.log=(...a)=>{ try{pushLog('info',a.map(String).join(' '));}catch{}; orig.log?.(...a); };
+    c.warn=(...a)=>{ try{pushLog('warn',a.map(String).join(' '));}catch{}; orig.warn?.(...a); };
+    c.error=(...a)=>{ try{pushLog('error',a.map(String).join(' '));}catch{}; orig.error?.(...a); };
+  })();
+
+  // Tabs
+  host.addEventListener('click', (ev)=>{
+    const btn=ev.target.closest?.('.insp-tab'); if(!btn) return;
+    const tab=btn.getAttribute('data-insp-tab');
+    $all('.insp-tab', host).forEach(b=>{
+      const active=b===btn; b.classList.toggle('active',active); b.setAttribute('aria-selected', active?'true':'false');
+    });
+    $all('.insp-content > section', host).forEach(sec=>{
+      sec.toggleAttribute('hidden', sec.getAttribute('data-panel')!==tab);
+    });
+    window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab }}));
+    pushLog('info', `Tab → ${tab}`);
+  }, {passive:true});
+
+  // Buttons (Tests / Log leeren)
+  $('#insp-clear-log', host)?.addEventListener('click', ()=>{ if(logTBody) logTBody.innerHTML=''; });
+  $('#insp-test-open', host)?.addEventListener('click', ()=> window.UIInspector?.open());
+  $('#insp-test-close', host)?.addEventListener('click',()=> window.UIInspector?.close());
+  $('#insp-test-toggle',host)?.addEventListener('click',()=> window.UIInspector?.toggle());
+
+  // Ressourcen-Event (falls dein HUD feuert)
+  window.addEventListener('cb:res:change', (e)=>{
+    try{
+      const list = e?.detail?.list || e?.detail || {};
+      const tb = $('#insp-res-table tbody', host);
+      if(!tb) return;
+      tb.innerHTML = '';
+      Object.entries(list).forEach(([k,v])=>{
+        const tr=document.createElement('tr'); tr.innerHTML=`<td>${k}</td><td>${v}</td>`; tb.appendChild(tr);
+      });
+    }catch{}
+  });
+
+  console.log('[insp-bootstrap] Markup injiziert ✔');
+})();
+</script>
 </body>
 </html>
