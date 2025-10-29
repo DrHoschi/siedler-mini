@@ -16,12 +16,12 @@
        - ?v=… als einfaches Cache-Busting: Zahl erhöhen bei Updates
        - WICHTIG: ui-layout.css greift NUR mit body.is-playing (Start-BG bleibt sichtbar)
        =========================================================  -->
-  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
+  <!-- link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2" -->
+  <!-- link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2" -->
   <link rel="stylesheet" href="ui/css/ui-inspector.css">
-  <link rel="stylesheet" href="ui/css/ui-build.clean.css">   
-  <link rel="stylesheet" href="ui/css/ui-hud.clean.css">
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- greift erst mit .is-playing -->
+  <!-- link rel="stylesheet" href="ui/css/ui-build.clean.css" -->   
+  <!-- link rel="stylesheet" href="ui/css/ui-hud.clean.css" -->
+  <!-- link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"--><!-- greift erst mit .is-playing -->
 </head>
 
 <body>
@@ -71,11 +71,13 @@
 <script defer src="inspector/ui-inspector.content-v1.js"></script>
 <script src="ui/ui-inspector.js"></script>
 
+ <!-- Testevents (nur vorübergehend) -->
+<script defer src="tools/test-insp-events.js?v=25.10.31"></script>
  <script defer src="ui/inspector/inspector.button-bind.js"></script>
  <!-- Inspector Core -->
 
 <!-- Inspector Content (Inline-Bootstrap, Safari-sicher) -->
-<script>
+<!-- script>
 (function inspContentBootstrap(){
   try{
     var host = document.querySelector('#inspector, #inspector-overlay');
@@ -164,7 +166,7 @@
     console.error('[insp-content] Bootstrap-Fehler:', err && err.message || err);
   }
 })();
-</script>
+</script -->
   
 <!-- APIs & Kompat -->
 <!--script defer src="ui/inspector/inspector.api-compat.restore.js"></script
