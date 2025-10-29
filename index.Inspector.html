@@ -1,7 +1,7 @@
 <!doctype html>
- <!-- inspektor testseite V1.0.0
+ <!-- inspektor testseite V1.1.1
       data-theme="dark oder light / wood -->
-<html lang="de" data-theme="wood>
+<html lang="de" data-theme="wood">
 <head>
   <!-- =========================================================
        META / BASIS
@@ -9,113 +9,97 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
-  <title>Neue Siedler</title>
+  <title>Neue Siedler – Inspector Test</title>
 
-  
   <!-- =========================================================
-       STYLES (Global → Start → Inspector → Layout)
-       - ?v=… als einfaches Cache-Busting: Zahl erhöhen bei Updates
-       - WICHTIG: ui-layout.css greift NUR mit body.is-playing (Start-BG bleibt sichtbar)
-       =========================================================  -->
-  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
-  <!-- link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2" -->
-  <link rel="stylesheet" href="ui/css/ui-inspector.css">
-  <!-- link rel="stylesheet" href="ui/css/ui-build.clean.css" -->   
-  <!-- link rel="stylesheet" href="ui/css/ui-hud.clean.css" -->
-  <!-- link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"--><!-- greift erst mit .is-playing -->
+       STYLES
+       - ui.css optional (Grundlayout), Inspector-CSS Pflicht
+       ========================================================= -->
+  <link rel="stylesheet" href="ui/css/ui.css?v=25.10.31">
+  <link rel="stylesheet" href="main/inspector/ui-inspector.css?v=25.10.31">
+  <style>
+    /* Testseite: neutraler Hintergrund + Canvas-Größe */
+    html, body { height: 100%; margin: 0; background:#111; color:#eee; }
+    #game-canvas { display:block; margin: 24px auto; background:#181a1d; width: 402px; height: 780px; }
+    #ui-root, #hud-root { position:relative; z-index:10; }
+    /* FAB sichtbar unten rechts (falls CSS fehlt) */
+    #btn-inspector{ position:fixed; right:12px; bottom:12px; z-index:99999; }
+  </style>
 </head>
 
 <body>
   <!-- =========================================================
-       WICHTIG: Diese Container erwartet dein Code (Lastenheft 3.1 / 4.2–4.3)
+       SPIEL-PLATZHALTER (verliert nichts, aber minimal)
        ========================================================= -->
-  <canvas id="game-canvas" aria-label="Spielfeld"></canvas>
-  <div id="ui-root" aria-live="polite"></div>
+  <canvas id="game-canvas" aria-label="Spielfeld" width="402" height="780"></canvas>
+  <div id="ui-root"  aria-live="polite"></div>
+  <div id="hud-root" aria-live="polite"></div>
 
-  <!-- HUD + BuildDock Platzhalter -->
-<div id="hud-root" aria-live="polite"></div>
-<div id="build-dock" hidden></div>
-<button id="btn-build" aria-label="Bau-Menü" hidden></button>
+  <!-- =========================================================
+       INSPECTOR HOST + FAB
+       - Host bleibt initial verborgen (aria-hidden="true")
+       - FAB toggelt den Inspector
+       ========================================================= -->
+  <div id="inspector" aria-hidden="true"></div>
+  <button id="btn-inspector" aria-label="Inspector öffnen/schließen" title="Inspector">🛠️</button>
 
-<!-- Inspector-FAB (Pflicht laut Vorgaben) -->
-<!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)" hidden></button> -->
-<!-- <button id="btn-inspector" aria-label="Inspector" title="Inspector (I)">Inspektor</button> -->
-
- <!-- ... dein Content ... -->
-
-<!-- <button id="inspector-toggle" type="button" aria-label="Inspector öffnen">
-  🛠️
-  <!-- Optional: <span class="lbl">Inspector</span> 
-</button> -->
-
- <div id="inspector" aria-hidden="true">
-  <div class="insp-shell">…</div>
-</div>
-
-<button id="btn-inspector" aria-label="Inspector öffnen/schließen">🛠️</button>
- <!-- =========================================================
-       SCRIPTS – LADEREIHENFOLGE (kritisch!)
+  <!-- =========================================================
+       SCRIPTS – REIHENFOLGE (nur das Nötigste!)
        ========================================================= -->
 
-  <!-- 1) Logging/Polyfills (falls vorhanden) -->
-  <script src="core/cblog.polyfill.js?v=25.10.19-final2"></script>
+  <!-- (1) Optional: leichter Eventbus/Polyfills – falls vorhanden
+       (nicht nötig für den Test; einkommentieren, wenn du willst)
+  <script defer src="core/eventbus.js?v=25.10.31"></script>
+  -->
 
-  <!-- 2) Optionaler Mini-EventBus (falls vorhanden) -->
-  <script src="core/eventbus.js?v=25.10.19-final2"></script>
+  <!-- (2) NEUER INSPECTOR (Core → Content), beides mit defer -->
+  <script defer src="main/inspector/ui-inspector.js?v=25.10.31"></script>
+  <script defer src="main/inspector/ui-inspector.content.js?v=25.10.31"></script>
 
-  <!-- 3) INSPECTOR – sehr früh laden: hookt console/CBLog direkt nach Start
-         Overlay bleibt standardmäßig geschlossen.
-         <!-- Monolith-Inspector: Core + Modules -->
-<!-- Inspector v1-->
-<script src="inspector/ui-inspector-v1.js"></script>
-<script defer src="inspector/ui-inspector.content-v1.js"></script>
+  <!-- (3) TEST-EVENTS: speisen Ressourcen/Build in den Inspector -->
+  <script defer src="tools/test-insp-events.js?v=25.10.31"></script>
 
- <!-- Testevents (nur vorübergehend) -->
-<script defer src="tools/test-insp-events.js?v=25.10.31"></script>
- <script defer src="ui/inspector/inspector.button-bind.js"></script>
+  <!-- (4) iOS/GitHub-Pages „Airbag“ (nur falls Safari externes JS ignoriert):
+       – injiziert Tabs, WENN keine .insp-shell existiert.
+       – kannst du später löschen, wenn alles zuverlässig extern läuft. -->
+  <script>
+  (function inspContentBootstrap(){
+    try{
+      var h = document.querySelector('#inspector,#inspector-overlay');
+      if(!h || h.querySelector('.insp-shell')) return;
+      h.innerHTML =
+        '<div class="insp-shell" role="dialog" aria-label="Inspector">'
+      + '  <div class="insp-header"><div class="insp-tabs" role="tablist">'
+      + '    <button class="insp-tab active" data-insp-tab="logs" role="tab" aria-selected="true">Logs</button>'
+      + '    <button class="insp-tab" data-insp-tab="build" role="tab" aria-selected="false">Build</button>'
+      + '    <button class="insp-tab" data-insp-tab="resources" role="tab" aria-selected="false">Ressourcen</button>'
+      + '    <button class="insp-tab" data-insp-tab="paths" role="tab" aria-selected="false">Pfade</button>'
+      + '    <button class="insp-tab" data-insp-tab="tests" role="tab" aria-selected="false">Tests</button>'
+      + '  </div></div>'
+      + '  <div class="insp-content">'
+      + '    <section data-panel="logs">'
+      + '      <div class="toolbar"><strong>Konsole</strong> <button id="insp-clear-log">Leeren</button></div>'
+      + '      <table class="inspector-table" id="insp-log-table"><thead><tr><th>Zeit</th><th>Typ</th><th>Nachricht</th></tr></thead><tbody></tbody></table>'
+      + '    </section>'
+      + '    <section data-panel="build" hidden><div class="pad muted">Build-Infos</div></section>'
+      + '    <section data-panel="resources" hidden><table class="inspector-table" id="insp-res-table"><thead><tr><th>Ressource</th><th>Menge</th></tr></thead><tbody></tbody></table></section>'
+      + '    <section data-panel="paths" hidden><div class="pad muted">Pfade: Platzhalter</div></section>'
+      + '    <section data-panel="tests" hidden><div class="pad">Tests</div></section>'
+      + '  </div>'
+      + '</div>';
+      console.log('[insp-airbag] UI injiziert (Fallback).');
+    }catch(e){ console.error('[insp-airbag] Fehler:', e); }
+  })();
+  </script>
 
-
-
-<!-- Taps  Feature-Module -->
-<script defer src="ui/inspector/inspector.logs.js?v=18.14.5"></script>
-<script defer src="ui/inspector/inspector.build.js?v=18.15.1"></script>
-<script defer src="ui/inspector/inspector.paths.js?v=18.15.0"></script>
-<script defer src="ui/inspector/inspector.resources.js?v=18.15.1"></script>
-<script defer src="ui/inspector/inspector.tests.js?v=18.15.0"></script>
-
-<!-- Overlay-Bindings (falls genutzt) -->
-<script defer src="ui/inspector/overlay.hooks.js?v=1.4"></script>
-
-<!-- Tools IM Inspector -->
-<script defer src="ui/inspector/events.scan.js"></script>
-
-  <!-- 4) Loader, die READY-Events feuern (müssen dispatchen):
-         'cb:assets-ready'  (core/asset.js)
-         'cb:registry:ready' (core/registry.js)
-         Siehe Registry-Patch im Lastenheft. -->
-  <script src="core/asset.js?v=25.10.19-final2"></script>
-  <script src="core/registry.js?v=25.10.19-final2"></script>
-
-  <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel + BG, emittiert 'cb:ui-ready') -->
-  <script src="ui/ui-start.js?v=25.10.19-final2"></script>
-
-  <!-- 6) UI: HUD & BuildDock (bestehende Module; hören auf Events)
-         - HUD zeigt Ressourcen nach Spielstart (cb:game-start / cb:res:change)
-         - BuildDock nutzt #btn-build & #build-dock -->
-  <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
-  <script src="ui/ui-build.js?v=25.10.19-final2"></script>
-
-  <!-- 7) Debug Overlay für Pfade/Heatmap (vom Inspector gesteuert) -->
-  <script src="core/path-overlay.js?v=25.10.19-final2"></script>
-
-  <!-- 8) Boot + Spiel -->
-  <script src="core/boot.js?v=25.10.19-final2"></script>
-  <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
-  <script src="core/game.js?v=25.10.19-final2"></script>
-
-  
-  <!-- 10) Mini-Diagnose (öffnet NICHT den Inspector) -->
-
- 
+  <!-- =========================================================
+       WICHTIG: KEINE ALTEN INSPECTOR-DATEIEN LADEN!
+       Entfernt aus deiner Vorlage:
+       - ui/inspector/inspector.ui.js (v18.x)
+       - ui/inspector/inspector.core.final.js
+       - ui/inspector/inspector.*.js (logs/build/paths/resources/tests)
+       - overlay.hooks.js, inspector.button-bind.js
+       Diese alten Dateien verursachten deine roten Fehler (const doppelt,
+       container.appendChild auf null). Jetzt raus – sauberer Stand.  -->
 </body>
 </html>
