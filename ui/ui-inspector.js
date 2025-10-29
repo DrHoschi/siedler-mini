@@ -170,3 +170,165 @@
   window.addEventListener('cb:game:start', ()=> LOGI('cb:game:start empfangen'));
 
 })();
+/* ============================================================================
+ * Datei   : ui/ui-inspector.js
+ * Projekt : Neue Siedler
+ * Version : v25.10.29 (stable open/close + flags + aria + debounce)
+ * Zweck   : Vollbild-Inspector sicher öffnen/schließen (Logs/Tests/Ressourcen/Pfade/Editor)
+ * Lauscht : Click auf #btn-inspector, Click auf .insp-close, Escape-Key
+ * Sendet  : cb:insp:open, cb:insp:close, cb:insp:tab:change (bei Bedarf)
+ * Hinweise:
+ *   - Einziger Wahrheitszustand: Body-Flag .is-inspector (legacy .inspector-open wird mitgepflegt)
+ *   - Overlay-Host darf #inspector ODER #inspector-overlay heißen
+ *   - FAB (#btn-inspector) bleibt standardmäßig sichtbar (Z-Index > Overlay)
+ *   - Defensive: entfernt "inert" & aria-hidden korrekt
+ *   - Debounce gegen Doppelklicks
+ * ========================================================================== */
+
+/* ============================= [1] IMPORTS ================================ */
+// (keine externen Importe nötig)
+
+/* ======================= [2] KONSTANTEN & META ============================ */
+const MOD_NAME    = "[inspector]";
+const MOD_VERSION = "v25.10.29";
+const OPEN_FLAG   = "is-inspector";     // neuer Standard
+const LEGACY_FLAG = "inspector-open";   // legacy mitführen
+const EVT_OPEN    = "cb:insp:open";
+const EVT_CLOSE   = "cb:insp:close";
+
+const SELECTORS = {
+  fab:    "#btn-inspector",
+  hostA:  "#inspector",
+  hostB:  "#inspector-overlay",
+  closeX: ".insp-close",
+  tabs:   "[data-insp-tab]"          // optional: Buttons zum Tabwechsel
+};
+
+let _busy = false; // Debounce
+
+/* ======================== [3] HILFSFUNKTIONEN ============================= */
+function logOk(msg){ (window.CBLog?.ok || console.log)(`${MOD_NAME} ${msg}`); }
+function logInfo(msg){ (window.CBLog?.info || console.info)(`${MOD_NAME} ${msg}`); }
+function logWarn(msg){ (window.CBLog?.warn || console.warn)(`${MOD_NAME} ${msg}`); }
+
+function $(sel, root=document){ return root.querySelector(sel); }
+function $all(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
+
+function dispatch(name, detail={}) {
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
+/** Body-Flags konsistent setzen/löschen */
+function setInspectorActive(active){
+  const b = document.body;
+  b.classList.toggle(OPEN_FLAG,  !!active);
+  b.classList.toggle(LEGACY_FLAG,!!active);      // legacy support
+}
+
+/** Overlay-Host finden (#inspector ODER #inspector-overlay) */
+function getHost(){
+  return $(SELECTORS.hostA) || $(SELECTORS.hostB);
+}
+
+/** Aria/Interact-Attribute sauber setzen */
+function setAria(host, visible){
+  if(!host) return;
+  host.setAttribute("aria-hidden", visible ? "false" : "true");
+  host.removeAttribute("inert");
+  host.classList.remove("inert");
+}
+
+/** Harte Rücksetzung – falls mal ein Crash das Flag stehen ließ */
+function hardReset(){
+  setInspectorActive(false);
+  const host = getHost();
+  setAria(host, false);
+}
+
+/* ============================= [4] KLASSE ================================= */
+class UIInspector {
+  static open(tab){
+    if(_busy) return; _busy = true;
+    try{
+      const host = getHost();
+      setInspectorActive(true);
+      setAria(host, true);
+
+      // Optional: Tab setzen
+      if(tab){ dispatch("cb:insp:tab:change", { tab }); }
+
+      dispatch(EVT_OPEN, { tab: tab || "Logs" });
+      logInfo(`geöffnet (${MOD_VERSION})`);
+    } finally {
+      setTimeout(()=>{ _busy = false; }, 120);
+    }
+  }
+
+  static close(){
+    if(_busy) return; _busy = true;
+    try{
+      const host = getHost();
+      setInspectorActive(false);
+      setAria(host, false);
+
+      dispatch(EVT_CLOSE, {});
+      logInfo("geschlossen");
+    } finally {
+      setTimeout(()=>{ _busy = false; }, 120);
+    }
+  }
+
+  static toggle(){
+    const active = document.body.classList.contains(OPEN_FLAG) ||
+                   document.body.classList.contains(LEGACY_FLAG);
+    active ? UIInspector.close() : UIInspector.open();
+  }
+
+  /** Einmalige Initialisierung / Event-Bindings (idempotent) */
+  static init(){
+    logOk(`Modul geladen (${MOD_VERSION})`);
+
+    // 1) FAB toggelt immer (auch wenn Overlay offen bleibt der FAB sichtbar)
+    const fab = $(SELECTORS.fab);
+    if(fab){
+      fab.removeEventListener("click", UIInspector.toggle); // doppelte Bindung vermeiden
+      fab.addEventListener("click", UIInspector.toggle);
+    } else {
+      logWarn("FAB #btn-inspector nicht gefunden – bitte in index.demo.html prüfen.");
+    }
+
+    // 2) Close(X) im Overlay
+    const host = getHost();
+    if(host){
+      host.addEventListener("click", (ev)=>{
+        const t = ev.target;
+        if(t?.closest(SELECTORS.closeX)){
+          UIInspector.close();
+        }
+      }, { passive:true });
+    }
+
+    // 3) Escape schließt
+    window.removeEventListener("keydown", _onKey);
+    window.addEventListener("keydown", _onKey);
+
+    // 4) Bei Start hart resetten (verhindert „Button weg nach erstem Close“)
+    hardReset();
+  }
+}
+
+/* ========================= [5] HAUPTLOGIK (Init) ========================== */
+function _onKey(e){
+  if(e.key === "Escape"){
+    const isOpen = document.body.classList.contains(OPEN_FLAG) ||
+                   document.body.classList.contains(LEGACY_FLAG);
+    if(isOpen) UIInspector.close();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  try { UIInspector.init(); } catch(err){ logWarn(`Init-Fehler: ${err?.message||err}`); }
+});
+
+/* =============================== [6] EXPORTS ============================== */
+window.UIInspector = UIInspector; // Debug/Inspector ist fester Bestandteil (never remove)
