@@ -195,18 +195,6 @@
 <!-- Tools IM Inspector -->
 <script defer src="ui/inspector/events.scan.js"></script>
 
-<!-- Optional: nur Anzeige, wenn du willst -->
-<!--script defer src="ui/inspector/inspector.tab.events.js"></script-->
-
-  <!-- Fallback: sorgt dafür, dass der Button da ist & funktioniert -->
-  <!--script defer src="ui/inspector/inspector.ensure-button.js"></script>
-  <script defer src="ui/inspector/inspector.ensure-host.js"></script>
-  <script defer src="ui/inspector/inspector.fix-runtime.js"></script-->
-  <!-- script>
-    // Optionales Auto-Open: aus (Start-BG sichtbar halten)
-    // window.InspectorConfig = { autoOpen: true };
-</script -->
-
   <!-- 4) Loader, die READY-Events feuern (müssen dispatchen):
          'cb:assets-ready'  (core/asset.js)
          'cb:registry:ready' (core/registry.js)
@@ -231,21 +219,9 @@
   <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
   <script src="core/game.js?v=25.10.19-final2"></script>
 
-  <!-- 9) Layout-Glue ganz zum Schluss: schaltet NACH Spielstart auf Spiel-Layout -->
-  <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
-
+  
   <!-- 10) Mini-Diagnose (öffnet NICHT den Inspector) -->
-  <script>
-    (window.CBLog?.info||console.info)('[index] geladen v25.10.19-final2');
 
-    // Harte Absicherung: niemals "offen" starten, selbst wenn eine Altlast die Klasse gesetzt hat.
-    (function(){
-      var host = document.getElementById('inspector-overlay');
-      if (host) { host.classList.remove('open'); host.style.display='none'; }
-      // Layout initial NICHT aktiv → Start-BG sichtbar
-      document.body.classList.remove('is-playing');
-    }());
-  </script>
  
 </body>
 </html>
