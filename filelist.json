@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-28T19:02:29.805Z",
+  "createdAt": "2025-10-29T10:07:53.408Z",
   "root": ".",
-  "count": 436,
+  "count": 441,
   "entries": [
     {
       "type": "dir",
@@ -1813,6 +1813,11 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-build.clean.css",
+      "size": 2292
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-build.css",
       "size": 3486
     },
@@ -1823,13 +1828,28 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-hud.clean.css",
+      "size": 2257
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-hud.css",
       "size": 3984
     },
     {
       "type": "file",
+      "path": "ui/css/ui-inspector.clean.css",
+      "size": 3928
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 5985
+      "size": 6040
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-inspector.final.css",
+      "size": 9387
     },
     {
       "type": "file",
@@ -1859,7 +1879,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 2079
+      "size": 12099
     },
     {
       "type": "dir",
@@ -1908,12 +1928,17 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.button-bind.js",
-      "size": 793
+      "size": 874
     },
     {
       "type": "file",
       "path": "ui/inspector/inspector.compat.js",
       "size": 754
+    },
+    {
+      "type": "file",
+      "path": "ui/inspector/inspector.core.final.js",
+      "size": 9053
     },
     {
       "type": "file",
@@ -1923,7 +1948,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.diag.js",
-      "size": 12485
+      "size": 12460
     },
     {
       "type": "file",
@@ -1978,7 +2003,7 @@
     {
       "type": "file",
       "path": "ui/inspector/inspector.ui.js",
-      "size": 21573
+      "size": 23113
     },
     {
       "type": "file",
@@ -2093,17 +2118,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 42976
+      "size": 43124
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16477
+      "size": 16513
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 6104
+      "size": 6465
     },
     {
       "type": "file",
