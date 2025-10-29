@@ -197,4 +197,67 @@ body.inspector-open #inspector-toggle {
 .insp-tab.is-active { outline: 2px solid var(--ui-accent); border-color: var(--ui-accent); }
 .is-hidden, .hidden-soft { display:none !important; }
 
+/* ============================================================================
+   Datei   : ui/css/ui-inspector.css
+   Projekt : Neue Siedler – Inspector
+   Version : v25.10.29 (open/close-stability + z-index/FAB)
+   Zweck   : Sichtbarkeit & Interaktion von Inspector-Overlay + FAB
+   Hinweis : Unterstützt beide Body-Flags (neu: .is-inspector, legacy: .inspector-open)
+============================================================================ */
+
+/* --- Overlay-Host (id kann #inspector oder #inspector-overlay sein) --- */
+#inspector, #inspector-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;                 /* per Flag sichtbar */
+  background: var(--insp-bg, rgba(18,18,20,.96));
+  z-index: 99990;                /* unter dem FAB (FAB = 99999) */
+  pointer-events: auto;
+}
+
+/* Sichtbar wenn Flag aktiv */
+body.is-inspector #inspector,
+body.is-inspector #inspector-overlay,
+body.inspector-open #inspector,
+body.inspector-open #inspector-overlay {
+  display: block;
+}
+
+/* Sicherheitsnetz: wenn Overlay unsichtbar, soll es nicht blocken */
+#inspector[aria-hidden="true"],
+#inspector-overlay[aria-hidden="true"] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* --- FAB unten rechts: #btn-inspector (Toggler) ----------------------- */
+#btn-inspector{
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 99999;                 /* über Overlay */
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Variante A (empfohlen): FAB bleibt IMMER sichtbar, dient als Toggle */
+body.is-inspector #btn-inspector,
+body.inspector-open #btn-inspector {
+  /* Sichtbar lassen: Nutzer kann damit auch SCHLIESSEN */
+  /* Wenn du ihn während offen lieber ausblendest: display:none; (Variante B) */
+}
+
+/* Variante B (optional): wenn du lieber ausblendest, nimm diese Zeile statt Variante A: */
+/* body.is-inspector #btn-inspector, body.inspector-open #btn-inspector { display: none; } */
+
+/* --- Header-X Button im Overlay, nur Stil-Stub (dein bestehender Style bleibt) --- */
+.insp-close {
+  cursor: pointer;
+}
+
+/* --- Defensive: kein unsichtbares Fullscreen-Element darf Klicks blocken --- */
+.inert, [inert] {
+  pointer-events: none !important;
+}
+
 /* Ende der Datei – ui-inspector.css */
