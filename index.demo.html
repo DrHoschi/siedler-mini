@@ -17,7 +17,7 @@
   <!-- ===== Styles (Reihenfolge: global → start → inspector → HUD/Build → layout) ===== -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="ui/css/ui-inspector.css?v=1.0.0">      <!-- Neuer Inspector -->
+  <link rel="stylesheet" href="inspector/ui-inspector-v1.css?v=1.0.0">      <!-- Neuer Inspector -->
   <link rel="stylesheet" href="ui/css/ui-hud.clean.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-build.clean.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"> <!-- greift erst mit .is-playing -->
@@ -56,27 +56,39 @@
          - hookt console/CBLog früh
          - bleibt geschlossen, bis per Button geöffnet
          - benutzt body-Klasse: .is-inspector
-  -->
+ 
   <script src="inspector/inspector.core.js?v=1.0.0" defer></script>
   <script src="inspector/inspector.tabs.js?v=1.0.0" defer></script>
+   -->
+  <!-- Neuer Inspector v1 -->
+<script src="inspector/ui-inspector-v1.js?v=1.0.0" defer></script>
+<script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
+
+<!-- Tabs (einzelne Module) -->
+<script src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0" defer></script>
+<script src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0" defer></script>
+<script src="inspector/tabs/inspector.tab.resources-v1.js?v=1.0.0" defer></script>
+<script src="inspector/tabs/inspector.tab.paths-v1.js?v=1.0.0" defer></script>
+<script src="inspector/tabs/inspector.tab.tests-v1.js?v=1.0.0" defer></script>
+<script src="inspector/tabs/inspector.tab.ui-v1.js?v=1.0.0" defer></script>
+  
   <script>
-    // Bootstrap minimal & Safari-sicher (ohne Auto-Open)
-    window.addEventListener('DOMContentLoaded', () => {
-      if (window.Inspector && !window.Inspector.initialized) {
-        window.Inspector.init({
-          mount: document.body,
-          autoOpen: false,
-          useBodyClass: 'is-inspector',
-          selectors: { uiScan: '[data-ui]' } // UI-Tab findet Canvas/HUD/etc.
-        });
-      }
-      // FAB koppeln (bestehende Optik beibehalten)
-      const fab = document.getElementById('inspector-fab');
-      fab?.addEventListener('click', () => window.Inspector?.toggle(true));
-      // Sicherheit: nicht offen starten
-      document.body.classList.remove('is-inspector');
-    });
-  </script>
+  window.addEventListener('DOMContentLoaded', () => {
+    // Neuer Inspector initialisieren (nutzt body.is-inspector)
+    if (window.Inspector && !window.Inspector.initialized) {
+      window.Inspector.init({
+        mount: document.body,
+        autoOpen: false,
+        useBodyClass: 'is-inspector',
+        selectors: { uiScan: '[data-ui]' } // für den UI-Tab
+      });
+    }
+    // Zahnrad koppeln (Button bleibt wie gehabt)
+    const fab = document.getElementById('inspector-fab');
+    fab?.addEventListener('click', () => window.Inspector?.toggle(true));
+    document.body.classList.remove('is-inspector'); // nie offen starten
+  });
+</script>
 
   <!-- 4) Loader, die READY-Events feuern -->
   <script src="core/asset.js?v=25.10.19-final2"></script>    <!-- dispatch: cb:assets-ready -->
