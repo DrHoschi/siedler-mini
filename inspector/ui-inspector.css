@@ -1,27 +1,42 @@
 /* ============================================================================
- * Datei   : inspector/ui-inspector.css
- * Zweck   : Layout & Fixes für Inspector
- * ========================================================================= */
+ * Datei   : inspector/ui-inspector-v1.css
+ * Zweck   : Layout & Fixes für Inspector (Tabs/Panel)
+ * Version : v25.11.01
+ * ========================================================================== */
+
 #inspector {
   position: fixed;
   inset: 0;
   background: rgba(18,18,20,.96);
   color: #eee;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   z-index: 99990;
-  display: none;
+  display: none;                /* wird per body-Flag sichtbar */
 }
-body.is-inspector #inspector { display: block; }
+body.is-inspector #inspector,
+body.inspector-open #inspector { display: block; }
 
-.insp-header { background:#1f1f23; padding:6px; border-bottom:1px solid #333; }
-.insp-tabs { display:flex; gap:6px; }
-.insp-tab { background:#2a2a2e; color:#ccc; border:none; padding:4px 10px; cursor:pointer; }
-.insp-tab.active { background:#555; color:#fff; }
-.insp-content { padding:6px; overflow:auto; height:calc(100% - 40px); }
+.insp-shell  { position: absolute; inset: 4%; display:flex; flex-direction: column; }
+.insp-header { background:#1f1f23; padding:6px; border:1px solid #2b2b30; border-radius:8px 8px 0 0; }
+.insp-tabs   { display:flex; gap:6px; flex-wrap:wrap; }
 
+.insp-tab {
+  background:#2a2a2e; color:#ccc; border:none; padding:4px 10px; cursor:pointer;
+  border-radius:6px; line-height:1.2;
+}
+.insp-tab:focus { outline:2px solid #5a86ff; outline-offset:2px; }
+.insp-tab.active { background:#4a4a50; color:#fff; }
+
+.insp-content {
+  flex:1; overflow:auto; padding:10px; background:#151518;
+  border:1px solid #2b2b30; border-top:none; border-radius:0 0 8px 8px;
+}
+
+/* Tabellen */
 .insp-table { width:100%; border-collapse:collapse; font-size:12px; }
-.insp-table th, .insp-table td { border:1px solid #333; padding:2px 4px; }
+.insp-table th, .insp-table td { border:1px solid #2b2b30; padding:4px 6px; }
+.insp-table thead th { background:#202024; color:#cfd3ff; text-align:left; }
 
-/* Safety Overrides */
+/* Sichtbarkeits-Fix (Safari & globale Styles) */
 #inspector .insp-content > section { display:block; }
 #inspector .insp-content > section[hidden]{ display:none !important; }
