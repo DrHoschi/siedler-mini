@@ -1,85 +1,64 @@
 /* ============================================================================
  * Datei   : inspector/ui-inspector.content-v1.js
- * Zweck   : UI-Aufbau (Tabs/Panels), Konsolen-Hook, Ressourcen-Anzeige
- * ========================================================================= */
+ * Version : v25.11.01
+ * Zweck   : Baut NUR die sichtbare Shell (Tabs + leere Panels).
+ *           → JEDER Tab liefert seine Logik/Controls selbst (eigene Datei).
+ * ========================================================================== */
 (() => {
   const host = () => document.querySelector("#inspector, #inspector-overlay");
-  const now  = () => new Date().toLocaleTimeString();
 
-  /* --- LogSink ------------------------------------------------------------ */
-  const LogSink = {
-    tbody:null,
-    init(){ this.tbody=document.querySelector("#insp-log-body"); this.hook(); },
-    hook(){
-      const c=console, orig={log:c.log.bind(c),warn:c.warn.bind(c),error:c.error.bind(c)};
-      ["log","warn","error"].forEach(k=>{
-        c[k]=(...a)=>{ try{this.push(k,a.join(" "));}catch{}; orig[k](...a); };
-      });
-    },
-    push(type,msg){
-      const tb=this.tbody; if(!tb)return;
-      const tr=document.createElement("tr");
-      tr.innerHTML=`<td>${now()}</td><td>${type}</td><td>${msg}</td>`;
-      tb.appendChild(tr); tb.scrollTop=tb.scrollHeight;
-    }
-  };
-
-  /* --- Shell erzeugen ----------------------------------------------------- */
   function buildShell(){
-    const h=host(); if(!h)return;
-    if(h.querySelector(".insp-shell"))return;
-    h.innerHTML=`
-      <div class="insp-shell">
+    const h=host(); if(!h){ console.warn("[insp.content] Kein Host gefunden"); return; }
+    if(h.querySelector(".insp-shell")) return; // idempotent
+
+    // Tabs definieren (Button-Reihenfolge)
+    const TABS = [
+      {id:"logs",      title:"Logs"},
+      {id:"build",     title:"Build"},
+      {id:"resources", title:"Ressourcen"},
+      {id:"paths",     title:"Pfade"},
+      {id:"tests",     title:"Tests"},
+      {id:"editor",    title:"Editoren"},
+      {id:"ui",        title:"UI"},
+    ];
+
+    const tabsHTML = TABS.map((t,i)=>
+      `<button class="insp-tab ${i===0?"active":""}" data-tab="${t.id}" role="tab" aria-selected="${i===0}">${t.title}</button>`
+    ).join("");
+
+    const sections = TABS.map((t,i)=>
+      `<section data-panel="${t.id}" ${i===0?"":"hidden"}></section>`
+    ).join("");
+
+    h.innerHTML = `
+      <div class="insp-shell" role="dialog" aria-label="Inspector">
         <div class="insp-header">
-          <div class="insp-tabs">
-            <button class="insp-tab active" data-tab="logs">Logs</button>
-            <button class="insp-tab" data-tab="build">Build</button>
-            <button class="insp-tab" data-tab="resources">Ressourcen</button>
-            <button class="insp-tab" data-tab="paths">Pfade</button>
-            <button class="insp-tab" data-tab="tests">Tests</button>
-          </div>
+          <div class="insp-tabs" role="tablist">${tabsHTML}</div>
         </div>
         <div class="insp-content">
-          <section data-panel="logs"><table class="insp-table">
-            <thead><tr><th>Zeit</th><th>Typ</th><th>Nachricht</th></tr></thead>
-            <tbody id="insp-log-body"></tbody></table></section>
-          <section data-panel="build" hidden><div id="insp-build"></div></section>
-          <section data-panel="resources" hidden><table id="insp-res">
-            <thead><tr><th>Ressource</th><th>Menge</th></tr></thead><tbody></tbody></table></section>
-          <section data-panel="paths" hidden><div id="insp-paths">–</div></section>
-          <section data-panel="tests" hidden><div id="insp-tests">–</div></section>
+          ${sections}
         </div>
       </div>`;
-    window.dispatchEvent(new CustomEvent("cb:insp:content:ready"));
-  }
 
-  /* --- Tabs --------------------------------------------------------------- */
-  function bindTabs(){
-    const h=host(); if(!h)return;
-    h.querySelectorAll(".insp-tab").forEach(btn=>{
-      btn.addEventListener("click",()=>{
-        const id=btn.dataset.tab;
-        h.querySelectorAll(".insp-tab").forEach(b=>b.classList.toggle("active",b===btn));
-        h.querySelectorAll("[data-panel]").forEach(p=>p.hidden=p.dataset.panel!==id);
-        window.dispatchEvent(new CustomEvent("cb:insp:tab:change",{detail:{tab:id}}));
+    // Tabs schalten
+    h.querySelector(".insp-tabs")?.addEventListener("click", (ev)=>{
+      const btn = ev.target?.closest?.(".insp-tab"); if(!btn) return;
+      const id = btn.getAttribute("data-tab");
+      h.querySelectorAll(".insp-tab").forEach(b=>{
+        const active = (b===btn);
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-selected", String(active));
       });
+      h.querySelectorAll("[data-panel]").forEach(sec=>{
+        sec.toggleAttribute("hidden", sec.getAttribute("data-panel")!==id);
+      });
+      window.dispatchEvent(new CustomEvent("cb:insp:tab:change",{detail:{tab:id}}));
     });
+
+    // Meldung: Content bereit
+    window.dispatchEvent(new CustomEvent("cb:insp:content:ready"));
+    console.log("[insp] Content bereit (Shell).");
   }
 
-  /* --- Ressourcen-Updater ------------------------------------------------- */
-  window.addEventListener("cb:res:change",(e)=>{
-    const data=e.detail?.list||{}, tb=document.querySelector("#insp-res tbody");
-    if(!tb)return;
-    tb.innerHTML="";
-    Object.entries(data).forEach(([k,v])=>{
-      const tr=document.createElement("tr");
-      tr.innerHTML=`<td>${k}</td><td>${v}</td>`; tb.appendChild(tr);
-    });
-  });
-
-  /* --- Start -------------------------------------------------------------- */
-  document.addEventListener("DOMContentLoaded",()=>{
-    buildShell(); bindTabs(); LogSink.init();
-    console.log("[insp] Content bereit.");
-  });
+  document.addEventListener("DOMContentLoaded", buildShell);
 })();
