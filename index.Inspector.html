@@ -84,36 +84,66 @@
 
   <!-- (4) iOS/GitHub-Pages „Airbag“ (nur falls Safari externes JS ignoriert):
        – injiziert Tabs, WENN keine .insp-shell existiert.
-       – kannst du später löschen, wenn alles zuverlässig extern läuft. -->
-  <script>
-  (function inspContentBootstrap(){
-    try{
-      var h = document.querySelector('#inspector,#inspector-overlay');
-      if(!h || h.querySelector('.insp-shell')) return;
-      h.innerHTML =
-        '<div class="insp-shell" role="dialog" aria-label="Inspector">'
-      + '  <div class="insp-header"><div class="insp-tabs" role="tablist">'
-      + '    <button class="insp-tab active" data-insp-tab="logs" role="tab" aria-selected="true">Logs</button>'
-      + '    <button class="insp-tab" data-insp-tab="build" role="tab" aria-selected="false">Build</button>'
-      + '    <button class="insp-tab" data-insp-tab="resources" role="tab" aria-selected="false">Ressourcen</button>'
-      + '    <button class="insp-tab" data-insp-tab="paths" role="tab" aria-selected="false">Pfade</button>'
-      + '    <button class="insp-tab" data-insp-tab="tests" role="tab" aria-selected="false">Tests</button>'
-      + '  </div></div>'
-      + '  <div class="insp-content">'
-      + '    <section data-panel="logs">'
-      + '      <div class="toolbar"><strong>Konsole</strong> <button id="insp-clear-log">Leeren</button></div>'
-      + '      <table class="inspector-table" id="insp-log-table"><thead><tr><th>Zeit</th><th>Typ</th><th>Nachricht</th></tr></thead><tbody></tbody></table>'
-      + '    </section>'
-      + '    <section data-panel="build" hidden><div class="pad muted">Build-Infos</div></section>'
-      + '    <section data-panel="resources" hidden><table class="inspector-table" id="insp-res-table"><thead><tr><th>Ressource</th><th>Menge</th></tr></thead><tbody></tbody></table></section>'
-      + '    <section data-panel="paths" hidden><div class="pad muted">Pfade: Platzhalter</div></section>'
-      + '    <section data-panel="tests" hidden><div class="pad">Tests</div></section>'
-      + '  </div>'
-      + '</div>';
-      console.log('[insp-airbag] UI injiziert (Fallback).');
-    }catch(e){ console.error('[insp-airbag] Fehler:', e); }
-  })();
-  </script>
+       – kannst du später löschen, wenn alles zuverlässig extern läuft. --><script>
+(function inspContentBootstrap(){
+  try{
+    var h = document.querySelector('#inspector,#inspector-overlay');
+    if(!h || h.querySelector('.insp-shell')) return;
+
+    var tabs = [
+      {id:'logs', title:'Logs'},
+      {id:'build', title:'Build'},
+      {id:'resources', title:'Ressourcen'},
+      {id:'paths', title:'Pfade'},
+      {id:'tests', title:'Tests'},
+      {id:'editor', title:'Editoren'},
+      {id:'ui', title:'UI'}
+    ];
+
+    var tabsHTML = tabs.map(function(t,i){
+      return '<button class="insp-tab '+(i===0?'active':'')+'" data-tab="'+t.id+'" role="tab" aria-selected="'+(i===0)+'">'+t.title+'</button>';
+    }).join('');
+
+    var sectionsHTML = tabs.map(function(t,i){
+      return '<section data-panel="'+t.id+'" '+(i===0?'':'hidden')+'></section>';
+    }).join('');
+
+    h.innerHTML =
+      '<div class="insp-shell" role="dialog" aria-label="Inspector">'
+    + '  <div class="insp-header"><div class="insp-tabs" role="tablist">'
+    +       tabsHTML
+    + '  </div></div>'
+    + '  <div class="insp-content">'
+    +       sectionsHTML
+    + '  </div>'
+    + '</div>';
+
+    // Tab-Schaltung (gleich wie im Content-Skript)
+    var tabbar = h.querySelector('.insp-tabs');
+    tabbar && tabbar.addEventListener('click', function(ev){
+      var btn = ev.target && ev.target.closest('.insp-tab'); if(!btn) return;
+      var id = btn.getAttribute('data-tab');
+      h.querySelectorAll('.insp-tab').forEach(function(b){
+        var on = (b===btn);
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+      });
+      h.querySelectorAll('[data-panel]').forEach(function(sec){
+        sec.toggleAttribute('hidden', sec.getAttribute('data-panel') !== id);
+      });
+      try{ window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail: { tab: id } })); }catch(e){}
+    });
+
+    // „Content bereit“ + initialen Tab triggern (wie im Hauptskript)
+    try{ window.dispatchEvent(new CustomEvent('cb:insp:content:ready')); }catch(e){}
+    var activeBtn = h.querySelector('.insp-tab.active');
+    var activeId  = activeBtn && activeBtn.getAttribute('data-tab') || 'logs';
+    try{ window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail: { tab: activeId } })); }catch(e){}
+
+    console.log('[insp-airbag] UI injiziert (Fallback).');
+  }catch(e){ console.error('[insp-airbag] Fehler:', e); }
+})();
+</script>
 
   <!-- =========================================================
        WICHTIG: KEINE ALTEN INSPECTOR-DATEIEN LADEN!
