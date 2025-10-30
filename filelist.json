@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-30T12:58:49.998Z",
+  "createdAt": "2025-10-30T20:08:32.695Z",
   "root": ".",
-  "count": 447,
+  "count": 456,
   "entries": [
     {
       "type": "dir",
@@ -1439,14 +1439,58 @@
       "path": "inspector/"
     },
     {
+      "type": "dir",
+      "path": "inspector/tabs/"
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.build-v1.js",
+      "size": 1781
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.editor-v1.js",
+      "size": 947
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.logs-v1.js",
+      "size": 5501
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.paths-v1.js",
+      "size": 1858
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.resources-v1.js",
+      "size": 2747
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.tests-v1.js",
+      "size": 2265
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.ui-v1.js",
+      "size": 1505
+    },
+    {
+      "type": "file",
+      "path": "inspector/ui-inspector-v1.css",
+      "size": 2029
+    },
+    {
       "type": "file",
       "path": "inspector/ui-inspector-v1.js",
-      "size": 12675
+      "size": 2426
     },
     {
       "type": "file",
       "path": "inspector/ui-inspector.content-v1.js",
-      "size": 13507
+      "size": 2744
     },
     {
       "type": "dir",
@@ -2137,17 +2181,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1942
+      "size": 1966
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43627
+      "size": 44186
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16706
+      "size": 16905
     },
     {
       "type": "file",
@@ -2162,7 +2206,7 @@
     {
       "type": "file",
       "path": "index.Inspector.html",
-      "size": 6031
+      "size": 7043
     },
     {
       "type": "file",
