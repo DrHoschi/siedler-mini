@@ -2,11 +2,19 @@
 <html lang="de" data-theme="wood">
 <head>
   <!-- =========================================================================
-       PROJEKT: Neue Siedler
-       DATEI  : index.html
-       ZWECK  : Minimaler Live-Test (Spiel sichtbar + neuer Inspector)
-       HINWEIS: Start-BG bleibt sichtbar, bis Spiel auf "is-playing" schaltet.
-       ========================================================================= -->
+   * PROJEKT : Neue Siedler
+   * DATEI   : index.html
+   * VERSION : v25.10.30-inspector-v1
+   * ZWECK   : Minimaler Live-Test – Spiel sichtbar + NEUER Inspector (Tabs)
+   * HINWEISE:
+   *   – Start-BG bleibt sichtbar, bis das Spiel auf body.is-playing schaltet.
+   *   – Der Inspector nutzt body.is-inspector (Overlay ist standardmäßig zu).
+   *   – Debug/Tools bleiben dauerhaft integriert (Projektpräferenz).
+   * STRUKTUR:
+   *   [Styles]   global → start → inspector → hud/build → layout
+   *   [Body]     Canvas/UI/HUD/Build + FAB (Zahnrad)
+   *   [Scripts]  Polyfills → EventBus → Inspector → Loader → UI → Debug → Boot → Layout → Bridges
+   ========================================================================= -->
 
   <!-- ===== Basis-Meta ===== -->
   <meta charset="utf-8">
@@ -14,118 +22,116 @@
   <meta name="theme-color" content="#1f1f23">
   <title>Neue Siedler</title>
 
-  <!-- ===== Styles (Reihenfolge: global → start → inspector → HUD/Build → layout) ===== -->
+  <!-- ===== Styles (Reihenfolge wichtig) ===== -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="inspector/ui-inspector-v1.css?v=1.0.0">      <!-- Neuer Inspector -->
+
+  <!-- Neuer Inspector (ALT: ui/css/ui-inspector.css ENTFERNT) -->
+  <link rel="stylesheet" href="inspector/ui-inspector-v1.css?v=1.0.0">
+
   <link rel="stylesheet" href="ui/css/ui-hud.clean.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-build.clean.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"> <!-- greift erst mit .is-playing -->
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- greift erst mit .is-playing -->
 </head>
 
 <body>
   <!-- =========================================================================
-     WICHTIG: Diese Container erwartet der Code (Lastenheft 3.1 / 4.2–4.3)
-     - data-ui: damit der Inspector-Tab "UI" Elemente findet
-     ========================================================================= -->
+     BENÖTIGTE CONTAINER (Lastenheft 3.1 / 4.2–4.3)
+     → data-ui: wird vom Inspector-Tab „UI“ gescannt
+  ========================================================================= -->
   <canvas id="game-canvas" data-ui="canvas" aria-label="Spielfeld"></canvas>
-  <div id="ui-root"   data-ui="root"   aria-live="polite"></div>
+  <div id="ui-root"    data-ui="root"   aria-live="polite"></div>
 
   <!-- HUD + BuildDock Platzhalter -->
-  <div id="hud-root"  data-ui="hud"    aria-live="polite" hidden></div>
-  <div id="build-dock" data-ui="build" hidden></div>
+  <div id="hud-root"   data-ui="hud"    aria-live="polite" hidden></div>
+  <div id="build-dock" data-ui="build"  hidden></div>
   <button id="btn-build" aria-label="Bau-Menü" hidden></button>
 
-  <!-- Inspector-FAB (Zahnrad) – bleibt unten rechts; Beibehaltung gewünscht -->
-  <button id="inspector-fab" aria-label="Inspector öffnen" title="Inspector">
-    🛠️
-  </button>
-  <!-- Optional: <span class="lbl">Inspector</span> -->
+  <!-- Inspector-FAB (Zahnrad) – bleibt unten rechts; Optik beibehalten -->
+  <button id="inspector-fab" aria-label="Inspector öffnen" title="Inspector">🛠️</button>
 
   <!-- =========================================================================
        SCRIPTS – LADEREIHENFOLGE (kritisch!)
-       ========================================================================= -->
+       Bitte exakt so lassen, damit Ready-Events/Bridges stimmen.
+  ========================================================================= -->
 
-  <!-- 1) Logging/Polyfills (falls vorhanden) -->
+  <!-- [1] Logging/Polyfills (falls vorhanden) -->
   <script src="core/cblog.polyfill.js?v=25.10.19-final2"></script>
 
-  <!-- 2) Optionaler Mini-EventBus (falls vorhanden) -->
+  <!-- [2] Optionaler Mini-EventBus (falls vorhanden) -->
   <script src="core/eventbus.js?v=25.10.19-final2"></script>
 
-  <!-- 3) NEUER INSPECTOR (Core + Tabs; alter Inspector KOMPLETT ENTFERNT)
-         - hookt console/CBLog früh
-         - bleibt geschlossen, bis per Button geöffnet
-         - benutzt body-Klasse: .is-inspector
- 
-  <script src="inspector/inspector.core.js?v=1.0.0" defer></script>
-  <script src="inspector/inspector.tabs.js?v=1.0.0" defer></script>
-   -->
-  <!-- Neuer Inspector v1 -->
-<script src="inspector/ui-inspector-v1.js?v=1.0.0" defer></script>
-<script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
+  <!-- [3] NEUER INSPECTOR v1 (alter Inspector komplett entfernt)
+         – hookt CBLog/console früh
+         – Overlay wird per body.is-inspector gezeigt
+         – Tabs sind modular (logs/build/resources/paths/tests/ui)
+  -->
+  <script src="inspector/ui-inspector-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.resources-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.paths-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.tests-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.ui-v1.js?v=1.0.0" defer></script>
 
-<!-- Tabs (einzelne Module) -->
-<script src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0" defer></script>
-<script src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0" defer></script>
-<script src="inspector/tabs/inspector.tab.resources-v1.js?v=1.0.0" defer></script>
-<script src="inspector/tabs/inspector.tab.paths-v1.js?v=1.0.0" defer></script>
-<script src="inspector/tabs/inspector.tab.tests-v1.js?v=1.0.0" defer></script>
-<script src="inspector/tabs/inspector.tab.ui-v1.js?v=1.0.0" defer></script>
-  
+  <!-- Kleines Bootstrap für den Inspector + Zahnrad-Bindung -->
   <script>
-  window.addEventListener('DOMContentLoaded', () => {
-    // Neuer Inspector initialisieren (nutzt body.is-inspector)
-    if (window.Inspector && !window.Inspector.initialized) {
-      window.Inspector.init({
-        mount: document.body,
-        autoOpen: false,
-        useBodyClass: 'is-inspector',
-        selectors: { uiScan: '[data-ui]' } // für den UI-Tab
-      });
-    }
-    // Zahnrad koppeln (Button bleibt wie gehabt)
-    const fab = document.getElementById('inspector-fab');
-    fab?.addEventListener('click', () => window.Inspector?.toggle(true));
-    document.body.classList.remove('is-inspector'); // nie offen starten
-  });
-</script>
+    window.addEventListener('DOMContentLoaded', () => {
+      // Nie "offen" starten
+      document.body.classList.remove('is-inspector');
 
-  <!-- 4) Loader, die READY-Events feuern -->
+      // Initialisieren (sofort nutzbar, aber geschlossen)
+      if (window.Inspector && !window.Inspector.initialized) {
+        window.Inspector.init({
+          mount: document.body,
+          autoOpen: false,
+          useBodyClass: 'is-inspector',
+          selectors: { uiScan: '[data-ui]' } // UI-Tab findet Canvas/HUD/Build
+        });
+      }
+      // FAB (Zahnrad) koppeln
+      const fab = document.getElementById('inspector-fab');
+      fab?.addEventListener('click', () => window.Inspector?.toggle(true));
+    });
+  </script>
+
+  <!-- [4] Loader, die READY-Events feuern -->
   <script src="core/asset.js?v=25.10.19-final2"></script>    <!-- dispatch: cb:assets-ready -->
   <script src="core/registry.js?v=25.10.19-final2"></script> <!-- dispatch: cb:registry:ready -->
 
-  <!-- 5) UI: Startscreen/Panel (erzeugt Startpanel, emittiert 'cb:ui-ready') -->
+  <!-- [5] UI: Startscreen/Panel (emittiert 'cb:ui-ready') -->
   <script src="ui/ui-start.js?v=25.10.19-final2"></script>
 
-  <!-- 6) UI: HUD & BuildDock -->
+  <!-- [6] UI: HUD & BuildDock -->
   <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
   <script src="ui/ui-build.js?v=25.10.19-final2"></script>
 
-  <!-- 7) Debug-Overlay für Pfade/Heatmap (vom Inspector steuerbar) -->
+  <!-- [7] Debug-Overlay für Pfade/Heatmap (vom Inspector steuerbar) -->
   <script src="core/path-overlay.js?v=25.10.19-final2"></script>
 
-  <!-- 8) Boot + Spiel -->
+  <!-- [8] Boot + Spiel -->
   <script src="core/boot.js?v=25.10.19-final2"></script>
   <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
   <script src="core/game.js?v=25.10.19-final2"></script>
 
-  <!-- 9) Layout-Glue: schaltet NACH Spielstart auf Spiel-Layout -->
+  <!-- [9] Layout-Glue: schaltet NACH Spielstart auf Spiel-Layout -->
   <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
 
-  <!-- 10) Mini-Diagnose + Bridges (öffnet NICHT automatisch) -->
+  <!-- [10] Mini-Diagnose + Bridges (öffnet NICHT automatisch) -->
   <script>
     (window.CBLog?.info || console.info)('[index] geladen v25.10.19-final2');
 
-    // HARTE ABSICHERUNG: Inspector-Host nie "offen" starten
-    document.body.classList.remove('is-inspector');
+    // Layout initial NICHT aktiv → Start-BG bleibt sichtbar
+    document.body.classList.remove('is-playing');
 
-    // === Inspector ↔ PathOverlay Bridge (Buttons "Overlay/Heatmap an/aus") ===
+    // === Inspector ↔ PathOverlay Bridge (Buttons „Overlay/Heatmap an/aus“) ===
     window.addEventListener('cb:path:overlay:on',  () => window.PathOverlay?.toggle(true));
     window.addEventListener('cb:path:overlay:off', () => window.PathOverlay?.toggle(false));
     window.addEventListener('cb:path:heatmap:on',  () => window.PathOverlay?.setHeatmap(true));
     window.addEventListener('cb:path:heatmap:off', () => window.PathOverlay?.setHeatmap(false));
 
-    // Für leeren Teststand: „paths:ready“, damit der Tests-Tab grün meldet
+    // Für den leeren Teststand: „paths:ready“, damit Tests/Pfade bereit anzeigen
     window.dispatchEvent(new CustomEvent('paths:ready'));
   </script>
 </body>
