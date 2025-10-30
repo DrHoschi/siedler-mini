@@ -9,6 +9,10 @@
 
   function buildShell(){
     const h=host(); if(!h){ console.warn("[insp.content] Kein Host gefunden"); return; }
+    // Aktiven Tab ermitteln und einmalig anzeigen (damit Logs direkt mounten)
+const activeBtn = h.querySelector(".insp-tab.active");
+const activeId = activeBtn?.getAttribute("data-tab") || "logs";
+window.dispatchEvent(new CustomEvent("cb:insp:tab:change", { detail: { tab: activeId } }));
     if(h.querySelector(".insp-shell")) return; // idempotent
 
     // Tabs definieren (Button-Reihenfolge)
