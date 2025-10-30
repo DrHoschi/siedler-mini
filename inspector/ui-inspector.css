@@ -1,0 +1,27 @@
+/* ============================================================================
+ * Datei   : inspector/ui-inspector.css
+ * Zweck   : Layout & Fixes für Inspector
+ * ========================================================================= */
+#inspector {
+  position: fixed;
+  inset: 0;
+  background: rgba(18,18,20,.96);
+  color: #eee;
+  font-family: monospace;
+  z-index: 99990;
+  display: none;
+}
+body.is-inspector #inspector { display: block; }
+
+.insp-header { background:#1f1f23; padding:6px; border-bottom:1px solid #333; }
+.insp-tabs { display:flex; gap:6px; }
+.insp-tab { background:#2a2a2e; color:#ccc; border:none; padding:4px 10px; cursor:pointer; }
+.insp-tab.active { background:#555; color:#fff; }
+.insp-content { padding:6px; overflow:auto; height:calc(100% - 40px); }
+
+.insp-table { width:100%; border-collapse:collapse; font-size:12px; }
+.insp-table th, .insp-table td { border:1px solid #333; padding:2px 4px; }
+
+/* Safety Overrides */
+#inspector .insp-content > section { display:block; }
+#inspector .insp-content > section[hidden]{ display:none !important; }
