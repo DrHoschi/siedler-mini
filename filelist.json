@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-29T10:07:53.408Z",
+  "createdAt": "2025-10-30T12:58:49.998Z",
   "root": ".",
-  "count": 441,
+  "count": 447,
   "entries": [
     {
       "type": "dir",
@@ -1101,7 +1101,7 @@
     {
       "type": "file",
       "path": "core/boot.js",
-      "size": 6234
+      "size": 6500
     },
     {
       "type": "file",
@@ -1436,6 +1436,20 @@
     },
     {
       "type": "dir",
+      "path": "inspector/"
+    },
+    {
+      "type": "file",
+      "path": "inspector/ui-inspector-v1.js",
+      "size": 12675
+    },
+    {
+      "type": "file",
+      "path": "inspector/ui-inspector.content-v1.js",
+      "size": 13507
+    },
+    {
+      "type": "dir",
       "path": "qa/"
     },
     {
@@ -1746,6 +1760,11 @@
     },
     {
       "type": "file",
+      "path": "tools/test-insp-events.js",
+      "size": 5451
+    },
+    {
+      "type": "file",
       "path": "tools/texture-checker.html",
       "size": 6940
     },
@@ -1844,7 +1863,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-inspector.css",
-      "size": 6040
+      "size": 7213
     },
     {
       "type": "file",
@@ -2077,8 +2096,13 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-inspector.content.js",
+      "size": 2134
+    },
+    {
+      "type": "file",
       "path": "ui/ui-inspector.js",
-      "size": 7273
+      "size": 5087
     },
     {
       "type": "file",
@@ -2118,22 +2142,27 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 43124
+      "size": 43627
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16513
+      "size": 16706
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 6465
+      "size": 12608
     },
     {
       "type": "file",
       "path": "index.html",
       "size": 5709
+    },
+    {
+      "type": "file",
+      "path": "index.Inspector.html",
+      "size": 6031
     },
     {
       "type": "file",
