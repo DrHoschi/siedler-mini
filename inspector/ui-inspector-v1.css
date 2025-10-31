@@ -82,3 +82,27 @@ body.inspector-open #inspector { display: block; }
     bottom: calc(12px + env(safe-area-inset-bottom));
   }
 }
+
+/* ============================================================================
+   Inspector Host (Overlay)
+   ============================================================================ */
+.inspector-host {
+  position: fixed;
+  inset: 0;                 /* top/right/bottom/left: 0 */
+  display: none;            /* default: aus */
+  z-index: 99998;           /* über HUD/Canvas */
+  pointer-events: auto;
+}
+
+/* Wenn der Body im Inspector-Modus ist → Overlay sichtbar */
+body.is-inspector .inspector-host {
+  display: block;
+}
+
+/* Shell-Grundfläche (falls nicht schon im CSS definiert) */
+.inspector-host .insp-shell {
+  position: absolute;
+  inset: 0;
+  background: rgba(18,18,20,.96); /* dunkler Overlay */
+  overflow: auto;
+}
