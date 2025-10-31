@@ -78,24 +78,28 @@
 
   <!-- Kleines Bootstrap für den Inspector + Zahnrad-Bindung -->
   <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      // Nie "offen" starten
+  window.addEventListener('DOMContentLoaded', () => {
+    try{
       document.body.classList.remove('is-inspector');
-
-      // Initialisieren (sofort nutzbar, aber geschlossen)
       if (window.Inspector && !window.Inspector.initialized) {
         window.Inspector.init({
           mount: document.body,
           autoOpen: false,
           useBodyClass: 'is-inspector',
-          selectors: { uiScan: '[data-ui]' } // UI-Tab findet Canvas/HUD/Build
+          selectors: { uiScan: '[data-ui]' }
         });
       }
-      // FAB (Zahnrad) koppeln
       const fab = document.getElementById('inspector-fab');
       fab?.addEventListener('click', () => window.Inspector?.toggle(true));
-    });
-  </script>
+      window.addEventListener('keydown', (e)=>{
+        if (e.altKey && (e.key === 'i' || e.key === 'I')){
+          e.preventDefault();
+          window.Inspector?.toggle();
+        }
+      });
+    }catch(err){ (window.CBLog?.error||console.error)('[inspector bootstrap]', err); }
+  });
+</script>
 
   <!-- [4] Loader, die READY-Events feuern -->
   <script src="core/asset.js?v=25.10.19-final2"></script>    <!-- dispatch: cb:assets-ready -->
