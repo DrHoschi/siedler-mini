@@ -46,3 +46,39 @@ body.inspector-open #inspector { display: block; }
 .insp-input { background:#0f0f12; border:1px solid #333; color:#eee; padding:4px 6px; border-radius:4px; }
 .insp-btn   { background:#2f2f34; border:1px solid #444; color:#eee; padding:4px 8px; border-radius:4px; cursor:pointer; }
 .insp-btn:hover { background:#3a3a40; }
+
+/* ============================================================================
+   [Inspector FAB-Button] – feste Position unten rechts (Safe-Area-freundlich)
+   ========================================================================= */
+#inspector-fab {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 9999;                /* über HUD und Canvas */
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: var(--insp-header, #2a2a2e);
+  color: #eee;
+  font-size: 22px;
+  line-height: 48px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0,0,0,.35);
+  transition: transform .15s ease, opacity .15s ease;
+}
+
+/* Hover/Active (Desktop-Test) */
+#inspector-fab:hover {
+  transform: scale(1.05);
+  opacity: .9;
+}
+
+/* Auf Mobilgeräten nicht vom HUD verdecken lassen */
+@media (max-width: 900px) {
+  #inspector-fab {
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
