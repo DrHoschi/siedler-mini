@@ -1,161 +1,64 @@
 /* ============================================================================
  * Datei   : inspector/ui-inspector-v1.css
- * Version : v25.11.01
- * Zweck   : Layout & Fixes für Inspector (Tabs, Panels, Tabellen)
+ * Version : v25.11.01-final
+ * Zweck   : Layout für Overlay, Tabs und FAB (Zahnrad)
  * ========================================================================== */
 
-#inspector {
+/* ---- Host/Overlay ------------------------------------------------------- */
+#inspector.inspector-host{
   position: fixed;
   inset: 0;
+  display: none;                         /* sichtbar via Body-Flag */
+  z-index: 99998;                        /* unter FAB */
   background: rgba(18,18,20,.96);
   color: #eee;
+  pointer-events: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  z-index: 99990;
-  display: none; /* sichtbar via Body-Flag */
 }
-body.is-inspector #inspector,
-body.inspector-open #inspector { display: block; }
+body.is-inspector #inspector{ display: block !important; }
+body.inspector-open #inspector{ display: block !important; } /* Legacy */
 
-.insp-shell  { position: absolute; inset: 4%; display:flex; flex-direction: column; }
-.insp-header { background:#1f1f23; padding:8px; border:1px solid #2b2b30; border-radius:8px 8px 0 0; }
-.insp-tabs   { display:flex; gap:6px; flex-wrap:wrap; }
+/* Shell + Grundaufbau */
+#inspector .insp-shell{ position: absolute; inset: 4%; display:flex; flex-direction: column; }
+#inspector .insp-header{ background:#1f1f23; padding:8px; border:1px solid #2b2b30; border-radius:8px 8px 0 0; }
+#inspector .insp-tabs{ display:flex; gap:6px; flex-wrap:wrap; }
+#inspector .insp-content{ flex:1; overflow:auto; padding:10px; background:#151518;
+  border:1px solid #2b2b30; border-top:none; border-radius:0 0 8px 8px; }
 
-.insp-tab {
-  background:#2a2a2e; color:#ccc; border:none; padding:6px 12px; cursor:pointer;
-  border-radius:6px; line-height:1.2;
-}
-.insp-tab.active { background:#4a4a50; color:#fff; }
+/* Tabs/Buttons */
+.insp-tab{ background:#2a2a2e; color:#ccc; border:none; padding:6px 12px; cursor:pointer; border-radius:6px; line-height:1.2; }
+.insp-tab.active{ background:#4a4a50; color:#fff; }
 
-.insp-content {
-  flex:1; overflow:auto; padding:10px; background:#151518;
-  border:1px solid #2b2b30; border-top:none; border-radius:0 0 8px 8px;
-}
+/* Tabellen */
+.insp-table{ width:100%; border-collapse:collapse; font-size:12px; }
+.insp-table th,.insp-table td{ border:1px solid #2b2b30; padding:4px 6px; }
+.insp-table thead th{ background:#202024; color:#cfd3ff; text-align:left; }
 
-/* Tabellen-Stil */
-.insp-table { width:100%; border-collapse:collapse; font-size:12px; }
-.insp-table th, .insp-table td { border:1px solid #2b2b30; padding:4px 6px; }
-.insp-table thead th { background:#202024; color:#cfd3ff; text-align:left; }
-
-/* Sichtbarkeits-Fix gegen globale Styles/Safari */
-#inspector .insp-content > section { display:block; }
+/* Panels sicher sichtbar/unsichtbar schalten */
+#inspector .insp-content > section{ display:block; }
 #inspector .insp-content > section[hidden]{ display:none !important; }
 
-/* Toolbars */
-.insp-toolbar { display:flex; gap:8px; align-items:center; margin:0 0 8px; flex-wrap:wrap; }
-.insp-toolbar .spacer { flex:1; }
-.insp-input { background:#0f0f12; border:1px solid #333; color:#eee; padding:4px 6px; border-radius:4px; }
-.insp-btn   { background:#2f2f34; border:1px solid #444; color:#eee; padding:4px 8px; border-radius:4px; cursor:pointer; }
-.insp-btn:hover { background:#3a3a40; }
-
-/* ============================================================================
-   [Inspector FAB-Button] – feste Position unten rechts (Safe-Area-freundlich)
-   ========================================================================= */
-#inspector-fab {
-  position: fixed;
-  right: calc(16px + env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 9999;                /* über HUD und Canvas */
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: none;
-  background: var(--insp-header, #2a2a2e);
-  color: #eee;
-  font-size: 22px;
-  line-height: 48px;
-  text-align: center;
-  cursor: pointer;
-  box-shadow: 0 4px 8px rgba(0,0,0,.35);
-  transition: transform .15s ease, opacity .15s ease;
-}
-
-/* Hover/Active (Desktop-Test) */
-#inspector-fab:hover {
-  transform: scale(1.05);
-  opacity: .9;
-}
-
-/* Auf Mobilgeräten nicht vom HUD verdecken lassen */
-@media (max-width: 900px) {
-  #inspector-fab {
-    right: calc(12px + env(safe-area-inset-right));
-    bottom: calc(12px + env(safe-area-inset-bottom));
-  }
-}
-
-/* ============================================================================
-   Inspector Host (Overlay)
-   ============================================================================ */
-.inspector-host {
-  position: fixed;
-  inset: 0;                 /* top/right/bottom/left: 0 */
-  display: none;            /* default: aus */
-  z-index: 99998;           /* über HUD/Canvas */
-  pointer-events: auto;
-}
-
-/* Wenn der Body im Inspector-Modus ist → Overlay sichtbar */
-body.is-inspector .inspector-host {
-  display: block;
-}
-
-/* Shell-Grundfläche (falls nicht schon im CSS definiert) */
-.inspector-host .insp-shell {
-  position: absolute;
-  inset: 0;
-  background: rgba(18,18,20,.96); /* dunkler Overlay */
-  overflow: auto;
-}
-
-/* ===== Inspector-Overlay (liegt unter dem FAB) ===== */
-#inspector.inspector-host{
-  position: fixed;
-  inset: 0;
-  display: none;                  /* default: aus */
-  z-index: 99998;                 /* unter FAB */
-  background: rgba(18,18,20,.96);
-  overflow: auto;
-}
-body.is-inspector #inspector{ display:block !important; }
-
-/* ===== FAB unten rechts – bleibt über allem klickbar ===== */
+/* ---- FAB (Zahnrad) ------------------------------------------------------ */
 #inspector-fab{
   position: fixed;
   right: calc(16px + env(safe-area-inset-right));
   bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 100000;                /* ÜBER dem Overlay */
-  width: 48px; height: 48px; border: 0; border-radius: 50%;
+  z-index: 100000;                        /* über Overlay/HUD/Canvas */
+  width: 48px; height: 48px;
+  border: 0; border-radius: 50%;
   background: var(--insp-header,#2a2a2e); color: #eee;
   font-size: 22px; line-height: 48px; text-align: center;
   box-shadow: 0 4px 8px rgba(0,0,0,.35);
-  cursor: pointer;
+  cursor: pointer; transition: transform .15s ease, opacity .15s ease;
 }
-/* WICHTIG: NIE automatisch verstecken, auch wenn Inspector offen ist */
+#inspector-fab:hover{ transform: scale(1.05); opacity:.9; }
+
+/* FAB bleibt auch geöffnet klickbar (wenn du ausblenden willst, hier auf display:none ändern) */
 body.is-inspector #inspector-fab{
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  display: block !important;
+  opacity: 1 !important; pointer-events: auto !important; display: block !important;
 }
-/* ===== Inspector-Host (unter FAB, volle Fläche) ===== */
-#inspector.inspector-host{
-  position: fixed;
-  inset: 0;
-  display: none;
-  z-index: 99998;                 /* unter FAB */
-  background: rgba(18,18,20,.96);
-  overflow: auto;
-}
-body.is-inspector #inspector{ display:block !important; }
 
-/* ===== FAB unten rechts – bleibt über allem klickbar ===== */
-#inspector-fab{
-  position: fixed;
-  right: calc(16px + env(safe-area-inset-right));
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 100000;                /* über Overlay/HUD */
-  width: 48px; height: 48px; border: 0; border-radius: 50%;
-  background: var(--insp-header,#2a2a2e); color: #eee;
-  font-size: 22px; line-height: 48px; text-align: center;
-  box-shadow: 0 4px 8px rgba(0,0,0,.35);
-  cursor: pointer;
+/* Mobile-Feintuning */
+@media (max-width:900px){
+  #inspector-fab{ right: calc(12px + env(safe-area-inset-right)); bottom: calc(12px + env(safe-area-inset-bottom)); }
 }
