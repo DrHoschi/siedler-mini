@@ -1,71 +1,111 @@
 /* ============================================================================
  * Datei   : inspector/ui-inspector-v1.js
- * Version : v25.11.01
- * Zweck   : Inspector-CORE – öffnet/schließt Overlay, verwaltet Flags & Events
- * Struktur: KONSTANTEN → HILFSFUNKTIONEN → KLASSE → INIT/EXPORT
+ * Version : v25.11.01-final
+ * Zweck   : Inspector-CORE – Overlay öffnen/schließen + Grundgerüst aufbauen
+ * Stil    : KONSTANTEN → HILFSFUNKTIONEN → KLASSE → INIT/EXPORT
+ * Hinweis : Exportiert window.Inspector mit API: init/open/close/toggle/isOpen
  * ========================================================================== */
 (() => {
-  /* --- Konstanten --------------------------------------------------------- */
-  const INSP = {
-    CLASS_ACTIVE : "is-inspector",   // neuer Standard
-    CLASS_LEGACY : "inspector-open", // Legacy-Komp.
+  /* ---------------------------------- KONSTANTEN -------------------------- */
+  const CFG = {
+    HOST_SEL     : "#inspector",                 // fester Host (DIV im DOM)
+    BODY_FLAG    : "is-inspector",               // Sichtbarkeits-Flag am <body>
+    BODY_FLAG_LE : "inspector-open",             // Legacy-Kompatibilität
     EVT_OPEN     : "cb:insp:open",
-    EVT_CLOSE    : "cb:insp:close"
+    EVT_CLOSE    : "cb:insp:close",
+    VERSION      : "v25.11.01-final"
   };
 
-  /* --- Hilfsfunktionen ---------------------------------------------------- */
-  const host = () => document.querySelector("#inspector, #inspector-overlay");
-  const setActive = (on) => {
-    document.body.classList.toggle(INSP.CLASS_ACTIVE, on);
-    document.body.classList.toggle(INSP.CLASS_LEGACY, on);
-    const h = host(); if (h) h.setAttribute("aria-hidden", on ? "false" : "true");
-  };
+  /* -------------------------------- HILFSFUNKTIONEN ----------------------- */
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, cls) => Object.assign(document.createElement(tag), { className: cls || "" });
 
-  /* --- Öffentliche API ---------------------------------------------------- */
-  class UIInspector {
-    static open()  { setActive(true);  window.dispatchEvent(new CustomEvent(INSP.EVT_OPEN));  }
-    static close() { setActive(false); window.dispatchEvent(new CustomEvent(INSP.EVT_CLOSE)); }
-    static toggle(){ UIInspector.isOpen() ? UIInspector.close() : UIInspector.open(); }
-    static isOpen(){ return document.body.classList.contains(INSP.CLASS_ACTIVE); }
-
-    // Komfort: PathOverlay/Heatmap-Events
-    static pathOverlay(on=true){ window.dispatchEvent(new CustomEvent(on?'cb:path:overlay:on':'cb:path:overlay:off')); }
-    static heatmap(on=true){ window.dispatchEvent(new CustomEvent(on?'cb:path:heatmap:on':'cb:path:heatmap:off')); }
+  /** Host ermitteln/erzeugen */
+  function getHost() {
+    let h = $(CFG.HOST_SEL);
+    if (!h) {
+      h = el("div", "inspector-host");
+      h.id = "inspector";
+      document.body.appendChild(h);
+    }
+    return h;
   }
 
-  /* --- Init --------------------------------------------------------------- */
-  document.addEventListener("DOMContentLoaded", () => {
-    setActive(false);
-    // FAB
-    document.getElementById("btn-inspector")?.addEventListener("click", () => UIInspector.toggle());
-    // ESC schließt
-    window.addEventListener("keydown", (e)=> e.key==="Escape" && UIInspector.isOpen() && UIInspector.close());
-    // Export
-    window.UIInspector = UIInspector;
-    window.dispatchEvent(new CustomEvent("cb:insp:core:ready",{detail:{version:"v25.11.01"}}));
-    console.log("[insp] Core bereit.");
-  });
-})();
+  /** Grundgerüst (Header/Tabs/Content) aufbauen, falls noch leer */
+  function ensureShell(host) {
+    if (host.dataset.shellReady) return host;
+    host.innerHTML = ""; // leer
+    const shell   = el("div", "insp-shell");
+    const header  = el("div", "insp-header");
+    const tabs    = el("div", "insp-tabs");     tabs.setAttribute("role","tablist");
+    const content = el("div", "insp-content");  content.setAttribute("role","region");
 
-/* ===== Inspector v1 – Public API Export (einheitlich) ===== */
-(function(){
-  // Diese Variablen existieren in deiner Datei bereits – hier nur skizziert:
-  // const state = { open:false, ... };
-  // function init(opts){ ... } 
-  // function open(){ document.body.classList.add('is-inspector'); }
-  // function close(){ document.body.classList.remove('is-inspector'); }
-  // function toggle(force){ (force??=!state.open) ? open() : close(); }
+    header.appendChild(tabs);
+    shell.appendChild(header);
+    shell.appendChild(content);
+    host.appendChild(shell);
+    host.dataset.shellReady = "1";
 
-  // >> BITTE diese Namen mit deinen internen Funktionen verdrahten:
-  const api = {
-    initialized: false,
-    init,
-    open,
-    close,
-    toggle
+    // Close-Button rechts oben
+    const btnX = el("button"); btnX.type = "button"; btnX.textContent = "×";
+    btnX.setAttribute("aria-label","Inspector schließen");
+    btnX.style.cssText = "position:absolute;right:12px;top:10px;font-size:24px;background:none;border:0;color:#ddd;cursor:pointer;";
+    btnX.addEventListener("click", () => Inspector.close());
+    header.style.position = "relative";
+    header.appendChild(btnX);
+
+    return host;
+  }
+
+  /** Sichtbarkeit setzen (Klassen pflegen + aria) */
+  function setActive(on) {
+    document.body.classList.toggle(CFG.BODY_FLAG, on);
+    document.body.classList.toggle(CFG.BODY_FLAG_LE, on);
+    const h = getHost();
+    h.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+
+  /* ------------------------------------ KLASSE ---------------------------- */
+  class InspectorCore {
+    constructor() { this.initialized = false; }
+
+    init(opts = {}) {
+      // Host & Shell
+      const host = ensureShell(getHost());
+      // Tabs/Content werden von deinen Tab-Dateien befüllt (content-v1 + tabs/*)
+      // Optional: Mount erlauben (für spätere Varianten)
+      this.mount = opts.mount || host;
+
+      // Startzustand
+      setActive(false);
+      this.initialized = true;
+      (window.CBLog?.info || console.info)(`[insp] Core bereit (${CFG.VERSION}).`);
+      window.dispatchEvent(new CustomEvent("cb:insp:core:ready", { detail: { version: CFG.VERSION }}));
+      return this;
+    }
+
+    open()  { setActive(true);  window.dispatchEvent(new CustomEvent(CFG.EVT_OPEN));  }
+    close() { setActive(false); window.dispatchEvent(new CustomEvent(CFG.EVT_CLOSE)); }
+    toggle(force) { (typeof force === "boolean" ? force : !this.isOpen()) ? this.open() : this.close(); }
+    isOpen() { return document.body.classList.contains(CFG.BODY_FLAG); }
+  }
+
+  /* ---------------------------------- INIT/EXPORT ------------------------- */
+  const core = new InspectorCore();
+
+  // Global API
+  window.Inspector = {
+    get initialized(){ return core.initialized; },
+    init   : (...a) => core.init(...a),
+    open   : (...a) => core.open(...a),
+    close  : (...a) => core.close(...a),
+    toggle : (...a) => core.toggle(...a),
+    isOpen : (...a) => core.isOpen(...a)
   };
-  // init() soll api.initialized = true setzen, wenn fertig.
 
-  // Global verfügbar machen
-  window.Inspector = Object.assign({}, window.Inspector || {}, api);
+  // ESC schließt
+  window.addEventListener("keydown", (e)=> e.key === "Escape" && core.isOpen() && core.close());
+
+  // Auto-Init wenn DOM da ist
+  document.addEventListener("DOMContentLoaded", () => { if (!core.initialized) core.init(); });
 })();
