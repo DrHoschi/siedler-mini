@@ -2,73 +2,42 @@
 <html lang="de" data-theme="wood">
 <head>
   <!-- =========================================================================
-   * PROJEKT : Neue Siedler
-   * DATEI   : index.demo.html
-   * VERSION : v25.10.30-inspector-v1
-   * ZWECK   : Minimaler Live-Test – Spiel sichtbar + NEUER Inspector (Tabs)
-   * HINWEISE:
-   *   – Start-BG bleibt sichtbar, bis das Spiel auf body.is-playing schaltet.
-   *   – Der Inspector nutzt body.is-inspector (Overlay ist standardmäßig zu).
-   *   – Debug/Tools bleiben dauerhaft integriert (Projektpräferenz).
-   * STRUKTUR:
-   *   [Styles]   global → start → inspector → hud/build → layout
-   *   [Body]     Canvas/UI/HUD/Build + FAB (Zahnrad)
-   *   [Scripts]  Polyfills → EventBus → Inspector → Loader → UI → Debug → Boot → Layout → Bridges
+   * Datei   : index.demo.html
+   * Version : v25.11.01-final
+   * Zweck   : Minimaler Live-Test – Spiel + NEUER Inspector (Tabs)
    ========================================================================= -->
-
-  <!-- ===== Basis-Meta ===== -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#1f1f23">
   <title>Neue Siedler</title>
 
-  <!-- ===== Styles (Reihenfolge wichtig) ===== -->
+  <!-- Styles -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-start.css?v=25.10.19-final2">
-
-  <!-- Neuer Inspector (ALT: ui/css/ui-inspector.css ENTFERNT) -->
-  <link rel="stylesheet" href="inspector/ui-inspector-v1.css?v=1.0.0">
-
+  <link rel="stylesheet" href="inspector/ui-inspector-v1.css?v=25.11.01-final">
   <link rel="stylesheet" href="ui/css/ui-hud.clean.css?v=25.10.19-final2">
   <link rel="stylesheet" href="ui/css/ui-build.clean.css?v=25.10.19-final2">
-  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2"><!-- greift erst mit .is-playing -->
+  <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.10.19-final2">
 </head>
 
 <body>
-  <!-- =========================================================================
-     BENÖTIGTE CONTAINER (Lastenheft 3.1 / 4.2–4.3)
-     → data-ui: wird vom Inspector-Tab „UI“ gescannt
-  ========================================================================= -->
+  <!-- Spiel-Container -->
   <canvas id="game" data-ui="canvas" aria-label="Spielfeld"></canvas>
-  <!-- <canvas id="game-canvas" data-ui="canvas" aria-label="Spielfeld"></canvas> -->
   <div id="ui-root"    data-ui="root"   aria-live="polite"></div>
-
-  <!-- HUD + BuildDock Platzhalter -->
   <div id="hud-root"   data-ui="hud"    aria-live="polite" hidden></div>
   <div id="build-dock" data-ui="build"  hidden></div>
   <button id="btn-build" aria-label="Bau-Menü" hidden></button>
 
-  <!-- Inspector-FAB (Zahnrad) – bleibt unten rechts; Optik beibehalten -->
-  <button id="inspector-fab" aria-label="Inspector öffnen" title="Inspector">⚙️</button>
-<!-- Host für den neuen Inspector (wird vom Script gefüllt) -->
-<div id="inspector" class="inspector-host"></div>
-  <!-- =========================================================================
-       SCRIPTS – LADEREIHENFOLGE (kritisch!)
-       Bitte exakt so lassen, damit Ready-Events/Bridges stimmen.
-  ========================================================================= -->
+  <!-- Inspector Host + FAB -->
+  <div id="inspector" class="inspector-host" aria-hidden="true"></div>
+  <button id="inspector-fab" aria-label="Inspector" title="Inspector">⚙️</button>
 
-  <!-- [1] Logging/Polyfills (falls vorhanden) -->
+  <!-- Scripts: Polyfills/EventBus -->
   <script src="core/cblog.polyfill.js?v=25.10.19-final2"></script>
-
-  <!-- [2] Optionaler Mini-EventBus (falls vorhanden) -->
   <script src="core/eventbus.js?v=25.10.19-final2"></script>
 
-  <!-- [3] NEUER INSPECTOR v1 (alter Inspector komplett entfernt)
-         – hookt CBLog/console früh
-         – Overlay wird per body.is-inspector gezeigt
-         – Tabs sind modular (logs/build/resources/paths/tests/ui)
-  -->
-  <script src="inspector/ui-inspector-v1.js?v=1.0.0" defer></script>
+  <!-- Inspector Core + Content + Tabs -->
+  <script src="inspector/ui-inspector-v1.js?v=25.11.01-final" defer></script>
   <script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0" defer></script>
@@ -77,102 +46,35 @@
   <script src="inspector/tabs/inspector.tab.tests-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.ui-v1.js?v=1.0.0" defer></script>
 
-  <!-- Kleines Bootstrap für den Inspector + Zahnrad-Bindung -->
-  <script>
-/* ============================================================================
-   Inspector Bootstrap Shim
-   - Nutzt echte API, falls vorhanden.
-   - Stellt andernfalls open/close/toggle bereit (Sichtbarkeit per CSS).
-============================================================================ */
-window.addEventListener('DOMContentLoaded', () => {
-  const host = document.getElementById('inspector') || document.body;
+  <!-- Bridges zentral (du sagtest: bereits eingefügt – lassen wir so) -->
+  <script src="inspector/inspector.bridges.js?v=1.0.0" defer></script>
 
-  // Falls init() existiert, einmal aufrufen (idempotent).
-  try {
-    if (window.Inspector?.init && !window.Inspector.initialized) {
-      window.Inspector.init({
-        mount: host,
-        autoOpen: false,
-        useBodyClass: 'is-inspector',
-        selectors: { uiScan: '[data-ui]' }
-      });
-    }
-  } catch (e) {
-    (window.CBLog?.warn||console.warn)('[inspector] init() Fehler (Shim fängt ab):', e);
-  }
-
-  // ==== SHIM: fehlende Methoden ergänzen ====
-  if (!window.Inspector) window.Inspector = {};
-
-  if (typeof window.Inspector.open !== 'function') {
-    window.Inspector.open = () => {
-      try { host.removeAttribute?.('hidden'); host.style.display = 'block'; } catch {}
-      document.body.classList.add('is-inspector');
-      return true;
-    };
-  }
-  if (typeof window.Inspector.close !== 'function') {
-    window.Inspector.close = () => {
-      document.body.classList.remove('is-inspector');
-      // host.style.display = 'none'; // optional – CSS erledigt das über die Klasse
-      return true;
-    };
-  }
-  if (typeof window.Inspector.toggle !== 'function') {
-    window.Inspector.toggle = (force) => {
-      const on = (typeof force === 'boolean') ? force : !document.body.classList.contains('is-inspector');
-      return on ? window.Inspector.open() : window.Inspector.close();
-    };
-  }
-
-  // FAB koppeln (jetzt garantiert funktionsfähig)
-  const fab = document.getElementById('inspector-fab');
-  fab?.addEventListener('click', () => window.Inspector.toggle(true));
-
-  // Hotkey Alt+I
-  window.addEventListener('keydown', (e) => {
-    if (e.altKey && (e.key === 'i' || e.key === 'I')) { e.preventDefault(); window.Inspector.toggle(); }
-  });
-});
-</script>
-
-  <!-- [4] Loader, die READY-Events feuern -->
-  <script src="core/asset.js?v=25.10.19-final2"></script>    <!-- dispatch: cb:assets-ready -->
-  <script src="core/registry.js?v=25.10.19-final2"></script> <!-- dispatch: cb:registry:ready -->
-
-  <!-- [5] UI: Startscreen/Panel (emittiert 'cb:ui-ready') -->
+  <!-- Loader & UI -->
+  <script src="core/asset.js?v=25.10.19-final2"></script>
+  <script src="core/registry.js?v=25.10.19-final2"></script>
   <script src="ui/ui-start.js?v=25.10.19-final2"></script>
-
-  <!-- [6] UI: HUD & BuildDock -->
   <script src="ui/ui-hud.js?v=25.10.19-final2"></script>
   <script src="ui/ui-build.js?v=25.10.19-final2"></script>
-
-  <!-- [7] Debug-Overlay für Pfade/Heatmap (vom Inspector steuerbar) -->
   <script src="core/path-overlay.js?v=25.10.19-final2"></script>
 
-  <!-- [8] Boot + Spiel -->
+  <!-- Spiel -->
   <script src="core/boot.js?v=25.10.19-final2"></script>
   <script src="core/game.bootstrap.js?v=25.10.19-final2"></script>
   <script src="core/game.js?v=25.10.19-final2"></script>
 
-  <!-- [9] Layout-Glue: schaltet NACH Spielstart auf Spiel-Layout -->
+  <!-- Layout zuletzt -->
   <script src="ui/ui-layout.js?v=25.10.19-final2"></script>
 
-  <!-- [10] Mini-Diagnose + Bridges (öffnet NICHT automatisch) -->
+  <!-- Bootstrap (schlank, ohne Hacks) -->
   <script>
-    (window.CBLog?.info || console.info)('[index] geladen v25.10.19-final2');
-
-    // Layout initial NICHT aktiv → Start-BG bleibt sichtbar
-    document.body.classList.remove('is-playing');
-
-    // === Inspector ↔ PathOverlay Bridge (Buttons „Overlay/Heatmap an/aus“) ===
-    window.addEventListener('cb:path:overlay:on',  () => window.PathOverlay?.toggle(true));
-    window.addEventListener('cb:path:overlay:off', () => window.PathOverlay?.toggle(false));
-    window.addEventListener('cb:path:heatmap:on',  () => window.PathOverlay?.setHeatmap(true));
-    window.addEventListener('cb:path:heatmap:off', () => window.PathOverlay?.setHeatmap(false));
-
-    // Für den leeren Teststand: „paths:ready“, damit Tests/Pfade bereit anzeigen
-    window.dispatchEvent(new CustomEvent('paths:ready'));
+    window.addEventListener('DOMContentLoaded', () => {
+      // Inspector initialisieren (falls Core nicht schon auto-init gemacht hat)
+      if (!window.Inspector?.initialized) {
+        window.Inspector?.init({ mount: document.getElementById('inspector'), autoOpen:false });
+      }
+      // FAB toggelt offen/zu
+      document.getElementById('inspector-fab')?.addEventListener('click', () => window.Inspector?.toggle());
+    });
   </script>
 </body>
 </html>
