@@ -32,30 +32,39 @@
   }
 
   /** Grundgerüst (Header/Tabs/Content) aufbauen, falls noch leer */
-  function ensureShell(host) {
-    if (host.dataset.shellReady) return host;
-    host.innerHTML = ""; // leer
-    const shell   = el("div", "insp-shell");
-    const header  = el("div", "insp-header");
-    const tabs    = el("div", "insp-tabs");     tabs.setAttribute("role","tablist");
-    const content = el("div", "insp-content");  content.setAttribute("role","region");
-
-    header.appendChild(tabs);
-    shell.appendChild(header);
-    shell.appendChild(content);
-    host.appendChild(shell);
+/** Grundgerüst (Header/Tabs/Content) aufbauen – NICHT destruktiv */
+function ensureShell(host) {
+  // 1) Wenn Content-/Tabs-Skripte die Shell bereits gebaut haben → übernehmen
+  const existingShell = host.querySelector('.insp-shell');
+  if (existingShell) {
     host.dataset.shellReady = "1";
+    return host; // nichts anfassen!
+  }
 
-    // Close-Button rechts oben
+  // 2) Falls noch nichts existiert → minimale Shell erzeugen
+  const shell   = el("div", "insp-shell");
+  const header  = el("div", "insp-header");
+  const tabs    = el("div", "insp-tabs");     tabs.setAttribute("role","tablist");
+  const content = el("div", "insp-content");  content.setAttribute("role","region");
+
+  header.appendChild(tabs);
+  shell.appendChild(header);
+  shell.appendChild(content);
+  host.appendChild(shell);
+  host.dataset.shellReady = "1";
+
+  // Close-Button (nur hinzufügen, wenn keiner existiert)
+  if (!header.querySelector('[data-action="insp-close"]')) {
     const btnX = el("button"); btnX.type = "button"; btnX.textContent = "×";
+    btnX.setAttribute("data-action","insp-close");
     btnX.setAttribute("aria-label","Inspector schließen");
     btnX.style.cssText = "position:absolute;right:12px;top:10px;font-size:24px;background:none;border:0;color:#ddd;cursor:pointer;";
     btnX.addEventListener("click", () => Inspector.close());
     header.style.position = "relative";
     header.appendChild(btnX);
-
-    return host;
   }
+  return host;
+}
 
   /** Sichtbarkeit setzen (Klassen pflegen + aria) */
   function setActive(on) {
