@@ -80,25 +80,44 @@
   <!-- Kleines Bootstrap für den Inspector + Zahnrad-Bindung -->
   <script>
   window.addEventListener('DOMContentLoaded', () => {
-    try{
+    try {
+      // nie offen starten
       document.body.classList.remove('is-inspector');
+
+      // Host bestimmen (Fallback: body)
+      const host = document.getElementById('inspector-overlay') || document.body;
+
+      // Inspector initialisieren
       if (window.Inspector && !window.Inspector.initialized) {
         window.Inspector.init({
-          mount: document.body,
+          mount: host,
           autoOpen: false,
           useBodyClass: 'is-inspector',
           selectors: { uiScan: '[data-ui]' }
         });
       }
+
+      // FAB koppeln – erst wenn API da ist
+      const safeToggle = () => {
+        if (window.Inspector && typeof window.Inspector.toggle === 'function') {
+          window.Inspector.toggle();
+        } else {
+          (window.CBLog?.warn||console.warn)('[inspector] toggle() noch nicht verfügbar');
+        }
+      };
       const fab = document.getElementById('inspector-fab');
-      fab?.addEventListener('click', () => window.Inspector?.toggle(true));
-      window.addEventListener('keydown', (e)=>{
-        if (e.altKey && (e.key === 'i' || e.key === 'I')){
+      fab?.addEventListener('click', safeToggle);
+
+      // Hotkey Alt+I (optional)
+      window.addEventListener('keydown', (e) => {
+        if (e.altKey && (e.key === 'i' || e.key === 'I')) {
           e.preventDefault();
-          window.Inspector?.toggle();
+          safeToggle();
         }
       });
-    }catch(err){ (window.CBLog?.error||console.error)('[inspector bootstrap]', err); }
+    } catch (err) {
+      (window.CBLog?.error||console.error)('[inspector bootstrap]', err);
+    }
   });
 </script>
 
