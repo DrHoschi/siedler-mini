@@ -136,3 +136,26 @@ body.is-inspector #inspector-fab{
   pointer-events: auto !important;
   display: block !important;
 }
+/* ===== Inspector-Host (unter FAB, volle Fläche) ===== */
+#inspector.inspector-host{
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 99998;                 /* unter FAB */
+  background: rgba(18,18,20,.96);
+  overflow: auto;
+}
+body.is-inspector #inspector{ display:block !important; }
+
+/* ===== FAB unten rechts – bleibt über allem klickbar ===== */
+#inspector-fab{
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 100000;                /* über Overlay/HUD */
+  width: 48px; height: 48px; border: 0; border-radius: 50%;
+  background: var(--insp-header,#2a2a2e); color: #eee;
+  font-size: 22px; line-height: 48px; text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,.35);
+  cursor: pointer;
+}
