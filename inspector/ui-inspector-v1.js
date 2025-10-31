@@ -46,3 +46,26 @@
     console.log("[insp] Core bereit.");
   });
 })();
+
+/* ===== Inspector v1 – Public API Export (einheitlich) ===== */
+(function(){
+  // Diese Variablen existieren in deiner Datei bereits – hier nur skizziert:
+  // const state = { open:false, ... };
+  // function init(opts){ ... } 
+  // function open(){ document.body.classList.add('is-inspector'); }
+  // function close(){ document.body.classList.remove('is-inspector'); }
+  // function toggle(force){ (force??=!state.open) ? open() : close(); }
+
+  // >> BITTE diese Namen mit deinen internen Funktionen verdrahten:
+  const api = {
+    initialized: false,
+    init,
+    open,
+    close,
+    toggle
+  };
+  // init() soll api.initialized = true setzen, wenn fertig.
+
+  // Global verfügbar machen
+  window.Inspector = Object.assign({}, window.Inspector || {}, api);
+})();
