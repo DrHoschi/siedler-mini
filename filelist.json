@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-10-30T20:08:32.695Z",
+  "createdAt": "2025-10-31T19:36:43.302Z",
   "root": ".",
-  "count": 456,
+  "count": 457,
   "entries": [
     {
       "type": "dir",
@@ -1479,18 +1479,23 @@
     },
     {
       "type": "file",
+      "path": "inspector/inspector.bridges.js",
+      "size": 2188
+    },
+    {
+      "type": "file",
       "path": "inspector/ui-inspector-v1.css",
-      "size": 2029
+      "size": 2937
     },
     {
       "type": "file",
       "path": "inspector/ui-inspector-v1.js",
-      "size": 2426
+      "size": 7178
     },
     {
       "type": "file",
       "path": "inspector/ui-inspector.content-v1.js",
-      "size": 2744
+      "size": 5403
     },
     {
       "type": "dir",
@@ -2186,17 +2191,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 44186
+      "size": 45135
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 16905
+      "size": 17308
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 12608
+      "size": 3750
     },
     {
       "type": "file",
@@ -2206,7 +2211,7 @@
     {
       "type": "file",
       "path": "index.Inspector.html",
-      "size": 7043
+      "size": 7367
     },
     {
       "type": "file",
