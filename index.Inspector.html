@@ -64,9 +64,12 @@
   <!-- (2) NEUER INSPECTOR (Core → Content), beides mit defer -->
   <script defer src="inspector/ui-inspector-v1.js"></script>
   <script defer src="inspector/ui-inspector.content-v1.js"></script>
-<!-- Bridges zentral (du sagtest: bereits eingefügt – lassen wir so) -->
-  <script src="inspector/inspector.bridges.js?v=1.0.0" defer></script>
+<!-- 1) Compat-Bridge (Tab-Registrierung aus Altdateien) -->
+<script src="inspector/inspector.bridges.js?v=1.1.0"></script>
 
+<!-- 2) Spiel-Bridge (DIESE Datei) – nach PathOverlay laden -->
+<script src="core/path-overlay.js?v=…"></script>   <!-- falls noch nicht vorher -->
+<script src="inspector/inspector.bridges.game.js?v=1.0.0"></script>
  <!-- Tabs -->
 <script defer src="inspector/tabs/inspector.tab.logs-v1.js"></script>
 <script defer src="inspector/tabs/inspector.tab.build-v1.js"></script>
