@@ -4,14 +4,24 @@
  * Zweck   : LOGS – Konsole mitschneiden, filtern, kopieren, exportieren
  * Features: Text-Filter, Typ-Filter (info/warn/error), Clear, Copy, Export JSON/CSV
  * ========================================================================== */
-// Beispiel: inspector/tabs/inspector.tab.logs-v1.js
+/* ============================================================================
+ * Datei   : inspector/tabs/inspector.tab.logs-v1.js
+ * Version : v1.0.0 (2025-11-01)
+ * Zweck   : Logs-Tab – einfacher Platzhalter mit Hinweis
+ * API     : window.registerInspectorTab('logs', renderFn)
+ * Abhäng. : inspector.tabs.adapter.js (stellt registerInspectorTab bereit)
+ * Hinweis : Hier aktuell nur statischer Hinweis – echte Log-Pipe später.
+ * ========================================================================== */
 (function () {
   function renderLogsTab(sectionEl) {
-    // HIER deine bisherige Logs-Tab-Renderlogik:
-    // sectionEl.innerHTML = '...';
-    sectionEl.innerHTML = '<pre>(Logs kommen hier rein)</pre>';
+    sectionEl.innerHTML = [
+      '<div class="insp-pad">',
+      '<h3>Logs</h3>',
+      '<p><em>(noch keine Log-Pipe angebunden)</em></p>',
+      '<p>Später: EventBus-Mitschnitt oder Console-Proxy.</p>',
+      '</div>'
+    ].join('');
   }
-  // << NEU: über Adapter registrieren >>
   window.registerInspectorTab('logs', renderLogsTab);
 })();
 
