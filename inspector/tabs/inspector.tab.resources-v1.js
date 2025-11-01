@@ -3,6 +3,47 @@
  * Version : v25.11.01
  * Zweck   : RESSOURCEN – Tabelle + Dazubuchen (add/sub)
  * ========================================================================== */
+/* ============================================================================
+ * Datei   : inspector/tabs/inspector.tab.resources-v1.js
+ * Version : v1.0.0 (2025-11-01)
+ * Zweck   : Ressourcenstand anfordern & anzeigen
+ * Events  : → 'req:res:snapshot'
+ *           ← 'cb:res:snapshot'      (detail:{ Holz:..., Stein:..., ... })
+ * ========================================================================== */
+(function () {
+  function renderResTab(sectionEl) {
+    sectionEl.innerHTML = [
+      '<div class="insp-pad">',
+      '<h3>Ressourcen</h3>',
+      '<button type="button" data-action="req">Snapshot anfordern</button>',
+      '<pre class="out">(keine Daten)</pre>',
+      '</div>'
+    ].join('');
+
+    const out = sectionEl.querySelector('.out');
+    const reqBtn = sectionEl.querySelector('[data-action="req"]');
+
+    const request = () => {
+      out.textContent = '(warte auf Antwort …)';
+      window.dispatchEvent(new CustomEvent('req:res:snapshot'));
+    };
+
+    const onSnapshot = (ev) => {
+      try {
+        const data = ev?.detail || {};
+        out.textContent = JSON.stringify(data, null, 2) || '(keine Daten)';
+      } catch (e) {
+        out.textContent = '(Fehler beim Darstellen)';
+      }
+    };
+
+    reqBtn.addEventListener('click', request);
+    window.addEventListener('cb:res:snapshot', onSnapshot, { once: false });
+
+    request();
+  }
+  window.registerInspectorTab('resources', renderResTab);
+})();
 (() => {
   const state = { list: {} };
 
