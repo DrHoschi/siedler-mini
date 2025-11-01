@@ -1,226 +1,365 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.tests-v1.js
  * Version : v25.11.01-final
- * Zweck   : TESTS – Diagnose & Quick-Buttons
- *           – Skript-Scanner (Duplikate erkennen, v=… auslesen)
- *           – Copy / Export (JSON, CSV)
- *           – Quick-Events (insp open/close/toggle, build/res snapshot, paths)
- * API     : window.registerInspectorTab('tests', setup)
- * Abhäng. : Inspector-Core (registerInspectorTab), Bridges (optional)
- * Autor   : Siedler 2020
+ * Zweck   : TESTS – Diagnose & Werkzeuge
+ * Features:
+ *   • Script-Scanner: alle <script>, Duplikate, Version-Query, async/defer
+ *   • Quick-Events: Inspector open/close/toggle, Build/Res-Snapshots, Path-Overlay
+ *   • Globals-Check: Inspector/Registry/UIBuild/PathOverlay/Bridge-Hooks
+ *   • UI-Layer-Scan: wichtige Container (Canvas, HUD, BuildDock, Inspector, …)
+ *   • Layer-Highlight: sichtbares Overlay mit Bounds, z-index, id
+ *   • Copy/Export: Diagnose als JSON kopieren oder downloaden
+ * Abhäng. : window.registerInspectorTab(name, setup)
+ * Hinweis : rein lesend, verändert keine Spielzustände (außer bei Test-Events)
  * ========================================================================== */
 (function(){
-  if (typeof window.registerInspectorTab !== 'function'){
+  if (typeof window.registerInspectorTab !== 'function') {
     console.warn('[tests-tab] registerInspectorTab fehlt.');
     return;
   }
 
-  // --------------------------- [Inline-CSS] ----------------------------------
-  (function injectCSS(){
+  // ----------------------------- [Inline CSS] -------------------------------
+  function injectCSS(){
     if (document.getElementById('insp-tests-inline-style')) return;
-    const css = `
+    const st = document.createElement('style');
+    st.id = 'insp-tests-inline-style';
+    st.textContent = `
 #inspector .tests-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.25rem 0 .75rem}
-#inspector .tests-btn{padding:.25rem .6rem;border:1px solid #333;background:#222;border-radius:.5rem;color:#ddd;cursor:pointer;font-size:13px}
-#inspector .tests-btn:hover{background:#303036}
-#inspector .tests-grid{display:grid;grid-template-columns:1fr;gap:.75rem}
+#inspector .tests-btn{padding:.25rem .6rem;border:1px solid #333;background:#222;border-radius:.5rem;cursor:pointer}
+#inspector .tests-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem}
 #inspector .tests-card{border:1px solid #2a2a2e;border-radius:.6rem;padding:.6rem;background:#111}
 #inspector .tests-card h4{margin:.1rem 0 .45rem}
-#inspector table.tests-table{width:100%;border-collapse:collapse;font-size:13px}
-#inspector table.tests-table th,#inspector table.tests-table td{padding:.3rem .4rem;border-bottom:1px dashed #262626;vertical-align:top}
-#inspector .muted{opacity:.75}
-#inspector .warn{color:#ffcc00}
-#inspector .err{color:#ff6666}
-#inspector .ok{color:#8ab4f8}
-#inspector .badge{display:inline-block;min-width:1.6em;text-align:center;border-radius:.45rem;padding:.05rem .35rem;background:#2a2f39;opacity:.9}
-#inspector .dup{background:rgba(255, 204, 0, .1)}
-#inspector .right{text-align:right}
-#inspector .tests-hr{border:0;border-top:1px solid #262626;margin:.5rem 0}
-#inspector .code{font-family:monospace;background:#0f1013;border:1px solid #2a2a2e;border-radius:.35rem;padding:.25rem .4rem;display:inline-block}
-    `.trim();
-    const s = document.createElement('style');
-    s.id = 'insp-tests-inline-style';
-    s.textContent = css;
-    document.head.appendChild(s);
-  })();
-
-  // --------------------------- [Utils] ---------------------------------------
-  const $ = (sel, root=document) => root.querySelector(sel);
-  const fmt = (v)=> v==null ? '' : String(v);
-  function baseName(url){
-    try{
-      const u = url.split('#')[0];
-      const [path, query] = u.split('?');
-      const file = path.split('/').pop() || '';
-      const v = (query||'').split('&').find(p => p.startsWith('v=')) || '';
-      return { file, query:(query||''), v: v ? v.slice(2) : '' };
-    }catch{ return { file: '', query:'', v:'' }; }
+#inspector .tests-pre{max-height:220px;overflow:auto;border:1px solid #222;border-radius:.35rem;background:#0f1013;padding:.5rem;margin:0}
+#inspector .tests-kv{font-size:.9em}
+#inspector .tests-kv b{opacity:.75}
+#inspector .tests-badge{display:inline-block;border:1px solid #444;border-radius:.4rem;padding:.05rem .4rem;margin-left:.4rem;font-size:.85em;opacity:.85}
+#inspector .tests-warn{color:#ffcc00}
+#inspector .tests-err{color:#ff6666}
+#inspector .tests-ok{color:#8ab4f8}
+#inspector .tests-layer-outline{position:fixed;pointer-events:none;border:1px dashed #ffa500;outline:2px solid rgba(255,165,0,.25);z-index:2147483646}
+#inspector .tests-layer-label{position:fixed;pointer-events:none;background:rgba(0,0,0,.7);color:#fff;font:12px/1.2 monospace;padding:.2rem .35rem;border-radius:.35rem;border:1px solid #222;z-index:2147483647;max-width:48vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    `;
+    document.head.appendChild(st);
   }
 
-  function scanScripts(){
-    const items = [...document.scripts].map(s => {
-      const src = s.getAttribute('src') || '';
-      const {file, v} = baseName(src);
+  // ------------------------------- [State] ---------------------------------
+  const S = {
+    section: null,
+    out: null,
+    lastDiag: null,
+    layerMarks: [],
+    layerOn: false
+  };
+
+  // ---------------------------- [Utilities] --------------------------------
+  const base = (url) => (url||'').split('?')[0].split('/').pop();
+  const qver = (url) => {
+    if (!url) return '';
+    const q = url.split('?')[1] || '';
+    const m = /(?:^|&)v=([^&]+)/i.exec(q);
+    return m ? m[1] : '';
+  };
+  const toJSON = (o) => { try { return JSON.stringify(o, null, 2); } catch(e){ return String(e); } };
+  const num = (v, d=0) => (typeof v==='number' ? v.toFixed(d) : v);
+
+  // -------------------------- [Collectors] ---------------------------------
+  function collectScripts(){
+    const arr = [...document.scripts].map(s => {
+      const src = s.src || '';
       return {
-        src, file, v,
-        isInline: !src,
+        src,
+        file: base(src),
+        version: qver(src),
+        async: !!s.async,
+        defer: !!s.defer,
+        type: s.type || 'text/javascript'
       };
     });
+    const counts = arr.reduce((m,a)=> (m[a.file]=(m[a.file]||0)+1, m), {});
+    const duplicates = Object.entries(counts)
+      .filter(([_,c])=>c>1)
+      .map(([file,c])=>({file, count:c}));
+    return { scripts: arr, duplicates };
+  }
 
-    // Gruppieren nach file (ohne Query) – Duplikate erkennen
-    const map = new Map();
-    for (const it of items){
-      if (it.isInline) continue;
-      const key = it.file;                      // bewusst nur der Dateiname
-      const arr = map.get(key) || [];
-      arr.push(it);
-      map.set(key, arr);
+  function collectGlobals(){
+    return {
+      inspector: !!window.Inspector,
+      inspectorContent: !!window.InspectorContent,
+      registerInspectorTab: typeof window.registerInspectorTab === 'function',
+      registry: !!window.Registry,
+      uiBuild: !!window.UIBuild,
+      pathOverlay: !!window.PathOverlay,
+      bridge_v120: !!window.__INSPECTOR_BRIDGE_V120__,
+      console_hooked: !!window.__INSPECTOR_CONSOLE_HOOKED__
+    };
+  }
+
+  function collectLayers(){
+    const pick = [
+      '#game', '#game-canvas',  // Canvas-IDs
+      '#ui-root', '#hud-root', '#build-dock', '#inspector', '#inspector-fab',
+      '[data-ui="canvas"]','[data-ui="root"]','[data-ui="hud"]','[data-ui="build"]'
+    ];
+    const seen = new Set();
+    const nodes = [];
+    for (const sel of pick){
+      document.querySelectorAll(sel).forEach(el=>{
+        if (!el || seen.has(el)) return;
+        seen.add(el);
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        nodes.push({
+          sel,
+          id: el.id || null,
+          tag: el.tagName.toLowerCase(),
+          visible: !!(r.width && r.height && cs.visibility!=='hidden' && cs.display!=='none'),
+          z: cs.zIndex || 'auto',
+          opacity: cs.opacity,
+          bounds: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
+        });
+      });
     }
-    const groups = [...map.entries()].map(([file, rows]) => ({
-      file,
-      count: rows.length,
-      versions: [...new Set(rows.map(r => r.v || '(ohne)'))],
-      rows
-    })).sort((a,b)=> a.file.localeCompare(b.file));
-
-    const inlineCount = items.filter(i => i.isInline).length;
-
-    return { items, groups, inlineCount };
+    return nodes;
   }
 
-  function csvFromGroups(groups){
-    const head = 'file,count,versions,src\n';
-    const body = groups.flatMap(g => g.rows.map(r =>
-      `"${g.file}","${g.count}","${g.versions.join(' | ')}","${r.src.replace(/"/g,'""')}"`
-    )).join('\n');
-    return head + body + '\n';
+  function makeDiagnosis(){
+    const scripts = collectScripts();
+    const globals = collectGlobals();
+    const layers  = collectLayers();
+    return {
+      ts: new Date().toISOString(),
+      globals,
+      scripts,
+      layers,
+      hints: buildHints(globals, scripts, layers)
+    };
   }
 
-  function download(name, data, mime='application/octet-stream'){
-    const url = URL.createObjectURL(new Blob([data], {type:mime}));
-    const a = Object.assign(document.createElement('a'), {href:url, download:name});
+  function buildHints(globals, scripts, layers){
+    const tips = [];
+    if (scripts.duplicates.length){
+      tips.push({type:'warn', msg:`${scripts.duplicates.length} doppelte Script-Datei(en) gefunden`});
+    }
+    if (!globals.registerInspectorTab){
+      tips.push({type:'err', msg:`registerInspectorTab fehlt → Tabs werden nicht gerendert`});
+    }
+    const insp = layers.find(l => l.id === 'inspector');
+    const fab  = layers.find(l => l.id === 'inspector-fab');
+    if (insp && fab && fab.visible && insp.visible){
+      // ok
+    } else {
+      tips.push({type:'warn', msg:`Inspector oder FAB evtl. nicht sichtbar/überdeckt`});
+    }
+    return tips;
+  }
+
+  // ------------------------ [Layer Highlight] ------------------------------
+  function clearLayerMarks(){
+    S.layerMarks.forEach(n => n.remove());
+    S.layerMarks.length = 0;
+  }
+  function markNode(bounds, label){
+    const b = document.createElement('div');
+    b.className = 'tests-layer-outline';
+    b.style.left = bounds.x + 'px';
+    b.style.top  = bounds.y + 'px';
+    b.style.width  = Math.max(1, bounds.w) + 'px';
+    b.style.height = Math.max(1, bounds.h) + 'px';
+
+    const lab = document.createElement('div');
+    lab.className = 'tests-layer-label';
+    lab.style.left = (bounds.x + 2) + 'px';
+    lab.style.top  = (bounds.y - 20) + 'px';
+    lab.textContent = label;
+
+    document.body.append(b, lab);
+    S.layerMarks.push(b, lab);
+  }
+  function toggleLayerMarks(on){
+    S.layerOn = on ?? !S.layerOn;
+    clearLayerMarks();
+    if (!S.layerOn) return;
+    // markierte Layer erneut berechnen
+    const nodes = collectLayers();
+    nodes.forEach(n=>{
+      if (!n.visible) return;
+      const lbl = `${n.id ? '#'+n.id : n.tag}${n.z!=='auto' ? ' z='+n.z : ''} ${n.bounds.w}×${n.bounds.h}`;
+      markNode(n.bounds, lbl);
+    });
+  }
+
+  // ----------------------------- [UI] --------------------------------------
+  function el(tag, cls, txt){ const n=document.createElement(tag); if(cls) n.className=cls; if(txt!=null) n.textContent=txt; return n; }
+
+  function render(section){
+    section.innerHTML = '<h2>Tests</h2>';
+
+    // Toolbar
+    const tb = el('div','tests-toolbar');
+    const bOpen   = el('button','tests-btn','Open');
+    const bClose  = el('button','tests-btn','Close');
+    const bToggle = el('button','tests-btn','Toggle');
+    const bBuild  = el('button','tests-btn','Build Snapshot');
+    const bRes    = el('button','tests-btn','Res Snapshot');
+    const bPaths  = el('button','tests-btn','Path Overlay');
+    const bHeat   = el('button','tests-btn','Heatmap');
+    const bScan   = el('button','tests-btn','Scan');
+    const bCopy   = el('button','tests-btn','Copy JSON');
+    const bExport = el('button','tests-btn','Export JSON');
+    const bLayer  = el('button','tests-btn','Layer markieren');
+
+    tb.append(bOpen,bClose,bToggle,bBuild,bRes,bPaths,bHeat,bScan,bCopy,bExport,bLayer);
+    section.append(tb);
+
+    // Cards Grid
+    const grid = el('div','tests-grid');
+    section.append(grid);
+
+    // Card: Globals
+    const c1 = el('div','tests-card');
+    c1.innerHTML = `<h4>Globals</h4><div class="tests-kv" id="tests-globals"></div>`;
+    grid.append(c1);
+
+    // Card: Scripts
+    const c2 = el('div','tests-card');
+    c2.innerHTML = `<h4>Scripts <span class="tests-badge" id="tests-scripts-count">0</span></h4>
+                    <pre class="tests-pre" id="tests-scripts-pre"></pre>`;
+    grid.append(c2);
+
+    // Card: Duplicates
+    const c3 = el('div','tests-card');
+    c3.innerHTML = `<h4>Duplikate</h4><pre class="tests-pre" id="tests-dupes-pre">(keine)</pre>`;
+    grid.append(c3);
+
+    // Card: Layers
+    const c4 = el('div','tests-card');
+    c4.innerHTML = `<h4>Layers</h4><pre class="tests-pre" id="tests-layers-pre"></pre>`;
+    grid.append(c4);
+
+    // Card: Hints
+    const c5 = el('div','tests-card');
+    c5.innerHTML = `<h4>Hinweise</h4><div id="tests-hints"></div>`;
+    grid.append(c5);
+
+    // Output cache
+    S.section = section;
+    S.out = {
+      globals: document.getElementById('tests-globals'),
+      scriptsCount: document.getElementById('tests-scripts-count'),
+      scriptsPre: document.getElementById('tests-scripts-pre'),
+      dupesPre: document.getElementById('tests-dupes-pre'),
+      layersPre: document.getElementById('tests-layers-pre'),
+      hintsBox: document.getElementById('tests-hints')
+    };
+
+    // Bind buttons
+    bOpen.onclick   = ()=> window.dispatchEvent(new CustomEvent('req:insp:open'));
+    bClose.onclick  = ()=> window.dispatchEvent(new CustomEvent('req:insp:close'));
+    bToggle.onclick = ()=> window.Inspector?.toggle?.();
+
+    bBuild.onclick  = ()=> window.dispatchEvent(new CustomEvent('req:build:snapshot'));
+    bRes.onclick    = ()=> window.dispatchEvent(new CustomEvent('req:res:snapshot'));
+
+    bPaths.onclick  = ()=> {
+      const flag = !window.__TESTS_PATH_OVERLAY__;
+      window.__TESTS_PATH_OVERLAY__ = flag;
+      window.dispatchEvent(new CustomEvent(flag ? 'cb:path:overlay:on' : 'cb:path:overlay:off'));
+      bPaths.textContent = flag ? 'Path Overlay (aus)' : 'Path Overlay (an)';
+    };
+    bHeat.onclick   = ()=> {
+      const flag = !window.__TESTS_PATH_HEAT__;
+      window.__TESTS_PATH_HEAT__ = flag;
+      window.dispatchEvent(new CustomEvent(flag ? 'cb:path:heatmap:on' : 'cb:path:heatmap:off'));
+      bHeat.textContent = flag ? 'Heatmap (aus)' : 'Heatmap (an)';
+    };
+
+    bScan.onclick   = ()=> updateDiagnosis(true);
+    bCopy.onclick   = ()=> copyDiagnosis();
+    bExport.onclick = ()=> exportDiagnosis();
+    bLayer.onclick  = ()=> toggleLayerMarks();
+
+    // Initial scan
+    updateDiagnosis(false);
+  }
+
+  // ----------------------- [Render Diagnosis] ------------------------------
+  function updateDiagnosis(verbose){
+    const diag = makeDiagnosis();
+    S.lastDiag = diag;
+
+    // globals
+    const g = diag.globals;
+    S.out.globals.innerHTML = `
+      <div><b>Inspector</b>: ${g.inspector ? 'ja' : '<span class="tests-warn">nein</span>'}</div>
+      <div><b>registerInspectorTab</b>: ${g.registerInspectorTab ? 'ja' : '<span class="tests-err">nein</span>'}</div>
+      <div><b>Registry</b>: ${g.registry ? 'ja' : 'nein'}</div>
+      <div><b>UIBuild</b>: ${g.uiBuild ? 'ja' : 'nein'}</div>
+      <div><b>PathOverlay</b>: ${g.pathOverlay ? 'ja' : 'nein'}</div>
+      <div><b>Bridge v1.2.0</b>: ${g.bridge_v120 ? 'ja' : 'nein'}</div>
+      <div><b>Console Hook</b>: ${g.console_hooked ? 'ja' : 'nein'}</div>
+    `;
+
+    // scripts
+    const sc = diag.scripts;
+    S.out.scriptsCount.textContent = String(sc.scripts.length);
+    const lines = sc.scripts.map(s => {
+      const flags = [
+        s.async ? 'async' : '',
+        s.defer ? 'defer' : '',
+        s.version ? ('v='+s.version) : ''
+      ].filter(Boolean).join(' ');
+      return `${s.file}${flags?('  ['+flags+']'):''}`;
+    });
+    S.out.scriptsPre.textContent = (lines.join('\n') || '(keine)');
+
+    // duplicates
+    S.out.dupesPre.textContent = (sc.duplicates.length
+      ? sc.duplicates.map(d=>`${d.file} × ${d.count}`).join('\n')
+      : '(keine)');
+
+    // layers
+    const lay = diag.layers;
+    const llines = lay.map(l => {
+      const id = l.id ? '#'+l.id : l.tag;
+      return `${id}  z=${l.z}  vis=${l.visible?'ja':'nein'}  @(${l.bounds.x},${l.bounds.y})  ${l.bounds.w}×${l.bounds.h}`;
+    }).join('\n');
+    S.out.layersPre.textContent = (llines || '(keine)');
+
+    // hints
+    S.out.hintsBox.innerHTML = diag.hints.map(h=>{
+      const cls = h.type==='err' ? 'tests-err' : (h.type==='warn' ? 'tests-warn' : 'tests-ok');
+      return `<div class="${cls}">• ${h.msg}</div>`;
+    }).join('') || '<div class="tests-ok">Keine Auffälligkeiten.</div>';
+
+    if (verbose) console.info('[tests] diagnose', diag);
+  }
+
+  async function copyDiagnosis(){
+    try{
+      const txt = toJSON(S.lastDiag || makeDiagnosis());
+      await navigator.clipboard.writeText(txt);
+      console.info('[tests] Diagnose in Zwischenablage kopiert.');
+    }catch(e){
+      console.warn('[tests] Copy fehlgeschlagen', e);
+    }
+  }
+
+  function exportDiagnosis(){
+    const txt = toJSON(S.lastDiag || makeDiagnosis());
+    const url = URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+    const a = Object.assign(document.createElement('a'), {href:url, download:'inspector-diagnose.json'});
     document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }
 
-  // --------------------------- [Rendering] -----------------------------------
-  function renderScriptsCard(container){
-    const {groups, inlineCount} = scanScripts();
-
-    const card = document.createElement('div'); card.className='tests-card';
-    const h4 = document.createElement('h4'); h4.textContent = 'Geladene Skripte';
-    const p = document.createElement('p');
-    const dupCount = groups.filter(g => g.count>1).length;
-    p.innerHTML = [
-      `<span class="ok">Gesamt:</span> ${groups.length} Dateien`,
-      ` &nbsp;•&nbsp; <span class="muted">inline:</span> ${inlineCount}`,
-      ` &nbsp;•&nbsp; <span class="${dupCount? 'warn':'ok'}">Duplikat-Gruppen:</span> ${dupCount}`
-    ].join('');
-
-    const table = document.createElement('table'); table.className='tests-table';
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Datei</th>
-          <th class="right">Anzahl</th>
-          <th>Version(en)</th>
-          <th>Quelle (eine Zeile pro Vorkommen)</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    `;
-    const tb = table.tbody || table.querySelector('tbody');
-
-    for (const g of groups){
-      const tr = document.createElement('tr');
-      if (g.count>1) tr.classList.add('dup');
-
-      const srcList = g.rows.map(r => `<div class="muted">${r.src}</div>`).join('');
-
-      tr.innerHTML = `
-        <td><span class="code">${g.file}</span></td>
-        <td class="right"><span class="badge">${g.count}</span></td>
-        <td>${g.versions.map(v=>`<span class="badge">${v||'(ohne)'}</span>`).join(' ')}</td>
-        <td>${srcList || '<span class="muted">(ohne src – inline)</span>'}</td>
-      `;
-      tb.appendChild(tr);
-    }
-
-    const hr = document.createElement('div'); hr.className='tests-hr';
-
-    // Copy/Export Buttons
-    const actions = document.createElement('div'); actions.className='tests-toolbar';
-    const bCopy = document.createElement('button'); bCopy.className='tests-btn'; bCopy.textContent='Copy Übersicht';
-    const bJson = document.createElement('button'); bJson.className='tests-btn'; bJson.textContent='Export JSON';
-    const bCsv  = document.createElement('button'); bCsv.className='tests-btn';  bCsv.textContent='Export CSV';
-
-    bCopy.onclick = async ()=>{
-      const lines = [];
-      for (const g of groups){
-        lines.push(`${g.file}\t${g.count}\t${g.versions.join(' | ')}`);
-        for (const r of g.rows) lines.push(`  - ${r.src||'(inline)'}`);
-      }
-      const text = lines.join('\n');
-      try{ await navigator.clipboard.writeText(text); console.info('[tests] Übersicht kopiert.'); }
-      catch(e){ console.warn('[tests] Copy fehlgeschlagen:', e); }
-    };
-    bJson.onclick = ()=>{
-      const json = JSON.stringify(groups, null, 2);
-      download('scripts-overview.json', json, 'application/json');
-    };
-    bCsv.onclick = ()=>{
-      const csv = csvFromGroups(groups);
-      download('scripts-overview.csv', csv, 'text/csv');
-    };
-
-    actions.append(bCopy, bJson, bCsv);
-
-    card.append(h4, p, table, hr, actions);
-    container.append(card);
-  }
-
-  function renderQuickButtons(container){
-    const card = document.createElement('div'); card.className='tests-card';
-    const h4 = document.createElement('h4'); h4.textContent = 'Quick-Events';
-    const bar = document.createElement('div'); bar.className='tests-toolbar';
-
-    const btn = (txt, fn) => {
-      const b = document.createElement('button'); b.className='tests-btn'; b.textContent = txt; b.onclick = fn; return b;
-    };
-
-    bar.append(
-      btn('Inspector öffnen',  ()=> window.dispatchEvent(new CustomEvent('req:insp:open')) ),
-      btn('Inspector schließen',()=> window.dispatchEvent(new CustomEvent('req:insp:close')) ),
-      btn('Toggle',            ()=> (window.Inspector?.toggle?.(), null)),
-      btn('Build Snapshot',    ()=> window.dispatchEvent(new CustomEvent('req:build:snapshot')) ),
-      btn('Res Snapshot',      ()=> window.dispatchEvent(new CustomEvent('req:res:snapshot')) ),
-      btn('Overlay an',        ()=> window.dispatchEvent(new CustomEvent('cb:path:overlay:on')) ),
-      btn('Overlay aus',       ()=> window.dispatchEvent(new CustomEvent('cb:path:overlay:off')) ),
-      btn('Heatmap an',        ()=> window.dispatchEvent(new CustomEvent('cb:path:heatmap:on')) ),
-      btn('Heatmap aus',       ()=> window.dispatchEvent(new CustomEvent('cb:path:heatmap:off')) )
-    );
-
-    card.append(h4, bar);
-    container.append(card);
-  }
-
-  // --------------------------- [Tab-Setup] -----------------------------------
+  // ------------------------- [Tab-Registration] ----------------------------
   window.registerInspectorTab('tests', function setup(section){
-    section.innerHTML = '<h2>Tests & Diagnose</h2>';
-    const grid = document.createElement('div'); grid.className='tests-grid';
-    section.append(grid);
+    injectCSS();
+    render(section);
 
-    renderQuickButtons(grid);
-    renderScriptsCard(grid);
-
-    // Beim Anzeigen nochmals refreshen, damit late-loader erfasst werden
-    let initial = true;
+    // Bei Tab-Wechsel optional auto-scan
     window.addEventListener('cb:insp:tab:change', (e)=>{
-      if (e?.detail?.tab !== 'tests') return;
-      // Beim ersten Wechsel nichts neu rendern: das Tab ist frisch
-      if (initial){ initial = false; return; }
-      // Nur die Skript-Karte neu aufbauen
-      const old = section.querySelector('.tests-card:nth-of-type(2)'); // zweite Karte = Skripte
-      old?.remove();
-      renderScriptsCard(grid);
+      if (e?.detail?.tab === 'tests') updateDiagnosis(false);
     });
   });
 
