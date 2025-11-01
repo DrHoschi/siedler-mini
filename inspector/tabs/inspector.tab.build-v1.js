@@ -3,6 +3,52 @@
  * Version : v25.11.01
  * Zweck   : BUILD – Zeigt Build/Registry-Infos an (ready/update)
  * ========================================================================== */
+/* ============================================================================
+ * Datei   : inspector/tabs/inspector.tab.build-v1.js
+ * Version : v1.0.0 (2025-11-01)
+ * Zweck   : Build/Registry-Übersicht anfordern & anzeigen
+ * Events  : → 'req:build:snapshot'  (Inspector fragt Spiel)
+ *           ← 'cb:build:snapshot'   (Spiel antwortet mit detail:{...})
+ * Hinweis : Zeigt "(keine Daten)", falls noch keine Antwort kam.
+ * ========================================================================== */
+(function () {
+  function renderBuildTab(sectionEl) {
+    sectionEl.innerHTML = [
+      '<div class="insp-pad">',
+      '<h3>Build</h3>',
+      '<button type="button" data-action="req">Snapshot anfordern</button>',
+      '<pre class="out">(keine Daten)</pre>',
+      '</div>'
+    ].join('');
+
+    const out = sectionEl.querySelector('.out');
+    const reqBtn = sectionEl.querySelector('[data-action="req"]');
+
+    // Anfrage an Spiel schicken
+    const request = () => {
+      out.textContent = '(warte auf Antwort …)';
+      window.dispatchEvent(new CustomEvent('req:build:snapshot'));
+    };
+
+    // Antwort empfangen
+    const onSnapshot = (ev) => {
+      try {
+        const data = ev?.detail || {};
+        out.textContent = JSON.stringify(data, null, 2) || '(keine Daten)';
+      } catch (e) {
+        out.textContent = '(Fehler beim Darstellen)';
+      }
+    };
+
+    reqBtn.addEventListener('click', request);
+    window.addEventListener('cb:build:snapshot', onSnapshot, { once: false });
+
+    // Beim ersten Öffnen direkt versuchen
+    request();
+  }
+  window.registerInspectorTab('build', renderBuildTab);
+})();
+
 (() => {
   function mount(panel){
     panel.innerHTML = `
