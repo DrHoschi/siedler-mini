@@ -150,3 +150,105 @@
 
   document.addEventListener("DOMContentLoaded", ensureMountedOnShow);
 })();
+
+/* ============================================================================
+ * Datei   : inspector/tabs/inspector.tab.logs-v1.js
+ * Version : v1.0.1 (2025-11-01)
+ * Zweck   : Zeigt Events 'cb:log' aus der Bridge im Logs-Tab an
+ * Abhäng. : registerInspectorTab(name, setup) – aus deinem bestehenden Inspector
+ * ========================================================================== */
+(function () {
+  if (typeof window.registerInspectorTab !== 'function') {
+    console.warn('[logs-tab] registerInspectorTab fehlt.');
+    return;
+  }
+
+  const STATE = {
+    cap: 300,
+    buf: [],
+    el: { list: null, counter: null }
+  };
+  const cssId = 'insp-logs-inline-style';
+  function injectCSS(){
+    if (document.getElementById(cssId)) return;
+    const style = document.createElement('style');
+    style.id = cssId;
+    style.textContent = `
+#inspector .logs-toolbar{display:flex;gap:.5rem;align-items:center;margin:0 0 .5rem}
+#inspector .logs-btn{padding:.25rem .5rem;border:1px solid #333;background:#222;border-radius:.4rem;cursor:pointer}
+#inspector .logs-list{height:calc(100% - 2.2rem);overflow:auto;border-top:1px solid #2a2a2e;padding:.35rem .25rem}
+#inspector .logs-row{padding:.15rem .25rem;border-bottom:1px dashed #2a2a2e;white-space:pre-wrap;word-break:break-word}
+#inspector .logs-row:last-child{border-bottom:none}
+#inspector .logs-ts{opacity:.6;margin-right:.5rem}
+#inspector .logs-lvl{display:inline-block;min-width:3.2rem;text-align:center;border-radius:.35rem;padding:.05rem .3rem;margin-right:.5rem;opacity:.9}
+#inspector .logs-log .logs-lvl{background:#2a2f39}
+#inspector .logs-info .logs-lvl{background:#233b56}
+#inspector .logs-warn .logs-lvl{background:#4a3c1b}
+#inspector .logs-error .logs-lvl{background:#4a1b1b}
+#inspector .logs-debug .logs-lvl{background:#2a2a2a}
+    `;
+    document.head.append(style);
+  }
+
+  function row(entry){
+    const div = document.createElement('div');
+    div.className = 'logs-row logs-' + entry.level;
+    const ts  = document.createElement('span'); ts.className='logs-ts';  ts.textContent = entry.ts;
+    const lvl = document.createElement('span'); lvl.className='logs-lvl'; lvl.textContent = entry.level.toUpperCase();
+    const msg = document.createElement('span'); msg.className='logs-msg'; msg.textContent = entry.msg;
+    div.append(ts, lvl, msg);
+    return div;
+  }
+
+  function push(entry){
+    STATE.buf.push(entry);
+    if (STATE.buf.length > STATE.cap) STATE.buf.splice(0, STATE.buf.length - STATE.cap);
+    render();
+  }
+
+  function render(){
+    const {list, counter} = STATE.el;
+    if (!list) return;
+    list.innerHTML = '';
+    for (const e of STATE.buf) list.append(row(e));
+    if (counter) counter.textContent = String(STATE.buf.length);
+    list.scrollTop = list.scrollHeight;
+  }
+
+  // === Registrierung im bestehenden Inspector ===
+  window.registerInspectorTab('logs', function setup(section){
+    injectCSS();
+
+    // Toolbar
+    const toolbar = document.createElement('div'); toolbar.className='logs-toolbar';
+    const clearBtn = document.createElement('button'); clearBtn.className='logs-btn'; clearBtn.textContent='Clear';
+    const count    = document.createElement('span'); count.className='logs-count'; count.textContent='0';
+    toolbar.append(clearBtn, count);
+
+    // Liste
+    const list = document.createElement('div'); list.className='logs-list';
+    section.innerHTML = '<h2>Logs</h2>';
+    section.append(toolbar, list);
+
+    STATE.el.list = list;
+    STATE.el.counter = count;
+
+    clearBtn.onclick = () => { STATE.buf.length = 0; render(); };
+
+    // Listener: Bridge-Events
+    function onLog(ev){
+      const d = ev.detail || {};
+      const level = (d.level || 'log').toLowerCase();
+      const msg   = (d.msg != null ? String(d.msg) : '(ohne msg)');
+      const ts    = new Date().toISOString().replace('T',' ').replace('Z','');
+      push({ ts, level, msg });
+    }
+    window.addEventListener('cb:log', onLog);
+
+    // Erste Ausgabe – damit man sofort etwas sieht
+    push({ ts: new Date().toISOString().replace('T',' ').replace('Z',''), level: 'info',
+           msg: 'Logs-Tab bereit (wartet auf console.* via Bridge)' });
+
+    // Cleanup ist nicht nötig (Section bleibt bestehen)
+  });
+})();
