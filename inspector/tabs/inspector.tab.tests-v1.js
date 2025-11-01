@@ -3,6 +3,43 @@
  * Version : v25.11.01
  * Zweck   : TESTS – Buttons für typische Events (Schnellprüfung)
  * ========================================================================== */
+/* ============================================================================
+ * Datei   : inspector/tabs/inspector.tab.tests-v1.js
+ * Version : v1.0.0 (2025-11-01)
+ * Zweck   : Kleine Service- und Diagnose-Buttons
+ * Events  : 'req:insp:open' / 'req:insp:close' (optional)
+ * ========================================================================== */
+(function () {
+  function renderTestsTab(sectionEl) {
+    sectionEl.innerHTML = [
+      '<div class="insp-pad">',
+      '<h3>Tests / Service</h3>',
+      '<div class="row">',
+      '  <button data-action="open">Inspector öffnen</button>',
+      '  <button data-action="close">Inspector schließen</button>',
+      '  <button data-action="remount">Content neu mounten</button>',
+      '</div>',
+      '<pre class="out" style="margin-top:10px;"></pre>',
+      '</div>'
+    ].join('');
+
+    const out = sectionEl.querySelector('.out');
+    const log = (msg) => out.textContent = (out.textContent + '\n' + msg).trim();
+
+    sectionEl.querySelector('[data-action="open"]')
+      .addEventListener('click', () => window.dispatchEvent(new CustomEvent('req:insp:open')));
+    sectionEl.querySelector('[data-action="close"]')
+      .addEventListener('click', () => window.dispatchEvent(new CustomEvent('req:insp:close')));
+    sectionEl.querySelector('[data-action="remount"]')
+      .addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('req:insp:content:mount', { detail:{ host: document.getElementById('inspector') } }));
+        log('remount gesendet');
+      });
+
+    log('Tests bereit.');
+  }
+  window.registerInspectorTab('tests', renderTestsTab);
+})();
 (() => {
   function mount(panel){
     panel.innerHTML = `
