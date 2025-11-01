@@ -4,6 +4,17 @@
  * Zweck   : LOGS – Konsole mitschneiden, filtern, kopieren, exportieren
  * Features: Text-Filter, Typ-Filter (info/warn/error), Clear, Copy, Export JSON/CSV
  * ========================================================================== */
+// Beispiel: inspector/tabs/inspector.tab.logs-v1.js
+(function () {
+  function renderLogsTab(sectionEl) {
+    // HIER deine bisherige Logs-Tab-Renderlogik:
+    // sectionEl.innerHTML = '...';
+    sectionEl.innerHTML = '<pre>(Logs kommen hier rein)</pre>';
+  }
+  // << NEU: über Adapter registrieren >>
+  window.registerInspectorTab('logs', renderLogsTab);
+})();
+
 (() => {
   const state = {
     items: [],       // {time,type,msg}
