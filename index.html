@@ -170,14 +170,15 @@
           CBLog.info('[inspector] Lazy-Load beginnt (nach registry)');
 
           // Host + Bridges (aus deinem Inspektor.zip)
-          await import('./ui/inspector/inspector.core.js?v=25.11.02');
-          await import('./ui/inspector/inspector.bridges.js?v=25.11.02');
+          await import('./inspector/inspector.core-v1.js');
+          await import('./inspector/inspector.bridges-v1.js');
 
           // Standard-Tabs
-          await import('./ui/inspector/tabs.logs.js?v=25.11.02');
-          await import('./ui/inspector/tabs.tests.js?v=25.11.02');
-          await import('./ui/inspector/tabs.resources.js?v=25.11.02');
-          await import('./ui/inspector/tabs.paths.js?v=25.11.02');
+          await import('./inspector/tabs.logs-v1.js');
+          await import('./inspector/tabs.tests-v1.js');
+          await import('./inspector/tabs.resources-v1.js');
+          await import('./inspector/tabs.paths-v1.js');
+             
 
           // Optional (jetzt auskommentiert lassen; später aktivieren)
           // await import('./ui/inspector/tabs.editor.js?v=25.11.02');
