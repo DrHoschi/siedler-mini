@@ -1,5 +1,5 @@
 # Audit-Ergebnis
-Gesamt Dateien: 415
+Gesamt Dateien: 417
 
 ## Groß-/Kleinschreibung (.PNG → .png)
  - assets/characters/fisherman.PNG

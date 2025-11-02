@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-01T08:57:52.519Z",
+  "createdAt": "2025-11-02T20:27:03.581Z",
   "root": ".",
-  "count": 460,
+  "count": 462,
   "entries": [
     {
       "type": "dir",
@@ -1450,7 +1450,12 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.build-v1.js",
-      "size": 3417
+      "size": 6474
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.checker-v1.js",
+      "size": 22511
     },
     {
       "type": "file",
@@ -1460,7 +1465,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.logs-v1.js",
-      "size": 6376
+      "size": 6311
     },
     {
       "type": "file",
@@ -1474,8 +1479,13 @@
     },
     {
       "type": "file",
+      "path": "inspector/tabs/inspector.tab.signals-v1.js",
+      "size": 17089
+    },
+    {
+      "type": "file",
       "path": "inspector/tabs/inspector.tab.tests-v1.js",
-      "size": 3901
+      "size": 20841
     },
     {
       "type": "file",
@@ -1485,12 +1495,12 @@
     {
       "type": "file",
       "path": "inspector/inspector.bridges.game.js",
-      "size": 1818
+      "size": 2979
     },
     {
       "type": "file",
       "path": "inspector/inspector.bridges.js",
-      "size": 2188
+      "size": 7678
     },
     {
       "type": "file",
@@ -1500,7 +1510,7 @@
     {
       "type": "file",
       "path": "inspector/ui-inspector-v1.css",
-      "size": 2937
+      "size": 4732
     },
     {
       "type": "file",
@@ -2206,22 +2216,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 45236
+      "size": 45543
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 17347
+      "size": 17468
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 3877
+      "size": 4066
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 5709
+      "size": 5714
     },
     {
       "type": "file",
