@@ -151,7 +151,7 @@
        - Enthält: Host (core), Bridges, Tabs (logs/tests/resources/paths)
        - Optional: Editor-Tab später zuschaltbar
        ========================================================= -->
-  <script>
+<!--  <script>
     (function setupLazyInspector(){
       let loaded = false;
 
@@ -205,8 +205,25 @@
         }
       }, 5000);
     })();
-  </script>
+  </script> -->
 
+      <!-- Inspector Core + Content + Tabs -->
+  <script src="inspector/ui-inspector-v1.js?v=25.11.01-final" defer></script>
+  <script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/inspector.tabs.adapter.js?v=1.0.0"></script>
+  <!-- Bridges zentral  -->
+  <script src="inspector/inspector.bridges.js?v=1.0.0" defer></script>
+  <script src="inspector/inspector.bridges.game.js?v=1.0.0"></script>
+  <script src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.resources-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.paths-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.tests-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.ui-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.checker-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.editor-v1.js?v=1.0.0" defer></script>
+  <script src="inspector/tabs/inspector.tab.signals-v1.js?v=1.0.0" defer></script>
+ 
   <!-- =========================================================
        [8] OPTIONALE OVERLAYS (LAZY nach Game-Start)
        ---------------------------------------------------------
