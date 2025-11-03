@@ -2,6 +2,17 @@
 
 ## 🧩 Übersicht
 Das Verzeichnis `/core/` enthält **alle Kernmodule** des Spiels „Neue Siedler“.  
+header strutur
+/* ============================================================================
+ * Datei   : core/…
+ * Version : v25.11.03 (skeleton)
+ * Zweck   : …
+ * Struktur: IMPORTS → KONSTANTEN → HILFSFUNKTIONEN → KLASSEN → HAUPTLOGIK → EXPORTS
+ * Ereignisse : cb:/req:/emit:
+ * ============================================================================
+
+ */
+ 
 Sie bilden gemeinsam die **Engine-Basis, Registry-Verwaltung, UI-Bridges, Rendering- und Overlay-Systeme** sowie die Integrationspunkte zum Inspector.
 
 ---
