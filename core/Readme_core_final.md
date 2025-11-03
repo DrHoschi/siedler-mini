@@ -13,6 +13,15 @@ header strutur
 
  */
  
+ neue datein 251103
+ core/logistics.prio.js
+ core/territory.js
+ core/market.js
+ core/warehouse.js
+ core/carrier.js
+ core/game.production.js
+
+ 
 Sie bilden gemeinsam die **Engine-Basis, Registry-Verwaltung, UI-Bridges, Rendering- und Overlay-Systeme** sowie die Integrationspunkte zum Inspector.
 
 ---
