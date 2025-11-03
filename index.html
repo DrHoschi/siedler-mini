@@ -6,19 +6,16 @@
      Autor   : Mann + ChatGPT (GPT-5 Thinking)
      Zweck   : Start-Dokument. Lädt UI + Core in sinnhafter Reihenfolge:
                [0] HTML/CSS → [1] Boot → [2] Startpanel → [3] Assets → [4] Registry
-               → [5] HUD/Build → [6] Game → [7] Inspector (lazy) → [8] optionale Overlays
-     WICHTIG : - Startpanel ist zuerst sichtbar
-               - Inspector wird NACH registry lazy nachgeladen
-               - Alle Events/Logs folgen unseren Projektkonventionen
-     themen  : dark / ligth /wood
+               → [5] HUD/Build → [6] Game → [7] Inspector (lazy/optional) → [8] Overlays
+     WICHTIG : - Startpanel zuerst sichtbar (Splash-Fallback bis cb:ui-ready)
+               - Inspector bleibt geschlossen, bis du ihn öffnest (⚙️)
+               - Auskommentierte Inspector-Varianten bleiben zum Testen erhalten
+     themen  : dark / light / wood
      ============================================================================ -->
 <html lang="de" data-theme="wood">
 <head>
   <!-- =========================================================
        [0] META / BASIS
-       ---------------------------------------------------------
-       - viewport + theme-color für Mobile
-       - <meta name="robots"> optional, wenn Repo public
        ========================================================= -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -28,13 +25,7 @@
 
   <!-- =========================================================
        [0] STYLES (Global → HUD/Build → Inspector-CSS)
-       ---------------------------------------------------------
-       Regeln:
-       - ui.css = Grundlayout
-       - ui-hud.css = Ressourcen-HUD (obere/seitliche Leiste)
-       - ui-build.css = Baumenü & Kosten-Icons
-       - Inspector-CSS kann schon im <head> geladen werden
-         (damit beim Lazy-JS-Laden keine FOUC-Effekte auftreten)
+       - Inspector-CSS im <head>, damit kein FOUC beim Nachladen entsteht
        ========================================================= -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.11.02">
   <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.11.02">
@@ -48,13 +39,11 @@
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.clean.css?v=25.11.02"> -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.final.css?v=25.11.02"> -->
 
-  <!-- Optional: Projekt-spezifische Layout-CSS (nur falls gebraucht) -->
+  <!-- Optional: Projekt-Layout -->
   <!-- <link rel="stylesheet" href="ui/css/ui-layout.css?v=25.11.02"> -->
 
   <!-- =========================================================
-       [0] BASIS-SCRIPTS (nur falls unbedingt nötig)
-       ---------------------------------------------------------
-       KEINE Inspector-JS hier! (wird lazy nach registry geladen)
+       [0] BASIS-LOG & MINIMAL-UI
        ========================================================= -->
   <script>
     // Kleiner, robuster Log-Wrapper (falls boot.js noch nicht da ist)
@@ -68,7 +57,7 @@
   </script>
 
   <style>
-    /* Optional: Minimal-Error-Banner, falls Lazy-Loads fehlschlagen */
+    /* Fehlerbanner für Nachladeprobleme (z. B. Inspector) */
     #boot-error {
       position: fixed; left: 0; right: 0; top: 0;
       background: #b00020; color: #fff; padding: 10px 14px;
@@ -76,16 +65,51 @@
       display: none; z-index: 99999;
     }
     #boot-error b { font-weight: 700; }
+
+    /* Splash/Startbild-Fallback: sichtbar bis cb:ui-ready */
+    :root { --start-bg: url("assets/ui/start-bg.jpg"); } /* Pfad bei Bedarf anpassen */
+    #start-splash{
+      position: fixed; inset: 0;
+      background: #111 center/cover no-repeat var(--start-bg);
+      display: grid; place-items: center;
+      z-index: 1000; /* unter Fehlerbanner, über Canvas */
+    }
+    #start-splash .title{
+      font: 600 20px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color: #f0e6d2; text-shadow: 0 2px 6px rgba(0,0,0,.6);
+      letter-spacing: .04em;
+    }
+    html.splash-done #start-splash{ display:none; }
+
+    /* Inspector „closed by default“ – Sicherheitsgurt */
+    #inspector{ display:none !important; }
+    #inspector[data-open="1"]{ display:block !important; }
+
+    /* FAB-Button (Zahnrad) unten links */
+    #inspector-fab {
+      position: fixed; left: 14px; bottom: 14px;
+      width: 44px; height: 44px; border-radius: 12px;
+      background: rgba(245,245,245,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      backdrop-filter: blur(6px);
+      display: grid; place-items: center;
+      font: 20px/1.0 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color: #ddd; cursor: pointer; z-index: 99998;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #inspector-fab:active { transform: translateY(1px); }
+    #inspector-fab.hidden { display: none; }
   </style>
 </head>
 <body>
   <!-- =========================================================
-       [0] ROOT-KONTAINER + (optional) Fehlerbanner
+       [0] ROOT + Fehlerbanner
        ========================================================= -->
   <div id="boot-error" role="alert" aria-live="assertive">
     <b>Fehler beim Nachladen</b> – Details in der Konsole prüfen (Netzwerk/404).
   </div>
-  <!-- Spiel-Container -->
+
+  <!-- Spiel-Container (Canvas & UI-Roots) -->
   <canvas id="game" data-ui="canvas" aria-label="Spielfeld"></canvas>
   <div id="ui-root"    data-ui="root"   aria-live="polite"></div>
   <div id="hud-root"   data-ui="hud"    aria-live="polite" hidden></div>
@@ -96,106 +120,66 @@
   <div id="inspector" class="inspector-host" aria-hidden="true"></div>
   <button id="inspector-fab" aria-label="Inspector" title="Inspector">⚙️</button>
 
-  <!-- =========================================================
-       [2] STARTPANEL / UI-SHELL
-       ---------------------------------------------------------
-       - Das konkrete Markup kommt aus ui/ui-start.js (generativ)
-       - Stelle sicher, dass dein Startpanel zuerst sichtbar ist
-       ========================================================= -->
-  <div id="app-root">
-    <!-- Platzhalter: UI/Startpanel & Canvas werden per JS eingefügt -->
-    <noscript>Bitte JavaScript aktivieren.</noscript>
+  <!-- Splash/Startbild-Fallback (verschwindet bei cb:ui-ready) -->
+  <div id="start-splash" aria-hidden="true">
+    <div class="title">Neue Siedler</div>
   </div>
 
   <!-- =========================================================
        [1] BOOT & EVENT-BUS
-       ---------------------------------------------------------
-       - Boot muss VOR allen anderen Modulen geladen werden
-       - Stellt EventBus, globale Hooks & Basis-Logs
        ========================================================= -->
   <script src="core/boot.js?v=25.11.02"></script>
 
   <!-- =========================================================
        [2] UI: STARTPANEL (sichtbar zuerst)
-       ---------------------------------------------------------
-       - Erzeugt Start-Overlay, sendet cb:ui-ready
        ========================================================= -->
   <script src="ui/ui-start.js?v=25.11.02"></script>
 
   <!-- =========================================================
        [3] ASSETS (Loader – MUSS 'asset.js' Singular heißen)
-       ---------------------------------------------------------
-       - Lädt Bilder/JSON/Vektoren
-       - Sendet cb:assets-ready {ok:true, counts:{...}}
        ========================================================= -->
   <script src="core/asset.js?v=25.11.02"></script>
 
   <!-- =========================================================
        [4] REGISTRY (Datenzusammenführung/Validierung)
-       ---------------------------------------------------------
-       - Liest data/*.json, prüft IDs, baut Maps
-       - Sendet cb:registry:ready {version, counts:{...}}
        ========================================================= -->
   <script src="core/registry.js?v=25.11.02"></script>
 
   <!-- =========================================================
        [5] UI: HUD + BUILD
-       ---------------------------------------------------------
-       - HUD reagiert auf cb:res:change
-       - Build-Dock rendert Kategorien/Buildings dynamisch
        ========================================================= -->
   <script src="ui/ui-hud.js?v=25.11.02"></script>
   <script src="ui/ui-build.js?v=25.11.02"></script>
 
   <!-- =========================================================
        [6] GAME (Map/Loop/World)
-       ---------------------------------------------------------
-       - Initialisiert Spiel und sendet cb:game:start
        ========================================================= -->
   <script src="core/game.js?v=25.11.02"></script>
 
   <!-- =========================================================
-       [7] INSPECTOR (LAZY LOAD nach registry)
-       ---------------------------------------------------------
-       - Wir laden NUR CSS vorab. JS-Module werden dynamisch importiert,
-         sobald cb:registry:ready gefeuert wurde. So sind alle Daten da.
-       - Enthält: Host (core), Bridges, Tabs (logs/tests/resources/paths)
-       - Optional: Editor-Tab später zuschaltbar
+       [7] INSPECTOR (Option A: LAZY via import() – AUSKOMMENTIERT)
+       - Aktivieren, wenn du „echtes“ Lazy-Loading willst.
+       - Dann die statischen <script src="inspector/..."> unten entfernen.
        ========================================================= -->
-<!--  <script>
+  <!--
+  <script type="module">
     (function setupLazyInspector(){
       let loaded = false;
-
-      function showBootError(msg){
+      const showBootError = (msg) => {
         const b = document.getElementById('boot-error');
-        if (!b) return;
-        b.style.display = 'block';
-        b.textContent = `Inspector-Ladefehler: ${msg}`;
-      }
-
+        if (!b) return; b.style.display='block'; b.textContent = `Inspector-Ladefehler: ${msg}`;
+      };
       async function loadInspector() {
-        if (loaded) return;
-        loaded = true;
-
+        if (loaded) return; loaded = true;
         try {
           CBLog.info('[inspector] Lazy-Load beginnt (nach registry)');
-
-          // Host + Bridges (aus deinem Inspektor.zip)
           await import('./inspector/inspector.core-v1.js');
           await import('./inspector/inspector.bridges-v1.js');
-
-          // Standard-Tabs
           await import('./inspector/tabs.logs-v1.js');
           await import('./inspector/tabs.tests-v1.js');
           await import('./inspector/tabs.resources-v1.js');
           await import('./inspector/tabs.paths-v1.js');
-             
-
-          // Optional (jetzt auskommentiert lassen; später aktivieren)
-          // await import('./ui/inspector/tabs.editor.js?v=25.11.02');
-
-          // Signal „Inspector bereit“
-          window.dispatchEvent(new CustomEvent('cb:insp:ready', { detail: { lazy:true, version:'v25.11.02' }}));
+          window.dispatchEvent(new CustomEvent('cb:insp:ready',{detail:{lazy:true,version:'v25.11.02'}}));
           CBLog.ok('[inspector] bereit (lazy)');
         } catch (err) {
           console.error(err);
@@ -203,28 +187,23 @@
           CBLog.error('[inspector] Fehler beim Lazy-Load');
         }
       }
-
-      // Load-Trigger: NACH REGISTRY
-      window.addEventListener('cb:registry:ready', loadInspector, { once: true });
-
-      // Optionaler Fallback: Wenn aus irgendeinem Grund „registry“ nicht kommt,
-      // trotzdem nach ~5s versuchen (z. B. in Demo-Seiten)
-      setTimeout(()=> {
-        if (!loaded) {
-          CBLog.warn('[inspector] Timeout-Fallback: versuche trotzdem Lazy-Load …');
-          loadInspector();
-        }
-      }, 5000);
+      window.addEventListener('cb:registry:ready', loadInspector, { once:true });
+      setTimeout(()=>{ if(!loaded){ CBLog.warn('[inspector] Timeout-Fallback …'); loadInspector(); } }, 5000);
     })();
-  </script> -->
+  </script>
+  -->
 
-      <!-- Inspector Core + Content + Tabs -->
+  <!-- =========================================================
+       [7] INSPECTOR (Option B: deine DEMO statisch geladen – AKTIV)
+       - Bleibt geschlossen bis du ihn öffnest (siehe „Hard Close“ + FAB).
+       ========================================================= -->
   <script src="inspector/ui-inspector-v1.js?v=25.11.01-final" defer></script>
   <script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
-  <script src="inspector/inspector.tabs.adapter.js?v=1.0.0"></script>
-  <!-- Bridges zentral  -->
+  <script src="inspector/inspector.tabs.adapter.js?v=1.0.0" defer></script>
+  <!-- Bridges zentral -->
   <script src="inspector/inspector.bridges.js?v=1.0.0" defer></script>
-  <script src="inspector/inspector.bridges.game.js?v=1.0.0"></script>
+  <script src="inspector/inspector.bridges.game.js?v=1.0.0" defer></script>
+  <!-- Tabs -->
   <script src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.resources-v1.js?v=1.0.0" defer></script>
@@ -234,12 +213,34 @@
   <script src="inspector/tabs/inspector.tab.checker-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.editor-v1.js?v=1.0.0" defer></script>
   <script src="inspector/tabs/inspector.tab.signals-v1.js?v=1.0.0" defer></script>
- 
+
+  <!-- =========================================================
+       [7.1] Inspector: Hard-Close + FAB-Hook
+       - Verhindert Auto-Open; Öffnen nur via req:insp:open (durch ⚙️)
+       ========================================================= -->
+  <script>
+    (function inspectorGuardsAndFab(){
+      const fab = document.getElementById('inspector-fab');
+
+      // FAB öffnet den Inspector
+      fab?.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('req:insp:open', { detail:{ tab:'logs' }}));
+      });
+
+      // Sobald der Inspector "bereit" meldet, NICHT automatisch öffnen
+      const close = () => window.dispatchEvent(new CustomEvent('cb:insp:close'));
+      window.addEventListener('cb:insp:ready', close);
+
+      // Einige Builds respektieren diese Flag explizit
+      window.INSP_AUTO_OPEN = false;
+
+      // Optional: FAB erst nach Game-Start anzeigen
+      // window.addEventListener('cb:game:start', ()=> fab?.classList.remove('hidden'), { once:true });
+    })();
+  </script>
+
   <!-- =========================================================
        [8] OPTIONALE OVERLAYS (LAZY nach Game-Start)
-       ---------------------------------------------------------
-       - Beispiel Path-Overlay: macht erst nach cb:game:start Sinn
-       - Wird vom Inspector-Tab „Pfade“ getoggelt
        ========================================================= -->
   <script>
     (function setupLazyOverlays(){
@@ -259,14 +260,13 @@
         }
       }
 
-      // Läd das Overlay erst, wenn das Spiel läuft – spart Init-Kosten
+      // Erst laden, wenn das Spiel läuft – spart Init-Kosten
       window.addEventListener('cb:game:start', loadPathOverlay, { once: true });
 
-      // Zusätzlich: Wenn der Inspector-Tab „Pfade“ früh geöffnet wird,
-      // kann man optional sofort nachladen (auskommentiert lassen, wenn nicht gewünscht)
+      // Optional: Beim Öffnen des Pfade-Tabs sofort nachladen
       /*
       window.addEventListener('cb:insp:tab:change', (e)=>{
-        if (e.detail && (e.detail.tab === 'Pfade' || e.detail.tab === 'Paths')) {
+        if (e.detail && (e.detail.tab === 'Pfade' || e.detail.tab === 'paths')) {
           loadPathOverlay();
         }
       });
@@ -276,14 +276,16 @@
 
   <!-- =========================================================
        [9] SMOKE-TEST HILFE (Debug – kann drin bleiben)
-       ---------------------------------------------------------
-       - Ein paar Kurz-Listener, damit man in der Konsole sieht,
-         ob die Events korrekt fließen.
        ========================================================= -->
   <script>
     (function smoke(){
       const on = (n)=>window.addEventListener(n, e=>CBLog.info(`[event] ${n}`, e.detail));
       ['cb:ui-ready','cb:assets-ready','cb:registry:ready','cb:hud-ready','cb:build:ready','cb:game:start','cb:insp:ready','cb:path:overlay:ready'].forEach(on);
+
+      // Splash-Fallback ausblenden, wenn echtes Startpanel bereit ist
+      window.addEventListener('cb:ui-ready', ()=>{
+        document.documentElement.classList.add('splash-done');
+      }, { once:true });
     })();
   </script>
 </body>
