@@ -128,7 +128,8 @@
   <!-- =========================================================
        [1] BOOT & EVENT-BUS
        ========================================================= -->
-  <script src="core/boot.js?v=25.11.02"></script>
+  <script src="core/boot-v1.js"></script>
+<!-- <script src="core/boot.js" defer></script> -->
 
   <!-- =========================================================
        [2] UI: STARTPANEL (sichtbar zuerst)
@@ -143,7 +144,15 @@
   <!-- =========================================================
        [4] REGISTRY (Datenzusammenführung/Validierung)
        ========================================================= -->
-  <script src="core/registry.js?v=25.11.02"></script>
+<!-- alte version  <script src="core/registry.js"></script> -->
+  <script src="core/registry-v1.js" defer></script>
+<!-- Systeme (aus deiner letzten Runde) -->
+<script src="core/warehouse.js" defer></script>
+<script src="core/carrier.js" defer></script>
+<script src="core/logistics.prio.js" defer></script>
+<script src="core/territory.js" defer></script>
+<script src="core/market.js" defer></script>
+<script src="core/game.production.js" defer></script>
 
   <!-- =========================================================
        [5] UI: HUD + BUILD
@@ -156,6 +165,9 @@
        ========================================================= -->
   <script src="core/game.js?v=25.11.02"></script>
 
+
+
+     
   <!-- =========================================================
        [7] INSPECTOR (Option A: LAZY via import() – AUSKOMMENTIERT)
        - Aktivieren, wenn du „echtes“ Lazy-Loading willst.
