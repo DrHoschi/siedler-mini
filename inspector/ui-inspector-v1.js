@@ -254,3 +254,8 @@
   // Auto-Init, falls noch nicht anderswo aufgerufen
   document.addEventListener('DOMContentLoaded', () => { if (!core.initialized) core.init(); });
 })();
+/* ==== Registrierung ======================================================== */
+  // Name/Titel absichtlich "Layer", ID eindeutig:
+  universalRegister('Layer', 'insp-tab-layer', mount, 120);
+
+})(); // <--- schließt den Adapter-Header
