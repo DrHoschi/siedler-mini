@@ -24,6 +24,16 @@
   padding: 14px 16px;
 }
 
+#start-panel .box.wood-frame{
+  border: var(--panel-border-width, 16px) solid transparent;
+  border-image-source: var(--panel-src, url("../../assets/ui/panel.svg"));
+  border-image-slice: var(--panel-slice, 12) fill;
+  border-image-width: var(--panel-border-width, 16);
+  border-image-repeat: stretch;
+  background: var(--panel-bg, rgba(0,0,0,.18));
+  backdrop-filter: blur(var(--panel-blur, 2px));
+}
+
 #start-panel h1{
   margin: 2px 0 12px; color:#fff; font-size:24px; text-align:center;
   text-shadow:0 0 8px #000;
