@@ -13,6 +13,77 @@
  *                    req:insp:content:mount (Ping, falls Content später lädt)
  * Struktur: KONSTANTEN → HILFSFUNKTIONEN → KLASSE → INIT/EXPORT
  * ========================================================================== */
+
+/* ==== Inspector-Adapter-Header (neu + alt) ================================= */
+(function(){
+  'use strict';
+
+  // Run-Once: verhindert Doppel-Registrierung
+  window.__INSP_TABS__ = window.__INSP_TABS__ || {};
+  if (window.__INSP_TABS__['layer-v1']) return;
+  window.__INSP_TABS__['layer-v1'] = true;
+
+  // Universal-Registrierer: nutzt neue API oder fällt auf DOM-Fallback zurück
+  function universalRegister(tabTitle, tabId, mountFn, order){
+    const tryAPI = ()=> {
+      if (typeof window.registerInspectorTab === 'function') {
+        window.registerInspectorTab(tabTitle, mountFn, { id: tabId, order: order||120 });
+        console.info('[layer-tab] via API registriert.');
+        return true;
+      }
+      return false;
+    };
+
+    if (tryAPI()) return; // neue API war da
+
+    // Auf Ready-Events warten (neuer Inspector feuert diese)
+    const onReady = ()=> { if (tryAPI()) cleanup(); };
+    function cleanup(){
+      window.removeEventListener('cb:insp:core:ready', onReady);
+      window.removeEventListener('cb:insp:content:ready', onReady);
+      clearInterval(poll);
+      clearTimeout(tout);
+    }
+    window.addEventListener('cb:insp:core:ready', onReady);
+    window.addEventListener('cb:insp:content:ready', onReady);
+
+    // Polling + Timeout-Fallback (falls keine Events kommen)
+    const poll = setInterval(onReady, 200);
+    const tout = setTimeout(()=>{
+      clearInterval(poll);
+      // Fallback: Tab-Button + Section direkt in den Inspector einhängen
+      const insp = document.querySelector('#inspector');
+      const tabs = insp?.querySelector('.insp-tabs');
+      const content = insp?.querySelector('.insp-content');
+      if (tabs && content) {
+        const btn = document.createElement('button');
+        btn.textContent = tabTitle; btn.dataset.tab = tabId;
+        tabs.appendChild(btn);
+
+        const sec = document.createElement('section');
+        sec.id = tabId; content.appendChild(sec);
+
+        tabs.querySelectorAll('button').forEach(b=>{
+          b.addEventListener('click', ()=>{
+            const id = b.dataset.tab;
+            content.querySelectorAll('section').forEach(s=> s.style.display = (s.id===id?'block':'none'));
+            window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab: b.textContent } }));
+          });
+        });
+
+        // mount jetzt direkt
+        mountFn(sec);
+        sec.style.display = 'block';
+        console.info('[layer-tab] DOM-Fallback aktiv.');
+      } else {
+        console.warn('[layer-tab] Weder API noch .insp-tabs/.insp-content gefunden.');
+      }
+    }, 10000);
+  }
+
+/* ==== AB HIER DEIN BESTEHENDER CODE (utils, render, etc.) ================== */
+// … (lass deinen bisherigen Code so wie er ist) …
+
 (() => {
   /* ---------------------------------- KONSTANTEN -------------------------- */
   const CFG = {
