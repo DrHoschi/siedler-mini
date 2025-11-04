@@ -15,7 +15,7 @@
  * ========================================================================== */
 
 /* ==== Inspector-Adapter-Header (neu + alt) ================================= */
-(function(){
+/* (function(){
   'use strict';
 
   // Run-Once: verhindert Doppel-Registrierung
@@ -79,7 +79,7 @@
         console.warn('[layer-tab] Weder API noch .insp-tabs/.insp-content gefunden.');
       }
     }, 10000);
-  }
+  } */
 
 /* ==== AB HIER DEIN BESTEHENDER CODE (utils, render, etc.) ================== */
 // … (lass deinen bisherigen Code so wie er ist) …
@@ -255,7 +255,7 @@
   document.addEventListener('DOMContentLoaded', () => { if (!core.initialized) core.init(); });
 })();
 /* ==== Registrierung ======================================================== */
-  // Name/Titel absichtlich "Layer", ID eindeutig:
+/*  // Name/Titel absichtlich "Layer", ID eindeutig:
   universalRegister('Layer', 'insp-tab-layer', mount, 120);
 
-})(); // <--- schließt den Adapter-Header
+})(); // <--- schließt den Adapter-Header */
