@@ -36,7 +36,7 @@
  *  - inspector.core.js v18.16.3+ (mit generic-view)
  * ========================================================================== */
 /* ============================================================================
- * Datei   : ui/inspector/inspector.ui.js
+ * Datei   : ui/inspector/inspector.layer.js
  * Projekt : Neue Siedler
  * Version : v18.16.5 (final, Floating Tools + Event/State-Bridge)
  * Zweck   : UI-/Layer-Diagnose + verschiebbare Floating-Tool-Leiste
