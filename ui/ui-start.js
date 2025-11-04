@@ -1,6 +1,6 @@
 /* ============================================================================
  * Datei   : ui/ui-start.js
- * Version : v25.10.16-3
+ * Version : v25.11.04
  * Zweck   : Startfenster (klein, 4 Buttons), Fade-Out direkt beim Start-Klick
  * Events  : cb:ui-ready, req:game:start, req:game:continue, req:game:reset
 ============================================================================ */
@@ -80,6 +80,15 @@
     if (p) p.style.display = 'none';
     html.classList.remove('panel-open');
   }
+  
+ /* ===== Splash (Hintergrundbild) – verschwindet bei cb:ui-ready ===== */
+    :root { --start-bg: url("assets/ui/start-bg.jpg"); } /* Pfad bei Bedarf anpassen */
+    #start-splash{
+      position: fixed; inset: 0;
+      background: #111 center/cover no-repeat var(--start-bg);
+      display: grid; place-items: center;
+      z-index: 100; /* unter Startpanel */
+    }
 
   // Buttons binden (IDs aus deinem Markup: Spiel starten, Weiterspielen, Reset, Vollbild)
   window.addEventListener('cb:ui-ready', ()=>{
