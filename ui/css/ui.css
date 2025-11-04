@@ -48,6 +48,9 @@ img, canvas, svg, video { max-width: 100%; height: auto; display: block; }
 
 /* [1A] Default-Fallback (falls kein data-theme gesetzt ist) */
 :root{
+   /* Hintergrund Bild */
+  #start-splace display.block
+   
   /* Grundfarben Oberfläche */
   --ui-bg:          #0f1012;      /* Seitenhintergrund */
   --ui-surface:     #15171b;      /* Flächen/Panels    */
