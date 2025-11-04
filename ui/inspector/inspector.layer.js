@@ -1,5 +1,5 @@
 /* ============================================================================
- * Datei   : ui/inspector/inspector.ui.js
+ * Datei   : ui/inspector/inspector.layer.js
  * Projekt : Neue Siedler
  * Version : v18.16.3 (final, UI-Diagnose-Tools)
  * Zweck   : Inspector-Tab "ui" zum Untersuchen von Layern/Z-Order/Pointer Events
@@ -17,7 +17,7 @@
  *  - Keine Inspector open/close Buttons mehr – Close oben rechts im Header.
  * ========================================================================== */
 /* ============================================================================
- * Datei   : ui/inspector/inspector.ui.js
+ * Datei   : ui/inspector/inspector.layer.js
  * Projekt : Neue Siedler
  * Version : v18.16.4 (UI-Tab + Floating Tools / Toastleiste)
  * Zweck   : Layer-/Hit-Diagnose + frei verschiebbare Tool-Leiste, die
