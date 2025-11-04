@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-02T20:27:03.581Z",
+  "createdAt": "2025-11-04T09:15:48.759Z",
   "root": ".",
-  "count": 462,
+  "count": 471,
   "entries": [
     {
       "type": "dir",
@@ -1100,6 +1100,11 @@
     },
     {
       "type": "file",
+      "path": "core/boot-v1.js",
+      "size": 5840
+    },
+    {
+      "type": "file",
       "path": "core/boot.js",
       "size": 6500
     },
@@ -1107,6 +1112,11 @@
       "type": "file",
       "path": "core/camera.js",
       "size": 14547
+    },
+    {
+      "type": "file",
+      "path": "core/carrier-v1.js",
+      "size": 1351
     },
     {
       "type": "file",
@@ -1175,6 +1185,16 @@
     },
     {
       "type": "file",
+      "path": "core/game.production.js",
+      "size": 1421
+    },
+    {
+      "type": "file",
+      "path": "core/Header.md",
+      "size": 363
+    },
+    {
+      "type": "file",
       "path": "core/icons-map.js",
       "size": 5133
     },
@@ -1190,8 +1210,18 @@
     },
     {
       "type": "file",
+      "path": "core/logistics.prio.js",
+      "size": 1860
+    },
+    {
+      "type": "file",
       "path": "core/map-runtime.bridge.js",
       "size": 4665
+    },
+    {
+      "type": "file",
+      "path": "core/market.js",
+      "size": 1223
     },
     {
       "type": "file",
@@ -1221,7 +1251,12 @@
     {
       "type": "file",
       "path": "core/Readme_core_final.md",
-      "size": 7110
+      "size": 7634
+    },
+    {
+      "type": "file",
+      "path": "core/registry-v1.js",
+      "size": 5452
     },
     {
       "type": "file",
@@ -1245,6 +1280,11 @@
     },
     {
       "type": "file",
+      "path": "core/territory.js",
+      "size": 1524
+    },
+    {
+      "type": "file",
       "path": "core/ui-build.data-bridge.js",
       "size": 3842
     },
@@ -1252,6 +1292,11 @@
       "type": "file",
       "path": "core/unit-overlay.js",
       "size": 5080
+    },
+    {
+      "type": "file",
+      "path": "core/warehouse.js",
+      "size": 1490
     },
     {
       "type": "file",
@@ -2216,22 +2261,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 45543
+      "size": 45774
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 17468
+      "size": 17575
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 4066
+      "size": 4371
     },
     {
       "type": "file",
       "path": "index.html",
-      "size": 5714
+      "size": 13844
     },
     {
       "type": "file",
