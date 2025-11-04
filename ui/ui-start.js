@@ -75,6 +75,8 @@
     if (p) p.style.display = 'grid';
     html.classList.add('panel-open');
   }
+  #start-splash style.display.block
+    
   function closePanel(){
     const p = document.getElementById('start-panel');
     if (p) p.style.display = 'none';
