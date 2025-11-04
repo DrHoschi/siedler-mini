@@ -1,29 +1,104 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.layer-v1.js
  * Projekt : Neue Siedler
- * Version : v1.0.0 (2025-11-04)
- * Zweck   : Inspector-Tab "Layer" – Layer-/Hit-Diagnose, z-Boost, pointer-events
+ * Version : v1.0.0 (2025-11-04, final)
+ * Zweck   : Inspector-Tab "Layer" – UI-/Layer-Diagnose, z-Boost, pointer-events,
+ *           Hit-Test (elementsFromPoint), Canvas-Fit, Startpanel zeigen.
  *
- * WICHTIG
- * - Registriert sich direkt über window.registerInspectorTab(...) (keine core-Bridge).
- * - Run-Once-Guard verhindert Doppel-Registrierung.
- * - Nutzt #game ODER #game-canvas (beide geprüft).
+ * Kompatibilität
+ * - Neuer Inspector (ui-inspector-v1.js v25.11.01-final) über registerInspectorTab(...)
+ * - Fallback: Wenn API (noch) nicht verfügbar → DOM-Fallback nach 10s
+ *
+ * Features
+ * - Canvas: Fit-Window (setzt #game ODER #game-canvas auf Fenstergröße)
+ * - Startpanel sichtbar machen (hebt body.is-playing auf, cb:ui-ready feuern)
+ * - Layer-Tabelle (#game, #game-canvas, #ui-root, #hud-root, #build-dock, #btn-build, #inspector)
+ *   · Mark/Unmark (Outline)
+ *   · z+ (temporärer z-index)
+ *   · pointer-events toggeln
+ *   · Stack @ center (elementsFromPoint mit Anzeige)
+ *
+ * Struktur
+ * - Run-Once Guard → verhindert doppelte Registrierung
+ * - Adapter (Late Registration + Events + Poll + DOM-Fallback)
+ * - CSS Inline Injection
+ * - Utils → Render → Registrierung
+ *
+ * Hinweise
+ * - Debug/Diagnose gehört fest zur Toolchain → bitte NICHT entfernen.
+ * - CSS ist absichtlich minimal, um mit deinem Theme nicht zu kollidieren.
  * ========================================================================== */
 
 (function(){
   'use strict';
 
-  // --------------------------- Run-Once-Guard -------------------------------
+  /* ============================== Run-Once ================================= */
+  // Verhindert Doppel-Registrierung bei mehrfacher Einbindung / Inline-Duplikaten
   window.__INSP_TABS__ = window.__INSP_TABS__ || {};
   if (window.__INSP_TABS__['layer-v1']) return;
   window.__INSP_TABS__['layer-v1'] = true;
 
-  if (typeof window.registerInspectorTab !== 'function') {
-    console.warn('[layer-tab] registerInspectorTab fehlt – Tab kann nicht angelegt werden.');
-    return;
+  /* ======================= Late Registration Helper ======================== */
+  // Registriert den Tab, sobald die API vorhanden ist; ansonsten DOM-Fallback.
+  function universalRegister(tabTitle, tabId, mountFn, order){
+    const tryAPI = ()=>{
+      if (typeof window.registerInspectorTab === 'function'){
+        window.registerInspectorTab(tabTitle, mountFn, { id: tabId, order: order||120 });
+        (window.CBLog?.info||console.info)('[layer-tab] via API registriert.');
+        return true;
+      }
+      return false;
+    };
+
+    if (tryAPI()) return; // API war bereits verfügbar
+
+    // Auf Ready-Events des neuen Inspectors warten
+    const onReady = ()=>{ if (tryAPI()) cleanup(); };
+    function cleanup(){
+      window.removeEventListener('cb:insp:core:ready', onReady);
+      window.removeEventListener('cb:insp:content:ready', onReady);
+      clearInterval(poll);
+      clearTimeout(tout);
+    }
+    window.addEventListener('cb:insp:core:ready', onReady);
+    window.addEventListener('cb:insp:content:ready', onReady);
+
+    // Sicherheit: alle 200 ms prüfen; nach 10 s DOM-Fallback
+    const poll = setInterval(onReady, 200);
+    const tout = setTimeout(()=>{
+      clearInterval(poll);
+      if (typeof window.registerInspectorTab === 'function') return; // spät geworden, aber doch verfügbar
+
+      const insp = document.querySelector('#inspector');
+      const tabs = insp?.querySelector('.insp-tabs');
+      const content = insp?.querySelector('.insp-content');
+      if (tabs && content){
+        const btn = document.createElement('button');
+        btn.textContent = tabTitle; btn.dataset.tab = tabId;
+        tabs.appendChild(btn);
+
+        const sec = document.createElement('section');
+        sec.id = tabId; content.appendChild(sec);
+
+        // Einfache Tab-Switch-Logik (Fallback)
+        tabs.querySelectorAll('button').forEach(b=>{
+          b.addEventListener('click', ()=>{
+            const id = b.dataset.tab;
+            content.querySelectorAll('section').forEach(s=> s.style.display = (s.id===id?'block':'none'));
+            window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail:{ tab: b.textContent } }));
+          });
+        });
+
+        mountFn(sec);
+        sec.style.display = 'block';
+        (window.CBLog?.info||console.info)('[layer-tab] DOM-Fallback aktiv.');
+      } else {
+        console.warn('[layer-tab] Weder API noch .insp-tabs/.insp-content vorhanden.');
+      }
+    }, 10000);
   }
 
-  // ------------------------------ Inline CSS --------------------------------
+  /* =============================== CSS ===================================== */
   function injectCSS(){
     if (document.getElementById('insp-layer-inline-style')) return;
     const st = document.createElement('style');
@@ -38,9 +113,8 @@
     document.head.appendChild(st);
   }
 
-  // ------------------------------- Utils ------------------------------------
+  /* =============================== Utils =================================== */
   const $ = (s,sc=document)=> sc.querySelector(s);
-  const $$ = (s,sc=document)=> Array.from(sc.querySelectorAll(s));
   function css(el){ try{ return getComputedStyle(el); }catch(_){ return {}; } }
   function z(el,cs){ const v=(cs||css(el)).zIndex; return (v==null||v==='auto')?'auto':String(v); }
   function fmtBBox(el){
@@ -82,8 +156,8 @@
     return `@(${x},${y}) elementsFromPoint: ${items.length}\n\n` + lines.join('\n\n');
   }
 
-  // --------------------------- Beobachtete Layer -----------------------------
-  // Diagnose-Dump zeigt #game als Canvas-ID, nicht #game-canvas. 
+  /* ============================ Beobachtete Layer =========================== */
+  // Laut deiner Diagnose heißt der Canvas aktuell #game (nicht nur #game-canvas).
   const LAYERS = [
     { sel:'#game',             label:'Canvas (#game)' },
     { sel:'#game-canvas',      label:'Canvas (#game-canvas)' },
@@ -94,7 +168,7 @@
     { sel:'#inspector',        label:'Inspector' }
   ];
 
-  // ------------------------------ Tab-Render --------------------------------
+  /* ================================ MOUNT =================================== */
   function mount(sectionEl){
     injectCSS();
 
@@ -106,20 +180,23 @@
     h.textContent = 'UI / Layer';
     wrap.appendChild(h);
 
-    // Toolbar
+    // --------------------------- Toolbar ------------------------------------
     const bar = document.createElement('div');
     bar.className = 'layer-toolbar';
     wrap.appendChild(bar);
+
+    const mkBtn = (txt, fn)=>{
+      const b=document.createElement('button'); b.className='layer-btn'; b.textContent=txt; b.addEventListener('click', fn); return b;
+    };
 
     const bFit = mkBtn('Canvas: Fit Window', ()=>{
       const c = $('#game') || $('#game-canvas');
       if (c){ c.width = innerWidth; c.height = innerHeight; c.style.display='block'; }
     });
-    const bPeek = mkBtn('Peek (halten)', ()=>{
-      /* gedrückt halten → body pointer-events:none */
-    });
-    bPeek.addEventListener('mousedown', ()=>{ setAndRemember(document.body,'pointerEvents','none'); });
-    ['mouseup','mouseleave'].forEach(evt=> bPeek.addEventListener(evt, ()=> restore(document.body,'pointerEvents')));
+
+    const bPeek = mkBtn('Peek (halten)', ()=>{/* gedrückt halten → pointer-events:none */});
+    bPeek.addEventListener('mousedown', ()=> setAndRemember(document.body,'pointerEvents','none'));
+    ;['mouseup','mouseleave'].forEach(evt=> bPeek.addEventListener(evt, ()=> restore(document.body,'pointerEvents')));
 
     const bPE2s = mkBtn('PE off (2s)', ()=>{
       setAndRemember(document.body,'pointerEvents','none');
@@ -135,7 +212,7 @@
 
     bar.append(bFit, bPeek, bPE2s, bStartpanel);
 
-    // Tabelle
+    // --------------------------- Tabelle ------------------------------------
     const table = document.createElement('table');
     table.className = 'layer-table';
     table.innerHTML = `
@@ -146,19 +223,15 @@
       <tbody></tbody>
     `;
     wrap.appendChild(table);
+    const tbody = table.querySelector('tbody');
 
-    // Stack-Ausgabe
+    // --------------------------- Stack-Ausgabe -------------------------------
     const h2 = document.createElement('h3'); h2.textContent = 'Hit-Test / Stack';
     const pre = document.createElement('pre'); pre.className = 'layer-pre'; pre.textContent = '—';
     wrap.appendChild(h2); wrap.appendChild(pre);
 
     sectionEl.appendChild(wrap);
 
-    const tbody = $('tbody', table);
-
-    function mkBtn(txt, fn){
-      const b=document.createElement('button'); b.className='layer-btn'; b.textContent=txt; b.addEventListener('click', fn); return b;
-    }
     function row(values){
       const tr=document.createElement('tr');
       values.forEach(v=>{
@@ -177,11 +250,11 @@
         const actions = document.createElement('div');
         actions.style.display='flex'; actions.style.gap='6px'; actions.style.flexWrap='wrap';
 
-        // Highlight toggle
+        // Mark/Unmark
         const bHl = mkBtn('Mark', ()=>{
           if(!el) return;
-          const on = el.style.outline && el.style.outline.includes('#ffcc00');
-          if (on){
+          const isMarked = (el.style.outline && el.style.outline.includes('#ffcc00'));
+          if (isMarked){
             el.style.outline=''; el.style.outlineOffset=''; el.style.boxShadow='';
           } else {
             setAndRemember(el,'outline','2px dashed #ffcc00');
@@ -207,7 +280,7 @@
           const y = Math.max(0, b.top  + Math.min(5, b.height/2));
           const items = stackAt(x,y);
           pre.textContent = formatStackText(x,y, items);
-          console.group('[Layer] Stack');
+          console.group('[Layer] Stack @ center');
           items.forEach((it,i)=> console.log(`#${i+1}`, it.tag, {z:it.z, display:it.disp, visibility:it.vis, opacity:it.op, pointer:it.pe}));
           console.groupEnd();
         });
@@ -224,16 +297,15 @@
     }
 
     render();
-    // kleines Auto-Refresh, damit Veränderungen sichtbar werden
+    // kleiner Auto-Refresh, damit Live-Änderungen sichtbar werden
     sectionEl._layer_timer && clearInterval(sectionEl._layer_timer);
     sectionEl._layer_timer = setInterval(render, 1000);
-    window.addEventListener('cb:insp:close', ()=> { try{ clearInterval(sectionEl._layer_timer);}catch(_){} }, { once:true });
+    window.addEventListener('cb:insp:close', ()=>{ try{ clearInterval(sectionEl._layer_timer); }catch(_){} }, { once:true });
 
     (window.CBLog?.info||console.info)('Layer-Tab bereit (v1.0.0)');
   }
 
-  // ----------------------------- Registrierung ------------------------------
-  // eigener Name/ID, um Kollisionen mit bestehendem "UI"-Tab zu vermeiden
-  window.registerInspectorTab('Layer', mount, { id:'insp-tab-layer', order: 120 });
+  /* ============================= Registrierung ============================= */
+  universalRegister('Layer', 'insp-tab-layer', mount, 120);
 
 })();
