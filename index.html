@@ -2,14 +2,14 @@
 <!-- ============================================================================
      Datei   : index.html
      Projekt : Neue Siedler (Monolith)
-     Version : v25.11.02-final (Lazy-Inspector + saubere Lade-Reihenfolge)
+     Version : v25.11.02-final.2 (Robuster Inspector-Toggle + Fixes)
      Autor   : Mann + ChatGPT (GPT-5 Thinking)
      Zweck   : Start-Dokument. Lädt UI + Core in sinnhafter Reihenfolge:
                [0] HTML/CSS → [1] Boot → [2] Startpanel → [3] Assets → [4] Registry
                → [5] HUD/Build → [6] Game → [7] Inspector (lazy/optional) → [8] Overlays
      WICHTIG : - Startpanel zuerst sichtbar (Splash-Fallback bis cb:ui-ready)
                - Inspector bleibt geschlossen, bis du ihn öffnest (⚙️)
-               - Auskommentierte Inspector-Varianten bleiben zum Testen erhalten
+               - Zentraler Toggle-Controller steuert open/close/toggle idempotent
      themen  : dark / light / wood
      ============================================================================ -->
 <html lang="de" data-theme="wood">
@@ -25,7 +25,6 @@
 
   <!-- =========================================================
        [0] STYLES (Global → HUD/Build → Inspector-CSS)
-       - Inspector-CSS im <head>, damit kein FOUC beim Nachladen entsteht
        ========================================================= -->
   <link rel="stylesheet" href="ui/css/ui.css?v=25.11.02">
   <link rel="stylesheet" href="ui/css/ui-hud.css?v=25.11.02">
@@ -34,7 +33,7 @@
   <!-- Inspector Styles (aktiv) -->
   <link rel="stylesheet" href="inspector/ui-inspector-v1.css?v=25.11.02">
 
-  <!-- Inspector Styles (Varianten – bitte zum Testen so AUSKOMMENTIERT lassen) -->
+  <!-- Inspector Styles (Varianten – zum Testen auskommentiert belassen) -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.11.02"> -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.clean.css?v=25.11.02"> -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.final.css?v=25.11.02"> -->
@@ -46,7 +45,7 @@
        [0] BASIS-LOG & MINIMAL-UI
        ========================================================= -->
   <script>
-    // Kleiner, robuster Log-Wrapper (falls boot.js noch nicht da ist)
+    // Robuster Log-Wrapper (falls boot.js noch nicht da ist)
     window.CBLog = window.CBLog || {
       info:  (...a)=>console.log('[info]', ...a),
       warn:  (...a)=>console.warn('[warn]', ...a),
@@ -55,16 +54,20 @@
     };
     document.addEventListener('DOMContentLoaded', ()=>CBLog.info('[index] DOM bereit'));
   </script>
-<style>
-  #start-panel {
-    display: flex !important; 
-    position: fixed; 
-    top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 1000; /* Sicher über allem */
-    background: rgba(0,0,0,0.5); /* Nur zum Testen ein halbtransparenter Hintergrund */
-  }
-</style>
-     
+
+  <!-- ===== DEBUG: Startpanel vorübergehend erzwingen (sichtbar & oben)
+       Hinweis: solange dein ui-start.js nicht sicher mounted, hilft das.
+       Wenn stabil, diesen Block wieder entfernen/entschärfen. -->
+  <style>
+    #start-panel {
+      display: flex !important;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 1000; /* über Canvas, unter Inspector */
+      background: rgba(0,0,0,0.0); /* Debug-Overlay: 0.5 → 0.0 reduziert */
+    }
+  </style>
+
   <style>
     /* Fehlerbanner für Nachladeprobleme (z. B. Inspector) */
     #boot-error {
@@ -81,7 +84,7 @@
       position: fixed; inset: 0;
       background: #111 center/cover no-repeat var(--start-bg);
       display: grid; place-items: center;
-      z-index: 1000; /* unter Fehlerbanner, über Canvas */
+      z-index: 900; /* unter Startpanel, über Canvas */
     }
     #start-splash .title{
       font: 600 20px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -92,18 +95,19 @@
 
     /* Inspector „closed by default“ – Sicherheitsgurt */
     #inspector{ display:none !important; }
-    #inspector[data-open="1"]{ display:block !important; }
+    #inspector[data-open="1"]{ display:block !important; position:fixed; inset:0; z-index:2147483000; }
 
-    /* FAB-Button (Zahnrad) unten links */
+    /* FAB-Button (Zahnrad) */
     #inspector-fab {
-      position: fixed; left: 14px; bottom: 14px;
+      position: fixed;
+      left: 14px; bottom: 14px;
       width: 44px; height: 44px; border-radius: 12px;
       background: rgba(245,245,245,.08);
       border: 1px solid rgba(255,255,255,.15);
       backdrop-filter: blur(6px);
       display: grid; place-items: center;
       font: 20px/1.0 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color: #ddd; cursor: pointer; z-index: 99998;
+      color: #ddd; cursor: pointer; z-index: 1200;
       -webkit-tap-highlight-color: transparent;
     }
     #inspector-fab:active { transform: translateY(1px); }
@@ -126,7 +130,7 @@
   <button id="btn-build" aria-label="Bau-Menü" hidden></button>
 
   <!-- Inspector Host + FAB -->
-  <div id="inspector" class="inspector-host" aria-hidden="true"></div>
+  <div id="inspector" class="inspector-host" aria-hidden="true" data-open="0"></div>
   <button id="inspector-fab" aria-label="Inspector" title="Inspector">⚙️</button>
 
   <!-- Splash/Startbild-Fallback (verschwindet bei cb:ui-ready) -->
@@ -138,7 +142,7 @@
        [1] BOOT & EVENT-BUS
        ========================================================= -->
   <script src="core/boot-v1.js"></script>
-<!-- <script src="core/boot.js" defer></script> -->
+  <!-- <script src="core/boot.js" defer></script> -->
 
   <!-- =========================================================
        [2] UI: STARTPANEL (sichtbar zuerst)
@@ -153,15 +157,16 @@
   <!-- =========================================================
        [4] REGISTRY (Datenzusammenführung/Validierung)
        ========================================================= -->
-<!-- alte version  <script src="core/registry.js"></script> -->
+  <!-- alte version  <script src="core/registry.js"></script> -->
   <script src="core/registry-v1.js" defer></script>
-<!-- Systeme (aus deiner letzten Runde) -->
-<script src="core/warehouse.js" defer></script>
-<script src="core/carrier.js" defer></script>
-<script src="core/logistics.prio.js" defer></script>
-<script src="core/territory.js" defer></script>
-<script src="core/market.js" defer></script>
-<script src="core/game.production.js" defer></script>
+
+  <!-- Systeme (aus deiner letzten Runde) -->
+  <script src="core/warehouse.js" defer></script>
+  <script src="core/carrier.js" defer></script>
+  <script src="core/logistics.prio.js" defer></script>
+  <script src="core/territory.js" defer></script>
+  <script src="core/market.js" defer></script>
+  <script src="core/game.production.js" defer></script>
 
   <!-- =========================================================
        [5] UI: HUD + BUILD
@@ -174,13 +179,8 @@
        ========================================================= -->
   <script src="core/game.js?v=25.11.02"></script>
 
-
-
-     
   <!-- =========================================================
        [7] INSPECTOR (Option A: LAZY via import() – AUSKOMMENTIERT)
-       - Aktivieren, wenn du „echtes“ Lazy-Loading willst.
-       - Dann die statischen <script src="inspector/..."> unten entfernen.
        ========================================================= -->
   <!--
   <script type="module">
@@ -216,7 +216,6 @@
 
   <!-- =========================================================
        [7] INSPECTOR (Option B: deine DEMO statisch geladen – AKTIV)
-       - Bleibt geschlossen bis du ihn öffnest (siehe „Hard Close“ + FAB).
        ========================================================= -->
   <script src="inspector/ui-inspector-v1.js?v=25.11.01-final" defer></script>
   <script src="inspector/ui-inspector.content-v1.js?v=1.0.0" defer></script>
@@ -236,28 +235,73 @@
   <script src="inspector/tabs/inspector.tab.signals-v1.js?v=1.0.0" defer></script>
 
   <!-- =========================================================
-       [7.1] Inspector: Hard-Close + FAB-Hook
-       - Verhindert Auto-Open; Öffnen nur via req:insp:open (durch ⚙️)
+       [7.1] ZENTRALER INSPECTOR-TOGGLE-CONTROLLER (idempotent)
+       – Einzige Quelle der Wahrheit für open/close/toggle
+       – Schaltet data-open, aria-hidden und body.inspector-open
        ========================================================= -->
   <script>
-    (function inspectorGuardsAndFab(){
-      const fab = document.getElementById('inspector-fab');
+  (function InspectorToggleController(){
+    if (window.__insp_toggle_wired) return;
+    window.__insp_toggle_wired = true;
 
-      // FAB öffnet den Inspector
-      fab?.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('req:insp:open', { detail:{ tab:'logs' }}));
-      });
+    const LOG = (...a)=> (window.CBLog?.info||console.log)('[insp-toggle]', ...a);
+    let transitioning = false;
+    const T_DEBOUNCE = 120;
 
-      // Sobald der Inspector "bereit" meldet, NICHT automatisch öffnen
-      const close = () => window.dispatchEvent(new CustomEvent('cb:insp:close'));
-      window.addEventListener('cb:insp:ready', close);
+    window.INSP_AUTO_OPEN = false;
 
-      // Einige Builds respektieren diese Flag explizit
-      window.INSP_AUTO_OPEN = false;
+    const host = ()=> document.getElementById('inspector');
+    const isOpen = ()=> host()?.dataset.open === '1';
 
-      // Optional: FAB erst nach Game-Start anzeigen
-      // window.addEventListener('cb:game:start', ()=> fab?.classList.remove('hidden'), { once:true });
-    })();
+    function setOpenState(open){
+      const el = host(); if(!el) return false;
+      const target = open ? '1' : '0';
+      if (el.dataset.open === target) return false;
+      el.dataset.open = target;
+      el.setAttribute('aria-hidden', open ? 'false' : 'true');
+      document.body.classList.toggle('inspector-open', open);
+      return true;
+    }
+
+    function open(detail={}){
+      if (transitioning || isOpen()) return;
+      transitioning = true;
+      if (setOpenState(true)) {
+        window.dispatchEvent(new CustomEvent('cb:insp:open', {detail}));
+        LOG('open');
+      }
+      setTimeout(()=>transitioning=false, T_DEBOUNCE);
+    }
+
+    function close(){
+      if (transitioning || !isOpen()) return;
+      transitioning = true;
+      if (setOpenState(false)) {
+        window.dispatchEvent(new CustomEvent('cb:insp:close'));
+        LOG('close');
+      }
+      setTimeout(()=>transitioning=false, T_DEBOUNCE);
+    }
+
+    function toggle(detail={}){
+      isOpen() ? close() : open(detail);
+    }
+
+    // Events von überall
+    window.addEventListener('req:insp:open',  e => open(e?.detail||{}));
+    window.addEventListener('req:insp:close', () => close());
+    window.addEventListener('req:insp:toggle', e => toggle(e?.detail||{}));
+
+    // Falls irgendein Build beim Ready „auto-open“ macht → sofort schließen
+    window.addEventListener('cb:insp:ready', () => { if (isOpen()) close(); });
+
+    // FAB: auf TOGGLE verdrahten
+    document.getElementById('inspector-fab')?.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('req:insp:toggle', { detail:{ tab:'logs' }}));
+    });
+
+    LOG('controller bereit');
+  })();
   </script>
 
   <!-- =========================================================
