@@ -47,7 +47,7 @@
  *    und via CustomEvents (ui-probe:*) publiziert.
  *  - Der UI-Tab rendert bei Mount die letzten Ergebnisse und subscribed live.
  * ========================================================================== */
-(function(){
+/* (function(){
   'use strict';
   const MOD='[inspector.ui]'; const VER='v18.16.5';
 
@@ -65,7 +65,35 @@
       },
       mount(id,onShow){ return this.registerTab({ id, title:id, onShow }); },
     };
-  })();
+  })(); */
+
+(function(){
+  if (typeof window.registerInspectorTab !== 'function') {
+    console.warn('[layer-tab] registerInspectorTab fehlt.');
+    return;
+  }
+
+  /* ----------------------------- Inline CSS ------------------------------ */
+  function injectCSS(){
+    if (document.getElementById('insp-layer-inline-style')) return;
+    const st = document.createElement('style');
+    st.id='insp-layer-inline-style';
+    st.textContent = `
+#inspector .chk-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.25rem 0 .75rem}
+#inspector .chk-btn{padding:.25rem .6rem;border:1px solid #333;background:#222;border-radius:.5rem;cursor:pointer}
+#inspector .chk-input{padding:.25rem .5rem;border:1px solid #333;background:#111;border-radius:.4rem;min-width:220px}
+#inspector .chk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.75rem}
+#inspector .chk-card{border:1px solid #2a2a2e;border-radius:.6rem;padding:.6rem;background:#111}
+#inspector .chk-card h4{margin:.1rem 0 .45rem}
+#inspector .chk-pre{max-height:260px;overflow:auto;border:1px solid #222;border-radius:.35rem;background:#0f1013;padding:.5rem;margin:0;white-space:pre}
+#inspector .chk-badge{display:inline-block;border:1px solid #444;border-radius:.4rem;padding:.05rem .4rem;margin-left:.4rem;font-size:.85em;opacity:.85}
+#inspector .ok{color:#8ab4f8} #inspector .warn{color:#ffcc00} #inspector .err{color:#ff6666}
+#inspector .svg-wrap{overflow:auto;border:1px solid #222;border-radius:.35rem;background:#0f1013;padding:.4rem}
+#inspector .legend{font-size:.85em;opacity:.8}
+    `;
+    document.head.appendChild(st);
+  }
+
 
   // ---------- Globaler State & kleine Event-Helfer ---------------------------
   // Wird einmalig angelegt. Inspector & Floating-Tools teilen sich diesen State.
