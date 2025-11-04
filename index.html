@@ -55,7 +55,16 @@
     };
     document.addEventListener('DOMContentLoaded', ()=>CBLog.info('[index] DOM bereit'));
   </script>
-
+<style>
+  #start-panel {
+    display: flex !important; 
+    position: fixed; 
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1000; /* Sicher über allem */
+    background: rgba(0,0,0,0.5); /* Nur zum Testen ein halbtransparenter Hintergrund */
+  }
+</style>
+     
   <style>
     /* Fehlerbanner für Nachladeprobleme (z. B. Inspector) */
     #boot-error {
