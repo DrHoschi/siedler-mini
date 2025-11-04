@@ -140,6 +140,15 @@ img, canvas, svg, video { max-width: 100%; height: auto; display: block; }
   --ui-info:      #b0c7ff;
 }
 
+/* Beispiel – Theme "wood" */
+html[data-theme="wood"]{
+  --panel-src: url("../../assets/ui/panel.svg");
+  --panel-slice: 12;
+  --panel-border-width: 16px;
+  --panel-bg: rgba(0,0,0,.18);
+  --panel-blur: 2px;
+}
+
 /* ============================================================================
    [2] GRUNDLAYOUT: Seite, App-Container & Ebenen
 ============================================================================ */
