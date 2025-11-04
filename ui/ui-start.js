@@ -61,3 +61,63 @@
 
   panel.querySelector("#btn-fullscreen").addEventListener("click", toggleFullscreen);
 })();
+
+/* ============================================================================
+ * Startpanel-Steuerung (sichtbar/unsichtbar) + Events
+ * – Panel offen:   html.panel-open  (Splash sichtbar)
+ * – Panel zu:      html (ohne Klasse)  (Splash weg)
+ * ========================================================================== */
+(function StartPanelController(){
+  const html = document.documentElement;
+
+  function openPanel(){
+    const p = document.getElementById('start-panel');
+    if (p) p.style.display = 'grid';
+    html.classList.add('panel-open');
+  }
+  function closePanel(){
+    const p = document.getElementById('start-panel');
+    if (p) p.style.display = 'none';
+    html.classList.remove('panel-open');
+  }
+
+  // Buttons binden (IDs aus deinem Markup: Spiel starten, Weiterspielen, Reset, Vollbild)
+  window.addEventListener('cb:ui-ready', ()=>{
+    // Panel initial offen:
+    openPanel();
+
+    document.getElementById('btn-new')?.addEventListener('click', ()=>{
+      // schließe Panel + starte Spiel
+      closePanel();
+      window.dispatchEvent(new CustomEvent('req:game:start', { detail:{ mode:'new' }}));
+    });
+
+    document.getElementById('btn-continue')?.addEventListener('click', ()=>{
+      closePanel();
+      window.dispatchEvent(new CustomEvent('req:game:start', { detail:{ mode:'continue' }}));
+    });
+
+    document.getElementById('btn-reset')?.addEventListener('click', ()=>{
+      window.dispatchEvent(new CustomEvent('req:game:reset'));
+    });
+
+    document.getElementById('btn-full')?.addEventListener('click', ()=>{
+      window.dispatchEvent(new CustomEvent('req:fullscreen:toggle'));
+    });
+  }, { once:true });
+
+  // Wenn das Spiel startet → Panel zu, Splash weg
+  window.addEventListener('cb:game:start', closePanel);
+
+  // Wenn das Spiel pausiert wird → Panel wieder anzeigen
+  window.addEventListener('cb:game:paused', openPanel);
+
+  // Optional: ESC pausiert das Spiel → Panel wieder zeigen
+  document.addEventListener('keydown', (ev)=>{
+    if (ev.key === 'Escape') {
+      window.dispatchEvent(new CustomEvent('req:game:pause'));
+      // entweder Game reagiert und feuert cb:game:paused … oder wir öffnen direkt:
+      setTimeout(()=>{ html.classList.contains('panel-open') || openPanel(); }, 50);
+    }
+  });
+})();
