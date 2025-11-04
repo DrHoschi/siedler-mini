@@ -91,6 +91,19 @@
 
     /* Optional: wenn du beim offenen Inspector den Canvas blocken willst */
     body.inspector-open #game { pointer-events:none; }
+  
+  /* ===== Startpanel: sicher über dem Canvas, ohne Layout-Override ===== */
+  #ui-root{ position: relative; z-index: 1020; }
+
+  #start-panel{
+    position: fixed;           /* wichtig: z-index greift nur mit Position */
+    inset: 0;
+    z-index: 1030;
+    display: grid;             /* neutrale Platzierung */
+    place-items: start;        /* Box oben links; kannst du auf center ändern */
+    padding: clamp(12px, 2vw, 24px);
+    pointer-events: auto;
+  }
   </style>
 </head>
 <body>
