@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-05T11:27:24.404Z",
+  "createdAt": "2025-11-05T17:47:50.942Z",
   "root": ".",
   "count": 475,
   "entries": [
@@ -1101,7 +1101,7 @@
     {
       "type": "file",
       "path": "core/boot-v1.js",
-      "size": 5840
+      "size": 4170
     },
     {
       "type": "file",
@@ -1505,7 +1505,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.checker-v1.js",
-      "size": 22511
+      "size": 25318
     },
     {
       "type": "file",
@@ -1520,12 +1520,12 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.layer-v1.js",
-      "size": 13074
+      "size": 11733
     },
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.logs-v1.js",
-      "size": 6311
+      "size": 6315
     },
     {
       "type": "file",
@@ -1535,7 +1535,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.resources-v1.js",
-      "size": 4186
+      "size": 4187
     },
     {
       "type": "file",
@@ -2021,7 +2021,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layout.css",
-      "size": 3687
+      "size": 4362
     },
     {
       "type": "file",
@@ -2265,7 +2265,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 5140
+      "size": 5991
     },
     {
       "type": "file",
@@ -2280,12 +2280,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 46813
+      "size": 47016
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 17932
+      "size": 18023
     },
     {
       "type": "file",
@@ -2295,7 +2295,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 9855
+      "size": 9912
     },
     {
       "type": "file",
