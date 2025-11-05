@@ -10,7 +10,6 @@
  * Events  : → 'req:res:snapshot'
  *           ← 'cb:res:snapshot'      (detail:{ Holz:..., Stein:..., ... })
  * ========================================================================== */
-
 (function () {
   function renderResTab(sectionEl) {
     sectionEl.innerHTML = [
