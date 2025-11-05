@@ -12,8 +12,8 @@
  * ========================================================================== */
 
 window.__INSP_TABS__ = window.__INSP_TABS__ || {};
-if (window.__INSP_TABS__['<tab-id>']) return;
-window.__INSP_TABS__['<tab-id>'] = true;
+if (window.__INSP_TABS__['<tab:resources>']) return;
+window.__INSP_TABS__['<resources-id>'] = true;
 
 (function () {
   function renderResTab(sectionEl) {
