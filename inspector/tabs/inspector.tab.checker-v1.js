@@ -282,6 +282,15 @@ const RULZ = {
         return p <= br;
       }
     },
+    // in RULZ.soft ergänzen:
+{ id:'start-before-layout',
+  desc:'ui-start.js vor ui-layout.js laden (Startpanel zuerst).',
+  should: (S) => {
+    const s = indexOfFile(S, /ui\/ui-start\.js$/);
+    const l = indexOfFile(S, /ui\/ui-layout\.js$/);
+    return (s < 0 || l < 0) ? true : (s < l);
+  }
+},
   ]
 };
   function svgSequence(scripts, results){
