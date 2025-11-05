@@ -1,24 +1,25 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.audit-v1.js
  * Projekt : Neue Siedler
- * Version : v1.0.0 (2025-11-04, final)
- * Zweck   : Inspector-Tab "Audit" – Laufzeit-Analyse der eingebundenen JS-Dateien:
- *           - Duplikate (gleicher src / identische Inhalte / mehrfach registrierte Tabs)
- *           - Mehrfache Event-Hooks (cb:ui-ready, cb:game-start, req:game:start, ...)
- *           - Startpanel-Konflikte (req:ui:startpanel:hide vs. show, is-playing)
- * Ausgabe : Tabelle "Datei → Event/Init → Konflikt/OK → Empfohlene Maßnahme"
+ * Version : v1.1.0 (2025-11-05, final)
+ *
+ * Tab "Audit" – kombiniert:
+ *  A) Quellcode-Audit der geladenen <script>-Dateien:
+ *     - Duplikate (gleicher src / identischer Inhalt / doppelte Tab-Registrierung)
+ *     - Mehrfache Event-Hooks (cb:ui-ready, cb:game-start, req:game:start, ...)
+ *     - Startpanel-Konflikte (req:ui:startpanel:hide vs. show, is-playing)
+ *     Ausgabe: Tabelle "Datei → Events/Init → Konflikt/Status → Maßnahme" + CSV
+ *
+ *  B) Laufzeit-Event-Scanner (integriert):
+ *     - Hookt window.dispatchEvent (Emits) und addEventListener (Listener)
+ *     - Zählt und protokolliert CustomEvents (cb:*, req:*) + Listener je Typ
+ *     - Live-Zusammenfassung + Detailanzeige + CSV-Export (Events / Listener)
  *
  * Leitlinien
  * - Keine Projekt-Abhängigkeiten: arbeitet rein über DOM + fetch()
- * - Läuft in der Seite (gleiche Origin) → kann Script-Quellen einlesen
- * - Schützt sich gegen Doppelladen (Run-Once)
- * - CSV-Export für Befundliste
- *
- * Empfohlene Maßnahmen (Heuristik)
- * - Run-Once-Guards für Tabs/Module (window.__INSP_TABS__, window.__MODULES__)
- * - Doppelte Inline-Blöcke entfernen oder __inline_once('key', fn) nutzen
- * - Nur EIN BootManager (core/boot.js) laden
- * - UI meldet cb:ui-ready genau EINMAL
+ * - Gleich-Origin erwartet (für fetch der Skripte)
+ * - Run-Once-Guards gegen Doppel-Registrierung
+ * - Scanner-Guards, damit wir dispatchEvent/addEventListener nur 1× hooken
  * ========================================================================== */
 
 (function(){
@@ -51,7 +52,7 @@
     const poll = setInterval(onReady, 200);
     const tout = setTimeout(()=>{
       clearInterval(poll);
-      // Minimaler DOM-Fallback
+      // Minimaler DOM-Fallback (falls API nie kommt)
       const insp = document.querySelector('#inspector');
       const tabs = insp?.querySelector('.insp-tabs');
       const content = insp?.querySelector('.insp-content');
@@ -83,12 +84,12 @@
     st.textContent = `
 #inspector .audit-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.25rem 0 .75rem}
 #inspector .audit-btn{padding:.25rem .6rem;border:1px solid #333;background:#222;border-radius:.5rem;cursor:pointer}
-#inspector .audit-input{padding:.25rem .5rem;border:1px solid #333;background:#111;border-radius:.4rem;min-width:220px}
 #inspector .audit-table{width:100%;border-collapse:collapse;font-size:12px}
 #inspector .audit-table th,#inspector .audit-table td{border-bottom:1px solid #2a2a2e;padding:.4rem .5rem;text-align:left;vertical-align:top}
-#inspector .audit-badge{display:inline-block;border:1px solid #444;border-radius:.4rem;padding:.05rem .4rem;margin-right:.25rem}
+#inspector .audit-badge{display:inline-block;border:1px solid #444;border-radius:.4rem;padding:.05rem .4rem;margin:.1rem .25rem .1rem 0}
 #inspector .ok{color:#8ab4f8} #inspector .warn{color:#ffcc00} #inspector .err{color:#ff6666}
 #inspector .mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+#inspector .audit-subtitle{margin:.75rem 0 .35rem;font-weight:700;opacity:.9}
     `;
     document.head.appendChild(st);
   }
@@ -96,62 +97,108 @@
   /* ================================ Utils ================================== */
   const $ = (s,sc=document)=> sc.querySelector(s);
   const $$ = (s,sc=document)=> Array.from(sc.querySelectorAll(s));
-  function hash32(str){
-    let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h) + str.charCodeAt(i); h|=0; }
-    return (h>>>0).toString(16);
-  }
+  function hash32(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h)+str.charCodeAt(i); h|=0; } return (h>>>0).toString(16); }
   function csvEscape(s){ return `"${String(s).replace(/"/g,'""')}"`; }
+  function badge(cls, txt){ const b=document.createElement('span'); b.className='audit-badge '+cls; b.textContent=txt; return b; }
 
-  // Muster für Events/Init (heuristisch)
+  // Regex-Muster (Quellcode-Heuristik)
   const PAT = {
     emit_ui_ready: /dispatchEvent\s*\(\s*new\s+CustomEvent\s*\(\s*['"]cb:ui-ready['"]/g,
     listen_ui_ready: /addEventListener\s*\(\s*['"]cb:ui-ready['"]/g,
-
     emit_game_start: /dispatchEvent\s*\(\s*new\s+CustomEvent\s*\(\s*['"](cb:game-start|req:game:start)['"]/g,
     listen_game_start: /addEventListener\s*\(\s*['"](cb:game-start|req:game:start)['"]/g,
-
     startpanel_hide: /['"]req:ui:startpanel:hide['"]/g,
     startpanel_show: /['"]req:ui:startpanel:show['"]/g,
-
     inspector_register: /registerInspectorTab\s*\(/g,
     boot_init: /\[boot\]\s*BootManager\s+initialisiert|class\s+BootManager|BootManager\s*=/g,
   };
 
-  // Bewertung/Empfehlung aus Befunden ableiten
+  // Bewertung aus Heuristik
   function assess(file, meta){
     const f = meta.flags;
     const probs = [];
-
-    // Duplikate
-    if (meta.dupSrcCount>1) probs.push({sev:'err', msg:`gleicher <script src> ${meta.dupSrcCount}×`, fix:'Doppelte Einbindung in index.html entfernen'});
+    if (meta.dupSrcCount>1) probs.push({sev:'err', msg:`gleicher <script src> ${meta.dupSrcCount}×`, fix:'Duplikat in index.html entfernen'});
     if (meta.dupHashCount>1) probs.push({sev:'err', msg:`identischer Inhalt ${meta.dupHashCount}×`, fix:'Inline-Duplikat entfernen oder __inline_once(key,fn) nutzen'});
-
-    // BootManager mehrfach
-    if (f.boot_init>1) probs.push({sev:'err', msg:`BootManager-Initialisierung ${f.boot_init}×`, fix:'Nur EIN boot.js laden; Run-Once-Guard in boot.js'});
-
-    // UI-Ready mehrfach gesendet
-    if (f.emit_ui_ready>1) probs.push({sev:'warn', msg:`cb:ui-ready wird ${f.emit_ui_ready}× emittiert`, fix:'UI meldet sich genau EINMAL ready (Run-Once-Flag setzen)'});
-
-    // Startpanel-Konflikte
-    if (f.startpanel_hide>0 && f.startpanel_show===0) probs.push({sev:'warn', msg:`Startpanel wird versteckt (hide=${f.startpanel_hide}), aber kein show`, fix:'Startpanel show/restore bei Bedarf ergänzen'});
-    if (f.startpanel_hide>0 && f.emit_game_start>0 && f.listen_ui_ready===0) probs.push({sev:'warn', msg:`hide + game-start ohne UI-ready Listener`, fix:'boot.js: auf cb:ui-ready hören (tryStart())'});
-
-    // Inspector-Tabs doppelt
+    if (f.boot_init>1)      probs.push({sev:'err', msg:`BootManager-Initialisierung ${f.boot_init}×`, fix:'Nur EIN core/boot.js laden; Run-Once in boot.js'});
+    if (f.emit_ui_ready>1)  probs.push({sev:'warn',msg:`cb:ui-ready wird ${f.emit_ui_ready}× emittiert`, fix:'UI meldet sich genau EINMAL ready (Run-Once-Flag setzen)'});
+    if (f.startpanel_hide>0 && f.startpanel_show===0) probs.push({sev:'warn', msg:`Startpanel hide (${f.startpanel_hide}) ohne show`, fix:'show/restore ergänzen'});
+    if (f.startpanel_hide>0 && f.emit_game_start>0 && f.listen_ui_ready===0) probs.push({sev:'warn', msg:`hide + game-start ohne ui-ready Listener`, fix:'boot.js: cb:ui-ready abwarten (tryStart())'});
     if (f.inspector_register>1) probs.push({sev:'warn', msg:`registerInspectorTab ${f.inspector_register}×`, fix:'Run-Once-Guard (window.__INSP_TABS__) pro Tab'});
-
-    // Nichts Auffälliges?
     if (!probs.length) probs.push({sev:'ok', msg:'OK', fix:'—'});
-
     return probs;
   }
 
-  /* ================================ Scan =================================== */
-  async function scanAll(){
+  /* ========================= Integrierter Event-Scanner ===================== */
+  // Laufzeit-Hooks: dispatchEvent (Emits) + addEventListener (Listener)
+  // Guarded, damit wir es nie doppelt patchen.
+  function ensureEventScanner(){
+    if (window.__EVENT_SCANNER_ACTIVE__) return true;
+    window.__EVENT_SCANNER_ACTIVE__ = true;
+
+    // Datenspeicher
+    const MAX = 2000; // Ringpuffer
+    window.__EVENT_REGISTRY__   = window.__EVENT_REGISTRY__   || [];  // [{type, time, detail, target, file}]
+    window.__EVENT_LISTENERS__  = window.__EVENT_LISTENERS__  || new Map(); // type -> [{target, file}]
+    window.__EVENT_SUMMARY__    = window.__EVENT_SUMMARY__    || new Map(); // type -> {emit: n, listen: n}
+
+    // Hilfen
+    function addSummary(type, kind){
+      const rec = window.__EVENT_SUMMARY__.get(type) || { emit:0, listen:0 };
+      rec[kind] = (rec[kind]||0) + 1;
+      window.__EVENT_SUMMARY__.set(type, rec);
+    }
+    function guessFileFromStack(){
+      try{
+        const st = (new Error()).stack || '';
+        // nimm die erste stack-Zeile mit .js
+        const m = st.split('\n').find(l=>/\.js[:)]/.test(l));
+        if (!m) return '';
+        const u = m.match(/(https?:\/\/[^\s)]+\.js)/)?.[1] || m.match(/(\/[^)\s]+\.js)/)?.[1] || '';
+        return u || '';
+      }catch(_){ return ''; }
+    }
+
+    // Hook dispatchEvent (nur CustomEvents zählen)
+    const _dispatch = window.dispatchEvent.bind(window);
+    window.dispatchEvent = function(ev){
+      try{
+        if (ev && typeof ev.type === 'string' && (/^(cb:|req:)/.test(ev.type))){
+          const file = guessFileFromStack();
+          const entry = { type:ev.type, time:Date.now(), detail:ev.detail, target:'window', file };
+          window.__EVENT_REGISTRY__.push(entry);
+          if (window.__EVENT_REGISTRY__.length > MAX) window.__EVENT_REGISTRY__.shift();
+          addSummary(ev.type, 'emit');
+        }
+      }catch(_){}
+      return _dispatch(ev);
+    };
+
+    // Hook addEventListener (alle Targets, aber nur cb:/req: Typen zählen)
+    const _add = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type, listener, opts){
+      try{
+        if (typeof type === 'string' && (/^(cb:|req:)/.test(type))){
+          const file = guessFileFromStack();
+          const list = window.__EVENT_LISTENERS__.get(type) || [];
+          list.push({ target: this===window?'window':(this?.tagName||'object'), file });
+          window.__EVENT_LISTENERS__.set(type, list);
+          addSummary(type, 'listen');
+        }
+      }catch(_){}
+      return _add.call(this, type, listener, opts);
+    };
+
+    (window.CBLog?.info||console.info)('[audit-tab] Event-Scanner aktiv.');
+    return true;
+  }
+
+  /* ================================ Code-Scan =============================== */
+  async function scanAllScripts(){
     const scripts = Array.from(document.scripts||[]);
     const bySrc = new Map();    // src → [script]
     const byHash = new Map();   // hash → [ {idx, inline, src, content} ]
 
-    // 1) Gruppen bilden
+    // Gruppen bilden
     scripts.forEach((s, idx)=>{
       const src = (s.src||'').trim();
       if (src) {
@@ -163,32 +210,24 @@
       }
     });
 
-    // 2) Inhalte laden (nur src) – gleiche Origin angenommen
+    // Inhalte laden
     const entries = [];
     for (const s of scripts){
       const src = (s.src||'').trim();
       let content = '';
       let inline = false;
       if (src){
-        try {
-          const res = await fetch(src, { cache:'no-store' });
-          content = await res.text();
-        } catch(e) {
-          content = `/* [audit] fetch fehlgeschlagen: ${e?.message||e} */`;
-        }
+        try { const res = await fetch(src, { cache:'no-store' }); content = await res.text(); }
+        catch(e){ content = `/* [audit] fetch fehlgeschlagen: ${e?.message||e} */`; }
       } else {
-        inline = true;
-        content = (s.textContent||'');
+        inline = true; content = (s.textContent||'');
       }
       const h = hash32(content);
-      const dupSrcCount = src ? (bySrc.get(src)?.length||0) : 0;
+      const dupSrcCount  = src ? (bySrc.get(src)?.length||0) : 0;
       const dupHashCount = (byHash.get(h)?.length||0);
 
-      // Muster zählen
       const flags = {};
-      for (const [k, rx] of Object.entries(PAT)){
-        flags[k] = (content.match(rx)||[]).length;
-      }
+      for (const [k, rx] of Object.entries(PAT)){ flags[k] = (content.match(rx)||[]).length; }
 
       entries.push({
         file: src || `<inline #${entries.length+1}>`,
@@ -198,53 +237,64 @@
       });
     }
 
-    // 3) Bewertung + empfohlene Maßnahme
-    const rows = entries.map(e=>{
-      const assessList = assess(e.file, e);
-      return { entry:e, assess:assessList };
-    });
-
-    return rows;
+    // Bewertung
+    return entries.map(e => ({ entry:e, assess:assess(e.file, e) }));
   }
 
-  /* =============================== UI Mount ================================ */
+  /* ================================ UI ===================================== */
   function mount(sectionEl){
     injectCSS();
+    ensureEventScanner();
+
     sectionEl.innerHTML = '';
     const wrap = document.createElement('div');
 
-    const h = document.createElement('h3');
-    h.textContent = 'Audit – Duplikate, Event-Hooks, Startpanel-Konflikte';
+    const h = document.createElement('h3'); h.textContent = 'Audit – Code & Live-Events';
     wrap.appendChild(h);
 
-    // Toolbar
+    // ---------- Toolbar ----------
     const bar = document.createElement('div'); bar.className='audit-toolbar';
-    const btnScan = document.createElement('button'); btnScan.className='audit-btn'; btnScan.textContent='Scan starten';
-    const btnCSV  = document.createElement('button'); btnCSV.className='audit-btn';  btnCSV.textContent='Export CSV';
-    const hint = document.createElement('span'); hint.className='mono'; hint.style.opacity='.8';
-    hint.textContent = 'Scannt alle aktuell eingebundenen <script>-Dateien.';
-    bar.append(btnScan, btnCSV, hint);
+    const btnScan     = mkBtn('Code-Scan starten');
+    const btnCSV      = mkBtn('Export Audit CSV');
+    const btnEvtSum   = mkBtn('Live-Events aktualisieren');
+    const btnEvtCSV   = mkBtn('Export Events CSV');
+    const btnLstCSV   = mkBtn('Export Listener CSV');
+    bar.append(btnScan, btnCSV, btnEvtSum, btnEvtCSV, btnLstCSV);
     wrap.appendChild(bar);
 
-    // Tabelle
-    const table = document.createElement('table'); table.className='audit-table';
-    table.innerHTML = `
-      <thead><tr>
-        <th style="width:32%">Datei</th>
-        <th style="width:28%">Events / Init (Zähler)</th>
-        <th style="width:20%">Konflikt / Status</th>
-        <th style="width:20%">Empfohlene Maßnahme</th>
-      </tr></thead>
-      <tbody></tbody>
-    `;
-    const tbody = table.querySelector('tbody');
-    wrap.appendChild(table);
+    // ---------- Code-Audit Tabelle ----------
+    const titleA = subtitle('Code-Audit (Skripte)');
+    const tableA = mkTable(['Datei','Events / Init (Zähler)','Konflikt / Status','Empfohlene Maßnahme'], [32,28,20,20]);
+    const tbodyA = tableA.querySelector('tbody');
+    wrap.appendChild(titleA); wrap.appendChild(tableA);
+
+    // ---------- Live-Events Zusammenfassung ----------
+    const titleB = subtitle('Live-Events (Scanner)');
+    const tableB = mkTable(['Event','Emits','Listener','Hinweis'], [42,12,12,34]);
+    const tbodyB = tableB.querySelector('tbody');
+    wrap.appendChild(titleB); wrap.appendChild(tableB);
+
+    // ---------- Details (optional) ----------
+    const titleC = subtitle('Event-Details (letzte Emits)');
+    const tableC = mkTable(['Zeit','Event','Detail','Quelle'], [14,20,36,30]);
+    const tbodyC = tableC.querySelector('tbody');
+    wrap.appendChild(titleC); wrap.appendChild(tableC);
 
     sectionEl.appendChild(wrap);
 
-    // Render-Hilfen
-    function badge(cls, txt){ const b=document.createElement('span'); b.className='audit-badge '+cls; b.textContent=txt; return b; }
-    function flagsToNode(flags){
+    let lastAuditRows = [];
+
+    // Helpers UI
+    function mkBtn(txt, fn){ const b=document.createElement('button'); b.className='audit-btn'; b.textContent=txt; if(fn) b.addEventListener('click', fn); return b; }
+    function mkTable(heads, widths){
+      const t = document.createElement('table'); t.className='audit-table';
+      const th = heads.map((h,i)=>`<th style="width:${widths[i]}%">${h}</th>`).join('');
+      t.innerHTML = `<thead><tr>${th}</tr></thead><tbody></tbody>`;
+      return t;
+    }
+    function subtitle(txt){ const el=document.createElement('div'); el.className='audit-subtitle'; el.textContent=txt; return el; }
+
+    function flagsNode(flags){
       const box = document.createElement('div');
       const map = [
         ['emit_ui_ready','emit ui-ready'],
@@ -259,39 +309,27 @@
       map.forEach(([k,label])=>{
         const val = flags[k]||0;
         const cls = val>1 ? 'warn' : (val>0 ? 'ok':'');
-        const b = badge(cls, `${label}:${val}`);
-        box.appendChild(b);
-        box.appendChild(document.createTextNode(' '));
+        box.appendChild( badge(cls, `${label}:${val}`) );
       });
       return box;
     }
-
-    function assessToNodes(assess){
+    function assessNodes(assess){
       const box = document.createElement('div');
-      assess.forEach(a=>{
-        const cls = a.sev==='err'?'err':(a.sev==='warn'?'warn':'ok');
-        box.appendChild(badge(cls, a.msg));
-        box.appendChild(document.createElement('br'));
-      });
+      assess.forEach(a=> box.appendChild(badge(a.sev==='err'?'err':(a.sev==='warn'?'warn':'ok'), a.msg)));
       return box;
     }
-
     function firstFix(assess){
-      const row = assess.find(a=>a.sev!=='ok');
-      return row ? row.fix : '—';
+      const row = assess.find(a=>a.sev!=='ok'); return row ? row.fix : '—';
     }
 
-    let lastRows = [];
-
-    async function doScan(){
-      tbody.innerHTML = `<tr><td colspan="4">Analysiere … bitte warten.</td></tr>`;
+    async function doAuditScan(){
+      tbodyA.innerHTML = `<tr><td colspan="4">Analysiere …</td></tr>`;
       try{
-        lastRows = await scanAll();
-        tbody.innerHTML = '';
-        lastRows.forEach(({entry, assess})=>{
+        lastAuditRows = await scanAllScripts();
+        tbodyA.innerHTML = '';
+        lastAuditRows.forEach(({entry, assess})=>{
           const tr = document.createElement('tr');
 
-          // Datei
           const tdFile = document.createElement('td');
           tdFile.innerHTML = `
             <div class="mono">${entry.file}</div>
@@ -301,59 +339,117 @@
           `;
           tr.appendChild(tdFile);
 
-          // Events / Init
-          const tdFlags = document.createElement('td');
-          tdFlags.appendChild( flagsToNode(entry.flags) );
-          tr.appendChild(tdFlags);
+          const tdFlags = document.createElement('td'); tdFlags.appendChild( flagsNode(entry.flags) ); tr.appendChild(tdFlags);
+          const tdAss   = document.createElement('td'); tdAss.appendChild( assessNodes(assess) ); tr.appendChild(tdAss);
+          const tdFix   = document.createElement('td'); tdFix.textContent = firstFix(assess); tr.appendChild(tdFix);
 
-          // Konflikt / Status
-          const tdAss = document.createElement('td');
-          tdAss.appendChild( assessToNodes(assess) );
-          tr.appendChild(tdAss);
-
-          // Maßnahme
-          const tdFix = document.createElement('td');
-          tdFix.textContent = firstFix(assess);
-          tr.appendChild(tdFix);
-
-          tbody.appendChild(tr);
+          tbodyA.appendChild(tr);
         });
       }catch(e){
-        tbody.innerHTML = `<tr><td colspan="4" class="err">Scan-Fehler: ${e?.message||e}</td></tr>`;
+        tbodyA.innerHTML = `<tr><td colspan="4" class="err">Scan-Fehler: ${e?.message||e}</td></tr>`;
       }
     }
 
-    function exportCSV(){
-      if (!lastRows.length){ alert('Bitte zuerst scannen.'); return; }
+    function populateLive(){
+      // Zusammenfassung
+      tbodyB.innerHTML = '';
+      const sum = window.__EVENT_SUMMARY__ || new Map();
+      const rows = Array.from(sum.entries()).sort((a,b)=> a[0].localeCompare(b[0]));
+      if (!rows.length){
+        tbodyB.innerHTML = `<tr><td colspan="4">Noch keine Events erfasst. Starte Aktionen oder wechsle Tabs/Buttons im Spiel.</td></tr>`;
+      } else {
+        rows.forEach(([type, rec])=>{
+          const tr = document.createElement('tr');
+          const hint = (rec.emit>1 && rec.listen===0) ? 'Emit mehrfach, kein Listener?' :
+                       (rec.listen>1 && rec.emit===0) ? 'Listener mehrfach, kein Emit sichtbar?' : '—';
+          tr.innerHTML = `<td class="mono">${type}</td><td>${rec.emit||0}</td><td>${rec.listen||0}</td><td>${hint}</td>`;
+          tbodyB.appendChild(tr);
+        });
+      }
+
+      // Details (letzte N Emits)
+      tbodyC.innerHTML = '';
+      const list = window.__EVENT_REGISTRY__ || [];
+      const last = list.slice(-200).reverse(); // letzte 200 anzeigen
+      if (!last.length){
+        tbodyC.innerHTML = `<tr><td colspan="4">Keine Emits protokolliert.</td></tr>`;
+      } else {
+        last.forEach(it=>{
+          const t = new Date(it.time).toLocaleTimeString();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="mono">${t}</td>
+            <td class="mono">${it.type}</td>
+            <td class="mono" style="max-width:0;word-break:break-word">${safeJSON(it.detail)}</td>
+            <td class="mono" title="${it.file||''}">${shorten(it.file||'')}</td>
+          `;
+          tbodyC.appendChild(tr);
+        });
+      }
+    }
+
+    function safeJSON(v){ try{ return (v==null)?'—':JSON.stringify(v); }catch(_){ return String(v); } }
+    function shorten(s){ if(!s) return '—'; return s.length>96 ? ('…'+s.slice(-95)) : s; }
+
+    function exportAuditCSV(){
+      if (!lastAuditRows.length){ alert('Bitte zuerst „Code-Scan starten“.'); return; }
       const head = ['Datei','hash','inline','dup_src','dup_content','emit_ui_ready','listen_ui_ready','emit_game_start','listen_game_start','startpanel_hide','startpanel_show','inspector_register','boot_init','Konflikt(e)','Empfehlung'];
       const lines = [head.join(';')];
-
-      lastRows.forEach(({entry, assess})=>{
-        const flags = entry.flags;
+      lastAuditRows.forEach(({entry, assess})=>{
+        const f = entry.flags;
         const probs = assess.map(a=>`${a.sev.toUpperCase()}:${a.msg}`).join(' | ');
-        const fix   = assess.map(a=>a.fix).filter(Boolean)[0] || '—';
+        const fix   = assess.map(a=>a.fix).find(Boolean) || '—';
         const row = [
           entry.file, entry.hash, entry.inline, entry.dupSrcCount, entry.dupHashCount,
-          flags.emit_ui_ready, flags.listen_ui_ready,
-          flags.emit_game_start, flags.listen_game_start,
-          flags.startpanel_hide, flags.startpanel_show,
-          flags.inspector_register, flags.boot_init,
+          f.emit_ui_ready, f.listen_ui_ready, f.emit_game_start, f.listen_game_start,
+          f.startpanel_hide, f.startpanel_show, f.inspector_register, f.boot_init,
           probs, fix
         ].map(csvEscape).join(';');
         lines.push(row);
       });
+      downloadCSV('audit-report.csv', lines);
+    }
 
+    function exportEventsCSV(){
+      const list = window.__EVENT_REGISTRY__ || [];
+      const head = ['time','event','detail','file'];
+      const lines = [head.join(';')];
+      list.forEach(it=>{
+        const t = new Date(it.time).toISOString();
+        lines.push([t, it.type, safeJSON(it.detail), it.file||''].map(csvEscape).join(';'));
+      });
+      downloadCSV('events-report.csv', lines);
+    }
+
+    function exportListenersCSV(){
+      const map = window.__EVENT_LISTENERS__ || new Map();
+      const head = ['event','target','file'];
+      const lines = [head.join(';')];
+      map.forEach((arr, type)=>{
+        arr.forEach(r=>{
+          lines.push([type, r.target||'?', r.file||''].map(csvEscape).join(';'));
+        });
+      });
+      downloadCSV('listeners-report.csv', lines);
+    }
+
+    function downloadCSV(name, lines){
       const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'audit-report.csv';
+      const a = document.createElement('a'); a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
     }
 
-    btnScan.addEventListener('click', doScan);
-    btnCSV .addEventListener('click', exportCSV);
+    // Bindings
+    btnScan   .addEventListener('click', doAuditScan);
+    btnCSV    .addEventListener('click', exportAuditCSV);
+    btnEvtSum .addEventListener('click', populateLive);
+    btnEvtCSV .addEventListener('click', exportEventsCSV);
+    btnLstCSV .addEventListener('click', exportListenersCSV);
 
-    // Beim ersten Öffnen sofort scannen
-    doScan();
+    // Erstlauf
+    doAuditScan();
+    populateLive();
   }
 
   /* ============================= Registrierung ============================= */
