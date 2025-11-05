@@ -1,9 +1,13 @@
 /* ============================================================================
    Datei   : ui/css/ui-start.css
-   Version : v25.10.16-3
-   Zweck   : Startpanel (kleines Quadrat + 4 Buttons untereinander)
+   Version : v25.10.16-4 (Doku + z-Index Panel)
+   Zweck   : Startpanel (Holzrahmen + Buttons). KEINE globalen Splash-Styles!
 ============================================================================ */
-/* Beispiel-Regel in ui-start.css */
+
+/* Legacy (nicht mehr verwendet):
+   #start-bg war der alte Splash-Layer.
+   Aktuell wird der Splash über #start-splash in ui/css/ui-layout.css gesteuert.
+   Dieser Block bleibt als Fallback und kann später entfernt werden. */
 #start-bg {
   position: fixed;
   inset: 0;
@@ -13,6 +17,7 @@
 
 #start-panel{
   position:fixed; inset:0;
+  z-index: 100;                 /* Panel über Splash (#start-splash z=90) */
   display:grid; place-items:center;
   pointer-events:auto; /* UI anklickbar */
 }
