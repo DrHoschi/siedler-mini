@@ -317,46 +317,54 @@ const RULZ = {
   }
 
   function svgDeps(results){
-    const edges = [
-      { from:'asset.js', to:'registry.js', hard: true },
-      { from:'ui-inspector-v1.js', to:'inspector.tab.*.js', hard: true },
-      { from:'registry/ui-build', to:'inspector.bridges.js', hard: true },
-    ];
-    const W=680, H=160; const col1=150,col2=360,col3=560;
-    const rows = [
-      { y:40,  nodes:['asset.js','ui-inspector-v1.js'] },
-      { y:90,  nodes:['registry.js','ui-inspector.content-v1.js'] },
-      { y:130, nodes:['inspector.tab.*.js','inspector.bridges.js'] },
-    ];
-    const pos = {};
-    rows.forEach(row=>row.nodes.forEach((name,i)=>{
-      const x = [col1,col2,col3, col3+90][i] || (col1+i*180);
-      pos[name] = { x, y: row.y };
-    }));
-    function ruleFailed(id){ return results.hard.some(r=>!r.ok && r.id===id); }
+  const edges = [
+    // harte Abhängigkeiten
+    { from:'asset.js',              to:'registry.js',            hard:true },
+    { from:'ui-inspector-v1.js',    to:'inspector.tab.*.js',     hard:true },
+    { from:'registry/ui-build',     to:'inspector.bridges.js',   hard:true },
+    { from:'boot.js',               to:'game.bootstrap.js',      hard:true },
+    { from:'game.bootstrap.js',     to:'game.js',                hard:true },
+    // weiche Empfehlungen
+    { from:'(Spielteile)',          to:'ui-layout.js',           hard:false },
+    { from:'ui-inspector.content',  to:'inspector.tab.*.js',     hard:false }
+  ];
 
-    let svg = `<div class="svg-wrap"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
-    Object.entries(pos).forEach(([name,p])=>{
-      svg += `<rect x="${p.x-70}" y="${p.y-15}" width="140" height="30" rx="6" ry="6" fill="#1a1d22" stroke="#333"/>`;
-      svg += `<text x="${p.x}" y="${p.y+4}" font-size="11" text-anchor="middle" fill="#ddd">${name}</text>`;
-    });
-    edges.forEach(e=>{
-      const a = pos[e.from], b = pos[e.to]; if (!a||!b) return;
-      let ok = true;
-      if (e.hard){
-        if (e.from==='ui-inspector-v1.js' && ruleFailed('insp-core-before-tabs')) ok=false;
-        if (e.from==='asset.js' && ruleFailed('registry-after-asset')) ok=false;
-        if (e.from==='registry/ui-build' && ruleFailed('bridge-after-registry')) ok=false;
-      }
-      const col = ok ? (e.hard?'#8ab4f8':'#ffcc00') : '#ff6666';
-      const id = `arr_${e.from.replace(/\W/g,'')}_${e.to.replace(/\W/g,'')}`;
-      svg += `<defs><marker id="${id}" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="${col}"/></marker></defs>`;
-      svg += `<line x1="${a.x+70}" y1="${a.y}" x2="${b.x-70}" y2="${b.y}" stroke="${col}" stroke-width="2" marker-end="url(#${id})"/>`;
-    });
-    svg += `</svg><div class="legend">Kanten: Blau=harte OK · Gelb=weiche Empfehlung · Rot=harte Verletzung</div></div>`;
-    return svg;
+  const W=760, H=200; const col1=120,col2=340,col3=560;
+  const rows = [
+    { y:40,  nodes:['asset.js','ui-inspector-v1.js','boot.js'] },
+    { y:100, nodes:['registry.js','ui-inspector.content','game.bootstrap.js'] },
+    { y:160, nodes:['inspector.tab.*.js','inspector.bridges.js','game.js','ui-layout.js'] },
+  ];
+  const pos = {};
+  rows.forEach(row=>row.nodes.forEach((name,i)=>{
+    const xs=[col1,col2,col3,col3+120][i] || (col1+i*200);
+    pos[name] = { x: xs, y: row.y };
+  }));
+  function ruleFailed(id){ return results.hard.some(r=>!r.ok && r.id===id); }
+
+  let svg = `<div class="svg-wrap"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  Object.entries(pos).forEach(([name,p])=>{
+    svg += `<rect x="${p.x-78}" y="${p.y-16}" width="156" height="32" rx="6" ry="6" fill="#1a1d22" stroke="#333"/>`;
+    svg += `<text x="${p.x}" y="${p.y+4}" font-size="11" text-anchor="middle" fill="#ddd">${name}</text>`;
+  });
+  edges.forEach(e=>{
+    const a = pos[e.from], b = pos[e.to]; if(!a||!b) return;
+    let ok = true;
+    if (e.hard){
+      if (e.from==='ui-inspector-v1.js' && ruleFailed('insp-core-before-tabs')) ok=false;
+      if (e.from==='asset.js'          && ruleFailed('registry-after-asset')) ok=false;
+      if (e.from==='registry/ui-build' && ruleFailed('bridge-after-registry')) ok=false;
+      if (e.from==='boot.js'           && ruleFailed('boot-chain')) ok=false;
+      if (e.from==='game.bootstrap.js' && ruleFailed('boot-chain')) ok=false;
+    }
+    const col = ok ? (e.hard?'#8ab4f8':'#ffcc00') : '#ff6666';
+    const id  = `arr_${e.from.replace(/\W/g,'')}_${e.to.replace(/\W/g,'')}`;
+    svg += `<defs><marker id="${id}" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="${col}"/></marker></defs>`;
+    svg += `<line x1="${a.x+78}" y1="${a.y}" x2="${b.x-78}" y2="${b.y}" stroke="${col}" stroke-width="2" marker-end="url(#${id})"/>`;
+  });
+  svg += `</svg><div class="legend">Kanten: Blau=harte OK · Gelb=weiche Empfehlung · Rot=harte Verletzung</div></div>`;
+  return svg;
   }
-
   function runRules(scriptsArr){
     const hard = RULZ.hard.map(r=>({ id:r.id, desc:r.desc, ok: !!r.must(scriptsArr) }));
     const soft = RULZ.soft.map(r=>({ id:r.id, desc:r.desc, ok: !!r.should(scriptsArr) }));
