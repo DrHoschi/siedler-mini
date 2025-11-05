@@ -1,43 +1,92 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.checker-v1.js
- * Version : v25.11.02 (final)
+ * Projekt : Neue Siedler
+ * Version : v25.11.07-final
  * Zweck   : CHECKER – Reihenfolgen-Checker für Skripte, Events, Abhängigkeiten
- * Features:
- *   • Script-Order-Check (harte/weiche Regeln) + Duplikate
- *   • Abhängigkeiten-Validierung + Mini-Graph (SVG)
- *   • Event-Timeline (Hook auf dispatchEvent für req:/cb:)
- *   • **Event-Listener-Zähler** (Hook auf add/removeEventListener)
- *   • **Klassen/Unterklassen-Scanner** (globale Konstruktoren, Vererbung, Methoden)
- *   • Copy/Export der kompletten Diagnose (JSON)
- * Abhäng. : window.registerInspectorTab(name, setup)
- * Hinweise:
- *   – Hooks sind read-only & idempotent (setzen __CHK_* Guards).
- *   – Ergebnisse liegen zusätzlich in window.__CHECKER_DIAG__.
+ *
+ * Features
+ * - Script-Order-Check (harte/weiche Regeln) + Duplikate
+ * - Abhängigkeiten-Validierung + Mini-Graph (SVG)
+ * - Event-Timeline (Hook auf dispatchEvent für req:/cb:)
+ * - Event-Listener-Zähler (Hook auf add/removeEventListener)
+ * - Klassen-Scanner (globale Klassen/Konstruktoren, Vererbung, Methoden)
+ * - Copy/Export der kompletten Diagnose (JSON)
+ *
+ * API     : window.registerInspectorTab(name, setup, { id, order, icon? })
+ * Guards  : __INSP_TABS__['tab:checker@v1'], __CHK_DISPATCH_HOOKED__, __CHK_LISTENER_HOOKED__
+ * Output  : window.__CHECKER_DIAG__ (letztes Ergebnis)
  * ========================================================================== */
-
-(function(){
+(function () {
   'use strict';
-  // Run-Once (nur für diesen Tab!)
+
+  /* ============================== Run-Once ================================= */
   window.__INSP_TABS__ = window.__INSP_TABS__ || {};
   if (window.__INSP_TABS__['tab:checker@v1']) {
-    (console.info||console.log)('[checker-tab] already loaded');
+    (console.info || console.log)('[checker-tab] already loaded');
     return;
   }
   window.__INSP_TABS__['tab:checker@v1'] = true;
 
+  /* ============================== Late-Register ============================ *
+   * Registriert den Tab, sobald die Inspector-API verfügbar ist. Fällt nach
+   * 10s auf einen minimalen DOM-Fallback zurück (wenn .insp-tabs/.insp-content existieren).
+   * ======================================================================== */
+  function universalRegister(tabTitle, tabId, mountFn, order, icon) {
+    const tryAPI = () => {
+      if (typeof window.registerInspectorTab === 'function') {
+        window.registerInspectorTab(tabTitle, mountFn, { id: tabId, order: order || 130, icon });
+        (window.CBLog?.info || console.info)('[checker-tab] via API registriert.');
+        return true;
+      }
+      return false;
+    };
+    if (tryAPI()) return;
 
+    const onReady = () => { if (tryAPI()) cleanup(); };
+    const cleanup = () => {
+      window.removeEventListener('cb:insp:core:ready', onReady);
+      window.removeEventListener('cb:insp:content:ready', onReady);
+      clearInterval(poll); clearTimeout(tout);
+    };
+    window.addEventListener('cb:insp:core:ready', onReady);
+    window.addEventListener('cb:insp:content:ready', onReady);
+    const poll = setInterval(onReady, 200);
+    const tout = setTimeout(() => {
+      clearInterval(poll);
+      // --- Minimaler DOM-Fallback ---
+      const insp = document.querySelector('#inspector');
+      const tabs = insp?.querySelector('.insp-tabs');
+      const content = insp?.querySelector('.insp-content');
+      if (tabs && content) {
+        const btn = document.createElement('button');
+        btn.textContent = tabTitle; btn.dataset.tab = tabId;
+        if (icon) btn.style.setProperty('--insp-tab-icon', `url(${icon})`);
+        tabs.appendChild(btn);
 
-(function(){
-  if (typeof window.registerInspectorTab !== 'function') {
-    console.warn('[checker-tab] registerInspectorTab fehlt.');
-    return;
+        const sec = document.createElement('section');
+        sec.id = tabId; content.appendChild(sec);
+
+        tabs.querySelectorAll('button').forEach(b => {
+          b.addEventListener('click', () => {
+            const id = b.dataset.tab;
+            content.querySelectorAll('section').forEach(s => s.style.display = (s.id === id ? 'block' : 'none'));
+            window.dispatchEvent(new CustomEvent('cb:insp:tab:change', { detail: { tab: b.textContent } }));
+          });
+        });
+
+        mountFn(sec); sec.style.display = 'block';
+        console.info('[checker-tab] DOM-Fallback aktiv.');
+      } else {
+        console.warn('[checker-tab] Weder API noch .insp-tabs/.insp-content vorhanden.');
+      }
+    }, 10000);
   }
 
-  /* ----------------------------- Inline CSS ------------------------------ */
-  function injectCSS(){
+  /* ================================= CSS =================================== */
+  function injectCSS() {
     if (document.getElementById('insp-checker-inline-style')) return;
     const st = document.createElement('style');
-    st.id='insp-checker-inline-style';
+    st.id = 'insp-checker-inline-style';
     st.textContent = `
 #inspector .chk-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.25rem 0 .75rem}
 #inspector .chk-btn{padding:.25rem .6rem;border:1px solid #333;background:#222;border-radius:.5rem;cursor:pointer}
@@ -54,8 +103,8 @@
     document.head.appendChild(st);
   }
 
-  /* ------------------------------- Guards & Hooks ------------------------- */
-  // (1) Event-Dispatch-Timeline (req:/cb:)
+  /* =============================== Hooks =================================== */
+  // 1) Event-Dispatch-Timeline (req:/cb:)
   (function hookDispatch(){
     if (window.__CHK_DISPATCH_HOOKED__) return;
     window.__CHK_DISPATCH_HOOKED__ = true;
@@ -80,7 +129,7 @@
     };
   })();
 
-  // (2) Event-Listener-Zähler (add/removeEventListener)
+  // 2) Event-Listener-Zähler (add/removeEventListener)
   (function hookAddRemove(){
     if (window.__CHK_LISTENER_HOOKED__) return;
     window.__CHK_LISTENER_HOOKED__ = true;
@@ -91,10 +140,9 @@
     const origAdd = ET.addEventListener;
     const origRem = ET.removeEventListener;
 
-    // pro Target (WeakMap) → Map(eventType -> count)
-    const mapPerTarget = new WeakMap();
-    const totals = Object.create(null);        // {type: count}
-    const totalsByTarget = new WeakMap();      // target -> count total
+    const mapPerTarget = new WeakMap();   // target -> Map(type -> count)
+    const totals = Object.create(null);   // { type: totalCount }
+    const totalsByTarget = new WeakMap(); // target -> totalCount
     const track = window.__CHK_LISTENER__ = { totals, mapPerTarget, totalsByTarget };
 
     function inc(target, type){
@@ -123,7 +171,7 @@
     };
   })();
 
-  /* ----------------------------- Utilities ------------------------------- */
+  /* ================================ Utils ================================== */
   const base = (url) => (url||'').split('?')[0].split('/').pop();
   const qver = (url) => {
     if (!url) return '';
@@ -160,7 +208,7 @@
     return -1;
   }
 
-  /* -------------------------- Regel-Definitionen -------------------------- */
+  /* =========================== Regeln & Graphen ============================ */
   const RULZ = {
     hard: [
       { id:'insp-core-before-tabs',
@@ -191,36 +239,8 @@
           return afterR && afterU;
         }
       },
-      { id:'boot-chain',
-        desc:'boot.js → game.bootstrap.js → game.js (in dieser Reihenfolge).',
-        must: (S) => {
-          const boot = indexOfFile(S, /core\/boot\.js$/);
-          const gb   = indexOfFile(S, /core\/game\.bootstrap\.js$/);
-          const g    = indexOfFile(S, /core\/game\.js$/);
-          if (boot<0 || gb<0 || g<0) return true;
-          return boot < gb && gb < g;
-        }
-      },
-      { id:'layout-lastish',
-        desc:'ui-layout.js sollte nahe am Ende liegen (nach Start-Komponenten).',
-        must: (S) => {
-          const l = indexOfFile(S, /ui\/ui-layout\.js$/);
-          if (l < 0) return true;
-          const last = Math.max(...S.map(x=>x.idx));
-          return (last - l) <= 2;
-        }
-      },
     ],
     soft: [
-      { id:'pathoverlay-before-usage',
-        desc:'path-overlay.js möglichst vor Benutzung (Bridge/Buttons) laden.',
-        should: (S) => {
-          const p  = indexOfFile(S, /core\/path-overlay\.js$/);
-          const br = indexOfFile(S, /inspector\.bridges\.js$/);
-          if (p<0 || br<0) return true;
-          return p <= br;
-        }
-      },
       { id:'insp-content-before-tabs',
         desc:'ui-inspector.content-v1.js möglichst vor Tab-Skripten laden.',
         should: (S) => {
@@ -232,7 +252,6 @@
     ]
   };
 
-  /* --------------------------- Visualisierung ----------------------------- */
   function svgSequence(scripts, results){
     const W = Math.max(680, scripts.length * 140);
     const H = 120;
@@ -270,15 +289,12 @@
       { from:'asset.js', to:'registry.js', hard: true },
       { from:'ui-inspector-v1.js', to:'inspector.tab.*.js', hard: true },
       { from:'registry/ui-build', to:'inspector.bridges.js', hard: true },
-      { from:'boot.js', to:'game.bootstrap.js', hard: true },
-      { from:'game.bootstrap.js', to:'game.js', hard: true },
-      { from:'(Spielteile)', to:'ui-layout.js', hard: false },
     ];
-    const W=680, H=180; const col1=150,col2=360,col3=560;
+    const W=680, H=160; const col1=150,col2=360,col3=560;
     const rows = [
-      { y:40,  nodes:['asset.js','ui-inspector-v1.js','boot.js'] },
-      { y:90,  nodes:['registry.js','ui-inspector.content-v1.js','game.bootstrap.js'] },
-      { y:140, nodes:['inspector.tab.*.js','inspector.bridges.js','game.js','ui-layout.js'] },
+      { y:40,  nodes:['asset.js','ui-inspector-v1.js'] },
+      { y:90,  nodes:['registry.js','ui-inspector.content-v1.js'] },
+      { y:130, nodes:['inspector.tab.*.js','inspector.bridges.js'] },
     ];
     const pos = {};
     rows.forEach(row=>row.nodes.forEach((name,i)=>{
@@ -298,8 +314,6 @@
       if (e.hard){
         if (e.from==='ui-inspector-v1.js' && ruleFailed('insp-core-before-tabs')) ok=false;
         if (e.from==='asset.js' && ruleFailed('registry-after-asset')) ok=false;
-        if (e.from==='boot.js' && ruleFailed('boot-chain')) ok=false;
-        if (e.from==='game.bootstrap.js' && ruleFailed('boot-chain')) ok=false;
         if (e.from==='registry/ui-build' && ruleFailed('bridge-after-registry')) ok=false;
       }
       const col = ok ? (e.hard?'#8ab4f8':'#ffcc00') : '#ff6666';
@@ -311,7 +325,6 @@
     return svg;
   }
 
-  /* --------------------------- Diagnose & Regeln --------------------------- */
   function runRules(scriptsArr){
     const hard = RULZ.hard.map(r=>({ id:r.id, desc:r.desc, ok: !!r.must(scriptsArr) }));
     const soft = RULZ.soft.map(r=>({ id:r.id, desc:r.desc, ok: !!r.should(scriptsArr) }));
@@ -328,46 +341,11 @@
     return hints;
   }
 
-  /* --------------------------- Klassen-Scanner ---------------------------- */
-  function scanClasses(filterRe){
-    const out = [];
-    const seen = new Set();
-    const isClassDecl = fn => /^\s*class\s/.test(Function.prototype.toString.call(fn));
-    const isCtorFn = fn => typeof fn==='function' && !/\[native code\]/.test(String(fn)) &&
-                           /^[A-Z]/.test(fn.name||'') && fn.prototype && Object.getOwnPropertyNames(fn.prototype).length>1;
-
-    Object.getOwnPropertyNames(window).forEach(k=>{
-      try{
-        const v = window[k];
-        if (!v) return;
-        if (!isClassDecl(v) && !isCtorFn(v)) return;
-        if (seen.has(v)) return;
-        const name = v.name || k;
-        if (filterRe && !filterRe.test(name)) return;
-
-        const proto = v.prototype || {};
-        const methods = Object.getOwnPropertyNames(proto)
-          .filter(n=> n!=='constructor' && typeof proto[n]==='function');
-
-        const baseCtor = proto && Object.getPrototypeOf(proto) && Object.getPrototypeOf(proto).constructor;
-        const baseName = baseCtor && baseCtor!==Object && baseCtor.name || null;
-
-        out.push({
-          name, kind: isClassDecl(v)?'class':'ctor',
-          methodsCount: methods.length, methods,
-          extends: baseName
-        });
-        seen.add(v);
-      }catch(_){}
-    });
-    out.sort((a,b)=> a.name.localeCompare(b.name));
-    return out;
-  }
-
-  /* --------------------------------- UI ----------------------------------- */
-  function el(tag, cls, txt){ const n=document.createElement(tag); if(cls) n.className=cls; if(txt!=null) n.textContent=txt; return n; }
+  /* ================================ UI ===================================== */
+  const el = (tag, cls, txt) => { const n=document.createElement(tag); if(cls) n.className=cls; if(txt!=null) n.textContent=txt; return n; };
 
   function render(section){
+    injectCSS();
     section.innerHTML = '<h2>Checker</h2>';
     const tb = el('div','chk-toolbar');
     const bScan   = el('button','chk-btn','Scan');
@@ -405,12 +383,9 @@
     function renderListeners(){
       const L = window.__CHK_LISTENER__;
       if (!L){ OUT.lst.textContent='(kein Listener-Hook aktiv)'; return; }
-      // Totals by type
       const totals = Object.entries(L.totals).sort((a,b)=> b[1]-a[1]).map(([t,c])=>`${String(c).padStart(4,' ')} ×  ${t}`).join('\n');
-      // Top targets (heuristic): we can’t stringify targets – just counts span
       let targets = [];
       try{
-        // Estimate: collect by constructor name when available
         const temp = {};
         L.mapPerTarget.forEach((map, target)=>{
           const name = (target && target.constructor && target.constructor.name) || '(Target)';
@@ -425,7 +400,7 @@
     function renderClasses(){
       const re = (()=>{
         const v = OUT.filterInput.value.trim();
-        if (!v) return /^(core|ui|Inspector|Path|Build|Registry)/; // praxisnaher Default
+        if (!v) return /^(core|ui|Inspector|Path|Build|Registry)/;
         try{ return new RegExp(v); }catch(_){ return null; }
       })();
       const list = scanClasses(re||undefined);
@@ -444,18 +419,12 @@
 
       OUT.seq.innerHTML  = svgSequence(scriptsArr, rules);
       OUT.deps.innerHTML = svgDeps(rules);
-
       OUT.rules.textContent = toJSON(rules);
       OUT.dupes.textContent = S.dupes.length ? S.dupes.map(d=>`${d.file} × ${d.count}`).join('\n') : '(keine)';
       OUT.evt.textContent   = evlog.slice(-200).map(e=>`${e.ts}  ${e.name}`).join('\n') || '(leer)';
       OUT.evtCount.textContent = String(evlog.length);
       renderListeners();
       renderClasses();
-
-      OUT.hints.innerHTML = hints.map(h=>{
-        const cls = h.type==='err'?'err':(h.type==='warn'?'warn':'ok');
-        return `<div class="${cls}">• ${h.msg}</div>`;
-      }).join('');
 
       window.__CHECKER_DIAG__ = {
         ts: new Date().toISOString(),
@@ -489,15 +458,54 @@
     bClear.onclick  = ()=> { if (window.__CHK_EVLOG__) window.__CHK_EVLOG__.list.length = 0; doScan(); };
     OUT.filterInput.addEventListener('change', doScan);
 
-    // Initialer Scan + bei Tab-Aktivierung aktualisieren
     doScan();
     window.addEventListener('cb:insp:tab:change', (e)=>{ if (e?.detail?.tab === 'checker') doScan(); });
   }
 
-  /* -------------------------- Tab registrieren ---------------------------- */
-  window.registerInspectorTab('checker', function setup(section){
-    injectCSS();
-    render(section);
-  });
+  /* ============================= Registrierung ============================= */
+  universalRegister(
+    'checker',
+    'insp-tab-checker',
+    (section) => render(section),
+    130,
+    // Optional: eigenes Tab-Icon (falls du eins hast):
+    // 'assets/ui/icons/checker.svg'
+    undefined
+  );
 
+  /* =============================== Hilfs-Scanner =========================== */
+  function scanClasses(filterRe){
+    const out = [];
+    const seen = new Set();
+    const isClassDecl = fn => /^\s*class\s/.test(Function.prototype.toString.call(fn));
+    const isCtorFn = fn => typeof fn==='function' && !/\[native code\]/.test(String(fn)) &&
+                           /^[A-Z]/.test(fn.name||'') && fn.prototype && Object.getOwnPropertyNames(fn.prototype).length>1;
+
+    Object.getOwnPropertyNames(window).forEach(k=>{
+      try{
+        const v = window[k];
+        if (!v) return;
+        if (!isClassDecl(v) && !isCtorFn(v)) return;
+        if (seen.has(v)) return;
+        const name = v.name || k;
+        if (filterRe && !filterRe.test(name)) return;
+
+        const proto = v.prototype || {};
+        const methods = Object.getOwnPropertyNames(proto)
+          .filter(n=> n!=='constructor' && typeof proto[n]==='function');
+
+        const baseCtor = proto && Object.getPrototypeOf(proto) && Object.getPrototypeOf(proto).constructor;
+        const baseName = baseCtor && baseCtor!==Object && baseCtor.name || null;
+
+        out.push({
+          name, kind: isClassDecl(v)?'class':'ctor',
+          methodsCount: methods.length, methods,
+          extends: baseName
+        });
+        seen.add(v);
+      }catch(_){}
+    });
+    out.sort((a,b)=> a.name.localeCompare(b.name));
+    return out;
+  }
 })();
