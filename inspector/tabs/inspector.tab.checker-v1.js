@@ -14,6 +14,11 @@
  *   – Hooks sind read-only & idempotent (setzen __CHK_* Guards).
  *   – Ergebnisse liegen zusätzlich in window.__CHECKER_DIAG__.
  * ========================================================================== */
+
+window.__INSP_TABS__ = window.__INSP_TABS__ || {};
+if (window.__INSP_TABS__['<tab-id>']) return;
+window.__INSP_TABS__['<tab-id>'] = true;
+
 (function(){
   if (typeof window.registerInspectorTab !== 'function') {
     console.warn('[checker-tab] registerInspectorTab fehlt.');
