@@ -149,7 +149,7 @@
 
   // --- [8] Registrierung ----------------------------------------------------
   if (typeof window.registerInspectorTab === "function"){
-    window.registerInspectorTab("logs", mount);
+    window.registerInspectorTab("logs🧾", mount);
   } else {
     console.warn("[logs-tab] registerInspectorTab fehlt.");
   }
