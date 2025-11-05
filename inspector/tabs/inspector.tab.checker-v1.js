@@ -209,49 +209,81 @@
   }
 
   /* =========================== Regeln & Graphen ============================ */
-  const RULZ = {
-    hard: [
-      { id:'insp-core-before-tabs',
-        desc:'Inspector Core MUSS vor allen Inspector-Tab-Skripten geladen werden.',
-        must: (S) => {
-          const core = indexOfFile(S, /ui-inspector-v1\.js$/);
-          const anyTab = indexOfFile(S, /inspector\.tab\..*?\.js$/);
-          return core >= 0 && (anyTab < 0 || core < anyTab);
-        }
-      },
-      { id:'registry-after-asset',
-        desc:'registry.js MUSS nach asset.js geladen werden.',
-        must: (S) => {
-          const a = indexOfFile(S, /core\/asset\.js$/);
-          const r = indexOfFile(S, /core\/registry\.js$/);
-          return (a < 0 || r < 0) ? true : (a < r);
-        }
-      },
-      { id:'bridge-after-registry',
-        desc:'inspector.bridges.js MUSS nach registry/ui-build geladen werden.',
-        must: (S) => {
-          const br = indexOfFile(S, /inspector\.bridges\.js$/);
-          const r  = indexOfFile(S, /core\/registry\.js$/);
-          const ub = indexOfFile(S, /ui\/ui-build\.js$/);
-          if (br < 0) return true;
-          const afterR = (r >= 0 ? br > r : true);
-          const afterU = (ub >= 0 ? br > ub : true);
-          return afterR && afterU;
-        }
-      },
-    ],
-    soft: [
-      { id:'insp-content-before-tabs',
-        desc:'ui-inspector.content-v1.js möglichst vor Tab-Skripten laden.',
-        should: (S) => {
-          const c = indexOfFile(S, /ui-inspector\.content-v1\.js$/);
-          const t = indexOfFile(S, /inspector\.tab\..*?\.js$/);
-          return (c < 0 || t < 0) ? true : (c < t);
-        }
-      },
-    ]
-  };
-
+  // --- RULZ: HART + WEICH -----------------------------------------------------
+const RULZ = {
+  hard: [
+    { id:'insp-core-before-tabs',
+      desc:'Inspector Core MUSS vor allen Inspector-Tab-Skripten geladen werden.',
+      must: (S) => {
+        const core = indexOfFile(S, /ui-inspector-v1\.js$/);
+        const anyTab = indexOfFile(S, /inspector\.tab\..*?\.js$/);
+        return core >= 0 && (anyTab < 0 || core < anyTab);
+      }
+    },
+    { id:'registry-after-asset',
+      desc:'registry.js MUSS nach asset.js geladen werden.',
+      must: (S) => {
+        const a = indexOfFile(S, /core\/asset\.js$/);
+        const r = indexOfFile(S, /core\/registry\.js$/);
+        return (a < 0 || r < 0) ? true : (a < r);
+      }
+    },
+    { id:'bridge-after-registry',
+      desc:'inspector.bridges.js MUSS nach registry/ui-build geladen werden.',
+      must: (S) => {
+        const br = indexOfFile(S, /inspector\.bridges\.js$/);
+        const r  = indexOfFile(S, /core\/registry\.js$/);
+        const ub = indexOfFile(S, /ui\/ui-build\.js$/);
+        if (br < 0) return true;
+        const afterR = (r >= 0 ? br > r : true);
+        const afterU = (ub >= 0 ? br > ub : true);
+        return afterR && afterU;
+      }
+    },
+    // ⬇️ wieder aktiv: Boot-Kette
+    { id:'boot-chain',
+      desc:'boot.js → game.bootstrap.js → game.js (in dieser Reihenfolge).',
+      must: (S) => {
+        const boot = indexOfFile(S, /core\/boot(?:-v1)?\.js$/);
+        const gb   = indexOfFile(S, /core\/game\.bootstrap\.js$/);
+        const g    = indexOfFile(S, /core\/game\.js$/);
+        if (boot<0 || gb<0 || g<0) return true; // wenn Teile fehlen, kein Hard-Fail
+        return boot < gb && gb < g;
+      }
+    },
+  ],
+  soft: [
+    // ⬇️ wieder aktiv: Content vor Tabs
+    { id:'insp-content-before-tabs',
+      desc:'ui-inspector.content-v1.js möglichst vor Tab-Skripten laden.',
+      should: (S) => {
+        const c = indexOfFile(S, /ui-inspector\.content-v1\.js$/);
+        const t = indexOfFile(S, /inspector\.tab\..*?\.js$/);
+        return (c < 0 || t < 0) ? true : (c < t);
+      }
+    },
+    // ⬇️ wieder aktiv: Layout möglichst zuletzt
+    { id:'layout-lastish',
+      desc:'ui-layout.js sollte am Ende liegen (nach Start-/HUD-Komponenten).',
+      should: (S) => {
+        const l = indexOfFile(S, /ui\/ui-layout\.js$/);
+        if (l < 0) return true;
+        const last = Math.max(...S.map(x=>x.idx));
+        return (last - l) <= 2;
+      }
+    },
+    // ⬇️ optional: Path-Overlay vor Bridges benutzen
+    { id:'pathoverlay-before-usage',
+      desc:'core/path-overlay.js möglichst vor Bridges/Toggles laden.',
+      should: (S) => {
+        const p  = indexOfFile(S, /core\/path-overlay\.js$/);
+        const br = indexOfFile(S, /inspector\.bridges\.js$/);
+        if (p<0 || br<0) return true;
+        return p <= br;
+      }
+    },
+  ]
+};
   function svgSequence(scripts, results){
     const W = Math.max(680, scripts.length * 140);
     const H = 120;
