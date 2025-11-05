@@ -24,6 +24,12 @@
  *   - Startpanel soll vor Spielstart sichtbar sein; Autostart ist AUS.
  * ============================================================================ */
 
+if (window.__BOOT_INIT__) {
+  console.warn('[boot] Doppel-Init verhindert.');
+  return;
+}
+window.__BOOT_INIT__ = true;
+
 ;(() => {
   // [IMPORTS] – keine echten Imports (ESM) – nutzt globale Singletons (Registry, Production, Carrier, Warehouse, LogisticsManager, Territory, Market)
 
