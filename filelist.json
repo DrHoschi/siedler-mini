@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-05T08:27:51.814Z",
+  "createdAt": "2025-11-05T11:27:24.404Z",
   "root": ".",
-  "count": 473,
+  "count": 475,
   "entries": [
     {
       "type": "dir",
@@ -1494,6 +1494,11 @@
     },
     {
       "type": "file",
+      "path": "inspector/tabs/inspector.tab.audit-v1.js",
+      "size": 21169
+    },
+    {
+      "type": "file",
       "path": "inspector/tabs/inspector.tab.build-v1.js",
       "size": 6474
     },
@@ -1546,6 +1551,20 @@
       "type": "file",
       "path": "inspector/tabs/inspector.tab.ui-v1.js",
       "size": 2886
+    },
+    {
+      "type": "dir",
+      "path": "inspector/tools/"
+    },
+    {
+      "type": "file",
+      "path": "inspector/tools/inspector.events-v1.js",
+      "size": 7075
+    },
+    {
+      "type": "file",
+      "path": "inspector/tools/inspector.tab0.events-v1.js",
+      "size": 17236
     },
     {
       "type": "file",
@@ -2145,11 +2164,6 @@
     },
     {
       "type": "file",
-      "path": "ui/inspector/inspector.tab.events.js",
-      "size": 7070
-    },
-    {
-      "type": "file",
       "path": "ui/inspector/inspector.tests.js",
       "size": 15458
     },
@@ -2162,11 +2176,6 @@
       "type": "file",
       "path": "ui/build-menu.js",
       "size": 3828
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector.events.js",
-      "size": 17216
     },
     {
       "type": "file",
@@ -2271,12 +2280,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 46581
+      "size": 46813
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 17824
+      "size": 17932
     },
     {
       "type": "file",
@@ -2286,7 +2295,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 9708
+      "size": 9855
     },
     {
       "type": "file",
