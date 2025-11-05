@@ -15,9 +15,17 @@
  *   – Ergebnisse liegen zusätzlich in window.__CHECKER_DIAG__.
  * ========================================================================== */
 
-window.__INSP_TABS__ = window.__INSP_TABS__ || {};
-if (window.__INSP_TABS__['<tab-id>']) return;
-window.__INSP_TABS__['<tab-id>'] = true;
+(function(){
+  'use strict';
+  // Run-Once (nur für diesen Tab!)
+  window.__INSP_TABS__ = window.__INSP_TABS__ || {};
+  if (window.__INSP_TABS__['tab:checker@v1']) {
+    (console.info||console.log)('[checker-tab] already loaded');
+    return;
+  }
+  window.__INSP_TABS__['tab:checker@v1'] = true;
+
+
 
 (function(){
   if (typeof window.registerInspectorTab !== 'function') {
