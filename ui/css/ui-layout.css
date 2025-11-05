@@ -1,16 +1,17 @@
 /* ============================================================================
    Datei   : ui/css/ui-layout.css
    Projekt : Neue Siedler
-   Version : v1.0.0
+   Version : v1.0.1 (Fix --start-bg Pfad + Doku)
    Datum   : 25.11.05
    Zweck   : Spiel-Layout (HUD + quadratische Map + BuildDock) + Start-Splash.
-   Aktiv   : Splash/Panel bei html.panel-open; Spiel-Layout bei body.is-playing
-   ============================================================================ */
+             State: Splash/Panel → html.panel-open, Spiel → body.is-playing
+   Hinweis : Der Splash-Hintergrund gehört als GLOBALER Style hierher.
+============================================================================ */
 
 /* ---------- Start-Splash (Hintergrund vor Spielstart) -------------------- */
 :root{
-  /* Pfad an dein Bild: */
-  --start-bg: url("assets/ui/start-bg.jpg");
+  /* WICHTIG: Pfad ist relativ zu ui/css/ → zwei Ebenen hoch bis /assets/ui/ */
+  --start-bg: url("../../assets/ui/start-bg.jpg");
 }
 
 /* Splash-Layer: unter dem Panel, über dem Canvas */
@@ -27,7 +28,7 @@
 /* Sichtbar solange Panel offen ist (vor Spielstart) */
 html.panel-open #start-splash { display: block; }
 
-/* Nach Spielstart ausblenden/weg (wird per JS entfernt) */
+/* Nach Spielstart ausblenden/entfernen (JS entfernt das Element) */
 body.is-playing #start-splash { display: none; }
 #start-splash.fade-out { opacity: 0; }
 
@@ -36,8 +37,8 @@ body.is-playing #start-splash { display: none; }
 /* ========================================================================== */
 
 :root{
-  --hud-h: 56px;                 /* HUD-Höhe (Basis); per MQ skalierbar */
-  --dock-w: min(360px, 48vw);    /* BuildDock-Breite (rechts) */
+  --hud-h: 56px;
+  --dock-w: min(360px, 48vw);
   --gap: 8px;
 
   --safe-top: env(safe-area-inset-top, 0px);
@@ -75,51 +76,4 @@ body.is-playing #game{
   display: block;
   border: 1px solid #0008;
   box-shadow: 0 6px 18px rgba(0,0,0,.45) inset;
-}
-
-/* HUD-Leiste unten, volle Breite (abzgl. Dock rechts) */
-body.is-playing #hud-root{
-  position: fixed;
-  left:  calc(var(--safe-left) + var(--gap));
-  right: calc(var(--safe-right) + var(--dock-w) + var(--gap));
-  bottom: calc(var(--safe-bottom) + var(--gap));
-  height: var(--hud-h);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: rgba(16,18,22,.94);
-  border: 1px solid #0008;
-  border-radius: 10px;
-  box-shadow: 0 10px 28px rgba(0,0,0,.35);
-  overflow: hidden;
-}
-
-/* BuildDock rechts (Panel) */
-body.is-playing #build-dock{
-  position: fixed;
-  top:    calc(var(--safe-top) + var(--gap));
-  right:  calc(var(--safe-right) + var(--gap));
-  bottom: calc(var(--safe-bottom) + var(--gap));
-  width:  var(--dock-w);
-  background: rgba(20,22,26,.94);
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 10px;
-  box-shadow: 0 10px 28px rgba(0,0,0,.35);
-  color: #eaeaea;
-  overflow: auto;
-}
-
-/* Button, mit dem das Dock geöffnet wird (wird von ui-build.js sichtbar gemacht) */
-#btn-build[hidden]{ display:none !important; }
-
-/* Hilfsklasse für Module */
-.hidden{ display: none !important; }
-
-/* ----------------- Responsive Feinheiten --------------------------------- */
-@media (min-width: 1200px){
-  :root{ --hud-h: 64px; }
-}
-@media (max-width: 720px){
-  :root{ --hud-h: 52px; --dock-w: min(320px, 52vw); }
 }
