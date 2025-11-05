@@ -1,5 +1,5 @@
 /* ============================================================================
- * Datei   : ui/inspector/inspector.tab.events.js
+ * Datei   : inspector/tabs/inspector.tab.events-v1.js
  * Projekt : Neue Siedler
  * Version : v1.2.0 (2025-10-21)
  * Zweck   : Inspector-Tab "Events" ODER Fallback-Float-Panel mit "Scan Now"
