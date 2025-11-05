@@ -252,7 +252,7 @@
   };
 // nach erfolgreichem JSON-Load:
 window.dispatchEvent(new CustomEvent('cb:map:loaded', { detail:{ map, tileset, tileSize:32 }}));
-  
+window.dispatchEvent(new CustomEvent('cb:res:change', { detail: Game.getResourceSnapshot() })); 
   /* ============================== [REQUESTS] =============================== */
   window.addEventListener('req:res:snapshot', emitResSnapshot);
 
