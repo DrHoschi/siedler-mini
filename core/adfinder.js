@@ -16,6 +16,9 @@ window.CBLog = window.CBLog || {
   error:(...a)=>console.error('❌', ...a),
 };
 
+window.addEventListener('cb:res:change', ()=> Carrier.assignJobs());
+window.addEventListener('cb:game:tick',   ()=> Carrier.update());
+
 const ADFINDER_VERSION="v1.0.0";
 function _fakePath(from,to){ return [from,to]; }
 class AdFinder{
