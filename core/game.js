@@ -250,7 +250,9 @@
     resAdd,
     resSnapshot: emitResSnapshot
   };
-
+// nach erfolgreichem JSON-Load:
+window.dispatchEvent(new CustomEvent('cb:map:loaded', { detail:{ map, tileset, tileSize:32 }}));
+  
   /* ============================== [REQUESTS] =============================== */
   window.addEventListener('req:res:snapshot', emitResSnapshot);
 
