@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-05T17:47:50.942Z",
+  "createdAt": "2025-11-05T20:40:40.599Z",
   "root": ".",
   "count": 475,
   "entries": [
@@ -1535,7 +1535,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.resources-v1.js",
-      "size": 4187
+      "size": 4186
     },
     {
       "type": "file",
@@ -2021,7 +2021,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layout.css",
-      "size": 4362
+      "size": 3075
     },
     {
       "type": "file",
@@ -2036,7 +2036,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 1780
+      "size": 2084
     },
     {
       "type": "file",
@@ -2250,7 +2250,7 @@
     {
       "type": "file",
       "path": "ui/ui-map.js",
-      "size": 8158
+      "size": 2337
     },
     {
       "type": "file",
@@ -2295,7 +2295,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 9912
+      "size": 10185
     },
     {
       "type": "file",
