@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-04T09:15:48.759Z",
+  "createdAt": "2025-11-05T08:27:51.814Z",
   "root": ".",
-  "count": 471,
+  "count": 473,
   "entries": [
     {
       "type": "dir",
@@ -1504,8 +1504,18 @@
     },
     {
       "type": "file",
+      "path": "inspector/tabs/inspector.tab.diagnose-v1.js",
+      "size": 14384
+    },
+    {
+      "type": "file",
       "path": "inspector/tabs/inspector.tab.editor-v1.js",
       "size": 947
+    },
+    {
+      "type": "file",
+      "path": "inspector/tabs/inspector.tab.layer-v1.js",
+      "size": 13074
     },
     {
       "type": "file",
@@ -1560,7 +1570,7 @@
     {
       "type": "file",
       "path": "inspector/ui-inspector-v1.js",
-      "size": 7178
+      "size": 10158
     },
     {
       "type": "file",
@@ -2007,7 +2017,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-start.css",
-      "size": 1378
+      "size": 1780
     },
     {
       "type": "file",
@@ -2017,7 +2027,7 @@
     {
       "type": "file",
       "path": "ui/css/ui.css",
-      "size": 12099
+      "size": 12371
     },
     {
       "type": "dir",
@@ -2115,6 +2125,11 @@
     },
     {
       "type": "file",
+      "path": "ui/inspector/inspector.layer.js",
+      "size": 24749
+    },
+    {
+      "type": "file",
       "path": "ui/inspector/inspector.logs.js",
       "size": 14221
     },
@@ -2137,11 +2152,6 @@
       "type": "file",
       "path": "ui/inspector/inspector.tests.js",
       "size": 15458
-    },
-    {
-      "type": "file",
-      "path": "ui/inspector/inspector.ui.js",
-      "size": 23113
     },
     {
       "type": "file",
@@ -2246,7 +2256,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 2450
+      "size": 5140
     },
     {
       "type": "file",
@@ -2261,12 +2271,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 45774
+      "size": 46581
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 17575
+      "size": 17824
     },
     {
       "type": "file",
@@ -2276,12 +2286,12 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 13844
+      "size": 9708
     },
     {
       "type": "file",
       "path": "index.Inspector.html",
-      "size": 7560
+      "size": 7633
     },
     {
       "type": "file",
