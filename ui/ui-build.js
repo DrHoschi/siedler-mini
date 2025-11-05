@@ -82,7 +82,11 @@
     }
     return { id, name, categories: cats, image, cost };
   }
-
+  
+document.getElementById('btn-build')?.addEventListener('click', ()=>{
+  window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'HUD' }}));
+});
+  
   // [04] Daten: Registry → Fallback
   async function loadBuildings(){
     try {
@@ -269,7 +273,9 @@
   window.addEventListener('cb:ui-ready',        wireUI,        { once:true });
   window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
   window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
-
+  window.addEventListener('cb:build:open', ()=> BuildDock.show());
+  window.addEventListener('cb:build:close',()=> BuildDock.hide());
+  
   // Standalone-Fallback (kein Auto-Init hier, damit Reihenfolge im Spiel stimmt)
   LOG('geladen v25.10.19-final3');
 })();
