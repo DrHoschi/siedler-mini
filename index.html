@@ -104,27 +104,41 @@
     <div class="title">Neue Siedler</div>
   </div>
 
-  <!-- ===== Scripte: Reihenfolge bleibt wie bei dir ===== -->
-  <script src="core/boot-v1.js"></script>
+  <!-- BOOT -->
+<script src="core/boot-v1.js"></script>
 
-  <script src="ui/ui-start.js?v=25.11.02"></script>
-  <script src="ui/ui-layout.js"></script>   <!-- NEU -->
-  <script src="core/asset.js?v=25.11.02"></script>
+<!-- START -->
+<script src="ui/ui-start.js?v=25.11.02"></script>
 
-  <!-- alte version  <script src="core/registry.js"></script> -->
-  <script src="core/registry-v1.js" defer></script>
+<!-- CORE -->
+<script src="core/asset.js?v=25.11.02"></script>
+<!-- <script src="core/registry.js"></script> -->
+<script src="core/registry-v1.js"></script>
+<script src="core/warehouse.js"></script>
+<script src="core/carrier.js"></script>
+<script src="core/logistics.prio.js"></script>
+<script src="core/territory.js"></script>
+<script src="core/market.js"></script>
+<script src="core/game.production.js"></script>
 
-  <script src="core/warehouse.js" defer></script>
-  <script src="core/carrier.js" defer></script>
-  <script src="core/logistics.prio.js" defer></script>
-  <script src="core/territory.js" defer></script>
-  <script src="core/market.js" defer></script>
-  <script src="core/game.production.js" defer></script>
-  <script src="ui/ui-map.js" defer></script>
-  <script src="ui/ui-hud.js?v=25.11.02"></script>
-  <script src="ui/ui-build.js?v=25.11.02"></script>
-  <script src="core/game.js?v=25.11.02"></script>
+<!-- MAP-BRIDGE + GAME + MAP -->
+<script src="core/map-runtime.bridge.js"></script>
+<script src="core/game.js?v=25.11.02"></script>
+<script src="ui/ui-map.js?v=25.11.05"></script>
 
+<!-- HUD + BUILD -->
+<script src="ui/ui-hud.js?v=25.11.02"></script>
+<script src="ui/ui-build.js?v=25.11.02"></script>
+
+<!-- LAYOUT (JETZT) -->
+<script src="ui/ui-layout.js"></script>
+
+<!-- INSPECTOR -->
+<script src="inspector/ui-inspector-v1.js?v=25.11.01-final"></script>
+...
+<!-- Events-Tab: korrigierter Pfad -->
+<script src="inspector/tools/inspector.tab0.events-v1.js"></script>
+     
   <!-- Deine statische Inspector-Demo bleibt aktiv -->
   <script defer src="inspector/ui-inspector-v1.js?v=25.11.01-final"></script>
   <script defer src="inspector/ui-inspector.content-v1.js?v=1.0.0"></script>
