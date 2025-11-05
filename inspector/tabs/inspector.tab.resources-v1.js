@@ -10,6 +10,11 @@
  * Events  : → 'req:res:snapshot'
  *           ← 'cb:res:snapshot'      (detail:{ Holz:..., Stein:..., ... })
  * ========================================================================== */
+
+window.__INSP_TABS__ = window.__INSP_TABS__ || {};
+if (window.__INSP_TABS__['<tab-id>']) return;
+window.__INSP_TABS__['<tab-id>'] = true;
+
 (function () {
   function renderResTab(sectionEl) {
     sectionEl.innerHTML = [
