@@ -1,5 +1,5 @@
 // ============================================================================
-// Datei   : ui/inspector.events.js
+// Datei   : inspector/tabs/inspector.tabs.events-v1.js
 // Projekt : Neue Siedler
 // Version : v1.0.0 (2025-10-15)
 // Zweck   : Inspector-Tab "Events" – scannt cb:/req:/emit: in Projektdateien,
