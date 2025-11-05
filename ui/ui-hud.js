@@ -112,6 +112,8 @@
 
   return { init };
 });
+window.addEventListener('cb:res:change', (ev)=> HUD.render(ev.detail));
+(window.CBLog?.ok||console.log)('[hud] bereit'); window.dispatchEvent(new CustomEvent('cb:hud-ready'));
 
 // Lifecycle-Hooks: HUD zum Spielstart aufbauen, bei Registry-Ready ebenfalls (idempotent)
 window.addEventListener('cb:game-start',   ()=> window.UIHUD?.init?.(), { passive:true });
