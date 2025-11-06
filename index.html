@@ -142,12 +142,13 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
 
 <!-- <script src="ui/ui-map.js?v=25.11.05"></script>
 -->
-     <!-- Overlays über der Map (optional) -->
-<script src="core/path-overlay.js"></script>   <!-- NACH ui-map.js, damit Canvas/FBO existieren -->
+     
 
 
 <!-- START -->
 <script src="ui/ui-start.js?v=25.11.02"></script>
+     <!-- Overlays über der Map (optional) -->
+<script src="core/path-overlay.js"></script>   <!-- NACH ui-map.js, damit Canvas/FBO existieren -->
 <!-- Map-Subsystem (vollwertig) -->
 <script src="core/core.map.js"></script> <!-- SiedlerMap / MapRuntime -->
      <!-- HUD + BUILD -->
@@ -159,9 +160,6 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
 
 <!-- INSPECTOR -->
 <script src="inspector/ui-inspector-v1.js?v=25.11.01-final"></script>
-...
-<!-- Events-Tab: korrigierter Pfad -->
-<script src="inspector/tools/inspector.tab0.events-v1.js"></script>
      
   <!-- Deine statische Inspector-Demo bleibt aktiv -->
   <!-- script defer src="inspector/ui-inspector-v1.js?v=25.11.01-final"></script -->
@@ -181,7 +179,10 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
   <script defer src="inspector/tabs/inspector.tab.diagnose-v1.js"></script>
   <script defer src="inspector/tabs/inspector.tab.layer-v1.js"></script>
   <script defer src="inspector/tabs/inspector.tab.audit-v1.js"></script>
-  <script defer src="inspector/tabs/inspector.tab.events-v1.js"></script>
+     <!-- Events-Tab:  Pfade -->
+  <!--   <script src="inspector/tools/inspector.tab0.events-v1.js"></script>
+     <script defer src="inspector/tabs/inspector.tab.events-v1.js"></script>
+  -->
      <!-- ===== Zentraler Toggle-Controller (idempotent) ===== -->
   <script>
   (function InspectorToggleController(){
