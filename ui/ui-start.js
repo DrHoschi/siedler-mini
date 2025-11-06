@@ -79,6 +79,11 @@
     </div>`;
   (root || document.body).appendChild(panel);
 
+  document.getElementById('btn-start')?.addEventListener('click', ()=>{
+  document.body.classList.add('is-playing');          // wichtig für Canvas/HUD-Styles
+  window.dispatchEvent(new CustomEvent('req:game:start'));
+});
+  
   /* ------------------------------- Helpers -------------------------------- */
   function closePanel() {
     panel.style.display = 'none';
