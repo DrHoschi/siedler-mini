@@ -69,7 +69,7 @@ window.__BOOT_INIT__ = true;
     // Registry
     addEventListener('cb:registry:ready', (e)=>{ S.registryReady = true; logI('Registry bereit ✓', e?.detail||{}); startTicker(); });
 
-    // Spielstart
+ /*   // Spielstart
     addEventListener('req:game:start', (e)=>{
       const { map = DEFAULT_MAP, seed = DEFAULT_SEED } = e?.detail || {};
       if (!canStart()){
@@ -80,7 +80,7 @@ window.__BOOT_INIT__ = true;
       S.running = true;
       emitGameStart(map, seed);
       logI('Spiel gestartet →', { map, seed });
-    });
+    }); */
 
     // Spielstopp
     addEventListener('req:game:stop', ()=>{
