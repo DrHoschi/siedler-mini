@@ -273,9 +273,24 @@
   window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
   window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
 
+  // Bereits gefeuertes UI-Ready nachträglich erkennen
+if (window.__UI_READY_EMITTED__ || document.body.classList.contains('is-playing')) {
+  try { wireUI(); } catch(e) { console.warn('[build] wireUI fallback', e); }
+}
+
+// Zusätzliche Lebenslinien, falls Timing wieder anders ist:
+window.addEventListener('cb:game:start', ()=> {
+  try { wireUI(); } catch(e) { console.warn('[build] wireUI on cb:game:start', e); }
+}, { once:true });
+
+document.addEventListener('DOMContentLoaded', ()=> {
+  if (!document.getElementById('btn-build')) return; // falls Button fehlt
+  try { wireUI(); } catch(e) { console.warn('[build] wireUI on DOMContentLoaded', e); }
+}, { once:true });
+  
   // Öffnen/Schließen via Events (jetzt DOM-basiert, kein BuildDock-Objekt nötig)
   window.addEventListener('cb:build:open',  openDock);
   window.addEventListener('cb:build:close', closeDock);
 
-  LOG('geladen v25.11.07-final');
+  LOG('ui-build geladen');
 })();
