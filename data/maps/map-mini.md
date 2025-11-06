@@ -9,6 +9,13 @@
   |spawns|Startpunkte + Startressourcen|Kap. 6.6 spawns[]|
   |metadata|Zusatzinfos für Editor/Inspector (Autor, Beschreibung, Epoche)|Registry-Patch / Kap. 6.6|
 
+🧭 Test-Flow (laut Lastenheft Kap. 9)
+	1.	Spiel starten → cb:game-start feuert.
+	2.	Map-Loader lädt data/maps/map-mini.json.
+	3.	Inspector-Tab „Tests“ → Profil smoke oder eco starten.
+	4.	Träger / Gebäude / Ressourcen-Fluss prüfen → Logs ✅ ok.
+
+
 
 {
   "id": "map-mini",
