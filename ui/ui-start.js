@@ -43,7 +43,7 @@
     // Bild aus CSS-Variable --start-bg holen (url("…") → Pfad extrahieren)
     const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--start-bg').trim();
     const m = cssVar.match(/url\((['"]?)(.*?)\1\)/);
-    const url = m ? m[2] : 'assets/ui/start-bg.jpg'; // Fallback
+    const url = m ? m[2] : '../../assets/ui/start-bg.jpg'; // Fallback
 
     const img = new Image();
     img.onerror = () => warn('Splash-Bild nicht gefunden:', url);
