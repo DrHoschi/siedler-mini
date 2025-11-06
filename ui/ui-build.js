@@ -237,10 +237,10 @@
     INIT_DONE = true;
     try {
       // Sichtbarkeit initial „geschlossen“, aber nicht per hidden blockieren
-      $dock.removeAttribute('hidden');
+      $dock.hidden = false;
       $dock.classList.add('hidden');
       $dock.style.display = 'none';
-
+     
       renderDockSkeleton();
       await loadBuildings();
       buildCategories();
