@@ -289,6 +289,9 @@ document.addEventListener('DOMContentLoaded', ()=> {
   if (!document.getElementById('btn-build')) return; // falls Button fehlt
   try { wireUI(); } catch(e) { console.warn('[build] wireUI on DOMContentLoaded', e); }
 }, { once:true });
+
+  // Falls das Timing anders ist, nach Spielstart sicher initialisieren
+window.addEventListener('cb:game:start', initAndRender, { once:true });
   
   // Öffnen/Schließen via Events (jetzt DOM-basiert, kein BuildDock-Objekt nötig)
   window.addEventListener('cb:build:open',  openDock);
