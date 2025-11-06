@@ -1,6 +1,6 @@
 {
   "version": "16.0.4",
-  "width": 76,
+  "width": 64,
   "height": 64,
   "tileSize": 64,
   "tileset": "assets/tiles/tileset.terrain.json",
