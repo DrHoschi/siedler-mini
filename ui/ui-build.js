@@ -1,16 +1,13 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.11.07-final
+ * Version  : v25.11.07-final-clean
  * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
  *
- * Lauscht  : cb:ui-ready, cb:assets-ready, cb:registry:ready,
- *            cb:build:open, cb:build:close, cb:game:start
+ * Lauscht  : cb:ui-ready (WIRING), cb:assets-ready, cb:registry:ready, cb:game:start (INIT)
  * Sendet   : req:place:begin { building }
  * DOM      : #build-dock (Container), #btn-build (Toggle)
- *
- * Wichtig  : Kein globales BuildDock mehr nötig. Optionales Kompat-API:
- *            window.BuildDock = {show,hide,toggle}
+ * Hinweis  : WIRING nur hier und nur 1× (kein DOMContentLoaded- oder game-start-Wiring)
  * ========================================================================== */
 
 /* --- Failsafe: #build-dock sicherstellen (greift nur, wenn nicht vorhanden) --- */
@@ -20,8 +17,8 @@
   if (!el){
     el = document.createElement('div');
     el.id = 'build-dock';
-    el.hidden = true;            // Start: verborgen
-    el.style.overflow = 'auto';  // minimale Sicherheit
+    el.hidden = true;
+    el.style.overflow = 'auto';
     document.body.appendChild(el);
     ok('Failsafe: #build-dock erzeugt.');
   }
@@ -31,27 +28,23 @@
 (function(){
   'use strict';
 
-  // [00] Logger
+  // Logger
   const LOG = (...m)=> (window.CBLog?.log  || console.log )('[build]', ...m);
   const INF = (...m)=> (window.CBLog?.info || console.info)('[build]', ...m);
   const WRN = (...m)=> (window.CBLog?.warn || console.warn)('[build]', ...m);
   const ERR = (...m)=> (window.CBLog?.error|| console.error)('[build]', ...m);
 
-  // [01] DOM-Hooks
+  // DOM
   const $dock = document.getElementById('build-dock'); // nach Failsafe vorhanden
   if (!$dock){ ERR('DOM: #build-dock fehlt'); return; }
 
-  // Button immer aktuell holen (kann spät gemountet werden)
   const getBtn = () => document.getElementById('btn-build');
 
-  // [02] State
-  let BUILDINGS   = [];
-  let CATEGORIES  = [];
-  let ACTIVE_CAT  = 'all';
-  let IS_OPEN     = false;
-  let INIT_DONE   = false;   // Debounce initAndRender
+  // State
+  let BUILDINGS=[], CATEGORIES=[];
+  let ACTIVE_CAT='all', IS_OPEN=false, INIT_DONE=false;
 
-  // [03] Utils
+  // Utils
   const iconRes = id => `assets/icons/resources/${id}.png`;
   const iconBld = id => `assets/icons/buildings/${id}.png`;
   const emit = (name, detail={}) => window.dispatchEvent(new CustomEvent(name, { detail }));
@@ -60,13 +53,10 @@
   function normalizeBuilding(raw){
     const id    = String(raw.id || '').trim();
     const name  = String(raw.name || id || 'Unbenannt');
-    let cats    = [];
-    if (Array.isArray(raw.categories)) cats = raw.categories.map(String);
-    else if (raw.category)            cats = [String(raw.category)];
-    else                              cats = ['misc'];
+    let cats    = Array.isArray(raw.categories) ? raw.categories.map(String)
+                : raw.category ? [String(raw.category)] : ['misc'];
     const image = raw.image || iconBld(id);
-
-    let cost = [];
+    let cost    = [];
     if (Array.isArray(raw.cost)) {
       cost = raw.cost.map(c => ({ id: String(c.id), amount: Number(c.amount||0) }))
                      .filter(c => c.id && c.amount > 0);
@@ -77,16 +67,12 @@
     return { id, name, categories: cats, image, cost };
   }
 
-  // [04] Daten: Registry → Fallback
+  // Daten
   async function loadBuildings(){
     try {
       if (window.Registry && typeof Registry.list === 'function') {
         const fromReg = Registry.list('buildings') || [];
-        if (fromReg.length){
-          BUILDINGS = fromReg.map(normalizeBuilding);
-          INF('Datenquelle: Registry', BUILDINGS.length);
-          return;
-        }
+        if (fromReg.length){ BUILDINGS = fromReg.map(normalizeBuilding); INF('Datenquelle: Registry', BUILDINGS.length); return; }
       }
     } catch(e) { WRN('Registry.list("buildings") Fehler:', e); }
     try {
@@ -96,23 +82,18 @@
       const arr  = Array.isArray(json) ? json : (json?.buildings || []);
       BUILDINGS  = arr.map(normalizeBuilding);
       INF('Datenquelle: data/buildings.json', BUILDINGS.length);
-    } catch(e) {
-      ERR('Fallback-Laden fehlgeschlagen:', e);
-      BUILDINGS = [];
-    }
+    } catch(e) { ERR('Fallback-Laden fehlgeschlagen:', e); BUILDINGS = []; }
   }
 
   function buildCategories(){
     const map = new Map();
     BUILDINGS.forEach(b => (b.categories||[]).forEach(c => map.set(c, (map.get(c)||0)+1)));
-    CATEGORIES = Array.from(map.entries())
-      .map(([id, count]) => ({ id, name: id, count }))
-      .sort((a,b)=> a.id.localeCompare(b.id));
+    CATEGORIES = Array.from(map.entries()).map(([id,count])=>({id,name:id,count})).sort((a,b)=>a.id.localeCompare(b.id));
     CATEGORIES.unshift({ id:'all', name:'Alles', count: BUILDINGS.length });
     if (!CATEGORIES.some(c => c.id === ACTIVE_CAT)) ACTIVE_CAT = 'all';
   }
 
-  // [05] Render – Grundgerüst
+  // Render
   function renderDockSkeleton(){
     $dock.innerHTML = `
       <div class="build-dock__head">
@@ -128,17 +109,14 @@
         <div class="build-empty hidden" id="build-empty">
           Keine Gebäude gefunden. Prüfe <code>data/buildings.json</code> oder Registry-Kategorien.
         </div>
-      </div>
-    `;
+      </div>`;
     $dock.querySelector('#build-close')?.addEventListener('click', closeDock);
   }
 
-  // [06] Render – Kategorien
   function renderCategories(){
     const $cats  = $dock.querySelector('#build-cats');
     const $count = $dock.querySelector('#build-count');
     if (!$cats) return;
-
     $cats.innerHTML = '';
     CATEGORIES.forEach(cat => {
       const btn = document.createElement('button');
@@ -151,71 +129,40 @@
     if ($count) $count.textContent = `${BUILDINGS.length} Gebäude`;
   }
 
-  // [07] Render – Grid
   function renderGrid(){
     const $grid  = $dock.querySelector('#build-grid');
     const $empty = $dock.querySelector('#build-empty');
     if (!$grid) return;
-
     const list = byCat(BUILDINGS, ACTIVE_CAT);
     $grid.innerHTML = '';
-    if (!list.length){
-      $empty?.classList.remove('hidden');
-      $empty && ($empty.style.display = 'block');
-      return;
-    }
-    $empty?.classList.add('hidden');
-    $empty && ($empty.style.display = '');
-
+    if (!list.length){ $empty?.classList.remove('hidden'); $empty && ($empty.style.display = 'block'); return; }
+    $empty?.classList.add('hidden'); $empty && ($empty.style.display = '');
     list.forEach(b=>{
       const $card = document.createElement('button');
       $card.className = 'build-card';
       $card.setAttribute('data-bid', b.id);
       $card.setAttribute('aria-label', `Gebäude ${b.name}`);
-
-      const $title = document.createElement('div');
-      $title.className = 'build-card__title';
-      $title.textContent = b.name;
-
-      const $img = document.createElement('img');
-      $img.className = 'build-card__img';
-      $img.loading   = 'lazy';
-      $img.alt       = b.name;
-      $img.src       = b.image || iconBld(b.id);
-
-      const $costs = document.createElement('div');
-      $costs.className = 'build-costs';
-      (b.cost || []).forEach(c=>{
-        const $c = document.createElement('div');
-        $c.className = 'build-cost';
-        $c.innerHTML = `
-          <img class="build-cost__icon" src="${iconRes(c.id)}" alt="${c.id}">
-          <span class="build-cost__amt">x${c.amount}</span>
-        `;
+      const $title = document.createElement('div'); $title.className = 'build-card__title'; $title.textContent = b.name;
+      const $img   = document.createElement('img'); $img.className = 'build-card__img'; $img.loading='lazy'; $img.alt=b.name; $img.src=b.image||iconBld(b.id);
+      const $costs = document.createElement('div'); $costs.className='build-costs';
+      (b.cost||[]).forEach(c=>{ const $c=document.createElement('div'); $c.className='build-cost';
+        $c.innerHTML = `<img class="build-cost__icon" src="${iconRes(c.id)}" alt="${c.id}"><span class="build-cost__amt">x${c.amount}</span>`;
         $costs.appendChild($c);
       });
-
-      $card.appendChild($title);
-      $card.appendChild($img);
-      $card.appendChild($costs);
-      $card.addEventListener('click', () => {
-        INF('select', b.id);
-        emit('req:place:begin', { building: b });
-      });
-
+      $card.appendChild($title); $card.appendChild($img); $card.appendChild($costs);
+      $card.addEventListener('click', () => { INF('select', b.id); emit('req:place:begin', { building: b }); });
       $grid.appendChild($card);
     });
   }
 
-  // [08] Öffnen/Schließen/Toggle – DOM-gesteuert
+  // Dock Steuerung (DOM-basiert)
   function openDock(){
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
     $dock.classList.remove('hidden');
     $dock.style.display = 'block';
-    const btn = getBtn();
-    if (btn) btn.setAttribute('aria-expanded', 'true');
+    const btn = getBtn(); if (btn) btn.setAttribute('aria-expanded', 'true');
     LOG('open');
   }
   function closeDock(){
@@ -223,28 +170,25 @@
     IS_OPEN = false;
     $dock.classList.add('hidden');
     $dock.style.display = 'none';
-    const btn = getBtn();
-    if (btn) btn.setAttribute('aria-expanded', 'false');
+    const btn = getBtn(); if (btn) btn.setAttribute('aria-expanded', 'false');
     LOG('close');
   }
   function toggleDock(){ IS_OPEN ? closeDock() : openDock(); }
 
-  // Optionales Kompatibilitäts-API (falls Altcode window.BuildDock nutzt)
+  // Kompat-API (Altcode)
   window.BuildDock = { show: openDock, hide: closeDock, toggle: toggleDock };
 
   // ESC schließt
   window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeDock(); }, { passive:true });
 
-  // [09] Init (einmalig)
+  // Init (einmalig – Inhalte laden & rendern)
   async function initAndRender(){
-    if (INIT_DONE) return;           // Debounce
+    if (INIT_DONE) return;
     INIT_DONE = true;
     try {
-      // Sichtbarkeit initial „geschlossen“, aber nicht per hidden blockieren
       $dock.hidden = false;
       $dock.classList.add('hidden');
       $dock.style.display = 'none';
-
       renderDockSkeleton();
       await loadBuildings();
       buildCategories();
@@ -254,52 +198,30 @@
     } catch(e){
       ERR('initAndRender Fehler:', e);
       const $empty = $dock.querySelector('#build-empty');
-      if ($empty){
-        $empty.textContent = 'Fehler beim Laden des Baumenüs. Details in der Konsole.';
-        $empty.classList.remove('hidden');
-      }
+      if ($empty){ $empty.textContent='Fehler beim Laden des Baumenüs. Details in der Konsole.'; $empty.classList.remove('hidden'); }
     }
   }
 
-  // [10] UI Wiring (Button)
+  // WIRING: genau 1× auf cb:ui-ready (keine weiteren Fallbacks)
   function wireUI(){
     const btn = getBtn();
-    if (btn){
-      btn.hidden = false;
-      btn.setAttribute('aria-expanded','false');
-      btn.addEventListener('click', toggleDock);
-      INF('Button verdrahtet (wireUI)');
-    } else {
-      WRN('#btn-build fehlt – Dock nur per API steuerbar');
-    }
+    if (!btn){ WRN('#btn-build fehlt – Dock nur per API steuerbar'); return; }
+    if (btn.dataset.wiredBuild === '1') { INF('Button bereits verdrahtet – übersprungen'); return; }
+    btn.dataset.wiredBuild = '1';
+    btn.hidden = false;
+    btn.setAttribute('aria-expanded','false');
+    btn.addEventListener('click', toggleDock);
+    INF('Button verdrahtet (wireUI)');
   }
 
-  // [11] Events (einmalig)
-  window.addEventListener('cb:ui-ready',        wireUI,        { once:true });
-  window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
-  window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
+  // Events
+  window.addEventListener('cb:ui-ready',       wireUI,        { once:true });      // nur hier Wiring!
+  window.addEventListener('cb:assets-ready',   initAndRender, { once:true });      // Inhalte
+  window.addEventListener('cb:registry:ready', initAndRender, { once:true });      // Inhalte
+  window.addEventListener('cb:game:start',     initAndRender, { once:true });      // Fallback nur für Inhalte (kein Wiring!)
 
-  // Bereits gefeuertes UI-Ready nachträglich erkennen
-  if (window.__UI_READY_EMITTED__ || document.body.classList.contains('is-playing')) {
-    try { wireUI(); } catch(e) { console.warn('[build] wireUI fallback', e); }
-  }
-
-  // Zusätzliche Lebenslinien, falls Timing wieder anders ist:
-  window.addEventListener('cb:game:start', ()=> {
-    try { wireUI(); } catch(e) { console.warn('[build] wireUI on cb:game:start', e); }
-  }, { once:true });
-
-  document.addEventListener('DOMContentLoaded', ()=> {
-    if (!getBtn()) return; // falls Button fehlt
-    try { wireUI(); } catch(e) { console.warn('[build] wireUI on DOMContentLoaded', e); }
-  }, { once:true });
-
-  // Sicher initialisieren, selbst wenn assets/registry vorher schon liefen
-  window.addEventListener('cb:game:start', initAndRender, { once:true });
-
-  // Öffnen/Schließen via Events (DOM-basiert)
   window.addEventListener('cb:build:open',  openDock);
   window.addEventListener('cb:build:close', closeDock);
 
   LOG('ui-build geladen');
-})()
+})();
