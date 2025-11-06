@@ -1,3 +1,17 @@
+🔧 So ist die Map aufgebaut
+
+|Abschnitt|Zweck|Quelle|
+|id / size|eindeutige Map-ID + Spielfeldgröße|Lastenheft Kap. 6.6|
+tiles|2D-Matrix mit Terrain-IDs (0=Wasser / 1=Gras / 2=Wald / 3=Fels)|Code-Style & Map-Schema|
+objects|platzierte Objekte (tree, rock, fish …)|Kap. 6.6 objects[]|
+spawns
+Startpunkte + Startressourcen
+Kap. 6.6 spawns[]
+metadata
+Zusatzinfos für Editor/Inspector (Autor, Beschreibung, Epoche)
+Registry-Patch / Kap. 6.6
+
+
 {
   "id": "map-mini",
   "size": [64, 64],
