@@ -116,7 +116,7 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
   <!-- BOOT -->
 <script src="core/boot-v1.js"></script>
 
-<!-- CORE -->
+<!-- CORE ESSENCE -->
 <script src="core/asset.js?v=25.11.02"></script>
 <!-- <script src="core/registry.js"></script> -->
 <script src="core/registry-v1.js"></script>
@@ -127,7 +127,7 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
 <script src="core/market.js"></script>
 <script src="core/game.production.js"></script>
 
-     <!-- PF/Glue & Input/Cam: Low-Level vor Game -->
+     <!-- LOW-LEVEL (vor Game) -->
 <script src="core/core.pfglue.js"></script>   <!-- Polyfills/Glue: früh -->
 <script src="core/core.input.js"></script>    <!-- Input-Hooks (Keys/Pointer) -->
 <script src="core/camera.js"></script>        <!-- Camera-State/Math -->
@@ -135,23 +135,24 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
 
 
 
-<!-- MAP-BRIDGE + GAME + MAP -->
+<!-- GAME BOOTSTRAP + GAME LOOP -->
 <script src="core/game.bootstrap.js"></script><!-- verdrahtet Start/Flow -->
 <script src="core/game.js"></script>
+
+<!-- MAP LOAD + MAP RUNTIME/RENDER -->
 <script src="core/map-runtime.bridge.js"></script>
+<script src="core/core.map.js"></script> <!-- SiedlerMap / MapRuntime -->
 
 <!-- <script src="ui/ui-map.js?v=25.11.05"></script>
 -->
      
+<!-- OVERLAYS (brauchen Canvas/Map) -->
+     <script src="core/path-overlay.js"></script>   <!-- NACH ui-map.js, damit Canvas/FBO existieren -->
 
 
 <!-- START -->
 <script src="ui/ui-start.js?v=25.11.02"></script>
      
-<!-- Map-Subsystem (vollwertig) -->
-<script src="core/core.map.js"></script> <!-- SiedlerMap / MapRuntime -->
-     <!-- Overlays braucht Map -->
-     <script src="core/path-overlay.js"></script>   <!-- NACH ui-map.js, damit Canvas/FBO existieren -->
 
      <!-- HUD + BUILD -->
 <script src="ui/ui-hud.js?v=25.11.02"></script>
