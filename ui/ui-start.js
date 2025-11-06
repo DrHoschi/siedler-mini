@@ -1,31 +1,27 @@
 /* ============================================================================
  * Datei   : ui/ui-start.js
  * Projekt : Neue Siedler
- * Version : v1.0.0
- * Datum.  : 25.11.05
+ * Version : v25.11.07-final
  * Zweck   : Startfenster + Splash-Hintergrund (vor Spielstart sichtbar).
  *
  * Sendet  : cb:ui-ready (GENAU 1×)
  *           req:game:start | req:game:continue | req:game:reset
- *           (Optional) req:game:pause über ESC (Panel danach wieder sichtbar)
  *
  * Lauscht : cb:game:start  → Panel schließen, body.is-playing setzen
  *           cb:game:paused → Panel öffnen, body.is-playing entfernen
  *
  * Zustände: html.panel-open   = Startpanel/Splash sichtbar (vor Start)
  *           body.is-playing   = Spiel-Layout aktiv (nach Start)
- *
- * Wichtig : KEINE Fremd-Events von hier (kein cb:assets-ready etc.).
- *           Run-Once-Guard verhindert Doppel-Init.
  * ========================================================================== */
-
 (function () {
   'use strict';
 
-  const LOG = (msg) => (window.CBLog?.ok || console.log)(`[ui-start] ${msg}`);
+  const TAG = '[ui-start]';
+  const log = (m,...a)=>(window.CBLog?.info||console.info)(TAG, m, ...a);
+  const warn= (m,...a)=>(window.CBLog?.warn||console.warn)(TAG, m, ...a);
 
   /* --------------------------- Run-Once Guard ------------------------------ */
-  if (window.__UI_START_INIT__) { console.warn('[ui-start] Doppel-Init verhindert.'); return; }
+  if (window.__UI_START_INIT__) { warn('Doppel-Init verhindert.'); return; }
   window.__UI_START_INIT__ = true;
 
   /* ---------------------------- Wurzel/State ------------------------------- */
@@ -37,8 +33,6 @@
   document.body.classList.remove('is-playing');
 
   /* ------------------------------ Splash-Setup ----------------------------- */
-  // Das CSS für #start-splash liegt in ui/css/ui-layout.css (→ siehe Datei unten).
-  // Hier nur Element anlegen und Bild preladen (verhindert Flackern).
   (function ensureSplash() {
     if (document.getElementById('start-splash')) return;
 
@@ -46,17 +40,16 @@
     splash.id = 'start-splash';
     document.body.appendChild(splash);
 
-    // Bild aus der CSS-Variable ziehen (url("…") → reiner Pfad)
+    // Bild aus CSS-Variable --start-bg holen (url("…") → Pfad extrahieren)
     const cssVar = getComputedStyle(document.documentElement).getPropertyValue('--start-bg').trim();
     const m = cssVar.match(/url\((['"]?)(.*?)\1\)/);
-    const url = m ? m[2] : 'assets/ui/start-bg.jpg'; // Fallback (dein Pfad)
+    const url = m ? m[2] : 'assets/ui/start-bg.jpg'; // Fallback
 
     const img = new Image();
-    img.onload = () => { /* alles gut */ };
-    img.onerror = () => console.warn('[ui-start] Splash-Bild nicht gefunden:', url);
+    img.onerror = () => warn('Splash-Bild nicht gefunden:', url);
     img.src = url;
 
-    // Beim Spielstart sanft ausblenden und dann entfernen
+    // Beim Spielstart Splash weich ausblenden
     window.addEventListener('cb:game-start', () => {
       splash.classList.add('fade-out');
       setTimeout(() => splash.remove(), 280);
@@ -79,23 +72,17 @@
     </div>`;
   (root || document.body).appendChild(panel);
 
-  document.getElementById('btn-start')?.addEventListener('click', ()=>{
-  document.body.classList.add('is-playing');          // wichtig für Canvas/HUD-Styles
-  window.dispatchEvent(new CustomEvent('req:game:start'));
-});
-  
   /* ------------------------------- Helpers -------------------------------- */
   function closePanel() {
     panel.style.display = 'none';
-    html.classList.remove('panel-open');     // Splash/Panel aus
-    document.body.classList.add('is-playing'); // Spiel-Layout an
+    html.classList.remove('panel-open');
+    document.body.classList.add('is-playing'); // Spiel-Layout aktivieren
   }
   function openPanel() {
     panel.style.display = 'grid';
     html.classList.add('panel-open');
     document.body.classList.remove('is-playing');
   }
-
   async function toggleFullscreen() {
     const el = document.documentElement;
     try {
@@ -104,36 +91,42 @@
       } else {
         await (document.exitFullscreen?.() || document.webkitExitFullscreen?.());
       }
-    } catch (e) {
-      LOG('Vollbild evtl. durch iOS/Safari eingeschränkt.');
+    } catch {
+      warn('Vollbild evtl. durch iOS/Safari eingeschränkt.');
     }
   }
 
   /* ------------------------------- Buttons -------------------------------- */
-  panel.querySelector('#btn-start')
-    .addEventListener('click', () => {
-      closePanel();
-      window.dispatchEvent(new CustomEvent('req:game:start', { detail: { mode: 'new' } }));
-    });
+  // Start (GENAU EIN Handler – vorher waren 2 vorhanden)
+  panel.querySelector('#btn-start')?.addEventListener('click', () => {
+    closePanel(); // schließt Panel + setzt is-playing
+    // UI ist bereit → Boot darf starten
+    if (!window.__UI_READY_EMITTED__) {
+      window.__UI_READY_EMITTED__ = true;
+      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
+    }
+    // Spielstart anfordern
+    window.dispatchEvent(new CustomEvent('req:game:start', { detail: { mode: 'new' } }));
+  });
 
-  panel.querySelector('#btn-continue')
-    .addEventListener('click', () => {
-      closePanel();
-      window.dispatchEvent(new CustomEvent('req:game:continue', { detail: { mode: 'continue' } }));
-    });
+  panel.querySelector('#btn-continue')?.addEventListener('click', () => {
+    closePanel();
+    if (!window.__UI_READY_EMITTED__) {
+      window.__UI_READY_EMITTED__ = true;
+      window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
+    }
+    window.dispatchEvent(new CustomEvent('req:game:continue', { detail: { mode: 'continue' } }));
+  });
 
-  panel.querySelector('#btn-reset')
-    .addEventListener('click', () => {
-      try { localStorage.clear(); } catch (_) { /* ignore */ }
-      window.dispatchEvent(new CustomEvent('req:game:reset'));
-    });
+  panel.querySelector('#btn-reset')?.addEventListener('click', () => {
+    try { localStorage.clear(); } catch {}
+    window.dispatchEvent(new CustomEvent('req:game:reset'));
+  });
 
-  panel.querySelector('#btn-fullscreen')
-    .addEventListener('click', toggleFullscreen);
+  panel.querySelector('#btn-fullscreen')?.addEventListener('click', toggleFullscreen);
 
   /* --------------------------- Event-Brücken ------------------------------- */
-  // Game startet/pausiert → Panel-Status umschalten
-  window.addEventListener('cb:game:start',  closePanel);
+  window.addEventListener('cb:game:start',  closePanel); // falls Game selbst startet
   window.addEventListener('cb:game:paused', openPanel);
 
   // Komfort: ESC → Pause anfordern, danach Panel sichtbar machen
@@ -145,9 +138,10 @@
   });
 
   /* ---------------------------- UI ready (1×) ------------------------------ */
+  // Viele deiner Boot-Flows brauchen ui-ready vorab – wir senden es einmalig.
   if (!window.__UI_READY_EMITTED__) {
     window.__UI_READY_EMITTED__ = true;
     window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
-    LOG('Startpanel bereit → cb:ui-ready');
+    log('Startpanel bereit → cb:ui-ready');
   }
 })();
