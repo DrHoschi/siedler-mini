@@ -169,7 +169,7 @@
   window.addEventListener('req:game:start',  ()=> start());
   window.addEventListener('req:game:stop',   ()=> stop());
   window.addEventListener('req:game:toggle', ()=> { if (state.loop.running) stop(); else start(); });
-
+  window.addEventListener('cb:game:frame', () => { window.MapRuntime?.draw?.(); });
   document.addEventListener('visibilitychange', ()=>{ if (document.hidden){ if (state.loop.running) stopLoop(); } else { if (!state.loop.running) startLoop(); } });
 
   INFO('Modul geladen – Core-Services + Loop bereit.');
