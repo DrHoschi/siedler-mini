@@ -1,6 +1,7 @@
 🔧 So ist die Map aufgebaut
 
 |Abschnitt|Zweck|Quelle|
+|------|-----|----|
 |id / size|eindeutige Map-ID + Spielfeldgröße|Lastenheft Kap. 6.6|
 tiles|2D-Matrix mit Terrain-IDs (0=Wasser / 1=Gras / 2=Wald / 3=Fels)|Code-Style & Map-Schema|
 objects|platzierte Objekte (tree, rock, fish …)|Kap. 6.6 objects[]|
