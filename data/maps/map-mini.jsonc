@@ -1,57 +1,43 @@
 {
-  // v16.0.3 — Minimale Testkarte, lädt sicher mit deinem Loader
-  "version": "16.0.3",
+  "id": "map-mini",
+  "size": [64, 64],
 
-  // Kartengröße in Tiles:
-  "width": 16,
-  "height": 10,
+  "tiles": [
+    // 0 = Wasser, 1 = Gras, 2 = Wald, 3 = Fels
+    // Einfaches Beispiel: Außen 1-Tile-Rand Wasser, innen Gras,
+    // zufällig etwas Wald und Fels zur Deko.
+    // Für Übersichtlichkeit hier stark gekürzt:
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    /* … repeat pattern … */,
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+  ],
 
-  // Muss zum Tileset passen:
-  "tileSize": 64,
+  "objects": [
+    { "type": "tree", "x": 8,  "y": 10 },
+    { "type": "tree", "x": 12, "y": 15 },
+    { "type": "rock", "x": 20, "y": 18 },
+    { "type": "fish", "x": 6,  "y": 5  }
+  ],
 
-  // RELATIVER Pfad (vom Map‑JSON aus gesehen!)
-  "tileset": "./assets/tiles/tileset.terrain.json",
-
-  // Layer-Array — dein Loader versteht sowohl json.layers (Tiles per Namen) als auch
-  // numerische Tiles. Wir nutzen hier die Frame‑Namen aus dem Atlas:
-  "layers": [
+  "spawns": [
     {
-      "name": "ground",
-      "type": "tiles",
-
-      // 10 Zeilen à 16 Spalten → überall „terrain_r4_c0“ (Gras).
-      // Du kannst das später im Editor live ersetzen.
-      "data": [
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"],
-        ["terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0","terrain_r4_c0"]
-      ]
-    },
-    {
-      "name": "roads",
-      "type": "tiles",
-      "data": [
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""],
-        ["","","","","","","","","","","","","","","",""]
-      ]
+      "player": 1,
+      "x": 10,
+      "y": 10,
+      "resources": {
+        "wood": 30,
+        "stone": 15,
+        "food": 20
+      }
     }
   ],
 
-  // Optional: Objekt-Layer; bleibt leer.
-  "objects": []
+  "metadata": {
+    "author": "LevelDesigner",
+    "description": "Kleine Testkarte mit Wald, Stein und See. Perfekt für erste Gebäude- und Produktionsketten-Tests.",
+    "epoch": 1,
+    "registry": "v1.0"
+  }
 }
