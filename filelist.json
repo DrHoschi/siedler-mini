@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-06T09:47:03.777Z",
+  "createdAt": "2025-11-06T11:51:06.007Z",
   "root": ".",
   "count": 475,
   "entries": [
@@ -1176,12 +1176,12 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 5836
+      "size": 4452
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 10484
+      "size": 7866
     },
     {
       "type": "file",
@@ -1216,7 +1216,7 @@
     {
       "type": "file",
       "path": "core/map-runtime.bridge.js",
-      "size": 4665
+      "size": 4807
     },
     {
       "type": "file",
@@ -2200,7 +2200,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 10713
+      "size": 10543
     },
     {
       "type": "file",
@@ -2265,7 +2265,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 5991
+      "size": 6122
     },
     {
       "type": "file",
@@ -2295,7 +2295,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 10979
+      "size": 11098
     },
     {
       "type": "file",
