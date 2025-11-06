@@ -1,26 +1,26 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.10.19-final3
+ * Version  : v25.11.07-final
  * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
  *
- * Lauscht  : cb:ui-ready, cb:assets-ready, cb:registry:ready
- * Sendet   : cb:build:open / cb:build:close, req:place:begin { building }
- * DOM      : #build-dock (Container), #btn-build (Toggle), Icons unter assets/icons
- * Hinweise : - Failsafe legt #build-dock nur an, wenn er fehlt.
- *            - Doppel-Initialisierung verhindert (INIT_DONE).
- *            - Schließende Klammern + IIFEs sind sauber abgeschlossen :)
+ * Lauscht  : cb:ui-ready, cb:assets-ready, cb:registry:ready,
+ *            cb:build:open, cb:build:close
+ * Sendet   : req:place:begin { building }
+ * DOM      : #build-dock (Container), #btn-build (Toggle)
+ *
+ * Wichtig  : Kein globales BuildDock mehr nötig. Wir exportieren optional
+ *            ein kompatibles API-Fallback: window.BuildDock = {show,hide,toggle}
  * ========================================================================== */
 
 /* --- Failsafe: #build-dock sicherstellen (greift nur, wenn nicht vorhanden) --- */
 (function FailsafeEnsureDock(){
-  const MOD = 'build';
-  const ok  = (m)=> (window.CBLog?.ok||console.log)(`[${MOD}] ${m}`);
+  const ok  = (m)=> (window.CBLog?.ok||console.log)('[build]', m);
   let el = document.getElementById('build-dock');
   if (!el){
     el = document.createElement('div');
     el.id = 'build-dock';
-    el.hidden = true;            // Sichtbarkeit steuert das UI-Modul
+    el.hidden = true;            // Start: verborgen
     el.style.overflow = 'auto';  // minimale Sicherheit
     document.body.appendChild(el);
     ok('Failsafe: #build-dock erzeugt.');
@@ -31,24 +31,16 @@
 (function(){
   'use strict';
 
-  // [00] Logger (robust; crasht nicht bei exotischem CBLog)
-  const __safeLog = (fn, tag, ...m) => {
-    try {
-      if (window.CBLog && typeof window.CBLog[fn] === 'function') {
-        try { window.CBLog[fn](tag, ...m); } catch { window.CBLog[fn]([tag, ...m]); }
-      } else { (console[fn] || console.log)(tag, ...m); }
-    } catch { try { (console[fn] || console.log)(tag, ...m); } catch(_){} }
-  };
-  const LOG = (...m)=>__safeLog('log',  '[build]', ...m);
-  const INF = (...m)=>__safeLog('info', '[build]', ...m);
-  const WRN = (...m)=>__safeLog('warn', '[build]', ...m);
-  const ERR = (...m)=>__safeLog('error','[build]', ...m);
+  // [00] Logger
+  const LOG = (...m)=> (window.CBLog?.log  || console.log )('[build]', ...m);
+  const INF = (...m)=> (window.CBLog?.info || console.info)('[build]', ...m);
+  const WRN = (...m)=> (window.CBLog?.warn || console.warn)('[build]', ...m);
+  const ERR = (...m)=> (window.CBLog?.error|| console.error)('[build]', ...m);
 
   // [01] DOM-Hooks
   const $dock     = document.getElementById('build-dock');  // nach Failsafe vorhanden
   const $btnBuild = document.getElementById('btn-build');   // optional (HUD)
   if (!$dock){ ERR('DOM: #build-dock fehlt'); return; }
-  if (!$btnBuild){ WRN('DOM: #btn-build fehlt – Dock nur per API steuerbar'); }
 
   // [02] State
   let BUILDINGS   = [];
@@ -82,11 +74,7 @@
     }
     return { id, name, categories: cats, image, cost };
   }
-  
-document.getElementById('btn-build')?.addEventListener('click', ()=>{
-  window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'HUD' }}));
-});
-  
+
   // [04] Daten: Registry → Fallback
   async function loadBuildings(){
     try {
@@ -217,23 +205,28 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
     });
   }
 
-  // [08] Öffnen/Schließen/Toggle
+  // [08] Öffnen/Schließen/Toggle – DOM-gesteuert (kein globales BuildDock nötig)
   function openDock(){
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
     $dock.classList.remove('hidden');
-    $btnBuild?.setAttribute('aria-expanded', 'true');
-    emit('cb:build:open');
+    $dock.style.display = 'block';
+    if ($btnBuild) $btnBuild.setAttribute('aria-expanded', 'true');
+    LOG('open');
   }
   function closeDock(){
     if (!IS_OPEN) return;
     IS_OPEN = false;
     $dock.classList.add('hidden');
-    $btnBuild?.setAttribute('aria-expanded', 'false');
-    emit('cb:build:close');
+    $dock.style.display = 'none';
+    if ($btnBuild) $btnBuild.setAttribute('aria-expanded', 'false');
+    LOG('close');
   }
   function toggleDock(){ IS_OPEN ? closeDock() : openDock(); }
+
+  // Optionales Kompatibilitäts-API (falls Altcode window.BuildDock nutzt)
+  window.BuildDock = { show: openDock, hide: closeDock, toggle: toggleDock };
 
   // ESC schließt
   window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeDock(); }, { passive:true });
@@ -243,6 +236,11 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
     if (INIT_DONE) return;           // Debounce
     INIT_DONE = true;
     try {
+      // Sichtbarkeit initial „geschlossen“, aber nicht per hidden blockieren
+      $dock.removeAttribute('hidden');
+      $dock.classList.add('hidden');
+      $dock.style.display = 'none';
+
       renderDockSkeleton();
       await loadBuildings();
       buildCategories();
@@ -259,23 +257,25 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
     }
   }
 
-  // [10] UI Wiring
+  // [10] UI Wiring (Button)
   function wireUI(){
     if ($btnBuild){
       $btnBuild.hidden = false;
       $btnBuild.setAttribute('aria-expanded','false');
       $btnBuild.addEventListener('click', toggleDock);
+    } else {
+      WRN('#btn-build fehlt – Dock nur per API steuerbar');
     }
-    $dock.classList.add('hidden');   // Start: geschlossen
   }
 
   // [11] Events (einmalig)
   window.addEventListener('cb:ui-ready',        wireUI,        { once:true });
   window.addEventListener('cb:assets-ready',    initAndRender, { once:true });
   window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
-  window.addEventListener('cb:build:open', ()=> BuildDock.show());
-  window.addEventListener('cb:build:close',()=> BuildDock.hide());
-  
-  // Standalone-Fallback (kein Auto-Init hier, damit Reihenfolge im Spiel stimmt)
-  LOG('geladen v25.10.19-final3');
+
+  // Öffnen/Schließen via Events (jetzt DOM-basiert, kein BuildDock-Objekt nötig)
+  window.addEventListener('cb:build:open',  openDock);
+  window.addEventListener('cb:build:close', closeDock);
+
+  LOG('geladen v25.11.07-final');
 })();
