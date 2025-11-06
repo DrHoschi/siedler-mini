@@ -106,14 +106,12 @@
     <div class="title">Neue Siedlern</div>
   </div>
 
-    <!-- 
-     core/core.pfglue.js
-     core/path-overlay.js
-     core/game.bootstrap.js
-     core/core.input.js
-     core/camera.js
-     core/camera.js
-     -->
+     <!-- button baumenü -->
+     <script>
+document.getElementById('btn-build')?.addEventListener('click', ()=>{
+  window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' }}));
+});
+</script>
      
   <!-- BOOT -->
 <script src="core/boot-v1.js"></script>
