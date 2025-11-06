@@ -54,7 +54,7 @@ window.__BOOT_INIT__ = true;
     emitBootReady();
 
     // UI
-    addEventListener('cb:ui-ready', (e)=>{ S.uiReady = true;  logI('UI bereit – Startpanel sichtbar', e?.detail||{}); });
+   // addEventListener('cb:ui-ready', (e)=>{ S.uiReady = true;  logI('UI bereit – Startpanel sichtbar', e?.detail||{}); });
 
     // Assets
     addEventListener('cb:assets-ready', (e)=>{
