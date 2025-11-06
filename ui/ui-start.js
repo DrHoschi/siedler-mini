@@ -71,7 +71,7 @@
       window.__UI_READY_EMITTED__ = true;
       window.dispatchEvent(new CustomEvent('cb:ui-ready', { detail: { ok: true } }));
     }
-    window.dispatchEvent(new CustomEvent('req:game:start', { detail: { mode: 'new' } }));
+    // window.dispatchEvent(new CustomEvent('req:game:start', { detail: { mode: 'new' } }));
   });
 
   panel.querySelector('#btn-continue')?.addEventListener('click', () => {
