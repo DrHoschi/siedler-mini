@@ -5,12 +5,12 @@
  * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
  *
  * Lauscht  : cb:ui-ready, cb:assets-ready, cb:registry:ready,
- *            cb:build:open, cb:build:close
+ *            cb:build:open, cb:build:close, cb:game:start
  * Sendet   : req:place:begin { building }
  * DOM      : #build-dock (Container), #btn-build (Toggle)
  *
- * Wichtig  : Kein globales BuildDock mehr nötig. Wir exportieren optional
- *            ein kompatibles API-Fallback: window.BuildDock = {show,hide,toggle}
+ * Wichtig  : Kein globales BuildDock mehr nötig. Optionales Kompat-API:
+ *            window.BuildDock = {show,hide,toggle}
  * ========================================================================== */
 
 /* --- Failsafe: #build-dock sicherstellen (greift nur, wenn nicht vorhanden) --- */
@@ -38,9 +38,11 @@
   const ERR = (...m)=> (window.CBLog?.error|| console.error)('[build]', ...m);
 
   // [01] DOM-Hooks
-  const $dock     = document.getElementById('build-dock');  // nach Failsafe vorhanden
-  const $btnBuild = document.getElementById('btn-build');   // optional (HUD)
+  const $dock = document.getElementById('build-dock'); // nach Failsafe vorhanden
   if (!$dock){ ERR('DOM: #build-dock fehlt'); return; }
+
+  // Button immer aktuell holen (kann spät gemountet werden)
+  const getBtn = () => document.getElementById('btn-build');
 
   // [02] State
   let BUILDINGS   = [];
@@ -205,14 +207,15 @@
     });
   }
 
-  // [08] Öffnen/Schließen/Toggle – DOM-gesteuert (kein globales BuildDock nötig)
+  // [08] Öffnen/Schließen/Toggle – DOM-gesteuert
   function openDock(){
     if (IS_OPEN) return;
     IS_OPEN = true;
     $dock.hidden = false;
     $dock.classList.remove('hidden');
     $dock.style.display = 'block';
-    if ($btnBuild) $btnBuild.setAttribute('aria-expanded', 'true');
+    const btn = getBtn();
+    if (btn) btn.setAttribute('aria-expanded', 'true');
     LOG('open');
   }
   function closeDock(){
@@ -220,7 +223,8 @@
     IS_OPEN = false;
     $dock.classList.add('hidden');
     $dock.style.display = 'none';
-    if ($btnBuild) $btnBuild.setAttribute('aria-expanded', 'false');
+    const btn = getBtn();
+    if (btn) btn.setAttribute('aria-expanded', 'false');
     LOG('close');
   }
   function toggleDock(){ IS_OPEN ? closeDock() : openDock(); }
@@ -240,7 +244,7 @@
       $dock.hidden = false;
       $dock.classList.add('hidden');
       $dock.style.display = 'none';
-     
+
       renderDockSkeleton();
       await loadBuildings();
       buildCategories();
@@ -259,7 +263,7 @@
 
   // [10] UI Wiring (Button)
   function wireUI(){
-    const btn = document.getElementById('btn-build');
+    const btn = getBtn();
     if (btn){
       btn.hidden = false;
       btn.setAttribute('aria-expanded','false');
@@ -276,26 +280,26 @@
   window.addEventListener('cb:registry:ready',  initAndRender, { once:true });
 
   // Bereits gefeuertes UI-Ready nachträglich erkennen
-if (window.__UI_READY_EMITTED__ || document.body.classList.contains('is-playing')) {
-  try { wireUI(); } catch(e) { console.warn('[build] wireUI fallback', e); }
-}
+  if (window.__UI_READY_EMITTED__ || document.body.classList.contains('is-playing')) {
+    try { wireUI(); } catch(e) { console.warn('[build] wireUI fallback', e); }
+  }
 
-// Zusätzliche Lebenslinien, falls Timing wieder anders ist:
-window.addEventListener('cb:game:start', ()=> {
-  try { wireUI(); } catch(e) { console.warn('[build] wireUI on cb:game:start', e); }
-}, { once:true });
+  // Zusätzliche Lebenslinien, falls Timing wieder anders ist:
+  window.addEventListener('cb:game:start', ()=> {
+    try { wireUI(); } catch(e) { console.warn('[build] wireUI on cb:game:start', e); }
+  }, { once:true });
 
-document.addEventListener('DOMContentLoaded', ()=> {
-  if (!document.getElementById('btn-build')) return; // falls Button fehlt
-  try { wireUI(); } catch(e) { console.warn('[build] wireUI on DOMContentLoaded', e); }
-}, { once:true });
+  document.addEventListener('DOMContentLoaded', ()=> {
+    if (!getBtn()) return; // falls Button fehlt
+    try { wireUI(); } catch(e) { console.warn('[build] wireUI on DOMContentLoaded', e); }
+  }, { once:true });
 
-  // Falls das Timing anders ist, nach Spielstart sicher initialisieren
-window.addEventListener('cb:game:start', initAndRender, { once:true });
-  
-  // Öffnen/Schließen via Events (jetzt DOM-basiert, kein BuildDock-Objekt nötig)
+  // Sicher initialisieren, selbst wenn assets/registry vorher schon liefen
+  window.addEventListener('cb:game:start', initAndRender, { once:true });
+
+  // Öffnen/Schließen via Events (DOM-basiert)
   window.addEventListener('cb:build:open',  openDock);
   window.addEventListener('cb:build:close', closeDock);
 
   LOG('ui-build geladen');
-})();
+})()
