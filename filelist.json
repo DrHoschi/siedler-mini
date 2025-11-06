@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-05T20:40:40.599Z",
+  "createdAt": "2025-11-06T09:47:03.777Z",
   "root": ".",
   "count": 475,
   "entries": [
@@ -1091,7 +1091,7 @@
     {
       "type": "file",
       "path": "core/adfinder.js",
-      "size": 1147
+      "size": 1283
     },
     {
       "type": "file",
@@ -1181,7 +1181,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 10258
+      "size": 10484
     },
     {
       "type": "file",
@@ -2021,7 +2021,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-layout.css",
-      "size": 3075
+      "size": 3126
     },
     {
       "type": "file",
@@ -2200,7 +2200,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 10414
+      "size": 10713
     },
     {
       "type": "file",
@@ -2225,7 +2225,7 @@
     {
       "type": "file",
       "path": "ui/ui-hud.js",
-      "size": 4697
+      "size": 4873
     },
     {
       "type": "file",
@@ -2280,12 +2280,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47016
+      "size": 47017
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18023
+      "size": 18024
     },
     {
       "type": "file",
@@ -2295,12 +2295,12 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 10185
+      "size": 10979
     },
     {
       "type": "file",
       "path": "index.Inspector.html",
-      "size": 7633
+      "size": 7626
     },
     {
       "type": "file",
