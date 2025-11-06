@@ -259,10 +259,12 @@
 
   // [10] UI Wiring (Button)
   function wireUI(){
-    if ($btnBuild){
-      $btnBuild.hidden = false;
-      $btnBuild.setAttribute('aria-expanded','false');
-      $btnBuild.addEventListener('click', toggleDock);
+    const btn = document.getElementById('btn-build');
+    if (btn){
+      btn.hidden = false;
+      btn.setAttribute('aria-expanded','false');
+      btn.addEventListener('click', toggleDock);
+      INF('Button verdrahtet (wireUI)');
     } else {
       WRN('#btn-build fehlt – Dock nur per API steuerbar');
     }
