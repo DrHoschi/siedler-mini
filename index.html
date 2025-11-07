@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="ui/css/ui-hud.css">
   <link rel="stylesheet" href="ui/css/ui-build.css">
   <link rel="stylesheet" href="inspector/ui-inspector-v1.css">
+     <link rel="stylesheet" href="ui/css/ui-build.place.css">
   <!-- Inspector-Style-Varianten (zum Experimentieren) -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.11.02"> -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.clean.css?v=25.11.02"> -->
@@ -155,7 +156,9 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
      
 <!-- OVERLAYS (brauchen Canvas/Map) -->
      <script src="core/path-overlay.js"></script>   <!-- NACH ui-map.js, damit Canvas/FBO existieren -->
-
+<script src="core/camera.glue.js"></script>
+<script src="core/placement.js"></script>
+<script src="ui/ui-build-hook.js"></script>
 
 <!-- START -->
 <script src="ui/ui-start.js?v=25.11.02"></script>
