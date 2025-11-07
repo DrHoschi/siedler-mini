@@ -1,22 +1,17 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.logs-v1.js
- * Version : v25.11.13-final
+ * Version : v25.11.13-final2
  * Zweck   : LOGS – Konsole mitschneiden, filtern, kopieren, exportieren
  * Features: Text-/Typ-Filter, Clear, Copy, Export JSON/CSV, cb:log-Bridge
- *
- * Änderungen ggü. v25.11.01:
- *   • Run-Once-Guards gegen doppelte Registrierung + doppelte Hooks
- *   • stabiler Console-Proxy (keine Endlos-Rekursion)
- *   • keine Mehrfach-"Logs-Tab bereit"-Meldungen mehr
+ * Änderungen ggü. final1:
+ *   • Mount-Guard: Panel wird nur 1× initialisiert.
+ *   • "Logs-Tab bereit" erscheint genau 1×.
+ *   • Console-Hook & Event-Bindungen stabilisiert.
  * ========================================================================== */
 (function () {
-  /* ----------------------------- Run-Once-Guards -------------------------- */
+  /* ----------------------------- Run-Once-Guards --------------------------- */
   if (window.__INSPECTOR_TAB_LOGS__) return;
   window.__INSPECTOR_TAB_LOGS__ = true;
-
-  if (window.__INSPECTOR_CONSOLE_HOOKED__) {
-    console.info('[logs-tab] Console bereits verbunden');
-  }
 
   /* ------------------------------- State ---------------------------------- */
   const state = {
@@ -24,11 +19,12 @@
     filterText: '',
     types: { info: true, warn: true, error: true, debug: true },
     el: { tbody: null },
+    mounted: false,
   };
 
   const nowStr = () => {
     const d = new Date(), p = n => String(n).padStart(2, '0');
-    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,'0')}`;
   };
 
   /* --------------------------- Console-Hook ------------------------------- */
@@ -46,9 +42,8 @@
 
     function forward(type, args) {
       try {
-        // Doppelte Echo-Vermeidung: Boot-Logs filtern
         const first = String(args[0] || '');
-        if (first.startsWith('[boot]')) return;
+        if (first.startsWith('[boot]')) return; // Boot-Logs nicht doppeln
         window.dispatchEvent(new CustomEvent('cb:log', {
           detail: { level: type, msg: args.map(String).join(' ') },
         }));
@@ -86,8 +81,11 @@
     );
   }
 
-  /* --------------------------- UI-Erstellung ------------------------------ */
+  /* --------------------------- UI-Erstellung ------------------------------- */
   function mount(panel) {
+    if (state.mounted) return;            // mehrfacher Mount blockiert
+    state.mounted = true;
+
     panel.innerHTML = `
       <div class="insp-toolbar">
         <input id="log-filter" class="insp-input" placeholder="Filter (Text)…" style="min-width:220px">
@@ -121,6 +119,8 @@
     panel.querySelector('#log-export-csv').onclick  = exportCSV;
 
     hookConsole();
+
+    // Nur beim ersten echten Mount diese Meldung schreiben
     push('info', 'Logs-Tab bereit (Konsole & cb:log aktiv).');
     render();
   }
@@ -168,10 +168,10 @@
       if (e.detail?.tab !== 'logs') return;
       const panel = document.querySelector('[data-panel="logs"]');
       if (!panel) return;
-      if (!panel.querySelector('#log-table')) mount(panel);
+      if (!state.mounted) mount(panel);
     });
   }
-  document.addEventListener('DOMContentLoaded', ensureMountedOnShow, { once: true });
+  document.addEventListener('DOMContentLoaded', ensureMountedOnShow, { once:true });
 
   /* --------------------------- Registrierung ------------------------------ */
   if (typeof window.registerInspectorTab === 'function') {
@@ -180,5 +180,5 @@
     console.warn('[logs-tab] registerInspectorTab fehlt.');
   }
 
-  console.info('[logs-tab] Modul geladen (' + 'v25.11.13-final' + ')');
+  console.info('[logs-tab] Modul geladen (' + 'v25.11.13-final2' + ')');
 })();
