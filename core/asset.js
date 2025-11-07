@@ -1,36 +1,27 @@
 /* ============================================================================
  * Datei   : core/asset.js
- * Projekt : Neue Siedler
- * Version : v25.11.13-final+emit-once
- * Zweck   : Minimaler Asset-Loader → feuert cb:assets-ready genau einmal
+ * Version : v25.11.13-final (emit once)
+ * Zweck   : feuert genau 1× cb:assets-ready, wenn Basispaket geladen ist
  * ========================================================================== */
 (function(){
   'use strict';
-  const TAG = '[assets]';
-
-  if (window.__ASSETS_LOADER__) {
-    console.info(TAG, 'bereits aktiv – ignoriere Doppel-Init');
-    return;
-  }
+  const TAG='[assets]';
+  if (window.__ASSETS_LOADER__) { console.info(TAG,'bereits aktiv – skip'); return; }
   window.__ASSETS_LOADER__ = true;
 
-  const OK   = (...a)=> (window.CBLog?.ok   || console.log)(TAG, ...a);
-  const INFO = (...a)=> (window.CBLog?.info || console.info)(TAG, ...a);
+  const INFO=(...a)=>(window.CBLog?.info||console.info)(TAG, ...a);
 
-  let emitted = false;
-
-  function emitOnce(name, detail){
-    if (emitted) return;
-    emitted = true;
-    window.dispatchEvent(new CustomEvent(name, { detail }));
+  let emitted=false;
+  function emitOnce(name, detail){ if (emitted) return; emitted=true;
+    dispatchEvent(new CustomEvent(name,{ detail }));
   }
 
   async function loadAll(){
-    // TODO: dein echter Loader; hier nur Demo-Infos aus deinem Log
+    // TODO: hier kommt dein echter Loader; Demo-Detail wie im Log:
     const detail = { ok:true, counts:{ images:1, json:5 }, version:'v25.10.25-final', errors:[] };
-    INFO('assets-ready ✓ ', ` (json:${detail.counts.json}, img:${detail.counts.images})`);
+    INFO('Assets bereit ✓', detail);
     emitOnce('cb:assets-ready', detail);
   }
 
-  loadAll().catch(()=> emitOnce('cb:assets-ready', { ok:false }));
+  loadAll().catch(err=>emitOnce('cb:assets-ready',{ ok:false, error:String(err)}));
 })();
