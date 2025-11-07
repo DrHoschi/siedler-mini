@@ -1,14 +1,17 @@
 /* ============================================================================
  * Datei    : core/map-runtime.bridge.js
  * Projekt  : Neue Siedler (Epoche 1 – Basis)
- * Version  : v25.11.07-final-clean
- * Zweck    : Bridge: Map-Quelle finden → JSON laden/normalisieren → Events/Start
+ * Version  : v25.11.13-final
+ * Zweck    : Bridge: Map-Quelle finden → JSON laden/normalisieren → Events
  *
- * Lauscht  : cb:start:new {map?}, cb:boot:ready
+ * KEIN AUTOSTART:
+ * - Lädt/Startet die Map NUR nach cb:game-start (vom Boot).
+ * - KEIN Start mehr auf cb:boot:ready, KEIN setTimeout-Fallback.
+ *
+ * Lauscht  : cb:game-start
  * Sendet   : cb:map:loaded { id?, map:{size:[w,h], tiles:2D}, tileset?, tileSize? }
  *            cb:map:error { message }
- * Ruft     : Game.start(map)
- * Hinweis  : SINGLE-RUN (Guard). Kein DOMContentLoaded/early-init Doppelstart.
+ * Ruft     : Game.start(normalizedMap) – NACH erfolgreichem Laden/Normalize
  * ========================================================================== */
 (function(){
   'use strict';
@@ -87,17 +90,13 @@
     return false;
   }
 
-  // ---- Event-Bindings (ein Pfad) ------------------------------------------
-  window.addEventListener('cb:start:new', (ev)=>{
+  // ---- Event-Bindings (einziger Startpfad) ---------------------------------
+  window.addEventListener('cb:game-start', (ev)=>{
     const mapUrl = ev?.detail?.map || null;
-    if (!mapUrl) { WARN('cb:start:new ohne detail.map → prüfe DOM'); startFromDOMIfPresent('cb:start:new'); return; }
-    startWithMapUrl(mapUrl);
-  }, { once:true });
+    if (mapUrl) { startWithMapUrl(mapUrl); return; }
+    // kein map in detail → DOM-Attribut auslesen
+    startFromDOMIfPresent('game-start');
+  }); // NICHT once:true → unterstützt Stop/Restart
 
-  window.addEventListener('cb:boot:ready', ()=>{
-    // Einziger Auto-Start für die Map
-    startFromDOMIfPresent('boot-ready');
-  }, { once:true });
-
-  OK('Modul geladen (v25.11.07-final-clean)');
+  OK('Modul geladen (v25.11.13-final) – wartet auf cb:game-start');
 })();
