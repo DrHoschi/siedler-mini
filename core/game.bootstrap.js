@@ -7,9 +7,9 @@
  * WICHTIG
  * - Kein eigener Render-Loop hier! Der Loop gehört Game.start().
  * - Diese Datei kümmert sich NUR um: Canvas-Größe, Splash/Diag, Repaint-Impulse.
- * - KEIN Autostart. Start erfolgt ausschließlich auf cb:game-start (vom Boot).
+ * - KEIN Autostart. Start erfolgt ausschließlich auf cb:game:start (vom Boot).
  *
- * Lauscht  : cb:assets-ready, cb:registry:ready, cb:boot:ready, cb:game-start
+ * Lauscht  : cb:assets-ready, cb:registry:ready, cb:boot:ready, cb:game:start
  * Sendet   : cb:game:initialized, cb:request-repaint
  * Ruft     : (optional) MapRuntime.init(canvas), Render.init()
  * ========================================================================== */
@@ -80,7 +80,7 @@
       }, { once:true });
 
       // Expliziter Startschuss → nur Szene initialisieren (kein Loop hier!)
-      window.addEventListener('cb:game-start', ()=>{
+      window.addEventListener('cb:game:start', ()=>{
         INFO('game-start ✓');
         this.initSceneOnce();
       }); // NICHT once:true → unterstützt Stop/Restart
@@ -100,7 +100,7 @@
 
     maybeInitScene(){
       // Sanfte Vorinitialisierung: Canvas & optionale Systeme aufsetzen,
-      // aber KEIN Game.start – das passiert NUR, nachdem cb:game-start kam.
+      // aber KEIN Game.start – das passiert NUR, nachdem cb:game:start kam.
       if (!this.canvas) return;
       if (this._assetsReady && this._registryReady) this.initSceneOnce();
     }
