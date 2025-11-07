@@ -8,7 +8,7 @@
  *
  * Events  :
  *   • sendet  cb:camera-change  (detail: { x, y, zoom })
- *   • hört auf cb:game-start     (Auto-Bind an Canvas, falls noch nicht gebunden)
+ *   • hört auf cb:game:start     (Auto-Bind an Canvas, falls noch nicht gebunden)
  *
  * API (global, bewusst simpel gehalten für Debug/Inspector & Renderer):
  *   window.GameCamera = {
@@ -282,7 +282,7 @@
     canvas.addEventListener('pointerleave', onPointerUp);
 
     // Bei Spielstart automatisch an #game hängen, falls nicht gebunden
-    window.addEventListener('cb:game-start', () => {
+    window.addEventListener('cb:game:start', () => {
       if (!canvas) {
         const auto = document.getElementById('game')
                  ||  document.querySelector('canvas[data-role="map"]')
