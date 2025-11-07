@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-07T12:16:12.588Z",
+  "createdAt": "2025-11-07T20:39:55.085Z",
   "root": ".",
   "count": 475,
   "entries": [
@@ -1096,12 +1096,12 @@
     {
       "type": "file",
       "path": "core/asset.js",
-      "size": 9046
+      "size": 1069
     },
     {
       "type": "file",
       "path": "core/boot-v1.js",
-      "size": 5532
+      "size": 1979
     },
     {
       "type": "file",
@@ -1181,7 +1181,7 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 7949
+      "size": 8943
     },
     {
       "type": "file",
@@ -1216,7 +1216,7 @@
     {
       "type": "file",
       "path": "core/map-runtime.bridge.js",
-      "size": 4325
+      "size": 7226
     },
     {
       "type": "file",
@@ -1256,7 +1256,7 @@
     {
       "type": "file",
       "path": "core/registry-v1.js",
-      "size": 5452
+      "size": 1311
     },
     {
       "type": "file",
@@ -2245,7 +2245,7 @@
     {
       "type": "file",
       "path": "ui/ui-layout.js",
-      "size": 2808
+      "size": 2636
     },
     {
       "type": "file",
@@ -2265,7 +2265,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 6710
+      "size": 6713
     },
     {
       "type": "file",
@@ -2280,12 +2280,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47016
+      "size": 47015
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18023
+      "size": 18022
     },
     {
       "type": "file",
@@ -2295,7 +2295,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 11098
+      "size": 11311
     },
     {
       "type": "file",
