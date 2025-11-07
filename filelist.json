@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-07T20:39:55.085Z",
+  "createdAt": "2025-11-07T20:53:29.782Z",
   "root": ".",
-  "count": 475,
+  "count": 477,
   "entries": [
     {
       "type": "dir",
@@ -1318,6 +1318,16 @@
     },
     {
       "type": "file",
+      "path": "data/maps/map-demo-siedler.json",
+      "size": 3422
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-demo-siedler.md",
+      "size": 4018
+    },
+    {
+      "type": "file",
       "path": "data/maps/map-demo.json",
       "size": 1689
     },
@@ -2295,7 +2305,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 11311
+      "size": 11340
     },
     {
       "type": "file",
