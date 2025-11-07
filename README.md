@@ -62,7 +62,7 @@ Die Spieler:innen starten mit einer kleinen Siedlergruppe, erschließen Rohstoff
 🔑 Kernmodule & Schnittstellen
 
 	•	core/boot.js → Initialisierung, 
-		Events (cb:assets-ready, cb:game-start)
+		Events (cb:assets-ready, cb:game:start)
 	•	core/asset.js → Asset-Verwaltung 
 		(Sprites, Sounds, Tiles), immer singular
 	•	core/game.js → Spielloop, 
