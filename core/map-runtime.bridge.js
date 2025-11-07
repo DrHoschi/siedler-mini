@@ -1,87 +1,100 @@
 /* ============================================================================
  * Datei    : core/map-runtime.bridge.js
- * Projekt  : Neue Siedler (Epoche 1 – Basis)
- * Version  : v25.11.13-final+guard
- * Zweck    : Bridge: Map-Quelle finden → JSON laden/normalisieren → Events
- * Änderung : Run-Once/Debounce gegen Start-Stürme; kein Mehrfach-Laden
+ * Projekt  : Neue Siedler
+ * Version  : v25.11.13-final (map → tileset → ready → Game.start)
+ * Zweck    : Map laden, Tileset sicherstellen, Ereignisse emittieren
+ * Hinweis  : Kein Debug/Workaround – saubere, synchrone Kette.
  * ========================================================================== */
 (function(){
   'use strict';
-  const MOD  = '[map-bridge]';
-  const OK   = (...a)=> (window.CBLog?.ok   || console.log)(MOD, ...a);
-  const INFO = (...a)=> (window.CBLog?.info || console.info)(MOD, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn || console.warn)(MOD, ...a);
-  const ERR  = (...a)=> (window.CBLog?.error|| console.error)(MOD, ...a);
+  const TAG = '[map-bridge]';
+  const INFO = (...a)=> (window.CBLog?.info || console.info)(TAG, ...a);
+  const OK   = (...a)=> (window.CBLog?.ok   || console.log)(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn || console.warn)(TAG, ...a);
+  const ERR  = (...a)=> (window.CBLog?.error|| console.error)(TAG, ...a);
 
-  // Modul nur einmal aktivieren
-  if (window.__MAP_BRIDGE_RUN__) { INFO('bereits aktiv'); return; }
-  window.__MAP_BRIDGE_RUN__ = true;
+  // Singleton
+  if (window.__MAP_BRIDGE__) { INFO('bereits aktiv – skip'); return; }
+  window.__MAP_BRIDGE__ = true;
 
-  // Start-Guards
-  let starting   = false;   // gerade am Laden
-  let started    = false;   // Map bereits geladen + Game.start aufgerufen
-  const T_DEBOUNCE = 150;   // zusammenfallende Start-Events bündeln
-  let tDeb = null;
-
+  // -------- Utilities -------------------------------------------------------
   function emit(name, detail={}) {
     try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch(_) {}
   }
+
   async function loadJSON(url){
     const bust = (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
     const res = await fetch(url + bust, { cache:'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
     return res.json();
   }
-  function findMapFromDOM(){
+
+  // Kleiner Bild-Cache, falls kein globaler Asset-Cache existiert
+  const IMG = (window.Assets && Assets.images) || (window.__IMG__ = window.__IMG__ || {});
+  async function loadImage(url){
+    if (!url) throw new Error('leerer Tileset-Pfad');
+    if (IMG[url] instanceof HTMLImageElement && IMG[url].complete) return IMG[url];
+    await new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload  = ()=> { IMG[url] = img; resolve(); };
+      img.onerror = ()=> reject(new Error('Bild nicht ladbar: ' + url));
+      img.src = url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
+    });
+    return IMG[url];
+  }
+
+  // Tileset-Pfad aus Map-Objekt ermitteln (unterstützt typische Strukturen)
+  function resolveTilesetUrl(map){
+    // Kandidaten in Reihenfolge der Wahrscheinlichkeit
+    const cand = [
+      map?.tileset,                 // "assets/tiles/terrain.png"
+      map?.tiles?.image,            // { tiles: { image: "...png" } }
+      map?.atlas?.image,            // { atlas: { image: "...png" } }
+      map?.meta?.tileset,           // fallback meta
+    ].filter(Boolean);
+    return cand[0] || null;
+  }
+
+  // data-map aus DOM lesen (Canvas oder Body)
+  function findMapUrlFromDOM(){
     const el = document.getElementById('game') || document.body;
-    const map = el?.getAttribute?.('data-map');
-    return map && map.trim() ? map.trim() : null;
-  }
-  function normalizeMap(m){
-    if (!m || typeof m!=='object') throw new Error('invalid map');
-    // TODO: echte Normalisierung…
-    return m;
+    const m = el?.getAttribute?.('data-map');
+    return (m && m.trim()) ? m.trim() : null;
   }
 
-  async function startWithMapUrl(url){
-    if (started || starting) { INFO('start ignoriert (already started/starting)'); return; }
-    try {
-      starting = true;
-      INFO('lade Map', url);
-      const raw = await loadJSON(url);
-      const map = normalizeMap(raw);
-      // Game.start übergibt normalisierte Map
-      if (typeof window.Game?.start === 'function') {
-        window.Game.start(map);
-      }
-      started = true;
-      OK('Map gestartet → Game.start ✓');
-      emit('cb:map:loaded', { map });
-    } catch (e) {
-      ERR('Fehler beim Laden der Map:', e?.message||e);
-      emit('cb:map:error', { message: String(e?.message||e) });
-    } finally {
-      starting = false;
-    }
-  }
-
-  function startFromDOMIfPresent(src='game-start'){
-    const found = findMapFromDOM();
-    if (found) { INFO(`game-start: data-map gefunden ${found}`); startWithMapUrl(found); return true; }
-    WARN('kein data-map gefunden (DOM)');
-    return false;
-  }
-
-  // Event-Bindings (gebounced, nicht einmalig – Restart später möglich)
-  window.addEventListener('cb:game:start', (ev)=>{
+  // -------- Start-Kette -----------------------------------------------------
+  let started = false;  // Schutz gegen Mehrfachstart
+  addEventListener('cb:game:start', async (ev)=>{
     if (started) { INFO('ignoriere cb:game:start (bereits gestartet)'); return; }
-    clearTimeout(tDeb);
-    tDeb = setTimeout(() => {
-      const mapUrl = ev?.detail?.map || null;
-      if (mapUrl) { startWithMapUrl(mapUrl); return; }
-      startFromDOMIfPresent('game-start');
-    }, T_DEBOUNCE);
-  });
+    started = true;
 
-  OK('Modul geladen (v25.11.13-final+guard) – wartet auf cb:game:start');
+    try {
+      const mapUrl = ev?.detail?.map || findMapUrlFromDOM();
+      if (!mapUrl) throw new Error('Keine Map-Quelle (data-map) gefunden.');
+      INFO('lade Map', mapUrl);
+
+      const raw = await loadJSON(mapUrl);
+      const map = raw && typeof raw === 'object' ? raw : (()=>{ throw new Error('Map JSON ungültig'); })();
+
+      // Tileset sichern (BLOCKING, strukturell notwendig)
+      const tilesetUrl = resolveTilesetUrl(map);
+      if (!tilesetUrl) WARN('Kein Tileset-Pfad in Map gefunden – Renderer könnte nichts zeichnen.');
+      const tileset = tilesetUrl ? await loadImage(tilesetUrl) : null;
+
+      // Map ready → Renderer & andere Module können reagieren
+      emit('cb:map:ready', { map, tileset, url: mapUrl, tilesetUrl });
+
+      // Game starten (Tileset als Option übergeben, Renderer kann es auswerten)
+      if (typeof window.Game?.start === 'function') {
+        window.Game.start(map, { tileset, tilesetUrl });
+        OK('Map gestartet → Game.start ✓');
+      } else {
+        WARN('Game.start fehlt – Map geladen, aber kein Start möglich.');
+      }
+    } catch (e) {
+      ERR('Fehler:', e?.message || e);
+      emit('cb:map:error', { message: String(e?.message||e) });
+      started = false; // erneuter Versuch später möglich
+    }
+  });
 })();
