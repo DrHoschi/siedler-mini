@@ -1,0 +1,13 @@
+/* ============================================================================
+   Datei : ui/css/ui-build.place.css  – v25.11.13
+   Zweck : minimale Styles für Ghost-Layer (liegt fix über #game)
+   ========================================================================== */
+
+#place-layer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none; /* nur Anzeige */
+  z-index: 2147483642;  /* direkt unter Inspector */
+}
