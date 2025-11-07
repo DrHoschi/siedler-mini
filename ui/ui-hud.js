@@ -3,7 +3,7 @@
  * Projekt : Neue Siedler
  * Version : v25.10.19-final2
  * Zweck   : Ressourcen-HUD initialisieren & aktualisieren
- * Events  : listen  -> cb:game-start, cb:registry:ready, cb:res:change
+ * Events  : listen  -> cb:game:start, cb:registry:ready, cb:res:change
  *           emit    -> cb:hud-ready
  * Hinweise:
  *   - Greift, falls vorhanden, auf window.Registry zu (labels, icons, order).
@@ -116,5 +116,5 @@ window.addEventListener('cb:res:change', (ev)=> HUD.render(ev.detail));
 (window.CBLog?.ok||console.log)('[hud] bereit'); window.dispatchEvent(new CustomEvent('cb:hud-ready'));
 
 // Lifecycle-Hooks: HUD zum Spielstart aufbauen, bei Registry-Ready ebenfalls (idempotent)
-window.addEventListener('cb:game-start',   ()=> window.UIHUD?.init?.(), { passive:true });
+window.addEventListener('cb:game:start',   ()=> window.UIHUD?.init?.(), { passive:true });
 window.addEventListener('cb:registry:ready',()=> window.UIHUD?.init?.(), { passive:true });
