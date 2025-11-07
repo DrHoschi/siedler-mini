@@ -73,8 +73,8 @@
   }
 
   // Event-Bindings (gebounced, nicht einmalig – Restart später möglich)
-  window.addEventListener('cb:game-start', (ev)=>{
-    if (started) { INFO('ignoriere cb:game-start (bereits gestartet)'); return; }
+  window.addEventListener('cb:game:start', (ev)=>{
+    if (started) { INFO('ignoriere cb:game:start (bereits gestartet)'); return; }
     clearTimeout(tDeb);
     tDeb = setTimeout(() => {
       const mapUrl = ev?.detail?.map || null;
@@ -83,5 +83,5 @@
     }, T_DEBOUNCE);
   });
 
-  OK('Modul geladen (v25.11.13-final+guard) – wartet auf cb:game-start');
+  OK('Modul geladen (v25.11.13-final+guard) – wartet auf cb:game:start');
 })();
