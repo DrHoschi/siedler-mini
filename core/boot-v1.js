@@ -48,7 +48,7 @@
     }
     state.started = true;
     // Einheitliches Game-Start Event (einmalig)
-    window.dispatchEvent(new CustomEvent('cb:game-start', { detail:{} }));
+    window.dispatchEvent(new CustomEvent('cb:game:start', { detail:{} }));
     OK('Szene initialisiert.');
   }
 
