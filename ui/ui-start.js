@@ -19,13 +19,6 @@
  * ========================================================================== */
 (function () {
   'use strict';
-
-    // ---- Singleton-Guard: Datei darf nur 1x initialisieren -------------------
-  if (window.__UI_START_INIT__) {
-    console.info('[ui-start]', 'doppelt eingebunden – ignoriere.');
-    return;
-  }
-  window.__UI_START_INIT__ = true;
   
   const TAG  = '[ui-start]';
   const log  = (m, ...a) => (window.CBLog?.info  || console.info )(TAG, m, ...a);
