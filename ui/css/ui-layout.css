@@ -11,7 +11,7 @@
 /* ---------- Start-Splash (Hintergrund vor Spielstart) -------------------- */
 :root{
   /* WICHTIG: Pfad ist relativ zu ui/css/ → zwei Ebenen hoch bis /assets/ui/ */
-  --start-bg: url("./assets/ui/start-bg.jpg");
+  --start-bg: url("././assets/ui/start-bg.jpg");
 }
 
 /* Splash-Layer: unter dem Panel, über dem Canvas */
