@@ -200,7 +200,7 @@
 
   // ---- Auto-Start (optional, wenn gewünscht) --------------------------------
   // Starte nach Spielstart automatisch, wenn nicht manuell gestartet
-  window.addEventListener('cb:game-start', ()=>{
+  window.addEventListener('cb:game:start', ()=>{
     if (!Production.isRunning()) Production.start();
   });
 
