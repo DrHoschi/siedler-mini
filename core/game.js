@@ -1,20 +1,18 @@
 /* ============================================================================
  * Datei   : core/game.js
  * Projekt : Neue Siedler
- * Version : v25.11.13-final3
- * Zweck   : Sichtbares Rendern der Karte (Canvas-Init, Loop, Tiled- & Simple-Map)
+ * Version : v25.11.13-final4
+ * Zweck   : Sichtbares Rendern der Karte (Canvas-Init, Loop)
+ *
+ * Unterstützte Map-Formate:
+ *   (A) Tiled JSON:
+ *       - keys: width,height,tilewidth,tileheight,layers[],tilesets[]
+ *   (B) Simple JSON (DEIN Format):
+ *       - keys: size:[tileW,tileH], tiles:number[][]  (2D-Array)
+ *       - optional: objects[], spawns[], metadata
  *
  * Lauscht : cb:map:ready  → Game.start(map,{tileset,tilesetUrl})
- *          cb:game:start  → (Fallback) falls Bridge nicht emitten konnte
- * Sendet  : (keine neuen Events)
- *
- * Hinweise:
- *  - Kein Debug/Hack. Sauberer, deterministischer Renderer mit Guards.
- *  - Unterstützte Map-Formate:
- *      (A) Tiled JSON: { width,height,tilewidth,tileheight, layers:[{type:'tilelayer', data:[...]}],
- *                        tilesets:[{ firstgid, image, columns, tilewidth,tileheight, ... }] }
- *      (B) Simple Map: { cols,rows,tileSize || tile, layer || grid:[[...]], tilesetIndexing:'row-major' }
- *  - Bild wird NICHT nachgeladen (das macht die Bridge); hier nur Nutzung.
+ *          cb:game:start  → Fallback (Loop startet, falls Map später kommt)
  * ========================================================================== */
 
 window.Game = window.Game || {};
@@ -25,179 +23,181 @@ window.Game = window.Game || {};
   const INFO = (...a)=> (window.CBLog?.info || console.info)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn || console.warn)(TAG, ...a);
 
-  // ------------------------------- State ------------------------------------
+  // -------------------------------- State -----------------------------------
   const state = {
     map: null,
     tileset: null,
     tilesetUrl: null,
 
-    // Canvas / Context
+    // Canvas
     canvas: null,
     ctx: null,
 
-    // Map-Geom
+    // Geometrie
     cols: 0,
     rows: 0,
     tileW: 64,
     tileH: 64,
 
-    // Tiled: firstgid + columns zur GID-Schnittberechnung
+    // Tileset-Raster
     firstGid: 1,
-    tsCols: 0,     // Spalten im Tileset-Bild
-    tsRows: 0,     // Reihen im Tileset-Bild
+    tsCols: 0,
+    tsRows: 0,
 
-    // Layers
-    layers: [],    // normalisierte Tile-Layer (integers, 0 = leer)
+    // Layer (normalisiert als flaches Int-Array)
+    layers: [],
 
     // Loop
     running: false,
     rafId: 0,
   };
 
-  // ----------------------------- Canvas-Setup -------------------------------
-  function ensureCanvas() {
+  // ---------------------------- Canvas / Resize ------------------------------
+  function ensureCanvas(){
     if (state.canvas && state.ctx) return;
     const cvs = document.getElementById('game');
     if (!cvs) throw new Error('#game Canvas fehlt');
-    const ctx = cvs.getContext('2d', { alpha: false });
-
-    // Render-Qualität für Pixelgrafik
+    const ctx = cvs.getContext('2d', { alpha:false });
     ctx.imageSmoothingEnabled = false;
-
     state.canvas = cvs;
     state.ctx = ctx;
 
-    // Resize → Attributgröße auf Viewport setzen
     function resize(){
       const w = Math.floor(window.innerWidth);
       const h = Math.floor(window.innerHeight);
-      if (cvs.width !== w || cvs.height !== h) {
-        cvs.width = w; cvs.height = h;
-      }
+      if (cvs.width !== w || cvs.height !== h) { cvs.width = w; cvs.height = h; }
     }
     window.addEventListener('resize', resize);
     resize();
   }
 
-  // --------------------------- Map-Normalisierung ---------------------------
-  function normalizeFromTiled(map) {
-    // Geometrie
-    state.cols  = Number(map.width  || map.cols || 0);
-    state.rows  = Number(map.height || map.rows || 0);
-    state.tileW = Number(map.tilewidth  || map.tileW || map.tile || 64);
-    state.tileH = Number(map.tileheight || map.tileH || map.tile || 64);
+  // --------------------------- Map-Normalisierung ----------------------------
+  function deriveTilesetGrid(){
+    // Spalten/Zeilen im Tileset-Bild ableiten, falls noch nicht gesetzt
+    if (state.tileset && state.tileW && state.tileH) {
+      state.tsCols = state.tsCols || Math.max(1, Math.floor(state.tileset.width  / state.tileW));
+      state.tsRows = state.tsRows || Math.max(1, Math.floor(state.tileset.height / state.tileH));
+    }
+    if (!state.tsCols) { state.tsCols = 1; state.tsRows = 1; }
+  }
 
-    // firstgid / tileset columns ableiten (falls vorhanden)
-    if (Array.isArray(map.tilesets) && map.tilesets.length) {
+  function normalizeFromTiled(map){
+    state.cols  = Number(map.width  || 0);
+    state.rows  = Number(map.height || 0);
+    state.tileW = Number(map.tilewidth  || 64);
+    state.tileH = Number(map.tileheight || 64);
+
+    // Tileset-Raster
+    if (Array.isArray(map.tilesets) && map.tilesets.length){
       const ts0 = map.tilesets[0];
       state.firstGid = Number(ts0.firstgid || 1);
-
-      // Spalten im Bild: Tiled liefert columns, sonst selbst ableiten
-      if (Number.isFinite(ts0.columns)) {
-        state.tsCols = Number(ts0.columns);
-      } else if (state.tileset && state.tileset.width && state.tileW) {
-        state.tsCols = Math.max(1, Math.floor(state.tileset.width / state.tileW));
-      }
-      if (state.tsCols && state.tileset && state.tileH) {
-        state.tsRows = Math.max(1, Math.floor(state.tileset.height / state.tileH));
-      }
-    } else {
-      // Fallback falls kein tilesets[] vorhanden (wir haben aber das Bild)
-      state.firstGid = 1;
-      if (state.tileset && state.tileset.width && state.tileW) {
-        state.tsCols = Math.max(1, Math.floor(state.tileset.width / state.tileW));
-        state.tsRows = Math.max(1, Math.floor(state.tileset.height / state.tileH));
-      }
+      if (Number.isFinite(ts0.columns)) state.tsCols = Number(ts0.columns);
     }
+    deriveTilesetGrid();
 
-    // Layer-Daten extrahieren (nur tilelayer)
+    // Tile-Layer übernehmen
     state.layers = [];
-    if (Array.isArray(map.layers)) {
-      for (const L of map.layers) {
-        if (L?.type === 'tilelayer' && Array.isArray(L.data)) {
-          // Tiled erlaubt 0 = leer
-          state.layers.push({
-            name: L.name || 'layer',
-            data: L.data.slice(0) // flach, length = width*height
-          });
+    if (Array.isArray(map.layers)){
+      for (const L of map.layers){
+        if (L?.type === 'tilelayer' && Array.isArray(L.data)){
+          state.layers.push({ name: L.name || 'layer', data: L.data.slice(0) });
         }
       }
     }
   }
 
-  function normalizeFromSimple(map) {
-    state.cols  = Number(map.cols || map.width  || 0);
-    state.rows  = Number(map.rows || map.height || 0);
-    state.tileW = Number(map.tileSize || map.tile || map.tileW || 64);
-    state.tileH = Number(map.tileSize || map.tile || map.tileH || 64);
-
-    // Tileset-Grid aus Bildgröße ableiten
-    if (state.tileset && state.tileset.width && state.tileW) {
-      state.tsCols = Math.max(1, Math.floor(state.tileset.width / state.tileW));
-      state.tsRows = Math.max(1, Math.floor(state.tileset.height / state.tileH));
-    } else {
-      state.tsCols = state.tsCols || 1;
-      state.tsRows = state.tsRows || 1;
+  // --------- SIMPLE FORMAT (dein Schema): { size:[w,h], tiles:number[][] } ---
+  function normalizeFromSimple(map){
+    // 1) Tilegröße aus size:[tileW,tileH]
+    if (Array.isArray(map.size) && map.size.length >= 2){
+      state.tileW = Number(map.size[0]) || 64;
+      state.tileH = Number(map.size[1]) || 64;
     }
+
+    // 2) Geometrie aus tiles (2D)
+    const grid2D = map.tiles;
+    if (!Array.isArray(grid2D) || !Array.isArray(grid2D[0])) {
+      throw new Error('Simple-Map erwartet "tiles" als 2D-Array');
+    }
+    state.rows = grid2D.length;
+    state.cols = grid2D[0].length;
+
+    // 3) Tileset-Raster vom Bild ableiten
     state.firstGid = 1;
+    state.tsCols = 0; state.tsRows = 0;
+    deriveTilesetGrid();
 
-    // Layer normalisieren
-    const layer = map.layer || map.grid || null;
-    if (Array.isArray(layer)) {
-      // erlaubt 2D-Array [rows][cols] oder flach
-      if (Array.isArray(layer[0])) {
-        // 2D -> flatten row-major
-        const flat = [];
-        for (let r=0; r<layer.length; r++) {
-          for (let c=0; c<layer[r].length; c++) flat.push(layer[r][c]|0);
-        }
-        state.layers = [{ name:'layer0', data: flat }];
-      } else {
-        state.layers = [{ name:'layer0', data: layer.map(v=>v|0) }];
+    // 4) Zu flachem Array normalisieren (row-major)
+    const flat = new Array(state.cols * state.rows);
+    let i = 0;
+    for (let r=0; r<state.rows; r++){
+      const row = grid2D[r];
+      if (!Array.isArray(row) || row.length !== state.cols){
+        throw new Error(`Zeile ${r} hat Länge ${row?.length||0}, erwartet ${state.cols}`);
       }
-    } else {
-      // Falls nix da ist: ein leerer Layer, damit der Loop läuft
-      state.layers = [{ name:'layer0', data: new Array(state.cols*state.rows).fill(0) }];
+      for (let c=0; c<state.cols; c++) flat[i++] = row[c]|0;
     }
+    state.layers = [{ name:'layer0', data: flat }];
+
+    INFO('Map (simple) normalisiert:',
+      { cols:state.cols, rows:state.rows, tile:[state.tileW,state.tileH], tsCols:state.tsCols });
   }
 
   function normalizeMap(map){
-    // Entscheide: Tiled vs. Simple
-    if (Array.isArray(map?.layers) && (map?.tilewidth || map?.tileheight || map?.tilesets)) {
+    // Erkennung: Tiled vs. Simple
+    const looksTiled =
+      Array.isArray(map?.layers) &&
+      (Number.isFinite(map?.tilewidth) || Number.isFinite(map?.tileheight) || Array.isArray(map?.tilesets));
+
+    const looksSimple =
+      Array.isArray(map?.tiles) && Array.isArray(map?.tiles[0]) && Array.isArray(map?.size);
+
+    if (looksTiled) {
       normalizeFromTiled(map);
-    } else {
+    } else if (looksSimple) {
       normalizeFromSimple(map);
+    } else {
+      // Letzter Versuch: sehr generisch (falls nur "grid" o.ä. existiert)
+      const grid = map?.tiles || map?.grid;
+      if (Array.isArray(grid) && Array.isArray(grid[0])) {
+        // Tilegröße fallback
+        if (Array.isArray(map?.size) && map.size.length>=2){
+          state.tileW = Number(map.size[0]) || 64;
+          state.tileH = Number(map.size[1]) || 64;
+        }
+        state.rows = grid.length;
+        state.cols = grid[0].length;
+        const flat = [];
+        for (let r=0; r<state.rows; r++) for (let c=0; c<state.cols; c++) flat.push(grid[r][c]|0);
+        state.layers = [{ name:'layer0', data: flat }];
+        deriveTilesetGrid();
+      } else {
+        throw new Error('Unbekanntes Map-Format – erwarte Tiled oder {size,tiles}');
+      }
     }
 
     // Sanity
-    if (!state.cols || !state.rows) {
-      WARN('Map-Geometrie unklar – setze 1x1 als Fallback');
+    if (!state.cols || !state.rows){
+      WARN('Map-Geometrie unklar – setze 1x1');
       state.cols = state.cols || 1;
       state.rows = state.rows || 1;
-    }
-    if (!state.tsCols) {
-      // immer noch 0? → wenigstens 1 setzen, damit Division nicht platzt
-      state.tsCols = 1;
-      state.tsRows = 1;
+      state.layers = [{ name:'layer0', data:[0] }];
     }
   }
 
-  // ------------------------------- Drawing ----------------------------------
-  function clear() {
-    const c = state.canvas; const ctx = state.ctx;
+  // -------------------------------- Drawing ---------------------------------
+  function clear(){
+    const c = state.canvas, ctx = state.ctx;
     ctx.setTransform(1,0,0,1,0,0);
-    ctx.fillStyle = '#101418'; // dunkles UI-Hintergrundgrau
+    ctx.fillStyle = '#101418';
     ctx.fillRect(0,0,c.width,c.height);
   }
 
-  function drawTile(gid, dx, dy) {
-    // gid=0 → leer
-    if (!gid) return;
+  function drawTile(gid, dx, dy){
+    if (!gid) return;                  // 0 = leer
+    const img = state.tileset; if (!img) return;
 
-    const img = state.tileset;
-    if (!img) return;
-
-    // Tiled: gid beginnt bei firstgid
+    // gid (1-basiert) → Index im Tileset (0-basiert)
     const index = Math.max(0, (gid|0) - (state.firstGid|0));
     const sxIndex = index % state.tsCols;
     const syIndex = Math.floor(index / state.tsCols);
@@ -205,32 +205,22 @@ window.Game = window.Game || {};
     const sx = sxIndex * state.tileW;
     const sy = syIndex * state.tileH;
 
-    state.ctx.drawImage(
-      img,
-      sx, sy, state.tileW, state.tileH,
-      dx, dy, state.tileW, state.tileH
-    );
+    state.ctx.drawImage(img, sx, sy, state.tileW, state.tileH, dx, dy, state.tileW, state.tileH);
   }
 
-  function drawLayers() {
-    const ctx = state.ctx;
+  function drawLayers(){
     const { cols, rows, tileW, tileH } = state;
+    const ctx = state.ctx;
+    ctx.setTransform(1,0,0,1,0,0); // (später Kamera)
 
-    // einfache Kamera (0,0) – später mit translate/scale erweiterbar
-    ctx.setTransform(1,0,0,1,0,0);
-
-    for (const L of state.layers) {
-      const data = L.data;
-      if (!Array.isArray(data)) continue;
-
-      // flaches Array im Row-major: idx = y*cols + x
+    for (const L of state.layers){
+      const data = L.data; if (!Array.isArray(data)) continue;
       let i = 0;
-      for (let y=0; y<rows; y++) {
+      for (let y=0; y<rows; y++){
         const py = y * tileH;
-        for (let x=0; x<cols; x++, i++) {
+        for (let x=0; x<cols; x++, i++){
           const px = x * tileW;
-          const gid = data[i]|0;
-          drawTile(gid, px, py);
+          drawTile(data[i]|0, px, py);
         }
       }
     }
@@ -243,49 +233,41 @@ window.Game = window.Game || {};
     state.rafId = requestAnimationFrame(frame);
   }
 
-  // ------------------------------- Public API -------------------------------
+  // ------------------------------- Public API --------------------------------
   Game.start = function(map, options = {}){
-    // 1) Canvas besorgen
     ensureCanvas();
-
-    // 2) Tileset annehmen
     state.tileset    = options.tileset    || state.tileset || null;
     state.tilesetUrl = options.tilesetUrl || state.tilesetUrl || null;
-    if (state.tileset) {
-      INFO('Tileset bereit:', state.tilesetUrl || '(inline)');
-    } else {
-      WARN('Tileset fehlt – es wird ggf. nichts gezeichnet.');
-    }
+    if (state.tileset) INFO('Tileset bereit:', state.tilesetUrl || '(inline)');
+    else WARN('Tileset fehlt – es wird ggf. nichts gezeichnet.');
 
-    // 3) Map normalisieren
     state.map = map || null;
     try {
       normalizeMap(state.map);
     } catch (e) {
       WARN('Map-Normalisierung fehlgeschlagen:', e?.message || e);
-      // Minimal-Map, damit nichts abstürzt
+      // Minimal-Fallback
       state.cols = state.rows = 1; state.tileW = state.tileH = 64;
       state.layers = [{ name:'layer0', data:[0] }];
+      deriveTilesetGrid();
     }
 
-    // 4) Loop starten (einmalig)
-    if (!state.running) {
+    if (!state.running){
       state.running = true;
       state.rafId = requestAnimationFrame(frame);
     }
   };
 
-  // Map-Bridge ruft dies idealerweise zuerst:
+  // Bridge liefert Map + Tileset
   addEventListener('cb:map:ready', (e)=>{
     const d = e.detail || {};
     Game.start(d.map, { tileset: d.tileset, tilesetUrl: d.tilesetUrl });
   });
 
-  // Fallback: Falls jemand direkt cb:game:start feuert (ohne Bridge),
-  // starte wenigstens die Loop, damit ein späteres cb:map:ready sofort sichtbar wird.
+  // Fallback: Loop laufen lassen, falls Map später kommt
   addEventListener('cb:game:start', ()=>{
     ensureCanvas();
-    if (!state.running) { state.running = true; state.rafId = requestAnimationFrame(frame); }
-  }, { once: true });
+    if (!state.running){ state.running = true; state.rafId = requestAnimationFrame(frame); }
+  }, { once:true });
 
 })();
