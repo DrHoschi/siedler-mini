@@ -4,7 +4,7 @@
  * Version : v25.10.19-final3
  * Zweck   : Schaltet Spiel-Layout NACH Spielstart aktiv (Start-BG bleibt bis dahin).
  * Events  : cb:ui-ready / cb:ui:ready    -> Layout AUS
- *           cb:game-start / cb:game:start-> Layout AN
+ *           cb:game:start-> Layout AN
  *           cb:game:reset                -> Layout AUS
  * ========================================================================== */
 /* (function () {
@@ -22,7 +22,6 @@
   window.addEventListener('cb:ui:ready', disableLayout, { passive:true });
 
   // --- Game start (beide Aliasse) -> AN ---
-  window.addEventListener('cb:game-start',  enableLayout, { passive:true });
   window.addEventListener('cb:game:start',  enableLayout, { passive:true });
 
   // --- Reset optional -> AUS ---
@@ -36,7 +35,7 @@
  * Datei   : ui/ui-layout.js
  * Zweck   : Schaltet Spiel-Layout NACH Spielstart aktiv (Start-BG bis dahin).
  * Events  : cb:ui-ready / cb:ui:ready    -> Layout AUS
- *           cb:game-start / cb:game:start-> Layout AN
+ *           cb:game:start-> Layout AN
  *           cb:game:reset                -> Layout AUS
  * ========================================================================== */
 (function () {
@@ -54,7 +53,6 @@
   addEventListener('cb:ui:ready', disable,  { passive:true });
 
   // Game start -> AN (beide Aliasse)
-  addEventListener('cb:game-start', enable, { passive:true });
   addEventListener('cb:game:start', enable, { passive:true });
 
   // Reset -> AUS
