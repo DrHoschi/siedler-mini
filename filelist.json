@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-06T11:51:06.007Z",
+  "createdAt": "2025-11-07T12:16:12.588Z",
   "root": ".",
   "count": 475,
   "entries": [
@@ -1101,11 +1101,11 @@
     {
       "type": "file",
       "path": "core/boot-v1.js",
-      "size": 4170
+      "size": 5532
     },
     {
       "type": "file",
-      "path": "core/boot.js",
+      "path": "core/bootold.js",
       "size": 6500
     },
     {
@@ -1176,12 +1176,12 @@
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
-      "size": 4452
+      "size": 4901
     },
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 7866
+      "size": 7949
     },
     {
       "type": "file",
@@ -1216,7 +1216,7 @@
     {
       "type": "file",
       "path": "core/map-runtime.bridge.js",
-      "size": 4807
+      "size": 4325
     },
     {
       "type": "file",
@@ -1236,7 +1236,7 @@
     {
       "type": "file",
       "path": "core/path-overlay.js",
-      "size": 15859
+      "size": 11741
     },
     {
       "type": "file",
@@ -1334,12 +1334,12 @@
     {
       "type": "file",
       "path": "data/maps/map-mini.json",
-      "size": 283
+      "size": 1181
     },
     {
       "type": "file",
-      "path": "data/maps/map-mini.jsonc",
-      "size": 4102
+      "path": "data/maps/map-mini.md",
+      "size": 2176
     },
     {
       "type": "file",
@@ -1589,7 +1589,7 @@
     {
       "type": "file",
       "path": "inspector/ui-inspector-v1.js",
-      "size": 10158
+      "size": 7992
     },
     {
       "type": "file",
@@ -2200,7 +2200,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 10543
+      "size": 9917
     },
     {
       "type": "file",
@@ -2265,7 +2265,7 @@
     {
       "type": "file",
       "path": "ui/ui-start.js",
-      "size": 6122
+      "size": 6710
     },
     {
       "type": "file",
@@ -2280,12 +2280,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47017
+      "size": 47016
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18024
+      "size": 18023
     },
     {
       "type": "file",
