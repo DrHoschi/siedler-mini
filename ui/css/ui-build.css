@@ -141,3 +141,24 @@
   display:grid; place-items:center;
   background:#0007; color:#fff; font-weight:700;
 }
+
+/* === Build-Button (immer sichtbar, über der Map & dem Dock) ============== */
+#btn-build{
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(245,245,245,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(6px);
+  color: #e8e8e8;
+  font: 600 14px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  display: grid;
+  place-items: center;
+  z-index: 2147483602;   /* über dem Build-Dock & UI */
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+#btn-build:active{ transform: translateY(1px); }
