@@ -111,7 +111,13 @@
   <div id="hud-root"   data-ui="hud"    aria-live="polite"></div>
   <div id="build-dock" data-ui="build"></div>
   <button id="btn-build" aria-label="Bau-Menü">Bauen</button>
-     
+ <div id="place-overlay" class="place-overlay" hidden>
+  <div id="place-ghost" class="ghost-sprite">
+    <div class="ghost-tint"></div>
+  </div>
+  <button class="place-btn ok">✓</button>
+  <button class="place-btn cancel">✕</button>
+</div>  
   <!-- Inspector Host + FAB -->
   <div id="inspector" class="inspector-host" aria-hidden="true" data-open="0"></div>
   <button id="inspector-fab" aria-label="Inspector" title="Inspector">⚙️</button>
