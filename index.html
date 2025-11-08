@@ -296,5 +296,19 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
   }
 })();
 </script>
+     <script>
+(function(){
+  if (window.__ERUDA_INIT__) return;
+  window.__ERUDA_INIT__ = true;
+  try {
+    if (window.eruda && eruda.init) {
+      eruda.init();            // einmalig
+      eruda.add && eruda.add('dom');
+      eruda.add && eruda.add('timing');
+      console.info('[eruda] initialized');
+    }
+  } catch(e){ console.warn('[eruda] init failed', e); }
+})();
+</script>
 </body>
 </html>
