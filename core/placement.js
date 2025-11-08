@@ -1,14 +1,22 @@
 /* ============================================================================
  * Datei   : core/placement.js
- * Version : v25.11.13-final-2
- * Zweck   : Ghost-Preview + Klick setzt cb:build:place
- * Safety  : Klaut keine UI-Klicks (Build-Dock, HUD, Inspector, FAB).
+ * Version : v25.11.13-final-3
+ * Zweck   : Ghost-Preview + Klick → cb:build:place
+ * Safety  : Blockiert keine UI (HUD/Inspector/Build/FAB).
  * ========================================================================== */
 (function () {
   'use strict';
-  const emit = (n,d={})=>window.dispatchEvent(new CustomEvent(n,{detail:d}));
-  const log  = (m,...a)=>(window.CBLog?.info||console.info)('[place]',m,...a);
 
+  const OK = (m,...a)=>(window.CBLog?.ok||console.log)('✅ [place]', m, ...a);
+  const LOG= (m,...a)=>(window.CBLog?.info||console.info)('[place]', m, ...a);
+  const WARN= (m,...a)=>(window.CBLog?.warn||console.warn)('[place] ⚠️', m, ...a);
+  const EMIT = (n,d={})=>window.dispatchEvent(new CustomEvent(n,{detail:d}));
+
+  // ——— Diagnose: Canvas vorhanden? ———
+  const canvas = document.getElementById('game');
+  if (!canvas) { WARN('#game nicht gefunden → Placement lädt, aber inaktiv'); return; }
+
+  // ——— State ———
   const UI_BLOCK = '#build-dock, #hud-root, #ui-root, #inspector, #inspector-fab';
   const isOnUI = (el)=> !!(el && (el.closest?.(UI_BLOCK)));
 
@@ -17,7 +25,7 @@
     size:{w:1,h:1}, tile:64, cam:{x:0,y:0,scale:1}
   };
 
-  // Canvas-Overlay (pointer-events:none → blockiert keine UI)
+  // Overlay-Layer (zeichnet nur, blockiert keine Klicks)
   let cvs=null, ctx=null;
   function ensureLayer(){
     if (cvs) return;
@@ -40,9 +48,11 @@
   }
   addEventListener('resize', resize);
 
+  // Kamera
   window.__CAM = window.__CAM || { x:0, y:0, scale:1 };
-  addEventListener('cb:camera:change', ()=>{ state.cam={...window.__CAM}; if (state.active) redraw(); });
+  addEventListener('cb:camera:change', ()=>{ state.cam={...window.__CAM}; if(state.active) redraw(); });
 
+  // Helpers
   function getTileSize(){ try { return (window.Game?.getTileSize?.()||64)|0; } catch { return 64; } }
   function screenToWorld(sx,sy){ const {x,y,scale}=state.cam; return { wx:(sx-x)/scale, wy:(sy-y)/scale }; }
   function worldToTile(wx,wy){ const t=state.tile; return { tx:Math.floor(wx/t), ty:Math.floor(wy/t) }; }
@@ -77,14 +87,13 @@
   }
   function onClick(e){
     if (!state.active) return;
-    // UI-Klicks ignorieren:
-    if (isOnUI(e.target)) return;
+    if (isOnUI(e.target)) return; // UI nie konsumieren
     e.preventDefault();
     const p = (e.changedTouches ? e.changedTouches[0] : e);
     const { wx, wy } = screenToWorld(p.clientX, p.clientY);
     const { tx, ty } = worldToTile(wx, wy);
     const chk = canPlaceAt(tx,ty);
-    emit('cb:build:place', { buildingId: state.buildingId, x:tx, y:ty, ok:chk.ok, reason:chk.reason });
+    EMIT('cb:build:place', { buildingId: state.buildingId, x:tx, y:ty, ok:chk.ok, reason:chk.reason });
     if (!chk.ok) { hover={tx,ty,ok:false}; redraw(); return; }
     stop();
   }
@@ -100,7 +109,7 @@
     addEventListener('pointerdown', onClick, { passive:false });
     addEventListener('touchmove', onMove, { passive:true });
     addEventListener('touchend', onClick, { passive:false });
-    log('an', buildingId, state.size);
+    LOG('an', buildingId, state.size);
   }
   function stop(){
     state.active=false; state.buildingId=null; clear();
@@ -108,7 +117,7 @@
     removeEventListener('pointerdown', onClick);
     removeEventListener('touchmove', onMove);
     removeEventListener('touchend', onClick);
-    log('aus');
+    LOG('aus');
   }
 
   addEventListener('cb:game:start', ()=> { state.tile=getTileSize(); state.cam={...window.__CAM}; clear(); });
@@ -125,5 +134,6 @@
   addEventListener('cb:build:cancel', ()=> stop());
 
   window.Placement = { start, stop };
-  (window.CBLog?.ok||console.log)('✅ [place] bereit');
+
+  OK('bereit v25.11.13-final-3');
 })();
