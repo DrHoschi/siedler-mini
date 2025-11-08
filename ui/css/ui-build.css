@@ -24,26 +24,20 @@
   --build-shadow: 0 8px 30px rgba(0,0,0,.25);
 }
 
-/* ------------------------------- Dock-Host --------------------------------
-   #build-dock bleibt leerer Container; die JS rendert darin Panel/Content.
-   Wir sperren Pointer am Host und geben sie dem Panel zurück → sauberes
-   Tap-Verhalten wenn das Dock teilweise außerhalb liegt.                     */
-#build-dock{
-  position: fixed;
-  z-index: var(--build-z);
-  pointer-events: none;      /* Panel selbst schaltet wieder auf auto */
-  inset: auto auto auto auto;
-  contain: layout size style; /* Scrolllag reduzieren */
-}
-
-/* Panel mit Holzrahmen (Klasse .wood-frame kommt aus Haupt-CSS) */
-#build-dock .build-panel{
-  pointer-events: auto;
-  backdrop-filter: blur(var(--build-panel-blur));
-  background: var(--build-panel-bg);
-  box-shadow: var(--build-shadow);
-  border-radius: 14px;
-  overflow: hidden;
+/* ------------------------- Portrait: unten andocken (iPhone-Fix) ------------------------ */
+@media (orientation: portrait){
+  #build-dock{
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 70px); /* HEBT das Dock höher an! */
+    transform: translateX(-50%);
+    right: auto; top: auto;
+    width: var(--build-dock-w-port);
+  }
+  #build-dock .build-panel{
+    width: 100%;
+    max-height: var(--build-dock-h-port);
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 /* --------------------------- Tabs / Header-Zeile -------------------------- */
