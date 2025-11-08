@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-07T20:53:29.782Z",
+  "createdAt": "2025-11-08T20:34:57.588Z",
   "root": ".",
-  "count": 477,
+  "count": 485,
   "entries": [
     {
       "type": "dir",
@@ -306,12 +306,17 @@
     },
     {
       "type": "file",
+      "path": "assets/icons/buildings/b.house_small.png",
+      "size": 1761817
+    },
+    {
+      "type": "file",
       "path": "assets/icons/buildings/b.hq.png",
       "size": 99205
     },
     {
       "type": "file",
-      "path": "assets/icons/buildings/b.lumber.png",
+      "path": "assets/icons/buildings/b.lumberjack.png",
       "size": 106970
     },
     {
@@ -1110,6 +1115,16 @@
     },
     {
       "type": "file",
+      "path": "core/build.place.handler.js",
+      "size": 4436
+    },
+    {
+      "type": "file",
+      "path": "core/camera.glue.js",
+      "size": 3397
+    },
+    {
+      "type": "file",
       "path": "core/camera.js",
       "size": 14547
     },
@@ -1245,6 +1260,11 @@
     },
     {
       "type": "file",
+      "path": "core/placement.js",
+      "size": 5276
+    },
+    {
+      "type": "file",
       "path": "core/production.res-validate.js",
       "size": 5396
     },
@@ -1330,6 +1350,11 @@
       "type": "file",
       "path": "data/maps/map-demo.json",
       "size": 1689
+    },
+    {
+      "type": "file",
+      "path": "data/maps/map-epoch1.json",
+      "size": 3145
     },
     {
       "type": "file",
@@ -1996,7 +2021,12 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 3486
+      "size": 5308
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build.place.css",
+      "size": 2053
     },
     {
       "type": "file",
@@ -2204,13 +2234,18 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-build-hook.js",
+      "size": 3751
+    },
+    {
+      "type": "file",
       "path": "ui/ui-build.categories.js",
       "size": 1398
     },
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 9917
+      "size": 10104
     },
     {
       "type": "file",
@@ -2269,6 +2304,11 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-place-overlay.js",
+      "size": 4669
+    },
+    {
+      "type": "file",
       "path": "ui/ui-place.js",
       "size": 8270
     },
@@ -2290,12 +2330,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47015
+      "size": 47219
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18022
+      "size": 18102
     },
     {
       "type": "file",
@@ -2305,7 +2345,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 11340
+      "size": 12735
     },
     {
       "type": "file",
