@@ -1,16 +1,12 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.11.08-final
- * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
- *
- * Lauscht  : cb:ui-ready (WIRING), cb:assets-ready, cb:registry:ready, cb:game:start (INIT)
- * Sendet   : cb:build:open / cb:build:close (nur für Sichtbarkeit)
- * DOM      : #build-dock (Container), #btn-build (Toggle)
- * Hinweis  : Auswahl / Platzieren übernimmt ui-build-hook.js (einheitlicher Event-Flow)
+ * Version  : v25.11.08-final+size
+ * Modul    : Baumenü (Build-Dock)
+ * Änderung : Größe (size / w,h) wird aus Daten übernommen und in data-w/h
+ *            auf die Karten geschrieben, damit der Hook korrekte w/h kennt.
  * ========================================================================== */
 
-/* Failsafe: #build-dock erzwingen (falls im HTML nicht vorhanden) */
 (function EnsureDock(){
   const ok  = (m)=> (window.CBLog?.ok||console.log)('[build]', m);
   let el = document.getElementById('build-dock');
@@ -51,7 +47,11 @@
     let cats    = Array.isArray(raw.categories) ? raw.categories.map(String)
                 : raw.category ? [String(raw.category)] : ['misc'];
     const image = raw.image || iconBld(id);
-    let cost    = [];
+    // ➜ Größe aus Daten mitnehmen (size:[w,h] ODER w/h):
+    const w = Number(raw.w || (Array.isArray(raw.size) ? raw.size[0] : 1)) || 1;
+    const h = Number(raw.h || (Array.isArray(raw.size) ? raw.size[1] : 1)) || 1;
+
+    let cost = [];
     if (Array.isArray(raw.cost)) {
       cost = raw.cost.map(c => ({ id: String(c.id), amount: Number(c.amount||0) }))
                      .filter(c => c.id && c.amount > 0);
@@ -59,15 +59,13 @@
       cost = Object.keys(raw.cost).map(k => ({ id:String(k), amount:Number(raw.cost[k]||0) }))
                                   .filter(c => c.amount > 0);
     }
-    return { id, name, categories: cats, image, cost };
+    return { id, name, categories: cats, image, cost, size:[w,h], w, h };
   }
 
   async function loadBuildings(){
     try {
-      // Bevorzugt Registry (singular), Fallback plural + JSON-Datei
       if (typeof window.Registry?.list === 'function') {
-        let fromReg = window.Registry.list('building');
-        if (!fromReg || !fromReg.length) fromReg = window.Registry.list('buildings');
+        let fromReg = window.Registry.list('building') || window.Registry.list('buildings');
         if (fromReg && fromReg.length){ BUILDINGS = fromReg.map(normalizeBuilding); INF('Datenquelle: Registry', BUILDINGS.length); return; }
       }
     } catch(e) { WRN('Registry.list("building") Fehler:', e); }
@@ -136,10 +134,11 @@
     list.forEach(b=>{
       const $card = document.createElement('button');
       $card.className = 'build-card';
-      // Vereinheitlichte Daten-Attribute (Hook greift hierauf):
       $card.setAttribute('data-building-id', b.id);
-      // Optional: bekannte Größe für Preview
-      if (Array.isArray(b.size)) { $card.setAttribute('data-w', b.size[0]); $card.setAttribute('data-h', b.size[1]); }
+      // ➜ Größe auf die Karte schreiben (wichtig für den Hook!)
+      $card.setAttribute('data-w', b.w||1);
+      $card.setAttribute('data-h', b.h||1);
+
       $card.setAttribute('aria-label', `Gebäude ${b.name}`);
 
       const $title = document.createElement('div'); $title.className = 'build-card__title'; $title.textContent = b.name;
@@ -151,8 +150,6 @@
       });
 
       $card.appendChild($title); $card.appendChild($img); $card.appendChild($costs);
-
-      // WICHTIG: KEIN direkter req:place:begin hier – das macht ui-build-hook.js
       $grid.appendChild($card);
     });
   }
@@ -221,5 +218,5 @@
   window.addEventListener('cb:build:open',  openDock);
   window.addEventListener('cb:build:close', closeDock);
 
-  LOG('ui-build geladen (v25.11.08-final)');
+  LOG('ui-build geladen (v25.11.08-final+size)');
 })();
