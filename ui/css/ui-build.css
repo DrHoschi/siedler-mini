@@ -14,7 +14,7 @@
 /* ------------------------- Grundwerte / Variablen ------------------------- */
 :root{
   /* Maximalmaße für Dock */
-  --build-dock-w-land: 120px;              /* Landscape rechts angedockt */
+  --build-dock-w-land: 50px;              /* Landscape rechts angedockt */
   --build-dock-w-port: min(92vw, 180px);   /* Portrait unten angedockt  */
   --build-dock-h-port: min(56vh, 100px);   /* Portrait-Höhe             */
   --build-gap: 10px;
