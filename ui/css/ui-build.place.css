@@ -1,13 +1,42 @@
 /* ============================================================================
-   Datei : ui/css/ui-build.place.css  – v25.11.13
-   Zweck : minimale Styles für Ghost-Layer (liegt fix über #game)
-   ========================================================================== */
+ * Datei   : ui/css/ui-build.place.css
+ * Projekt : Neue Siedler
+ * Version : v25.11.14
+ * Zweck   : Styles für Platzieren-Overlay (Ghost + Buttons)
+ * ========================================================================= */
 
-#place-layer {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none; /* nur Anzeige */
-  z-index: 2147483642;  /* direkt unter Inspector */
+/* Overlay-Canvas über #game (bleibt pixelgenau deckungsgleich) */
+.place-overlay{
+  position:fixed; inset:auto; /* Position wird per JS gesetzt */
+  z-index: 1025;              /* über #game (10), unter Startpanel (1030) */
+  pointer-events: auto;
+  display: none;
+}
+.place-overlay.is-active{ display:block; }
+
+/* Buttons oben links über dem Overlay */
+.place-ui{
+  position:fixed; inset:auto;
+  z-index: 1026;
+  display:none;
+  gap:8px;
+}
+.place-ui.is-active{ display:flex; }
+
+.place-ui .btn{
+  min-width:40px; height:40px; border-radius:10px;
+  border:1px solid rgba(0,0,0,.25);
+  background: rgba(250,250,250,.85);
+  backdrop-filter: blur(6px);
+  font-size:18px; line-height:1;
+  display:grid; place-items:center;
+  box-shadow: 0 6px 14px rgba(0,0,0,.15);
+  -webkit-tap-highlight-color: transparent;
+}
+.place-ui .btn-ok{    border-color: #208a20; }
+.place-ui .btn-cancel{border-color: #a22;    }
+
+/* iPhone Browser-Leiste: etwas Luft lassen */
+@supports (bottom: env(safe-area-inset-bottom)){
+  .place-ui.is-active{ margin-top: env(safe-area-inset-top, 0px); }
 }
