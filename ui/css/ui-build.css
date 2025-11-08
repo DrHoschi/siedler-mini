@@ -15,7 +15,7 @@
 :root{
   /* Maximalmaße für Dock */
   --build-dock-w-land: 50px;              /* Landscape rechts angedockt */
-  --build-dock-w-port: min(92vw, 130px);   /* Portrait unten angedockt  */
+  --build-dock-w-port: min(92vw, 100px);   /* Portrait unten angedockt  */
   --build-dock-h-port: min(56vh, 76px);   /* Portrait-Höhe             */
   --build-gap: 10px;
   --build-z: 95;
