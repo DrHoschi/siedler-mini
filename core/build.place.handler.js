@@ -1,10 +1,8 @@
 /* ============================================================================
  * Datei   : core/build.place.handler.js
- * Version : v25.11.13-final-2
- * Zweck   : Echte Platzierung verarbeiten (Game-API, sonst Fallback-Layer).
- * Lauscht : cb:build:place { buildingId, x, y }  // (alias: kind)
- * Abh.    : cb:camera:change, cb:game:start (für Kamerafollow)
- * Hinweis : Größe aus Registry.get('building', id) (singular) – Lastenheft
+ * Version : v25.11.13-final-3
+ * Zweck   : Platzierung anwenden – nutzt w/h aus Event-Detail, sonst Registry.
+ *           Fallback malt Rechteck in Overlay-Layer.
  * ========================================================================== */
 (function () {
   'use strict';
@@ -12,7 +10,6 @@
   const OK   = (m,...a)=>(window.CBLog?.ok   || console.log )('✅ [place-apply]', m, ...a);
   const LOG  = (m,...a)=>(window.CBLog?.info || console.info)('[place-apply]', m, ...a);
   const WARN = (m,...a)=>(window.CBLog?.warn || console.warn)('[place-apply] ⚠️', m, ...a);
-  const ERR  = (m,...a)=>(window.CBLog?.err  || console.error)('[place-apply] ❌', m, ...a);
 
   const tile = ()=> (window.Game?.getTileSize?.() || window.Game?.tileSize || 64);
 
@@ -64,54 +61,44 @@
     ctx.restore();
   }
 
-  function flash(x,y,w,h, ok){
-    ensureLayer();
-    const t = tile(), {x:cx,y:cy,scale:s}=cam;
-    const col = ok ? 'rgba(40,200,120,0.45)' : 'rgba(220,70,70,0.45)';
-    const lw  = 3/Math.max(1,s);
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(s, s);
-    ctx.fillStyle = col;
-    ctx.fillRect(x*t, y*t, (w||1)*t, (h||1)*t);
-    ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(0,0,0,.5)';
-    ctx.strokeRect(x*t, y*t, (w||1)*t, (h||1)*t);
-    ctx.restore();
-    setTimeout(()=> redraw(), 180);
-  }
-
-  function sizeOf(buildingId){
+  function sizeFromRegistry(id){
     try {
-      const meta = window.Registry?.get?.('building', buildingId);
+      const meta = window.Registry?.get?.('building', id);
       if (meta?.size) return { w: (+meta.size[0]||1), h: (+meta.size[1]||1) };
+      if (meta?.w || meta?.h) return { w:(+meta.w||1), h:(+meta.h||1) };
     } catch {}
-    if (buildingId === 'b.hq') return { w: 2, h: 2 };
-    return { w: 1, h: 1 };
+    return { w:1, h:1 };
   }
 
   function handlePlace(detail){
-    const id = detail?.buildingId || detail?.kind; // alias für Legacy
+    const id = detail?.buildingId || detail?.kind;
     const x  = detail?.x|0, y = detail?.y|0;
-    if (!id && id !== 0) return;
 
-    // 1) Bevorzugt Game-API
+    // Priorität: Event w/h → Registry → 1x1
+    let w = (detail?.w|0) || 0;
+    let h = (detail?.h|0) || 0;
+    if (w <= 0 || h <= 0){
+      const r = sizeFromRegistry(id);
+      w = r.w; h = r.h;
+    }
+
+    // 1) Versuche echte Game-API
     try {
       if (typeof window.Game?.placeBuilding === 'function') {
-        const res = window.Game.placeBuilding(id, x, y);
+        const res = window.Game.placeBuilding(id, x, y, { w, h });
         LOG('Game.placeBuilding →', res);
         return;
       }
-    } catch (e) { ERR('Game.placeBuilding Exception', e); }
+    } catch (e) { WARN('Game.placeBuilding Exception', e?.message||e); }
 
-    // 2) Fallback: sichtbare „Platzierung“
-    const s = sizeOf(id);
+    // 2) Fallback: sichtbare Markierung (mit korrekter Größe)
     ensureLayer();
-    placed.push({ id, x, y, w: s.w, h: s.h, tint: 'rgba(140,200,255,0.30)' });
+    placed.push({ id, x, y, w, h, tint:'rgba(140,200,255,0.30)' });
     redraw();
-    LOG('fallback placed', id, {x,y,w:s.w,h:s.h});
+    LOG('fallback placed', id, {x,y,w,h});
   }
 
   addEventListener('cb:build:place', (e)=> handlePlace(e.detail||{}));
 
-  OK('bereit v25.11.13-final-2');
+  OK('bereit v25.11.13-final-3');
 })();
