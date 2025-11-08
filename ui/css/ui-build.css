@@ -15,8 +15,8 @@
 :root{
   /* Maximalmaße für Dock */
   --build-dock-w-land: 420px;              /* Landscape rechts angedockt */
-  --build-dock-w-port: min(92vw, 780px);   /* Portrait unten angedockt  */
-  --build-dock-h-port: min(56vh, 560px);   /* Portrait-Höhe             */
+  --build-dock-w-port: min(92vw, 180px);   /* Portrait unten angedockt  */
+  --build-dock-h-port: min(56vh, 160px);   /* Portrait-Höhe             */
   --build-gap: 10px;
   --build-z: 95;
   --build-panel-bg: #efe5cfcc;             /* zarter Pergament-Look unterm Holz */
