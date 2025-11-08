@@ -1,9 +1,10 @@
 /* ============================================================================
  * Datei   : core/build.place.handler.js
- * Version : v25.11.13-final-1
+ * Version : v25.11.13-final-2
  * Zweck   : Echte Platzierung verarbeiten (Game-API, sonst Fallback-Layer).
- * Lauscht : cb:build:place { buildingId, x, y, ok }
+ * Lauscht : cb:build:place { buildingId, x, y }  // (alias: kind)
  * Abh.    : cb:camera:change, cb:game:start (für Kamerafollow)
+ * Hinweis : Größe aus Registry.get('building', id) (singular) – Lastenheft
  * ========================================================================== */
 (function () {
   'use strict';
@@ -13,9 +14,8 @@
   const WARN = (m,...a)=>(window.CBLog?.warn || console.warn)('[place-apply] ⚠️', m, ...a);
   const ERR  = (m,...a)=>(window.CBLog?.err  || console.error)('[place-apply] ❌', m, ...a);
 
-  const tile = ()=> (window.Game?.getTileSize?.() || 64);
+  const tile = ()=> (window.Game?.getTileSize?.() || window.Game?.tileSize || 64);
 
-  // -------------------------- Placed-Layer (Fallback) -----------------------
   let layer, ctx, dpr=1;
   let cam = window.__CAM || { x:0, y:0, scale:1 };
   const placed = []; // {id, x, y, w, h, tint}
@@ -43,7 +43,7 @@
   addEventListener('resize', onResize);
 
   function setCam(c){ cam = { ...c }; redraw(); }
-  addEventListener('cb:camera:change', ()=> setCam(window.__CAM||{x:0,y:0,scale:1}));
+  addEventListener('cb:camera-change', ()=> setCam(window.__CAM||{x:0,y:0,scale:1}));
   addEventListener('cb:game:start',   ()=> setCam(window.__CAM||{x:0,y:0,scale:1}));
 
   function redraw(){
@@ -57,7 +57,6 @@
     for (const p of placed) {
       ctx.fillStyle = p.tint || 'rgba(100,160,255,0.35)';
       ctx.fillRect(p.x*t, p.y*t, (p.w||1)*t, (p.h||1)*t);
-      // Einfache Kontur
       ctx.lineWidth = 2/Math.max(1,cam.scale);
       ctx.strokeStyle = 'rgba(0,0,0,.35)';
       ctx.strokeRect(p.x*t+1, p.y*t+1, (p.w||1)*t-2, (p.h||1)*t-2);
@@ -70,7 +69,6 @@
     const t = tile(), {x:cx,y:cy,scale:s}=cam;
     const col = ok ? 'rgba(40,200,120,0.45)' : 'rgba(220,70,70,0.45)';
     const lw  = 3/Math.max(1,s);
-    // Overlay direkt ohne Cam-Matrix zeichnen → wir transformieren manuell:
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(s, s);
@@ -82,31 +80,7 @@
     setTimeout(()=> redraw(), 180);
   }
 
-  // ------------------------------- Handler ----------------------------------
-  function handlePlace(detail){
-    const { buildingId, x, y, ok } = detail||{};
-    if (ok === false) { flash(x,y, sizeOf(buildingId).w, sizeOf(buildingId).h, false); return; }
-
-    // 1) Bevorzugt Game-API
-    try {
-      if (window.Game?.placeBuilding) {
-        const res = window.Game.placeBuilding(buildingId, x, y);
-        LOG('Game.placeBuilding →', res);
-        return;
-      }
-    } catch (e) {
-      ERR('Game.placeBuilding Exception', e);
-    }
-
-    // 2) Fallback: „echte“ sichtbare Platzierung auf eigenem Layer
-    const s = sizeOf(buildingId);
-    placed.push({ id: buildingId, x, y, w: s.w, h: s.h, tint: 'rgba(140,200,255,0.30)' });
-    ensureLayer(); redraw();
-    LOG('fallback placed', buildingId, {x,y,w:s.w,h:s.h});
-  }
-
   function sizeOf(buildingId){
-    // Größe aus Registry, sonst 2x2 für HQ / 1x1 default
     try {
       const meta = window.Registry?.get?.('building', buildingId);
       if (meta?.size) return { w: (+meta.size[0]||1), h: (+meta.size[1]||1) };
@@ -115,8 +89,29 @@
     return { w: 1, h: 1 };
   }
 
-  // Listener
+  function handlePlace(detail){
+    const id = detail?.buildingId || detail?.kind; // alias für Legacy
+    const x  = detail?.x|0, y = detail?.y|0;
+    if (!id && id !== 0) return;
+
+    // 1) Bevorzugt Game-API
+    try {
+      if (typeof window.Game?.placeBuilding === 'function') {
+        const res = window.Game.placeBuilding(id, x, y);
+        LOG('Game.placeBuilding →', res);
+        return;
+      }
+    } catch (e) { ERR('Game.placeBuilding Exception', e); }
+
+    // 2) Fallback: sichtbare „Platzierung“
+    const s = sizeOf(id);
+    ensureLayer();
+    placed.push({ id, x, y, w: s.w, h: s.h, tint: 'rgba(140,200,255,0.30)' });
+    redraw();
+    LOG('fallback placed', id, {x,y,w:s.w,h:s.h});
+  }
+
   addEventListener('cb:build:place', (e)=> handlePlace(e.detail||{}));
 
-  OK('bereit v25.11.13-final-1');
+  OK('bereit v25.11.13-final-2');
 })();
