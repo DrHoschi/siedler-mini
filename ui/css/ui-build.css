@@ -1,193 +1,143 @@
 /* ============================================================================
- * [00] META
  * Datei    : ui/css/ui-build.css
  * Projekt  : Neue Siedler (Siedler-Mini)
- * Version  : v25.11.13-min (responsive, kompakt)
+ * Version  : v25.11.15-final (Dock Portrait=unten, Landscape=rechts; Holzrahmen)
  * Zweck    : Baumenü/Dock (Tabs, Scroller, Karten) + Kosten-Icons
- * Struktur :
- *   [05] Variablen
- *   [10] Dock-Layout (Container #build-dock)
- *   [20] Tabs
- *   [30] Grid/Karten
- *   [40] Kostenleiste
- *   [50] Responsiv
- * Hinweise :
- *   – Nur Build-spezifische Styles hier (kein HUD/Inspector).
- *   – „Holzrahmen“ optional über .u-frame nutzbar.
- *   – #build-dock existiert bereits im HTML; Logik rendert .build-grid/.build-card.
+ * Autor    : Mann + ChatGPT
+ *
+ * WICHTIG
+ * - Der Holzrahmen kommt aus der Haupt-CSS (.wood-frame). Hier NICHT überschreiben.
+ * - Dieses Stylesheet steuert nur Position/Größe/Innenlayout des Build-Docks.
+ * - Z-Reihenfolge: unter dem FAB/Inspector, über der Map.
  * ========================================================================== */
 
-/* [05] Variablen (Fallbacks, falls nicht global definiert) */
+/* ------------------------- Grundwerte / Variablen ------------------------- */
 :root{
-  --frame-src: url("../../assets/ui/panel.svg");
-  --frame-slice: 12;
-  --dock-w: 980px;
-  --gap: 10px;
-  --panel: rgba(255, 250, 240, 0.95);
-  --accent: #6fa8dc;
-  --shadow: 0 2px 8px rgba(0,0,0,.35);
+  /* Maximalmaße für Dock */
+  --build-dock-w-land: 420px;              /* Landscape rechts angedockt */
+  --build-dock-w-port: min(92vw, 780px);   /* Portrait unten angedockt  */
+  --build-dock-h-port: min(56vh, 560px);   /* Portrait-Höhe             */
+  --build-gap: 10px;
+  --build-z: 95;
+  --build-panel-bg: #efe5cfcc;             /* zarter Pergament-Look unterm Holz */
+  --build-panel-blur: 6px;
+  --build-shadow: 0 8px 30px rgba(0,0,0,.25);
 }
 
-/* === Holzrahmen-Panel (universell, optional anwendbar) === */
-.u-frame{
-  border-style: solid;
-  border-width: 12px; /* Ohne Breite kein border-image! */
-  border-image-source: var(--frame-src);
-  border-image-slice: var(--frame-slice);
-  border-image-repeat: stretch;
-  background: rgba(40,35,30,.9);
-  border-radius: 6px;
-}
-
-/* Build-Button (dein FAB bleibt wie gehabt) */
-#btn-build{
-  position: fixed; top: 8px; right: 64px; z-index: 2140;
-  width: 36px; height: 36px; border-radius: 8px;
-}
-
-/* ============================================================================
- * [10] Dock-Layout – der Container, der alles hält
- *   – Kompakt, scrollt bei Bedarf, verdeckt Karte nicht
- *   – Bleibt über dem Canvas, aber unter dem Inspector
- * ========================================================================== */
+/* ------------------------------- Dock-Host --------------------------------
+   #build-dock bleibt leerer Container; die JS rendert darin Panel/Content.
+   Wir sperren Pointer am Host und geben sie dem Panel zurück → sauberes
+   Tap-Verhalten wenn das Dock teilweise außerhalb liegt.                     */
 #build-dock{
   position: fixed;
-  top: 8%;
-  left: 84px;
-  right: 24px;
-  max-width: 90vw;
-  max-height: 70vh;
-  padding: 10px;
-  background: rgba(245, 235, 210, 0.92);
-  border: 2px solid rgba(80, 60, 30, 0.55);
-  border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0,0,0,.35);
-  backdrop-filter: blur(5px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  z-index: 2100;             /* über HUD, unter Inspector */
-  transform: scale(0.90);    /* kompakter Standard */
-  transform-origin: top left;
+  z-index: var(--build-z);
+  pointer-events: none;      /* Panel selbst schaltet wieder auf auto */
+  inset: auto auto auto auto;
+  contain: layout size style; /* Scrolllag reduzieren */
 }
 
-/* Optionaler Wrapper-Stil, falls dein Script .build-dock (class) nutzt */
-.build-dock{
-  position: fixed; left: 16px; bottom: 16px; width: var(--dock-w);
-  display: flex; flex-direction: column; gap: var(--gap);
-  z-index: 2100;
+/* Panel mit Holzrahmen (Klasse .wood-frame kommt aus Haupt-CSS) */
+#build-dock .build-panel{
+  pointer-events: auto;
+  backdrop-filter: blur(var(--build-panel-blur));
+  background: var(--build-panel-bg);
+  box-shadow: var(--build-shadow);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
-/* Scrollbar dezenter */
-#build-dock{ scrollbar-width: thin; }
-#build-dock::-webkit-scrollbar{ height: 8px; width: 8px; }
-#build-dock::-webkit-scrollbar-thumb{ background: rgba(0,0,0,.25); border-radius: 8px; }
-
-/* ============================================================================
- * [20] Tabs
- * ========================================================================== */
+/* --------------------------- Tabs / Header-Zeile -------------------------- */
+.build-header{
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px 4px 12px;
+}
+.build-header__title{
+  font: 700 16px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  color: #3b2b12; opacity: .85;
+}
 .build-tabs{
-  display: flex; gap: 8px; overflow: auto; padding-bottom: 6px;
+  display: flex; gap: 6px; overflow: auto;
+  padding: 6px 12px 10px 12px;
   scrollbar-width: thin;
 }
-.build-tabs .tab{ white-space: nowrap; }
-.build-tabs .tab.is-active{
-  outline: 2px solid var(--accent);
-  border-radius: 8px;
+.build-tabs .tab{
+  white-space: nowrap;
+  padding: 4px 8px; border-radius: 999px;
+  background: #fff7; color:#173; font-weight:600;
+}
+.build-tabs .tab.is-active{ outline: 2px solid #6aa; }
+
+/* ------------------------------- Karten-Grid ------------------------------- */
+.build-body{
+  overflow: auto; max-height: 100%;
+  padding: 10px 12px 12px 12px;
 }
 
-/* ============================================================================
- * [30] Grid + Karten
- *   – Karten kompakt (~140×180), hover-Feedback
- * ========================================================================== */
 .build-grid{
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 10px;
-  padding: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--build-gap);
 }
 
-#build-dock .build-card,
+/* Karte (Innenkarte hat SELBST wieder Holzrahmen über .wood-frame aus main) */
 .build-card{
-  background: var(--panel);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-  color: #2c1f12;
-  transition: transform .15s ease, box-shadow .15s ease;
-  min-height: 168px; /* sorgt für gleichmäßige Kartenhöhe */
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px;
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.08);
 }
-
-.build-card:hover{ transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,.28); }
-
-#build-dock .build-card__img,
 .build-card__img{
-  width: 92%;
-  height: auto;
-  display: block;
-  object-fit: cover;
-  image-rendering: pixelated;
-  border-radius: 6px;
-  margin-top: 2px;
+  width: 100%; aspect-ratio: 1/1; object-fit: cover;
+  image-rendering: pixelated; border-radius: 10px; background:#f6f3eb;
 }
-
-#build-dock .build-card__title,
 .build-card__title{
-  font-weight: 700;
-  font-size: 14px;
-  margin-top: 4px;
-  text-shadow: 0 1px 0 #fff8;
-  color: #3b260a;
+  font-weight: 700; text-align: center; color:#3b2b12; text-shadow: 0 1px 0 #fff8;
 }
+.build-costs{
+  display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+}
+.build-cost{ display:inline-flex; gap:4px; align-items:center;
+  padding:2px 8px; border-radius:999px; background:#0006; color:#fff; font-weight:700;
+}
+.build-cost__icon{ width:16px; height:16px; display:block; image-rendering:pixelated; }
 
-/* ============================================================================
- * [40] Kostenleiste (klein & übersichtlich)
- * ========================================================================== */
-.build-costs,
-#build-dock .build-costs{
-  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
-}
-.build-cost,
-#build-dock .build-cost{
-  display: inline-flex; gap: 4px; align-items: center;
-  padding: 2px 6px; border-radius: 999px;
-  background: #0006; color: #fff; font-weight: 700; font-size: 12px;
-}
-.build-cost__icon,
-#build-dock .build-cost__icon{ width: 16px; height: 16px; display: block; image-rendering: pixelated; }
-
-/* ============================================================================
- * [50] Responsiv
- *   – iPad/iPhone: kleiner skalieren + mehr Platz rechts
- * ========================================================================== */
-@media (max-width: 1200px){
-  #build-dock { transform: scale(0.86); }
-}
-
-@media (max-width: 900px){
-  #build-dock {
-    left: 70px;
-    right: 16px;
-    max-width: 88vw;
-    max-height: 68vh;
-    transform: scale(0.82);
+/* ------------------------- Portrait: unten andocken ------------------------ */
+@media (orientation: portrait){
+  #build-dock{
+    left: 50%; bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%); right: auto; top: auto;
+    width: var(--build-dock-w-port);
+  }
+  #build-dock .build-panel{
+    width: 100%;
+    max-height: var(--build-dock-h-port);
   }
 }
 
-@media (max-width: 768px){
-  #build-dock {
-    left: 64px;
-    right: 12px;
-    top: 9%;
-    max-width: 92vw;
-    max-height: 66vh;
-    transform: scale(0.80);
+/* ------------------------ Landscape: rechts andocken ---------------------- */
+@media (orientation: landscape){
+  #build-dock{
+    right: max(12px, env(safe-area-inset-right, 0px));
+    top: max(12px, env(safe-area-inset-top, 0px));
+    bottom: auto; left: auto;
+    width: var(--build-dock-w-land);
   }
-  .build-grid{ grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
-  .build-card{ min-height: 158px; }
+  #build-dock .build-panel{
+    width: 100%;
+    max-height: min(86vh, 860px);
+  }
+}
+
+/* --------------------------- Kleinere Displays ---------------------------- */
+@media (max-width: 430px){
+  .build-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .build-card__title{ font-size: 14px; }
+}
+
+/* --------------------------- Utility / Close-X ---------------------------- */
+.build-close{
+  position:absolute; left:10px; top:10px;
+  width:26px; height:26px; border-radius:999px;
+  display:grid; place-items:center;
+  background:#0007; color:#fff; font-weight:700;
 }
