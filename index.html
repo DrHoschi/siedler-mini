@@ -282,5 +282,18 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
       window.addEventListener('cb:ui-ready', ()=> document.documentElement.classList.add('splash-done'), { once:true });
     })();
   </script>
+     <script>
+(function(){
+  const miss = [];
+  if (!window.__CAM) miss.push('__CAM');
+  if (!window.Placement) miss.push('Placement');
+  if (!document.getElementById('build-dock')) miss.push('#build-dock');
+  if (miss.length) {
+    console.warn('[diag] fehlt:', miss.join(', '));
+  } else {
+    console.info('✅ [diag] placement-stack ok');
+  }
+})();
+</script>
 </body>
 </html>
