@@ -1,50 +1,53 @@
 /* ============================================================================
- * [00] META
  * Datei    : ui/css/ui-place.css
- * Projekt  : Neue Siedler (Siedler‑Mini)
- * Version  : v19.2.0 (2025-10-10)
- * Zweck    : Platzier‑Overlay (Ghost‑Sprite, ✅/❌ Buttons, Raster)
+ * Projekt  : Neue Siedler (Siedler-Mini)
+ * Version  : v25.11.09-final (Kompat-Fix v2-0)
+ * Zweck    : Platzier-Overlay (Ghost-Sprite, ✅/❌ Buttons, Raster-Ready)
  * Struktur :
- *   [10] Overlay‑Root
- *   [20] Ghost‑Bild
- *   [30] Buttons (OK/Abbrechen)
- * ============================================================================
- */
-.place-overlay{ position:absolute; z-index:40; pointer-events:none; }
-.place-sprite{ position:absolute; inset:0; width:100%; height:100%; image-rendering:pixelated; pointer-events:none; }
-.place-btn{
-  position:absolute; pointer-events:auto; width:32px; height:32px; border-radius:8px; border:0;
-  font-weight:700; line-height:32px; text-align:center; box-shadow:var(--shadow); color:#111;
-}
-.place-btn.ok{  background:var(--ok);   right:8px; top:8px; }
-.place-btn.no{  background:var(--error); left:8px; top:8px; color:#fff; }
+ *   [10] Root-Variablen
+ *   [20] Overlay-Root (fixed, full viewport)
+ *   [30] Ghost-Sprite + Tint (valid/invalid)
+ *   [40] Buttons (OK/Cancel) – oben links/rechts (klassischer Look)
+ * Hinweise:
+ *   – Keine Pointer-Events am Overlay; nur Buttons sind klickbar.
+ *   – Größe der Ghost-Kachel wird über CSS-Variablen gesetzt:
+ *       --wTiles, --hTiles (Tile-Anzahl) und --tile (Pixel pro Tile)
+ *     Fallback: 1x1 Kachel bei fehlenden Angaben.
+ * ========================================================================== */
 
-/* ui/css/ui-place.css — v25.10.24-align */
+/* [10] Root-Variablen (Tilegröße 64px als Default, kann per :root überschrieben werden) */
 :root{
-  --tile: 32px;
+  --tile: 64px;                 /* Logs zeigen 64px Tiles → Default auf 64 */
   --ok: #1d6e2f;
   --error: #b11c2a;
   --shadow: 0 10px 24px rgba(0,0,0,.35);
 }
 
-/* Overlay muss den ganzen Viewport abdecken */
+/* [20] Overlay über gesamte Fläche – frisst keine Pointer-Events */
 .place-overlay{
-  position: fixed;         /* <— vorher absolute */
-  inset: 0;                /* <— volle Fläche */
-  z-index: 40;
-  pointer-events: none;    /* Buttons schalten wir einzeln frei */
+  position: fixed;              /* volle Bühne */
+  inset: 0;
+  z-index: 3000;                /* hoch genug über Canvas/HUD; Inspector liegt noch drüber */
+  pointer-events: none;         /* Buttons werden gezielt wieder aktiviert */
 }
 
-/* Dein JS erzeugt .ghost-sprite/.ghost-tint */
+/* Optional: Container für Ghost (wird von JS positioniert) */
+#place-ghost{ pointer-events:none; }
+
+/* [30] Ghost-Sprite: Größe = Tiles * tilepx; Position via transform vom JS */
 .ghost-sprite{
   position: absolute;
-  width: var(--w, var(--tile));
-  height: var(--h, var(--tile));
+  width: calc(var(--wTiles, 1) * var(--tile));
+  height: calc(var(--hTiles, 1) * var(--tile));
+  transform: translate(var(--sx, 0px), var(--sy, 0px)); /* Screen-Offsets vom JS */
   image-rendering: pixelated;
   background-size: cover;
+  background-repeat: no-repeat;
   will-change: transform;
   pointer-events: none;
 }
+
+/* Farb-Overlay mit Validierungsrahmen */
 .ghost-tint{
   position:absolute; inset:0;
   border-radius: 4px;
@@ -60,19 +63,30 @@
   outline-color: rgba(255,0,0,.85);
 }
 
-/* Ghost-Container (dein #place-ghost) darf pointer-events ebenfalls nicht fressen */
-#place-ghost{ pointer-events:none; }
-
-/* Buttons */
+/* [40] Buttons – oben links (OK) & oben rechts (Cancel), klassischer Look */
 .place-btn{
   position: absolute;
-  pointer-events: auto;
+  pointer-events: auto;         /* Buttons wieder klickbar */
   width: 36px; height: 36px;
-  border-radius: 8px; border: 1px solid #0008;
-  font-weight: 700; line-height: 34px; text-align: center;
-  color: #eee; background: rgba(18,20,24,.95);
+  border-radius: 8px;
+  border: 1px solid #0008;
   box-shadow: var(--shadow);
+  font: 700 16px/34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  text-align: center;
+  color: #fff;
+  user-select: none;
 }
-/* Wir positionieren sie dynamisch im JS – hier KEINE left/right/top */
-.place-btn.ok{ background: var(--ok); border-color:#154e22; }
-.place-btn.cancel{ background: var(--error); border-color:#5f0e17; }
+
+.place-btn.ok{
+  left: 8px; top: 8px;
+  background: var(--ok);
+  border-color:#154e22;
+}
+.place-btn.cancel{
+  right: 8px; top: 8px;
+  background: var(--error);
+  border-color:#5f0e17;
+}
+
+/* Optional: Wenn du Icons statt Text willst, lass JS "✓" / "✕" einsetzen
+   oder nutze background-image: url(...). */
