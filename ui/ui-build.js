@@ -34,10 +34,10 @@
   const WRN = (...m)=> (window.CBLog?.warn || console.warn)('[build]', ...m);
   const ERR = (...m)=> (window.CBLog?.error|| console.error)('[build]', ...m);
 
-  // Dock → Platzierer (Ghost) informieren
+/*  // Dock → Platzierer (Ghost) informieren
 window.dispatchEvent(new CustomEvent('cb:build:select', {
   detail: { buildingId: id }           // 'id' ist die aus deinem Dock
-}));
+})); */
   
   // DOM
   const $dock = document.getElementById('build-dock'); // nach Failsafe vorhanden
