@@ -1,11 +1,12 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.11.09-final+confirm+grid+ghost-sync
+ * Version : v25.11.09-final+confirm+grid+ghost-zoom
  * Zweck   : Eingabe & Build-Interaktion (Bestätigen/Abbrechen optional)
- * Änderungen:
+ * Highlights:
  *   – Übernimmt w/h aus req:place:begin → setzt --wTiles/--hTiles
  *   – Bewegt Ghost per --sx/--sy entlang der Maus (gleiches Mapping wie Klick)
+ *   – NEW: --tilePx = tileSize * cam.zoom wird immer gesetzt (Ghost bleibt exakt 3×3)
  * ========================================================================== */
 (() => {
   'use strict';
@@ -39,7 +40,11 @@
       display:'none', gap:'8px', padding:'8px', background:'rgba(0,0,0,.35)',
       borderRadius:'8px', backdropFilter:'blur(4px)'
     });
-    const styleBtn = (b)=>Object.assign(b.style,{font:'700 16px system-ui',padding:'8px 10px',border:'1px solid rgba(255,255,255,.35)',borderRadius:'6px',cursor:'pointer',color:'#fff',background:'rgba(0,0,0,.15)'});
+    const styleBtn = (b)=>Object.assign(b.style,{
+      font:'700 16px system-ui', padding:'8px 10px',
+      border:'1px solid rgba(255,255,255,.35)', borderRadius:'6px',
+      cursor:'pointer', color:'#fff', background:'rgba(0,0,0,.15)'
+    });
     const ok = uiBox.querySelector('#btn-place-confirm'); const cc = uiBox.querySelector('#btn-place-cancel');
     styleBtn(ok); styleBtn(cc);
     ok.addEventListener('click', ()=> placeAt(lastHover.tx, lastHover.ty, lastSize.w, lastSize.h));
@@ -87,6 +92,7 @@
     if (typeof d.x === 'number')   cam.x = d.x;
     if (typeof d.y === 'number')   cam.y = d.y;
     if (typeof d.zoom === 'number')cam.zoom = d.zoom;
+    applyTilePx();                 // ← NEW: Ghost-Kachelgröße bei Zoom-Änderung
     drawGrid();
   });
   addEventListener('req:debug:grid:toggle', ()=>{
@@ -99,7 +105,11 @@
     try { return Number(window.Game?.tileSize) || Number(window.Entities?.state?.tile) || 64; }
     catch { return 64; }
   }
-  function updateTileSize(){ tileSize = getTileSize(); drawGrid(); }
+  function updateTileSize(){
+    tileSize = getTileSize();
+    drawGrid();
+    applyTilePx();                 // ← NEW: auch bei TileSize-Änderung aktualisieren
+  }
 
   function rectOf(el){ try { return el.getBoundingClientRect(); } catch { return {left:0,top:0,width:0,height:0}; } }
 
@@ -161,9 +171,9 @@
       // Ghost an Maus ausrichten (per CSS-Variablen)
       const ghost = document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
       if (ghost){
-        // einfache Screen-Ausrichtung; wenn du Welt→Screen-Matrix hast, nutze die
-        ghost.style.setProperty('--sx', `${p.sx - ((p.sx) % (tileSize*cam.zoom))}px`);
-        ghost.style.setProperty('--sy', `${p.sy - ((p.sy) % (tileSize*cam.zoom))}px`);
+        const step = tileSize * cam.zoom;
+        ghost.style.setProperty('--sx', `${p.sx - (p.sx % step)}px`);
+        ghost.style.setProperty('--sy', `${p.sy - (p.sy % step)}px`);
       }
 
       try {
@@ -212,13 +222,13 @@
     });
   }
 
+  // NEW: setzt --tilePx = tileSize * cam.zoom (für saubere Ghost-Breite/Höhe)
   function applyTilePx() {
-  const px = (tileSize * cam.zoom);
-  // auf Overlay-Root schreiben (documentElement = :root, oder direkt #place-overlay)
-  (document.getElementById('place-overlay') || document.documentElement)
-    .style.setProperty('--tilePx', `${px}px`);
-}
-  
+    const px = (tileSize * cam.zoom);
+    (document.getElementById('place-overlay') || document.documentElement)
+      .style.setProperty('--tilePx', `${px}px`);
+  }
+
   function init(){
     try{
       canvas = document.getElementById('game')
@@ -235,11 +245,12 @@
       } catch {}
 
       ensureConfirmUI();
-      updateTileSize();
+      updateTileSize();   // setzt auch --tilePx
+      applyTilePx();      // Sicherheit: initial einmal setzen
       bindGlobal();
       bindPointer();
 
-      OK(`${TAG} bereit (v25.11.09-final+confirm+grid+ghost-sync)`);
+      OK(`${TAG} bereit (v25.11.09-final+confirm+grid+ghost-zoom)`);
     } catch(e){
       console.error(TAG, 'Init-Fehler:', e?.message || e);
     }
