@@ -1,32 +1,34 @@
 /* ============================================================================
- * Datei   : core/registry-v1.js
- * Version : v25.11.13-final (emit once)
- * Zweck   : Daten laden/registrieren → cb:registry:ready
+ * Datei   : core/registry.js
+ * Version : v25.11.09-final
+ * Zweck   : Einfache Registry (Buildings etc.), liefert 3×3 Größen
  * ========================================================================== */
-(function(){
+(() => {
   'use strict';
-  const TAG='[registry]';
-  if (window.__REGISTRY_V1__) { console.info(TAG,'bereits aktiv – skip'); return; }
-  window.__REGISTRY_V1__ = true;
 
-  const INFO=(...a)=>(window.CBLog?.info||console.info)(TAG, ...a);
+  const TAG = '[registry]';
+  const LOG = (...a)=>(window.CBLog?.info??console.info)(TAG, ...a);
 
-  async function loadJSON(url){
-    const bust = (url.includes('?') ? '&' : '?') + 'v=' + Date.now();
-    const r = await fetch(url + bust, { cache:'no-store' });
-    if (!r.ok) throw new Error(`HTTP ${r.status} @ ${url}`);
-    return r.json();
-  }
+  const buildings = {
+    'b.hq'          : { id:'b.hq',          title:'HQ',            size:[3,3] },
+    'b.lumberjack'  : { id:'b.lumberjack',  title:'Holzfäller',    size:[3,3] },
+    'b.quarry'      : { id:'b.quarry',      title:'Steinbruch',    size:[3,3] },
+    'b.house_small' : { id:'b.house_small', title:'Wohnhaus klein',size:[3,3] },
+  };
 
-  async function init(){
-    // TODO: ersetze die Pfade durch deine echten Quellen
-    const buildings = await loadJSON('data/buildings.json');
-    // ggf. weitere Quellen …
-    INFO('bereit', { counts:{ buildings: Array.isArray(buildings)?buildings.length:Object.keys(buildings||{}).length } });
-    dispatchEvent(new CustomEvent('cb:registry:ready', {
-      detail:{ version:'v25.11.13', counts:{ buildings: (buildings?.length||0) } }
-    }));
-  }
+  const Registry = {
+    get(kind, id){
+      if (kind === 'building') return buildings[id] || null;
+      return null;
+    },
+    counts(){
+      return { buildings: Object.keys(buildings).length };
+    }
+  };
 
-  init().catch(e=>console.warn(TAG,'Fehler:', e?.message||e));
+  window.Registry = Registry;
+  LOG('bereit', { counts: Registry.counts() });
+  window.dispatchEvent(new CustomEvent('cb:registry:ready', {
+    detail: { version:'v25.11.09', counts: Registry.counts() }
+  }));
 })();
