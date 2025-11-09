@@ -1,11 +1,11 @@
 /* ============================================================================
  * Datei   : core/build.place.handler.js
- * Version : v25.11.09-final-5+overlay-safe
+ * Version : v25.11.09-final-6 (camera-fix)
  * Zweck   : Platzierung anwenden – nutzt w/h aus Event; dedupe & 0,0-Schutz.
- *
- * Fixes/Neu:
- *   – Fallback-Layer liegt sicher über dem Ghost (z-index > Overlay)
- *   – Safety: versteckt Overlay, falls es nach Place noch sichtbar wäre
+ * Änderungen:
+ *   – Korrekte Kameratransformation: scale(zoom) + translate(-x, -y)
+ *   – Reagiert auf cb:camera-change (detail:{x,y,zoom}); einmaliger Init aus GameCamera
+ *   – DPR-sicheres Zeichnen beibehalten
  * ========================================================================== */
 (function () {
   'use strict';
@@ -25,8 +25,10 @@
     return dup;
   }
 
+  // Kamera-Zustand (Weltkoordinaten)
+  const cam = { x:0, y:0, zoom:1 };
+
   let layer, ctx, dpr=1;
-  let cam = window.__CAM || { x:0, y:0, scale:1 };
   const placed = []; // {id, x, y, w, h, tint}
 
   function ensureLayer(){
@@ -37,41 +39,71 @@
       position:'fixed', inset:'0',
       width:'100vw', height:'100vh',
       pointerEvents:'none',
-      zIndex:'3101' // > .place-overlay (typisch 3000); sichtbar über Ghost
+      zIndex:'3101' // > .place-overlay
     });
     document.body.appendChild(layer);
     ctx = layer.getContext('2d');
     onResize();
   }
+
   function onResize(){
     if (!layer) return;
     dpr = Math.max(1, window.devicePixelRatio||1);
     layer.width  = Math.floor(innerWidth*dpr);
     layer.height = Math.floor(innerHeight*dpr);
+    // Grundtransform nur für DPR – Welt-Transform kommt in redraw()
     ctx.setTransform(dpr,0,0,dpr,0,0);
     redraw();
   }
   addEventListener('resize', onResize);
 
-  function setCam(c){ cam = { ...c }; redraw(); }
-  addEventListener('cb:camera-change', ()=> setCam(window.__CAM||{x:0,y:0,scale:1}));
-  addEventListener('cb:game:start',   ()=> setCam(window.__CAM||{x:0,y:0,scale:1}));
+  function applyCamFromGameOnce(){
+    try{
+      if (window.GameCamera){
+        if (typeof GameCamera.x === 'number')   cam.x    = GameCamera.x;
+        if (typeof GameCamera.y === 'number')   cam.y    = GameCamera.y;
+        if (typeof GameCamera.zoom === 'number')cam.zoom = GameCamera.zoom;
+      }
+    } catch {}
+  }
+
+  // Holt Kamera live aus Events
+  addEventListener('cb:camera-change', (ev)=>{
+    const d = ev?.detail || {};
+    if (typeof d.x === 'number')    cam.x    = d.x;
+    if (typeof d.y === 'number')    cam.y    = d.y;
+    if (typeof d.zoom === 'number') cam.zoom = d.zoom;
+    redraw();
+  });
+  addEventListener('cb:game:start', ()=> { applyCamFromGameOnce(); redraw(); });
 
   function redraw(){
     if (!ctx) return;
-    ctx.clearRect(0,0,layer.width,layer.height);
     const t = tile();
+
+    // Canvas löschen (bereits auf DPR skaliert)
+    ctx.clearRect(0,0,layer.width,layer.height);
+
+    // Welt-Transform: erst Zoom, dann gegen die Kameraposition verschieben
     ctx.save();
-    ctx.translate(cam.x, cam.y);
-    ctx.scale(cam.scale, cam.scale);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-cam.x, -cam.y);
 
     for (const p of placed) {
+      // Weltkoordinaten (in Tiles) → Pixel in Welt
+      const px = p.x * t;
+      const py = p.y * t;
+      const pw = (p.w||1) * t;
+      const ph = (p.h||1) * t;
+
       ctx.fillStyle = p.tint || 'rgba(100,160,255,0.35)';
-      ctx.fillRect(p.x*t, p.y*t, (p.w||1)*t, (p.h||1)*t);
-      ctx.lineWidth = 2/Math.max(1,cam.scale);
+      ctx.fillRect(px, py, pw, ph);
+
+      ctx.lineWidth = 2 / Math.max(1, cam.zoom);
       ctx.strokeStyle = 'rgba(0,0,0,.35)';
-      ctx.strokeRect(p.x*t+1, p.y*t+1, (p.w||1)*t-2, (p.h||1)*t-2);
+      ctx.strokeRect(px+1, py+1, pw-2, ph-2);
     }
+
     ctx.restore();
   }
 
@@ -110,7 +142,6 @@
       if (typeof window.Game?.placeBuilding === 'function') {
         const res = window.Game.placeBuilding(id, x, y, { w, h });
         LOG('Game.placeBuilding →', res);
-        // Safety: Overlay sicher verbergen
         const ov = document.getElementById('place-overlay'); if (ov) ov.hidden = true;
         return;
       }
@@ -128,5 +159,5 @@
 
   addEventListener('cb:build:place', (e)=> handlePlace(e.detail||{}));
 
-  OK('bereit v25.11.09-final-5+overlay-safe');
+  OK('bereit v25.11.09-final-6 (camera-fix)');
 })();
