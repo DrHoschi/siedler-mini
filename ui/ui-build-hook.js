@@ -1,7 +1,8 @@
 /* ============================================================================
  * Datei   : ui/ui-build-hook.js
- * Version : v25.11.14-final-3
+ * Version : v25.11.09-final
  * Zweck   : Klick im Build-Dock → Auswahl & Platzieren-Start (mit w/h)
+ * Fix     : Doppeltes IIFE & LOG-Fehlposition entfernt, Fallback 3×3
  * ========================================================================== */
 (function () {
   'use strict';
@@ -12,24 +13,6 @@
 
   const root = document.getElementById('build-dock');
   if (!root) { console.warn('[build-hook] #build-dock fehlt – Hook inaktiv'); return; }
-
-  function getSizeFromRegistry(id) {
-    try {
-      if (typeof window.Registry?.get === 'function') {
-        const def = window.Registry.get('building', id);
-        if (def && (def.size || (def.w && def.h))) {
-          const w = def.w || def.size?.[0] || 1;
-          const h = def.h || def.size?.[1] || 1;
-          return { w: Math.max(1, w|0), h: Math.max(1, h|0) };
-        }
-      }
-    } catch (e) { WARN('Registry-Abfrage fehlgeschlagen:', e?.message || e); }
-    return { w: 1, h: 1 };
-  }
-
-  (function(){
-  const EMIT = (n, d = {}) => window.dispatchEvent(new CustomEvent(n, { detail: d }));
-  const root = document.getElementById('build-dock'); if (!root) return;
 
   function resolveSize(el, id){
     const wAttr = el.getAttribute('data-w');
@@ -53,12 +36,13 @@
     const id = card.getAttribute('data-building-id') || card.getAttribute('data-bid'); if (!id) return;
 
     const { w, h } = resolveSize(card, id);
+
     EMIT('cb:build:select',   { buildingId: id });
     EMIT('cb:set-build-tool', { kind: id });
     EMIT('req:place:begin',   { buildingId: id, w, h });
-  });
+
     LOG('select', id, `→ begin ${w}x${h}`);
   });
 
-  OK('aktiv ui-build-hook');
+  OK('aktiv v25.11.09-final');
 })();
