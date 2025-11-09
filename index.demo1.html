@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+  <!-- =========================================================
+       META / BASIS
+       datei: index.html (v25.11.09-final)
+       ========================================================= -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1f1f23">
+  <title>Neue Siedler</title>
+
+  <!-- =========================================================
+       STYLES (Global → HUD → Build → Place)
+       ========================================================= -->
+  <link rel="stylesheet" href="ui/css/ui.css">
+  <link rel="stylesheet" href="ui/css/ui-hud.css">
+  <link rel="stylesheet" href="ui/css/ui-build.css">
+  <link rel="stylesheet" href="ui/css/ui-place.css"> <!-- Platzieren-Overlay -->
+</head>
+<body>
+
+  <!-- Deine Map-Canvas -->
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <!-- Startpanel/HUD/Build-Dock (dein bestehendes Markup bleibt) -->
+
+  <!-- Platzier-Overlay (muss existieren) -->
+  <div id="place-overlay" class="place-overlay" hidden>
+    <div id="place-ghost" class="ghost-sprite">
+      <div class="ghost-tint"></div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       SCRIPTS – REIHENFOLGE WICHTIG!
+       Core / Camera / Map / Registry
+       ========================================================= -->
+  <script src="core/boot.js"></script>
+  <script src="core/camera.js"></script>
+  <script src="core/map-bridge.js"></script>
+  <script src="core/registry.js"></script>
+
+  <!-- UI -->
+  <script src="ui/ui-start.js"></script>
+  <script src="ui/ui-hud.js"></script>
+  <script src="ui/ui-build.js"></script>
+  <script src="ui/ui-build-hook.js"></script>
+
+  <!-- Platzieren: Input + Anwenden -->
+  <script src="core/core.input.js"></script>             <!-- (deine final) -->
+  <script src="core/build.place.handler.js"></script>    <!-- (deine final) -->
+
+  <!-- Inspector (optional) -->
+  <script src="inspector/ui-inspector.core.js"></script>
+  <script src="inspector/tabs/inspector.tab.logs.js"></script>
+  <script src="inspector/tabs/inspector.tab.layer.js"></script>
+  <script src="inspector/tabs/inspector.tab.checker-v1.js"></script>
+
+  <!-- (Optional) Log-Mirror NUR DEV -->
+  <!-- <script src="inspector/insp-log-mirror.js"></script> -->
+</body>
+</html>
