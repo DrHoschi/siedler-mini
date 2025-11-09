@@ -123,36 +123,41 @@
   }
 
   function renderGrid(){
-    const $grid  = $dock.querySelector('#build-grid');
-    const $empty = $dock.querySelector('#build-empty');
-    if (!$grid) return;
-    const list = byCat(BUILDINGS, ACTIVE_CAT);
-    $grid.innerHTML = '';
-    if (!list.length){ $empty?.classList.remove('hidden'); $empty && ($empty.style.display = 'block'); return; }
-    $empty?.classList.add('hidden'); $empty && ($empty.style.display = '');
+  const $grid  = $dock.querySelector('#build-grid');
+  const $empty = $dock.querySelector('#build-empty');
+  if (!$grid) return;
+  const list = byCat(BUILDINGS, ACTIVE_CAT);
+  $grid.innerHTML = '';
+  if (!list.length){ $empty?.classList.remove('hidden'); $empty && ($empty.style.display = 'block'); return; }
+  $empty?.classList.add('hidden'); $empty && ($empty.style.display = '');
 
-    list.forEach(b=>{
-      const $card = document.createElement('button');
-      $card.className = 'build-card';
-      $card.setAttribute('data-building-id', b.id);
-      // ➜ Größe auf die Karte schreiben (wichtig für den Hook!)
-      $card.setAttribute('data-w', b.w||1);
-      $card.setAttribute('data-h', b.h||1);
+  list.forEach(b=>{
+    const $card = document.createElement('button');
+    $card.className = 'build-card';
+    $card.setAttribute('data-building-id', b.id);
 
-      $card.setAttribute('aria-label', `Gebäude ${b.name}`);
+    // ► Größe aus Daten; wenn fehlend → 3x3 (temporärer Fallback)
+    const w = b.w || (Array.isArray(b.size) ? b.size[0] : 0) || 3;
+    const h = b.h || (Array.isArray(b.size) ? b.size[1] : 0) || 3;
+    $card.setAttribute('data-w', w);
+    $card.setAttribute('data-h', h);
 
-      const $title = document.createElement('div'); $title.className = 'build-card__title'; $title.textContent = b.name;
-      const $img   = document.createElement('img'); $img.className = 'build-card__img'; $img.loading='lazy'; $img.alt=b.name; $img.src=b.image||iconBld(b.id);
-      const $costs = document.createElement('div'); $costs.className='build-costs';
-      (b.cost||[]).forEach(c=>{ const $c=document.createElement('div'); $c.className='build-cost';
-        $c.innerHTML = `<img class="build-cost__icon" src="${iconRes(c.id)}" alt="${c.id}"><span class="build-cost__amt">x${c.amount}</span>`;
-        $costs.appendChild($c);
-      });
+    $card.setAttribute('aria-label', `Gebäude ${b.name || b.id}`);
 
-      $card.appendChild($title); $card.appendChild($img); $card.appendChild($costs);
-      $grid.appendChild($card);
+    const $title = document.createElement('div'); $title.className = 'build-card__title'; $title.textContent = b.name || b.id;
+    const $img   = document.createElement('img'); $img.className = 'build-card__img'; $img.loading='lazy'; $img.alt=b.name||b.id; $img.src=b.image||`assets/icons/buildings/${b.id}.png`;
+    const $costs = document.createElement('div'); $costs.className='build-costs';
+
+    (b.cost||[]).forEach(c=>{
+      const $c=document.createElement('div'); $c.className='build-cost';
+      $c.innerHTML = `<img class="build-cost__icon" src="assets/icons/resources/${c.id}.png" alt="${c.id}"><span class="build-cost__amt">x${c.amount}</span>`;
+      $costs.appendChild($c);
     });
-  }
+
+    $card.appendChild($title); $card.appendChild($img); $card.appendChild($costs);
+    $grid.appendChild($card);
+  });
+}
 
   function openDock(){
     if (IS_OPEN) return;
