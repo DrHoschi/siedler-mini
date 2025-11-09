@@ -27,32 +27,38 @@
     return { w: 1, h: 1 };
   }
 
-  function resolveSize(el, id) {
+  (function(){
+  const EMIT = (n, d = {}) => window.dispatchEvent(new CustomEvent(n, { detail: d }));
+  const root = document.getElementById('build-dock'); if (!root) return;
+
+  function resolveSize(el, id){
     const wAttr = el.getAttribute('data-w');
     const hAttr = el.getAttribute('data-h');
     if (wAttr || hAttr) {
-      const w = Math.max(1, (wAttr|0) || 1);
-      const h = Math.max(1, (hAttr|0) || 1);
-      return { w, h };
+      return { w: Math.max(1,(wAttr|0)||1), h: Math.max(1,(hAttr|0)||1) };
     }
-    return getSizeFromRegistry(id);
+    try {
+      const def = window.Registry?.get?.('building', id);
+      if (def){
+        const w = def.w || (def.size?.[0]||0);
+        const h = def.h || (def.size?.[1]||0);
+        if (w && h) return { w:w|0, h:h|0 };
+      }
+    } catch {}
+    return { w:3, h:3 }; // letzter Fallback
   }
 
-  root.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-building-id], [data-bid]');
-    if (!card) return;
-
-    const id = card.getAttribute('data-building-id') || card.getAttribute('data-bid');
-    if (!id) return;
+  root.addEventListener('click', (e)=>{
+    const card = e.target.closest('[data-building-id],[data-bid]'); if (!card) return;
+    const id = card.getAttribute('data-building-id') || card.getAttribute('data-bid'); if (!id) return;
 
     const { w, h } = resolveSize(card, id);
-
-    EMIT('cb:build:select', { buildingId: id });
+    EMIT('cb:build:select',   { buildingId: id });
     EMIT('cb:set-build-tool', { kind: id });
-    EMIT('req:place:begin', { buildingId: id, w, h });
-
+    EMIT('req:place:begin',   { buildingId: id, w, h });
+  });
     LOG('select', id, `→ begin ${w}x${h}`);
   });
 
-  OK('aktiv v25.11.14-final-3');
+  OK('aktiv ui-build-hook');
 })();
