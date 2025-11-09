@@ -1,10 +1,11 @@
 /* ============================================================================
  * Datei    : ui/ui-build.js
  * Projekt  : Neue Siedler
- * Version  : v25.11.08-final+size
- * Modul    : Baumenü (Build-Dock)
- * Änderung : Größe (size / w,h) wird aus Daten übernommen und in data-w/h
- *            auf die Karten geschrieben, damit der Hook korrekte w/h kennt.
+ * Version  : v25.11.09-final+size3
+ * Modul    : Baumenü (Build-Dock) – Kategorien + Kartenraster
+ * Änderungen:
+ *   – Karten schreiben IMMER data-w/data-h (aus Daten; Fallback 3x3)
+ *   – Ansonsten unverändert (kein Direkt-Place, das macht der Hook)
  * ========================================================================== */
 
 (function EnsureDock(){
@@ -47,9 +48,8 @@
     let cats    = Array.isArray(raw.categories) ? raw.categories.map(String)
                 : raw.category ? [String(raw.category)] : ['misc'];
     const image = raw.image || iconBld(id);
-    // ➜ Größe aus Daten mitnehmen (size:[w,h] ODER w/h):
-    const w = Number(raw.w || (Array.isArray(raw.size) ? raw.size[0] : 1)) || 1;
-    const h = Number(raw.h || (Array.isArray(raw.size) ? raw.size[1] : 1)) || 1;
+    const w = Number(raw.w || (Array.isArray(raw.size) ? raw.size[0] : 0)) || 0;
+    const h = Number(raw.h || (Array.isArray(raw.size) ? raw.size[1] : 0)) || 0;
 
     let cost = [];
     if (Array.isArray(raw.cost)) {
@@ -59,7 +59,7 @@
       cost = Object.keys(raw.cost).map(k => ({ id:String(k), amount:Number(raw.cost[k]||0) }))
                                   .filter(c => c.amount > 0);
     }
-    return { id, name, categories: cats, image, cost, size:[w,h], w, h };
+    return { id, name, categories: cats, image, cost, size:[w||3,h||3], w: w||3, h: h||3 };
   }
 
   async function loadBuildings(){
@@ -123,41 +123,38 @@
   }
 
   function renderGrid(){
-  const $grid  = $dock.querySelector('#build-grid');
-  const $empty = $dock.querySelector('#build-empty');
-  if (!$grid) return;
-  const list = byCat(BUILDINGS, ACTIVE_CAT);
-  $grid.innerHTML = '';
-  if (!list.length){ $empty?.classList.remove('hidden'); $empty && ($empty.style.display = 'block'); return; }
-  $empty?.classList.add('hidden'); $empty && ($empty.style.display = '');
+    const $grid  = $dock.querySelector('#build-grid');
+    const $empty = $dock.querySelector('#build-empty');
+    if (!$grid) return;
+    const list = byCat(BUILDINGS, ACTIVE_CAT);
+    $grid.innerHTML = '';
+    if (!list.length){ $empty?.classList.remove('hidden'); $empty && ($empty.style.display = 'block'); return; }
+    $empty?.classList.add('hidden'); $empty && ($empty.style.display = '');
 
-  list.forEach(b=>{
-    const $card = document.createElement('button');
-    $card.className = 'build-card';
-    $card.setAttribute('data-building-id', b.id);
+    list.forEach(b=>{
+      const $card = document.createElement('button');
+      $card.className = 'build-card';
+      $card.setAttribute('data-building-id', b.id);
 
-    // ► Größe aus Daten; wenn fehlend → 3x3 (temporärer Fallback)
-    const w = b.w || (Array.isArray(b.size) ? b.size[0] : 0) || 3;
-    const h = b.h || (Array.isArray(b.size) ? b.size[1] : 0) || 3;
-    $card.setAttribute('data-w', w);
-    $card.setAttribute('data-h', h);
+      // ► immer gesetzt: data-w/data-h (Fallback 3x3)
+      $card.setAttribute('data-w', b.w||3);
+      $card.setAttribute('data-h', b.h||3);
 
-    $card.setAttribute('aria-label', `Gebäude ${b.name || b.id}`);
+      $card.setAttribute('aria-label', `Gebäude ${b.name || b.id}`);
 
-    const $title = document.createElement('div'); $title.className = 'build-card__title'; $title.textContent = b.name || b.id;
-    const $img   = document.createElement('img'); $img.className = 'build-card__img'; $img.loading='lazy'; $img.alt=b.name||b.id; $img.src=b.image||`assets/icons/buildings/${b.id}.png`;
-    const $costs = document.createElement('div'); $costs.className='build-costs';
+      const $title = document.createElement('div'); $title.className = 'build-card__title'; $title.textContent = b.name || b.id;
+      const $img   = document.createElement('img'); $img.className = 'build-card__img'; $img.loading='lazy'; $img.alt=b.name||b.id; $img.src=b.image||iconBld(b.id);
+      const $costs = document.createElement('div'); $costs.className='build-costs';
+      (b.cost||[]).forEach(c=>{
+        const $c=document.createElement('div'); $c.className='build-cost';
+        $c.innerHTML = `<img class="build-cost__icon" src="${iconRes(c.id)}" alt="${c.id}"><span class="build-cost__amt">x${c.amount}</span>`;
+        $costs.appendChild($c);
+      });
 
-    (b.cost||[]).forEach(c=>{
-      const $c=document.createElement('div'); $c.className='build-cost';
-      $c.innerHTML = `<img class="build-cost__icon" src="assets/icons/resources/${c.id}.png" alt="${c.id}"><span class="build-cost__amt">x${c.amount}</span>`;
-      $costs.appendChild($c);
+      $card.appendChild($title); $card.appendChild($img); $card.appendChild($costs);
+      $grid.appendChild($card);
     });
-
-    $card.appendChild($title); $card.appendChild($img); $card.appendChild($costs);
-    $grid.appendChild($card);
-  });
-}
+  }
 
   function openDock(){
     if (IS_OPEN) return;
@@ -223,5 +220,5 @@
   window.addEventListener('cb:build:open',  openDock);
   window.addEventListener('cb:build:close', closeDock);
 
-  LOG('ui-build geladen (v25.11.08-final+size)');
+  LOG('ui-build geladen (v25.11.09-final+size3)');
 })();
