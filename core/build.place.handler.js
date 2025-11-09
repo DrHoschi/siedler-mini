@@ -1,7 +1,11 @@
 /* ============================================================================
  * Datei   : core/build.place.handler.js
- * Version : v25.11.09-final-4
+ * Version : v25.11.09-final-5+overlay-safe
  * Zweck   : Platzierung anwenden – nutzt w/h aus Event; dedupe & 0,0-Schutz.
+ *
+ * Fixes/Neu:
+ *   – Fallback-Layer liegt sicher über dem Ghost (z-index > Overlay)
+ *   – Safety: versteckt Overlay, falls es nach Place noch sichtbar wäre
  * ========================================================================== */
 (function () {
   'use strict';
@@ -30,8 +34,10 @@
     layer = document.createElement('canvas');
     layer.id = 'placed-layer';
     Object.assign(layer.style, {
-      position:'fixed', inset:'0', width:'100vw', height:'100vh',
-      pointerEvents:'none', zIndex:'2147483635'
+      position:'fixed', inset:'0',
+      width:'100vw', height:'100vh',
+      pointerEvents:'none',
+      zIndex:'3101' // > .place-overlay (typisch 3000); sichtbar über Ghost
     });
     document.body.appendChild(layer);
     ctx = layer.getContext('2d');
@@ -104,6 +110,8 @@
       if (typeof window.Game?.placeBuilding === 'function') {
         const res = window.Game.placeBuilding(id, x, y, { w, h });
         LOG('Game.placeBuilding →', res);
+        // Safety: Overlay sicher verbergen
+        const ov = document.getElementById('place-overlay'); if (ov) ov.hidden = true;
         return;
       }
     } catch (e) { WARN('Game.placeBuilding Exception', e?.message||e); }
@@ -113,9 +121,12 @@
     placed.push({ id, x, y, w, h, tint:'rgba(140,200,255,0.30)' });
     redraw();
     LOG('fallback placed', id, {x,y,w,h});
+
+    // Safety: Overlay sicher verbergen
+    const ov = document.getElementById('place-overlay'); if (ov) ov.hidden = true;
   }
 
   addEventListener('cb:build:place', (e)=> handlePlace(e.detail||{}));
 
-  OK('bereit v25.11.09-final-4');
+  OK('bereit v25.11.09-final-5+overlay-safe');
 })();
