@@ -14,42 +14,38 @@
  *       --wTiles, --hTiles (Tile-Anzahl) und --tile (Pixel pro Tile)
  *     Fallback: 1x1 Kachel bei fehlenden Angaben.
  * ========================================================================== */
-
-/* [10] Root-Variablen (Tilegröße 64px als Default, kann per :root überschrieben werden) */
-/* neue, zoombereinigte Kachelgröße in Pixeln */
+/* ============================================================================
+ * Datei    : ui/css/ui-place.css
+ * Version  : v25.11.09-final
+ * Zweck    : Platzier-Overlay (Ghost + Gültigkeits-Tint)
+ * ========================================================================== */
 :root{
-  --tile: 64px;               /* bleibt als Basis */
-  --tilePx: var(--tile);      /* wird per JS auf tileSize * zoom gesetzt */
+  --tile: 64px;                 /* Basisgröße; tatsächliche px via --tilePx */
+  --tilePx: var(--tile);        /* wird von JS (core.input.js) gesetzt = tileSize * zoom */
+  --ok: #1d6e2f;
+  --error: #b11c2a;
+  --shadow: 0 10px 24px rgba(0,0,0,.35);
 }
 
-
-/* [20] Overlay über gesamte Fläche – frisst keine Pointer-Events */
 .place-overlay{
-  position: fixed;              /* volle Bühne */
+  position: fixed;
   inset: 0;
-  z-index: 3000;                /* hoch genug über Canvas/HUD; Inspector liegt noch drüber */
-  pointer-events: none;         /* Buttons werden gezielt wieder aktiviert */
+  z-index: 3000;
+  pointer-events: none;
 }
 
-/* Optional: Container für Ghost (wird von JS positioniert) */
-#place-ghost{ pointer-events:none; }
-
-/* [30] Ghost-Sprite: Größe = Tiles * tilepx; Position via transform vom JS */
-
-/* Ghost-Sprite exakt in Kachel-Pixeln skalieren */
 .ghost-sprite{
   position: absolute;
   width:  calc(var(--wTiles, 1) * var(--tilePx));
   height: calc(var(--hTiles, 1) * var(--tilePx));
-  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0); /* 3D vermeidet Blur */
+  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0);
   image-rendering: pixelated;
   background-size: cover;
   background-repeat: no-repeat;
-  will-change: transform;
   pointer-events: none;
+  will-change: transform, width, height;
 }
 
-/* Farb-Overlay mit Validierungsrahmen */
 .ghost-tint{
   position:absolute; inset:0;
   border-radius: 4px;
@@ -65,30 +61,13 @@
   outline-color: rgba(255,0,0,.85);
 }
 
-/* [40] Buttons – oben links (OK) & oben rechts (Cancel), klassischer Look */
+/* Optional: Buttons, falls du sie im Overlay benutzt
 .place-btn{
-  position: absolute;
-  pointer-events: auto;         /* Buttons wieder klickbar */
-  width: 36px; height: 36px;
-  border-radius: 8px;
-  border: 1px solid #0008;
-  box-shadow: var(--shadow);
-  font: 700 16px/34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  text-align: center;
-  color: #fff;
-  user-select: none;
+  position: absolute; pointer-events:auto;
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid #0008; font-weight:700; line-height:34px; text-align:center;
+  color: #eee; background: rgba(18,20,24,.95); box-shadow: var(--shadow);
 }
-
-.place-btn.ok{
-  left: 8px; top: 8px;
-  background: var(--ok);
-  border-color:#154e22;
-}
-.place-btn.cancel{
-  right: 8px; top: 8px;
-  background: var(--error);
-  border-color:#5f0e17;
-}
-
-/* Optional: Wenn du Icons statt Text willst, lass JS "✓" / "✕" einsetzen
-   oder nutze background-image: url(...). */
+.place-btn.ok{     background: var(--ok);    border-color:#154e22; }
+.place-btn.cancel{ background: var(--error); border-color:#5f0e17; }
+*/
