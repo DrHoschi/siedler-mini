@@ -16,12 +16,12 @@
  * ========================================================================== */
 
 /* [10] Root-Variablen (Tilegröße 64px als Default, kann per :root überschrieben werden) */
+/* neue, zoombereinigte Kachelgröße in Pixeln */
 :root{
-  --tile: 64px;                 /* Logs zeigen 64px Tiles → Default auf 64 */
-  --ok: #1d6e2f;
-  --error: #b11c2a;
-  --shadow: 0 10px 24px rgba(0,0,0,.35);
+  --tile: 64px;               /* bleibt als Basis */
+  --tilePx: var(--tile);      /* wird per JS auf tileSize * zoom gesetzt */
 }
+
 
 /* [20] Overlay über gesamte Fläche – frisst keine Pointer-Events */
 .place-overlay{
@@ -35,11 +35,13 @@
 #place-ghost{ pointer-events:none; }
 
 /* [30] Ghost-Sprite: Größe = Tiles * tilepx; Position via transform vom JS */
+
+/* Ghost-Sprite exakt in Kachel-Pixeln skalieren */
 .ghost-sprite{
   position: absolute;
-  width: calc(var(--wTiles, 1) * var(--tile));
-  height: calc(var(--hTiles, 1) * var(--tile));
-  transform: translate(var(--sx, 0px), var(--sy, 0px)); /* Screen-Offsets vom JS */
+  width:  calc(var(--wTiles, 1) * var(--tilePx));
+  height: calc(var(--hTiles, 1) * var(--tilePx));
+  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0); /* 3D vermeidet Blur */
   image-rendering: pixelated;
   background-size: cover;
   background-repeat: no-repeat;
