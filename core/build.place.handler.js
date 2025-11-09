@@ -1,8 +1,7 @@
 /* ============================================================================
  * Datei   : core/build.place.handler.js
- * Version : v25.11.13-final-3
- * Zweck   : Platzierung anwenden – nutzt w/h aus Event-Detail, sonst Registry.
- *           Fallback malt Rechteck in Overlay-Layer.
+ * Version : v25.11.09-final-4
+ * Zweck   : Platzierung anwenden – nutzt w/h aus Event; dedupe & 0,0-Schutz.
  * ========================================================================== */
 (function () {
   'use strict';
@@ -12,6 +11,15 @@
   const WARN = (m,...a)=>(window.CBLog?.warn || console.warn)('[place-apply] ⚠️', m, ...a);
 
   const tile = ()=> (window.Game?.getTileSize?.() || window.Game?.tileSize || 64);
+
+  // Dedupe (gegen Doppel-Listener) + 0,0-Bremse
+  let last = { t:0, id:null, x:null, y:null };
+  function isDup(d){
+    const now = performance.now();
+    const dup = (d?.buildingId===last.id && d?.x===last.x && d?.y===last.y && (now-last.t)<200);
+    if (!dup) last = { t:now, id:d?.buildingId, x:d?.x, y:d?.y };
+    return dup;
+  }
 
   let layer, ctx, dpr=1;
   let cam = window.__CAM || { x:0, y:0, scale:1 };
@@ -67,20 +75,29 @@
       if (meta?.size) return { w: (+meta.size[0]||1), h: (+meta.size[1]||1) };
       if (meta?.w || meta?.h) return { w:(+meta.w||1), h:(+meta.h||1) };
     } catch {}
-    return { w:1, h:1 };
+    return { w:3, h:3 }; // Default 3×3
   }
 
   function handlePlace(detail){
     const id = detail?.buildingId || detail?.kind;
     const x  = detail?.x|0, y = detail?.y|0;
 
-    // Priorität: Event w/h → Registry → 1x1
+    // 0,0-Schutz (typisch für Altlistener); nur verwerfen, wenn Overlay aktiv ist
+    if (x===0 && y===0 && document.getElementById('place-overlay')) {
+      WARN('Ignoriere Platzierung 0,0 (Altlistener?)');
+      return;
+    }
+
+    // Priorität: Event w/h → Registry → 3x3
     let w = (detail?.w|0) || 0;
     let h = (detail?.h|0) || 0;
     if (w <= 0 || h <= 0){
       const r = sizeFromRegistry(id);
       w = r.w; h = r.h;
     }
+
+    // Dedupe
+    if (isDup({ buildingId:id, x, y })) return;
 
     // 1) Versuche echte Game-API
     try {
@@ -100,5 +117,5 @@
 
   addEventListener('cb:build:place', (e)=> handlePlace(e.detail||{}));
 
-  OK('bereit v25.11.13-final-3');
+  OK('bereit v25.11.09-final-4');
 })();
