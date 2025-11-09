@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-08T20:34:57.588Z",
+  "createdAt": "2025-11-09T11:23:21.752Z",
   "root": ".",
   "count": 485,
   "entries": [
@@ -1116,7 +1116,7 @@
     {
       "type": "file",
       "path": "core/build.place.handler.js",
-      "size": 4436
+      "size": 3588
     },
     {
       "type": "file",
@@ -1156,7 +1156,7 @@
     {
       "type": "file",
       "path": "core/core.input.js",
-      "size": 8014
+      "size": 8484
     },
     {
       "type": "file",
@@ -2021,7 +2021,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 5308
+      "size": 5306
     },
     {
       "type": "file",
@@ -2071,7 +2071,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 2604
+      "size": 3080
     },
     {
       "type": "file",
@@ -2235,7 +2235,7 @@
     {
       "type": "file",
       "path": "ui/ui-build-hook.js",
-      "size": 3751
+      "size": 2195
     },
     {
       "type": "file",
@@ -2245,7 +2245,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 10104
+      "size": 9582
     },
     {
       "type": "file",
@@ -2330,12 +2330,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47219
+      "size": 47997
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18102
+      "size": 18384
     },
     {
       "type": "file",
@@ -2345,7 +2345,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 12735
+      "size": 13045
     },
     {
       "type": "file",
