@@ -1,12 +1,14 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.11.09-final+confirm+grid+ghost-zoom
+ * Version : v25.11.09-final+confirm+grid+ghost-zoom+hover-guard
  * Zweck   : Eingabe & Build-Interaktion (Bestätigen/Abbrechen optional)
- * Highlights:
- *   – Übernimmt w/h aus req:place:begin → setzt --wTiles/--hTiles
- *   – Bewegt Ghost per --sx/--sy entlang der Maus (gleiches Mapping wie Klick)
- *   – NEW: --tilePx = tileSize * cam.zoom wird immer gesetzt (Ghost bleibt exakt 3×3)
+ *
+ * Fixes/Neu:
+ *   – --tilePx = tileSize * cam.zoom wird immer gesetzt (quadratischer Ghost)
+ *   – "Confirm nur mit gültigem Hover": verhindert Place(0,0), wenn Maus
+ *     noch nicht über der Karte war
+ *   – Overlay/Ghost wird nach dem Platzieren/Abbrechen sauber verborgen
  * ========================================================================== */
 (() => {
   'use strict';
@@ -25,6 +27,13 @@
   let lastHover = { tx:0, ty:0 };
   let lastSize  = { w:3, h:3 };          // Default 3×3
   let requireConfirm = true;             // ✔︎ explizite Bestätigung
+
+  // NEW: wird true, sobald die Maus einmal über der Karte war
+  let hoverValid = false;
+
+  // Hilfszugriffe
+  const getGhost   = () => document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
+  const getOverlay = () => document.getElementById('place-overlay');
 
   // Bestätigen/Abbrechen-UI
   let uiBox = null;
@@ -48,10 +57,15 @@
     const ok = uiBox.querySelector('#btn-place-confirm'); const cc = uiBox.querySelector('#btn-place-cancel');
     styleBtn(ok); styleBtn(cc);
     ok.addEventListener('click', ()=> placeAt(lastHover.tx, lastHover.ty, lastSize.w, lastSize.h));
-    cc.addEventListener('click', ()=> resetTool());
+    cc.addEventListener('click', ()=> { const ov=getOverlay(); if (ov) ov.hidden = true; resetTool(); });
     document.body.appendChild(uiBox);
   }
-  function showConfirmUI(show){ ensureConfirmUI(); uiBox.style.display = show ? 'flex' : 'none'; }
+  function showConfirmUI(show){
+    ensureConfirmUI();
+    uiBox.style.display = show ? 'flex' : 'none';
+    const okBtn = uiBox.querySelector('#btn-place-confirm');
+    if (okBtn) okBtn.disabled = !hoverValid; // OK erst aktiv, wenn Hover gültig
+  }
 
   // Grid-Overlay (optional)
   let gridOn = false, gridLayer = null, gtx = null, dpr = 1;
@@ -92,7 +106,7 @@
     if (typeof d.x === 'number')   cam.x = d.x;
     if (typeof d.y === 'number')   cam.y = d.y;
     if (typeof d.zoom === 'number')cam.zoom = d.zoom;
-    applyTilePx();                 // ← NEW: Ghost-Kachelgröße bei Zoom-Änderung
+    applyTilePx();
     drawGrid();
   });
   addEventListener('req:debug:grid:toggle', ()=>{
@@ -105,11 +119,7 @@
     try { return Number(window.Game?.tileSize) || Number(window.Entities?.state?.tile) || 64; }
     catch { return 64; }
   }
-  function updateTileSize(){
-    tileSize = getTileSize();
-    drawGrid();
-    applyTilePx();                 // ← NEW: auch bei TileSize-Änderung aktualisieren
-  }
+  function updateTileSize(){ tileSize = getTileSize(); drawGrid(); applyTilePx(); }
 
   function rectOf(el){ try { return el.getBoundingClientRect(); } catch { return {left:0,top:0,width:0,height:0}; } }
 
@@ -125,17 +135,18 @@
     return { tx, ty, sx, sy };
   }
 
-  // w/h aus req:place:begin übernehmen + Ghost skalieren
+  // w/h aus req:place:begin übernehmen + Ghost skalieren + Hover resetten
   window.addEventListener('req:place:begin', (ev)=>{
     const d = ev?.detail || {};
     if (d.w) lastSize.w = d.w|0;
     if (d.h) lastSize.h = d.h|0;
 
-    const ghost = document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
+    const ghost = getGhost();
     if (ghost){
       ghost.style.setProperty('--wTiles', String(lastSize.w||1));
       ghost.style.setProperty('--hTiles', String(lastSize.h||1));
     }
+    hoverValid = false; // erst Maus über Karte macht OK möglich
     INFO('place begin', lastSize);
   });
 
@@ -151,6 +162,7 @@
 
   function placeAt(tx, ty, w=lastSize.w, h=lastSize.h){
     if (!buildTool) return;
+    if (!hoverValid){ WARN('Bestätigen ignoriert – Maus war noch nicht über der Karte.'); return; }
     const detail = { buildingId: buildTool, x: tx, y: ty, w, h };
     try {
       window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
@@ -158,6 +170,7 @@
     } catch(e){
       WARN('Platzierung fehlgeschlagen:', e?.message || e);
     }
+    const overlay = getOverlay(); if (overlay) overlay.hidden = true; // Ghost weg
     resetTool();
   }
 
@@ -167,9 +180,9 @@
     canvas.addEventListener('pointermove', (ev)=>{
       const p = screenToTile(ev.clientX, ev.clientY);
       lastHover = { tx:p.tx, ty:p.ty };
+      hoverValid = true; // ab jetzt darf bestätigt werden
 
-      // Ghost an Maus ausrichten (per CSS-Variablen)
-      const ghost = document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
+      const ghost = getGhost();
       if (ghost){
         const step = tileSize * cam.zoom;
         ghost.style.setProperty('--sx', `${p.sx - (p.sx % step)}px`);
@@ -181,16 +194,21 @@
           detail: { tx: p.tx, ty: p.ty, screenX: p.sx, screenY: p.sy }
         }));
       } catch {}
+      showConfirmUI(!!buildTool && requireConfirm); // Button-Enable live updaten
     }, { passive:true });
 
     canvas.addEventListener('pointerdown', (ev)=>{
       if (ev.button != null && ev.button !== 0) return; // nur LMB/Touch
       if (!buildTool) return;
-      if (requireConfirm) {
-        // nur Ziel setzen; Confirm-UI erledigt Place (Enter/✓)
-      } else {
+      // „Not-Hover“ Klick → einmalig Hover ableiten
+      if (!hoverValid){
         const p = screenToTile(ev.clientX, ev.clientY);
-        placeAt(p.tx, p.ty);
+        lastHover = { tx:p.tx, ty:p.ty };
+        hoverValid = true;
+        showConfirmUI(!!buildTool && requireConfirm);
+      }
+      if (!requireConfirm){
+        placeAt(lastHover.tx, lastHover.ty);
       }
       ev.preventDefault?.();
     }, { passive:false });
@@ -198,6 +216,7 @@
     canvas.addEventListener('contextmenu', (ev)=>{
       if (buildTool){
         ev.preventDefault();
+        const overlay = getOverlay(); if (overlay) overlay.hidden = true;
         resetTool();
       }
     });
@@ -208,6 +227,10 @@
       const d = ev?.detail || {};
       const next = (d.kind ?? d.type ?? null) || null;
       buildTool = next;
+
+      const overlay = getOverlay();
+      if (overlay) overlay.hidden = !buildTool; // Overlay anzeigen/verbergen
+
       try { if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default'; } catch {}
       showConfirmUI(!!buildTool && requireConfirm);
       INFO('Build-Tool:', buildTool ?? '(none)');
@@ -215,18 +238,20 @@
 
     window.addEventListener('keydown', (e)=>{
       if (!buildTool) return;
-      if (e.key === 'Escape'){ resetTool(); }
+      if (e.key === 'Escape'){
+        const overlay = getOverlay(); if (overlay) overlay.hidden = true;
+        resetTool();
+      }
       if (requireConfirm && (e.key === 'Enter' || e.key === 'NumpadEnter')){
         placeAt(lastHover.tx, lastHover.ty);
       }
     });
   }
 
-  // NEW: setzt --tilePx = tileSize * cam.zoom (für saubere Ghost-Breite/Höhe)
+  // --tilePx = tileSize * cam.zoom (für Ghost-Breite/Höhe in CSS)
   function applyTilePx() {
     const px = (tileSize * cam.zoom);
-    (document.getElementById('place-overlay') || document.documentElement)
-      .style.setProperty('--tilePx', `${px}px`);
+    (getOverlay() || document.documentElement).style.setProperty('--tilePx', `${px}px`);
   }
 
   function init(){
@@ -250,7 +275,7 @@
       bindGlobal();
       bindPointer();
 
-      OK(`${TAG} bereit (v25.11.09-final+confirm+grid+ghost-zoom)`);
+      OK(`${TAG} bereit (v25.11.09-final+confirm+grid+ghost-zoom+hover-guard)`);
     } catch(e){
       console.error(TAG, 'Init-Fehler:', e?.message || e);
     }
