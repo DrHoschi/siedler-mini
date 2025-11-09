@@ -212,6 +212,13 @@
     });
   }
 
+  function applyTilePx() {
+  const px = (tileSize * cam.zoom);
+  // auf Overlay-Root schreiben (documentElement = :root, oder direkt #place-overlay)
+  (document.getElementById('place-overlay') || document.documentElement)
+    .style.setProperty('--tilePx', `${px}px`);
+}
+  
   function init(){
     try{
       canvas = document.getElementById('game')
