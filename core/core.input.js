@@ -1,10 +1,11 @@
 /* ============================================================================
  * Datei   : core/core.input.js
- * Version : v25.11.08-final+confirm+grid
- * Zweck   : Eingabe & Build-Interaktion
- *           – merkt w/h aus req:place:begin
- *           – Bestätigen/Abbrechen-UI (✔︎ / ✖︎)
- *           – optionales Grid-Overlay (req:debug:grid:toggle)
+ * Projekt : Neue Siedler
+ * Version : v25.11.09-final+confirm+grid+ghost-sync
+ * Zweck   : Eingabe & Build-Interaktion (Bestätigen/Abbrechen optional)
+ * Änderungen:
+ *   – Übernimmt w/h aus req:place:begin → setzt --wTiles/--hTiles
+ *   – Bewegt Ghost per --sx/--sy entlang der Maus (gleiches Mapping wie Klick)
  * ========================================================================== */
 (() => {
   'use strict';
@@ -21,7 +22,7 @@
   // Aktives Tool & Platzier-Meta
   let buildTool = null;                  // z. B. 'b.hq'
   let lastHover = { tx:0, ty:0 };
-  let lastSize  = { w:1, h:1 };
+  let lastSize  = { w:3, h:3 };          // Default 3×3
   let requireConfirm = true;             // ✔︎ explizite Bestätigung
 
   // Bestätigen/Abbrechen-UI
@@ -31,26 +32,23 @@
     uiBox = document.createElement('div');
     uiBox.id = 'place-confirm-ui';
     uiBox.innerHTML = `
-      <button id="btn-place-confirm" type="button" aria-label="Bestätigen">✔︎ Platzieren</button>
-      <button id="btn-place-cancel"  type="button" aria-label="Abbrechen">✖︎ Abbrechen</button>`;
+      <button id="btn-place-confirm" type="button" aria-label="Bestätigen">✔︎</button>
+      <button id="btn-place-cancel"  type="button" aria-label="Abbrechen">✖︎</button>`;
     Object.assign(uiBox.style, {
       position:'fixed', right:'20px', bottom:'20px', zIndex:'2147483636',
       display:'none', gap:'8px', padding:'8px', background:'rgba(0,0,0,.35)',
       borderRadius:'8px', backdropFilter:'blur(4px)'
     });
-    const styleBtn = (b)=>Object.assign(b.style,{font:'600 14px system-ui',padding:'8px 10px',border:'1px solid rgba(255,255,255,.35)',borderRadius:'6px',cursor:'pointer',color:'#fff',background:'rgba(0,0,0,.15)'});
+    const styleBtn = (b)=>Object.assign(b.style,{font:'700 16px system-ui',padding:'8px 10px',border:'1px solid rgba(255,255,255,.35)',borderRadius:'6px',cursor:'pointer',color:'#fff',background:'rgba(0,0,0,.15)'});
     const ok = uiBox.querySelector('#btn-place-confirm'); const cc = uiBox.querySelector('#btn-place-cancel');
     styleBtn(ok); styleBtn(cc);
     ok.addEventListener('click', ()=> placeAt(lastHover.tx, lastHover.ty, lastSize.w, lastSize.h));
     cc.addEventListener('click', ()=> resetTool());
     document.body.appendChild(uiBox);
   }
-  function showConfirmUI(show){
-    ensureConfirmUI();
-    uiBox.style.display = show ? 'flex' : 'none';
-  }
+  function showConfirmUI(show){ ensureConfirmUI(); uiBox.style.display = show ? 'flex' : 'none'; }
 
-  // Grid-Overlay
+  // Grid-Overlay (optional)
   let gridOn = false, gridLayer = null, gtx = null, dpr = 1;
   function ensureGrid(){
     if (gridLayer) return;
@@ -74,10 +72,9 @@
     const t = tileSize, step = t * cam.zoom;
     gtx.clearRect(0,0,gridLayer.width,gridLayer.height);
     gtx.save();
-    gtx.globalAlpha = .35;
+    gtx.globalAlpha = .3;
     gtx.strokeStyle = 'rgba(255,255,255,.25)';
     gtx.lineWidth = 1;
-    // einfache Projektion (Bildschirmgitter mit Kamera-Offset)
     const x0 = - (cam.x * cam.zoom) % step;
     const y0 = - (cam.y * cam.zoom) % step;
     for (let x = x0; x < innerWidth;  x += step){ gtx.beginPath(); gtx.moveTo(x,0); gtx.lineTo(x,innerHeight); gtx.stroke(); }
@@ -93,11 +90,9 @@
     drawGrid();
   });
   addEventListener('req:debug:grid:toggle', ()=>{
-    gridOn = !gridOn;
-    ensureGrid();
+    gridOn = !gridOn; ensureGrid();
     gridLayer.style.display = gridOn ? 'block':'none';
-    drawGrid();
-    INFO('Grid', gridOn?'ein':'aus');
+    drawGrid(); INFO('Grid', gridOn?'ein':'aus');
   });
 
   function getTileSize(){
@@ -120,11 +115,17 @@
     return { tx, ty, sx, sy };
   }
 
-  // w/h aus req:place:begin übernehmen
+  // w/h aus req:place:begin übernehmen + Ghost skalieren
   window.addEventListener('req:place:begin', (ev)=>{
     const d = ev?.detail || {};
     if (d.w) lastSize.w = d.w|0;
     if (d.h) lastSize.h = d.h|0;
+
+    const ghost = document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
+    if (ghost){
+      ghost.style.setProperty('--wTiles', String(lastSize.w||1));
+      ghost.style.setProperty('--hTiles', String(lastSize.h||1));
+    }
     INFO('place begin', lastSize);
   });
 
@@ -156,6 +157,15 @@
     canvas.addEventListener('pointermove', (ev)=>{
       const p = screenToTile(ev.clientX, ev.clientY);
       lastHover = { tx:p.tx, ty:p.ty };
+
+      // Ghost an Maus ausrichten (per CSS-Variablen)
+      const ghost = document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
+      if (ghost){
+        // einfache Screen-Ausrichtung; wenn du Welt→Screen-Matrix hast, nutze die
+        ghost.style.setProperty('--sx', `${p.sx - ((p.sx) % (tileSize*cam.zoom))}px`);
+        ghost.style.setProperty('--sy', `${p.sy - ((p.sy) % (tileSize*cam.zoom))}px`);
+      }
+
       try {
         window.dispatchEvent(new CustomEvent('cb:hover-tile', {
           detail: { tx: p.tx, ty: p.ty, screenX: p.sx, screenY: p.sy }
@@ -166,8 +176,9 @@
     canvas.addEventListener('pointerdown', (ev)=>{
       if (ev.button != null && ev.button !== 0) return; // nur LMB/Touch
       if (!buildTool) return;
-      if (requireConfirm) { /* nur Ziel setzen, UI zeigt Confirm */ }
-      else {
+      if (requireConfirm) {
+        // nur Ziel setzen; Confirm-UI erledigt Place (Enter/✓)
+      } else {
         const p = screenToTile(ev.clientX, ev.clientY);
         placeAt(p.tx, p.ty);
       }
@@ -188,7 +199,6 @@
       const next = (d.kind ?? d.type ?? null) || null;
       buildTool = next;
       try { if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default'; } catch {}
-      // Tool aktiv → Confirm-UI zeigen, sonst verstecken
       showConfirmUI(!!buildTool && requireConfirm);
       INFO('Build-Tool:', buildTool ?? '(none)');
     });
@@ -222,7 +232,7 @@
       bindGlobal();
       bindPointer();
 
-      OK(`${TAG} bereit (v25.11.08-final+confirm+grid)`);
+      OK(`${TAG} bereit (v25.11.09-final+confirm+grid+ghost-sync)`);
     } catch(e){
       console.error(TAG, 'Init-Fehler:', e?.message || e);
     }
