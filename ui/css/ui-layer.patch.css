@@ -1,0 +1,24 @@
+/* ============================================================================
+ * Datei   : ui/css/ui-layer.patch.css
+ * Version : v25.11.14-ghost-fix
+ * Zweck   : Verhindert, dass UI-Layer Canvas-Ereignisse „schlucken“
+ * ========================================================================== */
+
+/* Alle Overlay-Layer durchsichtig für Pointer – Basisregel */
+.ui-layer,
+#ui-root,
+#hud-root,
+#dock-root {
+  pointer-events: none;
+}
+
+/* Interaktive Inseln wieder aktivieren */
+#btn-build, #btn-inspector, #inspector, #build-dock,
+#toast, .ui-button, .ui-card {
+  pointer-events: auto;
+}
+
+/* Sicherheit: kein unsichtbarer Fullscreen-Hitbox */
+#build-dock, #hud-root, #inspector {
+  background: transparent; /* keine „unsichtbare Wand“ */
+}
