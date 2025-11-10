@@ -1,64 +1,35 @@
 /* ============================================================================
- * Datei    : ui/css/ui-place.css
- * Projekt  : Neue Siedler (Siedler-Mini)
- * Version  : v25.11.10-final
- * Zweck    : Platzier-Overlay (Ghost-Sprite, Gültigkeits-Tint, Buttons optional)
- * Hinweis  : JS setzt --tilePx = tileSize * zoom und --sx/--sy (Screen-Pos)
+ * Datei   : ui/ui-place.css
+ * Projekt : Neue Siedler
+ * Version : v25.11.13-fix
+ * Zweck   : Styles für Confirm/Cancel-Bar (einziges, eindeutiges Widget)
+ * Hinweis : Keine globalen Überschreibungen anderer UI-Elemente.
  * ========================================================================== */
 
-/* Root-Variablen – tilePx wird per JS aktualisiert */
-:root{
-  --tile: 64px;
-  --tilePx: var(--tile);
-  --ok: #1d6e2f;
-  --error: #b11c2a;
-  --shadow: 0 10px 24px rgba(0,0,0,.35);
-}
-
-.place-overlay{
+#place-confirm-bar {
   position: fixed;
-  inset: 0;
-  z-index: 3000;
-  pointer-events: none; /* Overlay selbst fängt keine Klicks */
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.55);
+  border-radius: 12px;
+  z-index: 10000; /* über Dock/HUD, unter Inspector */
+  backdrop-filter: blur(2px);
 }
 
-#place-ghost{ pointer-events:none; }
+#place-confirm-bar.is-hidden { display: none; }
 
-/* Ghost: Größe = (Tiles * tilePx); Position via transform vom JS */
-.ghost-sprite{
-  position: absolute;
-  width:  calc(var(--wTiles, 1) * var(--tilePx));
-  height: calc(var(--hTiles, 1) * var(--tilePx));
-  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0);
-  image-rendering: pixelated;
-  background-size: cover;
-  background-repeat: no-repeat;
-  will-change: transform, width, height;
-  pointer-events: none;
+#place-confirm-bar .pcb-btn {
+  min-width: 44px; min-height: 44px;
+  border: 0; border-radius: 10px;
+  font-size: 22px; line-height: 1;
+  background: rgba(255,255,255,0.9);
+  cursor: pointer;
 }
 
-.ghost-tint{
-  position:absolute; inset:0;
-  border-radius: 4px;
-  box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset;
-  outline: 2px solid transparent;
-}
-.ghost-tint.is-valid{
-  background: rgba(0,190,60,.12);
-  outline-color: rgba(0,190,60,.9);
-}
-.ghost-tint.is-invalid{
-  background: rgba(255,0,0,.15);
-  outline-color: rgba(255,0,0,.85);
-}
+#place-confirm-bar .pcb-ok { }
+#place-confirm-bar .pcb-cancel { }
 
-/* Optional: klassische Buttons oben links/rechts
-.place-btn{
-  position: absolute; pointer-events:auto;
-  width: 36px; height: 36px; border-radius: 8px;
-  border: 1px solid #0008; box-shadow: var(--shadow);
-  font: 700 16px/34px system-ui; text-align:center; color:#fff;
-}
-.place-btn.ok{     left:8px;  top:8px;  background: var(--ok);    border-color:#154e22; }
-.place-btn.cancel{ right:8px; top:8px;  background: var(--error); border-color:#5f0e17; }
-*/
+body.is-placing #place-confirm-bar { display: flex; }
