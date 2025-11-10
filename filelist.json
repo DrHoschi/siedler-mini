@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-10T10:58:54.914Z",
+  "createdAt": "2025-11-10T19:07:07.071Z",
   "root": ".",
-  "count": 487,
+  "count": 488,
   "entries": [
     {
       "type": "dir",
@@ -1121,7 +1121,7 @@
     {
       "type": "file",
       "path": "core/camera-v1.js",
-      "size": 6273
+      "size": 6147
     },
     {
       "type": "file",
@@ -1136,7 +1136,7 @@
     {
       "type": "file",
       "path": "core/carrier-v1.js",
-      "size": 1351
+      "size": 6549
     },
     {
       "type": "file",
@@ -1161,7 +1161,7 @@
     {
       "type": "file",
       "path": "core/core.input.js",
-      "size": 13093
+      "size": 9827
     },
     {
       "type": "file",
@@ -1192,6 +1192,11 @@
       "type": "file",
       "path": "core/eventbus.js",
       "size": 1291
+    },
+    {
+      "type": "file",
+      "path": "core/game-v1.js",
+      "size": 7729
     },
     {
       "type": "file",
@@ -1266,7 +1271,7 @@
     {
       "type": "file",
       "path": "core/placement.js",
-      "size": 5276
+      "size": 1415
     },
     {
       "type": "file",
@@ -2026,12 +2031,12 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 5306
+      "size": 5309
     },
     {
       "type": "file",
       "path": "ui/css/ui-build.place.css",
-      "size": 2053
+      "size": 1785
     },
     {
       "type": "file",
@@ -2076,7 +2081,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 3162
+      "size": 2237
     },
     {
       "type": "file",
@@ -2330,17 +2335,17 @@
     {
       "type": "file",
       "path": "filelist-audit.txt",
-      "size": 1966
+      "size": 1986
     },
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47996
+      "size": 48174
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18383
+      "size": 18437
     },
     {
       "type": "file",
@@ -2355,7 +2360,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 13206
+      "size": 13267
     },
     {
       "type": "file",
