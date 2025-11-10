@@ -316,14 +316,28 @@ window.Game = window.Game || {};
   });
 
   // Interne Platzierung: Events vom Input/UI
-  addEventListener('cb:build:place', (e)=>{
+    addEventListener('cb:build:place', (e)=>{
     const d = e.detail || {};
-    // Schutz gegen Altlistener 0,0 nur wenn Overlay aktiv ist
-    const overlay = document.getElementById('place-overlay');
-    if (overlay && d.x===0 && d.y===0) {
-      WARN('Ignoriere Platzierung 0,0 (Altlistener?)');
+    // Harter Filter gegen Alt-/Geisterevents:
+    const isTagged = d.__src === 'input-v25.11.14';   // <— nur neue Quelle
+    const xi = (d.x|0), yi = (d.y|0);
+    const wi = (d.w|0) || 3, hi = (d.h|0) || 3;
+
+    if (!isTagged) {
+      WARN('Ignoriere ungetaggte Platzierung', d);
       return;
     }
+    if (xi===0 && yi===0) {
+      WARN('Ignoriere Platzierung 0,0 (Altlistener/fehlerhafte Quelle)', d);
+      return;
+    }
+
+    const res = Game.placeBuilding(d.buildingId || d.kind, xi, yi, { w: wi, h: hi });
+    INFO('Platzierung (akzeptiert)', res);
+
+    const overlay = document.getElementById('place-overlay');
+    if (overlay) overlay.hidden = true;
+  });
     const size = { w: d.w|0, h: d.h|0 };
     const res = placeBuildingInternal(d.buildingId || d.kind, d.x|0, d.y|0, size);
     INFO('Platzierung', res);
