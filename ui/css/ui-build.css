@@ -139,8 +139,8 @@
 /* === Build-Button (immer sichtbar, über der Map & dem Dock) ============== */
 #btn-build{
   position: fixed;
-  bottem: 12px;
-  right: 16px;
+  bottem: 14px;
+  right: 14px;
   width: 46px;
   height: 46px;
   border-radius: 12px;
