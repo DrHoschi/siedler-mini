@@ -1,55 +1,42 @@
 /* ============================================================================
  * Datei    : ui/css/ui-place.css
- * Projekt  : Neue Siedler (Siedler-Mini)
- * Version  : v25.11.09-final (Kompat-Fix v2-0)
- * Zweck    : Platzier-Overlay (Ghost-Sprite, ✅/❌ Buttons, Raster-Ready)
- * Struktur :
- *   [10] Root-Variablen
- *   [20] Overlay-Root (fixed, full viewport)
- *   [30] Ghost-Sprite + Tint (valid/invalid)
- *   [40] Buttons (OK/Cancel) – oben links/rechts (klassischer Look)
- * Hinweise:
- *   – Keine Pointer-Events am Overlay; nur Buttons sind klickbar.
- *   – Größe der Ghost-Kachel wird über CSS-Variablen gesetzt:
- *       --wTiles, --hTiles (Tile-Anzahl) und --tile (Pixel pro Tile)
- *     Fallback: 1x1 Kachel bei fehlenden Angaben.
- * ========================================================================== */
+ * Projekt  : Neue Siedler
+ * Version  : v25.11.14-final (anchored buttons inside ghost)
+ * Zweck    : Platzier-Overlay (Ghost + Tint + Buttons TL/TR am Ghost)
+ * ============================================================================
+ */
 
-/* [10] Root-Variablen (Tilegröße 64px als Default, kann per :root überschrieben werden) */
-/* neue, zoombereinigte Kachelgröße in Pixeln */
+/* Root-Variablen (werden von JS aktualisiert: --tilePx = tile * zoom) */
 :root{
-  --tile: 64px;               /* bleibt als Basis */
-  --tilePx: var(--tile);      /* wird per JS auf tileSize * zoom gesetzt */
+  --tile: 64px;
+  --tilePx: var(--tile);
+  --ok: #1d6e2f;
+  --error: #b11c2a;
+  --shadow: 0 10px 24px rgba(0,0,0,.35);
 }
 
-
-/* [20] Overlay über gesamte Fläche – frisst keine Pointer-Events */
+/* Overlay deckt die Bühne ab, klickbar sind nur die Buttons */
 .place-overlay{
-  position: fixed;              /* volle Bühne */
+  position: fixed;
   inset: 0;
-  z-index: 3000;                /* hoch genug über Canvas/HUD; Inspector liegt noch drüber */
-  pointer-events: none;         /* Buttons werden gezielt wieder aktiviert */
+  z-index: 3000;        /* über Canvas/HUD */
+  pointer-events: none; /* Buttons werden gezielt frei gegeben */
 }
 
-/* Optional: Container für Ghost (wird von JS positioniert) */
-#place-ghost{ pointer-events:none; }
-
-/* [30] Ghost-Sprite: Größe = Tiles * tilepx; Position via transform vom JS */
-
-/* Ghost-Sprite exakt in Kachel-Pixeln skalieren */
+/* Ghost-Container; Position/Größe werden über CSS-Variablen gesetzt */
 .ghost-sprite{
   position: absolute;
   width:  calc(var(--wTiles, 1) * var(--tilePx));
   height: calc(var(--hTiles, 1) * var(--tilePx));
-  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0); /* 3D vermeidet Blur */
+  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0);
   image-rendering: pixelated;
   background-size: cover;
   background-repeat: no-repeat;
   will-change: transform;
-  pointer-events: none;
+  pointer-events: none; /* nur Buttons fangen Events */
 }
 
-/* Farb-Overlay mit Validierungsrahmen */
+/* Farb-Overlay für gültig/ungültig */
 .ghost-tint{
   position:absolute; inset:0;
   border-radius: 4px;
@@ -65,10 +52,10 @@
   outline-color: rgba(255,0,0,.85);
 }
 
-/* [40] Buttons – oben links (OK) & oben rechts (Cancel), klassischer Look */
+/* Buttons (im Ghost verankert → absolute bezieht sich auf Ghost-Box) */
 .place-btn{
   position: absolute;
-  pointer-events: auto;         /* Buttons wieder klickbar */
+  pointer-events: auto;   /* Buttons wieder aktiv */
   width: 36px; height: 36px;
   border-radius: 8px;
   border: 1px solid #0008;
@@ -78,17 +65,13 @@
   color: #fff;
   user-select: none;
 }
-
-.place-btn.ok{
+.ghost-sprite .place-btn.ok{
   left: 8px; top: 8px;
   background: var(--ok);
   border-color:#154e22;
 }
-.place-btn.cancel{
+.ghost-sprite .place-btn.cancel{
   right: 8px; top: 8px;
   background: var(--error);
   border-color:#5f0e17;
 }
-
-/* Optional: Wenn du Icons statt Text willst, lass JS "✓" / "✕" einsetzen
-   oder nutze background-image: url(...). */
