@@ -1,27 +1,15 @@
 /* ============================================================================
  * Datei    : ui/css/ui-place.css
  * Projekt  : Neue Siedler (Siedler-Mini)
- * Version  : v25.11.09-final (Kompat-Fix v2-0)
- * Zweck    : Platzier-Overlay (Ghost-Sprite, ✅/❌ Buttons, Raster-Ready)
- * Struktur :
- *   [10] Root-Variablen
- *   [20] Overlay-Root (fixed, full viewport)
- *   [30] Ghost-Sprite + Tint (valid/invalid)
- *   [40] Buttons (OK/Cancel) – oben links/rechts (klassischer Look)
- * Hinweise:
- *   – Keine Pointer-Events am Overlay; nur Buttons sind klickbar.
- *   – Größe der Ghost-Kachel wird über CSS-Variablen gesetzt:
- *       --wTiles, --hTiles (Tile-Anzahl) und --tile (Pixel pro Tile)
- *     Fallback: 1x1 Kachel bei fehlenden Angaben.
+ * Version  : v25.11.10-final
+ * Zweck    : Platzier-Overlay (Ghost-Sprite, Gültigkeits-Tint, Buttons optional)
+ * Hinweis  : JS setzt --tilePx = tileSize * zoom und --sx/--sy (Screen-Pos)
  * ========================================================================== */
-/* ============================================================================
- * Datei    : ui/css/ui-place.css
- * Version  : v25.11.09-final
- * Zweck    : Platzier-Overlay (Ghost + Gültigkeits-Tint)
- * ========================================================================== */
+
+/* Root-Variablen – tilePx wird per JS aktualisiert */
 :root{
-  --tile: 64px;                 /* Basisgröße; tatsächliche px via --tilePx */
-  --tilePx: var(--tile);        /* wird von JS (core.input.js) gesetzt = tileSize * zoom */
+  --tile: 64px;
+  --tilePx: var(--tile);
   --ok: #1d6e2f;
   --error: #b11c2a;
   --shadow: 0 10px 24px rgba(0,0,0,.35);
@@ -31,9 +19,12 @@
   position: fixed;
   inset: 0;
   z-index: 3000;
-  pointer-events: none;
+  pointer-events: none; /* Overlay selbst fängt keine Klicks */
 }
 
+#place-ghost{ pointer-events:none; }
+
+/* Ghost: Größe = (Tiles * tilePx); Position via transform vom JS */
 .ghost-sprite{
   position: absolute;
   width:  calc(var(--wTiles, 1) * var(--tilePx));
@@ -42,8 +33,8 @@
   image-rendering: pixelated;
   background-size: cover;
   background-repeat: no-repeat;
-  pointer-events: none;
   will-change: transform, width, height;
+  pointer-events: none;
 }
 
 .ghost-tint{
@@ -61,13 +52,13 @@
   outline-color: rgba(255,0,0,.85);
 }
 
-/* Optional: Buttons, falls du sie im Overlay benutzt
+/* Optional: klassische Buttons oben links/rechts
 .place-btn{
   position: absolute; pointer-events:auto;
   width: 36px; height: 36px; border-radius: 8px;
-  border: 1px solid #0008; font-weight:700; line-height:34px; text-align:center;
-  color: #eee; background: rgba(18,20,24,.95); box-shadow: var(--shadow);
+  border: 1px solid #0008; box-shadow: var(--shadow);
+  font: 700 16px/34px system-ui; text-align:center; color:#fff;
 }
-.place-btn.ok{     background: var(--ok);    border-color:#154e22; }
-.place-btn.cancel{ background: var(--error); border-color:#5f0e17; }
+.place-btn.ok{     left:8px;  top:8px;  background: var(--ok);    border-color:#154e22; }
+.place-btn.cancel{ right:8px; top:8px;  background: var(--error); border-color:#5f0e17; }
 */
