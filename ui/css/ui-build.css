@@ -139,7 +139,7 @@
 /* === Build-Button (immer sichtbar, über der Map & dem Dock) ============== */
 #btn-build{
   position: fixed;
-  top: 12px;
+  bottem: 12px;
   right: 16px;
   width: 46px;
   height: 46px;
