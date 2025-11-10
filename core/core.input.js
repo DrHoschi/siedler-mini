@@ -1,16 +1,13 @@
 /* ============================================================================
  * Datei   : core/core.input.js
  * Projekt : Neue Siedler
- * Version : v25.11.09-final+confirm+grid+ghost-zoom+hover-guard+patchA
- * Zweck   : Eingabe & Build-Interaktion (Bestätigen/Abbrechen optional)
+ * Version : v25.11.14-final (confirm+grid+ghost-sync; ohne Pan/Zoom)
+ * Zweck   : Eingabe & Build-Interaktion (Ghost, Hover, Bestätigen/Abbrechen)
  *
- * Fixes/Neu:
- *   – --tilePx = tileSize * cam.zoom wird immer gesetzt (quadratischer Ghost)
- *   – "Confirm nur mit gültigem Hover": verhindert Place(0,0), wenn Maus
- *     noch nicht über der Karte war
- *   – Overlay/Ghost wird nach dem Platzieren/Abbrechen sauber verborgen
- *   – [PATCH-A] Kompat-Bridge: req:place:start|confirm|cancel
- *   – [PATCH-A] Ghost folgt Zoom/Pan sicher (applyGhostCSSFromHover)
+ * Wichtig : KEINE Kamera-Steuerung mehr hier! Nur Listener auf cb:camera-change.
+ *           screen→tile erfolgt relativ zum Canvas & Kamera-State.
+ * UI      : Optionales Grid-Overlay (req:debug:grid:toggle)
+ * Events  : req:place:start|begin|confirm|cancel  •  cb:build:place
  * ========================================================================== */
 (() => {
   'use strict';
@@ -29,15 +26,12 @@
   let lastHover = { tx:0, ty:0, sx:0, sy:0 };
   let lastSize  = { w:3, h:3 };          // Default 3×3
   let requireConfirm = true;             // ✔︎ explizite Bestätigung
+  let hoverValid = false;                // wird true, sobald Maus über Karte war
 
-  // NEW: wird true, sobald die Maus einmal über der Karte war
-  let hoverValid = false;
-
-  // Hilfszugriffe
   const getGhost   = () => document.getElementById('place-ghost') || document.querySelector('.ghost-sprite');
   const getOverlay = () => document.getElementById('place-overlay');
 
-  // Bestätigen/Abbrechen-UI
+  // --------------------------- Confirm UI (unten rechts) ---------------------
   let uiBox = null;
   function ensureConfirmUI(){
     if (uiBox) return;
@@ -66,10 +60,10 @@
     ensureConfirmUI();
     uiBox.style.display = show ? 'flex' : 'none';
     const okBtn = uiBox.querySelector('#btn-place-confirm');
-    if (okBtn) okBtn.disabled = !hoverValid; // OK erst aktiv, wenn Hover gültig
+    if (okBtn) okBtn.disabled = !hoverValid;
   }
 
-  // Grid-Overlay (optional)
+  // ------------------------------ Grid-Overlay -------------------------------
   let gridOn = false, gridLayer = null, gtx = null, dpr = 1;
   function ensureGrid(){
     if (gridLayer) return;
@@ -102,8 +96,14 @@
     for (let y = y0; y < innerHeight; y += step){ gtx.beginPath(); gtx.moveTo(0,y); gtx.lineTo(innerWidth,y); gtx.stroke(); }
     gtx.restore();
   }
-
   addEventListener('resize', onResizeGrid);
+  addEventListener('req:debug:grid:toggle', ()=>{
+    gridOn = !gridOn; ensureGrid();
+    gridLayer.style.display = gridOn ? 'block':'none';
+    drawGrid(); INFO('Grid', gridOn?'ein':'aus');
+  });
+
+  // ----------------------------- Kamera-Leser -------------------------------
   addEventListener('cb:camera-change', (ev)=>{
     const d = ev?.detail || {};
     if (typeof d.x === 'number')   cam.x = d.x;
@@ -111,24 +111,18 @@
     if (typeof d.zoom === 'number')cam.zoom = d.zoom;
     applyTilePx();
     drawGrid();
-    // [PATCH-A] Ghost-Position nach Zoom/Pan aktualisieren
     applyGhostCSSFromHover();
   });
 
-  addEventListener('req:debug:grid:toggle', ()=>{
-    gridOn = !gridOn; ensureGrid();
-    gridLayer.style.display = gridOn ? 'block':'none';
-    drawGrid(); INFO('Grid', gridOn?'ein':'aus');
-  });
-
+  // ------------------------------ Tile-Größe --------------------------------
   function getTileSize(){
     try { return Number(window.Game?.tileSize) || Number(window.Entities?.state?.tile) || 64; }
     catch { return 64; }
   }
   function updateTileSize(){ tileSize = getTileSize(); drawGrid(); applyTilePx(); }
 
+  // ----------------------------- Koord-Helfer --------------------------------
   function rectOf(el){ try { return el.getBoundingClientRect(); } catch { return {left:0,top:0,width:0,height:0}; } }
-
   function screenToTile(clientX, clientY){
     const r = rectOf(canvas);
     const sx = (clientX - r.left);
@@ -141,23 +135,21 @@
     return { tx, ty, sx, sy };
   }
 
-  // [PATCH-A] Ghost-CSS aus letztem Hover (konsistent zu camera + zoom)
+  // ---------------------------- Ghost-Sync -----------------------------------
   function applyGhostCSSFromHover(){
     const ghost = getGhost(); if (!ghost) return;
     const step = tileSize * cam.zoom;
-    // sx/sy werden pixelgenau am Raster eingerastet
     ghost.style.setProperty('--sx', `${lastHover.sx - (lastHover.sx % step)}px`);
     ghost.style.setProperty('--sy', `${lastHover.sy - (lastHover.sy % step)}px`);
     ghost.style.setProperty('--wTiles', String(lastSize.w||1));
     ghost.style.setProperty('--hTiles', String(lastSize.h||1));
   }
 
-  // w/h aus req:place:begin übernehmen + Ghost skalieren + Hover resetten
+  // ----------------------------- Platzierfluss -------------------------------
   window.addEventListener('req:place:begin', (ev)=>{
     const d = ev?.detail || {};
     if (d.w) lastSize.w = d.w|0;
     if (d.h) lastSize.h = d.h|0;
-
     const ghost = getGhost();
     if (ghost){
       ghost.style.setProperty('--wTiles', String(lastSize.w||1));
@@ -167,13 +159,9 @@
     INFO('place begin', lastSize);
   });
 
-  // === [PATCH-A] Alias: req:place:start  → begin + Tool setzen + Overlay zeigen
   window.addEventListener('req:place:start', (ev)=>{
     const d = ev?.detail || {};
-    if (Array.isArray(d.size)) {
-      lastSize.w = Number(d.size[0])||3;
-      lastSize.h = Number(d.size[1])||3;
-    }
+    if (Array.isArray(d.size)) { lastSize.w = Number(d.size[0])||3; lastSize.h = Number(d.size[1])||3; }
     if (d.w) lastSize.w = d.w|0;
     if (d.h) lastSize.h = d.h|0;
     if (d.buildingId) buildTool = d.buildingId;
@@ -209,19 +197,18 @@
     } catch(e){
       WARN('Platzierung fehlgeschlagen:', e?.message || e);
     }
-    const overlay = getOverlay(); if (overlay) overlay.hidden = true; // Ghost weg
+    const overlay = getOverlay(); if (overlay) overlay.hidden = true;
     resetTool();
   }
 
+  // ----------------------------- Pointer-Binds -------------------------------
   function bindPointer(){
     if (!canvas) return;
 
     canvas.addEventListener('pointermove', (ev)=>{
       const p = screenToTile(ev.clientX, ev.clientY);
       lastHover = { tx:p.tx, ty:p.ty, sx:p.sx, sy:p.sy };
-      hoverValid = true; // ab jetzt darf bestätigt werden
-
-      // Ghost visuell updaten
+      hoverValid = true;
       applyGhostCSSFromHover();
 
       try {
@@ -229,13 +216,12 @@
           detail: { tx: p.tx, ty: p.ty, screenX: p.sx, screenY: p.sy }
         }));
       } catch {}
-      showConfirmUI(!!buildTool && requireConfirm); // Button-Enable live updaten
+      showConfirmUI(!!buildTool && requireConfirm);
     }, { passive:true });
 
     canvas.addEventListener('pointerdown', (ev)=>{
-      if (ev.button != null && ev.button !== 0) return; // nur LMB/Touch
+      if (ev.button != null && ev.button !== 0) return;
       if (!buildTool) return;
-      // „Not-Hover“ Klick → einmalig Hover ableiten
       if (!hoverValid){
         const p = screenToTile(ev.clientX, ev.clientY);
         lastHover = { tx:p.tx, ty:p.ty, sx:p.sx, sy:p.sy };
@@ -258,6 +244,7 @@
     });
   }
 
+  // ------------------------------- Global Binds ------------------------------
   function bindGlobal(){
     window.addEventListener('cb:set-build-tool', (ev)=>{
       const d = ev?.detail || {};
@@ -265,7 +252,7 @@
       buildTool = next;
 
       const overlay = getOverlay();
-      if (overlay) overlay.hidden = !buildTool; // Overlay anzeigen/verbergen
+      if (overlay) overlay.hidden = !buildTool;
 
       try { if (canvas) canvas.style.cursor = buildTool ? 'crosshair' : 'default'; } catch {}
       showConfirmUI(!!buildTool && requireConfirm);
@@ -283,18 +270,14 @@
       }
     });
 
-    // === [PATCH-A] Externe Confirm/Cancel-Events (kompatibel zu UI-Build) ===
+    // Kompat-Events:
     window.addEventListener('req:place:confirm', (ev)=>{
-      // falls tx/ty mitgegeben → nutzen, sonst letzten Hover
       const d = ev?.detail || {};
       const tx = (typeof d.tx==='number') ? d.tx : lastHover.tx;
       const ty = (typeof d.ty==='number') ? d.ty : lastHover.ty;
-      // Falls extern bestätigt werden soll, erlauben wir Confirm auch ohne vorheriges Hover,
-      // wenn tx/ty explizit übergeben wurden:
       if (typeof d.tx==='number' && typeof d.ty==='number') hoverValid = true;
       placeAt(tx, ty, lastSize.w, lastSize.h);
     });
-
     window.addEventListener('req:place:cancel', ()=>{
       const overlay = getOverlay(); if (overlay) overlay.hidden = true;
       resetTool();
@@ -302,7 +285,7 @@
     });
   }
 
-  // --tilePx = tileSize * cam.zoom (für Ghost-Breite/Höhe in CSS)
+  // ------------------------------ Init --------------------------------------
   function applyTilePx() {
     const px = (tileSize * cam.zoom);
     (getOverlay() || document.documentElement).style.setProperty('--tilePx', `${px}px`);
@@ -311,25 +294,17 @@
   function init(){
     try{
       canvas = document.getElementById('game')
-            || document.querySelector('canvas[data-role="map"]')
-            || document.querySelector('canvas');
+         ||  document.querySelector('canvas[data-role="map"]')
+         ||  document.querySelector('canvas');
       if (!canvas){ WARN('Canvas #game nicht gefunden'); return; }
 
-      try{
-        if (window.GameCamera){
-          cam.x    = Number(window.GameCamera.x   ?? cam.x);
-          cam.y    = Number(window.GameCamera.y   ?? cam.y);
-          cam.zoom = Number(window.GameCamera.zoom?? cam.zoom);
-        }
-      } catch {}
-
+      updateTileSize();   // setzt auch --tilePx via drawGrid/applyTilePx
+      applyTilePx();
       ensureConfirmUI();
-      updateTileSize();   // setzt auch --tilePx
-      applyTilePx();      // Sicherheit: initial einmal setzen
       bindGlobal();
       bindPointer();
 
-      OK(`${TAG} bereit (v25.11.09-final+confirm+grid+ghost-zoom+hover-guard+patchA)`);
+      OK('bereit v25.11.14-final (input only; camera extern)');
     } catch(e){
       console.error(TAG, 'Init-Fehler:', e?.message || e);
     }
