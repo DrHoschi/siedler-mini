@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-09T11:23:21.752Z",
+  "createdAt": "2025-11-10T10:58:54.914Z",
   "root": ".",
-  "count": 485,
+  "count": 487,
   "entries": [
     {
       "type": "dir",
@@ -1116,7 +1116,12 @@
     {
       "type": "file",
       "path": "core/build.place.handler.js",
-      "size": 3588
+      "size": 6463
+    },
+    {
+      "type": "file",
+      "path": "core/camera-v1.js",
+      "size": 6273
     },
     {
       "type": "file",
@@ -1156,7 +1161,7 @@
     {
       "type": "file",
       "path": "core/core.input.js",
-      "size": 8484
+      "size": 13093
     },
     {
       "type": "file",
@@ -2071,7 +2076,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-place.css",
-      "size": 3080
+      "size": 3162
     },
     {
       "type": "file",
@@ -2235,7 +2240,7 @@
     {
       "type": "file",
       "path": "ui/ui-build-hook.js",
-      "size": 2195
+      "size": 1967
     },
     {
       "type": "file",
@@ -2245,7 +2250,7 @@
     {
       "type": "file",
       "path": "ui/ui-build.js",
-      "size": 9582
+      "size": 9592
     },
     {
       "type": "file",
@@ -2330,12 +2335,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 47997
+      "size": 47996
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18384
+      "size": 18383
     },
     {
       "type": "file",
@@ -2344,8 +2349,13 @@
     },
     {
       "type": "file",
+      "path": "index.demo1.html",
+      "size": 2420
+    },
+    {
+      "type": "file",
       "path": "index.html",
-      "size": 13045
+      "size": 13206
     },
     {
       "type": "file",
