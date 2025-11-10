@@ -1,24 +1,13 @@
 /* ============================================================================
  * Datei   : inspector/tabs/inspector.tab.ui-v1.js
  * Projekt : Neue Siedler – Inspector
- * Version : v25.11.14-camdebug (final)
+ * Version : v25.11.15-camdebug2-grid (final)
  * Zweck   : UI/Diagnose-Tab – Live-Ansicht für Kamera/Canvas/Viewport/Tiles
  *
- * Kurzüberblick
- * - Zeigt live: Kamera (x,y,zoom), Canvas (CSS/DPR/Backing), Map (cols/rows,tileW/H)
- * - Rechnet Sichtfenster in Pixel *und* Tiles (tx0..ty1) aus, inkl. 1-Tile-Puffer
- * - Visualisiert Viewport als Rechteck in einer Mini-Skizze (Map-Umriss + Kamera)
- * - Hört auf: cb:camera-change, cb:camera:update, cb:game:start, req:place:cursor
- * - Pullt (optional) interne Werte aus Game.__dbg.state, fällt sonst auf „nur Events“ zurück
- *
- * Bedienung
- * - „Refresh“: einmalige Aktualisierung
- * - „Live an/aus“: 10×/Sek. auto-aktualisieren (leichtgewichtig)
- * - „Snap“: aktuellen Datensatz einfrieren (JSON kopierbar)
- *
- * Hinweise
- * - Keine Abhängigkeiten zu fremden Inspector-Tabs.
- * - Defensive Fallbacks: Wenn Game.__dbg fehlt, wird alles aus Events/DOM berechnet.
+ * Neu (ggü. v25.11.14-camdebug):
+ * - Persistenter Grid-Toggle (bleibt an/aus, auch wenn Inspector geschlossen wird)
+ * - Mini-Skizze zeichnet optional ein Tile-Raster (auf Basis von cols/rows/tileW/H)
+ * - Event-Bridge: emit 'cb:debug:grid' {on}  → andere Module können Grid im Haupt-Canvas nutzen
  * ========================================================================== */
 (function () {
   'use strict';
@@ -26,7 +15,18 @@
   /* --------------------------------- Log ---------------------------------- */
   const TAG  = '[insp/ui]';
   const INFO = (...a)=> (window.CBLog?.info ?? console.info)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+
+  /* --------------------------- Persistente Settings ------------------------ */
+  const STORE_KEY = 'insp.ui.camdebug.settings';
+  const DEFAULTS  = { showGrid: false, live: false };
+
+  function loadSettings(){
+    try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(STORE_KEY)||'{}')); }
+    catch { return {...DEFAULTS}; }
+  }
+  function saveSettings(s){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch {}
+  }
 
   /* ------------------------------ Interner State --------------------------- */
   const ST = {
@@ -43,18 +43,14 @@
     cursor: { tx:null, ty:null },
 
     // Quellen (optional) – zur Diagnose
-    sources: {
-      gameDbg: false
-    },
+    sources: { gameDbg: false },
 
-    // UI
-    live: false,
+    // Settings (persist.)
+    settings: loadSettings(),   // { showGrid, live }
     liveTimer: null,
 
     // DOM-Reffs
-    el: {
-      panel: null, outTxt: null, mini: null
-    }
+    el: { panel: null, outTxt: null, mini: null, btnGrid: null, btnLive: null }
   };
 
   /* ----------------------------- Datenabruf ------------------------------- */
@@ -93,7 +89,6 @@
   }
 
   function readFromDomOnly() {
-    // Canvas (DOM)
     const canvas = document.getElementById('game');
     const dpr = (window.devicePixelRatio || 1);
 
@@ -106,15 +101,12 @@
     ST.back.w = (canvas ? canvas.width  : (cssW * dpr)|0);
     ST.back.h = (canvas ? canvas.height : (cssH * dpr)|0);
 
-    // Map/Tile (nur grob – falls Game keine Infos liefert)
     const ts = (window.Game && (window.Game.tileSize || (window.Game.getTileSize && window.Game.getTileSize()))) || 64;
     ST.map.tileW = ts; ST.map.tileH = ts;
-    // cols/rows unbekannt → 0 (Skizze nutzt defensive Defaults)
   }
 
   /* ------------------------ Sichtfenster-Berechnung ----------------------- */
   function recomputeViewport() {
-    // Sichtfenster im World-Space (in px) – wie in core/game-v1.js
     const viewW = ST.css.w / ST.cam.zoom;
     const viewH = ST.css.h / ST.cam.zoom;
     const vx0   = ST.cam.x;
@@ -124,7 +116,6 @@
 
     ST.view.vx0 = vx0; ST.view.vy0 = vy0; ST.view.vx1 = vx1; ST.view.vy1 = vy1;
 
-    // In Tiles (inkl. 1-Tile Puffer), bounds clampen wenn Map-Größe bekannt
     const TW = ST.map.tileW || 64;
     const TH = ST.map.tileH || 64;
 
@@ -147,6 +138,27 @@
   }
 
   /* --------------------------- Mini-Skizze zeichnen ----------------------- */
+  function drawGridInMini(ctx, s, worldW, worldH){
+    const TW = ST.map.tileW || 64;
+    const TH = ST.map.tileH || 64;
+
+    ctx.save();
+    ctx.lineWidth = Math.max(1, 1 / s);
+    ctx.strokeStyle = 'rgba(180, 190, 200, 0.18)';
+
+    // dünne Linien: nur jede n-te, damit es nicht zu dicht wird bei großen Maps
+    const stepX = Math.max(TW, 1);
+    const stepY = Math.max(TH, 1);
+
+    for (let x=0; x<=worldW; x+=stepX) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, worldH); ctx.stroke();
+    }
+    for (let y=0; y<=worldH; y+=stepY) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(worldW, y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawMini() {
     const cvs = ST.el.mini;
     if (!cvs) return;
@@ -160,26 +172,31 @@
     ctx.fillStyle = '#0f1115';
     ctx.fillRect(0,0,W,H);
 
-    // Map-Umriss bestimmen (px in „Welt“)
+    // Map-Umriss bestimmen
     const worldW = (ST.map.cols>0 ? ST.map.cols*ST.map.tileW : Math.max(ST.view.vx1, ST.view.vx0+512));
     const worldH = (ST.map.rows>0 ? ST.map.rows*ST.map.tileH : Math.max(ST.view.vy1, ST.view.vy0+512));
 
-    // Fit-Scale für Skizze
+    // Fit-Scale
     const pad = 8;
     const sx = (W - pad*2) / Math.max(1, worldW);
     const sy = (H - pad*2) / Math.max(1, worldH);
     const s  = Math.min(sx, sy);
 
-    // Map-Rahmen
     ctx.save();
     ctx.translate(pad, pad);
     ctx.scale(s, s);
 
+    // optionales Raster (persistenter Toggle)
+    if (ST.settings.showGrid) {
+      drawGridInMini(ctx, s, worldW, worldH);
+    }
+
+    // Map-Rahmen
     ctx.strokeStyle = '#4b5563';
     ctx.lineWidth = 2 / s;
     ctx.strokeRect(0, 0, worldW, worldH);
 
-    // Viewport-Rechteck
+    // Viewport
     ctx.strokeStyle = '#7dd3fc';
     ctx.fillStyle   = 'rgba(125, 211, 252, 0.15)';
     const vx = ST.view.vx0;
@@ -204,8 +221,6 @@
   /* ----------------------------- Rendering (Text) ------------------------- */
   function buildDiagnosticsText() {
     const t = (n)=> typeof n === 'number' ? n.toFixed(2) : n;
-    const J = (o)=> JSON.stringify(o);
-
     return [
       'KAMERA',
       `  x=${t(ST.cam.x)}  y=${t(ST.cam.y)}  zoom=${t(ST.cam.zoom)}`,
@@ -227,43 +242,46 @@
       'CURSOR (Tile, von req:place:cursor)',
       `  tx=${ST.cursor.tx==null?'–':ST.cursor.tx}  ty=${ST.cursor.ty==null?'–':ST.cursor.ty}`,
       '',
+      'SETTINGS',
+      `  grid=${ST.settings.showGrid ? 'an' : 'aus'}  |  live=${ST.settings.live ? 'an' : 'aus'}`,
+      '',
       'QUELLEN',
       `  Game.__dbg: ${ST.sources.gameDbg ? 'ja' : 'nein'}`,
-      '',
-      'FORMELN',
-      '  // Pixel-Sichtfenster (World)',
-      '  viewW = cssW / zoom;  viewH = cssH / zoom',
-      '  vx0 = cam.x; vy0 = cam.y; vx1 = vx0 + viewW; vy1 = vy0 + viewH',
-      '  // Tiles mit Puffer',
-      '  tx0 = floor(vx0/tileW) - 1;  tx1 = floor(vx1/tileW) + 1',
-      '  ty0 = floor(vy0/tileH) - 1;  ty1 = floor(vy1/tileH) + 1',
       ''
     ].join('\n');
   }
 
   function refreshOnce() {
-    // Datenquelle bevorzugt: Game.__dbg (falls vorhanden)
     if (!readFromGameDbg()) readFromDomOnly();
-
     recomputeViewport();
 
-    // Textfeld
-    if (ST.el.outTxt) {
-      ST.el.outTxt.textContent = buildDiagnosticsText();
-    }
-    // Mini-Skizze
+    if (ST.el.outTxt) ST.el.outTxt.textContent = buildDiagnosticsText();
     drawMini();
   }
 
   function startLive() {
     if (ST.liveTimer) return;
-    ST.live = true;
-    ST.liveTimer = setInterval(refreshOnce, 100); // 10 Hz reicht locker
+    ST.settings.live = true;
+    saveSettings(ST.settings);
+    ST.liveTimer = setInterval(refreshOnce, 100);
+    if (ST.el.btnLive) ST.el.btnLive.textContent = 'Live aus';
   }
 
   function stopLive() {
-    ST.live = false;
+    ST.settings.live = false;
+    saveSettings(ST.settings);
     if (ST.liveTimer) { clearInterval(ST.liveTimer); ST.liveTimer = null; }
+    if (ST.el.btnLive) ST.el.btnLive.textContent = 'Live an';
+  }
+
+  function toggleGrid(){
+    ST.settings.showGrid = !ST.settings.showGrid;
+    saveSettings(ST.settings);
+    if (ST.el.btnGrid) ST.el.btnGrid.textContent = 'Grid ' + (ST.settings.showGrid ? 'aus' : 'an');
+
+    // Event für Haupt-Canvas (optional nutzbar)
+    window.dispatchEvent(new CustomEvent('cb:debug:grid', { detail: { on: ST.settings.showGrid }}));
+    refreshOnce();
   }
 
   /* ------------------------------- UI Setup ------------------------------- */
@@ -272,8 +290,9 @@
       <div class="insp-toolbar">
         <strong>UI / Kamera-Diagnose</strong>
         <span class="spacer"></span>
+        <button class="insp-btn" data-act="grid">Grid ${ST.settings.showGrid ? 'aus' : 'an'}</button>
         <button class="insp-btn" data-act="snap">Snap</button>
-        <button class="insp-btn" data-act="live">Live an</button>
+        <button class="insp-btn" data-act="live">${ST.settings.live ? 'Live aus' : 'Live an'}</button>
         <button class="insp-btn" data-act="refresh">Refresh</button>
       </div>
       <div class="insp-pad" style="display:grid;grid-template-columns: 1fr 300px;gap:12px;align-items:start;">
@@ -281,8 +300,8 @@
         <div>
           <canvas class="mini" width="300" height="200" style="width:300px;height:200px;border:1px solid #2a2f3a;border-radius:6px;background:#0b0d12;"></canvas>
           <div style="font-size:12px;opacity:.8;margin-top:6px;">
-            Mini-Skizze: grauer Rahmen = Map (falls Größe bekannt), blau = sichtbarer Bereich,
-            rot = Cursor-Tile.
+            Mini-Skizze: grauer Rahmen = Map (falls Größe bekannt),
+            blau = Viewport, rot = Cursor-Tile, Grid = toggelbar (persistiert).
           </div>
         </div>
       </div>
@@ -290,23 +309,19 @@
     ST.el.panel = panel;
     ST.el.outTxt = panel.querySelector('.out');
     ST.el.mini   = panel.querySelector('canvas.mini');
+    ST.el.btnGrid= panel.querySelector('[data-act="grid"]');
+    ST.el.btnLive= panel.querySelector('[data-act="live"]');
 
     panel.querySelector('[data-act="refresh"]').addEventListener('click', refreshOnce);
-    panel.querySelector('[data-act="live"]').addEventListener('click', (ev)=>{
-      if (ST.live) { stopLive(); ev.currentTarget.textContent = 'Live an'; }
-      else         { startLive(); ev.currentTarget.textContent = 'Live aus'; }
-    });
     panel.querySelector('[data-act="snap"]').addEventListener('click', ()=>{
-      // eingefrorene JSON-Sicht (schnell kopierbar)
-      const snap = {
-        cam: ST.cam, css: ST.css, back: ST.back, map: ST.map, view: ST.view, cursor: ST.cursor,
-        src: ST.sources
-      };
-      const box = ST.el.outTxt;
-      if (box) box.textContent = (buildDiagnosticsText() + '\nSNAP(JSON):\n' + JSON.stringify(snap, null, 2));
+      const snap = { cam: ST.cam, css: ST.css, back: ST.back, map: ST.map, view: ST.view, cursor: ST.cursor, settings: ST.settings, src: ST.sources };
+      if (ST.el.outTxt) ST.el.outTxt.textContent = (buildDiagnosticsText() + '\nSNAP(JSON):\n' + JSON.stringify(snap, null, 2));
     });
+    ST.el.btnGrid.addEventListener('click', toggleGrid);
+    ST.el.btnLive.addEventListener('click', ()=> (ST.settings.live ? stopLive() : startLive()));
 
-    refreshOnce();
+    // Live-Status aus Settings übernehmen
+    if (ST.settings.live) startLive(); else refreshOnce();
   }
 
   function ensureMountedOnShow(){
@@ -319,22 +334,24 @@
   }
 
   /* -------------------------- Event-Listener (Live) ----------------------- */
-  // Kamera-Events (beide Varianten unterstützen)
-  window.addEventListener('cb:camera-change',  (e)=>{ const d=e.detail||{}; if('x'in d)ST.cam.x=d.x; if('y'in d)ST.cam.y=d.y; if('zoom'in d)ST.cam.zoom=Math.max(0.1,d.zoom); if(!ST.live) refreshOnce(); });
-  window.addEventListener('cb:camera:update',  (e)=>{ const d=e.detail||{}; if('x'in d)ST.cam.x=d.x; if('y'in d)ST.cam.y=d.y; if('zoom'in d)ST.cam.zoom=Math.max(0.1,d.zoom); if(!ST.live) refreshOnce(); });
+  const onCam = (e)=>{
+    const d=e.detail||{};
+    if('x' in d)    ST.cam.x    = d.x;
+    if('y' in d)    ST.cam.y    = d.y;
+    if('zoom' in d) ST.cam.zoom = Math.max(0.1, d.zoom);
+    if(!ST.settings.live) refreshOnce();
+  };
+  window.addEventListener('cb:camera-change', onCam);
+  window.addEventListener('cb:camera:update', onCam);
 
-  // Cursor-Tile aus dem Input
-  window.addEventListener('req:place:cursor', (e)=>{ const d=e.detail||{}; ST.cursor.tx=d.tx; ST.cursor.ty=d.ty; if(!ST.live) refreshOnce(); });
-
-  // Bei Spielstart einmal initialisieren
-  window.addEventListener('cb:game:start', ()=> { if (!ST.live) refreshOnce(); }, { once:true });
+  window.addEventListener('req:place:cursor', (e)=>{ const d=e.detail||{}; ST.cursor.tx=d.tx; ST.cursor.ty=d.ty; if(!ST.settings.live) refreshOnce(); });
+  window.addEventListener('cb:game:start', ()=> { if (!ST.settings.live) refreshOnce(); }, { once:true });
 
   /* ------------------------------- Tab-Register --------------------------- */
-  // Achtung: alter Code hatte zwei getrennte Implementierungen – wir registrieren *eine* saubere.
   window.registerInspectorTab('ui', mount);
 
   /* ------------------------------- Bootstrapping -------------------------- */
   document.addEventListener("DOMContentLoaded", ensureMountedOnShow);
 
-  INFO('UI-Diagnose geladen (v25.11.14-camdebug)');
+  INFO('UI-Diagnose geladen (v25.11.15-camdebug2-grid)');
 })();
