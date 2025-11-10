@@ -1,68 +1,62 @@
 /* ============================================================================
- * Datei   : ui/css/ui-build.place.css
+ * Datei   : ui/ui-place.css
  * Version : v25.11.14-final
- * Zweck   : Ghost-Overlay + CTA (OK/Abbrechen) für Gebäude-Platzierung
- * Hinweis : Greift nur Overlay-Elemente an – dein Holzrahmen bleibt unberührt.
+ * Zweck   : Styles für Platzier-Ghost + Buttons (ohne placement.js)
  * ========================================================================== */
 
-#place-overlay{
+#place-overlay {
   position: fixed;
   inset: 0;
-  pointer-events: none;          /* Overlay lässt UI durch, Buttons haben own PE */
-  z-index: 120;                  /* über Canvas (#game: z-index:10 in deiner index) */
+  z-index: 2147483600; /* über Canvas, unter Inspector-Headern */
+  pointer-events: none; /* nur Buttons aktiv schalten */
 }
 
-#place-overlay .place-ghost{
-  --gw: 1; --gh: 1;
+#place-overlay .place-ghost {
   position: absolute;
-  width: calc(var(--gw) * 1px);   /* werden in JS via transform positioniert */
-  height: calc(var(--gh) * 1px);
-  transform: translate(0,0);
+  left: var(--sx, 0px);
+  top:  var(--sy, 0px);
+  width:  calc(var(--tilePx, 64px) * var(--wTiles, 1));
+  height: calc(var(--tilePx, 64px) * var(--hTiles, 1));
+  box-sizing: border-box;
+  background: rgba(120,170,255,.15); /* Basis-Tint */
+  outline: 2px solid rgba(255,255,255,.35);
+  outline-offset: -2px;
 }
 
-/* Kacheloptik – echte Größe per JS (tile) */
-#place-overlay .place-ghost::before{
-  content: "";
-  display: block;
-  width: calc(var(--gw) * var(--tile, 64px));
-  height: calc(var(--gh) * var(--tile, 64px));
-  background: repeating-linear-gradient(
-    to right,
-    rgba(255,255,255,.18) 0,
-    rgba(255,255,255,.18) 1px,
-    transparent 1px,
-    transparent calc(var(--tile,64px))
-  ),
-  repeating-linear-gradient(
-    to bottom,
-    rgba(255,255,255,.18) 0,
-    rgba(255,255,255,.18) 1px,
-    transparent 1px,
-    transparent calc(var(--tile,64px))
-  ),
-  rgba(90,170,255,.18);
-  outline: 2px solid rgba(90,170,255,.75);
-  box-shadow: 0 0 0 2px rgba(0,0,0,.25) inset;
+#place-overlay .place-ghost.good {
+  background: linear-gradient(0deg, rgba(60,200,100,.25), rgba(60,200,100,.18));
+  outline-color: rgba(60,200,100,.65);
+}
+
+#place-overlay .place-ghost.bad {
+  background: linear-gradient(0deg, rgba(220,70,70,.25), rgba(220,70,70,.18));
+  outline-color: rgba(220,70,70,.65);
+}
+
+/* Buttons am Ghost */
+#place-overlay .place-btn {
+  position: absolute;
+  width: 28px; height: 28px;
   border-radius: 6px;
-}
-
-/* Bestätigen/Abbrechen */
-#place-overlay .place-cta{
-  position: absolute;
-  display: flex;
-  gap: 6px;
-  transform: translate(0,0);
-  pointer-events: auto;          /* Buttons anklickbar */
-}
-
-#place-overlay .btn{
-  min-width: 34px;
-  height: 34px;
-  border-radius: 8px;
   border: 1px solid rgba(0,0,0,.25);
-  background: rgba(245,245,245,.85);
-  backdrop-filter: blur(3px);
-  font-weight: 700;
+  color: #fff;
+  font: 700 16px/26px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto; /* aktiv! */
+  user-select: none;
 }
-#place-overlay .btn-ok{    background: rgba(100,220,120,.9); }
-#place-overlay .btn-cancel{background: rgba(240,110,110,.9); }
+
+#place-overlay .place-btn.ok {
+  left: 6px; top: 6px;
+  background: #2fb36d;
+}
+#place-overlay .place-btn.ok:disabled {
+  filter: grayscale(0.9) brightness(0.7);
+  cursor: not-allowed;
+}
+
+#place-overlay .place-btn.cancel {
+  right: 6px; top: 6px;
+  background: #d24b4b;
+}
