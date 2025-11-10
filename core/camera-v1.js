@@ -1,14 +1,12 @@
 /* ============================================================================
  * Datei   : core/camera.js
  * Projekt : Neue Siedler
- * Version : v25.11.10-final
+ * Version : v25.11.14-final
  * Zweck   : Zentrale Kamera (Pan & Zoom, Desktop + Touch) + Events cb:camera-change
  *
- * WICHTIG:
- *  - sendet nach JEDEM Update:  cb:camera-change { x, y, zoom }
- *  - bindet sich automatisch an #game (oder erstes <canvas>)
- *  - "touch-action: none" auf Canvas, damit Browser-Gesten nicht stören
- *  - Zoom ist um Maus-/Finger-Anker stabil (Weltpunkt bleibt unter dem Anker)
+ * API     : window.GameCamera.{ x,y,zoom, bind(canvas), setState({...}) }
+ * Emits   : cb:camera-change { x, y, zoom } nach JEDEM Update
+ * Hinweis : Canvas (#game) braucht touch-action:none (setzen wir hier)
  * ========================================================================== */
 (() => {
   'use strict';
@@ -116,8 +114,8 @@
     } else if (touches.size === 2 && pinchStart){
       const [a,b] = [...touches.values()];
       const dist = Math.hypot(b.x-a.x, b.y-a.y) || 1;
-      const factor = clamp(dist / (pinchStart.dist || 1), 0.05, 20);
-      anchorZoom(clamp(pinchStart.zoom * factor, ZOOM_MIN, ZOOM_MAX), pinchStart.center);
+      const factor = Math.max(0.05, Math.min(20, dist / (pinchStart.dist || 1)));
+      anchorZoom(pinchStart.zoom * factor, pinchStart.center);
     }
   }
   function onPointerUp(e){
@@ -157,16 +155,16 @@
     if (auto) bind(auto);
   }
 
-  // Auto-Bind: sofort oder nach DOMContentLoaded
+  // Auto-Bind
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', init, { once:true });
   } else init();
 
-  // Export für Debug/Inspector
+  // Export
   window.GameCamera = {
     bind,
     get x(){ return cam.x; }, get y(){ return cam.y; }, get zoom(){ return cam.zoom; },
-    set zoom(v){ anchorZoom(clamp(v, ZOOM_MIN, ZOOM_MAX), {x:0,y:0}); },
-    setState({x,y,zoom}={}){ if(typeof x==='number')cam.x=x; if(typeof y==='number')cam.y=y; if(typeof zoom==='number')cam.zoom=clamp(zoom,ZOOM_MIN,ZOOM_MAX); publish(); }
+    set zoom(v){ anchorZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v)), {x:0,y:0}); },
+    setState({x,y,zoom}={}){ if(typeof x==='number')cam.x=x; if(typeof y==='number')cam.y=y; if(typeof zoom==='number')cam.zoom=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,zoom)); publish(); }
   };
 })();
