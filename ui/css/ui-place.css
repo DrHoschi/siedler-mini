@@ -1,35 +1,94 @@
 /* ============================================================================
- * Datei   : ui/ui-place.css
- * Projekt : Neue Siedler
- * Version : v25.11.13-fix
- * Zweck   : Styles für Confirm/Cancel-Bar (einziges, eindeutiges Widget)
- * Hinweis : Keine globalen Überschreibungen anderer UI-Elemente.
+ * Datei    : ui/css/ui-place.css
+ * Projekt  : Neue Siedler (Siedler-Mini)
+ * Version  : v25.11.09-final (Kompat-Fix v2-0)
+ * Zweck    : Platzier-Overlay (Ghost-Sprite, ✅/❌ Buttons, Raster-Ready)
+ * Struktur :
+ *   [10] Root-Variablen
+ *   [20] Overlay-Root (fixed, full viewport)
+ *   [30] Ghost-Sprite + Tint (valid/invalid)
+ *   [40] Buttons (OK/Cancel) – oben links/rechts (klassischer Look)
+ * Hinweise:
+ *   – Keine Pointer-Events am Overlay; nur Buttons sind klickbar.
+ *   – Größe der Ghost-Kachel wird über CSS-Variablen gesetzt:
+ *       --wTiles, --hTiles (Tile-Anzahl) und --tile (Pixel pro Tile)
+ *     Fallback: 1x1 Kachel bei fehlenden Angaben.
  * ========================================================================== */
 
-#place-confirm-bar {
-  position: fixed;
-  right: calc(16px + env(safe-area-inset-right, 0px));
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  gap: 12px;
-  padding: 10px 12px;
-  background: rgba(0,0,0,0.55);
-  border-radius: 12px;
-  z-index: 10000; /* über Dock/HUD, unter Inspector */
-  backdrop-filter: blur(2px);
+/* [10] Root-Variablen (Tilegröße 64px als Default, kann per :root überschrieben werden) */
+/* neue, zoombereinigte Kachelgröße in Pixeln */
+:root{
+  --tile: 64px;               /* bleibt als Basis */
+  --tilePx: var(--tile);      /* wird per JS auf tileSize * zoom gesetzt */
 }
 
-#place-confirm-bar.is-hidden { display: none; }
 
-#place-confirm-bar .pcb-btn {
-  min-width: 44px; min-height: 44px;
-  border: 0; border-radius: 10px;
-  font-size: 22px; line-height: 1;
-  background: rgba(255,255,255,0.9);
-  cursor: pointer;
+/* [20] Overlay über gesamte Fläche – frisst keine Pointer-Events */
+.place-overlay{
+  position: fixed;              /* volle Bühne */
+  inset: 0;
+  z-index: 3000;                /* hoch genug über Canvas/HUD; Inspector liegt noch drüber */
+  pointer-events: none;         /* Buttons werden gezielt wieder aktiviert */
 }
 
-#place-confirm-bar .pcb-ok { }
-#place-confirm-bar .pcb-cancel { }
+/* Optional: Container für Ghost (wird von JS positioniert) */
+#place-ghost{ pointer-events:none; }
 
-body.is-placing #place-confirm-bar { display: flex; }
+/* [30] Ghost-Sprite: Größe = Tiles * tilepx; Position via transform vom JS */
+
+/* Ghost-Sprite exakt in Kachel-Pixeln skalieren */
+.ghost-sprite{
+  position: absolute;
+  width:  calc(var(--wTiles, 1) * var(--tilePx));
+  height: calc(var(--hTiles, 1) * var(--tilePx));
+  transform: translate3d(var(--sx, 0px), var(--sy, 0px), 0); /* 3D vermeidet Blur */
+  image-rendering: pixelated;
+  background-size: cover;
+  background-repeat: no-repeat;
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* Farb-Overlay mit Validierungsrahmen */
+.ghost-tint{
+  position:absolute; inset:0;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset;
+  outline: 2px solid transparent;
+}
+.ghost-tint.is-valid{
+  background: rgba(0,190,60,.12);
+  outline-color: rgba(0,190,60,.9);
+}
+.ghost-tint.is-invalid{
+  background: rgba(255,0,0,.15);
+  outline-color: rgba(255,0,0,.85);
+}
+
+/* [40] Buttons – oben links (OK) & oben rechts (Cancel), klassischer Look */
+.place-btn{
+  position: absolute;
+  pointer-events: auto;         /* Buttons wieder klickbar */
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 1px solid #0008;
+  box-shadow: var(--shadow);
+  font: 700 16px/34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  text-align: center;
+  color: #fff;
+  user-select: none;
+}
+
+.place-btn.ok{
+  left: 8px; top: 8px;
+  background: var(--ok);
+  border-color:#154e22;
+}
+.place-btn.cancel{
+  right: 8px; top: 8px;
+  background: var(--error);
+  border-color:#5f0e17;
+}
+
+/* Optional: Wenn du Icons statt Text willst, lass JS "✓" / "✕" einsetzen
+   oder nutze background-image: url(...). */
