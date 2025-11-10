@@ -187,16 +187,24 @@
     } catch {}
   }
 
-  function placeAt(tx, ty, w=lastSize.w, h=lastSize.h){
+    function placeAt(tx, ty, w=lastSize.w, h=lastSize.h){
     if (!buildTool) return;
     if (!hoverValid){ WARN('Bestätigen ignoriert – Maus war noch nicht über der Karte.'); return; }
-    const detail = { buildingId: buildTool, x: tx, y: ty, w, h };
+
+    const detail = {
+      __src: 'input-v25.11.14',   // <— Herkunftstag
+      buildingId: buildTool,
+      x: tx|0, y: ty|0,
+      w: w|0, h: h|0
+    };
+
     try {
+      OK('Sende cb:build:place', JSON.stringify(detail));
       window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
-      OK('Gebäude platziert:', buildTool, '→', tx, ty, `(${w}x${h})`);
     } catch(e){
       WARN('Platzierung fehlgeschlagen:', e?.message || e);
     }
+
     const overlay = getOverlay(); if (overlay) overlay.hidden = true;
     resetTool();
   }
