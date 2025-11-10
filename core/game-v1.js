@@ -314,7 +314,11 @@ window.Game = window.Game || {};
     if (typeof d.y === 'number')    state.cam.y    = d.y;
     if (typeof d.zoom === 'number') state.cam.zoom = d.zoom;
   });
-
+  addEventListener('cb:build:place', (e)=>{
+    const d = e.detail || {};
+    console.info('[audit] cb:build:place raw', d);
+  }, { capture:true });
+  
   // Interne Platzierung: Events vom Input/UI
     addEventListener('cb:build:place', (e)=>{
     const d = e.detail || {};
