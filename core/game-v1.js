@@ -1,14 +1,15 @@
 /* ============================================================================
  * Datei   : core/game-v1.js
  * Projekt : Neue Siedler
- * Version : v25.11.14-final.2
- * Build   : cam-transform + DPR/resize-fix + view-culling + dual camera events
+ * Version : v25.11.15-final (fit-to-map + focus-zoom + culling-fix + DPR)
+ * Build   : cam-transform · DPR/resize-fix · view-culling · dual camera events
  * Zweck   : Map rendern (Tiles) + Kamera-Transform + Gebäude-Renderer (basic)
  *
  * Lauscht : cb:map:ready {map,tileset,tilesetUrl}
  *           cb:game:start
  *           cb:camera-change {x,y,zoom}     ← Camera-Modul A
  *           cb:camera:update {x,y,zoom}     ← Camera-Modul B (Input nutzt das)
+ *           req:camera:zoomAt {cx,cy,zoom}  ← optionaler Fokus-Zoom (Canvas-Koords)
  *           cb:build:place {__src,buildingId,x,y,w,h}
  *
  * API     : Game.start(map,{tileset,tilesetUrl})
@@ -16,14 +17,18 @@
  *
  * Emits   : cb:build:placed {id,x,y,w,h}
  *
- * WICHTIG
- * - Diese Version behebt „Zoom/Pan zeigt nur Teilbereiche“ durch:
- *   1) **DevicePixelRatio-Canvas** (physikalische Auflösung = CSS * DPR)
- *   2) **dauerhaftes Re-Layout** bei resize/orientationchange
- *   3) **View-Culling**: nur sichtbare Tiles zeichnen (Performance & Vollständigkeit)
- *   4) **Dual-Event-Support** für Kamera (cb:camera-change & cb:camera:update)
- * - Tile- und Kamera-Koordinaten sind **Pixel-basiert** (World-Space in px).
- *   Wenn euer Kamera-Modul Tile-Koordinaten liefert, bitte dort → px umrechnen.
+ * WICHTIG (Änderungen ggü. v25.11.14-final.2)
+ * - **Culling-Bugfix**: py nutzte fälschlich tileW → jetzt korrekt tileH.
+ * - **fitToMapContain()**: initiale Kamera so setzen, dass die gesamte Map sichtbar
+ *   und zentriert ist (statt immer bei 0/0 zu starten).
+ * - **focus-zoom (zoomAt)**: Zoom verankert sich am Finger/Zeiger (cx,cy bleibt
+ *   auf derselben Weltposition). Optionaler Listener für req:camera:zoomAt.
+ * - **Wheel-Zoom (optional)**: Ctrl/Cmd + Mausrad nutzt focus-zoom.
+ * - **DPR-Canvas**: Backing-Store = CSS * devicePixelRatio, gegen unscharfes/teilweises Rendering.
+ *
+ * Koordinaten:
+ * - Kamera & Zeichnen arbeiten in **World-Pixeln** (px), Tiles sind tileW × tileH px.
+ * - Transform übernimmt scale (=zoom) + translate (=-cam*zoom).
  * ========================================================================== */
 window.Game = window.Game || {};
 (function(){
@@ -56,6 +61,9 @@ window.Game = window.Game || {};
 
     // Loop
     running:false, rafId:0,
+
+    // Fit-Flag: wurde initial fit-to-map schon angewendet?
+    didInitialFit:false,
   };
 
   /* -------------------------- Canvas & Resize ----------------------------- */
@@ -76,7 +84,7 @@ window.Game = window.Game || {};
       const cssW = Math.max(1, Math.floor(window.innerWidth));
       const cssH = Math.max(1, Math.floor(window.innerHeight));
 
-      // Physikalische Backing-Store-Größe = CSS * DPR (gegen unscharfes/teilweises Rendering)
+      // Physikalische Backing-Store-Größe = CSS * DPR
       const dpr = (window.devicePixelRatio || 1);
       const w = Math.floor(cssW * dpr);
       const h = Math.floor(cssH * dpr);
@@ -86,14 +94,16 @@ window.Game = window.Game || {};
         S.canvas.width  = w;
         S.canvas.height = h;
       }
-      // Wichtig: CSS-Size explizit setzen (verhindert Browser-Autoscaling)
       S.canvas.style.width  = cssW + 'px';
       S.canvas.style.height = cssH + 'px';
 
       S.cssW = cssW; S.cssH = cssH; S.dpr = dpr;
 
-      // Nach Resize sicherstellen, dass nächste Frames vollständig zeichnen
-      // (transform wird je Frame gesetzt; hier kein persistentes setTransform nötig)
+      // Wenn bereits eine Map existiert und noch kein Fit gemacht wurde,
+      // nach erstem vollständigen Resize das Fit durchführen.
+      if (S.map && !S.didInitialFit) {
+        try { fitToMapContain(); S.didInitialFit = true; } catch(e){ WARN('fitToMapContain@resize fail', e); }
+      }
     }
 
     addEventListener('resize', resize);
@@ -169,19 +179,71 @@ window.Game = window.Game || {};
     window.Game.getTileSize = ()=> S.tileW;
   }
 
+  /* ----------------------- Kamera-Fit / Focus-Zoom ------------------------ */
+  /**
+   * fitToMapContain()
+   * - Setzt Zoom so, dass die komplette Map in den sichtbaren Bereich passt (contain),
+   *   und zentriert die Kamera entsprechend.
+   */
+  function fitToMapContain() {
+    const worldW = S.cols * S.tileW;
+    const worldH = S.rows * S.tileH;
+
+    if (!worldW || !worldH) return;       // keine Map
+
+    const cssW = S.cssW || window.innerWidth;
+    const cssH = S.cssH || window.innerHeight;
+
+    const zFit = Math.min(
+      worldW ? (cssW / worldW) : 1,
+      worldH ? (cssH / worldH) : 1
+    ) || 1;
+
+    S.cam.zoom = Math.max(0.1, Math.min(3, zFit));
+
+    const viewW = cssW / S.cam.zoom;
+    const viewH = cssH / S.cam.zoom;
+
+    S.cam.x = Math.max(0, (worldW - viewW) * 0.5);
+    S.cam.y = Math.max(0, (worldH - viewH) * 0.5);
+  }
+
+  /**
+   * zoomAt(cx,cy,nextZoom)
+   * - Fokus-gesperrter Zoom: Der Screen-Punkt (cx,cy) (Client-Koords) bleibt
+   *   auf derselben Welt-Position stehen.
+   */
+  function zoomAt(focusClientX, focusClientY, nextZoom) {
+    const c = S.canvas; if (!c) return;
+    const rect = c.getBoundingClientRect();
+
+    // Screen → Canvas
+    const cx = focusClientX - rect.left;
+    const cy = focusClientY - rect.top;
+
+    // Canvas → World (vorheriger Zoom)
+    const wxBefore = (cx / S.cam.zoom) + S.cam.x;
+    const wyBefore = (cy / S.cam.zoom) + S.cam.y;
+
+    // neuen Zoom setzen
+    const z = Math.max(0.1, Math.min(3, nextZoom || 1));
+    S.cam.zoom = z;
+
+    // Kamera so verschieben, dass Fokuspunkt stabil bleibt
+    S.cam.x = wxBefore - (cx / z);
+    S.cam.y = wyBefore - (cy / z);
+  }
+
   /* ---------------------------- Kamera/Transform -------------------------- */
   function clear(){
     const c=S.canvas, ctx=S.ctx;
     ctx.setTransform(1,0,0,1,0,0);              // Reset (wichtig fürs Clear bei DPR)
-    // Füllt die *physikalische* Backing-Store-Größe – deshalb kein CSS-Maß hier!
     ctx.fillStyle='#101418';
-    ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillRect(0,0,c.width,c.height);         // Backing-Store (DPR) füllen
   }
 
   function applyCamera(){
-    // Wir zeichnen in World-Pixeln. Transform rechnet Canvas→World:
-    // scale = zoom * DPR-Ausgleich? NEIN: Wir zeichnen im Backing-Store (DPR-Skaliert),
-    // daher bleibt Transform rein „Weltzoom“. DPR ist bereits in Canvasgröße eingerechnet.
+    // Transform: Canvas → World (scale + translate)
     const {x,y,zoom} = S.cam;
     S.ctx.setTransform(zoom,0,0,zoom, -x*zoom, -y*zoom);
   }
@@ -196,7 +258,7 @@ window.Game = window.Game || {};
     const sx = (index % S.tsCols) * S.tileW;
     const sy = Math.floor(index / S.tsCols) * S.tileH;
 
-    // Zielposition dx/dy sind World-Pixel (ohne Transform schon richtig)
+    // Zielposition dx/dy sind World-Pixel (Transform ist bereits aktiv)
     S.ctx.drawImage(img, sx,sy,S.tileW,S.tileH, dx,dy,S.tileW,S.tileH);
   }
 
@@ -227,7 +289,7 @@ window.Game = window.Game || {};
 
       for (let y=ty0; y<=ty1; y++){
         const rowIndex = y * cols;
-        const py = y * tileW; // tileH, aber W/H sind gleich groß im Top-Down-Tileset
+        const py = y * tileH;                // ★ Fix: korrektes Y mit tileH!
         for (let x=tx0; x<=tx1; x++){
           const px = x * tileW;
           const gid = data[rowIndex + x] | 0;
@@ -285,6 +347,9 @@ window.Game = window.Game || {};
       S.map = map||null;
       try { normalizeMap(S.map); } catch(e){ WARN('Map-Normalisierung fehlgeschlagen:', e?.message||e); }
 
+      // Beim ersten Start direkt passend einzoomen & zentrieren
+      try { fitToMapContain(); S.didInitialFit = true; } catch(e){ WARN('fitToMapContain@start fail', e); }
+
       if (!S.running){
         S.running = true;
         S.rafId = requestAnimationFrame(frame);
@@ -328,6 +393,14 @@ window.Game = window.Game || {};
   addEventListener('cb:camera-change', onCamera);
   addEventListener('cb:camera:update', onCamera); // für Input/ältere Module
 
+  // Fokus-Zoom per Event (z. B. aus Camera-Modul/Pinch)
+  addEventListener('req:camera:zoomAt', (e)=>{
+    const d=e.detail||{};
+    if (typeof d.cx==='number' && typeof d.cy==='number' && typeof d.zoom==='number') {
+      zoomAt(d.cx, d.cy, d.zoom);
+    }
+  });
+
   // Platzierungs-Ereignis (nur von neuem Input annehmen)
   addEventListener('cb:build:place', (e)=>{
     const d=e.detail||{};
@@ -345,8 +418,20 @@ window.Game = window.Game || {};
       if (!S.canvas) return;
       const evt = new Event('resize');
       window.dispatchEvent(evt);
-    }
+    },
+    fitToMapContain,   // für Inspector-Buttons praktisch
+    zoomAt             // extern ansteuerbar (Inspector/Camera)
   };
 
-  OK('Modul geladen (', 'v25.11.14-final.2', ')');
+  /* -------------------------- Optional: Wheel-Zoom ------------------------ */
+  // Desktop-Komfort: STRG/Cmd + Mausrad zum Zoomen; Fokus ist Mausposition.
+  S.canvas?.addEventListener?.('wheel', (ev)=>{
+    if (!ev.ctrlKey && !ev.metaKey) return;     // nur mit Modifikatortaste zoomen
+    ev.preventDefault();
+    const factor = ev.deltaY < 0 ? 1.1 : 1/1.1; // sanfte Stufen
+    const next = S.cam.zoom * factor;
+    zoomAt(ev.clientX, ev.clientY, next);
+  }, { passive:false });
+
+  OK('Modul geladen (', 'v25.11.15-final', ')');
 })();
