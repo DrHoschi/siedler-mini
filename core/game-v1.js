@@ -1,15 +1,17 @@
 /* ============================================================================
  * Datei   : core/game-v1.js
  * Projekt : Neue Siedler
- * Version : v25.11.16-final (square+cover fit, culling-fix, focus-zoom)
- * Build   : cam-transform · DPR/resize-fix · view-culling · dual camera events
- * Zweck   : Map rendern (Tiles) + Kamera-Transform + Gebäude-Renderer (basic)
+ * Version : v25.11.16-final.3
+ * Build   : DPR/ResizeObserver • view-culling-fix • focus-zoom • dual camera evts
+ * Zweck   : Tiles rendern + Kamera-Transform + einfache Gebäude-Overlays
  *
- * Änderungen ggü. v25.11.14-final.2
- * - Quadratischer Canvas (Seite = min(innerWidth, innerHeight))
- * - Fit-Modus "cover": Map füllt das Quadrat (nicht winzig, kein "contain")
- * - Culling-Fix (py = y*tileH)
- * - Focus-Zoom (zoomAnker bleibt unter Finger/Zeiger), Wheel-zoom optional
+ * WICHTIG (gegenüber deiner Vorlage):
+ * 1) Canvas-Größe kommt JETZT aus dem echten Layout-Rechteck
+ *    (getBoundingClientRect + ResizeObserver). KEIN Setzen von style.width/height
+ *    und KEIN innerWidth/innerHeight mehr → passt zu ui-layout.css!
+ * 2) Culling-Fix: py = y * tileH.
+ * 3) fitToMap() nutzt S.cssW/H (vom Layout) und respektiert 'contain' / 'cover'.
+ * 4) Focus-Zoom (zoomAt) verankert Zoom am Finger/Zeiger.
  * ========================================================================== */
 window.Game = window.Game || {};
 (function(){
@@ -23,10 +25,10 @@ window.Game = window.Game || {};
   const ERR  = (...a)=> (window.CBLog?.error?? console.error)(TAG, ...a);
 
   /* --------------------------- Anzeige-Präferenzen ------------------------ */
-  // mode: 'square' erzwingt quadratischen Canvas; fit: 'cover' oder 'contain'
-  //const VIEW_PREF = { mode: 'square', fit: 'cover' }; kleine map
-  const VIEW_PREF = { mode: 'square', fit: 'contain' };
-  
+  // Nur noch der Fit-Modus wird hier gesteuert. Das Quadrat/der verfügbare Bereich
+  // kommt AUS DEM CSS (ui-layout.css → Insets für HUD/Dock/Safe-Area).
+  const VIEW_PREF = { fit: 'contain' }; // 'contain' (komplett sichtbar) oder 'cover' (füllt Bereich)
+
   /* ------------------------------ Modul-Status ---------------------------- */
   const S = {
     // Map & Tileset
@@ -50,6 +52,9 @@ window.Game = window.Game || {};
 
     // initialer Fit schon erfolgt?
     didInitialFit:false,
+
+    // ResizeObserver (zum späteren disconnect)
+    _ro:null,
   };
 
   /* --------------------------- Canvas & Resize ---------------------------- */
@@ -63,46 +68,39 @@ window.Game = window.Game || {};
     ctx.imageSmoothingEnabled = false;
 
     S.canvas = el; S.ctx = ctx;
-    S.dpr = (window.devicePixelRatio || 1);
 
-    function resize(){
-      // Basis: Fenstergröße (sichtbarer Bereich)
-      let cssW = Math.max(1, Math.floor(window.innerWidth));
-      let cssH = Math.max(1, Math.floor(window.innerHeight));
+    // Layout aus dem echten CSS-Rechteck übernehmen (passt zu ui-layout.css)
+    function relayoutFromRect(){
+      const dpr  = window.devicePixelRatio || 1;
+      const rect = S.canvas.getBoundingClientRect();      // ← das vom CSS definierte Feld
+      const cssW = Math.max(1, Math.floor(rect.width));
+      const cssH = Math.max(1, Math.floor(rect.height));
 
-      // Quadratischer Canvas: Seite = min(w,h)
-      if (VIEW_PREF.mode === 'square') {
-        const side = Math.min(cssW, cssH);
-        cssW = side; cssH = side;
-      }
-
-      // Physikalische Backing-Store-Größe = CSS * DPR
-      const dpr = (window.devicePixelRatio || 1);
+      // Backing-Store an CSS*DPR anpassen (NICHT style.width/height setzen!)
       const w = Math.floor(cssW * dpr);
       const h = Math.floor(cssH * dpr);
-
-      // Backing-Store & CSS-Size setzen
-      if (S.canvas.width !== w || S.canvas.height !== h) {
-        S.canvas.width  = w;
-        S.canvas.height = h;
-      }
-      S.canvas.style.width  = cssW + 'px';
-      S.canvas.style.height = cssH + 'px';
+      if (S.canvas.width  !== w) S.canvas.width  = w;
+      if (S.canvas.height !== h) S.canvas.height = h;
 
       S.cssW = cssW; S.cssH = cssH; S.dpr = dpr;
 
-      // Nach dem ersten vollständigen Resize initial fitten
       if (S.map && !S.didInitialFit) {
-        try { fitToMap(VIEW_PREF.fit); S.didInitialFit = true; }
-        catch(e){ WARN('fitToMap@resize fail', e); }
+        try { fitToMap(VIEW_PREF.fit); S.didInitialFit = true; } catch (e) { WARN('fitToMap@resize fail', e); }
       }
     }
 
-    addEventListener('resize', resize);
-    addEventListener('orientationchange', resize);
-    resize();
+    // Beobachte DOM/Layout-Änderungen (HUD/Dock/Safe-Area/Rotation)
+    try {
+      S._ro = new ResizeObserver(relayoutFromRect);
+      S._ro.observe(document.documentElement);
+      S._ro.observe(S.canvas);
+    } catch { /* älterer Safari ohne RO: Fallback über resize/orientation */ }
 
-    OK('Canvas init (DPR=', S.dpr, ' CSS=', S.cssW+'x'+S.cssH, ' BS=', S.canvas.width+'x'+S.canvas.height, ')');
+    addEventListener('resize', relayoutFromRect);
+    addEventListener('orientationchange', relayoutFromRect);
+
+    relayoutFromRect();
+    OK('Canvas init (layout-gebunden, DPR=', S.dpr, ', CSS=', S.cssW+'x'+S.cssH, ')');
   }
 
   /* --------------------------- Map-Normalisierung ------------------------- */
@@ -171,18 +169,17 @@ window.Game = window.Game || {};
   }
 
   /* ------------------------- Kamera-Fit / Focus-Zoom ---------------------- */
-  // Fit-Strategie: 'contain' (komplett sichtbar) oder 'cover' (füllt Viewport)
-  function fitToMap(strategy='cover') {
+  function fitToMap(strategy='contain') {
     const worldW = S.cols * S.tileW;
     const worldH = S.rows * S.tileH;
     if (!worldW || !worldH) return;
 
-    const cssW = S.cssW || window.innerWidth;
-    const cssH = S.cssH || window.innerHeight;
+    const cssW = S.cssW || 1;
+    const cssH = S.cssH || 1;
 
     const zContain = Math.min(cssW/worldW, cssH/worldH) || 1;
     const zCover   = Math.max(cssW/worldW, cssH/worldH) || 1;
-    const z = (strategy === 'contain') ? zContain : zCover;
+    const z = (strategy === 'cover') ? zCover : zContain;
 
     S.cam.zoom = Math.max(0.1, Math.min(3, z));
 
@@ -194,23 +191,19 @@ window.Game = window.Game || {};
     S.cam.y = Math.max(0, (worldH - viewH) * 0.5);
   }
 
-  // Fokus-gesperrter Zoom (cx,cy = Client-Koordinaten relativ zum Canvas-Viewport)
+  // Zoom verankert am Screen-Punkt (cx,cy) → bleibt auf gleicher Weltposition.
   function zoomAt(focusClientX, focusClientY, nextZoom) {
     const c = S.canvas; if (!c) return;
     const rect = c.getBoundingClientRect();
-
     const cx = focusClientX - rect.left;
     const cy = focusClientY - rect.top;
 
-    // Weltpunkt vor dem Zoom
     const wxBefore = (cx / S.cam.zoom) + S.cam.x;
     const wyBefore = (cy / S.cam.zoom) + S.cam.y;
 
-    // neuen Zoom setzen
     const z = Math.max(0.1, Math.min(3, nextZoom || 1));
     S.cam.zoom = z;
 
-    // Kamera so verschieben, dass der Fokus stabil bleibt
     S.cam.x = wxBefore - (cx / z);
     S.cam.y = wyBefore - (cy / z);
   }
@@ -222,7 +215,6 @@ window.Game = window.Game || {};
     ctx.fillStyle='#101418';
     ctx.fillRect(0,0,c.width,c.height);  // Backing-Store (DPR) füllen
   }
-
   function applyCamera(){
     const {x,y,zoom} = S.cam;
     S.ctx.setTransform(zoom,0,0,zoom, -x*zoom, -y*zoom);
@@ -259,7 +251,6 @@ window.Game = window.Game || {};
 
     for (const L of S.layers){
       const data=L.data; if(!Array.isArray(data)) continue;
-
       for (let y=ty0; y<=ty1; y++){
         const rowIndex = y * cols;
         const py = y * tileH;            // ★ Fix: korrektes Y!
@@ -319,7 +310,7 @@ window.Game = window.Game || {};
       S.map = map||null;
       try { normalizeMap(S.map); } catch(e){ WARN('Map-Normalisierung fehlgeschlagen:', e?.message||e); }
 
-      // Direkt passend einzoomen & zentrieren (quadratisch + cover)
+      // Mit dem vom CSS vorgegebenen Sichtfenster passend einzoomen & zentrieren
       try { fitToMap(VIEW_PREF.fit); S.didInitialFit = true; }
       catch(e){ WARN('fitToMap@start fail', e); }
 
@@ -397,5 +388,5 @@ window.Game = window.Game || {};
     zoomAt(ev.clientX, ev.clientY, S.cam.zoom * factor);
   }, { passive:false });
 
-  OK('Modul geladen (', 'v25.11.16-final', ')');
+  OK('Modul geladen (', 'v25.11.16-final.3', ')');
 })();
