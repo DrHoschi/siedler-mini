@@ -1,23 +1,33 @@
 /* ============================================================================
  * Datei    : ui/ui-place.js
  * Projekt  : Neue Siedler
- * Version  : v24.2.0 (2025-10-08)
- * Zweck    : Platziermodus-UI (Ghost, ✅/❌, Grün/Rot-Tint). Zentriert
- *            sichtbar starten; Maus/Touch; Canvas-Offsets; Zoom-responsiv.
+ * Version  : v25.11.16-camera-std
+ * Zweck    : Platziermodus-UI (DOM-Ghost mit OK/Cancel) – kompatibel zu
+ *            neuem Kamera-Standard (cb:camera-change/update, req:camera:zoomAt)
  *
- * Events (listen)
+ * Lauscht  :
  *   - req:place:start   { buildingId }
- *   - cb:zoom:change    { scale }             → Größe/Position anpassen
- *   - cb:place:preview  { tx,ty,w,h,valid }   → Validität vom Core
+ *   - cb:place:preview  { tx,ty,w,h,valid }     → Validität vom Core
+ *   - cb:place:done                         → nach erfolgreicher Platzierung
+ *   - cb:camera-change {x,y,zoom}           → Kamera A
+ *   - cb:camera:update {x,y,zoom}           → Kamera B (Input nutzt das)
  *
- * Events (emit)
- *   - req:place:cursor  { tx, ty, w, h, id }  → Core kann Validität prüfen
- *   - req:place:confirm { tx, ty }            → angepasst an core/game.js
+ * Sendet   :
+ *   - req:place:cursor  { tx, ty, w, h, id }
+ *   - req:place:confirm { tx, ty }
  *   - req:place:cancel
+ *
+ * Wichtige Änderungen ggü. Altversion:
+ *   ✓ Kein Zoom.js / kein cb:zoom:change mehr
+ *   ✓ Tilegröße auf dem Bildschirm = Game.tileSize * cam.zoom
+ *   ✓ screenToTile() rechnet mit cam.{x,y,zoom} (World-Space exakt)
+ *   ✓ Re-Layout des Ghosts bei Kamera-Änderungen
+ *   ✓ Entfernt: globaler cb:set-build-tool Dispatch am Dateiende (Fehltrigger)
  * ========================================================================== */
 (function(){
   'use strict';
 
+  /* ------------------------------ DOM-Grundgerüst ------------------------- */
   const overlay = document.createElement('div');
   overlay.className = 'place-overlay';
   document.body.appendChild(overlay);
@@ -30,73 +40,80 @@
     </div>
   `;
 
-    function resizeSprite(){
-    if (!active) return;
-    const tpx = tileSize();
-    $sprite.style.setProperty('--w', (active.w * tpx) + 'px');
-    $sprite.style.setProperty('--h', (active.h * tpx) + 'px');
-    $sprite.style.backgroundImage = `url(${iconsBaseBuildings()}${active.file})`;
-    // Position der Buttons an die Ecke unten links/rechts der Ghost-Kachel
-    positionButtons();
-  }
-
-  function positionButtons(){
-    const tpx = tileSize();
-    const pad = Math.round(Math.max(6, tpx * 0.08));
-    // Unten links / unten rechts relativ zur Ghost-Position
-    $ok.style.left = pad + 'px';
-    $ok.style.bottom = pad + 'px';
-    $cancel.style.right = pad + 'px';
-    $cancel.style.bottom = pad + 'px';
-  }
-
-  // Nach erfolgreicher Platzierung vom Game schließen
-  window.addEventListener('cb:place:done', ()=>{
-    stop();
-  });
-
   const $ghost  = overlay.querySelector('#place-ghost');
   const $sprite = overlay.querySelector('.ghost-sprite');
   const $tint   = overlay.querySelector('.ghost-tint');
   const $ok     = overlay.querySelector('.place-btn.ok');
   const $cancel = overlay.querySelector('.place-btn.cancel');
-
   const $canvas = document.getElementById('game');
 
-  function emit(name, detail={}){ window.dispatchEvent(new CustomEvent(name, { detail })); }
-  const log = (...a)=> (window.CBLog?.ok || console.log)('[place]', ...a);
+  /* --------------------------------- Utils -------------------------------- */
+  const emit = (name, detail={}) => window.dispatchEvent(new CustomEvent(name, { detail }));
+  const LOG  = (...a)=> (window.CBLog?.ok || console.log)('[place]', ...a);
 
-  function iconsBaseBuildings(){
-    const base = (typeof Registry?.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
-    return base.replace(/\/?$/,'/');
+  const baseTileSize = () => (window.Game?.getTileSize ? window.Game.getTileSize() : (window.Game?.tileSize || 64));
+
+  // Kamera-Status (World-Pixel)
+  const cam = { x:0, y:0, zoom:1 };
+  function onCamera(ev){
+    const d = ev?.detail||{};
+    if (typeof d.x==='number')    cam.x = d.x;
+    if (typeof d.y==='number')    cam.y = d.y;
+    if (typeof d.zoom==='number') cam.zoom = Math.max(0.1, d.zoom||1);
+    // Ghost an neue Kamera anpassen (Größe & Position behalten)
+    resizeSprite();
+    if (active) updateSpritePositionFromTile(last.tx, last.ty);
   }
-  function getZoom(){ return (window.Zoom && typeof Zoom.scale === 'number') ? Zoom.scale : 1; }
-  function baseTileSize(){ return window.Game?.tileSize || 32; }
-  function tileSize(){ return baseTileSize() * getZoom(); }
+  window.addEventListener('cb:camera-change', onCamera);
+  window.addEventListener('cb:camera:update', onCamera);
 
-  // Screen → Tile relativ ZUM CANVAS (nicht zum Fenster)
+  // Bildschirm-Tilegröße (in CSS-px) = BasisTile * Zoom
+  const tileSizePx = () => baseTileSize() * cam.zoom;
+
+  // Hilfsrechner: Screen → Tile (berücksichtigt Kamera & Canvas-Rect)
   function screenToTile(clientX, clientY){
     const rect = $canvas?.getBoundingClientRect();
     if (!rect) return { tx:0, ty:0, sx:0, sy:0 };
-    const tpx = tileSize();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    const tx = Math.max(0, Math.floor(x / tpx));
-    const ty = Math.max(0, Math.floor(y / tpx));
-    return { tx, ty, sx: rect.left + tx*tpx, sy: rect.top + ty*tpx };
+
+    // Screen-Koords relativ zum Canvas
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+
+    // Screen → World → Tile
+    const worldX = (sx / cam.zoom) + cam.x;
+    const worldY = (sy / cam.zoom) + cam.y;
+    const tW = baseTileSize();
+    const tx = Math.max(0, Math.floor(worldX / tW));
+    const ty = Math.max(0, Math.floor(worldY / tW));
+
+    // Tile-TopLeft zurück in Screen-Koords (für Ghost-Translate)
+    const screenX = (tx * tW - cam.x) * cam.zoom + rect.left;
+    const screenY = (ty * tW - cam.y) * cam.zoom + rect.top;
+
+    return { tx, ty, sx: screenX, sy: screenY };
   }
 
-  // ---------------------------- State ---------------------------------------
+  // Aus vorhandenen Tile-Koords die Screen-Position berechnen
+  function updateSpritePositionFromTile(tx, ty){
+    const rect = $canvas?.getBoundingClientRect();
+    if (!rect) return;
+    const tW = baseTileSize();
+    const screenX = (tx * tW - cam.x) * cam.zoom + rect.left;
+    const screenY = (ty * tW - cam.y) * cam.zoom + rect.top;
+    $sprite.style.transform = `translate(${screenX}px, ${screenY}px)`;
+  }
+
+  /* --------------------------------- State -------------------------------- */
   let active = null; // { id, w, h, file }
   let last   = { tx:0, ty:0, valid:true };
 
-  // ---------------------------- Start / Stop --------------------------------
+  /* ------------------------------ Lifecycle -------------------------------- */
   window.addEventListener('req:place:start', (ev)=>{
     const id = ev?.detail?.buildingId;
     if (!id) return;
 
     const b = (typeof Registry?.get === 'function') ? Registry.get('buildings', id) : null;
-    if (!b){ log('building not found', id); return; }
+    if (!b){ LOG('building not found', id); return; }
 
     const w = (b?.size?.w || b?.size?.[0] || 1);
     const h = (b?.size?.h || b?.size?.[1] || 1);
@@ -112,9 +129,8 @@
     window.addEventListener('mousemove', onMouseMove, { passive:true });
     window.addEventListener('touchmove', onTouchMove, { passive:true });
     window.addEventListener('keydown',   onKeyDown);
-    window.addEventListener('cb:zoom:change', onZoomChanged);
 
-    log('start', active);
+    LOG('start', active);
   });
 
   function stop(){
@@ -122,41 +138,27 @@
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('touchmove', onTouchMove);
     window.removeEventListener('keydown',   onKeyDown);
-    window.removeEventListener('cb:zoom:change', onZoomChanged);
     active = null;
   }
 
-  // ---------------------------- Darstellung ---------------------------------
+  /* ------------------------------ Darstellung ----------------------------- */
   function resizeSprite(){
     if (!active) return;
-    const tpx = tileSize();
+    const tpx = tileSizePx();
+    $sprite.style.setProperty('--w', (active.w * tpx) + 'px');
+    $sprite.style.setProperty('--h', (active.h * tpx) + 'px');
+
+    // Fallbacks (falls CSS-Variablen im Theme nicht genutzt werden)
     $sprite.style.width  = (active.w * tpx) + 'px';
     $sprite.style.height = (active.h * tpx) + 'px';
+
     $sprite.style.backgroundImage = `url(${iconsBaseBuildings()}${active.file})`;
     $sprite.style.backgroundSize  = 'cover';
     positionButtons();
   }
 
-  function centerGhostOnScreen(){
-    if (!active) return;
-    const tpx = tileSize();
-    const rect = $canvas?.getBoundingClientRect();
-    const cx = (rect ? rect.left + rect.width/2 : window.innerWidth/2);
-    const cy = (rect ? rect.top  + rect.height/2: window.innerHeight/2);
-
-    // snap auf Kachel
-    const tx = Math.max(0, Math.floor((cx - (rect?.left||0)) / tpx) - Math.floor(active.w/2));
-    const ty = Math.max(0, Math.floor((cy - (rect?.top ||0)) / tpx) - Math.floor(active.h/2));
-    const sx = (rect ? rect.left : 0) + tx*tpx;
-    const sy = (rect ? rect.top  : 0) + ty*tpx;
-
-    $sprite.style.transform = `translate(${sx}px, ${sy}px)`;
-    last.tx = tx; last.ty = ty;
-    setTint(true);
-  }
-
   function positionButtons(){
-    const tpx = tileSize();
+    const tpx = tileSizePx();
     const pad = Math.round(Math.max(6, tpx * 0.08));
     $ok.style.left      = pad + 'px';
     $ok.style.bottom    = pad + 'px';
@@ -164,6 +166,31 @@
     $cancel.style.bottom= pad + 'px';
   }
 
+  function iconsBaseBuildings(){
+    const base = (typeof Registry?.iconsBase === 'function' ? Registry.iconsBase() : '') || 'assets/icons/buildings/';
+    return base.replace(/\/?$/,'/');
+  }
+
+  function centerGhostOnScreen(){
+    if (!active) return;
+    const rect = $canvas?.getBoundingClientRect();
+    const cssW = rect ? rect.width  : window.innerWidth;
+    const cssH = rect ? rect.height : window.innerHeight;
+
+    // Weltmittelpunkt des Canvas
+    const worldCenterX = cam.x + (cssW / cam.zoom) * 0.5;
+    const worldCenterY = cam.y + (cssH / cam.zoom) * 0.5;
+
+    const tW = baseTileSize();
+    const tx = Math.max(0, Math.floor(worldCenterX / tW) - Math.floor(active.w/2));
+    const ty = Math.max(0, Math.floor(worldCenterY / tW) - Math.floor(active.h/2));
+
+    last.tx = tx; last.ty = ty;
+    updateSpritePositionFromTile(tx, ty);
+    setTint(true);
+  }
+
+  /* ------------------------------- Input ---------------------------------- */
   function onMouseMove(e){
     if (!active) return;
     const { tx, ty, sx, sy } = screenToTile(e.clientX, e.clientY);
@@ -185,8 +212,6 @@
     emit('req:place:cursor', { tx, ty, w: active.w, h: active.h, id: active.id });
   }
 
-  function onZoomChanged(){ resizeSprite(); }
-
   function onKeyDown(e){
     if (e.key === 'Escape' || e.key === 'Backspace'){
       emit('req:place:cancel'); stop();
@@ -197,21 +222,25 @@
   }
 
   $ok.addEventListener('click', confirmPlace);
-  $cancel.addEventListener('click', ()=>{
-    emit('req:place:cancel'); stop();
-  });
+  $cancel.addEventListener('click', ()=>{ emit('req:place:cancel'); stop(); });
 
   function confirmPlace(){
     if (!active) return;
-    emit('req:place:confirm', { tx: last.tx, ty: last.ty }); // <— an game.js angepasst
+    emit('req:place:confirm', { tx: last.tx, ty: last.ty });
+    // Bei Erfolg kommt cb:place:done; zur Sicherheit hier schon mal schließen:
+    stop();
   }
 
-  // Vorschau (rot/grün) vom Core
+  // Nach erfolgreicher Platzierung vom Game schließen
+  window.addEventListener('cb:place:done', stop);
+
+  /* ------------------------------ Preview-Tint ----------------------------- */
   window.addEventListener('cb:place:preview', (ev)=>{
     const d = ev?.detail||{};
     if (!active) return;
     if (typeof d.tx === 'number' && typeof d.ty === 'number'){
       last.tx = d.tx; last.ty = d.ty;
+      updateSpritePositionFromTile(last.tx, last.ty);
     }
     setTint(d.valid !== false);
   });
@@ -220,7 +249,4 @@
     $tint.classList.toggle('is-invalid', !valid);
     $tint.classList.toggle('is-valid', !!valid);
   }
-  // am Ende von confirm/cancel in ui/ui-place.js
-// am Ende von confirm/cancel in ui/ui-place.js
-window.dispatchEvent(new CustomEvent('cb:set-build-tool', { detail:{ type:null }}));
 })();
