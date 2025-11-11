@@ -1,248 +1,120 @@
-/* ============================================================================
+/* =============================================================================
  * Datei   : ui/ui-hud.js
  * Projekt : Neue Siedler
- * Version : v25.11.16-final-fix1
- * Zweck   : Ressourcen-HUD (Holzleiste) sicher anzeigen & live aktualisieren
- *
- * Warum diese Fix-Version?
- * - HUD verschwand nach Update → hierrobust gemacht:
- *   1) Rendert **sofort** nach DOMContentLoaded (nicht nur per Events)
- *   2) Rendert **idempotent** (mehrfacher Init unkritisch)
- *   3) Nutzt **klassische UND neue** Klassennamen parallel
- *      (kompatibel zu bestehenden CSS-Selektoren)
- *   4) Löst **req:res:snapshot** aus, damit Werte geladen werden
- *   5) Kein doppeltes Listener-Chaos
- *
- * Ereignisse (Standard)
- *  Lauscht : cb:registry:ready
- *           cb:game:start
- *           cb:res:change     { res, value? | delta? }
- *           cb:res:reset      { snapshot }      (optional)
- *           cb:res:snapshot   { snapshot }      (Antwort auf req:res:snapshot)
- *  Sendet  : cb:hud-ready     { ok:true }
- *  Fordert : req:res:snapshot
- *
- * Hinweise
- * - Sichtbarkeit wird über CSS (body.is-playing) gesteuert → ui-layout.js setzt das.
- * - Diese Datei erzeugt #hud-root falls nicht vorhanden.
- * ========================================================================== */
+ * Version : v25.10.19-final2
+ * Zweck   : Ressourcen-HUD initialisieren & aktualisieren
+ * Events  : listen  -> cb:game:start, cb:registry:ready, cb:res:change
+ *           emit    -> cb:hud-ready
+ * Hinweise:
+ *   - Greift, falls vorhanden, auf window.Registry zu (labels, icons, order).
+ *   - Ohne Registry verwendet es sinnvolle Default-Ressourcen.
+ *   - Zeichnet nur DOM; Styling kommt aus den CSS-Dateien (ui/ui.css, ui-layout.css, ...).
+ * ============================================================================ */
+(function (root, factory) {
+  root.UIHUD = factory();
+})(typeof window !== 'undefined' ? window : this, function () {
 
-/* ------------------------------- Logging ---------------------------------- */
-const _TAG  = '[hud]';
-const _OK   = (...a)=>(window.CBLog?.ok   ?? console.log)(_TAG, ...a);
-const _LOG  = (...a)=>(window.CBLog?.info ?? console.info)(_TAG, ...a);
-const _WARN = (...a)=>(window.CBLog?.warn ?? console.warn)(_TAG, ...a);
-const _ERR  = (...a)=>(window.CBLog?.error?? console.error)(_TAG, ...a);
+  const TAG = '[hud]';
+  const log = (m)=> (window.CBLog?.info||console.info)(`${TAG} ${m}`);
+  const warn= (m)=> (window.CBLog?.warn||console.warn)(`${TAG} ${m}`);
 
-/* ------------------------------- Konstanten -------------------------------- */
-const DEFAULT_ICONS_BASE = 'assets/icons/resources/';
-const FALLBACK_RESOURCES = [
-  { id:'wood',  name:'Holz',    icon:'wood.png',  order:10 },
-  { id:'stone', name:'Stein',   icon:'stone.png', order:20 },
-  { id:'food',  name:'Nahrung', icon:'food.png',  order:30 },
-  { id:'gold',  name:'Gold',    icon:'gold.png',  order:40 },
-];
+  // --------------------------- Utils ---------------------------
+  const $  = (sel, ctx=document)=> ctx.querySelector(sel);
+  const el = (tag, cls)=>{ const n=document.createElement(tag); if(cls) n.className=cls; return n; };
 
-/* ------------------------------- Hilfsfunktionen --------------------------- */
-function iconsBase(){
-  try{
-    const base = (typeof window.Registry?.iconsBase === 'function')
-      ? window.Registry.iconsBase()
-      : DEFAULT_ICONS_BASE;
-    return (base || DEFAULT_ICONS_BASE).replace(/\/?$/,'/');
-  }catch{ return DEFAULT_ICONS_BASE; }
-}
-function readResources(){
-  try{
-    if (typeof window.Registry?.list === 'function'){
-      const list = window.Registry.list('resources');
-      if (Array.isArray(list) && list.length){
-        return list.map((r,i)=>({
-          id:    r.id    ?? `res_${i}`,
-          name:  r.name  ?? (r.id||`Res ${i}`),
-          icon:  r.icon  ?? `${r.id||`res_${i}`}.png`,
-          order: Number(r.order ?? (i+1)*10)
-        })).sort((a,b)=>(a.order|0)-(b.order|0));
-      }
+  function defaultResources(){
+    // Fallback-Reihenfolge Epoche 1 (erweiterbar) – Labels deutsch
+    return [
+      { id:'wood',  label:'Holz',  icon:'assets/icons/resources/wood.png',  value:0 },
+      { id:'stone', label:'Stein', icon:'assets/icons/resources/stone.png', value:0 },
+      { id:'food',  label:'Nahrung', icon:'assets/icons/resources/food.png', value:0 },
+      { id:'gold',  label:'Gold',  icon:'assets/icons/resources/gold.png',  value:0 }
+    ];
+  }
+
+  function fromRegistry(){
+    try{
+      if (!window.Registry || typeof Registry.list !== 'function') return null;
+      const resMeta = Registry.list('resources') || [];
+      if (!Array.isArray(resMeta) || !resMeta.length) return null;
+      return resMeta.map(r => ({
+        id: String(r.id || '').trim(),
+        label: String(r.label || r.id || '').trim(),
+        icon: r.icon || `assets/icons/resources/${r.id}.png`,
+        value: 0
+      }));
+    } catch(e){
+      warn('Registry.list("resources") fehlgeschlagen – nutze Defaults.');
+      return null;
     }
-  }catch(e){ _WARN('Registry-Lesen fehlgeschlagen → Fallback', e?.message||e); }
-  return FALLBACK_RESOURCES.slice();
-}
-function el(tag, cls, attrs){
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (attrs) for (const k in attrs) n.setAttribute(k, attrs[k]);
-  return n;
-}
-const fmt = v => Number.isFinite(v) ? String(v|0) : '0';
-
-/* --------------------------------- State ---------------------------------- */
-const HUD = {
-  mounted   : false,
-  $root     : null,
-  $bar      : null,
-  iconsBase : DEFAULT_ICONS_BASE,
-  ids       : [],
-  nodes     : new Map(),             // id → {cell,labelEl,valueEl,iconEl}
-  values    : Object.create(null),   // id → number
-  focus     : null
-};
-
-/* ------------------------------ DOM-Aufbau --------------------------------- */
-/**
- * Achtung CSS-Kompat: Wir vergeben sowohl „neue“ Klassen (.hud__bar, .hud__cell)
- * als auch „alte“ Varianten (.hud, .hud-bar, .hud-cell …), damit bestehende
- * Styles sicher greifen – unabhängig davon, welche CSS-Version gerade aktiv ist.
- */
-function ensureRoot(){
-  if (HUD.$root && HUD.$bar) return;
-
-  let root = document.getElementById('hud-root');
-  if (!root){
-    root = el('div', 'hud-root', { id:'hud-root' });
-    document.body.appendChild(root);
   }
 
-  // Nur ersetzen, wenn keine kompatible Struktur existiert
-  const hasBar =
-    root.querySelector('.hud__bar') ||
-    root.querySelector('.hud-bar')  ||
-    root.querySelector('.hud');
-  if (!hasBar){
-    root.innerHTML = `
-      <div class="hud__wrap hud-wrap">
-        <div class="hud__bar hud-bar hud" role="toolbar" aria-label="Ressourcen"></div>
-      </div>
-    `;
+  // Zeichnet Zellen neu
+  function render(host, model){
+    host.innerHTML = '';
+    model.forEach(r=>{
+      const cell  = el('div','hud__cell'); cell.dataset.res = r.id;
+      const wrap  = el('div','hud__icon-wrap');
+      const icon  = el('img','hud__icon'); icon.alt = r.label; icon.src = r.icon;
+      const name  = el('div','hud__title'); name.textContent = r.label;
+      const val   = el('div','hud__value'); val.textContent = String(r.value ?? 0);
+
+      wrap.appendChild(icon);
+      cell.append(name, wrap, val);
+      host.appendChild(cell);
+    });
   }
 
-  HUD.$root = root;
-  HUD.$bar  = root.querySelector('.hud__bar, .hud-bar, .hud');
-}
+  // Aktualisiert eine Ressource – minimal robust
+  function patch(host, resId, deltaOrAbs){
+    const cell = host.querySelector(`.hud__cell[data-res="${resId}"]`);
+    if (!cell) return;
 
-/** Eine Zelle erzeugen (mit alten & neuen Klassennamen) */
-function createCell(meta){
-  const { id, name, icon } = meta;
-  const cell   = el('div', 'hud__cell hud-cell', { 'data-res':id, 'tabindex':'0', role:'button', 'aria-label':name });
-  const iconEl = el('div', 'hud__icon hud-icon');
-  const label  = el('div', 'hud__label hud-label');  label.textContent = name;
-  const value  = el('div', 'hud__value hud-value');  value.textContent = '0';
+    const valEl = cell.querySelector('.hud__value');
+    const oldV  = Number(valEl?.textContent || 0);
+    const newV  = (typeof deltaOrAbs === 'object' && typeof deltaOrAbs.value === 'number')
+      ? deltaOrAbs.value
+      : (typeof deltaOrAbs === 'number' ? (oldV + deltaOrAbs) : oldV);
 
-  iconEl.style.backgroundImage = `url("${HUD.iconsBase + icon}")`;
-  iconEl.style.backgroundSize  = 'cover';
+    if (valEl) valEl.textContent = String(newV);
 
-  cell.append(iconEl, label, value);
-  HUD.$bar.appendChild(cell);
-
-  cell.addEventListener('click', ()=> setFocus(id));
-  HUD.nodes.set(id, { cell, iconEl, labelEl:label, valueEl:value });
-}
-
-/** Komplettaufbau */
-function renderAll(resList){
-  ensureRoot();
-
-  HUD.$bar.innerHTML = '';
-  HUD.nodes.clear();
-
-  HUD.iconsBase = iconsBase();
-  HUD.ids = resList.map(r=>r.id);
-
-  for (const r of resList) createCell(r);
-  HUD.mounted = true;
-
-  // Bereits bekannte Werte erneut auftragen
-  for (const id of HUD.ids) patchValue(id, HUD.values[id]);
-}
-
-/** Einzelupdate */
-function patchValue(id, value){
-  const node = HUD.nodes.get(id);
-  HUD.values[id] = Number.isFinite(value) ? (value|0) : 0;
-  if (node) node.valueEl.textContent = fmt(HUD.values[id]);
-  if (node) node.cell.classList.toggle('is-focus', HUD.focus === id);
-}
-
-function setFocus(idOrNull){
-  const id = idOrNull || null;
-  if (HUD.focus === id) return;
-  HUD.focus = id;
-  for (const rid of HUD.ids){
-    const n = HUD.nodes.get(rid);
-    if (n) n.cell.classList.toggle('is-focus', rid === id);
+    // kleines Highlight
+    cell.classList.add('is-updated');
+    setTimeout(()=> cell.classList.remove('is-updated'), 300);
   }
-  if (id){
-    // optionales Spiegel-Signal an andere Systeme
-    window.dispatchEvent(new CustomEvent('req:res:focus', { detail:{ res:id } }));
-  }
-}
 
-/* ------------------------------- Events ----------------------------------- */
-function tryInit(reason){
-  try{
-    const list = readResources();
-    renderAll(list);
-    // Werte anfordern (falls ein Ressourcensystem aktiv ist)
-    window.dispatchEvent(new CustomEvent('req:res:snapshot'));
+  // --------------------------- API ---------------------------
+  function init() {
+    let host = $('#hud-root');
+    if (!host){
+      host = el('div'); host.id = 'hud-root';
+      document.body.appendChild(host);
+    }
+
+    // Reihenfolge über Registry (falls vorhanden), sonst Defaults
+    const model = fromRegistry() || defaultResources();
+    render(host, model);
+
+    // Erstellt/zeigt den Build-Button, wenn noch hidden
+    const btnBuild = $('#btn-build');
+    if (btnBuild) btnBuild.hidden = false;
+
+    // Events: Ressourcenänderungen anwenden
+    window.addEventListener('cb:res:change', (e)=>{
+      const d = e?.detail || e;
+      // d kann {res, delta} oder {res, value} sein
+      if (d && d.res){ patch(host, d.res, ('value' in d) ? {value:d.value} : (d.delta||0)); }
+    });
+
+    (window.CBLog?.ok||console.log)('[hud] bereit');
     window.dispatchEvent(new CustomEvent('cb:hud-ready', { detail:{ ok:true } }));
-    _OK('bereit', { reason, count: HUD.ids.length });
-  }catch(e){
-    _ERR('Init-Fehler:', e?.message||e);
   }
-}
-function onRegistryReady(){ tryInit('registry'); }
-function onGameStart(){      if (!HUD.mounted) tryInit('game-start'); }
-function onResChange(ev){
-  const d = ev?.detail || {};
-  if (!d.res) return;
-  const prev = Number(HUD.values[d.res] ?? 0);
-  const next = Number.isFinite(d.value) ? d.value : (prev + (Number(d.delta)||0));
-  patchValue(d.res, next);
-}
-function onResSnapshotOrReset(ev){
-  const snap = ev?.detail?.snapshot || ev?.detail || {};
-  if (snap && typeof snap === 'object'){
-    for (const id of HUD.ids){
-      if (Object.prototype.hasOwnProperty.call(snap, id)){
-        patchValue(id, Number(snap[id])||0);
-      }
-    }
-  }
-}
 
-/* ------------------------------ Bootstrap --------------------------------- */
-/**
- * WICHTIG: Neben den Projekt-Events initialisieren wir **zusätzlich**
- * beim DOMContentLoaded – so ist die Leiste immer vorhanden (CSS blendet
- * sie ggf. vor Spielstart aus, siehe ui-layout.css).
- */
-(function boot(){
-  // Projekt-Events
-  window.addEventListener('cb:registry:ready', onRegistryReady);
-  window.addEventListener('cb:game:start',     onGameStart, { once:true });
+  return { init };
+});
+window.addEventListener('cb:res:change', (ev)=> HUD.render(ev.detail));
+(window.CBLog?.ok||console.log)('[hud] bereit'); window.dispatchEvent(new CustomEvent('cb:hud-ready'));
 
-  window.addEventListener('cb:res:change',   onResChange);
-  window.addEventListener('cb:res:reset',    onResSnapshotOrReset);
-  window.addEventListener('cb:res:snapshot', onResSnapshotOrReset);
-
-  // Sofortige DOM-Initialisierung (failsafe)
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', ()=> { if (!HUD.mounted) tryInit('dom'); });
-  } else {
-    if (!HUD.mounted) tryInit('dom-now');
-  }
-})();
-
-/* -------------------------------- Exporte --------------------------------- */
-window.HUD = {
-  list : ()=> HUD.ids.slice(),
-  set  : (id,v)=> patchValue(id,v),
-  focus: (id)=> setFocus(id||null),
-  render: ()=> renderAll(readResources()),
-  snapshot(){
-    const values = {}; for (const k of Object.keys(HUD.values)) values[k]=HUD.values[k];
-    return { ids:HUD.ids.slice(), values, mounted:HUD.mounted, iconsBase:HUD.iconsBase, focus:HUD.focus };
-  }
-};
-
-_LOG('geladen (v25.11.16-final-fix1)');
+// Lifecycle-Hooks: HUD zum Spielstart aufbauen, bei Registry-Ready ebenfalls (idempotent)
+window.addEventListener('cb:game:start',   ()=> window.UIHUD?.init?.(), { passive:true });
+window.addEventListener('cb:registry:ready',()=> window.UIHUD?.init?.(), { passive:true });
