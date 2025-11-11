@@ -24,8 +24,9 @@ window.Game = window.Game || {};
 
   /* --------------------------- Anzeige-Präferenzen ------------------------ */
   // mode: 'square' erzwingt quadratischen Canvas; fit: 'cover' oder 'contain'
-  const VIEW_PREF = { mode: 'square', fit: 'cover' };
-
+  //const VIEW_PREF = { mode: 'square', fit: 'cover' }; kleine map
+  const VIEW_PREF = { mode: 'square', fit: 'contain' };
+  
   /* ------------------------------ Modul-Status ---------------------------- */
   const S = {
     // Map & Tileset
