@@ -52,12 +52,12 @@
 }
 
 /* Optional: in sehr schmalen Portrait-Views automatisch vertikal stapeln */
-@media (max-width: 500px) and (orientation: portrait){
+/* @media (max-width: 500px) and (orientation: portrait){
   .hud{
     grid-auto-flow: row;
     grid-auto-rows: var(--hud-cell-size);
   }
-}
+} */
 
 /* =========================
    [3] Zelle mit 9-Slice-Rahmen
