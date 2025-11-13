@@ -22,14 +22,14 @@
 :root{
   /* Rahmen (9-Slice) */
   --hud-frame-src: url("../../assets/ui/panel.svg");
-  --hud-border-slice: 12;            /* abhängig von deiner panel.svg */
+  --hud-border-slice:8px;            /* abhängig von deiner panel.svg */
 
   /* Zellkante (Portrait/Landscape identisch) */
-  --hud-cell-size: 50px;             /* ⇦ ein Wert für alles */
+  --hud-cell-size:64px;             /* ⇦ ein Wert für alles */
   --hud-gap: 8px;
 
   /* Icon-Größe als Anteil am Quadrat */
-  --hud-icon-size: 64%;              /* 50–72% passen erfahrungsgemäß gut */
+  --hud-icon-size: 75%;              /* 50–72% passen erfahrungsgemäß gut */
 
   /* Schrift */
   --hud-font: "Times New Roman", Georgia, serif;
