@@ -25,7 +25,7 @@
 }
 
 /* ------------------------- Portrait: unten andocken (iPhone-Fix) ------------------------ */
-@media (orientation: portrait){
+/* @media (orientation: portrait){
   #build-dock{
     left: 50%;
     bottom: calc(env(safe-area-inset-bottom, 0px) + 70px); /* HEBT das Dock höher an! */
@@ -39,7 +39,7 @@
     margin-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
-
+*/
 /* --------------------------- Tabs / Header-Zeile -------------------------- */
 .build-header{
   display: flex; align-items: center; gap: 8px;
