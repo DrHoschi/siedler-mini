@@ -1,0 +1,180 @@
+/* =============================================================================
+ * Datei   : ui/css/ui-hud.css
+ * Projekt : Neue Siedler
+ * Version : v1.9.0 (2025-11-17)
+ * Zweck   : Ressourcen-HUD (oben links, immer gleiche Position)
+ *           - Quadratische Zellen mit Holzrahmen
+ *           - Name links oben, Menge rechts unten
+ *           - Icon 100% mittig (unabhängig vom PNG-Offset)
+ *           - Horizontales Scrollen, wenn zu viele Ressourcen
+ *
+ * Leitplanken:
+ *   - Position bleibt bei Portrait/Landscape identisch (top/left fix)
+ *   - HUD-Leiste scrollt horizontal, statt umzubrechen
+ *   - Keine Media-Query-Umbauten der HUD-Ausrichtung
+ *   - Keine Subpixel-Drifts auf iOS/Safari
+ * ============================================================================= */
+
+/* =========================
+   [1] Variablen (einheitlich)
+   ========================= */
+:root{
+  /* Rahmen (9-Slice) – Holzpanel */
+  --hud-frame-src: url("../../assets/ui/panel.svg");
+  --hud-border-slice: 12px;           /* abhängig von deiner panel.svg */
+
+  /* Zellkante (Portrait/Landscape identisch) */
+  --hud-cell-size: 72px;              /* eine Größe für alle Zellen */
+  --hud-gap: 8px;
+
+  /* Icon-Größe als Anteil am Quadrat */
+  --hud-icon-size: 50%;               /* 50–72% sind erfahrungsgemäß gut */
+
+  /* Schrift */
+  --hud-font: "Times New Roman", Georgia, serif;
+  --hud-title-color: #5a3b24;
+  --hud-title-shadow: 0 1px 0 rgba(255,255,255,.35);
+  --hud-value-color: #3b2a18;
+}
+
+/* =========================
+   [2] Container-Bar (HUD)
+   ========================= */
+/*
+ * WICHTIG:
+ * - Immer oben links (6px/6px), unabhängig von Portrait / Landscape.
+ * - display:flex + overflow-x:auto → horizontale Scroll-Leiste, wenn voll.
+ * - pointer-events:auto → Finger-Swipe auf der HUD-Leiste löst Scroll aus.
+ */
+.hud{
+  position: fixed;
+  top: 6px;
+  left: 6px;
+
+  /* Horizontale Leiste */
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--hud-gap);
+
+  /* Scroll-Verhalten */
+  max-width: calc(100vw - 12px);      /* nicht über den Screen hinaus ragen */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;  /* sanftes Scrollen auf iOS */
+
+  z-index: 50;                        /* Canvas < 40, HUD 50, Inspector > 60 */
+  pointer-events: auto;               /* HUD darf Scroll-Gesten annehmen */
+}
+
+/* Scrollbar optisch klein halten (optional) */
+.hud::-webkit-scrollbar{
+  height: 6px;
+}
+.hud::-webkit-scrollbar-track{
+  background: transparent;
+}
+.hud::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.35);
+  border-radius: 3px;
+}
+
+/* ALT: automatisches Umstapeln im Portrait – bewusst deaktiviert
+@media (max-width: 500px) and (orientation: portrait){
+  .hud{
+    grid-auto-flow: row;
+    grid-auto-rows: var(--hud-cell-size);
+  }
+}
+*/
+
+/* =========================
+   [3] Zelle mit 9-Slice-Rahmen
+   ========================= */
+.hud__cell{
+  width: var(--hud-cell-size);
+  height: var(--hud-cell-size);
+  box-sizing: border-box;
+
+  /* Holzrahmen als 9-Slice */
+  border: 14px solid transparent;     /* muss >= slice sein */
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+          border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+
+  background: #e9e0d3;                /* Pergament-Füllung */
+  filter: saturate(0.95);
+  position: relative;
+
+  pointer-events: none;               /* Zelle selbst ist nicht klickbar */
+  image-rendering: pixelated;
+}
+
+/* =========================
+   [4] Titel (oben links)
+   ========================= */
+.hud__title{
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  margin: 0;
+
+  font: 700 18px/1 var(--hud-font);
+  color: var(--hud-title-color);
+  text-shadow: var(--hud-title-shadow);
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* =========================
+   [5] Wert (unten rechts)
+   ========================= */
+.hud__value{
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  margin: 0;
+
+  font: 700 16px/1 var(--hud-font);
+  color: var(--hud-value-color);
+  text-shadow: 0 1px 0 rgba(255,255,255,.2);
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* =========================
+   [6] Icon-Wrapper + Icon (zentriert)
+   ========================= */
+/*
+ * Der Wrapper füllt die Pergamentmitte aus, hält aber Abstand zum Rahmen.
+ * Durch display:grid + place-items:center ist das Icon exakt mittig,
+ * selbst wenn das PNG selbst ungleichmäßig Rand hat.
+ */
+.hud__icon-wrap{
+  position: absolute;
+  inset: 0;
+  padding: 3px;                       /* Abstand vom Holzrahmen */
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.hud__icon{
+  width: var(--hud-icon-size);
+  height: var(--hud-icon-size);
+  display: block;                     /* baseline-Drift verhindern */
+  object-fit: contain;                /* PNG mit Rand bleibt mittig */
+  image-rendering: pixelated;         /* Retro-Schärfe */
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* =========================
+   [7] Safe-Guard für iOS / Safari
+   ========================= */
+@supports (-webkit-touch-callout: none){
+  .hud__icon{
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
