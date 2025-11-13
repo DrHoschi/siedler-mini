@@ -22,7 +22,7 @@
 :root{
   /* Rahmen (9-Slice) */
   --hud-frame-src: url("../../assets/ui/panel.svg");
-  --hud-border-slice:8px;            /* abhängig von deiner panel.svg */
+  --hud-border-slice:12px;            /* abhängig von deiner panel.svg */
 
   /* Zellkante (Portrait/Landscape identisch) */
   --hud-cell-size:64px;             /* ⇦ ein Wert für alles */
