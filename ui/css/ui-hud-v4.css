@@ -1,0 +1,213 @@
+/* =============================================================================
+ * Datei   : ui/css/ui-hud.css
+ * Projekt : Neue Siedler
+ * Version : v1.9.1 (2025-11-17-final)
+ * Zweck   : Ressourcen-HUD (immer oben links – unabhängig von Zoom & Map)
+ *
+ * WICHTIG (Konzept)
+ * - Die HUD-Leiste ist ein fest verankertes Overlay:
+ *     → position: fixed; top: 6px; left: 6px;
+ * - Sie hängt NICHT an der Map und NICHT am Canvas-Transform.
+ *   Nur #game (Canvas) zoomt und verschiebt sich – die HUD bleibt davon unberührt.
+ * - Es gibt KEINE Media-Queries, die die Position verändern.
+ * - Die HUD selbst bekommt KEIN transform – damit dreht / skaliert sie nicht mit.
+ *
+ * Hinweis zur Geräte-Drehung:
+ * - Wenn du das Gerät drehst, dreht sich immer der gesamte Viewport mit.
+ *   Die HUD bleibt aber immer im CSS-Sinn oben-links am Fenster.
+ * - D.h. sie zoomt nicht mit der Map und verschiebt sich nicht relativ zum Canvas.
+ * ============================================================================= */
+
+
+/* ============================================================================
+   [1] Globale HUD-Variablen
+   - Holzrahmen (9-Slice)
+   - Zellgröße, Abstände, Typografie
+   ========================================================================== */
+:root{
+  /* Holzrahmen-Grafik – unabhängig vom Theme, aber optisch passend zu "wood" */
+  --hud-frame-src: url("../../assets/ui/panel.svg");
+  --hud-border-slice: 12px;
+
+  /* Quadratische Feldgröße für jede Ressource */
+  --hud-cell-size: 72px;
+  --hud-gap: 8px;
+
+  /* Icon-Größe als Anteil der Zellfläche */
+  --hud-icon-size: 50%;
+
+  /* Schrift / Farben – harmonieren mit ui.css Themes */
+  --hud-font: "Times New Roman", Georgia, serif;
+  --hud-title-color: #5a3b24;
+  --hud-title-shadow: 0 1px 0 rgba(255,255,255,.35);
+  --hud-value-color: #3b2a18;
+}
+
+
+/* ============================================================================
+   [2] HUD-Container (.hud)
+   - Immer oben links fixiert
+   - Horizontal scrollbare Leiste
+   - NICHT rotieren, NICHT zoomen
+   ========================================================================== */
+/*
+ * .hud wird von ui-hud.js als Container erzeugt.
+ * Sie liegt innerhalb von #hud-root (aus ui-layout.css),
+ * aber durch "position: fixed" klebt sie direkt am Viewport.
+ */
+.hud{
+  /* Feste physische Position im Viewport */
+  position: fixed;
+  top: 6px;
+  left: 6px;
+
+  /* Immer eine horizontale Leiste (keine Umbrüche, kein Grid-Umdrehen) */
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--hud-gap);
+
+  /* Wenn viele Ressourcen: horizontal scrollen statt umbrechen */
+  max-width: calc(100vw - 12px);      /* kleiner Abstand zum rechten Rand */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;  /* flüssiges Scrollen auf iOS */
+
+  /* Z-Layer ist in ui.css außerdem auf --z-hud gesetzt,
+     hier nur zur Sicherheit ein sinnvoller Wert */
+  z-index: 50;
+
+  /* HUD darf Scroll-Gesten annehmen (statt komplett "durchlässig" zu sein) */
+  pointer-events: auto;
+
+  /* WICHTIG: KEINE Rotation / Skalierung erzwingen.
+   * Falls ein Eltern-Container jemals transformiert würde,
+   * verhindern wir hier explizit weitere Transformation auf der HUD selbst.
+   */
+  transform: none !important;
+  transform-origin: top left !important;
+}
+
+/* Dezente Scrollbar für WebKit-Browser (optional kosmetisch) */
+.hud::-webkit-scrollbar{
+  height: 6px;
+}
+.hud::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.3);
+  border-radius: 3px;
+}
+.hud::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+
+/* ============================================================================
+   [3] HUD-Zelle (.hud__cell)
+   - Quadratischer Holzrahmen mit Pergament-Hintergrund
+   - Enthält Titel, Icon und Wert
+   ========================================================================== */
+.hud__cell{
+  width: var(--hud-cell-size);
+  height: var(--hud-cell-size);
+
+  box-sizing: border-box;
+
+  /* 9-Slice-Holzrahmen – Quelle ist panel.svg (global gleiche Optik) */
+  border: 14px solid transparent;     /* muss >= --hud-border-slice sein */
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+          border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+
+  /* „Pergament“ im Inneren des Rahmens */
+  background: #e9e0d3;
+  filter: saturate(0.95);
+
+  position: relative;
+
+  /* HUD-Anzeige ist rein visuell – keine direkten Klicks auf Zellen */
+  pointer-events: none;
+
+  /* Pixelige Darstellung für Retro-Grafik */
+  image-rendering: pixelated;
+}
+
+
+/* ============================================================================
+   [4] Titel (oben links in der Zelle)
+   - Zeigt den Ressourcennamen (z.B. „Holz“)
+   ========================================================================== */
+.hud__title{
+  position: absolute;
+  top: 6px;
+  left: 8px;
+
+  margin: 0;
+  font: 700 18px/1 var(--hud-font);
+
+  color: var(--hud-title-color);
+  text-shadow: var(--hud-title-shadow);
+
+  user-select: none;
+  pointer-events: none;
+}
+
+
+/* ============================================================================
+   [5] Wert (unten rechts in der Zelle)
+   - Zeigt die aktuelle Menge (z.B. „128“)
+   ========================================================================== */
+.hud__value{
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+
+  margin: 0;
+  font: 700 16px/1 var(--hud-font);
+  color: var(--hud-value-color);
+
+  text-shadow: 0 1px 0 rgba(255,255,255,.2);
+
+  user-select: none;
+  pointer-events: none;
+}
+
+
+/* ============================================================================
+   [6] Icon-Wrapper (.hud__icon-wrap) + Icon (.hud__icon)
+   - Icon exakt mittig, unabhängig von transparenten Rändern im PNG
+   - Größe über --hud-icon-size steuerbar
+   ========================================================================== */
+.hud__icon-wrap{
+  /* Den kompletten Innenbereich einnehmen (Pergamentfläche) */
+  position: absolute;
+  inset: 0;
+  padding: 3px;                       /* Abstand vom Holzrahmen */
+
+  /* Grid-Center: Icon sitzt immer in der Mitte der Zelle */
+  display: grid;
+  place-items: center;
+
+  pointer-events: none;
+}
+
+.hud__icon{
+  width: var(--hud-icon-size);
+  height: var(--hud-icon-size);
+
+  display: block;                     /* verhindert baseline-Verschiebungen */
+  object-fit: contain;                /* Icon bleibt vollständig sichtbar */
+
+  image-rendering: pixelated;         /* saubere Pixel-Kanten */
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+
+/* ============================================================================
+   [7] iOS / Safari Feintuning
+   - Optimierte Kantenglättung für Pixel-Grafiken
+   ========================================================================== */
+@supports (-webkit-touch-callout: none){
+  .hud__icon{
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
