@@ -1,11 +1,11 @@
 /* =============================================================================
  * Datei   : ui/css/ui-hud.css
  * Projekt : Neue Siedler
- * Version : v1.9.0 (2025-11-17)
+ * Version : v1.9.1 (2025-11-17)
  * Zweck   : Ressourcen-HUD (oben links, immer gleiche Position)
  *           - Quadratische Zellen mit Holzrahmen
  *           - Name links oben, Menge rechts unten
- *           - Icon 100% mittig (unabhängig vom PNG-Offset)
+ *           - Icon zentriert
  *           - Horizontales Scrollen, wenn zu viele Ressourcen
  *
  * Leitplanken:
@@ -21,14 +21,14 @@
 :root{
   /* Rahmen (9-Slice) – Holzpanel */
   --hud-frame-src: url("../../assets/ui/panel.svg");
-  --hud-border-slice: 12px;           /* abhängig von deiner panel.svg */
+  --hud-border-slice: 12px;           /* abhängig von panel.svg */
 
-  /* Zellkante (Portrait/Landscape identisch) */
-  --hud-cell-size: 72px;              /* eine Größe für alle Zellen */
+  /* Zellgröße (Portrait/Landscape identisch) */
+  --hud-cell-size: 72px;
   --hud-gap: 8px;
 
   /* Icon-Größe als Anteil am Quadrat */
-  --hud-icon-size: 50%;               /* 50–72% sind erfahrungsgemäß gut */
+  --hud-icon-size: 50%;
 
   /* Schrift */
   --hud-font: "Times New Roman", Georgia, serif;
@@ -41,10 +41,9 @@
    [2] Container-Bar (HUD)
    ========================= */
 /*
- * WICHTIG:
- * - Immer oben links (6px/6px), unabhängig von Portrait / Landscape.
- * - display:flex + overflow-x:auto → horizontale Scroll-Leiste, wenn voll.
- * - pointer-events:auto → Finger-Swipe auf der HUD-Leiste löst Scroll aus.
+ * Immer oben links am Viewport.
+ * – Im Portrait wie im Landscape gleiches top/left.
+ * – display:flex + overflow-x:auto → horizontale Scroll-Leiste.
  */
 .hud{
   position: fixed;
@@ -58,16 +57,16 @@
   gap: var(--hud-gap);
 
   /* Scroll-Verhalten */
-  max-width: calc(100vw - 12px);      /* nicht über den Screen hinaus ragen */
+  max-width: calc(100vw - 12px);      /* 6px links + 6px rechts Rand */
   overflow-x: auto;
   overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;  /* sanftes Scrollen auf iOS */
+  -webkit-overflow-scrolling: touch;  /* sanft auf iOS */
 
   z-index: 50;                        /* Canvas < 40, HUD 50, Inspector > 60 */
-  pointer-events: auto;               /* HUD darf Scroll-Gesten annehmen */
+  pointer-events: auto;               /* darf Scroll-Gesten annehmen */
 }
 
-/* Scrollbar optisch klein halten (optional) */
+/* Schmale, unauffällige Scrollbar (optional) */
 .hud::-webkit-scrollbar{
   height: 6px;
 }
@@ -79,15 +78,6 @@
   border-radius: 3px;
 }
 
-/* ALT: automatisches Umstapeln im Portrait – bewusst deaktiviert
-@media (max-width: 500px) and (orientation: portrait){
-  .hud{
-    grid-auto-flow: row;
-    grid-auto-rows: var(--hud-cell-size);
-  }
-}
-*/
-
 /* =========================
    [3] Zelle mit 9-Slice-Rahmen
    ========================= */
@@ -97,7 +87,7 @@
   box-sizing: border-box;
 
   /* Holzrahmen als 9-Slice */
-  border: 14px solid transparent;     /* muss >= slice sein */
+  border: 14px solid transparent;     /* sollte >= slice sein */
   -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
           border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
 
@@ -105,8 +95,14 @@
   filter: saturate(0.95);
   position: relative;
 
-  pointer-events: none;               /* Zelle selbst ist nicht klickbar */
+  pointer-events: none;               /* Zelle selbst nicht klickbar */
   image-rendering: pixelated;
+}
+
+/* Optionales Mini-Highlight bei Änderungen (Klasse kommt aus JS) */
+.hud__cell.is-updated{
+  outline: 2px solid rgba(255, 255, 0, 0.6);
+  outline-offset: -2px;
 }
 
 /* =========================
@@ -146,17 +142,12 @@
 /* =========================
    [6] Icon-Wrapper + Icon (zentriert)
    ========================= */
-/*
- * Der Wrapper füllt die Pergamentmitte aus, hält aber Abstand zum Rahmen.
- * Durch display:grid + place-items:center ist das Icon exakt mittig,
- * selbst wenn das PNG selbst ungleichmäßig Rand hat.
- */
 .hud__icon-wrap{
   position: absolute;
   inset: 0;
   padding: 3px;                       /* Abstand vom Holzrahmen */
   display: grid;
-  place-items: center;
+  place-items: center;                /* Icon exakt mittig */
   pointer-events: none;
 }
 
