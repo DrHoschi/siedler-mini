@@ -1,0 +1,171 @@
+/* =============================================================================
+ * Datei   : ui/css/ui-hud.css
+ * Projekt : Neue Siedler
+ * Version : v1.9.1 (2025-11-17-final)
+ * Zweck   : Ressourcen-HUD (immer oben links, unabhängig von Rotation)
+ *
+ * WICHTIG:
+ *   - HUD bleibt *fest verankert* (top:6px; left:6px)
+ *   - Keine Media Queries, die Position verändern
+ *   - HUD wird NICHT rotiert (transform:none)
+ *   - Nur das SPIEL (Canvas) darf rotieren, nie die HUD-Leiste
+ *   - Horizontal scrollen wenn viele Elemente
+ * ============================================================================= */
+
+
+/* =========================
+   [1] Variablen (globale HUD-Parameter)
+   ========================= */
+:root{
+  --hud-frame-src: url("../../assets/ui/panel.svg");
+  --hud-border-slice: 12px;
+
+  --hud-cell-size: 72px;       /* Quadratisches HUD-Feld */
+  --hud-gap: 8px;
+
+  --hud-icon-size: 50%;
+
+  --hud-font: "Times New Roman", Georgia, serif;
+  --hud-title-color: #5a3b24;
+  --hud-title-shadow: 0 1px 0 rgba(255,255,255,.35);
+  --hud-value-color: #3b2a18;
+}
+
+
+/* ============================================================================
+   [2] HUD-Container – **immer oben links** und **bleibt dort IMMER**
+   ============================================================================ */
+/*
+ * FIX: HUD bleibt permanent oben-links → NICHT rotieren, NICHT wandern.
+ *      Darf nicht durch orientation verändert werden.
+ *      Wichtig für iOS Safari: transform:none erzwingt "nicht mitdrehen".
+ */
+.hud{
+  position: fixed;
+  top: 6px;
+  left: 6px;
+
+  /* Ausrichtung: immer horizontal */
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--hud-gap);
+
+  /* Scrollen falls zu viele Ressourcen */
+  max-width: calc(100vw - 12px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  z-index: 50;
+  pointer-events: auto;
+
+  /* WICHTIGER FIX → HUD rotiert *nicht* mit dem Bildschirm */
+  transform: none !important;
+  transform-origin: top left !important;
+}
+
+/* Scrollbar optisch zurückhaltend */
+.hud::-webkit-scrollbar{
+  height: 6px;
+}
+.hud::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.3);
+  border-radius: 3px;
+}
+.hud::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+
+/* ============================================================================
+   [3] HUD-Zelle – quadratischer Holzrahmen mit Pergament
+   ============================================================================ */
+.hud__cell{
+  width: var(--hud-cell-size);
+  height: var(--hud-cell-size);
+
+  box-sizing: border-box;
+  border: 14px solid transparent;
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+          border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+
+  background: #e9e0d3;
+  filter: saturate(0.95);
+  position: relative;
+
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+
+/* ============================================================================
+   [4] Titel (oben links)
+   ============================================================================ */
+.hud__title{
+  position: absolute;
+  top: 6px;
+  left: 8px;
+
+  margin: 0;
+  font: 700 18px/1 var(--hud-font);
+
+  color: var(--hud-title-color);
+  text-shadow: var(--hud-title-shadow);
+
+  user-select: none;
+  pointer-events: none;
+}
+
+
+/* ============================================================================
+   [5] Wert (unten rechts)
+   ============================================================================ */
+.hud__value{
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+
+  margin: 0;
+  font: 700 16px/1 var(--hud-font);
+  color: var(--hud-value-color);
+
+  text-shadow: 0 1px 0 rgba(255,255,255,.2);
+
+  user-select: none;
+  pointer-events: none;
+}
+
+
+/* ============================================================================
+   [6] Icon-Wrapper (zentriert) + Icon
+   ============================================================================ */
+.hud__icon-wrap{
+  position: absolute;
+  inset: 0;
+  padding: 3px;
+
+  display: grid;
+  place-items: center;
+
+  pointer-events: none;
+}
+
+.hud__icon{
+  width: var(--hud-icon-size);
+  height: var(--hud-icon-size);
+  object-fit: contain;
+
+  display: block;
+  image-rendering: pixelated;
+
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* iOS-Kontrast-Fix */
+@supports (-webkit-touch-callout: none){
+  .hud__icon{
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
