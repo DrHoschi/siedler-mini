@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-10T19:07:07.071Z",
+  "createdAt": "2025-11-15T14:45:26.838Z",
   "root": ".",
-  "count": 488,
+  "count": 497,
   "entries": [
     {
       "type": "dir",
@@ -1110,11 +1110,6 @@
     },
     {
       "type": "file",
-      "path": "core/bootold.js",
-      "size": 6500
-    },
-    {
-      "type": "file",
       "path": "core/build.place.handler.js",
       "size": 6463
     },
@@ -1165,7 +1160,7 @@
     },
     {
       "type": "file",
-      "path": "core/core.map.js",
+      "path": "core/core.map.old.js",
       "size": 11596
     },
     {
@@ -1196,17 +1191,22 @@
     {
       "type": "file",
       "path": "core/game-v1.js",
-      "size": 7729
+      "size": 13632
+    },
+    {
+      "type": "file",
+      "path": "core/game-v2.js",
+      "size": 15624
+    },
+    {
+      "type": "file",
+      "path": "core/game-v3.js",
+      "size": 16389
     },
     {
       "type": "file",
       "path": "core/game.bootstrap.js",
       "size": 4901
-    },
-    {
-      "type": "file",
-      "path": "core/game.js",
-      "size": 8943
     },
     {
       "type": "file",
@@ -1227,6 +1227,11 @@
       "type": "file",
       "path": "core/input.bridge.js",
       "size": 4601
+    },
+    {
+      "type": "file",
+      "path": "core/input.js",
+      "size": 7830
     },
     {
       "type": "file",
@@ -1327,11 +1332,6 @@
       "type": "file",
       "path": "core/warehouse.js",
       "size": 1490
-    },
-    {
-      "type": "file",
-      "path": "core/zoom.js",
-      "size": 2557
     },
     {
       "type": "dir",
@@ -1595,7 +1595,7 @@
     {
       "type": "file",
       "path": "inspector/tabs/inspector.tab.ui-v1.js",
-      "size": 2886
+      "size": 13186
     },
     {
       "type": "dir",
@@ -2031,7 +2031,7 @@
     {
       "type": "file",
       "path": "ui/css/ui-build.css",
-      "size": 5309
+      "size": 5315
     },
     {
       "type": "file",
@@ -2045,13 +2045,33 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-hud-v1.css",
+      "size": 4720
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-hud-v3.css",
+      "size": 4450
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-hud-v4.css",
+      "size": 6922
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-hud-v5.css",
+      "size": 5136
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-hud.clean.css",
       "size": 2257
     },
     {
       "type": "file",
       "path": "ui/css/ui-hud.css",
-      "size": 3984
+      "size": 3990
     },
     {
       "type": "file",
@@ -2067,6 +2087,21 @@
       "type": "file",
       "path": "ui/css/ui-inspector.final.css",
       "size": 9387
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-layer.patch.css",
+      "size": 754
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-layout-v0.css",
+      "size": 3467
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-layout-v1.css",
+      "size": 3467
     },
     {
       "type": "file",
@@ -2249,6 +2284,16 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-build-testen.js",
+      "size": 12979
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build-v0.js",
+      "size": 1830
+    },
+    {
+      "type": "file",
       "path": "ui/ui-build.categories.js",
       "size": 1398
     },
@@ -2279,6 +2324,21 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-hud-v0.js",
+      "size": 6878
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-hud-v1.js",
+      "size": 5155
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-hud-v2.js",
+      "size": 6376
+    },
+    {
+      "type": "file",
       "path": "ui/ui-hud.js",
       "size": 4873
     },
@@ -2286,11 +2346,6 @@
       "type": "file",
       "path": "ui/ui-inspector-bridge.js",
       "size": 1582
-    },
-    {
-      "type": "file",
-      "path": "ui/ui-inspector.content.js",
-      "size": 2134
     },
     {
       "type": "file",
@@ -2304,23 +2359,13 @@
     },
     {
       "type": "file",
-      "path": "ui/ui-map.js",
-      "size": 2337
-    },
-    {
-      "type": "file",
       "path": "ui/ui-notify.js",
       "size": 1434
     },
     {
       "type": "file",
-      "path": "ui/ui-place-overlay.js",
-      "size": 4669
-    },
-    {
-      "type": "file",
       "path": "ui/ui-place.js",
-      "size": 8270
+      "size": 9527
     },
     {
       "type": "file",
@@ -2340,12 +2385,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 48174
+      "size": 48260
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18437
+      "size": 18461
     },
     {
       "type": "file",
@@ -2360,7 +2405,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 13267
+      "size": 13794
     },
     {
       "type": "file",
