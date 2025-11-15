@@ -337,5 +337,43 @@ document.getElementById('btn-build')?.addEventListener('click', ()=>{
   } catch(e){ console.warn('[eruda] init failed', e); }
 })();
 </script>
+       <script>
+  /* ============================================================================
+   * Datei   : index.html (Inline-Fix)
+   * Zweck   : iOS-Start-Bug – Karte direkt nach Spielstart auf volle Größe bringen
+   *
+   * Idee:
+   *  - ui/ui-layout.js reagiert auf window.resize und passt #game + HUD an.
+   *  - Beim ersten Laden ist der Viewport auf iOS noch kleiner (Browser-Chrome).
+   *  - Beim Drehen des Geräts feuert resize → alles wird richtig.
+   *  - Wir simulieren dieses resize einmal direkt nach cb:game:start.
+   * ========================================================================== */
+  (function(){
+    const TAG = '[layout-fix]';
+
+    function fireResize(reason){
+      try {
+        const ev = new Event('resize');
+        // nur fürs Debuggen im Inspector-Log
+        ev.detail = { reason };
+        window.dispatchEvent(ev);
+        (window.CBLog?.info || console.info)(TAG, 'resize ausgelöst →', reason);
+      } catch(e){
+        console.warn(TAG, 'resize-Event fehlgeschlagen', e);
+      }
+    }
+
+    // Wenn das Spiel startet → einmal (leicht verzögert) resize auslösen
+    window.addEventListener('cb:game:start', () => {
+      // Sofort einmal …
+      fireResize('cb:game:start:0ms');
+      // … und noch einmal leicht verzögert, wenn Safari seine Leisten einklappt
+      setTimeout(() => fireResize('cb:game:start:150ms'), 150);
+      setTimeout(() => fireResize('cb:game:start:400ms'), 400);
+    }, { once:true });
+  })();
+  </script>
+</body>
+</html>
 </body>
 </html>
