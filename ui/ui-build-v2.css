@@ -1,0 +1,189 @@
+/* ============================================================================
+ * Datei    : ui/css/ui-build.css
+ * Projekt  : Neue Siedler (Siedler-Mini)
+ * Version  : v25.11.15-final2 (Build-Bar unten, quadratische Tiles)
+ * Zweck    : Baumenü/Dock (Build-Bar unten + Gebäude-Kacheln)
+ * Autor    : Mann + ChatGPT
+ *
+ * Idee
+ * - Das Build-Dock hängt wie das HUD an der "physischen" Gerätekante.
+ * - Portrait + Landscape: unten zentriert, über der Home-Bar (safe-area).
+ * - Gebäude werden als kleine quadratische Kästchen angezeigt:
+ *      • Name oben links
+ *      • Icon mittig
+ *      • Kostenzeile unten
+ * ========================================================================== */
+
+/* ------------------------- Grundwerte / Variablen ------------------------- */
+:root{
+  --build-dock-max-w: 100vw;               /* max. Breite der Build-Bar          */
+  --build-dock-pad-x: 8px;
+  --build-dock-pad-y: 4px;
+  --build-gap: 8px;
+  --build-z: 95;
+
+  --build-panel-bg: #efe5cfcc;             /* zarter Pergament-Look unterm Holz  */
+  --build-panel-blur: 6px;
+  --build-shadow: 0 8px 30px rgba(0,0,0,.25);
+
+  --build-card-size: 74px;                 /* Kantenlänge der Gebäude-Kacheln    */
+}
+
+/* ------------------------- Position des Build-Docks ----------------------- */
+#build-dock{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(6px, env(safe-area-inset-bottom, 0px));
+  z-index: var(--build-z);
+  max-width: var(--build-dock-max-w);
+  padding: var(--build-dock-pad-y) var(--build-dock-pad-x);
+  box-sizing: border-box;
+
+  /* Panel-Look (wie kleine Holz-/Pergament-Leiste) */
+  background: var(--build-panel-bg);
+  backdrop-filter: blur(var(--build-panel-blur));
+  -webkit-backdrop-filter: blur(var(--build-panel-blur));
+  box-shadow: var(--build-shadow);
+  border-radius: 12px;
+
+  pointer-events: auto; /* Dock ist klick-/touchbar */
+}
+
+/* Head & Kategorien im mobilen Build-Bar ausblenden,
+   damit nur die kleinen Kacheln sichtbar sind.       */
+.build-dock__head,
+.build-cats{
+  display: none !important;
+}
+
+/* Body nur als dünner Container für die Kacheln */
+.build-dock__body{
+  padding: 0;
+  margin: 0;
+}
+
+/* ------------------------------- Karten-Row -------------------------------- */
+/* Anstatt Grid nutzen wir eine horizontale Leiste mit Kacheln */
+.build-grid{
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: var(--build-gap);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px;
+
+  scrollbar-width: thin;
+}
+
+/* ------------------------------ Gebäude-Kachel ----------------------------- */
+/* Jede Kachel ist ein kleines Quadrat, innen wieder mit Holz-/Papier-Look   */
+.build-card{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+
+  width: var(--build-card-size);
+  height: var(--build-card-size);
+
+  padding: 4px;
+  border-radius: 8px;
+
+  background: #f7f1e5;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+
+/* Name oben links, klein, nicht zentriert */
+.build-card__title{
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: left;
+  color: #3b2b12;
+  margin-bottom: 2px;
+}
+
+/* Icon mittig, füllt den verfügbaren Raum */
+.build-card__img{
+  flex: 1 1 auto;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  background: #e0d4bc;
+}
+
+/* Kosten-Leiste unten: kleine Chips */
+.build-costs{
+  margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: flex-start;
+}
+
+.build-cost{
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #0007;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.build-cost__icon{
+  width: 12px;
+  height: 12px;
+  image-rendering: pixelated;
+}
+
+/* Leerer-Text fall (wenn keine Gebäude) – kompakt darstellen */
+.build-empty{
+  font-size: 11px;
+  padding: 4px 6px;
+}
+
+/* --------------------------- Kleinere Displays ---------------------------- */
+@media (max-width: 430px){
+  :root{
+    --build-card-size: 68px;
+  }
+}
+
+/* --------------------------- Build-Button (FAB) ----------------=========== */
+/* Der Bauen-Button sitzt wie der Inspector-FAB über der Bar an der
+   physischen unteren Kante, aber etwas höher als das Dock selbst.           */
+#btn-build{
+  position: fixed;
+  bottom: calc(max(6px, env(safe-area-inset-bottom, 0px)) + 64px);
+  right: max(12px, env(safe-area-inset-right, 0px));
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+
+  background: rgba(245,245,245,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  color: #e8e8e8;
+  font: 600 14px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  display: grid;
+  place-items: center;
+
+  z-index: 2147483602;   /* über Build-Dock & Map */
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+
+#btn-build:active{
+  transform: translateY(1px);
+}
