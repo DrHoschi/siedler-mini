@@ -1,0 +1,195 @@
+/* =============================================================================
+ * Datei   : ui/css/ui-hud.css
+ * Projekt : Neue Siedler
+ * Version : v1.10.0 (2025-11-18)
+ * Zweck   : Ressourcen-HUD (immer an derselben Gerätekante)
+ *
+ * Verhalten:
+ *   - Portrait  : HUD als horizontale Leiste oben links
+ *   - Landscape : HUD als vertikale Leiste an der linken Seite
+ *                 (Text bleibt „normal lesbar“, nicht gedreht)
+ *
+ * Technisch:
+ *   - position:fixed → unabhängig vom Map-Zoom (Canvas)
+ *   - Flex-Layout + Overflow → Scrollen bei vielen Ressourcen
+ *   - Holzrahmen über border-image (9-Slice)
+ * ============================================================================= */
+
+/* =========================
+   [1] Variablen (einheitlich)
+   ========================= */
+:root{
+  /* Rahmen (9-Slice) – Holzpanel aus deiner ui.css-Theme-Welt */
+  --hud-frame-src: url("../../assets/ui/panel.svg");
+  --hud-border-slice: 12px;           /* passend zu panel.svg */
+
+  /* Zellkante (Portrait / Landscape identisch) */
+  --hud-cell-size: 72px;
+  --hud-gap: 8px;
+
+  /* Icon-Größe als Anteil am Quadrat */
+  --hud-icon-size: 50%;
+
+  /* Schrift */
+  --hud-font: "Times New Roman", Georgia, serif;
+  --hud-title-color: #5a3b24;
+  --hud-title-shadow: 0 1px 0 rgba(255,255,255,.35);
+  --hud-value-color: #3b2a18;
+}
+
+/* =========================
+   [2] Container-Bar (HUD)
+   ========================= */
+/*
+ * Basis-Layout → Portrait:
+ *   - oben links fix
+ *   - horizontale Leiste
+ *   - bei vielen Einträgen → horizontal scrollen
+ */
+.hud{
+  position: fixed;
+  top: 6px;
+  left: 6px;
+
+  /* Portrait: horizontale Leiste */
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--hud-gap);
+
+  /* Scroll-Verhalten */
+  max-width: calc(100vw - 12px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+
+  z-index: 50;                        /* über Canvas, unter Inspector */
+  pointer-events: auto;               /* Scroll-Gesten erlaubt */
+}
+
+/* Scrollbar optisch klein halten (optional) */
+.hud::-webkit-scrollbar{
+  height: 6px;
+}
+.hud::-webkit-scrollbar-track{
+  background: transparent;
+}
+.hud::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.35);
+  border-radius: 3px;
+}
+
+/* =========================
+   [2b] Landscape-Spezialfall
+   ========================= */
+/*
+ * Landscape:
+ *   - HUD bleibt an „derselben physischen Kante“ → links
+ *   - Zellen werden untereinander gestapelt (vertikale Leiste)
+ *   - vertikales Scrollen bei vielen Einträgen
+ *   - Text bleibt normal lesbar (keine Rotation)
+ */
+@media (orientation: landscape){
+  .hud{
+    top: 6px;                  /* weiterhin 6px vom oberen Rand der Kante */
+    left: 6px;                 /* HUD an der linken Seite verankert */
+
+    flex-direction: column;    /* vertikale Leiste */
+    max-height: calc(100vh - 12px);
+    max-width: none;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .hud::-webkit-scrollbar{
+    width: 6px;
+    height: auto;
+  }
+}
+
+/* =========================
+   [3] Zelle mit 9-Slice-Rahmen
+   ========================= */
+.hud__cell{
+  width: var(--hud-cell-size);
+  height: var(--hud-cell-size);
+  box-sizing: border-box;
+
+  /* Holzrahmen als 9-Slice */
+  border: 14px solid transparent;     /* muss >= slice sein */
+  -webkit-border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+          border-image: var(--hud-frame-src) var(--hud-border-slice) fill stretch;
+
+  background: #e9e0d3;                /* Pergament-Füllung */
+  filter: saturate(0.95);
+  position: relative;
+
+  pointer-events: none;               /* Zelle selbst nicht klickbar */
+  image-rendering: pixelated;
+}
+
+/* =========================
+   [4] Titel (oben links)
+   ========================= */
+.hud__title{
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  margin: 0;
+
+  font: 700 18px/1 var(--hud-font);
+  color: var(--hud-title-color);
+  text-shadow: var(--hud-title-shadow);
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* =========================
+   [5] Wert (unten rechts)
+   ========================= */
+.hud__value{
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  margin: 0;
+
+  font: 700 16px/1 var(--hud-font);
+  color: var(--hud-value-color);
+  text-shadow: 0 1px 0 rgba(255,255,255,.2);
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* =========================
+   [6] Icon-Wrapper + Icon (zentriert)
+   ========================= */
+.hud__icon-wrap{
+  position: absolute;
+  inset: 0;
+  padding: 3px;                       /* Abstand vom Holzrahmen */
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.hud__icon{
+  width: var(--hud-icon-size);
+  height: var(--hud-icon-size);
+  display: block;                     /* baseline-Drift verhindern */
+  object-fit: contain;                /* PNG mit Rand bleibt mittig */
+  image-rendering: pixelated;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* =========================
+   [7] Safe-Guard für iOS / Safari
+   ========================= */
+@supports (-webkit-touch-callout: none){
+  .hud__icon{
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
