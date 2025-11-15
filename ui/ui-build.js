@@ -8,15 +8,6 @@
  *   – Ansonsten unverändert (kein Direkt-Place, das macht der Hook)
  * ========================================================================== */
 
-/* container hud */
-<div class="hud__cell">
-  <h3 class="hud__title">Holz</h3>
-  <div class="hud__icon-wrap">
-    <img class="hud__icon" src="assets/icons/res/wood.png" alt="Holz">
-  </div>
-  <div class="hud__value">128</div>
-</div>
-
 (function EnsureDock(){
   const ok  = (m)=> (window.CBLog?.ok||console.log)('[build]', m);
   let el = document.getElementById('build-dock');
