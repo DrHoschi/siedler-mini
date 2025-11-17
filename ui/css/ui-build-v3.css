@@ -1,59 +1,51 @@
 /* ============================================================================
  * Datei    : ui/css/ui-build.css
  * Projekt  : Neue Siedler (Siedler-Mini)
- * Version  : v25.11.15-final.4
+ * Version  : v25.11.15-final.5
  * Zweck    : Baumenü/Dock (Kopf, Kategorien, Karten) + Build-Button
  * Autor    : Mann + ChatGPT
  *
  * WICHTIG
- * - Der Holzrahmen / Look kommt primär aus der globalen UI-CSS (ui.css).
+ * - Holzrahmen / Look kommen aus der globalen UI-CSS (z.B. panel-wood).
  * - Dieses Stylesheet kümmert sich um:
- *      • Position des Build-Docks (immer an der PHYSISCHEN Unterkante)
+ *      • Position des Build-Docks (Bottom / Right, wie HUD)
  *      • Innenlayout: Kopf, Kategorien, Karten-Raster, Kostenchips
  *      • Position des Build-Buttons (unten rechts)
- *
- * Mobile-Orientierung:
- * - Portrait  → Dock unten mittig (wie klassischer Dock).
- * - Landscape → Dock an der RECHTEN physischen Kante (mittig).
- *   Umsetzung wie beim HUD:
- *     #build-dock selbst wird -90° gedreht und an die Kante gesetzt,
- *     .build-panel wird +90° zurückgedreht → Inhalt bleibt “normal”.
+ * - Verhalten:
+ *      • Portrait  → Dock unten mittig.
+ *      • Landscape → Dock an RECHTER physikalischer Kante,
+ *                    Container gedreht, Inhalt wieder zurückgedreht.
  * ========================================================================== */
 
 /* ------------------------- Grundwerte / Variablen ------------------------- */
 :root{
-  /* Maximalmaße für Dock (nicht die komplette Kantenlänge!) */
   --build-dock-w-port: min(96vw, 420px);   /* Portrait: Breite unten */
-  --build-dock-w-land: min(80vw, 480px);   /* Landscape: Länge an der Seite */
+  --build-dock-w-land: min(80vw, 480px);   /* Landscape: Länge an Seite */
   --build-dock-h-max : 88px;               /* max. Höhe (eine Kartenreihe) */
 
   --build-gap: 8px;
   --build-z: 95;
 
-  --build-panel-bg: #efe5cfcc;             /* zarter Pergament-Look unterm Holz */
+  --build-panel-bg: #efe5cfcc;             /* leichtes Papier im Dock */
   --build-panel-blur: 6px;
   --build-shadow: 0 8px 30px rgba(0,0,0,.25);
 }
 
 /* --------------------------- Dock-Container (Basis) ----------------------- */
-/* ACHTUNG:
- * - Keine feste Position hier, die kommt über @media (Portrait/Landscape),
- *   damit wir die “physikalische Kante” sauber nachziehen können.
- */
+/* Position/Rotation via @media weiter unten */
 #build-dock{
   position: fixed;
   z-index: var(--build-z);
   box-sizing: border-box;
   pointer-events: auto;
-  transform-origin: center center; /* wichtig für Rotationen im Landscape */
+  transform-origin: center center;
 }
 
-/* Innen-Panel mit leichtem Papier-/Blur-Look (unter dem Holzrahmen)
- * WICHTIG:
- * - Wir setzen NUR background-color, damit die Holzrahmen-Grafik aus ui.css
- *   (z. B. .panel-wood) nicht überschrieben wird.
+/* Direkte Kinder: unser “Dock-Inhalt”
+ * - Hier legen wir den Papier-/Blur-Look drunter, OHNE Holzrahmen zu killen.
+ * - Rotation der Kinder erfolgt in den @media-Regeln.
  */
-#build-dock .build-panel{
+#build-dock > *{
   box-sizing: border-box;
   background-color: var(--build-panel-bg);
   backdrop-filter: blur(var(--build-panel-blur));
@@ -61,30 +53,16 @@
   box-shadow: var(--build-shadow);
   border-radius: 12px;
   overflow: hidden;
-  transform-origin: center center; /* für Gegenrotation im Landscape */
+  transform-origin: center center;
 }
 
-/* Head + Body haben nur die Box-Logik */
-#build-dock .build-dock__body,
-#build-dock .build-dock__head{
+/* Head + Body */
+#build-dock .build-dock__head,
+#build-dock .build-dock__body{
   box-sizing: border-box;
 }
 
-/* Standard-Höhe für den Scrollbereich */
-#build-dock .build-dock__body{
-  max-height: var(--build-dock-h-max);
-}
-
 /* ----------------------------- Kopf / Titel ------------------------------- */
-/* Struktur laut ui-build.js:
-   <div class="build-dock__head">
-     <div class="build-dock__title">
-       <span>Baumenü</span>
-       <span id="build-count">… Gebäude</span>
-     </div>
-     <button class="build-dock__close" id="build-close">×</button>
-   </div>
-*/
 .build-dock__head{
   display: flex;
   align-items: center;
@@ -109,7 +87,7 @@
   opacity: .8;
 }
 
-/* Close-Button im Kopf */
+/* Close-Button */
 .build-dock__close{
   border: none;
   outline: none;
@@ -125,19 +103,13 @@
 }
 
 /* ----------------------------- Body / Inhalt ------------------------------ */
-/* Struktur laut ui-build.js:
-   <div class="build-dock__body">
-     <div class="build-cats"  id="build-cats"></div>
-     <div class="build-grid"  id="build-grid"></div>
-     <div class="build-empty" id="build-empty"></div>
-   </div>
-*/
 .build-dock__body{
   padding: 4px 8px 8px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   overflow: hidden;
+  max-height: var(--build-dock-h-max);
 }
 
 /* Kategorien-Leiste */
@@ -176,7 +148,6 @@
   scrollbar-width: thin;
 }
 
-/* Karte: flex-Spalte, damit wir oben Titel, Mitte Bild, unten Kosten haben */
 .build-card{
   display: flex;
   flex-direction: column;
@@ -188,14 +159,12 @@
   box-shadow: 0 2px 6px rgba(0,0,0,.15);
 }
 
-/* Name oben links, klein */
 .build-card__title{
   font: 700 11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
   text-align: left;
   color: #3b2b12;
 }
 
-/* Bild in der Mitte, quadratisch */
 .build-card__img{
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -205,7 +174,7 @@
   background: #f6f3eb;
 }
 
-/* Kosten-Leiste unten: wir nutzen margin-top:auto, damit sie nach unten drückt */
+/* Kostenzeile */
 .build-costs{
   margin-top: auto;
   display: flex;
@@ -232,7 +201,7 @@
   image-rendering: pixelated;
 }
 
-/* Leerer Zustand (z.B. wenn keine Gebäude in Kategorie) */
+/* Leerer Zustand */
 .build-empty{
   font-size: 11px;
   padding: 4px 2px;
@@ -240,56 +209,43 @@
 
 /* --------------------------- Responsive / Orientierung --------------------- */
 /* Portrait:
- * - Dock: unten mittig, “klassischer” Bottom-Dock.
- * - Keine Rotation nötig.
+ * - Dock unten mittig, normal ausgerichtet.
  */
 @media (orientation: portrait){
   #build-dock{
     width: var(--build-dock-w-port);
     left: 50%;
     bottom: max(6px, env(safe-area-inset-bottom, 0px));
-    top: auto;
     right: auto;
+    top: auto;
     transform: translateX(-50%) rotate(0deg);
   }
 
-  #build-dock .build-panel{
+  #build-dock > *{
     width: 100%;
     transform: rotate(0deg);
-  }
-
-  #build-dock .build-dock__body{
-    max-height: var(--build-dock-h-max);
   }
 }
 
 /* Landscape:
- * - Dock soll an der PHYSISCHEN Unterkante bleiben.
- *   → Das ist in Landscape die RECHTE Bildschirmkante.
- * - Trick (wie beim HUD):
- *     • #build-dock wird -90° gedreht und rechts mittig positioniert.
- *     • .build-panel wird +90° zurückgedreht, damit der Inhalt
- *       wieder “normal” steht.
+ * - Dock an rechter physikalischer Kante.
+ * - #build-dock wird -90° gedreht, Child wieder +90° → Inhalt gerade.
  */
 @media (orientation: landscape){
   #build-dock{
-    /* “Dicke” des Docks = max. Höhe der Kartenreihe */
-    width: var(--build-dock-h-max);
-    /* “Länge” entlang der Kante = ehem. Breite */
-    height: var(--build-dock-w-land);
+    width: var(--build-dock-h-max);      /* “Dicke” des Docks */
+    height: var(--build-dock-w-land);    /* Länge an der Seite */
 
     top: 50%;
     right: max(6px, env(safe-area-inset-right, 0px));
     left: auto;
     bottom: auto;
 
-    /* Erst mittig setzen, dann um -90° drehen */
     transform: translateY(-50%) rotate(-90deg);
   }
 
-  #build-dock .build-panel{
+  #build-dock > *{
     width: var(--build-dock-w-land);
-    /* Panel wieder zurückdrehen → Inhalt liest sich normal */
     transform: rotate(90deg);
   }
 
@@ -298,7 +254,7 @@
   }
 }
 
-/* Sehr kleine Displays (z.B. iPhone Mini) */
+/* Kleine Displays */
 @media (max-width: 430px){
   .build-grid{
     grid-auto-columns: minmax(72px, 88px);
@@ -314,8 +270,6 @@
 }
 
 /* --------------------------- Build-Button (FAB) ----------------=========== */
-/* Der Bauen-Button sitzt unten rechts an der PHYSISCHEN Unterkante und hängt
-   NICHT am Dock selbst. Der Dock wird per JS (ui-build.js) geöffnet/geschlossen. */
 #btn-build{
   position: fixed;
   bottom: max(14px, env(safe-area-inset-bottom, 0px));
@@ -334,7 +288,7 @@
   display: grid;
   place-items: center;
 
-  z-index: 2147483602;   /* über Dock & UI */
+  z-index: 2147483602;
   -webkit-tap-highlight-color: transparent;
   pointer-events: auto;
 }
