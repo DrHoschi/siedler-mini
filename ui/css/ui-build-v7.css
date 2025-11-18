@@ -1,0 +1,334 @@
+/* ============================================================================
+ * Datei    : ui/css/ui-build.css
+ * Projekt  : Neue Siedler (Siedler-Mini)
+ * Version  : v25.11.16-final.3
+ * Zweck    : Baumenü/Dock (Kopf, Kategorien, Karten) + Build-Button
+ * Autor    : Mann + ChatGPT
+ *
+ * Layout:
+ * - Portrait:
+ *     Dock unten zentriert, Karten quadratisch nebeneinander (horizontal).
+ * - Landscape:
+ *     Dock rechts, mittig (analog HUD links),
+ *     Karten quadratisch in 2 Spalten (vertikales Scrollen).
+ *
+ * Kartenaufbau:
+ *   • oben links: Name
+ *   • Mitte: Gebäude-Bild (zentriert, so groß wie möglich)
+ *   • unten zentriert: Kosten-Chips (Icons + Menge)
+ *   • Holzrahmen der Karte kommt aus der globalen ui.css
+ * ========================================================================== */
+
+/* ------------------------- Grundwerte / Variablen ------------------------- */
+:root{
+  --build-dock-w-port: min(96vw, 420px);   /* Portrait: Breite unten */
+  --build-dock-w-land: min(40vw, 320px);   /* Landscape: Leistenbreite rechts */
+
+  --build-body-h-land: 60vh;               /* Landscape: max. Höhe Scrollbereich */
+
+  --build-card-size-port: 112px;           /* Kartengröße Portrait (Quadrat) */
+  --build-card-size-land: 120px;           /* Kartengröße Landscape (Quadrat) */
+
+  --build-gap: 8px;
+  --build-z: 95;
+
+  --build-panel-bg: #efe5cfcc;             /* leichtes Papier im Dock */
+  --build-panel-blur: 6px;
+  --build-shadow: 0 8px 30px rgba(0,0,0,.25);
+}
+
+/* --------------------------- Dock-Container (Basis) ----------------------- */
+#build-dock{
+  position: fixed;
+  z-index: var(--build-z);
+  box-sizing: border-box;
+  pointer-events: auto;
+  transform-origin: center center;
+}
+
+/* Innen-Panel (Holzrahmen gehört zur Karte selbst, nicht zum Dock) */
+#build-dock > *{
+  box-sizing: border-box;
+  background-color: var(--build-panel-bg);
+  backdrop-filter: blur(var(--build-panel-blur));
+  -webkit-backdrop-filter: blur(var(--build-panel-blur));
+  box-shadow: var(--build-shadow);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Head + Body */
+#build-dock .build-dock__head,
+#build-dock .build-dock__body{
+  box-sizing: border-box;
+}
+
+/* ----------------------------- Kopf / Titel ------------------------------- */
+.build-dock__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px 4px 10px;
+}
+
+.build-dock__title{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: 700 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  color: #3b2b12;
+}
+
+.build-dock__title span:first-child{
+  font-size: 14px; /* “Baumenü” */
+}
+.build-dock__title span:last-child{
+  font-size: 11px; /* “5 Gebäude” */
+  opacity: .8;
+}
+
+/* Close-Button */
+.build-dock__close{
+  border: none;
+  outline: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #0007;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* ----------------------------- Body / Inhalt ------------------------------ */
+.build-dock__body{
+  padding: 4px 8px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+/* Kategorien-Leiste */
+.build-cats{
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.build-cats button{
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: none;
+  background: #fff7;
+  color: #173;
+  font: 600 11px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+
+.build-cats button.is-active{
+  outline: 2px solid #6aa;
+}
+
+/* --------------------------- Karten / Kacheln ----------------------------- */
+/* Grid-Container – Details je Orientation */
+.build-grid{
+  display: grid;
+  gap: var(--build-gap);
+  scrollbar-width: thin;
+}
+
+/* Karte:
+ * - quadratisch (aspect-ratio)
+ * - wir verwenden Flex-Spalte:
+ *     1) Titel (oben, klein)
+ *     2) Bild (flex:1, zentriert)
+ *     3) Kosten (unten zentriert)
+ * - KEIN eigener Hintergrund / Schatten -> Holzrahmen aus ui.css sichtbar
+ */
+.build-card{
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  gap: 2px;
+  padding: 4px;
+  aspect-ratio: 1 / 1;
+  /* Wichtig: kein background, keine box-shadow,
+   * damit die Holzrahmen-Klasse aus deiner Haupt-CSS wirken kann.
+   */
+}
+
+.build-card__title{
+  font: 700 11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  text-align: left;
+  color: #3b2b12;
+  margin-bottom: 2px;
+}
+
+/* Bild in der Mitte:
+ * - nimmt den ganzen restlichen Platz ein
+ * - zentriert in beide Richtungen
+ */
+.build-card__img{
+  flex: 1 1 auto;
+  align-self: center;
+  justify-self: center;
+
+  max-width: 100%;
+  max-height: 100%;
+
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  background: #f6f3eb;
+}
+
+/* Kostenzeile unten, mittig im Quadrat */
+.build-costs{
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;  /* zentriert unter dem Gebäude */
+}
+
+.build-cost{
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #0007;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.build-cost__icon{
+  width: 12px;
+  height: 12px;
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* Leerer Zustand */
+.build-empty{
+  font-size: 11px;
+  padding: 4px 2px;
+}
+
+/* --------------------------- Responsive / Orientierung --------------------- */
+/* Portrait:
+ * - Dock unten mittig.
+ * - Karten: eine Reihe, quadratisch, horizontal scrollen.
+ */
+@media (orientation: portrait){
+  #build-dock{
+    width: var(--build-dock-w-port);
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    right: auto;
+    top: auto;
+    transform: translateX(-50%);
+  }
+
+  #build-dock > *{
+    width: 100%;
+  }
+
+  .build-dock__body{
+    max-height: calc(var(--build-card-size-port) + 56px); /* Kopf + Kategorien + Karte */
+  }
+
+  .build-grid{
+    grid-auto-flow: column;
+    grid-auto-columns: var(--build-card-size-port);
+    grid-auto-rows: var(--build-card-size-port);
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-top: 2px;
+  }
+}
+
+/* Landscape:
+ * - Dock rechts, mittig (wie HUD links).
+ * - Karten: 2 Spalten, quadratisch, vertikal scrollen.
+ */
+@media (orientation: landscape){
+  #build-dock{
+    width: var(--build-dock-w-land);
+    right: max(6px, env(safe-area-inset-right, 0px));
+    left: auto;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+
+  #build-dock > *{
+    width: 100%;
+  }
+
+  .build-dock__body{
+    max-height: var(--build-body-h-land);
+  }
+
+  .build-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: var(--build-card-size-land);
+    grid-auto-flow: row;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 2px;
+  }
+}
+
+/* Kleine Displays */
+@media (max-width: 430px){
+  :root{
+    --build-card-size-port: 100px;
+    --build-card-size-land: 110px;
+  }
+
+  .build-card__title{
+    font-size: 10px;
+  }
+}
+
+/* --------------------------- Utility / Hidden ----------------------------- */
+.hidden{
+  display: none !important;
+}
+
+/* --------------------------- Build-Button (FAB) --------------------------- */
+#btn-build{
+  position: fixed;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  right: max(14px, env(safe-area-inset-right, 0px));
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+
+  background: rgba(245,245,245,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  color: #e8e8e8;
+  font: 600 14px/1 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  display: grid;
+  place-items: center;
+
+  z-index: 2147483602;
+  -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+}
+
+#btn-build:active{
+  transform: translateY(1px);
+}
