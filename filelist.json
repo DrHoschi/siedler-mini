@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-15T14:45:26.838Z",
+  "createdAt": "2025-11-23T05:01:21.624Z",
   "root": ".",
-  "count": 497,
+  "count": 513,
   "entries": [
     {
       "type": "dir",
@@ -1120,6 +1120,16 @@
     },
     {
       "type": "file",
+      "path": "core/camera.glue-v1.js",
+      "size": 5198
+    },
+    {
+      "type": "file",
+      "path": "core/camera.glue-v3.js",
+      "size": 6038
+    },
+    {
+      "type": "file",
       "path": "core/camera.glue.js",
       "size": 3397
     },
@@ -2025,6 +2035,56 @@
     },
     {
       "type": "file",
+      "path": "ui/css/ui-build-v10.css",
+      "size": 6346
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v11.css",
+      "size": 6788
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v2.css",
+      "size": 7514
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v3.css",
+      "size": 7107
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v4.css",
+      "size": 6892
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v5.css",
+      "size": 6759
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v6.css",
+      "size": 7380
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v7.css",
+      "size": 7884
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v8.css",
+      "size": 8013
+    },
+    {
+      "type": "file",
+      "path": "ui/css/ui-build-v9.css",
+      "size": 8518
+    },
+    {
+      "type": "file",
       "path": "ui/css/ui-build.clean.css",
       "size": 2292
     },
@@ -2294,6 +2354,26 @@
     },
     {
       "type": "file",
+      "path": "ui/ui-build-v1.js",
+      "size": 11518
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build-v2.js",
+      "size": 13437
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build-v4.js",
+      "size": 11264
+    },
+    {
+      "type": "file",
+      "path": "ui/ui-build-v5.js",
+      "size": 13939
+    },
+    {
+      "type": "file",
       "path": "ui/ui-build.categories.js",
       "size": 1398
     },
@@ -2385,12 +2465,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 48260
+      "size": 49094
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 18461
+      "size": 18737
     },
     {
       "type": "file",
@@ -2405,7 +2485,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 13794
+      "size": 15365
     },
     {
       "type": "file",
