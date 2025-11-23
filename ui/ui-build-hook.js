@@ -1,8 +1,7 @@
 /* ============================================================================
  * Datei   : ui/ui-build-hook.js
- * Version : v25.11.09-final
+ * Version : v25.11.16-final   // (Label angepasst, Logik unverändert)
  * Zweck   : Klick im Build-Dock → Auswahl & Platzieren-Start (mit w/h)
- * Fix     : Doppeltes IIFE & LOG-Fehlposition entfernt, Fallback 3×3
  * ========================================================================== */
 (function () {
   'use strict';
@@ -32,8 +31,11 @@
   }
 
   root.addEventListener('click', (e)=>{
-    const card = e.target.closest('[data-building-id],[data-bid]'); if (!card) return;
-    const id = card.getAttribute('data-building-id') || card.getAttribute('data-bid'); if (!id) return;
+    const card = e.target.closest('[data-building-id],[data-bid]');
+    if (!card) return;
+
+    const id = card.getAttribute('data-building-id') || card.getAttribute('data-bid');
+    if (!id) return;
 
     const { w, h } = resolveSize(card, id);
 
@@ -44,5 +46,5 @@
     LOG('select', id, `→ begin ${w}x${h}`);
   });
 
-  OK('aktiv v25.11.09-final');
+  OK('aktiv v25.11.16-final');
 })();
