@@ -1,0 +1,225 @@
+/* ============================================================================
+ * Datei    : ui/css/ui-build.css
+ * Version  : v25.11.17-final.10
+ * Fixes    : Landscape-Karten kleiner, Buttons lesbar, alles innerhalb
+ * ========================================================================== */
+
+
+/* -------- Variablen ------------------------------------------------------- */
+:root{
+  --build-dock-w-port: min(96vw, 420px);
+  --build-dock-w-land: min(34vw, 250px);
+
+  --build-body-h-land: 62vh;
+
+  --build-card-size-port: 108px;
+  --build-card-size-land: 94px;       /* kleiner = perfekt passend */
+
+  --build-gap: 10px;
+  --build-z: 95;
+
+  --panel-bg-build: rgba(255,250,240,0.12);
+  --panel-radius-build: 18px;
+
+  --btn-cat-bg1: #b8864b;
+  --btn-cat-bg2: #8a5b2a;
+  --btn-cat-color: #fceec8;
+}
+
+
+/* -------- Dock-Container -------------------------------------------------- */
+#build-dock{
+  position: fixed;
+  z-index: var(--build-z);
+  pointer-events: auto;
+}
+
+
+/* -------- Panel Außenrahmen ----------------------------------------------- */
+#build-dock > *{
+  box-sizing: border-box;
+
+  background: var(--panel-bg-build);
+  border-style: solid;
+  border-width: 16px;
+  border-radius: var(--panel-radius-build);
+
+  -webkit-border-image: var(--panel-src) var(--panel-slice) fill stretch;
+  border-image: var(--panel-src) var(--panel-slice) fill stretch;
+}
+
+
+/* -------- Dock Body -------------------------------------------------------- */
+.build-dock__body{
+  padding: 4px 6px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+
+/* -------- Titel ------------------------------------------------------------ */
+.build-dock__title{
+  display: inline-flex;
+  flex-direction: column;
+  padding: 6px 12px;
+  background: linear-gradient(#b8864b,#8a5b2a);
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.4);
+  color: #fceec8;
+  font: 700 13px system-ui;
+  text-shadow: 0 1px 2px rgba(0,0,0,.7);
+}
+
+
+/* -------- Kategorien ------------------------------------------------------- */
+.build-cats{
+  display:flex;
+  flex-wrap:nowrap;
+  gap:8px;
+  overflow-x:auto;
+  padding: 4px 4px 6px 4px;
+}
+
+.build-cats button{
+  padding: 7px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.55);
+
+  background: linear-gradient(var(--btn-cat-bg1), var(--btn-cat-bg2));
+  color: var(--btn-cat-color);
+
+  box-shadow: 0 1px 2px rgba(0,0,0,.6);
+  font: 600 14px/1 system-ui;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+
+/* -------- Karten-Grid ------------------------------------------------------ */
+.build-grid{
+  display: grid;
+  gap: var(--build-gap);
+}
+
+
+/* -------- Einzelkarte ------------------------------------------------------ */
+.build-card{
+  display:flex;
+  flex-direction:column;
+  padding:6px;
+
+  background:#f6f3eb;
+  border-style: solid;
+  border-width: 10px;
+  border-radius: 10px;
+
+  -webkit-border-image: var(--panel-src) var(--panel-slice) fill stretch;
+  border-image: var(--panel-src) var(--panel-slice) fill stretch;
+}
+
+
+/* -------- Innerer Container ----------------------------------------------- */
+.build-card__inner{
+  flex: 1 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;       /* Bild endlich mittig */
+  margin-top: 0;
+}
+
+
+/* Titel etwas höher */
+.build-card__title{
+  font: 700 12px system-ui;
+  color:#f4e0b0;
+  margin-bottom:4px;
+  text-shadow:0 1px 1px rgba(0,0,0,.75);
+  margin-top: -2px;             /* höher schieben */
+}
+
+
+/* Gebäude absolut mittig */
+.build-card__img{
+  max-width:80%;
+  max-height:70%;
+  object-fit:contain;
+  image-rendering:pixelated;
+  margin-bottom:6px;            /* Abstand zu Kosten */
+}
+
+
+/* Kosten */
+.build-costs{
+  display:flex;
+  gap:4px;
+  justify-content:center;
+  margin-top: auto;
+}
+
+.build-cost{
+  padding:3px 6px;
+  border-radius:10px;
+  background:#0007;
+  color:white;
+  font-size:11px;
+  display:flex;
+  align-items:center;
+}
+
+.build-cost__icon{
+  width:13px;
+  height:13px;
+}
+
+/* -------- PORTRAIT -------------------------------------------------------- */
+@media (orientation: portrait){
+
+  #build-dock{
+    left:50%;
+    bottom: calc(env(safe-area-inset-bottom) + 14px);
+    transform:translateX(-50%);
+    width: var(--build-dock-w-port);
+  }
+
+  .build-dock__body{
+    max-height: calc(var(--build-card-size-port) + 86px);
+  }
+
+  .build-grid{
+    grid-auto-flow: column;
+    grid-auto-columns: var(--build-card-size-port);
+    grid-auto-rows: var(--build-card-size-port);
+    overflow-x:auto;
+  }
+}
+
+
+/* -------- LANDSCAPE -------------------------------------------------------- */
+@media (orientation: landscape){
+
+  #build-dock{
+    right: 4px;
+    top:50%;
+    transform:translateY(-50%);
+    width: var(--build-dock-w-land);
+  }
+
+  .build-dock__body{
+    max-height: calc(var(--build-card-size-land) * 3 + 48px);
+  }
+
+  .build-grid{
+    grid-template-columns: repeat(2, var(--build-card-size-land));
+    grid-auto-rows: var(--build-card-size-land);
+    justify-content:center;
+    overflow-y:auto;
+  }
+
+  /* Kategorien größer & gut lesbar */
+  .build-cats button{
+    font-size: 15px;
+    padding: 9px 18px;
+  }
+}
