@@ -370,6 +370,20 @@ window.Game = window.Game || {};
   /* ==========================================================================
    * 5) PLATZIEREN (API intern)
    * ======================================================================== */
+ // Gebäude-Sprites laden (Icon-Lookup wie beim Ghost)
+S.buildingSprites = {};
+
+function loadBuildingSprite(id){
+  if (S.buildingSprites[id]) return;
+  const img = new Image();
+  
+  // selbes Schema wie unser Ghost
+  const url = `assets/icons/buildings/${id}.png`;
+  img.src = url;
+
+  S.buildingSprites[id] = img;
+}
+  
   function placeInternal(id,x,y,opt={}){
     const w=(opt.w|0)||3, h=(opt.h|0)||3;
     if (!(Number.isFinite(x)&&Number.isFinite(y) && x>=0 && y>=0)){
