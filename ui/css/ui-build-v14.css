@@ -194,12 +194,12 @@
 
 /* Gebäude mittig und skaliert in der Karte */
 .build-card__img{
-  flex: 1 1 auto;
-  max-width: 90%;
-  max-height: 72%;          /* lässt unten Platz für Kosten */
+  flex: 0 1 auto;
+  max-width: 86%;
+  max-height: 68%;          /* minimal kleiner → mehr Luft für Kosten */
   object-fit: contain;
   display:block;
-  margin: 2px auto 4px auto; /* optisch in die Mitte */
+  margin: 4px auto 4px auto; /* oben/unten gleich → optisch mittiger */
   image-rendering: pixelated;
 }
 
