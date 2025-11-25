@@ -22,7 +22,7 @@
 
   /* Kartengrößen (quadratisch) */
   --build-card-size-port: 108px;
-  --build-card-size-land: 104px;           /* leicht verkleinert */
+  --build-card-size-land: 96px;           /* leicht verkleinert */
 
   --build-gap: 8px;
   --build-z: 95;
