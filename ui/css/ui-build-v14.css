@@ -287,15 +287,6 @@
     overflow-y: auto;
     overflow-x: hidden;
   }
-
-  /* Kategorien im Landscape etwas größer und besser lesbar,
-     aber gleicher Stil wie im Portrait */
-  .build-cats button{
-    padding: 8px 20px;
-    font-size: 15px;        /* im Querformat gut lesbar */
-    min-width: 96px;        /* genug Breite für "Verwaltung" etc. */
-    white-space: nowrap;    /* Text bleibt in einer Zeile */
-  }
 }
 
 
