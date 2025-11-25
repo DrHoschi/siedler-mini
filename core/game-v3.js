@@ -332,18 +332,31 @@ window.Game = window.Game || {};
   }
 
   function drawBuildings(){
-    const ctx=S.ctx, {tileW,tileH,cam} = S;
-    ctx.save();
-    for (const b of S.buildings){
-      const px=b.x*tileW, py=b.y*tileH, pw=(b.w||1)*tileW, ph=(b.h||1)*tileH;
-      ctx.fillStyle='rgba(140,200,255,0.30)';     // einfache Platzhalter-Visualisierung
+  const ctx = S.ctx;
+  const {tileW, tileH} = S;
+
+  ctx.save();
+  for (const b of S.buildings){
+    // Sprite vorhanden?
+    const spr = S.buildingSprites?.[b.id];
+    const px = b.x * tileW;
+    const py = b.y * tileH;
+    const pw = (b.w || 1) * tileW;
+    const ph = (b.h || 1) * tileH;
+
+    if (spr && spr.complete){
+      ctx.drawImage(spr, px, py, pw, ph);
+    } else {
+      // Fallback: leicht getöntes Rechteck
+      ctx.fillStyle='rgba(255,200,140,0.25)';
       ctx.fillRect(px,py,pw,ph);
-      ctx.lineWidth = 2 / Math.max(1, cam.zoom);
-      ctx.strokeStyle='rgba(0,0,0,.35)';
+      ctx.strokeStyle='rgba(0,0,0,0.35)';
+      ctx.lineWidth = 2 / Math.max(1, S.cam.zoom);
       ctx.strokeRect(px+1,py+1,pw-2,ph-2);
     }
-    ctx.restore();
   }
+  ctx.restore();
+}
 
   function frame(){
     if (!S.running) return;
