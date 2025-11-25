@@ -205,10 +205,10 @@
 
 /* Kosten unten zentriert, aber innerhalb des Holzrahmens */
 .build-costs{
-  margin-top: 0;
+  margin-top: auto;          /* schiebt die Kosten an den unteren Rand der Karte */
   margin-bottom: 2px;
   display:flex;
-  gap:3px;
+  gap:4px;
   justify-content:center;
   align-items:center;
 }
@@ -291,9 +291,10 @@
   /* Kategorien im Landscape etwas größer und besser lesbar,
      aber gleicher Stil wie im Portrait */
   .build-cats button{
-    padding: 7px 18px;
-    font-size: 14px;               /* besser lesbar im Querformat */
-    min-width: 88px;                /* verhindert zu schmale Buttons */
+    padding: 8px 20px;
+    font-size: 15px;        /* im Querformat gut lesbar */
+    min-width: 96px;        /* genug Breite für "Verwaltung" etc. */
+    white-space: nowrap;    /* Text bleibt in einer Zeile */
   }
 }
 
