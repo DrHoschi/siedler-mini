@@ -169,7 +169,9 @@ window.Game = window.Game || {};
     }
 
     // Desktop-Komfort: STRG/Cmd + Mausrad = Zoom am Mausfokus
-    if (!S.canvas.__wheelZoomWired){
+    // ABER nur, wenn KEINE externe Kamera (GameCamera) aktiv ist.
+    // Sonst würden zwei Systeme gleichzeitig zoomen → "Sprung"-Effekt.
+    if (!window.GameCamera && !S.canvas.__wheelZoomWired){
       S.canvas.__wheelZoomWired = true;
       S.canvas.addEventListener('wheel', (ev)=>{
         if (!ev.ctrlKey && !ev.metaKey) return;
