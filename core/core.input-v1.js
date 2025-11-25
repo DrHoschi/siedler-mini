@@ -239,16 +239,20 @@
   }
 
   function placeAt(tx,ty,w=lastSize.w,h=lastSize.h){
-    const detail = {
-      __src: 'input-v25.11.18',
-      buildingId: buildTool,
-      x: tx|0, y: ty|0, w:w|0, h:h|0
-    };
-    OK('cb:build:place', detail);
-    window.dispatchEvent(new CustomEvent('cb:build:place',{detail}));
-    hideOverlay();
-    resetTool();
-  }
+  const detail = {
+    // WICHTIG: alter Tag, den dein Game-Listener akzeptiert
+    __src: 'input-v25.11.14',
+    buildingId: buildTool,
+    x: tx|0,
+    y: ty|0,
+    w: w|0,
+    h: h|0
+  };
+  OK('cb:build:place', detail);
+  window.dispatchEvent(new CustomEvent('cb:build:place', { detail }));
+  hideOverlay();
+  resetTool();
+}
 
   // ==========================================================================
   //  POINTER HANDLING
