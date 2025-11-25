@@ -186,6 +186,7 @@
 .build-card__title{
   font: 700 11.5px/1.2 system-ui,-apple-system;
   color:#f4e0b0;
+  margin-top:-1px;              /* etwas näher an den oberen Holzrand */
   margin-bottom:2px;
   text-shadow:0 1px 1px rgba(0,0,0,.75);
   text-align:left;
