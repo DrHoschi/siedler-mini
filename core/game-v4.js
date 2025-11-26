@@ -325,44 +325,61 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
   }
 
   // 🔥 Frame-Loop: Map + Gebäude + Overlays + Units-Tick
-  function frame(){
-    if (!S.running) return;
+function frame(){
+  if (!S.running) return;
 
-    // 1) Units / Träger-System pro Frame ticken lassen
-    window.dispatchEvent(new CustomEvent('cb:game:tick', {
-      detail: { dt: 1/60 }
-    }));
+  // 1) Units / Träger-System pro Frame ticken lassen
+  window.dispatchEvent(new CustomEvent('cb:game:tick', {
+    detail: { dt: 1/60 }
+  }));
 
-    // 2) Map + Gebäude mit Kamera-Transform zeichnen
-    clear();
-    applyCamera();
-    drawLayersCulled();
-    drawBuildings();
+  // 2) Map + Gebäude mit Kamera-Transform zeichnen
+  clear();
+  applyCamera();
+  drawLayersCulled();
+  drawBuildings();
 
-    // 3) Overlays (Träger-Punkte, Trampelpfade) zeichnen
-    //    Wichtig: Transform zurücksetzen, die Overlays rechnen selbst mit Kamera.
-    if (window.OverlayHooks?.draw) {
-      try {
-        const ctx = S.ctx;
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // 3) Overlays (Träger-Punkte, Trampelpfade) zeichnen
+  //    Wichtig: Transform zurücksetzen, die Overlays rechnen selbst mit Kamera.
+  if (window.OverlayHooks?.draw) {
+    try {
+      const ctx = S.ctx;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-        // Kamera aus GameCamera (Standard) oder aus unserem State
-        const cam = window.GameCamera?.getState?.() || {
+      // Kamera aus GameCamera (Standard) oder aus unserem State
+      const cam = window.GameCamera?.getState?.() || {
+        x: S.cam.x,
+        y: S.cam.y,
+        zoom: S.cam.zoom
+      };
+
+      window.OverlayHooks.draw(ctx, cam);
+    } catch (e) {
+      WARN('OverlayHooks.draw Fehler:', e?.message || e);
+    }
+  }
+
+  // ⭐ NEU: Frame-Render-Event für Unit-Overlay / Path-Traces / weitere Overlays
+  try {
+    window.dispatchEvent(new CustomEvent('cb:game:render', {
+      detail: {
+        ctx: S.ctx,
+        cam: {
           x: S.cam.x,
           y: S.cam.y,
           zoom: S.cam.zoom
-        };
-
-        window.OverlayHooks.draw(ctx, cam);
-      } catch (e) {
-        WARN('OverlayHooks.draw Fehler:', e?.message || e);
+        },
+        tileW: S.tileW,
+        tileH: S.tileH
       }
-    }
-
-    // 4) Nächsten Frame planen
-    S.rafId = requestAnimationFrame(frame);
+    }));
+  } catch (e) {
+    WARN('cb:game:render Fehler:', e?.message || e);
   }
 
+  // 4) Nächsten Frame planen
+  S.rafId = requestAnimationFrame(frame);
+}
   /* ==========================================================================
    * 5) PLATZIEREN (API intern)
    * ======================================================================== */
