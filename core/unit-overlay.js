@@ -84,26 +84,36 @@
     return { x:cx, y:cy, resId };
   }
 
-  // Zeichenroutine für einen Carrier
+   // Zeichenroutine für einen Carrier
   function drawCarrier(ctx, uw, cam, ts){
     const z  = cam.zoom || 1;
-    const sx = (uw.x - cam.x*ts) * z;
-    const sy = (uw.y - cam.y*ts) * z;
+
+    // WICHTIG:
+    // uw.x / uw.y sind schon Weltpixel (TileKoord * tileSize)
+    // cam.x / cam.y sind ebenfalls Weltpixel.
+    // Also KEIN *ts mehr → sonst landen wir weit außerhalb des sichtbaren Bereichs.
+    const sx = (uw.x - cam.x) * z;
+    const sy = (uw.y - cam.y) * z;
 
     // Kreis (Schatten + weißer Kern)
     ctx.save();
-    ctx.beginPath(); ctx.arc(sx, sy, Math.max(1, (RADIUS+1.5)*z), 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fill();
-    ctx.beginPath(); ctx.arc(sx, sy, Math.max(1, RADIUS*z), 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx, sy, Math.max(1, (RADIUS+1.5)*z), 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, Math.max(1, RADIUS*z), 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fill();
 
     // Icon (falls Ressource getragen wird)
     if (uw.resId){
       const path = resIconPath(uw.resId);
       const img  = loadIcon(path);
       if (img && img.complete){
-        const s = Math.max(8, ICON*z);
-        ctx.drawImage(img, sx + (RADIUS+2)*z, sy - s - 2, s, s);
+        const s = Math.max(10, ICON*z);
+        ctx.drawImage(img, sx + (RADIUS+4)*z, sy - s - 4, s, s);
       }
     }
 
