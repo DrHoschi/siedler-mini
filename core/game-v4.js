@@ -323,19 +323,42 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
     ctx.restore();
   }
 
-  // 🔥 HIER ist Patch B: wir bauen den Tick ins frame() ein
+  // 🔥 Frame-Loop: Map + Gebäude + Overlays + Units-Tick
   function frame(){
     if (!S.running) return;
 
-    // Units / Träger-System pro Frame ticken lassen
+    // 1) Units / Träger-System pro Frame ticken lassen
     window.dispatchEvent(new CustomEvent('cb:game:tick', {
       detail: { dt: 1/60 }
     }));
 
+    // 2) Map + Gebäude mit Kamera-Transform zeichnen
     clear();
     applyCamera();
     drawLayersCulled();
     drawBuildings();
+
+    // 3) Overlays (Träger-Punkte, Trampelpfade) zeichnen
+    //    Wichtig: Transform zurücksetzen, die Overlays rechnen selbst mit Kamera.
+    if (window.OverlayHooks?.draw) {
+      try {
+        const ctx = S.ctx;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Kamera aus GameCamera (Standard) oder aus unserem State
+        const cam = window.GameCamera?.getState?.() || {
+          x: S.cam.x,
+          y: S.cam.y,
+          zoom: S.cam.zoom
+        };
+
+        window.OverlayHooks.draw(ctx, cam);
+      } catch (e) {
+        WARN('OverlayHooks.draw Fehler:', e?.message || e);
+      }
+    }
+
+    // 4) Nächsten Frame planen
     S.rafId = requestAnimationFrame(frame);
   }
 
