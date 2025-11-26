@@ -1,5 +1,5 @@
 /* ============================================================================
- * Datei   : core/game-v3.js
+ * Datei   : core/game-v4.js
  * Projekt : Neue Siedler
  * Version : v25.11.26
  * Build   : quadratisches Layout (CSS-Rect) · DPR-Backbuffer · Focus-Zoom
