@@ -370,7 +370,8 @@ window.Game = window.Game || {};
   /* ==========================================================================
    * 5) PLATZIEREN (API intern)
    * ======================================================================== */
- // Gebäude-Sprites laden (Icon-Lookup wie beim Ghost)
+
+  // Gebäude-Sprites laden (Icon-Lookup wie beim Ghost)
 S.buildingSprites = {};
 
 function loadBuildingSprite(id){
@@ -390,8 +391,21 @@ function loadBuildingSprite(id){
       return { ok:false, reason:'invalid_xy' };
     }
     S.buildings.push({ id, x:x|0, y:y|0, w, h });
+   
+    loadBuildingSprite(id);
+   
     window.dispatchEvent(new CustomEvent('cb:build:placed', { detail:{ id, x:x|0, y:y|0, w, h } }));
     return { ok:true, id, x:x|0, y:y|0, w, h };
+    // ✨ Träger-Auftrag starten
+window.dispatchEvent(new CustomEvent('req:carrier:createTask', {
+  detail:{
+    type:'build',
+    buildingId:id,
+    x:x|0,
+    y:y|0,
+    w,
+    h
+   }
   }
 
   /* ==========================================================================
