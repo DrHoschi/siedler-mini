@@ -111,10 +111,10 @@
     }
   });
 
-  // Frame-Tick vom Spiel → Units updaten
+/*  // Frame-Tick vom Spiel → Units updaten
   addEventListener("cb:game:tick", (ev) => {
     tickUnits(ev.detail.dt);
-  });
+  }); */
 
 addEventListener("cb:game:tick", (ev) => {
   const dt = ev?.detail?.dt ?? 0;
