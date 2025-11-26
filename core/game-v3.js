@@ -20,6 +20,10 @@
  * ========================================================================== */
 
 window.Game = window.Game || {};
+Game.getUnits = () => (window.GameUnits?.getUnits() || []);
+Game.popJob   = (...a)=> window.GameUnits?.popJob(...a);
+Game.addJob   = (...a)=> window.GameUnits?.addJob(...a);
+
 (function(){
   'use strict';
 
