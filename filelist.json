@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-25T12:24:05.394Z",
+  "createdAt": "2025-11-26T23:25:32.815Z",
   "root": ".",
-  "count": 517,
+  "count": 524,
   "entries": [
     {
       "type": "dir",
@@ -1120,6 +1120,16 @@
     },
     {
       "type": "file",
+      "path": "core/camera-v2.js",
+      "size": 9051
+    },
+    {
+      "type": "file",
+      "path": "core/camera-v3.js",
+      "size": 8443
+    },
+    {
+      "type": "file",
       "path": "core/camera.glue-v1.js",
       "size": 5198
     },
@@ -1127,6 +1137,11 @@
       "type": "file",
       "path": "core/camera.glue-v3.js",
       "size": 6038
+    },
+    {
+      "type": "file",
+      "path": "core/camera.glue-v4.js",
+      "size": 7020
     },
     {
       "type": "file",
@@ -1162,6 +1177,16 @@
       "type": "file",
       "path": "core/core.env.js",
       "size": 5188
+    },
+    {
+      "type": "file",
+      "path": "core/core.input-v0.js",
+      "size": 10326
+    },
+    {
+      "type": "file",
+      "path": "core/core.input-v1.js",
+      "size": 11121
     },
     {
       "type": "file",
@@ -1211,7 +1236,12 @@
     {
       "type": "file",
       "path": "core/game-v3.js",
-      "size": 16389
+      "size": 17735
+    },
+    {
+      "type": "file",
+      "path": "core/game-v4.js",
+      "size": 15595
     },
     {
       "type": "file",
@@ -1222,6 +1252,11 @@
       "type": "file",
       "path": "core/game.production.js",
       "size": 1421
+    },
+    {
+      "type": "file",
+      "path": "core/game.units.js",
+      "size": 4125
     },
     {
       "type": "file",
@@ -1336,7 +1371,7 @@
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 5080
+      "size": 5308
     },
     {
       "type": "file",
@@ -2485,17 +2520,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 50584
+      "size": 50959
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19235
+      "size": 19362
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 4371
+      "size": 15381
     },
     {
       "type": "file",
@@ -2505,7 +2540,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 15365
+      "size": 13944
     },
     {
       "type": "file",
