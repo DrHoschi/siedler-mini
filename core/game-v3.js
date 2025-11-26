@@ -385,29 +385,44 @@ function loadBuildingSprite(id){
   S.buildingSprites[id] = img;
 }
   
-  function placeInternal(id,x,y,opt={}){
-    const w=(opt.w|0)||3, h=(opt.h|0)||3;
-    if (!(Number.isFinite(x)&&Number.isFinite(y) && x>=0 && y>=0)){
-      return { ok:false, reason:'invalid_xy' };
-    }
-    S.buildings.push({ id, x:x|0, y:y|0, w, h });
-   
-    loadBuildingSprite(id);
-   
-    window.dispatchEvent(new CustomEvent('cb:build:placed', { detail:{ id, x:x|0, y:y|0, w, h } }));
-    return { ok:true, id, x:x|0, y:y|0, w, h };
-    // ✨ Träger-Auftrag starten
-window.dispatchEvent(new CustomEvent('req:carrier:createTask', {
-  detail:{
-    type:'build',
-    buildingId:id,
-    x:x|0,
-    y:y|0,
-    w,
-    h
-   }
+  function placeInternal(id, x, y, opt = {}) {
+  const w = (opt.w | 0) || 3;
+  const h = (opt.h | 0) || 3;
+
+  if (!(Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0)) {
+    return { ok: false, reason: 'invalid_xy' };
   }
 
+  // Gebäude in interner Liste speichern
+  S.buildings.push({ id, x: x | 0, y: y | 0, w, h });
+
+  // Gebäude-Sprite laden
+  loadBuildingSprite(id);
+
+  // Game-Event „Gebäude wurde erstellt“
+  window.dispatchEvent(
+    new CustomEvent('cb:build:placed', {
+      detail: { id, x: x | 0, y: y | 0, w, h }
+    })
+  );
+
+  // ✨ Träger-Task erzeugen (korrekt geschlossen!)
+  window.dispatchEvent(
+    new CustomEvent('req:carrier:createTask', {
+      detail: {
+        type: 'build',
+        buildingId: id,
+        x: x | 0,
+        y: y | 0,
+        w,
+        h
+      }
+    })
+  );
+
+  // Rückgabe
+  return { ok: true, id, x: x | 0, y: y | 0, w, h };
+}
   /* ==========================================================================
    * 6) HAUPTLOGIK / PUBLIC API
    * ======================================================================== */
