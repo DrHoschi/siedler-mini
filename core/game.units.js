@@ -116,6 +116,17 @@
     tickUnits(ev.detail.dt);
   });
 
+addEventListener("cb:game:tick", (ev) => {
+  const dt = ev?.detail?.dt ?? 0;
+  // TEMP zum Testen:
+  // console.info("[units] tick", dt);
+  try {
+    tickUnits(dt);
+  } catch (e) {
+    console.error("[units] Tick-Fehler:", e);
+  }
+});
+  
   // ---------------------------------------------------------------------------
   //  EXPORT
   // ---------------------------------------------------------------------------
