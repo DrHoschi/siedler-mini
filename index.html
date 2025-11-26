@@ -168,6 +168,19 @@
   <script src="core/core.pfglue.js"></script>   <!-- Polyfills/Glue: früh -->
   <script src="core/core.input-v1.js"></script> <!-- Input-Hooks (Keys/Pointer) -->
 
+  <!-- OVERLAYS (brauchen Canvas/Map) -->
+  <script src="core/path-overlay.js"></script>
+  <!-- <script src="core/camera.glue-v4.js"></script> -->
+  <!-- <script src="core/camera.glue.js"></script> -->
+  <!-- <script src="core/placement.js"></script> -->
+
+     <!-- CARRIER + PATHFINDING + OVERLAYS -->
+<script src="core/adfinder.js"></script>
+<script src="core/overlay-hooks.js"></script>
+<script src="core/path-traces.overlay.js"></script>
+<script src="core/unit-overlay.js"></script>
+<script src="core/game.units.js"></script>
+     
   <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
   <script src="core/camera.js"></script>
   <!-- KEINE camera-v3.js, KEINE camera.glue-Varianten hier laden! -->
@@ -183,18 +196,7 @@
   <!-- START-UI -->
   <script src="ui/ui-start.js?v=25.11.02"></script>
 
-  <!-- OVERLAYS (brauchen Canvas/Map) -->
-  <script src="core/path-overlay.js"></script>
-  <!-- <script src="core/camera.glue-v4.js"></script> -->
-  <!-- <script src="core/camera.glue.js"></script> -->
-  <!-- <script src="core/placement.js"></script> -->
 
-     <!-- CARRIER + PATHFINDING + OVERLAYS -->
-<script src="core/adfinder.js"></script>
-<script src="core/overlay-hooks.js"></script>
-<script src="core/path-traces.overlay.js"></script>
-<script src="core/unit-overlay.js"></script>
-<script src="core/game.units.js"></script>
      
   <!-- PLACEMENT OVERLAY (braucht Game+Camera & den Build-Hook) -->
   <script src="ui/ui-place.js?v=25.11.14"></script>
