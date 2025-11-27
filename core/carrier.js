@@ -1,62 +1,108 @@
 /* ============================================================================
- * Datei    : core/carrier.js
- * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.10.25-final+traces
- * Zweck    : Träger-Logik (Jobs annehmen → Ressource holen → ins HQ liefern)
+ * Datei   : core/carrier.js
+ * Projekt : Neue Siedler – Transport / Träger-Layer
+ * Version : v25.11.27-stub
+ * Zweck   : Minimal-Laufzeit für CarrierRuntime, damit units-Tick nicht crasht.
  *
- * Events (emit):
- *   cb:carrier:job:accepted {res, from:{x,y}, to:{x,y}}
- *   cb:carrier:pickup:ok    {res, at:{x,y}}
- *   cb:carrier:pickup:fail  {res, at:{x,y}, reason}
- *   cb:carrier:deliver:ok   {res, qty, to:{x,y}}
- *   cb:carrier:idle         {id}
- *   cb:res:change           {res, delta, source:'carrier'} // Fallback
- *   cb:path:trace           {from:{x,y}, to:{x,y}}          // Weltpixel (Trampelpfad)
- *   cb:request-repaint      {}                              // nach Schritt
- * ============================================================================ */
-(() => {
+ * WICHTIG:
+ *  - Dieser Stand behebt nur den Fehler "Can't find variable: CarrierRuntime".
+ *  - Die eigentliche Trägerbewegung / Pfade bauen wir im nächsten Schritt wieder ein.
+ * ========================================================================== */
+
+(function(){
   'use strict';
 
-  const LOG  = (...a)=> (window.CBLog?.ok   ?? console.log)('[carrier]', ...a);
-  const INFO = (...a)=> (window.CBLog?.info ?? console.info)('[carrier]', ...a);
-  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)('[carrier]', ...a);
+  // --------------------------------------------------------------------------
+  // 1) Logging-Helfer (nutzt CBLog, fällt sonst auf console zurück)
+  // --------------------------------------------------------------------------
+  const MOD = 'carrier';
 
-  const G = window.Game || {};
+  const logger = (window.CBLog || {
+    ok:   (...a)=>console.log(...a),
+    info: (...a)=>console.info(...a),
+    warn: (...a)=>console.warn(...a),
+    error:(...a)=>console.error(...a),
+  });
 
-  // ... (DEIN GANZER BISHERIGER CODE UNVERÄNDERT BIS ZUM MOVEMENT-TEIL)
+  const OK   = (...args)=> logger.ok   (`✅ [${MOD}]`, ...args);
+  const INFO = (...args)=> logger.info (`ℹ️ [${MOD}]`, ...args);
+  const WARN = (...args)=> logger.warn (`⚠️ [${MOD}]`, ...args);
+  const ERR  = (...args)=> logger.error(`❌ [${MOD}]`, ...args);
 
-  // ---- Movement -------------------------------------------------------------
-  // Vereinfachte Schrittlogik mit künstlicher Verlangsamung,
-  // damit Träger nicht so "hektisch" wirken.
-  function stepTowardFallback(u, tx, ty){
-    // Alle N Frames einen Schritt machen
-    const SKIP_FRAMES = 4; // 0 = jede Frame, 4 = nur alle 5 Frames
-    if (u._moveSkip == null) u._moveSkip = 0;
+  // --------------------------------------------------------------------------
+  // 2) Konstante / Meta
+  //    (Speed etc. sind hier schon vorbereitet, falls wir gleich mehr einbauen)
+  // --------------------------------------------------------------------------
+  const CARRIER_BASE_SPEED_TILES_PER_SEC = 0.75; // langsamer als Arbeiter
+  const TILE_SIZE                        = 64;   // nur als Referenz
 
-    if (u._moveSkip > 0){
-      u._moveSkip--;
-      return false; // diese Frame keinen Schritt
+  // --------------------------------------------------------------------------
+  // 3) Hilfsfunktionen (Vorbereitung für "echte" AI – aktuell nur Platzhalter)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Defensiver Zugriff auf Game-State.
+   * So können wir später z. B. HQ-Position, Gebäude usw. auslesen.
+   */
+  function getGameState(){
+    return window.Game?.__dbg?.state || null;
+  }
+
+  // --------------------------------------------------------------------------
+  // 4) CarrierRuntime – MINIMALE API, damit GameUnits nicht mehr crasht
+  // --------------------------------------------------------------------------
+  /**
+   * Wir implementieren nur genau das, was das units-Modul aktuell braucht:
+   *   - Ein globales Objekt `window.CarrierRuntime`
+   *   - Eine Funktion `tick(unit, dt, ctx)` – hier NO-OP.
+   *
+   * Das units-Modul ruft `CarrierRuntime.tick(...)` in einem try/catch auf.
+   * Bisher: ReferenceError → dein Log-Spam.
+   * Jetzt:  tick() existiert, macht aber (noch) nichts → kein Fehler mehr.
+   */
+  const CarrierRuntime = {
+
+    /**
+     * Haupt-Tick für eine Träger-Einheit.
+     *
+     * @param {Object} unit - Einheit aus dem units-Modul (Träger)
+     * @param {number} dt   - Delta-Time in Sekunden
+     * @param {Object} ctx  - Zusätzlicher Kontext (Map, Jobs, etc.)
+     */
+    tick(unit, dt, ctx){
+      // *** STUB ***
+      // Hier später:
+      //  - Job-Phase abarbeiten (zum Lager, zur Baustelle, zurück zum HQ …)
+      //  - Position aktualisieren
+      //  - ggf. Pfad-Overlay aktualisieren
+      //
+      // Aktuell absichtlich NO-OP, damit nichts crasht.
+      return;
+    },
+
+    /**
+     * Optionaler Hook, falls das units-Modul ihn aufruft.
+     * (z. B. zum Registrieren einer neuen Träger-Einheit)
+     */
+    onUnitCreated(unit){
+      // aktuell nichts zu tun – nur vorhanden, falls jemand es aufruft
+      return;
+    },
+
+    /**
+     * Optionaler Hook bei Job-Änderungen – vorbereitend für spätere AI.
+     */
+    onJobAssigned(unit, job){
+      // aktuell nichts zu tun – nur Stub
+      return;
     }
-    u._moveSkip = SKIP_FRAMES;
+  };
 
-    if (u.x === tx && u.y === ty) return true;
+  // --------------------------------------------------------------------------
+  // 5) Export auf window – WICHTIG für units-Modul
+  // --------------------------------------------------------------------------
+  window.CarrierRuntime = CarrierRuntime;
 
-    if (u.x < tx && !G.isBlocked(u.x+1,u.y)) u.x++;
-    else if (u.x > tx && !G.isBlocked(u.x-1,u.y)) u.x--;
-    else if (u.y < ty && !G.isBlocked(u.x,u.y+1)) u.y++;
-    else if (u.y > ty && !G.isBlocked(u.x,u.y-1)) u.y--;
-
-    return (u.x === tx && u.y === ty);
-  }
-
-  function ensureCarryIcon(u){
-    if (u._iconElm) return;
-    const elm = document.createElement('div');
-    elm.className = 'carrier-icon';
-    document.body.appendChild(elm);
-    u._iconElm = elm;
-  }
-
-  // ... (Rest deiner Datei unverändert – tick(), Export usw.)
+  OK('Modul geladen (v25.11.27-stub, CarrierRuntime vorhanden, tick() NO-OP)');
 
 })();
