@@ -1,12 +1,16 @@
 /* ============================================================================
  * Datei   : core/game-v4.js
  * Projekt : Neue Siedler
- * Version : v25.11.26
+ * Version : v25.11.27-building-phase-1
  * Build   : quadratisches Layout (CSS-Rect) · DPR-Backbuffer · Focus-Zoom
  *           View-Culling · Dual-Camera-Events · Wheel-Zoom (Desktop)
  *
  * Zweck   : Einziger Renderer für die Kachel-Map + Gebäude-Visualisierung.
  *           Gekoppelt an das CSS-Layout (#game) und die map-runtime.bridge.js.
+ *
+ * Neu     : Baujob in 3 Phasen (Baustelle → Materialphase → fertig)
+ *           – rein visuell/zeitbasiert (Vorbereitung für echtes Job-/Ressourcen-
+ *             System in Schritt 2/3).
  * ========================================================================== */
 
 window.Game = window.Game || {};
@@ -15,6 +19,7 @@ window.Game = window.Game || {};
 Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
 Game.popJob   = (...a)=> window.GameUnits?.popJob?.(...a);
 Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
+
 (function(){
   'use strict';
 
@@ -31,6 +36,20 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
    * 1) KONSTANTEN & ANZEIGE-PRÄFERENZEN
    * ======================================================================== */
   const VIEW_PREF = { fit: 'cover' }; // 'cover' oder 'contain'
+
+  // --- NEU: Bauphasen-Konstanten (Schritt 1) --------------------------------
+  const BUILD_PHASE = {
+    FOUNDATION: 1,  // Baustelle angelegt
+    SUPPLY:     2,  // „Materialien liefern“
+    COMPLETE:   3   // Gebäude fertig
+  };
+
+  // einfache Zeit-Dauern pro Phase (Sekunden)
+  const BUILD_PHASE_DURATION = {
+    [BUILD_PHASE.FOUNDATION]: 1.0,  // Dauer Baustellen-Phase
+    [BUILD_PHASE.SUPPLY]:     1.5   // Dauer Material-Phase
+    // COMPLETE hat keine Dauer – ist Endzustand
+  };
 
   /* ==========================================================================
    * 2) MODUL-STATUS (STATE)
@@ -49,7 +68,8 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
     // Kamera (World-Pixel) + Zoom
     cam:{ x:0, y:0, zoom:1 },
 
-    // Gebäude (x/y in Tiles)
+    // Gebäude (x/y in Tiles, inkl. Bauphase)
+    // Eintrag: { id, x, y, w, h, phase, phaseTime }
     buildings: [],
 
     // Laufsteuerung
@@ -60,10 +80,13 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
 
     // einmaliger Initial-Fit durchgeführt?
     didInitialFit:false,
+
+    // Sprites für fertige Gebäude
+    buildingSprites: {}
   };
 
   /* ==========================================================================
-   * 3) HILFSFUNKTIONEN
+   * 3) HILFSFUNKTIONEN – MAP / CANVAS
    * ======================================================================== */
 
   function deriveTsGrid(){
@@ -257,6 +280,7 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
   /* ==========================================================================
    * 4) ZEICHNEN
    * ======================================================================== */
+
   function drawTile(gid, dx, dy){
     if (!gid) return;
     const img=S.tileset; if (!img) return;
@@ -299,93 +323,7 @@ Game.addJob   = (...a)=> window.GameUnits?.addJob?.(...a);
     }
   }
 
-  function drawBuildings(){
-    const ctx = S.ctx;
-    const {tileW, tileH} = S;
-
-    ctx.save();
-    for (const b of S.buildings){
-      const spr = S.buildingSprites?.[b.id];
-      const px = b.x * tileW;
-      const py = b.y * tileH;
-      const pw = (b.w || 1) * tileW;
-      const ph = (b.h || 1) * tileH;
-
-      if (spr && spr.complete){
-        ctx.drawImage(spr, px, py, pw, ph);
-      } else {
-        ctx.fillStyle='rgba(255,200,140,0.25)';
-        ctx.fillRect(px,py,pw,ph);
-        ctx.strokeStyle='rgba(0,0,0,0.35)';
-        ctx.lineWidth = 2 / Math.max(1, S.cam.zoom);
-        ctx.strokeRect(px+1,py+1,pw-2,ph-2);
-      }
-    }
-    ctx.restore();
-  }
-
-  // 🔥 Frame-Loop: Map + Gebäude + Overlays + Units-Tick
-function frame(){
-  if (!S.running) return;
-
-  // 1) Units / Träger-System pro Frame ticken lassen
-  window.dispatchEvent(new CustomEvent('cb:game:tick', {
-    detail: { dt: 1/60 }
-  }));
-
-  // 2) Map + Gebäude mit Kamera-Transform zeichnen
-  clear();
-  applyCamera();
-  drawLayersCulled();
-  drawBuildings();
-
-  // 3) Overlays (Träger-Punkte, Trampelpfade) zeichnen
-  //    Wichtig: Transform zurücksetzen, die Overlays rechnen selbst mit Kamera.
-  if (window.OverlayHooks?.draw) {
-    try {
-      const ctx = S.ctx;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-      // Kamera aus GameCamera (Standard) oder aus unserem State
-      const cam = window.GameCamera?.getState?.() || {
-        x: S.cam.x,
-        y: S.cam.y,
-        zoom: S.cam.zoom
-      };
-
-      window.OverlayHooks.draw(ctx, cam);
-    } catch (e) {
-      WARN('OverlayHooks.draw Fehler:', e?.message || e);
-    }
-  }
-
-  // ⭐ NEU: Frame-Render-Event für Unit-Overlay / Path-Traces / weitere Overlays
-  try {
-    window.dispatchEvent(new CustomEvent('cb:game:render', {
-      detail: {
-        ctx: S.ctx,
-        cam: {
-          x: S.cam.x,
-          y: S.cam.y,
-          zoom: S.cam.zoom
-        },
-        tileW: S.tileW,
-        tileH: S.tileH
-      }
-    }));
-  } catch (e) {
-    WARN('cb:game:render Fehler:', e?.message || e);
-  }
-
-  // 4) Nächsten Frame planen
-  S.rafId = requestAnimationFrame(frame);
-}
-  /* ==========================================================================
-   * 5) PLATZIEREN (API intern)
-   * ======================================================================== */
-
-  // Gebäude-Sprites
-  S.buildingSprites = {};
+  // Gebäude-Sprite laden (nur für fertige Gebäude, Phase COMPLETE)
   function loadBuildingSprite(id){
     if (S.buildingSprites[id]) return;
     const img = new Image();
@@ -393,6 +331,172 @@ function frame(){
     img.src = url;
     S.buildingSprites[id] = img;
   }
+
+  function drawBuildings(){
+    const ctx = S.ctx;
+    const {tileW, tileH} = S;
+
+    ctx.save();
+    for (const b of S.buildings){
+      const phase = b.phase || BUILD_PHASE.COMPLETE;
+      const px = b.x * tileW;
+      const py = b.y * tileH;
+      const pw = (b.w || 1) * tileW;
+      const ph = (b.h || 1) * tileH;
+
+      // Phase 1: nur Baustellen-Rahmen
+      if (phase === BUILD_PHASE.FOUNDATION){
+        ctx.fillStyle='rgba(255, 220, 150, 0.12)';
+        ctx.fillRect(px,py,pw,ph);
+        ctx.strokeStyle='rgba(220, 180, 120, 0.9)';
+        ctx.lineWidth = 2 / Math.max(1, S.cam.zoom);
+        ctx.setLineDash([4 / S.cam.zoom, 4 / S.cam.zoom]);
+        ctx.strokeRect(px+1,py+1,pw-2,ph-2);
+      }
+
+      // Phase 2: „Holz-Baustelle“ etwas deutlicher
+      else if (phase === BUILD_PHASE.SUPPLY){
+        ctx.fillStyle='rgba(255, 210, 140, 0.35)';
+        ctx.fillRect(px,py,pw,ph);
+        ctx.setLineDash([]);
+        ctx.strokeStyle='rgba(0,0,0,0.45)';
+        ctx.lineWidth = 2 / Math.max(1, S.cam.zoom);
+        ctx.strokeRect(px+1,py+1,pw-2,ph-2);
+      }
+
+      // Phase 3 (COMPLETE) oder unbekannt → fertiges Gebäude-Sprite
+      else {
+        const spr = S.buildingSprites[b.id];
+        if (spr && spr.complete){
+          ctx.drawImage(spr, px, py, pw, ph);
+        } else {
+          // Fallback: wie bisheriger Platzhalter
+          ctx.fillStyle='rgba(255,200,140,0.25)';
+          ctx.fillRect(px,py,pw,ph);
+          ctx.strokeStyle='rgba(0,0,0,0.35)';
+          ctx.lineWidth = 2 / Math.max(1, S.cam.zoom);
+          ctx.strokeRect(px+1,py+1,pw-2,ph-2);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  /* ==========================================================================
+   * 4a) BAUPHASEN-UPDATE (Schritt 1)
+   * ======================================================================== */
+  function updateConstruction(dt){
+    if (!Array.isArray(S.buildings) || !S.buildings.length) return;
+
+    for (const b of S.buildings){
+      const phase = b.phase || BUILD_PHASE.COMPLETE;
+      if (phase >= BUILD_PHASE.COMPLETE) continue; // fertig, nichts tun
+
+      const needed = BUILD_PHASE_DURATION[phase];
+      if (!needed) {
+        // Sicherheitsfallback: direkt auf COMPLETE springen
+        b.phase = BUILD_PHASE.COMPLETE;
+        loadBuildingSprite(b.id);
+        continue;
+      }
+
+      b.phaseTime = (b.phaseTime || 0) + dt;
+      if (b.phaseTime < needed) continue;
+
+      // Phase abschließen
+      b.phaseTime = 0;
+      const nextPhase = Math.min(phase + 1, BUILD_PHASE.COMPLETE);
+      b.phase = nextPhase;
+
+      INFO('Bauphase', phase, '→', nextPhase, 'für', b.id);
+
+      // Event für Inspector/Debug
+      try {
+        window.dispatchEvent(new CustomEvent('cb:build:phase-change', {
+          detail: { id:b.id, x:b.x, y:b.y, phase:nextPhase }
+        }));
+      } catch(e){
+        WARN('cb:build:phase-change Fehler:', e?.message||e);
+      }
+
+      if (nextPhase === BUILD_PHASE.COMPLETE){
+        loadBuildingSprite(b.id);
+        try {
+          window.dispatchEvent(new CustomEvent('cb:build:completed', {
+            detail: { id:b.id, x:b.x, y:b.y }
+          }));
+        } catch(e){
+          WARN('cb:build:completed Fehler:', e?.message||e);
+        }
+      }
+    }
+  }
+
+  /* ==========================================================================
+   * 4b) FRAME-LOOP (mit Units-Tick + Overlays)
+   * ======================================================================== */
+  function frame(){
+    if (!S.running) return;
+
+    // 0) Bauphasen aktualisieren (ca. dt = 1/60 s)
+    updateConstruction(1/60);
+
+    // 1) Units / Träger-System pro Frame ticken lassen
+    window.dispatchEvent(new CustomEvent('cb:game:tick', {
+      detail: { dt: 1/60 }
+    }));
+
+    // 2) Map + Gebäude mit Kamera-Transform zeichnen
+    clear();
+    applyCamera();
+    drawLayersCulled();
+    drawBuildings();
+
+    // 3) Overlays (Träger-Punkte, Trampelpfade) zeichnen
+    //    Wichtig: Transform zurücksetzen, die Overlays rechnen selbst mit Kamera.
+    if (window.OverlayHooks?.draw) {
+      try {
+        const ctx = S.ctx;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+        // Kamera aus GameCamera (Standard) oder aus unserem State
+        const cam = window.GameCamera?.getState?.() || {
+          x: S.cam.x,
+          y: S.cam.y,
+          zoom: S.cam.zoom
+        };
+
+        window.OverlayHooks.draw(ctx, cam);
+      } catch (e) {
+        WARN('OverlayHooks.draw Fehler:', e?.message || e);
+      }
+    }
+
+    // 4) Render-Event für weitere Overlays / Debug
+    try {
+      window.dispatchEvent(new CustomEvent('cb:game:render', {
+        detail: {
+          ctx: S.ctx,
+          cam: {
+            x: S.cam.x,
+            y: S.cam.y,
+            zoom: S.cam.zoom
+          },
+          tileW: S.tileW,
+          tileH: S.tileH
+        }
+      }));
+    } catch (e) {
+      WARN('cb:game:render Fehler:', e?.message || e);
+    }
+
+    // 5) Nächsten Frame planen
+    S.rafId = requestAnimationFrame(frame);
+  }
+
+  /* ==========================================================================
+   * 5) PLATZIEREN (API intern) – Bauphasen-Start
+   * ======================================================================== */
 
   function placeInternal(id, x, y, opt = {}) {
     const w = (opt.w | 0) || 3;
@@ -402,30 +506,47 @@ function frame(){
       return { ok: false, reason: 'invalid_xy' };
     }
 
-    S.buildings.push({ id, x: x | 0, y: y | 0, w, h });
+    // NEU: Gebäude als Baustelle in Phase 1 anlegen
+    const bx = x | 0;
+    const by = y | 0;
 
-    loadBuildingSprite(id);
+    S.buildings.push({
+      id,
+      x: bx,
+      y: by,
+      w,
+      h,
+      phase: BUILD_PHASE.FOUNDATION,
+      phaseTime: 0
+      // Später können hier noch offene Baukosten etc. ergänzt werden
+    });
 
+    // WICHTIG:
+    // - Sprite wird NICHT sofort geladen → erst bei COMPLETE-Phase
+    // - So können wir visuell zwischen Baustelle und fertig unterscheiden
+
+    // Event: Platzierung (Inspector / Logs)
     window.dispatchEvent(
       new CustomEvent('cb:build:placed', {
-        detail: { id, x: x | 0, y: y | 0, w, h }
+        detail: { id, x: bx, y: by, w, h }
       })
     );
 
+    // Bestehende Hook für Job-System / Träger bleibt erhalten
     window.dispatchEvent(
       new CustomEvent('req:carrier:createTask', {
         detail: {
           type: 'build',
           buildingId: id,
-          x: x | 0,
-          y: y | 0,
+          x: bx,
+          y: by,
           w,
           h
         }
       })
     );
 
-    return { ok: true, id, x: x | 0, y: y | 0, w, h };
+    return { ok: true, id, x: bx, y: by, w, h };
   }
 
   /* ==========================================================================
@@ -460,6 +581,16 @@ function frame(){
     const r=placeInternal(id,x,y,opt||{});
     if(!r.ok) WARN('placeBuilding fail',r);
     return r;
+  };
+
+  // Debug-Helfer: alle Baustellen sofort fertigstellen (Cheat)
+  Game.debugCompleteAllConstruction = function(){
+    for (const b of S.buildings){
+      b.phase = BUILD_PHASE.COMPLETE;
+      b.phaseTime = 0;
+      loadBuildingSprite(b.id);
+    }
+    INFO('debugCompleteAllConstruction: alle Gebäude als fertig markiert.');
   };
 
   window.Game.__dbg = {
@@ -511,6 +642,6 @@ function frame(){
     INFO('Platzierung (akzeptiert)', res);
   });
 
-  OK('Modul geladen (v25.11.26 + units-tick)');
+  OK('Modul geladen (v25.11.27-building-phase-1 + units-tick)');
 
 })();
