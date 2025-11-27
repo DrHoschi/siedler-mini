@@ -4,7 +4,7 @@
  * Version : v25.11.27-final
  *
  * Zweck   : Zentraler Tick für Träger / GameUnits
- *           – holt Jobs aus Game.popJob()
+ *           – holt Jobs aus JobEngine.pop()
  *           – tickt alle Units kontinuierlich
  *           – garantiert Bewegung der Carrier
  *
@@ -29,7 +29,7 @@
 
       // 2) Jobs prüfen → falls ein Carrier frei ist
       if (window.GameUnits?.needsJob && window.GameUnits.needsJob()) {
-        const job = window.Game.popJob?.() || null;
+        const job = window.JobEngine.pop?.() || null;
         if (job) {
           try {
             window.GameUnits.assignJob(job);
