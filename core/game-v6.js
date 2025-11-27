@@ -478,7 +478,14 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
       if (hq) S.hqPos = { x:hq.x, y:hq.y };
     }
 
-    for (const b of S.buildings){
+        for (const b of S.buildings){
+
+      // Noch im Bau? → Keine Produktion
+      if (typeof b.buildStage === 'number' &&
+          b.buildStage < BUILD_PHASE.COMPLETE){
+        continue;
+      }
+
       const rule = getProductionRuleFor(b.id);
       if (!rule) continue;
 
