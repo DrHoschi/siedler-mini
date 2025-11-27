@@ -530,6 +530,40 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
 
+  // ---- Bauphasen-Update (einfach timerbasiert) ----------------------
+  function updateConstruction(dt){
+    if (!Array.isArray(S.buildings) || !S.buildings.length) return;
+
+    for (const b of S.buildings){
+      if (typeof b.buildStage !== 'number') continue;
+      if (b.buildStage >= BUILD_PHASE.COMPLETE) continue;
+
+      const phaseIndex = b.buildStage;
+      const dur = BUILD_PHASE_DUR[phaseIndex] || 0;
+      if (!dur){
+        // Sicherung: wenn Dauer 0 ist → direkt fertig
+        b.buildStage = BUILD_PHASE.COMPLETE;
+        continue;
+      }
+
+      b._buildTimer = (b._buildTimer || 0) + dt;
+      if (b._buildTimer >= dur){
+        b._buildTimer = 0;
+        b.buildStage++;
+
+        if (b.buildStage >= BUILD_PHASE.COMPLETE){
+          b.buildStage = BUILD_PHASE.COMPLETE;
+          // Hook für später (Inspector, Sounds, etc.)
+          try {
+            window.dispatchEvent(new CustomEvent('cb:build:completed', {
+              detail: { id: b.id, x: b.x, y: b.y, w: b.w, h: b.h }
+            }));
+          } catch {}
+        }
+      }
+    }
+  }
+  
   /* ==========================================================================
    * 4b) FRAME-LOOP
    * ======================================================================== */
