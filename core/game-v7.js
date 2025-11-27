@@ -17,6 +17,11 @@
  *           - Interne Job-Liste in Game
  *           - Game.addJob / Game.popJob verwalten die Queue
  *           - Carrier bleiben aktiv, bis KEIN Job mehr in der Queue ist
+ *
+ *           SCHRITT 1 – Bauphasen
+ *           - Gebäude laufen durch Baustelle_0 → Baustelle_1 → Baustelle_2
+ *             → fertiges Haus
+ *           - Produktion läuft nur, wenn Bauphase COMPLETE ist
  * ========================================================================== */
 
 window.Game = window.Game || {};
@@ -45,7 +50,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
    * ======================================================================== */
   const VIEW_PREF = { fit: 'cover' }; // 'cover' oder 'contain'
 
-    // ---- Bauphasen für Gebäude-Baustellen ------------------------------
+  // ---- Bauphasen für Gebäude-Baustellen ------------------------------
   // 0 = nur abgesteckt, 1 = Material liegt, 2 = fast fertig, 3 = fertig
   const BUILD_PHASE = {
     SITE     : 0,
@@ -56,7 +61,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
 
   // Dauer je Phase in Sekunden (0→1, 1→2, 2→3)
   const BUILD_PHASE_DUR = [4, 4, 4];
-  
+
   // ---- Produktionsregeln (Fallback, wenn keine Registry-Infos vorhanden) ----
   const HARDCODED_PRODUCTION = {
     // Holzfäller-Varianten
@@ -121,7 +126,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     cam:{ x:0, y:0, zoom:1 },
 
     // Gebäude-Liste
-    // { id, x, y, w, h, stock:{res:menge}, _prodTimer:sec }
+    // { id, x, y, w, h, stock:{res:menge}, _prodTimer:sec, buildStage }
     buildings: [],
 
     // HQ-Info
@@ -139,12 +144,12 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     resizeObs:null,
     didInitialFit:false,
 
-        // Gebäude-Sprites
+    // Gebäude-Sprites
     buildingSprites   : {},
     // Baustellen-Sprites für die Bauphasen (baustelle_0/1/2.png)
     buildPlaceSprites : []
-    };
-  
+  };
+
   /* ==========================================================================
    * 3) HILFSFUNKTIONEN – MAP / CANVAS
    * ======================================================================== */
@@ -384,6 +389,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
 
+  // Gebäude- & Baustellen-Sprites
   function loadBuildingSprite(id){
     if (S.buildingSprites[id]) return;
     const img = new Image();
@@ -392,12 +398,12 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     S.buildingSprites[id] = img;
   }
 
+  // Baustellen-Grafiken: assets/buildings/building_place/baustelle_0/1/2.png
   function ensureBuildPlaceSprites(){
-    // Schon geladen?
     if (Array.isArray(S.buildPlaceSprites) && S.buildPlaceSprites.length) return;
 
     S.buildPlaceSprites = [];
-    const phases = [0,1,2]; // baustelle_0/1/2.png
+    const phases = [0,1,2];
 
     for (const idx of phases){
       const img = new Image();
@@ -405,8 +411,8 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
       S.buildPlaceSprites.push(img);
     }
   }
-  
-    function drawBuildings(){
+
+  function drawBuildings(){
     const ctx = S.ctx;
     const {tileW, tileH} = S;
 
@@ -438,7 +444,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
       if (spr && spr.complete){
         ctx.drawImage(spr, px, py, pw, ph);
       } else {
-        // Fallback: halbtransparente Baufläche
+        // Fallback: halbtransparente Fläche
         ctx.fillStyle='rgba(255,200,140,0.25)';
         ctx.fillRect(px,py,pw,ph);
         ctx.strokeStyle='rgba(0,0,0,0.35)';
@@ -468,6 +474,42 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   }
 
   /* ==========================================================================
+   * 4a) BAUPHASEN-UPDATE (SCHRITT 1)
+   * ======================================================================== */
+  function updateConstruction(dt){
+    if (!Array.isArray(S.buildings) || !S.buildings.length) return;
+
+    for (const b of S.buildings){
+      if (typeof b.buildStage !== 'number') continue;
+      if (b.buildStage >= BUILD_PHASE.COMPLETE) continue;
+
+      const phaseIndex = b.buildStage;
+      const dur = BUILD_PHASE_DUR[phaseIndex] || 0;
+      if (!dur){
+        // Sicherung: wenn Dauer 0 ist → direkt fertig
+        b.buildStage = BUILD_PHASE.COMPLETE;
+        continue;
+      }
+
+      b._buildTimer = (b._buildTimer || 0) + dt;
+      if (b._buildTimer >= dur){
+        b._buildTimer = 0;
+        b.buildStage++;
+
+        if (b.buildStage >= BUILD_PHASE.COMPLETE){
+          b.buildStage = BUILD_PHASE.COMPLETE;
+          // Hook für später (Inspector, Sounds, etc.)
+          try {
+            window.dispatchEvent(new CustomEvent('cb:build:completed', {
+              detail: { id: b.id, x: b.x, y: b.y, w: b.w, h: b.h }
+            }));
+          } catch {}
+        }
+      }
+    }
+  }
+
+  /* ==========================================================================
    * 4a) PRODUKTIONS-UPDATE (SCHRITT 2)
    * ======================================================================== */
   function updateProduction(dt){
@@ -479,9 +521,9 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
       if (hq) S.hqPos = { x:hq.x, y:hq.y };
     }
 
-        for (const b of S.buildings){
+    for (const b of S.buildings){
 
-      // Noch im Bau? → Keine Produktion
+      // Noch im Bau? → keine Produktion
       if (typeof b.buildStage === 'number' &&
           b.buildStage < BUILD_PHASE.COMPLETE){
         continue;
@@ -524,7 +566,6 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
         to
       };
 
-      // **SCHRITT 3:** Job in interne Queue schieben
       Game.addJob(job);
 
       // Debug-Event
@@ -538,47 +579,13 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
 
-  // ---- Bauphasen-Update (einfach timerbasiert) ----------------------
-  function updateConstruction(dt){
-    if (!Array.isArray(S.buildings) || !S.buildings.length) return;
-
-    for (const b of S.buildings){
-      if (typeof b.buildStage !== 'number') continue;
-      if (b.buildStage >= BUILD_PHASE.COMPLETE) continue;
-
-      const phaseIndex = b.buildStage;
-      const dur = BUILD_PHASE_DUR[phaseIndex] || 0;
-      if (!dur){
-        // Sicherung: wenn Dauer 0 ist → direkt fertig
-        b.buildStage = BUILD_PHASE.COMPLETE;
-        continue;
-      }
-
-      b._buildTimer = (b._buildTimer || 0) + dt;
-      if (b._buildTimer >= dur){
-        b._buildTimer = 0;
-        b.buildStage++;
-
-        if (b.buildStage >= BUILD_PHASE.COMPLETE){
-          b.buildStage = BUILD_PHASE.COMPLETE;
-          // Hook für später (Inspector, Sounds, etc.)
-          try {
-            window.dispatchEvent(new CustomEvent('cb:build:completed', {
-              detail: { id: b.id, x: b.x, y: b.y, w: b.w, h: b.h }
-            }));
-          } catch {}
-        }
-      }
-    }
-  }
-  
   /* ==========================================================================
    * 4b) FRAME-LOOP
    * ======================================================================== */
   function frame(){
     if (!S.running) return;
 
-        const dt = 1/60;
+    const dt = 1/60;
 
     // 1) Bauphasen (Baustelle 0/1/2 → fertiges Gebäude)
     updateConstruction(dt);
@@ -649,7 +656,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     const bx = x | 0;
     const by = y | 0;
 
-        const b = {
+    const b = {
       id,
       x: bx,
       y: by,
@@ -673,6 +680,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
 
     loadBuildingSprite(id);
+    ensureBuildPlaceSprites();
 
     window.dispatchEvent(
       new CustomEvent('cb:build:placed', {
@@ -735,7 +743,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   Game.addJob = function(job){
     if (!job) return;
     S.jobs.push(job);
-    // optional: für Inspector später weiterreichen
+    // optional: zusätzlich an GameUnits durchreichen
     if (window.GameUnits?.addJob){
       try { window.GameUnits.addJob(job); } catch {}
     }
@@ -821,6 +829,6 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     INFO('Platzierung (akzeptiert)', res);
   });
 
-  OK('Modul geladen (v25.11.27-step2+3)');
+  OK('Modul geladen (v25.11.27-step1+2+3)');
 
 })();
