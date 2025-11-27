@@ -4,7 +4,7 @@
  * Version : v25.11.27-simplejobs
  *
  * Zweck   : Einfache Laufzeitlogik für Träger (Carrier).
- *           – Holt Jobs über Game.popJob()
+ *           – Holt Jobs über JobEngine.pop()
  *           – Bewegt Träger kachelweise von job.from → job.to
  *           – Bei type:"carry" werden Game.takeFromBuilding / Game.deliverToHQ
  *             verwendet, damit Ressourcen im HQ ankommen können.
@@ -13,7 +13,7 @@
  *   • Das Units-Modul ruft pro Frame auf:
  *       CarrierRuntime.tick(unit, dt, ctx)
  *   • Die Jobs werden im Units-System erzeugt (GameUnits.addJob)
- *     und über Game.popJob() / Game.addJob() verwaltet.
+ *     und über JobEngine.pop() / Game.addJob() verwaltet.
  *
  * Achtung:
  *   – Das ist eine bewusst einfache Implementierung ohne komplexes Pathfinding.
