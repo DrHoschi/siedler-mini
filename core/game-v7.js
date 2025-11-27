@@ -579,23 +579,34 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
 
-    // SCHRITT 3 – Job-Queue
+  // SCHRITT 3 – Job-Queue
   //  Leitplanke: Game reicht die Jobs 1:1 an das Units-Modul weiter.
-  //  Das Units-Modul (core/game.units.js) verwaltet U.jobs und kennt
-  //  alle Träger. CarrierRuntime holt sich die Jobs über:
-  //    CarrierRuntime → G.popJob() → Game.popJob() → GameUnits.popJob()
-  Game.popJob = (...args) => {
-    return window.GameUnits?.popJob?.(...args) || null;
-  };
+  //  Das Units-Modul (GameUnits) verwaltet die interne Queue.
+  //  CarrierRuntime holt sich Jobs immer über Game.popJob().
 
   Game.addJob = (job) => {
     if (!job) return;
     try {
       // zentrale Stelle: alle neuen Jobs landen im Units-System
-      window.GameUnits?.addJob?.(job);
+      if (window.GameUnits?.addJob) {
+        window.GameUnits.addJob(job);
+      } else {
+        WARN('Game.addJob → GameUnits.addJob fehlt noch', job);
+      }
     } catch (e) {
       WARN('Game.addJob → GameUnits.addJob Fehler:', e?.message || e);
     }
+  };
+
+  Game.popJob = (...args) => {
+    try {
+      if (window.GameUnits?.popJob) {
+        return window.GameUnits.popJob(...args) || null;
+      }
+    } catch (e) {
+      WARN('Game.popJob → GameUnits.popJob Fehler:', e?.message || e);
+    }
+    return null;
   };
   
   /* ==========================================================================
@@ -766,21 +777,6 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     const r=placeInternal(id,x,y,opt||{});
     if(!r.ok) WARN('placeBuilding fail',r);
     return r;
-  };
-
-  // SCHRITT 3 – Job-Queue
-  Game.addJob = function(job){
-    if (!job) return;
-    S.jobs.push(job);
-    // optional: zusätzlich an GameUnits durchreichen
-    if (window.GameUnits?.addJob){
-      try { window.GameUnits.addJob(job); } catch {}
-    }
-  };
-
-  Game.popJob = function(){
-    const job = S.jobs.shift() || null;
-    return job;
   };
 
   // Hooks für carrier.js
