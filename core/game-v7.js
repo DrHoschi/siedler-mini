@@ -143,7 +143,8 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     buildingSprites   : {},
     // Baustellen-Sprites für die Bauphasen (baustelle_0/1/2.png)
     buildPlaceSprites : []
-
+    };
+  
   /* ==========================================================================
    * 3) HILFSFUNKTIONEN – MAP / CANVAS
    * ======================================================================== */
