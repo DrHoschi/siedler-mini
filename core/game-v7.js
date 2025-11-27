@@ -579,6 +579,25 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
 
+    // SCHRITT 3 – Job-Queue
+  //  Leitplanke: Game reicht die Jobs 1:1 an das Units-Modul weiter.
+  //  Das Units-Modul (core/game.units.js) verwaltet U.jobs und kennt
+  //  alle Träger. CarrierRuntime holt sich die Jobs über:
+  //    CarrierRuntime → G.popJob() → Game.popJob() → GameUnits.popJob()
+  Game.popJob = (...args) => {
+    return window.GameUnits?.popJob?.(...args) || null;
+  };
+
+  Game.addJob = (job) => {
+    if (!job) return;
+    try {
+      // zentrale Stelle: alle neuen Jobs landen im Units-System
+      window.GameUnits?.addJob?.(job);
+    } catch (e) {
+      WARN('Game.addJob → GameUnits.addJob Fehler:', e?.message || e);
+    }
+  };
+  
   /* ==========================================================================
    * 4b) FRAME-LOOP
    * ======================================================================== */
