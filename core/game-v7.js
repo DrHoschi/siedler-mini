@@ -582,62 +582,72 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   /* ==========================================================================
    * 4b) FRAME-LOOP
    * ======================================================================== */
+    /* ==========================================================================
+   * 4b) FRAME-LOOP
+   * ======================================================================== */
   function frame(){
     if (!S.running) return;
 
-    const dt = 1/60;
-
-    // 1) Bauphasen (Baustelle 0/1/2 → fertiges Gebäude)
-    updateConstruction(dt);
-
-    // 2) Produktion nur bei fertigen Gebäuden → erzeugt Jobs
-    updateProduction(dt);
-
-    // 3) Träger / Units ticken lassen
-    window.dispatchEvent(new CustomEvent('cb:game:tick', {
-      detail: { dt }
-    }));
-
-    // Map + Gebäude zeichnen
-    clear();
-    applyCamera();
-    drawLayersCulled();
-    drawBuildings();
-
-    // Overlays
-    if (window.OverlayHooks?.draw) {
-      try {
-        const ctx = S.ctx;
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        const cam = window.GameCamera?.getState?.() || {
-          x: S.cam.x,
-          y: S.cam.y,
-          zoom: S.cam.zoom
-        };
-        window.OverlayHooks.draw(ctx, cam);
-      } catch (e) {
-        WARN('OverlayHooks.draw Fehler:', e?.message || e);
-      }
-    }
-
-    // Render-Event
     try {
-      window.dispatchEvent(new CustomEvent('cb:game:render', {
-        detail: {
-          ctx: S.ctx,
-          cam: {
+      const dt = 1/60;
+
+      // 1) Bauphasen (Baustelle 0/1/2 → fertiges Gebäude)
+      updateConstruction(dt);
+
+      // 2) Produktion nur bei fertigen Gebäuden → erzeugt Jobs
+      updateProduction(dt);
+
+      // 3) Träger / Units ticken lassen
+      window.dispatchEvent(new CustomEvent('cb:game:tick', {
+        detail: { dt }
+      }));
+
+      // Map + Gebäude zeichnen
+      clear();
+      applyCamera();
+      drawLayersCulled();
+      drawBuildings();
+
+      // Overlays
+      if (window.OverlayHooks?.draw) {
+        try {
+          const ctx = S.ctx;
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          const cam = window.GameCamera?.getState?.() || {
             x: S.cam.x,
             y: S.cam.y,
             zoom: S.cam.zoom
-          },
-          tileW: S.tileW,
-          tileH: S.tileH
+          };
+          window.OverlayHooks.draw(ctx, cam);
+        } catch (e) {
+          WARN('OverlayHooks.draw Fehler:', e?.message || e);
         }
-      }));
+      }
+
+      // Render-Event
+      try {
+        window.dispatchEvent(new CustomEvent('cb:game:render', {
+          detail: {
+            ctx: S.ctx,
+            cam: {
+              x: S.cam.x,
+              y: S.cam.y,
+              zoom: S.cam.zoom
+            },
+            tileW: S.tileW,
+            tileH: S.tileH
+          }
+        }));
+      } catch (e) {
+        WARN('cb:game:render Fehler:', e?.message || e);
+      }
+
     } catch (e) {
-      WARN('cb:game:render Fehler:', e?.message || e);
+      // Ganz wichtig: Fehler loggen, aber den Loop NICHT stoppen
+      ERR('frame() Fehler:', e?.message || e);
     }
 
+    // Egal was passiert ist: Nächsten Frame wieder planen
     S.rafId = requestAnimationFrame(frame);
   }
 
