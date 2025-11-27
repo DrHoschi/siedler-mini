@@ -14,7 +14,7 @@
  *           - Game.takeFromBuilding + Game.deliverToHQ für carrier.js
  *
  *           SCHRITT 3 – Job-Queue
- *           - Interne Job-Liste in Game
+ *           - Interne Job-Liste in Game (S.jobs)
  *           - Game.addJob / Game.popJob verwalten die Queue
  *           - Carrier bleiben aktiv, bis KEIN Job mehr in der Queue ist
  *
@@ -29,12 +29,14 @@ window.Game = window.Game || {};
 /* ============================================================================
  * Units-API
  * - getUnits: nur Durchreicher auf GameUnits (für Inspector/Debug)
- * - Jobs: werden ab jetzt von Game SELBST verwaltet (interne Queue)
  * ========================================================================== */
 Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
 
 (function(){
   'use strict';
+
+  // WICHTIG: direkt am Anfang, damit es KEINE TDZ-Probleme gibt
+  const Game = window.Game;
 
   /* ==========================================================================
    * 0) LOGGING / HILFSALIASE
@@ -134,7 +136,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     hqStock : {},
 
     // Job-Queue (SCHRITT 3)
-    // Eintrag: { type:'carry', res, from:{x,y}, to:{x,y}, ... }
+    // Eintrag: { type:'carry'|'build'|..., res, from:{x,y}, to:{x,y}, ... }
     jobs: [],
 
     // Laufsteuerung
@@ -203,7 +205,12 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     S.firstGid = 1; S.tsCols = 1; S.tsRows = 1;
     deriveTsGrid();
 
-    INFO('Map (simple) normalisiert:', { cols:S.cols, rows:S.rows, tile:[S.tileW,S.tileH], tsCols:S.tsCols });
+    INFO('Map (simple) normalisiert:', {
+      cols:S.cols,
+      rows:S.rows,
+      tile:[S.tileW,S.tileH],
+      tsCols:S.tsCols
+    });
   }
 
   function normalizeMap(map){
@@ -579,41 +586,38 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
 
-  // SCHRITT 3 – Job-Queue
-  //  Leitplanke: Game reicht die Jobs 1:1 an das Units-Modul weiter.
-  //  Das Units-Modul (GameUnits) verwaltet die interne Queue.
-  //  CarrierRuntime holt sich Jobs immer über Game.popJob().
-
-  Game.addJob = (job) => {
-    if (!job) return;
-    try {
-      // zentrale Stelle: alle neuen Jobs landen im Units-System
-      if (window.GameUnits?.addJob) {
-        window.GameUnits.addJob(job);
-      } else {
-        WARN('Game.addJob → GameUnits.addJob fehlt noch', job);
-      }
-    } catch (e) {
-      WARN('Game.addJob → GameUnits.addJob Fehler:', e?.message || e);
-    }
-  };
-
-  Game.popJob = (...args) => {
-    try {
-      if (window.GameUnits?.popJob) {
-        return window.GameUnits.popJob(...args) || null;
-      }
-    } catch (e) {
-      WARN('Game.popJob → GameUnits.popJob Fehler:', e?.message || e);
-    }
-    return null;
-  };
-  
   /* ==========================================================================
-   * 4b) FRAME-LOOP
+   * 4b) JOB-QUEUE (SCHRITT 3) – interne Verwaltung
    * ======================================================================== */
-    /* ==========================================================================
-   * 4b) FRAME-LOOP
+
+  Game.addJob = function(job){
+    if (!job) return;
+    S.jobs.push(job);
+    try {
+      window.dispatchEvent(new CustomEvent('cb:jobs:added', {
+        detail: { job, size:S.jobs.length }
+      }));
+    } catch(e){
+      // Debug optional
+    }
+  };
+
+  Game.popJob = function(){
+    const job = S.jobs.shift() || null;
+    if (job){
+      try {
+        window.dispatchEvent(new CustomEvent('cb:jobs:popped', {
+          detail: { job, size:S.jobs.length }
+        }));
+      } catch(e){
+        // Debug optional
+      }
+    }
+    return job;
+  };
+
+  /* ==========================================================================
+   * 4c) FRAME-LOOP
    * ======================================================================== */
   function frame(){
     if (!S.running) return;
@@ -638,7 +642,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
       drawLayersCulled();
       drawBuildings();
 
-      // Overlays
+      // Overlays (z. B. Path-Overlay)
       if (window.OverlayHooks?.draw) {
         try {
           const ctx = S.ctx;
@@ -654,7 +658,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
         }
       }
 
-      // Render-Event
+      // Render-Event (für Inspector usw.)
       try {
         window.dispatchEvent(new CustomEvent('cb:game:render', {
           detail: {
@@ -728,6 +732,7 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
       })
     );
 
+    // Träger-System über Event anpingen (für Baustellen-Material)
     window.dispatchEvent(
       new CustomEvent('req:carrier:createTask', {
         detail: {
@@ -748,18 +753,21 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
    * 6) PUBLIC API (Game.*)
    * ======================================================================== */
 
-  const Game = window.Game;
-
   Game.start = function(map, opt={}){
     try {
       ensureCanvas();
 
       S.tileset    = opt.tileset    || S.tileset || null;
       S.tilesetUrl = opt.tilesetUrl || S.tilesetUrl || null;
-      if (S.tileset) INFO('Tileset bereit:', S.tilesetUrl || '(inline)'); else WARN('Tileset fehlt');
+      if (S.tileset) INFO('Tileset bereit:', S.tilesetUrl || '(inline)');
+      else WARN('Tileset fehlt');
 
       S.map = map || null;
-      try { normalizeMap(S.map); } catch(e){ WARN('Map-Normalisierung fehlgeschlagen:', e?.message||e); }
+      try {
+        normalizeMap(S.map);
+      } catch(e){
+        WARN('Map-Normalisierung fehlgeschlagen:', e?.message||e);
+      }
 
       S.didInitialFit = false;
       resizeToCssRect();
@@ -782,7 +790,9 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   // Hooks für carrier.js
   Game.takeFromBuilding = function(tx,ty,res){
     if (!res) return 0;
-    const b = S.buildings.find(b => b.x===tx && b.y===ty && b.stock && b.stock[res] > 0);
+    const b = S.buildings.find(
+      b => b.x===tx && b.y===ty && b.stock && b.stock[res] > 0
+    );
     if (!b) return 0;
     b.stock[res] -= 1;
     if (b.stock[res] <= 0) delete b.stock[res];
@@ -824,7 +834,10 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   addEventListener('cb:game:start', ()=>{
     try{
       ensureCanvas();
-      if(!S.running){ S.running=true; S.rafId=requestAnimationFrame(frame); }
+      if(!S.running){
+        S.running=true;
+        S.rafId=requestAnimationFrame(frame);
+      }
     } catch(e){
       ERR('cb:game:start Fehler:', e?.message||e);
     }
@@ -848,7 +861,10 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
 
   addEventListener('cb:build:place', (e)=>{
     const d=e.detail||{};
-    if (d.__src !== 'input-v25.11.14'){ WARN('Ignoriere ungetaggte Platzierung', d); return; }
+    if (d.__src !== 'input-v25.11.14'){
+      WARN('Ignoriere ungetaggte Platzierung', d);
+      return;
+    }
     const xi=d.x|0, yi=d.y|0, wi=(d.w|0)||3, hi=(d.h|0)||3;
     const res = Game.placeBuilding(d.buildingId || d.kind, xi, yi, { w:wi, h:hi });
     INFO('Platzierung (akzeptiert)', res);
