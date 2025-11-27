@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-27T19:04:17.918Z",
+  "createdAt": "2025-11-27T21:42:03.288Z",
   "root": ".",
-  "count": 531,
+  "count": 535,
   "entries": [
     {
       "type": "dir",
@@ -1185,7 +1185,12 @@
     {
       "type": "file",
       "path": "core/carrier.js",
-      "size": 7639
+      "size": 7643
+    },
+    {
+      "type": "file",
+      "path": "core/carrier.runtime.js",
+      "size": 1978
     },
     {
       "type": "file",
@@ -1275,7 +1280,7 @@
     {
       "type": "file",
       "path": "core/game-v7.js",
-      "size": 25594
+      "size": 25607
     },
     {
       "type": "file",
@@ -1286,6 +1291,11 @@
       "type": "file",
       "path": "core/game.production.js",
       "size": 1421
+    },
+    {
+      "type": "file",
+      "path": "core/game.tick.js",
+      "size": 1966
     },
     {
       "type": "file",
@@ -1311,6 +1321,11 @@
       "type": "file",
       "path": "core/input.js",
       "size": 7830
+    },
+    {
+      "type": "file",
+      "path": "core/job.engine.js",
+      "size": 3410
     },
     {
       "type": "file",
@@ -1365,7 +1380,7 @@
     {
       "type": "file",
       "path": "core/Readme_core_final.md",
-      "size": 7634
+      "size": 7636
     },
     {
       "type": "file",
@@ -1406,6 +1421,11 @@
       "type": "file",
       "path": "core/unit-overlay.js",
       "size": 5308
+    },
+    {
+      "type": "file",
+      "path": "core/units.js",
+      "size": 2729
     },
     {
       "type": "file",
@@ -2554,12 +2574,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 51598
+      "size": 52330
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19567
+      "size": 19877
     },
     {
       "type": "file",
@@ -2574,7 +2594,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 13944
+      "size": 14135
     },
     {
       "type": "file",
