@@ -49,12 +49,37 @@
   };
 
   // ---- Movement -------------------------------------------------------------
-  function stepTowardFallback(u, tx, ty){
+ /* function stepTowardFallback(u, tx, ty){
     if (u.x === tx && u.y === ty) return true;
     if (u.x < tx && !G.isBlocked(u.x+1,u.y)) u.x++;
     else if (u.x > tx && !G.isBlocked(u.x-1,u.y)) u.x--;
     else if (u.y < ty && !G.isBlocked(u.x,u.y+1)) u.y++;
     else if (u.y > ty && !G.isBlocked(u.x,u.y-1)) u.y--;
+    return (u.x === tx && u.y === ty);
+  }
+  */
+    // Einfacher Fallback-Schritt Richtung Ziel – aktuell benutzt für Träger.
+  // NEU: Move-Slowdown über _moveSkip → Träger laufen nicht mehr so schnell.
+  function stepTowardFallback(u, tx, ty){
+    // Alle N Frames bewegen (hier: nur jeden 5. Frame = deutlich langsamer)
+    const SKIP_FRAMES = 4; // 0 = jedes Frame, 4 = alle 5 Frames
+    if (u._moveSkip == null) u._moveSkip = 0;
+
+    if (u._moveSkip > 0){
+      u._moveSkip--;
+      return false; // noch nicht bewegen
+    }
+
+    u._moveSkip = SKIP_FRAMES;
+
+    const dx = Math.sign(tx - u.x);
+    const dy = Math.sign(ty - u.y);
+    const nx = u.x + dx;
+    const ny = u.y + dy;
+    if (dx===0 && dy===0) return true;
+    if (!isWalkable(nx,ny)) return false;
+    u.x = nx;
+    u.y = ny;
     return (u.x === tx && u.y === ty);
   }
 
