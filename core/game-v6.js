@@ -391,6 +391,20 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     S.buildingSprites[id] = img;
   }
 
+  function ensureBuildPlaceSprites(){
+    // Schon geladen?
+    if (Array.isArray(S.buildPlaceSprites) && S.buildPlaceSprites.length) return;
+
+    S.buildPlaceSprites = [];
+    const phases = [0,1,2]; // baustelle_0/1/2.png
+
+    for (const idx of phases){
+      const img = new Image();
+      img.src = `assets/buildings/building_place/baustelle_${idx}.png`;
+      S.buildPlaceSprites.push(img);
+    }
+  }
+  
   function drawBuildings(){
     const ctx = S.ctx;
     const {tileW, tileH} = S;
