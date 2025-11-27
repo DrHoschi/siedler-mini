@@ -604,14 +604,21 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     const bx = x | 0;
     const by = y | 0;
 
-    const b = {
+        const b = {
       id,
       x: bx,
       y: by,
       w,
       h,
-      stock: {},
-      _prodTimer: 0
+
+      // Lager / Produktion
+      stock      : {},
+      _prodTimer : 0,
+
+      // Bauphasen
+      // 0 = Baustelle abgesteckt, 1 = Material, 2 = Gerüst, 3 = fertig
+      buildStage  : BUILD_PHASE.SITE,
+      _buildTimer : 0
     };
 
     S.buildings.push(b);
