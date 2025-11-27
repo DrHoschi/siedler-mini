@@ -35,7 +35,7 @@ Sie bilden gemeinsam die **Engine-Basis, Registry-Verwaltung, UI-Bridges, Render
 | **game.bootstrap.js** | Bridge zwischen Boot → Game → Canvas. Handhabt Pointer-Eingaben, Preview / Confirm-Events. | Lauscht auf `req:place:*`, emittiert `cb:game:initialized`. |
 | **camera.js** | Kameraposition, Scroll, Viewport. | Optionaler Bestandteil für spätere Pan/Zoom-Steuerung. |
 | **zoom.js** | Zentrale Zoom-Verwaltung (`Zoom.scale`, `Zoom.set(n)`). Sendet `cb:zoom:change {scale}`. | Von `MapRuntime` abonniert. |
-| **carrier.js** | Träger-Laufzeitlogik (Job annehmen → Ressource holen → HQ liefern). | nutzt `Game.popJob()` usw.; sendet `cb:carrier:*`. |
+| **carrier.js** | Träger-Laufzeitlogik (Job annehmen → Ressource holen → HQ liefern). | nutzt `JobEngine.pop()` usw.; sendet `cb:carrier:*`. |
 | **core.env.js** | Gemeinsamer Namespace `window.GameCore`, Logging-Helper + Shared State (Map, Camera, Entities). | Grundlage für Module wie `pfglue.js`. |
 | **core.render.shim.js** | Passiver Render-Shim – belässt die Frame-Kontrolle bei `game.js`. | Dient nur zur Rückwärts-Kompatibilität. |
 
