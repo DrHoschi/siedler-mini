@@ -45,6 +45,18 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
    * ======================================================================== */
   const VIEW_PREF = { fit: 'cover' }; // 'cover' oder 'contain'
 
+    // ---- Bauphasen für Gebäude-Baustellen ------------------------------
+  // 0 = nur abgesteckt, 1 = Material liegt, 2 = fast fertig, 3 = fertig
+  const BUILD_PHASE = {
+    SITE     : 0,
+    MATERIAL : 1,
+    FINISH   : 2,
+    COMPLETE : 3
+  };
+
+  // Dauer je Phase in Sekunden (0→1, 1→2, 2→3)
+  const BUILD_PHASE_DUR = [4, 4, 4];
+  
   // ---- Produktionsregeln (Fallback, wenn keine Registry-Infos vorhanden) ----
   const HARDCODED_PRODUCTION = {
     // Holzfäller-Varianten
