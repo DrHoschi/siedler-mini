@@ -1,7 +1,7 @@
 /* ============================================================================
- * Datei   : core/game-v6.js
+ * Datei   : core/game-v7.js
  * Projekt : Neue Siedler
- * Version : v25.11.27-step2+3
+ * Version : v25.11.27-step1+2+3
  * Build   : quadratisches Layout (CSS-Rect) · DPR-Backbuffer · Focus-Zoom
  *           View-Culling · Dual-Camera-Events · Wheel-Zoom (Desktop)
  *
