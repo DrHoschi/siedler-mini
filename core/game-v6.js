@@ -577,12 +577,15 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   function frame(){
     if (!S.running) return;
 
-    const dt = 1/60;
+        const dt = 1/60;
 
-    // Produktion → erzeugt Jobs
+    // 1) Bauphasen (Baustelle 0/1/2 → fertiges Gebäude)
+    updateConstruction(dt);
+
+    // 2) Produktion nur bei fertigen Gebäuden → erzeugt Jobs
     updateProduction(dt);
 
-    // Träger / Units ticken lassen
+    // 3) Träger / Units ticken lassen
     window.dispatchEvent(new CustomEvent('cb:game:tick', {
       detail: { dt }
     }));
