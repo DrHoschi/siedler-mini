@@ -16,7 +16,7 @@
  *           SCHRITT 3 – Job-Queue
  *           - Jobs werden nicht mehr lokal gehalten, sondern komplett an
  *             GameUnits delegiert (GameUnits.addJob / GameUnits.popJob)
- *           - Carrier holen Jobs weiter über Game.popJob()
+ *           - Carrier holen Jobs weiter über JobEngine.pop()
  *
  *           SCHRITT 1 – Bauphasen
  *           - Gebäude laufen durch Baustelle_0 → Baustelle_1 → Baustelle_2
@@ -747,14 +747,14 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
   // SCHRITT 3 – Job-Queue
   //  Leitplanke: Game verwaltet die Jobs NICHT mehr selbst,
   //  sondern reicht sie 1:1 an das Units-Modul (GameUnits) weiter.
-  //  CarrierRuntime holt sich Jobs immer über Game.popJob().
-  Game.addJob = function(job){
+  //  CarrierRuntime holt sich Jobs immer über JobEngine.pop().
+  JobEngine.add = function(job){
     if (!job) return;
     if (window.GameUnits?.addJob){
       try {
         window.GameUnits.addJob(job);
       } catch(e){
-        WARN('Game.addJob → GameUnits.addJob Fehler:', e?.message || e);
+        WARN('JobEngine.add → GameUnits.addJob Fehler:', e?.message || e);
       }
     } else {
       WARN('Game.addJob → GameUnits.addJob fehlt – Job wird verworfen', job);
