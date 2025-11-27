@@ -405,21 +405,39 @@ Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
     }
   }
   
-  function drawBuildings(){
+    function drawBuildings(){
     const ctx = S.ctx;
     const {tileW, tileH} = S;
 
     ctx.save();
     for (const b of S.buildings){
-      const spr = S.buildingSprites?.[b.id];
       const px = b.x * tileW;
       const py = b.y * tileH;
       const pw = (b.w || 1) * tileW;
       const ph = (b.h || 1) * tileH;
 
+      // --- Bauphase ermitteln ----------------------------------------
+      let stage = BUILD_PHASE.COMPLETE;
+      if (typeof b.buildStage === 'number'){
+        stage = b.buildStage;
+      }
+
+      let spr = null;
+
+      if (stage < BUILD_PHASE.COMPLETE){
+        // Baustellen-Grafiken
+        ensureBuildPlaceSprites();
+        const idx = Math.min(stage, S.buildPlaceSprites.length - 1);
+        spr = S.buildPlaceSprites[idx] || null;
+      } else {
+        // Fertiges Gebäude
+        spr = S.buildingSprites?.[b.id] || null;
+      }
+
       if (spr && spr.complete){
         ctx.drawImage(spr, px, py, pw, ph);
       } else {
+        // Fallback: halbtransparente Baufläche
         ctx.fillStyle='rgba(255,200,140,0.25)';
         ctx.fillRect(px,py,pw,ph);
         ctx.strokeStyle='rgba(0,0,0,0.35)';
