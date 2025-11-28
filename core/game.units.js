@@ -1,33 +1,33 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler
- * Version : v25.11.27-final-trager
+ * Version : v25.11.27-carrier+hud
  * Zweck   : Einfaches, funktionierendes Träger-System
  *           - verwaltet Träger (Units)
  *           - verwaltet Jobs (Bau-/Transportaufträge)
  *           - bewegt Träger sichtbar auf der Map
+ *           - liefert Ressourcen ins Lager (Warehouse/HUD)
  *
  * Integration:
- *   - Game (game-v7.js) feuert cb:build:placed → hier werden Jobs erzeugt
- *   - GameTick (core/game.tick.js) + frame() feuern cb:game:tick
- *   - unit-overlay.js zeichnet die Träger-Positionen (getUnits())
- * ============================================================================
- */
+ *   - Game (game-v7.js) erzeugt Build- und Carry-Jobs → GameUnits.addJob()
+ *   - GameTick / carrier.runtime feuert cb:game:tick → GameUnits.tick()
+ *   - unit.overlay.js zeichnet Träger + Icon anhand u.carrying.res
+ *   - warehouse.js wandelt req:stock:push in cb:res:change fürs HUD
+ * ============================================================================ */
 
 (() => {
   const TAG  = "[units]";
   const LOG  = (...a) => console.info(TAG, ...a);
-  const WRN  = (...a) => console.warn(TAG, ...a);
-  const ERR  = (...a) => console.error(TAG, ...a);
+  const WARN = (...a) => console.warn(TAG, ...a);
 
   // ---------------------------------------------------------------------------
   //  STATE
   // ---------------------------------------------------------------------------
   const U = {
-    units   : [],          // laufende Träger
-    jobs    : [],          // Warteschlange von Jobs
-    nextId  : 1,
-    hqPos   : null         // wird gesetzt, wenn b.hq gebaut wurde
+    units  : [],          // laufende Träger
+    jobs   : [],          // Warteschlange von Jobs (Carry/Bau)
+    nextId : 1,
+    hqPos  : null         // wird gesetzt, wenn b.hq gebaut wurde
   };
 
   // ---------------------------------------------------------------------------
@@ -35,16 +35,16 @@
   // ---------------------------------------------------------------------------
   function spawnCarrier(x, y) {
     const u = {
-      id   : U.nextId++,
-      x, y,              // aktuelle Position (in Tile-Koordinaten, float erlaubt)
-      tx  : x,           // Ziel-X
-      ty  : y,           // Ziel-Y
-      speed : 2.5,       // Tiles pro Sekunde
-      task  : null,      // aktueller Job (siehe unten)
-      carrying : null    // { res, qty }
+      id       : U.nextId++,
+      x, y,               // aktuelle Position (Tile-Koordinaten, float erlaubt)
+      tx       : x,
+      ty       : y,       // Target-Koordinaten
+      speed    : 2.5,     // Tiles pro Sekunde
+      task     : null,    // aktueller Job (siehe unten)
+      carrying : null     // { res, qty }
     };
     U.units.push(u);
-    LOG("Carrier gespawnt", u);
+    LOG("Carrier gespawnt", JSON.stringify(u));
     return u;
   }
 
@@ -57,40 +57,37 @@
   // ---------------------------------------------------------------------------
   function addJob(job) {
     if (!job) return;
-    // defensiv normalisieren
     const safe = {
-      type       : job.type       || "build",
-      res        : job.res        || "res.wood",
+      type       : job.type       || "carry",
+      res        : job.res        || "wood",
       from       : job.from       || { x: 0, y: 0 },
       to         : job.to         || (U.hqPos || { x: 0, y: 0 }),
       buildingId : job.buildingId || null
     };
     U.jobs.push(safe);
-    LOG("Neuer Job", safe);
+    LOG("Neuer Job", JSON.stringify(safe));
   }
 
   function popJob() {
     return U.jobs.shift() || null;
   }
 
-  // Wird von CarrierRuntime/GameTick gefragt, ob Jobs & freie Träger vorhanden sind
   function needsJob() {
     if (!U.jobs.length) return false;
     return U.units.some(u => !u.task);
   }
 
-  // Verteilt einen Job aktiv auf einen freien Träger
   function assignJob(job) {
     const u = U.units.find(u => !u.task);
     if (!u) {
-      // kein freier Träger → Job wieder in Queue legen
       if (job) U.jobs.unshift(job);
       return false;
     }
     u.task = {
       ...job,
       phase   : "toSource",  // "toSource" → "toHQ"
-      hasLoad : false
+      hasLoad : false,
+      qty     : 0
     };
     u.tx = job.from.x;
     u.ty = job.from.y;
@@ -98,28 +95,28 @@
   }
 
   // ---------------------------------------------------------------------------
-  //  BAU-/LAGERHILFEN (Dummy / einfache Variante)
+  //  QUELLE / LAGER (Dummy-Implementationen)
   // ---------------------------------------------------------------------------
-  // Gebäude gibt Material aus → später echtes Lager-/Produktionssystem
-  function takeFromBuilding(tx, ty, res) {
-    // Aktuell: Gebäude liefert einfach 1 Stück
-    return { qty: 1 };
+  function takeFromBuilding(tx, ty, resId) {
+    // Aktuell: Gebäude liefert immer 1 Stück,
+    // später hier echtes Lager/Produktion einhängen.
+    return { qty: 1, res: resId };
   }
 
-  // Lieferung ins HQ → an warehouse.js gekoppelt
-  function deliverToHQ(res, qty) {
-    // Über Warehouse-Event an das HQ-Lager schicken
+  function deliverToHQ(resId, qty) {
+    if (!resId || !qty) return;
     try {
+      // Standard: HQ-Lager
       window.dispatchEvent(new CustomEvent("req:stock:push", {
-        detail: { store: "HQ", item: res, qty }
+        detail: { store: "HQ", item: resId, qty }
       }));
     } catch (e) {
-      WRN("deliverToHQ Fehler", e);
+      WARN("deliverToHQ Fehler:", e?.message || e);
     }
   }
 
   // ---------------------------------------------------------------------------
-  //  BEWEGUNGSHELFER
+  //  BEWEGUNG
   // ---------------------------------------------------------------------------
   function stepTowards(u, dt) {
     const speed   = u.speed || 2.5;
@@ -129,7 +126,7 @@
     const dy   = u.ty - u.y;
     const dist = Math.hypot(dx, dy);
 
-    if (dist <= maxStep || dist === 0) {
+    if (dist === 0 || dist <= maxStep) {
       u.x = u.tx;
       u.y = u.ty;
       return true; // angekommen
@@ -142,7 +139,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  //  TICK-LOGIK (einfach, aber sichtbar)
+  //  TICK-LOGIK
   // ---------------------------------------------------------------------------
   function ensureTask(u) {
     if (u.task) return;
@@ -151,7 +148,8 @@
     u.task = {
       ...job,
       phase   : "toSource",
-      hasLoad : false
+      hasLoad : false,
+      qty     : 0
     };
     u.tx = job.from.x;
     u.ty = job.from.y;
@@ -168,16 +166,25 @@
       const job = u.task;
 
       if (job.phase === "toSource") {
-        // Ziel: Quell-Gebäude
+        // Ziel = Quell-Gebäude
         u.tx = job.from.x;
         u.ty = job.from.y;
         const arrived = stepTowards(u, dtSec);
         if (arrived) {
           const taken = takeFromBuilding(job.from.x, job.from.y, job.res);
-          job.hasLoad = !!(taken && taken.qty > 0);
-          job.phase   = "toHQ";
+          if (taken && taken.qty > 0) {
+            job.hasLoad = true;
+            job.qty     = taken.qty;
+            // WICHTIG: hier setzen wir die „Ladung“ für das Unit-Overlay
+            u.carrying  = { res: job.res, qty: taken.qty };
+          } else {
+            job.hasLoad = false;
+            job.qty     = 0;
+            u.carrying  = null;
+          }
 
-          // HQ-Ziel setzen
+          job.phase = "toHQ";
+
           const hq = U.hqPos || job.to || { x: u.x, y: u.y };
           u.tx = hq.x;
           u.ty = hq.y;
@@ -188,9 +195,10 @@
         u.ty = dest.y;
         const arrived = stepTowards(u, dtSec);
         if (arrived) {
-          if (job.hasLoad) {
-            deliverToHQ(job.res, 1);
+          if (job.hasLoad && job.qty > 0) {
+            deliverToHQ(job.res, job.qty);
           }
+          // Job abgeschlossen
           u.task     = null;
           u.carrying = null;
         }
@@ -198,12 +206,11 @@
     }
   }
 
-  // Öffentliche Tick-Funktion (für game.tick.js)
   function publicTick(dt) {
     try {
       tickUnits(dt);
     } catch (e) {
-      ERR("Tick-Fehler:", e);
+      WARN("Tick-Fehler:", e?.message || e);
     }
   }
 
@@ -211,33 +218,24 @@
   //  EVENTS
   // ---------------------------------------------------------------------------
 
-  // Gebäude platziert → Baujob erzeugen
-  addEventListener("cb:build:placed", (ev) => {
-    const d = ev.detail || {};
-    addJob({
-      type       : "build",
-      res        : "res.wood",
-      from       : { x: d.x, y: d.y },
-      to         : U.hqPos || { x: 0, y: 0 },
-      buildingId : d.id
-    });
-  });
-
-  // HQ Position setzen (wenn HQ gebaut wurde) + Carrier spawnen
+  // HQ-Position und erste Carrier
   addEventListener("cb:build:placed", (ev) => {
     const d = ev.detail || {};
     if (d.id !== "b.hq") return;
 
     U.hqPos = { x: d.x, y: d.y };
-    LOG("HQ gesetzt → Carrier werden gespawnt", U.hqPos);
+    LOG("HQ gesetzt → Carrier werden gespawnt", JSON.stringify(U.hqPos));
 
-    // Standard: 3 Carrier am HQ
     spawnCarrier(U.hqPos.x + 0.2, U.hqPos.y + 0.2);
     spawnCarrier(U.hqPos.x - 0.2, U.hqPos.y + 0.2);
     spawnCarrier(U.hqPos.x,       U.hqPos.y - 0.2);
   });
 
-  // Frame-Tick vom Spiel → Units updaten
+  // Für andere Listener (z.B. alternative Build-Pipelines) lassen wir
+  // die [units] Neuer Job-Logs in addJob().
+  // -> Produktionsjobs kommen über game-v7.js → GameUnits.addJob(...)
+
+  // Tick aus dem Game (carrier.runtime / game.tick.js)
   addEventListener("cb:game:tick", (ev) => {
     const dt = ev?.detail?.dt ?? 0.0;
     publicTick(dt);
@@ -257,10 +255,10 @@
     needsJob,
     assignJob,
 
-    // Tick (für GameTick / Tests)
+    // Tick
     tick      : publicTick,
     tickUnits
   };
 
-  LOG("Units-System geladen (v25.11.27-final-trager)");
+  LOG("Units-System geladen (v25.11.27-carrier+hud)");
 })();
