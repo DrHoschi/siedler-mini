@@ -1,27 +1,28 @@
 /* ============================================================================
- * Datei   : core/game-v7.js
+ * Datei   : core/game.js
  * Projekt : Neue Siedler
- * Version : v25.11.27-step1+2+3
+ * Version : v25.11.27-final-build+prod
  * Build   : quadratisches Layout (CSS-Rect) · DPR-Backbuffer · Focus-Zoom
  *           View-Culling · Dual-Camera-Events · Wheel-Zoom (Desktop)
  *
  * Zweck   : Einziger Renderer für die Kachel-Map + Gebäude-Visualisierung.
  *           Gekoppelt an das CSS-Layout (#game) und die map-runtime.bridge.js.
  *
- * Neu     : SCHRITT 2 – Produktionssystem
- *           - Gebäude produzieren Ressourcen (Holz / Stein)
- *           - Erzeugte Waren werden als Jobs an das Träger-System übergeben
- *           - Game.takeFromBuilding + Game.deliverToHQ für carrier.js
- *
- *           SCHRITT 3 – Job-Queue
- *           - Jobs werden nicht mehr lokal gehalten, sondern komplett an
- *             GameUnits delegiert (GameUnits.addJob / GameUnits.popJob)
- *           - Carrier holen Jobs weiter über JobEngine.pop()
- *
- *           SCHRITT 1 – Bauphasen
+ * Neu     : SCHRITT 1 – Bauphasen
  *           - Gebäude laufen durch Baustelle_0 → Baustelle_1 → Baustelle_2
  *             → fertiges Haus
  *           - Produktion läuft nur, wenn Bauphase COMPLETE ist
+ *
+ *           SCHRITT 2 – Produktionssystem
+ *           - Gebäude produzieren Ressourcen (Holz / Stein)
+ *           - Erzeugte Waren werden als Jobs an das Träger-System übergeben
+ *
+ *           SCHRITT 3 – Job-Queue
+ *           - Jobs werden an GameUnits (Träger) + JobEngine (Inspector) gegeben
+ *
+ *           SCHRITT 4 – Baujobs
+ *           - Beim Platzieren eines Gebäudes wird 1 Bau-Job erzeugt:
+ *             Träger laufen mit Holz vom HQ zur Baustelle (optisch)
  * ========================================================================== */
 
 window.Game = window.Game || {};
@@ -30,10 +31,10 @@ window.Game = window.Game || {};
  * Units-API
  * - getUnits: nur Durchreicher auf GameUnits (für Inspector/Debug)
  * - addJob / popJob: Brücke auf die JobEngine-Queue
- * ========================================================================== */
+ * ============================================================================ */
 Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
 
-// Jobs landen zentral in der JobEngine-Queue
+// Jobs landen zentral in der JobEngine-Queue (für Inspector)
 Game.addJob = (...args) => {
   return window.JobEngine?.add?.(...args);
 };
@@ -84,6 +85,7 @@ Game.popJob = (...args) => {
     'b.steinbruch'  : { res:'stone', cycleSec:8, amount:1, maxStock:4 }
   };
 
+  // Produktionsregel aus Registry oder Fallback
   function getProductionRuleFor(id){
     if (!id) return null;
 
@@ -142,7 +144,7 @@ Game.popJob = (...args) => {
     hqPos   : null,
     hqStock : {},
 
-    // Job-Queue (wird jetzt von GameUnits verwaltet, Feld hier nur noch passiv)
+    // Job-Info (eigentliche Queue liegt bei GameUnits/JobEngine)
     jobs: [],
 
     // Laufsteuerung
@@ -460,7 +462,7 @@ Game.popJob = (...args) => {
         ctx.strokeRect(px+1,py+1,pw-2,ph-2);
       }
 
-      // Kleine Produktionsanzeige, wenn Lager > 0
+      // Kleine Produktionsanzeige, wenn Lager > 0 (debug)
       if (b.stock){
         const keys = Object.keys(b.stock).filter(k => b.stock[k] > 0);
         if (keys.length){
@@ -518,7 +520,7 @@ Game.popJob = (...args) => {
   }
 
   /* ==========================================================================
-   * 4a) PRODUKTIONS-UPDATE (SCHRITT 2)
+   * 4b) PRODUKTIONS-UPDATE (SCHRITT 2)
    * ======================================================================== */
   function updateProduction(dt){
     if (!Array.isArray(S.buildings) || !S.buildings.length) return;
@@ -560,25 +562,23 @@ Game.popJob = (...args) => {
       // 1) Produktion im Gebäude-Lager erhöhen
       b.stock[resId] = cur + amount;
 
-      // 2) Träger-Job erzeugen
+      // 2) Träger-Job erzeugen (Gebäude → HQ)
       const from = {
         x: (rule.pickup?.x ?? b.x),
         y: (rule.pickup?.y ?? b.y)
       };
       const to = S.hqPos || { x:b.x, y:b.y };
 
-                        const job = {
-        type: 'carry',
+      const job = {
+        type: 'carry',   // Produktions-Transport
         res : resId,
         from,
         to
       };
 
-      // NEU: Job sowohl ins Träger-System (GameUnits),
-      //      als auch in die zentrale JobEngine (für Logs/Inspector) schieben.
       let pushed = false;
 
-      // 1) Direkt an die Träger-Queue → damit die Carrier wirklich laufen
+      // a) Direkt an die Träger-Queue → damit die Carrier wirklich laufen
       if (window.GameUnits?.addJob) {
         try {
           window.GameUnits.addJob(job);
@@ -588,10 +588,10 @@ Game.popJob = (...args) => {
         }
       }
 
-      // 2) Zusätzlich in die zentrale JobEngine für Diagnose/Übersicht
-      if (typeof Game?.addJob === 'function') {
+      // b) Zusätzlich in die zentrale JobEngine für Diagnose/Übersicht
+      if (window.Game?.addJob) {
         try {
-          Game.addJob(job); // ruft intern JobEngine.add(...)
+          window.Game.addJob(job); // ruft intern JobEngine.add(...)
           pushed = true;
         } catch (e) {
           WARN('Game.addJob Fehler:', e?.message || e);
@@ -605,11 +605,10 @@ Game.popJob = (...args) => {
         }
       }
 
-      // 3) Falls gar nichts verfügbar war → Warnung
       if (!pushed) {
         WARN('[production] Kein Job-System für erzeugten Job gefunden', job);
       }
-      
+
       // Debug-Event für Inspector / Diagnose
       try {
         window.dispatchEvent(new CustomEvent('cb:prod:created', {
@@ -622,7 +621,7 @@ Game.popJob = (...args) => {
   }
 
   /* ==========================================================================
-   * 4b) FRAME-LOOP
+   * 4c) FRAME-LOOP
    * ======================================================================== */
   function frame(){
     if (!S.running) return;
@@ -641,13 +640,13 @@ Game.popJob = (...args) => {
         detail: { dt }
       }));
 
-      // Map + Gebäude zeichnen
+      // 4) Map + Gebäude zeichnen
       clear();
       applyCamera();
       drawLayersCulled();
       drawBuildings();
 
-      // Overlays
+      // 5) Overlays (Units, Pfade, etc.)
       if (window.OverlayHooks?.draw) {
         try {
           const ctx = S.ctx;
@@ -663,7 +662,7 @@ Game.popJob = (...args) => {
         }
       }
 
-      // Render-Event
+      // 6) Render-Event
       try {
         window.dispatchEvent(new CustomEvent('cb:game:render', {
           detail: {
@@ -682,11 +681,9 @@ Game.popJob = (...args) => {
       }
 
     } catch (e) {
-      // Ganz wichtig: Fehler loggen, aber den Loop NICHT stoppen
       ERR('frame() Fehler:', e?.message || e);
     }
 
-    // Egal was passiert ist: Nächsten Frame wieder planen
     S.rafId = requestAnimationFrame(frame);
   }
 
@@ -724,6 +721,7 @@ Game.popJob = (...args) => {
 
     S.buildings.push(b);
 
+    // HQ-Position ggf. merken
     if (!S.hqPos && id === 'b.hq'){
       S.hqPos = { x:bx, y:by };
     }
@@ -731,12 +729,14 @@ Game.popJob = (...args) => {
     loadBuildingSprite(id);
     ensureBuildPlaceSprites();
 
+    // Event für Units & Inspector
     window.dispatchEvent(
       new CustomEvent('cb:build:placed', {
         detail: { id, x: bx, y: by, w, h }
       })
     );
 
+    // (ALT) kompatibler Event für alte carrier-Pipelines
     window.dispatchEvent(
       new CustomEvent('req:carrier:createTask', {
         detail: {
@@ -749,6 +749,52 @@ Game.popJob = (...args) => {
         }
       })
     );
+
+    // -----------------------------------------------------------------------
+    // NEU: Baujob erzeugen
+    // - type: "build" → in game.units.js speziell behandelt
+    // - from: HQ → Baustelle (optisch Träger mit Holz)
+    // -----------------------------------------------------------------------
+    const job = {
+      type       : 'build',
+      res        : 'wood',
+      from       : S.hqPos ? { x:S.hqPos.x, y:S.hqPos.y } : { x:bx, y:by },
+      to         : { x:bx, y:by },
+      buildingId : id
+    };
+
+    let pushed = false;
+
+    // a) Direkt an GameUnits (Träger-System)
+    if (window.GameUnits?.addJob) {
+      try {
+        window.GameUnits.addJob(job);
+        pushed = true;
+      } catch (e) {
+        WARN('GameUnits.addJob (build) Fehler:', e?.message || e);
+      }
+    }
+
+    // b) Zusätzlich für Inspector in die JobEngine
+    if (window.Game?.addJob) {
+      try {
+        window.Game.addJob(job);
+        pushed = true;
+      } catch (e) {
+        WARN('Game.addJob (build) Fehler:', e?.message || e);
+      }
+    } else if (window.JobEngine?.add) {
+      try {
+        window.JobEngine.add(job);
+        pushed = true;
+      } catch (e) {
+        WARN('JobEngine.add (build) Fehler:', e?.message || e);
+      }
+    }
+
+    if (!pushed) {
+      WARN('[build] Kein Job-System für Baujob gefunden', job);
+    }
 
     return { ok: true, id, x: bx, y: by, w, h };
   }
@@ -788,7 +834,8 @@ Game.popJob = (...args) => {
     return r;
   };
 
-  // Hooks für carrier.js
+  // Diese beiden werden aktuell von game.units.js NICHT mehr genutzt,
+  // bleiben aber für spätere Refactors als API-Hooks erhalten.
   Game.takeFromBuilding = function(tx,ty,res){
     if (!res) return 0;
     const b = S.buildings.find(b => b.x===tx && b.y===ty && b.stock && b.stock[res] > 0);
@@ -863,6 +910,6 @@ Game.popJob = (...args) => {
     INFO('Platzierung (akzeptiert)', res);
   });
 
-  OK('Modul geladen (v25.11.27-step1+2+3)');
+  OK('Modul geladen (v25.11.27-final-build+prod)');
 
 })();
