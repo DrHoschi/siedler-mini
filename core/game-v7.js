@@ -567,27 +567,21 @@ Game.popJob = (...args) => {
       };
       const to = S.hqPos || { x:b.x, y:b.y };
 
-            const job = {
+                  const job = {
         type: 'carry',
         res : resId,
         from,
         to
       };
 
-      // NEU: Job direkt ins zentrale Job-System schieben
-      if (typeof Game?.addJob === 'function') {
-        // Bevorzugt über Game → GameUnits
+      // Job in die zentrale JobEngine schieben
+      if (window.JobEngine?.add) {
+        JobEngine.add(job);
+      } else if (typeof Game?.addJob === 'function') {
+        // Fallback über Game, falls du später etwas umhängst
         Game.addJob(job);
-      } else if (window.GameUnits?.addJob) {
-        // Fallback: direkt auf GameUnits
-        try {
-          window.GameUnits.addJob(job);
-        } catch (e) {
-          WARN('GameUnits.addJob Fehler:', e?.message || e);
-        }
       } else {
-        // Letzte Absicherung: Log, damit wir es im Inspector sehen
-        WARN('Kein Job-System für erzeugten Job gefunden', job);
+        WARN('[production] Kein Job-System für erzeugten Job gefunden', job);
       }
 
       // Debug-Event für Inspector / Diagnose
