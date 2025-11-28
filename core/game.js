@@ -1,14 +1,8 @@
 /* ============================================================================
  * Datei   : core/game.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.27-modular
- *
+ * Version : v25.11.27-final
  * Zweck   : Zentrale Spielsteuerung (Director)
- *           – Initialisiert Submodule
- *           – Verbindet Events
- *           – tick() + render()
- *
- * Struktur: IMPORTS → STATE → INIT → TICK/RENDER → EVENTS → EXPORT
  * ========================================================================== */
 
 (function(){
@@ -21,6 +15,7 @@
   // STATE
   // ------------------------------------------------------------
   const Game = {
+    ctx: null,
     tileSize: 64,
     buildings: [],
     units: [],
@@ -28,26 +23,31 @@
 
     getUnits(){ return this.units; }
   };
-
   window.Game = Game;
 
   // ------------------------------------------------------------
-  // INIT (wird durch bootstrap ausgelöst)
+  // INIT
   // ------------------------------------------------------------
   function init(){
     LOG('init()');
 
-    // Map laden / vorbereiten
-    if (window.GameMap?.init) Game.map = window.GameMap.init(Game);
+    // Canvas holen
+    const canvas = document.querySelector('#game');
+    Game.ctx = canvas.getContext('2d');
 
-    // Units / Carrier-Modul initialisieren
-    if (window.GameUnits?.init) window.GameUnits.init(Game);
+    // Kamera
+    if (window.Camera?.init) Camera.init(Game);
 
-    // Production starten
-    if (window.Production?.tick) {
-      setInterval(()=> window.Production.tick(), 2000);
-    }
+    // Map
+    if (window.GameMap?.init) Game.map = GameMap.init(Game);
 
+    // Units
+    if (window.GameUnits?.init) GameUnits.init(Game);
+
+    // Runtime-Carriers
+    if (window.CarrierRuntime?.start) CarrierRuntime.start();
+
+    // Tick starten
     requestAnimationFrame(loop);
   }
 
@@ -55,12 +55,13 @@
   // TICK + RENDER
   // ------------------------------------------------------------
   function tick(dt){
-    if (window.GameUnits?.tick) window.GameUnits.tick(dt);
+    GameUnits.tick(dt);
+    GameConstruction.tick(dt);
   }
 
   function render(){
-    if (window.GameMap?.render) window.GameMap.render(Game);
-    if (window.OverlayHooks?.render) window.OverlayHooks.render();
+    GameMap.render(Game);
+    if (window.OverlayHooks?.render) OverlayHooks.render();
   }
 
   function loop(ts){
@@ -72,6 +73,9 @@
   // ------------------------------------------------------------
   // EVENTS
   // ------------------------------------------------------------
-  window.addEventListener('cb:game:start', ()=> init());
+  window.addEventListener('cb:registry:ready', ()=>{
+    LOG('registry ready → warte auf cb:game:start');
+  });
 
+  window.addEventListener('cb:game:start', ()=> init());
 })();
