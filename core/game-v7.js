@@ -567,23 +567,49 @@ Game.popJob = (...args) => {
       };
       const to = S.hqPos || { x:b.x, y:b.y };
 
-                  const job = {
+                        const job = {
         type: 'carry',
         res : resId,
         from,
         to
       };
 
-      // Job in die zentrale JobEngine schieben
-      if (window.JobEngine?.add) {
-        JobEngine.add(job);
-      } else if (typeof Game?.addJob === 'function') {
-        // Fallback über Game, falls du später etwas umhängst
-        Game.addJob(job);
-      } else {
-        WARN('[production] Kein Job-System für erzeugten Job gefunden', job);
+      // NEU: Job sowohl ins Träger-System (GameUnits),
+      //      als auch in die zentrale JobEngine (für Logs/Inspector) schieben.
+      let pushed = false;
+
+      // 1) Direkt an die Träger-Queue → damit die Carrier wirklich laufen
+      if (window.GameUnits?.addJob) {
+        try {
+          window.GameUnits.addJob(job);
+          pushed = true;
+        } catch (e) {
+          WARN('GameUnits.addJob Fehler:', e?.message || e);
+        }
       }
 
+      // 2) Zusätzlich in die zentrale JobEngine für Diagnose/Übersicht
+      if (typeof Game?.addJob === 'function') {
+        try {
+          Game.addJob(job); // ruft intern JobEngine.add(...)
+          pushed = true;
+        } catch (e) {
+          WARN('Game.addJob Fehler:', e?.message || e);
+        }
+      } else if (window.JobEngine?.add) {
+        try {
+          window.JobEngine.add(job);
+          pushed = true;
+        } catch (e) {
+          WARN('JobEngine.add Fehler:', e?.message || e);
+        }
+      }
+
+      // 3) Falls gar nichts verfügbar war → Warnung
+      if (!pushed) {
+        WARN('[production] Kein Job-System für erzeugten Job gefunden', job);
+      }
+      
       // Debug-Event für Inspector / Diagnose
       try {
         window.dispatchEvent(new CustomEvent('cb:prod:created', {
