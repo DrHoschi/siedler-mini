@@ -1,63 +1,388 @@
 <!doctype html>
-<html lang="de" data-theme="dark">
+<!-- ============================================================================
+     Datei   : index.html
+     Projekt : Neue Siedler
+     Version : v25.11.25 (Fix Kamera-Auswahl + Startlayout)
+     Autor   : Mann + ChatGPT (GPT-5.1 Thinking)
+     Zweck   : Saubere Lade-Reihenfolge, genau EINE Kamera, stabiler Start
+     ============================================================================ -->
+<html lang="de" data-theme="wood">
 <head>
-  <!-- =========================================================
-       META / BASIS
-       datei: index.html (v25.11.09-final)
-       ========================================================= -->
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#1f1f23">
-  <title>Neue Siedler</title>
+  <meta name="robots" content="noindex,nofollow">
+  <title>Neue Siedler</title> 
 
-  <!-- =========================================================
-       STYLES (Global → HUD → Build → Place)
-       ========================================================= -->
+  <!-- Styles -->
   <link rel="stylesheet" href="ui/css/ui.css">
-  <link rel="stylesheet" href="ui/css/ui-hud.css">
-  <link rel="stylesheet" href="ui/css/ui-build.css">
-  <link rel="stylesheet" href="ui/css/ui-place.css"> <!-- Platzieren-Overlay -->
+  <link rel="stylesheet" href="ui/css/ui-start.css">
+  <!-- <link rel="stylesheet" href="ui/css/ui-layout.css"> -->
+  <link rel="stylesheet" href="ui/css/ui-layout-v0.css">
+  <!-- <link rel="stylesheet" href="ui/css/ui-hud.css"> -->
+  <link rel="stylesheet" href="ui/css/ui-hud-v5.css">
+
+  <link rel="stylesheet" href="ui/css/ui-build-v14.css">
+  <link rel="stylesheet" href="ui/css/ui-layer.patch.css">
+  <link rel="stylesheet" href="ui/css/ui-place.css">
+
+  <link rel="stylesheet" href="inspector/ui-inspector-v1.css">
+  <!-- Inspector-Style-Varianten (zum Experimentieren) -->
+  <!-- <link rel="stylesheet" href="ui/css/ui-inspector.css?v=25.11.02"> -->
+  <!-- <link rel="stylesheet" href="ui/css/ui-inspector.clean.css?v=25.11.02"> -->
+  <!-- <link rel="stylesheet" href="ui/css/ui-inspector.final.css?v=25.11.02"> -->
+
+  <style>
+    /* ===== Fehlerbanner (Import-/Netzwerkfehler) ===== */
+    #boot-error {
+      position: fixed;
+      left: 0; right: 0; top: 0;
+      background: #b00020;
+      color: #fff;
+      padding: 10px 14px;
+      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display: none;
+      z-index: 2147483601;
+    }
+    #boot-error b { font-weight: 700; }
+
+    #start-splash .title{
+      font: 600 20px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color: #f0e6d2;
+      text-shadow: 0 2px 6px rgba(0,0,0,.6);
+      letter-spacing: .04em;
+    }
+    html.splash-done #start-splash{ display:none; }
+
+    /* ===== Safe Layering ===== */
+    #game {
+      position: relative;
+      z-index: 10;
+      display: block;
+      touch-action: none;      /* verhindert systemweite Pinch/Pan */
+      transform-origin: 0 0;   /* sauberer Ursprung für unsere Kamera */
+    }
+    #app-root  { position:relative; z-index: 20; }
+
+    /* Startpanel (Holzrahmen etc. kommt aus ui/ui-start.js) */
+    #start-panel { z-index: 1030; }
+
+    /* ===== Inspector sichtbar / unsichtbar ===== */
+    #inspector{ display:none !important; }
+    #inspector[data-open="1"]{
+      display:block !important;
+      position:fixed;
+      inset:0;
+      z-index:2147483600;
+    }
+
+    /* ===== FAB immer über allem ===== */
+    #inspector-fab {
+      position: fixed;
+      left: 14px;
+      bottom: 14px;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(245,245,245,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      backdrop-filter: blur(6px);
+      display: grid;
+      place-items: center;
+      font: 20px/1.0 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color: #ddd;
+      cursor: pointer;
+      z-index: 2147483602; /* über Inspector */
+      -webkit-tap-highlight-color: transparent;
+      pointer-events: auto;
+    }
+    #inspector-fab:active { transform: translateY(1px); }
+    body.inspector-open #inspector-fab {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Optional: wenn du beim offenen Inspector den Canvas blocken willst */
+    body.inspector-open #game { pointer-events:none; }
+
+    /* ===== Startpanel: sicher über dem Canvas ===== */
+    #ui-root{ position: relative; z-index: 1020; }
+  </style>
 </head>
 <body>
+  <div id="boot-error" role="alert" aria-live="assertive">
+    <b>Fehler beim Nachladen</b> – Details in der Konsole prüfen (Netzwerk/404).
+  </div>
 
-  <!-- Deine Map-Canvas -->
-  <canvas id="game" width="1280" height="720"></canvas>
+  <!-- Spiel-Container -->
+  <canvas id="game"
+          data-map="data/maps/map-epoch1.json"
+          data-tileset="assets/tiles/tileset.terrain.png"></canvas>
 
-  <!-- Startpanel/HUD/Build-Dock (dein bestehendes Markup bleibt) -->
+  <div id="ui-root"    data-ui="root"   aria-live="polite"></div>
+  <div id="hud-root"   data-ui="hud"    aria-live="polite"></div>
+  <div id="build-dock" data-ui="build"></div>
 
-  <!-- Platzier-Overlay (muss existieren) -->
+  <button id="btn-build"
+          class="fab-build"
+          type="button"
+          aria-controls="build-dock">Bauen</button>
+
+  <!-- Platzier-Overlay (UI-Variante; Ghost wird in ui/ui-place-overlay.js benutzt) -->
   <div id="place-overlay" class="place-overlay" hidden>
     <div id="place-ghost" class="ghost-sprite">
       <div class="ghost-tint"></div>
     </div>
+    <button class="place-btn ok">✓</button>
+    <button class="place-btn cancel">✕</button>
   </div>
 
-  <!-- =========================================================
-       SCRIPTS – REIHENFOLGE WICHTIG!
-       Core / Camera / Map / Registry
-       ========================================================= -->
-  <script src="core/boot.js"></script>
-  <script src="core/camera-v1.js"></script>
-  <script src="core/map-bridge.js"></script>
+  <!-- Inspector Host + FAB -->
+  <div id="inspector" class="inspector-host" aria-hidden="true" data-open="0"></div>
+  <button id="inspector-fab" aria-label="Inspector" title="Inspector">⚙️</button>
+
+  <!-- ===== Build-Menü Button → Event ===== -->
+  <script>
+  document.getElementById('btn-build')?.addEventListener('click', ()=>{
+    window.dispatchEvent(new CustomEvent('cb:build:open', { detail:{ from:'button' }}));
+  });
+  </script>
+
+  <!-- BOOT -->
+  <script src="core/boot-v1.js"></script>
+
+  <!-- CORE ESSENCE -->
+  <script src="core/asset.js?v=25.11.02"></script>
+  <!-- Alte Registry-Variante auskommentiert lassen -->
+  <!-- <script src="core/registry.js"></script>
+  <script src="core/core.entities.js"></script> -->
+  <!-- Neue, schlanke Registry – genau DIE brauchen wir -->
   <script src="core/registry-v1.js"></script>
 
-  <!-- UI -->
-  <script src="ui/ui-start.js"></script>
-  <script src="ui/ui-hud.js"></script>
-  <script src="ui/ui-build.js"></script>
+  <!-- JOB / CARRIER / RES / PROD -->
+  <script src="core/warehouse.js"></script>
+  <!-- <script src="core/units.js"></script> -->
+  <script src="core/carrier.runtime.js"></script>
+  <script src="core/carrier.js"></script>
+  <script src="core/logistics.prio.js"></script>
+  <script src="core/territory.js"></script>
+  <script src="core/market.js"></script>
+  <script src="core/game.production.js"></script>
+
+  <!-- LOW-LEVEL (vor Game) -->
+  <script src="core/core.pfglue.js"></script>   <!-- Polyfills/Glue: früh -->
+  <script src="core/core.input-v1.js"></script> <!-- Input-Hooks (Keys/Pointer) -->
+  <script src="core/path-overlay.js"></script>
+  <script src="core/adfinder.js"></script>
+  <script src="core/overlay-hooks.js"></script>
+  <script src="core/path-traces.overlay.js"></script>
+  <script src="core/job.engine.js"></script>
+  <script src="core/unit-overlay.js"></script>
+  <script src="core/game.units.js"></script>
+
+  <!-- ASSET / REGISTRY (zusätzliche Bridges falls nötig)
+       → asset.js + registry-v1.js sind schon oben geladen -->
+  <!-- <script src="core/core.entities.js"></script> -->
+
+  <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
+  <script src="core/camera.js"></script>
+  <!-- KEINE camera-v3.js, KEINE camera.glue-Varianten hier laden! -->
+
+  <!-- GAME BOOTSTRAP + GAME LOOP -->
+  <script src="core/game.build.js"></script>
+  <script src="core/game.map.js"></script>
+  <script src="core/game.construction.js"></script>
+  <script src="core/game.bootstrap.js"></script>
+  <script src="core/game.tick.js"></script>
+  <script src="core/game.js"></script>
+
+  <!-- MAP LOAD + MAP RUNTIME/RENDER -->
+  <script src="core/map-runtime.bridge.js"></script>
+  
+  <!-- START-UI -->
+  <script src="ui/ui-start.js?v=25.11.02"></script>
+
+
+     
+  <!-- PLACEMENT OVERLAY (braucht Game+Camera & den Build-Hook) -->
+  <script src="ui/ui-place.js?v=25.11.14"></script>
+  <!-- <script src="core/build.place.handler.js"></script> -->
   <script src="ui/ui-build-hook.js"></script>
 
-  <!-- Platzieren: Input + Anwenden -->
-  <script src="core/core.input.js"></script>             <!-- (deine final) -->
-  <script src="core/build.place.handler.js"></script>    <!-- (deine final) -->
+  <script src="ui/ui-events.js"></script>
 
-  <!-- Inspector (optional) -->
-  <script src="inspector/ui-inspector.core.js"></script>
-  <script src="inspector/tabs/inspector.tab.logs.js"></script>
-  <script src="inspector/tabs/inspector.tab.layer.js"></script>
-  <script src="inspector/tabs/inspector.tab.checker-v1.js"></script>
+  <!-- HUD + BUILD -->
+  <!-- <script src="ui/ui-hud.js"></script> -->
+  <!-- <script src="ui/ui-hud-v0.js"></script> -->
+  <!-- <script src="ui/ui-hud-v1.js"></script> -->
+  <script src="ui/ui-hud-v2.js"></script>
 
-  <!-- (Optional) Log-Mirror NUR DEV -->
-  <!-- <script src="inspector/insp-log-mirror.js"></script> -->
+  <script src="ui/ui-build-v6.js"></script>
+  <script src="ui/ui-dialog.js"></script>
+  <script src="ui/ui-notify.js?v=25.11.05"></script>
+
+  <!-- LAYOUT -->
+  <script src="ui/ui-layout.js"></script>
+
+  <!-- INSPECTOR -->
+  <script src="inspector/ui-inspector-v1.js?v=25.11.01-final"></script>
+  <script defer src="inspector/ui-inspector.content-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/inspector.tabs.adapter.js?v=1.0.0"></script>
+  <script defer src="inspector/inspector.bridges.js?v=1.0.0"></script>
+  <script defer src="inspector/inspector.bridges.game.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.logs-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.build-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.resources-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.paths-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.tests-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.ui-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.checker-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.editor-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.signals-v1.js?v=1.0.0"></script>
+  <script defer src="inspector/tabs/inspector.tab.diagnose-v1.js"></script>
+  <script defer src="inspector/tabs/inspector.tab.layer-v1.js"></script>
+  <script defer src="inspector/tabs/inspector.tab.audit-v1.js"></script>
+  <!-- Events-Tab (derzeit deaktiviert) -->
+  <!--
+  <script src="inspector/tools/inspector.tab0.events-v1.js"></script>
+  <script defer src="inspector/tabs/inspector.tab.events-v1.js"></script>
+  -->
+
+  <!-- ===== Zentraler Inspector-Toggle-Controller (idempotent) ===== -->
+  <script>
+  (function InspectorToggleController(){
+    if (window.__insp_toggle_wired) return;
+    window.__insp_toggle_wired = true;
+    window.INSP_AUTO_OPEN = false;
+
+    const LOG = (...a)=> (window.CBLog?.info||console.log)('[insp-toggle]', ...a);
+    let transitioning = false;
+    const T_DEBOUNCE = 120;
+
+    const host = ()=> document.getElementById('inspector');
+    const isOpen = ()=> host()?.dataset.open === '1';
+
+    function setOpenState(open){
+      const el = host(); if(!el) return false;
+      const target = open ? '1' : '0';
+      if (el.dataset.open === target) return false;
+      el.dataset.open = target;
+      el.setAttribute('aria-hidden', open ? 'false' : 'true');
+      document.body.classList.toggle('inspector-open', open);
+      return true;
+    }
+    function open(detail={}){
+      if (transitioning || isOpen()) return;
+      transitioning = true;
+      if (setOpenState(true)) {
+        window.dispatchEvent(new CustomEvent('cb:insp:open', {detail}));
+        LOG('open');
+      }
+      setTimeout(()=>transitioning=false, T_DEBOUNCE);
+    }
+    function close(){
+      if (transitioning || !isOpen()) return;
+      transitioning = true;
+      if (setOpenState(false)) {
+        window.dispatchEvent(new CustomEvent('cb:insp:close'));
+        LOG('close');
+      }
+      setTimeout(()=>transitioning=false, T_DEBOUNCE);
+    }
+    function toggle(detail={}){ isOpen() ? close() : open(detail); }
+
+    window.addEventListener('req:insp:open',  e => open(e?.detail||{}));
+    window.addEventListener('req:insp:close', () => close());
+    window.addEventListener('req:insp:toggle', e => toggle(e?.detail||{}));
+
+    window.addEventListener('cb:insp:ready', () => { if (isOpen()) close(); });
+
+    document.addEventListener('keydown', (ev)=>{ if(ev.key === 'Escape') close(); });
+
+    document.addEventListener('click', (ev)=>{
+      const el = host();
+      if (!isOpen() || !el) return;
+      if (ev.target && ev.target.getAttribute && ev.target.getAttribute('data-backdrop') === '1') {
+        close();
+      }
+    });
+
+    document.getElementById('inspector-fab')?.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('req:insp:toggle', { detail:{ tab:'logs' }}));
+    });
+
+    LOG('controller bereit');
+  })();
+  </script>
+
+  <!-- ===== Smoke-Events + Splash ausblenden ===== -->
+  <script>
+  (function smoke(){
+    const on = (n)=>window.addEventListener(n, e=>CBLog.info(`[event] ${n}`, e.detail));
+    ['cb:ui-ready','cb:assets-ready','cb:registry:ready','cb:hud-ready',
+     'cb:build:ready','cb:game:start','cb:insp:ready','cb:path:overlay:ready']
+      .forEach(on);
+    window.addEventListener('cb:ui-ready', ()=>{
+      document.documentElement.classList.add('splash-done');
+    }, { once:true });
+  })();
+  </script>
+
+  <!-- ===== Diagnose: Platzierung + Build-Dock ===== -->
+  <script>
+  (function(){
+    const miss = [];
+    if (!window.GameCamera) miss.push('GameCamera');  // statt __CAM
+    if (!document.getElementById('build-dock')) miss.push('#build-dock');
+    if (miss.length) {
+      console.warn('[diag] fehlt:', miss.join(', '));
+    } else {
+      console.info('✅ [diag] placement-stack ok');
+    }
+  })();
+  </script>
+
+  <!-- ===== Eruda-Init (Debug-Konsole auf Mobilgeräten) ===== -->
+  <script>
+  (function(){
+    if (window.__ERUDA_INIT__) return;
+    window.__ERUDA_INIT__ = true;
+    try {
+      if (window.eruda && eruda.init) {
+        eruda.init();
+        eruda.add && eruda.add('dom');
+        eruda.add && eruda.add('timing');
+        console.info('[eruda] initialized');
+      }
+    } catch(e){
+      console.warn('[eruda] init failed', e);
+    }
+  })();
+  </script>
+
+  <!-- ===== iOS-Start-Bug – Karte auf volle Größe bringen ===== -->
+  <script>
+  (function(){
+    const TAG = '[layout-fix]';
+
+    function fireResize(reason){
+      try {
+        const ev = new Event('resize');
+        ev.detail = { reason };
+        window.dispatchEvent(ev);
+        (window.CBLog?.info || console.info)(TAG, 'resize ausgelöst →', reason);
+      } catch(e){
+        console.warn(TAG, 'resize-Event fehlgeschlagen', e);
+      }
+    }
+
+    window.addEventListener('cb:game:start', () => {
+      fireResize('cb:game:start:0ms');
+      setTimeout(() => fireResize('cb:game:start:150ms'), 150);
+      setTimeout(() => fireResize('cb:game:start:400ms'), 400);
+    }, { once:true });
+  })();
+  </script>
 </body>
 </html>
