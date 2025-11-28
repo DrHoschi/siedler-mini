@@ -1,75 +1,48 @@
 /* ============================================================================
  * Datei   : core/game.build.js
- * Projekt : Neue Siedler – Epoche 1
  * Version : v25.11.27-final
- *
- * Zweck   : Gebäude platzieren:
- *            – Baustelle erzeugen
- *            – HQ erkennen + Units.hqPos setzen
- *            – Baujobs anlegen (für game.units.js)
- *
- * Struktur: IMPORTS → KONSTANTEN → FUNKTIONEN → EXPORT
+ * Zweck   : Gebäude platzieren + Baujobs erzeugen
  * ========================================================================== */
 
 (function(){
   'use strict';
-
   const TAG = '[build]';
-  const LOG = (...a)=> (window.CBLog?.ok ?? console.log)(TAG, ...a);
+  const LOG = (...a)=> (window.CBLog?.ok ?? console.log)(TAG,...a);
 
-  // ------------------------------------------------------------
-  // KONSTANTEN
-  // ------------------------------------------------------------
-  const BUILD_PHASE = {
-    SITE: 0,        // Baustelle
-    MATERIAL: 1,    // Material wird geliefert
-    FINISH: 2,      // Fertigstellung
-    COMPLETE: 3     // Gebäude fertig
-  };
-
-  // ------------------------------------------------------------
-  // HAUPTFUNKTION – Gebäude platzieren
-  // ------------------------------------------------------------
-  function place(buildId, x, y){
-    LOG('new building', buildId, x, y);
+  function place(id, x, y){
+    const def = Registry.getBuilding(id);
+    if (!def){
+      console.warn(TAG,'Unbekanntes Gebäude:', id);
+      return;
+    }
 
     const b = {
-      id: buildId,
-      x, y,
-      w: 3,
-      h: 3,
-      buildStage: BUILD_PHASE.SITE,
-      buildTimer: 0,
-      stock: 0
+      id,
+      x,y,
+      w:def.size?.w||3,
+      h:def.size?.h||3,
+      buildStage:0,
+      buildTimer:0,
+      stock:0
     };
-
-    // Gebäude registrieren
     Game.buildings.push(b);
 
-    // HQ erkennt hqPos
-    if (buildId === 'b.hq'){
-      window.GameUnits.hqPos = { x, y };
-      LOG('HQ gesetzt → Units.hqPos', window.GameUnits.hqPos);
+    if (id === 'b.hq'){
+      GameUnits.hqPos = { x,y };
+      LOG('HQ gesetzt', GameUnits.hqPos);
     }
 
     // Baujob erzeugen
-    window.GameUnits.assignJob({
-      type: 'build',
-      res: 'wood',
-      from: window.GameUnits.hqPos,
-      to: { x, y },
-      buildingId: buildId
+    GameUnits.assignJob({
+      type:'build',
+      res:'wood',
+      from: GameUnits.hqPos,
+      to:{x,y},
+      buildingId:id
     });
 
-    // Visual-Event für andere Module
-    dispatchEvent(new CustomEvent('cb:build:placed',{
-      detail:{id:buildId, x,y}
-    }));
+    dispatchEvent(new CustomEvent('cb:build:placed',{detail:{id,x,y}}));
   }
 
-  // ------------------------------------------------------------
-  // EXPORT
-  // ------------------------------------------------------------
   window.GameBuild = { place };
-
 })();
