@@ -1,30 +1,40 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.28-fix1 (Map-Render-Fix)
- * Zweck   : Map laden + sicher rendern (Map + Tileset warten)
- * Struktur: IMPORTS → STATE → INIT → RENDER → EXPORT
+ * Version : v25.11.28-fix2 (Map-Render: 2D-Grid)
+ * Zweck   : Map laden (map-epoch1.json) + Tileset laden + komplette Map rendern
+ * Struktur: STATE → INIT → RENDER → EXPORT
  * ========================================================================== */
 
 (function(){
   'use strict';
 
   const TAG = '[map]';
-  const LOG = (...a)=> (window.CBLog?.ok  ?? console.log)(TAG, ...a);
+  const LOG = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WRN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
   // -------------------------------------------------------------------------
   // STATE
   // -------------------------------------------------------------------------
   const Mod = {
-    map:     null,
-    tileset: null,
-    ts:      64,
-    ready:   false,   // true, wenn Map + Tileset da
-    sized:   false    // einmal Canvas auf Viewportgröße ziehen
+    // Map-Daten
+    name:        'unknown',
+    cols:        1,
+    rows:        1,
+    tileSize:    64,
+    grid:        null,   // 2D-Array [y][x] = tileId
+    // Tileset
+    tileset:     null,
+    tilesetUrl:  '',
+    tilesetCols: 1,
+
+    ready: false,
+    sized: false
   };
 
-  // Hilfsfunktion: Canvas-Größe an Viewport anpassen (einmalig)
+  // -------------------------------------------------------------------------
+  // Canvas-Größe an Viewport anpassen (einmalig)
+  // -------------------------------------------------------------------------
   function ensureCanvasSize(Game){
     try{
       const ctx = Game.ctx;
@@ -47,46 +57,117 @@
   }
 
   // -------------------------------------------------------------------------
+  // Map-JSON normalisieren
+  // Erwartet Format in etwa:
+  // {
+  //   "name": "epoch1",
+  //   "size": [64,64],
+  //   "tiles": [
+  //     [1,1,1,1,...],
+  //     [1,2,2,1,...],
+  //     ...
+  //   ]
+  // }
+  // -------------------------------------------------------------------------
+  function applyMapJson(json){
+    if (!json || !Array.isArray(json.tiles) || !json.tiles.length){
+      WRN('Map-JSON ungültig oder leer – verwende 1x1 Fallback');
+      Mod.name = 'fallback';
+      Mod.cols = 1;
+      Mod.rows = 1;
+      Mod.tileSize = 64;
+      Mod.grid = [[1]];
+      return;
+    }
+
+    const tiles = json.tiles;
+    const rows  = tiles.length;
+    const cols  = tiles[0].length;
+
+    Mod.name     = json.name || 'epoch1';
+    Mod.rows     = rows;
+    Mod.cols     = cols;
+    Mod.tileSize = Array.isArray(json.size) ? (json.size[0] || 64) : 64;
+
+    // Safety: alle Zeilen auf gleiche Länge bringen, Werte in Integer umwandeln
+    const grid = new Array(rows);
+    for (let y = 0; y < rows; y++){
+      const row = Array.isArray(tiles[y]) ? tiles[y] : [];
+      grid[y] = new Array(cols);
+      for (let x = 0; x < cols; x++){
+        grid[y][x] = row[x] | 0; // 0 = leer, >0 = Tile-ID
+      }
+    }
+
+    Mod.grid = grid;
+
+    LOG('Map übernommen:', {
+      name : Mod.name,
+      cols : Mod.cols,
+      rows : Mod.rows,
+      ts   : Mod.tileSize
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Tileset-Helfer: aus Tile-ID (1-basiert) → sx, sy im Tileset
+  // -------------------------------------------------------------------------
+  function spriteFromId(tileId){
+    tileId = tileId | 0;
+    if (tileId <= 0) return null;     // 0 = kein Tile
+
+    const ts   = Mod.tileSize;
+    const cols = Mod.tilesetCols || 1;
+
+    const id   = tileId - 1;          // 0-basiert
+    const sx   = (id % cols) * ts;
+    const sy   = Math.floor(id / cols) * ts;
+
+    return { sx, sy };
+  }
+
+  // -------------------------------------------------------------------------
   // INIT
   // -------------------------------------------------------------------------
   function init(Game){
-    // Quelle aus dem <canvas id="game" ...> lesen
-    const canvas = document.getElementById('game');
-    const mapUrl  = canvas?.getAttribute('data-map')     || 'data/maps/map-epoch1.json';
-    const tileUrl = canvas?.getAttribute('data-tileset') || 'assets/tiles/tileset.terrain.png';
+    const canvas    = document.getElementById('game');
+    const mapUrl    = canvas?.getAttribute('data-map')     || 'data/maps/map-epoch1.json';
+    const tilesetUrl= canvas?.getAttribute('data-tileset') || 'assets/tiles/tileset.terrain.png';
+
+    Mod.tilesetUrl  = tilesetUrl;
 
     // Map laden
     fetch(mapUrl)
-      .then(r=>{
+      .then(r => {
         if (!r.ok) throw new Error('HTTP '+r.status);
         return r.json();
       })
-      .then(json=>{
-        Mod.map = json;
-        LOG('Map geladen:', mapUrl);
+      .then(json => {
+        applyMapJson(json);
         if (Mod.tileset) {
           Mod.ready = true;
           LOG('Map + Tileset bereit → renderfähig');
         }
       })
-      .catch(err=>{
-        WRN('Fehler beim Laden der Map:', err);
+      .catch(err => {
+        WRN('Fehler beim Laden der Map:', mapUrl, err);
       });
 
     // Tileset laden
     const img = new Image();
     img.onload = ()=>{
-      Mod.tileset = img;
-      LOG('Tileset geladen:', tileUrl);
-      if (Mod.map) {
+      Mod.tileset     = img;
+      Mod.tilesetCols = Math.max(1, Math.floor(img.width / Mod.tileSize) || 1);
+      LOG('Tileset geladen:', tilesetUrl, 'Cols=', Mod.tilesetCols);
+      if (Mod.grid) {
         Mod.ready = true;
         LOG('Map + Tileset bereit → renderfähig');
       }
     };
     img.onerror = (e)=>{
-      WRN('Fehler beim Laden des Tilesets:', tileUrl, e);
+      WRN('Fehler beim Laden des Tilesets:', tilesetUrl, e);
     };
-    img.src = tileUrl;
+    img.src = tilesetUrl;
 
     return Mod;
   }
@@ -98,62 +179,47 @@
     const ctx = Game.ctx;
     if (!ctx) return;
 
-    // Canvas ggf. einmalig auf Bildschirmgröße ziehen
+    // Canvas einmalig an Viewport anpassen
     ensureCanvasSize(Game);
 
-    // WICHTIG: Nur rendern, wenn Map + Tileset da sind
-    if (!Mod.ready || !Mod.map || !Mod.tileset) {
-      return; // kein Fehler → Loop läuft weiter
-    }
+    // Erst zeichnen, wenn Map + Tileset wirklich da sind
+    if (!Mod.ready || !Mod.grid || !Mod.tileset) return;
 
-    const c = ctx.canvas;
-    const ts = Mod.ts;
+    const c  = ctx.canvas;
+    const ts = Mod.tileSize;
 
     ctx.clearRect(0, 0, c.width, c.height);
 
-    // Safety: falls Map-Tiles fehlen
-    const tiles = Array.isArray(Mod.map.tiles) ? Mod.map.tiles : [];
-    if (!tiles.length){
-      WRN('Map enthält keine tiles[] – nichts zu zeichnen');
-      return;
-    }
+    // komplette Map zeichnen (ohne Kamera-Offset, Top-Left)
+    for (let y = 0; y < Mod.rows; y++){
+      const row = Mod.grid[y];
+      for (let x = 0; x < Mod.cols; x++){
+        const id = row[x] | 0;
+        if (id <= 0) continue; // leer
 
-    // Tiles zeichnen
-    for (const t of tiles){
-      // Fallbacks
-      const sx = t.sx ?? 0;
-      const sy = t.sy ?? 0;
-      const tx = t.x  ?? 0;
-      const ty = t.y  ?? 0;
+        const spr = spriteFromId(id);
+        if (!spr) continue;
 
-      try{
-        ctx.drawImage(
-          Mod.tileset,
-          sx, sy, ts, ts,
-          tx*ts, ty*ts, ts, ts
-        );
-      }catch(e){
-        WRN('drawImage-Fehler für Tile:', e?.message || e);
-        break; // nicht den ganzen Frame zerschießen
+        try{
+          ctx.drawImage(
+            Mod.tileset,
+            spr.sx, spr.sy, ts, ts,
+            x * ts, y * ts, ts, ts
+          );
+        }catch(e){
+          WRN('drawImage-Fehler (x='+x+', y='+y+', id='+id+'):',
+              e?.message || e);
+          // nicht den ganzen Frame abbrechen
+        }
       }
     }
 
-    // Gebäude (simple Platzhalter-Visualisierung)
-    const buildings = Array.isArray(Game.buildings) ? Game.buildings : [];
-    for (const b of buildings){
-      ctx.fillStyle = b.buildStage < 3
-        ? 'rgba(200,150,50,0.6)'   // Baustelle
-        : 'rgba(80,200,80,0.9)';  // fertig
-
-      const bw = (b.w ?? 3) * ts;
-      const bh = (b.h ?? 3) * ts;
-      ctx.fillRect(b.x*ts, b.y*ts, bw, bh);
-    }
+    // (Optional) Gebäude-Overlay → später; aktuell lassen wir das Map-only.
   }
 
   // -------------------------------------------------------------------------
   // EXPORT
   // -------------------------------------------------------------------------
-  window.GameMap = { init, render };
+  window.GameMap = { init, render, _state: Mod };
 
 })();
