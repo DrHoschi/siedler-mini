@@ -762,34 +762,6 @@ Game.popJob = (...args) => {
     return r;
   };
 
-  // SCHRITT 3 – Job-Queue
-  //  Leitplanke: Game verwaltet die Jobs NICHT mehr selbst,
-  //  sondern reicht sie 1:1 an das Units-Modul (GameUnits) weiter.
-  //  CarrierRuntime holt sich Jobs immer über JobEngine.pop().
-  JobEngine.add = function(job){
-    if (!job) return;
-    if (window.GameUnits?.addJob){
-      try {
-        window.GameUnits.addJob(job);
-      } catch(e){
-        WARN('JobEngine.add → GameUnits.addJob Fehler:', e?.message || e);
-      }
-    } else {
-      WARN('Game.addJob → GameUnits.addJob fehlt – Job wird verworfen', job);
-    }
-  };
-
-  Game.popJob = function(){
-    if (window.GameUnits?.popJob){
-      try {
-        return window.GameUnits.popJob() || null;
-      } catch(e){
-        WARN('Game.popJob → GameUnits.popJob Fehler:', e?.message || e);
-      }
-    }
-    return null;
-  };
-
   // Hooks für carrier.js
   Game.takeFromBuilding = function(tx,ty,res){
     if (!res) return 0;
