@@ -37,7 +37,7 @@
    * ======================================================================== */
 
   // Standard-Geschwindigkeit: Kacheln pro Sekunde
-  const DEFAULT_SPEED_TPS = 3;   // 3 Tiles pro Sekunde
+  const DEFAULT_SPEED_TPS = 1;   // 1 Tiles pro Sekunde
 
   function sign(v){
     return v < 0 ? -1 : (v > 0 ? 1 : 0);
