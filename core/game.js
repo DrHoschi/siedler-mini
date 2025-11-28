@@ -29,6 +29,7 @@
   // INIT
   // ------------------------------------------------------------
   function init(){
+    Renderer.init(this);
     LOG('init()');
 
     // Canvas holen
@@ -57,6 +58,7 @@
   function tick(dt){
     GameUnits.tick(dt);
     GameConstruction.tick(dt);
+    Renderer.draw();
   }
 
   function render(){
