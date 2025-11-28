@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-28T13:04:23.097Z",
+  "createdAt": "2025-11-28T21:26:40.548Z",
   "root": ".",
-  "count": 533,
+  "count": 535,
   "entries": [
     {
       "type": "dir",
@@ -1260,7 +1260,12 @@
     {
       "type": "file",
       "path": "core/game.build.js",
-      "size": 1115
+      "size": 1400
+    },
+    {
+      "type": "file",
+      "path": "core/game.buildings.js",
+      "size": 1582
     },
     {
       "type": "file",
@@ -1270,17 +1275,22 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 2134
+      "size": 2180
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 1348
+      "size": 7470
     },
     {
       "type": "file",
       "path": "core/game.production.js",
       "size": 1421
+    },
+    {
+      "type": "file",
+      "path": "core/game.renderer.js",
+      "size": 2755
     },
     {
       "type": "file",
@@ -2564,22 +2574,22 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52249
+      "size": 52519
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19858
+      "size": 19942
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 14033
+      "size": 14435
     },
     {
       "type": "file",
       "path": "index.demo1.html",
-      "size": 2420
+      "size": 14463
     },
     {
       "type": "file",
