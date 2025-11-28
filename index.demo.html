@@ -33,7 +33,17 @@
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.clean.css?v=25.11.02"> -->
   <!-- <link rel="stylesheet" href="ui/css/ui-inspector.final.css?v=25.11.02"> -->
 
-  <style>
+    <style>
+    /* ===== Basis: Vollbild-Canvas erzwingen ===== */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000; /* zur Kontrolle – kannst du später ändern */
+    }
+
     /* ===== Fehlerbanner (Import-/Netzwerkfehler) ===== */
     #boot-error {
       position: fixed;
@@ -56,14 +66,25 @@
     html.splash-done #start-splash{ display:none; }
 
     /* ===== Safe Layering ===== */
+    /* Canvas immer vollflächig sichtbar machen */
     #game {
-      position: relative;
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
       z-index: 10;
       display: block;
       touch-action: none;      /* verhindert systemweite Pinch/Pan */
       transform-origin: 0 0;   /* sauberer Ursprung für unsere Kamera */
+      background: #1b3a1b;     /* Debug-Hintergrund, damit du es sofort siehst */
     }
-    #app-root  { position:relative; z-index: 20; }
+
+    /* HUD-/UI-Root immer über dem Canvas */
+    #ui-root{
+      position: relative;
+      z-index: 1020;
+    }
 
     /* Startpanel (Holzrahmen etc. kommt aus ui/ui-start.js) */
     #start-panel { z-index: 1030; }
@@ -105,9 +126,6 @@
 
     /* Optional: wenn du beim offenen Inspector den Canvas blocken willst */
     body.inspector-open #game { pointer-events:none; }
-
-    /* ===== Startpanel: sicher über dem Canvas ===== */
-    #ui-root{ position: relative; z-index: 1020; }
   </style>
 </head>
 <body>
