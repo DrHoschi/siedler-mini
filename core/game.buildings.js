@@ -1,19 +1,23 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
  * Projekt : Neue Siedler
- * Version : v25.11.28-initial
+ * Version : v25.11.28-final
  * Zweck   : Zentrale Gebäudeliste + Definitionen pro Gebäude
  * ============================================================================
  */
 
 export const Buildings = {
+
+    /** Liste aller Gebäude-Instanzen */
     list: [],
 
     /**
-     * Neues Gebäude-Objekt erzeugen (Daten kommen aus buildings.json)
+     * Neues Gebäude erzeugen
+     * → wird von game.build.js aufgerufen
      */
     create(buildingType, x, y) {
         const def = window.Registry.buildings[buildingType];
+
         if (!def) {
             console.warn("[buildings] Unbekannter Typ:", buildingType);
             return null;
@@ -21,13 +25,20 @@ export const Buildings = {
 
         const obj = {
             id: crypto.randomUUID(),
+
+            // Registry-Daten
             type: buildingType,
-            x, y,
             w: def.size.w,
             h: def.size.h,
 
-            buildStage: 0,          // 0 = Baustelle
-            stock: {},              // Ressourcenlager
+            // Position (Tile-Koordinaten)
+            x, y,
+
+            // Bauphasen
+            buildStage: 0,       // 0 = Baustelle → später 1,2,3 = complete
+
+            // Ressourcen/Produktion
+            stock: {},
             productionRule: def.productionRule || null
         };
 
@@ -35,12 +46,13 @@ export const Buildings = {
         return obj;
     },
 
+    /** Gibt alle Gebäude zurück */
     getAll() {
         return this.list;
     },
 
     /**
-     * Holt ein Gebäude an einer Tile-Position
+     * Prüft, ob eine Tile-Koordinate ein Gebäude enthält
      */
     getAt(tx, ty) {
         return this.list.find(b =>
