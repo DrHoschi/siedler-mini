@@ -29,7 +29,6 @@
   // INIT
   // ------------------------------------------------------------
   function init(){
-    Renderer.init(this);
     LOG('init()');
 
     // Canvas holen
@@ -56,13 +55,13 @@
   // TICK + RENDER
   // ------------------------------------------------------------
   function tick(dt){
-    GameUnits.tick(dt);
-    GameConstruction.tick(dt);
-    Renderer.draw();
+    if (window.GameUnits?.tick)        GameUnits.tick(dt);
+    if (window.GameConstruction?.tick) GameConstruction.tick(dt);
+    if (window.Renderer?.draw)         Renderer.draw();
   }
 
   function render(){
-    GameMap.render(Game);
+    if (window.GameMap?.render) GameMap.render(Game);
     if (window.OverlayHooks?.render) OverlayHooks.render();
   }
 
