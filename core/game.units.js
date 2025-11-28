@@ -1,18 +1,35 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler
- * Version : v25.11.27-carrier+hud
+ * Version : v25.11.27-final-carrier+build+hud
  * Zweck   : Einfaches, funktionierendes Träger-System
  *           - verwaltet Träger (Units)
- *           - verwaltet Jobs (Bau-/Transportaufträge)
+ *           - verwaltet Jobs (Bau- / Transportaufträge)
  *           - bewegt Träger sichtbar auf der Map
  *           - liefert Ressourcen ins Lager (Warehouse/HUD)
  *
+ * Job-Typen:
+ *   type: "carry"
+ *     - Produktionsjobs: Gebäude → HQ
+ *     - Ressource wird aus Gebäude-Lager genommen (später echt)
+ *     - bei Ankunft im HQ: req:stock:push (Warehouse → HUD)
+ *
+ *   type: "build"
+ *     - Baujobs: HQ → Baustelle (nur optisch)
+ *     - Ressource wird aktuell NICHT vom HQ-Bestand abgezogen
+ *       (das machen wir später, wenn Baukosten-Logik aktiv ist)
+ *     - bei Ankunft am Gebäude nur Log + ggf. später Baufortschritt
+ *
  * Integration:
- *   - Game (game-v7.js) erzeugt Build- und Carry-Jobs → GameUnits.addJob()
- *   - GameTick / carrier.runtime feuert cb:game:tick → GameUnits.tick()
- *   - unit.overlay.js zeichnet Träger + Icon anhand u.carrying.res
- *   - warehouse.js wandelt req:stock:push in cb:res:change fürs HUD
+ *   - game-v7.js
+ *       • erzeugt bei Produktion Jobs type:"carry"
+ *       • erzeugt bei Platzieren eines Gebäudes einen Job type:"build"
+ *   - carrier.runtime / game.tick.js
+ *       • feuert cb:game:tick → Units laufen im Takt
+ *   - unit.overlay.js
+ *       • zeichnet Träger + Icon anhand u.carrying.res
+ *   - warehouse.js
+ *       • wandelt req:stock:push in cb:res:change fürs HUD
  * ============================================================================ */
 
 (() => {
@@ -58,9 +75,9 @@
   function addJob(job) {
     if (!job) return;
     const safe = {
-      type       : job.type       || "carry",
+      type       : job.type       || "carry",       // "carry" | "build"
       res        : job.res        || "wood",
-      from       : job.from       || { x: 0, y: 0 },
+      from       : job.from       || (U.hqPos || { x: 0, y: 0 }),
       to         : job.to         || (U.hqPos || { x: 0, y: 0 }),
       buildingId : job.buildingId || null
     };
@@ -85,7 +102,7 @@
     }
     u.task = {
       ...job,
-      phase   : "toSource",  // "toSource" → "toHQ"
+      phase   : "toSource",  // "toSource" → "toHQOrTarget"
       hasLoad : false,
       qty     : 0
     };
@@ -95,11 +112,21 @@
   }
 
   // ---------------------------------------------------------------------------
-  //  QUELLE / LAGER (Dummy-Implementationen)
+  //  QUELLEN / LAGER
   // ---------------------------------------------------------------------------
+
+  // Quelle für Produktionsjobs (Gebäude)
   function takeFromBuilding(tx, ty, resId) {
-    // Aktuell: Gebäude liefert immer 1 Stück,
-    // später hier echtes Lager/Produktion einhängen.
+    // Aktuell Dummy:
+    // - Das eigentliche Gebäude-Lager wird noch im Game-Modul gepflegt
+    // - Hier nur "1 Einheit vorhanden" simulieren
+    return { qty: 1, res: resId };
+  }
+
+  // Dummy-Quelle für Baujobs (HQ → Baustelle)
+  // Später: hier wirklich aus Warehouse/HQ ziehen
+  function takeForBuildFromHQ(resId) {
+    // Noch ohne echten Bestand → später: req:stock:pull + Rückkanal
     return { qty: 1, res: resId };
   }
 
@@ -113,6 +140,19 @@
     } catch (e) {
       WARN("deliverToHQ Fehler:", e?.message || e);
     }
+  }
+
+  // Lieferung für Baujobs: HQ → Gebäude (optisch)
+  function deliverToBuilding(tx, ty, resId, qty) {
+    // Aktuell nur Log – später kann man hier
+    // - Baufortschritt erhöhen
+    // - Baukosten herunterzählen etc.
+    LOG("Baumaterial geliefert", JSON.stringify({
+      res: resId,
+      qty,
+      x: tx,
+      y: ty
+    }));
   }
 
   // ---------------------------------------------------------------------------
@@ -166,12 +206,21 @@
       const job = u.task;
 
       if (job.phase === "toSource") {
-        // Ziel = Quell-Gebäude
+        // Ziel = Quelle
         u.tx = job.from.x;
         u.ty = job.from.y;
         const arrived = stepTowards(u, dtSec);
         if (arrived) {
-          const taken = takeFromBuilding(job.from.x, job.from.y, job.res);
+          let taken = null;
+
+          if (job.type === "build") {
+            // Baujob: Holz "aus HQ" holen (aktuell noch Dummy)
+            taken = takeForBuildFromHQ(job.res);
+          } else {
+            // Produktionsjob: Ware aus Gebäude-Lager holen
+            taken = takeFromBuilding(job.from.x, job.from.y, job.res);
+          }
+
           if (taken && taken.qty > 0) {
             job.hasLoad = true;
             job.qty     = taken.qty;
@@ -183,20 +232,26 @@
             u.carrying  = null;
           }
 
-          job.phase = "toHQ";
+          job.phase = "toHQOrTarget";
 
-          const hq = U.hqPos || job.to || { x: u.x, y: u.y };
-          u.tx = hq.x;
-          u.ty = hq.y;
+          const target = U.hqPos || job.to || { x: u.x, y: u.y };
+          u.tx = target.x;
+          u.ty = target.y;
         }
-      } else if (job.phase === "toHQ") {
+      } else if (job.phase === "toHQOrTarget") {
         const dest = U.hqPos || job.to || { x: u.tx, y: u.ty };
         u.tx = dest.x;
         u.ty = dest.y;
         const arrived = stepTowards(u, dtSec);
         if (arrived) {
           if (job.hasLoad && job.qty > 0) {
-            deliverToHQ(job.res, job.qty);
+            if (job.type === "build") {
+              // Holz zur Baustelle liefern (rein optisch)
+              deliverToBuilding(dest.x, dest.y, job.res, job.qty);
+            } else {
+              // Produktions-Transport → ins HQ-Lager
+              deliverToHQ(job.res, job.qty);
+            }
           }
           // Job abgeschlossen
           u.task     = null;
@@ -231,10 +286,6 @@
     spawnCarrier(U.hqPos.x,       U.hqPos.y - 0.2);
   });
 
-  // Für andere Listener (z.B. alternative Build-Pipelines) lassen wir
-  // die [units] Neuer Job-Logs in addJob().
-  // -> Produktionsjobs kommen über game-v7.js → GameUnits.addJob(...)
-
   // Tick aus dem Game (carrier.runtime / game.tick.js)
   addEventListener("cb:game:tick", (ev) => {
     const dt = ev?.detail?.dt ?? 0.0;
@@ -260,5 +311,5 @@
     tickUnits
   };
 
-  LOG("Units-System geladen (v25.11.27-carrier+hud)");
+  LOG("Units-System geladen (v25.11.27-final-carrier+build+hud)");
 })();
