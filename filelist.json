@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-28T10:09:08.755Z",
+  "createdAt": "2025-11-28T13:04:23.097Z",
   "root": ".",
-  "count": 530,
+  "count": 533,
   "entries": [
     {
       "type": "dir",
@@ -1254,13 +1254,28 @@
     },
     {
       "type": "file",
-      "path": "core/game-v7.js",
-      "size": 26211
+      "path": "core/game.bootstrap.js",
+      "size": 4901
     },
     {
       "type": "file",
-      "path": "core/game.bootstrap.js",
-      "size": 4901
+      "path": "core/game.build.js",
+      "size": 1115
+    },
+    {
+      "type": "file",
+      "path": "core/game.construction.js",
+      "size": 1573
+    },
+    {
+      "type": "file",
+      "path": "core/game.js",
+      "size": 2134
+    },
+    {
+      "type": "file",
+      "path": "core/game.map.js",
+      "size": 1348
     },
     {
       "type": "file",
@@ -1275,7 +1290,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 7881
+      "size": 4105
     },
     {
       "type": "file",
@@ -1365,7 +1380,7 @@
     {
       "type": "file",
       "path": "core/registry.js",
-      "size": 13528
+      "size": 1344
     },
     {
       "type": "file",
@@ -1405,7 +1420,7 @@
     {
       "type": "file",
       "path": "core/warehouse.js",
-      "size": 1490
+      "size": 3174
     },
     {
       "type": "dir",
@@ -2549,17 +2564,17 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52689
+      "size": 52249
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 19988
+      "size": 19858
     },
     {
       "type": "file",
       "path": "index.demo.html",
-      "size": 13899
+      "size": 14033
     },
     {
       "type": "file",
