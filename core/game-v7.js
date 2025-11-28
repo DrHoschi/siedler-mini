@@ -29,8 +29,18 @@ window.Game = window.Game || {};
 /* ============================================================================
  * Units-API
  * - getUnits: nur Durchreicher auf GameUnits (für Inspector/Debug)
+ * - addJob / popJob: dünne Brücke auf das Units-Modul
  * ========================================================================== */
 Game.getUnits = () => (window.GameUnits?.getUnits?.() || []);
+
+// Neue Brücke: Jobs laufen über GameUnits
+Game.addJob = (...args) => {
+  return window.GameUnits?.addJob?.(...args);
+};
+
+Game.popJob = (...args) => {
+  return window.GameUnits?.popJob?.(...args);
+};
 
 (function(){
   'use strict';
