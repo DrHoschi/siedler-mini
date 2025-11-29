@@ -1,95 +1,101 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-split1
- * Zweck   : Bauphasen (Baustelle → fertig) steuern
- * Lauscht : cb:build:deliver { x, y, res, qty }
- * Sendet  : cb:build:complete { id }
+ * Version : v25.11.29-fallback
+ * Zweck   : Bauphasen steuern (mit Fallback, falls Träger/Events klemmen)
  * ========================================================================= */
 
-(function () {
+(function(){
   'use strict';
 
-  const TAG  = '[construction]';
-  const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
+  const TAG='[construction]';
+  const LOG=(...a)=> (window.CBLog?.ok??console.log)(TAG,...a);
 
   const PHASE = {
-    SITE    : 0,
-    MATERIAL: 1,
-    FINISH  : 2,
-    COMPLETE: 3
+    SITE:0, MATERIAL:1, FINISH:2, COMPLETE:3
   };
 
   const TIME = {
-    SITE    : 2000,
-    MATERIAL: 1500,
-    FINISH  : 1200
+    SITE:2000, MATERIAL:1500, FINISH:1200
   };
 
-  // Hilfsfunktion: aktuelle Gebäudeliste holen (Buildings bevorzugt)
-  function allBuildings () {
-    if (window.Buildings?.getAll) return Buildings.getAll();
-    if (window.Game?.buildings)   return Game.buildings;
-    return [];
+  // Wir merken uns pro Gebäude, ob bereits Material geliefert wurde.
+  // Das Feld wird direkt an das Gebäude gehängt (b.hasMaterial)
+  function getBuildings(){
+    return (window.Game && Array.isArray(Game.buildings))
+      ? Game.buildings
+      : [];
   }
 
-  // --------------------------------------------------------------
-  //  Material-Lieferung (von Units)
-  // --------------------------------------------------------------
-  window.addEventListener('cb:build:deliver', (ev) => {
-    const { x, y } = ev.detail || {};
-    const list = allBuildings();
-
-    let b = null;
-    if (window.Buildings?.getAt) {
-      b = Buildings.getAt(x, y);
-    } else {
-      b = list.find(g => g.x === x && g.y === y) || null;
-    }
+  // -------------------------------------------------------------------------
+  // Event: Material geliefert (von GameUnits)
+  // -------------------------------------------------------------------------
+  window.addEventListener('cb:build:deliver', ev=>{
+    const {x,y} = ev.detail;
+    const list = getBuildings();
+    const b = list.find(b=>b.x===x && b.y===y);
     if (!b) return;
 
-    if (b.buildStage === PHASE.SITE) {
-      b.buildStage = PHASE.MATERIAL;
-      b.buildTimer = 0;
-      LOG('Material geliefert → Phase MATERIAL:', b.id);
-    }
+    // Flag setzen → nächste Tick-Runde kann Phase hochschalten
+    b.hasMaterial = true;
+    LOG('Material geliefert', b.id, '→ hasMaterial=true');
   });
 
-  // --------------------------------------------------------------
-  //  Tick: Bauphasen voranschreiten lassen
-  // --------------------------------------------------------------
-  function tick (dt) {
-    const list = allBuildings();
-    const ms   = dt * 1000;
+  // -------------------------------------------------------------------------
+  // Tick: Bauphasen voranschieben
+  //  - läuft immer, egal ob Events kommen oder nicht
+  //  - Events dienen nur dazu, schneller voranzukommen
+  // -------------------------------------------------------------------------
+  function tick(dt){
+    const list = getBuildings();
+    if (!list.length) return;
 
-    for (const b of list) {
-      switch (b.buildStage) {
-        case PHASE.SITE:
+    const ms = dt * 1000;
+
+    for (const b of list){
+      // Initialisierung, falls aus älterem Save stammt
+      if (typeof b.buildStage !== 'number') b.buildStage = PHASE.SITE;
+      if (typeof b.buildTimer !== 'number') b.buildTimer = 0;
+
+      switch (b.buildStage){
+
+        case PHASE.SITE: {
           b.buildTimer += ms;
-          // (Hier könnte man irgendwann Baustelle nach Zeit verschwinden lassen)
+
+          // Fallback: auch ohne Material beginnt irgendwann der Aufbau
+          if (b.hasMaterial || b.buildTimer > TIME.SITE){
+            b.buildStage = PHASE.MATERIAL;
+            b.buildTimer = 0;
+            LOG('Phase MATERIAL', b.id);
+          }
           break;
+        }
 
-        case PHASE.MATERIAL:
+        case PHASE.MATERIAL: {
           b.buildTimer += ms;
-          if (b.buildTimer > TIME.MATERIAL) {
+          // Mit Material etwas schneller fertig
+          const limit = b.hasMaterial ? TIME.MATERIAL*0.6 : TIME.MATERIAL;
+          if (b.buildTimer > limit){
             b.buildStage = PHASE.FINISH;
             b.buildTimer = 0;
+            LOG('Phase FINISH', b.id);
           }
           break;
+        }
 
-        case PHASE.FINISH:
+        case PHASE.FINISH: {
           b.buildTimer += ms;
-          if (b.buildTimer > TIME.FINISH) {
+          const limit = TIME.FINISH;
+          if (b.buildTimer > limit){
             b.buildStage = PHASE.COMPLETE;
             b.buildTimer = 0;
-            try {
-              window.dispatchEvent(new CustomEvent('cb:build:complete', {
-                detail: { id: b.id }
-              }));
-            } catch { /* egal */ }
-            LOG('Gebäude fertiggestellt:', b.id);
+            b.hasMaterial = false;
+            try{
+              dispatchEvent(new CustomEvent('cb:build:complete',{detail:{id:b.id}}));
+            }catch(_){}
+            LOG('Gebäude fertig', b.id);
           }
           break;
+        }
 
         case PHASE.COMPLETE:
         default:
