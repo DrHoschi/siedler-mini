@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-mapfix2
+ * Version : v25.11.29-mapfix3
  * Zweck   : Zentrale Spielsteuerung (Director) – Map sicher zeichnen,
  *           Gebäude-Platzierung aus Events übernehmen
  * Struktur: STATE → INIT → TICK/RENDER → LOOP → EVENTS
@@ -11,10 +11,10 @@
 (function(){
   'use strict';
 
-  const TAG = '[game]';
-  const LOG = (...a)=> (window.CBLog?.ok ?? console.log)(TAG, ...a);
+  const TAG  = '[game]';
+  const LOG  = (...a)=> (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
-  const ERR  = (...a)=> (window.CBLog?.error ?? console.error)(TAG, ...a);
+  const ERR  = (...a)=> (window.CBLog?.error?? console.error)(TAG, ...a);
 
   // -------------------------------------------------------------------------
   //  STATE
@@ -22,17 +22,17 @@
   const Game = {
     ctx       : null,      // Canvas-Context
     tileSize  : 64,
-    buildings : [],        // einfache Gebäudeliste (Platzhalter + echte Buildings)
-    units     : [],        // Einheiten (Träger etc.)
+    buildings : [],        // Baustellen + fertige Gebäude
+    units     : [],        // Träger etc.
     map       : null,
     camera    : null,
 
     getUnits(){ return this.units; },
     getBuildings(){ return this.buildings; }
   };
-  window.Game = Game;     // global verfügbar für alle Module
+  window.Game = Game;     // global verfügbar für andere Module
 
-  // Zeitbasis für dt im Loop
+  // Zeitbasis für dt
   let lastTime = 0;
 
   // -------------------------------------------------------------------------
@@ -85,9 +85,7 @@
       }
     }
 
-    // 5) Renderer – aktuell optional / defensiv
-    //    Achtung: Hier passieren gerne Fehler (Sprites, Entities, usw.).
-    //    Deshalb nur aufrufen, wenn vorhanden und Fehler abfangen.
+    // 5) Renderer – optional / defensiv
     if (window.Renderer?.init){
       try {
         Renderer.init(Game);
@@ -96,7 +94,7 @@
       }
     }
 
-    // 6) Runtime-Carriers / JobEngine (separater TICK-Loop)
+    // 6) CarrierRuntime (eigene Schleife) – nur starten, wenn vorhanden
     if (window.CarrierRuntime?.start){
       try {
         CarrierRuntime.start();
@@ -116,19 +114,31 @@
   function tick(dt){
     // Einheiten bewegen / Jobs abarbeiten
     if (window.GameUnits?.tick){
-      GameUnits.tick(dt);
+      try {
+        GameUnits.tick(dt);
+      } catch(e){
+        ERR('GameUnits.tick Fehler:', e);
+      }
     }
 
     // Bauphasen (Baustelle → fertig) 
     if (window.GameConstruction?.tick){
-      GameConstruction.tick(dt);
+      try {
+        GameConstruction.tick(dt);
+      } catch(e){
+        ERR('GameConstruction.tick Fehler:', e);
+      }
     }
   }
 
   function render(){
     // 1) Terrain + Baustellen/ Gebäude-Overlay direkt aus GameMap
     if (window.GameMap?.render){
-      GameMap.render(Game);   // benutzt Game.ctx + Game.camera 
+      try {
+        GameMap.render(Game);   // benutzt Game.ctx + Game.camera 
+      } catch(e){
+        ERR('GameMap.render Fehler:', e);
+      }
     }
 
     // 2) Optional: zusätzlicher Renderer (Sprites/Overlays/Entities)
@@ -151,29 +161,19 @@
   }
 
   function loop(ts){
-    // dt in Sekunden berechnen
     const now = ts || performance.now();
     let dt = (now - lastTime) / 1000;
     if (!Number.isFinite(dt) || dt <= 0) dt = 1/60;
     lastTime = now;
 
-    // Tick/Render hart absichern – Fehler sollen Spiel NICHT stoppen
-    try {
-      tick(dt);
-    } catch(e){
-      ERR('tick() Fehler:', e);
-    }
+    try { tick(dt);   } catch(e){ ERR('tick() Fehler:', e); }
+    try { render();   } catch(e){ ERR('render() Fehler:', e); }
 
+    // kleines Diagnose-Event pro Frame
     try {
-      render();
-    } catch(e){
-      ERR('render() Fehler:', e);
-    }
-
-    // cb:game:tick für FPS/DIAG-Overlay
-    try {
-      const ev = new CustomEvent('cb:game:tick', { detail:{ dt, time: now } });
-      window.dispatchEvent(ev);
+      window.dispatchEvent(new CustomEvent('cb:game:tick', {
+        detail:{ dt, time: now }
+      }));
     } catch(e){
       // nicht kritisch
     }
@@ -186,79 +186,52 @@
   // -------------------------------------------------------------------------
 
   /**
-   * Nimmt das Detail-Objekt aus `cb:build:place` und erzeugt
-   * ein Building-Objekt + startet Bauphase.
+   * Detail-Objekt aus `cb:build:place` in ein Game-Building umwandeln.
    *
-   * Erwartete detail-Felder (vom Ghost/Build-Hook):
-   *   id          : 'b.hq' / 'b.lumberjack' ...
-   *   tx, ty      : Tile-Koordinaten
-   *   w, h        : Breite/Höhe in Tiles
+   * Input (von ui-build-hook/input):
+   *   {
+   *     __src      : "input-v25.11.14",
+   *     buildingId : "b.hq",
+   *     x, y       : Tile-Koordinaten,
+   *     w, h       : Größe in Tiles
+   *   }
    */
   function placeBuildingFromEvent(detail){
-    const id = detail.id || detail.buildingId;
-    const tx = detail.tx;
-    const ty = detail.ty;
-    const w  = detail.w || 1;
-    const h  = detail.h || 1;
+    const d = detail || {};
 
-    if (tx == null || ty == null || !id){
-      WARN('placeBuildingFromEvent → unvollständige Daten', detail);
+    const id = d.id || d.buildingId || d.kind;
+    const x  = Number.isFinite(d.x)  ? (d.x|0)  :
+               Number.isFinite(d.tx) ? (d.tx|0) : NaN;
+    const y  = Number.isFinite(d.y)  ? (d.y|0)  :
+               Number.isFinite(d.ty) ? (d.ty|0) : NaN;
+    const w  = (d.w|0) || 3;
+    const h  = (d.h|0) || 3;
+
+    if (!id || !Number.isFinite(x) || !Number.isFinite(y)){
+      WARN('placeBuildingFromEvent → unvollständige Daten', d);
       return;
     }
 
-    // Rohdaten für Buildings-Factory
-    const src = { id, tx, ty, w, h };
+    // Einfaches Building-Objekt – GameConstruction arbeitet direkt mit Game.buildings
+    const building = {
+      id,
+      x, y, w, h,
+      buildStage : 0,       // 0 = SITE
+      buildTimer : 0,
+      hasMaterial: false
+    };
 
-    let building = null;
-
-    // Bevorzugt: zentrale Buildings-Logik (Animationen, Produktion etc.)
-    if (window.Buildings?.createFromPlacement){
-      try {
-        building = Buildings.createFromPlacement(src);
-      } catch(e){
-        ERR('Buildings.createFromPlacement Fehler:', e);
-      }
-    }
-
-    // Fallback: sehr simples Objekt, falls oben noch nicht verdrahtet
-    if (!building){
-      building = {
-        id,
-        tx, ty, w, h,
-        // Für GameMap.render / GameConstruction:
-        buildStage : 0,     // 0 = Baustelle 0
-        buildTimer : 0
-      };
-    }
-
-    // In globale Game-Liste aufnehmen
     if (!Array.isArray(Game.buildings)){
       Game.buildings = [];
     }
     Game.buildings.push(building);
 
-    // Bauphasen-Engine informieren
-    if (window.GameConstruction?.add){
-      try {
-        GameConstruction.add(building);
-      } catch(e){
-        ERR('GameConstruction.add Fehler:', e);
-      }
-    } else if (window.GameConstruction?.start){
-      // ältere Variante
-      try {
-        GameConstruction.start(building);
-      } catch(e){
-        ERR('GameConstruction.start Fehler:', e);
-      }
-    }
+    LOG('Building übernommen', building);
 
-    LOG('placeBuildingFromEvent', building);
-
-    // Ghost/Platzier-UI informieren → Ghost schließt sich
+    // Ghost / Overlay schließen
     try {
       window.dispatchEvent(new CustomEvent('cb:place:done', {
-        detail: { ok:true, id, tx, ty, w, h }
+        detail:{ ok:true, id, x, y, w, h }
       }));
     } catch(e){
       // nicht kritisch
@@ -266,7 +239,7 @@
   }
 
   // -------------------------------------------------------------------------
-  //  EVENTS – Start erst, wenn Registry + UI fertig sind
+  //  EVENTS – Start und Platzierung
   // -------------------------------------------------------------------------
   window.addEventListener('cb:registry:ready', ()=>{
     LOG('registry ready → warte auf cb:game:start');
