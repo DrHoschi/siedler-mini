@@ -1,133 +1,153 @@
 /* ============================================================================
  * Datei   : core/game.renderer.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-split1
- * Zweck   : Rein fürs Zeichnen → Boden + Baustellen/Gebäude + Overlays
+ * Projekt : Neue Siedler
+ * Version : v25.11.29-mapfix
+ * Zweck   : Rein fürs Zeichnen → Boden (Map), Gebäude, Baustellen, Overlays
+ * ============================================================================
+ *
+ * WICHTIG:
+ * - Game.map kommt aus game.map.js / map-bridge
+ * - Wir rufen pro Frame die Zeichenfunktion der Map auf
+ * - Danach zeichnen wir alle Gebäude aus Buildings.list
+ * - Kamera-Transform wird einmalig pro Frame gesetzt
  * ========================================================================= */
 
-(function () {
-  'use strict';
+import { Buildings } from "./game.buildings.js";
 
-  const TAG = '[renderer]';
-  const LOG = (...a) => (window.CBLog?.ok ?? console.log)(TAG, ...a);
+/** Zentraler Renderer – wird von game.js benutzt */
+export const Renderer = {
 
-  const Renderer = {
-    game: null,
-    ctx : null,
-    tile: 64,
+    /** Wird aus game.js mit dem Game-Objekt aufgerufen */
+    init(game) {
+        this.game = game;
+        this.ctx  = game.ctx;
+        // Fallback: wenn game.map.tileSize nicht existiert, nimm game.tileSize oder 64
+        this.tile = (game.map && game.map.tileSize) || game.tileSize || 64;
 
-    // -----------------------------------------------------------------------
-    //  Init – wird aus game.js mit Game aufgerufen
-    // -----------------------------------------------------------------------
-    init (game) {
-      this.game = game;
-      this.ctx  = game.ctx;
-      this.tile = game.tileSize || 64;
-
-      LOG('initialisiert (tileSize=%d)', this.tile);
+        const LOG = (window.CBLog?.ok ?? console.log);
+        LOG("[renderer]", "initialisiert (tileSize=%d)", this.tile);
     },
 
-    // -----------------------------------------------------------------------
-    //  Haupt-Draw
-    // -----------------------------------------------------------------------
-    draw () {
-      const g   = this.game;
-      const ctx = this.ctx;
-      if (!g || !ctx || !g.map) return;
+    /** Haupt-Zeichnen pro Frame */
+    draw() {
+        const g   = this.game;
+        const ctx = this.ctx;
+        if (!g || !ctx) return;
 
-      const cam = g.camera || {
-        x   : 0,
-        y   : 0,
-        zoom: 1,
-        applyTransform (c) {
-          const z = this.zoom || 1;
-          c.setTransform(z, 0, 0, z, -this.x * z, -this.y * z);
+        const cam = g.camera || null;
+
+        ctx.save();
+
+        // -------------------------------------------------------------
+        // 1. Kamera-Transform setzen (falls vorhanden)
+        // -------------------------------------------------------------
+        if (cam && typeof cam.applyTransform === "function") {
+            // Neues Kamera-Modul hat eigene applyTransform(...)
+            cam.applyTransform(ctx);
+        } else if (cam && typeof cam.toScreen === "function") {
+            // Älteres Kamera-Modul: wir setzen eine einfache translate/scale
+            const z = cam.zoom || 1;
+            ctx.setTransform(z, 0, 0, z, -cam.x * z, -cam.y * z);
+        } else {
+            // Fallback: Identitäts-Transform
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
         }
-      };
 
-      ctx.save();
-      if (typeof cam.applyTransform === 'function') {
-        cam.applyTransform(ctx);
-      }
+        // -------------------------------------------------------------
+        // 2. Map zeichnen (Boden / Terrain)
+        // -------------------------------------------------------------
+        const map = g.map;
 
-      // 1) Boden (Terrain-Layer aus der Map)
-      if (g.map?.draw) {
-        g.map.draw(ctx);
-      }
+        if (map) {
+            // a) bevorzugt: Sichtfeld-Culling
+            if (typeof map.drawLayersCulled === "function") {
+                map.drawLayersCulled(ctx);
+            }
+            // b) alternativ: einfache draw-Funktion
+            else if (typeof map.draw === "function") {
+                map.draw(ctx);
+            }
+            // c) alternativ: render()
+            else if (typeof map.render === "function") {
+                map.render(ctx);
+            }
+            // Wenn nichts davon existiert, lassen wir die Map einfach weg.
+            // (Dann liegt der Fehler in game.map.js → separat prüfen)
+        }
 
-      // 2) Gebäude / Baustellen
-      const list = window.Buildings?.getAll
-        ? Buildings.getAll()
-        : (g.buildings || []);
-      for (const b of list) {
-        this.drawBuilding(b);
-      }
+        // -------------------------------------------------------------
+        // 3. Gebäude / Baustellen zeichnen
+        // -------------------------------------------------------------
+        const list = Buildings.getAll ? Buildings.getAll() : (g.buildings || []);
+        for (const b of list) {
+            this.drawBuilding(b);
+        }
 
-      // 3) Spätere Overlays (Produktion, Debug, Units etc.)
-      this.drawOverlays();
+        // -------------------------------------------------------------
+        // 4. Debug-/Produktions-Overlays
+        // -------------------------------------------------------------
+        this.drawOverlays();
 
-      ctx.restore();
+        ctx.restore();
     },
 
-    // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------
     //  Gebäude ODER Baustelle zeichnen
-    // -----------------------------------------------------------------------
-    drawBuilding (b) {
-      const ctx = this.ctx;
-      const t   = this.tile;
+    // -----------------------------------------------------------------
+    drawBuilding(b) {
+        if (!b) return;
+        const ctx = this.ctx;
+        const t   = this.tile;
 
-      const px = b.x * t;
-      const py = b.y * t;
+        const px = b.x * t;
+        const py = b.y * t;
 
-      // ------------------------ Baustelle -------------------------
-      if (b.buildStage === 0 || b.buildStage == null) {
-        ctx.fillStyle   = 'rgba(255,200,50,0.35)';
-        ctx.strokeStyle = 'rgba(120,60,0,0.85)';
-        ctx.lineWidth   = 2;
+        // Baustelle (buildStage 0/undefined)
+        if (b.buildStage === 0 || b.buildStage == null) {
+            ctx.fillStyle   = "rgba(255,200,50,0.35)";
+            ctx.strokeStyle = "rgba(120,60,0,0.85)";
+            ctx.lineWidth   = 2;
 
-        ctx.fillRect(px, py, b.w * t, b.h * t);
-        ctx.strokeRect(px, py, b.w * t, b.h * t);
+            ctx.fillRect(px, py, b.w * t, b.h * t);
+            ctx.strokeRect(px, py, b.w * t, b.h * t);
 
-        ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        ctx.font      = 'bold 16px system-ui';
-        ctx.fillText('🔨', px + 4, py + 20);
-        return;
-      }
+            ctx.fillStyle = "rgba(0,0,0,0.45)";
+            ctx.font      = "bold 16px system-ui";
+            ctx.fillText("🔨", px + 4, py + 20);
+            return;
+        }
 
-      // ------------------------ Fertiges Gebäude ------------------
-      const reg = window.Registry || {};
-      const def = (typeof reg.getBuilding === 'function')
-        ? reg.getBuilding(b.type)
-        : (reg.buildings && reg.buildings[b.type]) || null;
+        // Fertiges Gebäude – Definition aus Registry holen
+        const reg = window.Registry || {};
+        const def = (typeof reg.getBuilding === "function")
+            ? reg.getBuilding(b.type || b.id)
+            : (reg.buildings && reg.buildings[b.type || b.id]) || null;
 
-      if (!def) {
-        // Diagnose: lila Block, falls Registry-Eintrag fehlt
-        ctx.fillStyle = 'magenta';
-        ctx.fillRect(px, py, b.w * t, b.h * t);
-        return;
-      }
+        // Diagnose: falls Registry-Eintrag fehlt → lila Block
+        if (!def) {
+            ctx.fillStyle = "magenta";
+            ctx.fillRect(px, py, b.w * t, b.h * t);
+            return;
+        }
 
-      const img = window.Assets?.get
-        ? Assets.get(def.img)
-        : null;
+        const imgKey = def.img || def.sprite || def.icon;
+        const img = window.Assets?.get ? Assets.get(imgKey) : null;
 
-      if (!img) {
-        // Diagnose: roter Block, falls Sprite fehlt
-        ctx.fillStyle = 'red';
-        ctx.fillRect(px, py, b.w * t, b.h * t);
-        return;
-      }
+        // Diagnose: falls Sprite fehlt → roter Block
+        if (!img) {
+            ctx.fillStyle = "red";
+            ctx.fillRect(px, py, b.w * t, b.h * t);
+            return;
+        }
 
-      ctx.drawImage(img, px, py, b.w * t, b.h * t);
+        ctx.drawImage(img, px, py, b.w * t, b.h * t);
     },
 
-    // -----------------------------------------------------------------------
-    //  Debug/Production-Overlays (Platzhalter)
-    // -----------------------------------------------------------------------
-    drawOverlays () {
-      // TODO: Produktion-Icons etc.
+    /** Debug-/Produktions-Overlay (optional) */
+    drawOverlays() {
+        // Platzhalter:
+        // - Produktion-Icons
+        // - Selektions-Rahmen
+        // - Debug-Grid etc.
     }
-  };
-
-  window.Renderer = Renderer;
-})();
+};
