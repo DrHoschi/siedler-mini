@@ -1,64 +1,83 @@
 /* ============================================================================
  * Datei   : core/game.buildings.js
- * Projekt : Neue Siedler
- * Version : v25.11.28-final
- * Zweck   : Zentrale Gebäudeliste + Definitionen pro Gebäude
- * ============================================================================
- */
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.11.29-split1
+ * Zweck   : Zentrale Gebäudeliste + Helper (Create/Get)
+ * --------------------------------------------------------------------------
+ *  - Buildings.list = EINE Quelle für ALLE Gebäude
+ *  - create(type,x,y) liest Größe aus Registry
+ *  - Game.buildings zeigt auf dieselbe Liste (Kompat)
+ * ========================================================================= */
 
-export const Buildings = {
+(function () {
+  'use strict';
 
-    /** Liste aller Gebäude-Instanzen */
+  const TAG  = '[buildings]';
+  const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
+  const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+
+  const Buildings = {
     list: [],
 
-    /**
-     * Neues Gebäude erzeugen
-     * → wird von game.build.js aufgerufen
-     */
-    create(buildingType, x, y) {
-        const def = window.Registry.buildings[buildingType];
+    // -----------------------------------------------------------------------
+    //  Gebäude erzeugen
+    // -----------------------------------------------------------------------
+    create (buildingType, x, y) {
+      const reg = window.Registry || {};
+      const def = (typeof reg.getBuilding === 'function')
+        ? reg.getBuilding(buildingType)
+        : (reg.buildings && reg.buildings[buildingType]) || null;
 
-        if (!def) {
-            console.warn("[buildings] Unbekannter Typ:", buildingType);
-            return null;
-        }
+      if (!def) {
+        WARN('Unbekannter Gebäudetyp:', buildingType);
+        return null;
+      }
 
-        const obj = {
-            id: crypto.randomUUID(),
+      const w = def.size?.w ?? def.size?.width ?? 3;
+      const h = def.size?.h ?? def.size?.height ?? 3;
 
-            // Registry-Daten
-            type: buildingType,
-            w: def.size.w,
-            h: def.size.h,
+      const b = {
+        id         : buildingType,          // einfache ID = Registry-ID
+        type       : buildingType,
+        x          : x | 0,
+        y          : y | 0,
+        w,
+        h,
+        buildStage : 0,                     // 0 = Baustelle
+        buildTimer : 0,
+        stock      : {},                    // Ressourcenlager
+        productionRule: def.productionRule || null
+      };
 
-            // Position (Tile-Koordinaten)
-            x, y,
-
-            // Bauphasen
-            buildStage: 0,       // 0 = Baustelle → später 1,2,3 = complete
-
-            // Ressourcen/Produktion
-            stock: {},
-            productionRule: def.productionRule || null
-        };
-
-        this.list.push(obj);
-        return obj;
+      this.list.push(b);
+      LOG('Gebäude erzeugt:', b.id, 'an', b.x, b.y);
+      return b;
     },
 
-    /** Gibt alle Gebäude zurück */
-    getAll() {
-        return this.list;
+    getAll () {
+      return this.list;
     },
 
-    /**
-     * Prüft, ob eine Tile-Koordinate ein Gebäude enthält
-     */
-    getAt(tx, ty) {
-        return this.list.find(b =>
-            tx >= b.x && ty >= b.y &&
-            tx < b.x + b.w &&
-            ty < b.y + b.h
-        );
+    // Gebäude anhand Tile-Position finden
+    getAt (tx, ty) {
+      return this.list.find(b =>
+        tx >= b.x && ty >= b.y &&
+        tx < b.x + b.w &&
+        ty < b.y + b.h
+      ) || null;
     }
-};
+  };
+
+  // global machen
+  window.Buildings = Buildings;
+
+  // Game.buildings → gleiche Liste (Kompatibilität für alte Module)
+  function syncToGame () {
+    if (window.Game) {
+      window.Game.buildings = Buildings.list;
+    }
+  }
+  syncToGame();
+
+  window.addEventListener('cb:game:start', syncToGame);
+})();
