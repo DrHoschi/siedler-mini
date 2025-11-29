@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-29T15:08:58.309Z",
+  "createdAt": "2025-11-29T19:10:44.780Z",
   "root": ".",
   "count": 535,
   "entries": [
@@ -1275,12 +1275,12 @@
     {
       "type": "file",
       "path": "core/game.js",
-      "size": 3997
+      "size": 7405
     },
     {
       "type": "file",
       "path": "core/game.map.js",
-      "size": 10302
+      "size": 12002
     },
     {
       "type": "file",
@@ -2589,7 +2589,7 @@
     {
       "type": "file",
       "path": "index.demo1.html",
-      "size": 14463
+      "size": 14560
     },
     {
       "type": "file",
