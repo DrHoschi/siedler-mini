@@ -1,11 +1,9 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-buildsprites
- * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera rendern.
- *           Zusätzlich:
- *           - Gebäude-Overlay mit Baustellen-Grafiken (baustelle_0/1/2.png)
- *           - fertige Gebäude mit eigenem Sprite pro ID
+ * Version : v25.11.29-buildsprites (Map+Camera+BaustellenSprites)
+ * Zweck   : Map (map-epoch1.json) + Tileset selbst laden und mit GameCamera
+ *           rendern (Pan + Zoom) + Gebäude/Baustellen-Overlay.
  * ========================================================================= */
 
 (function(){
@@ -16,7 +14,7 @@
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
   // -------------------------------------------------------------------------
-  // Map-State
+  // STATE
   // -------------------------------------------------------------------------
   const Mod = {
     name       : 'unknown',
@@ -30,19 +28,26 @@
     tilesetCols: 1,
 
     ready      : false,
-    sized      : false,
-
-    // Gebäude-Sprites (fertige Gebäude, nach ID, z.B. "b.hq")
-    buildingSprites   : {},
-    // Baustellen-Sprites für die Bauphasen (baustelle_0/1/2.png)
-    buildPlaceSprites : []
+    sized      : false
   };
 
-  // Bauphasen-Konstanten (muss zu game.construction.js passen)
-  const BUILD_PHASE = { SITE:0, MATERIAL:1, FINISH:2, COMPLETE:3 };
+  // -------------------------------------------------------------------------
+  // Baustellen-Sprites (baustelle_0/1/2.png) – einfache Bildliste
+  // -------------------------------------------------------------------------
+  const BuildPlaceSprites = [];
+
+  function ensureBuildPlaceSprites(){
+    if (BuildPlaceSprites.length) return; // schon geladen
+    const phases = [0,1,2];
+    for (const idx of phases){
+      const img = new Image();
+      img.src = `assets/buildings/building_place/baustelle_${idx}.png`;
+      BuildPlaceSprites.push(img);
+    }
+  }
 
   // -------------------------------------------------------------------------
-  // Canvas-Größe an Viewport anpassen (einmalig)
+  // Canvas-Größe an Viewport anpassen
   // -------------------------------------------------------------------------
   function ensureCanvasSize(Game){
     try{
@@ -67,37 +72,49 @@
 
   // -------------------------------------------------------------------------
   // Map-JSON normalisieren (2D-Grid -> internes Format)
+  //
+  // Erwartetes Format:
+  // {
+  //   "name": "epoch1",
+  //   "size": [64, 64],
+  //   "tiles": [
+  //     [1,1,1,...],
+  //     [1,2,2,...],
+  //     ...
+  //   ]
+  // }
   // -------------------------------------------------------------------------
   function applyMapJson(json){
-    if (!json){
-      WARN('applyMapJson ohne JSON aufgerufen');
+    if (!json || !Array.isArray(json.tiles) || !json.tiles.length){
+      WARN('Map-JSON ungültig oder leer – Fallback 1x1');
+      Mod.name     = 'fallback';
+      Mod.cols     = 1;
+      Mod.rows     = 1;
+      Mod.tileSize = 64;
+      Mod.grid     = [[1]];
       return;
     }
 
-    Mod.name     = json.name || 'unknown';
-    Mod.cols     = Number(json.width  || 1);
-    Mod.rows     = Number(json.height || 1);
-    Mod.tileSize = Number(json.tilewidth || json.tileWidth || 64);
+    const tiles = json.tiles;
+    const rows  = tiles.length;
+    const cols  = tiles[0].length;
 
-    // Tiled-Layer „ground“ als 2D-Grid übernehmen
-    const layer = (json.layers || []).find(l => l.name === 'ground') || json.layers?.[0];
-    if (!layer || !Array.isArray(layer.data)){
-      WARN('Kein gültiger Layer in map-json gefunden');
-      return;
-    }
+    Mod.name     = json.name || 'epoch1';
+    Mod.cols     = cols;
+    Mod.rows     = rows;
+    Mod.tileSize = Number(json.tileSize || json.tile_size || 64);
 
-    const data = layer.data;
     const grid = [];
-    for (let y=0; y<Mod.rows; y++){
-      const row = [];
-      for (let x=0; x<Mod.cols; x++){
-        row.push(data[y*Mod.cols + x] | 0);
+    for (let y = 0; y < rows; y++){
+      const row = tiles[y];
+      const out = [];
+      for (let x = 0; x < cols; x++){
+        out.push(row[x] | 0);
       }
-      grid.push(row);
+      grid.push(out);
     }
     Mod.grid = grid;
 
-    // Wenn Tileset schon da ist → ready
     if (Mod.tileset){
       Mod.ready = true;
       LOG('Map übernommen:', json, '→ renderfähig');
@@ -110,8 +127,9 @@
   // Tileset laden
   // -------------------------------------------------------------------------
   function loadTileset(Game){
-    const canvas = Game?.ctx?.canvas;
-    const tilesetUrl = canvas?.getAttribute('data-tileset') || 'assets/tiles/tileset.terrain.png';
+    const canvas     = Game?.ctx?.canvas;
+    const tilesetUrl = canvas?.getAttribute('data-tileset')
+                     || 'assets/tiles/tileset.terrain.png';
 
     Mod.tilesetUrl = tilesetUrl;
 
@@ -120,7 +138,7 @@
       Mod.tileset = img;
       Mod.tilesetCols = Math.max(1, Math.floor(img.width / Mod.tileSize) || 1);
       LOG('Tileset geladen:', tilesetUrl, 'Cols=', Mod.tilesetCols);
-      if (Mod.grid) {
+      if (Mod.grid){
         Mod.ready = true;
         LOG('Map + Tileset bereit → renderfähig');
       }
@@ -135,55 +153,28 @@
   }
 
   // -------------------------------------------------------------------------
-  // Gebäude- & Baustellen-Sprites (lazy loading)
-  // -------------------------------------------------------------------------
-
-  // fertige Gebäude – z.B. assets/icons/buildings/b.hq.png
-  function loadBuildingSprite(id){
-    if (!id) return;
-    if (Mod.buildingSprites[id]) return;
-
-    const img = new Image();
-    img.src = `assets/icons/buildings/${id}.png`;
-    Mod.buildingSprites[id] = img;
-  }
-
-  // Baustellen-Grafiken: assets/buildings/building_place/baustelle_0/1/2.png
-  function ensureBuildPlaceSprites(){
-    if (Array.isArray(Mod.buildPlaceSprites) && Mod.buildPlaceSprites.length) return;
-
-    Mod.buildPlaceSprites = [];
-    const phases = [0,1,2];
-
-    for (const idx of phases){
-      const img = new Image();
-      img.src = `assets/buildings/building_place/baustelle_${idx}.png`;
-      Mod.buildPlaceSprites.push(img);
-    }
-  }
-
-  // -------------------------------------------------------------------------
   // RENDER – mit GameCamera (Pan + Zoom)
   // -------------------------------------------------------------------------
   function render(Game){
     const ctx = Game?.ctx;
     if (!ctx) return;
 
-    // 1) Canvas auf Bildschirmgröße bringen
+    // 1) Canvasgröße anpassen
     ensureCanvasSize(Game);
 
-    // 2) Canvas komplett löschen (im Screen-Space)
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    // 2) kompletten Canvas löschen (Screen-Space)
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
 
     // 3) Kamera anwenden
-    const cam   = window.GameCamera || {};
-    const zoom  = cam.zoom ?? 1;
-    const camX  = cam.x    ?? 0;
-    const camY  = cam.y    ?? 0;
+    const cam  = window.GameCamera || {};
+    const zoom = cam.zoom ?? 1;
+    const camX = cam.x    ?? 0;
+    const camY = cam.y    ?? 0;
+
     ctx.setTransform(zoom, 0, 0, zoom, -camX * zoom, -camY * zoom);
 
-    // 4) Nur zeichnen, wenn Map + Tileset bereit sind
+    // 4) Tiles zeichnen, wenn Map + Tileset bereit
     if (!Mod.ready || !Mod.tileset || !Mod.grid){
       return;
     }
@@ -192,7 +183,6 @@
     const cols = Mod.tilesetCols;
     const img  = Mod.tileset;
 
-    // 5) Tiles zeichnen
     for (let y=0; y<Mod.rows; y++){
       const row = Mod.grid[y];
       if (!row) continue;
@@ -201,11 +191,11 @@
         const tileId = row[x] | 0;
         if (!tileId) continue; // 0 = leer
 
-        const id   = tileId - 1;                // 0-basiert
-        const sx   = (id % cols) * ts;
-        const sy   = Math.floor(id / cols) * ts;
-        const dx   = x * ts;
-        const dy   = y * ts;
+        const id = tileId - 1;  // 0-basiert
+        const sx = (id % cols) * ts;
+        const sy = Math.floor(id / cols) * ts;
+        const dx = x * ts;
+        const dy = y * ts;
 
         try{
           ctx.drawImage(
@@ -221,57 +211,74 @@
 
     // 6) Gebäude-Overlay (Baustellen / fertige Gebäude)
     if (Array.isArray(Game?.buildings)){
-      const buildings = Game.buildings;
-      // Sprites vorbereiten (Baustellen-Grafiken werden lazy geladen)
+      // Baustellen-Sprites lazy laden
       ensureBuildPlaceSprites();
 
-      for (const b of buildings){
+      const reg = window.Registry || {};
+      for (const b of Game.buildings){
         const bx = (b.x | 0) * ts;
         const by = (b.y | 0) * ts;
         const bw = (b.w || 1) * ts;
         const bh = (b.h || 1) * ts;
 
-        // Bauphase ermitteln
-        let stage = BUILD_PHASE.COMPLETE;
-        if (typeof b.buildStage === 'number'){
-          stage = b.buildStage;
+        // Standard-Fallback-Farbe (fertig)
+        let col = 'rgba(80,200,80,0.9)';
+
+        // Bauphase bestimmen (0,1,2 = Baustelle; >=3 = fertig)
+        const stage = typeof b.buildStage === 'number' ? b.buildStage : 3;
+
+        let drawFallback = false;
+
+        if (stage < 3){
+          // Baustelle → passende Grafik verwenden
+          const idx = Math.min(stage, BuildPlaceSprites.length - 1);
+          const imgBP = BuildPlaceSprites[idx];
+          if (imgBP && imgBP.complete){
+            ctx.drawImage(imgBP, bx, by, bw, bh);
+          } else {
+            // solange Bild noch lädt: Farb-Fallback nach Phase
+            if (stage === 0) col = 'rgba(200,150,50,0.6)';
+            if (stage === 1) col = 'rgba(220,180,80,0.7)';
+            if (stage === 2) col = 'rgba(140,200,120,0.8)';
+            drawFallback = true;
+          }
+        } else {
+          // fertiges Gebäude → Sprite aus Registry / Assets
+          let def = null;
+          if (typeof reg.getBuilding === 'function'){
+            def = reg.getBuilding(b.id);
+          } else if (reg.buildings && reg.buildings[b.id]){
+            def = reg.buildings[b.id];
+          }
+
+          let imgB = null;
+          if (def && def.img && window.Assets?.get){
+            imgB = Assets.get(def.img);
+          }
+
+          if (imgB && imgB.complete){
+            ctx.drawImage(imgB, bx, by, bw, bh);
+          } else {
+            // solange kein Sprite vorhanden ist: grüne Fläche
+            drawFallback = true;
+          }
         }
 
-        let spr = null;
-
-        if (stage < BUILD_PHASE.COMPLETE){
-          // Baustelle – richtige Bauphasen-Grafik nutzen
-          const idx = Math.min(stage, Mod.buildPlaceSprites.length - 1);
-          spr = Mod.buildPlaceSprites[idx] || null;
-        } else {
-          // Fertiges Gebäude – Gebäude-Sprite nach ID laden
-          loadBuildingSprite(b.id);
-          spr = Mod.buildingSprites?.[b.id] || null;
-        }
-
-        if (spr && spr.complete){
-          ctx.drawImage(spr, bx, by, bw, bh);
-        } else {
-          // Fallback: halbtransparente Fläche (falls Sprite noch lädt)
-          ctx.fillStyle = 'rgba(255,200,140,0.25)';
+        if (drawFallback){
+          ctx.fillStyle = col;
           ctx.fillRect(bx, by, bw, bh);
-          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-          ctx.lineWidth = 2 / Math.max(1, zoom || 1);
-          ctx.strokeRect(bx+1, by+1, bw-2, bh-2);
         }
       }
     }
   }
 
   // -------------------------------------------------------------------------
-  // INIT – Map + Tileset SELBST laden (ohne map-runtime.bridge.js)
+  // INIT – Map + Tileset SELBST laden (ohne map-bridge)
   // -------------------------------------------------------------------------
   function init(Game){
-    const canvas    = document.getElementById('game');
-    const mapUrl    = canvas?.getAttribute('data-map')     || 'data/maps/map-epoch1.json';
-    const tilesetUrl= canvas?.getAttribute('data-tileset') || 'assets/tiles/tileset.terrain.png';
-
-    Mod.tilesetUrl = tilesetUrl;
+    const canvas = document.getElementById('game');
+    const mapUrl = canvas?.getAttribute('data-map')
+                 || 'data/maps/map-epoch1.json';
 
     // Map laden
     fetch(mapUrl)
@@ -281,7 +288,7 @@
       })
       .then(json => {
         applyMapJson(json);
-        if (Mod.tileset) {
+        if (Mod.tileset){
           Mod.ready = true;
           LOG('Map + Tileset bereit → renderfähig');
         }
