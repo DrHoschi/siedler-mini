@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-29T19:10:44.780Z",
+  "createdAt": "2025-11-29T21:14:52.875Z",
   "root": ".",
-  "count": 535,
+  "count": 540,
   "entries": [
     {
       "type": "dir",
@@ -656,6 +656,30 @@
     },
     {
       "type": "dir",
+      "path": "assets/tex/deco/"
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/readme.md",
+      "size": 2198
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas_phaser.json",
+      "size": 8085
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas.json",
+      "size": 2957
+    },
+    {
+      "type": "file",
+      "path": "assets/tex/deco/trees_mega_atlas.png",
+      "size": 2010739
+    },
+    {
+      "type": "dir",
       "path": "assets/tex/path/"
     },
     {
@@ -1300,7 +1324,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 4105
+      "size": 5393
     },
     {
       "type": "file",
@@ -1325,7 +1349,7 @@
     {
       "type": "file",
       "path": "core/job.engine.js",
-      "size": 3410
+      "size": 6645
     },
     {
       "type": "file",
