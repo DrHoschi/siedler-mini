@@ -1,148 +1,138 @@
 /* ============================================================================
  * Datei   : core/game.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-split1
- * Zweck   : Zentrale Spielsteuerung (Director) nach Split
- * --------------------------------------------------------------------------
- *  - Hält den globalen Game-State
- *  - Startet Kamera, Map, Units
- *  - Startet eigenen Render-Loop
- *  - Units-Tick kommt AUS der job.engine.js (nicht doppelt!)
- * ========================================================================= */
+ * Version : v25.11.29-mapfix1
+ * Zweck   : Zentrale Spielsteuerung (Director) – Map sicher zeichnen
+ * Struktur: STATE → INIT → TICK/RENDER → LOOP → EVENTS
+ * ============================================================================
+ */
 
-(function () {
+(function(){
   'use strict';
 
   const TAG = '[game]';
-  const LOG = (...a) => (window.CBLog?.ok ?? console.log)(TAG, ...a);
-  const ERR = (...a) => (window.CBLog?.error ?? console.error)(TAG, ...a);
+  const LOG = (...a)=> (window.CBLog?.ok ?? console.log)(TAG, ...a);
 
   // -------------------------------------------------------------------------
   //  STATE
   // -------------------------------------------------------------------------
   const Game = {
-    ctx      : null,
+    ctx      : null,      // Canvas-Context
     tileSize : 64,
-    buildings: [],     // wird auf Buildings.list gemappt
+    buildings: [],        // einfache Gebäudeliste (Platzhalter)
     units    : [],
     map      : null,
     camera   : null,
 
-    getUnits () { return this.units; },
-    getTileSize () { return this.tileSize; }
+    getUnits(){ return this.units; }
   };
-  window.Game = Game;
+  window.Game = Game;     // global verfügbar für alle Module
 
   // -------------------------------------------------------------------------
-  //  INIT
+  //  INIT – wird von cb:game:start ausgelöst
   // -------------------------------------------------------------------------
-  function init () {
-    LOG('init() startet');
+  function init(){
+    LOG('cb:game:start empfangen → init() startet');
 
-    // Canvas holen
+    // 1) Canvas holen
     const canvas = document.querySelector('#game');
-    if (!canvas) {
-      ERR('Canvas #game nicht gefunden!');
+    if (!canvas){
+      console.warn(TAG, 'Kein <canvas id="game"> gefunden!');
       return;
     }
     Game.ctx = canvas.getContext('2d');
 
-    // Kamera
-    try {
-      if (window.Camera?.init) {
-        const cam = Camera.init(Game);
-        if (cam) Game.camera = cam;
-      }
-    } catch (e) {
-      ERR('Camera.init Fehler:', e);
+    // 2) Map initialisieren (lädt JSON + Tileset) 
+    if (window.GameMap?.init){
+      Game.map = GameMap.init(Game);
     }
 
-    // Map
-    try {
-      if (window.GameMap?.init) {
-        Game.map = GameMap.init(Game) || Game.map;
-      }
-    } catch (e) {
-      ERR('GameMap.init Fehler:', e);
+    // 3) Units / Carrier
+    if (window.GameUnits?.init){
+      Game.GameUnits = GameUnits;
+      GameUnits.init(Game);
     }
 
-    // Units
-    try {
-      if (window.GameUnits?.init) {
-        GameUnits.init(Game);
-      }
-    } catch (e) {
-      ERR('GameUnits.init Fehler:', e);
+    // 4) Kamera (neues Modul GameCamera bevorzugt)
+    if (window.GameCamera?.init){
+      Game.camera = GameCamera;
+      GameCamera.init(Game);
+    } else if (window.Camera?.init){
+      Game.camera = Camera;
+      Camera.init(Game);
     }
 
-    // Buildings-Liste an Game spiegeln (gemeinsame Quelle)
-    try {
-      if (window.Buildings?.getAll) {
-        Game.buildings = Buildings.getAll();
-      }
-    } catch (e) {
-      ERR('Buildings-Bridge Fehler:', e);
-    }
-
-    // Renderer initialisieren (nachdem ctx + map + camera verfügbar sind)
-    try {
-      if (window.Renderer?.init) {
+    // 5) Renderer (optional – Map zeichnet trotzdem direkt über GameMap.render)
+    if (window.Renderer?.init){
+      try {
         Renderer.init(Game);
+      } catch(e){
+        console.warn(TAG, 'Renderer.init Fehler:', e);
       }
-    } catch (e) {
-      ERR('Renderer.init Fehler:', e);
     }
 
-    // JobEngine startet über eigenen cb:game:start Listener (job.engine.js)
-    // → NICHT hier starten
+    // 6) Runtime-Carriers / JobEngine
+    if (window.CarrierRuntime?.start){
+      CarrierRuntime.start();
+    }
 
-    // Render-Loop starten
+    LOG('init() fertig → starte Loop');
     requestAnimationFrame(loop);
   }
 
   // -------------------------------------------------------------------------
-  //  TICK – Nur Spielspezifisches, KEINE Units (die macht job.engine)
+  //  TICK + RENDER
   // -------------------------------------------------------------------------
-  function tick (dt) {
-    if (window.GameConstruction?.tick) {
-      try {
-        GameConstruction.tick(dt);
-      } catch (e) {
-        ERR('GameConstruction.tick Fehler:', e);
-      }
+  function tick(dt){
+    // Einheiten bewegen / Jobs abarbeiten
+    if (window.GameUnits?.tick){
+      GameUnits.tick(dt);
     }
-    // Produktion folgt später separat (GameProduction.tick etc.)
-  }
 
-  // -------------------------------------------------------------------------
-  //  RENDER
-  // -------------------------------------------------------------------------
-  function render () {
-    if (window.Renderer?.draw) {
-      try {
-        Renderer.draw();
-      } catch (e) {
-        ERR('Renderer.draw Fehler:', e);
-      }
+    // Bauphasen (Baustelle → fertig) 
+    if (window.GameConstruction?.tick){
+      GameConstruction.tick(dt);
     }
   }
 
-  function loop (_ts) {
-    const dt = 1 / 60;  // einfacher Fix-Timestep
-    tick(dt);
+  function render(){
+    // 1) Terrain + Baustellen/ Gebäude-Overlay direkt aus GameMap
+    if (window.GameMap?.render){
+      GameMap.render(Game);   // benutzt Game.ctx + GameCamera 
+    }
+
+    // 2) Optional: zusätzlicher Renderer (z.B. spätere Sprites/Overlays)
+    if (window.Renderer?.draw){
+      try {
+        Renderer.draw(Game);
+      } catch(e){
+        console.warn(TAG, 'Renderer.draw Fehler:', e);
+      }
+    }
+
+    // 3) Debug-/HUD-Overlays
+    if (window.OverlayHooks?.render){
+      OverlayHooks.render();
+    }
+  }
+
+  function loop(ts){
+    // Feste Schrittweite, reicht für jetzt
+    tick(1/60);
     render();
     requestAnimationFrame(loop);
   }
 
   // -------------------------------------------------------------------------
-  //  EVENTS
+  //  EVENTS – Start erst, wenn Registry + UI fertig sind
   // -------------------------------------------------------------------------
-  window.addEventListener('cb:registry:ready', () => {
+  window.addEventListener('cb:registry:ready', ()=>{
     LOG('registry ready → warte auf cb:game:start');
   });
 
-  window.addEventListener('cb:game:start', () => {
-    LOG('cb:game:start empfangen → init()');
+  window.addEventListener('cb:game:start', ()=>{
+    LOG('cb:game:start Event erhalten');
     init();
   });
+
 })();
