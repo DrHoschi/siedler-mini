@@ -1,3 +1,44 @@
+🌲 MEGA-ATLAS SPEZIFIKATION
+
+🔶 Format:
+
+👉 2048 × 2048 px (perfekte 8×8-Matrix)
+👉 64 Slots à 256×256
+
+🔶 Inhalt:
+
+Epoche 1 (Laubbäume):
+	•	Birke: klein, mittel, groß
+	•	Eiche: klein, mittel, groß
+	•	Obstbaum: klein, mittel, groß
+	•	E1-Regrowth (Spross → Baby → Jung → kleiner Baum)
+
+Epoche 2 (Nadelbäume):
+	•	Fichte: klein, mittel, groß
+	•	Tanne: klein, mittel, groß
+	•	Kiefer: klein, mittel, groß
+	•	E2-Regrowth (Spross → Baby → Jung → kleiner Nadelbaum)
+
+Fällanimationen:
+	•	Fallen links / rechts / diagonal
+	•	Baum abgesägt (Übergangsframes)
+	•	Baumstumpf (groß/klein)
+
+Holz-Output (Ergebnis für Lager):
+	•	1× Stamm
+	•	3× Holzstücke
+	•	kleiner Resthaufen
+	•	Rindenreste
+	•	Splinter / kleine Holzkrümel
+
+Bonus-Frames (für später):
+	•	Toter Baum (grau, ohne Blätter)
+	•	Baum mit Pilzen
+	•	Obstbaum mit Früchten
+
+Alles in einer Datei.
+
+
 
 🌳 Epoche 1 – Laubbäume (16 Slots)
 	1.	Birke – klein
