@@ -1,135 +1,140 @@
 /* ============================================================================
  * Datei   : core/game.build.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-carriers
- * Zweck   : Gebäude platzieren + Baujobs erzeugen + cb:build:place anbinden
- * ========================================================================= */
+ * Projekt : Neue Siedler Engine – Build/Place System (Variante B)
+ * Version : v25.11.29-buildsystem
+ * Zweck   : Ghost-Handling, Platzierungsprüfung, Gebäude anlegen,
+ *           Construction starten.
+ * ========================================================================== */
 
 (function(){
-  'use strict';
 
-  const TAG  = '[build]';
-  const LOG  = (...a)=> (window.CBLog?.ok   ?? console.log)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+  const TAG = "[build]";
 
-  // -------------------------------------------------------------------------
-  //  EIN GEBÄUDE PLATZIEREN
-  // -------------------------------------------------------------------------
-  function place(id, x, y){
-    const reg = window.Registry || {};
+  // Interner Build-Status
+  const Build = {
+    selectedId : null,
+    ghostX     : null,
+    ghostY     : null,
+    active     : false
+  };
 
-    // 1) Definition aus Registry holen (falls vorhanden)
-    let def = null;
-    if (typeof reg.getBuilding === 'function'){
-      def = reg.getBuilding(id);
-    } else if (reg.buildings && reg.buildings[id]){
-      def = reg.buildings[id];
+  // ---------------------------------------------------------------------------
+  // BUILD.SELECT → UI-BuildMenu ruft das auf, wenn ein Gebäude gewählt wurde
+  // ---------------------------------------------------------------------------
+  Build.select = function(buildingId){
+    Build.selectedId = buildingId;
+    Build.active = true;
+
+    console.info(TAG, "Select", buildingId);
+
+    // ui-place.js wartet genau auf dieses Event:
+    document.dispatchEvent(new CustomEvent("req:build:ghost-start", {
+      detail: { id: buildingId }
+    }));
+
+    return true;
+  };
+
+  // ---------------------------------------------------------------------------
+  // GHOST UPDATE → ui-place.js ruft updateGhost(x,y) auf
+  // ---------------------------------------------------------------------------
+  Build.updateGhost = function(tx, ty){
+    if (!Build.active) return;
+    Build.ghostX = tx;
+    Build.ghostY = ty;
+
+    // Renderer bekommt Ghost-Position
+    window.Game?.renderer?.setGhost?.({
+      id : Build.selectedId,
+      x  : tx,
+      y  : ty
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // CAN PLACE CHECK
+  // ---------------------------------------------------------------------------
+  Build.canPlace = function(tx, ty){
+    if (!Build.active || !Build.selectedId) return false;
+    if (!window.Game?.map?._state) return false;
+
+    const st = window.Game.map._state;
+    const bdef = window.Game.buildings?.getDefinition(Build.selectedId);
+
+    if (!bdef){
+      console.warn(TAG, "Keine Definition für", Build.selectedId);
+      return false;
     }
+
+    const w = bdef.w || 3;
+    const h = bdef.h || 3;
+
+    // einfache Bounds-Prüfung
+    if (tx < 0 || ty < 0 || tx + w > st.cols || ty + h > st.rows)
+      return false;
+
+    // Kollision mit bestehenden Gebäuden prüfen
+    const all = window.Game.buildings.list || [];
+    for (const b of all){
+      if (tx < b.x + b.w &&
+          tx + w > b.x &&
+          ty < b.y + b.h &&
+          ty + h > b.y)
+        return false;
+    }
+
+    return true;
+  };
+
+  // ---------------------------------------------------------------------------
+  // CONFIRM → ui-place.js ruft confirm() auf (Tap)
+  // ---------------------------------------------------------------------------
+  Build.confirm = function(tx, ty){
+    if (!Build.canPlace(tx, ty)){
+      console.warn(TAG, "Kann hier nicht bauen", tx, ty);
+      return false;
+    }
+
+    const id = Build.selectedId;
+    const def = window.Game.buildings.getDefinition(id);
 
     if (!def){
-      WARN('Registry kennt Gebäude nicht → verwende Platzhalter 3x3:', id);
+      console.error(TAG, "Fehlende building-definition", id);
+      return false;
     }
 
-    const w = def?.size?.w ?? def?.size?.width ?? 3;
-    const h = def?.size?.h ?? def?.size?.height ?? 3;
+    // Gebäude registrieren
+    const newB = window.Game.buildings.add({
+      id : id,
+      x  : tx,
+      y  : ty,
+      w  : def.w || 3,
+      h  : def.h || 3
+    });
 
-    if (!window.Game){
-      WARN('Game fehlt – kann Gebäude nicht anlegen');
-      return;
-    }
-    if (!Array.isArray(Game.buildings)){
-      Game.buildings = [];
-    }
+    console.info(TAG, "Gebäude platziert:", id, tx, ty, newB);
 
-    const b = {
-      id,
-      type       : id,
-      x : x|0,
-      y : y|0,
-      w,
-      h,
-      buildStage : 0,          // 0 = Baustelle_0
-      buildTimer : 0,
-      stock      : 0
-    };
+    // Construction starten
+    window.Game.construction.start(newB);
 
-    Game.buildings.push(b);
+    // UI informieren
+    document.dispatchEvent(new CustomEvent("cb:build:place", {
+      detail: { id, x: tx, y: ty, building: newB }
+    }));
 
-    // -----------------------------------------------------------------------
-    // HQ-SPEZIALFALL:
-    //  - Position merken
-    //  - falls noch keine Carrier existieren → direkt welche spawnen
-    // -----------------------------------------------------------------------
-    if (id === 'b.hq' && window.GameUnits){
-      GameUnits.hqPos = { x: b.x, y: b.y };
-      LOG('HQ gesetzt', GameUnits.hqPos);
+    // Ghost zurücksetzen
+    Build.active = false;
+    Build.selectedId = null;
+    Build.ghostX = null;
+    Build.ghostY = null;
+    window.Game.renderer.clearGhost?.();
 
-      try{
-        if (typeof GameUnits.spawnCarrier === 'function' &&
-            Array.isArray(GameUnits.list) &&
-            GameUnits.list.length === 0){
-          // Drei Träger rund ums HQ
-          GameUnits.spawnCarrier(b.x + 1, b.y);
-          GameUnits.spawnCarrier(b.x - 1, b.y);
-          GameUnits.spawnCarrier(b.x,     b.y + 1);
-        }
-      }catch(e){
-        WARN('Carrier-Spawn bei HQ fehlgeschlagen:', e?.message || e);
-      }
-    }
+    return true;
+  };
 
-    // -----------------------------------------------------------------------
-    //  Baujob erzeugen (direkt an GameUnits) – nur wenn HQ-Position bekannt
-    // -----------------------------------------------------------------------
-    if (window.GameUnits?.assignJob && GameUnits.hqPos){
-      GameUnits.assignJob({
-        type      : 'build',
-        res       : 'wood',
-        from      : { x: GameUnits.hqPos.x, y: GameUnits.hqPos.y },
-        to        : { x: b.x,               y: b.y },
-        buildingId: id
-      });
-    } else {
-      WARN('Kein Baujob erzeugt – GameUnits oder hqPos fehlen');
-    }
-
-    // Event für Construction/HUD/Inspector
-    try{
-      window.dispatchEvent(new CustomEvent('cb:build:placed',{
-        detail:{ id, x:b.x, y:b.y, w:b.w, h:b.h }
-      }));
-    }catch(_){}
-
-    LOG('Gebäude platziert:', id, '→', b.x, b.y, '| Anzahl=', Game.buildings.length);
-  }
-
-  // -------------------------------------------------------------------------
-  //  EVENT-BRIDGE: cb:build:place → place(...)
-  // -------------------------------------------------------------------------
-  function onBuildPlace(ev){
-    const d = ev?.detail || {};
-
-    const id = String(d.buildingId ?? d.kind ?? d.type ?? d.id ?? '');
-    if (!id){
-      WARN('cb:build:place ohne gültige ID', d);
-      return;
-    }
-
-    const rawX = d.x ?? d.tx;
-    const rawY = d.y ?? d.ty;
-    if (!Number.isFinite(rawX) || !Number.isFinite(rawY)){
-      WARN('cb:build:place ohne Koordinaten', d);
-      return;
-    }
-
-    place(id, rawX|0, rawY|0);
-  }
-
-  window.addEventListener('cb:build:place', onBuildPlace);
-
-  // -------------------------------------------------------------------------
-  //  EXPORT
-  // -------------------------------------------------------------------------
-  window.GameBuild = { place };
+  // ---------------------------------------------------------------------------
+  // EXPORT
+  // ---------------------------------------------------------------------------
+  window.GameBuild = Build;
 
 })();
