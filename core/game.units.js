@@ -46,19 +46,27 @@
     // Unit erzeugen
     // ------------------------------------------------------------
     spawnCarrier(x,y){
-      const u = {
-        id : Units.list.length+1,
-        x  : x,
-        y  : y,
-        tx : x,
-        ty : y,
-        speed    : 2.2,
-        carrying : null,
-        task     : null
-      };
-      Units.list.push(u);
-      LOG('Carrier gespawnt', u);
-    },
+  // Fallbacks: falls irgendwas Komisches reinkommt
+  if (!Number.isFinite(x) || !Number.isFinite(y)){
+    const hq = Units.hqPos || { x:0, y:0 };
+    x = hq.x;
+    y = hq.y;
+    WARN('spawnCarrier mit ungültigen Koordinaten – nutze HQPos', { x, y });
+  }
+
+  const u = {
+    id : Units.list.length+1,
+    x  : x,
+    y  : y,
+    tx : x,
+    ty : y,
+    speed    : 2.2,
+    carrying : null,
+    task     : null
+  };
+  Units.list.push(u);
+  LOG('Carrier gespawnt', u);
+},
 
     // Alias, falls jemand spawnUnit() aufruft
     spawnUnit(x,y,opts){
@@ -97,38 +105,41 @@
     // MOVEMENT
     // ------------------------------------------------------------
     move(u, dt){
-      // Sicherheits-GUARD gegen NaN / undef → sonst springen Units nach (0,0)
-      if (!Number.isFinite(u.x) || !Number.isFinite(u.y) ||
-          !Number.isFinite(u.tx) || !Number.isFinite(u.ty)){
-        WARN('Unit mit ungültigen Koordinaten – resette auf HQ', u);
-        const hq = Units.hqPos || { x:0, y:0 };
-        u.x  = hq.x;
-        u.y  = hq.y;
-        u.tx = hq.x;
-        u.ty = hq.y;
-        return;
-      }
+  // 1) Position prüfen
+  if (!Number.isFinite(u.x) || !Number.isFinite(u.y)){
+    const hq = Units.hqPos || { x:0, y:0 };
+    WARN('Unit-Position ungültig – setze auf HQ', u);
+    u.x = hq.x;
+    u.y = hq.y;
+  }
 
-      const dx   = u.tx - u.x;
-      const dy   = u.ty - u.y;
-      const dist = Math.hypot(dx,dy);
+  // 2) Ziel prüfen
+  if (!Number.isFinite(u.tx) || !Number.isFinite(u.ty)){
+    WARN('Unit-Ziel ungültig – setze Ziel = Position', u);
+    u.tx = u.x;
+    u.ty = u.y;
+  }
 
-      if (!Number.isFinite(dist)){
-        WARN('dist NaN für Unit, breche Bewegung ab', u);
-        return;
-      }
+  const dx   = u.tx - u.x;
+  const dy   = u.ty - u.y;
+  const dist = Math.hypot(dx,dy);
 
-      if (dist < 0.02){
-        Units.onArrive(u);
-        return;
-      }
+  if (!Number.isFinite(dist)){
+    WARN('dist NaN für Unit, breche Bewegung ab', u);
+    return;
+  }
 
-      const step = u.speed * dt;
-      if (step <= 0) return;
+  if (dist < 0.02){
+    Units.onArrive(u);
+    return;
+  }
 
-      u.x += dx/dist * step;
-      u.y += dy/dist * step;
-    },
+  const step = u.speed * dt;
+  if (step <= 0) return;
+
+  u.x += dx/dist * step;
+  u.y += dy/dist * step;
+},
 
     // ------------------------------------------------------------
     // ANKUNFT
