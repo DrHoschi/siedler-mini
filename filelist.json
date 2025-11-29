@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-29T10:41:17.985Z",
+  "createdAt": "2025-11-29T15:08:58.309Z",
   "root": ".",
   "count": 535,
   "entries": [
@@ -1260,7 +1260,7 @@
     {
       "type": "file",
       "path": "core/game.build.js",
-      "size": 4360
+      "size": 4090
     },
     {
       "type": "file",
@@ -2574,12 +2574,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52707
+      "size": 52708
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20006
+      "size": 20007
     },
     {
       "type": "file",
