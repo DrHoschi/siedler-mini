@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.map.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-buildsprites+units
+ * Version : v25.11.29-buildsprites+units2
  * Zweck   : Map (map-epoch1.json) + Tileset laden und mit GameCamera
  *           rendern (Pan + Zoom) + Baustellen + einfache Einheitenanzeige.
  * ========================================================================== */
@@ -37,31 +37,73 @@
   const BuildPlaceSprites   = [];          // baustelle_0/1/2
   const BuildingSpriteCache = new Map();   // key = buildingId ("b.hq" …) → Image
 
+  /**
+   * Baustellen-Sprites vorbereiten (einmalig).
+   */
   function ensureBuildPlaceSprites(){
     if (BuildPlaceSprites.length) return;
-    for (let i=0;i<3;i++){
+    for (let i = 0; i < 3; i++){
       const img = new Image();
+      img.onload  = ()=>{/* ok */};
+      img.onerror = (e)=>{
+        WARN('Baustellen-Sprite konnte nicht geladen werden:', i, e);
+      };
       img.src = `assets/buildings/building_place/baustelle_${i}.png`;
       BuildPlaceSprites[i] = img;
     }
   }
 
+  /**
+   * Pfad für ein Gebäudesprite bestimmen.
+   *
+   * Aktueller Stand laut Repo:
+   *   siedler-mini/assets/icons/buildings/b.hq.png
+   *   siedler-mini/assets/icons/buildings/b.lumberjack.png
+   *   siedler-mini/assets/icons/buildings/b.quarry.png
+   *   …
+   *
+   * Wenn sich die Struktur ändert, bitte HIER anpassen.
+   */
   function resolveBuildingSpritePath(id){
-    // Hier kannst du später die Pfade anpassen!
-    // Aktuell: assets/buildings/b.hq.png / b.lumberjack.png / b.quarry.png …
-    const raw  = String(id || '');
-    return `assets/buildings/${raw}.png`;
+    const raw = String(id || '');
+    // Icons-Ordner benutzen:
+    return `assets/icons/buildings/${raw}.png`;
+    // Falls du später eigene Welt-Sprites hast, könntest du hier auch
+    // zwischen icons/ und buildings/ unterscheiden.
   }
 
+  /**
+   * Image-Objekt für ein Gebäude holen (mit Cache).
+   */
   function getBuildingSprite(id){
     if (!id) return null;
     if (BuildingSpriteCache.has(id)) return BuildingSpriteCache.get(id);
 
     const path = resolveBuildingSpritePath(id);
     const img  = new Image();
-    img.src    = path;
+
+    img.onload = ()=>{
+      if (!img.naturalWidth || !img.naturalHeight){
+        WARN('Gebäudesprite geladen, aber ohne Größe (evtl. defekt):', id, path);
+      } else {
+        LOG('Gebäudesprite geladen:', id, path);
+      }
+    };
+    img.onerror = (e)=>{
+      WARN('Gebäudesprite NICHT ladbar:', id, path, e);
+    };
+
+    img.src = path;
     BuildingSpriteCache.set(id, img);
     return img;
+  }
+
+  /**
+   * Prüfen, ob ein Image wirklich zeichnbar ist
+   * (kein "broken" Image – wichtig für Safari).
+   */
+  function isDrawableImage(img){
+    return !!(img && img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
   }
 
   // -------------------------------------------------------------------------
@@ -116,6 +158,7 @@
       const row = Array.isArray(tiles[y]) ? tiles[y] : [];
       grid[y] = new Array(cols);
       for (let x = 0; x < cols; x++){
+        grid[x] = grid[x] || 0;
         grid[y][x] = row[x] | 0;
       }
     }
@@ -267,19 +310,33 @@
         let useFallback = false;
 
         if (stage < 3){
-          const idx = Math.max(0, Math.min(2, stage));
+          // Baustelle 0/1/2
+          const idx    = Math.max(0, Math.min(2, stage));
           const imgSite = BuildPlaceSprites[idx];
-          if (imgSite && imgSite.complete){
-            ctx.drawImage(imgSite, bx, by, bw, bh);
+
+          if (isDrawableImage(imgSite)){
+            try{
+              ctx.drawImage(imgSite, bx, by, bw, bh);
+            }catch(e){
+              WARN('drawImage Baustelle-Fehler:', e?.message || e);
+              useFallback = true;
+            }
           } else {
+            // Bild noch nicht fertig oder defekt → Fallback-Rechteck
             useFallback = true;
           }
         } else {
+          // Fertiges Gebäude
           const imgB = getBuildingSprite(b.id);
-          if (imgB && imgB.complete){
-            ctx.drawImage(imgB, bx, by, bw, bh);
+          if (isDrawableImage(imgB)){
+            try{
+              ctx.drawImage(imgB, bx, by, bw, bh);
+            }catch(e){
+              WARN('drawImage Gebäude-Fehler id='+b.id+':', e?.message || e);
+              useFallback = true;
+            }
           } else {
-            // Solange kein fertiges Gebäudebild da ist → Fallback
+            // Sprite noch nicht da oder kaputt → Fallback-Rechteck
             useFallback = true;
           }
         }
