@@ -1,6 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.build.js
- * Version : v25.11.29-placefix
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.11.29-carriers
  * Zweck   : Gebäude platzieren + Baujobs erzeugen + cb:build:place anbinden
  * ========================================================================= */
 
@@ -17,7 +18,7 @@
   function place(id, x, y){
     const reg = window.Registry || {};
 
-    // Definition aus Registry holen (egal ob getBuilding oder plain Objekt)
+    // 1) Definition aus Registry holen (falls vorhanden)
     let def = null;
     if (typeof reg.getBuilding === 'function'){
       def = reg.getBuilding(id);
@@ -47,36 +48,57 @@
       y : y|0,
       w,
       h,
-      buildStage : 0,      // 0 = Baustelle
+      buildStage : 0,          // 0 = Baustelle_0
       buildTimer : 0,
       stock      : 0
     };
 
     Game.buildings.push(b);
 
-    // HQ-Spezialfall → Position für Carrier merken
+    // -----------------------------------------------------------------------
+    // HQ-SPEZIALFALL:
+    //  - Position merken
+    //  - falls noch keine Carrier existieren → direkt welche spawnen
+    // -----------------------------------------------------------------------
     if (id === 'b.hq' && window.GameUnits){
       GameUnits.hqPos = { x: b.x, y: b.y };
       LOG('HQ gesetzt', GameUnits.hqPos);
+
+      try{
+        if (typeof GameUnits.spawnCarrier === 'function' &&
+            Array.isArray(GameUnits.list) &&
+            GameUnits.list.length === 0){
+          // Drei Träger rund ums HQ
+          GameUnits.spawnCarrier(b.x + 1, b.y);
+          GameUnits.spawnCarrier(b.x - 1, b.y);
+          GameUnits.spawnCarrier(b.x,     b.y + 1);
+        }
+      }catch(e){
+        WARN('Carrier-Spawn bei HQ fehlgeschlagen:', e?.message || e);
+      }
     }
 
-    // Einfacher Baujob: 1x Holz vom HQ zur Baustelle
+    // -----------------------------------------------------------------------
+    //  Baujob erzeugen (direkt an GameUnits) – nur wenn HQ-Position bekannt
+    // -----------------------------------------------------------------------
     if (window.GameUnits?.assignJob && GameUnits.hqPos){
       GameUnits.assignJob({
         type      : 'build',
         res       : 'wood',
         from      : { x: GameUnits.hqPos.x, y: GameUnits.hqPos.y },
-        to        : { x: b.x, y: b.y },
+        to        : { x: b.x,               y: b.y },
         buildingId: id
       });
+    } else {
+      WARN('Kein Baujob erzeugt – GameUnits oder hqPos fehlen');
     }
 
-    // Event für andere Systeme (Construction, Inspector, HUD …)
+    // Event für Construction/HUD/Inspector
     try{
       window.dispatchEvent(new CustomEvent('cb:build:placed',{
         detail:{ id, x:b.x, y:b.y, w:b.w, h:b.h }
       }));
-    }catch{}
+    }catch(_){}
 
     LOG('Gebäude platziert:', id, '→', b.x, b.y, '| Anzahl=', Game.buildings.length);
   }
@@ -87,14 +109,12 @@
   function onBuildPlace(ev){
     const d = ev?.detail || {};
 
-    // ID aus verschiedenen möglichen Feldern holen
     const id = String(d.buildingId ?? d.kind ?? d.type ?? d.id ?? '');
     if (!id){
       WARN('cb:build:place ohne gültige ID', d);
       return;
     }
 
-    // Koordinaten (wir erlauben x/y ODER tx/ty)
     const rawX = d.x ?? d.tx;
     const rawY = d.y ?? d.ty;
     if (!Number.isFinite(rawX) || !Number.isFinite(rawY)){
