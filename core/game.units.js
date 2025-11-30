@@ -1,188 +1,259 @@
 /* ============================================================================
  * Datei    : core/game.units.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final-UnitsHQ
- * Zweck    : Verwaltet alle Einheiten (vorerst nur Träger) + HQ-Position
- * Struktur : 
- *   - Interner State (Liste, HQPos, ID-Zähler)
- *   - Helper: addUnit(), spawnCarriersForHQ()
- *   - API: GameUnits.{init,getAll,addUnit,setHQPos,spawnCarriersForHQ,clear,hqPos}
- *   - Hook: Game.getUnits() → für unit.overlay.js
- *   - Hook: registriert sich auf cb:game:start (Game.on)
- * ============================================================================
- */
-(function () {
+ * Version  : v25.11.30-final
+ * Zweck    : Zentrale Verwaltung aller Einheiten (aktuell nur Träger/Carrier)
+ *            – speichert Einheitenliste
+ *            – kennt HQ-Position in TILES
+ *            – stellt API für JobEngine + CarrierRuntime bereit
+ *
+ * Öffentliche API (global):
+ *   window.GameUnits = {
+ *     attachToGame(game),
+ *     setHQPos({tx,ty}),
+ *     getHQPos(),
+ *     spawnInitialCarriers(count),
+ *     getUnits(),
+ *     needsJob(),
+ *     assignJob(job),   // von JobEngine/CarrierRuntime verwendet
+ *     tick(dt)          // von CarrierRuntime aufgerufen
+ *   }
+ *
+ * Außerdem:
+ *   – Game.__units und window.__units werden mit dem gleichen Array verknüpft
+ *   – optional: Game.getUnits() → Array zurück
+ * ============================================================================ */
+(() => {
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // Kurz-Helper für Logging (nutzt deine globale LOG/WARN wenn vorhanden)
-  // ---------------------------------------------------------------------------
-  const global = window;
-  const LOG  = global.LOG  ? global.LOG.bind(global,  '[units]') : console.log.bind(console, '[units]');
-  const WARN = global.WARN ? global.WARN.bind(global, '[units]') : console.warn.bind(console, '[units]');
+  const TAG  = '[units]';
+  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // ---------------------------------------------------------------------------
-  // Interner State
-  // ---------------------------------------------------------------------------
-  const state = {
-    list:   [],      // alle Einheiten (Träger etc.)
-    hqPos:  null,    // { tx, ty } Kachel-Position (Mitte des HQ)
-    nextId: 1        // fortlaufende ID
-  };
+  /** interne Zustände *********************************************************/
 
-  // ---------------------------------------------------------------------------
-  // interne Hilfsfunktionen
-  // ---------------------------------------------------------------------------
+  /** @type {Array<{id:number, type:string, x:number, y:number, task?:object}>} */
+  const _units = [];
+  let _nextId  = 1;
 
-  /**
-   * Liefert eine flache Referenz auf die aktuelle Einheitenliste.
-   * Wird vom unit.overlay.js genutzt (Game.getUnits → Units.getAll)
-   */
-  function getAll() {
-    return state.list;
+  /** HQ-Position in TILE-Koordinaten (tx,ty = Mittelpunkt) */
+  let _hqPos = null;
+
+  /** Referenz auf Game (wenn vorhanden) */
+  let _gameRef = null;
+
+  /** Hilfsfunktionen **********************************************************/
+
+  function _ensureGameBinding(game) {
+    if (!game || _gameRef === game) return;
+    _gameRef = game;
+
+    try {
+      // Units-Array an Game und als Fallback an window hängen
+      game.__units = _units;
+      if (typeof game.getUnits !== 'function') {
+        game.getUnits = () => _units;
+      }
+      if (!Array.isArray(window.__units)) {
+        window.__units = _units;
+      }
+      LOG('Units.init abgeschlossen – Units an Game gebunden');
+    } catch (err) {
+      WARN('Fehler beim Binden an Game', err);
+    }
   }
 
-  /**
-   * Fügt eine neue Einheit hinzu (aktuell nur Träger).
-   * unit: { type, x, y, tx, ty, speed, carrying, task }
-   */
-  function addUnit(unit) {
-    const u = Object.assign(
-      {
-        id:       state.nextId++,
-        type:     'carrier',
-        x:        0,
-        y:        0,
-        tx:       0,
-        ty:       0,
-        speed:    2.0,
-        carrying: null,
-        task:     null
-      },
-      unit || {}
-    );
-
-    state.list.push(u);
-    LOG('Unit hinzugefügt', u);
+  /** neuen Carrier an einer Tile-Position anlegen (TILE-Koordinaten) */
+  function _spawnCarrierAt(tx, ty) {
+    const u = {
+      id   : _nextId++,
+      type : 'carrier',
+      x    : tx,   // Tile-Koordinaten (werden vom Overlay in Pixel umgerechnet)
+      y    : ty,
+      task : null
+    };
+    _units.push(u);
+    LOG('Carrier gespawnt', { id: u.id, x: u.x, y: u.y });
     return u;
   }
 
+  /** Öffentliche API **********************************************************/
+
   /**
-   * Merkt sich die HQ-Kachelposition.
-   * Erwartet Kachel-Koordinaten (tx, ty – z. B. HQ-Mitte).
+   * HQ-Position setzen (in TILE-Koordinaten).
+   * Wird i. d. R. von JobEngine.handleBuildComplete(b.hq) aufgerufen.
    */
-  function setHQPos(tx, ty) {
-    if (typeof tx !== 'number' || typeof ty !== 'number' || isNaN(tx) || isNaN(ty)) {
-      WARN('setHQPos: ungültige Position', tx, ty);
+  function setHQPos(pos) {
+    if (!pos || typeof pos.tx !== 'number' || typeof pos.ty !== 'number') {
+      WARN('setHQPos: ungültige Position übergeben', pos);
       return;
     }
-    state.hqPos = { tx, ty };
-    LOG('HQPos gesetzt', state.hqPos);
+    _hqPos = { tx: pos.tx, ty: pos.ty };
+    LOG('HQPos gesetzt', _hqPos);
+  }
+
+  /** HQ-Position abfragen (kann null sein, wenn HQ noch nicht fertig) */
+  function getHQPos() {
+    return _hqPos;
   }
 
   /**
-   * Spawnt eine bestimmte Anzahl Träger unmittelbar um das HQ herum.
-   * Nur optische Platzierung – Job-/Pfad-Logik macht später CarrierRuntime.
+   * Initial mehrere Träger rund um das HQ spawnen.
+   * count = gewünschte Anzahl (Standard: 3)
    */
-  function spawnCarriersForHQ(count) {
-    if (!state.hqPos) {
-      WARN('spawnCarriersForHQ: keine HQPos gesetzt – breche ab');
+  function spawnInitialCarriers(count = 3) {
+    if (!_hqPos) {
+      WARN('spawnInitialCarriers: noch kein HQPos gesetzt');
       return;
     }
 
-    const n = (count | 0) > 0 ? (count | 0) : 0;
-    if (!n) {
-      LOG('spawnCarriersForHQ: count = 0 → nichts zu tun');
-      return;
-    }
+    const baseX = _hqPos.tx;
+    const baseY = _hqPos.ty;
 
-    const base = state.hqPos;
-
-    // Kleine Offsets rund um die HQ-Mitte, damit man 3 Träger sieht
-    const slots = [
-      { dx: -0.6, dy:  0.0 },
-      { dx:  0.6, dy:  0.0 },
-      { dx:  0.0, dy:  0.6 },
-      { dx:  0.0, dy: -0.6 }
+    // kleine Offsets, damit sie nicht genau übereinander stehen
+    const OFFSETS = [
+      { dx: -0.4, dy:  0.0 },
+      { dx:  0.4, dy:  0.0 },
+      { dx:  0.0, dy:  0.4 },
+      { dx: -0.4, dy: -0.4 },
+      { dx:  0.4, dy: -0.4 },
     ];
 
-    for (let i = 0; i < n; i++) {
-      const slot = slots[i % slots.length];
-      addUnit({
-        type: 'carrier',
-        x:    base.tx + slot.dx,
-        y:    base.ty + slot.dy,
-        tx:   base.tx + slot.dx,
-        ty:   base.ty + slot.dy,
-        task: null,
-        carrying: null
-      });
+    for (let i = 0; i < count; i++) {
+      const o = OFFSETS[i % OFFSETS.length];
+      _spawnCarrierAt(baseX + o.dx, baseY + o.dy);
     }
 
-    LOG('spawnCarriersForHQ: Carrier gespawnt', { count: n, hqPos: state.hqPos });
+    LOG('Initiale Carrier gespawnt', { count, hqPos: _hqPos });
+  }
+
+  /** liefert das interne Units-Array zurück */
+  function getUnits() {
+    return _units;
+  }
+
+  /** Gibt true zurück, wenn mindestens ein Carrier keinen Job hat */
+  function needsJob() {
+    return _units.some(u => u.type === 'carrier' && !u.task);
   }
 
   /**
-   * State zurücksetzen (z. B. beim Neustart eines Spiels).
+   * Ein Job wird einem freien Carrier zugewiesen.
+   * Erwartet ein Job-Objekt (von JobEngine.pop()).
    */
-  function clear() {
-    state.list.length = 0;
-    state.hqPos       = null;
-    state.nextId      = 1;
-    LOG('State geleert');
+  function assignJob(job) {
+    if (!job) return false;
+    const carrier = _units.find(u => u.type === 'carrier' && !u.task);
+    if (!carrier) return false;
+
+    carrier.task = {
+      id    : job.id ?? ('job-' + Date.now()),
+      type  : job.type ?? 'generic',
+      from  : job.from ?? null,
+      to    : job.to ?? null,
+      res   : job.res ?? null,
+      phase : 'toSource'  // einfache Zweiphasen-Logik: zur Quelle → zum Ziel
+    };
+
+    LOG('Job zugewiesen', { unitId: carrier.id, job: carrier.task });
+    return true;
   }
 
   /**
-   * Init-Funktion (wird bei cb:game:start aufgerufen).
-   * – State leeren
-   * – Game.getUnits-Hook setzen (für unit.overlay)
+   * Einfache Bewegungs-Logik:
+   *  – Positionen werden in TILE-Koordinaten interpretiert.
+   *  – pro Tick wird ein kleines Stück in Richtung Ziel gelaufen.
+   *  – reicht fürs erste, damit "etwas passiert" und Overlay die Bewegung zeigt.
    */
-  function init(game) {
-    clear();
+  function _moveUnitTowards(u, target, dt) {
+    if (!target) return;
+    const SPEED_TILES_PER_SEC = 1.5; // Carrier-Geschwindigkeit (Tiles/Sek)
+    const step = SPEED_TILES_PER_SEC * (dt / 1000);
 
-    const g = game || global.Game;
-    if (g) {
-      try {
-        if (typeof g.getUnits !== 'function') {
-          g.getUnits = getAll;
-          LOG('Game.getUnits Hook registriert');
+    const dx = target.x - u.x;
+    const dy = target.y - u.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.01) {
+      // Ziel erreicht
+      u.x = target.x;
+      u.y = target.y;
+      return true;
+    }
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    u.x += nx * step;
+    u.y += ny * step;
+    return false;
+  }
+
+  /** Tick-Loop: wird von CarrierRuntime aufgerufen (siehe carrier.runtime.js) */
+  function tick(dt) {
+    for (const u of _units) {
+      if (u.type !== 'carrier' || !u.task) continue;
+
+      const ts = u.task;
+      let target = null;
+
+      if (ts.phase === 'toSource' && ts.from) {
+        target = { x: ts.from.tx, y: ts.from.ty };
+      } else if (ts.phase === 'toTarget' && ts.to) {
+        target = { x: ts.to.tx, y: ts.to.ty };
+      }
+
+      if (!target) continue;
+
+      const arrived = _moveUnitTowards(u, target, dt);
+      if (arrived) {
+        if (ts.phase === 'toSource') {
+          // Ressource aufnehmen (nur Marker, Logik kann später verfeinert werden)
+          if (ts.res) {
+            u.carrying = { res: ts.res };
+          }
+          ts.phase = 'toTarget';
+        } else if (ts.phase === 'toTarget') {
+          // Job fertig
+          LOG('Job abgeschlossen', { unitId: u.id, jobId: ts.id });
+          u.task = null;
+          u.carrying = null;
         }
-      } catch (e) {
-        WARN('Fehler beim Registrieren von Game.getUnits:', e);
       }
     }
-
-    LOG('Units.init abgeschlossen – Units an Game gebunden');
   }
 
-  // ---------------------------------------------------------------------------
-  // Öffentliche API
-  // ---------------------------------------------------------------------------
-  const Units = {
-    init,
-    getAll,
-    addUnit,
+  /**
+   * Wird bei cb:game:start oder explizit aus game.js aufgerufen,
+   * um Units an das Game-Objekt zu binden.
+   */
+  function attachToGame(game) {
+    _ensureGameBinding(game);
+  }
+
+  /** Event-Hook für cb:game:start (DOM-CustomEvent) *********************** */
+
+  try {
+    window.addEventListener('cb:game:start', (ev) => {
+      const game = ev?.detail?.game ?? window.Game ?? null;
+      if (game) {
+        _ensureGameBinding(game);
+      }
+    });
+  } catch (err) {
+    WARN('cb:game:start-Listener konnte nicht registriert werden', err);
+  }
+
+  /** Export nach global ********************************************************/
+
+  window.GameUnits = {
+    attachToGame,
     setHQPos,
-    spawnCarriersForHQ,
-    clear,
-    get hqPos() {
-      return state.hqPos;
-    }
+    getHQPos,
+    spawnInitialCarriers,
+    getUnits,
+    needsJob,
+    assignJob,
+    tick
   };
 
-  // Global verfügbar machen
-  global.GameUnits = Units;
-
-  // ---------------------------------------------------------------------------
-  // Game-Event-Hooks
-  // ---------------------------------------------------------------------------
-  // Bei Spielstart initialisieren
-  if (global.Game && typeof global.Game.on === 'function') {
-    global.Game.on('cb:game:start', function () {
-      init(global.Game);
-    });
-    LOG('Listener auf cb:game:start registriert');
-  } else {
-    WARN('Game.on nicht verfügbar – Units.init muss ggf. manuell aufgerufen werden');
-  }
+  LOG('Modul geladen v25.11.30-final');
 })();
