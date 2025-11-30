@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/game.units.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final-3 (HQ-Fallback + Placement-Merker)
+ * Version  : v25.11.30-final-4 (HQ-Fallback + Placement-Merker + Extra-Scan)
  * Zweck    : Zentrale Verwaltung aller Einheiten (aktuell nur Träger/Carrier)
  *            – speichert Einheitenliste
  *            – kennt HQ-Position in TILES
@@ -153,7 +153,7 @@
     if (typeof posOrTx === 'object' && posOrTx !== null) {
       // Aufruf: setHQPos({tx,ty})
       tx = posOrTx.tx;
-      ty = posOrTy = posOrTx.ty;
+      ty = posOrTx.ty;
     } else if (typeof posOrTx === 'number' && typeof maybeTy === 'number') {
       // Aufruf: setHQPos(tx, ty)
       tx = posOrTx;
@@ -310,15 +310,23 @@
     _ensureGameBinding(game);
   }
 
-  /** Fallback-Logik für HQ-fertig → Träger spawnen ***************************
-   *
-   * Hintergrund:
-   *  – JobEngine ist bei dir offenbar (noch) nicht aktiv.
-   *  – Deshalb hängen wir uns direkt an:
-   *        cb:build:place       → Position merken
-   *        cb:construction:complete / cb:build:complete
-   *                            → HQ erkennen, HQPos setzen, Carrier spawnen
-   */
+  /** Fallback-Logik für HQ-fertig → Träger spawnen ***************************/
+
+  function _isHQLike(obj) {
+    if (!obj) return false;
+    const id   = obj.id   || obj.type || obj.buildingId || '';
+    const name = String(id);
+    if (name === 'b.hq') return true;
+
+    // etwas gröber: JSON-String enthält "b.hq"
+    try {
+      const s = JSON.stringify(obj);
+      if (s.includes('"b.hq"')) return true;
+    } catch (_) {
+      /* ignore */
+    }
+    return false;
+  }
 
   function _tryFallbackHQSpawn(reason, eventDetail) {
     // Wenn bereits HQPos und mindestens ein Carrier existiert → nichts tun
@@ -330,29 +338,44 @@
     const d = eventDetail || {};
     let hqBuilding = null;
 
-    // 1) Direkt aus Event, falls da mehr als nur id drin ist
-    if (d.id === 'b.hq' || d.type === 'b.hq') {
-      hqBuilding = d.building || d;
+    // 1) Direkt aus Event, falls ein "Building" drin steckt
+    if (_isHQLike(d)) {
+      hqBuilding = d;
+    } else if (d.building && _isHQLike(d.building)) {
+      hqBuilding = d.building;
+    } else if (d.data && _isHQLike(d.data)) {
+      hqBuilding = d.data;
     }
 
     // 2) Falls im Game noch Infos hängen
     const game = _gameRef || window.Game || null;
     if (!hqBuilding && game && Array.isArray(game.buildings)) {
       hqBuilding = game.buildings.find(
-        b => b && (b.id === 'b.hq' || b.type === 'b.hq')
+        b => b && _isHQLike(b)
       ) || null;
     }
 
-    // 3) Tile-Position aus Building ODER aus gemerkter HQ-Platzierung holen
-    let pos =
-      (hqBuilding && _extractTilePosFromAny(hqBuilding)) ||
-      _lastHQPlacement;
+    // 3) Tile-Position in folgender Reihenfolge suchen:
+    //    a) in hqBuilding
+    //    b) letzte HQ-Platzierung (_lastHQPlacement)
+    //    c) direkt im Event-Detail
+    let pos = null;
+    if (hqBuilding) {
+      pos = _extractTilePosFromAny(hqBuilding);
+    }
+    if (!pos && _lastHQPlacement) {
+      pos = _lastHQPlacement;
+    }
+    if (!pos) {
+      pos = _extractTilePosFromAny(d);
+    }
 
     if (!pos) {
       WARN('Fallback-HQ: keine verwertbare HQ-Position', {
         reason,
         hqBuilding: hqBuilding ? { id: hqBuilding.id } : null,
-        lastPlacement: _lastHQPlacement
+        lastPlacement: _lastHQPlacement,
+        eventDetail: d
       });
       return;
     }
@@ -394,14 +417,21 @@
       const d = ev?.detail ?? ev;
       if (!d) return;
 
-      if (d.id === 'b.hq' || d.type === 'b.hq') {
-        const pos = _extractTilePosFromAny(d);
-        if (pos) {
-          _lastHQPlacement = pos;
-          LOG('HQ-Placement gemerkt', { pos });
-        } else {
-          WARN('HQ-Placement ohne erkennbare Tile-Pos', d);
-        }
+      LOG('cb:build:place Event empfangen', d);
+
+      const isHQ =
+        _isHQLike(d) ||
+        (d.building && _isHQLike(d.building)) ||
+        (d.data && _isHQLike(d.data));
+
+      if (!isHQ) return;
+
+      const pos = _extractTilePosFromAny(d);
+      if (pos) {
+        _lastHQPlacement = pos;
+        LOG('HQ-Placement gemerkt', { pos });
+      } else {
+        WARN('HQ-Placement ohne erkennbare Tile-Pos', d);
       }
     });
 
@@ -409,17 +439,21 @@
     window.addEventListener('cb:construction:complete', (ev) => {
       const d = ev?.detail ?? ev;
       if (!d) return;
-      if (d.id === 'b.hq' || d.type === 'b.hq') {
-        _tryFallbackHQSpawn('cb:construction:complete', d);
+      if (!_isHQLike(d) && !(d.building && _isHQLike(d.building)) &&
+          !(d.data && _isHQLike(d.data))) {
+        return;
       }
+      _tryFallbackHQSpawn('cb:construction:complete', d);
     });
 
     window.addEventListener('cb:build:complete', (ev) => {
       const d = ev?.detail ?? ev;
       if (!d) return;
-      if (d.id === 'b.hq' || d.type === 'b.hq') {
-        _tryFallbackHQSpawn('cb:build:complete', d);
+      if (!_isHQLike(d) && !(d.building && _isHQLike(d.building)) &&
+          !(d.data && _isHQLike(d.data))) {
+        return;
       }
+      _tryFallbackHQSpawn('cb:build:complete', d);
     });
   } catch (err) {
     WARN('HQ-Fallback-Listener konnten nicht registriert werden', err);
@@ -451,5 +485,5 @@
     tick
   };
 
-  LOG('Modul geladen v25.11.30-final-3 (mit HQ-Fallback + Placement-Merker)');
+  LOG('Modul geladen v25.11.30-final-4 (HQ-Fallback+Placement+Extra-Scan)');
 })();
