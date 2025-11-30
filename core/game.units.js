@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/game.units.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final-4 (HQ-Fallback + Placement-Merker + Extra-Scan)
+ * Version  : v25.11.30-final-idle-move
  * Zweck    : Zentrale Verwaltung aller Einheiten (aktuell nur Träger/Carrier)
  *            – speichert Einheitenliste
  *            – kennt HQ-Position in TILES
@@ -10,22 +10,18 @@
  * Öffentliche API (global):
  *   window.GameUnits = {
  *     attachToGame(game),
- *     setHQPos(posOrTx, ty?),   // flexibel: {tx,ty} ODER (tx, ty)
+ *     setHQPos({tx,ty}),
  *     getHQPos(),
  *     spawnInitialCarriers(count),
  *     getUnits(),
  *     needsJob(),
- *     assignJob(job),           // von JobEngine/CarrierRuntime verwendet
- *     tick(dt)                  // von CarrierRuntime aufgerufen
+ *     assignJob(job),   // von JobEngine/CarrierRuntime verwendet
+ *     tick(dt)          // von CarrierRuntime aufgerufen
  *   }
  *
  * Außerdem:
  *   – Game.__units und window.__units werden mit dem gleichen Array verknüpft
  *   – optional: Game.getUnits() → Array zurück
- *   – Fallback:
- *       • cb:build:place merkt sich HQ-Platzierung (Tile-Position)
- *       • cb:construction:complete / cb:build:complete nutzt diese Position,
- *         setzt HQPos und spawnt initiale Carrier, falls noch keine da sind.
  * ============================================================================ */
 (() => {
   'use strict';
@@ -36,7 +32,16 @@
 
   /** interne Zustände *********************************************************/
 
-  /** @type {Array<{id:number, type:string, x:number, y:number, task?:object}>} */
+  /**
+   * Einheiten:
+   *  x,y     → aktuelle Position in TILE-Koordinaten
+   *  sx,sy   → „Spawn“-/Basisposition für Idle-Bewegung
+   *  task    → aktueller Job (oder null)
+   *  idlePhase → Phase für Idle-Animation, damit nicht alle synchron sind
+   */
+  /** @type {Array<{id:number, type:string, x:number, y:number,
+   *                sx:number, sy:number, task?:object|null,
+   *                idlePhase:number, carrying?:object|null}>} */
   const _units = [];
   let _nextId  = 1;
 
@@ -46,8 +51,8 @@
   /** Referenz auf Game (wenn vorhanden) */
   let _gameRef = null;
 
-  /** letzte bekannte HQ-Platzierung (aus cb:build:place) */
-  let _lastHQPlacement = null;
+  /** globale Zeit für Idle-Animation (ms) */
+  let _timeMs = 0;
 
   /** Hilfsfunktionen **********************************************************/
 
@@ -70,65 +75,17 @@
     }
   }
 
-  /** Kleinere Helper für Nummern-Konvertierung (für Fallback) */
-  function _num(value, fallback) {
-    const v = (value !== undefined && value !== null) ? value : fallback;
-    const n = (typeof v === 'string') ? parseFloat(v) : v;
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  /**
-   * Versucht aus einem beliebigen Objekt Tile-Koordinaten (tx,ty) zu lesen.
-   * – direkte Felder: tx/ty, cx/cy, x/y
-   * – verschachtelte Strukturen: tile, pos, center, placement, target
-   */
-  function _extractTilePosFromAny(obj, depth = 0) {
-    if (!obj || typeof obj !== 'object') return null;
-    if (depth > 3) return null; // zur Sicherheit, keine endlosen Rekursionen
-
-    // 1) direkte Felder
-    {
-      const tx = _num(obj.tx, NaN);
-      const ty = _num(obj.ty, NaN);
-      if (Number.isFinite(tx) && Number.isFinite(ty)) {
-        return { tx, ty };
-      }
-    }
-    {
-      const cx = _num(obj.cx, NaN);
-      const cy = _num(obj.cy, NaN);
-      if (Number.isFinite(cx) && Number.isFinite(cy)) {
-        return { tx: cx, ty: cy };
-      }
-    }
-    {
-      const x = _num(obj.x, NaN);
-      const y = _num(obj.y, NaN);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        return { tx: x, ty: y };
-      }
-    }
-
-    // 2) verschachtelte Kandidaten
-    const nestedKeys = ['tile', 'pos', 'center', 'placement', 'target'];
-    for (const k of nestedKeys) {
-      if (obj[k] && typeof obj[k] === 'object') {
-        const res = _extractTilePosFromAny(obj[k], depth + 1);
-        if (res) return res;
-      }
-    }
-
-    return null;
-  }
-
   /** neuen Carrier an einer Tile-Position anlegen (TILE-Koordinaten) */
   function _spawnCarrierAt(tx, ty) {
     const u = {
       id   : _nextId++,
       type : 'carrier',
-      x    : tx,   // Tile-Koordinaten (werden vom Overlay in Pixel umgerechnet)
+      x    : tx,
       y    : ty,
-      task : null
+      sx   : tx,   // Basisposition für Idle-Bewegung
+      sy   : ty,
+      task : null,
+      idlePhase : Math.random() * Math.PI * 2
     };
     _units.push(u);
     LOG('Carrier gespawnt', { id: u.id, x: u.x, y: u.y });
@@ -139,38 +96,15 @@
 
   /**
    * HQ-Position setzen (in TILE-Koordinaten).
-   *
-   * Flexibel:
-   *   – setHQPos({ tx, ty })
-   *   – setHQPos(tx, ty)
-   *
-   * Wird i. d. R. von JobEngine.handleBuildComplete(b.hq) aufgerufen
-   * oder vom Fallback-Listener in diesem Modul.
+   * Wird i. d. R. von JobEngine.handleBuildComplete(b.hq) aufgerufen.
    */
-  function setHQPos(posOrTx, maybeTy) {
-    let tx, ty;
-
-    if (typeof posOrTx === 'object' && posOrTx !== null) {
-      // Aufruf: setHQPos({tx,ty})
-      tx = posOrTx.tx;
-      ty = posOrTx.ty;
-    } else if (typeof posOrTx === 'number' && typeof maybeTy === 'number') {
-      // Aufruf: setHQPos(tx, ty)
-      tx = posOrTx;
-      ty = maybeTy;
-    } else {
-      WARN('setHQPos: ungültige Parameter übergeben', posOrTx, maybeTy);
-      return null;
+  function setHQPos(pos) {
+    if (!pos || typeof pos.tx !== 'number' || typeof pos.ty !== 'number') {
+      WARN('setHQPos: ungültige Position übergeben', pos);
+      return;
     }
-
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
-      WARN('setHQPos: ungültige Position (tx/ty nicht numerisch)', { tx, ty });
-      return null;
-    }
-
-    _hqPos = { tx, ty };
+    _hqPos = { tx: pos.tx, ty: pos.ty };
     LOG('HQPos gesetzt', _hqPos);
-    return _hqPos;
   }
 
   /** HQ-Position abfragen (kann null sein, wenn HQ noch nicht fertig) */
@@ -233,7 +167,7 @@
       from  : job.from ?? null,
       to    : job.to ?? null,
       res   : job.res ?? null,
-      phase : 'toSource'  // einfache Zweiphasen-Logik: zur Quelle → zum Ziel
+      phase : 'toSource'  // Zweiphasen-Logik: zur Quelle → zum Ziel
     };
 
     LOG('Job zugewiesen', { unitId: carrier.id, job: carrier.task });
@@ -241,10 +175,9 @@
   }
 
   /**
-   * Einfache Bewegungs-Logik:
+   * Bewegungs-Logik für aktive Jobs:
    *  – Positionen werden in TILE-Koordinaten interpretiert.
    *  – pro Tick wird ein kleines Stück in Richtung Ziel gelaufen.
-   *  – reicht fürs erste, damit "etwas passiert" und Overlay die Bewegung zeigt.
    */
   function _moveUnitTowards(u, target, dt) {
     if (!target) return;
@@ -268,36 +201,64 @@
     return false;
   }
 
+  /**
+   * Idle-Bewegung, wenn KEIN Job aktiv ist:
+   *  – kleine Kreisbewegung um die Basisposition sx,sy
+   *  – nur zur Visualisierung, bis echte Jobs laufen
+   */
+  function _updateIdleUnit(u, dt) {
+    if (!_hqPos) return; // zur Sicherheit
+
+    const radius = 0.25;           // ~ Viertel Tile
+    const speed  = 0.0006;         // Umdrehungen pro ms
+
+    const angle  = _timeMs * speed + u.idlePhase;
+    const cx     = u.sx;
+    const cy     = u.sy;
+
+    u.x = cx + Math.cos(angle) * radius;
+    u.y = cy + Math.sin(angle) * radius * 0.6; // leicht „oval“
+  }
+
   /** Tick-Loop: wird von CarrierRuntime aufgerufen (siehe carrier.runtime.js) */
   function tick(dt) {
+    _timeMs += dt;
+
     for (const u of _units) {
-      if (u.type !== 'carrier' || !u.task) continue;
+      if (u.type !== 'carrier') continue;
 
       const ts = u.task;
-      let target = null;
 
-      if (ts.phase === 'toSource' && ts.from) {
-        target = { x: ts.from.tx, y: ts.from.ty };
-      } else if (ts.phase === 'toTarget' && ts.to) {
-        target = { x: ts.to.tx, y: ts.to.ty };
-      }
+      if (ts) {
+        // AKTIVER JOB
+        let target = null;
 
-      if (!target) continue;
-
-      const arrived = _moveUnitTowards(u, target, dt);
-      if (arrived) {
-        if (ts.phase === 'toSource') {
-          // Ressource aufnehmen (nur Marker, Logik kann später verfeinert werden)
-          if (ts.res) {
-            u.carrying = { res: ts.res };
-          }
-          ts.phase = 'toTarget';
-        } else if (ts.phase === 'toTarget') {
-          // Job fertig
-          LOG('Job abgeschlossen', { unitId: u.id, jobId: ts.id });
-          u.task = null;
-          u.carrying = null;
+        if (ts.phase === 'toSource' && ts.from) {
+          target = { x: ts.from.tx, y: ts.from.ty };
+        } else if (ts.phase === 'toTarget' && ts.to) {
+          target = { x: ts.to.tx, y: ts.to.ty };
         }
+
+        if (!target) continue;
+
+        const arrived = _moveUnitTowards(u, target, dt);
+        if (arrived) {
+          if (ts.phase === 'toSource') {
+            // Ressource aufnehmen (nur Marker, Logik kann später verfeinert werden)
+            if (ts.res) {
+              u.carrying = { res: ts.res };
+            }
+            ts.phase = 'toTarget';
+          } else if (ts.phase === 'toTarget') {
+            // Job fertig
+            LOG('Job abgeschlossen', { unitId: u.id, jobId: ts.id });
+            u.task = null;
+            u.carrying = null;
+          }
+        }
+      } else {
+        // KEIN JOB → Idle-Bewegung, damit überhaupt Bewegung sichtbar ist
+        _updateIdleUnit(u, dt);
       }
     }
   }
@@ -310,156 +271,7 @@
     _ensureGameBinding(game);
   }
 
-  /** Fallback-Logik für HQ-fertig → Träger spawnen ***************************/
-
-  function _isHQLike(obj) {
-    if (!obj) return false;
-    const id   = obj.id   || obj.type || obj.buildingId || '';
-    const name = String(id);
-    if (name === 'b.hq') return true;
-
-    // etwas gröber: JSON-String enthält "b.hq"
-    try {
-      const s = JSON.stringify(obj);
-      if (s.includes('"b.hq"')) return true;
-    } catch (_) {
-      /* ignore */
-    }
-    return false;
-  }
-
-  function _tryFallbackHQSpawn(reason, eventDetail) {
-    // Wenn bereits HQPos und mindestens ein Carrier existiert → nichts tun
-    if (_hqPos && _units.some(u => u.type === 'carrier')) {
-      LOG('Fallback-HQ: bereits Carrier vorhanden – nichts zu tun', { reason });
-      return;
-    }
-
-    const d = eventDetail || {};
-    let hqBuilding = null;
-
-    // 1) Direkt aus Event, falls ein "Building" drin steckt
-    if (_isHQLike(d)) {
-      hqBuilding = d;
-    } else if (d.building && _isHQLike(d.building)) {
-      hqBuilding = d.building;
-    } else if (d.data && _isHQLike(d.data)) {
-      hqBuilding = d.data;
-    }
-
-    // 2) Falls im Game noch Infos hängen
-    const game = _gameRef || window.Game || null;
-    if (!hqBuilding && game && Array.isArray(game.buildings)) {
-      hqBuilding = game.buildings.find(
-        b => b && _isHQLike(b)
-      ) || null;
-    }
-
-    // 3) Tile-Position in folgender Reihenfolge suchen:
-    //    a) in hqBuilding
-    //    b) letzte HQ-Platzierung (_lastHQPlacement)
-    //    c) direkt im Event-Detail
-    let pos = null;
-    if (hqBuilding) {
-      pos = _extractTilePosFromAny(hqBuilding);
-    }
-    if (!pos && _lastHQPlacement) {
-      pos = _lastHQPlacement;
-    }
-    if (!pos) {
-      pos = _extractTilePosFromAny(d);
-    }
-
-    if (!pos) {
-      WARN('Fallback-HQ: keine verwertbare HQ-Position', {
-        reason,
-        hqBuilding: hqBuilding ? { id: hqBuilding.id } : null,
-        lastPlacement: _lastHQPlacement,
-        eventDetail: d
-      });
-      return;
-    }
-
-    const tx = _num(pos.tx, NaN);
-    const ty = _num(pos.ty, NaN);
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
-      WARN('Fallback-HQ: ungültige HQ-Position', {
-        reason,
-        pos,
-        hqBuilding: hqBuilding ? { id: hqBuilding.id } : null
-      });
-      return;
-    }
-
-    const setPos = setHQPos(tx, ty);
-    if (!setPos) {
-      WARN('Fallback-HQ: setHQPos fehlgeschlagen', { reason, tx, ty });
-      return;
-    }
-
-    // Nur spawnen, wenn noch keine Carrier existieren (sonst doppelt)
-    const hadCarrier = _units.some(u => u.type === 'carrier');
-    if (!hadCarrier) {
-      spawnInitialCarriers(3);
-      LOG('Fallback-HQ: Träger gespawnt', { reason, hqPos: setPos });
-    } else {
-      LOG('Fallback-HQ: HQPos gesetzt, aber Carrier existieren schon', {
-        reason,
-        hqPos: setPos
-      });
-    }
-  }
-
-  // Event-Hooks: HQ-Platzierung merken + HQ-Fertig erkennen
-  try {
-    // 1) HQ-Platzierung merken
-    window.addEventListener('cb:build:place', (ev) => {
-      const d = ev?.detail ?? ev;
-      if (!d) return;
-
-      LOG('cb:build:place Event empfangen', d);
-
-      const isHQ =
-        _isHQLike(d) ||
-        (d.building && _isHQLike(d.building)) ||
-        (d.data && _isHQLike(d.data));
-
-      if (!isHQ) return;
-
-      const pos = _extractTilePosFromAny(d);
-      if (pos) {
-        _lastHQPlacement = pos;
-        LOG('HQ-Placement gemerkt', { pos });
-      } else {
-        WARN('HQ-Placement ohne erkennbare Tile-Pos', d);
-      }
-    });
-
-    // 2) Gebäude fertig – Fallback-HQ aktivieren
-    window.addEventListener('cb:construction:complete', (ev) => {
-      const d = ev?.detail ?? ev;
-      if (!d) return;
-      if (!_isHQLike(d) && !(d.building && _isHQLike(d.building)) &&
-          !(d.data && _isHQLike(d.data))) {
-        return;
-      }
-      _tryFallbackHQSpawn('cb:construction:complete', d);
-    });
-
-    window.addEventListener('cb:build:complete', (ev) => {
-      const d = ev?.detail ?? ev;
-      if (!d) return;
-      if (!_isHQLike(d) && !(d.building && _isHQLike(d.building)) &&
-          !(d.data && _isHQLike(d.data))) {
-        return;
-      }
-      _tryFallbackHQSpawn('cb:build:complete', d);
-    });
-  } catch (err) {
-    WARN('HQ-Fallback-Listener konnten nicht registriert werden', err);
-  }
-
-  /** Event-Hook für cb:game:start (DOM-CustomEvent) **************************/
+  /** Event-Hook für cb:game:start (DOM-CustomEvent) *********************** */
 
   try {
     window.addEventListener('cb:game:start', (ev) => {
@@ -485,5 +297,5 @@
     tick
   };
 
-  LOG('Modul geladen v25.11.30-final-4 (HQ-Fallback+Placement+Extra-Scan)');
+  LOG('Modul geladen v25.11.30-final-idle-move');
 })();
