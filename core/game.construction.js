@@ -1,8 +1,17 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
- * Version : v25.11.30-instance-fix1
- * Zweck   : Bauphasen steuern (mit Fallback, falls Träger/Events klemmen)
- *           → meldet fertige Gebäude mit exakter Instanz-Position
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.11.30-instance-fix2
+ *
+ * Zweck   :
+ *   - Steuert die Bauphasen von Gebäuden (Baustelle → Material → Finish → fertig)
+ *   - Verarbeitet Material-Lieferungen der Träger (cb:build:deliver)
+ *   - Meldet fertige Gebäude mit exakter Instanz-Position (cb:build:complete)
+ *
+ * Hinweis:
+ *   - Wir bleiben bei einer einfachen „Fake-Baustelle“:
+ *       • ohne echte Lager-Bestände
+ *       • ABER: mit echter Zuordnung „Material kam bei diesem Gebäude an“
  * ========================================================================== */
 
 (function () {
@@ -10,6 +19,7 @@
 
   const TAG = '[construction]';
   const LOG = (...a) => (window.CBLog?.ok ?? console.log)(TAG, ...a);
+  const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
   const PHASE = {
     SITE    : 0,
@@ -19,34 +29,95 @@
   };
 
   const TIME = {
-    SITE    : 2000,
+    SITE    : 2000,  // Zeit bis zum Wechsel in MATERIAL (Fallback)
     MATERIAL: 1500,
     FINISH  : 1200
   };
 
+  // -------------------------------------------------------------------------
+  // Hilfsfunktionen
+  // -------------------------------------------------------------------------
+
   function getBuildings() {
-    return (window.Game && Array.isArray(Game.buildings))
-      ? Game.buildings
+    return (window.Game && Array.isArray(window.Game.buildings))
+      ? window.Game.buildings
       : [];
+  }
+
+  function toNumberOr(obj, key, fallback) {
+    const v = Number(obj?.[key]);
+    return Number.isFinite(v) ? v : fallback;
+  }
+
+  /**
+   * Finde Gebäude, dessen Tile-Rechteck die übergebene Position enthält.
+   *  - b.x, b.y  ... linke obere Ecke
+   *  - b.w, b.h  ... Breite/Höhe in Tiles
+   *  - posX,posY ... irgendein Punkt (z.B. Gebäude-Mitte)
+   */
+  function findBuildingAt(posX, posY) {
+    const list = getBuildings();
+    if (!list.length) return null;
+
+    for (const b of list) {
+      if (!b) continue;
+
+      const bx = toNumberOr(b, 'x', NaN);
+      const by = toNumberOr(b, 'y', NaN);
+      const bw = toNumberOr(b, 'w', 1);
+      const bh = toNumberOr(b, 'h', 1);
+
+      if (!Number.isFinite(bx) || !Number.isFinite(by)) continue;
+
+      const inX = posX >= bx && posX < bx + bw;
+      const inY = posY >= by && posY < by + bh;
+
+      if (inX && inY) return b;
+    }
+
+    return null;
   }
 
   // -------------------------------------------------------------------------
   // Event: Material geliefert (von GameUnits)
+  //  -> cb:build:deliver { x, y, res?, jobId? }
   // -------------------------------------------------------------------------
   window.addEventListener('cb:build:deliver', (ev) => {
-    const { x, y } = ev.detail || {};
-    const list = getBuildings();
-    const b = list.find((b) => b.x === x && b.y === y);
-    if (!b) return;
+    const d = ev.detail || {};
+    const x = toNumberOr(d, 'x', NaN);
+    const y = toNumberOr(d, 'y', NaN);
 
-    b.hasMaterial = true; // Flag setzen → nächste Tick-Runde kann Phase hochschalten
-    LOG('Material geliefert', b.id, '→ hasMaterial=true');
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      WARN('cb:build:deliver ohne gültige Koordinaten', d);
+      return;
+    }
+
+    const b = findBuildingAt(x, y);
+    if (!b) {
+      WARN('cb:build:deliver – kein Gebäude an Position gefunden', { x, y, detail: d });
+      return;
+    }
+
+    // Flag setzen: dieses Gebäude hat Material bekommen
+    b.hasMaterial = true;
+
+    LOG('Material geliefert', {
+      id    : b.id,
+      x     : b.x,
+      y     : b.y,
+      w     : b.w,
+      h     : b.h,
+      fromX : x,
+      fromY : y,
+      res   : d.res,
+      jobId : d.jobId
+    });
   });
 
   // -------------------------------------------------------------------------
   // Tick: Bauphasen voranschieben
   //  - läuft immer, egal ob Events kommen oder nicht
-  //  - Events dienen nur dazu, schneller voranzukommen
+  //  - Events dienen dazu, schneller voranzukommen
   // -------------------------------------------------------------------------
   function tick(dt) {
     const list = getBuildings();
@@ -63,7 +134,8 @@
         case PHASE.SITE: {
           b.buildTimer += ms;
 
-          // Fallback: auch ohne Material beginnt irgendwann der Aufbau
+          // Fallback: nach TIME.SITE geht's auch ohne Lieferung weiter,
+          // aber wenn hasMaterial früh gesetzt wird, sofort Phase MATERIAL.
           if (b.hasMaterial || b.buildTimer > TIME.SITE) {
             b.buildStage = PHASE.MATERIAL;
             b.buildTimer = 0;
@@ -74,7 +146,8 @@
 
         case PHASE.MATERIAL: {
           b.buildTimer += ms;
-          // Mit Material etwas schneller fertig
+
+          // Mit Material: schneller bauen
           const limit = b.hasMaterial ? TIME.MATERIAL * 0.6 : TIME.MATERIAL;
           if (b.buildTimer > limit) {
             b.buildStage = PHASE.FINISH;
@@ -86,13 +159,12 @@
 
         case PHASE.FINISH: {
           b.buildTimer += ms;
-          const limit = TIME.FINISH;
-          if (b.buildTimer > limit) {
+          if (b.buildTimer > TIME.FINISH) {
             b.buildStage   = PHASE.COMPLETE;
             b.buildTimer   = 0;
             b.hasMaterial  = false;
 
-            // WICHTIG: fertiges Gebäude mit Instanz-Koordinaten melden
+            // Fertiges Gebäude inkl. Koordinaten melden
             try {
               window.dispatchEvent(new CustomEvent('cb:build:complete', {
                 detail: {
@@ -103,7 +175,9 @@
                   h : b.h
                 }
               }));
-            } catch (_) { /* nicht kritisch */ }
+            } catch (e) {
+              WARN('cb:build:complete dispatch fehlgeschlagen', e);
+            }
 
             LOG('Gebäude fertig', b.id);
           }
@@ -119,4 +193,5 @@
   }
 
   window.GameConstruction = { tick };
+  LOG('Construction-Modul aktiv (instance-fix2)');
 })();
