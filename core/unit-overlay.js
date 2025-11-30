@@ -1,17 +1,17 @@
 /* ============================================================================
  * Datei   : core/unit-overlay.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-bubblefix1
+ * Version : v25.11.30-overlay-carrier-res3
  *
- * Zweck   : Zeichnet Ressourcenkugeln (Blasen) über Trägern.
- *           Läuft auf einem separaten Canvas (#units-overlay), das
- *           exakt über dem Game-Canvas liegt und NICHT klickbar ist.
+ * Zweck   : Ressourcenkugeln über Trägern (Carrier)
+ *           - Fallback-Bubble (neutral)
+ *           - Trage-Bubble (Icon + Farbe der Ressource)
+ *           - Auftrags-Bubble (halbtransparent + roter Rand, wenn Job bekannt)
  *
- * Wichtige Punkte:
- *   - Units-Quelle: Game.getUnits() → Game.units → GameUnits.getUnits()
- *   - Positionen werden mit Kamera (GameCamera) + tileSize berechnet
- *   - Wenn keine Ressource erkannt wird, trotzdem eine neutrale Blase
- *   - Debug-Logs bleiben drin, bitte NICHT entfernen :)
+ * WICHTIG:
+ *   - nutzt GameUnits / Game.getUnits() / Game.units
+ *   - Kamera-Umrechnung wie im Renderer (GameCamera.x/y/zoom, Game.tileSize)
+ *   - Canvas (#units-overlay) liegt exakt über #game
  * ========================================================================== */
 (function () {
   'use strict';
@@ -20,49 +20,53 @@
   const LOG  = (...a) => (window.CBLog?.info || console.info)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn || console.warn)(TAG, ...a);
 
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // KONSTANTEN
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   const CANVAS_ID = 'units-overlay';
 
-  // Farben für bekannte Ressourcen
+  // Farben für Ressourcentypen
   const RES_COLORS = {
-    wood : '#d19a55',
-    stone: '#c0c0c0',
-    food : '#f4c965',
-    gold : '#ffd84a',
+    wood   : '#d49a55',
+    stone  : '#c0c0c0',
+    food   : '#f4c965',
+    gold   : '#ffd84a',
     default: '#f0f0f0'
   };
 
-  // -------------------------------------------------------------------------
+  // Emoji-„Icons“ für Ressourcen (später gern durch echte Sprites ersetzen)
+  const RES_EMOJI = {
+    wood   : '🪵',
+    stone  : '🪨',
+    food   : '🍞',
+    gold   : '🪙',
+    default: ''
+  };
+
+  // ---------------------------------------------------------------------------
   // STATE
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   /** @type {HTMLCanvasElement|null} */
   let canvas = null;
   /** @type {CanvasRenderingContext2D|null} */
   let ctx = null;
 
+  let lastW = 0;
+  let lastH = 0;
   let running = false;
   let rafId   = 0;
 
-  // Letzte bekannte Canvas-Größe (CSS-Pixel)
-  let lastW = 0;
-  let lastH = 0;
-
-  // -------------------------------------------------------------------------
-  // HILFSFUNKTIONEN – DOM & Größen
-  // -------------------------------------------------------------------------
-
-  // Stellt sicher, dass es ein Overlay-Canvas gibt und passt Größe an das
-  // Game-Canvas (#game) an.
+  // ---------------------------------------------------------------------------
+  // HILFSFUNKTIONEN – DOM & GRÖSSE
+  // ---------------------------------------------------------------------------
   function ensureCanvas() {
-    const gameCanvas = document.getElementById('game');
-    if (!gameCanvas) {
-      WARN('kein #game-Canvas gefunden – Overlay inaktiv');
+    const game = document.getElementById('game');
+    if (!game) {
+      WARN('kein #game Canvas gefunden – Overlay inaktiv');
       return false;
     }
 
-    // Canvas anlegen, falls noch nicht vorhanden
+    // Canvas anlegen, falls nötig
     if (!canvas) {
       canvas = document.getElementById(CANVAS_ID);
       if (!canvas) {
@@ -70,47 +74,47 @@
         canvas.id = CANVAS_ID;
         canvas.style.position = 'absolute';
         canvas.style.left = '0';
-        canvas.style.top = '0';
+        canvas.style.top  = '0';
         canvas.style.pointerEvents = 'none';
-        canvas.style.zIndex = '5'; // über der Map, unter UI
-        // direkt über dem Game-Canvas einhängen
-        const parent = gameCanvas.parentElement || document.body;
+        canvas.style.zIndex = '15'; // über der Map, unter UI
+        const parent = game.parentElement || document.body;
         parent.appendChild(canvas);
       }
       ctx = canvas.getContext('2d');
     }
 
-    const rect = gameCanvas.getBoundingClientRect();
-    const cssW = rect.width  | 0;
-    const cssH = rect.height | 0;
+    const rect = game.getBoundingClientRect();
+    const cssW = Math.max(1, Math.round(rect.width));
+    const cssH = Math.max(1, Math.round(rect.height));
     const dpr  = window.devicePixelRatio || 1;
 
-    // Nur neu setzen, wenn sich etwas geändert hat
     if (cssW !== lastW || cssH !== lastH ||
-        canvas.width !== (cssW * dpr) || canvas.height !== (cssH * dpr)) {
+        canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
 
       lastW = cssW;
       lastH = cssH;
 
       canvas.style.width  = cssW + 'px';
       canvas.style.height = cssH + 'px';
+
       canvas.width  = cssW * dpr;
       canvas.height = cssH * dpr;
 
-      // Wir wollen in "CSS-Pixeln" zeichnen, deshalb transformieren wir
-      // direkt auf DPR, damit alle Koordinaten in Screen-Pixeln bleiben.
+      // Alle Koordinaten in "CSS-Pixeln" → wir skalieren intern auf DPR
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       LOG('Canvas-Größe synchronisiert', { cssW, cssH, dpr });
     }
 
+    // Overlay exakt über #game positionieren
+    canvas.style.left = rect.left + 'px';
+    canvas.style.top  = rect.top  + 'px';
+
     return true;
   }
 
-  // -------------------------------------------------------------------------
-  // HILFSFUNKTIONEN – Daten
-  // -------------------------------------------------------------------------
-
-  // Liefert die aktuell sichtbaren Units.
+  // ---------------------------------------------------------------------------
+  // HILFSFUNKTIONEN – UNITS & RESSOURCEN
+  // ---------------------------------------------------------------------------
   function getUnits() {
     const Game = window.Game || {};
 
@@ -131,50 +135,54 @@
     return [];
   }
 
-  // Ressource zu einem Unit ableiten (möglichst robust).
-  function getResIdForUnit(u) {
-    // 1) Direkte Kennzeichnung (String)
+  function normalizeResId(id) {
+    if (!id) return null;
+    let s = String(id);
+    s = s.replace(/^res[._]/, '');
+    s = s.replace(/^resource[._]/, '');
+    return s || null;
+  }
+
+  // Ressource, die der Träger GERADE wirklich trägt
+  function getCarryResId(u) {
+    if (!u) return null;
     if (typeof u.carrying === 'string' && u.carrying) {
       return normalizeResId(u.carrying);
     }
-
-    // 2) Objekt-Form, z.B. { id:'wood' } oder { res:'wood' }
     if (u.carrying && typeof u.carrying === 'object') {
       const c = u.carrying;
-      if (typeof c.id  === 'string') return normalizeResId(c.id);
+      if (typeof c.id === 'string')  return normalizeResId(c.id);
       if (typeof c.res === 'string') return normalizeResId(c.res);
-      if (typeof c.type=== 'string') return normalizeResId(c.type);
+      if (typeof c.type === 'string')return normalizeResId(c.type);
     }
-
-    // 3) Job-Info (u.task.job.*)
-    const job = u.task && u.task.job ? u.task.job : null;
-    if (job && typeof job === 'object') {
-      const keys = ['res', 'resource', 'resourceId', 'item', 'itemId', 'type'];
-      for (const k of keys) {
-        const v = job[k];
-        if (typeof v === 'string' && v) return normalizeResId(v);
-      }
-    }
-
-    // nichts erkannt → null (wir zeichnen trotzdem eine neutrale Blase)
     return null;
   }
 
-  // Dinge wie "res.wood" oder "resource.wood" auf "wood" reduzieren
-  function normalizeResId(id) {
-    if (!id) return id;
-    return String(id).replace(/^res[._]/, '').replace(/^resource[._]/, '');
+  // Ressource, die der aktuelle Job VORsieht (Auftrag)
+  function getJobResId(u) {
+    const job = u && u.task && u.task.job ? u.task.job : null;
+    if (!job || typeof job !== 'object') return null;
+
+    const keys = ['res', 'resource', 'resourceId', 'item', 'itemId', 'type'];
+    for (const k of keys) {
+      const v = job[k];
+      if (typeof v === 'string' && v) return normalizeResId(v);
+    }
+    return null;
   }
 
-  // Farbe für eine Ressource
   function getColorForRes(resId) {
     if (!resId) return RES_COLORS.default;
-    const key = normalizeResId(resId);
-    return RES_COLORS[key] || RES_COLORS.default;
+    return RES_COLORS[resId] || RES_COLORS.default;
   }
 
-  // Tile-Koordinaten → Screen-Pixel, analog zum Kamera-Setup im Renderer
-  function tileToScreen(x, y) {
+  function getEmojiForRes(resId) {
+    if (!resId) return RES_EMOJI.default;
+    return RES_EMOJI[resId] || RES_EMOJI.default;
+  }
+
+  // Tile → Screen-Koordinaten, analog zum Renderer
+  function tileToScreen(tx, ty) {
     const Game = window.Game || {};
     const ts   = Game.tileSize || 64;
 
@@ -183,95 +191,142 @@
     const camX = Number(cam.x    ?? 0);
     const camY = Number(cam.y    ?? 0);
 
-    // Weltkoordinaten (linke obere Ecke der Tile)
-    const wx = x * ts;
-    const wy = y * ts;
+    const wx = tx * ts;
+    const wy = ty * ts;
 
-    // Map benutzt: ctx.setTransform(zoom, 0, 0, zoom, -camX*zoom, -camY*zoom)
-    // → Screen: (wx - camX)*zoom
     const sx = (wx - camX) * zoom;
     const sy = (wy - camY) * zoom;
 
     return { sx, sy, ts, zoom };
   }
 
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // ZEICHEN-HILFEN
+  // ---------------------------------------------------------------------------
+  function drawCarryBubble(cx, cy, zoom, resId) {
+    const col   = getColorForRes(resId);
+    const emoji = getEmojiForRes(resId);
+
+    const rOuter = 14 * zoom;
+    const rInner = 11 * zoom;
+
+    // Schatten
+    ctx.beginPath();
+    ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+
+    // farbige Kugel
+    ctx.beginPath();
+    ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+
+    if (emoji) {
+      ctx.font = `${11 * zoom}px system-ui,apple-color-emoji,sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#3b2a15';
+      ctx.fillText(emoji, cx, cy);
+    }
+  }
+
+  function drawJobBubble(cx, cy, zoom, resId) {
+    if (!resId) return;
+
+    const emoji = getEmojiForRes(resId);
+    const r = 15 * zoom;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';       // halbtransparent
+    ctx.fill();
+    ctx.lineWidth = 2.0;
+    ctx.strokeStyle = 'rgba(200,40,40,0.9)';        // roter Rand
+    ctx.stroke();
+
+    if (emoji) {
+      ctx.font = `${12 * zoom}px system-ui,apple-color-emoji,sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#3b2a15';
+      ctx.fillText(emoji, cx, cy);
+    }
+  }
+
+  function drawFallbackBubble(cx, cy, zoom) {
+    const r = 6 * zoom;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  }
+
+  // ---------------------------------------------------------------------------
   // RENDER-LOOP
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   function render() {
     if (!running) return;
 
     if (!ensureCanvas() || !ctx) {
-      scheduleNextFrame();
+      scheduleNext();
       return;
     }
 
-    // Komplett löschen (in CSS-Pixeln, daher lastW/lastH)
     ctx.clearRect(0, 0, lastW, lastH);
 
     const units = getUnits();
     if (!units.length) {
-      scheduleNextFrame();
+      scheduleNext();
       return;
     }
 
     for (const u of units) {
-      if (!u || u.type !== 'carrier') continue;
+      if (!u) continue;
+      if (u.type && u.type !== 'carrier') continue;
 
       const { sx, sy, ts, zoom } = tileToScreen(u.x || 0, u.y || 0);
       const cx = sx + (ts * zoom) / 2;
       const cy = sy + (ts * zoom) / 2;
 
-      const resId = getResIdForUnit(u);
-      const col   = getColorForRes(resId);
+      const carryRes = getCarryResId(u);
+      const jobRes   = getJobResId(u);
 
-      const radiusOuter = 14 * zoom;
-      const radiusInner = 10 * zoom;
-      const bubbleY     = cy - 18 * zoom; // etwas über dem Träger
+      // Grundpositionen für die Bubbles
+      const yCarry = cy - 18 * zoom;   // Trage-Bubble (Hauptebene)
+      const yJob   = cy - 34 * zoom;   // Auftrags-Bubble etwas höher
 
-      // Außenrand
-      ctx.beginPath();
-      ctx.arc(cx, bubbleY, radiusOuter, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fill();
+      // 1) Auftrags-Bubble: nur wenn Job bekannt & noch nichts getragen wird
+      if (!carryRes && jobRes) {
+        drawJobBubble(cx, yJob, zoom, jobRes);
+      }
 
-      // Innenkreis (Ressource)
-      ctx.beginPath();
-      ctx.arc(cx, bubbleY, radiusInner, 0, Math.PI * 2);
-      ctx.fillStyle = col;
-      ctx.fill();
+      // 2) Trage-Bubble: wenn der Träger etwas in der Hand hat
+      if (carryRes) {
+        drawCarryBubble(cx, yCarry, zoom, carryRes);
+      }
 
-      // Optional kleines Initial als Text (H/S/N/G) – hilft beim Debug
-      const label =
-        resId && /^wood/.test(resId)  ? 'H' :
-        resId && /^stone/.test(resId) ? 'S' :
-        resId && /^food/.test(resId)  ? 'N' :
-        resId && /^gold/.test(resId)  ? 'G' : '';
-
-      if (label) {
-        ctx.font = `${10 * zoom}px system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#3b2a15';
-        ctx.fillText(label, cx, bubbleY);
+      // 3) Fallback: wenn wir gar nichts wissen → kleine neutrale Kugel
+      if (!carryRes && !jobRes) {
+        drawFallbackBubble(cx, yCarry, zoom);
       }
     }
 
-    scheduleNextFrame();
+    scheduleNext();
   }
 
-  function scheduleNextFrame() {
+  function scheduleNext() {
     rafId = window.requestAnimationFrame(render);
   }
 
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // STEUERUNG
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   function start() {
     if (running) return;
     running = true;
-    LOG('gestartet (Ressourcenkugeln aktiv)');
-    scheduleNextFrame();
+    LOG('gestartet (Carrier-Overlay mit Ressourcensymbolen)');
+    scheduleNext();
   }
 
   function stop() {
@@ -287,19 +342,17 @@
     LOG('gestoppt');
   }
 
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // EXPORT / AUTO-START
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   window.UnitOverlay = {
     start,
     stop,
     isRunning: () => running
   };
 
-  // Nach Spielstart automatisch aktivieren
-  window.addEventListener('cb:game:start', () => {
-    start();
-  });
+  // Startet automatisch, sobald das Spiel losläuft
+  window.addEventListener('cb:game:start', () => start());
 
-  LOG('geladen (bubblefix1 – wartet auf cb:game:start)');
+  LOG('geladen (overlay-carrier-res3, wartet auf cb:game:start)');
 })();
