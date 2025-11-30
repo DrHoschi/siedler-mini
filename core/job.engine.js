@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/job.engine.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-jobs-adapted
+ * Version : v25.11.30-jobs-instance-fix1
  *
  * Zweck   : Zentrale Job-Queue (passiv)
  *           – verwaltet Jobs (FIFO)
@@ -9,7 +9,7 @@
  *           – erzeugt Baujobs für fertige Gebäude (NICHT für HQ)
  *
  * WICHTIG:
- *   - GameUnits (core/game.units.js v25.11.30-simple-carriers) verwaltet:
+ *   - GameUnits (core/game.units.js simple-carriers) verwaltet:
  *       • HQ-Position in Tiles
  *       • Träger-Spawns
  *       • Bewegung in Tile-Koordinaten
@@ -78,7 +78,7 @@
     LOG('JobEngine bereit (passiv – CarrierRuntime holt Jobs aus Queue)');
   }
   function stop() {
-    LOG('JobEngine stop() aufgerufen – keine eigene Loop aktiv');
+    LOG('JobEngine gestoppt (kein Effekt – nur Logging)');
   }
 
   // -------------------------------------------------------------------------
@@ -146,16 +146,13 @@
   /**
    * Wird aufgerufen, wenn ein Gebäude fertiggestellt ist.
    * Erwartet Event:
-   *   detail: { id: 'b.lumberjack' } etc.
+   *   detail: { id: 'b.lumberjack', x, y, w, h }  (x/y/w/h optional für Legacy)
    *
-   * Holt:
-   *   – Building aus Game.buildings
-   *   – HQ-Position aus GameUnits (Tiles)
    * Erzeugt:
    *   – 3 Baujobs von HQ → Gebäude-Mitte (Tiles)
    */
   function handleBuildComplete(ev) {
-    const d = ev?.detail || {};
+    const d  = ev?.detail || {};
     const id = d.id;
 
     if (!id) {
@@ -163,16 +160,27 @@
       return;
     }
 
-    const building = findBuildingById(id);
-    if (!building) {
-      WARN('cb:build:complete – Building nicht gefunden', d);
-      return;
-    }
+    // 1) Koordinaten bevorzugt aus dem Event nehmen (Instanz!)
+    let bx = toNumberOr(d, 'x', NaN);
+    let by = toNumberOr(d, 'y', NaN);
+    let bw = toNumberOr(d, 'w', NaN);
+    let bh = toNumberOr(d, 'h', NaN);
 
-    const bx = toNumberOr(building, 'x', 0);
-    const by = toNumberOr(building, 'y', 0);
-    const bw = toNumberOr(building, 'w', 1);
-    const bh = toNumberOr(building, 'h', 1);
+    // 2) Fallback: wenn irgendwas davon fehlt → Building aus Game.buildings
+    if (!Number.isFinite(bx) || !Number.isFinite(by) ||
+        !Number.isFinite(bw) || !Number.isFinite(bh)) {
+
+      const building = findBuildingById(id);
+      if (!building) {
+        WARN('cb:build:complete – Building nicht gefunden (weder Detail-Koords noch Game-Liste)', d);
+        return;
+      }
+
+      if (!Number.isFinite(bx)) bx = toNumberOr(building, 'x', 0);
+      if (!Number.isFinite(by)) by = toNumberOr(building, 'y', 0);
+      if (!Number.isFinite(bw)) bw = toNumberOr(building, 'w', 1);
+      if (!Number.isFinite(bh)) bh = toNumberOr(building, 'h', 1);
+    }
 
     // Gebäude-Mitte in Tiles
     const cx = bx + bw / 2;
@@ -215,9 +223,9 @@
         add({
           id   : `job-build-${id}-${Date.now()}-${n}`,
           type : 'build',
-          res  : 'res.wood', // TODO: später aus Registry/Baukosten holen
-          from : { x: hq.x, y: hq.y }, // Tiles
-          to   : { x: cx,   y: cy    } // Tiles
+          res  : 'res.wood',             // TODO: später aus Registry/Baukosten holen
+          from : { x: hq.x, y: hq.y },   // Tiles
+          to   : { x: cx,   y: cy    }   // Tiles
         });
       }
 
@@ -255,5 +263,5 @@
   };
 
   start();
-  LOG('Modul geladen (v25.11.30-jobs-adapted)');
+  LOG('Modul geladen (v25.11.30-jobs-instance-fix1)');
 })(window);
