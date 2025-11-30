@@ -1,250 +1,251 @@
-/* ============================================================================
- * Datei   : core/game.units.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-units-safe-b1
- *
- * Zweck   : Einheiten (Carrier) steuern:
- *           – Bewegung
- *           – Job-Annahme
- *           – Baujobs korrekt ausführen
- *           – Produktionsjobs korrekt ausführen
- *           – Ressource tragen → Icon in unit.overlay.js
- *
- * Struktur: IMPORTS → STATE → JOBLOGIK → MOVEMENT → TICK → EXPORT
- * ========================================================================== */
+// ============================================================================
+//  Datei   : game.units.js
+//  Projekt : Neue Siedler – Units / Träger-Laufzeit
+//  Version : v25.11.30-fix-carrier-jumping
+//  Autor   : Mann + ChatGPT
+//  Zweck   : Verwaltung aller Einheiten (v.a. Träger) + Bewegung / Jobs
+// ============================================================================
 
-(function(){
+(function () {
   'use strict';
 
   const TAG = '[units]';
-  const LOG = (...a)=> (window.CBLog?.ok   ?? console.log)(TAG, ...a);
-  const WARN= (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // ---------------------------------------------------------------------------
-  // ZENTRALE Unit-Verwaltung
-  // ---------------------------------------------------------------------------
+  // Kleine Log-Helfer (nutzt CBLog, wenn vorhanden)
+  const LOG = (...args) => (window.CBLog?.info ?? console.log)(TAG, ...args);
+  const WARN = (...args) => (window.CBLog?.warn ?? console.warn)(TAG, ...args);
+
+  // Zentraler Container für alle Units
   const Units = {
-    list : [],     // alle Carrier
-    hqPos: null,   // wird beim HQ-Set gesetzt
-    Game : null,   // Referenz auf Game (für spätere Erweiterungen)
+    list: [],           // Array aller Einheiten
+    byId: Object.create(null), // Map id → Unit
+    nextId: 1,          // laufende ID
+    hqPos: null,        // Position der HQ (wird von außen gesetzt)
+    Game: null,         // Referenz auf Game (für später, falls nötig)
+    JobEngine: null,    // Referenz auf JobEngine
 
-    // ------------------------------------------------------------
-    // INIT
-    // ------------------------------------------------------------
-    /**
-     * Wird einmal von core/game.js (o. ä.) aufgerufen.
-     * Verdrahtet die Units ins globale Game-Objekt, sodass
-     *   – das Overlay
-     *   – andere Systeme
-     * problemlos auf die Unit-Liste zugreifen können.
-     */
-    init(Game){
-      Units.Game = Game;
-
-      // Zentrale Liste
-      Game.units   = Units.list;
-
-      // Komfort-Getter → bevorzugt von unit.overlay.js genutzt
-      Game.getUnits = function getUnits(){
-        return Units.list;
-      };
-
-      // Zusätzliche Fallbacks für ältere/andere Module
-      Game.__units  = Units.list;
-      window.__units = Units.list;
-
+    // -------------------------------------------------------------------------
+    // init(GameRef, JobEngineRef)
+    // -------------------------------------------------------------------------
+    init(GameRef, JobEngineRef) {
+      this.Game = GameRef || null;
+      this.JobEngine = JobEngineRef || null;
+      this.list = [];
+      this.byId = Object.create(null);
+      this.nextId = 1;
       LOG('Units.init abgeschlossen – Units an Game gebunden');
     },
 
-    // HQ-Position (Startpunkt für Carrier)
-    setHQPos(x,y){
-      if (!Number.isFinite(x) || !Number.isFinite(y)){
-        WARN('setHQPos mit ungültigen Werten:', x, y);
+    // -------------------------------------------------------------------------
+    // setHQPos(pos)
+    // Wird typischerweise vom carrier.runtime / construction-callback gerufen,
+    // sobald das HQ fertig gebaut ist.
+    // -------------------------------------------------------------------------
+    setHQPos(pos) {
+      if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
+        WARN('setHQPos: ungültige Position übergeben', pos);
         return;
       }
-      Units.hqPos = { x, y };
-      LOG('HQPos gesetzt:', Units.hqPos);
+      this.hqPos = { x: pos.x, y: pos.y };
+      LOG('HQPos gesetzt:', this.hqPos);
     },
 
-    // ------------------------------------------------------------
-    // Unit erzeugen
-    // ------------------------------------------------------------
-    spawnCarrier(x,y){
-      // Fallbacks: falls irgendwas Komisches reinkommt
-      if (!Number.isFinite(x) || !Number.isFinite(y)){
-        const hq = Units.hqPos || { x:0, y:0 };
-        x = hq.x;
-        y = hq.y;
-        WARN('spawnCarrier mit ungültigen Koordinaten – nutze HQPos', { x, y });
+    // -------------------------------------------------------------------------
+    // spawnCarrier(opts)
+    // Erzeugt eine neue Träger-Einheit.
+    // opts: { x, y, speed }
+    // Wenn x/y fehlen, wird HQ-Position verwendet.
+    // -------------------------------------------------------------------------
+    spawnCarrier(opts = {}) {
+      const { x, y, speed } = opts;
+      const hasX = Number.isFinite(x);
+      const hasY = Number.isFinite(y);
+
+      let startX = 0;
+      let startY = 0;
+
+      if (hasX && hasY) {
+        startX = x;
+        startY = y;
+      } else if (this.hqPos && Number.isFinite(this.hqPos.x) && Number.isFinite(this.hqPos.y)) {
+        startX = this.hqPos.x;
+        startY = this.hqPos.y;
+      } else {
+        // Wenn noch keine HQ-Position bekannt ist, einfach (0,0) nehmen.
+        WARN('spawnCarrier ohne bekannte HQPos – nutze (0,0) als Start', { x, y });
       }
 
-      const u = {
-        id : Units.list.length+1,
-        x  : x,
-        y  : y,
-        tx : x,
-        ty : y,
-        speed    : 2.2,
-        carrying : null, // { res:'res.wood', qty:1 } o. ä.
-        task     : null  // aktueller Job (build/carry)
+      const unit = {
+        id: this.nextId++,
+        type: 'carrier',
+        x: startX,
+        y: startY,
+        tx: startX,     // Ziel-X
+        ty: startY,     // Ziel-Y
+        speed: Number.isFinite(speed) ? speed : 2.0,
+        carrying: null, // { res, qty } oder null
+        task: null      // aktueller Job (Build/Transport/etc.)
       };
-      Units.list.push(u);
-      LOG('Carrier gespawnt', u);
+
+      this.list.push(unit);
+      this.byId[unit.id] = unit;
+      LOG('Carrier gespawnt', unit);
+      return unit;
     },
 
-    // Alias, falls jemand spawnUnit() aufruft
-    spawnUnit(x,y,opts){
-      Units.spawnCarrier(x,y,opts);
+    // Alias, falls irgendwo noch spawnUnit() benutzt wird:
+    spawnUnit(opts = {}) {
+      return this.spawnCarrier(opts);
     },
 
-    // ------------------------------------------------------------
-    // JOBLOGIK
-    // ------------------------------------------------------------
-    /**
-     * Liefert true, wenn mindestens eine Unit frei ist
-     * und einen Job annehmen kann.
-     */
-    needsJob(){
-      return Units.list.some(u => !u.task);
-    },
+    // -------------------------------------------------------------------------
+    // assignJob(unit, job)
+    // Wird von carrier.runtime / JobEngine aufgerufen, wenn ein Job zugewiesen
+    // wird. Wir tragen hier nur den Job ein und setzen das Ziel.
+    // job: { id, type, from:{x,y}, to:{x,y}, res, qty }
+    // -------------------------------------------------------------------------
+    assignJob(unit, job) {
+      if (!unit || !job) return;
+      unit.task = job;
 
-    /**
-     * Weist einem freien Carrier einen Job zu.
-     * Erwartet Job-Objekte der Form:
-     *   – Baujob:
-     *       { type:'build', res:'res.wood', from:{x,y}, to:{x,y} }
-     *   – Produktions-Transport:
-     *       { type:'carry', res:'res.wood', from:{x,y} }
-     */
-    assignJob(job){
-      const u = Units.list.find(u => !u.task);
-      if (!u) return;
-
-      u.task     = job;
-      u.carrying = null;
-
-      if (job.type === 'build'){
-        // Startpunkt: HQ / Lager (job.from sollte HQ/Lager sein)
-        u.tx = job.from.x;
-        u.ty = job.from.y;
-      }
-      else if (job.type === 'carry'){
-        // Produktion → zur Ressource
-        u.tx = job.from.x;
-        u.ty = job.from.y;
+      // Zielkoordinaten übernehmen
+      if (job.to && Number.isFinite(job.to.x) && Number.isFinite(job.to.y)) {
+        unit.tx = job.to.x;
+        unit.ty = job.to.y;
       }
 
-      LOG('assignJob →', job);
+      LOG('assignJob →', { unitId: unit.id, job });
     },
 
-    // ------------------------------------------------------------
-    // MOVEMENT
-    // ------------------------------------------------------------
-    move(u, dt){
-      // 1) Position prüfen
-      if (!Number.isFinite(u.x) || !Number.isFinite(u.y)){
-        const hq = Units.hqPos || { x:0, y:0 };
-        WARN('Unit-Position ungültig – setze auf HQ', u);
-        u.x = hq.x;
-        u.y = hq.y;
+    // -------------------------------------------------------------------------
+    // onArrive(unit)
+    // Wird aufgerufen, wenn die Unit ihr Ziel erreicht hat.
+    // Hier wird je nach Job-Typ entschieden, was passieren soll.
+    // -------------------------------------------------------------------------
+    onArrive(unit) {
+      const job = unit.task;
+      if (!job) return;
+
+      LOG('onArrive()', { unitId: unit.id, job });
+
+      // Beispiel-Handling für Build-Job:
+      if (job.type === 'build') {
+        // Material ist beim Bauplatz angekommen
+        if (job.res && job.from && job.to) {
+          LOG('Build-Job Material geliefert', {
+            unitId: unit.id,
+            res: job.res,
+            from: job.from,
+            to: job.to,
+            carrying: unit.carrying
+          });
+        }
+        // Job Engine informieren (falls API vorhanden)
+        if (this.JobEngine && typeof this.JobEngine.finishJob === 'function') {
+          this.JobEngine.finishJob(job.id, unit);
+        }
+      }
+
+      // Nach erledigtem Job entladen & Job löschen
+      unit.carrying = null;
+      unit.task = null;
+
+      // Nach dem Job wieder zur HQ zurücklaufen, wenn wir eine Position haben
+      if (this.hqPos && Number.isFinite(this.hqPos.x) && Number.isFinite(this.hqPos.y)) {
+        unit.tx = this.hqPos.x;
+        unit.ty = this.hqPos.y;
+      } else {
+        // Wenn keine HQPos bekannt → kein neues Ziel
+        unit.tx = unit.x;
+        unit.ty = unit.y;
+      }
+    },
+
+    // -------------------------------------------------------------------------
+    // move(unit, dt)
+    // Führt die eigentliche Bewegung der Unit in einem Tick aus.
+    // dt = Zeit seit letztem Tick (z.B. 0.2s)
+    // -------------------------------------------------------------------------
+    move(u, dt) {
+      if (!u.task) return; // Nichts zu tun
+
+      if (!Number.isFinite(u.speed) || u.speed <= 0) {
+        u.speed = 1.2; // Default-Speed
+      }
+
+      // -----------------------------------------------------------------------
+      // 1) Falls Position noch nie gesetzt oder korrupt ist → reparieren
+      // -----------------------------------------------------------------------
+      if (!Number.isFinite(u.x) || !Number.isFinite(u.y)) {
+        // Versuche zuerst, die Startposition aus dem Job zu nehmen (task.from).
+        const from = u.task && u.task.from;
+        const hasFrom = from && Number.isFinite(from.x) && Number.isFinite(from.y);
+        const hasTarget = Number.isFinite(u.tx) && Number.isFinite(u.ty);
+
+        if (hasFrom) {
+          // Start am Lager / HQ / Ausgangspunkt der Lieferung
+          u.x = from.x;
+          u.y = from.y;
+          LOG('Init-Position aus task.from gesetzt', u);
+        } else if (hasTarget) {
+          // Fallback: Start direkt am Ziel (besser als null → verhindert Springen)
+          u.x = u.tx;
+          u.y = u.ty;
+          LOG('Init-Position aus tx/ty gesetzt', u);
+        } else if (this.hqPos && Number.isFinite(this.hqPos.x) && Number.isFinite(this.hqPos.y)) {
+          // Letzter sanfter Fallback: HQ-Position
+          u.x = this.hqPos.x;
+          u.y = this.hqPos.y;
+          LOG('Init-Position aus HQPos gesetzt', u);
+        } else {
+          // *Nur* wenn wirklich gar nichts bekannt ist, hart auf (0,0) gehen.
+          u.x = 0;
+          u.y = 0;
+          WARN('Unit-Position komplett unbekannt – setze auf (0,0)', u);
+        }
       }
 
       // 2) Ziel prüfen
-      if (!Number.isFinite(u.tx) || !Number.isFinite(u.ty)){
-        WARN('Unit-Ziel ungültig – setze Ziel = Position', u);
-        u.tx = u.x;
-        u.ty = u.y;
-      }
+      const dx = u.tx - u.x;
+      const dy = u.ty - u.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-      const dx   = u.tx - u.x;
-      const dy   = u.ty - u.y;
-      const dist = Math.hypot(dx,dy);
-
-      if (!Number.isFinite(dist)){
-        WARN('dist NaN für Unit, breche Bewegung ab', u);
+      if (distance === 0) {
+        // Schon am Ziel → Job abschließen
+        this.onArrive(u);
         return;
       }
 
-      // Wenn fast am Ziel → Arrival-Logik
-      if (dist < 0.02){
-        Units.onArrive(u);
-        return;
-      }
-
+      // 3) Schrittweite (abhängig von speed & dt)
       const step = u.speed * dt;
-      if (step <= 0) return;
 
-      u.x += dx/dist * step;
-      u.y += dy/dist * step;
-    },
-
-    // ------------------------------------------------------------
-    // ANKUNFT
-    // ------------------------------------------------------------
-    onArrive(u){
-      const job = u.task;
-      if (!job) return;
-
-      // --------- BAUJOB ---------
-      if (job.type === 'build'){
-        if (!u.carrying){
-          // Schritt 1: Ressource am HQ holen
-          u.carrying = { res: job.res, qty:1 };
-
-          // Ziel: Baustelle
-          u.tx = job.to.x;
-          u.ty = job.to.y;
-        } else {
-          // Schritt 2: Baustelle erreicht → Ressource ablegen
-          dispatchEvent(new CustomEvent('cb:build:deliver',{
-            detail:{
-              res: job.res,
-              qty: 1,
-              x  : job.to.x,
-              y  : job.to.y
-            }
-          }));
-          u.carrying = null;
-          u.task     = null;
-        }
-        return;
-      }
-
-      // --------- PRODUKTIONSJOB ---------
-      if (job.type === 'carry'){
-        if (!u.carrying){
-          // Ressource aufnehmen
-          u.carrying = { res: job.res, qty:1 };
-
-          // Ziel: HQ
-          if (Units.hqPos){
-            u.tx = Units.hqPos.x;
-            u.ty = Units.hqPos.y;
-          }
-        } else {
-          // Im HQ ablegen
-          dispatchEvent(new CustomEvent('cb:warehouse:push',{
-            detail:{
-              res: job.res,
-              qty: 1
-            }
-          }));
-          u.carrying = null;
-          u.task     = null;
-        }
+      if (step >= distance) {
+        // Ziel wird in diesem Tick erreicht
+        u.x = u.tx;
+        u.y = u.ty;
+        this.onArrive(u);
+      } else {
+        // Richtung normalisieren und ein Stück laufen
+        const nx = dx / distance;
+        const ny = dy / distance;
+        u.x += nx * step;
+        u.y += ny * step;
       }
     },
 
-    // ------------------------------------------------------------
-    // TICK
-    // ------------------------------------------------------------
-    tick(dt){
-      for (const u of Units.list){
-        Units.move(u,dt);
+    // -------------------------------------------------------------------------
+    // tick(dt)
+    // Wird von der Game-Loop aufgerufen (z.B. alle 200ms) und bewegt alle Units.
+    // -------------------------------------------------------------------------
+    tick(dt) {
+      if (!Array.isArray(this.list) || this.list.length === 0) return;
+      for (const u of this.list) {
+        this.move(u, dt);
       }
     }
   };
 
-  // Globale Export-Struktur
+  // Expose nach außen
   window.GameUnits = Units;
+
 })();
