@@ -1,131 +1,148 @@
 /* ============================================================================
  * Datei    : core/job.engine.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final-JobHQ
- * Zweck    : Vereinfachte Job-Engine
- *            - kümmert sich aktuell NUR darum:
- *              → wenn HQ fertig gebaut ist:
- *                * HQ-Position an Units übergeben
- *                * Träger am HQ spawnen
+ * Version  : v25.11.30-final
+ * Zweck    : Zentrale Job-Warteschlange (aktuell Baujobs)
  *
- * Später:
- *   - Baujobs für andere Gebäude
- *   - Produktionsjobs (Holz, Fisch, Stein, ...)
- *   - Prioritäten / Warteschlangen
- * ============================================================================
- */
-(function () {
+ * Architektur:
+ *   – JobEngine erzeugt Jobs bei Bauabschluss (HQ, Gebäude)
+ *   – CarrierRuntime zieht Jobs per JobEngine.pop() und gibt sie an GameUnits
+ *   – GameUnits.assignJob(job) weist den Job einem freien Carrier zu
+ *
+ * Öffentliche API (global):
+ *   window.JobEngine = {
+ *     push(job),
+ *     pop(),
+ *     handleBuildComplete(building)
+ *   }
+ * ============================================================================ */
+(() => {
   'use strict';
 
-  const global = window;
-  const LOG  = global.LOG  ? global.LOG.bind(global,  '[job.engine]') : console.log.bind(console, '[job.engine]');
-  const WARN = global.WARN ? global.WARN.bind(global, '[job.engine]') : console.warn.bind(console, '[job.engine]');
+  const TAG  = '[job.engine]';
+  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
+  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  const Game  = global.Game  || null;
-  const Units = global.GameUnits || null;
+  /** interne Warteschlange *****************************************************/
 
-  // ---------------------------------------------------------------------------
-  // Helper: HQ-Mitte aus einem Building-Objekt berechnen
-  // building: { id, tx, ty, w, h }
-  // ---------------------------------------------------------------------------
-  function getBuildingCenter(building) {
-    if (!building) return null;
+  /** @type {Array<object>} */
+  const _queue = [];
 
-    const w = building.w || 1;
-    const h = building.h || 1;
-
-    // Mitte der Kachelfläche (wie früher: +w/2 - 0.5)
-    const cx = (building.tx || 0) + w / 2 - 0.5;
-    const cy = (building.ty || 0) + h / 2 - 0.5;
-
-    return { cx, cy };
+  function push(job) {
+    if (!job) return;
+    _queue.push(job);
+    LOG('Job hinzugefügt', { id: job.id, type: job.type, queueLen: _queue.length });
   }
 
-  // ---------------------------------------------------------------------------
-  // Handler für cb:build:complete
-  // ---------------------------------------------------------------------------
-  function handleBuildComplete(ev) {
+  function pop() {
+    const job = _queue.shift() ?? null;
+    if (job) {
+      LOG('Job entnommen', { id: job.id, type: job.type, queueLen: _queue.length });
+    }
+    return job;
+  }
+
+  /**
+   * Hilfsfunktion: HQ-Mittelpunkt in Tile-Koordinaten bestimmen.
+   * Erwartet ein Gebäude-Objekt mit x,y,w,h in TILES.
+   */
+  function _getBuildingCenterTiles(b) {
+    const tx = Number(b.x ?? 0) + Number(b.w ?? 1) / 2;
+    const ty = Number(b.y ?? 0) + Number(b.h ?? 1) / 2;
+    return { tx, ty };
+  }
+
+  /**
+   * Wird von construction.runtime.js o. ä. aufgerufen, sobald ein Gebäude
+   * fertiggestellt ist.
+   *
+   * building-Objekt:
+   *   { id, type, x, y, w, h, buildCost? }
+   */
+  function handleBuildComplete(building) {
     try {
-      const building = ev && ev.building;
-      if (!building) {
-        WARN('handleBuildComplete: kein building im Event', ev);
+      const b = building?.building ?? building;
+      if (!b || !b.id) {
+        WARN('handleBuildComplete: kein gültiges Gebäude', building);
         return;
       }
 
-      const id = building.id;
-      LOG('handleBuildComplete für', id, building);
-
-      // 1) HQ fertig → HQ-Position setzen + Träger spawnen
-      if (id === 'b.hq') {
-        const center = getBuildingCenter(building);
-        if (!center) {
-          WARN('HQ fertig, aber Center konnte nicht berechnet werden', building);
+      // Spezialfall: HQ – HQ-Position setzen und Träger spawnen
+      if (b.id === 'b.hq') {
+        if (!window.GameUnits || typeof window.GameUnits.setHQPos !== 'function') {
+          WARN('handleBuildComplete(HQ): GameUnits.setHQPos nicht verfügbar');
           return;
         }
 
-        if (!Units) {
-          WARN('HQ fertig, aber GameUnits nicht verfügbar');
-          return;
+        const center = _getBuildingCenterTiles(b);
+        window.GameUnits.setHQPos(center);
+
+        // initial 3 Carrier spawnen (kannst du später anpassen)
+        if (typeof window.GameUnits.spawnInitialCarriers === 'function') {
+          window.GameUnits.spawnInitialCarriers(3);
         }
 
-        if (typeof Units.setHQPos === 'function') {
-          Units.setHQPos(center.cx, center.cy);
-        } else {
-          WARN('Units.setHQPos fehlt');
-        }
-
-        if (typeof Units.spawnCarriersForHQ === 'function') {
-          Units.spawnCarriersForHQ(3); // aktuell: 3 Träger
-        } else {
-          WARN('Units.spawnCarriersForHQ fehlt');
-        }
-
-        LOG('HQ fertig → HQPos gesetzt + Carrier gespawnt', center);
+        LOG('HQ fertig → HQPos gesetzt & Carrier gespawnt', { center });
         return;
       }
 
-      // 2) Andere Gebäude: aktuell nur Log, noch keine Jobs
-      LOG('Gebäude fertig (noch keine Job-Logik):', id);
+      // alle anderen Gebäude → Baujobs anlegen, sofern HQ schon bekannt ist
+      if (!window.GameUnits || typeof window.GameUnits.getHQPos !== 'function') {
+        WARN('handleBuildComplete: GameUnits nicht verfügbar – keine Baujobs', b.id);
+        return;
+      }
 
-      // Hier später: Baujobs/Produktion für Lumberjack, Fisher etc. anlegen
+      const hqPos = window.GameUnits.getHQPos();
+      if (!hqPos) {
+        LOG('Noch kein HQPos gesetzt – keine Baujobs für', b.id);
+        return;
+      }
 
-    } catch (e) {
-      // WICHTIG: hier KEIN "this.hqPos" o.ä. mehr verwenden → der alte Fehler kam daher
-      WARN('handleBuildComplete Fehler', e);
+      const center = _getBuildingCenterTiles(b);
+
+      // einfache Schätzung: wie viele Holz-Einheiten werden benötigt?
+      const woodCost =
+        Number(b.buildCost?.res?.wood) ||
+        Number(b.buildCost?.wood) ||
+        3; // Default, falls nichts angegeben
+
+      const jobCount = Math.max(1, woodCost);
+
+      for (let i = 0; i < jobCount; i++) {
+        const jobId = `build-${b.id}-${Date.now()}-${i}`;
+        push({
+          id   : jobId,
+          type : 'build',
+          res  : 'res.wood',
+          from : { tx: hqPos.tx, ty: hqPos.ty },
+          to   : { tx: center.tx, ty: center.ty }
+        });
+      }
+
+      LOG('Baujobs angelegt', { building: b.id, count: jobCount });
+    } catch (err) {
+      WARN('handleBuildComplete Fehler', err);
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Start-Funktion: registriert Event-Listener
-  // ---------------------------------------------------------------------------
-  function start() {
-    if (!Game || typeof Game.on !== 'function') {
-      WARN('start(): Game oder Game.on nicht verfügbar – JobEngine bleibt passiv');
-      return;
-    }
+  /** Event-Hooks ***************************************************************/
 
-    // Auf "Gebäude fertig" reagieren
-    Game.on('cb:build:complete', handleBuildComplete);
-
-    LOG('JobEngine bereit (HQ-Logik aktiv)');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Auto-Start bei cb:game:start
-  // ---------------------------------------------------------------------------
-  if (Game && typeof Game.on === 'function') {
-    Game.on('cb:game:start', function () {
-      LOG('cb:game:start erhalten → JobEngine.start()');
-      start();
+  // Fängt das "Gebäude fertig"-Event der Construction-Engine ab, falls vorhanden.
+  try {
+    window.addEventListener('cb:construction:building-complete', (ev) => {
+      handleBuildComplete(ev.detail);
     });
-  } else {
-    WARN('Game.on nicht verfügbar – JobEngine.start() muss manuell aufgerufen werden');
+  } catch (err) {
+    WARN('Konnte cb:construction:building-complete Listener nicht registrieren', err);
   }
 
-  // ---------------------------------------------------------------------------
-  // Öffentliche API (falls du später vom Inspector aus triggern willst)
-  // ---------------------------------------------------------------------------
-  global.JobEngine = {
-    start
+  /** Export nach global ********************************************************/
+
+  window.JobEngine = {
+    push,
+    pop,
+    handleBuildComplete
   };
+
+  LOG('JobEngine bereit (passiv – CarrierRuntime verteilt Jobs)');
 })();
