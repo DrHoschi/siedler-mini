@@ -5,7 +5,7 @@
  * Zweck    : Zeichnet alle Träger/Units als Debug-Overlay über die Karte
  *
  * - Liest Unit-Positionen aus GameUnits.getUnits()
- * - Verwendet Kamera aus window.Camera / MapRuntime
+ * - Verwendet GameCamera für die Projektion
  * - Registriert sich bei OverlayHooks (Layer-Tab / Debug-Overlay)
  * ============================================================================ */
 (() => {
@@ -15,7 +15,8 @@
   const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // Einfacher Zugriff auf Units
+  /** Hilfsfunktionen **********************************************************/
+
   function getUnits(){
     try{
       return window.GameUnits?.getUnits?.() || [];
@@ -25,46 +26,45 @@
     }
   }
 
-  // Kamera / Map-Helfer holen
+  /** Kamera holen – wir benutzen deine core/camera.js (GameCamera). */
   function getCamera(){
-    // MapRuntime hat meist eine getCamera()-API
-    if (window.MapRuntime?.getCamera){
-      return window.MapRuntime.getCamera();
-    }
-    // Fallback: globale Camera
-    if (window.Camera){
-      return window.Camera;
-    }
+    if (window.GameCamera) return window.GameCamera;
     return null;
   }
 
   /**
    * Wandelt Tile-Koordinaten (tx,ty) in Canvas-Koordinaten um.
-   * Hier nutzen wir MapRuntime / Camera, damit Zoom und Offset stimmen.
+   * Nutzt, wenn vorhanden, GameCamera.tileToScreen / worldToScreen.
+   * Fallback: einfache isometrische Projektion.
    */
   function tileToCanvas(tx, ty){
     const cam = getCamera();
-    if (!cam){
-      return { x: tx * 32, y: ty * 32 }; // sehr grober Fallback
+
+    // Wenn deine Kamera eine passende Helper-Funktion hat, zuerst versuchen:
+    try {
+      if (cam && typeof cam.tileToScreen === 'function') {
+        // Erwartet (tx,ty) und gibt {x,y} zurück
+        return cam.tileToScreen(tx, ty);
+      }
+      if (cam && typeof cam.worldToScreen === 'function') {
+        // Falls deine Weltkoordinaten = Tilekoordinaten sind
+        return cam.worldToScreen(tx, ty);
+      }
+    } catch (e) {
+      WARN('tileToCanvas via GameCamera failed', e?.message||e);
     }
 
-    // Falls MapRuntime eine Helper-Funktion hat:
-    if (window.MapRuntime?.tileToCanvas){
-      return window.MapRuntime.tileToCanvas(tx, ty, cam);
-    }
+    // Fallback: einfache Iso-Projektion
+    const tileW = (cam && cam.tileWidth)  || 64;
+    const tileH = (cam && cam.tileHeight) || 32;
+    const camX  = (cam && cam.x) || 0;
+    const camY  = (cam && cam.y) || 0;
 
-    // Vereinfachtes Beispiel: isometrische Projektion über Camera
-    const tileW = cam.tileWidth  || 64;
-    const tileH = cam.tileHeight || 32;
+    // Standard-Iso-Formel (wie bei Tiles): (tx-ty, tx+ty)
+    const sx = (tx - ty) * (tileW / 2) - camX;
+    const sy = (tx + ty) * (tileH / 2) - camY;
 
-    // World (iso) → Screen
-    const sx = (tx - ty) * (tileW / 2);
-    const sy = (tx + ty) * (tileH / 2);
-
-    return {
-      x: sx - (cam.x || 0),
-      y: sy - (cam.y || 0)
-    };
+    return { x: sx, y: sy };
   }
 
   /** Zeichnet alle Units als kleine Kreise mit "C" auf dem Canvas. */
@@ -85,7 +85,6 @@
       const p = tileToCanvas(u.x, u.y);
       const r = 6; // Radius in Pixeln
 
-      // Kreis
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(20, 200, 255, 0.85)';
@@ -94,8 +93,7 @@
       ctx.strokeStyle = '#003344';
       ctx.stroke();
 
-      // kleines "C" für Carrier
-      ctx.font = '8px sans-serif';
+      ctx.font = '8px system-ui, sans-serif';
       ctx.fillStyle = '#001016';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -110,7 +108,6 @@
    * Wir warten, bis OverlayHooks verfügbar sind (Layer-Tab / Debug-Layer).
    */
   function register(){
-    // Wenn OverlayHooks noch nicht da sind, wiederholt versuchen
     function tryRegister(){
       if (!window.OverlayHooks || typeof window.OverlayHooks.register !== 'function'){
         return false;
