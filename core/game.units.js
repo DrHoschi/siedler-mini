@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/game.units.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final-2 (HQ-Fallback + flexibles setHQPos)
+ * Version  : v25.11.30-final-3 (HQ-Fallback + Placement-Merker)
  * Zweck    : Zentrale Verwaltung aller Einheiten (aktuell nur Träger/Carrier)
  *            – speichert Einheitenliste
  *            – kennt HQ-Position in TILES
@@ -22,9 +22,10 @@
  * Außerdem:
  *   – Game.__units und window.__units werden mit dem gleichen Array verknüpft
  *   – optional: Game.getUnits() → Array zurück
- *   – Fallback: Wenn keine JobEngine aktiv ist, werden beim ersten HQ
- *     automatisch Träger gespawnt (Listener auf cb:construction:complete /
- *     cb:build:complete).
+ *   – Fallback:
+ *       • cb:build:place merkt sich HQ-Platzierung (Tile-Position)
+ *       • cb:construction:complete / cb:build:complete nutzt diese Position,
+ *         setzt HQPos und spawnt initiale Carrier, falls noch keine da sind.
  * ============================================================================ */
 (() => {
   'use strict';
@@ -44,6 +45,9 @@
 
   /** Referenz auf Game (wenn vorhanden) */
   let _gameRef = null;
+
+  /** letzte bekannte HQ-Platzierung (aus cb:build:place) */
+  let _lastHQPlacement = null;
 
   /** Hilfsfunktionen **********************************************************/
 
@@ -71,6 +75,50 @@
     const v = (value !== undefined && value !== null) ? value : fallback;
     const n = (typeof v === 'string') ? parseFloat(v) : v;
     return Number.isFinite(n) ? n : NaN;
+  }
+
+  /**
+   * Versucht aus einem beliebigen Objekt Tile-Koordinaten (tx,ty) zu lesen.
+   * – direkte Felder: tx/ty, cx/cy, x/y
+   * – verschachtelte Strukturen: tile, pos, center, placement, target
+   */
+  function _extractTilePosFromAny(obj, depth = 0) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (depth > 3) return null; // zur Sicherheit, keine endlosen Rekursionen
+
+    // 1) direkte Felder
+    {
+      const tx = _num(obj.tx, NaN);
+      const ty = _num(obj.ty, NaN);
+      if (Number.isFinite(tx) && Number.isFinite(ty)) {
+        return { tx, ty };
+      }
+    }
+    {
+      const cx = _num(obj.cx, NaN);
+      const cy = _num(obj.cy, NaN);
+      if (Number.isFinite(cx) && Number.isFinite(cy)) {
+        return { tx: cx, ty: cy };
+      }
+    }
+    {
+      const x = _num(obj.x, NaN);
+      const y = _num(obj.y, NaN);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        return { tx: x, ty: y };
+      }
+    }
+
+    // 2) verschachtelte Kandidaten
+    const nestedKeys = ['tile', 'pos', 'center', 'placement', 'target'];
+    for (const k of nestedKeys) {
+      if (obj[k] && typeof obj[k] === 'object') {
+        const res = _extractTilePosFromAny(obj[k], depth + 1);
+        if (res) return res;
+      }
+    }
+
+    return null;
   }
 
   /** neuen Carrier an einer Tile-Position anlegen (TILE-Koordinaten) */
@@ -105,7 +153,7 @@
     if (typeof posOrTx === 'object' && posOrTx !== null) {
       // Aufruf: setHQPos({tx,ty})
       tx = posOrTx.tx;
-      ty = posOrTx.ty;
+      ty = posOrTy = posOrTx.ty;
     } else if (typeof posOrTx === 'number' && typeof maybeTy === 'number') {
       // Aufruf: setHQPos(tx, ty)
       tx = posOrTx;
@@ -265,14 +313,11 @@
   /** Fallback-Logik für HQ-fertig → Träger spawnen ***************************
    *
    * Hintergrund:
-   *  – Normalerweise übernimmt JobEngine.handleBuildComplete(b.hq) diese
-   *    Aufgabe (HQPos setzen + spawnInitialCarriers).
-   *  – In deinem aktuellen Log taucht job.engine aber gar nicht auf.
-   *  – Damit du trotzdem Träger siehst, hängen wir uns hier direkt an die
-   *    Bau-Events und machen EINMAL einen Fallback:
-   *      → wenn b.hq fertig ODER wir ein HQ im Game finden
-   *      → und noch KEINE Carrier existieren
-   *      → dann HQPos bestimmen + 3 Carrier spawnen.
+   *  – JobEngine ist bei dir offenbar (noch) nicht aktiv.
+   *  – Deshalb hängen wir uns direkt an:
+   *        cb:build:place       → Position merken
+   *        cb:construction:complete / cb:build:complete
+   *                            → HQ erkennen, HQPos setzen, Carrier spawnen
    */
 
   function _tryFallbackHQSpawn(reason, eventDetail) {
@@ -282,15 +327,15 @@
       return;
     }
 
-    // 1) Versuchen, Building direkt aus Event zu nehmen
-    let hqBuilding = null;
     const d = eventDetail || {};
+    let hqBuilding = null;
 
+    // 1) Direkt aus Event, falls da mehr als nur id drin ist
     if (d.id === 'b.hq' || d.type === 'b.hq') {
       hqBuilding = d.building || d;
     }
 
-    // 2) Wenn das nicht klappt → in Game.buildings suchen
+    // 2) Falls im Game noch Infos hängen
     const game = _gameRef || window.Game || null;
     if (!hqBuilding && game && Array.isArray(game.buildings)) {
       hqBuilding = game.buildings.find(
@@ -298,22 +343,34 @@
       ) || null;
     }
 
-    if (!hqBuilding) {
-      WARN('Fallback-HQ: kein HQ-Building gefunden', { reason, d });
-      return;
-    }
+    // 3) Tile-Position aus Building ODER aus gemerkter HQ-Platzierung holen
+    let pos =
+      (hqBuilding && _extractTilePosFromAny(hqBuilding)) ||
+      _lastHQPlacement;
 
-    // Position bestimmen: bevorzugt cx/cy, sonst tx/ty, sonst x/y
-    const tx = _num(hqBuilding.cx, _num(hqBuilding.tx, hqBuilding.x));
-    const ty = _num(hqBuilding.cy, _num(hqBuilding.ty, hqBuilding.y));
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
-      WARN('Fallback-HQ: ungültige HQ-Position', { reason, hqBuilding });
-      return;
-    }
-
-    const pos = setHQPos(tx, ty);
     if (!pos) {
-      WARN('Fallback-HQ: setHQPos fehlgeschlagen', { reason });
+      WARN('Fallback-HQ: keine verwertbare HQ-Position', {
+        reason,
+        hqBuilding: hqBuilding ? { id: hqBuilding.id } : null,
+        lastPlacement: _lastHQPlacement
+      });
+      return;
+    }
+
+    const tx = _num(pos.tx, NaN);
+    const ty = _num(pos.ty, NaN);
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
+      WARN('Fallback-HQ: ungültige HQ-Position', {
+        reason,
+        pos,
+        hqBuilding: hqBuilding ? { id: hqBuilding.id } : null
+      });
+      return;
+    }
+
+    const setPos = setHQPos(tx, ty);
+    if (!setPos) {
+      WARN('Fallback-HQ: setHQPos fehlgeschlagen', { reason, tx, ty });
       return;
     }
 
@@ -321,17 +378,34 @@
     const hadCarrier = _units.some(u => u.type === 'carrier');
     if (!hadCarrier) {
       spawnInitialCarriers(3);
-      LOG('Fallback-HQ: Träger gespawnt', { reason, hqPos: pos });
+      LOG('Fallback-HQ: Träger gespawnt', { reason, hqPos: setPos });
     } else {
       LOG('Fallback-HQ: HQPos gesetzt, aber Carrier existieren schon', {
-        reason, hqPos: pos
+        reason,
+        hqPos: setPos
       });
     }
   }
 
-  // Event-Hooks für Bau-Fertig-Meldungen
+  // Event-Hooks: HQ-Platzierung merken + HQ-Fertig erkennen
   try {
-    // Wird typischerweise von construction.runtime.js emittiert
+    // 1) HQ-Platzierung merken
+    window.addEventListener('cb:build:place', (ev) => {
+      const d = ev?.detail ?? ev;
+      if (!d) return;
+
+      if (d.id === 'b.hq' || d.type === 'b.hq') {
+        const pos = _extractTilePosFromAny(d);
+        if (pos) {
+          _lastHQPlacement = pos;
+          LOG('HQ-Placement gemerkt', { pos });
+        } else {
+          WARN('HQ-Placement ohne erkennbare Tile-Pos', d);
+        }
+      }
+    });
+
+    // 2) Gebäude fertig – Fallback-HQ aktivieren
     window.addEventListener('cb:construction:complete', (ev) => {
       const d = ev?.detail ?? ev;
       if (!d) return;
@@ -340,7 +414,6 @@
       }
     });
 
-    // Optionaler zweiter Hook, falls irgendwo cb:build:complete verwendet wird
     window.addEventListener('cb:build:complete', (ev) => {
       const d = ev?.detail ?? ev;
       if (!d) return;
@@ -378,5 +451,5 @@
     tick
   };
 
-  LOG('Modul geladen v25.11.30-final-2 (mit HQ-Fallback)');
+  LOG('Modul geladen v25.11.30-final-3 (mit HQ-Fallback + Placement-Merker)');
 })();
