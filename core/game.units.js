@@ -79,7 +79,7 @@
       x: tx,
       y: ty,
       target: null,
-      speed: 1.5,       // Tiles / Sekunde
+      speed: 0.5,       // Tiles / Sekunde
       carrying: null,
       task: null
     };
