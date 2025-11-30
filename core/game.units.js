@@ -1,12 +1,13 @@
 /* ============================================================================
  * Datei   : core/game.units.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-carrier-jobs-fix1
+ * Version : v25.11.30-carrier-jobs-fix2
  *
- * Zweck   : Träger mit echtem Job-System
+ * Zweck   : Träger mit Job-System
  *           – verwaltet HQ-Position & Carrier-Liste
  *           – bewegt Carrier (Idle + Job-Phasen)
  *           – versteht Jobs mit {tx,ty} ODER {x,y}
+ *           – sendet cb:build:deliver bei Ankunft an der Baustelle
  * ========================================================================== */
 (function () {
   'use strict';
@@ -18,7 +19,7 @@
   // -------------------------------------------------------------------------
   // STATE
   // -------------------------------------------------------------------------
-  /** @type {Array<{id:number,type:string,x:number,y:number,target?:object,task?:object}>} */
+  /** @type {Array<{id:number,type:string,x:number,y:number,target?:object,task?:object,carrying?:string|null}>} */
   const _units = [];
   /** @type {{tx:number,ty:number}|null} */
   let _hqPos = null;
@@ -230,11 +231,23 @@
       return;
     }
 
-    // Phase 4: Abliefern
+    // Phase 4: Abliefern → Event schicken + Ladung leeren
     if (t.phase === 'deliver'){
-      // TODO: später cb:build:deliver bzw. Lager-Update senden
+      try{
+        window.dispatchEvent(new CustomEvent('cb:build:deliver', {
+          detail: {
+            x    : t.dest.x,
+            y    : t.dest.y,
+            res  : u.carrying,
+            jobId: t.job?.id
+          }
+        }));
+      } catch(e){
+        WARN('cb:build:deliver dispatch fehlgeschlagen', e);
+      }
+
       u.carrying = null;
-      u.task = null; // Job erledigt → Carrier wird wieder idle
+      u.task = null; // Job erledigt → Carrier wieder idle
       return;
     }
   }
@@ -302,5 +315,5 @@
     tick
   };
 
-  LOG('Units geladen → Jobfähig (fix1)');
+  LOG('Units geladen → Jobfähig (fix2, mit cb:build:deliver)');
 })();
