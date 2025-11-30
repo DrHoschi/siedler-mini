@@ -42,23 +42,33 @@
 
   const ctx = $overlay.getContext('2d');
 
-  function syncSize() {
-    // Wir orientieren uns an der sichtbaren Größe des Game-Canvas
+    // Passt Größe + Bildschirmposition des Overlays an das #game-Canvas an
+  function syncSize(){
+    if (!overlay || !$game) return;
+
     const rect = $game.getBoundingClientRect();
-    const w    = rect.width  || $game.width  || 1;
-    const h    = rect.height || $game.height || 1;
+    const dpr  = window.devicePixelRatio || 1;
 
-    const dpr = window.devicePixelRatio || 1;
+    // Sichtbare CSS-Größe des Game-Canvas
+    const wCss = Math.max(1, Math.round(rect.width  || $game.width  || 1));
+    const hCss = Math.max(1, Math.round(rect.height || $game.height || 1));
 
-    $overlay.width  = Math.round(w * dpr);
-    $overlay.height = Math.round(h * dpr);
+    // Interne Auflösung in Device-Pixel
+    const wDev = wCss * dpr;
+    const hDev = hCss * dpr;
 
-    $overlay.style.width  = Math.round(w) + 'px';
-    $overlay.style.height = Math.round(h) + 'px';
+    if (overlay.width  !== wDev) overlay.width  = wDev;
+    if (overlay.height !== hDev) overlay.height = hDev;
 
-    // Overlay exakt über den Game-Canvas legen
-    $overlay.style.left = '0px';
-    $overlay.style.top  = '0px';
+    // Sichtbare CSS-Größe des Overlays
+    overlay.style.width  = wCss + 'px';
+    overlay.style.height = hCss + 'px';
+
+    // WICHTIG:
+    // Overlay exakt an die gleiche Stelle kleben wie #game (Viewport-Koordinaten),
+    // damit worldToScreen() → (x,y) genau auf die Tiles vom Canvas passt.
+    overlay.style.left = rect.left + 'px';
+    overlay.style.top  = rect.top  + 'px';
   }
   syncSize();
 
