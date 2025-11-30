@@ -1,13 +1,14 @@
 /* ============================================================================
  * Datei    : core/unit-overlay.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-units-overlay-direct
+ * Version  : v25.11.30-units-overlay-direct-v2
  * Zweck    : Zeichnet Träger direkt in ein eigenes Canvas über dem Spiel.
  *
- *  - völlig unabhängig vom Path-Overlay
+ *  - unabhängig vom Path-Overlay
  *  - liest Positionen aus GameUnits.getUnits() / Game.getUnits() / window.__units
  *  - nutzt GameCamera.worldToScreen(), falls vorhanden
- *  - läuft per requestAnimationFrame
+ *  - übernimmt CSS-Transform + Position von #game, damit beim Schieben/Zoomen
+ *    alles synchron bleibt
  * ============================================================================ */
 (() => {
   'use strict';
@@ -25,11 +26,16 @@
 
   let _width  = 0;
   let _height = 0;
+  let _usedCamera = null; // 'GameCamera' oder 'fallback'
+
+  function getGameCanvas() {
+    return document.getElementById('game');
+  }
 
   function ensureCanvas() {
     if (_canvas && _ctx) return;
 
-    const gameCanvas = document.getElementById('game');
+    const gameCanvas = getGameCanvas();
     if (!gameCanvas) {
       WARN('kein #game Canvas gefunden');
       return;
@@ -39,11 +45,9 @@
 
     const c = document.createElement('canvas');
     c.id = 'units-overlay';
-    c.style.position      = 'absolute';
-    c.style.left          = gameCanvas.offsetLeft + 'px';
-    c.style.top           = gameCanvas.offsetTop + 'px';
-    c.style.pointerEvents = 'none';   // Klicks gehen weiter an das Spiel
-    c.style.zIndex        = '15';     // über #game (10), unter UI (1020)
+    c.style.position       = 'absolute';
+    c.style.pointerEvents  = 'none';   // Klicks gehen weiter an das Spiel
+    c.style.zIndex         = '15';     // über #game (10), unter UI (1020)
     c.style.imageRendering = 'pixelated';
 
     parent.insertBefore(c, gameCanvas.nextSibling);
@@ -57,27 +61,35 @@
     _canvas = c;
     _ctx    = ctx;
 
-    resizeToGame();
+    syncToGame();
     LOG('Canvas erstellt & bereit');
   }
 
-  function resizeToGame() {
+  /** Größe + Position + Transform an #game anpassen ***************************/
+  function syncToGame() {
     if (!_canvas) return;
-    const gameCanvas = document.getElementById('game');
+    const gameCanvas = getGameCanvas();
     if (!gameCanvas) return;
 
     const rect = gameCanvas.getBoundingClientRect();
 
-    // interne Canvasgröße in Pixeln der Spiellogik
+    // interne Canvasgröße = logische Spielgröße
     _canvas.width  = gameCanvas.width;
     _canvas.height = gameCanvas.height;
 
-    // CSS-Größe an sichtbare Größe koppeln
-    _canvas.style.width  = rect.width  + 'px';
-    _canvas.style.height = rect.height + 'px';
-
     _width  = _canvas.width;
     _height = _canvas.height;
+
+    // visuelle Größe + Position
+    _canvas.style.width  = rect.width  + 'px';
+    _canvas.style.height = rect.height + 'px';
+    _canvas.style.left   = rect.left + window.scrollX + 'px';
+    _canvas.style.top    = rect.top  + window.scrollY + 'px';
+
+    // Kamera-Transform vom Game-Canvas übernehmen (Zoom/Pan)
+    const style = getComputedStyle(gameCanvas);
+    _canvas.style.transform       = style.transform;
+    _canvas.style.transformOrigin = style.transformOrigin;
   }
 
   /** Helpers ******************************************************************/
@@ -102,10 +114,26 @@
   function worldToScreen(tx, ty) {
     // bevorzugt: echte Kamera benutzen, falls vorhanden
     if (window.GameCamera && typeof window.GameCamera.worldToScreen === 'function') {
-      return window.GameCamera.worldToScreen({ x: tx, y: ty });
+      try {
+        const pt = window.GameCamera.worldToScreen({ x: tx, y: ty });
+        if (pt && typeof pt.x === 'number' && typeof pt.y === 'number') {
+          if (_usedCamera !== 'GameCamera') {
+            _usedCamera = 'GameCamera';
+            LOG('nutze GameCamera.worldToScreen für Units');
+          }
+          return { x: pt.x, y: pt.y };
+        }
+      } catch (err) {
+        WARN('Fehler in GameCamera.worldToScreen', err);
+      }
     }
 
-    // Fallback: einfache ISO-Projektion ungefähr mittig
+    // Fallback: einfache ISO-Projektion ungefähr mittig im Canvas
+    if (_usedCamera !== 'fallback') {
+      _usedCamera = 'fallback';
+      LOG('nutze Fallback-ISO-Projektion (GameCamera fehlt)');
+    }
+
     const TILE_W = 64;
     const TILE_H = 32;
     const sx = (tx - ty) * (TILE_W / 2) + (_width / 2);
@@ -128,15 +156,16 @@
       const p = worldToScreen(u.x, u.y);
       const r = 6;
 
+      // gelber Punkt (Körper)
       _ctx.beginPath();
       _ctx.arc(p.x, p.y - 10, r, 0, Math.PI * 2, false);
-      _ctx.fillStyle   = 'rgba(255, 255, 0, 0.9)';   // gelber Punkt
-      _ctx.strokeStyle = 'rgba(80, 40, 0, 0.9)';     // braune Umrandung
+      _ctx.fillStyle   = 'rgba(255, 255, 0, 0.9)';
+      _ctx.strokeStyle = 'rgba(80, 40, 0, 0.9)';
       _ctx.lineWidth   = 2;
       _ctx.fill();
       _ctx.stroke();
 
-      // kleiner Debug-Schatten darunter
+      // kleiner Schatten
       _ctx.beginPath();
       _ctx.ellipse(p.x, p.y - 4, r + 2, r / 2, 0, 0, Math.PI * 2);
       _ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
@@ -159,7 +188,7 @@
 
     try {
       ensureCanvas();
-      resizeToGame();
+      syncToGame();   // wichtig: jedes Frame an Kamera anpassen
       drawUnits();
     } catch (err) {
       WARN('Fehler im Overlay-Loop', err);
@@ -174,7 +203,7 @@
   window.addEventListener('cb:game:start', () => {
     try {
       ensureCanvas();
-      resizeToGame();
+      syncToGame();
       window.requestAnimationFrame(loop);
       LOG('Overlay-Loop gestartet');
     } catch (err) {
@@ -182,10 +211,10 @@
     }
   }, { once: true });
 
-  // Sicherheitsnetz: falls resize später passiert
+  // Sicherheitsnetz: bei Fenster-Resize
   window.addEventListener('resize', () => {
-    resizeToGame();
+    syncToGame();
   });
 
-  LOG('Modul geladen v25.11.30-units-overlay-direct');
+  LOG('Modul geladen v25.11.30-units-overlay-direct-v2');
 })();
