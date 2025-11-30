@@ -27,7 +27,7 @@
   // -------------------------------------------------------------------------
   const $overlay = document.createElement('canvas');
   $overlay.id = 'units-overlay';
-  $overlay.style.position      = 'absolute';
+  $overlay.style.position      = 'fixed';
   $overlay.style.left          = '0';
   $overlay.style.top           = '0';
   $overlay.style.pointerEvents = 'none'; // nicht klick-bar
