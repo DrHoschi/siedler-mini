@@ -87,7 +87,7 @@
    *     buildingId   : Typ-ID (z.B. "b.hq")
    *   }
    */
-  function addDeliverJob(building, resKey){
+    function addDeliverJob(building, resKey){
     const eng = ensureJobEngine();
 
     const bw = Number.isFinite(building.w) ? building.w : 1;
@@ -96,12 +96,21 @@
     const centerX = building.x + bw / 2;
     const centerY = building.y + bh / 2;
 
+    // Ziel-Koordinate für CarrierRuntime / JobEngine
+    const dest = {
+      x  : centerX,
+      y  : centerY,
+      tx : centerX | 0,
+      ty : centerY | 0
+    };
+
     const job = {
       id         : 'job-deliver-' + (++jobIdCounter),
       type       : 'deliver',
       res        : String(resKey || 'wood'),
-      tx         : centerX | 0,
-      ty         : centerY | 0,
+      tx         : dest.tx,
+      ty         : dest.ty,
+      to         : dest,        // <-- wichtig: assignJob() nutzt job.to.x / job.to.y
       targetX    : centerX,
       targetY    : centerY,
       buildingId : building.id
