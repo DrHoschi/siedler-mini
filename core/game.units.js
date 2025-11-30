@@ -1,137 +1,123 @@
 /* ============================================================================
- * Datei    : core/game.units.js
- * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final-idle-move
- * Zweck    : Zentrale Verwaltung aller Einheiten (aktuell nur Träger/Carrier)
- *            – speichert Einheitenliste
- *            – kennt HQ-Position in TILES
- *            – stellt API für JobEngine + CarrierRuntime bereit
+ * Datei   : core/game.units.js
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.11.30-simple-carriers
  *
- * Öffentliche API (global):
- *   window.GameUnits = {
- *     attachToGame(game),
- *     setHQPos({tx,ty}),
- *     getHQPos(),
- *     spawnInitialCarriers(count),
- *     getUnits(),
- *     needsJob(),
- *     assignJob(job),   // von JobEngine/CarrierRuntime verwendet
- *     tick(dt)          // von CarrierRuntime aufgerufen
- *   }
+ * Zweck   : Einfache Träger-Verwaltung
+ *           - merkt sich HQ-Position (in Tile-Koordinaten)
+ *           - spawnt beim HQ-Finish ein paar Träger
+ *           - lässt sie in der Nähe vom HQ herumlaufen
+ *           - stellt Daten für unit-overlay.js bereit
  *
- * Außerdem:
- *   – Game.__units und window.__units werden mit dem gleichen Array verknüpft
- *   – optional: Game.getUnits() → Array zurück
- * ============================================================================ */
-(() => {
+ * WICHTIG:
+ *   - Unabhängig von JobEngine / Production.
+ *   - Nutzt Events:
+ *       cb:game:start   → an Game binden
+ *       cb:build:place  → HQ erkennen (b.hq) und Träger spawnen
+ * ========================================================================== */
+(function () {
   'use strict';
 
   const TAG  = '[units]';
-  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+  const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
+  const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  /** interne Zustände *********************************************************/
+  // --- interner Zustand -----------------------------------------------------
 
-  /**
-   * Einheiten:
-   *  x,y     → aktuelle Position in TILE-Koordinaten
-   *  sx,sy   → „Spawn“-/Basisposition für Idle-Bewegung
-   *  task    → aktueller Job (oder null)
-   *  idlePhase → Phase für Idle-Animation, damit nicht alle synchron sind
-   */
-  /** @type {Array<{id:number, type:string, x:number, y:number,
-   *                sx:number, sy:number, task?:object|null,
-   *                idlePhase:number, carrying?:object|null}>} */
+  /** Liste aller Einheiten (nur Träger) */
   const _units = [];
-  let _nextId  = 1;
 
-  /** HQ-Position in TILE-Koordinaten (tx,ty = Mittelpunkt) */
+  /** HQ-Position in Tile-Koordinaten { tx, ty } */
   let _hqPos = null;
 
-  /** Referenz auf Game (wenn vorhanden) */
-  let _gameRef = null;
+  /** Referenz auf das Game-Objekt (Canvas, tileSize, Kamera etc.) */
+  let _game = null;
 
-  /** globale Zeit für Idle-Animation (ms) */
-  let _timeMs = 0;
+  /** Flag, ob wir schon initiale Träger gespawnt haben */
+  let _initialSpawnDone = false;
 
-  /** Hilfsfunktionen **********************************************************/
+  // --- Hilfsfunktionen ------------------------------------------------------
 
+  /** Sichere Game-Bindung – nur einmal ausführen */
   function _ensureGameBinding(game) {
-    if (!game || _gameRef === game) return;
-    _gameRef = game;
-
+    if (!game || _game === game) return;
+    _game = game;
     try {
-      // Units-Array an Game und als Fallback an window hängen
-      game.__units = _units;
-      if (typeof game.getUnits !== 'function') {
-        game.getUnits = () => _units;
-      }
-      if (!Array.isArray(window.__units)) {
-        window.__units = _units;
-      }
-      LOG('Units.init abgeschlossen – Units an Game gebunden');
+      _game.units = _units;
     } catch (err) {
-      WARN('Fehler beim Binden an Game', err);
+      WARN('Game-Bindung fehlgeschlagen', err);
     }
+    LOG('Units.init abgeschlossen – Units an Game gebunden');
   }
 
-  /** neuen Carrier an einer Tile-Position anlegen (TILE-Koordinaten) */
-  function _spawnCarrierAt(tx, ty) {
-    const u = {
-      id   : _nextId++,
-      type : 'carrier',
-      x    : tx,
-      y    : ty,
-      sx   : tx,   // Basisposition für Idle-Bewegung
-      sy   : ty,
-      task : null,
-      idlePhase : Math.random() * Math.PI * 2
-    };
-    _units.push(u);
-    LOG('Carrier gespawnt', { id: u.id, x: u.x, y: u.y });
-    return u;
+  /** Hilfsfunktion: zufällige Zahl in [min,max] */
+  function _rand(min, max) {
+    return min + Math.random() * (max - min);
   }
 
-  /** Öffentliche API **********************************************************/
+  // --- HQ / Spawn-Logik -----------------------------------------------------
 
   /**
-   * HQ-Position setzen (in TILE-Koordinaten).
-   * Wird i. d. R. von JobEngine.handleBuildComplete(b.hq) aufgerufen.
+   * HQ-Position setzen (Tile-Koordinaten).
    */
   function setHQPos(pos) {
     if (!pos || typeof pos.tx !== 'number' || typeof pos.ty !== 'number') {
-      WARN('setHQPos: ungültige Position übergeben', pos);
+      WARN('setHQPos: ungültige Position', pos);
       return;
     }
     _hqPos = { tx: pos.tx, ty: pos.ty };
     LOG('HQPos gesetzt', _hqPos);
   }
 
-  /** HQ-Position abfragen (kann null sein, wenn HQ noch nicht fertig) */
-  function getHQPos() {
-    return _hqPos;
+  /**
+   * Ein Träger-Objekt an einer Tile-Position erzeugen.
+   * Wir speichern x/y als "Tile-Position mit Offset", damit Bewegung weich ist.
+   */
+  function _spawnCarrierAt(tx, ty) {
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
+      WARN('spawnCarrier: ungültige Koordinaten', tx, ty);
+      return;
+    }
+    const unit = {
+      id  : _units.length + 1,
+      type: 'carrier',
+      // Position (Tile-Koordinaten, dürfen Kommawerte haben)
+      x   : tx,
+      y   : ty,
+      // kleines Zufalls-Offset-Ziel um das HQ herum
+      target: null,
+      speed : 1.5,   // Tiles pro Sekunde
+      carrying: null,
+      task    : null
+    };
+    _units.push(unit);
+    LOG('Carrier gespawnt', unit);
   }
 
   /**
-   * Initial mehrere Träger rund um das HQ spawnen.
-   * count = gewünschte Anzahl (Standard: 3)
+   * Initial mehrere Träger um das HQ spawnen (z. B. 3 Stück).
    */
   function spawnInitialCarriers(count = 3) {
     if (!_hqPos) {
-      WARN('spawnInitialCarriers: noch kein HQPos gesetzt');
+      WARN('spawnInitialCarriers: HQPos noch nicht gesetzt');
       return;
     }
+    if (_initialSpawnDone) {
+      LOG('spawnInitialCarriers: schon erledigt, überspringe');
+      return;
+    }
+    _initialSpawnDone = true;
 
     const baseX = _hqPos.tx;
     const baseY = _hqPos.ty;
 
-    // kleine Offsets, damit sie nicht genau übereinander stehen
+    // kleine Offsets um das HQ herum (damit sie nicht übereinander liegen)
     const OFFSETS = [
-      { dx: -0.4, dy:  0.0 },
-      { dx:  0.4, dy:  0.0 },
-      { dx:  0.0, dy:  0.4 },
-      { dx: -0.4, dy: -0.4 },
-      { dx:  0.4, dy: -0.4 },
+      { dx: -0.6, dy:  0.0 },
+      { dx:  0.6, dy:  0.0 },
+      { dx:  0.0, dy:  0.6 },
+      { dx: -0.6, dy: -0.4 },
+      { dx:  0.6, dy: -0.4 }
     ];
 
     for (let i = 0; i < count; i++) {
@@ -142,137 +128,98 @@
     LOG('Initiale Carrier gespawnt', { count, hqPos: _hqPos });
   }
 
-  /** liefert das interne Units-Array zurück */
+  /** Öffentliche Abfrage der HQ-Position */
+  function getHQPos() {
+    return _hqPos;
+  }
+
+  /** Öffentliche Abfrage der Units-Liste */
   function getUnits() {
     return _units;
   }
 
-  /** Gibt true zurück, wenn mindestens ein Carrier keinen Job hat */
+  // --- Mini-Job-Interface (für später / CarrierRuntime) ---------------------
+
+  /**
+   * Gibt true zurück, wenn mindestens ein Carrier gerade keinen Job hat.
+   * (Im Moment immer false, bis wir richtige Jobs haben.)
+   */
   function needsJob() {
-    return _units.some(u => u.type === 'carrier' && !u.task);
+    return false;
   }
 
   /**
-   * Ein Job wird einem freien Carrier zugewiesen.
-   * Erwartet ein Job-Objekt (von JobEngine.pop()).
+   * Job einem Carrier zuweisen (Stub, damit CarrierRuntime nicht crasht).
    */
   function assignJob(job) {
-    if (!job) return false;
-    const carrier = _units.find(u => u.type === 'carrier' && !u.task);
-    if (!carrier) return false;
+    // Später sauber implementieren – aktuell nur Stub.
+    LOG('assignJob (Stub, wird derzeit ignoriert)', job);
+    return false;
+  }
 
-    carrier.task = {
-      id    : job.id ?? ('job-' + Date.now()),
-      type  : job.type ?? 'generic',
-      from  : job.from ?? null,
-      to    : job.to ?? null,
-      res   : job.res ?? null,
-      phase : 'toSource'  // Zweiphasen-Logik: zur Quelle → zum Ziel
+  // --- Bewegung / Tick ------------------------------------------------------
+
+  /**
+   * intern: gibt ein zufälliges Ziel in der Nähe des HQ zurück.
+   */
+  function _randomTargetNearHQ() {
+    if (!_hqPos) return null;
+    const r = 1.2; // Radius in Tiles
+    return {
+      x: _hqPos.tx + _rand(-r, r),
+      y: _hqPos.ty + _rand(-r, r)
     };
-
-    LOG('Job zugewiesen', { unitId: carrier.id, job: carrier.task });
-    return true;
   }
 
   /**
-   * Bewegungs-Logik für aktive Jobs:
-   *  – Positionen werden in TILE-Koordinaten interpretiert.
-   *  – pro Tick wird ein kleines Stück in Richtung Ziel gelaufen.
+   * Eine Unit in Richtung ihres Ziels bewegen.
    */
-  function _moveUnitTowards(u, target, dt) {
-    if (!target) return;
-    const SPEED_TILES_PER_SEC = 1.5; // Carrier-Geschwindigkeit (Tiles/Sek)
-    const step = SPEED_TILES_PER_SEC * (dt / 1000);
+  function _moveUnit(u, dt) {
+    if (!u) return;
+    if (!u.target) {
+      u.target = _randomTargetNearHQ();
+      if (!u.target) return;
+    }
 
-    const dx = target.x - u.x;
-    const dy = target.y - u.y;
+    const dx = u.target.x - u.x;
+    const dy = u.target.y - u.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < 0.01) {
-      // Ziel erreicht
-      u.x = target.x;
-      u.y = target.y;
-      return true;
+    if (!Number.isFinite(dist) || dist <= 0) {
+      u.target = _randomTargetNearHQ();
+      return;
+    }
+
+    const step = u.speed * dt; // Tiles pro Sekunde
+    if (dist < step) {
+      // Ziel erreicht → neues zufälliges Ziel wählen
+      u.x = u.target.x;
+      u.y = u.target.y;
+      u.target = _randomTargetNearHQ();
+      return;
     }
 
     const nx = dx / dist;
     const ny = dy / dist;
     u.x += nx * step;
     u.y += ny * step;
-    return false;
   }
 
   /**
-   * Idle-Bewegung, wenn KEIN Job aktiv ist:
-   *  – kleine Kreisbewegung um die Basisposition sx,sy
-   *  – nur zur Visualisierung, bis echte Jobs laufen
+   * Tick-Funktion, wird von game.js / carrier.runtime.js pro Frame aufgerufen.
+   * dt = Sekunden seit letztem Frame.
    */
-  function _updateIdleUnit(u, dt) {
-    if (!_hqPos) return; // zur Sicherheit
-
-    const radius = 0.25;           // ~ Viertel Tile
-    const speed  = 0.0006;         // Umdrehungen pro ms
-
-    const angle  = _timeMs * speed + u.idlePhase;
-    const cx     = u.sx;
-    const cy     = u.sy;
-
-    u.x = cx + Math.cos(angle) * radius;
-    u.y = cy + Math.sin(angle) * radius * 0.6; // leicht „oval“
-  }
-
-  /** Tick-Loop: wird von CarrierRuntime aufgerufen (siehe carrier.runtime.js) */
   function tick(dt) {
-    _timeMs += dt;
+    if (!Number.isFinite(dt) || dt <= 0) dt = 1 / 60;
 
     for (const u of _units) {
       if (u.type !== 'carrier') continue;
-
-      const ts = u.task;
-
-      if (ts) {
-        // AKTIVER JOB
-        let target = null;
-
-        if (ts.phase === 'toSource' && ts.from) {
-          target = { x: ts.from.tx, y: ts.from.ty };
-        } else if (ts.phase === 'toTarget' && ts.to) {
-          target = { x: ts.to.tx, y: ts.to.ty };
-        }
-
-        if (!target) continue;
-
-        const arrived = _moveUnitTowards(u, target, dt);
-        if (arrived) {
-          if (ts.phase === 'toSource') {
-            // Ressource aufnehmen (nur Marker, Logik kann später verfeinert werden)
-            if (ts.res) {
-              u.carrying = { res: ts.res };
-            }
-            ts.phase = 'toTarget';
-          } else if (ts.phase === 'toTarget') {
-            // Job fertig
-            LOG('Job abgeschlossen', { unitId: u.id, jobId: ts.id });
-            u.task = null;
-            u.carrying = null;
-          }
-        }
-      } else {
-        // KEIN JOB → Idle-Bewegung, damit überhaupt Bewegung sichtbar ist
-        _updateIdleUnit(u, dt);
-      }
+      _moveUnit(u, dt);
     }
   }
 
-  /**
-   * Wird bei cb:game:start oder explizit aus game.js aufgerufen,
-   * um Units an das Game-Objekt zu binden.
-   */
-  function attachToGame(game) {
-    _ensureGameBinding(game);
-  }
+  // --- Event-Hooks ----------------------------------------------------------
 
-  /** Event-Hook für cb:game:start (DOM-CustomEvent) *********************** */
-
+  // Beim Spielstart an Game binden (damit Game.units = _units gesetzt wird)
   try {
     window.addEventListener('cb:game:start', (ev) => {
       const game = ev?.detail?.game ?? window.Game ?? null;
@@ -284,10 +231,31 @@
     WARN('cb:game:start-Listener konnte nicht registriert werden', err);
   }
 
-  /** Export nach global ********************************************************/
+  // HQ-Spawn: wir hören direkt auf cb:build:place → b.hq
+  try {
+    window.addEventListener('cb:build:place', (ev) => {
+      const d = ev?.detail || {};
+      const id = d.buildingId || d.id || '';
+      if (id !== 'b.hq') return;
 
+      // Tiles aus dem Event holen (siehe core/core.input-v1.js → placeAt)
+      const w = Number.isFinite(d.w) ? d.w : 3;
+      const h = Number.isFinite(d.h) ? d.h : 3;
+      const tx = (d.x ?? d.tx ?? 0) + w / 2;
+      const ty = (d.y ?? d.ty ?? 0) + h / 2;
+
+      LOG('HQ-Placement erkannt (cb:build:place)', { tx, ty, w, h });
+
+      setHQPos({ tx, ty });
+      spawnInitialCarriers(3);
+    });
+  } catch (err) {
+    WARN('cb:build:place-Listener konnte nicht registriert werden', err);
+  }
+
+  // --- Export nach global ---------------------------------------------------
   window.GameUnits = {
-    attachToGame,
+    // API für andere Module
     setHQPos,
     getHQPos,
     spawnInitialCarriers,
@@ -297,5 +265,5 @@
     tick
   };
 
-  LOG('Modul geladen v25.11.30-final-idle-move');
+  LOG('Modul geladen v25.11.30-simple-carriers');
 })();
