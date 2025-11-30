@@ -1,12 +1,13 @@
 /* ============================================================================
  * Datei   : core/game.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-mapfix3
- * Zweck   : Zentrale Spielsteuerung (Director) – Map sicher zeichnen,
- *           Gebäude-Platzierung aus Events übernehmen
- * Struktur: STATE → INIT → TICK/RENDER → LOOP → EVENTS
- * ============================================================================
- */
+ * Version : v25.11.30-buildjobs1
+ * Zweck   : Zentrale Spielsteuerung (Director)
+ *           – Map sicher zeichnen
+ *           – Gebäude-Platzierung aus Events übernehmen
+ *           – Baustellen-Jobs (deliver) an JobEngine übergeben
+ * Struktur: STATE → JOBS → INIT → TICK/RENDER → LOOP → EVENTS
+ * ============================================================================ */
 
 (function(){
   'use strict';
@@ -34,6 +35,87 @@
 
   // Zeitbasis für dt
   let lastTime = 0;
+
+  // -------------------------------------------------------------------------
+  //  JOB-ENGINE / BAUSTELLEN-JOBS
+  // -------------------------------------------------------------------------
+
+  // Laufende Nummer für Jobs (nur für Debug / Logs)
+  let jobIdCounter = 0;
+
+  /**
+   * Stellt sicher, dass eine JobEngine existiert und eine push()/pop()-API hat.
+   *  - Falls schon vorhanden: NICHT überschreiben, nur sanft ergänzen
+   *  - Falls nicht vorhanden: minimale Queue implementieren
+   */
+  function ensureJobEngine(){
+    if (!window.JobEngine){
+      window.JobEngine = {
+        _queue: [],
+        push(job){ this._queue.push(job); },
+        pop(){ return this._queue.shift(); }
+      };
+    } else {
+      const eng = window.JobEngine;
+
+      // Falls nur add() existiert → push auf add mappen
+      if (!eng.push && typeof eng.add === 'function'){
+        eng.push = eng.add.bind(eng);
+      }
+      // Falls weder push noch add existieren → einfache Queue ergänzen
+      if (!eng.push && !eng.add){
+        eng._queue = eng._queue || [];
+        eng.push   = function(job){ this._queue.push(job); };
+        if (!eng.pop){
+          eng.pop = function(){ return this._queue.shift(); };
+        }
+      }
+    }
+    return window.JobEngine;
+  }
+
+  /**
+   * Erzeugt einen einzelnen Deliver-Job für eine Baustelle.
+   *
+   * Job-Shape (generisch, damit GameUnits damit arbeiten kann):
+   *   {
+   *     id           : 'job-deliver-…',
+   *     type         : 'deliver',
+   *     res          : 'wood' | 'stone' | …
+   *     tx, ty       : Tile-Koordinaten (Mitte der Baustelle)
+   *     targetX/Y    : float-Koordinaten
+   *     buildingId   : Typ-ID (z.B. "b.hq")
+   *   }
+   */
+  function addDeliverJob(building, resKey){
+    const eng = ensureJobEngine();
+
+    const bw = Number.isFinite(building.w) ? building.w : 1;
+    const bh = Number.isFinite(building.h) ? building.h : 1;
+
+    const centerX = building.x + bw / 2;
+    const centerY = building.y + bh / 2;
+
+    const job = {
+      id         : 'job-deliver-' + (++jobIdCounter),
+      type       : 'deliver',
+      res        : String(resKey || 'wood'),
+      tx         : centerX | 0,
+      ty         : centerY | 0,
+      targetX    : centerX,
+      targetY    : centerY,
+      buildingId : building.id
+    };
+
+    if (typeof eng.push === 'function'){
+      eng.push(job);
+    } else if (typeof eng.add === 'function'){
+      eng.add(job);
+    }
+
+    LOG('Baustellen-Job erzeugt', job);
+    return job;
+  }
 
   // -------------------------------------------------------------------------
   //  INIT – wird von cb:game:start ausgelöst
@@ -182,7 +264,7 @@
   }
 
   // -------------------------------------------------------------------------
-  //  BUILD-PLACEMENT – cb:build:place → Game.buildings + Construction
+  //  BUILD-PLACEMENT – cb:build:place → Game.buildings + Jobs + Construction
   // -------------------------------------------------------------------------
 
   /**
@@ -193,7 +275,8 @@
    *     __src      : "input-v25.11.14",
    *     buildingId : "b.hq",
    *     x, y       : Tile-Koordinaten,
-   *     w, h       : Größe in Tiles
+   *     w, h       : Größe in Tiles,
+   *     needs?     : { wood, stone, … }   // optional (vom Registry/Build-UI)
    *   }
    */
   function placeBuildingFromEvent(detail){
@@ -212,13 +295,31 @@
       return;
     }
 
+    // -----------------------------------------------------------------------
+    // Baustellen-Metadaten: needs / delivered / status / drops
+    //  - Falls UI/Registry needs mitliefert → übernehmen
+    //  - Sonst: kleiner Fallback (z.B. 2 Holz, 1 Stein)
+    // -----------------------------------------------------------------------
+    const needs = (d.needs && typeof d.needs === 'object')
+      ? { ...d.needs }
+      : { wood: 2, stone: 1 };   // Fallback, bis echte Kosten angebunden sind
+
+    const delivered = {};
+    Object.keys(needs).forEach(k => { delivered[k] = 0; });
+
     // Einfaches Building-Objekt – GameConstruction arbeitet direkt mit Game.buildings
     const building = {
       id,
       x, y, w, h,
       buildStage : 0,       // 0 = SITE
       buildTimer : 0,
-      hasMaterial: false
+      hasMaterial: false,
+
+      // neue Felder für Baustellen-Logik
+      needs,                // Soll-Mengen pro Ressource
+      delivered,            // bereits geliefert
+      status    : 'pending',// pending | building | done
+      dropSlots : []        // Boden-Ressourcen (Holz/Stein-Kugeln)
     };
 
     if (!Array.isArray(Game.buildings)){
@@ -226,7 +327,17 @@
     }
     Game.buildings.push(building);
 
-    LOG('Building übernommen', building);
+    // -----------------------------------------------------------------------
+    // Jobs erzeugen: Für jede Ressource in needs einzelne Deliver-Jobs
+    // -----------------------------------------------------------------------
+    Object.keys(needs).forEach((resKey)=>{
+      const count = needs[resKey] | 0;
+      for (let i = 0; i < count; i++){
+        addDeliverJob(building, resKey);
+      }
+    });
+
+    LOG('Building übernommen (mit Needs + Jobs)', building);
 
     // Ghost / Overlay schließen
     try {
