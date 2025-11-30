@@ -1,20 +1,14 @@
 /* ============================================================================
  * Datei    : core/unit.overlay.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.29-units-overlay-b1
- * Zweck    : Einheiten-Overlay (Carrier-Punkt + getragenes Ressourcen-Icon)
- * Architektur:
- *   – Kein eigenes Canvas, keine eigene RAF-Loop.
- *   – Zeichnet im Render-Frame über OverlayHooks (gleiche Kamera/Zoom).
- *   – Robust gegenüber fehlenden Gettern (nutzt mehrere Quellen).
+ * Version  : v25.11.30-final
+ * Zweck    : Einheiten-Overlay (Carrier-Punkte + getragenes Ressourcen-Icon)
  *
- * Erwartet/Optionale Abhängigkeiten:
- *   – window.OverlayHooks.register(name, fn)  (assets/core/overlay-hooks.js)
- *   – window.GameCamera.getState()            (core/camera.js)
- *   – window.Game.tileSize                    (core/game.js)
- *   – window.Game.getUnits?()  ODER window.Game.units
- *     ODER window.Game.__units/window.__units (Fallback)
- *   – core/icons-map.js  → resolveIcon()/getIconSafe() (optional)
+ * Architektur:
+ *   – nutzt OverlayHooks.register('units', draw) falls vorhanden
+ *   – sonst Fallback: hört auf DOM-Event 'cb:render:overlay'
+ *   – liest Einheiten aus:
+ *       Game.getUnits() ODER Game.__units ODER window.__units ODER GameUnits.getUnits()
  * ============================================================================ */
 (() => {
   'use strict';
@@ -23,156 +17,219 @@
   const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // Darstellung
-  const RADIUS = 8;   // Kreisradius in Weltpixeln (vor Zoom)
-  const ICON   = 18;  // Icongröße (px, vor Zoom)
+  // Darstellung (vor Zoom, in Pixeln)
+  const RADIUS = 8;   // Kreisradius
+  const ICON   = 18;  // Icongröße (px)
 
-  // Icon-Auflösung: bevorzugt icons-map.js, sonst statische Fallbacks
+  // Icon-Fallbacks, falls kein icons-map.js vorhanden ist
   const FALLBACK_ICONS = {
     'res.wood' : 'assets/icons/resources/wood.png',
     'res.stone': 'assets/icons/resources/stone.png',
     'res.fish' : 'assets/icons/resources/fish.png'
   };
+
   const _imgCache = new Map();
-  function resIconPath(resId){
-    try{
-      if (window.resolveIcon) {
-        const p = window.resolveIcon(String(resId).replace(/^res\./,''));
+
+  /** Icon-Pfad für eine Ressource bestimmen ***********************************/
+  function resIconPath(resId) {
+    if (!resId) return null;
+    // Versuch 1: icons-map.js / resolveIcon()
+    try {
+      if (typeof window.resolveIcon === 'function') {
+        const key = String(resId).replace(/^res\./, '');
+        const p = window.resolveIcon(key);
         if (p) return p;
       }
-      if (window.getIconSafe) {
-        const p = window.getIconSafe(String(resId).replace(/^res\./,''));
-        if (p) return p;
-      }
-    }catch(_){}
-    return FALLBACK_ICONS[resId] ||
-           `assets/icons/resources/${String(resId).replace(/^res\./,'')}.png`;
+    } catch (_e) {
+      // ignorieren – wir fallen gleich auf Fallbacks zurück
+    }
+
+    // Versuch 2: statische Fallbacks
+    const id = String(resId);
+    if (FALLBACK_ICONS[id]) {
+      return FALLBACK_ICONS[id];
+    }
+
+    return null;
   }
-  function loadIcon(path){
+
+  /** Bild laden (mit einfachem Cache) ******************************************/
+  function getIconImage(resId) {
+    const path = resIconPath(resId);
     if (!path) return null;
-    if (_imgCache.has(path)) return _imgCache.get(path);
-    const img = new Image(); img.src = path;
+
+    if (_imgCache.has(path)) {
+      return _imgCache.get(path);
+    }
+
+    const img = new Image();
+    img.src = path;
     _imgCache.set(path, img);
     return img;
   }
 
-  // Kamera/Zoom holen
-  function camState(){
-    return window.GameCamera?.getState?.() || { x:0, y:0, zoom:1 };
-  }
-
-  // TileSize → Weltpixel
-  function tilePx(){
-    return window.Game?.tileSize || window.Entities?.state?.tile || 64;
-  }
-
-  // Units beschaffen (robust)
-  function getUnits(){
-    try{
-      // 1) Bevorzugt: offizieller Getter
-      if (typeof window.Game?.getUnits === 'function'){
-        return window.Game.getUnits() || [];
+  /** Einheiten-Quelle robust ermitteln *****************************************/
+  function getUnitsSafe() {
+    try {
+      // 1) Game.getUnits()
+      if (window.Game && typeof window.Game.getUnits === 'function') {
+        const u = window.Game.getUnits();
+        if (Array.isArray(u)) return u;
       }
-
-      // 2) Direkte Liste an Game gehängt
-      if (Array.isArray(window.Game?.units)){
-        return window.Game.units;
+      // 2) GameUnits.getUnits()
+      if (window.GameUnits && typeof window.GameUnits.getUnits === 'function') {
+        const u = window.GameUnits.getUnits();
+        if (Array.isArray(u)) return u;
       }
-
-      // 3) Fallbacks für ältere Varianten
+      // 3) Game.__units
       if (Array.isArray(window.Game?.__units)) return window.Game.__units;
-      if (Array.isArray(window.__units))      return window.__units;
-    }catch(_){}
+      // 4) globales __units
+      if (Array.isArray(window.__units)) return window.__units;
+    } catch (_e) {
+      // bewusst ignorieren – wir liefern unten ein leeres Array zurück
+    }
     return [];
   }
 
-  // Ein Carrier-Objekt in Weltpixel-Koordinaten (Mitte der Tile)
-  function unitToWorldPx(u, ts){
-    const cx = (u.x || 0) * ts + ts/2;
-    const cy = (u.y || 0) * ts + ts/2;
-    const resId = (u.carrying?.res) || (u.carry?.id) || null;
-    return { x:cx, y:cy, resId };
+  /** Ein Carrier-Objekt in Weltpixel-Koordinaten (Mitte der Tile) *************/
+  function unitToWorldPx(u, ts) {
+    const cx = (u.x || 0) * ts + ts / 2;
+    const cy = (u.y || 0) * ts + ts / 2;
+    const resId = (u.carrying?.res) || (u.carry?.id) || null; // beide Varianten unterstützen
+    return { x: cx, y: cy, resId };
   }
 
-  // Zeichenroutine für einen Carrier
-  function drawCarrier(ctx, uw, cam, ts){
-    const z  = cam.zoom || 1;
+  /** Prüfen, ob etwas im sichtbaren Bereich liegt ******************************/
+  function isOnScreen(px, py, cam, padding = 64) {
+    const left   = cam.x - padding;
+    const top    = cam.y - padding;
+    const right  = cam.x + cam.w + padding;
+    const bottom = cam.y + cam.h + padding;
+    return px >= left && px <= right && py >= top && py <= bottom;
+  }
 
-    // uw.x / uw.y sind Weltpixel, cam.x / cam.y ebenfalls
-    const sx = (uw.x - cam.x) * z;
-    const sy = (uw.y - cam.y) * z;
-
-    ctx.save();
-
-    // Schatten
+  /** Carrier zeichnen (auf bereits transformiertem ctx) ************************/
+  function drawCarrier(ctx, sx, sy, zoom, resId) {
+    const r = RADIUS * zoom;
     ctx.beginPath();
-    ctx.arc(sx, sy, Math.max(1, (RADIUS+1.5)*z), 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fillStyle   = 'rgba(255, 255, 255, 0.9)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth   = 1.5 * zoom;
     ctx.fill();
+    ctx.stroke();
 
-    // Weißer Kern
-    ctx.beginPath();
-    ctx.arc(sx, sy, Math.max(1, RADIUS*z), 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.fill();
+    if (!resId) return;
+    const img = getIconImage(resId);
+    if (!img || !img.complete) return;
 
-    // Icon (falls Ressource getragen wird)
-    if (uw.resId){
-      const path = resIconPath(uw.resId);
-      const img  = loadIcon(path);
-      if (img && img.complete){
-        const s = Math.max(10, ICON*z);
-        ctx.drawImage(img, sx + (RADIUS+4)*z, sy - s - 4, s, s);
-      }
-    }
-
-    ctx.restore();
+    const size = ICON * zoom;
+    ctx.drawImage(
+      img,
+      sx - size / 2,
+      sy - r - size - 2 * zoom, // etwas über dem Kopf
+      size,
+      size
+    );
   }
 
-  // Hauptzeichenfunktion → wird von OverlayHooks im Render-Frame aufgerufen
-  function draw(ctx){
-    const cam   = camState();
-    const ts    = tilePx();
-    const units = getUnits();
-    if (!units.length) return;
+  /** Haupt-Zeichenroutine für OverlayHooks ************************************/
+  function draw(ctx, state) {
+    try {
+      const units = getUnitsSafe();
+      if (!units.length) return;
 
-    try{
-      for (const u of units){
-        const uw = unitToWorldPx(u, ts);
-        drawCarrier(ctx, uw, cam, ts);
-      }
-    }catch(e){
-      WARN('draw error:', e?.message||e);
-    }
-  }
+      const ts = window.Game?.tileSize || 32;
 
-  // Registrierung am Overlay-System
-  function register(){
-    if (!window.OverlayHooks?.register){
-      let tries = 0;
-      const t = setInterval(()=>{
-        if (window.OverlayHooks?.register){
-          clearInterval(t);
-          registerNow();
-        } else if (++tries > 40){
-          clearInterval(t);
+      // Kamera ermitteln
+      let camState = state?.camera || null;
+      if (!camState) {
+        if (window.GameCamera && typeof window.GameCamera.getState === 'function') {
+          camState = window.GameCamera.getState();
+        } else if (window.Game && typeof window.Game.getCamera === 'function') {
+          camState = window.Game.getCamera();
         }
-      }, 100);
-      return;
+      }
+      if (!camState) {
+        // Fallback: ganze Canvas als Viewport annehmen
+        camState = {
+          x: 0,
+          y: 0,
+          w: ctx.canvas.width,
+          h: ctx.canvas.height,
+          zoom: 1
+        };
+      }
+
+      const camX   = camState.x || 0;
+      const camY   = camState.y || 0;
+      const zoom   = camState.zoom || 1;
+      const viewW  = camState.w || ctx.canvas.width;
+      const viewH  = camState.h || ctx.canvas.height;
+
+      ctx.save();
+      // Kamera-Transformation (Welt → Screen)
+      ctx.translate(-camX * zoom, -camY * zoom);
+      ctx.scale(zoom, zoom);
+
+      for (const u of units) {
+        if (u.type !== 'carrier') continue;
+
+        const wpos = unitToWorldPx(u, ts);
+        if (!isOnScreen(wpos.x, wpos.y, { x: camX, y: camY, w: viewW, h: viewH })) {
+          continue;
+        }
+
+        // zurück in "Screen-Koordinaten" für Kreis-Zeichnung
+        const sx = wpos.x;
+        const sy = wpos.y;
+        // Kreis und Icon zeichnen (Kreis wird im Weltmaßstab gezeichnet, daher zoom in drawCarrier)
+        drawCarrier(ctx, sx, sy, 1 / zoom, wpos.resId);
+      }
+
+      ctx.restore();
+    } catch (err) {
+      WARN('Fehler im draw()', err);
     }
-    registerNow();
   }
 
-  function registerNow(){
-    try{
-      window.OverlayHooks.register('units', (ctx)=>{
-        draw(ctx); // Kamera wird intern gelesen
+  /** Registrierung bei OverlayHooks oder per Fallback **************************/
+  function registerWithOverlayHooks() {
+    if (!window.OverlayHooks || typeof window.OverlayHooks.register !== 'function') {
+      return false;
+    }
+    window.OverlayHooks.register('units', draw);
+    LOG('Overlay über OverlayHooks.register("units", draw) registriert');
+    return true;
+  }
+
+  function registerFallbackListener() {
+    // Fallback: wir hören auf ein generisches Overlay-Event und bekommen ctx über detail.ctx
+    try {
+      window.addEventListener('cb:render:overlay', (ev) => {
+        const ctx = ev?.detail?.ctx;
+        const state = ev?.detail?.state || {};
+        if (!ctx) return;
+        draw(ctx, state);
       });
-      LOG('Overlay-Layer "units" registriert');
-    }catch(e){
-      WARN('register failed:', e?.message||e);
+      LOG('Fallback-Overlay-Listener (cb:render:overlay) registriert');
+    } catch (err) {
+      WARN('Konnte Fallback-Listener nicht registrieren', err);
     }
   }
 
-  register();
+  function registerNow(attempt = 0) {
+    if (registerWithOverlayHooks()) return;
+    if (attempt === 0) {
+      // Beim ersten Mal direkt Fallback aktivieren
+      registerFallbackListener();
+    }
+    // Ein paar Mal erneut versuchen, bis OverlayHooks geladen ist
+    if (attempt < 10) {
+      setTimeout(() => registerNow(attempt + 1), 1000);
+    }
+  }
+
+  registerNow();
+  LOG('Modul geladen v25.11.30-final');
 })();
