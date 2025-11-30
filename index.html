@@ -394,5 +394,53 @@
     }, { once:true });
   })();
   </script>
+     
+  <!-- ===== Notlösung: alle fremden Canvas mit wandernden schwarzen Punkten ausblenden ===== -->
+  <script>
+  (function killStrayCanvases(){
+    const TAG = '[canvas-killer]';
+    const game = document.getElementById('game');
+    if (!game) {
+      console.warn(TAG, 'kein #game gefunden');
+      return;
+    }
+
+    // Kurz warten, bis alle Debug-Overlays evtl. ihre Canvas angelegt haben
+    function runKill(){
+      const canvases = document.querySelectorAll('canvas');
+      const gameRect  = game.getBoundingClientRect();
+
+      canvases.forEach(cv => {
+        if (cv === game) return; // Haupt-Canvas niemals anfassen
+
+        const s = getComputedStyle(cv);
+        const rect = cv.getBoundingClientRect();
+
+        // Heuristik:
+        // 1. Canvas ist "fullscreen" oder gleich groß wie das Game → vermutlich Overlay
+        // 2. oder es ist position:fixed → Debug/Overlay
+        const isOverlaySize =
+          Math.abs(rect.width  - gameRect.width)  < 4 &&
+          Math.abs(rect.height - gameRect.height) < 4;
+
+        const isFixed = (s.position === 'fixed');
+
+        if (isOverlaySize || isFixed) {
+          cv.style.display = 'none';
+          cv.style.pointerEvents = 'none';
+          (window.CBLog?.info || console.info)(TAG, 'Canvas ausgeblendet', {
+            width: rect.width, height: rect.height, pos: s.position
+          });
+        }
+      });
+    }
+
+    // einmal kurz nach Start + nochmal nach kleiner Verzögerung
+    window.addEventListener('load', () => {
+      setTimeout(runKill, 200);
+      setTimeout(runKill, 1000);
+    });
+  })();
+  </script>
 </body>
 </html>
