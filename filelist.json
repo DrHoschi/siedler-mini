@@ -1,5 +1,5 @@
 {
-  "createdAt": "2025-11-30T18:32:10.442Z",
+  "createdAt": "2025-11-30T20:09:45.771Z",
   "root": ".",
   "count": 537,
   "entries": [
@@ -1429,7 +1429,7 @@
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 6356
+      "size": 9553
     },
     {
       "type": "file",
@@ -2603,7 +2603,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 16109
+      "size": 16116
     },
     {
       "type": "file",
