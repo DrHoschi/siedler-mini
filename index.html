@@ -154,12 +154,25 @@
 
   <!-- CORE ESSENCE -->
   <script src="core/asset.js?v=25.11.02"></script>
+  <!-- Alte Registry-Variante auskommentiert lassen -->
   <!-- <script src="core/registry.js"></script>
   <script src="core/core.entities.js"></script> -->
-  <script src="core/registry-v1.js"></script>
+  <!-- Neue, schlanke Registry – genau DIE brauchen wir -->
+  <script src="core/registry.js"></script>
+
+   <!-- JOB / CARRIER / RES / PROD -->
   <script src="core/warehouse.js"></script>
-  <!-- <script src="core/units.js"></script> -->
-     <script src="core/carrier.runtime.js"></script>
+
+  <!-- NEU: Zentrales Units-System (muss VOR JobEngine + CarrierRuntime geladen werden) -->
+  <script src="core/game.units.js"></script>
+
+  <!-- JobEngine verwaltet Jobs, nutzt GameUnits.needsJob/assignJob -->
+  <script src="core/job.engine.js"></script>
+
+  <!-- Runtime, die die Carrier bewegt & tick(dt) auf GameUnits aufruft -->
+  <script src="core/carrier.runtime.js"></script>
+
+  <!-- älteres Carrier-/Logistik-Zeug, kann später bereinigt werden -->
   <script src="core/carrier.js"></script>
   <script src="core/logistics.prio.js"></script>
   <script src="core/territory.js"></script>
@@ -170,41 +183,40 @@
   <script src="core/core.pfglue.js"></script>   <!-- Polyfills/Glue: früh -->
   <script src="core/core.input-v1.js"></script> <!-- Input-Hooks (Keys/Pointer) -->
 
-  <!-- OVERLAYS (brauchen Canvas/Map) -->
+  <!-- Overlay-System -->
   <script src="core/path-overlay.js"></script>
-  <!-- <script src="core/camera.glue-v4.js"></script> -->
-  <!-- <script src="core/camera.glue.js"></script> -->
-  <!-- <script src="core/placement.js"></script> -->
+  <script src="core/adfinder.js"></script>
+  <script src="core/overlay-hooks.js"></script>
+  <script src="core/path-traces.overlay.js"></script>
 
-     <!-- CARRIER + PATHFINDING + OVERLAYS -->
-<script src="core/adfinder.js"></script>
-<script src="core/overlay-hooks.js"></script>
-<script src="core/path-traces.overlay.js"></script>
- <script src="core/job.engine.js"></script>
-<script src="core/unit-overlay.js"></script>
-<script src="core/game.units.js"></script>
+  <!-- NEU: Unit-Overlay zum Zeichnen der Träger (nutzt OverlayHooks + GameUnits) -->
+  <script src="core/unit-overlay.js"></script>
      
   <!-- *** WICHTIG: genau EINE Kamera laden → hier die stabile core/camera.js *** -->
   <script src="core/camera.js"></script>
   <!-- KEINE camera-v3.js, KEINE camera.glue-Varianten hier laden! -->
 
   <!-- GAME BOOTSTRAP + GAME LOOP -->
-      
+  <script src="core/game.buildings.js"></script>
+  <script src="core/game.renderer.js"></script>
+  <script src="core/game.build.js"></script>
+  <script src="core/game.map.js"></script>
+  <script src="core/game.construction.js"></script>
   <script src="core/game.bootstrap.js"></script>
   <script src="core/game.tick.js"></script>
-  <script src="core/game-v7.js"></script>
+  <script src="core/game.js"></script>
 
   <!-- MAP LOAD + MAP RUNTIME/RENDER -->
-  <script src="core/map-runtime.bridge.js"></script>
-  <!-- <script src="core/core.map.js"></script> -->
-
+ <!-- <script src="core/map-runtime.bridge.js"></script>
+  -->
   <!-- START-UI -->
   <script src="ui/ui-start.js?v=25.11.02"></script>
 
-
+<!-- NEU: Placement-Handler wieder aktiv machen -->
+<!--<script src="core/placement.js"></script> -->
      
   <!-- PLACEMENT OVERLAY (braucht Game+Camera & den Build-Hook) -->
-  <script src="ui/ui-place.js?v=25.11.14"></script>
+ <!-- <script src="ui/ui-place.js"></script>-->
   <!-- <script src="core/build.place.handler.js"></script> -->
   <script src="ui/ui-build-hook.js"></script>
 
