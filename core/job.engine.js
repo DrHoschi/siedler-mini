@@ -1,220 +1,131 @@
 /* ============================================================================
- * Datei   : core/job.engine.js
- * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.29-jobs-v3
+ * Datei    : core/job.engine.js
+ * Projekt  : Neue Siedler – Epoche 1
+ * Version  : v25.11.30-final-JobHQ
+ * Zweck    : Vereinfachte Job-Engine
+ *            - kümmert sich aktuell NUR darum:
+ *              → wenn HQ fertig gebaut ist:
+ *                * HQ-Position an Units übergeben
+ *                * Träger am HQ spawnen
  *
- * Zweck   : Einfache, PASSIVE Job-Queue + Bau-Hooks
- *
- *  - Verwaltet nur die Warteschlange der Jobs (FIFO)
- *  - Erzeugt Baujobs, wenn ein Gebäude fertig ist (cb:build:complete)
- *  - Beim ersten HQ:
- *      -> HQ-Position merken
- *      -> 3 Träger leicht versetzt um das HQ spawnen
- *
- *  Bewegung / Job-Abarbeitung macht weiterhin:
- *      -> core/carrier.runtime.js  +  core/game.units.js
- * ========================================================================== */
-
-(function initJobEngine (global) {
+ * Später:
+ *   - Baujobs für andere Gebäude
+ *   - Produktionsjobs (Holz, Fisch, Stein, ...)
+ *   - Prioritäten / Warteschlangen
+ * ============================================================================
+ */
+(function () {
   'use strict';
 
-  const TAG  = '[job.engine]';
-  const LOG  = (...a)=> (global.CBLog?.info  || console.info)(TAG, ...a);
-  const WARN = (...a)=> (global.CBLog?.warn  || console.warn)(TAG, ...a);
+  const global = window;
+  const LOG  = global.LOG  ? global.LOG.bind(global,  '[job.engine]') : console.log.bind(console, '[job.engine]');
+  const WARN = global.WARN ? global.WARN.bind(global, '[job.engine]') : console.warn.bind(console, '[job.engine]');
 
-  // -------------------------------------------------------------------------
-  // STATE
-  // -------------------------------------------------------------------------
-  const queue    = [];       // FIFO-Queue
-  let   hqSpawned = false;   // HQ bereits initialisiert?
+  const Game  = global.Game  || null;
+  const Units = global.GameUnits || null;
 
-  // -------------------------------------------------------------------------
-  // QUEUE-API
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // Helper: HQ-Mitte aus einem Building-Objekt berechnen
+  // building: { id, tx, ty, w, h }
+  // ---------------------------------------------------------------------------
+  function getBuildingCenter(building) {
+    if (!building) return null;
 
-  function add(job){
-    if (!job || typeof job !== 'object'){
-      WARN('add(job) → ungültiger Job', job);
-      return;
-    }
-    queue.push(job);
+    const w = building.w || 1;
+    const h = building.h || 1;
+
+    // Mitte der Kachelfläche (wie früher: +w/2 - 0.5)
+    const cx = (building.tx || 0) + w / 2 - 0.5;
+    const cy = (building.ty || 0) + h / 2 - 0.5;
+
+    return { cx, cy };
   }
 
-  function pop(){
-    return queue.length ? queue.shift() : null;
-  }
-
-  function hasJobs(){
-    return queue.length > 0;
-  }
-
-  function getQueue(){
-    return queue;
-  }
-
-  // Nur für Abwärtskompatibilität – JobEngine ist passiv
-  function start(){
-    LOG('JobEngine bereit (passiv – CarrierRuntime verteilt Jobs)');
-  }
-  function stop(){
-    LOG('JobEngine stop() aufgerufen – keine eigene Loop aktiv');
-  }
-
-  // -------------------------------------------------------------------------
-  // HILFSFUNKTIONEN
-  // -------------------------------------------------------------------------
-
-  function findBuildingById(id){
-    const G = global.Game || {};
-    let list = [];
-
-    if (Array.isArray(G.buildings)){
-      list = G.buildings;
-    } else if (typeof G.getBuildings === 'function'){
-      try { list = G.getBuildings() || []; } catch(_){ list = []; }
-    }
-
-    if (!Array.isArray(list)) return null;
-    return list.find(b => b && b.id === id) || null;
-  }
-
-  function toNumberOr(obj, key, fallback){
-    const v = Number(obj?.[key]);
-    return Number.isFinite(v) ? v : fallback;
-  }
-
-  // -------------------------------------------------------------------------
-  // HQ + BAUJOBS: cb:build:complete
-  // -------------------------------------------------------------------------
-
-  function handleBuildComplete(ev){
-    const d  = ev?.detail || {};
-    const id = d.id;
-
-    if (!id){
-      WARN('cb:build:complete ohne id', d);
-      return;
-    }
-
-    const building = findBuildingById(id);
-    if (!building){
-      WARN('cb:build:complete – Building nicht gefunden', d);
-      return;
-    }
-
-    const bx = toNumberOr(building, 'x', 0);
-    const by = toNumberOr(building, 'y', 0);
-    const bw = toNumberOr(building, 'w', 1);
-    const bh = toNumberOr(building, 'h', 1);
-
-    const cx = bx + bw / 2;
-    const cy = by + bh / 2;
-
-    const Units = global.GameUnits || {};
-
+  // ---------------------------------------------------------------------------
+  // Handler für cb:build:complete
+  // ---------------------------------------------------------------------------
+  function handleBuildComplete(ev) {
     try {
-      // -------------------------------------------------------------
-      // 1) HQ-SPEZIALFALL → HQ-Pos + 3 Träger versetzt spawnen
-      // -------------------------------------------------------------
-      if (id === 'b.hq'){
-        if (!hqSpawned && Units){
-          hqSpawned = true;
+      const building = ev && ev.building;
+      if (!building) {
+        WARN('handleBuildComplete: kein building im Event', ev);
+        return;
+      }
 
-          try {
-            if (typeof Units.setHQPos === 'function'){
-              Units.setHQPos(cx, cy);
-            } else {
-              Units.hqPos = { x: cx, y: cy };
-            }
-          } catch (e){
-            WARN('HQPos setzen fehlgeschlagen', e);
-          }
+      const id = building.id;
+      LOG('handleBuildComplete für', id, building);
 
-          const spawn = Units.spawnCarrier || Units.spawnUnit;
-          if (typeof spawn === 'function'){
-            const OFFS = [
-              { dx: -0.5, dy:  0.1 },
-              { dx:  0.5, dy:  0.15 },
-              { dx:  0.0, dy:  0.6 }
-            ];
-            OFFS.forEach((o, i)=>{
-              spawn(cx + o.dx, cy + o.dy, {
-                kind: 'u.carrier',
-                name: `Träger ${i+1}`
-              });
-            });
-            LOG('HQ fertig → 3 Träger gespawnt', { at:{ x:cx, y:cy } });
-          } else {
-            WARN('Kein Units.spawnCarrier/spawnUnit vorhanden – keine Träger gespawnt');
-          }
-        } else {
-          LOG('Zweites HQ fertig – HQ/Träger bereits initialisiert, überspringe Spawn');
+      // 1) HQ fertig → HQ-Position setzen + Träger spawnen
+      if (id === 'b.hq') {
+        const center = getBuildingCenter(building);
+        if (!center) {
+          WARN('HQ fertig, aber Center konnte nicht berechnet werden', building);
+          return;
         }
 
-        // GANZ WICHTIG:
-        // Für das HQ selbst KEINE Baujobs erzeugen – sonst laufen alle
-        // Träger sofort zum HQ-Mittelpunkt und "verballern" Jobs im Kreis.
+        if (!Units) {
+          WARN('HQ fertig, aber GameUnits nicht verfügbar');
+          return;
+        }
+
+        if (typeof Units.setHQPos === 'function') {
+          Units.setHQPos(center.cx, center.cy);
+        } else {
+          WARN('Units.setHQPos fehlt');
+        }
+
+        if (typeof Units.spawnCarriersForHQ === 'function') {
+          Units.spawnCarriersForHQ(3); // aktuell: 3 Träger
+        } else {
+          WARN('Units.spawnCarriersForHQ fehlt');
+        }
+
+        LOG('HQ fertig → HQPos gesetzt + Carrier gespawnt', center);
         return;
       }
 
-      // -------------------------------------------------------------
-      // 2) BAUJOBS FÜR ALLE NICHT-HQ-GEBÄUDE
-      // -------------------------------------------------------------
-      const hq = Units && (Units.hqPos || null);
-      if (!hq || !Number.isFinite(hq.x) || !Number.isFinite(hq.y)){
-        LOG('Noch kein HQPos gesetzt – keine Baujobs für', id);
-        return;
-      }
+      // 2) Andere Gebäude: aktuell nur Log, noch keine Jobs
+      LOG('Gebäude fertig (noch keine Job-Logik):', id);
 
-      // defensive: Building-Coords checken
-      if (!Number.isFinite(cx) || !Number.isFinite(cy)){
-        WARN('Building-Koordinaten nicht gültig – keine Jobs', { id, cx, cy });
-        return;
-      }
+      // Hier später: Baujobs/Produktion für Lumberjack, Fisher etc. anlegen
 
-      const JOB_COUNT = 3;
-      for (let n = 0; n < JOB_COUNT; n++){
-        add({
-          id   : `job-build-${id}-${Date.now()}-${n}`,
-          type : 'build',
-          res  : 'res.wood',        // TODO: später aus Registry/Baukosten holen
-          from : { x: hq.x, y: hq.y },
-          to   : { x: cx,  y: cy    }
-        });
-      }
-
-      LOG('Baujobs angelegt', {
-        building: id,
-        count   : JOB_COUNT,
-        from    : { x:hq.x, y:hq.y },
-        to      : { x:cx,  y:cy }
-      });
-
-    } catch (e){
+    } catch (e) {
+      // WICHTIG: hier KEIN "this.hqPos" o.ä. mehr verwenden → der alte Fehler kam daher
       WARN('handleBuildComplete Fehler', e);
     }
   }
 
-  global.addEventListener('cb:build:complete', handleBuildComplete);
+  // ---------------------------------------------------------------------------
+  // Start-Funktion: registriert Event-Listener
+  // ---------------------------------------------------------------------------
+  function start() {
+    if (!Game || typeof Game.on !== 'function') {
+      WARN('start(): Game oder Game.on nicht verfügbar – JobEngine bleibt passiv');
+      return;
+    }
 
-  // -------------------------------------------------------------------------
-  // EXPORT
-  // -------------------------------------------------------------------------
-  const API = {
-    add,
-    pop,
-    hasJobs,
-    queue : getQueue,
-    start,
-    stop
+    // Auf "Gebäude fertig" reagieren
+    Game.on('cb:build:complete', handleBuildComplete);
+
+    LOG('JobEngine bereit (HQ-Logik aktiv)');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-Start bei cb:game:start
+  // ---------------------------------------------------------------------------
+  if (Game && typeof Game.on === 'function') {
+    Game.on('cb:game:start', function () {
+      LOG('cb:game:start erhalten → JobEngine.start()');
+      start();
+    });
+  } else {
+    WARN('Game.on nicht verfügbar – JobEngine.start() muss manuell aufgerufen werden');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Öffentliche API (falls du später vom Inspector aus triggern willst)
+  // ---------------------------------------------------------------------------
+  global.JobEngine = {
+    start
   };
-
-  global.JobEngine = API;
-
-  global.addEventListener('cb:game:start', () => {
-    start();
-  });
-
-  LOG('modul geladen (v25.11.29-jobs-v3)');
-
-})(window);
+})();
