@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei    : core/game.units.js
  * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final
+ * Version  : v25.11.30-final-2 (HQ-Fallback + flexibles setHQPos)
  * Zweck    : Zentrale Verwaltung aller Einheiten (aktuell nur Träger/Carrier)
  *            – speichert Einheitenliste
  *            – kennt HQ-Position in TILES
@@ -10,18 +10,21 @@
  * Öffentliche API (global):
  *   window.GameUnits = {
  *     attachToGame(game),
- *     setHQPos({tx,ty}),
+ *     setHQPos(posOrTx, ty?),   // flexibel: {tx,ty} ODER (tx, ty)
  *     getHQPos(),
  *     spawnInitialCarriers(count),
  *     getUnits(),
  *     needsJob(),
- *     assignJob(job),   // von JobEngine/CarrierRuntime verwendet
- *     tick(dt)          // von CarrierRuntime aufgerufen
+ *     assignJob(job),           // von JobEngine/CarrierRuntime verwendet
+ *     tick(dt)                  // von CarrierRuntime aufgerufen
  *   }
  *
  * Außerdem:
  *   – Game.__units und window.__units werden mit dem gleichen Array verknüpft
  *   – optional: Game.getUnits() → Array zurück
+ *   – Fallback: Wenn keine JobEngine aktiv ist, werden beim ersten HQ
+ *     automatisch Träger gespawnt (Listener auf cb:construction:complete /
+ *     cb:build:complete).
  * ============================================================================ */
 (() => {
   'use strict';
@@ -63,6 +66,13 @@
     }
   }
 
+  /** Kleinere Helper für Nummern-Konvertierung (für Fallback) */
+  function _num(value, fallback) {
+    const v = (value !== undefined && value !== null) ? value : fallback;
+    const n = (typeof v === 'string') ? parseFloat(v) : v;
+    return Number.isFinite(n) ? n : NaN;
+  }
+
   /** neuen Carrier an einer Tile-Position anlegen (TILE-Koordinaten) */
   function _spawnCarrierAt(tx, ty) {
     const u = {
@@ -81,15 +91,38 @@
 
   /**
    * HQ-Position setzen (in TILE-Koordinaten).
-   * Wird i. d. R. von JobEngine.handleBuildComplete(b.hq) aufgerufen.
+   *
+   * Flexibel:
+   *   – setHQPos({ tx, ty })
+   *   – setHQPos(tx, ty)
+   *
+   * Wird i. d. R. von JobEngine.handleBuildComplete(b.hq) aufgerufen
+   * oder vom Fallback-Listener in diesem Modul.
    */
-  function setHQPos(pos) {
-    if (!pos || typeof pos.tx !== 'number' || typeof pos.ty !== 'number') {
-      WARN('setHQPos: ungültige Position übergeben', pos);
-      return;
+  function setHQPos(posOrTx, maybeTy) {
+    let tx, ty;
+
+    if (typeof posOrTx === 'object' && posOrTx !== null) {
+      // Aufruf: setHQPos({tx,ty})
+      tx = posOrTx.tx;
+      ty = posOrTx.ty;
+    } else if (typeof posOrTx === 'number' && typeof maybeTy === 'number') {
+      // Aufruf: setHQPos(tx, ty)
+      tx = posOrTx;
+      ty = maybeTy;
+    } else {
+      WARN('setHQPos: ungültige Parameter übergeben', posOrTx, maybeTy);
+      return null;
     }
-    _hqPos = { tx: pos.tx, ty: pos.ty };
+
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
+      WARN('setHQPos: ungültige Position (tx/ty nicht numerisch)', { tx, ty });
+      return null;
+    }
+
+    _hqPos = { tx, ty };
     LOG('HQPos gesetzt', _hqPos);
+    return _hqPos;
   }
 
   /** HQ-Position abfragen (kann null sein, wenn HQ noch nicht fertig) */
@@ -229,7 +262,97 @@
     _ensureGameBinding(game);
   }
 
-  /** Event-Hook für cb:game:start (DOM-CustomEvent) *********************** */
+  /** Fallback-Logik für HQ-fertig → Träger spawnen ***************************
+   *
+   * Hintergrund:
+   *  – Normalerweise übernimmt JobEngine.handleBuildComplete(b.hq) diese
+   *    Aufgabe (HQPos setzen + spawnInitialCarriers).
+   *  – In deinem aktuellen Log taucht job.engine aber gar nicht auf.
+   *  – Damit du trotzdem Träger siehst, hängen wir uns hier direkt an die
+   *    Bau-Events und machen EINMAL einen Fallback:
+   *      → wenn b.hq fertig ODER wir ein HQ im Game finden
+   *      → und noch KEINE Carrier existieren
+   *      → dann HQPos bestimmen + 3 Carrier spawnen.
+   */
+
+  function _tryFallbackHQSpawn(reason, eventDetail) {
+    // Wenn bereits HQPos und mindestens ein Carrier existiert → nichts tun
+    if (_hqPos && _units.some(u => u.type === 'carrier')) {
+      LOG('Fallback-HQ: bereits Carrier vorhanden – nichts zu tun', { reason });
+      return;
+    }
+
+    // 1) Versuchen, Building direkt aus Event zu nehmen
+    let hqBuilding = null;
+    const d = eventDetail || {};
+
+    if (d.id === 'b.hq' || d.type === 'b.hq') {
+      hqBuilding = d.building || d;
+    }
+
+    // 2) Wenn das nicht klappt → in Game.buildings suchen
+    const game = _gameRef || window.Game || null;
+    if (!hqBuilding && game && Array.isArray(game.buildings)) {
+      hqBuilding = game.buildings.find(
+        b => b && (b.id === 'b.hq' || b.type === 'b.hq')
+      ) || null;
+    }
+
+    if (!hqBuilding) {
+      WARN('Fallback-HQ: kein HQ-Building gefunden', { reason, d });
+      return;
+    }
+
+    // Position bestimmen: bevorzugt cx/cy, sonst tx/ty, sonst x/y
+    const tx = _num(hqBuilding.cx, _num(hqBuilding.tx, hqBuilding.x));
+    const ty = _num(hqBuilding.cy, _num(hqBuilding.ty, hqBuilding.y));
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
+      WARN('Fallback-HQ: ungültige HQ-Position', { reason, hqBuilding });
+      return;
+    }
+
+    const pos = setHQPos(tx, ty);
+    if (!pos) {
+      WARN('Fallback-HQ: setHQPos fehlgeschlagen', { reason });
+      return;
+    }
+
+    // Nur spawnen, wenn noch keine Carrier existieren (sonst doppelt)
+    const hadCarrier = _units.some(u => u.type === 'carrier');
+    if (!hadCarrier) {
+      spawnInitialCarriers(3);
+      LOG('Fallback-HQ: Träger gespawnt', { reason, hqPos: pos });
+    } else {
+      LOG('Fallback-HQ: HQPos gesetzt, aber Carrier existieren schon', {
+        reason, hqPos: pos
+      });
+    }
+  }
+
+  // Event-Hooks für Bau-Fertig-Meldungen
+  try {
+    // Wird typischerweise von construction.runtime.js emittiert
+    window.addEventListener('cb:construction:complete', (ev) => {
+      const d = ev?.detail ?? ev;
+      if (!d) return;
+      if (d.id === 'b.hq' || d.type === 'b.hq') {
+        _tryFallbackHQSpawn('cb:construction:complete', d);
+      }
+    });
+
+    // Optionaler zweiter Hook, falls irgendwo cb:build:complete verwendet wird
+    window.addEventListener('cb:build:complete', (ev) => {
+      const d = ev?.detail ?? ev;
+      if (!d) return;
+      if (d.id === 'b.hq' || d.type === 'b.hq') {
+        _tryFallbackHQSpawn('cb:build:complete', d);
+      }
+    });
+  } catch (err) {
+    WARN('HQ-Fallback-Listener konnten nicht registriert werden', err);
+  }
+
+  /** Event-Hook für cb:game:start (DOM-CustomEvent) **************************/
 
   try {
     window.addEventListener('cb:game:start', (ev) => {
@@ -255,5 +378,5 @@
     tick
   };
 
-  LOG('Modul geladen v25.11.30-final');
+  LOG('Modul geladen v25.11.30-final-2 (mit HQ-Fallback)');
 })();
