@@ -223,6 +223,15 @@
       }
     }
 
+      // 2) Baustellen-Overlays: Drops + Baufortschrittsbalken
+  if (window.GameConstruction?.render){
+    try {
+      GameConstruction.render(Game);
+    } catch(e){
+      ERR('GameConstruction.render Fehler:', e);
+    }
+  }
+    
     // 2) Optional: zusätzlicher Renderer (Sprites/Overlays/Entities)
     if (window.Renderer?.draw){
       try {
