@@ -1,7 +1,7 @@
 /* ============================================================================
  * Datei   : core/game.construction.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-buildstep4-multiphasic
+ * Version : v25.11.30-buildstep4-multiphasic-fix1
  *
  * Zweck   :
  *   - Mehrstufige Baustellen-Logik:
@@ -347,6 +347,19 @@
 
     ensureConstructionState(b);
 
+    // FIX: Wenn Gebäude schon fertig ist → Lieferung ignorieren
+    if (b.buildPhase === PHASE.COMPLETE ||
+        b.status === 'done' ||
+        b.buildStage >= 3) {
+      LOG('Material-Lieferung ignoriert (Gebäude bereits fertig)', {
+        id    : b.id,
+        posX, posY,
+        res,
+        amount
+      });
+      return;
+    }
+
     // Delivered hochzählen, aber maximal bis Need
     const needTotal = toNumber(b.needs[res], 0);
     const prev      = toNumber(b.delivered[res], 0);
@@ -371,7 +384,7 @@
       b.buildSubStage  = 1;   // wir steigen direkt mit Bild 1 ein
       b.status         = 'building';
       b.hasMaterial    = true;
-      b.buildStage     = 1;   // Bild 1 sichtbar
+      b.buildStage     = 1;   // Bild 1 sichtbar (Baustelle-Variante)
       spawnBuilders(b);
     }
 
@@ -592,6 +605,6 @@
     tick,
     render
   };
-  LOG('Construction-Modul aktiv (buildstep4-multiphasic)');
+  LOG('Construction-Modul aktiv (buildstep4-multiphasic-fix1)');
 
 })();
