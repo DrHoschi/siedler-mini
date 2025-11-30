@@ -36,18 +36,44 @@
       LOG('Units.init abgeschlossen – Units an Game gebunden');
     },
 
-    // -------------------------------------------------------------------------
-    // setHQPos(pos)
-    // Wird typischerweise vom carrier.runtime / construction-callback gerufen,
-    // sobald das HQ fertig gebaut ist.
-    // -------------------------------------------------------------------------
-    setHQPos(pos) {
-      if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
-        WARN('setHQPos: ungültige Position übergeben', pos);
+        /**
+     * HQ-Position setzen.
+     *
+     * Akzeptiert:
+     *   - Units.setHQPos(x, y)
+     *   - Units.setHQPos({ x, y })
+     *   - Units.setHQPos({ tx, ty })   // z. B. Gebäude-Tile-Position
+     */
+    setHQPos(posOrX, y) {
+      let x = null;
+      let yy = null;
+
+      // Variante A: zwei Zahlen (x, y)
+      if (typeof posOrX === 'number' && typeof y === 'number') {
+        x = posOrX;
+        yy = y;
+
+      // Variante B: Objekt mit x/y oder tx/ty
+      } else if (posOrX && typeof posOrX === 'object') {
+        const p = posOrX;
+        if (typeof p.x === 'number' && typeof p.y === 'number') {
+          x = p.x;
+          yy = p.y;
+        } else if (typeof p.tx === 'number' && typeof p.ty === 'number') {
+          // Falls nur Tile-Koordinaten existieren, auf die Mitte der Kachel schieben
+          x = p.tx + 0.5;
+          yy = p.ty + 0.5;
+        }
+      }
+
+      // Plausibilitätscheck
+      if (!Number.isFinite(x) || !Number.isFinite(yy)) {
+        WARN('setHQPos: ungültige Position übergeben', { posOrX, y });
         return;
       }
-      this.hqPos = { x: pos.x, y: pos.y };
-      LOG('HQPos gesetzt:', this.hqPos);
+
+      Units.hqPos = { x, y: yy };
+      LOG('HQPos gesetzt:', Units.hqPos);
     },
 
     // -------------------------------------------------------------------------
