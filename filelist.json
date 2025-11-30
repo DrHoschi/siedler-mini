@@ -1,7 +1,7 @@
 {
-  "createdAt": "2025-11-29T21:14:52.875Z",
+  "createdAt": "2025-11-30T14:33:14.847Z",
   "root": ".",
-  "count": 540,
+  "count": 537,
   "entries": [
     {
       "type": "dir",
@@ -1163,21 +1163,6 @@
     },
     {
       "type": "file",
-      "path": "core/camera-v1.js",
-      "size": 6147
-    },
-    {
-      "type": "file",
-      "path": "core/camera-v2.js",
-      "size": 9051
-    },
-    {
-      "type": "file",
-      "path": "core/camera-v3.js",
-      "size": 8443
-    },
-    {
-      "type": "file",
       "path": "core/camera.glue-v1.js",
       "size": 5198
     },
@@ -1324,7 +1309,7 @@
     {
       "type": "file",
       "path": "core/game.units.js",
-      "size": 5393
+      "size": 5238
     },
     {
       "type": "file",
@@ -1349,7 +1334,7 @@
     {
       "type": "file",
       "path": "core/job.engine.js",
-      "size": 6645
+      "size": 4649
     },
     {
       "type": "file",
@@ -1444,7 +1429,7 @@
     {
       "type": "file",
       "path": "core/unit-overlay.js",
-      "size": 5308
+      "size": 4620
     },
     {
       "type": "file",
@@ -2598,12 +2583,12 @@
     {
       "type": "file",
       "path": "filelist.json",
-      "size": 52708
+      "size": 53208
     },
     {
       "type": "file",
       "path": "filelist.txt",
-      "size": 20007
+      "size": 20209
     },
     {
       "type": "file",
@@ -2618,7 +2603,7 @@
     {
       "type": "file",
       "path": "index.html",
-      "size": 14141
+      "size": 16109
     },
     {
       "type": "file",
