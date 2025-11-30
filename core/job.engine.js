@@ -1,148 +1,259 @@
 /* ============================================================================
- * Datei    : core/job.engine.js
- * Projekt  : Neue Siedler – Epoche 1
- * Version  : v25.11.30-final
- * Zweck    : Zentrale Job-Warteschlange (aktuell Baujobs)
+ * Datei   : core/job.engine.js
+ * Projekt : Neue Siedler – Epoche 1
+ * Version : v25.11.30-jobs-adapted
  *
- * Architektur:
- *   – JobEngine erzeugt Jobs bei Bauabschluss (HQ, Gebäude)
- *   – CarrierRuntime zieht Jobs per JobEngine.pop() und gibt sie an GameUnits
- *   – GameUnits.assignJob(job) weist den Job einem freien Carrier zu
+ * Zweck   : Zentrale Job-Queue (passiv)
+ *           – verwaltet Jobs (FIFO)
+ *           – reagiert auf cb:build:complete
+ *           – erzeugt Baujobs für fertige Gebäude (NICHT für HQ)
  *
- * Öffentliche API (global):
- *   window.JobEngine = {
- *     push(job),
- *     pop(),
- *     handleBuildComplete(building)
- *   }
- * ============================================================================ */
-(() => {
+ * WICHTIG:
+ *   - GameUnits (core/game.units.js v25.11.30-simple-carriers) verwaltet:
+ *       • HQ-Position in Tiles
+ *       • Träger-Spawns
+ *       • Bewegung in Tile-Koordinaten
+ *   - JobEngine erzeugt NUR Jobs in denselben Tile-Koordinaten.
+ *
+ * API (global):
+ *   window.JobEngine.add(job)
+ *   window.JobEngine.pop()
+ *   window.JobEngine.hasJobs()
+ *   window.JobEngine.getQueue()
+ *   window.JobEngine.start() / stop() (nur Logging)
+ * ========================================================================== */
+
+(function (global) {
   'use strict';
 
   const TAG  = '[job.engine]';
-  const LOG  = (...a)=> (window.CBLog?.info ?? console.log)(TAG, ...a);
-  const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
+  const LOG  = (...a) => (global.CBLog?.ok   ?? console.log )(TAG, ...a);
+  const WARN = (...a) => (global.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  /** interne Warteschlange *****************************************************/
-
+  // -------------------------------------------------------------------------
+  // STATE: Zentrale Job-Queue (FIFO)
+  // -------------------------------------------------------------------------
   /** @type {Array<object>} */
-  const _queue = [];
+  const Queue = [];
 
-  function push(job) {
-    if (!job) return;
-    _queue.push(job);
-    LOG('Job hinzugefügt', { id: job.id, type: job.type, queueLen: _queue.length });
+  // Nur für Legacy-Kompatibilität – in dieser Version spawnen wir keine Träger
+  let hqSpawned = false; // wird nur noch für Logging verwendet
+
+  // -------------------------------------------------------------------------
+  // PUBLIC API: Queue-Operationen
+  // -------------------------------------------------------------------------
+  function add(job) {
+    if (!job || typeof job !== 'object') {
+      WARN('add(job) mit ungültigem Job aufgerufen', job);
+      return;
+    }
+    // kleine Normalisierung
+    const norm = {
+      id   : job.id   || `job-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      type : job.type || 'build',
+      res  : job.res  || 'res.wood',
+      from : job.from || null,
+      to   : job.to   || null
+    };
+    Queue.push(norm);
+    LOG('Job hinzugefügt', norm);
   }
 
   function pop() {
-    const job = _queue.shift() ?? null;
-    if (job) {
-      LOG('Job entnommen', { id: job.id, type: job.type, queueLen: _queue.length });
+    const j = Queue.shift() || null;
+    if (j) LOG('Job ausgegeben', j);
+    return j;
+  }
+
+  function hasJobs() {
+    return Queue.length > 0;
+  }
+
+  function getQueue() {
+    return Queue.slice();
+  }
+
+  // Nur für Abwärtskompatibilität – JobEngine ist passiv
+  function start() {
+    LOG('JobEngine bereit (passiv – CarrierRuntime holt Jobs aus Queue)');
+  }
+  function stop() {
+    LOG('JobEngine stop() aufgerufen – keine eigene Loop aktiv');
+  }
+
+  // -------------------------------------------------------------------------
+  // HILFSFUNKTIONEN
+  // -------------------------------------------------------------------------
+
+  function findBuildingById(id) {
+    const G = global.Game || {};
+    let list = [];
+
+    if (Array.isArray(G.buildings)) {
+      list = G.buildings;
+    } else if (typeof G.getBuildings === 'function') {
+      try {
+        list = G.getBuildings() || [];
+      } catch (_) {
+        list = [];
+      }
     }
-    return job;
+
+    if (!Array.isArray(list)) return null;
+    return list.find((b) => b && b.id === id) || null;
+  }
+
+  function toNumberOr(obj, key, fallback) {
+    const v = Number(obj?.[key]);
+    return Number.isFinite(v) ? v : fallback;
   }
 
   /**
-   * Hilfsfunktion: HQ-Mittelpunkt in Tile-Koordinaten bestimmen.
-   * Erwartet ein Gebäude-Objekt mit x,y,w,h in TILES.
-   */
-  function _getBuildingCenterTiles(b) {
-    const tx = Number(b.x ?? 0) + Number(b.w ?? 1) / 2;
-    const ty = Number(b.y ?? 0) + Number(b.h ?? 1) / 2;
-    return { tx, ty };
-  }
-
-  /**
-   * Wird von construction.runtime.js o. ä. aufgerufen, sobald ein Gebäude
-   * fertiggestellt ist.
+   * HQ-Position aus GameUnits holen.
+   * Unterstützt:
+   *   – Units.hqPos = { x, y }          (alte Variante, Welt-/Tilekoord.)
+   *   – Units.getHQPos() = { tx, ty }   (neue simple-carriers-Variante)
    *
-   * building-Objekt:
-   *   { id, type, x, y, w, h, buildCost? }
+   * Rückgabe IMMER als { x, y } in Tile-Koordinaten.
    */
-  function handleBuildComplete(building) {
+  function getHQPosTiles(Units) {
+    if (!Units) return null;
+
+    // 1) Alte Variante: Units.hqPos = { x, y }
+    if (Units.hqPos && Number.isFinite(Units.hqPos.x) && Number.isFinite(Units.hqPos.y)) {
+      return { x: Units.hqPos.x, y: Units.hqPos.y };
+    }
+
+    // 2) Neue Variante: Units.getHQPos() = { tx, ty }
+    if (typeof Units.getHQPos === 'function') {
+      try {
+        const p = Units.getHQPos();
+        if (p && Number.isFinite(p.tx) && Number.isFinite(p.ty)) {
+          return { x: p.tx, y: p.ty };
+        }
+      } catch (err) {
+        WARN('getHQPos() hat Fehler geworfen', err);
+      }
+    }
+
+    return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // HQ + BAUJOBS: cb:build:complete
+  // -------------------------------------------------------------------------
+
+  /**
+   * Wird aufgerufen, wenn ein Gebäude fertiggestellt ist.
+   * Erwartet Event:
+   *   detail: { id: 'b.lumberjack' } etc.
+   *
+   * Holt:
+   *   – Building aus Game.buildings
+   *   – HQ-Position aus GameUnits (Tiles)
+   * Erzeugt:
+   *   – 3 Baujobs von HQ → Gebäude-Mitte (Tiles)
+   */
+  function handleBuildComplete(ev) {
+    const d = ev?.detail || {};
+    const id = d.id;
+
+    if (!id) {
+      WARN('cb:build:complete ohne id', d);
+      return;
+    }
+
+    const building = findBuildingById(id);
+    if (!building) {
+      WARN('cb:build:complete – Building nicht gefunden', d);
+      return;
+    }
+
+    const bx = toNumberOr(building, 'x', 0);
+    const by = toNumberOr(building, 'y', 0);
+    const bw = toNumberOr(building, 'w', 1);
+    const bh = toNumberOr(building, 'h', 1);
+
+    // Gebäude-Mitte in Tiles
+    const cx = bx + bw / 2;
+    const cy = by + bh / 2;
+
+    const Units = global.GameUnits || {};
+
     try {
-      const b = building?.building ?? building;
-      if (!b || !b.id) {
-        WARN('handleBuildComplete: kein gültiges Gebäude', building);
-        return;
-      }
-
-      // Spezialfall: HQ – HQ-Position setzen und Träger spawnen
-      if (b.id === 'b.hq') {
-        if (!window.GameUnits || typeof window.GameUnits.setHQPos !== 'function') {
-          WARN('handleBuildComplete(HQ): GameUnits.setHQPos nicht verfügbar');
-          return;
+      // -------------------------------------------------------------
+      // 1) HQ-SPEZIALFALL → in dieser Version KEINE Träger spawnen
+      //    (das erledigt game.units.js bereits über cb:build:place)
+      // -------------------------------------------------------------
+      if (id === 'b.hq') {
+        if (!hqSpawned) {
+          hqSpawned = true;
+          LOG('HQ fertig – HQ/Träger werden von GameUnits verwaltet; keine Baujobs fürs HQ.');
+        } else {
+          LOG('Zweites HQ fertig – bereits initialisiert, überspringe Job-Erzeugung.');
         }
-
-        const center = _getBuildingCenterTiles(b);
-        window.GameUnits.setHQPos(center);
-
-        // initial 3 Carrier spawnen (kannst du später anpassen)
-        if (typeof window.GameUnits.spawnInitialCarriers === 'function') {
-          window.GameUnits.spawnInitialCarriers(3);
-        }
-
-        LOG('HQ fertig → HQPos gesetzt & Carrier gespawnt', { center });
         return;
       }
 
-      // alle anderen Gebäude → Baujobs anlegen, sofern HQ schon bekannt ist
-      if (!window.GameUnits || typeof window.GameUnits.getHQPos !== 'function') {
-        WARN('handleBuildComplete: GameUnits nicht verfügbar – keine Baujobs', b.id);
+      // -------------------------------------------------------------
+      // 2) BAUJOBS FÜR ALLE NICHT-HQ-GEBÄUDE
+      // -------------------------------------------------------------
+      const hq = getHQPosTiles(Units);
+      if (!hq || !Number.isFinite(hq.x) || !Number.isFinite(hq.y)) {
+        LOG('Noch kein HQPos gesetzt – keine Baujobs für', id);
         return;
       }
 
-      const hqPos = window.GameUnits.getHQPos();
-      if (!hqPos) {
-        LOG('Noch kein HQPos gesetzt – keine Baujobs für', b.id);
+      // defensive: Building-Coords checken
+      if (!Number.isFinite(cx) || !Number.isFinite(cy)) {
+        WARN('Building-Koordinaten nicht gültig – keine Jobs', { id, cx, cy });
         return;
       }
 
-      const center = _getBuildingCenterTiles(b);
-
-      // einfache Schätzung: wie viele Holz-Einheiten werden benötigt?
-      const woodCost =
-        Number(b.buildCost?.res?.wood) ||
-        Number(b.buildCost?.wood) ||
-        3; // Default, falls nichts angegeben
-
-      const jobCount = Math.max(1, woodCost);
-
-      for (let i = 0; i < jobCount; i++) {
-        const jobId = `build-${b.id}-${Date.now()}-${i}`;
-        push({
-          id   : jobId,
+      const JOB_COUNT = 3;
+      for (let n = 0; n < JOB_COUNT; n++) {
+        add({
+          id   : `job-build-${id}-${Date.now()}-${n}`,
           type : 'build',
-          res  : 'res.wood',
-          from : { tx: hqPos.tx, ty: hqPos.ty },
-          to   : { tx: center.tx, ty: center.ty }
+          res  : 'res.wood', // TODO: später aus Registry/Baukosten holen
+          from : { x: hq.x, y: hq.y }, // Tiles
+          to   : { x: cx,   y: cy    } // Tiles
         });
       }
 
-      LOG('Baujobs angelegt', { building: b.id, count: jobCount });
-    } catch (err) {
-      WARN('handleBuildComplete Fehler', err);
+      LOG('Baujobs angelegt', {
+        building: id,
+        count   : JOB_COUNT,
+        from    : { x: hq.x, y: hq.y },
+        to      : { x: cx,   y: cy }
+      });
+
+    } catch (e) {
+      WARN('handleBuildComplete Fehler', e);
     }
   }
 
-  /** Event-Hooks ***************************************************************/
-
-  // Fängt das "Gebäude fertig"-Event der Construction-Engine ab, falls vorhanden.
+  // Event-Listener registrieren
   try {
-    window.addEventListener('cb:construction:building-complete', (ev) => {
-      handleBuildComplete(ev.detail);
-    });
+    global.addEventListener('cb:build:complete', handleBuildComplete);
+    LOG('Listener auf cb:build:complete registriert');
   } catch (err) {
-    WARN('Konnte cb:construction:building-complete Listener nicht registrieren', err);
+    WARN('Konnte Listener auf cb:build:complete nicht registrieren', err);
   }
 
-  /** Export nach global ********************************************************/
-
-  window.JobEngine = {
-    push,
+  // -------------------------------------------------------------------------
+  // Export nach global
+  // -------------------------------------------------------------------------
+  global.JobEngine = {
+    add,
     pop,
-    handleBuildComplete
+    hasJobs,
+    getQueue,
+    start,
+    stop
+    // KEIN tick() nötig – GameTick ruft nur CarrierRuntime/GameUnits/Production
   };
 
-  LOG('JobEngine bereit (passiv – CarrierRuntime verteilt Jobs)');
-})();
+  start();
+  LOG('Modul geladen (v25.11.30-jobs-adapted)');
+})(window);
