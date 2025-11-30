@@ -1,12 +1,13 @@
 /* ============================================================================
  * Datei   : core/unit-overlay.js
  * Projekt : Neue Siedler – Epoche 1
- * Version : v25.11.30-overlay-follow-camera
+ * Version : v25.11.30-overlay-carrier-res
  *
  * Zweck   : Zeichnet die Träger (Carrier) als Punkte über der Karte.
  *           - eigenes Canvas direkt über #game
  *           - reagiert auf Kamera (Pan/Zoom)
  *           - liest Daten aus GameUnits.getUnits()
+ *           - zeigt kleine Ressourcenkugeln, wenn der Träger etwas trägt
  * ========================================================================== */
 (function () {
   'use strict';
@@ -15,57 +16,68 @@
   const LOG  = (...a) => (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a) => (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  const $game = document.getElementById('game');
-  if (!$game) {
-    WARN('kein #game Canvas gefunden – Overlay deaktiviert');
-    return;
+  let overlay = null;
+  let ctx      = null;
+
+  const RES_COLORS = {
+    'res.wood' : '#c48a3c',
+    'res.stone': '#9e9e9e',
+    'res.fish' : '#1e88e5',
+    'res.food' : '#f4b400',
+    'res.gold' : '#ffd700'
+  };
+
+  // -------------------------------------------------------------------------
+  // Canvas anlegen & Größe mit #game synchronisieren
+  // -------------------------------------------------------------------------
+  function getGameCanvas() {
+    return document.getElementById('game');
   }
 
-  // --- Canvas für das Overlay anlegen ---------------------------------------
+  function ensureCanvas() {
+    if (overlay && ctx) return;
 
-  const $overlay = document.createElement('canvas');
-  $overlay.id = 'units-overlay';
-  $overlay.style.position = 'absolute';
-  $overlay.style.left = '0';
-  $overlay.style.top = '0';
-  $overlay.style.pointerEvents = 'none'; // nicht klick-bar
-  $overlay.style.zIndex = '15';         // über der Map, unter dem UI
+    const host = document.body;
+    overlay = document.createElement('canvas');
+    overlay.id = 'unit-overlay';
+    overlay.style.position      = 'absolute';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.zIndex        = '25'; // über Karte, unter HUD
+    overlay.style.left = '0';
+    overlay.style.top  = '0';
+    host.appendChild(overlay);
 
-  // Canvas direkt über den Game-Canvas legen
-  const parent = $game.parentElement || document.body;
-  parent.style.position = parent.style.position || 'relative';
-  parent.appendChild($overlay);
+    ctx = overlay.getContext('2d');
+    LOG('Overlay-Canvas erstellt');
+    syncSize();
+  }
 
-  const ctx = $overlay.getContext('2d');
-
-  // Dimensionen vom Game-Canvas übernehmen
   function syncSize() {
-    const w = $game.width  || $game.getBoundingClientRect().width;
-    const h = $game.height || $game.getBoundingClientRect().height;
-    if (!w || !h) return;
-    $overlay.width  = w;
-    $overlay.height = h;
-    $overlay.style.width  = w + 'px';
-    $overlay.style.height = h + 'px';
-  }
-  syncSize();
+    const game = getGameCanvas();
+    if (!game || !overlay) return;
 
-  // Wenn sich die Canvas-Größe ändert (Resize-Handler aus camera/layout)
+    const r   = game.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    overlay.width  = Math.max(1, Math.round(r.width  * dpr));
+    overlay.height = Math.max(1, Math.round(r.height * dpr));
+
+    overlay.style.left   = Math.floor(r.left + window.scrollX) + 'px';
+    overlay.style.top    = Math.floor(r.top  + window.scrollY) + 'px';
+    overlay.style.width  = Math.max(1, Math.round(r.width))  + 'px';
+    overlay.style.height = Math.max(1, Math.round(r.height)) + 'px';
+  }
+
   window.addEventListener('resize', syncSize);
   window.addEventListener('cb:game:start', syncSize);
   window.addEventListener('cb:camera-change', syncSize);
 
-  // --- Kamera-Helfer --------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Kamera-Helfer
+  // -------------------------------------------------------------------------
 
-  /**
-   * Wir versuchen zuerst GameCamera.worldToScreen(wx, wy) zu nutzen.
-   * Falls das nicht vorhanden ist, rechnen wir selbst mit __CAM:
-   *   - x/y = Weltpixel
-   *   - CAM.x / CAM.y = Welt-Offset
-   *   - CAM.zoom = Zoom-Faktor
-   */
   function worldToScreen(wx, wy) {
-    // bevorzugt: GameCamera aus camera.js
+    // bevorzugt zentrale Kamera-API
     const GC = window.GameCamera;
     if (GC && typeof GC.worldToScreen === 'function') {
       try {
@@ -75,77 +87,105 @@
       }
     }
 
-    // Fallback: __CAM direkt benutzen (wie in camera.glue.js)
-    const CAM = window.__CAM || {};
-    const zoom = Number(CAM.zoom) || 1;
-    const sx = (wx - (CAM.x || 0)) * zoom;
-    const sy = (wy - (CAM.y || 0)) * zoom;
+    const CAM  = window.__CAM || {};
+    const zoom = Number(CAM.zoom || CAM.scale || 1) || 1;
+    const cx   = Number(CAM.x) || 0;
+    const cy   = Number(CAM.y) || 0;
+
+    const sx = (wx - cx) * zoom;
+    const sy = (wy - cy) * zoom;
     return { x: sx, y: sy };
   }
 
-  /**
-   * Tile-Koordinaten (tx,ty) → Screen-Koordinaten.
-   * Nutzt Game.tileSize oder Entities.state.tile als Basis.
-   */
+  /** Tile-Koordinaten (tx,ty) → Screen-Koordinaten */
   function tileToScreen(tx, ty) {
     const tileSize =
       (window.Game && window.Game.tileSize) ||
       (window.Entities?.state?.tile) ||
       64;
 
-    // Mittelpunkt der Kachel
     const wx = (tx + 0.5) * tileSize;
     const wy = (ty + 0.5) * tileSize;
     return worldToScreen(wx, wy);
   }
 
-  // --- Render-Loop ----------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Units lesen
+  // -------------------------------------------------------------------------
+  function getUnits() {
+    try {
+      if (window.GameUnits && typeof window.GameUnits.getUnits === 'function') {
+        return window.GameUnits.getUnits() || [];
+      }
+    } catch (e) {
+      WARN('getUnits Fehler', e);
+    }
+    return [];
+  }
 
-  function drawUnits() {
-    syncSize();
+  // -------------------------------------------------------------------------
+  // Zeichnen
+  // -------------------------------------------------------------------------
+  function draw() {
+    if (!overlay || !ctx) return;
 
-    ctx.clearRect(0, 0, $overlay.width, $overlay.height);
+    const dpr = window.devicePixelRatio || 1;
+    const w   = overlay.width  / dpr;
+    const h   = overlay.height / dpr;
 
-    const UnitsAPI = window.GameUnits;
-    if (!UnitsAPI || typeof UnitsAPI.getUnits !== 'function') return;
+    // Koordinatensystem: 1 Unit = 1 CSS-Pixel
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
 
-    const list = UnitsAPI.getUnits() || [];
-    if (!list.length) return;
+    const units = getUnits();
+    if (!units.length) return;
 
-    ctx.save();
-    ctx.fillStyle = 'rgba(20, 20, 20, 0.9)'; // dunkler Punkt mit kleinem Rand
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 1.2;
-
-    for (const u of list) {
-      if (!u) continue;
+    for (const u of units) {
       if (u.type !== 'carrier') continue;
 
-      const tx = Number(u.x);
-      const ty = Number(u.y);
-      if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+      const pos = tileToScreen(u.x, u.y);
+      const sx  = pos.x;
+      const sy  = pos.y;
 
-      const p = tileToScreen(tx, ty);
-      const r = 4; // Radius des Punkts
-
+      // Grundpunkt des Trägers
+      const baseR = 4;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.arc(sx, sy, baseR, 0, Math.PI * 2);
+      ctx.fillStyle   = '#fdf0c0';
+      ctx.strokeStyle = '#5d3a1a';
+      ctx.lineWidth   = 1;
       ctx.fill();
       ctx.stroke();
-    }
 
-    ctx.restore();
+      // Wenn er etwas trägt → kleine Ressourcenkugel darüber
+      if (u.carrying) {
+        const color = RES_COLORS[u.carrying] || '#ffffff';
+        const rRes  = 3;
+        const by    = sy - baseR - 3;
+
+        ctx.beginPath();
+        ctx.arc(sx, by, rRes, 0, Math.PI * 2);
+        ctx.fillStyle   = color;
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth   = 0.8;
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
   }
 
   function loop() {
     try {
-      drawUnits();
+      ensureCanvas();
+      draw();
     } catch (e) {
       WARN('Overlay-loop Fehler', e);
     }
     requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
 
-  LOG('Canvas erstellt & bereit');
+  // Start
+  ensureCanvas();
+  requestAnimationFrame(loop);
+  LOG('Units-Overlay aktiv (mit Ressourcenkugeln)');
 })();
