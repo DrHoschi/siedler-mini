@@ -10,15 +10,7 @@
  *   - Erzeugt Boden-Drops (Holz-/Stein-Kugeln) um die Baustelle
  *   - Zeichnet Drops + Baufortschrittsbalken
  *   - Meldet fertige Gebäude (cb:build:complete)
- *
- * Hinweis:
- *   - Dieses Modul geht davon aus, dass Game.buildings eine Liste aller
- *     aktuellen Baustellen/Gebäude enthält. Beim Platzieren sollte jedes
- *     Building idealerweise bereits ein "needs"-Objekt besitzen:
- *       building.needs = { wood: 3, stone: 2, ... }
- *     Falls nicht vorhanden, wird ein kleiner Fallback gesetzt.
  * ========================================================================== */
-
 (function(){
   'use strict';
 
@@ -26,22 +18,13 @@
   const LOG  = (...a)=> (window.CBLog?.ok   ?? console.log)(TAG, ...a);
   const WARN = (...a)=> (window.CBLog?.warn ?? console.warn)(TAG, ...a);
 
-  // ---------------------------------------------------------------------------
-  // Phasen & Zeiten
-  // ---------------------------------------------------------------------------
-
   const PHASE = {
     SITE    : 0,  // Baustelle angelegt, wartet auf Material
     BUILD   : 1,  // alle Ressourcen da, Bau läuft (Progress-Balken)
     COMPLETE: 2   // Bau fertig, fertiges Gebäude
   };
 
-  // Gesamt-Bauzeit in Millisekunden (ab dem Moment, wo alles Material da ist)
   const DEFAULT_BUILD_TIME = 6000;
-
-  // ---------------------------------------------------------------------------
-  // Hilfsfunktionen: Basis
-  // ---------------------------------------------------------------------------
 
   function getBuildings(){
     return (window.Game && Array.isArray(window.Game.buildings))
@@ -54,12 +37,9 @@
     return Number.isFinite(n) ? n : fallback;
   }
 
-  /**
-   * Finde Gebäude, dessen Tile-Rechteck die übergebene Position enthält.
-   *  - b.x, b.y  ... linke obere Ecke (Tile-Koordinaten)
-   *  - b.w, b.h  ... Breite/Höhe in Tiles
-   *  - posX,posY ... irgendein Punkt (z.B. Ziel des Lieferjobs) in Tiles
-   */
+  // ----------------------------------------------------------
+  // passendes Gebäude anhand der Zielposition finden
+  // ----------------------------------------------------------
   function findBuildingAt(posX, posY){
     const list = getBuildings();
     if (!list.length) return null;
@@ -82,17 +62,9 @@
     return null;
   }
 
-  /**
-   * Stellt sicher, dass alle Felder für die Baustellen-Logik vorhanden sind.
-   *  - needs      : Soll-Mengen pro Ressource (Holz/Stein/...)
-   *  - delivered  : bereits gelieferte Mengen
-   *  - drops      : Boden-Ressourcen (Kugeln) um die Baustelle
-   *  - buildPhase : PHASE.SITE | PHASE.BUILD | PHASE.COMPLETE
-   *  - buildTime  : Gesamtzeit in ms
-   *  - buildElapsed: bereits verstrichene Bauzeit in ms
-   *  - buildProgress: 0..1
-   *  - status     : 'pending' | 'building' | 'done'
-   */
+  // ----------------------------------------------------------
+  // Grundzustand pro Baustelle sicherstellen
+  // ----------------------------------------------------------
   function ensureConstructionState(b){
     if (!b) return;
 
@@ -119,7 +91,7 @@
       }
     }
 
-    // Drops (Boden-Ressourcen)
+    // Drops
     if (!Array.isArray(b.drops)){
       b.drops = [];
     }
@@ -144,11 +116,15 @@
     if (typeof b.status !== 'string'){
       b.status = 'pending';
     }
+
+    // Visuelle Stufe für Renderer:
+    // 0 = Baustelle, 1 = fertiges Gebäude
+    if (typeof b.buildStage !== 'number'){
+      b.buildStage = (b.buildPhase === PHASE.COMPLETE) ? 1 : 0;
+    }
   }
 
-  /**
-   * Prüft, ob alle benötigten Ressourcen geliefert wurden.
-   */
+  // alle Ressourcen da?
   function hasAllMaterial(b){
     if (!b || !b.needs) return false;
     const delivered = b.delivered || {};
@@ -161,15 +137,10 @@
     return true;
   }
 
-  /**
-   * Neuen Boden-Drop (Ressourcenkugel) um die Baustelle registrieren.
-   *  - resKey: 'wood' | 'stone' | ...
-   *  - posX,posY: Tile-Koordinaten des Ziels (z.B. Mitte der Baustelle)
-   */
+  // Drop (Ressourcenkugel) an Baustelle erzeugen
   function addDrop(b, resKey, posX, posY){
     ensureConstructionState(b);
 
-    // Zufälliger Radius um die Baustellenmitte
     const bw = toNumber(b.w, 1);
     const bh = toNumber(b.h, 1);
 
@@ -191,9 +162,7 @@
     b.drops.push(drop);
   }
 
-  /**
-   * Wenn Bau fertig: Phase COMPLETE, Drops leeren, Event feuern.
-   */
+  // Bau fertig → Phase COMPLETE + Event
   function completeBuilding(b){
     ensureConstructionState(b);
 
@@ -202,11 +171,12 @@
     b.buildProgress = 1;
     b.status        = 'done';
 
-    // Boden-Drops ausblenden / leeren
+    // fertiges Gebäude sichtbar machen
+    b.buildStage    = 1;
+
+    // Drops entfernen
     b.drops = [];
 
-    // Fertiges Gebäude melden – andere Module können damit z.B.
-    // die Baustellen-Grafik gegen das fertige Gebäude austauschen
     try{
       window.dispatchEvent(new CustomEvent('cb:build:complete', {
         detail:{
@@ -228,17 +198,9 @@
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // Event: Material geliefert – cb:build:deliver
-  //
-  // Erwartetes Detail:
-  //   {
-  //     x, y   : Zielposition in Tiles (Mitte/Fläche der Baustelle)
-  //     res    : 'wood' / 'stone' / ...
-  //     amount?: Anzahl (Standard: 1)
-  //     jobId ?: Debug-Info
-  //   }
-  // ---------------------------------------------------------------------------
+  // ----------------------------------------------------------
+  // Event: Material geliefert (von CarrierRuntime)
+  // ----------------------------------------------------------
   window.addEventListener('cb:build:deliver', (ev)=>{
     const d     = ev.detail || {};
     const posX  = toNumber(d.x, NaN);
@@ -268,10 +230,10 @@
     }
     b.delivered[res] = next;
 
-    // Nur so viele Drops erzeugen, wie wirklich "neu" dazugekommen sind
+    // Nur die „neuen“ Mengen als Kugeln anzeigen
     let inc = next - prev;
     if (inc < 0) inc = 0;
-    for (let i = 0; i < inc; i++){
+    for (let i=0; i<inc; i++){
       addDrop(b, res, posX, posY);
     }
 
@@ -281,7 +243,8 @@
       b.buildElapsed  = 0;
       b.buildProgress = 0;
       b.status        = 'building';
-      b.hasMaterial   = true; // kompatibel zu älteren Checks
+      b.hasMaterial   = true;
+      b.buildStage    = 0;   // immer noch Baustelle, nur mit Balken
     }
 
     LOG('Material geliefert', {
@@ -294,11 +257,9 @@
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // Tick: Baufortschritt
-  //  - wird pro Frame aus Game.tick(dt) aufgerufen
-  //  - dt in Sekunden
-  // ---------------------------------------------------------------------------
+  // ----------------------------------------------------------
+  // Tick: Baufortschritt (pro Frame aus game.js)
+  // ----------------------------------------------------------
   function tick(dt){
     const list = getBuildings();
     if (!list.length) return;
@@ -310,8 +271,8 @@
 
       switch (b.buildPhase){
         case PHASE.SITE: {
-          // Nur warten, bis alle Ressourcen da sind.
-          b.status = 'pending';
+          b.status     = 'pending';
+          b.buildStage = 0;
           break;
         }
 
@@ -319,6 +280,7 @@
           b.buildElapsed  += ms;
           b.buildProgress  = Math.min(1, b.buildElapsed / b.buildTime);
           b.status         = 'building';
+          b.buildStage     = 0;   // solange nur Baustellen-Grafik
 
           if (b.buildProgress >= 1){
             completeBuilding(b);
@@ -329,24 +291,19 @@
         case PHASE.COMPLETE:
         default:
           b.status = 'done';
+          // buildStage bleibt 1
           break;
       }
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Rendering: Drops + Baufortschrittsbalken
-  //
-  // GameConstruction.render(Game) wird von core/game.js im render()-Pfad
-  // aufgerufen (nach GameMap.render), um die kleinen Kugeln & Balken
-  // über den Tiles zu zeichnen.
-  // ---------------------------------------------------------------------------
-
+  // ----------------------------------------------------------
+  // Render: Drops + Fortschrittsbalken
+  // ----------------------------------------------------------
   function worldToScreen(Game, wx, wy){
     const tileSize = Game.tileSize || 64;
     const cam      = Game.camera || {};
 
-    // Falls Kamera eine eigene Helper-Funktion hat, bevorzugen
     if (typeof cam.worldToScreen === 'function'){
       return cam.worldToScreen(wx, wy);
     }
@@ -384,22 +341,19 @@
       const sz     = camPos.size || (Game.tileSize || 64);
       const zoom   = camPos.zoom || 1;
 
-      // ---------------------------------------------------------------
-      // 1) Boden-Drops (kleine Ressourcenkugeln)
-      // ---------------------------------------------------------------
+      // 1) Drops
       if (Array.isArray(b.drops) && b.drops.length){
         for (const drop of b.drops){
           const dPos = worldToScreen(Game, drop.x, drop.y);
 
-          const r = sz * 0.15; // Radius der Kugel
+          const r = sz * 0.15;
           const sx = dPos.x;
           const sy = dPos.y;
 
           ctx.beginPath();
           ctx.arc(sx, sy, r, 0, Math.PI * 2);
 
-          // einfache Farbwahl je nach Resource
-          let fill = '#c8a060'; // Holz
+          let fill = '#c8a060';            // Holz
           if (drop.res === 'stone') fill = '#b0b0b0';
           if (drop.res === 'food' || drop.res === 'fish') fill = '#c06060';
 
@@ -412,9 +366,7 @@
         }
       }
 
-      // ---------------------------------------------------------------
-      // 2) Baufortschrittsbalken über der Baustelle
-      // ---------------------------------------------------------------
+      // 2) Fortschrittsbalken
       if (b.buildPhase !== PHASE.COMPLETE){
         const progress = (b.buildPhase === PHASE.BUILD)
           ? b.buildProgress
@@ -423,19 +375,16 @@
         const barWidth  = bw * sz * 0.8;
         const barHeight = Math.max(3, sz * 0.08);
         const barX      = camPos.x - barWidth / 2;
-        const barY      = camPos.y - bh * sz * 0.6 - barHeight; // etwas über dem Gebäude
+        const barY      = camPos.y - bh * sz * 0.6 - barHeight;
 
-        // Hintergrund
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(barX, barY, barWidth, barHeight);
 
-        // Progress-Füllung (grün)
         if (progress > 0){
           ctx.fillStyle = 'rgba(80,200,80,0.9)';
           ctx.fillRect(barX+1, barY+1, (barWidth-2) * progress, barHeight-2);
         }
 
-        // Rahmen
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(0,0,0,0.85)';
         ctx.strokeRect(barX, barY, barWidth, barHeight);
@@ -445,9 +394,6 @@
     ctx.restore();
   }
 
-  // ---------------------------------------------------------------------------
-  // Export
-  // ---------------------------------------------------------------------------
   window.GameConstruction = {
     tick,
     render
